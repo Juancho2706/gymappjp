@@ -22,6 +22,7 @@ vi.mock('@/services/billing/discount.service', async (orig) => {
 import * as repo from '@/infrastructure/db/coach-addons.repository'
 import {
     activateAddonForCoach,
+    activateAddonForCoachFlow,
     ADMIN_GRANT_TERMS_VERSION,
     applyCouponToAddonProration,
     canPurchaseAddon,
@@ -403,6 +404,76 @@ describe('activateAddonForCoach — bifurcación por ciclo (D4)', () => {
     })
 })
 
+// ── activateAddonForCoachFlow (alta Flow síncrona, Ola 5) ────────────────────────
+describe('activateAddonForCoachFlow — cambio de plan síncrono (Flow cobra la diferencia)', () => {
+    const ctx = {
+        coachId: 'coach-1',
+        tier: 'pro' as const,
+        cycle: 'monthly' as const,
+        subscriptionRef: 'flow-sub-1',
+        planLabel: 'Suscripción Pro Mensual (EVA)',
+        webhookUrl: 'https://app.test/api/payments/flow/webhook',
+        currentPeriodEnd: new Date('2026-07-01T00:00:00.000Z'),
+        now: new Date('2026-06-16T00:00:00.000Z'),
+    }
+
+    function makeFlowProvider(over?: Partial<{ applied: boolean; chargedNowClp: number | null; creditClp: number | null }>) {
+        return {
+            addSubscriptionItem: vi
+                .fn()
+                .mockResolvedValue({ applied: true, chargedNowClp: 5161, creditClp: null, ...over }),
+        }
+    }
+
+    it('llama addSubscriptionItem con el compuesto NUEVO (base + add-on) e inserta la fila YA cobrada', async () => {
+        listLive.mockResolvedValue([]) // sin add-ons vivos
+        insertAddon.mockResolvedValue({ id: 'addon-flow-1', moduleKey: 'cardio' } as never)
+        const provider = makeFlowProvider()
+
+        const res = await activateAddonForCoachFlow(makeDbStub().db, provider, ctx, 'cardio', 'v2-2026-06')
+
+        // compuesto nuevo = base pro mensual + cardio mensual (ÚNICA fuente de la plata).
+        const expected = getCompositeAmountClp('pro', 'monthly', [{ moduleKey: 'cardio', priceClpMensual: 9990 }])
+        expect(provider.addSubscriptionItem).toHaveBeenCalledOnce()
+        expect(provider.addSubscriptionItem.mock.calls[0][0]).toBe('flow-sub-1')
+        expect(provider.addSubscriptionItem.mock.calls[0][1]).toMatchObject({
+            tier: 'pro',
+            cycle: 'monthly',
+            amountClp: expected,
+        })
+        // fila insertada con firstChargedAt (el cobro ya ocurrió) + source self_service.
+        expect(insertAddon).toHaveBeenCalledOnce()
+        expect(insertAddon.mock.calls[0][1]).toMatchObject({
+            coachId: 'coach-1',
+            moduleKey: 'cardio',
+            source: 'self_service',
+            firstChargedAt: ctx.now.toISOString(),
+        })
+        expect(res.chargedNowClp).toBe(5161)
+        expect(res.newCompositeAmountClp).toBe(expected)
+        expect(res.addon.id).toBe('addon-flow-1')
+    })
+
+    it('money-safety: si addSubscriptionItem tira, NO se inserta la fila', async () => {
+        listLive.mockResolvedValue([])
+        const provider = {
+            addSubscriptionItem: vi.fn().mockRejectedValue(new Error('Flow changePlan failed (HTTP 500)')),
+        }
+        await expect(
+            activateAddonForCoachFlow(makeDbStub().db, provider, ctx, 'cardio', 'v2-2026-06')
+        ).rejects.toThrow()
+        expect(insertAddon).not.toHaveBeenCalled()
+    })
+
+    it('fallback: si Flow no reporta chargedNowClp, usa la proración server-computed', async () => {
+        listLive.mockResolvedValue([])
+        insertAddon.mockResolvedValue({ id: 'addon-flow-1', moduleKey: 'cardio' } as never)
+        const provider = makeFlowProvider({ chargedNowClp: null })
+        const res = await activateAddonForCoachFlow(makeDbStub().db, provider, ctx, 'cardio', 'v2-2026-06')
+        expect(res.chargedNowClp).toBe(getAddonProrationClp(9990, 'monthly', ctx.now, ctx.currentPeriodEnd))
+    })
+})
+
 // ── materializeAddonFromOneShot (webhook trim/anual) ─────────────────────────────
 describe('materializeAddonFromOneShot', () => {
     const ctx = {
@@ -554,6 +625,60 @@ describe('requestAddonCancellation', () => {
         await expect(
             requestAddonCancellation({} as never, payments, ctx, 'cardio')
         ).rejects.toThrow(/módulo/)
+    })
+
+    // ── B5: coach FLOW, baja regla 4 → NO changePlan-DOWN inmediato (se difiere al corte via cron) ──
+    it('regla 4 coach FLOW → cancel_pending + expires_at al corte, SIN updateCheckoutAmount inmediato', async () => {
+        const payments = makePaymentsStub()
+        const live = makeAddon({
+            moduleKey: 'cardio',
+            status: 'active',
+            firstChargedAt: '2026-06-01T00:00:00.000Z',
+        })
+        listLive.mockResolvedValueOnce([live])
+        requestCancel.mockResolvedValue(makeAddon({ ...live, status: 'cancel_pending' }))
+
+        const result = await requestAddonCancellation(
+            {} as never,
+            payments,
+            { ...ctx, provider: 'flow', subscriptionMpId: 'flow-sub-1' },
+            'cardio'
+        )
+
+        // Fila igual que MP: cancel_pending + expires_at al corte.
+        expect(result.status).toBe('cancel_pending')
+        expect(result.effectiveAt).toBe('2026-07-01T00:00:00.000Z')
+        expect(requestCancel.mock.calls[0][2]).toMatchObject({ expiresAt: '2026-07-01T00:00:00.000Z' })
+        // CRÍTICO money-safety: NO se baja el monto de la sub Flow ahora (bajarlo mid-ciclo acreditaria
+        // el ciclo ya cobrado → viola regla 4). El changePlan-down corre DIFERIDO en el cron.
+        expect(payments.updateCheckoutAmount).not.toHaveBeenCalled()
+        expect(result.putApplied).toBe(false)
+    })
+
+    it('regla 4 coach MP (provider mercadopago explícito) → PUT inmediato (sin regresion)', async () => {
+        const payments = makePaymentsStub()
+        const live = makeAddon({
+            moduleKey: 'cardio',
+            status: 'active',
+            firstChargedAt: '2026-06-01T00:00:00.000Z',
+        })
+        listLive.mockResolvedValueOnce([live])
+        requestCancel.mockResolvedValue(makeAddon({ ...live, status: 'cancel_pending' }))
+        listLive.mockResolvedValueOnce([]) // liveAfter: sin add-ons → solo la base
+
+        const result = await requestAddonCancellation(
+            {} as never,
+            payments,
+            { ...ctx, provider: 'mercadopago' },
+            'cardio'
+        )
+
+        expect(payments.updateCheckoutAmount).toHaveBeenCalledWith(
+            'preapproval-1',
+            getTierPriceClp('pro', 'monthly'),
+            undefined
+        )
+        expect(result.putApplied).toBe(true)
     })
 })
 

@@ -7,15 +7,28 @@ import { signFlowParams } from './flow-signature'
 // fallo transitorio de DB (para chequear que NO se confunde con huerfano).
 let coachIdBySub: string | null = 'coach-flow-1'
 let coachLookupError: { message: string } | null = null
+// updateCheckoutAmount resuelve tier/cycle por otro select (subscription_tier, billing_cycle).
+let coachTierCycle: { subscription_tier: string; billing_cycle: string } | null = {
+    subscription_tier: 'pro',
+    billing_cycle: 'monthly',
+}
+let coachTierCycleError: { message: string } | null = null
 vi.mock('@/lib/supabase/admin-client', () => ({
     createServiceRoleClient: () => ({
         from: () => ({
-            select: () => ({
+            // El select discrimina por columnas: `id` (resolveCoachId) vs `subscription_tier,...` (tier/cycle).
+            select: (cols?: string) => ({
                 eq: () => ({
-                    maybeSingle: async () =>
-                        coachLookupError
+                    maybeSingle: async () => {
+                        if (cols && cols.includes('subscription_tier')) {
+                            return coachTierCycleError
+                                ? { data: null, error: coachTierCycleError }
+                                : { data: coachTierCycle, error: null }
+                        }
+                        return coachLookupError
                             ? { data: null, error: coachLookupError }
-                            : { data: coachIdBySub ? { id: coachIdBySub } : null, error: null },
+                            : { data: coachIdBySub ? { id: coachIdBySub } : null, error: null }
+                    },
                 }),
             }),
         }),
@@ -127,6 +140,25 @@ describe('FlowProvider.createCheckout (Fase 1 — enrolamiento)', () => {
         expect(callAt(0).url).toBe(`${BASE}/customer/register`)
         expect(callAt(0).params.get('customerId')).toBe('cus_existing')
         expect(r.checkoutId).toBe('cus_existing')
+    })
+})
+
+describe('FlowProvider.startCardReenrollment (T5.5 — cambio de tarjeta por redirect)', () => {
+    it('POST a customer/register sobre el customerId existente; devuelve la url de re-enrolamiento', async () => {
+        fetchMock.mockResolvedValueOnce(ok({ url: 'https://sandbox.flow.cl/app/customer/register.php', token: 'RG-CARD' }))
+        const r = await new FlowProvider().startCardReenrollment('cus_existing', 'https://eva/coach/subscription?card=updated')
+        expect(fetchMock).toHaveBeenCalledTimes(1)
+        expect(callAt(0).url).toBe(`${BASE}/customer/register`)
+        expect(callAt(0).params.get('customerId')).toBe('cus_existing')
+        expect(callAt(0).params.get('url_return')).toBe('https://eva/coach/subscription?card=updated')
+        expect(r).toEqual({ redirectUrl: 'https://sandbox.flow.cl/app/customer/register.php?token=RG-CARD' })
+    })
+
+    it('respuesta sin url/token → error', async () => {
+        fetchMock.mockResolvedValueOnce(ok({}))
+        await expect(
+            new FlowProvider().startCardReenrollment('cus_existing', 'https://eva/return')
+        ).rejects.toThrow('sin url/token')
     })
 })
 
@@ -363,10 +395,133 @@ describe('FlowProvider.createSubscriptionForEnrolledCustomer (Fase 2b)', () => {
 })
 
 describe('FlowProvider — diferidos (throws etiquetados por Ola)', () => {
-    it('updateCheckoutAmount → Ola 5', async () => {
-        await expect(new FlowProvider().updateCheckoutAmount('s', 1000)).rejects.toThrow('Ola 5')
-    })
     it('updateCardAtProvider → Ola 4', async () => {
         await expect(new FlowProvider().updateCardAtProvider('s', 't', 'k')).rejects.toThrow('Ola 4')
+    })
+    it('fetchCardTokenSummary → Ola 4', async () => {
+        await expect(new FlowProvider().fetchCardTokenSummary('t')).rejects.toThrow('Ola 4')
+    })
+})
+
+describe('FlowProvider.changeSubscriptionPlan (T5.3 — ensure-plan + changePlan)', () => {
+    const input = {
+        tier: 'pro',
+        cycle: 'monthly' as const,
+        amountClp: 14990,
+        planLabel: 'EVA Pro (mensual)',
+        webhookUrl: 'https://eva/api/payments/flow/webhook?token=x',
+    }
+
+    it('happy SUBIDA: plans/create (planId por monto) + changePlan; balance>0 → chargedNowClp, sin credito', async () => {
+        fetchMock
+            .mockResolvedValueOnce(ok({ planId: 'eva_pro_monthly_14990' }))
+            .mockResolvedValueOnce(ok({ start_date_of_new_plan: '2026-07-09', new_amount: 14990, old_amount: 5000, balance: 9990 }))
+        const r = await new FlowProvider().changeSubscriptionPlan('sus_abc', input)
+        expect(fetchMock).toHaveBeenCalledTimes(2)
+        // 1) plans/create con planId deterministico por monto NUEVO.
+        expect(callAt(0).method).toBe('POST')
+        expect(callAt(0).url).toBe(`${BASE}/plans/create`)
+        expect(callAt(0).params.get('planId')).toBe('eva_pro_monthly_14990')
+        expect(callAt(0).params.get('amount')).toBe('14990')
+        expect(callAt(0).params.get('interval')).toBe('3')
+        expect(callAt(0).params.get('interval_count')).toBe('1')
+        // 2) subscription/changePlan con subscriptionId + newPlanId.
+        expect(callAt(1).method).toBe('POST')
+        expect(callAt(1).url).toBe(`${BASE}/subscription/changePlan`)
+        expect(callAt(1).params.get('subscriptionId')).toBe('sus_abc')
+        expect(callAt(1).params.get('newPlanId')).toBe('eva_pro_monthly_14990')
+        expect(r).toEqual({ applied: true, chargedNowClp: 9990, creditClp: null })
+    })
+
+    it('BAJADA: balance<0 (string, Flow stringifica) → creditClp, sin cobro', async () => {
+        fetchMock
+            .mockResolvedValueOnce(ok({ planId: 'eva_pro_monthly_5000' }))
+            .mockResolvedValueOnce(ok({ balance: '-9990' }))
+        const r = await new FlowProvider().changeSubscriptionPlan('sus_abc', { ...input, amountClp: 5000 })
+        expect(callAt(0).params.get('planId')).toBe('eva_pro_monthly_5000')
+        expect(r).toEqual({ applied: true, chargedNowClp: null, creditClp: 9990 })
+    })
+
+    it('balance 0 / ausente → ni cobro ni credito', async () => {
+        fetchMock
+            .mockResolvedValueOnce(ok({ planId: 'eva_pro_monthly_14990' }))
+            .mockResolvedValueOnce(ok({ start_date_of_new_plan: '2026-07-09' }))
+        const r = await new FlowProvider().changeSubscriptionPlan('sus_abc', input)
+        expect(r).toEqual({ applied: true, chargedNowClp: null, creditClp: null })
+    })
+
+    it('plan duplicado (HTTP 401 "already been used") → NO tira, sigue a changePlan', async () => {
+        fetchMock
+            .mockResolvedValueOnce({
+                ok: false,
+                status: 401,
+                text: async () => JSON.stringify({ code: 501, message: 'Internal Server Error - This planId has already been used' }),
+            })
+            .mockResolvedValueOnce(ok({ balance: 9990 }))
+        const r = await new FlowProvider().changeSubscriptionPlan('sus_abc', input)
+        expect(fetchMock).toHaveBeenCalledTimes(2)
+        expect(callAt(1).url).toBe(`${BASE}/subscription/changePlan`)
+        expect(r.chargedNowClp).toBe(9990)
+    })
+
+    it('addSubscriptionItem y removeSubscriptionItem = alias del mismo camino (ensure-plan + changePlan)', async () => {
+        fetchMock
+            .mockResolvedValueOnce(ok({ planId: 'eva_pro_monthly_14990' }))
+            .mockResolvedValueOnce(ok({ balance: 9990 }))
+        const add = await new FlowProvider().addSubscriptionItem('sus_add', input)
+        expect(callAt(1).url).toBe(`${BASE}/subscription/changePlan`)
+        expect(callAt(1).params.get('subscriptionId')).toBe('sus_add')
+        expect(add).toEqual({ applied: true, chargedNowClp: 9990, creditClp: null })
+
+        fetchMock.mockClear()
+        fetchMock
+            .mockResolvedValueOnce(ok({ planId: 'eva_pro_monthly_5000' }))
+            .mockResolvedValueOnce(ok({ balance: '-3000' }))
+        const rem = await new FlowProvider().removeSubscriptionItem('sus_rem', { ...input, amountClp: 5000 })
+        expect(callAt(1).url).toBe(`${BASE}/subscription/changePlan`)
+        expect(callAt(1).params.get('subscriptionId')).toBe('sus_rem')
+        expect(rem).toEqual({ applied: true, chargedNowClp: null, creditClp: 3000 })
+    })
+})
+
+describe('FlowProvider.updateCheckoutAmount (T5.3 — cupon-expira via changePlan, tier/cycle del coach)', () => {
+    beforeEach(() => {
+        coachTierCycle = { subscription_tier: 'pro', billing_cycle: 'monthly' }
+        coachTierCycleError = null
+        vi.stubEnv('NEXT_PUBLIC_SITE_URL', 'https://eva-app.cl')
+    })
+
+    it('resuelve tier/cycle del coach → ensure-plan + changePlan al nuevo monto', async () => {
+        fetchMock
+            .mockResolvedValueOnce(ok({ planId: 'eva_pro_monthly_29990' }))
+            .mockResolvedValueOnce(ok({ balance: 15000 }))
+        await new FlowProvider().updateCheckoutAmount('sus_cupon', 29990)
+        expect(fetchMock).toHaveBeenCalledTimes(2)
+        expect(callAt(0).url).toBe(`${BASE}/plans/create`)
+        expect(callAt(0).params.get('planId')).toBe('eva_pro_monthly_29990')
+        // urlCallback del plan = webhook Flow por defecto (NEXT_PUBLIC_SITE_URL).
+        expect(callAt(0).params.get('urlCallback')).toContain('https://eva-app.cl/api/payments/flow/webhook')
+        expect(callAt(1).url).toBe(`${BASE}/subscription/changePlan`)
+        expect(callAt(1).params.get('subscriptionId')).toBe('sus_cupon')
+    })
+
+    it('sin coach para la sub → throw (no mueve plata a ciegas)', async () => {
+        coachTierCycle = null
+        await expect(new FlowProvider().updateCheckoutAmount('sus_orphan', 29990)).rejects.toThrow('sin coach')
+        expect(fetchMock).not.toHaveBeenCalled()
+    })
+
+    it('error de query en el lookup → throw (no lo confunde con huerfano)', async () => {
+        coachTierCycleError = { message: 'statement timeout' }
+        await expect(new FlowProvider().updateCheckoutAmount('sus_x', 29990)).rejects.toThrow('tier/cycle lookup failed')
+    })
+
+    it('updateCheckoutAmountAndRef ignora el external_reference (EVA es fuente del tier) y aplica el monto', async () => {
+        fetchMock
+            .mockResolvedValueOnce(ok({ planId: 'eva_pro_monthly_29990' }))
+            .mockResolvedValueOnce(ok({ balance: 0 }))
+        await new FlowProvider().updateCheckoutAmountAndRef('sus_cupon', 29990, 'coach|pro|monthly')
+        expect(fetchMock).toHaveBeenCalledTimes(2)
+        expect(callAt(1).url).toBe(`${BASE}/subscription/changePlan`)
     })
 })

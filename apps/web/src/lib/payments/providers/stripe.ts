@@ -6,6 +6,8 @@ import type {
     PaymentsProvider,
     ProviderCheckoutSnapshot,
     ProviderPaymentSnapshot,
+    SubscriptionChangeResult,
+    SubscriptionCompositeInput,
     WebhookProcessResult,
 } from '@/lib/payments/types'
 
@@ -57,6 +59,27 @@ export class StripeProvider implements PaymentsProvider {
     }
 
     async createOneShotPayment(_input: CreateOneShotInput): Promise<CreateOneShotResult> {
+        throw new Error('Stripe provider is not implemented yet. Configure PAYMENT_PROVIDER=mercadopago.')
+    }
+
+    async addSubscriptionItem(
+        _subscriptionRef: string,
+        _input: SubscriptionCompositeInput
+    ): Promise<SubscriptionChangeResult> {
+        throw new Error('Stripe provider is not implemented yet. Configure PAYMENT_PROVIDER=mercadopago.')
+    }
+
+    async removeSubscriptionItem(
+        _subscriptionRef: string,
+        _input: SubscriptionCompositeInput
+    ): Promise<SubscriptionChangeResult> {
+        throw new Error('Stripe provider is not implemented yet. Configure PAYMENT_PROVIDER=mercadopago.')
+    }
+
+    async changeSubscriptionPlan(
+        _subscriptionRef: string,
+        _input: SubscriptionCompositeInput
+    ): Promise<SubscriptionChangeResult> {
         throw new Error('Stripe provider is not implemented yet. Configure PAYMENT_PROVIDER=mercadopago.')
     }
 }

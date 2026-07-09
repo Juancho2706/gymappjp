@@ -67,6 +67,9 @@ type CoachSubscription = {
     billing_cycle: string
     current_period_end: string | null
     payment_provider: string
+    // Gateway PERSISTIDO de la sub viva (T5.5): decide si "Cambiar" muestra el form MP o el boton de
+    // re-enrolamiento Webpay. NUNCA inferido del `payment_provider` legado (no siempre reflejaba Flow).
+    subscription_provider?: string
     card_last4?: string | null
     card_brand?: string | null
 }
@@ -248,7 +251,10 @@ export function SubscriptionContent({ embedded = false }: { embedded?: boolean }
         if (checkoutFeedbackHandledRef.current) return
         const addon = searchParams.get('addon')
         const upgrade = searchParams.get('upgrade')
-        if (!addon && !upgrade) return
+        // 'success' = swap MP (Secure Fields, síncrono) · 'updated' = vuelta del redirect de
+        // re-enrolamiento Webpay (Flow, T5.5). Mismo banner: para el coach es el mismo resultado.
+        const card = searchParams.get('card')
+        if (!addon && !upgrade && !card) return
         checkoutFeedbackHandledRef.current = true
 
         if (addon === 'success') {
@@ -275,6 +281,12 @@ export function SubscriptionContent({ embedded = false }: { embedded?: boolean }
         } else if (upgrade === 'failure') {
             setSuccessMessage(null)
             setError('No se pudo completar el cambio de plan. No se realizó ningún cobro. Puedes intentarlo nuevamente.')
+        }
+
+        if (card === 'success' || card === 'updated') {
+            setError(null)
+            setSuccessMessage('Tarjeta actualizada correctamente.')
+            void refreshStatus()
         }
 
         // Limpiar el param para que un refresh no re-muestre el banner.
@@ -456,6 +468,12 @@ export function SubscriptionContent({ embedded = false }: { embedded?: boolean }
     // completa) puede pagar con Flow. Con coach pago activo el modal muestra únicamente MP con su
     // texto 'Confirmar' original — sin ofrecer un botón que reventaría en el server.
     const canUseFlowForPlanChange = FLOW_ENABLED && coachTier === 'free'
+    // B2: un coach con SUSCRIPCION Flow ACTIVA no puede cambiar de plan todavia — el server responde 400
+    // FLOW_PLAN_CHANGE_UNSUPPORTED por CUALQUIER gateway (confirm-upgrade y el PUT del preapproval son
+    // MP-only; changeSubscriptionPlan de Flow se cablea en la proxima ola). La UI no debe dejar pagar algo
+    // que revienta en el server → deshabilita Confirmar y avisa. El alta free→paid por Flow no entra aca
+    // (coachTier === 'free' → hasActivePaidPlan false).
+    const isFlowActivePlanChange = coach?.subscription_provider === 'flow' && hasActivePaidPlan
     // P1-3: ¿el coach tiene un add-on de nutrición por intercambios VIVO? Bloquea bajar a un tier
     // sin nutrición (Starter) hasta quitarlo — espejo del 409 NUTRITION_ADDON_ON_DOWNGRADE del server.
     // Solo ACTIVE bloquea: si ya dio de baja la nutrición (cancel_pending) el downgrade se permite.
@@ -512,7 +530,17 @@ export function SubscriptionContent({ embedded = false }: { embedded?: boolean }
             })
             const payload = await response.json()
             if (!response.ok) throw new Error(payload.error ?? 'No se pudo agregar el módulo.')
-            // Todos los ciclos: el endpoint devuelve la URL del one-shot prorrateado → redirige a MP.
+            // Coach FLOW (Ola 5): el cambio de plan es SÍNCRONO — Flow ya cobró la diferencia y el
+            // módulo quedó activo. NO hay redirect a checkout: cerramos el modal, refrescamos el estado
+            // (para que el módulo nuevo aparezca) y mostramos el banner de éxito existente.
+            if (payload.kind === 'flow_change_applied') {
+                captureAddonFunnel('addon_flow_applied', { module_key: key, billing_cycle: coachCycle, tier: coachTier })
+                setAddonModalKey(null)
+                setSuccessMessage('Tu módulo quedó activo y se suma a tu próximo cobro.')
+                await refreshStatus()
+                return
+            }
+            // MercadoPago (todos los ciclos): el endpoint devuelve la URL del one-shot prorrateado.
             if (payload.kind === 'one_shot_checkout' && payload.checkoutUrl) {
                 captureAddonFunnel('addon_oneshot_redirected', { module_key: key, billing_cycle: coachCycle, tier: coachTier })
                 window.location.href = payload.checkoutUrl
@@ -1136,10 +1164,15 @@ export function SubscriptionContent({ embedded = false }: { embedded?: boolean }
                             )}
                         </div>
                         <div className="mt-4 flex flex-col gap-1.5">
+                            {isFlowActivePlanChange && (
+                                <p className="text-xs font-medium text-amber-600 dark:text-amber-400">
+                                    El cambio de plan con Flow estara disponible pronto.
+                                </p>
+                            )}
                             <button
                                 type="button"
                                 onClick={() => { setShowUpgradeConfirm(false); void handleChangePlan('mercadopago') }}
-                                disabled={saving}
+                                disabled={saving || isFlowActivePlanChange}
                                 className="h-12 w-full rounded-control bg-sport-500 text-sm font-bold text-white transition-colors hover:bg-sport-600 disabled:opacity-60 disabled:hover:bg-sport-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
                             >
                                 {saving ? 'Procesando...' : (canUseFlowForPlanChange ? 'Pagar con Mercado Pago' : 'Confirmar')}

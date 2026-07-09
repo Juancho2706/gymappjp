@@ -30,6 +30,10 @@ export type CoachBillingRow = {
     billing_cycle: string | null
     current_period_end: string | null
     subscription_mp_id: string | null
+    /** Gateway persistido de la sub viva (Ola 3). NOT NULL DEFAULT 'mercadopago' en DB. */
+    subscription_provider: string | null
+    /** Ref de la sub en el gateway NO-MP (Flow → subscriptionId). null en coaches MP. */
+    subscription_provider_external_id: string | null
 }
 
 /**
@@ -43,12 +47,24 @@ export async function fetchCoachBillingRow(
     const { data, error } = await admin
         .from('coaches')
         .select(
-            'id, subscription_tier, subscription_status, billing_cycle, current_period_end, subscription_mp_id'
+            'id, subscription_tier, subscription_status, billing_cycle, current_period_end, subscription_mp_id, subscription_provider, subscription_provider_external_id'
         )
         .eq('id', coachId)
         .maybeSingle()
     if (error) throw new Error(error.message)
     return (data as CoachBillingRow | null) ?? null
+}
+
+/**
+ * Ref de la suscripción viva según el gateway persistido (money-safety, Ola 5): Flow →
+ * `subscription_provider_external_id`; MP (default) → `subscription_mp_id`. Los caminos que operan
+ * sobre la sub (baja de add-on = PUT/changePlan de monto) deben usar ESTE ref, nunca asumir MP.
+ * NOTA de naming legacy: el `AddonPaymentsPort`/`CancelAddonContext` sigue llamando `subscriptionMpId`
+ * al ref por compatibilidad — pero lleva el ref del gateway del coach (MP o Flow).
+ */
+export function resolveSubscriptionRef(row: CoachBillingRow): string {
+    if (row.subscription_provider === 'flow') return row.subscription_provider_external_id ?? ''
+    return row.subscription_mp_id ?? ''
 }
 
 /** Normaliza el ciclo del coach (default mensual si la columna viene vacía/inválida). */
@@ -77,14 +93,18 @@ export function buildActivateContext(
     }
 }
 
-/** Construye el contexto de baja del service. */
+/** Construye el contexto de baja del service. `subscriptionMpId` lleva el ref del gateway del coach
+ * (Flow → external_id; MP → mp_id) — el service hace el PUT/changePlan de monto contra ese ref. */
 export function buildCancelContext(row: CoachBillingRow): CancelAddonContext {
     return {
         coachId: row.id,
         tier: row.subscription_tier as SubscriptionTier,
         cycle: normalizeCycle(row.billing_cycle),
-        subscriptionMpId: row.subscription_mp_id ?? '',
+        subscriptionMpId: resolveSubscriptionRef(row),
         currentPeriodEnd: row.current_period_end ? new Date(row.current_period_end) : new Date(),
+        // B5: el gateway del coach decide si la baja regla 4 dispara el changePlan-DOWN inmediato (MP) o
+        // lo difiere al corte (Flow, para no acreditar el ciclo ya cobrado).
+        provider: row.subscription_provider === 'flow' ? 'flow' : 'mercadopago',
     }
 }
 

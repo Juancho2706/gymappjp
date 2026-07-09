@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import type { Json, TablesInsert } from '@/lib/database.types'
-import { getPaymentsProvider } from '@/lib/payments/provider'
+import { getPaymentsProvider, getPaymentsProviderForCoach } from '@/lib/payments/provider'
 import { rateLimitPayment, jsonRateLimited } from '@/lib/rate-limit'
 import { resolvePreferredWorkspace } from '@/services/auth/workspace.service'
 import { canViewBilling } from '@/services/auth/workspace-permissions.service'
@@ -45,7 +45,7 @@ export async function POST(request: Request) {
         const { data: coach } = await admin
             .from('coaches')
             .select(
-                'id, subscription_mp_id, payment_provider, current_period_end, superseded_mp_preapproval_id'
+                'id, subscription_mp_id, subscription_provider, subscription_provider_external_id, payment_provider, current_period_end, superseded_mp_preapproval_id'
             )
             .eq('id', user.id)
             .maybeSingle()
@@ -54,8 +54,14 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Coach no encontrado' }, { status: 404 })
         }
 
-        const provider = getPaymentsProvider()
-        const checkoutId = coach.subscription_mp_id?.trim()
+        // Provider POR COACH (Ola 5): la sub viva se cancela en su gateway persistido. El id a cancelar
+        // depende del gateway — Flow → subscription_provider_external_id; MP → subscription_mp_id.
+        // `cancelCheckoutAtProvider` conserva el acceso hasta el corte en ambos (Flow at_period_end=1).
+        const provider = getPaymentsProviderForCoach(coach)
+        const checkoutId = (coach.subscription_provider === 'flow'
+            ? coach.subscription_provider_external_id
+            : coach.subscription_mp_id
+        )?.trim()
 
         const providerMatches =
             !coach.payment_provider || coach.payment_provider === provider.name
@@ -79,10 +85,14 @@ export async function POST(request: Request) {
         // como backstop en superseded_mp_preapproval_id), cancelar solo subscription_mp_id dejaría al
         // VIEJO cobrando. Lo cancelamos en MP (best-effort: un "already cancelled" no es error) y
         // limpiamos el marcador para que no quede colgando. service-role.
+        // El superseded es SIEMPRE un preapproval de MercadoPago (columna subscription_mp_id viejo),
+        // incluso para un coach que migró a Flow: se cancela con el provider MP explícito, NUNCA con el
+        // provider del coach (Flow no reconoce un id MP → fallaría en silencio dejándolo cobrando).
+        const mpProvider = getPaymentsProvider('mercadopago')
         const superseded = coach.superseded_mp_preapproval_id?.trim()
-        if (superseded && superseded !== checkoutId && providerMatches) {
+        if (superseded && superseded !== checkoutId) {
             try {
-                await provider.cancelCheckoutAtProvider(superseded)
+                await mpProvider.cancelCheckoutAtProvider(superseded)
                 console.info('[payments.cancel-subscription] cancelled superseded preapproval', {
                     coachId: user.id,
                     superseded,

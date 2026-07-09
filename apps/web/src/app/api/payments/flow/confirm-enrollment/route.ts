@@ -20,7 +20,7 @@ import { FlowProvider } from '@/lib/payments/providers/flow'
 import { resolvePreferredWorkspace } from '@/services/auth/workspace.service'
 import { canViewBilling } from '@/services/auth/workspace-permissions.service'
 import { MODULE_KEYS, type ModuleKey } from '@/services/entitlements.service'
-import { listLive } from '@/infrastructure/db/coach-addons.repository'
+import { listLive, markFirstCharged } from '@/infrastructure/db/coach-addons.repository'
 import { getCompositeAmountClp, toBillableAddons } from '@/services/billing/addons.service'
 import {
     resolveActiveDiscountSpec,
@@ -120,12 +120,47 @@ export async function POST(request: Request) {
         // El status devuelto es el REAL del coach (escéptico Ola 4): una sub ya creada cuya 1ra
         // invoice DECLINO quedo persistida como 'pending_payment' — responder 'active' hardcodeado
         // hacia que la pagina redirigiera al dashboard como activo a un coach sin cobro confirmado.
-        if (coach.subscription_provider_external_id) {
+        // ── B3: idempotencia vs reactivacion Flow→Flow ───────────────────────────────────────────────
+        // El external_id viejo cuenta como "sub Flow ya creada" (→ alreadyCreated) SOLO si el coach NO esta
+        // en un estado TERMINAL. Si esta 'canceled'/'expired', esa sub Flow YA fue cancelada en Flow
+        // (at_period_end, sin cobros futuros) → el external_id es un ref MUERTO: sin esta excepcion, un coach
+        // que se reinscribe por Flow quedaria bloqueado en alreadyCreated ETERNO (el guard veria el id viejo
+        // por siempre). money-safety: NO hay riesgo de doble cobro (la sub vieja ya no cobra en Flow).
+        const isTerminalSubStatus =
+            coach.subscription_status === 'canceled' || coach.subscription_status === 'expired'
+        if (coach.subscription_provider_external_id && !isTerminalSubStatus) {
             return NextResponse.json({
                 ok: true,
                 status: coach.subscription_status ?? 'active',
                 alreadyCreated: true,
             })
+        }
+        // Reactivacion Flow→Flow legitima (external_id presente + coach terminal): ARCHIVAR el id MUERTO en el
+        // historial (evidencia money-safety) antes de continuar con la creacion de la sub nueva — el persist
+        // de abajo sobrescribe subscription_provider_external_id con el id nuevo. Idempotente (onConflict).
+        if (coach.subscription_provider_external_id && isTerminalSubStatus) {
+            const { error: supersedeErr } = await admin.from('subscription_events').upsert(
+                {
+                    coach_id: user.id,
+                    provider: 'flow',
+                    provider_event_id: `flow:subscription:${coach.subscription_provider_external_id}:superseded_by_reenrollment`,
+                    provider_checkout_id: coach.subscription_provider_external_id,
+                    provider_status: 'superseded_by_reenrollment',
+                    payload: {
+                        action: 'flow_subscription_superseded_by_reenrollment',
+                        old_subscription_id: coach.subscription_provider_external_id,
+                        coach_status: coach.subscription_status,
+                    },
+                },
+                { onConflict: 'provider_event_id' }
+            )
+            if (supersedeErr) {
+                console.error('[payments.flow.confirm-enrollment] supersede-archive failed', {
+                    traceId,
+                    coachId: user.id,
+                    message: supersedeErr.message,
+                })
+            }
         }
 
         // Sin customer enrolado no hay Fase 1 en curso: el coach no paso por create-preference (Flow).
@@ -305,7 +340,12 @@ export async function POST(request: Request) {
             .select('subscription_provider_external_id, subscription_status')
             .eq('id', user.id)
             .maybeSingle()
-        if (freshCoach?.subscription_provider_external_id) {
+        // B3: misma excepcion terminal que el guard de arriba. Un external_id FRESCO cuenta como sub ya
+        // creada por otra request SOLO si el coach NO esta terminal; si sigue 'canceled'/'expired' es el id
+        // MUERTO de la reactivacion (nadie lo limpio) → proceder a crear (el persist lo sobrescribe).
+        const freshIsTerminal =
+            freshCoach?.subscription_status === 'canceled' || freshCoach?.subscription_status === 'expired'
+        if (freshCoach?.subscription_provider_external_id && !freshIsTerminal) {
             await clearFlowEnrollment(admin, user.id).catch(() => {})
             // status REAL (no 'active' hardcodeado): la sub creada por la otra request pudo quedar
             // 'pending_payment' (1ra invoice declinada) — la pagina no debe redirigir como activo.
@@ -441,8 +481,31 @@ export async function POST(request: Request) {
         // (provider, provider_payment_id) = ('flow', 'invoice:<id>') → evidencia SERNAC garantizada aunque
         // el urlCallback de Flow (PIN Ola 6) nunca entregue la notificacion de la 1ra invoice.
         if (result.firstInvoice?.paid) {
+            const chargedAt = new Date().toISOString()
+
+            // (b0) FIRST-CHARGE de add-ons (B1): el primer cobro de Flow es SINCRONO (Flow cobra la 1ra
+            // invoice al crear la sub, con el compuesto —base + add-ons − descuento— ya horneado en el
+            // plan). A diferencia de MP, no llega un webhook de cobro recurrente que dispare
+            // `applyFirstChargeToAddons` keyeado por subscription_mp_id (NULL en un coach Flow) → sin
+            // esto los add-ons recién materializados quedarían con `first_charged_at` NULL para siempre:
+            // la regla de baja (compromiso mínimo) los seguiría contando como no cobrados → OVERCHARGE al
+            // cancelar. Marcamos AQUÍ (set-once, idempotente con el webhook: `markFirstCharged` solo
+            // afecta filas con `first_charged_at IS NULL`). Usamos `markFirstCharged` DIRECTO (no
+            // `applyFirstChargeToAddons`) a propósito: el PUT del compromiso mínimo de ese helper haría un
+            // `changePlan` de Flow, y en Flow una SUBIDA de monto COBRA la diferencia al instante → en un
+            // alta (add-ons `active`, jamás `cancel_pending`) sería un cobro redundante. El compuesto ya
+            // está correcto en el plan; no hay PUT que hacer. Best-effort (el coach ya quedó activo).
             try {
-                const chargedAt = new Date().toISOString()
+                await markFirstCharged(admin, user.id, chargedAt)
+            } catch (firstChargeErr) {
+                console.error('[payments.flow.confirm-enrollment] markFirstCharged failed (coach already active)', {
+                    traceId,
+                    coachId: user.id,
+                    message: firstChargeErr instanceof Error ? firstChargeErr.message : String(firstChargeErr),
+                })
+            }
+
+            try {
                 const detail = await resolveActiveDiscountDetail(admin, user.id)
                 // Releer las filas vivas (ya incluyen los add-ons recien materializados) para el desglose.
                 const liveForSnap = await listLive(admin, user.id)

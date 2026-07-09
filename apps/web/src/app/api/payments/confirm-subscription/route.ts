@@ -205,6 +205,15 @@ export async function POST(request: Request) {
                 billing_cycle: billingCycle,
                 max_clients: getTierMaxClients(tier),
                 subscription_mp_id: preapprovalId,
+                // ── B3: al persistir un preapproval MP VIVO, el gateway dueño de la sub vuelve a MP y los
+                // refs Flow MUERTOS se limpian. Sin esto, un ex-coach Flow reactivado por MP quedaria con
+                // subscription_provider='flow' + external_id viejo → cancel-subscription elegiria Flow por
+                // el provider persistido y se saltaria el cancel del preapproval MP → MP seguiria cobrando a
+                // un coach 'canceled' (loop no-puede-cancelar). El provider_customer_id se CONSERVA (tarjeta
+                // Flow enrolada reutilizable si el coach volviera a Flow).
+                subscription_provider: 'mercadopago',
+                subscription_provider_external_id: null,
+                provider_plan_id: null,
             })
             .eq('id', user.id)
 

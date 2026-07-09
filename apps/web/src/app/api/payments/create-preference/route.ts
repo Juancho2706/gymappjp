@@ -125,7 +125,7 @@ export async function POST(request: Request) {
         const { data: currentCoach } = await supabase
             .from('coaches')
             .select(
-                'subscription_status, subscription_tier, billing_cycle, current_period_end, subscription_mp_id, provider_customer_id'
+                'subscription_status, subscription_tier, billing_cycle, current_period_end, subscription_mp_id, provider_customer_id, subscription_provider'
             )
             .eq('id', user.id)
             .maybeSingle()
@@ -138,6 +138,24 @@ export async function POST(request: Request) {
             currentCoach?.subscription_status === 'active' &&
             currentCoach.current_period_end != null &&
             new Date(currentCoach.current_period_end).getTime() > Date.now()
+
+        // ── B2 (money-safety): coach con SUSCRIPCION Flow ACTIVA no puede cambiar de plan por NINGUN
+        //    gateway todavia. El bug: un coach Flow activo aprieta el boton por defecto (Mercado Pago) y
+        //    paga el one-shot de upgrade — pero confirm-upgrade y el PUT del preapproval son MP-only y
+        //    cortan en `subscription_mp_id` NULL → plata cobrada sin upgrade entregado. Un downgrade por
+        //    MP crearia ademas un preapproval MP nuevo JUNTO a la sub Flow viva → doble recurrencia. El
+        //    guard F1 de abajo solo mira el gateway PEDIDO (flow); este mira el gateway del COACH. El flujo
+        //    de cambio de plan completo de Flow (changeSubscriptionPlan + proracion + disclosure) se cablea
+        //    en la proxima ola. Fail-closed: bloqueo ANTES del claim/one-shot, sin importar el gateway.
+        if (isActiveUpgrade && currentCoach?.subscription_provider === 'flow') {
+            return NextResponse.json(
+                {
+                    code: 'FLOW_PLAN_CHANGE_UNSUPPORTED',
+                    error: 'El cambio de plan de una suscripcion Flow estara disponible proximamente.',
+                },
+                { status: 400 }
+            )
+        }
 
         // ── F1 (C2): Flow SOLO hace ALTA en Ola 4 (free→paid y reactivacion). CUALQUIER cambio de plan de
         //    un coach pago ACTIVO por Flow se BLOQUEA aca, ANTES de la rama del upgrade one-shot. Motivo

@@ -6,7 +6,7 @@ import { resolvePreferredWorkspace } from '@/services/auth/workspace.service'
 import { canViewBilling } from '@/services/auth/workspace-permissions.service'
 import { rateLimitPayment, jsonRateLimited } from '@/lib/rate-limit'
 import { mapProviderStatus } from '@/lib/payments/subscription-state'
-import { getPaymentsProvider } from '@/lib/payments/provider'
+import { getPaymentsProviderForCoach } from '@/lib/payments/provider'
 import { parseOneShotAddonReference } from '@/lib/payments/providers/mercadopago'
 import { materializeAddonFromOneShot } from '@/services/billing/addons.service'
 import { buildAddonPaymentsPort } from '../addons/_lib/payments-port'
@@ -68,7 +68,20 @@ export async function POST(request: Request) {
         }
         const { paymentId } = parsed.data
 
-        const provider = getPaymentsProvider()
+        const admin = createServiceRoleClient()
+        const coach = await fetchCoachBillingRow(admin, user.id)
+        if (!coach) {
+            return NextResponse.json({ error: 'Coach no encontrado' }, { status: 404 })
+        }
+
+        // Coach FLOW (Ola 5, D): el alta de add-on es SÍNCRONA (POST /api/payments/addons cobra vía
+        // changePlan y materializa la fila en el acto). NO hay one-shot MP que confirmar → no-op claro.
+        // La pantalla addon-processing es MP-only; Flow no llega acá, pero el guard es defensivo.
+        if (coach.subscription_provider === 'flow') {
+            return NextResponse.json({ ok: true, status: 'active', code: 'FLOW_NO_ONESHOT' })
+        }
+
+        const provider = getPaymentsProviderForCoach(coach)
         let payment
         try {
             payment = await provider.fetchPaymentSnapshot(paymentId)
@@ -99,11 +112,6 @@ export async function POST(request: Request) {
             )
         }
 
-        const admin = createServiceRoleClient()
-        const coach = await fetchCoachBillingRow(admin, user.id)
-        if (!coach) {
-            return NextResponse.json({ error: 'Coach no encontrado' }, { status: 404 })
-        }
         if (!coach.subscription_mp_id) {
             // Backstop defensivo: el alta (POST /api/payments/addons) ya bloquea con 409
             // NO_ACTIVE_SUBSCRIPTION ANTES de cobrar cuando no hay preapproval, así que este camino es

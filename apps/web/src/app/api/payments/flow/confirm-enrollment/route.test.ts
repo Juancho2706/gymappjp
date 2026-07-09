@@ -155,10 +155,13 @@ vi.mock('@/lib/payments/provider', () => ({
     getPaymentsProvider: () => getPaymentsProvider(),
 }))
 
-// listLive (add-ons vivos) mockeado → controla el compuesto.
+// listLive (add-ons vivos) mockeado → controla el compuesto. markFirstCharged (B1): el primer cobro
+// SINCRONO de Flow debe marcar first_charged_at de los add-ons recién materializados.
 const listLive = vi.fn()
+const markFirstCharged = vi.fn(async (..._a: unknown[]) => [] as unknown[])
 vi.mock('@/infrastructure/db/coach-addons.repository', () => ({
     listLive: (...a: unknown[]) => listLive(...a),
+    markFirstCharged: (...a: unknown[]) => markFirstCharged(...a),
 }))
 
 // discount.service: isChargeableNetClp real; resolvers stub a null (sin cupon).
@@ -300,6 +303,58 @@ describe('POST /api/payments/flow/confirm-enrollment — idempotencia (anti dobl
     })
 })
 
+// ════════════════════════════════════════════════════════════════════════════════════
+// B3 — reactivacion Flow→Flow. El external_id viejo bloquea alreadyCreated ETERNO si el coach ya
+// esta 'canceled'/'expired' (la sub vieja ya fue cancelada en Flow, sin cobros futuros). Con estado
+// terminal se ARCHIVA el id muerto y se crea una sub NUEVA; con estado vivo se conserva alreadyCreated.
+// ════════════════════════════════════════════════════════════════════════════════════
+describe('POST /api/payments/flow/confirm-enrollment — B3 reactivacion Flow→Flow', () => {
+    it('coach CANCELED con external_id viejo → crea sub NUEVA + archiva el id muerto', async () => {
+        coachRow!.subscription_provider_external_id = 'sus_OLD'
+        coachRow!.subscription_status = 'canceled'
+        externalIdRecheck = 'sus_OLD' // el re-read fresco tambien ve el id muerto (nadie lo limpio)
+        const res = await POST(makeRequest({}))
+        expect(res.status).toBe(200)
+        expect((await res.json()).status).toBe('active')
+        // Creo una sub NUEVA (NO bloqueo por alreadyCreated).
+        expect(createSubscriptionForEnrolledCustomer).toHaveBeenCalledOnce()
+        // Archivo el external_id muerto en el historial (evidencia).
+        const superseded = upsertCalls.find(
+            (c) =>
+                c.table === 'subscription_events' &&
+                c.row.provider_event_id === 'flow:subscription:sus_OLD:superseded_by_reenrollment'
+        )
+        expect(superseded).toBeTruthy()
+        expect((superseded!.row.payload as Record<string, unknown>).old_subscription_id).toBe('sus_OLD')
+        // El persist sobrescribe con el id NUEVO.
+        const patch = updateCalls.find((c) => c.table === 'coaches')!.patch
+        expect(patch.subscription_provider_external_id).toBe('sus_1')
+    })
+
+    it('coach EXPIRED con external_id viejo → tambien reactiva (crea sub nueva)', async () => {
+        coachRow!.subscription_provider_external_id = 'sus_OLD'
+        coachRow!.subscription_status = 'expired'
+        externalIdRecheck = 'sus_OLD'
+        const res = await POST(makeRequest({}))
+        expect(res.status).toBe(200)
+        expect(createSubscriptionForEnrolledCustomer).toHaveBeenCalledOnce()
+    })
+
+    it('coach ACTIVE con external_id → alreadyCreated SIN archivar (sin cambio)', async () => {
+        coachRow!.subscription_provider_external_id = 'sus_LIVE'
+        coachRow!.subscription_status = 'active'
+        const res = await POST(makeRequest({}))
+        expect((await res.json()).alreadyCreated).toBe(true)
+        expect(createSubscriptionForEnrolledCustomer).not.toHaveBeenCalled()
+        const superseded = upsertCalls.find(
+            (c) =>
+                c.table === 'subscription_events' &&
+                String(c.row.provider_event_id).includes('superseded_by_reenrollment')
+        )
+        expect(superseded).toBeFalsy()
+    })
+})
+
 describe('POST /api/payments/flow/confirm-enrollment — claim atomico (anti TOCTOU doble-sub)', () => {
     it('claim PERDIDO (otro POST esta creando) → creating:true, NO crea sub', async () => {
         claimResult = false
@@ -391,6 +446,11 @@ describe('POST /api/payments/flow/confirm-enrollment — happy path', () => {
         expect(coachIdArg).toBe('coach-1')
         expect(addonsArg).toEqual(['cardio'])
 
+        // B1: el primer cobro SINCRONO de Flow marca first_charged_at de los add-ons recién materializados
+        // (sin webhook recurrente que lo dispare como en MP). Set-once, best-effort.
+        expect(markFirstCharged).toHaveBeenCalledOnce()
+        expect(markFirstCharged.mock.calls[0][1]).toBe('coach-1')
+
         // Snapshot de la 1ra invoice pagada (idempotente por provider_payment_id 'invoice:<id>').
         expect(insertBillingSnapshot).toHaveBeenCalledOnce()
         const snap = insertBillingSnapshot.mock.calls[0][1] as Record<string, unknown>
@@ -416,6 +476,8 @@ describe('POST /api/payments/flow/confirm-enrollment — happy path', () => {
         const res = await POST(makeRequest({}))
         expect(res.status).toBe(200)
         expect(insertBillingSnapshot).not.toHaveBeenCalled()
+        // B1: sin cobro confirmado tampoco se marca first_charged_at (no hubo primer cobro).
+        expect(markFirstCharged).not.toHaveBeenCalled()
     })
 
     it('segundo POST (external id ya persistido) → alreadyCreated, crea la sub UNA sola vez', async () => {

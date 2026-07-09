@@ -1,4 +1,4 @@
-import { getPaymentsProvider } from '@/lib/payments/provider'
+import { getPaymentsProviderForCoach } from '@/lib/payments/provider'
 import type { PaymentsProvider } from '@/lib/payments/types'
 import type { AddonPaymentsPort } from '@/services/billing/addons.service'
 
@@ -21,8 +21,13 @@ import type { AddonPaymentsPort } from '@/services/billing/addons.service'
 /** Forma extendida del provider que F3 implementa (las dos ops del puerto de add-ons). */
 type ProviderWithAddonOps = PaymentsProvider & Partial<AddonPaymentsPort>
 
-export function buildAddonPaymentsPort(): AddonPaymentsPort {
-    const provider = getPaymentsProvider() as ProviderWithAddonOps
+/**
+ * Resuelve el provider POR COACH (Ola 5): un coach Flow debe operar sus add-ons (PUT/changePlan de
+ * monto en la baja) contra Flow, no contra MP. Sin `coach` (o coach MP) → MercadoPago (default, cero
+ * regresión). El `updateCheckoutAmount` de Flow lo hace funcionar W1 (changePlan por debajo).
+ */
+export function buildAddonPaymentsPort(coach?: { subscription_provider?: string | null }): AddonPaymentsPort {
+    const provider = getPaymentsProviderForCoach(coach ?? {}) as ProviderWithAddonOps
 
     return {
         async updateCheckoutAmount(checkoutId: string, amountClp: number, idempotencyKey?: string): Promise<void> {

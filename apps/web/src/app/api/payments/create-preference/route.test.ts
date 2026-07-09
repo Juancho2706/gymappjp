@@ -830,3 +830,59 @@ describe('POST /api/payments/create-preference — W2 gateway Flow', () => {
         expect(payload).not.toHaveProperty('subscription_mp_id')
     })
 })
+
+// ════════════════════════════════════════════════════════════════════════════════════
+// B2 (money-safety): un coach con SUSCRIPCION Flow ACTIVA no puede cambiar de plan por NINGUN
+// gateway. El bug: aprieta el boton por defecto (Mercado Pago) → paga el one-shot de upgrade que
+// confirm-upgrade/webhook JAMAS activan (cortan en subscription_mp_id null) → plata sin entregar; o
+// un downgrade crea un preapproval MP nuevo junto a la sub Flow viva → doble recurrencia. El guard F1
+// solo mira el gateway PEDIDO (flow); este guard mira el gateway del COACH (subscription_provider).
+// ════════════════════════════════════════════════════════════════════════════════════
+describe('POST /api/payments/create-preference — B2 coach Flow activo bloquea cambio de plan por MP', () => {
+    // Coach pago ACTIVO cuya suscripcion viva es Flow (subscription_mp_id null; el ref vive en el external_id).
+    const ACTIVE_FLOW_PRO_COACH = {
+        subscription_status: 'active',
+        subscription_tier: 'pro',
+        billing_cycle: 'monthly',
+        current_period_end: '2999-01-01T00:00:00.000Z',
+        subscription_mp_id: null,
+        subscription_provider: 'flow',
+    }
+
+    it('coach Flow activo + gateway MP (UPGRADE pro→elite): 400 FLOW_PLAN_CHANGE_UNSUPPORTED sin claim ni one-shot', async () => {
+        currentCoachMaybeSingle.mockResolvedValue({ data: ACTIVE_FLOW_PRO_COACH, error: null })
+        // gateway por defecto (mercadopago): el guard B2 debe cortar ANTES del claim/one-shot.
+        const res = await POST(makeRequest({ tier: 'elite', billingCycle: 'monthly' }))
+        expect(res.status).toBe(400)
+        expect((await res.json()).code).toBe('FLOW_PLAN_CHANGE_UNSUPPORTED')
+        expect(claimUpgradeInFlight).not.toHaveBeenCalled()
+        expect(createOneShotPayment).not.toHaveBeenCalled()
+        expect(createCheckout).not.toHaveBeenCalled()
+        expect(lastUpdatePayload()).toBeUndefined()
+    })
+
+    it('coach Flow activo + gateway MP (DOWNGRADE elite→pro): mismo 400, sin crear preapproval MP (evita doble recurrencia)', async () => {
+        currentCoachMaybeSingle.mockResolvedValue({
+            data: { ...ACTIVE_FLOW_PRO_COACH, subscription_tier: 'elite' },
+            error: null,
+        })
+        countActiveStandaloneClients.mockResolvedValue(0)
+        const res = await POST(makeRequest({ tier: 'pro', billingCycle: 'monthly' }))
+        expect(res.status).toBe(400)
+        expect((await res.json()).code).toBe('FLOW_PLAN_CHANGE_UNSUPPORTED')
+        expect(createCheckout).not.toHaveBeenCalled()
+        expect(createOneShotPayment).not.toHaveBeenCalled()
+        expect(lastUpdatePayload()).toBeUndefined()
+    })
+
+    it('coach MP activo (subscription_provider mercadopago): SIN regresion — el upgrade construye el one-shot normal', async () => {
+        currentCoachMaybeSingle.mockResolvedValue({
+            data: { ...ACTIVE_PRO_COACH, subscription_provider: 'mercadopago' },
+            error: null,
+        })
+        const res = await POST(makeRequest({ tier: 'elite', billingCycle: 'monthly' }))
+        expect(res.status).toBe(200)
+        expect((await res.json()).kind).toBe('tier_upgrade_oneshot')
+        expect(createOneShotPayment).toHaveBeenCalledOnce()
+    })
+})

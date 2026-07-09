@@ -3,6 +3,20 @@ import { NextResponse } from 'next/server'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import { getPaymentsProvider } from '@/lib/payments/provider'
 import { mapProviderStatus } from '@/lib/payments/subscription-state'
+import { listLive } from '@/infrastructure/db/coach-addons.repository'
+import { getCompositeAmountClp, toBillableAddons } from '@/services/billing/addons.service'
+import { resolveDiscountSpecByRedemptionId } from '@/services/billing/discount.service'
+import type { BillingCycle, SubscriptionTier } from '@/lib/constants'
+
+/**
+ * Monto horneado en el planId de Flow (`eva_<tier>_<cycle>_<amount>` → trailing = monto CLP), i.e. lo
+ * que Flow AUN cobra. Null si no hay planId o no parsea. Usado en el chequeo de drift (B4).
+ */
+function parseFlowPlanAmount(planId: string | null | undefined): number | null {
+    if (!planId) return null
+    const m = /_(\d+)$/.exec(planId)
+    return m ? Number(m[1]) : null
+}
 
 /**
  * Cron reconcile de Flow (plan pagos-multigateway-flow, Ola 3, T3.5) — BACKSTOP diario, espejo de
@@ -48,7 +62,7 @@ export async function GET(req: Request) {
     // Coaches con suscripcion Flow viva (subscription_provider_external_id = el subscriptionId de Flow).
     const { data: coaches, error } = await admin
         .from('coaches')
-        .select('id, slug, subscription_status, current_period_end, subscription_provider, subscription_provider_external_id')
+        .select('id, slug, subscription_status, subscription_tier, billing_cycle, current_period_end, subscription_provider, subscription_provider_external_id, provider_plan_id, active_coupon_redemption_id')
         .eq('subscription_provider', 'flow')
         .not('subscription_provider_external_id', 'is', null)
         .not('subscription_status', 'eq', 'free')
@@ -98,6 +112,30 @@ export async function GET(req: Request) {
                     target_id: coach.id,
                     payload: { coach_slug: coach.slug, flow_period_end: flowPeriodEnd, db_period_end: coach.current_period_end, flow_subscription_id: subId, triggered_by: 'cron/flow-reconcile' },
                 })
+            }
+
+            // (3) DRIFT de monto (B4, ALERT-ONLY, barato): Flow hornea el monto en el planId
+            // (`eva_<tier>_<cycle>_<amount>`). Comparamos ese monto contra el compuesto ESPERADO de la DB
+            // (base + add-ons vivos − cupon). Si difieren → ALERTA (sin auto-fix): puede ser el window de un
+            // downgrade DIFERIDO (regla 4 Flow: la baja del monto se aplica al corte via cron mp-reconcile),
+            // un webhook perdido, o drift real. La correccion la hace el expiry pass de mp-reconcile / soporte.
+            const planAmount = parseFlowPlanAmount(coach.provider_plan_id)
+            if (flowIsActive && planAmount != null) {
+                const tier = (coach.subscription_tier ?? 'starter') as SubscriptionTier
+                const cycle = (coach.billing_cycle ?? 'monthly') as BillingCycle
+                const live = await listLive(admin, coach.id)
+                const couponSpec = await resolveDiscountSpecByRedemptionId(admin, coach.active_coupon_redemption_id)
+                const expectedClp = getCompositeAmountClp(tier, cycle, toBillableAddons(live), couponSpec).totalClp
+                if (planAmount !== expectedClp) {
+                    divergences.push({ coachId: coach.id, slug: coach.slug, kind: 'amount_drift', detail: `plan=${planAmount} esperado=${expectedClp}` })
+                    await admin.from('admin_audit_logs').insert({
+                        admin_email: 'cron',
+                        action: 'coach.flow_amount_drift',
+                        target_table: 'coaches',
+                        target_id: coach.id,
+                        payload: { coach_slug: coach.slug, plan_amount_clp: planAmount, expected_clp: expectedClp, provider_plan_id: coach.provider_plan_id, flow_subscription_id: subId, triggered_by: 'cron/flow-reconcile' },
+                    })
+                }
             }
 
             checked++

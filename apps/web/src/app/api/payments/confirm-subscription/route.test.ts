@@ -154,6 +154,27 @@ describe('POST /api/payments/confirm-subscription — FIX-1: solo muta el coach 
         expect(activated).toBeTruthy()
     })
 
+    it('B3: la activación paid-like reclama la sub para MP y LIMPIA los refs Flow muertos', async () => {
+        // Un ex-coach Flow reactivado por MP: el persist debe volver subscription_provider a 'mercadopago'
+        // y nulear external_id + provider_plan_id (si no, cancel-subscription elegiría Flow y no cancelaría
+        // el preapproval MP → cobro fantasma). provider_customer_id NO se toca (no está en este patch).
+        const res = await POST(makeRequest({ preapprovalId: 'preapproval-NEW' }))
+        expect(res.status).toBe(200)
+        const activated = updateCalls.find(
+            (c) =>
+                c.table === 'coaches' &&
+                (c.patch as Record<string, unknown>).subscription_status === 'active'
+        )
+        expect(activated).toBeTruthy()
+        const patch = activated!.patch as Record<string, unknown>
+        expect(patch.subscription_provider).toBe('mercadopago')
+        expect(patch.subscription_provider_external_id).toBeNull()
+        expect(patch.provider_plan_id).toBeNull()
+        expect(patch.subscription_mp_id).toBe('preapproval-NEW')
+        // provider_customer_id NO se pisa (tarjeta Flow reutilizable).
+        expect(patch).not.toHaveProperty('provider_customer_id')
+    })
+
     it("pending → NO muta el coach (cero coaches.update) y responde subscriptionStatus 'pending_payment'", async () => {
         fetchCheckoutSnapshot.mockResolvedValue({
             id: 'preapproval-NEW',

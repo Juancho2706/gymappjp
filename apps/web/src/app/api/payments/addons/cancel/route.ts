@@ -75,7 +75,9 @@ export async function POST(request: Request) {
         }
 
         const ctx = buildCancelContext(coach)
-        const payments = buildAddonPaymentsPort()
+        // Provider POR COACH (Ola 5): un coach Flow baja el monto vía changePlan sobre su sub Flow;
+        // buildCancelContext ya pasa el ref del gateway (external_id para Flow, mp_id para MP).
+        const payments = buildAddonPaymentsPort(coach)
 
         let result
         try {
@@ -95,10 +97,10 @@ export async function POST(request: Request) {
         const appUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000'
         const effectiveDate = formatDateEsCl(result.effectiveAt)
 
-        // Evento de historial.
+        // Evento de historial (gateway del coach para trazabilidad correcta MP/Flow).
         await admin.from('subscription_events').insert({
             coach_id: user.id,
-            provider: 'mercadopago',
+            provider: coach.subscription_provider === 'flow' ? 'flow' : 'mercadopago',
             provider_event_id: `addon:${moduleKey}:cancel:${Date.now()}`,
             provider_status: 'addon_cancel_requested',
             payload: {

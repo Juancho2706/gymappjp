@@ -35,7 +35,7 @@ export async function GET() {
     const { data: coach, error } = await supabase
         .from('coaches')
         .select(
-            'id, subscription_tier, subscription_status, max_clients, billing_cycle, current_period_end, payment_provider, subscription_mp_id, superseded_mp_preapproval_id, card_last4, card_brand'
+            'id, subscription_tier, subscription_status, max_clients, billing_cycle, current_period_end, payment_provider, subscription_provider, subscription_mp_id, superseded_mp_preapproval_id, card_last4, card_brand'
         )
         .eq('id', user.id)
         .maybeSingle()

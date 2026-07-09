@@ -186,7 +186,7 @@ export async function runWebhookPipeline(
     const { data: coach } = await admin
         .from('coaches')
         .select(
-            'id, full_name, subscription_status, subscription_tier, billing_cycle, current_period_end, subscription_mp_id, superseded_mp_preapproval_id'
+            'id, full_name, subscription_status, subscription_tier, billing_cycle, current_period_end, subscription_mp_id, superseded_mp_preapproval_id, subscription_provider, subscription_provider_external_id'
         )
         .eq('id', result.coachId)
         .maybeSingle()
@@ -202,6 +202,22 @@ export async function runWebhookPipeline(
         console.warn('[payments.webhook] skipping managed coach', { traceId, coachId: coach.id, status: coach.subscription_status })
         return NextResponse.json({ ok: true })
     }
+
+    // ── Ref de la suscripción viva SEGÚN EL GATEWAY (money-safety, Ola 5/B1) ────────────────────────
+    // Flow → `subscription_provider_external_id` (el `subscription_mp_id` de un coach Flow es NULL);
+    // MP (default) → `subscription_mp_id`. Los caminos que operan sobre la sub por su ref lógico —
+    // first-charge de add-ons (`applyFirstChargeToAddons`) y el PUT del cupón-expira
+    // (`updateCheckoutAmount`, que FlowProvider traduce a changePlan) — DEBEN usar ESTE ref, no asumir
+    // MP; si no, para un coach Flow keyean en `subscription_mp_id` (NULL) → el first-charge y el
+    // cupón-expira JAMÁS corren (add-ons sin `first_charged_at` → overcharge en la baja; cupón que no
+    // expira → undercharge). Espejo de `resolveSubscriptionRef` (addons/_lib/coach-context.ts):
+    // duplicación mínima documentada a propósito (el pipeline en `lib/` no importa de `app/`). Los usos
+    // ESPECÍFICAMENTE MP (cancel de preapproval superseded, cancel del refund P1-3) siguen leyendo
+    // `subscription_mp_id` directo — esas columnas son MP-only.
+    const subRef =
+        coach.subscription_provider === 'flow'
+            ? coach.subscription_provider_external_id?.trim() || null
+            : coach.subscription_mp_id?.trim() || null
 
     // Adapter del provider al puerto estrecho que usan los hooks de add-ons. El webhook SOLO
     // necesita el PUT de monto (materializeAddonFromOneShot / PUT diferido del compromiso mínimo);
@@ -236,7 +252,9 @@ export async function runWebhookPipeline(
             const tierForCharge = (coach.subscription_tier ?? 'starter') as SubscriptionTier
             const cycleForCharge = (coach.billing_cycle ?? 'monthly') as BillingCycle
             const paidAt = result.paidAt ?? new Date().toISOString()
-            const mpId = coach.subscription_mp_id?.trim() ?? null
+            // Ref del gateway (B1): Flow → external_id; MP → mp_id. Un coach Flow tiene mp_id NULL, así
+            // que keyear el first-charge / cupón-expira en él los saltearía por completo (bug de plata).
+            const chargeRef = subRef
 
             // Money-safety (panel adversarial Ola 1): AVANZAR el período del coach ANTES de los hooks
             // (snapshot / add-ons / cupón). Esos hooks corren en el try de abajo que TRAGA errores y ackea
@@ -258,7 +276,7 @@ export async function runWebhookPipeline(
             }
 
             try {
-                if (mpId) {
+                if (chargeRef) {
                     await applyFirstChargeToAddons(
                         admin,
                         addonPayments,
@@ -266,7 +284,8 @@ export async function runWebhookPipeline(
                             coachId: coach.id,
                             tier: tierForCharge,
                             cycle: cycleForCharge,
-                            subscriptionMpId: mpId,
+                            // naming legacy `subscriptionMpId`: lleva el ref del gateway (MP o Flow).
+                            subscriptionMpId: chargeRef,
                             currentPeriodEnd: coach.current_period_end,
                         },
                         paidAt
@@ -304,10 +323,10 @@ export async function runWebhookPipeline(
                     // Al expirar (plazo disclosed cumplido) subir el preapproval al precio lleno DESDE la
                     // próxima renovación — revert disclosed (N ciclos → precio normal), SERNAC-safe.
                     const cycleResult = await decrementCouponCycleForCharge(admin, coach.id, result.providerPaymentId)
-                    if (cycleResult.expired && mpId) {
+                    if (cycleResult.expired && chargeRef) {
                         const liveNow = await listLive(admin, coach.id)
                         const fullComposite = getCompositeAmountClp(tierForCharge, cycleForCharge, toBillableAddons(liveNow))
-                        await provider.updateCheckoutAmount(mpId, fullComposite)
+                        await provider.updateCheckoutAmount(chargeRef, fullComposite)
                     }
                 }
                 // P0-2: si el coach venía de dunning (past_due), avisar que el pago se recuperó.
@@ -363,7 +382,8 @@ export async function runWebhookPipeline(
             provider: provider.name,
             provider_event_id:
                 result.eventId ?? `${provider.name}:authpay:${result.providerPaymentId ?? 'unknown'}`,
-            provider_checkout_id: coach.subscription_mp_id ?? null,
+            // Audit: ref del gateway de la sub (Flow → external_id; MP → mp_id). Idéntico a mp_id para MP.
+            provider_checkout_id: subRef,
             provider_status: result.providerStatus ?? null,
             payload: toJsonPayload(payload),
         }
@@ -779,9 +799,10 @@ export async function runWebhookPipeline(
             try {
                 const tierForCharge = (coach.subscription_tier ?? 'starter') as SubscriptionTier
                 const cycleForCharge = (coach.billing_cycle ?? 'monthly') as BillingCycle
-                const mpId = coach.subscription_mp_id?.trim() ?? null
+                // Ref del gateway (B1): Flow → external_id; MP → mp_id. Espejo de la rama recurrente.
+                const chargeRef = subRef
                 const paidAt = result.paidAt ?? new Date().toISOString()
-                if (mpId) {
+                if (chargeRef) {
                     await applyFirstChargeToAddons(
                         admin,
                         addonPayments,
@@ -789,7 +810,8 @@ export async function runWebhookPipeline(
                             coachId: coach.id,
                             tier: tierForCharge,
                             cycle: cycleForCharge,
-                            subscriptionMpId: mpId,
+                            // naming legacy `subscriptionMpId`: lleva el ref del gateway (MP o Flow).
+                            subscriptionMpId: chargeRef,
                             currentPeriodEnd: coach.current_period_end,
                         },
                         paidAt
@@ -827,10 +849,10 @@ export async function runWebhookPipeline(
                     // Al expirar (plazo disclosed cumplido) subir el preapproval al precio lleno DESDE la
                     // próxima renovación — revert disclosed (N ciclos → precio normal), SERNAC-safe.
                     const cycleResult = await decrementCouponCycleForCharge(admin, coach.id, result.providerPaymentId)
-                    if (cycleResult.expired && mpId) {
+                    if (cycleResult.expired && chargeRef) {
                         const liveNow = await listLive(admin, coach.id)
                         const fullComposite = getCompositeAmountClp(tierForCharge, cycleForCharge, toBillableAddons(liveNow))
-                        await provider.updateCheckoutAmount(mpId, fullComposite)
+                        await provider.updateCheckoutAmount(chargeRef, fullComposite)
                     }
                 }
             } catch (chargeErr) {
@@ -1012,7 +1034,20 @@ export async function runWebhookPipeline(
         coachUpdate.max_clients = getTierMaxClients(tier)
         // subscription_mp_id: SOLO con un checkoutId real. Un `payment` sin `order.id` trae checkoutId
         // null → NO pisar el preapproval id vigente con null (lo dejaría sin con qué cobrar/reconciliar).
-        if (checkoutId) coachUpdate.subscription_mp_id = checkoutId
+        if (checkoutId) {
+            coachUpdate.subscription_mp_id = checkoutId
+            // ── B3: persistir un preapproval MP vivo (rama canónica con checkoutId) = el gateway dueño de la
+            // sub vuelve a MP. Limpiar los refs Flow MUERTOS (external_id + plan_id) para que
+            // cancel-subscription elija MP y no se salte el cancel del preapproval (evita el loop
+            // 'no-puede-cancelar' de un ex-Flow reactivado por MP). provider_customer_id se CONSERVA (tarjeta
+            // Flow reutilizable). Gated a provider.name==='mercadopago': el pipeline es agnóstico del gateway
+            // (lo reusa la ruta Flow) → NUNCA reclamar la sub para MP procesando un webhook Flow.
+            if (provider.name === 'mercadopago') {
+                coachUpdate.subscription_provider = 'mercadopago'
+                coachUpdate.subscription_provider_external_id = null
+                coachUpdate.provider_plan_id = null
+            }
+        }
 
         const superseded = coach.superseded_mp_preapproval_id?.trim()
         if (superseded && superseded !== (checkoutId ?? coachMpId)) {
@@ -1085,7 +1120,11 @@ export async function runWebhookPipeline(
     const finalTier = (coachUpdate.subscription_tier as SubscriptionTier | undefined) ?? tier
     const finalCycle = (coachUpdate.billing_cycle as BillingCycle | undefined) ?? billingCycle
     const finalPeriodEnd = (coachUpdate.current_period_end as string | null | undefined) ?? nextPeriodEnd
-    const finalMpId = (coachUpdate.subscription_mp_id as string | undefined) ?? checkoutId ?? coachMpId
+    // B1: para un coach Flow, subscription_mp_id/checkoutId/coachMpId son todos NULL → cae a `subRef`
+    // (el external_id de la sub Flow) para que el first-charge (d) y el cupón-expira (e) usen el ref
+    // correcto. Para MP `subRef === coachMpId`, así que el fallback es no-op (cero regresión).
+    const finalMpId =
+        (coachUpdate.subscription_mp_id as string | undefined) ?? checkoutId ?? coachMpId ?? subRef
 
     try {
         // (a) TERMINAL expire → cancelar DURO todos los add-ons (trigger D1 apaga módulos).

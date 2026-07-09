@@ -39,7 +39,18 @@ vi.mock('@/lib/payments/provider', () => ({
     getPaymentsProvider: () => ({ name: 'flow', fetchCheckoutSnapshot: (...a: unknown[]) => fetchCheckoutSnapshot(...(a as [string])) }),
 }))
 
+// B4 drift: listLive (add-ons vivos) + resolveDiscountSpecByRedemptionId (cupon) alimentan el compuesto
+// esperado. getCompositeAmountClp/toBillableAddons quedan REALES (puros). Default: sin add-ons, sin cupon.
+const listLive = vi.fn(async () => [] as unknown[])
+vi.mock('@/infrastructure/db/coach-addons.repository', () => ({
+    listLive: (...a: unknown[]) => listLive(...(a as [])),
+}))
+vi.mock('@/services/billing/discount.service', () => ({
+    resolveDiscountSpecByRedemptionId: vi.fn(async () => null),
+}))
+
 import { GET } from './route'
+import { getCompositeAmountClp } from '@/services/billing/addons.service'
 
 const SECRET = 'cron-sekret'
 const authedReq = () => new Request('https://eva/api/cron/flow-reconcile', { headers: { authorization: `Bearer ${SECRET}` } })
