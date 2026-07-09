@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import Image from 'next/image'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { AlertTriangle, ArrowRight, Check, CheckCircle2, Users } from 'lucide-react'
@@ -515,6 +516,9 @@ export function ReactivateClient({ currentTier, activeClientCount, subscriptionS
                 >
                     {isLoading ? 'Redirigiendo...' : (
                         <>
+                            {FLOW_ENABLED && (
+                                <Image src="/payments/mercadopago.svg" alt="" aria-hidden="true" width={18} height={18} />
+                            )}
                             <span>Continuar al pago con Mercado Pago</span>
                             <ArrowRight className="h-4 w-4" />
                         </>
@@ -527,9 +531,25 @@ export function ReactivateClient({ currentTier, activeClientCount, subscriptionS
                             type="button"
                             onClick={() => void handleCheckout('flow')}
                             disabled={isLoading || tierBlockedByClients || exceedsTopSaleTier}
-                            className="inline-flex h-11 items-center justify-center rounded-control border border-default px-6 text-sm font-semibold text-strong hover:bg-surface-sunken transition-colors disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                            className="inline-flex h-11 items-center justify-center gap-2 rounded-control border border-default px-6 text-sm font-semibold text-strong hover:bg-surface-sunken transition-colors disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
                         >
-                            Pagar con Webpay (Flow)
+                            <Image
+                                src="/payments/webpay-light.svg"
+                                alt=""
+                                aria-hidden="true"
+                                width={73}
+                                height={18}
+                                className="dark:hidden"
+                            />
+                            <Image
+                                src="/payments/webpay-dark.svg"
+                                alt=""
+                                aria-hidden="true"
+                                width={73}
+                                height={18}
+                                className="hidden dark:block"
+                            />
+                            <span>Pagar con Webpay (Flow)</span>
                         </button>
                         <p className="text-xs text-muted">
                             Webpay procesado por Flow.cl — tarjetas de crédito, débito y prepago chilenas.

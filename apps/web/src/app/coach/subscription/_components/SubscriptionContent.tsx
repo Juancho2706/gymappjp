@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useId, useRef, useState } from 'react'
+import Image from 'next/image'
 import { useRouter, useSearchParams } from 'next/navigation'
 import {
     ADDON_CONFIG,
@@ -1173,18 +1174,39 @@ export function SubscriptionContent({ embedded = false }: { embedded?: boolean }
                                 type="button"
                                 onClick={() => { setShowUpgradeConfirm(false); void handleChangePlan('mercadopago') }}
                                 disabled={saving || isFlowActivePlanChange}
-                                className="h-12 w-full rounded-control bg-sport-500 text-sm font-bold text-white transition-colors hover:bg-sport-600 disabled:opacity-60 disabled:hover:bg-sport-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                                className="flex h-12 w-full items-center justify-center gap-2 rounded-control bg-sport-500 text-sm font-bold text-white transition-colors hover:bg-sport-600 disabled:opacity-60 disabled:hover:bg-sport-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
                             >
-                                {saving ? 'Procesando...' : (canUseFlowForPlanChange ? 'Pagar con Mercado Pago' : 'Confirmar')}
+                                {saving ? 'Procesando...' : canUseFlowForPlanChange ? (
+                                    <>
+                                        <Image src="/payments/mercadopago.svg" alt="" aria-hidden="true" width={18} height={18} />
+                                        <span>Pagar con Mercado Pago</span>
+                                    </>
+                                ) : 'Confirmar'}
                             </button>
                             {canUseFlowForPlanChange && (
                                 <button
                                     type="button"
                                     onClick={() => { setShowUpgradeConfirm(false); void handleChangePlan('flow') }}
                                     disabled={saving}
-                                    className="h-11 w-full rounded-control border border-default bg-surface-sunken text-sm font-semibold text-strong transition-colors hover:bg-surface-card disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                                    className="flex h-11 w-full items-center justify-center gap-2 rounded-control border border-default bg-surface-sunken text-sm font-semibold text-strong transition-colors hover:bg-surface-card disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
                                 >
-                                    Pagar con Webpay (Flow)
+                                    <Image
+                                        src="/payments/webpay-light.svg"
+                                        alt=""
+                                        aria-hidden="true"
+                                        width={73}
+                                        height={18}
+                                        className="dark:hidden"
+                                    />
+                                    <Image
+                                        src="/payments/webpay-dark.svg"
+                                        alt=""
+                                        aria-hidden="true"
+                                        width={73}
+                                        height={18}
+                                        className="hidden dark:block"
+                                    />
+                                    <span>Pagar con Webpay (Flow)</span>
                                 </button>
                             )}
                             <button
