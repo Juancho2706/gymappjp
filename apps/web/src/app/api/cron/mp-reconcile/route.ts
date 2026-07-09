@@ -5,6 +5,7 @@ import { sendTransactionalEmail } from '@/lib/email/send-email'
 import { wrapEmailLayout } from '@/lib/email/base-layout'
 import { isModuleKilledByOperator, type ModuleKey } from '@/services/entitlements.service'
 import { applyExpiry, listLive } from '@/infrastructure/db/coach-addons.repository'
+import { getPaymentsProviderForCoach } from '@/lib/payments/provider'
 import {
     getCompositeAmountClp,
     toBillableAddons,
@@ -32,6 +33,17 @@ function isAuthorized(req: Request) {
 // Días por defecto de las alertas semiautomáticas (mejora F3.5). Fijados en RUNBOOK.
 const KILL_SWITCH_ALERT_DAYS = 3
 const PAUSED_ALERT_DAYS = 14
+
+/**
+ * Monto horneado en el planId de Flow (`eva_<tier>_<cycle>_<amount>` → el trailing es el monto CLP).
+ * Es lo que Flow AUN cobra. Null si no hay planId o no parsea. Usado en la pasada de expiry (B4) para
+ * registrar el old_amount del changePlan-DOWN diferido de un coach Flow.
+ */
+function parseFlowPlanAmount(planId: string | null | undefined): number | null {
+    if (!planId) return null
+    const m = /_(\d+)$/.exec(planId)
+    return m ? Number(m[1]) : null
+}
 
 type MpPreapproval = {
     status?: string
@@ -173,31 +185,8 @@ export async function GET(req: Request) {
             const cycle = (coach.billing_cycle ?? 'monthly') as BillingCycle
             const live = await listLive(admin, coach.id)
 
-            // (a) cancel_pending con expires_at <= now → applyExpiry (cancelled; trigger D1 apaga).
-            for (const addon of live) {
-                if (
-                    addon.status === 'cancel_pending' &&
-                    addon.expiresAt &&
-                    new Date(addon.expiresAt).getTime() <= now.getTime()
-                ) {
-                    const expired = await applyExpiry(admin, addon.id, now.toISOString())
-                    if (expired) {
-                        addonsExpired++
-                        await admin.from('admin_audit_logs').insert({
-                            admin_email: 'cron',
-                            action: 'coach.addon_expired',
-                            target_table: 'coach_addons',
-                            target_id: addon.id,
-                            payload: {
-                                coach_slug: coach.slug,
-                                module_key: addon.moduleKey,
-                                expires_at: addon.expiresAt,
-                                triggered_by: 'cron/mp-reconcile',
-                            },
-                        })
-                    }
-                }
-            }
+            // (a) EXPIRY de add-ons cancel_pending: EXTRAIDO a una pasada PROPIA no gateada por mp_id (B4) —
+            // corre mas abajo sobre TODOS los coaches pagos (incluidos Flow), no solo los MP de este loop.
 
             // (b) cancel_pending YA cobrado sin PUT aplicado (reintento del caso webhook caído): si la
             // baja regla 4 quedó facturable en MP (drift detecta el monto), se reporta como drift (c).
@@ -331,6 +320,101 @@ export async function GET(req: Request) {
         } catch (err) {
             console.error(`[cron/mp-reconcile] failed for coach ${coach.slug}:`, err)
             errors++
+        }
+    }
+
+    // ── B4: pasada de EXPIRY de add-ons — TODOS los gateways (no gateada por subscription_mp_id) ──────
+    // El loop MP de arriba filtra `.not('subscription_mp_id','is',null)` → un coach FLOW jamas entra, asi
+    // que su applyExpiry nunca correria y sus modulos cancelados quedarian ON PARA SIEMPRE. La pasada de
+    // expiry se EXTRAE aca sobre TODOS los coaches pagos (cualquier gateway). Para el coach FLOW cuya fila
+    // expira, ademas del applyExpiry se ejecuta el changePlan-DOWN DIFERIDO (regla 4 Flow, B5): recompone
+    // el monto sin el modulo y baja la sub Flow AL CORTE (no antes → no acredita el ciclo ya cobrado). Para
+    // MP el monto ya se bajo al SOLICITAR la baja (PUT inmediato) → aca solo applyExpiry (idempotente).
+    const { data: payingCoaches, error: payingErr } = await admin
+        .from('coaches')
+        .select(
+            'id, slug, subscription_tier, billing_cycle, subscription_provider, subscription_provider_external_id, provider_plan_id, active_coupon_redemption_id'
+        )
+        .not('subscription_status', 'eq', 'free')
+        .not('subscription_status', 'eq', 'org_managed')
+        .not('subscription_status', 'eq', 'team_managed')
+    if (payingErr) {
+        console.error('[cron/mp-reconcile] paying-coaches expiry query failed:', payingErr)
+    }
+    for (const coach of payingCoaches ?? []) {
+        try {
+            const tier = (coach.subscription_tier ?? 'starter') as SubscriptionTier
+            const cycle = (coach.billing_cycle ?? 'monthly') as BillingCycle
+            const live = await listLive(admin, coach.id)
+            for (const addon of live) {
+                if (
+                    addon.status !== 'cancel_pending' ||
+                    !addon.expiresAt ||
+                    new Date(addon.expiresAt).getTime() > now.getTime()
+                ) {
+                    continue
+                }
+                const expired = await applyExpiry(admin, addon.id, now.toISOString())
+                if (!expired) continue
+                addonsExpired++
+                await admin.from('admin_audit_logs').insert({
+                    admin_email: 'cron',
+                    action: 'coach.addon_expired',
+                    target_table: 'coach_addons',
+                    target_id: addon.id,
+                    payload: {
+                        coach_slug: coach.slug,
+                        module_key: addon.moduleKey,
+                        expires_at: addon.expiresAt,
+                        gateway: coach.subscription_provider ?? 'mercadopago',
+                        triggered_by: 'cron/mp-reconcile',
+                    },
+                })
+
+                // B4/B5: coach FLOW → changePlan-DOWN DIFERIDO al corte. Recomputamos el compuesto con las
+                // filas vivas POST-expiry (el modulo recien cancelado ya no cuenta) y bajamos el monto de la
+                // sub Flow via el puerto (changePlan por debajo). El monto viejo se lee del provider_plan_id
+                // (lo que Flow AUN cobra). try/catch: un fallo NO tumba el cron (el drift de flow-reconcile lo
+                // vuelve a marcar). MP no entra: alli el PUT-down ya corrio al solicitar la baja.
+                if (coach.subscription_provider === 'flow' && coach.subscription_provider_external_id) {
+                    try {
+                        const liveAfter = await listLive(admin, coach.id)
+                        const couponSpec = await resolveDiscountSpecByRedemptionId(
+                            admin,
+                            coach.active_coupon_redemption_id
+                        )
+                        const newComposite = getCompositeAmountClp(
+                            tier,
+                            cycle,
+                            toBillableAddons(liveAfter),
+                            couponSpec
+                        ).totalClp
+                        const provider = getPaymentsProviderForCoach(coach)
+                        await provider.updateCheckoutAmount(coach.subscription_provider_external_id, newComposite)
+                        await admin.from('admin_audit_logs').insert({
+                            admin_email: 'cron',
+                            action: 'coach.flow_composite_lowered',
+                            target_table: 'coaches',
+                            target_id: coach.id,
+                            payload: {
+                                coach_slug: coach.slug,
+                                module_key: addon.moduleKey,
+                                old_amount_clp: parseFlowPlanAmount(coach.provider_plan_id),
+                                new_amount_clp: newComposite,
+                                flow_subscription_id: coach.subscription_provider_external_id,
+                                triggered_by: 'cron/mp-reconcile',
+                            },
+                        })
+                    } catch (flowErr) {
+                        console.error(
+                            `[cron/mp-reconcile] flow composite-down failed for coach ${coach.slug}:`,
+                            flowErr
+                        )
+                    }
+                }
+            }
+        } catch (err) {
+            console.error(`[cron/mp-reconcile] expiry pass failed for coach ${coach.id}:`, err)
         }
     }
 

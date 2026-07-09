@@ -39,11 +39,12 @@ vi.mock('@/services/billing/addons.service', async (orig) => {
     }
 })
 
+const buildAddonPaymentsPort = vi.fn((_coach?: unknown) => ({
+    updateCheckoutAmount: vi.fn(),
+    createOneShotPayment: vi.fn(),
+}))
 vi.mock('../_lib/payments-port', () => ({
-    buildAddonPaymentsPort: vi.fn(() => ({
-        updateCheckoutAmount: vi.fn(),
-        createOneShotPayment: vi.fn(),
-    })),
+    buildAddonPaymentsPort: (coach?: unknown) => buildAddonPaymentsPort(coach),
 }))
 
 const fetchCoachBillingRow = vi.fn()
@@ -78,6 +79,8 @@ const PAID_COACH = {
     billing_cycle: 'monthly',
     current_period_end: '2026-07-01T00:00:00.000Z',
     subscription_mp_id: 'preapproval-1',
+    subscription_provider: 'mercadopago',
+    subscription_provider_external_id: null,
 }
 
 beforeEach(() => {
@@ -154,5 +157,36 @@ describe('POST /api/payments/addons/cancel — máquina de estados (reglas 3-4)'
         expect(res.status).toBe(409)
         const json = await res.json()
         expect(json.code).toBe('NOT_ACTIVE')
+    })
+})
+
+// ── Baja para coach FLOW (Ola 5): mismo estado de la fila; el PUT/changePlan de monto va por el
+// puerto resuelto por coach con el ref de la sub Flow (subscription_provider_external_id). ─────
+describe('POST /api/payments/addons/cancel — coach FLOW (ref external_id)', () => {
+    const FLOW_COACH = {
+        ...PAID_COACH,
+        subscription_mp_id: null,
+        subscription_provider: 'flow',
+        subscription_provider_external_id: 'flow-sub-1',
+    }
+
+    it('el service recibe el ctx con subscriptionMpId = external_id y el port se arma con el coach Flow', async () => {
+        fetchCoachBillingRow.mockResolvedValue(FLOW_COACH)
+        requestAddonCancellation.mockResolvedValue({
+            moduleKey: 'cardio',
+            status: 'cancel_pending',
+            effectiveAt: '2026-07-01T00:00:00.000Z',
+            putApplied: true,
+        })
+        const res = await POST(makeRequest({ moduleKey: 'cardio' }))
+        expect(res.status).toBe(200)
+        // buildCancelContext (real) resuelve el ref del gateway → external_id para Flow.
+        const ctx = requestAddonCancellation.mock.calls[0][2] as Record<string, unknown>
+        expect(ctx.subscriptionMpId).toBe('flow-sub-1')
+        // El port se construye con el coach Flow (getPaymentsProviderForCoach por debajo → Flow).
+        expect(buildAddonPaymentsPort).toHaveBeenCalledWith(FLOW_COACH)
+        // El evento de historial se registra con el gateway del coach (flow).
+        const inserted = adminInsert.mock.calls[0][0]
+        expect(inserted.provider).toBe('flow')
     })
 })

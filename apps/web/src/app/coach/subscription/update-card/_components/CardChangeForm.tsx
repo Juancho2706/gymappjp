@@ -33,6 +33,10 @@ type Props = {
     publicKey: string
     termsVersion: string
     disclosure: DisclosurePoint[]
+    // T5.5: gateway PERSISTIDO del coach (leído server-side en page.tsx). 'flow' oculta el form de
+    // Secure Fields — Flow no tiene tokenización síncrona, el cambio de tarjeta ahí es un REDIRECT
+    // de re-enrolamiento Webpay que arma /api/payments/change-card.
+    subscriptionProvider: 'mercadopago' | 'flow'
 }
 
 type FieldStyle = Record<string, string>
@@ -41,7 +45,8 @@ type FieldStyle = Record<string, string>
 const FIELD_BOX =
     'h-11 rounded-control border border-default bg-surface-card px-3'
 
-export function CardChangeForm({ publicKey, termsVersion, disclosure }: Props) {
+export function CardChangeForm({ publicKey, termsVersion, disclosure, subscriptionProvider }: Props) {
+    const isFlow = subscriptionProvider === 'flow'
     const router = useRouter()
     const mpRef = useRef<MpInstance | null>(null)
     const mountedRef = useRef(false)
@@ -53,14 +58,16 @@ export function CardChangeForm({ publicKey, termsVersion, disclosure }: Props) {
     // Medio de pago (visa/master/debvisa/…) resuelto del BIN — DISPLAY-ONLY (ícono/marca). No gatea nada.
     const [paymentMethodId, setPaymentMethodId] = useState<string | null>(null)
 
-    const missingKey = publicKey.trim().length === 0
+    // La MP public key solo hace falta para montar Secure Fields — la rama Flow no la usa.
+    const missingKey = !isFlow && publicKey.trim().length === 0
 
     // Monta los Secure Fields. Idempotente (mountedRef). Se invoca tanto desde onLoad/onReady del
     // Script (donde window.MercadoPago ya está garantizado) como desde el effect de SDK-ya-cargado.
     // Si en una invocación el Ctor aún no existe, sale sin marcar montado → un disparo posterior reintenta
     // (evita el "bricked forever" de leer el Ctor en un effect keyed en un solo flag).
     const initFields = useCallback(() => {
-        if (mountedRef.current || missingKey) return
+        // Rama Flow: no hay Secure Fields que montar (los contenedores ni se renderizan) — no-op.
+        if (isFlow || mountedRef.current || missingKey) return
         const Ctor = window.MercadoPago
         if (!Ctor) return
         try {
@@ -103,12 +110,49 @@ export function CardChangeForm({ publicKey, termsVersion, disclosure }: Props) {
         } catch {
             setError('No se pudo cargar el formulario de pago. Recargá la página e intentá de nuevo.')
         }
-    }, [publicKey, missingKey])
+    }, [publicKey, missingKey, isFlow])
 
     // SDK ya cargado (cache / navegación): monta sin esperar el onLoad del Script.
     useEffect(() => {
         if (window.MercadoPago) initFields()
     }, [initFields])
+
+    // Rama Flow (T5.5): sin tokenización — POSTea el consentimiento y sigue el redirect de
+    // re-enrolamiento Webpay que arma el backend (FlowProvider.startCardReenrollment).
+    const handleFlowSubmit = useCallback(
+        async (e: React.FormEvent) => {
+            e.preventDefault()
+            setError(null)
+            if (!accepted) {
+                setError('Debés aceptar las condiciones para continuar.')
+                return
+            }
+            setSubmitting(true)
+            try {
+                const res = await fetch('/api/payments/change-card', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ acceptedTermsVersion: termsVersion }),
+                })
+                const data = (await res.json().catch(() => ({}))) as {
+                    kind?: string
+                    redirectUrl?: string
+                    error?: string
+                    code?: string
+                }
+                if (res.ok && data.kind === 'redirect' && data.redirectUrl) {
+                    window.location.href = data.redirectUrl
+                    return
+                }
+                setError(data.error ?? 'No se pudo iniciar el cambio de tarjeta con Webpay. Intentá de nuevo.')
+            } catch {
+                setError('No se pudo conectar. Revisá tu conexión e intentá de nuevo.')
+            } finally {
+                setSubmitting(false)
+            }
+        },
+        [accepted, termsVersion]
+    )
 
     const handleSubmit = useCallback(
         async (e: React.FormEvent) => {
@@ -190,6 +234,64 @@ export function CardChangeForm({ publicKey, termsVersion, disclosure }: Props) {
         )
     }
 
+    // Bloque de consentimiento (SERNAC) — idéntico en ambas ramas, texto versionado de CARD_CHANGE_DISCLOSURE.
+    const disclosureBlock = (
+        <>
+            <div className="rounded-control bg-surface-sunken p-3 text-xs text-muted">
+                <ul className="space-y-1">
+                    {disclosure.map((p) => (
+                        <li key={p.number}>
+                            <span className="font-medium text-body">{p.title}:</span> {p.text}
+                        </li>
+                    ))}
+                </ul>
+            </div>
+
+            <label className="flex items-start gap-2 text-sm text-body">
+                <input
+                    type="checkbox"
+                    checked={accepted}
+                    onChange={(e) => setAccepted(e.target.checked)}
+                    className="mt-0.5 h-4 w-4"
+                />
+                <span>Entiendo y acepto las condiciones del cambio de tarjeta.</span>
+            </label>
+
+            {error && (
+                <p role="alert" className="rounded-control bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">
+                    {error}
+                </p>
+            )}
+        </>
+    )
+
+    // Rama Flow (T5.5): Flow no tiene tokenización síncrona — el cambio de tarjeta es un REDIRECT de
+    // re-enrolamiento por Webpay (misma pantalla donde el coach ingresó su tarjeta originalmente).
+    if (isFlow) {
+        return (
+            <form onSubmit={handleFlowSubmit} className="space-y-4">
+                <p className="rounded-control bg-surface-sunken p-3 text-sm text-body">
+                    Vas a ser redirigido a Webpay para ingresar tu nueva tarjeta. Al volver, tu suscripción
+                    queda cobrando con la tarjeta nueva — el plan, el monto y la fecha de cobro no cambian.
+                </p>
+
+                {disclosureBlock}
+
+                <button
+                    type="submit"
+                    disabled={submitting || !accepted}
+                    className="h-11 w-full rounded-control bg-[var(--cta-fill)] font-semibold text-white transition-opacity disabled:opacity-50"
+                >
+                    {submitting ? 'Redirigiendo…' : 'Continuar a Webpay'}
+                </button>
+
+                <p className="text-center text-xs text-subtle">
+                    Procesado de forma segura por Flow / Webpay. EVA no almacena el número de tu tarjeta.
+                </p>
+            </form>
+        )
+    }
+
     return (
         <>
             <Script
@@ -237,33 +339,7 @@ export function CardChangeForm({ publicKey, termsVersion, disclosure }: Props) {
                     </div>
                 </div>
 
-                {/* Consentimiento DEDICADO (SERNAC) — texto versionado de CARD_CHANGE_DISCLOSURE. */}
-                <div className="rounded-control bg-surface-sunken p-3 text-xs text-muted">
-                    <ul className="space-y-1">
-                        {disclosure.map((p) => (
-                            <li key={p.number}>
-                                <span className="font-medium text-body">{p.title}:</span>{' '}
-                                {p.text}
-                            </li>
-                        ))}
-                    </ul>
-                </div>
-
-                <label className="flex items-start gap-2 text-sm text-body">
-                    <input
-                        type="checkbox"
-                        checked={accepted}
-                        onChange={(e) => setAccepted(e.target.checked)}
-                        className="mt-0.5 h-4 w-4"
-                    />
-                    <span>Entiendo y acepto las condiciones del cambio de tarjeta.</span>
-                </label>
-
-                {error && (
-                    <p role="alert" className="rounded-control bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">
-                        {error}
-                    </p>
-                )}
+                {disclosureBlock}
 
                 <button
                     type="submit"

@@ -19,13 +19,16 @@ import { describe, expect, it, vi, beforeEach } from 'vitest'
 //        provider_payment_id. Idempotent. (It does NOT physically reverse the billing_snapshot.)
 // ════════════════════════════════════════════════════════════════════════════════════
 
-// ── webhook-authorization: token + signature always valid here; notification id is the
-//    DEDUP key (FIX-5). We thread it through a module-level var so each test can set it. ──
+// ── webhook-authorization: token + signature default to valid; notification id is the DEDUP
+//    key (FIX-5). All three are threaded through module-level vars so each test can flip them
+//    (the 401 tests set tokenValid/sigValid to false). ──
 let notificationId: string | null = 'notif-1'
+let tokenValid = true
+let sigValid = true
 vi.mock('@/lib/payments/webhook-authorization', () => ({
     extractMercadoPagoNotificationId: () => notificationId,
-    isPaymentsWebhookTokenValid: () => true,
-    verifyMercadoPagoSignatureIfConfigured: () => true,
+    isPaymentsWebhookTokenValid: () => tokenValid,
+    verifyMercadoPagoSignatureIfConfigured: () => sigValid,
 }))
 
 // ── Stateful service-role admin. Tracks subscription_events by provider_event_id (the
@@ -133,8 +136,11 @@ const updateCheckoutAmount = vi.fn().mockResolvedValue(undefined)
 // P0-1: el tier-upgrade del webhook reescribe monto + external_reference del preapproval (al nuevo
 // tier|cycle) vía updateCheckoutAmountAndRef — no por updateCheckoutAmount.
 const updateCheckoutAmountAndRef = vi.fn().mockResolvedValue(undefined)
+// U6: el gateway que PROCESA el webhook (Flow vs MP) decide si el PUT del cupón-expira es inmediato.
+// Un test de coach Flow lo flipea a 'flow' para verificar que NO se hace el changePlan-UP inmediato.
+let providerName = 'mercadopago'
 const getPaymentsProvider = vi.fn(() => ({
-    name: 'mercadopago' as const,
+    name: providerName,
     processWebhook: (...a: unknown[]) => processWebhook(...a),
     updateCheckoutAmount: (...a: unknown[]) => updateCheckoutAmount(...a),
     updateCheckoutAmountAndRef: (...a: unknown[]) => updateCheckoutAmountAndRef(...a),
@@ -166,13 +172,41 @@ vi.mock('@/services/billing/addons.service', async (orig) => {
     }
 })
 
-// ── addon-webhook.service: snapshot + breakdown helpers (keep them inert). ──
+// ── addon-webhook.service: snapshot + breakdown helpers (keep them inert). applyFirstChargeToAddons
+//    mockeado (B1): capturamos con qué ref (subscriptionMpId) lo llama el pipeline — para un coach Flow
+//    debe ser el external_id, no el subscription_mp_id (null). ──
 const insertBillingSnapshot = vi.fn().mockResolvedValue({ inserted: true })
+const applyFirstChargeToAddons = vi.fn().mockResolvedValue({ markedIds: [], putApplied: false })
 vi.mock('@/services/billing/addon-webhook.service', async (orig) => {
     const actual = await orig<typeof import('@/services/billing/addon-webhook.service')>()
     return {
         ...actual,
         insertBillingSnapshot: (...a: unknown[]) => insertBillingSnapshot(...a),
+        applyFirstChargeToAddons: (...a: unknown[]) => applyFirstChargeToAddons(...a),
+    }
+})
+
+// ── discount.service / coupons.service: el pipeline los llama en las ramas recurrente/canónica. Los
+//    dejamos inertes (sin cupón por defecto) para aislar la lógica de ref del gateway. Un test de
+//    cupón-expira flipea decrementCouponCycleForCharge a { expired: true }. ──
+const resolveActiveDiscountSpec = vi.fn().mockResolvedValue(null)
+const resolveActiveDiscountDetail = vi.fn().mockResolvedValue(null)
+vi.mock('@/services/billing/discount.service', async (orig) => {
+    const actual = await orig<typeof import('@/services/billing/discount.service')>()
+    return {
+        ...actual,
+        resolveActiveDiscountSpec: (...a: unknown[]) => resolveActiveDiscountSpec(...a),
+        resolveActiveDiscountDetail: (...a: unknown[]) => resolveActiveDiscountDetail(...a),
+    }
+})
+const decrementCouponCycleForCharge = vi.fn().mockResolvedValue({ expired: false })
+const revertActiveCouponForCoach = vi.fn().mockResolvedValue({ reverted: false })
+vi.mock('@/services/billing/coupons.service', async (orig) => {
+    const actual = await orig<typeof import('@/services/billing/coupons.service')>()
+    return {
+        ...actual,
+        decrementCouponCycleForCharge: (...a: unknown[]) => decrementCouponCycleForCharge(...a),
+        revertActiveCouponForCoach: (...a: unknown[]) => revertActiveCouponForCoach(...a),
     }
 })
 
@@ -213,6 +247,9 @@ beforeEach(() => {
     auditLogInserts.length = 0
     fakeAdmin = makeAdmin()
     notificationId = 'notif-1'
+    tokenValid = true
+    sigValid = true
+    providerName = 'mercadopago'
     coachRow = { ...PAID_COACH }
     cancelAllForCoach.mockResolvedValue(0)
     listLive.mockResolvedValue([])
@@ -221,6 +258,34 @@ beforeEach(() => {
     })
     getUserById.mockResolvedValue({ data: { user: { email: 'juan@evatest.cl' } } })
     sendTransactionalEmail.mockResolvedValue({ ok: true, providerMessageId: 'm1' })
+    applyFirstChargeToAddons.mockResolvedValue({ markedIds: [], putApplied: false })
+    resolveActiveDiscountSpec.mockResolvedValue(null)
+    resolveActiveDiscountDetail.mockResolvedValue(null)
+    decrementCouponCycleForCharge.mockResolvedValue({ expired: false })
+    revertActiveCouponForCoach.mockResolvedValue({ reverted: false })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────────────
+// AUTH BOUNDARY: tras la extracción de Ola 1, la única responsabilidad restante de la ruta
+// es rechazar token/firma inválidos (401) ANTES de delegar en runWebhookPipeline. Sin estos
+// tests, invertir/borrar un guard en un merge dejaría la suite verde mientras el webhook
+// procesa payloads forjados sin auth (un atacante manejaría subscription_status/tier/billing).
+// ─────────────────────────────────────────────────────────────────────────────────────
+describe('POST /api/payments/webhook — auth boundary (401 en token/firma inválidos)', () => {
+    it('token inválido → 401 y NO invoca el pipeline (processWebhook nunca corre)', async () => {
+        tokenValid = false
+        const res = await POST(makeRequest())
+        expect(res.status).toBe(401)
+        expect(processWebhook).not.toHaveBeenCalled()
+    })
+
+    it('firma inválida → 401 y NO invoca el pipeline (processWebhook nunca corre)', async () => {
+        // token válido, firma no → el segundo guard debe cortar igual.
+        sigValid = false
+        const res = await POST(makeRequest())
+        expect(res.status).toBe(401)
+        expect(processWebhook).not.toHaveBeenCalled()
+    })
 })
 
 // ─────────────────────────────────────────────────────────────────────────────────────
@@ -553,6 +618,82 @@ describe('POST /api/payments/webhook — P1-1: refund fallback by preapproval id
 })
 
 // ─────────────────────────────────────────────────────────────────────────────────────
+// B1: cobro RECURRENTE de un coach FLOW (subscription_provider='flow', subscription_mp_id=null,
+// external_id presente). El ref de la sub para el first-charge de add-ons y el PUT del cupón-expira
+// DEBE resolverse al external_id — no al subscription_mp_id (null) → antes esos hooks JAMÁS corrían
+// para Flow (add-ons sin first_charged_at → overcharge en la baja; cupón que no expira → undercharge).
+// ─────────────────────────────────────────────────────────────────────────────────────
+describe('POST /api/payments/webhook — B1: cobro recurrente de coach Flow usa el ref del gateway', () => {
+    const FLOW_COACH = {
+        id: 'coach-1',
+        subscription_status: 'active',
+        subscription_tier: 'pro',
+        billing_cycle: 'monthly',
+        current_period_end: '2026-07-01T00:00:00.000Z',
+        subscription_mp_id: null, // un coach Flow NO tiene preapproval MP
+        superseded_mp_preapproval_id: null,
+        subscription_provider: 'flow',
+        subscription_provider_external_id: 'flowsub-1',
+    }
+
+    function flowRecurringApproved() {
+        return {
+            accepted: true,
+            coachId: 'coach-1',
+            eventKind: 'payment' as const,
+            isRecurringAuthorizedPayment: true,
+            providerStatus: 'approved',
+            providerPaymentId: 'invoice:9001',
+            paidAt: '2026-06-13T12:00:00.000Z',
+            currentPeriodEnd: '2026-08-01T00:00:00.000Z',
+        }
+    }
+
+    it('approved → applyFirstChargeToAddons corre con el ref FLOW (external_id), no con mp_id null', async () => {
+        coachRow = { ...FLOW_COACH }
+        processWebhook.mockResolvedValue(flowRecurringApproved())
+        const res = await POST(makeRequest())
+        expect(res.status).toBe(200)
+        expect(applyFirstChargeToAddons).toHaveBeenCalledOnce()
+        const ctx = applyFirstChargeToAddons.mock.calls[0][2] as { subscriptionMpId: string }
+        expect(ctx.subscriptionMpId).toBe('flowsub-1')
+    })
+
+    it('cupón expira en este cobro (gateway MP) → updateCheckoutAmount al ref FLOW (external_id)', async () => {
+        coachRow = { ...FLOW_COACH }
+        decrementCouponCycleForCharge.mockResolvedValue({ expired: true })
+        processWebhook.mockResolvedValue(flowRecurringApproved())
+        const res = await POST(makeRequest())
+        expect(res.status).toBe(200)
+        expect(updateCheckoutAmount).toHaveBeenCalledOnce()
+        expect(updateCheckoutAmount.mock.calls[0][0]).toBe('flowsub-1')
+    })
+
+    // U6: cuando el gateway que PROCESA el webhook es FLOW, el cupón-expira NO hace el PUT inmediato
+    // (un changePlan-UP cobraría el delta AL INSTANTE de un ciclo disclosed con descuento = overcharge).
+    // El cron flow-reconcile (escritor único) sincroniza el compuesto antes de la próxima renovación.
+    it('cupón expira procesado por el gateway FLOW → NO llama updateCheckoutAmount (lo sincroniza el cron)', async () => {
+        providerName = 'flow'
+        coachRow = { ...FLOW_COACH }
+        decrementCouponCycleForCharge.mockResolvedValue({ expired: true })
+        processWebhook.mockResolvedValue(flowRecurringApproved())
+        const res = await POST(makeRequest())
+        expect(res.status).toBe(200)
+        expect(updateCheckoutAmount).not.toHaveBeenCalled()
+    })
+
+    it('coach MP (mismo cobro recurrente): SIN regresión — el ref es el subscription_mp_id', async () => {
+        coachRow = { ...PAID_COACH } // subscription_mp_id 'preapproval-1', provider default (no flow)
+        processWebhook.mockResolvedValue(flowRecurringApproved())
+        const res = await POST(makeRequest())
+        expect(res.status).toBe(200)
+        expect(applyFirstChargeToAddons).toHaveBeenCalledOnce()
+        const ctx = applyFirstChargeToAddons.mock.calls[0][2] as { subscriptionMpId: string }
+        expect(ctx.subscriptionMpId).toBe('preapproval-1')
+    })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────────────
 // tier-upgrade one-shot (plan estrategia 06, C4): backstop idempotente de confirm-upgrade.
 // El webhook corre la MISMA activación rank-guarded (tier+max_clients+cycle) + PUT al nuevo
 // compuesto y escribe el snapshot kind='tier_upgrade_proration' deduped por provider_payment_id.
@@ -652,5 +793,63 @@ describe('POST /api/payments/webhook — tier-upgrade one-shot (idempotente con 
         expect(res.status).toBe(200)
         expect(updateCheckoutAmountAndRef).not.toHaveBeenCalled()
         expect(coachUpdates.find((p) => p.subscription_tier === 'elite')).toBeFalsy()
+    })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────────────
+// U1b/U5: eventos MP rancios NO deben mutar a un coach cuyo gateway VIVO es Flow, ni un 'cancelled'
+// del preapproval MP viejo puede expirar a un coach cuyo mp_id fue nuleado (switch de gateway a Flow).
+// El match exacto (checkoutId===coachMpId, ambos non-null) es requisito para aplicar el terminal; el
+// primer pago aprobado sin order.id SIGUE aplicando canonicamente (regresion cubierta arriba).
+// ─────────────────────────────────────────────────────────────────────────────────────
+describe('POST /api/payments/webhook — U1b/U5: eventos MP sobre coach Flow / mp_id nulo', () => {
+    function preapprovalCancelled(checkoutId: string) {
+        return {
+            accepted: true,
+            coachId: 'coach-1',
+            eventKind: 'preapproval' as const,
+            providerStatus: 'cancelled',
+            providerCheckoutId: checkoutId,
+        }
+    }
+
+    it('U1b: evento MP cancelled sobre coach FLOW (provider flow + external_id) → 200 SIN mutar al coach', async () => {
+        coachRow = {
+            ...PAID_COACH,
+            subscription_mp_id: null,
+            subscription_provider: 'flow',
+            subscription_provider_external_id: 'flowsub-1',
+        }
+        processWebhook.mockResolvedValue(preapprovalCancelled('preapproval-viejo'))
+        const res = await POST(makeRequest())
+        expect(res.status).toBe(200)
+        // La sub viva es Flow → ningun coaches.update expira/cancela al coach.
+        expect(coachUpdates.find((p) => p.subscription_status === 'expired')).toBeFalsy()
+        expect(coachUpdates.find((p) => p.subscription_status === 'canceled')).toBeFalsy()
+        // Se escribio un event-row (dedup/replay) con el marcador flow-owned.
+        const flowOwned = [...subscriptionEvents.keys()].find((k) => k.includes('flow-owned'))
+        expect(flowOwned).toBeTruthy()
+    })
+
+    it('U5: cancelled con coachMpId NULL (coach en transicion, provider mercadopago) → STALE, sin terminal-expire', async () => {
+        coachRow = { ...PAID_COACH, subscription_mp_id: null, subscription_provider: 'mercadopago' }
+        processWebhook.mockResolvedValue(preapprovalCancelled('preapproval-viejo'))
+        const res = await POST(makeRequest())
+        expect(res.status).toBe(200)
+        // mp_id null → el 'cancelled' del preapproval viejo NO expira al coach (match exacto requerido).
+        expect(coachUpdates.find((p) => p.subscription_status === 'expired')).toBeFalsy()
+    })
+
+    it('U5: cancelled con match EXACTO checkoutId===coachMpId → SI aplica el terminal-expire (sin regresion)', async () => {
+        coachRow = {
+            ...PAID_COACH,
+            subscription_mp_id: 'preapproval-1',
+            current_period_end: '2020-01-01T00:00:00.000Z', // periodo ya vencido → cancel = terminal
+        }
+        processWebhook.mockResolvedValue(preapprovalCancelled('preapproval-1'))
+        const res = await POST(makeRequest())
+        expect(res.status).toBe(200)
+        // Cancelacion legitima de la sub trackeada → coach expira.
+        expect(coachUpdates.find((p) => p.subscription_status === 'expired')).toBeTruthy()
     })
 })

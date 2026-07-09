@@ -92,12 +92,20 @@ vi.mock('@/lib/rate-limit', () => ({
 const cancelCheckoutAtProvider = vi.fn(async (id: string) => {
     cancelAtProviderCalls.push(id)
 })
-const getPaymentsProvider = vi.fn(() => ({
-    name: 'mercadopago' as const,
+// getPaymentsProvider(gateway): el superseded se cancela SIEMPRE con el provider MP explícito.
+const getPaymentsProvider = vi.fn((g?: string) => ({
+    name: (g ?? 'mercadopago') as 'mercadopago' | 'flow',
+    cancelCheckoutAtProvider: (...a: unknown[]) => cancelCheckoutAtProvider(a[0] as string),
+}))
+// getPaymentsProviderForCoach: la sub viva se cancela en el gateway del coach (name refleja el coach).
+const getPaymentsProviderForCoach = vi.fn((c: { subscription_provider?: string | null }) => ({
+    name: (c?.subscription_provider === 'flow' ? 'flow' : 'mercadopago') as 'mercadopago' | 'flow',
     cancelCheckoutAtProvider: (...a: unknown[]) => cancelCheckoutAtProvider(a[0] as string),
 }))
 vi.mock('@/lib/payments/provider', () => ({
-    getPaymentsProvider: () => getPaymentsProvider(),
+    getPaymentsProvider: (...a: unknown[]) => getPaymentsProvider(...(a as [string?])),
+    getPaymentsProviderForCoach: (...a: unknown[]) =>
+        getPaymentsProviderForCoach(...(a as [{ subscription_provider?: string | null }])),
 }))
 
 import { POST } from './route'
@@ -125,10 +133,50 @@ beforeEach(() => {
     coachRow = {
         id: 'coach-1',
         subscription_mp_id: 'preapproval-1',
+        subscription_provider: 'mercadopago',
+        subscription_provider_external_id: null,
         payment_provider: 'mercadopago',
         current_period_end: '2026-07-01T00:00:00.000Z',
         superseded_mp_preapproval_id: null,
     }
+})
+
+// ════════════════════════════════════════════════════════════════════════════════════
+// Ola 5 — coach FLOW: la sub viva se cancela por su ref Flow (subscription_provider_external_id),
+// no por subscription_mp_id (que es null en un coach Flow). cancelCheckoutAtProvider conserva el
+// acceso hasta el corte (Flow at_period_end=1, misma máquina de estados EVA).
+// ════════════════════════════════════════════════════════════════════════════════════
+describe('POST /api/payments/cancel-subscription — coach FLOW cancela por external_id', () => {
+    it('usa subscription_provider_external_id (no el mp_id null) al cancelar en el provider', async () => {
+        coachRow = {
+            id: 'coach-1',
+            subscription_mp_id: null,
+            subscription_provider: 'flow',
+            subscription_provider_external_id: 'flow-sub-1',
+            payment_provider: 'flow',
+            current_period_end: '2026-07-01T00:00:00.000Z',
+            superseded_mp_preapproval_id: null,
+        }
+        const res = await POST(makeRequest({ reason: 'me voy' }))
+        expect(res.status).toBe(200)
+        expect(cancelAtProviderCalls).toEqual(['flow-sub-1'])
+    })
+
+    it('coach FLOW con superseded MP en vuelo: cancela la sub Flow Y el preapproval MP viejo', async () => {
+        coachRow = {
+            id: 'coach-1',
+            subscription_mp_id: null,
+            subscription_provider: 'flow',
+            subscription_provider_external_id: 'flow-sub-1',
+            payment_provider: 'flow',
+            current_period_end: '2026-07-01T00:00:00.000Z',
+            superseded_mp_preapproval_id: 'preapproval-OLD',
+        }
+        const res = await POST(makeRequest({}))
+        expect(res.status).toBe(200)
+        expect(cancelAtProviderCalls).toContain('flow-sub-1')
+        expect(cancelAtProviderCalls).toContain('preapproval-OLD')
+    })
 })
 
 describe('POST /api/payments/cancel-subscription — FIX-2 rate limit', () => {

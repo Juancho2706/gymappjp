@@ -34,14 +34,15 @@ vi.mock('@/lib/rate-limit', () => ({
         }),
 }))
 
-// Provider: el camino síncrono lee el snapshot del PAGO one-shot (no del preapproval).
+// Provider: el camino síncrono lee el snapshot del PAGO one-shot (no del preapproval). Se resuelve
+// por coach (getPaymentsProviderForCoach); para coach Flow el route hace no-op antes de tocarlo.
 const fetchPaymentSnapshot = vi.fn()
-const getPaymentsProvider = vi.fn(() => ({
+const getPaymentsProviderForCoach = vi.fn(() => ({
     name: 'mercadopago' as const,
     fetchPaymentSnapshot: (...a: unknown[]) => fetchPaymentSnapshot(...a),
 }))
 vi.mock('@/lib/payments/provider', () => ({
-    getPaymentsProvider: () => getPaymentsProvider(),
+    getPaymentsProviderForCoach: () => getPaymentsProviderForCoach(),
 }))
 
 // materializeAddonFromOneShot es el ÚNICO hook que escribe coach_addons (service-role) en este
@@ -100,6 +101,8 @@ const PAID_COACH = {
     billing_cycle: 'monthly',
     current_period_end: '2026-07-01T00:00:00.000Z',
     subscription_mp_id: 'preapproval-1',
+    subscription_provider: 'mercadopago',
+    subscription_provider_external_id: null,
 }
 const ONE_SHOT_REF = 'addon_oneshot|coach-1|cardio|v2-2026-06'
 
@@ -228,6 +231,24 @@ describe('POST /api/payments/confirm-addon — pago no aprobado: NO otorga', () 
         })
         const res = await POST(makeRequest({ paymentId: 'pay-1' }))
         expect(res.status).toBe(200)
+        expect(materializeAddonFromOneShot).not.toHaveBeenCalled()
+    })
+})
+
+describe('POST /api/payments/confirm-addon — coach FLOW: no-op (alta síncrona, sin one-shot)', () => {
+    it('coach Flow → 200 no-op sin fetch del pago ni materialización', async () => {
+        fetchCoachBillingRow.mockResolvedValue({
+            ...PAID_COACH,
+            subscription_mp_id: null,
+            subscription_provider: 'flow',
+            subscription_provider_external_id: 'flow-sub-1',
+        })
+        const res = await POST(makeRequest({ paymentId: 'pay-1' }))
+        expect(res.status).toBe(200)
+        const json = await res.json()
+        expect(json.code).toBe('FLOW_NO_ONESHOT')
+        // Flow no tiene one-shot MP: ni se consulta el pago ni se materializa nada.
+        expect(fetchPaymentSnapshot).not.toHaveBeenCalled()
         expect(materializeAddonFromOneShot).not.toHaveBeenCalled()
     })
 })

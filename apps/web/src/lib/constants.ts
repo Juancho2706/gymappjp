@@ -121,6 +121,16 @@ export const SUBSCRIPTION_BLOCKED_STATUSES = [
 export const SELF_SERVICE_ADDONS_ENABLED =
     process.env.NEXT_PUBLIC_SELF_SERVICE_ADDONS_ENABLED === 'true'
 
+// ── Gateway Flow.cl (plan pagos-multigateway-flow) ───────────────────────────
+// SWITCH DE LANZAMIENTO del gateway Flow. Gobernado por env var (NEXT_PUBLIC_ → vale en
+// cliente Y servidor): 'true' exacto ⇒ ON; cualquier otro valor o ausente ⇒ false
+// (fail-closed, el default seguro). Así el código se mergea a master con Flow APAGADO sin
+// tocar nada. Es build-time inlined (NEXT_PUBLIC), por lo que el flip exige redeploy —
+// aceptable para un switch de lanzamiento. El gate de DINERO es server-side
+// (create-preference rechaza gateway 'flow' con el flag OFF): aunque la UI quedara con un
+// valor stale, ningún cobro Flow ocurre sin el gate del servidor.
+export const FLOW_ENABLED = process.env.NEXT_PUBLIC_FLOW_ENABLED === 'true'
+
 // ── Cambio de tarjeta self-service (feat/coach-change-card, Modalidad A) ──────
 // Gate de LANZAMIENTO del cambio de tarjeta in-place. SERVER-ONLY a propósito (NO NEXT_PUBLIC):
 // el gate de dinero de /api/payments/change-card debe ser legible en el servidor y NO inlinearse

@@ -19,6 +19,12 @@ export type CreateCheckoutInput = {
      * add-ons, plan 05 F3.3). Ausente ⇒ preapproval de 3 partes (backward compatible).
      */
     addons?: ModuleKey[]
+    /**
+     * Flow-only: `customerId` ya enrolado del coach (`coaches.provider_customer_id`). Si viene, la
+     * Fase 1 de Flow reusa ese customer (no crea uno nuevo) antes del enrolamiento de tarjeta. MP lo
+     * ignora (no aplica). Ausente ⇒ Flow crea el customer.
+     */
+    existingCustomerId?: string
 }
 
 /** Input del pago one-shot prorrateado (Checkout Pro clásico — alta in-app trim/anual, plan 05 F3.2). */
@@ -45,6 +51,37 @@ export type CreateOneShotResult = {
 export type CreateCheckoutResult = {
     checkoutId: string
     checkoutUrl: string
+}
+
+/**
+ * Input de un cambio de compuesto sobre una suscripcion recurrente VIVA (add/remove item o
+ * changePlan, T5.1). El `amountClp` es el compuesto NUEVO ya calculado por el caller con
+ * `getCompositeAmountClp` (UNICA fuente de verdad de la plata) — los metodos del puerto NUNCA
+ * calculan montos ni prorratean: solo aplican el monto que reciben. `planLabel`/`webhookUrl` los
+ * usa Flow para hornear el plan deterministico nuevo (`eva_<tier>_<cycle>_<amountClp>`); MP los
+ * ignora (solo mueve el monto del preapproval).
+ */
+export type SubscriptionCompositeInput = {
+    tier: string
+    cycle: 'monthly' | 'quarterly' | 'annual'
+    amountClp: number
+    planLabel: string
+    webhookUrl: string
+}
+
+/**
+ * Resultado de un cambio de compuesto (T5.1). `applied`=el provider acepto el cambio.
+ * `chargedNowClp`=lo que el provider COBRO al instante por la diferencia (Flow, al SUBIR de monto,
+ * emite+cobra una invoice por el delta al toque — VALIDADO sandbox); `null` si el provider no cobra
+ * diferencia inmediata (MP mueve solo el proximo cobro) o no expone el dato. `creditClp`=credito a
+ * favor del pagador cuando el compuesto BAJA (Flow deja balance negativo, invoice $0); `null` si no
+ * aplica. Money-safety: el caller NUNCA debe sumar un one-shot propio sobre `chargedNowClp` (doble
+ * cobro) — cuando el provider ya cobro la diferencia, ese cobro ES el ajuste.
+ */
+export type SubscriptionChangeResult = {
+    applied: boolean
+    chargedNowClp: number | null
+    creditClp: number | null
 }
 
 /**
@@ -151,7 +188,7 @@ export type ProviderPaymentSnapshot = {
 }
 
 export interface PaymentsProvider {
-    name: 'mercadopago' | 'stripe'
+    name: 'mercadopago' | 'stripe' | 'flow'
     createCheckout(input: CreateCheckoutInput): Promise<CreateCheckoutResult>
     processWebhook(payload: unknown): Promise<WebhookProcessResult>
     /** Fetch current state of a recurring checkout / preapproval by provider id. */
@@ -214,4 +251,41 @@ export interface PaymentsProvider {
      * checkout (plan 05 F3.2 — alta in-app trim/anual prorrateada).
      */
     createOneShotPayment(input: CreateOneShotInput): Promise<CreateOneShotResult>
+    /**
+     * Agrega un add-on al compuesto de una suscripcion VIVA (T5.1). El `input.amountClp` es el
+     * compuesto NUEVO (base + add-ons − descuento) ya calculado por el service — el metodo solo lo
+     * aplica. Money-safety (VALIDADO Flow sandbox): al SUBIR el monto Flow emite+cobra al instante
+     * una invoice por la diferencia → `chargedNowClp` la refleja; el caller NUNCA suma un one-shot
+     * propio encima (seria doble cobro). MP no cobra diferencia inmediata en el PUT
+     * (`chargedNowClp: null`). Bajo Flow es un `changePlan` a un plan deterministico nuevo; bajo MP
+     * un `updateCheckoutAmount` (el "item" es el compuesto horneado, granularidad diferida).
+     */
+    addSubscriptionItem(
+        subscriptionRef: string,
+        input: SubscriptionCompositeInput
+    ): Promise<SubscriptionChangeResult>
+    /**
+     * Quita un add-on del compuesto de una suscripcion VIVA (T5.1). El `input.amountClp` es el
+     * compuesto NUEVO (ya sin el add-on) calculado por el service. Money-safety (VALIDADO Flow
+     * sandbox): al BAJAR el monto Flow deja un balance NEGATIVO (credito a favor, invoice $0) →
+     * `creditClp` lo refleja, sin cargo. MP mueve solo el proximo cobro. Misma mecanica que
+     * `addSubscriptionItem` (Flow: `changePlan`; MP: `updateCheckoutAmount`).
+     */
+    removeSubscriptionItem(
+        subscriptionRef: string,
+        input: SubscriptionCompositeInput
+    ): Promise<SubscriptionChangeResult>
+    /**
+     * Cambia el plan/compuesto completo de una suscripcion VIVA al monto de `input.amountClp`
+     * (T5.1 — cambio de tier o de ciclo con recomputo del compuesto). Money-safety: idem
+     * add/removeSubscriptionItem (subida → `chargedNowClp` que Flow cobra solo; bajada →
+     * `creditClp`). Bajo Flow es un ensure-plan deterministico (`eva_<tier>_<cycle>_<amountClp>`) +
+     * `subscription/changePlan` (cambio INMEDIATO en la MISMA sub, VALIDADO sandbox). Bajo MP es un
+     * `updateCheckoutAmount` (el rewrite de external_reference del upgrade MP lo hace su flujo
+     * propio confirm-upgrade; el semantico MP toca SOLO el monto).
+     */
+    changeSubscriptionPlan(
+        subscriptionRef: string,
+        input: SubscriptionCompositeInput
+    ): Promise<SubscriptionChangeResult>
 }

@@ -16,6 +16,8 @@ import type {
     PaymentsProvider,
     ProviderCheckoutSnapshot,
     ProviderPaymentSnapshot,
+    SubscriptionChangeResult,
+    SubscriptionCompositeInput,
     TierUpgradeRef,
     WebhookProcessResult,
 } from '@/lib/payments/types'
@@ -579,5 +581,37 @@ export class MercadoPagoProvider implements PaymentsProvider {
             checkoutUrl: payload.init_point ?? payload.sandbox_init_point ?? '',
             preferenceId: String(payload.id ?? ''),
         }
+    }
+
+    /**
+     * Puerto semantico (T5.2) — MP NO cambia de comportamiento. Los tres metodos delegan en la
+     * maquinaria EXISTENTE `updateCheckoutAmount` (PUT /preapproval al nuevo monto compuesto que ya
+     * viene calculado por el service). MP NO cobra la diferencia en el PUT (el ajuste va al proximo
+     * cobro) → `chargedNowClp`/`creditClp` = null SIEMPRE. `changeSubscriptionPlan` NO reescribe el
+     * external_reference: el rewrite de ref del upgrade de tier lo hace su flujo propio
+     * (confirm-upgrade via `updateCheckoutAmountAndRef`); el semantico MP toca SOLO el monto.
+     */
+    async addSubscriptionItem(
+        subscriptionRef: string,
+        input: SubscriptionCompositeInput
+    ): Promise<SubscriptionChangeResult> {
+        await this.updateCheckoutAmount(subscriptionRef, input.amountClp)
+        return { applied: true, chargedNowClp: null, creditClp: null }
+    }
+
+    async removeSubscriptionItem(
+        subscriptionRef: string,
+        input: SubscriptionCompositeInput
+    ): Promise<SubscriptionChangeResult> {
+        await this.updateCheckoutAmount(subscriptionRef, input.amountClp)
+        return { applied: true, chargedNowClp: null, creditClp: null }
+    }
+
+    async changeSubscriptionPlan(
+        subscriptionRef: string,
+        input: SubscriptionCompositeInput
+    ): Promise<SubscriptionChangeResult> {
+        await this.updateCheckoutAmount(subscriptionRef, input.amountClp)
+        return { applied: true, chargedNowClp: null, creditClp: null }
     }
 }

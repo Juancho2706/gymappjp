@@ -80,7 +80,7 @@ export async function POST(request: Request) {
         const admin = createServiceRoleClient()
         const { data: coach } = await admin
             .from('coaches')
-            .select('subscription_tier, subscription_status, billing_cycle, subscription_mp_id')
+            .select('subscription_tier, subscription_status, billing_cycle, subscription_mp_id, subscription_provider, subscription_provider_external_id')
             .eq('id', user.id)
             .maybeSingle()
         if (!coach) return NextResponse.json({ error: 'Coach no encontrado' }, { status: 404 })
@@ -133,24 +133,37 @@ export async function POST(request: Request) {
             if (error) console.error('[redeem-coupon] audit log failed:', error.message)
         })
 
-        // Commit con preapproval vivo: PUT del monto descontado a MP de inmediato → el PRÓXIMO cobro
-        // ya sale al precio del disclosure (el ciclo actual, ya pagado, NO se toca: MP solo cambia el
-        // próximo). Best-effort: si el PUT falla, la redención queda escrita igual (drift lo loguea
-        // webhook/cron); NUNCA tumbamos el canje por un fallo del provider. Sin preapproval (comp /
-        // internal) no hay dónde aplicar → no-op. result.preview.totalClp = neto server-side descontado.
+        // Aplicación del descuento al plan, SEGÚN EL GATEWAY (U6):
+        //   - MP: PUT del monto descontado de inmediato → el PRÓXIMO cobro ya sale al precio del
+        //     disclosure (el ciclo actual, ya pagado, NO se toca: MP solo cambia el próximo). Best-effort:
+        //     si el PUT falla, la redención queda escrita igual (drift lo loguea webhook/cron).
+        //   - FLOW: NO se hace PUT inmediato. En Flow `updateCheckoutAmount` traduce a un changePlan que
+        //     movería la plata del ciclo EN CURSO; el disclosure dice "desde tu próxima renovación", así
+        //     que el cron `flow-reconcile` (ESCRITOR ÚNICO del compuesto Flow) materializa el monto
+        //     descontado ANTES del próximo cobro. La redención YA quedó commiteada por redeemCoupon.
+        //   - Sin preapproval (comp / internal) → no hay dónde aplicar (no-op). Antes un coach Flow caía
+        //     acá con mp_id NULL y el descuento moría en silencio (cobraba lleno con snapshot descontado =
+        //     SERNAC invertido) — ahora es EXPLÍCITO: lo aplica el cron.
         const mpId = coach.subscription_mp_id?.trim() || null
-        if (result.redemptionId && mpId) {
-            try {
-                await getPaymentsProvider().updateCheckoutAmount(
-                    mpId,
-                    result.preview.totalClp,
-                    buildAmountPutIdempotencyKey(user.id, result.preview.totalClp)
-                )
-            } catch (putErr) {
-                console.error('[redeem-coupon] PUT del monto descontado falló — redención escrita, reconcile reintenta', {
+        if (result.redemptionId) {
+            if (coach.subscription_provider === 'flow') {
+                console.info('[redeem-coupon] coach Flow — cron flow-reconcile aplica el compuesto descontado antes del próximo cobro', {
                     coachId: user.id,
-                    message: putErr instanceof Error ? putErr.message : String(putErr),
+                    redemptionId: result.redemptionId,
                 })
+            } else if (mpId) {
+                try {
+                    await getPaymentsProvider().updateCheckoutAmount(
+                        mpId,
+                        result.preview.totalClp,
+                        buildAmountPutIdempotencyKey(user.id, result.preview.totalClp)
+                    )
+                } catch (putErr) {
+                    console.error('[redeem-coupon] PUT del monto descontado falló — redención escrita, reconcile reintenta', {
+                        coachId: user.id,
+                        message: putErr instanceof Error ? putErr.message : String(putErr),
+                    })
+                }
             }
         }
 
