@@ -274,7 +274,7 @@ export async function POST(request: Request) {
 
         // Fase 2a — ¿la tarjeta ya quedo enrolada? La tarjeta puede tardar unos segundos en reflejarse
         // tras el redirect; si aun no, respondemos { enrolled:false } y la pagina sigue poll-eando.
-        let enrollment: { enrolled: boolean }
+        let enrollment: { enrolled: boolean; cardType: string | null; last4: string | null }
         try {
             enrollment = await flowProvider.getCustomerEnrollmentStatus(coach.provider_customer_id)
         } catch (error) {
@@ -409,6 +409,10 @@ export async function POST(request: Request) {
                 subscription_tier: tier,
                 billing_cycle: cycle,
                 max_clients: getTierMaxClients(tier),
+                // Tarjeta enrolada (display-only, E2E QA: quedaba "Sin tarjeta registrada"): el
+                // getCustomerEnrollmentStatus de arriba ya trae marca+last4 de customer/get.
+                card_brand: enrollment.cardType,
+                card_last4: enrollment.last4,
                 // F4 (H2): el coach ahora es Flow. Limpiar cualquier subscription_mp_id rancio: si conservara
                 // el preapproval id viejo de MP, el webhook 'cancelled' de MP (gatillado por NUESTRO propio
                 // cancel en Fase 1) matchearia al coach y lo tumbaria a canceled DESPUES de activarlo.

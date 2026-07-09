@@ -587,6 +587,19 @@ export async function POST(request: Request) {
         })
     } catch (error) {
         const message = error instanceof Error ? error.message : 'No se pudo iniciar el flujo de suscripción.'
+        // Flow VALIDA la entregabilidad real del email del pagador (no solo el formato) en
+        // customer/create — confirmado en QA E2E: un buzon no entregable devuelve
+        // `code=501 "email is not valid"`. Sin este mapeo el coach ve un 500 opaco; con el, un
+        // 400 accionable (que revise su correo). Los coaches reales con email real no lo pegan.
+        if (/email is not valid/i.test(message)) {
+            return NextResponse.json(
+                {
+                    code: 'GATEWAY_EMAIL_REJECTED',
+                    error: 'El medio de pago no pudo validar tu correo. Verificá que tu email de la cuenta sea real y accesible, o proba con Mercado Pago.',
+                },
+                { status: 400 }
+            )
+        }
         return NextResponse.json({ error: message }, { status: 500 })
     }
 }

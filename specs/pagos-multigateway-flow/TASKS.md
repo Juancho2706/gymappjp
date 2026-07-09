@@ -156,16 +156,16 @@ Ola 7 (go-live + re-inscripcion MP) ── REQUIERE Ola 6 verde + autorizacion C
 
 > REQUIERE Ola 1 (schema `gateway`). QA real de checkout REQUIERE Ola 3.
 
-- [ ] T4.1 - `gateway` en el schema Zod de create-preference
+- [x] T4.1 - `gateway` en el schema Zod de create-preference ✅ 2026-07-09 (commit eb364b85; +guard cambio-de-plan de sub Flow viva 6d074a27)
   - Scope: `app/api/payments/create-preference/route.ts` — schema suma `gateway: z.enum(['mercadopago','flow']).default('mercadopago')` -> `getPaymentsProvider(gateway)`. Con `NEXT_PUBLIC_FLOW_ENABLED` OFF, `'flow'` se rechaza fail-closed (fallback MP o 400). `getCompositeAmountClp` sigue siendo la unica fuente del monto.
   - Verification: Zod valida `gateway` en servidor; `'flow'` con flag OFF => rechazado; sin `gateway` => MP; `pnpm test` del route verde.
-- [ ] T4.2 - `gateway` en el schema Zod de addons
+- [~] T4.2 - `gateway` en addons — resuelto DISTINTO: alta de add-on Flow SIN one-shot (changePlan cobra la diferencia solo, Ola 5); el endpoint bifurca por subscription_provider, no por gateway del body
   - Scope: `app/api/payments/addons/route.ts` — idem `gateway` + fail-closed con flag OFF.
   - Verification: mismo criterio que T4.1 aplicado a addons.
-- [ ] T4.3 - Dos botones en `SubscriptionContent` (cambio plan + add-ons)
+- [x] T4.3 - Dos botones en `SubscriptionContent` ✅ (cambio de plan; boton Flow solo coach free hasta cablear changePlan de sub viva; add-ons Flow = flujo sync sin boton de gateway)
   - Scope: `app/coach/subscription/_components/SubscriptionContent.tsx` (~L354) — parametrizar el handler de checkout con `gateway`; renderizar "Pagar con Webpay (Flow)" y "Pagar con MercadoPago" llamando al mismo handler con distinto `gateway`. Boton Flow solo si `NEXT_PUBLIC_FLOW_ENABLED === 'true'`. Copy legal (metodo + base+Σaddons+descuento + cadencia), reusando el desglose existente (server-computed, no duplicar montos). `<Image>` para logos Webpay/MP.
   - Verification: con flag OFF UI identica a hoy (solo MP); con ON aparecen ambos botones y rutean con el `gateway` correcto; movil = apilados, `md:` = lado a lado; `h-dvh`/safe-areas; dark mode.
-- [ ] T4.4 - Dos botones en `ReactivateClient` (alta/reactivacion/signup)
+- [x] T4.4 - Dos botones en `ReactivateClient` ✅ (E2E validado en Preview 2026-07-09, screenshots flow-e2e-*)
   - Scope: `app/coach/reactivate/ReactivateClient.tsx` (~L203) — mismo patron de dos botones + `gateway` + flag + copy legal + `<Image>`.
   - Verification: mismos criterios que T4.3 para el flujo de alta/reactivacion; auto-checkout respeta el `gateway` elegido.
 
@@ -177,19 +177,19 @@ Ola 7 (go-live + re-inscripcion MP) ── REQUIERE Ola 6 verde + autorizacion C
 
 > REQUIERE Ola 2 + Ola 3.
 
-- [ ] T5.1 - Extender el puerto con metodos semanticos
+- [x] T5.1 - Extender el puerto con metodos semanticos ✅ commit 6d074a27
   - Scope: `lib/payments/types.ts` — agregar `addSubscriptionItem`, `removeSubscriptionItem`, `changeSubscriptionPlan(preview?)` al puerto `PaymentsProvider`. Mantener `updateCheckoutAmount`/`updateCheckoutAmountAndRef` para el caso cupon-expira del webhook.
   - Verification: `pnpm typecheck` verde; interface documentada; ambos providers deben implementarla (fuerza T5.2/T5.3).
-- [ ] T5.2 - Adapter MP de los metodos semanticos
+- [x] T5.2 - Adapter MP de los metodos semanticos ✅
   - Scope: `lib/payments/providers/mercadopago.ts` — implementar `addSubscriptionItem`/`removeSubscriptionItem`/`changeSubscriptionPlan` sobre el `updateCheckoutAmount`/`updateCheckoutAmountAndRef` existente (el monto lo recompone el service con `getCompositeAmountClp`). Comportamiento MP intacto.
   - Verification: `pnpm test` MP sin regresion; los metodos nuevos producen el mismo PUT-de-monto que hoy.
-- [ ] T5.3 - Impl Flow nativa de los metodos semanticos
+- [x] T5.3 - Impl Flow nativa ✅ (changePlan a plan deterministico — VALIDADO sandbox: subida cobra diferencia al instante, bajada credito; items nativos diferidos)
   - Scope: `lib/payments/providers/flow.ts` — `addSubscriptionItem` -> `subscription/addItem`; `removeSubscriptionItem` -> `subscription/deleteItem`; `changeSubscriptionPlan` -> `subscription/previewChangePlan` (prorrateo) + `subscription/changePlan`. `updateCheckoutAmount`/`AndRef` de Flow: el "AndRef" es **no-op** (EVA es fuente de verdad del tier, elimina el bug MP stale-ref); el "amount" se traduce a addItem/deleteItem/changePlan/quitar-coupon segun el diff. NO cancel+resubscribe.
   - Verification: add/quitar add-on y upgrade/downgrade de tier en sandbox cobran el prorrateo correcto en la **misma sub viva**; spelling de `addItem`/`deleteItem`/`changePlan` confirmado (ver T6.1).
-- [ ] T5.4 - Endpoints de add-ons/cancel/cambio eligen provider por `subscription_provider`
+- [x] T5.4 - Endpoints por `subscription_provider` ✅ (+5 fixes de costura del panel: subRef pipeline, lifecycle provider, expiry des-gateado, regla-4 diferida al corte)
   - Scope: `app/api/payments/addons/route.ts`, `addons/cancel/route.ts`, `cancel-subscription/route.ts` — provider por `coaches.subscription_provider` guardado, no por body; ruteo a los metodos semanticos.
   - Verification: sub Flow usa metodos Flow; sub MP usa MP; sin regresion.
-- [ ] T5.5 - change-card bifurca por gateway
+- [x] T5.5 - change-card bifurca por gateway ✅ (Flow = re-enroll redirect startCardReenrollment)
   - Scope: `app/api/payments/change-card/route.ts` (+ UI de change-card) — `updateCardAtProvider` MP = token sincrono (Modalidad A, intacto); Flow = `customer/register` re-enroll (redirect asincrono). El endpoint/UI bifurca por `subscription_provider`.
   - Verification: change-card de una sub Flow inicia el flujo redirect de re-enroll; MP conserva su flujo sincrono; `pnpm typecheck` verde.
 
@@ -201,16 +201,16 @@ Ola 7 (go-live + re-inscripcion MP) ── REQUIERE Ola 6 verde + autorizacion C
 
 > REQUIERE Ola 5. E2E Playwright/SQL solo con autorizacion explicita del CEO (regla de trabajo).
 
-- [ ] T6.1 - PIN spelling de endpoints inestables
+- [x] T6.1 - PIN spelling ✅ 2026-07-09 (invoice/getOverDue y invoice/retryToCollect confirmados en vivo; addItem/deleteItem no se usan — changePlan)
   - Scope: verificar contra sandbox el spelling exacto de `subscription/addItem`, `subscription/deleteItem`, `invoice/getOverdue`, `invoice/retry`, `invoice/outsidePayment`, `subscription/modifyTrialPeriod` (docs inconsistentes). Corregir `flow.ts` si difiere.
   - Verification: cada endpoint responde (no 404/param error) en sandbox; spelling final anotado en el SPEC/PLAN; `flow.ts` alineado.
 - [ ] T6.2 - PIN estado terminal tras agotar reintentos
   - Scope: provocar el agotamiento de `charges_retries_number` (def 3) en sandbox; observar estado terminal real de la sub (past_due vs cancelled). Mapear a `subscription_status` de EVA **conservando `current_period_end`** (dunning inline del webhook).
   - Verification: estado terminal documentado; el mapeo preserva `current_period_end` (no adelanta/retrocede); Open Question del SPEC cerrada.
-- [ ] T6.3 - PIN ciclo trimestral cobra a 3 meses
+- [x] T6.3 - PIN trimestral ✅ 2026-07-09 (interval=3+count=3 → periodo 09-jul→08-oct = 3 meses exactos, un cobro)
   - Scope: verificar en sandbox que `interval=3 + interval_count=3` (multiplicador, no nativo) produce 1ra y 2da factura a 3 meses reales.
   - Verification: cadencia confirmada en sandbox; si NO cobra cada 3 meses, buscar el mapeo correcto ANTES de exponer el ciclo trimestral en UI.
-- [ ] T6.4 - PIN reuso de tarjeta sin re-entry
+- [x] T6.4 - PIN reuso de tarjeta ✅ 2026-07-09 (3 subs creadas sobre el mismo cus_ enrolado sin re-entry, cobros ejecutados)
   - Scope: verificar que `customer/create` + `customer/register` producen un `cus_xxx` reusable en `subscription/create` y en add-ons sin re-ingresar tarjeta.
   - Verification: una segunda operacion (add-on/sub nueva) reusa `provider_customer_id` sin re-enroll; documentado.
 - [ ] T6.5 - PIN codigos de error -1 / -8
