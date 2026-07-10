@@ -67,18 +67,20 @@ jobs:
           eas-version: latest
           token: ${{ secrets.EXPO_TOKEN }}
 
-      - name: Inject prod env vars into eas.json for prodpreview
-        if: ${{ inputs.profile == 'prodpreview' }}
+      - name: Inject prod env vars into eas.json for prodpreview/production
+        if: ${{ inputs.profile == 'prodpreview' || inputs.profile == 'production' }}
         working-directory: apps/${{ inputs.app }}
         env:
           SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          BUILD_PROFILE: ${{ inputs.profile }}
         run: |
           node -e "
             const fs = require('fs');
             const eas = JSON.parse(fs.readFileSync('eas.json', 'utf8'));
-            eas.build.prodpreview.env.EXPO_PUBLIC_SUPABASE_URL = process.env.SUPABASE_URL;
-            eas.build.prodpreview.env.EXPO_PUBLIC_SUPABASE_ANON_KEY = process.env.SUPABASE_KEY;
+            const profile = eas.build[process.env.BUILD_PROFILE];
+            profile.env.EXPO_PUBLIC_SUPABASE_URL = process.env.SUPABASE_URL;
+            profile.env.EXPO_PUBLIC_SUPABASE_ANON_KEY = process.env.SUPABASE_KEY;
             fs.writeFileSync('eas.json', JSON.stringify(eas, null, 2));
           "
 
@@ -152,18 +154,20 @@ jobs:
             exit 1
           fi
 
-      - name: Inject prod env vars into eas.json for prodpreview
-        if: ${{ inputs.profile == 'prodpreview' }}
+      - name: Inject prod env vars into eas.json for prodpreview/production
+        if: ${{ inputs.profile == 'prodpreview' || inputs.profile == 'production' }}
         working-directory: apps/${{ inputs.app }}
         env:
           SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          BUILD_PROFILE: ${{ inputs.profile }}
         run: |
           node -e "
             const fs = require('fs');
             const eas = JSON.parse(fs.readFileSync('eas.json', 'utf8'));
-            eas.build.prodpreview.env.EXPO_PUBLIC_SUPABASE_URL = process.env.SUPABASE_URL;
-            eas.build.prodpreview.env.EXPO_PUBLIC_SUPABASE_ANON_KEY = process.env.SUPABASE_KEY;
+            const profile = eas.build[process.env.BUILD_PROFILE];
+            profile.env.EXPO_PUBLIC_SUPABASE_URL = process.env.SUPABASE_URL;
+            profile.env.EXPO_PUBLIC_SUPABASE_ANON_KEY = process.env.SUPABASE_KEY;
             fs.writeFileSync('eas.json', JSON.stringify(eas, null, 2));
           "
 
