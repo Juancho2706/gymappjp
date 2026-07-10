@@ -25,9 +25,10 @@ import { getClientProfile } from '../../../lib/client'
 import { getTodayInSantiago, formatRelativeDate } from '../../../lib/date-utils'
 import { useTheme } from '../../../context/ThemeContext'
 import { useEvaMotion } from '../../../lib/motion'
+import { useAlumnoScrollHandler } from '../../../lib/alumno-chrome-scroll'
 import { TYPE, FONT, textStyle } from '../../../lib/typography'
 import { SHADOWS } from '../../../lib/shadows'
-import { Button, Card, Textarea } from '../../../components'
+import { Button, Card, Slider, Textarea } from '../../../components'
 import { AppBackground } from '../../../components/AppBackground'
 
 const MAX_BYTES = 5 * 1024 * 1024
@@ -45,6 +46,7 @@ interface LastCheckIn {
 export default function CheckInScreen() {
   const { theme, resolvedScheme } = useTheme()
   const motion = useEvaMotion()
+  const onScrollChrome = useAlumnoScrollHandler()
   const router = useRouter()
   const [step, setStep] = useState<1 | 2 | 3>(1)
   // Peso: stepper +/- 0.1kg con default 70.0 (espejo web); se prellenar con el
@@ -343,6 +345,8 @@ export default function CheckInScreen() {
           contentContainerStyle={styles.scroll}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
+          onScroll={onScrollChrome}
+          scrollEventThrottle={16}
         >
           {step === 1 && (
             <StepOne
@@ -470,28 +474,15 @@ function StepOne({
             <Text className="text-muted" style={textStyle('2xs', FONT.uiSemibold)}>/10</Text>
           </Text>
         </View>
-        {/* RN no tiene primitiva Slider en el DS → selector segmentado 1-10 (mismo rango que el slider web). */}
-        <View style={styles.energyRow}>
-          {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => {
-            const selected = energyLevel === n
-            return (
-              <Pressable
-                key={n}
-                onPress={() => setEnergyLevel(selected ? null : n)}
-                className={selected ? 'bg-sport-500 border-[1.5px] border-sport-500' : 'bg-surface-card border-[1.5px] border-default'}
-                style={styles.energyBtn}
-                testID={`energy-${n}`}
-              >
-                <Text
-                  className={selected ? 'text-on-sport' : 'text-strong'}
-                  style={textStyle('sm', FONT.uiBold)}
-                >
-                  {n}
-                </Text>
-              </Pressable>
-            )
-          })}
-        </View>
+        {/* Slider de rango 1-10 (espejo del <input type="range"> de la web). */}
+        <Slider
+          value={energyLevel ?? 7}
+          onValueChange={setEnergyLevel}
+          min={1}
+          max={10}
+          step={1}
+          testID="energy-slider"
+        />
       </Card>
 
       <Button
@@ -686,8 +677,6 @@ const styles = StyleSheet.create({
   weightValueRow: { flexDirection: 'row', alignItems: 'baseline', gap: 4 },
   stepBtn: { width: 48, height: 48, borderRadius: 999, alignItems: 'center', justifyContent: 'center' },
   energyHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  energyRow: { flexDirection: 'row', gap: 6, flexWrap: 'wrap' },
-  energyBtn: { width: 42, height: 42, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   photoRow: { flexDirection: 'row', gap: 10 },
   photoSlot: {
     flex: 1, aspectRatio: 3 / 4, borderRadius: 14, overflow: 'hidden',

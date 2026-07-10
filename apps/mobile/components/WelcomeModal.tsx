@@ -8,10 +8,10 @@ import {
   View,
 } from 'react-native'
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { WebView } from 'react-native-webview'
 import { X } from 'lucide-react-native'
 import { MotiView } from 'moti'
 import { useTheme } from '../context/ThemeContext'
+import { VideoPlayer } from './VideoPlayer'
 
 interface Props {
   brandName?: string
@@ -22,16 +22,6 @@ interface Props {
 }
 
 const STORAGE_KEY_PREFIX = 'eva_welcome_modal_v'
-
-/** Normaliza links de YouTube/Vimeo a su URL embebible para el WebView. */
-function toEmbedUrl(raw: string): string {
-  const url = (raw ?? '').trim()
-  const yt = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/|youtube\.com\/shorts\/)([\w-]{11})/)
-  if (yt) return `https://www.youtube.com/embed/${yt[1]}?playsinline=1`
-  const vimeo = url.match(/vimeo\.com\/(?:video\/)?(\d+)/)
-  if (vimeo) return `https://player.vimeo.com/video/${vimeo[1]}`
-  return url
-}
 
 export function WelcomeModal({ brandName, enabled, content, type, version }: Props) {
   const { theme } = useTheme()
@@ -97,16 +87,21 @@ export function WelcomeModal({ brandName, enabled, content, type, version }: Pro
             </TouchableOpacity>
           </View>
 
+          {/* Video de bienvenida del coach — reproducido INLINE con la primitiva DS
+              (VideoPlayer: YouTube nocookie via IFrame API + mp4 via expo-video, mismo
+              contrato que la web). El WebView crudo con `source={{ uri }}` renderizaba
+              hueco en device (YouTube bloquea el embed sin origin/baseUrl). Sin video
+              (content vacio) no se reserva el hueco → modal compacto. */}
           {type === 'video' ? (
-            <View style={styles.videoWrap}>
-              <WebView
-                source={{ uri: toEmbedUrl(content) }}
-                style={styles.video}
-                allowsInlineMediaPlayback
-                mediaPlaybackRequiresUserAction={false}
-                javaScriptEnabled
+            content.trim() ? (
+              <VideoPlayer
+                url={content}
+                muted={false}
+                loop={false}
+                title="Video de bienvenida"
+                style={styles.videoPlayer}
               />
-            </View>
+            ) : null
           ) : (
             <ScrollView style={styles.body} showsVerticalScrollIndicator={false}>
               <Text style={[styles.content, { color: theme.foreground, fontFamily: theme.fontSans }]}>
@@ -180,8 +175,7 @@ const styles = StyleSheet.create({
   closeBtn: { padding: 8, marginTop: 2 },
   body: { maxHeight: 280, paddingHorizontal: 20, paddingBottom: 4 },
   content: { fontSize: 14, lineHeight: 22 },
-  videoWrap: { height: 200, marginHorizontal: 20, borderRadius: 12, overflow: 'hidden' },
-  video: { flex: 1 },
+  videoPlayer: { marginHorizontal: 20 },
   footer: {
     padding: 20,
     paddingTop: 16,

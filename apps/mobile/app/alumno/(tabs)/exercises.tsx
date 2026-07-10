@@ -13,6 +13,7 @@ import { useLocalSearchParams } from 'expo-router'
 import { BookOpen, ChevronDown, Dumbbell, Play, Search, X } from 'lucide-react-native'
 import { MotiView } from 'moti'
 import { useTheme } from '../../../context/ThemeContext'
+import { useAlumnoScrollHandler } from '../../../lib/alumno-chrome-scroll'
 import { Button, EmptyState, Input, Sheet, VideoPlayer } from '../../../components'
 import { EvaLoaderScreen } from '../../../components/EvaLoader'
 import { SafeAreaView } from 'react-native-safe-area-context'
@@ -35,6 +36,7 @@ const SEARCH_DEBOUNCE_MS = 250
 
 export default function ExercisesScreen() {
   const { theme, resolvedScheme } = useTheme()
+  const onScrollChrome = useAlumnoScrollHandler()
   // Deep-link: `?q=<term>` precarga la búsqueda (lo usa el "Ver técnica" del Home, home.tsx),
   // `?ex=<id>` abre directo el sheet de detalle (ruta `/alumno/exercise/[id]`).
   const params = useLocalSearchParams<{ q?: string; ex?: string }>()
@@ -274,6 +276,8 @@ export default function ExercisesScreen() {
           columnWrapperStyle={styles.column}
           contentContainerStyle={styles.list}
           showsVerticalScrollIndicator={false}
+          onScroll={onScrollChrome}
+          scrollEventThrottle={16}
           style={refetching ? styles.dimmed : undefined}
           ListHeaderComponent={
             featured ? (

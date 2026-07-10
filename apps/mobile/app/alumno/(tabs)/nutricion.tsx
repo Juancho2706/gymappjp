@@ -31,6 +31,7 @@ import { enqueueNutritionToggle, flushNutritionQueue } from '../../../lib/offlin
 import { readNutritionCache, writeNutritionCache } from '../../../lib/nutrition-offline-cache'
 import { useStudentExchanges } from '../../../lib/nutrition-exchanges.queries'
 import { useEntitlements } from '../../../lib/entitlements'
+import { useAlumnoScrollHandler } from '../../../lib/alumno-chrome-scroll'
 import { getAssignedRecipesForClient, type RecipeRow } from '../../../lib/recipes.queries'
 import {
   applyMealFoodSwap,
@@ -103,6 +104,7 @@ import {
  */
 export default function AlumnoNutricionScreen() {
   const { theme } = useTheme()
+  const onScrollChrome = useAlumnoScrollHandler()
   const { iso: todayIso } = getTodayInSantiago()
 
   // Master switch del dominio + gating por seccion (feature-prefs resueltas server-side y servidas
@@ -519,6 +521,8 @@ export default function AlumnoNutricionScreen() {
           contentContainerStyle={styles.scroll}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
+          onScroll={onScrollChrome}
+          scrollEventThrottle={16}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.primary} colors={[theme.primary]} />
           }

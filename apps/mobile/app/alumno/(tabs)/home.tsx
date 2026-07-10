@@ -7,6 +7,7 @@ import { getOnboardingStatus } from '../../../lib/alumno-onboarding'
 import { getDailyHabits } from '../../../lib/habits.queries'
 import { getActiveOrgAnnouncements } from '../../../lib/org-announcements'
 import { useEntitlements } from '../../../lib/entitlements'
+import { useAlumnoScrollHandler } from '../../../lib/alumno-chrome-scroll'
 import { formatLongDate, getSantiagoIsoYmdForUtcInstant, getTodayInSantiago, formatRelativeDate, timeGreeting } from '../../../lib/date-utils'
 import { AppBackground } from '../../../components/AppBackground'
 import { Skeleton } from '../../../components/Skeleton'
@@ -64,6 +65,7 @@ function calculateStreak(dates: Set<string>): number {
 export default function AlumnoHomeScreen() {
   const router = useRouter()
   const { nutritionEnabled } = useEntitlements()
+  const onScrollChrome = useAlumnoScrollHandler()
   const [data, setData] = useState<HomeData | null>(null)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
@@ -291,6 +293,8 @@ export default function AlumnoHomeScreen() {
       <ScrollView
         contentContainerStyle={styles.scroll}
         showsVerticalScrollIndicator={false}
+        onScroll={onScrollChrome}
+        scrollEventThrottle={16}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
         {/* §1 Anuncios de la org */}

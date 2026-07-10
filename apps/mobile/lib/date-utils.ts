@@ -1,8 +1,58 @@
 const SANTIAGO_TZ = 'America/Santiago'
 
+/**
+ * Convierte un instante a un `Date` cuyos getters locales (getHours,
+ * getFullYear, ...) reflejan la hora de pared de Santiago.
+ *
+ * NO usar `new Date(now.toLocaleString(...))`: el string localizado
+ * ("7/9/2026, 3:04:05 PM") NO es ISO y Hermes/iOS lo rechaza → "Invalid Date"
+ * (bug de clase). `formatToParts` + constructor numérico nunca parsea strings.
+ */
 function toSantiagoDate(now: Date): Date {
-  const tzStr = now.toLocaleString('en-US', { timeZone: SANTIAGO_TZ })
-  return new Date(tzStr)
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: SANTIAGO_TZ,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  }).formatToParts(now)
+  const p: Record<string, string> = {}
+  for (const part of parts) p[part.type] = part.value
+  let hour = Number(p.hour)
+  if (hour === 24) hour = 0 // algunos motores devuelven '24' a medianoche
+  return new Date(
+    Number(p.year),
+    Number(p.month) - 1,
+    Number(p.day),
+    hour,
+    Number(p.minute),
+    Number(p.second),
+  )
+}
+
+/**
+ * Parser central y seguro para fechas que vienen de Postgres.
+ * Acepta: `YYYY-MM-DD` (columnas `date`, se ancla a mediodía local para evitar
+ * saltos de día por TZ), timestamps ISO con `T`/`Z`, y el formato con espacio
+ * `YYYY-MM-DD HH:mm[:ss]` que Hermes/iOS NO parsea con `new Date()`.
+ * Devuelve `null` si el valor es vacío o no se puede parsear.
+ */
+export function parseDbDate(value: string | null | undefined): Date | null {
+  if (!value) return null
+  const s = String(value).trim()
+  if (!s) return null
+  // Solo fecha (YYYY-MM-DD): anclar a mediodía local evita off-by-one por TZ.
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+    const d = new Date(`${s}T12:00:00`)
+    return Number.isNaN(d.getTime()) ? null : d
+  }
+  // Timestamp con espacio → normalizar a ISO reemplazando el primer espacio.
+  const iso = s.includes('T') ? s : s.replace(' ', 'T')
+  const d = new Date(iso)
+  return Number.isNaN(d.getTime()) ? null : d
 }
 
 export function getTodayInSantiago(now = new Date()): { iso: string; dayOfWeek: number } {

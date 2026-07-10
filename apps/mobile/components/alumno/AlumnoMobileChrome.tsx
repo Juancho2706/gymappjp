@@ -28,6 +28,7 @@ import { useEntitlements } from '../../lib/entitlements'
 import { signOutAndCleanup } from '../../lib/auth-actions'
 import { resetChromeScroll, useChromeMinimized } from '../../lib/alumno-chrome-scroll'
 import { FONT } from '../../lib/typography'
+import { SPRING } from '../../lib/motion'
 import { shadow } from '../../lib/shadows'
 import { Sheet } from '../Sheet'
 import { ListRow } from '../ListRow'
@@ -66,7 +67,10 @@ for (const Icon of NAV_ICONS) {
   cssInterop(Icon, { className: { target: 'style', nativeStyleToProp: { color: true } } })
 }
 
-const SPRING = { damping: 20, stiffness: 220, mass: 0.6 }
+// Resorte del pill deslizante + inset de la capsula: token compartido `SPRING.ui`
+// de @eva/brand-kit (damping 18 · stiffness 220 · mass 1) — mismo "resorte" que la
+// PWA (var(--ease-spring)) para que el desliz al cambiar de tab sea 1:1 con la web.
+const NAV_SPRING = SPRING.ui
 const CAPSULE_PAD = 8
 const CAPSULE_RADIUS = 30
 const PILL_RADIUS = 22
@@ -157,7 +161,7 @@ export function AlumnoMobileChrome({
   }, [activeName])
 
   const capsuleInsetStyle = useAnimatedStyle(() => {
-    const inset = withSpring(mini.value ? INSET_MIN : INSET_OPEN, SPRING)
+    const inset = withSpring(mini.value ? INSET_MIN : INSET_OPEN, NAV_SPRING)
     return { left: inset, right: inset }
   })
 
@@ -167,7 +171,7 @@ export function AlumnoMobileChrome({
     const idx = activeIdx.value
     return {
       width: w,
-      transform: [{ translateX: withSpring(CAPSULE_PAD + (idx < 0 ? 0 : idx) * w, SPRING) }],
+      transform: [{ translateX: withSpring(CAPSULE_PAD + (idx < 0 ? 0 : idx) * w, NAV_SPRING) }],
       opacity: withTiming(idx < 0 ? 0 : 1, { duration: 160 }),
     }
   })
