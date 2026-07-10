@@ -27,6 +27,11 @@ import { useWorkoutTimers } from './timers/TimerProvider'
 
 const ON_DARK = '#F4F6F8'
 
+// NativeWind v4: el `style` inline pisa la `fontFamily` compilada de la className, así que
+// `style={TYPE.mono}` + `className="font-mono-bold"` renderiza el peso REGULAR (bug ola0, mismo
+// workaround que SingleExerciseCard/SupersetGroupCard). Fijamos la cara bold por `style` (array).
+const MONO_BOLD = { fontFamily: FONT.monoBold } as const
+
 interface TargetCard {
   label: string
   value: string
@@ -97,7 +102,7 @@ export function TypedTargetGrid({
           className={`rounded-sm border px-2.5 py-2 ${
             card.highlight ? 'border-ember-500/30 bg-ember-500/[0.14]' : 'border-inverse/10 bg-white/[0.05]'
           }`}
-          style={{ flexBasis: '47%', flexGrow: 1 }}
+          style={{ flexBasis: '47%' }}
         >
           <Text
             style={{ fontFamily: FONT.uiBold, fontSize: 9.5, letterSpacing: 0.57, textTransform: 'uppercase' }}
@@ -106,7 +111,7 @@ export function TypedTargetGrid({
           >
             {card.label}
           </Text>
-          <Text style={TYPE.mono} className={`mt-0.5 text-[15px] font-mono-bold ${card.highlight ? 'text-ember-200' : 'text-on-dark'}`} numberOfLines={1}>
+          <Text style={[TYPE.mono, MONO_BOLD]} className={`mt-0.5 text-[15px] ${card.highlight ? 'text-ember-200' : 'text-on-dark'}`} numberOfLines={1}>
             {card.value}
           </Text>
         </View>

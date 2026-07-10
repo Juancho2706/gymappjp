@@ -131,7 +131,17 @@ export function StepperExecution({
   return (
     // `max-w-3xl` (768px) centrado — paridad web `mx-auto w-full max-w-3xl` (StepperExecution.tsx:90);
     // en tablet el paso no se estira a todo el ancho.
-    <View className="w-full flex-1 self-center" style={{ maxWidth: 768 }}>
+    // Semántica de agrupación del carrusel — paridad web `<section aria-roledescription="carrusel de
+    // ejercicios" aria-label="Ejercicios de la rutina">` (StepperExecution.tsx:87-91). `aria-roledescription`
+    // no tiene equivalente directo en RN; `accessibilityRole="adjustable"` es lo más cercano (el paso se
+    // ajusta con swipe/rail). SIN `accessible={true}` para no colapsar el foco de los hijos (nav, rail,
+    // card): así el lector expone la etiqueta del grupo pero sigue enfocando cada control por separado.
+    <View
+      className="w-full flex-1 self-center"
+      style={{ maxWidth: 768 }}
+      accessibilityRole="adjustable"
+      accessibilityLabel="Ejercicios de la rutina"
+    >
       {/* Chrome, rail, paso y pie viven DENTRO del scroll y se desplazan CON el contenido — paridad web:
           los cuatro son hijos del mismo `<section className="…px-4 py-4 pb-32">` en flujo normal de
           página, sin `sticky`/`fixed` (StepperExecution.tsx:87-182). Al hacer scroll de un ejercicio
@@ -167,8 +177,14 @@ export function StepperExecution({
             </NavButton>
           </View>
 
-          {/* Rail de progreso: segmentos tappables (salta a cualquier paso, incluso a editar). */}
-          <View className="mt-3 flex-row items-stretch gap-1">
+          {/* Rail de progreso: segmentos tappables (salta a cualquier paso, incluso a editar).
+              Etiqueta de grupo — paridad web `<div role="group" aria-label="Progreso de ejercicios">`
+              (StepperExecution.tsx:116). SIN `accessible={true}` para no colapsar el foco de los
+              segmentos hijos (cada uno anuncia "Ir al ejercicio X de Y"). */}
+          <View
+            className="mt-3 flex-row items-stretch gap-1"
+            accessibilityLabel="Progreso de ejercicios"
+          >
             {steps.map((s, i) => {
               const state = i === idx ? 'active' : s.complete ? 'done' : 'upcoming'
               return (
@@ -193,8 +209,12 @@ export function StepperExecution({
           </View>
 
           {/* Pager: solo el paso actual, con arrastre en vivo + transición direccional enter/exit.
-              `mt-4` = separación rail→paso del web (`mb-4` del rail, StepperExecution.tsx:116). */}
-          <Animated.View style={dragStyle} className="mt-4">
+              `mt-4` = separación rail→paso del web (`mb-4` del rail, StepperExecution.tsx:116).
+              `overflow-hidden` clipa el translateX ±48 del slide/drag — paridad web `overflow-x-clip`
+              en el motion.div del pager (StepperExecution.tsx:145-147): en tablet (maxWidth 768) evita
+              que el card entrante/saliente asome ~48px fuera del contenedor centrado durante la
+              transición de 260ms. El scroll vertical sigue vivo en el ScrollView externo. */}
+          <Animated.View style={dragStyle} className="mt-4 overflow-hidden">
             {/* `initial={false}` suprime la variante `enter` en el PRIMER montaje — paridad web
                 `<AnimatePresence … initial={false}>` (:154): al entrar al modo Pasos el paso aparece ya
                 en su sitio, sin fade/slide-in; sólo los CAMBIOS de paso posteriores animan. */}

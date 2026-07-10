@@ -26,6 +26,7 @@ import {
   type SummaryBlock,
   type SummaryLogLike,
 } from '@eva/workout-engine'
+import { deriveSportTokens } from '@eva/brand-kit'
 import { useTheme } from '../../../context/ThemeContext'
 import { useEvaMotion } from '../../../lib/motion'
 import { haptics } from '../../../lib/haptics'
@@ -55,10 +56,11 @@ const W05 = 'rgba(255,255,255,0.05)'
 const W06 = 'rgba(255,255,255,0.06)'
 const W08 = 'rgba(255,255,255,0.08)'
 const W10 = 'rgba(255,255,255,0.10)'
-// --sport-300 (147 190 255): eyebrow "Lo que viene". El sport-500 semántico (círculo del check,
-// hero, nudge) NO es un literal fijo: sigue la MARCA del coach (`theme.primary`), igual que web
-// donde `--sport-500` === `--theme-primary` (globals.css:260,350 + deriveSportTokens white-label).
-const SPORT_300 = '#93BEFF'
+// --sport-300 (eyebrow "Lo que viene") NO es un literal fijo: el web lo inyecta como
+// deriveSportTokens(primaryColor).ramp['300'] (layout.tsx:290 + brand-kit index.ts:281,295), o sea
+// un tinte de la MARCA del coach. En white-label debe recolorearse igual que el sport-500 semántico
+// (círculo del check, hero, nudge = `theme.primary`). Se deriva por-marca dentro del componente
+// (deriveSportTokens(brand).ramp['300']) en vez de hardcodear el azul EVA #93BEFF.
 const AMBER_200 = '#FDE68A'
 const EMBER_500 = '#FF6A3D'
 const EMBER_100 = 'rgba(255,106,61,0.14)'
@@ -97,6 +99,11 @@ function withAlpha(hex: string, alpha: number): string {
 
 const MONO = FONT.monoBold
 const BOLD = FONT.uiBold
+// font-semibold (~600) — nombres de ejercicio (§6) y NonStrengthCard (§7.1), MÁS las etiquetas
+// pequeñas muted que el web pinta `font-semibold`, no `font-bold`: labels de hero "Duración"/adaptativo
+// (web WorkoutSummaryOverlay.tsx:289,298), chip "Compartir" del PR (:350), valor 1RM (:364) y label de
+// tile en NonStrengthCard (:130). El web usa `font-semibold text-sm/[10px]/[11px]`, no bold.
+const SEMIBOLD = FONT.uiSemibold
 const DISPLAY = FONT.displayBlack
 // Encabezado del panel de PRs: web usa la SANS en peso black (`text-sm font-black`, sin font-display —
 // WorkoutSummaryOverlay.tsx:320). El sans más pesado cargado en mobile es uiExtra (800).
@@ -187,6 +194,9 @@ export function WorkoutSummaryOverlay({
   const { theme } = useTheme()
   const motion = useEvaMotion()
   const brand = theme.primary
+  // Tinte sport-300 derivado de la marca del coach — espejo de web layout.tsx:290
+  // (--sport-300 = deriveSportTokens(primaryColor).ramp['300']). Usado en el eyebrow "Lo que viene".
+  const sport300 = useMemo(() => deriveSportTokens(brand).ramp['300'], [brand])
 
   const session = useMemo(
     () => summarizeSessionByKind(blocks, logs, substitutedBlockIds),
@@ -297,7 +307,7 @@ export function WorkoutSummaryOverlay({
           {/* Header */}
           <View style={{ alignItems: 'center', gap: 6 }}>
             <View style={[{ width: 76, height: 76, borderRadius: 38, alignItems: 'center', justifyContent: 'center', backgroundColor: brand, marginBottom: 8 }, theme.shadowGlowBlue]}>
-              <Check size={36} color="#fff" strokeWidth={2.5} />
+              <Check size={36} color="#fff" strokeWidth={2} />
             </View>
             <Text style={{ fontFamily: DISPLAY, fontSize: 28, letterSpacing: -0.6, color: ON_DARK, textAlign: 'center' }}>¡Sesión completada!</Text>
             <Text style={{ fontFamily: theme.fontSans, fontSize: 14, color: ON_DARK_MUTED, textAlign: 'center' }}>{planTitle}</Text>
@@ -308,24 +318,30 @@ export function WorkoutSummaryOverlay({
             <View style={{ flexDirection: 'row', gap: 8 }}>
               <View style={{ flex: 1, borderRadius: 14, borderWidth: 1, borderColor: BORDER_INV, backgroundColor: INK_900, paddingHorizontal: 16, paddingVertical: 20, alignItems: 'center' }}>
                 <Text style={{ fontFamily: MONO, fontSize: 34, color: brand }}>{durationLabel}</Text>
-                <Text style={{ fontFamily: BOLD, fontSize: 11, color: ON_DARK_MUTED, marginTop: 8 }}>Duración</Text>
+                <Text style={{ fontFamily: SEMIBOLD, fontSize: 11, color: ON_DARK_MUTED, marginTop: 8 }}>Duración</Text>
               </View>
               <View style={{ flex: 1, borderRadius: 14, borderWidth: 1, borderColor: BORDER_INV, backgroundColor: INK_900, paddingHorizontal: 16, paddingVertical: 20, alignItems: 'center' }}>
                 <Text style={{ fontFamily: MONO, fontSize: 34, color: brand }}>
                   {heroSecondary.value}
                   {heroSecondary.unit ? <Text style={{ fontFamily: BOLD, fontSize: 16, color: ON_DARK_MUTED }}> {heroSecondary.unit}</Text> : null}
                 </Text>
-                <Text style={{ fontFamily: BOLD, fontSize: 11, color: ON_DARK_MUTED, marginTop: 8 }}>{heroSecondary.label}</Text>
+                <Text style={{ fontFamily: SEMIBOLD, fontSize: 11, color: ON_DARK_MUTED, marginTop: 8 }}>{heroSecondary.label}</Text>
               </View>
             </View>
+            {/* Web (WorkoutSummaryOverlay.tsx:302-309): contenedor `tabular-nums` y separador `·`
+                a 50% del muted (`text-on-dark-muted/50`). Aplicamos fontVariant a los números y
+                bajamos la opacidad del `·` a la mitad. */}
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: 14, borderWidth: 1, borderColor: BORDER_INV, backgroundColor: W03, paddingHorizontal: 16, paddingVertical: 10 }}>
               <Text style={{ fontFamily: theme.fontSans, fontSize: 14, color: ON_DARK_MUTED }}>
-                <Text style={{ fontFamily: BOLD, color: ON_DARK }}>{completedSets}</Text> series
+                <Text style={{ fontFamily: BOLD, color: ON_DARK, fontVariant: ['tabular-nums'] }}>{completedSets}</Text> series
               </Text>
               {totalReps > 0 ? (
-                <Text style={{ fontFamily: theme.fontSans, fontSize: 14, color: ON_DARK_MUTED }}>
-                  · <Text style={{ fontFamily: BOLD, color: ON_DARK }}>{totalReps}</Text> reps
-                </Text>
+                <>
+                  <Text style={{ fontFamily: theme.fontSans, fontSize: 14, color: withAlpha(ON_DARK_MUTED, 0.5) }}>·</Text>
+                  <Text style={{ fontFamily: theme.fontSans, fontSize: 14, color: ON_DARK_MUTED }}>
+                    <Text style={{ fontFamily: BOLD, color: ON_DARK, fontVariant: ['tabular-nums'] }}>{totalReps}</Text> reps
+                  </Text>
+                </>
               ) : null}
             </View>
           </View>
@@ -355,13 +371,13 @@ export function WorkoutSummaryOverlay({
                   onPress={() => onOpenPr(pr)}
                   // rounded-lg (8px) es la excepción visual explícita de la card dorada (spec §5.2 /
                   // web WorkoutSummaryOverlay.tsx:346), NO el rounded-control del DS.
-                  style={({ pressed }) => ({ borderRadius: 8, borderWidth: 1, borderColor: 'rgba(251,191,36,0.25)', backgroundColor: pressed ? 'rgba(255,255,255,0.12)' : W06, paddingHorizontal: 12, paddingVertical: 10 })}
+                  style={({ pressed }) => ({ borderRadius: 8, borderWidth: 1, borderColor: 'rgba(251,191,36,0.25)', backgroundColor: pressed ? 'rgba(255,255,255,0.12)' : W06, paddingHorizontal: 12, paddingVertical: 8 })}
                 >
                   <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
                     <Text style={{ flex: 1, fontFamily: BOLD, fontSize: 14, color: ON_DARK }}>{pr.exerciseName}</Text>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                       <Share2 size={12} color="rgba(253,230,138,0.9)" />
-                      <Text style={{ fontFamily: BOLD, fontSize: 10, color: 'rgba(253,230,138,0.9)' }}>Compartir</Text>
+                      <Text style={{ fontFamily: SEMIBOLD, fontSize: 10, color: 'rgba(253,230,138,0.9)' }}>Compartir</Text>
                     </View>
                   </View>
                   <Text style={{ fontFamily: theme.fontSans, fontSize: 12, color: ON_DARK_MUTED, marginTop: 2 }}>
@@ -373,7 +389,7 @@ export function WorkoutSummaryOverlay({
                     </Text>
                   ) : null}
                   <Text style={{ fontFamily: theme.fontSans, fontSize: 10, color: ON_DARK_MUTED, marginTop: 4 }}>
-                    1RM estimado: <Text style={{ fontFamily: BOLD, color: ON_DARK }}>{pr.estimated1RM} kg</Text>
+                    1RM estimado: <Text style={{ fontFamily: SEMIBOLD, color: ON_DARK }}>{pr.estimated1RM} kg</Text>
                   </Text>
                 </Pressable>
               ))}
@@ -388,7 +404,7 @@ export function WorkoutSummaryOverlay({
               {exerciseBreakdown.map((ex, i) => (
                 <View key={`${ex.exerciseId}-${i}`} style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: 8, borderRadius: 20, borderWidth: 1, borderColor: BORDER_INV, backgroundColor: W04, paddingHorizontal: 12, paddingVertical: 10 }}>
                   <View style={{ flex: 1 }}>
-                    <Text style={{ fontFamily: BOLD, fontSize: 14, color: ON_DARK }}>{ex.name}</Text>
+                    <Text style={{ fontFamily: SEMIBOLD, fontSize: 14, color: ON_DARK }}>{ex.name}</Text>
                     <Text style={{ fontFamily: theme.fontSans, fontSize: 10, color: ON_DARK_MUTED }}>{ex.muscleGroup}</Text>
                   </View>
                   {/* Web: `text-xs text-on-dark-muted tabular-nums` (SANS regular tabular) con SÓLO los
@@ -437,7 +453,9 @@ export function WorkoutSummaryOverlay({
                   <View key={group} style={{ gap: 4 }}>
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                       <Text style={{ fontFamily: theme.fontSans, fontSize: 12, color: ON_DARK }}>{group}</Text>
-                      <Text style={{ fontFamily: MONO, fontSize: 12, color: ON_DARK_MUTED }}>{Math.round(vol)} kg</Text>
+                      {/* Web (WorkoutSummaryOverlay.tsx:465) pinta "{vol} kg" en SANS `text-on-dark-muted`,
+                          sin mono/tabular. Espejamos la sans; tabular-nums sólo alinea los dígitos. */}
+                      <Text style={{ fontFamily: theme.fontSans, fontSize: 12, color: ON_DARK_MUTED, fontVariant: ['tabular-nums'] }}>{Math.round(vol)} kg</Text>
                     </View>
                     <View style={{ height: 8, borderRadius: 4, backgroundColor: W10, overflow: 'hidden' }}>
                       <MuscleBar pct={pct} color={brand} reduced={motion.reduced} />
@@ -455,7 +473,7 @@ export function WorkoutSummaryOverlay({
                 <ArrowRight size={16} color="#fff" />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={{ fontFamily: BOLD, fontSize: 11, letterSpacing: 1.1, textTransform: 'uppercase', color: SPORT_300 }}>Lo que viene</Text>
+                <Text style={{ fontFamily: BOLD, fontSize: 11, letterSpacing: 1.1, textTransform: 'uppercase', color: sport300 }}>Lo que viene</Text>
                 <Text style={{ fontFamily: BOLD, fontSize: 14, color: ON_DARK }} numberOfLines={1}>Sigue tu progreso en {programName}</Text>
                 {nextHint ? <Text style={{ fontFamily: theme.fontSans, fontSize: 12, color: ON_DARK_MUTED }} numberOfLines={1}>{nextHint}</Text> : null}
               </View>
@@ -489,7 +507,7 @@ export function WorkoutSummaryOverlay({
             style={({ pressed }) => ({ height: 40, borderRadius: 14, borderWidth: 1, borderColor: BORDER_INV, backgroundColor: pressed ? 'rgba(255,255,255,0.14)' : W08, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 })}
           >
             <Share2 size={16} color={ON_DARK} />
-            <Text style={{ fontFamily: BOLD, fontSize: 15, color: ON_DARK }}>Compartir logro</Text>
+            <Text style={{ fontFamily: BOLD, fontSize: 14, color: ON_DARK }}>Compartir logro</Text>
           </Pressable>
           <Pressable
             testID="summary-done"
@@ -532,7 +550,14 @@ export function WorkoutSummaryOverlay({
             <ShareCardTitle>{prCard.exerciseName}</ShareCardTitle>
             {/* Coma decimal es-CL como el canvas web (fmtWeight/fmtPct): "102,5 kg", "+12,5%". */}
             <ShareCardHero value={fmtDecimalCL(prCard.newWeightKg)} unit="kg" color={brand} />
-            <ShareCardPill tone="success">{fmtDecimalCL(prCard.prevWeightKg)} → {fmtDecimalCL(prCard.newWeightKg)} kg{prCard.pct > 0 ? ` · +${fmtDecimalCL(prCard.pct)}%` : ''}</ShareCardPill>
+            {/* Web canvas (workout-pr-card-canvas.ts:676-684): el pill verde de salto sólo aparece si
+                prevWeightKg>0; con máximo histórico 0 muestra el literal neutro "Primer récord personal"
+                (tono neutro, no success), no "0 → X kg · +100%". */}
+            {prCard.prevWeightKg > 0 ? (
+              <ShareCardPill tone="success">{fmtDecimalCL(prCard.prevWeightKg)} → {fmtDecimalCL(prCard.newWeightKg)} kg{prCard.pct > 0 ? ` · +${fmtDecimalCL(prCard.pct)}%` : ''}</ShareCardPill>
+            ) : (
+              <ShareCardPill>Primer récord personal</ShareCardPill>
+            )}
             <ShareCardDate />
             <ShareCardPill>1RM estimado · {fmtDecimalCL(prCard.estimated1RM)} kg</ShareCardPill>
           </>
@@ -580,18 +605,18 @@ function NonStrengthCard({
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 10 }}>
         <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
           {icon}
-          <Text style={{ flex: 1, fontFamily: BOLD, fontSize: 14, color: ON_DARK }} numberOfLines={1}>{name}</Text>
+          <Text style={{ flex: 1, fontFamily: SEMIBOLD, fontSize: 14, color: ON_DARK }} numberOfLines={1}>{name}</Text>
         </View>
         <Text style={{ fontFamily: BOLD, fontSize: 10, letterSpacing: 0.6, textTransform: 'uppercase', color: accent, backgroundColor: accent + '28', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 999, overflow: 'hidden' }}>{typeLabel}</Text>
       </View>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
         {tiles.map((t, i) => (
-          <View key={i} style={{ flexGrow: 1, minWidth: '46%', borderRadius: 12, borderWidth: 1, borderColor: BORDER_INV, backgroundColor: W05, paddingHorizontal: 12, paddingVertical: 10, alignItems: 'center' }}>
+          <View key={i} style={{ flexGrow: 1, minWidth: '46%', borderRadius: 14, borderWidth: 1, borderColor: BORDER_INV, backgroundColor: W05, paddingHorizontal: 12, paddingVertical: 10, alignItems: 'center' }}>
             <Text style={{ fontFamily: MONO, fontSize: 20, color: ON_DARK }}>
               {t.value}
               {t.unit ? <Text style={{ fontFamily: BOLD, fontSize: 11, color: ON_DARK_MUTED }}> {t.unit}</Text> : null}
             </Text>
-            <Text style={{ fontFamily: BOLD, fontSize: 10, color: ON_DARK_MUTED, marginTop: 6 }}>{t.label}</Text>
+            <Text style={{ fontFamily: SEMIBOLD, fontSize: 10, color: ON_DARK_MUTED, marginTop: 6 }}>{t.label}</Text>
           </View>
         ))}
       </View>

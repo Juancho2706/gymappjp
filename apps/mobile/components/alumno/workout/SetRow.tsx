@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Modal, Pressable, Text, TextInput, View, type TextStyle } from 'react-native'
 import { MotiView } from 'moti'
-import { Check, ChevronRight, CloudOff, HelpCircle, StickyNote } from 'lucide-react-native'
+import { Check, ChevronRight, CloudOff, HelpCircle, Loader2, StickyNote } from 'lucide-react-native'
 import {
   formatWeightEsCl,
   typedKeypadFields,
@@ -28,6 +28,19 @@ const ON_DARK_MUTED = '#939DAB'
 // tres pesos por debajo y en la familia equivocada.
 const BADGE_CHIP_STYLE: TextStyle = { ...textStyle('3xs', FONT.displayBlack), fontVariant: ['tabular-nums'] }
 const BADGE_ACTIVE_STYLE: TextStyle = { ...textStyle('xs', FONT.displayBlack), fontVariant: ['tabular-nums'] }
+
+// Métricas del chip recap: la FORMA (tamaño+familia) viene de un solo origen (typography.ts:11-14: TYPE=forma,
+// className=color). Antes se pasaba `style={TYPE.mono}` (16px JetBrains 400, TYPE_SCALE.md) JUNTO a un
+// className `text-[13px]`/`text-[11px]`; bajo NativeWind v4 el `style` inline gana → las cifras salían a 16px
+// (no los 13/11 del web) y en peso 400 (Regular), no el font-bold/font-semibold del web. Ahora cada estilo fija
+// size+familia y el className sólo aporta color.
+//   • Marca peso×reps — web `font-mono text-[13px] font-bold tabular-nums` (LogSetForm.tsx:542) → mono 700, 13px.
+//   • RPE/RIR — web `font-mono text-[11px] font-semibold` (LogSetForm.tsx:548,551) → mono 500 (semibold; la cara
+//     600 no está cargada, 500 es el peso disponible más cercano al font-semibold del web), 11px.
+//   • Línea tipada (cardio/movilidad/roller) — chip propio de RN; conserva la familia mono previa a 13px.
+const CHIP_MARK_STYLE: TextStyle = { ...textStyle('xs', FONT.monoBold), fontVariant: ['tabular-nums'] }
+const CHIP_EFFORT_STYLE: TextStyle = textStyle('3xs', FONT.monoMedium)
+const CHIP_TYPED_STYLE: TextStyle = { ...textStyle('xs', FONT.mono), fontVariant: ['tabular-nums'] }
 
 /**
  * Fila de una serie (mobile). Espeja el chip recap de `LogSetForm` de web: la serie logueada muestra
@@ -106,13 +119,17 @@ export function SetRow({
     return (
       <View
         testID={`set-row-${setNumber}`}
-        className="gap-2 rounded-control border border-sport-500/30 bg-sport-500/[0.06] px-3 py-2.5"
+        className="gap-2 rounded-control border border-sport-500/30 bg-sport-500/[0.06] px-3 py-2"
       >
         <Pressable
           onPress={onPress}
-          className="flex-row items-center gap-3"
+          className="flex-row items-center gap-2"
           accessibilityRole="button"
-          accessibilityLabel={`Editar serie ${setNumber}`}
+          accessibilityLabel={
+            pending
+              ? `Serie ${setNumber} sin sincronizar — toca para editar`
+              : `Serie ${setNumber} registrada — toca para editar`
+          }
         >
           <View className="h-7 w-7 items-center justify-center rounded-full bg-sport-500/20">
             <Check size={15} color={SPORT_400} strokeWidth={2.6} />
@@ -124,11 +141,9 @@ export function SetRow({
             <Text style={KEYPAD_EYEBROW_STYLE} className="text-on-dark-muted">
               Serie {setNumber}
             </Text>
-            <Text
-              style={TYPE.mono}
-              className={`text-[13px] ${pending ? 'text-warning-500' : 'text-on-dark'}`}
-              numberOfLines={1}
-            >
+            {/* Mark siempre text-on-dark (paridad web LogSetForm.tsx:542: la marca nunca se recolorea;
+                el ámbar de pending vive en el contenedor/badge/estado, no en el valor). */}
+            <Text style={CHIP_TYPED_STYLE} className="text-on-dark" numberOfLines={1}>
               {fmtTypedLoggedLine(log, typedMode)}
             </Text>
           </View>
@@ -168,7 +183,7 @@ export function SetRow({
     <Pressable
       testID={`set-row-${setNumber}`}
       onPress={onPress}
-      className={`relative flex-row items-center gap-3 overflow-hidden rounded-control border px-3 py-2.5 ${
+      className={`relative flex-row items-center gap-2 overflow-hidden rounded-control border px-3 py-2 ${
         logged
           ? syncError
             ? // Fallo de guardado real (con conexión) ⇒ contenedor ROJO (mirror web estado 'error':
@@ -184,7 +199,13 @@ export function SetRow({
             : 'border-inverse/50 bg-white/[0.02]'
       }`}
       accessibilityRole="button"
-      accessibilityLabel={logged ? `Editar serie ${setNumber}` : `Registrar serie ${setNumber}`}
+      accessibilityLabel={
+        logged
+          ? pending
+            ? `Serie ${setNumber} sin sincronizar — toca para editar`
+            : `Serie ${setNumber} registrada — toca para editar`
+          : `Registrar serie ${setNumber}`
+      }
     >
       {/* Pulso dorado de PR (mirror web `prGlow`, `LogSetForm.tsx:534-536`): ring que entra a 0.8 y se
           apaga en 0.32s (320ms) cuando el commit devolvió isPR. La web usa `times:[0,0.4,1]` (pico al 40%);
@@ -220,28 +241,28 @@ export function SetRow({
             Toca para registrar
           </Text>
         ) : typedMode ? (
-          <Text
-            style={TYPE.mono}
-            className={`text-[13px] ${pending && !syncError ? 'text-warning-500' : 'text-on-dark'}`}
-            numberOfLines={1}
-          >
+          // Mark siempre text-on-dark (paridad web LogSetForm.tsx:542): el valor nunca se recolorea; el
+          // ámbar de pending vive en el contenedor/badge/estado a la derecha, no en la cifra.
+          <Text style={CHIP_TYPED_STYLE} className="text-on-dark" numberOfLines={1}>
             {fmtTypedLoggedLine(log, typedMode)}
           </Text>
         ) : (
           <View className="flex-row flex-wrap items-center gap-x-2">
-            <Text
-              style={TYPE.mono}
-              className={`text-[13px] font-mono-bold ${pending && !syncError ? 'text-warning-500' : 'text-on-dark'}`}
-            >
+            {/* Marca peso×reps: forma desde CHIP_MARK_STYLE (mono 700, 13px, tabular — web
+                `font-mono text-[13px] font-bold tabular-nums`, LogSetForm.tsx:542). SIEMPRE text-on-dark:
+                el web nunca tiñe el valor de ámbar en pending (el borde/badge/estado ya lo señalan). */}
+            <Text style={CHIP_MARK_STYLE} className="text-on-dark">
               {log?.weight_kg ?? '–'}
               <Text className="text-on-dark-muted"> × </Text>
               {log?.reps_done ?? '–'}
             </Text>
+            {/* RPE/RIR: mono 500 (semibold web) a 11px vía CHIP_EFFORT_STYLE (web
+                `font-mono text-[11px] font-semibold`, LogSetForm.tsx:548,551). */}
             {log?.rpe != null && (
-              <Text style={TYPE.mono} className="text-[11px] text-on-dark-muted">RPE {log.rpe}</Text>
+              <Text style={CHIP_EFFORT_STYLE} className="text-on-dark-muted">RPE {log.rpe}</Text>
             )}
             {log?.rir != null && (
-              <Text style={TYPE.mono} className="text-[11px] text-on-dark-muted">RIR {log.rir}</Text>
+              <Text style={CHIP_EFFORT_STYLE} className="text-on-dark-muted">RIR {log.rir}</Text>
             )}
             {/* Ícono nota (paridad web A.3, `LogSetForm.tsx:553-555`): señala que la serie lleva nota
                 para el coach. Sin token `amber` en el theme mobile ⇒ warning-500 (mismo ámbar del pending). */}
@@ -511,6 +532,21 @@ export function ActiveSetRow({
     onCommit(payload)
   }
 
+  // Guarda de doble-tap + affordance de "guardando" del submit (mirror web SubmitSetButton, `LogSetForm.tsx:1150-1154`:
+  // `disabled:opacity-70` + Loader2 spin mientras `useFormStatus().pending`). El commit RN es optimista y la fila
+  // suele desmontarse al cerrar, pero sin guarda un doble-tap encolaría la serie dos veces; `committing` bloquea el
+  // botón y muestra el spinner durante la breve ventana de commit (auto-liberada por si la fila sigue montada al editar).
+  const [committing, setCommitting] = useState(false)
+  const commitTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => () => { if (commitTimer.current) clearTimeout(commitTimer.current) }, [])
+  const handleConfirm = () => {
+    if (committing) return
+    setCommitting(true)
+    haptics.setDone()
+    commit()
+    commitTimer.current = setTimeout(() => setCommitting(false), 1200)
+  }
+
   const currentField = openKey ? fields.find((f) => f.key === openKey) ?? null : null
 
   return (
@@ -632,7 +668,7 @@ export function ActiveSetRow({
               placeholderTextColor={ON_DARK_MUTED}
               accessibilityLabel="Nota de la serie para tu coach"
               style={textStyle('xs', FONT.ui)}
-              className="mt-1.5 rounded-control border border-inverse/10 bg-white/[0.06] px-3 py-2 text-on-dark"
+              className="mt-1.5 rounded-control border border-inverse bg-white/[0.06] px-3 py-2 text-on-dark"
             />
           )}
         </View>
@@ -645,18 +681,39 @@ export function ActiveSetRow({
       <View className="flex-row justify-end">
         <Pressable
           testID={`confirm-set-${setNumber}`}
-          onPress={() => {
-            haptics.setDone()
-            commit()
-          }}
-          className="h-12 min-w-[104px] flex-row items-center justify-center gap-2 rounded-control bg-sport-500 px-4 active:opacity-90"
+          onPress={handleConfirm}
+          disabled={committing}
+          className={`h-12 min-w-[104px] flex-row items-center justify-center gap-2 rounded-control bg-sport-500 px-4 active:opacity-90 ${
+            committing ? 'opacity-70' : ''
+          }`}
           accessibilityRole="button"
-          accessibilityLabel={`${isEditing ? 'Guardar' : 'Listo'}, confirmar serie ${setNumber}`}
+          accessibilityState={{ disabled: committing, busy: committing }}
+          accessibilityLabel={
+            committing ? 'Guardando set...' : `${isEditing ? 'Guardar' : 'Listo'}, confirmar serie ${setNumber}`
+          }
         >
-          <Check size={18} color="#FFFFFF" strokeWidth={2.6} />
-          <Text style={textStyle('sm', FONT.uiBold)} className="text-white">
-            {isEditing ? 'Guardar' : 'Listo'}
-          </Text>
+          {committing ? (
+            // Spinner durante el commit (mirror web `<Loader2 animate-spin>`). Sin reduce-motion gira en loop;
+            // con reduce-motion queda estático (paridad con el resto de animaciones de la card).
+            motion.reduced ? (
+              <Loader2 size={18} color="#FFFFFF" strokeWidth={2.6} />
+            ) : (
+              <MotiView
+                from={{ rotate: '0deg' }}
+                animate={{ rotate: '360deg' }}
+                transition={{ type: 'timing', duration: 800, loop: true, repeatReverse: false }}
+              >
+                <Loader2 size={18} color="#FFFFFF" strokeWidth={2.6} />
+              </MotiView>
+            )
+          ) : (
+            <>
+              <Check size={18} color="#FFFFFF" strokeWidth={2.6} />
+              <Text style={textStyle('sm', FONT.uiBold)} className="text-white">
+                {isEditing ? 'Guardar' : 'Listo'}
+              </Text>
+            </>
+          )}
         </Pressable>
       </View>
 

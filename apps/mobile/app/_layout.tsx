@@ -30,6 +30,7 @@ import {
 import {
   JetBrainsMono_400Regular,
   JetBrainsMono_500Medium,
+  JetBrainsMono_600SemiBold,
   JetBrainsMono_700Bold,
 } from '@expo-google-fonts/jetbrains-mono'
 import type { Session } from '@supabase/supabase-js'
@@ -208,6 +209,7 @@ export default function RootLayout() {
     HankenGrotesk_800ExtraBold,
     JetBrainsMono_400Regular,
     JetBrainsMono_500Medium,
+    JetBrainsMono_600SemiBold,
     JetBrainsMono_700Bold,
   })
   const [splashDone, setSplashDone] = useState(false)

@@ -15,7 +15,7 @@ import {
 } from 'lucide-react-native'
 import { formatWeightEsCl, type ExerciseType, type OptimisticLogPayload, type ReconciledSessionLog, type TypedKeypadMode } from '@eva/workout-engine'
 import type { HrZoneRange } from '@eva/cardio'
-import { FONT, TYPE } from '../../../lib/typography'
+import { FONT, TYPE, textStyle } from '../../../lib/typography'
 import { useTheme } from '../../../context/ThemeContext'
 import { EXERCISE_TYPE_META, exerciseTypeColor } from '../../../lib/exercise-type-meta'
 import type { EffectiveTarget } from '../../../lib/workout/progression'
@@ -39,7 +39,16 @@ const EMBER_200 = '#FFD6C7' // --color-ember-200 (255 214 199) — ArrowRightLef
 // `style={TYPE.mono}` + `className="font-mono-bold"` renderiza el peso REGULAR (bug ola0). Fijamos
 // la cara bold por `style` (array) y quitamos la clase de fuente en esos Text para que el bold aplique.
 const MONO_BOLD = { fontFamily: FONT.monoBold } as const
+// Línea de prescripción strength (web:274): el contenedor es `font-mono ... font-semibold` (600) y TODOS
+// los segmentos lo heredan por igual — la jerarquía la marca el COLOR (on-dark vs muted), no el peso. El
+// theme mono sólo tiene 400/500/700 (typography.ts:41-43), así que unificamos toda la línea a 500 (la cara
+// más cercana a 600) en vez del salto 700/400 que engrosaba los primarios y afinaba los muted.
+const MONO_MEDIUM = { fontFamily: FONT.monoMedium } as const
 const SANS_BOLD = { fontFamily: FONT.uiBold } as const
+// Párrafos del panel "Detalles" (técnica/instrucciones/nota/sobrecarga): web usa `leading-relaxed`
+// (line-height 1.6, SingleExerciseCard web:344,352,363,372). TYPE.caption trae lh `normal` (1.4,
+// typography.ts:113) → el multilínea quedaba ~13% más apretado. Igualamos a relaxed a 12px (web text-[12px]).
+const DETAIL_BODY = textStyle('2xs', FONT.uiMedium, { lh: 'relaxed' })
 
 // Reflow de la card (paridad web `layout={!reducedMotion}` + `springs.smooth` {stiffness:200,damping:25},
 // SingleExerciseCard web:159-160/165): anima el cambio de tamaño/orden al completar/colapsar. Sólo si
@@ -175,12 +184,70 @@ export function SingleExerciseCard({
       ? { shadowColor: theme.primary, shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.35, shadowRadius: 16, elevation: 12 }
       : undefined
 
+  // Filas de registro (la ACTIVA es ActiveSetRow; las demás chips/prompts). Se computan una vez y luego
+  // se envuelven distinto por rama: strength = lista simple; tipado = contenedor con borde/fondo + header.
+  const setRows = Array.from({ length: block.sets }).map((_, i) => {
+    const setNumber = i + 1
+    const log = blockLogs.find((l) => l.set_number === setNumber)
+    if (!log && setNumber === firstUnlogged) {
+      const seed =
+        restoredDraft && restoredDraft.blockId === block.id && restoredDraft.setNumber === setNumber
+          ? restoredDraft.values
+          : null
+      return (
+        <ActiveSetRow
+          key={setNumber}
+          blockId={block.id}
+          setNumber={setNumber}
+          typedMode={typedMode}
+          suggestedWeight={suggestedWeightKg ?? null}
+          seedValues={seed}
+          autofill={autofill}
+          // Header de objetivo repetido en el teclado (DB-5, mirror web NumericKeypadSheet:204-228):
+          // el scrim atenúa el objetivo/"Última vez" de la card mientras el alumno tipea.
+          header={{
+            exerciseName: exercise.name,
+            objectiveLine: isStrength
+              ? `${block.sets}×${block.reps}${suggestedWeightKg != null ? ` · ${formatWeightEsCl(suggestedWeightKg)} kg` : ''}`
+              : undefined,
+            last:
+              isStrength && bestPrev
+                ? { weightKg: bestPrev.weight_kg ?? null, reps: bestPrev.reps_done ?? null }
+                : null,
+          }}
+          onDraftChange={(values, fieldIndex) => onDraftChange(block.id, setNumber, values, fieldIndex)}
+          onCommit={onCommitSet}
+        />
+      )
+    }
+    const isRecent = recentSet?.blockId === block.id && recentSet?.setNumber === setNumber
+    return (
+      <SetRow
+        key={setNumber}
+        setNumber={setNumber}
+        log={log}
+        isActive={setNumber === firstUnlogged}
+        typedMode={typedMode}
+        onPress={() => onOpenSet(setNumber)}
+        onRpeUpdate={onRpeUpdate}
+        settle={isRecent}
+        pr={isRecent && !!recentSet?.pr}
+        syncError={syncErrors?.[`${block.id}:${setNumber}`] ?? null}
+        onRetry={() => onRetrySet?.(block.id, setNumber)}
+      />
+    )
+  })
+
   return (
     <MotiView
       style={activeShadow}
       layout={reducedMotion ? undefined : CARD_LAYOUT}
       className={`relative gap-3 rounded-card border bg-white/[0.03] p-4 ${borderClass}`}
     >
+      {/* Cluster de header (tipo·músculo + sustitución + nombre/dots) a 8px entre sí (paridad web
+          SingleExerciseCard.tsx:176 `<div className="space-y-2">` anidado en el `space-y-3` de la card):
+          el header queda más apretado (8px) que su separación del resto (gap-3 = 12px del MotiView). */}
+      <View className="gap-2">
       {/* Fila silenciosa: músculo + acciones (Detalles / Cambiar / Técnica) */}
       <View className="flex-row items-center justify-between gap-2">
         <View className="min-w-0 flex-1 flex-row items-center gap-1.5">
@@ -294,6 +361,7 @@ export function SingleExerciseCard({
           </View>
         )}
       </View>
+      </View>
 
       {/* Bloques tipados (cardio/movilidad/roller): grilla de objetivos + botón de timer (E2-10) */}
       {!isStrength && (
@@ -309,29 +377,29 @@ export function SingleExerciseCard({
           {/* Segmentos separados por `·` atenuado (web usa <Sep/> = text-on-dark-muted/40, no el color
               del segmento). Wrapper con gap-y-0.5 como web (:274). */}
           <View className="flex-row flex-wrap items-center gap-x-2 gap-y-0.5">
-            <Text style={[TYPE.mono, MONO_BOLD]} className="text-[13px] text-on-dark">{block.sets} × {block.reps}</Text>
+            <Text style={[TYPE.mono, MONO_MEDIUM]} className="text-[13px] text-on-dark">{block.sets} × {block.reps}</Text>
             {block.target_weight_kg != null && (
               <>
                 <Sep />
-                <Text style={[TYPE.mono, MONO_BOLD]} className="text-[13px] text-on-dark">{suggestedWeightKg ?? block.target_weight_kg} kg</Text>
+                <Text style={[TYPE.mono, MONO_MEDIUM]} className="text-[13px] text-on-dark">{suggestedWeightKg ?? block.target_weight_kg} kg</Text>
               </>
             )}
             {block.rest_time && (
               <>
                 <Sep />
-                <Text style={TYPE.mono} className="text-[13px] text-on-dark-muted">desc {block.rest_time}</Text>
+                <Text style={[TYPE.mono, MONO_MEDIUM]} className="text-[13px] text-on-dark-muted">desc {block.rest_time}</Text>
               </>
             )}
             {block.tempo && (
               <>
                 <Sep />
-                <Text style={TYPE.mono} className="text-[13px] text-on-dark-muted">tempo {block.tempo}</Text>
+                <Text style={[TYPE.mono, MONO_MEDIUM]} className="text-[13px] text-on-dark-muted">tempo {block.tempo}</Text>
               </>
             )}
             {block.rir && (
               <>
                 <Sep />
-                <Text style={TYPE.mono} className="text-[13px] text-on-dark-muted">RIR {block.rir}</Text>
+                <Text style={[TYPE.mono, MONO_MEDIUM]} className="text-[13px] text-on-dark-muted">RIR {block.rir}</Text>
               </>
             )}
           </View>
@@ -350,6 +418,10 @@ export function SingleExerciseCard({
           testID="btn-autofill-last"
           disabled={firstUnlogged == null}
           onPress={() => { if (firstUnlogged != null) setAutofill({ weight: bestPrev.weight_kg, reps: bestPrev.reps_done, nonce: Date.now() }) }}
+          // Feedback de presión: web escala la fila a 0.99 al presionar (enabled:active:scale-[0.99],
+          // SingleExerciseCard web:299). RN colapsa hover+active en el press, así que mantenemos el tinte
+          // (active:bg, equivalente al hover-tint de web) Y añadimos el scale del active de web.
+          style={({ pressed }) => (pressed && firstUnlogged != null ? { transform: [{ scale: 0.99 }] } : null)}
           className="min-h-[40px] w-full flex-row flex-wrap items-center gap-x-2 gap-y-0.5 rounded-control py-1 active:bg-white/[0.05]"
           accessibilityRole="button"
           accessibilityLabel={firstUnlogged != null && bestPrev.weight_kg ? `Autollenar la serie activa con ${bestPrev.weight_kg} kg por ${bestPrev.reps_done ?? '-'} reps` : undefined}
@@ -396,7 +468,7 @@ export function SingleExerciseCard({
                 {exercise.instructions.map((step, i) => (
                   <View key={i} className="flex-row gap-2">
                     <Text style={TYPE.mono} className="text-[12px] text-on-dark-muted">{i + 1}.</Text>
-                    <Text style={TYPE.caption} className="flex-1 text-[12px] text-on-dark/90">{step.replace(/^Step:\d+\s*/i, '')}</Text>
+                    <Text style={DETAIL_BODY} className="flex-1 text-[12px] text-on-dark/90">{step.replace(/^Step:\d+\s*/i, '')}</Text>
                   </View>
                 ))}
               </View>
@@ -405,7 +477,7 @@ export function SingleExerciseCard({
           {!isStrength && block.instructions && (
             <View>
               <Text style={TYPE.eyebrow} className="mb-1 text-on-dark-muted">Instrucciones</Text>
-              <Text style={TYPE.caption} className="text-[12px] text-on-dark/90">{block.instructions}</Text>
+              <Text style={DETAIL_BODY} className="text-[12px] text-on-dark/90">{block.instructions}</Text>
             </View>
           )}
           {block.notes && (
@@ -413,14 +485,14 @@ export function SingleExerciseCard({
               <Text style={TYPE.eyebrow} className="mb-1 text-on-dark-muted">Nota del coach</Text>
               <View className="flex-row gap-2">
                 <Quote size={14} color={ON_DARK_MUTED} style={{ marginTop: 2 }} />
-                <Text style={TYPE.caption} className="flex-1 text-[12px] text-on-dark/90">{block.notes}</Text>
+                <Text style={DETAIL_BODY} className="flex-1 text-[12px] text-on-dark/90">{block.notes}</Text>
               </View>
             </View>
           )}
           {isStrength && overloadDetail && (
             <View>
               <Text style={TYPE.eyebrow} className="mb-1 text-on-dark-muted">Sobrecarga progresiva</Text>
-              <Text style={TYPE.caption} className="text-[12px] text-on-dark/90">{overloadDetail}</Text>
+              <Text style={DETAIL_BODY} className="text-[12px] text-on-dark/90">{overloadDetail}</Text>
             </View>
           )}
           {prevList.length > 0 && (
@@ -440,60 +512,20 @@ export function SingleExerciseCard({
         )}
       </AnimatePresence>
 
-      {/* Series: la ACTIVA es la fila de registro expandida (paridad web); las demas son chips/prompts */}
-      <View className="gap-1.5">
-        {Array.from({ length: block.sets }).map((_, i) => {
-          const setNumber = i + 1
-          const log = blockLogs.find((l) => l.set_number === setNumber)
-          if (!log && setNumber === firstUnlogged) {
-            const seed =
-              restoredDraft && restoredDraft.blockId === block.id && restoredDraft.setNumber === setNumber
-                ? restoredDraft.values
-                : null
-            return (
-              <ActiveSetRow
-                key={setNumber}
-                blockId={block.id}
-                setNumber={setNumber}
-                typedMode={typedMode}
-                suggestedWeight={suggestedWeightKg ?? null}
-                seedValues={seed}
-                autofill={autofill}
-                // Header de objetivo repetido en el teclado (DB-5, mirror web NumericKeypadSheet:204-228):
-                // el scrim atenúa el objetivo/"Última vez" de la card mientras el alumno tipea.
-                header={{
-                  exerciseName: exercise.name,
-                  objectiveLine: isStrength
-                    ? `${block.sets}×${block.reps}${suggestedWeightKg != null ? ` · ${formatWeightEsCl(suggestedWeightKg)} kg` : ''}`
-                    : undefined,
-                  last:
-                    isStrength && bestPrev
-                      ? { weightKg: bestPrev.weight_kg ?? null, reps: bestPrev.reps_done ?? null }
-                      : null,
-                }}
-                onDraftChange={(values, fieldIndex) => onDraftChange(block.id, setNumber, values, fieldIndex)}
-                onCommit={onCommitSet}
-              />
-            )
-          }
-          const isRecent = recentSet?.blockId === block.id && recentSet?.setNumber === setNumber
-          return (
-            <SetRow
-              key={setNumber}
-              setNumber={setNumber}
-              log={log}
-              isActive={setNumber === firstUnlogged}
-              typedMode={typedMode}
-              onPress={() => onOpenSet(setNumber)}
-              onRpeUpdate={onRpeUpdate}
-              settle={isRecent}
-              pr={isRecent && !!recentSet?.pr}
-              syncError={syncErrors?.[`${block.id}:${setNumber}`] ?? null}
-              onRetry={() => onRetrySet?.(block.id, setNumber)}
-            />
-          )
-        })}
-      </View>
+      {/* Series: la ACTIVA es la fila de registro expandida (paridad web); las demas son chips/prompts.
+          Strength → lista simple `gap-1.5` (web:392-393 `space-y-1.5`). TIPADO → contenedor con borde/fondo
+          + encabezado de columnas por tipo, luego filas a `gap-1 pt-2` (paridad web §8b,
+          SingleExerciseCard.tsx:423-449: `rounded-card border ... bg-white/[0.02] p-2` + `TypedLogHeader`
+          + `space-y-1 pt-2`). El header nombra los ejes tipados (Set/Min/Metros/FC · Set/Seg/Pasadas ·
+          Set/Seg de hold) que en strength no aplican. */}
+      {isStrength ? (
+        <View className="gap-1.5">{setRows}</View>
+      ) : (
+        <View className="rounded-card border border-inverse/10 bg-white/[0.02] p-2">
+          <TypedLogHeader kind={effType as TypedKeypadMode} />
+          <View className="gap-1 pt-2">{setRows}</View>
+        </View>
+      )}
     </MotiView>
   )
 }
@@ -501,5 +533,33 @@ export function SingleExerciseCard({
 /** Separador `·` atenuado entre segmentos de la línea de prescripción (espeja `Sep` de web,
  *  WorkoutExecutionClient.tsx:562 = `<span className="text-on-dark-muted/40">·</span>`). */
 function Sep() {
-  return <Text style={TYPE.mono} className="text-[13px] text-on-dark-muted/40">·</Text>
+  // Peso 500 como el resto de la línea (web: el `·` hereda `font-semibold` del contenedor; acá igualamos
+  // a MONO_MEDIUM para no dejar el separador en 400 mientras los segmentos van a 500).
+  return <Text style={[TYPE.mono, MONO_MEDIUM]} className="text-[13px] text-on-dark-muted/40">·</Text>
+}
+
+// Etiqueta de columna del header tipado — mirror web `text-[10px] font-bold uppercase tracking-wider`
+// (WorkoutExecutionClient.tsx:395/406/415). tracking-wider = 0.05em → 10px * 0.05 = 0.5pt.
+const HEADER_LABEL_STYLE = { fontFamily: FONT.uiBold, fontSize: 10, letterSpacing: 0.5, textTransform: 'uppercase' } as const
+
+/**
+ * Encabezado de columnas de la tabla de registro TIPADA (cardio/movilidad/roller) — espejo de
+ * `TypedLogHeader` de web (WorkoutExecutionClient.tsx:392-421): `Set` sobre el badge, las columnas de eje
+ * por tipo (cardio = Min/Metros/FC · roller = Seg/Pasadas · movilidad = Seg de hold) y un hueco final
+ * bajo el check/chevron. Las columnas de eje coinciden con las `FieldBox` de la fila activa
+ * (`typedKeypadFields`, packages/workout-engine/typed-keypad.ts:29-45). Sólo enmarca el header; el
+ * alineado a pixel no es factible sobre las filas-chip de RN, pero devuelve el marco y los rótulos de
+ * columna que el web sí muestra.
+ */
+function TypedLogHeader({ kind }: { kind: TypedKeypadMode }) {
+  const cols = kind === 'cardio' ? ['Min', 'Metros', 'FC'] : kind === 'roller' ? ['Seg', 'Pasadas'] : ['Seg de hold']
+  return (
+    <View className="flex-row items-center gap-2 border-b border-white/10 px-2 pb-2">
+      <Text style={HEADER_LABEL_STYLE} className="w-4 text-center text-on-dark-muted">Set</Text>
+      {cols.map((c) => (
+        <Text key={c} style={HEADER_LABEL_STYLE} className="flex-1 text-center text-on-dark-muted">{c}</Text>
+      ))}
+      <View className="w-8" />
+    </View>
+  )
 }

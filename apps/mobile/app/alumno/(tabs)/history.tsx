@@ -269,7 +269,8 @@ export default function HistoryScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  scroll: { paddingBottom: 40 },
+  // Web: contenedor interno `pb-6` = 24px bajo el disclaimer (page.tsx:36). 1:1.
+  scroll: { paddingBottom: 24 },
   // Espejo de `mx-auto max-w-2xl` (page.tsx:36): capa el contenido a 42rem (672px)
   // y lo centra. En teléfono (<672px) width:'100%' llena; en tablet no se estira.
   content: { width: '100%', maxWidth: 672, alignSelf: 'center' },

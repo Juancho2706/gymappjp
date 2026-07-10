@@ -13,6 +13,9 @@ export type { DurationToken, SpringToken }
  * out/inOut/spring/emphasis = las curvas EVA DS de la web (--ease-*); las tres
  * Material (standard/decelerate/accelerate) quedan para los consumidores legacy. */
 export const EASE = {
+  // Lineal (paridad web `ease-linear`): progreso constante, sin curva. Usado por los
+  // rellenos/anillos de progreso de los timers (`transition-all duration-300 ease-linear`).
+  linear: Easing.linear,
   // EVA DS (paridad web)
   out: Easing.bezier(EASING.out[0], EASING.out[1], EASING.out[2], EASING.out[3]),
   inOut: Easing.bezier(EASING.inOut[0], EASING.inOut[1], EASING.inOut[2], EASING.inOut[3]),

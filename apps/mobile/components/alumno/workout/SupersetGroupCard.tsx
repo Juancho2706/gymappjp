@@ -59,6 +59,7 @@ export function SupersetGroupCard({
   recentSet,
   syncErrors,
   onRetrySet,
+  registerSetRowRef,
 }: {
   members: SessionBlock[]
   sessionLogs: ReconciledSessionLog[]
@@ -86,6 +87,9 @@ export function SupersetGroupCard({
   syncErrors?: Record<string, string>
   /** Reintenta el guardado de una serie fallida (re-dispara el commit con el payload guardado). */
   onRetrySet?: (blockId: string, setNumber: number) => void
+  /** Registra el nodo de cada fila de ronda (`${blockId}:${set}`) para el auto-scroll del orquestador
+   *  (paridad web `setRowRefs`, WEC:992): destino del scroll 'center' a la siguiente serie. */
+  registerSetRowRef?: (key: string, node: View | null) => void
 }) {
   const { theme } = useTheme()
   const [howToOpen, setHowToOpen] = useState(false)
@@ -203,10 +207,12 @@ export function SupersetGroupCard({
                   <Text className="font-display-black text-[12px] text-sport-300">{m.letter}</Text>
                 </View>
                 <View className="min-w-0 flex-1">
+                  {/* SIN numberOfLines: el nombre envuelve completo, sin recorte (paridad web
+                      WorkoutExecutionClient.tsx:749-751, `<h3>` sin line-clamp). El clamp a 2 líneas
+                      cortaba con elipsis texto que el web sí muestra. */}
                   <Text
                     style={{ letterSpacing: -0.34 }}
                     className="font-display-black text-[17px] leading-[20px] text-on-dark"
-                    numberOfLines={2}
                   >
                     {m.exercise.name}
                   </Text>
@@ -331,7 +337,12 @@ export function SupersetGroupCard({
                     ? restoredDraft.values
                     : null
                 return (
-                  <View key={m.block.id} className="gap-1">
+                  <View
+                    key={m.block.id}
+                    collapsable={false}
+                    ref={(node) => registerSetRowRef?.(`${m.block.id}:${round}`, node)}
+                    className="gap-1"
+                  >
                     <View className="flex-row items-center gap-2 px-1.5">
                       <View className="rounded-full bg-sport-500/15 px-1.5 py-0.5">
                         <Text style={[TYPE.mono, MONO_BOLD]} className="text-[10px] text-sport-300">{label}</Text>

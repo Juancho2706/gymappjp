@@ -40,6 +40,7 @@ export const FONT = {
   // Mono / metrics / timers — JetBrains Mono
   mono: 'JetBrainsMono_400Regular',
   monoMedium: 'JetBrainsMono_500Medium',
+  monoSemibold: 'JetBrainsMono_600SemiBold',
   monoBold: 'JetBrainsMono_700Bold',
 } as const
 

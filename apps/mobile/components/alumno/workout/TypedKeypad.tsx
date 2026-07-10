@@ -96,8 +96,10 @@ export const TABULAR: TextStyle = { fontVariant: ['tabular-nums', 'lining-nums']
 // Número grande del display: web `font-display text-3xl font-black tabular-nums leading-none`
 // (`NumericKeypadSheet.tsx:313`). `textStyle` no aplica tabular (sólo el rol 'mono'), así que lo spreadeamos.
 const DISPLAY_STYLE: TextStyle = { ...textStyle('3xl', FONT.displayBlack, { lh: 'tight', ls: 'tight' }), ...TABULAR }
-// Header del keypad (objetivo / "Última vez"): web `font-mono ... tabular-nums` (`NumericKeypadSheet.tsx:212,219`).
-export const OBJECTIVE_STYLE: TextStyle = { ...textStyle('xs', FONT.monoMedium), ...TABULAR }
+// Header del keypad — línea objetivo: web `font-mono text-[13px] font-semibold tabular-nums`
+// (`NumericKeypadSheet.tsx:212`, peso 600). Usa `monoSemibold` (JetBrainsMono_600SemiBold, cargado en
+// `_layout.tsx`) para igualar el semibold web exacto — antes `monoMedium` (500) quedaba un escalón abajo.
+export const OBJECTIVE_STYLE: TextStyle = { ...textStyle('xs', FONT.monoSemibold), ...TABULAR }
 export const LASTVEZ_STYLE: TextStyle = { ...textStyle('3xs', FONT.mono), ...TABULAR }
 // Teclas del grid: web `font-display text-2xl font-bold` = Archivo 700 (`NumericKeypadSheet.tsx:474`).
 // Antes usaba FONT.displayBold (Archivo 800), un peso más pesado que el 700 de la web.
@@ -266,7 +268,7 @@ export function WeightChips({ onIncrement }: { onIncrement: (delta: number) => v
             onPress={() => onIncrement(delta)}
             className="h-10 flex-1 items-center justify-center rounded-pill border border-inverse/10 bg-white/[0.06] active:bg-white/[0.12]"
           >
-            <Text style={textStyle('xs', FONT.monoBold)} className="text-on-dark">
+            <Text style={{ ...textStyle('xs', FONT.monoBold), ...TABULAR }} className="text-on-dark">
               {chipLabel(delta)}
             </Text>
           </Pressable>
@@ -309,7 +311,7 @@ export function WeightChips({ onIncrement }: { onIncrement: (delta: number) => v
                       : 'h-9 min-w-[52px] flex-1 items-center justify-center rounded-control bg-white/[0.06] active:bg-white/[0.12]'
                   }
                 >
-                  <Text style={textStyle('xs', FONT.monoBold)} className={active ? 'text-white' : 'text-on-dark'}>
+                  <Text style={{ ...textStyle('xs', FONT.monoBold), ...TABULAR }} className={active ? 'text-white' : 'text-on-dark'}>
                     {formatWeightEsCl(preset)}
                   </Text>
                 </Pressable>
@@ -467,6 +469,18 @@ export function TypedKeypad(props: {
     onDone()
   }
 
+  // Botón de acción PRIMARIO único (mirror web `NumericKeypadSheet.tsx:154,405-421`): la web renderiza UN
+  // solo botón full-width sport-500 que alterna Siguiente/Listo, nunca los dos. `primaryIsNext` es
+  // `!isLastField || hasEffort`; aquí el paso de esfuerzo vive en la fila (`ActiveSetRow`), no en el keypad,
+  // así que `hasEffort` es siempre false → `primaryIsNext = !isLastField`. En el ÚLTIMO/único campo (p.ej.
+  // movilidad) se muestra "Listo" (Check) que GUARDA — antes se mostraba un "Siguiente" secundario que
+  // cerraba el teclado sin registrar la serie (P1). Las cajas de la fila siguen sirviendo de "pestañas"
+  // para saltar de campo; el scrim cierra sin guardar (paridad web `:169-178`).
+  const fieldList = tabs?.fields ?? []
+  const isLastField =
+    fieldList.length <= 1 || fieldList[fieldList.length - 1]?.key === (tabs?.activeKey ?? '')
+  const primaryIsNext = !isLastField
+
   return (
     <MotiView
       testID="typed-keypad"
@@ -478,7 +492,10 @@ export function TypedKeypad(props: {
       style={{ position: 'absolute', left: 0, right: 0, bottom: 0 }}
     >
       <View
-        className="rounded-t-sheet border-t border-inverse/10 bg-ink-950 px-3 pt-3"
+        // `mx-auto w-full max-w-md`: cap 448px centrado, mirror del panel web (`NumericKeypadSheet.tsx:184`
+        // `mx-auto max-w-md`) y del `KeypadHost` (`KeypadHost.tsx:223`). Sin esto ocupaba el 100% del ancho
+        // → se estiraba en tablet/landscape sin el cap centrado.
+        className="mx-auto w-full max-w-md rounded-t-sheet border-t border-inverse/10 bg-ink-950 px-3 pt-3"
         style={[{ paddingBottom: insets.bottom + 10 }, panelShadow]}
       >
         {/* Grabber */}
@@ -508,32 +525,31 @@ export function TypedKeypad(props: {
           onClear={onClear}
         />
 
-        {/* Acción primaria: Siguiente / Listo */}
-        <View className="mt-2 flex-row gap-2">
+        {/* Acción — un ÚNICO botón full-width: "Siguiente" avanza de campo; "Listo" cierra + guarda la
+            serie (mirror web §5.4 `NumericKeypadSheet.tsx:405-421`, idéntico al `KeypadHost.tsx:377-401`). */}
+        <View className="mt-2">
           <Pressable
-            testID="keypad-next"
+            testID={primaryIsNext ? 'keypad-next' : 'keypad-done'}
             accessibilityRole="button"
-            accessibilityLabel="Siguiente"
-            onPress={handleNext}
-            className="h-14 flex-1 flex-row items-center justify-center gap-2 rounded-control border border-inverse/10 bg-white/[0.06] active:bg-white/[0.12]"
+            accessibilityLabel={primaryIsNext ? 'Siguiente' : 'Listo, guardar serie'}
+            onPress={primaryIsNext ? handleNext : handleDone}
+            className="h-14 w-full flex-row items-center justify-center gap-2 rounded-control bg-sport-500 active:opacity-90"
           >
-            <Text style={KEYPAD_ACTION_STYLE} className="text-on-dark">
-              Siguiente
-            </Text>
-            <ArrowRight size={20} className="text-on-dark" />
-          </Pressable>
-          <Pressable
-            testID="keypad-done"
-            accessibilityRole="button"
-            accessibilityLabel="Listo, guardar serie"
-            onPress={handleDone}
-            className="h-14 flex-row items-center justify-center gap-2 rounded-control bg-sport-500 px-6 active:opacity-90"
-            style={{ flex: 1.4 }}
-          >
-            <Check size={20} className="text-white" />
-            <Text style={KEYPAD_ACTION_STYLE} className="text-white">
-              Listo
-            </Text>
+            {primaryIsNext ? (
+              <>
+                <Text style={KEYPAD_ACTION_STYLE} className="text-white">
+                  Siguiente
+                </Text>
+                <ArrowRight size={20} className="text-white" />
+              </>
+            ) : (
+              <>
+                <Check size={20} className="text-white" />
+                <Text style={KEYPAD_ACTION_STYLE} className="text-white">
+                  Listo
+                </Text>
+              </>
+            )}
           </Pressable>
         </View>
       </View>

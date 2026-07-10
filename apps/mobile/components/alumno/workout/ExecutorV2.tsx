@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Pressable, RefreshControl, ScrollView, Text, View } from 'react-native'
+import { findNodeHandle, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useKeepAwake } from 'expo-keep-awake'
@@ -68,6 +68,23 @@ const EMBER_200 = '#FFD6C7'
 const SPORT_400 = '#5C9DFF'
 // Letras de miembro por posición (A, B, C…) para la señal "Sigue con {label}" de las superseries.
 const SUPERSET_MEMBER_LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+// paddingTop del contentContainer del ScrollView (la lista). El wrapper de contenido que medimos con
+// `measureLayout` arranca DEBAJO de este padding, así que se suma para pasar a coordenadas de scroll.
+const CONTENT_PAD_TOP = 12
+// Alto aproximado de la barra fija "Finalizar" (paridad `.exec-finish-bar`, WEC:1949): obstrucción
+// inferior que el gate de auto-scroll del web descuenta del viewport (scroll-visibility.ts, WEC:552).
+const FINISH_BAR_H = 88
+
+/** Completitud de un bloque contra un set de logs ARBITRARIO (la proyección optimista, no el estado):
+ *  espeja `isBlockComplete(b, fromLogs)` del web (WEC:1410) para decidir el auto-scroll sin esperar
+ *  al re-render. */
+function isBlockDoneIn(sets: number, blockId: string, logs: readonly { block_id: string; set_number: number }[]) {
+  let done = 0
+  for (let i = 1; i <= sets; i += 1) {
+    if (logs.some((l) => l.block_id === blockId && l.set_number === i)) done += 1
+  }
+  return done >= sets
+}
 
 // Media/técnica del sustituto: el modal de técnica y la CTA "Técnica" del ejercicio sustituido
 // dependen de que el gif/video/instrucciones viajen aquí (paridad web `SessionSubstitution`,
@@ -108,6 +125,20 @@ function ExecutorV2Inner({ planId }: { planId: string }) {
   const session = useWorkoutSession(planId)
   // Guard reentrante de finalización (paridad web `finishing.current`, WEC:1503).
   const finishingRef = useRef(false)
+
+  // ── Auto-scroll de la lista (paridad web `scrollToNextIncomplete` + `blockRefs`/`setRowRefs`,
+  // WEC:991-994, 1408-1430) ──────────────────────────────────────────────────────────────────────
+  // El web tiene refs por bloque (scroll 'start' al siguiente incompleto) y por fila de serie de
+  // superserie (scroll 'center' a la siguiente ronda). Aquí replicamos con: un ref al ScrollView, un
+  // wrapper de contenido para medir posiciones absolutas (`measureLayout`), y mapas de nodos por bloque
+  // y por fila de ronda (`${blockId}:${set}`). El alto del viewport y el offset de scroll se leen en vivo
+  // para el gate "IfNeeded" (no scrollear si ya está a la vista) y para centrar respetando la barra fija.
+  const scrollRef = useRef<ScrollView>(null)
+  const scrollContentRef = useRef<View>(null)
+  const viewportHRef = useRef(0)
+  const scrollYRef = useRef(0)
+  const blockRowRefs = useRef<Map<string, View>>(new Map())
+  const setRowRefs = useRef<Map<string, View>>(new Map())
 
   const [keypadTarget, setKeypadTarget] = useState<KeypadTarget | null>(null)
   const [techniqueExercise, setTechniqueExercise] = useState<SessionExercise | null>(null)
@@ -326,6 +357,63 @@ function ExecutorV2Inner({ planId }: { planId: string }) {
     if (isPR) void haptics.pr()
   }, [])
 
+  // Scroll a un nodo medido, con alineación 'start' (borde superior) o 'center' (centro del área útil),
+  // replicando `smoothScrollIntoViewIfNeeded` del web (WEC:1425,1429): sólo mueve si el nodo NO está ya a
+  // la vista, descuenta la barra fija inferior de la zona visible y respeta reduced-motion (animated).
+  const scrollToNode = useCallback(
+    (node: View | undefined | null, align: 'start' | 'center') => {
+      const scroller = scrollRef.current
+      const content = scrollContentRef.current
+      if (!node || !scroller || !content) return
+      const contentHandle = findNodeHandle(content)
+      if (contentHandle == null) return
+      node.measureLayout(
+        contentHandle,
+        (_x, yRel, _w, h) => {
+          const vh = viewportHRef.current
+          const scrollY = scrollYRef.current
+          const top = CONTENT_PAD_TOP + yRel
+          const bottom = top + h
+          const bottomObstruction = FINISH_BAR_H + insets.bottom
+          // Gate "IfNeeded": si ya está completamente visible (bajo el header y sobre la barra), no mover.
+          if (vh > 0 && top >= scrollY + 8 && bottom <= scrollY + vh - bottomObstruction) return
+          let target: number
+          if (align === 'center' && vh > 0) {
+            const usable = vh - bottomObstruction
+            target = top + h / 2 - usable / 2
+          } else {
+            target = top - 8
+          }
+          scroller.scrollTo({ y: Math.max(0, target), animated: !motion.reduced })
+        },
+        () => {},
+      )
+    },
+    [insets.bottom, motion.reduced],
+  )
+
+  // Auto-scroll al siguiente incompleto (paridad web `scrollToNextIncomplete`, WEC:1408-1430): si el
+  // próximo bloque incompleto es de una superserie ⇒ trae su siguiente fila de ronda al 'center'; si es
+  // suelto ⇒ trae el bloque al 'start'. Sólo corre en modo Lista (en Pasos el avance lo maneja el efecto
+  // de auto-avance, que ya reposiciona el pager — WEC:1415-1418).
+  const scrollToNextIncomplete = useCallback(
+    (fromLogs: readonly { block_id: string; set_number: number }[]) => {
+      const nextIncomplete = blocks.find((b) => !isBlockDoneIn(b.sets, b.id, fromLogs))
+      if (!nextIncomplete) return
+      const members = supersetMembersByBlock.get(nextIncomplete.id)
+      if (members && members.length >= 2) {
+        const order = buildRoundOrder(members.map((m) => ({ id: m.id, sets: m.sets })))
+        const pos = order.find((p) => !fromLogs.some((l) => l.block_id === p.blockId && l.set_number === p.set))
+        if (pos) {
+          scrollToNode(setRowRefs.current.get(`${pos.blockId}:${pos.set}`), 'center')
+          return
+        }
+      }
+      scrollToNode(blockRowRefs.current.get(nextIncomplete.id), 'start')
+    },
+    [blocks, supersetMembersByBlock, scrollToNode],
+  )
+
   // ── Commit de una serie ─────────────────────────────────────────────────────
   const handleCommit = useCallback(
     async (payload: OptimisticLogPayload) => {
@@ -380,7 +468,22 @@ function ExecutorV2Inner({ planId }: { planId: string }) {
           toast.info(`Sin descanso — sigue con ${label}`)
         } else if (roundClosed) {
           const groupRest = members.reduce((mx, m) => Math.max(mx, parseRestTime(m.rest_time)), 0)
-          if (groupRest > 0 && isRestAutoTimerEnabled()) timers.startRest(groupRest, { autoStart: true })
+          // Etiqueta "qué sigue" de la barra = nombre del PRIMER miembro del grupo (paridad web
+          // LogSetForm.tsx:379 `startRest(..., { label: nextUpLabel })` con nextUpLabel = memberVMs[0]
+          // .exercise.name, WEC:884). Así la barra pinta "Sigue · {ejercicio}" en vez del fallback.
+          const label = resolveExercise(members[0])?.name
+          if (groupRest > 0 && isRestAutoTimerEnabled()) timers.startRest(groupRest, { autoStart: true, label })
+        }
+        // Auto-scroll (paridad web handleLogged, WEC:1462-1474): en modo Lista, tras cada serie de
+        // superserie trae la SIGUIENTE fila de ronda al 'center' (350ms); al cerrar el grupo (nextPos
+        // null) salta al siguiente incompleto. En Pasos no aplica (lo maneja el auto-avance).
+        if (viewMode === 'list') {
+          if (nextPos) {
+            const key = `${nextPos.blockId}:${nextPos.set}`
+            setTimeout(() => scrollToNode(setRowRefs.current.get(key), 'center'), 350)
+          } else {
+            setTimeout(() => scrollToNextIncomplete(projected), 350)
+          }
         }
         return
       }
@@ -392,11 +495,29 @@ function ExecutorV2Inner({ planId }: { planId: string }) {
       if (!error && block && ex && effectiveExerciseType(block, ex) === 'strength') {
         toast.success('Serie registrada')
       }
+      // Descanso de aproximación (warmup): la 1ª serie de un bloque de ≥3 series usa el
+      // `warmup_rest_time` (más corto) si existe, y la barra pinta el eyebrow "Aproximación"
+      // (paridad web LogSetForm.tsx:382-385 `useWarmup = !!warmupRestTimeStr && setNumber===1 &&
+      // (totalSets ?? 0) >= 3`; datos de SingleExerciseCard.tsx:403-405 warmup_rest_time/sets).
+      const useWarmup = !!block?.warmup_rest_time && payload.setNumber === 1 && (block?.sets ?? 0) >= 3
+      const restStr = useWarmup ? block!.warmup_rest_time! : block?.rest_time
       // Cronómetro automático (pref device-scoped, default ON): si está apagado no arranca solo.
-      const secs = parseRestTime(block?.rest_time)
-      if (secs > 0 && isRestAutoTimerEnabled()) timers.startRest(secs, { autoStart: true })
+      // Etiqueta "qué sigue" = nombre del ejercicio (paridad web nextUpLabel = exercise.name,
+      // SingleExerciseCard.tsx:405) y flag warmup para el eyebrow de la barra.
+      const secs = parseRestTime(restStr)
+      if (secs > 0 && isRestAutoTimerEnabled()) {
+        timers.startRest(secs, { autoStart: true, label: ex?.name, warmup: useWarmup })
+      }
+      // Auto-scroll al completar el bloque suelto (paridad web WEC:1494-1500): sólo al pasar de
+      // incompleto→completo (mirror `!wasComplete && nowComplete`), salta al siguiente incompleto
+      // ('start') a los 350ms. En Pasos no aplica (lo maneja el efecto de auto-avance).
+      if (viewMode === 'list' && block) {
+        const wasComplete = isBlockDoneIn(block.sets, block.id, sessionLogs)
+        const nowComplete = isBlockDoneIn(block.sets, block.id, projected)
+        if (!wasComplete && nowComplete) setTimeout(() => scrollToNextIncomplete(projected), 350)
+      }
     },
-    [blocks, getSubstitution, logSet, timers, sessionLogs, supersetMembersByBlock, signalCommitted],
+    [blocks, getSubstitution, logSet, timers, sessionLogs, supersetMembersByBlock, signalCommitted, viewMode, scrollToNode, scrollToNextIncomplete],
   )
 
   // Reintentar el guardado de una serie fallida (mirror web `Reintentar` → `requestSubmit`, LogSetForm.tsx:743):
@@ -566,7 +687,7 @@ function ExecutorV2Inner({ planId }: { planId: string }) {
             <CollapsedExerciseBar
               key={group.key}
               name={names || 'Superserie'}
-              sub={`Superserie · ${members.length} ${members.length === 1 ? 'ejercicio' : 'ejercicios'}`}
+              sub={`Superserie · ${members.length} ejercicios`}
               reducedMotion={motion.reduced}
               // Celebración one-shot: la serie recién confirmada pertenece a un miembro (mirror web
               // `justCompleted` de un miembro, WEC:1603). Se apaga con reduced-motion.
@@ -609,6 +730,12 @@ function ExecutorV2Inner({ planId }: { planId: string }) {
               recentSet={recentSet}
               syncErrors={syncErrors}
               onRetrySet={retryCommit}
+              // Registro de nodos de filas de ronda = `setRowRefs` del web (WEC:992): destino del scroll
+              // 'center' a la siguiente serie de la superserie tras cada commit.
+              registerSetRowRef={(key, node) => {
+                if (node) setRowRefs.current.set(key, node)
+                else setRowRefs.current.delete(key)
+              }}
             />
           </View>
         )
@@ -660,8 +787,17 @@ function ExecutorV2Inner({ planId }: { planId: string }) {
         )
       }
       return (
-        <SingleExerciseCard
+        // Wrapper con ref por bloque = `blockRefs` del web (WEC:991): destino del scroll 'start' al
+        // siguiente bloque suelto incompleto. `collapsable={false}` para que `measureLayout` lo encuentre.
+        <View
           key={block.id}
+          collapsable={false}
+          ref={(node) => {
+            if (node) blockRowRefs.current.set(block.id, node)
+            else blockRowRefs.current.delete(block.id)
+          }}
+        >
+        <SingleExerciseCard
           block={block}
           exercise={exercise}
           effType={effType}
@@ -689,6 +825,7 @@ function ExecutorV2Inner({ planId }: { planId: string }) {
           syncErrors={syncErrors}
           onRetrySet={retryCommit}
         />
+        </View>
       )
     },
     [supersetMembersByBlock, sessionLogs, effByBlock, currentWeek, activeBlockId, isBlockComplete, previousHistory, openDetails, expandedDone, getSubstitution, openSet, hrZones, restoredDraft, motion.reduced, theme.primary, handleCommit, handleRpeUpdate, saveActiveDraft, recentSet, syncErrors, retryCommit],
@@ -853,17 +990,24 @@ function ExecutorV2Inner({ planId }: { planId: string }) {
         />
       ) : (
         <ScrollView
-          contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 12, paddingBottom: 140 + insets.bottom, gap: 20 }}
+          ref={scrollRef}
+          onLayout={(e) => { viewportHRef.current = e.nativeEvent.layout.height }}
+          onScroll={(e) => { scrollYRef.current = e.nativeEvent.contentOffset.y }}
+          scrollEventThrottle={16}
+          contentContainerStyle={{ paddingHorizontal: 16, paddingTop: CONTENT_PAD_TOP, paddingBottom: 140 + insets.bottom }}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.primary} colors={[theme.primary]} />}
         >
-          {/* El estado "completado" se comunica SÓLO por el colapso de cada ejercicio a su recap
-              (CollapsedExerciseBar) — el web NO muestra banner de éxito en la lista (spec §7). */}
+          {/* Wrapper de contenido: ancla de `measureLayout` para el auto-scroll (posiciones absolutas de
+              bloques/filas). Lleva el gap:20 entre secciones (antes en contentContainerStyle, que con un
+              único hijo ya no aplicaba). El estado "completado" se comunica SÓLO por el colapso de cada
+              ejercicio a su recap — el web NO muestra banner de éxito en la lista (spec §7). */}
+          <View ref={scrollContentRef} collapsable={false} style={{ gap: 20 }}>
           {sections.map((section) => (
             <View key={section.key} className="gap-3">
               <View className="flex-row items-center gap-3">
-                <View className="w-1 self-stretch rounded-full" style={{ backgroundColor: '#2680FF', opacity: section.muted ? 0.4 : 1, minHeight: 20 }} />
+                <View className="w-1 self-stretch rounded-full bg-sport-500" style={{ opacity: section.muted ? 0.4 : 1, minHeight: 20 }} />
                 <Text className="shrink-0 font-sans-bold text-sm uppercase text-on-dark-muted" style={{ letterSpacing: 1 }}>{section.title}</Text>
                 <View className="h-px flex-1 bg-white/10" />
               </View>
@@ -875,6 +1019,7 @@ function ExecutorV2Inner({ planId }: { planId: string }) {
               </View>
             </View>
           ))}
+          </View>
         </ScrollView>
       )}
 
@@ -895,7 +1040,9 @@ function ExecutorV2Inner({ planId }: { planId: string }) {
               accessibilityLabel="Iniciar descanso de 90 segundos"
             >
               <Timer size={14} color={EMBER_200} />
-              <Text className="font-sans-bold text-xs text-ember-200">Descanso (90s)</Text>
+              {/* Label = render REAL del web: el caller pasa defaultTime={'90'} (WEC:1951), truthy, así que
+                  el fallback '90s' nunca aplica y el web muestra literalmente 'Descanso (90)' (WEC:217). */}
+              <Text className="font-sans-bold text-xs text-ember-200">Descanso (90)</Text>
             </Pressable>
             <Pressable
               testID="btn-finish-workout"

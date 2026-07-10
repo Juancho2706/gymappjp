@@ -21,11 +21,16 @@ import type { SessionExercise } from '../../../lib/workout-session'
  *   4. sin medio → nada.
  */
 
-/** Marco 16:9 para gif/imagen — mismo chrome DS que el frame de `VideoPlayer` (surface-sunken/subtle). */
-function MediaImage({ uri }: { uri: string }) {
+/**
+ * Marco 16:9 para gif/imagen — mismo chrome DS que el frame de `VideoPlayer` (surface-sunken/subtle).
+ * `padded` inset el medio 16px dentro del marco = web gif `object-contain p-4`
+ * (WorkoutExecutionClient.tsx:2035, p-4 = 16px = space-5). El fallback de imagen del web
+ * (video_url no-YouTube/no-mp4, :2067) NO lleva padding, así que ese caso pasa `padded={false}`.
+ */
+function MediaImage({ uri, padded = false }: { uri: string; padded?: boolean }) {
   return (
     <View
-      className="bg-surface-sunken border border-subtle rounded-2xl overflow-hidden"
+      className={`bg-surface-sunken border border-subtle rounded-2xl overflow-hidden${padded ? ' p-space-5' : ''}`}
       style={{ width: '100%', aspectRatio: 16 / 9 }}
     >
       <Image source={{ uri }} style={{ flex: 1 }} contentFit="contain" />
@@ -53,9 +58,9 @@ function TechniqueMedia({ exercise }: { exercise: SessionExercise }) {
     )
   }
 
-  // 2) gif.
+  // 2) gif — inset 16px como el web (`object-contain p-4`, :2035).
   if (exercise.gif_url) {
-    return <MediaImage uri={exercise.gif_url} />
+    return <MediaImage uri={exercise.gif_url} padded />
   }
 
   // 3) video_url no-YouTube: mp4/mov/webm/Storage → video directo; resto → imagen.
@@ -95,15 +100,21 @@ export function TechniqueSheet({
       // Título a 21px = web `DialogTitle text-xl` (WorkoutExecutionClient.tsx:2079 + dialog.tsx:126-127).
       titleSize="xl"
       snapPoints={['55%', '90%']}
+      // El medio (índice 0) queda FIJADO fuera del scroll = web `shrink-0` fuera de la zona
+      // `overflow-y-auto` (WorkoutExecutionClient.tsx:2015/2030/2048/2062 vs :2076): el gif/video
+      // permanece a la vista mientras las instrucciones scrollean. Su marco lleva fondo opaco
+      // (VideoPlayer / MediaImage bg-surface-sunken), requisito de stickyHeaderIndices.
+      stickyHeaderIndices={[0]}
     >
       {exercise ? <TechniqueMedia exercise={exercise} /> : null}
 
       {steps && steps.length > 0 ? (
-        <View className="gap-2.5">
+        <View className="gap-3">
           {steps.map((step, i) => (
-            <View key={`${i}-${step}`} className="flex-row items-start gap-2.5">
-              {/* Badge numérico — espejo de la web (§5): círculo sport-500 @15%, número sport-500 bold. */}
-              <View className="h-6 w-6 items-center justify-center rounded-full bg-sport-500/15">
+            <View key={`${i}-${step}`} className="flex-row items-start gap-3">
+              {/* Badge numérico — espejo de la web (§5): círculo sport-500 @15%, número sport-500 bold.
+                  mt-0.5 (2px) iguala el `mt-0.5` del span web (:2090) para el mismo alineado vertical. */}
+              <View className="mt-0.5 h-6 w-6 items-center justify-center rounded-full bg-sport-500/15">
                 <Text style={textStyle('2xs', FONT.uiBold)} className="text-sport-500">
                   {i + 1}
                 </Text>
@@ -117,7 +128,9 @@ export function TechniqueSheet({
           ))}
         </View>
       ) : (
-        <Text style={textStyle('sm', FONT.ui)} className="text-center text-muted">
+        <Text style={textStyle('sm', FONT.ui)} className="text-muted">
+          {/* Sin text-center: el web lo alinea a la izquierda (WorkoutExecutionClient.tsx:2103,
+              <p> sin text-align). */}
           No hay instrucciones detalladas disponibles para este ejercicio.
         </Text>
       )}
@@ -129,7 +142,7 @@ export function TechniqueSheet({
         activeOpacity={0.85}
         accessibilityRole="button"
         accessibilityLabel="Entendido"
-        className="mt-space-4 w-full items-center justify-center rounded-control bg-surface-sunken py-3"
+        className="mt-space-7 w-full items-center justify-center rounded-control bg-surface-sunken py-3"
       >
         <Text style={textStyle('sm', FONT.uiBold)} className="text-body">
           Entendido

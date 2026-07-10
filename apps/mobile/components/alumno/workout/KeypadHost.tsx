@@ -156,6 +156,11 @@ export function KeypadHost({
   }
 
   const commit = () => {
+    // Háptica de "serie guardada" — la más fuerte del keypad (mirror web `onDone` → `triggerHaptic(20)`
+    // antes de `closeKeypad()`+`requestSubmit()`, `WorkoutKeypadProvider.tsx:245-251`, spec §7/§11.3).
+    // Cubre las 3 rutas de confirmación de EDICIÓN (Omitir/Guardar/Listo-vía-goNext) que antes no daban
+    // feedback háptico, a diferencia de la ruta PRIMARIA (`TypedKeypad` handleDone / `ActiveSetRow`).
+    haptics.setDone()
     const v = valuesRef.current
     const payload = target.typed
       ? buildTypedPayload(target.typed.mode, v, target.blockId, target.setNumber)
@@ -311,7 +316,7 @@ export function KeypadHost({
                       placeholderTextColor={ON_DARK_MUTED}
                       accessibilityLabel="Nota de la serie para tu coach"
                       style={textStyle('xs', FONT.ui)}
-                      className="mt-1.5 rounded-control border border-inverse/10 bg-white/[0.06] px-3 py-2 text-on-dark"
+                      className="mt-1.5 rounded-control border border-inverse bg-white/[0.06] px-3 py-2 text-on-dark"
                     />
                   ) : null}
                 </View>

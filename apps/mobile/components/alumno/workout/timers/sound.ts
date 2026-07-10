@@ -13,9 +13,10 @@
  * Gating: el sonido respeta `isRestTimerMuted()` (default web = ON). La háptica
  * NO pasa por acá y nunca se silencia.
  *
- * NOTA de integración: falta (a) `expo install expo-audio` y (b) un asset de
- * sonido bundleado (p.ej. `assets/audio/rest-alarm.m4a`) registrado al arrancar.
- * Sin (b) no hay fuente que reproducir aunque (a) exista — por eso es no-op.
+ * NOTA de integración: los assets de sonido YA están bundleados y registrados al
+ * cargar el módulo (un `.wav` por timbre + el tick de countdown, ver abajo). Sólo
+ * falta (a) `expo install expo-audio` para que el `require('expo-audio')` guardado
+ * resuelva; hasta entonces `playTimerCue` es no-op seguro (no hay import estático).
  */
 import { isRestTimerMuted, getRestTimerVolume, getRestTimerSound, type TimerSound } from './rest-timer-preferences'
 
@@ -52,7 +53,8 @@ const cueSources: Partial<Record<TimerCueKind, CueSource>> = {}
 // Assets de la ALARMA por timbre (`TimerSound`): espejo de los 4 timbres web
 // (digital/bell/classic/boxing). `playTimerCue('alarm')` resuelve la fuente vía
 // `getRestTimerSound()`, así elegir un sonido en ajustes CAMBIA el audio (paridad
-// con `playTimerSound(readRestTimerSound())` web). Vacío hasta bundlear los assets.
+// con `playTimerSound(readRestTimerSound())` web). Poblado al final del módulo con
+// un asset por timbre (digital/bell/classic/boxing).
 const soundAssets: Partial<Record<TimerSound, CueSource>> = {}
 const players: Record<string, AudioPlayerLike> = {}
 
@@ -93,11 +95,17 @@ export function primeTimerAudio(): void {
 export function playTimerCue(kind: TimerCueKind): void {
   if (isRestTimerMuted()) return
   const mod = ExpoAudio
-  // La alarma respeta el timbre elegido (`getRestTimerSound`); cae al asset genérico
-  // 'alarm' si aún no se bundleó un asset por-timbre. El resto de cues usa su fuente.
-  const sound = kind === 'alarm' ? getRestTimerSound() : null
-  const source = kind === 'alarm' ? (soundAssets[sound!] ?? cueSources.alarm) : cueSources[kind]
-  const key = kind === 'alarm' ? `alarm:${sound}` : kind
+  // El fin de descanso ('alarm'), el fin de HOLD ('done') y los cambios/fin de fase
+  // de INTERVALO ('phase'/'finish') respetan el TIMBRE elegido por el usuario
+  // (`getRestTimerSound`) — paridad con la web, que en los tres casos reproduce
+  // `playTimerSound(readRestTimerSound(), readRestTimerVolume())`
+  // (HoldTimer.tsx:33 done; IntervalTimer.tsx:44 beep de fase/fin). Caen al asset
+  // genérico 'alarm' si aún no se bundleó un asset por-timbre. Solo 'tick' (beep de
+  // countdown por segundo) conserva su propia fuente.
+  const usesTimbre = kind === 'alarm' || kind === 'done' || kind === 'phase' || kind === 'finish'
+  const sound = usesTimbre ? getRestTimerSound() : null
+  const source = usesTimbre ? (soundAssets[sound!] ?? cueSources.alarm) : cueSources[kind]
+  const key = usesTimbre ? `alarm:${sound}` : kind
   if (!mod || source == null) return
   try {
     let player = players[key]
@@ -113,15 +121,27 @@ export function playTimerCue(kind: TimerCueKind): void {
   }
 }
 
-// Cue bundleado del fin de descanso: 3 tonos brillantes (espeja el sonido web
-// 'digital'). Se registra al cargar el módulo; Metro lo empaqueta como asset.
-// El 'tick' 3-2-1 queda a cargo de la háptica (no registramos asset para evitar
-// repetir la alarma completa cada segundo). Reproduce SOLO cuando expo-audio esté
-// instalado (`expo install expo-audio`) + un build nativo lo incluya; hasta
-// entonces `playTimerCue` es no-op seguro.
+// Assets bundleados de la alarma — UNO por timbre (`TimerSound`), sintetizados para
+// espejar los 4 timbres de la web `audioUtils.ts:35-124` (digital = 3 beeps square
+// 1000Hz; bell = sine 800Hz resonante; classic = 4 pulsos triangle 2000Hz; boxing =
+// sine 600Hz + square 1200Hz metálico). Al registrarlos, `playTimerCue('alarm')`
+// resuelve `soundAssets[getRestTimerSound()]` → elegir Digital/Campana/Clásico/Boxeo
+// en ajustes CAMBIA el audio (paridad web `playTimerSound(readRestTimerSound())`).
+// `rest-cue.wav` queda como fallback genérico de `cueSources.alarm` (si algún timbre
+// no resolviera). El 'tick' 3-2-1 tiene su propio asset corto (sine 760Hz ~0.16s,
+// espeja `playCountdownBeep` audioUtils.ts:8-33) — NO reusa la alarma completa, así
+// el beep de countdown suena por segundo sin repetir la alarma. Metro empaqueta los
+// .wav; reproduce SOLO cuando expo-audio esté instalado (`expo install expo-audio`) +
+// un build nativo lo incluya; hasta entonces `playTimerCue` es no-op seguro.
 try {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  /* eslint-disable @typescript-eslint/no-require-imports */
   registerTimerCue('alarm', require('../../../../assets/audio/rest-cue.wav'))
+  registerTimerSound('digital', require('../../../../assets/audio/alarm-digital.wav'))
+  registerTimerSound('bell', require('../../../../assets/audio/alarm-bell.wav'))
+  registerTimerSound('classic', require('../../../../assets/audio/alarm-classic.wav'))
+  registerTimerSound('boxing', require('../../../../assets/audio/alarm-boxing.wav'))
+  registerTimerCue('tick', require('../../../../assets/audio/timer-tick.wav'))
+  /* eslint-enable @typescript-eslint/no-require-imports */
 } catch {
-  // Sin el asset (o bundler sin soporte) el cue queda en no-op.
+  // Sin los assets (o bundler sin soporte) los cues quedan en no-op.
 }

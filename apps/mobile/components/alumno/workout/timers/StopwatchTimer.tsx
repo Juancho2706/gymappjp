@@ -120,7 +120,6 @@ export function StopwatchTimer({ onClose }: StopwatchTimerProps) {
               onPress={addLap}
               accessibilityRole="button"
               accessibilityLabel="Marcar vuelta"
-              hitSlop={6}
               style={styles.utilBtn}
             >
               <Flag size={14} color={ON_DARK_MUTED} />
@@ -130,7 +129,6 @@ export function StopwatchTimer({ onClose }: StopwatchTimerProps) {
               onPress={togglePause}
               accessibilityRole="button"
               accessibilityLabel={isActive ? 'Pausar' : 'Reanudar'}
-              hitSlop={6}
               style={styles.utilBtn}
             >
               {isActive ? <Pause size={14} color={ON_DARK_MUTED} /> : <Play size={14} color={ON_DARK_MUTED} />}
@@ -140,7 +138,6 @@ export function StopwatchTimer({ onClose }: StopwatchTimerProps) {
               onPress={reset}
               accessibilityRole="button"
               accessibilityLabel="Reiniciar"
-              hitSlop={6}
               style={styles.utilBtn}
             >
               <RotateCcw size={14} color={ON_DARK_MUTED} />
@@ -150,7 +147,6 @@ export function StopwatchTimer({ onClose }: StopwatchTimerProps) {
               onPress={onClose}
               accessibilityRole="button"
               accessibilityLabel="Cerrar cronómetro"
-              hitSlop={6}
               style={styles.utilBtn}
             >
               <X size={14} color={ON_DARK_MUTED} />
@@ -203,8 +199,12 @@ const styles = StyleSheet.create({
     color: ON_DARK,
     marginTop: 2,
   },
-  utilRow: { flexDirection: 'row', alignItems: 'center', flexShrink: 0 },
-  utilBtn: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
+  // Web Stopwatch.tsx:73 cluster `flex items-center gap-0.5` = 2px entre botones.
+  utilRow: { flexDirection: 'row', alignItems: 'center', flexShrink: 0, gap: 2 },
+  // Web Stopwatch.tsx:77/87/96/105 botones `h-11 w-11 md:h-8 md:w-8 rounded-full` = 44px móvil,
+  // circulares. Icono en 14px. Antes 36px + hitSlop dejaba el círculo visible en 36px; ahora es 44px
+  // y cumple el touch-target sin hitSlop. borderRadius 22 = diámetro/2.
+  utilBtn: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
   laps: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 6 },
   // Web Stopwatch.tsx:116 `rounded` = 4px (default Tailwind, no hay token de 4px en la escala RN).
   lapChip: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.06)' },

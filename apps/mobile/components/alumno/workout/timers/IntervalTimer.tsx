@@ -202,7 +202,6 @@ export function IntervalTimer({ phases, onClose }: IntervalTimerProps) {
               accessibilityRole="button"
               accessibilityLabel="Mantener pantalla encendida"
               accessibilityState={{ selected: wakeLockOn }}
-              hitSlop={6}
               style={[styles.utilBtn, wakeLockOn ? styles.wakeOn : null]}
             >
               <Sun size={14} color={wakeLockOn ? WARNING_500 : ON_DARK_MUTED} />
@@ -236,7 +235,6 @@ export function IntervalTimer({ phases, onClose }: IntervalTimerProps) {
               onPress={onClose}
               accessibilityRole="button"
               accessibilityLabel="Cerrar timer"
-              hitSlop={6}
               style={styles.utilBtn}
             >
               <X size={14} color={ON_DARK_MUTED} />
@@ -245,14 +243,14 @@ export function IntervalTimer({ phases, onClose }: IntervalTimerProps) {
         </View>
         {!finished && phase ? (
           <View style={styles.track}>
-            <View
-              style={[
-                styles.fill,
-                {
-                  width: `${Math.max(0, Math.min(1, progress)) * 100}%`,
-                  backgroundColor: phase.kind === 'work' ? EMBER_500 : theme.primary,
-                },
-              ]}
+            {/* Web IntervalTimer.tsx:195 el relleno lleva `transition-all duration-300 ease-linear`
+                y su width se recalcula por-segundo, llenándose de forma FLUIDA. MotiView interpola
+                el width 300ms lineal (instantáneo en reduce-motion) para espejarlo, en vez de saltar
+                a escalones cada tick. */}
+            <MotiView
+              style={[styles.fill, { backgroundColor: phase.kind === 'work' ? EMBER_500 : theme.primary }]}
+              animate={{ width: `${Math.max(0, Math.min(1, progress)) * 100}%` }}
+              transition={{ type: 'timing', duration: motion.reduced ? 0 : 300, easing: EASE.linear }}
             />
           </View>
         ) : null}
@@ -296,8 +294,13 @@ const styles = StyleSheet.create({
     color: ON_DARK,
     marginTop: 2,
   },
-  utilRow: { flexDirection: 'row', alignItems: 'center', flexShrink: 0 },
-  utilBtn: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
+  // Web IntervalTimer.tsx:145 cluster `flex items-center gap-0.5` = 2px entre botones.
+  utilRow: { flexDirection: 'row', alignItems: 'center', flexShrink: 0, gap: 2 },
+  // Web IntervalTimer.tsx:149/162/171/183 botones `h-11 w-11 md:h-8 md:w-8 rounded-full` = 44px móvil,
+  // circulares. El pill ámbar del wake-lock (styles.wakeOn) hereda estos 44px. Icono en 14px. Antes
+  // 36px + hitSlop dejaba el círculo/pill visible en 36px; ahora es 44px y cumple el touch-target sin
+  // hitSlop. borderRadius 22 = diámetro/2.
+  utilBtn: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
   wakeOn: { backgroundColor: `${WARNING_500}1A` }, // warning-500 @ 10% (espeja `bg-[var(--warning-500)]/10`)
   track: { marginTop: 6, height: 4, borderRadius: 999, backgroundColor: TRACK_ON_DARK, overflow: 'hidden' },
   fill: { height: '100%', borderRadius: 999 },

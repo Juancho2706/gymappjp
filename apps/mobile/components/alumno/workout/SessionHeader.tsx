@@ -2,9 +2,9 @@ import { Pressable, Text, View } from 'react-native'
 import { MotiView } from 'moti'
 import { ArrowLeft, GalleryHorizontal, List, Settings } from 'lucide-react-native'
 import { ProgressBar } from '../../ProgressBar'
+import { useTheme } from '../../../context/ThemeContext'
 import { FONT, TYPE } from '../../../lib/typography'
 
-const SPORT_500 = '#2680FF'
 const W10 = 'rgba(255,255,255,0.10)'
 const ON_DARK = '#F4F6F8'
 const ON_DARK_MUTED = '#939DAB'
@@ -52,6 +52,10 @@ export function SessionHeader({
   onBack: () => void
   onOpenSettings: () => void
 }) {
+  // Fill de la barra de progreso = acento sport recoloreado por white-label (paridad web `var(--sport-500)`,
+  // WEC:1862). `theme.primary` sigue la rampa SPORT del coach; el shadowColor/color de libs nativas debe
+  // salir del objeto Theme (no de un hex literal) para que la marca resuelva en vivo (theme.ts).
+  const { theme } = useTheme()
   return (
     <MotiView
       from={{ opacity: 0, translateY: -20 }}
@@ -146,12 +150,14 @@ export function SessionHeader({
           accessibilityRole="button"
           accessibilityLabel="Ajustes del entrenamiento"
         >
-          <Settings size={18} color={ON_DARK} />
+          {/* Icono a 20px = web `Settings w-5 h-5` (WEC:1854), igualando el back arrow (w-5 h-5, WEC:1800)
+              dentro del mismo control h-10 w-10. */}
+          <Settings size={20} color={ON_DARK} />
         </Pressable>
         </View>
       </View>
 
-      <ProgressBar value={requiredSets === 0 ? 0 : completedSetCount / requiredSets} color={SPORT_500} track={W10} height={6} />
+      <ProgressBar value={requiredSets === 0 ? 0 : completedSetCount / requiredSets} color={theme.primary} track={W10} height={6} />
 
       <View className="mt-1.5 flex-row items-start justify-between gap-2">
         <Text style={TYPE.mono} className="text-[11px] text-on-dark-muted">
@@ -165,7 +171,7 @@ export function SessionHeader({
           <Text style={TYPE.mono} className="text-[11px] text-on-dark-muted">·</Text>
           {/* Pulso de escala del % cada vez que cambia completedSetCount (paridad web WEC:1883-1892:
               `motion.span key={completedSetCount}` scale 1.18→1, springs.snappy). `key` fuerza el
-              re-montaje que reeejecuta el from→animate; reduced-motion lo colapsa a instantáneo. */}
+              re-montaje que reejecuta el from→animate; reduced-motion lo colapsa a instantáneo. */}
           <MotiView
             key={completedSetCount}
             from={reducedMotion ? { scale: 1 } : { scale: 1.18 }}

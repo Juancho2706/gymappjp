@@ -13,6 +13,7 @@ import { captureRef } from 'react-native-view-shot'
 import * as Sharing from 'expo-sharing'
 import * as Haptics from 'expo-haptics'
 import { LinearGradient } from 'expo-linear-gradient'
+import { BlurView } from 'expo-blur'
 import { Image } from 'expo-image'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import {
@@ -27,6 +28,7 @@ import {
 import { useTheme } from '../context/ThemeContext'
 import { TYPE, FONT, textStyle } from '../lib/typography'
 import { SHADOWS } from '../lib/shadows'
+import { toast } from './Toast'
 
 /**
  * EVA ShareCard — single RN engine for the brandeable share-cards (story format
@@ -272,7 +274,9 @@ export const ShareCardCanvas = function ShareCardCanvas({
 
   return (
     <ShareCardChromeContext.Provider value={{ accent, toneColor }}>
-    <View style={{ width, aspectRatio: CARD_ASPECT, borderRadius: 20, overflow: 'hidden', backgroundColor: INK_950 }}>
+    {/* border-white/10 del marco: web PRShareCardModal.tsx:115 lo pinta en el contenedor del preview
+        (`... rounded-card border border-white/10 bg-[var(--ink-950)] shadow-2xl`). */}
+    <View style={{ width, aspectRatio: CARD_ASPECT, borderRadius: 20, borderWidth: 1, borderColor: W10, overflow: 'hidden', backgroundColor: INK_950 }}>
       {/* Ink base gradient (mirror drawCardBase). */}
       <LinearGradient
         colors={[INK_950, INK_900]}
@@ -372,9 +376,19 @@ export function ShareCardPreview({
     if (busy) return
     setBusy(true)
     try {
-      // Rasterize the exact previewed node. Output resolution ≈ cardWidth ×
-      // devicePixelRatio (e.g. 340dp × 3 ≈ 1020px wide) — plenty for social.
-      const uri = await captureRef(cardRef, { format: 'png', quality: 1, result: 'tmpfile' })
+      // Rasterize the exact previewed node a resolución FIJA 1080×1350 (independiente
+      // del device), espejo del canvas web que siempre exporta 1080×1350
+      // (workout-pr-card-canvas.ts:634). Sin width/height, view-shot salía a
+      // cardWidth × devicePixelRatio (≈680–1020px según @2x/@3x), por debajo de 1080.
+      let uri: string
+      try {
+        uri = await captureRef(cardRef, { format: 'png', quality: 1, result: 'tmpfile', width: 1080, height: 1350 })
+      } catch {
+        // Fallo REAL de captura (no cancelación) → toast de error, espejo del web
+        // (PRShareCardModal.tsx:52-55: blob null → toast.error + cierre).
+        toast.error('No pudimos generar la imagen. Intenta de nuevo.')
+        return
+      }
       void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
 
       if (onShare) {
@@ -391,11 +405,18 @@ export function ShareCardPreview({
           UTI: 'public.png',
         })
       } else {
-        await Share.share({ url: uri, message: shareMessage ?? '' })
+        // RN Share distingue cancelación de éxito: dismissedAction = el usuario cerró
+        // la hoja → silencio (como el web, que sólo traga el AbortError de cancelación
+        // en web-share.ts:29). No lo tratamos como error.
+        const result = await Share.share({ url: uri, message: shareMessage ?? '' })
+        if (result.action === Share.dismissedAction) return
       }
       onShared?.()
     } catch {
-      // user cancelled or capture failed — silent (matches web modal UX)
+      // Fallo real de la hoja de compartir (expo-sharing lanza; la cancelación del
+      // usuario NO lanza — resuelve). El comentario previo "silent (matches web modal
+      // UX)" era inexacto: tragaba también los fallos reales sin avisar.
+      toast.error('No pudimos compartir la imagen. Intenta de nuevo.')
     } finally {
       setBusy(false)
     }
@@ -407,6 +428,12 @@ export function ShareCardPreview({
         onPress={onClose}
         style={[styles.backdrop, { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 16 }]}
       >
+        {/* Backdrop desenfocado + velo negro — espejo de web PRShareCardModal.tsx:102
+            (`bg-black/80 backdrop-blur-sm`): la BlurView desenfoca el overlay del resumen
+            detrás y el velo lo oscurece (~0.8). Ambas capas con pointerEvents="none" para
+            que el tap caiga en el Pressable de cierre. */}
+        <BlurView intensity={24} tint="dark" style={StyleFill} pointerEvents="none" />
+        <View style={[StyleFill, { backgroundColor: 'rgba(0,0,0,0.7)' }]} pointerEvents="none" />
         {/* stopPropagation: taps inside the card column must not dismiss */}
         <Pressable onPress={() => {}} style={{ width: cardWidth, gap: 16 }}>
           {/* Captured node. `collapsable={false}` is required on Android so the
@@ -471,8 +498,10 @@ function withAlpha(hex: string, alpha: number): string {
 const styles = {
   // ── modal chrome ──
   backdrop: {
+    // El oscurecimiento vive en el velo sobre la BlurView (ver render); el Pressable
+    // queda transparente para no tapar el desenfoque (paridad web `bg-black/80 backdrop-blur-sm`).
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.82)',
+    backgroundColor: 'transparent',
     alignItems: 'center' as const,
     justifyContent: 'center' as const,
     paddingHorizontal: 16,

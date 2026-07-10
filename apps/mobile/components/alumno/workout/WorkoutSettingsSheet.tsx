@@ -44,7 +44,16 @@ export function WorkoutSettingsSheet({ open, onClose }: { open: boolean; onClose
               Si está activado, el descanso empieza solo al guardar cada serie.
             </Text>
           </View>
-          <Switch value={autoTimer} onValueChange={setRestAutoTimerEnabled} />
+          {/* Etiqueta de estado "Activado/Desactivado" a la izquierda del control (paridad web
+              WorkoutTimerSettingsPanel.tsx:80: <span font-semibold>{autoTimerEnabled ? 'Activado' :
+              'Desactivado'}</span>). El control es el `<Switch>` DS idiomático (equivalente RN del
+              track/perilla animado del web); la etiqueta preserva el texto de estado que el usuario ve. */}
+          <View className="flex-row items-center gap-2">
+            <Text className="text-sm font-sans-semibold text-strong">
+              {autoTimer ? 'Activado' : 'Desactivado'}
+            </Text>
+            <Switch value={autoTimer} onValueChange={setRestAutoTimerEnabled} />
+          </View>
         </View>
       </Card>
 

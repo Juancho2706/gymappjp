@@ -262,7 +262,12 @@ export async function fetchSubstituteCandidates(blockId: string): Promise<Substi
   const client = await getClientProfile()
   const scopeFilter = client?.coachId ? `coach_id.is.null,coach_id.eq.${client.coachId}` : 'coach_id.is.null'
 
-  const RICH = 'id, name, muscle_group, equipment, exercise_type, secondary_muscles, gif_url, image_url, video_url, thumbnail_url, video_start_time, video_end_time, instructions, coach_id'
+  // org_id/team_id son necesarios para el desempate isSystemScope (substitution.ts:85-87):
+  // sin ellos llegan `undefined` ⇒ `== null` true siempre, tratando cualquier ejercicio con
+  // coach_id null como 'sistema' (un candidato org/team-scoped se ordenaria como sistema en
+  // empates de score). Paridad con web SUBSTITUTE_COLUMNS (_data/substitution.queries.ts:16-17,
+  // incluye coach_id, org_id, team_id) y rankSubstitutes (exercise-substitution.ts:90-92,169-173).
+  const RICH = 'id, name, muscle_group, equipment, exercise_type, secondary_muscles, gif_url, image_url, video_url, thumbnail_url, video_start_time, video_end_time, instructions, coach_id, org_id, team_id'
   const MIN = 'id, name, muscle_group, equipment, gif_url, image_url, video_url, thumbnail_url, instructions, coach_id'
   const muscle = currentNorm.muscle_group as string
 

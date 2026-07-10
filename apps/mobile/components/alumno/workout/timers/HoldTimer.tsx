@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { AppState, Pressable, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { MotiView } from 'moti'
+import Animated, { useAnimatedProps, useSharedValue, withTiming } from 'react-native-reanimated'
 import { BlurView } from 'expo-blur'
 import Svg, { Circle, G } from 'react-native-svg'
 import { Pause, Play, RotateCcw, X } from 'lucide-react-native'
@@ -32,6 +33,12 @@ interface HoldTimerProps {
 function formatTime(s: number): string {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
 }
+
+// Espeja web HoldTimer.tsx:85-93: el círculo de progreso es un <circle> con
+// `transition-all duration-300 ease-linear`, así que strokeDashoffset se INTERPOLA
+// 300ms lineal entre los valores por-segundo (el anillo drena de forma fluida, no a
+// escalones). Reanimated anima la prop nativa de SVG por el mismo camino.
+const AnimatedCircle = Animated.createAnimatedComponent(Circle)
 
 const R = 18
 // Espeja la matemática de la web (HoldTimer.tsx:66,90-91): strokeDasharray fija en 176
@@ -101,6 +108,14 @@ export function HoldTimer({ initialSeconds, label, onClose }: HoldTimerProps) {
   const pct = (timeLeft / (initialSeconds || 1)) * 100
   const dashoffset = DASH - (DASH * Math.min(100, pct)) / 100
 
+  // Interpola strokeDashoffset 300ms lineal (espeja `transition-all duration-300
+  // ease-linear` de la web); en reduce-motion salta instantáneo.
+  const dashSV = useSharedValue(dashoffset)
+  useEffect(() => {
+    dashSV.value = withTiming(dashoffset, { duration: motion.reduced ? 0 : 300, easing: EASE.linear })
+  }, [dashoffset, motion.reduced, dashSV])
+  const progressProps = useAnimatedProps(() => ({ strokeDashoffset: dashSV.value }))
+
   return (
     <View
       pointerEvents="box-none"
@@ -129,7 +144,7 @@ export function HoldTimer({ initialSeconds, label, onClose }: HoldTimerProps) {
             <Svg width={44} height={44} viewBox="0 0 44 44">
               <G rotation={-90} origin="22, 22">
                 <Circle cx={22} cy={22} r={R} strokeWidth={3} fill="none" stroke={TRACK_ON_DARK} />
-                <Circle
+                <AnimatedCircle
                   cx={22}
                   cy={22}
                   r={R}
@@ -138,7 +153,7 @@ export function HoldTimer({ initialSeconds, label, onClose }: HoldTimerProps) {
                   stroke={EMBER_500}
                   strokeLinecap="round"
                   strokeDasharray={DASH}
-                  strokeDashoffset={dashoffset}
+                  animatedProps={progressProps}
                 />
               </G>
             </Svg>
@@ -161,7 +176,6 @@ export function HoldTimer({ initialSeconds, label, onClose }: HoldTimerProps) {
             onPress={toggle}
             accessibilityRole="button"
             accessibilityLabel={isActive ? 'Pausar' : 'Reanudar'}
-            hitSlop={6}
             style={styles.utilBtn}
           >
             {isActive ? <Pause size={14} color={ON_DARK_MUTED} /> : <Play size={14} color={ON_DARK_MUTED} />}
@@ -171,7 +185,6 @@ export function HoldTimer({ initialSeconds, label, onClose }: HoldTimerProps) {
             onPress={restart}
             accessibilityRole="button"
             accessibilityLabel="Repetir hold"
-            hitSlop={6}
             style={styles.utilBtn}
           >
             <RotateCcw size={14} color={ON_DARK_MUTED} />
@@ -181,7 +194,6 @@ export function HoldTimer({ initialSeconds, label, onClose }: HoldTimerProps) {
             onPress={onClose}
             accessibilityRole="button"
             accessibilityLabel="Cerrar timer"
-            hitSlop={6}
             style={styles.utilBtn}
           >
             <X size={14} color={ON_DARK_MUTED} />
@@ -211,9 +223,15 @@ const styles = StyleSheet.create({
   left: { flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 1, minWidth: 0 },
   ringWrap: { width: 44, height: 44, position: 'relative' },
   ringCenter: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center' },
-  // Web HoldTimer.tsx:95 `text-xs ... tabular-nums` = 13px (--text-xs=13, globals.css:455);
-  // consistente con la subLine ('xs'), no '2xs'/12px.
-  ringTime: { ...textStyle('xs', FONT.monoBold), color: ON_DARK },
+  // Web HoldTimer.tsx:95 `text-xs font-bold tabular-nums text-on-dark` = 13px, fuente UI (body)
+  // en negrita con cifras tabulares, NO monoespaciada. Espeja el mismo tratamiento que el
+  // bigTime de Interval/Stopwatch (displayBlack/uiBold + fontVariant tabular), y la subLine
+  // hermana que usa FONT.uiBold. `tabular-nums`+`lining-nums` alinea los dígitos del countdown.
+  ringTime: {
+    ...textStyle('xs', FONT.uiBold),
+    fontVariant: ['tabular-nums', 'lining-nums'],
+    color: ON_DARK,
+  },
   textCol: { flexShrink: 1, minWidth: 0 },
   // Web HoldTimer.tsx:98 `text-[10px] font-semibold uppercase tracking-wider` = 10px / peso 600 /
   // tracking 0.05em (=0.5pt a 10px). No usar TYPE.eyebrow (12px/700/0.12em).
@@ -226,6 +244,11 @@ const styles = StyleSheet.create({
     color: ON_DARK_MUTED,
   },
   subLine: { ...textStyle('xs', FONT.uiBold), color: ON_DARK, marginTop: 1 },
-  utilRow: { flexDirection: 'row', alignItems: 'center', flexShrink: 0 },
-  utilBtn: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
+  // Web HoldTimer.tsx:106 cluster `flex items-center gap-0.5` = 2px entre botones.
+  utilRow: { flexDirection: 'row', alignItems: 'center', flexShrink: 0, gap: 2 },
+  // Web HoldTimer.tsx:110,119,129 botones `h-11 w-11 md:h-8 md:w-8 rounded-full` = 44px en móvil
+  // (h-11/w-11), circulares. Antes 36px + hitSlop dejaba el círculo visible (highlight/pressed)
+  // en 36px; ahora el círculo visible es 44px y ya cumple el touch-target sin hitSlop. El icono
+  // sigue en 14px (w-3.5 h-3.5). borderRadius 22 = diámetro/2 → círculo perfecto.
+  utilBtn: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
 })

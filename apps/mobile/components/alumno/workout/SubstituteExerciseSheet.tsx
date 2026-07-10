@@ -4,7 +4,7 @@ import { Image } from 'expo-image'
 import { cssInterop } from 'nativewind'
 import { ArrowRightLeft, Dumbbell, RotateCw, TriangleAlert } from 'lucide-react-native'
 import { Sheet } from '../../Sheet'
-import { FONT, TYPE, textStyle } from '../../../lib/typography'
+import { FONT, textStyle } from '../../../lib/typography'
 import { exerciseGridThumb } from '../../../lib/exercise-catalog'
 import {
   equipmentLabel,
@@ -149,8 +149,11 @@ export function SubstituteExerciseSheet({ open, onOpenChange, blockId, prescribe
         >
           {prescribedName}
         </Text>
-        <Text style={TYPE.caption} className="text-on-dark-muted mt-1">
-          {muscleGroup ? `${muscleGroup} · ` : ''}Máquina ocupada — el cambio vale{' '}
+        {/* 12px (2xs) peso regular (FONT.ui) — web `text-[12px]` sin font-weight ⇒ 400
+            (SubstituteExerciseSheet.tsx:84). Separador ` · ` incondicional como el web (L85:
+            `{muscleGroup} · Máquina…`, muscleGroup se muestra siempre, sin guard de vacío). */}
+        <Text style={textStyle('2xs', FONT.ui)} className="text-on-dark-muted mt-1">
+          {muscleGroup} · Máquina ocupada — el cambio vale{' '}
           <Text style={{ fontFamily: FONT.uiSemibold }} className="text-on-dark">
             solo por hoy
           </Text>{' '}
@@ -164,7 +167,7 @@ export function SubstituteExerciseSheet({ open, onOpenChange, blockId, prescribe
       ) : error ? (
         <View style={styles.centerState}>
           <TriangleAlert className="text-warning-500" size={32} strokeWidth={2} />
-          <Text style={TYPE.body} className="text-on-dark-muted text-center">
+          <Text style={textStyle('sm', FONT.ui)} className="text-on-dark-muted text-center">
             {error}
           </Text>
           {blockId ? (
@@ -193,7 +196,7 @@ export function SubstituteExerciseSheet({ open, onOpenChange, blockId, prescribe
           <View className="items-center justify-center rounded-pill bg-white/[0.06]" style={styles.emptyIcon}>
             <Dumbbell className="text-on-dark-muted" size={28} />
           </View>
-          <Text style={TYPE.body} className="text-on-dark-muted text-center">
+          <Text style={textStyle('sm', FONT.ui)} className="text-on-dark-muted text-center">
             No encontramos alternativas equivalentes para{' '}
             <Text style={{ fontFamily: FONT.uiSemibold }} className="text-on-dark">
               {muscleGroup}
