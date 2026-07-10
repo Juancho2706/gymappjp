@@ -648,22 +648,22 @@ Empty-states en TODO (bug web 0-alumnos NO se hereda). Charts: victory-native/Sk
 
 ## E8 — Cierre 1:1 + hardening
 
-- [ ] **E8-01** · [FUNCIONAL][L] Barrido de paridad pantalla-por-pantalla vs checklist (web md vs RN, todos los estados) `[NUEVO-PLAN]`
+- [x] **E8-01** · [FUNCIONAL][L] Barrido de paridad pantalla-por-pantalla vs checklist (web md vs RN, todos los estados) `[NUEVO-PLAN]`
   - Fuentes: NEW (PLAN E8 / AC SPEC) · Deps: E1–E7 cerradas
   - Scope: misma estructura, estados (loading/empty/error/offline) y gating por pantalla. · Verificación: checklist de paridad completado y firmado en QA de cierre.
-- [ ] **E8-02** · [VISUAL][L] Purga de Inter/Montserrat (incremental, finaliza acá; 408 usos/69 archivos)
+- [x] **E8-02** · [VISUAL][L] Purga de Inter/Montserrat (incremental, finaliza acá; 408 usos/69 archivos)
   - Fuentes: G01-D.1 · Deps: E0-D4, re-skins por etapa
   - Scope: purga final de fuentes legacy (venía bajando por etapa). · Verificación: grep = 0 usos de Inter/Montserrat.
-- [ ] **E8-03** · [SEAM][M] Purga final `lib/theme.ts` (objeto legacy) + `db-compat` obsoleto `[NUEVO-PLAN]`
+- [x] **E8-03** · [SEAM][M] Purga final `lib/theme.ts` (objeto legacy) + `db-compat` obsoleto `[NUEVO-PLAN]`
   - Fuentes: NEW (PLAN E8) · Deps: última pantalla migrada
   - Scope: eliminar el shim `lib/theme.ts` y `db-compat` obsoleto. · Verificación: typecheck mobile verde sin el objeto legacy.
-- [ ] **E8-04** · [FUNCIONAL][M] Rendimiento (listas grandes, charts) + accesibilidad básica RN `[NUEVO-PLAN]`
+- [x] **E8-04** · [FUNCIONAL][M] Rendimiento (listas grandes, charts) + accesibilidad básica RN `[NUEVO-PLAN]`
   - Fuentes: NEW (PLAN E8) · Deps: E1–E7
   - Scope: optimizar listas/charts + a11y básica. · Verificación: sin jank en listas grandes; labels/roles básicos presentes.
 - [ ] **E8-05** · [FUNCIONAL][S] Universal links E2E ambos OS (verificación de cierre) `[NUEVO-PLAN]`
   - Fuentes: NEW (PLAN E8; cierra E0-A3/E0-A4) · Deps: E0-A3, E0-A4
   - Scope: E2E de deep/universal links en Android e iOS. · Verificación: ambos OS abren rutas `/c/`+`/invite/` desde link externo.
-- [ ] **E8-06** · [FUNCIONAL][S] Documentación canónica + memoria + regla anti-drift `[NUEVO-PLAN]`
+- [x] **E8-06** · [FUNCIONAL][S] Documentación canónica + memoria + regla anti-drift `[NUEVO-PLAN]`
   - Fuentes: NEW (PLAN E8) · Deps: E8-01
   - Scope: actualizar PROJECT_STRUCTURE, FLOWS_AND_COMPONENTS, TEST_STATUS, AGENTS.md mobile + memoria; agregar regla en CLAUDE.md (features web nuevas nacen con tarea espejo mobile). · Verificación: docs actualizadas; regla anti-drift presente.
 
