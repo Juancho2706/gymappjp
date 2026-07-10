@@ -19,6 +19,7 @@ export const ON_DARK = '#F4F6F8' // --color-text-on-dark (ink-50) — iconos act
 export const ON_DARK_MUTED = '#939DAB' // --color-text-on-dark-muted — iconos secundarios
 export const EMBER_500 = '#FF6A3D' // --color-ember-500 — descanso / hold (anillo)
 export const EMBER_300 = '#FFB199' // --color-ember-300 — eyebrow "Descanso"
+export const EMBER_200 = '#FFD6C7' // --color-ember-200 — icono mute activo (Volume2)
 export const AQUA_500 = '#18ABD4' // --color-aqua-500 — fase recovery del intervalo
 export const SUCCESS_500 = '#1FB877' // --color-success-500 — "¡A entrenar!" / completado
 export const SPORT_300 = '#93BEFF' // --color-sport-300 — fases warmup/cooldown

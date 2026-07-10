@@ -117,6 +117,23 @@ export interface SessionDraft {
 
 const SNAPSHOT_PREFIX = 'eva_workout_session_'
 
+/**
+ * Nombre de la fase activa del programa (semanas de `program_phases` acumuladas vs semana actual).
+ * Espejo exacto de `currentPhaseName` de web (WorkoutExecutionClient.tsx:238-249).
+ */
+function currentPhaseName(
+  phases: { name: string; weeks: number }[] | null | undefined,
+  week: number | null | undefined,
+): string | null {
+  if (!phases?.length || week == null) return null
+  let acc = 0
+  for (const ph of phases) {
+    acc += ph.weeks
+    if (week <= acc) return ph.name
+  }
+  return phases[phases.length - 1]?.name ?? null
+}
+
 export function resolveExercise(block: SessionBlock): SessionExercise | null {
   const ex = block.exercises
   if (!ex) return null
@@ -177,6 +194,8 @@ export interface WorkoutSessionState {
   loading: boolean
   planTitle: string
   programName: string | null
+  /** Nombre de la fase activa del programa (periodización), o null si no aplica. */
+  phaseName: string | null
   activeWeekVariant: string | null
   currentWeek: number | null
   weeksToRepeat: number | null
@@ -214,6 +233,7 @@ export function useWorkoutSession(planId: string): WorkoutSessionState {
   const [loading, setLoading] = useState(true)
   const [planTitle, setPlanTitle] = useState('')
   const [programName, setProgramName] = useState<string | null>(null)
+  const [phaseName, setPhaseName] = useState<string | null>(null)
   const [activeWeekVariant, setActiveWeekVariant] = useState<string | null>(null)
   const [currentWeek, setCurrentWeek] = useState<number | null>(null)
   const [weeksToRepeat, setWeeksToRepeat] = useState<number | null>(null)
@@ -432,15 +452,17 @@ export function useWorkoutSession(planId: string): WorkoutSessionState {
     if (programId) {
       const { data: prog } = await supabase
         .from('workout_programs')
-        .select('name, start_date, weeks_to_repeat, program_structure_type, cycle_length')
+        .select('name, start_date, weeks_to_repeat, program_structure_type, cycle_length, program_phases')
         .eq('id', programId)
         .maybeSingle()
       if (prog) {
+        const week = programWeekIndex1Based(prog as { start_date?: string | null; weeks_to_repeat?: number | null })
         setProgramName((prog as { name?: string | null }).name ?? null)
         setWeeksToRepeat((prog as { weeks_to_repeat?: number | null }).weeks_to_repeat ?? null)
-        setCurrentWeek(programWeekIndex1Based(prog as { start_date?: string | null; weeks_to_repeat?: number | null }))
+        setCurrentWeek(week)
         setProgramStructure((prog as { program_structure_type?: 'weekly' | 'cycle' | null }).program_structure_type ?? null)
         setCycleLength((prog as { cycle_length?: number | null }).cycle_length ?? null)
+        setPhaseName(currentPhaseName((prog as { program_phases?: { name: string; weeks: number }[] | null }).program_phases, week))
       }
     }
 
@@ -626,6 +648,7 @@ export function useWorkoutSession(planId: string): WorkoutSessionState {
     loading,
     planTitle,
     programName,
+    phaseName,
     activeWeekVariant,
     currentWeek,
     weeksToRepeat,

@@ -72,10 +72,12 @@ export function parseRestTime(restTime: string | null | undefined): number {
   return match ? parseInt(match[1], 10) : 0
 }
 
-/** mm:ss desde segundos (cronómetro de sesión). */
+/** mm:ss desde segundos (cronómetro de sesión); desde 1h rueda a H:MM:SS (ej. "1:05:32"). */
 export function fmtElapsed(totalSec: number): string {
-  const m = Math.floor(totalSec / 60)
+  const h = Math.floor(totalSec / 3600)
+  const m = Math.floor((totalSec % 3600) / 60)
   const s = totalSec % 60
+  if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
   return `${m}:${String(s).padStart(2, '0')}`
 }
 

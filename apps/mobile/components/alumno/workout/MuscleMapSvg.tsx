@@ -1,5 +1,5 @@
-import { useMemo } from 'react'
-import { View, Text } from 'react-native'
+import { useEffect, useMemo, useRef } from 'react'
+import { Animated, View, Text } from 'react-native'
 import Svg, { G, Path, Text as SvgText } from 'react-native-svg'
 import {
   BODY_SHAPES,
@@ -40,6 +40,10 @@ const REGION_LABEL: Record<MuscleRegion, string> = {
 }
 
 const REGION_ORDER = Object.keys(REGION_LABEL) as MuscleRegion[]
+const REGION_INDEX = Object.fromEntries(REGION_ORDER.map((r, i) => [r, i])) as Record<MuscleRegion, number>
+
+// <G> animable para el fade escalonado de cada región encendida (paridad con el web framer-motion).
+const AnimatedG = Animated.createAnimatedComponent(G)
 
 // Alfa por nivel de intensidad (1 = menos, 4 = más) — mismos valores que el web.
 const TIER_ALPHA: Record<1 | 2 | 3 | 4, number> = { 1: 0.18, 2: 0.38, 3: 0.62, 4: 0.92 }
@@ -84,16 +88,55 @@ export interface MuscleMapSvgProps {
    * el proxy de movilidad/roller (cardio excluido), de modo que la intensidad es RELATIVA, no kg.
    */
   groups: { group: string; vol: number }[]
+  /** Salta el fade escalonado de entrada (accesibilidad; espejo del web). */
+  reducedMotion?: boolean | null
 }
 
-export function MuscleMapSvg({ groups }: MuscleMapSvgProps) {
+export function MuscleMapSvg({ groups, reducedMotion }: MuscleMapSvgProps) {
   const { theme } = useTheme()
   const brand = theme.primary
   const intensity = useMemo(() => muscleGroupsToRegionIntensity(groups), [groups])
 
+  // Una opacidad animada por región (9 fijas → hooks estables). Sólo las encendidas animan; las
+  // neutras se dibujan siempre visibles. Delay escalonado 0.16s + 0.05s·litIndex en orden REGION_ORDER
+  // (idéntico al `litIndex++` del web). Reduced-motion: opacidad 1 directa, sin timing.
+  const opacities = useRef(REGION_ORDER.map(() => new Animated.Value(reducedMotion ? 1 : 0))).current
+
+  const litRegions = useMemo(
+    () => REGION_ORDER.filter((r) => tierOf(intensity[r]) > 0),
+    [intensity],
+  )
+
+  useEffect(() => {
+    if (reducedMotion) {
+      litRegions.forEach((r) => opacities[REGION_INDEX[r]].setValue(1))
+      return
+    }
+    const anims = litRegions.map((r, litIndex) => {
+      const av = opacities[REGION_INDEX[r]]
+      av.setValue(0)
+      return Animated.timing(av, {
+        toValue: 1,
+        duration: 360,
+        delay: (0.16 + 0.05 * litIndex) * 1000,
+        useNativeDriver: false,
+      })
+    })
+    Animated.parallel(anims).start()
+  }, [litRegions, reducedMotion, opacities])
+
+  const ariaLabel =
+    litRegions.length > 0
+      ? `Músculos trabajados: ${litRegions
+          .slice()
+          .sort((a, b) => intensity[b] - intensity[a])
+          .map((r) => REGION_LABEL[r])
+          .join(', ')}`
+      : 'Músculos trabajados'
+
   return (
-    <View testID="muscle-map">
-      <Svg viewBox={BODY_VIEWBOX} width="100%" height={240} preserveAspectRatio="xMidYMid meet">
+    <View testID="muscle-map" accessibilityRole="image" accessibilityLabel={ariaLabel}>
+      <Svg viewBox={BODY_VIEWBOX} width="100%" height={260} preserveAspectRatio="xMidYMid meet">
         {/* Cuerpo base neutro (cuello / cabeza / manos / rodillas / tobillos / pies). */}
         <G fill={NEUTRAL_FILL} stroke={NEUTRAL_STROKE} strokeWidth={2}>
           {NEUTRAL_SHAPES.map((s, i) => (
@@ -120,11 +163,19 @@ export function MuscleMapSvg({ groups }: MuscleMapSvgProps) {
           const stroke = isMax ? withAlpha(brand, 1) : withAlpha(brand, 0.45)
           const strokeWidth = isMax ? 6 : 2
           return (
-            <G key={region} fill={fill} stroke={stroke} strokeWidth={strokeWidth}>
+            <AnimatedG
+              key={region}
+              opacity={opacities[REGION_INDEX[region]]}
+              fill={fill}
+              stroke={stroke}
+              strokeWidth={strokeWidth}
+              accessibilityRole="image"
+              accessibilityLabel={`${REGION_LABEL[region]}, intensidad ${litTier} de 4`}
+            >
               {shapes.map((s, i) => (
                 <Path key={i} d={s.d} />
               ))}
-            </G>
+            </AnimatedG>
           )
         })}
 
@@ -138,7 +189,7 @@ export function MuscleMapSvg({ groups }: MuscleMapSvgProps) {
 
       {/* Leyenda de niveles (menos → más). El último lleva anillo = nivel máximo (stroke). */}
       <View style={{ marginTop: 4, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-        <Text style={{ fontFamily: FONT.uiBold, fontSize: 10, letterSpacing: 1, color: LABEL_FILL, textTransform: 'uppercase' }}>Menos</Text>
+        <Text style={{ fontFamily: FONT.ui, fontSize: 10, letterSpacing: 1, color: LABEL_FILL, textTransform: 'uppercase' }}>Menos</Text>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
           {([1, 2, 3, 4] as const).map((lvl) => (
             <View
@@ -154,7 +205,7 @@ export function MuscleMapSvg({ groups }: MuscleMapSvgProps) {
             />
           ))}
         </View>
-        <Text style={{ fontFamily: FONT.uiBold, fontSize: 10, letterSpacing: 1, color: LABEL_FILL, textTransform: 'uppercase' }}>Más</Text>
+        <Text style={{ fontFamily: FONT.ui, fontSize: 10, letterSpacing: 1, color: LABEL_FILL, textTransform: 'uppercase' }}>Más</Text>
       </View>
     </View>
   )

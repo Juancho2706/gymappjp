@@ -1,34 +1,64 @@
-import { useEffect, useMemo, useState } from 'react'
-import { Modal, Pressable, Text, View } from 'react-native'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { Modal, Pressable, Text, View, type TextStyle } from 'react-native'
+import { MotiView } from 'moti'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { ChevronLeft } from 'lucide-react-native'
-import type { OptimisticLogPayload } from '@eva/workout-engine'
-import { TYPE } from '../../../lib/typography'
+import { ArrowLeft, ArrowRight, Check, X } from 'lucide-react-native'
+import {
+  appendKeypadDecimal,
+  appendKeypadDigit,
+  applyKeypadIncrement,
+  formatWeightEsCl,
+  keypadBackspace,
+  type OptimisticLogPayload,
+} from '@eva/workout-engine'
+import { useTheme } from '@/context/ThemeContext'
+import { FONT, TYPE, textStyle } from '../../../lib/typography'
+import { shadow } from '../../../lib/shadows'
+import { haptics } from '../../../lib/haptics'
 // Routing PURO tipo->campos (fix QA R4·#5): fuente única de la secuencia de pasos del teclado.
-import { keypadStepsForTarget, type KeypadTarget } from './keypad-flow'
+import { keypadStepsForTarget, type KeypadStep, type KeypadTarget } from './keypad-flow'
 // Mapeo PURO valores->payload, compartido con la `ActiveSetRow` (sin drift entre superficies).
-import { num, int, typedLogValues } from './set-log-payload'
-// Contrato de la ola (otro worker): teclado tipado + selector de esfuerzo. Se importan asumiendo la
-// firma exacta del contrato; el orquestador integra. NO stubear.
-import { TypedKeypad, EffortScale } from './TypedKeypad'
+import { buildStrengthPayload, buildTypedPayload, int } from './set-log-payload'
+// Primitivas presentacionales + paso de esfuerzo, compartidas con la `ActiveSetRow` (sin duplicar).
+import {
+  EffortField,
+  KeypadDisplayRow,
+  KeypadGrid,
+  RIR_HELP,
+  RPE_HELP,
+  WeightChips,
+} from './TypedKeypad'
 
 const ON_DARK = '#F4F6F8'
+const ON_DARK_MUTED = '#939DAB'
+const WHITE = '#FFFFFF'
+
+// Cifras tabulares para el objetivo / "Última vez" (mirror `tabular-nums` web del header del keypad).
+const TABULAR: TextStyle = { fontVariant: ['tabular-nums', 'lining-nums'] }
+const OBJECTIVE_STYLE: TextStyle = { ...textStyle('xs', FONT.monoMedium), ...TABULAR }
+const LASTVEZ_STYLE: TextStyle = { ...textStyle('3xs', FONT.mono), ...TABULAR }
 
 // El tipo `KeypadTarget` vive en `keypad-flow` (puro/testeable); se re-exporta para los consumidores
 // que ya lo importaban desde acá (ExecutorV2) sin tocar sus imports.
 export type { KeypadTarget } from './keypad-flow'
 
+/** Paso de campo (excluye el paso de esfuerzo) — cada uno es una pestaña del display. */
+type KeypadFieldStep = Extract<KeypadStep, { kind: 'keypad' }>
+
 /**
- * Host del teclado tipado (mobile). Orquesta la secuencia de registro de una serie montando el
- * `TypedKeypad` (numérico) o el `EffortScale` (dots) del contrato dentro de un panel inferior propio.
+ * Host del teclado numérico custom (mobile) — espejo del `NumericKeypadSheet` + `WorkoutKeypadProvider`
+ * de web (`apps/web/.../workout/[planId]`). UNA sola hoja inferior con:
+ *  - Header de objetivo SIEMPRE visible (DB-5): ejercicio, "Objetivo {sets}×{reps} · {peso} kg" y
+ *    "Última vez {peso}kg × {reps}", todo en es-CL (coma decimal) via `formatWeightEsCl`.
+ *  - Fase de captura: display con PESTAÑAS de campo (peso↔reps / min↔metros↔FC …) — el alumno salta
+ *    entre campos sin wizard —, chips de incremento (sólo peso) + paso configurable, grid 3×4 y un
+ *    ÚNICO botón primario (Siguiente / Listo).
+ *  - Fase de esfuerzo (sólo fuerza, opcional): AMBAS escalas RPE y RIR (ScaleDots) con ayuda 1-tap,
+ *    y botones Omitir / Listo (ambos guardan; el esfuerzo es saltable).
  *
- * Dos flujos según el bloque:
- *  - Strength: peso → reps → (esfuerzo RPE/RIR opcional).
- *  - Tipado (cardio/movilidad/roller): recorre los `typedKeypadFields` del modo (min/metros/FC ·
- *    hold · segundos/pasadas) y arma el payload con las columnas `actual_*`/`reps_done`.
- *
- * El commit arma el `OptimisticLogPayload` y lo entrega al padre; el draft se reporta en cada cambio
- * para la resiliencia (E2-03).
+ * El valor lo posee este host (`values`, string es-CL); el commit arma el `OptimisticLogPayload` con
+ * los builders puros (`buildStrengthPayload`/`buildTypedPayload`, compartidos con `ActiveSetRow`) y lo
+ * entrega al padre. El draft se reporta en cada cambio para la resiliencia (E2-03).
  */
 export function KeypadHost({
   target,
@@ -42,141 +72,303 @@ export function KeypadHost({
   onDraftChange: (values: Record<string, string>, fieldIndex: number) => void
 }) {
   const insets = useSafeAreaInsets()
+  const { resolvedScheme } = useTheme()
   const [values, setValues] = useState<Record<string, string>>({})
-  const [fieldIndex, setFieldIndex] = useState(0)
+  const valuesRef = useRef(values)
+  valuesRef.current = values
+  const [activeKey, setActiveKey] = useState('')
+  const [phase, setPhase] = useState<'input' | 'effort'>('input')
 
   // Secuencia de pasos según el tipo del bloque (routing puro compartido con `openSet`).
   const steps = useMemo(() => keypadStepsForTarget(target), [target])
+  // Los campos son las pestañas del display; el esfuerzo es una FASE aparte (no una pestaña).
+  const fields = useMemo(() => steps.filter((s): s is KeypadFieldStep => s.kind === 'keypad'), [steps])
+  const hasEffort = steps.some((s) => s.kind === 'effort')
 
-  // (Re)inicializa al abrir un target: valores iniciales (draft/autofill) o prefill de peso sugerido.
+  // (Re)inicializa al abrir un target: valores iniciales (draft/autofill) o prefill de peso sugerido
+  // (en es-CL, mismo formato que la `ActiveSetRow`). Arranca en el campo tocado (draft) o el primero.
   useEffect(() => {
     if (!target) return
     const seed: Record<string, string> =
       target.initialValues ??
-      (target.typed ? {} : { weight: target.suggestedWeight != null ? String(target.suggestedWeight) : '' })
+      (target.typed
+        ? {}
+        : { weight: target.suggestedWeight != null ? formatWeightEsCl(target.suggestedWeight) : '' })
+    valuesRef.current = seed
     setValues(seed)
-    setFieldIndex(target.initialFieldIndex ?? 0)
-  }, [target])
+    setActiveKey(fields[target.initialFieldIndex ?? 0]?.key ?? fields[0]?.key ?? '')
+    setPhase('input')
+  }, [target, fields])
 
-  if (!target || steps.length === 0) return null
+  if (!target || fields.length === 0) return null
 
-  const idx = Math.min(fieldIndex, steps.length - 1)
-  const current = steps[idx]
+  const activeIndex = Math.max(0, fields.findIndex((f) => f.key === activeKey))
+  const activeField = fields[activeIndex]
+  const isLastField = activeIndex === fields.length - 1
+  const primaryIsNext = !isLastField || hasEffort
+  const allowDecimal = activeField.mode === 'weight' || activeField.mode === 'decimal'
+  const showChips = activeField.mode === 'weight'
 
-  const update = (next: Record<string, string>, i: number) => {
+  // ── Mutación del valor (write-through al draft), mirror del provider web ──────
+  const patch = (p: Record<string, string>, idx: number) => {
+    const next = { ...valuesRef.current, ...p }
+    valuesRef.current = next
     setValues(next)
-    onDraftChange(next, i)
+    onDraftChange(next, idx)
+  }
+  const activeVal = () => valuesRef.current[activeField.key] ?? ''
+  const writeActive = (nextValue: string) => patch({ [activeField.key]: nextValue }, activeIndex)
+
+  const onDigit = (d: string) => {
+    haptics.select()
+    writeActive(appendKeypadDigit(activeVal(), d, { allowDecimal }))
+  }
+  const onDecimal = () => {
+    if (!allowDecimal) return
+    haptics.select()
+    writeActive(appendKeypadDecimal(activeVal()))
+  }
+  const onBackspace = () => {
+    haptics.tap()
+    writeActive(keypadBackspace(activeVal()))
+  }
+  const onClear = () => {
+    haptics.tap()
+    writeActive('')
+  }
+  const onIncrement = (delta: number) => {
+    haptics.select()
+    writeActive(applyKeypadIncrement(activeVal(), delta))
+  }
+  const onSwitchField = (key: string) => {
+    haptics.select()
+    setActiveKey(key)
+    setPhase('input')
+  }
+  const onEffortBack = () => {
+    haptics.tap()
+    setPhase('input')
   }
 
   const commit = () => {
-    if (target.typed) {
-      const { actualDurationSec, actualDistanceM, actualHoldSec, actualAvgHr, repsDone } = typedLogValues(
-        target.typed.mode,
-        values,
-      )
-      onCommit({
-        blockId: target.blockId,
-        setNumber: target.setNumber,
-        weightKg: null,
-        repsDone,
-        rpe: null,
-        rir: null,
-        actualDurationSec,
-        actualDistanceM,
-        actualHoldSec,
-        actualAvgHr,
-      })
-      return
-    }
-    onCommit({
-      blockId: target.blockId,
-      setNumber: target.setNumber,
-      weightKg: num(values.weight),
-      repsDone: int(values.reps),
-      rpe: target.effortKind === 'rpe' ? int(values.effort) : null,
-      rir: target.effortKind === 'rir' ? int(values.effort) : null,
-    })
+    const v = valuesRef.current
+    const payload = target.typed
+      ? buildTypedPayload(target.typed.mode, v, target.blockId, target.setNumber)
+      : buildStrengthPayload(v, target.blockId, target.setNumber)
+    onCommit(payload)
   }
 
+  // "Siguiente": avanza de campo → entra a esfuerzo → guarda (mirror `WorkoutKeypadProvider:253-271`).
   const goNext = () => {
-    if (idx + 1 >= steps.length) {
+    if (phase === 'effort') {
       commit()
       return
     }
-    setFieldIndex(idx + 1)
+    if (!isLastField) {
+      onSwitchField(fields[activeIndex + 1].key)
+      return
+    }
+    if (hasEffort) {
+      haptics.tap()
+      setPhase('effort')
+      return
+    }
+    commit()
   }
-  const goBack = () => setFieldIndex((i) => Math.max(0, i - 1))
 
-  const objective = target.typed
-    ? target.typed.objective || '—'
-    : `${target.targetSets ?? '—'}×${target.targetReps || '—'}${target.suggestedWeight != null ? ` · ${target.suggestedWeight} kg` : ''}`
-  const lastPrevLabel =
-    !target.typed && target.lastPrev && (target.lastPrev.weightKg != null || target.lastPrev.reps != null)
-      ? `${target.lastPrev.weightKg != null ? `${target.lastPrev.weightKg} kg` : '–'} × ${target.lastPrev.reps ?? '–'}`
-      : null
+  // ── Header de objetivo (es-CL) ───────────────────────────────────────────────
+  const objectiveLine = (() => {
+    if (target.typed) return target.typed.objective
+    const parts: string[] = []
+    if (target.targetSets != null && target.targetReps) parts.push(`${target.targetSets}×${target.targetReps}`)
+    else if (target.targetReps) parts.push(`${target.targetReps} reps`)
+    if (target.suggestedWeight != null) parts.push(`${formatWeightEsCl(target.suggestedWeight)} kg`)
+    return parts.join(' · ')
+  })()
+  const lastPrev = !target.typed ? target.lastPrev ?? null : null
+  const hasLast = lastPrev != null && (lastPrev.weightKg != null || lastPrev.reps != null)
+
+  const panelShadow = { ...shadow('xl', resolvedScheme), shadowOffset: { width: 0, height: -16 } }
 
   return (
-    <Modal visible transparent animationType="slide" onRequestClose={onClose}>
-      <View className="flex-1 justify-end" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
-        <Pressable className="flex-1" onPress={onClose} accessibilityLabel="Cerrar teclado" />
-        <View
-          className="rounded-t-sheet border-t border-inverse/50 bg-ink-900 px-4 pt-3"
-          style={{ paddingBottom: insets.bottom + 12 }}
-        >
-          <View className="mb-2 items-center">
-            <View className="h-1 w-10 rounded-pill bg-white/15" />
-          </View>
+    <Modal transparent visible animationType="none" statusBarTranslucent onRequestClose={onClose}>
+      <View className="flex-1 justify-end">
+        {/* Scrim: tap-fuera cierra (no guarda). Fade 0→1 (mirror `NumericKeypadSheet:169-178`). */}
+        <MotiView from={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ type: 'timing', duration: 150 }} className="flex-1">
+          <Pressable className="flex-1 bg-black/25" onPress={onClose} accessibilityRole="button" accessibilityLabel="Cerrar teclado" />
+        </MotiView>
 
-          <View className="mb-3 flex-row items-center gap-2">
-            {idx > 0 && (
-              <Pressable testID="keypad-back" onPress={goBack} hitSlop={8} className="h-9 w-9 items-center justify-center rounded-control bg-white/[0.06]">
-                <ChevronLeft size={18} color={ON_DARK} />
+        {/* Panel: dark siempre (ink-950), aparece con spring (springsSheet.enter web). */}
+        <MotiView from={{ translateY: 360 }} animate={{ translateY: 0 }} transition={{ type: 'spring', stiffness: 320, damping: 34, mass: 0.9 }}>
+          <View
+            accessibilityLabel="Teclado numérico"
+            className="mx-auto w-full max-w-md rounded-t-sheet border-t border-inverse/10 bg-ink-950 px-3 pt-2"
+            style={[{ paddingBottom: insets.bottom + 8 }, panelShadow]}
+          >
+            {/* Grabber + cerrar */}
+            <View className="items-center justify-center pb-1">
+              <View className="h-1 w-10 rounded-pill bg-white/20" />
+              <Pressable
+                onPress={onClose}
+                accessibilityRole="button"
+                accessibilityLabel="Cerrar teclado"
+                className="absolute right-0 top-0 h-8 w-8 items-center justify-center rounded-pill"
+              >
+                <X size={16} color={ON_DARK_MUTED} />
               </Pressable>
-            )}
-            <View className="min-w-0 flex-1">
-              <Text style={TYPE.eyebrow} className="text-on-dark-muted" numberOfLines={1}>
-                Serie {target.setNumber} · objetivo {objective}
-              </Text>
-              <Text className="font-display-bold text-[16px] text-on-dark" numberOfLines={1}>{target.exerciseName}</Text>
-              {lastPrevLabel && (
-                <Text style={TYPE.mono} className="text-[11px] text-on-dark-muted" numberOfLines={1}>Última vez {lastPrevLabel}</Text>
-              )}
             </View>
-          </View>
 
-          {current.kind === 'effort' && target.effortKind ? (
-            <View className="gap-4 pb-2">
-              <Text style={TYPE.label} className="text-on-dark">
-                {target.effortKind === 'rir' ? 'RIR (reps en reserva)' : 'RPE (esfuerzo percibido)'}
-              </Text>
-              <EffortScale
-                kind={target.effortKind}
-                value={int(values.effort)}
-                onSelect={(v: number) => update({ ...values, effort: String(v) }, idx)}
-              />
-              <View className="flex-row gap-2">
-                <Pressable testID="keypad-skip-effort" onPress={commit} className="h-12 flex-1 items-center justify-center rounded-control border border-inverse/50">
-                  <Text style={TYPE.label} className="text-on-dark-muted">Omitir</Text>
-                </Pressable>
-                <Pressable testID="keypad-save-set" onPress={commit} className="h-12 flex-1 items-center justify-center rounded-control bg-sport-500">
-                  <Text style={TYPE.label} className="text-on-sport">Guardar serie</Text>
-                </Pressable>
+            {/* Objetivo prescrito — SIEMPRE visible (DB-5) */}
+            <View className="flex-row items-baseline justify-between gap-2 px-1">
+              <View className="min-w-0 flex-1">
+                {target.exerciseName ? (
+                  <Text style={TYPE.eyebrow} className="text-on-dark-muted" numberOfLines={1}>
+                    {target.exerciseName}
+                  </Text>
+                ) : null}
+                {objectiveLine ? (
+                  <Text style={OBJECTIVE_STYLE} className="text-on-dark" numberOfLines={1}>
+                    <Text className="text-on-dark-muted">Objetivo </Text>
+                    {objectiveLine}
+                  </Text>
+                ) : null}
               </View>
+              {hasLast ? (
+                <Text style={LASTVEZ_STYLE} className="shrink-0 text-on-dark-muted" numberOfLines={1}>
+                  Última vez{' '}
+                  <Text style={{ fontFamily: FONT.monoBold }} className="text-on-dark">
+                    {lastPrev!.weightKg != null ? `${formatWeightEsCl(lastPrev!.weightKg)}kg` : '–'}
+                    {' × '}
+                    {lastPrev!.reps ?? '–'}
+                  </Text>
+                </Text>
+              ) : null}
             </View>
-          ) : current.kind === 'keypad' ? (
-            <View className="pb-1">
-              <Text style={TYPE.label} className="mb-2 text-on-dark">{current.label}</Text>
-              <TypedKeypad
-                mode={current.mode}
-                unit={current.unit}
-                value={values[current.key] ?? ''}
-                onChange={(v: string) => update({ ...values, [current.key]: v }, idx)}
-                onNext={goNext}
-                onDone={commit}
-              />
-            </View>
-          ) : null}
-        </View>
+
+            {phase === 'effort' ? (
+              /* ── Paso OPCIONAL de esfuerzo (RPE/RIR) — sólo fuerza, siempre saltable (DB-5) ── */
+              <View className="mt-2">
+                <View className="mb-2 flex-row items-center justify-between px-1">
+                  <Text style={TYPE.eyebrow} className="text-on-dark-muted">
+                    Esfuerzo <Text className="text-on-dark-muted/60">(opcional)</Text>
+                  </Text>
+                  <Pressable
+                    onPress={onEffortBack}
+                    accessibilityRole="button"
+                    accessibilityLabel="Volver a los números"
+                    className="flex-row items-center gap-1 rounded-control px-2 py-1"
+                  >
+                    <ArrowLeft size={14} color={ON_DARK_MUTED} />
+                    <Text style={textStyle('3xs', FONT.uiSemibold)} className="text-on-dark-muted">
+                      Volver
+                    </Text>
+                  </Pressable>
+                </View>
+
+                <View className="gap-3 rounded-control border border-inverse/10 bg-white/[0.03] p-3">
+                  <EffortField
+                    kind="rpe"
+                    label="Esfuerzo · RPE"
+                    help={RPE_HELP}
+                    value={int(values.rpe)}
+                    onSelect={(v) => patch({ rpe: String(v) }, activeIndex)}
+                  />
+                  <EffortField
+                    kind="rir"
+                    label="Reps en reserva · RIR"
+                    help={RIR_HELP}
+                    value={int(values.rir)}
+                    onSelect={(v) => patch({ rir: String(v) }, activeIndex)}
+                  />
+                </View>
+
+                {/* Acciones — ambas guardan la serie (el esfuerzo es opcional) */}
+                <View className="mt-2 flex-row gap-2">
+                  <Pressable
+                    testID="keypad-skip-effort"
+                    onPress={commit}
+                    accessibilityRole="button"
+                    accessibilityLabel="Omitir el esfuerzo y guardar la serie"
+                    className="h-14 flex-1 items-center justify-center rounded-control border border-inverse/10 bg-white/[0.06] active:bg-white/[0.10]"
+                  >
+                    <Text style={TYPE.label} className="text-on-dark">
+                      Omitir
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    testID="keypad-save-set"
+                    onPress={commit}
+                    accessibilityRole="button"
+                    accessibilityLabel="Listo, guardar serie"
+                    className="h-14 flex-row items-center justify-center gap-2 rounded-control bg-sport-500 active:opacity-90"
+                    style={{ flex: 1.4 }}
+                  >
+                    <Check size={20} color={WHITE} />
+                    <Text style={TYPE.label} className="text-white">
+                      Listo
+                    </Text>
+                  </Pressable>
+                </View>
+              </View>
+            ) : (
+              /* ── Fase de captura numérica ── */
+              <>
+                <View className="mt-2">
+                  <KeypadDisplayRow
+                    display={activeVal()}
+                    unit={activeField.unit}
+                    tabs={
+                      fields.length > 1
+                        ? {
+                            fields: fields.map((f) => ({ key: f.key, label: f.label })),
+                            activeKey: activeField.key,
+                            onSwitch: onSwitchField,
+                          }
+                        : undefined
+                    }
+                  />
+                </View>
+
+                {showChips ? <WeightChips onIncrement={onIncrement} /> : null}
+
+                <KeypadGrid
+                  allowDecimal={allowDecimal}
+                  onDigit={onDigit}
+                  onDecimal={onDecimal}
+                  onBackspace={onBackspace}
+                  onClear={onClear}
+                />
+
+                {/* Acción — un ÚNICO botón: "Siguiente" avanza; "Listo" guarda (mirror web §5.4) */}
+                <View className="mt-2">
+                  <Pressable
+                    testID={primaryIsNext ? 'keypad-next' : 'keypad-done'}
+                    onPress={goNext}
+                    accessibilityRole="button"
+                    accessibilityLabel={primaryIsNext ? 'Siguiente' : 'Listo, guardar serie'}
+                    className="h-14 w-full flex-row items-center justify-center gap-2 rounded-control bg-sport-500 active:opacity-90"
+                  >
+                    {primaryIsNext ? (
+                      <>
+                        <Text style={TYPE.label} className="text-white">
+                          Siguiente
+                        </Text>
+                        <ArrowRight size={20} color={WHITE} />
+                      </>
+                    ) : (
+                      <>
+                        <Check size={20} color={WHITE} />
+                        <Text style={TYPE.label} className="text-white">
+                          Listo
+                        </Text>
+                      </>
+                    )}
+                  </Pressable>
+                </View>
+              </>
+            )}
+          </View>
+        </MotiView>
       </View>
     </Modal>
   )

@@ -21,4 +21,4 @@ export {
   subscribeRestTimerPrefs,
   type TimerSound,
 } from './rest-timer-preferences'
-export { registerTimerCue, primeTimerAudio, type TimerCueKind } from './sound'
+export { registerTimerCue, registerTimerSound, primeTimerAudio, type TimerCueKind } from './sound'

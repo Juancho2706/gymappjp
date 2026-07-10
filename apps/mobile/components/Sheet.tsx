@@ -64,6 +64,13 @@ export interface SheetProps extends OverlayCommonProps {
   showHandle?: boolean
   /** Wrap children in an internal scroll view. Default true. */
   scrollable?: boolean
+  /**
+   * Force the dark chrome (surface `ink-950`, `border-inverse`, on-dark handle/close)
+   * regardless of the active theme. For overlays that must read dark on top of an
+   * always-dark screen (e.g. the workout executor) — mirrors the web sheets that pin
+   * `bg-[var(--ink-950)] text-on-dark` in both light and dark. Default false (theme-aware).
+   */
+  forceDark?: boolean
 }
 
 const TITLE_STYLE = { ...textStyle('lg', FONT.displayBold, { lh: 'snug', ls: 'tighter' }), textTransform: 'uppercase' as const }
@@ -79,6 +86,7 @@ export function Sheet({
   scrollable = true,
   showHandle = true,
   snapPoints = DEFAULT_SNAP,
+  forceDark = false,
   children,
 }: SheetProps) {
   const { resolvedScheme } = useTheme()
@@ -128,10 +136,13 @@ export function Sheet({
       handleComponent={null}
     >
       {/* Surface rendered by us so DS tokens (not @gorhom style props) own the color. */}
-      <View className="flex-1 rounded-t-sheet border-t border-subtle bg-surface-card" style={shadow('lg', resolvedScheme)}>
+      <View
+        className={`flex-1 rounded-t-sheet border-t ${forceDark ? 'border-inverse bg-ink-950' : 'border-subtle bg-surface-card'}`}
+        style={shadow('lg', resolvedScheme)}
+      >
         {showHandle ? (
           <View className="items-center pt-space-3">
-            <View className="h-1 w-10 rounded-pill bg-ink-300 dark:bg-ink-600" />
+            <View className={`h-1 w-10 rounded-pill ${forceDark ? 'bg-white/15' : 'bg-ink-300 dark:bg-ink-600'}`} />
           </View>
         ) : null}
 
@@ -163,9 +174,9 @@ export function Sheet({
             activeOpacity={0.7}
             accessibilityRole="button"
             accessibilityLabel="Cerrar"
-            className="absolute right-space-5 top-space-4 h-8 w-8 items-center justify-center rounded-pill border border-subtle bg-surface-sunken"
+            className={`absolute right-space-5 top-space-4 h-8 w-8 items-center justify-center rounded-pill border ${forceDark ? 'border-inverse bg-white/5' : 'border-subtle bg-surface-sunken'}`}
           >
-            <X className="text-muted" size={16} strokeWidth={2.4} />
+            <X className={forceDark ? 'text-on-dark' : 'text-muted'} size={16} strokeWidth={2.4} />
           </TouchableOpacity>
         ) : null}
       </View>

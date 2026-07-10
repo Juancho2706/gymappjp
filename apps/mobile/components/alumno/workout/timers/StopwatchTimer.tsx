@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { AppState, Pressable, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { MotiView } from 'moti'
 import { Flag, Pause, Play, RotateCcw, X } from 'lucide-react-native'
+import { useEvaMotion, EASE } from '../../../../lib/motion'
+import { useTheme } from '../../../../context/ThemeContext'
 import { TYPE, textStyle, FONT } from '../../../../lib/typography'
 import { SHADOWS } from '../../../../lib/shadows'
 import { haptics } from '../../../../lib/haptics'
@@ -12,6 +15,10 @@ import { INK_900, ON_DARK, ON_DARK_MUTED, TRACK_ON_DARK } from './timer-colors'
  * continuo / por distancia (bloques sin duración cronometrable). Background-safe:
  * el transcurrido se calcula desde `startRef` (Date.now()) + `accumulatedRef`, no
  * acumulando ticks; AppState fuerza el recompute al volver de background.
+ *
+ * Toast flotante top-anclado con entrada slide-down + fade (200ms, respeta
+ * reduce-motion). No emite cue de audio ni háptica de EVENTO (nunca "termina"
+ * solo); solo háptica ligera de feedback al pulsar sus botones (idiom RN).
  */
 interface StopwatchTimerProps {
   onClose: () => void
@@ -28,6 +35,8 @@ function formatTime(s: number): string {
 
 export function StopwatchTimer({ onClose }: StopwatchTimerProps) {
   const insets = useSafeAreaInsets()
+  const motion = useEvaMotion()
+  const { theme } = useTheme()
   const [elapsed, setElapsed] = useState(0)
   const [isActive, setIsActive] = useState(true)
   const [laps, setLaps] = useState<number[]>([])
@@ -80,9 +89,15 @@ export function StopwatchTimer({ onClose }: StopwatchTimerProps) {
   return (
     <View
       pointerEvents="box-none"
-      style={[styles.anchor, { top: insets.top + 12, left: insets.left + 12, right: insets.right + 12 }]}
+      style={[styles.anchor, { top: insets.top + 100, left: insets.left + 12, right: insets.right + 12 }]}
     >
-      <View style={[styles.card, SHADOWS.dark.lg]} accessibilityRole="timer">
+      <MotiView
+        style={[styles.card, SHADOWS.dark.lg, { borderRadius: theme.radius['2xl'] }]}
+        accessibilityRole="timer"
+        from={motion.reduced ? undefined : { opacity: 0, translateY: -24 }}
+        animate={{ opacity: 1, translateY: 0 }}
+        transition={{ type: 'timing', duration: motion.reduced ? 0 : 200, easing: EASE.out }}
+      >
         <View style={styles.row}>
           <View style={styles.info}>
             <Text style={styles.eyebrow}>Cronómetro</Text>
@@ -142,15 +157,14 @@ export function StopwatchTimer({ onClose }: StopwatchTimerProps) {
             ))}
           </View>
         ) : null}
-      </View>
+      </MotiView>
     </View>
   )
 }
 
 const styles = StyleSheet.create({
-  anchor: { position: 'absolute', maxWidth: 340, alignSelf: 'flex-end', width: '100%' },
+  anchor: { position: 'absolute' },
   card: {
-    borderRadius: 22,
     borderWidth: 1,
     borderColor: TRACK_ON_DARK,
     backgroundColor: `${INK_900}F2`,

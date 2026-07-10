@@ -17,7 +17,7 @@
  * sonido bundleado (p.ej. `assets/audio/rest-alarm.m4a`) registrado al arrancar.
  * Sin (b) no hay fuente que reproducir aunque (a) exista — por eso es no-op.
  */
-import { isRestTimerMuted, getRestTimerVolume } from './rest-timer-preferences'
+import { isRestTimerMuted, getRestTimerVolume, getRestTimerSound, type TimerSound } from './rest-timer-preferences'
 
 /** Superficie mínima de expo-audio que usamos (tipada acá para no exigir sus tipos pre-install). */
 interface AudioPlayerLike {
@@ -44,14 +44,26 @@ try {
 
 export type TimerCueKind = 'tick' | 'alarm' | 'done' | 'phase' | 'finish'
 
-// Assets de cue registrados (require('...') → number, o { uri }). Vacío hasta
-// que la integración bundlee sonidos. Un player por cue (reutilizado con seekTo).
-const cueSources: Partial<Record<TimerCueKind, number | { uri: string }>> = {}
-const players: Partial<Record<TimerCueKind, AudioPlayerLike>> = {}
+type CueSource = number | { uri: string }
 
-/** Registra el asset de un cue (llamar al arrancar la app tras instalar expo-audio). */
-export function registerTimerCue(kind: TimerCueKind, source: number | { uri: string }): void {
+// Assets de cue registrados (require('...') → number, o { uri }). Vacío hasta
+// que la integración bundlee sonidos. Un player por fuente (reutilizado con seekTo).
+const cueSources: Partial<Record<TimerCueKind, CueSource>> = {}
+// Assets de la ALARMA por timbre (`TimerSound`): espejo de los 4 timbres web
+// (digital/bell/classic/boxing). `playTimerCue('alarm')` resuelve la fuente vía
+// `getRestTimerSound()`, así elegir un sonido en ajustes CAMBIA el audio (paridad
+// con `playTimerSound(readRestTimerSound())` web). Vacío hasta bundlear los assets.
+const soundAssets: Partial<Record<TimerSound, CueSource>> = {}
+const players: Record<string, AudioPlayerLike> = {}
+
+/** Registra el asset de un cue genérico (tick/done/phase/finish). */
+export function registerTimerCue(kind: TimerCueKind, source: CueSource): void {
   cueSources[kind] = source
+}
+
+/** Registra el asset de la alarma para un timbre concreto (digital/bell/classic/boxing). */
+export function registerTimerSound(sound: TimerSound, source: CueSource): void {
+  soundAssets[sound] = source
 }
 
 /**
@@ -81,13 +93,17 @@ export function primeTimerAudio(): void {
 export function playTimerCue(kind: TimerCueKind): void {
   if (isRestTimerMuted()) return
   const mod = ExpoAudio
-  const source = cueSources[kind]
+  // La alarma respeta el timbre elegido (`getRestTimerSound`); cae al asset genérico
+  // 'alarm' si aún no se bundleó un asset por-timbre. El resto de cues usa su fuente.
+  const sound = kind === 'alarm' ? getRestTimerSound() : null
+  const source = kind === 'alarm' ? (soundAssets[sound!] ?? cueSources.alarm) : cueSources[kind]
+  const key = kind === 'alarm' ? `alarm:${sound}` : kind
   if (!mod || source == null) return
   try {
-    let player = players[kind]
+    let player = players[key]
     if (!player) {
       player = mod.createAudioPlayer(source)
-      players[kind] = player
+      players[key] = player
     }
     player.volume = getRestTimerVolume()
     player.seekTo(0)

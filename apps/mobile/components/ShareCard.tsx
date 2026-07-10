@@ -410,14 +410,14 @@ export function ShareCardPreview({
             disabled={busy}
             style={[styles.shareBtn, { backgroundColor: accent, opacity: busy ? 0.6 : 1 }]}
           >
+            {/* El spinner reemplaza SÓLO el ícono; el label "Compartir" permanece (paridad con el
+                modal web PRShareCardModal donde Loader2 sustituye el ícono, no el texto). */}
             {busy ? (
               <ActivityIndicator color={theme.primaryForeground} />
             ) : (
-              <>
-                <Share2 size={18} color={theme.primaryForeground} />
-                <Text style={[styles.shareBtnLabel, { color: theme.primaryForeground }]}>Compartir</Text>
-              </>
+              <Share2 size={18} color={theme.primaryForeground} />
             )}
+            <Text style={[styles.shareBtnLabel, { color: theme.primaryForeground }]}>Compartir</Text>
           </Pressable>
           <Pressable onPress={onClose} style={styles.closeBtn}>
             <X size={16} color={W72} />

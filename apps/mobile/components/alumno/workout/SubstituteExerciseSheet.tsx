@@ -1,45 +1,56 @@
-import { useEffect, useMemo, useState } from 'react'
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native'
-import { BottomSheetTextInput } from '@gorhom/bottom-sheet'
+import { useEffect, useRef, useState } from 'react'
+import { Animated, Pressable, StyleSheet, Text, View } from 'react-native'
 import { Image } from 'expo-image'
-import { ArrowRightLeft, Check, Dumbbell, RotateCw, Search, TriangleAlert, X } from 'lucide-react-native'
+import { cssInterop } from 'nativewind'
+import { ArrowRightLeft, Dumbbell, RotateCw, TriangleAlert } from 'lucide-react-native'
 import { Sheet } from '../../Sheet'
-import { Button } from '../../Button'
-import { toast } from '../../Toast'
-import { useTheme } from '../../../context/ThemeContext'
 import { FONT, TYPE, textStyle } from '../../../lib/typography'
-import { exerciseThumb, normalizeString } from '../../../lib/exercises'
+import { exerciseThumb } from '../../../lib/exercises'
 import {
   equipmentLabel,
   fetchSubstituteCandidates,
-  SUBSTITUTION_REASON,
   type SubstituteCandidate,
-  type SubstitutionCandidateSet,
 } from '../../../lib/workout/substitution'
 
+// Let NativeWind drive lucide icon color via `className` (text-*) so the dark
+// accent tokens (sport-300, warning-500, on-dark…) own the color, no JS literals.
+cssInterop(ArrowRightLeft, { className: { target: 'style', nativeStyleToProp: { color: true } } })
+cssInterop(Dumbbell, { className: { target: 'style', nativeStyleToProp: { color: true } } })
+cssInterop(RotateCw, { className: { target: 'style', nativeStyleToProp: { color: true } } })
+cssInterop(TriangleAlert, { className: { target: 'style', nativeStyleToProp: { color: true } } })
+
 /**
- * SubstituteExerciseSheet (E2-05) — sustitucion de "maquina ocupada" del ejecutor alumno RN.
+ * SubstituteExerciseSheet (E2-05) — bottom-sheet de sustitución de "máquina ocupada" del
+ * ejecutor alumno RN. Puerto 1:1 del `SubstituteExerciseSheet` web (Fase L · workstream C, DC-3):
+ * `apps/web/src/app/c/[coach_slug]/workout/[planId]/_components/SubstituteExerciseSheet.tsx`.
  *
- * Puerto DS del `SubstituteExerciseSheet` web (Fase L · workstream C). Bottom-sheet que sugiere
- * alternativas del MISMO grupo muscular (mismo query/ranking que la web, replicado en
- * `lib/workout/substitution.ts`), deja elegir una + un motivo (chips) y devuelve la eleccion via
- * `onSubstituted`. El cambio vale SOLO por la sesion de hoy: el plan no se toca; la escritura de
- * las columnas de log (`substituted_exercise_*`/`substitution_reason`) la hace el nucleo al
- * loguear usando `buildSubstitutionLogFields` (exportado abajo, contrato de integracion).
- *
- * Estados: cargando (skeleton) · vacio (sin alternativas) · error (Toast DS + reintentar).
- * Lazy: pide las sugerencias al abrir (evento raro, sin prefetch).
+ * Contrato idéntico al web (SPEC verificada línea a línea):
+ *  - Props: `open`/`onOpenChange`/`blockId`/`prescribedName`/`muscleGroup`/`onConfirm(option)`.
+ *  - NO persiste: un tap en la card llama `onConfirm(opt)` (swap SOLO de la sesión de hoy; el
+ *    plan no se toca). El badge "Sustituido" + deshacer viven en el caller (ExecutorV2).
+ *  - Motivo constante `machine_busy` (NG-4): es copy ("Máquina ocupada — …"), NO un picker.
+ *  - Chrome SIEMPRE dark (Sheet `forceDark`): ink-950 / border-inverse / text-on-dark / sport-300,
+ *    como el resto de la exec (web fuerza `bg-[var(--ink-950)]` en claro y oscuro, web L73).
+ *  - Lazy: pide sugerencias al abrir para un `blockId` concreto (evento raro, sin prefetch).
+ *  - 4 ramas de estado exclusivas: cargando (skeletons pulse) · error (reintentar) · vacío · lista.
  */
 
 interface Props {
-  visible: boolean
-  onClose(): void
-  blockId: string
-  exerciseName: string
-  onSubstituted(sub: { exerciseId: string | null; name: string; reason: string | null }): void
+  /** Controla visibilidad (web `open`). */
+  open: boolean
+  /** Cierre por backdrop/swipe/botón X (web `onOpenChange`). */
+  onOpenChange: (open: boolean) => void
+  /** Bloque a sustituir (fuente del candidate set en el server). */
+  blockId: string | null
+  /** Ejercicio prescrito (header + aria). */
+  prescribedName: string
+  /** Grupo muscular (subtítulo + estado vacío). */
+  muscleGroup: string
+  /** Confirmar la elección → swap in-place SOLO de esta sesión (el plan NO se toca). */
+  onConfirm: (option: SubstituteCandidate) => void
 }
 
-/** Seleccion emitida por el sheet / consumida por el nucleo. */
+/** Selección emitida por el sheet / consumida por el núcleo al loguear. */
 export interface SubstitutionSelection {
   exerciseId: string | null
   name: string
@@ -47,10 +58,10 @@ export interface SubstitutionSelection {
 }
 
 /**
- * Helper PURO (contrato de integracion): mapea la seleccion a las columnas de `workout_logs`.
- * El nucleo lo hace merge dentro del payload del set al loguear. `null`/undefined ⇒ log normal
- * (sin sustitucion). No toca `exercise_id` del log (el sustituto vive SOLO en estas columnas —
- * migracion `20260704160352_workout_logs_substitution_columns.sql`, DC-4/AC-C7).
+ * Helper PURO (contrato de integración, fuera de la UI del sheet): mapea la selección a las
+ * columnas de `workout_logs`. El núcleo lo hace merge dentro del payload del set al loguear.
+ * `null`/undefined ⇒ log normal (sin sustitución). No toca `exercise_id` del log (el sustituto
+ * vive SOLO en estas columnas — migración `20260704160352_workout_logs_substitution_columns.sql`).
  */
 export function buildSubstitutionLogFields(sub: SubstitutionSelection | null | undefined): {
   substituted_exercise_id: string | null
@@ -67,292 +78,212 @@ export function buildSubstitutionLogFields(sub: SubstitutionSelection | null | u
   }
 }
 
-/** Motivos de sustitucion (chips). El valor viaja al log; el default es paridad web (machine_busy). */
-const REASONS: { key: string; label: string }[] = [
-  { key: SUBSTITUTION_REASON, label: 'Máquina ocupada' },
-  { key: 'pain', label: 'Molestia / dolor' },
-  { key: 'no_equipment', label: 'Sin equipo' },
-  { key: 'preference', label: 'Preferencia' },
-]
-
-export function SubstituteExerciseSheet({ visible, onClose, blockId, exerciseName, onSubstituted }: Props) {
-  const { theme } = useTheme()
-  const [set, setSet] = useState<SubstitutionCandidateSet | null>(null)
+export function SubstituteExerciseSheet({ open, onOpenChange, blockId, prescribedName, muscleGroup, onConfirm }: Props) {
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState(false)
-  const [query, setQuery] = useState('')
-  const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [reason, setReason] = useState<string>(SUBSTITUTION_REASON)
+  const [options, setOptions] = useState<SubstituteCandidate[] | null>(null)
+  const [error, setError] = useState<string | null>(null)
 
-  async function load() {
-    if (!blockId) return
+  const load = (id: string) => {
+    setError(null)
+    setOptions(null)
     setLoading(true)
-    setError(false)
-    setSet(null)
-    try {
-      const result = await fetchSubstituteCandidates(blockId)
-      if (!result) {
-        setError(true)
-        toast.error('No se pudo resolver el ejercicio de este bloque.')
-      } else {
-        setSet(result)
-      }
-    } catch {
-      setError(true)
-      toast.error('No pudimos cargar alternativas. Revisa tu conexión.')
-    } finally {
-      setLoading(false)
-    }
+    fetchSubstituteCandidates(id)
+      .then((set) => {
+        // Paridad con el server action web: top-5 (rankSubstitutes limit 5, action L31).
+        if (!set) setError('No se pudo resolver el ejercicio de este bloque.')
+        else setOptions(set.candidates.slice(0, 5))
+      })
+      .catch(() => setError('No pudimos cargar alternativas. Revisa tu conexión.'))
+      .finally(() => setLoading(false))
   }
 
-  // Pide sugerencias cada vez que se abre para un bloque concreto; limpia al cerrar.
+  // Pide sugerencias CADA vez que se abre para un bloque concreto; limpia al cerrar (web L57-63).
   useEffect(() => {
-    if (visible && blockId) {
-      setQuery('')
-      setSelectedId(null)
-      setReason(SUBSTITUTION_REASON)
-      load()
-    }
-    if (!visible) {
-      setSet(null)
-      setError(false)
+    if (open && blockId) load(blockId)
+    if (!open) {
+      setOptions(null)
+      setError(null)
       setLoading(false)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visible, blockId])
+  }, [open, blockId])
 
-  const muscleGroup = set?.current.muscle_group ?? null
-
-  const filtered = useMemo(() => {
-    const list = set?.candidates ?? []
-    const q = normalizeString(query.trim())
-    if (!q) return list
-    return list.filter((c) => {
-      const name = normalizeString(c.name)
-      const equip = normalizeString(equipmentLabel(c.equipment))
-      return name.includes(q) || equip.includes(q)
-    })
-  }, [set, query])
-
-  const selected = filtered.find((c) => c.id === selectedId) ?? set?.candidates.find((c) => c.id === selectedId) ?? null
-
-  function handleConfirm() {
-    if (!selected) return
-    onSubstituted({ exerciseId: selected.id, name: selected.name, reason })
-    onClose()
-  }
-
-  const footer = (
-    <Button
-      label="Confirmar cambio"
-      leftIcon={Check}
-      variant="sport"
-      onPress={handleConfirm}
-      disabled={!selected}
-      full
-      size="lg"
-      testID="substitute-confirm"
-    />
-  )
+  const showLoading = loading || (open && options === null && error === null)
 
   return (
-    <Sheet open={visible} onClose={onClose} snapPoints={['85%']} footer={footer} scrollable>
-      {/* Header: objetivo prescrito + aviso "solo por hoy". */}
+    <Sheet open={open} onClose={() => onOpenChange(false)} snapPoints={['85%']} scrollable forceDark>
+      {/* Header: objetivo prescrito + aviso "solo por hoy" (grabber = handle del Sheet). */}
       <View style={styles.headerBlock}>
         <View style={styles.eyebrowRow}>
-          <ArrowRightLeft size={14} color={theme.primary} strokeWidth={2.4} />
-          <Text style={TYPE.eyebrow} className="text-sport-600">
+          <ArrowRightLeft className="text-sport-300" size={14} strokeWidth={2.4} />
+          <Text style={TYPE.eyebrow} className="text-sport-300">
             Cambiar ejercicio
           </Text>
         </View>
-        <Text style={textStyle('xl', FONT.displayBold, { lh: 'snug', ls: 'tight' })} className="text-strong mt-1" numberOfLines={2}>
-          {exerciseName}
+        <Text
+          style={textStyle('xl', FONT.displayBlack, { lh: 'tight', ls: 'tight' })}
+          className="text-on-dark mt-1"
+          numberOfLines={2}
+        >
+          {prescribedName}
         </Text>
-        <Text style={TYPE.caption} className="text-muted mt-1">
-          {muscleGroup ? `${muscleGroup} · ` : ''}El cambio vale solo por hoy y no toca tu plan.
+        <Text style={TYPE.caption} className="text-on-dark-muted mt-1">
+          {muscleGroup ? `${muscleGroup} · ` : ''}Máquina ocupada — el cambio vale{' '}
+          <Text style={{ fontFamily: FONT.uiSemibold }} className="text-on-dark">
+            solo por hoy
+          </Text>{' '}
+          y no toca tu plan.
         </Text>
       </View>
 
-      {/* Buscador */}
-      {!error ? (
-        <View className="flex-row items-center bg-surface-sunken border border-subtle rounded-control" style={styles.searchBar}>
-          <Search size={16} color={theme.mutedForeground} />
-          <BottomSheetTextInput
-            testID="substitute-search"
-            value={query}
-            onChangeText={setQuery}
-            placeholder="Buscar alternativa…"
-            placeholderTextColor={theme.mutedForeground}
-            className="flex-1 text-strong"
-            style={[styles.searchInput, { fontFamily: FONT.ui }]}
-          />
-          {query.length ? (
-            <TouchableOpacity onPress={() => setQuery('')} hitSlop={8} accessibilityLabel="Limpiar búsqueda">
-              <X size={15} color={theme.mutedForeground} />
-            </TouchableOpacity>
+      {/* Rama exclusiva: cargando · error · vacío · lista. */}
+      {showLoading ? (
+        <LoadingSkeleton />
+      ) : error ? (
+        <View style={styles.centerState}>
+          <TriangleAlert className="text-warning-500" size={32} strokeWidth={2} />
+          <Text style={TYPE.body} className="text-on-dark-muted text-center">
+            {error}
+          </Text>
+          {blockId ? (
+            <Pressable
+              testID="substitute-retry"
+              onPress={() => load(blockId)}
+              accessibilityRole="button"
+              accessibilityLabel="Reintentar"
+            >
+              {({ pressed }) => (
+                <View
+                  className={`flex-row items-center justify-center rounded-control ${pressed ? 'bg-white/[0.12]' : 'bg-white/[0.06]'}`}
+                  style={styles.retryBtn}
+                >
+                  <RotateCw className="text-on-dark" size={16} />
+                  <Text style={{ ...textStyle('sm', FONT.uiBold), marginLeft: 8 }} className="text-on-dark">
+                    Reintentar
+                  </Text>
+                </View>
+              )}
+            </Pressable>
           ) : null}
         </View>
-      ) : null}
-
-      {/* Motivo (chips) */}
-      {!error ? (
-        <View style={styles.reasonWrap}>
-          <Text style={TYPE.eyebrow} className="text-muted">
-            Motivo
-          </Text>
-          <View style={styles.reasonRow}>
-            {REASONS.map((r) => {
-              const on = reason === r.key
-              return (
-                <TouchableOpacity
-                  key={r.key}
-                  testID={`substitute-reason-${r.key}`}
-                  onPress={() => setReason(r.key)}
-                  activeOpacity={0.8}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: on }}
-                  className={`justify-center rounded-pill ${on ? 'bg-sport-500' : 'bg-surface-card border border-default'}`}
-                  style={styles.chip}
-                >
-                  <Text style={TYPE.caption} className={on ? 'text-on-sport' : 'text-body'}>
-                    {r.label}
-                  </Text>
-                </TouchableOpacity>
-              )
-            })}
+      ) : options && options.length === 0 ? (
+        <View style={styles.centerState}>
+          <View className="items-center justify-center rounded-pill bg-white/[0.06]" style={styles.emptyIcon}>
+            <Dumbbell className="text-on-dark-muted" size={28} />
           </View>
+          <Text style={TYPE.body} className="text-on-dark-muted text-center">
+            No encontramos alternativas equivalentes para{' '}
+            <Text style={{ fontFamily: FONT.uiSemibold }} className="text-on-dark">
+              {muscleGroup}
+            </Text>{' '}
+            en tu catálogo.
+          </Text>
         </View>
-      ) : null}
-
-      {/* Estado: cargando */}
-      {loading ? (
-        <View style={styles.stateWrap}>
-          {[0, 1, 2, 3].map((i) => (
-            <View key={i} className="flex-row items-center bg-surface-card border border-subtle rounded-control" style={styles.skeletonRow}>
-              <View className="bg-surface-sunken" style={styles.skeletonThumb} />
-              <View style={{ flex: 1, gap: 8 }}>
-                <View className="bg-surface-sunken" style={[styles.skeletonLine, { width: '66%' }]} />
-                <View className="bg-surface-sunken" style={[styles.skeletonLine, { width: '33%' }]} />
-              </View>
-            </View>
+      ) : options && options.length > 0 ? (
+        <View style={styles.list} accessibilityRole="list" accessibilityLabel={`Alternativas para ${prescribedName}`}>
+          {options.map((opt) => (
+            <CandidateRow key={opt.id} opt={opt} onPress={() => onConfirm(opt)} />
           ))}
         </View>
       ) : null}
-
-      {/* Estado: error */}
-      {!loading && error ? (
-        <View style={styles.centerState}>
-          <TriangleAlert size={30} color={theme.destructive} strokeWidth={2} />
-          <Text style={TYPE.body} className="text-muted text-center">
-            No pudimos cargar alternativas.
-          </Text>
-          <TouchableOpacity
-            testID="substitute-retry"
-            onPress={load}
-            activeOpacity={0.85}
-            className="flex-row items-center justify-center bg-surface-card border border-default rounded-control"
-            style={styles.retryBtn}
-          >
-            <RotateCw size={16} color={theme.text} />
-            <Text style={TYPE.label} className="text-strong">
-              Reintentar
-            </Text>
-          </TouchableOpacity>
-        </View>
-      ) : null}
-
-      {/* Estado: vacio */}
-      {!loading && !error && set && filtered.length === 0 ? (
-        <View style={styles.centerState}>
-          <View className="bg-surface-sunken items-center justify-center rounded-pill" style={styles.emptyIcon}>
-            <Dumbbell size={26} color={theme.mutedForeground} />
-          </View>
-          <Text style={TYPE.body} className="text-muted text-center">
-            {query.trim()
-              ? 'Ninguna alternativa coincide con tu búsqueda.'
-              : `No encontramos alternativas equivalentes para ${muscleGroup ?? 'este ejercicio'} en tu catálogo.`}
-          </Text>
-        </View>
-      ) : null}
-
-      {/* Lista de candidatos */}
-      {!loading && !error && filtered.length > 0
-        ? filtered.map((opt) => (
-            <CandidateRow key={opt.id} opt={opt} selected={opt.id === selectedId} onPress={() => setSelectedId(opt.id)} />
-          ))
-        : null}
     </Sheet>
   )
 }
 
-function CandidateRow({ opt, selected, onPress }: { opt: SubstituteCandidate; selected: boolean; onPress: () => void }) {
-  const { theme } = useTheme()
+/** 4 filas placeholder con pulse de opacidad (web `animate-pulse`, L91-101). */
+function LoadingSkeleton() {
+  const opacity = useRef(new Animated.Value(0.5)).current
+  useEffect(() => {
+    const anim = Animated.loop(
+      Animated.sequence([
+        Animated.timing(opacity, { toValue: 1, duration: 700, useNativeDriver: true }),
+        Animated.timing(opacity, { toValue: 0.5, duration: 700, useNativeDriver: true }),
+      ]),
+    )
+    anim.start()
+    return () => anim.stop()
+  }, [opacity])
+
+  return (
+    <View style={styles.list} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+      {[0, 1, 2, 3].map((i) => (
+        <View key={i} className="flex-row items-center rounded-card border border-inverse bg-white/[0.03]" style={styles.row}>
+          <Animated.View style={{ opacity, flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+            <View className="rounded-control bg-white/[0.06]" style={styles.thumb} />
+            <View style={{ flex: 1, gap: 8 }}>
+              <View className="bg-white/[0.06]" style={{ height: 14, width: '66%', borderRadius: 6 }} />
+              <View className="bg-white/[0.05]" style={{ height: 12, width: '33%', borderRadius: 6 }} />
+            </View>
+          </Animated.View>
+        </View>
+      ))}
+    </View>
+  )
+}
+
+function CandidateRow({ opt, onPress }: { opt: SubstituteCandidate; onPress: () => void }) {
   const thumb = exerciseThumb(opt)
   return (
-    <TouchableOpacity
+    <Pressable
       testID={`substitute-option-${opt.id}`}
       onPress={onPress}
-      activeOpacity={0.85}
       accessibilityRole="button"
-      accessibilityState={{ selected }}
       accessibilityLabel={`Usar ${opt.name} (${equipmentLabel(opt.equipment)})`}
-      className={`flex-row items-center rounded-control ${selected ? 'bg-sport-500/10 border-2 border-sport-500' : 'bg-surface-card border border-subtle'}`}
-      style={[styles.optRow, selected ? styles.optRowSelected : null]}
     >
-      <View className="bg-surface-sunken items-center justify-center overflow-hidden" style={styles.optThumb}>
-        {thumb ? (
-          <Image source={{ uri: thumb }} style={styles.optThumbImg} contentFit="contain" cachePolicy="memory-disk" recyclingKey={opt.id} />
-        ) : (
-          <Dumbbell size={18} color={theme.mutedForeground} />
-        )}
-      </View>
-      <View style={{ flex: 1, minWidth: 0, gap: 4 }}>
-        <Text style={textStyle('sm', FONT.uiBold, { lh: 'snug' })} className="text-strong" numberOfLines={1}>
-          {opt.name}
-        </Text>
-        <View style={styles.optMetaRow}>
-          <View className="bg-sport-500/15 rounded-pill" style={styles.optBadge}>
-            <Text style={TYPE.eyebrow} className="text-sport-600">
-              {equipmentLabel(opt.equipment)}
+      {({ pressed }) => (
+        <View
+          className={`flex-row items-center rounded-card border ${pressed ? 'border-sport-500/50 bg-white/[0.06]' : 'border-inverse bg-white/[0.03]'}`}
+          style={[styles.row, { transform: [{ scale: pressed ? 0.99 : 1 }] }]}
+        >
+          {/* Thumbnail 56x56 rounded-control */}
+          <View className="items-center justify-center overflow-hidden rounded-control bg-white/[0.06]" style={styles.thumb}>
+            {thumb ? (
+              <Image source={{ uri: thumb }} style={styles.thumbImg} contentFit="contain" cachePolicy="memory-disk" recyclingKey={opt.id} />
+            ) : (
+              <Dumbbell className="text-on-dark-muted" size={20} />
+            )}
+          </View>
+          {/* Bloque texto */}
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text style={textStyle('sm', FONT.uiBold, { lh: 'snug' })} className="text-on-dark" numberOfLines={1}>
+              {opt.name}
+            </Text>
+            <View style={styles.metaRow}>
+              <View className="rounded-pill border border-sport-500/30 bg-sport-500/[0.10]" style={styles.badge}>
+                <Text style={textStyle('3xs', FONT.uiBold)} className="text-sport-300">
+                  {equipmentLabel(opt.equipment)}
+                </Text>
+              </View>
+              {opt.muscle_group ? (
+                <Text style={textStyle('3xs', FONT.ui)} className="text-on-dark-muted" numberOfLines={1}>
+                  {opt.muscle_group}
+                </Text>
+              ) : null}
+            </View>
+          </View>
+          {/* Pill "Usar" — reposo sport translúcido; al presionar la fila, sport sólido + texto blanco. */}
+          <View className={`rounded-control ${pressed ? 'bg-sport-500' : 'bg-sport-500/[0.15]'}`} style={styles.usePill}>
+            <Text style={textStyle('2xs', FONT.uiBold)} className={pressed ? 'text-white' : 'text-sport-300'}>
+              Usar
             </Text>
           </View>
-          {opt.muscle_group ? (
-            <Text style={TYPE.caption} className="text-muted" numberOfLines={1}>
-              {opt.muscle_group}
-            </Text>
-          ) : null}
         </View>
-      </View>
-      <View
-        className={`items-center justify-center rounded-pill ${selected ? 'bg-sport-500' : 'border border-default'}`}
-        style={styles.optCheck}
-      >
-        {selected ? <Check size={16} color={theme.primaryForeground} strokeWidth={2.6} /> : null}
-      </View>
-    </TouchableOpacity>
+      )}
+    </Pressable>
   )
 }
 
 const styles = StyleSheet.create({
   headerBlock: { gap: 2 },
-  eyebrowRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  searchBar: { gap: 10, paddingHorizontal: 12, height: 46 },
-  searchInput: { fontSize: 15, paddingVertical: 0 },
-  reasonWrap: { gap: 8 },
-  reasonRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 7 },
-  chip: { paddingHorizontal: 13, height: 34 },
-  stateWrap: { gap: 10 },
-  skeletonRow: { gap: 12, padding: 12 },
-  skeletonThumb: { width: 48, height: 48, borderRadius: 10 },
-  skeletonLine: { height: 12, borderRadius: 6 },
-  centerState: { alignItems: 'center', gap: 12, paddingVertical: 36, paddingHorizontal: 8 },
-  retryBtn: { gap: 8, paddingHorizontal: 16, height: 44 },
+  eyebrowRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  list: { gap: 10 },
+  row: { gap: 12, padding: 12 },
+  thumb: { width: 56, height: 56 },
+  thumbImg: { width: 56, height: 56, padding: 4 },
+  metaRow: { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginTop: 4 },
+  badge: { paddingHorizontal: 8, paddingVertical: 2 },
+  usePill: { paddingHorizontal: 12, paddingVertical: 8 },
+  centerState: { alignItems: 'center', gap: 12, paddingVertical: 40, paddingHorizontal: 8 },
+  retryBtn: { paddingHorizontal: 16, minHeight: 44, marginTop: 4 },
   emptyIcon: { width: 56, height: 56 },
-  optRow: { gap: 12, padding: 12 },
-  optRowSelected: {},
-  optThumb: { width: 48, height: 48, borderRadius: 10 },
-  optThumbImg: { width: 48, height: 48 },
-  optMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
-  optBadge: { paddingHorizontal: 8, paddingVertical: 3 },
-  optCheck: { width: 30, height: 30 },
 })

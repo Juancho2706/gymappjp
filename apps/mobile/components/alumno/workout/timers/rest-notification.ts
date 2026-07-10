@@ -20,6 +20,49 @@ let permResolved = false
 let permGranted = false
 let scheduledId: string | null = null
 
+/**
+ * Estado del permiso para la UI de ajustes (espejo del `permission` del panel web
+ * `WorkoutTimerSettingsPanel`): `'default'` = aún no decidido (undetermined),
+ * `'denied'` = negado (sin poder re-preguntar → recuperación por Ajustes del SO),
+ * `'unsupported'` = notifs no disponibles. `null` (en el consumidor) = cargando.
+ */
+export type RestNotifPermission = 'granted' | 'denied' | 'default' | 'unsupported'
+
+function mapStatus(status: string, canAskAgain: boolean): RestNotifPermission {
+  if (status === 'granted') return 'granted'
+  // undetermined → 'default' (podemos pedirlo). Negado con re-pregunta aún posible
+  // se trata como 'default' para ofrecer el botón; sólo bloqueo duro → 'denied'.
+  if (status === 'undetermined' || canAskAgain) return 'default'
+  return 'denied'
+}
+
+/**
+ * Lee el permiso actual SIN promptear (para pintar el card de ajustes). NO toca
+ * el cache lazy (`permResolved`): así no suprime el prompt automático que dispara
+ * el primer timer si el alumno abre ajustes antes de usar uno.
+ */
+export async function getRestNotifPermission(): Promise<RestNotifPermission> {
+  try {
+    const current = await Notifications.getPermissionsAsync()
+    return mapStatus(current.status, current.canAskAgain !== false)
+  } catch {
+    return 'unsupported'
+  }
+}
+
+/** Pide el permiso de forma interactiva (botón "Activar permisos"). Devuelve el estado final. */
+export async function requestRestNotifPermission(): Promise<RestNotifPermission> {
+  try {
+    const res = await Notifications.requestPermissionsAsync()
+    const mapped = mapStatus(res.status, res.canAskAgain !== false)
+    permResolved = true
+    permGranted = mapped === 'granted'
+    return mapped
+  } catch {
+    return 'unsupported'
+  }
+}
+
 /** Pide permiso de notificaciones una sola vez (lazy). Devuelve si quedó concedido. */
 export async function ensureRestNotifPermission(): Promise<boolean> {
   if (permResolved) return permGranted

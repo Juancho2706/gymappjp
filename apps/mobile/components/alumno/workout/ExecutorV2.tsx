@@ -5,7 +5,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useKeepAwake } from 'expo-keep-awake'
 import { useRouter } from 'expo-router'
 import { Confetti } from 'react-native-fast-confetti'
-import { CheckCircle2, Timer, Trophy } from 'lucide-react-native'
+import { CheckCircle2, ChevronDown, Dumbbell, Timer, Trophy } from 'lucide-react-native'
 import {
   buildStepModel,
   effectiveExerciseType,
@@ -50,9 +50,12 @@ const VIEW_MODE_KEY = 'eva_workout_view_mode'
 import { WorkoutTimerProvider, useWorkoutTimers } from './timers/TimerProvider'
 import { isRestAutoTimerEnabled } from './timers'
 import { SubstituteExerciseSheet } from './SubstituteExerciseSheet'
+import { SUBSTITUTION_REASON } from '../../../lib/workout/substitution'
 
 const ON_DARK = '#F4F6F8'
-const EMBER_300 = '#FFB199'
+const ON_DARK_MUTED = '#939DAB'
+const EMBER_200 = '#FFD6C7'
+const SPORT_400 = '#5C9DFF'
 
 type ActiveSub = { exerciseId: string | null; name: string; reason: string | null; prescribedName: string }
 
@@ -80,6 +83,10 @@ function ExecutorV2Inner({ planId }: { planId: string }) {
   const [keypadTarget, setKeypadTarget] = useState<KeypadTarget | null>(null)
   const [techniqueExercise, setTechniqueExercise] = useState<SessionExercise | null>(null)
   const [openDetails, setOpenDetails] = useState<Record<string, boolean>>({})
+  // Ejercicios COMPLETADOS colapsados a recap en la lista (paridad web `expandedDone`,
+  // WorkoutExecutionClient.tsx:1038-1039). El CheckCircle2 de la card re-colapsa; tap en el recap
+  // re-expande. En modo Pasos NO se colapsa (siempre editable), como web (`allowCollapse` false).
+  const [expandedDone, setExpandedDone] = useState<Record<string, boolean>>({})
   const [substituteBlockId, setSubstituteBlockId] = useState<string | null>(null)
   const [substitutionByBlock, setSubstitutionByBlock] = useState<Record<string, ActiveSub>>({})
   const [summaryOpen, setSummaryOpen] = useState(false)
@@ -101,7 +108,7 @@ function ExecutorV2Inner({ planId }: { planId: string }) {
   }, [])
 
   const {
-    loading, planTitle, programName, activeWeekVariant, currentWeek, weeksToRepeat, programStructure, cycleLength,
+    loading, planTitle, programName, phaseName, activeWeekVariant, currentWeek, weeksToRepeat, programStructure, cycleLength,
     dayOfWeek, clientId, blocks, sections, supersetMembersByBlock, sessionLogs, previousHistory, lastSessionByBlock,
     exerciseMaxes, elapsedSec, capped, isOnline, restoredDraft, refresh, saveDraft, logSet,
   } = session
@@ -173,8 +180,11 @@ function ExecutorV2Inner({ planId }: { planId: string }) {
   const activeBlockId = currentExerciseIdx === -1 ? null : blocks[currentExerciseIdx].id
 
   const weekBadge = activeWeekVariant ? `Semana ${activeWeekVariant}` : null
-  const subline =
+  // Sublínea: `{fase · }Día X de Y | Programa semanal` — la fase activa prefija cuando el programa
+  // está periodizado (paridad web WEC:1813-1818: `{phaseName · }` + cycle/weekly).
+  const baseSub =
     programStructure === 'cycle' ? `Dia ${dayOfWeek || 1} de ${cycleLength || '?'}` : programStructure === 'weekly' ? 'Programa semanal' : null
+  const subline = baseSub && phaseName ? `${phaseName} · ${baseSub}` : baseSub
 
   // ── Abrir teclado para una serie (strength o tipado según effType) ──────────
   const openSet = useCallback(
@@ -259,6 +269,21 @@ function ExecutorV2Inner({ planId }: { planId: string }) {
       saveDraft({ blockId: keypadTarget.blockId, setNumber: keypadTarget.setNumber, values, fieldIndex })
     },
     [keypadTarget, saveDraft],
+  )
+
+  // RPE post-log de una serie tipada (paridad web `submitRpeUpdate`, `LogSetForm.tsx:952-974`):
+  // re-submitea el log completo (el payload ya preserva los ejes `actual_*`) SIN re-disparar el
+  // descanso ni la celebración de PR — a diferencia de `handleCommit`, esto sólo persiste el RPE.
+  const handleRpeUpdate = useCallback(
+    (payload: OptimisticLogPayload) => {
+      const block = blocks.find((b) => b.id === payload.blockId)
+      const sub = block ? getSubstitution(block) : null
+      void logSet(
+        payload,
+        sub ? { substitution: { exerciseId: sub.exerciseId, name: sub.name, reason: sub.reason } } : undefined,
+      )
+    },
+    [blocks, getSubstitution, logSet],
   )
 
   // Draft de la fila de registro expandida (ActiveSetRow): reporta directo con block/set (no depende
@@ -351,8 +376,10 @@ function ExecutorV2Inner({ planId }: { planId: string }) {
   const substituteBlock = substituteBlockId ? blocks.find((b) => b.id === substituteBlockId) : null
 
   // Render de un grupo (bloque suelto o superserie) — reutilizado por la lista Y el modo Pasos.
+  // `allowCollapse`: true en la lista (los completados colapsan a recap); false en Pasos (siempre
+  // card completa para poder editar) — paridad web renderGroup (WorkoutExecutionClient.tsx:1580-1586).
   const renderGroup = useCallback(
-    (group: { key: string; type: 'single' | 'superset'; blocks: SessionBlock[] }) => {
+    (group: { key: string; type: 'single' | 'superset'; blocks: SessionBlock[] }, { allowCollapse }: { allowCollapse: boolean }) => {
       if (group.type === 'superset') {
         const members = supersetMembersByBlock.get(group.blocks[0].id) ?? group.blocks
         return (
@@ -364,9 +391,11 @@ function ExecutorV2Inner({ planId }: { planId: string }) {
             previousHistory={previousHistory}
             currentWeek={currentWeek}
             restoredDraft={restoredDraft}
+            hrZones={hrZones}
             onOpenTechnique={(b) => setTechniqueExercise(resolveExercise(b))}
             onOpenSet={openSet}
             onCommitSet={handleCommit}
+            onRpeUpdate={handleRpeUpdate}
             onDraftChange={saveActiveDraft}
           />
         )
@@ -386,6 +415,22 @@ function ExecutorV2Inner({ planId }: { planId: string }) {
       const complete = doneCount >= block.sets
       const focus: 'active' | 'upcoming' | 'done' = complete ? 'done' : block.id === activeBlockId ? 'active' : 'upcoming'
       const prevList: PrevSet[] = sub ? [] : previousHistory[exercise.id] ?? []
+      // Completado + lista → recap delgado; tap re-expande la card para editar una serie (web 1701-1713).
+      if (allowCollapse && focus === 'done' && !expandedDone[block.id]) {
+        const eff = effByBlock.get(block.id) ?? null
+        const recapWeight = eff?.weightKg ?? block.target_weight_kg
+        const recapSub = isStrengthBlock
+          ? `${block.sets} × ${block.reps}${recapWeight != null ? ` · ${recapWeight} kg` : ''}`
+          : `${block.sets} ${block.sets === 1 ? 'serie' : 'series'} · ${exercise.muscle_group}`
+        return (
+          <CollapsedExerciseBar
+            key={block.id}
+            name={exercise.name}
+            sub={recapSub}
+            onExpand={() => setExpandedDone((p) => ({ ...p, [block.id]: true }))}
+          />
+        )
+      }
       return (
         <SingleExerciseCard
           key={block.id}
@@ -406,13 +451,15 @@ function ExecutorV2Inner({ planId }: { planId: string }) {
           onOpenTechnique={() => setTechniqueExercise(exercise)}
           onOpenSet={(setNumber) => openSet(block.id, setNumber)}
           onCommitSet={handleCommit}
+          onRpeUpdate={handleRpeUpdate}
           onDraftChange={saveActiveDraft}
           onOpenSubstitute={() => setSubstituteBlockId(block.id)}
           onUndoSubstitution={() => setSubstitutionByBlock((p) => { const n = { ...p }; delete n[block.id]; return n })}
+          onToggleCollapse={allowCollapse ? () => setExpandedDone((p) => ({ ...p, [block.id]: false })) : undefined}
         />
       )
     },
-    [supersetMembersByBlock, sessionLogs, effByBlock, currentWeek, activeBlockId, previousHistory, openDetails, getSubstitution, openSet, hrZones, restoredDraft, handleCommit, saveActiveDraft],
+    [supersetMembersByBlock, sessionLogs, effByBlock, currentWeek, activeBlockId, previousHistory, openDetails, expandedDone, getSubstitution, openSet, hrZones, restoredDraft, handleCommit, handleRpeUpdate, saveActiveDraft],
   )
 
   // ── Modo Paso a paso (E2-04): modelo de pasos + vistas del rail + auto-avance ──
@@ -431,20 +478,32 @@ function ExecutorV2Inner({ planId }: { planId: string }) {
   )
   const stepViews = useMemo<StepperStepView[]>(
     () =>
-      steps.map((st) => ({
-        key: st.key,
-        title: st.blocks.map((b) => resolveExercise(b)?.name ?? 'Ejercicio').join(' + '),
-        sectionTitle: st.sectionTitle,
-        muted: st.muted,
-        complete: isStepComplete(st, sessionLogs),
-      })),
+      steps.map((st) => {
+        // Título del paso para el rail + anuncio a11y (paridad web `stepTitle`, WEC:1763-1768):
+        // superserie ⇒ "Superserie · A + B" (o "Superserie"); single ⇒ nombre del bloque (o "Ejercicio").
+        let title: string
+        if (st.kind === 'superset') {
+          const names = st.blocks.map((b) => resolveExercise(b)?.name).filter(Boolean)
+          title = names.length ? `Superserie · ${names.join(' + ')}` : 'Superserie'
+        } else {
+          title = resolveExercise(st.blocks[0])?.name ?? 'Ejercicio'
+        }
+        return {
+          key: st.key,
+          kind: st.kind,
+          title,
+          sectionTitle: st.sectionTitle,
+          muted: st.muted,
+          complete: isStepComplete(st, sessionLogs),
+        }
+      }),
     [steps, sessionLogs],
   )
   const renderStep = useCallback(
     (index: number) => {
       const st = steps[index]
       if (!st) return null
-      return renderGroup({ key: st.key, type: st.kind, blocks: st.blocks })
+      return renderGroup({ key: st.key, type: st.kind, blocks: st.blocks }, { allowCollapse: false })
     },
     [steps, renderGroup],
   )
@@ -474,6 +533,31 @@ function ExecutorV2Inner({ planId }: { planId: string }) {
 
   const stepperActive = viewMode === 'steps' && steps.length > 0
 
+  // Estado vacío (paridad web WEC:1310-1323): plan resuelto pero sin ejercicios → pantalla dedicada
+  // con icono, título y CTA al home. Se muestra sólo tras cargar (nunca durante el loader).
+  if (!loading && blocks.length === 0) {
+    return (
+      <SafeAreaView edges={['top']} className="flex-1 items-center justify-center bg-ink-950 p-6">
+        <View className="mb-4 h-16 w-16 items-center justify-center rounded-full bg-white/[0.06]">
+          <Dumbbell size={32} color={ON_DARK_MUTED} strokeWidth={2} />
+        </View>
+        <Text className="mb-2 font-display-bold text-xl text-on-dark">Rutina sin ejercicios</Text>
+        <Text className="mb-6 text-center text-sm text-on-dark-muted">
+          Esta rutina ya no tiene ejercicios asociados. Tu coach probablemente esté actualizando tu plan.
+        </Text>
+        <Pressable
+          testID="btn-empty-back"
+          onPress={() => router.replace('/alumno/home')}
+          className="rounded-control bg-sport-500 px-6 py-2.5"
+          accessibilityRole="button"
+          accessibilityLabel="Volver al inicio"
+        >
+          <Text className="font-sans-bold text-on-sport">Volver al Dashboard</Text>
+        </Pressable>
+      </SafeAreaView>
+    )
+  }
+
   return (
     <SafeAreaView edges={['top']} className="flex-1 bg-ink-950">
       {prCelebration && (
@@ -484,8 +568,6 @@ function ExecutorV2Inner({ planId }: { planId: string }) {
           </View>
         </View>
       )}
-
-      <OfflineBanner visible={!isOnline} />
 
       <SessionHeader
         planTitle={planTitle}
@@ -504,6 +586,9 @@ function ExecutorV2Inner({ planId }: { planId: string }) {
         onBack={() => router.back()}
         onOpenSettings={() => setSettingsOpen(true)}
       />
+
+      {/* Banner offline BAJO el header (paridad web WEC:1898-1903, sticky top-[header-h]). */}
+      <OfflineBanner visible={!isOnline} />
 
       {loading ? (
         <EvaLoaderScreen subtitle="Cargando rutina…" />
@@ -542,7 +627,7 @@ function ExecutorV2Inner({ planId }: { planId: string }) {
                 <Text className="border-l-2 border-white/10 pl-4 text-[12px] text-on-dark-muted">{section.subtitle}</Text>
               )}
               <View className="gap-3">
-                {section.groups.map((group) => renderGroup(group))}
+                {section.groups.map((group) => renderGroup(group, { allowCollapse: true }))}
               </View>
             </View>
           ))}
@@ -559,7 +644,7 @@ function ExecutorV2Inner({ planId }: { planId: string }) {
             accessibilityRole="button"
             accessibilityLabel="Iniciar descanso de 90 segundos"
           >
-            <Timer size={16} color={EMBER_300} />
+            <Timer size={14} color={EMBER_200} />
             <Text className="font-sans-bold text-xs text-ember-200">Descanso (90s)</Text>
           </Pressable>
           <Pressable
@@ -587,18 +672,21 @@ function ExecutorV2Inner({ planId }: { planId: string }) {
       <WorkoutSettingsSheet open={settingsOpen} onClose={() => setSettingsOpen(false)} />
 
       <SubstituteExerciseSheet
-        visible={substituteBlockId != null}
-        onClose={() => setSubstituteBlockId(null)}
-        blockId={substituteBlockId ?? ''}
-        exerciseName={substituteBlock ? resolveExercise(substituteBlock)?.name ?? '' : ''}
-        onSubstituted={(s) => {
+        open={substituteBlockId != null}
+        onOpenChange={(o) => { if (!o) setSubstituteBlockId(null) }}
+        blockId={substituteBlockId}
+        prescribedName={substituteBlock ? resolveExercise(substituteBlock)?.name ?? 'Ejercicio' : 'Ejercicio'}
+        muscleGroup={substituteBlock ? resolveExercise(substituteBlock)?.muscle_group ?? '' : ''}
+        onConfirm={(opt) => {
+          // Swap SOLO de esta sesión (el plan no se toca). Motivo constante machine_busy (NG-4);
+          // el sheet ya no expone picker de motivo → paridad con el web. El caller cierra el sheet.
           if (!substituteBlockId || !substituteBlock) return
           setSubstitutionByBlock((p) => ({
             ...p,
             [substituteBlockId]: {
-              exerciseId: s.exerciseId,
-              name: s.name,
-              reason: s.reason,
+              exerciseId: opt.id,
+              name: opt.name,
+              reason: SUBSTITUTION_REASON,
               prescribedName: resolveExercise(substituteBlock)?.name ?? 'Ejercicio',
             },
           }))
@@ -625,5 +713,31 @@ function ExecutorV2Inner({ planId }: { planId: string }) {
         onClose={() => { setSummaryOpen(false); setFinishedElapsed(null) }}
       />
     </SafeAreaView>
+  )
+}
+
+/**
+ * Recap colapsado de un ejercicio COMPLETADO en la lista (paridad web `CollapsedExerciseBar`,
+ * WorkoutExecutionClient.tsx:918-961): fila delgada a opacidad plena; tap re-expande la card para
+ * ver/editar. El barrido de celebración del borde y el recap de superserie quedan como pulido Wave B.
+ */
+function CollapsedExerciseBar({ name, sub, onExpand }: { name: string; sub: string; onExpand: () => void }) {
+  return (
+    <Pressable
+      testID="collapsed-exercise-bar"
+      onPress={onExpand}
+      className="w-full flex-row items-center gap-2.5 rounded-card border border-sport-500/25 bg-sport-500/[0.05] px-3.5 py-2.5 active:opacity-80"
+      accessibilityRole="button"
+      accessibilityLabel={`${name} — completado, toca para ver o editar`}
+    >
+      <View className="h-7 w-7 shrink-0 items-center justify-center rounded-full bg-sport-500/15">
+        <CheckCircle2 size={20} color={SPORT_400} />
+      </View>
+      <View className="min-w-0 flex-1">
+        <Text className="font-display text-[15px] text-on-dark" numberOfLines={1}>{name}</Text>
+        <Text className="font-mono text-[11px] text-on-dark-muted" numberOfLines={1}>{sub}</Text>
+      </View>
+      <ChevronDown size={16} color={ON_DARK_MUTED} />
+    </Pressable>
   )
 }

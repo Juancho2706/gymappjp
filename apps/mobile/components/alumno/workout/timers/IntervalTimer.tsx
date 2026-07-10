@@ -1,14 +1,19 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { AppState, Pressable, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { Pause, Play, SkipForward, X } from 'lucide-react-native'
+import { MotiView } from 'moti'
+import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake'
+import { Pause, Play, SkipForward, Sun, X } from 'lucide-react-native'
 import * as Haptics from 'expo-haptics'
 import { INTERVAL_PHASE_LABEL, type IntervalPhase, type IntervalPhaseKind } from '@eva/workout-engine'
+import { useEvaMotion, EASE } from '../../../../lib/motion'
+import { useTheme } from '../../../../context/ThemeContext'
 import { TYPE, textStyle, FONT } from '../../../../lib/typography'
 import { SHADOWS } from '../../../../lib/shadows'
 import { haptics } from '../../../../lib/haptics'
 import {
   AQUA_500,
+  EMBER_300,
   EMBER_500,
   INK_900,
   ON_DARK,
@@ -16,6 +21,7 @@ import {
   SPORT_300,
   SUCCESS_500,
   TRACK_ON_DARK,
+  WARNING_500,
 } from './timer-colors'
 import { playTimerCue } from './sound'
 
@@ -25,16 +31,27 @@ import { playTimerCue } from './sound'
  * provider; acá se recibe `phases`). Muestra fase (warmup/work/recovery/cooldown)
  * con "intervalo N de M", tiempo mono grande, barra de progreso de la fase, y
  * pausa/saltar-fase/cerrar. Cue de audio + háptica en cada cambio de fase (doble
- * al terminar). El wake-lock lo maneja el núcleo del ejecutor, no este componente.
+ * al terminar).
+ *
+ * Wake-lock OPCIONAL con toggle (botón Sun): mantiene la pantalla encendida vía
+ * `expo-keep-awake` (equivalente idiomático del `navigator.wakeLock` web — requiere
+ * gesto del usuario, avisa del costo de batería y se libera al desmontar). En RN el
+ * keep-awake no se suelta al ir a background (no hay que re-adquirir en foreground
+ * como en el navegador), pero se re-asegura al volver a `active` por robustez.
  */
+const KEEP_AWAKE_TAG = 'eva-interval-timer'
+
 interface IntervalTimerProps {
   phases: IntervalPhase[]
   onClose: () => void
 }
 
-const PHASE_COLOR: Record<IntervalPhaseKind, string> = {
+// Color de la ETIQUETA de fase (espeja web `PHASE_COLOR`): warmup/cooldown sport-300,
+// work ember-300, recovery aqua-500. Ojo: la BARRA usa otro color (work ember-500,
+// resto theme-primary) — no confundir con estos.
+const PHASE_LABEL_COLOR: Record<IntervalPhaseKind, string> = {
   warmup: SPORT_300,
-  work: EMBER_500,
+  work: EMBER_300,
   recovery: AQUA_500,
   cooldown: SPORT_300,
 }
@@ -45,12 +62,16 @@ function formatTime(s: number): string {
 
 export function IntervalTimer({ phases, onClose }: IntervalTimerProps) {
   const insets = useSafeAreaInsets()
+  const motion = useEvaMotion()
+  const { theme } = useTheme()
   const [phaseIndex, setPhaseIndex] = useState(0)
   const [timeLeft, setTimeLeft] = useState(phases[0]?.durationSec ?? 0)
   const [isActive, setIsActive] = useState(true)
   const [finished, setFinished] = useState(false)
+  const [wakeLockOn, setWakeLockOn] = useState(false)
   const endTimeRef = useRef<number | null>(null)
   const phaseIndexRef = useRef(0)
+  const wakeLockOnRef = useRef(false)
 
   const phase = phases[phaseIndex] ?? null
 
@@ -92,15 +113,36 @@ export function IntervalTimer({ phases, onClose }: IntervalTimerProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isActive, finished, phaseIndex, advance])
 
+  // Wake-lock con toggle (gesto del usuario). Se re-asegura al volver a foreground
+  // (paridad con la re-adquisición web en `visibilitychange`) y se libera al desmontar.
+  const toggleWakeLock = useCallback(() => {
+    void haptics.tap()
+    const next = !wakeLockOnRef.current
+    wakeLockOnRef.current = next
+    setWakeLockOn(next)
+    if (next) void activateKeepAwakeAsync(KEEP_AWAKE_TAG).catch(() => {})
+    else void deactivateKeepAwake(KEEP_AWAKE_TAG).catch(() => {})
+  }, [])
+
   useEffect(() => {
     const sub = AppState.addEventListener('change', (next) => {
-      if (next !== 'active' || !endTimeRef.current || finished) return
+      if (next !== 'active') return
+      if (wakeLockOnRef.current) void activateKeepAwakeAsync(KEEP_AWAKE_TAG).catch(() => {})
+      if (!endTimeRef.current || finished) return
       const remaining = Math.max(0, Math.ceil((endTimeRef.current - Date.now()) / 1000))
       setTimeLeft(remaining)
       if (remaining === 0) advance()
     })
     return () => sub.remove()
   }, [advance, finished])
+
+  // Libera el keep-awake si el timer se desmonta con la pantalla aún forzada.
+  useEffect(
+    () => () => {
+      if (wakeLockOnRef.current) void deactivateKeepAwake(KEEP_AWAKE_TAG).catch(() => {})
+    },
+    [],
+  )
 
   const toggle = useCallback(() => {
     void haptics.tap()
@@ -117,16 +159,22 @@ export function IntervalTimer({ phases, onClose }: IntervalTimerProps) {
   return (
     <View
       pointerEvents="box-none"
-      style={[styles.anchor, { top: insets.top + 12, left: insets.left + 12, right: insets.right + 12 }]}
+      style={[styles.anchor, { top: insets.top + 100, left: insets.left + 12, right: insets.right + 12 }]}
     >
-      <View style={[styles.card, SHADOWS.dark.lg]} accessibilityRole="timer">
+      <MotiView
+        style={[styles.card, SHADOWS.dark.lg, { borderRadius: theme.radius['2xl'] }]}
+        accessibilityRole="timer"
+        from={motion.reduced ? undefined : { opacity: 0, translateY: -24 }}
+        animate={{ opacity: 1, translateY: 0 }}
+        transition={{ type: 'timing', duration: motion.reduced ? 0 : 200, easing: EASE.out }}
+      >
         <View style={styles.row}>
           <View style={styles.info}>
             {finished ? (
               <Text style={styles.finished}>¡Intervalos completados!</Text>
             ) : (
               <>
-                <Text style={[styles.eyebrow, { color: phase ? PHASE_COLOR[phase.kind] : ON_DARK_MUTED }]}>
+                <Text style={[styles.eyebrow, { color: phase ? PHASE_LABEL_COLOR[phase.kind] : ON_DARK_MUTED }]}>
                   {phase ? INTERVAL_PHASE_LABEL[phase.kind] : ''}
                   {phase?.repeat != null && phase.totalRepeats != null ? (
                     <Text style={styles.repeat}> · intervalo {phase.repeat} de {phase.totalRepeats}</Text>
@@ -137,6 +185,17 @@ export function IntervalTimer({ phases, onClose }: IntervalTimerProps) {
             )}
           </View>
           <View style={styles.utilRow}>
+            <Pressable
+              testID="interval-timer-wakelock"
+              onPress={toggleWakeLock}
+              accessibilityRole="button"
+              accessibilityLabel="Mantener pantalla encendida"
+              accessibilityState={{ selected: wakeLockOn }}
+              hitSlop={6}
+              style={[styles.utilBtn, wakeLockOn ? styles.wakeOn : null]}
+            >
+              <Sun size={16} color={wakeLockOn ? WARNING_500 : ON_DARK_MUTED} />
+            </Pressable>
             {!finished ? (
               <>
                 <Pressable
@@ -180,21 +239,23 @@ export function IntervalTimer({ phases, onClose }: IntervalTimerProps) {
                 styles.fill,
                 {
                   width: `${Math.max(0, Math.min(1, progress)) * 100}%`,
-                  backgroundColor: phase.kind === 'work' ? EMBER_500 : SUCCESS_500,
+                  backgroundColor: phase.kind === 'work' ? EMBER_500 : theme.primary,
                 },
               ]}
             />
           </View>
         ) : null}
-      </View>
+        {wakeLockOn ? (
+          <Text style={styles.batteryNote}>Pantalla siempre encendida activa — consume más batería.</Text>
+        ) : null}
+      </MotiView>
     </View>
   )
 }
 
 const styles = StyleSheet.create({
-  anchor: { position: 'absolute', maxWidth: 360, alignSelf: 'flex-end', width: '100%' },
+  anchor: { position: 'absolute' },
   card: {
-    borderRadius: 22,
     borderWidth: 1,
     borderColor: TRACK_ON_DARK,
     backgroundColor: `${INK_900}F2`,
@@ -204,12 +265,14 @@ const styles = StyleSheet.create({
   },
   row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, minHeight: 44 },
   info: { flexShrink: 1, minWidth: 0 },
-  finished: { ...textStyle('sm', FONT.uiExtra), color: SUCCESS_500 },
+  finished: { ...textStyle('sm', FONT.uiBold), color: SUCCESS_500 },
   eyebrow: { ...TYPE.eyebrow },
   repeat: { ...textStyle('2xs', FONT.uiBold), color: ON_DARK_MUTED },
   bigTime: { ...textStyle('2xl', FONT.monoBold, { lh: 'tight' }), color: ON_DARK, marginTop: 2 },
   utilRow: { flexDirection: 'row', alignItems: 'center', flexShrink: 0 },
   utilBtn: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
+  wakeOn: { backgroundColor: `${WARNING_500}1A` }, // warning-500 @ 10% (espeja `bg-[var(--warning-500)]/10`)
   track: { marginTop: 6, height: 4, borderRadius: 999, backgroundColor: TRACK_ON_DARK, overflow: 'hidden' },
   fill: { height: '100%', borderRadius: 999 },
+  batteryNote: { ...textStyle('3xs', FONT.ui), color: ON_DARK_MUTED, marginTop: 4 },
 })

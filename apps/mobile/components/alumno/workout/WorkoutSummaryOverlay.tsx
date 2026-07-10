@@ -15,6 +15,8 @@ import {
 import { Confetti } from 'react-native-fast-confetti'
 import {
   compactDistance,
+  formatClockDuration,
+  formatSessionDuration,
   summarizeSessionByKind,
   type CardioItem,
   type MobilityItem,
@@ -29,6 +31,7 @@ import { epleyOneRM } from '../../../lib/profile-analytics'
 import type { CheckInReminder } from '../../../lib/checkin-thresholds'
 import { MuscleMapSvg } from './MuscleMapSvg'
 import {
+  ShareCardDate,
   ShareCardEyebrow,
   ShareCardHero,
   ShareCardPill,
@@ -48,8 +51,10 @@ const W05 = 'rgba(255,255,255,0.05)'
 const W06 = 'rgba(255,255,255,0.06)'
 const W08 = 'rgba(255,255,255,0.08)'
 const W10 = 'rgba(255,255,255,0.10)'
-const SPORT_500 = '#12B76A'
-const SPORT_300 = '#6CE9A6'
+// --sport-300 (147 190 255): eyebrow "Lo que viene". El sport-500 semántico (círculo del check,
+// hero, nudge) NO es un literal fijo: sigue la MARCA del coach (`theme.primary`), igual que web
+// donde `--sport-500` === `--theme-primary` (globals.css:260,350 + deriveSportTokens white-label).
+const SPORT_300 = '#93BEFF'
 const AMBER_200 = '#FDE68A'
 const EMBER_500 = '#FF6A3D'
 const EMBER_100 = 'rgba(255,106,61,0.14)'
@@ -65,14 +70,14 @@ function fmtShortDate(ymd: string): string {
   return new Date(`${ymd}T12:00:00Z`).toLocaleDateString('es-CL', { day: 'numeric', month: 'short', timeZone: 'UTC' })
 }
 
-/** Duración → "45:12" (mm:ss) o "1h 05" desde 1 hora. "—" si no llega el dato. */
-function fmtDuration(totalSec: number | undefined): string {
-  if (totalSec == null || totalSec <= 0) return '—'
-  const h = Math.floor(totalSec / 3600)
-  const m = Math.floor((totalSec % 3600) / 60)
-  const s = totalSec % 60
-  if (h > 0) return `${h}h ${String(m).padStart(2, '0')}`
-  return `${m}:${String(s).padStart(2, '0')}`
+/** "#rrggbb" + alfa → "rgba(r,g,b,a)" — para tintar la marca del coach (nudge sport-500/x). */
+function withAlpha(hex: string, alpha: number): string {
+  const h = hex.replace('#', '')
+  const full = h.length === 3 ? h.split('').map((c) => c + c).join('') : h
+  const r = parseInt(full.slice(0, 2), 16) || 0
+  const g = parseInt(full.slice(2, 4), 16) || 0
+  const b = parseInt(full.slice(4, 6), 16) || 0
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`
 }
 
 const MONO = FONT.monoBold
@@ -83,7 +88,7 @@ type SummaryTile = { value: string; unit?: string; label: string }
 
 function cardioTiles(c: CardioItem): SummaryTile[] {
   const tiles: SummaryTile[] = []
-  if (c.durationSec != null && c.durationSec > 0) tiles.push({ value: fmtDuration(c.durationSec), label: 'Tiempo' })
+  if (c.durationSec != null && c.durationSec > 0) tiles.push({ value: formatClockDuration(c.durationSec), label: 'Tiempo' })
   if (c.distanceM != null && c.distanceM > 0) tiles.push({ value: compactDistance(c.distanceM, 'm'), label: 'Distancia' })
   if (c.avgHr != null && c.avgHr > 0) tiles.push({ value: String(c.avgHr), unit: 'bpm', label: 'FC media' })
   if (c.rounds > 1) tiles.push({ value: String(c.rounds), label: 'Rondas' })
@@ -93,7 +98,7 @@ function cardioTiles(c: CardioItem): SummaryTile[] {
 
 function mobilityTiles(m: MobilityItem): SummaryTile[] {
   const tiles: SummaryTile[] = [{ value: String(m.sets), label: m.sets === 1 ? 'Serie' : 'Series' }]
-  if (m.holdSec != null && m.holdSec > 0) tiles.push({ value: fmtDuration(m.holdSec), label: 'Hold total' })
+  if (m.holdSec != null && m.holdSec > 0) tiles.push({ value: formatClockDuration(m.holdSec), label: 'Hold total' })
   return tiles
 }
 
@@ -227,8 +232,11 @@ export function WorkoutSummaryOverlay({
     if (visible) haptics.success()
   }, [visible])
 
-  const durationLabel = fmtDuration(durationSec)
-  const sessionShareMsg = `¡Completé "${planTitle}"! 💪 ${completedSets} series · ${totalReps} reps · ${Math.round(totalVolume)} kg${detectedPRs.length ? ` · ${detectedPRs.length} récord${detectedPRs.length > 1 ? 's' : ''}!` : ''}`
+  // Hero "Duración" y ShareCardHero: `formatSessionDuration` (explícita, sin segundos — un 0:40
+  // se leía como 40 min siendo 40 s). Los tiles de cardio/hold usan `formatClockDuration` (mm:ss).
+  const durationLabel = formatSessionDuration(durationSec)
+  const prSuffix = detectedPRs.length ? ` 🏆 ${detectedPRs.length} récord${detectedPRs.length > 1 ? 's' : ''}!` : ''
+  const sessionShareMsg = `¡Completé "${planTitle}"! 💪 ${completedSets} series · ${totalReps} reps · ${Math.round(totalVolume)} kg${prSuffix}`
 
   const onOpenPr = useCallback((pr: DetectedPR) => {
     haptics.tap()
@@ -243,7 +251,7 @@ export function WorkoutSummaryOverlay({
       <SafeAreaProvider>
       <SafeAreaView edges={['top', 'bottom']} style={{ flex: 1, backgroundColor: INK_950 }}>
         {visible && !motion.reduced ? (
-          <Confetti autoplay fadeOutOnEnd colors={[brand, '#F59E0B', SPORT_500, theme.cyan]} />
+          <Confetti autoplay fadeOutOnEnd colors={[brand, '#F59E0B', theme.success, theme.cyan]} />
         ) : null}
 
         {onClose && (
@@ -259,7 +267,7 @@ export function WorkoutSummaryOverlay({
         <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 24, paddingBottom: 20, gap: 24 }} showsVerticalScrollIndicator={false}>
           {/* Header */}
           <View style={{ alignItems: 'center', gap: 6 }}>
-            <View style={[{ width: 76, height: 76, borderRadius: 38, alignItems: 'center', justifyContent: 'center', backgroundColor: SPORT_500, marginBottom: 8 }, theme.shadowGlowBlue]}>
+            <View style={[{ width: 76, height: 76, borderRadius: 38, alignItems: 'center', justifyContent: 'center', backgroundColor: brand, marginBottom: 8 }, theme.shadowGlowBlue]}>
               <Check size={36} color="#fff" strokeWidth={2.5} />
             </View>
             <Text style={{ fontFamily: DISPLAY, fontSize: 28, letterSpacing: -0.6, color: ON_DARK, textAlign: 'center' }}>¡Sesión completada!</Text>
@@ -269,19 +277,19 @@ export function WorkoutSummaryOverlay({
           {/* Hero: Duración + stat adaptativo, luego series · reps */}
           <View style={{ gap: 8 }}>
             <View style={{ flexDirection: 'row', gap: 8 }}>
-              <View style={{ flex: 1, borderRadius: 12, borderWidth: 1, borderColor: BORDER_INV, backgroundColor: INK_900, paddingVertical: 20, alignItems: 'center' }}>
-                <Text style={{ fontFamily: MONO, fontSize: 32, color: SPORT_500 }}>{durationLabel}</Text>
+              <View style={{ flex: 1, borderRadius: 14, borderWidth: 1, borderColor: BORDER_INV, backgroundColor: INK_900, paddingVertical: 20, alignItems: 'center' }}>
+                <Text style={{ fontFamily: MONO, fontSize: 34, color: brand }}>{durationLabel}</Text>
                 <Text style={{ fontFamily: BOLD, fontSize: 11, color: ON_DARK_MUTED, marginTop: 8 }}>Duración</Text>
               </View>
-              <View style={{ flex: 1, borderRadius: 12, borderWidth: 1, borderColor: BORDER_INV, backgroundColor: INK_900, paddingVertical: 20, alignItems: 'center' }}>
-                <Text style={{ fontFamily: MONO, fontSize: 32, color: SPORT_500 }}>
+              <View style={{ flex: 1, borderRadius: 14, borderWidth: 1, borderColor: BORDER_INV, backgroundColor: INK_900, paddingVertical: 20, alignItems: 'center' }}>
+                <Text style={{ fontFamily: MONO, fontSize: 34, color: brand }}>
                   {heroSecondary.value}
-                  {heroSecondary.unit ? <Text style={{ fontFamily: BOLD, fontSize: 15, color: ON_DARK_MUTED }}> {heroSecondary.unit}</Text> : null}
+                  {heroSecondary.unit ? <Text style={{ fontFamily: BOLD, fontSize: 16, color: ON_DARK_MUTED }}> {heroSecondary.unit}</Text> : null}
                 </Text>
                 <Text style={{ fontFamily: BOLD, fontSize: 11, color: ON_DARK_MUTED, marginTop: 8 }}>{heroSecondary.label}</Text>
               </View>
             </View>
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: 12, borderWidth: 1, borderColor: BORDER_INV, backgroundColor: W03, paddingVertical: 10 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: 14, borderWidth: 1, borderColor: BORDER_INV, backgroundColor: W03, paddingVertical: 10 }}>
               <Text style={{ fontFamily: theme.fontSans, fontSize: 14, color: ON_DARK_MUTED }}>
                 <Text style={{ fontFamily: BOLD, color: ON_DARK }}>{completedSets}</Text> series
               </Text>
@@ -337,7 +345,7 @@ export function WorkoutSummaryOverlay({
             <View style={{ gap: 8 }}>
               <Text style={{ fontFamily: BOLD, fontSize: 12, letterSpacing: 1.5, textTransform: 'uppercase', color: ON_DARK_MUTED }}>Por ejercicio</Text>
               {exerciseBreakdown.map((ex, i) => (
-                <View key={`${ex.exerciseId}-${i}`} style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: 8, borderRadius: 16, borderWidth: 1, borderColor: BORDER_INV, backgroundColor: W04, paddingHorizontal: 12, paddingVertical: 10 }}>
+                <View key={`${ex.exerciseId}-${i}`} style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: 8, borderRadius: 20, borderWidth: 1, borderColor: BORDER_INV, backgroundColor: W04, paddingHorizontal: 12, paddingVertical: 10 }}>
                   <View style={{ flex: 1 }}>
                     <Text style={{ fontFamily: BOLD, fontSize: 14, color: ON_DARK }}>{ex.name}</Text>
                     <Text style={{ fontFamily: theme.fontSans, fontSize: 10, color: ON_DARK_MUTED }}>{ex.muscleGroup}</Text>
@@ -376,7 +384,7 @@ export function WorkoutSummaryOverlay({
               <Text style={{ fontFamily: BOLD, fontSize: 12, letterSpacing: 1.5, textTransform: 'uppercase', color: ON_DARK_MUTED }}>Músculos trabajados</Text>
               {hasMuscleMap && (
                 <View style={{ borderRadius: 20, borderWidth: 1, borderColor: BORDER_INV, backgroundColor: W03, paddingHorizontal: 12, paddingTop: 12, paddingBottom: 8 }}>
-                  <MuscleMapSvg groups={session.muscleWork} />
+                  <MuscleMapSvg groups={session.muscleWork} reducedMotion={motion.reduced} />
                 </View>
               )}
               <View style={{ gap: 8 }}>
@@ -397,8 +405,8 @@ export function WorkoutSummaryOverlay({
 
           {/* Lo que viene */}
           {programName ? (
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, borderRadius: 20, borderWidth: 1, borderColor: 'rgba(18,183,106,0.25)', backgroundColor: 'rgba(18,183,106,0.08)', paddingHorizontal: 16, paddingVertical: 12 }}>
-              <View style={{ width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: SPORT_500 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, borderRadius: 20, borderWidth: 1, borderColor: withAlpha(brand, 0.25), backgroundColor: withAlpha(brand, 0.08), paddingHorizontal: 16, paddingVertical: 12 }}>
+              <View style={{ width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: brand }}>
                 <ArrowRight size={16} color="#fff" />
               </View>
               <View style={{ flex: 1 }}>
@@ -423,7 +431,7 @@ export function WorkoutSummaryOverlay({
             style={{ height: 52, paddingHorizontal: 18, borderRadius: 14, borderWidth: 1, borderColor: BORDER_INV, backgroundColor: W08, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 }}
           >
             <Share2 size={16} color={ON_DARK} />
-            <Text style={{ fontFamily: BOLD, fontSize: 15, color: ON_DARK }}>Compartir</Text>
+            <Text style={{ fontFamily: BOLD, fontSize: 15, color: ON_DARK }}>Compartir logro</Text>
           </Pressable>
           <Pressable
             testID="summary-done"
@@ -459,10 +467,12 @@ export function WorkoutSummaryOverlay({
       >
         {prCard ? (
           <>
-            <ShareCardEyebrow>RÉCORD PERSONAL</ShareCardEyebrow>
+            <ShareCardEyebrow color={brand}>RÉCORD PERSONAL</ShareCardEyebrow>
             <ShareCardTitle>{prCard.exerciseName}</ShareCardTitle>
             <ShareCardHero value={String(prCard.newWeightKg)} unit="kg" color={brand} />
             <ShareCardPill tone="success">{prCard.prevWeightKg} → {prCard.newWeightKg} kg{prCard.pct > 0 ? ` · +${prCard.pct}%` : ''}</ShareCardPill>
+            <ShareCardDate />
+            <ShareCardPill>1RM estimado · {prCard.estimated1RM} kg</ShareCardPill>
           </>
         ) : null}
       </ShareCardPreview>
@@ -485,7 +495,7 @@ function NonStrengthCard({
   tiles: SummaryTile[]
 }) {
   return (
-    <View style={{ borderRadius: 16, borderWidth: 1, borderColor: BORDER_INV, backgroundColor: W03, paddingHorizontal: 12, paddingVertical: 12 }}>
+    <View style={{ borderRadius: 20, borderWidth: 1, borderColor: BORDER_INV, backgroundColor: W03, paddingHorizontal: 12, paddingVertical: 12 }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 10 }}>
         <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
           {icon}

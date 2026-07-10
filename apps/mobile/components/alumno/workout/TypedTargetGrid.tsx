@@ -95,7 +95,7 @@ export function TypedTargetGrid({
         <View
           key={card.label}
           className={`rounded-sm border px-2.5 py-2 ${
-            card.highlight ? 'border-ember-500/30 bg-ember-500/[0.14]' : 'border-inverse/50 bg-white/[0.05]'
+            card.highlight ? 'border-ember-500/30 bg-ember-500/[0.14]' : 'border-inverse/10 bg-white/[0.05]'
           }`}
           style={{ flexBasis: '47%', flexGrow: 1 }}
         >
@@ -149,7 +149,7 @@ function TimerButton({ testID, label, onPress }: { testID: string; label: string
     <Pressable
       testID={testID}
       onPress={onPress}
-      className="h-11 flex-row items-center gap-1.5 self-end rounded-control border border-inverse/50 bg-sport-500/[0.12] px-3 active:opacity-90"
+      className="h-11 flex-row items-center gap-1.5 self-end rounded-control border border-inverse/10 bg-sport-500/[0.12] px-3 active:opacity-90"
       accessibilityRole="button"
       accessibilityLabel={label}
     >

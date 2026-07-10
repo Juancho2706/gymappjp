@@ -1,4 +1,5 @@
 import { Pressable, Text, View } from 'react-native'
+import { MotiView } from 'moti'
 import { ArrowLeft, GalleryHorizontal, List, Settings } from 'lucide-react-native'
 import { ProgressBar } from '../../ProgressBar'
 import { FONT, TYPE } from '../../../lib/typography'
@@ -50,7 +51,12 @@ export function SessionHeader({
   onOpenSettings: () => void
 }) {
   return (
-    <View className="border-b border-white/10 px-4 pb-3 pt-1">
+    <MotiView
+      from={{ opacity: 0, translateY: -20 }}
+      animate={{ opacity: 1, translateY: 0 }}
+      transition={{ type: 'timing', duration: 250 }}
+      className="border-b border-white/10 px-4 pb-3 pt-1"
+    >
       <View className="mb-3 flex-row items-center gap-2.5">
         <Pressable
           testID="btn-exit-workout"
@@ -86,29 +92,45 @@ export function SessionHeader({
             </Text>
           )}
         </View>
-        {/* Toggle segmentado Lista / Pasos (E2-04) */}
-        <View className="flex-row items-center gap-0.5 rounded-control border border-inverse/50 bg-white/[0.04] p-0.5">
+        {/* Toggle segmentado Lista / Pasos (E2-04) — icono + rótulo, como el web (1823-1846). */}
+        <View
+          className="flex-row items-center gap-0.5 rounded-control bg-white/[0.06] p-0.5"
+          accessibilityRole="radiogroup"
+          accessibilityLabel="Modo de ejecución"
+        >
           <Pressable
             testID="toggle-view-list"
             onPress={() => onToggleMode('list')}
             hitSlop={4}
-            className={`h-8 w-8 items-center justify-center rounded-control ${viewMode === 'list' ? 'bg-sport-500' : ''}`}
+            className={`h-9 flex-row items-center gap-1 rounded-[10px] px-2 ${viewMode === 'list' ? 'bg-sport-500' : ''}`}
             accessibilityRole="button"
             accessibilityLabel="Ver como lista"
             accessibilityState={{ selected: viewMode === 'list' }}
           >
-            <List size={16} color={viewMode === 'list' ? ON_DARK : ON_DARK_MUTED} />
+            <List size={14} color={viewMode === 'list' ? ON_DARK : ON_DARK_MUTED} />
+            <Text
+              style={{ fontFamily: FONT.uiBold, fontSize: 11 }}
+              className={viewMode === 'list' ? 'text-on-dark' : 'text-on-dark-muted'}
+            >
+              Lista
+            </Text>
           </Pressable>
           <Pressable
             testID="toggle-view-steps"
             onPress={() => onToggleMode('steps')}
             hitSlop={4}
-            className={`h-8 w-8 items-center justify-center rounded-control ${viewMode === 'steps' ? 'bg-sport-500' : ''}`}
+            className={`h-9 flex-row items-center gap-1 rounded-[10px] px-2 ${viewMode === 'steps' ? 'bg-sport-500' : ''}`}
             accessibilityRole="button"
             accessibilityLabel="Ver paso a paso"
             accessibilityState={{ selected: viewMode === 'steps' }}
           >
-            <GalleryHorizontal size={16} color={viewMode === 'steps' ? ON_DARK : ON_DARK_MUTED} />
+            <GalleryHorizontal size={14} color={viewMode === 'steps' ? ON_DARK : ON_DARK_MUTED} />
+            <Text
+              style={{ fontFamily: FONT.uiBold, fontSize: 11 }}
+              className={viewMode === 'steps' ? 'text-on-dark' : 'text-on-dark-muted'}
+            >
+              Pasos
+            </Text>
           </Pressable>
         </View>
         {/* Ajustes: cronómetro automático + alarma de descanso (WAVE-B-SEAM). */}
@@ -137,6 +159,6 @@ export function SessionHeader({
           <Text style={TYPE.mono} className="text-[11px] text-sport-400 font-mono-bold">· {completionPct}%</Text>
         </View>
       </View>
-    </View>
+    </MotiView>
   )
 }

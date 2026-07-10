@@ -4,7 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import Svg, { Circle, G } from 'react-native-svg'
 import { MotiView } from 'moti'
 import { Confetti } from 'react-native-fast-confetti'
-import { Minus, Pause, Play, Plus, RotateCcw, Volume2, VolumeX, X } from 'lucide-react-native'
+import { Pause, Play, RotateCcw, Volume2, VolumeX, X } from 'lucide-react-native'
 import * as Haptics from 'expo-haptics'
 import { useEvaMotion } from '../../../../lib/motion'
 import { TYPE, textStyle, FONT } from '../../../../lib/typography'
@@ -12,6 +12,7 @@ import { SHADOWS } from '../../../../lib/shadows'
 import { haptics } from '../../../../lib/haptics'
 import {
   CONFETTI_COLORS,
+  EMBER_200,
   EMBER_300,
   EMBER_500,
   INK_900,
@@ -261,9 +262,17 @@ export function RestTimerBar({ initialSeconds, nextLabel, warmup = false, autoSt
         pointerEvents="box-none"
         style={[styles.anchor, { bottom: bottomOffset, left: insets.left + 12, right: insets.right + 12 }]}
       >
-        <View
+        <MotiView
           style={[styles.bar, SHADOWS.dark.xl, done ? styles.barDone : styles.barIdle]}
           accessibilityRole="timer"
+          // Entrada tipo bottom-sheet (espeja `springsSheet.enter` web: slide-up + fade).
+          from={motion.reduced ? undefined : { opacity: 0, translateY: 40 }}
+          animate={{ opacity: 1, translateY: 0 }}
+          transition={
+            motion.reduced
+              ? { type: 'timing', duration: 0 }
+              : { type: 'spring', stiffness: 320, damping: 34, mass: 0.9 }
+          }
         >
           {/* Pulso ember al llegar a 0. */}
           {done ? (
@@ -310,18 +319,26 @@ export function RestTimerBar({ initialSeconds, nextLabel, warmup = false, autoSt
                 <View style={styles.infoText}>
                   <Text style={styles.eyebrow}>{warmup ? 'Aproximación' : 'Descanso'}</Text>
                   <Text style={styles.subLine} numberOfLines={1}>
-                    {done ? '¡A entrenar!' : nextLabel ? `Sigue · ${nextLabel}` : 'Recupérate'}
+                    {done ? (
+                      '¡A entrenar!'
+                    ) : nextLabel ? (
+                      <>
+                        Sigue · <Text style={styles.subLineMuted}>{nextLabel}</Text>
+                      </>
+                    ) : (
+                      'Recupérate'
+                    )}
                   </Text>
                 </View>
                 <View style={styles.utilRow}>
                   <UtilButton testID="rest-timer-pause" onPress={toggleTimer} label={isActive ? 'Pausar' : 'Reanudar'}>
-                    {isActive ? <Pause size={18} color={ON_DARK_MUTED} /> : <Play size={18} color={ON_DARK_MUTED} />}
+                    {isActive ? <Pause size={16} color={ON_DARK_MUTED} /> : <Play size={16} color={ON_DARK_MUTED} />}
                   </UtilButton>
                   <UtilButton testID="rest-timer-reset" onPress={resetTimer} label="Reiniciar descanso">
-                    <RotateCcw size={18} color={ON_DARK_MUTED} />
+                    <RotateCcw size={16} color={ON_DARK_MUTED} />
                   </UtilButton>
                   <UtilButton testID="rest-timer-close" onPress={handleClose} label="Cerrar descanso">
-                    <X size={18} color={ON_DARK_MUTED} />
+                    <X size={16} color={ON_DARK_MUTED} />
                   </UtilButton>
                 </View>
               </View>
@@ -335,8 +352,7 @@ export function RestTimerBar({ initialSeconds, nextLabel, warmup = false, autoSt
                   accessibilityLabel="Restar 15 segundos"
                   style={styles.adjustBtn}
                 >
-                  <Minus size={14} color={ON_DARK} />
-                  <Text style={styles.adjustLabel}>15s</Text>
+                  <Text style={styles.adjustLabel}>−15s</Text>
                 </Pressable>
                 <Pressable
                   testID="rest-timer-add-15"
@@ -345,8 +361,7 @@ export function RestTimerBar({ initialSeconds, nextLabel, warmup = false, autoSt
                   accessibilityLabel="Sumar 15 segundos"
                   style={styles.adjustBtn}
                 >
-                  <Plus size={14} color={ON_DARK} />
-                  <Text style={styles.adjustLabel}>15s</Text>
+                  <Text style={styles.adjustLabel}>+15s</Text>
                 </Pressable>
                 <Pressable
                   testID="rest-timer-mute"
@@ -356,12 +371,12 @@ export function RestTimerBar({ initialSeconds, nextLabel, warmup = false, autoSt
                   accessibilityLabel={muted ? 'Activar sonido del descanso' : 'Silenciar descanso'}
                   style={[styles.muteBtn, muted ? styles.muteOff : styles.muteOn]}
                 >
-                  {muted ? <VolumeX size={18} color={ON_DARK_MUTED} /> : <Volume2 size={18} color={EMBER_300} />}
+                  {muted ? <VolumeX size={16} color={ON_DARK_MUTED} /> : <Volume2 size={16} color={EMBER_200} />}
                 </Pressable>
               </View>
             </View>
           </View>
-        </View>
+        </MotiView>
       </View>
     </>
   )
@@ -414,6 +429,7 @@ const styles = StyleSheet.create({
   infoText: { flexShrink: 1, minWidth: 0 },
   eyebrow: { ...TYPE.eyebrow, color: EMBER_300 },
   subLine: { ...TYPE.label, color: ON_DARK, marginTop: 2 },
+  subLineMuted: { color: ON_DARK_MUTED }, // el "qué sigue" en tono atenuado (espeja `text-on-dark-muted` web)
   utilRow: { flexDirection: 'row', alignItems: 'center', flexShrink: 0 },
   utilBtn: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
   adjustRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 10 },

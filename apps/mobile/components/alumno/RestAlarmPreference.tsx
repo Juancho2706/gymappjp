@@ -4,6 +4,7 @@ import { Volume2, VolumeX } from 'lucide-react-native'
 import { Card } from '../Card'
 import { SegmentedTabs } from '../SegmentedTabs'
 import { HapticPressable } from '../HapticPressable'
+import { Slider } from '../Slider'
 import { useTheme } from '../../context/ThemeContext'
 import { haptics } from '../../lib/haptics'
 import {
@@ -12,6 +13,8 @@ import {
   setRestTimerMuted,
   getRestTimerSound,
   setRestTimerSound,
+  getRestTimerVolume,
+  setRestTimerVolume,
   type TimerSound,
 } from './workout/timers'
 import { playTimerCue } from './workout/timers/sound'
@@ -43,19 +46,20 @@ const SOUND_ITEMS: { value: TimerSound; label: string }[] = [
 
 // Snapshot combinado para useSyncExternalStore. Se memoiza por igualdad de
 // campos para no forzar renders (el store notifica en cada set).
-let snapCache = { muted: isRestTimerMuted(), sound: getRestTimerSound() }
+let snapCache = { muted: isRestTimerMuted(), sound: getRestTimerSound(), volume: getRestTimerVolume() }
 function getSnapshot() {
   const muted = isRestTimerMuted()
   const sound = getRestTimerSound()
-  if (snapCache.muted !== muted || snapCache.sound !== sound) {
-    snapCache = { muted, sound }
+  const volume = getRestTimerVolume()
+  if (snapCache.muted !== muted || snapCache.sound !== sound || snapCache.volume !== volume) {
+    snapCache = { muted, sound, volume }
   }
   return snapCache
 }
 
 export function RestAlarmPreference() {
   const { theme } = useTheme()
-  const { muted, sound } = useSyncExternalStore(subscribeRestTimerPrefs, getSnapshot, getSnapshot)
+  const { muted, sound, volume } = useSyncExternalStore(subscribeRestTimerPrefs, getSnapshot, getSnapshot)
 
   function toggleMuted() {
     haptics.select()
@@ -66,6 +70,14 @@ export function RestAlarmPreference() {
     setRestTimerSound(next)
     // Al elegir un sonido con Silencio activo, lo desactivamos (intención clara).
     if (muted) setRestTimerMuted(false)
+    // Previsualiza el timbre elegido (espeja `handleSoundChange` web → playTimerSound).
+    playTimerCue('alarm')
+  }
+
+  function pickVolume(next: number) {
+    setRestTimerVolume(next)
+    // Previsualiza con el nuevo volumen (espeja `handleVolumeChange` web).
+    playTimerCue('alarm')
   }
 
   function preview() {
@@ -108,6 +120,24 @@ export function RestAlarmPreference() {
           value={sound}
           onChange={pickSound}
           size="sm"
+        />
+      </View>
+
+      <View className="mt-4">
+        <View className="flex-row items-center gap-1.5 mb-2">
+          <Volume2 size={14} color={theme.mutedForeground} />
+          <Text className="text-xs font-sans text-muted">Volumen</Text>
+        </View>
+        <Slider
+          testID="rest-alarm-volume"
+          min={0}
+          max={1}
+          step={0.1}
+          value={volume}
+          onValueChange={pickVolume}
+          renderValue={(v) => (
+            <Text className="text-xs font-sans-semibold text-muted">{Math.round(v * 100)}%</Text>
+          )}
         />
       </View>
 

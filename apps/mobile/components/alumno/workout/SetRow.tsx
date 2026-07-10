@@ -33,15 +33,99 @@ export function SetRow({
   isActive,
   typedMode,
   onPress,
+  onRpeUpdate,
 }: {
   setNumber: number
   log?: ReconciledSessionLog
   isActive: boolean
   typedMode?: TypedKeypadMode | null
   onPress: () => void
+  /**
+   * Registro de RPE POST-log en series tipadas (cardio/movilidad/roller) — mirror de
+   * `TypedLogSetRow` web (`LogSetForm.tsx:1112-1136`): al loguear una serie tipada se despliega la
+   * MISMA escala de dots RPE; cambiarla re-submitea el log completo preservando los ejes `actual_*`
+   * (crítico anti-bug hold). Opcional: sin este callback la serie tipada queda como chip simple
+   * (comportamiento previo, sin regresión). No aplica a fuerza (RPE/RIR se capturan en la fila activa).
+   */
+  onRpeUpdate?: (payload: OptimisticLogPayload) => void
 }) {
   const logged = !!log
   const pending = log?._pending === true
+  const [rpeHelpOpen, setRpeHelpOpen] = useState(false)
+
+  // Paridad web B.3: una serie TIPADA logueada muestra la escala RPE debajo de su marca; cambiarla
+  // reconstruye el payload desde el log (preservando `actual_*`) y re-submitea vía `onRpeUpdate`.
+  if (logged && typedMode && onRpeUpdate && log) {
+    const rpePayload = (v: number): OptimisticLogPayload => ({
+      blockId: log.block_id,
+      setNumber,
+      weightKg: log.weight_kg ?? null,
+      repsDone: log.reps_done ?? null,
+      rpe: v,
+      rir: log.rir ?? null,
+      note: log.note ?? null,
+      actualDurationSec: log.actual_duration_sec ?? null,
+      actualDistanceM: log.actual_distance_m ?? null,
+      actualHoldSec: log.actual_hold_sec ?? null,
+      actualAvgHr: log.actual_avg_hr ?? null,
+    })
+    return (
+      <View
+        testID={`set-row-${setNumber}`}
+        className="gap-2 rounded-control border border-sport-500/30 bg-sport-500/[0.06] px-3 py-2.5"
+      >
+        <Pressable
+          onPress={onPress}
+          className="flex-row items-center gap-3"
+          accessibilityRole="button"
+          accessibilityLabel={`Editar serie ${setNumber}`}
+        >
+          <View className="h-7 w-7 items-center justify-center rounded-full bg-sport-500/20">
+            <Check size={15} color={SPORT_400} strokeWidth={2.6} />
+          </View>
+          <View className="min-w-0 flex-1">
+            <Text style={TYPE.eyebrow} className="text-on-dark-muted">
+              Serie {setNumber}
+            </Text>
+            <Text
+              style={TYPE.mono}
+              className={`text-[13px] ${pending ? 'text-warning-500' : 'text-on-dark'}`}
+              numberOfLines={1}
+            >
+              {fmtTypedLoggedLine(log, typedMode)}
+            </Text>
+          </View>
+          {pending && (
+            <View className="flex-row items-center gap-1">
+              <CloudOff size={13} color={WARNING_500} />
+              <Text
+                style={{ fontFamily: FONT.uiBold, fontSize: 10, letterSpacing: 0.6, textTransform: 'uppercase' }}
+                className="text-warning-500"
+              >
+                Sin sincronizar
+              </Text>
+            </View>
+          )}
+        </Pressable>
+
+        {/* RPE post-registro con la MISMA escala segmentada (mirror `LogSetForm.tsx:1121-1135`) */}
+        <View>
+          <View className="mb-1 flex-row items-center gap-1">
+            <Text style={TYPE.eyebrow} className="text-on-dark-muted">
+              Esfuerzo · RPE
+            </Text>
+            <EffortLabel label="RPE" open={rpeHelpOpen} onToggle={() => setRpeHelpOpen((o) => !o)} />
+          </View>
+          {rpeHelpOpen && (
+            <Text style={TYPE.caption} className="mb-1.5 text-[11px] text-on-dark-muted">
+              {RPE_HELP}
+            </Text>
+          )}
+          <EffortScale kind="rpe" value={log.rpe ?? null} onSelect={(v) => onRpeUpdate(rpePayload(v))} compact />
+        </View>
+      </View>
+    )
+  }
 
   return (
     <Pressable

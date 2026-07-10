@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react'
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
+import { Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import { MotiView } from 'moti'
-import { AlertTriangle, Calendar, ChevronDown, Dumbbell } from 'lucide-react-native'
+import { Easing, useReducedMotion } from 'react-native-reanimated'
+import { useRouter } from 'expo-router'
+import { AlertTriangle, Calendar, ChevronDown, ChevronLeft, Dumbbell } from 'lucide-react-native'
 import { getClientProfile } from '../../../lib/client'
 import {
   getWorkoutDaySummaries,
@@ -10,18 +12,73 @@ import {
   type DaySummary,
 } from '../../../lib/history.queries'
 import { useTheme } from '../../../context/ThemeContext'
-import { Button, ScreenHeader } from '../../../components'
+import { Button } from '../../../components'
 import { Card } from '../../../components/Card'
-import { EmptyState } from '../../../components/EmptyState'
 import { EvaLoaderScreen } from '../../../components/EvaLoader'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { AppBackground } from '../../../components/AppBackground'
 
+const FONT_DISPLAY = 'Archivo_900Black'
 const FONT_BOLD = 'HankenGrotesk_700Bold'
 const FONT_MONO = 'JetBrainsMono_700Bold'
 
+// Curva del reveal fade-up de la web (Reveal.tsx:7 `ease: [0.16, 1, 0.3, 1]`), 1:1.
+const EASE_FADEUP = Easing.bezier(0.16, 1, 0.3, 1)
+
+/**
+ * Etiqueta de día 1:1 con la web (dashboard.queries.ts:228-232):
+ * `new Date(day + 'T12:00:00').toLocaleDateString('es-CL', { weekday:'long', day:'numeric', month:'short' })`
+ * → "lunes, 3 mar". El ancla T12:00:00 evita saltos de día por zona horaria. Se
+ * recalcula aquí (no en la query compartida getWorkoutDaySummaries, que usa el
+ * label relativo "Hoy/Ayer" del dashboard) para no alterar el widget/perfil.
+ */
+function formatDayLabel(dayKey: string): string {
+  return new Date(dayKey + 'T12:00:00').toLocaleDateString('es-CL', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'short',
+  })
+}
+
+/**
+ * Header inline (no sticky) — 1:1 con la web (page.tsx:37-63): botón volver al
+ * dashboard, badge con el color de marca del coach al 12%, título display-black
+ * y subtítulo con el rango activo.
+ */
+function HistoryHeader({ monthsLabel, onBack }: { monthsLabel: string; onBack: () => void }) {
+  const { theme } = useTheme()
+  return (
+    <View style={styles.header}>
+      <Pressable
+        onPress={onBack}
+        accessibilityRole="button"
+        accessibilityLabel="Volver al inicio"
+        hitSlop={8}
+        style={[styles.backBtn, { backgroundColor: theme.muted, borderRadius: theme.radius.md }]}
+      >
+        <ChevronLeft size={20} className="text-strong" strokeWidth={2} />
+      </Pressable>
+      <View
+        style={[styles.badge, { backgroundColor: theme.primary + '1F', borderRadius: theme.radius.md }]}
+      >
+        <Dumbbell size={19} color={theme.primary} strokeWidth={2} />
+      </View>
+      <View style={styles.headerText}>
+        <Text className="text-strong" style={[styles.h1, { fontFamily: FONT_DISPLAY }]}>
+          Historial de entrenos
+        </Text>
+        <Text className="text-muted" style={[styles.headerSub, { fontFamily: theme.fontSans }]}>
+          Días con series registradas (últimos {monthsLabel})
+        </Text>
+      </View>
+    </View>
+  )
+}
+
 export default function HistoryScreen() {
   const { theme } = useTheme()
+  const router = useRouter()
+  const reduced = useReducedMotion()
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
   const [expanding, setExpanding] = useState(false)
@@ -57,15 +114,17 @@ export default function HistoryScreen() {
     }
   }
 
+  // Volver al dashboard (home) — espejo del back web a `${base}/dashboard`.
+  const goBack = () => router.push('/alumno/home')
+
   const extended = daysBack >= HISTORY_DAYS_EXTENDED
   const monthsLabel = extended ? '6 meses' : '3 meses'
-  const subtitle = `Días con series registradas (últimos ${monthsLabel})`
 
   if (loading) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
         <AppBackground />
-        <ScreenHeader title="Historial de entrenos" subtitle={subtitle} />
+        <HistoryHeader monthsLabel={monthsLabel} onBack={goBack} />
         <EvaLoaderScreen subtitle="Cargando historial…" />
       </SafeAreaView>
     )
@@ -75,7 +134,7 @@ export default function HistoryScreen() {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
         <AppBackground />
-        <ScreenHeader title="Historial de entrenos" subtitle={subtitle} />
+        <HistoryHeader monthsLabel={monthsLabel} onBack={goBack} />
         <View style={styles.errorBox}>
           <View
             style={{
@@ -98,15 +157,19 @@ export default function HistoryScreen() {
   }
 
   if (summaries.length === 0) {
+    // Empty state 1:1 con la web (page.tsx:66-72): Calendar 34 al 40% + una sola línea text-subtle.
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
         <AppBackground />
-        <ScreenHeader title="Historial de entrenos" subtitle={subtitle} />
-        <EmptyState
-          icon={Calendar}
-          title="Aún no hay series registradas"
-          subtitle="Cuando completes entrenos en este periodo, aparecerán aquí."
-        />
+        <HistoryHeader monthsLabel={monthsLabel} onBack={goBack} />
+        <View style={styles.emptyBox}>
+          <View style={styles.emptyIcon}>
+            <Calendar size={34} className="text-subtle" strokeWidth={2} />
+          </View>
+          <Text className="text-subtle" style={[styles.emptyText, { fontFamily: theme.fontSans }]}>
+            Aún no hay series registradas en este periodo. Cuando completes entrenos, aparecerán aquí.
+          </Text>
+        </View>
       </SafeAreaView>
     )
   }
@@ -115,35 +178,40 @@ export default function HistoryScreen() {
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
       <AppBackground />
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
-        <ScreenHeader title="Historial de entrenos" subtitle={subtitle} />
+        <HistoryHeader monthsLabel={monthsLabel} onBack={goBack} />
 
         <View style={styles.body}>
-          {/* Un solo Card con filas y divisores hairline — 1:1 con WorkoutHistoryList (web). */}
+          {/* Un solo Card con filas y divisores — 1:1 con WorkoutHistoryList (web). */}
           <Card padding="none" style={{ overflow: 'hidden' }}>
             {summaries.map((item, index) => (
               <MotiView
                 key={item.dayKey}
-                from={{ opacity: 0, translateY: 8 }}
+                from={reduced ? { opacity: 1, translateY: 0 } : { opacity: 0, translateY: 24 }}
                 animate={{ opacity: 1, translateY: 0 }}
-                transition={{ type: 'timing', duration: 280, delay: Math.min(index, 12) * 40 }}
+                transition={{
+                  type: 'timing',
+                  duration: reduced ? 0 : 450,
+                  delay: reduced ? 0 : Math.min(index, 12) * 40,
+                  easing: EASE_FADEUP,
+                }}
               >
                 {index > 0 ? (
-                  <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: theme.border, marginHorizontal: 14 }} />
+                  <View style={{ height: 1, backgroundColor: theme.border, marginHorizontal: 14 }} />
                 ) : null}
                 <View style={styles.row}>
                   <View style={[styles.dayChip, { backgroundColor: theme.muted, borderRadius: theme.radius.sm }]}>
                     <Dumbbell size={17} color={theme.primary} strokeWidth={2} />
                   </View>
-                  <View style={{ flex: 1, minWidth: 0 }}>
-                    <Text style={[styles.dayLabel, { color: theme.foreground, fontFamily: FONT_BOLD }]} numberOfLines={1}>
-                      {item.dateLabel}
+                  <View style={styles.rowText}>
+                    <Text className="text-strong" style={[styles.dayLabel, { fontFamily: FONT_BOLD }]}>
+                      {formatDayLabel(item.dayKey)}
                     </Text>
-                    <Text style={[styles.daySub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]} numberOfLines={1}>
+                    <Text className="text-muted" style={[styles.daySub, { fontFamily: theme.fontSans }]}>
                       {item.subtitle}
                     </Text>
                   </View>
                   <View style={[styles.setsPill, { backgroundColor: theme.muted }]}>
-                    <Text style={[styles.setsPillText, { color: theme.foreground, fontFamily: FONT_MONO }]}>
+                    <Text className="text-strong" style={[styles.setsPillText, { fontFamily: FONT_MONO }]}>
                       {item.sets === 1 ? '1 serie' : `${item.sets} series`}
                     </Text>
                   </View>
@@ -161,13 +229,13 @@ export default function HistoryScreen() {
               style={[styles.moreBtn, { borderColor: theme.border, backgroundColor: theme.card }]}
             >
               <ChevronDown size={16} color={theme.primary} strokeWidth={2.25} />
-              <Text style={[styles.moreTxt, { color: theme.foreground, fontFamily: FONT_BOLD }]}>
+              <Text className="text-strong" style={[styles.moreTxt, { fontFamily: FONT_BOLD }]}>
                 {expanding ? 'Cargando…' : 'Ver últimos 6 meses'}
               </Text>
             </TouchableOpacity>
           ) : null}
 
-          <Text style={[styles.disclaimer, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+          <Text className="text-subtle" style={[styles.disclaimer, { fontFamily: theme.fontSans }]}>
             Solo ves tus propios registros. Mostrando los últimos {monthsLabel}.
           </Text>
         </View>
@@ -180,6 +248,20 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   scroll: { paddingBottom: 40 },
   body: { paddingHorizontal: 20 },
+  // Header (web page.tsx:38 `flex items-center gap-[11px] pb-4 pt-1.5`, dentro de px-5).
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 11,
+    paddingHorizontal: 20,
+    paddingTop: 6,
+    paddingBottom: 16,
+  },
+  backBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginLeft: -8 },
+  badge: { width: 38, height: 38, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  headerText: { flex: 1, minWidth: 0 },
+  h1: { fontSize: 21, lineHeight: 21, letterSpacing: -0.42 },
+  headerSub: { fontSize: 12.5, marginTop: 2 },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -188,13 +270,14 @@ const styles = StyleSheet.create({
     paddingVertical: 13,
   },
   dayChip: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
-  dayLabel: { fontSize: 14.5, letterSpacing: -0.1, textTransform: 'capitalize' },
-  daySub: { fontSize: 12.5, marginTop: 1 },
-  setsPill: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999 },
-  setsPillText: { fontSize: 12 },
+  rowText: { flex: 1, minWidth: 0 },
+  dayLabel: { fontSize: 14.5, textTransform: 'capitalize' },
+  daySub: { fontSize: 12.5 },
+  setsPill: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999, flexShrink: 0 },
+  setsPillText: { fontSize: 12.5 },
   moreBtn: {
     marginTop: 14,
-    paddingVertical: 13,
+    height: 44,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -204,6 +287,10 @@ const styles = StyleSheet.create({
   },
   moreTxt: { fontSize: 13.5 },
   disclaimer: { fontSize: 11.5, lineHeight: 17, textAlign: 'center', marginTop: 16 },
+  // Empty state (web page.tsx:66-72 `px-5 py-12 text-center text-subtle`).
+  emptyBox: { paddingHorizontal: 20, paddingVertical: 48, alignItems: 'center' },
+  emptyIcon: { marginBottom: 10, opacity: 0.4 },
+  emptyText: { fontSize: 14, lineHeight: 21, textAlign: 'center' },
   errorBox: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 10, paddingHorizontal: 32 },
   errorTitle: { fontSize: 17, letterSpacing: -0.3, textAlign: 'center' },
   errorSub: { fontSize: 13, lineHeight: 19, textAlign: 'center', maxWidth: 300, marginBottom: 4 },
