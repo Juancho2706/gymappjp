@@ -5,6 +5,7 @@
     "paths": {
       "@/*": ["./*"],
       "@eva/cardio": ["../../packages/cardio/index.ts"],
+      "@eva/coach-nav": ["../../packages/coach-nav/index.ts"],
       "@eva/bodycomp": ["../../packages/bodycomp/index.ts"],
       "@eva/calc": ["../../packages/calc/index.ts"],
       "@eva/profile-analytics": ["../../packages/profile-analytics/index.ts"],

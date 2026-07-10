@@ -87,7 +87,6 @@ export default function CoachHomeScreen() {
     )
   }
 
-  const pendingCount = data.agenda.length + data.topRiskClients.length
   const showTierBanners =
     data.coach.subscriptionTier === 'free' ||
     (data.coach.subscriptionTier === 'elite' && data.kpi.totalClients >= 48)
@@ -113,9 +112,7 @@ export default function CoachHomeScreen() {
         <MobileGreetingHeader
           coachName={data.coach.fullName || data.coach.brandName || 'Coach'}
           logoUrl={data.coach.logoUrl}
-          hasNotifications={pendingCount > 0}
           onInsights={() => setStatsOpen(true)}
-          onNotifications={() => router.push('/coach/(tabs)/check-ins')}
           onAvatar={() => router.push('/coach/(tabs)/perfil')}
         />
 

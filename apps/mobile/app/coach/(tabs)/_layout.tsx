@@ -1,14 +1,40 @@
-import { Tabs } from 'expo-router'
+import { useEffect } from 'react'
+import { Tabs, useRouter } from 'expo-router'
 import { View } from 'react-native'
 import { useTheme } from '../../../context/ThemeContext'
 import { CoachMobileTabBar } from '../../../components/coach/CoachMobileChrome'
+import { getCoachProfile } from '../../../lib/coach'
+import { resolveReactivateRequired } from '../../../lib/workspace'
 
 export default function CoachTabsLayout() {
   const { theme } = useTheme()
+  const router = useRouter()
+
+  // E7-12: gate de suscripcion a nivel navegacion (cubre TODAS las tabs, espejo del middleware web
+  // resolveCoachSubscriptionRedirect + del guard alumno->suspended). Un coach sin acceso EFECTIVO
+  // (cancelado con gracia vencida / expired / dunning fuera de gracia) va a /coach/reactivate, que
+  // vive FUERA de este grupo (tabs) => sin loop de redireccion. `resolveReactivateRequired` respeta la
+  // gracia hasta current_period_end y NUNCA gatea a managed (org/team).
+  useEffect(() => {
+    let mounted = true
+    getCoachProfile()
+      .then((c) => {
+        if (!mounted || !c) return
+        if (resolveReactivateRequired(c.subscriptionStatus, c.currentPeriodEnd)) {
+          router.replace('/coach/reactivate')
+        }
+      })
+      .catch(() => {})
+    return () => { mounted = false }
+  }, [])
+
   return (
     <View style={{ flex: 1, backgroundColor: theme.background }}>
       {/* Sin barra superior global: cada screen renderiza su propio header (como el
-          diseño). El dashboard usa <MobileGreetingHeader/> (fecha + Hola + acciones). */}
+          diseño). El dashboard usa <MobileGreetingHeader/> (fecha + Hola + acciones).
+          El SET de Tabs.Screen es fijo (expo-router necesita los archivos), pero QUE tabs se
+          muestran los deriva CoachMobileTabBar de getVisibleNavItems (@eva/coach-nav): gating por
+          módulos + workspace + estado de suscripción, hub Opciones, Reactivar y sheet "Más". */}
       <Tabs
         tabBar={(props) => <CoachMobileTabBar {...props} />}
         screenOptions={{

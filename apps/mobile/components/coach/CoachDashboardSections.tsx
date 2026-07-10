@@ -9,6 +9,7 @@ import {
   ArrowRight,
   ArrowUpRight,
   Bell,
+  Bug,
   CalendarClock,
   Camera,
   Check,
@@ -22,15 +23,19 @@ import {
   ExternalLink,
   Layers,
   LockKeyhole,
+  Megaphone,
   Minus,
   Monitor,
   Palette,
   PartyPopper,
+  Pin,
   Plus,
   Receipt,
   Rocket,
+  Search,
   Sparkles,
   Smartphone,
+  Wrench,
   TrendingDown,
   TrendingUp,
   TriangleAlert,
@@ -71,10 +76,14 @@ import { Avatar } from '../Avatar'
 import { Badge } from '../Badge'
 import { ListRow } from '../ListRow'
 import { SegmentedTabs } from '../SegmentedTabs'
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { apiFetch, getApiBaseUrl } from '../../lib/api'
+import { getCoachNews, markCoachNewsRead, type CoachNewsItem } from '../../lib/coach-news'
 import { FONT } from '../../lib/typography'
+import { useWorkspace } from '../../lib/workspace'
+import { CoachSearchPalette } from './CoachSearchPalette'
+import { WorkspaceSwitcherSheet } from './WorkspaceSwitcherSheet'
 
 function hexToRgba(hex: string, alpha: number): string {
   const clean = hex.replace('#', '')
@@ -803,7 +812,7 @@ export function MobileOnboardingChecklist({
       {!allDone ? <MobileOnboardingLoopStrip /> : null}
       <MobileOnboardingTwinPanels
         studentPath={studentPath}
-        onOpenPreview={() => router.push('/coach/(tabs)/settings')}
+        onOpenPreview={() => router.push('/coach/settings/brand')}
         onOpenStudentApp={() => Linking.openURL(`${getApiBaseUrl()}${studentPath}`).catch(() => null)}
       />
 
@@ -827,7 +836,7 @@ export function MobileOnboardingChecklist({
             </>
           ) : (
             <>
-              <Button label="Ir a Mi Marca" size="sm" onPress={() => router.push('/coach/(tabs)/settings')} style={styles.stepButton} />
+              <Button label="Ir a Mi Marca" size="sm" onPress={() => router.push('/coach/settings/brand')} style={styles.stepButton} />
               <Button label={completed.profile_branding ? 'Desmarcar paso' : 'Ya lo deje listo'} variant="ghost" size="sm" onPress={toggleBrandStep} style={styles.stepButton} />
             </>
           )}
@@ -1738,19 +1747,19 @@ function useGlassStyle() {
 export function MobileGreetingHeader({
   coachName,
   logoUrl,
-  hasNotifications = true,
   onInsights,
-  onNotifications,
   onAvatar,
 }: {
   coachName: string
   logoUrl?: string | null
-  hasNotifications?: boolean
   onInsights?: () => void
-  onNotifications?: () => void
   onAvatar?: () => void
 }) {
   const { theme } = useTheme()
+  const { workspaces } = useWorkspace()
+  const [searchOpen, setSearchOpen] = useState(false)
+  const [switcherOpen, setSwitcherOpen] = useState(false)
+  const hasMultipleWorkspaces = (workspaces?.length ?? 0) > 1
   const firstName = coachName?.split(' ')[0] || 'Coach'
   const dateStr = new Intl.DateTimeFormat('es-ES', {
     weekday: 'long',
@@ -1786,32 +1795,258 @@ export function MobileGreetingHeader({
       </View>
 
       <View className="flex-row items-center" style={{ gap: 6 }}>
+        <TouchableOpacity
+          activeOpacity={0.8}
+          accessibilityLabel="Buscar"
+          onPress={() => setSearchOpen(true)}
+          style={iconBtn}
+          testID="coach-global-search"
+        >
+          <Search size={19} color={theme.foreground} strokeWidth={2.1} />
+        </TouchableOpacity>
         <TouchableOpacity activeOpacity={0.8} accessibilityLabel="Insights" onPress={onInsights} style={iconBtn}>
           <Sparkles size={19} color={theme.foreground} strokeWidth={2.1} />
         </TouchableOpacity>
-        <TouchableOpacity activeOpacity={0.8} accessibilityLabel="Notificaciones" onPress={onNotifications} style={iconBtn}>
-          <Bell size={19} color={theme.foreground} strokeWidth={2.1} />
-          {hasNotifications ? (
-            <View
-              style={{
-                position: 'absolute',
-                top: 8,
-                right: 9,
-                width: 8,
-                height: 8,
-                borderRadius: 4,
-                backgroundColor: theme.destructive,
-                borderWidth: 2,
-                borderColor: theme.card,
-              }}
-            />
-          ) : null}
-        </TouchableOpacity>
-        <TouchableOpacity activeOpacity={0.85} accessibilityLabel="Tu cuenta" onPress={onAvatar}>
+        <CoachNewsBell tileStyle={iconBtn} />
+        <TouchableOpacity
+          activeOpacity={0.85}
+          accessibilityLabel={hasMultipleWorkspaces ? 'Cambiar workspace' : 'Tu cuenta'}
+          onPress={hasMultipleWorkspaces ? () => setSwitcherOpen(true) : onAvatar}
+          testID="coach-avatar-workspace"
+        >
           <Avatar src={logoUrl} name={coachName} size={40} />
         </TouchableOpacity>
       </View>
+      <CoachSearchPalette visible={searchOpen} onClose={() => setSearchOpen(false)} />
+      <WorkspaceSwitcherSheet open={switcherOpen} onClose={() => setSwitcherOpen(false)} />
     </View>
+  )
+}
+
+// ─── News bell (campana de Novedades) ───────────────────────────────────────
+// 1:1 con la NewsBell web (NewsBellButton.tsx): badge con unreadCount, bottom-sheet
+// con el feed de novedades y marcar-todo-leido al abrir. Misma fuente de datos que web
+// (news_items + news_reads) via /api/mobile/coach/news.
+
+const NEWS_TYPE_META: Record<string, { icon: LucideIcon; bg: string; fg: string }> = {
+  feature: { icon: Sparkles, bg: 'rgba(0,122,255,0.14)', fg: '#0A84FF' },
+  improvement: { icon: Wrench, bg: 'rgba(16,185,129,0.14)', fg: '#10B981' },
+  fix: { icon: Bug, bg: 'rgba(245,158,11,0.14)', fg: '#F59E0B' },
+  announcement: { icon: Megaphone, bg: 'rgba(148,163,184,0.16)', fg: '#94A3B8' },
+}
+const NEWS_TYPE_LABEL: Record<string, string> = {
+  feature: 'Nueva funcion',
+  improvement: 'Mejora',
+  fix: 'Correccion',
+  announcement: 'Anuncio',
+}
+
+function newsRelativeDate(dateStr: string | null): string {
+  if (!dateStr) return ''
+  const d = new Date(dateStr)
+  const diffDays = Math.floor((Date.now() - d.getTime()) / 86400000)
+  if (diffDays <= 0) return 'Hoy'
+  if (diffDays === 1) return 'Ayer'
+  if (diffDays < 7) return `Hace ${diffDays} dias`
+  if (diffDays < 30) return `Hace ${Math.floor(diffDays / 7)} sem`
+  return d.toLocaleDateString('es-CL', { day: 'numeric', month: 'short' })
+}
+
+// Render inline de **negrita** (unico markdown que el feed usa con frecuencia).
+function NewsInline({ text, color }: { text: string; color: string }) {
+  const parts = text.split(/(\*\*[^*]+\*\*)/)
+  if (parts.length === 1) return <>{text}</>
+  return (
+    <>
+      {parts.map((part, i) =>
+        part.startsWith('**') && part.endsWith('**') ? (
+          <Text key={i} className="font-sans-bold" style={{ color }}>
+            {part.slice(2, -2)}
+          </Text>
+        ) : (
+          <Text key={i}>{part}</Text>
+        )
+      )}
+    </>
+  )
+}
+
+function NewsContent({ text }: { text: string }) {
+  const { theme } = useTheme()
+  const lines = text.split('\n')
+  return (
+    <View style={{ gap: 2 }}>
+      {lines.map((line, i) => {
+        const trimmed = line.trim()
+        if (trimmed === '') return <View key={i} style={{ height: 3 }} />
+        if (trimmed === '---') {
+          return <View key={i} style={{ height: StyleSheet.hairlineWidth, backgroundColor: theme.border, marginVertical: 6 }} />
+        }
+        if (line.startsWith('## ')) {
+          return (
+            <Text key={i} className="font-sans-bold text-[13px] text-strong" style={{ marginTop: 4 }}>
+              <NewsInline text={line.slice(3)} color={theme.foreground} />
+            </Text>
+          )
+        }
+        if (line.startsWith('### ')) {
+          return (
+            <Text key={i} className="font-sans-extra text-[10.5px] text-muted" style={{ letterSpacing: 0.5, marginTop: 3, textTransform: 'uppercase' }}>
+              <NewsInline text={line.slice(4)} color={theme.mutedForeground} />
+            </Text>
+          )
+        }
+        if (line.startsWith('- ')) {
+          return (
+            <View key={i} className="flex-row" style={{ gap: 6, paddingLeft: 4 }}>
+              <Text className="font-sans text-[12px] text-muted">{'•'}</Text>
+              <Text className="flex-1 font-sans text-[12px] text-muted" style={{ lineHeight: 17 }}>
+                <NewsInline text={line.slice(2)} color={theme.foreground} />
+              </Text>
+            </View>
+          )
+        }
+        return (
+          <Text key={i} className="font-sans text-[12px] text-muted" style={{ lineHeight: 17 }}>
+            <NewsInline text={line} color={theme.foreground} />
+          </Text>
+        )
+      })}
+    </View>
+  )
+}
+
+function NewsFeedRow({ item, onNavigate }: { item: CoachNewsItem; onNavigate: () => void }) {
+  const { theme } = useTheme()
+  const meta = NEWS_TYPE_META[item.type] ?? NEWS_TYPE_META.announcement
+  const TypeIcon = meta.icon
+  return (
+    <View
+      className="flex-row"
+      style={{
+        gap: 11,
+        paddingVertical: 11,
+        paddingHorizontal: 12,
+        borderRadius: theme.radius.md,
+        backgroundColor: item.is_pinned ? hexToRgba(theme.primary, 0.08) : 'transparent',
+      }}
+    >
+      {item.is_pinned ? (
+        <View style={{ position: 'absolute', left: 2, top: 12, bottom: 12, width: 3, borderRadius: 2, backgroundColor: theme.primary }} />
+      ) : null}
+      <View style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: meta.bg, alignItems: 'center', justifyContent: 'center' }}>
+        <TypeIcon size={16} color={meta.fg} />
+      </View>
+      <View className="flex-1" style={{ minWidth: 0, gap: 2 }}>
+        <View className="flex-row items-center" style={{ gap: 6 }}>
+          <Text className="font-sans-extra text-[10.5px] text-muted" style={{ letterSpacing: 0.6, textTransform: 'uppercase' }}>
+            {NEWS_TYPE_LABEL[item.type] || item.type}
+          </Text>
+          {item.is_pinned ? <Pin size={11} color={theme.primary} /> : null}
+        </View>
+        <Text className="font-sans-bold text-[13px] text-strong" style={{ lineHeight: 18 }}>
+          {item.title}
+        </Text>
+        <NewsContent text={item.content} />
+        {item.cta_url ? (
+          <TouchableOpacity
+            activeOpacity={0.8}
+            onPress={() => {
+              Linking.openURL(item.cta_url as string).catch(() => null)
+              onNavigate()
+            }}
+            style={{ marginTop: 3 }}
+          >
+            <Text className="font-sans-bold text-[12.5px]" style={{ color: theme.primary }}>
+              {item.cta_label || 'Ver mas'} →
+            </Text>
+          </TouchableOpacity>
+        ) : null}
+      </View>
+      <Text className="font-sans text-[11px] text-muted" style={{ flexShrink: 0 }}>
+        {newsRelativeDate(item.published_at)}
+      </Text>
+    </View>
+  )
+}
+
+export function CoachNewsBell({ tileStyle }: { tileStyle: object }) {
+  const { theme } = useTheme()
+  const [items, setItems] = useState<CoachNewsItem[]>([])
+  const [unreadCount, setUnreadCount] = useState(0)
+  const [open, setOpen] = useState(false)
+
+  useEffect(() => {
+    let mounted = true
+    getCoachNews()
+      .then((res) => {
+        if (!mounted) return
+        setItems(res.items ?? [])
+        setUnreadCount(res.unreadCount ?? 0)
+      })
+      .catch(() => {
+        // Silencioso: la campana es no-critica; sin novedades = sin badge.
+      })
+    return () => {
+      mounted = false
+    }
+  }, [])
+
+  const openSheet = useCallback(() => {
+    setOpen(true)
+    if (unreadCount > 0) {
+      setUnreadCount(0)
+      markCoachNewsRead().catch(() => {
+        // Si falla, el badge reaparece en el proximo fetch (al re-montar el home).
+      })
+    }
+  }, [unreadCount])
+
+  const badge = unreadCount > 9 ? '9+' : unreadCount > 0 ? String(unreadCount) : null
+
+  return (
+    <>
+      <TouchableOpacity activeOpacity={0.8} accessibilityLabel="Novedades" testID="coach-news-bell" onPress={openSheet} style={tileStyle}>
+        <Bell size={19} color={theme.foreground} strokeWidth={2.1} />
+        {badge ? (
+          <View
+            style={{
+              position: 'absolute',
+              top: -4,
+              right: -4,
+              minWidth: 16,
+              height: 16,
+              borderRadius: 8,
+              paddingHorizontal: 3,
+              backgroundColor: theme.destructive,
+              borderWidth: 2,
+              borderColor: theme.card,
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <Text style={{ color: '#FFFFFF', fontSize: 9, fontFamily: 'Inter_700Bold', lineHeight: 11 }}>{badge}</Text>
+          </View>
+        ) : null}
+      </TouchableOpacity>
+
+      <NativeDialog open={open} title="Novedades" onClose={() => setOpen(false)}>
+        {items.length === 0 ? (
+          <View style={{ alignItems: 'center', gap: 8, paddingVertical: 32 }}>
+            <Bell size={26} color={theme.mutedForeground} />
+            <Text className="font-sans text-[13px] text-muted">No hay novedades por ahora.</Text>
+          </View>
+        ) : (
+          <ScrollView style={{ maxHeight: 460 }} showsVerticalScrollIndicator={false} testID="coach-news-feed">
+            <View style={{ gap: 2 }}>
+              {items.map((item) => (
+                <NewsFeedRow key={item.id} item={item} onNavigate={() => setOpen(false)} />
+              ))}
+            </View>
+          </ScrollView>
+        )}
+      </NativeDialog>
+    </>
   )
 }
 

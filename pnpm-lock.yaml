@@ -291,6 +291,9 @@ importers:
       '@eva/cardio':
         specifier: workspace:*
         version: link:../../packages/cardio
+      '@eva/coach-nav':
+        specifier: workspace:*
+        version: link:../../packages/coach-nav
       '@eva/feature-prefs':
         specifier: workspace:*
         version: link:../../packages/feature-prefs
@@ -526,6 +529,9 @@ importers:
       '@eva/cardio':
         specifier: workspace:*
         version: link:../../packages/cardio
+      '@eva/coach-nav':
+        specifier: workspace:*
+        version: link:../../packages/coach-nav
       '@eva/plan-builder':
         specifier: workspace:*
         version: link:../../packages/plan-builder
@@ -560,6 +566,8 @@ importers:
   packages/calc: {}
 
   packages/cardio: {}
+
+  packages/coach-nav: {}
 
   packages/feature-prefs: {}
 

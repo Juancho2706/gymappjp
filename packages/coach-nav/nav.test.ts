@@ -1,20 +1,25 @@
 import { describe, expect, it } from 'vitest'
-import { getVisibleNavItems, splitNavItems, NAV_MODULES } from './coach-nav'
+import {
+    getVisibleNavItems,
+    splitNavItems,
+    splitForSidebar,
+    coachWorkspaceTypeFromKind,
+    NAV_MODULES,
+    type NavModule,
+} from './nav'
 
-// Matriz de módulos por contexto (separación de flujos — regresión del smoke 2026-06-09:
-// josefit en standalone veía "Equipo").
+// Matriz de modulos por contexto (separacion de flujos — regresion del smoke 2026-06-09:
+// josefit en standalone veia "Equipo").
 
-const keys = (items: ReturnType<typeof getVisibleNavItems>) => items.map((i) => i.key)
+const keys = (items: NavModule[]) => items.map((i) => i.key)
 
 describe('getVisibleNavItems — matriz por contexto', () => {
     it('standalone (status propio): todo lo personal con "Opciones" (marca+suscripción colapsadas), SIN Equipo ni Ejercicios top-level', () => {
         const k = keys(getVisibleNavItems({ activeWorkspaceType: 'coach_standalone', subscriptionStatus: 'active' }))
         expect(k).toEqual(['dashboard', 'clients', 'programs', 'nutrition', 'options', 'support'])
         expect(k).not.toContain('team')
-        // Movida 1: brand/billing dejaron de ser entradas top-level (cards dentro del hub "Opciones").
         expect(k).not.toContain('brand')
         expect(k).not.toContain('billing')
-        // Movida 2: 'exercises' ya no es entrada del nav (botón dentro de Programas).
         expect(k).not.toContain('exercises')
     })
 
@@ -30,7 +35,6 @@ describe('getVisibleNavItems — matriz por contexto', () => {
     })
 
     it('coach_team con status personal activo (multi-contexto como josefit): igual sin "Opciones" standalone', () => {
-        // El layout simula team_managed en contexto team, pero el registro también lo garantiza por contexts.
         const k = keys(getVisibleNavItems({ activeWorkspaceType: 'coach_team', subscriptionStatus: 'active' }))
         expect(k).not.toContain('options')
         expect(k).toContain('team')
@@ -57,14 +61,10 @@ describe('getVisibleNavItems — matriz por contexto', () => {
     it('el registro declara "team" SOLO en coach_team y "options" (hub marca+suscripción) SOLO en standalone', () => {
         const team = NAV_MODULES.find((m) => m.key === 'team')!
         expect(team.contexts).toEqual(['coach_team'])
-        // Movida 1: "Opciones" standalone = entrada única que reemplaza brand+billing.
         expect(NAV_MODULES.find((m) => m.key === 'options')!.contexts).toEqual(['coach_standalone'])
-        // brand/billing dejaron de existir en el registro (colapsadas en cards del hub).
         expect(NAV_MODULES.find((m) => m.key === 'brand')).toBeUndefined()
         expect(NAV_MODULES.find((m) => m.key === 'billing')).toBeUndefined()
-        // Movida 2: 'exercises' ya no existe en el registro (botón dentro de Programas).
         expect(NAV_MODULES.find((m) => m.key === 'exercises')).toBeUndefined()
-        // C: "Opciones" team (hub context-aware de /coach/settings) existe SOLO en coach_team.
         expect(NAV_MODULES.find((m) => m.key === 'settings_team')!.contexts).toEqual(['coach_team'])
     })
 
@@ -88,7 +88,6 @@ describe('getVisibleNavItems — master switch de dominio (feature-prefs _enable
             disabledDomains: new Set(['nutrition']),
         }))
         expect(k).not.toContain('nutrition')
-        // El resto del nav permanece intacto (solo se filtra el dominio apagado).
         expect(k).toEqual(['dashboard', 'clients', 'programs', 'options', 'support'])
     })
 
@@ -174,23 +173,16 @@ describe('getVisibleNavItems — módulos toggleables (entitlements, specs movid
 })
 
 describe('reorden del registro (cardio/movement al final) — F3', () => {
-    // El registro mueve cardio/movement al FINAL (después de support) para que en mobile (bottom
-    // bar plano por orden de registro) queden contiguos al final. Estos asserts blindan que ese
-    // reorden NO altera las listas visibles cuando los módulos están OFF (el filtro de entitlement
-    // actúa ANTES de que el orden importe), porque module-matrix.spec.ts las assertea byte-idénticas.
-
     it('los módulos toggleables están declarados al final del registro (después de support)', () => {
         const supportIdx = NAV_MODULES.findIndex((m) => m.key === 'support')
         const cardioIdx = NAV_MODULES.findIndex((m) => m.key === 'cardio')
         const movementIdx = NAV_MODULES.findIndex((m) => m.key === 'movement')
         expect(cardioIdx).toBeGreaterThan(supportIdx)
         expect(movementIdx).toBeGreaterThan(supportIdx)
-        // Y son los DOS últimos del registro (ningún core declarado después).
         expect(NAV_MODULES.slice(supportIdx + 1).map((m) => m.key)).toEqual(['cardio', 'movement'])
     })
 
     it('con módulos OFF las listas existentes NO cambian (verificación explícita del reorden)', () => {
-        // Exactamente las mismas listas que assertean los specs de la matriz, post-reorden.
         expect(keys(getVisibleNavItems({ activeWorkspaceType: 'coach_standalone', subscriptionStatus: 'active' })))
             .toEqual(['dashboard', 'clients', 'programs', 'nutrition', 'options', 'support'])
         expect(keys(getVisibleNavItems({ activeWorkspaceType: 'coach_team', subscriptionStatus: 'team_managed' })))
@@ -206,9 +198,7 @@ describe('reorden del registro (cardio/movement al final) — F3', () => {
                 subscriptionStatus: ws === 'coach_team' ? 'team_managed' : 'active',
                 enabledModules: { cardio: true, movement_assessment: true },
             }))
-            // Los dos últimos son los módulos, en orden de registro.
             expect(k.slice(-2)).toEqual(['cardio', 'movement'])
-            // support (último core) precede a ambos módulos.
             expect(k.indexOf('support')).toBeLessThan(k.indexOf('cardio'))
         }
     })
@@ -237,7 +227,6 @@ describe('splitNavItems — partición core / módulos (F3)', () => {
         expect(core.length + modules.length).toBe(items.length)
         const coreKeys = new Set(core.map((m) => m.key))
         const moduleKeys = new Set(modules.map((m) => m.key))
-        // Disjuntos: ninguna key aparece en ambos grupos.
         for (const k of coreKeys) expect(moduleKeys.has(k)).toBe(false)
     })
 
@@ -255,7 +244,6 @@ describe('splitNavItems — partición core / módulos (F3)', () => {
             enabledModules: { cardio: true, movement_assessment: true },
         })
         const { core, modules } = splitNavItems(items)
-        // El orden de core coincide con su orden en items (solo se quitan los módulos del medio/final).
         expect(core.map((m) => m.key)).toEqual(items.filter((i) => i.entitlement == null).map((m) => m.key))
         expect(modules.map((m) => m.key)).toEqual(items.filter((i) => i.entitlement != null).map((m) => m.key))
     })
@@ -274,5 +262,65 @@ describe('splitNavItems — partición core / módulos (F3)', () => {
         const { core, modules } = splitNavItems([])
         expect(core).toEqual([])
         expect(modules).toEqual([])
+    })
+})
+
+describe('splitForSidebar — partición primary / secundario "Más" (chrome web + mobile)', () => {
+    it('secundario = Soporte + módulos con entitlement ON; primary = el resto (en orden)', () => {
+        const items = getVisibleNavItems({
+            activeWorkspaceType: 'coach_standalone',
+            subscriptionStatus: 'active',
+            enabledModules: { cardio: true, movement_assessment: true },
+        })
+        const { primary, secondary } = splitForSidebar(items)
+        expect(primary.map((m) => m.key)).toEqual(['dashboard', 'clients', 'programs', 'nutrition', 'options'])
+        expect(secondary.map((m) => m.key)).toEqual(['support', 'cardio', 'movement'])
+    })
+
+    it('sin módulos ON, el secundario es solo Soporte (el bar mobile lo pliega en "Más")', () => {
+        const items = getVisibleNavItems({ activeWorkspaceType: 'coach_standalone', subscriptionStatus: 'active' })
+        const { primary, secondary } = splitForSidebar(items)
+        expect(secondary.map((m) => m.key)).toEqual(['support'])
+        expect(primary.map((m) => m.key)).toEqual(['dashboard', 'clients', 'programs', 'nutrition', 'options'])
+    })
+
+    it('status bloqueado ⇒ solo Reactivar en primary, secundario vacío', () => {
+        const items = getVisibleNavItems({ activeWorkspaceType: 'coach_standalone', subscriptionStatus: 'expired' })
+        const { primary, secondary } = splitForSidebar(items)
+        expect(primary.map((m) => m.key)).toEqual(['reactivate'])
+        expect(secondary).toEqual([])
+    })
+})
+
+describe('coachWorkspaceTypeFromKind — puente enum mobile (WorkspaceKind) -> web (CoachWorkspaceType)', () => {
+    it('standalone -> coach_standalone', () => {
+        expect(coachWorkspaceTypeFromKind('standalone')).toBe('coach_standalone')
+    })
+
+    it('team_owner y team_member colapsan a coach_team', () => {
+        expect(coachWorkspaceTypeFromKind('team_owner')).toBe('coach_team')
+        expect(coachWorkspaceTypeFromKind('team_member')).toBe('coach_team')
+    })
+
+    it('enterprise -> enterprise_coach', () => {
+        expect(coachWorkspaceTypeFromKind('enterprise')).toBe('enterprise_coach')
+    })
+
+    it('el resultado alimenta getVisibleNavItems y produce la matriz correcta por kind', () => {
+        // team_member (managed) => ve Equipo + hub team, nunca "Opciones" standalone.
+        const teamKeys = getVisibleNavItems({
+            activeWorkspaceType: coachWorkspaceTypeFromKind('team_member'),
+            subscriptionStatus: 'team_managed',
+        }).map((i) => i.key)
+        expect(teamKeys).toContain('team')
+        expect(teamKeys).not.toContain('options')
+
+        // standalone => ve Opciones, nunca Equipo.
+        const soloKeys = getVisibleNavItems({
+            activeWorkspaceType: coachWorkspaceTypeFromKind('standalone'),
+            subscriptionStatus: 'active',
+        }).map((i) => i.key)
+        expect(soloKeys).toContain('options')
+        expect(soloKeys).not.toContain('team')
     })
 })

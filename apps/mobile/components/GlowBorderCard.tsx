@@ -48,13 +48,19 @@ interface GlowBorderCardProps {
   children: ReactNode
   /** Radio del marco (default theme.radius['2xl'] ≈ rounded-card de la web). */
   radius?: number
+  /**
+   * Override del color del anillo/glow. Por defecto = `theme.primary` (la marca
+   * YA aplicada del coach). Los previews de Mi Marca lo pasan para reflejar en vivo
+   * el color EDITADO (aún sin guardar), no el guardado.
+   */
+  tint?: string
   style?: ViewStyle | ViewStyle[]
 }
 
-export function GlowBorderCard({ children, radius, style }: GlowBorderCardProps) {
+export function GlowBorderCard({ children, radius, tint: tintProp, style }: GlowBorderCardProps) {
   const { theme, resolvedScheme } = useTheme()
   const isDark = resolvedScheme === 'dark'
-  const tint = theme.primary
+  const tint = tintProp ?? theme.primary
   const r = radius ?? theme.radius['2xl']
   const [size, setSize] = useState({ w: 0, h: 0 })
   const reduced = useReducedMotion()

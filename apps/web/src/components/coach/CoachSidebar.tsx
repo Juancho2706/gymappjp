@@ -7,11 +7,17 @@ import { usePathname } from 'next/navigation'
 import {
     House,
     Users,
+    UsersRound,
     Dumbbell,
+    Apple,
+    ClipboardList,
     Utensils,
     Settings,
     Shield,
     LifeBuoy,
+    HeartPulse,
+    PersonStanding,
+    LayoutDashboard,
     Building2,
     ChevronsLeft,
     ChevronsRight,
@@ -20,7 +26,7 @@ import {
 import { cn } from '@/lib/utils'
 import { Avatar } from '@/components/ui/avatar'
 import { EvaBrandIcon } from '@/components/landing/LandingBrandMark'
-import { getVisibleNavItems, splitForSidebar, type NavModule } from '@/components/coach/coach-nav'
+import { getVisibleNavItems, splitForSidebar, type NavModule } from '@eva/coach-nav'
 import type { WorkspaceSummary, WorkspaceType } from '@/domain/auth/types'
 import type { EnabledModules } from '@/services/entitlements.service'
 
@@ -81,8 +87,24 @@ const ICON_OVERRIDE: Record<string, LucideIcon> = {
     support: LifeBuoy,
 }
 
+/**
+ * Resolucion del icono string-key del registro (`@eva/coach-nav`, lucide-por-lado) a componente
+ * lucide-react. Fallback cuando la key no tiene override de diseno (cardio/movement/reactivate).
+ */
+const ICON_BY_NAME: Record<string, LucideIcon> = {
+    LayoutDashboard,
+    Users,
+    UsersRound,
+    ClipboardList,
+    Apple,
+    Settings,
+    LifeBuoy,
+    HeartPulse,
+    PersonStanding,
+}
+
 const displayLabel = (item: NavModule) => DISPLAY_LABELS[item.key] ?? item.label
-const navIcon = (item: NavModule): LucideIcon => ICON_OVERRIDE[item.key] ?? item.icon
+const navIcon = (item: NavModule): LucideIcon => ICON_OVERRIDE[item.key] ?? ICON_BY_NAME[item.icon] ?? Settings
 
 /** Capsula flotante movil — claves de los tabs PRIMARIOS (espejo del coachTabs del diseño eva-app). */
 const MOBILE_TAB_KEYS = ['dashboard', 'clients', 'programs', 'nutrition', 'options', 'settings_team', 'team', 'reactivate'] as const
