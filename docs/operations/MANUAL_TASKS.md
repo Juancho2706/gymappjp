@@ -227,6 +227,12 @@
    e. Guardar el JSON como GitHub Secret **`GOOGLE_SERVICE_ACCOUNT_JSON`** (contenido completo del archivo). Si `eas submit` da 403 recién configurado: la propagación de permisos puede tardar 24-48h.
 6. Desde ahí: workflow con profile=production + `submit_android=true` → el step `Submit AAB to Google Play` sube automático al track internal (track definido en `eas.json` → `submit.production.android`).
 
+**Gotchas de versionCode y errores de `eas submit` (verificados):**
+- El primer AAB (subida manual) DEBE salir del mismo workflow (build EAS con `appVersionSource: remote` + `autoIncrement`) para que el contador remoto de versionCode quede alineado con Play. Si alguna vez se sube un binario de otro origen, el siguiente submit falla con "does not allow any existing users to upgrade" → sincronizar con `eas build:version:set`.
+- "The app is missing the required metadata" en `eas submit` = app sin release previo en el track (workaround: `releaseStatus: draft` en eas.json); la primera subida manual lo evita.
+- "Changes cannot be sent for review automatically" = la app/track quedó en estado rejected en Play → flag `changesNotSentForReview: true`.
+- `releaseStatus` default = `completed` (publica directo en el track); EXPO_TOKEN NO reemplaza el service account JSON — son credenciales distintas (Expo vs Google).
+
 ---
 
 ### MT-14 — Crear cuenta Expo (EAS) para builds mobile · ✅ HECHO (2026-05-18)
