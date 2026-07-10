@@ -1,4 +1,4 @@
-import { Text, TouchableOpacity, View } from 'react-native'
+import { Text, TouchableOpacity, useWindowDimensions, View } from 'react-native'
 import { Image } from 'expo-image'
 import { X } from 'lucide-react-native'
 // Importar Sheet registra su cssInterop(X) (className→color), así la X de abajo colorea con text-*.
@@ -37,15 +37,18 @@ const techniqueTitleStyle = {
  */
 
 /**
- * Marco 16:9 para gif/imagen — SIN chrome de tarjeta (sin borde ni radio), a sangre: el medio del
+ * Marco de altura FIJA para gif/imagen — SIN chrome de tarjeta (sin borde ni radio), a sangre: el medio del
  * modal web es full-bleed bajo `DialogContent p-0`, el gif usa `bg-muted` sin borde ni radio y el
  * fallback de imagen `bg-white border-b` sin radio (WorkoutExecutionClient.tsx:2005,2030,2062).
+ * `height` es la ALTURA FIJA del contenedor = web `h-48 md:h-64` (192/256px), independiente del ancho,
+ * con el medio `object-contain` centrado dentro (WorkoutExecutionClient.tsx:2030,2062). Antes se derivaba
+ * de `aspectRatio:16/9`, que en un phone full-bleed (~390px) daba ~219px (~27px de más) y divergía más en tablets.
  * `padded` inset el medio 16px dentro del marco = web gif `object-contain p-4`
  * (WorkoutExecutionClient.tsx:2035, p-4 = 16px = space-5). El fallback de imagen del web
  * (video_url no-YouTube/no-mp4, :2067) NO lleva padding, así que ese caso pasa `padded={false}`.
  * El bleed lateral (fuera del padding del scroll) lo aplica el envoltorio en `TechniqueSheet`.
  */
-function MediaImage({ uri, padded = false }: { uri: string; padded?: boolean }) {
+function MediaImage({ uri, padded = false, height }: { uri: string; padded?: boolean; height: number }) {
   // gif (padded): letterbox `bg-surface-sunken` = web `bg-muted` (WorkoutExecutionClient.tsx:2030) — en paridad.
   // imagen-fallback (no padded): letterbox BLANCO + hairline inferior = web `bg-white border-b border-border/50`
   // (:2062, con `--border` = `--border-subtle`, globals.css:235). El blanco forzado en ambos temas se espeja con
@@ -53,7 +56,7 @@ function MediaImage({ uri, padded = false }: { uri: string; padded?: boolean }) 
   return (
     <View
       className={`overflow-hidden ${padded ? 'bg-surface-sunken p-space-5' : 'border-b border-subtle/50 bg-white'}`}
-      style={{ width: '100%', aspectRatio: 16 / 9 }}
+      style={{ width: '100%', height }}
     >
       <Image source={{ uri }} style={{ flex: 1 }} contentFit="contain" />
     </View>
@@ -62,6 +65,13 @@ function MediaImage({ uri, padded = false }: { uri: string; padded?: boolean }) 
 
 /** Decide el medio a renderizar espejando el orden de prioridad de la web (§3). */
 function TechniqueMedia({ exercise }: { exercise: SessionExercise }) {
+  const { width } = useWindowDimensions()
+  // Altura FIJA del medio = web `h-48 md:h-64` (Tailwind 4px grid: 48·4=192 / 64·4=256px). Los CUATRO
+  // contenedores del medio del modal web usan esta altura fija INDEPENDIENTE del ancho, con el medio
+  // `object-contain` centrado dentro (WorkoutExecutionClient.tsx:2016,2030,2048,2062). ≥md (tablet/landscape,
+  // breakpoint 768 de Tailwind) sube a 256 igual que el `md:` del web. No es un valor nuevo: es el mismo token
+  // `h-48`/`h-64` de la escala Tailwind (misma grilla de 4px del DS) que compila el web, no `aspectRatio:16/9`.
+  const mediaHeight = width >= 768 ? 256 : 192
   const videoUrl = exercise.video_url
   // Detección idéntica a la web (WorkoutExecutionClient.tsx:2010-2012): substring + extractor robusto.
   const isYouTube = !!videoUrl && (videoUrl.includes('youtube.com') || videoUrl.includes('youtu.be'))
@@ -76,6 +86,8 @@ function TechniqueMedia({ exercise }: { exercise: SessionExercise }) {
         end={exercise.video_end_time}
         autoPlay
         frameless
+        // Altura FIJA = web `h-48 md:h-64` (:2016), no el 16:9 derivado del ancho.
+        style={{ height: mediaHeight }}
         title={exercise.name}
       />
     )
@@ -83,7 +95,7 @@ function TechniqueMedia({ exercise }: { exercise: SessionExercise }) {
 
   // 2) gif — inset 16px como el web (`object-contain p-4`, :2035).
   if (exercise.gif_url) {
-    return <MediaImage uri={exercise.gif_url} padded />
+    return <MediaImage uri={exercise.gif_url} padded height={mediaHeight} />
   }
 
   // 3) video_url no-YouTube: mp4/mov/webm/Storage → video directo; resto → imagen.
@@ -102,11 +114,12 @@ function TechniqueMedia({ exercise }: { exercise: SessionExercise }) {
     if (isMp4) {
       return (
         <View className="border-b border-subtle/50 bg-white">
-          <VideoPlayer url={videoUrl} autoPlay frameless letterbox="#ffffff" title={exercise.name} />
+          {/* Altura FIJA = web `h-48 md:h-64` (:2048), no el 16:9 derivado del ancho. */}
+          <VideoPlayer url={videoUrl} autoPlay frameless letterbox="#ffffff" style={{ height: mediaHeight }} title={exercise.name} />
         </View>
       )
     }
-    return <MediaImage uri={videoUrl} />
+    return <MediaImage uri={videoUrl} height={mediaHeight} />
   }
 
   // 4) sin medio.

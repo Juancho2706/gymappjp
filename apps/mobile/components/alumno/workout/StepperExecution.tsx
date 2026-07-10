@@ -162,14 +162,18 @@ export function StepperExecution({
     // `max-w-3xl` (768px) centrado — paridad web `mx-auto w-full max-w-3xl` (StepperExecution.tsx:90);
     // en tablet el paso no se estira a todo el ancho.
     // Semántica de agrupación del carrusel — paridad web `<section aria-roledescription="carrusel de
-    // ejercicios" aria-label="Ejercicios de la rutina">` (StepperExecution.tsx:87-91). `aria-roledescription`
-    // no tiene equivalente directo en RN; `accessibilityRole="adjustable"` es lo más cercano (el paso se
-    // ajusta con swipe/rail). SIN `accessible={true}` para no colapsar el foco de los hijos (nav, rail,
-    // card): así el lector expone la etiqueta del grupo pero sigue enfocando cada control por separado.
+    // ejercicios" aria-label="Ejercicios de la rutina">` (StepperExecution.tsx:87-91). El web usa una
+    // descripción PURAMENTE textual (`aria-roledescription`) sobre un rol genérico region/group: NO
+    // promete gestos de incremento/decremento. Por eso aquí se deja SOLO el `accessibilityLabel` (espejo
+    // de esa naturaleza descriptiva) y NO `accessibilityRole="adjustable"`: ese rol haría que
+    // VoiceOver/TalkBack anunciaran el contenedor como ajustable y ofrecieran swipe up/down para
+    // "ajustar" que no harían nada (no hay `accessibilityActions`/`onAccessibilityAction` cableados),
+    // prometiendo una interacción inexistente que el web tampoco expone. SIN `accessible={true}` para no
+    // colapsar el foco de los hijos (nav, rail, card): el lector expone la etiqueta del grupo pero sigue
+    // enfocando cada control por separado.
     <View
       className="w-full flex-1 self-center"
       style={{ maxWidth: 768 }}
-      accessibilityRole="adjustable"
       accessibilityLabel="Ejercicios de la rutina"
     >
       {/* Chrome, rail, paso y pie viven DENTRO del scroll y se desplazan CON el contenido — paridad web:
@@ -258,10 +262,11 @@ export function StepperExecution({
                 from={motion.reduced ? { opacity: 0 } : { opacity: 0, translateX: direction > 0 ? SLIDE : -SLIDE }}
                 animate={{ opacity: 1, translateX: 0 }}
                 exit={motion.reduced ? { opacity: 0 } : { opacity: 0, translateX: direction > 0 ? -SLIDE : SLIDE }}
-                // reduced-motion: crossfade puro SIN curva custom (`Easing.linear`) — paridad web, cuya
-                // rama reduce-motion es `{ duration: 0.12 }` sin `ease` (StepperExecution.tsx:162). Normal:
-                // curva direccional `dirSlide`.
-                transition={{ type: 'timing', duration: motion.reduced ? 120 : 260, easing: motion.reduced ? Easing.linear : DIR_SLIDE }}
+                // reduced-motion: crossfade puro con la MISMA curva por defecto de framer-motion. La rama
+                // reduce-motion del web es `{ duration: 0.12 }` SIN `ease` (StepperExecution.tsx:162), y el
+                // default de framer para un tween de opacidad es `easeInOut` (NO lineal). Se espeja con
+                // `Easing.inOut(Easing.ease)`, el easeInOut estándar. Normal: curva direccional `dirSlide`.
+                transition={{ type: 'timing', duration: motion.reduced ? 120 : 260, easing: motion.reduced ? Easing.inOut(Easing.ease) : DIR_SLIDE }}
                 accessibilityLabel={`Ejercicio ${idx + 1} de ${total}`}
               >
                 {renderStep(idx)}

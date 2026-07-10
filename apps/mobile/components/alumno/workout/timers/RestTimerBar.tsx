@@ -55,6 +55,15 @@ interface RestTimerBarProps {
   /** Arrancar corriendo (auto-timer) o montar en pausa. Default true. */
   autoStart?: boolean
   onClose: () => void
+  /**
+   * Registra en el provider el `stopAlarm` de esta barra mientras la alarma suena,
+   * para que un toque en CUALQUIER parte de la pantalla del ejecutor la silencie —
+   * paridad con el listener GLOBAL de `document` de la web (`RestTimer.tsx:102-111`).
+   * El provider lo invoca desde su observador de responder de pantalla completa
+   * (`onStartShouldSetResponderCapture`). Se registra al empezar a sonar y se limpia
+   * al parar/desmontar. Opcional: si no se pasa, solo silencia el toque SOBRE la barra.
+   */
+  registerAlarmSilencer?: (silence: (() => void) | null) => void
 }
 
 const RING_R = 52
@@ -71,7 +80,14 @@ function formatTime(seconds: number): string {
   return `${m}:${s.toString().padStart(2, '0')}`
 }
 
-export function RestTimerBar({ initialSeconds, nextLabel, warmup = false, autoStart = true, onClose }: RestTimerBarProps) {
+export function RestTimerBar({
+  initialSeconds,
+  nextLabel,
+  warmup = false,
+  autoStart = true,
+  onClose,
+  registerAlarmSilencer,
+}: RestTimerBarProps) {
   const insets = useSafeAreaInsets()
   const motion = useEvaMotion()
 
@@ -121,6 +137,18 @@ export function RestTimerBar({ initialSeconds, nextLabel, warmup = false, autoSt
     if (alarmIntervalRef.current) clearInterval(alarmIntervalRef.current)
     void cancelRestEndNotification()
   }, [])
+
+  // Silenciar-alarma-en-cualquier-lado (paridad web `RestTimer.tsx:102-111`): mientras
+  // suena, la web añade un listener GLOBAL en `document` que cualquier click/touchstart
+  // (en cualquier zona) detiene. Aquí registramos `stopAlarm` en el provider SOLO mientras
+  // `isAlarmRinging`, gateado igual que el efecto web (add al empezar / remove al parar),
+  // y el observador de pantalla del provider lo invoca ante cualquier toque. Al desmontar
+  // limpiamos el registro (equiv. del cleanup `removeEventListener` web).
+  useEffect(() => {
+    if (!registerAlarmSilencer) return
+    registerAlarmSilencer(isAlarmRinging ? stopAlarm : null)
+    return () => registerAlarmSilencer(null)
+  }, [isAlarmRinging, stopAlarm, registerAlarmSilencer])
 
   const triggerAlarm = useCallback(() => {
     if (alarmRingingRef.current) return
@@ -265,13 +293,14 @@ export function RestTimerBar({ initialSeconds, nextLabel, warmup = false, autoSt
     onClose()
   }, [onClose, stopAlarm])
 
-  // Tap-para-silenciar (paridad web `RestTimer.tsx:102-111`: mientras suena, un
-  // `click`/`touchstart` en el documento detiene la alarma). En RN no hay documento
-  // global; el equivalente idiomático es que CUALQUIER toque sobre la barra la
-  // silencie — `onTouchStart` corre al iniciar el gesto aunque el toque caiga sobre
-  // un botón interno (pausa/±15s/mute), así el toque detiene la alarma y además
-  // ejecuta su acción, igual que el listener global de la web. Se limita a la barra
-  // (no a toda la pantalla) para no bloquear el ejecutor debajo.
+  // Tap-para-silenciar SOBRE la barra (paridad web `RestTimer.tsx:102-111`: mientras
+  // suena, un `click`/`touchstart` detiene la alarma). `onTouchStart` corre al iniciar
+  // el gesto aunque el toque caiga sobre un botón interno (pausa/±15s/mute), así el toque
+  // detiene la alarma y además ejecuta su acción. La paridad COMPLETA con el listener
+  // global de `document` de la web (silenciar tocando la fila de serie, el fondo o
+  // cualquier zona fuera de la barra) la aporta el observador de pantalla del provider
+  // (`onStartShouldSetResponderCapture` en `TimerProvider`, alimentado por
+  // `registerAlarmSilencer`); este handler local queda como refuerzo directo sobre la barra.
   const handleBarTouchStart = useCallback(() => {
     if (alarmRingingRef.current) stopAlarm()
   }, [stopAlarm])

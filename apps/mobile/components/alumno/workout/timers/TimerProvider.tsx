@@ -153,6 +153,26 @@ export function WorkoutTimerProvider({ children }: { children: React.ReactNode }
     setActive((cur) => (cur?.kind === 'rest' ? null : cur))
   }, [])
 
+  // Silenciar la alarma con un toque en CUALQUIER parte del ejecutor (paridad web
+  // `RestTimer.tsx:102-111`: mientras `isAlarmRinging`, un listener GLOBAL en `document`
+  // escucha `click`/`touchstart` y CUALQUIER toque en cualquier zona llama `stopAlarm()`).
+  // Antes en RN el toque solo silenciaba SOBRE la barra (`RestTimerBar` `onTouchStart`), no
+  // sobre la fila de serie ni el fondo. El equivalente idiomático es un observador de
+  // responder a nivel de TODA la pantalla: `onStartShouldSetResponderCapture` corre en la
+  // fase de captura para CADA toque sobre cualquier descendiente (ejecutor + overlay) y
+  // SIEMPRE devuelve false → nunca roba el gesto, así el toque además ejecuta su acción normal
+  // debajo (igual que el listener pasivo de la web). `RestTimerBar` registra aquí su `stopAlarm`
+  // mientras la alarma suena (y lo limpia al parar/desmontar); si no hay rest activo el ref es
+  // null → no-op (no afecta hold/interval/cronómetro).
+  const alarmSilencerRef = useRef<(() => void) | null>(null)
+  const registerAlarmSilencer = useCallback((silence: (() => void) | null) => {
+    alarmSilencerRef.current = silence
+  }, [])
+  const handleScreenTouchCapture = useCallback(() => {
+    alarmSilencerRef.current?.()
+    return false // observador puro: no captura el gesto (el ejecutor/scroll debajo lo maneja)
+  }, [])
+
   const api = useMemo<WorkoutTimersApi>(
     () => ({ startRest, startHold, startInterval, startStopwatch, cancelRest, close, state: active }),
     [startRest, startHold, startInterval, startStopwatch, cancelRest, close, active],
@@ -160,6 +180,11 @@ export function WorkoutTimerProvider({ children }: { children: React.ReactNode }
 
   return (
     <Ctx.Provider value={api}>
+      {/* Wrapper de pantalla completa: ancla el observador de toques (silenciar-alarma-en-cualquier-lado,
+          ver `handleScreenTouchCapture`) como ANCESTRO del ejecutor Y del overlay, de modo que la fase de
+          captura vea todo toque de la pantalla — imposible desde el overlay `box-none` (es hermano encima,
+          no ancestro). `flex:1` para llenar (el ejecutor ya es un SafeAreaView flex-1). */}
+      <View style={styles.screen} onStartShouldSetResponderCapture={handleScreenTouchCapture}>
       {children}
       {/* <AnimatePresence> mantiene el overlay montado mientras el timer sale, para que la barra de
           descanso ANIME su salida (`exit` de `RestTimerBar`) en vez de desaparecer de golpe — paridad
@@ -177,6 +202,7 @@ export function WorkoutTimerProvider({ children }: { children: React.ReactNode }
                 nextLabel={active.label}
                 warmup={active.warmup}
                 onClose={close}
+                registerAlarmSilencer={registerAlarmSilencer}
               />
             ) : null}
             {active.kind === 'hold' ? (
@@ -189,9 +215,14 @@ export function WorkoutTimerProvider({ children }: { children: React.ReactNode }
           </View>
         ) : null}
       </AnimatePresence>
+      </View>
     </Ctx.Provider>
   )
 }
+
+const styles = StyleSheet.create({
+  screen: { flex: 1 },
+})
 
 /** Hook de acceso a los timers. Debe usarse dentro de `WorkoutTimerProvider`. */
 export function useWorkoutTimers(): WorkoutTimersApi {

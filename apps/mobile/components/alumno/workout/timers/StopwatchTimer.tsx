@@ -95,10 +95,15 @@ export function StopwatchTimer({ onClose }: StopwatchTimerProps) {
         accessibilityRole="timer"
         from={motion.reduced ? undefined : { opacity: 0, translateY: -24 }}
         animate={{ opacity: 1, translateY: 0 }}
-        // Salida (espeja `exit={reducedMotion ? undefined : { y: -24, opacity: 0 }}` web
-        // `Stopwatch.tsx:64`): al cerrar, la tarjeta se desliza -24px con fade en 200ms en vez de
-        // desaparecer de golpe. Lo anima el <AnimatePresence> de moti en `TimerProvider`. Bajo
-        // reduce-motion se omite (paridad `exit=undefined` web).
+        // Salida — DIVERGENCIA CONSCIENTE, favorable a RN (no un espejo del comportamiento REAL del web).
+        // El web DECLARA `exit={reducedMotion ? undefined : { y: -24, opacity: 0 }}` (Stopwatch.tsx:64)
+        // pero NUNCA lo reproduce: su <AnimatePresence> vive DENTRO del componente (Stopwatch.tsx:60) y el
+        // provider lo monta con `&&` (WorkoutTimerProvider.tsx:138); al cerrar hace `setActive(null)` (:120),
+        // desmontando el motion.div JUNTO con su AnimatePresence. framer-motion no puede animar el exit de un
+        // hijo que se desmonta a la vez que su propio AnimatePresence, así que en web la tarjeta desaparece de
+        // golpe (bug latente del web). RN honra la INTENCIÓN del SPEC (sección 1: exit -24px + fade 200ms)
+        // subiendo el <AnimatePresence> de moti al overlay estable del `TimerProvider`. Bajo reduce-motion se
+        // omite (paridad `exit=undefined` web).
         exit={motion.reduced ? undefined : { opacity: 0, translateY: -24 }}
         transition={{ type: 'timing', duration: motion.reduced ? 0 : 200, easing: EASE.out }}
       >

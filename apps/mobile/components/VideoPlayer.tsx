@@ -155,10 +155,19 @@ export function VideoPlayer({
   // contenedor) para que el fondo detrás del `object-contain` iguale a la web (p.ej. blanco en mp4 del modal).
   const fillStyle = letterbox ? [styles.fill, { backgroundColor: letterbox }] : styles.fill
 
+  // Modelo de altura del marco. Por defecto 16:9 (la altura DERIVA del ancho) — es el estándar DS para
+  // previews de ejercicio (forms/catálogo del coach) y no se toca. PERO si el caller fija una `height`
+  // explícita vía `style`, se descarta el `aspectRatio` para respetar esa ALTURA FIJA: el modal de técnica
+  // pasa height 192/256 = web `h-48 md:h-64`, altura fija independiente del ancho con el medio `object-contain`
+  // dentro (WorkoutExecutionClient.tsx:2016,2030,2048,2062). Sin el guard, RN sobre-restringiría el marco al
+  // llevar width:100% + height + aspectRatio a la vez (el 16:9 daba ~219px en un phone de ~390px vs los 192px fijos).
+  const hasFixedHeight = StyleSheet.flatten(style)?.height != null
+  const frameSizing = hasFixedHeight ? styles.frameFluid : styles.frame
+
   return (
     <View
       className={`bg-surface-sunken overflow-hidden${frameless ? '' : ' border border-subtle rounded-2xl'}`}
-      style={[styles.frame, letterbox ? { backgroundColor: letterbox } : null, style]}
+      style={[frameSizing, letterbox ? { backgroundColor: letterbox } : null, style]}
     >
       {!started ? (
         poster_
@@ -374,6 +383,9 @@ function directVideoHtml(
 
 const styles = StyleSheet.create({
   frame: { width: '100%', aspectRatio: 16 / 9 },
+  // Marco cuando el caller impone una `height` fija (p.ej. el modal de técnica con `h-48 md:h-64`):
+  // solo ancho full; la altura la aporta el `style` del caller, sin `aspectRatio` que compita.
+  frameFluid: { width: '100%' },
   fill: { flex: 1, backgroundColor: '#000' },
   playBtn: {
     width: 60,

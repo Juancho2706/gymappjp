@@ -8,6 +8,7 @@ import { HapticPressable } from '../../HapticPressable'
 import { RestAlarmPreference } from '../RestAlarmPreference'
 import { isRestAutoTimerEnabled, setRestAutoTimerEnabled, subscribeRestTimerPrefs } from './timers'
 import { WARNING_500 } from './timers/timer-colors'
+import { haptics } from '../../../lib/haptics'
 import {
   getRestNotifPermission,
   requestRestNotifPermission,
@@ -34,9 +35,29 @@ import {
 export function WorkoutSettingsSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
   const autoTimer = useSyncExternalStore(subscribeRestTimerPrefs, isRestAutoTimerEnabled, isRestAutoTimerEnabled)
 
+  // Alternar tocando la FILA COMPLETA (paridad web `WorkoutTimerSettingsPanel.tsx:75-91`: el
+  // toggle es un `<button w-full ...>` cuyo `onClick` alterna al tocar cualquier parte de la fila,
+  // incluida la etiqueta "Activado/Desactivado"). Antes en RN solo el `<Switch>` pequeño alternaba.
+  // `haptics.select()` iguala el feedback del Switch (que ya lo dispara en su propio onValueChange).
+  const toggleAutoTimer = () => {
+    void haptics.select()
+    setRestAutoTimerEnabled(!autoTimer)
+  }
+
   return (
     <Sheet open={open} onClose={onClose} title="Descanso y alarma">
-      <Card padding="lg" testID="workout-autotimer-setting">
+      {/* Card presionable = objetivo táctil de fila completa (paridad web). El `<Switch>` interno
+          sigue siendo interactivo: al tocarlo, él (responder más interno) gana el gesto y alterna vía
+          su `onValueChange`, así que el `onPress` de la Card NO se dispara también → sin doble toggle;
+          tocar el texto o el resto de la fila dispara el `onPress` de la Card. */}
+      <Card
+        padding="lg"
+        testID="workout-autotimer-setting"
+        onPress={toggleAutoTimer}
+        accessibilityRole="switch"
+        accessibilityState={{ checked: autoTimer }}
+        accessibilityLabel={`Cronómetro automático, ${autoTimer ? 'activado' : 'desactivado'}`}
+      >
         <View className="flex-row items-start justify-between gap-3">
           <View className="flex-1">
             {/* Eyebrow de sección (espeja el H3 web `WorkoutTimerSettingsPanel.tsx:69-71`:
@@ -56,7 +77,12 @@ export function WorkoutSettingsSheet({ open, onClose }: { open: boolean; onClose
             <Text className="text-sm font-sans-semibold text-strong">
               {autoTimer ? 'Activado' : 'Desactivado'}
             </Text>
-            <Switch value={autoTimer} onValueChange={setRestAutoTimerEnabled} />
+            {/* El Switch queda VISIBLE y presionable (tocarlo también alterna vía onValueChange),
+                pero oculto para lectores de pantalla: la Card ya expone el rol `switch` con su estado,
+                así hay UN solo control accesible (evita anunciar dos switches anidados). */}
+            <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+              <Switch value={autoTimer} onValueChange={setRestAutoTimerEnabled} />
+            </View>
           </View>
         </View>
       </Card>
@@ -104,6 +130,13 @@ function NotificationPermissionCard() {
     )
   }
 
+  // Paleta: la web usa la rampa `amber` cruda de Tailwind (`WorkoutTimerSettingsPanel.tsx:131`:
+  // `border-amber-500/25 bg-amber-500/10 text-amber-800 dark:text-amber-200`). El DS de RN NO define
+  // token `amber` (solo `warning`, ver `global.css`), y `global.css`/`tailwind.config.js` son
+  // intocables aquí. Se mapea a la rampa `warning` del DS, cromáticamente equivalente y token-safe (NO
+  // hardcodear amber crudo): warning-500 #F5A524 ≈ amber-500 #F59E0B; warning-700 light #8F5A05 ≈
+  // amber-800; warning-700 dark #FFD489 ≈ amber-200. Mapeo de DS intencional y verificado, no un hex
+  // mágico. Si el DS añade una rampa `amber`, migrar aquí (border/bg/text) + `BellRing`/`WARNING_500`.
   return (
     <View className="flex-row gap-3 rounded-2xl border border-warning-500/25 bg-warning-500/10 p-4">
       <BellRing size={16} color={WARNING_500} style={{ marginTop: 2 }} />
