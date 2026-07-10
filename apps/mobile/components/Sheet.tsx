@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef } from 'react'
 import type { ReactNode } from 'react'
-import { Text, TouchableOpacity, View } from 'react-native'
+import { Text, TouchableOpacity, View, useWindowDimensions } from 'react-native'
 import {
   BottomSheetModal,
   BottomSheetBackdrop,
@@ -50,10 +50,24 @@ export interface OverlayCommonProps {
   onClose: () => void
   title?: string
   description?: string
+  /**
+   * Non-scrolling header slot rendered BETWEEN the handle and the scroll body
+   * (outside the scroll region), so a custom header stays pinned while only the
+   * body scrolls — mirrors web's `shrink-0` header + `overflow-y-auto` body split
+   * (web SubstituteExerciseSheet.tsx:76 vs :89). Supersedes `title`/`description`
+   * when a caller needs richer header markup. The caller owns its own padding.
+   */
+  headerSlot?: ReactNode
   /** Pinned action row at the bottom (own border + sunken bg). */
   footer?: ReactNode
   /** Top-right dismiss affordance. Default true. */
   showCloseButton?: boolean
+  /**
+   * Accessible name announced for the whole sheet/dialog (screen readers) —
+   * mirrors web `SheetContent aria-label`. Forwarded to the native bottom-sheet
+   * container. Omit to leave the sheet unnamed (default).
+   */
+  accessibilityLabel?: string
   children: ReactNode
 }
 
@@ -64,6 +78,15 @@ export interface SheetProps extends OverlayCommonProps {
   showHandle?: boolean
   /** Wrap children in an internal scroll view. Default true. */
   scrollable?: boolean
+  /**
+   * Size the sheet to its content (hugging it) up to the largest `snapPoints`
+   * fraction as a cap, instead of forcing a fixed snap height. Mirrors web's
+   * bottom sheet `h-auto max-h-[85dvh]` (base sheet.tsx:58 `data-[side=bottom]:h-auto`
+   * + caller `max-h-[85dvh]`): short states (empty/error/loading) render a short
+   * sheet, tall content grows to the cap and then scrolls. Default false (fixed
+   * snap points, unchanged for existing callers).
+   */
+  dynamicSizing?: boolean
   /**
    * Force the dark chrome (surface `ink-950`, `border-inverse`, on-dark handle/close)
    * regardless of the active theme. For overlays that must read dark on top of an
@@ -81,17 +104,38 @@ export function Sheet({
   onClose,
   title,
   description,
+  headerSlot,
   footer,
   showCloseButton = true,
   scrollable = true,
   showHandle = true,
   snapPoints = DEFAULT_SNAP,
+  dynamicSizing = false,
+  accessibilityLabel,
   forceDark = false,
   children,
 }: SheetProps) {
   const { resolvedScheme } = useTheme()
   const insets = useSafeAreaInsets()
+  const { height: windowHeight } = useWindowDimensions()
   const modalRef = useRef<BottomSheetModal>(null)
+
+  // Cap for content-hugging (dynamic) sizing = the largest snap-point fraction of
+  // the screen (e.g. '85%' → 0.85·height), so short content hugs and tall content
+  // grows to the same 85% ceiling web enforces with `max-h-[85dvh]`. Falls back to
+  // 85% when snap points carry no usable fraction.
+  const maxDynamicContentSize = (() => {
+    let fraction = 0
+    for (const p of snapPoints) {
+      if (typeof p === 'string') {
+        const t = p.trim()
+        if (t.endsWith('%')) fraction = Math.max(fraction, parseFloat(t) / 100)
+      } else if (typeof p === 'number' && windowHeight > 0) {
+        fraction = Math.max(fraction, p / windowHeight)
+      }
+    }
+    return Math.round(windowHeight * Math.min(fraction > 0 ? fraction : 0.85, 1))
+  })()
 
   // Bridge declarative `open` → imperative present/dismiss.
   useEffect(() => {
@@ -127,17 +171,23 @@ export function Sheet({
   return (
     <BottomSheetModal
       ref={modalRef}
-      snapPoints={snapPoints}
-      enableDynamicSizing={false}
+      // Dynamic mode: let @gorhom measure content and cap at maxDynamicContentSize
+      // (content-hug up to 85%); otherwise keep the fixed snap points as before.
+      snapPoints={dynamicSizing ? undefined : snapPoints}
+      enableDynamicSizing={dynamicSizing}
+      maxDynamicContentSize={dynamicSizing ? maxDynamicContentSize : undefined}
       enablePanDownToClose
       onDismiss={onClose}
       backdropComponent={renderBackdrop}
       backgroundStyle={{ backgroundColor: 'transparent' }}
       handleComponent={null}
+      // @gorhom already labels its content container (default 'Bottom Sheet');
+      // forward the real dialog name so screen readers announce it (web aria-label parity).
+      accessibilityLabel={accessibilityLabel}
     >
       {/* Surface rendered by us so DS tokens (not @gorhom style props) own the color. */}
       <View
-        className={`flex-1 rounded-t-sheet border-t ${forceDark ? 'border-inverse bg-ink-950' : 'border-subtle bg-surface-card'}`}
+        className={`${dynamicSizing ? '' : 'flex-1'} rounded-t-sheet border-t ${forceDark ? 'border-inverse bg-ink-950' : 'border-subtle bg-surface-card'}`}
         style={shadow('lg', resolvedScheme)}
       >
         {showHandle ? (
@@ -148,16 +198,19 @@ export function Sheet({
 
         {header}
 
+        {/* Non-scrolling header slot: stays pinned above the scroll region (web `shrink-0` header). */}
+        {headerSlot}
+
         {scrollable ? (
           <BottomSheetScrollView
-            style={{ flex: 1 }}
+            style={dynamicSizing ? undefined : { flex: 1 }}
             contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: bodyPadBottom, gap: 14 }}
             showsVerticalScrollIndicator={false}
           >
             {children}
           </BottomSheetScrollView>
         ) : (
-          <View className="flex-1 px-space-6" style={{ paddingBottom: bodyPadBottom, gap: 14 }}>
+          <View className={dynamicSizing ? 'px-space-6' : 'flex-1 px-space-6'} style={{ paddingBottom: bodyPadBottom, gap: 14 }}>
             {children}
           </View>
         )}

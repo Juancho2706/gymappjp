@@ -3,15 +3,14 @@ import { AppState, Pressable, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import Svg, { Circle, G } from 'react-native-svg'
 import { MotiView } from 'moti'
-import { Confetti } from 'react-native-fast-confetti'
+import Animated, { Easing, useAnimatedProps, useSharedValue, withTiming } from 'react-native-reanimated'
 import { Pause, Play, RotateCcw, Volume2, VolumeX, X } from 'lucide-react-native'
 import * as Haptics from 'expo-haptics'
 import { useEvaMotion } from '../../../../lib/motion'
-import { TYPE, textStyle, FONT } from '../../../../lib/typography'
+import { textStyle, FONT } from '../../../../lib/typography'
 import { SHADOWS } from '../../../../lib/shadows'
 import { haptics } from '../../../../lib/haptics'
 import {
-  CONFETTI_COLORS,
   EMBER_200,
   EMBER_300,
   EMBER_500,
@@ -22,17 +21,14 @@ import {
 } from './timer-colors'
 import { isRestTimerMuted, setRestTimerMuted, subscribeRestTimerPrefs } from './rest-timer-preferences'
 import { playTimerCue } from './sound'
-import {
-  cancelRestEndNotification,
-  ensureRestNotifPermission,
-  scheduleRestEndNotification,
-} from './rest-notification'
+import { cancelRestEndNotification, scheduleRestEndNotification } from './rest-notification'
 
 /**
  * Descanso PROTAGONISTA (E2-09) — barra/overlay inferior con cuenta regresiva.
  * Port RN de la web Fase M `RestTimer.tsx`: anillo grande + tiempo mono gigante,
  * ±15s, pausa/reset/cerrar, mute, alarma al llegar a 0 (háptica en loop + pulso
- * ember + confetti + cue de audio gateado), y beeps 3-2-1.
+ * ember + cue de audio gateado), y beeps 3-2-1. Sin confetti (la web solo hace el
+ * pulso ember al `done`; el confetti de PR vive a nivel ExecutorV2, no en la barra).
  *
  * Background-safe: la cuenta se calcula desde `endTimeRef` (Date.now() al montar),
  * NO acumulando ticks. Si el SO congela el JS en background, al volver a `active`
@@ -52,6 +48,11 @@ interface RestTimerBarProps {
 
 const RING_R = 52
 const RING_C = 2 * Math.PI * RING_R
+
+// Anillo animable: espeja el `transition: stroke-dashoffset 0.5s linear` de la web
+// (`RestTimer.tsx:353`) para que el arco decrezca suave entre ticks de 500ms en vez
+// de saltar. Bajo reduce-motion se fija sin animar (paridad con `transition:none`).
+const AnimatedCircle = Animated.createAnimatedComponent(Circle)
 
 function formatTime(seconds: number): string {
   const m = Math.floor(seconds / 60)
@@ -87,11 +88,11 @@ export function RestTimerBar({ initialSeconds, nextLabel, warmup = false, autoSt
     return unsub
   }, [])
 
-  // Permiso de notificaciones LAZY: la barra solo se monta al iniciar un descanso,
-  // así que esto es "la primera vez que se usa el timer" (pedido de la Ronda 4).
-  useEffect(() => {
-    void ensureRestNotifPermission()
-  }, [])
+  // Permiso de notificaciones: la barra NUNCA promptea al montar (paridad con la
+  // web `RestTimer.tsx:132-148`, que solo consulta `Notification.permission` y calla
+  // sin permiso — "cero prompts nuevos en medio del entreno"). El único prompt vive
+  // tras el botón "Activar permisos" del panel de ajustes (`WorkoutSettingsSheet`).
+  // Si ya está concedido, la notif de background se programa en el handler de AppState.
 
   const stopAlarm = useCallback(() => {
     if (alarmIntervalRef.current) {
@@ -259,20 +260,23 @@ export function RestTimerBar({ initialSeconds, nextLabel, warmup = false, autoSt
   const frac = Math.max(0, Math.min(1, timeLeft / (totalSeconds || 1)))
   const dashoffset = RING_C * (1 - frac)
 
+  // Barrido suave del anillo (espeja `stroke-dashoffset 0.5s linear` web): anima el
+  // offset entre ticks de 500ms; bajo reduce-motion se fija sin transición.
+  const animatedOffset = useSharedValue(dashoffset)
+  useEffect(() => {
+    animatedOffset.value = motion.reduced
+      ? dashoffset
+      : withTiming(dashoffset, { duration: 500, easing: Easing.linear })
+  }, [dashoffset, motion.reduced, animatedOffset])
+  const ringAnimatedProps = useAnimatedProps(() => ({ strokeDashoffset: animatedOffset.value }))
+
   const bottomOffset = insets.bottom + 88 // sobre el footer de Finalizar (≈ web +5.5rem)
 
   return (
-    <>
-      {done && !motion.reduced ? (
-        <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-          <Confetti autoplay fadeOutOnEnd colors={[...CONFETTI_COLORS]} />
-        </View>
-      ) : null}
-
-      <View
-        pointerEvents="box-none"
-        style={[styles.anchor, { bottom: bottomOffset, left: insets.left + 12, right: insets.right + 12 }]}
-      >
+    <View
+      pointerEvents="box-none"
+      style={[styles.anchor, { bottom: bottomOffset, left: insets.left + 12, right: insets.right + 12 }]}
+    >
         <MotiView
           style={[styles.bar, SHADOWS.dark.xl, done ? styles.barDone : styles.barIdle]}
           onTouchStart={handleBarTouchStart}
@@ -307,7 +311,7 @@ export function RestTimerBar({ initialSeconds, nextLabel, warmup = false, autoSt
               <Svg width={96} height={96} viewBox="0 0 120 120">
                 <G rotation={-90} origin="60, 60">
                   <Circle cx={60} cy={60} r={RING_R} strokeWidth={9} fill="none" stroke={TRACK_ON_DARK} />
-                  <Circle
+                  <AnimatedCircle
                     cx={60}
                     cy={60}
                     r={RING_R}
@@ -316,7 +320,7 @@ export function RestTimerBar({ initialSeconds, nextLabel, warmup = false, autoSt
                     stroke={EMBER_500}
                     strokeLinecap="round"
                     strokeDasharray={RING_C}
-                    strokeDashoffset={dashoffset}
+                    animatedProps={ringAnimatedProps}
                   />
                 </G>
               </Svg>
@@ -389,8 +393,7 @@ export function RestTimerBar({ initialSeconds, nextLabel, warmup = false, autoSt
             </View>
           </View>
         </MotiView>
-      </View>
-    </>
+    </View>
   )
 }
 
@@ -435,12 +438,30 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: 14 },
   ringWrap: { width: 96, height: 96, position: 'relative' },
   ringCenter: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center' },
-  bigTime: { ...textStyle('3xl', FONT.monoBold, { lh: 'tight' }), color: ON_DARK },
+  // Web `RestTimer.tsx:357`: `.eva-metric text-[1.75rem] leading-none` = 28px, line-height 1,
+  // cifras tabulares (font-variant-numeric). Fijo a 28 (no '3xl'=31) + tabular para que los
+  // dígitos no salten de ancho al descontar (1:11 → 1:09).
+  bigTime: {
+    fontFamily: FONT.monoBold,
+    fontSize: 28,
+    lineHeight: 28,
+    fontVariant: ['tabular-nums', 'lining-nums'],
+    color: ON_DARK,
+  },
   info: { flex: 1, minWidth: 0 },
   infoTop: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 },
   infoText: { flexShrink: 1, minWidth: 0 },
-  eyebrow: { ...TYPE.eyebrow, color: EMBER_300 },
-  subLine: { ...TYPE.label, color: ON_DARK, marginTop: 2 },
+  // Web `RestTimer.tsx:367`: `text-[10px] font-bold uppercase tracking-[0.14em]` = 10px, ls 10·0.14=1.4.
+  eyebrow: {
+    fontFamily: FONT.uiBold,
+    fontSize: 10,
+    lineHeight: 14,
+    letterSpacing: 1.4,
+    textTransform: 'uppercase',
+    color: EMBER_300,
+  },
+  // Web `RestTimer.tsx:370`: `text-[13px] font-semibold` = 13px ('xs'), semibold.
+  subLine: { ...textStyle('xs', FONT.uiSemibold), color: ON_DARK, marginTop: 2 },
   subLineMuted: { color: ON_DARK_MUTED }, // el "qué sigue" en tono atenuado (espeja `text-on-dark-muted` web)
   utilRow: { flexDirection: 'row', alignItems: 'center', flexShrink: 0 },
   utilBtn: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },

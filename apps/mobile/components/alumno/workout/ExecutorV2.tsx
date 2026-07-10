@@ -47,14 +47,18 @@ import { typedTargetFor } from './keypad-flow'
 import { TechniqueSheet } from './TechniqueSheet'
 import { WorkoutSettingsSheet } from './WorkoutSettingsSheet'
 import { WorkoutSummaryOverlay } from './WorkoutSummaryOverlay'
-import { bestPrevOf, fmtElapsed, fmtVolume, parseRestTime } from './workout-ui'
+import { bestPrevOf, fmtElapsed, fmtVolume } from './workout-ui'
 
 /** Carril device-scoped del modo de vista (Lista/Pasos), igual que `STEPPER_MODE_KEY` de web. */
 const VIEW_MODE_KEY = 'eva_workout_view_mode'
 // Contrato de la ola (otros workers): provider de timers + sheet de sustitución. Importados con la
 // firma exacta del contrato; el orquestador integra. NO stubear.
 import { WorkoutTimerProvider, useWorkoutTimers } from './timers/TimerProvider'
-import { isRestAutoTimerEnabled } from './timers'
+// `parseRestTime` del PROPIO unit de timers (port exacto del web): maneja "MM:SS" /
+// "90s" / "1 min" / "90". El `startRest` del provider exige SEGUNDOS (number), así que
+// el caller parsea aquí — a diferencia del `parseRestTime` de `workout-ui`, que colapsa
+// "01:30" a 1s. Esto satisface el contrato string→number del provider con paridad web.
+import { isRestAutoTimerEnabled, parseRestTime } from './timers'
 import { SubstituteExerciseSheet } from './SubstituteExerciseSheet'
 import { SUBSTITUTION_REASON } from '../../../lib/workout/substitution'
 

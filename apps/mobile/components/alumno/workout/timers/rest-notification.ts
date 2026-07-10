@@ -9,8 +9,10 @@
  * da el audio/háptica in-app, así que la barra CANCELA la notificación programada
  * (ver `RestTimerBar`) para no duplicar el beep.
  *
- * Permiso LAZY: se pide la primera vez que se usa un timer (no en el arranque),
- * y se cachea el resultado. Si el usuario lo niega, todo acá es no-op seguro.
+ * Permiso: la barra NUNCA promptea (paridad web `RestTimer.tsx:134-137`). La notif
+ * de background solo se programa si el permiso YA está concedido (`getRestNotifPermission`,
+ * lectura sin prompt). El único prompt interactivo vive tras el botón "Activar permisos"
+ * del panel de ajustes (`requestRestNotifPermission`). Sin permiso ⇒ no-op seguro.
  */
 import * as Notifications from 'expo-notifications'
 import { Platform } from 'react-native'
@@ -88,7 +90,10 @@ export async function ensureRestNotifPermission(): Promise<boolean> {
 export async function scheduleRestEndNotification(seconds: number): Promise<void> {
   await cancelRestEndNotification()
   if (!Number.isFinite(seconds) || seconds <= 0) return
-  if (!(await ensureRestNotifPermission())) return
+  // Paridad web (`RestTimer.tsx:134-137`): la notif SOLO se programa si el permiso YA
+  // está concedido; NUNCA promptea a mitad del descanso. Sin permiso ⇒ silencio total
+  // (el prompt interactivo vive únicamente en el botón del panel de ajustes).
+  if ((await getRestNotifPermission()) !== 'granted') return
   try {
     scheduledId = await Notifications.scheduleNotificationAsync({
       content: {

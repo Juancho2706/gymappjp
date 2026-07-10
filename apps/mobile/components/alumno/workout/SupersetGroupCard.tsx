@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
-import { MotiView } from 'moti'
+import { AnimatePresence, MotiView } from 'moti'
+import { LinearTransition } from 'react-native-reanimated'
 import { CheckCircle2, ChevronDown, History, Info, Quote, TrendingUp } from 'lucide-react-native'
 import {
   effectiveExerciseType,
@@ -27,6 +28,10 @@ const LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
 // NativeWind v4: `style={TYPE.mono}` pisa la fontFamily de `font-mono-bold` → el bold no aplica. Se fija
 // la cara bold por style (array) en los valores mono destacados (bug ola0).
 const MONO_BOLD = { fontFamily: FONT.monoBold } as const
+// Reflow de la card (paridad web `layout={!reducedMotion}` + `springs.smooth` {stiffness:200,damping:25},
+// SingleExerciseCard web:159-160/165): anima el cambio de tamaño/orden (p. ej. al cerrar una ronda).
+// `undefined` cuando hay reduced-motion. LinearTransition = layout transition de reanimated.
+const CARD_LAYOUT = LinearTransition.springify().damping(25).stiffness(200)
 
 /**
  * Card de superserie (mobile) — grupo visual sport-bordered con dos zonas, espejo de `SupersetGroupCard`
@@ -118,6 +123,12 @@ export function SupersetGroupCard({
     })
     .filter((m): m is NonNullable<typeof m> => m != null)
 
+  // Guard de <2 miembros RESUELTOS (contrato §10 / web WEC:690 `if (memberVMs.length < 2) return null`):
+  // una superserie exige ≥2; con 1 (o 1 que resuelve) no se pinta la card 'Superserie'. El motor de
+  // agrupación ya degrada un tramo de 1 bloque a single, pero esta defensa espeja la del web y evita
+  // renderizar '1 ejercicios' si un miembro no resuelve su ejercicio (`resolveExercise` null).
+  if (memberVMs.length < 2) return null
+
   // Serie ACTIVA del grupo en orden intercalado (A1 → B1 → A2…): la primera incompleta. Es la única que
   // se pinta como fila de registro (ActiveSetRow) y lleva la señal "Sigue" — mirror web `nextCue`/isActive.
   const activePos = firstIncompleteInRounds(
@@ -126,13 +137,18 @@ export function SupersetGroupCard({
   )
 
   return (
-    <View className="gap-3 rounded-card border border-sport-500/30 bg-sport-500/[0.05] p-4">
+    <MotiView
+      layout={reducedMotion ? undefined : CARD_LAYOUT}
+      className="gap-3 rounded-card border border-sport-500/30 bg-sport-500/[0.05] p-4"
+    >
       <View className="gap-2">
         <View className="flex-row flex-wrap items-center justify-between gap-2">
           <View className="flex-row items-center gap-2">
             <Text className="font-display text-sm text-on-dark">Superserie</Text>
             <Text style={TYPE.caption} className="text-[11px] text-on-dark-muted">
-              {members.length} ejercicios · {maxSets} ronda{maxSets === 1 ? '' : 's'}
+              {/* Conteo sobre los miembros RESUELTOS (mirror web WEC:702 `{memberVMs.length}`), no el
+                  crudo `members.length` que contaría un miembro con `resolveExercise` null. */}
+              {memberVMs.length} ejercicios · {maxSets} ronda{maxSets === 1 ? '' : 's'}
             </Text>
           </View>
           <Pressable
@@ -149,17 +165,24 @@ export function SupersetGroupCard({
         <Text style={TYPE.caption} className="text-[12px] text-on-dark-muted">
           Rondas: <Text className="text-on-dark font-sans-bold">{firstLabel}</Text> → <Text className="text-on-dark font-sans-bold">{secondLabel}</Text> sin descanso, descansa al cerrar la ronda.
         </Text>
-        {howToOpen && (
-          <MotiView
-            from={reducedMotion ? { opacity: 1, translateY: 0 } : { opacity: 0, translateY: -4 }}
-            animate={{ opacity: 1, translateY: 0 }}
-            transition={reducedMotion ? { type: 'timing', duration: 0 } : undefined}
-          >
-            <Text style={TYPE.caption} className="rounded-sm border border-inverse/10 bg-white/[0.03] p-3 text-[12px] text-on-dark/90">
-              Trabaja por rondas: haz <Text className="font-sans-bold">{firstLabel}</Text>, sigue con <Text className="font-sans-bold">{secondLabel}</Text> sin descanso, y descansa al <Text className="font-sans-bold">cerrar la ronda</Text>. Repite hasta completar todas las series.
-            </Text>
-          </MotiView>
-        )}
+        {/* Disclosure "Cómo hacerla" — AnimatePresence + `exit` para que el COLAPSO anime en vez de
+            desmontar de golpe (paridad web WEC:718-733: AnimatePresence con `exit`, transition
+            {duration:0.25}). El eje es opacity/translateY (idiomático RN) en lugar de height. */}
+        <AnimatePresence>
+          {howToOpen && (
+            <MotiView
+              key="howto"
+              from={reducedMotion ? { opacity: 1, translateY: 0 } : { opacity: 0, translateY: -4 }}
+              animate={{ opacity: 1, translateY: 0 }}
+              exit={reducedMotion ? { opacity: 0, translateY: 0 } : { opacity: 0, translateY: -4 }}
+              transition={reducedMotion ? { type: 'timing', duration: 0 } : { type: 'timing', duration: 250 }}
+            >
+              <Text style={TYPE.caption} className="rounded-sm border border-inverse/10 bg-white/[0.03] p-3 text-[12px] text-on-dark/90">
+                Trabaja por rondas: haz <Text className="font-sans-bold">{firstLabel}</Text>, sigue con <Text className="font-sans-bold">{secondLabel}</Text> sin descanso, y descansa al <Text className="font-sans-bold">cerrar la ronda</Text>. Repite hasta completar todas las series.
+              </Text>
+            </MotiView>
+          )}
+        </AnimatePresence>
       </View>
 
       {/* LEYENDA: referencia rápida de cada ejercicio (objetivo, técnica, notas, historial). Las series
@@ -345,6 +368,6 @@ export function SupersetGroupCard({
           )
         })}
       </View>
-    </View>
+    </MotiView>
   )
 }

@@ -67,10 +67,10 @@ export function RestAlarmPreference() {
   }
 
   function pickSound(next: TimerSound) {
+    // Espeja `handleSoundChange` web (`WorkoutTimerSettingsPanel.tsx:56-59`): solo
+    // persiste + previsualiza; NO toca el mute (la web no auto-desmutea al elegir un
+    // timbre). Si el usuario tiene Silencio activo, el preview queda gateado (no-op).
     setRestTimerSound(next)
-    // Al elegir un sonido con Silencio activo, lo desactivamos (intención clara).
-    if (muted) setRestTimerMuted(false)
-    // Previsualiza el timbre elegido (espeja `handleSoundChange` web → playTimerSound).
     playTimerCue('alarm')
   }
 
@@ -94,7 +94,7 @@ export function RestAlarmPreference() {
         <View className="flex-1">
           <Text className="text-base font-sans-semibold text-strong">Alarma de descanso</Text>
           <Text className="text-sm font-sans text-muted mt-1">
-            Sonido y volumen al terminar el descanso entre series.
+            Sonido y volumen cuando termina el descanso.
           </Text>
         </View>
         <HapticPressable

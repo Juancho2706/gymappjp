@@ -11,7 +11,6 @@ import Animated, {
 } from 'react-native-reanimated'
 import { CheckCircle2, ChevronLeft, ChevronRight } from 'lucide-react-native'
 import { EASE, useEvaMotion } from '../../../lib/motion'
-import { haptics } from '../../../lib/haptics'
 import { FONT } from '../../../lib/typography'
 
 const ON_DARK = '#F4F6F8'

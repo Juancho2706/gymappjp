@@ -156,6 +156,26 @@ export function rankSubstitutes<T extends RankableExercise>(
 
 // ─────────────────────────── resolucion del candidate set ───────────────────────────
 
+/**
+ * `blockId` malformado → misma copia que el server action web ('Bloque inválido.',
+ * apps/web/.../_actions/substitution.actions.ts:18,26 valida con Zod `z.guid()`). En web esa
+ * validación vive en el action que envuelve la query; aquí, sin action, la hace la capa de datos.
+ */
+export class InvalidBlockIdError extends Error {
+  constructor() {
+    super('Bloque inválido.')
+    this.name = 'InvalidBlockIdError'
+  }
+}
+
+// GUID 8-4-4-4-12 (paridad con Zod `z.guid()` del action web).
+const BLOCK_ID_GUID = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/
+
+/** ¿`id` es un GUID válido? (mismo criterio que la validación Zod del server action web). */
+export function isValidBlockId(id: string | null | undefined): boolean {
+  return typeof id === 'string' && BLOCK_ID_GUID.test(id)
+}
+
 /** Candidato de sustitucion: card del sheet + media para la tecnica. */
 export interface SubstituteCandidate extends RankableExercise {
   exercise_type: string | null
@@ -201,6 +221,10 @@ type BlockExerciseRow = {
  * `selectWithFallback` reintenta sin esas columnas.
  */
 export async function fetchSubstituteCandidates(blockId: string): Promise<SubstitutionCandidateSet | null> {
+  // 0) Valida el GUID ANTES de la query (paridad con el action web: id malformado → 'Bloque inválido.',
+  //    NO 'No se pudo resolver…'). Distingue la copia igual que el `z.guid()` del server action.
+  if (!isValidBlockId(blockId)) throw new InvalidBlockIdError()
+
   // 1) Ejercicio prescrito del bloque (RLS del alumno gatea la propiedad del plan).
   const { data: blockData } = await selectWithFallback<BlockExerciseRow>(
     () =>

@@ -167,7 +167,11 @@ export function SingleExerciseCard({
       : undefined
 
   return (
-    <View style={activeShadow} className={`relative gap-3 rounded-card border bg-white/[0.03] p-4 ${borderClass}`}>
+    <MotiView
+      style={activeShadow}
+      layout={reducedMotion ? undefined : CARD_LAYOUT}
+      className={`relative gap-3 rounded-card border bg-white/[0.03] p-4 ${borderClass}`}
+    >
       {/* Fila silenciosa: músculo + acciones (Detalles / Cambiar / Técnica) */}
       <View className="flex-row items-center justify-between gap-2">
         <View className="min-w-0 flex-1 flex-row items-center gap-1.5">
@@ -175,18 +179,16 @@ export function SingleExerciseCard({
           <Text style={{ fontFamily: FONT.uiBold, fontSize: 11, color: typeColor }} numberOfLines={1}>
             {typeMeta.label}
           </Text>
-          {exercise.muscle_group && (
-            <>
-              <Text style={{ fontSize: 11 }} className="text-on-dark-muted/40">·</Text>
-              <Text
-                style={{ fontFamily: FONT.uiSemibold, fontSize: 11 }}
-                className="min-w-0 shrink text-on-dark-muted"
-                numberOfLines={1}
-              >
-                {exercise.muscle_group}
-              </Text>
-            </>
-          )}
+          {/* Separador `·` + músculo INCONDICIONALES (paridad web SingleExerciseCard.tsx:182-187: el
+              `·` y el span de músculo se pintan siempre, aun con `muscle_group` vacío). */}
+          <Text style={{ fontSize: 11 }} className="text-on-dark-muted/40">·</Text>
+          <Text
+            style={{ fontFamily: FONT.uiSemibold, fontSize: 11 }}
+            className="min-w-0 shrink text-on-dark-muted"
+            numberOfLines={1}
+          >
+            {exercise.muscle_group}
+          </Text>
         </View>
         <View className="flex-row shrink-0 items-center gap-1">
           {hasDetails && (
@@ -365,12 +367,17 @@ export function SingleExerciseCard({
         <Text style={TYPE.caption} className="text-[12px] text-on-dark-muted" numberOfLines={1}>{cueLine}</Text>
       )}
 
-      {/* Detalles (disclosure) */}
-      {detailsOpen && (
+      {/* Detalles (disclosure) — AnimatePresence + `exit` para que el COLAPSO anime en vez de desmontar
+          de golpe (paridad web SingleExerciseCard.tsx:331-337: AnimatePresence con `exit`,
+          transition {duration:0.25}). El eje es opacity/translateY (idiomático RN) en lugar de height. */}
+      <AnimatePresence>
+        {detailsOpen && (
         <MotiView
+          key="details"
           from={reducedMotion ? { opacity: 1, translateY: 0 } : { opacity: 0, translateY: -4 }}
           animate={{ opacity: 1, translateY: 0 }}
-          transition={reducedMotion ? { type: 'timing', duration: 0 } : undefined}
+          exit={reducedMotion ? { opacity: 0, translateY: 0 } : { opacity: 0, translateY: -4 }}
+          transition={reducedMotion ? { type: 'timing', duration: 0 } : { type: 'timing', duration: 250 }}
           className="gap-3 rounded-card border border-inverse/10 bg-white/[0.02] p-3"
         >
           {isStrength && exercise.instructions && exercise.instructions.length > 0 && (
@@ -421,7 +428,8 @@ export function SingleExerciseCard({
             </View>
           )}
         </MotiView>
-      )}
+        )}
+      </AnimatePresence>
 
       {/* Series: la ACTIVA es la fila de registro expandida (paridad web); las demas son chips/prompts */}
       <View className="gap-1.5">
@@ -463,7 +471,7 @@ export function SingleExerciseCard({
           )
         })}
       </View>
-    </View>
+    </MotiView>
   )
 }
 

@@ -56,11 +56,12 @@ export function WorkoutSettingsSheet({ open, onClose }: { open: boolean; onClose
 }
 
 /**
- * Card de permiso de notificaciones (espejo §7 C web). El permiso se pide LAZY al
- * usar el primer timer (`ensureRestNotifPermission`); este card da la vía de
- * recuperación en ajustes que el web ofrece: re-pedir si está en `default`, o
- * explicar el desbloqueo por Ajustes del SO si quedó `denied`. `null` = cargando
- * (evita el flash del card antes de leer el permiso real, igual que el web).
+ * Card de permiso de notificaciones (espejo §7 C web). El permiso NUNCA se pide
+ * automáticamente (la barra no promptea, paridad web): este card es el ÚNICO punto
+ * de prompt interactivo (`requestRestNotifPermission` tras "Activar permisos"),
+ * espejando el botón del panel web. Re-pide si está en `default`, o explica el
+ * desbloqueo por Ajustes del SO si quedó `denied`. `null` = cargando (evita el flash
+ * del card antes de leer el permiso real, igual que el web).
  */
 function NotificationPermissionCard() {
   const [permission, setPermission] = useState<RestNotifPermission | null>(null)
