@@ -926,3 +926,13 @@ Search Console removal de `/enterprise` y `/legal/contrato-enterprise`: **INNECE
 
 Notas: el flip de `NEXT_PUBLIC_FLOW_ENABLED` exige redeploy (inlined build-time). Rollback = quitar/poner `false` + redeploy (kill-switch, cero regresion MP). Gotcha QA Preview: `NEXT_PUBLIC_SITE_URL` de Preview apunta a un alias fijo → el retorno de Webpay cae en un dominio sin sesion (rebote a /login); en prod no ocurre (eva-app.cl).
 
+
+## MT-42 — Google Sign-In mobile: credenciales iOS/Android reales · ⏳ Cuando el CEO quiera activar login Google en la app
+
+El plugin `@react-native-google-signin/google-signin` fue REMOVIDO de `apps/mobile/app.json` (2026-07-09) porque el placeholder `iosUrlScheme` rompía la validación de TestFlight (RFC1738). El código JS queda fail-closed (`isGoogleSignInAvailable()` oculta el botón sin credenciales). Para activar:
+
+1. Google Cloud Console (mismo proyecto del client web `NEXT_PUBLIC_GOOGLE_CLIENT_ID`) → Credentials → Create OAuth client ID → tipo **iOS** (bundle `cl.evaapp.eva`) → copiar el client ID → el `iosUrlScheme` es ese ID INVERTIDO (`com.googleusercontent.apps.XXXX`).
+2. Crear también OAuth client tipo **Android** (package `cl.evaapp.eva` + SHA1 del keystore EAS — `eas credentials`).
+3. Restaurar en `app.json` plugins: `["@react-native-google-signin/google-signin", { "iosUrlScheme": "<invertido>" }]`.
+4. `EXPO_PUBLIC_GOOGLE_CLIENT_ID` (el **web** client ID, mismo del sitio) en `eas.json` env de prodpreview/production.
+5. Rebuild ambas plataformas (lib nativa).
