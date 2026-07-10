@@ -18,3 +18,4 @@ yarn-error.*
 /ios
 /android
 credentials.json
+google-service-account.json
