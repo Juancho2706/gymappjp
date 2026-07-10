@@ -151,7 +151,7 @@ export function MealGroupModal({ isOpen, onClose, onSave, editingGroup, coachId 
                         <div className="space-y-2.5">
                             {items.length === 0 ? (
                                 <div className="rounded-card border border-dashed border-default bg-surface-sunken py-8 text-center">
-                                    <p className="text-[12.5px] text-subtle">Agregá ingredientes arriba.</p>
+                                    <p className="text-[12.5px] text-subtle">Agrega ingredientes arriba.</p>
                                 </div>
                             ) : (
                                 items.map((item, index) => (

@@ -61,7 +61,7 @@ export function ModulesForm({
             <div className="flex items-start gap-2.5 rounded-control px-3.5 py-[11px]" style={{ background: 'var(--sport-100)' }}>
                 <Info className="mt-0.5 h-[17px] w-[17px] shrink-0" style={{ color: 'var(--sport-600)' }} />
                 <p className="text-[12.5px] font-semibold leading-normal" style={{ color: 'var(--sport-700)' }}>
-                    Activá un módulo acá; usalo desde <b>Alumnos › Herramientas</b>. Cada uno se cobra aparte de tu plan.
+                    Activa un módulo acá; usalo desde <b>Alumnos › Herramientas</b>. Cada uno se cobra aparte de tu plan.
                 </p>
             </div>
 
@@ -190,7 +190,7 @@ export function ModulesForm({
 
             {scope === 'standalone' && (
                 <p className="pt-1 text-center text-[11.5px] leading-relaxed text-subtle">
-                    El cobro se prorratea al período. Gestioná bajas desde Suscripción.
+                    El cobro se prorratea al período. Gestiona bajas desde Suscripción.
                 </p>
             )}
         </div>

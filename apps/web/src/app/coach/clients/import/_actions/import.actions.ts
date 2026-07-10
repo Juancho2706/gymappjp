@@ -190,7 +190,7 @@ export async function importClientsAction(
 
         if ((activeCount ?? 0) + rows.length > maxClients) {
             return {
-                error: `Tu plan permite ${maxClients} alumnos activos. Tenés ${activeCount ?? 0} y querés importar ${rows.length}. Actualizá tu plan o reducí la cantidad de filas.`,
+                error: `Tu plan permite ${maxClients} alumnos activos. Tienes ${activeCount ?? 0} y quieres importar ${rows.length}. Actualiza tu plan o reduce la cantidad de filas.`,
             }
         }
     }

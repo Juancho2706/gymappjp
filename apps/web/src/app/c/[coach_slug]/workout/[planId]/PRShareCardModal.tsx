@@ -50,7 +50,7 @@ export function PRShareCardModal({ pr, onClose }: PRShareCardModalProps) {
             const blob = await renderWorkoutPRCardToBlob(pr, brand)
             if (cancelled) return
             if (!blob) {
-                toast.error('No pudimos generar la imagen. Intentá de nuevo.')
+                toast.error('No pudimos generar la imagen. Intenta de nuevo.')
                 onClose()
                 return
             }

@@ -87,7 +87,7 @@ export function CreateClientModal({ open, onClose }: CreateClientModalProps) {
                                 ¡Alumno creado!
                             </h2>
                             <p className="mt-1 text-sm text-muted-foreground">
-                                Enviá el link de acceso a{' '}
+                                Envía el link de acceso a{' '}
                                 <span className="font-semibold text-foreground">{state.clientName}</span>{' '}
                                 por WhatsApp.
                             </p>
@@ -136,7 +136,7 @@ export function CreateClientModal({ open, onClose }: CreateClientModalProps) {
                                 Límite de {state.currentLimit} alumnos alcanzado
                             </h2>
                             <p className="mt-2 text-sm text-muted-foreground">
-                                Hacé upgrade para seguir creciendo. Tus alumnos actuales no se ven afectados.
+                                Haz upgrade para seguir creciendo. Tus alumnos actuales no se ven afectados.
                             </p>
                         </div>
                         <Link

@@ -226,7 +226,7 @@ function PickerBody({
                     <Ruler className="size-5" aria-hidden />
                 </span>
                 <div className="min-w-0 flex-1">
-                    <p className="font-display text-lg font-extrabold text-strong">Elegí un alumno</p>
+                    <p className="font-display text-lg font-extrabold text-strong">Elige un alumno</p>
                     <p className="text-[12.5px] text-muted">Composición corporal · se mide a una persona a la vez</p>
                 </div>
             </div>
@@ -275,14 +275,14 @@ function StudentPicker({
     onPick: (id: string) => void
 }) {
     const isDesktop = useIsDesktopMd()
-    const description = 'Elegí a quién medir — la captura es 1-a-1.'
+    const description = 'Elige a quién medir — la captura es 1-a-1.'
 
     if (isDesktop) {
         return (
             <Dialog open={open} onOpenChange={onOpenChange}>
                 <DialogContent className="max-h-[min(88dvh,88svh)] overflow-y-auto overscroll-contain border-subtle bg-surface-card text-body sm:max-w-[440px]">
                     <DialogHeader className="sr-only">
-                        <DialogTitle>Elegí un alumno</DialogTitle>
+                        <DialogTitle>Elige un alumno</DialogTitle>
                         <DialogDescription>{description}</DialogDescription>
                     </DialogHeader>
                     <PickerBody clients={clients} onPick={onPick} />
@@ -304,7 +304,7 @@ function StudentPicker({
                         aria-hidden="true"
                     />
                     <SheetHeader className="border-0 bg-transparent p-0">
-                        <SheetTitle className="sr-only">Elegí un alumno</SheetTitle>
+                        <SheetTitle className="sr-only">Elige un alumno</SheetTitle>
                         <SheetDescription className="sr-only">{description}</SheetDescription>
                     </SheetHeader>
                     <PickerBody clients={clients} onPick={onPick} />
@@ -356,7 +356,7 @@ export function ToolsHub({
                             <LayoutGrid className="size-7" aria-hidden />
                         </span>
                         <h2 className="font-display text-[22px] font-black tracking-[-0.02em] text-on-dark">
-                            Potenciá tu evaluación
+                            Potencia tu evaluación
                         </h2>
                         <p className="mx-auto mt-2 max-w-[290px] text-[13.5px] leading-relaxed text-on-dark-muted">
                             Cardio con zonas, screening de movimiento y composición corporal — herramientas
@@ -376,7 +376,7 @@ export function ToolsHub({
                             </p>
                         )}
                     </Card>
-                    <SectionTitle>Lo que podés desbloquear</SectionTitle>
+                    <SectionTitle>Lo que puedes desbloquear</SectionTitle>
                     <div className="flex flex-col gap-3">
                         {[...TOOLS, PLAN_TOOL].map((t) => (
                             <ModuleHubCard key={t.key} tool={t} active={false} managed={managed} />
@@ -389,7 +389,7 @@ export function ToolsHub({
                     <div className="flex items-center gap-[9px] rounded-control bg-surface-sunken px-[13px] py-2.5">
                         <Info className="size-[15px] shrink-0 text-subtle" aria-hidden />
                         <p className="flex-1 text-xs leading-snug text-muted">
-                            Elegí el módulo y después el alumno. Se mide a una persona a la vez.
+                            Elige el módulo y después el alumno. Se mide a una persona a la vez.
                         </p>
                     </div>
 

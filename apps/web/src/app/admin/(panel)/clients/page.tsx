@@ -6,7 +6,7 @@ import { PageInfoButton } from '../_components/PageInfoButton'
 const CLIENTS_INFO = [
     {
         heading: '¿Qué muestra esta sección?',
-        body: 'Lista de todos los alumnos registrados en la plataforma EVA, de todos los coaches. Podés buscar por nombre o email, filtrar por coach, y ver o editar los datos de cada alumno.',
+        body: 'Lista de todos los alumnos registrados en la plataforma EVA, de todos los coaches. Puedes buscar por nombre o email, filtrar por coach, y ver o editar los datos de cada alumno.',
     },
     {
         heading: 'Columnas',
@@ -18,11 +18,11 @@ const CLIENTS_INFO = [
     },
     {
         heading: 'Crear alumno',
-        body: 'Click en "Nuevo Alumno" para crear un alumno directamente desde el panel CEO. Seleccioná el coach al que pertenece, completá los datos y se generará la cuenta al instante. Las credenciales temporales se muestran una sola vez al crear.',
+        body: 'Click en "Nuevo Alumno" para crear un alumno directamente desde el panel CEO. Selecciona el coach al que pertenece, completa los datos y se generará la cuenta al instante. Las credenciales temporales se muestran una sola vez al crear.',
     },
     {
         heading: 'Editar alumno',
-        body: 'Click en el ícono de lápiz para abrir el panel de edición. Podés modificar nombre, email y estado activo/inactivo. Los cambios quedan registrados en Auditoría.',
+        body: 'Click en el ícono de lápiz para abrir el panel de edición. Puedes modificar nombre, email y estado activo/inactivo. Los cambios quedan registrados en Auditoría.',
     },
     {
         heading: 'Fuente de datos',

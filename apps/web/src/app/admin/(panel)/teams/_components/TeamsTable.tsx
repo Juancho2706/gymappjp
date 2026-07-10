@@ -25,7 +25,7 @@ export function TeamsTable({ teams }: { teams: AdminTeamRow[] }) {
                 <div className="rounded-lg border border-[--admin-border] bg-[--admin-bg-surface] px-4 py-12 text-center">
                     <Users className="mx-auto h-8 w-8 text-[--admin-text-3]" />
                     <p className="mt-2 text-sm text-[--admin-text-2]">No hay equipos todavía</p>
-                    <p className="text-xs text-[--admin-text-3]">Creá el primero para provisionar un pool de coaches.</p>
+                    <p className="text-xs text-[--admin-text-3]">Crea el primero para provisionar un pool de coaches.</p>
                 </div>
             ) : (
                 <div className="overflow-hidden rounded-lg border border-[--admin-border]">

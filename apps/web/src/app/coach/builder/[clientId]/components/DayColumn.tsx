@@ -444,7 +444,7 @@ function DayColumnInner({
                             const bothGrouped = !!block.superset_group && !!nextBlock?.superset_group
                             const linkApplicable = canLinkSuperset && !bothGrouped
                             const linkTooltip = bothGrouped
-                                ? 'Ya están en superseries — desagrupá primero'
+                                ? 'Ya están en superseries — desagrupa primero'
                                 : !sameAreaAsNext
                                     ? 'Solo puedes enlazar con el siguiente ejercicio de la misma área'
                                     : 'Agrupar como superserie con el siguiente ejercicio'

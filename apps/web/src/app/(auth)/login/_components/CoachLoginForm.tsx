@@ -110,12 +110,12 @@ export function CoachLoginForm({ urlError, showCaptcha, turnstileSiteKey }: Coac
             <GoogleSignInButton intent="login" />
 
             <div className="pt-6 text-center text-sm text-text-muted">
-                ¿No tenés cuenta?{' '}
+                ¿No tienes cuenta?{' '}
                 <Link
                     href="/register"
                     className="font-bold text-sport-600 hover:opacity-80 transition-opacity"
                 >
-                    Registrate
+                    Regístrate
                 </Link>
             </div>
         </form>

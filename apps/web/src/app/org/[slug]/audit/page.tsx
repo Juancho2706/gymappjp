@@ -259,7 +259,7 @@ export default async function OrgAuditPage({ params, searchParams }: Props) {
                                         tone="neutral"
                                         headline={(actionFilter || actorFilter || targetTypeFilter) ? 'Sin resultados para ese filtro' : 'No hay eventos auditados todavía'}
                                         description={(actionFilter || actorFilter || targetTypeFilter)
-                                            ? 'Ajustá o limpiá los filtros para ver más eventos.'
+                                            ? 'Ajusta o limpia los filtros para ver más eventos.'
                                             : 'Las acciones sensibles (asignaciones, cambios de marca, exports) aparecerán aquí automáticamente.'}
                                     />
                                 </div>

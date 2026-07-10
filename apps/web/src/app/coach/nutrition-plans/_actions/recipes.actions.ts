@@ -53,7 +53,7 @@ const DeleteRecipeSchema = z.object({ recipeId: z.guid() })
 
 const AssignRecipeSchema = z.object({
   recipeId: z.guid(),
-  clientIds: z.array(z.guid()).min(1, 'Seleccioná al menos un alumno.').max(500),
+  clientIds: z.array(z.guid()).min(1, 'Selecciona al menos un alumno.').max(500),
 })
 
 const UnassignRecipeSchema = z.object({

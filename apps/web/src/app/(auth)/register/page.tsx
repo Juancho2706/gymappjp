@@ -193,12 +193,12 @@ export default function RegisterPage() {
         if (step === 1) {
             if (fromGoogle) {
                 if (!fullName || !brandName) {
-                    setClientError('Completá tu nombre y nombre de marca antes de continuar.')
+                    setClientError('Completa tu nombre y nombre de marca antes de continuar.')
                     return
                 }
             } else {
                 if (!fullName || !brandName || !email || password.length < 8) {
-                    setClientError('Completá tus datos antes de continuar al paso de plan y pago.')
+                    setClientError('Completa tus datos antes de continuar al paso de plan y pago.')
                     return
                 }
             }
@@ -346,7 +346,7 @@ export default function RegisterPage() {
                         <>
                     <div>
                         <h1 className="font-display text-[26px] font-black leading-[1.1] tracking-[-0.02em] text-text-strong">
-                            Creá tu cuenta de coach
+                            Crea tu cuenta de coach
                         </h1>
                         <p className="mt-1.5 text-sm text-text-muted">Tu marca, tus alumnos, tu negocio — en una sola app.</p>
                     </div>
@@ -485,15 +485,15 @@ export default function RegisterPage() {
                         <>
                             <div>
                                 <h1 className="font-display text-2xl font-black tracking-[-0.02em] text-text-strong">
-                                    Elegí tu plan
+                                    Elige tu plan
                                 </h1>
-                                <p className="mt-1 text-[13.5px] text-text-muted">Cambiá o cancelá cuando quieras. Empezá gratis si querés probar.</p>
+                                <p className="mt-1 text-[13.5px] text-text-muted">Cambia o cancela cuando quieras. Empieza gratis si quieres probar.</p>
                             </div>
                             <section className="space-y-2">
                                 <div
                                     ref={tierGroupRef}
                                     role="radiogroup"
-                                    aria-label="Elegí tu plan"
+                                    aria-label="Elige tu plan"
                                     className="grid gap-2.5"
                                 >
                                     {tierOptions.map(([key, option], index) => {
@@ -709,7 +709,7 @@ export default function RegisterPage() {
                                                 onClick={() => setCouponFieldOpen(true)}
                                                 className="text-sm font-semibold text-sport-600 hover:underline"
                                             >
-                                                ¿Tenés un código de descuento?
+                                                ¿Tienes un código de descuento?
                                             </button>
                                         ) : couponAutoApplied && couponCode ? (
                                             <p className="text-sm text-[var(--success-600)]">
@@ -751,7 +751,7 @@ export default function RegisterPage() {
                                 {isFreeTier ? 'Tu plan gratuito' : 'Resumen antes de pagar'}
                             </h1>
                             <p className="mt-1 text-[13.5px] text-text-muted">
-                                Revisá y confirmá. {isFreeTier ? 'Sin tarjeta de crédito.' : 'El cobro ocurre en el checkout seguro.'}
+                                Revisa y confirma. {isFreeTier ? 'Sin tarjeta de crédito.' : 'El cobro ocurre en el checkout seguro.'}
                             </p>
                         </div>
                         <section className="rounded-card border border-border-subtle bg-surface-card p-4 space-y-3">
@@ -805,7 +805,7 @@ export default function RegisterPage() {
                                 <div className="flex items-start gap-2 pt-1 text-xs text-text-muted">
                                     <Sparkles className="w-3.5 h-3.5 shrink-0 mt-0.5 text-[var(--success-500)]" />
                                     <span>
-                                        Sin tarjeta de crédito. Acceso inmediato. Podés hacer upgrade cuando quieras desde tu dashboard.
+                                        Sin tarjeta de crédito. Acceso inmediato. Puedes hacer upgrade cuando quieras desde tu dashboard.
                                     </span>
                                 </div>
                             ) : (
@@ -903,12 +903,12 @@ export default function RegisterPage() {
 
                 {step === 1 && (
                     <div className="pt-5 pb-2 text-center text-[13px] text-text-muted">
-                        ¿Ya tenés cuenta?{' '}
+                        ¿Ya tienes cuenta?{' '}
                         <Link
                             href="/login"
                             className="font-bold text-sport-600 hover:opacity-80 transition-opacity"
                         >
-                            Iniciá sesión
+                            Inicia sesión
                         </Link>
                     </div>
                 )}

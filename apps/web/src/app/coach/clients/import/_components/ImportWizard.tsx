@@ -43,7 +43,7 @@ export function ImportWizard({ coachId, orgId: _orgId, maxClients, activeCount, 
                 <div className="mb-8">
                     <h1 className="text-2xl font-extrabold text-foreground">Importar Alumnos</h1>
                     <p className="text-sm text-muted-foreground mt-1">
-                        Importá tu cartera desde un archivo Excel o CSV.
+                        Importa tu cartera desde un archivo Excel o CSV.
                     </p>
                 </div>
             )}

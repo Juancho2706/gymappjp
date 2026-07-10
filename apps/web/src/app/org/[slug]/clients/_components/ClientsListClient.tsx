@@ -127,7 +127,7 @@ export function ClientsListClient({ orgSlug, clients, coaches, isAdmin }: Props)
                     icon={Users}
                     tone="amber"
                     headline="Sin alumnos en esta vista"
-                    description="Agregá alumnos manualmente, importá un CSV, o ajustá el filtro activo para ver otros estados."
+                    description="Agrega alumnos manualmente, importa un CSV, o ajusta el filtro activo para ver otros estados."
                     cta={isAdmin ? { label: 'Agregar alumno', href: `/org/${orgSlug}/clients` } : undefined}
                 />
             </div>
@@ -336,7 +336,7 @@ export function ClientsListClient({ orgSlug, clients, coaches, isAdmin }: Props)
                     <div className="w-full max-w-sm rounded-xl border border-zinc-700 bg-zinc-900 p-5 space-y-4">
                         <h2 className="font-bold text-white">Archivar {selected.size} alumno{selected.size === 1 ? '' : 's'}</h2>
                         <p className="text-sm text-zinc-400">
-                            Se marcan como inactivos. No se eliminan datos. Podés reactivarlos desde el perfil.
+                            Se marcan como inactivos. No se eliminan datos. Puedes reactivarlos desde el perfil.
                         </p>
                         <div className="flex gap-2">
                             <button

@@ -73,7 +73,7 @@ export function LoaderComposer({ value, onChange, logoUrl, brandName, primaryCol
                             config.symbol === 'logo' ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/40',
                             !logoUrl && 'cursor-not-allowed opacity-40'
                         )}
-                        title={logoUrl ? 'Tu logo' : 'Subí un logo primero'}
+                        title={logoUrl ? 'Tu logo' : 'Sube un logo primero'}
                     >
                         {logoUrl ? (
                             <Image src={logoUrl} alt="" width={28} height={28} className="object-contain" unoptimized />

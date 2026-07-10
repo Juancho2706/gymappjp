@@ -36,7 +36,7 @@ export async function completeOAuthOnboarding(
     const { data: { user } } = await supabase.auth.getUser()
 
     if (!user) {
-        return { error: 'Sesión expirada. Volvé a iniciar sesión con Google.' }
+        return { error: 'Sesión expirada. Vuelve a iniciar sesión con Google.' }
     }
 
     const brandName = (formData.get('brand_name') as string)?.trim()
@@ -49,8 +49,8 @@ export async function completeOAuthOnboarding(
 
     if (!brandName || brandName.length < 2) return { error: 'El nombre de tu marca es obligatorio (mínimo 2 caracteres).' }
     if (!fullName || fullName.length < 2) return { error: 'Tu nombre completo es obligatorio.' }
-    if (!acceptLegal) return { error: 'Debés aceptar los términos de servicio y la política de privacidad.' }
-    if (!acceptHealthData) return { error: 'Debés aceptar el tratamiento de datos de salud (Ley 21.719, Art. 16).' }
+    if (!acceptLegal) return { error: 'Debes aceptar los términos de servicio y la política de privacidad.' }
+    if (!acceptHealthData) return { error: 'Debes aceptar el tratamiento de datos de salud (Ley 21.719, Art. 16).' }
     if (!(VALID_TIERS as readonly string[]).includes(selectedTier)) return { error: 'Plan inválido.' }
     if (!VALID_CYCLES.includes(selectedBillingCycle)) return { error: 'Frecuencia de pago inválida.' }
 
@@ -76,7 +76,7 @@ export async function completeOAuthOnboarding(
         .maybeSingle()
 
     if (existingTrial) {
-        return { error: 'Ya existe una cuenta gratuita con este correo. Iniciá sesión o contacta soporte.' }
+        return { error: 'Ya existe una cuenta gratuita con este correo. Inicia sesión o contacta soporte.' }
     }
 
     // Generate slug
@@ -87,13 +87,13 @@ export async function completeOAuthOnboarding(
         .replace(/[^a-z0-9]+/g, '-')
         .replace(/^-|-$/g, '')
 
-    if (RESERVED_SLUGS.has(baseSlug)) return { error: 'Este nombre de marca no está disponible. Probá con otro.' }
+    if (RESERVED_SLUGS.has(baseSlug)) return { error: 'Este nombre de marca no está disponible. Prueba con otro.' }
 
     let slug = baseSlug
     for (let attempt = 0; attempt < 8; attempt++) {
         const { data: existing } = await adminDb.from('coaches').select('id').eq('slug', slug).maybeSingle()
         if (!existing) break
-        if (attempt === 7) return { error: 'No se pudo generar un ID único. Probá con otro nombre.' }
+        if (attempt === 7) return { error: 'No se pudo generar un ID único. Prueba con otro nombre.' }
         slug = `${baseSlug}-${Math.random().toString(36).slice(2, 8)}`
     }
 
@@ -125,7 +125,7 @@ export async function completeOAuthOnboarding(
     })
 
     if (insertError) {
-        return { error: 'Error al crear tu perfil. Intentá de nuevo o contactá soporte.' }
+        return { error: 'Error al crear tu perfil. Intenta de nuevo o contacta soporte.' }
     }
 
     if (isFreeTier) {

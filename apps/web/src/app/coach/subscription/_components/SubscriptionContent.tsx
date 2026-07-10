@@ -830,7 +830,7 @@ export function SubscriptionContent({ embedded = false }: { embedded?: boolean }
                     )}
                     {hasActivePaidPlan && SELF_SERVICE_ADDONS_ENABLED && (
                         <p className="mt-2 px-1 text-[11px] text-subtle">
-                            Activá un módulo acá; usalo desde Alumnos › Herramientas. Cada uno se cobra aparte de tu plan.
+                            Activa un módulo acá; usalo desde Alumnos › Herramientas. Cada uno se cobra aparte de tu plan.
                         </p>
                     )}
                 </section>
@@ -943,7 +943,7 @@ export function SubscriptionContent({ embedded = false }: { embedded?: boolean }
                                 </div>
                                 <p className={`mt-1 text-[12.5px] ${isBlocked ? 'font-medium text-red-600 dark:text-red-400' : 'text-muted'}`}>
                                     {isBlocked
-                                        ? (wouldExceed ? `Sin cupo · tenés ${activeClientCount} alumnos` : (shortBlockReason ?? 'No disponible'))
+                                        ? (wouldExceed ? `Sin cupo · tienes ${activeClientCount} alumnos` : (shortBlockReason ?? 'No disponible'))
                                         : features.join(' · ')}
                                 </p>
                             </button>
@@ -958,7 +958,7 @@ export function SubscriptionContent({ embedded = false }: { embedded?: boolean }
                     </div>
                 )}
 
-                {/* Combo plan + add-ons (plan 05): elegí módulos para pagarlos JUNTO al plan en un
+                {/* Combo plan + add-ons (plan 05): elige módulos para pagarlos JUNTO al plan en un
                     solo checkout. Visible solo con el flag de lanzamiento (en prod oculto). */}
                 {SELF_SERVICE_ADDONS_ENABLED && (
                     <div className="rounded-control border border-subtle bg-surface-card p-4">
@@ -1446,7 +1446,7 @@ export function SubscriptionContent({ embedded = false }: { embedded?: boolean }
                     <h2 className="font-display text-base font-bold tracking-tight text-strong">Cancelar suscripción</h2>
                     {coach?.current_period_end ? (
                         <p className="mt-2 text-sm text-muted">
-                            Conservás acceso hasta el{' '}
+                            Conservas acceso hasta el{' '}
                             <strong className="text-strong">
                                 {new Date(coach.current_period_end).toLocaleDateString('es-CL', { day: 'numeric', month: 'long', year: 'numeric' })}
                             </strong>

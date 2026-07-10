@@ -130,7 +130,7 @@ function YoutubePanel({ value, onChange, onDuration }: { value: string; onChange
                     onChange={(e) => onChange(e.target.value)}
                 />
                 <p className="text-xs text-muted mt-1.5">
-                    Pegá el link. Asegurate que el video sea <strong>Unlisted</strong> o Público en YouTube.
+                    Pega el link. Asegúrate que el video sea <strong>Unlisted</strong> o Público en YouTube.
                 </p>
             </div>
             {videoId && (
@@ -145,7 +145,7 @@ function YoutubePanel({ value, onChange, onDuration }: { value: string; onChange
             )}
             {value && !videoId && (
                 <p className="text-xs text-[var(--warning-600)]">
-                    URL inválida. Usá un link de youtube.com o youtu.be.
+                    URL inválida. Usa un link de youtube.com o youtu.be.
                 </p>
             )}
         </div>
@@ -241,7 +241,7 @@ function FileUploadPanel({ kind, value, onChange }: FileUploadProps) {
                     headers: { 'Content-Type': toUpload.type },
                 })
                 if (!uploadRes.ok) {
-                    toast.error('Error al subir el archivo. Intentá de nuevo.')
+                    toast.error('Error al subir el archivo. Intenta de nuevo.')
                     setLocalPreview(null)
                     URL.revokeObjectURL(previewUrl)
                     return
@@ -344,11 +344,11 @@ function FileUploadPanel({ kind, value, onChange }: FileUploadProps) {
                                 <Upload className="w-6 h-6 text-[var(--sport-600)]" />
                             </div>
                             <p className="text-sm font-semibold text-strong">
-                                Arrastrá o hacé click para subir
+                                Arrastra o haz click para subir
                             </p>
                             <p className="text-xs text-muted text-center">{helpText}</p>
                             <p className="text-[10px] text-subtle">
-                                También podés pegar (Ctrl+V) una imagen
+                                También puedes pegar (Ctrl+V) una imagen
                             </p>
                         </>
                     )}

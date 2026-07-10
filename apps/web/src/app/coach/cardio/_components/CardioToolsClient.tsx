@@ -239,7 +239,7 @@ function CardioZonesTool({ clients }: { clients: CardioClientVM[] }) {
                     {selected ? (
                         <>
                             <div className="mb-3.5 leading-relaxed">
-                                Sin edad ni FC máx no se pueden derivar zonas — completá el perfil del alumno.
+                                Sin edad ni FC máx no se pueden derivar zonas — completa el perfil del alumno.
                             </div>
                             <Link
                                 href={`/coach/cardio/${selected.id}`}
@@ -250,7 +250,7 @@ function CardioZonesTool({ clients }: { clients: CardioClientVM[] }) {
                             </Link>
                         </>
                     ) : (
-                        'Ingresá una edad válida para calcular las zonas.'
+                        'Ingresa una edad válida para calcular las zonas.'
                     )}
                 </Card>
             )}

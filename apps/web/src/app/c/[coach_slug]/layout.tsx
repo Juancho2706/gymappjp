@@ -350,7 +350,7 @@ export default async function ClientBrandLayout({ children, params }: Props) {
                             <div className="mx-auto mt-3 max-w-2xl px-4 pt-safe">
                                 <div className="rounded-xl border border-amber-400/30 bg-amber-400/10 px-4 py-3 text-sm text-amber-700 dark:text-amber-300">
                                     Tu coach ya no está disponible en {orphanOrgName || 'tu organización'}.
-                                    Hablá con {orphanOrgName || 'tu organización'} para que te asignen un nuevo coach.
+                                    Habla con {orphanOrgName || 'tu organización'} para que te asignen un nuevo coach.
                                 </div>
                             </div>
                         )}

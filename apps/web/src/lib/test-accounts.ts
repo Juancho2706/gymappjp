@@ -11,14 +11,14 @@ import type { Database } from '@/lib/database.types'
  * módulo (lado TS) y los RPCs de MRR las excluyen en SQL con el MISMO predicado
  * (migración `*_exclude_test_coaches_from_mrr.sql`).
  *
- * ⚠️ MANTENER EN SINCRONÍA con la cláusula `WHERE` de esos RPCs. Si agregás un email/dominio
+ * ⚠️ MANTENER EN SINCRONÍA con la cláusula `WHERE` de esos RPCs. Si agregas un email/dominio
  *    acá, agregalo también en la migración SQL (y viceversa).
  */
 
 /**
  * Emails EXPLÍCITOS de cuentas de prueba (case-insensitive). Para AGREGAR más cuentas
  * permanentes de prueba del dueño (p.ej. las `yolomon.2*` / `josefit*` mencionadas en la
- * memoria — sus emails reales NO se conocen acá, NO inventar), sumá el email exacto a esta
+ * memoria — sus emails reales NO se conocen acá, NO inventar), suma el email exacto a esta
  * lista Y a la migración SQL de los RPCs de MRR.
  */
 export const TEST_COACH_EMAILS: string[] = [

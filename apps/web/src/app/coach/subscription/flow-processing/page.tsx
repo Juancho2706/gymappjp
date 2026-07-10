@@ -103,7 +103,7 @@ export default function FlowProcessingPage() {
                 if (response.status === 409) {
                     setOutcome({
                         kind: 'terminal',
-                        message: serverMsg ?? 'Tu suscripción ya está activa. Revisá tu suscripción.',
+                        message: serverMsg ?? 'Tu suscripción ya está activa. Revisa tu suscripción.',
                     })
                     return false
                 }
@@ -115,7 +115,7 @@ export default function FlowProcessingPage() {
                 ) {
                     setOutcome({
                         kind: 'terminal',
-                        message: 'Tu pago requiere revisión manual. Escribinos a soporte.',
+                        message: 'Tu pago requiere revisión manual. Escríbenos a soporte.',
                         support: true,
                     })
                     return false

@@ -246,9 +246,9 @@ export default async function OrgSettingsPage({ params }: Props) {
 
                             {/* No in-app billing — contact flow */}
                             <div className="mt-4 rounded-xl border border-zinc-700 bg-zinc-950/60 p-4">
-                                <p className="text-sm font-semibold text-zinc-200">¿Necesitás más seats o cambiar de plan?</p>
+                                <p className="text-sm font-semibold text-zinc-200">¿Necesitas más seats o cambiar de plan?</p>
                                 <p className="mt-1 text-xs text-zinc-500">
-                                    El billing enterprise es manual. Contactá a EVA para ajustar tu plan sin interrumpir el servicio.
+                                    El billing enterprise es manual. Contacta a EVA para ajustar tu plan sin interrumpir el servicio.
                                 </p>
                                 <div className="mt-3 flex flex-wrap gap-2">
                                     <a

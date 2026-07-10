@@ -72,7 +72,7 @@ export function ResetStaffPasswordButton({ orgSlug, memberId, memberName }: Prop
                                 <div className="flex items-start gap-2 rounded-lg bg-amber-400/5 border border-amber-400/20 p-3">
                                     <TriangleAlert className="h-3.5 w-3.5 mt-0.5 shrink-0 text-amber-400/80" />
                                     <p className="text-[11px] leading-4 text-amber-300/80">
-                                        Se genera una nueva contraseña temporal. La anterior queda inválida inmediatamente. Compartí la nueva por canal seguro externo a EVA.
+                                        Se genera una nueva contraseña temporal. La anterior queda inválida inmediatamente. Comparte la nueva por canal seguro externo a EVA.
                                     </p>
                                 </div>
 
@@ -113,7 +113,7 @@ export function ResetStaffPasswordButton({ orgSlug, memberId, memberName }: Prop
                                 </div>
 
                                 <p className="text-[11px] leading-4 text-zinc-500">
-                                    Compartí esta contraseña por Slack, WhatsApp o email seguro. Quedó registrado en el audit log.
+                                    Comparte esta contraseña por Slack, WhatsApp o email seguro. Quedó registrado en el audit log.
                                 </p>
 
                                 <button

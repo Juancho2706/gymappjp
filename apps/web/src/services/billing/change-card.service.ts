@@ -112,7 +112,7 @@ export async function changeCardForCoach(
             ok: false,
             code: 'NO_ACTIVE_SUBSCRIPTION',
             status: 409,
-            message: 'Necesitás una suscripción recurrente activa para cambiar la tarjeta.',
+            message: 'Necesitas una suscripción recurrente activa para cambiar la tarjeta.',
         }
     }
 
@@ -124,7 +124,7 @@ export async function changeCardForCoach(
             ok: false,
             code: 'UPGRADE_IN_FLIGHT',
             status: 409,
-            message: 'Tu plan está en proceso de cambio. Completá ese cambio antes de actualizar tu tarjeta.',
+            message: 'Tu plan está en proceso de cambio. Completa ese cambio antes de actualizar tu tarjeta.',
         }
     }
     if (await isUpgradeInFlight(db, coachId)) {
@@ -132,7 +132,7 @@ export async function changeCardForCoach(
             ok: false,
             code: 'UPGRADE_IN_FLIGHT',
             status: 409,
-            message: 'Tu plan está en proceso de cambio. Completá ese cambio antes de actualizar tu tarjeta.',
+            message: 'Tu plan está en proceso de cambio. Completa ese cambio antes de actualizar tu tarjeta.',
         }
     }
 
@@ -152,7 +152,7 @@ export async function changeCardForCoach(
             ok: false,
             code: 'INVALID_STATUS',
             status: 409,
-            message: 'No podés cambiar la tarjeta mientras tu suscripción está en este estado. Contactá a soporte.',
+            message: 'No puedes cambiar la tarjeta mientras tu suscripción está en este estado. Contacta a soporte.',
         }
     }
 
@@ -168,7 +168,7 @@ export async function changeCardForCoach(
             ok: false,
             code: 'GATEWAY_ERROR',
             status: 502,
-            message: 'No pudimos leer tu suscripción en Mercado Pago. Intentá de nuevo.',
+            message: 'No pudimos leer tu suscripción en Mercado Pago. Intenta de nuevo.',
             retryable: true,
         }
     }
@@ -208,7 +208,7 @@ export async function changeCardForCoach(
             ok: false,
             code: 'GATEWAY_ERROR',
             status: 502,
-            message: 'No pudimos preparar el cambio de tarjeta. Intentá de nuevo.',
+            message: 'No pudimos preparar el cambio de tarjeta. Intenta de nuevo.',
             retryable: true,
         }
     }
@@ -226,7 +226,7 @@ export async function changeCardForCoach(
                 ok: false,
                 code: 'TOKEN_INVALID',
                 status: 400,
-                message: 'No pudimos validar la tarjeta. Revisá los datos e intentá de nuevo.',
+                message: 'No pudimos validar la tarjeta. Revisa los datos e intenta de nuevo.',
                 retryable: true,
             }
         }
@@ -234,7 +234,7 @@ export async function changeCardForCoach(
             ok: false,
             code: 'GATEWAY_ERROR',
             status: 502,
-            message: 'Mercado Pago no pudo procesar el cambio. Intentá en unos minutos.',
+            message: 'Mercado Pago no pudo procesar el cambio. Intenta en unos minutos.',
             retryable: true,
         }
     }
@@ -284,7 +284,7 @@ export async function changeCardForCoach(
                 code: 'CYCLE_DRIFT',
                 status: 409,
                 message:
-                    'El cambio de tarjeta no se pudo verificar de forma segura. No se realizó ningún cobro; contactá a soporte.',
+                    'El cambio de tarjeta no se pudo verificar de forma segura. No se realizó ningún cobro; contacta a soporte.',
             }
         }
         q1Verified = true

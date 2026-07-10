@@ -11,7 +11,7 @@ export const metadata = { title: 'Coaches' }
 const COACHES_INFO = [
     {
         heading: '¿Qué muestra esta sección?',
-        body: 'Lista completa de todos los coaches registrados en la plataforma con métricas de salud, estado de suscripción, uso de alumnos y actividad reciente. Desde aquí podés gestionar cualquier coach individualmente o en masa.',
+        body: 'Lista completa de todos los coaches registrados en la plataforma con métricas de salud, estado de suscripción, uso de alumnos y actividad reciente. Desde aquí puedes gestionar cualquier coach individualmente o en masa.',
     },
     {
         heading: 'Columnas de la tabla',
@@ -23,7 +23,7 @@ const COACHES_INFO = [
     },
     {
         heading: 'Acciones masivas',
-        body: 'Seleccioná uno o más coaches con los checkboxes. Aparece una barra flotante abajo con opciones:\nForzar expiración — todos los seleccionados pasan a status=expired y ven /reactivate en su próxima visita.\nReactivar — todos pasan a status=active con 30 días adicionales.\nTodas las acciones quedan registradas en Auditoría.',
+        body: 'Selecciona uno o más coaches con los checkboxes. Aparece una barra flotante abajo con opciones:\nForzar expiración — todos los seleccionados pasan a status=expired y ven /reactivate en su próxima visita.\nReactivar — todos pasan a status=active con 30 días adicionales.\nTodas las acciones quedan registradas en Auditoría.',
     },
     {
         heading: 'Alerta de riesgo (banner ámbar)',

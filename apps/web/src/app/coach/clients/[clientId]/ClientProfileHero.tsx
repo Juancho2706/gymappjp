@@ -185,7 +185,7 @@ export function ClientProfileHero({
             const dossier = await getClientDossier(clientId)
             await downloadClientDossierPdf(dossier)
         } catch {
-            setExportError('No se pudo generar el PDF. Intentá de nuevo.')
+            setExportError('No se pudo generar el PDF. Intenta de nuevo.')
         } finally {
             setExporting(false)
         }

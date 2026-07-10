@@ -186,10 +186,10 @@ export default async function ClientLoginPage({ params }: Props) {
                     className="font-display text-[26px] font-black leading-tight tracking-[-0.02em] text-text-strong"
                     style={{ fontFamily: 'var(--login-font)' }}
                 >
-                    Iniciá sesión
+                    Inicia sesión
                 </h2>
                 <p className="mt-2 text-[15px] leading-relaxed text-text-muted">
-                    Entrená con <b className="text-text-strong">{coach.brand_name}</b>
+                    Entrena con <b className="text-text-strong">{coach.brand_name}</b>
                 </p>
                 <div className="mt-8">{desktopLoginForm}</div>
                 {poweredBy}
@@ -332,7 +332,7 @@ export default async function ClientLoginPage({ params }: Props) {
                     </div>
                     <LoginEntranceItem className="rounded-t-[var(--radius-2xl)] border-t border-subtle bg-surface-card px-6 pb-7 pt-6 shadow-[var(--shadow-lg)]">
                         <p className="mb-[18px] text-center text-[13px] text-text-muted">
-                            Iniciá sesión para entrenar con <b className="text-text-strong">{coach.brand_name}</b>
+                            Inicia sesión para entrenar con <b className="text-text-strong">{coach.brand_name}</b>
                         </p>
                         {loginForm}
                         {poweredBy}
@@ -372,7 +372,7 @@ export default async function ClientLoginPage({ params }: Props) {
 
                     <LoginEntranceItem className="relative z-[2] -mt-[26px] flex-1 rounded-t-[var(--radius-2xl)] bg-surface-app px-6 pb-7 pt-[26px]">
                         <p className="mb-[18px] text-center text-[13px] text-text-muted">
-                            Iniciá sesión para entrenar con <b className="text-text-strong">{coach.brand_name}</b>
+                            Inicia sesión para entrenar con <b className="text-text-strong">{coach.brand_name}</b>
                         </p>
                         {loginForm}
                         {poweredBy}

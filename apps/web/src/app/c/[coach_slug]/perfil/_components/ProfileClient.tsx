@@ -269,7 +269,7 @@ export function ProfileClient({
                 <StatCard label="Racha" value={streak} unit="días" icon={Flame} accent="var(--ember-500)" />
             </div>
 
-            {/* Compartí tu logro — abre el selector de plantilla */}
+            {/* Comparte tu logro — abre el selector de plantilla */}
             <button
                 type="button"
                 onClick={() => setPickerOpen(true)}
@@ -283,8 +283,8 @@ export function ProfileClient({
                     <Share2 className="h-5 w-5" />
                 </span>
                 <div className="min-w-0 flex-1">
-                    <div className="text-[14.5px] font-extrabold text-text-strong">Compartí tu logro</div>
-                    <div className="text-[12.5px] text-text-muted">Elegí una tarjeta con la marca de tu coach</div>
+                    <div className="text-[14.5px] font-extrabold text-text-strong">Comparte tu logro</div>
+                    <div className="text-[12.5px] text-text-muted">Elige una tarjeta con la marca de tu coach</div>
                 </div>
                 <ChevronRight className="h-[18px] w-[18px] flex-shrink-0" style={{ color: 'var(--sport-600)' }} />
             </button>
@@ -393,7 +393,7 @@ export function ProfileClient({
                     </span>
                     <div className="min-w-0 flex-1">
                         <div className="text-[14.5px] font-bold text-text-strong">Solicitar baja de cuenta</div>
-                        <div className="text-[12.5px] text-text-muted">Pedí la eliminación de tus datos (derechos ARCO)</div>
+                        <div className="text-[12.5px] text-text-muted">Pide la eliminación de tus datos (derechos ARCO)</div>
                     </div>
                     <ChevronRight className="h-[18px] w-[18px] flex-shrink-0 text-[var(--ink-300)]" />
                 </a>
@@ -407,12 +407,12 @@ export function ProfileClient({
                     <SheetHeader>
                         <SheetTitle className="flex items-center gap-2">
                             <Share2 className="h-[18px] w-[18px] shrink-0 text-sport-500" />
-                            Compartí tu logro
+                            Comparte tu logro
                         </SheetTitle>
                     </SheetHeader>
                     <div className="flex flex-col gap-2.5 px-5 pb-5 pt-1">
                         <p className="mb-1 text-[12.5px] text-text-muted">
-                            Cada tarjeta lleva la marca de tu coach. Elegí cuál compartir:
+                            Cada tarjeta lleva la marca de tu coach. Elige cuál compartir:
                         </p>
                         <ShareTemplateOption
                             icon={TrendingUp}
@@ -426,7 +426,7 @@ export function ProfileClient({
                         <ShareTemplateOption
                             icon={Flame}
                             title="Racha"
-                            subtitle={streak > 0 ? `${streak} ${streak === 1 ? 'día' : 'días'} seguidos activo` : 'Encendé tu racha'}
+                            subtitle={streak > 0 ? `${streak} ${streak === 1 ? 'día' : 'días'} seguidos activo` : 'Enciende tu racha'}
                             accentBg="var(--ember-100, color-mix(in oklab, var(--ember-500) 12%, transparent))"
                             accentIconBg="var(--ember-500)"
                             accentIconColor="#ffffff"

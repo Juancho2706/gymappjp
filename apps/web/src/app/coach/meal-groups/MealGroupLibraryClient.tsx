@@ -103,7 +103,7 @@ export function MealGroupLibraryClient({ initialGroups, coachId }: { initialGrou
                     <p className="mx-auto mt-1.5 max-w-[252px] text-[13px] leading-snug text-[var(--text-muted)]">
                         {searchTerm
                             ? `Ningún grupo coincide con «${searchTerm.trim()}».`
-                            : 'Creá tu primer grupo de alimentos para usarlo en tus planes.'}
+                            : 'Crea tu primer grupo de alimentos para usarlo en tus planes.'}
                     </p>
                 </div>
             ) : (

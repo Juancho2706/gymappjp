@@ -37,7 +37,7 @@ export function StreakShareCardModal({ data, onClose }: StreakShareCardModalProp
             const blob = await renderStreakCardToBlob(data, brand)
             if (cancelled) return
             if (!blob) {
-                toast.error('No pudimos generar la imagen. Intentá de nuevo.')
+                toast.error('No pudimos generar la imagen. Intenta de nuevo.')
                 onClose()
                 return
             }

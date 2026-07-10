@@ -184,7 +184,7 @@ export async function createLogoUploadUrlAction(params: {
     size: number
 }): Promise<LogoUploadUrlResult> {
     const ext = LOGO_CONTENT_TYPES[params.contentType]
-    if (!ext) return { error: 'Formato no permitido. Usá PNG, JPG o WebP.' }
+    if (!ext) return { error: 'Formato no permitido. Usa PNG, JPG o WebP.' }
     if (params.size > 2 * 1024 * 1024) return { error: 'El logo no puede superar 2 MB.' }
 
     const supabase = await createClient()
@@ -208,7 +208,7 @@ export async function createLogoUploadUrlAction(params: {
         .createSignedUploadUrl(path, { upsert: true })
     if (error || !signed) {
         console.error('createSignedUploadUrl (logo) error:', error)
-        return { error: 'No se pudo preparar la subida del logo. Intentá de nuevo.' }
+        return { error: 'No se pudo preparar la subida del logo. Intenta de nuevo.' }
     }
     return { success: true, signedUrl: signed.signedUrl, path }
 }

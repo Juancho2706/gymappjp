@@ -82,7 +82,7 @@ function ConfirmBody({
             {confirmName && (
                 <div className="mb-5">
                     <div className="mb-1.5 text-xs text-muted">
-                        Escribí <strong className="text-strong">{confirmName}</strong> para confirmar:
+                        Escribe <strong className="text-strong">{confirmName}</strong> para confirmar:
                     </div>
                     <input
                         value={typed}
@@ -314,7 +314,7 @@ export function ClientActionsSheet({ client, loginUrl, onClose, onEdit }: Client
                 icon={Archive}
                 tone="warning"
                 title="Archivar alumno"
-                body="Se oculta de la lista y libera cupo de tu plan. No se borra nada: podés desarchivarlo cuando quieras."
+                body="Se oculta de la lista y libera cupo de tu plan. No se borra nada: puedes desarchivarlo cuando quieras."
                 cta="Archivar"
                 pending={isPending}
                 error={error}

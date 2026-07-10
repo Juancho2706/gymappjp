@@ -54,7 +54,7 @@ export function ThemeGallery({ value, onChange, legacyPrimaryColor, hasLegacyCus
                 <h2 className="text-base font-bold text-strong">Tema de tu marca</h2>
             </div>
             <p className="text-xs text-muted -mt-3">
-                Elegí un tema curado: color, tipografía y tono en un solo tap. Todos están calibrados para
+                Elige un tema curado: color, tipografía y tono en un solo tap. Todos están calibrados para
                 verse legibles en claro y oscuro. Se aplican a botones, gráficos, brillos y la app de tus alumnos.
             </p>
 
@@ -153,8 +153,8 @@ export function ThemeGallery({ value, onChange, legacyPrimaryColor, hasLegacyCus
 
             {legacySelected && hasLegacyCustom && (
                 <p className="text-[11px] text-muted">
-                    Estás usando tu color personalizado de siempre. Elegí un tema de arriba cuando quieras — tu
-                    color queda guardado y podés volver a él.
+                    Estás usando tu color personalizado de siempre. Elige un tema de arriba cuando quieras — tu
+                    color queda guardado y puedes volver a él.
                 </p>
             )}
         </div>

@@ -49,10 +49,10 @@ export function EnterpriseROIComparison() {
                 id="roi-heading"
                 className="text-3xl sm:text-4xl font-display font-black text-white mb-4 leading-[1.1] tracking-[-0.02em]"
               >
-                Calculá cuánto ahorra tu gym
+                Calcula cuánto ahorra tu gym
               </h2>
               <p className="text-base text-white/60 mb-8 leading-relaxed">
-                Cada coach con cuenta individual cuesta más de lo que pensás. Movés el
+                Cada coach con cuenta individual cuesta más de lo que piensas. Mueves el
                 slider y ves el ahorro real con tu mejor plan Enterprise.
               </p>
 

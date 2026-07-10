@@ -323,7 +323,7 @@ export default async function OrgCoachesPage({ params }: Props) {
                                         icon={Users}
                                         tone="amber"
                                         headline="Sin coaches activos"
-                                        description="Invitá a tu primer coach con el formulario de arriba. Recibirá un código para activar su cuenta enterprise."
+                                        description="Invita a tu primer coach con el formulario de arriba. Recibirá un código para activar su cuenta enterprise."
                                     />
                                 </div>
                             )}

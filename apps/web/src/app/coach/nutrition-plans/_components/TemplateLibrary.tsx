@@ -354,14 +354,14 @@ export function TemplateLibrary({ templates, coachId, clients }: Props) {
               <p className="text-[13px] text-[var(--text-muted)] max-w-[252px] mx-auto mt-1.5 leading-snug">
                 {searchTerm.trim()
                   ? `Ninguna plantilla coincide con «${searchTerm.trim()}».`
-                  : 'Ninguna plantilla con ese filtro. Probá quitarlo.'}
+                  : 'Ninguna plantilla con ese filtro. Prueba quitarlo.'}
               </p>
             </>
           ) : (
             <>
               <h3 className="text-[16.5px] font-extrabold font-display text-[var(--text-strong)]">Sin plantillas todavía</h3>
               <p className="text-[13px] text-[var(--text-muted)] max-w-[252px] mx-auto mt-1.5 leading-snug">
-                Creá una plantilla de comidas reutilizable y asignala a tus alumnos en segundos.
+                Crea una plantilla de comidas reutilizable y asignala a tus alumnos en segundos.
               </p>
             </>
           )}

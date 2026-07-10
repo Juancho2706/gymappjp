@@ -207,7 +207,7 @@ export default async function AnnouncementsPage({ params }: Props) {
                                     icon={MessageSquareText}
                                     tone="sky"
                                     headline="Sin novedades publicadas"
-                                    description="Creá el primer mensaje cuando haya información accionable para coaches o alumnos enterprise. Usá el composer de la izquierda."
+                                    description="Crea el primer mensaje cuando haya información accionable para coaches o alumnos enterprise. Usa el composer de la izquierda."
                                 />
                             ) : (
                                 announcements.filter(a => !a.published_at || a.published_at <= now).map(announcement => (

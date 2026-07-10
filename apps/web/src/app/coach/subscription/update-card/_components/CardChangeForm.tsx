@@ -108,7 +108,7 @@ export function CardChangeForm({ publicKey, termsVersion, disclosure, subscripti
             mountedRef.current = true
             setFieldsReady(true)
         } catch {
-            setError('No se pudo cargar el formulario de pago. Recargá la página e intentá de nuevo.')
+            setError('No se pudo cargar el formulario de pago. Recarga la página e intenta de nuevo.')
         }
     }, [publicKey, missingKey, isFlow])
 
@@ -124,7 +124,7 @@ export function CardChangeForm({ publicKey, termsVersion, disclosure, subscripti
             e.preventDefault()
             setError(null)
             if (!accepted) {
-                setError('Debés aceptar las condiciones para continuar.')
+                setError('Debes aceptar las condiciones para continuar.')
                 return
             }
             setSubmitting(true)
@@ -144,9 +144,9 @@ export function CardChangeForm({ publicKey, termsVersion, disclosure, subscripti
                     window.location.href = data.redirectUrl
                     return
                 }
-                setError(data.error ?? 'No se pudo iniciar el cambio de tarjeta con Webpay. Intentá de nuevo.')
+                setError(data.error ?? 'No se pudo iniciar el cambio de tarjeta con Webpay. Intenta de nuevo.')
             } catch {
-                setError('No se pudo conectar. Revisá tu conexión e intentá de nuevo.')
+                setError('No se pudo conectar. Revisa tu conexión e intenta de nuevo.')
             } finally {
                 setSubmitting(false)
             }
@@ -159,12 +159,12 @@ export function CardChangeForm({ publicKey, termsVersion, disclosure, subscripti
             e.preventDefault()
             setError(null)
             if (!accepted) {
-                setError('Debés aceptar las condiciones para continuar.')
+                setError('Debes aceptar las condiciones para continuar.')
                 return
             }
             const mp = mpRef.current
             if (!mp || !fieldsReady) {
-                setError('El formulario todavía se está cargando. Esperá un momento.')
+                setError('El formulario todavía se está cargando. Espera un momento.')
                 return
             }
             setSubmitting(true)
@@ -176,12 +176,12 @@ export function CardChangeForm({ publicKey, termsVersion, disclosure, subscripti
             try {
                 token = await mp.fields.createCardToken({ cardholderName: cardholderName.trim() })
             } catch {
-                setError('Revisá los datos de la tarjeta. Si reintentás, volvé a ingresar el código de seguridad (CVV).')
+                setError('Revisa los datos de la tarjeta. Si reintentas, vuelve a ingresar el código de seguridad (CVV).')
                 setSubmitting(false)
                 return
             }
             if (!token?.id) {
-                setError('Revisá los datos de la tarjeta. Volvé a ingresar el código de seguridad (CVV) e intentá de nuevo.')
+                setError('Revisa los datos de la tarjeta. Vuelve a ingresar el código de seguridad (CVV) e intenta de nuevo.')
                 setSubmitting(false)
                 return
             }
@@ -215,9 +215,9 @@ export function CardChangeForm({ publicKey, termsVersion, disclosure, subscripti
                     window.location.href = data.reactivateUrl
                     return
                 }
-                setError(data.error ?? 'No se pudo cambiar la tarjeta. Intentá de nuevo.')
+                setError(data.error ?? 'No se pudo cambiar la tarjeta. Intenta de nuevo.')
             } catch {
-                setError('No se pudo conectar. Revisá tu conexión e intentá de nuevo.')
+                setError('No se pudo conectar. Revisa tu conexión e intenta de nuevo.')
             } finally {
                 setSubmitting(false)
             }
@@ -228,7 +228,7 @@ export function CardChangeForm({ publicKey, termsVersion, disclosure, subscripti
     if (missingKey) {
         return (
             <p className="rounded-control bg-amber-50 p-3 text-sm text-amber-800 dark:bg-amber-950 dark:text-amber-200">
-                El cambio de tarjeta no está disponible en este momento. Intentá más tarde o escribinos a
+                El cambio de tarjeta no está disponible en este momento. Intenta más tarde o escríbenos a
                 contacto@eva-app.cl.
             </p>
         )

@@ -19,10 +19,10 @@ export function ClientsDirectoryEmpty() {
                     <Users className="h-[34px] w-[34px]" />
                 </div>
                 <h2 className="font-display text-[22px] font-black tracking-[-0.02em] text-strong">
-                    Sumá tu primer alumno
+                    Suma tu primer alumno
                 </h2>
                 <p className="mx-auto mt-2 max-w-[280px] text-sm leading-normal text-muted">
-                    Creá un alumno y recibirá su acceso, o importá tu cartera completa desde
+                    Crea un alumno y recibirá su acceso, o importa tu cartera completa desde
                     Excel/CSV.
                 </p>
                 <div className="mx-auto mt-[22px] flex max-w-[280px] flex-col gap-2.5">

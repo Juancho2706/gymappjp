@@ -28,7 +28,7 @@ export function Step1Upload({ onComplete }: Props) {
 
         const ext = '.' + file.name.split('.').pop()?.toLowerCase()
         if (!ACCEPTED_EXTS.includes(ext) && !ACCEPTED_MIME.includes(file.type)) {
-            setError('Formato no soportado. Usá .xlsx, .xls o .csv.')
+            setError('Formato no soportado. Usa .xlsx, .xls o .csv.')
             return
         }
         if (file.size > MAX_BYTES) {
@@ -66,7 +66,7 @@ export function Step1Upload({ onComplete }: Props) {
 
             onComplete({ headers, rows, filename: file.name })
         } catch {
-            setError('No se pudo leer el archivo. Verificá que sea un Excel o CSV válido.')
+            setError('No se pudo leer el archivo. Verifica que sea un Excel o CSV válido.')
         } finally {
             setParsing(false)
         }
@@ -109,7 +109,7 @@ export function Step1Upload({ onComplete }: Props) {
                 </div>
                 <div className="text-center">
                     <p className="font-semibold text-foreground">
-                        {parsing ? 'Procesando archivo...' : 'Arrastrá tu archivo o hacé click para seleccionar'}
+                        {parsing ? 'Procesando archivo...' : 'Arrastra tu archivo o haz click para seleccionar'}
                     </p>
                     <p className="text-sm text-muted-foreground mt-1">
                         .xlsx, .xls o .csv · Máximo 5 MB · Hasta 1.000 alumnos

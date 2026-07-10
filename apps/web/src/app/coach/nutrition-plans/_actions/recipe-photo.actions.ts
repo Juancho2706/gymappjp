@@ -39,7 +39,7 @@ export async function uploadRecipePhotoAction(
     return { success: false, error: 'La imagen supera los 8 MB.' }
   }
   if (file.type && !ALLOWED_MIME.has(file.type)) {
-    return { success: false, error: 'Formato no permitido. Usá JPG, PNG, WebP o HEIC.' }
+    return { success: false, error: 'Formato no permitido. Usa JPG, PNG, WebP o HEIC.' }
   }
 
   // coachUid de la sesión (getClaims: verificación local del JWT, sin /user).

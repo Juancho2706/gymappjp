@@ -57,13 +57,13 @@ export default async function NutritionPlansPage() {
             className="font-display text-[24px] font-black leading-tight tracking-[-0.02em]"
             style={{ color: 'var(--text-on-dark)' }}
           >
-            Desbloqueá Nutrición
+            Desbloquea Nutrición
           </h2>
           <p
             className="mx-auto mt-2 max-w-sm text-sm leading-relaxed"
             style={{ color: 'var(--text-on-dark-muted)' }}
           >
-            Armá planes de alimentación profesionales para tus alumnos. Disponible en el plan{' '}
+            Arma planes de alimentación profesionales para tus alumnos. Disponible en el plan{' '}
             <strong style={{ color: 'var(--text-on-dark)' }}>Pro</strong>.
           </p>
         </div>
@@ -156,7 +156,7 @@ export default async function NutritionPlansPage() {
           <ArrowUpCircle className="h-[18px] w-[18px]" />
           Mejorar a Pro
         </Link>
-        <p className="text-center text-xs text-muted">Sin permanencia · Cancelá cuando quieras</p>
+        <p className="text-center text-xs text-muted">Sin permanencia · Cancela cuando quieras</p>
       </main>
     )
   }

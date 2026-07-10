@@ -59,7 +59,7 @@ export function WorkspaceSwitchSheet({ open, onOpenChange, workspaces }: Props) 
                     />
                     <SheetHeader className="border-0 bg-transparent p-0">
                         <SheetTitle className="font-display text-[19px] font-extrabold text-strong">
-                            ¿En qué espacio querés trabajar?
+                            ¿En qué espacio quieres trabajar?
                         </SheetTitle>
                         <SheetDescription className="mt-1 text-[12.5px] text-subtle">
                             Cada espacio separa datos, marca y permisos.

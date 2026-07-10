@@ -82,7 +82,7 @@ export function StreakRibbon({ streak }: { streak: number }) {
                     </div>
                     <div className="mt-1 truncate text-xs font-semibold text-ember-700/90">
                         {toGoal === 0
-                            ? '¡Alcanzaste el hito! Seguí así.'
+                            ? '¡Alcanzaste el hito! Sigue así.'
                             : `Te ${toGoal === 1 ? 'falta' : 'faltan'} ${toGoal} para los ${goal} días`}
                     </div>
                 </div>

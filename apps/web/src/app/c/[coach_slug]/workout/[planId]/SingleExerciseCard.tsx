@@ -306,7 +306,7 @@ export function SingleExerciseCard({
                             </span>
                             {beatIt && (
                                 <span className="inline-flex items-center gap-1 font-bold text-[var(--sport-300)]">
-                                    <TrendingUp className="h-3 w-3" /> Superá tu marca
+                                    <TrendingUp className="h-3 w-3" /> Supera tu marca
                                 </span>
                             )}
                             {firstUnlogged != null && (

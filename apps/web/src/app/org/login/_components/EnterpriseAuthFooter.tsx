@@ -16,7 +16,7 @@ export function EnterpriseAuthFooter() {
                     className="text-zinc-400 underline underline-offset-2 hover:text-zinc-200 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/50 rounded"
                     rel="noopener noreferrer"
                 >
-                    Ingresá en eva-app.cl
+                    Ingresa en eva-app.cl
                 </a>
             </p>
         </div>

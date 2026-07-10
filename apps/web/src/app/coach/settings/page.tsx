@@ -209,7 +209,7 @@ export default async function CoachSettingsPage() {
                         href="/coach/settings/areas"
                         icon={LayoutGrid}
                         title="Áreas del builder"
-                        desc="Organizá los días del planificador"
+                        desc="Organiza los días del planificador"
                     />
                 </div>
 
@@ -219,7 +219,7 @@ export default async function CoachSettingsPage() {
                         href="/coach/support"
                         icon={LifeBuoy}
                         title="Soporte"
-                        desc="Escribinos si algo no funciona o necesitás ayuda"
+                        desc="Escríbenos si algo no funciona o necesitas ayuda"
                     />
                     <CoachSignOutCard />
                 </div>
@@ -248,7 +248,7 @@ export default async function CoachSettingsPage() {
 
     const sections: Partial<Record<SettingsSectionId, ReactNode>> = {
         marca: canUseBranding ? (
-            <PaneBody desc="Personalizá la app de tus alumnos: logo, colores, nombre y mensajes. Cada alumno ve TU marca, no la de EVA.">
+            <PaneBody desc="Personaliza la app de tus alumnos: logo, colores, nombre y mensajes. Cada alumno ve TU marca, no la de EVA.">
                 <BrandSettingsForm coach={coach} />
             </PaneBody>
         ) : (
@@ -281,7 +281,7 @@ export default async function CoachSettingsPage() {
     }
     if (modulesRes.ctx) {
         sections.modulos = (
-            <PaneBody desc="Conocé los módulos disponibles para tu cuenta.">
+            <PaneBody desc="Conoce los módulos disponibles para tu cuenta.">
                 <ModulesForm
                     modules={modulesRes.ctx.modules}
                     killedByOperator={modulesRes.ctx.killedByOperator}
@@ -295,7 +295,7 @@ export default async function CoachSettingsPage() {
     }
     if (funcionesRes.ctx) {
         sections.funciones = (
-            <PaneBody desc="Elegí qué tan a fondo trabajás la nutrición y qué secciones ven vos y tus alumnos.">
+            <PaneBody desc="Elige qué tan a fondo trabajas la nutrición y qué secciones ven tus alumnos y tú.">
                 {funcionesRes.ctx.scope === 'team' ? (
                     <FeaturePrefsPanel scope="team" teamId={funcionesRes.ctx.teamId!} domains={funcionesRes.ctx.domains} />
                 ) : (
@@ -306,7 +306,7 @@ export default async function CoachSettingsPage() {
     }
     if (areasRes.ctx) {
         sections.areas = (
-            <PaneBody desc="Organizá los días de entrenamiento con tus propias áreas (Movilidad, Core, HYROX…).">
+            <PaneBody desc="Organiza los días de entrenamiento con tus propias áreas (Movilidad, Core, HYROX…).">
                 <AreasManager initialAreas={areasRes.ctx.areas} canEdit={areasRes.ctx.canEdit} scope={areasRes.ctx.scope} />
             </PaneBody>
         )
@@ -378,13 +378,13 @@ export default async function CoachSettingsPage() {
                         href="/coach/settings/funciones"
                         icon={SlidersHorizontal}
                         title="Funciones de nutrición"
-                        desc="Qué tan a fondo trabajás la nutrición y qué ven los alumnos"
+                        desc="Qué tan a fondo trabajas la nutrición y qué ven los alumnos"
                     />
                     <HubCard
                         href="/coach/settings/areas"
                         icon={LayoutGrid}
                         title="Áreas del builder"
-                        desc="Organizá los días del planificador"
+                        desc="Organiza los días del planificador"
                     />
                 </div>
 
@@ -394,7 +394,7 @@ export default async function CoachSettingsPage() {
                         href="/coach/support"
                         icon={LifeBuoy}
                         title="Soporte"
-                        desc="Escribinos si algo no funciona o necesitás ayuda"
+                        desc="Escríbenos si algo no funciona o necesitas ayuda"
                     />
                     <CoachSignOutCard />
                 </div>

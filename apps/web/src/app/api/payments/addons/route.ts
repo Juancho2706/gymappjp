@@ -159,7 +159,7 @@ export async function POST(request: Request) {
             if (!flowRef) {
                 return NextResponse.json(
                     {
-                        error: 'Necesitás una suscripción recurrente activa para sumar módulos.',
+                        error: 'Necesitas una suscripción recurrente activa para sumar módulos.',
                         code: 'NO_ACTIVE_SUBSCRIPTION',
                     },
                     { status: 409 }
@@ -346,7 +346,7 @@ export async function POST(request: Request) {
         if (!coach.subscription_mp_id) {
             return NextResponse.json(
                 {
-                    error: 'Necesitás una suscripción recurrente activa para sumar módulos.',
+                    error: 'Necesitas una suscripción recurrente activa para sumar módulos.',
                     code: 'NO_ACTIVE_SUBSCRIPTION',
                 },
                 { status: 409 }

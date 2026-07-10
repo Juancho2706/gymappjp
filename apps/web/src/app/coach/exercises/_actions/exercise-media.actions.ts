@@ -77,7 +77,7 @@ export async function getSignedUploadUrlAction(params: {
     }
 
     if (!EXERCISE_MEDIA_MIME.includes(contentType as never)) {
-        return { error: 'Tipo no permitido. Usá GIF, JPEG, PNG o WebP.', code: 'INVALID' }
+        return { error: 'Tipo no permitido. Usa GIF, JPEG, PNG o WebP.', code: 'INVALID' }
     }
 
     const isGif = contentType === 'image/gif'
@@ -96,7 +96,7 @@ export async function getSignedUploadUrlAction(params: {
         rateLimitExerciseMediaUpload(coach.id),
         rateLimitExerciseMediaUploadByIp(ip),
     ])
-    if (!coachLimit.ok) return { error: 'Demasiados uploads. Esperá un momento.', code: 'RATE_LIMIT' }
+    if (!coachLimit.ok) return { error: 'Demasiados uploads. Espera un momento.', code: 'RATE_LIMIT' }
     if (!ipLimit.ok) return { error: 'Demasiados uploads desde esta red.', code: 'RATE_LIMIT' }
 
     const { data: existingFiles } = await supabase.storage.from(BUCKET).list(coach.id, { limit: 1000 })
@@ -105,7 +105,7 @@ export async function getSignedUploadUrlAction(params: {
         0
     )
     if (usedBytes + size > EXERCISE_MEDIA_LIMITS.coachQuotaBytes) {
-        return { error: 'Cuota de 50MB alcanzada. Eliminá medios viejos.', code: 'QUOTA' }
+        return { error: 'Cuota de 50MB alcanzada. Elimina medios viejos.', code: 'QUOTA' }
     }
 
     const ext = CONTENT_TYPE_TO_EXT[contentType] ?? 'bin'

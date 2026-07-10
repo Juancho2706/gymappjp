@@ -250,7 +250,7 @@ export function PrintProgramDialog({ open, onClose, programName, clientName, coa
                                                     Superserie {letter} · {group.blocks.length} ejercicios
                                                 </div>
                                                 <div className="superset-note" style={{ fontSize: '8px', fontWeight: 700, color: '#1462DC', padding: '1px 14px 4px' }}>
-                                                    Alterná los ejercicios ({order}) en cada ronda
+                                                    Alterna los ejercicios ({order}) en cada ronda
                                                 </div>
                                                 <div className="blocks" style={{ padding: '0 14px' }}>
                                                     {members}

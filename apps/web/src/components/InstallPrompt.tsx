@@ -196,7 +196,7 @@ export function InstallPrompt({
                     <PlusSquare className="w-4 h-4" />
                   </div>
                   <p>
-                    Elegí <strong>{'"Añadir a inicio"'}</strong>.
+                    Elige <strong>{'"Añadir a inicio"'}</strong>.
                   </p>
                 </div>
                 <div className="flex items-center gap-3 text-sm text-foreground/80 bg-muted/50 p-3 rounded-2xl">
@@ -207,7 +207,7 @@ export function InstallPrompt({
                     <Sparkles className="w-4 h-4" />
                   </div>
                   <p>
-                    Dejá activado <strong>{'"Abrir como app"'}</strong> y toca <strong>Añadir</strong>.
+                    Deja activado <strong>{'"Abrir como app"'}</strong> y toca <strong>Añadir</strong>.
                   </p>
                 </div>
               </div>

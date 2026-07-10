@@ -182,7 +182,7 @@ export function CreateStaffDialog({ orgSlug }: Props) {
                                 <div className="flex items-start gap-2 rounded-lg bg-amber-400/5 border border-amber-400/20 p-3">
                                     <Info className="h-3.5 w-3.5 mt-0.5 shrink-0 text-amber-400/70" />
                                     <p className="text-[11px] leading-4 text-amber-300/70">
-                                        Compartí esta contraseña por canal seguro externo a EVA. El usuario puede cambiarla en su perfil.
+                                        Comparte esta contraseña por canal seguro externo a EVA. El usuario puede cambiarla en su perfil.
                                     </p>
                                 </div>
 

@@ -336,7 +336,7 @@ export default async function OrgPaymentsPage({ params, searchParams }: Props) {
                                         icon={ReceiptText}
                                         tone="sky"
                                         headline="Sin alumnos para este filtro"
-                                        description="Probá con otro estado de pago, o registrá el primer pago externo de un alumno desde su fila."
+                                        description="Prueba con otro estado de pago, o registra el primer pago externo de un alumno desde su fila."
                                         cta={{ label: 'Ver todos', href: `/org/${slug}/payments` }}
                                     />
                                 </div>

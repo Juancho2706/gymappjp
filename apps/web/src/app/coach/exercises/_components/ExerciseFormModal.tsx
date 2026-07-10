@@ -174,7 +174,7 @@ export function ExerciseFormModal({ open, onClose, exercise }: Props) {
                         <label className="text-sm font-medium text-strong">Grupo muscular *</label>
                         <Select name="muscle_group" defaultValue={exercise?.muscle_group ?? ''} required>
                             <SelectTrigger>
-                                <SelectValue placeholder="Seleccioná un grupo" />
+                                <SelectValue placeholder="Selecciona un grupo" />
                             </SelectTrigger>
                             <SelectContent>
                                 {MUSCLE_GROUPS.map((mg) => (
@@ -217,7 +217,7 @@ export function ExerciseFormModal({ open, onClose, exercise }: Props) {
                             <label className="text-sm font-medium text-strong">Equipo</label>
                             <Select name="equipment" defaultValue={exercise?.equipment ?? ''}>
                                 <SelectTrigger>
-                                    <SelectValue placeholder="Seleccioná equipo" />
+                                    <SelectValue placeholder="Selecciona equipo" />
                                 </SelectTrigger>
                                 <SelectContent>
                                     {EQUIPMENT_OPTIONS.map((eq) => (
@@ -230,7 +230,7 @@ export function ExerciseFormModal({ open, onClose, exercise }: Props) {
                             <label className="text-sm font-medium text-strong">Dificultad</label>
                             <Select name="difficulty" value={difficulty} onValueChange={(v) => setDifficulty(v ?? '')}>
                                 <SelectTrigger>
-                                    <SelectValue placeholder="Seleccioná dificultad">
+                                    <SelectValue placeholder="Selecciona dificultad">
                                         {difficulty ? (DIFFICULTY_OPTIONS.find((o) => o.value === difficulty)?.label ?? difficulty) : null}
                                     </SelectValue>
                                 </SelectTrigger>

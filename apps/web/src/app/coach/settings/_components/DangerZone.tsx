@@ -84,7 +84,7 @@ export function DangerZone() {
 
                         <div className="space-y-1.5">
                             <label className="text-xs font-semibold text-strong">
-                                Escribí <span className="font-mono" style={{ color: 'var(--danger-600)' }}>ELIMINAR</span> para confirmar
+                                Escribe <span className="font-mono" style={{ color: 'var(--danger-600)' }}>ELIMINAR</span> para confirmar
                             </label>
                             <input
                                 type="text"

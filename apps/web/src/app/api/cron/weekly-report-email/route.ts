@@ -132,7 +132,7 @@ export async function POST(req: Request) {
   <tr><td style="padding:16px 32px 0;">
     <div style="background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;padding:12px 16px;">
       <p style="margin:0;font-size:13px;font-weight:700;color:#92400e;">⚠ ${unassignedClients} alumno${unassignedClients !== 1 ? 's' : ''} sin coach asignado</p>
-      <p style="margin:4px 0 0;font-size:12px;color:#78350f;">Revisá las asignaciones para mantener la adherencia.</p>
+      <p style="margin:4px 0 0;font-size:12px;color:#78350f;">Revisa las asignaciones para mantener la adherencia.</p>
     </div>
   </td></tr>` : `
   <tr><td style="padding:16px 32px 0;">

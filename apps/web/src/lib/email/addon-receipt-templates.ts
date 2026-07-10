@@ -91,7 +91,7 @@ ${badge('ADD-ON ACTIVADO', '#10B981')}
   ${ctx.coachName}, activaste ${ctx.addonLabel}
 </h1>
 <p style="margin:0 0 20px;font-size:15px;color:#374151;line-height:1.6;">
-  Gracias por sumar <strong>${ctx.addonLabel}</strong> a tu cuenta EVA. Acá tenés el detalle de tu nuevo cobro.
+  Gracias por sumar <strong>${ctx.addonLabel}</strong> a tu cuenta EVA. Acá tienes el detalle de tu nuevo cobro.
 </p>
 
 ${oneShotBlock}
@@ -131,7 +131,7 @@ ${divider()}
 </ul>
 
 <p style="margin:20px 0 0;font-size:12px;color:#9ca3af;line-height:1.6;">
-  Podés cancelar el módulo cuando quieras desde tu panel de suscripción. Si tenés dudas, respondé este correo.
+  Puedes cancelar el módulo cuando quieras desde tu panel de suscripción. Si tienes dudas, responde este correo.
 </p>`
 
     const html = wrapEmailLayout(body, {
@@ -184,7 +184,7 @@ ${badge('ADD-ON CANCELADO', '#6b7280')}
 </div>
 
 <p style="margin:24px 0 0;font-size:12px;color:#9ca3af;line-height:1.6;">
-  Si cancelaste por error, podés volver a activar el módulo desde tu panel. Si tenés dudas, respondé este correo.
+  Si cancelaste por error, puedes volver a activar el módulo desde tu panel. Si tienes dudas, responde este correo.
 </p>`
 
     const html = wrapEmailLayout(body, {

@@ -121,7 +121,7 @@ export default function TeamMembersManager({
                                 <div className="flex min-w-0 flex-col">
                                     <span className="truncate font-semibold text-strong">
                                         {m.name}
-                                        {isSelf && <span className="font-normal text-muted"> (vos)</span>}
+                                        {isSelf && <span className="font-normal text-muted"> (tú)</span>}
                                     </span>
                                     <span className="truncate text-xs text-muted">{m.display_role || 'Coach'}</span>
                                 </div>
@@ -219,7 +219,7 @@ export default function TeamMembersManager({
                         </AlertDialogMedia>
                         <AlertDialogTitle>Transferir propiedad a {transferTarget?.name}</AlertDialogTitle>
                         <AlertDialogDescription>
-                            {transferTarget?.name} pasa a ser owner del equipo (controla cupos, co-gestores y propiedad). Vos quedas como co-gestor. No se puede deshacer salvo que el nuevo owner te la devuelva.
+                            {transferTarget?.name} pasa a ser owner del equipo (controla cupos, co-gestores y propiedad). Tú quedas como co-gestor. No se puede deshacer salvo que el nuevo owner te la devuelva.
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>

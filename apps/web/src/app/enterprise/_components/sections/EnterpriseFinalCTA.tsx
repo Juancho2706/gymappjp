@@ -69,7 +69,7 @@ export function EnterpriseFinalCTA() {
               </span>
             </h2>
             <p className="text-base sm:text-lg text-white/60 mb-10 max-w-lg mx-auto leading-relaxed">
-              Cada gimnasio, academia o franquicia es distinta. Agendá una demo de 30 minutos
+              Cada gimnasio, academia o franquicia es distinta. Agenda una demo de 30 minutos
               y armamos un plan personalizado para tu operación.
             </p>
 

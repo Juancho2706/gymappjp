@@ -81,7 +81,7 @@ export function Step2MapColumns({ sheet, initialMapping, onBack, onComplete }: P
     return (
         <div className="space-y-6">
             <p className="text-sm text-muted-foreground">
-                Detectamos las siguientes columnas. Verificá que el mapeo sea correcto.
+                Detectamos las siguientes columnas. Verifica que el mapeo sea correcto.
             </p>
 
             <div className="rounded-xl border border-border overflow-hidden">
@@ -141,7 +141,7 @@ export function Step2MapColumns({ sheet, initialMapping, onBack, onComplete }: P
 
             {missingRequired.length > 0 && (
                 <p className="text-sm text-destructive rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3">
-                    Debés mapear: {missingRequired.map((f) => IMPORT_FIELD_LABELS[f]).join(', ')}
+                    Debes mapear: {missingRequired.map((f) => IMPORT_FIELD_LABELS[f]).join(', ')}
                 </p>
             )}
 

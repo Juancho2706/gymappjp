@@ -10,28 +10,28 @@ interface AuthErrorMessage {
 
 const MESSAGES: Record<string, AuthErrorMessage> = {
     auth_callback_failed: {
-        coach: 'No se pudo completar el inicio de sesión con Google. Intentá de nuevo.',
+        coach: 'No se pudo completar el inicio de sesión con Google. Intenta de nuevo.',
     },
     confirmation_expired: {
-        coach: 'El enlace de confirmación expiró. Solicitá uno nuevo.',
-        enterprise: 'El enlace de confirmación expiró. Contactá al administrador.',
+        coach: 'El enlace de confirmación expiró. Solicita uno nuevo.',
+        enterprise: 'El enlace de confirmación expiró. Contacta al administrador.',
     },
     no_google_account: {
         coach: 'No encontramos una cuenta con ese correo de Google.',
     },
     session_expired: {
-        coach: 'Tu sesión expiró. Iniciá sesión nuevamente.',
-        enterprise: 'Tu sesión expiró. Iniciá sesión nuevamente.',
+        coach: 'Tu sesión expiró. Inicia sesión nuevamente.',
+        enterprise: 'Tu sesión expiró. Inicia sesión nuevamente.',
     },
     captcha_failed: {
-        coach: 'No pudimos verificar el captcha. Reintentá.',
-        enterprise: 'No pudimos verificar el captcha. Reintentá.',
+        coach: 'No pudimos verificar el captcha. Reintenta.',
+        enterprise: 'No pudimos verificar el captcha. Reintenta.',
     },
 }
 
 const FALLBACK: AuthErrorMessage = {
-    coach: 'Ocurrió un error. Intentá de nuevo.',
-    enterprise: 'Ocurrió un error. Intentá de nuevo.',
+    coach: 'Ocurrió un error. Intenta de nuevo.',
+    enterprise: 'Ocurrió un error. Intenta de nuevo.',
 }
 
 export function getAuthErrorMessage(

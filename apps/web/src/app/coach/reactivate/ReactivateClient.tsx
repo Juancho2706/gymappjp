@@ -304,10 +304,10 @@ export function ReactivateClient({ currentTier, activeClientCount, subscriptionS
                     {activeClientCount > 0 ? (
                         <>
                             Tus <strong>{activeClientCount} alumno{activeClientCount !== 1 ? 's' : ''}</strong> están en
-                            pausa. Elegí un plan para reactivar el acceso.
+                            pausa. Elige un plan para reactivar el acceso.
                         </>
                     ) : (
-                        <>Sin un plan activo no puedes gestionar alumnos ni rutinas. Elegí un plan para reactivar el acceso.</>
+                        <>Sin un plan activo no puedes gestionar alumnos ni rutinas. Elige un plan para reactivar el acceso.</>
                     )}
                 </p>
             </div>
@@ -574,7 +574,7 @@ export function ReactivateClient({ currentTier, activeClientCount, subscriptionS
                         <div className="min-w-0 flex-1">
                             <p className="text-sm font-semibold text-strong">Continuar con plan gratuito</p>
                             <p className="mt-0.5 text-xs text-muted">
-                                Tenés {activeClientCount} alumno{activeClientCount !== 1 ? 's' : ''} activo{activeClientCount !== 1 ? 's' : ''}. El plan gratuito cubre hasta 3 alumnos — calificás sin archivar a nadie.
+                                Tienes {activeClientCount} alumno{activeClientCount !== 1 ? 's' : ''} activo{activeClientCount !== 1 ? 's' : ''}. El plan gratuito cubre hasta 3 alumnos — calificas sin archivar a nadie.
                             </p>
                             <button
                                 type="button"

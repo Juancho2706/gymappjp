@@ -11,7 +11,7 @@ export default async function AdminTeamsPage() {
             <header className="mb-5">
                 <h1 className="text-xl font-semibold text-[--admin-text-1]">Equipos</h1>
                 <p className="mt-0.5 text-sm text-[--admin-text-3]">
-                    Pools de coaches (modelo «team»). Creá el equipo + su owner; el owner suma al resto desde su panel.
+                    Pools de coaches (modelo «team»). Crea el equipo + su owner; el owner suma al resto desde su panel.
                 </p>
             </header>
             <TeamsTable teams={teams} />

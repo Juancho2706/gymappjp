@@ -240,7 +240,7 @@ export function CoachTeamDesktop({ team, userId }: { team: TeamOverview; userId:
                                     <span className="flex min-w-0 flex-1 flex-col gap-px">
                                         <span className="truncate text-[14px] font-bold text-strong">
                                             {m.name}
-                                            {m.you && <span className="font-bold text-sport-600"> · vos</span>}
+                                            {m.you && <span className="font-bold text-sport-600"> · tú</span>}
                                         </span>
                                         <span className="hidden truncate text-[11.5px] text-subtle min-[861px]:block">
                                             {m.specialty}
@@ -273,7 +273,7 @@ export function CoachTeamDesktop({ team, userId }: { team: TeamOverview; userId:
                                 <div className="min-w-0">
                                     <div className="font-display text-[24px] font-black tracking-[-0.02em] text-strong">
                                         {sel.name}
-                                        {sel.you && <span className="font-black text-sport-600"> · vos</span>}
+                                        {sel.you && <span className="font-black text-sport-600"> · tú</span>}
                                     </div>
                                     <div className="mb-2.5 mt-0.5 text-[14px] text-muted">{sel.specialty}</div>
                                     <div className="flex gap-2">
@@ -322,7 +322,7 @@ export function CoachTeamDesktop({ team, userId }: { team: TeamOverview; userId:
                                 })}
                             </div>
 
-                            {/* Acciones gated por rol (solo manager sobre miembros que no son el owner ni vos) */}
+                            {/* Acciones gated por rol (solo manager sobre miembros que no son el owner ni tú) */}
                             {meIsManager && !sel.you && !sel.isMemberOwner && (
                                 <>
                                     <div className="mb-2.5 mt-6 text-[11px] font-extrabold uppercase tracking-[0.06em] text-subtle">
@@ -377,7 +377,7 @@ export function CoachTeamDesktop({ team, userId }: { team: TeamOverview; userId:
 
                             {sel.you && (
                                 <p className="mt-6 rounded-control bg-surface-sunken p-3.5 text-[13.5px] leading-relaxed text-muted">
-                                    Este es tu perfil dentro de <b>{team.name}</b>. Para cambiar tu propio rol, pedíselo al owner del equipo.
+                                    Este es tu perfil dentro de <b>{team.name}</b>. Para cambiar tu propio rol, pídeselo al owner del equipo.
                                 </p>
                             )}
 
@@ -414,7 +414,7 @@ export function CoachTeamDesktop({ team, userId }: { team: TeamOverview; userId:
                                 <Users className="h-[30px] w-[30px]" />
                             </div>
                             <div className="font-display text-[18px] font-extrabold text-strong">Sin miembros</div>
-                            <div className="max-w-[320px] text-[13.5px] leading-relaxed text-muted">Invitá coaches a tu equipo.</div>
+                            <div className="max-w-[320px] text-[13.5px] leading-relaxed text-muted">Invita coaches a tu equipo.</div>
                         </div>
                     )}
                 </section>
@@ -475,7 +475,7 @@ export function CoachTeamDesktop({ team, userId }: { team: TeamOverview; userId:
                     <AlertDialogHeader>
                         <AlertDialogTitle>Transferir propiedad a {transferTarget?.name}</AlertDialogTitle>
                         <AlertDialogDescription>
-                            {transferTarget?.name} pasa a ser owner del equipo (controla cupos, co-gestores y propiedad). Vos quedas como co-gestor. No se puede deshacer salvo que el nuevo owner te la devuelva.
+                            {transferTarget?.name} pasa a ser owner del equipo (controla cupos, co-gestores y propiedad). Tú quedas como co-gestor. No se puede deshacer salvo que el nuevo owner te la devuelva.
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>

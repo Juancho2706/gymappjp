@@ -512,7 +512,7 @@ function CustomFoodForm({
       <div className="rounded-control bg-surface-sunken px-3.5 py-3 space-y-1">
         <p className="text-[10.5px] font-extrabold uppercase tracking-[0.05em] text-subtle">Cómo cargar los datos</p>
         <p className="text-xs text-muted-foreground leading-relaxed">
-          Ingresá calorías y macros <span className="font-semibold text-foreground">por cada 100 g</span> del alimento. Podés usar decimales (ej. <code className="bg-muted px-1 rounded">6.5</code>) — se guardan redondeados al entero más cercano. Si no tenés el dato exacto de un macro, dejalo en 0.
+          Ingresa calorías y macros <span className="font-semibold text-foreground">por cada 100 g</span> del alimento. Puedes usar decimales (ej. <code className="bg-muted px-1 rounded">6.5</code>) — se guardan redondeados al entero más cercano. Si no tienes el dato exacto de un macro, déjalo en 0.
         </p>
       </div>
 

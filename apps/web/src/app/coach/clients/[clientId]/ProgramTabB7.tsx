@@ -676,7 +676,7 @@ export function ProgramTabB7({
                         className="p-4 text-sm"
                     >
                         <span style={{ color: TXT_MUTED }}>
-                            No hay días con ejercicios en este programa (revisá variantes de semana en el builder).
+                            No hay días con ejercicios en este programa (revisa variantes de semana en el builder).
                         </span>
                     </div>
                 ) : (

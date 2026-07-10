@@ -228,9 +228,9 @@ export const FAQS = [
 
 // ─── ROI Comparison ────────────────────────────────────────────────────────
 export const ROI_CONTENT = {
-  eyebrow: 'Calculá tu ahorro',
-  headline: 'Cuentas individuales cuestan más de lo que pensás',
-  sub: 'Mové el slider para ver cuánto ahorra tu gym con un plan Enterprise.',
+  eyebrow: 'Calcula tu ahorro',
+  headline: 'Cuentas individuales cuestan más de lo que piensas',
+  sub: 'Mueve el slider para ver cuánto ahorra tu gym con un plan Enterprise.',
   comparisonLabel: {
     individual: 'Cuentas individuales EVA',
     enterprise: 'Plan Enterprise EVA',
