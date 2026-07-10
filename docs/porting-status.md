@@ -10,8 +10,8 @@
 
 | # | Sección | Estado |
 |---|---------|--------|
-| 0 | Fundación: tokens no-color + paridad de componentes compartidos | 🔄 en curso |
-| 1 | Vista de workout del alumno (inputs kg/reps + barras RIR/RPE) | ⏳ pendiente |
+| 0 | Fundación: tokens no-color + paridad de componentes compartidos | ✅ parcial (ver nota) |
+| 1 | Vista de workout del alumno (inputs kg/reps + barras RIR/RPE) | 🔄 en curso (Opus) |
 | 2 | Dashboard del alumno completo | ⏳ pendiente |
 | 3 | Dashboard del coach completo | ⏳ pendiente |
 | 4 | Nutrición (coach y alumno) | ⏳ pendiente |
@@ -25,14 +25,23 @@
 - Paridad de tokens de COLOR ya gobernada: `pnpm check:tokens` pasa (86 tokens, claro+oscuro). Contrato: `specs/redesign-eva-ds/token-contract.md`. La Ola 0 cubre lo NO gobernado: tipografía, tamaños, espaciados, radios, sombras.
 - Superficies web sin contraparte mobile (fuera de alcance): landing, admin, enterprise, org, pricing.
 
+## Resultado Ola 0 (cortada a propósito, no fallida)
+
+- ✅ Tokens no-color corregidos y pusheados (radios, tipografía, sombras, motion — commit c193a68a). Gate `pnpm check:tokens` sigue pasando.
+- ✅ Mapa de 132 componentes compartidos web→RN construido.
+- ✅ 1,293 discrepancias de paridad documentadas con evidencia (archivo:líneas) en `docs/rn-port/ola0-hallazgos.json`.
+- ⚠️ Los FIXES de componentes NO se aplicaron (la cola se saturó de auditorías y se cortó la ola para preservar cuota del modelo grande). Las olas por sección deben consumir `ola0-hallazgos.json` al tocar cada componente.
+
 ## Dónde retomar
 
-Ola 0 en curso. Si murió a mitad: revisar `docs/rn-port/foundation.md` (si existe, la ola avanzó) y el último commit pusheado.
+Sección 1 (workout del alumno) corriendo en Opus. Si murió: relanzar el workflow del script de sección 1 (scratchpad de la sesión) o rehacerlo desde este doc; los hallazgos de fundación están en `docs/rn-port/ola0-hallazgos.json`.
 
 ## Decisiones tomadas
 
-(ninguna aún)
+1. Ola 0 recortada de 123→41 componentes y luego cortada tras las auditorías: el valor (tokens + hallazgos) ya estaba capturado y la cuota de Fable estaba por agotarse.
+2. Desde la Sección 1 en adelante, TODOS los agentes corren en Opus; Fable solo orquesta.
+3. Los componentes compartidos sin fix se corrigen dentro de la sección que los usa, consumiendo los hallazgos de la Ola 0.
 
 ## Hallazgos pendientes / bloqueos
 
-(ninguno aún)
+- ~1,293 discrepancias de componentes compartidos pendientes de aplicar (ver `docs/rn-port/ola0-hallazgos.json`).
