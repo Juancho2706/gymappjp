@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Animated, Modal, Pressable, ScrollView, Text, View } from 'react-native'
+import { Animated, Modal, Pressable, ScrollView, Text, View, type StyleProp, type ViewStyle } from 'react-native'
 import { LinearGradient } from 'expo-linear-gradient'
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context'
 import {
@@ -158,6 +158,13 @@ export interface WorkoutSummaryOverlayProps {
   checkInLastRelative?: string | null
   onCheckIn: () => void
   onDone: () => void
+  /**
+   * Descarte opcional del overlay. PARIDAD ESTRICTA: el overlay web no tiene control de cerrar — su
+   * única salida es "Volver al inicio" → onDone (web WorkoutSummaryOverlay.tsx:517-524). El executor
+   * deliberadamente NO lo pasa (ver ExecutorV2), de modo que el ✕ no se renderiza y `onRequestClose`
+   * cae en onDone. Se conserva como prop por si un consumidor futuro necesita el idioma móvil de un
+   * descarte explícito, pero por defecto queda sin cablear para no añadir una vía de escape ausente en web.
+   */
   onClose?: () => void
 }
 
@@ -305,16 +312,16 @@ export function WorkoutSummaryOverlay({
 
         <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 24, paddingBottom: 20, gap: 24 }} showsVerticalScrollIndicator={false}>
           {/* Header */}
-          <View style={{ alignItems: 'center', gap: 6 }}>
+          <FadeIn play={visible} reduced={motion.reduced} y={12} duration={350} style={{ alignItems: 'center', gap: 6 }}>
             <View style={[{ width: 76, height: 76, borderRadius: 38, alignItems: 'center', justifyContent: 'center', backgroundColor: brand, marginBottom: 8 }, theme.shadowGlowBlue]}>
               <Check size={36} color="#fff" strokeWidth={2} />
             </View>
             <Text style={{ fontFamily: DISPLAY, fontSize: 28, letterSpacing: -0.6, color: ON_DARK, textAlign: 'center' }}>¡Sesión completada!</Text>
             <Text style={{ fontFamily: theme.fontSans, fontSize: 14, color: ON_DARK_MUTED, textAlign: 'center' }}>{planTitle}</Text>
-          </View>
+          </FadeIn>
 
           {/* Hero: Duración + stat adaptativo, luego series · reps */}
-          <View style={{ gap: 8 }}>
+          <FadeIn play={visible} reduced={motion.reduced} y={8} delay={50} style={{ gap: 8 }}>
             <View style={{ flexDirection: 'row', gap: 8 }}>
               <View style={{ flex: 1, borderRadius: 14, borderWidth: 1, borderColor: BORDER_INV, backgroundColor: INK_900, paddingHorizontal: 16, paddingVertical: 20, alignItems: 'center' }}>
                 <Text style={{ fontFamily: MONO, fontSize: 34, color: brand }}>{durationLabel}</Text>
@@ -344,10 +351,11 @@ export function WorkoutSummaryOverlay({
                 </>
               ) : null}
             </View>
-          </View>
+          </FadeIn>
 
           {/* PRs */}
           {detectedPRs.length > 0 && (
+            <FadeIn play={visible} reduced={motion.reduced} y={0} duration={300}>
             <View style={{ borderRadius: 20, borderWidth: 1, borderColor: 'rgba(251,191,36,0.4)', overflow: 'hidden' }}>
               {/* Gradiente diagonal amber→yellow (web: `bg-gradient-to-br from-amber-500/20 to-yellow-500/10`,
                   WorkoutSummaryOverlay.tsx:319). amber-500 #f59e0b @20% → yellow-500 #eab308 @10%. */}
@@ -364,9 +372,9 @@ export function WorkoutSummaryOverlay({
                   {detectedPRs.length} {detectedPRs.length === 1 ? 'récord personal' : 'récords personales'}
                 </Text>
               </View>
-              {detectedPRs.map((pr) => (
+              {detectedPRs.map((pr, i) => (
+                <FadeIn key={pr.exerciseName} play={visible} reduced={motion.reduced} y={10} delay={100 * i} duration={280}>
                 <Pressable
-                  key={pr.exerciseName}
                   testID={`summary-pr-${pr.exerciseName}`}
                   onPress={() => onOpenPr(pr)}
                   // rounded-lg (8px) es la excepción visual explícita de la card dorada (spec §5.2 /
@@ -392,9 +400,11 @@ export function WorkoutSummaryOverlay({
                     1RM estimado: <Text style={{ fontFamily: SEMIBOLD, color: ON_DARK }}>{pr.estimated1RM} kg</Text>
                   </Text>
                 </Pressable>
+                </FadeIn>
               ))}
               </View>
             </View>
+            </FadeIn>
           )}
 
           {/* Por ejercicio */}
@@ -402,7 +412,7 @@ export function WorkoutSummaryOverlay({
             <View style={{ gap: 8 }}>
               <Text style={{ fontFamily: BOLD, fontSize: 12, letterSpacing: 1.2, textTransform: 'uppercase', color: ON_DARK_MUTED }}>Por ejercicio</Text>
               {exerciseBreakdown.map((ex, i) => (
-                <View key={`${ex.exerciseId}-${i}`} style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: 8, borderRadius: 20, borderWidth: 1, borderColor: BORDER_INV, backgroundColor: W04, paddingHorizontal: 12, paddingVertical: 10 }}>
+                <FadeIn key={`${ex.exerciseId}-${i}`} play={visible} reduced={motion.reduced} y={16} delay={50 + 60 * i} duration={300} style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: 8, borderRadius: 20, borderWidth: 1, borderColor: BORDER_INV, backgroundColor: W04, paddingHorizontal: 12, paddingVertical: 10 }}>
                   <View style={{ flex: 1 }}>
                     <Text style={{ fontFamily: SEMIBOLD, fontSize: 14, color: ON_DARK }}>{ex.name}</Text>
                     <Text style={{ fontFamily: theme.fontSans, fontSize: 10, color: ON_DARK_MUTED }}>{ex.muscleGroup}</Text>
@@ -413,7 +423,7 @@ export function WorkoutSummaryOverlay({
                   <Text style={{ fontFamily: theme.fontSans, fontSize: 12, color: ON_DARK_MUTED, fontVariant: ['tabular-nums'] }}>
                     <Text style={{ fontFamily: BOLD, color: ON_DARK }}>{ex.sets.length}</Text> series · <Text style={{ fontFamily: BOLD, color: ON_DARK }}>{Math.round(ex.totalVolume)}</Text> kg vol.
                   </Text>
-                </View>
+                </FadeIn>
               ))}
             </View>
           )}
@@ -422,18 +432,24 @@ export function WorkoutSummaryOverlay({
           {hasNonStrength && (
             <View style={{ gap: 8 }}>
               <Text style={{ fontFamily: BOLD, fontSize: 12, letterSpacing: 1.2, textTransform: 'uppercase', color: ON_DARK_MUTED }}>Cardio y movilidad</Text>
-              {session.cardio.map((c) => (
-                <NonStrengthCard key={c.blockId} name={c.name} typeLabel="Cardio" accent={EMBER_500} icon={<HeartPulse size={16} color={EMBER_500} />} tiles={cardioTiles(c)} />
+              {/* Índice de stagger CONTINUO cardio→movilidad: en el web ambos .map son hijos del mismo
+                  staggerContainer (WorkoutSummaryOverlay.tsx:414-441), así que el escalonado sigue el
+                  orden del DOM sin reiniciarse. */}
+              {session.cardio.map((c, i) => (
+                <FadeIn key={c.blockId} play={visible} reduced={motion.reduced} y={16} delay={50 + 60 * i} duration={300}>
+                  <NonStrengthCard name={c.name} typeLabel="Cardio" accent={EMBER_500} icon={<HeartPulse size={16} color={EMBER_500} />} tiles={cardioTiles(c)} />
+                </FadeIn>
               ))}
-              {session.mobility.map((m) => (
-                <NonStrengthCard
-                  key={m.blockId}
-                  name={m.name}
-                  typeLabel={m.kind === 'roller' ? 'Foam roller' : 'Movilidad'}
-                  accent={m.kind === 'roller' ? ROLLER : MOBILITY}
-                  icon={m.kind === 'roller' ? <GitCommit size={16} color={ROLLER} /> : <Move size={16} color={MOBILITY} />}
-                  tiles={mobilityTiles(m)}
-                />
+              {session.mobility.map((m, i) => (
+                <FadeIn key={m.blockId} play={visible} reduced={motion.reduced} y={16} delay={50 + 60 * (session.cardio.length + i)} duration={300}>
+                  <NonStrengthCard
+                    name={m.name}
+                    typeLabel={m.kind === 'roller' ? 'Foam roller' : 'Movilidad'}
+                    accent={m.kind === 'roller' ? ROLLER : MOBILITY}
+                    icon={m.kind === 'roller' ? <GitCommit size={16} color={ROLLER} /> : <Move size={16} color={MOBILITY} />}
+                    tiles={mobilityTiles(m)}
+                  />
+                </FadeIn>
               ))}
             </View>
           )}
@@ -444,9 +460,9 @@ export function WorkoutSummaryOverlay({
               <Text style={{ fontFamily: BOLD, fontSize: 12, letterSpacing: 1.2, textTransform: 'uppercase', color: ON_DARK_MUTED }}>Músculos trabajados</Text>
               {/* px-3 pt-3 pb-1 (web WorkoutSummaryOverlay.tsx:455). */}
               {hasMuscleMap && (
-                <View style={{ borderRadius: 20, borderWidth: 1, borderColor: BORDER_INV, backgroundColor: W03, paddingHorizontal: 12, paddingTop: 12, paddingBottom: 4 }}>
+                <FadeIn play={visible} reduced={motion.reduced} y={8} duration={300} style={{ borderRadius: 20, borderWidth: 1, borderColor: BORDER_INV, backgroundColor: W03, paddingHorizontal: 12, paddingTop: 12, paddingBottom: 4 }}>
                   <MuscleMapSvg groups={session.muscleWork} reducedMotion={motion.reduced} />
-                </View>
+                </FadeIn>
               )}
               <View style={{ gap: 8 }}>
                 {muscleGroupVolume.map(({ group, pct, vol }) => (
@@ -468,7 +484,7 @@ export function WorkoutSummaryOverlay({
 
           {/* Lo que viene */}
           {programName ? (
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, borderRadius: 20, borderWidth: 1, borderColor: withAlpha(brand, 0.25), backgroundColor: withAlpha(brand, 0.08), paddingHorizontal: 16, paddingVertical: 12 }}>
+            <FadeIn play={visible} reduced={motion.reduced} y={8} delay={100} duration={300} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, borderRadius: 20, borderWidth: 1, borderColor: withAlpha(brand, 0.25), backgroundColor: withAlpha(brand, 0.08), paddingHorizontal: 16, paddingVertical: 12 }}>
               <View style={{ width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: brand }}>
                 <ArrowRight size={16} color="#fff" />
               </View>
@@ -477,7 +493,7 @@ export function WorkoutSummaryOverlay({
                 <Text style={{ fontFamily: BOLD, fontSize: 14, color: ON_DARK }} numberOfLines={1}>Sigue tu progreso en {programName}</Text>
                 {nextHint ? <Text style={{ fontFamily: theme.fontSans, fontSize: 12, color: ON_DARK_MUTED }} numberOfLines={1}>{nextHint}</Text> : null}
               </View>
-            </View>
+            </FadeIn>
           ) : null}
 
           {/* Check-in prompt (E2-18) */}
@@ -566,6 +582,52 @@ export function WorkoutSummaryOverlay({
       </SafeAreaProvider>
     </Modal>
   )
+}
+
+/**
+ * Entrada escalonada por sección/card — espejo de las animaciones framer del overlay web
+ * (WorkoutSummaryOverlay.tsx): header opacity 0→1 / y 12→0 0.35s (:261-266), hero y 8→0 delay 0.05s
+ * 0.3s (:279-284), sección PRs opacity 0→1 (:314-317) con cada card y 10→0 delay 0.1*i 0.28s
+ * (:339-345), "Por ejercicio"/cardio staggerContainer(0.06, 0.05) + fadeSlideUp y 16→0 (:374-387,
+ * :405-410), contenedor del mapa y 8→0 0.3s (:451-454) y nudge y 8→0 delay 0.1s (:483-487).
+ * Reduced-motion: se pinta en el estado final sin animar (paridad web `initial={false}`/duration:0).
+ * Se reproduce en CADA apertura (`play` = visible) porque el RN Modal no remonta el árbol al cerrar,
+ * a diferencia del overlay web que se monta de cero cada vez.
+ */
+function FadeIn({
+  children,
+  play,
+  reduced,
+  y = 8,
+  delay = 0,
+  duration = 300,
+  style,
+}: {
+  children: React.ReactNode
+  play: boolean
+  reduced: boolean | null
+  y?: number
+  delay?: number
+  duration?: number
+  style?: StyleProp<ViewStyle>
+}) {
+  const progress = useRef(new Animated.Value(reduced ? 1 : 0)).current
+  useEffect(() => {
+    if (reduced) {
+      progress.setValue(1)
+      return
+    }
+    if (!play) {
+      progress.setValue(0)
+      return
+    }
+    progress.setValue(0)
+    const anim = Animated.timing(progress, { toValue: 1, duration, delay, useNativeDriver: true })
+    anim.start()
+    return () => anim.stop()
+  }, [play, reduced, delay, duration, progress])
+  const translateY = progress.interpolate({ inputRange: [0, 1], outputRange: [y, 0] })
+  return <Animated.View style={[style, { opacity: progress, transform: [{ translateY }] }]}>{children}</Animated.View>
 }
 
 /**

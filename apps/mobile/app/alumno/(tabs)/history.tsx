@@ -98,12 +98,18 @@ export default function HistoryScreen() {
 
   useEffect(() => { void load(HISTORY_DAYS_DEFAULT) }, [])
 
-  async function load(days: number) {
-    setLoading(true)
+  // `background: true` NO muestra el EvaLoaderScreen a pantalla completa: la lista
+  // actual permanece visible mientras se recarga. Espejo del soft-nav web del botón
+  // "6 meses", que es un <Link> (page.tsx:80-86): la navegación server-side mantiene
+  // el chrome (header + lista) en pantalla. El arranque on-mount y el retry sí usan
+  // el loader completo (no hay nada que preservar todavía).
+  async function load(days: number, opts?: { background?: boolean }) {
+    const background = opts?.background ?? false
+    if (!background) setLoading(true)
     setError(false)
     try {
       const client = await getClientProfile()
-      if (!client) { setLoading(false); return }
+      if (!client) { if (!background) setLoading(false); return }
 
       // Conteo de series por día agregado en DB (RPC) — 90d por defecto, 180d al "ver más".
       const data = await getWorkoutDaySummaries(client.id, days)
@@ -112,14 +118,16 @@ export default function HistoryScreen() {
     } catch {
       setError(true)
     } finally {
-      setLoading(false)
+      if (!background) setLoading(false)
     }
   }
 
   async function showMore() {
+    // Expansión in-place: solo `expanding` (label inline 'Cargando…' del botón),
+    // sin blanquear a loader de pantalla completa — la lista de 3 meses sigue visible.
     setExpanding(true)
     try {
-      await load(HISTORY_DAYS_EXTENDED)
+      await load(HISTORY_DAYS_EXTENDED, { background: true })
     } finally {
       setExpanding(false)
     }
@@ -209,7 +217,11 @@ export default function HistoryScreen() {
                 transition={{
                   type: 'timing',
                   duration: reduced ? 0 : 450,
-                  delay: reduced ? 0 : Math.min(index, 12) * 40,
+                  // Cascada literal sin tope — espejo de RevealStagger stagger={0.04}
+                  // (WorkoutHistoryList.tsx:16) + staggerChildren sin límite (Reveal.tsx:104):
+                  // cada fila i entra con delay 40ms*i. Sin Math.min(index,12) para que
+                  // los historiales largos (13+ días) sigan escalonando, no entren en bloque.
+                  delay: reduced ? 0 : index * 40,
                   easing: EASE_FADEUP,
                 }}
               >

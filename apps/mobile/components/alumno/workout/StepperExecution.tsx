@@ -1,5 +1,6 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { AccessibilityInfo, Pressable, ScrollView, Text, View, type TextStyle } from 'react-native'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { AnimatePresence, MotiView } from 'moti'
 import { Gesture, GestureDetector } from 'react-native-gesture-handler'
 import Animated, {
@@ -12,18 +13,24 @@ import Animated, {
 import { CheckCircle2, ChevronLeft, ChevronRight } from 'lucide-react-native'
 import { EASE, useEvaMotion } from '../../../lib/motion'
 import { FONT } from '../../../lib/typography'
+import { hexToRgba, resolveSportRamp } from '../../../lib/theme'
+import { useTheme } from '../../../context/ThemeContext'
 
 const ON_DARK = '#F4F6F8'
 // Deshabilitado: text-on-dark-muted/30 en web (StepperExecution.tsx:213) → rgba(147,157,171,0.30).
 const ON_DARK_DIM = 'rgba(147,157,171,0.30)'
-// --sport-300 del theme (global.css:46 = 147 190 255 = #93BEFF); web usa text-[var(--sport-300)].
-const SPORT_300 = '#93BEFF'
 
-// Colores del rail (paridad web StepperExecution.tsx:131-136). RN no anima clases NativeWind, así que
-// el fade `transition-colors` se hace con MotiView + valores resueltos de los tokens sport-*/white.
-const RAIL_ACTIVE = '#5C9DFF' // --sport-400 (92 157 255)
-const RAIL_DONE = 'rgba(38,128,255,0.6)' // --sport-500/60 (38 128 255 @ .6)
+// Rail "upcoming": web usa `bg-white/15` (StepperExecution.tsx:135) — blanco, NO la rampa sport, así
+// que no reacciona al white-label. Los estados active/done SÍ leen `--sport-400`/`--sport-500` y se
+// resuelven en runtime vía el theme context (ver `sport400`/`railDone` abajo). RN no anima clases
+// NativeWind, así que el fade `transition-colors` se hace con MotiView sobre backgroundColor.
 const RAIL_UPCOMING = 'rgba(255,255,255,0.15)' // bg-white/15
+
+// Clearance del contenido para dejar libre la barra fija "Finalizar" — paridad web `pb-32` = 128px
+// (StepperExecution.tsx:90). En RN la barra (`.exec-finish-bar`, ExecutorV2 FINISH_BAR_H=88) se
+// extiende ADEMÁS hasta el safe-area inferior, por lo que se suma `insets.bottom` (concepto sin
+// equivalente en web); 128 + inset mantiene el mismo respiro visual (~40px sobre la barra de 88).
+const FINISH_BAR_CLEARANCE = 128
 
 // Eyebrow de sección: web usa el literal `text-[10px] tracking-widest` (StepperExecution.tsx:100), no
 // el rol DS (que es 12px). Se mirror 1:1 el valor literal del web. tracking-widest = 0.1em × 10 = 1pt.
@@ -78,6 +85,19 @@ export function StepperExecution({
   renderStep: (index: number) => ReactNode
 }) {
   const motion = useEvaMotion()
+  const insets = useSafeAreaInsets()
+  // Colores sport resueltos en RUNTIME desde el mismo `deriveSportTokens` que alimenta las vars
+  // `--color-sport-*` de NativeWind (ThemeContext → brandVars). Así los props de color imperativos
+  // (backgroundColor del rail MotiView, `color` de los iconos lucide) siguen el override white-label
+  // igual que el `currentColor`/`var(--sport-*)` del web (StepperExecution.tsx:131-134,177,179-180),
+  // en vez de quedar clavados en el azul EVA mientras las clases `text-sport-*`/`bg-sport-*` sí cambian.
+  const { branding } = useTheme()
+  const { sport300, sport400, sport500 } = useMemo(
+    () => resolveSportRamp(branding?.primaryColor),
+    [branding?.primaryColor],
+  )
+  // Rail active → --sport-400; rail done → --sport-500/60 (web StepperExecution.tsx:132,134).
+  const railDone = useMemo(() => hexToRgba(sport500, 0.6), [sport500])
   const total = steps.length
   const idx = Math.max(0, Math.min(currentIndex, total - 1))
   const active = steps[idx]
@@ -146,74 +166,82 @@ export function StepperExecution({
           los cuatro son hijos del mismo `<section className="…px-4 py-4 pb-32">` en flujo normal de
           página, sin `sticky`/`fixed` (StepperExecution.tsx:87-182). Al hacer scroll de un ejercicio
           largo, chrome y rail salen de vista igual que en web (antes quedaban pinned arriba).
-          El `paddingTop:16` del contenedor da el hueco superior de 16px (web `py-4`, :90); el arrastre
-          elástico (`dragStyle`) envuelve SOLO el card del paso — no chrome/rail — igual que el `drag`
-          del web va sólo en el `motion.div` del pager (:145-152). */}
-      <GestureDetector gesture={pan}>
-        <ScrollView
-          contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: 160 }}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
+          El `paddingTop:16` del contenedor da el hueco superior de 16px (web `py-4`, :90); el
+          `GestureDetector`/arrastre elástico (`dragStyle`) envuelve SOLO el card del paso — no
+          chrome/rail/pie — igual que el `drag` del web va SÓLO en el `motion.div` del pager
+          (:145-152): un pan sobre el chrome, rail o pie NO navega (paridad estricta). */}
+      <ScrollView
+        contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: FINISH_BAR_CLEARANCE + insets.bottom }}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Chrome superior: prev/next SIEMPRE presentes + eyebrow de sección + "Ejercicio X de Y". */}
+        <View className="flex-row items-center gap-2">
+          <NavButton testID="stepper-prev" disabled={idx === 0} onPress={goPrev} accessibilityLabel="Ejercicio anterior">
+            <ChevronLeft size={20} color={idx === 0 ? ON_DARK_DIM : ON_DARK} />
+          </NavButton>
+          <View className="min-w-0 flex-1 items-center">
+            <Text
+              style={EYEBROW_STYLE}
+              className={active.muted ? 'text-on-dark-muted/60' : 'text-sport-300'}
+              numberOfLines={1}
+            >
+              {active.sectionTitle}
+            </Text>
+            <Text style={COUNTER_STYLE} className="text-on-dark-muted" numberOfLines={1}>
+              <Text className="text-on-dark font-mono-bold">Ejercicio {idx + 1}</Text> de {total}
+            </Text>
+          </View>
+          <NavButton testID="stepper-next" disabled={idx === total - 1} onPress={goNext} accessibilityLabel="Ejercicio siguiente">
+            <ChevronRight size={20} color={idx === total - 1 ? ON_DARK_DIM : ON_DARK} />
+          </NavButton>
+        </View>
+
+        {/* Rail de progreso: segmentos tappables (salta a cualquier paso, incluso a editar).
+            Etiqueta de grupo — paridad web `<div role="group" aria-label="Progreso de ejercicios">`
+            (StepperExecution.tsx:116). SIN `accessible={true}` para no colapsar el foco de los
+            segmentos hijos (cada uno anuncia "Ir al ejercicio X de Y"). */}
+        <View
+          className="mt-3 flex-row items-stretch gap-1"
+          accessibilityLabel="Progreso de ejercicios"
         >
-          {/* Chrome superior: prev/next SIEMPRE presentes + eyebrow de sección + "Ejercicio X de Y". */}
-          <View className="flex-row items-center gap-2">
-            <NavButton testID="stepper-prev" disabled={idx === 0} onPress={goPrev} accessibilityLabel="Ejercicio anterior">
-              <ChevronLeft size={20} color={idx === 0 ? ON_DARK_DIM : ON_DARK} />
-            </NavButton>
-            <View className="min-w-0 flex-1 items-center">
-              <Text
-                style={EYEBROW_STYLE}
-                className={active.muted ? 'text-on-dark-muted/60' : 'text-sport-300'}
-                numberOfLines={1}
+          {steps.map((s, i) => {
+            const state = i === idx ? 'active' : s.complete ? 'done' : 'upcoming'
+            return (
+              <Pressable
+                key={s.key}
+                testID={`stepper-rail-${i}`}
+                onPress={() => goTo(i)}
+                accessibilityRole="button"
+                accessibilityLabel={`Ir al ejercicio ${i + 1} de ${total}: ${s.title}`}
+                accessibilityState={{ selected: i === idx }}
+                className="-my-2 flex-1 justify-center py-2"
               >
-                {active.sectionTitle}
-              </Text>
-              <Text style={COUNTER_STYLE} className="text-on-dark-muted" numberOfLines={1}>
-                <Text className="text-on-dark font-mono-bold">Ejercicio {idx + 1}</Text> de {total}
-              </Text>
-            </View>
-            <NavButton testID="stepper-next" disabled={idx === total - 1} onPress={goNext} accessibilityLabel="Ejercicio siguiente">
-              <ChevronRight size={20} color={idx === total - 1 ? ON_DARK_DIM : ON_DARK} />
-            </NavButton>
-          </View>
+                {/* `transition-colors` del web → fade de backgroundColor con moti. active/done leen la
+                    rampa sport resuelta en runtime (white-label aware); upcoming es blanco/15. */}
+                <MotiView
+                  className="h-1.5 w-full rounded-full"
+                  animate={{ backgroundColor: state === 'active' ? sport400 : state === 'done' ? railDone : RAIL_UPCOMING }}
+                  transition={{ type: 'timing', duration: 150, easing: EASE.out }}
+                />
+              </Pressable>
+            )
+          })}
+        </View>
 
-          {/* Rail de progreso: segmentos tappables (salta a cualquier paso, incluso a editar).
-              Etiqueta de grupo — paridad web `<div role="group" aria-label="Progreso de ejercicios">`
-              (StepperExecution.tsx:116). SIN `accessible={true}` para no colapsar el foco de los
-              segmentos hijos (cada uno anuncia "Ir al ejercicio X de Y"). */}
-          <View
-            className="mt-3 flex-row items-stretch gap-1"
-            accessibilityLabel="Progreso de ejercicios"
-          >
-            {steps.map((s, i) => {
-              const state = i === idx ? 'active' : s.complete ? 'done' : 'upcoming'
-              return (
-                <Pressable
-                  key={s.key}
-                  testID={`stepper-rail-${i}`}
-                  onPress={() => goTo(i)}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Ir al ejercicio ${i + 1} de ${total}: ${s.title}`}
-                  accessibilityState={{ selected: i === idx }}
-                  className="-my-2 flex-1 justify-center py-2"
-                >
-                  {/* `transition-colors` del web → fade de backgroundColor con moti. */}
-                  <MotiView
-                    className="h-1.5 w-full rounded-full"
-                    animate={{ backgroundColor: state === 'active' ? RAIL_ACTIVE : state === 'done' ? RAIL_DONE : RAIL_UPCOMING }}
-                    transition={{ type: 'timing', duration: 150, easing: EASE.out }}
-                  />
-                </Pressable>
-              )
-            })}
-          </View>
-
-          {/* Pager: solo el paso actual, con arrastre en vivo + transición direccional enter/exit.
-              `mt-4` = separación rail→paso del web (`mb-4` del rail, StepperExecution.tsx:116).
-              `overflow-hidden` clipa el translateX ±48 del slide/drag — paridad web `overflow-x-clip`
-              en el motion.div del pager (StepperExecution.tsx:145-147): en tablet (maxWidth 768) evita
-              que el card entrante/saliente asome ~48px fuera del contenedor centrado durante la
-              transición de 260ms. El scroll vertical sigue vivo en el ScrollView externo. */}
+        {/* Pager: solo el paso actual, con arrastre en vivo + transición direccional enter/exit.
+            `mt-4` = separación rail→paso del web (`mb-4` del rail, StepperExecution.tsx:116).
+            El `GestureDetector` envuelve SOLO este card (no el ScrollView completo) — paridad web:
+            el `drag='x'` va únicamente en el `motion.div` del pager (StepperExecution.tsx:145-152), así
+            que un pan que empieza en el chrome/rail/pie NO navega. `activeOffsetX`/`failOffsetY` ceden
+            el eje vertical al scroll del ScrollView externo.
+            `overflow-hidden` clipa el translateX ±48 del slide/drag — el equivalente RN más cercano a
+            `overflow-x-clip` del web (:146): RN no tiene overflow por-eje, pero como este contenedor
+            abraza la altura natural del card, el recorte VERTICAL es un no-op (nada del card lo excede;
+            keypad/sheets/popovers se portalan FUERA de este árbol, ExecutorV2), quedando SOLO el
+            recorte horizontal del deslizamiento, tal como el web. El scroll vertical sigue vivo en el
+            ScrollView externo. */}
+        <GestureDetector gesture={pan}>
           <Animated.View style={dragStyle} className="mt-4 overflow-hidden">
             {/* `initial={false}` suprime la variante `enter` en el PRIMER montaje — paridad web
                 `<AnimatePresence … initial={false}>` (:154): al entrar al modo Pasos el paso aparece ya
@@ -224,30 +252,35 @@ export function StepperExecution({
                 from={motion.reduced ? { opacity: 0 } : { opacity: 0, translateX: direction > 0 ? SLIDE : -SLIDE }}
                 animate={{ opacity: 1, translateX: 0 }}
                 exit={motion.reduced ? { opacity: 0 } : { opacity: 0, translateX: direction > 0 ? -SLIDE : SLIDE }}
-                transition={{ type: 'timing', duration: motion.reduced ? 120 : 260, easing: motion.reduced ? EASE.out : DIR_SLIDE }}
+                // reduced-motion: crossfade puro SIN curva custom (`Easing.linear`) — paridad web, cuya
+                // rama reduce-motion es `{ duration: 0.12 }` sin `ease` (StepperExecution.tsx:162). Normal:
+                // curva direccional `dirSlide`.
+                transition={{ type: 'timing', duration: motion.reduced ? 120 : 260, easing: motion.reduced ? Easing.linear : DIR_SLIDE }}
                 accessibilityLabel={`Ejercicio ${idx + 1} de ${total}`}
               >
                 {renderStep(idx)}
               </MotiView>
             </AnimatePresence>
           </Animated.View>
+        </GestureDetector>
 
-          {/* Pie: "Siguiente ejercicio" cuando el paso ya está completo (afirma el auto-avance). */}
-          {active.complete && idx < total - 1 && (
-            <Pressable
-              testID="stepper-next-cta"
-              onPress={goNext}
-              className="mt-4 flex-row items-center justify-center gap-2 rounded-control border border-sport-500/40 bg-sport-500/[0.08] py-3 active:bg-sport-500/[0.16]"
-              accessibilityRole="button"
-              accessibilityLabel="Siguiente ejercicio"
-            >
-              <CheckCircle2 size={16} color={SPORT_300} />
-              <Text style={{ fontFamily: FONT.uiBold, fontSize: 14 }} className="text-sport-300">Siguiente ejercicio</Text>
-              <ChevronRight size={16} color={SPORT_300} />
-            </Pressable>
-          )}
-        </ScrollView>
-      </GestureDetector>
+        {/* Pie: "Siguiente ejercicio" cuando el paso ya está completo (afirma el auto-avance). */}
+        {active.complete && idx < total - 1 && (
+          <Pressable
+            testID="stepper-next-cta"
+            onPress={goNext}
+            className="mt-4 flex-row items-center justify-center gap-2 rounded-control border border-sport-500/40 bg-sport-500/[0.08] py-3 active:bg-sport-500/[0.16]"
+            accessibilityRole="button"
+            accessibilityLabel="Siguiente ejercicio"
+          >
+            {/* Iconos: `--sport-300` resuelto en runtime (paridad web currentColor→text-[var(--sport-300)],
+                StepperExecution.tsx:177,179-180), igual que el texto/borde/fondo sport-* del botón. */}
+            <CheckCircle2 size={16} color={sport300} />
+            <Text style={{ fontFamily: FONT.uiBold, fontSize: 14 }} className="text-sport-300">Siguiente ejercicio</Text>
+            <ChevronRight size={16} color={sport300} />
+          </Pressable>
+        )}
+      </ScrollView>
     </View>
   )
 }

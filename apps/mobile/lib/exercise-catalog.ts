@@ -256,12 +256,17 @@ export function toStorageRenderThumb(publicUrl: string, width = 256, quality = 5
  * completa vive SOLO en el sheet de técnica. (1:1 web `exerciseGridThumb`.)
  */
 export function exerciseGridThumb(
-  ex: Pick<CatalogExercise, 'thumbnail_url' | 'gif_url' | 'video_url'>,
+  ex: Pick<CatalogExercise, 'thumbnail_url' | 'gif_url' | 'video_url'> & { image_url?: string | null },
   width = 256,
 ): string | null {
+  // Prioridad 1:1 web `exerciseGridThumb` (thumbnail_url early-return) + `exerciseThumbnailUrl`
+  // (apps/web/src/lib/youtube.ts:130-143): gif_url → image_url → thumbnail_url → youtube(video_url)
+  // → video_url. `image_url` va entre gif_url y el póster de YouTube (un candidato image_url-only
+  // debe mostrar ESA imagen, no el placeholder Dumbbell). SubstituteCandidate ya trae image_url.
   if (ex.thumbnail_url) return ex.thumbnail_url
   let base: string | null = null
   if (ex.gif_url) base = ex.gif_url
+  else if (ex.image_url) base = ex.image_url
   else {
     const yt = youtubeId(ex.video_url)
     if (yt) base = youtubeThumb(yt)

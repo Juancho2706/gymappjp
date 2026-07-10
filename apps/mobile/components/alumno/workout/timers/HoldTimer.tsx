@@ -10,7 +10,7 @@ import { useEvaMotion, EASE } from '../../../../lib/motion'
 import { useTheme } from '../../../../context/ThemeContext'
 import { textStyle, FONT } from '../../../../lib/typography'
 import { SHADOWS } from '../../../../lib/shadows'
-import { haptics } from '../../../../lib/haptics'
+import { haptics, timerHaptics } from '../../../../lib/haptics'
 import { EMBER_500, INK_900, ON_DARK, ON_DARK_MUTED, TRACK_ON_DARK } from './timer-colors'
 import { playTimerCue } from './sound'
 
@@ -59,7 +59,9 @@ export function HoldTimer({ initialSeconds, label, onClose }: HoldTimerProps) {
   const triggerDone = useCallback(() => {
     if (firedRef.current) return
     firedRef.current = true
-    void haptics.success()
+    // Web HoldTimer.tsx:34 dispara triggerHaptic([200,100,400]); en Android replicamos
+    // el patrón exacto (en iOS, tap fijo — igual que la web).
+    timerHaptics.holdDone()
     playTimerCue('done')
     setIsActive(false)
     endTimeRef.current = null
@@ -144,6 +146,9 @@ export function HoldTimer({ initialSeconds, label, onClose }: HoldTimerProps) {
             <Svg width={44} height={44} viewBox="0 0 44 44">
               <G rotation={-90} origin="22, 22">
                 <Circle cx={22} cy={22} r={R} strokeWidth={3} fill="none" stroke={TRACK_ON_DARK} />
+                {/* Web HoldTimer.tsx:85-93: el <circle> de progreso NO declara strokeLinecap,
+                    así que usa el default SVG 'butt' (extremos planos). No añadir 'round' aquí
+                    para no redondear el borde delantero/trasero del arco mientras drena. */}
                 <AnimatedCircle
                   cx={22}
                   cy={22}
@@ -151,7 +156,6 @@ export function HoldTimer({ initialSeconds, label, onClose }: HoldTimerProps) {
                   strokeWidth={3}
                   fill="none"
                   stroke={EMBER_500}
-                  strokeLinecap="round"
                   strokeDasharray={DASH}
                   animatedProps={progressProps}
                 />

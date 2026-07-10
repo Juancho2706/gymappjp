@@ -5,13 +5,12 @@ import { MotiView } from 'moti'
 import { BlurView } from 'expo-blur'
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake'
 import { Pause, Play, SkipForward, Sun, X } from 'lucide-react-native'
-import * as Haptics from 'expo-haptics'
 import { INTERVAL_PHASE_LABEL, type IntervalPhase, type IntervalPhaseKind } from '@eva/workout-engine'
 import { useEvaMotion, EASE } from '../../../../lib/motion'
 import { useTheme } from '../../../../context/ThemeContext'
 import { textStyle, FONT } from '../../../../lib/typography'
 import { SHADOWS } from '../../../../lib/shadows'
-import { haptics } from '../../../../lib/haptics'
+import { haptics, timerHaptics } from '../../../../lib/haptics'
 import {
   AQUA_500,
   EMBER_300,
@@ -77,7 +76,12 @@ export function IntervalTimer({ phases, onClose }: IntervalTimerProps) {
   const phase = phases[phaseIndex] ?? null
 
   const cue = useCallback((double: boolean) => {
-    void (double ? haptics.success() : Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {}))
+    // Web IntervalTimer.tsx:45 triggerHaptic(double ? [200,100,200,100,400] : [200,100,200]):
+    // fin-de-intervalos y cambio-de-fase son patrones DISTINTOS. En Android replicamos los ms
+    // exactos (antes fin colapsaba con fin-de-hold en el mismo notificationAsync); en iOS, tap
+    // fijo idiomático por evento (igual que la web, que ahí no diferencia por patrón).
+    if (double) timerHaptics.intervalFinish()
+    else timerHaptics.intervalPhase()
     playTimerCue(double ? 'finish' : 'phase')
   }, [])
 

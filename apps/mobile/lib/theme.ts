@@ -210,6 +210,31 @@ function rgbaToChannels(rgba: string): string {
   return `${Math.round(+m[0])} ${Math.round(+m[1])} ${Math.round(+m[2])}`
 }
 
+/** "#rrggbb" + alpha -> "rgba(r, g, b, a)" for imperative color props (lucide,
+ *  MotiView backgroundColor) that need a literal when a className can't express it. */
+export function hexToRgba(hex: string, alpha: number): string {
+  return `rgba(${hexToChannels(hex).replace(/ /g, ', ')}, ${alpha})`
+}
+
+/**
+ * Runtime-resolved SPORT ramp hexes (300/400/500) for the CURRENT white-label
+ * brand — the SAME `deriveSportTokens` source that `brandVars` feeds into the
+ * NativeWind `--color-sport-*` vars. Use it for imperative color props a
+ * className can't drive (lucide icon `color`, MotiView `backgroundColor`) so
+ * they track the coach override in lockstep with the `sport-*` utility classes.
+ * Steps 300/400/500 are scheme-independent in `brandVars` (only 100/600/700 flip
+ * in dark), so no scheme arg is needed. Mirrors the `primaryColor || DEFAULT_BRAND`
+ * fallback so a free/default coach resolves to the identical ramp NativeWind uses.
+ */
+export function resolveSportRamp(primaryColor?: string | null): {
+  sport300: string
+  sport400: string
+  sport500: string
+} {
+  const { ramp } = deriveSportTokens(primaryColor || DEFAULT_BRAND)
+  return { sport300: ramp['300'], sport400: ramp['400'], sport500: ramp['500'] }
+}
+
 /**
  * StyleSheet Theme branded via @eva/brand-kit (same engine as web/PWA): the
  * accent is contrast-clamped and matches the published org/coach brand.

@@ -427,6 +427,12 @@ function ExecutorV2Inner({ planId }: { planId: string }) {
         ...sessionLogs.filter((l) => !(l.block_id === payload.blockId && l.set_number === payload.setNumber)),
         { block_id: payload.blockId, set_number: payload.setNumber },
       ]
+      // Guard "editar serie ya cerrada no toca el descanso" (paridad web buildRest `if (isLogged) return`,
+      // LogSetForm.tsx:372, con isLogged capturado pre-commit en :247). Si la serie YA estaba loggeada
+      // antes de este commit (edición vía keypad o reintento de una serie cerrada), la decisión del
+      // descanso —startRest/cancelRest— se omite por completo, igual que la web: ni se dispara ni se corta
+      // ningún descanso al re-guardar una serie ya cerrada. `sessionLogs` del closure es el estado previo.
+      const wasLogged = sessionLogs.some((l) => l.block_id === payload.blockId && l.set_number === payload.setNumber)
       const { isPR, error } = await logSet(
         payload,
         sub ? { substitution: { exerciseId: sub.exerciseId, name: sub.name, reason: sub.reason } } : undefined,
@@ -462,17 +468,31 @@ function ExecutorV2Inner({ planId }: { planId: string }) {
           setNumber: payload.setNumber,
         })
         const roundClosed = isRoundComplete(roundBlocks, round, projected)
+        // Decisión del descanso — espeja buildRest (LogSetForm.tsx:370-380) SÓLO si no es edición de una
+        // serie ya cerrada (guard wasLogged). Tres ramas de auto-skip vía cancelRest, como la web:
+        //  (a) auto-timer OFF → cancelRest y nada más (:374): registrar corta cualquier descanso manual.
+        //  (b) la ronda NO cierra → cancelRest (:380): sigues con el otro ejercicio, se corta el descanso.
+        //  (c) la ronda cierra → startRest del descanso del grupo (:379).
+        if (!wasLogged) {
+          if (!isRestAutoTimerEnabled()) {
+            timers.cancelRest()
+          } else if (roundClosed) {
+            const groupRest = members.reduce((mx, m) => Math.max(mx, parseRestTime(m.rest_time)), 0)
+            // Etiqueta "qué sigue" de la barra = nombre del PRIMER miembro del grupo (paridad web
+            // LogSetForm.tsx:379 `startRest(..., { label: nextUpLabel })` con nextUpLabel = memberVMs[0]
+            // .exercise.name, WEC:884). Así la barra pinta "Sigue · {ejercicio}" en vez del fallback.
+            const label = resolveExercise(members[0])?.name
+            if (groupRest > 0) timers.startRest(groupRest, { autoStart: true, label })
+          } else {
+            timers.cancelRest()
+          }
+        }
+        // Toast "Sin descanso — sigue con {label}" entre miembros de la ronda (display, paridad web
+        // handleLogged WEC:1462-1466). Es independiente del auto-timer y del guard de descanso.
         if (nextPos && !roundClosed) {
           const idx = members.findIndex((m) => m.id === nextPos.blockId)
           const label = `${SUPERSET_MEMBER_LETTERS[idx] ?? ''}${nextPos.set}`
           toast.info(`Sin descanso — sigue con ${label}`)
-        } else if (roundClosed) {
-          const groupRest = members.reduce((mx, m) => Math.max(mx, parseRestTime(m.rest_time)), 0)
-          // Etiqueta "qué sigue" de la barra = nombre del PRIMER miembro del grupo (paridad web
-          // LogSetForm.tsx:379 `startRest(..., { label: nextUpLabel })` con nextUpLabel = memberVMs[0]
-          // .exercise.name, WEC:884). Así la barra pinta "Sigue · {ejercicio}" en vez del fallback.
-          const label = resolveExercise(members[0])?.name
-          if (groupRest > 0 && isRestAutoTimerEnabled()) timers.startRest(groupRest, { autoStart: true, label })
         }
         // Auto-scroll (paridad web handleLogged, WEC:1462-1474): en modo Lista, tras cada serie de
         // superserie trae la SIGUIENTE fila de ronda al 'center' (350ms); al cerrar el grupo (nextPos
@@ -495,18 +515,27 @@ function ExecutorV2Inner({ planId }: { planId: string }) {
       if (!error && block && ex && effectiveExerciseType(block, ex) === 'strength') {
         toast.success('Serie registrada')
       }
-      // Descanso de aproximación (warmup): la 1ª serie de un bloque de ≥3 series usa el
-      // `warmup_rest_time` (más corto) si existe, y la barra pinta el eyebrow "Aproximación"
-      // (paridad web LogSetForm.tsx:382-385 `useWarmup = !!warmupRestTimeStr && setNumber===1 &&
+      // Decisión del descanso del bloque suelto — espeja buildRest (LogSetForm.tsx:381-386) SÓLO si no es
+      // edición de una serie ya cerrada (guard wasLogged). Descanso de aproximación (warmup): la 1ª serie
+      // de un bloque de ≥3 series usa el `warmup_rest_time` (más corto) si existe, y la barra pinta el
+      // eyebrow "Aproximación" (paridad web `useWarmup = !!warmupRestTimeStr && setNumber===1 &&
       // (totalSets ?? 0) >= 3`; datos de SingleExerciseCard.tsx:403-405 warmup_rest_time/sets).
-      const useWarmup = !!block?.warmup_rest_time && payload.setNumber === 1 && (block?.sets ?? 0) >= 3
-      const restStr = useWarmup ? block!.warmup_rest_time! : block?.rest_time
-      // Cronómetro automático (pref device-scoped, default ON): si está apagado no arranca solo.
-      // Etiqueta "qué sigue" = nombre del ejercicio (paridad web nextUpLabel = exercise.name,
-      // SingleExerciseCard.tsx:405) y flag warmup para el eyebrow de la barra.
-      const secs = parseRestTime(restStr)
-      if (secs > 0 && isRestAutoTimerEnabled()) {
-        timers.startRest(secs, { autoStart: true, label: ex?.name, warmup: useWarmup })
+      if (!wasLogged) {
+        const useWarmup = !!block?.warmup_rest_time && payload.setNumber === 1 && (block?.sets ?? 0) >= 3
+        const restStr = useWarmup ? block!.warmup_rest_time! : block?.rest_time
+        const secs = parseRestTime(restStr)
+        // Tres ramas espejo de buildRest, con auto-skip vía cancelRest como la web:
+        //  (a) auto-timer OFF → cancelRest (:374): registrar la serie corta cualquier descanso manual.
+        //  (b) sin rest_time (parseRestTime<=0) → cancelRest (:386).
+        //  (c) rest válido → startRest con etiqueta = nombre del ejercicio (nextUpLabel, SingleExerciseCard
+        //      .tsx:405) y flag warmup para el eyebrow de la barra.
+        if (!isRestAutoTimerEnabled()) {
+          timers.cancelRest()
+        } else if (secs > 0) {
+          timers.startRest(secs, { autoStart: true, label: ex?.name, warmup: useWarmup })
+        } else {
+          timers.cancelRest()
+        }
       }
       // Auto-scroll al completar el bloque suelto (paridad web WEC:1494-1500): sólo al pasar de
       // incompleto→completo (mirror `!wasComplete && nowComplete`), salta al siguiente incompleto
@@ -1115,7 +1144,12 @@ function ExecutorV2Inner({ planId }: { planId: string }) {
         checkInLastRelative={checkInLastRelative}
         onCheckIn={() => router.replace('/alumno/check-in')}
         onDone={() => router.replace('/alumno/home')}
-        onClose={() => { setSummaryOpen(false); setFinishedElapsed(null) }}
+        // PARIDAD ESTRICTA CON WEB: el overlay web NO tiene control de descarte — su única salida es
+        // "Volver al inicio" → onDone (WorkoutSummaryOverlay.tsx:517-524). Antes cableábamos `onClose`
+        // (cerraba el resumen y volvía a la pantalla de entreno completado SIN navegar a home), una vía
+        // de escape ausente en web que podía saltarse el flujo onDone. Al no pasar `onClose`, el botón
+        // ✕ no se renderiza y el back de Android cae en onDone (ver onRequestClose del Modal). El reset
+        // de finishedElapsed ya no es necesario porque onDone abandona la pantalla.
       />
     </SafeAreaView>
   )

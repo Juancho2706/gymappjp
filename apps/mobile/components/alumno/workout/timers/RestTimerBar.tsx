@@ -34,6 +34,18 @@ import { cancelRestEndNotification, scheduleRestEndNotification } from './rest-n
  * NO acumulando ticks. Si el SO congela el JS en background, al volver a `active`
  * el tiempo se recalcula correcto (listener de AppState fuerza el recompute).
  * El wake-lock lo maneja el núcleo del ejecutor, no este componente.
+ *
+ * OMISIÓN CONOCIDA — Media Session / controles de lock-screen y auriculares:
+ * la web (`RestTimer.tsx:269-290`) publica `MediaMetadata` mientras corre (title
+ * "Descanso activo", artist "{M:SS} restantes", album "EVA Fitness", artwork icono
+ * de marca) y registra handlers `pause`→pausa / `play`→reanuda para la pantalla de
+ * bloqueo y los botones de auriculares. Este port NO lo replica: RN carecería de un
+ * módulo nativo de "now playing" (no hay react-native-track-player / expo-music-control
+ * en las deps), así que el descanso NO se puede pausar/reanudar desde la pantalla de
+ * bloqueo ni desde los auriculares, ni se muestra metadata ahí. La cuenta en sí sí
+ * sigue en background (notif local de fin, ver `rest-notification.ts`); lo omitido es
+ * SOLO el control multimedia de lock-screen. Portarlo requeriría añadir un módulo
+ * nativo con su config de build (fuera del alcance de esta unidad).
  */
 interface RestTimerBarProps {
   initialSeconds: number
@@ -300,7 +312,12 @@ export function RestTimerBar({ initialSeconds, nextLabel, warmup = false, autoSt
                 style={[StyleSheet.absoluteFill, styles.pulse]}
                 from={{ opacity: 0.2 }}
                 animate={{ opacity: 0.5 }}
-                transition={{ type: 'timing', duration: 1100, loop: true }}
+                // Ritmo del pulso = paridad exacta con la web (`RestTimer.tsx:325-326`): opacity
+                // [0.2,0.5,0.2] con `duration:1.1, ease:'easeInOut'` → ciclo COMPLETO 0.2→0.5→0.2 en 1.1s.
+                // Con `loop:true` Moti hace ping-pong (reverse), así cada MEDIO ciclo (0.2→0.5) dura
+                // `duration`; por eso 550ms para que el ciclo completo iguale los 1.1s web (antes 1100ms
+                // daba ~2200ms, el doble de lento). Easing inOut para el mismo perfil que easeInOut.
+                transition={{ type: 'timing', duration: 550, easing: Easing.inOut(Easing.ease), loop: true }}
               />
             )
           ) : null}

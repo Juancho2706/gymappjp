@@ -136,7 +136,8 @@ export function SubstituteExerciseSheet({ open, onOpenChange, blockId, prescribe
           scrollear por debajo. Grabber = handle del Sheet. */}
       <View style={styles.headerBlock} className="bg-ink-950">
         <View style={styles.eyebrowRow}>
-          <ArrowRightLeft className="text-sport-300" size={14} strokeWidth={2.4} />
+          {/* strokeWidth 2 = default lucide, igual que el ArrowRightLeft web (sin prop, L79). */}
+          <ArrowRightLeft className="text-sport-300" size={14} strokeWidth={2} />
           {/* 11px (3xs) uiBold uppercase + tracking wide (~0.04em) — web `text-[11px] tracking-wider`. */}
           <Text style={styles.eyebrow} className="text-sport-300">
             Cambiar ejercicio

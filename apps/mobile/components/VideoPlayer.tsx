@@ -88,6 +88,13 @@ export interface VideoPlayerProps {
   style?: StyleProp<ViewStyle>
   /** Accesibilidad. */
   title?: string
+  /**
+   * Renderiza el medio SIN chrome de tarjeta (sin borde ni radio), a sangre. Para superficies
+   * cuyo origen web muestra el medio full-bleed sin borde ni esquinas — p.ej. el modal de técnica,
+   * donde el `DialogContent p-0` deja el wrapper del medio pegado a los bordes sin borde ni radio
+   * (WorkoutExecutionClient.tsx:2005 + :2016/2030/2048/2062). Default false (marco DS estándar).
+   */
+  frameless?: boolean
 }
 
 /**
@@ -105,6 +112,7 @@ export function VideoPlayer({
   loop = true,
   style,
   title,
+  frameless = false,
 }: VideoPlayerProps) {
   const { theme } = useTheme()
   const [started, setStarted] = useState(autoPlay)
@@ -136,7 +144,7 @@ export function VideoPlayer({
 
   return (
     <View
-      className="bg-surface-sunken border border-subtle rounded-2xl overflow-hidden"
+      className={`bg-surface-sunken overflow-hidden${frameless ? '' : ' border border-subtle rounded-2xl'}`}
       style={[styles.frame, style]}
     >
       {!started ? (
@@ -252,29 +260,45 @@ function DirectVideo({
 
 /**
  * HTML del embed de YouTube para el WebView. Mismo contrato que la web
- * (`ExerciseVideo` / `exerciseEmbedUrl`): youtube-nocookie, sin controles/branding,
- * autoplay + mute + loop = GIF. La IFrame API loopea el recorte [start,end]:
- * al ENDED o al cruzar `end` hace seekTo(start).play() (degradación grácil — si la
- * API no carga, el iframe reproduce igual con loop nativo del video completo).
+ * (`ExerciseVideo.tsx:50-57,113-124`): el `<iframe>` de youtube-nocookie se renderiza SIEMPRE en
+ * el HTML con `autoplay=1&mute=1&loop=1&playlist=<id>` NATIVO (sin controles/branding = GIF), así
+ * que si la IFrame API JS no carga (red/bloqueo) el iframe reproduce igual con loop nativo del video
+ * completo — degradación grácil, nunca queda una caja negra (contrato §3a). La API JS SOLO se ATACHA
+ * al iframe ya presente (`enablejsapi=1`, `new YT.Player('p',{events})` como la web
+ * `ExerciseVideo.tsx:72`) para: (a) loopear el recorte [start,end] — ENDED / watchdog al cruzar `end`
+ * → seekTo(start).play(); (b) empujar el play en iOS/WKWebView, que a veces ignora el autoplay nativo.
  */
 function youtubeEmbedHtml(
   id: string,
   opts: { start: number; end: number | null; muted: boolean; loop: boolean; autoplay: boolean },
 ): string {
   const { start, end, muted, loop, autoplay } = opts
+  // URL del iframe = espejo de la web (ExerciseVideo.tsx:51-57): playlist=id para que el loop nativo
+  // funcione; enablejsapi=1 para poder ATACHAR la API al iframe existente.
+  const params = [
+    `autoplay=${autoplay ? 1 : 0}`,
+    `mute=${muted ? 1 : 0}`,
+    `loop=${loop ? 1 : 0}`,
+    `playlist=${id}`,
+    'controls=0', 'modestbranding=1', 'rel=0', 'playsinline=1',
+    'disablekb=1', 'iv_load_policy=3', 'fs=0', 'enablejsapi=1',
+  ]
+  if (start > 0) params.push(`start=${start}`)
+  const src = `https://www.youtube-nocookie.com/embed/${id}?${params.join('&')}`
   return `<!DOCTYPE html><html><head>
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-<style>*{margin:0;padding:0}html,body{background:#000;height:100%;overflow:hidden}#p{width:100%;height:100%}iframe{width:100%;height:100%;border:0}</style>
-</head><body><div id="p"></div>
+<style>*{margin:0;padding:0}html,body{background:#000;height:100%;overflow:hidden}#p{width:100%;height:100%;border:0}</style>
+</head><body>
+<iframe id="p" src="${src}" allow="autoplay; encrypted-media; picture-in-picture; web-share" allowfullscreen="false"></iframe>
 <script>
   var START=${start}, END=${end == null ? 'null' : end}, LOOP=${loop ? 'true' : 'false'};
   var player, watchdog;
+  // ATACHA la API al iframe YA renderizado (no crea uno nuevo): mismo patrón que la web
+  // (new YT.Player(frameId,{events}), ExerciseVideo.tsx:72). Si este script no llega a cargar,
+  // el iframe de arriba ya está reproduciendo con loop nativo (degradación grácil).
   function onYouTubeIframeAPIReady(){
-    player=new YT.Player('p',{host:'https://www.youtube-nocookie.com',videoId:'${id}',playerVars:{
-      autoplay:${autoplay ? 1 : 0},mute:${muted ? 1 : 0},controls:0,modestbranding:1,rel:0,
-      playsinline:1,disablekb:1,iv_load_policy:3,fs:0,loop:${loop ? 1 : 0},playlist:'${id}',start:${start}
-    },events:{
-      // iOS/WKWebView ignora el playerVar autoplay: hay que arrancar a mano en onReady
+    player=new YT.Player('p',{events:{
+      // iOS/WKWebView a veces ignora el autoplay nativo: reforzamos el play en onReady
       // (mute primero para respetar la policy de autoplay silencioso de iOS y Android).
       onReady:function(e){
         ${muted ? 'e.target.mute();' : ''}
