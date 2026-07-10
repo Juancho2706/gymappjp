@@ -206,18 +206,26 @@
 ---
 
 ### MT-13 — Google Play Developer account ($25 USD) · 1️⃣ Solo una vez (pago único)
-**Estado:** EN ESPERA — esperar dinero la próxima semana
+**Estado:** CUENTA VERIFICADA (identidad aprobada 2026-07-10) — falta crear la app y el primer release
 
-**Pasos (cuando tengas los $25):**
-1. Ir a [play.google.com/console](https://play.google.com/console)
-2. Crear cuenta: **Payment: $25 USD** (único, no recurrente) con tarjeta de crédito/débito
-3. Verificar identidad (pueden pedir foto de cédula o pasaporte)
-4. Crear nueva app:
-   - Package name: `cl.evaapp.eva`
-   - Nombre: "EVA - Entrenamiento Personalizado"
-   - Default language: Spanish (Chile)
-5. Completar la sección "App content" (rating, content policy)
-6. Avísame cuando esté creada → yo configuro el resto de `eas.json`
+**Contexto (investigado y verificado contra docs oficiales 2026-07-10):**
+- El track **Internal testing** es el equivalente a TestFlight: hasta 100 testers, sin review de Google, builds disponibles en minutos (la PRIMERA publicación puede tardar hasta 48h), updates automáticos vía Play Store. NO requiere store listing, data safety, content rating ni declaraciones — esas solo bloquean closed/open/production.
+- Cuenta personal post nov-2023: para **producción pública** Google exige un closed test con 12 testers opt-in por 14 días consecutivos. NO afecta a internal testing.
+- La **primera subida de AAB debe ser manual** por la UI de Play Console (limitación de la Google Play Developer API; ver `expo/fyi/first-android-submission.md`). Desde la segunda, `eas submit` automatiza.
+- Google Play solo acepta **AAB** (no APK). El profile `production` de `eas.json` genera AAB (keystore remoto EAS); al subir el primer AAB, aceptar Play App Signing (default, botón Continue — la upload key de EAS se registra sola).
+
+**Pasos restantes (una vez):**
+1. Play Console → **Create app**: nombre "EVA - Entrenamiento Personalizado", idioma Spanish (Latin America), tipo App, Free, aceptar las 3 declaraciones (policies / export laws / Play App Signing ToS). El package `cl.evaapp.eva` queda fijado con la primera subida — es PERMANENTE.
+2. Testing → Internal testing → pestaña **Testers** → crear lista con el email del dev (y los que quieras, máx 100).
+3. Correr el workflow `mobile-build.yml` (app=mobile, platform=android, profile=**production**) → descargar el artifact `.aab` → subirlo MANUAL en Internal testing → publicar release.
+4. Abrir el **link de opt-in** (pestaña Testers) en el celular con la cuenta Google de la lista → "Become a tester" → instalar desde Play Store.
+5. **Service account** (para automatizar `eas submit`):
+   a. [console.cloud.google.com](https://console.cloud.google.com) → crear proyecto (o reusar) → IAM → Service Accounts → Create (ej. `eas-submit-eva`), sin roles IAM.
+   b. En el service account → Keys → Add key → JSON → descargar.
+   c. En la API Library del MISMO proyecto → habilitar **Google Play Android Developer API**.
+   d. Play Console → **Users and permissions** → Invite new user → pegar el email del service account (`...@<proyecto>.iam.gserviceaccount.com`) → App permissions: agregar la app EVA → permiso **"Release apps to testing tracks"** (la vieja página "API access" ya no se usa; Google eliminó el requisito de linkear el Cloud project).
+   e. Guardar el JSON como GitHub Secret **`GOOGLE_SERVICE_ACCOUNT_JSON`** (contenido completo del archivo). Si `eas submit` da 403 recién configurado: la propagación de permisos puede tardar 24-48h.
+6. Desde ahí: workflow con profile=production + `submit_android=true` → el step `Submit AAB to Google Play` sube automático al track internal (track definido en `eas.json` → `submit.production.android`).
 
 ---
 
