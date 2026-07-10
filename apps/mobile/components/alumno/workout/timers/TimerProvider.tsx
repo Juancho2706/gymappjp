@@ -1,5 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { StyleSheet, View } from 'react-native'
+import { AnimatePresence } from 'moti'
 import { buildIntervalPhases, type IntervalConfig, type IntervalPhase } from '@eva/workout-engine'
 import { toast } from '../../../Toast'
 import { RestTimerBar } from './RestTimerBar'
@@ -31,8 +32,13 @@ type ActiveTimer =
   | { kind: 'stopwatch'; nonce: number }
 
 export interface WorkoutTimersApi {
-  /** Inicia el descanso protagonista. `autoStart` (default true) = arranca corriendo. */
-  startRest: (seconds: number, opts?: RestOpts) => void
+  /**
+   * Inicia el descanso protagonista. `autoStart` (default true) = arranca corriendo.
+   * Acepta SEGUNDOS (number, lo que ya pasa el ejecutor RN) o un STRING del plan
+   * ('MM:SS' | '90s' | '1 min' | '90') que se parsea internamente con `parseRestTime`
+   * — paridad de contrato con la web (`WorkoutTimerProvider.tsx:96-99`, que recibe string).
+   */
+  startRest: (seconds: number | string, opts?: RestOpts) => void
   startHold: (seconds: number, opts?: { label?: string }) => void
   startInterval: (config: IntervalConfig, sets?: number) => void
   startStopwatch: () => void
@@ -94,7 +100,12 @@ export function WorkoutTimerProvider({ children }: { children: React.ReactNode }
   }, [])
 
   const startRest = useCallback(
-    (seconds: number, opts?: RestOpts) => {
+    (input: number | string, opts?: RestOpts) => {
+      // Paridad de contrato con la web (`WorkoutTimerProvider.tsx:96-99`): `startRest` acepta un
+      // STRING ('MM:SS' | '90s' | '1 min' | '90') y lo parsea con `parseRestTime`, además del number
+      // que ya pasa el ejecutor RN. Así un caller que pase un string NO rompe en silencio (antes el
+      // early-return por `!Number.isFinite` lo tragaba). Sólo dispara si segundos > 0 (igual que web).
+      const seconds = typeof input === 'string' ? parseRestTime(input) : input
       if (!Number.isFinite(seconds) || seconds <= 0) return
       nonceRef.current += 1
       replaceWith({
@@ -150,27 +161,34 @@ export function WorkoutTimerProvider({ children }: { children: React.ReactNode }
   return (
     <Ctx.Provider value={api}>
       {children}
-      {active ? (
-        <View pointerEvents="box-none" style={StyleSheet.absoluteFill}>
-          {active.kind === 'rest' ? (
-            <RestTimerBar
-              key={active.nonce}
-              initialSeconds={active.seconds}
-              autoStart={active.autoStart}
-              nextLabel={active.label}
-              warmup={active.warmup}
-              onClose={close}
-            />
-          ) : null}
-          {active.kind === 'hold' ? (
-            <HoldTimer key={active.nonce} initialSeconds={active.seconds} label={active.label} onClose={close} />
-          ) : null}
-          {active.kind === 'interval' ? (
-            <IntervalTimer key={active.nonce} phases={active.phases} onClose={close} />
-          ) : null}
-          {active.kind === 'stopwatch' ? <StopwatchTimer key={active.nonce} onClose={close} /> : null}
-        </View>
-      ) : null}
+      {/* <AnimatePresence> mantiene el overlay montado mientras el timer sale, para que la barra de
+          descanso ANIME su salida (`exit` de `RestTimerBar`) en vez de desaparecer de golpe — paridad
+          web `RestTimer.tsx:300-308` (motion.div dentro de AnimatePresence con `exit={{ y:40, opacity:0 }}`).
+          Key ESTABLE en el overlay: el swap por `nonce` (remount al re-disparar el mismo tipo) NO es un
+          hijo directo de AnimatePresence, así no dispara exit — solo la transición null↔activo anima. */}
+      <AnimatePresence>
+        {active ? (
+          <View key="timer-overlay" pointerEvents="box-none" style={StyleSheet.absoluteFill}>
+            {active.kind === 'rest' ? (
+              <RestTimerBar
+                key={active.nonce}
+                initialSeconds={active.seconds}
+                autoStart={active.autoStart}
+                nextLabel={active.label}
+                warmup={active.warmup}
+                onClose={close}
+              />
+            ) : null}
+            {active.kind === 'hold' ? (
+              <HoldTimer key={active.nonce} initialSeconds={active.seconds} label={active.label} onClose={close} />
+            ) : null}
+            {active.kind === 'interval' ? (
+              <IntervalTimer key={active.nonce} phases={active.phases} onClose={close} />
+            ) : null}
+            {active.kind === 'stopwatch' ? <StopwatchTimer key={active.nonce} onClose={close} /> : null}
+          </View>
+        ) : null}
+      </AnimatePresence>
     </Ctx.Provider>
   )
 }

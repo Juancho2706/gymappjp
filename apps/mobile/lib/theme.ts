@@ -216,6 +216,33 @@ export function hexToRgba(hex: string, alpha: number): string {
   return `rgba(${hexToChannels(hex).replace(/ /g, ', ')}, ${alpha})`
 }
 
+/** "r g b" channels -> "#rrggbb". Inverse of `hexToChannels`; lets an imperative
+ *  color prop reuse the SAME channel source that feeds a NativeWind `--color-*` var. */
+function channelsToHex(channels: string): string {
+  const [r, g, b] = channels.trim().split(/\s+/).map((n) => Math.max(0, Math.min(255, Number(n) || 0)))
+  const h = (n: number) => n.toString(16).padStart(2, '0')
+  return `#${h(r)}${h(g)}${h(b)}`
+}
+
+// Canales de los neutros "on dark" (texto sobre superficie oscura) — MISMO valor que
+// las vars NativeWind `--color-text-on-dark`/`-muted` (global.css:102-103 y :203-204;
+// idénticos en light y dark ⇒ scheme-independent, NO white-label). Espejo del contrato
+// web globals.css:408-409 (`--text-on-dark: var(--ink-50)` #F4F6F8 / `--text-on-dark-muted: #939DAB`).
+const ON_DARK_CHANNELS = '244 246 248' // ink-50 #F4F6F8
+const ON_DARK_MUTED_CHANNELS = '147 157 171' // #939DAB
+
+/**
+ * Neutros "on dark" resueltos como hex imperativo para props de color que una
+ * className no puede animar (lucide icon `color`). Se atan a los MISMOS canales que
+ * alimentan `--color-text-on-dark`/`-muted` de NativeWind (igual que `resolveSportRamp`
+ * hace con `--sport-*`), en vez de clavar el literal en el consumidor: mantiene el valor
+ * actual (#F4F6F8 / #939DAB) pero lo liga al token, así no deriva si el token cambiara.
+ * Sin arg de scheme/branding porque estos neutros no flipean ni son white-label.
+ */
+export function resolveOnDark(): { onDark: string; onDarkMuted: string } {
+  return { onDark: channelsToHex(ON_DARK_CHANNELS), onDarkMuted: channelsToHex(ON_DARK_MUTED_CHANNELS) }
+}
+
 /**
  * Runtime-resolved SPORT ramp hexes (300/400/500) for the CURRENT white-label
  * brand — the SAME `deriveSportTokens` source that `brandVars` feeds into the

@@ -109,7 +109,11 @@ export default function HistoryScreen() {
     setError(false)
     try {
       const client = await getClientProfile()
-      if (!client) { if (!background) setLoading(false); return }
+      // Paridad con web (page.tsx:25-27): getClientProfile() devuelve null tanto si no
+      // hay usuario (JWT inválido/expirado) como si no hay fila en clients — los dos casos
+      // que en web hacen `redirect(`${base}/login`)`. Nunca el empty state 'sin series'
+      // (engañoso para una sesión expirada). Login del alumno = codigo.tsx:66, index.tsx:92.
+      if (!client) { router.replace('/(auth)/login?role=alumno'); return }
 
       // Conteo de series por día agregado en DB (RPC) — 90d por defecto, 180d al "ver más".
       const data = await getWorkoutDaySummaries(client.id, days)

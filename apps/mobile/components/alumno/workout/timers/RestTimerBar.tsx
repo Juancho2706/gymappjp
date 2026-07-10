@@ -5,11 +5,10 @@ import Svg, { Circle, G } from 'react-native-svg'
 import { MotiView } from 'moti'
 import Animated, { Easing, useAnimatedProps, useSharedValue, withTiming } from 'react-native-reanimated'
 import { Pause, Play, RotateCcw, Volume2, VolumeX, X } from 'lucide-react-native'
-import * as Haptics from 'expo-haptics'
 import { useEvaMotion } from '../../../../lib/motion'
 import { textStyle, FONT } from '../../../../lib/typography'
 import { SHADOWS } from '../../../../lib/shadows'
-import { haptics } from '../../../../lib/haptics'
+import { haptics, timerHaptics } from '../../../../lib/haptics'
 import {
   EMBER_200,
   EMBER_300,
@@ -132,19 +131,22 @@ export function RestTimerBar({ initialSeconds, nextLabel, warmup = false, autoSt
     endTimeRef.current = null
 
     // Cue HÁPTICO fuerte (primario, nunca se silencia) + audio gateado por mute.
-    // El alarma llegó en foreground: cancela la notif local programada (evita el
-    // beep duplicado al minimizar justo en el 0).
-    void haptics.alarm()
+    // Patrón EXACTO de la web (`RestTimer.tsx:128,150`: `triggerHaptic([200,100,200,100,400])`)
+    // vía `timerHaptics.restAlarm` — en Android emite esos ms exactos (antes `alarm()` daba
+    // Heavy+Success+Heavy, un patrón distinto). El alarma llegó en foreground: cancela la notif
+    // local programada (evita el beep duplicado al minimizar justo en el 0).
+    timerHaptics.restAlarm()
     void cancelRestEndNotification()
     playTimerCue('alarm')
 
-    // Recordatorio en loop: refuerzo háptico cada 3s hasta 5 veces (como web).
+    // Recordatorio en loop: refuerzo háptico cada 3s hasta 5 veces (como web, que repite el
+    // MISMO patrón `[200,100,200,100,400]` en cada iteración — `RestTimer.tsx:128`).
     alarmIntervalRef.current = setInterval(() => {
       alarmCountRef.current += 1
       if (alarmCountRef.current > 5) {
         stopAlarm()
       } else {
-        void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {})
+        timerHaptics.restAlarm()
         playTimerCue('alarm')
       }
     }, 3000)
@@ -175,8 +177,14 @@ export function RestTimerBar({ initialSeconds, nextLabel, warmup = false, autoSt
     if (!isActive) return
     if (timeLeft > 0 && timeLeft <= 3 && lastBeepRef.current !== timeLeft) {
       lastBeepRef.current = timeLeft
-      void haptics.select()
-      playTimerCue('tick')
+      // Paridad de contrato con la web (`RestTimer.tsx:207-213`): en los últimos 3s tanto el beep
+      // COMO la háptica están AMBOS dentro del guard `if (!mutedRef.current)`. Con mute activo el
+      // countdown 3-2-1 queda totalmente silencioso Y sin háptica (antes RN vibraba igual). La
+      // alarma FINAL sí conserva háptica con mute en ambos lados; el 3-2-1 no.
+      if (!isRestTimerMuted()) {
+        void haptics.select()
+        playTimerCue('tick')
+      }
     }
   }, [timeLeft, isActive])
 
@@ -296,6 +304,11 @@ export function RestTimerBar({ initialSeconds, nextLabel, warmup = false, autoSt
           // Entrada tipo bottom-sheet (espeja `springsSheet.enter` web: slide-up + fade).
           from={motion.reduced ? undefined : { opacity: 0, translateY: 40 }}
           animate={{ opacity: 1, translateY: 0 }}
+          // Salida (espeja `exit={{ y:40, opacity:0 }}` web `RestTimer.tsx:307`): al cerrar/saltar
+          // el descanso la barra se desliza hacia abajo y se desvanece en vez de desaparecer de golpe.
+          // Requiere el <AnimatePresence> de moti en `TimerProvider` (envuelve el overlay de timers).
+          // Bajo reduce-motion se omite (paridad `exit=undefined` web).
+          exit={motion.reduced ? undefined : { opacity: 0, translateY: 40 }}
           transition={
             motion.reduced
               ? { type: 'timing', duration: 0 }
@@ -383,7 +396,8 @@ export function RestTimerBar({ initialSeconds, nextLabel, warmup = false, autoSt
                   onPress={() => adjust(-15)}
                   accessibilityRole="button"
                   accessibilityLabel="Restar 15 segundos"
-                  style={styles.adjustBtn}
+                  // Micro-escala al presionar (espeja `active:scale-95` web `RestTimer.tsx:396`).
+                  style={({ pressed }) => [styles.adjustBtn, pressed && styles.pressedScale]}
                 >
                   <Text style={styles.adjustLabel}>−15s</Text>
                 </Pressable>
@@ -392,7 +406,8 @@ export function RestTimerBar({ initialSeconds, nextLabel, warmup = false, autoSt
                   onPress={() => adjust(15)}
                   accessibilityRole="button"
                   accessibilityLabel="Sumar 15 segundos"
-                  style={styles.adjustBtn}
+                  // Micro-escala al presionar (espeja `active:scale-95` web `RestTimer.tsx:404`).
+                  style={({ pressed }) => [styles.adjustBtn, pressed && styles.pressedScale]}
                 >
                   <Text style={styles.adjustLabel}>+15s</Text>
                 </Pressable>
@@ -402,7 +417,12 @@ export function RestTimerBar({ initialSeconds, nextLabel, warmup = false, autoSt
                   accessibilityRole="button"
                   accessibilityState={{ selected: muted }}
                   accessibilityLabel={muted ? 'Activar sonido del descanso' : 'Silenciar descanso'}
-                  style={[styles.muteBtn, muted ? styles.muteOff : styles.muteOn]}
+                  // Micro-escala al presionar (espeja `active:scale-95` web `RestTimer.tsx:414`).
+                  style={({ pressed }) => [
+                    styles.muteBtn,
+                    muted ? styles.muteOff : styles.muteOn,
+                    pressed && styles.pressedScale,
+                  ]}
                 >
                   {muted ? <VolumeX size={16} color={ON_DARK_MUTED} /> : <Volume2 size={16} color={EMBER_200} />}
                 </Pressable>
@@ -499,4 +519,7 @@ const styles = StyleSheet.create({
   muteBtn: { width: 44, height: 44, borderRadius: 14, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   muteOn: { borderColor: `${EMBER_500}4D`, backgroundColor: `${EMBER_500}1F` },
   muteOff: { borderColor: TRACK_ON_DARK, backgroundColor: 'rgba(255,255,255,0.03)' },
+  // Espeja `active:scale-95` web: micro-escala al presionar en ±15s y mute (los utilitarios
+  // pausa/reset/cerrar NO llevan escala en la web — solo hover).
+  pressedScale: { transform: [{ scale: 0.95 }] },
 })

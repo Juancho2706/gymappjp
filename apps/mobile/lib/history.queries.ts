@@ -57,9 +57,16 @@ export async function getWorkoutDaySummaries(
   }
   const rows = (data ?? []) as { day: string; sets: number }[]
   const todayIso = getTodayInSantiago().iso
+  // Orden crudo de la RPC (newest-first): la función SQL ya trae `ORDER BY 1 DESC`
+  // (supabase/migrations/20260612051000_rpc_client_workout_day_counts.sql:24), así que
+  // NO se re-ordena en cliente — paridad 1:1 con web getWorkoutHistoryDayCounts, que
+  // mapea las filas de la MISMA RPC sin re-ordenar (dashboard.queries.ts:225-239) y cuya
+  // spec §2 afirma "El orden de días viene de la RPC (no se re-ordena en cliente)". El
+  // `.sort()` anterior era redundante con ese ORDER BY; se elimina para alinear ambas
+  // superficies al mismo criterio explícito (el del RPC). Consumidores que asumen
+  // newest-first (RecentWorkouts.slice(0,5), perfil computeStreak) siguen correctos.
   return rows
     .map((r) => ({ dayKey: r.day.slice(0, 10), sets: Number(r.sets) }))
-    .sort((a, b) => b.dayKey.localeCompare(a.dayKey))
     .map(({ dayKey, sets }) => ({
       dayKey,
       dateLabel: formatRelativeDate(dayKey, todayIso),

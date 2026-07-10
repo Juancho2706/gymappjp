@@ -59,6 +59,24 @@ export async function requestRestNotifPermission(): Promise<RestNotifPermission>
     const mapped = mapStatus(res.status, res.canAskAgain !== false)
     permResolved = true
     permGranted = mapped === 'granted'
+    if (mapped === 'granted') {
+      // Confirmación inmediata al conceder (paridad web `WorkoutTimerSettingsPanel.tsx:41-53`:
+      // tras `granted`, `showNotification('¡Notificaciones activadas!', { body: 'El cronómetro te
+      // avisará cuando termine el descanso.' })`). `trigger: null` = se presenta de inmediato.
+      // try/catch silencioso: si el SO no la muestra, el permiso quedó igual concedido.
+      try {
+        await Notifications.scheduleNotificationAsync({
+          content: {
+            title: '¡Notificaciones activadas!',
+            body: 'El cronómetro te avisará cuando termine el descanso.',
+            data: { type: 'rest-timer-confirm' },
+          },
+          trigger: null,
+        })
+      } catch {
+        // no-op
+      }
+    }
     return mapped
   } catch {
     return 'unsupported'

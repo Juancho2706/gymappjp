@@ -91,9 +91,15 @@ export function primeTimerAudio(): void {
 /**
  * Reproduce un cue si (1) no está muteado, (2) expo-audio está instalado y
  * (3) hay un asset registrado para ese cue. Cualquier ausencia → no-op.
+ *
+ * `opts.force` OMITE el gate de mute: para PREVIEWS por acción directa del usuario
+ * en ajustes (elegir timbre / mover volumen / "Probar sonido"). Paridad con la web,
+ * donde el panel `WorkoutTimerSettingsPanel` reproduce `playTimerSound` SIEMPRE al
+ * cambiar sonido/volumen (`:56-64`), sin gatear por mute (el mute vive sólo en la
+ * barra, no en el panel). La cuenta regresiva (tick) y la alarma real sí respetan mute.
  */
-export function playTimerCue(kind: TimerCueKind): void {
-  if (isRestTimerMuted()) return
+export function playTimerCue(kind: TimerCueKind, opts?: { force?: boolean }): void {
+  if (!opts?.force && isRestTimerMuted()) return
   const mod = ExpoAudio
   // El fin de descanso ('alarm'), el fin de HOLD ('done') y los cambios/fin de fase
   // de INTERVALO ('phase'/'finish') respetan el TIMBRE elegido por el usuario

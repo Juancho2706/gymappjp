@@ -89,4 +89,23 @@ export const timerHaptics = {
     timerVibrate([200, 100, 200, 100, 400], () =>
       safe(Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)),
     ),
+  /**
+   * Fin del DESCANSO — web RestTimer.tsx:128,150 usa `triggerHaptic([200, 100, 200, 100, 400])`
+   * EXACTO tanto en el golpe inmediato como en cada repetición del loop de 3s. En Android emite
+   * ese patrón exacto (restaura la paridad que antes se perdía con `alarm()`/`Warning`); en iOS
+   * (los ms no son replicables) usa el doble golpe fuerte Heavy+Success+Heavy — el mismo feel del
+   * `haptics.alarm` previo, para que se sienta con el teléfono en el bolsillo/mancuerna en mano.
+   */
+  restAlarm: () =>
+    timerVibrate([200, 100, 200, 100, 400], () => {
+      void (async () => {
+        try {
+          await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy)
+          await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
+          await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy)
+        } catch {
+          // no-op
+        }
+      })()
+    }),
 }

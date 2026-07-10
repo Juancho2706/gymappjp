@@ -8,7 +8,6 @@ import { useEvaMotion, EASE } from '../../../../lib/motion'
 import { useTheme } from '../../../../context/ThemeContext'
 import { textStyle, FONT } from '../../../../lib/typography'
 import { SHADOWS } from '../../../../lib/shadows'
-import { haptics } from '../../../../lib/haptics'
 import { INK_900, ON_DARK, ON_DARK_MUTED, TRACK_ON_DARK } from './timer-colors'
 
 /**
@@ -17,9 +16,11 @@ import { INK_900, ON_DARK, ON_DARK_MUTED, TRACK_ON_DARK } from './timer-colors'
  * el transcurrido se calcula desde `startRef` (Date.now()) + `accumulatedRef`, no
  * acumulando ticks; AppState fuerza el recompute al volver de background.
  *
- * Toast flotante top-anclado con entrada slide-down + fade (200ms, respeta
- * reduce-motion). No emite cue de audio ni háptica de EVENTO (nunca "termina"
- * solo); solo háptica ligera de feedback al pulsar sus botones (idiom RN).
+ * Toast flotante top-anclado con entrada slide-down + fade y salida slide-up + fade
+ * (200ms, respeta reduce-motion). Paridad estricta con la web (`Stopwatch.tsx:3-6` no
+ * importa `triggerHaptic`/`playTimerSound`): el cronómetro NO emite sonido NI háptica —
+ * ni de EVENTO (nunca "termina" solo) ni al pulsar sus botones. Se retiró la háptica de
+ * feedback que RN había añadido en los controles para no divergir del web puro.
  */
 interface StopwatchTimerProps {
   onClose: () => void
@@ -68,13 +69,11 @@ export function StopwatchTimer({ onClose }: StopwatchTimerProps) {
   }, [isActive, recompute])
 
   const togglePause = useCallback(() => {
-    void haptics.tap()
     if (isActive) accumulatedRef.current += Math.floor((Date.now() - startRef.current) / 1000)
     setIsActive((v) => !v)
   }, [isActive])
 
   const reset = useCallback(() => {
-    void haptics.tap()
     accumulatedRef.current = 0
     startRef.current = Date.now()
     elapsedRef.current = 0
@@ -83,7 +82,6 @@ export function StopwatchTimer({ onClose }: StopwatchTimerProps) {
   }, [])
 
   const addLap = useCallback(() => {
-    void haptics.select()
     setLaps((prev) => [elapsedRef.current, ...prev].slice(0, 5))
   }, [])
 
@@ -97,6 +95,11 @@ export function StopwatchTimer({ onClose }: StopwatchTimerProps) {
         accessibilityRole="timer"
         from={motion.reduced ? undefined : { opacity: 0, translateY: -24 }}
         animate={{ opacity: 1, translateY: 0 }}
+        // Salida (espeja `exit={reducedMotion ? undefined : { y: -24, opacity: 0 }}` web
+        // `Stopwatch.tsx:64`): al cerrar, la tarjeta se desliza -24px con fade en 200ms en vez de
+        // desaparecer de golpe. Lo anima el <AnimatePresence> de moti en `TimerProvider`. Bajo
+        // reduce-motion se omite (paridad `exit=undefined` web).
+        exit={motion.reduced ? undefined : { opacity: 0, translateY: -24 }}
         transition={{ type: 'timing', duration: motion.reduced ? 0 : 200, easing: EASE.out }}
       >
         {/* backdrop-blur-xl de la web: BlurView difumina el contenido detrás; el velo

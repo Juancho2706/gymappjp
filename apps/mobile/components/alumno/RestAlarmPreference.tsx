@@ -67,32 +67,35 @@ export function RestAlarmPreference() {
   }
 
   function pickSound(next: TimerSound) {
-    // Espeja `handleSoundChange` web (`WorkoutTimerSettingsPanel.tsx:56-59`): solo
-    // persiste + previsualiza; NO toca el mute (la web no auto-desmutea al elegir un
-    // timbre). Si el usuario tiene Silencio activo, el preview queda gateado (no-op).
+    // Espeja `handleSoundChange` web (`WorkoutTimerSettingsPanel.tsx:56-59`): persiste +
+    // previsualiza SIEMPRE, sin gatear por mute (`force`) — en la web el mute no existe en el
+    // panel (vive sólo en la barra), así que elegir un timbre siempre suena. NO toca el mute.
     setRestTimerSound(next)
-    playTimerCue('alarm')
+    playTimerCue('alarm', { force: true })
   }
 
   function pickVolume(next: number) {
     setRestTimerVolume(next)
-    // Previsualiza con el nuevo volumen (espeja `handleVolumeChange` web).
-    playTimerCue('alarm')
+    // Previsualiza con el nuevo volumen SIEMPRE (espeja `handleVolumeChange` web, sin gate de mute).
+    playTimerCue('alarm', { force: true })
   }
 
   function preview() {
-    // Háptica siempre (feedback inmediato); audio si hay asset + no muteado.
+    // Háptica siempre (feedback inmediato); audio por acción directa aun con mute (`force`),
+    // igual que los previews del panel web. El mute silencia la ALARMA real, no la prueba.
     haptics.setDone()
-    playTimerCue('alarm')
+    playTimerCue('alarm', { force: true })
   }
-
-  const enabled = !muted
 
   return (
     <Card padding="lg" testID="rest-alarm-preference">
       <View className="flex-row items-start justify-between gap-3">
         <View className="flex-1">
-          <Text className="text-base font-sans-semibold text-strong">Alarma de descanso</Text>
+          {/* Eyebrow de sección (espeja el H3 web `WorkoutTimerSettingsPanel.tsx:95`:
+              `text-xs font-bold uppercase tracking-widest text-muted-foreground`). */}
+          <Text className="text-xs font-sans-bold uppercase tracking-[1.2px] text-muted">
+            Alarma de descanso
+          </Text>
           <Text className="text-sm font-sans text-muted mt-1">
             Sonido y volumen cuando termina el descanso.
           </Text>
@@ -114,7 +117,9 @@ export function RestAlarmPreference() {
         </HapticPressable>
       </View>
 
-      <View className="mt-4" style={{ opacity: enabled ? 1 : 0.45 }}>
+      {/* Sin dim por mute: elegir timbre siempre previsualiza (paridad web — el panel no
+          gatea el preview por mute). El interruptor Silencio afecta la ALARMA real, no la prueba. */}
+      <View className="mt-4">
         <SegmentedTabs
           items={SOUND_ITEMS}
           value={sound}
@@ -141,13 +146,13 @@ export function RestAlarmPreference() {
         />
       </View>
 
+      {/* "Probar sonido" suena SIEMPRE por acción directa (aun con mute), igual que los previews
+          del panel web. No se deshabilita por mute — el mute silencia la alarma real del descanso. */}
       <HapticPressable
         testID="rest-alarm-preview"
         haptic="none"
         onPress={preview}
-        disabled={muted}
         className="mt-4 h-11 flex-row items-center justify-center gap-2 rounded-control border border-default"
-        style={{ opacity: muted ? 0.45 : 1 }}
       >
         <Volume2 size={16} color={theme.foreground} />
         <Text className="text-sm font-sans-semibold text-strong">Probar sonido</Text>

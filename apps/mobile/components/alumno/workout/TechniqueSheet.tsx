@@ -46,9 +46,13 @@ const techniqueTitleStyle = {
  * El bleed lateral (fuera del padding del scroll) lo aplica el envoltorio en `TechniqueSheet`.
  */
 function MediaImage({ uri, padded = false }: { uri: string; padded?: boolean }) {
+  // gif (padded): letterbox `bg-surface-sunken` = web `bg-muted` (WorkoutExecutionClient.tsx:2030) — en paridad.
+  // imagen-fallback (no padded): letterbox BLANCO + hairline inferior = web `bg-white border-b border-border/50`
+  // (:2062, con `--border` = `--border-subtle`, globals.css:235). El blanco forzado en ambos temas se espeja con
+  // `bg-white` (--color-white, global.css:39) y el hairline con `border-subtle/50` (mismo canal + alpha del web).
   return (
     <View
-      className={`bg-surface-sunken overflow-hidden${padded ? ' p-space-5' : ''}`}
+      className={`overflow-hidden ${padded ? 'bg-surface-sunken p-space-5' : 'border-b border-subtle/50 bg-white'}`}
       style={{ width: '100%', aspectRatio: 16 / 9 }}
     >
       <Image source={{ uri }} style={{ flex: 1 }} contentFit="contain" />
@@ -91,8 +95,16 @@ function TechniqueMedia({ exercise }: { exercise: SessionExercise }) {
       u.includes('.webm') ||
       (u.includes('supabase.co/storage') && !u.includes('.gif') && !u.includes('.jpg') && !u.includes('.png'))
     // La web reproduce el mp4 con `<video loop>` SIN recorte → no pasamos start/end (loop completo).
+    // Letterbox BLANCO + hairline inferior = web mp4 `bg-white border-b border-border/50` (:2048), blanco
+    // forzado en ambos temas. `letterbox="#ffffff"` pinta el fondo del video (contenedor + WebView/HTML) de
+    // blanco en vez del #000 por defecto; el `#fff` = --color-white (global.css:39), patrón hex-que-coincide-
+    // con-canal-DS documentado. El `border-b border-subtle/50` (= web border-subtle/50) va en el envoltorio.
     if (isMp4) {
-      return <VideoPlayer url={videoUrl} autoPlay frameless title={exercise.name} />
+      return (
+        <View className="border-b border-subtle/50 bg-white">
+          <VideoPlayer url={videoUrl} autoPlay frameless letterbox="#ffffff" title={exercise.name} />
+        </View>
+      )
     }
     return <MediaImage uri={videoUrl} />
   }
@@ -140,10 +152,15 @@ export function TechniqueSheet({
       ) : null}
 
       {/* Nombre + X DEBAJO del medio — espejo del DialogHeader web (WorkoutExecutionClient.tsx:2077-2084):
-          nombre en display xl extrabold uppercase tracking-tighter (text-foreground → text-strong) y la X
-          (w-5 h-5 text-muted-foreground, botón p-2 -mr-2 -mt-2 rounded-full) que cierra el modal. */}
-      <View className="flex-row items-start justify-between gap-space-4">
-        <Text style={techniqueTitleStyle} className="flex-1 text-strong" numberOfLines={2}>
+          nombre en display xl extrabold uppercase tracking-tighter, color `text-foreground` que en el DS web
+          resuelve a `--text-body` (= ink-800), NO a text-strong/ink-950 (globals.css:209 `--foreground:
+          var(--text-body)`, :401 `--text-body: var(--ink-800)`); por eso el Text usa `text-body`. La X
+          (w-5 h-5 text-muted-foreground, botón p-2 -mr-2 -mt-2 rounded-full) cierra el modal. `mt-space-3`
+          (8px) sube el gap uniforme (14px) del BottomSheetScrollView (Sheet.tsx:219) hacia el ~24px
+          medio→nombre del web (p-6 top del cuerpo scrolleable, WorkoutExecutionClient.tsx:2076). Sin
+          `numberOfLines`: el DialogTitle web NO clampa, el nombre envuelve completo (:2079). */}
+      <View className="mt-space-3 flex-row items-start justify-between gap-space-4">
+        <Text style={techniqueTitleStyle} className="flex-1 text-body">
           {exercise?.name ?? 'Técnica'}
         </Text>
         <TouchableOpacity
@@ -162,10 +179,12 @@ export function TechniqueSheet({
         <View className="gap-3">
           {steps.map((step, i) => (
             <View key={`${i}-${step}`} className="flex-row items-start gap-3">
-              {/* Badge numérico — espejo de la web (§5): círculo sport-500 @15%, número sport-500 bold.
-                  mt-0.5 (2px) iguala el `mt-0.5` del span web (:2090) para el mismo alineado vertical. */}
+              {/* Badge numérico — espejo de la web (§5): círculo sport-500 @15%, número sport-500 bold,
+                  size 'xs' (13px) = web span `text-xs` (globals.css:455 `--text-xs: 13px`,
+                  WorkoutExecutionClient.tsx:2090). mt-0.5 (2px) iguala el `mt-0.5` del span web (:2090)
+                  para el mismo alineado vertical. */}
               <View className="mt-0.5 h-6 w-6 items-center justify-center rounded-full bg-sport-500/15">
-                <Text style={textStyle('2xs', FONT.uiBold)} className="text-sport-500">
+                <Text style={textStyle('xs', FONT.uiBold)} className="text-sport-500">
                   {i + 1}
                 </Text>
               </View>
@@ -186,13 +205,16 @@ export function TechniqueSheet({
       )}
 
       {/* "Entendido" (§6): cierra el modal. bg-secondary/text-secondary-foreground de la web =
-          surface-sunken / text-body (globals.css:222-223). Sin toast/haptic/navegación. */}
+          surface-sunken / text-body (globals.css:222-223). Sin toast/haptic/navegación.
+          `mt-space-3` (8px) sobre el gap uniforme (14px) del scroll (Sheet.tsx:219) ≈ 22px, acercándose
+          al `mt-6` (24px) pasos→botón del web (WorkoutExecutionClient.tsx:2107) sin el ~38px previo
+          (14 gap + 24 mt), reproduciendo el ritmo grande/pequeño/grande (24/16/24) del web. */}
       <TouchableOpacity
         onPress={onClose}
         activeOpacity={0.85}
         accessibilityRole="button"
         accessibilityLabel="Entendido"
-        className="mt-space-7 w-full items-center justify-center rounded-control bg-surface-sunken py-3"
+        className="mt-space-3 w-full items-center justify-center rounded-control bg-surface-sunken py-3"
       >
         <Text style={textStyle('sm', FONT.uiBold)} className="text-body">
           Entendido

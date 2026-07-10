@@ -10,7 +10,7 @@ import { useEvaMotion, EASE } from '../../../../lib/motion'
 import { useTheme } from '../../../../context/ThemeContext'
 import { textStyle, FONT } from '../../../../lib/typography'
 import { SHADOWS } from '../../../../lib/shadows'
-import { haptics, timerHaptics } from '../../../../lib/haptics'
+import { timerHaptics } from '../../../../lib/haptics'
 import {
   AQUA_500,
   EMBER_300,
@@ -121,7 +121,6 @@ export function IntervalTimer({ phases, onClose }: IntervalTimerProps) {
   // Wake-lock con toggle (gesto del usuario). Se re-asegura al volver a foreground
   // (paridad con la re-adquisición web en `visibilitychange`) y se libera al desmontar.
   const toggleWakeLock = useCallback(() => {
-    void haptics.tap()
     const next = !wakeLockOnRef.current
     wakeLockOnRef.current = next
     setWakeLockOn(next)
@@ -149,13 +148,14 @@ export function IntervalTimer({ phases, onClose }: IntervalTimerProps) {
     [],
   )
 
+  // Paridad estricta con la web (`IntervalTimer.tsx:159-177`): pausa/saltar/wake-lock NO emiten
+  // háptica en su onClick — la web solo dispara háptica en el EVENTO de cambio/fin de fase (`cue`).
+  // Se retira el `haptics.tap()` que RN había añadido en estos controles para no divergir.
   const toggle = useCallback(() => {
-    void haptics.tap()
     setIsActive((v) => !v)
   }, [])
 
   const skip = useCallback(() => {
-    void haptics.tap()
     advance()
   }, [advance])
 
@@ -171,6 +171,11 @@ export function IntervalTimer({ phases, onClose }: IntervalTimerProps) {
         accessibilityRole="timer"
         from={motion.reduced ? undefined : { opacity: 0, translateY: -24 }}
         animate={{ opacity: 1, translateY: 0 }}
+        // Salida (espeja `exit={reducedMotion ? undefined : { y: -24, opacity: 0 }}` web
+        // `IntervalTimer.tsx:123`): al cerrar, la tarjeta se desliza -24px con fade en 200ms en vez de
+        // desaparecer de golpe. Lo anima el <AnimatePresence> de moti en `TimerProvider`. Bajo
+        // reduce-motion se omite (paridad `exit=undefined` web).
+        exit={motion.reduced ? undefined : { opacity: 0, translateY: -24 }}
         transition={{ type: 'timing', duration: motion.reduced ? 0 : 200, easing: EASE.out }}
       >
         {/* backdrop-blur-xl de la web: BlurView difumina el contenido detrás; el velo
@@ -248,13 +253,15 @@ export function IntervalTimer({ phases, onClose }: IntervalTimerProps) {
         {!finished && phase ? (
           <View style={styles.track}>
             {/* Web IntervalTimer.tsx:195 el relleno lleva `transition-all duration-300 ease-linear`
-                y su width se recalcula por-segundo, llenándose de forma FLUIDA. MotiView interpola
-                el width 300ms lineal (instantáneo en reduce-motion) para espejarlo, en vez de saltar
-                a escalones cada tick. */}
+                y su width se recalcula por-segundo, llenándose de forma FLUIDA. Esa micro-animación es
+                CSS puro y NO está gateada por `useReducedMotion` en la web (reduce-motion solo apaga la
+                ENTRADA del contenedor, línea 121/123), así que la barra sigue llenándose 300ms incluso
+                con reduce-motion activo. MotiView interpola el width con duración fija 300ms lineal para
+                espejarlo, en vez de saltar a escalones cada tick. */}
             <MotiView
               style={[styles.fill, { backgroundColor: phase.kind === 'work' ? EMBER_500 : theme.primary }]}
               animate={{ width: `${Math.max(0, Math.min(1, progress)) * 100}%` }}
-              transition={{ type: 'timing', duration: motion.reduced ? 0 : 300, easing: EASE.linear }}
+              transition={{ type: 'timing', duration: 300, easing: EASE.linear }}
             />
           </View>
         ) : null}

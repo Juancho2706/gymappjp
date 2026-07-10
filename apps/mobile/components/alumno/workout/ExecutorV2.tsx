@@ -74,6 +74,11 @@ const CONTENT_PAD_TOP = 12
 // Alto aproximado de la barra fija "Finalizar" (paridad `.exec-finish-bar`, WEC:1949): obstrucción
 // inferior que el gate de auto-scroll del web descuenta del viewport (scroll-visibility.ts, WEC:552).
 const FINISH_BAR_H = 88
+// Alto aproximado de la barra de DESCANSO (`RestTimerBar`): se ancla en `insets.bottom + 88` (sobre la
+// barra Finalizar) y mide ~124px (anillo 96 + padding 14·2 + borde). Cuando hay un descanso activo el
+// gate de auto-scroll debe descontarla también para no dejar la fila destino oculta detrás de ella —
+// paridad con la web, que mide el borde superior del `data-exec-bottom-sheet` (RestTimer, WEC:552).
+const REST_BAR_H = 124
 
 /** Completitud de un bloque contra un set de logs ARBITRARIO (la proyección optimista, no el estado):
  *  espeja `isBlockComplete(b, fromLogs)` del web (WEC:1410) para decidir el auto-scroll sin esperar
@@ -374,7 +379,10 @@ function ExecutorV2Inner({ planId }: { planId: string }) {
           const scrollY = scrollYRef.current
           const top = CONTENT_PAD_TOP + yRel
           const bottom = top + h
-          const bottomObstruction = FINISH_BAR_H + insets.bottom
+          // Con un descanso activo, la RestTimerBar se ancla sobre la barra Finalizar: se suma su alto
+          // a la obstrucción inferior para que la fila auto-scrolleada no quede tapada tras ella.
+          const restBarObstruction = timers.state?.kind === 'rest' ? REST_BAR_H : 0
+          const bottomObstruction = FINISH_BAR_H + insets.bottom + restBarObstruction
           // Gate "IfNeeded": si ya está completamente visible (bajo el header y sobre la barra), no mover.
           if (vh > 0 && top >= scrollY + 8 && bottom <= scrollY + vh - bottomObstruction) return
           let target: number
@@ -389,7 +397,7 @@ function ExecutorV2Inner({ planId }: { planId: string }) {
         () => {},
       )
     },
-    [insets.bottom, motion.reduced],
+    [insets.bottom, motion.reduced, timers.state?.kind],
   )
 
   // Auto-scroll al siguiente incompleto (paridad web `scrollToNextIncomplete`, WEC:1408-1430): si el

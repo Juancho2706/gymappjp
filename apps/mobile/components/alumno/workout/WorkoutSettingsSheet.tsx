@@ -39,7 +39,11 @@ export function WorkoutSettingsSheet({ open, onClose }: { open: boolean; onClose
       <Card padding="lg" testID="workout-autotimer-setting">
         <View className="flex-row items-start justify-between gap-3">
           <View className="flex-1">
-            <Text className="text-base font-sans-semibold text-strong">Cronómetro automático</Text>
+            {/* Eyebrow de sección (espeja el H3 web `WorkoutTimerSettingsPanel.tsx:69-71`:
+                `text-xs font-bold uppercase tracking-widest text-muted-foreground`). */}
+            <Text className="text-xs font-sans-bold uppercase tracking-[1.2px] text-muted">
+              Cronómetro automático
+            </Text>
             <Text className="text-sm font-sans text-muted mt-1">
               Si está activado, el descanso empieza solo al guardar cada serie.
             </Text>

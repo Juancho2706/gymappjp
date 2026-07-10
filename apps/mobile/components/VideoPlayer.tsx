@@ -95,6 +95,14 @@ export interface VideoPlayerProps {
    * (WorkoutExecutionClient.tsx:2005 + :2016/2030/2048/2062). Default false (marco DS estándar).
    */
   frameless?: boolean
+  /**
+   * Color del letterbox (fondo detrás del video `object-contain`). Sin override (default) se conserva
+   * el comportamiento actual: contenedor `bg-surface-sunken` + WebView/HTML `#000`, que espeja el
+   * `bg-black` de los contenedores de video de la web. Se pasa BLANCO (`#ffffff` = --color-white,
+   * global.css:39) en el caso mp4 del modal de técnica, donde la web fuerza `bg-white` en ambos temas
+   * (WorkoutExecutionClient.tsx:2048). No es un token nuevo: es el canal DS blanco como color CSS del HTML.
+   */
+  letterbox?: string
 }
 
 /**
@@ -113,6 +121,7 @@ export function VideoPlayer({
   style,
   title,
   frameless = false,
+  letterbox,
 }: VideoPlayerProps) {
   const { theme } = useTheme()
   const [started, setStarted] = useState(autoPlay)
@@ -142,10 +151,14 @@ export function VideoPlayer({
     </TouchableOpacity>
   )
 
+  // Letterbox: cuando se pasa un color, sobreescribe el #000 baked del fill (y el bg-surface-sunken del
+  // contenedor) para que el fondo detrás del `object-contain` iguale a la web (p.ej. blanco en mp4 del modal).
+  const fillStyle = letterbox ? [styles.fill, { backgroundColor: letterbox }] : styles.fill
+
   return (
     <View
       className={`bg-surface-sunken overflow-hidden${frameless ? '' : ' border border-subtle rounded-2xl'}`}
-      style={[styles.frame, style]}
+      style={[styles.frame, letterbox ? { backgroundColor: letterbox } : null, style]}
     >
       {!started ? (
         poster_
@@ -158,7 +171,7 @@ export function VideoPlayer({
             html: youtubeEmbedHtml(ytId, { start: startAt, end: endAt, muted, loop, autoplay: true }),
             baseUrl: 'https://www.youtube-nocookie.com',
           }}
-          style={styles.fill}
+          style={fillStyle}
           // iOS: sin estas dos props el gesto del usuario NO llega al iframe y el
           // video queda congelado en el primer frame (bug reportado en TestFlight).
           allowsInlineMediaPlayback
@@ -172,7 +185,7 @@ export function VideoPlayer({
           setSupportMultipleWindows={false}
         />
       ) : isDirect && ExpoVideo ? (
-        <DirectVideo url={url} start={startAt} end={endAt} muted={muted} loop={loop} />
+        <DirectVideo url={url} start={startAt} end={endAt} muted={muted} loop={loop} letterbox={letterbox} />
       ) : isDirect ? (
         // expo-video aún no instalado: reproducción INLINE via WebView + HTML5 <video> — el MISMO
         // elemento `<video autoPlay loop muted playsInline object-contain>` que usa la web
@@ -183,8 +196,8 @@ export function VideoPlayer({
           testID="video-player-direct-webview"
           accessibilityRole="image"
           accessibilityLabel={title ? `Video de ${title}` : 'Video del ejercicio'}
-          source={{ html: directVideoHtml(url, { start: startAt, end: endAt, muted, loop }) }}
-          style={styles.fill}
+          source={{ html: directVideoHtml(url, { start: startAt, end: endAt, muted, loop, background: letterbox ?? '#000' }) }}
+          style={fillStyle}
           allowsInlineMediaPlayback
           mediaPlaybackRequiresUserAction={false}
           javaScriptEnabled
@@ -224,12 +237,14 @@ function DirectVideo({
   end,
   muted,
   loop,
+  letterbox,
 }: {
   url: string
   start: number
   end: number | null
   muted: boolean
   loop: boolean
+  letterbox?: string
 }) {
   // ExpoVideo es no-null por el guard del padre.
   const mod = ExpoVideo as ExpoVideoModule
@@ -255,7 +270,15 @@ function DirectVideo({
   }, [player, start, end, loop])
 
   const { VideoView } = mod
-  return <VideoView player={player} style={styles.fill} contentFit="contain" nativeControls={false} allowsFullscreen={false} />
+  return (
+    <VideoView
+      player={player}
+      style={letterbox ? [styles.fill, { backgroundColor: letterbox }] : styles.fill}
+      contentFit="contain"
+      nativeControls={false}
+      allowsFullscreen={false}
+    />
+  )
 }
 
 /**
@@ -322,18 +345,20 @@ function youtubeEmbedHtml(
 /**
  * HTML del `<video>` HTML5 directo (mp4/webm/mov/Storage) para el WebView. Espejo EXACTO del
  * elemento de la web (`WorkoutExecutionClient.tsx:2049-2056`): `autoplay loop muted playsinline
- * object-fit:contain`, fondo negro. Si el coach recortó `[start,end]`, un listener `timeupdate`
+ * object-fit:contain`. El fondo (letterbox) es `#000` por defecto — espeja el `bg-black` de los
+ * contenedores web — o el color que pase `background` (blanco en el mp4 del modal de técnica, donde la
+ * web fuerza `bg-white`, WorkoutExecutionClient.tsx:2048). Si el coach recortó `[start,end]`, un listener `timeupdate`
  * vuelve a `start` al cruzar `end` (mismo truco que `DirectVideo`/la IFrame API de YouTube). La
  * `url` se inyecta con `JSON.stringify` (evita romper el HTML con comillas en la query string).
  */
 function directVideoHtml(
   url: string,
-  opts: { start: number; end: number | null; muted: boolean; loop: boolean },
+  opts: { start: number; end: number | null; muted: boolean; loop: boolean; background: string },
 ): string {
-  const { start, end, muted, loop } = opts
+  const { start, end, muted, loop, background } = opts
   return `<!DOCTYPE html><html><head>
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-<style>*{margin:0;padding:0}html,body{background:#000;height:100%;overflow:hidden}video{width:100%;height:100%;object-fit:contain;background:#000}</style>
+<style>*{margin:0;padding:0}html,body{background:${background};height:100%;overflow:hidden}video{width:100%;height:100%;object-fit:contain;background:${background}}</style>
 </head><body>
 <video id="v" ${loop ? 'loop' : ''} ${muted ? 'muted' : ''} autoplay playsinline webkit-playsinline></video>
 <script>

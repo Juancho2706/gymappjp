@@ -10,7 +10,7 @@ import { useEvaMotion, EASE } from '../../../../lib/motion'
 import { useTheme } from '../../../../context/ThemeContext'
 import { textStyle, FONT } from '../../../../lib/typography'
 import { SHADOWS } from '../../../../lib/shadows'
-import { haptics, timerHaptics } from '../../../../lib/haptics'
+import { timerHaptics } from '../../../../lib/haptics'
 import { EMBER_500, INK_900, ON_DARK, ON_DARK_MUTED, TRACK_ON_DARK } from './timer-colors'
 import { playTimerCue } from './sound'
 
@@ -93,8 +93,10 @@ export function HoldTimer({ initialSeconds, label, onClose }: HoldTimerProps) {
     return () => sub.remove()
   }, [triggerDone])
 
+  // Paridad estricta con la web (`HoldTimer.tsx:107-125`): los controles de pausa/repetir
+  // NO emiten háptica en su onClick — la web solo dispara háptica en el EVENTO de fin
+  // (`triggerDone`). Se retira el `haptics.tap()` que RN había añadido para no divergir.
   const restart = useCallback(() => {
-    void haptics.tap()
     firedRef.current = false
     endTimeRef.current = null
     setTimeLeft(initialSeconds)
@@ -102,7 +104,6 @@ export function HoldTimer({ initialSeconds, label, onClose }: HoldTimerProps) {
   }, [initialSeconds])
 
   const toggle = useCallback(() => {
-    void haptics.tap()
     setIsActive((v) => !v)
   }, [])
 
@@ -110,12 +111,15 @@ export function HoldTimer({ initialSeconds, label, onClose }: HoldTimerProps) {
   const pct = (timeLeft / (initialSeconds || 1)) * 100
   const dashoffset = DASH - (DASH * Math.min(100, pct)) / 100
 
-  // Interpola strokeDashoffset 300ms lineal (espeja `transition-all duration-300
-  // ease-linear` de la web); en reduce-motion salta instantáneo.
+  // Interpola strokeDashoffset 300ms lineal (espeja `transition-all duration-300 ease-linear`
+  // de la web, `HoldTimer.tsx:92`). Esa micro-animación del anillo es CSS puro y NO está gateada
+  // por `useReducedMotion` en la web (reduce-motion solo apaga la ENTRADA del contenedor, línea
+  // 71/73), así que el drenado sigue animando 300ms incluso con reduce-motion activo — se mantiene
+  // fijo aquí para no saltar por escalones per-segundo.
   const dashSV = useSharedValue(dashoffset)
   useEffect(() => {
-    dashSV.value = withTiming(dashoffset, { duration: motion.reduced ? 0 : 300, easing: EASE.linear })
-  }, [dashoffset, motion.reduced, dashSV])
+    dashSV.value = withTiming(dashoffset, { duration: 300, easing: EASE.linear })
+  }, [dashoffset, dashSV])
   const progressProps = useAnimatedProps(() => ({ strokeDashoffset: dashSV.value }))
 
   return (
@@ -128,6 +132,11 @@ export function HoldTimer({ initialSeconds, label, onClose }: HoldTimerProps) {
         accessibilityRole="timer"
         from={motion.reduced ? undefined : { opacity: 0, translateY: -24 }}
         animate={{ opacity: 1, translateY: 0 }}
+        // Salida (espeja `exit={reducedMotion ? undefined : { y: -24, opacity: 0 }}` web
+        // `HoldTimer.tsx:73`): al cerrar, la tarjeta se desliza -24px con fade en 200ms en vez de
+        // desaparecer de golpe. Lo anima el <AnimatePresence> de moti en `TimerProvider` (key estable
+        // del overlay → solo la transición activo↔null dispara exit). Bajo reduce-motion se omite.
+        exit={motion.reduced ? undefined : { opacity: 0, translateY: -24 }}
         transition={{ type: 'timing', duration: motion.reduced ? 0 : 200, easing: EASE.out }}
       >
         {/* backdrop-blur-xl de la web: BlurView difumina el contenido detrás; el velo

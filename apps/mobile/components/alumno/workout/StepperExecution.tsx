@@ -10,15 +10,25 @@ import Animated, {
   useSharedValue,
   withSpring,
 } from 'react-native-reanimated'
-import { CheckCircle2, ChevronLeft, ChevronRight } from 'lucide-react-native'
+import { CheckCircle2, ChevronLeft, ChevronRight, type LucideIcon } from 'lucide-react-native'
 import { EASE, useEvaMotion } from '../../../lib/motion'
 import { FONT } from '../../../lib/typography'
-import { hexToRgba, resolveSportRamp } from '../../../lib/theme'
+import { hexToRgba, resolveOnDark, resolveSportRamp } from '../../../lib/theme'
 import { useTheme } from '../../../context/ThemeContext'
 
-const ON_DARK = '#F4F6F8'
-// Deshabilitado: text-on-dark-muted/30 en web (StepperExecution.tsx:213) → rgba(147,157,171,0.30).
-const ON_DARK_DIM = 'rgba(147,157,171,0.30)'
+// Neutros "on dark" del icono resueltos desde el token (helper del theme, como `resolveSportRamp`
+// para sport-*), en vez de literales clavados: los ata a los MISMOS canales que alimentan
+// `--color-text-on-dark`/`-muted` de NativeWind. Habilitado → `text-on-dark` #F4F6F8; deshabilitado
+// → `text-on-dark-muted/30` (web StepperExecution.tsx:213-214), es decir el neutro al alfa 0.30.
+const { onDark: ON_DARK, onDarkMuted: ON_DARK_MUTED } = resolveOnDark()
+const ON_DARK_DIM = hexToRgba(ON_DARK_MUTED, 0.3)
+
+// Fondo del NavButton habilitado: web `bg-white/[0.06]` (StepperExecution.tsx:214) — blanco LITERAL,
+// NO la rampa sport, así que no reacciona al white-label (mismo criterio que `RAIL_UPCOMING`).
+const NAV_BG = 'rgba(255,255,255,0.06)'
+// `transition-colors` del web (NavButton base :211) → fade de 150ms/EASE.out, MISMO criterio que el
+// rail (:222-226): espeja el cambio habilitado↔deshabilitado de fondo/color-de-icono sin salto.
+const NAV_FADE = { type: 'timing' as const, duration: 150, easing: EASE.out }
 
 // Rail "upcoming": web usa `bg-white/15` (StepperExecution.tsx:135) — blanco, NO la rampa sport, así
 // que no reacciona al white-label. Los estados active/done SÍ leen `--sport-400`/`--sport-500` y se
@@ -177,9 +187,7 @@ export function StepperExecution({
       >
         {/* Chrome superior: prev/next SIEMPRE presentes + eyebrow de sección + "Ejercicio X de Y". */}
         <View className="flex-row items-center gap-2">
-          <NavButton testID="stepper-prev" disabled={idx === 0} onPress={goPrev} accessibilityLabel="Ejercicio anterior">
-            <ChevronLeft size={20} color={idx === 0 ? ON_DARK_DIM : ON_DARK} />
-          </NavButton>
+          <NavButton testID="stepper-prev" Icon={ChevronLeft} disabled={idx === 0} onPress={goPrev} accessibilityLabel="Ejercicio anterior" />
           <View className="min-w-0 flex-1 items-center">
             <Text
               style={EYEBROW_STYLE}
@@ -192,9 +200,7 @@ export function StepperExecution({
               <Text className="text-on-dark font-mono-bold">Ejercicio {idx + 1}</Text> de {total}
             </Text>
           </View>
-          <NavButton testID="stepper-next" disabled={idx === total - 1} onPress={goNext} accessibilityLabel="Ejercicio siguiente">
-            <ChevronRight size={20} color={idx === total - 1 ? ON_DARK_DIM : ON_DARK} />
-          </NavButton>
+          <NavButton testID="stepper-next" Icon={ChevronRight} disabled={idx === total - 1} onPress={goNext} accessibilityLabel="Ejercicio siguiente" />
         </View>
 
         {/* Rail de progreso: segmentos tappables (salta a cualquier paso, incluso a editar).
@@ -285,15 +291,20 @@ export function StepperExecution({
   )
 }
 
-/** Botón prev/next — target ≥44px, deshabilitado en los extremos (mismo borde en ambos estados). */
+/**
+ * Botón prev/next — target ≥44px, deshabilitado en los extremos. Espeja el `transition-colors`
+ * del web (NavButton base, StepperExecution.tsx:211): al llegar al primer/último paso el fondo y el
+ * color del icono NO saltan, transicionan ~150ms. El borde es CONSTANTE en ambos estados (web usa
+ * `--border-inverse` tanto habilitado como deshabilitado, :213-214), por eso no se anima.
+ */
 function NavButton({
-  children,
+  Icon,
   testID,
   disabled,
   onPress,
   accessibilityLabel,
 }: {
-  children: ReactNode
+  Icon: LucideIcon
   testID: string
   disabled: boolean
   onPress: () => void
@@ -305,14 +316,29 @@ function NavButton({
       onPress={onPress}
       disabled={disabled}
       hitSlop={6}
-      className={`h-11 w-11 items-center justify-center rounded-control border border-inverse/10 ${
-        disabled ? '' : 'bg-white/[0.06] active:scale-95'
-      }`}
+      className="h-11 w-11 items-center justify-center rounded-control border border-inverse/10 active:scale-95"
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
       accessibilityState={{ disabled }}
     >
-      {children}
+      {/* Fondo: `bg-white/[0.06]` habilitado ↔ sin fondo deshabilitado (web :214), animado como el
+          rail (:222-226). Absoluto detrás del icono; el borde queda constante en el Pressable. */}
+      <MotiView
+        className="absolute inset-0 rounded-control"
+        animate={{ backgroundColor: disabled ? 'transparent' : NAV_BG }}
+        transition={NAV_FADE}
+      />
+      {/* Icono: el currentColor del web transiciona `text-on-dark` ↔ `text-on-dark-muted/30` (:213-214).
+          lucide exige un color imperativo (no animable por className), así que se cruzan por opacidad
+          dos capas del MISMO chevron —una en ON_DARK, otra en ON_DARK_DIM— con la misma curva 150ms. */}
+      <View className="h-5 w-5">
+        <MotiView className="absolute inset-0" animate={{ opacity: disabled ? 0 : 1 }} transition={NAV_FADE}>
+          <Icon size={20} color={ON_DARK} />
+        </MotiView>
+        <MotiView className="absolute inset-0" animate={{ opacity: disabled ? 1 : 0 }} transition={NAV_FADE}>
+          <Icon size={20} color={ON_DARK_DIM} />
+        </MotiView>
+      </View>
     </Pressable>
   )
 }
