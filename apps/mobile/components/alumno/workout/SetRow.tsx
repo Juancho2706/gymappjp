@@ -121,7 +121,7 @@ export function SetRow({
     return (
       <View
         testID={`set-row-${setNumber}`}
-        className="gap-2 rounded-control border border-sport-500/30 bg-sport-500/[0.06] px-3 py-2"
+        className="gap-2 rounded-control border border-sport-500/25 bg-sport-500/[0.06] px-3 py-2"
       >
         <Pressable
           onPress={onPress}
@@ -151,7 +151,7 @@ export function SetRow({
           </View>
           {pending && (
             <View className="flex-row items-center gap-1">
-              <CloudOff size={13} color={WARNING_500} />
+              <CloudOff size={14} color={WARNING_500} />
               <Text
                 style={{ fontFamily: FONT.uiBold, fontSize: 10, letterSpacing: 0.6, textTransform: 'uppercase' }}
                 className="text-warning-500"
@@ -179,7 +179,7 @@ export function SetRow({
             <EffortLabel label="RPE" open={rpeHelpOpen} onToggle={() => setRpeHelpOpen((o) => !o)} />
           </View>
           {rpeHelpOpen && (
-            <Text style={TYPE.caption} className="mb-1.5 text-[11px] text-on-dark-muted">
+            <Text style={textStyle('3xs', FONT.uiMedium)} className="mb-1.5 text-on-dark-muted">
               {RPE_HELP}
             </Text>
           )}
@@ -203,7 +203,9 @@ export function SetRow({
               ? // Serie sin sincronizar ⇒ contenedor ÁMBAR (mirror web amber-500/30·/[0.06],
                 // `LogSetForm.tsx:520-521`); antes sólo el texto/badge se teñía, el chip seguía sport.
                 'border-warning-500/30 bg-warning-500/[0.06]'
-              : 'border-sport-500/30 bg-sport-500/[0.06]'
+              : // Serie guardada ⇒ borde sport al 25% (mirror web SAVED `border-[var(--sport-500)]/25`,
+                // `LogSetForm.tsx:522`); antes /30, un escalón por encima del web (el bg /[0.06] sí coincidía).
+                'border-sport-500/25 bg-sport-500/[0.06]'
           : isActive
             ? 'border-sport-500/50 bg-white/[0.04]'
             : 'border-inverse/50 bg-white/[0.02]'
@@ -277,7 +279,7 @@ export function SetRow({
             {/* Ícono nota (paridad web A.3, `LogSetForm.tsx:553-555`): señala que la serie lleva nota
                 para el coach. Sin token `amber` en el theme mobile ⇒ warning-500 (mismo ámbar del pending). */}
             {log?.note?.trim() ? (
-              <StickyNote size={13} color={WARNING_500} accessibilityLabel="Serie con nota" />
+              <StickyNote size={14} color={WARNING_500} accessibilityLabel="Serie con nota" />
             ) : null}
           </View>
         )}
@@ -291,7 +293,7 @@ export function SetRow({
         null
       ) : pending ? (
         <View className="flex-row items-center gap-1">
-          <CloudOff size={13} color={WARNING_500} />
+          <CloudOff size={14} color={WARNING_500} />
           <Text
             style={{ fontFamily: FONT.uiBold, fontSize: 10, letterSpacing: 0.6, textTransform: 'uppercase' }}
             className="text-warning-500"
@@ -659,7 +661,7 @@ export function ActiveSetRow({
               <EffortLabel label="RPE" open={helpKey === 'rpe'} onToggle={() => setHelpKey((k) => (k === 'rpe' ? null : 'rpe'))} />
             </View>
             {helpKey === 'rpe' && (
-              <Text style={TYPE.caption} className="mb-1.5 text-[11px] text-on-dark-muted">
+              <Text style={textStyle('3xs', FONT.uiMedium)} className="mb-1.5 text-on-dark-muted">
                 {RPE_HELP}
               </Text>
             )}
@@ -673,7 +675,7 @@ export function ActiveSetRow({
               <EffortLabel label="RIR" open={helpKey === 'rir'} onToggle={() => setHelpKey((k) => (k === 'rir' ? null : 'rir'))} />
             </View>
             {helpKey === 'rir' && (
-              <Text style={TYPE.caption} className="mb-1.5 text-[11px] text-on-dark-muted">
+              <Text style={textStyle('3xs', FONT.uiMedium)} className="mb-1.5 text-on-dark-muted">
                 {RIR_HELP}
               </Text>
             )}
@@ -718,7 +720,7 @@ export function ActiveSetRow({
             ) : (
               // Check atenuado mientras la fila activa aún no está guardada (mirror web círculo no-logueado
               // `opacity-40`, `LogSetForm.tsx:1166`): affordance tenue que se resuelve al confirmar.
-              <Check size={18} color={ON_DARK_MUTED} strokeWidth={2.6} style={{ opacity: 0.4 }} />
+              <Check size={20} color={ON_DARK_MUTED} strokeWidth={2.6} style={{ opacity: 0.4 }} />
             )}
           </Pressable>
         ) : (
@@ -739,19 +741,19 @@ export function ActiveSetRow({
               // Spinner durante el commit (mirror web `<Loader2 animate-spin>`). Sin reduce-motion gira en loop;
               // con reduce-motion queda estático (paridad con el resto de animaciones de la card).
               motion.reduced ? (
-                <Loader2 size={18} color="#FFFFFF" strokeWidth={2.6} />
+                <Loader2 size={20} color="#FFFFFF" strokeWidth={2.6} />
               ) : (
                 <MotiView
                   from={{ rotate: '0deg' }}
                   animate={{ rotate: '360deg' }}
                   transition={{ type: 'timing', duration: 800, loop: true, repeatReverse: false }}
                 >
-                  <Loader2 size={18} color="#FFFFFF" strokeWidth={2.6} />
+                  <Loader2 size={20} color="#FFFFFF" strokeWidth={2.6} />
                 </MotiView>
               )
             ) : (
               <>
-                <Check size={18} color="#FFFFFF" strokeWidth={2.6} />
+                <Check size={20} color="#FFFFFF" strokeWidth={2.6} />
                 {/* Label a 16px (`textStyle('md')`): el botón etiquetado web NO fija text-size, así que el
                     label hereda el tamaño base del documento (~16px) con `font-bold` (`LogSetForm.tsx:1148-1154`).
                     Antes `textStyle('sm')` = 14px, ~2px por debajo del base heredado. El peso (bold) ya coincidía. */}

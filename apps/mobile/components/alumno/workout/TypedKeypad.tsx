@@ -648,7 +648,10 @@ export function EffortScale(props: {
         )
       })}
       <Text
-        style={textStyle(compact ? '3xs' : 'xs', FONT.monoBold)}
+        // `...TABULAR` estabiliza el ancho del dígito del readout (mirror web `tabular-nums`,
+        // `EffortScale.tsx:91`). `textStyle` sólo pone tabular en el rol 'mono', así que aquí se spreadea
+        // igual que CHIP_MARK_STYLE/DISPLAY_STYLE; antes el readout salía proporcional (saltaba al cambiar 9↔10).
+        style={{ ...textStyle(compact ? '3xs' : 'xs', FONT.monoBold), ...TABULAR }}
         className="ml-1 w-5 shrink-0 text-center text-sport-300"
       >
         {value != null ? String(value) : '–'}
@@ -703,7 +706,10 @@ export function EffortField({
         <EffortHelp label={kind.toUpperCase()} open={helpOpen} onToggle={() => setHelpOpen((o) => !o)} />
       </View>
       {helpOpen ? (
-        <Text style={TYPE.caption} className="mb-1.5 text-[11px] text-on-dark-muted">
+        // Ayuda inline a 11px (`textStyle('3xs', FONT.uiMedium)`): antes `TYPE.caption` fijaba fontSize=13 inline
+        // y —por la convención NativeWind v4 (el style inline gana)— mataba el `text-[11px]` del className,
+        // saliendo a 13px. Mismo arreglo que el toggle de nota (`SetRow.tsx`) y los EffortLabel del propio SetRow.
+        <Text style={textStyle('3xs', FONT.uiMedium)} className="mb-1.5 text-on-dark-muted">
           {help}
         </Text>
       ) : null}

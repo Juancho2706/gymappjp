@@ -36,7 +36,16 @@ export interface Theme {
   text: string
   textSecondary: string
   muted: string
+  /** border-subtle: hairline divisor/superficie. Dark = white 7%, light = ink-100 solid. */
   border: string
+  /**
+   * border-default: borde algo más marcado (botones outline, borde de Card).
+   * Existe porque el token NativeWind `border-default` es blanco puro en dark
+   * (global.css:209 `255 255 255`) y la clase bare compila `<alpha-value>`=1 →
+   * blanco OPACO; en web es rgba(255,255,255,0.13) (globals.css:601). Se pasa por
+   * style.borderColor (igual que `border` para el divisor) para resolver el alpha.
+   */
+  borderDefault: string
   destructive: string
   success: string
   // Extended (new - matches web design system)
@@ -93,6 +102,8 @@ const DS = {
   paper: '#FBFCFD', // surface-app (light)
   sunkenLight: '#F4F6F8', // ink-50 / surface-sunken (light)
   borderLight: '#E6E9ED', // ink-100 / border-subtle (light)
+  borderDefaultLight: '#CDD3DB', // ink-200 / border-default (light) — web globals.css:414
+  borderDefaultDark: 'rgba(255,255,255,0.13)', // border-default (dark) — web globals.css:601
   // Dark neutrals
   textStrongDark: '#F4F6F8',
   textMutedDark: '#8A95A3',
@@ -138,6 +149,7 @@ export const lightTheme: Theme = freezeTheme({
   textSecondary: DS.inkMuted,
   muted: DS.sunkenLight,
   border: DS.borderLight,
+  borderDefault: DS.borderDefaultLight,
   destructive: DS.danger500,
   success: DS.success500,
   // Extended
@@ -168,6 +180,7 @@ export const darkTheme: Theme = freezeTheme({
   textSecondary: DS.textMutedDark,
   muted: DS.surfaceSunkenDark,
   border: DS.borderDark,
+  borderDefault: DS.borderDefaultDark,
   destructive: DS.danger500,
   success: DS.success500,
   // Extended

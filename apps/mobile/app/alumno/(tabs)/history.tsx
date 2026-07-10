@@ -211,8 +211,12 @@ export default function HistoryScreen() {
         <HistoryHeader monthsLabel={monthsLabel} onBack={goBack} />
 
         <View style={styles.body}>
-          {/* Un solo Card con filas y divisores — 1:1 con WorkoutHistoryList (web). */}
-          <Card padding="none" style={{ overflow: 'hidden' }}>
+          {/* Un solo Card con filas y divisores — 1:1 con WorkoutHistoryList (web).
+              El Card default trae `border border-subtle` (Card.tsx:50); en dark ese token
+              es blanco puro (global.css:208) y la clase bare saldría OPACA, mientras la web
+              lo pinta rgba(255,255,255,0.07) translúcido (card.tsx:16). Se fuerza el color
+              del borde por style con theme.border (= border-subtle, mismo valor del divisor). */}
+          <Card padding="none" style={{ overflow: 'hidden', borderColor: theme.border }}>
             {summaries.map((item, index) => (
               <MotiView
                 key={item.dayKey}
@@ -260,10 +264,14 @@ export default function HistoryScreen() {
               activeOpacity={0.82}
               onPress={showMore}
               disabled={expanding}
-              // Web: border-default + bg-surface-card (page.tsx:82). border-default es
-              // más marcado que border-subtle; se resuelve dark-aware vía la var.
-              className="border-default bg-surface-card"
-              style={styles.moreBtn}
+              // Web: border-default + bg-surface-card (page.tsx:82) = borde blanco 13% en dark
+              // (globals.css:601), ink-200 sólido en light (globals.css:414). border-default
+              // es más marcado que border-subtle. El token NativeWind border-default es blanco
+              // PURO en dark (global.css:209 `255 255 255`), así que la clase bare compila
+              // <alpha-value>=1 → blanco OPACO. Se pasa el color imperativo por style.borderColor
+              // (mismo patrón que el divisor con theme.border, :233) para resolver el alpha 13%.
+              className="bg-surface-card"
+              style={[styles.moreBtn, { borderColor: theme.borderDefault }]}
             >
               {/* Web: ChevronDown hereda currentColor = text-strong del Link (page.tsx:82,84), no la marca. */}
               <ChevronDown size={16} className="text-strong" strokeWidth={2} />
