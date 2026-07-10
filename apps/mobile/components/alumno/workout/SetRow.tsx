@@ -124,10 +124,14 @@ export function SetRow({
 
 // ─── ActiveSetRow ─────────────────────────────────────────────────────────────
 
-/** Ayuda 1-tap del alumno (mirror EXACTO de RPE_HELP/RIR_HELP de la web `EffortScale`). */
+/**
+ * Ayuda 1-tap del alumno — mirror LITERAL (con tildes) de `RPE_HELP`/`RIR_HELP` de la web
+ * (`EffortScale.tsx:17-20`). El puerto previo perdía las tildes pese al comentario "mirror EXACTO"
+ * (Ola 0 · discrepancia #1); estas cadenas son la fuente de verdad y deben coincidir carácter a carácter.
+ */
 const RPE_HELP =
-  'RPE = que tan duro se sintio la serie. 1 = muy facil · 10 = no podias hacer ni una repeticion mas.'
-const RIR_HELP = 'RIR = cuantas reps te quedaban en el tanque. Si te quedaba 1, es 1. Asi de simple.'
+  'RPE = qué tan duro se sintió la serie. 1 = muy fácil · 10 = no podías hacer ni una repetición más.'
+const RIR_HELP = 'RIR = cuántas reps te quedaban en el tanque. Si te quedaba 1, es 1. Así de simple.'
 
 const BOX_VALUE_STYLE = textStyle('2xl', FONT.monoBold, { ls: 'tight' })
 
@@ -177,14 +181,19 @@ function FieldBox({
   )
 }
 
-/** Botoncito (?) que despliega una ayuda corta inline junto al label de esfuerzo (paridad web). */
-function EffortLabel({ open, onToggle }: { open: boolean; onToggle: () => void }) {
+/**
+ * Botoncito (?) que despliega una ayuda corta inline junto al label de esfuerzo (mirror de `EffortHelp`
+ * web `EffortScale.tsx:29-44`). El ícono es chico (14px) pero el hit-area es ≥44px vía `hitSlop` — la web
+ * exige ≥44px con `h-11 w-11` y márgenes negativos para no inflar la fila (Ola 0 · discrepancia #6, el
+ * puerto previo daba ~30px con `hitSlop={8}`). `label` da la etiqueta específica "¿Qué es el RPE/RIR?".
+ */
+function EffortLabel({ label, open, onToggle }: { label: 'RPE' | 'RIR'; open: boolean; onToggle: () => void }) {
   return (
     <Pressable
       onPress={onToggle}
-      hitSlop={8}
+      hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
       accessibilityRole="button"
-      accessibilityLabel="Que es esto"
+      accessibilityLabel={`¿Qué es el ${label}?`}
       accessibilityState={{ expanded: open }}
     >
       <HelpCircle size={14} color={ON_DARK_MUTED} />
@@ -348,7 +357,7 @@ export function ActiveSetRow({
               <Text style={TYPE.eyebrow} className="text-on-dark-muted">
                 Esfuerzo · RPE
               </Text>
-              <EffortLabel open={helpKey === 'rpe'} onToggle={() => setHelpKey((k) => (k === 'rpe' ? null : 'rpe'))} />
+              <EffortLabel label="RPE" open={helpKey === 'rpe'} onToggle={() => setHelpKey((k) => (k === 'rpe' ? null : 'rpe'))} />
             </View>
             {helpKey === 'rpe' && (
               <Text style={TYPE.caption} className="mb-1.5 text-[11px] text-on-dark-muted">
@@ -362,7 +371,7 @@ export function ActiveSetRow({
               <Text style={TYPE.eyebrow} className="text-on-dark-muted">
                 Reps en reserva · RIR
               </Text>
-              <EffortLabel open={helpKey === 'rir'} onToggle={() => setHelpKey((k) => (k === 'rir' ? null : 'rir'))} />
+              <EffortLabel label="RIR" open={helpKey === 'rir'} onToggle={() => setHelpKey((k) => (k === 'rir' ? null : 'rir'))} />
             </View>
             {helpKey === 'rir' && (
               <Text style={TYPE.caption} className="mb-1.5 text-[11px] text-on-dark-muted">

@@ -356,9 +356,20 @@ function KeyButton({
  */
 const EFFORT_SCALE = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] as const
 
-export function EffortScale(props: { kind: 'rpe' | 'rir'; value: number | null; onSelect(v: number): void }) {
-  const { kind, value, onSelect } = props
+export function EffortScale(props: {
+  kind: 'rpe' | 'rir'
+  value: number | null
+  onSelect(v: number): void
+  /**
+   * Densidad compacta para filas NO protagonistas (chip recap / RPE post-log tipado): dots 8px y
+   * readout 11px, mirror de `ScaleDots` web con `compact={!isActive}` (`EffortScale.tsx:84,92`).
+   * Sin prop ⇒ 10px + text-xs (fila activa protagonista), paridad con `compact=false` web.
+   */
+  compact?: boolean
+}) {
+  const { kind, value, onSelect, compact = false } = props
   const label = kind.toUpperCase()
+  const dotSize = compact ? 8 : 10
 
   return (
     <View
@@ -375,7 +386,8 @@ export function EffortScale(props: { kind: 'rpe' | 'rir'; value: number | null; 
             key={n}
             testID={`effort-${kind}-${n}`}
             accessibilityRole="radio"
-            accessibilityState={{ selected }}
+            // Rol radio ⇒ estado `checked` (mirror `aria-checked` web `EffortScale.tsx:75`), no `selected`.
+            accessibilityState={{ checked: selected }}
             accessibilityLabel={`${label} ${n}`}
             onPress={() => {
               haptics.select()
@@ -385,16 +397,17 @@ export function EffortScale(props: { kind: 'rpe' | 'rir'; value: number | null; 
           >
             <MotiView
               animate={{ scale: selected ? 1.3 : filled ? 1 : 0.7 }}
-              transition={{ type: 'spring', damping: 15, stiffness: 320 }}
+              // springs.snappy web (`animation-presets.ts:4`): stiffness 400 · damping 30 (menos rebote).
+              transition={{ type: 'spring', stiffness: 400, damping: 30 }}
               className={filled ? 'rounded-pill bg-sport-500' : 'rounded-pill bg-white/15'}
-              style={{ width: 10, height: 10 }}
+              style={{ width: dotSize, height: dotSize }}
             />
           </Pressable>
         )
       })}
       <Text
-        style={textStyle('xs', FONT.monoBold)}
-        className="ml-1 w-6 text-center text-sport-300"
+        style={textStyle(compact ? '3xs' : 'xs', FONT.monoBold)}
+        className="ml-1 w-5 text-center text-sport-300"
       >
         {value != null ? String(value) : '–'}
       </Text>
