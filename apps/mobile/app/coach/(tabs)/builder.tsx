@@ -1,23 +1,22 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Alert, Pressable, ScrollView, Text, View } from 'react-native'
+import { Alert, Pressable, Text, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { FlashList } from '@shopify/flash-list'
 import { useRouter } from 'expo-router'
-import { ArrowDownUp, Dumbbell, Filter, Plus, Search } from 'lucide-react-native'
+import { ArrowDownUp, CalendarClock, Dumbbell, LayoutGrid, LayoutTemplate, List, Plus, Search, SearchX } from 'lucide-react-native'
 import { MotiView } from 'moti'
 import * as Haptics from 'expo-haptics'
 import { supabase } from '../../../lib/supabase'
 import { getCoachProfile } from '../../../lib/coach'
 import { selectWithFallback } from '../../../lib/db-compat'
 import { useTheme } from '../../../context/ThemeContext'
-import { GLOWS, SHADOWS } from '../../../lib/shadows'
+import { SHADOWS } from '../../../lib/shadows'
 import { FONT, textStyle } from '../../../lib/typography'
-import { EmptyState, Input, NativeDialog, ScreenHeader, SegmentedTabs } from '../../../components'
+import { Input, NativeDialog } from '../../../components'
 import { EvaLoaderScreen } from '../../../components/EvaLoader'
 import { AppBackground } from '../../../components/AppBackground'
-import { themedIcon } from '../../../components/coach/programs/themed-icon'
-import { ProgramLibraryHero } from '../../../components/coach/programs/ProgramLibraryHero'
-import { ProgramCard } from '../../../components/coach/programs/ProgramCard'
+import { themedIcon, type ThemedIcon } from '../../../components/coach/programs/themed-icon'
+import { ProgramRow } from '../../../components/coach/programs/ProgramRow'
 import { ProgramPreviewCard } from '../../../components/coach/programs/ProgramPreviewCard'
 import { AssignTemplateForm } from '../../../components/coach/programs/AssignTemplateForm'
 import { DuplicateForm } from '../../../components/coach/programs/DuplicateForm'
@@ -39,15 +38,28 @@ import {
   type ProgramItem,
 } from '../../../components/coach/programs/program-model'
 
-const IconFilter = themedIcon(Filter)
 const IconPlus = themedIcon(Plus)
 const IconSort = themedIcon(ArrowDownUp)
+const IconList = themedIcon(List)
+const IconGrid = themedIcon(LayoutGrid)
 
 type SortKey = 'recent' | 'name'
 
-const T_PILL = textStyle('3xs', FONT.uiBold)
-const T_RESULT = textStyle('2xs', FONT.ui)
-const T_TOGGLE = textStyle('3xs', FONT.uiBold)
+// Header (1:1 web mobile): eyebrow 12px bold uppercase · título display 26px black.
+const T_EYEBROW = { fontFamily: FONT.uiBold, fontSize: 12, letterSpacing: 0.96, textTransform: 'uppercase' as const }
+const T_TITLE = { fontFamily: FONT.displayBlack, fontSize: 26, lineHeight: 29, letterSpacing: -0.78 }
+const T_NAV = textStyle('xs', FONT.uiBold)
+const T_TAB_COUNT = { fontFamily: FONT.mono, fontSize: 17, lineHeight: 19 }
+const T_TAB_LABEL = { fontFamily: FONT.uiBold, fontSize: 11 }
+const T_NUEVA = textStyle('sm', FONT.uiBold)
+const T_EMPTY_TITLE = { fontFamily: FONT.displayBold, fontSize: 17, lineHeight: 21 }
+const T_EMPTY_SUB = textStyle('xs', FONT.ui, { lh: 'normal' })
+
+const TABS: { value: FilterType; label: string }[] = [
+  { value: 'all', label: 'Todos' },
+  { value: 'templates', label: 'Plantillas' },
+  { value: 'assigned', label: 'En curso' },
+]
 
 export default function BuilderScreen() {
   const { resolvedScheme } = useTheme()
@@ -61,7 +73,6 @@ export default function BuilderScreen() {
   const [filterStructure, setFilterStructure] = useState<FilterStructure>('all')
   const [filterPhases, setFilterPhases] = useState<FilterPhases>('all')
   const [sortKey, setSortKey] = useState<SortKey>('recent')
-  const [compact, setCompact] = useState(false)
   const [preview, setPreview] = useState<ProgramItem | null>(null)
   const [assignProgram, setAssignProgram] = useState<ProgramItem | null>(null)
   const [selectedClientIds, setSelectedClientIds] = useState<string[]>([])
@@ -258,91 +269,95 @@ export default function BuilderScreen() {
     )
   }
 
+  const tabCounts: Record<FilterType, number> = { all: programs.length, templates: stats.templates, assigned: stats.active }
+
   return (
     <View className="flex-1 bg-surface-app">
       <AppBackground />
       <SafeAreaView edges={[]} style={{ flex: 1 }}>
-        <ScreenHeader title="Programas" subtitle="Plantillas, planes activos y alumnos asignados." />
+        {/* Header minimal (1:1 web): eyebrow + Programas + Nueva */}
+        <View className="flex-row items-end justify-between gap-space-3 px-space-5 pb-space-3 pt-space-6">
+          <View className="min-w-0 flex-1">
+            <Text style={T_EYEBROW} className="text-muted">Biblioteca</Text>
+            <Text numberOfLines={1} style={T_TITLE} className="text-strong">Programas</Text>
+          </View>
+          <Pressable
+            testID="new-template-button"
+            accessibilityRole="button"
+            accessibilityLabel="Nueva plantilla"
+            onPress={openNewTemplate}
+            className="shrink-0 flex-row items-center gap-space-2 rounded-control bg-sport-500 px-space-4 py-space-3 active:opacity-85"
+          >
+            <IconPlus size={16} className="text-on-sport" />
+            <Text style={T_NUEVA} className="text-on-sport">Nueva</Text>
+          </Pressable>
+        </View>
 
         <FlashList
           data={filtered}
           keyExtractor={(item) => item.id}
-          contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 110 }}
+          contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 4, paddingBottom: 110 }}
           showsVerticalScrollIndicator={false}
           ListHeaderComponent={
-            <View className="gap-space-4 pb-space-4">
-              <ProgramLibraryHero
-                stats={stats}
-                onNewTemplate={openNewTemplate}
-                onExercises={() => router.push('/coach/ejercicios')}
-                onAreas={() => router.push('/coach/settings/areas')}
-              />
+            <View className="gap-space-3 pb-space-3">
+              {/* Navegación a catálogo / áreas */}
+              <View className="flex-row gap-space-2">
+                <NavButton icon={IconList} label="Ejercicios" onPress={() => router.push('/coach/ejercicios')} />
+                <NavButton icon={IconGrid} label="Áreas" onPress={() => router.push('/coach/settings/areas')} />
+              </View>
 
-              <View
-                className="gap-space-3 rounded-card border border-subtle bg-surface-card p-space-4"
-                style={SHADOWS[resolvedScheme].sm}
-              >
-                <Input
-                  leftIcon={Search}
-                  value={search}
-                  onChangeText={setSearch}
-                  placeholder="Buscar programa o alumno..."
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  clearButtonMode="while-editing"
-                />
-
-                <SegmentedTabs<FilterType>
-                  items={[
-                    { value: 'all', label: 'Todos' },
-                    { value: 'templates', label: 'Plantillas' },
-                    { value: 'assigned', label: 'En curso' },
-                  ]}
-                  value={filterType}
-                  onChange={setFilterType}
-                />
-
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingVertical: 2 }}>
-                  <FilterPill label="Activos" active={filterStatus === 'active'} onPress={() => setFilterStatus(filterStatus === 'active' ? 'all' : 'active')} />
-                  <FilterPill label="Inactivos" active={filterStatus === 'inactive'} onPress={() => setFilterStatus(filterStatus === 'inactive' ? 'all' : 'inactive')} />
-                  <FilterPill label="Semanal" active={filterStructure === 'weekly'} onPress={() => setFilterStructure(filterStructure === 'weekly' ? 'all' : 'weekly')} />
-                  <FilterPill label="Ciclo" active={filterStructure === 'cycle'} onPress={() => setFilterStructure(filterStructure === 'cycle' ? 'all' : 'cycle')} />
-                  <FilterPill label="Con fases" active={filterPhases === 'with'} onPress={() => setFilterPhases(filterPhases === 'with' ? 'all' : 'with')} />
-                </ScrollView>
-
-                {/* Orden (espejo del popover web Recientes/Nombre). */}
-                <View className="flex-row items-center gap-space-2">
-                  <IconSort size={13} className="text-muted" />
-                  <Text style={T_RESULT} className="text-muted">Ordenar</Text>
-                  <FilterPill label="Recientes" active={sortKey === 'recent'} onPress={() => setSortKey('recent')} />
-                  <FilterPill label="Nombre" active={sortKey === 'name'} onPress={() => setSortKey('name')} />
+              {/* Búsqueda + orden */}
+              <View className="flex-row items-center gap-space-2">
+                <View className="flex-1">
+                  <Input
+                    leftIcon={Search}
+                    value={search}
+                    onChangeText={setSearch}
+                    placeholder="Buscar programa o alumno..."
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    clearButtonMode="while-editing"
+                  />
                 </View>
+                <Pressable
+                  testID="sort-toggle"
+                  accessibilityRole="button"
+                  accessibilityLabel="Ordenar"
+                  onPress={() => setSortKey((k) => (k === 'recent' ? 'name' : 'recent'))}
+                  className={`h-[42px] w-[42px] items-center justify-center rounded-control border ${sortKey === 'name' ? 'border-sport-500 bg-sport-100 dark:bg-sport-100/20' : 'border-subtle bg-surface-card'}`}
+                >
+                  <IconSort size={16} className={sortKey === 'name' ? 'text-sport-600' : 'text-strong'} />
+                </Pressable>
+              </View>
 
-                <View className="flex-row items-center justify-between gap-space-3">
-                  <View className="flex-row items-center gap-space-2">
-                    <IconFilter size={14} className="text-muted" />
-                    <Text style={T_RESULT} className="text-muted">
-                      {filtered.length} de {programs.length}
-                    </Text>
-                  </View>
-                  <Pressable
-                    testID="view-toggle"
-                    onPress={() => setCompact((v) => !v)}
-                    className="rounded-control border border-subtle px-space-4 py-space-2 active:opacity-70"
-                  >
-                    <Text style={T_TOGGLE} className="text-strong">
-                      {compact ? 'Compacta' : 'Comoda'}
-                    </Text>
-                  </Pressable>
-                </View>
+              {/* Tabs-stats accionables: count (eva-metric) + label */}
+              <View className="flex-row gap-[3px] rounded-control bg-surface-sunken p-[3px]">
+                {TABS.map((t) => {
+                  const on = filterType === t.value
+                  return (
+                    <Pressable
+                      key={t.value}
+                      testID={`tab-${t.value}`}
+                      onPress={() => setFilterType(t.value)}
+                      style={on ? SHADOWS[resolvedScheme].sm : undefined}
+                      className={`h-[46px] flex-1 items-center justify-center rounded-control ${on ? 'bg-surface-card' : ''}`}
+                    >
+                      <Text style={T_TAB_COUNT} className={on ? 'text-strong' : 'text-muted'}>{tabCounts[t.value]}</Text>
+                      <Text style={T_TAB_LABEL} className={on ? 'text-strong' : 'text-muted'}>{t.label}</Text>
+                    </Pressable>
+                  )
+                })}
               </View>
             </View>
           }
           ListEmptyComponent={
-            <EmptyState
-              icon={Dumbbell}
-              title={programs.length ? 'Sin resultados' : 'Aun no tienes programas'}
-              subtitle={programs.length ? 'Prueba otro filtro o busqueda.' : 'Crea una plantilla o un programa desde un alumno.'}
+            <LibraryEmptyState
+              hasPrograms={programs.length > 0}
+              filterType={filterType}
+              search={search}
+              onNewTemplate={openNewTemplate}
+              onClearSearch={() => setSearch('')}
+              onShowTemplates={() => setFilterType('templates')}
             />
           }
           renderItem={({ item, index }) => (
@@ -351,40 +366,22 @@ export default function BuilderScreen() {
               animate={{ opacity: 1, translateY: 0 }}
               transition={{ type: 'timing', duration: 260, delay: Math.min(index * 24, 220) }}
             >
-              <ProgramCard
-                program={item}
-                compact={compact}
-                busy={actionBusy?.endsWith(item.id) ?? false}
-                onPreview={() => setPreview(item)}
-                onEdit={() => editProgram(item)}
-                onAssign={() => openAssign(item)}
-                onDuplicate={() => openDuplicate(item)}
-                onDelete={() => confirmDelete(item)}
-                onSync={() => confirmSync(item)}
-              />
+              <ProgramRow program={item} onOpen={() => setPreview(item)} />
             </MotiView>
           )}
         />
       </SafeAreaView>
 
-      <Pressable
-        testID="new-template-fab"
-        accessibilityRole="button"
-        accessibilityLabel="Nueva plantilla"
-        onPress={openNewTemplate}
-        className="absolute bottom-6 right-5 h-14 w-14 items-center justify-center rounded-full bg-sport-500 active:opacity-85"
-        style={GLOWS.sport}
-      >
-        <IconPlus size={24} className="text-on-sport" />
-      </Pressable>
-
       <NativeDialog open={!!preview} title={preview?.name ?? 'Vista previa'} onClose={() => setPreview(null)} maxWidth={520}>
         {preview ? (
           <ProgramPreviewCard
             program={preview}
+            busy={actionBusy?.endsWith(preview.id) ?? false}
             onEdit={() => { const p = preview; setPreview(null); editProgram(p) }}
             onAssign={() => { const p = preview; setPreview(null); openAssign(p) }}
             onDuplicate={() => { const p = preview; setPreview(null); openDuplicate(p) }}
+            onSync={() => { const p = preview; setPreview(null); confirmSync(p) }}
+            onDelete={() => { const p = preview; setPreview(null); confirmDelete(p) }}
           />
         ) : null}
       </NativeDialog>
@@ -420,19 +417,63 @@ export default function BuilderScreen() {
   )
 }
 
-function FilterPill({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {
+/** Botón de navegación a catálogo (1:1 web: border-[1.5px], icono + label 13px bold). */
+function NavButton({ icon: Icon, label, onPress }: { icon: ThemedIcon; label: string; onPress: () => void }) {
   return (
     <Pressable
-      testID={`filter-pill-${label.toLowerCase().replace(/\s+/g, '-')}`}
+      accessibilityRole="button"
       onPress={onPress}
-      className={`rounded-control border px-space-4 py-space-3 active:opacity-80 ${
-        active ? 'border-sport-500 bg-sport-500' : 'border-subtle bg-surface-sunken'
-      }`}
+      className="flex-1 flex-row items-center justify-center gap-space-2 rounded-control border-[1.5px] border-subtle bg-surface-card px-space-3 py-space-3 active:opacity-80"
     >
-      <Text style={T_PILL} className={active ? 'text-on-sport' : 'text-muted'}>
-        {label}
-      </Text>
+      <Icon size={16} className="text-strong" />
+      <Text style={T_NAV} className="text-strong">{label}</Text>
     </Pressable>
+  )
+}
+
+/** Empty state contextual (1:1 web LibraryEmptyState): tile 60px sport + título display + CTA. */
+function LibraryEmptyState({
+  hasPrograms,
+  filterType,
+  search,
+  onNewTemplate,
+  onClearSearch,
+  onShowTemplates,
+}: {
+  hasPrograms: boolean
+  filterType: FilterType
+  search: string
+  onNewTemplate: () => void
+  onClearSearch: () => void
+  onShowTemplates: () => void
+}) {
+  const trimmed = search.trim()
+  const cfg =
+    hasPrograms && trimmed
+      ? { icon: SearchX, title: 'Sin resultados', sub: `No encontramos programas para «${trimmed}». Prueba otro término o quita el filtro.`, cta: 'Limpiar búsqueda', ctaIcon: Search, act: onClearSearch }
+      : hasPrograms && filterType === 'assigned'
+        ? { icon: CalendarClock, title: 'Nada en curso', sub: 'Cuando asignes una plantilla a un alumno, su programa activo aparece aquí.', cta: 'Ver plantillas', ctaIcon: LayoutTemplate, act: onShowTemplates }
+        : hasPrograms && filterType === 'templates'
+          ? { icon: LayoutTemplate, title: 'Sin plantillas todavía', sub: 'Crea una plantilla reutilizable y asígnala a tus alumnos en segundos.', cta: 'Crear plantilla', ctaIcon: Plus, act: onNewTemplate }
+          : { icon: Dumbbell, title: 'Tu biblioteca está vacía', sub: 'Crea tu primera plantilla de entrenamiento para empezar a asignar.', cta: 'Crear plantilla', ctaIcon: Plus, act: onNewTemplate }
+  const EmptyIcon = themedIcon(cfg.icon)
+  const CtaIcon = themedIcon(cfg.ctaIcon)
+  return (
+    <View className="items-center px-space-4 pt-space-6">
+      <View className="mb-space-4 h-[60px] w-[60px] items-center justify-center rounded-card bg-sport-100 dark:bg-sport-100/20">
+        <EmptyIcon size={27} className="text-sport-600" />
+      </View>
+      <Text style={T_EMPTY_TITLE} className="text-strong">{cfg.title}</Text>
+      <Text style={[T_EMPTY_SUB, { maxWidth: 252, textAlign: 'center', marginTop: 6 }]} className="text-muted">{cfg.sub}</Text>
+      <Pressable
+        accessibilityRole="button"
+        onPress={cfg.act}
+        className="mt-space-4 flex-row items-center gap-space-2 rounded-control bg-sport-500 px-space-4 py-space-3 active:opacity-85"
+      >
+        <CtaIcon size={16} className="text-on-sport" />
+        <Text style={T_NUEVA} className="text-on-sport">{cfg.cta}</Text>
+      </Pressable>
+    </View>
   )
 }
 

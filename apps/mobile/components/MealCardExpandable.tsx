@@ -33,6 +33,9 @@ interface Props {
   activeSwapMealIds?: Set<string>
   /** Abre el SwapSheet para un alimento con alternativas del coach (E4-08). */
   onSwapFood?: (item: FoodItemForMacros) => void
+  /** Favoritos del alumno por food_id (corazón en cada alimento). */
+  favoriteFoodIds?: Set<string>
+  onToggleFavorite?: (foodId: string) => void
   /** Porción del plan consumida. null = "Plan completo" (100% de macros, sin %). */
   consumedPct?: number | null
   onPortionChange?: (pct: number | null) => void
@@ -56,6 +59,8 @@ export function MealCardExpandable({
   onSatisfaction,
   activeSwapMealIds,
   onSwapFood,
+  favoriteFoodIds,
+  onToggleFavorite,
   consumedPct,
   onPortionChange,
 }: Props) {
@@ -178,6 +183,8 @@ export function MealCardExpandable({
                 item={item}
                 hasActiveSwap={activeSwapMealIds?.has(item.foods.id ?? '')}
                 onSwapPress={isToday && onSwapFood ? () => onSwapFood(item) : undefined}
+                isFavorite={favoriteFoodIds?.has(item.foods.id ?? '')}
+                onToggleFavorite={onToggleFavorite}
               />
             ))}
 

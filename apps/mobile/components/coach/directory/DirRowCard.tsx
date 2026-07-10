@@ -1,9 +1,10 @@
-import { memo } from 'react'
+import { memo, useState } from 'react'
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native'
-import { Apple, ChevronRight } from 'lucide-react-native'
+import { Apple, MoreVertical } from 'lucide-react-native'
 import { MotiView } from 'moti'
 import { Badge } from '../../Badge'
 import { ProgressRing } from '../../ProgressRing'
+import { ClientActionsSheet } from './ClientActionsSheet'
 import { FONT } from '../../../lib/typography'
 import type { DirectoryClient, PulseRow } from '../../../lib/clients-directory'
 import { DANGER, EMBER, SEV_HEX, WARNING, lastInfo, severityMeta, statusMeta } from './directory-shared'
@@ -19,13 +20,28 @@ export const DirRowCard = memo(function DirRowCard({
   theme,
   pulse,
   onOpen,
+  onWhatsApp,
+  onShare,
+  onWorkout,
+  onNutrition,
+  onReset,
+  onToggle,
+  onDelete,
 }: {
   item: DirectoryClient
   index: number
   theme: any
   pulse?: PulseRow
   onOpen: (c: DirectoryClient) => void
+  onWhatsApp?: (c: DirectoryClient) => void
+  onShare?: (c: DirectoryClient) => void
+  onWorkout?: (c: DirectoryClient) => void
+  onNutrition?: (c: DirectoryClient) => void
+  onReset?: (c: DirectoryClient) => void
+  onToggle?: (c: DirectoryClient) => void
+  onDelete?: (c: DirectoryClient) => void
 }) {
+  const [menu, setMenu] = useState(false)
   const adherence = pulse?.percentage ?? null
   const score = pulse?.attentionScore ?? item.attentionScore
   const sev = severityMeta(score)
@@ -34,6 +50,8 @@ export const DirRowCard = memo(function DirRowCard({
   const nutri = pulse?.nutritionPercentage ?? 0
   const nutriRisk = (pulse?.attentionFlags?.includes('NUTRICION_RIESGO') ?? false) || (nutri > 0 && nutri < 60)
   const st = statusMeta(item)
+  // Separador "·" = border-strong (mas fuerte que border), scheme-aware (1:1 web).
+  const sepColor = theme.scheme === 'dark' ? 'rgba(255,255,255,0.22)' : '#A8B1BD'
 
   return (
     <MotiView
@@ -56,7 +74,7 @@ export const DirRowCard = memo(function DirRowCard({
             color={ringColor}
             showValue={false}
             label={
-              <Text style={{ fontSize: 18, fontFamily: FONT.displayBold, color: theme.foreground }}>
+              <Text style={{ fontSize: 18, fontFamily: FONT.displayBlack, color: theme.foreground }}>
                 {item.fullName.charAt(0).toUpperCase()}
               </Text>
             }
@@ -73,11 +91,11 @@ export const DirRowCard = memo(function DirRowCard({
             {adherence != null ? (
               <Text style={[styles.metricStrong, { color: theme.foreground }]}>{adherence}%</Text>
             ) : null}
-            {adherence != null ? <Text style={[styles.dotSep, { color: theme.border }]}>·</Text> : null}
+            {adherence != null ? <Text style={[styles.dotSep, { color: sepColor }]}>·</Text> : null}
             <Text style={[styles.metric, { color: theme.mutedForeground }]}>{li.label}</Text>
             {nutriRisk ? (
               <>
-                <Text style={[styles.dotSep, { color: theme.border }]}>·</Text>
+                <Text style={[styles.dotSep, { color: sepColor }]}>·</Text>
                 <Apple size={12} color={EMBER} />
                 <Text style={[styles.metric, { color: EMBER }]}>{nutri}%</Text>
               </>
@@ -90,8 +108,32 @@ export const DirRowCard = memo(function DirRowCard({
           </View>
         </View>
 
-        <ChevronRight size={18} color={theme.mutedForeground} />
+        <TouchableOpacity
+          testID={`directory-row-menu-${item.id}`}
+          accessibilityRole="button"
+          accessibilityLabel={`Acciones de ${item.fullName}`}
+          hitSlop={8}
+          onPress={() => setMenu(true)}
+          style={styles.menuBtn}
+        >
+          <MoreVertical size={18} color={theme.mutedForeground} />
+        </TouchableOpacity>
       </TouchableOpacity>
+
+      <ClientActionsSheet
+        visible={menu}
+        client={item}
+        theme={theme}
+        onClose={() => setMenu(false)}
+        onProfile={() => onOpen(item)}
+        onWhatsApp={onWhatsApp ? () => onWhatsApp(item) : undefined}
+        onShare={() => onShare?.(item)}
+        onWorkout={() => onWorkout?.(item)}
+        onNutrition={() => onNutrition?.(item)}
+        onReset={() => onReset?.(item)}
+        onToggle={() => onToggle?.(item)}
+        onDelete={() => onDelete?.(item)}
+      />
     </MotiView>
   )
 })
@@ -109,9 +151,10 @@ const styles = StyleSheet.create({
   lastDot: { position: 'absolute', bottom: -1, right: -1, width: 13, height: 13, borderRadius: 7, borderWidth: 2 },
   info: { flex: 1, gap: 4, minWidth: 0 },
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: 7, minWidth: 0 },
-  name: { fontSize: 15.5, fontFamily: FONT.displayBold, letterSpacing: -0.2, flexShrink: 1 },
+  name: { fontSize: 15.5, fontFamily: FONT.displayBlack, letterSpacing: -0.155, flexShrink: 1 },
   metricsRow: { flexDirection: 'row', alignItems: 'center', gap: 5, flexWrap: 'wrap' },
   metricStrong: { fontSize: 12, fontFamily: FONT.monoBold },
   metric: { fontSize: 12, fontFamily: FONT.uiMedium },
   dotSep: { fontSize: 12 },
+  menuBtn: { padding: 2, marginRight: -2 },
 })

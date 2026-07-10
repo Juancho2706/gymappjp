@@ -2,14 +2,14 @@ import { useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import { MotiView } from 'moti'
 import { CheckCircle2, ChevronDown, History, Info, TrendingUp } from 'lucide-react-native'
-import { effectiveExerciseType, type ReconciledSessionLog, type TypedKeypadMode } from '@eva/workout-engine'
+import { effectiveExerciseType, type OptimisticLogPayload, type ReconciledSessionLog, type TypedKeypadMode } from '@eva/workout-engine'
 import { FONT, TYPE } from '../../../lib/typography'
 import { useTheme } from '../../../context/ThemeContext'
 import { EXERCISE_TYPE_META, exerciseTypeColor } from '../../../lib/exercise-type-meta'
 import type { EffectiveTarget } from '../../../lib/workout/progression'
-import { resolveExercise, type PrevSet, type SessionBlock } from '../../../lib/workout-session'
+import { resolveExercise, type PrevSet, type SessionBlock, type SessionDraft } from '../../../lib/workout-session'
 import { formatRelativeDate } from '../../../lib/date-utils'
-import { SetRow } from './SetRow'
+import { SetRow, ActiveSetRow } from './SetRow'
 import { bestPrevOf, overloadChipLabel } from './workout-ui'
 
 const SPORT_400 = '#5C9DFF'
@@ -27,16 +27,26 @@ export function SupersetGroupCard({
   effByBlock,
   previousHistory,
   currentWeek,
+  restoredDraft,
   onOpenTechnique,
   onOpenSet,
+  onCommitSet,
+  onDraftChange,
 }: {
   members: SessionBlock[]
   sessionLogs: ReconciledSessionLog[]
   effByBlock: Map<string, EffectiveTarget | null>
   previousHistory: Record<string, PrevSet[]>
   currentWeek: number | null
+  /** Draft restaurado del set en curso (resiliencia E2-03). */
+  restoredDraft: SessionDraft | null
   onOpenTechnique: (block: SessionBlock) => void
+  /** Tap en una serie ya logueada / proxima: abre el teclado de edicion (KeypadHost). */
   onOpenSet: (blockId: string, setNumber: number) => void
+  /** Confirma la serie activa (payload armado por la fila): logSet intacto. */
+  onCommitSet: (payload: OptimisticLogPayload) => void
+  /** Reporta el draft del set en curso (resiliencia). */
+  onDraftChange: (blockId: string, setNumber: number, values: Record<string, string>, fieldIndex: number) => void
 }) {
   const { theme } = useTheme()
   const [howToOpen, setHowToOpen] = useState(false)
@@ -183,6 +193,24 @@ export function SupersetGroupCard({
               {Array.from({ length: block.sets }).map((_, i) => {
                 const setNumber = i + 1
                 const log = blockLogs.find((l) => l.set_number === setNumber)
+                if (!log && setNumber === firstUnlogged) {
+                  const seed =
+                    restoredDraft && restoredDraft.blockId === block.id && restoredDraft.setNumber === setNumber
+                      ? restoredDraft.values
+                      : null
+                  return (
+                    <ActiveSetRow
+                      key={setNumber}
+                      blockId={block.id}
+                      setNumber={setNumber}
+                      typedMode={typedMode}
+                      suggestedWeight={suggested ?? null}
+                      seedValues={seed}
+                      onDraftChange={(values, fieldIndex) => onDraftChange(block.id, setNumber, values, fieldIndex)}
+                      onCommit={onCommitSet}
+                    />
+                  )
+                }
                 return (
                   <SetRow
                     key={setNumber}

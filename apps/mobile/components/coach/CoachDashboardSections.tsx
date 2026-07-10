@@ -11,7 +11,7 @@ import {
   Bell,
   Bug,
   CalendarClock,
-  Camera,
+  CalendarX,
   Check,
   CheckCircle2,
   ChevronDown,
@@ -26,6 +26,7 @@ import {
   Megaphone,
   Minus,
   Monitor,
+  OctagonAlert,
   Palette,
   PartyPopper,
   Pin,
@@ -1749,11 +1750,14 @@ export function MobileGreetingHeader({
   logoUrl,
   onInsights,
   onAvatar,
+  pendingCount = 0,
 }: {
   coachName: string
   logoUrl?: string | null
   onInsights?: () => void
   onAvatar?: () => void
+  /** Pendientes accionables de hoy (riesgo + programas por vencer + check-ins por revisar). */
+  pendingCount?: number
 }) {
   const { theme } = useTheme()
   const { workspaces } = useWorkspace()
@@ -1761,6 +1765,9 @@ export function MobileGreetingHeader({
   const [switcherOpen, setSwitcherOpen] = useState(false)
   const hasMultipleWorkspaces = (workspaces?.length ?? 0) > 1
   const firstName = coachName?.split(' ')[0] || 'Coach'
+  // Saludo por hora del dia (espejo useTimeOfDayGreeting web) — neutralizado (sin voseo).
+  const hour = new Date().getHours()
+  const greeting = hour < 6 ? 'Buenas noches' : hour < 13 ? 'Buenos dias' : hour < 20 ? 'Buenas tardes' : 'Buenas noches'
   const dateStr = new Intl.DateTimeFormat('es-ES', {
     weekday: 'long',
     day: 'numeric',
@@ -1782,15 +1789,20 @@ export function MobileGreetingHeader({
   return (
     <View style={styles.greeting}>
       <View style={{ flex: 1, minWidth: 0 }}>
-        <Text className="font-sans-semibold text-[13px] text-muted" style={{ lineHeight: 16 }}>
+        <Text className="font-sans-semibold text-[12px] uppercase text-muted" style={{ lineHeight: 16, letterSpacing: 2.16 }}>
           {dateCap}
         </Text>
         <Text
-          className="font-display-black text-[28px] text-strong"
-          style={{ lineHeight: 29, letterSpacing: -0.84 }}
+          className="font-display-black text-[31px] text-strong"
+          style={{ lineHeight: 34, letterSpacing: -0.93 }}
           numberOfLines={1}
         >
-          Hola, {firstName}
+          {greeting}, <Text className="text-sport-500">{firstName}</Text>
+        </Text>
+        <Text className="font-sans text-[13px] text-muted" style={{ marginTop: 3 }}>
+          {pendingCount > 0
+            ? `Tienes ${pendingCount} pendiente${pendingCount === 1 ? '' : 's'} hoy.`
+            : 'Todo al día. Buen momento para planificar.'}
         </Text>
       </View>
 
@@ -2082,13 +2094,16 @@ function pulseDeltaView(
   delta: number,
   goodDir: 'up' | 'down',
   theme: ReturnType<typeof useTheme>['theme'],
+  scheme: 'light' | 'dark',
 ): { txt: string; color: string; icon: LucideIcon } {
   if (!delta) return { txt: 'igual', color: theme.mutedForeground, icon: Minus }
   const dir = delta > 0 ? 'up' : 'down'
   const good = dir === goodDir
+  const dark = scheme === 'dark'
   return {
     txt: (delta > 0 ? '+' : '') + delta,
-    color: good ? '#10B981' : theme.destructive,
+    // success-600 / danger-600 scheme-aware (1:1 con deltaView web).
+    color: good ? (dark ? '#4FD9A0' : '#0F7D50') : (dark ? '#FF7C97' : '#BE183C'),
     icon: dir === 'up' ? TrendingUp : TrendingDown,
   }
 }
@@ -2110,7 +2125,7 @@ export function MobilePulseHero({
   onRiesgoPress: () => void
   onAdherencePress: () => void
 }) {
-  const { theme } = useTheme()
+  const { theme, resolvedScheme } = useTheme()
 
   // Serie suave terminando en el valor real (1:1 con sparkSeries de PulseHero.tsx web:
   // mismo wiggle → misma curva). La pipeline no expone histórico agregado (placeholder).
@@ -2132,7 +2147,7 @@ export function MobilePulseHero({
       value: String(kpi.totalClients),
       danger: false,
       onPress: onActivosPress,
-      sub: pulseDeltaView(1, 'up', theme),
+      sub: pulseDeltaView(1, 'up', theme, resolvedScheme),
     },
     {
       key: 'riesgo',
@@ -2140,7 +2155,7 @@ export function MobilePulseHero({
       value: String(kpi.riskCount),
       danger: kpi.riskCount > 0,
       onPress: onRiesgoPress,
-      sub: pulseDeltaView(kpi.riskCount > 0 ? -1 : 0, 'down', theme),
+      sub: pulseDeltaView(kpi.riskCount > 0 ? -1 : 0, 'down', theme, resolvedScheme),
     },
     {
       key: 'adherencia',
@@ -2148,7 +2163,7 @@ export function MobilePulseHero({
       value: `${kpi.avgAdherence}%`,
       danger: false,
       onPress: onAdherencePress,
-      sub: pulseDeltaView(3, 'up', theme),
+      sub: pulseDeltaView(3, 'up', theme, resolvedScheme),
       spark: adherenceSpark,
     },
   ]
@@ -2175,8 +2190,8 @@ export function MobilePulseHero({
               {s.label}
             </Text>
             <Text
-              className="font-display-black text-[27px]"
-              style={{ lineHeight: 28, color: s.danger ? theme.destructive : theme.foreground }}
+              className="font-display-bold text-[27px]"
+              style={{ lineHeight: 27, letterSpacing: -0.27, color: s.danger ? theme.destructive : theme.foreground, fontVariant: ['tabular-nums'] }}
             >
               {s.value}
             </Text>
@@ -2360,14 +2375,14 @@ export function MobileFocusList({
   return (
     <Card variant="inverse" padding="md" radius="card" style={{ overflow: 'hidden' }}>
       <View className="mb-3 flex-row items-center justify-between">
-        <Text className="font-sans-bold uppercase text-[11px] tracking-[1px] text-sport-400">
+        <Text className="font-sans-extra uppercase text-[11px] tracking-[0.88px] text-sport-400">
           Prioridad de hoy
         </Text>
         <View
           className="rounded-pill px-2 py-0.5"
           style={{ backgroundColor: hasRisk ? '#F4365A' : '#1FB877' }}
         >
-          <Text className="font-sans-bold text-[11px]" style={{ color: '#0B0E13' }}>
+          <Text className="font-sans-extra text-[11px]" style={{ color: '#0B0E13' }}>
             {riesgoCount}
           </Text>
         </View>
@@ -2410,7 +2425,7 @@ export function MobileFocusList({
                       : undefined
                   }
                 >
-                  <Avatar name={item.clientName} size="sm" ring="sport" />
+                  <Avatar name={item.clientName} size="sm" />
                   <View className="flex-1" style={{ minWidth: 0 }}>
                     <Text className="font-sans-bold text-[14px] text-on-dark" numberOfLines={1}>
                       {item.clientName}
@@ -2437,33 +2452,51 @@ export function MobileFocusList({
             })}
           </View>
 
-          {/* NextBestAction embebido — paso complementario sobre la card oscura. */}
-          <TouchableOpacity
-            activeOpacity={0.85}
-            onPress={handleNba}
-            className="mt-3 flex-row items-center gap-2.5 rounded-xl px-3 py-2.5"
-            style={{ backgroundColor: 'rgba(255,255,255,0.05)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' }}
-          >
-            <Sparkles size={16} color={theme.primary} />
-            <View className="flex-1" style={{ minWidth: 0 }}>
-              <Text className="font-sans-bold text-[13px] text-on-dark" numberOfLines={1}>
-                {nba.title}
-              </Text>
-              <Text className="font-sans text-[12px] text-on-dark-muted" numberOfLines={2}>
-                {nba.description}
-              </Text>
-            </View>
-            <Text className="font-sans-bold text-[12px] text-sport-400" numberOfLines={1}>
-              {nba.ctaLabel}
-            </Text>
-          </TouchableOpacity>
+          {/* NextStepInset embebido (1:1 con PriorityCard.tsx): icono por tono en
+              circulo + eyebrow "Tu proximo paso" + titulo + CTA con flecha, radius 10. */}
+          {(() => {
+            const acc = nba.tone === 'warn' ? '#FFC861' : nba.tone === 'positive' ? '#4FD9A0' : '#7FB0FF'
+            const NbaIcon =
+              nba.id === 'programas-vencidos' ? CalendarX
+              : nba.id === 'focus-list' ? OctagonAlert
+              : nba.id === 'adherencia-baja' ? Activity
+              : nba.id === 'mrr-cayendo' ? TrendingDown
+              : nba.id === 'agenda-hoy' ? CalendarClock
+              : CheckCircle2
+            return (
+              <TouchableOpacity
+                activeOpacity={0.85}
+                onPress={handleNba}
+                className="mt-3 w-full flex-row items-center px-3 py-[11px]"
+                style={{ gap: 11, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.05)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.10)' }}
+              >
+                <View className="h-8 w-8 items-center justify-center rounded-pill" style={{ backgroundColor: 'rgba(255,255,255,0.08)' }}>
+                  <NbaIcon size={16} color={acc} />
+                </View>
+                <View className="flex-1" style={{ minWidth: 0 }}>
+                  <Text className="font-sans-extra text-[10px] uppercase" style={{ color: acc, letterSpacing: 0.7 }} numberOfLines={1}>
+                    Tu proximo paso
+                  </Text>
+                  <Text className="font-sans-bold text-[13.5px] text-on-dark" style={{ marginTop: 1 }} numberOfLines={1}>
+                    {nba.title}
+                  </Text>
+                </View>
+                <View className="flex-row items-center" style={{ gap: 3 }}>
+                  <Text className="font-sans-extra text-[12px]" style={{ color: acc }} numberOfLines={1}>
+                    {nba.ctaLabel}
+                  </Text>
+                  <ArrowRight size={13} color={acc} />
+                </View>
+              </TouchableOpacity>
+            )
+          })()}
 
           <TouchableOpacity
             activeOpacity={0.8}
             onPress={() => router.push('/coach/(tabs)/clientes')}
             className="mt-2 h-9 flex-row items-center justify-center gap-1"
           >
-            <Text className="font-sans-bold text-[13px] text-sport-400">Ver todos en Alumnos</Text>
+            <Text className="font-sans-extra text-[13px] text-sport-400">Ver todos en Alumnos</Text>
             <ArrowRight size={14} color={theme.primary} />
           </TouchableOpacity>
         </>
@@ -2631,8 +2664,8 @@ export function MobileTodayAgenda({ items }: { items: MobileAgendaItem[] }) {
     <View style={{ gap: 10 }}>
       <View className="flex-row items-center justify-between">
         <View className="flex-row items-center gap-2">
-          <CalendarClock size={17} color={theme.primary} />
-          <Text className="font-display-bold text-[17px] text-strong">Agenda de hoy</Text>
+          <CalendarClock size={16} color={theme.primary} />
+          <Text className="font-display-black text-[18px] text-strong">Agenda de hoy</Text>
         </View>
         <Text className="font-sans text-[12px] text-muted">{items.length} pendientes</Text>
       </View>
@@ -2650,16 +2683,12 @@ export function MobileTodayAgenda({ items }: { items: MobileAgendaItem[] }) {
               <ListRow
                 leading={
                   <View
-                    className="h-7 w-7 items-center justify-center"
-                    style={{ backgroundColor: hexToRgba(theme.primary, 0.1), borderRadius: 8 }}
+                    className="h-8 w-8 items-center justify-center rounded-pill"
+                    style={{ backgroundColor: theme.muted }}
                   >
-                    {item.kind === 'programa_vence' ? (
-                      <Clock size={15} color={theme.primary} />
-                    ) : item.kind === 'checkin_pendiente' ? (
-                      <Camera size={15} color={theme.primary} />
-                    ) : (
-                      <Dumbbell size={15} color={theme.primary} />
-                    )}
+                    <Text style={{ fontSize: 16, lineHeight: 20 }}>
+                      {item.kind === 'programa_vence' ? '⏳' : item.kind === 'checkin_pendiente' ? '📷' : '💪'}
+                    </Text>
                   </View>
                 }
                 title={item.clientName}
@@ -2723,13 +2752,22 @@ export function MobileExpiringPrograms({ items }: { items: MobileExpiringProgram
 
 function ActivityTypeIcon({ type, size, color }: { type: MobileActivityItem['type']; size: number; color: string }) {
   if (type === 'nuevo alumno') return <UserPlus size={size} color={color} />
-  if (type === 'check-in') return <Camera size={size} color={color} />
+  if (type === 'check-in') return <CheckCircle2 size={size} color={color} />
   return <Dumbbell size={size} color={color} />
+}
+
+// Tonos de actividad [bg, fg] — espejo 1:1 del ACT_TONE web (sport / success / ember).
+// Scheme-aware porque los tokens -100/-600/-700 divergen por tema en globals.css.
+function activityTone(type: MobileActivityItem['type'], scheme: 'light' | 'dark'): [string, string] {
+  const dark = scheme === 'dark'
+  if (type === 'nuevo alumno') return dark ? ['rgba(38,128,255,0.20)', '#7FB0FF'] : ['#E8F1FF', '#1462DC']
+  if (type === 'check-in') return dark ? ['rgba(31,184,119,0.18)', '#4FD9A0'] : ['#DBF5EA', '#0F7D50']
+  return dark ? ['rgba(255,106,61,0.20)', '#FFB79E'] : ['#FFEDE6', '#C23E14']
 }
 
 export function MobileActivityFeed({ items }: { items: MobileActivityItem[] }) {
   const router = useRouter()
-  const { theme } = useTheme()
+  const { theme, resolvedScheme } = useTheme()
 
   return (
     <View style={{ gap: 10 }}>
@@ -2746,7 +2784,7 @@ export function MobileActivityFeed({ items }: { items: MobileActivityItem[] }) {
       ) : (
         <Card padding="none" radius="card" style={{ overflow: 'hidden' }}>
           {items.map((item, index) => {
-            const iconColor = item.type === 'nuevo alumno' ? '#10B981' : item.type === 'check-in' ? '#3B82F6' : theme.primary
+            const [toneBg, toneFg] = activityTone(item.type, resolvedScheme)
             return (
               <View key={item.id}>
                 {index > 0 ? (
@@ -2764,9 +2802,9 @@ export function MobileActivityFeed({ items }: { items: MobileActivityItem[] }) {
                     ) : (
                       <View
                         className="h-8 w-8 items-center justify-center rounded-pill"
-                        style={{ backgroundColor: hexToRgba(iconColor, 0.11) }}
+                        style={{ backgroundColor: toneBg }}
                       >
-                        <ActivityTypeIcon type={item.type} size={16} color={iconColor} />
+                        <ActivityTypeIcon type={item.type} size={16} color={toneFg} />
                       </View>
                     )
                   }
@@ -2811,7 +2849,7 @@ export function MobileNovedades({
   pendingCheckins?: number
 }) {
   const router = useRouter()
-  const { theme } = useTheme()
+  const { theme, resolvedScheme } = useTheme()
   const [filter, setFilter] = useState<NovedadesFilter>('todos')
 
   const hasCheckins = activities.some((a) => a.type === 'check-in')
@@ -2875,6 +2913,14 @@ export function MobileNovedades({
                 rowIndex += 1
                 const expired = it.daysLeft <= 0
                 const urgent = expired || it.daysLeft <= 2
+                const progDark = resolvedScheme === 'dark'
+                // bg = danger-100 / warning-100 (token solido); fg = danger-600 / warning-600 (1:1 con ProgramRow web).
+                const progBg = urgent
+                  ? (progDark ? 'rgba(244,54,90,0.18)' : '#FCDDE4')
+                  : (progDark ? 'rgba(245,165,36,0.18)' : '#FDEFD3')
+                const progFg = urgent
+                  ? (progDark ? '#FF7C97' : '#BE183C')
+                  : (progDark ? '#FFC861' : '#A8690A')
                 return (
                   <View key={`prog-${it.id}`}>
                     <Divider index={rowIndex} />
@@ -2890,9 +2936,9 @@ export function MobileNovedades({
                     >
                       <View
                         className="h-[34px] w-[34px] items-center justify-center rounded-pill"
-                        style={{ backgroundColor: urgent ? 'rgba(244,54,90,0.12)' : 'rgba(245,158,11,0.14)' }}
+                        style={{ backgroundColor: progBg }}
                       >
-                        <CalendarClock size={16} color={urgent ? '#F4365A' : '#F59E0B'} />
+                        <CalendarClock size={16} color={progFg} />
                       </View>
                       <View className="flex-1" style={{ minWidth: 0 }}>
                         <Text className="font-sans text-[13.5px] text-body" numberOfLines={1}>
@@ -2913,7 +2959,7 @@ export function MobileNovedades({
             : null}
           {shownActivities.map((it) => {
             rowIndex += 1
-            const iconColor = it.type === 'nuevo alumno' ? '#10B981' : it.type === 'check-in' ? '#3B82F6' : theme.primary
+            const [toneBg, toneFg] = activityTone(it.type, resolvedScheme)
             const isCheckin = it.type === 'check-in'
             const reviewed = activityReviewed(it)
             return (
@@ -2932,14 +2978,13 @@ export function MobileNovedades({
                     ) : (
                       <View
                         className="h-[34px] w-[34px] items-center justify-center rounded-pill"
-                        style={{ backgroundColor: hexToRgba(iconColor, 0.11) }}
+                        style={{ backgroundColor: toneBg }}
                       >
-                        <ActivityTypeIcon type={it.type} size={16} color={iconColor} />
+                        <ActivityTypeIcon type={it.type} size={16} color={toneFg} />
                       </View>
                     )
                   }
                   title={it.title}
-                  subtitle={it.subtitle}
                   trailing={
                     <View className="flex-row items-center" style={{ gap: 8 }}>
                       {isCheckin ? (

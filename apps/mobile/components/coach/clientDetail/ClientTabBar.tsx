@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import type { LayoutChangeEvent, NativeScrollEvent, NativeSyntheticEvent } from 'react-native'
 import { LinearGradient } from 'expo-linear-gradient'
+import { BlurView } from 'expo-blur'
 import { MotiView } from 'moti'
 import { ChevronRight } from 'lucide-react-native'
 import * as Haptics from 'expo-haptics'
@@ -22,7 +23,8 @@ export interface TabItem {
 // animado a la derecha cuando las pills desbordan y no se llego al final.
 // El comportamiento sticky lo maneja el ScrollView de la pantalla.
 export function ClientTabBar({ items, value, onChange }: { items: TabItem[]; value: ClientTab; onChange: (v: ClientTab) => void }) {
-  const { theme } = useTheme()
+  const { theme, resolvedScheme } = useTheme()
+  const isDark = resolvedScheme === 'dark'
   const [viewW, setViewW] = useState(0)
   const [contentW, setContentW] = useState(0)
   const [scrollX, setScrollX] = useState(0)
@@ -33,7 +35,16 @@ export function ClientTabBar({ items, value, onChange }: { items: TabItem[]; val
   const onScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => setScrollX(e.nativeEvent.contentOffset.x)
 
   return (
-    <View className="bg-surface-app border-b border-subtle" style={styles.wrap}>
+    <View className="border-b border-subtle" style={styles.wrap}>
+      {/* Glass: surface-app 80% + backdrop-blur 12px (1:1 con el contenedor sticky web). */}
+      <BlurView
+        intensity={isDark ? 20 : 30}
+        tint={isDark ? 'dark' : 'light'}
+        experimentalBlurMethod="dimezisBlurView"
+        pointerEvents="none"
+        style={StyleSheet.absoluteFill}
+      />
+      <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: isDark ? 'rgba(10,13,18,0.8)' : 'rgba(251,252,253,0.8)' }]} />
       <View style={styles.inner}>
         <ScrollView
           horizontal

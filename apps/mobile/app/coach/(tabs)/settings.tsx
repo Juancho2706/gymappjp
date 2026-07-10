@@ -1,14 +1,17 @@
 import { useEffect, useState } from 'react'
-import { ScrollView, Text, View } from 'react-native'
+import { Linking, Pressable, ScrollView, Text, View } from 'react-native'
 import { useRouter } from 'expo-router'
 import { cssInterop } from 'nativewind'
 import {
   CreditCard,
   LayoutGrid,
   LifeBuoy,
+  Moon,
   Package,
   Palette,
   SlidersHorizontal,
+  Sun,
+  Trash2,
   UserCog,
   Users,
 } from 'lucide-react-native'
@@ -16,10 +19,12 @@ import type { LucideIcon } from 'lucide-react-native'
 import { MotiView } from 'moti'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { MODULE_CATALOG_KEYS } from '@eva/module-catalog'
-import { Avatar, Badge, Card } from '../../../components'
+import { Avatar, Badge, Button, Card } from '../../../components'
 import { ListRow } from '../../../components/ListRow'
 import { AppBackground } from '../../../components/AppBackground'
 import { EvaLoaderScreen } from '../../../components/EvaLoader'
+import { useTheme } from '../../../context/ThemeContext'
+import { SHADOWS } from '../../../lib/shadows'
 import { useWorkspace } from '../../../lib/workspace'
 import { getCoachProfile, type CoachProfile } from '../../../lib/coach'
 import { canUseBranding } from '../../../lib/coach-tiers'
@@ -42,7 +47,7 @@ import { canUseBranding } from '../../../lib/coach-tiers'
  */
 
 // Let NativeWind drive the lucide icon `color` via `text-*` classes (DS pattern, ver perfil.tsx).
-for (const Icon of [CreditCard, LayoutGrid, LifeBuoy, Package, Palette, SlidersHorizontal, UserCog, Users]) {
+for (const Icon of [CreditCard, LayoutGrid, LifeBuoy, Moon, Package, Palette, SlidersHorizontal, Sun, Trash2, UserCog, Users]) {
   cssInterop(Icon, { className: { target: 'style', nativeStyleToProp: { color: true } } })
 }
 
@@ -59,11 +64,85 @@ type Tone = 'neutral' | 'sport'
 const TILE_BG: Record<Tone, string> = { neutral: 'bg-surface-sunken', sport: 'bg-sport-100' }
 const TILE_FG: Record<Tone, string> = { neutral: 'text-ink-700', sport: 'text-sport-600' }
 
-/** 36px rounded tile hosting a row icon (DS ListRow leading slot, 1:1 con perfil). */
+/** 46px rounded tile hosting a HubCard icon (1:1 con el HubCard web: 46×46 rounded-control, icono 22). */
 function IconTile({ Icon, tone = 'neutral' }: { Icon: LucideIcon; tone?: Tone }) {
   return (
-    <View className={`items-center justify-center rounded-md ${TILE_BG[tone]}`} style={{ width: 36, height: 36 }}>
-      <Icon size={18} strokeWidth={2} className={TILE_FG[tone]} />
+    <View className={`items-center justify-center rounded-control ${TILE_BG[tone]}`} style={{ width: 46, height: 46 }}>
+      <Icon size={22} strokeWidth={2} className={TILE_FG[tone]} />
+    </View>
+  )
+}
+
+/** Apariencia — toggle claro/oscuro cableado a ThemeContext (1:1 con ThemeToggleCard web). */
+function AppearanceToggle() {
+  const { resolvedScheme, toggleTheme } = useTheme()
+  const opts: [('light' | 'dark'), string, LucideIcon][] = [
+    ['light', 'Claro', Sun],
+    ['dark', 'Oscuro', Moon],
+  ]
+  return (
+    <Card padding="sm">
+      <View className="flex-row rounded-control bg-surface-sunken" style={{ gap: 6, padding: 4 }} accessibilityRole="tablist">
+        {opts.map(([val, label, Icon]) => {
+          const active = resolvedScheme === val
+          return (
+            <Pressable
+              key={val}
+              testID={`hub-tema-${val}`}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: active }}
+              accessibilityLabel={label}
+              onPress={() => { if (!active) toggleTheme() }}
+              className={active ? 'bg-surface-card' : ''}
+              style={[
+                { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: 46, borderRadius: 10 },
+                active ? SHADOWS[resolvedScheme].sm : null,
+              ]}
+            >
+              <Icon size={18} strokeWidth={2.2} className={active ? 'text-strong' : 'text-muted'} />
+              <Text className={active ? 'font-sans-bold text-strong' : 'font-sans-bold text-muted'} style={{ fontSize: 14.5 }}>
+                {label}
+              </Text>
+            </Pressable>
+          )
+        })}
+      </View>
+    </Card>
+  )
+}
+
+/** Zona de peligro — la baja de cuenta se gestiona por correo (money/data-safety, Ley 21.719).
+ *  Vive en el hub (1:1 con el DangerZone web), no dentro de Mi Marca. */
+function DangerZone() {
+  return (
+    <View>
+      <View className="mx-0.5 mb-2.5 mt-5 flex-row items-center gap-2">
+        <View className="h-3 w-[3px] rounded-sm bg-danger-500" />
+        <Text className="font-sans-extra text-danger-600" style={{ fontSize: 11, letterSpacing: 0.77, textTransform: 'uppercase' }}>
+          Zona de peligro
+        </Text>
+      </View>
+      <View className="rounded-card border-[1.5px] border-danger-100 bg-surface-card" style={{ padding: 16 }}>
+        <View className="flex-row items-center" style={{ gap: 14 }}>
+          <View className="items-center justify-center rounded-control bg-danger-100" style={{ width: 46, height: 46 }}>
+            <Trash2 size={22} strokeWidth={2} className="text-danger-600" />
+          </View>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text className="font-sans-bold text-strong" style={{ fontSize: 15 }}>Eliminar mi cuenta</Text>
+            <Text className="font-sans text-muted" style={{ fontSize: 12.5, marginTop: 2, lineHeight: 17 }}>
+              La baja se gestiona por correo (Ley 21.719): datos, pagos y la app de tus alumnos.
+            </Text>
+          </View>
+        </View>
+        <Button
+          label="Solicitar baja por correo"
+          variant="danger"
+          full
+          style={{ marginTop: 14 }}
+          testID="hub-danger-baja"
+          onPress={() => Linking.openURL('mailto:contacto@eva-app.cl?subject=' + encodeURIComponent('Solicitud de baja de cuenta EVA')).catch(() => {})}
+        />
+      </View>
     </View>
   )
 }
@@ -126,10 +205,10 @@ export default function CoachSettingsHubScreen() {
         <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
           {/* Título */}
           <View style={{ paddingTop: 16, paddingBottom: 4 }}>
-            <Text className="font-display-black text-strong" style={{ fontSize: 26, letterSpacing: -0.52 }}>
+            <Text className="font-display-black text-strong" style={{ fontSize: 21, letterSpacing: -0.6, textTransform: 'uppercase' }}>
               Opciones
             </Text>
-            <Text className="font-sans text-muted" style={{ fontSize: 13, marginTop: 4, lineHeight: 19 }}>
+            <Text className="font-sans text-muted" style={{ fontSize: 14, marginTop: 4, lineHeight: 22 }}>
               {managed
                 ? 'La marca y la suscripción las gestiona tu equipo. Acá están los módulos y tu cuenta.'
                 : 'Tu marca, tu suscripción y la configuración de tu cuenta, todo en un solo lugar.'}
@@ -158,6 +237,12 @@ export default function CoachSettingsHubScreen() {
               </View>
             </Card>
           </MotiView>
+
+          {/* Apariencia — toggle claro/oscuro, justo tras el hero (1:1 con web). */}
+          <View>
+            <SectionTitle>Apariencia</SectionTitle>
+            <AppearanceToggle />
+          </View>
 
           {/* Personalización — solo con marca propia (no gestionada). */}
           {!managed ? (
@@ -230,8 +315,8 @@ export default function CoachSettingsHubScreen() {
               <ListRow
                 testID="hub-features"
                 leading={<IconTile Icon={SlidersHorizontal} />}
-                title="Funciones"
-                subtitle="Qué tan a fondo trabajas la nutrición y qué ven tus alumnos"
+                title="Funciones de nutrición"
+                subtitle="Qué tan a fondo trabajas la nutrición y qué ven los alumnos"
                 showChevron
                 onPress={() => router.push('/coach/settings/features')}
               />
@@ -240,7 +325,7 @@ export default function CoachSettingsHubScreen() {
                 testID="hub-areas"
                 leading={<IconTile Icon={LayoutGrid} />}
                 title="Áreas del builder"
-                subtitle="Organizá los días del planificador"
+                subtitle="Organiza los días del planificador"
                 showChevron
                 onPress={() => router.push('/coach/settings/areas')}
               />
@@ -271,12 +356,15 @@ export default function CoachSettingsHubScreen() {
             </Card>
           </View>
 
+          {/* Zona de peligro — baja de cuenta (siempre alcanzable, 1:1 con web). */}
+          <DangerZone />
+
           {/* Pie — wordmark EVA, espejo del footer del hub web. */}
           <View className="items-center" style={{ paddingTop: 26, gap: 4, opacity: 0.6 }}>
-            <Text className="font-display-black text-strong" style={{ fontSize: 22, letterSpacing: -0.5 }}>
+            <Text className="font-display-black text-strong" style={{ fontSize: 24, letterSpacing: -0.5 }}>
               EVA
             </Text>
-            <Text className="font-sans-semibold text-subtle" style={{ fontSize: 11 }}>
+            <Text className="font-sans-semibold text-subtle" style={{ fontSize: 12 }}>
               Ejercicio Virtual Avanzado · v2.4
             </Text>
           </View>

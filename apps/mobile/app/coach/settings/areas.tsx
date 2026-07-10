@@ -189,7 +189,7 @@ export default function CoachAreasScreen() {
               Áreas del builder
             </Text>
             <Text className="font-sans text-muted" style={{ fontSize: 13.5, marginTop: 4, lineHeight: 19 }}>
-              Organizá los días de entrenamiento con tus propias áreas (Movilidad, Core, HYROX…).
+              Organiza los días de entrenamiento con tus propias áreas (Movilidad, Core, HYROX…).
               {isTeam ? ' Son las áreas compartidas del equipo.' : ''}
             </Text>
           </View>
@@ -293,13 +293,13 @@ export default function CoachAreasScreen() {
                     ) : (
                       <>
                         <View
-                          style={{ borderWidth: 1, borderColor: color, borderRadius: 7, paddingHorizontal: 7, paddingVertical: 3, minWidth: 38, alignItems: 'center' }}
+                          style={{ borderWidth: 1, borderColor: color, backgroundColor: `${color}1A`, borderRadius: 7, paddingHorizontal: 6, paddingVertical: 2, minWidth: 38, alignItems: 'center' }}
                         >
-                          <Text className="font-display-black" style={{ color, fontSize: 10, letterSpacing: 0.2 }}>{short}</Text>
+                          <Text className="font-display-black" style={{ color, fontSize: 9, letterSpacing: 0.2, textTransform: 'uppercase' }}>{short}</Text>
                         </View>
                         <View style={{ flex: 1, minWidth: 0 }}>
-                          <Text className="font-sans-bold text-strong" style={{ fontSize: 14.5 }} numberOfLines={1}>{area.name}</Text>
-                          <Text className="font-sans text-muted" style={{ fontSize: 11.5, marginTop: 1 }}>
+                          <Text className="font-sans-semibold text-strong" style={{ fontSize: 16 }} numberOfLines={1}>{area.name}</Text>
+                          <Text className="font-sans text-muted" style={{ fontSize: 12, marginTop: 1 }}>
                             Orden {area.sort_order}
                             {area.is_system ? ' · Área del sistema (solo lectura)' : ''}
                           </Text>

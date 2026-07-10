@@ -181,7 +181,7 @@ export default function CoachModulesScreen() {
             style={{ gap: 2, paddingVertical: 6, paddingHorizontal: 4 }}
           >
             <ChevronLeft size={22} strokeWidth={2.2} className="text-sport-600" />
-            <Text className="font-sans-bold text-sport-600" style={{ fontSize: 15 }}>Ajustes</Text>
+            <Text className="font-sans-bold text-sport-600" style={{ fontSize: 15 }}>Opciones</Text>
           </Pressable>
         </View>
 
@@ -216,7 +216,7 @@ export default function CoachModulesScreen() {
           </View>
 
           <Text className="font-sans text-subtle" style={{ fontSize: 11.5, textAlign: 'center', lineHeight: 17, marginTop: 16 }}>
-            El cobro se prorratea al período. Gestioná las bajas desde Suscripción.
+            El cobro se prorratea al período. Gestiona las bajas desde Suscripción.
           </Text>
         </ScrollView>
       </SafeAreaView>

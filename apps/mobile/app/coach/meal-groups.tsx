@@ -5,13 +5,12 @@ import { useFocusEffect, useRouter } from 'expo-router'
 import { BottomSheetModal } from '@gorhom/bottom-sheet'
 import { ChevronLeft, Layers, PencilLine, Plus, Search, Trash2 } from 'lucide-react-native'
 import { useTheme } from '../../context/ThemeContext'
-import { Badge, Button, Dialog, EmptyState, Input, MacroPill } from '../../components'
+import { Badge, Button, Dialog, EmptyState, Input } from '../../components'
 import { EvaLoaderScreen } from '../../components/EvaLoader'
 import { AppBackground } from '../../components/AppBackground'
 import { FoodSearchSheet } from '../../components/coach/FoodSearchSheet'
 import { FONT } from '../../lib/typography'
 import { SHADOWS, type Scheme } from '../../lib/shadows'
-import { MACRO_COLORS } from '../../components/MacroRingSummary'
 import type { FoodRow } from '../../lib/nutrition-builder'
 import {
   deleteMealGroup,
@@ -296,7 +295,7 @@ export default function CoachMealGroupsScreen() {
                 <EmptyState
                   icon={Layers}
                   title={query ? 'Sin resultados' : 'Sin grupos todavía'}
-                  subtitle={query ? `Ningún grupo coincide con «${query.trim()}».` : 'Crea tu primer grupo de alimentos para reutilizarlo en tus planes.'}
+                  subtitle={query ? `Ningún grupo coincide con «${query.trim()}».` : 'Crea tu primer grupo de alimentos para usarlo en tus planes.'}
                   action={!query ? <Button label="Nuevo grupo" leftIcon={Plus} variant="sport" onPress={openCreate} style={{ marginTop: 8 }} /> : undefined}
                 />
               </View>
@@ -307,25 +306,19 @@ export default function CoachMealGroupsScreen() {
                 <View style={[styles.groupCard, { borderColor: theme.border, backgroundColor: theme.card, borderRadius: theme.radius.xl }, SHADOWS[theme.scheme as Scheme].sm]}>
                   <View style={styles.groupTop}>
                     <View style={{ flex: 1, minWidth: 0 }}>
-                      <Text style={[styles.groupName, { color: theme.foreground, fontFamily: FONT.displayBold }]} numberOfLines={1}>{group.name}</Text>
+                      <Text style={[styles.groupName, { color: theme.foreground, fontFamily: FONT.uiBold }]} numberOfLines={1}>{group.name}</Text>
                       <Text style={[styles.groupMeta, { color: theme.mutedForeground, fontFamily: FONT.mono }]}>
-                        {group.items.length} ingrediente{group.items.length !== 1 ? 's' : ''} · ~{Math.round(totals.calories)} kcal
+                        {group.items.length} ingredientes · ~{Math.round(totals.calories)} kcal · {Math.round(totals.protein)}g P
                       </Text>
                     </View>
                     <View style={styles.groupActions}>
                       <TouchableOpacity testID={`meal-groups-edit-${group.id}`} onPress={() => openEdit(group)} activeOpacity={0.8} style={[styles.iconBtn, { borderColor: theme.border, backgroundColor: theme.secondary }]}>
                         <PencilLine size={15} color={theme.foreground} />
                       </TouchableOpacity>
-                      <TouchableOpacity testID={`meal-groups-delete-${group.id}`} onPress={() => setDeleteTarget(group)} activeOpacity={0.8} style={[styles.iconBtn, { borderColor: theme.destructive + '33', backgroundColor: theme.destructive + '14' }]}>
-                        <Trash2 size={15} color={theme.destructive} />
+                      <TouchableOpacity testID={`meal-groups-delete-${group.id}`} onPress={() => setDeleteTarget(group)} activeOpacity={0.8} style={[styles.iconBtn, { borderColor: theme.border, backgroundColor: theme.secondary }]}>
+                        <Trash2 size={15} color={theme.foreground} />
                       </TouchableOpacity>
                     </View>
-                  </View>
-
-                  <View style={styles.macrosRow}>
-                    <MacroPill label="P" value={Math.round(totals.protein)} color={MACRO_COLORS.protein} />
-                    <MacroPill label="C" value={Math.round(totals.carbs)} color={MACRO_COLORS.carbs} />
-                    <MacroPill label="G" value={Math.round(totals.fats)} color={MACRO_COLORS.fats} />
                   </View>
 
                   {group.items.length > 0 ? (
@@ -383,16 +376,15 @@ const styles = StyleSheet.create({
   hSub: { fontSize: 12.5, marginTop: 2 },
 
   listHead: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, paddingBottom: 10 },
-  newBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, height: 48, paddingHorizontal: 16, borderRadius: 14 },
+  newBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, height: 44, paddingHorizontal: 14, borderRadius: 14 },
   listBody: { paddingHorizontal: 16, paddingBottom: 120, paddingTop: 4 },
 
   groupCard: { borderWidth: 1, padding: 16, gap: 12 },
   groupTop: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 },
-  groupName: { fontSize: 16, letterSpacing: -0.2 },
+  groupName: { fontSize: 15.5, letterSpacing: -0.2 },
   groupMeta: { fontSize: 11.5, marginTop: 3 },
   groupActions: { flexDirection: 'row', gap: 8 },
-  iconBtn: { width: 36, height: 36, borderWidth: 1, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-  macrosRow: { flexDirection: 'row', gap: 6, flexWrap: 'wrap' },
+  iconBtn: { width: 34, height: 34, borderWidth: 1.5, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   chipsRow: { flexDirection: 'row', gap: 6, flexWrap: 'wrap', alignItems: 'center' },
   foodChip: { maxWidth: 140, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
 

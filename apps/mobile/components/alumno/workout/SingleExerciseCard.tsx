@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import { MotiView } from 'moti'
 import {
@@ -10,15 +11,15 @@ import {
   TrendingUp,
   Undo2,
 } from 'lucide-react-native'
-import type { ExerciseType, ReconciledSessionLog, TypedKeypadMode } from '@eva/workout-engine'
+import type { ExerciseType, OptimisticLogPayload, ReconciledSessionLog, TypedKeypadMode } from '@eva/workout-engine'
 import type { HrZoneRange } from '@eva/cardio'
 import { FONT, TYPE } from '../../../lib/typography'
 import { useTheme } from '../../../context/ThemeContext'
 import { EXERCISE_TYPE_META, exerciseTypeColor } from '../../../lib/exercise-type-meta'
 import type { EffectiveTarget } from '../../../lib/workout/progression'
-import type { PrevSet, SessionBlock, SessionExercise } from '../../../lib/workout-session'
+import type { PrevSet, SessionBlock, SessionDraft, SessionExercise } from '../../../lib/workout-session'
 import { formatRelativeDate } from '../../../lib/date-utils'
-import { SetRow } from './SetRow'
+import { SetRow, ActiveSetRow } from './SetRow'
 import { TypedBlockTimerButton, TypedTargetGrid } from './TypedTargetGrid'
 import { bestPrevOf, overloadChipLabel, overloadDetailText } from './workout-ui'
 
@@ -47,11 +48,13 @@ export function SingleExerciseCard({
   detailsOpen,
   substitution,
   canSubstitute,
+  restoredDraft,
   hrZones,
   onToggleDetails,
   onOpenTechnique,
   onOpenSet,
-  onAutofillLast,
+  onCommitSet,
+  onDraftChange,
   onOpenSubstitute,
   onUndoSubstitution,
 }: {
@@ -66,16 +69,24 @@ export function SingleExerciseCard({
   detailsOpen: boolean
   substitution: { name: string; prescribedName: string } | null
   canSubstitute: boolean
+  /** Draft restaurado del set en curso (resiliencia E2-03) — pre-llena la fila activa al reabrir. */
+  restoredDraft: SessionDraft | null
   /** Rangos bpm por zona del alumno (E2-11, cardio gated); null si el módulo cardio está OFF. */
   hrZones?: HrZoneRange[] | null
   onToggleDetails: () => void
   onOpenTechnique: () => void
+  /** Tap en una serie ya logueada / proxima (no la activa): abre el teclado de edicion (KeypadHost). */
   onOpenSet: (setNumber: number) => void
-  onAutofillLast: (setNumber: number, best: PrevSet) => void
+  /** Confirma la serie activa (arma el payload la propia fila): logSet intacto. */
+  onCommitSet: (payload: OptimisticLogPayload) => void
+  /** Reporta el draft del set en curso (resiliencia). */
+  onDraftChange: (blockId: string, setNumber: number, values: Record<string, string>, fieldIndex: number) => void
   onOpenSubstitute: () => void
   onUndoSubstitution: () => void
 }) {
   const { theme } = useTheme()
+  // Autollenado "= usar ultima vez": siembra las cajas KG/REPS de la fila activa (nonce dispara).
+  const [autofill, setAutofill] = useState<{ weight: number | null; reps: number | null; nonce: number } | null>(null)
   const isStrength = effType === 'strength'
   const typeMeta = EXERCISE_TYPE_META[effType]
   const TypeIcon = typeMeta.Icon
@@ -247,7 +258,7 @@ export function SingleExerciseCard({
         <Pressable
           testID="btn-autofill-last"
           disabled={firstUnlogged == null}
-          onPress={() => { if (firstUnlogged != null) onAutofillLast(firstUnlogged, bestPrev) }}
+          onPress={() => { if (firstUnlogged != null) setAutofill({ weight: bestPrev.weight_kg, reps: bestPrev.reps_done, nonce: Date.now() }) }}
           className="min-h-[40px] flex-row flex-wrap items-center gap-x-2 rounded-control py-1"
           accessibilityRole="button"
           accessibilityLabel={firstUnlogged != null && bestPrev.weight_kg ? `Autollenar la serie activa con ${bestPrev.weight_kg} kg por ${bestPrev.reps_done ?? '-'} reps` : undefined}
@@ -321,11 +332,30 @@ export function SingleExerciseCard({
         </MotiView>
       )}
 
-      {/* Series (tap → TypedKeypad; strength o tipado según effType) */}
+      {/* Series: la ACTIVA es la fila de registro expandida (paridad web); las demas son chips/prompts */}
       <View className="gap-1.5">
         {Array.from({ length: block.sets }).map((_, i) => {
           const setNumber = i + 1
           const log = blockLogs.find((l) => l.set_number === setNumber)
+          if (!log && setNumber === firstUnlogged) {
+            const seed =
+              restoredDraft && restoredDraft.blockId === block.id && restoredDraft.setNumber === setNumber
+                ? restoredDraft.values
+                : null
+            return (
+              <ActiveSetRow
+                key={setNumber}
+                blockId={block.id}
+                setNumber={setNumber}
+                typedMode={typedMode}
+                suggestedWeight={suggestedWeightKg ?? null}
+                seedValues={seed}
+                autofill={autofill}
+                onDraftChange={(values, fieldIndex) => onDraftChange(block.id, setNumber, values, fieldIndex)}
+                onCommit={onCommitSet}
+              />
+            )
+          }
           return (
             <SetRow
               key={setNumber}

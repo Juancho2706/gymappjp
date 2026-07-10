@@ -261,6 +261,15 @@ function ExecutorV2Inner({ planId }: { planId: string }) {
     [keypadTarget, saveDraft],
   )
 
+  // Draft de la fila de registro expandida (ActiveSetRow): reporta directo con block/set (no depende
+  // del keypadTarget, que solo existe cuando se edita una serie via KeypadHost).
+  const saveActiveDraft = useCallback(
+    (blockId: string, setNumber: number, values: Record<string, string>, fieldIndex: number) => {
+      saveDraft({ blockId, setNumber, values, fieldIndex })
+    },
+    [saveDraft],
+  )
+
   const onRefresh = useCallback(async () => {
     setRefreshing(true)
     await refresh()
@@ -354,8 +363,11 @@ function ExecutorV2Inner({ planId }: { planId: string }) {
             effByBlock={effByBlock}
             previousHistory={previousHistory}
             currentWeek={currentWeek}
+            restoredDraft={restoredDraft}
             onOpenTechnique={(b) => setTechniqueExercise(resolveExercise(b))}
             onOpenSet={openSet}
+            onCommitSet={handleCommit}
+            onDraftChange={saveActiveDraft}
           />
         )
       }
@@ -388,17 +400,19 @@ function ExecutorV2Inner({ planId }: { planId: string }) {
           detailsOpen={!!openDetails[block.id]}
           substitution={sub ? { name: sub.name, prescribedName: sub.prescribedName } : null}
           canSubstitute={doneCount === 0 && isStrengthBlock}
+          restoredDraft={restoredDraft}
           hrZones={hrZones}
           onToggleDetails={() => setOpenDetails((p) => ({ ...p, [block.id]: !p[block.id] }))}
           onOpenTechnique={() => setTechniqueExercise(exercise)}
           onOpenSet={(setNumber) => openSet(block.id, setNumber)}
-          onAutofillLast={(setNumber, best) => openSet(block.id, setNumber, { weight: best.weight_kg, reps: best.reps_done })}
+          onCommitSet={handleCommit}
+          onDraftChange={saveActiveDraft}
           onOpenSubstitute={() => setSubstituteBlockId(block.id)}
           onUndoSubstitution={() => setSubstitutionByBlock((p) => { const n = { ...p }; delete n[block.id]; return n })}
         />
       )
     },
-    [supersetMembersByBlock, sessionLogs, effByBlock, currentWeek, activeBlockId, previousHistory, openDetails, getSubstitution, openSet, hrZones],
+    [supersetMembersByBlock, sessionLogs, effByBlock, currentWeek, activeBlockId, previousHistory, openDetails, getSubstitution, openSet, hrZones, restoredDraft, handleCommit, saveActiveDraft],
   )
 
   // ── Modo Paso a paso (E2-04): modelo de pasos + vistas del rail + auto-avance ──

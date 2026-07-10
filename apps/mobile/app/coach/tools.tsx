@@ -1,26 +1,29 @@
 import { useCallback, useMemo, useState } from 'react'
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
+import { Pressable, ScrollView, Text, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useFocusEffect, useRouter } from 'expo-router'
+import { cssInterop } from 'nativewind'
 import {
+  Apple,
+  ArrowRight,
   ChevronLeft,
   ChevronRight,
   CirclePlay,
+  ClipboardList,
   HeartPulse,
   Info,
   LayoutGrid,
+  Lock,
   PersonStanding,
   Ruler,
   Search,
-  UserRound,
   UserPlus,
+  UserRound,
   type LucideIcon,
 } from 'lucide-react-native'
-import { MODULE_CATALOG } from '@eva/module-catalog'
-import { useTheme } from '../../context/ThemeContext'
-import { FONT } from '../../lib/typography'
+import { MODULE_CATALOG, type ModuleKey } from '@eva/module-catalog'
 import { useEntitlements } from '../../lib/entitlements'
-import type { ModuleKey } from '../../lib/entitlements-core'
+import { useWorkspace } from '../../lib/workspace'
 import { listCardioClients, type CardioClientRow } from '../../lib/cardio-coach'
 import { AppBackground } from '../../components/AppBackground'
 import { Badge } from '../../components/Badge'
@@ -29,60 +32,91 @@ import { Card } from '../../components/Card'
 import { EvaLoaderScreen } from '../../components/EvaLoader'
 import { Input } from '../../components/Input'
 import { Sheet } from '../../components/Sheet'
+import { useTheme } from '../../context/ThemeContext'
 
 /**
- * Hub /coach/tools (E6-02) — launcher de los modulos que el coach USA (espejo mobile del
- * `ToolsHub` web `apps/web/.../coach/tools`). "Comprar != usar": aca aparecen SOLO los
- * modulos ENTITLED (via `useEntitlements().hasModule`); el catalogo de COMPRA vive en
- * `/coach/modules`. Cada card navega al contrato de rutas del arquitecto:
- *   cardio -> /coach/cardio · movement_assessment -> /coach/movement · body_composition ->
- *   /coach/bodycomp/[clientId] (captura 1-a-1 => picker de alumno primero).
+ * Hub /coach/tools (E6-02) — launcher de los módulos que el coach USA (espejo mobile del
+ * `ToolsHub` web `apps/web/.../coach/tools`). "Comprar != usar": los ENTITLED se listan arriba
+ * con CTA "Usar"; los NO entitled NO se esconden — aparecen como locked-cards con upsell
+ * ("Desbloquear · $X/mes"), y el empty-state VENDE (card inverse "Potencia tu evaluación").
+ * La capa del plan (`nutrition_exchanges`) va aparte: se configura DENTRO de un plan, no acá.
  *
- * Money-safety: solo VISIBILIDAD; el gate de dinero vive server-side en /api/mobile/*. Sin
- * ningun modulo del hub NO se listan alumnos (cero fetch). Empty-states en todo: 0 modulos
- * -> CTA al catalogo; 0 alumnos en el picker -> CTA crear alumno (NUNCA crash — el bug web
- * de modulos con 0 alumnos NO se hereda, memoria module_page_crash_no_clients).
+ * Money-safety: solo VISIBILIDAD; el gate de dinero vive server-side en /api/mobile/*. El picker
+ * de composición no pega a la DB sin el módulo. 0 alumnos -> CTA crear alumno (NUNCA crash — el
+ * bug web de módulos con 0 alumnos NO se hereda, memoria module_page_crash_no_clients).
  */
 
+// Let NativeWind drive the lucide icon `color` via `text-*` classes (DS pattern, ver perfil.tsx).
+for (const Icon of [
+  Apple, ArrowRight, ChevronLeft, ChevronRight, CirclePlay, ClipboardList, HeartPulse,
+  Info, LayoutGrid, Lock, PersonStanding, Ruler, Search, UserPlus, UserRound,
+]) {
+  cssInterop(Icon, { className: { target: 'style', nativeStyleToProp: { color: true } } })
+}
+
+const clpFormatter = new Intl.NumberFormat('es-CL', {
+  style: 'currency',
+  currency: 'CLP',
+  maximumFractionDigits: 0,
+})
+
+type ToolScope = 'student' | 'plan'
 type ToolDef = {
-  key: Extract<ModuleKey, 'cardio' | 'movement_assessment' | 'body_composition'>
+  key: ModuleKey
   icon: LucideIcon
   /** Descripcion corta de valor (UI del hub, no el pitch comercial del catalogo). */
   value: string
+  /** Alcance: se usa con un alumno (student) vs se configura dentro del plan (plan). */
+  scope: ToolScope
   /** El modulo se captura 1-a-1: abre el picker de alumno antes de navegar. */
   picker?: boolean
   /** Ruta directa (modulos con hub propio que ya listan alumnos). */
   href?: string
 }
 
-// Herramientas por-alumno del launcher. `nutrition_exchanges` NO va aca: es del plan.
+// Herramientas por-alumno del launcher (scope 'student'). El orden espeja el catalogo del kit.
 const TOOLS: ToolDef[] = [
   {
     key: 'cardio',
     icon: HeartPulse,
     value: 'Zonas de FC personalizadas, calculadora de pace y plantillas de intervalos.',
+    scope: 'student',
     href: '/coach/cardio',
   },
   {
     key: 'movement_assessment',
     icon: PersonStanding,
-    value: 'Screening de 7 patrones con semaforo de prioridad y evolucion.',
+    value: 'Screening de 7 patrones con semáforo de prioridad y evolución.',
+    scope: 'student',
     href: '/coach/movement',
   },
   {
     key: 'body_composition',
     icon: Ruler,
-    value: 'Bioimpedancia y antropometria ISAK con tendencia por metodo.',
+    value: 'Bioimpedancia y antropometría ISAK con tendencia por método.',
+    scope: 'student',
     picker: true,
   },
 ]
 
+// Capa del plan — intercambios NO es herramienta del launcher; vive dentro del plan de nutrición.
+const PLAN_TOOL: ToolDef = {
+  key: 'nutrition_exchanges',
+  icon: Apple,
+  value: 'Porciones e intercambios, micronutrientes avanzados y PDF con tu marca, dentro del plan.',
+  scope: 'plan',
+  href: '/coach/(tabs)/nutricion',
+}
+
 export default function ToolsHubScreen() {
-  const { theme } = useTheme()
   const router = useRouter()
   const { hasModule, ready } = useEntitlements()
+  const { isManaged: managed } = useWorkspace()
 
   const activeTools = useMemo(() => TOOLS.filter((t) => hasModule(t.key)), [hasModule])
+  const lockedTools = useMemo(() => TOOLS.filter((t) => !hasModule(t.key)), [hasModule])
+  const planActive = hasModule('nutrition_exchanges')
+  const anyActive = activeTools.length > 0 || planActive
   const bodycompActive = hasModule('body_composition')
 
   const [clients, setClients] = useState<CardioClientRow[]>([])
@@ -112,149 +146,267 @@ export default function ToolsHubScreen() {
     }, [bodycompActive]),
   )
 
-  const onUse = useCallback(
-    (tool: ToolDef) => {
-      if (tool.picker) {
-        setPickerOpen(true)
-        return
+  // Handler primario por card, calculado por estado (activo / picker / bloqueado / gestionado).
+  const primaryFor = useCallback(
+    (tool: ToolDef, active: boolean): (() => void) | undefined => {
+      if (active) {
+        if (tool.picker) return () => setPickerOpen(true)
+        return () => router.push(tool.href as never)
       }
-      if (tool.href) router.push(tool.href as never)
+      if (managed) return undefined
+      return () => router.push('/coach/modules')
     },
-    [router],
+    [router, managed],
   )
 
   return (
-    <SafeAreaView edges={['top']} style={[styles.container, { backgroundColor: theme.background }]}>
+    <View className="flex-1 bg-surface-app">
       <AppBackground />
+      <SafeAreaView edges={['top']} style={{ flex: 1 }}>
+        {/* Back al hub Opciones (Herramientas es sub-pantalla pusheada, 1:1 con /coach/modules). */}
+        <View className="flex-row items-center" style={{ paddingHorizontal: 12, paddingTop: 8, paddingBottom: 4 }}>
+          <Pressable
+            testID="tools-back"
+            accessibilityRole="button"
+            accessibilityLabel="Volver"
+            onPress={() => router.back()}
+            hitSlop={10}
+            className="flex-row items-center"
+            style={{ gap: 2, paddingVertical: 6, paddingHorizontal: 4 }}
+          >
+            <ChevronLeft size={22} strokeWidth={2.2} className="text-sport-600" />
+            <Text className="font-sans-bold text-sport-600" style={{ fontSize: 15 }}>Opciones</Text>
+          </Pressable>
+        </View>
 
-      {/* Header: back + tile de modulos + titulo */}
-      <View style={styles.header}>
-        <TouchableOpacity
-          testID="tools-back"
-          onPress={() => router.back()}
-          activeOpacity={0.8}
-          style={[styles.backBtn, { backgroundColor: theme.card, borderColor: theme.border }]}
+        {!ready ? (
+          <EvaLoaderScreen subtitle="Cargando…" />
+        ) : (
+          <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
+            {/* Header: tile de módulos + título */}
+            <View className="flex-row items-center" style={{ gap: 10, paddingTop: 8, paddingBottom: 12 }}>
+              <View className="items-center justify-center rounded-control bg-sport-100" style={{ width: 36, height: 36 }}>
+                <LayoutGrid size={18} strokeWidth={2} className="text-sport-600" />
+              </View>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text className="font-display-black text-strong" style={{ fontSize: 21, letterSpacing: -0.42 }} numberOfLines={1}>
+                  Herramientas
+                </Text>
+                <Text className="font-sans text-muted" style={{ fontSize: 12.5, marginTop: 1 }} numberOfLines={1}>
+                  {anyActive ? 'Tus módulos' : 'Módulos'}
+                </Text>
+              </View>
+            </View>
+
+            {!anyActive ? (
+              <View style={{ gap: 14 }}>
+                {/* Empty-state que VENDE — nada comprado (no se esconde el catálogo). */}
+                <SellCard managed={managed} onExplore={() => router.push('/coach/modules')} />
+                <SectionTitle>Lo que puedes desbloquear</SectionTitle>
+                <View style={{ gap: 12 }}>
+                  {[...TOOLS, PLAN_TOOL].map((tool) => (
+                    <ModuleHubCard key={tool.key} tool={tool} active={false} managed={managed} onPrimary={primaryFor(tool, false)} />
+                  ))}
+                </View>
+              </View>
+            ) : (
+              <View style={{ gap: 12 }}>
+                {/* Comprar ≠ usar — recordatorio (espejo del banner web). */}
+                <View className="flex-row items-center rounded-control bg-surface-sunken" style={{ gap: 9, paddingHorizontal: 13, paddingVertical: 10 }}>
+                  <Info size={15} strokeWidth={2.2} className="text-subtle" style={{ marginTop: 1 }} />
+                  <Text className="font-sans text-muted" style={{ flex: 1, fontSize: 12, lineHeight: 17 }}>
+                    Elige el módulo y después el alumno. Se mide a una persona a la vez.
+                  </Text>
+                </View>
+
+                {/* Activos arriba */}
+                {activeTools.map((tool) => (
+                  <ModuleHubCard key={tool.key} tool={tool} active managed={managed} onPrimary={primaryFor(tool, true)} />
+                ))}
+
+                {/* Capa del plan — intercambios vive en el plan, no en el launcher. */}
+                {planActive ? (
+                  <>
+                    <SectionTitle>En el plan de nutrición</SectionTitle>
+                    <ModuleHubCard tool={PLAN_TOOL} active managed={managed} onPrimary={primaryFor(PLAN_TOOL, true)} />
+                  </>
+                ) : null}
+
+                {/* Descubre más — bloqueados con upsell. */}
+                {lockedTools.length > 0 || !planActive ? (
+                  <>
+                    <SectionTitle>Descubre más</SectionTitle>
+                    <View style={{ gap: 12 }}>
+                      {lockedTools.map((tool) => (
+                        <ModuleHubCard key={tool.key} tool={tool} active={false} managed={managed} onPrimary={primaryFor(tool, false)} />
+                      ))}
+                      {!planActive ? (
+                        <ModuleHubCard tool={PLAN_TOOL} active={false} managed={managed} onPrimary={primaryFor(PLAN_TOOL, false)} />
+                      ) : null}
+                    </View>
+                  </>
+                ) : null}
+              </View>
+            )}
+          </ScrollView>
+        )}
+
+        {/* Picker de alumno SINGLE para Composición (captura 1-a-1). */}
+        <Sheet
+          open={pickerOpen}
+          onClose={() => setPickerOpen(false)}
+          title="Elige un alumno"
+          description="Composición corporal · se mide a una persona a la vez"
+          snapPoints={['55%', '85%']}
         >
-          <ChevronLeft size={20} color={theme.foreground} />
-        </TouchableOpacity>
-        <View className="bg-sport-100" style={styles.iconTile}>
-          <LayoutGrid size={18} color={theme.primary} />
-        </View>
-        <View style={{ flex: 1, minWidth: 0 }}>
-          <Text style={[styles.hTitle, { color: theme.foreground, fontFamily: FONT.displayBold }]} numberOfLines={1}>
-            Herramientas
-          </Text>
-          <Text style={[styles.hSub, { color: theme.mutedForeground, fontFamily: FONT.ui }]} numberOfLines={1}>
-            {activeTools.length > 0 ? 'Tus modulos' : 'Modulos'}
-          </Text>
-        </View>
-      </View>
-
-      {!ready ? (
-        <EvaLoaderScreen subtitle="Cargando…" />
-      ) : activeTools.length === 0 ? (
-        <View style={styles.emptyWrap}>
-          <View style={[styles.emptyIcon, { backgroundColor: theme.muted, borderRadius: theme.radius.xl }]}>
-            <LayoutGrid size={26} color={theme.mutedForeground} strokeWidth={2} />
-          </View>
-          <Text style={[styles.emptyTitle, { color: theme.foreground, fontFamily: FONT.displayBold }]}>
-            Aun no tenes modulos activos
-          </Text>
-          <Text style={[styles.emptyBody, { color: theme.mutedForeground, fontFamily: FONT.ui }]}>
-            Cardio, evaluacion de movimiento y composicion corporal son herramientas profesionales por alumno.
-            Activalas para verlas aca.
-          </Text>
-          <Button
-            label="Ver modulos"
-            variant="sport"
-            onPress={() => router.push('/coach/modules')}
-            style={{ marginTop: 6 }}
-            testID="tools-empty-cta"
+          <StudentPicker
+            clients={clients}
+            loading={loadingClients}
+            onPick={(id) => {
+              setPickerOpen(false)
+              router.push(`/coach/bodycomp/${id}` as never)
+            }}
+            onCreate={() => {
+              setPickerOpen(false)
+              router.push('/coach/(tabs)/clientes')
+            }}
           />
-        </View>
-      ) : (
-        <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
-          {/* Comprar != usar — recordatorio (espejo del banner web) */}
-          <View style={[styles.infoBanner, { backgroundColor: theme.secondary }]}>
-            <Info size={15} color={theme.mutedForeground} style={{ marginTop: 1 }} />
-            <Text style={[styles.infoTxt, { color: theme.mutedForeground, fontFamily: FONT.ui }]}>
-              Elegi el modulo y despues el alumno. Se mide a una persona a la vez.
-            </Text>
-          </View>
-
-          {activeTools.map((tool) => (
-            <ToolCard key={tool.key} tool={tool} onUse={() => onUse(tool)} />
-          ))}
-        </ScrollView>
-      )}
-
-      {/* Picker de alumno SINGLE para Composicion (captura 1-a-1) */}
-      <Sheet
-        open={pickerOpen}
-        onClose={() => setPickerOpen(false)}
-        title="Elegi un alumno"
-        description="Composicion corporal · se mide a una persona a la vez"
-        snapPoints={['55%', '85%']}
-      >
-        <StudentPicker
-          clients={clients}
-          loading={loadingClients}
-          onPick={(id) => {
-            setPickerOpen(false)
-            router.push(`/coach/bodycomp/${id}` as never)
-          }}
-          onCreate={() => {
-            setPickerOpen(false)
-            router.push('/coach/(tabs)/clientes')
-          }}
-        />
-      </Sheet>
-    </SafeAreaView>
+        </Sheet>
+      </SafeAreaView>
+    </View>
   )
 }
 
-/* ── Card de modulo entitled ─────────────────────────────────────────────────── */
-function ToolCard({ tool, onUse }: { tool: ToolDef; onUse: () => void }) {
-  const { theme } = useTheme()
-  const Icon = tool.icon
-  const label = MODULE_CATALOG[tool.key].label
-
+/* ── Título de sección (display extrabold, 1:1 con el SectionTitle web) ───────── */
+function SectionTitle({ children }: { children: string }) {
   return (
-    <Card padding="md" style={{ gap: 13 }}>
-      <View style={styles.cardHead}>
-        <View className="bg-sport-100" style={styles.cardIconTile}>
-          <Icon size={23} color={theme.primary} />
-        </View>
-        <View style={{ flex: 1, minWidth: 0 }}>
-          <Text style={[styles.cardLabel, { color: theme.foreground, fontFamily: FONT.displayBold }]}>{label}</Text>
-          <Text style={[styles.cardValue, { color: theme.mutedForeground, fontFamily: FONT.ui }]}>{tool.value}</Text>
-        </View>
-      </View>
+    <Text className="font-display-bold text-strong" style={{ fontSize: 17, letterSpacing: -0.34, paddingTop: 4 }}>
+      {children}
+    </Text>
+  )
+}
 
-      <View style={styles.chipRow}>
-        <View style={[styles.scopeChip, { backgroundColor: theme.secondary }]}>
-          <UserRound size={12} color={theme.mutedForeground} />
-          <Text style={[styles.scopeTxt, { color: theme.mutedForeground, fontFamily: FONT.uiBold }]}>
-            Se usa con un alumno
-          </Text>
-        </View>
-        <Badge tone="success" variant="soft" size="sm" dot>
-          Activo
-        </Badge>
+/* ── Empty-state que VENDE — card inverse (espejo del estado vacío web) ───────── */
+function SellCard({ managed, onExplore }: { managed: boolean; onExplore: () => void }) {
+  const { theme } = useTheme()
+  return (
+    <Card variant="inverse" padding="lg" style={{ alignItems: 'center', gap: 0 }}>
+      <View
+        className="items-center justify-center rounded-2xl"
+        style={{ width: 60, height: 60, marginBottom: 14, backgroundColor: `${theme.primary}2E` }}
+      >
+        <LayoutGrid size={28} strokeWidth={2} className="text-sport-400" />
       </View>
-
-      <Button
-        label="Usar"
-        variant="sport"
-        leftIcon={CirclePlay}
-        onPress={onUse}
-        testID={`tools-use-${tool.key}`}
-      />
+      <Text className="font-display-black text-on-dark" style={{ fontSize: 22, letterSpacing: -0.44, textAlign: 'center' }}>
+        Potencia tu evaluación
+      </Text>
+      <Text className="font-sans text-on-dark-muted" style={{ fontSize: 13.5, lineHeight: 20, textAlign: 'center', marginTop: 8, maxWidth: 300 }}>
+        Cardio con zonas, screening de movimiento y composición corporal — herramientas profesionales por alumno.
+      </Text>
+      {!managed ? (
+        <Button
+          label="Ver planes y módulos"
+          variant="sport"
+          onPress={onExplore}
+          full
+          style={{ marginTop: 18 }}
+          testID="tools-empty-cta"
+        />
+      ) : (
+        <Text className="font-sans-semibold text-on-dark-muted" style={{ fontSize: 12.5, textAlign: 'center', marginTop: 16 }}>
+          Pídele al owner de tu equipo que active los módulos.
+        </Text>
+      )}
     </Card>
   )
 }
 
-/* ── Picker de alumno (lista + busqueda) ─────────────────────────────────────── */
+/* ── Card de módulo del hub — alcance + estado + acción según entitlement ─────── */
+function ModuleHubCard({
+  tool,
+  active,
+  managed,
+  onPrimary,
+}: {
+  tool: ToolDef
+  active: boolean
+  managed: boolean
+  onPrimary?: () => void
+}) {
+  const Icon = tool.icon
+  const label = MODULE_CATALOG[tool.key].label
+  const isPlan = tool.scope === 'plan'
+
+  return (
+    <Card padding="md" style={{ gap: 13 }}>
+      <View className="flex-row items-start" style={{ gap: 13 }}>
+        <View
+          className={`items-center justify-center rounded-xl ${active ? 'bg-sport-100' : 'bg-surface-sunken'}`}
+          style={{ width: 48, height: 48 }}
+        >
+          <Icon size={23} strokeWidth={2} className={active ? 'text-sport-600' : 'text-subtle'} />
+        </View>
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text className="font-display-bold text-strong" style={{ fontSize: 16.5, letterSpacing: -0.2 }}>{label}</Text>
+          <Text className="font-sans text-muted" style={{ fontSize: 12.5, lineHeight: 18, marginTop: 2 }}>{tool.value}</Text>
+        </View>
+      </View>
+
+      {/* Alcance + estado */}
+      <View className="flex-row flex-wrap items-center" style={{ gap: 7 }}>
+        <View className="flex-row items-center rounded-pill bg-surface-sunken" style={{ gap: 5, paddingHorizontal: 9, height: 24 }}>
+          {isPlan ? (
+            <ClipboardList size={12} strokeWidth={2.2} className="text-muted" />
+          ) : (
+            <UserRound size={12} strokeWidth={2.2} className="text-muted" />
+          )}
+          <Text className="font-sans-bold text-muted" style={{ fontSize: 11 }}>
+            {isPlan ? 'Se configura en el plan' : 'Se usa con un alumno'}
+          </Text>
+        </View>
+        {active ? (
+          <Badge tone="success" variant="soft" size="sm" dot>
+            Activo
+          </Badge>
+        ) : (
+          <Badge tone="neutral" variant="soft" size="sm">
+            De pago
+          </Badge>
+        )}
+      </View>
+
+      {/* Acción primaria según estado */}
+      {active ? (
+        <Button
+          label={tool.picker ? 'Usar' : isPlan ? 'Abrir en un plan' : 'Usar'}
+          variant="sport"
+          leftIcon={isPlan && !tool.picker ? ArrowRight : CirclePlay}
+          onPress={onPrimary}
+          full
+          testID={`tools-use-${tool.key}`}
+        />
+      ) : managed ? (
+        <View className="flex-row items-center rounded-control bg-surface-sunken" style={{ gap: 8, paddingHorizontal: 14, paddingVertical: 11 }}>
+          <Lock size={15} strokeWidth={2.2} className="text-subtle" />
+          <Text className="font-sans-semibold text-muted" style={{ flex: 1, fontSize: 12.5, lineHeight: 18 }}>
+            Pídelo al owner de tu equipo
+          </Text>
+        </View>
+      ) : (
+        <Button
+          label={`Desbloquear · ${clpFormatter.format(MODULE_CATALOG[tool.key].priceClp)}/mes`}
+          variant="secondary"
+          leftIcon={Lock}
+          onPress={onPrimary}
+          full
+          testID={`tools-unlock-${tool.key}`}
+        />
+      )}
+    </Card>
+  )
+}
+
+/* ── Picker de alumno (lista + búsqueda) ─────────────────────────────────────── */
 function StudentPicker({
   clients,
   loading,
@@ -266,7 +418,6 @@ function StudentPicker({
   onPick: (id: string) => void
   onCreate: () => void
 }) {
-  const { theme } = useTheme()
   const [q, setQ] = useState('')
 
   const list = useMemo(
@@ -278,8 +429,8 @@ function StudentPicker({
     // Empty-state 0 alumnos: NO crash — CTA a crear alumno.
     return (
       <View style={{ alignItems: 'center', gap: 12, paddingVertical: 20 }}>
-        <Text style={[styles.pickerEmpty, { color: theme.mutedForeground, fontFamily: FONT.ui }]}>
-          Aun no tenes alumnos. Agrega uno para tomar mediciones de composicion corporal.
+        <Text className="font-sans text-muted" style={{ fontSize: 13.5, lineHeight: 20, textAlign: 'center' }}>
+          Aún no tienes alumnos. Agrega uno para tomar mediciones de composición corporal.
         </Text>
         <Button label="Crear alumno" variant="sport" leftIcon={UserPlus} onPress={onCreate} testID="tools-picker-create" />
       </View>
@@ -298,80 +449,31 @@ function StudentPicker({
         autoCorrect={false}
       />
       {loading ? (
-        <Text style={[styles.pickerHint, { color: theme.mutedForeground, fontFamily: FONT.ui }]}>Cargando alumnos…</Text>
+        <Text className="font-sans text-muted" style={{ fontSize: 13, textAlign: 'center', paddingVertical: 16 }}>Cargando alumnos…</Text>
       ) : list.length === 0 ? (
-        <Text style={[styles.pickerHint, { color: theme.mutedForeground, fontFamily: FONT.ui }]}>Sin resultados</Text>
+        <Text className="font-sans text-muted" style={{ fontSize: 13, textAlign: 'center', paddingVertical: 16 }}>Sin resultados</Text>
       ) : (
         list.map((c) => (
-          <TouchableOpacity
+          <Pressable
             key={c.id}
             testID={`tools-picker-client-${c.id}`}
-            activeOpacity={0.75}
+            accessibilityRole="button"
             onPress={() => onPick(c.id)}
-            style={styles.pickerRow}
+            className="flex-row items-center"
+            style={{ gap: 12, paddingVertical: 10 }}
           >
-            <View style={[styles.avatar, { backgroundColor: theme.foreground }]}>
-              <Text style={[styles.avatarTxt, { color: theme.card, fontFamily: FONT.displayBold }]}>
+            <View className="items-center justify-center rounded-full bg-ink-900" style={{ width: 38, height: 38 }}>
+              <Text className="font-display-bold text-sport-400" style={{ fontSize: 14 }}>
                 {(c.full_name ?? '?').charAt(0).toUpperCase()}
               </Text>
             </View>
-            <Text style={[styles.pickerName, { color: theme.foreground, fontFamily: FONT.uiBold }]} numberOfLines={1}>
+            <Text className="font-sans-bold text-strong" style={{ flex: 1, fontSize: 14.5 }} numberOfLines={1}>
               {c.full_name ?? 'Alumno'}
             </Text>
-            <ChevronRight size={17} color={theme.mutedForeground} />
-          </TouchableOpacity>
+            <ChevronRight size={17} strokeWidth={2.2} className="text-ink-300" />
+          </Pressable>
         ))
       )}
     </View>
   )
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1 },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 12,
-  },
-  backBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  iconTile: { width: 36, height: 36, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
-  hTitle: { fontSize: 19, letterSpacing: -0.4 },
-  hSub: { fontSize: 12.5, marginTop: 1 },
-  body: { paddingHorizontal: 16, paddingTop: 4, paddingBottom: 40, gap: 12 },
-  infoBanner: { flexDirection: 'row', gap: 9, borderRadius: 12, paddingHorizontal: 13, paddingVertical: 10 },
-  infoTxt: { flex: 1, fontSize: 12, lineHeight: 17 },
-  cardHead: { flexDirection: 'row', alignItems: 'flex-start', gap: 13 },
-  cardIconTile: { width: 48, height: 48, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
-  cardLabel: { fontSize: 16.5, letterSpacing: -0.2 },
-  cardValue: { fontSize: 12.5, lineHeight: 18, marginTop: 2 },
-  chipRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 7 },
-  scopeChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    borderRadius: 999,
-    paddingHorizontal: 9,
-    height: 24,
-  },
-  scopeTxt: { fontSize: 11 },
-  emptyWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 28, gap: 14 },
-  emptyIcon: { width: 52, height: 52, alignItems: 'center', justifyContent: 'center' },
-  emptyTitle: { fontSize: 20, letterSpacing: -0.4, textAlign: 'center' },
-  emptyBody: { fontSize: 14, lineHeight: 20, textAlign: 'center', maxWidth: 340 },
-  pickerEmpty: { fontSize: 13.5, lineHeight: 20, textAlign: 'center' },
-  pickerHint: { fontSize: 13, textAlign: 'center', paddingVertical: 16 },
-  pickerRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10 },
-  avatar: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
-  avatarTxt: { fontSize: 14 },
-  pickerName: { flex: 1, fontSize: 14.5 },
-})

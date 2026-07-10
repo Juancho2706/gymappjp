@@ -234,16 +234,16 @@ export const BlockEditorSheet = forwardRef<BottomSheetModal, Props>(function Blo
         {draftType === 'strength' ? (
           <>
             <View style={styles.row2}>
-              <StepperField theme={theme} label="Series" value={draft.sets ?? 0} onChange={(n: number) => patch({ sets: n || undefined })} />
-              <Field theme={theme} label="Reps" value={draft.reps ?? ''} onChangeText={(v: string) => patch({ reps: v })} placeholder="8-10" />
+              <StepperField theme={theme} label="Series *" value={draft.sets ?? 0} onChange={(n: number) => patch({ sets: n || undefined })} />
+              <Field theme={theme} label="Repeticiones *" value={draft.reps ?? ''} onChangeText={(v: string) => patch({ reps: v })} placeholder="8-10" />
             </View>
             <View style={styles.row2}>
-              <Field theme={theme} label="Peso (kg)" value={draft.target_weight_kg ?? ''} keyboardType="decimal-pad" onChangeText={(v: string) => patch({ target_weight_kg: v })} placeholder="opcional" />
-              <Field theme={theme} label="Descanso" value={draft.rest_time ?? ''} onChangeText={(v: string) => patch({ rest_time: v })} placeholder="90s" />
+              <Field theme={theme} label="Peso objetivo (kg)" value={draft.target_weight_kg ?? ''} keyboardType="decimal-pad" onChangeText={(v: string) => patch({ target_weight_kg: v })} placeholder="opcional" />
+              <Field theme={theme} label="Recuperación" value={draft.rest_time ?? ''} onChangeText={(v: string) => patch({ rest_time: v })} placeholder="90s" />
             </View>
             <View style={styles.row2}>
               <Field theme={theme} label="Tempo" value={draft.tempo ?? ''} onChangeText={(v: string) => patch({ tempo: v })} placeholder="3-0-1-0" />
-              <Field theme={theme} label="RIR" value={draft.rir ?? ''} onChangeText={(v: string) => patch({ rir: v })} placeholder="2" />
+              <Field theme={theme} label="RIR / RPE" value={draft.rir ?? ''} onChangeText={(v: string) => patch({ rir: v })} placeholder="2" />
             </View>
             <Field theme={theme} label="Descanso calentamiento" value={draft.warmup_rest_time ?? ''} onChangeText={(v: string) => patch({ warmup_rest_time: v })} placeholder="opcional — vacío = mismo descanso" />
 

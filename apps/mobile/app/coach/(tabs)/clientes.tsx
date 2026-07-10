@@ -3,17 +3,20 @@ import { Alert, FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react
 import { SafeAreaView } from 'react-native-safe-area-context'
 import Animated, { Extrapolation, interpolate, useAnimatedScrollHandler, useAnimatedStyle, useSharedValue, type SharedValue } from 'react-native-reanimated'
 import AsyncStorage from '@react-native-async-storage/async-storage'
+import * as Clipboard from 'expo-clipboard'
 import { useRouter } from 'expo-router'
 import {
   ArrowUpDown,
+  Check,
+  ChevronRight,
+  FileUp,
   LayoutGrid,
+  Link as LinkIcon,
   List as ListIcon,
   Search,
   SlidersHorizontal,
-  Upload,
   Users,
   UserPlus,
-  Wrench,
   X,
 } from 'lucide-react-native'
 import { useTheme } from '../../../context/ThemeContext'
@@ -26,6 +29,7 @@ import { DirRowCard } from '../../../components/coach/directory/DirRowCard'
 import { DirectorySummary } from '../../../components/coach/directory/DirectorySummary'
 import { DirectoryAlertBanner } from '../../../components/coach/directory/DirectoryAlertBanner'
 import { DirectoryOptionSheet } from '../../../components/coach/directory/DirectoryOptionSheet'
+import { DirectoryFilterSheet } from '../../../components/coach/directory/DirectoryFilterSheet'
 import { CreateClientModal } from '../../../components/coach/directory/CreateClientModal'
 import { ImportClientsForm } from '../../../components/coach/directory/ImportClientsForm'
 import {
@@ -54,7 +58,7 @@ import {
 import { clientLoginUrl, deleteClient, openWhatsApp, resetClientPassword, setClientStatus, shareLogin } from '../../../lib/client-actions'
 import { getCoachProfile } from '../../../lib/coach'
 import { FONT } from '../../../lib/typography'
-import { GLOWS, SHADOWS } from '../../../lib/shadows'
+import { GLOWS } from '../../../lib/shadows'
 
 const CARD_GAP = 12
 const CARD_STEP = CLIENT_CARD_HEIGHT + CARD_GAP
@@ -75,7 +79,7 @@ function StackCardItem({ index, scrollY, headerH, children }: { index: number; s
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 
 export default function ClientesScreen() {
-  const { theme, resolvedScheme } = useTheme()
+  const { theme } = useTheme()
   const router = useRouter()
   // Acceso a Herramientas (hub /coach/tools): mismo gate que el sidebar web (toolsEnabled)
   // — visible solo con ≥1 modulo del hub activo (cardio/movimiento/composicion).
@@ -93,6 +97,7 @@ export default function ClientesScreen() {
   const [showFilterSheet, setShowFilterSheet] = useState(false)
   const [showCreate, setShowCreate] = useState(false)
   const [showImport, setShowImport] = useState(false)
+  const [copied, setCopied] = useState(false)
   const [dismissed, setDismissed] = useState<Record<string, { date: string; count: number }>>({})
   const [viewMode, setViewMode] = useState<'list' | 'cards'>('list')
   const [sortDir, setSortDir] = useState<SortDir>('desc')
@@ -154,6 +159,12 @@ export default function ClientesScreen() {
     () => [...pulseById.values()].filter((p) => (p.attentionFlags?.includes('NUTRICION_RIESGO')) || (p.nutritionPercentage > 0 && p.nutritionPercentage < 60)).length,
     [pulseById]
   )
+  // Adherencia promedio (espejo web CoachWarRoom) + total archivados — métricas derivadas del pulse/lista ya cargados.
+  const avgAdherence = useMemo(() => {
+    const vals = [...pulseById.values()]
+    return vals.length ? Math.round(vals.reduce((a, p) => a + p.percentage, 0) / vals.length) : 0
+  }, [pulseById])
+  const archivedCount = useMemo(() => clients.filter((c) => c.isArchived).length, [clients])
 
   // Swipe-to-dismiss alerts: hidden until the next day OR until the count changes.
   const todayIso = new Date().toISOString().slice(0, 10)
@@ -181,6 +192,13 @@ export default function ClientesScreen() {
   function handleShare(c: DirectoryClient) {
     if (!coachSlug) return
     shareLogin(c.fullName, clientLoginUrl(coachSlug)).catch(() => {})
+  }
+  // Copiar el portal de alumnos al portapapeles (espejo web CoachWarRoom copiar-portal).
+  function handleCopyPortal() {
+    if (!coachSlug) return
+    Clipboard.setStringAsync(clientLoginUrl(coachSlug))
+      .then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000) })
+      .catch(() => {})
   }
   function handleToggle(c: DirectoryClient) {
     // TX-5: confirmar acción reversible pero sensible (pausa/activa acceso del alumno).
@@ -232,12 +250,33 @@ export default function ClientesScreen() {
 
   const headerNode = (
     <>
+      {/* Entrada Herramientas (hub /coach/tools) — card prominente, espejo CoachWarRoom móvil */}
+      {toolsEnabled && (
+        <TouchableOpacity
+          testID="directory-tools-card"
+          activeOpacity={0.85}
+          onPress={() => router.push('/coach/tools')}
+          style={[styles.toolsCard, { backgroundColor: theme.card, borderColor: theme.border }]}
+        >
+          <View style={[styles.toolsTile, { backgroundColor: hexToRgba(theme.primary, 0.12) }]}>
+            <LayoutGrid size={19} color={theme.primary} />
+          </View>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text style={[styles.toolsCardTitle, { color: theme.foreground }]}>Herramientas</Text>
+            <Text numberOfLines={1} style={[styles.toolsCardSub, { color: theme.mutedForeground }]}>Cardio · Movimiento · Composición</Text>
+          </View>
+          <ChevronRight size={18} color={theme.mutedForeground} />
+        </TouchableOpacity>
+      )}
+
       {/* Resumen · hoy — pulso de prioridad + métricas secundarias (espejo CoachWarRoom) */}
       <DirectorySummary
         stats={stats}
         riskFilter={riskFilter}
         onToggleRisk={toggleRisk}
         onSetAllRisk={() => setRiskFilter('all')}
+        avgAdherence={avgAdherence}
+        nutritionLowCount={nutritionLowCount}
       />
 
       {/* Alert banners */}
@@ -266,7 +305,7 @@ export default function ClientesScreen() {
           {chips.map((c) => (
             <TouchableOpacity key={c.key} testID={`directory-chip-${c.key}`} style={[styles.filterChip, { backgroundColor: theme.foreground }]} onPress={c.onClear} activeOpacity={0.85}>
               <Text style={[styles.filterChipText, { color: theme.card }]}>{c.label}</Text>
-              <X size={12} color={theme.card} />
+              <X size={12} color={theme.card} style={{ opacity: 0.7 }} />
             </TouchableOpacity>
           ))}
           <TouchableOpacity testID="directory-clear-filters" onPress={() => { setRiskFilter('all'); setStatusFilter('any') }} activeOpacity={0.7}>
@@ -278,7 +317,7 @@ export default function ClientesScreen() {
       {/* Sort label / result count */}
       <View style={styles.sortRow}>
         <Text style={[styles.sortLabel, { color: theme.mutedForeground }]}>
-          {displayed.length} resultado{displayed.length !== 1 ? 's' : ''} <Text style={{ color: theme.border }}>·</Text> {sortLabel} ({sortDir === 'asc' ? '↑' : '↓'})
+          {displayed.length} alumno{displayed.length !== 1 ? 's' : ''} <Text style={{ color: theme.border }}>·</Text> {sortLabel}
         </Text>
       </View>
     </>
@@ -312,21 +351,32 @@ export default function ClientesScreen() {
       <AppBackground />
       <ScreenHeader
         title="Alumnos"
-        subtitle={`${stats.active} activos · ${stats.total} total`}
+        subtitle="Tu seguimiento de hoy"
         trailing={
-          toolsEnabled ? (
+          <View style={styles.headerActions}>
+            {coachSlug ? (
+              <TouchableOpacity
+                testID="directory-copy-portal"
+                accessibilityRole="button"
+                accessibilityLabel="Copiar portal de alumnos"
+                activeOpacity={0.8}
+                onPress={handleCopyPortal}
+                style={[styles.headerIconBtn, { backgroundColor: theme.card, borderColor: theme.border }]}
+              >
+                {copied ? <Check size={18} color={theme.primary} /> : <LinkIcon size={18} color={theme.foreground} />}
+              </TouchableOpacity>
+            ) : null}
             <TouchableOpacity
-              testID="directory-tools-link"
+              testID="directory-import-btn"
               accessibilityRole="button"
-              accessibilityLabel="Herramientas"
+              accessibilityLabel="Importar alumnos"
               activeOpacity={0.8}
-              onPress={() => router.push('/coach/tools')}
-              style={[styles.toolsBtn, { backgroundColor: theme.card, borderColor: theme.border }]}
+              onPress={() => setShowImport(true)}
+              style={[styles.headerIconBtn, { backgroundColor: theme.card, borderColor: theme.border }]}
             >
-              <Wrench size={15} color={theme.primary} />
-              <Text style={[styles.toolsBtnTxt, { color: theme.foreground }]}>Herramientas</Text>
+              <FileUp size={18} color={theme.foreground} />
             </TouchableOpacity>
-          ) : null
+          </View>
         }
       />
 
@@ -344,13 +394,13 @@ export default function ClientesScreen() {
           containerStyle={{ flex: 1 }}
         />
         <BarButton testID="directory-filter-btn" label="Filtrar" theme={theme} onPress={() => setShowFilterSheet(true)} active={hasActiveFilters} badge={activeFilterCount}>
-          <SlidersHorizontal size={18} color={hasActiveFilters ? theme.primary : theme.mutedForeground} />
+          <SlidersHorizontal size={16} color={hasActiveFilters ? theme.card : theme.mutedForeground} />
         </BarButton>
         <BarButton testID="directory-sort-btn" label="Ordenar" theme={theme} onPress={() => setShowSortSheet(true)} onLongPress={() => setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))}>
-          <ArrowUpDown size={18} color={theme.mutedForeground} />
+          <ArrowUpDown size={16} color={theme.mutedForeground} />
         </BarButton>
         <BarButton testID="directory-view-toggle" label={viewMode === 'list' ? 'Ver como tarjetas' : 'Ver como lista'} theme={theme} onPress={toggleView}>
-          {viewMode === 'list' ? <LayoutGrid size={18} color={theme.mutedForeground} /> : <ListIcon size={18} color={theme.mutedForeground} />}
+          {viewMode === 'list' ? <LayoutGrid size={16} color={theme.mutedForeground} /> : <ListIcon size={16} color={theme.mutedForeground} />}
         </BarButton>
       </View>
 
@@ -388,7 +438,20 @@ export default function ClientesScreen() {
           data={displayed}
           keyExtractor={(c) => c.id}
           renderItem={({ item, index }) => (
-            <DirRowCard item={item} index={index} theme={theme} pulse={pulseById.get(item.id)} onOpen={goProfile} />
+            <DirRowCard
+              item={item}
+              index={index}
+              theme={theme}
+              pulse={pulseById.get(item.id)}
+              onOpen={goProfile}
+              onWhatsApp={item.phone && coachSlug ? handleWhatsApp : undefined}
+              onShare={handleShare}
+              onWorkout={goWorkout}
+              onNutrition={goNutrition}
+              onReset={handleReset}
+              onToggle={handleToggle}
+              onDelete={handleDelete}
+            />
           )}
           contentContainerStyle={styles.list}
           showsVerticalScrollIndicator={false}
@@ -398,16 +461,6 @@ export default function ClientesScreen() {
           ListEmptyComponent={emptyNode}
         />
       )}
-
-      {/* A-F14: FAB secundario Importar → wizard 4 pasos (Subir → Mapear → Revisar → Confirmar) */}
-      <TouchableOpacity
-        testID="directory-fab-import"
-        style={[styles.fabSecondary, { backgroundColor: theme.card, borderColor: theme.border }, SHADOWS[resolvedScheme].md]}
-        onPress={() => setShowImport(true)}
-        activeOpacity={0.85}
-      >
-        <Upload size={20} color={theme.primary} />
-      </TouchableOpacity>
 
       {/* FAB: Nuevo Alumno (pill extendido, acción primaria) */}
       <TouchableOpacity
@@ -430,14 +483,15 @@ export default function ClientesScreen() {
         onClose={() => setShowSortSheet(false)}
         theme={theme}
       />
-      <DirectoryOptionSheet
+      <DirectoryFilterSheet
         visible={showFilterSheet}
-        title="Estado"
-        options={STATUS_OPTIONS}
-        selected={statusFilter}
-        onSelect={(v) => setStatusFilter(v as StatusFilter)}
         onClose={() => setShowFilterSheet(false)}
         theme={theme}
+        statusFilter={statusFilter}
+        onStatusChange={setStatusFilter}
+        riskFilter={riskFilter}
+        onRiskChange={setRiskFilter}
+        archivedCount={archivedCount}
       />
       <CreateClientModal
         visible={showCreate}
@@ -487,8 +541,8 @@ function BarButton({
       style={[
         styles.barBtn,
         {
-          backgroundColor: active ? hexToRgba(theme.primary, 0.12) : theme.card,
-          borderColor: active ? theme.primary : theme.border,
+          backgroundColor: active ? theme.foreground : theme.card,
+          borderColor: active ? theme.foreground : theme.border,
         },
       ]}
       onPress={onPress}
@@ -535,8 +589,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   barBadgeTxt: { color: '#fff', fontSize: 10, fontFamily: FONT.uiExtra },
-  toolsBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, height: 36, paddingHorizontal: 12, borderRadius: 999, borderWidth: 1.5 },
-  toolsBtnTxt: { fontSize: 13, fontFamily: FONT.uiBold },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  headerIconBtn: { width: 40, height: 40, borderRadius: 12, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  toolsCard: { flexDirection: 'row', alignItems: 'center', gap: 12, marginHorizontal: 16, marginBottom: 12, borderWidth: 1, borderRadius: 18, paddingHorizontal: 13, paddingVertical: 11 },
+  toolsTile: { width: 38, height: 38, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
+  toolsCardTitle: { fontSize: 14, fontFamily: FONT.uiBold },
+  toolsCardSub: { fontSize: 11.5, marginTop: 1, fontFamily: FONT.ui },
   chipRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -579,15 +637,4 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   fabLabel: { color: '#fff', fontSize: 15, fontFamily: FONT.uiBold },
-  fabSecondary: {
-    position: 'absolute',
-    right: 24,
-    bottom: 146,
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
 })

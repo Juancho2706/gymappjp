@@ -3,6 +3,7 @@ import { ActivityIndicator, StyleSheet, Text, TextInput, TouchableOpacity, View 
 import { ArrowLeftRight, FileDown, Plus, Trash2 } from 'lucide-react-native'
 import { dayTotalsByVariant, type DayVariant, type ExchangeGroup } from '@eva/nutrition-engine'
 import { useTheme } from '../../context/ThemeContext'
+import { FONT } from '../../lib/typography'
 import { GLOWS } from '../../lib/shadows'
 import { EXCHANGE_STRINGS as S } from '../../lib/nutrition-exchanges.dict'
 import { SegmentedTabs } from '../SegmentedTabs'
@@ -73,7 +74,7 @@ export function ExchangeModePanel({
           <ArrowLeftRight size={16} color={EMBER_ICON} />
         </View>
         <View style={{ flex: 1, minWidth: 0 }}>
-          <Text className="font-display-bold text-strong" style={styles.title}>{S.modeTitle}</Text>
+          <Text className="text-strong" style={styles.title}>{S.modeTitle}</Text>
           <Text numberOfLines={2} className="font-sans text-muted" style={styles.subtitle}>{S.modeTooltip}</Text>
         </View>
       </View>
@@ -97,17 +98,17 @@ export function ExchangeModePanel({
       {active ? (
         <>
           {provisional ? (
-            <View className="border border-ember-300 bg-ember-100 rounded-control" style={styles.notice}>
-              <Text className="font-sans-semibold text-ember-700" style={styles.noticeText}>{S.provisionalNotice}</Text>
+            <View className="border border-warning-500/40 bg-warning-100 rounded-control" style={styles.notice}>
+              <Text className="font-sans-semibold text-warning-700" style={styles.noticeText}>{S.provisionalNotice}</Text>
             </View>
           ) : null}
 
           <View style={{ gap: 6 }}>
-            <Text className="font-sans text-muted" style={styles.eyebrow}>{S.derivedVsGoal}</Text>
+            <Text className="font-sans-bold text-muted" style={styles.eyebrow}>{S.derivedVsGoal}</Text>
             {totalsByVariant.map((row) => (
               <View key={row.variantId ?? '__all__'} className="bg-surface-sunken/40 rounded-control" style={styles.totalRow}>
                 <Text className="font-sans-bold text-strong" style={styles.totalName}>{row.name ?? S.wholeDay}</Text>
-                <Text className="font-mono-medium text-muted" style={styles.totalVal}>
+                <Text className="font-sans-bold text-muted" style={styles.totalVal}>
                   {Math.round(row.totals.calories)}/{goals.calories} kcal · P {row.totals.proteinG}/{goals.protein} · C {row.totals.carbsG}/{goals.carbs} · G {row.totals.fatsG}/{goals.fats}
                 </Text>
               </View>
@@ -115,7 +116,7 @@ export function ExchangeModePanel({
           </View>
 
           <View style={{ gap: 8 }}>
-            <Text className="font-sans text-muted" style={styles.eyebrow}>{S.dayVariants}</Text>
+            <Text className="font-sans-bold text-muted" style={styles.eyebrow}>{S.dayVariants}</Text>
             <View style={styles.chipWrap}>
               {variants.map((v) => (
                 <View key={v.id} className="border border-subtle bg-surface-app rounded-lg" style={styles.variantPill}>
@@ -173,7 +174,7 @@ export function ExchangeModePanel({
           </View>
 
           <View className="border-t border-subtle" style={styles.pdfSection}>
-            <Text className="font-sans text-muted" style={styles.eyebrow}>{S.pdfTitle}</Text>
+            <Text className="font-sans-bold text-muted" style={styles.eyebrow}>{S.pdfTitle}</Text>
             <SegmentedTabs
               value={pdfFormat}
               onChange={(v) => setPdfFormat(v)}
@@ -213,7 +214,7 @@ const styles = StyleSheet.create({
   panel: { padding: 14, gap: 12 },
   titleRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
   titleTile: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
-  title: { fontSize: 14 },
+  title: { fontSize: 14, fontFamily: FONT.uiExtra },
   subtitle: { fontSize: 11, lineHeight: 15, marginTop: 2 },
   hint: { fontSize: 11, lineHeight: 15 },
   eyebrow: { fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.8 },
@@ -221,7 +222,7 @@ const styles = StyleSheet.create({
   noticeText: { fontSize: 11, lineHeight: 15 },
   totalRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, paddingHorizontal: 10, paddingVertical: 7, flexWrap: 'wrap' },
   totalName: { fontSize: 12 },
-  totalVal: { fontSize: 10.5 },
+  totalVal: { fontSize: 11 },
   chipWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, alignItems: 'center' },
   variantPill: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingLeft: 10, paddingRight: 4, paddingVertical: 4 },
   variantPillText: { fontSize: 11 },
@@ -233,7 +234,7 @@ const styles = StyleSheet.create({
   addBtn: { height: 44, paddingHorizontal: 16, alignItems: 'center', justifyContent: 'center' },
   addBtnText: { fontSize: 13 },
   pdfSection: { gap: 8, paddingTop: 12 },
-  pdfBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: 46 },
+  pdfBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: 44 },
   pdfBtnText: { fontSize: 14 },
   brandPreview: { fontSize: 10 },
 })

@@ -212,7 +212,17 @@ export default function LoginScreen() {
   }
 
   // ── Bloque de campos (compartido coach/alumno) ──
-  function renderFields(accent: string, accentText: string, submitLabel: string) {
+  // Los placeholders se parametrizan por modo: coach usa los del panel web
+  // ("coach@eva.app" / "Tu contraseña"); el default = los del alumno white-label,
+  // así el árbol del alumno NO cambia visualmente.
+  function renderFields(
+    accent: string,
+    accentText: string,
+    submitLabel: string,
+    opts?: { emailPlaceholder?: string; passwordPlaceholder?: string },
+  ) {
+    const emailPlaceholder = opts?.emailPlaceholder ?? 'tu@email.com'
+    const passwordPlaceholder = opts?.passwordPlaceholder ?? '••••••••'
     // Android (HyperOS/MIUI/Samsung): el autofill del OEM roba el foco al tocar el
     // email y lo salta al campo de contraseña, cerrando el teclado (bug P0 en Xiaomi
     // 14T). `importantForAutofill="no"` + `autoComplete="off"` desactivan el servicio
@@ -223,7 +233,7 @@ export default function LoginScreen() {
         <Input
           label="Email"
           leftIcon={Mail}
-          placeholder="tu@email.com"
+          placeholder={emailPlaceholder}
           value={email}
           onChangeText={setEmail}
           autoCapitalize="none"
@@ -244,7 +254,7 @@ export default function LoginScreen() {
           rightIcon={showPwd ? EyeOff : Eye}
           onRightIconPress={() => setShowPwd((s) => !s)}
           rightIconLabel={showPwd ? 'Ocultar contraseña' : 'Mostrar contraseña'}
-          placeholder="••••••••"
+          placeholder={passwordPlaceholder}
           value={password}
           onChangeText={setPassword}
           secureTextEntry={!showPwd}
@@ -379,7 +389,10 @@ export default function LoginScreen() {
               transition={{ type: 'timing', duration: 500, delay: 120 }}
             >
               <Card variant="default" padding={20} radius="card">
-                {renderFields(theme.primary, theme.primaryForeground, 'Ingresar al panel')}
+                {renderFields(theme.primary, theme.primaryForeground, 'Entrar como coach', {
+                  emailPlaceholder: 'coach@eva.app',
+                  passwordPlaceholder: 'Tu contraseña',
+                })}
                 {showGoogle ? (
                   <View style={{ gap: 14, marginTop: 16 }}>
                     <AuthDivider />
@@ -397,11 +410,12 @@ export default function LoginScreen() {
             >
               <Text
                 onPress={() => router.push('/(auth)/register')}
-                className="text-sport-600 font-sans-semibold"
+                className="font-sans"
                 style={{ fontSize: 13 }}
                 testID="login-coach-register-link"
               >
-                Crear cuenta nueva
+                <Text className="text-muted">¿No tienes cuenta? </Text>
+                <Text className="text-sport-600 font-sans-bold">Regístrate</Text>
               </Text>
               <Text className="text-subtle font-sans" style={{ fontSize: 12, letterSpacing: 0.3 }}>
                 eva-app.cl

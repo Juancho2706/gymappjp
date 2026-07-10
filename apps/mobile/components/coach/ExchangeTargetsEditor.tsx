@@ -11,6 +11,7 @@ import {
   type ExchangeGroup,
 } from '@eva/nutrition-engine'
 import { useTheme } from '../../context/ThemeContext'
+import { FONT } from '../../lib/typography'
 import { EXCHANGE_STRINGS as S } from '../../lib/nutrition-exchanges.dict'
 import type { ExchangeTargetDraft } from '../../lib/nutrition-exchanges.coach'
 
@@ -68,13 +69,13 @@ export function ExchangeTargetsEditor({
     saveState === 'saving' ? S.saving : saveState === 'saved' ? S.saved : saveState === 'error' ? S.saveError : ''
 
   return (
-    <View testID="exchange-targets-editor" className="bg-surface-sunken/40 border border-subtle rounded-xl" style={styles.wrap}>
+    <View testID="exchange-targets-editor" className="bg-surface-sunken/20 border border-subtle rounded-xl" style={styles.wrap}>
       <View style={styles.headerRow}>
-        <Text className="font-sans text-muted" style={styles.eyebrow}>{S.portionsPerGroup}</Text>
+        <Text className="font-sans-bold text-muted" style={styles.eyebrow}>{S.portionsPerGroup}</Text>
         <View style={styles.headerRight}>
           {provisional ? (
-            <View className="bg-ember-100 rounded-pill" style={styles.badge}>
-              <Text className="font-sans-bold text-ember-700" style={styles.badgeText}>{S.provisionalBadge}</Text>
+            <View className="bg-warning-100 border border-warning-500/40 rounded-pill" style={styles.badge}>
+              <Text className="font-sans-bold text-warning-700" style={styles.badgeText}>{S.provisionalBadge}</Text>
             </View>
           ) : null}
           {saveLabel ? (
@@ -90,8 +91,8 @@ export function ExchangeTargetsEditor({
       </View>
 
       {!persistable ? (
-        <View className="border border-ember-300 bg-ember-100 rounded-control" style={styles.hint}>
-          <Text className="font-sans-semibold text-ember-700" style={styles.hintText}>{S.savePlanFirst}</Text>
+        <View className="border border-warning-500/40 bg-warning-100 rounded-control" style={styles.hint}>
+          <Text className="font-sans-semibold text-warning-700" style={styles.hintText}>{S.savePlanFirst}</Text>
         </View>
       ) : null}
 
@@ -111,8 +112,8 @@ export function ExchangeTargetsEditor({
                 <Text style={styles.groupDotText}>{group.code}</Text>
               </View>
               <View style={{ flex: 1, minWidth: 0 }}>
-                <Text numberOfLines={1} className="font-sans-semibold text-strong" style={styles.groupName}>{group.name}</Text>
-                <Text className="font-mono text-muted" style={styles.groupRef}>
+                <Text numberOfLines={1} className="font-sans-bold text-strong" style={styles.groupName}>{group.name}</Text>
+                <Text className="font-sans text-muted" style={styles.groupRef}>
                   {Math.round(group.refCalories)} kcal/“1”{!group.macrosConfirmed ? ' *' : ''}
                 </Text>
               </View>
@@ -124,12 +125,12 @@ export function ExchangeTargetsEditor({
                   activeOpacity={0.7}
                   accessibilityRole="button"
                   accessibilityLabel={`${S.decrease} ${group.name}`}
-                  className="border border-subtle rounded-control"
+                  className="border border-subtle rounded-xl"
                   style={[styles.stepBtn, (!persistable || current <= 0) && { opacity: 0.4 }]}
                 >
                   <Minus size={16} color={theme.mutedForeground} />
                 </TouchableOpacity>
-                <Text className="font-mono-bold text-strong" style={styles.stepValue}>{formatPortions(current)}</Text>
+                <Text className="text-strong" style={styles.stepValue}>{formatPortions(current)}</Text>
                 <TouchableOpacity
                   testID="exchange-portion-inc"
                   disabled={!persistable || current >= 99}
@@ -137,7 +138,7 @@ export function ExchangeTargetsEditor({
                   activeOpacity={0.7}
                   accessibilityRole="button"
                   accessibilityLabel={`${S.increase} ${group.name}`}
-                  className="border border-subtle rounded-control"
+                  className="border border-subtle rounded-xl"
                   style={[styles.stepBtn, (!persistable || current >= 99) && { opacity: 0.4 }]}
                 >
                   <Plus size={16} color={theme.mutedForeground} />
@@ -149,7 +150,7 @@ export function ExchangeTargetsEditor({
       </View>
 
       <View className="border-t border-subtle" style={styles.summaryRow}>
-        <Text className="font-display text-strong" style={styles.summaryLabel}>{summary || S.noPortions}</Text>
+        <Text className="text-strong" style={styles.summaryLabel}>{summary || S.noPortions}</Text>
         <Text className="font-mono-medium text-muted" style={styles.summaryMacros}>
           {Math.round(mealMacros.calories)} kcal · P {mealMacros.proteinG}g · C {mealMacros.carbsG}g · G {mealMacros.fatsG}g
         </Text>
@@ -157,7 +158,7 @@ export function ExchangeTargetsEditor({
 
       {variants.length > 0 ? (
         <View style={styles.variantRow}>
-          <Text className="font-sans text-muted" style={styles.eyebrow}>{S.dayVariant}</Text>
+          <Text className="font-sans-bold text-muted" style={styles.eyebrow}>{S.dayVariant}</Text>
           <View style={styles.variantChips}>
             <TouchableOpacity
               testID="exchange-variant-all"
@@ -167,7 +168,7 @@ export function ExchangeTargetsEditor({
               className={variantId == null ? 'bg-primary' : 'border border-subtle bg-surface-app'}
               style={styles.variantChip}
             >
-              <Text className={`font-sans-semibold ${variantId == null ? 'text-primary-foreground' : 'text-muted'}`} style={styles.variantChipText}>{S.allVariants}</Text>
+              <Text className={`font-sans-bold ${variantId == null ? 'text-primary-foreground' : 'text-muted'}`} style={styles.variantChipText}>{S.allVariants}</Text>
             </TouchableOpacity>
             {variants.map((v) => {
               const active = variantId === v.id
@@ -181,7 +182,7 @@ export function ExchangeTargetsEditor({
                   className={active ? 'bg-primary' : 'border border-subtle bg-surface-app'}
                   style={styles.variantChip}
                 >
-                  <Text className={`font-sans-semibold ${active ? 'text-primary-foreground' : 'text-muted'}`} style={styles.variantChipText}>{v.name}</Text>
+                  <Text className={`font-sans-bold ${active ? 'text-primary-foreground' : 'text-muted'}`} style={styles.variantChipText}>{v.name}</Text>
                 </TouchableOpacity>
               )
             })}
@@ -205,17 +206,17 @@ const styles = StyleSheet.create({
   groupList: { gap: 6 },
   groupRow: { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderRadius: 12, paddingHorizontal: 8, paddingVertical: 6 },
   groupDot: { width: 28, height: 28, borderRadius: 999, alignItems: 'center', justifyContent: 'center' },
-  groupDotText: { color: '#FFFFFF', fontSize: 9.5, fontWeight: '900' },
-  groupName: { fontSize: 12.5 },
+  groupDotText: { color: '#FFFFFF', fontSize: 10, fontWeight: '900' },
+  groupName: { fontSize: 12 },
   groupRef: { fontSize: 10, marginTop: 1 },
   stepper: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  stepBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
-  stepValue: { width: 32, textAlign: 'center', fontSize: 14 },
+  stepBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  stepValue: { width: 32, textAlign: 'center', fontSize: 14, fontFamily: FONT.uiExtra },
   summaryRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, paddingTop: 8, flexWrap: 'wrap' },
-  summaryLabel: { fontSize: 12.5 },
+  summaryLabel: { fontSize: 12, fontFamily: FONT.uiExtra },
   summaryMacros: { fontSize: 11 },
   variantRow: { gap: 6 },
   variantChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, alignItems: 'center' },
-  variantChip: { minHeight: 34, paddingHorizontal: 12, borderRadius: 999, alignItems: 'center', justifyContent: 'center' },
-  variantChipText: { fontSize: 11.5 },
+  variantChip: { minHeight: 36, paddingHorizontal: 10, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  variantChipText: { fontSize: 11 },
 })

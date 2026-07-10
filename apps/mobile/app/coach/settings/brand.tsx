@@ -42,46 +42,13 @@ for (const Icon of [Camera, Check, ChevronDown, ChevronLeft, Eye, ImageIcon, Inf
   cssInterop(Icon, { className: { target: 'style', nativeStyleToProp: { color: true } } })
 }
 
-const COLOR_PRESETS = ['#007AFF', '#8B5CF6', '#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#EC4899', '#06B6D4', '#F97316']
 // EVA wordmark gradient stops (violet / cyan / emerald) — brand asset constant,
 // same as EvaLoader; not a themable surface.
 const WORDMARK_COLORS = ['#8B5CF6', '#06B6D4', '#10B981']
 
-// M-F8: contraste WCAG del color de marca como fondo de botón (texto blanco vs negro).
-function relLuminance(hex: string): number | null {
-  const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim())
-  if (!m) return null
-  const int = parseInt(m[1], 16)
-  const ch = [(int >> 16) & 255, (int >> 8) & 255, int & 255].map((v) => {
-    const s = v / 255
-    return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4)
-  })
-  return 0.2126 * ch[0] + 0.7152 * ch[1] + 0.0722 * ch[2]
-}
-function hslToHex(h: number, s: number, l: number): string {
-  s /= 100; l /= 100
-  const k = (n: number) => (n + h / 30) % 12
-  const a = s * Math.min(l, 1 - l)
-  const f = (n: number) => {
-    const c = l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)))
-    return Math.round(255 * c).toString(16).padStart(2, '0')
-  }
-  return `#${f(0)}${f(8)}${f(4)}`.toUpperCase()
-}
-
-// M-F9: paleta de matices (tap) — picker sin dep nativa. 12 tonos × 3 luminancias.
-const HUE_STEPS = Array.from({ length: 12 }, (_, i) => i * 30)
-const LIGHTNESS = [42, 55, 68]
-
-function contrastInfo(hex: string): { txt: string; ratio: number; aa: boolean; aaLarge: boolean } | null {
-  const l = relLuminance(hex)
-  if (l == null) return null
-  const ratio = (a: number, b: number) => (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05)
-  const cw = ratio(l, 1)
-  const cb = ratio(l, 0)
-  const best = cw >= cb ? { txt: 'blanco', ratio: cw } : { txt: 'negro', ratio: cb }
-  return { ...best, aa: best.ratio >= 4.5, aaLarge: best.ratio >= 3 }
-}
+// W1b: la rueda de color libre (swatches + paleta de matices + hex + contraste WCAG) se ELIMINÓ.
+// La selección de color vive en la galería de temas (presets). Los helpers de HSL/contraste que la
+// alimentaban se removieron con ella.
 
 const HEX6 = /^#[0-9a-fA-F]{6}$/
 // EVA defaults: si el color guardado es uno de estos NO es un custom legacy (mirror web EVA_DEFAULT_COLORS).
@@ -227,18 +194,24 @@ export default function MiMarcaScreen() {
     return { off: resolveBrandTheme({ brandColor: base, neutralTint: false }), on: resolveBrandTheme({ brandColor: base, neutralTint: true }) }
   }, [effectivePrimary])
 
+  // Brand Score — pesos 1:1 con el web BrandSettingsForm (H6): logo20 · color15 · welcomeMsg10 ·
+  // modal10 · brandName10 · loader10 · fuente10 · variante10 · secundario5. La fuente y la variante
+  // se cuentan por su valor EFECTIVO (el preset activo aporta si el coach no eligió).
+  const effectiveFontKey = fontKey || (activePreset?.fontKey ?? '')
+  const effectiveLoaderVariant = loaderVariant && loaderVariant !== 'eva' ? loaderVariant : (activePreset?.loaderVariant ?? 'eva')
   const brandScore = useMemo(() => {
     let s = 0
     if (logoUrl) s += 20
     if (activePreset || (color && color.toLowerCase() !== '#007aff')) s += 15
-    if (welcomeMessage.trim()) s += 15
-    if (useCustomLoader && loaderText.trim()) s += 15
-    if (brandName.trim().length >= 2) s += 15
-    if (fontKey) s += 10
-    if (loaderVariant && loaderVariant !== 'eva') s += 5
+    if (welcomeMessage.trim()) s += 10
+    if (welcomeModalEnabled && welcomeModalContent.trim()) s += 10
+    if (brandName.trim() && brandName.trim() !== fullName.trim()) s += 10
+    if (useCustomLoader && loaderText.trim()) s += 10
+    if (effectiveFontKey) s += 10
+    if (effectiveLoaderVariant !== 'eva') s += 10
     if (HEX6.test(secondaryColor)) s += 5
     return Math.min(100, s)
-  }, [logoUrl, activePreset, color, welcomeMessage, useCustomLoader, loaderText, brandName, fontKey, loaderVariant, secondaryColor])
+  }, [logoUrl, activePreset, color, welcomeMessage, welcomeModalEnabled, welcomeModalContent, brandName, fullName, useCustomLoader, loaderText, effectiveFontKey, effectiveLoaderVariant, secondaryColor])
 
   // "Sin guardar" (dirty) — mirrors the web BrandSettingsForm indicator + drives
   // the unified save FAB. Logo is excluded: it persists immediately on upload.
@@ -381,10 +354,10 @@ export default function MiMarcaScreen() {
                 <Lock size={26} className="text-sport-600" />
               </View>
               <Text className="font-display-bold text-strong" style={{ fontSize: 19, textAlign: 'center', letterSpacing: -0.3 }}>
-                Marca personalizada en Starter+
+                Marca personalizada en Pro+
               </Text>
               <Text className="font-sans text-muted" style={{ fontSize: 13.5, lineHeight: 20, textAlign: 'center' }}>
-                Sube a Starter (o superior) para personalizar el logo, los colores, el loader y el mensaje de bienvenida que ven tus alumnos al instalar tu app.
+                Sube a Pro (o superior) para personalizar el logo, los colores, el loader y el mensaje de bienvenida que ven tus alumnos al instalar tu app.
               </Text>
               <Button
                 label="Ver planes y upgrade"
@@ -518,10 +491,17 @@ export default function MiMarcaScreen() {
                 </View>
               </SectionCard>
 
-              {/* Identidad */}
-              <SectionCard icon={Type} title="Identidad">
-                <Input label="Tu nombre" value={fullName} onChangeText={setFullName} placeholder="Nombre y apellido" testID="mimarca-fullname" />
-                <Input label="Nombre de marca" value={brandName} onChangeText={setBrandName} placeholder="Mi Gimnasio" testID="mimarca-brandname" />
+              {/* Identidad — orden 1:1 con web: nombre de marca PRIMERO (lo público), luego tu nombre (privado). */}
+              <SectionCard icon={Type} title="Identidad de tu marca">
+                <Text className="font-sans text-muted" style={{ fontSize: 12, lineHeight: 17, marginTop: -4 }}>
+                  Esta información es lo primero que ven tus alumnos al abrir tu app.
+                </Text>
+                <View style={{ gap: 6 }}>
+                  <Input label="Nombre de tu marca" value={brandName} onChangeText={setBrandName} placeholder="Mi Gimnasio" testID="mimarca-brandname" />
+                  <Text className="font-sans text-muted" style={{ fontSize: 10, lineHeight: 14 }}>
+                    Nombre que ven tus alumnos en la app instalada, la pestaña del navegador y el título.
+                  </Text>
+                </View>
                 {/* P4: el CÓDIGO es el identificador principal — permanente, no editable. */}
                 {settings?.inviteCode ? (
                   <ReadonlyRow label="Tu código (permanente)" value={settings.inviteCode} />
@@ -530,6 +510,12 @@ export default function MiMarcaScreen() {
                 {settings?.hasLegacySlug && settings.slug ? (
                   <ReadonlyRow label="URL legacy (alias, no editable)" value={`eva-app.cl/c/${settings.slug}`} />
                 ) : null}
+                <View style={{ gap: 6 }}>
+                  <Input label="Tu nombre completo" value={fullName} onChangeText={setFullName} placeholder="Nombre y apellido" testID="mimarca-fullname" />
+                  <Text className="font-sans text-muted" style={{ fontSize: 10, lineHeight: 14 }}>
+                    Privado — para facturación y soporte. Tus alumnos no lo ven.
+                  </Text>
+                </View>
               </SectionCard>
 
               {/* Bienvenida (login del alumno) */}
@@ -621,82 +607,10 @@ export default function MiMarcaScreen() {
                 </View>
               </SectionCard>
 
-              {/* Color / tema de marca */}
-              <SectionCard icon={Palette} title="Color de marca">
-                {activePreset ? (
-                  <View className="flex-row items-start rounded-control border border-sport-200 bg-sport-100" style={{ gap: 8, padding: 10 }}>
-                    <Sparkles size={13} className="text-sport-600" style={{ marginTop: 1 }} />
-                    <Text className="font-sans text-muted" style={{ flex: 1, fontSize: 11.5, lineHeight: 16 }}>
-                      Tu tema <Text className="font-sans-bold text-strong">{activePreset.label}</Text> define el color. Tu color libre queda guardado; elige "Personalizado" arriba para volver a él.
-                    </Text>
-                  </View>
-                ) : null}
-                <View className="flex-row flex-wrap" style={{ gap: 10 }}>
-                  {COLOR_PRESETS.map((c) => {
-                    const active = c.toLowerCase() === color.toLowerCase()
-                    return (
-                      <Pressable
-                        key={c}
-                        testID={`mimarca-color-${c.replace('#', '')}`}
-                        accessibilityRole="button"
-                        onPress={() => setColor(c)}
-                        className={`items-center justify-center rounded-full ${active ? 'border-2 border-strong' : 'border-2 border-transparent'}`}
-                        style={{ width: 40, height: 40, backgroundColor: c }}
-                      >
-                        {active ? <Check size={16} color="#FFFFFF" /> : null}
-                      </Pressable>
-                    )
-                  })}
-                </View>
-                {/* M-F9: paleta de matices (tap) */}
-                <Text className="font-sans-medium text-muted" style={{ fontSize: 12 }}>Paleta de matices</Text>
-                <View style={{ gap: 6 }}>
-                  {LIGHTNESS.map((l) => (
-                    <View key={l} className="flex-row flex-wrap" style={{ gap: 6 }}>
-                      {HUE_STEPS.map((h) => {
-                        const hex = hslToHex(h, 75, l)
-                        const active = hex.toLowerCase() === color.toLowerCase()
-                        return (
-                          <Pressable
-                            key={`${h}-${l}`}
-                            testID={`mimarca-hue-${h}-${l}`}
-                            accessibilityRole="button"
-                            onPress={() => setColor(hex)}
-                            className={`rounded-full ${active ? 'border-2 border-strong' : 'border-2 border-transparent'}`}
-                            style={{ width: 22, height: 22, backgroundColor: hex }}
-                          />
-                        )
-                      })}
-                    </View>
-                  ))}
-                </View>
-                <Input
-                  label="Hex personalizado"
-                  value={color}
-                  onChangeText={(v: string) => setColor(v.startsWith('#') ? v : `#${v}`)}
-                  placeholder="#007AFF"
-                  autoCapitalize="characters"
-                  testID="mimarca-hex"
-                />
-                {(() => {
-                  const ci = contrastInfo(color)
-                  if (!ci) return null
-                  const cls = ci.aa ? 'text-success-600' : ci.aaLarge ? 'text-warning-600' : 'text-danger-600'
-                  return (
-                    <Text className={`font-sans-semibold ${cls}`} style={{ fontSize: 12 }}>
-                      Texto {ci.txt} sobre tu color: {ci.ratio.toFixed(1)}:1 · {ci.aa ? 'AA ✓' : ci.aaLarge ? 'AA solo texto grande' : 'contraste bajo ⚠'}
-                    </Text>
-                  )
-                })()}
-                {/* Escribe use_brand_colors_coach: tiñe el panel del COACH (no la app del alumno, que ya
-                    hereda la marca por tier). Etiqueta alineada a la web ("usar mi marca en mi panel"). */}
-                <ToggleRow
-                  label="Usar mi marca también en mi panel"
-                  value={useBrandColors}
-                  onValueChange={setUseBrandColors}
-                  testID="mimarca-use-brand-colors"
-                />
-              </SectionCard>
+              {/* W1b: la rueda de color libre se ELIMINÓ — la selección de color vive en la galería de
+                  temas (presets curados) de arriba. El color legacy se preserva en `color` (hidden) y es
+                  reversible vía el chip "Personalizado". El toggle "usar mi marca en mi panel" se de-anidó
+                  a su propia card, tras "Diseño del login" (1:1 con web). */}
 
               {/* Loader animado */}
               <SectionCard icon={Sparkles} title="Loader animado">
@@ -783,6 +697,20 @@ export default function MiMarcaScreen() {
                     )
                   })}
                 </View>
+              </SectionCard>
+
+              {/* Usar mi marca en mi panel — card propia (de-anidada del color): tiñe el chrome del COACH,
+                  no la app del alumno (que ya hereda por tier). Escribe use_brand_colors_coach. 1:1 con web. */}
+              <SectionCard icon={Palette} title="Tu panel">
+                <ToggleRow
+                  label="Usar mi marca también en mi panel"
+                  value={useBrandColors}
+                  onValueChange={setUseBrandColors}
+                  testID="mimarca-use-brand-colors"
+                />
+                <Text className="font-sans text-muted" style={{ fontSize: 12, lineHeight: 17 }}>
+                  Si se activa, tu panel de coach usa tu color y estilos de marca. Si no, usa los del sistema. No afecta la app del alumno.
+                </Text>
               </SectionCard>
 
               {/* Branding avanzado (Pro) — acordeón: color2 + fuente + tinte + acento por modo + variante de
@@ -966,19 +894,8 @@ export default function MiMarcaScreen() {
             </SectionCard>
           ) : null}
 
-          {/* M-F5 (reemplazo): la cuenta NO se borra desde la app — se solicita por correo. */}
-          <SectionCard icon={Lock} title="Cuenta">
-            <Text className="font-sans text-muted" style={{ fontSize: 12.5, lineHeight: 18 }}>
-              La eliminación de cuenta no se hace desde la app. Escríbenos a contacto@eva-app.cl y gestionamos la baja (datos, pagos y app de tus alumnos) según la Ley 21.719.
-            </Text>
-            <Button
-              label="Solicitar baja por correo"
-              variant="secondary"
-              full
-              testID="mimarca-baja"
-              onPress={() => Linking.openURL('mailto:contacto@eva-app.cl?subject=' + encodeURIComponent('Solicitud de baja de cuenta EVA')).catch(() => {})}
-            />
-          </SectionCard>
+          {/* La baja de cuenta se de-anidó a la "Zona de peligro" del hub Opciones (1:1 con web);
+              ya no vive dentro de Mi Marca. */}
         </ScrollView>
 
         {/* Guardado unificado (FAB) — Mi Marca ahora es sub-pantalla del hub Opciones (pushed sobre

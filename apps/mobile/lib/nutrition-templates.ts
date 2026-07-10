@@ -19,7 +19,20 @@ export interface TemplateSummary {
   protein_g: number | null
   carbs_g: number | null
   fats_g: number | null
+  goal_type: string | null
+  description: string | null
+  mealNames: string[]
   mealCount: number
+}
+
+/** Etiqueta de objetivo (espejo de goalLabel web — Déficit/Volumen/Mantenimiento). */
+export function goalLabel(goal: string | null | undefined): string | null {
+  if (!goal) return null
+  const g = goal.toLowerCase()
+  if (g.includes('deficit') || g === 'cut') return 'Déficit'
+  if (g.includes('surplus') || g.includes('bulk') || g === 'volume') return 'Volumen'
+  if (g.includes('maint')) return 'Mantenimiento'
+  return null
 }
 
 function uid(prefix: string): string {
@@ -47,7 +60,7 @@ export async function listTemplates(): Promise<TemplateSummary[]> {
   if (!coachId) return []
   // N-F5/TX-4: scoping de org explícito (fallback seguro si no existe la columna org_id).
   const { orgId } = await getCoachOrgContext().catch(() => ({ orgId: null as string | null }))
-  const cols = 'id, name, daily_calories, protein_g, carbs_g, fats_g, template_meals ( id )'
+  const cols = 'id, name, daily_calories, protein_g, carbs_g, fats_g, goal_type, description, template_meals ( id, name, order_index )'
   const { data } = await selectWithFallback<any>(
     () => {
       const q = supabase.from('nutrition_plan_templates').select(cols).eq('coach_id', coachId)
@@ -57,7 +70,11 @@ export async function listTemplates(): Promise<TemplateSummary[]> {
   )
   return (data ?? []).map((t: any) => ({
     id: t.id, name: t.name, daily_calories: t.daily_calories, protein_g: t.protein_g,
-    carbs_g: t.carbs_g, fats_g: t.fats_g, mealCount: t.template_meals?.length ?? 0,
+    carbs_g: t.carbs_g, fats_g: t.fats_g, goal_type: t.goal_type ?? null, description: t.description ?? null,
+    mealNames: [...(t.template_meals ?? [])]
+      .sort((a: any, b: any) => (a.order_index ?? 0) - (b.order_index ?? 0))
+      .map((m: any) => m.name).filter(Boolean),
+    mealCount: t.template_meals?.length ?? 0,
   }))
 }
 
@@ -181,6 +198,15 @@ export async function deleteTemplate(templateId: string): Promise<{ ok: boolean;
   const { error } = await supabase.from('nutrition_plan_templates').delete().eq('id', templateId).eq('coach_id', coachId)
   if (error) return { ok: false, error: error.message }
   return { ok: true }
+}
+
+/** Duplica una plantilla: clona el borrador con nombre nuevo (id=null → inserta). */
+export async function duplicateTemplate(templateId: string): Promise<{ ok: boolean; error?: string }> {
+  const draft = await getTemplateDraft(templateId)
+  if (!draft) return { ok: false, error: 'Plantilla no encontrada.' }
+  const copy: PlanDraft = { ...draft, id: null, name: `${draft.name} (copia)` }
+  const r = await saveTemplate(copy)
+  return { ok: r.ok, error: r.error }
 }
 
 /** Assign a template to clients: each gets a fresh active plan (template-linked). */

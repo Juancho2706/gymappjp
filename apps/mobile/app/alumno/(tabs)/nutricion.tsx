@@ -529,6 +529,11 @@ export default function AlumnoNutricionScreen() {
         >
           {!isOnline && <OfflineBanner visible />}
 
+          {/* Recap semanal (E4-14): PRIMERO tras el header, arriba del shell (espejo de
+              la web, donde vive en la página encima del NutritionShell). Con endpoint
+              404 en el backend desplegado, deriva local invisible desde `adherence`. */}
+          <WeeklyRecapCard refreshSignal={refreshTick} plan={plan} adherence={adherence} />
+
           <WorkoutContextBanner visible={hasTodayWorkout && isToday} />
 
           <DayNavigator
@@ -610,6 +615,10 @@ export default function AlumnoNutricionScreen() {
                         ? (item) => setSwapState({ mealId: meal.id, mealName: meal.name, item })
                         : undefined
                     }
+                    // Corazón de favorito por alimento (paridad web MealIngredientRow),
+                    // reusa el handler optimista con rollback ya existente.
+                    favoriteFoodIds={favoriteFoodIds}
+                    onToggleFavorite={handleToggleFavorite}
                   />
                   {/* Bloque "En porciones" (E4-07): chips de intercambio + macros
                       derivados de targets; null en modo gramos o sin targets. */}
@@ -638,9 +647,6 @@ export default function AlumnoNutricionScreen() {
 
           {/* Lista de compras (E4-13): derivada del plan + manuales; sheet propio. */}
           {isNutritionSectionEnabled('shopping') && <ShoppingList refreshSignal={refreshTick} />}
-
-          {/* Recap semanal (E4-14): adherencia 7d vs 7d previos, tono adaptativo. */}
-          <WeeklyRecapCard refreshSignal={refreshTick} />
 
           {/* Ideas de recetas (E4-15): inspiración asignada por el coach (solo lectura).
               Solo se muestra con recetas asignadas (la sección vacía no aporta). */}

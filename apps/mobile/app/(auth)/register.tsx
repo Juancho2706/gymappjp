@@ -117,7 +117,7 @@ export default function RegisterScreen() {
     setError(null)
     if (step === 1) {
       if (!canContinueStep1) {
-        setError('Completa tus datos antes de continuar. La contrasena necesita al menos 8 caracteres.')
+        setError('Completa tus datos antes de continuar. La contraseña necesita al menos 8 caracteres.')
         return
       }
       setStep(2)
@@ -149,14 +149,14 @@ export default function RegisterScreen() {
 
   async function handleCreate() {
     if (!canSubmit) {
-      setError('Debes aceptar los terminos y el tratamiento de datos de salud para crear tu cuenta.')
+      setError('Debes aceptar los términos y el tratamiento de datos de salud para crear tu cuenta.')
       return
     }
 
     // ── Modo Google: el auth user ya existe; solo materializamos la fila `coaches` (free) ──
     if (googleMode) {
       if (fullName.trim().length < 2 || brandName.trim().length < 2) {
-        setError('Ingresa tu nombre y el de tu marca (minimo 2 caracteres).')
+        setError('Ingresa tu nombre y el de tu marca (mínimo 2 caracteres).')
         return
       }
       setError(null)
@@ -313,7 +313,7 @@ export default function RegisterScreen() {
                   value={brandName}
                   onChangeText={setBrandName}
                   editable={!loading}
-                  hint="Tu enlace para alumnos se genera con un codigo unico en tu panel."
+                  hint="Tu enlace para alumnos se genera con un código único en tu panel."
                   testID="register-brand-input"
                 />
                 {googleMode ? (
@@ -343,9 +343,9 @@ export default function RegisterScreen() {
                     />
                     <View>
                       <Input
-                        label="Contrasena"
+                        label="Contraseña"
                         leftIcon={Lock}
-                        placeholder="Minimo 8 caracteres"
+                        placeholder="Mínimo 8 caracteres"
                         value={password}
                         onChangeText={setPassword}
                         secureTextEntry
@@ -373,7 +373,7 @@ export default function RegisterScreen() {
                             ))}
                           </View>
                           <Text className="text-muted font-sans" style={styles.pwdHint}>
-                            {pwdScore === 3 ? 'Contrasena segura' : '8+ caracteres con letras y numeros.'}
+                            {pwdScore === 3 ? 'Contraseña segura' : '8+ caracteres con letras y números.'}
                           </Text>
                         </View>
                       ) : null}
@@ -406,8 +406,8 @@ export default function RegisterScreen() {
 
                 <Pressable onPress={() => router.replace('/(auth)/login?role=coach')} hitSlop={8} testID="register-login-link">
                   <Text className="font-sans" style={styles.loginLine}>
-                    <Text className="text-muted">Ya tienes cuenta? </Text>
-                    <Text className="text-sport-600 font-sans-bold">Inicia sesion</Text>
+                    <Text className="text-muted">¿Ya tienes cuenta? </Text>
+                    <Text className="text-sport-600 font-sans-bold">Inicia sesión</Text>
                   </Text>
                 </Pressable>
               </View>
@@ -451,7 +451,7 @@ export default function RegisterScreen() {
                     Tu plan gratuito
                   </Text>
                   <Text className="text-muted font-sans" style={styles.subtitle}>
-                    Revisa y confirma. Sin tarjeta de credito.
+                    Revisa y confirma. Sin tarjeta de crédito.
                   </Text>
                 </View>
 
@@ -462,7 +462,7 @@ export default function RegisterScreen() {
                   <SummaryRow label="Plan" value={TIER_CONFIG[tier].label} />
                   <SummaryRow label="Alumnos" value={`Hasta ${TIER_CONFIG[tier].maxClients}`} />
                   <SummaryRow
-                    label="Nutricion"
+                    label="Nutrición"
                     value={caps.canUseNutrition ? 'Incluida' : 'No incluida'}
                     tone={caps.canUseNutrition ? 'success' : 'warning'}
                   />
@@ -478,7 +478,7 @@ export default function RegisterScreen() {
                   <ConsentRow
                     checked={acceptLegal}
                     onPress={() => setAcceptLegal((v) => !v)}
-                    label="Acepto los terminos de servicio y la politica de privacidad."
+                    label="Acepto los términos de servicio y la política de privacidad."
                     required
                     testID="register-consent-legal"
                   />
@@ -547,7 +547,7 @@ function TierCard({
 
   const features = [
     { label: `Hasta ${cfg.maxClients} alumnos`, included: true },
-    { label: 'Planes de nutricion', included: caps.canUseNutrition },
+    { label: 'Planes de nutrición', included: caps.canUseNutrition },
     { label: 'Branding personalizado', included: caps.canUseBranding },
   ]
 
@@ -588,7 +588,7 @@ function TierCard({
             {isPopular ? (
               <View className="rounded-pill bg-sport-500" style={styles.tierBadge}>
                 <Text className="text-on-sport font-display-bold" style={styles.tierBadgeText}>
-                  Mas popular
+                  Más popular
                 </Text>
               </View>
             ) : null}

@@ -1,7 +1,7 @@
 import { memo, useEffect, useMemo, useState } from 'react'
 import { Modal, Pressable, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
 import { Image } from 'expo-image'
-import { Check, ChevronDown, CircleHelp, GripVertical, Minus, Plus, X } from 'lucide-react-native'
+import { Check, ChevronDown, ChevronUp, CircleHelp, GripVertical, Minus, Plus, X } from 'lucide-react-native'
 import { ScaleDecorator } from 'react-native-draggable-flatlist'
 import { effectiveExerciseType, typedBlockSummary } from '@eva/workout-engine'
 import { useTheme } from '../../context/ThemeContext'
@@ -32,6 +32,11 @@ interface Props {
   /** Mover el bloque a otra área (persiste section_template_id vía SET_BLOCK_AREA). */
   onSetArea?: (uid: string, areaId: string) => void
   onToggleSuperset: (uid: string) => void
+  /** Rail de chevrons ▲▼ (1:1 web ExerciseBlock): reordenar el bloque dentro de su área. */
+  onMoveUp?: () => void
+  onMoveDown?: () => void
+  canMoveUp?: boolean
+  canMoveDown?: boolean
   /** Fallback de media desde el catálogo (por exercise_id) cuando el bloque no la trae. */
   catGif?: string | null
   catImage?: string | null
@@ -41,7 +46,7 @@ interface Props {
 /** Card de ejercicio 1:1 con la web (ExerciseBlock): borde por músculo, miniatura, badge de
  *  ÁREA (color), chip resumen typed (cardio/movilidad/roller) o sets×reps con quick-edit /
  *  "Incompleto", descanso, superserie, progresión, músculo + selector de área + eliminar. */
-function BuilderBlockCardInner({ block, drag, isActive, onEdit, onRemove, onUpdate, areaVMs, currentAreaId, onSetArea, onToggleSuperset, catGif, catImage, catVideo }: Props) {
+function BuilderBlockCardInner({ block, drag, isActive, onEdit, onRemove, onUpdate, areaVMs, currentAreaId, onSetArea, onToggleSuperset, onMoveUp, onMoveDown, canMoveUp, canMoveDown, catGif, catImage, catVideo }: Props) {
   const { theme } = useTheme()
   const [editing, setEditing] = useState(false)
   const [helpOpen, setHelpOpen] = useState(false)
@@ -88,13 +93,13 @@ function BuilderBlockCardInner({ block, drag, isActive, onEdit, onRemove, onUpda
 
         <View style={{ flex: 1, gap: 6, minWidth: 0 }}>
           <TouchableOpacity activeOpacity={0.8} onPress={() => onEdit(block.uid)}>
-            <Text numberOfLines={2} style={[styles.name, { color: theme.foreground, fontFamily: FONT.display }]}>{block.exercise_name}</Text>
+            <Text numberOfLines={2} style={[styles.name, { color: theme.foreground, fontFamily: FONT.uiBold }]}>{block.exercise_name}</Text>
           </TouchableOpacity>
 
           <View style={styles.badges}>
             {/* Badge de ÁREA (color del área efectiva) */}
             <View style={[styles.badge, { backgroundColor: hexToRgba(areaC, 0.14), borderColor: hexToRgba(areaC, 0.4) }]}>
-              <Text style={[styles.badgeT, { color: areaC }]}>{currentArea?.shortLabel ?? 'PRI'}</Text>
+              <Text style={[styles.badgeT, { color: areaC, fontSize: 8, fontFamily: FONT.uiExtra }]}>{currentArea?.shortLabel ?? 'PRI'}</Text>
             </View>
             {/* P-F7: badge de override (bloque modificado vs plantilla base). */}
             {block.is_override ? (
@@ -116,26 +121,26 @@ function BuilderBlockCardInner({ block, drag, isActive, onEdit, onRemove, onUpda
               // Chip resumen typed (cardio/movilidad/roller): icono del tipo + resumen. Tap ⇒ editor.
               <TouchableOpacity onPress={() => onEdit(block.uid)} style={[styles.typedChip, { backgroundColor: hexToRgba(theme.foreground, 0.06) }]}>
                 <TypeIcon size={13} color={typeColor} />
-                <Text style={[styles.typedChipT, { color: theme.foreground, fontFamily: FONT.monoBold }]} numberOfLines={1}>{typedSummary}</Text>
+                <Text style={[styles.typedChipT, { color: theme.foreground, fontFamily: FONT.uiBold }]} numberOfLines={1}>{typedSummary}</Text>
               </TouchableOpacity>
             ) : complete ? (
               <TouchableOpacity onPress={() => setEditing(true)} style={[styles.badge, { backgroundColor: hexToRgba(theme.foreground, 0.06) }]}>
-                <Text style={[styles.badgeT, { color: theme.foreground, fontFamily: FONT.monoBold }]}>{block.sets} × {block.reps}</Text>
+                <Text style={[styles.badgeT, { color: theme.foreground, fontFamily: FONT.uiBold, fontSize: 10, textTransform: 'none' }]}>{block.sets} × {block.reps}</Text>
               </TouchableOpacity>
             ) : (
               <TouchableOpacity onPress={() => setEditing(true)} style={[styles.badge, { backgroundColor: hexToRgba(theme.destructive, 0.12), borderColor: hexToRgba(theme.destructive, 0.3) }]}>
-                <Text style={[styles.badgeT, { color: theme.destructive }]}>INCOMPLETO</Text>
+                <Text style={[styles.badgeT, { color: theme.destructive, fontSize: 10, textTransform: 'none' }]}>Incompleto</Text>
               </TouchableOpacity>
             )}
 
             {block.rest_time ? (
-              <View style={[styles.badge, { backgroundColor: hexToRgba(theme.foreground, 0.06) }]}><Text style={[styles.badgeT, { color: theme.mutedForeground, fontFamily: FONT.monoBold }]}>⏱ {block.rest_time}</Text></View>
+              <View style={[styles.badge, { backgroundColor: hexToRgba(theme.foreground, 0.06) }]}><Text style={[styles.badgeT, { color: theme.mutedForeground, fontFamily: FONT.uiBold, fontSize: 10, textTransform: 'none' }]}>⏱ {block.rest_time}</Text></View>
             ) : null}
             {block.superset_group ? (
               <TouchableOpacity onPress={() => onToggleSuperset(block.uid)} style={[styles.badge, { backgroundColor: hexToRgba(theme.primary, 0.1), borderColor: hexToRgba(theme.primary, 0.3) }]}><Text style={[styles.badgeT, { color: theme.primary }]}>SS·{block.superset_group}</Text></TouchableOpacity>
             ) : null}
             {block.progression_type ? (
-              <View style={[styles.badge, { backgroundColor: hexToRgba(theme.primary, 0.1), borderColor: hexToRgba(theme.primary, 0.25) }]}><Text style={[styles.badgeT, { color: theme.primary }]}>↑{block.progression_type === 'weight' ? `${block.progression_value ?? '?'}kg` : `${block.progression_value ?? '?'}r`}</Text></View>
+              <View style={[styles.badge, { backgroundColor: hexToRgba(theme.primary, 0.1), borderColor: hexToRgba(theme.primary, 0.25) }]}><Text style={[styles.badgeT, { color: theme.primary, fontSize: 10, textTransform: 'none' }]}>↑{block.progression_type === 'weight' ? `${block.progression_value ?? '?'}kg` : `${block.progression_value ?? '?'}r`}</Text></View>
             ) : null}
             <View style={[styles.badge, { backgroundColor: muscle, borderColor: 'transparent', maxWidth: 120 }]}><Text style={[styles.badgeT, { color: '#fff' }]} numberOfLines={1}>{block.muscle_group}</Text></View>
           </View>
@@ -187,6 +192,20 @@ function BuilderBlockCardInner({ block, drag, isActive, onEdit, onRemove, onUpda
           </Pressable>
         </Modal>
 
+        {/* Rail de reordenar por tap (1:1 web): ▲▼ dentro del área */}
+        {onMoveUp || onMoveDown ? (
+          <View style={[styles.rail, { borderLeftColor: theme.border }]}>
+            <TouchableOpacity onPress={onMoveUp} disabled={!canMoveUp} hitSlop={4}
+              style={[styles.railBtn, { borderBottomWidth: 1, borderBottomColor: theme.border, opacity: canMoveUp ? 1 : 0.3 }]}>
+              <ChevronUp size={16} color={theme.mutedForeground} />
+            </TouchableOpacity>
+            <TouchableOpacity onPress={onMoveDown} disabled={!canMoveDown} hitSlop={4}
+              style={[styles.railBtn, { opacity: canMoveDown ? 1 : 0.3 }]}>
+              <ChevronDown size={16} color={theme.mutedForeground} />
+            </TouchableOpacity>
+          </View>
+        ) : null}
+
         <TouchableOpacity onPress={() => onRemove(block.uid)} hitSlop={6} style={styles.del}>
           <X size={18} color={theme.mutedForeground} />
         </TouchableOpacity>
@@ -207,6 +226,8 @@ export const BuilderBlockCard = memo(
     a.catVideo === b.catVideo &&
     a.currentAreaId === b.currentAreaId &&
     a.areaVMs === b.areaVMs &&
+    a.canMoveUp === b.canMoveUp &&
+    a.canMoveDown === b.canMoveDown &&
     a.drag === b.drag,
 )
 
@@ -215,7 +236,7 @@ const styles = StyleSheet.create({
   grip: { paddingTop: 2 },
   thumb: { width: 40, height: 40, borderRadius: 8, overflow: 'hidden' },
   thumbImg: { width: 40, height: 40 },
-  name: { fontSize: 12.5, letterSpacing: 0.3, textTransform: 'uppercase' },
+  name: { fontSize: 14.5, lineHeight: 18 },
   badges: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 5 },
   badge: { borderWidth: 1, borderColor: 'transparent', borderRadius: 5, paddingHorizontal: 6, paddingVertical: 2 },
   badgeT: { fontSize: 9, fontFamily: FONT.uiBold, letterSpacing: 0.2, textTransform: 'uppercase' },
@@ -229,6 +250,8 @@ const styles = StyleSheet.create({
   secSwitch: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 1 },
   areaBtn: { flexDirection: 'row', alignItems: 'center', gap: 3, minHeight: 28, paddingHorizontal: 8, borderWidth: 1, borderRadius: 7 },
   helpBtn: { width: 26, height: 26, borderWidth: 1, borderRadius: 6, alignItems: 'center', justifyContent: 'center' },
+  rail: { alignSelf: 'stretch', width: 38, borderLeftWidth: 1 },
+  railBtn: { flex: 1, minHeight: 30, alignItems: 'center', justifyContent: 'center' },
   del: { padding: 4 },
   helpBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 28 },
   helpCard: { width: '100%', maxWidth: 380, borderWidth: 1, borderRadius: 16, padding: 16, gap: 7 },

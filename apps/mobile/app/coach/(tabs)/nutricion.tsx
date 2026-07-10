@@ -6,19 +6,20 @@ import * as ImagePicker from 'expo-image-picker'
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
 import {
   Apple,
+  BookOpen,
   CalendarHeart,
   ChefHat,
   Check,
   CheckCircle2,
   ChevronRight,
+  CircleHelp,
+  Copy,
   Globe,
-  HelpCircle,
   ImagePlus,
   Layers,
   Pencil,
   Plus,
   Search,
-  Share2,
   SlidersHorizontal,
   Sparkles,
   Star,
@@ -32,7 +33,7 @@ import { MotiView } from 'moti'
 import { supabase } from '../../../lib/supabase'
 import { getCoachProfile } from '../../../lib/coach'
 import { useTheme } from '../../../context/ThemeContext'
-import { Badge, Button, EmptyState, Input, MacroPill, NativeDialog, Sheet, Textarea } from '../../../components'
+import { Badge, Button, EmptyState, Input, NativeDialog, Sheet, Textarea } from '../../../components'
 import { EvaLoaderScreen } from '../../../components/EvaLoader'
 import { AppBackground } from '../../../components/AppBackground'
 import { FONT } from '../../../lib/typography'
@@ -51,7 +52,7 @@ import {
   type FoodUnit,
   type NutritionBoardRow,
 } from '../../../lib/nutrition-builder'
-import { assignTemplateToClients, deleteTemplate, listTemplates, type TemplateSummary } from '../../../lib/nutrition-templates'
+import { assignTemplateToClients, deleteTemplate, duplicateTemplate, goalLabel, listTemplates, type TemplateSummary } from '../../../lib/nutrition-templates'
 import {
   assignRecipeToClients,
   createCoachRecipe,
@@ -66,8 +67,32 @@ import { getApiBaseUrl } from '../../../lib/api'
 
 // Acentos de dominio FIJOS del token-contract (§1 — NO white-label, seguros para SVG).
 const EMBER = '#FF6A3D' // ember-500 — planes personalizados / dominio nutrición
+const AQUA = '#18ABD4' // aqua-500 — recovery / paso 3 guía
 const WARNING = '#F5A524' // warning-500 — sin plan
 const SUCCESS = '#1FB877' // success-500
+
+// Onboarding coach (espejo de COACH_NUTRITION_ONBOARDING_STEPS web).
+const GUIDE_STEPS = [
+  { n: 1, icon: Apple, color: '' as string, title: 'Agrega tus alimentos', description: 'Busca en el catálogo (~250 alimentos chilenos y globales) o crea los tuyos propios. Los alimentos son la base de todos tus planes.', cta: 'Ir al catálogo', tab: 'foods' as HubTab | null },
+  { n: 2, icon: BookOpen, color: EMBER, title: 'Crea tu primera plantilla', description: 'Una plantilla es un modelo de plan reutilizable. Arma las comidas con sus alimentos y cantidades. Tarda menos de 5 minutos.', cta: 'Crear plantilla', tab: 'templates' as HubTab | null },
+  { n: 3, icon: Users, color: AQUA, title: 'Asigna el plan a un alumno', description: 'Una vez tengas una plantilla lista, asígnala a tus alumnos. Puedes asignar la misma plantilla a varios a la vez.', cta: 'Asignar plan', tab: null },
+] as const
+
+// Superficies de nutrición (espejo de NUTRITION_SURFACES web) — Base vs Pro.
+const GUIDE_SURFACES: { label: string; description: string; tier: 'base' | 'pro' }[] = [
+  { label: 'Recetas', description: 'Ideas de recetas para inspirar a tus alumnos. No afectan macros ni adherencia.', tier: 'base' },
+  { label: 'Micronutrientes', description: 'Vitaminas y minerales estimados del plan, sin trabajo extra de tu parte.', tier: 'base' },
+  { label: 'Notas', description: 'Notas y recordatorios que dejas a un alumno sobre su nutrición.', tier: 'base' },
+  { label: 'Lista de compras', description: 'Lista de compras generada desde el plan del alumno, agrupada por categoría.', tier: 'base' },
+  { label: 'Objetivos', description: 'Calorías y macros objetivo calculados a partir de los datos del alumno.', tier: 'base' },
+  { label: 'Intercambios', description: 'Sistema de equivalencias para que el alumno arme comidas con flexibilidad.', tier: 'pro' },
+]
+
+// Etiquetas de categoría (espejo de FOOD_CATEGORIES web {value,label}).
+const CAT_LABELS: Record<string, string> = {
+  proteina: 'Proteína', carbohidrato: 'Carbohidrato', grasa: 'Grasa', lacteo: 'Lácteo',
+  fruta: 'Fruta', verdura: 'Verdura', legumbre: 'Legumbre', bebida: 'Bebida', snack: 'Snack', otro: 'Otro',
+}
 
 interface Client { id: string; full_name: string }
 type HubTab = 'templates' | 'clients' | 'foods' | 'recipes'
@@ -169,6 +194,11 @@ export default function CoachNutricionScreen() {
     Alert.alert('Plantilla asignada', `Asignada a ${assignIds.length} alumno(s) como plan activo.`)
     void loadAll(true)
   }
+  async function doDuplicateTemplate(t: TemplateSummary) {
+    const r = await duplicateTemplate(t.id)
+    if (!r.ok) { Alert.alert('Error', r.error ?? 'No se pudo duplicar.'); return }
+    setTemplates(await listTemplates())
+  }
   function confirmDeleteTemplate(t: TemplateSummary) {
     Alert.alert('Eliminar plantilla', `¿Eliminar "${t.name}"?`, [
       { text: 'Cancelar', style: 'cancel' },
@@ -181,7 +211,7 @@ export default function CoachNutricionScreen() {
   }
 
   const TAB_META: { key: HubTab; label: string; count: number }[] = [
-    { key: 'templates', label: 'Plantillas', count: templates.length },
+    { key: 'templates', label: 'Planes', count: templates.length },
     { key: 'clients', label: 'Alumnos', count: board.length },
     { key: 'foods', label: 'Alimentos', count: foodsCount },
     { key: 'recipes', label: 'Recetas', count: recipes.length },
@@ -205,7 +235,7 @@ export default function CoachNutricionScreen() {
             activeOpacity={0.85}
             style={[styles.hIconBtn, { backgroundColor: theme.card, borderColor: theme.border }]}
           >
-            <Layers size={18} color={theme.foreground} />
+            <BookOpen size={17} color={theme.foreground} />
           </TouchableOpacity>
           <TouchableOpacity
             testID="nutricion-guide-open"
@@ -213,7 +243,7 @@ export default function CoachNutricionScreen() {
             activeOpacity={0.85}
             style={[styles.hIconBtn, { backgroundColor: theme.card, borderColor: theme.border }]}
           >
-            <HelpCircle size={18} color={theme.foreground} />
+            <CircleHelp size={17} color={theme.foreground} />
           </TouchableOpacity>
           {showCreate ? (
             <TouchableOpacity
@@ -266,6 +296,7 @@ export default function CoachNutricionScreen() {
               templates={templates}
               onEdit={(t) => router.push(`/coach/nutrition-builder?templateId=${t.id}`)}
               onAssign={(t) => { setAssignIds([]); setAssignTemplate(t) }}
+              onDuplicate={doDuplicateTemplate}
               onDelete={confirmDeleteTemplate}
               onCreate={() => router.push('/coach/nutrition-builder?mode=template')}
             />
@@ -319,13 +350,53 @@ export default function CoachNutricionScreen() {
         </View>
       </NativeDialog>
 
-      {/* Guía: logística synced/custom */}
-      <NativeDialog open={guideOpen} title="Cómo funciona" onClose={() => setGuideOpen(false)}>
-        <View style={{ gap: 12 }}>
-          <GuideRow theme={theme} color={theme.primary} title="1. Plantillas (moldes)" text="Son moldes reutilizables. No pertenecen a un alumno hasta que las asignas. Si editas una plantilla, los alumnos SINCRONIZADOS se actualizan con ese molde." />
-          <GuideRow theme={theme} color={SUCCESS} title="2. Alumnos (planes activos)" text="Al asignar una plantilla, el plan del alumno queda SINCRONIZADO con el molde." />
-          <GuideRow theme={theme} color={EMBER} title="3. Edición individual (custom)" text="Si ajustas el plan solo para un alumno, pasa a PERSONALIZADO y deja de seguir el molde (editar la plantilla ya no lo cambia)." />
-        </View>
+      {/* Guía rápida — 3 pasos onboarding + superficies (espejo CoachNutritionGuideDialog) */}
+      <NativeDialog open={guideOpen} title="Guía rápida — Nutrición" onClose={() => setGuideOpen(false)}>
+        <ScrollView style={{ maxHeight: 480 }} contentContainerStyle={{ gap: 16 }} showsVerticalScrollIndicator={false}>
+          <Text style={[styles.hint, { color: theme.mutedForeground, fontFamily: FONT.ui }]}>Tres pasos para sacar provecho al módulo. Puedes volver aquí cuando quieras.</Text>
+          <View style={{ gap: 12 }}>
+            {GUIDE_STEPS.map((step) => {
+              const StepIcon = step.icon
+              const color = step.color || theme.primary
+              return (
+                <View key={step.n} style={[styles.guideStep, { borderColor: theme.border, backgroundColor: theme.secondary }]}>
+                  <View style={styles.guideStepHead}>
+                    <View style={[styles.guideStepIcon, { backgroundColor: color + '1A' }]}>
+                      <StepIcon size={16} color={color} />
+                    </View>
+                    <Text style={[styles.guideStepEyebrow, { color: theme.mutedForeground, fontFamily: FONT.uiExtra }]}>Paso {step.n}</Text>
+                  </View>
+                  <Text style={[styles.guideStepTitle, { color: theme.foreground, fontFamily: FONT.uiExtra }]}>{step.title}</Text>
+                  <Text style={[styles.guideStepDesc, { color: theme.mutedForeground, fontFamily: FONT.ui }]}>{step.description}</Text>
+                  <TouchableOpacity
+                    testID={`nutricion-guide-step-${step.n}`}
+                    disabled={!step.tab}
+                    onPress={() => { setGuideOpen(false); if (step.tab) setTab(step.tab) }}
+                    activeOpacity={0.7}
+                    style={styles.guideStepCta}
+                  >
+                    <Text style={{ fontSize: 12, color, fontFamily: FONT.uiBold }}>{step.cta}</Text>
+                    <ChevronRight size={14} color={color} />
+                  </TouchableOpacity>
+                </View>
+              )
+            })}
+          </View>
+          <View style={[styles.guideSurfaces, { borderTopColor: theme.border }]}>
+            <Text style={[styles.eyebrow, { color: theme.mutedForeground }]}>Qué incluye nutrición</Text>
+            {GUIDE_SURFACES.map((s) => (
+              <View key={s.label} style={styles.guideSurfaceRow}>
+                <View style={{ marginTop: 1 }}>
+                  <Badge tone={s.tier === 'pro' ? 'sport' : 'aqua'} variant="soft" size="sm">{s.tier === 'pro' ? 'Pro' : 'Base'}</Badge>
+                </View>
+                <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+                  <Text style={{ fontSize: 12, color: theme.foreground, fontFamily: FONT.uiBold }}>{s.label}</Text>
+                  <Text style={{ fontSize: 11, lineHeight: 16, color: theme.mutedForeground, fontFamily: FONT.ui }}>{s.description}</Text>
+                </View>
+              </View>
+            ))}
+          </View>
+        </ScrollView>
       </NativeDialog>
     </SafeAreaView>
   )
@@ -385,12 +456,22 @@ function SortSheet<T extends string>({
   )
 }
 
+// Macro con dot de color + gramos + % (mono 11) — espejo del split de TemplateLibrary web.
+function MacroStat({ theme, color, label, grams, pct }: { theme: any; color: string; label: string; grams: number; pct: number }) {
+  return (
+    <View style={styles.macroStat}>
+      <Text style={{ fontSize: 11, color, fontFamily: FONT.mono }}>●</Text>
+      <Text style={{ fontSize: 11, color: theme.mutedForeground, fontFamily: FONT.mono }}>{label} {grams}g · {pct}%</Text>
+    </View>
+  )
+}
+
 // ─── Tab: Plantillas ────────────────────────────────────────────────────────────
 type TplSort = 'recent' | 'name' | 'kcalDesc' | 'kcalAsc'
 function TemplatesTab({
-  theme, templates, onEdit, onAssign, onDelete, onCreate,
+  theme, templates, onEdit, onAssign, onDuplicate, onDelete, onCreate,
 }: {
-  theme: any; templates: TemplateSummary[]; onEdit: (t: TemplateSummary) => void; onAssign: (t: TemplateSummary) => void; onDelete: (t: TemplateSummary) => void; onCreate: () => void
+  theme: any; templates: TemplateSummary[]; onEdit: (t: TemplateSummary) => void; onAssign: (t: TemplateSummary) => void; onDuplicate: (t: TemplateSummary) => void; onDelete: (t: TemplateSummary) => void; onCreate: () => void
 }) {
   const [query, setQuery] = useState('')
   const [sort, setSort] = useState<TplSort>('recent')
@@ -408,7 +489,7 @@ function TemplatesTab({
   if (templates.length === 0) {
     return (
       <View style={{ flex: 1 }}>
-        <EmptyState icon={CalendarHeart} title="Sin plantillas todavía" subtitle="Crea tu primera plantilla para reutilizar planes de nutrición entre tus alumnos."
+        <EmptyState icon={CalendarHeart} title="Sin plantillas todavía" subtitle="Crea una plantilla de comidas reutilizable y asígnala a tus alumnos en segundos."
           action={<Button label="Nueva plantilla" leftIcon={Plus} variant="sport" onPress={onCreate} style={{ marginTop: 8 }} />} />
       </View>
     )
@@ -419,39 +500,67 @@ function TemplatesTab({
       <SearchFilterBar theme={theme} value={query} onChange={setQuery} placeholder="Buscar plantilla…" onFilter={() => setFilterOpen(true)} filtersActive={sort !== 'recent'} />
       <ScrollView contentContainerStyle={styles.tabBody} showsVerticalScrollIndicator={false}>
         {list.map((t) => {
-          const { pPct, cPct, fPct } = macroSplit(t.daily_calories ?? 0, t.protein_g ?? 0, t.carbs_g ?? 0, t.fats_g ?? 0)
-          const hasSplit = pPct + cPct + fPct > 0
+          const kcal = t.daily_calories ?? 0
+          const p = t.protein_g ?? 0, c = t.carbs_g ?? 0, f = t.fats_g ?? 0
+          const { pPct, cPct, fPct } = macroSplit(kcal, p, c, f)
+          const goal = goalLabel(t.goal_type)
           return (
             <View key={t.id} style={[styles.tplCard, { borderColor: theme.border, backgroundColor: theme.card, borderRadius: theme.radius.xl }, SHADOWS[theme.scheme as Scheme].sm]}>
               <View style={styles.tplTop}>
-                <Text style={[styles.tplName, { color: theme.foreground, fontFamily: FONT.displayBold }]} numberOfLines={2}>{t.name}</Text>
-                <Badge tone="neutral" variant="soft" size="sm">{t.mealCount} comida{t.mealCount !== 1 ? 's' : ''}</Badge>
+                <View style={{ flex: 1, minWidth: 0, gap: 6 }}>
+                  {goal ? <View style={{ alignSelf: 'flex-start' }}><Badge tone="neutral" variant="soft" size="sm">{goal.toUpperCase()}</Badge></View> : null}
+                  <Text style={[styles.tplName, { color: theme.foreground, fontFamily: FONT.uiBold }]} numberOfLines={1}>{t.name}</Text>
+                  {t.description ? <Text style={[styles.tplDesc, { color: theme.mutedForeground, fontFamily: FONT.ui }]} numberOfLines={2}>{t.description}</Text> : null}
+                </View>
+                <View style={styles.tplKcalBox}>
+                  <Text style={[styles.tplKcalNum, { color: theme.foreground, fontFamily: FONT.displayBlack }]}>{kcal.toLocaleString('es')}</Text>
+                  <Text style={[styles.tplKcalLabel, { color: theme.mutedForeground, fontFamily: FONT.uiSemibold }]}>kcal</Text>
+                </View>
               </View>
-              <Text style={[styles.tplKcal, { color: theme.foreground, fontFamily: FONT.monoBold }]}>
-                {t.daily_calories ?? 0}<Text style={{ fontSize: 12, color: theme.mutedForeground }}> kcal/día</Text>
-              </Text>
-              {hasSplit ? (
-                <View style={styles.splitBar}>
+              {kcal > 0 ? (
+                <View style={[styles.splitBar, { backgroundColor: theme.secondary }]}>
                   {pPct > 0 ? <View style={{ flex: pPct, backgroundColor: MACRO_COLORS.protein }} /> : null}
                   {cPct > 0 ? <View style={{ flex: cPct, backgroundColor: MACRO_COLORS.carbs }} /> : null}
                   {fPct > 0 ? <View style={{ flex: fPct, backgroundColor: MACRO_COLORS.fats }} /> : null}
                 </View>
               ) : null}
-              <View style={styles.macrosRow}>
-                {t.protein_g != null ? <MacroPill label="P" value={t.protein_g} color={MACRO_COLORS.protein} /> : null}
-                {t.carbs_g != null ? <MacroPill label="C" value={t.carbs_g} color={MACRO_COLORS.carbs} /> : null}
-                {t.fats_g != null ? <MacroPill label="G" value={t.fats_g} color={MACRO_COLORS.fats} /> : null}
+              <View style={styles.tplMacros}>
+                <MacroStat theme={theme} color={MACRO_COLORS.protein} label="P" grams={p} pct={pPct} />
+                <MacroStat theme={theme} color={MACRO_COLORS.carbs} label="C" grams={c} pct={cPct} />
+                <MacroStat theme={theme} color={MACRO_COLORS.fats} label="G" grams={f} pct={fPct} />
               </View>
-              <View style={[styles.tplActions, { borderTopColor: theme.border }]}>
-                <TouchableOpacity testID={`nutricion-tpl-edit-${t.id}`} style={styles.tplBtn} activeOpacity={0.8} onPress={() => onEdit(t)}>
-                  <Pencil size={14} color={theme.foreground} /><Text style={[styles.tplBtnText, { color: theme.foreground, fontFamily: FONT.uiSemibold }]}>Editar</Text>
-                </TouchableOpacity>
-                <TouchableOpacity testID={`nutricion-tpl-assign-${t.id}`} style={styles.tplBtn} activeOpacity={0.8} onPress={() => onAssign(t)}>
-                  <UserPlus size={14} color={theme.primary} /><Text style={[styles.tplBtnText, { color: theme.primary, fontFamily: FONT.uiSemibold }]}>Asignar</Text>
-                </TouchableOpacity>
-                <TouchableOpacity testID={`nutricion-tpl-delete-${t.id}`} style={styles.tplBtn} activeOpacity={0.8} onPress={() => onDelete(t)}>
-                  <Trash2 size={14} color={theme.destructive} /><Text style={[styles.tplBtnText, { color: theme.destructive, fontFamily: FONT.uiSemibold }]}>Borrar</Text>
-                </TouchableOpacity>
+              {t.mealNames.length > 0 ? (
+                <View style={styles.tplChips}>
+                  {t.mealNames.slice(0, 8).map((m, i) => (
+                    <View key={`${m}-${i}`} style={[styles.tplChip, { backgroundColor: theme.secondary }]}>
+                      <Text style={{ fontSize: 11, color: theme.foreground, fontFamily: FONT.uiSemibold }} numberOfLines={1}>{m}</Text>
+                    </View>
+                  ))}
+                  {t.mealNames.length > 8 ? (
+                    <Text style={{ fontSize: 11, color: theme.mutedForeground, fontFamily: FONT.uiBold, paddingHorizontal: 4, paddingVertical: 2 }}>+{t.mealNames.length - 8}</Text>
+                  ) : null}
+                </View>
+              ) : null}
+              <View style={[styles.tplFooter, { borderTopColor: theme.border }]}>
+                <View style={styles.tplMealCount}>
+                  <Utensils size={14} color={theme.mutedForeground} />
+                  <Text style={{ fontSize: 12, color: theme.mutedForeground, fontFamily: FONT.ui }}>{t.mealCount} comidas</Text>
+                </View>
+                <View style={styles.tplFooterActions}>
+                  <TouchableOpacity testID={`nutricion-tpl-edit-${t.id}`} onPress={() => onEdit(t)} activeOpacity={0.8} style={[styles.tplIconBtn, { borderColor: theme.border, backgroundColor: theme.secondary }]}>
+                    <Pencil size={15} color={theme.foreground} />
+                  </TouchableOpacity>
+                  <TouchableOpacity testID={`nutricion-tpl-duplicate-${t.id}`} onPress={() => onDuplicate(t)} activeOpacity={0.8} style={[styles.tplIconBtn, { borderColor: theme.border, backgroundColor: theme.secondary }]}>
+                    <Copy size={15} color={theme.foreground} />
+                  </TouchableOpacity>
+                  <TouchableOpacity testID={`nutricion-tpl-delete-${t.id}`} onPress={() => onDelete(t)} activeOpacity={0.8} style={[styles.tplIconBtn, { borderColor: theme.border, backgroundColor: theme.secondary }]}>
+                    <Trash2 size={15} color={theme.foreground} />
+                  </TouchableOpacity>
+                  <TouchableOpacity testID={`nutricion-tpl-assign-${t.id}`} onPress={() => onAssign(t)} activeOpacity={0.9} style={[styles.tplAssignBtn, { backgroundColor: theme.primary }]}>
+                    <UserPlus size={13} color={theme.primaryForeground} />
+                    <Text style={[styles.tplAssignTxt, { color: theme.primaryForeground, fontFamily: FONT.uiExtra }]}>Asignar</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
             </View>
           )
@@ -464,7 +573,7 @@ function TemplatesTab({
 }
 
 // ─── Tab: Alumnos (ActivePlansBoard móvil — sync/custom) ──────────────────────────
-type BoardSort = 'adherence' | 'name' | 'plan'
+type BoardSort = 'name' | 'plan'
 function ClientsBoardTab({
   theme, board, planMeta, clientsWithoutPlan, onManage, onAssignEmpty, onReload,
 }: {
@@ -477,7 +586,7 @@ function ClientsBoardTab({
   onReload: () => void
 }) {
   const [query, setQuery] = useState('')
-  const [sort, setSort] = useState<BoardSort>('adherence')
+  const [sort, setSort] = useState<BoardSort>('name')
   const [filterOpen, setFilterOpen] = useState(false)
 
   const rows: BoardRow[] = useMemo(() => {
@@ -487,9 +596,8 @@ function ClientsBoardTab({
       return { ...r, planId: m?.planId, isCustom: !!m?.isCustom }
     })
     if (q) out = out.filter((r) => r.clientName.toLowerCase().includes(q) || r.planName.toLowerCase().includes(q))
-    if (sort === 'name') out = [...out].sort((a, b) => a.clientName.localeCompare(b.clientName))
-    else if (sort === 'plan') out = [...out].sort((a, b) => a.planName.localeCompare(b.planName))
-    else out = [...out].sort((a, b) => a.avg7d - b.avg7d) // adherencia peor primero (triage)
+    if (sort === 'plan') out = [...out].sort((a, b) => a.planName.localeCompare(b.planName))
+    else out = [...out].sort((a, b) => a.clientName.localeCompare(b.clientName))
     return out
   }, [board, planMeta, query, sort])
 
@@ -514,7 +622,7 @@ function ClientsBoardTab({
 
   return (
     <View style={{ flex: 1 }}>
-      <SearchFilterBar theme={theme} value={query} onChange={setQuery} placeholder="Buscar por alumno o plan…" onFilter={() => setFilterOpen(true)} filtersActive={sort !== 'adherence'} />
+      <SearchFilterBar theme={theme} value={query} onChange={setQuery} placeholder="Buscar por alumno o plan…" onFilter={() => setFilterOpen(true)} filtersActive={sort !== 'name'} />
       {query.trim() ? (
         <View style={styles.resultBar}>
           <Text style={{ fontSize: 12, color: theme.mutedForeground, fontFamily: FONT.ui }}>{rows.length} resultado{rows.length !== 1 ? 's' : ''}</Text>
@@ -552,7 +660,7 @@ function ClientsBoardTab({
       )}
 
       <SortSheet theme={theme} open={filterOpen} onClose={() => setFilterOpen(false)} selected={sort} onSelect={setSort}
-        options={[{ value: 'adherence', label: 'Adherencia' }, { value: 'name', label: 'Alumno' }, { value: 'plan', label: 'Plan' }]} />
+        options={[{ value: 'name', label: 'Alumno' }, { value: 'plan', label: 'Plan' }]} />
     </View>
   )
 }
@@ -587,14 +695,14 @@ function PlanCard({
 }: {
   theme: any; row: BoardRow; accent: string; index: number; onManage: (r: BoardRow) => void; onUnassign: (r: BoardRow) => void
 }) {
-  const initial = (row.clientName || '?').charAt(0).toUpperCase()
+  const initial = (row.clientName || '?').charAt(0)
   return (
     <MotiView from={{ opacity: 0, translateY: 10 }} animate={{ opacity: 1, translateY: 0 }} transition={{ type: 'timing', duration: 300, delay: Math.min(index * 45, 360) }}>
       <View style={[styles.planCard, { borderColor: theme.border, backgroundColor: theme.card, borderRadius: theme.radius.xl }, SHADOWS[theme.scheme as Scheme].sm]}>
         <View style={styles.planTop}>
           <View style={styles.planId}>
-            <View style={[styles.avatar, { backgroundColor: accent + '1A' }]}>
-              <Text style={{ fontSize: 15, color: accent, fontFamily: FONT.displayBold }}>{initial}</Text>
+            <View style={[styles.avatar, { backgroundColor: accent + '26' }]}>
+              <Text style={{ fontSize: 15, color: accent, fontFamily: FONT.uiBold }}>{initial}</Text>
             </View>
             <View style={{ flex: 1, minWidth: 0 }}>
               <Text style={[styles.planName, { color: theme.foreground, fontFamily: FONT.uiBold }]} numberOfLines={1}>{row.clientName}</Text>
@@ -606,15 +714,18 @@ function PlanCard({
 
         <View style={styles.sparkHead}>
           <Text style={[styles.eyebrow, { color: theme.mutedForeground }]}>Últimos 7 días</Text>
-          <Text style={{ fontSize: 10.5, color: theme.mutedForeground, fontFamily: FONT.mono }}>
-            Hoy: <Text style={{ color: theme.foreground, fontFamily: FONT.monoBold }}>{row.todayKcal}</Text>{row.targetKcal ? ` / ${row.targetKcal} kcal` : ' kcal'}
+          <Text style={{ fontSize: 10, color: theme.mutedForeground, fontFamily: FONT.ui, fontVariant: ['tabular-nums'] }}>
+            Hoy: <Text style={{ color: theme.foreground, fontFamily: FONT.uiBold }}>{row.todayKcal}</Text>{row.targetKcal ? ` / ${row.targetKcal} kcal` : ' kcal'}
           </Text>
         </View>
         <View style={styles.sparkBars}>
           {row.sparkline7d.map((v, i) => (
-            <View key={i} style={{ flex: 1, borderRadius: 2, height: `${Math.max(8, Math.min(v, 100))}%`, backgroundColor: adherenceColorFor(row.avg7d), opacity: 0.4 + Math.min(v, 100) / 200 }} />
+            <View key={i} style={{ flex: 1, borderRadius: 2, height: `${Math.max(6, Math.min(v, 100))}%`, backgroundColor: accent, opacity: 0.4 + Math.min(v, 100) / 200 }} />
           ))}
         </View>
+        <Text style={{ fontSize: 10, color: theme.mutedForeground, fontFamily: FONT.ui }}>
+          Más detalle: <Text style={{ color: theme.foreground }}>perfil del alumno</Text>
+        </Text>
 
         <View style={[styles.planActions, { borderTopColor: theme.border }]}>
           <TouchableOpacity testID={`nutricion-manage-${row.clientId}`} onPress={() => onManage(row)} activeOpacity={0.85} style={[styles.manageBtn, { backgroundColor: theme.secondary, borderColor: theme.border }]}>
@@ -632,10 +743,12 @@ function PlanCard({
 
 // ─── Tab: Alimentos (FoodLibrary embebida — E3-19) ────────────────────────────────
 function FoodsTab({ theme, onFoodsChanged }: { theme: any; onFoodsChanged: () => void }) {
+  const router = useRouter()
   const [foods, setFoods] = useState<FoodRow[]>([])
   const [loading, setLoading] = useState(true)
   const [query, setQuery] = useState('')
   const [scope, setScope] = useState<'mine' | 'all'>('mine')
+  const [category, setCategory] = useState<string>('todos')
   const [editing, setEditing] = useState<FoodRow | null>(null)
   const [creating, setCreating] = useState(false)
 
@@ -656,10 +769,14 @@ function FoodsTab({ theme, onFoodsChanged }: { theme: any; onFoodsChanged: () =>
   }, [query, scope])
 
   const filtered = useMemo(() => {
-    if (scope === 'all') return foods
-    const q = query.trim().toLowerCase()
-    return q ? foods.filter((f) => f.name.toLowerCase().includes(q)) : foods
-  }, [foods, query, scope])
+    let out = foods
+    if (scope !== 'all') {
+      const q = query.trim().toLowerCase()
+      if (q) out = out.filter((f) => f.name.toLowerCase().includes(q))
+    }
+    if (category !== 'todos') out = out.filter((f) => (f.category ?? 'otro') === category)
+    return out
+  }, [foods, query, scope, category])
 
   function confirmDelete(food: FoodRow) {
     Alert.alert('Eliminar alimento', `¿Eliminar "${food.name}"?`, [
@@ -674,6 +791,23 @@ function FoodsTab({ theme, onFoodsChanged }: { theme: any; onFoodsChanged: () =>
 
   return (
     <View style={{ flex: 1 }}>
+      {/* Entry-card — Grupos de comidas (espejo FoodLibrary web) */}
+      <TouchableOpacity
+        testID="nutricion-foods-meal-groups"
+        onPress={() => router.push('/coach/meal-groups')}
+        activeOpacity={0.85}
+        style={[styles.mealGroupsEntry, { borderColor: theme.border, backgroundColor: theme.card }]}
+      >
+        <View style={[styles.mealGroupsIcon, { backgroundColor: theme.primary + '1A' }]}>
+          <Layers size={17} color={theme.primary} />
+        </View>
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text style={{ fontSize: 14, color: theme.foreground, fontFamily: FONT.uiBold }}>Grupos de comidas</Text>
+          <Text style={{ fontSize: 11.5, color: theme.mutedForeground, fontFamily: FONT.ui, marginTop: 1 }}>Combos de alimentos reutilizables</Text>
+        </View>
+        <ChevronRight size={18} color={theme.mutedForeground} />
+      </TouchableOpacity>
+
       <View style={styles.foodsHead}>
         <View style={styles.scopeRow}>
           {(['mine', 'all'] as const).map((s) => {
@@ -681,7 +815,7 @@ function FoodsTab({ theme, onFoodsChanged }: { theme: any; onFoodsChanged: () =>
             return (
               <TouchableOpacity key={s} testID={`nutricion-food-scope-${s}`} onPress={() => setScope(s)} activeOpacity={0.8}
                 style={[styles.scopeChip, { borderColor: on ? theme.primary : theme.border, backgroundColor: on ? theme.primary + '1A' : 'transparent' }]}>
-                <Text style={{ fontSize: 12.5, fontFamily: FONT.uiSemibold, color: on ? theme.primary : theme.mutedForeground }}>{s === 'mine' ? 'Míos' : 'Catálogo'}</Text>
+                <Text style={{ fontSize: 12.5, fontFamily: FONT.uiSemibold, color: on ? theme.primary : theme.mutedForeground }}>{s === 'mine' ? 'Mis alimentos' : 'Catálogo'}</Text>
               </TouchableOpacity>
             )
           })}
@@ -693,6 +827,33 @@ function FoodsTab({ theme, onFoodsChanged }: { theme: any; onFoodsChanged: () =>
       </View>
 
       <SearchFilterBar theme={theme} value={query} onChange={setQuery} placeholder="Buscar alimento…" />
+
+      {/* Pills de categoría (kit nutriSelPill) */}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.catPills}>
+        {[{ value: 'todos', label: 'Todas' }, ...FOOD_CATEGORIES.map((c) => ({ value: c, label: CAT_LABELS[c] ?? c }))].map((cat) => {
+          const on = category === cat.value
+          return (
+            <TouchableOpacity
+              key={cat.value}
+              testID={`nutricion-food-cat-pill-${cat.value}`}
+              onPress={() => setCategory(cat.value)}
+              activeOpacity={0.8}
+              style={[styles.catPill, { borderColor: on ? 'transparent' : theme.border, backgroundColor: on ? theme.primary : theme.card }]}
+            >
+              <Text style={{ fontSize: 12, fontFamily: FONT.uiBold, color: on ? theme.primaryForeground : theme.mutedForeground }}>{cat.label}</Text>
+            </TouchableOpacity>
+          )
+        })}
+      </ScrollView>
+
+      {/* Conteo (kit: línea mono) */}
+      <View style={styles.foodCountLine}>
+        <Text style={{ fontSize: 11, color: theme.mutedForeground, fontFamily: FONT.mono, fontVariant: ['tabular-nums'] }}>
+          {query.trim()
+            ? `${filtered.length} ${filtered.length === 1 ? 'resultado' : 'resultados'}`
+            : `${filtered.length} ${filtered.length === 1 ? 'visible' : 'visibles'}`}
+        </Text>
+      </View>
 
       {loading ? (
         <EvaLoaderScreen subtitle="Cargando alimentos…" />
@@ -716,7 +877,7 @@ function FoodsTab({ theme, onFoodsChanged }: { theme: any; onFoodsChanged: () =>
               <TouchableOpacity style={{ flex: 1 }} activeOpacity={scope === 'mine' ? 0.8 : 1} onPress={() => { if (scope === 'mine') setEditing(item) }}>
                 <Text style={[styles.foodName, { color: theme.foreground, fontFamily: FONT.uiBold }]} numberOfLines={1}>{item.name}</Text>
                 <Text style={[styles.foodMacros, { color: theme.mutedForeground, fontFamily: FONT.mono }]}>
-                  {item.calories} kcal · P{item.protein_g} C{item.carbs_g} G{item.fats_g} / {item.serving_size}{item.serving_unit}
+                  {item.calories} kcal · <Text style={{ color: MACRO_COLORS.protein }}>P{item.protein_g}</Text> <Text style={{ color: MACRO_COLORS.carbs }}>C{item.carbs_g}</Text> <Text style={{ color: MACRO_COLORS.fats }}>G{item.fats_g}</Text> / {item.serving_size}{item.serving_unit}
                 </Text>
               </TouchableOpacity>
               {scope === 'mine' ? (
@@ -893,27 +1054,27 @@ function RecipesTab({
           }
           renderItem={({ item: r }) => (
             <View style={[styles.recipeCard, { borderColor: theme.border, backgroundColor: theme.card, borderRadius: theme.radius.xl }, SHADOWS[theme.scheme as Scheme].sm]}>
-              <View style={[styles.recipeThumb, { backgroundColor: theme.secondary }]}>
+              <View style={[styles.recipeImg, { backgroundColor: theme.secondary }]}>
                 {r.image_url ? (
                   <Image source={{ uri: r.image_url }} style={{ width: '100%', height: '100%' }} contentFit="cover" />
                 ) : (
-                  <ChefHat size={26} color={EMBER} />
+                  <View style={styles.recipeImgEmpty}><ChefHat size={32} color={EMBER} /></View>
                 )}
               </View>
-              <View style={{ flex: 1, minWidth: 0, gap: 8 }}>
-                <Text style={[styles.recipeName, { color: theme.foreground, fontFamily: FONT.displayBold }]} numberOfLines={2}>{r.name}</Text>
+              <View style={styles.recipeBody}>
+                <Text style={[styles.recipeName, { color: theme.foreground, fontFamily: FONT.uiExtra }]} numberOfLines={2}>{r.name}</Text>
                 {r.ingredients_text ? (
-                  <Text style={{ fontSize: 12, lineHeight: 17, color: theme.mutedForeground, fontFamily: FONT.ui }} numberOfLines={2}>{r.ingredients_text}</Text>
+                  <Text style={{ fontSize: 12, lineHeight: 17, color: theme.mutedForeground, fontFamily: FONT.ui }} numberOfLines={3}>{r.ingredients_text}</Text>
                 ) : null}
                 <View style={styles.recipeActions}>
-                  <TouchableOpacity testID={`nutricion-recipe-share-${r.id}`} onPress={() => setAssignTarget(r)} activeOpacity={0.85} style={[styles.recipeShareBtn, { backgroundColor: theme.primary }]}>
-                    <Share2 size={14} color={theme.primaryForeground} />
-                    <Text style={{ fontSize: 12, color: theme.primaryForeground, fontFamily: FONT.uiBold }}>Compartir</Text>
+                  <TouchableOpacity testID={`nutricion-recipe-share-${r.id}`} onPress={() => setAssignTarget(r)} activeOpacity={0.9} style={[styles.recipeShareBtn, { backgroundColor: theme.primary }]}>
+                    <Users size={14} color={theme.primaryForeground} />
+                    <Text style={[styles.recipeShareTxt, { color: theme.primaryForeground, fontFamily: FONT.uiBold }]}>Compartir</Text>
                   </TouchableOpacity>
                   <TouchableOpacity testID={`nutricion-recipe-edit-${r.id}`} onPress={() => openEdit(r)} activeOpacity={0.8} style={[styles.recipeIconBtn, { borderColor: theme.border, backgroundColor: theme.secondary }]}>
-                    <Pencil size={15} color={theme.foreground} />
+                    <Pencil size={15} color={theme.mutedForeground} />
                   </TouchableOpacity>
-                  <TouchableOpacity testID={`nutricion-recipe-delete-${r.id}`} onPress={() => confirmDelete(r)} activeOpacity={0.8} style={[styles.recipeIconBtn, { borderColor: theme.destructive + '33', backgroundColor: theme.destructive + '14' }]}>
+                  <TouchableOpacity testID={`nutricion-recipe-delete-${r.id}`} onPress={() => confirmDelete(r)} activeOpacity={0.8} style={[styles.recipeIconBtn, { borderColor: theme.border, backgroundColor: theme.secondary }]}>
                     <Trash2 size={15} color={theme.destructive} />
                   </TouchableOpacity>
                 </View>
@@ -1100,28 +1261,19 @@ function UpsellCard({ theme }: { theme: any }) {
   )
 }
 
-function GuideRow({ theme, color, title, text }: { theme: any; color: string; title: string; text: string }) {
-  return (
-    <View style={{ gap: 3 }}>
-      <Text style={[styles.guideTitle, { color, fontFamily: FONT.uiExtra }]}>{title}</Text>
-      <Text style={[styles.hint, { color: theme.mutedForeground, fontFamily: FONT.ui }]}>{text}</Text>
-    </View>
-  )
-}
-
 const styles = StyleSheet.create({
   container: { flex: 1 },
 
   header: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12, paddingHorizontal: 20, paddingTop: 10, paddingBottom: 12 },
-  hTitle: { fontSize: 25, letterSpacing: -0.5 },
+  hTitle: { fontSize: 24, letterSpacing: -0.5 },
   hSub: { fontSize: 13, marginTop: 2 },
   hActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  hIconBtn: { width: 40, height: 40, borderRadius: 12, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
-  hCreateBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, height: 40, paddingHorizontal: 14, borderRadius: 12 },
+  hIconBtn: { width: 36, height: 36, borderRadius: 12, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
+  hCreateBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, height: 36, paddingHorizontal: 14, borderRadius: 12 },
   hCreateTxt: { fontSize: 13 },
 
   tabStripWrap: { paddingHorizontal: 16, paddingBottom: 10 },
-  tabStrip: { flexDirection: 'row', gap: 3, padding: 3, borderRadius: 14 },
+  tabStrip: { flexDirection: 'row', gap: 4, padding: 3, borderRadius: 14 },
   tabSeg: { flex: 1, height: 46, alignItems: 'center', justifyContent: 'center', borderRadius: 11, paddingHorizontal: 4 },
 
   filterBar: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, paddingBottom: 10 },
@@ -1135,15 +1287,24 @@ const styles = StyleSheet.create({
   eyebrow: { fontSize: 10, textTransform: 'uppercase', letterSpacing: 1, fontFamily: FONT.uiExtra },
 
   // Template card
-  tplCard: { borderWidth: 1, padding: 16, gap: 10 },
-  tplTop: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 },
-  tplName: { fontSize: 16, letterSpacing: -0.2, flex: 1 },
-  tplKcal: { fontSize: 22 },
-  splitBar: { flexDirection: 'row', height: 8, borderRadius: 4, overflow: 'hidden' },
-  macrosRow: { flexDirection: 'row', gap: 6, flexWrap: 'wrap' },
-  tplActions: { flexDirection: 'row', borderTopWidth: StyleSheet.hairlineWidth, paddingTop: 12, gap: 16 },
-  tplBtn: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  tplBtnText: { fontSize: 13 },
+  tplCard: { borderWidth: 1, padding: 20, gap: 12 },
+  tplTop: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 },
+  tplName: { fontSize: 18, letterSpacing: -0.2 },
+  tplDesc: { fontSize: 13, lineHeight: 18 },
+  tplKcalBox: { alignItems: 'flex-end', flexShrink: 0 },
+  tplKcalNum: { fontSize: 19, letterSpacing: -0.4, fontVariant: ['tabular-nums'] },
+  tplKcalLabel: { fontSize: 10, marginTop: 1 },
+  splitBar: { flexDirection: 'row', height: 6, borderRadius: 999, overflow: 'hidden' },
+  tplMacros: { flexDirection: 'row', flexWrap: 'wrap', columnGap: 12, rowGap: 4 },
+  macroStat: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  tplChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  tplChip: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6, maxWidth: 150 },
+  tplFooter: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8, borderTopWidth: StyleSheet.hairlineWidth, paddingTop: 12 },
+  tplMealCount: { flexDirection: 'row', alignItems: 'center', gap: 6, marginRight: 'auto' },
+  tplFooterActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  tplIconBtn: { width: 34, height: 34, borderWidth: 1, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  tplAssignBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, height: 34, paddingHorizontal: 12, borderRadius: 10 },
+  tplAssignTxt: { fontSize: 10, textTransform: 'uppercase', letterSpacing: 1 },
 
   // Board
   colHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
@@ -1156,7 +1317,7 @@ const styles = StyleSheet.create({
   planName: { fontSize: 14 },
   planSub: { fontSize: 12, marginTop: 1 },
   sparkHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
-  sparkBars: { height: 32, flexDirection: 'row', alignItems: 'flex-end', gap: 3, width: '100%' },
+  sparkBars: { height: 32, flexDirection: 'row', alignItems: 'flex-end', gap: 4, width: '100%' },
   planActions: { flexDirection: 'row', alignItems: 'center', gap: 8, borderTopWidth: StyleSheet.hairlineWidth, paddingTop: 12 },
   manageBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', height: 40, paddingHorizontal: 14, borderWidth: 1, borderRadius: 12 },
   manageTxt: { fontSize: 13 },
@@ -1169,6 +1330,11 @@ const styles = StyleSheet.create({
   assignEmptyTxt: { fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.3 },
 
   // Foods
+  mealGroupsEntry: { flexDirection: 'row', alignItems: 'center', gap: 12, marginHorizontal: 16, marginBottom: 12, paddingHorizontal: 14, paddingVertical: 12, borderWidth: 1.5, borderRadius: 14 },
+  mealGroupsIcon: { width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  catPills: { flexDirection: 'row', gap: 6, paddingHorizontal: 16, paddingBottom: 10 },
+  catPill: { height: 32, justifyContent: 'center', paddingHorizontal: 12, borderWidth: 1.5, borderRadius: 999 },
+  foodCountLine: { paddingHorizontal: 18, paddingBottom: 8 },
   foodsHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingBottom: 12, gap: 8 },
   scopeRow: { flexDirection: 'row', gap: 8 },
   scopeChip: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 14, paddingVertical: 7 },
@@ -1196,12 +1362,15 @@ const styles = StyleSheet.create({
   baseBanner: { flexDirection: 'row', alignItems: 'center', gap: 10, marginHorizontal: 16, marginBottom: 8, paddingHorizontal: 14, paddingVertical: 11, borderRadius: 14 },
   recipesHead: { flexDirection: 'row', justifyContent: 'flex-end', paddingHorizontal: 16, paddingBottom: 12 },
   recipesList: { paddingHorizontal: 16, paddingTop: 4, paddingBottom: 120 },
-  recipeCard: { flexDirection: 'row', gap: 12, borderWidth: 1, padding: 12 },
-  recipeThumb: { width: 84, height: 84, borderRadius: 14, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' },
-  recipeName: { fontSize: 15.5, letterSpacing: -0.2 },
+  recipeCard: { borderWidth: 1, overflow: 'hidden' },
+  recipeImg: { width: '100%', aspectRatio: 16 / 9 },
+  recipeImgEmpty: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  recipeBody: { padding: 16, gap: 12 },
+  recipeName: { fontSize: 16, letterSpacing: -0.3, lineHeight: 20 },
   recipeActions: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 2 },
-  recipeShareBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, height: 34, paddingHorizontal: 12, borderRadius: 10 },
-  recipeIconBtn: { width: 34, height: 34, borderWidth: 1, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  recipeShareBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, height: 36, borderRadius: 12 },
+  recipeShareTxt: { fontSize: 10, textTransform: 'uppercase', letterSpacing: 1 },
+  recipeIconBtn: { width: 36, height: 36, borderWidth: 1, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   recipeImgPreview: { height: 150, borderWidth: 1, borderRadius: 14, overflow: 'hidden' },
   recipeImgOverlay: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.4)' },
   recipeImgRemove: { position: 'absolute', top: 8, right: 8, width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.6)' },
@@ -1223,5 +1392,15 @@ const styles = StyleSheet.create({
   selectAllTxt: { fontSize: 12.5 },
   copyRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, borderWidth: 1, paddingHorizontal: 14, paddingVertical: 12 },
   copyName: { fontSize: 14, flex: 1 },
-  guideTitle: { fontSize: 13, textTransform: 'uppercase', letterSpacing: 0.3 },
+
+  // Guía rápida
+  guideStep: { borderWidth: 1, borderRadius: 14, padding: 14, gap: 8 },
+  guideStepHead: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  guideStepIcon: { width: 36, height: 36, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  guideStepEyebrow: { fontSize: 10, textTransform: 'uppercase', letterSpacing: 1 },
+  guideStepTitle: { fontSize: 14 },
+  guideStepDesc: { fontSize: 11.5, lineHeight: 16 },
+  guideStepCta: { flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start' },
+  guideSurfaces: { gap: 10, borderTopWidth: StyleSheet.hairlineWidth, paddingTop: 14 },
+  guideSurfaceRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
 })

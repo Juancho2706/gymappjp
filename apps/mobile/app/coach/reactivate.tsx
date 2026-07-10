@@ -32,9 +32,9 @@ function headlineFor(status: string): { title: string; body: string } {
     case 'canceled':
       return { title: 'Tu plan está cancelado', body: 'Tu acceso al panel terminó. Reactiva un plan para volver a gestionar tu marca, tus alumnos y tus rutinas.' }
     case 'paused':
-      return { title: 'Tu plan está pausado', body: 'Tu suscripción quedó en pausa. Reactivala para recuperar el acceso completo al panel.' }
+      return { title: 'Tu plan está pausado', body: 'Tu suscripción quedó en pausa. Reactívala para recuperar el acceso completo al panel.' }
     case 'past_due':
-      return { title: 'Tu pago quedó pendiente', body: 'No pudimos completar el cobro de tu suscripción. Regularizá el pago para mantener el acceso.' }
+      return { title: 'Tu pago quedó pendiente', body: 'No pudimos completar el cobro de tu suscripción. Regulariza el pago para mantener el acceso.' }
     case 'expired':
       return { title: 'Tu plan venció', body: 'Tu suscripción venció. Elige un plan para recuperar el acceso al panel.' }
     default:

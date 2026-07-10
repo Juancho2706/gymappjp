@@ -149,10 +149,10 @@ export function ClientHero({
               </View>
               <Text numberOfLines={1} style={[styles.email, { color: ON_DARK_MUTED }]}>{email}</Text>
               <View style={styles.metaRow}>
-                <MetaItem icon={<Flame size={13} color={EMBER} />} text={`${streak} d de racha`} color={ON_DARK_MUTED} />
-                <MetaItem icon={<Activity size={13} color={theme.primary} />} text={lastActivityLabel} color={ON_DARK_MUTED} />
-                <MetaItem icon={<Calendar size={13} color={ON_DARK_MUTED} />} text={`Desde ${sinceLabel}`} color={ON_DARK_MUTED} />
-                <MetaItem icon={<Target size={13} color={ON_DARK_MUTED} />} text={`~${trainingAge}`} color={ON_DARK_MUTED} />
+                <MetaItem icon={<Flame size={14} color={EMBER} />} text={`${streak} d de racha de actividad`} color={ON_DARK_MUTED} />
+                <MetaItem icon={<Activity size={14} color="#5C9DFF" />} text={lastActivityLabel} color={ON_DARK_MUTED} />
+                <MetaItem icon={<Calendar size={14} color={ON_DARK_MUTED} />} text={`Desde ${sinceLabel}`} color={ON_DARK_MUTED} />
+                <MetaItem icon={<Target size={14} color={ON_DARK_MUTED} />} text={`~${trainingAge}`} color={ON_DARK_MUTED} />
               </View>
             </View>
           </View>
@@ -160,7 +160,7 @@ export function ClientHero({
           {/* 4 chips 2×2 (el programa/semana vive en el eyebrow, no en un chip). */}
           <View style={styles.chipGrid}>
             <HeroChip label="Peso" value={chips.weightValue != null && chips.weightValue > 0 ? `${chips.weightValue} kg` : '—'} sub={<WeightDeltaSub delta={chips.weightDelta} />} />
-            <HeroChip label="Adherencia" value={`${chips.adherencePct}%`} sub={<ChipBar value={chips.adherencePct} color={theme.primary} />} />
+            <HeroChip label="Adherencia" value={`${chips.adherencePct}%`} sub={<ChipBar value={chips.adherencePct} color="#2680FF" />} />
             <HeroChip label="Workouts" value={`${chips.workoutsThisWeek}/${chips.workoutsTarget}`} sub={<Text style={[styles.chipSub, { color: ON_DARK_MUTED }]}>esta semana</Text>} />
             <HeroChip
               label="Comidas hoy"
@@ -198,7 +198,7 @@ function WeightDeltaSub({ delta }: { delta: number | null }) {
   return (
     <View style={styles.subRow}>
       {up ? <TrendingUp size={12} color={color} /> : <TrendingDown size={12} color={color} />}
-      <Text style={[styles.chipSub, { color }]}>{up ? '+' : ''}{delta} kg</Text>
+      <Text style={[styles.chipSub, { color }]}>{up ? `+${Math.abs(delta).toFixed(1)}` : delta.toFixed(1)} kg</Text>
     </View>
   )
 }
@@ -226,13 +226,13 @@ const styles = StyleSheet.create({
   root: { gap: 12 },
   topbar: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 },
   eyebrow: { fontSize: 10, textTransform: 'uppercase', letterSpacing: 1.4, fontFamily: FONT.uiBold },
-  name: { fontSize: 25, letterSpacing: -0.6, marginTop: 2, fontFamily: FONT.displayBlack },
+  name: { fontSize: 24, letterSpacing: -1.2, marginTop: 2, fontFamily: FONT.displayBlack },
   topActions: { flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 0 },
   iconBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
   identityRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 14 },
   ring: { width: 64, height: 64, borderRadius: 32, padding: 2, flexShrink: 0 },
   ringInner: { flex: 1, borderRadius: 30, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
-  initials: { fontSize: 22, letterSpacing: -0.4 },
+  initials: { fontSize: 20, letterSpacing: -0.4 },
   badgeRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8 },
   reasons: { flex: 1, minWidth: 0, fontSize: 11.5, fontFamily: FONT.ui },
   email: { fontSize: 12.5, fontFamily: FONT.ui },
@@ -245,5 +245,5 @@ const styles = StyleSheet.create({
   chipVal: { fontSize: 16, letterSpacing: -0.2, marginTop: 3, fontFamily: FONT.displayBlack, fontVariant: ['tabular-nums'] },
   chipSub: { fontSize: 10.5, fontFamily: FONT.uiBold },
   subRow: { flexDirection: 'row', alignItems: 'center', gap: 3 },
-  barTrack: { height: 4, borderRadius: 99, overflow: 'hidden', backgroundColor: 'rgba(255,255,255,0.14)', marginTop: 3 },
+  barTrack: { height: 4, borderRadius: 99, overflow: 'hidden', backgroundColor: 'rgba(255,255,255,0.10)', marginTop: 3 },
 })

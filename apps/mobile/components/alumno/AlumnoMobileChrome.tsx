@@ -201,58 +201,63 @@ export function AlumnoMobileChrome({
         pointerEvents="box-none"
         style={[styles.capsuleAnchor, { bottom: insets.bottom + 16 }, capsuleInsetStyle]}
       >
-        {/* Shadow + surface backing on a plain View (className is safe here;
-            the anchor above only carries the animated left/right insets).
-            Sombra `md` (no `lg`): `lg` (radio 28-30) se derramaba a ancho completo
-            detras de la capsula inset — el CEO lo marco como "fondo difuminado".
-            `md` = drop shadow sutil y contenido, 1:1 con la sombra de la web. */}
+        {/* Capsula flotante 1:1 con el coach/web: UN solo shell esmerilado. El
+            BlurView frostea el CONTENIDO real que scrollea por debajo (NADA opaco
+            detras) y un unico velo translucido va ENCIMA para legibilidad, con
+            borde hairline + sombra md. El bug historico de la "franja": habia un
+            backing `bg-surface-card/70` DETRAS del blur (+ un 2º velo /60), asi
+            que el blur frosteaba ESE backing, no el contenido — la pastilla se
+            leia como un slab solido de fondo. Sin backing, la capsula flota y el
+            scroll pasa por debajo hasta el borde inferior (paridad PWA). */}
         <View
-          className="bg-surface-card/70"
-          style={[{ borderRadius: CAPSULE_RADIUS }, shadow('md', resolvedScheme)]}
+          className="overflow-hidden rounded-[30px] border border-subtle"
+          style={[styles.capsuleShell, shadow('md', resolvedScheme)]}
         >
-          <View className="overflow-hidden rounded-[30px] border border-subtle">
-            <BlurView
-              intensity={isDark ? 40 : 60}
-              tint={isDark ? 'dark' : 'light'}
-              style={StyleSheet.absoluteFill}
-            />
-            <View className="bg-surface-card/60" style={StyleSheet.absoluteFill} />
+          <BlurView
+            intensity={isDark ? 40 : 60}
+            tint={isDark ? 'dark' : 'light'}
+            style={StyleSheet.absoluteFill}
+          />
+          <View pointerEvents="none" className="bg-surface-card/70" style={StyleSheet.absoluteFill} />
 
-            <View
-              style={styles.row}
-              onLayout={(e) => {
-                rowW.value = e.nativeEvent.layout.width
-              }}
-            >
-              {/* Sliding pill behind the active tab (brand-tinted). The animated
-                  view owns position/size; the inner plain View carries color. */}
-              <Animated.View pointerEvents="none" style={[styles.pill, pillStyle]}>
-                <View
-                  className="border border-primary/[0.24] bg-primary/[0.15]"
-                  style={{ flex: 1, borderRadius: PILL_RADIUS }}
-                />
-              </Animated.View>
-
-              {tiles.map((t) => (
-                <TabTile
-                  key={t.name}
-                  icon={t.icon}
-                  label={t.label}
-                  testID={t.testID}
-                  active={activeName === t.name}
-                  mini={mini}
-                  onPress={() => go(t.name)}
-                />
-              ))}
-              <TabTile
-                icon={MoreHorizontal}
-                label="Más"
-                testID="tab-mas"
-                active={isMoreActive}
-                mini={mini}
-                onPress={() => setMoreOpen((o) => !o)}
+          <View
+            style={styles.row}
+            onLayout={(e) => {
+              rowW.value = e.nativeEvent.layout.width
+            }}
+          >
+            {/* Sliding pill behind the active tab (brand-tinted). The animated
+                view owns position/size; the inner plain View carries color. */}
+            <Animated.View pointerEvents="none" style={[styles.pill, pillStyle]}>
+              <View
+                className="border border-primary/[0.24] bg-primary/[0.15]"
+                style={{ flex: 1, borderRadius: PILL_RADIUS }}
               />
-            </View>
+            </Animated.View>
+
+            {tiles.map((t) => (
+              <TabTile
+                key={t.name}
+                icon={t.icon}
+                label={t.label}
+                testID={t.testID}
+                active={activeName === t.name}
+                mini={mini}
+                onPress={() => go(t.name)}
+              />
+            ))}
+            {/* "Más" abre (nunca togglea): un toggle `!o` hacia que el 2º tap
+                cerrara el sheet recien abierto — se leia como "necesita muchos
+                taps / abre y cierra al instante". El cierre lo maneja el Sheet
+                (backdrop / swipe / boton X) y el cambio de ruta. */}
+            <TabTile
+              icon={MoreHorizontal}
+              label="Más"
+              testID="tab-mas"
+              active={isMoreActive}
+              mini={mini}
+              onPress={() => setMoreOpen(true)}
+            />
           </View>
         </View>
       </Animated.View>
@@ -329,6 +334,7 @@ function TabTile({
       accessibilityLabel={label}
       accessibilityState={active ? { selected: true } : {}}
       onPress={onPress}
+      hitSlop={{ top: 10, bottom: 10, left: 6, right: 6 }}
       style={styles.tile}
     >
       <View style={{ transform: [{ translateY: active ? -1 : 0 }] }}>
@@ -356,6 +362,9 @@ const styles = StyleSheet.create({
     position: 'absolute',
     zIndex: 59,
   } as ViewStyle,
+  capsuleShell: {
+    borderRadius: CAPSULE_RADIUS,
+  } as ViewStyle,
   row: {
     flexDirection: 'row',
     alignItems: 'stretch',
@@ -376,6 +385,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 3,
     paddingVertical: 6,
+    // Above the absolutely-positioned sliding pill so taps always hit the tile.
+    zIndex: 1,
   },
   labelWrap: {
     overflow: 'hidden',

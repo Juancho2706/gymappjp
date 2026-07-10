@@ -44,7 +44,12 @@ export interface RawMeal {
   description: string | null
   order_index: number
   day_of_week: number | null
-  nutrition_meal_food_items: RawFoodItem[]
+  // El embed PostgREST aliasa la relación real `food_items` a esta clave
+  // (nutrition.queries.ts). Se declara `food_items` como fallback tolerante por si
+  // el shape llega sin alias (caché previa / drift de query): la card SIEMPRE recibe
+  // sus ítems y por ende macros + expand + porción (evita la card "muda" del QA r5).
+  nutrition_meal_food_items?: RawFoodItem[] | null
+  food_items?: RawFoodItem[] | null
 }
 
 export interface NutritionPlan {
@@ -105,7 +110,7 @@ export type DisplayMeal = MealWithFoodItems & {
  * tolera en el cómputo de macros base.
  */
 export function normalizeMealForDisplay(meal: RawMeal): DisplayMeal {
-  const items = meal.nutrition_meal_food_items ?? []
+  const items = meal.nutrition_meal_food_items ?? meal.food_items ?? []
   return {
     id: meal.id,
     name: meal.name,

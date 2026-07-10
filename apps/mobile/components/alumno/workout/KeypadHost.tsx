@@ -2,10 +2,12 @@ import { useEffect, useMemo, useState } from 'react'
 import { Modal, Pressable, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { ChevronLeft } from 'lucide-react-native'
-import type { OptimisticLogPayload, TypedKeypadMode } from '@eva/workout-engine'
+import type { OptimisticLogPayload } from '@eva/workout-engine'
 import { TYPE } from '../../../lib/typography'
 // Routing PURO tipo->campos (fix QA R4·#5): fuente única de la secuencia de pasos del teclado.
 import { keypadStepsForTarget, type KeypadTarget } from './keypad-flow'
+// Mapeo PURO valores->payload, compartido con la `ActiveSetRow` (sin drift entre superficies).
+import { num, int, typedLogValues } from './set-log-payload'
 // Contrato de la ola (otro worker): teclado tipado + selector de esfuerzo. Se importan asumiendo la
 // firma exacta del contrato; el orquestador integra. NO stubear.
 import { TypedKeypad, EffortScale } from './TypedKeypad'
@@ -15,38 +17,6 @@ const ON_DARK = '#F4F6F8'
 // El tipo `KeypadTarget` vive en `keypad-flow` (puro/testeable); se re-exporta para los consumidores
 // que ya lo importaban desde acá (ExecutorV2) sin tocar sus imports.
 export type { KeypadTarget } from './keypad-flow'
-
-function num(v: string | undefined): number | null {
-  if (!v) return null
-  const n = parseFloat(v.replace(',', '.'))
-  return Number.isFinite(n) ? n : null
-}
-function int(v: string | undefined): number | null {
-  const n = num(v)
-  return n == null ? null : Math.round(n)
-}
-
-/** Mapea los valores tipados (por modo) a las columnas del log (`actual_*` / `reps_done`). */
-function typedPayload(mode: TypedKeypadMode, values: Record<string, string>) {
-  let actualDurationSec: number | null = null
-  let actualDistanceM: number | null = null
-  let actualHoldSec: number | null = null
-  let actualAvgHr: number | null = null
-  let repsDone: number | null = null
-  if (mode === 'cardio') {
-    const min = num(values.cardio_min)
-    actualDurationSec = min != null && min > 0 ? Math.round(min * 60) : null
-    actualDistanceM = num(values.actual_distance_m)
-    actualAvgHr = int(values.actual_avg_hr)
-  } else if (mode === 'mobility') {
-    actualHoldSec = int(values.actual_hold_sec)
-  } else {
-    // roller
-    actualDurationSec = int(values.actual_duration_sec)
-    repsDone = int(values.reps_done)
-  }
-  return { actualDurationSec, actualDistanceM, actualHoldSec, actualAvgHr, repsDone }
-}
 
 /**
  * Host del teclado tipado (mobile). Orquesta la secuencia de registro de una serie montando el
@@ -100,7 +70,7 @@ export function KeypadHost({
 
   const commit = () => {
     if (target.typed) {
-      const { actualDurationSec, actualDistanceM, actualHoldSec, actualAvgHr, repsDone } = typedPayload(
+      const { actualDurationSec, actualDistanceM, actualHoldSec, actualAvgHr, repsDone } = typedLogValues(
         target.typed.mode,
         values,
       )

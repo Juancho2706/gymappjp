@@ -115,6 +115,7 @@ export default function CoachHomeScreen() {
           logoUrl={data.coach.logoUrl}
           onInsights={() => setStatsOpen(true)}
           onAvatar={() => router.push('/coach/(tabs)/perfil')}
+          pendingCount={data.topRiskClients.length + data.expiringPrograms.length + data.pendingCheckinsCount}
         />
 
         {/* P1 — Pulse hero (Activos · En riesgo · Adherencia) */}
