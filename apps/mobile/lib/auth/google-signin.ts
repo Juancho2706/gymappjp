@@ -47,7 +47,9 @@ export function configureGoogleSignIn(): boolean {
 }
 
 export function isGoogleSignInAvailable(): boolean {
-  return Boolean(WEB_CLIENT_ID)
+  // Exige formato real de OAuth client ID — un placeholder tipo "REEMPLAZAR_*"
+  // en el env NO debe mostrar un botón Google roto (MT-42).
+  return Boolean(WEB_CLIENT_ID && WEB_CLIENT_ID.endsWith('.apps.googleusercontent.com'))
 }
 
 export class GoogleSignInError extends Error {
