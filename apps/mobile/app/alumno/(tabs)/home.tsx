@@ -45,16 +45,6 @@ function startOfWeekMonday(d: Date): Date {
   m.setHours(0, 0, 0, 0)
   return m
 }
-function calculateStreak(dates: Set<string>): number {
-  let streak = 0
-  const cursor = new Date()
-  cursor.setHours(0, 0, 0, 0)
-  while (dates.has(isoDate(cursor))) {
-    streak += 1
-    cursor.setTime(cursor.getTime() - MS_DAY)
-  }
-  return streak
-}
 
 /**
  * Dashboard alumno — shell de columna unica (paridad 1:1 con el arbol mobile de
@@ -82,7 +72,7 @@ export default function AlumnoHomeScreen() {
     const { iso: todayIso } = getTodayInSantiago()
     const since30Iso = isoDate(new Date(Date.now() - 29 * MS_DAY))
 
-    const [{ data: programData }, { data: workoutRows }, { data: nutritionRows }, { data: checkInRows }, { data: coachData }, habitsData, announcements] =
+    const [{ data: programData }, { data: workoutRows }, { data: nutritionRows }, { data: checkInRows }, { data: coachData }, habitsData, announcements, { data: streakData }] =
       await Promise.all([
         supabase
           .from('workout_programs')
@@ -118,7 +108,16 @@ export default function AlumnoHomeScreen() {
         getDailyHabits(client.id, todayIso),
         // §1 — anuncios de org (solo si el alumno pertenece a una org).
         client.orgId ? getActiveOrgAnnouncements(client.orgId) : Promise.resolve([]),
+        // §3 Racha — 1:1 con web: MISMO RPC (`get_client_current_streak`) que el
+        // dashboard web (StreakRibbonSection). Cuenta workout_logs + comidas
+        // completadas, con dia de gracia (racha viva si la ultima actividad fue
+        // hoy U ayer). Evita el drift de derivar local, que exigia entrenar HOY e
+        // ignoraba la nutricion → mostraba "Empieza tu racha hoy" de mas.
+        supabase.rpc('get_client_current_streak', { p_client_id: client.id }),
       ])
+
+    const streakN = typeof streakData === 'number' ? streakData : Number(streakData)
+    const streak = Number.isFinite(streakN) ? streakN : 0
 
     const rawPlans = ((programData as any)?.workout_plans ?? []) as any[]
     const program: Program | null = programData
@@ -178,6 +177,7 @@ export default function AlumnoHomeScreen() {
       checkIns: (checkInRows ?? []) as any,
       habitsToday: habitsData,
       welcomeModal,
+      streak,
     })
     setLoading(false)
     setRefreshing(false)
@@ -249,7 +249,8 @@ export default function AlumnoHomeScreen() {
     const checkInCompliance = data ? Math.min(1, (data.checkIns.length ?? 0) / 4) : 0
 
     // Racha + check-in variant (umbrales compartidos con el prompt post-entreno → lib/checkin-thresholds).
-    const streak = calculateStreak(workoutDates)
+    // `streak` viene del RPC (fetch), MISMA fuente/regla que el web — no se re-deriva local.
+    const streak = data?.streak ?? 0
     const checkIns = data?.checkIns ?? []
     const ci = computeCheckInReminder(checkIns.length ? checkIns[checkIns.length - 1].date : null, todayIso)
     const ciVariant = ci.variant
@@ -288,8 +289,6 @@ export default function AlumnoHomeScreen() {
   return (
     <View style={styles.container} className="bg-surface-app">
       <AppBackground />
-      <DashboardHeader greeting={greeting} dateLabel={formatLongDate()} brandName={data?.coachName} welcomeMessage={data?.coachWelcome} />
-
       <ScrollView
         contentContainerStyle={styles.scroll}
         showsVerticalScrollIndicator={false}
@@ -297,6 +296,10 @@ export default function AlumnoHomeScreen() {
         scrollEventThrottle={16}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
+        {/* §2 Header — scrollea con el contenido (paridad con web md, NO sticky) */}
+        <DashboardHeader greeting={greeting} dateLabel={formatLongDate()} brandName={data?.coachName} welcomeMessage={data?.coachWelcome} />
+
+        <View style={styles.content}>
         {/* §1 Anuncios de la org */}
         <OrgAnnouncementBanner announcements={data?.announcements ?? []} />
 
@@ -399,6 +402,7 @@ export default function AlumnoHomeScreen() {
             <NutritionDailySummary clientId={data.client.id} onSeeAll={() => router.push('/alumno/nutricion')} />
           </View>
         ) : null}
+        </View>
       </ScrollView>
 
       {/* §13 WelcomeModal */}
@@ -417,6 +421,7 @@ export default function AlumnoHomeScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  scroll: { paddingHorizontal: 16, paddingBottom: 120, gap: 14, paddingTop: 14 },
+  scroll: { paddingBottom: 120 },
+  content: { paddingHorizontal: 16, gap: 14, paddingTop: 14 },
   skeletonWrap: { paddingHorizontal: 16, paddingTop: 16, gap: 14 },
 })

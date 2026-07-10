@@ -202,10 +202,13 @@ export function AlumnoMobileChrome({
         style={[styles.capsuleAnchor, { bottom: insets.bottom + 16 }, capsuleInsetStyle]}
       >
         {/* Shadow + surface backing on a plain View (className is safe here;
-            the anchor above only carries the animated left/right insets). */}
+            the anchor above only carries the animated left/right insets).
+            Sombra `md` (no `lg`): `lg` (radio 28-30) se derramaba a ancho completo
+            detras de la capsula inset — el CEO lo marco como "fondo difuminado".
+            `md` = drop shadow sutil y contenido, 1:1 con la sombra de la web. */}
         <View
           className="bg-surface-card/70"
-          style={[{ borderRadius: CAPSULE_RADIUS }, shadow('lg', resolvedScheme)]}
+          style={[{ borderRadius: CAPSULE_RADIUS }, shadow('md', resolvedScheme)]}
         >
           <View className="overflow-hidden rounded-[30px] border border-subtle">
             <BlurView

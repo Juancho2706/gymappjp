@@ -283,11 +283,11 @@ export default function CheckInScreen() {
           >
             <Check size={44} color={ICON_WHITE} strokeWidth={2.5} />
           </MotiView>
-          <Text className="text-strong" style={[TYPE.h2, styles.successTitle]}>
+          <Text className="text-strong" style={[TYPE.h2, styles.successTitle, { fontSize: 27, lineHeight: 32, fontFamily: FONT.displayBlack }]}>
             ¡Check-in enviado!
           </Text>
           <Text className="text-muted" style={[TYPE.body, styles.successMsg]}>
-            Tu coach recibió tu actualización. Ajustará tu plan según tu progreso.
+            Tu coach recibió tu actualización mensual. Ajustará tu plan según tu progreso.
           </Text>
           <Button
             label="Volver al inicio"
@@ -314,7 +314,7 @@ export default function CheckInScreen() {
           <Text className="text-muted" style={TYPE.eyebrow}>
             Paso {step} de 3
           </Text>
-          <Text className="text-strong" style={textStyle('2xl', FONT.displayBold, { lh: 'tight', ls: 'tighter' })}>
+          <Text className="text-strong" style={[textStyle('2xl', FONT.displayBlack, { lh: 'tight', ls: 'tighter' }), { fontSize: 26 }]}>
             Check-in mensual
           </Text>
         </View>
@@ -515,7 +515,7 @@ function StepTwo({
 }) {
   return (
     <View style={{ gap: 14 }}>
-      <Text className="text-muted" style={[TYPE.body, { lineHeight: 21 }]}>
+      <Text className="text-muted" style={[TYPE.body, { fontSize: 13.5, lineHeight: 20 }]}>
         Las fotos son opcionales pero ayudan a tu coach a ver tu evolución.
       </Text>
 

@@ -2,44 +2,19 @@ import { useEffect, useMemo, useState } from 'react'
 import { Modal, Pressable, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { ChevronLeft } from 'lucide-react-native'
-import type { OptimisticLogPayload, TypedKeypadFieldDef, TypedKeypadMode } from '@eva/workout-engine'
+import type { OptimisticLogPayload, TypedKeypadMode } from '@eva/workout-engine'
 import { TYPE } from '../../../lib/typography'
+// Routing PURO tipo->campos (fix QA R4·#5): fuente única de la secuencia de pasos del teclado.
+import { keypadStepsForTarget, type KeypadTarget } from './keypad-flow'
 // Contrato de la ola (otro worker): teclado tipado + selector de esfuerzo. Se importan asumiendo la
 // firma exacta del contrato; el orquestador integra. NO stubear.
 import { TypedKeypad, EffortScale } from './TypedKeypad'
 
 const ON_DARK = '#F4F6F8'
 
-/** Objetivo del teclado: qué serie de qué bloque se está registrando + el estado inicial. */
-export interface KeypadTarget {
-  blockId: string
-  setNumber: number
-  exerciseName: string
-  targetReps: string
-  suggestedWeight: number | null
-  /** Si el bloque pide esfuerzo: 'rpe' | 'rir'; null ⇒ el flujo termina en reps. */
-  effortKind: 'rpe' | 'rir' | null
-  /** Valores iniciales (draft restaurado o autollenado "última vez"). */
-  initialValues?: Record<string, string>
-  /** Paso inicial (draft restaurado). */
-  initialFieldIndex?: number
-  /**
-   * Bloques TIPADOS (cardio/movilidad/roller): reemplaza el flujo peso→reps→esfuerzo por los campos
-   * tipados de `typedKeypadFields`. Ausente ⇒ flujo strength. El commit mapea las keys tipadas a las
-   * columnas `actual_*` / `reps_done` (mismo pipeline que web `TypedLogSetRow`).
-   */
-  typed?: { mode: TypedKeypadMode; fields: TypedKeypadFieldDef[]; objective: string }
-}
-
-/** Paso del host: una pantalla de teclado numérico, o el paso de esfuerzo (dots). */
-type KeypadStep =
-  | { kind: 'keypad'; key: string; mode: 'weight' | 'reps' | 'decimal' | 'integer'; unit: string; label: string }
-  | { kind: 'effort' }
-
-const STRENGTH_KEYPAD_STEPS: KeypadStep[] = [
-  { kind: 'keypad', key: 'weight', mode: 'weight', unit: 'kg', label: 'Peso (kg)' },
-  { kind: 'keypad', key: 'reps', mode: 'reps', unit: 'reps', label: 'Repeticiones' },
-]
+// El tipo `KeypadTarget` vive en `keypad-flow` (puro/testeable); se re-exporta para los consumidores
+// que ya lo importaban desde acá (ExecutorV2) sin tocar sus imports.
+export type { KeypadTarget } from './keypad-flow'
 
 function num(v: string | undefined): number | null {
   if (!v) return null
@@ -100,20 +75,8 @@ export function KeypadHost({
   const [values, setValues] = useState<Record<string, string>>({})
   const [fieldIndex, setFieldIndex] = useState(0)
 
-  // Secuencia de pasos según el tipo del bloque.
-  const steps = useMemo<KeypadStep[]>(() => {
-    if (!target) return []
-    if (target.typed) {
-      return target.typed.fields.map((f) => ({
-        kind: 'keypad' as const,
-        key: f.key,
-        mode: f.allowDecimal ? ('decimal' as const) : ('integer' as const),
-        unit: f.unit,
-        label: f.label,
-      }))
-    }
-    return [...STRENGTH_KEYPAD_STEPS, ...(target.effortKind ? [{ kind: 'effort' as const }] : [])]
-  }, [target])
+  // Secuencia de pasos según el tipo del bloque (routing puro compartido con `openSet`).
+  const steps = useMemo(() => keypadStepsForTarget(target), [target])
 
   // (Re)inicializa al abrir un target: valores iniciales (draft/autofill) o prefill de peso sugerido.
   useEffect(() => {
@@ -176,7 +139,11 @@ export function KeypadHost({
 
   const objective = target.typed
     ? target.typed.objective || '—'
-    : `${target.targetReps || '—'} reps${target.suggestedWeight != null ? ` · ${target.suggestedWeight} kg` : ''}`
+    : `${target.targetSets ?? '—'}×${target.targetReps || '—'}${target.suggestedWeight != null ? ` · ${target.suggestedWeight} kg` : ''}`
+  const lastPrevLabel =
+    !target.typed && target.lastPrev && (target.lastPrev.weightKg != null || target.lastPrev.reps != null)
+      ? `${target.lastPrev.weightKg != null ? `${target.lastPrev.weightKg} kg` : '–'} × ${target.lastPrev.reps ?? '–'}`
+      : null
 
   return (
     <Modal visible transparent animationType="slide" onRequestClose={onClose}>
@@ -201,6 +168,9 @@ export function KeypadHost({
                 Serie {target.setNumber} · objetivo {objective}
               </Text>
               <Text className="font-display-bold text-[16px] text-on-dark" numberOfLines={1}>{target.exerciseName}</Text>
+              {lastPrevLabel && (
+                <Text style={TYPE.mono} className="text-[11px] text-on-dark-muted" numberOfLines={1}>Última vez {lastPrevLabel}</Text>
+              )}
             </View>
           </View>
 

@@ -1,16 +1,20 @@
 import { Pressable, Text, View } from 'react-native'
-import { Check, ChevronRight } from 'lucide-react-native'
+import { Check, ChevronRight, CloudOff } from 'lucide-react-native'
 import type { ReconciledSessionLog, TypedKeypadMode } from '@eva/workout-engine'
-import { TYPE } from '../../../lib/typography'
+import { FONT, TYPE } from '../../../lib/typography'
 import { fmtTypedLoggedLine } from './workout-ui'
 
+const SPORT_400 = '#5C9DFF'
+const WARNING_500 = '#F5A524' // --color-warning-500 (serie sin sincronizar)
+
 /**
- * Fila de una serie (mobile). Espeja la fila de `LogSetForm` de web pero adaptada al patrón mobile:
- * la serie logueada muestra su marca (verde) y la activa es un tap que abre el TypedKeypad. Cero
- * `TextInput` crudo — el registro pasa 100% por el teclado tipado (contrato de la ola).
+ * Fila de una serie (mobile). Espeja el chip recap de `LogSetForm` de web: la serie logueada muestra
+ * su marca (`{peso} × {reps}` en mono, "×" atenuada) + RPE/RIR, y la activa es un tap que abre el
+ * TypedKeypad. El prompt "Tocá para registrar" va en Hanken (sans), NO en mono — el mono se reserva a
+ * las métricas (paridad web: la frase es cuerpo, los números son datos).
  *
  * `typedMode` (cardio/movilidad/roller) muta la línea de valores a las columnas `actual_*`/`reps_done`
- * (E2-10). Ausente ⇒ strength (kg × reps · RPE/RIR).
+ * (E2-10). Ausente ⇒ strength (peso × reps · RPE/RIR).
  */
 export function SetRow({
   setNumber,
@@ -27,12 +31,6 @@ export function SetRow({
 }) {
   const logged = !!log
   const pending = log?._pending === true
-
-  const valueLine = !logged
-    ? 'Tocá para registrar'
-    : typedMode
-      ? fmtTypedLoggedLine(log, typedMode)
-      : `${log?.reps_done ?? '-'} reps${log?.weight_kg != null ? ` · ${log.weight_kg} kg` : ''}${log?.rpe != null ? ` · RPE ${log.rpe}` : ''}${log?.rir != null ? ` · RIR ${log.rir}` : ''}`
 
   return (
     <Pressable
@@ -54,7 +52,7 @@ export function SetRow({
         }`}
       >
         {logged ? (
-          <Check size={15} color="#5C9DFF" strokeWidth={2.6} />
+          <Check size={15} color={SPORT_400} strokeWidth={2.6} />
         ) : (
           <Text style={TYPE.mono} className="text-[12px] text-on-dark-muted">
             {setNumber}
@@ -65,16 +63,50 @@ export function SetRow({
         <Text style={TYPE.eyebrow} className="text-on-dark-muted">
           Serie {setNumber}
         </Text>
-        <Text
-          style={TYPE.mono}
-          className={`text-[13px] ${logged ? (pending ? 'text-warning-500' : 'text-on-dark') : 'text-on-dark-muted'}`}
-          numberOfLines={1}
-        >
-          {valueLine}
-          {pending ? ' · sin sincronizar' : ''}
-        </Text>
+        {!logged ? (
+          <Text style={TYPE.caption} className="text-[13px] text-on-dark-muted" numberOfLines={1}>
+            Tocá para registrar
+          </Text>
+        ) : typedMode ? (
+          <Text
+            style={TYPE.mono}
+            className={`text-[13px] ${pending ? 'text-warning-500' : 'text-on-dark'}`}
+            numberOfLines={1}
+          >
+            {fmtTypedLoggedLine(log, typedMode)}
+          </Text>
+        ) : (
+          <View className="flex-row flex-wrap items-center gap-x-2">
+            <Text
+              style={TYPE.mono}
+              className={`text-[13px] font-mono-bold ${pending ? 'text-warning-500' : 'text-on-dark'}`}
+            >
+              {log?.weight_kg ?? '–'}
+              <Text className="text-on-dark-muted"> × </Text>
+              {log?.reps_done ?? '–'}
+            </Text>
+            {log?.rpe != null && (
+              <Text style={TYPE.mono} className="text-[11px] text-on-dark-muted">RPE {log.rpe}</Text>
+            )}
+            {log?.rir != null && (
+              <Text style={TYPE.mono} className="text-[11px] text-on-dark-muted">RIR {log.rir}</Text>
+            )}
+          </View>
+        )}
       </View>
-      {!logged && <ChevronRight size={18} color="#5C9DFF" />}
+      {!logged ? (
+        <ChevronRight size={18} color={SPORT_400} />
+      ) : pending ? (
+        <View className="flex-row items-center gap-1">
+          <CloudOff size={13} color={WARNING_500} />
+          <Text
+            style={{ fontFamily: FONT.uiBold, fontSize: 10, letterSpacing: 0.6, textTransform: 'uppercase' }}
+            className="text-warning-500"
+          >
+            Sin sincronizar
+          </Text>
+        </View>
+      ) : null}
     </Pressable>
   )
 }

@@ -29,4 +29,18 @@ export const haptics = {
       // no-op
     }
   },
+  /**
+   * Fin del descanso — cue HÁPTICO fuerte (canal primario en móvil: suena en el
+   * device aunque el audio esté mudo o el asset no cargue). Doble golpe Heavy +
+   * éxito para que se sienta con el teléfono en el bolsillo/mancuerna en mano.
+   */
+  alarm: async () => {
+    try {
+      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy)
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
+      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy)
+    } catch {
+      // no-op
+    }
+  },
 }

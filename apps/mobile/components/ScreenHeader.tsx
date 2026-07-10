@@ -14,7 +14,7 @@ export function ScreenHeader({ title, subtitle, trailing, compact = false }: Scr
   return (
     <View style={[styles.wrap, compact && styles.wrapCompact]}>
       <View style={styles.textWrap}>
-        <Text style={[styles.title, { color: theme.foreground, fontFamily: 'Archivo_700Bold' }]}>
+        <Text style={[styles.title, { color: theme.foreground, fontFamily: 'Archivo_900Black' }]}>
           {title}
         </Text>
         {subtitle ? (
@@ -44,6 +44,6 @@ const styles = StyleSheet.create({
     paddingBottom: 0,
   },
   textWrap: { flex: 1, minWidth: 0 },
-  title: { fontSize: 28, letterSpacing: -0.5 },
+  title: { fontSize: 21, letterSpacing: -0.42 },
   subtitle: { fontSize: 13, marginTop: 4, lineHeight: 18 },
 })

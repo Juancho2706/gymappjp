@@ -27,7 +27,11 @@ interface AudioPlayerLike {
 }
 interface ExpoAudioLike {
   createAudioPlayer: (source: number | { uri: string }) => AudioPlayerLike
-  setAudioModeAsync?: (mode: { playsInSilentMode?: boolean }) => Promise<void>
+  setAudioModeAsync?: (mode: {
+    playsInSilentMode?: boolean
+    interruptionMode?: 'mixWithOthers' | 'doNotMix' | 'duckOthers'
+    shouldPlayInBackground?: boolean
+  }) => Promise<void>
 }
 
 let ExpoAudio: ExpoAudioLike | null = null
@@ -50,9 +54,24 @@ export function registerTimerCue(kind: TimerCueKind, source: number | { uri: str
   cueSources[kind] = source
 }
 
-/** Prepara el modo de audio (reproducir en modo silencio). Best-effort. */
+/**
+ * Prepara el modo de audio del cue. Best-effort (nunca lanza).
+ *
+ * DECISIÓN (modo silencio): en apps de fitness el beep de fin de descanso DEBE
+ * sonar aunque el iPhone tenga el switch físico en silencio — el usuario entrena
+ * con el teléfono mudo y espera igual la señal para la siguiente serie (paridad
+ * con Strong/Hevy/apps de gym). Por eso `playsInSilentMode: true`. El único
+ * silenciador es la preferencia IN-APP `restTimerMuted` (gate en `playTimerCue`);
+ * la háptica nunca se silencia. `interruptionMode: 'duckOthers'` baja (no corta)
+ * la música/podcast del usuario durante el beep y la restaura sola. El cue no
+ * suena en background (ahí lo cubre la notificación local); `shouldPlayInBackground:false`.
+ */
 export function primeTimerAudio(): void {
-  void ExpoAudio?.setAudioModeAsync?.({ playsInSilentMode: true }).catch(() => {})
+  void ExpoAudio?.setAudioModeAsync?.({
+    playsInSilentMode: true,
+    interruptionMode: 'duckOthers',
+    shouldPlayInBackground: false,
+  }).catch(() => {})
 }
 
 /**
@@ -76,4 +95,17 @@ export function playTimerCue(kind: TimerCueKind): void {
   } catch {
     // Falla de audio nunca interrumpe el timer.
   }
+}
+
+// Cue bundleado del fin de descanso: 3 tonos brillantes (espeja el sonido web
+// 'digital'). Se registra al cargar el módulo; Metro lo empaqueta como asset.
+// El 'tick' 3-2-1 queda a cargo de la háptica (no registramos asset para evitar
+// repetir la alarma completa cada segundo). Reproduce SOLO cuando expo-audio esté
+// instalado (`expo install expo-audio`) + un build nativo lo incluya; hasta
+// entonces `playTimerCue` es no-op seguro.
+try {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  registerTimerCue('alarm', require('../../../../assets/audio/rest-cue.wav'))
+} catch {
+  // Sin el asset (o bundler sin soporte) el cue queda en no-op.
 }

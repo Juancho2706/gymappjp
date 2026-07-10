@@ -1,25 +1,31 @@
+import { useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
-import { CheckCircle2, Info } from 'lucide-react-native'
+import { MotiView } from 'moti'
+import { CheckCircle2, ChevronDown, History, Info, TrendingUp } from 'lucide-react-native'
 import { effectiveExerciseType, type ReconciledSessionLog, type TypedKeypadMode } from '@eva/workout-engine'
-import { TYPE } from '../../../lib/typography'
+import { FONT, TYPE } from '../../../lib/typography'
+import { useTheme } from '../../../context/ThemeContext'
+import { EXERCISE_TYPE_META, exerciseTypeColor } from '../../../lib/exercise-type-meta'
 import type { EffectiveTarget } from '../../../lib/workout/progression'
-import { resolveExercise, type SessionBlock } from '../../../lib/workout-session'
+import { resolveExercise, type PrevSet, type SessionBlock } from '../../../lib/workout-session'
+import { formatRelativeDate } from '../../../lib/date-utils'
 import { SetRow } from './SetRow'
-import { overloadChipLabel } from './workout-ui'
+import { bestPrevOf, overloadChipLabel } from './workout-ui'
 
 const SPORT_400 = '#5C9DFF'
 const ON_DARK_MUTED = '#939DAB'
 const LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
 
 /**
- * Card de superserie (mobile) — grupo visual sport-bordered con sus miembros (A/B/C), prescripción,
- * técnica y las series de cada uno. Espeja `SupersetGroupCard` de web; el orden intercalado por rondas
- * (A1→B1→A2…) con auto-cue queda como seam de pulido (Wave B).
+ * Card de superserie (mobile) — grupo visual sport-bordered con sus miembros (A/B/C), prescripción en
+ * pills, técnica, historial "Sesión anterior" y las series de cada uno. Espeja `SupersetGroupCard` de
+ * web; el orden intercalado por rondas (A1→B1→A2…) con auto-cue queda como seam de pulido (Wave B).
  */
 export function SupersetGroupCard({
   members,
   sessionLogs,
   effByBlock,
+  previousHistory,
   currentWeek,
   onOpenTechnique,
   onOpenSet,
@@ -27,23 +33,49 @@ export function SupersetGroupCard({
   members: SessionBlock[]
   sessionLogs: ReconciledSessionLog[]
   effByBlock: Map<string, EffectiveTarget | null>
+  previousHistory: Record<string, PrevSet[]>
   currentWeek: number | null
   onOpenTechnique: (block: SessionBlock) => void
   onOpenSet: (blockId: string, setNumber: number) => void
 }) {
+  const { theme } = useTheme()
+  const [howToOpen, setHowToOpen] = useState(false)
   const maxSets = members.reduce((mx, m) => Math.max(mx, m.sets), 0)
+  const firstLabel = `${LETTERS[0]}1`
+  const secondLabel = `${LETTERS[1] ?? '?'}1`
 
   return (
     <View className="gap-3 rounded-card border border-sport-500/30 bg-sport-500/[0.05] p-4">
-      <View className="flex-row items-center gap-2">
-        <Text className="font-display-bold text-sm text-on-dark">Superserie</Text>
-        <Text style={TYPE.caption} className="text-[11px] text-on-dark-muted">
-          {members.length} ejercicios · {maxSets} ronda{maxSets === 1 ? '' : 's'}
+      <View className="gap-2">
+        <View className="flex-row flex-wrap items-center justify-between gap-2">
+          <View className="flex-row items-center gap-2">
+            <Text className="font-display text-sm text-on-dark">Superserie</Text>
+            <Text style={TYPE.caption} className="text-[11px] text-on-dark-muted">
+              {members.length} ejercicios · {maxSets} ronda{maxSets === 1 ? '' : 's'}
+            </Text>
+          </View>
+          <Pressable
+            testID="btn-superset-howto"
+            onPress={() => setHowToOpen((o) => !o)}
+            className="h-8 flex-row items-center gap-1 rounded-control px-2"
+            accessibilityRole="button"
+            accessibilityLabel="Cómo hacer la superserie"
+          >
+            <Text style={TYPE.caption} className="text-[11px] text-on-dark-muted">Cómo hacerla</Text>
+            <ChevronDown size={12} color={ON_DARK_MUTED} style={{ transform: [{ rotate: howToOpen ? '180deg' : '0deg' }] }} />
+          </Pressable>
+        </View>
+        <Text style={TYPE.caption} className="text-[12px] text-on-dark-muted">
+          Rondas: <Text className="text-on-dark font-sans-bold">{firstLabel}</Text> → <Text className="text-on-dark font-sans-bold">{secondLabel}</Text> sin descanso, descansa al cerrar la ronda.
         </Text>
+        {howToOpen && (
+          <MotiView from={{ opacity: 0, translateY: -4 }} animate={{ opacity: 1, translateY: 0 }}>
+            <Text style={TYPE.caption} className="rounded-sm border border-inverse/50 bg-white/[0.03] p-3 text-[12px] text-on-dark/90">
+              Trabaja por rondas: haz <Text className="font-sans-bold">{firstLabel}</Text>, sigue con <Text className="font-sans-bold">{secondLabel}</Text> sin descanso, y descansa al <Text className="font-sans-bold">cerrar la ronda</Text>. Repite hasta completar todas las series.
+            </Text>
+          </MotiView>
+        )}
       </View>
-      <Text style={TYPE.caption} className="text-[12px] text-on-dark-muted">
-        Completa una serie de cada ejercicio y repite. Descansa al cerrar la ronda.
-      </Text>
 
       {members.map((block, idx) => {
         const exercise = resolveExercise(block)
@@ -64,6 +96,11 @@ export function SupersetGroupCard({
         const hasTechnique = !!(exercise.gif_url || exercise.video_url)
         const effType = effectiveExerciseType(block, exercise)
         const typedMode: TypedKeypadMode | null = effType === 'strength' ? null : (effType as TypedKeypadMode)
+        const MemberIcon = EXERCISE_TYPE_META[effType].Icon
+        const memberColor = exerciseTypeColor(effType, theme.primary)
+        const prevList = previousHistory[exercise.id] ?? []
+        const bestPrev = bestPrevOf(prevList)
+        const beatIt = bestPrev?.weight_kg != null && bestPrev.weight_kg > 0 && suggested != null && suggested >= bestPrev.weight_kg
 
         return (
           <View key={block.id} className="gap-2 rounded-card border border-inverse/50 bg-white/[0.03] p-3">
@@ -73,24 +110,74 @@ export function SupersetGroupCard({
                   <Text className="font-display-black text-[12px] text-sport-300">{letter}</Text>
                 </View>
                 <View className="min-w-0 flex-1">
-                  <Text className="font-display-bold text-[16px] leading-[19px] text-on-dark" numberOfLines={2}>{exercise.name}</Text>
-                  <View className="mt-1 flex-row flex-wrap items-center gap-x-2 gap-y-0.5">
-                    <Text style={TYPE.mono} className="text-[11px] text-on-dark font-mono-bold">{block.sets} × {block.reps}</Text>
-                    {block.target_weight_kg != null && (
-                      <Text style={TYPE.mono} className="text-[11px] text-on-dark font-mono-bold">· {suggested ?? block.target_weight_kg}kg</Text>
+                  <Text
+                    style={{ letterSpacing: -0.34 }}
+                    className="font-display-black text-[17px] leading-[20px] text-on-dark"
+                    numberOfLines={2}
+                  >
+                    {exercise.name}
+                  </Text>
+                  <View className="mt-1 flex-row flex-wrap items-center gap-1.5">
+                    {exercise.muscle_group && (
+                      <View className="flex-row items-center gap-1.5 rounded-full bg-white/[0.06] px-2 py-0.5">
+                        <MemberIcon size={12} color={memberColor} />
+                        <Text style={{ fontFamily: FONT.uiBold, fontSize: 10.5 }} className="text-on-dark">{exercise.muscle_group}</Text>
+                      </View>
                     )}
-                    {overload && <Text style={TYPE.caption} className="text-[10.5px] text-sport-300 font-sans-bold">· {overload}</Text>}
+                    {hasTechnique && (
+                      <Pressable testID={`btn-technique-${block.id}`} onPress={() => onOpenTechnique(block)} className="flex-row items-center gap-1">
+                        <Info size={13} color={ON_DARK_MUTED} />
+                        <Text style={TYPE.caption} className="text-[11px] text-on-dark-muted">Ver técnica</Text>
+                      </Pressable>
+                    )}
                   </View>
-                  {hasTechnique && (
-                    <Pressable testID={`btn-technique-${block.id}`} onPress={() => onOpenTechnique(block)} className="mt-1.5 flex-row items-center gap-1">
-                      <Info size={13} color={ON_DARK_MUTED} />
-                      <Text style={TYPE.caption} className="text-[11px] text-on-dark-muted">Ver tecnica</Text>
-                    </Pressable>
-                  )}
                 </View>
               </View>
-              {complete && <CheckCircle2 size={22} color={SPORT_400} />}
+              {complete && <CheckCircle2 size={24} color={SPORT_400} />}
             </View>
+
+            {/* Prescripción en pills (paridad web: sets×reps · kg · Descanso) */}
+            <View className="flex-row flex-wrap gap-1.5">
+              <View className="rounded-full bg-white/[0.06] px-2 py-0.5">
+                <Text style={TYPE.mono} className="text-[11px] text-on-dark font-mono-bold">{block.sets} × {block.reps}</Text>
+              </View>
+              {block.target_weight_kg != null && (
+                <View className="rounded-full bg-white/[0.06] px-2 py-0.5">
+                  <Text style={TYPE.mono} className="text-[11px] text-on-dark font-mono-bold">{suggested ?? block.target_weight_kg}kg</Text>
+                </View>
+              )}
+              {block.rest_time && (
+                <View className="rounded-full bg-white/[0.06] px-2 py-0.5">
+                  <Text style={TYPE.mono} className="text-[11px] text-on-dark-muted">Descanso {block.rest_time}</Text>
+                </View>
+              )}
+            </View>
+
+            {overload && (
+              <View className="flex-row items-center gap-1 self-start rounded-full border border-sport-500/30 bg-sport-500/[0.10] px-2 py-0.5">
+                <TrendingUp size={12} color={SPORT_400} />
+                <Text style={{ fontFamily: FONT.uiBold, fontSize: 10.5 }} className="text-sport-300">{overload}</Text>
+              </View>
+            )}
+
+            {/* Historial "Sesión anterior" (strength con marca previa) */}
+            {bestPrev && (
+              <View className="flex-row flex-wrap items-center gap-x-2 gap-y-1 rounded-sm bg-white/[0.04] px-2.5 py-1.5">
+                <History size={13} color={ON_DARK_MUTED} />
+                <Text style={{ fontFamily: FONT.uiSemibold, fontSize: 10.5 }} className="text-on-dark-muted">
+                  Sesión anterior · {formatRelativeDate(prevList[0].date)}:
+                </Text>
+                <Text style={TYPE.mono} className="text-[11px] text-on-dark font-mono-bold">
+                  {bestPrev.weight_kg ? `${bestPrev.weight_kg}kg` : '-'} × {bestPrev.reps_done || '-'}
+                </Text>
+                {beatIt && (
+                  <View className="flex-row items-center gap-1">
+                    <TrendingUp size={12} color={SPORT_400} />
+                    <Text style={{ fontFamily: FONT.uiBold, fontSize: 10 }} className="text-sport-300">Supera tu marca</Text>
+                  </View>
+                )}
+              </View>
+            )}
 
             <View className="gap-1.5">
               {Array.from({ length: block.sets }).map((_, i) => {

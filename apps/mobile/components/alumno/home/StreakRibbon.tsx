@@ -9,7 +9,7 @@ import { EMBER_500, EMBER_600, EMBER_700 } from './types'
 
 /**
  * §3 StreakRibbon (web `streak/StreakRibbon.tsx`): protagonista de retencion.
- * `streak` = RPC `get_client_current_streak` (aca derivado de workoutDates). El
+ * `streak` = RPC `get_client_current_streak` (MISMA fuente/regla que el web). El
  * diseno no tiene "record" real → se degrada al proximo HITO (7/14/30/60/100/
  * 180/365) por encima de la racha, con copy motivacional + barra al hito. Llama
  * de fondo pulsante (reduced-motion aware), numero grande con count-up.

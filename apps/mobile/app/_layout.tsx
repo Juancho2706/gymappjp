@@ -222,8 +222,19 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <ReducedMotionConfig mode={ReduceMotion.System} />
       <SafeAreaProvider>
-        <BottomSheetModalProvider>
-          <ThemeProvider>
+        {/* ThemeProvider DEBE envolver a BottomSheetModalProvider (no al revés).
+            @gorhom teletransporta el CONTENIDO de cada BottomSheetModal a su
+            `BottomSheetHostingContainer`, que se renderiza como HERMANO —fuera de
+            `{children}`— del provider. Si ThemeProvider vive dentro del modal
+            provider, ese host queda FUERA del ThemeContext y todo sheet cuyo
+            contenido llame `useTheme()` (ListRow, el propio surface, etc.) lanza
+            "useTheme must be used inside ThemeProvider" → el ErrorBoundary raíz
+            traga la pantalla entera ("Algo salió mal"). Fue el P0 del menú "Más"
+            del alumno (QA ronda 4, hallazgo 9); afecta a TODO sheet (ejecutor,
+            share-card…). Con ThemeProvider afuera, el host —y su `themeVars`
+            View— quedan dentro del contexto y los sheets resuelven tokens/marca. */}
+        <ThemeProvider>
+          <BottomSheetModalProvider>
             <StatusBar style="light" />
             {/* P0 focus-hop: el navegador va en un View PLANO. Antes lo envolvía un
                 MotiView que animaba opacity — vista animada persistente sobre
@@ -236,8 +247,8 @@ export default function RootLayout() {
             {/* Transient feedback overlay — single mount point (parity with web <Toaster/>). */}
             <Toaster />
             {!splashDone && <BrandedSplash onFinish={() => setSplashDone(true)} />}
-          </ThemeProvider>
-        </BottomSheetModalProvider>
+          </BottomSheetModalProvider>
+        </ThemeProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   )

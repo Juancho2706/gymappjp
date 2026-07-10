@@ -8,7 +8,7 @@ import { Button } from '../../Button'
 import { Card } from '../../Card'
 import { ProgressRing } from '../../ProgressRing'
 import type { HeroBlock, Plan } from './types'
-import { SUCCESS_500 } from './types'
+import { DAY_SHORT, SUCCESS_500 } from './types'
 
 /**
  * §5 HeroSection (web `hero/HeroSection.tsx` → WorkoutHeroCard | RestDayCard).
@@ -76,7 +76,7 @@ function WorkoutHero({
             <Text className="text-sport-400" style={{ fontFamily: FONT.uiBold, fontSize: 11, textTransform: 'uppercase', letterSpacing: 1 }}>
               Hoy entrenás
             </Text>
-            <Text className="text-on-dark" numberOfLines={2} style={[textStyle('2xl', FONT.displayBlack, { lh: 'tight', ls: 'tight' }), { marginTop: 6 }]}>
+            <Text className="text-on-dark" numberOfLines={2} style={[textStyle('2xl', FONT.displayBlack, { lh: 'tight', ls: 'tight' }), { marginTop: 6, fontSize: 23 }]}>
               {plan.title}
             </Text>
             <Text className="text-on-dark-muted font-sans" style={{ fontSize: 13, marginTop: 4 }}>
@@ -166,7 +166,14 @@ function RestDayCard({ nextPlan, nutritionEnabled, onRest }: { nextPlan: Plan | 
         </MotiView>
         <Text className="text-strong" style={[textStyle('xl', FONT.displayBlack, { lh: 'snug', ls: 'tight' }), { textAlign: 'center' }]}>Día de descanso</Text>
         <Text className="text-muted font-sans" style={{ textAlign: 'center', fontSize: 13.5, lineHeight: 20, marginTop: 6, maxWidth: 280 }}>
-          {nextPlan ? `Próximo: ${nextPlan.title}.` : 'Recupera bien para la próxima sesión.'}
+          {nextPlan ? (
+            <>
+              Próximo: <Text className="text-body font-sans-semibold">{nextPlan.title}</Text>
+              {nextPlan.day_of_week ? ` · ${DAY_SHORT[nextPlan.day_of_week]}` : ''}
+            </>
+          ) : (
+            'Recupera bien para la próxima sesión.'
+          )}
         </Text>
         {nutritionEnabled ? (
           <Button label="Ver nutrición de hoy" variant="secondary" size="lg" rightIcon={ArrowRight} onPress={onRest} style={{ marginTop: 16 }} />

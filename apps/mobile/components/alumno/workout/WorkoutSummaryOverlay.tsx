@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Modal, Pressable, ScrollView, Text, View } from 'react-native'
-import { SafeAreaView } from 'react-native-safe-area-context'
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context'
 import {
   ArrowRight,
   Check,
@@ -237,6 +237,10 @@ export function WorkoutSummaryOverlay({
 
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose ?? onDone} statusBarTranslucent>
+      {/* SafeAreaProvider PROPIO: el contexto de insets del root NO cruza la barrera del RN Modal
+          (iOS lo presenta en otra jerarquía nativa) → sin esto el inset top vuelve 0 y el check queda
+          pegado al reloj del sistema. Re-mide dentro del modal para dar el respiro superior (paridad web pt-safe). */}
+      <SafeAreaProvider>
       <SafeAreaView edges={['top', 'bottom']} style={{ flex: 1, backgroundColor: INK_950 }}>
         {visible && !motion.reduced ? (
           <Confetti autoplay fadeOutOnEnd colors={[brand, '#F59E0B', SPORT_500, theme.cyan]} />
@@ -462,6 +466,7 @@ export function WorkoutSummaryOverlay({
           </>
         ) : null}
       </ShareCardPreview>
+      </SafeAreaProvider>
     </Modal>
   )
 }

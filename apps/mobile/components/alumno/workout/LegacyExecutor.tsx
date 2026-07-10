@@ -22,6 +22,7 @@ import { supabase } from '../../../lib/supabase'
 import { getClientProfile } from '../../../lib/client'
 import { getTodayInSantiago, getSantiagoUtcBoundsForDay, getSantiagoIsoYmdForUtcInstant } from '../../../lib/date-utils'
 import { cachePlan, enqueueLog, getCachedPlan } from '../../../lib/offline-cache'
+import { checkOnline } from '../../../lib/use-online'
 import { haptics } from '../../../lib/haptics'
 import { useEvaMotion } from '../../../lib/motion'
 import { useTheme } from '../../../context/ThemeContext'
@@ -398,8 +399,9 @@ export default function WorkoutExecutionScreen() {
     }
 
     if (error) {
-      setIsOnline(false)
+      // Encolar por seguridad del dato; el banner refleja la red REAL (checkOnline), no todo error.
       await enqueueLog(logData)
+      setIsOnline(await checkOnline())
     } else {
       setIsOnline(true)
     }

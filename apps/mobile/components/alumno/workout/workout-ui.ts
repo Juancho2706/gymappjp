@@ -26,7 +26,7 @@ export function overloadChipLabel(
     return block.progression_type === 'weight' ? `+${v} kg/sem` : `+${v} rep/ses`
   }
   if (eff.mode === 'double') {
-    return eff.status === 'holding' ? `Manten ${eff.weightKg} kg` : `Objetivo ${eff.weightKg} kg`
+    return eff.status === 'holding' ? `Mantén ${eff.weightKg} kg` : `Objetivo ${eff.weightKg} kg`
   }
   if (eff.isProgressed && currentWeek != null) return `Sem ${currentWeek} · ${eff.weightKg} kg`
   return `+${v} kg/sem`
@@ -42,16 +42,16 @@ export function overloadDetailText(
   if (block.progression_type === 'weight' && block.target_weight_kg == null) return null
   const v = block.progression_value
   if (block.progression_type !== 'weight' || !eff?.modeImplemented) {
-    return `Sube +${v} ${block.progression_type === 'weight' ? 'kg cada semana' : 'rep cada sesion'}.`
+    return `Sube +${v} ${block.progression_type === 'weight' ? 'kg cada semana' : 'rep cada sesión'}.`
   }
   if (eff.mode === 'double') {
-    if (eff.status === 'holding') return `Doble progresion: mante ${eff.weightKg} kg y completa ${eff.repsTopToUnlock} reps en todas las series para subir.`
+    if (eff.status === 'holding') return `Doble progresión: mantén ${eff.weightKg} kg y completa ${eff.repsTopToUnlock} reps en todas las series para subir.`
     if (eff.status === 'progressed') {
       return eff.isProgressed
-        ? `Doble progresion: subiste! objetivo ${eff.weightKg} kg (base ${eff.baseWeightKg}).`
-        : `Doble progresion: objetivo ${eff.weightKg} kg (aun por debajo de la base ${eff.baseWeightKg}).`
+        ? `Doble progresión: ¡subiste! Objetivo ${eff.weightKg} kg (base ${eff.baseWeightKg}).`
+        : `Doble progresión: objetivo ${eff.weightKg} kg (aún por debajo de la base ${eff.baseWeightKg}).`
     }
-    return `Doble progresion: sube +${v} kg cuando completes ${eff.repsTopToUnlock} reps en todas las series.`
+    return `Doble progresión: sube +${v} kg cuando completes ${eff.repsTopToUnlock} reps en todas las series.`
   }
   if (eff.isProgressed && currentWeek != null) return `Semana ${currentWeek}: objetivo ${eff.weightKg} kg (base ${eff.baseWeightKg} +${eff.addedKg}).`
   return `Sube +${v} kg cada semana (esta semana arrancas en la base).`

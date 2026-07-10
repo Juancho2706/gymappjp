@@ -199,7 +199,7 @@ export default function ExercisesScreen() {
           <Dumbbell size={22} color={theme.primary} strokeWidth={2.2} />
         </View>
         <View style={styles.headerText}>
-          <Text style={[TYPE.h3, { color: theme.foreground }]} numberOfLines={1}>
+          <Text style={[TYPE.h3, { color: theme.foreground, fontSize: 22, fontFamily: FONT.displayBlack }]} numberOfLines={1}>
             Aprender
           </Text>
           <Text style={[TYPE.caption, { color: theme.mutedForeground }]} numberOfLines={1}>
@@ -528,7 +528,7 @@ const styles = StyleSheet.create({
     paddingTop: 20,
     paddingBottom: 14,
   },
-  headerIcon: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  headerIcon: { width: 38, height: 38, alignItems: 'center', justifyContent: 'center' },
   headerText: { flex: 1, minWidth: 0 },
   searchWrap: { paddingHorizontal: 16, paddingBottom: 10 },
   muscleScroll: { paddingHorizontal: 16, gap: 8, paddingBottom: 12 },

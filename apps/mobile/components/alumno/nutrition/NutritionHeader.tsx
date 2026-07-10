@@ -34,12 +34,12 @@ export function NutritionHeader({
           <Text
             className="text-strong"
             numberOfLines={1}
-            style={textStyle('xl', FONT.displayBlack, { lh: 'snug', ls: 'tight' })}
+            style={textStyle('lg', FONT.uiExtra, { lh: 'snug', ls: 'tight' })}
           >
             Plan Nutricional
           </Text>
           {planName ? (
-            <Text className="text-muted" numberOfLines={1} style={{ fontFamily: FONT.uiMedium, fontSize: 13, marginTop: 1 }}>
+            <Text className="text-muted" numberOfLines={1} style={{ fontFamily: FONT.uiMedium, fontSize: 10, marginTop: 1 }}>
               {planName}
             </Text>
           ) : null}

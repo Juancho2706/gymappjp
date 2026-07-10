@@ -10,12 +10,9 @@ import {
   buildStepModel,
   effectiveExerciseType,
   firstIncompleteStepIndex,
-  formatTypedObjective,
   isStepComplete,
-  typedKeypadFields,
   type OptimisticLogPayload,
   type SummaryBlock,
-  type TypedKeypadMode,
 } from '@eva/workout-engine'
 import { useTheme } from '../../../context/ThemeContext'
 import { useEvaMotion } from '../../../lib/motion'
@@ -33,7 +30,6 @@ import {
   type SessionBlock,
   type SessionExercise,
 } from '../../../lib/workout-session'
-import { Button } from '../../Button'
 import { OfflineBanner } from '../../OfflineBanner'
 import { EvaLoaderScreen } from '../../EvaLoader'
 import { SessionHeader, type WorkoutViewMode } from './SessionHeader'
@@ -41,6 +37,7 @@ import { SingleExerciseCard } from './SingleExerciseCard'
 import { SupersetGroupCard } from './SupersetGroupCard'
 import { StepperExecution, type StepperStepView } from './StepperExecution'
 import { KeypadHost, type KeypadTarget } from './KeypadHost'
+import { typedTargetFor } from './keypad-flow'
 import { TechniqueSheet } from './TechniqueSheet'
 import { WorkoutSettingsSheet } from './WorkoutSettingsSheet'
 import { WorkoutSummaryOverlay } from './WorkoutSummaryOverlay'
@@ -86,6 +83,9 @@ function ExecutorV2Inner({ planId }: { planId: string }) {
   const [substituteBlockId, setSubstituteBlockId] = useState<string | null>(null)
   const [substitutionByBlock, setSubstitutionByBlock] = useState<Record<string, ActiveSub>>({})
   const [summaryOpen, setSummaryOpen] = useState(false)
+  // Duración CONGELADA al finalizar (snapshot del cronómetro en ese instante). El overlay no debe
+  // seguir sumando mientras está abierto — paridad web (`finishedElapsed`, ya viene capado a 4h).
+  const [finishedElapsed, setFinishedElapsed] = useState<number | null>(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [prCelebration, setPrCelebration] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
@@ -172,7 +172,7 @@ function ExecutorV2Inner({ planId }: { planId: string }) {
   const currentExerciseNum = currentExerciseIdx === -1 ? blocks.length : currentExerciseIdx + 1
   const activeBlockId = currentExerciseIdx === -1 ? null : blocks[currentExerciseIdx].id
 
-  const eyebrow = activeWeekVariant ? `Semana ${activeWeekVariant}` : 'Entrenamiento'
+  const weekBadge = activeWeekVariant ? `Semana ${activeWeekVariant}` : null
   const subline =
     programStructure === 'cycle' ? `Dia ${dayOfWeek || 1} de ${cycleLength || '?'}` : programStructure === 'weekly' ? 'Programa semanal' : null
 
@@ -182,16 +182,16 @@ function ExecutorV2Inner({ planId }: { planId: string }) {
       const block = blocks.find((b) => b.id === blockId)
       if (!block) return
       const exercise = resolveExercise(block)
-      const effType = effectiveExerciseType(block, exercise)
       const exerciseName = exercise?.name ?? 'Ejercicio'
       const restored =
         !prefill && restoredDraft && restoredDraft.blockId === blockId && restoredDraft.setNumber === setNumber
           ? restoredDraft
           : null
 
-      // Bloques tipados (cardio/movilidad/roller): keypad por campos tipados (E2-10).
-      if (effType !== 'strength') {
-        const mode = effType as TypedKeypadMode
+      // Bloques tipados (cardio/movilidad/roller): keypad por campos tipados (E2-10). El routing
+      // tipo->campos es el MISMO puro que consume `KeypadHost` (fix QA R4·#5, cero drift).
+      const typed = typedTargetFor(block, exercise)
+      if (typed) {
         setKeypadTarget({
           blockId,
           setNumber,
@@ -201,7 +201,7 @@ function ExecutorV2Inner({ planId }: { planId: string }) {
           effortKind: null,
           initialValues: restored?.values,
           initialFieldIndex: restored?.fieldIndex,
-          typed: { mode, fields: typedKeypadFields(mode), objective: formatTypedObjective(block, mode) },
+          typed,
         })
         haptics.tap()
         return
@@ -212,19 +212,22 @@ function ExecutorV2Inner({ planId }: { planId: string }) {
       const initialValues = prefill
         ? { weight: prefill.weight != null ? String(prefill.weight) : '', reps: prefill.reps != null ? String(prefill.reps) : '' }
         : restored?.values
+      const bestPrev = bestPrevOf(previousHistory[exercise?.id ?? ''] ?? [])
       setKeypadTarget({
         blockId,
         setNumber,
         exerciseName,
         targetReps: block.reps,
+        targetSets: block.sets,
         suggestedWeight: suggested ?? null,
+        lastPrev: bestPrev ? { weightKg: bestPrev.weight_kg, reps: bestPrev.reps_done } : null,
         effortKind: block.rir ? 'rir' : 'rpe',
         initialValues,
         initialFieldIndex: restored?.fieldIndex,
       })
       haptics.tap()
     },
-    [blocks, effByBlock, restoredDraft],
+    [blocks, effByBlock, restoredDraft, previousHistory],
   )
 
   // ── Commit de una serie ─────────────────────────────────────────────────────
@@ -349,6 +352,7 @@ function ExecutorV2Inner({ planId }: { planId: string }) {
             members={members}
             sessionLogs={sessionLogs}
             effByBlock={effByBlock}
+            previousHistory={previousHistory}
             currentWeek={currentWeek}
             onOpenTechnique={(b) => setTechniqueExercise(resolveExercise(b))}
             onOpenSet={openSet}
@@ -471,7 +475,7 @@ function ExecutorV2Inner({ planId }: { planId: string }) {
 
       <SessionHeader
         planTitle={planTitle}
-        eyebrow={eyebrow}
+        weekBadge={weekBadge}
         subline={subline}
         currentExerciseNum={currentExerciseNum}
         totalExercises={blocks.length}
@@ -528,16 +532,6 @@ function ExecutorV2Inner({ planId }: { planId: string }) {
               </View>
             </View>
           ))}
-
-          <Button
-            label="Finalizar entrenamiento"
-            leftIcon={allDone ? Trophy : CheckCircle2}
-            variant="sport"
-            size="lg"
-            full
-            onPress={() => setSummaryOpen(true)}
-            disabled={blocks.length === 0}
-          />
         </ScrollView>
       )}
 
@@ -556,13 +550,13 @@ function ExecutorV2Inner({ planId }: { planId: string }) {
           </Pressable>
           <Pressable
             testID="btn-finish-workout"
-            onPress={() => setSummaryOpen(true)}
+            onPress={() => { setFinishedElapsed(elapsedSec); setSummaryOpen(true) }}
             className="h-12 flex-row items-center gap-2 rounded-control bg-sport-500 px-5"
             accessibilityRole="button"
             accessibilityLabel="Finalizar entrenamiento"
           >
             <CheckCircle2 size={16} color={ON_DARK} />
-            <Text className="font-sans-bold text-on-sport">Finalizar</Text>
+            <Text className="font-sans-bold text-on-sport">Finalizar entrenamiento</Text>
           </Pressable>
         </View>
       )}
@@ -606,7 +600,7 @@ function ExecutorV2Inner({ planId }: { planId: string }) {
         logs={sessionLogs}
         exerciseMaxes={exerciseMaxes}
         exerciseMaxDates={exerciseMaxDates}
-        durationSec={elapsedSec}
+        durationSec={finishedElapsed ?? elapsedSec}
         programName={programName}
         nextHint={subline}
         substitutedBlockIds={substitutedBlockIds}
@@ -614,7 +608,7 @@ function ExecutorV2Inner({ planId }: { planId: string }) {
         checkInLastRelative={checkInLastRelative}
         onCheckIn={() => router.replace('/alumno/check-in')}
         onDone={() => router.replace('/alumno/home')}
-        onClose={() => setSummaryOpen(false)}
+        onClose={() => { setSummaryOpen(false); setFinishedElapsed(null) }}
       />
     </SafeAreaView>
   )

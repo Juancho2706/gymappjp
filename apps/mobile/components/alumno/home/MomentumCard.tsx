@@ -51,11 +51,11 @@ export function MomentumCard({
         <WeekStrip days={days} />
         <View style={{ height: 1, marginVertical: 16, backgroundColor: theme.border }} />
         <View style={{ flexDirection: 'row', justifyContent: 'space-around' }}>
-          <ComplianceItem value={workoutCompliance} label="Entrenos" sub={`${workoutDays} días`} color={theme.primary} />
+          <ComplianceItem value={workoutCompliance} label="Entrenos" color={theme.primary} />
           {nutritionEnabled ? (
-            <ComplianceItem value={nutritionCompliance} label="Nutrición" sub={`${nutritionDays} días`} color={EMBER_500} empty={nutritionEmpty} />
+            <ComplianceItem value={nutritionCompliance} label="Nutrición" color={EMBER_500} empty={nutritionEmpty} />
           ) : null}
-          <ComplianceItem value={checkInCompliance} label="Check-ins" sub={`${checkInCount} de 4`} color={theme.success} empty={checkInEmpty} />
+          <ComplianceItem value={checkInCompliance} label="Check-ins" color={theme.success} empty={checkInEmpty} />
         </View>
       </Card>
     </View>
@@ -92,26 +92,31 @@ function WeekStrip({ days }: { days: MomentumDay[] }) {
   )
 }
 
-function ComplianceItem({ value, label, sub, color, empty = false }: { value: number; label: string; sub: string; color: string; empty?: boolean }) {
+function ComplianceItem({ value, label, color, empty = false }: { value: number; label: string; color: string; empty?: boolean }) {
   const { theme } = useTheme()
   const pct = Math.round(Math.max(0, Math.min(1, value)) * 100)
   return (
-    <View style={{ alignItems: 'center', gap: 7 }}>
+    <View style={{ alignItems: 'center', gap: 8 }}>
       <ProgressRing
         value={empty ? 0 : pct}
-        size={74}
+        size={76}
         stroke={7}
         color={empty ? theme.mutedForeground : color}
         showValue={false}
         label={
-          <Text className="text-strong" style={{ fontFamily: FONT.displayBlack, fontSize: 19, fontVariant: ['tabular-nums'] }}>
-            {empty ? '—' : pct}
-          </Text>
+          empty ? (
+            <Text className="text-subtle" style={{ fontFamily: FONT.displayBlack, fontSize: 18 }}>—</Text>
+          ) : (
+            <Text className="text-strong" style={{ fontFamily: FONT.displayBlack, fontSize: 19, letterSpacing: -0.57, fontVariant: ['tabular-nums'] }}>
+              {pct}
+              <Text style={{ fontFamily: FONT.displayBlack, fontSize: 11 }}>%</Text>
+            </Text>
+          )
         }
       />
       <View style={{ alignItems: 'center' }}>
         <Text className="text-strong font-sans-bold" style={{ fontSize: 12 }}>{label}</Text>
-        <Text className="text-subtle font-sans" style={{ fontSize: 10.5 }}>{empty ? 'Sin datos' : sub}</Text>
+        {empty ? <Text className="text-subtle font-sans" style={{ fontSize: 10 }}>Sin datos</Text> : null}
       </View>
     </View>
   )

@@ -9,7 +9,7 @@ import {
   type IntervalConfig,
 } from '@eva/workout-engine'
 import { formatPace, type HrZoneRange } from '@eva/cardio'
-import { TYPE } from '../../../lib/typography'
+import { FONT, TYPE } from '../../../lib/typography'
 import type { SessionBlock } from '../../../lib/workout-session'
 import { useWorkoutTimers } from './timers/TimerProvider'
 
@@ -94,12 +94,16 @@ export function TypedTargetGrid({
       {cards.map((card) => (
         <View
           key={card.label}
-          className={`rounded-control border px-2.5 py-2 ${
+          className={`rounded-sm border px-2.5 py-2 ${
             card.highlight ? 'border-ember-500/30 bg-ember-500/[0.14]' : 'border-inverse/50 bg-white/[0.05]'
           }`}
           style={{ flexBasis: '47%', flexGrow: 1 }}
         >
-          <Text style={TYPE.eyebrow} className={card.highlight ? 'text-ember-300' : 'text-on-dark-muted'} numberOfLines={1}>
+          <Text
+            style={{ fontFamily: FONT.uiBold, fontSize: 9.5, letterSpacing: 0.57, textTransform: 'uppercase' }}
+            className={card.highlight ? 'text-ember-300' : 'text-on-dark-muted'}
+            numberOfLines={1}
+          >
             {card.label}
           </Text>
           <Text style={TYPE.mono} className={`mt-0.5 text-[15px] font-mono-bold ${card.highlight ? 'text-ember-200' : 'text-on-dark'}`} numberOfLines={1}>

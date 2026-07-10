@@ -19,7 +19,7 @@ import { useTheme } from '../../context/ThemeContext'
 import { supabase } from '../../lib/supabase'
 import { Button, Input, Textarea } from '../../components'
 import { AppBackground } from '../../components/AppBackground'
-import { TYPE } from '../../lib/typography'
+import { FONT, TYPE } from '../../lib/typography'
 import { submitIntake } from '../../lib/alumno-onboarding'
 
 // Wizard de intake — espejo del web `c/[coach_slug]/onboarding` (OnboardingForm.tsx):
@@ -408,7 +408,7 @@ export default function AlumnoOnboardingScreen() {
 function StepHeading({ title, subtitle }: { title: string; subtitle: string }) {
   return (
     <View style={styles.stepHeadingWrap}>
-      <Text className="text-strong" style={TYPE.h3}>{title}</Text>
+      <Text className="text-strong" style={[TYPE.h3, { fontFamily: FONT.displayBlack }]}>{title}</Text>
       <Text className="text-muted" style={TYPE.body}>{subtitle}</Text>
     </View>
   )

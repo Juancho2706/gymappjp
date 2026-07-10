@@ -343,7 +343,7 @@ export default function AlumnoPerfilScreen() {
   const hasExtras = detail?.phone || detail?.goalWeightKg != null || detail?.subscriptionStartDate
   const firstName = (detail?.fullName ?? '').trim().split(/\s+/)[0] || 'Atleta'
   const streakSubtitle = stats.streak > 0
-    ? `${stats.streak} ${stats.streak === 1 ? 'día seguido' : 'días seguidos'} activo`
+    ? `${stats.streak} ${stats.streak === 1 ? 'día' : 'días'} seguidos activo`
     : 'Encendé tu racha'
 
   return (

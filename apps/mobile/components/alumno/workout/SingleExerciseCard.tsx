@@ -12,7 +12,9 @@ import {
 } from 'lucide-react-native'
 import type { ExerciseType, ReconciledSessionLog, TypedKeypadMode } from '@eva/workout-engine'
 import type { HrZoneRange } from '@eva/cardio'
-import { TYPE } from '../../../lib/typography'
+import { FONT, TYPE } from '../../../lib/typography'
+import { useTheme } from '../../../context/ThemeContext'
+import { EXERCISE_TYPE_META, exerciseTypeColor } from '../../../lib/exercise-type-meta'
 import type { EffectiveTarget } from '../../../lib/workout/progression'
 import type { PrevSet, SessionBlock, SessionExercise } from '../../../lib/workout-session'
 import { formatRelativeDate } from '../../../lib/date-utils'
@@ -73,7 +75,11 @@ export function SingleExerciseCard({
   onOpenSubstitute: () => void
   onUndoSubstitution: () => void
 }) {
+  const { theme } = useTheme()
   const isStrength = effType === 'strength'
+  const typeMeta = EXERCISE_TYPE_META[effType]
+  const TypeIcon = typeMeta.Icon
+  const typeColor = exerciseTypeColor(effType, theme.primary)
   const typedMode: TypedKeypadMode | null = isStrength ? null : (effType as TypedKeypadMode)
   const loggedSetNumbers = new Set(
     blockLogs.filter((l) => l.set_number >= 1 && l.set_number <= block.sets).map((l) => l.set_number),
@@ -107,9 +113,22 @@ export function SingleExerciseCard({
       {/* Fila silenciosa: músculo + acciones (Detalles / Cambiar / Técnica) */}
       <View className="flex-row items-center justify-between gap-2">
         <View className="min-w-0 flex-1 flex-row items-center gap-1.5">
-          <Text style={TYPE.eyebrow} className="text-on-dark-muted" numberOfLines={1}>
-            {exercise.muscle_group ?? 'Ejercicio'}
+          <TypeIcon size={14} color={typeColor} />
+          <Text style={{ fontFamily: FONT.uiBold, fontSize: 11, color: typeColor }} numberOfLines={1}>
+            {typeMeta.label}
           </Text>
+          {exercise.muscle_group && (
+            <>
+              <Text style={{ fontSize: 11 }} className="text-on-dark-muted/40">·</Text>
+              <Text
+                style={{ fontFamily: FONT.uiSemibold, fontSize: 11 }}
+                className="min-w-0 shrink text-on-dark-muted"
+                numberOfLines={1}
+              >
+                {exercise.muscle_group}
+              </Text>
+            </>
+          )}
         </View>
         <View className="flex-row shrink-0 items-center gap-1">
           {hasDetails && (
@@ -131,7 +150,7 @@ export function SingleExerciseCard({
               onPress={onOpenSubstitute}
               className="h-8 flex-row items-center gap-1 rounded-control px-2"
               accessibilityRole="button"
-              accessibilityLabel={`Cambiar ${exercise.name}, maquina ocupada`}
+              accessibilityLabel={`Cambiar ${exercise.name} — máquina ocupada`}
             >
               <ArrowRightLeft size={14} color={ON_DARK_MUTED} />
               <Text style={TYPE.caption} className="text-[11px] text-on-dark-muted">Cambiar</Text>
@@ -143,10 +162,10 @@ export function SingleExerciseCard({
               onPress={onOpenTechnique}
               className="h-8 flex-row items-center gap-1 rounded-control bg-white/[0.06] px-2.5"
               accessibilityRole="button"
-              accessibilityLabel={`Ver tecnica de ${exercise.name}`}
+              accessibilityLabel={`Ver técnica de ${exercise.name}`}
             >
               <Play size={12} color={ON_DARK} fill={ON_DARK} />
-              <Text style={TYPE.caption} className="text-[11px] text-on-dark">Tecnica</Text>
+              <Text style={TYPE.caption} className="text-[11px] text-on-dark">Técnica</Text>
             </Pressable>
           )}
         </View>
@@ -157,7 +176,7 @@ export function SingleExerciseCard({
         <View className="flex-row flex-wrap items-center gap-2">
           <View className="flex-row items-center gap-1.5 rounded-full border border-ember-500/30 bg-ember-500/[0.12] px-2.5 py-1">
             <ArrowRightLeft size={12} color={EMBER_300} />
-            <Text style={TYPE.caption} className="text-[11px] text-ember-200">Sustituido · maquina ocupada</Text>
+            <Text style={TYPE.caption} className="text-[11px] text-ember-200">Sustituido · máquina ocupada</Text>
           </View>
           <Text style={TYPE.caption} className="text-[11px] text-on-dark-muted">
             en vez de <Text className="text-on-dark font-sans-bold">{substitution.prescribedName}</Text>
@@ -173,7 +192,11 @@ export function SingleExerciseCard({
 
       {/* Nombre + dots de progreso (o check al completar) */}
       <View className="flex-row items-start justify-between gap-3">
-        <Text className="min-w-0 flex-1 font-display-black text-[22px] leading-[24px] text-on-dark" numberOfLines={2}>
+        <Text
+          style={{ letterSpacing: -0.44 }}
+          className="min-w-0 flex-1 font-display-black text-[22px] leading-[24px] text-on-dark"
+          numberOfLines={2}
+        >
           {exercise.name}
         </Text>
         {complete ? (
@@ -230,7 +253,7 @@ export function SingleExerciseCard({
           accessibilityLabel={firstUnlogged != null && bestPrev.weight_kg ? `Autollenar la serie activa con ${bestPrev.weight_kg} kg por ${bestPrev.reps_done ?? '-'} reps` : undefined}
         >
           <History size={14} color={ON_DARK_MUTED} />
-          <Text style={TYPE.caption} className="text-[11px] text-on-dark-muted">Ultima vez:</Text>
+          <Text style={TYPE.caption} className="text-[11px] text-on-dark-muted">Última vez:</Text>
           <Text style={TYPE.mono} className="text-[11px] text-on-dark font-mono-bold">
             {bestPrev.weight_kg ? `${bestPrev.weight_kg}kg` : '-'} × {bestPrev.reps_done || '-'}
           </Text>
@@ -260,7 +283,7 @@ export function SingleExerciseCard({
         >
           {isStrength && exercise.instructions && exercise.instructions.length > 0 && (
             <View>
-              <Text style={TYPE.eyebrow} className="mb-1 text-on-dark-muted">Tecnica</Text>
+              <Text style={TYPE.eyebrow} className="mb-1 text-on-dark-muted">Técnica</Text>
               {exercise.instructions.map((step, i) => (
                 <Text key={i} style={TYPE.caption} className="text-[12px] text-on-dark/90">{i + 1}. {step.replace(/^Step:\d+\s*/i, '')}</Text>
               ))}

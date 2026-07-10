@@ -21,6 +21,11 @@ import {
 } from './timer-colors'
 import { isRestTimerMuted, setRestTimerMuted, subscribeRestTimerPrefs } from './rest-timer-preferences'
 import { playTimerCue } from './sound'
+import {
+  cancelRestEndNotification,
+  ensureRestNotifPermission,
+  scheduleRestEndNotification,
+} from './rest-notification'
 
 /**
  * Descanso PROTAGONISTA (E2-09) — barra/overlay inferior con cuenta regresiva.
@@ -81,6 +86,12 @@ export function RestTimerBar({ initialSeconds, nextLabel, warmup = false, autoSt
     return unsub
   }, [])
 
+  // Permiso de notificaciones LAZY: la barra solo se monta al iniciar un descanso,
+  // así que esto es "la primera vez que se usa el timer" (pedido de la Ronda 4).
+  useEffect(() => {
+    void ensureRestNotifPermission()
+  }, [])
+
   const stopAlarm = useCallback(() => {
     if (alarmIntervalRef.current) {
       clearInterval(alarmIntervalRef.current)
@@ -91,9 +102,11 @@ export function RestTimerBar({ initialSeconds, nextLabel, warmup = false, autoSt
     setIsAlarmRinging(false)
   }, [])
 
-  // Limpieza dura del loop de alarma si se desmonta sonando.
+  // Limpieza dura al desmontar: corta el loop de alarma y cancela cualquier
+  // notificación de fin programada (descanso saltado / cerrado no debe sonar luego).
   useEffect(() => () => {
     if (alarmIntervalRef.current) clearInterval(alarmIntervalRef.current)
+    void cancelRestEndNotification()
   }, [])
 
   const triggerAlarm = useCallback(() => {
@@ -104,8 +117,11 @@ export function RestTimerBar({ initialSeconds, nextLabel, warmup = false, autoSt
     setIsActive(false)
     endTimeRef.current = null
 
-    // Háptica primaria (no se silencia) + cue de audio gateado por mute.
-    void haptics.success()
+    // Cue HÁPTICO fuerte (primario, nunca se silencia) + audio gateado por mute.
+    // El alarma llegó en foreground: cancela la notif local programada (evita el
+    // beep duplicado al minimizar justo en el 0).
+    void haptics.alarm()
+    void cancelRestEndNotification()
     playTimerCue('alarm')
 
     // Recordatorio en loop: refuerzo háptico cada 3s hasta 5 veces (como web).
@@ -150,14 +166,25 @@ export function RestTimerBar({ initialSeconds, nextLabel, warmup = false, autoSt
     }
   }, [timeLeft, isActive])
 
-  // Al volver de background: recomputar desde endTime (corrige el tiempo congelado).
+  // AppState: al IRSE a background con el descanso corriendo, programa una
+  // notificación local que dispare al terminar (el JS se congela; el SO la
+  // entrega). Al VOLVER a foreground, cancela esa notif (el cue lo da el timer
+  // in-app) y recomputa desde endTime (corrige el tiempo congelado).
   useEffect(() => {
     const sub = AppState.addEventListener('change', (next) => {
-      if (next !== 'active' || !endTimeRef.current) return
-      const remaining = Math.max(0, Math.ceil((endTimeRef.current - Date.now()) / 1000))
-      timeLeftRef.current = remaining
-      setTimeLeft(remaining)
-      if (remaining === 0) triggerAlarm()
+      if (next === 'active') {
+        void cancelRestEndNotification()
+        if (!endTimeRef.current) return
+        const remaining = Math.max(0, Math.ceil((endTimeRef.current - Date.now()) / 1000))
+        timeLeftRef.current = remaining
+        setTimeLeft(remaining)
+        if (remaining === 0) triggerAlarm()
+      } else {
+        // background / inactive: si corre, agenda el cue nativo de fin.
+        if (!isActiveRef.current || !endTimeRef.current) return
+        const remaining = Math.max(0, Math.ceil((endTimeRef.current - Date.now()) / 1000))
+        if (remaining > 0) void scheduleRestEndNotification(remaining)
+      }
     })
     return () => sub.remove()
   }, [triggerAlarm])
@@ -169,6 +196,7 @@ export function RestTimerBar({ initialSeconds, nextLabel, warmup = false, autoSt
 
   const resetTimer = useCallback(() => {
     stopAlarm()
+    void cancelRestEndNotification()
     void haptics.tap()
     setTimeLeft(initialSeconds)
     setTotalSeconds(initialSeconds)
@@ -211,6 +239,7 @@ export function RestTimerBar({ initialSeconds, nextLabel, warmup = false, autoSt
 
   const handleClose = useCallback(() => {
     stopAlarm()
+    void cancelRestEndNotification()
     onClose()
   }, [onClose, stopAlarm])
 

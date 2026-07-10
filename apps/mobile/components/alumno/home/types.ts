@@ -76,6 +76,8 @@ export interface HomeData {
   checkIns: CheckInPoint[]
   habitsToday: HabitsData | null
   welcomeModal: WelcomeModalConfig | null
+  /** §3 Racha — valor del RPC `get_client_current_streak` (MISMA fuente que web). */
+  streak: number
 }
 
 /** Estado de un dia del programa en la semana actual (espejo de `WeekDayStatus`). */

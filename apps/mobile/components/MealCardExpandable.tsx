@@ -124,7 +124,7 @@ export function MealCardExpandable({
             <Text
               style={[
                 styles.mealName,
-                { fontFamily: FONT.displayBold },
+                { fontFamily: FONT.uiExtra },
                 isCompleted
                   ? { color: EMBER_700, textDecorationLine: 'line-through' }
                   : { color: theme.foreground },
@@ -273,7 +273,7 @@ const styles = StyleSheet.create({
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   mealName: { fontSize: 16, letterSpacing: -0.3, flexShrink: 1 },
   kcalPill: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 999, flexShrink: 0 },
-  kcalText: { fontSize: 11 },
+  kcalText: { fontSize: 12 },
   macroRow: { flexDirection: 'row', gap: 10 },
   macro: { fontSize: 10.5 },
   foodItems: { borderTopWidth: 1, paddingHorizontal: 14, paddingBottom: 12, paddingTop: 4 },

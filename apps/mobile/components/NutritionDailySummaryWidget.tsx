@@ -49,7 +49,7 @@ export function NutritionDailySummaryWidget({ clientId }: Props) {
         id, name, daily_calories, protein_g, carbs_g, fats_g,
         nutrition_meals (
           id, order_index, day_of_week,
-          nutrition_meal_food_items (
+          nutrition_meal_food_items:food_items (
             id, quantity, unit, swap_options,
             foods ( id, name, calories, protein_g, carbs_g, fats_g, serving_size, serving_unit )
           )

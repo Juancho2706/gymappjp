@@ -1,7 +1,7 @@
 import { Pressable, Text, View } from 'react-native'
-import { ChevronLeft, List, Rows3, Settings } from 'lucide-react-native'
+import { ArrowLeft, GalleryHorizontal, List, Settings } from 'lucide-react-native'
 import { ProgressBar } from '../../ProgressBar'
-import { TYPE } from '../../../lib/typography'
+import { FONT, TYPE } from '../../../lib/typography'
 
 const SPORT_500 = '#2680FF'
 const W10 = 'rgba(255,255,255,0.10)'
@@ -17,7 +17,7 @@ export type WorkoutViewMode = 'list' | 'steps'
  */
 export function SessionHeader({
   planTitle,
-  eyebrow,
+  weekBadge,
   subline,
   currentExerciseNum,
   totalExercises,
@@ -33,7 +33,8 @@ export function SessionHeader({
   onOpenSettings,
 }: {
   planTitle: string
-  eyebrow: string | null
+  /** Texto de la píldora de variante ("Semana A/B"), o null si el plan no tiene variantes. */
+  weekBadge: string | null
   subline: string | null
   currentExerciseNum: number
   totalExercises: number
@@ -59,15 +60,30 @@ export function SessionHeader({
           accessibilityRole="button"
           accessibilityLabel="Salir del entrenamiento"
         >
-          <ChevronLeft size={20} color={ON_DARK} />
+          <ArrowLeft size={20} color={ON_DARK} />
         </Pressable>
-        <View className="min-w-0 flex-1">
-          {eyebrow && (
-            <Text style={TYPE.eyebrow} className="text-on-dark-muted" numberOfLines={1}>{eyebrow}</Text>
-          )}
-          <Text className="font-display-bold text-[18px] text-on-dark" numberOfLines={1}>{planTitle || 'Workout'}</Text>
+        <View className="min-w-0 flex-1 items-center px-2">
+          <View className="flex-row flex-wrap items-center justify-center gap-2">
+            <Text className="font-display text-[18px] text-on-dark" numberOfLines={1}>{planTitle || 'Workout'}</Text>
+            {weekBadge && (
+              <View className="shrink-0 rounded-full border border-white/20 px-2 py-0.5">
+                <Text
+                  style={{ fontFamily: FONT.uiExtra, fontSize: 10, letterSpacing: 1, textTransform: 'uppercase' }}
+                  className="text-on-dark-muted"
+                >
+                  {weekBadge}
+                </Text>
+              </View>
+            )}
+          </View>
           {subline && (
-            <Text style={TYPE.eyebrow} className="text-on-dark-muted" numberOfLines={1}>{subline}</Text>
+            <Text
+              style={{ fontFamily: FONT.uiBold, fontSize: 10, letterSpacing: 1, textTransform: 'uppercase' }}
+              className="text-on-dark-muted"
+              numberOfLines={1}
+            >
+              {subline}
+            </Text>
           )}
         </View>
         {/* Toggle segmentado Lista / Pasos (E2-04) */}
@@ -92,7 +108,7 @@ export function SessionHeader({
             accessibilityLabel="Ver paso a paso"
             accessibilityState={{ selected: viewMode === 'steps' }}
           >
-            <Rows3 size={16} color={viewMode === 'steps' ? ON_DARK : ON_DARK_MUTED} />
+            <GalleryHorizontal size={16} color={viewMode === 'steps' ? ON_DARK : ON_DARK_MUTED} />
           </Pressable>
         </View>
         {/* Ajustes: cronómetro automático + alarma de descanso (WAVE-B-SEAM). */}

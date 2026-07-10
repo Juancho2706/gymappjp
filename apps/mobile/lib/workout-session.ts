@@ -28,6 +28,7 @@ import {
 import { supabase } from './supabase'
 import { getClientProfile } from './client'
 import { cachePlan, enqueueLog, getCachedPlan } from './offline-cache'
+import { checkOnline } from './use-online'
 import {
   getTodayInSantiago,
   getSantiagoUtcBoundsForDay,
@@ -592,7 +593,8 @@ export function useWorkoutSession(planId: string): WorkoutSessionState {
       }
 
       if (error) {
-        setIsOnline(false)
+        // Encolar SIEMPRE por seguridad del dato. Pero el banner "Sin conexion" refleja la red REAL,
+        // no la presencia de un error: un error no-de-red (RLS, 4xx) con conexión plena NO es offline.
         await enqueueLog({
           block_id: payload.blockId,
           client_id: cid,
@@ -603,6 +605,7 @@ export function useWorkoutSession(planId: string): WorkoutSessionState {
           rir: clampIntInRange(payload.rir, 0, 10),
           exercise_name_at_log: (logData.exercise_name_at_log as string) ?? null,
         })
+        setIsOnline(await checkOnline())
       } else {
         setIsOnline(true)
       }

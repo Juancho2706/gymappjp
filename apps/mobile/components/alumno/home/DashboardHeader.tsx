@@ -1,14 +1,14 @@
 import { Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useTheme } from '../../../context/ThemeContext'
-import { FONT, TYPE, textStyle } from '../../../lib/typography'
+import { FONT, textStyle } from '../../../lib/typography'
 
 /**
- * §2 DashboardHeader (web `DashboardHeader.tsx`): header sticky — eyebrow con
- * `brandName`, saludo `{timeGreeting}, {firstName}` (display), fecha larga
- * Santiago y `welcome_message` opcional. En RN se monta FIJO sobre el ScrollView
- * (equivalente al `sticky top-0` + `pt-safe` + `backdrop-blur` de la web) con la
- * superficie `surface-app` y borde inferior sutil.
+ * §2 DashboardHeader (web `DashboardHeader.tsx`): eyebrow con `brandName`, saludo
+ * `{timeGreeting}, {firstName}` (display), fecha larga Santiago y `welcome_message`
+ * opcional. En RN se monta como PRIMER hijo del ScrollView (full-bleed) para que
+ * SCROLLEE con el contenido — paridad con el header web md (el CEO marco el header
+ * fijo como divergencia). Superficie `surface-app`, `pt-safe` y borde inferior sutil.
  */
 export function DashboardHeader({
   greeting,
@@ -39,14 +39,18 @@ export function DashboardHeader({
           </Text>
         ) : null}
         <Text
+          className="text-muted"
+          numberOfLines={1}
+          style={{ fontFamily: FONT.uiSemibold, fontSize: 10, textTransform: 'uppercase', letterSpacing: 1 }}
+        >
+          {dateLabel}
+        </Text>
+        <Text
           className="text-strong"
           numberOfLines={1}
-          style={textStyle('xl', FONT.displayBlack, { lh: 'snug', ls: 'tight' })}
+          style={textStyle('2xl', FONT.displayBlack, { lh: 'snug', ls: 'tighter' })}
         >
           {greeting}
-        </Text>
-        <Text className="text-muted" style={[TYPE.caption, { marginTop: 1 }]} numberOfLines={1}>
-          {dateLabel.charAt(0).toUpperCase() + dateLabel.slice(1)}
         </Text>
         {welcomeMessage ? (
           <Text className="text-muted" numberOfLines={1} style={{ marginTop: 2, fontSize: 11, fontFamily: FONT.ui }}>

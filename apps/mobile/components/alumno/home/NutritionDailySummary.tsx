@@ -19,6 +19,7 @@ interface Loaded {
   macros: { label: string; value: number; target: number; color: string }[]
   meals: MealRow[]
   completed: Set<string>
+  hasLog: boolean
 }
 
 /**
@@ -45,7 +46,7 @@ export function NutritionDailySummary({ clientId, onSeeAll }: { clientId: string
       .select(`
         id, name, daily_calories, protein_g, carbs_g, fats_g,
         nutrition_meals ( id, name, order_index, day_of_week,
-          nutrition_meal_food_items ( id, quantity, unit, swap_options,
+          nutrition_meal_food_items:food_items ( id, quantity, unit, swap_options,
             foods ( id, name, calories, protein_g, carbs_g, fats_g, serving_size, serving_unit ) ) )
       `)
       .eq('client_id', clientId)
@@ -84,6 +85,7 @@ export function NutritionDailySummary({ clientId, onSeeAll }: { clientId: string
       ],
       meals: mealsForDay.map((m: any) => ({ id: m.id, name: m.name })),
       completed,
+      hasLog: !!logData,
     })
   }
 
@@ -114,6 +116,10 @@ export function NutritionDailySummary({ clientId, onSeeAll }: { clientId: string
           <Text className="text-sport-600" style={{ fontFamily: FONT.uiBold, fontSize: 11 }}>Ver todo →</Text>
         </TouchableOpacity>
       </View>
+
+      {!data.hasLog && data.meals.length > 0 ? (
+        <Text className="text-muted font-sans" style={{ fontSize: 12 }}>¡Registra tu primera comida desde nutrición!</Text>
+      ) : null}
 
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
         <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 6 }}>

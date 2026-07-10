@@ -42,7 +42,7 @@ export function NutritionStreakBanner({ streak }: { streak: StreakResult }) {
       >
         <Flame size={20} color={AMBER_500} strokeWidth={2.25} />
         <View style={{ flex: 1, minWidth: 0 }}>
-          <Text style={{ fontFamily: FONT.displayBold, fontSize: 14, color: AMBER_700 }}>
+          <Text style={{ fontFamily: FONT.uiExtra, fontSize: 14, color: AMBER_700 }}>
             Tu racha sigue viva · {frame}
           </Text>
           <Text className="text-muted" style={{ fontFamily: FONT.ui, fontSize: 11, marginTop: 2 }}>
@@ -80,7 +80,7 @@ export function NutritionStreakBanner({ streak }: { streak: StreakResult }) {
         <Flame size={20} color="#FFFFFF" strokeWidth={2.25} />
       </View>
       <View style={{ flex: 1, minWidth: 0 }}>
-        <Text style={{ fontFamily: FONT.displayBold, fontSize: 14, color: EMBER_700 }}>{frame} de racha</Text>
+        <Text style={{ fontFamily: FONT.uiExtra, fontSize: 14, color: EMBER_700 }}>{frame} de racha</Text>
         <Text numberOfLines={1} style={{ fontFamily: FONT.uiSemibold, fontSize: 11, color: EMBER_700, opacity: 0.8, marginTop: 2 }}>
           {sub}
         </Text>
