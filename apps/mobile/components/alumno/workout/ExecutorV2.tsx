@@ -4,7 +4,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useKeepAwake } from 'expo-keep-awake'
 import { useRouter } from 'expo-router'
-import { Confetti } from 'react-native-fast-confetti'
+import { MotiView } from 'moti'
 import { CheckCircle2, ChevronDown, Dumbbell, Timer } from 'lucide-react-native'
 import {
   buildRoundOrder,
@@ -123,12 +123,16 @@ function ExecutorV2Inner({ planId }: { planId: string }) {
   // seguir sumando mientras está abierto — paridad web (`finishedElapsed`, ya viene capado a 4h).
   const [finishedElapsed, setFinishedElapsed] = useState<number | null>(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
-  const [prCelebration, setPrCelebration] = useState(false)
   // Señal one-shot de la serie recién confirmada (paridad web `settleRef`/`prRef`, LogSetForm.tsx:257-258):
   // el chip recap que se acaba de cerrar hace el check elástico y, si fue PR, un pulso dorado. Sólo la
   // serie del último commit (no las cargadas al abrir) → sin animación fantasma. Se limpia a los 800ms.
   const [recentSet, setRecentSet] = useState<{ blockId: string; setNumber: number; pr: boolean } | null>(null)
   const recentSetTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // Estado de error de sync por serie (mirror web `SetSyncStatus='error'`, `LogSetForm.tsx:136-137`):
+  // un guardado que falla CON conexión pinta el chip en rojo + botón Reintentar. `failedPayloads`
+  // guarda el payload exacto para que Reintentar re-dispare el mismo commit (mirror `requestSubmit`, :743).
+  const [syncErrors, setSyncErrors] = useState<Record<string, string>>({})
+  const failedPayloads = useRef<Record<string, OptimisticLogPayload>>({})
   const [refreshing, setRefreshing] = useState(false)
   const [viewMode, setViewMode] = useState<WorkoutViewMode>('list')
   const [stepIndex, setStepIndex] = useState(0)
@@ -227,11 +231,17 @@ function ExecutorV2Inner({ planId }: { planId: string }) {
   const activeBlockId = currentExerciseIdx === -1 ? null : blocks[currentExerciseIdx].id
 
   const weekBadge = activeWeekVariant ? `Semana ${activeWeekVariant}` : null
-  // Sublínea: `{fase · }Día X de Y | Programa semanal` — la fase activa prefija cuando el programa
-  // está periodizado (paridad web WEC:1813-1818: `{phaseName · }` + cycle/weekly).
+  // Sublínea del header (paridad web WEC:1813-1818): el `<p>` SIEMPRE se renderiza. `cycle` → "Día X de Y";
+  // CUALQUIER otro caso (weekly, o programStructure null en un plan standalone / programa sin structure_type)
+  // cae al else abierto ⇒ "Programa semanal". La fase activa prefija `${phaseName} · ` cuando existe, aunque
+  // baseSub venga del else. 'Día' lleva tilde (WEC:1816).
   const baseSub =
-    programStructure === 'cycle' ? `Dia ${dayOfWeek || 1} de ${cycleLength || '?'}` : programStructure === 'weekly' ? 'Programa semanal' : null
-  const subline = baseSub && phaseName ? `${phaseName} · ${baseSub}` : baseSub
+    programStructure === 'cycle' ? `Día ${dayOfWeek || 1} de ${cycleLength || '?'}` : 'Programa semanal'
+  const subline = phaseName ? `${phaseName} · ${baseSub}` : baseSub
+  // Nudge "lo que viene" del resumen (paridad web WEC:1572-1578): reusa la sublínea, pero SOLO si hay fase
+  // o programa. Un plan standalone sin programa NO muestra hint (null), a diferencia de la sublínea del
+  // header, que siempre cae a 'Programa semanal'.
+  const nextHint = phaseName || programName ? subline : null
 
   // ── Abrir teclado para una serie (strength o tipado según effType) ──────────
   const openSet = useCallback(
@@ -309,11 +319,11 @@ function ExecutorV2Inner({ planId }: { planId: string }) {
     if (recentSetTimer.current) clearTimeout(recentSetTimer.current)
     setRecentSet({ blockId, setNumber, pr: isPR })
     recentSetTimer.current = setTimeout(() => setRecentSet(null), 800)
-    if (isPR) {
-      setPrCelebration(true)
-      void haptics.pr()
-      setTimeout(() => setPrCelebration(false), 2600)
-    }
+    // Feedback de PR = pulso dorado inline del chip recap (recentSet.pr → SetRow), como el web
+    // (settleRef/prRef en LogSetForm; SPEC §7). El haptic se conserva como adaptación táctil idiomática
+    // de RN (no crea divergencia visual). NO hay overlay de PR a pantalla completa: el orquestador web
+    // no muestra Confetti ni banner (divergencia retirada por paridad 1:1, auditoría spec-vs-RN #7).
+    if (isPR) void haptics.pr()
   }, [])
 
   // ── Commit de una serie ─────────────────────────────────────────────────────
@@ -329,10 +339,25 @@ function ExecutorV2Inner({ planId }: { planId: string }) {
         ...sessionLogs.filter((l) => !(l.block_id === payload.blockId && l.set_number === payload.setNumber)),
         { block_id: payload.blockId, set_number: payload.setNumber },
       ]
-      const { isPR } = await logSet(
+      const { isPR, error } = await logSet(
         payload,
         sub ? { substitution: { exerciseId: sub.exerciseId, name: sub.name, reason: sub.reason } } : undefined,
       )
+      // Estado 'error' por serie (mirror web `state.error` ⇒ error+Reintentar, `LogSetForm.tsx:348-363,738-749`):
+      // un fallo REAL (con conexión) surface el chip en rojo con Reintentar; el éxito lo limpia.
+      const setKey = `${payload.blockId}:${payload.setNumber}`
+      if (error) {
+        failedPayloads.current[setKey] = payload
+        setSyncErrors((m) => ({ ...m, [setKey]: error }))
+      } else {
+        delete failedPayloads.current[setKey]
+        setSyncErrors((m) => {
+          if (!(setKey in m)) return m
+          const next = { ...m }
+          delete next[setKey]
+          return next
+        })
+      }
       signalCommitted(payload.blockId, payload.setNumber, isPR)
 
       // ── Superserie: descanso SÓLO al cerrar la ronda (paridad web supersetRest, WEC:894-897). ──
@@ -364,7 +389,7 @@ function ExecutorV2Inner({ planId }: { planId: string }) {
       // Toast de confirmación (paridad web WEC:1486-1492, solo strength). La acción "Deshacer" no es
       // portable (el Toast RN no lleva botón); el deshacer sigue disponible tocando el chip recap.
       const ex = block ? resolveExercise(block) : null
-      if (block && ex && effectiveExerciseType(block, ex) === 'strength') {
+      if (!error && block && ex && effectiveExerciseType(block, ex) === 'strength') {
         toast.success('Serie registrada')
       }
       // Cronómetro automático (pref device-scoped, default ON): si está apagado no arranca solo.
@@ -372,6 +397,16 @@ function ExecutorV2Inner({ planId }: { planId: string }) {
       if (secs > 0 && isRestAutoTimerEnabled()) timers.startRest(secs, { autoStart: true })
     },
     [blocks, getSubstitution, logSet, timers, sessionLogs, supersetMembersByBlock, signalCommitted],
+  )
+
+  // Reintentar el guardado de una serie fallida (mirror web `Reintentar` → `requestSubmit`, LogSetForm.tsx:743):
+  // re-dispara el MISMO commit con el payload guardado. Éxito ⇒ handleCommit limpia el error del chip.
+  const retryCommit = useCallback(
+    (blockId: string, setNumber: number) => {
+      const payload = failedPayloads.current[`${blockId}:${setNumber}`]
+      if (payload) void handleCommit(payload)
+    },
+    [handleCommit],
   )
 
   const handleDraftChange = useCallback(
@@ -521,24 +556,61 @@ function ExecutorV2Inner({ planId }: { planId: string }) {
     (group: { key: string; type: 'single' | 'superset'; blocks: SessionBlock[] }, { allowCollapse }: { allowCollapse: boolean }) => {
       if (group.type === 'superset') {
         const members = supersetMembersByBlock.get(group.blocks[0].id) ?? group.blocks
+        const groupComplete = members.every(isBlockComplete)
+        const groupActive = activeBlockId != null && members.some((m) => m.id === activeBlockId)
+        // Superserie completa + lista → colapsa a recap delgado, reexpandible con tap (paridad web
+        // WEC:1594-1607). En Pasos (allowCollapse false) siempre queda la card completa para editar.
+        if (allowCollapse && groupComplete && !expandedDone[group.key]) {
+          const names = members.map((m) => resolveExercise(m)?.name).filter(Boolean).join(' + ')
+          return (
+            <CollapsedExerciseBar
+              key={group.key}
+              name={names || 'Superserie'}
+              sub={`Superserie · ${members.length} ${members.length === 1 ? 'ejercicio' : 'ejercicios'}`}
+              reducedMotion={motion.reduced}
+              // Celebración one-shot: la serie recién confirmada pertenece a un miembro (mirror web
+              // `justCompleted` de un miembro, WEC:1603). Se apaga con reduced-motion.
+              celebrate={!motion.reduced && recentSet != null && members.some((m) => m.id === recentSet.blockId)}
+              onExpand={() => setExpandedDone((p) => ({ ...p, [group.key]: true }))}
+            />
+          )
+        }
+        // Marcador de foco a nivel de grupo (paridad web WEC:1608-1615: `motion.div layout` con
+        // boxShadow sport cuando el grupo es el activo). Adaptación RN: sombra sport en la View wrapper.
         return (
-          <SupersetGroupCard
+          <View
             key={group.key}
-            members={members}
-            sessionLogs={sessionLogs}
-            effByBlock={effByBlock}
-            previousHistory={previousHistory}
-            currentWeek={currentWeek}
-            restoredDraft={restoredDraft}
-            hrZones={hrZones}
-            reducedMotion={motion.reduced}
-            onOpenTechnique={(b) => setTechniqueExercise(resolveExercise(b))}
-            onOpenSet={openSet}
-            onCommitSet={handleCommit}
-            onRpeUpdate={handleRpeUpdate}
-            onDraftChange={saveActiveDraft}
-            recentSet={recentSet}
-          />
+            style={
+              groupActive && !motion.reduced
+                ? {
+                    shadowColor: theme.primary,
+                    shadowOffset: { width: 0, height: 8 },
+                    shadowOpacity: 0.35,
+                    shadowRadius: 16,
+                    elevation: 8,
+                  }
+                : undefined
+            }
+          >
+            <SupersetGroupCard
+              members={members}
+              sessionLogs={sessionLogs}
+              effByBlock={effByBlock}
+              previousHistory={previousHistory}
+              currentWeek={currentWeek}
+              restoredDraft={restoredDraft}
+              hrZones={hrZones}
+              reducedMotion={motion.reduced}
+              onOpenTechnique={(b) => setTechniqueExercise(resolveExercise(b))}
+              onOpenSet={openSet}
+              onCommitSet={handleCommit}
+              onRpeUpdate={handleRpeUpdate}
+              onDraftChange={saveActiveDraft}
+              recentSet={recentSet}
+              syncErrors={syncErrors}
+              onRetrySet={retryCommit}
+            />
+          </View>
         )
       }
       const block = group.blocks[0]
@@ -580,6 +652,9 @@ function ExecutorV2Inner({ planId }: { planId: string }) {
             key={block.id}
             name={exercise.name}
             sub={recapSub}
+            reducedMotion={motion.reduced}
+            // Celebración one-shot al cerrar el bloque (mirror web `justCompleted?.id === block.id`, WEC:1708).
+            celebrate={!motion.reduced && recentSet?.blockId === block.id}
             onExpand={() => setExpandedDone((p) => ({ ...p, [block.id]: true }))}
           />
         )
@@ -611,10 +686,12 @@ function ExecutorV2Inner({ planId }: { planId: string }) {
           onUndoSubstitution={() => setSubstitutionByBlock((p) => { const n = { ...p }; delete n[block.id]; return n })}
           onToggleCollapse={allowCollapse ? () => setExpandedDone((p) => ({ ...p, [block.id]: false })) : undefined}
           recentSet={recentSet}
+          syncErrors={syncErrors}
+          onRetrySet={retryCommit}
         />
       )
     },
-    [supersetMembersByBlock, sessionLogs, effByBlock, currentWeek, activeBlockId, previousHistory, openDetails, expandedDone, getSubstitution, openSet, hrZones, restoredDraft, motion.reduced, handleCommit, handleRpeUpdate, saveActiveDraft, recentSet],
+    [supersetMembersByBlock, sessionLogs, effByBlock, currentWeek, activeBlockId, isBlockComplete, previousHistory, openDetails, expandedDone, getSubstitution, openSet, hrZones, restoredDraft, motion.reduced, theme.primary, handleCommit, handleRpeUpdate, saveActiveDraft, recentSet, syncErrors, retryCommit],
   )
 
   // ── Modo Paso a paso (E2-04): modelo de pasos + vistas del rail + auto-avance ──
@@ -737,15 +814,6 @@ function ExecutorV2Inner({ planId }: { planId: string }) {
 
   return (
     <SafeAreaView edges={['top']} className="flex-1 bg-ink-950">
-      {prCelebration && (
-        <View pointerEvents="none" className="absolute inset-0 z-50 items-center" style={{ paddingTop: 90 }}>
-          {!motion.reduced && <Confetti autoplay fadeOutOnEnd colors={[theme.primary, '#F59E0B', '#10B981', theme.cyan]} />}
-          <View className="rounded-pill px-5 py-3" style={{ backgroundColor: theme.primary }}>
-            <Text className="font-display-black text-[15px]" style={{ color: theme.primaryForeground }}>🏆 Nuevo record!</Text>
-          </View>
-        </View>
-      )}
-
       <SessionHeader
         planTitle={planTitle}
         weekBadge={weekBadge}
@@ -757,6 +825,7 @@ function ExecutorV2Inner({ planId }: { planId: string }) {
         completionPct={completionPct}
         volumeLabel={volumeLabel}
         elapsedLabel={fmtElapsed(elapsedSec)}
+        reducedMotion={motion.reduced}
         viewMode={viewMode}
         onToggleMode={handleToggleMode}
         // "Salir" → al Dashboard, determinista (paridad web `<Link href={base/dashboard}>`, WEC:1799);
@@ -893,7 +962,7 @@ function ExecutorV2Inner({ planId }: { planId: string }) {
         exerciseMaxDates={exerciseMaxDates}
         durationSec={finishedElapsed ?? elapsedSec}
         programName={programName}
-        nextHint={subline}
+        nextHint={nextHint}
         substitutedBlockIds={substitutedBlockIds}
         checkInReminder={checkInReminder}
         checkInLastRelative={checkInLastRelative}
@@ -906,22 +975,52 @@ function ExecutorV2Inner({ planId }: { planId: string }) {
 }
 
 /**
- * Recap colapsado de un ejercicio COMPLETADO en la lista (paridad web `CollapsedExerciseBar`,
- * WorkoutExecutionClient.tsx:918-961): fila delgada a opacidad plena; tap re-expande la card para
- * ver/editar. El barrido de celebración del borde y el recap de superserie quedan como pulido Wave B.
+ * Recap colapsado de un ejercicio/superserie COMPLETADO en la lista (paridad web `CollapsedExerciseBar`,
+ * WorkoutExecutionClient.tsx:918-964): fila delgada a opacidad plena; tap re-expande la card para
+ * ver/editar. Si `celebrate` (serie recién confirmada de este bloque/miembro y sin reduced-motion), el
+ * check entra elástico (spring 500·25, mirror web `springs.elastic`) y un borde sport barre su opacidad
+ * (mirror web `motion.span border-2` opacity [0,0.55,0] a 500ms, WEC:940-956).
  */
-function CollapsedExerciseBar({ name, sub, onExpand }: { name: string; sub: string; onExpand: () => void }) {
+function CollapsedExerciseBar({
+  name,
+  sub,
+  onExpand,
+  reducedMotion = false,
+  celebrate = false,
+}: {
+  name: string
+  sub: string
+  onExpand: () => void
+  reducedMotion?: boolean
+  celebrate?: boolean
+}) {
+  const animate = celebrate && !reducedMotion
   return (
     <Pressable
       testID="collapsed-exercise-bar"
       onPress={onExpand}
-      className="w-full flex-row items-center gap-2.5 rounded-card border border-sport-500/25 bg-sport-500/[0.05] px-3.5 py-2.5 active:opacity-80"
+      className="relative w-full flex-row items-center gap-2.5 overflow-hidden rounded-card border border-sport-500/25 bg-sport-500/[0.05] px-3.5 py-2.5 active:opacity-80"
       accessibilityRole="button"
       accessibilityLabel={`${name} — completado, toca para ver o editar`}
     >
-      <View className="h-7 w-7 shrink-0 items-center justify-center rounded-full bg-sport-500/15">
+      {animate && (
+        // Barrido del borde sport: entra a 0.55 y se desvanece a 0 en 500ms (mirror web opacity [0,0.55,0]).
+        <MotiView
+          pointerEvents="none"
+          from={{ opacity: 0.55 }}
+          animate={{ opacity: 0 }}
+          transition={{ type: 'timing', duration: 500 }}
+          className="absolute inset-0 rounded-card border-2 border-sport-500"
+        />
+      )}
+      <MotiView
+        from={animate ? { scale: 0 } : { scale: 1 }}
+        animate={{ scale: 1 }}
+        transition={animate ? { type: 'spring', stiffness: 500, damping: 25 } : { type: 'timing', duration: 0 }}
+        className="h-7 w-7 shrink-0 items-center justify-center rounded-full bg-sport-500/15"
+      >
         <CheckCircle2 size={20} color={SPORT_400} />
-      </View>
+      </MotiView>
       <View className="min-w-0 flex-1">
         <Text className="font-display text-[15px] text-on-dark" numberOfLines={1}>{name}</Text>
         <Text className="font-mono text-[11px] text-on-dark-muted" numberOfLines={1}>{sub}</Text>

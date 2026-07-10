@@ -89,7 +89,16 @@ function chipTestSlug(delta: number): string {
   return `${sign}-${mag}`
 }
 
-const DISPLAY_STYLE = textStyle('3xl', FONT.displayBlack, { lh: 'tight', ls: 'tight' })
+// Cifras tabulares: estabilizan el ancho de los dígitos (Archivo 900 es proporcional → el número
+// "salta" al tipear si no se fija). Mirror del `tabular-nums` web del display (`NumericKeypadSheet.tsx:313`)
+// y del header objetivo/"Última vez" (:212,219). Se comparte con `KeypadHost` para no divergir.
+export const TABULAR: TextStyle = { fontVariant: ['tabular-nums', 'lining-nums'] }
+// Número grande del display: web `font-display text-3xl font-black tabular-nums leading-none`
+// (`NumericKeypadSheet.tsx:313`). `textStyle` no aplica tabular (sólo el rol 'mono'), así que lo spreadeamos.
+const DISPLAY_STYLE: TextStyle = { ...textStyle('3xl', FONT.displayBlack, { lh: 'tight', ls: 'tight' }), ...TABULAR }
+// Header del keypad (objetivo / "Última vez"): web `font-mono ... tabular-nums` (`NumericKeypadSheet.tsx:212,219`).
+export const OBJECTIVE_STYLE: TextStyle = { ...textStyle('xs', FONT.monoMedium), ...TABULAR }
+export const LASTVEZ_STYLE: TextStyle = { ...textStyle('3xs', FONT.mono), ...TABULAR }
 // Teclas del grid: web `font-display text-2xl font-bold` = Archivo 700 (`NumericKeypadSheet.tsx:474`).
 // Antes usaba FONT.displayBold (Archivo 800), un peso más pesado que el 700 de la web.
 const KEY_STYLE = textStyle('2xl', FONT.display, { lh: 'tight', ls: 'tight' })
@@ -174,6 +183,53 @@ export function KeypadDisplayRow({
           </Text>
         ) : null}
       </View>
+    </View>
+  )
+}
+
+/**
+ * Header de objetivo del keypad — SIEMPRE visible (DB-5). Mirror de `NumericKeypadSheet.tsx:204-228`:
+ * nombre del ejercicio (eyebrow), "Objetivo {línea}" (mono tabular) y "Última vez {kg}kg × {reps}"
+ * (mono tabular, es-CL via `formatWeightEsCl`). Extraído como primitiva compartida para que la ruta
+ * PRIMARIA de registro (`ActiveSetRow` → `TypedKeypad`) repita el objetivo tal como lo hace el `KeypadHost`
+ * de EDICIÓN — sin esto, el scrim atenúa el objetivo/"Última vez" de la card mientras el alumno tipea.
+ */
+export function KeypadObjectiveHeader({
+  exerciseName,
+  objectiveLine,
+  last,
+}: {
+  exerciseName?: string
+  objectiveLine?: string
+  last?: { weightKg: number | null; reps: number | null } | null
+}) {
+  const hasLast = last != null && (last.weightKg != null || last.reps != null)
+  if (!exerciseName && !objectiveLine && !hasLast) return null
+  return (
+    <View className="flex-row items-baseline justify-between gap-2 px-1">
+      <View className="min-w-0 flex-1">
+        {exerciseName ? (
+          <Text style={KEYPAD_EYEBROW_STYLE} className="text-on-dark-muted" numberOfLines={1}>
+            {exerciseName}
+          </Text>
+        ) : null}
+        {objectiveLine ? (
+          <Text style={OBJECTIVE_STYLE} className="text-on-dark" numberOfLines={1}>
+            <Text className="text-on-dark-muted">Objetivo </Text>
+            {objectiveLine}
+          </Text>
+        ) : null}
+      </View>
+      {hasLast ? (
+        <Text style={LASTVEZ_STYLE} className="shrink-0 text-on-dark-muted" numberOfLines={1}>
+          Última vez{' '}
+          <Text style={{ fontFamily: FONT.monoBold }} className="text-on-dark">
+            {last!.weightKg != null ? `${formatWeightEsCl(last!.weightKg)}kg` : '–'}
+            {' × '}
+            {last!.reps ?? '–'}
+          </Text>
+        </Text>
+      ) : null}
     </View>
   )
 }
@@ -359,8 +415,19 @@ export function TypedKeypad(props: {
   onNext(): void
   onDone(): void
   unit?: string
+  /**
+   * Pestañas de campo (peso↔reps / campos tipados) — mirror del `role="tablist"` web
+   * (`NumericKeypadSheet.tsx:287-308`): dejan SALTAR de campo sin cerrar+reabrir. Las "pestañas" son las
+   * cajas de la propia `ActiveSetRow`; tocar una re-abre el keypad en ese campo (`onSwitch`).
+   */
+  tabs?: { fields: KeypadFieldTab[]; activeKey: string; onSwitch: (key: string) => void }
+  /**
+   * Header de objetivo — SIEMPRE visible (DB-5, `NumericKeypadSheet.tsx:204-228`). El scrim atenúa el
+   * objetivo/"Última vez" de la card mientras se tipea; el teclado lo repite como en web.
+   */
+  header?: { exerciseName?: string; objectiveLine?: string; last?: { weightKg: number | null; reps: number | null } | null }
 }) {
-  const { mode, value, onChange, onNext, onDone, unit } = props
+  const { mode, value, onChange, onNext, onDone, unit, tabs, header } = props
   const { resolvedScheme } = useTheme()
   const insets = useSafeAreaInsets()
   const motion = useEvaMotion()
@@ -419,7 +486,17 @@ export function TypedKeypad(props: {
           <View className="h-1 w-10 rounded-pill bg-white/20" />
         </View>
 
-        <KeypadDisplayRow display={value} unit={unit} />
+        {header ? (
+          <View className="mb-2">
+            <KeypadObjectiveHeader
+              exerciseName={header.exerciseName}
+              objectiveLine={header.objectiveLine}
+              last={header.last}
+            />
+          </View>
+        ) : null}
+
+        <KeypadDisplayRow display={value} unit={unit} tabs={tabs} />
 
         {cfg.showChips ? <WeightChips onIncrement={onIncrement} /> : null}
 

@@ -6,6 +6,7 @@ import { CheckCircle2, ChevronDown, History, Info, Quote, TrendingUp } from 'luc
 import {
   effectiveExerciseType,
   firstIncompleteInRounds,
+  formatWeightEsCl,
   type OptimisticLogPayload,
   type ReconciledSessionLog,
   type TypedKeypadMode,
@@ -56,6 +57,8 @@ export function SupersetGroupCard({
   onRpeUpdate,
   onDraftChange,
   recentSet,
+  syncErrors,
+  onRetrySet,
 }: {
   members: SessionBlock[]
   sessionLogs: ReconciledSessionLog[]
@@ -79,6 +82,10 @@ export function SupersetGroupCard({
   onDraftChange: (blockId: string, setNumber: number, values: Record<string, string>, fieldIndex: number) => void
   /** Serie recién confirmada (señal one-shot): settle elástico del check + pulso dorado si `pr`. */
   recentSet?: { blockId: string; setNumber: number; pr: boolean } | null
+  /** Errores de sync por serie (`${blockId}:${setNumber}`): chip rojo + Reintentar (mirror web 'error'). */
+  syncErrors?: Record<string, string>
+  /** Reintenta el guardado de una serie fallida (re-dispara el commit con el payload guardado). */
+  onRetrySet?: (blockId: string, setNumber: number) => void
 }) {
   const { theme } = useTheme()
   const [howToOpen, setHowToOpen] = useState(false)
@@ -348,6 +355,18 @@ export function SupersetGroupCard({
                         typedMode={m.typedMode}
                         suggestedWeight={m.suggested ?? null}
                         seedValues={seed}
+                        // Header de objetivo repetido en el teclado (DB-5, mirror web NumericKeypadSheet:204-228).
+                        header={{
+                          exerciseName: m.exercise.name,
+                          objectiveLine:
+                            m.effType === 'strength'
+                              ? `${m.block.sets}×${m.block.reps}${m.suggested != null ? ` · ${formatWeightEsCl(m.suggested)} kg` : ''}`
+                              : undefined,
+                          last:
+                            m.effType === 'strength' && m.bestPrev
+                              ? { weightKg: m.bestPrev.weight_kg ?? null, reps: m.bestPrev.reps_done ?? null }
+                              : null,
+                        }}
                         onDraftChange={(values, fieldIndex) => onDraftChange(m.block.id, round, values, fieldIndex)}
                         onCommit={onCommitSet}
                       />
@@ -361,6 +380,8 @@ export function SupersetGroupCard({
                         onRpeUpdate={onRpeUpdate}
                         settle={isRecent}
                         pr={isRecent && !!recentSet?.pr}
+                        syncError={syncErrors?.[`${m.block.id}:${round}`] ?? null}
+                        onRetry={() => onRetrySet?.(m.block.id, round)}
                       />
                     )}
                   </View>

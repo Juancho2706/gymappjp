@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Modal, Pressable, Text, TextInput, View, type TextStyle } from 'react-native'
+import { Modal, Pressable, Text, TextInput, View } from 'react-native'
 import { MotiView } from 'moti'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { ArrowLeft, ArrowRight, Check, StickyNote, X } from 'lucide-react-native'
@@ -27,6 +27,7 @@ import {
   KEYPAD_EYEBROW_STYLE,
   KeypadDisplayRow,
   KeypadGrid,
+  KeypadObjectiveHeader,
   RIR_HELP,
   RPE_HELP,
   WeightChips,
@@ -36,11 +37,6 @@ const ON_DARK = '#F4F6F8'
 const ON_DARK_MUTED = '#939DAB'
 const WHITE = '#FFFFFF'
 const WARNING_500 = '#F5A524' // --color-warning-500 (ámbar de la nota, mirror amber-300/400 web)
-
-// Cifras tabulares para el objetivo / "Última vez" (mirror `tabular-nums` web del header del keypad).
-const TABULAR: TextStyle = { fontVariant: ['tabular-nums', 'lining-nums'] }
-const OBJECTIVE_STYLE: TextStyle = { ...textStyle('xs', FONT.monoMedium), ...TABULAR }
-const LASTVEZ_STYLE: TextStyle = { ...textStyle('3xs', FONT.mono), ...TABULAR }
 
 // El tipo `KeypadTarget` vive en `keypad-flow` (puro/testeable); se re-exporta para los consumidores
 // que ya lo importaban desde acá (ExecutorV2) sin tocar sus imports.
@@ -195,7 +191,6 @@ export function KeypadHost({
     return parts.join(' · ')
   })()
   const lastPrev = !target.typed ? target.lastPrev ?? null : null
-  const hasLast = lastPrev != null && (lastPrev.weightKg != null || lastPrev.reps != null)
 
   // Editar una serie logueada → botón 'Guardar'; nueva → 'Listo' (mirror web LogSetForm.tsx:696).
   const doneLabel = target.isEdit ? 'Guardar' : 'Listo'
@@ -241,32 +236,13 @@ export function KeypadHost({
               </Pressable>
             </View>
 
-            {/* Objetivo prescrito — SIEMPRE visible (DB-5) */}
-            <View className="flex-row items-baseline justify-between gap-2 px-1">
-              <View className="min-w-0 flex-1">
-                {target.exerciseName ? (
-                  <Text style={KEYPAD_EYEBROW_STYLE} className="text-on-dark-muted" numberOfLines={1}>
-                    {target.exerciseName}
-                  </Text>
-                ) : null}
-                {objectiveLine ? (
-                  <Text style={OBJECTIVE_STYLE} className="text-on-dark" numberOfLines={1}>
-                    <Text className="text-on-dark-muted">Objetivo </Text>
-                    {objectiveLine}
-                  </Text>
-                ) : null}
-              </View>
-              {hasLast ? (
-                <Text style={LASTVEZ_STYLE} className="shrink-0 text-on-dark-muted" numberOfLines={1}>
-                  Última vez{' '}
-                  <Text style={{ fontFamily: FONT.monoBold }} className="text-on-dark">
-                    {lastPrev!.weightKg != null ? `${formatWeightEsCl(lastPrev!.weightKg)}kg` : '–'}
-                    {' × '}
-                    {lastPrev!.reps ?? '–'}
-                  </Text>
-                </Text>
-              ) : null}
-            </View>
+            {/* Objetivo prescrito — SIEMPRE visible (DB-5). Primitiva compartida con la ruta PRIMARIA
+                (`ActiveSetRow` → `TypedKeypad`) para no divergir el markup del header. */}
+            <KeypadObjectiveHeader
+              exerciseName={target.exerciseName}
+              objectiveLine={objectiveLine}
+              last={lastPrev}
+            />
 
             {phase === 'effort' ? (
               /* ── Paso OPCIONAL de esfuerzo (RPE/RIR) — sólo fuerza, siempre saltable (DB-5) ── */
@@ -335,7 +311,7 @@ export function KeypadHost({
                       placeholderTextColor={ON_DARK_MUTED}
                       accessibilityLabel="Nota de la serie para tu coach"
                       style={textStyle('xs', FONT.ui)}
-                      className="mt-1.5 rounded-control border border-inverse bg-white/[0.06] px-3 py-2 text-on-dark"
+                      className="mt-1.5 rounded-control border border-inverse/10 bg-white/[0.06] px-3 py-2 text-on-dark"
                     />
                   ) : null}
                 </View>

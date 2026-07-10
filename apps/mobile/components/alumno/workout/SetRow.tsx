@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Modal, Pressable, Text, TextInput, View } from 'react-native'
+import { Modal, Pressable, Text, TextInput, View, type TextStyle } from 'react-native'
 import { MotiView } from 'moti'
 import { Check, ChevronRight, CloudOff, HelpCircle, StickyNote } from 'lucide-react-native'
 import {
@@ -14,12 +14,20 @@ import { haptics } from '../../../lib/haptics'
 import { fmtTypedLoggedLine } from './workout-ui'
 // RPE_HELP/RIR_HELP se importan (fuente única mobile) en vez de re-declararlos: evita el drift que la
 // Ola 0 flagueó (#1). Son mirror literal —con tildes— de la web (`EffortScale.tsx:17-20`).
-import { TypedKeypad, EffortScale, RPE_HELP, RIR_HELP } from './TypedKeypad'
+import { TypedKeypad, EffortScale, KEYPAD_EYEBROW_STYLE, RPE_HELP, RIR_HELP } from './TypedKeypad'
 import { buildStrengthPayload, buildTypedPayload, int } from './set-log-payload'
+import { useEvaMotion } from '../../../lib/motion'
 
 const SPORT_400 = '#5C9DFF'
 const WARNING_500 = '#F5A524' // --color-warning-500 (serie sin sincronizar)
 const ON_DARK_MUTED = '#939DAB'
+
+// Badge numérico de serie: la web lo pinta `font-black tabular-nums` (fuente UI en peso 900, NO mono) —
+// chip `text-[11px]` (`LogSetForm.tsx:539`) y fila activa `text-[13px]` (`:620-626`). Mapea a Archivo 900
+// (displayBlack, el único peso 900 cargado) con cifras tabulares. Antes salía en TYPE.mono (JetBrains 400),
+// tres pesos por debajo y en la familia equivocada.
+const BADGE_CHIP_STYLE: TextStyle = { ...textStyle('3xs', FONT.displayBlack), fontVariant: ['tabular-nums'] }
+const BADGE_ACTIVE_STYLE: TextStyle = { ...textStyle('xs', FONT.displayBlack), fontVariant: ['tabular-nums'] }
 
 /**
  * Fila de una serie (mobile). Espeja el chip recap de `LogSetForm` de web: la serie logueada muestra
@@ -39,6 +47,8 @@ export function SetRow({
   onRpeUpdate,
   settle = false,
   pr = false,
+  syncError = null,
+  onRetry,
 }: {
   setNumber: number
   log?: ReconciledSessionLog
@@ -64,6 +74,14 @@ export function SetRow({
    * (comportamiento previo, sin regresión). No aplica a fuerza (RPE/RIR se capturan en la fila activa).
    */
   onRpeUpdate?: (payload: OptimisticLogPayload) => void
+  /**
+   * Mensaje de error de sync de ESTA serie (mirror web `SetSyncStatus='error'` + `state.error`,
+   * `LogSetForm.tsx:136-137,348-363`): un guardado fallido CON conexión pinta el chip en rojo y ofrece
+   * Reintentar. `null` ⇒ sin error. Offline no lo usa (queda `_pending` ámbar + auto-reintento).
+   */
+  syncError?: string | null
+  /** Re-dispara el commit de la serie fallida (mirror web botón 'Reintentar' → requestSubmit, `:738-749`). */
+  onRetry?: () => void
 }) {
   const logged = !!log
   const pending = log?._pending === true
@@ -100,7 +118,10 @@ export function SetRow({
             <Check size={15} color={SPORT_400} strokeWidth={2.6} />
           </View>
           <View className="min-w-0 flex-1">
-            <Text style={TYPE.eyebrow} className="text-on-dark-muted">
+            {/* Eyebrow con KEYPAD_EYEBROW_STYLE (11px / 0.04em) — mismo rol que el resto de la card (Kg/Reps,
+                Esfuerzo·RPE). Aquí el badge es un check, no el número, así que "Serie N" se conserva como
+                única señal del número (a diferencia del chip strength, donde el badge ya lo da). */}
+            <Text style={KEYPAD_EYEBROW_STYLE} className="text-on-dark-muted">
               Serie {setNumber}
             </Text>
             <Text
@@ -127,7 +148,7 @@ export function SetRow({
         {/* RPE post-registro con la MISMA escala segmentada (mirror `LogSetForm.tsx:1121-1135`) */}
         <View>
           <View className="mb-1 flex-row items-center gap-1">
-            <Text style={TYPE.eyebrow} className="text-on-dark-muted">
+            <Text style={KEYPAD_EYEBROW_STYLE} className="text-on-dark-muted">
               Esfuerzo · RPE
             </Text>
             <EffortLabel label="RPE" open={rpeHelpOpen} onToggle={() => setRpeHelpOpen((o) => !o)} />
@@ -143,17 +164,21 @@ export function SetRow({
     )
   }
 
-  return (
+  const chip = (
     <Pressable
       testID={`set-row-${setNumber}`}
       onPress={onPress}
       className={`relative flex-row items-center gap-3 overflow-hidden rounded-control border px-3 py-2.5 ${
         logged
-          ? pending
-            ? // Serie sin sincronizar ⇒ contenedor ÁMBAR (mirror web amber-500/30·/[0.06],
-              // `LogSetForm.tsx:520-521`); antes sólo el texto/badge se teñía, el chip seguía sport.
-              'border-warning-500/30 bg-warning-500/[0.06]'
-            : 'border-sport-500/30 bg-sport-500/[0.06]'
+          ? syncError
+            ? // Fallo de guardado real (con conexión) ⇒ contenedor ROJO (mirror web estado 'error':
+              // reabre la fila y muestra `state.error` + Reintentar, `LogSetForm.tsx:348-363,738-749`).
+              'border-danger-500/40 bg-danger-500/[0.06]'
+            : pending
+              ? // Serie sin sincronizar ⇒ contenedor ÁMBAR (mirror web amber-500/30·/[0.06],
+                // `LogSetForm.tsx:520-521`); antes sólo el texto/badge se teñía, el chip seguía sport.
+                'border-warning-500/30 bg-warning-500/[0.06]'
+              : 'border-sport-500/30 bg-sport-500/[0.06]'
           : isActive
             ? 'border-sport-500/50 bg-white/[0.04]'
             : 'border-inverse/50 bg-white/[0.02]'
@@ -161,32 +186,35 @@ export function SetRow({
       accessibilityRole="button"
       accessibilityLabel={logged ? `Editar serie ${setNumber}` : `Registrar serie ${setNumber}`}
     >
-      {/* Pulso dorado de PR (mirror web `prGlow`, `LogSetForm.tsx:530-538`): ring que entra a 0.8 y
-          se apaga (~0.32s) cuando el commit devolvió isPR. Sin token amber en el theme ⇒ warning-500. */}
+      {/* Pulso dorado de PR (mirror web `prGlow`, `LogSetForm.tsx:534-536`): ring que entra a 0.8 y se
+          apaga en 0.32s (320ms) cuando el commit devolvió isPR. La web usa `times:[0,0.4,1]` (pico al 40%);
+          Moti `timing` no acepta `times`, así que el pico queda al 50% pero la DURACIÓN sí iguala los
+          0.32s del web (antes 110ms, ~3× más rápido y contradiciendo este comentario). Sin token amber ⇒ warning-500. */}
       {pr ? (
         <MotiView
           pointerEvents="none"
           from={{ opacity: 0 }}
           animate={{ opacity: [0, 0.8, 0] }}
-          transition={{ type: 'timing', duration: 110 }}
+          transition={{ type: 'timing', duration: 320 }}
           className="absolute inset-0 rounded-control border-2 border-warning-500"
         />
       ) : null}
       <View
-        className={`h-7 w-7 items-center justify-center rounded-full ${
+        className={`h-6 w-6 items-center justify-center rounded-full ${
           logged ? 'bg-sport-500/20' : 'bg-white/[0.06]'
         }`}
       >
-        {/* Badge = NÚMERO de serie, también en las logueadas (mirror web `LogSetForm.tsx:539-541`); el
-            check de guardado va a la derecha, no en el badge. */}
-        <Text style={TYPE.mono} className={`text-[12px] ${logged ? 'text-sport-300' : 'text-on-dark-muted'}`}>
+        {/* Badge = NÚMERO de serie, también en las logueadas (mirror web `LogSetForm.tsx:539-541`): chip
+            `h-6 w-6 text-[11px] font-black tabular-nums`. El check de guardado va a la derecha, no en el
+            badge. Antes: h-7 w-7 (28px vs 24px web) + TYPE.mono a 12px (JetBrains 400, no el font-black web). */}
+        <Text style={BADGE_CHIP_STYLE} className={logged ? 'text-sport-300' : 'text-on-dark-muted'}>
           {setNumber}
         </Text>
       </View>
+      {/* Fila ÚNICA horizontal [badge][marca W×R · RPE · RIR · nota][check] — mirror del chip recap web
+          (`LogSetForm.tsx:539-570`), que NO repite "Serie N" (el badge ya da el número). Antes se apilaba
+          un eyebrow "Serie {n}" SOBRE la marca, duplicando el número y partiendo la fila en dos líneas. */}
       <View className="min-w-0 flex-1">
-        <Text style={TYPE.eyebrow} className="text-on-dark-muted">
-          Serie {setNumber}
-        </Text>
         {!logged ? (
           <Text style={TYPE.caption} className="text-[13px] text-on-dark-muted" numberOfLines={1}>
             Toca para registrar
@@ -194,7 +222,7 @@ export function SetRow({
         ) : typedMode ? (
           <Text
             style={TYPE.mono}
-            className={`text-[13px] ${pending ? 'text-warning-500' : 'text-on-dark'}`}
+            className={`text-[13px] ${pending && !syncError ? 'text-warning-500' : 'text-on-dark'}`}
             numberOfLines={1}
           >
             {fmtTypedLoggedLine(log, typedMode)}
@@ -203,7 +231,7 @@ export function SetRow({
           <View className="flex-row flex-wrap items-center gap-x-2">
             <Text
               style={TYPE.mono}
-              className={`text-[13px] font-mono-bold ${pending ? 'text-warning-500' : 'text-on-dark'}`}
+              className={`text-[13px] font-mono-bold ${pending && !syncError ? 'text-warning-500' : 'text-on-dark'}`}
             >
               {log?.weight_kg ?? '–'}
               <Text className="text-on-dark-muted"> × </Text>
@@ -225,6 +253,11 @@ export function SetRow({
       </View>
       {!logged ? (
         <ChevronRight size={18} color={SPORT_400} />
+      ) : syncError ? (
+        // Estado de error: el mensaje + Reintentar viven en su fila dedicada DEBAJO del chip (mirror web
+        // A.4.e, `LogSetForm.tsx:738-749`). Aquí no pintamos check verde ni "Sin sincronizar" ámbar para
+        // no contradecir el estado de error; el borde rojo del contenedor ya señala el fallo.
+        null
       ) : pending ? (
         <View className="flex-row items-center gap-1">
           <CloudOff size={13} color={WARNING_500} />
@@ -248,6 +281,38 @@ export function SetRow({
       )}
     </Pressable>
   )
+
+  // Estado de error (mirror web A.4.e, `LogSetForm.tsx:738-749`): fila dedicada con el mensaje en rojo +
+  // botón 'Reintentar' que re-dispara el commit. Sólo cuando hay error real (con conexión); offline usa el
+  // camino `_pending` ámbar. El chip se conserva intacto arriba (sin regresión de la marca/valores).
+  if (logged && syncError) {
+    return (
+      <View className="gap-1.5">
+        {chip}
+        <View className="flex-row items-center gap-2 px-1">
+          <Text style={TYPE.caption} className="flex-1 text-danger-500" numberOfLines={2}>
+            {syncError}
+          </Text>
+          <Pressable
+            testID={`retry-set-${setNumber}`}
+            onPress={onRetry}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel={`Reintentar guardar la serie ${setNumber}`}
+            className="rounded-control border border-danger-500/30 px-2 py-1 active:bg-danger-500/10"
+          >
+            <Text
+              style={{ fontFamily: FONT.uiBold, fontSize: 10, letterSpacing: 0.4, textTransform: 'uppercase' }}
+              className="text-danger-500"
+            >
+              Reintentar
+            </Text>
+          </Pressable>
+        </View>
+      </View>
+    )
+  }
+  return chip
 }
 
 // ─── ActiveSetRow ─────────────────────────────────────────────────────────────
@@ -284,7 +349,10 @@ function FieldBox({
       accessibilityRole="button"
       accessibilityLabel={`${label}: ${value || 'sin valor'}, toca para editar`}
     >
-      <Text style={TYPE.eyebrow} className="mb-1 text-on-dark-muted">
+      {/* Label de la caja (Kg/Reps/campos tipados) con KEYPAD_EYEBROW_STYLE (11px / 0.04em) — mirror del
+          `text-[9.5px] ... tracking-[0.08em]` web (`LogSetForm.tsx:632/654`). `TYPE.eyebrow` (12px / 0.12em)
+          sobra +26% de tamaño y desalinea con el mismo label a 11px del keypad (KeypadHost/EffortField). */}
+      <Text style={KEYPAD_EYEBROW_STYLE} className="mb-1 text-on-dark-muted">
         {label}
       </Text>
       <View
@@ -338,6 +406,8 @@ export function ActiveSetRow({
   suggestedWeight,
   seedValues,
   autofill,
+  header,
+  isEditing = false,
   onDraftChange,
   onCommit,
 }: {
@@ -346,6 +416,25 @@ export function ActiveSetRow({
   typedMode: TypedKeypadMode | null
   /** Peso sugerido (sobrecarga) — pre-llena la caja KG en strength. */
   suggestedWeight: number | null
+  /**
+   * Se está EDITANDO una serie ya cerrada (no una nueva): el botón dice 'Guardar' en vez de 'Listo'
+   * (mirror web `label={isLogged ? 'Guardar' : 'Listo'}`, `LogSetForm.tsx:696`). Default false = serie
+   * nueva. En el flujo mobile la edición vive en el `KeypadHost` (que ya distingue 'Guardar'/'Listo'
+   * vía `target.isEdit`, `KeypadHost.tsx:200-201`); este prop deja la fila activa correcta si algún día
+   * representa una edición, en vez de hardcodear 'Listo'.
+   */
+  isEditing?: boolean
+  /**
+   * Header de objetivo repetido DENTRO del teclado (DB-5: "SIEMPRE visible"; mirror web
+   * `NumericKeypadSheet.tsx:204-228`). El scrim atenúa el objetivo/"Última vez" de la card mientras el
+   * alumno tipea, así que el teclado lo repite igual que la ruta de EDICIÓN (`KeypadHost`). Opcional:
+   * sin él, el teclado simplemente no muestra header (sin regresión).
+   */
+  header?: {
+    exerciseName?: string
+    objectiveLine?: string
+    last?: { weightKg: number | null; reps: number | null } | null
+  } | null
   /** Draft restaurado de ESTA serie (resiliencia E2-03); pre-llena las cajas al reabrir. */
   seedValues?: Record<string, string> | null
   /** Autollenado "= usar ultima vez" (nonce dispara la re-siembra de KG/REPS). */
@@ -367,6 +456,8 @@ export function ActiveSetRow({
       { key: 'reps', label: 'Reps', unit: 'reps', mode: 'reps' },
     ]
   }, [typedMode])
+
+  const motion = useEvaMotion()
 
   const [values, setValues] = useState<Record<string, string>>(() => {
     if (seedValues) return { ...seedValues }
@@ -431,7 +522,9 @@ export function ActiveSetRow({
       <View className="flex-row items-end gap-2.5">
         <View className="h-14 w-7 items-center justify-center">
           <View className="h-7 w-7 items-center justify-center rounded-full bg-sport-500/20">
-            <Text style={TYPE.mono} className="text-[13px] text-sport-300">
+            {/* Badge de la fila activa: web `h-7 w-7 text-[13px] font-black tabular-nums` (`LogSetForm.tsx:620-626`).
+                Antes TYPE.mono (JetBrains 400) en vez del font-black web → mismo arreglo que el chip. */}
+            <Text style={BADGE_ACTIVE_STYLE} className="text-sport-300">
               {setNumber}
             </Text>
           </View>
@@ -477,7 +570,10 @@ export function ActiveSetRow({
         <View className="gap-2.5">
           <View>
             <View className="mb-1 flex-row items-center gap-1">
-              <Text style={TYPE.eyebrow} className="text-on-dark-muted">
+              {/* Eyebrow del esfuerzo con KEYPAD_EYEBROW_STYLE (11px / 0.04em) — mirror del label web
+                  `text-[9.5px] ... tracking-[0.08em]` (`NumericKeypadSheet.tsx:248`). `TYPE.eyebrow`
+                  (12px / 0.12em) salta +26% de tamaño y era inconsistente con el mismo label en `KeypadHost`. */}
+              <Text style={KEYPAD_EYEBROW_STYLE} className="text-on-dark-muted">
                 Esfuerzo · RPE
               </Text>
               <EffortLabel label="RPE" open={helpKey === 'rpe'} onToggle={() => setHelpKey((k) => (k === 'rpe' ? null : 'rpe'))} />
@@ -491,7 +587,7 @@ export function ActiveSetRow({
           </View>
           <View>
             <View className="mb-1 flex-row items-center gap-1">
-              <Text style={TYPE.eyebrow} className="text-on-dark-muted">
+              <Text style={KEYPAD_EYEBROW_STYLE} className="text-on-dark-muted">
                 Reps en reserva · RIR
               </Text>
               <EffortLabel label="RIR" open={helpKey === 'rir'} onToggle={() => setHelpKey((k) => (k === 'rir' ? null : 'rir'))} />
@@ -536,15 +632,16 @@ export function ActiveSetRow({
               placeholderTextColor={ON_DARK_MUTED}
               accessibilityLabel="Nota de la serie para tu coach"
               style={textStyle('xs', FONT.ui)}
-              className="mt-1.5 rounded-control border border-inverse bg-white/[0.06] px-3 py-2 text-on-dark"
+              className="mt-1.5 rounded-control border border-inverse/10 bg-white/[0.06] px-3 py-2 text-on-dark"
             />
           )}
         </View>
       )}
 
-      {/* Botón ETIQUETADO 'Listo' para confirmar la serie activa protagonista (mirror web SubmitSetButton
-          etiquetado, `LogSetForm.tsx:696,1146-1157`: h-12 min-w-[104px], Check + label). Antes era un
-          círculo sin texto; la web reserva el circular para las filas NO protagonistas. Commit intacto. */}
+      {/* Botón ETIQUETADO para confirmar la serie activa protagonista (mirror web SubmitSetButton etiquetado,
+          `LogSetForm.tsx:696,1146-1157`: h-12 min-w-[104px], Check + label). 'Guardar' al editar una serie
+          cerrada, 'Listo' cuando es nueva (mirror `isLogged ? 'Guardar' : 'Listo'`). La web reserva el
+          circular para las filas NO protagonistas. Commit intacto. */}
       <View className="flex-row justify-end">
         <Pressable
           testID={`confirm-set-${setNumber}`}
@@ -554,11 +651,11 @@ export function ActiveSetRow({
           }}
           className="h-12 min-w-[104px] flex-row items-center justify-center gap-2 rounded-control bg-sport-500 px-4 active:opacity-90"
           accessibilityRole="button"
-          accessibilityLabel={`Listo, confirmar serie ${setNumber}`}
+          accessibilityLabel={`${isEditing ? 'Guardar' : 'Listo'}, confirmar serie ${setNumber}`}
         >
           <Check size={18} color="#FFFFFF" strokeWidth={2.6} />
           <Text style={textStyle('sm', FONT.uiBold)} className="text-white">
-            Listo
+            {isEditing ? 'Guardar' : 'Listo'}
           </Text>
         </Pressable>
       </View>
@@ -566,8 +663,24 @@ export function ActiveSetRow({
       {/* Teclado numerico: mecanismo de entrada de la caja tocada (tap abre / Siguiente / Listo) */}
       {openKey && currentField && (
         <Modal transparent visible animationType="none" onRequestClose={() => setOpenKey(null)}>
-          <View className="flex-1" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
-            <Pressable className="flex-1" onPress={() => setOpenKey(null)} accessibilityLabel="Cerrar teclado" />
+          <View className="flex-1">
+            {/* Scrim: tap-fuera cierra (no guarda). `bg-black/25` con fade 0→1 en 150ms — mirror EXACTO
+                del scrim web (`NumericKeypadSheet.tsx:169-178`). Antes: `rgba(0,0,0,0.5)` hardcodeado (2× más
+                oscuro, viola "usa tokens") y sin fade. Reduce-motion ⇒ sin fade (mirror web `:174-177`),
+                igual que `KeypadHost.tsx:211-218`. */}
+            <MotiView
+              from={{ opacity: motion.reduced ? 1 : 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ type: 'timing', duration: motion.reduced ? 0 : 150 }}
+              className="flex-1"
+            >
+              <Pressable
+                className="flex-1 bg-black/25"
+                onPress={() => setOpenKey(null)}
+                accessibilityRole="button"
+                accessibilityLabel="Cerrar teclado"
+              />
+            </MotiView>
             <TypedKeypad
               mode={currentField.mode}
               unit={currentField.unit}
@@ -578,6 +691,23 @@ export function ActiveSetRow({
                 setOpenKey(null)
                 commit()
               }}
+              // Pestañas de campo (mirror `role="tablist"` web `NumericKeypadSheet.tsx:287-308`): dejan
+              // SALTAR peso↔reps sin cerrar+reabrir. Las cajas de la fila SON las pestañas; tocar una
+              // re-abre el keypad en ese campo.
+              tabs={
+                fields.length > 1
+                  ? {
+                      fields: fields.map((f) => ({ key: f.key, label: f.label })),
+                      activeKey: openKey,
+                      onSwitch: (key) => {
+                        haptics.tap()
+                        setOpenKey(key)
+                      },
+                    }
+                  : undefined
+              }
+              // Header de objetivo (DB-5): el scrim atenúa el objetivo de la card, el teclado lo repite.
+              header={header ?? undefined}
             />
           </View>
         </Modal>

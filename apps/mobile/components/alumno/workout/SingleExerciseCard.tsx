@@ -13,7 +13,7 @@ import {
   TrendingUp,
   Undo2,
 } from 'lucide-react-native'
-import type { ExerciseType, OptimisticLogPayload, ReconciledSessionLog, TypedKeypadMode } from '@eva/workout-engine'
+import { formatWeightEsCl, type ExerciseType, type OptimisticLogPayload, type ReconciledSessionLog, type TypedKeypadMode } from '@eva/workout-engine'
 import type { HrZoneRange } from '@eva/cardio'
 import { FONT, TYPE } from '../../../lib/typography'
 import { useTheme } from '../../../context/ThemeContext'
@@ -78,6 +78,8 @@ export function SingleExerciseCard({
   onUndoSubstitution,
   onToggleCollapse,
   recentSet,
+  syncErrors,
+  onRetrySet,
 }: {
   block: SessionBlock
   exercise: SessionExercise
@@ -120,6 +122,13 @@ export function SingleExerciseCard({
    * del check y, si `pr`, el pulso dorado del chip recap correspondiente (mirror web `settleRef`/`prRef`).
    */
   recentSet?: { blockId: string; setNumber: number; pr: boolean } | null
+  /**
+   * Errores de sync por serie (clave `${blockId}:${setNumber}`) — un guardado fallido CON conexión pinta
+   * el chip en rojo + Reintentar (mirror web estado 'error', `LogSetForm.tsx:348-363,738-749`).
+   */
+  syncErrors?: Record<string, string>
+  /** Reintenta el guardado de una serie fallida (re-dispara el commit con el payload guardado). */
+  onRetrySet?: (blockId: string, setNumber: number) => void
 }) {
   const { theme } = useTheme()
   // Autollenado "= usar ultima vez": siembra las cajas KG/REPS de la fila activa (nonce dispara).
@@ -450,6 +459,18 @@ export function SingleExerciseCard({
                 suggestedWeight={suggestedWeightKg ?? null}
                 seedValues={seed}
                 autofill={autofill}
+                // Header de objetivo repetido en el teclado (DB-5, mirror web NumericKeypadSheet:204-228):
+                // el scrim atenúa el objetivo/"Última vez" de la card mientras el alumno tipea.
+                header={{
+                  exerciseName: exercise.name,
+                  objectiveLine: isStrength
+                    ? `${block.sets}×${block.reps}${suggestedWeightKg != null ? ` · ${formatWeightEsCl(suggestedWeightKg)} kg` : ''}`
+                    : undefined,
+                  last:
+                    isStrength && bestPrev
+                      ? { weightKg: bestPrev.weight_kg ?? null, reps: bestPrev.reps_done ?? null }
+                      : null,
+                }}
                 onDraftChange={(values, fieldIndex) => onDraftChange(block.id, setNumber, values, fieldIndex)}
                 onCommit={onCommitSet}
               />
@@ -467,6 +488,8 @@ export function SingleExerciseCard({
               onRpeUpdate={onRpeUpdate}
               settle={isRecent}
               pr={isRecent && !!recentSet?.pr}
+              syncError={syncErrors?.[`${block.id}:${setNumber}`] ?? null}
+              onRetry={() => onRetrySet?.(block.id, setNumber)}
             />
           )
         })}

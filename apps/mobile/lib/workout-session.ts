@@ -220,8 +220,13 @@ export interface WorkoutSessionState {
   refresh: () => Promise<void>
   /** Persiste el draft del set en curso (llamado por el keypad host en cada cambio). */
   saveDraft: (draft: SessionDraft | null) => void
-  /** Registra una serie: optimista + snapshot + server (enqueue si falla). Devuelve isPR. */
-  logSet: (payload: OptimisticLogPayload, opts?: LogSetOptions) => Promise<{ isPR: boolean }>
+  /**
+   * Registra una serie: optimista + snapshot + server (enqueue si falla). Devuelve isPR y, cuando el
+   * guardado falla CON conexión (error real de server, no offline), `error` con el mensaje a mostrar
+   * en el chip de la serie + Reintentar — mirror del estado 'error' web (`LogSetForm.tsx:136-137,348-363`).
+   * Offline ⇒ `error: null` (la fila queda `_pending` ámbar + banner global, auto-reintento al reconectar).
+   */
+  logSet: (payload: OptimisticLogPayload, opts?: LogSetOptions) => Promise<{ isPR: boolean; error: string | null }>
   /**
    * Cierra la sesión al finalizar: borra el snapshot local + el draft en curso (paridad web
    * `clearSessionSnapshot`/`clearAllDrafts`, WEC:1567-1569). Así una 2ª sesión del MISMO día no
@@ -562,7 +567,7 @@ export function useWorkoutSession(planId: string): WorkoutSessionState {
   }, [snapshotKey])
 
   const logSet = useCallback(
-    async (payload: OptimisticLogPayload, opts?: LogSetOptions): Promise<{ isPR: boolean }> => {
+    async (payload: OptimisticLogPayload, opts?: LogSetOptions): Promise<{ isPR: boolean; error: string | null }> => {
       const cid = clientIdRef.current
       const block = blocks.find((b) => b.id === payload.blockId)
       const sub = opts?.substitution ?? null
@@ -584,7 +589,7 @@ export function useWorkoutSession(planId: string): WorkoutSessionState {
       setRestoredDraft(null)
       persistSnapshot()
 
-      if (!cid) return { isPR: false }
+      if (!cid) return { isPR: false, error: null }
 
       // 2) Persistencia server (select-then-update/insert acotado al día — no duplica).
       const logData: Record<string, unknown> = {
@@ -638,6 +643,7 @@ export function useWorkoutSession(planId: string): WorkoutSessionState {
         error = { message: (e as { message?: string })?.message ?? 'error' }
       }
 
+      let syncError: string | null = null
       if (error) {
         // Encolar SIEMPRE por seguridad del dato. Pero el banner "Sin conexion" refleja la red REAL,
         // no la presencia de un error: un error no-de-red (RLS, 4xx) con conexión plena NO es offline.
@@ -653,7 +659,19 @@ export function useWorkoutSession(planId: string): WorkoutSessionState {
           ...(payload.note != null ? { note: payload.note } : {}),
           exercise_name_at_log: (logData.exercise_name_at_log as string) ?? null,
         })
-        setIsOnline(await checkOnline())
+        const online = await checkOnline()
+        setIsOnline(online)
+        // La serie NO está confirmada por el server → márcala `_pending` para no pintar un check verde
+        // mentiroso (mirror web: `state.error` ⇒ setSyncStatus('error'); offline ⇒ 'pending',
+        // `LogSetForm.tsx:197-199,348-363`). Antes el fallo quedaba invisible: chip verde "guardado".
+        logsRef.current = logsRef.current.map((l) =>
+          l.block_id === payload.blockId && l.set_number === payload.setNumber ? { ...l, _pending: true } : l,
+        )
+        setSessionLogs(logsRef.current)
+        persistSnapshot()
+        // Sólo un fallo REAL (con conexión: RLS/4xx) surface el error+Reintentar por serie; offline ⇒
+        // pending ámbar + banner global + auto-reintento al reconectar (mirror web offline→pending vs error→red).
+        syncError = online ? 'No se pudo guardar la serie. Reintenta.' : null
       } else {
         setIsOnline(true)
       }
@@ -665,7 +683,7 @@ export function useWorkoutSession(planId: string): WorkoutSessionState {
       const w = payload.weightKg ?? 0
       if (!error && prevMax > 0 && w > prevMax) isPR = true
 
-      return { isPR }
+      return { isPR, error: syncError }
     },
     [blocks, exerciseMaxes, persistSnapshot],
   )

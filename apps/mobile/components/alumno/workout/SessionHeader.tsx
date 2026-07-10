@@ -28,6 +28,7 @@ export function SessionHeader({
   completionPct,
   volumeLabel,
   elapsedLabel,
+  reducedMotion = false,
   viewMode,
   onToggleMode,
   onBack,
@@ -44,6 +45,8 @@ export function SessionHeader({
   completionPct: number
   volumeLabel: string | null
   elapsedLabel: string
+  /** Reduce-motion global: apaga el pulso de escala del % (paridad web WEC:1885 reducedMotion). */
+  reducedMotion?: boolean
   viewMode: WorkoutViewMode
   onToggleMode: (mode: WorkoutViewMode) => void
   onBack: () => void
@@ -159,7 +162,18 @@ export function SessionHeader({
           {volumeLabel && <Text style={TYPE.mono} className="text-[11px] text-on-dark-muted">· {volumeLabel}</Text>}
           {/* El tope de 4h se aplica en silencio (paridad web WEC:1881: sin marcador de tope). */}
           <Text style={TYPE.mono} className="text-[11px] text-on-dark-muted">· {elapsedLabel}</Text>
-          <Text style={TYPE.mono} className="text-[11px] text-sport-400 font-mono-bold">· {completionPct}%</Text>
+          <Text style={TYPE.mono} className="text-[11px] text-on-dark-muted">·</Text>
+          {/* Pulso de escala del % cada vez que cambia completedSetCount (paridad web WEC:1883-1892:
+              `motion.span key={completedSetCount}` scale 1.18→1, springs.snappy). `key` fuerza el
+              re-montaje que reeejecuta el from→animate; reduced-motion lo colapsa a instantáneo. */}
+          <MotiView
+            key={completedSetCount}
+            from={reducedMotion ? { scale: 1 } : { scale: 1.18 }}
+            animate={{ scale: 1 }}
+            transition={reducedMotion ? { type: 'timing', duration: 0 } : { type: 'spring', stiffness: 400, damping: 30 }}
+          >
+            <Text style={TYPE.mono} className="text-[11px] text-sport-400 font-mono-bold">{completionPct}%</Text>
+          </MotiView>
         </View>
       </View>
     </MotiView>
