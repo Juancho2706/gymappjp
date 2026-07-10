@@ -42,6 +42,7 @@ import { SupersetGroupCard } from './SupersetGroupCard'
 import { StepperExecution, type StepperStepView } from './StepperExecution'
 import { KeypadHost, type KeypadTarget } from './KeypadHost'
 import { TechniqueSheet } from './TechniqueSheet'
+import { WorkoutSettingsSheet } from './WorkoutSettingsSheet'
 import { WorkoutSummaryOverlay } from './WorkoutSummaryOverlay'
 import { bestPrevOf, fmtElapsed, fmtVolume, parseRestTime } from './workout-ui'
 
@@ -50,6 +51,7 @@ const VIEW_MODE_KEY = 'eva_workout_view_mode'
 // Contrato de la ola (otros workers): provider de timers + sheet de sustitución. Importados con la
 // firma exacta del contrato; el orquestador integra. NO stubear.
 import { WorkoutTimerProvider, useWorkoutTimers } from './timers/TimerProvider'
+import { isRestAutoTimerEnabled } from './timers'
 import { SubstituteExerciseSheet } from './SubstituteExerciseSheet'
 
 const ON_DARK = '#F4F6F8'
@@ -84,6 +86,7 @@ function ExecutorV2Inner({ planId }: { planId: string }) {
   const [substituteBlockId, setSubstituteBlockId] = useState<string | null>(null)
   const [substitutionByBlock, setSubstitutionByBlock] = useState<Record<string, ActiveSub>>({})
   const [summaryOpen, setSummaryOpen] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false)
   const [prCelebration, setPrCelebration] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const [viewMode, setViewMode] = useState<WorkoutViewMode>('list')
@@ -240,8 +243,9 @@ function ExecutorV2Inner({ planId }: { planId: string }) {
         void haptics.pr()
         setTimeout(() => setPrCelebration(false), 2600)
       }
+      // Cronómetro automático (pref device-scoped, default ON): si está apagado no arranca solo.
       const secs = parseRestTime(block?.rest_time)
-      if (secs > 0) timers.startRest(secs, { autoStart: true })
+      if (secs > 0 && isRestAutoTimerEnabled()) timers.startRest(secs, { autoStart: true })
     },
     [blocks, getSubstitution, logSet, timers],
   )
@@ -480,6 +484,7 @@ function ExecutorV2Inner({ planId }: { planId: string }) {
         viewMode={viewMode}
         onToggleMode={handleToggleMode}
         onBack={() => router.back()}
+        onOpenSettings={() => setSettingsOpen(true)}
       />
 
       {loading ? (
@@ -570,6 +575,8 @@ function ExecutorV2Inner({ planId }: { planId: string }) {
       />
 
       <TechniqueSheet exercise={techniqueExercise} onClose={() => setTechniqueExercise(null)} />
+
+      <WorkoutSettingsSheet open={settingsOpen} onClose={() => setSettingsOpen(false)} />
 
       <SubstituteExerciseSheet
         visible={substituteBlockId != null}

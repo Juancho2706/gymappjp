@@ -28,7 +28,7 @@ export function EmptyState({ icon: Icon, title, subtitle, action }: EmptyStatePr
           <Icon size={28} color={theme.primary} strokeWidth={1.75} />
         </View>
       ) : null}
-      <Text style={[styles.title, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>
+      <Text style={[styles.title, { color: theme.foreground, fontFamily: 'Archivo_700Bold' }]}>
         {title}
       </Text>
       {subtitle ? (

@@ -2025,7 +2025,7 @@ export function CoachNewsBell({ tileStyle }: { tileStyle: object }) {
               justifyContent: 'center',
             }}
           >
-            <Text style={{ color: '#FFFFFF', fontSize: 9, fontFamily: 'Inter_700Bold', lineHeight: 11 }}>{badge}</Text>
+            <Text style={{ color: '#FFFFFF', fontSize: 9, fontFamily: 'HankenGrotesk_700Bold', lineHeight: 11 }}>{badge}</Text>
           </View>
         ) : null}
       </TouchableOpacity>
@@ -2974,7 +2974,7 @@ export function MobileDashboardCharts({ areaData, barData }: { areaData: MobileC
 }
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
-const INTER_FONT = require('@expo-google-fonts/inter/Inter_400Regular.ttf')
+const INTER_FONT = require('@expo-google-fonts/hanken-grotesk/HankenGrotesk_400Regular.ttf')
 
 // Touch tooltip (Skia, UI-thread) — dot + value where the user presses the chart.
 function ChartTooltip({ xPos, yPos, value, color, font }: {

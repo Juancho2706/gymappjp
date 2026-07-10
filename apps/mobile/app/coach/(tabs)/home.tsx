@@ -87,9 +87,10 @@ export default function CoachHomeScreen() {
     )
   }
 
+  // Umbral 80 = misma fuente que el banner interno (MobileTierUsageBanners → TeamsBridge >= 80).
   const showTierBanners =
     data.coach.subscriptionTier === 'free' ||
-    (data.coach.subscriptionTier === 'elite' && data.kpi.totalClients >= 48)
+    (data.coach.subscriptionTier === 'elite' && data.kpi.totalClients >= 80)
 
   return (
     <View style={{ flex: 1 }}>

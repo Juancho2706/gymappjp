@@ -22,7 +22,7 @@ export function ErrorState({ icon: Icon = AlertTriangle, title = 'No pudimos car
       <View style={[styles.iconWrap, { backgroundColor: theme.destructive + '14', borderColor: theme.destructive + '33', borderRadius: theme.radius['2xl'] }]}>
         <Icon size={28} color={theme.destructive} strokeWidth={1.75} />
       </View>
-      <Text style={[styles.title, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>{title}</Text>
+      <Text style={[styles.title, { color: theme.foreground, fontFamily: 'Archivo_700Bold' }]}>{title}</Text>
       {subtitle ? <Text style={[styles.sub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{subtitle}</Text> : null}
       {onRetry ? <Button label={retryLabel} variant="outline" onPress={onRetry} /> : null}
     </View>

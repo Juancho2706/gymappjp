@@ -243,6 +243,7 @@ export default function LoginScreen() {
           leftIcon={Lock}
           rightIcon={showPwd ? EyeOff : Eye}
           onRightIconPress={() => setShowPwd((s) => !s)}
+          rightIconLabel={showPwd ? 'Ocultar contraseña' : 'Mostrar contraseña'}
           placeholder="••••••••"
           value={password}
           onChangeText={setPassword}

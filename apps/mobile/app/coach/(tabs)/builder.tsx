@@ -3,7 +3,7 @@ import { Alert, Pressable, ScrollView, Text, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { FlashList } from '@shopify/flash-list'
 import { useRouter } from 'expo-router'
-import { Dumbbell, Filter, Plus, Search } from 'lucide-react-native'
+import { ArrowDownUp, Dumbbell, Filter, Plus, Search } from 'lucide-react-native'
 import { MotiView } from 'moti'
 import * as Haptics from 'expo-haptics'
 import { supabase } from '../../../lib/supabase'
@@ -41,6 +41,9 @@ import {
 
 const IconFilter = themedIcon(Filter)
 const IconPlus = themedIcon(Plus)
+const IconSort = themedIcon(ArrowDownUp)
+
+type SortKey = 'recent' | 'name'
 
 const T_PILL = textStyle('3xs', FONT.uiBold)
 const T_RESULT = textStyle('2xs', FONT.ui)
@@ -57,6 +60,7 @@ export default function BuilderScreen() {
   const [filterStatus, setFilterStatus] = useState<FilterStatus>('all')
   const [filterStructure, setFilterStructure] = useState<FilterStructure>('all')
   const [filterPhases, setFilterPhases] = useState<FilterPhases>('all')
+  const [sortKey, setSortKey] = useState<SortKey>('recent')
   const [compact, setCompact] = useState(false)
   const [preview, setPreview] = useState<ProgramItem | null>(null)
   const [assignProgram, setAssignProgram] = useState<ProgramItem | null>(null)
@@ -117,10 +121,16 @@ export default function BuilderScreen() {
   const stats = useMemo(() => buildLibraryStats(programs, clients), [clients, programs])
 
   const filtered = useMemo(() => {
-    return programs.filter((program) =>
+    const list = programs.filter((program) =>
       matchesProgram(program, { search, filterType, filterStatus, filterStructure, filterPhases })
     )
-  }, [programs, search, filterType, filterStatus, filterStructure, filterPhases])
+    // Orden (espejo web): Recientes = última actividad desc · Nombre = A→Z.
+    return [...list].sort((a, b) =>
+      sortKey === 'name'
+        ? a.name.localeCompare(b.name)
+        : (b.updated_at ?? b.created_at ?? '').localeCompare(a.updated_at ?? a.created_at ?? '')
+    )
+  }, [programs, search, filterType, filterStatus, filterStructure, filterPhases, sortKey])
 
   function openNewTemplate() {
     router.push({ pathname: '/coach/program-builder', params: { mode: 'template' } })
@@ -265,6 +275,7 @@ export default function BuilderScreen() {
                 stats={stats}
                 onNewTemplate={openNewTemplate}
                 onExercises={() => router.push('/coach/ejercicios')}
+                onAreas={() => router.push('/coach/settings/areas')}
               />
 
               <View
@@ -298,6 +309,14 @@ export default function BuilderScreen() {
                   <FilterPill label="Ciclo" active={filterStructure === 'cycle'} onPress={() => setFilterStructure(filterStructure === 'cycle' ? 'all' : 'cycle')} />
                   <FilterPill label="Con fases" active={filterPhases === 'with'} onPress={() => setFilterPhases(filterPhases === 'with' ? 'all' : 'with')} />
                 </ScrollView>
+
+                {/* Orden (espejo del popover web Recientes/Nombre). */}
+                <View className="flex-row items-center gap-space-2">
+                  <IconSort size={13} className="text-muted" />
+                  <Text style={T_RESULT} className="text-muted">Ordenar</Text>
+                  <FilterPill label="Recientes" active={sortKey === 'recent'} onPress={() => setSortKey('recent')} />
+                  <FilterPill label="Nombre" active={sortKey === 'name'} onPress={() => setSortKey('name')} />
+                </View>
 
                 <View className="flex-row items-center justify-between gap-space-3">
                   <View className="flex-row items-center gap-space-2">

@@ -17,7 +17,7 @@ export function Accordion({ question, answer, defaultOpen = false }: Props) {
   return (
     <View style={[styles.card, { borderColor: open ? theme.primary + '55' : theme.border, backgroundColor: open ? theme.secondary : theme.card }]}>
       <TouchableOpacity activeOpacity={0.75} onPress={() => setOpen((v) => !v)} style={styles.header}>
-        <Text style={[styles.q, { color: theme.foreground, fontFamily: 'Inter_700Bold' }]}>{question}</Text>
+        <Text style={[styles.q, { color: theme.foreground, fontFamily: 'HankenGrotesk_700Bold' }]}>{question}</Text>
         <MotiView animate={{ rotate: open ? '180deg' : '0deg' }} transition={{ type: 'timing', duration: 200 }}>
           <ChevronDown size={18} color={open ? theme.primary : theme.mutedForeground} />
         </MotiView>

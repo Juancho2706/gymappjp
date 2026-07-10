@@ -1,5 +1,6 @@
 import type { ClientProfile } from '../../../lib/client'
 import type { HabitsData } from '../../../lib/habits.queries'
+import type { OrgAnnouncement } from '../../../lib/org-announcements'
 
 /**
  * Contrato de datos del dashboard alumno (mobile). El shell (`home.tsx`) hace UN
@@ -62,6 +63,8 @@ export interface WelcomeModalConfig {
 
 export interface HomeData {
   client: ClientProfile | null
+  /** §1 — avisos activos de la org (vacio si el alumno no tiene org o sin anuncios). */
+  announcements: OrgAnnouncement[]
   coachName: string | null
   coachWelcome: string | null
   program: Program | null

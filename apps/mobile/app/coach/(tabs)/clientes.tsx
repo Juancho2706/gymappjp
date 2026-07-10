@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Alert, FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import Animated, { Extrapolation, interpolate, useAnimatedScrollHandler, useAnimatedStyle, useSharedValue, type SharedValue } from 'react-native-reanimated'
@@ -221,7 +221,8 @@ export default function ClientesScreen() {
       { text: 'Eliminar', style: 'destructive', onPress: () => deleteClient(c.id).then(() => load(true)).catch((e: any) => Alert.alert('Error', e?.message ?? 'No se pudo.')) },
     ])
   }
-  const goProfile = (c: DirectoryClient) => router.push(`/coach/cliente/${c.id}`)
+  // Estable (useCallback): permite que DirRowCard (memo) omita re-render cuando llega el pulse de otras filas.
+  const goProfile = useCallback((c: DirectoryClient) => router.push(`/coach/cliente/${c.id}`), [router])
   const goWorkout = (c: DirectoryClient) => router.push(`/coach/program-builder?clientId=${c.id}&clientName=${encodeURIComponent(c.fullName)}`)
   const goNutrition = () => router.push('/coach/nutricion')
 
@@ -342,13 +343,13 @@ export default function ClientesScreen() {
           autoCorrect={false}
           containerStyle={{ flex: 1 }}
         />
-        <BarButton testID="directory-filter-btn" theme={theme} onPress={() => setShowFilterSheet(true)} active={hasActiveFilters} badge={activeFilterCount}>
+        <BarButton testID="directory-filter-btn" label="Filtrar" theme={theme} onPress={() => setShowFilterSheet(true)} active={hasActiveFilters} badge={activeFilterCount}>
           <SlidersHorizontal size={18} color={hasActiveFilters ? theme.primary : theme.mutedForeground} />
         </BarButton>
-        <BarButton testID="directory-sort-btn" theme={theme} onPress={() => setShowSortSheet(true)} onLongPress={() => setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))}>
+        <BarButton testID="directory-sort-btn" label="Ordenar" theme={theme} onPress={() => setShowSortSheet(true)} onLongPress={() => setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))}>
           <ArrowUpDown size={18} color={theme.mutedForeground} />
         </BarButton>
-        <BarButton testID="directory-view-toggle" theme={theme} onPress={toggleView}>
+        <BarButton testID="directory-view-toggle" label={viewMode === 'list' ? 'Ver como tarjetas' : 'Ver como lista'} theme={theme} onPress={toggleView}>
           {viewMode === 'list' ? <LayoutGrid size={18} color={theme.mutedForeground} /> : <ListIcon size={18} color={theme.mutedForeground} />}
         </BarButton>
       </View>
@@ -387,7 +388,7 @@ export default function ClientesScreen() {
           data={displayed}
           keyExtractor={(c) => c.id}
           renderItem={({ item, index }) => (
-            <DirRowCard item={item} index={index} theme={theme} pulse={pulseById.get(item.id)} onPress={() => goProfile(item)} />
+            <DirRowCard item={item} index={index} theme={theme} pulse={pulseById.get(item.id)} onOpen={goProfile} />
           )}
           contentContainerStyle={styles.list}
           showsVerticalScrollIndicator={false}
@@ -398,7 +399,7 @@ export default function ClientesScreen() {
         />
       )}
 
-      {/* A-F14: FAB secundario Importar (paste CSV) */}
+      {/* A-F14: FAB secundario Importar → wizard 4 pasos (Subir → Mapear → Revisar → Confirmar) */}
       <TouchableOpacity
         testID="directory-fab-import"
         style={[styles.fabSecondary, { backgroundColor: theme.card, borderColor: theme.border }, SHADOWS[resolvedScheme].md]}
@@ -466,6 +467,7 @@ function BarButton({
   active,
   badge,
   testID,
+  label,
   children,
 }: {
   theme: any
@@ -474,11 +476,14 @@ function BarButton({
   active?: boolean
   badge?: number
   testID?: string
+  label?: string
   children: React.ReactNode
 }) {
   return (
     <TouchableOpacity
       testID={testID}
+      accessibilityRole="button"
+      accessibilityLabel={label}
       style={[
         styles.barBtn,
         {

@@ -5,7 +5,7 @@ import { useDerivedValue, useAnimatedReaction, runOnJS, type SharedValue } from 
 import { useTheme } from '../../../context/ThemeContext'
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
-const INTER_FONT = require('@expo-google-fonts/inter/Inter_400Regular.ttf')
+const INTER_FONT = require('@expo-google-fonts/hanken-grotesk/HankenGrotesk_400Regular.ttf')
 
 export interface BarComposedPoint { i: number; bar: number; avg: number; label: string; [k: string]: string | number }
 

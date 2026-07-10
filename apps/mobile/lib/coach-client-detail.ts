@@ -22,6 +22,15 @@ import {
   type MealWithFoodItems,
 } from './nutrition-utils'
 import { supabase } from './supabase'
+import { apiFetch } from './api'
+import {
+  resolveSections,
+  resolveDomainEnabled,
+  NUTRITION_SECTIONS,
+  type SectionPrefs,
+  type ModuleKey,
+  type NutritionSectionKey,
+} from '@eva/feature-prefs'
 
 // Coach-side client detail data. Reads via Supabase (RLS: coach sees own clients).
 // Mutations (update/archive/review) also use the coach session. Service-role never runs in RN.
@@ -1082,6 +1091,239 @@ export async function setCoachClientArchived(clientId: string, archived: boolean
 
 export async function deleteCoachClientPayment(clientId: string, paymentId: string): Promise<{ ok: boolean; error?: string }> {
   const { error } = await supabase.from('client_payments').delete().eq('id', paymentId).eq('client_id', clientId)
+  if (error) return { ok: false, error: error.message }
+  return { ok: true }
+}
+
+// ── Zona C de nutrición (coach) ──────────────────────────────────────────────
+// Espejo 1:1 de NutritionTabB5 zona C + sus services web (nutrition-notes.service,
+// nutrient-targets.service, feature-prefs.service). Write-paths = mismos que web: PostgREST
+// como el coach `authenticated` (las server actions web NO usan service-role → RLS es el gate,
+// idéntico aquí). La resolución de secciones reusa el paquete puro `@eva/feature-prefs` (cero
+// copia de lógica); el entitlement se computa leyendo `coaches/teams.enabled_modules` directo
+// (patrón sancionado del paquete) + el kill-switch/flag server-only del endpoint /api/mobile/config.
+
+export interface CoachPrivateNoteEntry { id: string; body: string; created_at: string | null; updated_at: string | null }
+export interface CoachMealCommentEntry { id: string; authorRole: 'coach' | 'client'; body: string; created_at: string }
+export interface CoachNutrientTargetEntry {
+  id: string
+  client_id: string | null
+  nutrient_key: string
+  intent: 'aimup' | 'cap'
+  floor_value: number | null
+  target_value: number | null
+  ceiling_value: number | null
+}
+export type NutritionEntitledByModule = Partial<Record<ModuleKey, boolean>>
+
+export interface NutritionZoneCData {
+  privateNotes: CoachPrivateNoteEntry[]
+  mealComments: CoachMealCommentEntry[]
+  nutrientTargets: CoachNutrientTargetEntry[]
+  /** Override crudo `client_feature_prefs.sections` (parcial). Key ausente => heredar. */
+  override: SectionPrefs
+  /** Resolver SIN la capa del alumno (lo que se hereda de coach/team) — estado "heredar". */
+  baseEffective: Record<NutritionSectionKey, boolean>
+  /** Resolver CON el override del alumno (visibilidad efectiva para el gating de la tab). */
+  effective: Record<NutritionSectionKey, boolean>
+  entitledByModule: NutritionEntitledByModule
+  domainEnabledBase: boolean
+  useTeamBase: boolean
+  prefsEnabled: boolean
+  proEnabled: boolean
+}
+
+export async function getCoachNutritionZoneC(clientId: string, logDate: string): Promise<NutritionZoneCData> {
+  const { data: userData } = await supabase.auth.getUser()
+  const coachId = userData.user?.id ?? ''
+
+  // Flag Edge Config (FEATURE_PREFS_ENABLED) + kill-switch de operador — server-only, vía el
+  // endpoint mobile. Fail-OPEN: cualquier fallo => prefs ignoradas = mostrar todo lo entitled.
+  let disabledModules: string[] = []
+  let prefsEnabled = false
+  try {
+    const cfg = await apiFetch<{ disabledModules?: string[]; featurePrefsEnabled?: boolean }>('/api/mobile/config', { authenticated: true })
+    disabledModules = cfg.disabledModules ?? []
+    prefsEnabled = cfg.featurePrefsEnabled === true
+  } catch { /* fail-open */ }
+
+  const [notesRes, commentsRes, targetsRes, overrideRes, clientRes] = await Promise.all([
+    supabase.from('nutrition_private_notes').select('id, body, created_at, updated_at').eq('client_id', clientId).order('updated_at', { ascending: false }),
+    supabase.from('nutrition_meal_comments').select('id, author_role, body, created_at').eq('client_id', clientId).eq('log_date', logDate).order('created_at', { ascending: true }),
+    supabase.from('nutrient_targets').select('id, client_id, nutrient_key, intent, floor_value, target_value, ceiling_value').eq('coach_id', coachId).or(`client_id.eq.${clientId},client_id.is.null`).order('nutrient_key', { ascending: true }),
+    supabase.from('client_feature_prefs').select('sections').eq('client_id', clientId).eq('domain', 'nutrition').maybeSingle(),
+    supabase.from('clients').select('team_id, org_id').eq('id', clientId).maybeSingle(),
+  ])
+
+  const teamId = (clientRes.data as any)?.team_id ?? null
+  const orgId = (clientRes.data as any)?.org_id ?? null
+  const useTeamBase = !!teamId && !orgId
+
+  // Base de preferencias: team si el alumno vive en un pool (base = team), si no el coach.
+  const baseRes = useTeamBase
+    ? await supabase.from('team_feature_prefs').select('preset, sections').eq('team_id', teamId).eq('domain', 'nutrition').maybeSingle()
+    : await supabase.from('coach_feature_prefs').select('preset, sections').eq('coach_id', coachId).eq('domain', 'nutrition').maybeSingle()
+  const basePreset = ((baseRes.data as any)?.preset ?? null) as string | null
+  const baseSections = (((baseRes.data as any)?.sections ?? null)) as SectionPrefs | null
+
+  // Entitlement por módulo (fail-closed). Pool-wins: el team decide; si no, el coach dueño.
+  // Enterprise (org) => sin resolución client-side de módulos => todo false (mismo fail-closed web).
+  let enabledModules: Record<string, unknown> = {}
+  if (useTeamBase) {
+    const { data } = await supabase.from('teams').select('enabled_modules').eq('id', teamId).maybeSingle()
+    enabledModules = ((data as any)?.enabled_modules ?? {}) as Record<string, unknown>
+  } else if (!orgId) {
+    const { data } = await supabase.from('coaches').select('enabled_modules').eq('id', coachId).maybeSingle()
+    enabledModules = ((data as any)?.enabled_modules ?? {}) as Record<string, unknown>
+  }
+  const ent = (k: ModuleKey): boolean => enabledModules[k] === true && !disabledModules.includes(k)
+  const entitledByModule: NutritionEntitledByModule = {
+    cardio: ent('cardio'),
+    movement_assessment: ent('movement_assessment'),
+    body_composition: ent('body_composition'),
+    nutrition_exchanges: ent('nutrition_exchanges'),
+  }
+
+  const override = (((overrideRes.data as any)?.sections ?? {})) as SectionPrefs
+
+  const resolveInput = (clientSections: SectionPrefs | null) => ({
+    domain: 'nutrition' as const,
+    entitledByModule,
+    preset: basePreset,
+    useTeamBase,
+    coachSections: useTeamBase ? null : baseSections,
+    teamSections: useTeamBase ? baseSections : null,
+    clientSections,
+  })
+
+  // Flag OFF/ausente/Edge caído => fail-OPEN: mostrar TODO lo entitled (comportamiento de HOY, espejo web).
+  const failOpen = (): Record<NutritionSectionKey, boolean> => {
+    const out = {} as Record<NutritionSectionKey, boolean>
+    for (const s of NUTRITION_SECTIONS) {
+      out[s.key] = s.core ? true : s.requiresModule ? entitledByModule[s.requiresModule] === true : true
+    }
+    return out
+  }
+
+  const baseEffective = prefsEnabled ? (resolveSections(resolveInput(null)) as Record<NutritionSectionKey, boolean>) : failOpen()
+  const effective = prefsEnabled ? (resolveSections(resolveInput(override)) as Record<NutritionSectionKey, boolean>) : failOpen()
+  const domainEnabledBase = prefsEnabled ? resolveDomainEnabled(resolveInput(null)) : true
+
+  return {
+    privateNotes: (((notesRes.data as any[] | null) ?? [])).map((n) => ({ id: String(n.id), body: String(n.body ?? ''), created_at: n.created_at ?? null, updated_at: n.updated_at ?? null })),
+    mealComments: (((commentsRes.data as any[] | null) ?? [])).map((c) => ({ id: String(c.id), authorRole: c.author_role === 'coach' ? 'coach' : 'client', body: String(c.body ?? ''), created_at: String(c.created_at ?? '') })),
+    nutrientTargets: (((targetsRes.data as any[] | null) ?? [])).map((t) => ({
+      id: String(t.id),
+      client_id: t.client_id ?? null,
+      nutrient_key: String(t.nutrient_key),
+      intent: t.intent === 'cap' ? 'cap' : 'aimup',
+      floor_value: t.floor_value ?? null,
+      target_value: t.target_value ?? null,
+      ceiling_value: t.ceiling_value ?? null,
+    })),
+    override,
+    baseEffective,
+    effective,
+    entitledByModule,
+    domainEnabledBase,
+    useTeamBase,
+    prefsEnabled,
+    proEnabled: effective.micros_advanced === true,
+  }
+}
+
+// Nota privada del coach (una viva por par coach↔alumno). Espejo de NutritionNotesService.upsertPrivateNote.
+export async function upsertCoachPrivateNote(clientId: string, body: string): Promise<{ ok: boolean; error?: string }> {
+  const trimmed = body.trim()
+  if (!trimmed) return { ok: false, error: 'La nota no puede estar vacía.' }
+  const { data: userData } = await supabase.auth.getUser()
+  const coachId = userData.user?.id
+  if (!coachId) return { ok: false, error: 'No autorizado.' }
+  const { data: existing } = await supabase
+    .from('nutrition_private_notes')
+    .select('id')
+    .eq('coach_id', coachId)
+    .eq('client_id', clientId)
+    .order('updated_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  if ((existing as any)?.id) {
+    const { error } = await supabase.from('nutrition_private_notes').update({ body: trimmed, updated_at: new Date().toISOString() }).eq('id', (existing as any).id)
+    if (error) return { ok: false, error: error.message }
+    return { ok: true }
+  }
+  const { error } = await supabase.from('nutrition_private_notes').insert({ coach_id: coachId, client_id: clientId, body: trimmed })
+  if (error) return { ok: false, error: error.message }
+  return { ok: true }
+}
+
+// Comentario bidireccional (author_role='coach', anclado al día) sobre la bitácora del alumno.
+// Espejo de NutritionNotesService.addMealComment. author_id = uid de la sesión (nunca del body).
+export async function addCoachMealComment(clientId: string, logDate: string, body: string): Promise<{ ok: boolean; error?: string }> {
+  const trimmed = body.trim()
+  if (!trimmed) return { ok: false, error: 'El comentario no puede estar vacío.' }
+  const { data: userData } = await supabase.auth.getUser()
+  const authorId = userData.user?.id
+  if (!authorId) return { ok: false, error: 'No autorizado.' }
+  const { error } = await supabase.from('nutrition_meal_comments').insert({
+    client_id: clientId, meal_log_id: null, log_date: logDate, body: trimmed, author_id: authorId, author_role: 'coach',
+  })
+  if (error) return { ok: false, error: error.message }
+  return { ok: true }
+}
+
+// Umbral de micronutriente por (coach, alumno, nutriente). Espejo de NutrientTargetsService.upsertNutrientTarget.
+// El gate de "Nutrición Pro" (micros avanzados) se aplica en la UI (solo se ofrecen si proEnabled);
+// RLS garantiza la pertenencia coach↔alumno igual que la server action web.
+export async function upsertCoachNutrientTarget(input: {
+  clientId: string
+  nutrientKey: string
+  intent: 'aimup' | 'cap'
+  floorValue: number | null
+  targetValue: number | null
+  ceilingValue: number | null
+}): Promise<{ ok: boolean; error?: string }> {
+  if (input.floorValue == null && input.targetValue == null && input.ceilingValue == null) {
+    return { ok: false, error: 'Define al menos un umbral (piso, meta o techo).' }
+  }
+  const { data: userData } = await supabase.auth.getUser()
+  const coachId = userData.user?.id
+  if (!coachId) return { ok: false, error: 'No autorizado.' }
+  const { data: existing } = await supabase
+    .from('nutrient_targets')
+    .select('id')
+    .eq('coach_id', coachId)
+    .eq('client_id', input.clientId)
+    .eq('nutrient_key', input.nutrientKey)
+    .maybeSingle()
+  const payload = {
+    coach_id: coachId,
+    client_id: input.clientId,
+    nutrient_key: input.nutrientKey,
+    floor_value: input.floorValue,
+    target_value: input.targetValue,
+    ceiling_value: input.ceilingValue,
+    intent: input.intent,
+    provenance: 'manual',
+    updated_at: new Date().toISOString(),
+  }
+  if ((existing as any)?.id) {
+    const { error } = await supabase.from('nutrient_targets').update(payload).eq('id', (existing as any).id)
+    if (error) return { ok: false, error: error.message }
+    return { ok: true }
+  }
+  const { error } = await supabase.from('nutrient_targets').insert(payload)
+  if (error) return { ok: false, error: error.message }
+  return { ok: true }
+}
+
+// Override por-alumno de la zona "Funciones" (client_feature_prefs.sections). Escribe SOLO el
+// jsonb de secciones (RLS coach-owner es el gate) — NUNCA toca enabled_modules ni borra datos.
+// Espejo de feature-prefs.actions.setClientFeaturePrefs.
+export async function setClientNutritionOverride(clientId: string, sections: SectionPrefs): Promise<{ ok: boolean; error?: string }> {
+  const { error } = await supabase
+    .from('client_feature_prefs')
+    .upsert({ client_id: clientId, domain: 'nutrition', sections, updated_at: new Date().toISOString() }, { onConflict: 'client_id,domain' })
   if (error) return { ok: false, error: error.message }
   return { ok: true }
 }

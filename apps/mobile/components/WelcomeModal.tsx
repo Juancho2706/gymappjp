@@ -80,11 +80,11 @@ export function WelcomeModal({ brandName, enabled, content, type, version }: Pro
           <View style={styles.header}>
             <View style={{ flex: 1 }}>
               {brandName ? (
-                <Text style={[styles.brand, { color: theme.primary, fontFamily: 'Montserrat_700Bold' }]}>
+                <Text style={[styles.brand, { color: theme.primary, fontFamily: 'Archivo_700Bold' }]}>
                   {brandName}
                 </Text>
               ) : null}
-              <Text style={[styles.title, { color: theme.foreground, fontFamily: 'Montserrat_800ExtraBold' }]}>
+              <Text style={[styles.title, { color: theme.foreground, fontFamily: 'Archivo_800ExtraBold' }]}>
                 Bienvenido/a
               </Text>
             </View>
@@ -143,7 +143,7 @@ export function WelcomeModal({ brandName, enabled, content, type, version }: Pro
               onPress={handleClose}
               activeOpacity={0.8}
             >
-              <Text style={[styles.confirmText, { color: theme.primaryForeground, fontFamily: 'Montserrat_700Bold' }]}>
+              <Text style={[styles.confirmText, { color: theme.primaryForeground, fontFamily: 'Archivo_700Bold' }]}>
                 Entendido
               </Text>
             </TouchableOpacity>

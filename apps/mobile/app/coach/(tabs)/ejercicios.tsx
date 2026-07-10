@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Alert, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import type { ViewStyle } from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -117,10 +117,11 @@ export default function EjerciciosScreen() {
     formRef.current?.present()
   }
 
-  function openPreview(row: ExerciseRow) {
+  // Estable: permite que la fila memoizada (ExerciseCard) omita renders al no cambiar la closure.
+  const openPreview = useCallback((row: ExerciseRow) => {
     setPreviewTarget(row)
     previewRef.current?.present()
-  }
+  }, [])
 
   function openEditFromPreview(row: ExerciseRow) {
     previewRef.current?.dismiss()
@@ -226,7 +227,7 @@ export default function EjerciciosScreen() {
             item.type === 'header' ? (
               <GroupHeader muscle={item.muscle} count={item.count} />
             ) : (
-              <ExerciseCard row={item.row} onPress={() => openPreview(item.row)} />
+              <ExerciseCard row={item.row} onOpen={openPreview} />
             )
           }
           contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 4, paddingBottom: insets.bottom + 96 }}
@@ -300,12 +301,12 @@ function GroupHeader({ muscle, count }: { muscle: string; count: number }) {
   )
 }
 
-function ExerciseCard({ row, onPress }: { row: ExerciseRow; onPress: () => void }) {
+const ExerciseCard = memo(function ExerciseCard({ row, onOpen }: { row: ExerciseRow; onOpen: (row: ExerciseRow) => void }) {
   const { theme } = useTheme()
   const meta = [row.equipment, row.difficulty ? DIFFICULTY_LABEL[row.difficulty] ?? row.difficulty : null].filter(Boolean).join(' · ')
   const thumb = exerciseThumb(row)
   return (
-    <Card interactive onPress={onPress} padding={12} radius="card" style={styles.card}>
+    <Card interactive onPress={() => onOpen(row)} padding={12} radius="card" style={styles.card}>
       <View
         className={`${thumb ? 'bg-surface-sunken' : 'bg-ink-950'} rounded-control items-center justify-center`}
         style={styles.thumb}
@@ -326,7 +327,7 @@ function ExerciseCard({ row, onPress }: { row: ExerciseRow; onPress: () => void 
       <ChevronRight size={18} color={theme.mutedForeground} />
     </Card>
   )
-}
+})
 
 const styles = StyleSheet.create({
   root: { flex: 1 },

@@ -26,7 +26,7 @@ export function NativeDialog({ open, title, onClose, children, maxWidth, showClo
           style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border, borderRadius: theme.radius['2xl'], maxWidth }]}
         >
           <View style={styles.header}>
-            <Text style={[styles.title, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]} numberOfLines={2}>
+            <Text style={[styles.title, { color: theme.foreground, fontFamily: 'Archivo_700Bold' }]} numberOfLines={2}>
               {title}
             </Text>
             {showClose ? (

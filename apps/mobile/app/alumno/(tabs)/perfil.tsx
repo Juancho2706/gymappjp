@@ -50,6 +50,9 @@ import { AppBackground } from '../../../components/AppBackground'
 import { RestAlarmPreference } from '../../../components/alumno/RestAlarmPreference'
 import { useEntitlements } from '../../../lib/entitlements'
 
+// Correo de contacto — una sola fuente, espejo de `SALES_EMAIL` (web `lib/brand-assets`).
+const SALES_EMAIL = 'contacto@eva-app.cl'
+
 // Let NativeWind drive the lucide icon `color` via `text-*` classes (same DS
 // pattern Sheet/Dialog use for their close glyph). This keeps the frozen
 // `lib/theme` shim out of this screen — every color here is a DS token, so dark
@@ -534,7 +537,7 @@ export default function AlumnoPerfilScreen() {
                   leading={<IconTile Icon={CircleHelp} />}
                   title="Ayuda"
                   showChevron
-                  onPress={() => Linking.openURL('mailto:contacto@eva-app.cl?subject=Ayuda')}
+                  onPress={() => Linking.openURL(`mailto:${SALES_EMAIL}?subject=Ayuda`)}
                 />
                 <RowDivider />
                 <ListRow

@@ -1,5 +1,5 @@
 import { Pressable, Text, View } from 'react-native'
-import { ChevronLeft, List, Rows3 } from 'lucide-react-native'
+import { ChevronLeft, List, Rows3, Settings } from 'lucide-react-native'
 import { ProgressBar } from '../../ProgressBar'
 import { TYPE } from '../../../lib/typography'
 
@@ -30,6 +30,7 @@ export function SessionHeader({
   viewMode,
   onToggleMode,
   onBack,
+  onOpenSettings,
 }: {
   planTitle: string
   eyebrow: string | null
@@ -45,6 +46,7 @@ export function SessionHeader({
   viewMode: WorkoutViewMode
   onToggleMode: (mode: WorkoutViewMode) => void
   onBack: () => void
+  onOpenSettings: () => void
 }) {
   return (
     <View className="border-b border-white/10 px-4 pb-3 pt-1">
@@ -93,6 +95,17 @@ export function SessionHeader({
             <Rows3 size={16} color={viewMode === 'steps' ? ON_DARK : ON_DARK_MUTED} />
           </Pressable>
         </View>
+        {/* Ajustes: cronómetro automático + alarma de descanso (WAVE-B-SEAM). */}
+        <Pressable
+          testID="btn-workout-settings"
+          onPress={onOpenSettings}
+          hitSlop={8}
+          className="h-10 w-10 items-center justify-center rounded-control bg-white/[0.08]"
+          accessibilityRole="button"
+          accessibilityLabel="Ajustes del entrenamiento"
+        >
+          <Settings size={18} color={ON_DARK} />
+        </Pressable>
       </View>
 
       <ProgressBar value={requiredSets === 0 ? 0 : completedSetCount / requiredSets} color={SPORT_500} track={W10} height={6} />

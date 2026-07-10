@@ -18,7 +18,7 @@ export function RecentWorkouts({ clientId }: { clientId: string }) {
   const [days, setDays] = useState<DaySummary[] | null>(null)
 
   useEffect(() => {
-    getWorkoutDaySummaries(clientId).then((d) => setDays(d))
+    getWorkoutDaySummaries(clientId).then((d) => setDays(d)).catch(() => setDays([]))
   }, [clientId])
 
   if (days == null || days.length === 0) return null

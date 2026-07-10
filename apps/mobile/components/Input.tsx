@@ -30,6 +30,8 @@ interface InputProps extends Omit<TextInputProps, 'style'> {
   leftIcon?: LucideIcon
   rightIcon?: LucideIcon
   onRightIconPress?: () => void
+  /** Etiqueta a11y del botón del icono derecho (screen readers) — p.ej. "Mostrar contraseña". */
+  rightIconLabel?: string
   /** Supportive helper text shown below the field when there is no error. */
   hint?: string
   error?: string | null
@@ -79,6 +81,7 @@ export const Input = forwardRef<TextInput, InputProps>(function Input(
     leftIcon: LeftIcon,
     rightIcon: RightIcon,
     onRightIconPress,
+    rightIconLabel,
     hint,
     error,
     size = 'md',
@@ -150,7 +153,12 @@ export const Input = forwardRef<TextInput, InputProps>(function Input(
             style={styles.input}
           />
           {RightIcon ? (
-            <Pressable onPress={onRightIconPress} hitSlop={10}>
+            <Pressable
+              onPress={onRightIconPress}
+              hitSlop={10}
+              accessibilityRole="button"
+              accessibilityLabel={rightIconLabel ?? 'Acción del campo'}
+            >
               <RightIcon size={18} color={theme.mutedForeground} />
             </Pressable>
           ) : null}

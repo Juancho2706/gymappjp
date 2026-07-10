@@ -30,6 +30,7 @@ import {
 import { enqueueNutritionToggle, flushNutritionQueue } from '../../../lib/offline-cache'
 import { readNutritionCache, writeNutritionCache } from '../../../lib/nutrition-offline-cache'
 import { useStudentExchanges } from '../../../lib/nutrition-exchanges.queries'
+import { useEntitlements } from '../../../lib/entitlements'
 import { getAssignedRecipesForClient, type RecipeRow } from '../../../lib/recipes.queries'
 import {
   applyMealFoodSwap,
@@ -62,6 +63,7 @@ import {
   HistoricBanner,
   MicrosPanel,
   NotesThread,
+  NutritionDomainOff,
   NutritionEmpty,
   NutritionHeader,
   NutritionStreakBanner,
@@ -102,6 +104,10 @@ import {
 export default function AlumnoNutricionScreen() {
   const { theme } = useTheme()
   const { iso: todayIso } = getTodayInSantiago()
+
+  // Master switch del dominio + gating por seccion (feature-prefs resueltas server-side y servidas
+  // por /api/mobile/config; fail-OPEN, espejo EXACTO de web `domainEnabled` + `sectionFlags`).
+  const { nutritionEnabled, isNutritionSectionEnabled } = useEntitlements()
 
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
@@ -485,10 +491,20 @@ export default function AlumnoNutricionScreen() {
       <View style={styles.container} className="bg-surface-app">
         <AppBackground />
         <NutritionHeader planName="Tu plan personalizado" />
-        {/* E4-SEAM-domain-off: gating de dominio (NutritionDomainOff) + gating por
-            sección + master switch — wave 2 (B3, useEntitlements.nutritionEnabled,
-            fail-open igual que web). Hoy: solo estado "sin plan". */}
         <NutritionEmpty />
+      </View>
+    )
+  }
+
+  // Dominio Nutrición apagado por el coach (master switch, §4.8). Espejo EXACTO de web: con plan
+  // cargado pero dominio OFF, se muestra el aviso — NUNCA el plan (deep-link / estado stale incluido).
+  // Fail-OPEN: nutritionEnabled default = true, así que sólo el `false` explícito del server lo activa.
+  if (!nutritionEnabled) {
+    return (
+      <View style={styles.container} className="bg-surface-app">
+        <AppBackground />
+        <NutritionHeader planName={null} />
+        <NutritionDomainOff />
       </View>
     )
   }
@@ -539,7 +555,7 @@ export default function AlumnoNutricionScreen() {
               resueltos server-side, el panel degrada ocultándose. */}
           <MicrosPanel date={selectedDate} />
 
-          <PlatePanel proteinG={goals.protein} carbsG={goals.carbs} />
+          {isNutritionSectionEnabled('plate') && <PlatePanel proteinG={goals.protein} carbsG={goals.carbs} />}
 
           {totalCount > 0 && (
             <View style={styles.progressRow}>
@@ -604,7 +620,7 @@ export default function AlumnoNutricionScreen() {
           )}
 
           {/* Fuera de plan (E4-11): quick-add del catálogo; su subtotal se suma a los anillos. */}
-          {clientId && (
+          {isNutritionSectionEnabled('off_plan_log') && clientId && (
             <OffPlanLogger
               clientId={clientId}
               logDate={selectedDate}
@@ -614,17 +630,17 @@ export default function AlumnoNutricionScreen() {
           )}
 
           {/* Notas del día (E4-12): hilo bidireccional coach ⇄ alumno, scope = día seleccionado. */}
-          <NotesThread logDate={selectedDate} />
+          {isNutritionSectionEnabled('notes') && <NotesThread logDate={selectedDate} />}
 
           {/* Lista de compras (E4-13): derivada del plan + manuales; sheet propio. */}
-          <ShoppingList refreshSignal={refreshTick} />
+          {isNutritionSectionEnabled('shopping') && <ShoppingList refreshSignal={refreshTick} />}
 
           {/* Recap semanal (E4-14): adherencia 7d vs 7d previos, tono adaptativo. */}
           <WeeklyRecapCard refreshSignal={refreshTick} />
 
           {/* Ideas de recetas (E4-15): inspiración asignada por el coach (solo lectura).
               Solo se muestra con recetas asignadas (la sección vacía no aporta). */}
-          {recipes.length > 0 && <RecipeIdeasSection recipes={recipes} />}
+          {isNutritionSectionEnabled('recipes') && recipes.length > 0 && <RecipeIdeasSection recipes={recipes} />}
 
           <AdherenceStrip
             adherence={adherence}

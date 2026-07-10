@@ -44,7 +44,11 @@ export function AnalisisTab({
   const maxVolume = Math.max(1, ...muscleVolume.map((r) => r.volume))
   const maxSets = Math.max(1, ...muscleVolumeReps.map((r) => r.sets))
 
-  const tonnagePoints: BarComposedPoint[] = tonnageSeries.map((p, i) => ({ i, bar: p.tonnage, avg: p.movingAvg ?? p.tonnage, label: p.label }))
+  // Series memoizadas: evita reconstruir el array de puntos (y hacer churnear el chart) en cada re-render.
+  const tonnagePoints: BarComposedPoint[] = useMemo(
+    () => tonnageSeries.map((p, i) => ({ i, bar: p.tonnage, avg: p.movingAvg ?? p.tonnage, label: p.label })),
+    [tonnageSeries]
+  )
 
   // ¿Hay datos con peso? Si no, caemos a volumen por series (calistenia/cardio).
   const hasWeighted = strengthCards.length > 0 || muscleVolume.length > 0
@@ -138,10 +142,12 @@ export function AnalisisTab({
 function StrengthCard({ series }: { series: ExerciseStrengthSeries }) {
   const { theme } = useTheme()
   const [active, setActive] = useState<number | null>(null)
-  const trend = strengthTrendDeltaKg(series.series)
-  const peakIdx = maxOneRMIndex(series.series)
-  const peak = series.series[peakIdx]
-  const points: AreaPoint[] = series.series.map((p, i) => ({ i, y: p.oneRm, label: p.label }))
+  // Derivados de la serie memoizados: el scrub (setActive) NO debe recalcular trend/pico/puntos.
+  const { trend, peak, points } = useMemo(() => ({
+    trend: strengthTrendDeltaKg(series.series),
+    peak: series.series[maxOneRMIndex(series.series)],
+    points: series.series.map((p, i) => ({ i, y: p.oneRm, label: p.label })) as AreaPoint[],
+  }), [series])
   const sel = active != null && active >= 0 && active < series.series.length ? series.series[active] : null
 
   return (

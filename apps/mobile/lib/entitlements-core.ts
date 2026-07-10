@@ -8,9 +8,9 @@
  * `MODULE_KEYS` de la app => sin drift). El ARRAY runtime se declara local porque el paquete
  * solo exporta el type.
  */
-import type { ModuleKey } from '@eva/feature-prefs'
+import type { ModuleKey, NutritionSectionKey } from '@eva/feature-prefs'
 
-export type { ModuleKey }
+export type { ModuleKey, NutritionSectionKey }
 
 /** Espejo runtime de MODULE_KEYS (fuente de verdad: entitlements.service.ts de la web). */
 export const MODULE_KEYS: readonly ModuleKey[] = [
@@ -23,6 +23,12 @@ export const MODULE_KEYS: readonly ModuleKey[] = [
 export interface MobileFeaturePrefs {
     /** Master switch del dominio Nutricion (gate del tab del alumno). Fail-open => true. */
     nutritionEnabled: boolean
+    /**
+     * Visibilidad por seccion del dominio Nutricion (espejo de `sectionFlags` de web). Fail-OPEN:
+     * key ausente / `true` => visible; solo `false` explicito oculta. Solo se guardan las keys
+     * booleanas del payload (el resto queda ausente = visible).
+     */
+    nutritionSections: Partial<Record<NutritionSectionKey, boolean>>
 }
 
 export type RemoteFlagsPayload = Record<string, boolean>
@@ -31,7 +37,7 @@ export type RemoteFlagsPayload = Record<string, boolean>
 export interface RawMobileConfig {
     enabledModules?: unknown
     disabledModules?: unknown
-    featurePrefs?: { nutritionEnabled?: unknown } | null
+    featurePrefs?: { nutritionEnabled?: unknown; sections?: unknown } | null
     featurePrefsEnabled?: unknown
     flags?: unknown
 }
@@ -44,11 +50,11 @@ export interface MobileConfig {
     flags: RemoteFlagsPayload
 }
 
-/** Config por defecto fail-safe (sin red / sin cache): 0 modulos, nutricion visible. */
+/** Config por defecto fail-safe (sin red / sin cache): 0 modulos, nutricion visible, sin gating. */
 export const DEFAULT_CONFIG: MobileConfig = {
     enabledModules: [],
     disabledModules: [],
-    featurePrefs: { nutritionEnabled: true },
+    featurePrefs: { nutritionEnabled: true, nutritionSections: {} },
     flags: {},
 }
 
@@ -72,6 +78,16 @@ function toFlags(v: unknown): RemoteFlagsPayload {
     return out
 }
 
+/** Extrae el mapa de secciones (solo valores booleanos) del payload. Basura => `{}`. */
+function toSectionFlags(v: unknown): Partial<Record<NutritionSectionKey, boolean>> {
+    if (!v || typeof v !== 'object') return {}
+    const out: Partial<Record<NutritionSectionKey, boolean>> = {}
+    for (const [k, val] of Object.entries(v as Record<string, unknown>)) {
+        if (typeof val === 'boolean') out[k as NutritionSectionKey] = val
+    }
+    return out
+}
+
 /** Normaliza (y valida tipos de) el payload crudo del endpoint. NUNCA lanza. */
 export function normalizeConfig(raw: RawMobileConfig | null | undefined): MobileConfig {
     if (!raw || typeof raw !== 'object') return DEFAULT_CONFIG
@@ -80,9 +96,17 @@ export function normalizeConfig(raw: RawMobileConfig | null | undefined): Mobile
     return {
         enabledModules: toModuleKeys(raw.enabledModules),
         disabledModules: toModuleKeys(raw.disabledModules),
-        featurePrefs: { nutritionEnabled },
+        featurePrefs: { nutritionEnabled, nutritionSections: toSectionFlags(raw.featurePrefs?.sections) },
         flags: toFlags(raw.flags),
     }
+}
+
+/**
+ * ¿Es visible la seccion `key` del dominio Nutricion? Fail-OPEN, espejo de web `sectionFlags`:
+ * key ausente / `true` => visible; SOLO el `false` explicito la oculta. PURA => testeable.
+ */
+export function isNutritionSectionVisibleIn(config: MobileConfig, key: NutritionSectionKey): boolean {
+    return config.featurePrefs.nutritionSections[key] !== false
 }
 
 /**

@@ -1,3 +1,4 @@
+import { memo } from 'react'
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import { Apple, ChevronRight } from 'lucide-react-native'
 import { MotiView } from 'moti'
@@ -12,18 +13,18 @@ import { DANGER, EMBER, SEV_HEX, WARNING, lastInfo, severityMeta, statusMeta } f
  * anillo de adherencia con inicial + dot de última actividad, nombre + badge de
  * severidad, línea meta (adherencia mono · lastLabel · nutrición si riesgo · estado).
  */
-export function DirRowCard({
+export const DirRowCard = memo(function DirRowCard({
   item,
   index,
   theme,
   pulse,
-  onPress,
+  onOpen,
 }: {
   item: DirectoryClient
   index: number
   theme: any
   pulse?: PulseRow
-  onPress: () => void
+  onOpen: (c: DirectoryClient) => void
 }) {
   const adherence = pulse?.percentage ?? null
   const score = pulse?.attentionScore ?? item.attentionScore
@@ -43,7 +44,7 @@ export function DirRowCard({
       <TouchableOpacity
         testID={`directory-row-${item.id}`}
         style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}
-        onPress={onPress}
+        onPress={() => onOpen(item)}
         activeOpacity={0.75}
       >
         {/* Anillo de adherencia con inicial + dot de última actividad */}
@@ -93,7 +94,7 @@ export function DirRowCard({
       </TouchableOpacity>
     </MotiView>
   )
-}
+})
 
 const styles = StyleSheet.create({
   card: {

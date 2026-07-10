@@ -23,12 +23,14 @@ import { setRemoteFlags, clearRemoteFlags } from './flags'
 import {
     DEFAULT_CONFIG,
     hasModuleIn,
+    isNutritionSectionVisibleIn,
     normalizeConfig,
     parseCachedConfig,
     resolveEffectiveModules,
     serializeConfig,
     type MobileConfig,
     type ModuleKey,
+    type NutritionSectionKey,
     type RawMobileConfig,
 } from './entitlements-core'
 
@@ -165,6 +167,11 @@ export interface EntitlementsValue {
     nutritionEnabled: boolean
     /** ¿El modulo `key` esta habilitado para este usuario? */
     hasModule: (key: ModuleKey) => boolean
+    /**
+     * ¿Es visible la seccion `key` de Nutricion? (notas/compras/plato/off-plan/recetas/…). Espejo
+     * de `sectionFlags` de web, fail-OPEN: ausente/`true` => visible; solo `false` explicito oculta.
+     */
+    isNutritionSectionEnabled: (key: NutritionSectionKey) => boolean
     /** Fuerza una revalidacion (pull-to-refresh, reintento manual). */
     refresh: () => Promise<void>
 }
@@ -182,6 +189,7 @@ export function useEntitlements(): EntitlementsValue {
         enabledModules: resolveEffectiveModules(s.config),
         nutritionEnabled: s.config.featurePrefs.nutritionEnabled,
         hasModule: (key) => hasModuleIn(s.config, key),
+        isNutritionSectionEnabled: (key) => isNutritionSectionVisibleIn(s.config, key),
         refresh: refreshEntitlements,
     }
 }

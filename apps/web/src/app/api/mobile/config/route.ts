@@ -9,7 +9,15 @@ import {
     getCoachEnabledModules,
     getTeamEnabledModules,
 } from '@/services/entitlements.service'
-import { resolveDomainEnabled, type Preset, type SectionPrefs } from '@eva/feature-prefs'
+import {
+    FEATURE_DOMAINS,
+    resolveDomainEnabled,
+    resolveSections,
+    type ModuleKey,
+    type NutritionSectionKey,
+    type Preset,
+    type SectionPrefs,
+} from '@eva/feature-prefs'
 
 /**
  * Config operacional + entitlements para el cliente mobile. Fuente UNICA de verdad de:
@@ -29,11 +37,17 @@ import { resolveDomainEnabled, type Preset, type SectionPrefs } from '@eva/featu
  *                                  //   pool; enterprise/org => [] por diseno, mobile diferido).
  *   disabledModules: ModuleKey[]   // los apagados por el kill-switch de operador (debug/defensa
  *                                  //   en profundidad: el cliente los resta de enabledModules).
- *   featurePrefs: { nutritionEnabled: boolean }
- *                                  // master switch `_enabled` del dominio Nutricion resuelto para
- *                                  //   el scope del bearer (coach/team/cliente). Gatea el tab
- *                                  //   "Plan" del nav del alumno (render-only). Fail-OPEN: flag
- *                                  //   FEATURE_PREFS_ENABLED OFF/ausente/Edge caido => true.
+ *   featurePrefs: { nutritionEnabled: boolean; sections: Record<NutritionSectionKey, boolean> }
+ *                                  // master switch `_enabled` del dominio Nutricion + visibilidad
+ *                                  //   por seccion, resueltos para el scope del bearer
+ *                                  //   (coach/team/cliente) con el resolver PURO de @eva/feature-prefs
+ *                                  //   (cero drift vs web). `nutritionEnabled` gatea el tab "Plan"
+ *                                  //   del nav Y la ruta (RN muestra NutritionDomainOff, no el plan).
+ *                                  //   `sections` gatea cada seccion (notas/compras/plato/off-plan/
+ *                                  //   recetas/micros) render-only, mismo choke point que web
+ *                                  //   `sectionFlags`. Fail-OPEN: flag FEATURE_PREFS_ENABLED
+ *                                  //   OFF/ausente/Edge caido => nutritionEnabled=true + secciones
+ *                                  //   = core||entitled (mostrar todo lo entitled).
  *   featurePrefsEnabled: boolean   // flag Edge Config FEATURE_PREFS_ENABLED (fail-OPEN).
  *   flags: {}                      // objeto reservado para flags remotos de pantalla (E0-G4,
  *                                  //   apps/mobile/lib/flags.ts). Vacio por ahora.
@@ -106,18 +120,46 @@ async function readBaseNutritionPrefs(
 }
 
 /**
- * Resuelve el master switch `_enabled` del dominio Nutricion para el scope del bearer, con
- * service-role (la RLS del alumno no deja leer prefs del coach/team). Reusa el resolver PURO
- * `resolveDomainEnabled` de @eva/feature-prefs (misma logica que la web => cero drift).
- * Fail-OPEN + fail-safe a `true`: nunca ocultar el tab por flag OFF ni por un fallo de lectura.
+ * Fail-OPEN de las secciones (flag OFF / sin scope / error de lectura): mostrar TODO lo entitled
+ * — core => true; gateada => entitled del modulo; libre => true. Espejo EXACTO de la rama fail-open
+ * de `resolveFeaturePrefs` de la web (feature-prefs.service.ts) => cero drift.
  */
-async function resolveNutritionEnabled(
+function failOpenSections(
+    entitledByModule: Partial<Record<ModuleKey, boolean>>,
+): Record<NutritionSectionKey, boolean> {
+    const out = {} as Record<NutritionSectionKey, boolean>
+    for (const section of FEATURE_DOMAINS.nutrition) {
+        out[section.key] = section.core
+            ? true
+            : section.requiresModule
+              ? entitledByModule[section.requiresModule] === true
+              : true
+    }
+    return out
+}
+
+/**
+ * Resuelve el master switch `_enabled` del dominio Nutricion + la visibilidad por seccion para el
+ * scope del bearer, con service-role (la RLS del alumno no deja leer prefs del coach/team). Reusa
+ * los resolvers PUROS `resolveDomainEnabled` + `resolveSections` de @eva/feature-prefs (misma
+ * logica que la web => cero drift). `entitledByModule` se deriva de los modulos EFECTIVOS del scope
+ * (post kill-switch) — las secciones que gatea mobile (notas/compras/plato/off-plan/recetas) son
+ * todas `requiresModule: null`, asi que la preferencia (preset + toggles) es lo unico que las achica.
+ * Fail-OPEN + fail-safe: flag OFF / sin scope / fallo de lectura => dominio ON + secciones entitled.
+ */
+async function resolveNutritionPrefs(
     admin: DB,
     prefsEnabled: boolean,
     scope: NutritionScope,
-): Promise<boolean> {
-    if (!prefsEnabled) return true
-    if (!scope.coachId && !scope.teamId) return true
+    applied: EnabledModules,
+): Promise<{ nutritionEnabled: boolean; sections: Record<NutritionSectionKey, boolean> }> {
+    const entitledByModule: Partial<Record<ModuleKey, boolean>> = {
+        nutrition_exchanges: applied.nutrition_exchanges === true,
+        body_composition: applied.body_composition === true,
+    }
+    if (!prefsEnabled || (!scope.coachId && !scope.teamId)) {
+        return { nutritionEnabled: true, sections: failOpenSections(entitledByModule) }
+    }
     const useTeamBase = !!scope.teamId && !scope.orgId
     try {
         const [base, clientRes] = await Promise.all([
@@ -132,17 +174,21 @@ async function resolveNutritionEnabled(
                 : Promise.resolve({ data: null }),
         ])
         const clientSections = ((clientRes.data as { sections?: SectionPrefs } | null)?.sections ?? null) as SectionPrefs | null
-        return resolveDomainEnabled({
-            domain: 'nutrition',
-            entitledByModule: {},
+        const resolverInput = {
+            domain: 'nutrition' as const,
+            entitledByModule,
             preset: base.preset as Preset | string | null,
             useTeamBase,
             coachSections: useTeamBase ? null : base.sections,
             teamSections: useTeamBase ? base.sections : null,
             clientSections,
-        })
+        }
+        return {
+            nutritionEnabled: resolveDomainEnabled(resolverInput),
+            sections: resolveSections(resolverInput) as Record<NutritionSectionKey, boolean>,
+        }
     } catch {
-        return true
+        return { nutritionEnabled: true, sections: failOpenSections(entitledByModule) }
     }
 }
 
@@ -190,12 +236,12 @@ export async function GET(request: NextRequest) {
     const disabledModules = MODULE_KEYS.filter((k) => isModuleKilledByOperator(k))
 
     const featurePrefsEnabled = await readFeaturePrefsEnabled()
-    const nutritionEnabled = await resolveNutritionEnabled(admin, featurePrefsEnabled, scope)
+    const { nutritionEnabled, sections } = await resolveNutritionPrefs(admin, featurePrefsEnabled, scope, applied)
 
     return NextResponse.json({
         enabledModules,
         disabledModules,
-        featurePrefs: { nutritionEnabled },
+        featurePrefs: { nutritionEnabled, sections },
         featurePrefsEnabled,
         flags: {},
     })

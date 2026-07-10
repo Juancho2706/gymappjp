@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useRef, useState } from 'react'
 import {
   ActivityIndicator,
   FlatList,
@@ -212,6 +212,7 @@ export default function ExercisesScreen() {
           leftIcon={Search}
           rightIcon={search.length > 0 ? X : undefined}
           onRightIconPress={() => setSearch('')}
+          rightIconLabel="Limpiar búsqueda"
           placeholder="Buscar ejercicio…"
           value={search}
           onChangeText={setSearch}
@@ -289,7 +290,7 @@ export default function ExercisesScreen() {
               transition={{ type: 'timing', duration: 300, delay: Math.min(index * 30, 300) }}
               style={styles.cardWrap}
             >
-              <ExerciseCard item={item} theme={theme} scheme={resolvedScheme} onPress={() => openExercise(item)} />
+              <ExerciseCard item={item} theme={theme} scheme={resolvedScheme} onOpen={openExercise} />
             </MotiView>
           )}
           ListFooterComponent={
@@ -384,24 +385,26 @@ function FeaturedCard({
   )
 }
 
-/** Card de grilla: banner + badge músculo + nombre + equipo. */
-function ExerciseCard({
+/** Card de grilla: banner + badge músculo + nombre + equipo.
+ *  Memoizada: `onOpen` es estable (useCallback) → la grilla no re-renderiza ni recomputa el thumb
+ *  cuando el screen re-renderiza por refetch/dim. La closure de press se arma adentro. */
+const ExerciseCard = memo(function ExerciseCard({
   item,
   theme,
   scheme,
-  onPress,
+  onOpen,
 }: {
   item: CatalogExercise
   theme: any
   scheme: 'light' | 'dark'
-  onPress: () => void
+  onOpen: (ex: CatalogExercise) => void
 }) {
   const thumb = exerciseGridThumb(item)
   return (
     <TouchableOpacity
       testID={`exercise-card-${item.id}`}
       style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }, SHADOWS[scheme].sm]}
-      onPress={onPress}
+      onPress={() => onOpen(item)}
       activeOpacity={0.85}
     >
       <View style={styles.banner}>
@@ -432,7 +435,7 @@ function ExerciseCard({
       </View>
     </TouchableOpacity>
   )
-}
+})
 
 /** Contenido del sheet: banner media (gif/video inline con recorte) + nombre + eyebrow + instrucciones on-demand. */
 function ExerciseDetail({

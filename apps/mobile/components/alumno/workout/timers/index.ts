@@ -16,6 +16,8 @@ export {
   setRestTimerSound,
   getRestTimerVolume,
   setRestTimerVolume,
+  isRestAutoTimerEnabled,
+  setRestAutoTimerEnabled,
   subscribeRestTimerPrefs,
   type TimerSound,
 } from './rest-timer-preferences'

@@ -50,8 +50,10 @@ export async function getWorkoutDaySummaries(
     p_days_back: daysBack,
   })
   if (error) {
+    // Lanza para que las pantallas distingan "error" de "sin datos" (estado de error con reintento).
+    // Los callers que solo quieren degradar a vacío usan `.catch(() => [])`.
     console.warn('[history.queries] day counts failed', error)
-    return []
+    throw error
   }
   const rows = (data ?? []) as { day: string; sets: number }[]
   const todayIso = getTodayInSantiago().iso

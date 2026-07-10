@@ -1,5 +1,5 @@
 import { Pressable, Text, View } from 'react-native'
-import { Dumbbell, Layers3, ListChecks, Plus, Sparkles, Users } from 'lucide-react-native'
+import { Dumbbell, Layers3, LayoutGrid, ListChecks, Plus, Sparkles, Users } from 'lucide-react-native'
 import { useTheme } from '../../../context/ThemeContext'
 import { SHADOWS } from '../../../lib/shadows'
 import { FONT, TYPE, textStyle } from '../../../lib/typography'
@@ -10,6 +10,7 @@ import type { LibraryStats } from './program-model'
 const IconSparkles = themedIcon(Sparkles)
 const IconPlus = themedIcon(Plus)
 const IconDumbbell = themedIcon(Dumbbell)
+const IconAreas = themedIcon(LayoutGrid)
 
 const T_TITLE = textStyle('2xl', FONT.displayBlack, { lh: 'tight', ls: 'tighter' })
 const T_SUB = textStyle('xs', FONT.ui, { lh: 'normal' })
@@ -31,10 +32,12 @@ export function ProgramLibraryHero({
   stats,
   onNewTemplate,
   onExercises,
+  onAreas,
 }: {
   stats: LibraryStats
   onNewTemplate: () => void
   onExercises: () => void
+  onAreas: () => void
 }) {
   const { resolvedScheme } = useTheme()
   return (
@@ -71,19 +74,33 @@ export function ProgramLibraryHero({
           </Pressable>
         </View>
 
-        {/* Movida 2: entrada contextual a la lista de ejercicios (ya no vive en la nav). */}
-        <Pressable
-          testID="hero-exercises"
-          accessibilityRole="button"
-          accessibilityLabel="Lista de ejercicios"
-          onPress={onExercises}
-          className="flex-row items-center justify-center gap-space-3 rounded-control border border-success-600/40 bg-success-100 py-space-4 active:opacity-80 dark:bg-success-100/20"
-        >
-          <IconDumbbell size={16} className="text-success-600" />
-          <Text style={T_EX} className="text-success-600">
-            Lista de ejercicios
-          </Text>
-        </Pressable>
+        {/* Movida 2: accesos contextuales (ya no viven en la nav): Ejercicios · Áreas del builder. */}
+        <View className="flex-row gap-space-3">
+          <Pressable
+            testID="hero-exercises"
+            accessibilityRole="button"
+            accessibilityLabel="Lista de ejercicios"
+            onPress={onExercises}
+            className="flex-1 flex-row items-center justify-center gap-space-2 rounded-control border border-success-600/40 bg-success-100 py-space-4 active:opacity-80 dark:bg-success-100/20"
+          >
+            <IconDumbbell size={16} className="text-success-600" />
+            <Text style={T_EX} className="text-success-600">
+              Ejercicios
+            </Text>
+          </Pressable>
+          <Pressable
+            testID="hero-areas"
+            accessibilityRole="button"
+            accessibilityLabel="Áreas del builder"
+            onPress={onAreas}
+            className="flex-1 flex-row items-center justify-center gap-space-2 rounded-control border border-sport-500/40 bg-sport-100 py-space-4 active:opacity-80 dark:bg-sport-100/20"
+          >
+            <IconAreas size={16} className="text-sport-600" />
+            <Text style={T_EX} className="text-sport-600">
+              Áreas
+            </Text>
+          </Pressable>
+        </View>
 
         <View className="flex-row gap-space-3">
           <HeroStat icon={themedIcon(Layers3)} label="Plantillas" value={stats.templates} tone="sport" />

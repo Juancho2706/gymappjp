@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { memo, useState } from 'react'
 import { Dimensions, Modal, Pressable, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import { Apple, Dumbbell, Eye, MoreVertical, Pause, Play, Share2, Smartphone, Star, Trash2, KeyRound } from 'lucide-react-native'
 import { useTheme } from '../../context/ThemeContext'
@@ -42,7 +42,7 @@ function attentionMeta(score: number, streak: number): { label: string; tone: Ba
   return { label: 'On track', tone: 'success' }
 }
 
-export function ClientCard({ client, pulse, onPress, onWhatsApp, onShareLogin, onToggleStatus, onResetPw, onDelete, onWorkout, onNutrition }: Props) {
+export const ClientCard = memo(function ClientCard({ client, pulse, onPress, onWhatsApp, onShareLogin, onToggleStatus, onResetPw, onDelete, onWorkout, onNutrition }: Props) {
   const { theme } = useTheme()
   const [menu, setMenu] = useState(false)
   const adherence = pulse?.percentage ?? 0
@@ -179,7 +179,7 @@ export function ClientCard({ client, pulse, onPress, onWhatsApp, onShareLogin, o
       </Modal>
     </Card>
   )
-}
+})
 
 function Bar({ value, color, theme }: { value: number; color: string; theme: any }) {
   return (

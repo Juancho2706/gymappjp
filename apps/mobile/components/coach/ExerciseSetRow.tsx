@@ -26,7 +26,7 @@ export function ExerciseSetRow({ block, index, onChange, onRemove }: ExerciseSet
       <View style={styles.header}>
         <GripVertical size={16} color={theme.mutedForeground} />
         <View style={{ flex: 1, gap: 1 }}>
-          <Text style={[styles.name, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]} numberOfLines={1}>
+          <Text style={[styles.name, { color: theme.foreground, fontFamily: 'Archivo_700Bold' }]} numberOfLines={1}>
             {block.exerciseName}
           </Text>
           <Text style={[styles.muscle, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>

@@ -5,6 +5,7 @@ import { supabase } from '../../../lib/supabase'
 import { getClientProfile } from '../../../lib/client'
 import { getOnboardingStatus } from '../../../lib/alumno-onboarding'
 import { getDailyHabits } from '../../../lib/habits.queries'
+import { getActiveOrgAnnouncements } from '../../../lib/org-announcements'
 import { useEntitlements } from '../../../lib/entitlements'
 import { formatLongDate, getSantiagoIsoYmdForUtcInstant, getTodayInSantiago, formatRelativeDate, timeGreeting } from '../../../lib/date-utils'
 import { AppBackground } from '../../../components/AppBackground'
@@ -22,6 +23,7 @@ import { ActiveProgramSection } from '../../../components/alumno/home/ActiveProg
 import { WeightWidget } from '../../../components/alumno/home/WeightWidget'
 import { PersonalRecordsCard } from '../../../components/alumno/home/PersonalRecordsCard'
 import { RecentWorkouts } from '../../../components/alumno/home/RecentWorkouts'
+import { OrgAnnouncementBanner } from '../../../components/alumno/home/OrgAnnouncementBanner'
 import { HabitsCard } from '../../../components/alumno/home/HabitsCard'
 import { NutritionDailySummary } from '../../../components/alumno/home/NutritionDailySummary'
 import { AQUA_700, DAY_SHORT, EMBER_500, WEEK_LETTERS } from '../../../components/alumno/home/types'
@@ -78,7 +80,7 @@ export default function AlumnoHomeScreen() {
     const { iso: todayIso } = getTodayInSantiago()
     const since30Iso = isoDate(new Date(Date.now() - 29 * MS_DAY))
 
-    const [{ data: programData }, { data: workoutRows }, { data: nutritionRows }, { data: checkInRows }, { data: coachData }, habitsData] =
+    const [{ data: programData }, { data: workoutRows }, { data: nutritionRows }, { data: checkInRows }, { data: coachData }, habitsData, announcements] =
       await Promise.all([
         supabase
           .from('workout_programs')
@@ -112,6 +114,8 @@ export default function AlumnoHomeScreen() {
           .eq('id', client.coachId)
           .maybeSingle(),
         getDailyHabits(client.id, todayIso),
+        // §1 — anuncios de org (solo si el alumno pertenece a una org).
+        client.orgId ? getActiveOrgAnnouncements(client.orgId) : Promise.resolve([]),
       ])
 
     const rawPlans = ((programData as any)?.workout_plans ?? []) as any[]
@@ -161,6 +165,7 @@ export default function AlumnoHomeScreen() {
 
     setData({
       client,
+      announcements,
       coachName: (coachData as any)?.brand_name ?? null,
       coachWelcome: (coachData as any)?.welcome_message ?? null,
       program,
@@ -288,6 +293,9 @@ export default function AlumnoHomeScreen() {
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
+        {/* §1 Anuncios de la org */}
+        <OrgAnnouncementBanner announcements={data?.announcements ?? []} />
+
         {/* §3 Racha */}
         <StreakRibbon streak={derived.streak} />
 

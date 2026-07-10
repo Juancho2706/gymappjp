@@ -5,7 +5,7 @@ import { useFocusEffect, useRouter } from 'expo-router'
 import { BottomSheetModal } from '@gorhom/bottom-sheet'
 import { ChevronLeft, Layers, PencilLine, Plus, Search, Trash2 } from 'lucide-react-native'
 import { useTheme } from '../../context/ThemeContext'
-import { Badge, Button, EmptyState, Input, MacroPill } from '../../components'
+import { Badge, Button, Dialog, EmptyState, Input, MacroPill } from '../../components'
 import { EvaLoaderScreen } from '../../components/EvaLoader'
 import { AppBackground } from '../../components/AppBackground'
 import { FoodSearchSheet } from '../../components/coach/FoodSearchSheet'
@@ -67,6 +67,8 @@ export default function CoachMealGroupsScreen() {
   const [name, setName] = useState('')
   const [items, setItems] = useState<MealGroupItem[]>([])
   const [saving, setSaving] = useState(false)
+  const [deleteTarget, setDeleteTarget] = useState<MealGroupRow | null>(null)
+  const [deleting, setDeleting] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -152,19 +154,15 @@ export default function CoachMealGroupsScreen() {
     cancelEdit()
   }
 
-  function confirmDelete(group: MealGroupRow) {
-    Alert.alert('Eliminar grupo', `¿Eliminar "${group.name}"?`, [
-      { text: 'Cancelar', style: 'cancel' },
-      {
-        text: 'Eliminar',
-        style: 'destructive',
-        onPress: async () => {
-          const r = await deleteMealGroup(group.id)
-          if (!r.ok) { Alert.alert('Error', r.error ?? 'No se pudo eliminar.'); return }
-          setGroups((prev) => prev.filter((g) => g.id !== group.id))
-        },
-      },
-    ])
+  async function performDelete() {
+    const group = deleteTarget
+    if (!group) return
+    setDeleting(true)
+    const r = await deleteMealGroup(group.id)
+    setDeleting(false)
+    if (!r.ok) { Alert.alert('Error', r.error ?? 'No se pudo eliminar.'); return }
+    setGroups((prev) => prev.filter((g) => g.id !== group.id))
+    setDeleteTarget(null)
   }
 
   const editorTotals = mealGroupTotals(items)
@@ -318,7 +316,7 @@ export default function CoachMealGroupsScreen() {
                       <TouchableOpacity testID={`meal-groups-edit-${group.id}`} onPress={() => openEdit(group)} activeOpacity={0.8} style={[styles.iconBtn, { borderColor: theme.border, backgroundColor: theme.secondary }]}>
                         <PencilLine size={15} color={theme.foreground} />
                       </TouchableOpacity>
-                      <TouchableOpacity testID={`meal-groups-delete-${group.id}`} onPress={() => confirmDelete(group)} activeOpacity={0.8} style={[styles.iconBtn, { borderColor: theme.destructive + '33', backgroundColor: theme.destructive + '14' }]}>
+                      <TouchableOpacity testID={`meal-groups-delete-${group.id}`} onPress={() => setDeleteTarget(group)} activeOpacity={0.8} style={[styles.iconBtn, { borderColor: theme.destructive + '33', backgroundColor: theme.destructive + '14' }]}>
                         <Trash2 size={15} color={theme.destructive} />
                       </TouchableOpacity>
                     </View>
@@ -332,13 +330,13 @@ export default function CoachMealGroupsScreen() {
 
                   {group.items.length > 0 ? (
                     <View style={styles.chipsRow}>
-                      {group.items.slice(0, 4).map((it, i) => (
+                      {group.items.slice(0, 3).map((it, i) => (
                         <View key={it.id ?? `${it.food_id}-${i}`} style={[styles.foodChip, { backgroundColor: theme.secondary }]}>
                           <Text style={{ fontSize: 11, color: theme.foreground, fontFamily: FONT.uiSemibold }} numberOfLines={1}>{it.food?.name ?? 'Alimento'}</Text>
                         </View>
                       ))}
-                      {group.items.length > 4 ? (
-                        <Badge tone="neutral" variant="soft" size="sm">+{group.items.length - 4}</Badge>
+                      {group.items.length > 3 ? (
+                        <Badge tone="neutral" variant="soft" size="sm">+{group.items.length - 3}</Badge>
                       ) : null}
                     </View>
                   ) : null}
@@ -348,6 +346,29 @@ export default function CoachMealGroupsScreen() {
           />
         </View>
       )}
+
+      <Dialog
+        open={!!deleteTarget}
+        onClose={() => (deleting ? undefined : setDeleteTarget(null))}
+        title="Eliminar grupo"
+        description={deleteTarget ? `¿Eliminar «${deleteTarget.name}»? Esta acción no se puede deshacer.` : undefined}
+        maxWidth={420}
+        footer={
+          <View style={styles.dialogActions}>
+            <Button label="Cancelar" variant="ghost" onPress={() => setDeleteTarget(null)} disabled={deleting} style={{ flex: 1 }} />
+            <Button
+              testID="meal-groups-delete-confirm"
+              label={deleting ? 'Eliminando…' : 'Eliminar'}
+              variant="danger"
+              onPress={performDelete}
+              disabled={deleting}
+              style={{ flex: 1 }}
+            />
+          </View>
+        }
+      >
+        <View />
+      </Dialog>
 
       <FoodSearchSheet ref={foodSheetRef} onSelect={addFood} excludedIds={items.map((i) => i.food_id)} title="Agregar alimento al grupo" />
     </SafeAreaView>
@@ -391,4 +412,5 @@ const styles = StyleSheet.create({
   qtyInput: { flex: 1, height: 44, borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, fontSize: 15, textAlign: 'center' },
   totalsRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, borderTopWidth: StyleSheet.hairlineWidth, paddingTop: 12 },
   editActions: { flexDirection: 'row', gap: 10, marginTop: 4 },
+  dialogActions: { flexDirection: 'row', gap: 10 },
 })

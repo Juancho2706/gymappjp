@@ -50,7 +50,7 @@ export function EvaLoader({ size = 'lg', subtitle }: { size?: Size; subtitle?: s
           ) : null}
           {customText ? (
             <MotiView from={{ opacity: 0.5 }} animate={{ opacity: 1 }} transition={pulse}>
-              <Text style={{ fontSize: fontSize * 0.62, lineHeight: fontSize * 0.72, color: textColor, fontFamily: 'Montserrat_800ExtraBold', letterSpacing: -0.5 }}>
+              <Text style={{ fontSize: fontSize * 0.62, lineHeight: fontSize * 0.72, color: textColor, fontFamily: 'Archivo_800ExtraBold', letterSpacing: -0.5 }}>
                 {customText}
               </Text>
             </MotiView>
@@ -78,7 +78,7 @@ function DefaultEvaLetters({ fontSize, reduceMotion }: { fontSize: number; reduc
             ? { type: 'timing', duration: 1 }
             : { type: 'timing', duration: 520, loop: true, repeatReverse: true, delay: i * 150 }}
         >
-          <Text style={{ fontSize, lineHeight: fontSize * 1.05, color: l.color, fontFamily: 'Montserrat_800ExtraBold', letterSpacing: -1 }}>
+          <Text style={{ fontSize, lineHeight: fontSize * 1.05, color: l.color, fontFamily: 'Archivo_800ExtraBold', letterSpacing: -1 }}>
             {l.c}
           </Text>
         </MotiView>

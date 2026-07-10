@@ -289,7 +289,7 @@ export default function ClientDetailScreen() {
           ) : tab === 'plan' ? (
             <PlanTab data={data} onEdit={openBuilder} />
           ) : (
-            <NutricionTab data={data} selectedDate={selectedDate} onSelectDate={setSelectedDate} dayDetail={dayDetail} dayLoading={dayLoading}
+            <NutricionTab clientId={client.id} data={data} selectedDate={selectedDate} onSelectDate={setSelectedDate} dayDetail={dayDetail} dayLoading={dayLoading}
               onEditNutrition={() => router.push(`/coach/nutrition-builder?clientId=${client.id}&clientName=${encodeURIComponent(client.full_name)}`)} />
           )}
         </View>

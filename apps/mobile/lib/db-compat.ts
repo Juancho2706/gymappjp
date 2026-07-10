@@ -39,8 +39,3 @@ export async function selectWithFallback<T>(
   }
   return res
 }
-
-/** Spread helper para inserts: incluye la key solo si el valor no es null/undefined. */
-export function optionalCol<T>(key: string, value: T | null | undefined): Record<string, T> {
-  return value == null ? {} : { [key]: value }
-}

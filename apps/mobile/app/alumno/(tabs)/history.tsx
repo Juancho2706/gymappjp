@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import { MotiView } from 'moti'
-import { Calendar, ChevronDown, Dumbbell } from 'lucide-react-native'
+import { AlertTriangle, Calendar, ChevronDown, Dumbbell } from 'lucide-react-native'
 import { getClientProfile } from '../../../lib/client'
 import {
   getWorkoutDaySummaries,
@@ -10,7 +10,7 @@ import {
   type DaySummary,
 } from '../../../lib/history.queries'
 import { useTheme } from '../../../context/ThemeContext'
-import { ScreenHeader } from '../../../components'
+import { Button, ScreenHeader } from '../../../components'
 import { Card } from '../../../components/Card'
 import { EmptyState } from '../../../components/EmptyState'
 import { EvaLoaderScreen } from '../../../components/EvaLoader'
@@ -23,22 +23,29 @@ const FONT_MONO = 'JetBrainsMono_700Bold'
 export default function HistoryScreen() {
   const { theme } = useTheme()
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(false)
   const [expanding, setExpanding] = useState(false)
   const [daysBack, setDaysBack] = useState(HISTORY_DAYS_DEFAULT)
   const [summaries, setSummaries] = useState<DaySummary[]>([])
 
-  useEffect(() => { load(HISTORY_DAYS_DEFAULT).catch(() => setLoading(false)) }, [])
+  useEffect(() => { void load(HISTORY_DAYS_DEFAULT) }, [])
 
   async function load(days: number) {
     setLoading(true)
-    const client = await getClientProfile()
-    if (!client) { setLoading(false); return }
+    setError(false)
+    try {
+      const client = await getClientProfile()
+      if (!client) { setLoading(false); return }
 
-    // Conteo de series por día agregado en DB (RPC) — 90d por defecto, 180d al "ver más".
-    const data = await getWorkoutDaySummaries(client.id, days)
-    setSummaries(data)
-    setDaysBack(days)
-    setLoading(false)
+      // Conteo de series por día agregado en DB (RPC) — 90d por defecto, 180d al "ver más".
+      const data = await getWorkoutDaySummaries(client.id, days)
+      setSummaries(data)
+      setDaysBack(days)
+    } catch {
+      setError(true)
+    } finally {
+      setLoading(false)
+    }
   }
 
   async function showMore() {
@@ -60,6 +67,32 @@ export default function HistoryScreen() {
         <AppBackground />
         <ScreenHeader title="Historial de entrenos" subtitle={subtitle} />
         <EvaLoaderScreen subtitle="Cargando historial…" />
+      </SafeAreaView>
+    )
+  }
+
+  if (error) {
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
+        <AppBackground />
+        <ScreenHeader title="Historial de entrenos" subtitle={subtitle} />
+        <View style={styles.errorBox}>
+          <View
+            style={{
+              width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center',
+              backgroundColor: theme.destructive + '14', borderWidth: 1, borderColor: theme.destructive + '33', marginBottom: 4,
+            }}
+          >
+            <AlertTriangle size={26} color={theme.destructive} strokeWidth={1.9} />
+          </View>
+          <Text style={[styles.errorTitle, { color: theme.foreground, fontFamily: FONT_BOLD }]}>
+            No pudimos cargar tu historial
+          </Text>
+          <Text style={[styles.errorSub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+            Revisá tu conexión e intentá de nuevo en un momento.
+          </Text>
+          <Button testID="history-retry" label="Reintentar" variant="outline" onPress={() => load(daysBack)} />
+        </View>
       </SafeAreaView>
     )
   }
@@ -171,4 +204,7 @@ const styles = StyleSheet.create({
   },
   moreTxt: { fontSize: 13.5 },
   disclaimer: { fontSize: 11.5, lineHeight: 17, textAlign: 'center', marginTop: 16 },
+  errorBox: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 10, paddingHorizontal: 32 },
+  errorTitle: { fontSize: 17, letterSpacing: -0.3, textAlign: 'center' },
+  errorSub: { fontSize: 13, lineHeight: 19, textAlign: 'center', maxWidth: 300, marginBottom: 4 },
 })

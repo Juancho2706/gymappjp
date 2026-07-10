@@ -63,7 +63,7 @@ export function ComplianceRing({
           />
         </Svg>
         <View style={[StyleSheet.absoluteFill, styles.center]}>
-          <Text style={[styles.pct, { color: empty ? theme.mutedForeground : theme.foreground, fontFamily: 'Montserrat_800ExtraBold' }]}>
+          <Text style={[styles.pct, { color: empty ? theme.mutedForeground : theme.foreground, fontFamily: 'Archivo_800ExtraBold' }]}>
             {empty ? '—' : `${pct}%`}
           </Text>
         </View>
