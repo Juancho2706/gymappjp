@@ -3,7 +3,7 @@ import type { Database } from '@/lib/database.types'
 import { assertModule, hasModule, isModuleKilledByOperator } from '@/services/entitlements.service'
 import { getCoachClientScope, type CoachClientScope } from '@/services/client/client-scope.service'
 import { logTeamClientAccess } from '@/services/team/team.service'
-import { computeIsak } from '@/domain/bodycomp'
+import { computeIsak } from '@eva/bodycomp'
 import { BodyCompositionCreateSchema } from '@eva/schemas/bodycomp'
 import * as repo from '@/infrastructure/db/body-composition.repository'
 import {

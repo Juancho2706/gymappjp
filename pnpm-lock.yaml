@@ -282,12 +282,21 @@ importers:
 
   apps/mobile:
     dependencies:
+      '@eva/bodycomp':
+        specifier: workspace:*
+        version: link:../../packages/bodycomp
+      '@eva/calc':
+        specifier: workspace:*
+        version: link:../../packages/calc
       '@eva/cardio':
         specifier: workspace:*
         version: link:../../packages/cardio
       '@eva/feature-prefs':
         specifier: workspace:*
         version: link:../../packages/feature-prefs
+      '@eva/module-catalog':
+        specifier: workspace:*
+        version: link:../../packages/module-catalog
       '@eva/nutrition-engine':
         specifier: workspace:*
         version: link:../../packages/nutrition-engine
@@ -535,6 +544,8 @@ importers:
       xlsx:
         specifier: https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz
         version: https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz
+
+  packages/bodycomp: {}
 
   packages/brand-kit:
     dependencies:

@@ -29,6 +29,9 @@ export default defineConfig({
       '@eva/workout-engine': path.resolve(__dirname, './packages/workout-engine/index.ts'),
       '@eva/plan-builder': path.resolve(__dirname, './packages/plan-builder/index.ts'),
       '@eva/cardio': path.resolve(__dirname, './packages/cardio/index.ts'),
+      // Subpath ANTES del paquete raiz (resolucion por prefijo).
+      '@eva/bodycomp/fixtures': path.resolve(__dirname, './packages/bodycomp/fixtures.ts'),
+      '@eva/bodycomp': path.resolve(__dirname, './packages/bodycomp/index.ts'),
       '@eva/profile-analytics': path.resolve(__dirname, './packages/profile-analytics/index.ts'),
       // `server-only` throws outside an RSC; neutralize it for unit tests that transitively
       // import server modules. Build-time boundary is still enforced by Next.js.

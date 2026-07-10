@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { computeIsak } from '@/domain/bodycomp'
-import { athleteMaleInput } from '@/domain/bodycomp/fixtures'
+import { computeIsak } from '@eva/bodycomp'
+import { athleteMaleInput } from '@eva/bodycomp/fixtures'
 import { isakResultToMetricsJson } from './body-composition.mappers'
 
 vi.mock('@/services/entitlements.service', () => ({

@@ -14,6 +14,8 @@ import {
   KeyRound,
   LogOut,
   Moon,
+  PersonStanding,
+  Scale,
   Share2,
   Sun,
   Trash2,
@@ -46,6 +48,7 @@ import {
 import { EvaLoaderScreen } from '../../../components/EvaLoader'
 import { AppBackground } from '../../../components/AppBackground'
 import { RestAlarmPreference } from '../../../components/alumno/RestAlarmPreference'
+import { useEntitlements } from '../../../lib/entitlements'
 
 // Let NativeWind drive the lucide icon `color` via `text-*` classes (same DS
 // pattern Sheet/Dialog use for their close glyph). This keeps the frozen
@@ -53,7 +56,7 @@ import { RestAlarmPreference } from '../../../components/alumno/RestAlarmPrefere
 // mode + the white-label brand ramp resolve at runtime.
 for (const Icon of [
   CalendarDays, ChevronRight, CircleHelp, Dumbbell, Fingerprint, Flame, History,
-  KeyRound, LogOut, Moon, Share2, Sun, Trash2, TrendingUp,
+  KeyRound, LogOut, Moon, PersonStanding, Scale, Share2, Sun, Trash2, TrendingUp,
 ]) {
   cssInterop(Icon, { className: { target: 'style', nativeStyleToProp: { color: true } } })
 }
@@ -237,7 +240,12 @@ function ShareOption({
 
 export default function AlumnoPerfilScreen() {
   const { branding, setBranding, resolvedScheme } = useTheme()
+  const { hasModule } = useEntitlements()
   const router = useRouter()
+  // Módulos de pago activos del coach del alumno (E6-11). Solo se muestran las filas cuya
+  // superficie read-only existe (/alumno/movement · /alumno/bodycomp) si el módulo está ON.
+  const showMovement = hasModule('movement_assessment')
+  const showBodyComp = hasModule('body_composition')
   const [detail, setDetail] = useState<AlumnoDetail | null>(null)
   const [stats, setStats] = useState<{ totalWorkouts: number; streak: number }>({ totalWorkouts: 0, streak: 0 })
   const [monthly, setMonthly] = useState<MonthlyRecap | null>(null)
@@ -438,6 +446,37 @@ export default function AlumnoPerfilScreen() {
               <SectionTitle>Preferencias</SectionTitle>
               <RestAlarmPreference />
             </View>
+
+            {/* Seguimiento — módulos de pago read-only del alumno (E6-11). Cada fila SOLO si el
+                coach tiene el módulo activo; sin módulo NO se renderiza (cero superficie). */}
+            {(showMovement || showBodyComp) ? (
+              <View>
+                <SectionTitle>Seguimiento</SectionTitle>
+                <Card padding="none">
+                  {showMovement ? (
+                    <ListRow
+                      testID="perfil-movimiento-row"
+                      leading={<IconTile Icon={PersonStanding} tone="sport" />}
+                      title="Movimiento"
+                      subtitle="Tu evaluación y evolución"
+                      showChevron
+                      onPress={() => router.push('/alumno/movement')}
+                    />
+                  ) : null}
+                  {showMovement && showBodyComp ? <RowDivider /> : null}
+                  {showBodyComp ? (
+                    <ListRow
+                      testID="perfil-bodycomp-row"
+                      leading={<IconTile Icon={Scale} tone="sport" />}
+                      title="Composición corporal"
+                      subtitle="Tus mediciones en el tiempo"
+                      showChevron
+                      onPress={() => router.push('/alumno/bodycomp')}
+                    />
+                  ) : null}
+                </Card>
+              </View>
+            ) : null}
 
             {/* Información */}
             <View>

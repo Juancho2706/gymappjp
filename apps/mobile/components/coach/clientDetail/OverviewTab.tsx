@@ -1,11 +1,12 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import { Image } from 'expo-image'
-import { Activity, CalendarDays, Check, Dumbbell, Flame, LayoutGrid, Pencil, Ruler } from 'lucide-react-native'
+import { useRouter } from 'expo-router'
+import { Activity, CalendarDays, Check, ChevronRight, Dumbbell, Flame, HeartPulse, LayoutGrid, Pencil, Ruler, Scale, Wrench } from 'lucide-react-native'
 import { useTheme } from '../../../context/ThemeContext'
 import { Button, ComplianceRing, Input, ProgressBar, SegmentedTabs, Sheet } from '../../../components'
 import { CalendarHeatmap } from '../charts/CalendarHeatmap'
-import { StatCard, CardHeader, MetricBox, Pill, cd, formatDate, dayName } from './shared'
+import { StatCard, CardHeader, MetricBox, Pill, cd, formatDate, dayName, relativeDays } from './shared'
 import {
   buildProfileActivityCalendar,
   longestActivityStreak,
@@ -18,6 +19,10 @@ import {
   type ClientSex,
   type CoachClientDetailData,
 } from '../../../lib/coach-client-detail'
+import { useEntitlements } from '../../../lib/entitlements'
+import { getCardioClient } from '../../../lib/cardio-coach'
+import { getClientFinals } from '../../../lib/movement-coach'
+import { getLastBodycompMeasuredAt } from '../../../lib/bodycomp-coach'
 
 const SEX_LABEL: Record<ClientSex, string> = { male: 'Masculino', female: 'Femenino', other: 'Otro' }
 type SexSeg = ClientSex | 'none'
@@ -183,6 +188,9 @@ export function OverviewTab({
         </TouchableOpacity>
       ) : null}
 
+      {/* Herramientas (modulos de pago entitled) */}
+      {client ? <HerramientasSection clientId={client.id} /> : null}
+
       {/* Check-in snapshot */}
       {latestCheckIn ? <CheckInSnapshot checkIn={latestCheckIn} clientId={client!.id} reload={reload} onOpenPhoto={onOpenPhoto} /> : null}
 
@@ -207,6 +215,89 @@ export function OverviewTab({
       {/* Biometría editable */}
       <BiometriaCard client={client!} currentWeight={currentWeight} reload={reload} />
     </View>
+  )
+}
+
+// Sección Herramientas: accesos a los módulos de pago del alumno, SOLO los que el coach tiene
+// entitled (hasModule). Espejo de los accesos a módulos de la ficha web (page.tsx: hasModule
+// cardio/movement_assessment/body_composition). Sin ningún módulo entitled la sección no aparece.
+// Money-safety: se hace fetch de estado SOLO de los módulos entitled (cero fetch sin módulo).
+function HerramientasSection({ clientId }: { clientId: string }) {
+  const { theme } = useTheme()
+  const router = useRouter()
+  const { hasModule } = useEntitlements()
+  const hasCardio = hasModule('cardio')
+  const hasMovement = hasModule('movement_assessment')
+  const hasBodycomp = hasModule('body_composition')
+
+  const [cardioState, setCardioState] = useState<string | null>(null)
+  const [movementState, setMovementState] = useState<string | null>(null)
+  const [bodycompState, setBodycompState] = useState<string | null>(null)
+
+  useEffect(() => {
+    let alive = true
+    if (hasCardio) {
+      getCardioClient(clientId)
+        .then((p) => {
+          if (!alive) return
+          const configured = !!(p && (p.birth_date || p.resting_hr != null || p.max_hr_override != null || p.ref_5k_time_sec != null))
+          setCardioState(configured ? 'Perfil configurado' : 'Toca para configurar')
+        })
+        .catch(() => alive && setCardioState('Toca para configurar'))
+    }
+    if (hasMovement) {
+      getClientFinals(clientId)
+        .then((finals) => {
+          if (!alive) return
+          const last = finals.length ? finals[finals.length - 1]! : null
+          setMovementState(last ? `${finals.length} evaluación${finals.length === 1 ? '' : 'es'} · ${relativeDays(last.assessed_at)}` : 'Sin evaluaciones aún')
+        })
+        .catch(() => alive && setMovementState('Sin evaluaciones aún'))
+    }
+    if (hasBodycomp) {
+      getLastBodycompMeasuredAt(clientId)
+        .then((iso) => {
+          if (!alive) return
+          setBodycompState(iso ? `Última medición · ${relativeDays(iso)}` : 'Sin mediciones aún')
+        })
+        .catch(() => alive && setBodycompState('Sin mediciones aún'))
+    }
+    return () => { alive = false }
+  }, [clientId, hasCardio, hasMovement, hasBodycomp])
+
+  if (!hasCardio && !hasMovement && !hasBodycomp) return null
+
+  return (
+    <StatCard>
+      <CardHeader icon={Wrench} title="Herramientas" />
+      <View>
+        {hasCardio ? (
+          <ToolRow icon={HeartPulse} color={theme.destructive} title="Cardio" subtitle={cardioState} onPress={() => router.push(`/coach/cardio/${clientId}`)} testID="ficha-tool-cardio" />
+        ) : null}
+        {hasMovement ? (
+          <ToolRow icon={Activity} color={theme.primary} title="Movimiento" subtitle={movementState} onPress={() => router.push(`/coach/movement/${clientId}`)} testID="ficha-tool-movement" />
+        ) : null}
+        {hasBodycomp ? (
+          <ToolRow icon={Scale} color="#8B5CF6" title="Composición corporal" subtitle={bodycompState} onPress={() => router.push(`/coach/bodycomp/${clientId}`)} testID="ficha-tool-bodycomp" />
+        ) : null}
+      </View>
+    </StatCard>
+  )
+}
+
+function ToolRow({ icon: Icon, color, title, subtitle, onPress, testID }: { icon: any; color: string; title: string; subtitle: string | null; onPress: () => void; testID: string }) {
+  const { theme } = useTheme()
+  return (
+    <TouchableOpacity activeOpacity={0.7} onPress={onPress} style={[styles.toolRow, { borderColor: theme.border }]} accessibilityRole="button" accessibilityLabel={title} testID={testID}>
+      <View style={[styles.toolIcon, { backgroundColor: color + '18' }]}>
+        <Icon size={18} color={color} />
+      </View>
+      <View style={{ flex: 1 }}>
+        <Text style={[styles.toolTitle, { color: theme.foreground, fontFamily: 'HankenGrotesk_700Bold' }]} numberOfLines={1}>{title}</Text>
+        <Text style={[styles.toolSub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]} numberOfLines={1}>{subtitle ?? '…'}</Text>
+      </View>
+      <ChevronRight size={18} color={theme.mutedForeground} />
+    </TouchableOpacity>
   )
 }
 
@@ -362,4 +453,8 @@ const styles = StyleSheet.create({
   snapRow: { flexDirection: 'row', gap: 12 },
   snapPhoto: { width: 88, height: 112, borderRadius: 12, borderWidth: 1 },
   snapMetrics: { flexDirection: 'row', gap: 8 },
+  toolRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth },
+  toolIcon: { width: 38, height: 38, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  toolTitle: { fontSize: 14 },
+  toolSub: { fontSize: 11.5, marginTop: 2 },
 })

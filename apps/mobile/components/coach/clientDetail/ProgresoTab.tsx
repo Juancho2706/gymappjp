@@ -1,12 +1,16 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import { Image } from 'expo-image'
-import { Activity, GitCompare, Pencil, Scale, Target, TrendingUp, Zap } from 'lucide-react-native'
+import { useRouter } from 'expo-router'
+import { Activity, GitCompare, Pencil, Ruler, Scale, Target, TrendingUp, Zap } from 'lucide-react-native'
+import type { BiaMetrics, IsakResult } from '@eva/bodycomp'
 import { useTheme } from '../../../context/ThemeContext'
-import { Button, EmptyState, Input, Sheet } from '../../../components'
+import { Button, EmptyState, Input, Sheet, SegmentedTabs } from '../../../components'
 import { AreaTrend, type AreaPoint } from '../charts/AreaTrend'
 import { RadialGauge } from '../charts/RadialGauge'
 import { StatCard, CardHeader, MetricBox, Pill, cd, formatDate } from './shared'
+import { useEntitlements } from '../../../lib/entitlements'
+import { supabase } from '../../../lib/supabase'
 import {
   linearRegressionKgPerDay,
   bmiFromMetric,
@@ -27,6 +31,8 @@ const BMI_SEGMENTS = [
 
 export function ProgresoTab({ data, onOpenPhoto, reload }: { data: CoachClientDetailData; onOpenPhoto: (photos: string[], index: number) => void; reload: () => void }) {
   const { theme } = useTheme()
+  const { hasModule } = useEntitlements()
+  const hasBodyComp = hasModule('body_composition')
   const { client, checkIns } = data
   const [activeIdx, setActiveIdx] = useState<number | null>(null)
 
@@ -117,6 +123,9 @@ export function ProgresoTab({ data, onOpenPhoto, reload }: { data: CoachClientDe
           </View>
         </StatCard>
       ) : null}
+
+      {/* Composición corporal (gateada por módulo body_composition) */}
+      {client ? <CompositionSection clientId={client.id} hasModule={hasBodyComp} /> : null}
 
       {/* Comparador de fotos */}
       <PhotoComparator checkIns={checkIns} onOpenPhoto={onOpenPhoto} />
@@ -313,6 +322,189 @@ function CheckInRow({ c, onOpenPhoto }: { c: CheckInEntry; onOpenPhoto: (photos:
           ))}
         </View>
       ) : null}
+    </View>
+  )
+}
+
+// ── Composición corporal ─────────────────────────────────────────────────────
+// Sección del módulo de pago `body_composition` dentro del tab Progreso, espejo del
+// CompositionSection web (ProgressBodyCompositionB6). Solo se MONTA cuando hasModule es true
+// (money-safety: sin módulo => cero fetch, cero render — el padre no renderiza este componente).
+// Lectura read-only por PostgREST (RLS bcm_select = techo: el coach solo ve a SUS alumnos); las
+// MUTACIONES viven en la pantalla /coach/bodycomp/[clientId] (endpoints /api/mobile/bodycomp/*).
+// Las series NUNCA se mezclan entre métodos (el % grasa BIA e ISAK no es comparable).
+
+type BodyCompMethod = 'bia' | 'isak'
+interface BodyCompRow {
+  id: string
+  method: BodyCompMethod
+  measured_at: string
+  weight_kg: number | null
+  height_cm: number | null
+  device_brand: string | null
+  device_model: string | null
+  equation_used: string | null
+  metrics: unknown
+  notes: string | null
+}
+
+const BC_COLUMNS = 'id, method, measured_at, weight_kg, height_cm, device_brand, device_model, equation_used, metrics, notes'
+
+function readBia(row: BodyCompRow): BiaMetrics {
+  return row.method === 'bia' && row.metrics && typeof row.metrics === 'object' ? (row.metrics as BiaMetrics) : {}
+}
+function readIsak(row: BodyCompRow): IsakResult | null {
+  if (row.method !== 'isak') return null
+  const m = row.metrics as Partial<IsakResult> | null
+  return m && typeof m === 'object' && m.fractionation ? (m as IsakResult) : null
+}
+function bcDeviceLabel(row: BodyCompRow): string {
+  const dev = [row.device_brand, row.device_model].filter(Boolean).join(' ')
+  return dev ? `${dev} · ${formatDate(row.measured_at)}` : formatDate(row.measured_at)
+}
+
+function CompositionSection({ clientId, hasModule }: { clientId: string; hasModule: boolean }) {
+  const { theme } = useTheme()
+  const router = useRouter()
+  const [loading, setLoading] = useState(true)
+  const [rows, setRows] = useState<BodyCompRow[]>([])
+
+  useEffect(() => {
+    // Guard de money-safety: aunque el padre solo monta con módulo ON, no pegamos a DB sin él.
+    if (!hasModule) return
+    let alive = true
+    setLoading(true)
+    ;(async () => {
+      const { data } = await supabase
+        .from('body_composition_measurements')
+        .select(BC_COLUMNS)
+        .eq('client_id', clientId)
+        .is('deleted_at', null)
+        .order('measured_at', { ascending: false })
+      if (!alive) return
+      setRows(Array.isArray(data) ? (data as unknown as BodyCompRow[]) : [])
+      setLoading(false)
+    })()
+    return () => {
+      alive = false
+    }
+  }, [clientId, hasModule])
+
+  const bia = useMemo(() => rows.filter((r) => r.method === 'bia'), [rows])
+  const isak = useMemo(() => rows.filter((r) => r.method === 'isak'), [rows])
+  const hasBia = bia.length > 0
+  const hasIsak = isak.length > 0
+  const [method, setMethod] = useState<BodyCompMethod>('bia')
+  // Alinear el método visible con lo que tenga datos (BIA prioritario), sin pisar la elección manual.
+  useEffect(() => {
+    if (!hasBia && !hasIsak) return
+    setMethod((m) => (m === 'bia' ? (hasBia ? 'bia' : 'isak') : hasIsak ? 'isak' : 'bia'))
+  }, [hasBia, hasIsak])
+
+  const goCapture = () => router.push(`/coach/bodycomp/${clientId}`)
+
+  if (loading) {
+    return (
+      <StatCard>
+        <CardHeader icon={Ruler} title="Composición corporal" />
+        <Text style={[cd.sub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Cargando mediciones…</Text>
+      </StatCard>
+    )
+  }
+
+  if (!hasBia && !hasIsak) {
+    return (
+      <StatCard>
+        <CardHeader icon={Ruler} title="Composición corporal" right={<Pill label="Módulo" tone="success" />} />
+        <Text style={[cd.sub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+          Sin mediciones todavía. Captura bioimpedancia (BIA) o antropometría (ISAK) para ver la evolución.
+        </Text>
+        <Button label="Nueva medición" onPress={goCapture} testID="progreso-bodycomp-new" style={{ marginTop: 4 }} />
+      </StatCard>
+    )
+  }
+
+  const showBia = hasBia && (method === 'bia' || !hasIsak)
+  const series = showBia ? bia : isak
+
+  // Puntos de tendencia del % grasa (serie primaria) — ascendente por fecha, sin mezclar métodos.
+  const asc = [...series].sort((a, b) => a.measured_at.localeCompare(b.measured_at))
+  const fatOf = (r: BodyCompRow): number | null => {
+    if (showBia) return readBia(r).bodyFatPercent ?? null
+    return readIsak(r)?.bodyFat.percent ?? null
+  }
+  const points: AreaPoint[] = []
+  for (const r of asc) {
+    const y = fatOf(r)
+    if (y != null) points.push({ i: points.length, y, label: formatDate(r.measured_at) })
+  }
+
+  const latest = series[0]!
+  const prev = series[1] ?? null
+
+  return (
+    <StatCard>
+      <CardHeader icon={Ruler} title="Composición corporal" right={<Pill label={bcDeviceLabel(latest)} />} />
+
+      {hasBia && hasIsak ? (
+        <SegmentedTabs
+          size="sm"
+          value={method}
+          onChange={setMethod}
+          items={[
+            { value: 'bia', label: 'Bioimpedancia' },
+            { value: 'isak', label: 'Antropometría' },
+          ]}
+        />
+      ) : null}
+
+      {showBia ? <BiaTiles latest={readBia(latest)} prev={prev ? readBia(prev) : null} /> : <IsakTiles latest={readIsak(latest)} prev={prev ? readIsak(prev) : null} />}
+
+      {points.length >= 2 ? (
+        <View style={{ gap: 4 }}>
+          <Text style={[cd.listHeading, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>% Grasa · tendencia</Text>
+          <AreaTrend points={points} color={theme.primary} suffix="%" decimals={1} height={160} />
+        </View>
+      ) : null}
+
+      <Button label="Nueva medición" variant="secondary" onPress={goCapture} testID="progreso-bodycomp-new" />
+    </StatCard>
+  )
+}
+
+function deltaTile(delta: number | null, lowerIsBetter: boolean, theme: ReturnType<typeof useTheme>['theme']): { sub?: string; subColor?: string } {
+  if (delta == null || Math.abs(delta) < 0.05) return {}
+  const good = lowerIsBetter ? delta < 0 : delta > 0
+  return { sub: `${delta > 0 ? '+' : ''}${delta.toFixed(1)} vs. anterior`, subColor: good ? theme.success : '#EF4444' }
+}
+
+function BiaTiles({ latest, prev }: { latest: BiaMetrics; prev: BiaMetrics | null }) {
+  const { theme } = useTheme()
+  const dFat = latest.bodyFatPercent != null && prev?.bodyFatPercent != null ? Math.round((latest.bodyFatPercent - prev.bodyFatPercent) * 10) / 10 : null
+  const dMus = latest.skeletalMuscleMassKg != null && prev?.skeletalMuscleMassKg != null ? Math.round((latest.skeletalMuscleMassKg - prev.skeletalMuscleMassKg) * 10) / 10 : null
+  const visceral = latest.visceralFatLevel ?? latest.visceralFatAreaCm2 ?? null
+  return (
+    <View style={cd.grid2}>
+      {latest.bodyFatPercent != null ? <MetricBox value={`${latest.bodyFatPercent.toFixed(1)}%`} label="% Grasa" {...deltaTile(dFat, true, theme)} /> : null}
+      {latest.skeletalMuscleMassKg != null ? <MetricBox value={`${latest.skeletalMuscleMassKg.toFixed(1)} kg`} label="Masa muscular" {...deltaTile(dMus, false, theme)} /> : null}
+      {latest.phaseAngleDeg != null ? <MetricBox value={`${latest.phaseAngleDeg.toFixed(1)}°`} label="Ángulo de fase" /> : null}
+      {visceral != null ? <MetricBox value={`${visceral}`} label="Grasa visceral" /> : null}
+    </View>
+  )
+}
+
+function IsakTiles({ latest, prev }: { latest: IsakResult | null; prev: IsakResult | null }) {
+  const { theme } = useTheme()
+  if (!latest) return null
+  const s = latest.somatotype
+  const dFat = prev ? Math.round((latest.bodyFat.percent - prev.bodyFat.percent) * 10) / 10 : null
+  const dMus = prev ? Math.round((latest.fractionation.muscle.kg - prev.fractionation.muscle.kg) * 10) / 10 : null
+  return (
+    <View style={cd.grid2}>
+      <MetricBox value={`${latest.bodyFat.percent.toFixed(1)}%`} label="% Grasa" {...deltaTile(dFat, true, theme)} />
+      <MetricBox value={`${latest.fractionation.muscle.kg.toFixed(1)} kg`} label="Masa muscular" {...deltaTile(dMus, false, theme)} />
+      <MetricBox value={`${latest.fractionation.adipose.kg.toFixed(1)} kg`} label="Masa adiposa" />
+      <MetricBox value={`${s.endomorphy.toFixed(1)}-${s.mesomorphy.toFixed(1)}-${s.ectomorphy.toFixed(1)}`} label="Somatotipo" sub="endo·meso·ecto" />
     </View>
   )
 }

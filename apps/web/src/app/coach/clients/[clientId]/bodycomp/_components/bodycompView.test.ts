@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { BodyCompositionRow } from '@/infrastructure/db/body-composition.repository'
-import { computeIsak } from '@/domain/bodycomp'
+import { computeIsak } from '@eva/bodycomp'
 import { isakResultToMetricsJson } from '@/services/bodycomp/body-composition.mappers'
 import { deltaVsPrev, deviceLabel, readBiaMetrics, readIsakMetrics } from '@/lib/bodycomp/view-helpers'
 

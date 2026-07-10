@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { computeIsak, type IsakRawInput } from '@/domain/bodycomp'
+import { computeIsak, type IsakRawInput } from '@eva/bodycomp'
 import type { IsakRawInputDto } from '@eva/schemas/bodycomp'
 import {
     biaMetricsToJson,

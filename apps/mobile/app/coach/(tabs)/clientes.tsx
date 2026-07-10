@@ -13,9 +13,11 @@ import {
   Upload,
   Users,
   UserPlus,
+  Wrench,
   X,
 } from 'lucide-react-native'
 import { useTheme } from '../../../context/ThemeContext'
+import { useEntitlements } from '../../../lib/entitlements'
 import { Input, NativeDialog, ScreenHeader } from '../../../components'
 import { EvaLoaderScreen } from '../../../components/EvaLoader'
 import { AppBackground } from '../../../components/AppBackground'
@@ -75,6 +77,10 @@ function StackCardItem({ index, scrollY, headerH, children }: { index: number; s
 export default function ClientesScreen() {
   const { theme, resolvedScheme } = useTheme()
   const router = useRouter()
+  // Acceso a Herramientas (hub /coach/tools): mismo gate que el sidebar web (toolsEnabled)
+  // — visible solo con ≥1 modulo del hub activo (cardio/movimiento/composicion).
+  const { hasModule } = useEntitlements()
+  const toolsEnabled = hasModule('cardio') || hasModule('movement_assessment') || hasModule('body_composition')
 
   const [clients, setClients] = useState<DirectoryClient[]>([])
   const [loading, setLoading] = useState(true)
@@ -306,6 +312,21 @@ export default function ClientesScreen() {
       <ScreenHeader
         title="Alumnos"
         subtitle={`${stats.active} activos · ${stats.total} total`}
+        trailing={
+          toolsEnabled ? (
+            <TouchableOpacity
+              testID="directory-tools-link"
+              accessibilityRole="button"
+              accessibilityLabel="Herramientas"
+              activeOpacity={0.8}
+              onPress={() => router.push('/coach/tools')}
+              style={[styles.toolsBtn, { backgroundColor: theme.card, borderColor: theme.border }]}
+            >
+              <Wrench size={15} color={theme.primary} />
+              <Text style={[styles.toolsBtnTxt, { color: theme.foreground }]}>Herramientas</Text>
+            </TouchableOpacity>
+          ) : null
+        }
       />
 
       {/* Search + action bar */}
@@ -509,6 +530,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   barBadgeTxt: { color: '#fff', fontSize: 10, fontFamily: FONT.uiExtra },
+  toolsBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, height: 36, paddingHorizontal: 12, borderRadius: 999, borderWidth: 1.5 },
+  toolsBtnTxt: { fontSize: 13, fontFamily: FONT.uiBold },
   chipRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',

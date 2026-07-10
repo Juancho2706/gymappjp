@@ -15,6 +15,7 @@ import {
   deriveCalorieTarget,
   deriveMacroTargets,
   gramsToHousehold,
+  hasUnconfirmedMacros,
   type ActivityLevel,
   type Goal,
   type Sex,
@@ -43,6 +44,24 @@ import {
 } from '../../lib/nutrition-builder'
 import { coerceSwapOptionUnit } from '../../lib/nutrition-utils'
 import { getTemplateDraft, saveTemplate } from '../../lib/nutrition-templates'
+import type { NutritionPlanMode } from '@eva/nutrition-engine'
+import { ExchangeModePanel } from '../../components/coach/ExchangeModePanel'
+import { ExchangeTargetsEditor, type ExchangeSaveState } from '../../components/coach/ExchangeTargetsEditor'
+import {
+  assignMealDayVariant,
+  createPlanDayVariant,
+  deletePlanDayVariant,
+  fetchCoachExchangeGroups,
+  fetchExchangeEquivalences,
+  fetchPlanExchangeEditorData,
+  saveMealExchangeTargets,
+  setPlanExchangeMode,
+  type DayVariant,
+  type ExchangeGroup,
+  type ExchangeTargetDraft,
+} from '../../lib/nutrition-exchanges.coach'
+import { exportNutritionExchangePdf } from '../../lib/nutrition-exchange-pdf'
+import { resolveNutritionExportBrand } from '../../lib/nutrition-day-export'
 
 // Acento de dominio nutrición / intercambios: ember-500 (token-contract). Se
 // consume como color literal SOLO para el glyph lucide (surfaces/text usan las
@@ -95,7 +114,7 @@ function unitsForFood(item: { unit: string; serving_unit?: string; is_liquid?: b
 }
 
 export default function NutritionBuilderScreen() {
-  const { theme, resolvedScheme } = useTheme()
+  const { theme, resolvedScheme, branding } = useTheme()
   const { hasModule } = useEntitlements()
   const router = useRouter()
   const { clientId, clientName, planId, templateId, mode } = useLocalSearchParams<{ clientId?: string; clientName?: string; planId?: string; templateId?: string; mode?: string }>()
@@ -123,6 +142,21 @@ export default function NutritionBuilderScreen() {
   // E5-20: panel Pro "objetivos por composición corporal" (gated body_composition, solo plan de alumno).
   const [bodyCompOpen, setBodyCompOpen] = useState(false)
   const bodyCompModule = hasModule('body_composition')
+
+  // E6-06: Nutrición Pro / intercambios. GATE (money-safety + Pro es POR-ALUMNO):
+  // solo plan de alumno (mode client-plan) + módulo ON. Sin esto: CERO fetch, CERO render.
+  const hasExchangesModule = hasModule('nutrition_exchanges')
+  const showExchanges = !isTemplate && hasExchangesModule
+  const [planMode, setPlanMode] = useState<NutritionPlanMode>('grams')
+  const [exGroups, setExGroups] = useState<ExchangeGroup[]>([])
+  const [exTargetsByMeal, setExTargetsByMeal] = useState<Record<string, ExchangeTargetDraft[]>>({})
+  const [exVariants, setExVariants] = useState<DayVariant[]>([])
+  const [exVariantByMeal, setExVariantByMeal] = useState<Record<string, string | null>>({})
+  const [exSaveState, setExSaveState] = useState<Record<string, ExchangeSaveState>>({})
+  const [togglePending, setTogglePending] = useState(false)
+  const [variantPending, setVariantPending] = useState(false)
+  const [pdfPending, setPdfPending] = useState(false)
+  const exSaveTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
 
   useEffect(() => {
     (async () => {
@@ -248,6 +282,118 @@ export default function NutritionBuilderScreen() {
     setMeals((ms) => ms.map((m) => (m.uid === mealUid ? { ...m, items: m.items.filter((it) => it.uid !== itemUid) } : m)))
   }
 
+  // Carga de datos del modo intercambios (grupos del catálogo + targets/variantes del plan).
+  // SOLO con módulo ON + plan de alumno guardado (draft.id): sin módulo NO toca el PostgREST.
+  useEffect(() => {
+    if (!showExchanges || !draft.id) return
+    let alive = true
+    ;(async () => {
+      const [groups, editor] = await Promise.all([
+        fetchCoachExchangeGroups(),
+        fetchPlanExchangeEditorData(draft.id!),
+      ])
+      if (!alive) return
+      setExGroups(groups)
+      setPlanMode(editor.planMode)
+      setExTargetsByMeal(editor.targetsByMealId)
+      setExVariants(editor.variants)
+      setExVariantByMeal(editor.variantByMealId)
+    })().catch(() => {})
+    return () => { alive = false }
+  }, [showExchanges, draft.id])
+
+  // Limpia timers de autosave pendientes al desmontar (evita setState huérfano).
+  useEffect(() => () => { for (const t of Object.values(exSaveTimers.current)) clearTimeout(t) }, [])
+
+  async function handleToggleMode(next: boolean) {
+    if (!draft.id) return
+    const mode: NutritionPlanMode = next ? 'exchanges' : 'grams'
+    setTogglePending(true)
+    const res = await setPlanExchangeMode(draft.id, mode)
+    setTogglePending(false)
+    if (!res.ok) { Alert.alert('No se pudo cambiar el modo', res.error ?? 'Intentá de nuevo.'); return }
+    setPlanMode(mode)
+  }
+
+  // Autosave debounced (700 ms) por comida — espejo del builder web. Escribe SOLO por endpoint.
+  function handleTargetsChange(mealId: string, targets: ExchangeTargetDraft[]) {
+    setExTargetsByMeal((prev) => ({ ...prev, [mealId]: targets }))
+    setExSaveState((s) => ({ ...s, [mealId]: 'saving' }))
+    clearTimeout(exSaveTimers.current[mealId])
+    exSaveTimers.current[mealId] = setTimeout(async () => {
+      const res = await saveMealExchangeTargets(mealId, targets)
+      setExSaveState((s) => ({ ...s, [mealId]: res.ok ? 'saved' : 'error' }))
+      if (res.ok) {
+        setTimeout(() => setExSaveState((s) => (s[mealId] === 'saved' ? { ...s, [mealId]: 'idle' } : s)), 1500)
+      }
+    }, 700)
+  }
+
+  async function handleVariantAssign(mealId: string, variantId: string | null) {
+    const prev = exVariantByMeal[mealId] ?? null
+    setExVariantByMeal((m) => ({ ...m, [mealId]: variantId }))
+    const res = await assignMealDayVariant(mealId, variantId)
+    if (!res.ok) {
+      setExVariantByMeal((m) => ({ ...m, [mealId]: prev }))
+      Alert.alert('No se pudo asignar la variante', res.error ?? 'Intentá de nuevo.')
+    }
+  }
+
+  async function handleCreateVariant(name: string) {
+    if (!draft.id || !name.trim()) return
+    setVariantPending(true)
+    const res = await createPlanDayVariant(draft.id, name.trim())
+    setVariantPending(false)
+    if (!res.ok || !res.variant) { Alert.alert('No se pudo crear la variante', res.error ?? 'Intentá de nuevo.'); return }
+    setExVariants((v) => [...v, res.variant!])
+  }
+
+  async function handleDeleteVariant(variantId: string) {
+    setVariantPending(true)
+    const res = await deletePlanDayVariant(variantId)
+    setVariantPending(false)
+    if (!res.ok) { Alert.alert('No se pudo eliminar la variante', res.error ?? 'Intentá de nuevo.'); return }
+    setExVariants((v) => v.filter((x) => x.id !== variantId))
+    setExVariantByMeal((m) => {
+      const n = { ...m }
+      for (const k of Object.keys(n)) if (n[k] === variantId) n[k] = null
+      return n
+    })
+  }
+
+  async function handleDownloadExchangePdf(format: 'compact' | 'equivalences') {
+    if (!draft.id) return
+    setPdfPending(true)
+    try {
+      const meals = draft.meals
+        .filter((m) => m.id)
+        .map((m) => ({ name: m.name, targets: exTargetsByMeal[m.id!] ?? [], dayVariantId: exVariantByMeal[m.id!] ?? null }))
+      let equivalences: Awaited<ReturnType<typeof fetchExchangeEquivalences>> = []
+      if (format === 'equivalences') {
+        const usedGroupIds = [...new Set(meals.flatMap((m) => m.targets.map((t) => t.exchangeGroupId)))]
+        equivalences = await fetchExchangeEquivalences(usedGroupIds)
+      }
+      const brand = resolveNutritionExportBrand(branding)
+      await exportNutritionExchangePdf(
+        {
+          planName: draft.name,
+          goals: { calories: draft.daily_calories, protein: draft.protein_g, carbs: draft.carbs_g, fats: draft.fats_g },
+          instructions: draft.instructions,
+          meals,
+          groups: exGroups,
+          variants: exVariants,
+          equivalences,
+          format,
+        },
+        brand
+      )
+    } catch (e: any) {
+      Alert.alert('No se pudo generar el PDF', e?.message ?? 'Intentá de nuevo.')
+    } finally {
+      setPdfPending(false)
+    }
+  }
+
   async function save() {
     if (draft.name.trim().length < 2) { Alert.alert('Falta el nombre', isTemplate ? 'Indicá un nombre para la plantilla.' : 'Indicá un nombre para el plan.'); return }
     if (draft.meals.length === 0) { Alert.alert('Sin comidas', 'Agregá al menos una comida antes de guardar.'); return }
@@ -345,6 +491,33 @@ export default function NutritionBuilderScreen() {
               {totals.kcal} kcal · P{totals.protein} C{totals.carbs} G{totals.fats}
             </Text>
           </View>
+
+          {/* E6-06: Nutrición Pro / modo intercambios (gated hasModule + plan de alumno) */}
+          {showExchanges ? (() => {
+            const exMeals = draft.meals
+              .filter((m) => m.id)
+              .map((m) => ({ targets: exTargetsByMeal[m.id!] ?? [], dayVariantId: exVariantByMeal[m.id!] ?? null }))
+            const provisional = exMeals.some((m) => hasUnconfirmedMacros(m.targets, exGroups))
+            return (
+              <ExchangeModePanel
+                active={planMode === 'exchanges'}
+                canToggle={!!draft.id}
+                togglePending={togglePending}
+                onToggleMode={handleToggleMode}
+                mealsForTotals={exMeals}
+                groups={exGroups}
+                variants={exVariants}
+                goals={{ calories: draft.daily_calories, protein: draft.protein_g, carbs: draft.carbs_g, fats: draft.fats_g }}
+                provisional={provisional}
+                variantPending={variantPending}
+                onCreateVariant={handleCreateVariant}
+                onDeleteVariant={handleDeleteVariant}
+                brandName={resolveNutritionExportBrand(branding).brandName}
+                pdfPending={pdfPending}
+                onDownloadPdf={handleDownloadExchangePdf}
+              />
+            )
+          })() : null}
 
           <Textarea label="Instrucciones (opcional)" value={draft.instructions} onChangeText={(v: string) => patch({ instructions: v })} placeholder="Notas para el alumno" minRows={3} />
 
@@ -446,6 +619,21 @@ export default function NutritionBuilderScreen() {
                     </View>
                   )
                 })}
+
+                {/* E6-06: editor de porciones por grupo (solo modo intercambios) */}
+                {showExchanges && planMode === 'exchanges' ? (
+                  <ExchangeTargetsEditor
+                    mealId={meal.id ?? meal.uid}
+                    persistable={!!meal.id}
+                    groups={exGroups}
+                    targets={meal.id ? (exTargetsByMeal[meal.id] ?? []) : []}
+                    onChange={handleTargetsChange}
+                    variants={exVariants}
+                    variantId={meal.id ? (exVariantByMeal[meal.id] ?? null) : null}
+                    onVariantChange={handleVariantAssign}
+                    saveState={meal.id ? (exSaveState[meal.id] ?? 'idle') : 'idle'}
+                  />
+                ) : null}
 
                 {showEmptyWarn && meal.items.length === 0 ? (
                   <View className="border border-ember-300 bg-ember-100 rounded-control" style={styles.warnBox}>

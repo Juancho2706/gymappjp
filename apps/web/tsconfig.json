@@ -34,6 +34,8 @@
       "@eva/workout-engine": ["../../packages/workout-engine/index.ts"],
       "@eva/plan-builder": ["../../packages/plan-builder/index.ts"],
       "@eva/cardio": ["../../packages/cardio/index.ts"],
+      "@eva/bodycomp": ["../../packages/bodycomp/index.ts"],
+      "@eva/bodycomp/fixtures": ["../../packages/bodycomp/fixtures.ts"],
       "@eva/profile-analytics": ["../../packages/profile-analytics/index.ts"]
     }
   },
