@@ -348,7 +348,10 @@ export function SetRow({
 
 // ─── ActiveSetRow ─────────────────────────────────────────────────────────────
 
-const BOX_VALUE_STYLE = textStyle('2xl', FONT.monoBold, { ls: 'tight' })
+// Valor de las cajas KG/Reps de la fila activa: la web declara `font-semibold font-mono` para esos inputs
+// (mono 600, `LogSetForm.tsx:576-579`). Antes salía en `FONT.monoBold` (JetBrainsMono 700), un peso por
+// encima del semibold del web. La cara 600 ya está cargada y en uso (OBJECTIVE_STYLE, `TypedKeypad.tsx`).
+const BOX_VALUE_STYLE = textStyle('2xl', FONT.monoSemibold, { ls: 'tight' })
 
 type FieldMode = 'weight' | 'reps' | 'decimal' | 'integer'
 interface RowField {
@@ -595,7 +598,10 @@ export function ActiveSetRow({
               onPress={() => openField('weight')}
               testID={`set-field-${setNumber}-weight`}
             />
-            <View className="pb-4">
+            {/* Padding inferior del × = `pb-3` (12px): mirror del span '×' de la fila ACTIVA web,
+                `pb-3 text-xl` (`LogSetForm.tsx:652`). Antes `pb-4` (16px) lo alineaba 4px más arriba
+                respecto a las cajas h-14. `text-xl` ya coincide vía textStyle('xl'). */}
+            <View className="pb-3">
               <Text style={textStyle('xl', FONT.ui)} className="text-on-dark-muted">
                 ×
               </Text>
@@ -718,7 +724,10 @@ export function ActiveSetRow({
             ) : (
               <>
                 <Check size={18} color="#FFFFFF" strokeWidth={2.6} />
-                <Text style={textStyle('sm', FONT.uiBold)} className="text-white">
+                {/* Label a 16px (`textStyle('md')`): el botón etiquetado web NO fija text-size, así que el
+                    label hereda el tamaño base del documento (~16px) con `font-bold` (`LogSetForm.tsx:1148-1154`).
+                    Antes `textStyle('sm')` = 14px, ~2px por debajo del base heredado. El peso (bold) ya coincidía. */}
+                <Text style={textStyle('md', FONT.uiBold)} className="text-white">
                   {isEditing ? 'Guardar' : 'Listo'}
                 </Text>
               </>
@@ -741,9 +750,13 @@ export function ActiveSetRow({
             className="min-h-[36px] flex-row items-center gap-1.5 self-start rounded-control px-2 active:opacity-70"
           >
             <StickyNote size={14} color={noteTrimmed ? WARNING_500 : ON_DARK_MUTED} />
+            {/* Toggle de nota a 11px (`textStyle('3xs', FONT.uiSemibold)`): la web es `text-[11px] font-semibold`
+                (`LogSetForm.tsx:707,711-712`). Antes `TYPE.caption` fijaba fontSize=13 inline y —por la convención
+                NativeWind v4 documentada arriba (el style inline gana)— sobrescribía el `text-[11px]` del className,
+                saliendo a ~13px (+18%). Mismo patrón que `KeypadHost.tsx:311-312`, que ya usa textStyle('3xs'). */}
             <Text
-              style={[TYPE.caption, { fontFamily: FONT.uiSemibold }]}
-              className={`text-[11px] ${noteTrimmed ? 'text-warning-500' : 'text-on-dark-muted'}`}
+              style={textStyle('3xs', FONT.uiSemibold)}
+              className={noteTrimmed ? 'text-warning-500' : 'text-on-dark-muted'}
             >
               {noteTrimmed ? 'Nota añadida' : 'Agregar nota'}
             </Text>
