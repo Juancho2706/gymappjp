@@ -42,6 +42,12 @@ Sección 1 (workout del alumno) corriendo en Opus. Si murió: relanzar el workfl
 2. Desde la Sección 1 en adelante, TODOS los agentes corren en Opus; Fable solo orquesta.
 3. Los componentes compartidos sin fix se corrigen dentro de la sección que los usa, consumiendo los hallazgos de la Ola 0.
 
+## QA visual reportado por el usuario (build del 10-jul, dashboard alumno) — entrada P0 para Sección 2
+
+1. **Barra blanca fea en el navbar** (tab bar inferior): franja blanca visible alrededor/detrás de la tab bar flotante en dark mode. Revisar fondo del contenedor de tabs / safe area / edge-to-edge en Android.
+2. **Overlay "Entrenamiento completado"** (toast/badge verde con check): NO tapa el contenido de atrás — el texto de la card se lee a través/alrededor. Debe llevar backdrop/scrim u opacidad plena como en web (verificar contra el equivalente web).
+3. **Header "Buenas tardes, Catalina" superpuesto con otro texto** (se ve texto duplicado/marquee detrás del saludo). Posible doble render del header o animación de entrada rota.
+
 ## Hallazgos pendientes / bloqueos
 
 - ~1,293 discrepancias de componentes compartidos pendientes de aplicar (ver `docs/rn-port/ola0-hallazgos.json`).
