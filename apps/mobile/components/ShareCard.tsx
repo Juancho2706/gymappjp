@@ -2,6 +2,7 @@ import { createContext, useContext, useRef, useState, type ReactNode } from 'rea
 import {
   ActivityIndicator,
   Modal,
+  Platform,
   Pressable,
   Share,
   Text,
@@ -11,6 +12,7 @@ import {
 } from 'react-native'
 import { captureRef } from 'react-native-view-shot'
 import * as Sharing from 'expo-sharing'
+import * as FileSystem from 'expo-file-system/legacy'
 import * as Haptics from 'expo-haptics'
 import { LinearGradient } from 'expo-linear-gradient'
 import { BlurView } from 'expo-blur'
@@ -391,24 +393,50 @@ export function ShareCardPreview({
       }
       void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
 
+      // `fileName` VIVO (antes prop muerta): el capture a tmpfile queda con un nombre temporal
+      // aleatorio, mientras el web nombra el PNG compartido/descargado con la prop
+      // (`new File([blob], fileName, …)`, PRShareCardModal.tsx:72 → `record-{slug}.png`). Renombramos
+      // el archivo capturado a `${fileName}.png` para paridad de nombre. Best-effort: si el move falla
+      // en alguna plataforma, compartimos el tmpfile original (nunca romper el share por el renombrado).
+      let shareUri = uri
+      try {
+        const safe = (fileName || 'eva-card').replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/^-+|-+$/g, '') || 'eva-card'
+        const from = uri.startsWith('file://') ? uri : `file://${uri}`
+        const to = `${FileSystem.cacheDirectory}${safe}.png`
+        if (to !== from) {
+          await FileSystem.deleteAsync(to, { idempotent: true })
+          await FileSystem.moveAsync({ from, to })
+          shareUri = to
+        }
+      } catch {
+        shareUri = uri
+      }
+
       if (onShare) {
-        await onShare(uri)
+        await onShare(shareUri)
         return
       }
 
-      // Default: native share sheet with the PNG. expo-sharing is the primary
-      // path (present in deps); RN Share is the fallback.
-      if (await Sharing.isAvailableAsync()) {
-        await Sharing.shareAsync(uri, {
+      // Default: native share sheet with the PNG. El web comparte la IMAGEN + el TEXTO juntos
+      // (`navigator.share({ files, title, text })` — PRShareCardModal.tsx:72-75; y el brag de sesión
+      // series·reps·kg·récords viaja como `text` en WorkoutSummaryOverlay.tsx:224/231). `Sharing.shareAsync`
+      // sólo comparte el ARCHIVO: su `dialogTitle` es el título del chooser (Android), NO contenido
+      // compartido → en iOS el brag textual se perdía. En iOS usamos RN `Share.share({ url, message })`
+      // para adjuntar imagen + texto igual que web. En Android mantenemos expo-sharing (comparte el PNG
+      // real; el Share.share de Android no adjunta archivo, sólo texto — perderíamos la tarjeta branded).
+      if (Platform.OS === 'ios') {
+        // RN Share distingue cancelación de éxito: dismissedAction = el usuario cerró la hoja → silencio
+        // (como el web, que sólo traga el AbortError de cancelación en web-share.ts:29). No es error.
+        const result = await Share.share({ url: shareUri, message: shareMessage ?? '' })
+        if (result.action === Share.dismissedAction) return
+      } else if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(shareUri, {
           mimeType: 'image/png',
           dialogTitle: shareMessage || 'Compartir',
           UTI: 'public.png',
         })
       } else {
-        // RN Share distingue cancelación de éxito: dismissedAction = el usuario cerró
-        // la hoja → silencio (como el web, que sólo traga el AbortError de cancelación
-        // en web-share.ts:29). No lo tratamos como error.
-        const result = await Share.share({ url: uri, message: shareMessage ?? '' })
+        const result = await Share.share({ url: shareUri, message: shareMessage ?? '' })
         if (result.action === Share.dismissedAction) return
       }
       onShared?.()

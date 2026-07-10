@@ -267,7 +267,7 @@ export function WeightChips({ onIncrement }: { onIncrement: (delta: number) => v
             accessibilityRole="button"
             accessibilityLabel={`${delta > 0 ? 'más' : 'menos'} ${formatWeightEsCl(Math.abs(delta))} kilos`}
             onPress={() => onIncrement(delta)}
-            className="h-10 flex-1 items-center justify-center rounded-pill border border-inverse/10 bg-white/[0.06] active:bg-white/[0.12]"
+            className="h-10 flex-1 items-center justify-center rounded-pill border border-inverse/10 bg-white/[0.06] active:scale-95 active:bg-white/[0.12]"
           >
             <Text style={{ ...textStyle('xs', FONT.monoBold), ...TABULAR }} className="text-on-dark">
               {chipLabel(delta)}
@@ -396,7 +396,7 @@ function KeyButton({
       onPress={onPress}
       onLongPress={onLongPress}
       delayLongPress={450}
-      className="h-14 items-center justify-center rounded-control bg-white/[0.06] active:bg-white/[0.14]"
+      className="h-14 items-center justify-center rounded-control bg-white/[0.06] active:scale-95 active:bg-white/[0.14]"
       style={{ flexBasis: '31.5%', flexGrow: 1 }}
     >
       {children}
@@ -556,7 +556,7 @@ export function TypedKeypad(props: {
             accessibilityRole="button"
             accessibilityLabel={primaryIsNext ? 'Siguiente' : 'Listo, guardar serie'}
             onPress={primaryIsNext ? handleNext : handleDone}
-            className="h-14 w-full flex-row items-center justify-center gap-2 rounded-control bg-sport-500 active:opacity-90"
+            className="h-14 w-full flex-row items-center justify-center gap-2 rounded-control bg-sport-500 active:scale-[0.98]"
           >
             {primaryIsNext ? (
               <>

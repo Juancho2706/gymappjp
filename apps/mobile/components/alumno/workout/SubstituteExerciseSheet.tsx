@@ -129,12 +129,27 @@ export function SubstituteExerciseSheet({ open, onOpenChange, blockId, prescribe
       // contenido medido, así que dynamicSizing hugea bien. Es el hijo 0 (abajo).
       stickyHeaderIndices={[0]}
       forceDark
+      // El grabber lo dibuja ESTE componente dentro de su header, igual que el web (el grabber vive en
+      // SubstituteExerciseSheet.tsx:77, DENTRO del header; el `sheet.tsx` base web NO trae grabber). Por
+      // eso deshabilitamos el handle compartido del Sheet: así logramos paridad EXACTA de ancho (web
+      // w-9=36px) sin tocar el primitivo compartido —que sigue en w-10=40px, en paridad con los OTROS
+      // sheets exec/alumno web (NumericKeypadSheet.tsx:192, ExchangeEquivalencesSheet.tsx:62,
+      // OffPlanLogger.tsx:182, RecipeIdeasSection.tsx:108, todos w-10), a los que sí rompería cambiarlo.
+      // El drag-to-close no depende del bar visual (lo gestiona enablePanDownToClose del BottomSheetModal).
+      showHandle={false}
       // Nombre accesible del diálogo (web `aria-label`, SubstituteExerciseSheet.tsx:72).
       accessibilityLabel={`Cambiar ${prescribedName} por máquina ocupada`}
     >
       {/* Hijo 0 = header sticky. Fondo opaco (ink-950 = fondo del sheet) para tapar la lista al
-          scrollear por debajo. Grabber = handle del Sheet. */}
+          scrollear por debajo. */}
       <View style={styles.headerBlock} className="bg-ink-950">
+        {/* Grabber decorativo — web `mx-auto mb-3 h-1 w-9 rounded-full bg-white/15` (SubstituteExerciseSheet.tsx:77):
+            36px de ancho (w-9), 4px de alto (h-1), centrado, 12px de margen inferior (mb-3), bg white/15. */}
+        <View
+          accessibilityElementsHidden
+          importantForAccessibility="no-hide-descendants"
+          className="mb-3 h-1 w-9 self-center rounded-pill bg-white/15"
+        />
         <View style={styles.eyebrowRow}>
           {/* strokeWidth 2 = default lucide, igual que el ArrowRightLeft web (sin prop, L79). */}
           <ArrowRightLeft className="text-sport-300" size={14} strokeWidth={2} />
@@ -152,7 +167,7 @@ export function SubstituteExerciseSheet({ open, onOpenChange, blockId, prescribe
             cercano al web `tracking-[-0.02em]` (no hay token de -0.02em). */}
         <Text
           style={textStyle('xl', FONT.displayBlack, { lh: 'snug', ls: 'tight' })}
-          className="text-on-dark mt-1"
+          className="text-on-dark mt-1.5"
         >
           {prescribedName}
         </Text>
@@ -279,6 +294,9 @@ function CandidateRow({ opt, onPress }: { opt: SubstituteCandidate; onPress: () 
           </View>
           {/* Bloque texto */}
           <View style={{ flex: 1, minWidth: 0 }}>
+            {/* Nombre: sm=14px es el snap DS del web `text-[15px]` (la escala salta 14→16, no hay token de
+                15px; regla "usa tokens, no hardcodear px" → 1px de divergencia inherente). `font-bold`
+                web = FONT.uiBold. lh 'snug' ≈ web `leading-tight`. numberOfLines={1} replica `truncate`. */}
             <Text style={textStyle('sm', FONT.uiBold, { lh: 'snug' })} className="text-on-dark" numberOfLines={1}>
               {opt.name}
             </Text>
@@ -313,9 +331,11 @@ function CandidateRow({ opt, onPress }: { opt: SubstituteCandidate; onPress: () 
 
 const styles = StyleSheet.create({
   // Header sticky (hijo 0 del scroll): el px-20 lo da el contentContainer del Sheet; el gap:14 del
-  // contentContainer aporta la separación inferior (≈ web pb-4). pt corto porque el handle ya deja aire.
-  // Web `px-5 pt-3 pb-4` = 20 / 12 / 16 (SubstituteExerciseSheet.tsx:76).
-  headerBlock: { gap: 2, paddingTop: 8, paddingBottom: 2 },
+  // contentContainer aporta la separación inferior (2 + 14 ≈ web pb-4=16). pt=12 = web pt-3 (el grabber
+  // ahora vive DENTRO del header como en web L76-77, así que el header carga su propio aire superior).
+  // Sin `gap`: los márgenes entre hijos son EXPLÍCITOS y espejan el web 1:1 (grabber mb-3=12, título
+  // mt-1.5=6, subtítulo mt-1=4). Web `px-5 pt-3 pb-4` = 20 / 12 / 16 (SubstituteExerciseSheet.tsx:76).
+  headerBlock: { paddingTop: 12, paddingBottom: 2 },
   // Eyebrow: 11px (3xs) uiBold uppercase + tracking wide (~0.04em) — web `text-[11px] tracking-wider`.
   eyebrow: { ...textStyle('3xs', FONT.uiBold, { ls: 'wide' }), textTransform: 'uppercase' },
   eyebrowRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },

@@ -13,7 +13,7 @@ import {
   TrendingUp,
   Undo2,
 } from 'lucide-react-native'
-import { formatWeightEsCl, type ExerciseType, type OptimisticLogPayload, type ReconciledSessionLog, type TypedKeypadMode } from '@eva/workout-engine'
+import { formatTypedObjective, formatWeightEsCl, type ExerciseType, type OptimisticLogPayload, type ReconciledSessionLog, type TypedKeypadMode } from '@eva/workout-engine'
 import type { HrZoneRange } from '@eva/cardio'
 import { FONT, TYPE, textStyle } from '../../../lib/typography'
 import { useTheme } from '../../../context/ThemeContext'
@@ -207,9 +207,15 @@ export function SingleExerciseCard({
           // el scrim atenúa el objetivo/"Última vez" de la card mientras el alumno tipea.
           header={{
             exerciseName: exercise.name,
+            // Objetivo prescrito repetido en el header del keypad — SIEMPRE, también en bloques TIPADOS
+            // (mirror web NumericKeypadSheet.tsx:156-157 `if (target?.objective) return target.objective`;
+            // en tipados LogSetForm pasa `objective: typedObjective` = `formatTypedObjective(...)`,
+            // LogSetForm.tsx:830 / typed-keypad.ts:72-88). La ruta de EDICIÓN mobile ya lo mostraba
+            // (KeypadHost.tsx:193-194 vía `target.typed.objective`); acá la ruta PRIMARIA la iguala en vez
+            // de dejar `undefined`, que ocultaba el objetivo mientras el alumno registra la serie tipada.
             objectiveLine: isStrength
               ? `${block.sets}×${block.reps}${suggestedWeightKg != null ? ` · ${formatWeightEsCl(suggestedWeightKg)} kg` : ''}`
-              : undefined,
+              : formatTypedObjective(block, typedMode as TypedKeypadMode),
             last:
               isStrength && bestPrev
                 ? { weightKg: bestPrev.weight_kg ?? null, reps: bestPrev.reps_done ?? null }
@@ -258,6 +264,11 @@ export function SingleExerciseCard({
           {/* Separador `·` + músculo INCONDICIONALES (paridad web SingleExerciseCard.tsx:182-187: el
               `·` y el span de músculo se pintan siempre, aun con `muscle_group` vacío). */}
           <Text style={{ fontSize: 11 }} className="text-on-dark-muted/40">·</Text>
+          {/* Web SingleExerciseCard.tsx:183-187 antepone `${supersetLetter ?? 'SS'}-${blockIndex+1} · `
+              cuando `group.type === 'superset'`. Esa rama es INALCANZABLE: el motor de agrupación
+              (workout-block-grouping.ts:61-66) degrada todo tramo <2 a `type:'single'` y enruta los runs
+              de superserie ≥2 a SupersetGroupCard, así que una SingleExerciseCard siempre recibe grupo
+              'single'. Gap de paridad de rama muerta documentado, sin acción funcional. */}
           <Text
             style={{ fontFamily: FONT.uiSemibold, fontSize: 11 }}
             className="min-w-0 shrink text-on-dark-muted"

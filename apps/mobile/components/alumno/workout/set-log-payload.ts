@@ -54,7 +54,7 @@ export function typedLogValues(mode: TypedKeypadMode, values: Record<string, str
   return { actualDurationSec, actualDistanceM, actualHoldSec, actualAvgHr, repsDone }
 }
 
-/** Payload de una serie TIPADA (cardio/movilidad/roller): peso/rpe/rir van null, ejes en `actual_*`. */
+/** Payload de una serie TIPADA (cardio/movilidad/roller): peso/rir van null, ejes en `actual_*`. */
 export function buildTypedPayload(
   mode: TypedKeypadMode,
   values: Record<string, string>,
@@ -67,7 +67,12 @@ export function buildTypedPayload(
     setNumber,
     weightKg: null,
     repsDone: v.repsDone,
-    rpe: null,
+    // RPE: se lee de `values.rpe` (no se fuerza null). En el registro NUEVO de una serie tipada no hay
+    // key `rpe` (el flujo tipado no tiene paso de esfuerzo) ⇒ int(undefined)=null, idéntico al comportamiento
+    // previo. Pero al EDITAR una serie tipada ya logueada, `openSet` siembra `values.rpe` desde el log para
+    // NO borrar el RPE que el alumno fijó post-registro con los dots — mirror de la web, que conserva el RPE
+    // vía el hidden input `<input name="rpe" value={rpeLocal}>` en cada re-submit (`LogSetForm.tsx:1022`).
+    rpe: int(values.rpe),
     rir: null,
     actualDurationSec: v.actualDurationSec,
     actualDistanceM: v.actualDistanceM,

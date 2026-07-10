@@ -313,9 +313,22 @@ export function SetRow({
     </Pressable>
   )
 
-  // Estado de error (mirror web A.4.e, `LogSetForm.tsx:738-749`): fila dedicada con el mensaje en rojo +
-  // botón 'Reintentar' que re-dispara el commit. Sólo cuando hay error real (con conexión); offline usa el
-  // camino `_pending` ámbar. El chip se conserva intacto arriba (sin regresión de la marca/valores).
+  // Estado de error (mirror web A.4.e, `LogSetForm.tsx:738-749`): fila dedicada con el mensaje en rojo.
+  // Sólo cuando hay error real (con conexión); offline usa el camino `_pending` ámbar. El chip se conserva
+  // intacto arriba (sin regresión de la marca/valores).
+  //
+  // Paridad clave: al reconciliar `state.error` la web hace `setSyncStatus('error')` Y `setEditing(true)`
+  // (`LogSetForm.tsx:348-363`) → `collapsed=false` re-renderiza la FILA de captura EDITABLE (inputs +
+  // RPE/RIR) con el mensaje + 'Reintentar' al pie: el alumno queda directamente en un formulario para
+  // CORREGIR el valor. Antes RN sólo ofrecía 'Reintentar' con el MISMO payload (re-falla si el error fue de
+  // validación). Ahora, además, el chip-error abre la fila editable sembrada:
+  //   • El chip rojo (arriba) YA es un `onPress={onOpenSet}` (línea 195) → abre el KeypadHost sembrado con
+  //     TODOS los valores del log (`openSet` construye `editValues`, ExecutorV2 strength+typed) para corregir.
+  //   • Se añade un botón 'Editar' explícito (mirror del `setEditing(true)` web) por si el tap del chip no es
+  //     obvio, y se conserva 'Reintentar' (onRetry) para el error transitorio de red (mismo payload sirve).
+  // Adaptación RN idiomática: la fila editable vive en el Modal del keypad (no inline), así que en vez de
+  // FORZAR la apertura del modal ante un error de sync en segundo plano (intrusivo si el alumno ya pasó a
+  // otra serie) se ofrece la affordance editable — preserva "el alumno puede corregir el valor".
   if (logged && syncError) {
     return (
       <View className="gap-1.5">
@@ -324,6 +337,21 @@ export function SetRow({
           <Text style={TYPE.caption} className="flex-1 text-danger-500" numberOfLines={2}>
             {syncError}
           </Text>
+          <Pressable
+            testID={`edit-set-${setNumber}`}
+            onPress={onPress}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel={`Editar la serie ${setNumber} para corregir el valor`}
+            className="rounded-control border border-danger-500/30 px-2 py-1 active:bg-danger-500/10"
+          >
+            <Text
+              style={{ fontFamily: FONT.uiBold, fontSize: 10, letterSpacing: 0.4, textTransform: 'uppercase' }}
+              className="text-danger-500"
+            >
+              Editar
+            </Text>
+          </Pressable>
           <Pressable
             testID={`retry-set-${setNumber}`}
             onPress={onRetry}

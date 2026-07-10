@@ -295,6 +295,35 @@ function ExecutorV2Inner({ planId }: { planId: string }) {
       // tipo->campos es el MISMO puro que consume `KeypadHost` (fix QA R4·#5, cero drift).
       const typed = typedTargetFor(block, exercise)
       if (typed) {
+        // Editar una serie TIPADA ya logueada (tap en el chip recap): siembra el teclado con TODOS los ejes
+        // del log — igual que la rama strength (abajo) y que la web, que SIEMPRE re-renderiza el <form>
+        // tipado con cada input pre-llenado por `defaultValue` desde `existingLog` (cardio_min ←
+        // actual_duration_sec/60 `LogSetForm.tsx:1034`, actual_distance_m `:1043`, actual_avg_hr `:1052`,
+        // actual_hold_sec `:1065`, actual_duration_sec/reps_done roller `:1078/1087`). Sin esto, la rama
+        // typed abría el keypad en blanco (initialValues=draft, ya limpiado ⇒ {}) y confirmar disparaba
+        // `buildTypedPayload` sobre valores vacíos ⇒ todos los actual_* a null ⇒ BORRABA el registro (P1).
+        // Las keys de `values` = los `key` de `typedKeypadFields` (fuente única del mapeo). Decimales en
+        // es-CL (coma) vía formatWeightEsCl como el resto de la captura RN; enteros como String crudo.
+        const typedLog = sessionLogs.find((l) => l.block_id === blockId && l.set_number === setNumber)
+        let typedEditValues: Record<string, string> | null = null
+        if (typedLog) {
+          const vals: Record<string, string> = {}
+          if (typed.mode === 'cardio') {
+            if (typedLog.actual_duration_sec != null)
+              vals.cardio_min = formatWeightEsCl(Math.round((typedLog.actual_duration_sec / 60) * 10) / 10)
+            if (typedLog.actual_distance_m != null) vals.actual_distance_m = formatWeightEsCl(typedLog.actual_distance_m)
+            if (typedLog.actual_avg_hr != null) vals.actual_avg_hr = String(typedLog.actual_avg_hr)
+          } else if (typed.mode === 'mobility') {
+            if (typedLog.actual_hold_sec != null) vals.actual_hold_sec = String(typedLog.actual_hold_sec)
+          } else {
+            if (typedLog.actual_duration_sec != null) vals.actual_duration_sec = String(typedLog.actual_duration_sec)
+            if (typedLog.reps_done != null) vals.reps_done = String(typedLog.reps_done)
+          }
+          // Conserva el RPE fijado post-registro con los dots (mirror web hidden input `rpe`,
+          // `LogSetForm.tsx:1022`): `buildTypedPayload` lo re-lee de `values.rpe` en vez de forzar null.
+          if (typedLog.rpe != null) vals.rpe = String(typedLog.rpe)
+          typedEditValues = vals
+        }
         setKeypadTarget({
           blockId,
           setNumber,
@@ -302,8 +331,9 @@ function ExecutorV2Inner({ planId }: { planId: string }) {
           targetReps: '',
           suggestedWeight: null,
           effortKind: null,
-          initialValues: restored?.values,
+          initialValues: typedEditValues ?? restored?.values,
           initialFieldIndex: restored?.fieldIndex,
+          isEdit: typedEditValues != null,
           typed,
         })
         haptics.tap()
@@ -1061,7 +1091,11 @@ function ExecutorV2Inner({ planId }: { planId: string }) {
               bloques/filas). Lleva el gap:20 entre secciones (antes en contentContainerStyle, que con un
               único hijo ya no aplicaba). El estado "completado" se comunica SÓLO por el colapso de cada
               ejercicio a su recap — el web NO muestra banner de éxito en la lista (spec §7). */}
-          <View ref={scrollContentRef} collapsable={false} style={{ gap: 20 }}>
+          {/* Columna de contenido acotada a 1024px y centrada = paridad web: el body de la lista es
+              `max-w-5xl mx-auto` (WEC:1915), igual que el header (WEC:1797) y la barra Finalizar
+              (`max-w-5xl mx-auto`, WEC:1950). En tablet evita que las cards se estiren de borde a borde
+              mientras la barra Finalizar (maxWidth:1024) y el stepper (maxWidth:768) ya van centrados. */}
+          <View ref={scrollContentRef} collapsable={false} className="w-full self-center" style={{ gap: 20, maxWidth: 1024 }}>
           {sections.map((section) => (
             <View key={section.key} className="gap-3">
               {/* Header row + subtitle anidados en un View gap-1.5 (6px) — paridad web: la sección es
@@ -1114,7 +1148,11 @@ function ExecutorV2Inner({ planId }: { planId: string }) {
               accessibilityRole="button"
               accessibilityLabel="Finalizar entrenamiento"
             >
-              <CheckCircle2 size={16} color={ON_DARK} />
+              {/* Icono blanco puro = paridad web WEC:1952 (`text-white`): tanto el `CheckCircle2 w-4 h-4`
+                  como el rótulo heredan currentColor=#FFFFFF. Usamos el token `theme.primaryForeground`
+                  (text-on-sport, #FFFFFF) para igualar el `text-on-sport` del Text adyacente, no ON_DARK
+                  (#F4F6F8, con tinte azulado) que dejaría el icono más apagado que su propia etiqueta. */}
+              <CheckCircle2 size={16} color={theme.primaryForeground} />
               <Text className="font-sans-bold text-on-sport">Finalizar entrenamiento</Text>
             </Pressable>
           </View>

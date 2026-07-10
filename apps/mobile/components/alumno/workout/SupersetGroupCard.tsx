@@ -6,6 +6,7 @@ import { CheckCircle2, ChevronDown, History, Info, Quote, TrendingUp } from 'luc
 import {
   effectiveExerciseType,
   firstIncompleteInRounds,
+  formatTypedObjective,
   formatWeightEsCl,
   type OptimisticLogPayload,
   type ReconciledSessionLog,
@@ -160,9 +161,10 @@ export function SupersetGroupCard({
         <View className="flex-row flex-wrap items-center justify-between gap-2">
           <View className="flex-row items-center gap-2">
             <Text className="font-display text-sm text-on-dark">Superserie</Text>
-            <Text style={TYPE.caption} className="text-[11px] text-on-dark-muted">
+            <Text style={[TYPE.caption, { fontFamily: FONT.uiSemibold }]} className="text-[11px] text-on-dark-muted">
               {/* Conteo sobre los miembros RESUELTOS (mirror web WEC:702 `{memberVMs.length}`), no el
-                  crudo `members.length` que contaría un miembro con `resolveExercise` null. */}
+                  crudo `members.length` que contaría un miembro con `resolveExercise` null. Peso 600
+                  (uiSemibold) = web WEC:701 `font-semibold`, no el 500 de TYPE.caption. */}
               {memberVMs.length} ejercicios · {maxSets} ronda{maxSets === 1 ? '' : 's'}
             </Text>
           </View>
@@ -174,11 +176,14 @@ export function SupersetGroupCard({
             accessibilityLabel="Cómo hacer la superserie"
             accessibilityState={{ expanded: howToOpen }}
           >
-            <Text style={TYPE.caption} className="text-[11px] text-on-dark-muted">Cómo hacerla</Text>
+            {/* Peso 600 (uiSemibold) = web WEC:709 `font-semibold`, no el 500 de TYPE.caption. */}
+            <Text style={[TYPE.caption, { fontFamily: FONT.uiSemibold }]} className="text-[11px] text-on-dark-muted">Cómo hacerla</Text>
             <ChevronDown size={12} color={ON_DARK_MUTED} style={{ transform: [{ rotate: howToOpen ? '180deg' : '0deg' }] }} />
           </Pressable>
         </View>
-        <Text style={TYPE.caption} className="text-[12px] text-on-dark-muted">
+        {/* Cuerpo muted del intro: web WEC:715 SIN peso explícito → 400 (regular). Se baja de TYPE.caption
+            (uiMedium 500) a FONT.ui (400); los inline `font-sans-bold` mantienen el bold como los <strong>. */}
+        <Text style={[TYPE.caption, { fontFamily: FONT.ui }]} className="text-[12px] text-on-dark-muted">
           Rondas: <Text className="text-on-dark font-sans-bold">{firstLabel}</Text> → <Text className="text-on-dark font-sans-bold">{secondLabel}</Text> sin descanso, descansa al cerrar la ronda.
         </Text>
         {/* Disclosure "Cómo hacerla" — AnimatePresence + `exit` para que el COLAPSO anime en vez de
@@ -295,7 +300,7 @@ export function SupersetGroupCard({
             {/* Historial "Sesión anterior" — solo strength con marca previa (web gatea a strength, :819) */}
             {m.effType === 'strength' && m.bestPrev && (
               <View className="flex-row flex-wrap items-center gap-x-2 gap-y-1 rounded-sm bg-white/[0.04] px-2.5 py-1.5">
-                <History size={13} color={ON_DARK_MUTED} />
+                <History size={14} color={ON_DARK_MUTED} />
                 <Text style={{ fontFamily: FONT.uiSemibold, fontSize: 10.5 }} className="text-on-dark-muted">
                   Sesión anterior · {formatRelativeDate(m.prevList[0].date)}:
                 </Text>
@@ -351,14 +356,22 @@ export function SupersetGroupCard({
                   >
                     <View className="flex-row items-center gap-2 px-1.5">
                       <View className="rounded-full bg-sport-500/15 px-1.5 py-0.5">
-                        <Text style={[TYPE.mono, MONO_BOLD]} className="text-[10px] text-sport-300">{label}</Text>
+                        {/* Etiqueta de serie por ronda (A1/B1): web WEC:869 la pinta `font-black tabular-nums`
+                            → familia SANS peso 900, NO monoespaciada. Sin cara Hanken 900 cargada, se usa la
+                            black del DS (Archivo_900Black) para espejar el peso/impacto en vez de TYPE.mono. */}
+                        <Text
+                          style={{ fontFamily: FONT.displayBlack, fontVariant: ['tabular-nums'] }}
+                          className="text-[10px] text-sport-300"
+                        >
+                          {label}
+                        </Text>
                       </View>
                       <Text className="min-w-0 flex-1 font-sans-bold text-[11px] text-on-dark" numberOfLines={1}>
                         {m.exercise.name}
                       </Text>
                       {isNext && (
                         <Text
-                          style={{ fontFamily: FONT.uiBold, fontSize: 9, letterSpacing: 0.6, textTransform: 'uppercase' }}
+                          style={{ fontFamily: FONT.uiBold, fontSize: 9, letterSpacing: 0.45, textTransform: 'uppercase' }}
                           className="text-sport-300"
                         >
                           Sigue
@@ -375,10 +388,15 @@ export function SupersetGroupCard({
                         // Header de objetivo repetido en el teclado (DB-5, mirror web NumericKeypadSheet:204-228).
                         header={{
                           exerciseName: m.exercise.name,
+                          // Objetivo prescrito repetido en el header del keypad — SIEMPRE, también en
+                          // bloques TIPADOS (mirror web NumericKeypadSheet.tsx:156-157 / LogSetForm.tsx:830
+                          // `objective: typedObjective`). Antes la ruta PRIMARIA pasaba `undefined` para
+                          // cardio/movilidad/roller y el alumno no veía el objetivo al registrar; ahora lo
+                          // computa con `formatTypedObjective` igual que la ruta de EDICIÓN (KeypadHost:193-194).
                           objectiveLine:
                             m.effType === 'strength'
                               ? `${m.block.sets}×${m.block.reps}${m.suggested != null ? ` · ${formatWeightEsCl(m.suggested)} kg` : ''}`
-                              : undefined,
+                              : formatTypedObjective(m.block, m.typedMode as TypedKeypadMode),
                           last:
                             m.effType === 'strength' && m.bestPrev
                               ? { weightKg: m.bestPrev.weight_kg ?? null, reps: m.bestPrev.reps_done ?? null }

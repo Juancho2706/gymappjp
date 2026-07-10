@@ -349,7 +349,7 @@ export function KeypadHost({
                     onPress={commit}
                     accessibilityRole="button"
                     accessibilityLabel="Omitir el esfuerzo y guardar la serie"
-                    className="h-14 flex-1 items-center justify-center rounded-control border border-inverse/10 bg-white/[0.06] active:bg-white/[0.10]"
+                    className="h-14 flex-1 items-center justify-center rounded-control border border-inverse/10 bg-white/[0.06] active:scale-[0.98] active:bg-white/[0.10]"
                   >
                     <Text style={KEYPAD_ACTION_STYLE} className="text-on-dark">
                       Omitir
@@ -360,7 +360,7 @@ export function KeypadHost({
                     onPress={commit}
                     accessibilityRole="button"
                     accessibilityLabel={`${doneLabel}, guardar serie`}
-                    className="h-14 flex-row items-center justify-center gap-2 rounded-control bg-sport-500 active:opacity-90"
+                    className="h-14 flex-row items-center justify-center gap-2 rounded-control bg-sport-500 active:scale-[0.98]"
                     style={{ flex: 1.4 }}
                   >
                     <Check size={20} color={WHITE} />
@@ -406,7 +406,7 @@ export function KeypadHost({
                     onPress={goNext}
                     accessibilityRole="button"
                     accessibilityLabel={primaryIsNext ? 'Siguiente' : `${doneLabel}, guardar serie`}
-                    className="h-14 w-full flex-row items-center justify-center gap-2 rounded-control bg-sport-500 active:opacity-90"
+                    className="h-14 w-full flex-row items-center justify-center gap-2 rounded-control bg-sport-500 active:scale-[0.98]"
                   >
                     {primaryIsNext ? (
                       <>

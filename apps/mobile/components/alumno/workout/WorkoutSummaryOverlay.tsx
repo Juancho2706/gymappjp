@@ -87,6 +87,24 @@ function fmtDecimalCL(n: number): string {
   return String(n).replace('.', ',')
 }
 
+/**
+ * Slug para el nombre del PNG del PR — espejo EXACTO del `slugify` web (PRShareCardModal.tsx:20-30):
+ * minúsculas + NFD sin diacríticos + no-alfanum→'-' + trim guiones + slice(0,48), fallback 'record'.
+ * El web nombra el archivo compartido `record-{slug}.png`; aquí pasamos `record-{slug}` (ShareCard le
+ * añade la extensión) para paridad de nombre.
+ */
+function slugify(s: string): string {
+  return (
+    s
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[̀-ͯ]/g, '')
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 48) || 'record'
+  )
+}
+
 /** "#rrggbb" + alfa → "rgba(r,g,b,a)" — para tintar la marca del coach (nudge sport-500/x). */
 function withAlpha(hex: string, alpha: number): string {
   const h = hex.replace('#', '')
@@ -415,9 +433,14 @@ export function WorkoutSummaryOverlay({
           {exerciseBreakdown.length > 0 && (
             <View style={{ gap: 8 }}>
               <Text style={{ fontFamily: BOLD, fontSize: 12, letterSpacing: 1.2, textTransform: 'uppercase', color: ON_DARK_MUTED }}>Por ejercicio</Text>
+              {/* Web: fila `flex flex-wrap items-baseline justify-between gap-2`
+                  (WorkoutSummaryOverlay.tsx:387): con un nombre largo el bloque de stats (series · kg
+                  vol.) ENVUELVE a una nueva línea en vez de comprimirse. Espejamos `flexWrap:'wrap'`;
+                  el bloque de nombre usa `flexShrink:1` (mirror del `<div>` flex-initial del web, no
+                  `flex:1`) para que un nombre largo consuma la línea y empuje los stats debajo. */}
               {exerciseBreakdown.map((ex, i) => (
-                <FadeIn key={`${ex.exerciseId}-${i}`} play={visible} reduced={motion.reduced} y={16} delay={50 + 60 * i} duration={300} style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: 8, borderRadius: 20, borderWidth: 1, borderColor: BORDER_INV, backgroundColor: W04, paddingHorizontal: 12, paddingVertical: 10 }}>
-                  <View style={{ flex: 1 }}>
+                <FadeIn key={`${ex.exerciseId}-${i}`} play={visible} reduced={motion.reduced} y={16} delay={50 + 60 * i} duration={300} style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'baseline', justifyContent: 'space-between', gap: 8, borderRadius: 20, borderWidth: 1, borderColor: BORDER_INV, backgroundColor: W04, paddingHorizontal: 12, paddingVertical: 10 }}>
+                  <View style={{ flexShrink: 1 }}>
                     <Text style={{ fontFamily: SEMIBOLD, fontSize: 14, color: ON_DARK }}>{ex.name}</Text>
                     <Text style={{ fontFamily: theme.fontSans, fontSize: 10, color: ON_DARK_MUTED }}>{ex.muscleGroup}</Text>
                   </View>
@@ -503,7 +526,12 @@ export function WorkoutSummaryOverlay({
             </FadeIn>
           ) : null}
 
-          {/* Check-in prompt (E2-18) */}
+          {/* Check-in prompt (E2-18) — ADICIÓN MOBILE-ONLY SANCIONADA, NO una regresión de paridad.
+              El overlay web NO tiene sección de check-in: sus secciones son header, hero, PRs, por
+              ejercicio, cardio/movilidad, músculos, nudge y footer (web WorkoutSummaryOverlay.tsx:258-529);
+              no existe CheckInPrompt en la fuente de verdad. Este prompt (entre el nudge y el footer) es
+              funcionalidad exclusiva de mobile: no debe confundirse con un elemento ausente del web ni
+              eliminarse por "paridad". */}
           {checkInReminder?.variant ? (
             <CheckInPrompt reminder={checkInReminder} lastRelative={checkInLastRelative} onPress={onCheckIn} fontSans={theme.fontSans} />
           ) : null}
@@ -565,7 +593,9 @@ export function WorkoutSummaryOverlay({
         onClose={() => setPrCard(null)}
         variant="record"
         shareMessage={prCard ? `¡Nuevo récord en ${prCard.exerciseName}! 💪 ${prCard.newWeightKg} kg` : undefined}
-        fileName="eva-record"
+        // Nombre del PNG = `record-{slug}` (ShareCard añade .png) → paridad con el web
+        // `record-{slug}.png` (PRShareCardModal.tsx:42,72). Antes era el estático 'eva-record'.
+        fileName={prCard ? `record-${slugify(prCard.exerciseName)}` : 'eva-record'}
       >
         {prCard ? (
           <>
@@ -681,9 +711,14 @@ function NonStrengthCard({
         {/* tracking-wide del web = 0.025em; a font-size 10px ≈ 0.25px (WorkoutSummaryOverlay.tsx:112). */}
         <Text style={{ fontFamily: BOLD, fontSize: 10, letterSpacing: 0.25, textTransform: 'uppercase', color: accent, backgroundColor: accent + '28', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 999, overflow: 'hidden' }}>{typeLabel}</Text>
       </View>
+      {/* Web usa `grid grid-cols-2 gap-2` (WorkoutSummaryOverlay.tsx:118): COLUMNAS FIJAS. Un tile
+          único (cardio con sólo 'Rondas', o movilidad con sólo 'Series') ocupa media fila (columna
+          izquierda), no el ancho completo. Con `flexGrow:1` un tile solitario se estiraba a full-width,
+          cambiando el layout visible. Fijamos el ancho a ~48% (dos columnas reales sobre el gap de 8px)
+          en vez de flexGrow para que el tile único quede a media fila como en la grilla web. */}
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
         {tiles.map((t, i) => (
-          <View key={i} style={{ flexGrow: 1, minWidth: '46%', borderRadius: 14, borderWidth: 1, borderColor: BORDER_INV, backgroundColor: W05, paddingHorizontal: 12, paddingVertical: 10, alignItems: 'center' }}>
+          <View key={i} style={{ width: '48%', borderRadius: 14, borderWidth: 1, borderColor: BORDER_INV, backgroundColor: W05, paddingHorizontal: 12, paddingVertical: 10, alignItems: 'center' }}>
             <Text style={{ fontFamily: MONO, fontSize: 20, color: ON_DARK }}>
               {t.value}
               {t.unit ? <Text style={{ fontFamily: BOLD, fontSize: 11, color: ON_DARK_MUTED }}> {t.unit}</Text> : null}

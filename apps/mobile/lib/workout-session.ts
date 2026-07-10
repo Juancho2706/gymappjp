@@ -335,7 +335,12 @@ export function useWorkoutSession(planId: string): WorkoutSessionState {
         const exId = (log.workout_blocks as { exercise_id?: string } | undefined)?.exercise_id
         if (!exId) continue
         if (!history[exId]) history[exId] = []
-        const date = String(log.logged_at).split('T')[0]
+        // Día-calendario Santiago del instante (paridad web WorkoutSummaryOverlay.tsx:25-31, cuyo
+        // fmtShortDate hace getSantiagoIsoYmdForUtcInstant(iso) antes de formatear). `split('T')[0]`
+        // tomaba el trozo crudo del timestamp UTC: para un set cerca de medianoche la fecha "Superaste
+        // tus X kg del {fecha}" (E2-15) podía quedar corrida un día respecto a web. Esta ymd también
+        // alimenta el agrupado por sesión de abajo y los "Última vez"/"Sesión anterior" (formatRelativeDate).
+        const date = getSantiagoIsoYmdForUtcInstant(String(log.logged_at))
         const existingDates = history[exId].map((h) => h.date)
         if (existingDates.length === 0 || existingDates.includes(date)) {
           history[exId].push({ weight_kg: (log.weight_kg as number) ?? null, reps_done: (log.reps_done as number) ?? null, date })

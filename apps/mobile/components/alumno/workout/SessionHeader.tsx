@@ -63,6 +63,11 @@ export function SessionHeader({
       transition={{ type: 'timing', duration: 250 }}
       className="border-b border-white/10 px-4 pb-3 pt-1"
     >
+      {/* Columna interna acotada a 1024px y centrada = paridad web: el inner del header es
+          `max-w-5xl mx-auto` (WEC:1797). En tablet mantiene la fila de controles y la barra de
+          progreso alineadas con el body de la lista y la barra Finalizar (ambos max-w-5xl), en vez
+          de estirarse de borde a borde. */}
+      <View className="w-full self-center" style={{ maxWidth: 1024 }}>
       <View className="mb-3 flex-row items-center gap-2">
         <Pressable
           testID="btn-exit-workout"
@@ -181,6 +186,7 @@ export function SessionHeader({
             <Text style={TYPE.mono} className="text-[11px] text-sport-400 font-mono-bold">{completionPct}%</Text>
           </MotiView>
         </View>
+      </View>
       </View>
     </MotiView>
   )
