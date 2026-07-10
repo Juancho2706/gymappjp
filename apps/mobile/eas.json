@@ -29,7 +29,8 @@
         "EXPO_ROUTER_APP_ROOT": "apps/mobile/app",
         "EXPO_PUBLIC_SENTRY_DSN": "https://7c0dbb7f424c24fb62f29c9aacca97e1@o4511408707141632.ingest.us.sentry.io/4511702402138112",
         "SENTRY_DISABLE_AUTO_UPLOAD": "true",
-        "EXPO_PUBLIC_GOOGLE_CLIENT_ID": "REEMPLAZAR_CON_NEXT_PUBLIC_GOOGLE_CLIENT_ID_DE_WEB"
+        "EXPO_PUBLIC_GOOGLE_CLIENT_ID": "REEMPLAZAR_CON_NEXT_PUBLIC_GOOGLE_CLIENT_ID_DE_WEB",
+        "EXPO_PUBLIC_API_URL": "https://www.eva-app.cl"
       }
     },
     "staging": {
@@ -56,7 +57,8 @@
         "EXPO_ROUTER_APP_ROOT": "apps/mobile/app",
         "EXPO_PUBLIC_SENTRY_DSN": "https://7c0dbb7f424c24fb62f29c9aacca97e1@o4511408707141632.ingest.us.sentry.io/4511702402138112",
         "SENTRY_DISABLE_AUTO_UPLOAD": "true",
-        "EXPO_PUBLIC_GOOGLE_CLIENT_ID": "REEMPLAZAR_CON_NEXT_PUBLIC_GOOGLE_CLIENT_ID_DE_WEB"
+        "EXPO_PUBLIC_GOOGLE_CLIENT_ID": "REEMPLAZAR_CON_NEXT_PUBLIC_GOOGLE_CLIENT_ID_DE_WEB",
+        "EXPO_PUBLIC_API_URL": "https://www.eva-app.cl"
       },
       "android": {
         "credentialsSource": "remote"

@@ -155,7 +155,18 @@ function RootLayoutNav() {
       // Race-safe: signInWithPassword may have stored the session in supabase
       // before our onAuthStateChange listener updated React state.
       supabase.auth.getSession().then(({ data }) => {
-        if (!data.session) router.replace('/')
+        if (!data.session) {
+          // Telemetria del PUNTO DE EXPULSION: solo llegamos aca si de verdad NO hay sesion en
+          // storage (SIGNED_OUT real). Si esto aparece justo tras cargar el dashboard, la causa
+          // esta aguas arriba (algun signOut) — el breadcrump deja el rastro para diagnosticarlo.
+          Sentry.addBreadcrumb({
+            category: 'auth',
+            level: 'info',
+            message: 'RootLayoutNav: expulsion a login (sesion nula en ruta protegida)',
+            data: { section, subroute },
+          })
+          router.replace('/')
+        }
       })
     }
   }, [session, segments])

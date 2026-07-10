@@ -67,6 +67,20 @@ function mixBlack(hex: string, amount: number): string {
   return `#${to2(ch(0))}${to2(ch(2))}${to2(ch(4))}`
 }
 
+/**
+ * rgba() a partir de un color solido `#rrggbb` (p.ej. el `accentText` CONTRAST-AWARE
+ * del brand-kit) a una opacidad dada. Se usa para el texto "muted" del hero: en vez de
+ * blanco a mano, deriva la version tenue del color legible que el brand-kit ya eligio
+ * (blanco o casi-negro segun la luminancia del acento del coach).
+ */
+function withAlpha(hex: string, a: number): string {
+  const h = hex.replace('#', '')
+  const r = parseInt(h.slice(0, 2), 16) || 0
+  const g = parseInt(h.slice(2, 4), 16) || 0
+  const b = parseInt(h.slice(4, 6), 16) || 0
+  return `rgba(${r}, ${g}, ${b}, ${a})`
+}
+
 export default function LoginScreen() {
   const { role, switch: canSwitch } = useLocalSearchParams<{ role: 'coach' | 'alumno'; switch?: string }>()
   const router = useRouter()
@@ -125,6 +139,13 @@ export default function LoginScreen() {
 
   const loginAccent = bt.accent
   const loginAccentText = bt.accentText
+  // Hero brandeado: el texto usa el accentText CONTRAST-AWARE del brand-kit, NO blanco fijo.
+  // - Marca oscura => accentText blanco => se conserva la profundidad (oscurecido) del degradado.
+  // - Marca clara  => accentText casi-negro => el degradado NO debe oscurecerse (romperia el
+  //   texto negro sobre el acento ya de por si claro): se aplana para que el negro mantenga su
+  //   contraste nativo (pickOnColor garantiza el maximo posible sobre el acento plano).
+  const heroTextLight = loginAccentText.toLowerCase() === '#ffffff'
+  const heroTextMuted = withAlpha(loginAccentText, 0.92)
   const logoUrl = brandingAllowed
     ? (resolvedScheme === 'dark' && branding?.logoUrlDark) || branding?.logoUrl || null
     : null
@@ -404,7 +425,9 @@ export default function LoginScreen() {
       style={{ overflow: 'hidden', paddingHorizontal: 28, paddingBottom: 64, paddingTop: insets.top + 40 }}
     >
       <LinearGradient
-        colors={[loginAccent, mixBlack(loginAccent, 0.22), mixBlack(loginAccent, 0.42)]}
+        colors={heroTextLight
+          ? [loginAccent, mixBlack(loginAccent, 0.22), mixBlack(loginAccent, 0.42)]
+          : [loginAccent, mixBlack(loginAccent, 0.05), mixBlack(loginAccent, 0.1)]}
         locations={[0, 0.58, 1]}
         start={{ x: 0.5, y: 0 }}
         end={{ x: 0.5, y: 1 }}
@@ -419,9 +442,9 @@ export default function LoginScreen() {
         pointerEvents="none"
       />
       <View style={{ alignItems: 'center' }} testID="login-brand-hero">
-        <BrandMark px={76} glass logoUrl={logoUrl} initials={initials} accent={loginAccent} />
-        <Text style={[styles.heroTitleSm, { color: '#FFFFFF', fontFamily: displayFont }]}>{brandName}</Text>
-        <Text style={[styles.heroTagline, { color: 'rgba(255,255,255,0.82)' }]}>{tagline}</Text>
+        <BrandMark px={76} glass logoUrl={logoUrl} initials={initials} accent={loginAccent} accentText={loginAccentText} />
+        <Text style={[styles.heroTitleSm, { color: loginAccentText, fontFamily: displayFont }]}>{brandName}</Text>
+        <Text style={[styles.heroTagline, { color: heroTextMuted }]}>{tagline}</Text>
       </View>
     </MotiView>
   )
@@ -632,12 +655,16 @@ function BrandMark({
   logoUrl,
   initials,
   accent,
+  accentText = '#FFFFFF',
 }: {
   px: number
   glass?: boolean
   logoUrl: string | null
   initials: string
   accent: string
+  /** Texto/tinte legible del hero (accentText del brand-kit) — el frost glass y las
+   *  iniciales se derivan de aca para no asumir blanco sobre una marca clara. */
+  accentText?: string
 }) {
   const radius = Math.round(px * 0.2)
   if (logoUrl) {
@@ -652,7 +679,7 @@ function BrandMark({
           alignItems: 'center',
           justifyContent: 'center',
           ...(glass
-            ? { backgroundColor: 'rgba(255,255,255,0.16)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.28)' }
+            ? { backgroundColor: withAlpha(accentText, 0.16), borderWidth: 1, borderColor: withAlpha(accentText, 0.28) }
             : null),
         }}
       >
@@ -673,12 +700,12 @@ function BrandMark({
         borderRadius: radius,
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: glass ? 'rgba(255,255,255,0.16)' : accent + '1F',
+        backgroundColor: glass ? withAlpha(accentText, 0.16) : accent + '1F',
         borderWidth: 1,
-        borderColor: glass ? 'rgba(255,255,255,0.28)' : accent + '40',
+        borderColor: glass ? withAlpha(accentText, 0.28) : accent + '40',
       }}
     >
-      <Text style={{ fontFamily: FONT.displayBlack, fontSize: Math.round(px * 0.36), color: glass ? '#FFFFFF' : accent }}>
+      <Text style={{ fontFamily: FONT.displayBlack, fontSize: Math.round(px * 0.36), color: glass ? accentText : accent }}>
         {initials}
       </Text>
     </View>

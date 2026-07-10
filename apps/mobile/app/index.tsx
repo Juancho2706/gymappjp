@@ -26,9 +26,24 @@ function mixBlack(hex: string, amount: number): string {
   return `#${to2(ch(0))}${to2(ch(2))}${to2(ch(4))}`
 }
 
+/** rgba() de un color solido `#rrggbb` (el foreground CONTRAST-AWARE de la marca) a una
+ *  opacidad dada — texto "muted" del hero derivado del color legible, no blanco fijo. */
+function withAlpha(hex: string, a: number): string {
+  const h = hex.replace('#', '')
+  const r = parseInt(h.slice(0, 2), 16) || 0
+  const g = parseInt(h.slice(2, 4), 16) || 0
+  const b = parseInt(h.slice(4, 6), 16) || 0
+  return `rgba(${r}, ${g}, ${b}, ${a})`
+}
+
 export default function RoleSelector() {
   const router = useRouter()
   const { theme } = useTheme()
+  // Hero del alumno: texto sobre el gradiente de MARCA. Usa el foreground CONTRAST-AWARE
+  // (accentText) en vez de blanco fijo. Marca oscura => blanco + gradiente con profundidad;
+  // marca clara => casi-negro + gradiente aplanado (el oscurecido rompe el texto negro).
+  const heroTextLight = theme.primaryForeground.toLowerCase() === '#ffffff'
+  const heroMuted = withAlpha(theme.primaryForeground, 0.92)
   // `?pick=1` = el alumno tocó "Elegir otro rol" en el login brandeado → forzar
   // el selector aunque haya un coach cacheado (si no, el flujo inteligente lo
   // devolvería al login en loop).
@@ -124,7 +139,9 @@ export default function RoleSelector() {
                 style={[styles.hero, { borderRadius: theme.radius['3xl'] }, theme.shadowGlowBlue]}
               >
                 <LinearGradient
-                  colors={[theme.primary, mixBlack(theme.primary, 0.34)]}
+                  colors={heroTextLight
+                    ? [theme.primary, mixBlack(theme.primary, 0.34)]
+                    : [theme.primary, mixBlack(theme.primary, 0.1)]}
                   start={{ x: 0.1, y: 0 }}
                   end={{ x: 0.9, y: 1 }}
                   style={[StyleSheet.absoluteFill, { borderRadius: theme.radius['3xl'] }]}
@@ -148,9 +165,9 @@ export default function RoleSelector() {
                 </View>
 
                 <View style={styles.heroText}>
-                  <Text style={[TYPE.eyebrow, { color: 'rgba(255,255,255,0.82)' }]}>Para entrenar</Text>
+                  <Text style={[TYPE.eyebrow, { color: heroMuted }]}>Para entrenar</Text>
                   <Text style={[TYPE.h3, { color: theme.primaryForeground, marginTop: 4 }]}>Soy alumno</Text>
-                  <Text style={[TYPE.body, styles.heroDesc]}>
+                  <Text style={[TYPE.body, styles.heroDesc, { color: heroMuted }]}>
                     Entrena con tu coach. Tu plan, tu progreso y tus check-ins en un solo lugar.
                   </Text>
                 </View>
