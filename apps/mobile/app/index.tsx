@@ -5,7 +5,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router'
 import { LinearGradient } from 'expo-linear-gradient'
 import { ArrowUpRight, ChevronRight, Dumbbell, Shield, Ticket, Users } from 'lucide-react-native'
 import { MotiView } from 'moti'
-import { useTheme } from '../context/ThemeContext'
+import { ForceLightTheme, useTheme } from '../context/ThemeContext'
 import { AppBackground } from '../components/AppBackground'
 import { AmbientBrandGlow } from '../components/AmbientBrandGlow'
 import { EvaLoaderScreen } from '../components/EvaLoader'
@@ -36,7 +36,17 @@ function withAlpha(hex: string, a: number): string {
   return `rgba(${r}, ${g}, ${b}, ${a})`
 }
 
-export default function RoleSelector() {
+// Familia de entrada = SIEMPRE tema claro (#13). El wrapper scopea el claro a
+// todo el arbol del selector (incluye el Walkthrough que renderiza abajo).
+export default function RoleSelectorRoute() {
+  return (
+    <ForceLightTheme>
+      <RoleSelector />
+    </ForceLightTheme>
+  )
+}
+
+function RoleSelector() {
   const router = useRouter()
   const { theme } = useTheme()
   // Hero del alumno: texto sobre el gradiente de MARCA. Usa el foreground CONTRAST-AWARE

@@ -94,6 +94,48 @@ palabras terminadas en `á / ás / és / ís / í / é` para separar voseo de fu
    `jamás`, `atrás`, `detrás`, `después`, `además`, `demás`, `través`, `país`, `inglés`, `revés`,
    `Mié` (abreviatura de miércoles), `caché` (término técnico), `esté`/`estés` (subjuntivo de estar).
 
+---
+
+# Sweep copy español neutro — apps/mobile (RN)
+
+Fecha: 2026-07-10 · Rama: `rnmobiledenuevo` · QA Ronda 4 Lote B.
+Mismo método (script Node + reemplazo whole-word case-preserving, boundaries unicode-aware)
+sobre `apps/mobile/**/*.{ts,tsx}`. Los fixers pixel de hoy habían copiado voseo de la web:
+se barrió TODO (strings user-facing y comentarios). Homógrafos de 1ª persona conservados.
+
+## Resumen mobile
+
+- **Total de reemplazos: ~195** (187 por script + 8 manuales).
+- **Archivos tocados: 56.**
+- Homógrafos 1ª persona **NO tocados** (no son voseo): `Ya confirmé` (botón verify-email),
+  `¡Completé "..."!` (texto que comparte el alumno — WorkoutSummaryOverlay, WorkoutSummaryModal).
+
+## Conteo por forma (script, whole-word)
+
+- Intentá 10 · Podés 16 (Podés 10 + podés 6) · Elegí 9 · Revisá 9 · Tocá 10 (Tocá 7 + tocá 3)
+- Creá 7 · Usá 8 (Usá 3 + usá 5) · Tenés 9 (Tenés 2 + tenés 7) · Subí 7 (Subí 6 + subí 1)
+- Compartí 4 · Escribinos 5 · Seguí 4 · Agregá 7 (Agregá 5 + agregá 2) · Probá 3 · Completá 4
+- Ingresá 4 · Seleccioná 3 · Confirmá 2 · Pedí 3 · Activá 2 · Reactivá 2 · Definí 2 · Desbloqueá 2
+- pegá 3 · sumá 3 (Sumá 1 + sumá 2) · cambiás 2 · trabajás 3 · Dejalo 1 · usalo 1 · agregalos 1
+- singles: Iniciá, Registrate, esperá, querés, Encendé, Contactá, Asigná, necesitás, Necesitás,
+  completá, Guardá, Empezá, Armá/armá, deslizá, Entrená, Personalizá, Forzá, usás, Apagá, entrenás,
+  saltá, Escribí, Debés, Verificá, reducí, Esperá, revisá, Querés, seguís, movés, definís, Definís,
+  creás, agregás, Registrás, subís, mantené
+
+## Manuales (8)
+
+- `vos` → pronombre neutro según contexto: features.tsx (`ven vos`→`ven tú`, `para vos`→`para ti`),
+  support-faq.ts (`vos defines`→`tú defines`). 3 casos.
+- Presente -ás/-ís que el script no cubría (agregados a mano): `asignás`→`asignas`, `editás`→`editas`,
+  `ajustás`→`ajustas`, `desbloqueás`→`desbloqueas` (nutricion.tsx), `decidís`→`decides` (features.tsx). 5 casos.
+
+## Verificación mobile
+
+- Grep dictionary consolidado de voseo en `apps/mobile` → **0 ocurrencias** (salvo `confirmé`/`Completé` 1ª persona).
+- `apps/mobile` `tsc --noEmit` → **EXIT 0**.
+
+---
+
 ## Verificación
 
 - `pnpm --filter @eva/web typecheck` → **EXIT 0** (tsc --noEmit, sin errores).

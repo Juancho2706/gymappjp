@@ -681,11 +681,11 @@ export default function ProgramBuilderScreen() {
   }), [])
   const tourSteps = useMemo<TourStep[]>(() => {
     const base: TourStep[] = [
-      { id: 'top-config-button', title: 'Empezá en Configurar', description: 'Definí estructura, duración y fases del programa en la tuerca ámbar.', placement: 'bottom' },
-      { id: 'ab-toggle', title: 'Semanas A/B', description: 'Activá rutinas alternas A/B para microciclos semanales.', placement: 'bottom' },
-      { id: 'days-board', title: 'Armá cada día', description: 'Tocá un día para editarlo; deslizá a los lados para cambiar de día.', placement: 'bottom' },
+      { id: 'top-config-button', title: 'Empieza en Configurar', description: 'Define estructura, duración y fases del programa en la tuerca ámbar.', placement: 'bottom' },
+      { id: 'ab-toggle', title: 'Semanas A/B', description: 'Activa rutinas alternas A/B para microciclos semanales.', placement: 'bottom' },
+      { id: 'days-board', title: 'Arma cada día', description: 'Toca un día para editarlo; desliza a los lados para cambiar de día.', placement: 'bottom' },
       { id: 'more-menu', title: 'Más opciones', description: 'Plantillas, balance muscular, vista previa, asignar, imprimir y deshacer/rehacer.', placement: 'bottom' },
-      { id: 'save-button', title: 'Guardá al terminar', description: 'El disquete guarda el programa para seguir editándolo o asignarlo.', placement: 'bottom' },
+      { id: 'save-button', title: 'Guarda al terminar', description: 'El disquete guarda el programa para seguir editándolo o asignarlo.', placement: 'bottom' },
     ]
     return tourMode === 'short' ? [base[0], base[2], base[4]] : base
   }, [tourMode])
@@ -857,7 +857,7 @@ export default function ProgramBuilderScreen() {
     // cardio/movilidad/roller: su prescripción mínima). Espeja el blockIncomplete de la web.
     const allBlocks = [...days, ...(abMode ? otherDays : [])].flatMap((d) => d.blocks)
     const invalid = allBlocks.find(blockIncomplete)
-    if (invalid) { Alert.alert('Ejercicio incompleto', `Revisá "${invalid.exercise_name}": faltan datos (series/reps, duración o distancia según el tipo).`); return }
+    if (invalid) { Alert.alert('Ejercicio incompleto', `Revisa "${invalid.exercise_name}": faltan datos (series/reps, duración o distancia según el tipo).`); return }
     setSaving(true)
     try {
       const coach = await getCoachProfile()

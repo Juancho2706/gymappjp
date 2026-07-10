@@ -110,7 +110,7 @@ export default function EjerciciosScreen() {
 
   function openCreate() {
     if (!canCreate) {
-      Alert.alert('Sin permiso', 'Tu rol en la organización no permite crear ejercicios. Pedí acceso a un administrador.')
+      Alert.alert('Sin permiso', 'Tu rol en la organización no permite crear ejercicios. Pide acceso a un administrador.')
       return
     }
     setEditTarget(null)
@@ -235,7 +235,7 @@ export default function EjerciciosScreen() {
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load('refresh')} tintColor={theme.primary} />}
           ListEmptyComponent={
             <View style={{ paddingTop: 48 }}>
-              <EmptyState icon={Dumbbell} title="Sin ejercicios" subtitle={query || muscle || source !== 'all' || videoOnly ? 'Probá otro filtro o búsqueda.' : 'Creá tu primer ejercicio personalizado.'} />
+              <EmptyState icon={Dumbbell} title="Sin ejercicios" subtitle={query || muscle || source !== 'all' || videoOnly ? 'Prueba otro filtro o búsqueda.' : 'Crea tu primer ejercicio personalizado.'} />
             </View>
           }
         />

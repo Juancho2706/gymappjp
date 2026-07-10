@@ -181,7 +181,7 @@ function BuilderBlockCardInner({ block, drag, isActive, onEdit, onRemove, onUpda
               <Text style={[styles.helpTitle, { color: theme.foreground, fontFamily: FONT.display }]}>Áreas del día</Text>
               <Text style={[styles.helpLine, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Cada día se organiza por <Text style={{ color: theme.foreground, fontFamily: FONT.uiBold }}>áreas</Text> (Calentamiento, Principal, Enfriamiento, Movilidad…). El badge de color muestra el área del ejercicio; usa el selector con la flecha para moverlo.</Text>
               <Text style={[styles.helpTitle, { color: theme.foreground, fontFamily: FONT.display, marginTop: 6 }]}>Superserie</Text>
-              <Text style={[styles.helpLine, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Une el ejercicio con el siguiente solo si están en la misma área. Si cambiás el área de uno, el enlace se rompe.</Text>
+              <Text style={[styles.helpLine, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Une el ejercicio con el siguiente solo si están en la misma área. Si cambias el área de uno, el enlace se rompe.</Text>
               <TouchableOpacity onPress={() => setHelpOpen(false)} style={[styles.helpClose, { backgroundColor: theme.primary }]}><Text style={{ color: theme.primaryForeground, fontFamily: FONT.display, fontSize: 13 }}>Entendido</Text></TouchableOpacity>
             </Pressable>
           </Pressable>

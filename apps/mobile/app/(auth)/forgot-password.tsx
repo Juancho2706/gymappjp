@@ -82,7 +82,7 @@ export default function ForgotPasswordScreen() {
               Restablecer contraseña
             </Text>
             <Text className="text-muted font-sans" style={styles.subtitle}>
-              Ingresá tu email y te enviaremos un enlace para crear una nueva contraseña.
+              Ingresa tu email y te enviaremos un enlace para crear una nueva contraseña.
             </Text>
 
             <View style={styles.form}>

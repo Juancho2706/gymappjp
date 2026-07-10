@@ -322,9 +322,9 @@ export default function CoachNutricionScreen() {
       {/* Guía: logística synced/custom */}
       <NativeDialog open={guideOpen} title="Cómo funciona" onClose={() => setGuideOpen(false)}>
         <View style={{ gap: 12 }}>
-          <GuideRow theme={theme} color={theme.primary} title="1. Plantillas (moldes)" text="Son moldes reutilizables. No pertenecen a un alumno hasta que las asignás. Si editás una plantilla, los alumnos SINCRONIZADOS se actualizan con ese molde." />
+          <GuideRow theme={theme} color={theme.primary} title="1. Plantillas (moldes)" text="Son moldes reutilizables. No pertenecen a un alumno hasta que las asignas. Si editas una plantilla, los alumnos SINCRONIZADOS se actualizan con ese molde." />
           <GuideRow theme={theme} color={SUCCESS} title="2. Alumnos (planes activos)" text="Al asignar una plantilla, el plan del alumno queda SINCRONIZADO con el molde." />
-          <GuideRow theme={theme} color={EMBER} title="3. Edición individual (custom)" text="Si ajustás el plan solo para un alumno, pasa a PERSONALIZADO y deja de seguir el molde (editar la plantilla ya no lo cambia)." />
+          <GuideRow theme={theme} color={EMBER} title="3. Edición individual (custom)" text="Si ajustas el plan solo para un alumno, pasa a PERSONALIZADO y deja de seguir el molde (editar la plantilla ya no lo cambia)." />
         </View>
       </NativeDialog>
     </SafeAreaView>
@@ -408,7 +408,7 @@ function TemplatesTab({
   if (templates.length === 0) {
     return (
       <View style={{ flex: 1 }}>
-        <EmptyState icon={CalendarHeart} title="Sin plantillas todavía" subtitle="Creá tu primera plantilla para reutilizar planes de nutrición entre tus alumnos."
+        <EmptyState icon={CalendarHeart} title="Sin plantillas todavía" subtitle="Crea tu primera plantilla para reutilizar planes de nutrición entre tus alumnos."
           action={<Button label="Nueva plantilla" leftIcon={Plus} variant="sport" onPress={onCreate} style={{ marginTop: 8 }} />} />
       </View>
     )
@@ -539,7 +539,7 @@ function ClientsBoardTab({
                 <View key={c.id} style={[styles.noPlanCard, { borderColor: theme.border, backgroundColor: theme.card, borderRadius: theme.radius.lg }]}>
                   <View style={{ flex: 1, minWidth: 0 }}>
                     <Text style={[styles.noPlanName, { color: theme.foreground, fontFamily: FONT.uiBold }]} numberOfLines={1}>{c.full_name}</Text>
-                    <Text style={[styles.noPlanHint, { color: theme.mutedForeground, fontFamily: FONT.uiSemibold }]}>Asigná desde Plantillas</Text>
+                    <Text style={[styles.noPlanHint, { color: theme.mutedForeground, fontFamily: FONT.uiSemibold }]}>Asigna desde Plantillas</Text>
                   </View>
                   <TouchableOpacity testID={`nutricion-assign-empty-${c.id}`} onPress={() => onAssignEmpty(c)} activeOpacity={0.85} style={[styles.assignEmptyBtn, { backgroundColor: theme.secondary, borderColor: theme.border }]}>
                     <UserPlus size={13} color={theme.primary} /><Text style={[styles.assignEmptyTxt, { color: theme.primary, fontFamily: FONT.uiExtra }]}>Asignar</Text>
@@ -705,7 +705,7 @@ function FoodsTab({ theme, onFoodsChanged }: { theme: any; onFoodsChanged: () =>
           showsVerticalScrollIndicator={false}
           ListEmptyComponent={
             <View style={{ paddingTop: 40 }}>
-              <EmptyState icon={Apple} title={scope === 'mine' ? 'Sin alimentos propios' : 'Sin resultados'} subtitle={scope === 'mine' ? 'Tocá Nuevo para crear tu primer alimento.' : 'Probá con otro término de búsqueda.'} />
+              <EmptyState icon={Apple} title={scope === 'mine' ? 'Sin alimentos propios' : 'Sin resultados'} subtitle={scope === 'mine' ? 'Toca Nuevo para crear tu primer alimento.' : 'Prueba con otro término de búsqueda.'} />
             </View>
           }
           renderItem={({ item }) => (
@@ -876,7 +876,7 @@ function RecipesTab({
 
       {recipes.length === 0 ? (
         <View style={{ paddingTop: 20 }}>
-          <EmptyState icon={ChefHat} title="Todavía no tienes recetas" subtitle="Creá ideas de recetas para inspirar a tus alumnos. Toma unos 30 segundos."
+          <EmptyState icon={ChefHat} title="Todavía no tienes recetas" subtitle="Crea ideas de recetas para inspirar a tus alumnos. Toma unos 30 segundos."
             action={<Button label="Nueva receta" leftIcon={ChefHat} variant="sport" onPress={openCreate} style={{ marginTop: 8 }} />} />
         </View>
       ) : (
@@ -1084,7 +1084,7 @@ function UpsellCard({ theme }: { theme: any }) {
         </View>
         <Text style={[styles.upsellTitle, { color: theme.foreground, fontFamily: FONT.displayBold }]}>Nutrición en Pro o superior</Text>
         <Text style={[styles.upsellText, { color: theme.mutedForeground, fontFamily: FONT.ui }]}>
-          Tu plan actual incluye entrenos. Al subir a Pro desbloqueás el centro de nutrición completo.
+          Tu plan actual incluye entrenos. Al subir a Pro desbloqueas el centro de nutrición completo.
         </Text>
         <View style={{ gap: 8, alignSelf: 'stretch', marginVertical: 4 }}>
           {features.map((f) => (

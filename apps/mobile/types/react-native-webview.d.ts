@@ -8,6 +8,9 @@ declare module 'react-native-webview' {
     allowsInlineMediaPlayback?: boolean
     javaScriptEnabled?: boolean
     mediaPlaybackRequiresUserAction?: boolean
+    domStorageEnabled?: boolean
+    androidLayerType?: 'none' | 'software' | 'hardware'
+    setSupportMultipleWindows?: boolean
   }
 
   export const WebView: ComponentType<WebViewProps>

@@ -150,15 +150,23 @@ export function VideoPlayer({
         poster_
       ) : ytId ? (
         <WebView
+          testID="video-player-webview"
           source={{
             html: youtubeEmbedHtml(ytId, { start: startAt, end: endAt, muted, loop, autoplay: true }),
             baseUrl: 'https://www.youtube-nocookie.com',
           }}
           style={styles.fill}
+          // iOS: sin estas dos props el gesto del usuario NO llega al iframe y el
+          // video queda congelado en el primer frame (bug reportado en TestFlight).
           allowsInlineMediaPlayback
           mediaPlaybackRequiresUserAction={false}
           javaScriptEnabled
+          domStorageEnabled
           allowsFullscreenVideo={false}
+          // Android: capa hardware para que el <video> del iframe pinte (si no, negro).
+          androidLayerType="hardware"
+          // Evita que YouTube intente abrir el video en una ventana/app externa.
+          setSupportMultipleWindows={false}
         />
       ) : isDirect && ExpoVideo ? (
         <DirectVideo url={url} start={startAt} end={endAt} muted={muted} loop={loop} />
@@ -251,6 +259,13 @@ function youtubeEmbedHtml(
       autoplay:${autoplay ? 1 : 0},mute:${muted ? 1 : 0},controls:0,modestbranding:1,rel:0,
       playsinline:1,disablekb:1,iv_load_policy:3,fs:0,loop:${loop ? 1 : 0},playlist:'${id}',start:${start}
     },events:{
+      // iOS/WKWebView ignora el playerVar autoplay: hay que arrancar a mano en onReady
+      // (mute primero para respetar la policy de autoplay silencioso de iOS y Android).
+      onReady:function(e){
+        ${muted ? 'e.target.mute();' : ''}
+        ${start > 0 ? `e.target.seekTo(START,true);` : ''}
+        e.target.playVideo();
+      },
       onStateChange:function(e){
         if(e.data===YT.PlayerState.ENDED && LOOP){e.target.seekTo(START,true);e.target.playVideo();}
       }

@@ -38,9 +38,9 @@ const EMERALD_500 = '#10B981'
 const AMBER_500 = '#F59E0B'
 
 const TONE_COPY: Record<WeeklyRecapTone, { title: string; sub: string }> = {
-  great: { title: '¡Semana sólida! 🔥', sub: 'Gran consistencia. Seguí con este ritmo.' },
+  great: { title: '¡Semana sólida! 🔥', sub: 'Gran consistencia. Sigue con este ritmo.' },
   good: { title: 'Buen ritmo 💪', sub: 'Vas en camino — un poco más y la cierras redonda.' },
-  gentle: { title: 'Semana tranquila', sub: 'Sin dramas. La próxima sumás unos días más y listo.' },
+  gentle: { title: 'Semana tranquila', sub: 'Sin dramas. La próxima sumas unos días más y listo.' },
   start: { title: 'Arranca tu semana', sub: 'Registra tu primera comida para ver tu progreso aquí.' },
 }
 

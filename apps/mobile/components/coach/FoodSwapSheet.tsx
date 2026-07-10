@@ -40,11 +40,11 @@ export const FoodSwapSheet = forwardRef<BottomSheetModal, Props>(function FoodSw
           <Text style={[styles.title, { color: theme.foreground, fontFamily: 'Archivo_700Bold' }]} numberOfLines={1}>Intercambios · {item?.name ?? ''}</Text>
         </View>
         <Text style={[styles.sub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
-          Definí alternativas para este alimento. El alumno podrá elegir entre estas opciones.
+          Define alternativas para este alimento. El alumno podrá elegir entre estas opciones.
         </Text>
 
         {swaps.length === 0 ? (
-          <Text style={[styles.empty, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Sin alternativas aún. Tocá “Agregar alternativa”.</Text>
+          <Text style={[styles.empty, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Sin alternativas aún. Toca “Agregar alternativa”.</Text>
         ) : (
           swaps.map((opt) => <SwapRow key={opt.food_id} opt={opt} theme={theme} onUpdate={onUpdateSwap} onRemove={onRemoveSwap} />)
         )}

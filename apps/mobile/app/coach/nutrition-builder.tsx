@@ -311,7 +311,7 @@ export default function NutritionBuilderScreen() {
     setTogglePending(true)
     const res = await setPlanExchangeMode(draft.id, mode)
     setTogglePending(false)
-    if (!res.ok) { Alert.alert('No se pudo cambiar el modo', res.error ?? 'Intentá de nuevo.'); return }
+    if (!res.ok) { Alert.alert('No se pudo cambiar el modo', res.error ?? 'Intenta de nuevo.'); return }
     setPlanMode(mode)
   }
 
@@ -335,7 +335,7 @@ export default function NutritionBuilderScreen() {
     const res = await assignMealDayVariant(mealId, variantId)
     if (!res.ok) {
       setExVariantByMeal((m) => ({ ...m, [mealId]: prev }))
-      Alert.alert('No se pudo asignar la variante', res.error ?? 'Intentá de nuevo.')
+      Alert.alert('No se pudo asignar la variante', res.error ?? 'Intenta de nuevo.')
     }
   }
 
@@ -344,7 +344,7 @@ export default function NutritionBuilderScreen() {
     setVariantPending(true)
     const res = await createPlanDayVariant(draft.id, name.trim())
     setVariantPending(false)
-    if (!res.ok || !res.variant) { Alert.alert('No se pudo crear la variante', res.error ?? 'Intentá de nuevo.'); return }
+    if (!res.ok || !res.variant) { Alert.alert('No se pudo crear la variante', res.error ?? 'Intenta de nuevo.'); return }
     setExVariants((v) => [...v, res.variant!])
   }
 
@@ -352,7 +352,7 @@ export default function NutritionBuilderScreen() {
     setVariantPending(true)
     const res = await deletePlanDayVariant(variantId)
     setVariantPending(false)
-    if (!res.ok) { Alert.alert('No se pudo eliminar la variante', res.error ?? 'Intentá de nuevo.'); return }
+    if (!res.ok) { Alert.alert('No se pudo eliminar la variante', res.error ?? 'Intenta de nuevo.'); return }
     setExVariants((v) => v.filter((x) => x.id !== variantId))
     setExVariantByMeal((m) => {
       const n = { ...m }
@@ -388,7 +388,7 @@ export default function NutritionBuilderScreen() {
         brand
       )
     } catch (e: any) {
-      Alert.alert('No se pudo generar el PDF', e?.message ?? 'Intentá de nuevo.')
+      Alert.alert('No se pudo generar el PDF', e?.message ?? 'Intenta de nuevo.')
     } finally {
       setPdfPending(false)
     }
@@ -396,11 +396,11 @@ export default function NutritionBuilderScreen() {
 
   async function save() {
     if (draft.name.trim().length < 2) { Alert.alert('Falta el nombre', isTemplate ? 'Indicá un nombre para la plantilla.' : 'Indicá un nombre para el plan.'); return }
-    if (draft.meals.length === 0) { Alert.alert('Sin comidas', 'Agregá al menos una comida antes de guardar.'); return }
+    if (draft.meals.length === 0) { Alert.alert('Sin comidas', 'Agrega al menos una comida antes de guardar.'); return }
     const empties = draft.meals.filter((m) => m.items.length === 0)
     if (empties.length > 0) {
       setShowEmptyWarn(true)
-      Alert.alert('Comidas incompletas', `Completá al menos 1 alimento en: ${empties.map((m) => m.name || 'Sin nombre').join(', ')}.`)
+      Alert.alert('Comidas incompletas', `Completa al menos 1 alimento en: ${empties.map((m) => m.name || 'Sin nombre').join(', ')}.`)
       return
     }
     setSaving(true)
@@ -637,7 +637,7 @@ export default function NutritionBuilderScreen() {
 
                 {showEmptyWarn && meal.items.length === 0 ? (
                   <View className="border border-ember-300 bg-ember-100 rounded-control" style={styles.warnBox}>
-                    <Text className="font-sans-semibold text-ember-700" style={styles.warnText}>Comida vacía: agregá al menos 1 alimento.</Text>
+                    <Text className="font-sans-semibold text-ember-700" style={styles.warnText}>Comida vacía: agrega al menos 1 alimento.</Text>
                   </View>
                 ) : null}
 

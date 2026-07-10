@@ -209,7 +209,7 @@ export default function WorkoutScreen() {
       <AppBackground />
       <ScreenHeader
         title="Mi entrenamiento"
-        subtitle="Tocá el plan de hoy para empezar"
+        subtitle="Toca el plan de hoy para empezar"
         trailing={
           pendingLogs > 0 ? (
             <TouchableOpacity
@@ -256,7 +256,7 @@ export default function WorkoutScreen() {
             No pudimos cargar tus rutinas
           </Text>
           <Text style={[styles.errorSub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
-            Revisá tu conexión e intentá de nuevo en un momento.
+            Revisa tu conexión e intenta de nuevo en un momento.
           </Text>
           <Button testID="workout-retry" label="Reintentar" variant="outline" onPress={load} />
         </View>

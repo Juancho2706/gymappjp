@@ -49,7 +49,7 @@ export default function SupportScreen() {
 
       <ScrollView contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + 100 }]} showsVerticalScrollIndicator={false}>
         {/* Contact */}
-        <Button label="Escribinos por email" leftIcon={Mail} onPress={() => Linking.openURL(buildSupportMailto()).catch(() => {})} full />
+        <Button label="Escríbenos por email" leftIcon={Mail} onPress={() => Linking.openURL(buildSupportMailto()).catch(() => {})} full />
 
         <Text style={[styles.sectionTitle, { color: theme.mutedForeground, fontFamily: 'HankenGrotesk_800ExtraBold' }]}>PREGUNTAS FRECUENTES</Text>
 
@@ -65,7 +65,7 @@ export default function SupportScreen() {
         ))}
 
         <Text style={[styles.foot, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
-          ¿Necesitás más ayuda? Escribinos a {SUPPORT_EMAIL} y te respondemos a la brevedad.
+          ¿Necesitas más ayuda? Escríbenos a {SUPPORT_EMAIL} y te respondemos a la brevedad.
         </Text>
       </ScrollView>
     </SafeAreaView>

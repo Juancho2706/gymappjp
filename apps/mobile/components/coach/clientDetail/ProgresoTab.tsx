@@ -91,7 +91,7 @@ export function ProgresoTab({ data, onOpenPhoto, reload }: { data: CoachClientDe
               </View>
             </View>
           ) : (
-            <Text style={[cd.sub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Tocá la gráfica para ver cada check-in.</Text>
+            <Text style={[cd.sub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Toca la gráfica para ver cada check-in.</Text>
           )}
         </StatCard>
       ) : null}
@@ -199,7 +199,7 @@ function GoalWeightEditor({ client, reload }: { client: NonNullable<CoachClientD
           </View>
         }
       >
-        <Input label="Peso objetivo (kg)" value={goal} onChangeText={setGoal} keyboardType="decimal-pad" placeholder="75" hint="Dejalo vacío para quitar el objetivo." testID="goal-weight-input" />
+        <Input label="Peso objetivo (kg)" value={goal} onChangeText={setGoal} keyboardType="decimal-pad" placeholder="75" hint="Déjalo vacío para quitar el objetivo." testID="goal-weight-input" />
         {error ? <Text style={{ color: theme.destructive, fontSize: 13, fontFamily: theme.fontSans }}>{error}</Text> : null}
       </Sheet>
     </>

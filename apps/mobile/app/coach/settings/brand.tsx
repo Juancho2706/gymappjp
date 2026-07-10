@@ -292,7 +292,7 @@ export default function MiMarcaScreen() {
     const url = `https://eva-app.cl/c/${publicId}`
     const codeLine = settings.inviteCode ? ` Tu código: ${settings.inviteCode}.` : ''
     try {
-      await Share.share({ message: `Entrená conmigo en ${brandName || 'mi app'}: ${url}.${codeLine}` })
+      await Share.share({ message: `Entrena conmigo en ${brandName || 'mi app'}: ${url}.${codeLine}` })
     } catch {}
   }
 
@@ -384,7 +384,7 @@ export default function MiMarcaScreen() {
                 Marca personalizada en Starter+
               </Text>
               <Text className="font-sans text-muted" style={{ fontSize: 13.5, lineHeight: 20, textAlign: 'center' }}>
-                Subí a Starter (o superior) para personalizar el logo, los colores, el loader y el mensaje de bienvenida que ven tus alumnos al instalar tu app.
+                Sube a Starter (o superior) para personalizar el logo, los colores, el loader y el mensaje de bienvenida que ven tus alumnos al instalar tu app.
               </Text>
               <Button
                 label="Ver planes y upgrade"
@@ -480,7 +480,7 @@ export default function MiMarcaScreen() {
             <Card variant="default" padding="md" style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
               <Lock size={18} className="text-muted" />
               <Text className="font-sans text-muted" style={{ flex: 1, fontSize: 13, lineHeight: 18 }}>
-                {orgName ? `Tu marca la gestiona ${orgName}.` : 'Tu marca la gestiona tu organización.'} No podés editarla desde acá.
+                {orgName ? `Tu marca la gestiona ${orgName}.` : 'Tu marca la gestiona tu organización.'} No puedes editarla desde acá.
               </Text>
             </Card>
           ) : (
@@ -591,7 +591,7 @@ export default function MiMarcaScreen() {
                   se preserva (reversible al chip "Personalizado"). El preset OVERRIDE al color al leer. */}
               <SectionCard icon={Sparkles} title="Tema de tu marca">
                 <Text className="font-sans text-muted" style={{ fontSize: 12.5, lineHeight: 18 }}>
-                  Elegí un tema curado: color y tono en un tap. Todos están calibrados para verse legibles en claro y oscuro.
+                  Elige un tema curado: color y tono en un tap. Todos están calibrados para verse legibles en claro y oscuro.
                 </Text>
                 {/* Filtro por feel */}
                 <View className="flex-row flex-wrap" style={{ gap: 7 }}>
@@ -627,7 +627,7 @@ export default function MiMarcaScreen() {
                   <View className="flex-row items-start rounded-control border border-sport-200 bg-sport-100" style={{ gap: 8, padding: 10 }}>
                     <Sparkles size={13} className="text-sport-600" style={{ marginTop: 1 }} />
                     <Text className="font-sans text-muted" style={{ flex: 1, fontSize: 11.5, lineHeight: 16 }}>
-                      Tu tema <Text className="font-sans-bold text-strong">{activePreset.label}</Text> define el color. Tu color libre queda guardado; elegí "Personalizado" arriba para volver a él.
+                      Tu tema <Text className="font-sans-bold text-strong">{activePreset.label}</Text> define el color. Tu color libre queda guardado; elige "Personalizado" arriba para volver a él.
                     </Text>
                   </View>
                 ) : null}
@@ -723,7 +723,7 @@ export default function MiMarcaScreen() {
                       value={loaderIconMode}
                       onChange={(v) => {
                         // "Mi logo" requiere un logo subido (el web lo muestra deshabilitado).
-                        if (v === 'coach' && !logoUrl) { toast.info('Subí un logo primero para usarlo en el loader.'); return }
+                        if (v === 'coach' && !logoUrl) { toast.info('Sube un logo primero para usarlo en el loader.'); return }
                         setLoaderIconMode(v as 'eva' | 'coach' | 'none')
                       }}
                     />
@@ -890,7 +890,7 @@ export default function MiMarcaScreen() {
                         </View>
                       </AdvPreviewFrame>
                       <FieldLabel>Acento por modo (opcional)</FieldLabel>
-                      <Text className="font-sans text-muted" style={{ fontSize: 12, lineHeight: 17 }}>Forzá un acento distinto en claro y oscuro. Vacío = se calcula solo desde tu color.</Text>
+                      <Text className="font-sans text-muted" style={{ fontSize: 12, lineHeight: 17 }}>Fuerza un acento distinto en claro y oscuro. Vacío = se calcula solo desde tu color.</Text>
                       <Input label="Acento claro" value={accentLight} onChangeText={(v: string) => setAccentLight(v.startsWith('#') || v === '' ? v : `#${v}`)} placeholder="auto" autoCapitalize="characters" testID="mimarca-accent-light" />
                       <Input label="Acento oscuro" value={accentDark} onChangeText={(v: string) => setAccentDark(v.startsWith('#') || v === '' ? v : `#${v}`)} placeholder="auto" autoCapitalize="characters" testID="mimarca-accent-dark" />
                       <AdvPreviewFrame label="Acento resuelto por modo">
@@ -969,7 +969,7 @@ export default function MiMarcaScreen() {
           {/* M-F5 (reemplazo): la cuenta NO se borra desde la app — se solicita por correo. */}
           <SectionCard icon={Lock} title="Cuenta">
             <Text className="font-sans text-muted" style={{ fontSize: 12.5, lineHeight: 18 }}>
-              La eliminación de cuenta no se hace desde la app. Escribinos a contacto@eva-app.cl y gestionamos la baja (datos, pagos y app de tus alumnos) según la Ley 21.719.
+              La eliminación de cuenta no se hace desde la app. Escríbenos a contacto@eva-app.cl y gestionamos la baja (datos, pagos y app de tus alumnos) según la Ley 21.719.
             </Text>
             <Button
               label="Solicitar baja por correo"
@@ -1030,7 +1030,7 @@ function ScreenTitle() {
   return (
     <View style={{ paddingTop: 16, paddingBottom: 4 }}>
       <Text className="font-display-black text-strong" style={{ fontSize: 26, letterSpacing: -0.52 }}>Mi Marca</Text>
-      <Text className="font-sans text-muted" style={{ fontSize: 13, marginTop: 4 }}>Personalizá la app de tus alumnos</Text>
+      <Text className="font-sans text-muted" style={{ fontSize: 13, marginTop: 4 }}>Personaliza la app de tus alumnos</Text>
     </View>
   )
 }

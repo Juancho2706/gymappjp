@@ -10,7 +10,7 @@ const WARNING_500 = '#F5A524' // --color-warning-500 (serie sin sincronizar)
 /**
  * Fila de una serie (mobile). Espeja el chip recap de `LogSetForm` de web: la serie logueada muestra
  * su marca (`{peso} × {reps}` en mono, "×" atenuada) + RPE/RIR, y la activa es un tap que abre el
- * TypedKeypad. El prompt "Tocá para registrar" va en Hanken (sans), NO en mono — el mono se reserva a
+ * TypedKeypad. El prompt "Toca para registrar" va en Hanken (sans), NO en mono — el mono se reserva a
  * las métricas (paridad web: la frase es cuerpo, los números son datos).
  *
  * `typedMode` (cardio/movilidad/roller) muta la línea de valores a las columnas `actual_*`/`reps_done`
@@ -65,7 +65,7 @@ export function SetRow({
         </Text>
         {!logged ? (
           <Text style={TYPE.caption} className="text-[13px] text-on-dark-muted" numberOfLines={1}>
-            Tocá para registrar
+            Toca para registrar
           </Text>
         ) : typedMode ? (
           <Text

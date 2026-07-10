@@ -191,7 +191,7 @@ function ZonesTool({
         />
         {!loading && clients.length === 0 ? (
           <Text style={[styles.hint, { color: theme.mutedForeground, fontFamily: FONT.ui }]}>
-            Aún no tenés alumnos. Usá el cálculo manual o agregalos desde Alumnos.
+            Aún no tienes alumnos. Usa el cálculo manual o agrégalos desde Alumnos.
           </Text>
         ) : null}
 
@@ -263,7 +263,7 @@ function ZonesTool({
           {selected ? (
             <View style={{ gap: 14, alignItems: 'center' }}>
               <Text style={[styles.emptyTxt, { color: theme.mutedForeground, fontFamily: FONT.ui }]}>
-                Sin edad ni FC máx no se pueden derivar zonas — completá el perfil del alumno.
+                Sin edad ni FC máx no se pueden derivar zonas — completa el perfil del alumno.
               </Text>
               <Button
                 label="Editar perfil cardio"
@@ -275,7 +275,7 @@ function ZonesTool({
             </View>
           ) : (
             <Text style={[styles.emptyTxt, { color: theme.mutedForeground, fontFamily: FONT.ui, textAlign: 'center' }]}>
-              Ingresá una edad válida para calcular las zonas.
+              Ingresa una edad válida para calcular las zonas.
             </Text>
           )}
         </Card>

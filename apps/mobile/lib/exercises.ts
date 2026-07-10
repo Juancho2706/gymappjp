@@ -248,12 +248,12 @@ export async function createExercise(input: ExerciseInput): Promise<{ ok: boolea
   // no puede crear; standalone / org_admin / org_owner sí. Enforcement server-side
   // (no solo UI) — RLS es el techo real, esto espeja el gate de la web.
   if (!(await resolveCanCreateExercises())) {
-    return { ok: false, error: 'Tu rol en la organización no permite crear ejercicios. Pedí acceso a un administrador.' }
+    return { ok: false, error: 'Tu rol en la organización no permite crear ejercicios. Pide acceso a un administrador.' }
   }
 
   const name = input.name.trim()
   if (name.length < 2) return { ok: false, error: 'El nombre debe tener al menos 2 caracteres.' }
-  if (!input.muscle_group) return { ok: false, error: 'Seleccioná un grupo muscular.' }
+  if (!input.muscle_group) return { ok: false, error: 'Selecciona un grupo muscular.' }
 
   // Duplicate-name check scoped to the coach.
   const { count } = await supabase

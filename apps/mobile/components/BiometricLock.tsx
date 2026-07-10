@@ -25,7 +25,7 @@ export function BiometricLock({ onUnlock }: { onUnlock: () => void }) {
   async function tryUnlock() {
     if (busy) return
     setBusy(true)
-    const ok = await authenticate('Desbloqueá EVA')
+    const ok = await authenticate('Desbloquea EVA')
     setBusy(false)
     if (ok) onUnlock()
   }
@@ -44,7 +44,7 @@ export function BiometricLock({ onUnlock }: { onUnlock: () => void }) {
         <Fingerprint size={32} color={SPORT_500} />
       </View>
       <Text className="text-strong" style={TYPE.title}>EVA bloqueada</Text>
-      <Text className="text-center text-muted" style={textStyle('sm', FONT.ui)}>Usá tu rostro o huella para entrar.</Text>
+      <Text className="text-center text-muted" style={textStyle('sm', FONT.ui)}>Usa tu rostro o huella para entrar.</Text>
       <TouchableOpacity
         onPress={tryUnlock}
         activeOpacity={0.85}

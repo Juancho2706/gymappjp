@@ -294,7 +294,7 @@ export default function CoachTeamScreen() {
   async function onAdd() {
     if (!teamId) return
     const email = addEmail.trim()
-    if (!email) { toast.error('Ingresá el email del coach.'); return }
+    if (!email) { toast.error('Ingresa el email del coach.'); return }
     setAddPending(true)
     try {
       await addTeamMember(teamId, email, addRole)
@@ -535,7 +535,7 @@ export default function CoachTeamScreen() {
         open={addOpen}
         onClose={() => !addPending && setAddOpen(false)}
         title="Agregar coach"
-        description="Sumá a un coach que ya tenga cuenta EVA por su email."
+        description="Suma a un coach que ya tenga cuenta EVA por su email."
         snapPoints={['58%']}
         footer={
           <Button label="Agregar al equipo" variant="sport" full loading={addPending} onPress={onAdd} testID="team-add-submit" />

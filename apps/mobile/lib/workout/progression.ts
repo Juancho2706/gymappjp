@@ -4,8 +4,8 @@
 // El coach setea por bloque progression_type ('weight'|'reps') + progression_value (incremento)
 // + progression_mode (algoritmo). Este motor calcula el peso OBJETIVO real del día.
 //  - weekly_linear (default): base + (semana-1) × incremento.
-//  - double (doble progresión): mantené el peso hasta completar el tope del rango de reps en todas
-//    las series; ahí subís. Ancla en la última sesión registrada (lastSession).
+//  - double (doble progresión): mantén el peso hasta completar el tope del rango de reps en todas
+//    las series; ahí subes. Ancla en la última sesión registrada (lastSession).
 //  - session_linear / adaptive: reservados (sin motor → no-op seguro).
 // Conservador: ante dato faltante/raro devuelve el peso base (nunca rompe el plan).
 

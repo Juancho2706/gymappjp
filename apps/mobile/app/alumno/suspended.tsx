@@ -91,7 +91,7 @@ export default function SuspendedScreen() {
         ) : (
           <>
             <Text className="text-muted font-sans" style={styles.body}>
-              {owner} pausó temporalmente tu acceso. Contactá a{' '}
+              {owner} pausó temporalmente tu acceso. Contacta a{' '}
               <Text className="text-strong font-sans-semibold">{s.brandName}</Text> para reactivar tu cuenta.
             </Text>
             <Text className="text-subtle font-sans" style={styles.subtle}>

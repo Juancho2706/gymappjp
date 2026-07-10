@@ -15,7 +15,7 @@ interface ErrorStateProps {
  * Estado de ERROR (Ola 0) — distinto de EmptyState. Para fallos de red/servidor
  * con acción de reintentar. NUNCA disfrazar un error de red como "sin datos".
  */
-export function ErrorState({ icon: Icon = AlertTriangle, title = 'No pudimos cargar', subtitle = 'Revisá tu conexión e intentá de nuevo.', onRetry, retryLabel = 'Reintentar' }: ErrorStateProps) {
+export function ErrorState({ icon: Icon = AlertTriangle, title = 'No pudimos cargar', subtitle = 'Revisa tu conexión e intenta de nuevo.', onRetry, retryLabel = 'Reintentar' }: ErrorStateProps) {
   const { theme } = useTheme()
   return (
     <View style={styles.wrap}>

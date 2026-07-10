@@ -106,11 +106,11 @@ export async function signInWithGoogleCoach(): Promise<GoogleAuthResult> {
     if (code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
       throw new GoogleSignInError('play_services', 'Google Play Services no está disponible.')
     }
-    throw new GoogleSignInError('unknown', 'No se pudo iniciar sesión con Google. Intentá de nuevo.')
+    throw new GoogleSignInError('unknown', 'No se pudo iniciar sesión con Google. Intenta de nuevo.')
   }
 
   if (!idToken) {
-    throw new GoogleSignInError('no_id_token', 'Google no devolvió un token válido. Intentá de nuevo.')
+    throw new GoogleSignInError('no_id_token', 'Google no devolvió un token válido. Intenta de nuevo.')
   }
 
   const { data, error } = await supabase.auth.signInWithIdToken({
@@ -118,7 +118,7 @@ export async function signInWithGoogleCoach(): Promise<GoogleAuthResult> {
     token: idToken,
   })
   if (error || !data.user) {
-    throw new GoogleSignInError('supabase', 'No se pudo validar tu sesión de Google. Intentá de nuevo.')
+    throw new GoogleSignInError('supabase', 'No se pudo validar tu sesión de Google. Intenta de nuevo.')
   }
 
   return {

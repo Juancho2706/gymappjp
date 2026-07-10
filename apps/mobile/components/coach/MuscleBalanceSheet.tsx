@@ -55,7 +55,7 @@ export const MuscleBalanceSheet = forwardRef<BottomSheetModal, Props>(function M
         <Text style={[styles.sub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{data.total} series totales · {data.arr.length} grupos activos</Text>
 
         {data.arr.length === 0 ? (
-          <Text style={[styles.sub, { color: theme.mutedForeground, fontFamily: theme.fontSans, marginTop: 24, textAlign: 'center' }]}>Agregá ejercicios para ver el balance.</Text>
+          <Text style={[styles.sub, { color: theme.mutedForeground, fontFamily: theme.fontSans, marginTop: 24, textAlign: 'center' }]}>Agrega ejercicios para ver el balance.</Text>
         ) : (
           <>
             {n >= 3 ? (
@@ -90,7 +90,7 @@ export const MuscleBalanceSheet = forwardRef<BottomSheetModal, Props>(function M
             {data.push > 0 && data.pull > 0 ? (
               <View style={[styles.warn, { borderColor: balanced ? theme.success + '33' : WARNING_500 + '33', backgroundColor: balanced ? theme.success + '14' : WARNING_500 + '14' }]}>
                 <Text style={[styles.warnTxt, { color: balanced ? theme.success : WARNING_500, fontFamily: FONT.uiBold }]}>
-                  {balanced ? `✓ Ratio empuje/jale equilibrado (${data.push}s / ${data.pull}s)` : ratio > 1.5 ? '⚠ Empuje/jale desequilibrado — sumá más espalda' : '⚠ Jale/empuje desequilibrado — sumá más pecho y hombros'}
+                  {balanced ? `✓ Ratio empuje/jale equilibrado (${data.push}s / ${data.pull}s)` : ratio > 1.5 ? '⚠ Empuje/jale desequilibrado — suma más espalda' : '⚠ Jale/empuje desequilibrado — suma más pecho y hombros'}
                 </Text>
               </View>
             ) : null}

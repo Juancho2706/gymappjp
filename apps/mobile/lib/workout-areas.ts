@@ -51,9 +51,9 @@ export async function listBuilderAreas(scope: BuilderAreaScope): Promise<Workout
 
 /** Colision de slug por scope (indices parciales *_slug_uidx) / RLS → mensaje friendly. */
 function friendlyAreaError(msg: string | null | undefined): string {
-  if (!msg) return 'Ocurrió un error. Intentá de nuevo.'
+  if (!msg) return 'Ocurrió un error. Intenta de nuevo.'
   if (/duplicate key|_slug_uidx/i.test(msg)) return 'Ya existe un área con ese nombre en este contexto.'
-  if (/row-level security/i.test(msg)) return 'No tenés permiso para gestionar esta área.'
+  if (/row-level security/i.test(msg)) return 'No tienes permiso para gestionar esta área.'
   return msg
 }
 

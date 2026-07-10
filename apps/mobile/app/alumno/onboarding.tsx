@@ -15,7 +15,7 @@ import { useRouter } from 'expo-router'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { AnimatePresence, MotiView } from 'moti'
 import { ArrowLeft, ArrowRight, Check, Ruler, Scale } from 'lucide-react-native'
-import { useTheme } from '../../context/ThemeContext'
+import { ForceLightTheme, useTheme } from '../../context/ThemeContext'
 import { supabase } from '../../lib/supabase'
 import { Button, Input, Textarea } from '../../components'
 import { AppBackground } from '../../components/AppBackground'
@@ -74,7 +74,16 @@ const EMPTY_FORM: FormData = {
   medical_conditions: '',
 }
 
-export default function AlumnoOnboardingScreen() {
+// Familia de entrada = SIEMPRE tema claro (#13).
+export default function AlumnoOnboardingRoute() {
+  return (
+    <ForceLightTheme>
+      <AlumnoOnboardingScreen />
+    </ForceLightTheme>
+  )
+}
+
+function AlumnoOnboardingScreen() {
   const { theme } = useTheme()
   const router = useRouter()
   const scrollRef = useRef<ScrollViewType>(null)
@@ -447,8 +456,8 @@ function Pick({
               testID={`${testIDPrefix}-chip-${o.value}`}
             >
               <Text
-                className={active ? undefined : 'text-body'}
-                style={[styles.chipText, active ? { color: theme.primaryForeground } : null]}
+                className={active ? 'text-on-dark' : 'text-body'}
+                style={styles.chipText}
               >
                 {o.label}
               </Text>

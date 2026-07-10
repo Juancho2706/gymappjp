@@ -44,7 +44,7 @@ export const TemplatePickerSheet = forwardRef<BottomSheetModal, Props>(function 
         {loading ? <ActivityIndicator color={theme.primary} style={{ marginTop: 24 }} /> : null}
         {!loading && items.length === 0 ? (
           <Text style={[styles.empty, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
-            No tenés plantillas guardadas. Creá un programa sin alumno para reutilizarlo.
+            No tienes plantillas guardadas. Crea un programa sin alumno para reutilizarlo.
           </Text>
         ) : null}
         {items.map((t) => (

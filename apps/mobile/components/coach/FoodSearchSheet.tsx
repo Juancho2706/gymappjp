@@ -148,7 +148,7 @@ export const FoodSearchSheet = forwardRef<BottomSheetModal, Props>(function Food
             keyboardShouldPersistTaps="handled"
             ListEmptyComponent={!loading ? (
               <Text style={[styles.empty, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
-                {query.length >= 2 ? `Sin resultados. Toca + para crear "${query}".` : 'Escribí para buscar, o toca + para crear.'}
+                {query.length >= 2 ? `Sin resultados. Toca + para crear "${query}".` : 'Escribe para buscar, o toca + para crear.'}
               </Text>
             ) : null}
             renderItem={({ item }) => {

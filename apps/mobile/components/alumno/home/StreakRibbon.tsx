@@ -77,7 +77,7 @@ export function StreakRibbon({ streak }: { streak: number }) {
               <Text style={{ fontFamily: FONT.uiExtra, fontSize: 14, color: EMBER_700 }}>días de racha</Text>
             </View>
             <Text numberOfLines={1} style={{ fontFamily: FONT.uiSemibold, fontSize: 12, color: EMBER_600, marginTop: 4 }}>
-              {toGoal === 0 ? '¡Alcanzaste el hito! Seguí así.' : `Te ${toGoal === 1 ? 'falta' : 'faltan'} ${toGoal} para los ${goal} días`}
+              {toGoal === 0 ? '¡Alcanzaste el hito! Sigue así.' : `Te ${toGoal === 1 ? 'falta' : 'faltan'} ${toGoal} para los ${goal} días`}
             </Text>
           </View>
         </View>

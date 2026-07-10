@@ -1080,7 +1080,7 @@ export async function setCoachClientArchived(clientId: string, archived: boolean
         .eq('coach_id', coach.id)
         .eq('is_archived', false)
       if ((count ?? 0) >= coach.maxClients) {
-        return { ok: false, error: `Alcanzaste el límite de tu plan (${coach.maxClients} alumnos activos). Subí de plan para reactivar.` }
+        return { ok: false, error: `Alcanzaste el límite de tu plan (${coach.maxClients} alumnos activos). Sube de plan para reactivar.` }
       }
     }
   }

@@ -30,15 +30,15 @@ const WARNING_700 = { light: '#8F5A05', dark: '#FFD489' } as const
 function headlineFor(status: string): { title: string; body: string } {
   switch (status) {
     case 'canceled':
-      return { title: 'Tu plan está cancelado', body: 'Tu acceso al panel terminó. Reactivá un plan para volver a gestionar tu marca, tus alumnos y tus rutinas.' }
+      return { title: 'Tu plan está cancelado', body: 'Tu acceso al panel terminó. Reactiva un plan para volver a gestionar tu marca, tus alumnos y tus rutinas.' }
     case 'paused':
       return { title: 'Tu plan está pausado', body: 'Tu suscripción quedó en pausa. Reactivala para recuperar el acceso completo al panel.' }
     case 'past_due':
       return { title: 'Tu pago quedó pendiente', body: 'No pudimos completar el cobro de tu suscripción. Regularizá el pago para mantener el acceso.' }
     case 'expired':
-      return { title: 'Tu plan venció', body: 'Tu suscripción venció. Elegí un plan para recuperar el acceso al panel.' }
+      return { title: 'Tu plan venció', body: 'Tu suscripción venció. Elige un plan para recuperar el acceso al panel.' }
     default:
-      return { title: 'Reactivá tu plan', body: 'Tu suscripción está inactiva. Elegí un plan para recuperar el acceso al panel.' }
+      return { title: 'Reactiva tu plan', body: 'Tu suscripción está inactiva. Elige un plan para recuperar el acceso al panel.' }
   }
 }
 

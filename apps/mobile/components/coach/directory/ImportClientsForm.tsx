@@ -204,7 +204,7 @@ export function ImportClientsForm({
         <ScrollView style={scrollStyle} showsVerticalScrollIndicator={false}>
           <View style={{ gap: 12 }}>
             <Text style={{ color: theme.mutedForeground, fontFamily: FONT.ui, fontSize: 12.5, lineHeight: 18 }}>
-              Subí un CSV (columnas <Text style={{ fontFamily: FONT.uiBold }}>nombre, email, teléfono, fecha de inicio</Text>) o pegá el texto. La primera fila son los encabezados y detectamos las columnas automáticamente. Cada alumno recibe una contraseña temporal. Máximo {MAX_IMPORT_ROWS} filas.
+              Sube un CSV (columnas <Text style={{ fontFamily: FONT.uiBold }}>nombre, email, teléfono, fecha de inicio</Text>) o pega el texto. La primera fila son los encabezados y detectamos las columnas automáticamente. Cada alumno recibe una contraseña temporal. Máximo {MAX_IMPORT_ROWS} filas.
             </Text>
             <Button testID="import-clients-pick-file" label={sheet ? `Archivo: ${sheet.filename}` : 'Subir CSV'} variant="outline" leftIcon={Upload} onPress={pickFile} full />
             <TextInput
@@ -212,7 +212,7 @@ export function ImportClientsForm({
               value={pasteText}
               onChangeText={setPasteText}
               multiline
-              placeholder={'…o pegá aquí:\nnombre,email,telefono,inicio\nJuan Pérez,juan@mail.com,+569...,01/03/2026'}
+              placeholder={'…o pega aquí:\nnombre,email,telefono,inicio\nJuan Pérez,juan@mail.com,+569...,01/03/2026'}
               placeholderTextColor={theme.mutedForeground}
               style={{ minHeight: 100, borderWidth: 1, borderColor: theme.border, borderRadius: theme.radius.lg, backgroundColor: theme.secondary, color: theme.foreground, padding: 12, textAlignVertical: 'top', fontFamily: FONT.ui, fontSize: 13 }}
             />
@@ -228,7 +228,7 @@ export function ImportClientsForm({
         <ScrollView style={scrollStyle} showsVerticalScrollIndicator={false}>
           <View style={{ gap: 10 }}>
             <Text style={{ color: theme.mutedForeground, fontFamily: FONT.ui, fontSize: 12.5 }}>
-              Verificá el mapeo de cada columna del archivo a su campo EVA.
+              Verifica el mapeo de cada columna del archivo a su campo EVA.
             </Text>
             {sheet.headers.map((header, colIdx) => {
               const match = autoMatches[colIdx]
@@ -276,7 +276,7 @@ export function ImportClientsForm({
             })}
             {missingRequired.length ? (
               <Text style={{ color: theme.destructive, fontSize: 12.5, fontFamily: FONT.uiSemibold }}>
-                Debés mapear: {missingRequired.map((f) => IMPORT_FIELD_LABELS[f]).join(', ')}
+                Debes mapear: {missingRequired.map((f) => IMPORT_FIELD_LABELS[f]).join(', ')}
               </Text>
             ) : null}
           </View>
@@ -329,7 +329,7 @@ export function ImportClientsForm({
             {wouldExceedLimit ? (
               <View style={{ borderWidth: 1, borderColor: theme.destructive + '55', backgroundColor: theme.destructive + '0D', borderRadius: theme.radius.lg, padding: 12 }}>
                 <Text style={{ color: theme.destructive, fontSize: 12.5, fontFamily: FONT.uiSemibold }}>
-                  Tu plan permite {maxClients} alumnos y tenés {activeCount}. No podés importar {toImport.length} más. Subí de plan o reducí las filas.
+                  Tu plan permite {maxClients} alumnos y tienes {activeCount}. No puedes importar {toImport.length} más. Sube de plan o reduce las filas.
                 </Text>
               </View>
             ) : null}

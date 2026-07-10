@@ -116,7 +116,7 @@ export interface WorkoutSummaryOverlayProps {
   exerciseMaxDates?: Record<string, string>
   /** Duración de la sesión en segundos (cronómetro congelado al finalizar). */
   durationSec?: number
-  /** Nombre del programa activo (nudge "seguí tu progreso"). null en planes sueltos. */
+  /** Nombre del programa activo (nudge "sigue tu progreso"). null en planes sueltos. */
   programName?: string | null
   /** Sub-línea de contexto del programa (Día X de Y / "Programa semanal"). */
   nextHint?: string | null
@@ -403,7 +403,7 @@ export function WorkoutSummaryOverlay({
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={{ fontFamily: BOLD, fontSize: 11, letterSpacing: 1.5, textTransform: 'uppercase', color: SPORT_300 }}>Lo que viene</Text>
-                <Text style={{ fontFamily: BOLD, fontSize: 14, color: ON_DARK }} numberOfLines={1}>Seguí tu progreso en {programName}</Text>
+                <Text style={{ fontFamily: BOLD, fontSize: 14, color: ON_DARK }} numberOfLines={1}>Sigue tu progreso en {programName}</Text>
                 {nextHint ? <Text style={{ fontFamily: theme.fontSans, fontSize: 12, color: ON_DARK_MUTED }} numberOfLines={1}>{nextHint}</Text> : null}
               </View>
             </View>

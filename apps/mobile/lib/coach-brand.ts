@@ -147,7 +147,7 @@ export async function updateCoachBrandSettings(input: CoachBrandEditable): Promi
 
   const name = input.brandName.trim()
   if (name.length < 2) return { ok: false, error: 'El nombre de marca debe tener al menos 2 caracteres.' }
-  if (!/^#[0-9a-fA-F]{6}$/.test(input.primaryColor)) return { ok: false, error: 'Color de marca inválido (usá formato #RRGGBB).' }
+  if (!/^#[0-9a-fA-F]{6}$/.test(input.primaryColor)) return { ok: false, error: 'Color de marca inválido (usa formato #RRGGBB).' }
   // M-F11/TX-6: validación con zod local (límites + refine de video) — mismos límites que la web.
   const brandValidation = brandEditableSchema.safeParse(input)
   if (!brandValidation.success) {
@@ -161,11 +161,11 @@ export async function updateCoachBrandSettings(input: CoachBrandEditable): Promi
     return /^#[0-9a-fA-F]{6}$/.test(t) ? { ok: true, value: t } : { ok: false }
   }
   const sec = optHex(input.brandSecondaryColor)
-  if (!sec.ok) return { ok: false, error: 'Color secundario inválido (usá formato #RRGGBB).' }
+  if (!sec.ok) return { ok: false, error: 'Color secundario inválido (usa formato #RRGGBB).' }
   const al = optHex(input.accentLight)
-  if (!al.ok) return { ok: false, error: 'Acento claro inválido (usá formato #RRGGBB).' }
+  if (!al.ok) return { ok: false, error: 'Acento claro inválido (usa formato #RRGGBB).' }
   const ad = optHex(input.accentDark)
-  if (!ad.ok) return { ok: false, error: 'Acento oscuro inválido (usá formato #RRGGBB).' }
+  if (!ad.ok) return { ok: false, error: 'Acento oscuro inválido (usa formato #RRGGBB).' }
 
   // Bump welcome_modal_version when the modal changes so students re-see it (web parity).
   const { data: current } = await supabase

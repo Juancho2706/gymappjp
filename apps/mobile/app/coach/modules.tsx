@@ -204,7 +204,7 @@ export default function CoachModulesScreen() {
             <View className="flex-row items-start rounded-control bg-sport-100" style={{ gap: 10, paddingHorizontal: 14, paddingVertical: 12, marginBottom: 14 }}>
               <Info size={17} strokeWidth={2.2} className="text-sport-600" style={{ marginTop: 1 }} />
               <Text className="font-sans-bold text-sport-700" style={{ flex: 1, fontSize: 12.5, lineHeight: 18 }}>
-                Activá un módulo acá y usalo desde Herramientas. La compra se completa en la web con tu cuenta.
+                Activa un módulo acá y úsalo desde Herramientas. La compra se completa en la web con tu cuenta.
               </Text>
             </View>
           </MotiView>

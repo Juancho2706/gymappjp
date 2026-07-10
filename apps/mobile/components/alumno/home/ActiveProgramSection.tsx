@@ -59,7 +59,7 @@ export function ActiveProgramSection({
           </View>
           <View style={{ flex: 1, minWidth: 0 }}>
             <Text style={{ fontFamily: FONT.uiBold, fontSize: 13, color: EMBER_700 }}>
-              {pending.length === 1 ? 'Tenés 1 día pendiente' : `Tenés ${pending.length} días pendientes`} esta semana
+              {pending.length === 1 ? 'Tienes 1 día pendiente' : `Tienes ${pending.length} días pendientes`} esta semana
             </Text>
             <Text numberOfLines={1} style={{ fontFamily: FONT.uiSemibold, fontSize: 11.5, color: EMBER_700, marginTop: 2, opacity: 0.85 }}>
               Recuperar Día {oldestPending.dayOfWeek} · {oldestPending.dayLabel}

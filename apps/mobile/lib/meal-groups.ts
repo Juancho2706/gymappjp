@@ -84,7 +84,7 @@ export async function saveMealGroup(
   if (!coachId) return { ok: false, error: 'No autenticado.' }
   const name = input.name.trim()
   if (name.length < 1) return { ok: false, error: 'Indicá un nombre para el grupo.' }
-  if (!input.items.length) return { ok: false, error: 'Agregá al menos un alimento.' }
+  if (!input.items.length) return { ok: false, error: 'Agrega al menos un alimento.' }
 
   try {
     let groupId = input.id

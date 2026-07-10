@@ -201,7 +201,7 @@ export default function LoginScreen() {
       }
       // Google válido pero sin cuenta coach: cortamos la sesión (como web → /login?error=no_google_account).
       await signOutGoogleAndSupabase()
-      setError('No hay una cuenta de coach vinculada a este Google. Registrate primero.')
+      setError('No hay una cuenta de coach vinculada a este Google. Regístrate primero.')
     } catch (err) {
       // Cancelar no es un error para el usuario.
       if (err instanceof GoogleSignInError && err.code === 'cancelled') return
@@ -369,7 +369,7 @@ export default function LoginScreen() {
                 Bienvenido de vuelta
               </Text>
               <Text className="text-muted font-sans" style={{ fontSize: 14, lineHeight: 20 }}>
-                Ingresá tus credenciales para acceder al panel
+                Ingresa tus credenciales para acceder al panel
               </Text>
             </MotiView>
 
@@ -549,7 +549,7 @@ export default function LoginScreen() {
           ]}
         >
           <Text className="text-muted font-sans" style={{ textAlign: 'center', fontSize: 13, marginBottom: 18 }}>
-            Iniciá sesión para entrenar con{' '}
+            Inicia sesión para entrenar con{' '}
             <Text className="text-strong font-sans-bold">{brandName}</Text>
           </Text>
           {fields}

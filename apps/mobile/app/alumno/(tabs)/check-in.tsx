@@ -103,7 +103,7 @@ export default function CheckInScreen() {
     // incluido HEIC de iPhone (bloquearlo antes rompía a los alumnos con cámara Apple). Solo
     // rechazamos algo declarado que NO sea imagen.
     if (asset.mimeType && !asset.mimeType.startsWith('image/')) {
-      Alert.alert('Archivo no soportado', 'Seleccioná una imagen.')
+      Alert.alert('Archivo no soportado', 'Selecciona una imagen.')
       return
     }
     const compressed = await ImageManipulator.manipulateAsync(
@@ -144,7 +144,7 @@ export default function CheckInScreen() {
   }
 
   function choosePhotoSource(type: 'front' | 'back') {
-    Alert.alert('Foto de progreso', '¿Cómo querés agregarla?', [
+    Alert.alert('Foto de progreso', '¿Cómo quieres agregarla?', [
       { text: 'Tomar foto', onPress: () => takePhoto(type) },
       { text: 'Elegir de galería', onPress: () => pickFromGallery(type) },
       { text: 'Cancelar', style: 'cancel' },
@@ -243,8 +243,8 @@ export default function CheckInScreen() {
         Alert.alert(
           'Check-in guardado',
           droppedPhotos === 1
-            ? 'Tu check-in se guardó, pero una foto no pudo subirse. Podés volver a intentarlo en el próximo check-in.'
-            : 'Tu check-in se guardó, pero las fotos no pudieron subirse. Podés volver a intentarlo en el próximo check-in.'
+            ? 'Tu check-in se guardó, pero una foto no pudo subirse. Puedes volver a intentarlo en el próximo check-in.'
+            : 'Tu check-in se guardó, pero las fotos no pudieron subirse. Puedes volver a intentarlo en el próximo check-in.'
         )
       }
     }

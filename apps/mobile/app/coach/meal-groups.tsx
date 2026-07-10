@@ -137,7 +137,7 @@ export default function CoachMealGroupsScreen() {
 
   async function handleSave() {
     if (!name.trim()) { Alert.alert('Falta el nombre', 'Indicá un nombre para el grupo.'); return }
-    if (!items.length) { Alert.alert('Sin alimentos', 'Agregá al menos un alimento.'); return }
+    if (!items.length) { Alert.alert('Sin alimentos', 'Agrega al menos un alimento.'); return }
     setSaving(true)
     const res = await saveMealGroup({
       id: editingId ?? undefined,
@@ -212,7 +212,7 @@ export default function CoachMealGroupsScreen() {
           {items.length === 0 ? (
             <View style={[styles.emptyItems, { borderColor: theme.border }]}>
               <Text style={{ fontSize: 13, color: theme.mutedForeground, fontFamily: FONT.ui, textAlign: 'center' }}>
-                Agregá alimentos con el botón de arriba.
+                Agrega alimentos con el botón de arriba.
               </Text>
             </View>
           ) : (
@@ -296,7 +296,7 @@ export default function CoachMealGroupsScreen() {
                 <EmptyState
                   icon={Layers}
                   title={query ? 'Sin resultados' : 'Sin grupos todavía'}
-                  subtitle={query ? `Ningún grupo coincide con «${query.trim()}».` : 'Creá tu primer grupo de alimentos para reutilizarlo en tus planes.'}
+                  subtitle={query ? `Ningún grupo coincide con «${query.trim()}».` : 'Crea tu primer grupo de alimentos para reutilizarlo en tus planes.'}
                   action={!query ? <Button label="Nuevo grupo" leftIcon={Plus} variant="sport" onPress={openCreate} style={{ marginTop: 8 }} /> : undefined}
                 />
               </View>

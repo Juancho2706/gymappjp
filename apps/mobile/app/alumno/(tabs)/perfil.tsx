@@ -199,7 +199,7 @@ function AppearanceToggle() {
   )
 }
 
-// Option inside the "Compartí tu logro" sheet (mirror of the web ShareTemplateOption).
+// Option inside the "Comparte tu logro" sheet (mirror of the web ShareTemplateOption).
 function ShareOption({
   Icon,
   title,
@@ -328,7 +328,7 @@ export default function AlumnoPerfilScreen() {
   }, [])
   async function toggleBio(next: boolean) {
     if (next) {
-      const ok = await authenticate('Confirmá para activar el bloqueo')
+      const ok = await authenticate('Confirma para activar el bloqueo')
       if (!ok) return
     }
     await setBiometricLockEnabled(next)
@@ -344,7 +344,7 @@ export default function AlumnoPerfilScreen() {
   const firstName = (detail?.fullName ?? '').trim().split(/\s+/)[0] || 'Atleta'
   const streakSubtitle = stats.streak > 0
     ? `${stats.streak} ${stats.streak === 1 ? 'día' : 'días'} seguidos activo`
-    : 'Encendé tu racha'
+    : 'Enciende tu racha'
 
   return (
     <View className="flex-1 bg-surface-app">
@@ -397,7 +397,7 @@ export default function AlumnoPerfilScreen() {
               </View>
             </View>
 
-            {/* Compartí tu logro — abre el selector de plantilla (Sheet DS) */}
+            {/* Comparte tu logro — abre el selector de plantilla (Sheet DS) */}
             <Pressable
               testID="perfil-share-cta"
               accessibilityRole="button"
@@ -413,10 +413,10 @@ export default function AlumnoPerfilScreen() {
               </View>
               <View style={{ flex: 1, minWidth: 0 }}>
                 <Text className="font-sans-extra text-strong" style={{ fontSize: 14.5 }}>
-                  Compartí tu logro
+                  Comparte tu logro
                 </Text>
                 <Text className="font-sans text-muted" style={{ fontSize: 12.5 }} numberOfLines={1}>
-                  Elegí una tarjeta con la marca de tu coach
+                  Elige una tarjeta con la marca de tu coach
                 </Text>
               </View>
               <ChevronRight size={18} className="text-sport-600" />
@@ -573,7 +573,7 @@ export default function AlumnoPerfilScreen() {
                     Solicitar baja de cuenta
                   </Text>
                   <Text className="font-sans text-muted" style={{ fontSize: 12.5, marginTop: 1 }}>
-                    Pedí la eliminación de tus datos (derechos ARCO)
+                    Pide la eliminación de tus datos (derechos ARCO)
                   </Text>
                 </View>
                 <ChevronRight size={18} className="text-ink-300" />
@@ -597,8 +597,8 @@ export default function AlumnoPerfilScreen() {
       <Sheet
         open={pickerOpen}
         onClose={() => setPickerOpen(false)}
-        title="Compartí tu logro"
-        description="Cada tarjeta lleva la marca de tu coach. Elegí cuál compartir:"
+        title="Comparte tu logro"
+        description="Cada tarjeta lleva la marca de tu coach. Elige cuál compartir:"
         snapPoints={['56%']}
       >
         <View style={{ gap: 10 }}>

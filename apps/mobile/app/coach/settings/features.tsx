@@ -140,8 +140,8 @@ export default function CoachFeaturesScreen() {
             </Text>
             <Text className="font-sans text-muted" style={{ fontSize: 13.5, marginTop: 4, lineHeight: 19 }}>
               {isTeam
-                ? 'Elegí qué se muestra de la nutrición para el equipo y sus alumnos.'
-                : 'Elegí qué tan a fondo trabajás la nutrición y qué secciones ven vos y tus alumnos.'}
+                ? 'Elige qué se muestra de la nutrición para el equipo y sus alumnos.'
+                : 'Elige qué tan a fondo trabajas la nutrición y qué secciones ven tú y tus alumnos.'}
             </Text>
           </View>
 
@@ -170,7 +170,7 @@ export default function CoachFeaturesScreen() {
           {managedLock ? null : (
             <Text className="font-sans text-muted" style={{ fontSize: 12, lineHeight: 18, marginTop: 18, paddingHorizontal: 2 }}>
               <Text className="font-sans-bold text-strong">Módulos</Text> es lo que compraste (entitlements de pago).{' '}
-              <Text className="font-sans-bold text-strong">Funciones</Text> es lo que decidís mostrar de eso. Apagar una
+              <Text className="font-sans-bold text-strong">Funciones</Text> es lo que decides mostrar de eso. Apagar una
               función nunca cancela un módulo ni borra datos — solo la oculta.
             </Text>
           )}
@@ -198,7 +198,7 @@ function ReadOnlyBanner() {
     <Card variant="default" padding="md" style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 12 }}>
       <Lock size={16} strokeWidth={2} className="text-muted" />
       <Text className="font-sans text-muted" style={{ flex: 1, fontSize: 12.5, lineHeight: 18 }}>
-        Solo el gestor del equipo puede cambiar estas funciones. Podés verlas, pero no editarlas.
+        Solo el gestor del equipo puede cambiar estas funciones. Puedes verlas, pero no editarlas.
       </Text>
     </Card>
   )
@@ -279,10 +279,10 @@ function DomainGroup({ data, scopeCtx, entitledByModule, canEdit }: DomainGroupP
       {/* 1. Selector de preset */}
       <Card variant="default" padding="lg" style={{ gap: 10 }}>
         <Text className="font-sans-bold text-strong" style={{ fontSize: 14 }}>
-          ¿Qué tan a fondo trabajás {data.label.toLowerCase()}?
+          ¿Qué tan a fondo trabajas {data.label.toLowerCase()}?
         </Text>
         <Text className="font-sans text-muted" style={{ fontSize: 12.5, lineHeight: 18 }}>
-          Elegí un punto de partida. Podés ajustar cada sección después.
+          Elige un punto de partida. Puedes ajustar cada sección después.
         </Text>
         <View style={{ opacity: canEdit ? 1 : 0.55, marginTop: 2 }} pointerEvents={canEdit ? 'auto' : 'none'}>
           <SegmentedTabs<Preset>
@@ -299,7 +299,7 @@ function DomainGroup({ data, scopeCtx, entitledByModule, canEdit }: DomainGroupP
         <View style={{ flex: 1, minWidth: 0 }}>
           <Text className="font-sans-bold text-strong" style={{ fontSize: 14 }}>Mostrar {data.label}</Text>
           <Text className="font-sans text-muted" style={{ fontSize: 12, lineHeight: 17, marginTop: 3 }}>
-            Apagá esto si no usás el módulo. Oculta el menú y su contenido para vos y tus alumnos. No borra datos.
+            Apaga esto si no usas el módulo. Oculta el menú y su contenido para ti y tus alumnos. No borra datos.
           </Text>
         </View>
         <Switch value={domainEnabled} onValueChange={toggleDomain} disabled={!canEdit} />

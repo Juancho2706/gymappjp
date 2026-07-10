@@ -29,7 +29,7 @@ export function deriveNutritionCoachAlerts(input: {
   const monthly = input.monthlyAvgPct
 
   if (kcal > 0 && kcal < 1200) {
-    out.push({ id: 'over_restriction', variant: 'danger', title: 'Meta calórica muy baja', description: `El plan marca ${kcal} kcal/día. Por debajo de ~1200 kcal suele ser difícil cubrir micronutrientes; revisá si es intencional y seguro.` })
+    out.push({ id: 'over_restriction', variant: 'danger', title: 'Meta calórica muy baja', description: `El plan marca ${kcal} kcal/día. Por debajo de ~1200 kcal suele ser difícil cubrir micronutrientes; revisa si es intencional y seguro.` })
   }
   if (pw > 60 && w < 30) {
     out.push({ id: 'adherence_drop', variant: 'warning', title: 'Caída brusca de adherencia', description: `La semana pasada ~${Math.round(pw)}% de comidas registradas; esta semana ~${Math.round(w)}%. Conviene contactar y ajustar.` })

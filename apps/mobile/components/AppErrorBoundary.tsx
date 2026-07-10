@@ -28,7 +28,7 @@ export function AppErrorBoundary({ error, retry }: ErrorBoundaryProps) {
         <AlertTriangle size={30} color={DANGER} strokeWidth={1.75} />
       </View>
       <Text style={styles.title}>Algo salió mal</Text>
-      <Text style={styles.sub}>Tuvimos un problema cargando esta pantalla. Podés reintentar.</Text>
+      <Text style={styles.sub}>Tuvimos un problema cargando esta pantalla. Puedes reintentar.</Text>
       {__DEV__ ? <Text style={styles.dev} numberOfLines={4}>{error?.message}</Text> : null}
       <TouchableOpacity onPress={retry} activeOpacity={0.85} style={styles.btn}>
         <RotateCcw size={16} color="#fff" />

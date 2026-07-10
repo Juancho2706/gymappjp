@@ -107,7 +107,7 @@ export const ExerciseFormSheet = forwardRef<BottomSheetModal, Props>(function Ex
   async function save() {
     setError(null)
     if (name.trim().length < 2) { setError('El nombre debe tener al menos 2 caracteres.'); return }
-    if (!muscle) { setError('Seleccioná un grupo muscular.'); return }
+    if (!muscle) { setError('Selecciona un grupo muscular.'); return }
     const startSec = mmssToSeconds(videoStart)
     const endSec = mmssToSeconds(videoEnd)
     if (startSec != null && endSec != null && endSec <= startSec) {

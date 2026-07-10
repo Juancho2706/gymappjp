@@ -41,7 +41,7 @@ export async function checkForOtaUpdate(): Promise<void> {
 function promptReload(): void {
   Alert.alert(
     'Actualización disponible',
-    'Descargamos una versión nueva de EVA. ¿Querés reiniciar para aplicarla?',
+    'Descargamos una versión nueva de EVA. ¿Quieres reiniciar para aplicarla?',
     [
       { text: 'Ahora no', style: 'cancel' },
       {

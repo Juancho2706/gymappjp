@@ -89,7 +89,7 @@ export default function HistoryScreen() {
             No pudimos cargar tu historial
           </Text>
           <Text style={[styles.errorSub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
-            Revisá tu conexión e intentá de nuevo en un momento.
+            Revisa tu conexión e intenta de nuevo en un momento.
           </Text>
           <Button testID="history-retry" label="Reintentar" variant="outline" onPress={() => load(daysBack)} />
         </View>

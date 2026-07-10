@@ -205,8 +205,8 @@ export default function CoachAreasScreen() {
                 {isEnterprise
                   ? 'No disponible en cuentas gestionadas por una organización.'
                   : isTeam
-                    ? 'Solo el owner o co-gestor del equipo gestiona las áreas del pool. Podés usarlas en el builder.'
-                    : 'No tenés permiso para editar las áreas.'}
+                    ? 'Solo el owner o co-gestor del equipo gestiona las áreas del pool. Puedes usarlas en el builder.'
+                    : 'No tienes permiso para editar las áreas.'}
               </Text>
             </View>
           )}
@@ -222,9 +222,9 @@ export default function CoachAreasScreen() {
                 title={loadError ? 'No pudimos cargar las áreas' : 'Aún no hay áreas'}
                 subtitle={
                   loadError
-                    ? 'Revisá tu conexión e intentá de nuevo.'
+                    ? 'Revisa tu conexión e intenta de nuevo.'
                     : canEdit
-                      ? 'Creá tu primera área abajo para ordenar los días del planificador.'
+                      ? 'Crea tu primera área abajo para ordenar los días del planificador.'
                       : 'Todavía no hay áreas configuradas.'
                 }
               />

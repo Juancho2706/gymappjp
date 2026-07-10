@@ -244,3 +244,86 @@ export function brandVars(primaryColor: string | null | undefined, scheme: 'ligh
     '--color-focus-ring': hexToChannels(brand),
   }
 }
+
+/**
+ * Valores LIGHT (canales "r g b") de EXACTAMENTE los CSS-vars que el bloque
+ * `.dark` de `global.css` sobreescribe. Se spreadean con `vars()` en la <View>
+ * de `ForceLightTheme` (context/ThemeContext) para SCOPEAR el tema claro a la
+ * familia de entrada: el var mas cercano gana sobre el `.dark` del root, asi que
+ * los tokens semanticos (bg-surface-app, text-strong, border-subtle…) resuelven
+ * claro SOLO en ese subarbol —sin tocar el colorScheme GLOBAL— y las clases
+ * dark: quedan inertes ahi. El resto de la app sigue dark-aware.
+ *
+ * ⚠️ MANTENIMIENTO: espejo del bloque `.dark:root, .dark { … }` de global.css.
+ * Si ahi se agrega/quita un token que flipea en dark, reflejarlo aca (mismos
+ * valores que el bloque `:root` LIGHT). Las keys de marca (primary/accent/sport-*
+ * /cta-fill/focus-ring) las pisa `brandVars(color,'light')` al mergearse despues.
+ */
+export const LIGHT_SCHEME_VARS: Record<string, string> = {
+  // Rampa neutra (chips / tracks / icon fills)
+  '--color-ink-100': '230 233 237',
+  '--color-ink-200': '205 211 219',
+  '--color-ink-300': '168 177 189',
+  '--color-ink-700': '42 50 61',
+  '--color-ink-800': '27 33 41',
+  // Foregrounds de status (soft-chips)
+  '--color-success-700': '14 122 80',
+  '--color-success-600': '15 125 80',
+  '--color-warning-700': '143 90 5',
+  '--color-warning-600': '168 105 10',
+  '--color-danger-700': '168 22 58',
+  '--color-danger-600': '190 24 60',
+  '--color-info-600': '20 98 220',
+  '--color-sport-700': '11 71 176',
+  '--color-sport-600': '20 98 220',
+  '--color-ember-600': '232 81 30',
+  '--color-ember-700': '194 62 20',
+  '--color-aqua-700': '10 110 141',
+  '--color-aqua-600': '14 143 184',
+  // Tints suaves de status
+  '--color-success-100': '219 245 234',
+  '--color-warning-100': '253 239 211',
+  '--color-danger-100': '252 221 228',
+  '--color-info-100': '232 241 255',
+  '--color-sport-100': '232 241 255',
+  '--color-ember-100': '255 237 230',
+  '--color-aqua-100': '227 245 251',
+  // Superficies
+  '--color-surface-app': '251 252 253',
+  '--color-surface-card': '255 255 255',
+  '--color-surface-sunken': '244 246 248',
+  '--color-surface-inverse': '11 14 19',
+  '--color-surface-inverse-2': '18 22 29',
+  '--color-surface-overlay': '11 14 19',
+  // Texto
+  '--color-text-strong': '11 14 19',
+  '--color-text-body': '27 33 41',
+  '--color-text-muted': '90 101 115',
+  '--color-text-subtle': '100 111 125',
+  '--color-text-on-dark': '244 246 248',
+  '--color-text-on-dark-muted': '147 157 171',
+  '--color-text-link': '20 98 220',
+  // Bordes / divisores
+  '--color-border-subtle': '230 233 237',
+  '--color-border-default': '205 211 219',
+  '--color-border-strong': '168 177 189',
+  '--color-track': '230 233 237',
+  // Accion / marca fuerte
+  '--color-action-primary': '11 14 19',
+  '--color-action-primary-hover': '27 33 41',
+  '--color-brand-strong': '20 98 220',
+  // Legacy compat
+  '--color-primary': '38 128 255',
+  '--color-primary-foreground': '255 255 255',
+  '--color-background': '251 252 253',
+  '--color-card': '255 255 255',
+  '--color-foreground': '11 14 19',
+  '--color-muted': '244 246 248',
+  '--color-muted-foreground': '90 101 115',
+  '--color-border': '0 0 0',
+  '--color-accent': '38 128 255',
+  '--color-accent-foreground': '38 128 255',
+  '--color-cyan': '24 171 212',
+  '--color-destructive': '244 54 90',
+  '--color-success': '31 184 119',
+}

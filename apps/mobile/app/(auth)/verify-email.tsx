@@ -37,7 +37,7 @@ export default function VerifyEmailScreen() {
           </View>
 
           <Text className="text-strong font-display-black" style={styles.title}>
-            Revisá tu email
+            Revisa tu email
           </Text>
           <Text className="text-muted font-sans" style={styles.subtitle}>
             Te enviamos un enlace de confirmación a{' '}
@@ -62,7 +62,7 @@ export default function VerifyEmailScreen() {
           </Card>
 
           <Text className="text-subtle font-sans" style={styles.hint}>
-            ¿No te llegó? Revisá spam o esperá un minuto.
+            ¿No te llegó? Revisa spam o espera un minuto.
           </Text>
 
           <Button

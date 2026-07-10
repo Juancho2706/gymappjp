@@ -109,7 +109,7 @@ export function StepperExecution({
         </NavButton>
       </View>
 
-      {/* Rail de progreso: segmentos tappables (saltá a cualquier paso). */}
+      {/* Rail de progreso: segmentos tappables (salta a cualquier paso). */}
       <View className="mt-3 flex-row items-stretch gap-1 px-4">
         {steps.map((s, i) => {
           const state = i === idx ? 'active' : s.complete ? 'done' : 'upcoming'

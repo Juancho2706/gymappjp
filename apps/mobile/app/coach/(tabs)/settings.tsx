@@ -231,7 +231,7 @@ export default function CoachSettingsHubScreen() {
                 testID="hub-features"
                 leading={<IconTile Icon={SlidersHorizontal} />}
                 title="Funciones"
-                subtitle="Qué tan a fondo trabajás la nutrición y qué ven tus alumnos"
+                subtitle="Qué tan a fondo trabajas la nutrición y qué ven tus alumnos"
                 showChevron
                 onPress={() => router.push('/coach/settings/features')}
               />
@@ -255,7 +255,7 @@ export default function CoachSettingsHubScreen() {
                 testID="hub-support"
                 leading={<IconTile Icon={LifeBuoy} />}
                 title="Soporte"
-                subtitle="Escribinos si algo no funciona o necesitás ayuda"
+                subtitle="Escríbenos si algo no funciona o necesitas ayuda"
                 showChevron
                 onPress={() => router.push('/coach/support')}
               />

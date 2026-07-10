@@ -74,7 +74,7 @@ function WorkoutHero({
         <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
           <View style={{ flex: 1, minWidth: 0 }}>
             <Text className="text-sport-400" style={{ fontFamily: FONT.uiBold, fontSize: 11, textTransform: 'uppercase', letterSpacing: 1 }}>
-              Hoy entrenás
+              Hoy entrenas
             </Text>
             <Text className="text-on-dark" numberOfLines={2} style={[textStyle('2xl', FONT.displayBlack, { lh: 'tight', ls: 'tight' }), { marginTop: 6, fontSize: 23 }]}>
               {plan.title}

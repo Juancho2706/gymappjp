@@ -293,7 +293,7 @@ export default function ClientesScreen() {
         {search || hasActiveFilters ? 'Sin resultados' : 'Sin alumnos aún'}
       </Text>
       <Text style={[styles.emptySub, { color: theme.mutedForeground }]}>
-        {search || hasActiveFilters ? 'Probá ajustando los filtros o la búsqueda.' : 'Usá el botón Nuevo alumno para agregar tu primer alumno.'}
+        {search || hasActiveFilters ? 'Prueba ajustando los filtros o la búsqueda.' : 'Usa el botón Nuevo alumno para agregar tu primer alumno.'}
       </Text>
     </View>
   )

@@ -46,8 +46,8 @@ function asSections(v: unknown): SectionPrefs {
 }
 
 function friendlyPrefsError(msg: string | null | undefined): string {
-  if (!msg) return 'Ocurrió un error. Intentá de nuevo.'
-  if (/row-level security/i.test(msg)) return 'No tenés permiso para editar estas funciones.'
+  if (!msg) return 'Ocurrió un error. Intenta de nuevo.'
+  if (/row-level security/i.test(msg)) return 'No tienes permiso para editar estas funciones.'
   return msg
 }
 

@@ -17,7 +17,7 @@ export async function isBiometricAvailable(): Promise<boolean> {
 }
 
 /** Prompt biométrico. Devuelve true si autenticó. Degrada elegante (false) si falla. */
-export async function authenticate(reason = 'Desbloqueá EVA'): Promise<boolean> {
+export async function authenticate(reason = 'Desbloquea EVA'): Promise<boolean> {
   try {
     const res = await LocalAuthentication.authenticateAsync({
       promptMessage: reason,

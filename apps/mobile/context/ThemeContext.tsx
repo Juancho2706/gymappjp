@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import { useColorScheme, View } from 'react-native'
 import { colorScheme as nwColorScheme, vars } from 'nativewind'
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { applyCoachBranding, brandVars, darkTheme, lightTheme, type Theme } from '../lib/theme'
+import { applyCoachBranding, brandVars, darkTheme, lightTheme, LIGHT_SCHEME_VARS, type Theme } from '../lib/theme'
 import { type CoachBranding, loadStoredBranding } from '../lib/branding'
 
 type ThemeMode = 'light' | 'dark' | 'system'
@@ -90,4 +90,46 @@ export function useTheme(): ThemeContextValue {
   const ctx = useContext(ThemeContext)
   if (!ctx) throw new Error('useTheme must be used inside ThemeProvider')
   return ctx
+}
+
+/**
+ * Fuerza TEMA CLARO en la familia de entrada (selector, walkthrough, login,
+ * register, forgot/reset/verify, onboarding) — ruling CEO ronda 4 (#13). Estas
+ * pantallas NUNCA reaccionan al dark del sistema; el resto de la app SIGUE
+ * dark-aware.
+ *
+ * Por que este enfoque gana (simple + robusto): NO toca el colorScheme GLOBAL de
+ * NativeWind. Ese lever es app-wide y forzarlo por-pantalla dependeria del orden
+ * de focus/blur al navegar (flashes de un frame y fugas de "light" a pantallas
+ * dark). En su lugar el claro se SCOPEA al subarbol por dos vias, ambas locales:
+ *   1. useTheme(): ThemeContext ANIDADO con mode/resolvedScheme='light' y theme =
+ *      lightTheme brandeado. Cubre theme.*, AppBackground(mode),
+ *      AmbientBrandGlow(resolvedScheme), SHADOWS[resolvedScheme] y el calculo de
+ *      marca del login.
+ *   2. clases dark: de NativeWind: en la <View> contenedora se re-declaran los
+ *      CSS-vars a sus valores LIGHT (LIGHT_SCHEME_VARS + brandVars light). El var
+ *      mas cercano gana sobre el bloque `.dark` del root → los tokens semanticos
+ *      resuelven claro SOLO aca y las clases dark: quedan inertes en el subarbol.
+ * Nota: el login brandeado conserva los colores del coach porque el theme y las
+ * vars se derivan del branding sobre base CLARA (applyCoachBranding/brandVars).
+ */
+export function ForceLightTheme({ children }: { children: React.ReactNode }) {
+  const parent = useTheme()
+  const primaryColor = parent.branding?.primaryColor
+
+  const theme = useMemo(() => applyCoachBranding(lightTheme, primaryColor), [primaryColor])
+  const themeVars = useMemo(
+    () => ({ ...vars({ ...LIGHT_SCHEME_VARS, ...brandVars(primaryColor, 'light') }) }),
+    [primaryColor],
+  )
+  const value = useMemo<ThemeContextValue>(
+    () => ({ ...parent, theme, mode: 'light', resolvedScheme: 'light' }),
+    [parent, theme],
+  )
+
+  return (
+    <ThemeContext.Provider value={value}>
+      <View style={[{ flex: 1 }, themeVars]}>{children}</View>
+    </ThemeContext.Provider>
+  )
 }
