@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Modal, Pressable, Text, View, type TextStyle } from 'react-native'
+import { Modal, Pressable, Text, TextInput, View, type TextStyle } from 'react-native'
 import { MotiView } from 'moti'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { ArrowLeft, ArrowRight, Check, X } from 'lucide-react-native'
+import { ArrowLeft, ArrowRight, Check, StickyNote, X } from 'lucide-react-native'
 import {
   appendKeypadDecimal,
   appendKeypadDigit,
@@ -12,7 +12,8 @@ import {
   type OptimisticLogPayload,
 } from '@eva/workout-engine'
 import { useTheme } from '@/context/ThemeContext'
-import { FONT, TYPE, textStyle } from '../../../lib/typography'
+import { FONT, textStyle } from '../../../lib/typography'
+import { useEvaMotion } from '../../../lib/motion'
 import { shadow } from '../../../lib/shadows'
 import { haptics } from '../../../lib/haptics'
 // Routing PURO tipo->campos (fix QA R4·#5): fuente única de la secuencia de pasos del teclado.
@@ -23,6 +24,7 @@ import { buildStrengthPayload, buildTypedPayload, int } from './set-log-payload'
 import {
   EffortField,
   KEYPAD_ACTION_STYLE,
+  KEYPAD_EYEBROW_STYLE,
   KeypadDisplayRow,
   KeypadGrid,
   RIR_HELP,
@@ -33,6 +35,7 @@ import {
 const ON_DARK = '#F4F6F8'
 const ON_DARK_MUTED = '#939DAB'
 const WHITE = '#FFFFFF'
+const WARNING_500 = '#F5A524' // --color-warning-500 (ámbar de la nota, mirror amber-300/400 web)
 
 // Cifras tabulares para el objetivo / "Última vez" (mirror `tabular-nums` web del header del keypad).
 const TABULAR: TextStyle = { fontVariant: ['tabular-nums', 'lining-nums'] }
@@ -74,11 +77,15 @@ export function KeypadHost({
 }) {
   const insets = useSafeAreaInsets()
   const { resolvedScheme } = useTheme()
+  const motion = useEvaMotion()
   const [values, setValues] = useState<Record<string, string>>({})
   const valuesRef = useRef(values)
   valuesRef.current = values
   const [activeKey, setActiveKey] = useState('')
   const [phase, setPhase] = useState<'input' | 'effort'>('input')
+  // Nota rápida por serie (mirror web A.4.d): desplegable en el paso de esfuerzo. El texto vive en
+  // `values.note` (mismo carril que rpe/rir → viaja al draft y a `buildStrengthPayload`).
+  const [noteOpen, setNoteOpen] = useState(false)
 
   // Secuencia de pasos según el tipo del bloque (routing puro compartido con `openSet`).
   const steps = useMemo(() => keypadStepsForTarget(target), [target])
@@ -99,6 +106,7 @@ export function KeypadHost({
     setValues(seed)
     setActiveKey(fields[target.initialFieldIndex ?? 0]?.key ?? fields[0]?.key ?? '')
     setPhase('input')
+    setNoteOpen(false)
   }, [target, fields])
 
   if (!target || fields.length === 0) return null
@@ -189,18 +197,32 @@ export function KeypadHost({
   const lastPrev = !target.typed ? target.lastPrev ?? null : null
   const hasLast = lastPrev != null && (lastPrev.weightKg != null || lastPrev.reps != null)
 
+  // Editar una serie logueada → botón 'Guardar'; nueva → 'Listo' (mirror web LogSetForm.tsx:696).
+  const doneLabel = target.isEdit ? 'Guardar' : 'Listo'
+  const noteTrimmed = (values.note ?? '').trim()
+
   const panelShadow = { ...shadow('xl', resolvedScheme), shadowOffset: { width: 0, height: -16 } }
 
   return (
     <Modal transparent visible animationType="none" statusBarTranslucent onRequestClose={onClose}>
       <View className="flex-1 justify-end">
-        {/* Scrim: tap-fuera cierra (no guarda). Fade 0→1 (mirror `NumericKeypadSheet:169-178`). */}
-        <MotiView from={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ type: 'timing', duration: 150 }} className="flex-1">
+        {/* Scrim: tap-fuera cierra (no guarda). Fade 0→1 (mirror `NumericKeypadSheet:169-178`).
+            Reduce-motion ⇒ sin fade (mirror web `:174-177`: `initial=false`). */}
+        <MotiView
+          from={{ opacity: motion.reduced ? 1 : 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ type: 'timing', duration: motion.reduced ? 0 : 150 }}
+          className="flex-1"
+        >
           <Pressable className="flex-1 bg-black/25" onPress={onClose} accessibilityRole="button" accessibilityLabel="Cerrar teclado" />
         </MotiView>
 
         {/* Panel: dark siempre (ink-950), aparece con spring (springsSheet.enter web). */}
-        <MotiView from={{ translateY: 360 }} animate={{ translateY: 0 }} transition={{ type: 'spring', stiffness: 320, damping: 34, mass: 0.9 }}>
+        <MotiView
+          from={{ translateY: motion.reduced ? 0 : 360 }}
+          animate={{ translateY: 0 }}
+          transition={motion.reduced ? { type: 'timing', duration: 0 } : { type: 'spring', stiffness: 320, damping: 34, mass: 0.9 }}
+        >
           <View
             accessibilityLabel="Teclado numérico"
             className="mx-auto w-full max-w-md rounded-t-sheet border-t border-inverse/10 bg-ink-950 px-3 pt-2"
@@ -223,7 +245,7 @@ export function KeypadHost({
             <View className="flex-row items-baseline justify-between gap-2 px-1">
               <View className="min-w-0 flex-1">
                 {target.exerciseName ? (
-                  <Text style={TYPE.eyebrow} className="text-on-dark-muted" numberOfLines={1}>
+                  <Text style={KEYPAD_EYEBROW_STYLE} className="text-on-dark-muted" numberOfLines={1}>
                     {target.exerciseName}
                   </Text>
                 ) : null}
@@ -250,7 +272,7 @@ export function KeypadHost({
               /* ── Paso OPCIONAL de esfuerzo (RPE/RIR) — sólo fuerza, siempre saltable (DB-5) ── */
               <View className="mt-2">
                 <View className="mb-2 flex-row items-center justify-between px-1">
-                  <Text style={TYPE.eyebrow} className="text-on-dark-muted">
+                  <Text style={KEYPAD_EYEBROW_STYLE} className="text-on-dark-muted">
                     Esfuerzo <Text className="text-on-dark-muted/60">(opcional)</Text>
                   </Text>
                   <Pressable
@@ -283,6 +305,41 @@ export function KeypadHost({
                   />
                 </View>
 
+                {/* Nota rápida por serie (mirror web A.4.d, LogSetForm.tsx:699-736): toggle + input, máx
+                    300 chars. Expone la nota en el flujo de EDICIÓN (P1): sin esto, reabrir y confirmar una
+                    serie con nota la borraba (`buildStrengthPayload` leía values.note=undefined→null). */}
+                <View className="mt-2">
+                  <Pressable
+                    testID="keypad-note-toggle"
+                    onPress={() => setNoteOpen((o) => !o)}
+                    accessibilityRole="button"
+                    accessibilityState={{ expanded: noteOpen }}
+                    accessibilityLabel={noteTrimmed ? 'Editar la nota de la serie' : 'Agregar una nota a la serie'}
+                    className="min-h-[36px] flex-row items-center gap-1.5 self-start rounded-control px-2 active:opacity-70"
+                  >
+                    <StickyNote size={14} color={noteTrimmed ? WARNING_500 : ON_DARK_MUTED} />
+                    <Text
+                      style={textStyle('3xs', FONT.uiSemibold)}
+                      className={noteTrimmed ? 'text-warning-500' : 'text-on-dark-muted'}
+                    >
+                      {noteTrimmed ? 'Nota añadida' : 'Agregar nota'}
+                    </Text>
+                  </Pressable>
+                  {noteOpen ? (
+                    <TextInput
+                      testID="keypad-note-input"
+                      value={values.note ?? ''}
+                      onChangeText={(t) => patch({ note: t }, activeIndex)}
+                      maxLength={300}
+                      placeholder="Ej: sentí molestia en el hombro"
+                      placeholderTextColor={ON_DARK_MUTED}
+                      accessibilityLabel="Nota de la serie para tu coach"
+                      style={textStyle('xs', FONT.ui)}
+                      className="mt-1.5 rounded-control border border-inverse bg-white/[0.06] px-3 py-2 text-on-dark"
+                    />
+                  ) : null}
+                </View>
+
                 {/* Acciones — ambas guardan la serie (el esfuerzo es opcional) */}
                 <View className="mt-2 flex-row gap-2">
                   <Pressable
@@ -300,13 +357,13 @@ export function KeypadHost({
                     testID="keypad-save-set"
                     onPress={commit}
                     accessibilityRole="button"
-                    accessibilityLabel="Listo, guardar serie"
+                    accessibilityLabel={`${doneLabel}, guardar serie`}
                     className="h-14 flex-row items-center justify-center gap-2 rounded-control bg-sport-500 active:opacity-90"
                     style={{ flex: 1.4 }}
                   >
                     <Check size={20} color={WHITE} />
                     <Text style={KEYPAD_ACTION_STYLE} className="text-white">
-                      Listo
+                      {doneLabel}
                     </Text>
                   </Pressable>
                 </View>
@@ -346,7 +403,7 @@ export function KeypadHost({
                     testID={primaryIsNext ? 'keypad-next' : 'keypad-done'}
                     onPress={goNext}
                     accessibilityRole="button"
-                    accessibilityLabel={primaryIsNext ? 'Siguiente' : 'Listo, guardar serie'}
+                    accessibilityLabel={primaryIsNext ? 'Siguiente' : `${doneLabel}, guardar serie`}
                     className="h-14 w-full flex-row items-center justify-center gap-2 rounded-control bg-sport-500 active:opacity-90"
                   >
                     {primaryIsNext ? (
@@ -360,7 +417,7 @@ export function KeypadHost({
                       <>
                         <Check size={20} color={WHITE} />
                         <Text style={KEYPAD_ACTION_STYLE} className="text-white">
-                          Listo
+                          {doneLabel}
                         </Text>
                       </>
                     )}

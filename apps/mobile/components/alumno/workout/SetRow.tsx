@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Modal, Pressable, Text, TextInput, View } from 'react-native'
+import { MotiView } from 'moti'
 import { Check, ChevronRight, CloudOff, HelpCircle, StickyNote } from 'lucide-react-native'
 import {
   formatWeightEsCl,
@@ -36,12 +37,25 @@ export function SetRow({
   typedMode,
   onPress,
   onRpeUpdate,
+  settle = false,
+  pr = false,
 }: {
   setNumber: number
   log?: ReconciledSessionLog
   isActive: boolean
   typedMode?: TypedKeypadMode | null
   onPress: () => void
+  /**
+   * La serie se acaba de cerrar en ESTA sesión (señal one-shot del padre, mirror web `settleRef`,
+   * `LogSetForm.tsx:510`): el check de guardado entra con un settle elástico. Las series ya cargadas
+   * al abrir la rutina llegan con `settle=false` ⇒ sin animación fantasma (paridad web `:256`).
+   */
+  settle?: boolean
+  /**
+   * La serie recién cerrada igualó/superó el récord (isPR del commit, mirror web `prRef`,
+   * `LogSetForm.tsx:511`): pulso dorado sobre el chip. Sólo con `settle` real (no en logs cargados).
+   */
+  pr?: boolean
   /**
    * Registro de RPE POST-log en series tipadas (cardio/movilidad/roller) — mirror de
    * `TypedLogSetRow` web (`LogSetForm.tsx:1112-1136`): al loguear una serie tipada se despliega la
@@ -133,9 +147,13 @@ export function SetRow({
     <Pressable
       testID={`set-row-${setNumber}`}
       onPress={onPress}
-      className={`flex-row items-center gap-3 rounded-control border px-3 py-2.5 ${
+      className={`relative flex-row items-center gap-3 overflow-hidden rounded-control border px-3 py-2.5 ${
         logged
-          ? 'border-sport-500/30 bg-sport-500/[0.06]'
+          ? pending
+            ? // Serie sin sincronizar ⇒ contenedor ÁMBAR (mirror web amber-500/30·/[0.06],
+              // `LogSetForm.tsx:520-521`); antes sólo el texto/badge se teñía, el chip seguía sport.
+              'border-warning-500/30 bg-warning-500/[0.06]'
+            : 'border-sport-500/30 bg-sport-500/[0.06]'
           : isActive
             ? 'border-sport-500/50 bg-white/[0.04]'
             : 'border-inverse/50 bg-white/[0.02]'
@@ -143,18 +161,27 @@ export function SetRow({
       accessibilityRole="button"
       accessibilityLabel={logged ? `Editar serie ${setNumber}` : `Registrar serie ${setNumber}`}
     >
+      {/* Pulso dorado de PR (mirror web `prGlow`, `LogSetForm.tsx:530-538`): ring que entra a 0.8 y
+          se apaga (~0.32s) cuando el commit devolvió isPR. Sin token amber en el theme ⇒ warning-500. */}
+      {pr ? (
+        <MotiView
+          pointerEvents="none"
+          from={{ opacity: 0 }}
+          animate={{ opacity: [0, 0.8, 0] }}
+          transition={{ type: 'timing', duration: 110 }}
+          className="absolute inset-0 rounded-control border-2 border-warning-500"
+        />
+      ) : null}
       <View
         className={`h-7 w-7 items-center justify-center rounded-full ${
           logged ? 'bg-sport-500/20' : 'bg-white/[0.06]'
         }`}
       >
-        {logged ? (
-          <Check size={15} color={SPORT_400} strokeWidth={2.6} />
-        ) : (
-          <Text style={TYPE.mono} className="text-[12px] text-on-dark-muted">
-            {setNumber}
-          </Text>
-        )}
+        {/* Badge = NÚMERO de serie, también en las logueadas (mirror web `LogSetForm.tsx:539-541`); el
+            check de guardado va a la derecha, no en el badge. */}
+        <Text style={TYPE.mono} className={`text-[12px] ${logged ? 'text-sport-300' : 'text-on-dark-muted'}`}>
+          {setNumber}
+        </Text>
       </View>
       <View className="min-w-0 flex-1">
         <Text style={TYPE.eyebrow} className="text-on-dark-muted">
@@ -208,7 +235,17 @@ export function SetRow({
             Sin sincronizar
           </Text>
         </View>
-      ) : null}
+      ) : (
+        /* Check de guardado a la derecha, con entrada elástica al cerrar (mirror web `LogSetForm.tsx:561-570`,
+           springs.elastic = stiffness 500 · damping 25). `settle=false` (logs cargados) ⇒ sin animación. */
+        <MotiView
+          from={settle ? { scale: 0, rotate: '-25deg' } : { scale: 1, rotate: '0deg' }}
+          animate={{ scale: 1, rotate: '0deg' }}
+          transition={settle ? { type: 'spring', stiffness: 500, damping: 25 } : { type: 'timing', duration: 0 }}
+        >
+          <Check size={16} color={SPORT_400} strokeWidth={2.6} />
+        </MotiView>
+      )}
     </Pressable>
   )
 }
@@ -505,7 +542,9 @@ export function ActiveSetRow({
         </View>
       )}
 
-      {/* Boton circulo-check para confirmar la serie (commit intacto) */}
+      {/* Botón ETIQUETADO 'Listo' para confirmar la serie activa protagonista (mirror web SubmitSetButton
+          etiquetado, `LogSetForm.tsx:696,1146-1157`: h-12 min-w-[104px], Check + label). Antes era un
+          círculo sin texto; la web reserva el circular para las filas NO protagonistas. Commit intacto. */}
       <View className="flex-row justify-end">
         <Pressable
           testID={`confirm-set-${setNumber}`}
@@ -513,11 +552,14 @@ export function ActiveSetRow({
             haptics.setDone()
             commit()
           }}
-          className="h-12 w-12 items-center justify-center rounded-full border-2 border-sport-500 bg-sport-500"
+          className="h-12 min-w-[104px] flex-row items-center justify-center gap-2 rounded-control bg-sport-500 px-4 active:opacity-90"
           accessibilityRole="button"
-          accessibilityLabel={`Confirmar serie ${setNumber}`}
+          accessibilityLabel={`Listo, confirmar serie ${setNumber}`}
         >
-          <Check size={22} color="#FFFFFF" strokeWidth={2.6} />
+          <Check size={18} color="#FFFFFF" strokeWidth={2.6} />
+          <Text style={textStyle('sm', FONT.uiBold)} className="text-white">
+            Listo
+          </Text>
         </Pressable>
       </View>
 

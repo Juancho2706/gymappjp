@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
-import { MotiView } from 'moti'
+import { AnimatePresence, MotiView } from 'moti'
+import { LinearTransition } from 'react-native-reanimated'
 import {
   ArrowRightLeft,
   CheckCircle2,
@@ -40,6 +41,11 @@ const EMBER_200 = '#FFD6C7' // --color-ember-200 (255 214 199) — ArrowRightLef
 const MONO_BOLD = { fontFamily: FONT.monoBold } as const
 const SANS_BOLD = { fontFamily: FONT.uiBold } as const
 
+// Reflow de la card (paridad web `layout={!reducedMotion}` + `springs.smooth` {stiffness:200,damping:25},
+// SingleExerciseCard web:159-160/165): anima el cambio de tamaño/orden al completar/colapsar. Sólo si
+// no hay reduced-motion (se pasa `undefined` en ese caso). LinearTransition = layout transition de reanimated.
+const CARD_LAYOUT = LinearTransition.springify().damping(25).stiffness(200)
+
 /**
  * Card de un ejercicio suelto (mobile) — re-skin del `SingleExerciseCard` de web (E2-07): fila
  * tipo·músculo + acciones, dots de progreso de series, chip de sobrecarga, "Última vez" tap-autofill
@@ -71,6 +77,7 @@ export function SingleExerciseCard({
   onOpenSubstitute,
   onUndoSubstitution,
   onToggleCollapse,
+  recentSet,
 }: {
   block: SessionBlock
   exercise: SessionExercise
@@ -108,6 +115,11 @@ export function SingleExerciseCard({
    * dispara el toggle. Opcional: en modo Pasos la card no colapsa (siempre editable, como web).
    */
   onToggleCollapse?: () => void
+  /**
+   * Serie recién confirmada en esta sesión (señal one-shot del ExecutorV2): dispara el settle elástico
+   * del check y, si `pr`, el pulso dorado del chip recap correspondiente (mirror web `settleRef`/`prRef`).
+   */
+  recentSet?: { blockId: string; setNumber: number; pr: boolean } | null
 }) {
   const { theme } = useTheme()
   // Autollenado "= usar ultima vez": siembra las cajas KG/REPS de la fila activa (nonce dispara).
@@ -435,6 +447,7 @@ export function SingleExerciseCard({
               />
             )
           }
+          const isRecent = recentSet?.blockId === block.id && recentSet?.setNumber === setNumber
           return (
             <SetRow
               key={setNumber}
@@ -444,6 +457,8 @@ export function SingleExerciseCard({
               typedMode={typedMode}
               onPress={() => onOpenSet(setNumber)}
               onRpeUpdate={onRpeUpdate}
+              settle={isRecent}
+              pr={isRecent && !!recentSet?.pr}
             />
           )
         })}

@@ -8,6 +8,7 @@ const SPORT_500 = '#2680FF'
 const W10 = 'rgba(255,255,255,0.10)'
 const ON_DARK = '#F4F6F8'
 const ON_DARK_MUTED = '#939DAB'
+const ON_SPORT = '#FFFFFF' // --color-text-on-sport — rótulo/icono del segmento activo (web usa text-white)
 
 export type WorkoutViewMode = 'list' | 'steps'
 
@@ -27,7 +28,6 @@ export function SessionHeader({
   completionPct,
   volumeLabel,
   elapsedLabel,
-  capped,
   viewMode,
   onToggleMode,
   onBack,
@@ -44,7 +44,6 @@ export function SessionHeader({
   completionPct: number
   volumeLabel: string | null
   elapsedLabel: string
-  capped: boolean
   viewMode: WorkoutViewMode
   onToggleMode: (mode: WorkoutViewMode) => void
   onBack: () => void
@@ -109,10 +108,10 @@ export function SessionHeader({
             accessibilityLabel="Ver como lista"
             accessibilityState={{ selected: viewMode === 'list' }}
           >
-            <List size={14} color={viewMode === 'list' ? ON_DARK : ON_DARK_MUTED} />
+            <List size={14} color={viewMode === 'list' ? ON_SPORT : ON_DARK_MUTED} />
             <Text
               style={{ fontFamily: FONT.uiBold, fontSize: 11 }}
-              className={viewMode === 'list' ? 'text-on-dark' : 'text-on-dark-muted'}
+              className={viewMode === 'list' ? 'text-on-sport' : 'text-on-dark-muted'}
             >
               Lista
             </Text>
@@ -126,10 +125,10 @@ export function SessionHeader({
             accessibilityLabel="Ver paso a paso"
             accessibilityState={{ selected: viewMode === 'steps' }}
           >
-            <GalleryHorizontal size={14} color={viewMode === 'steps' ? ON_DARK : ON_DARK_MUTED} />
+            <GalleryHorizontal size={14} color={viewMode === 'steps' ? ON_SPORT : ON_DARK_MUTED} />
             <Text
               style={{ fontFamily: FONT.uiBold, fontSize: 11 }}
-              className={viewMode === 'steps' ? 'text-on-dark' : 'text-on-dark-muted'}
+              className={viewMode === 'steps' ? 'text-on-sport' : 'text-on-dark-muted'}
             >
               Pasos
             </Text>
@@ -158,7 +157,8 @@ export function SessionHeader({
         <View className="flex-row flex-wrap items-center justify-end gap-x-1.5">
           <Text style={TYPE.mono} className="text-[11px] text-on-dark-muted">{completedSetCount}/{requiredSets} series</Text>
           {volumeLabel && <Text style={TYPE.mono} className="text-[11px] text-on-dark-muted">· {volumeLabel}</Text>}
-          <Text style={TYPE.mono} className="text-[11px] text-on-dark-muted">· {elapsedLabel}{capped ? ' (máx)' : ''}</Text>
+          {/* El tope de 4h se aplica en silencio (paridad web WEC:1881: sin marcador de tope). */}
+          <Text style={TYPE.mono} className="text-[11px] text-on-dark-muted">· {elapsedLabel}</Text>
           <Text style={TYPE.mono} className="text-[11px] text-sport-400 font-mono-bold">· {completionPct}%</Text>
         </View>
       </View>

@@ -38,6 +38,12 @@ export interface KeypadTarget {
   /** Paso inicial (draft restaurado). */
   initialFieldIndex?: number
   /**
+   * Se está EDITANDO una serie ya logueada (tap en el chip recap) — no registrando una nueva. La web
+   * reabre la MISMA fila con los valores sembrados y el botón pasa de 'Listo' a 'Guardar'
+   * (`LogSetForm.tsx:696`). El host usa esto para el label del botón de confirmación.
+   */
+  isEdit?: boolean
+  /**
    * Bloques TIPADOS (cardio/movilidad/roller): reemplaza el flujo peso→reps→esfuerzo por los campos
    * tipados de `typedKeypadFields`. Ausente ⇒ flujo strength. El commit mapea las keys tipadas a las
    * columnas `actual_*` / `reps_done` (mismo pipeline que web `TypedLogSetRow`).

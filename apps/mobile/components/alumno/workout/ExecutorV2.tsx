@@ -5,11 +5,15 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useKeepAwake } from 'expo-keep-awake'
 import { useRouter } from 'expo-router'
 import { Confetti } from 'react-native-fast-confetti'
-import { CheckCircle2, ChevronDown, Dumbbell, Timer, Trophy } from 'lucide-react-native'
+import { CheckCircle2, ChevronDown, Dumbbell, Timer } from 'lucide-react-native'
 import {
+  buildRoundOrder,
   buildStepModel,
   effectiveExerciseType,
+  findNextIncompleteInRounds,
   firstIncompleteStepIndex,
+  formatWeightEsCl,
+  isRoundComplete,
   isStepComplete,
   type OptimisticLogPayload,
   type SummaryBlock,
@@ -58,6 +62,8 @@ const ON_DARK = '#F4F6F8'
 const ON_DARK_MUTED = '#939DAB'
 const EMBER_200 = '#FFD6C7'
 const SPORT_400 = '#5C9DFF'
+// Letras de miembro por posición (A, B, C…) para la señal "Sigue con {label}" de las superseries.
+const SUPERSET_MEMBER_LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
 
 type ActiveSub = { exerciseId: string | null; name: string; reason: string | null; prescribedName: string }
 
@@ -100,6 +106,11 @@ function ExecutorV2Inner({ planId }: { planId: string }) {
   const [finishedElapsed, setFinishedElapsed] = useState<number | null>(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [prCelebration, setPrCelebration] = useState(false)
+  // Señal one-shot de la serie recién confirmada (paridad web `settleRef`/`prRef`, LogSetForm.tsx:257-258):
+  // el chip recap que se acaba de cerrar hace el check elástico y, si fue PR, un pulso dorado. Sólo la
+  // serie del último commit (no las cargadas al abrir) → sin animación fantasma. Se limpia a los 800ms.
+  const [recentSet, setRecentSet] = useState<{ blockId: string; setNumber: number; pr: boolean } | null>(null)
+  const recentSetTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [refreshing, setRefreshing] = useState(false)
   const [viewMode, setViewMode] = useState<WorkoutViewMode>('list')
   const [stepIndex, setStepIndex] = useState(0)
@@ -116,10 +127,13 @@ function ExecutorV2Inner({ planId }: { planId: string }) {
     })
   }, [])
 
+  // Limpia el timer de la señal one-shot al desmontar (evita setState tras unmount).
+  useEffect(() => () => { if (recentSetTimer.current) clearTimeout(recentSetTimer.current) }, [])
+
   const {
     loading, planTitle, programName, phaseName, activeWeekVariant, currentWeek, weeksToRepeat, programStructure, cycleLength,
     dayOfWeek, clientId, blocks, sections, supersetMembersByBlock, sessionLogs, previousHistory, lastSessionByBlock,
-    exerciseMaxes, elapsedSec, capped, isOnline, restoredDraft, refresh, saveDraft, logSet, finishSession,
+    exerciseMaxes, elapsedSec, isOnline, restoredDraft, refresh, saveDraft, logSet, finishSession,
   } = session
 
   // Zona FC personalizada (E2-11): SOLO si el módulo `cardio` está habilitado (visibilidad de pago)
@@ -171,7 +185,6 @@ function ExecutorV2Inner({ planId }: { planId: string }) {
     return seen.size
   }, [blocks, sessionLogs])
   const completionPct = requiredSets === 0 ? 0 : Math.min(100, Math.round((completedSetCount / requiredSets) * 100))
-  const allDone = requiredSets > 0 && completedSetCount >= requiredSets
   const volumeLabel = fmtVolume(sessionLogs.reduce((acc, l) => acc + (l.weight_kg ?? 0) * (l.reps_done ?? 0), 0))
 
   const isBlockComplete = useCallback(
@@ -228,9 +241,24 @@ function ExecutorV2Inner({ planId }: { planId: string }) {
 
       const eff = effByBlock.get(blockId) ?? null
       const suggested = eff?.weightKg ?? block.target_weight_kg
+      // Editar una serie de fuerza ya logueada (tap en el chip recap): siembra el teclado con TODOS los
+      // valores del log (peso/reps/RPE/RIR/nota) para no perderlos al reconfirmar — paridad web, que
+      // reabre la misma fila con `existingLog` precargado (LogSetForm.tsx:263-270,583-587). Sin esto el
+      // seed era sólo `{ weight: sugerido }` y el commit sobrescribía reps/RPE/RIR/nota con nulos (P1).
+      const existingLog = sessionLogs.find((l) => l.block_id === blockId && l.set_number === setNumber)
+      const editValues = existingLog
+        ? {
+            weight: existingLog.weight_kg != null ? formatWeightEsCl(existingLog.weight_kg) : '',
+            reps: existingLog.reps_done != null ? String(existingLog.reps_done) : '',
+            rpe: existingLog.rpe != null ? String(existingLog.rpe) : '',
+            // Clamp legacy rir fuera de 1-10 a "sin valor" (mirror web LogSetForm.tsx:266-268).
+            rir: existingLog.rir != null && existingLog.rir >= 1 && existingLog.rir <= 10 ? String(existingLog.rir) : '',
+            note: existingLog.note ?? '',
+          }
+        : null
       const initialValues = prefill
         ? { weight: prefill.weight != null ? String(prefill.weight) : '', reps: prefill.reps != null ? String(prefill.reps) : '' }
-        : restored?.values
+        : editValues ?? restored?.values
       const bestPrev = bestPrevOf(previousHistory[exercise?.id ?? ''] ?? [])
       setKeypadTarget({
         blockId,
@@ -243,11 +271,25 @@ function ExecutorV2Inner({ planId }: { planId: string }) {
         effortKind: block.rir ? 'rir' : 'rpe',
         initialValues,
         initialFieldIndex: restored?.fieldIndex,
+        isEdit: editValues != null,
       })
       haptics.tap()
     },
-    [blocks, effByBlock, restoredDraft, previousHistory],
+    [blocks, effByBlock, restoredDraft, previousHistory, sessionLogs],
   )
+
+  // Señal one-shot para el chip recap recién cerrado: check elástico (settle) + pulso dorado si PR
+  // (paridad web `settleRef`/`prRef`). Se limpia a los 800ms para no re-disparar en re-renders.
+  const signalCommitted = useCallback((blockId: string, setNumber: number, isPR: boolean) => {
+    if (recentSetTimer.current) clearTimeout(recentSetTimer.current)
+    setRecentSet({ blockId, setNumber, pr: isPR })
+    recentSetTimer.current = setTimeout(() => setRecentSet(null), 800)
+    if (isPR) {
+      setPrCelebration(true)
+      void haptics.pr()
+      setTimeout(() => setPrCelebration(false), 2600)
+    }
+  }, [])
 
   // ── Commit de una serie ─────────────────────────────────────────────────────
   const handleCommit = useCallback(
@@ -256,20 +298,55 @@ function ExecutorV2Inner({ planId }: { planId: string }) {
       const sub = block ? getSubstitution(block) : null
       setKeypadTarget(null)
       haptics.setDone()
+      // Proyección optimista de la serie recién confirmada (los `sessionLogs` del closure aún no la
+      // incluyen) para decidir el cierre de ronda y la siguiente posición sin esperar al re-render.
+      const projected = [
+        ...sessionLogs.filter((l) => !(l.block_id === payload.blockId && l.set_number === payload.setNumber)),
+        { block_id: payload.blockId, set_number: payload.setNumber },
+      ]
       const { isPR } = await logSet(
         payload,
         sub ? { substitution: { exerciseId: sub.exerciseId, name: sub.name, reason: sub.reason } } : undefined,
       )
-      if (isPR) {
-        setPrCelebration(true)
-        void haptics.pr()
-        setTimeout(() => setPrCelebration(false), 2600)
+      signalCommitted(payload.blockId, payload.setNumber, isPR)
+
+      // ── Superserie: descanso SÓLO al cerrar la ronda (paridad web supersetRest, WEC:894-897). ──
+      // Entre miembros no corre descanso: se muestra "Sin descanso — sigue con {label}" (WEC:1462-1466).
+      // Al cerrar la ronda arranca el descanso COMPLETO del grupo = max de rest_time de los miembros
+      // (groupRestSeconds, WEC:1264-1266). Cubre tanto la fila activa como la edición vía teclado.
+      const members = supersetMembersByBlock.get(payload.blockId)
+      if (members && members.length >= 2) {
+        const roundBlocks = members.map((m) => ({ id: m.id, sets: m.sets }))
+        const round = payload.setNumber
+        const order = buildRoundOrder(roundBlocks)
+        const nextPos = findNextIncompleteInRounds(order, projected, {
+          blockId: payload.blockId,
+          setNumber: payload.setNumber,
+        })
+        const roundClosed = isRoundComplete(roundBlocks, round, projected)
+        if (nextPos && !roundClosed) {
+          const idx = members.findIndex((m) => m.id === nextPos.blockId)
+          const label = `${SUPERSET_MEMBER_LETTERS[idx] ?? ''}${nextPos.set}`
+          toast.info(`Sin descanso — sigue con ${label}`)
+        } else if (roundClosed) {
+          const groupRest = members.reduce((mx, m) => Math.max(mx, parseRestTime(m.rest_time)), 0)
+          if (groupRest > 0 && isRestAutoTimerEnabled()) timers.startRest(groupRest, { autoStart: true })
+        }
+        return
+      }
+
+      // ── Bloque suelto ──
+      // Toast de confirmación (paridad web WEC:1486-1492, solo strength). La acción "Deshacer" no es
+      // portable (el Toast RN no lleva botón); el deshacer sigue disponible tocando el chip recap.
+      const ex = block ? resolveExercise(block) : null
+      if (block && ex && effectiveExerciseType(block, ex) === 'strength') {
+        toast.success('Serie registrada')
       }
       // Cronómetro automático (pref device-scoped, default ON): si está apagado no arranca solo.
       const secs = parseRestTime(block?.rest_time)
       if (secs > 0 && isRestAutoTimerEnabled()) timers.startRest(secs, { autoStart: true })
     },
-    [blocks, getSubstitution, logSet, timers],
+    [blocks, getSubstitution, logSet, timers, sessionLogs, supersetMembersByBlock, signalCommitted],
   )
 
   const handleDraftChange = useCallback(
@@ -435,6 +512,7 @@ function ExecutorV2Inner({ planId }: { planId: string }) {
             onCommitSet={handleCommit}
             onRpeUpdate={handleRpeUpdate}
             onDraftChange={saveActiveDraft}
+            recentSet={recentSet}
           />
         )
       }
@@ -495,10 +573,11 @@ function ExecutorV2Inner({ planId }: { planId: string }) {
           onOpenSubstitute={() => setSubstituteBlockId(block.id)}
           onUndoSubstitution={() => setSubstitutionByBlock((p) => { const n = { ...p }; delete n[block.id]; return n })}
           onToggleCollapse={allowCollapse ? () => setExpandedDone((p) => ({ ...p, [block.id]: false })) : undefined}
+          recentSet={recentSet}
         />
       )
     },
-    [supersetMembersByBlock, sessionLogs, effByBlock, currentWeek, activeBlockId, previousHistory, openDetails, expandedDone, getSubstitution, openSet, hrZones, restoredDraft, motion.reduced, handleCommit, handleRpeUpdate, saveActiveDraft],
+    [supersetMembersByBlock, sessionLogs, effByBlock, currentWeek, activeBlockId, previousHistory, openDetails, expandedDone, getSubstitution, openSet, hrZones, restoredDraft, motion.reduced, handleCommit, handleRpeUpdate, saveActiveDraft, recentSet],
   )
 
   // ── Modo Paso a paso (E2-04): modelo de pasos + vistas del rail + auto-avance ──
@@ -631,7 +710,6 @@ function ExecutorV2Inner({ planId }: { planId: string }) {
         completionPct={completionPct}
         volumeLabel={volumeLabel}
         elapsedLabel={fmtElapsed(elapsedSec)}
-        capped={capped}
         viewMode={viewMode}
         onToggleMode={handleToggleMode}
         // "Salir" → al Dashboard, determinista (paridad web `<Link href={base/dashboard}>`, WEC:1799);
@@ -640,8 +718,13 @@ function ExecutorV2Inner({ planId }: { planId: string }) {
         onOpenSettings={() => setSettingsOpen(true)}
       />
 
-      {/* Banner offline BAJO el header (paridad web WEC:1898-1903, sticky top-[header-h]). */}
-      <OfflineBanner visible={!isOnline} />
+      {/* Banner offline BAJO el header (paridad web WEC:1898-1903, sticky top-[header-h]): franja ámbar
+          SÓLIDA y prominente con el copy exacto y sus tildes. */}
+      <OfflineBanner
+        visible={!isOnline}
+        prominent
+        message="Sin conexión — los datos se guardarán al reconectar."
+      />
 
       {loading ? (
         <EvaLoaderScreen subtitle="Cargando rutina…" />
@@ -659,16 +742,8 @@ function ExecutorV2Inner({ planId }: { planId: string }) {
           showsVerticalScrollIndicator={false}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.primary} colors={[theme.primary]} />}
         >
-          {allDone && (
-            <View className="flex-row items-start gap-3 rounded-card border border-success-500/40 bg-success-500/[0.16] p-4">
-              <Trophy size={18} color="#1FB877" strokeWidth={2} />
-              <View className="flex-1">
-                <Text className="font-sans-bold text-[15px] text-success-500">Entrenamiento completado!</Text>
-                <Text className="mt-0.5 text-[12px] text-success-600">Todas las series registradas. Queda sincronizado con tu coach.</Text>
-              </View>
-            </View>
-          )}
-
+          {/* El estado "completado" se comunica SÓLO por el colapso de cada ejercicio a su recap
+              (CollapsedExerciseBar) — el web NO muestra banner de éxito en la lista (spec §7). */}
           {sections.map((section) => (
             <View key={section.key} className="gap-3">
               <View className="flex-row items-center gap-3">

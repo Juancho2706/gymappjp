@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Pressable, Text, View } from 'react-native'
+import { Pressable, Text, View, type TextStyle } from 'react-native'
 import { MotiView } from 'moti'
 import { cssInterop } from 'nativewind'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -18,6 +18,7 @@ import { useTheme } from '@/context/ThemeContext'
 import { FONT, TYPE, textStyle } from '@/lib/typography'
 import { shadow } from '@/lib/shadows'
 import { haptics } from '@/lib/haptics'
+import { useEvaMotion } from '@/lib/motion'
 import { useKeypadStep } from './keypad-step-preference'
 
 /**
@@ -99,6 +100,15 @@ const UNIT_STYLE = textStyle('xs', FONT.uiBold)
 // (`NumericKeypadSheet.tsx:277,410`). El DS no tiene 15px; se ancla a 'sm' (14px) con peso bold
 // (antes TYPE.label = 14px semibold). Compartido con `KeypadHost` para no divergir.
 export const KEYPAD_ACTION_STYLE = textStyle('sm', FONT.uiBold)
+// Eyebrows del keypad (nombre ejercicio, 'Esfuerzo', labels RPE/RIR, título del menú de paso): la web
+// los pone en 9.5-11px con tracking 0.05-0.08em (`NumericKeypadSheet.tsx:207,234,248,255,355`). El rol
+// `TYPE.eyebrow` (piso 12px, tracking 0.12em) sobrepasa ese rango (el RPE/RIR salta 9.5→12px, +26%), así
+// que anclamos al piso del scale ('3xs'=11px) con el tracking positivo más chico del DS ('wide'=0.04em)
+// — mucho más fiel que 0.12em. Se comparte con `KeypadHost` para no divergir.
+export const KEYPAD_EYEBROW_STYLE: TextStyle = {
+  ...textStyle('3xs', FONT.uiBold, { ls: 'wide' }),
+  textTransform: 'uppercase',
+}
 
 // ─── Primitivas presentacionales compartidas (TypedKeypad + KeypadHost) ───────
 
@@ -126,7 +136,11 @@ export function KeypadDisplayRow({
   return (
     <View className="flex-row items-center gap-2 rounded-control border border-inverse/10 bg-white/[0.04] p-2 pl-3">
       {showTabs ? (
-        <View className="flex-row shrink-0 rounded-control bg-white/[0.05] p-0.5" accessibilityRole="tablist">
+        <View
+          className="flex-row shrink-0 rounded-control bg-white/[0.05] p-0.5"
+          accessibilityRole="tablist"
+          accessibilityLabel="Campo"
+        >
           {tabs!.fields.map((f) => {
             const selected = f.key === tabs!.activeKey
             return (
@@ -219,7 +233,7 @@ export function WeightChips({ onIncrement }: { onIncrement: (delta: number) => v
 
       {stepMenuOpen ? (
         <View className="mt-2 rounded-control border border-inverse/10 bg-white/[0.03] p-2">
-          <Text style={TYPE.eyebrow} className="mb-1.5 px-1 text-on-dark-muted">
+          <Text style={KEYPAD_EYEBROW_STYLE} className="mb-1.5 px-1 text-on-dark-muted">
             Paso del incremento (kg)
           </Text>
           <View className="flex-row flex-wrap gap-1.5">
@@ -349,6 +363,7 @@ export function TypedKeypad(props: {
   const { mode, value, onChange, onNext, onDone, unit } = props
   const { resolvedScheme } = useTheme()
   const insets = useSafeAreaInsets()
+  const motion = useEvaMotion()
   const cfg = MODE_CFG[mode]
 
   const panelShadow = useMemo(() => {
@@ -388,9 +403,11 @@ export function TypedKeypad(props: {
   return (
     <MotiView
       testID="typed-keypad"
-      from={{ translateY: 340 }}
+      // Reduce-motion ⇒ el panel aparece sin deslizarse (mirror web `NumericKeypadSheet.tsx:185-188`,
+      // que con reduced pone `initial=false` + `{duration:0}`).
+      from={{ translateY: motion.reduced ? 0 : 340 }}
       animate={{ translateY: 0 }}
-      transition={{ type: 'spring', stiffness: 320, damping: 34, mass: 0.9 }}
+      transition={motion.reduced ? { type: 'timing', duration: 0 } : { type: 'spring', stiffness: 320, damping: 34, mass: 0.9 }}
       style={{ position: 'absolute', left: 0, right: 0, bottom: 0 }}
     >
       <View
@@ -475,6 +492,7 @@ export function EffortScale(props: {
   compact?: boolean
 }) {
   const { kind, value, onSelect, compact = false } = props
+  const motion = useEvaMotion()
   const label = kind.toUpperCase()
   const dotSize = compact ? 8 : 10
 
@@ -505,7 +523,8 @@ export function EffortScale(props: {
             <MotiView
               animate={{ scale: selected ? 1.3 : filled ? 1 : 0.7 }}
               // springs.snappy web (`animation-presets.ts:4`): stiffness 400 · damping 30 (menos rebote).
-              transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+              // Reduce-motion ⇒ salto instantáneo, igual que la web (`EffortScale.tsx:83` con `{duration:0}`).
+              transition={motion.reduced ? { type: 'timing', duration: 0 } : { type: 'spring', stiffness: 400, damping: 30 }}
               className={filled ? 'rounded-pill bg-sport-500' : 'rounded-pill bg-white/15'}
               style={{ width: dotSize, height: dotSize }}
             />
@@ -562,7 +581,7 @@ export function EffortField({
   return (
     <View>
       <View className="mb-1 flex-row items-center gap-1">
-        <Text style={TYPE.eyebrow} className="text-on-dark-muted">
+        <Text style={KEYPAD_EYEBROW_STYLE} className="text-on-dark-muted">
           {label}
         </Text>
         <EffortHelp label={kind.toUpperCase()} open={helpOpen} onToggle={() => setHelpOpen((o) => !o)} />
