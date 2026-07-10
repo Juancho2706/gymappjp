@@ -2,11 +2,12 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { AppState, Pressable, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { MotiView } from 'moti'
+import { BlurView } from 'expo-blur'
 import Svg, { Circle, G } from 'react-native-svg'
 import { Pause, Play, RotateCcw, X } from 'lucide-react-native'
 import { useEvaMotion, EASE } from '../../../../lib/motion'
 import { useTheme } from '../../../../context/ThemeContext'
-import { TYPE, textStyle, FONT } from '../../../../lib/typography'
+import { textStyle, FONT } from '../../../../lib/typography'
 import { SHADOWS } from '../../../../lib/shadows'
 import { haptics } from '../../../../lib/haptics'
 import { EMBER_500, INK_900, ON_DARK, ON_DARK_MUTED, TRACK_ON_DARK } from './timer-colors'
@@ -33,7 +34,11 @@ function formatTime(s: number): string {
 }
 
 const R = 18
-const C = 2 * Math.PI * R
+// Espeja la matemática de la web (HoldTimer.tsx:66,90-91): strokeDasharray fija en 176
+// (mayor que la circunferencia real 2π·18≈113.1), por lo que el anillo se ve LLENO desde
+// pct=100 hasta ~pct=64.3 y recién ahí empieza a vaciarse. Reproducir la curva exacta que
+// ve el usuario en la web, no la circunferencia geométrica.
+const DASH = 176
 
 export function HoldTimer({ initialSeconds, label, onClose }: HoldTimerProps) {
   const insets = useSafeAreaInsets()
@@ -93,8 +98,8 @@ export function HoldTimer({ initialSeconds, label, onClose }: HoldTimerProps) {
   }, [])
 
   const done = timeLeft === 0
-  const frac = Math.max(0, Math.min(1, timeLeft / (initialSeconds || 1)))
-  const dashoffset = C * (1 - frac)
+  const pct = (timeLeft / (initialSeconds || 1)) * 100
+  const dashoffset = DASH - (DASH * Math.min(100, pct)) / 100
 
   return (
     <View
@@ -108,6 +113,16 @@ export function HoldTimer({ initialSeconds, label, onClose }: HoldTimerProps) {
         animate={{ opacity: 1, translateY: 0 }}
         transition={{ type: 'timing', duration: motion.reduced ? 0 : 200, easing: EASE.out }}
       >
+        {/* backdrop-blur-xl de la web: BlurView difumina el contenido detrás; el velo
+            ink-900 @ 95% (mismo alfa que la web `/95`) va encima. Chrome siempre oscuro. */}
+        <BlurView
+          pointerEvents="none"
+          intensity={20}
+          tint="dark"
+          experimentalBlurMethod="dimezisBlurView"
+          style={StyleSheet.absoluteFill}
+        />
+        <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.veil]} />
         {done ? <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.doneOverlay]} /> : null}
         <View style={styles.left}>
           <View style={styles.ringWrap}>
@@ -122,7 +137,7 @@ export function HoldTimer({ initialSeconds, label, onClose }: HoldTimerProps) {
                   fill="none"
                   stroke={EMBER_500}
                   strokeLinecap="round"
-                  strokeDasharray={C}
+                  strokeDasharray={DASH}
                   strokeDashoffset={dashoffset}
                 />
               </G>
@@ -149,7 +164,7 @@ export function HoldTimer({ initialSeconds, label, onClose }: HoldTimerProps) {
             hitSlop={6}
             style={styles.utilBtn}
           >
-            {isActive ? <Pause size={16} color={ON_DARK_MUTED} /> : <Play size={16} color={ON_DARK_MUTED} />}
+            {isActive ? <Pause size={14} color={ON_DARK_MUTED} /> : <Play size={14} color={ON_DARK_MUTED} />}
           </Pressable>
           <Pressable
             testID="hold-timer-restart"
@@ -159,7 +174,7 @@ export function HoldTimer({ initialSeconds, label, onClose }: HoldTimerProps) {
             hitSlop={6}
             style={styles.utilBtn}
           >
-            <RotateCcw size={16} color={ON_DARK_MUTED} />
+            <RotateCcw size={14} color={ON_DARK_MUTED} />
           </Pressable>
           <Pressable
             testID="hold-timer-close"
@@ -169,7 +184,7 @@ export function HoldTimer({ initialSeconds, label, onClose }: HoldTimerProps) {
             hitSlop={6}
             style={styles.utilBtn}
           >
-            <X size={16} color={ON_DARK_MUTED} />
+            <X size={14} color={ON_DARK_MUTED} />
           </Pressable>
         </View>
       </MotiView>
@@ -182,7 +197,6 @@ const styles = StyleSheet.create({
   card: {
     borderWidth: 1,
     borderColor: TRACK_ON_DARK,
-    backgroundColor: `${INK_900}F2`,
     overflow: 'hidden',
     paddingHorizontal: 10,
     paddingVertical: 8,
@@ -192,13 +206,25 @@ const styles = StyleSheet.create({
     gap: 6,
     minHeight: 44,
   },
+  veil: { backgroundColor: `${INK_900}F2` }, // ink-900 @ 95% sobre el blur (espeja `bg-[var(--ink-900)]/95`)
   doneOverlay: { backgroundColor: `${EMBER_500}26` }, // ember-500 @ 15% (espeja `bg-[var(--ember-500)]/15`)
   left: { flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 1, minWidth: 0 },
   ringWrap: { width: 44, height: 44, position: 'relative' },
   ringCenter: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center' },
-  ringTime: { ...textStyle('2xs', FONT.monoBold), color: ON_DARK },
+  // Web HoldTimer.tsx:95 `text-xs ... tabular-nums` = 13px (--text-xs=13, globals.css:455);
+  // consistente con la subLine ('xs'), no '2xs'/12px.
+  ringTime: { ...textStyle('xs', FONT.monoBold), color: ON_DARK },
   textCol: { flexShrink: 1, minWidth: 0 },
-  eyebrow: { ...TYPE.eyebrow, color: ON_DARK_MUTED },
+  // Web HoldTimer.tsx:98 `text-[10px] font-semibold uppercase tracking-wider` = 10px / peso 600 /
+  // tracking 0.05em (=0.5pt a 10px). No usar TYPE.eyebrow (12px/700/0.12em).
+  eyebrow: {
+    fontSize: 10,
+    lineHeight: 14,
+    fontFamily: FONT.uiSemibold,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+    color: ON_DARK_MUTED,
+  },
   subLine: { ...textStyle('xs', FONT.uiBold), color: ON_DARK, marginTop: 1 },
   utilRow: { flexDirection: 'row', alignItems: 'center', flexShrink: 0 },
   utilBtn: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },

@@ -2,7 +2,7 @@ import { Text, TouchableOpacity, View } from 'react-native'
 import { Image } from 'expo-image'
 import { Sheet } from '../../Sheet'
 import { VideoPlayer } from '../../VideoPlayer'
-import { FONT, TYPE, textStyle } from '../../../lib/typography'
+import { FONT, textStyle } from '../../../lib/typography'
 import { extractYoutubeVideoId } from '../../../lib/youtube'
 import type { SessionExercise } from '../../../lib/workout-session'
 
@@ -88,7 +88,14 @@ export function TechniqueSheet({
   const steps = exercise?.instructions ?? null
 
   return (
-    <Sheet open={open} onClose={onClose} title={exercise?.name ?? 'Técnica'} snapPoints={['55%', '90%']}>
+    <Sheet
+      open={open}
+      onClose={onClose}
+      title={exercise?.name ?? 'Técnica'}
+      // Título a 21px = web `DialogTitle text-xl` (WorkoutExecutionClient.tsx:2079 + dialog.tsx:126-127).
+      titleSize="xl"
+      snapPoints={['55%', '90%']}
+    >
       {exercise ? <TechniqueMedia exercise={exercise} /> : null}
 
       {steps && steps.length > 0 ? (
@@ -101,14 +108,16 @@ export function TechniqueSheet({
                   {i + 1}
                 </Text>
               </View>
-              <Text style={TYPE.body} className="flex-1 text-[13px] text-muted">
+              {/* 14px = web `text-sm` + `leading-relaxed` (WorkoutExecutionClient.tsx:2088,2098);
+                  color text-muted = web text-muted-foreground. Un solo tamaño (sin mezclar TYPE.body/text-[13px]). */}
+              <Text style={textStyle('sm', FONT.ui, { lh: 'relaxed' })} className="flex-1 text-muted">
                 {step.replace(/^Step:\d+\s*/i, '')}
               </Text>
             </View>
           ))}
         </View>
       ) : (
-        <Text style={TYPE.body} className="text-center text-muted">
+        <Text style={textStyle('sm', FONT.ui)} className="text-center text-muted">
           No hay instrucciones detalladas disponibles para este ejercicio.
         </Text>
       )}

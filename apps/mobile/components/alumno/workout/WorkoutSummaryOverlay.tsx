@@ -29,6 +29,7 @@ import {
 import { useTheme } from '../../../context/ThemeContext'
 import { useEvaMotion } from '../../../lib/motion'
 import { haptics } from '../../../lib/haptics'
+import { SHADOWS } from '../../../lib/shadows'
 import { FONT } from '../../../lib/typography'
 import { epleyOneRM } from '../../../lib/profile-analytics'
 import type { CheckInReminder } from '../../../lib/checkin-thresholds'
@@ -71,6 +72,17 @@ const ROLLER = '#8b5cf6'
 /** "12 jun" — fecha corta es-CL a partir de un ymd (YYYY-MM-DD). */
 function fmtShortDate(ymd: string): string {
   return new Date(`${ymd}T12:00:00Z`).toLocaleDateString('es-CL', { day: 'numeric', month: 'short', timeZone: 'UTC' })
+}
+
+/**
+ * Número con coma decimal es-CL para la share-card del PR — espejo EXACTO de
+ * `fmtWeight`/`fmtPct` del web (`records/pr-card.ts:20-22`, `workout-pr-card-canvas.ts:89-91`:
+ * `String(n).replace('.', ',')`). El canvas web pinta el peso hero, el pill de salto y el 1RM
+ * con coma ("102,5 kg", "+12,5%"); la ShareCard móvil pasaba `String()` crudo → punto. Enteros
+ * quedan intactos (String no añade decimales).
+ */
+function fmtDecimalCL(n: number): string {
+  return String(n).replace('.', ',')
 }
 
 /** "#rrggbb" + alfa → "rgba(r,g,b,a)" — para tintar la marca del coach (nudge sport-500/x). */
@@ -294,11 +306,11 @@ export function WorkoutSummaryOverlay({
           {/* Hero: Duración + stat adaptativo, luego series · reps */}
           <View style={{ gap: 8 }}>
             <View style={{ flexDirection: 'row', gap: 8 }}>
-              <View style={{ flex: 1, borderRadius: 14, borderWidth: 1, borderColor: BORDER_INV, backgroundColor: INK_900, paddingVertical: 20, alignItems: 'center' }}>
+              <View style={{ flex: 1, borderRadius: 14, borderWidth: 1, borderColor: BORDER_INV, backgroundColor: INK_900, paddingHorizontal: 16, paddingVertical: 20, alignItems: 'center' }}>
                 <Text style={{ fontFamily: MONO, fontSize: 34, color: brand }}>{durationLabel}</Text>
                 <Text style={{ fontFamily: BOLD, fontSize: 11, color: ON_DARK_MUTED, marginTop: 8 }}>Duración</Text>
               </View>
-              <View style={{ flex: 1, borderRadius: 14, borderWidth: 1, borderColor: BORDER_INV, backgroundColor: INK_900, paddingVertical: 20, alignItems: 'center' }}>
+              <View style={{ flex: 1, borderRadius: 14, borderWidth: 1, borderColor: BORDER_INV, backgroundColor: INK_900, paddingHorizontal: 16, paddingVertical: 20, alignItems: 'center' }}>
                 <Text style={{ fontFamily: MONO, fontSize: 34, color: brand }}>
                   {heroSecondary.value}
                   {heroSecondary.unit ? <Text style={{ fontFamily: BOLD, fontSize: 16, color: ON_DARK_MUTED }}> {heroSecondary.unit}</Text> : null}
@@ -306,7 +318,7 @@ export function WorkoutSummaryOverlay({
                 <Text style={{ fontFamily: BOLD, fontSize: 11, color: ON_DARK_MUTED, marginTop: 8 }}>{heroSecondary.label}</Text>
               </View>
             </View>
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: 14, borderWidth: 1, borderColor: BORDER_INV, backgroundColor: W03, paddingVertical: 10 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: 14, borderWidth: 1, borderColor: BORDER_INV, backgroundColor: W03, paddingHorizontal: 16, paddingVertical: 10 }}>
               <Text style={{ fontFamily: theme.fontSans, fontSize: 14, color: ON_DARK_MUTED }}>
                 <Text style={{ fontFamily: BOLD, color: ON_DARK }}>{completedSets}</Text> series
               </Text>
@@ -341,7 +353,9 @@ export function WorkoutSummaryOverlay({
                   key={pr.exerciseName}
                   testID={`summary-pr-${pr.exerciseName}`}
                   onPress={() => onOpenPr(pr)}
-                  style={({ pressed }) => ({ borderRadius: 12, borderWidth: 1, borderColor: 'rgba(251,191,36,0.25)', backgroundColor: pressed ? 'rgba(255,255,255,0.12)' : W06, paddingHorizontal: 12, paddingVertical: 10 })}
+                  // rounded-lg (8px) es la excepción visual explícita de la card dorada (spec §5.2 /
+                  // web WorkoutSummaryOverlay.tsx:346), NO el rounded-control del DS.
+                  style={({ pressed }) => ({ borderRadius: 8, borderWidth: 1, borderColor: 'rgba(251,191,36,0.25)', backgroundColor: pressed ? 'rgba(255,255,255,0.12)' : W06, paddingHorizontal: 12, paddingVertical: 10 })}
                 >
                   <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
                     <Text style={{ flex: 1, fontFamily: BOLD, fontSize: 14, color: ON_DARK }}>{pr.exerciseName}</Text>
@@ -370,15 +384,18 @@ export function WorkoutSummaryOverlay({
           {/* Por ejercicio */}
           {exerciseBreakdown.length > 0 && (
             <View style={{ gap: 8 }}>
-              <Text style={{ fontFamily: BOLD, fontSize: 12, letterSpacing: 1.5, textTransform: 'uppercase', color: ON_DARK_MUTED }}>Por ejercicio</Text>
+              <Text style={{ fontFamily: BOLD, fontSize: 12, letterSpacing: 1.2, textTransform: 'uppercase', color: ON_DARK_MUTED }}>Por ejercicio</Text>
               {exerciseBreakdown.map((ex, i) => (
                 <View key={`${ex.exerciseId}-${i}`} style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: 8, borderRadius: 20, borderWidth: 1, borderColor: BORDER_INV, backgroundColor: W04, paddingHorizontal: 12, paddingVertical: 10 }}>
                   <View style={{ flex: 1 }}>
                     <Text style={{ fontFamily: BOLD, fontSize: 14, color: ON_DARK }}>{ex.name}</Text>
                     <Text style={{ fontFamily: theme.fontSans, fontSize: 10, color: ON_DARK_MUTED }}>{ex.muscleGroup}</Text>
                   </View>
-                  <Text style={{ fontFamily: MONO, fontSize: 12, color: ON_DARK_MUTED }}>
-                    <Text style={{ color: ON_DARK }}>{ex.sets.length}</Text> series · <Text style={{ color: ON_DARK }}>{Math.round(ex.totalVolume)}</Text> kg vol.
+                  {/* Web: `text-xs text-on-dark-muted tabular-nums` (SANS regular tabular) con SÓLO los
+                      números en `font-bold text-on-dark`; el texto 'series ·'/'kg vol.' va en peso
+                      normal muted (WorkoutSummaryOverlay.tsx:393-395). No es mono. */}
+                  <Text style={{ fontFamily: theme.fontSans, fontSize: 12, color: ON_DARK_MUTED, fontVariant: ['tabular-nums'] }}>
+                    <Text style={{ fontFamily: BOLD, color: ON_DARK }}>{ex.sets.length}</Text> series · <Text style={{ fontFamily: BOLD, color: ON_DARK }}>{Math.round(ex.totalVolume)}</Text> kg vol.
                   </Text>
                 </View>
               ))}
@@ -388,7 +405,7 @@ export function WorkoutSummaryOverlay({
           {/* Cardio y movilidad */}
           {hasNonStrength && (
             <View style={{ gap: 8 }}>
-              <Text style={{ fontFamily: BOLD, fontSize: 12, letterSpacing: 1.5, textTransform: 'uppercase', color: ON_DARK_MUTED }}>Cardio y movilidad</Text>
+              <Text style={{ fontFamily: BOLD, fontSize: 12, letterSpacing: 1.2, textTransform: 'uppercase', color: ON_DARK_MUTED }}>Cardio y movilidad</Text>
               {session.cardio.map((c) => (
                 <NonStrengthCard key={c.blockId} name={c.name} typeLabel="Cardio" accent={EMBER_500} icon={<HeartPulse size={16} color={EMBER_500} />} tiles={cardioTiles(c)} />
               ))}
@@ -408,7 +425,7 @@ export function WorkoutSummaryOverlay({
           {/* Músculos trabajados */}
           {(hasMuscleMap || muscleGroupVolume.length > 0) && (
             <View style={{ gap: 10 }}>
-              <Text style={{ fontFamily: BOLD, fontSize: 12, letterSpacing: 1.5, textTransform: 'uppercase', color: ON_DARK_MUTED }}>Músculos trabajados</Text>
+              <Text style={{ fontFamily: BOLD, fontSize: 12, letterSpacing: 1.2, textTransform: 'uppercase', color: ON_DARK_MUTED }}>Músculos trabajados</Text>
               {/* px-3 pt-3 pb-1 (web WorkoutSummaryOverlay.tsx:455). */}
               {hasMuscleMap && (
                 <View style={{ borderRadius: 20, borderWidth: 1, borderColor: BORDER_INV, backgroundColor: W03, paddingHorizontal: 12, paddingTop: 12, paddingBottom: 4 }}>
@@ -438,7 +455,7 @@ export function WorkoutSummaryOverlay({
                 <ArrowRight size={16} color="#fff" />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={{ fontFamily: BOLD, fontSize: 11, letterSpacing: 1.5, textTransform: 'uppercase', color: SPORT_300 }}>Lo que viene</Text>
+                <Text style={{ fontFamily: BOLD, fontSize: 11, letterSpacing: 1.1, textTransform: 'uppercase', color: SPORT_300 }}>Lo que viene</Text>
                 <Text style={{ fontFamily: BOLD, fontSize: 14, color: ON_DARK }} numberOfLines={1}>Sigue tu progreso en {programName}</Text>
                 {nextHint ? <Text style={{ fontFamily: theme.fontSans, fontSize: 12, color: ON_DARK_MUTED }} numberOfLines={1}>{nextHint}</Text> : null}
               </View>
@@ -456,10 +473,20 @@ export function WorkoutSummaryOverlay({
             Aquí conservamos la barra FIJA (idioma móvil defendible) pero apilada en columna para
             replicar la orientación y jerarquía web. */}
         <View style={{ flexDirection: 'column', gap: 8, paddingHorizontal: 16, paddingTop: 12, paddingBottom: 16, borderTopWidth: 1, borderTopColor: BORDER_INV, backgroundColor: INK_950 }}>
+          {/* DIVERGENCIA IDIOMÁTICA DOCUMENTADA (share): el web `handleShare`
+              (WorkoutSummaryOverlay.tsx:222-237) comparte TEXTO plano vía navigator.share, y sin
+              Web Share API cae a clipboard mostrando el estado 'Copiado' (<Check emerald> 2s). En
+              móvil abrimos un `ShareCardPreview` branded (imagen-tarjeta) — más rico y nativo — con
+              el MISMO texto web adjunto a la hoja nativa como `shareMessage` (sessionShareMsg). El
+              estado 'Copiado' NO aplica: la hoja de compartir nativa siempre está disponible (no hay
+              rama de clipboard). Degradar a share de texto ELIMINARÍA la tarjeta branded existente
+              (prohibido), por eso se preserva + documenta. */}
           <Pressable
             testID="summary-share"
             onPress={() => { haptics.tap(); setShareOpen(true) }}
-            style={({ pressed }) => ({ height: 48, borderRadius: 14, borderWidth: 1, borderColor: BORDER_INV, backgroundColor: pressed ? 'rgba(255,255,255,0.14)' : W08, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 })}
+            // h-10 (40px) secundario / h-12 (48px) primario — paridad numérica con web
+            // (WorkoutSummaryOverlay.tsx:509,520).
+            style={({ pressed }) => ({ height: 40, borderRadius: 14, borderWidth: 1, borderColor: BORDER_INV, backgroundColor: pressed ? 'rgba(255,255,255,0.14)' : W08, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 })}
           >
             <Share2 size={16} color={ON_DARK} />
             <Text style={{ fontFamily: BOLD, fontSize: 15, color: ON_DARK }}>Compartir logro</Text>
@@ -467,7 +494,10 @@ export function WorkoutSummaryOverlay({
           <Pressable
             testID="summary-done"
             onPress={onDone}
-            style={[{ height: 52, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: brand }, theme.shadowGlowBlue]}
+            // Web usa `shadow-lg` = drop-shadow NEUTRO (sin tinte de marca), no un glow
+            // (WorkoutSummaryOverlay.tsx:520). Sobre el canvas siempre-oscuro del overlay usamos la
+            // rampa neutra dark del DS (SHADOWS.dark.lg) en vez del glow sport de la marca.
+            style={[{ height: 48, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: brand }, SHADOWS.dark.lg]}
           >
             <Text style={{ fontFamily: BOLD, fontSize: 16, color: theme.primaryForeground }}>Volver al inicio</Text>
           </Pressable>
@@ -500,10 +530,11 @@ export function WorkoutSummaryOverlay({
           <>
             <ShareCardEyebrow color={brand}>RÉCORD PERSONAL</ShareCardEyebrow>
             <ShareCardTitle>{prCard.exerciseName}</ShareCardTitle>
-            <ShareCardHero value={String(prCard.newWeightKg)} unit="kg" color={brand} />
-            <ShareCardPill tone="success">{prCard.prevWeightKg} → {prCard.newWeightKg} kg{prCard.pct > 0 ? ` · +${prCard.pct}%` : ''}</ShareCardPill>
+            {/* Coma decimal es-CL como el canvas web (fmtWeight/fmtPct): "102,5 kg", "+12,5%". */}
+            <ShareCardHero value={fmtDecimalCL(prCard.newWeightKg)} unit="kg" color={brand} />
+            <ShareCardPill tone="success">{fmtDecimalCL(prCard.prevWeightKg)} → {fmtDecimalCL(prCard.newWeightKg)} kg{prCard.pct > 0 ? ` · +${fmtDecimalCL(prCard.pct)}%` : ''}</ShareCardPill>
             <ShareCardDate />
-            <ShareCardPill>1RM estimado · {prCard.estimated1RM} kg</ShareCardPill>
+            <ShareCardPill>1RM estimado · {fmtDecimalCL(prCard.estimated1RM)} kg</ShareCardPill>
           </>
         ) : null}
       </ShareCardPreview>

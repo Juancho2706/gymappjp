@@ -165,8 +165,28 @@ export function VideoPlayer({
         />
       ) : isDirect && ExpoVideo ? (
         <DirectVideo url={url} start={startAt} end={endAt} muted={muted} loop={loop} />
+      ) : isDirect ? (
+        // expo-video aún no instalado: reproducción INLINE via WebView + HTML5 <video> — el MISMO
+        // elemento `<video autoPlay loop muted playsInline object-contain>` que usa la web
+        // (WorkoutExecutionClient.tsx:2049-2056), dentro del WebView que ya es dependencia (YouTube).
+        // Reemplaza el antiguo `Linking.openURL` (sacaba al usuario fuera de la app) → paridad inline
+        // sin depender de un módulo nativo. El recorte [start,end] se loopea igual que en DirectVideo.
+        <WebView
+          testID="video-player-direct-webview"
+          accessibilityRole="image"
+          accessibilityLabel={title ? `Video de ${title}` : 'Video del ejercicio'}
+          source={{ html: directVideoHtml(url, { start: startAt, end: endAt, muted, loop }) }}
+          style={styles.fill}
+          allowsInlineMediaPlayback
+          mediaPlaybackRequiresUserAction={false}
+          javaScriptEnabled
+          domStorageEnabled
+          allowsFullscreenVideo={false}
+          androidLayerType="hardware"
+          setSupportMultipleWindows={false}
+        />
       ) : (
-        // expo-video aún no instalado (o URL no reconocida): degradar a abrir afuera.
+        // URL no reconocida (ni YouTube ni media directa http/s): degradar a abrir afuera.
         <TouchableOpacity
           activeOpacity={0.9}
           onPress={() => Linking.openURL(url)}
@@ -272,6 +292,34 @@ function youtubeEmbedHtml(
     },300);
   }
   var s=document.createElement('script');s.src='https://www.youtube.com/iframe_api';document.body.appendChild(s);
+</script></body></html>`
+}
+
+/**
+ * HTML del `<video>` HTML5 directo (mp4/webm/mov/Storage) para el WebView. Espejo EXACTO del
+ * elemento de la web (`WorkoutExecutionClient.tsx:2049-2056`): `autoplay loop muted playsinline
+ * object-fit:contain`, fondo negro. Si el coach recortó `[start,end]`, un listener `timeupdate`
+ * vuelve a `start` al cruzar `end` (mismo truco que `DirectVideo`/la IFrame API de YouTube). La
+ * `url` se inyecta con `JSON.stringify` (evita romper el HTML con comillas en la query string).
+ */
+function directVideoHtml(
+  url: string,
+  opts: { start: number; end: number | null; muted: boolean; loop: boolean },
+): string {
+  const { start, end, muted, loop } = opts
+  return `<!DOCTYPE html><html><head>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<style>*{margin:0;padding:0}html,body{background:#000;height:100%;overflow:hidden}video{width:100%;height:100%;object-fit:contain;background:#000}</style>
+</head><body>
+<video id="v" ${loop ? 'loop' : ''} ${muted ? 'muted' : ''} autoplay playsinline webkit-playsinline></video>
+<script>
+  var START=${start}, END=${end == null ? 'null' : end}, LOOP=${loop ? 'true' : 'false'};
+  var v=document.getElementById('v');
+  ${muted ? 'v.muted=true;' : ''}
+  v.src=${JSON.stringify(url)};
+  if(START>0){v.addEventListener('loadedmetadata',function(){try{v.currentTime=START}catch(_){}});}
+  if(END!==null){v.addEventListener('timeupdate',function(){if(v.currentTime>=END){v.currentTime=START;if(LOOP){var p=v.play();if(p&&p.catch)p.catch(function(){});}}});}
+  var pr=v.play();if(pr&&pr.catch)pr.catch(function(){});
 </script></body></html>`
 }
 

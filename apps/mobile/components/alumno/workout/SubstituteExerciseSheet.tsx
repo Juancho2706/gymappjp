@@ -121,40 +121,43 @@ export function SubstituteExerciseSheet({ open, onOpenChange, blockId, prescribe
       onClose={() => onOpenChange(false)}
       snapPoints={['85%']}
       // Contenido-hug hasta 85% (web `h-auto max-h-[85dvh]`): los estados corto (vacío/error/
-      // cargando) no flotan dentro de un sheet fijo del 85%.
+      // cargando) hugean su contenido en vez de flotar dentro de un sheet fijo del 85%.
       dynamicSizing
       scrollable
+      // Header FIJO: se queda anclado arriba mientras solo scrollea la lista — RN-idiomático del
+      // split web `shrink-0` header (L76) + `overflow-y-auto` body (L89). El header sigue DENTRO del
+      // contenido medido, así que dynamicSizing hugea bien. Es el hijo 0 (abajo).
+      stickyHeaderIndices={[0]}
       forceDark
       // Nombre accesible del diálogo (web `aria-label`, SubstituteExerciseSheet.tsx:72).
       accessibilityLabel={`Cambiar ${prescribedName} por máquina ocupada`}
-      // Header FIJO (no scrollea): eyebrow + título + subtítulo se quedan anclados mientras solo
-      // scrollea la lista — espeja el split web `shrink-0` header (L76) + `overflow-y-auto` body (L89).
-      headerSlot={
-        <View style={styles.headerBlock}>
-          <View style={styles.eyebrowRow}>
-            <ArrowRightLeft className="text-sport-300" size={14} strokeWidth={2.4} />
-            {/* 11px (3xs) uiBold uppercase + tracking wide (~0.04em) — web `text-[11px] tracking-wider`. */}
-            <Text style={styles.eyebrow} className="text-sport-300">
-              Cambiar ejercicio
-            </Text>
-          </View>
-          {/* Sin numberOfLines: nombres largos hacen wrap libre como en web (título sin line-clamp). */}
-          <Text
-            style={textStyle('xl', FONT.displayBlack, { lh: 'tight', ls: 'tight' })}
-            className="text-on-dark mt-1"
-          >
-            {prescribedName}
-          </Text>
-          <Text style={TYPE.caption} className="text-on-dark-muted mt-1">
-            {muscleGroup ? `${muscleGroup} · ` : ''}Máquina ocupada — el cambio vale{' '}
-            <Text style={{ fontFamily: FONT.uiSemibold }} className="text-on-dark">
-              solo por hoy
-            </Text>{' '}
-            y no toca tu plan.
+    >
+      {/* Hijo 0 = header sticky. Fondo opaco (ink-950 = fondo del sheet) para tapar la lista al
+          scrollear por debajo. Grabber = handle del Sheet. */}
+      <View style={styles.headerBlock} className="bg-ink-950">
+        <View style={styles.eyebrowRow}>
+          <ArrowRightLeft className="text-sport-300" size={14} strokeWidth={2.4} />
+          {/* 11px (3xs) uiBold uppercase + tracking wide (~0.04em) — web `text-[11px] tracking-wider`. */}
+          <Text style={styles.eyebrow} className="text-sport-300">
+            Cambiar ejercicio
           </Text>
         </View>
-      }
-    >
+        {/* Sin numberOfLines: nombres largos hacen wrap libre como en web (título sin line-clamp). */}
+        <Text
+          style={textStyle('xl', FONT.displayBlack, { lh: 'tight', ls: 'tight' })}
+          className="text-on-dark mt-1"
+        >
+          {prescribedName}
+        </Text>
+        <Text style={TYPE.caption} className="text-on-dark-muted mt-1">
+          {muscleGroup ? `${muscleGroup} · ` : ''}Máquina ocupada — el cambio vale{' '}
+          <Text style={{ fontFamily: FONT.uiSemibold }} className="text-on-dark">
+            solo por hoy
+          </Text>{' '}
+          y no toca tu plan.
+        </Text>
+      </View>
+
       {/* Rama exclusiva: cargando · error · vacío · lista. */}
       {showLoading ? (
         <LoadingSkeleton />
@@ -295,9 +298,10 @@ function CandidateRow({ opt, onPress }: { opt: SubstituteCandidate; onPress: () 
 }
 
 const styles = StyleSheet.create({
-  // Header FIJO (fuera del scroll): asume su propio padding, antes lo daba el scroll body.
+  // Header sticky (hijo 0 del scroll): el px-20 lo da el contentContainer del Sheet; el gap:14 del
+  // contentContainer aporta la separación inferior (≈ web pb-4). pt corto porque el handle ya deja aire.
   // Web `px-5 pt-3 pb-4` = 20 / 12 / 16 (SubstituteExerciseSheet.tsx:76).
-  headerBlock: { gap: 2, paddingHorizontal: 20, paddingTop: 12, paddingBottom: 16 },
+  headerBlock: { gap: 2, paddingTop: 8, paddingBottom: 2 },
   // Eyebrow: 11px (3xs) uiBold uppercase + tracking wide (~0.04em) — web `text-[11px] tracking-wider`.
   eyebrow: { ...textStyle('3xs', FONT.uiBold, { ls: 'wide' }), textTransform: 'uppercase' },
   eyebrowRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },

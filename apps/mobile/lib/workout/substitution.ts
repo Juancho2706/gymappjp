@@ -183,6 +183,10 @@ export interface SubstituteCandidate extends RankableExercise {
   image_url: string | null
   video_url: string | null
   thumbnail_url: string | null
+  // Recorte del coach del video del sustituto — el modal de técnica loopea [start,end]
+  // (paridad web `_data/substitution.queries.ts:25-26` → `confirmSubstitution` :1388-1389).
+  video_start_time: number | null
+  video_end_time: number | null
   instructions: string[] | null
 }
 
@@ -258,7 +262,7 @@ export async function fetchSubstituteCandidates(blockId: string): Promise<Substi
   const client = await getClientProfile()
   const scopeFilter = client?.coachId ? `coach_id.is.null,coach_id.eq.${client.coachId}` : 'coach_id.is.null'
 
-  const RICH = 'id, name, muscle_group, equipment, exercise_type, secondary_muscles, gif_url, image_url, video_url, thumbnail_url, instructions, coach_id'
+  const RICH = 'id, name, muscle_group, equipment, exercise_type, secondary_muscles, gif_url, image_url, video_url, thumbnail_url, video_start_time, video_end_time, instructions, coach_id'
   const MIN = 'id, name, muscle_group, equipment, gif_url, image_url, video_url, thumbnail_url, instructions, coach_id'
   const muscle = currentNorm.muscle_group as string
 
@@ -294,6 +298,9 @@ export async function fetchSubstituteCandidates(blockId: string): Promise<Substi
     image_url: c.image_url ?? null,
     video_url: c.video_url ?? null,
     thumbnail_url: c.thumbnail_url ?? null,
+    // Ausentes en el fallback MIN (prod standalone sin estas columnas) → null.
+    video_start_time: c.video_start_time ?? null,
+    video_end_time: c.video_end_time ?? null,
     instructions: c.instructions ?? null,
   }))
 

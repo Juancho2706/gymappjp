@@ -11,7 +11,7 @@ import {
   type TypedKeypadMode,
 } from '@eva/workout-engine'
 import type { HrZoneRange } from '@eva/cardio'
-import { FONT, TYPE } from '../../../lib/typography'
+import { FONT, TYPE, textStyle } from '../../../lib/typography'
 import { useTheme } from '../../../context/ThemeContext'
 import { EXERCISE_TYPE_META, exerciseTypeColor } from '../../../lib/exercise-type-meta'
 import type { EffectiveTarget } from '../../../lib/workout/progression'
@@ -212,8 +212,10 @@ export function SupersetGroupCard({
                     )}
                     {m.hasTechnique && (
                       <Pressable testID={`btn-technique-${m.block.id}`} onPress={() => onOpenTechnique(m.block)} className="flex-row items-center gap-1">
-                        <Info size={13} color={ON_DARK_MUTED} />
-                        <Text style={TYPE.caption} className="text-[11px] text-on-dark-muted">Ver técnica</Text>
+                        {/* Icono 14 y texto 11px semibold (600) = web WEC:757-764 `Info w-3.5 h-3.5` +
+                            `text-[11px] font-semibold text-on-dark-muted` (no uiMedium/500). */}
+                        <Info size={14} color={ON_DARK_MUTED} />
+                        <Text style={textStyle('3xs', FONT.uiSemibold)} className="text-on-dark-muted">Ver técnica</Text>
                       </Pressable>
                     )}
                   </View>

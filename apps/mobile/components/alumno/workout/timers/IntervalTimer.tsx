@@ -2,13 +2,14 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { AppState, Pressable, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { MotiView } from 'moti'
+import { BlurView } from 'expo-blur'
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake'
 import { Pause, Play, SkipForward, Sun, X } from 'lucide-react-native'
 import * as Haptics from 'expo-haptics'
 import { INTERVAL_PHASE_LABEL, type IntervalPhase, type IntervalPhaseKind } from '@eva/workout-engine'
 import { useEvaMotion, EASE } from '../../../../lib/motion'
 import { useTheme } from '../../../../context/ThemeContext'
-import { TYPE, textStyle, FONT } from '../../../../lib/typography'
+import { textStyle, FONT } from '../../../../lib/typography'
 import { SHADOWS } from '../../../../lib/shadows'
 import { haptics } from '../../../../lib/haptics'
 import {
@@ -168,6 +169,16 @@ export function IntervalTimer({ phases, onClose }: IntervalTimerProps) {
         animate={{ opacity: 1, translateY: 0 }}
         transition={{ type: 'timing', duration: motion.reduced ? 0 : 200, easing: EASE.out }}
       >
+        {/* backdrop-blur-xl de la web: BlurView difumina el contenido detrás; el velo
+            ink-900 @ 95% (mismo alfa que la web `/95`) va encima. Chrome siempre oscuro. */}
+        <BlurView
+          pointerEvents="none"
+          intensity={20}
+          tint="dark"
+          experimentalBlurMethod="dimezisBlurView"
+          style={StyleSheet.absoluteFill}
+        />
+        <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.veil]} />
         <View style={styles.row}>
           <View style={styles.info}>
             {finished ? (
@@ -194,7 +205,7 @@ export function IntervalTimer({ phases, onClose }: IntervalTimerProps) {
               hitSlop={6}
               style={[styles.utilBtn, wakeLockOn ? styles.wakeOn : null]}
             >
-              <Sun size={16} color={wakeLockOn ? WARNING_500 : ON_DARK_MUTED} />
+              <Sun size={14} color={wakeLockOn ? WARNING_500 : ON_DARK_MUTED} />
             </Pressable>
             {!finished ? (
               <>
@@ -206,7 +217,7 @@ export function IntervalTimer({ phases, onClose }: IntervalTimerProps) {
                   hitSlop={6}
                   style={styles.utilBtn}
                 >
-                  {isActive ? <Pause size={16} color={ON_DARK_MUTED} /> : <Play size={16} color={ON_DARK_MUTED} />}
+                  {isActive ? <Pause size={14} color={ON_DARK_MUTED} /> : <Play size={14} color={ON_DARK_MUTED} />}
                 </Pressable>
                 <Pressable
                   testID="interval-timer-skip"
@@ -216,7 +227,7 @@ export function IntervalTimer({ phases, onClose }: IntervalTimerProps) {
                   hitSlop={6}
                   style={styles.utilBtn}
                 >
-                  <SkipForward size={16} color={ON_DARK_MUTED} />
+                  <SkipForward size={14} color={ON_DARK_MUTED} />
                 </Pressable>
               </>
             ) : null}
@@ -228,7 +239,7 @@ export function IntervalTimer({ phases, onClose }: IntervalTimerProps) {
               hitSlop={6}
               style={styles.utilBtn}
             >
-              <X size={16} color={ON_DARK_MUTED} />
+              <X size={14} color={ON_DARK_MUTED} />
             </Pressable>
           </View>
         </View>
@@ -258,21 +269,38 @@ const styles = StyleSheet.create({
   card: {
     borderWidth: 1,
     borderColor: TRACK_ON_DARK,
-    backgroundColor: `${INK_900}F2`,
     overflow: 'hidden',
     paddingHorizontal: 12,
     paddingVertical: 10,
   },
+  veil: { backgroundColor: `${INK_900}F2` }, // ink-900 @ 95% sobre el blur (espeja `bg-[var(--ink-900)]/95`)
   row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, minHeight: 44 },
   info: { flexShrink: 1, minWidth: 0 },
   finished: { ...textStyle('sm', FONT.uiBold), color: SUCCESS_500 },
-  eyebrow: { ...TYPE.eyebrow },
-  repeat: { ...textStyle('2xs', FONT.uiBold), color: ON_DARK_MUTED },
-  bigTime: { ...textStyle('2xl', FONT.monoBold, { lh: 'tight' }), color: ON_DARK, marginTop: 2 },
+  // Web IntervalTimer.tsx:133 `text-[10px] font-black uppercase tracking-widest` = 10px / peso 900
+  // (Archivo Black) / tracking 0.1em (=1pt a 10px). El color por fase se aplica inline.
+  eyebrow: {
+    fontSize: 10,
+    lineHeight: 14,
+    fontFamily: FONT.displayBlack,
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+  },
+  // Web IntervalTimer.tsx:136 span `font-bold` hereda los 10px del label (no 12px).
+  repeat: { fontSize: 10, fontFamily: FONT.uiBold, color: ON_DARK_MUTED },
+  // Web IntervalTimer.tsx:139 `text-2xl font-black tabular-nums` = 25px / peso 900. Usa Archivo
+  // Black con cifras tabulares para conservar el peso que ve el usuario (no mono/700).
+  bigTime: {
+    ...textStyle('2xl', FONT.displayBlack, { lh: 'tight' }),
+    fontVariant: ['tabular-nums', 'lining-nums'],
+    color: ON_DARK,
+    marginTop: 2,
+  },
   utilRow: { flexDirection: 'row', alignItems: 'center', flexShrink: 0 },
   utilBtn: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
   wakeOn: { backgroundColor: `${WARNING_500}1A` }, // warning-500 @ 10% (espeja `bg-[var(--warning-500)]/10`)
   track: { marginTop: 6, height: 4, borderRadius: 999, backgroundColor: TRACK_ON_DARK, overflow: 'hidden' },
   fill: { height: '100%', borderRadius: 999 },
-  batteryNote: { ...textStyle('3xs', FONT.ui), color: ON_DARK_MUTED, marginTop: 4 },
+  // Web IntervalTimer.tsx:204 `text-[9px]` = 9px (sin token en la escala; 3xs=11 era ~22% mayor).
+  batteryNote: { fontSize: 9, lineHeight: 13, fontFamily: FONT.ui, color: ON_DARK_MUTED, marginTop: 4 },
 })

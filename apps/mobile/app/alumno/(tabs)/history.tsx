@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
+import { cssInterop } from 'nativewind'
 import { MotiView } from 'moti'
 import { Easing, useReducedMotion } from 'react-native-reanimated'
 import { useRouter } from 'expo-router'
@@ -21,6 +22,16 @@ import { AppBackground } from '../../../components/AppBackground'
 const FONT_DISPLAY = 'Archivo_900Black'
 const FONT_BOLD = 'HankenGrotesk_700Bold'
 const FONT_MONO = 'JetBrainsMono_700Bold'
+
+// lucide-react-native no soporta currentColor: sin cssInterop la className text-*
+// es inerte y el icono cae a negro (invisible en dark). En web ChevronLeft/ChevronDown
+// heredan text-strong (page.tsx:41,44,82,84) y Calendar hereda text-subtle
+// (page.tsx:66,68). Mapeamos className→prop `color` igual que Sheet.tsx:44 y
+// perfil.tsx:64, para que los tokens resuelvan light/dark. (Dumbbell no lo necesita:
+// usa color={theme.primary} por prop, :64 y :203.)
+for (const Icon of [ChevronLeft, ChevronDown, Calendar]) {
+  cssInterop(Icon, { className: { target: 'style', nativeStyleToProp: { color: true } } })
+}
 
 // Curva del reveal fade-up de la web (Reveal.tsx:7 `ease: [0.16, 1, 0.3, 1]`), 1:1.
 const EASE_FADEUP = Easing.bezier(0.16, 1, 0.3, 1)
@@ -124,8 +135,10 @@ export default function HistoryScreen() {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
         <AppBackground />
-        <HistoryHeader monthsLabel={monthsLabel} onBack={goBack} />
-        <EvaLoaderScreen subtitle="Cargando historial…" />
+        <View style={styles.contentFill}>
+          <HistoryHeader monthsLabel={monthsLabel} onBack={goBack} />
+          <EvaLoaderScreen subtitle="Cargando historial…" />
+        </View>
       </SafeAreaView>
     )
   }
@@ -134,6 +147,7 @@ export default function HistoryScreen() {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
         <AppBackground />
+        <View style={styles.contentFill}>
         <HistoryHeader monthsLabel={monthsLabel} onBack={goBack} />
         <View style={styles.errorBox}>
           <View
@@ -152,6 +166,7 @@ export default function HistoryScreen() {
           </Text>
           <Button testID="history-retry" label="Reintentar" variant="outline" onPress={() => load(daysBack)} />
         </View>
+        </View>
       </SafeAreaView>
     )
   }
@@ -161,14 +176,16 @@ export default function HistoryScreen() {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
         <AppBackground />
-        <HistoryHeader monthsLabel={monthsLabel} onBack={goBack} />
-        <View style={styles.emptyBox}>
-          <View style={styles.emptyIcon}>
-            <Calendar size={34} className="text-subtle" strokeWidth={2} />
+        <View style={styles.contentFill}>
+          <HistoryHeader monthsLabel={monthsLabel} onBack={goBack} />
+          <View style={styles.emptyBox}>
+            <View style={styles.emptyIcon}>
+              <Calendar size={34} className="text-subtle" strokeWidth={2} />
+            </View>
+            <Text className="text-subtle" style={[styles.emptyText, { fontFamily: theme.fontSans }]}>
+              Aún no hay series registradas en este periodo. Cuando completes entrenos, aparecerán aquí.
+            </Text>
           </View>
-          <Text className="text-subtle" style={[styles.emptyText, { fontFamily: theme.fontSans }]}>
-            Aún no hay series registradas en este periodo. Cuando completes entrenos, aparecerán aquí.
-          </Text>
         </View>
       </SafeAreaView>
     )
@@ -178,6 +195,7 @@ export default function HistoryScreen() {
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
       <AppBackground />
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
+        <View style={styles.content}>
         <HistoryHeader monthsLabel={monthsLabel} onBack={goBack} />
 
         <View style={styles.body}>
@@ -243,6 +261,7 @@ export default function HistoryScreen() {
             Solo ves tus propios registros. Mostrando los últimos {monthsLabel}.
           </Text>
         </View>
+        </View>
       </ScrollView>
     </SafeAreaView>
   )
@@ -251,6 +270,10 @@ export default function HistoryScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   scroll: { paddingBottom: 40 },
+  // Espejo de `mx-auto max-w-2xl` (page.tsx:36): capa el contenido a 42rem (672px)
+  // y lo centra. En teléfono (<672px) width:'100%' llena; en tablet no se estira.
+  content: { width: '100%', maxWidth: 672, alignSelf: 'center' },
+  contentFill: { flex: 1, width: '100%', maxWidth: 672, alignSelf: 'center' },
   body: { paddingHorizontal: 20 },
   // Header (web page.tsx:38 `flex items-center gap-[11px] pb-4 pt-1.5`, dentro de px-5).
   header: {
@@ -291,8 +314,10 @@ const styles = StyleSheet.create({
   },
   moreTxt: { fontSize: 13.5 },
   disclaimer: { fontSize: 11.5, lineHeight: 17, textAlign: 'center', marginTop: 16 },
-  // Empty state (web page.tsx:66-72 `px-5 py-12 text-center text-subtle`).
-  emptyBox: { paddingHorizontal: 20, paddingVertical: 48, alignItems: 'center' },
+  // Empty state (web page.tsx:66-72 `px-5 py-12 text-center text-subtle`). El div
+  // del empty (px-5=20) va anidado en el contenedor con px-5=20 (page.tsx:36), así
+  // que el inset horizontal efectivo es 40px por lado, no 20 — replicamos el px-5 compuesto.
+  emptyBox: { paddingHorizontal: 40, paddingVertical: 48, alignItems: 'center' },
   emptyIcon: { marginBottom: 10, opacity: 0.4 },
   emptyText: { fontSize: 14, lineHeight: 21, textAlign: 'center' },
   errorBox: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 10, paddingHorizontal: 32 },

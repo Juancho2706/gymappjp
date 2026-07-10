@@ -11,7 +11,7 @@ import { cssInterop } from 'nativewind'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { X } from 'lucide-react-native'
 import { useTheme } from '../context/ThemeContext'
-import { FONT, TYPE, textStyle } from '../lib/typography'
+import { FONT, TYPE, textStyle, type TypeSize } from '../lib/typography'
 import { shadow } from '../lib/shadows'
 
 /**
@@ -50,14 +50,6 @@ export interface OverlayCommonProps {
   onClose: () => void
   title?: string
   description?: string
-  /**
-   * Non-scrolling header slot rendered BETWEEN the handle and the scroll body
-   * (outside the scroll region), so a custom header stays pinned while only the
-   * body scrolls — mirrors web's `shrink-0` header + `overflow-y-auto` body split
-   * (web SubstituteExerciseSheet.tsx:76 vs :89). Supersedes `title`/`description`
-   * when a caller needs richer header markup. The caller owns its own padding.
-   */
-  headerSlot?: ReactNode
   /** Pinned action row at the bottom (own border + sunken bg). */
   footer?: ReactNode
   /** Top-right dismiss affordance. Default true. */
@@ -79,6 +71,14 @@ export interface SheetProps extends OverlayCommonProps {
   /** Wrap children in an internal scroll view. Default true. */
   scrollable?: boolean
   /**
+   * Forwarded to the internal scroll view (`scrollable`). Pins the child views at
+   * these indices to the top while the rest scrolls — RN-idiomatic equivalent of a
+   * `shrink-0` header + `overflow-y-auto` body split (web SubstituteExerciseSheet.tsx:76
+   * vs :89): the pinned child STAYS in the measured content so `dynamicSizing` still
+   * hugs correctly. Pinned children must carry an opaque background. Default none.
+   */
+  stickyHeaderIndices?: number[]
+  /**
    * Size the sheet to its content (hugging it) up to the largest `snapPoints`
    * fraction as a cap, instead of forcing a fixed snap height. Mirrors web's
    * bottom sheet `h-auto max-h-[85dvh]` (base sheet.tsx:58 `data-[side=bottom]:h-auto`
@@ -94,9 +94,20 @@ export interface SheetProps extends OverlayCommonProps {
    * `bg-[var(--ink-950)] text-on-dark` in both light and dark. Default false (theme-aware).
    */
   forceDark?: boolean
+  /**
+   * Type-scale size of the title. Default `'lg'` (18px) for the standard sheet. Callers whose web
+   * source renders a larger heading pass `'xl'` (21px) for scale parity — e.g. the technique modal
+   * mirrors web `DialogTitle text-xl` (WorkoutExecutionClient.tsx:2079). Uppercase / tracking-tighter
+   * / display-extrabold stay fixed; only the size changes.
+   */
+  titleSize?: TypeSize
 }
 
-const TITLE_STYLE = { ...textStyle('lg', FONT.displayBold, { lh: 'snug', ls: 'tighter' }), textTransform: 'uppercase' as const }
+/** Title style at a given scale size — uppercase, display-extrabold, tracking-tighter (fixed). */
+const titleStyleFor = (size: TypeSize) => ({
+  ...textStyle(size, FONT.displayBold, { lh: 'snug', ls: 'tighter' }),
+  textTransform: 'uppercase' as const,
+})
 const DEFAULT_SNAP: (string | number)[] = ['45%', '85%']
 
 export function Sheet({
@@ -104,15 +115,16 @@ export function Sheet({
   onClose,
   title,
   description,
-  headerSlot,
   footer,
   showCloseButton = true,
   scrollable = true,
   showHandle = true,
   snapPoints = DEFAULT_SNAP,
+  stickyHeaderIndices,
   dynamicSizing = false,
   accessibilityLabel,
   forceDark = false,
+  titleSize = 'lg',
   children,
 }: SheetProps) {
   const { resolvedScheme } = useTheme()
@@ -154,7 +166,7 @@ export function Sheet({
     title || description ? (
       <View className="px-space-6 pt-space-4 pb-space-3">
         {title ? (
-          <Text style={TITLE_STYLE} className="text-strong pr-space-9" numberOfLines={2}>
+          <Text style={titleStyleFor(titleSize)} className="text-strong pr-space-9" numberOfLines={2}>
             {title}
           </Text>
         ) : null}
@@ -185,9 +197,12 @@ export function Sheet({
       // forward the real dialog name so screen readers announce it (web aria-label parity).
       accessibilityLabel={accessibilityLabel}
     >
-      {/* Surface rendered by us so DS tokens (not @gorhom style props) own the color. */}
+      {/* Surface rendered by us so DS tokens (not @gorhom style props) own the color.
+          Stays `flex-1` even under dynamicSizing: @gorhom drives the sheet height from the
+          scrollable's measured content (onContentSizeChange), while flex-1 keeps the scroll body
+          bounded so tall content (> cap) still scrolls instead of clipping. */}
       <View
-        className={`${dynamicSizing ? '' : 'flex-1'} rounded-t-sheet border-t ${forceDark ? 'border-inverse bg-ink-950' : 'border-subtle bg-surface-card'}`}
+        className={`flex-1 rounded-t-sheet border-t ${forceDark ? 'border-inverse bg-ink-950' : 'border-subtle bg-surface-card'}`}
         style={shadow('lg', resolvedScheme)}
       >
         {showHandle ? (
@@ -198,19 +213,17 @@ export function Sheet({
 
         {header}
 
-        {/* Non-scrolling header slot: stays pinned above the scroll region (web `shrink-0` header). */}
-        {headerSlot}
-
         {scrollable ? (
           <BottomSheetScrollView
-            style={dynamicSizing ? undefined : { flex: 1 }}
+            style={{ flex: 1 }}
             contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: bodyPadBottom, gap: 14 }}
             showsVerticalScrollIndicator={false}
+            stickyHeaderIndices={stickyHeaderIndices}
           >
             {children}
           </BottomSheetScrollView>
         ) : (
-          <View className={dynamicSizing ? 'px-space-6' : 'flex-1 px-space-6'} style={{ paddingBottom: bodyPadBottom, gap: 14 }}>
+          <View className="flex-1 px-space-6" style={{ paddingBottom: bodyPadBottom, gap: 14 }}>
             {children}
           </View>
         )}

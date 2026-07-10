@@ -423,7 +423,14 @@ export function ShareCardPreview({
             </ShareCardCanvas>
           </View>
 
-          {/* Actions */}
+          {/* Actions.
+              DIVERGENCIA IDIOMÁTICA DOCUMENTADA (vs web PRShareCardModal.tsx:127-146, spec §12.4):
+              el modal web muestra HASTA 3 botones — primario 'Compartir'/'Guardar imagen', un
+              secundario 'Guardar' (Download) cuando `canShare`, y 'Cerrar'. Aquí sólo hay
+              'Compartir' + 'Cerrar': la hoja de compartir NATIVA (expo-sharing / RN Share, arriba en
+              handleShare) YA incluye "Guardar imagen"/"Save Image", por lo que un botón de descarga
+              separado sería redundante y exigiría una nueva dependencia (expo-media-library +
+              permiso de galería). El affordance de guardar se preserva vía la hoja nativa. */}
           <Pressable
             onPress={handleShare}
             disabled={busy}

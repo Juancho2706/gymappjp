@@ -2,10 +2,11 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { AppState, Pressable, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { MotiView } from 'moti'
+import { BlurView } from 'expo-blur'
 import { Flag, Pause, Play, RotateCcw, X } from 'lucide-react-native'
 import { useEvaMotion, EASE } from '../../../../lib/motion'
 import { useTheme } from '../../../../context/ThemeContext'
-import { TYPE, textStyle, FONT } from '../../../../lib/typography'
+import { textStyle, FONT } from '../../../../lib/typography'
 import { SHADOWS } from '../../../../lib/shadows'
 import { haptics } from '../../../../lib/haptics'
 import { INK_900, ON_DARK, ON_DARK_MUTED, TRACK_ON_DARK } from './timer-colors'
@@ -98,6 +99,16 @@ export function StopwatchTimer({ onClose }: StopwatchTimerProps) {
         animate={{ opacity: 1, translateY: 0 }}
         transition={{ type: 'timing', duration: motion.reduced ? 0 : 200, easing: EASE.out }}
       >
+        {/* backdrop-blur-xl de la web: BlurView difumina el contenido detrás; el velo
+            ink-900 @ 95% (mismo alfa que la web `/95`) va encima. Chrome siempre oscuro. */}
+        <BlurView
+          pointerEvents="none"
+          intensity={20}
+          tint="dark"
+          experimentalBlurMethod="dimezisBlurView"
+          style={StyleSheet.absoluteFill}
+        />
+        <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.veil]} />
         <View style={styles.row}>
           <View style={styles.info}>
             <Text style={styles.eyebrow}>Cronómetro</Text>
@@ -112,7 +123,7 @@ export function StopwatchTimer({ onClose }: StopwatchTimerProps) {
               hitSlop={6}
               style={styles.utilBtn}
             >
-              <Flag size={16} color={ON_DARK_MUTED} />
+              <Flag size={14} color={ON_DARK_MUTED} />
             </Pressable>
             <Pressable
               testID="stopwatch-pause"
@@ -122,7 +133,7 @@ export function StopwatchTimer({ onClose }: StopwatchTimerProps) {
               hitSlop={6}
               style={styles.utilBtn}
             >
-              {isActive ? <Pause size={16} color={ON_DARK_MUTED} /> : <Play size={16} color={ON_DARK_MUTED} />}
+              {isActive ? <Pause size={14} color={ON_DARK_MUTED} /> : <Play size={14} color={ON_DARK_MUTED} />}
             </Pressable>
             <Pressable
               testID="stopwatch-reset"
@@ -132,7 +143,7 @@ export function StopwatchTimer({ onClose }: StopwatchTimerProps) {
               hitSlop={6}
               style={styles.utilBtn}
             >
-              <RotateCcw size={16} color={ON_DARK_MUTED} />
+              <RotateCcw size={14} color={ON_DARK_MUTED} />
             </Pressable>
             <Pressable
               testID="stopwatch-close"
@@ -142,7 +153,7 @@ export function StopwatchTimer({ onClose }: StopwatchTimerProps) {
               hitSlop={6}
               style={styles.utilBtn}
             >
-              <X size={16} color={ON_DARK_MUTED} />
+              <X size={14} color={ON_DARK_MUTED} />
             </Pressable>
           </View>
         </View>
@@ -167,18 +178,42 @@ const styles = StyleSheet.create({
   card: {
     borderWidth: 1,
     borderColor: TRACK_ON_DARK,
-    backgroundColor: `${INK_900}F2`,
     overflow: 'hidden',
     paddingHorizontal: 12,
     paddingVertical: 10,
   },
+  veil: { backgroundColor: `${INK_900}F2` }, // ink-900 @ 95% sobre el blur (espeja `bg-[var(--ink-900)]/95`)
   row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, minHeight: 44 },
   info: { flexShrink: 1, minWidth: 0 },
-  eyebrow: { ...TYPE.eyebrow, color: ON_DARK_MUTED },
-  bigTime: { ...textStyle('2xl', FONT.monoBold, { lh: 'tight' }), color: ON_DARK, marginTop: 2 },
+  // Web Stopwatch.tsx:70 `text-[10px] font-semibold uppercase tracking-wider` = 10px / peso 600 /
+  // tracking 0.05em (=0.5pt a 10px). No usar TYPE.eyebrow (12px/700/0.12em).
+  eyebrow: {
+    fontSize: 10,
+    lineHeight: 14,
+    fontFamily: FONT.uiSemibold,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+    color: ON_DARK_MUTED,
+  },
+  // Web Stopwatch.tsx:71 `text-2xl font-black tabular-nums` = 25px / peso 900. Archivo Black con
+  // cifras tabulares para conservar el peso que ve el usuario (no mono/700).
+  bigTime: {
+    ...textStyle('2xl', FONT.displayBlack, { lh: 'tight' }),
+    fontVariant: ['tabular-nums', 'lining-nums'],
+    color: ON_DARK,
+    marginTop: 2,
+  },
   utilRow: { flexDirection: 'row', alignItems: 'center', flexShrink: 0 },
   utilBtn: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
   laps: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 6 },
-  lapChip: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, backgroundColor: 'rgba(255,255,255,0.06)' },
-  lapText: { ...textStyle('2xs', FONT.monoBold), color: ON_DARK_MUTED },
+  // Web Stopwatch.tsx:116 `rounded` = 4px (default Tailwind, no hay token de 4px en la escala RN).
+  lapChip: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.06)' },
+  // Web Stopwatch.tsx:116 `text-[10px] font-bold tabular-nums` = 10px / UI bold / cifras tabulares.
+  lapText: {
+    fontSize: 10,
+    lineHeight: 14,
+    fontFamily: FONT.uiBold,
+    fontVariant: ['tabular-nums', 'lining-nums'],
+    color: ON_DARK_MUTED,
+  },
 })

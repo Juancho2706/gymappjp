@@ -69,7 +69,21 @@ const SPORT_400 = '#5C9DFF'
 // Letras de miembro por posición (A, B, C…) para la señal "Sigue con {label}" de las superseries.
 const SUPERSET_MEMBER_LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
 
-type ActiveSub = { exerciseId: string | null; name: string; reason: string | null; prescribedName: string }
+// Media/técnica del sustituto: el modal de técnica y la CTA "Técnica" del ejercicio sustituido
+// dependen de que el gif/video/instrucciones viajen aquí (paridad web `SessionSubstitution`,
+// WEC:157-168 → `substitutionToExercise` :1364-1374). Sin esto la CTA desaparece y el modal
+// quedaría vacío para todo ejercicio sustituido.
+type ActiveSub = {
+  exerciseId: string | null
+  name: string
+  reason: string | null
+  prescribedName: string
+  gif_url: string | null
+  video_url: string | null
+  video_start_time: number | null
+  video_end_time: number | null
+  instructions: string[] | null
+}
 
 /**
  * ExecutorV2 — ejecutor de rutina del alumno (Etapa 2). Reemplaza el LegacyExecutor monolítico por
@@ -165,11 +179,18 @@ function ExecutorV2Inner({ planId }: { planId: string }) {
       if (state) return state
       const log = sessionLogs.find((l) => l.block_id === block.id && l.substituted_exercise_id)
       if (log) {
+        // Rehidratado desde un log: el gif/técnica del sustituto NO viaja en `workout_logs`
+        // → se degrada a null (paridad web WEC:1052-1069; la card muestra nombre + badge).
         return {
           exerciseId: log.substituted_exercise_id ?? null,
           name: log.substituted_exercise_name ?? 'Sustituto',
           reason: log.substitution_reason ?? null,
           prescribedName: resolveExercise(block)?.name ?? 'Ejercicio',
+          gif_url: null,
+          video_url: null,
+          video_start_time: null,
+          video_end_time: null,
+          instructions: null,
         }
       }
       return null
@@ -527,8 +548,20 @@ function ExecutorV2Inner({ planId }: { planId: string }) {
       const isStrengthBlock = effType === 'strength'
       // La sustitución es strength-only (máquina ocupada) — los tipados no la ofrecen.
       const sub = isStrengthBlock ? getSubstitution(block) : null
+      // Espeja `substitutionToExercise` de web (WEC:1364-1374): el override del sustituto lleva su
+      // propio gif/video/recorte/instrucciones → la CTA "Técnica" (SingleExerciseCard hasTechnique =
+      // gif_url||video_url) sigue apareciendo y el modal muestra la técnica DEL SUSTITUTO.
       const exercise: SessionExercise = sub
-        ? { ...prescribed, id: sub.exerciseId ?? prescribed.id, name: sub.name, gif_url: null, video_url: null, instructions: null }
+        ? {
+            ...prescribed,
+            id: sub.exerciseId ?? prescribed.id,
+            name: sub.name,
+            video_url: sub.video_url,
+            video_start_time: sub.video_start_time,
+            video_end_time: sub.video_end_time,
+            gif_url: sub.gif_url,
+            instructions: sub.instructions,
+          }
         : prescribed
       const blockLogs = sessionLogs.filter((l) => l.block_id === block.id)
       const doneCount = new Set(blockLogs.filter((l) => l.set_number >= 1 && l.set_number <= block.sets).map((l) => l.set_number)).size
@@ -653,16 +686,26 @@ function ExecutorV2Inner({ planId }: { planId: string }) {
     setStepIndex(firstIncompleteStepIndex(steps, sessionLogs))
   }, [loading, viewMode, steps, sessionLogs])
 
-  // Auto-avance: al completar el paso activo, avanza al siguiente (una sola vez por paso).
+  // Auto-avance de paso (paridad web `scrollToNextIncomplete`, WEC:1408-1419): al CERRAR el paso activo
+  // (bloque suelto o grupo de superserie completo) el web reposiciona al PRIMER paso incompleto GLOBAL
+  // en orden de render — `stepIndexOfBlock(steps, blocks.find(b => !isBlockComplete(b, logs)).id)` — que
+  // puede ir HACIA ATRÁS si el usuario saltó pasos con el rail. Aquí calculamos ese mismo destino con
+  // `firstIncompleteStepIndex(steps, sessionLogs)` (en vez del antiguo +1). Si ya no queda ningún paso
+  // incompleto, web no mueve (`blocks.find` → undefined ⇒ return, WEC:1411) → aquí tampoco. El web lo
+  // dispara con un `setTimeout(…, 350)` tras cerrar el bloque/grupo (WEC:1473,1499): mismo retardo de
+  // 350ms (antes 650). Guard `autoAdvancedRef` = una sola vez por paso: reeditar un paso ya completo no
+  // vuelve a saltar (espeja el `!wasComplete && nowComplete` del web, WEC:1496).
   useEffect(() => {
     if (viewMode !== 'steps' || steps.length === 0) return
     const active = steps[Math.min(stepIndex, steps.length - 1)]
     if (!active || autoAdvancedRef.current.has(active.key)) return
-    if (isStepComplete(active, sessionLogs) && stepIndex < steps.length - 1) {
-      autoAdvancedRef.current.add(active.key)
-      const t = setTimeout(() => setStepIndex((i) => (i === stepIndex ? Math.min(i + 1, steps.length - 1) : i)), 650)
-      return () => clearTimeout(t)
-    }
+    if (!isStepComplete(active, sessionLogs)) return
+    // Todo completo ⇒ el web no reposiciona; nosotros tampoco.
+    if (steps.every((st) => isStepComplete(st, sessionLogs))) return
+    autoAdvancedRef.current.add(active.key)
+    const target = firstIncompleteStepIndex(steps, sessionLogs)
+    const t = setTimeout(() => setStepIndex((i) => (i === stepIndex ? target : i)), 350)
+    return () => clearTimeout(t)
   }, [sessionLogs, stepIndex, viewMode, steps])
 
   const stepperActive = viewMode === 'steps' && steps.length > 0
@@ -827,6 +870,13 @@ function ExecutorV2Inner({ planId }: { planId: string }) {
               name: opt.name,
               reason: SUBSTITUTION_REASON,
               prescribedName: resolveExercise(substituteBlock)?.name ?? 'Ejercicio',
+              // Media/técnica del candidato → la CTA "Técnica" sigue apareciendo y el modal
+              // muestra el video/gif/instrucciones DEL SUSTITUTO (paridad web WEC:1386-1390).
+              gif_url: opt.gif_url,
+              video_url: opt.video_url,
+              video_start_time: opt.video_start_time,
+              video_end_time: opt.video_end_time,
+              instructions: opt.instructions,
             },
           }))
           setSubstituteBlockId(null)

@@ -95,22 +95,18 @@ export function StepperExecution({
     }
   }, [idx, prevIndex, steps, total])
 
+  // Navegación PURA de índice — paridad web `goPrev`/`goNext` (StepperExecution.tsx:64-69) y el rail
+  // `onIndexChange(i)` (:123). SPEC §3: «NO dispara toast ni háptico DENTRO del pager; StepperExecution
+  // es puramente navegación de índice» (derivada de :46-49). Se retiran los `haptics.tap()` que RN había
+  // añadido en prev/next/segmento del rail: el web no vibra al navegar y toda la háptica real vive en el
+  // card que `renderStep` pinta y en el orquestador, FUERA del pager.
   const goPrev = () => {
-    if (idx > 0) {
-      haptics.tap()
-      onIndexChange(idx - 1)
-    }
+    if (idx > 0) onIndexChange(idx - 1)
   }
   const goNext = () => {
-    if (idx < total - 1) {
-      haptics.tap()
-      onIndexChange(idx + 1)
-    }
+    if (idx < total - 1) onIndexChange(idx + 1)
   }
-  const goTo = (i: number) => {
-    haptics.tap()
-    onIndexChange(i)
-  }
+  const goTo = (i: number) => onIndexChange(i)
 
   // Arrastre elástico en vivo del paso (paridad web `drag='x' dragSnapToOrigin dragElastic=0.12`,
   // StepperExecution.tsx:148-151): el paso sigue al dedo al 12% y rebota al soltar; el cambio real de
@@ -136,62 +132,73 @@ export function StepperExecution({
     // `max-w-3xl` (768px) centrado — paridad web `mx-auto w-full max-w-3xl` (StepperExecution.tsx:90);
     // en tablet el paso no se estira a todo el ancho.
     <View className="w-full flex-1 self-center" style={{ maxWidth: 768 }}>
-      {/* Chrome superior: prev/next SIEMPRE presentes + eyebrow de sección + "Ejercicio X de Y". */}
-      <View className="flex-row items-center gap-2 px-4 pt-2">
-        <NavButton testID="stepper-prev" disabled={idx === 0} onPress={goPrev} accessibilityLabel="Ejercicio anterior">
-          <ChevronLeft size={20} color={idx === 0 ? ON_DARK_DIM : ON_DARK} />
-        </NavButton>
-        <View className="min-w-0 flex-1 items-center">
-          <Text
-            style={EYEBROW_STYLE}
-            className={active.muted ? 'text-on-dark-muted/60' : 'text-sport-300'}
-            numberOfLines={1}
-          >
-            {active.sectionTitle}
-          </Text>
-          <Text style={COUNTER_STYLE} className="text-on-dark-muted" numberOfLines={1}>
-            <Text className="text-on-dark font-mono-bold">Ejercicio {idx + 1}</Text> de {total}
-          </Text>
-        </View>
-        <NavButton testID="stepper-next" disabled={idx === total - 1} onPress={goNext} accessibilityLabel="Ejercicio siguiente">
-          <ChevronRight size={20} color={idx === total - 1 ? ON_DARK_DIM : ON_DARK} />
-        </NavButton>
-      </View>
-
-      {/* Rail de progreso: segmentos tappables (salta a cualquier paso, incluso a editar). */}
-      <View className="mt-3 flex-row items-stretch gap-1 px-4">
-        {steps.map((s, i) => {
-          const state = i === idx ? 'active' : s.complete ? 'done' : 'upcoming'
-          return (
-            <Pressable
-              key={s.key}
-              testID={`stepper-rail-${i}`}
-              onPress={() => goTo(i)}
-              accessibilityRole="button"
-              accessibilityLabel={`Ir al ejercicio ${i + 1} de ${total}: ${s.title}`}
-              accessibilityState={{ selected: i === idx }}
-              className="-my-2 flex-1 justify-center py-2"
-            >
-              {/* `transition-colors` del web → fade de backgroundColor con moti. */}
-              <MotiView
-                className="h-1.5 w-full rounded-full"
-                animate={{ backgroundColor: state === 'active' ? RAIL_ACTIVE : state === 'done' ? RAIL_DONE : RAIL_UPCOMING }}
-                transition={{ type: 'timing', duration: 150, easing: EASE.out }}
-              />
-            </Pressable>
-          )
-        })}
-      </View>
-
-      {/* Pager: solo el paso actual, con arrastre en vivo + transición direccional enter/exit. */}
+      {/* Chrome, rail, paso y pie viven DENTRO del scroll y se desplazan CON el contenido — paridad web:
+          los cuatro son hijos del mismo `<section className="…px-4 py-4 pb-32">` en flujo normal de
+          página, sin `sticky`/`fixed` (StepperExecution.tsx:87-182). Al hacer scroll de un ejercicio
+          largo, chrome y rail salen de vista igual que en web (antes quedaban pinned arriba).
+          El `paddingTop:16` del contenedor da el hueco superior de 16px (web `py-4`, :90); el arrastre
+          elástico (`dragStyle`) envuelve SOLO el card del paso — no chrome/rail — igual que el `drag`
+          del web va sólo en el `motion.div` del pager (:145-152). */}
       <GestureDetector gesture={pan}>
         <ScrollView
           contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: 160 }}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          <Animated.View style={dragStyle}>
-            <AnimatePresence exitBeforeEnter>
+          {/* Chrome superior: prev/next SIEMPRE presentes + eyebrow de sección + "Ejercicio X de Y". */}
+          <View className="flex-row items-center gap-2">
+            <NavButton testID="stepper-prev" disabled={idx === 0} onPress={goPrev} accessibilityLabel="Ejercicio anterior">
+              <ChevronLeft size={20} color={idx === 0 ? ON_DARK_DIM : ON_DARK} />
+            </NavButton>
+            <View className="min-w-0 flex-1 items-center">
+              <Text
+                style={EYEBROW_STYLE}
+                className={active.muted ? 'text-on-dark-muted/60' : 'text-sport-300'}
+                numberOfLines={1}
+              >
+                {active.sectionTitle}
+              </Text>
+              <Text style={COUNTER_STYLE} className="text-on-dark-muted" numberOfLines={1}>
+                <Text className="text-on-dark font-mono-bold">Ejercicio {idx + 1}</Text> de {total}
+              </Text>
+            </View>
+            <NavButton testID="stepper-next" disabled={idx === total - 1} onPress={goNext} accessibilityLabel="Ejercicio siguiente">
+              <ChevronRight size={20} color={idx === total - 1 ? ON_DARK_DIM : ON_DARK} />
+            </NavButton>
+          </View>
+
+          {/* Rail de progreso: segmentos tappables (salta a cualquier paso, incluso a editar). */}
+          <View className="mt-3 flex-row items-stretch gap-1">
+            {steps.map((s, i) => {
+              const state = i === idx ? 'active' : s.complete ? 'done' : 'upcoming'
+              return (
+                <Pressable
+                  key={s.key}
+                  testID={`stepper-rail-${i}`}
+                  onPress={() => goTo(i)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Ir al ejercicio ${i + 1} de ${total}: ${s.title}`}
+                  accessibilityState={{ selected: i === idx }}
+                  className="-my-2 flex-1 justify-center py-2"
+                >
+                  {/* `transition-colors` del web → fade de backgroundColor con moti. */}
+                  <MotiView
+                    className="h-1.5 w-full rounded-full"
+                    animate={{ backgroundColor: state === 'active' ? RAIL_ACTIVE : state === 'done' ? RAIL_DONE : RAIL_UPCOMING }}
+                    transition={{ type: 'timing', duration: 150, easing: EASE.out }}
+                  />
+                </Pressable>
+              )
+            })}
+          </View>
+
+          {/* Pager: solo el paso actual, con arrastre en vivo + transición direccional enter/exit.
+              `mt-4` = separación rail→paso del web (`mb-4` del rail, StepperExecution.tsx:116). */}
+          <Animated.View style={dragStyle} className="mt-4">
+            {/* `initial={false}` suprime la variante `enter` en el PRIMER montaje — paridad web
+                `<AnimatePresence … initial={false}>` (:154): al entrar al modo Pasos el paso aparece ya
+                en su sitio, sin fade/slide-in; sólo los CAMBIOS de paso posteriores animan. */}
+            <AnimatePresence exitBeforeEnter initial={false}>
               <MotiView
                 key={active.key}
                 from={motion.reduced ? { opacity: 0 } : { opacity: 0, translateX: direction > 0 ? SLIDE : -SLIDE }}
@@ -246,7 +253,7 @@ function NavButton({
       disabled={disabled}
       hitSlop={6}
       className={`h-11 w-11 items-center justify-center rounded-control border border-inverse/10 ${
-        disabled ? '' : 'bg-white/[0.06] active:opacity-80'
+        disabled ? '' : 'bg-white/[0.06] active:scale-95'
       }`}
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
