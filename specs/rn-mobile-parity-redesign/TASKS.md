@@ -561,43 +561,43 @@ Reconstrucción funcional del builder (≠ re-skin E3). Batch EAS de la etapa: G
 
 Empty-states en TODO (bug web 0-alumnos NO se hereda). Charts: victory-native/Skia con tokens `--viz-*`. Vistas alumno gated con RLS confirmada (E0-B1).
 
-- [ ] **E6-01** · [SEAM][M] Extraer `domain/bodycomp` (12 archivos) → `@eva/bodycomp`
+- [x] **E6-01** · [SEAM][M] Extraer `domain/bodycomp` (12 archivos) → `@eva/bodycomp`
   - Fuentes: G10-T2 · Deps: ninguna
   - Scope: BIA + ISAK; confirmar portabilidad client-side (`@eva/schemas/bodycomp`, marcados SERVER-ONLY). · Verificación: web verde; lo que sea server-only queda tras endpoint.
-- [ ] **E6-02** · [FUNCIONAL][M] `coach/tools` hub (launcher de módulos + picker de alumno) `[NUEVO-PLAN]`
+- [x] **E6-02** · [FUNCIONAL][M] `coach/tools` hub (launcher de módulos + picker de alumno) `[NUEVO-PLAN]`
   - Fuentes: NEW (PLAN huérfanas, dueño E6) · Deps: E0-C1
   - Scope: launcher de módulos + selector de alumno (puerta a los módulos). · Verificación: solo módulos entitled aparecen.
-- [ ] **E6-03** · [FUNCIONAL][L] Cardio: hub (SegmentedTabs Zonas/Pace/Plantillas) + perfil del alumno + empty-state
+- [x] **E6-03** · [FUNCIONAL][L] Cardio: hub (SegmentedTabs Zonas/Pace/Plantillas) + perfil del alumno + empty-state
   - Fuentes: G10-T10 · Deps: E0-F2, E0-C1, E0-C2
   - Scope: calculadora de zonas, plantillas de intervalos, perfil por cliente (`@eva/cardio`). · Verificación: sin módulo no accede; empty-state 0-alumnos.
-- [ ] **E6-04** · [FUNCIONAL][XL] Movement assessment coach (hub risk-band + wizard 7 patrones + reporte + evolución)
+- [x] **E6-04** · [FUNCIONAL][XL] Movement assessment coach (hub risk-band + wizard 7 patrones + reporte + evolución)
   - Fuentes: G10-T11 (vista alumno → E6-08) · Deps: E0-C1, E0-C2
   - Scope: wizard 7 patrones (autosave/resume/consentimiento), reporte + evolución. · Verificación: wizard resume; reporte correcto; gated.
-- [ ] **E6-05** · [FUNCIONAL][XL] Body composition coach (BIA ~14 métricas + ISAK 4 pasos ~22 medidas + IsakResultCard + tendencia)
+- [x] **E6-05** · [FUNCIONAL][XL] Body composition coach (BIA ~14 métricas + ISAK 4 pasos ~22 medidas + IsakResultCard + tendencia)
   - Fuentes: G10-T12 (vista alumno → E6-09) · Deps: E6-01, E0-C1, E0-C2
   - Scope: captura BIA/ISAK + paneles de tendencia (`@eva/bodycomp`). · Verificación: captura persiste; trends correctos; gated.
-- [ ] **E6-06** · [FUNCIONAL][L] Nutrición Pro exchanges en el builder coach (gramos↔porciones + targets + PDF equivalencias)
+- [x] **E6-06** · [FUNCIONAL][L] Nutrición Pro exchanges en el builder coach (gramos↔porciones + targets + PDF equivalencias)
   - Fuentes: G10-T15 (dueño), G08-C2 · Deps: E0-C1, E3-17, esquemas
   - Scope: modo intercambios + exchange targets; mutaciones vía endpoint + `assertModule`. · Verificación: sin módulo no muta ni por API; PDF equivalencias correcto.
-- [ ] **E6-07** · [FUNCIONAL][L] Sección Módulos en Resumen de ficha (cardio/movement/bodycomp gated)
+- [x] **E6-07** · [FUNCIONAL][L] Sección Módulos en Resumen de ficha (cardio/movement/bodycomp gated)
   - Fuentes: G06-B3 · Deps: E0-C1, E6-03, E6-04, E6-05
   - Scope: entradas gated a los módulos desde la ficha. · Verificación: solo módulos entitled visibles.
-- [ ] **E6-08** · [FUNCIONAL][L] Vista Movimiento read-only del alumno (reporte + evolución + disclaimer)
+- [x] **E6-08** · [FUNCIONAL][L] Vista Movimiento read-only del alumno (reporte + evolución + disclaimer)
   - Fuentes: G05-T10 (dueño; absorbe la clausula "vista alumno" de G10-T11) · Deps: E0-C1, E0-B1 (RLS)
   - Scope: vista read-only del alumno gated con RLS confirmada. · Verificación: alumno sin módulo no lee ni por PostgREST.
-- [ ] **E6-09** · [FUNCIONAL][L] Vista Composición corporal read-only del alumno (BIA/ISAK + trend + disclaimer)
+- [x] **E6-09** · [FUNCIONAL][L] Vista Composición corporal read-only del alumno (BIA/ISAK + trend + disclaimer)
   - Fuentes: G05-T11 (dueño; absorbe la clausula "vista alumno" de G10-T12) · Deps: E6-01, E0-C1, E0-B1 (RLS)
   - Scope: vista read-only alumno (`@eva/bodycomp`). · Verificación: RLS gatea la lectura por módulo/`client_id`.
-- [ ] **E6-10** · [FUNCIONAL][L] Pestaña Progreso de ficha con composición corporal (coach, `@eva/bodycomp`)
+- [x] **E6-10** · [FUNCIONAL][L] Pestaña Progreso de ficha con composición corporal (coach, `@eva/bodycomp`)
   - Fuentes: G06-B4 · Deps: E6-01, E0-C1
   - Scope: mover domain/bodycomp a la pestaña Progreso coach. · Verificación: trends coach coinciden con la captura.
-- [ ] **E6-11** · [FUNCIONAL][M] Filas de perfil alumno read-only "Movimiento"/"Composición" gated
+- [x] **E6-11** · [FUNCIONAL][M] Filas de perfil alumno read-only "Movimiento"/"Composición" gated
   - Fuentes: G05-T9 · Deps: E0-C1
   - Scope: entradas gated en el perfil del alumno hacia E6-08/E6-09. · Verificación: filas aparecen solo con entitlement/RLS.
-- [ ] **E6-12** · [FUNCIONAL][M] Catálogo de Módulos en settings (cards read-only + CTA + evento)
+- [x] **E6-12** · [FUNCIONAL][M] Catálogo de Módulos en settings (cards read-only + CTA + evento)
   - Fuentes: G10-T13 (dueño), G09-T9 · Deps: E0-C1
   - Scope: display de `@eva/module-catalog` + CTA add-on (compra por link-out). · Verificación: display correcto; compra abre navegador externo (Non-Goal IAP).
-- [ ] **E6-13** · [FUNCIONAL][S] i18n exchanges (portar dict `es`, solo si se cablea exchanges)
+- [x] **E6-13** · [FUNCIONAL][S] i18n exchanges (portar dict `es`, solo si se cablea exchanges)
   - Fuentes: G11-D2 · Deps: E6-06
   - Scope: dict `es` de exchanges. · Verificación: strings de exchanges localizadas.
 
