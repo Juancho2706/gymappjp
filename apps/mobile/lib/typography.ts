@@ -32,6 +32,8 @@ export const FONT = {
   uiBold: 'HankenGrotesk_700Bold',
   uiExtra: 'HankenGrotesk_800ExtraBold',
   // Display / headings — Archivo
+  // (web h1–h6 = Archivo weight 600, globals.css; la cara ya se carga en _layout.tsx)
+  displaySemibold: 'Archivo_600SemiBold',
   display: 'Archivo_700Bold',
   displayBold: 'Archivo_800ExtraBold',
   displayBlack: 'Archivo_900Black',
@@ -93,6 +95,8 @@ interface RoleSpec {
   lh: keyof typeof LINE_HEIGHT
   ls: keyof typeof LETTER_SPACING
   uppercase?: boolean
+  /** Cifras tabulares (web `--fnum-tabular` / `.eva-mono`/`.eva-metric` font-variant-numeric). */
+  tabular?: boolean
 }
 
 // Role specs mirror web `--role-*-size/-weight`; family/weight follow the DS
@@ -107,7 +111,7 @@ const ROLE_SPEC: Record<TypeRole, RoleSpec> = {
   label: { size: 'sm', family: FONT.uiSemibold, lh: 'normal', ls: 'normal' },
   caption: { size: 'xs', family: FONT.uiMedium, lh: 'normal', ls: 'normal' },
   eyebrow: { size: '2xs', family: FONT.uiBold, lh: 'normal', ls: 'eyebrow', uppercase: true },
-  mono: { size: 'md', family: FONT.mono, lh: 'normal', ls: 'normal' },
+  mono: { size: 'md', family: FONT.mono, lh: 'normal', ls: 'normal', tabular: true },
 }
 
 function buildRole(spec: RoleSpec): TextStyle {
@@ -119,6 +123,7 @@ function buildRole(spec: RoleSpec): TextStyle {
     letterSpacing: Math.round(size * LETTER_SPACING[spec.ls] * 100) / 100,
   }
   if (spec.uppercase) style.textTransform = 'uppercase'
+  if (spec.tabular) style.fontVariant = ['tabular-nums', 'lining-nums']
   return style
 }
 

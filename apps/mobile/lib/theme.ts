@@ -49,14 +49,23 @@ export interface Theme {
   accentForeground: string
   cyan: string
   input: string
-  // Border radius scale
+  // Border radius scale (mirror de web globals.css @theme --radius-xs..3xl + semánticos)
   radius: {
+    xs: number
     sm: number
     md: number
     lg: number
     xl: number
     '2xl': number
     '3xl': number
+    /** DS semantic: rounded-card web = 20px */
+    card: number
+    /** DS semantic: rounded-control web = 14px */
+    control: number
+    /** DS semantic: rounded-pill web = 999px */
+    pill: number
+    /** DS semantic: rounded-sheet web = 28px */
+    sheet: number
   }
   // Shadows / glow (sourced from ./shadows — single source)
   shadowGlowBlue: ViewStyle
@@ -93,13 +102,21 @@ const DS = {
   borderDark: 'rgba(255,255,255,0.07)', // border-subtle (dark)
 } as const
 
+// Mirror 1:1 de la escala de radios del web (globals.css @theme --radius-xs..3xl
+// + --radius-card/-control/-pill/-sheet). Antes era la escala legacy 7/10/12/17/22/26,
+// que divergía del contrato (web rounded-lg = 20, no 12).
 const radius = Object.freeze({
-  sm: 7,
-  md: 10,
-  lg: 12,
-  xl: 17,
-  '2xl': 22,
-  '3xl': 26,
+  xs: 6,
+  sm: 10,
+  md: 14,
+  lg: 20,
+  xl: 28,
+  '2xl': 36,
+  '3xl': 44,
+  card: 20,
+  control: 14,
+  pill: 999,
+  sheet: 28,
 })
 
 /** Shallow-freeze a Theme plus its nested style objects so it stays read-only. */

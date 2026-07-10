@@ -46,7 +46,7 @@ function hexToRgba(hex: string, alpha: number): string {
 
 interface GlowBorderCardProps {
   children: ReactNode
-  /** Radio del marco (default theme.radius['2xl'] ≈ rounded-card de la web). */
+  /** Radio del marco (default theme.radius.card = rounded-card de la web, 20px). */
   radius?: number
   /**
    * Override del color del anillo/glow. Por defecto = `theme.primary` (la marca
@@ -61,7 +61,7 @@ export function GlowBorderCard({ children, radius, tint: tintProp, style }: Glow
   const { theme, resolvedScheme } = useTheme()
   const isDark = resolvedScheme === 'dark'
   const tint = tintProp ?? theme.primary
-  const r = radius ?? theme.radius['2xl']
+  const r = radius ?? theme.radius.card
   const [size, setSize] = useState({ w: 0, h: 0 })
   const reduced = useReducedMotion()
   const clock = useClock()

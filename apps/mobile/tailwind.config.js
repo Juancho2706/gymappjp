@@ -122,7 +122,10 @@ module.exports = {
       },
 
       borderRadius: {
-        sm: '7px', md: '10px', lg: '12px', xl: '17px', '2xl': '22px', '3xl': '26px',
+        // Escala DS — mirror 1:1 de apps/web globals.css @theme (--radius-xs..3xl):
+        // las utilidades rounded-* del web compilan contra esos literales, así que
+        // rounded-lg debe medir lo MISMO en ambas plataformas (antes: 7/10/12/17/22/26).
+        xs: '6px', sm: '10px', md: '14px', lg: '20px', xl: '28px', '2xl': '36px', '3xl': '44px',
         // DS semantic radii
         card: '20px', control: '14px', pill: '9999px', sheet: '28px',
       },
@@ -155,6 +158,11 @@ module.exports = {
         semibold: ['HankenGrotesk_600SemiBold'],
         'display-extra': ['Archivo_800ExtraBold'],
         // DS families (Archivo display / Hanken Grotesk UI / JetBrains mono)
+        // `ui` espeja la utilidad web `font-ui` (--font-ui = Hanken, globals.css @theme).
+        ui: ['HankenGrotesk_400Regular'],
+        // Web h1–h6 renderiza Archivo a peso 600 (globals.css `h1..h6 { font-weight:600 }`);
+        // la cara ya se carga en app/_layout.tsx pero no tenía utilidad.
+        'display-semibold': ['Archivo_600SemiBold'],
         sans: ['HankenGrotesk_400Regular'],
         'sans-medium': ['HankenGrotesk_500Medium'],
         'sans-semibold': ['HankenGrotesk_600SemiBold'],

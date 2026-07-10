@@ -5,18 +5,31 @@
  * y no una decisión ad-hoc por archivo. Reanimated/Moti los consumen en mobile.
  */
 
-/** Duraciones en ms. micro-feedback=instant/fast, estado=base/slow, celebración=expressive. */
+/** Duraciones en ms — mirror 1:1 de web globals.css `--dur-*` (instant 80 / fast 140 /
+ * base 220 / slow 320 / slower 480). micro-feedback=instant/fast, estado=base/slow,
+ * celebración=slower. `expressive` se conserva como alias legacy de `slower`. */
 export const DURATION = {
-  instant: 90,
-  fast: 160,
+  instant: 80,
+  fast: 140,
   base: 220,
   slow: 320,
+  slower: 480,
+  /** @deprecated alias legacy de `slower` (nombre pre-paridad). */
   expressive: 480,
 } as const
 export type DurationToken = keyof typeof DURATION
 
-/** Puntos de control Bézier (x1,y1,x2,y2) — curvas estándar tipo Material. */
+/** Puntos de control Bézier (x1,y1,x2,y2).
+ * out/inOut/spring/emphasis = mirror 1:1 de web globals.css `--ease-out/-in-out/
+ * -spring/-emphasis`. standard/decelerate/accelerate = curvas Material legacy
+ * (consumidores existentes; migrar a las DS en la limpieza de motion). */
 export const EASING = {
+  // EVA DS (web parity)
+  out: [0.22, 1, 0.36, 1] as [number, number, number, number],
+  inOut: [0.65, 0, 0.35, 1] as [number, number, number, number],
+  spring: [0.34, 1.56, 0.64, 1] as [number, number, number, number],
+  emphasis: [0.2, 0.8, 0.2, 1] as [number, number, number, number],
+  // Legacy (Material)
   standard: [0.2, 0, 0, 1] as [number, number, number, number],
   decelerate: [0, 0, 0, 1] as [number, number, number, number],
   accelerate: [0.3, 0, 1, 1] as [number, number, number, number],
