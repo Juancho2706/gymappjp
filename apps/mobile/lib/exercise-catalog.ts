@@ -255,7 +255,10 @@ export function toStorageRenderThumb(publicUrl: string, width = 256, quality = 5
  * chico) → gif de Storage reescrito a `render/image` → póster de YouTube. El gif/video a resolución
  * completa vive SOLO en el sheet de técnica. (1:1 web `exerciseGridThumb`.)
  */
-export function exerciseGridThumb(ex: CatalogExercise, width = 256): string | null {
+export function exerciseGridThumb(
+  ex: Pick<CatalogExercise, 'thumbnail_url' | 'gif_url' | 'video_url'>,
+  width = 256,
+): string | null {
   if (ex.thumbnail_url) return ex.thumbnail_url
   let base: string | null = null
   if (ex.gif_url) base = ex.gif_url

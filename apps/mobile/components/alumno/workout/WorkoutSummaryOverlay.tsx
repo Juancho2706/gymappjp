@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Modal, Pressable, ScrollView, Text, View } from 'react-native'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Animated, Modal, Pressable, ScrollView, Text, View } from 'react-native'
+import { LinearGradient } from 'expo-linear-gradient'
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context'
 import {
   ArrowRight,
@@ -17,6 +18,8 @@ import {
   compactDistance,
   formatClockDuration,
   formatSessionDuration,
+  muscleGroupsToRegionIntensity,
+  MUSCLE_REGIONS,
   summarizeSessionByKind,
   type CardioItem,
   type MobilityItem,
@@ -83,6 +86,9 @@ function withAlpha(hex: string, alpha: number): string {
 const MONO = FONT.monoBold
 const BOLD = FONT.uiBold
 const DISPLAY = FONT.displayBlack
+// Encabezado del panel de PRs: web usa la SANS en peso black (`text-sm font-black`, sin font-display —
+// WorkoutSummaryOverlay.tsx:320). El sans más pesado cargado en mobile es uiExtra (800).
+const SANS_BLACK = FONT.uiExtra
 
 type SummaryTile = { value: string; unit?: string; label: string }
 
@@ -207,10 +213,13 @@ export function WorkoutSummaryOverlay({
     return session.strengthMuscleVolume.map(({ group, vol }) => ({ group, vol, pct: Math.round((vol / maxV) * 100) }))
   }, [session.strengthMuscleVolume])
 
-  const hasMuscleMap = useMemo(
-    () => session.muscleWork.some((g) => g.vol > 0),
-    [session.muscleWork],
-  )
+  // Guard idéntico a web (WorkoutSummaryOverlay.tsx:200-203): sólo mostramos la card si alguna
+  // REGIÓN renderizada se enciende. Chequear `g.vol > 0` por GRUPO dejaría una silueta apagada
+  // cuando el grupo trabajado no mapea a ninguna región del SVG.
+  const hasMuscleMap = useMemo(() => {
+    const intensity = muscleGroupsToRegionIntensity(session.muscleWork)
+    return MUSCLE_REGIONS.some((r) => intensity[r] > 0)
+  }, [session.muscleWork])
   const hasNonStrength = session.cardio.length > 0 || session.mobility.length > 0
 
   const completedSets = logs.length
@@ -250,8 +259,16 @@ export function WorkoutSummaryOverlay({
           pegado al reloj del sistema. Re-mide dentro del modal para dar el respiro superior (paridad web pt-safe). */}
       <SafeAreaProvider>
       <SafeAreaView edges={['top', 'bottom']} style={{ flex: 1, backgroundColor: INK_950 }}>
+        {/* Celebración al abrir (respeta reduce-motion). Ráfaga AMPLIFICADA si hubo PRs — espejo del
+            web, que con PRs dispara 3 tandas (200 + 2×80) y sin PRs una sola de 80
+            (WorkoutSummaryOverlay.tsx:246-252). Aquí lo expresamos subiendo `count`. */}
         {visible && !motion.reduced ? (
-          <Confetti autoplay fadeOutOnEnd colors={[brand, '#F59E0B', theme.success, theme.cyan]} />
+          <Confetti
+            autoplay
+            fadeOutOnEnd
+            count={detectedPRs.length > 0 ? 250 : 120}
+            colors={[brand, '#F59E0B', theme.success, theme.cyan]}
+          />
         ) : null}
 
         {onClose && (
@@ -303,10 +320,19 @@ export function WorkoutSummaryOverlay({
 
           {/* PRs */}
           {detectedPRs.length > 0 && (
-            <View style={{ borderRadius: 20, borderWidth: 1, borderColor: 'rgba(251,191,36,0.4)', backgroundColor: 'rgba(245,158,11,0.14)', padding: 16, gap: 8 }}>
+            <View style={{ borderRadius: 20, borderWidth: 1, borderColor: 'rgba(251,191,36,0.4)', overflow: 'hidden' }}>
+              {/* Gradiente diagonal amber→yellow (web: `bg-gradient-to-br from-amber-500/20 to-yellow-500/10`,
+                  WorkoutSummaryOverlay.tsx:319). amber-500 #f59e0b @20% → yellow-500 #eab308 @10%. */}
+              <LinearGradient
+                colors={['rgba(245,158,11,0.20)', 'rgba(234,179,8,0.10)']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={{ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0 }}
+              />
+              <View style={{ padding: 16, gap: 8 }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
                 <Trophy size={16} color={AMBER_200} />
-                <Text style={{ fontFamily: DISPLAY, fontSize: 14, color: AMBER_200 }}>
+                <Text style={{ fontFamily: SANS_BLACK, fontSize: 14, color: AMBER_200 }}>
                   {detectedPRs.length} {detectedPRs.length === 1 ? 'récord personal' : 'récords personales'}
                 </Text>
               </View>
@@ -315,7 +341,7 @@ export function WorkoutSummaryOverlay({
                   key={pr.exerciseName}
                   testID={`summary-pr-${pr.exerciseName}`}
                   onPress={() => onOpenPr(pr)}
-                  style={{ borderRadius: 12, borderWidth: 1, borderColor: 'rgba(251,191,36,0.25)', backgroundColor: W06, paddingHorizontal: 12, paddingVertical: 10 }}
+                  style={({ pressed }) => ({ borderRadius: 12, borderWidth: 1, borderColor: 'rgba(251,191,36,0.25)', backgroundColor: pressed ? 'rgba(255,255,255,0.12)' : W06, paddingHorizontal: 12, paddingVertical: 10 })}
                 >
                   <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
                     <Text style={{ flex: 1, fontFamily: BOLD, fontSize: 14, color: ON_DARK }}>{pr.exerciseName}</Text>
@@ -337,6 +363,7 @@ export function WorkoutSummaryOverlay({
                   </Text>
                 </Pressable>
               ))}
+              </View>
             </View>
           )}
 
@@ -351,7 +378,7 @@ export function WorkoutSummaryOverlay({
                     <Text style={{ fontFamily: theme.fontSans, fontSize: 10, color: ON_DARK_MUTED }}>{ex.muscleGroup}</Text>
                   </View>
                   <Text style={{ fontFamily: MONO, fontSize: 12, color: ON_DARK_MUTED }}>
-                    <Text style={{ color: ON_DARK }}>{ex.sets.length}</Text> series · <Text style={{ color: ON_DARK }}>{Math.round(ex.totalVolume)}</Text> kg
+                    <Text style={{ color: ON_DARK }}>{ex.sets.length}</Text> series · <Text style={{ color: ON_DARK }}>{Math.round(ex.totalVolume)}</Text> kg vol.
                   </Text>
                 </View>
               ))}
@@ -382,8 +409,9 @@ export function WorkoutSummaryOverlay({
           {(hasMuscleMap || muscleGroupVolume.length > 0) && (
             <View style={{ gap: 10 }}>
               <Text style={{ fontFamily: BOLD, fontSize: 12, letterSpacing: 1.5, textTransform: 'uppercase', color: ON_DARK_MUTED }}>Músculos trabajados</Text>
+              {/* px-3 pt-3 pb-1 (web WorkoutSummaryOverlay.tsx:455). */}
               {hasMuscleMap && (
-                <View style={{ borderRadius: 20, borderWidth: 1, borderColor: BORDER_INV, backgroundColor: W03, paddingHorizontal: 12, paddingTop: 12, paddingBottom: 8 }}>
+                <View style={{ borderRadius: 20, borderWidth: 1, borderColor: BORDER_INV, backgroundColor: W03, paddingHorizontal: 12, paddingTop: 12, paddingBottom: 4 }}>
                   <MuscleMapSvg groups={session.muscleWork} reducedMotion={motion.reduced} />
                 </View>
               )}
@@ -395,7 +423,7 @@ export function WorkoutSummaryOverlay({
                       <Text style={{ fontFamily: MONO, fontSize: 12, color: ON_DARK_MUTED }}>{Math.round(vol)} kg</Text>
                     </View>
                     <View style={{ height: 8, borderRadius: 4, backgroundColor: W10, overflow: 'hidden' }}>
-                      <View style={{ height: 8, borderRadius: 4, backgroundColor: brand, width: `${pct}%` as `${number}%` }} />
+                      <MuscleBar pct={pct} color={brand} reduced={motion.reduced} />
                     </View>
                   </View>
                 ))}
@@ -423,12 +451,15 @@ export function WorkoutSummaryOverlay({
           ) : null}
         </ScrollView>
 
-        {/* Barra de acciones fija */}
-        <View style={{ flexDirection: 'row', gap: 10, paddingHorizontal: 16, paddingTop: 12, paddingBottom: 16, borderTopWidth: 1, borderTopColor: BORDER_INV, backgroundColor: INK_950 }}>
+        {/* Acciones finales. Web las apila en columna full-width dentro del scroll (mt-auto): Compartir
+            arriba (secundario) + "Volver al inicio" abajo (primario) — WorkoutSummaryOverlay.tsx:505-525.
+            Aquí conservamos la barra FIJA (idioma móvil defendible) pero apilada en columna para
+            replicar la orientación y jerarquía web. */}
+        <View style={{ flexDirection: 'column', gap: 8, paddingHorizontal: 16, paddingTop: 12, paddingBottom: 16, borderTopWidth: 1, borderTopColor: BORDER_INV, backgroundColor: INK_950 }}>
           <Pressable
             testID="summary-share"
             onPress={() => { haptics.tap(); setShareOpen(true) }}
-            style={{ height: 52, paddingHorizontal: 18, borderRadius: 14, borderWidth: 1, borderColor: BORDER_INV, backgroundColor: W08, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 }}
+            style={({ pressed }) => ({ height: 48, borderRadius: 14, borderWidth: 1, borderColor: BORDER_INV, backgroundColor: pressed ? 'rgba(255,255,255,0.14)' : W08, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 })}
           >
             <Share2 size={16} color={ON_DARK} />
             <Text style={{ fontFamily: BOLD, fontSize: 15, color: ON_DARK }}>Compartir logro</Text>
@@ -436,7 +467,7 @@ export function WorkoutSummaryOverlay({
           <Pressable
             testID="summary-done"
             onPress={onDone}
-            style={[{ flex: 1, height: 52, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: brand }, theme.shadowGlowBlue]}
+            style={[{ height: 52, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: brand }, theme.shadowGlowBlue]}
           >
             <Text style={{ fontFamily: BOLD, fontSize: 16, color: theme.primaryForeground }}>Volver al inicio</Text>
           </Pressable>
@@ -479,6 +510,25 @@ export function WorkoutSummaryOverlay({
       </SafeAreaProvider>
     </Modal>
   )
+}
+
+/**
+ * Barra de volumen por grupo muscular. Anima el ancho 0→pct% con un resorte suave (paridad con
+ * web, que usa `springs.smooth` = stiffness:200, damping:25 — WorkoutSummaryOverlay.tsx:471-473 +
+ * animation-presets.ts:5). Reduced-motion: se pinta directo en su estado final sin animar.
+ */
+function MuscleBar({ pct, color, reduced }: { pct: number; color: string; reduced: boolean | null }) {
+  const progress = useRef(new Animated.Value(reduced ? 1 : 0)).current
+  useEffect(() => {
+    if (reduced) {
+      progress.setValue(1)
+      return
+    }
+    progress.setValue(0)
+    Animated.spring(progress, { toValue: 1, stiffness: 200, damping: 25, mass: 1, useNativeDriver: false }).start()
+  }, [pct, reduced, progress])
+  const width = progress.interpolate({ inputRange: [0, 1], outputRange: ['0%', `${pct}%`] })
+  return <Animated.View style={{ height: 8, borderRadius: 4, backgroundColor: color, width }} />
 }
 
 function NonStrengthCard({

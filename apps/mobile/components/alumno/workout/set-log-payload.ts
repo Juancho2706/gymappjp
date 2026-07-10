@@ -86,6 +86,9 @@ export function buildStrengthPayload(
   blockId: string,
   setNumber: number,
 ): OptimisticLogPayload {
+  // Nota rápida por serie (paridad web A.4.d / `handleSubmit` noteTrimmed, LogSetForm.tsx:365/443-458):
+  // string crudo tipeado en la fila; vacío/espacios ⇒ null (misma normalización que `note.trim() || null`).
+  const note = values.note?.trim()
   return {
     blockId,
     setNumber,
@@ -93,5 +96,6 @@ export function buildStrengthPayload(
     repsDone: int(values.reps),
     rpe: int(values.rpe),
     rir: int(values.rir),
+    note: note ? note : null,
   }
 }

@@ -57,12 +57,12 @@ export function SessionHeader({
       transition={{ type: 'timing', duration: 250 }}
       className="border-b border-white/10 px-4 pb-3 pt-1"
     >
-      <View className="mb-3 flex-row items-center gap-2.5">
+      <View className="mb-3 flex-row items-center gap-2">
         <Pressable
           testID="btn-exit-workout"
           onPress={onBack}
           hitSlop={8}
-          className="-ml-1 h-10 w-10 items-center justify-center rounded-control bg-white/[0.08]"
+          className="-ml-2 h-10 w-10 items-center justify-center rounded-control bg-white/[0.08]"
           accessibilityRole="button"
           accessibilityLabel="Salir del entrenamiento"
         >
@@ -92,6 +92,8 @@ export function SessionHeader({
             </Text>
           )}
         </View>
+        {/* Grupo de controles derecho — toggle + ajustes juntos (paridad web WEC:1820: gap-1.5 shrink-0). */}
+        <View className="shrink-0 flex-row items-center gap-1.5">
         {/* Toggle segmentado Lista / Pasos (E2-04) — icono + rótulo, como el web (1823-1846). */}
         <View
           className="flex-row items-center gap-0.5 rounded-control bg-white/[0.06] p-0.5"
@@ -144,6 +146,7 @@ export function SessionHeader({
         >
           <Settings size={18} color={ON_DARK} />
         </Pressable>
+        </View>
       </View>
 
       <ProgressBar value={requiredSets === 0 ? 0 : completedSetCount / requiredSets} color={SPORT_500} track={W10} height={6} />

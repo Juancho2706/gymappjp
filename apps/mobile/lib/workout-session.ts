@@ -222,6 +222,13 @@ export interface WorkoutSessionState {
   saveDraft: (draft: SessionDraft | null) => void
   /** Registra una serie: optimista + snapshot + server (enqueue si falla). Devuelve isPR. */
   logSet: (payload: OptimisticLogPayload, opts?: LogSetOptions) => Promise<{ isPR: boolean }>
+  /**
+   * Cierra la sesión al finalizar: borra el snapshot local + el draft en curso (paridad web
+   * `clearSessionSnapshot`/`clearAllDrafts`, WEC:1567-1569). Así una 2ª sesión del MISMO día no
+   * rehidrata el cronómetro viejo ni un set a medio tipear. NO toca `sessionLogs` en memoria — el
+   * resumen post-entreno los sigue leyendo.
+   */
+  finishSession: () => Promise<void>
 }
 
 /** Sustitución activa del bloque al registrar la serie (persiste columnas dedicadas del log). */
@@ -542,6 +549,18 @@ export function useWorkoutSession(planId: string): WorkoutSessionState {
     await load()
   }, [load])
 
+  const finishSession = useCallback(async () => {
+    // La sesión terminó → el draft en curso y el snapshot local ya no aplican (paridad web BUG 2,
+    // WEC:1546-1548/1567-1569). `sessionLogs` en memoria se conservan para el resumen.
+    draftRef.current = null
+    setRestoredDraft(null)
+    try {
+      await AsyncStorage.removeItem(snapshotKey)
+    } catch {
+      /* best-effort: si falla, el snapshot vencerá igual (sólo se restaura si day === hoy). */
+    }
+  }, [snapshotKey])
+
   const logSet = useCallback(
     async (payload: OptimisticLogPayload, opts?: LogSetOptions): Promise<{ isPR: boolean }> => {
       const cid = clientIdRef.current
@@ -578,6 +597,11 @@ export function useWorkoutSession(planId: string): WorkoutSessionState {
         rir: clampIntInRange(payload.rir, 0, 10),
         exercise_name_at_log: block ? resolveExercise(block)?.name ?? null : null,
       }
+      // Nota rápida por serie (paridad web A.4.d `handleSubmit`, LogSetForm.tsx:609/443-458): viaja con
+      // el log a la ficha del coach. SÓLO se escribe cuando el payload la trae (mismo patrón que los
+      // ejes actual_*): un commit de EDICIÓN vía KeypadHost no captura nota → no debe pisar con null
+      // una nota ya guardada. El optimismo/DB read ya la preservan.
+      if (payload.note != null) logData.note = payload.note
       if (payload.actualDurationSec != null) logData.actual_duration_sec = payload.actualDurationSec
       if (payload.actualDistanceM != null) logData.actual_distance_m = payload.actualDistanceM
       if (payload.actualHoldSec != null) logData.actual_hold_sec = payload.actualHoldSec
@@ -625,6 +649,8 @@ export function useWorkoutSession(planId: string): WorkoutSessionState {
           reps_done: payload.repsDone,
           rpe: clampIntInRange(payload.rpe, 1, 10),
           rir: clampIntInRange(payload.rir, 0, 10),
+          // Sólo si el payload trae nota (no pisar con null la nota guardada en un flush de edición).
+          ...(payload.note != null ? { note: payload.note } : {}),
           exercise_name_at_log: (logData.exercise_name_at_log as string) ?? null,
         })
         setIsOnline(await checkOnline())
@@ -670,5 +696,6 @@ export function useWorkoutSession(planId: string): WorkoutSessionState {
     refresh,
     saveDraft,
     logSet,
+    finishSession,
   }
 }

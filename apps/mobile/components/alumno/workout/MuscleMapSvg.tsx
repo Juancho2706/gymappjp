@@ -50,7 +50,12 @@ const TIER_ALPHA: Record<1 | 2 | 3 | 4, number> = { 1: 0.18, 2: 0.38, 3: 0.62, 4
 
 const NEUTRAL_FILL = 'rgba(255,255,255,0.055)'
 const NEUTRAL_STROKE = 'rgba(255,255,255,0.10)'
+// Rótulos FRENTE/ESPALDA dentro del SVG: web usa `var(--on-dark-muted, rgba(255,255,255,0.55))`
+// y --on-dark-muted NO está definida en globals.css → cae al fallback blanco 55% (MuscleMapSvg.tsx:174).
 const LABEL_FILL = 'rgba(255,255,255,0.55)'
+// Leyenda "Menos/Más": web usa el token real text-on-dark-muted (#939DAB), no el fallback blanco 55%
+// (MuscleMapSvg.tsx:186). Valor del token --color-text-on-dark-muted (theme.ts:321 = 147 157 171).
+const LEGEND_FILL = '#939DAB'
 
 /** Nivel discreto 0..4 a partir de la intensidad relativa continua 0..1 (idéntico a web). */
 function tierOf(t: number): 0 | 1 | 2 | 3 | 4 {
@@ -179,17 +184,18 @@ export function MuscleMapSvg({ groups, reducedMotion }: MuscleMapSvgProps) {
           )
         })}
 
-        <SvgText x={362} y={1440} fill={LABEL_FILL} fontSize={44} fontWeight="700" textAnchor="middle">
+        {/* letterSpacing 44*0.08 ≈ 3.5 (web fija letterSpacing:'0.08em' sobre el <g>, MuscleMapSvg.tsx:178). */}
+        <SvgText x={362} y={1440} fill={LABEL_FILL} fontSize={44} fontWeight="700" textAnchor="middle" letterSpacing={3.5}>
           FRENTE
         </SvgText>
-        <SvgText x={1086} y={1440} fill={LABEL_FILL} fontSize={44} fontWeight="700" textAnchor="middle">
+        <SvgText x={1086} y={1440} fill={LABEL_FILL} fontSize={44} fontWeight="700" textAnchor="middle" letterSpacing={3.5}>
           ESPALDA
         </SvgText>
       </Svg>
 
       {/* Leyenda de niveles (menos → más). El último lleva anillo = nivel máximo (stroke). */}
       <View style={{ marginTop: 4, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-        <Text style={{ fontFamily: FONT.ui, fontSize: 10, letterSpacing: 1, color: LABEL_FILL, textTransform: 'uppercase' }}>Menos</Text>
+        <Text style={{ fontFamily: FONT.ui, fontSize: 10, letterSpacing: 1, color: LEGEND_FILL, textTransform: 'uppercase' }}>Menos</Text>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
           {([1, 2, 3, 4] as const).map((lvl) => (
             <View
@@ -205,7 +211,7 @@ export function MuscleMapSvg({ groups, reducedMotion }: MuscleMapSvgProps) {
             />
           ))}
         </View>
-        <Text style={{ fontFamily: FONT.ui, fontSize: 10, letterSpacing: 1, color: LABEL_FILL, textTransform: 'uppercase' }}>Más</Text>
+        <Text style={{ fontFamily: FONT.ui, fontSize: 10, letterSpacing: 1, color: LEGEND_FILL, textTransform: 'uppercase' }}>Más</Text>
       </View>
     </View>
   )

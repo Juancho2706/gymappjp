@@ -89,7 +89,16 @@ function chipTestSlug(delta: number): string {
 }
 
 const DISPLAY_STYLE = textStyle('3xl', FONT.displayBlack, { lh: 'tight', ls: 'tight' })
-const KEY_STYLE = textStyle('2xl', FONT.displayBold, { lh: 'tight', ls: 'tight' })
+// Teclas del grid: web `font-display text-2xl font-bold` = Archivo 700 (`NumericKeypadSheet.tsx:474`).
+// Antes usaba FONT.displayBold (Archivo 800), un peso más pesado que el 700 de la web.
+const KEY_STYLE = textStyle('2xl', FONT.display, { lh: 'tight', ls: 'tight' })
+// Unidad del display (kg/reps/min…): web `text-[13px] font-bold text-on-dark-muted` (`NumericKeypadSheet.tsx:319`).
+// El DS mapea 13px → 'xs' y bold → uiBold (antes TYPE.label = 14px semibold, más grande y menos peso).
+const UNIT_STYLE = textStyle('xs', FONT.uiBold)
+// Acciones primarias del keypad (Siguiente/Listo/Omitir): web `text-[15px] font-bold`
+// (`NumericKeypadSheet.tsx:277,410`). El DS no tiene 15px; se ancla a 'sm' (14px) con peso bold
+// (antes TYPE.label = 14px semibold). Compartido con `KeypadHost` para no divergir.
+export const KEYPAD_ACTION_STYLE = textStyle('sm', FONT.uiBold)
 
 // ─── Primitivas presentacionales compartidas (TypedKeypad + KeypadHost) ───────
 
@@ -146,7 +155,7 @@ export function KeypadDisplayRow({
           {display === '' ? '0' : display}
         </Text>
         {unit ? (
-          <Text style={TYPE.label} className="text-on-dark-muted">
+          <Text style={UNIT_STYLE} className="text-on-dark-muted">
             {unit}
           </Text>
         ) : null}
@@ -385,7 +394,7 @@ export function TypedKeypad(props: {
       style={{ position: 'absolute', left: 0, right: 0, bottom: 0 }}
     >
       <View
-        className="rounded-t-sheet border-t border-inverse/10 bg-surface-inverse px-3 pt-3"
+        className="rounded-t-sheet border-t border-inverse/10 bg-ink-950 px-3 pt-3"
         style={[{ paddingBottom: insets.bottom + 10 }, panelShadow]}
       >
         {/* Grabber */}
@@ -414,7 +423,7 @@ export function TypedKeypad(props: {
             onPress={handleNext}
             className="h-14 flex-1 flex-row items-center justify-center gap-2 rounded-control border border-inverse/10 bg-white/[0.06] active:bg-white/[0.12]"
           >
-            <Text style={TYPE.label} className="text-on-dark">
+            <Text style={KEYPAD_ACTION_STYLE} className="text-on-dark">
               Siguiente
             </Text>
             <ArrowRight size={20} className="text-on-dark" />
@@ -428,7 +437,7 @@ export function TypedKeypad(props: {
             style={{ flex: 1.4 }}
           >
             <Check size={20} className="text-white" />
-            <Text style={TYPE.label} className="text-white">
+            <Text style={KEYPAD_ACTION_STYLE} className="text-white">
               Listo
             </Text>
           </Pressable>
@@ -522,7 +531,7 @@ export function EffortHelp({ label, open, onToggle }: { label: string; open: boo
   return (
     <Pressable
       onPress={onToggle}
-      hitSlop={14}
+      hitSlop={16}
       accessibilityRole="button"
       accessibilityLabel={`¿Qué es el ${label}?`}
       accessibilityState={{ expanded: open }}

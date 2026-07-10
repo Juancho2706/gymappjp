@@ -28,6 +28,7 @@ interface PendingLog {
   reps_done: number | null
   rpe?: number | null
   rir?: number | null
+  note?: string | null
   exercise_name_at_log: string | null
   queued_at: string
 }

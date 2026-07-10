@@ -61,6 +61,7 @@ export function SingleExerciseCard({
   canSubstitute,
   restoredDraft,
   hrZones,
+  reducedMotion = false,
   onToggleDetails,
   onOpenTechnique,
   onOpenSet,
@@ -86,6 +87,9 @@ export function SingleExerciseCard({
   restoredDraft: SessionDraft | null
   /** Rangos bpm por zona del alumno (E2-11, cardio gated); null si el módulo cardio está OFF. */
   hrZones?: HrZoneRange[] | null
+  /** Reduce-motion (viene del padre, `useEvaMotion().reduced`): apaga la entrada del check y del
+   *  disclosure de Detalles — paridad web (SingleExerciseCard web:159-165/252-254/334-337). */
+  reducedMotion?: boolean
   onToggleDetails: () => void
   onOpenTechnique: () => void
   /** Tap en una serie ya logueada / proxima (no la activa): abre el teclado de edicion (KeypadHost). */
@@ -142,8 +146,16 @@ export function SingleExerciseCard({
   const borderClass =
     focus === 'active' ? 'border-sport-500/50' : focus === 'done' ? 'border-sport-500/30' : 'border-inverse/10'
 
+  // Sombra sport SOLO en la card activa (web:166 boxShadow '0 8px 32px -14px color-mix(sport-500 60%)').
+  // shadowColor = theme.primary = el mismo brand que pinta `border-sport-500` (la rampa sport se
+  // sobrescribe con la marca en runtime, global.css:12 / ThemeContext) → borde y elevación en el mismo tono.
+  const activeShadow =
+    focus === 'active'
+      ? { shadowColor: theme.primary, shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.35, shadowRadius: 16, elevation: 12 }
+      : undefined
+
   return (
-    <View className={`relative gap-3 rounded-card border bg-white/[0.03] p-4 ${borderClass}`}>
+    <View style={activeShadow} className={`relative gap-3 rounded-card border bg-white/[0.03] p-4 ${borderClass}`}>
       {/* Fila silenciosa: músculo + acciones (Detalles / Cambiar / Técnica) */}
       <View className="flex-row items-center justify-between gap-2">
         <View className="min-w-0 flex-1 flex-row items-center gap-1.5">
@@ -242,7 +254,11 @@ export function SingleExerciseCard({
             accessibilityRole="button"
             accessibilityLabel="Colapsar ejercicio completado"
           >
-            <MotiView from={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: 'spring', stiffness: 500, damping: 25 }}>
+            <MotiView
+              from={reducedMotion ? { scale: 1 } : { scale: 0 }}
+              animate={{ scale: 1 }}
+              transition={reducedMotion ? { type: 'timing', duration: 0 } : { type: 'spring', stiffness: 500, damping: 25 }}
+            >
               <CheckCircle2 size={28} color={SPORT_400} />
             </MotiView>
           </Pressable>
@@ -340,8 +356,9 @@ export function SingleExerciseCard({
       {/* Detalles (disclosure) */}
       {detailsOpen && (
         <MotiView
-          from={{ opacity: 0, translateY: -4 }}
+          from={reducedMotion ? { opacity: 1, translateY: 0 } : { opacity: 0, translateY: -4 }}
           animate={{ opacity: 1, translateY: 0 }}
+          transition={reducedMotion ? { type: 'timing', duration: 0 } : undefined}
           className="gap-3 rounded-card border border-inverse/10 bg-white/[0.02] p-3"
         >
           {isStrength && exercise.instructions && exercise.instructions.length > 0 && (

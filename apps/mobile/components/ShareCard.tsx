@@ -1,4 +1,4 @@
-import { useRef, useState, type ReactNode } from 'react'
+import { createContext, useContext, useRef, useState, type ReactNode } from 'react'
 import {
   ActivityIndicator,
   Modal,
@@ -118,6 +118,21 @@ function todayLong(): string {
   return new Date().toLocaleDateString('es-CL', { day: 'numeric', month: 'long', year: 'numeric' })
 }
 
+/** SPORT_500 — the EVA fallback accent (mirror web SSR fallback in workout-pr-card-canvas.ts:15). */
+const SPORT_500 = '#2680FF'
+
+/**
+ * Chrome context: the ShareCardCanvas publishes the coach accent + the variant's tone color so the
+ * central-block building blocks (eyebrow/hero) can DEFAULT to the brand instead of a hardcoded blue.
+ * Web paints the eyebrow with `accent`/`ember` and the hero with `accent` (workout-pr-card-canvas.ts:
+ * 650-653, 663-665); mobile must not fall back to #2680FF for white-label coaches. Explicit `color`
+ * props on the building blocks still win.
+ */
+const ShareCardChromeContext = createContext<{ accent: string; toneColor: string }>({
+  accent: SPORT_500,
+  toneColor: SPORT_500,
+})
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Central-block building blocks — the shared vocabulary of the web cards
 // (eyebrow / title / hero metric / pill). Consumers compose these as children.
@@ -125,8 +140,9 @@ function todayLong(): string {
 
 /** Tracked, tinted eyebrow (accent for 'brand' cards, ember for streak). */
 export function ShareCardEyebrow({ children, color }: { children: ReactNode; color?: string }) {
+  const { toneColor } = useContext(ShareCardChromeContext)
   return (
-    <Text style={[styles.eyebrow, color ? { color } : null]} numberOfLines={1}>
+    <Text style={[styles.eyebrow, { color: color ?? toneColor }]} numberOfLines={1}>
       {children}
     </Text>
   )
@@ -152,9 +168,10 @@ export function ShareCardSubtitle({ children }: { children: ReactNode }) {
 
 /** Hero metric: huge number + small unit baseline (mirror the 230px web hero). */
 export function ShareCardHero({ value, unit, color }: { value: string; unit?: string; color?: string }) {
+  const { accent } = useContext(ShareCardChromeContext)
   return (
     <View style={styles.heroRow}>
-      <Text style={[styles.heroValue, color ? { color } : null]} numberOfLines={1} adjustsFontSizeToFit>
+      <Text style={[styles.heroValue, { color: color ?? accent }]} numberOfLines={1} adjustsFontSizeToFit>
         {value}
       </Text>
       {unit ? <Text style={styles.heroUnit}>{unit}</Text> : null}
@@ -254,6 +271,7 @@ export const ShareCardCanvas = function ShareCardCanvas({
   const pad = Math.round(width * 0.074) // ≈ web PAD_X (80/1080)
 
   return (
+    <ShareCardChromeContext.Provider value={{ accent, toneColor }}>
     <View style={{ width, aspectRatio: CARD_ASPECT, borderRadius: 20, overflow: 'hidden', backgroundColor: INK_950 }}>
       {/* Ink base gradient (mirror drawCardBase). */}
       <LinearGradient
@@ -300,6 +318,7 @@ export const ShareCardCanvas = function ShareCardCanvas({
         </View>
       </View>
     </View>
+    </ShareCardChromeContext.Provider>
   )
 }
 
@@ -476,7 +495,8 @@ const styles = {
 
   // ── card body ──
   body: { flex: 1, justifyContent: 'center' as const, gap: 10 },
-  eyebrow: { ...textStyle('sm', FONT.displayBold, { ls: 'eyebrow' }), textTransform: 'uppercase' as const, color: '#2680FF' } as TextStyle,
+  // color se inyecta en runtime (ShareCardEyebrow → toneColor del canvas / prop explícita); sin literal.
+  eyebrow: { ...textStyle('sm', FONT.displayBold, { ls: 'eyebrow' }), textTransform: 'uppercase' as const } as TextStyle,
   cardTitle: { ...TYPE.h2, color: '#FFFFFF' } as TextStyle,
   cardSubtitle: { ...TYPE.body, color: W50 } as TextStyle,
   heroRow: { flexDirection: 'row' as const, alignItems: 'flex-end' as const, gap: 8 },

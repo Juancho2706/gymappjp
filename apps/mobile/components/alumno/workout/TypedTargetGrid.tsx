@@ -153,7 +153,7 @@ function TimerButton({ testID, label, onPress }: { testID: string; label: string
       accessibilityRole="button"
       accessibilityLabel={label}
     >
-      <Timer size={15} color={ON_DARK} />
+      <Timer size={14} color={ON_DARK} />
       <Text style={TYPE.caption} className="text-[12px] text-on-dark font-sans-bold">{label}</Text>
     </Pressable>
   )

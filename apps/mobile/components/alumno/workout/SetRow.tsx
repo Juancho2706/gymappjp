@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Modal, Pressable, Text, View } from 'react-native'
-import { Check, ChevronRight, CloudOff, HelpCircle } from 'lucide-react-native'
+import { Modal, Pressable, Text, TextInput, View } from 'react-native'
+import { Check, ChevronRight, CloudOff, HelpCircle, StickyNote } from 'lucide-react-native'
 import {
   formatWeightEsCl,
   typedKeypadFields,
@@ -11,7 +11,9 @@ import {
 import { FONT, TYPE, textStyle } from '../../../lib/typography'
 import { haptics } from '../../../lib/haptics'
 import { fmtTypedLoggedLine } from './workout-ui'
-import { TypedKeypad, EffortScale } from './TypedKeypad'
+// RPE_HELP/RIR_HELP se importan (fuente única mobile) en vez de re-declararlos: evita el drift que la
+// Ola 0 flagueó (#1). Son mirror literal —con tildes— de la web (`EffortScale.tsx:17-20`).
+import { TypedKeypad, EffortScale, RPE_HELP, RIR_HELP } from './TypedKeypad'
 import { buildStrengthPayload, buildTypedPayload, int } from './set-log-payload'
 
 const SPORT_400 = '#5C9DFF'
@@ -186,6 +188,11 @@ export function SetRow({
             {log?.rir != null && (
               <Text style={TYPE.mono} className="text-[11px] text-on-dark-muted">RIR {log.rir}</Text>
             )}
+            {/* Ícono nota (paridad web A.3, `LogSetForm.tsx:553-555`): señala que la serie lleva nota
+                para el coach. Sin token `amber` en el theme mobile ⇒ warning-500 (mismo ámbar del pending). */}
+            {log?.note?.trim() ? (
+              <StickyNote size={13} color={WARNING_500} accessibilityLabel="Serie con nota" />
+            ) : null}
           </View>
         )}
       </View>
@@ -207,15 +214,6 @@ export function SetRow({
 }
 
 // ─── ActiveSetRow ─────────────────────────────────────────────────────────────
-
-/**
- * Ayuda 1-tap del alumno — mirror LITERAL (con tildes) de `RPE_HELP`/`RIR_HELP` de la web
- * (`EffortScale.tsx:17-20`). El puerto previo perdía las tildes pese al comentario "mirror EXACTO"
- * (Ola 0 · discrepancia #1); estas cadenas son la fuente de verdad y deben coincidir carácter a carácter.
- */
-const RPE_HELP =
-  'RPE = qué tan duro se sintió la serie. 1 = muy fácil · 10 = no podías hacer ni una repetición más.'
-const RIR_HELP = 'RIR = cuántas reps te quedaban en el tanque. Si te quedaba 1, es 1. Así de simple.'
 
 const BOX_VALUE_STYLE = textStyle('2xl', FONT.monoBold, { ls: 'tight' })
 
@@ -342,6 +340,10 @@ export function ActiveSetRow({
   valuesRef.current = values
   const [openKey, setOpenKey] = useState<string | null>(null)
   const [helpKey, setHelpKey] = useState<'rpe' | 'rir' | null>(null)
+  // Nota rápida por serie (strength) — desplegable como en web (A.4.d). El texto vive en `values.note`
+  // (mismo carril que rpe/rir → viaja al draft y al `buildStrengthPayload`).
+  const [noteOpen, setNoteOpen] = useState(false)
+  const noteTrimmed = (values.note ?? '').trim()
 
   // Escritura única: sincroniza ref + estado + reporta el draft (resiliencia). idx = campo tocado.
   const patch = (p: Record<string, string>, idx = 0) => {
@@ -464,6 +466,42 @@ export function ActiveSetRow({
             )}
             <EffortScale kind="rir" value={int(values.rir)} onSelect={(v) => patch({ rir: String(v) })} />
           </View>
+        </View>
+      )}
+
+      {/* Nota rápida por serie (strength) — mirror web A.4.d (`LogSetForm.tsx:699-736`): toggle + input
+          desplegable, máx 300 chars, viaja al coach vía `values.note` → `buildStrengthPayload`. */}
+      {!typedMode && (
+        <View>
+          <Pressable
+            testID={`note-toggle-${setNumber}`}
+            onPress={() => setNoteOpen((o) => !o)}
+            accessibilityRole="button"
+            accessibilityState={{ expanded: noteOpen }}
+            accessibilityLabel={noteTrimmed ? 'Editar la nota de la serie' : 'Agregar una nota a la serie'}
+            className="min-h-[36px] flex-row items-center gap-1.5 self-start rounded-control px-2 active:opacity-70"
+          >
+            <StickyNote size={14} color={noteTrimmed ? WARNING_500 : ON_DARK_MUTED} />
+            <Text
+              style={[TYPE.caption, { fontFamily: FONT.uiSemibold }]}
+              className={`text-[11px] ${noteTrimmed ? 'text-warning-500' : 'text-on-dark-muted'}`}
+            >
+              {noteTrimmed ? 'Nota añadida' : 'Agregar nota'}
+            </Text>
+          </Pressable>
+          {noteOpen && (
+            <TextInput
+              testID={`note-input-${setNumber}`}
+              value={values.note ?? ''}
+              onChangeText={(t) => patch({ note: t })}
+              maxLength={300}
+              placeholder="Ej: sentí molestia en el hombro"
+              placeholderTextColor={ON_DARK_MUTED}
+              accessibilityLabel="Nota de la serie para tu coach"
+              style={textStyle('xs', FONT.ui)}
+              className="mt-1.5 rounded-control border border-inverse bg-white/[0.06] px-3 py-2 text-on-dark"
+            />
+          )}
         </View>
       )}
 

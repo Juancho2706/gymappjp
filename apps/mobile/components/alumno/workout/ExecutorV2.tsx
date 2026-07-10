@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Pressable, RefreshControl, ScrollView, Text, View } from 'react-native'
-import { SafeAreaView } from 'react-native-safe-area-context'
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useKeepAwake } from 'expo-keep-awake'
 import { useRouter } from 'expo-router'
@@ -30,6 +30,8 @@ import {
   type SessionBlock,
   type SessionExercise,
 } from '../../../lib/workout-session'
+import { toast } from '../../Toast'
+import { flushLogQueue, getPendingLogCount } from '../../../lib/offline-cache'
 import { OfflineBanner } from '../../OfflineBanner'
 import { EvaLoaderScreen } from '../../EvaLoader'
 import { SessionHeader, type WorkoutViewMode } from './SessionHeader'
@@ -75,10 +77,13 @@ export default function ExecutorV2({ planId }: { planId: string }) {
 function ExecutorV2Inner({ planId }: { planId: string }) {
   useKeepAwake() // Wake-lock de TODA la sesión.
   const router = useRouter()
+  const insets = useSafeAreaInsets()
   const { theme } = useTheme()
   const motion = useEvaMotion()
   const timers = useWorkoutTimers()
   const session = useWorkoutSession(planId)
+  // Guard reentrante de finalización (paridad web `finishing.current`, WEC:1503).
+  const finishingRef = useRef(false)
 
   const [keypadTarget, setKeypadTarget] = useState<KeypadTarget | null>(null)
   const [techniqueExercise, setTechniqueExercise] = useState<SessionExercise | null>(null)
@@ -99,6 +104,10 @@ function ExecutorV2Inner({ planId }: { planId: string }) {
   const [viewMode, setViewMode] = useState<WorkoutViewMode>('list')
   const [stepIndex, setStepIndex] = useState(0)
   const autoAdvancedRef = useRef<Set<string>>(new Set())
+  // Guard de posicionamiento inicial del pager: al HIDRATAR el modo Pasos desde storage (no un toggle
+  // explícito) hay que aterrizar en el primer paso incompleto, pero sólo una vez y recién cuando los
+  // pasos ya cargaron (la sesión es async en RN; al montar `steps` está vacío).
+  const didHydrateStepPosRef = useRef(false)
 
   // Modo de vista device-scoped (persiste Lista/Pasos entre sesiones, como web STEPPER_MODE_KEY).
   useEffect(() => {
@@ -110,7 +119,7 @@ function ExecutorV2Inner({ planId }: { planId: string }) {
   const {
     loading, planTitle, programName, phaseName, activeWeekVariant, currentWeek, weeksToRepeat, programStructure, cycleLength,
     dayOfWeek, clientId, blocks, sections, supersetMembersByBlock, sessionLogs, previousHistory, lastSessionByBlock,
-    exerciseMaxes, elapsedSec, capped, isOnline, restoredDraft, refresh, saveDraft, logSet,
+    exerciseMaxes, elapsedSec, capped, isOnline, restoredDraft, refresh, saveDraft, logSet, finishSession,
   } = session
 
   // Zona FC personalizada (E2-11): SOLO si el módulo `cardio` está habilitado (visibilidad de pago)
@@ -301,6 +310,34 @@ function ExecutorV2Inner({ planId }: { planId: string }) {
     setRefreshing(false)
   }, [refresh])
 
+  // Finalizar la sesión (paridad web `handleFinish`, WEC:1502-1571). Guard reentrante; drena la cola
+  // offline (idempotente, last-wins) para no finalizar en falso con series huérfanas; congela la
+  // duración; limpia snapshot/draft local (una 2ª sesión del día arranca de cero) y abre el resumen.
+  // Adaptación RN: el Toast no soporta botón de acción → si algo queda sin sincronizar se AVISA y se
+  // finaliza igual (la cola sigue reintentando al reconectar); no se bloquea al alumno.
+  const handleFinish = useCallback(async () => {
+    if (finishingRef.current) return
+    finishingRef.current = true
+    try {
+      const pendingBefore = await getPendingLogCount()
+      if (pendingBefore > 0) {
+        try { await flushLogQueue(supabase) } catch { /* excepción global → conservamos el aviso */ }
+      }
+      const stillPending = await getPendingLogCount()
+      if (stillPending > 0) {
+        toast.warning(`${stillPending} serie${stillPending !== 1 ? 's' : ''} sin sincronizar`, {
+          description: 'Se guardarán cuando vuelva la conexión.',
+          duration: 6000,
+        })
+      }
+      setFinishedElapsed(elapsedSec)
+      await finishSession()
+      setSummaryOpen(true)
+    } finally {
+      finishingRef.current = false
+    }
+  }, [elapsedSec, finishSession])
+
   // Adaptador para el WorkoutSummaryOverlay (E2-15): bloques → SummaryBlock (arrastra los ejes
   // tipados cardio/movilidad para el conteo polimórfico). Los logs (sessionLogs) ya cumplen
   // SummaryLogLike (snake_case + actual_*), se pasan directo.
@@ -392,6 +429,7 @@ function ExecutorV2Inner({ planId }: { planId: string }) {
             currentWeek={currentWeek}
             restoredDraft={restoredDraft}
             hrZones={hrZones}
+            reducedMotion={motion.reduced}
             onOpenTechnique={(b) => setTechniqueExercise(resolveExercise(b))}
             onOpenSet={openSet}
             onCommitSet={handleCommit}
@@ -447,6 +485,7 @@ function ExecutorV2Inner({ planId }: { planId: string }) {
           canSubstitute={doneCount === 0 && isStrengthBlock}
           restoredDraft={restoredDraft}
           hrZones={hrZones}
+          reducedMotion={motion.reduced}
           onToggleDetails={() => setOpenDetails((p) => ({ ...p, [block.id]: !p[block.id] }))}
           onOpenTechnique={() => setTechniqueExercise(exercise)}
           onOpenSet={(setNumber) => openSet(block.id, setNumber)}
@@ -459,7 +498,7 @@ function ExecutorV2Inner({ planId }: { planId: string }) {
         />
       )
     },
-    [supersetMembersByBlock, sessionLogs, effByBlock, currentWeek, activeBlockId, previousHistory, openDetails, expandedDone, getSubstitution, openSet, hrZones, restoredDraft, handleCommit, handleRpeUpdate, saveActiveDraft],
+    [supersetMembersByBlock, sessionLogs, effByBlock, currentWeek, activeBlockId, previousHistory, openDetails, expandedDone, getSubstitution, openSet, hrZones, restoredDraft, motion.reduced, handleCommit, handleRpeUpdate, saveActiveDraft],
   )
 
   // ── Modo Paso a paso (E2-04): modelo de pasos + vistas del rail + auto-avance ──
@@ -513,12 +552,24 @@ function ExecutorV2Inner({ planId }: { planId: string }) {
       setViewMode(mode)
       void AsyncStorage.setItem(VIEW_MODE_KEY, mode).catch(() => {})
       if (mode === 'steps') {
+        // Toggle explícito del usuario: posiciona aquí y desactiva el posicionamiento de hidratación
+        // para que su effect no vuelva a mover el índice después.
+        didHydrateStepPosRef.current = true
         autoAdvancedRef.current = new Set()
         setStepIndex(firstIncompleteStepIndex(steps, sessionLogs))
       }
     },
     [steps, sessionLogs],
   )
+  // Hidratación del modo Pasos (paridad web WEC:1285-1291): si el modo fue restaurado desde storage
+  // (no un toggle del usuario), aterriza en el primer paso incompleto una vez que los pasos cargaron —
+  // no en 0. Se ejecuta exactamente una vez (ref-guard) y sin pisar la navegación posterior del usuario.
+  useEffect(() => {
+    if (loading || viewMode !== 'steps' || steps.length === 0 || didHydrateStepPosRef.current) return
+    didHydrateStepPosRef.current = true
+    setStepIndex(firstIncompleteStepIndex(steps, sessionLogs))
+  }, [loading, viewMode, steps, sessionLogs])
+
   // Auto-avance: al completar el paso activo, avanza al siguiente (una sola vez por paso).
   useEffect(() => {
     if (viewMode !== 'steps' || steps.length === 0) return
@@ -583,7 +634,9 @@ function ExecutorV2Inner({ planId }: { planId: string }) {
         capped={capped}
         viewMode={viewMode}
         onToggleMode={handleToggleMode}
-        onBack={() => router.back()}
+        // "Salir" → al Dashboard, determinista (paridad web `<Link href={base/dashboard}>`, WEC:1799);
+        // `replace` para no dejar la sesión finalizada en el back-stack.
+        onBack={() => router.replace('/alumno/home')}
         onOpenSettings={() => setSettingsOpen(true)}
       />
 
@@ -601,7 +654,7 @@ function ExecutorV2Inner({ planId }: { planId: string }) {
         />
       ) : (
         <ScrollView
-          contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 12, paddingBottom: 120, gap: 20 }}
+          contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 12, paddingBottom: 140 + insets.bottom, gap: 20 }}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.primary} colors={[theme.primary]} />}
@@ -634,29 +687,36 @@ function ExecutorV2Inner({ planId }: { planId: string }) {
         </ScrollView>
       )}
 
-      {/* Barra inferior fija: descanso manual (WAVE-B-SEAM: modo protagonista + ajustes de alarma). */}
+      {/* Barra inferior fija (paridad web `.exec-finish-bar`, WEC:1949-1960): descanso manual (90s) +
+          Finalizar. `pt-4` + pad inferior por safe-area (calc(1rem+safe) del web); fila centrada a
+          max-w-5xl para no estirarse en tablet. */}
       {!loading && (
-        <View className="absolute bottom-0 left-0 right-0 flex-row items-center justify-between gap-3 border-t border-white/10 bg-ink-950/95 px-4 pb-8 pt-3">
-          <Pressable
-            testID="btn-manual-rest"
-            onPress={() => timers.startRest(90, { autoStart: true })}
-            className="h-11 flex-row items-center gap-1.5 rounded-control border border-ember-500/25 bg-ember-500/15 px-3"
-            accessibilityRole="button"
-            accessibilityLabel="Iniciar descanso de 90 segundos"
-          >
-            <Timer size={14} color={EMBER_200} />
-            <Text className="font-sans-bold text-xs text-ember-200">Descanso (90s)</Text>
-          </Pressable>
-          <Pressable
-            testID="btn-finish-workout"
-            onPress={() => { setFinishedElapsed(elapsedSec); setSummaryOpen(true) }}
-            className="h-12 flex-row items-center gap-2 rounded-control bg-sport-500 px-5"
-            accessibilityRole="button"
-            accessibilityLabel="Finalizar entrenamiento"
-          >
-            <CheckCircle2 size={16} color={ON_DARK} />
-            <Text className="font-sans-bold text-on-sport">Finalizar entrenamiento</Text>
-          </Pressable>
+        <View
+          className="absolute bottom-0 left-0 right-0 border-t border-white/10 bg-ink-950/90 px-4 pt-4"
+          style={{ paddingBottom: 16 + insets.bottom }}
+        >
+          <View className="w-full flex-row items-center justify-between gap-3 self-center" style={{ maxWidth: 1024 }}>
+            <Pressable
+              testID="btn-manual-rest"
+              onPress={() => timers.startRest(90, { autoStart: true })}
+              className="h-11 flex-row items-center gap-1.5 rounded-control border border-ember-500/25 bg-ember-500/15 px-3 active:opacity-90"
+              accessibilityRole="button"
+              accessibilityLabel="Iniciar descanso de 90 segundos"
+            >
+              <Timer size={14} color={EMBER_200} />
+              <Text className="font-sans-bold text-xs text-ember-200">Descanso (90s)</Text>
+            </Pressable>
+            <Pressable
+              testID="btn-finish-workout"
+              onPress={handleFinish}
+              className="h-12 flex-row items-center gap-2 rounded-control bg-sport-500 px-5 active:opacity-90"
+              accessibilityRole="button"
+              accessibilityLabel="Finalizar entrenamiento"
+            >
+              <CheckCircle2 size={16} color={ON_DARK} />
+              <Text className="font-sans-bold text-on-sport">Finalizar entrenamiento</Text>
+            </Pressable>
+          </View>
         </View>
       )}
 

@@ -244,6 +244,17 @@ export function RestTimerBar({ initialSeconds, nextLabel, warmup = false, autoSt
     onClose()
   }, [onClose, stopAlarm])
 
+  // Tap-para-silenciar (paridad web `RestTimer.tsx:102-111`: mientras suena, un
+  // `click`/`touchstart` en el documento detiene la alarma). En RN no hay documento
+  // global; el equivalente idiomático es que CUALQUIER toque sobre la barra la
+  // silencie — `onTouchStart` corre al iniciar el gesto aunque el toque caiga sobre
+  // un botón interno (pausa/±15s/mute), así el toque detiene la alarma y además
+  // ejecuta su acción, igual que el listener global de la web. Se limita a la barra
+  // (no a toda la pantalla) para no bloquear el ejecutor debajo.
+  const handleBarTouchStart = useCallback(() => {
+    if (alarmRingingRef.current) stopAlarm()
+  }, [stopAlarm])
+
   const done = timeLeft === 0
   const frac = Math.max(0, Math.min(1, timeLeft / (totalSeconds || 1)))
   const dashoffset = RING_C * (1 - frac)
@@ -264,6 +275,7 @@ export function RestTimerBar({ initialSeconds, nextLabel, warmup = false, autoSt
       >
         <MotiView
           style={[styles.bar, SHADOWS.dark.xl, done ? styles.barDone : styles.barIdle]}
+          onTouchStart={handleBarTouchStart}
           accessibilityRole="timer"
           // Entrada tipo bottom-sheet (espeja `springsSheet.enter` web: slide-up + fade).
           from={motion.reduced ? undefined : { opacity: 0, translateY: 40 }}

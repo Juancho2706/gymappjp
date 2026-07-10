@@ -94,7 +94,7 @@ export function RestAlarmPreference() {
         <View className="flex-1">
           <Text className="text-base font-sans-semibold text-strong">Alarma de descanso</Text>
           <Text className="text-sm font-sans text-muted mt-1">
-            Sonido al terminar el descanso entre series.
+            Sonido y volumen al terminar el descanso entre series.
           </Text>
         </View>
         <HapticPressable

@@ -35,6 +35,7 @@ export function SupersetGroupCard({
   currentWeek,
   restoredDraft,
   hrZones,
+  reducedMotion = false,
   onOpenTechnique,
   onOpenSet,
   onCommitSet,
@@ -50,6 +51,8 @@ export function SupersetGroupCard({
   restoredDraft: SessionDraft | null
   /** Rangos bpm por zona del alumno (E2-11) para miembros cardio con hr_zone; null si el módulo está OFF. */
   hrZones?: HrZoneRange[] | null
+  /** Reduce-motion (viene del padre): apaga la entrada del disclosure "Cómo hacerla". */
+  reducedMotion?: boolean
   onOpenTechnique: (block: SessionBlock) => void
   /** Tap en una serie ya logueada / proxima: abre el teclado de edicion (KeypadHost). */
   onOpenSet: (blockId: string, setNumber: number) => void
@@ -91,7 +94,11 @@ export function SupersetGroupCard({
           Rondas: <Text className="text-on-dark font-sans-bold">{firstLabel}</Text> → <Text className="text-on-dark font-sans-bold">{secondLabel}</Text> sin descanso, descansa al cerrar la ronda.
         </Text>
         {howToOpen && (
-          <MotiView from={{ opacity: 0, translateY: -4 }} animate={{ opacity: 1, translateY: 0 }}>
+          <MotiView
+            from={reducedMotion ? { opacity: 1, translateY: 0 } : { opacity: 0, translateY: -4 }}
+            animate={{ opacity: 1, translateY: 0 }}
+            transition={reducedMotion ? { type: 'timing', duration: 0 } : undefined}
+          >
             <Text style={TYPE.caption} className="rounded-sm border border-inverse/10 bg-white/[0.03] p-3 text-[12px] text-on-dark/90">
               Trabaja por rondas: haz <Text className="font-sans-bold">{firstLabel}</Text>, sigue con <Text className="font-sans-bold">{secondLabel}</Text> sin descanso, y descansa al <Text className="font-sans-bold">cerrar la ronda</Text>. Repite hasta completar todas las series.
             </Text>

@@ -5,7 +5,7 @@ import { cssInterop } from 'nativewind'
 import { ArrowRightLeft, Dumbbell, RotateCw, TriangleAlert } from 'lucide-react-native'
 import { Sheet } from '../../Sheet'
 import { FONT, TYPE, textStyle } from '../../../lib/typography'
-import { exerciseThumb } from '../../../lib/exercises'
+import { exerciseGridThumb } from '../../../lib/exercise-catalog'
 import {
   equipmentLabel,
   fetchSubstituteCandidates,
@@ -222,7 +222,9 @@ function LoadingSkeleton() {
 }
 
 function CandidateRow({ opt, onPress }: { opt: SubstituteCandidate; onPress: () => void }) {
-  const thumb = exerciseThumb(opt)
+  // Miniatura LIGERA (WebP redimensionado vía render/image), no el gif crudo full-res — paridad
+  // con el web `exerciseGridThumb(opt)` (SubstituteExerciseSheet.tsx:134 + nota de port #8).
+  const thumb = exerciseGridThumb(opt)
   return (
     <Pressable
       testID={`substitute-option-${opt.id}`}

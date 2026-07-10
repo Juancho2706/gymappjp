@@ -22,6 +22,7 @@ import { buildStrengthPayload, buildTypedPayload, int } from './set-log-payload'
 // Primitivas presentacionales + paso de esfuerzo, compartidas con la `ActiveSetRow` (sin duplicar).
 import {
   EffortField,
+  KEYPAD_ACTION_STYLE,
   KeypadDisplayRow,
   KeypadGrid,
   RIR_HELP,
@@ -291,7 +292,7 @@ export function KeypadHost({
                     accessibilityLabel="Omitir el esfuerzo y guardar la serie"
                     className="h-14 flex-1 items-center justify-center rounded-control border border-inverse/10 bg-white/[0.06] active:bg-white/[0.10]"
                   >
-                    <Text style={TYPE.label} className="text-on-dark">
+                    <Text style={KEYPAD_ACTION_STYLE} className="text-on-dark">
                       Omitir
                     </Text>
                   </Pressable>
@@ -304,7 +305,7 @@ export function KeypadHost({
                     style={{ flex: 1.4 }}
                   >
                     <Check size={20} color={WHITE} />
-                    <Text style={TYPE.label} className="text-white">
+                    <Text style={KEYPAD_ACTION_STYLE} className="text-white">
                       Listo
                     </Text>
                   </Pressable>
@@ -350,7 +351,7 @@ export function KeypadHost({
                   >
                     {primaryIsNext ? (
                       <>
-                        <Text style={TYPE.label} className="text-white">
+                        <Text style={KEYPAD_ACTION_STYLE} className="text-white">
                           Siguiente
                         </Text>
                         <ArrowRight size={20} color={WHITE} />
@@ -358,7 +359,7 @@ export function KeypadHost({
                     ) : (
                       <>
                         <Check size={20} color={WHITE} />
-                        <Text style={TYPE.label} className="text-white">
+                        <Text style={KEYPAD_ACTION_STYLE} className="text-white">
                           Listo
                         </Text>
                       </>
