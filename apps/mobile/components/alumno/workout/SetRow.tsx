@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Modal, Pressable, Text, TextInput, View, type TextStyle } from 'react-native'
-import { MotiView } from 'moti'
+import { AnimatePresence, MotiView } from 'moti'
 import { Check, ChevronRight, CloudOff, HelpCircle, Loader2, StickyNote } from 'lucide-react-native'
 import {
   formatWeightEsCl,
@@ -35,11 +35,12 @@ const BADGE_ACTIVE_STYLE: TextStyle = { ...textStyle('xs', FONT.displayBlack), f
 // (no los 13/11 del web) y en peso 400 (Regular), no el font-bold/font-semibold del web. Ahora cada estilo fija
 // size+familia y el className sólo aporta color.
 //   • Marca peso×reps — web `font-mono text-[13px] font-bold tabular-nums` (LogSetForm.tsx:542) → mono 700, 13px.
-//   • RPE/RIR — web `font-mono text-[11px] font-semibold` (LogSetForm.tsx:548,551) → mono 500 (semibold; la cara
-//     600 no está cargada, 500 es el peso disponible más cercano al font-semibold del web), 11px.
+//   • RPE/RIR — web `font-mono text-[11px] font-semibold` (LogSetForm.tsx:548,551) → mono 600 (semibold), 11px.
+//     La cara JetBrainsMono_600SemiBold SÍ está cargada (`app/_layout.tsx:33,212`) y ya la usa `OBJECTIVE_STYLE`
+//     (`TypedKeypad.tsx:102`); el peso 500 previo caía uno por debajo del `font-semibold` del web.
 //   • Línea tipada (cardio/movilidad/roller) — chip propio de RN; conserva la familia mono previa a 13px.
 const CHIP_MARK_STYLE: TextStyle = { ...textStyle('xs', FONT.monoBold), fontVariant: ['tabular-nums'] }
-const CHIP_EFFORT_STYLE: TextStyle = textStyle('3xs', FONT.monoMedium)
+const CHIP_EFFORT_STYLE: TextStyle = textStyle('3xs', FONT.monoSemibold)
 const CHIP_TYPED_STYLE: TextStyle = { ...textStyle('xs', FONT.mono), fontVariant: ['tabular-nums'] }
 
 /**
@@ -99,6 +100,7 @@ export function SetRow({
   const logged = !!log
   const pending = log?._pending === true
   const [rpeHelpOpen, setRpeHelpOpen] = useState(false)
+  const motion = useEvaMotion()
 
   // Paridad web B.3: una serie TIPADA logueada muestra la escala RPE debajo de su marca; cambiarla
   // reconstruye el payload desde el log (preservando `actual_*`) y re-submitea vía `onRpeUpdate`.
@@ -123,7 +125,7 @@ export function SetRow({
       >
         <Pressable
           onPress={onPress}
-          className="flex-row items-center gap-2"
+          className="flex-row items-center gap-2 active:opacity-90"
           accessibilityRole="button"
           accessibilityLabel={
             pending
@@ -160,8 +162,16 @@ export function SetRow({
           )}
         </Pressable>
 
-        {/* RPE post-registro con la MISMA escala segmentada (mirror `LogSetForm.tsx:1121-1135`) */}
-        <View>
+        {/* RPE post-registro con la MISMA escala segmentada (mirror `LogSetForm.tsx:1121-1135`). La web lo
+            EXPANDE con AnimatePresence height 0→auto + opacity en 0.25s al pasar la serie a logueada
+            (`LogSetForm.tsx:1112-1119`). Como este bloque monta junto con la fila logueada, aquí el equivalente
+            RN es la entrada opacity/translateY (mismo idioma que los disclosures de la card,
+            `SingleExerciseCard.tsx:453-461`), 250ms, instantánea con reduce-motion. */}
+        <MotiView
+          from={motion.reduced ? { opacity: 1, translateY: 0 } : { opacity: 0, translateY: -4 }}
+          animate={{ opacity: 1, translateY: 0 }}
+          transition={{ type: 'timing', duration: motion.reduced ? 0 : 250 }}
+        >
           <View className="mb-1 flex-row items-center gap-1">
             <Text style={KEYPAD_EYEBROW_STYLE} className="text-on-dark-muted">
               Esfuerzo · RPE
@@ -174,7 +184,7 @@ export function SetRow({
             </Text>
           )}
           <EffortScale kind="rpe" value={log.rpe ?? null} onSelect={(v) => onRpeUpdate(rpePayload(v))} compact />
-        </View>
+        </MotiView>
       </View>
     )
   }
@@ -183,7 +193,7 @@ export function SetRow({
     <Pressable
       testID={`set-row-${setNumber}`}
       onPress={onPress}
-      className={`relative flex-row items-center gap-2 overflow-hidden rounded-control border px-3 py-2 ${
+      className={`relative flex-row items-center gap-2 overflow-hidden rounded-control border px-3 py-2 active:opacity-90 ${
         logged
           ? syncError
             ? // Fallo de guardado real (con conexión) ⇒ contenedor ROJO (mirror web estado 'error':
@@ -638,8 +648,88 @@ export function ActiveSetRow({
         </View>
       )}
 
+      {/* Botón de confirmar — mirror web `SubmitSetButton` (`LogSetForm.tsx:695-697,1143-1169`). Va DEBAJO de
+          las escalas RPE/RIR y ENCIMA de la nota, replicando el orden vertical del web (submit `:695-697`
+          ANTES de la nota `:699-736`); antes la nota iba primero. Dos variantes según el modo, igual que web:
+          • FUERZA activa protagonista → botón ETIQUETADO (h-12 min-w-[104px], Check + 'Listo'/'Guardar',
+            `:696,1146-1157`). 'Guardar' al editar una serie cerrada, 'Listo' cuando es nueva.
+          • TIPADAS (cardio/movilidad/roller) → botón CIRCULAR sin label (`:1095-1097` usa `<SubmitSetButton>`
+            sin `label` ⇒ el círculo w-11/w-8 rounded-full de `:1158-1168`); la web reserva el círculo para las
+            filas no protagonistas. Commit intacto en ambos. */}
+      <View className="flex-row justify-end">
+        {typedMode ? (
+          <Pressable
+            testID={`confirm-set-${setNumber}`}
+            onPress={handleConfirm}
+            disabled={committing}
+            className={`h-11 w-11 items-center justify-center rounded-full border-2 border-white/25 active:opacity-90 ${
+              committing ? 'opacity-70' : ''
+            }`}
+            accessibilityRole="button"
+            accessibilityState={{ disabled: committing, busy: committing }}
+            accessibilityLabel={committing ? 'Guardando set...' : `Guardar la serie ${setNumber}`}
+          >
+            {committing ? (
+              motion.reduced ? (
+                <Loader2 size={16} color={ON_DARK_MUTED} strokeWidth={2.6} />
+              ) : (
+                <MotiView
+                  from={{ rotate: '0deg' }}
+                  animate={{ rotate: '360deg' }}
+                  transition={{ type: 'timing', duration: 800, loop: true, repeatReverse: false }}
+                >
+                  <Loader2 size={16} color={ON_DARK_MUTED} strokeWidth={2.6} />
+                </MotiView>
+              )
+            ) : (
+              // Check atenuado mientras la fila activa aún no está guardada (mirror web círculo no-logueado
+              // `opacity-40`, `LogSetForm.tsx:1166`): affordance tenue que se resuelve al confirmar.
+              <Check size={18} color={ON_DARK_MUTED} strokeWidth={2.6} style={{ opacity: 0.4 }} />
+            )}
+          </Pressable>
+        ) : (
+          <Pressable
+            testID={`confirm-set-${setNumber}`}
+            onPress={handleConfirm}
+            disabled={committing}
+            className={`h-12 min-w-[104px] flex-row items-center justify-center gap-2 rounded-control bg-sport-500 px-4 active:opacity-90 ${
+              committing ? 'opacity-70' : ''
+            }`}
+            accessibilityRole="button"
+            accessibilityState={{ disabled: committing, busy: committing }}
+            accessibilityLabel={
+              committing ? 'Guardando set...' : `${isEditing ? 'Guardar' : 'Listo'}, confirmar serie ${setNumber}`
+            }
+          >
+            {committing ? (
+              // Spinner durante el commit (mirror web `<Loader2 animate-spin>`). Sin reduce-motion gira en loop;
+              // con reduce-motion queda estático (paridad con el resto de animaciones de la card).
+              motion.reduced ? (
+                <Loader2 size={18} color="#FFFFFF" strokeWidth={2.6} />
+              ) : (
+                <MotiView
+                  from={{ rotate: '0deg' }}
+                  animate={{ rotate: '360deg' }}
+                  transition={{ type: 'timing', duration: 800, loop: true, repeatReverse: false }}
+                >
+                  <Loader2 size={18} color="#FFFFFF" strokeWidth={2.6} />
+                </MotiView>
+              )
+            ) : (
+              <>
+                <Check size={18} color="#FFFFFF" strokeWidth={2.6} />
+                <Text style={textStyle('sm', FONT.uiBold)} className="text-white">
+                  {isEditing ? 'Guardar' : 'Listo'}
+                </Text>
+              </>
+            )}
+          </Pressable>
+        )}
+      </View>
+
       {/* Nota rápida por serie (strength) — mirror web A.4.d (`LogSetForm.tsx:699-736`): toggle + input
-          desplegable, máx 300 chars, viaja al coach vía `values.note` → `buildStrengthPayload`. */}
+          desplegable, máx 300 chars, viaja al coach vía `values.note` → `buildStrengthPayload`. Va DESPUÉS
+          del botón, como en web (`:699` tras `:695`). */}
       {!typedMode && (
         <View>
           <Pressable
@@ -658,64 +748,33 @@ export function ActiveSetRow({
               {noteTrimmed ? 'Nota añadida' : 'Agregar nota'}
             </Text>
           </Pressable>
-          {noteOpen && (
-            <TextInput
-              testID={`note-input-${setNumber}`}
-              value={values.note ?? ''}
-              onChangeText={(t) => patch({ note: t })}
-              maxLength={300}
-              placeholder="Ej: sentí molestia en el hombro"
-              placeholderTextColor={ON_DARK_MUTED}
-              accessibilityLabel="Nota de la serie para tu coach"
-              style={textStyle('xs', FONT.ui)}
-              className="mt-1.5 rounded-control border border-inverse bg-white/[0.06] px-3 py-2 text-on-dark"
-            />
-          )}
+          {/* El input se despliega animado (mirror web AnimatePresence height 0→auto + opacity 0.2s,
+              `LogSetForm.tsx:714-734`). Idioma RN opacity/translateY (igual que los disclosures de la card,
+              `SingleExerciseCard.tsx:453-461`); instantáneo con reduce-motion. */}
+          <AnimatePresence>
+            {noteOpen && (
+              <MotiView
+                from={motion.reduced ? { opacity: 1, translateY: 0 } : { opacity: 0, translateY: -4 }}
+                animate={{ opacity: 1, translateY: 0 }}
+                exit={motion.reduced ? { opacity: 0, translateY: 0 } : { opacity: 0, translateY: -4 }}
+                transition={{ type: 'timing', duration: motion.reduced ? 0 : 200 }}
+              >
+                <TextInput
+                  testID={`note-input-${setNumber}`}
+                  value={values.note ?? ''}
+                  onChangeText={(t) => patch({ note: t })}
+                  maxLength={300}
+                  placeholder="Ej: sentí molestia en el hombro"
+                  placeholderTextColor={ON_DARK_MUTED}
+                  accessibilityLabel="Nota de la serie para tu coach"
+                  style={textStyle('xs', FONT.ui)}
+                  className="mt-1.5 rounded-control border border-inverse/10 bg-white/[0.06] px-3 py-2 text-on-dark"
+                />
+              </MotiView>
+            )}
+          </AnimatePresence>
         </View>
       )}
-
-      {/* Botón ETIQUETADO para confirmar la serie activa protagonista (mirror web SubmitSetButton etiquetado,
-          `LogSetForm.tsx:696,1146-1157`: h-12 min-w-[104px], Check + label). 'Guardar' al editar una serie
-          cerrada, 'Listo' cuando es nueva (mirror `isLogged ? 'Guardar' : 'Listo'`). La web reserva el
-          circular para las filas NO protagonistas. Commit intacto. */}
-      <View className="flex-row justify-end">
-        <Pressable
-          testID={`confirm-set-${setNumber}`}
-          onPress={handleConfirm}
-          disabled={committing}
-          className={`h-12 min-w-[104px] flex-row items-center justify-center gap-2 rounded-control bg-sport-500 px-4 active:opacity-90 ${
-            committing ? 'opacity-70' : ''
-          }`}
-          accessibilityRole="button"
-          accessibilityState={{ disabled: committing, busy: committing }}
-          accessibilityLabel={
-            committing ? 'Guardando set...' : `${isEditing ? 'Guardar' : 'Listo'}, confirmar serie ${setNumber}`
-          }
-        >
-          {committing ? (
-            // Spinner durante el commit (mirror web `<Loader2 animate-spin>`). Sin reduce-motion gira en loop;
-            // con reduce-motion queda estático (paridad con el resto de animaciones de la card).
-            motion.reduced ? (
-              <Loader2 size={18} color="#FFFFFF" strokeWidth={2.6} />
-            ) : (
-              <MotiView
-                from={{ rotate: '0deg' }}
-                animate={{ rotate: '360deg' }}
-                transition={{ type: 'timing', duration: 800, loop: true, repeatReverse: false }}
-              >
-                <Loader2 size={18} color="#FFFFFF" strokeWidth={2.6} />
-              </MotiView>
-            )
-          ) : (
-            <>
-              <Check size={18} color="#FFFFFF" strokeWidth={2.6} />
-              <Text style={textStyle('sm', FONT.uiBold)} className="text-white">
-                {isEditing ? 'Guardar' : 'Listo'}
-              </Text>
-            </>
-          )}
-        </Pressable>
-      </View>
 
       {/* Teclado numerico: mecanismo de entrada de la caja tocada (tap abre / Siguiente / Listo) */}
       {openKey && currentField && (
@@ -748,6 +807,9 @@ export function ActiveSetRow({
                 setOpenKey(null)
                 commit()
               }}
+              // Botón X del panel (mirror web `NumericKeypadSheet.tsx:193-200`, que SIEMPRE muestra la X):
+              // cierra SIN guardar, igual que el scrim tap-fuera. Añade la affordance explícita de cierre.
+              onClose={() => setOpenKey(null)}
               // Pestañas de campo (mirror `role="tablist"` web `NumericKeypadSheet.tsx:287-308`): dejan
               // SALTAR peso↔reps sin cerrar+reabrir. Las cajas de la fila SON las pestañas; tocar una
               // re-abre el keypad en ese campo.

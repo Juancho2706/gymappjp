@@ -99,6 +99,10 @@ function withAlpha(hex: string, alpha: number): string {
 
 const MONO = FONT.monoBold
 const BOLD = FONT.uiBold
+// font-medium (~500) — etiqueta de nombre de grupo bajo cada barra de kg de "Músculos trabajados"
+// (web WorkoutSummaryOverlay.tsx:464 `font-medium text-on-dark`). El web la pinta en medium, no
+// regular; FONT.uiMedium ya está cargado (usado en ShareCard dateLine, ShareCard.tsx:548).
+const MEDIUM = FONT.uiMedium
 // font-semibold (~600) — nombres de ejercicio (§6) y NonStrengthCard (§7.1), MÁS las etiquetas
 // pequeñas muted que el web pinta `font-semibold`, no `font-bold`: labels de hero "Duración"/adaptativo
 // (web WorkoutSummaryOverlay.tsx:289,298), chip "Compartir" del PR (:350), valor 1RM (:364) y label de
@@ -454,9 +458,12 @@ export function WorkoutSummaryOverlay({
             </View>
           )}
 
-          {/* Músculos trabajados */}
+          {/* Músculos trabajados. Web: `<section className="mb-8">` = 32px de margen inferior, la
+              ÚNICA sección con mb-8 (el resto usa mb-6 = 24px, WorkoutSummaryOverlay.tsx:446). El
+              ScrollView aplica `gap: 24` uniforme, así que sumamos 8px extra (marginBottom) para
+              llegar a los 32px del web en la separación Músculos→'Lo que viene'. */}
           {(hasMuscleMap || muscleGroupVolume.length > 0) && (
-            <View style={{ gap: 10 }}>
+            <View style={{ gap: 10, marginBottom: 8 }}>
               <Text style={{ fontFamily: BOLD, fontSize: 12, letterSpacing: 1.2, textTransform: 'uppercase', color: ON_DARK_MUTED }}>Músculos trabajados</Text>
               {/* px-3 pt-3 pb-1 (web WorkoutSummaryOverlay.tsx:455). */}
               {hasMuscleMap && (
@@ -468,7 +475,7 @@ export function WorkoutSummaryOverlay({
                 {muscleGroupVolume.map(({ group, pct, vol }) => (
                   <View key={group} style={{ gap: 4 }}>
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                      <Text style={{ fontFamily: theme.fontSans, fontSize: 12, color: ON_DARK }}>{group}</Text>
+                      <Text style={{ fontFamily: MEDIUM, fontSize: 12, color: ON_DARK }}>{group}</Text>
                       {/* Web (WorkoutSummaryOverlay.tsx:465) pinta "{vol} kg" en SANS `text-on-dark-muted`,
                           sin mono/tabular. Espejamos la sans; tabular-nums sólo alinea los dígitos. */}
                       <Text style={{ fontFamily: theme.fontSans, fontSize: 12, color: ON_DARK_MUTED, fontVariant: ['tabular-nums'] }}>{Math.round(vol)} kg</Text>
@@ -565,7 +572,9 @@ export function WorkoutSummaryOverlay({
             <ShareCardEyebrow color={brand}>RÉCORD PERSONAL</ShareCardEyebrow>
             <ShareCardTitle>{prCard.exerciseName}</ShareCardTitle>
             {/* Coma decimal es-CL como el canvas web (fmtWeight/fmtPct): "102,5 kg", "+12,5%". */}
-            <ShareCardHero value={fmtDecimalCL(prCard.newWeightKg)} unit="kg" color={brand} />
+            {/* Unidad hero en MAYÚSCULAS: el canvas web pinta "KG" (workout-pr-card-canvas.ts:673),
+                no "kg". Espejamos el casing dentro de la reimplementación Views de la tarjeta. */}
+            <ShareCardHero value={fmtDecimalCL(prCard.newWeightKg)} unit="KG" color={brand} />
             {/* Web canvas (workout-pr-card-canvas.ts:676-684): el pill verde de salto sólo aparece si
                 prevWeightKg>0; con máximo histórico 0 muestra el literal neutro "Primer récord personal"
                 (tono neutro, no success), no "0 → X kg · +100%". */}
@@ -669,7 +678,8 @@ function NonStrengthCard({
           {icon}
           <Text style={{ flex: 1, fontFamily: SEMIBOLD, fontSize: 14, color: ON_DARK }} numberOfLines={1}>{name}</Text>
         </View>
-        <Text style={{ fontFamily: BOLD, fontSize: 10, letterSpacing: 0.6, textTransform: 'uppercase', color: accent, backgroundColor: accent + '28', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 999, overflow: 'hidden' }}>{typeLabel}</Text>
+        {/* tracking-wide del web = 0.025em; a font-size 10px ≈ 0.25px (WorkoutSummaryOverlay.tsx:112). */}
+        <Text style={{ fontFamily: BOLD, fontSize: 10, letterSpacing: 0.25, textTransform: 'uppercase', color: accent, backgroundColor: accent + '28', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 999, overflow: 'hidden' }}>{typeLabel}</Text>
       </View>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
         {tiles.map((t, i) => (

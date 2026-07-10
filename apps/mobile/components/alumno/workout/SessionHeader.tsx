@@ -102,7 +102,7 @@ export function SessionHeader({
         <View className="shrink-0 flex-row items-center gap-1.5">
         {/* Toggle segmentado Lista / Pasos (E2-04) — icono + rótulo, como el web (1823-1846). */}
         <View
-          className="flex-row items-center gap-0.5 rounded-control bg-white/[0.06] p-0.5"
+          className="flex-row items-center rounded-control bg-white/[0.06] p-0.5"
           accessibilityRole="radiogroup"
           accessibilityLabel="Modo de ejecución"
         >

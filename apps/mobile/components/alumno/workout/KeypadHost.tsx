@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Modal, Pressable, Text, TextInput, View } from 'react-native'
-import { MotiView } from 'moti'
+import { AnimatePresence, MotiView } from 'moti'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { ArrowLeft, ArrowRight, Check, StickyNote, X } from 'lucide-react-native'
 import {
@@ -138,7 +138,10 @@ export function KeypadHost({
     writeActive(keypadBackspace(activeVal()))
   }
   const onClear = () => {
-    haptics.tap()
+    // Borrado TOTAL (long-press ⌫): cue háptico MÁS fuerte que el backspace de un char, espejando la
+    // gradación web `triggerHaptic(12)` vs `(6)` (`WorkoutKeypadProvider.tsx:213-221`). RN mapea esa mayor
+    // intensidad a impact Medium (`haptics.setDone`) frente al Light tap del backspace (`onBackspace`).
+    haptics.setDone()
     writeActive('')
   }
   const onIncrement = (delta: number) => {
@@ -197,7 +200,13 @@ export function KeypadHost({
   })()
   const lastPrev = !target.typed ? target.lastPrev ?? null : null
 
-  // Editar una serie logueada → botón 'Guardar'; nueva → 'Listo' (mirror web LogSetForm.tsx:696).
+  // Label del botón primario. DECISIÓN DE FUENTE DE VERDAD (adaptación intencional, no defecto):
+  // el KEYPAD web muestra SIEMPRE 'Listo' (`NumericKeypadSheet.tsx:279,418`), pero en web la EDICIÓN de
+  // una serie logueada ocurre inline en la fila (`LogSetForm`), cuyo botón de submit dice 'Guardar'
+  // (`LogSetForm.tsx:696` `label={isLogged ? 'Guardar' : 'Listo'}`). En mobile el `KeypadHost` es un Modal
+  // full-screen que TAPA la fila → fusiona ambos roles (keypad + botón de commit de la fila). Mantener
+  // 'Guardar' al editar PRESERVA la affordance que el usuario web ve en su fila de edición; forzar 'Listo'
+  // la perdería (la fila queda oculta tras el modal). Se conserva a propósito.
   const doneLabel = target.isEdit ? 'Guardar' : 'Listo'
   const noteTrimmed = (values.note ?? '').trim()
 
@@ -306,19 +315,31 @@ export function KeypadHost({
                       {noteTrimmed ? 'Nota añadida' : 'Agregar nota'}
                     </Text>
                   </Pressable>
-                  {noteOpen ? (
-                    <TextInput
-                      testID="keypad-note-input"
-                      value={values.note ?? ''}
-                      onChangeText={(t) => patch({ note: t }, activeIndex)}
-                      maxLength={300}
-                      placeholder="Ej: sentí molestia en el hombro"
-                      placeholderTextColor={ON_DARK_MUTED}
-                      accessibilityLabel="Nota de la serie para tu coach"
-                      style={textStyle('xs', FONT.ui)}
-                      className="mt-1.5 rounded-control border border-inverse bg-white/[0.06] px-3 py-2 text-on-dark"
-                    />
-                  ) : null}
+                  {/* El input se despliega animado (mirror web AnimatePresence height 0→auto + opacity 0.2s,
+                      `LogSetForm.tsx:714-734`). Idioma RN opacity/translateY (igual que los disclosures de la
+                      card, `SingleExerciseCard.tsx:453-461`); instantáneo con reduce-motion. */}
+                  <AnimatePresence>
+                    {noteOpen && (
+                      <MotiView
+                        from={motion.reduced ? { opacity: 1, translateY: 0 } : { opacity: 0, translateY: -4 }}
+                        animate={{ opacity: 1, translateY: 0 }}
+                        exit={motion.reduced ? { opacity: 0, translateY: 0 } : { opacity: 0, translateY: -4 }}
+                        transition={{ type: 'timing', duration: motion.reduced ? 0 : 200 }}
+                      >
+                        <TextInput
+                          testID="keypad-note-input"
+                          value={values.note ?? ''}
+                          onChangeText={(t) => patch({ note: t }, activeIndex)}
+                          maxLength={300}
+                          placeholder="Ej: sentí molestia en el hombro"
+                          placeholderTextColor={ON_DARK_MUTED}
+                          accessibilityLabel="Nota de la serie para tu coach"
+                          style={textStyle('xs', FONT.ui)}
+                          className="mt-1.5 rounded-control border border-inverse/10 bg-white/[0.06] px-3 py-2 text-on-dark"
+                        />
+                      </MotiView>
+                    )}
+                  </AnimatePresence>
                 </View>
 
                 {/* Acciones — ambas guardan la serie (el esfuerzo es opcional) */}

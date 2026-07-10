@@ -143,9 +143,15 @@ export function SubstituteExerciseSheet({ open, onOpenChange, blockId, prescribe
             Cambiar ejercicio
           </Text>
         </View>
-        {/* Sin numberOfLines: nombres largos hacen wrap libre como en web (título sin line-clamp). */}
+        {/* Sin numberOfLines: nombres largos hacen wrap libre como en web (título sin line-clamp).
+            Tamaño: xl=21px es el snap DS del web `text-[22px]` (no hay token de 22px — regla "usa
+            tokens, no hardcodear px"). Interlínea: web `leading-tight` (L81) es la utilidad Tailwind
+            por defecto ≈1.25 — globals.css:467 define la CSS var `--lh-tight:1.05` pero NO remapea la
+            utilidad — así que lh 'snug' (1.18) es el token DS más cercano a ese 1.25 del web (el 'tight'
+            de 1.05 apretaba de más los títulos que hacen wrap). ls 'tight' (-0.015em) es el token más
+            cercano al web `tracking-[-0.02em]` (no hay token de -0.02em). */}
         <Text
-          style={textStyle('xl', FONT.displayBlack, { lh: 'tight', ls: 'tight' })}
+          style={textStyle('xl', FONT.displayBlack, { lh: 'snug', ls: 'tight' })}
           className="text-on-dark mt-1"
         >
           {prescribedName}
@@ -282,8 +288,12 @@ function CandidateRow({ opt, onPress }: { opt: SubstituteCandidate; onPress: () 
                   {equipmentLabel(opt.equipment)}
                 </Text>
               </View>
+              {/* Sin numberOfLines: el web (SubstituteExerciseSheet.tsx:165-167) usa un `<span
+                  text-[11px]>` SIN truncado dentro de un contenedor `flex-wrap`, así que un
+                  muscle_group largo ENVUELVE a otra línea. metaRow ya tiene flexWrap:'wrap' (styles),
+                  por lo que quitar el numberOfLines={1} reproduce ese wrap en vez de elipsar. */}
               {opt.muscle_group ? (
-                <Text style={textStyle('3xs', FONT.ui)} className="text-on-dark-muted" numberOfLines={1}>
+                <Text style={textStyle('3xs', FONT.ui)} className="text-on-dark-muted">
                   {opt.muscle_group}
                 </Text>
               ) : null}

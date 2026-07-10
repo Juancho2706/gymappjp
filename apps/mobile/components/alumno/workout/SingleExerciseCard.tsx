@@ -41,9 +41,9 @@ const EMBER_200 = '#FFD6C7' // --color-ember-200 (255 214 199) — ArrowRightLef
 const MONO_BOLD = { fontFamily: FONT.monoBold } as const
 // Línea de prescripción strength (web:274): el contenedor es `font-mono ... font-semibold` (600) y TODOS
 // los segmentos lo heredan por igual — la jerarquía la marca el COLOR (on-dark vs muted), no el peso. El
-// theme mono sólo tiene 400/500/700 (typography.ts:41-43), así que unificamos toda la línea a 500 (la cara
-// más cercana a 600) en vez del salto 700/400 que engrosaba los primarios y afinaba los muted.
-const MONO_MEDIUM = { fontFamily: FONT.monoMedium } as const
+// theme mono SÍ tiene la cara 600 (typography.ts:43 `monoSemibold: JetBrainsMono_600SemiBold`), así que
+// igualamos toda la línea a 600 en vez de 500, que salía un tier más liviano que el `font-semibold` del web.
+const MONO_SEMIBOLD = { fontFamily: FONT.monoSemibold } as const
 const SANS_BOLD = { fontFamily: FONT.uiBold } as const
 // Párrafos del panel "Detalles" (técnica/instrucciones/nota/sobrecarga): web usa `leading-relaxed`
 // (line-height 1.6, SingleExerciseCard web:344,352,363,372). TYPE.caption trae lh `normal` (1.4,
@@ -377,29 +377,29 @@ export function SingleExerciseCard({
           {/* Segmentos separados por `·` atenuado (web usa <Sep/> = text-on-dark-muted/40, no el color
               del segmento). Wrapper con gap-y-0.5 como web (:274). */}
           <View className="flex-row flex-wrap items-center gap-x-2 gap-y-0.5">
-            <Text style={[TYPE.mono, MONO_MEDIUM]} className="text-[13px] text-on-dark">{block.sets} × {block.reps}</Text>
+            <Text style={[TYPE.mono, MONO_SEMIBOLD]} className="text-[13px] text-on-dark">{block.sets} × {block.reps}</Text>
             {block.target_weight_kg != null && (
               <>
                 <Sep />
-                <Text style={[TYPE.mono, MONO_MEDIUM]} className="text-[13px] text-on-dark">{suggestedWeightKg ?? block.target_weight_kg} kg</Text>
+                <Text style={[TYPE.mono, MONO_SEMIBOLD]} className="text-[13px] text-on-dark">{suggestedWeightKg ?? block.target_weight_kg} kg</Text>
               </>
             )}
             {block.rest_time && (
               <>
                 <Sep />
-                <Text style={[TYPE.mono, MONO_MEDIUM]} className="text-[13px] text-on-dark-muted">desc {block.rest_time}</Text>
+                <Text style={[TYPE.mono, MONO_SEMIBOLD]} className="text-[13px] text-on-dark-muted">desc {block.rest_time}</Text>
               </>
             )}
             {block.tempo && (
               <>
                 <Sep />
-                <Text style={[TYPE.mono, MONO_MEDIUM]} className="text-[13px] text-on-dark-muted">tempo {block.tempo}</Text>
+                <Text style={[TYPE.mono, MONO_SEMIBOLD]} className="text-[13px] text-on-dark-muted">tempo {block.tempo}</Text>
               </>
             )}
             {block.rir && (
               <>
                 <Sep />
-                <Text style={[TYPE.mono, MONO_MEDIUM]} className="text-[13px] text-on-dark-muted">RIR {block.rir}</Text>
+                <Text style={[TYPE.mono, MONO_SEMIBOLD]} className="text-[13px] text-on-dark-muted">RIR {block.rir}</Text>
               </>
             )}
           </View>
@@ -463,7 +463,7 @@ export function SingleExerciseCard({
         >
           {isStrength && exercise.instructions && exercise.instructions.length > 0 && (
             <View>
-              <Text style={TYPE.eyebrow} className="mb-1 text-on-dark-muted">Técnica</Text>
+              <Text style={HEADER_LABEL_STYLE} className="mb-1 text-on-dark-muted">Técnica</Text>
               <View className="gap-1">
                 {exercise.instructions.map((step, i) => (
                   <View key={i} className="flex-row gap-2">
@@ -476,13 +476,13 @@ export function SingleExerciseCard({
           )}
           {!isStrength && block.instructions && (
             <View>
-              <Text style={TYPE.eyebrow} className="mb-1 text-on-dark-muted">Instrucciones</Text>
+              <Text style={HEADER_LABEL_STYLE} className="mb-1 text-on-dark-muted">Instrucciones</Text>
               <Text style={DETAIL_BODY} className="text-[12px] text-on-dark/90">{block.instructions}</Text>
             </View>
           )}
           {block.notes && (
             <View>
-              <Text style={TYPE.eyebrow} className="mb-1 text-on-dark-muted">Nota del coach</Text>
+              <Text style={HEADER_LABEL_STYLE} className="mb-1 text-on-dark-muted">Nota del coach</Text>
               <View className="flex-row gap-2">
                 <Quote size={14} color={ON_DARK_MUTED} style={{ marginTop: 2 }} />
                 <Text style={DETAIL_BODY} className="flex-1 text-[12px] text-on-dark/90">{block.notes}</Text>
@@ -491,13 +491,13 @@ export function SingleExerciseCard({
           )}
           {isStrength && overloadDetail && (
             <View>
-              <Text style={TYPE.eyebrow} className="mb-1 text-on-dark-muted">Sobrecarga progresiva</Text>
+              <Text style={HEADER_LABEL_STYLE} className="mb-1 text-on-dark-muted">Sobrecarga progresiva</Text>
               <Text style={DETAIL_BODY} className="text-[12px] text-on-dark/90">{overloadDetail}</Text>
             </View>
           )}
           {prevList.length > 0 && (
             <View>
-              <Text style={TYPE.eyebrow} className="mb-1 text-on-dark-muted">Historial</Text>
+              <Text style={HEADER_LABEL_STYLE} className="mb-1 text-on-dark-muted">Historial</Text>
               <View className="gap-0.5">
                 {prevList.slice(0, 5).map((s, i) => (
                   <View key={i} className="flex-row justify-between">
@@ -533,13 +533,15 @@ export function SingleExerciseCard({
 /** Separador `·` atenuado entre segmentos de la línea de prescripción (espeja `Sep` de web,
  *  WorkoutExecutionClient.tsx:562 = `<span className="text-on-dark-muted/40">·</span>`). */
 function Sep() {
-  // Peso 500 como el resto de la línea (web: el `·` hereda `font-semibold` del contenedor; acá igualamos
-  // a MONO_MEDIUM para no dejar el separador en 400 mientras los segmentos van a 500).
-  return <Text style={[TYPE.mono, MONO_MEDIUM]} className="text-[13px] text-on-dark-muted/40">·</Text>
+  // Peso 600 como el resto de la línea (web: el `·` hereda `font-semibold` del contenedor, WEC:562; acá
+  // igualamos a MONO_SEMIBOLD para no dejar el separador en 400 mientras los segmentos van a 600).
+  return <Text style={[TYPE.mono, MONO_SEMIBOLD]} className="text-[13px] text-on-dark-muted/40">·</Text>
 }
 
-// Etiqueta de columna del header tipado — mirror web `text-[10px] font-bold uppercase tracking-wider`
-// (WorkoutExecutionClient.tsx:395/406/415). tracking-wider = 0.05em → 10px * 0.05 = 0.5pt.
+// Etiqueta de sección/columna — mirror web `text-[10px] font-bold uppercase tracking-wider`: los
+// encabezados del panel "Detalles" (SingleExerciseCard web:343,349,362,371,377) y las columnas del header
+// tipado (WorkoutExecutionClient.tsx:395/406/415). tracking-wider = 0.05em → 10px * 0.05 = 0.5pt.
+// (Reemplaza `TYPE.eyebrow` = 12px + ls 0.12em ≈ 1.44pt, que salía más grande y con ~3x el tracking del web.)
 const HEADER_LABEL_STYLE = { fontFamily: FONT.uiBold, fontSize: 10, letterSpacing: 0.5, textTransform: 'uppercase' } as const
 
 /**

@@ -3,7 +3,7 @@ import { Pressable, Text, View, type TextStyle } from 'react-native'
 import { MotiView } from 'moti'
 import { cssInterop } from 'nativewind'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { ArrowRight, Check, Delete, HelpCircle, SlidersHorizontal } from 'lucide-react-native'
+import { ArrowRight, Check, Delete, HelpCircle, SlidersHorizontal, X } from 'lucide-react-native'
 import {
   appendKeypadDigit,
   appendKeypadDecimal,
@@ -49,6 +49,7 @@ cssInterop(Check, { className: { target: 'style', nativeStyleToProp: { color: tr
 cssInterop(ArrowRight, { className: { target: 'style', nativeStyleToProp: { color: true } } })
 cssInterop(SlidersHorizontal, { className: { target: 'style', nativeStyleToProp: { color: true } } })
 cssInterop(HelpCircle, { className: { target: 'style', nativeStyleToProp: { color: true } } })
+cssInterop(X, { className: { target: 'style', nativeStyleToProp: { color: true } } })
 
 // ─── Config por modo ────────────────────────────────────────────────────────
 
@@ -416,6 +417,12 @@ export function TypedKeypad(props: {
   onChange(v: string): void
   onNext(): void
   onDone(): void
+  /**
+   * Cierre explícito SIN guardar — alimenta el botón X del panel (mirror web `NumericKeypadSheet.tsx:193-200`,
+   * que SIEMPRE renderiza la X junto al grabber). Sin `onClose` el panel omite la X (el scrim del Modal padre
+   * sigue cerrando por tap-fuera).
+   */
+  onClose?(): void
   unit?: string
   /**
    * Pestañas de campo (peso↔reps / campos tipados) — mirror del `role="tablist"` web
@@ -429,7 +436,7 @@ export function TypedKeypad(props: {
    */
   header?: { exerciseName?: string; objectiveLine?: string; last?: { weightKg: number | null; reps: number | null } | null }
 }) {
-  const { mode, value, onChange, onNext, onDone, unit, tabs, header } = props
+  const { mode, value, onChange, onNext, onDone, onClose, unit, tabs, header } = props
   const { resolvedScheme } = useTheme()
   const insets = useSafeAreaInsets()
   const motion = useEvaMotion()
@@ -453,7 +460,10 @@ export function TypedKeypad(props: {
     onChange(keypadBackspace(value))
   }
   const onClear = () => {
-    haptics.tap()
+    // Borrado TOTAL (long-press ⌫): cue háptico MÁS fuerte que el backspace de un char, espejando la
+    // gradación web `triggerHaptic(12)` vs `(6)` (`WorkoutKeypadProvider.tsx:213-221`). RN mapea esa mayor
+    // intensidad a impact Medium (`haptics.setDone`) frente al Light tap del backspace (`onBackspace`).
+    haptics.setDone()
     onChange('')
   }
   const onIncrement = (delta: number) => {
@@ -495,12 +505,25 @@ export function TypedKeypad(props: {
         // `mx-auto w-full max-w-md`: cap 448px centrado, mirror del panel web (`NumericKeypadSheet.tsx:184`
         // `mx-auto max-w-md`) y del `KeypadHost` (`KeypadHost.tsx:223`). Sin esto ocupaba el 100% del ancho
         // → se estiraba en tablet/landscape sin el cap centrado.
-        className="mx-auto w-full max-w-md rounded-t-sheet border-t border-inverse/10 bg-ink-950 px-3 pt-3"
+        // `pt-2` + grabber `pb-1`: mirror EXACTO del panel único web (`NumericKeypadSheet.tsx:184` panel
+        // `pt-2`, `:191` grabber `pb-1`) y del `KeypadHost.tsx:228,232` — antes `pt-3`/`pb-2` dejaban esta
+        // ruta primaria más alta que la web y que el propio KeypadHost.
+        className="mx-auto w-full max-w-md rounded-t-sheet border-t border-inverse/10 bg-ink-950 px-3 pt-2"
         style={[{ paddingBottom: insets.bottom + 10 }, panelShadow]}
       >
-        {/* Grabber */}
-        <View className="items-center pb-2">
+        {/* Grabber + cerrar (mirror web `NumericKeypadSheet.tsx:191-201` / `KeypadHost.tsx:232-242`) */}
+        <View className="items-center justify-center pb-1">
           <View className="h-1 w-10 rounded-pill bg-white/20" />
+          {onClose ? (
+            <Pressable
+              onPress={onClose}
+              accessibilityRole="button"
+              accessibilityLabel="Cerrar teclado"
+              className="absolute right-0 top-0 h-8 w-8 items-center justify-center rounded-pill"
+            >
+              <X size={16} className="text-on-dark-muted" />
+            </Pressable>
+          ) : null}
         </View>
 
         {header ? (
@@ -626,7 +649,7 @@ export function EffortScale(props: {
       })}
       <Text
         style={textStyle(compact ? '3xs' : 'xs', FONT.monoBold)}
-        className="ml-1 w-5 text-center text-sport-300"
+        className="ml-1 w-5 shrink-0 text-center text-sport-300"
       >
         {value != null ? String(value) : '–'}
       </Text>

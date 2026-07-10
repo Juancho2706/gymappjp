@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { findNodeHandle, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native'
+import { Alert, findNodeHandle, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useKeepAwake } from 'expo-keep-awake'
@@ -600,8 +600,16 @@ function ExecutorV2Inner({ planId }: { planId: string }) {
   // Finalizar la sesión (paridad web `handleFinish`, WEC:1502-1571). Guard reentrante; drena la cola
   // offline (idempotente, last-wins) para no finalizar en falso con series huérfanas; congela la
   // duración; limpia snapshot/draft local (una 2ª sesión del día arranca de cero) y abre el resumen.
-  // Adaptación RN: el Toast no soporta botón de acción → si algo queda sin sincronizar se AVISA y se
-  // finaliza igual (la cola sigue reintentando al reconectar); no se bloquea al alumno.
+  // Adaptación RN: el Toast no soporta botón de acción. El web, con series sin sincronizar, muestra un
+  // toast con acción "Finalizar igual" y RETORNA sin finalizar (WEC:1527-1555) — la sesión queda abierta
+  // y el alumno decide esperar la sync o finalizar explícitamente. Preservamos ESA elección con un Alert
+  // de confirmación ("Esperar" / "Finalizar igual") en vez de auto-finalizar de golpe.
+  const finalizeSession = useCallback(async () => {
+    setFinishedElapsed(elapsedSec)
+    await finishSession()
+    setSummaryOpen(true)
+  }, [elapsedSec, finishSession])
+
   const handleFinish = useCallback(async () => {
     if (finishingRef.current) return
     finishingRef.current = true
@@ -612,18 +620,24 @@ function ExecutorV2Inner({ planId }: { planId: string }) {
       }
       const stillPending = await getPendingLogCount()
       if (stillPending > 0) {
-        toast.warning(`${stillPending} serie${stillPending !== 1 ? 's' : ''} sin sincronizar`, {
-          description: 'Se guardarán cuando vuelva la conexión.',
-          duration: 6000,
-        })
+        // Paridad de elección con el web: no saltar al resumen; confirmar. "Esperar" mantiene la sesión
+        // abierta (la cola reintenta al reconectar); "Finalizar igual" cierra igual que el web.
+        const n = stillPending
+        Alert.alert(
+          `${n} serie${n !== 1 ? 's' : ''} sin sincronizar`,
+          'Se guardarán cuando vuelva la conexión. Puedes finalizar igual o esperar.',
+          [
+            { text: 'Esperar', style: 'cancel' },
+            { text: 'Finalizar igual', style: 'destructive', onPress: () => { void finalizeSession() } },
+          ],
+        )
+        return
       }
-      setFinishedElapsed(elapsedSec)
-      await finishSession()
-      setSummaryOpen(true)
+      await finalizeSession()
     } finally {
       finishingRef.current = false
     }
-  }, [elapsedSec, finishSession])
+  }, [finalizeSession])
 
   // Adaptador para el WorkoutSummaryOverlay (E2-15): bloques → SummaryBlock (arrastra los ejes
   // tipados cardio/movilidad para el conteo polimórfico). Los logs (sessionLogs) ya cumplen
@@ -704,13 +718,20 @@ function ExecutorV2Inner({ planId }: { planId: string }) {
   // card completa para poder editar) — paridad web renderGroup (WorkoutExecutionClient.tsx:1580-1586).
   const renderGroup = useCallback(
     (group: { key: string; type: 'single' | 'superset'; blocks: SessionBlock[] }, { allowCollapse }: { allowCollapse: boolean }) => {
+      // ¿Algún set de este bloque falló online (chip rojo "Reintentar")? Sus keys en `syncErrors` son
+      // `${blockId}:${setNumber}`. Un fallo REAL debe MANTENER la card expandida aunque el bloque cuente
+      // como "done" (la fila errada sigue en `sessionLogs` como `_pending`), porque el chip de reintento
+      // sólo se pinta dentro de la card completa: si colapsara a recap, el error quedaría invisible.
+      // Espeja el web, que revierte la fila optimista para que el bloque se re-expanda (WEC:1304-1308).
+      const blockHasSyncError = (blockId: string) =>
+        Object.keys(syncErrors).some((k) => k.startsWith(`${blockId}:`))
       if (group.type === 'superset') {
         const members = supersetMembersByBlock.get(group.blocks[0].id) ?? group.blocks
         const groupComplete = members.every(isBlockComplete)
         const groupActive = activeBlockId != null && members.some((m) => m.id === activeBlockId)
         // Superserie completa + lista → colapsa a recap delgado, reexpandible con tap (paridad web
         // WEC:1594-1607). En Pasos (allowCollapse false) siempre queda la card completa para editar.
-        if (allowCollapse && groupComplete && !expandedDone[group.key]) {
+        if (allowCollapse && groupComplete && !expandedDone[group.key] && !members.some((m) => blockHasSyncError(m.id))) {
           const names = members.map((m) => resolveExercise(m)?.name).filter(Boolean).join(' + ')
           return (
             <CollapsedExerciseBar
@@ -797,7 +818,7 @@ function ExecutorV2Inner({ planId }: { planId: string }) {
       const focus: 'active' | 'upcoming' | 'done' = complete ? 'done' : block.id === activeBlockId ? 'active' : 'upcoming'
       const prevList: PrevSet[] = sub ? [] : previousHistory[exercise.id] ?? []
       // Completado + lista → recap delgado; tap re-expande la card para editar una serie (web 1701-1713).
-      if (allowCollapse && focus === 'done' && !expandedDone[block.id]) {
+      if (allowCollapse && focus === 'done' && !expandedDone[block.id] && !blockHasSyncError(block.id)) {
         const eff = effByBlock.get(block.id) ?? null
         const recapWeight = eff?.weightKg ?? block.target_weight_kg
         const recapSub = isStrengthBlock
@@ -1035,14 +1056,19 @@ function ExecutorV2Inner({ planId }: { planId: string }) {
           <View ref={scrollContentRef} collapsable={false} style={{ gap: 20 }}>
           {sections.map((section) => (
             <View key={section.key} className="gap-3">
-              <View className="flex-row items-center gap-3">
-                <View className="w-1 self-stretch rounded-full bg-sport-500" style={{ opacity: section.muted ? 0.4 : 1, minHeight: 20 }} />
-                <Text className="shrink-0 font-sans-bold text-sm uppercase text-on-dark-muted" style={{ letterSpacing: 1 }}>{section.title}</Text>
-                <View className="h-px flex-1 bg-white/10" />
+              {/* Header row + subtitle anidados en un View gap-1.5 (6px) — paridad web: la sección es
+                  space-y-3 pero title→subtitle vive en un `div.space-y-1.5` interno (WEC:1920-1938), así
+                  que title→subtitle = 6px y subtitle→grupos = 12px (el gap-3 externo). */}
+              <View className="gap-1.5">
+                <View className="flex-row items-center gap-3">
+                  <View className="w-1 self-stretch rounded-full bg-sport-500" style={{ opacity: section.muted ? 0.4 : 1, minHeight: 20 }} />
+                  <Text className="shrink-0 font-sans-bold text-sm uppercase text-on-dark-muted" style={{ letterSpacing: 1 }}>{section.title}</Text>
+                  <View className="h-px flex-1 bg-white/10" />
+                </View>
+                {section.subtitle && (
+                  <Text className="border-l-2 border-white/10 pl-4 text-[12px] text-on-dark-muted">{section.subtitle}</Text>
+                )}
               </View>
-              {section.subtitle && (
-                <Text className="border-l-2 border-white/10 pl-4 text-[12px] text-on-dark-muted">{section.subtitle}</Text>
-              )}
               <View className="gap-3">
                 {section.groups.map((group) => renderGroup(group, { allowCollapse: true }))}
               </View>

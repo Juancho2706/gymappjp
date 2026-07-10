@@ -29,6 +29,10 @@ const LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
 // NativeWind v4: `style={TYPE.mono}` pisa la fontFamily de `font-mono-bold` → el bold no aplica. Se fija
 // la cara bold por style (array) en los valores mono destacados (bug ola0).
 const MONO_BOLD = { fontFamily: FONT.monoBold } as const
+// Pills de prescripción de la leyenda (sets×reps · kg · Descanso): web WEC:775,779,784 las pinta
+// `font-mono font-semibold` (600), no bold (700). Igualamos a JetBrainsMono_600SemiBold para no salir un
+// tier más pesado que el web (typography.ts:43 monoSemibold SÍ existe).
+const MONO_SEMIBOLD = { fontFamily: FONT.monoSemibold } as const
 // Reflow de la card (paridad web `layout={!reducedMotion}` + `springs.smooth` {stiffness:200,damping:25},
 // SingleExerciseCard web:159-160/165): anima el cambio de tamaño/orden (p. ej. al cerrar una ronda).
 // `undefined` cuando hay reduced-motion. LinearTransition = layout transition de reanimated.
@@ -168,6 +172,7 @@ export function SupersetGroupCard({
             className="h-8 flex-row items-center gap-1 rounded-control px-2"
             accessibilityRole="button"
             accessibilityLabel="Cómo hacer la superserie"
+            accessibilityState={{ expanded: howToOpen }}
           >
             <Text style={TYPE.caption} className="text-[11px] text-on-dark-muted">Cómo hacerla</Text>
             <ChevronDown size={12} color={ON_DARK_MUTED} style={{ transform: [{ rotate: howToOpen ? '180deg' : '0deg' }] }} />
@@ -217,12 +222,13 @@ export function SupersetGroupCard({
                     {m.exercise.name}
                   </Text>
                   <View className="mt-1 flex-row flex-wrap items-center gap-1.5">
-                    {m.exercise.muscle_group && (
-                      <View className="flex-row items-center gap-1.5 rounded-full bg-white/[0.06] px-2 py-0.5">
-                        <m.MemberIcon size={12} color={m.memberColor} />
-                        <Text style={{ fontFamily: FONT.uiBold, fontSize: 10.5 }} className="text-on-dark">{m.exercise.muscle_group}</Text>
-                      </View>
-                    )}
+                    {/* Pill tipo+músculo SIEMPRE presente (paridad web WEC:753-756: el `span` con
+                        `<TypeGlyph/>` + `muscle_group` se pinta sin condición → el icono de tipo se ve aun
+                        con `muscle_group` vacío; antes el gate `muscle_group &&` lo ocultaba entero). */}
+                    <View className="flex-row items-center gap-1.5 rounded-full bg-white/[0.06] px-2 py-0.5">
+                      <m.MemberIcon size={12} color={m.memberColor} />
+                      <Text style={{ fontFamily: FONT.uiBold, fontSize: 10.5 }} className="text-on-dark">{m.exercise.muscle_group}</Text>
+                    </View>
                     {m.hasTechnique && (
                       <Pressable testID={`btn-technique-${m.block.id}`} onPress={() => onOpenTechnique(m.block)} className="flex-row items-center gap-1">
                         {/* Icono 14 y texto 11px semibold (600) = web WEC:757-764 `Info w-3.5 h-3.5` +
@@ -242,16 +248,16 @@ export function SupersetGroupCard({
             {m.effType === 'strength' ? (
               <View className="flex-row flex-wrap gap-1.5">
                 <View className="rounded-full bg-white/[0.06] px-2 py-0.5">
-                  <Text style={[TYPE.mono, MONO_BOLD]} className="text-[11px] text-on-dark">{m.block.sets} × {m.block.reps}</Text>
+                  <Text style={[TYPE.mono, MONO_SEMIBOLD]} className="text-[11px] text-on-dark">{m.block.sets} × {m.block.reps}</Text>
                 </View>
                 {m.block.target_weight_kg != null && (
                   <View className="rounded-full bg-white/[0.06] px-2 py-0.5">
-                    <Text style={[TYPE.mono, MONO_BOLD]} className="text-[11px] text-on-dark">{m.suggested ?? m.block.target_weight_kg}kg</Text>
+                    <Text style={[TYPE.mono, MONO_SEMIBOLD]} className="text-[11px] text-on-dark">{m.suggested ?? m.block.target_weight_kg}kg</Text>
                   </View>
                 )}
                 {m.block.rest_time && (
                   <View className="rounded-full bg-white/[0.06] px-2 py-0.5">
-                    <Text style={[TYPE.mono, MONO_BOLD]} className="text-[11px] text-on-dark-muted">Descanso {m.block.rest_time}</Text>
+                    <Text style={[TYPE.mono, MONO_SEMIBOLD]} className="text-[11px] text-on-dark-muted">Descanso {m.block.rest_time}</Text>
                   </View>
                 )}
               </View>
