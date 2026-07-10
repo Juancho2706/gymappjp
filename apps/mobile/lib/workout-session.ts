@@ -12,6 +12,9 @@
  * cronómetro continúa desde `startedAt` (cap 4h). Cerrar la app a mitad de set ya no pierde nada.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { AppState } from 'react-native'
+import { useFocusEffect } from 'expo-router'
+import NetInfo from '@react-native-community/netinfo'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import {
   reconcileSessionLogs,
@@ -27,14 +30,14 @@ import {
 } from '@eva/workout-engine'
 import { supabase } from './supabase'
 import { getClientProfile } from './client'
-import { cachePlan, enqueueLog, getCachedPlan } from './offline-cache'
+import { cachePlan, enqueueLog, getCachedPlan, getPendingLogCount } from './offline-cache'
 import { checkOnline } from './use-online'
 import {
   getTodayInSantiago,
   getSantiagoUtcBoundsForDay,
   getSantiagoIsoYmdForUtcInstant,
 } from './date-utils'
-import { programWeekIndex1Based } from './program-week-variant'
+import { programWeekIndex1Based, resolveActiveWeekVariantForDisplay } from './program-week-variant'
 import type { LastSessionForBlock } from './workout/progression'
 
 /** Cap duro de duración de sesión (E2-03): 4 horas — el cronómetro se congela ahí. */
@@ -258,6 +261,7 @@ export function useWorkoutSession(planId: string): WorkoutSessionState {
   const [sessionLogs, setSessionLogs] = useState<ReconciledSessionLog[]>([])
   const [previousHistory, setPreviousHistory] = useState<Record<string, PrevSet[]>>({})
   const [lastSessionByBlock, setLastSessionByBlock] = useState<Record<string, LastSessionForBlock>>({})
+  const [exerciseMaxes, setExerciseMaxes] = useState<Record<string, number>>({})
   const [isOnline, setIsOnline] = useState(true)
   const [elapsedSec, setElapsedSec] = useState(0)
   const [restoredDraft, setRestoredDraft] = useState<SessionDraft | null>(null)
@@ -267,6 +271,8 @@ export function useWorkoutSession(planId: string): WorkoutSessionState {
   const logsRef = useRef<ReconciledSessionLog[]>([])
   const draftRef = useRef<SessionDraft | null>(null)
   const clientIdRef = useRef<string | null>(null)
+  // Espejo del estado online para leerlo sin stale-closure dentro de listeners (NetInfo/AppState/focus).
+  const isOnlineRef = useRef(true)
 
   const snapshotKey = SNAPSHOT_PREFIX + planId
 
@@ -317,22 +323,29 @@ export function useWorkoutSession(planId: string): WorkoutSessionState {
   )
 
   const loadPreviousHistory = useCallback(
-    async (cid: string, planBlocks: SessionBlock[], blockIds: string[]) => {
+    async (cid: string, planBlocks: SessionBlock[]) => {
       const exerciseIds = planBlocks
         .map((b) => resolveExercise(b)?.id)
         .filter((x): x is string => Boolean(x))
       if (!exerciseIds.length) return
+      // P1-3 (espejo queries.ts:186-200): match por el SNAPSHOT `exercise_id` del log (no por JOIN al
+      // bloque), filtra SÓLO por fecha (`< inicio de hoy`) SIN excluir los bloques del plan, límite 500.
+      // Antes el JOIN `workout_blocks!inner` + `.not('block_id','in',...)` dejaba VACÍO el historial en
+      // programas semanales reusados (mismos block_ids cada semana) ⇒ nunca aparecía "Última vez"/"Sesión
+      // anterior" ni autollenaba "= última vez". Ahora sobrevive al borrado del bloque y a la reutilización.
+      const { iso } = getTodayInSantiago()
+      const { startIso } = getSantiagoUtcBoundsForDay(iso)
       const { data } = await supabase
         .from('workout_logs')
-        .select('weight_kg, reps_done, logged_at, set_number, workout_blocks!inner(exercise_id)')
+        .select('weight_kg, reps_done, logged_at, set_number, exercise_id')
         .eq('client_id', cid)
-        .in('workout_blocks.exercise_id', exerciseIds)
-        .not('block_id', 'in', `(${blockIds.join(',')})`)
+        .in('exercise_id', exerciseIds)
+        .lt('logged_at', startIso)
         .order('logged_at', { ascending: false })
-        .limit(160)
+        .limit(500)
       const history: Record<string, PrevSet[]> = {}
       for (const log of (data ?? []) as Record<string, unknown>[]) {
-        const exId = (log.workout_blocks as { exercise_id?: string } | undefined)?.exercise_id
+        const exId = (log.exercise_id as string | null) ?? null
         if (!exId) continue
         if (!history[exId]) history[exId] = []
         // Día-calendario Santiago del instante (paridad web WorkoutSummaryOverlay.tsx:25-31, cuyo
@@ -350,6 +363,39 @@ export function useWorkoutSession(planId: string): WorkoutSessionState {
     },
     [],
   )
+
+  // Máximo histórico por ejercicio para detectar PR (espejo queries.ts:289-307): query INDEPENDIENTE
+  // del historial recortado. `previousHistory` sólo retiene el día MÁS RECIENTE por ejercicio (recap
+  // "sesión anterior") → derivar el máx de ahí daba `prevMax` = máx de la última sesión, no el histórico,
+  // rompiendo la detección de PR. Acá se barre TODO el historial previo (límite 5000) por snapshot
+  // `exercise_id`, quedándose con el mejor peso de días PREVIOS a hoy.
+  const loadExerciseMaxes = useCallback(async (cid: string, planBlocks: SessionBlock[]) => {
+    const exerciseIds = planBlocks
+      .map((b) => resolveExercise(b)?.id)
+      .filter((x): x is string => Boolean(x))
+    if (!exerciseIds.length) {
+      setExerciseMaxes({})
+      return
+    }
+    const { iso } = getTodayInSantiago()
+    const { startIso } = getSantiagoUtcBoundsForDay(iso)
+    const { data } = await supabase
+      .from('workout_logs')
+      .select('weight_kg, exercise_id, logged_at')
+      .eq('client_id', cid)
+      .not('weight_kg', 'is', null)
+      .in('exercise_id', exerciseIds)
+      .lt('logged_at', startIso)
+      .limit(5000)
+    const maxes: Record<string, number> = {}
+    for (const log of (data ?? []) as Record<string, unknown>[]) {
+      const exId = (log.exercise_id as string | null) ?? null
+      const w = log.weight_kg as number | null
+      if (!exId || w == null) continue
+      if (maxes[exId] == null || w > maxes[exId]) maxes[exId] = w
+    }
+    setExerciseMaxes(maxes)
+  }, [])
 
   const loadLastSession = useCallback(async (planBlocks: SessionBlock[], blockIds: string[]) => {
     const needsLastSession = planBlocks.some((b) => b.progression_mode === 'double')
@@ -403,8 +449,10 @@ export function useWorkoutSession(planId: string): WorkoutSessionState {
     }
   }, [])
 
-  const load = useCallback(async () => {
-    setLoading(true)
+  const load = useCallback(async (opts?: { silent?: boolean }) => {
+    // `silent`: refetch de frescura (foco/foreground) que NO debe parpadear al loader — la pantalla ya
+    // está montada con datos. El load inicial y el pull-to-refresh sí muestran el loader (silent=false).
+    if (!opts?.silent) setLoading(true)
     const client = await getClientProfile()
     if (client) {
       setClientId(client.id)
@@ -456,20 +504,21 @@ export function useWorkoutSession(planId: string): WorkoutSessionState {
     const sorted = [...(raw ?? [])].sort((a, b) => a.order_index - b.order_index)
     setPlanTitle((data as { title: string }).title)
     setBlocks(sorted)
-    setActiveWeekVariant((data as { week_variant?: string | null }).week_variant ?? null)
     setDayOfWeek((data as { day_of_week?: number | null }).day_of_week ?? null)
-    await cachePlan(planId, {
-      title: (data as { title: string }).title,
-      blocks: sorted,
-      activeWeekVariant: (data as { week_variant?: string | null }).week_variant ?? null,
-    })
     void loadAreas(sorted)
+
+    // Badge "Semana A/B" (P1, espejo queries.ts:136-138): el badge EXISTE sólo si el programa está en
+    // `ab_mode`, y la letra es la variante ACTIVA de la semana por ROTACIÓN (resolveActiveWeekVariantForDisplay),
+    // NO el `week_variant` crudo del plan. Antes se seteaba `plan.week_variant` sin mirar `ab_mode` → en
+    // programas NO-A/B aparecía "Semana A" (web no muestra nada) y en A/B pintaba la variante del plan en
+    // vez de la activa. Se resuelve tras cargar el programa; sin programa/sin ab_mode ⇒ null (sin badge).
+    let resolvedWeekVariant: string | null = null
 
     const programId = (data as { program_id?: string | null }).program_id
     if (programId) {
       const { data: prog } = await supabase
         .from('workout_programs')
-        .select('name, start_date, weeks_to_repeat, program_structure_type, cycle_length, program_phases')
+        .select('name, start_date, weeks_to_repeat, program_structure_type, cycle_length, program_phases, ab_mode')
         .eq('id', programId)
         .maybeSingle()
       if (prog) {
@@ -480,14 +529,28 @@ export function useWorkoutSession(planId: string): WorkoutSessionState {
         setProgramStructure((prog as { program_structure_type?: 'weekly' | 'cycle' | null }).program_structure_type ?? null)
         setCycleLength((prog as { cycle_length?: number | null }).cycle_length ?? null)
         setPhaseName(currentPhaseName((prog as { program_phases?: { name: string; weeks: number }[] | null }).program_phases, week))
+        resolvedWeekVariant = (prog as { ab_mode?: boolean | null }).ab_mode
+          ? resolveActiveWeekVariantForDisplay(
+              prog as { ab_mode?: boolean | null; start_date?: string | null; weeks_to_repeat?: number | null },
+            )
+          : null
       }
     }
+    setActiveWeekVariant(resolvedWeekVariant)
+    // Cache offline con la variante YA resuelta (no el `week_variant` crudo): al reabrir sin red el badge
+    // refleja la variante activa por rotación, igual que online.
+    await cachePlan(planId, {
+      title: (data as { title: string }).title,
+      blocks: sorted,
+      activeWeekVariant: resolvedWeekVariant,
+    })
 
     const blockIds = sorted.map((b) => b.id)
     if (client && blockIds.length > 0) {
       const [serverLogs] = await Promise.all([
         loadTodayServerLogs(client.id, blockIds),
-        loadPreviousHistory(client.id, sorted, blockIds),
+        loadPreviousHistory(client.id, sorted),
+        loadExerciseMaxes(client.id, sorted),
         loadLastSession(sorted, blockIds),
       ])
       // Reconciliación server ∪ snapshot (server gana por block:set; lo local sobrevive _pending).
@@ -498,7 +561,7 @@ export function useWorkoutSession(planId: string): WorkoutSessionState {
     }
 
     setLoading(false)
-  }, [planId, snapshotKey, loadAreas, loadTodayServerLogs, loadPreviousHistory, loadLastSession])
+  }, [planId, snapshotKey, loadAreas, loadTodayServerLogs, loadPreviousHistory, loadExerciseMaxes, loadLastSession])
 
   useEffect(() => {
     void load()
@@ -516,14 +579,46 @@ export function useWorkoutSession(planId: string): WorkoutSessionState {
     return () => clearInterval(id)
   }, [])
 
-  const exerciseMaxes = useMemo(() => {
-    const maxes: Record<string, number> = {}
-    for (const [exId, list] of Object.entries(previousHistory)) {
-      const m = list.reduce((mx, s) => Math.max(mx, s.weight_kg ?? 0), 0)
-      if (m > 0) maxes[exId] = m
-    }
-    return maxes
-  }, [previousHistory])
+  // Estado online REACTIVO (P2, espejo WEC:1145-1154 listeners window online/offline): el banner
+  // "Sin conexión" aparece/desaparece EN CUANTO cambia la conectividad, sin esperar a que falle un
+  // guardado. Antes `isOnline` sólo se tocaba dentro de logSet (checkOnline en el error, true en éxito),
+  // así que el banner no salía al perder red hasta intentar guardar una serie y fallar, ni se limpiaba
+  // hasta un guardado exitoso posterior. NetInfo lo hace reactivo al cambio de red.
+  useEffect(() => {
+    const unsub = NetInfo.addEventListener((state) => {
+      // Mismo criterio optimista que checkOnline/useOnline: offline SÓLO con negativa explícita.
+      const isUp = state.isConnected !== false && state.isInternetReachable !== false
+      isOnlineRef.current = isUp
+      setIsOnline(isUp)
+    })
+    return () => unsub()
+  }, [])
+
+  // Frescura al reentrar (P2, paridad conceptual WEC:1125-1140): al recuperar el foco de la pantalla o al
+  // volver la app a foreground, si hay conexión Y actividad previa (logs, cola offline o un draft en curso)
+  // se re-fetchea la sesión para reflejar cambios del coach o logs de otro dispositivo. `router.refresh`
+  // del web no es portable (SPEC §12) → equivalente idiomático con useFocusEffect + AppState 'active'. El
+  // refetch es SILENCIOSO (no parpadea al loader) y NUNCA offline (no expulsar al alumno del entreno).
+  const maybeRefreshForFreshness = useCallback(async () => {
+    if (!isOnlineRef.current) return
+    const hasPriorData =
+      logsRef.current.length > 0 || draftRef.current != null || (await getPendingLogCount()) > 0
+    if (!hasPriorData) return
+    await load({ silent: true })
+  }, [load])
+
+  useFocusEffect(
+    useCallback(() => {
+      void maybeRefreshForFreshness()
+    }, [maybeRefreshForFreshness]),
+  )
+
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (s) => {
+      if (s === 'active') void maybeRefreshForFreshness()
+    })
+    return () => sub.remove()
+  }, [maybeRefreshForFreshness])
 
   const { sections, supersetMembersByBlock } = useMemo(() => {
     const areaGroups: ExecutionAreaGroup<SessionBlock>[] = executionAreaGroupsFor(blocks, areas)
@@ -665,6 +760,7 @@ export function useWorkoutSession(planId: string): WorkoutSessionState {
           exercise_name_at_log: (logData.exercise_name_at_log as string) ?? null,
         })
         const online = await checkOnline()
+        isOnlineRef.current = online
         setIsOnline(online)
         // La serie NO está confirmada por el server → márcala `_pending` para no pintar un check verde
         // mentiroso (mirror web: `state.error` ⇒ setSyncStatus('error'); offline ⇒ 'pending',
@@ -678,6 +774,7 @@ export function useWorkoutSession(planId: string): WorkoutSessionState {
         // pending ámbar + banner global + auto-reintento al reconectar (mirror web offline→pending vs error→red).
         syncError = online ? 'No se pudo guardar la serie. Reintenta.' : null
       } else {
+        isOnlineRef.current = true
         setIsOnline(true)
       }
 

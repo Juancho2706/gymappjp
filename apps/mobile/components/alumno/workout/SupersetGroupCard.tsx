@@ -146,7 +146,24 @@ export function SupersetGroupCard({
   if (memberVMs.length < 2) return null
 
   // Serie ACTIVA del grupo en orden intercalado (A1 → B1 → A2…): la primera incompleta. Es la única que
-  // se pinta como fila de registro (ActiveSetRow) y lleva la señal "Sigue" — mirror web `nextCue`/isActive.
+  // se pinta como fila de registro (ActiveSetRow) y lleva la señal "Sigue".
+  //
+  // DIVERGENCIA INTENCIONAL vs web (documentada, no bug): en web `nextCue` arranca en null
+  // (WorkoutExecutionClient.tsx:996) y su único setter no-null es `setNextCue(nextPos)` dentro de
+  // `handleLogged` (WEC:1459) — recién TRAS loguear una serie del grupo. El gate de la fila es
+  // `isNext = !setLogged && nextCue?.blockId === m.block.id && nextCue?.set === round` (WEC:860) y el chip
+  // "Sigue" cuelga de ese `isNext` (WEC:875-877). Es decir: en web el "Sigue" es un hint TRANSITORIO que
+  // NO aparece en carga inicial (ahí todas las filas son `LogSetForm`, todas registrables — WEC:879).
+  //
+  // Mobile no tiene un `LogSetForm` por serie: el port usa UNA fila activa expandida (ActiveSetRow) +
+  // filas colapsadas (SetRow) que abren el teclado al tocar — arquitectura de registro documentada del
+  // port ("reconstrucción visual 1:1 de la fila activa", SetRow.tsx). Por eso la card DEBE elegir una fila
+  // activa desde el primer render (si `activePos` fuese null en carga no habría fila registrable inline,
+  // se PERDERÍA funcionalidad). Es el MISMO patrón que SingleExerciseCard.tsx:155-157/192-198 (`firstUnlogged`
+  // resuelve la primera serie sin loguear y pinta su ActiveSetRow desde el arranque). Consecuencia: aquí el
+  // "Sigue" es persistente en vez de transitorio. Adaptación aceptada: preserva lo que el alumno puede hacer
+  // (registrar sin un log previo) al costo de mostrar el hint antes; espejar el nextCue transitorio exigiría
+  // derivarlo en ExecutorV2 tras onCommit y romper la paridad con SingleExerciseCard.
   const activePos = firstIncompleteInRounds(
     memberVMs.map((m) => ({ id: m.block.id, sets: m.block.sets })),
     sessionLogs,
