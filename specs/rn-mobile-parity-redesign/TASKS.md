@@ -607,40 +607,40 @@ Empty-states en TODO (bug web 0-alumnos NO se hereda). Charts: victory-native/Sk
 
 `getWorkspaceContext` es bloqueante del dominio (sirve a switcher, suspended team-aware, settings, suscripción). El cableado de endpoints mobile no usados (G11-C3: cardio/movement/bodycomp/exchanges en E6; **team en E7-06**) queda distribuido — ver Trazabilidad.
 
-- [ ] **E7-01** · [SEAM/FUNCIONAL][M] `getWorkspaceContext` mobile único (standalone/team/enterprise)
+- [x] **E7-01** · [SEAM/FUNCIONAL][M] `getWorkspaceContext` mobile único (standalone/team/enterprise)
   - Fuentes: G09-T7 · Deps: ninguna dura
   - Scope: contexto de workspace único (bloqueante del dominio). · Verificación: resuelve el contexto correcto por cuenta.
-- [ ] **E7-02** · [FUNCIONAL][M] Hub de Opciones (pantalla-índice HubCards + brand studio a ruta hija, context-aware)
+- [x] **E7-02** · [FUNCIONAL][M] Hub de Opciones (pantalla-índice HubCards + brand studio a ruta hija, context-aware)
   - Fuentes: G09-T3 · Deps: E7-01
   - Scope: hub Opciones como web (HubCards); ruling D5 (switcher cubre `workspace/select`). · Verificación: hub navega a hijas correctas por contexto.
-- [ ] **E7-03** · [FUNCIONAL][L] Suscripción display rico (consumir `subscription-status`)
+- [x] **E7-03** · [FUNCIONAL][L] Suscripción display rico (consumir `subscription-status`)
   - Fuentes: G09-T4 · Deps: E7-01, E0-C1
   - Scope: precio compuesto, add-ons + "Cortesía EVA", tarjeta brand+last4, historial; acciones link-out. · Verificación: desglose coincide con web; acciones abren navegador externo.
-- [ ] **E7-04** · [FUNCIONAL][M] Funciones (FeaturePrefsPanel: presets + master switch + toggles con lock Pro + resolver visible)
+- [x] **E7-04** · [FUNCIONAL][M] Funciones (FeaturePrefsPanel: presets + master switch + toggles con lock Pro + resolver visible)
   - Fuentes: G09-T10 (dueño), G10-T14, G08-C5 · Deps: E0-C1, E7-02
   - Scope: panel de Funciones + resolver `visible = ENTITLED AND ENABLED`; aplica a secciones de nutrición. · Verificación: toggle oculta sección; lock Pro donde corresponde.
-- [ ] **E7-05** · [FUNCIONAL][S] Áreas del builder (CRUD) + scope team/standalone + lock no-gestor
+- [x] **E7-05** · [FUNCIONAL][S] Áreas del builder (CRUD) + scope team/standalone + lock no-gestor
   - Fuentes: G09-T11 · Deps: E7-01, E7-02
   - Scope: CRUD de áreas con scope + lock. · Verificación: no-gestor no edita; scope correcto.
-- [ ] **E7-06** · [FUNCIONAL][L] Mi Equipo / Team completo
+- [x] **E7-06** · [FUNCIONAL][L] Mi Equipo / Team completo
   - Fuentes: G09-T12 · Deps: E7-01, E0-C1
   - Scope: hero + rol + stats + ShareLink + BrandStudio + MembersManager + asientos + invite + módulos team (cablea endpoints team — parte de G11-C3). · Verificación: gestión de miembros/asientos/módulos team funciona.
-- [ ] **E7-07** · [FUNCIONAL][M] Workspace switcher (bottom-sheet, null si ≤1)
+- [x] **E7-07** · [FUNCIONAL][M] Workspace switcher (bottom-sheet, null si ≤1)
   - Fuentes: G09-T13 · Deps: E7-01
   - Scope: sheet de cambio de workspace (cubre ruling D5). · Verificación: cambia contexto; oculto si ≤1 workspace.
-- [ ] **E7-08** · [FUNCIONAL][M] News bell global con unreadCount + bottom-sheet de feed
+- [x] **E7-08** · [FUNCIONAL][M] News bell global con unreadCount + bottom-sheet de feed
   - Fuentes: G09-T14 · Deps: ninguna dura
   - Scope: campana viva con conteo + feed. · Verificación: badge y feed correctos.
-- [ ] **E7-09** · [SEAM][M] Nav registry compartido (extraer `coach-nav.ts` + `getVisibleNavItems` + tabs Expo + sheet "Más")
+- [x] **E7-09** · [SEAM][M] Nav registry compartido (extraer `coach-nav.ts` + `getVisibleNavItems` + tabs Expo + sheet "Más")
   - Fuentes: G09-T15 (dueño), G01-F1.3 · Deps: E7-01, E0-C1
   - Scope: separar dato de `coach-nav.ts` a package; derivar tabs Expo + sheet "Más" (mata `NAV_META`); tabs gated por módulos + tab Reactivar. · Verificación: tabs coinciden con web; gating por módulo.
-- [ ] **E7-10** · [VISUAL/FUNCIONAL][M] Mi Marca avanzada (logo oscuro + ThemeGallery + LoginLayoutPicker + BrandAdvanced + glow + loader)
+- [x] **E7-10** · [VISUAL/FUNCIONAL][M] Mi Marca avanzada (logo oscuro + ThemeGallery + LoginLayoutPicker + BrandAdvanced + glow + loader)
   - Fuentes: G09-T16 · Deps: E3-21, E7-02
   - Scope: features avanzadas del brand studio. · Verificación: cada control persiste y refleja.
-- [ ] **E7-11** · [FUNCIONAL][M] Búsqueda global coach (command palette + `/api/coach/search`)
+- [x] **E7-11** · [FUNCIONAL][M] Búsqueda global coach (command palette + `/api/coach/search`)
   - Fuentes: G06-B8 · Deps: E0-E9
   - Scope: búsqueda global coach (switcher/news del header cubiertos por E7-07/E7-08). · Verificación: búsqueda devuelve y navega a resultados.
-- [ ] **E7-12** · [FUNCIONAL][M] `coach/reactivate` (display + gate estado `cancelled` + link-out) (ruling D7) `[NUEVO-PLAN]`
+- [x] **E7-12** · [FUNCIONAL][M] `coach/reactivate` (display + gate estado `cancelled` + link-out) (ruling D7) `[NUEVO-PLAN]`
   - Fuentes: NEW (PLAN huérfanas, dueño E7) · Deps: E7-01, E7-09 (tab Reactivar)
   - Scope: display in-app + gate de estado `cancelled` en guards de acceso mobile + acción por link-out (patrón pagos). · Verificación: coach cancelado ve reactivate; acción abre navegador externo.
 
