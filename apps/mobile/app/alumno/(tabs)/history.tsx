@@ -226,9 +226,13 @@ export default function HistoryScreen() {
               activeOpacity={0.82}
               onPress={showMore}
               disabled={expanding}
-              style={[styles.moreBtn, { borderColor: theme.border, backgroundColor: theme.card }]}
+              // Web: border-default + bg-surface-card (page.tsx:82). border-default es
+              // más marcado que border-subtle; se resuelve dark-aware vía la var.
+              className="border-default bg-surface-card"
+              style={styles.moreBtn}
             >
-              <ChevronDown size={16} color={theme.primary} strokeWidth={2.25} />
+              {/* Web: ChevronDown hereda currentColor = text-strong del Link (page.tsx:82,84), no la marca. */}
+              <ChevronDown size={16} className="text-strong" strokeWidth={2} />
               <Text className="text-strong" style={[styles.moreTxt, { fontFamily: FONT_BOLD }]}>
                 {expanding ? 'Cargando…' : 'Ver últimos 6 meses'}
               </Text>

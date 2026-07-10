@@ -5,6 +5,7 @@ import { WebView } from 'react-native-webview'
 import { Play } from 'lucide-react-native'
 import { useTheme } from '../context/ThemeContext'
 import { GLOWS } from '../lib/shadows'
+import { extractYoutubeVideoId } from '../lib/youtube'
 
 /**
  * EVA DS — reproductor de video INLINE compartido (mobile).
@@ -63,14 +64,6 @@ try {
   ExpoVideo = null
 }
 
-const YT_ID = /(?:youtu\.be\/|v=|\/embed\/|\/shorts\/|\/live\/)([A-Za-z0-9_-]{11})/
-
-/** Extrae el id (11 chars) de una URL de YouTube; null si no es YouTube. */
-function youtubeId(url: string): string | null {
-  const m = url.match(YT_ID)
-  return m ? m[1] : null
-}
-
 /** Miniatura de YouTube (funciona aunque el embed esté bloqueado). */
 function youtubeThumb(id: string): string {
   return `https://img.youtube.com/vi/${id}/hqdefault.jpg`
@@ -116,7 +109,7 @@ export function VideoPlayer({
   const { theme } = useTheme()
   const [started, setStarted] = useState(autoPlay)
 
-  const ytId = useMemo(() => youtubeId(url), [url])
+  const ytId = useMemo(() => extractYoutubeVideoId(url), [url])
   const isDirect = !ytId && /^https?:\/\//i.test(url)
   const posterUri = poster ?? (ytId ? youtubeThumb(ytId) : null)
 
@@ -151,6 +144,8 @@ export function VideoPlayer({
       ) : ytId ? (
         <WebView
           testID="video-player-webview"
+          accessibilityRole="image"
+          accessibilityLabel={title ? `Video de ${title}` : 'Video del ejercicio'}
           source={{
             html: youtubeEmbedHtml(ytId, { start: startAt, end: endAt, muted, loop, autoplay: true }),
             baseUrl: 'https://www.youtube-nocookie.com',
@@ -255,7 +250,7 @@ function youtubeEmbedHtml(
   var START=${start}, END=${end == null ? 'null' : end}, LOOP=${loop ? 'true' : 'false'};
   var player, watchdog;
   function onYouTubeIframeAPIReady(){
-    player=new YT.Player('p',{videoId:'${id}',playerVars:{
+    player=new YT.Player('p',{host:'https://www.youtube-nocookie.com',videoId:'${id}',playerVars:{
       autoplay:${autoplay ? 1 : 0},mute:${muted ? 1 : 0},controls:0,modestbranding:1,rel:0,
       playsinline:1,disablekb:1,iv_load_policy:3,fs:0,loop:${loop ? 1 : 0},playlist:'${id}',start:${start}
     },events:{
