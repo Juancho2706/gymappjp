@@ -10,7 +10,7 @@ import {
   Text,
   View,
 } from 'react-native'
-import { SafeAreaView } from 'react-native-safe-area-context'
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import * as FileSystem from 'expo-file-system'
 import * as ImageManipulator from 'expo-image-manipulator'
@@ -30,6 +30,7 @@ import { TYPE, FONT, textStyle } from '../../../lib/typography'
 import { SHADOWS } from '../../../lib/shadows'
 import { Button, Card, Slider, Textarea } from '../../../components'
 import { AppBackground } from '../../../components/AppBackground'
+import { ALUMNO_TABBAR_CLEARANCE } from '../../../components/alumno/AlumnoMobileChrome'
 
 const MAX_BYTES = 5 * 1024 * 1024
 
@@ -48,6 +49,7 @@ interface LastCheckIn {
 
 export default function CheckInScreen() {
   const { theme, resolvedScheme } = useTheme()
+  const insets = useSafeAreaInsets()
   const motion = useEvaMotion()
   const onScrollChrome = useAlumnoScrollHandler()
   const router = useRouter()
@@ -396,7 +398,7 @@ export default function CheckInScreen() {
 
         <ScrollView
           ref={scrollRef}
-          contentContainerStyle={styles.scroll}
+          contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + ALUMNO_TABBAR_CLEARANCE }]}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
           onScroll={onScrollChrome}

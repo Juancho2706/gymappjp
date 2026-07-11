@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Text, TouchableOpacity, View } from 'react-native'
+import { useFocusEffect } from 'expo-router'
 import { AlertTriangle, Apple, Check, Flame } from 'lucide-react-native'
 import { useTheme } from '../../../context/ThemeContext'
 import { FONT } from '../../../lib/typography'
@@ -88,24 +89,38 @@ interface Loaded {
  * la comida, solo que no desde este widget-resumen. Decision de jefe (spec §7);
  * portar la mutacion aca exigiria server-action/endpoint inexistente en RN (regla 8).
  */
-export function NutritionDailySummary({ clientId, onSeeAll }: { clientId: string; onSeeAll: () => void }) {
+export function NutritionDailySummary({ clientId, onSeeAll, reloadSignal = 0 }: { clientId: string; onSeeAll: () => void; reloadSignal?: number }) {
   const { theme } = useTheme()
   const [data, setData] = useState<Loaded | null>(null)
   const [noPlan, setNoPlan] = useState(false)
 
-  // Guarda de cancelacion last-write-wins: en un cambio rapido de clientId A→B,
-  // el load(A) en vuelo se marca `ignore` para que su resolucion tardia no pise el
-  // estado del load(B). Ademas reseteamos data/noPlan a su estado de carga para no
-  // dejar render stale del alumno anterior mientras llega el fetch nuevo.
+  // Reset SOLO al cambiar de alumno: evita dejar render stale del alumno anterior
+  // mientras llega el fetch nuevo (clientId es estable en una sesion normal, asi que
+  // esto no parpadea en el uso corriente; el last-write-wins vive dentro de load()).
   useEffect(() => {
-    let ignore = false
     setData(null)
     setNoPlan(false)
-    load(() => ignore)
-    return () => {
-      ignore = true
-    }
   }, [clientId])
+
+  // Refetch en cada FOCUS del Home (montaje inicial + cada regreso a la tab Inicio) y
+  // cuando el dashboard hace pull-to-refresh (`reloadSignal` cambia). Sin esto el widget
+  // quedaba CONGELADO en el snapshot de su primer montaje: como las tabs de expo-router
+  // NO se desmontan (sin unmountOnBlur, _layout.tsx), la `useEffect([clientId])` original
+  // corria una sola vez y jamas volvia a consultar. Una comida completada DESPUES (en la
+  // tab Nutricion, en la web, o por el coach) nunca aparecia en el widget aunque la tab
+  // Nutricion (que SI refetchea) y la web ya la mostraran → 0/target + "Registra tu primera
+  // comida" fantasma. Web (RSC) se re-renderiza en cada navegacion; esto replica esa frescura.
+  // Guarda last-write-wins: un load en vuelo se marca `ignore` para no pisar uno mas nuevo.
+  useFocusEffect(
+    useCallback(() => {
+      let ignore = false
+      load(() => ignore)
+      return () => {
+        ignore = true
+      }
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [clientId, reloadSignal])
+  )
 
   async function load(isIgnored: () => boolean) {
     const { iso: todayIso } = getTodayInSantiago()
@@ -161,6 +176,11 @@ export function NutritionDailySummary({ clientId, onSeeAll }: { clientId: string
     const goals = { calories: plan.daily_calories ?? 0, protein: plan.protein_g ?? 0, carbs: plan.carbs_g ?? 0, fats: plan.fats_g ?? 0 }
     const consumed = calculateConsumedMacrosWithCompletionFallback(mealsWithSwaps, completed, goals, portionMap)
 
+    // Limpia el flag "sin plan" en la ruta de exito: si un load previo lo puso en true
+    // (l.140) y el coach asigna el plan con la app abierta, el refetch (mismo clientId, sin
+    // pasar por el reset de useEffect([clientId]) l.102) debe mostrar el plan. Sin esto,
+    // `if (noPlan)` (l.194) precede a `if (!data)` y congela "Sin plan" pese al setData.
+    setNoPlan(false)
     setData({
       planName: plan.name,
       consumedCal: Math.round(consumed.calories),

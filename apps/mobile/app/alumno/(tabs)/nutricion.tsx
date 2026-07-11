@@ -9,6 +9,7 @@ import {
   Text,
   View,
 } from 'react-native'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { supabase } from '../../../lib/supabase'
 import { getClientProfile } from '../../../lib/client'
 import { useOnline } from '../../../lib/use-online'
@@ -54,6 +55,7 @@ import {
 } from '../../../components'
 import { EvaLoaderScreen } from '../../../components/EvaLoader'
 import { AppBackground } from '../../../components/AppBackground'
+import { ALUMNO_TABBAR_CLEARANCE } from '../../../components/alumno/AlumnoMobileChrome'
 import {
   DayCompleteConfetti,
   ExchangeEquivalencesSheet,
@@ -104,6 +106,7 @@ import {
  */
 export default function AlumnoNutricionScreen() {
   const { theme } = useTheme()
+  const insets = useSafeAreaInsets()
   const onScrollChrome = useAlumnoScrollHandler()
   const { iso: todayIso } = getTodayInSantiago()
 
@@ -518,7 +521,7 @@ export default function AlumnoNutricionScreen() {
         <NutritionHeader planName={plan.name} onShare={handleShare} />
 
         <ScrollView
-          contentContainerStyle={styles.scroll}
+          contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + ALUMNO_TABBAR_CLEARANCE }]}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
           onScroll={onScrollChrome}

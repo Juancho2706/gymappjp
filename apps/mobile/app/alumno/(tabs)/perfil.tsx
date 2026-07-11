@@ -23,7 +23,7 @@ import {
 } from 'lucide-react-native'
 import type { LucideIcon } from 'lucide-react-native'
 import { MotiView } from 'moti'
-import { SafeAreaView } from 'react-native-safe-area-context'
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { supabase } from '../../../lib/supabase'
 import { signOutAndCleanup } from '../../../lib/auth-actions'
 import { authenticate, isBiometricAvailable, isBiometricLockEnabled, setBiometricLockEnabled } from '../../../lib/biometric'
@@ -49,6 +49,7 @@ import {
 } from '../../../components/ShareCard'
 import { EvaLoaderScreen } from '../../../components/EvaLoader'
 import { AppBackground } from '../../../components/AppBackground'
+import { ALUMNO_TABBAR_CLEARANCE } from '../../../components/alumno/AlumnoMobileChrome'
 import { RestAlarmPreference } from '../../../components/alumno/RestAlarmPreference'
 import { MonthlySummaryShareCard } from '../../../components/alumno/MonthlySummaryShareCard'
 import { useEntitlements } from '../../../lib/entitlements'
@@ -246,6 +247,7 @@ function ShareOption({
 
 export default function AlumnoPerfilScreen() {
   const { branding, setBranding, resolvedScheme } = useTheme()
+  const insets = useSafeAreaInsets()
   const { hasModule } = useEntitlements()
   const router = useRouter()
   // Módulos de pago activos del coach del alumno (E6-11). Solo se muestran las filas cuya
@@ -365,7 +367,7 @@ export default function AlumnoPerfilScreen() {
         {loading ? (
           <EvaLoaderScreen subtitle="Cargando perfil…" />
         ) : (
-          <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
+          <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: insets.bottom + ALUMNO_TABBAR_CLEARANCE }} showsVerticalScrollIndicator={false}>
             <View style={{ paddingVertical: 16 }}>
               <Text className="font-display-black text-strong" style={{ fontSize: 22, letterSpacing: -0.44 }}>
                 Mi perfil

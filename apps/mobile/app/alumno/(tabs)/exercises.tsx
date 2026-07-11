@@ -16,8 +16,9 @@ import { useTheme } from '../../../context/ThemeContext'
 import { useAlumnoScrollHandler } from '../../../lib/alumno-chrome-scroll'
 import { Button, EmptyState, Input, Sheet, VideoPlayer } from '../../../components'
 import { EvaLoaderScreen } from '../../../components/EvaLoader'
-import { SafeAreaView } from 'react-native-safe-area-context'
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { AppBackground } from '../../../components/AppBackground'
+import { ALUMNO_TABBAR_CLEARANCE } from '../../../components/alumno/AlumnoMobileChrome'
 import { FONT, TYPE, textStyle } from '../../../lib/typography'
 import { GLOWS, SHADOWS } from '../../../lib/shadows'
 import {
@@ -36,6 +37,7 @@ const SEARCH_DEBOUNCE_MS = 250
 
 export default function ExercisesScreen() {
   const { theme, resolvedScheme } = useTheme()
+  const insets = useSafeAreaInsets()
   const onScrollChrome = useAlumnoScrollHandler()
   // Deep-link: `?q=<term>` precarga la búsqueda (lo usa el "Ver técnica" del Home, home.tsx),
   // `?ex=<id>` abre directo el sheet de detalle (ruta `/alumno/exercise/[id]`).
@@ -274,7 +276,7 @@ export default function ExercisesScreen() {
           keyExtractor={(e) => e.id}
           numColumns={2}
           columnWrapperStyle={styles.column}
-          contentContainerStyle={styles.list}
+          contentContainerStyle={[styles.list, { paddingBottom: insets.bottom + ALUMNO_TABBAR_CLEARANCE }]}
           showsVerticalScrollIndicator={false}
           onScroll={onScrollChrome}
           scrollEventThrottle={16}

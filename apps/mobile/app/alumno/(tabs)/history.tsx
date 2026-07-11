@@ -16,8 +16,9 @@ import { useTheme } from '../../../context/ThemeContext'
 import { Button } from '../../../components'
 import { Card } from '../../../components/Card'
 import { EvaLoaderScreen } from '../../../components/EvaLoader'
-import { SafeAreaView } from 'react-native-safe-area-context'
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { AppBackground } from '../../../components/AppBackground'
+import { ALUMNO_TABBAR_CLEARANCE } from '../../../components/alumno/AlumnoMobileChrome'
 
 const FONT_DISPLAY = 'Archivo_900Black'
 const FONT_BOLD = 'HankenGrotesk_700Bold'
@@ -88,6 +89,7 @@ function HistoryHeader({ monthsLabel, onBack }: { monthsLabel: string; onBack: (
 
 export default function HistoryScreen() {
   const { theme } = useTheme()
+  const insets = useSafeAreaInsets()
   const router = useRouter()
   const reduced = useReducedMotion()
   const [loading, setLoading] = useState(true)
@@ -206,7 +208,7 @@ export default function HistoryScreen() {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
       <AppBackground />
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + ALUMNO_TABBAR_CLEARANCE }]}>
         <View style={styles.content}>
         <HistoryHeader monthsLabel={monthsLabel} onBack={goBack} />
 

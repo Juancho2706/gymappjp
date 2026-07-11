@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { RefreshControl, ScrollView, StyleSheet, View } from 'react-native'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import { supabase } from '../../../lib/supabase'
 import { getClientProfile } from '../../../lib/client'
@@ -10,6 +11,7 @@ import { useEntitlements } from '../../../lib/entitlements'
 import { useAlumnoScrollHandler } from '../../../lib/alumno-chrome-scroll'
 import { formatLongDate, getSantiagoIsoYmdForUtcInstant, getTodayInSantiago, formatRelativeDate, timeGreeting } from '../../../lib/date-utils'
 import { AppBackground } from '../../../components/AppBackground'
+import { ALUMNO_TABBAR_CLEARANCE } from '../../../components/alumno/AlumnoMobileChrome'
 import { Skeleton } from '../../../components/Skeleton'
 import { WelcomeModal } from '../../../components/WelcomeModal'
 import { DashboardHeader, DashboardHeaderSkeleton } from '../../../components/alumno/home/DashboardHeader'
@@ -55,6 +57,7 @@ function startOfWeekMonday(d: Date): Date {
  */
 export default function AlumnoHomeScreen() {
   const router = useRouter()
+  const insets = useSafeAreaInsets()
   const { nutritionEnabled } = useEntitlements()
   const onScrollChrome = useAlumnoScrollHandler()
   const [data, setData] = useState<HomeData | null>(null)
@@ -66,6 +69,11 @@ export default function AlumnoHomeScreen() {
   // getSantiagoIsoYmdForUtcInstant(logged_at)===dStr`), no por cualquier entreno del
   // dia. Vive fuera de HomeData (types.ts es off-limits en esta tarea).
   const [workoutPlanDays, setWorkoutPlanDays] = useState<Set<string>>(() => new Set())
+  // Señal de frescura para los widgets que fetchean por su cuenta (p.ej.
+  // NutritionDailySummary): se incrementa en cada load() exitoso (montaje,
+  // pull-to-refresh, onSaved) para que el widget re-consulte y no quede congelado
+  // en el snapshot de su primer montaje (paridad con la frescura RSC de la web).
+  const [reloadKey, setReloadKey] = useState(0)
   // Guard last-writer-wins: cada load() captura un id incremental y sólo escribe
   // estado si sigue siendo el más reciente. Sin esto, un load() lento (refresh/
   // onSaved) puede resolver DESPUÉS de uno nuevo y pisar el estado fresco (p.ej.
@@ -211,6 +219,7 @@ export default function AlumnoHomeScreen() {
       streak,
     })
     setWorkoutPlanDays(workoutPlanDays)
+    setReloadKey((k) => k + 1)
     setLoading(false)
     setRefreshing(false)
   }
@@ -344,7 +353,7 @@ export default function AlumnoHomeScreen() {
     <View style={styles.container} className="bg-surface-app">
       <AppBackground />
       <ScrollView
-        contentContainerStyle={styles.scroll}
+        contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + ALUMNO_TABBAR_CLEARANCE }]}
         showsVerticalScrollIndicator={false}
         onScroll={onScrollChrome}
         scrollEventThrottle={16}
@@ -456,7 +465,7 @@ export default function AlumnoHomeScreen() {
         {data?.client && nutritionEnabled ? (
           <View>
             <SectionTitle accent={EMBER_500} action="Ver nutrición" onAction={() => router.push('/alumno/nutricion')} actionTestID="home-nutrition-link">Nutrición de hoy</SectionTitle>
-            <NutritionDailySummary clientId={data.client.id} onSeeAll={() => router.push('/alumno/nutricion')} />
+            <NutritionDailySummary clientId={data.client.id} reloadSignal={reloadKey} onSeeAll={() => router.push('/alumno/nutricion')} />
           </View>
         ) : null}
         </View>

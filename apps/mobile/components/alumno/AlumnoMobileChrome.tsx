@@ -222,9 +222,16 @@ export function AlumnoMobileChrome({
           className="overflow-hidden rounded-[30px] border border-subtle"
           style={[styles.capsuleShell, shadow('md', resolvedScheme)]}
         >
+          {/* QA-8: en Android, expo-blur SIN `experimentalBlurMethod` NO difumina —
+              pinta un velo de color plano (tint@intensity), por eso la capsula se
+              leia como pastilla opaca oscura en vez de vidrio esmerilado. Con
+              `dimezisBlurView` Android hace blur REAL del contenido que scrollea por
+              debajo, == el `backdropFilter: blur(26px)` del web (ClientNav.tsx:480).
+              iOS lo ignora (usa su blur nativo). */}
           <BlurView
             intensity={isDark ? 40 : 60}
             tint={isDark ? 'dark' : 'light'}
+            experimentalBlurMethod="dimezisBlurView"
             style={StyleSheet.absoluteFill}
           />
 
