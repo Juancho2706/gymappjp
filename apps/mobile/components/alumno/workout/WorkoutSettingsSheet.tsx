@@ -47,14 +47,14 @@ export function WorkoutSettingsSheet({ open, onClose }: { open: boolean; onClose
   return (
     // Sizing content-hug con tope + scroll = paridad EXACTA con el `<DialogContent>` web
     // (`WorkoutExecutionClient.tsx:1964`: `max-h-[min(90dvh,32rem)] overflow-y-auto`, sin altura fija):
-    // el diálogo web abraza su contenido y solo scrollea al pasar el tope. El default del `Sheet` son
-    // snapPoints FIJOS en porcentaje (`['45%','85%']`), que además de divergir del web dependen de que
-    // @gorhom mida la altura del contenedor animado; bajo el stack actual (@gorhom v5 + reanimated v4)
-    // esa medición de porcentaje puede resolver a 0 → el sheet se "presenta" con altura nula y parece
-    // que la tuerca no abre nada (QA-2). `dynamicSizing` mide el CONTENIDO (vía onContentSizeChange),
-    // el mismo camino robusto que ya usa el SubstituteExerciseSheet del ejecutor. Tope 90% = lado
-    // `90dvh` del `min()` web; contenido corto abraza como el `h-auto` web.
-    <Sheet open={open} onClose={onClose} title="Descanso y alarma" dynamicSizing snapPoints={['90%']}>
+    // el diálogo web abraza su contenido y solo scrollea al pasar el tope.
+    // QA-12 (ronda 7): `nativeModal` renderiza vía `<Modal>` RN en vez de @gorhom — la tuerca NO abría en
+    // release bajo este stack (@gorhom 5.2.14 escrito para reanimated 3 + reanimated 4.1.7 + Fabric): el
+    // hosting-container de @gorhom siembra su alto en -999 hasta un commit de `.modify()` que no propaga a
+    // tiempo, y `enableDynamicSizing` está roto (mide ~0) — ver docs de la prop `nativeModal` en Sheet.tsx.
+    // El `<Modal>` nativo content-hugea solo (mismo patrón probado del KeypadHost). `snapPoints={['90%']}`
+    // pasa a ser el tope de max-height (lado `90dvh` del `min()` web); contenido corto abraza como el `h-auto`.
+    <Sheet open={open} onClose={onClose} title="Descanso y alarma" nativeModal snapPoints={['90%']}>
       {/* Card presionable = objetivo táctil de fila completa (paridad web). El `<Switch>` interno
           sigue siendo interactivo: al tocarlo, él (responder más interno) gana el gesto y alterna vía
           su `onValueChange`, así que el `onPress` de la Card NO se dispara también → sin doble toggle;

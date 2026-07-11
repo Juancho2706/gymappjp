@@ -121,7 +121,9 @@ Deuda que arrastra la Sección 1 (retomar aparte, sólo si se decide en frío): 
 Deuda que arrastra la Sección 2 (post-remate): solo los 2 P1 diferidos (cápsula en movement/bodycomp — estructural; toggle de comidas del widget — necesita server-action + cola offline) + residuos P2 por unidad. Los demás P1 de lógica y `cambiosShell` quedaron resueltos en la ola de remate del mismo día.
 
 QA Ronda 6 lote A del CEO (Xiaomi, dark, 2026-07-11, `docs/audits/rn-parity-qa/ronda-6-ceo-20260711.md`) aplicada sobre la rama post-Sección 2: 3 unidades PASS (`gear-settings`, `rest-timer-background`, `lista-rows-tecnica`), 2 unidades pendientes de resultado (`serie-edit-save` QA-1, `share-pr` QA-4/QA-5).
-Pendiente: re-build nueva desde `rnmobiledenuevo` + re-test en device Xiaomi de las 3 unidades PASS, y completar QA-1/QA-4/QA-5 que quedaron fuera de este lote.
+
+QA Ronda 7 del CEO (Xiaomi, dark, 2026-07-11 madrugada+mañana, `docs/audits/rn-parity-qa/ronda-7-ceo-20260711.md`) sobre build release con ronda 6 lote A pero SIN lote B (`96bc9bd0`): `rest-notif-spam-live` FAIL→fixeado (identifier determinístico en `scheduleNotificationAsync`, cambiosShell pendiente: `pnpm install` raíz con `react-native-notify-kit` + posible `@notifee` = build NATIVA nueva); `lista-scroll-perf` PASS (causa real = tick de 1s de `elapsedSec` en `useWorkoutSession` re-renderiza el árbol completo, no el countdown del descanso). QA-12 (tuerca/Técnica/"Más" — pista clave: "Más" solo abre tras visitar otra tab, apunta a montaje/focus del sheet host, NO repetir el fix dynamicSizing que ya falló en device) y QA-13 (texto cortado en sub-header) quedan PENDIENTES sin asignar.
+Pendiente: build nueva (nativa si se agregó notifee) + re-test QA-10/QA-14 + smoke lote B (QA-8 banda negra, QA-9 widget nutrición, no probados en ronda 7) + unidad dedicada QA-12/QA-13.
 
 ## Decisiones tomadas (globales / metodología)
 

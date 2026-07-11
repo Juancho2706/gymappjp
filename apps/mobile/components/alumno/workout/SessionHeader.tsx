@@ -165,10 +165,14 @@ export function SessionHeader({
       <ProgressBar value={requiredSets === 0 ? 0 : completedSetCount / requiredSets} color={theme.primary} track={W10} height={6} />
 
       <View className="mt-1.5 flex-row items-start justify-between gap-2">
-        <Text style={TYPE.mono} className="text-[11px] text-on-dark-muted">
+        {/* QA-13: `shrink-0` mantiene "Ejercicio X de Y" en una línea; el cluster derecho toma el resto
+            (`flex-1`) y ENVUELVE dentro de ese ancho (antes, sin ancho acotado, el grupo flex-wrap
+            desbordaba a la derecha y se recortaba). Espeja el web justify-between: izquierda al ancho
+            de su contenido, derecha ocupa el resto y hace wrap (WEC:1868-1872, `gap-y-0.5`). */}
+        <Text style={TYPE.mono} className="shrink-0 text-[11px] text-on-dark-muted">
           <Text className="text-on-dark font-mono-bold">Ejercicio {currentExerciseNum}</Text> de {totalExercises}
         </Text>
-        <View className="flex-row flex-wrap items-center justify-end gap-x-1.5">
+        <View className="flex-1 flex-row flex-wrap items-center justify-end gap-x-1.5 gap-y-0.5">
           <Text style={TYPE.mono} className="text-[11px] text-on-dark-muted">{completedSetCount}/{requiredSets} series</Text>
           {volumeLabel && <Text style={TYPE.mono} className="text-[11px] text-on-dark-muted">· {volumeLabel}</Text>}
           {/* El tope de 4h se aplica en silencio (paridad web WEC:1881: sin marcador de tope). */}

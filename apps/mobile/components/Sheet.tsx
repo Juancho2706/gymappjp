@@ -1,16 +1,18 @@
 import { useCallback, useEffect, useRef } from 'react'
 import type { ReactNode } from 'react'
-import { Text, TouchableOpacity, View, useWindowDimensions } from 'react-native'
+import { Modal, PanResponder, Pressable, ScrollView, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native'
 import {
   BottomSheetModal,
   BottomSheetBackdrop,
   BottomSheetScrollView,
   type BottomSheetBackdropProps,
 } from '@gorhom/bottom-sheet'
+import { MotiView } from 'moti'
 import { cssInterop } from 'nativewind'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { X } from 'lucide-react-native'
 import { useTheme } from '../context/ThemeContext'
+import { useEvaMotion } from '../lib/motion'
 import { FONT, TYPE, textStyle, type TypeSize } from '../lib/typography'
 import { shadow } from '../lib/shadows'
 
@@ -110,6 +112,37 @@ export interface SheetProps extends OverlayCommonProps {
    * / display-extrabold stay fixed; only the size changes.
    */
   titleSize?: TypeSize
+  /**
+   * Render via a native RN `<Modal>` (slide-up + backdrop) INSTEAD of `@gorhom/bottom-sheet`.
+   *
+   * WHY (QA-12, ronda 7): under this exact stack — `@gorhom/bottom-sheet@5.2.14` (written for
+   * reanimated 3) + `react-native-reanimated@4.1.7` + `react-native-worklets@0.8.3` + RN 0.81.5 +
+   * Expo SDK 54 New Architecture/Fabric — the gorhom modal is fragile in TWO independent, verified
+   * ways:
+   *   1. Cold-start no-op: the provider's `BottomSheetHostingContainer` seeds its shared
+   *      `containerLayoutState.height` to `INITIAL_LAYOUT_VALUE = -999` and only overwrites it from an
+   *      `onLayout` → reanimated `.modify()` worklet commit (bottomSheetModalProvider + hostingContainer
+   *      source). If the FIRST `present()` (itself rAF-wrapped, BottomSheetModal.tsx:243) lands before
+   *      that commit propagates under the reanimated-4 runtime, every snap point resolves against -999 →
+   *      the sheet mounts fully off-screen (invisible). It only heals after an unrelated re-layout
+   *      (navigation). This is exactly the "Más no abre al primer tap desde Home, sí tras visitar otra
+   *      tab" symptom, and gorhom v5 does NOT officially support reanimated 4 (upstream issues #2546 /
+   *      #2600).
+   *   2. `enableDynamicSizing` is broken here (content measures to ~0 → "barra pegada abajo" / altura
+   *      nula), already hit and worked-around in the builder sheets with `enableDynamicSizing={false}`
+   *      (see CODEX_HANDOFF). Ronda 6 mistakenly ADDED dynamicSizing to the executor sheets, so tuerca /
+   *      técnica still would not open.
+   *
+   * The native `<Modal>` path renders in its own OS window (no dependency on the gorhom hosting
+   * container's measured height, no reanimated shared-value plumbing) and content-hugs naturally with a
+   * `maxHeight` cap — the SAME proven pattern the numeric `KeypadHost` already uses reliably inside this
+   * very executor. Public API (`open`/`onClose`/`title`/`footer`/`snapPoints`/`scrollable`/
+   * `stickyHeaderIndices`/`forceDark`/…) is identical, so consumers only flip this one flag. `snapPoints`'
+   * largest fraction becomes the max-height cap; `dynamicSizing` is implicit (content-hug is native).
+   * Default false → existing gorhom consumers are untouched. Close vias: backdrop tap, close button,
+   * Android back, swipe-down on the handle. Default false.
+   */
+  nativeModal?: boolean
 }
 
 /** Title style at a given scale size — uppercase, display-extrabold, tracking-tighter (fixed). */
@@ -135,12 +168,29 @@ export function Sheet({
   forceDark = false,
   titleSize = 'lg',
   bodyPadBottomOffset = 24,
+  nativeModal = false,
   children,
 }: SheetProps) {
   const { resolvedScheme } = useTheme()
+  const motion = useEvaMotion()
   const insets = useSafeAreaInsets()
   const { height: windowHeight } = useWindowDimensions()
   const modalRef = useRef<BottomSheetModal>(null)
+
+  // Latest onClose for the imperative swipe handler (avoids stale closures without re-creating the
+  // responder). Used only by the native-modal path.
+  const onCloseRef = useRef(onClose)
+  onCloseRef.current = onClose
+  // Swipe-down on the handle dismisses in the native-modal path (parity with @gorhom
+  // `enablePanDownToClose`). No live follow — a downward release past the threshold closes.
+  const swipeResponder = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_e, g) => g.dy > 6 && g.dy > Math.abs(g.dx),
+      onPanResponderRelease: (_e, g) => {
+        if (g.dy > 48) onCloseRef.current()
+      },
+    }),
+  ).current
 
   // Cap for content-hugging (dynamic) sizing = the largest snap-point fraction of
   // the screen (e.g. '85%' → 0.85·height), so short content hugs and tall content
@@ -190,6 +240,95 @@ export function Sheet({
 
   const bodyPadBottom = footer ? 12 : insets.bottom + bodyPadBottomOffset
 
+  // Shared surface chrome (identical DS tokens across both render paths).
+  const handleEl = showHandle ? (
+    <View className="items-center pt-space-3">
+      <View className={`h-1 w-10 rounded-pill ${forceDark ? 'bg-white/15' : 'bg-ink-300 dark:bg-ink-600'}`} />
+    </View>
+  ) : null
+  const footerEl = footer ? (
+    <View className="border-t border-subtle bg-surface-sunken px-space-6 pt-space-4" style={{ paddingBottom: insets.bottom + 16 }}>
+      {footer}
+    </View>
+  ) : null
+  const closeEl = showCloseButton ? (
+    <TouchableOpacity
+      onPress={onClose}
+      activeOpacity={0.7}
+      accessibilityRole="button"
+      accessibilityLabel="Cerrar"
+      className={`absolute right-space-5 top-space-4 h-8 w-8 items-center justify-center rounded-pill border ${forceDark ? 'border-inverse bg-white/5' : 'border-subtle bg-surface-sunken'}`}
+    >
+      <X className={forceDark ? 'text-on-dark' : 'text-muted'} size={16} strokeWidth={2.4} />
+    </TouchableOpacity>
+  ) : null
+  const contentContainerStyle = { paddingHorizontal: 20, paddingBottom: bodyPadBottom, gap: 14 }
+
+  // ── Native `<Modal>` path (nativeModal) — bypasses @gorhom entirely. See the `nativeModal` prop
+  // docs for the root-cause (cold-start containerHeight -999 + broken enableDynamicSizing under
+  // reanimated 4 / Fabric). Mirrors the proven `KeypadHost` pattern (RN Modal + Moti slide-up). ──
+  if (nativeModal) {
+    return (
+      <Modal transparent visible={open} animationType="none" statusBarTranslucent onRequestClose={onClose}>
+        <View className="flex-1 justify-end">
+          {/* Backdrop: black/60 (== the gorhom BottomSheetBackdrop opacity 0.6), tap-to-close. */}
+          <MotiView
+            from={{ opacity: motion.reduced ? 1 : 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ type: 'timing', duration: motion.reduced ? 0 : 160 }}
+            style={{ position: 'absolute', top: 0, bottom: 0, left: 0, right: 0 }}
+          >
+            <Pressable
+              className="flex-1 bg-black/60"
+              onPress={onClose}
+              accessibilityRole="button"
+              accessibilityLabel="Cerrar"
+            />
+          </MotiView>
+
+          {/* Panel: slide-up spring (== KeypadHost). Content-hugs with maxHeight cap = largest snap
+              fraction of the screen; the scroll body shrinks (flexShrink) and scrolls past the cap. */}
+          <MotiView
+            from={{ translateY: motion.reduced ? 0 : maxDynamicContentSize }}
+            animate={{ translateY: 0 }}
+            transition={motion.reduced ? { type: 'timing', duration: 0 } : { type: 'spring', stiffness: 320, damping: 34, mass: 0.9 }}
+          >
+            <View
+              accessibilityLabel={accessibilityLabel}
+              className={`rounded-t-sheet border-t ${forceDark ? 'border-inverse bg-ink-950' : 'border-subtle bg-surface-card'}`}
+              style={[shadow('lg', resolvedScheme), { maxHeight: maxDynamicContentSize }]}
+            >
+              {/* Swipe-down on the handle zone dismisses (parity with enablePanDownToClose). */}
+              <View {...swipeResponder.panHandlers}>{handleEl}</View>
+
+              {header}
+
+              {scrollable ? (
+                <ScrollView
+                  // flexGrow 0 → hug content when short; flexShrink 1 → shrink + scroll when the column
+                  // would exceed the parent maxHeight cap (RN flex items default to flexShrink 0).
+                  style={{ flexGrow: 0, flexShrink: 1 }}
+                  contentContainerStyle={contentContainerStyle}
+                  showsVerticalScrollIndicator={false}
+                  stickyHeaderIndices={stickyHeaderIndices}
+                >
+                  {children}
+                </ScrollView>
+              ) : (
+                <View className="px-space-6" style={{ paddingBottom: bodyPadBottom, gap: 14 }}>
+                  {children}
+                </View>
+              )}
+
+              {footerEl}
+              {closeEl}
+            </View>
+          </MotiView>
+        </View>
+      </Modal>
+    )
+  }
+
   return (
     <BottomSheetModal
       ref={modalRef}
@@ -215,18 +354,14 @@ export function Sheet({
         className={`flex-1 rounded-t-sheet border-t ${forceDark ? 'border-inverse bg-ink-950' : 'border-subtle bg-surface-card'}`}
         style={shadow('lg', resolvedScheme)}
       >
-        {showHandle ? (
-          <View className="items-center pt-space-3">
-            <View className={`h-1 w-10 rounded-pill ${forceDark ? 'bg-white/15' : 'bg-ink-300 dark:bg-ink-600'}`} />
-          </View>
-        ) : null}
+        {handleEl}
 
         {header}
 
         {scrollable ? (
           <BottomSheetScrollView
             style={{ flex: 1 }}
-            contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: bodyPadBottom, gap: 14 }}
+            contentContainerStyle={contentContainerStyle}
             showsVerticalScrollIndicator={false}
             stickyHeaderIndices={stickyHeaderIndices}
           >
@@ -238,23 +373,8 @@ export function Sheet({
           </View>
         )}
 
-        {footer ? (
-          <View className="border-t border-subtle bg-surface-sunken px-space-6 pt-space-4" style={{ paddingBottom: insets.bottom + 16 }}>
-            {footer}
-          </View>
-        ) : null}
-
-        {showCloseButton ? (
-          <TouchableOpacity
-            onPress={onClose}
-            activeOpacity={0.7}
-            accessibilityRole="button"
-            accessibilityLabel="Cerrar"
-            className={`absolute right-space-5 top-space-4 h-8 w-8 items-center justify-center rounded-pill border ${forceDark ? 'border-inverse bg-white/5' : 'border-subtle bg-surface-sunken'}`}
-          >
-            <X className={forceDark ? 'text-on-dark' : 'text-muted'} size={16} strokeWidth={2.4} />
-          </TouchableOpacity>
-        ) : null}
+        {footerEl}
+        {closeEl}
       </View>
     </BottomSheetModal>
   )

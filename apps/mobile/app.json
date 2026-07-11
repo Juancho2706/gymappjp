@@ -104,6 +104,7 @@
       "./plugins/with-android-cleartext",
       "./plugins/with-gradle-jvmargs",
       "./plugins/with-privacy-manifest",
+      "react-native-notify-kit",
       "expo-secure-store",
       "./plugins/with-ios-modular-headers",
       [

@@ -20,7 +20,14 @@ import {
 } from './timer-colors'
 import { isRestTimerMuted, setRestTimerMuted, subscribeRestTimerPrefs } from './rest-timer-preferences'
 import { playTimerCue } from './sound'
-import { cancelRestEndNotification, ensureRestNotifPermission, scheduleRestEndNotification } from './rest-notification'
+import {
+  cancelRestEndNotification,
+  dismissRestEndNotification,
+  ensureRestNotifPermission,
+  scheduleRestEndNotification,
+  sweepRestNotifications,
+} from './rest-notification'
+import { showRestLiveCountdown, stopRestLiveCountdown } from './rest-live-notification'
 
 /**
  * Descanso PROTAGONISTA (E2-09) — barra/overlay inferior con cuenta regresiva.
@@ -138,6 +145,10 @@ export function RestTimerBar({
     mountedRef.current = false
     if (alarmIntervalRef.current) clearInterval(alarmIntervalRef.current)
     void cancelRestEndNotification()
+    // Al desmontar el ejecutor: retira el cronómetro vivo (QA-11) y barre cualquier
+    // notificación de descanso ya ENTREGADA/pintada (QA-10 (b)) para que MIUI no las deje.
+    void stopRestLiveCountdown()
+    void dismissRestEndNotification()
   }, [])
 
   // Silenciar-alarma-en-cualquier-lado (paridad web `RestTimer.tsx:102-111`): mientras
@@ -167,6 +178,8 @@ export function RestTimerBar({
     // local programada (evita el beep duplicado al minimizar justo en el 0).
     timerHaptics.restAlarm()
     void cancelRestEndNotification()
+    // Fin natural: retira el cronómetro vivo — el "¡Descanso listo!" toma la posta (QA-11).
+    void stopRestLiveCountdown()
     playTimerCue('alarm')
 
     // Recordatorio en loop: refuerzo háptico cada 3s hasta 5 veces (como web, que repite el
@@ -191,14 +204,20 @@ export function RestTimerBar({
     const end = endTimeRef.current
     if (!end) {
       await cancelRestEndNotification()
+      void stopRestLiveCountdown()
       return
     }
     const remaining = Math.max(0, Math.ceil((end - Date.now()) / 1000))
     if (remaining <= 0) {
       await cancelRestEndNotification()
+      void stopRestLiveCountdown()
       return
     }
     await scheduleRestEndNotification(remaining)
+    // Cronómetro vivo (QA-11): notificación ongoing con cuenta regresiva nativa hasta `end`.
+    // Mismo id → arranque / ±15s / reanudar la ACTUALIZAN en su sitio (no apila). Android-only
+    // + no-op si Notifee no está enlazado (build sin la dep nativa) — ver rest-live-notification.
+    void showRestLiveCountdown(end)
   }, [])
 
   // Permiso de notificaciones (fix QA-3, pedido explícito del CEO): se solicita la PRIMERA
@@ -206,6 +225,9 @@ export function RestTimerBar({
   // módulo → nunca vuelve a preguntar (flujo amable). Al concederlo, arma la notif de fondo;
   // si lo niega, el cronómetro sigue 100% en foreground (audio/háptica in-app) y no re-pregunta.
   useEffect(() => {
+    // Barrido al arrancar un descanso nuevo (QA-10 (d)): cancela cualquier notificación de
+    // descanso PROGRAMADA huérfana de un mount/build previo antes de armar la de este descanso.
+    void sweepRestNotifications()
     void ensureRestNotifPermission().then(() => {
       if (mountedRef.current) void syncEndNotification()
     })
@@ -240,6 +262,7 @@ export function RestTimerBar({
       // Pausa: descarta el fin absoluto y cancela la notif de fondo (no debe sonar en pausa).
       endTimeRef.current = null
       void cancelRestEndNotification()
+      void stopRestLiveCountdown() // retira el cronómetro vivo en pausa (QA-11)
     }
     return () => clearInterval(interval)
   }, [isActive, timeLeft, triggerAlarm, syncEndNotification])
@@ -269,6 +292,10 @@ export function RestTimerBar({
     const sub = AppState.addEventListener('change', (nextState) => {
       if (nextState === 'active') {
         void cancelRestEndNotification()
+        // De vuelta en foreground el cue lo da el timer in-app: retira cualquier notif de
+        // descanso ya ENTREGADA/pintada (QA-10 (c)). No toca el cronómetro vivo de Notifee
+        // (id/canal propios) si el descanso sigue corriendo.
+        void dismissRestEndNotification()
         if (!endTimeRef.current) return
         const remaining = Math.max(0, Math.ceil((endTimeRef.current - Date.now()) / 1000))
         timeLeftRef.current = remaining
@@ -290,6 +317,8 @@ export function RestTimerBar({
   const resetTimer = useCallback(() => {
     stopAlarm()
     void cancelRestEndNotification()
+    // Retira el cronómetro vivo; se re-arma al re-disparar el countdown (QA-11).
+    void stopRestLiveCountdown()
     void haptics.tap()
     setTimeLeft(initialSeconds)
     setTotalSeconds(initialSeconds)
@@ -335,6 +364,10 @@ export function RestTimerBar({
   const handleClose = useCallback(() => {
     stopAlarm()
     void cancelRestEndNotification()
+    // Cerrar/saltar el descanso: retira el cronómetro vivo (QA-11) y barre las notifs de
+    // descanso ya ENTREGADAS/pintadas (QA-10 (b)) — MIUI no debe dejar ninguna colgada.
+    void stopRestLiveCountdown()
+    void dismissRestEndNotification()
     onClose()
   }, [onClose, stopAlarm])
 

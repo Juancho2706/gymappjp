@@ -277,8 +277,14 @@ export function AlumnoMobileChrome({
         </View>
       </Animated.View>
 
-      {/* "Más" sheet — same entries as web (minus PWA install, N/A native). */}
-      <Sheet open={moreOpen} onClose={() => setMoreOpen(false)} title="Más" snapPoints={['48%']}>
+      {/* "Más" sheet — same entries as web (minus PWA install, N/A native).
+          QA-12 (ronda 7): `nativeModal` renderiza vía `<Modal>` RN en vez de @gorhom. El menú "Más" NO abría
+          al PRIMER tap desde Home (sí tras visitar otra tab): el hosting-container de @gorhom siembra su alto
+          en -999 hasta un commit de `.modify()` (reanimated 4 / Fabric) que sólo propaga tras un re-layout
+          (navegación) → el primer `present()` resolvía los snap points contra -999 y el sheet montaba
+          fuera de pantalla. El `<Modal>` nativo no depende de ese alto medido — abre siempre al primer tap.
+          Ver docs de la prop `nativeModal` en Sheet.tsx. `snapPoints={['48%']}` pasa a ser el tope de max-height. */}
+      <Sheet open={moreOpen} onClose={() => setMoreOpen(false)} title="Más" nativeModal snapPoints={['48%']}>
         <ListRow
           testID="mas-perfil"
           accessibilityLabel="Mi perfil"

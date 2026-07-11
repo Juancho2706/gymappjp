@@ -149,11 +149,12 @@ export function TechniqueSheet({
       showCloseButton={false}
       // Nombre del ejercicio como accessible name del sheet (lo daba el título del header antes).
       accessibilityLabel={exercise?.name}
-      // dynamicSizing en vez de snapPoints fijos: misma causa que QA-2 (tuerca) — bajo @gorhom v5 +
-      // reanimated v4 la medición de porcentajes puede resolver a 0 y el sheet se presenta con altura
-      // nula ("Técnica no abre nada", QA-7 en device). Content-hug con tope 90% = patrón del
-      // SubstituteExerciseSheet y del WorkoutSettingsSheet (paridad con el DialogContent web h-auto).
-      dynamicSizing
+      // QA-12 (ronda 7): `nativeModal` renderiza vía `<Modal>` RN en vez de @gorhom. La técnica NO abría el
+      // modal de multimedia en release: bajo @gorhom 5.2.14 (reanimated 3) + reanimated 4.1.7 + Fabric el
+      // hosting-container siembra su alto en -999 hasta un commit `.modify()` que no propaga a tiempo y
+      // `enableDynamicSizing` mide ~0 (QA-7). El `<Modal>` nativo content-hugea solo (patrón del KeypadHost);
+      // `snapPoints={['90%']}` es el tope de max-height (paridad con el DialogContent web `h-auto max-h`).
+      nativeModal
       snapPoints={['90%']}
       // El medio (índice 0) queda FIJADO fuera del scroll = web `shrink-0` fuera de la zona
       // `overflow-y-auto` (WorkoutExecutionClient.tsx:2015/2030/2048/2062 vs :2076): el gif/video

@@ -919,6 +919,48 @@ function ExecutorV2Inner({ planId }: { planId: string }) {
     [supersetMembersByBlock, sessionLogs, effByBlock, currentWeek, activeBlockId, isBlockComplete, previousHistory, openDetails, expandedDone, getSubstitution, openSet, hrZones, restoredDraft, motion.reduced, theme.primary, handleCommit, handleRpeUpdate, saveActiveDraft, recentSet, syncErrors, retryCommit],
   )
 
+  // ── Cuerpo de la lista MEMOIZADO (fix perf QA-14: lag/stuttering al scrollear) ───────────────────
+  // Causa raíz: el cronómetro de sesión (`elapsedSec`, useWorkoutSession con setInterval de 1s,
+  // workout-session.ts:572-580) hace setState CADA SEGUNDO → ExecutorV2Inner se re-renderiza 1×/s durante
+  // TODA la sesión. Como los grupos se pintaban con una llamada INLINE a `renderGroup(...)` (no
+  // componentes memoizados) directamente en el JSX del ScrollView, sin este memo el árbol COMPLETO de la
+  // lista se reconciliaba cada segundo: un día de ~18 series sin registrar monta ~18 ActiveSetRow, cada
+  // uno con 2 EffortScale de 10 dots `MotiView` (Reanimated, TypedKeypad.tsx:639) = ~360 nodos animados
+  // reconstruidos por tick, aunque el alumno no toque nada. Ese trabajo periódico del hilo JS cae a mitad
+  // del gesto de scroll → el hitch de ~1/seg que el CEO reporta. (El tick del DESCANSO no era el problema:
+  // vive local en RestTimerBar `useState timeLeft`, no toca este árbol; y "Descanso (90)" del footer es
+  // una constante estática.) `renderGroup` es un useCallback cuyas deps NO incluyen `elapsedSec` (solo
+  // sessionLogs/expandedDone/openDetails/recentSet/syncErrors/…), así que en el tick su identidad es
+  // estable → este memo devuelve el MISMO árbol de elementos y React descarta la reconciliación de la
+  // lista. Se recomputa SOLO ante cambios reales (registrar serie, expandir detalles, sustituir, error de
+  // sync). El SessionHeader (que sí muestra el cronómetro) se re-renderiza aparte, barato.
+  // Re-renders eliminados: de 1 reconciliación completa de la lista por segundo → 0 por tick (durante
+  // scroll: de ~1-2 hitches por gesto → ninguno atribuible al cronómetro).
+  const listBody = useMemo(
+    () =>
+      sections.map((section) => (
+        <View key={section.key} className="gap-3">
+          {/* Header row + subtitle anidados en un View gap-1.5 (6px) — paridad web: la sección es
+              space-y-3 pero title→subtitle vive en un `div.space-y-1.5` interno (WEC:1920-1938), así
+              que title→subtitle = 6px y subtitle→grupos = 12px (el gap-3 externo). */}
+          <View className="gap-1.5">
+            <View className="flex-row items-center gap-3">
+              <View className="w-1 self-stretch rounded-full bg-sport-500" style={{ opacity: section.muted ? 0.4 : 1, minHeight: 20 }} />
+              <Text className="shrink-0 font-sans-bold text-sm uppercase text-on-dark-muted" style={{ letterSpacing: 1 }}>{section.title}</Text>
+              <View className="h-px flex-1 bg-white/10" />
+            </View>
+            {section.subtitle && (
+              <Text className="border-l-2 border-white/10 pl-4 text-[12px] text-on-dark-muted">{section.subtitle}</Text>
+            )}
+          </View>
+          <View className="gap-3">
+            {section.groups.map((group) => renderGroup(group, { allowCollapse: true }))}
+          </View>
+        </View>
+      )),
+    [sections, renderGroup],
+  )
+
   // ── Modo Paso a paso (E2-04): modelo de pasos + vistas del rail + auto-avance ──
   const steps = useMemo(
     () =>
@@ -1104,26 +1146,7 @@ function ExecutorV2Inner({ planId }: { planId: string }) {
               (`max-w-5xl mx-auto`, WEC:1950). En tablet evita que las cards se estiren de borde a borde
               mientras la barra Finalizar (maxWidth:1024) y el stepper (maxWidth:768) ya van centrados. */}
           <View ref={scrollContentRef} collapsable={false} className="w-full self-center" style={{ gap: 20, maxWidth: 1024 }}>
-          {sections.map((section) => (
-            <View key={section.key} className="gap-3">
-              {/* Header row + subtitle anidados en un View gap-1.5 (6px) — paridad web: la sección es
-                  space-y-3 pero title→subtitle vive en un `div.space-y-1.5` interno (WEC:1920-1938), así
-                  que title→subtitle = 6px y subtitle→grupos = 12px (el gap-3 externo). */}
-              <View className="gap-1.5">
-                <View className="flex-row items-center gap-3">
-                  <View className="w-1 self-stretch rounded-full bg-sport-500" style={{ opacity: section.muted ? 0.4 : 1, minHeight: 20 }} />
-                  <Text className="shrink-0 font-sans-bold text-sm uppercase text-on-dark-muted" style={{ letterSpacing: 1 }}>{section.title}</Text>
-                  <View className="h-px flex-1 bg-white/10" />
-                </View>
-                {section.subtitle && (
-                  <Text className="border-l-2 border-white/10 pl-4 text-[12px] text-on-dark-muted">{section.subtitle}</Text>
-                )}
-              </View>
-              <View className="gap-3">
-                {section.groups.map((group) => renderGroup(group, { allowCollapse: true }))}
-              </View>
-            </View>
-          ))}
+          {listBody}
           </View>
         </ScrollView>
       )}
