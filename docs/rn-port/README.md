@@ -3,7 +3,7 @@
 > Documento maestro del esfuerzo de paridad. Escrito al cierre de la Sección 1
 > (11-jul-2026). Complementa a `docs/porting-status.md` (estado vivo y residuos
 > por unidad) y `docs/rn-port/ola0-hallazgos.json` (corpus de auditoría).
-> **Branch de trabajo: `claude/new-branch-rnmobile-x6qxw6`.**
+> **Branch de trabajo: `rnmobiledenuevo`** (absorbió a `claude/new-branch-rnmobile-x6qxw6` el 2026-07-11; aquella rama fue eliminada).
 
 ---
 

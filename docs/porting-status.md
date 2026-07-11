@@ -3,7 +3,7 @@
 > Documento vivo. Se actualiza y pushea en cada checkpoint. Si la sesión muere,
 > retomar leyendo este archivo desde la sección "Dónde retomar".
 
-**Branch de trabajo:** `claude/new-branch-rnmobile-x6qxw6`
+**Branch de trabajo:** `rnmobiledenuevo` (absorbió a `claude/new-branch-rnmobile-x6qxw6` el 2026-07-11; aquella rama fue eliminada)
 **Metodología:** olas por sección — inventario → spec con evidencia (citas de archivo:línea del código web) → implementación contra la spec → verificación adversarial hasta 2 rondas consecutivas en cero → typecheck/lint → commit+push.
 
 ## Orden de secciones

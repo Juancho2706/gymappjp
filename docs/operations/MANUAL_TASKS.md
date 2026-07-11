@@ -225,7 +225,14 @@
    c. En la API Library del MISMO proyecto → habilitar **Google Play Android Developer API**.
    d. Play Console → **Users and permissions** → Invite new user → pegar el email del service account (`...@<proyecto>.iam.gserviceaccount.com`) → App permissions: agregar la app EVA → permiso **"Release apps to testing tracks"** (la vieja página "API access" ya no se usa; Google eliminó el requisito de linkear el Cloud project).
    e. Guardar el JSON como GitHub Secret **`GOOGLE_SERVICE_ACCOUNT_JSON`** (contenido completo del archivo). Si `eas submit` da 403 recién configurado: la propagación de permisos puede tardar 24-48h.
+   - **Gotcha org policy (visto 2026-07-10):** si el proyecto GCP está dentro de una organización, la creación de la clave JSON falla con `iam.disableServiceAccountKeyCreation` (secure-by-default, orgs creadas desde may-2024). Fix A: crear el proyecto con Location = "No organization" (OJO: una cuenta administrada por la org NO puede — deniega `resourcemanager.projects.create` sobre "Sin organización"; cambiar al Gmail personal del Play Console, que sí puede, y crear el proyecto ahí). Fix B: override de la política en el proyecto (requiere rol Organization Policy Administrator a NIVEL org; el Super Admin de Workspace puede autootorgárselo) → Organization Policies → `iam.disableServiceAccountKeyCreation` → Override parent's policy → Enforcement Off → crear la clave → reactivar (no es retroactiva, la clave sigue viva).
 6. Desde ahí: workflow con profile=production + `submit_android=true` → el step `Submit AAB to Google Play` sube automático al track internal (track definido en `eas.json` → `submit.production.android`).
+
+**Gotchas de versionCode y errores de `eas submit` (verificados):**
+- El primer AAB (subida manual) DEBE salir del mismo workflow (build EAS con `appVersionSource: remote` + `autoIncrement`) para que el contador remoto de versionCode quede alineado con Play. Si alguna vez se sube un binario de otro origen, el siguiente submit falla con "does not allow any existing users to upgrade" → sincronizar con `eas build:version:set`.
+- "The app is missing the required metadata" en `eas submit` = app sin release previo en el track (workaround: `releaseStatus: draft` en eas.json); la primera subida manual lo evita.
+- "Changes cannot be sent for review automatically" = la app/track quedó en estado rejected en Play → flag `changesNotSentForReview: true`.
+- `releaseStatus` default = `completed` (publica directo en el track); EXPO_TOKEN NO reemplaza el service account JSON — son credenciales distintas (Expo vs Google).
 
 ---
 
