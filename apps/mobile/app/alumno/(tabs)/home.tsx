@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { RefreshControl, ScrollView, StyleSheet, View } from 'react-native'
 import { useRouter } from 'expo-router'
 import { supabase } from '../../../lib/supabase'
@@ -12,11 +12,12 @@ import { formatLongDate, getSantiagoIsoYmdForUtcInstant, getTodayInSantiago, for
 import { AppBackground } from '../../../components/AppBackground'
 import { Skeleton } from '../../../components/Skeleton'
 import { WelcomeModal } from '../../../components/WelcomeModal'
-import { DashboardHeader } from '../../../components/alumno/home/DashboardHeader'
+import { DashboardHeader, DashboardHeaderSkeleton } from '../../../components/alumno/home/DashboardHeader'
 import { SectionTitle } from '../../../components/alumno/home/SectionTitle'
 import { StreakRibbon } from '../../../components/alumno/home/StreakRibbon'
 import { CheckInBanner } from '../../../components/alumno/home/CheckInBanner'
 import { computeCheckInReminder } from '../../../lib/checkin-thresholds'
+import { programWeekIndex1Based, weekIndexToVariantLetter, effectiveWeekVariantFromPlans, workoutPlanMatchesVariant } from '../../../lib/program-week-variant'
 import { HeroSection } from '../../../components/alumno/home/HeroSection'
 import { CoachPresenceCard } from '../../../components/alumno/home/CoachPresenceCard'
 import { MomentumCard, type MomentumDay } from '../../../components/alumno/home/MomentumCard'
@@ -27,7 +28,7 @@ import { RecentWorkouts } from '../../../components/alumno/home/RecentWorkouts'
 import { OrgAnnouncementBanner } from '../../../components/alumno/home/OrgAnnouncementBanner'
 import { HabitsCard } from '../../../components/alumno/home/HabitsCard'
 import { NutritionDailySummary } from '../../../components/alumno/home/NutritionDailySummary'
-import { AQUA_700, DAY_SHORT, EMBER_500, WEEK_LETTERS } from '../../../components/alumno/home/types'
+import { DAY_FULL, EMBER_500, WEEK_LETTERS } from '../../../components/alumno/home/types'
 import type { HomeData, PendingDay, Plan, PlanDayView, Program } from '../../../components/alumno/home/types'
 
 const MS_DAY = 24 * 60 * 60 * 1000
@@ -59,6 +60,17 @@ export default function AlumnoHomeScreen() {
   const [data, setData] = useState<HomeData | null>(null)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
+  // Sub-P1 (done-por-plan): set de claves `${planId}|${ymdSantiago}` — un dia del
+  // programa solo se marca 'done' si hay log de ESE plan en ese mismo dia calendario
+  // Santiago (paridad web weekPendingWorkouts.ts:142-149, `plan_id===dayPlan.id &&
+  // getSantiagoIsoYmdForUtcInstant(logged_at)===dStr`), no por cualquier entreno del
+  // dia. Vive fuera de HomeData (types.ts es off-limits en esta tarea).
+  const [workoutPlanDays, setWorkoutPlanDays] = useState<Set<string>>(() => new Set())
+  // Guard last-writer-wins: cada load() captura un id incremental y sólo escribe
+  // estado si sigue siendo el más reciente. Sin esto, un load() lento (refresh/
+  // onSaved) puede resolver DESPUÉS de uno nuevo y pisar el estado fresco (p.ej.
+  // un check-in recién guardado desaparece del widget).
+  const loadIdRef = useRef(0)
 
   useEffect(() => {
     getOnboardingStatus().then((done) => { if (!done) router.replace('/alumno/onboarding') })
@@ -66,8 +78,10 @@ export default function AlumnoHomeScreen() {
   }, [])
 
   async function load() {
+    const myId = ++loadIdRef.current
     const client = await getClientProfile()
-    if (!client) { setLoading(false); return }
+    if (myId !== loadIdRef.current) return
+    if (!client) { setLoading(false); setRefreshing(false); return }
 
     const { iso: todayIso } = getTodayInSantiago()
     const since30Iso = isoDate(new Date(Date.now() - 29 * MS_DAY))
@@ -76,13 +90,15 @@ export default function AlumnoHomeScreen() {
       await Promise.all([
         supabase
           .from('workout_programs')
-          .select('id, name, start_date, weeks_to_repeat, program_phases, workout_plans ( id, title, day_of_week, assigned_date, workout_blocks ( id, sets, reps, exercises ( name ) ) )')
+          .select('id, name, start_date, weeks_to_repeat, ab_mode, program_phases, workout_plans ( id, title, day_of_week, assigned_date, week_variant, workout_blocks ( id, sets, reps, exercises ( name ) ) )')
           .eq('client_id', client.id)
           .eq('is_active', true)
           .maybeSingle(),
         supabase
           .from('workout_logs')
-          .select('id, logged_at, exercise_name_at_log, block_id')
+          // `workout_blocks ( plan_id )` = plan dueño del log (sub-P1 done-por-plan);
+          // mismo embed que web dashboard.queries.ts:150 (`workout_blocks(plan_id)`).
+          .select('id, logged_at, exercise_name_at_log, block_id, workout_blocks ( plan_id )')
           .eq('client_id', client.id)
           .gte('logged_at', `${since30Iso}T00:00:00.000Z`)
           .order('logged_at', { ascending: false })
@@ -126,6 +142,7 @@ export default function AlumnoHomeScreen() {
           name: (programData as any).name,
           startDate: (programData as any).start_date ?? null,
           weeksToRepeat: Math.max(1, (programData as any).weeks_to_repeat ?? 1),
+          abMode: !!(programData as any).ab_mode,
           phases: Array.isArray((programData as any).program_phases) ? ((programData as any).program_phases as Program['phases']) : null,
           plans: rawPlans
             .map((p): Plan => ({
@@ -133,6 +150,7 @@ export default function AlumnoHomeScreen() {
               title: p.title,
               day_of_week: p.day_of_week,
               assigned_date: p.assigned_date,
+              week_variant: p.week_variant ?? null,
               blockCount: p.workout_blocks?.length ?? 0,
               blocks: (p.workout_blocks ?? []).map((b: any) => ({
                 id: b.id,
@@ -145,8 +163,20 @@ export default function AlumnoHomeScreen() {
         }
       : null
 
-    const rows = (workoutRows ?? []) as { id: string; logged_at: string; exercise_name_at_log: string | null; block_id: string | null }[]
+    // `as unknown as` (mismo patron que web dashboard.queries.ts:155): el embed to-one
+    // `workout_blocks` llega como OBJETO en runtime, pero los tipos generados infieren
+    // array — se overridea la cardinalidad al shape real que consume web.
+    const rows = (workoutRows ?? []) as unknown as { id: string; logged_at: string; exercise_name_at_log: string | null; block_id: string | null; workout_blocks: { plan_id: string | null } | null }[]
     const workoutDates = new Set(rows.map((r) => getSantiagoIsoYmdForUtcInstant(r.logged_at)))
+    // Set plan-dia (sub-P1): clave `${planId}|${ymdSantiago}` por log con plan dueño.
+    // MISMO helper Santiago que workoutDates → mismo dia calendario; solo agrega la
+    // dimension plan_id que exige web (weekPendingWorkouts.ts:145-148).
+    const workoutPlanDays = new Set<string>()
+    for (const r of rows) {
+      const planId = r.workout_blocks?.plan_id
+      if (!planId) continue
+      workoutPlanDays.add(`${planId}|${getSantiagoIsoYmdForUtcInstant(r.logged_at)}`)
+    }
     const todayLoggedByBlock = new Map<string, number>()
     for (const r of rows) {
       if (!r.block_id) continue
@@ -164,6 +194,7 @@ export default function AlumnoHomeScreen() {
         }
       : null
 
+    if (myId !== loadIdRef.current) return
     setData({
       client,
       announcements,
@@ -179,6 +210,7 @@ export default function AlumnoHomeScreen() {
       welcomeModal,
       streak,
     })
+    setWorkoutPlanDays(workoutPlanDays)
     setLoading(false)
     setRefreshing(false)
   }
@@ -193,6 +225,16 @@ export default function AlumnoHomeScreen() {
     const today = new Date(); today.setHours(0, 0, 0, 0)
     const plans = data?.program?.plans ?? []
     const workoutDates = data?.workoutDates ?? new Set<string>()
+
+    // Semana del programa + variante A/B EFECTIVA (paridad web ActiveProgramSection.tsx:37-46 /
+    // weekPendingWorkouts.ts:108-117): sólo en ab_mode; cae a la variante que tenga planes si la
+    // del ciclo está vacía (A/B mal armado). weekIdx alimenta también currentWeek (C3).
+    const abMode = data?.program?.abMode ?? false
+    const weekIdx = data?.program
+      ? programWeekIndex1Based({ start_date: data.program.startDate, weeks_to_repeat: data.program.weeksToRepeat }, today)
+      : null
+    const cycleVariant = weekIdx ? weekIndexToVariantLetter(weekIdx) : 'A'
+    const activeVariant = effectiveWeekVariantFromPlans(plans, cycleVariant, abMode)
 
     const todayPlan =
       plans.find((p) => p.assigned_date === todayIso) ??
@@ -216,31 +258,34 @@ export default function AlumnoHomeScreen() {
       isCompleted: workoutDates.has(dIso),
     }))
 
-    // Estado por dia del programa + cola de pendientes (E1-19).
-    const programPlans = plans.filter((p) => p.day_of_week != null)
+    // Estado por dia del programa + cola de pendientes (E1-19). Filtra por la variante
+    // A/B efectiva (web ActiveProgramSection.tsx:49): en un programa A/B sólo se muestran
+    // los días de la semana activa.
+    const programPlans = plans.filter((p) => p.day_of_week != null && workoutPlanMatchesVariant(p, activeVariant, abMode))
     const planDays: PlanDayView[] = programPlans.map((plan) => {
       const dow = plan.day_of_week as number
       const idx = ((dow - 1) % 7 + 7) % 7
       const dIso = weekDates[idx]
-      const done = workoutDates.has(dIso)
       const isToday = dIso === todayIso
-      const status = done ? 'done' : isToday ? 'today' : dIso < todayIso ? 'pending' : 'upcoming'
+      const isFuture = dIso > todayIso
+      // done SOLO si hay log de ESTE plan en ese mismo dia calendario Santiago
+      // (paridad web weekPendingWorkouts.ts:142-156, isCompleted = !isFuture &&
+      // plan_id===dayPlan.id && santiago(logged_at)===dStr). Antes marcaba done por
+      // CUALQUIER entreno del dia (workoutDates.has(dIso)) → falso positivo entre planes.
+      const done = !isFuture && workoutPlanDays.has(`${plan.id}|${dIso}`)
+      const status = done ? 'done' : isToday ? 'today' : isFuture ? 'upcoming' : 'pending'
       return { plan, status, isToday }
     })
     const pending: PendingDay[] = planDays
       .filter((d) => d.status === 'pending')
-      .map((d) => ({ planId: d.plan.id, dayOfWeek: d.plan.day_of_week as number, dayLabel: DAY_SHORT[d.plan.day_of_week as number] }))
+      .map((d) => ({ planId: d.plan.id, dayOfWeek: d.plan.day_of_week as number, dayLabel: DAY_FULL[d.plan.day_of_week as number] }))
       .sort((a, b) => a.dayOfWeek - b.dayOfWeek)
     const todayPlanId = planDays.find((d) => d.isToday)?.plan.id ?? todayPlan?.id ?? null
 
-    // Semana actual del programa (aprox: dias desde start_date, ciclado por weeks_to_repeat).
+    // Semana actual del programa — vía programWeekIndex1Based (C3, paridad web
+    // ActiveProgramSection.tsx:82: `currentWeek = weekIdx ?? 1`).
     const totalWeeks = data?.program?.weeksToRepeat ?? 1
-    let currentWeek = 1
-    if (data?.program?.startDate) {
-      const startMs = new Date(`${data.program.startDate.slice(0, 10)}T12:00:00Z`).getTime()
-      const daysSince = Math.max(0, Math.floor((Date.parse(`${todayIso}T12:00:00Z`) - startMs) / MS_DAY))
-      currentWeek = (Math.floor(daysSince / 7) % totalWeeks) + 1
-    }
+    const currentWeek = weekIdx ?? 1
 
     // Cumplimiento (mismas formulas que el legacy mobile).
     const workoutTargetDays = plans.length ? Math.min(plans.length * 4, 30) : 12
@@ -252,7 +297,12 @@ export default function AlumnoHomeScreen() {
     // `streak` viene del RPC (fetch), MISMA fuente/regla que el web — no se re-deriva local.
     const streak = data?.streak ?? 0
     const checkIns = data?.checkIns ?? []
-    const ci = computeCheckInReminder(checkIns.length ? checkIns[checkIns.length - 1].date : null, todayIso)
+    // `check_ins.date` es un timestamptz (instante UTC): mapear al día calendario de Santiago
+    // ANTES de contar los días evita el off-by-one del prefijo UTC cerca de medianoche chilena
+    // (paridad web CheckInBanner.tsx:35 → getSantiagoIsoYmdForUtcInstant). MISMO helper que ya
+    // usa este shell para los workoutDates.
+    const lastCheckInDate = checkIns.length ? getSantiagoIsoYmdForUtcInstant(checkIns[checkIns.length - 1].date) : null
+    const ci = computeCheckInReminder(lastCheckInDate, todayIso)
     const ciVariant = ci.variant
     const ciDays = ci.daysSince
     const ciRelative = ci.lastDay ? formatRelativeDate(ci.lastDay, todayIso) : null
@@ -261,21 +311,25 @@ export default function AlumnoHomeScreen() {
 
     return {
       todayPlan, nextPlan, momentumDays, planDays, pending, todayPlanId, currentWeek, totalWeeks,
+      weekVariant: abMode ? activeVariant : null,
       workoutCompliance, nutritionCompliance, checkInCompliance,
       nutritionEmpty: data ? (data.nutritionDates.size ?? 0) === 0 : true,
       checkInEmpty: data ? checkIns.length === 0 : true,
       streak, ciVariant, ciDays, ciRelative, doneToday,
     }
-  }, [data])
+  }, [data, workoutPlanDays])
 
-  const firstName = data?.client?.fullName?.split(' ')[0] ?? ''
-  const greeting = `${timeGreeting()}${firstName ? `, ${firstName}` : ''}`
+  // Fallback 'Atleta' = web `DashboardHeader.tsx:13`; el saludo cargado siempre lleva
+  // nombre. Durante loading NO se pinta saludo (skeleton), asi el texto aparece una
+  // sola vez ya final (P0-3: evita el swap "Hola/Buenas tardes" -> "..., Nombre").
+  const firstName = data?.client?.fullName?.split(' ')[0] ?? 'Atleta'
+  const greeting = `${timeGreeting()}, ${firstName}`
 
   if (loading) {
     return (
       <View style={styles.container} className="bg-surface-app">
         <AppBackground />
-        <DashboardHeader greeting={greeting || 'Hola'} dateLabel={formatLongDate()} brandName={null} welcomeMessage={null} />
+        <DashboardHeaderSkeleton />
         <View style={styles.skeletonWrap}>
           <Skeleton height={72} radius={20} />
           <Skeleton height={200} radius={22} />
@@ -325,8 +379,9 @@ export default function AlumnoHomeScreen() {
           onNoPlan={() => router.push('/alumno/check-in')}
         />
 
-        {/* §6 Coach presence */}
-        {data?.coachName ? <CoachPresenceCard brandName={data.coachName} note={data.coachWelcome} /> : null}
+        {/* §6 Coach presence — SIEMPRE visible (web page.tsx:105-110); el componente
+            degrada a 'Tu coach' vía sus fallbacks cuando no hay brand_name. */}
+        <CoachPresenceCard brandName={data?.coachName ?? null} note={data?.coachWelcome ?? null} />
 
         {/* §7 Momentum */}
         <MomentumCard
@@ -342,21 +397,22 @@ export default function AlumnoHomeScreen() {
           checkInCount={data?.checkIns.length ?? 0}
         />
 
-        {/* §8 Programa activo */}
-        {data?.program ? (
-          <View>
-            <SectionTitle>Tu programa</SectionTitle>
-            <ActiveProgramSection
-              program={data.program}
-              currentWeek={derived.currentWeek}
-              totalWeeks={derived.totalWeeks}
-              planDays={derived.planDays}
-              pending={derived.pending}
-              todayPlanId={derived.todayPlanId}
-              onStart={(id) => router.push(`/alumno/workout/${id}`)}
-            />
-          </View>
-        ) : null}
+        {/* §8 Programa activo — SIEMPRE montado (web page.tsx:118-124 renderiza el
+            <div> con SectionTitle + ActiveProgramSection sin gate); la card "Sin
+            programa activo" vive dentro de la seccion (web ActiveProgramSection.tsx:26-34). */}
+        <View>
+          <SectionTitle>Tu programa</SectionTitle>
+          <ActiveProgramSection
+            program={data?.program ?? null}
+            currentWeek={derived.currentWeek}
+            totalWeeks={derived.totalWeeks}
+            planDays={derived.planDays}
+            pending={derived.pending}
+            todayPlanId={derived.todayPlanId}
+            weekVariant={derived.weekVariant}
+            onStart={(id) => router.push(`/alumno/workout/${id}`)}
+          />
+        </View>
 
         {/* §9 Peso y records */}
         <View>
@@ -366,7 +422,7 @@ export default function AlumnoHomeScreen() {
               <WeightWidget
                 clientId={data.client.id}
                 checkIns={data.checkIns}
-                onSaved={() => load()}
+                onSaved={() => load().catch(() => {})}
                 onCheckIn={() => router.push('/alumno/check-in')}
               />
             ) : null}
@@ -379,18 +435,19 @@ export default function AlumnoHomeScreen() {
           </View>
         </View>
 
-        {/* §10 Actividad reciente */}
+        {/* §10 Actividad reciente — la sección monta su propia SectionTitle ("Actividad
+            reciente" · "Historial") y se oculta entera (header incluido) si no hay logs,
+            espejo web RecentWorkoutsSection.tsx:11-19. */}
         {data?.client ? (
-          <View>
-            <SectionTitle action="Historial" onAction={() => router.push('/alumno/history')} actionTestID="home-history-link">Actividad reciente</SectionTitle>
-            <RecentWorkouts clientId={data.client.id} />
-          </View>
+          <RecentWorkouts clientId={data.client.id} onHistory={() => router.push('/alumno/history')} />
         ) : null}
 
         {/* §11 Habitos de hoy */}
         {data?.client ? (
           <View>
-            <SectionTitle accent={AQUA_700}>Hábitos de hoy</SectionTitle>
+            {/* aqua-700 vía clase DS dark-aware (--color-aqua-700 flipea en .dark, global.css:179),
+                no el literal light-only; paridad web page.tsx:146 `var(--aqua-700)`. */}
+            <SectionTitle accentClassName="bg-aqua-700">Hábitos de hoy</SectionTitle>
             <HabitsCard clientId={data.client.id} logDate={getTodayInSantiago().iso} isToday initialData={data.habitsToday} />
           </View>
         ) : null}

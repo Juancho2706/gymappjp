@@ -12,8 +12,8 @@
 |---|---------|--------|
 | 0 | Fundación: tokens no-color + paridad de componentes compartidos | ✅ parcial (ver nota) |
 | 1 | Vista de workout del alumno (inputs kg/reps + barras RIR/RPE) | ⚠️ cerrada con residuos (ver Resultado Sección 1) |
-| 2 | Dashboard del alumno completo | 🔄 siguiente |
-| 3 | Dashboard del coach completo | ⏳ pendiente |
+| 2 | Dashboard del alumno completo | ⚠️ cerrada con residuos (ver Resultado Sección 2) |
+| 3 | Dashboard del coach completo | 🔄 siguiente |
 | 4 | Nutrición (coach y alumno) | ⏳ pendiente |
 | 5 | Builder del coach | ⏳ pendiente |
 | 6 | Resto de secciones descubiertas en inventario | ⏳ pendiente |
@@ -83,11 +83,42 @@ Una pasada adicional con **lente de lógica** (no de paridad pixel) sobre unidad
 4. **Deltas de design-system aceptados como compromiso** (9,5px→11px, 15px→14px, 22/15/10.5px→escala DS, lh no mapeado): la regla "usa tokens, no px crudos" gana sobre la paridad exacta al pixel. Sólo se ampliaría el type-scale si un gate visual lo exige.
 5. **El borde blanco-opaco en dark era un bug sistémico de token**, no de la pantalla de historial. **✅ Resuelto en la mini-ola 2026-07-11** por la vía web (alpha horneado en el token: `tailwind.config.js` + `global.css` claro/oscuro + `lib/theme.ts`), no vía theme imperativo como se había previsto originalmente — arregla Card/Input/etc. de una vez. Detalle en "Historial de entrenos" arriba.
 
+## Resultado Sección 2 — dashboard del alumno (cerrada con residuos)
+
+**Metodología:** 13 unidades (specs en `docs/rn-port/specs/seccion-2/`), 4 rondas de verificación adversarial cada una contra el web fuente de verdad (`apps/web/src/app/c/[coach_slug]/dashboard/*`, `perfil`, `check-in`), más una pasada extra con **lente de lógica** (races, estado stale, guards de doble-tap) sobre las mismas unidades, ejecutada 2026-07-11.
+
+**Los 3 P0 del QA humano del 10-jul — los tres RESUELTOS**, verificados contra código HEAD real en esta pasada:
+
+1. **Barra blanca en tab bar (dark)** — resuelto en `AlumnoMobileChrome.tsx:221-229`: se eliminó el 2do velo opaco (`<View bg-surface-card/70>`) que se apilaba sobre el `BlurView`; queda una sola superficie translúcida (espejo del `backdropFilter` único web `ClientNav.tsx:479-482`). Confirmado leyendo el archivo (comentario in-line documenta el fix). `_layout.tsx:63-66` además pone `sceneStyle.backgroundColor='transparent'` + root `bg-surface-app` para edge-to-edge.
+2. **Overlay "Entrenamiento completado" sin scrim** — resuelto en `HeroSection.tsx:139-173` (`components/alumno/home/HeroSection.tsx`, no `components/alumno/HeroSection.tsx` como decía la nota original): fondo OPACO scheme-aware (`completedOverlayBg`, mezcla success+surface-inverse) cubriendo `top/left/right/bottom:0`, ya no se lee el contenido detrás. Confirmado por lectura directa.
+3. **Header "Buenas tardes, {nombre}" duplicado** — resuelto en `home.tsx:270-289`: el saludo sólo se pinta en la rama ya-cargada; la rama `loading` usa `DashboardHeaderSkeleton` sin texto de saludo, así el swap "cargando → saludo" ya no duplica/parpadea. Comentario in-line confirma la intención (evita el swap "Hola/Buenas tardes" → "..., Nombre").
+
+**Ola de remate (2026-07-11, misma sesión):** todos los P1 vivos listados abajo se cerraron en una ola dedicada (6 fixers + verificador adversarial c/u, todos PASS) + 1 worker de cierre: race de `load()` (guard `loadIdRef`), off-by-one Santiago del check-in banner, gate de `CoachPresenceCard`, datos del programa (día completo, variante A/B efectiva, `currentWeek` vía `programWeekIndex1Based`, `done` por `plan_id` como `weekPendingWorkouts.ts:142-156`, card "Sin programa activo" 1:1), doble-tap de `WeightQuickLog` (ref síncrono), flash de PR viejo en `PRDetailSheet` (reset durante render), race del prefill de check-in (dirty-flag), anti-patrón Fabric en `Textarea.tsx` (árbol estable, patrón `Input.tsx`), luna RestDayCard vía accesor `theme.aqua700`, título "Actividad reciente" dentro de `RecentWorkouts` (oculto en vacío). **momentum-card** (cuya cadena de verificación había muerto) quedó verificada: paridad PASS y lógica PASS (+ keys estables en los anillos). Los párrafos por unidad siguientes describen los hallazgos COMO SE ENCONTRARON; el estado final es el de este párrafo.
+
+**Estado por unidad** (13/13; P0/P1 dentro de la unidad = `ninguno` salvo lo listado; los "P1 vivos" de abajo quedaron RESUELTOS en el remate salvo los 2 diferidos explícitos):
+
+- **chrome-tabbar** — P0 tab bar resuelto (ver arriba). P1 vivo NO en archivos propios (`cambiosShell`): la cápsula de tabs desaparece dentro de `/movement` y `/bodycomp` porque esas pantallas viven fuera del navigator `(tabs)` (`_layout.tsx:69-76`); web sí la muestra siempre que "Más" esté activo. P2: detalles de iconografía del tab activo/perfil/historial/logout, documentados.
+- **home-shell-header** — sin P0/P1 de paridad. P2: falta animación stagger del saludo, sin `tintColor` en RefreshControl (ambos opcionales por spec). **Lógica: P1 vivo** — race sin cancelación en `home.tsx:75-184` (`Promise.all` sin request-id/AbortController): un guardado de peso durante un pull-to-refresh puede ser pisado por la respuesta más lenta del refresh, ocultando temporalmente el peso recién guardado.
+- **hero-section** — P0 overlay resuelto (ver arriba); P1 contador/luna de descanso también resueltos (tokens `sport-500`/`aqua-100`). P2: falta tooltip "Hoy entrenas", tamaños de ícono levemente distintos. Sin hallazgo de lógica.
+- **streak-checkin-banners** — sin P0. **P1 vivo, fuera de la unidad (`cambiosShell`)**: `home.tsx:255` pasa el `date` crudo (timestamptz UTC) de `check_ins` a `computeCheckInReminder` sin mapear a día calendario Santiago, mientras que el mismo archivo SÍ hace ese mapeo para workouts (`home.tsx:11,149,153`); cerca de medianoche chilena esto corre el conteo de días un día y puede ocultar el banner que el web muestra. P2: detalles de gradiente/sheen de la barra.
+- **coach-org-banners** — sin P0/P1 dentro de la unidad. **P1 vivo, fuera de la unidad (`cambiosShell`)**: `home.tsx:332` gatea `CoachPresenceCard` por `coachName`; web siempre la renderiza con fallback `'Tu coach'`. P2: tamaño del badge pill (primitivo DS compartido).
+- **active-program** — sin P0. **4 P1 vivos, todos fuera de la unidad (`cambiosShell`)**, la unidad renderiza bien pero recibe datos imprecisos de `home.tsx`: día corto en vez de completo (`DAY_SHORT` vs `DAY_NAMES_FULL`), variante A/B nunca se pasa (badge sin sufijo "· Sem X"), `done` se marca por cualquier entreno del día en vez de exigir el `plan_id` correcto, `currentWeek` aproximado en vez de `programWeekIndex1Based`. P2 interno: `Calendar` con `theme.primary` crudo en vez de token `sport-500` (misma clase de bug ya corregida en `ProgramPhaseBar`).
+- **weight-widget** — sin P0/P1 de paridad (Ola0 ya resuelta). P2: deltas de `Sparkline` (primitivo compartido, `cambiosShell`), signo "+" ausente. **Lógica: P1 vivo** — doble-tap en "Guardar" puede insertar 2 filas `check_ins`: el guard `pending` en `WeightQuickLog.tsx:24-32` lee del closure del render, no de un `useRef` seteado sync antes del `await`, así que 2 taps antes del primer re-render pasan ambos el guard.
+- **personal-records** — sin P0/P1 de paridad atribuible a la unidad (el único error de `tsc` cae en `HeroSection.tsx`, otra unidad). P2: falta ícono Trophy en el título del sheet (slot de `Sheet.tsx`, `cambiosShell`). **Lógica: P1 vivo** — al cambiar de tile (ej. Press banca → Curl) el reset de `detail` corre DENTRO de un `useEffect` post-paint (`PRDetailSheet.tsx:80`); hay un frame garantizado donde el sheet muestra peso/1RM/hitos del ejercicio ANTERIOR bajo el título del nuevo.
+- **recent-habits** — sin P0/P1 dentro de los 2 archivos propios (Ola0 resuelta). **P1 vivo, fuera de la unidad (`cambiosShell`)**: el título "Actividad reciente" + link Historial en `home.tsx:386-391` se renderiza incondicional aunque `RecentWorkouts` retorne `null` (0 registros/carga/error); web esconde la sección completa. P2 menores en `HabitsCard.tsx` (placeholder, strokeWidth crudo).
+- **nutrition-daily-summary** — sin P0. **P1 documentado y aceptado por decisión de producto** (no rechazo): las filas de comida son solo-lectura en RN (`onPress={onSeeAll}` navega, no completa in-place); web permite toggle directo con cola offline. Requiere server-action nueva, fuera de alcance de la unidad (regla 8). Sin hallazgos de lógica (race de `clientId` y setState post-unmount verificados y descartados).
+- **perfil-share-cards** — sin P0/P1 ni hallazgos de lógica; verificado 1:1 contra el web (mensajes de share, contenido de las 3 cards, hero, módulos). P2: card mensual sin línea de fecha (las otras 2 sí la traen).
+- **check-in-flow** — sin P0/P1 de paridad (Ola0 resuelta: TopBar, transición, error inline, gate por perfil preservado). P2: color de marca crudo en vez de token en stepper/slider, estados de foto simplificados a `Alert`. **Lógica: P1 vivo** — `check-in.tsx:84-115` prellena peso/energía de forma async tras montar; si el alumno edita el campo ANTES de que resuelva el `await`, el prefill llega después y pisa en silencio la edición del usuario (el guard `prefilledRef` sólo evita un 2do load, no la carrera con la 1ª edición).
+
+**P1 abiertos totales al cierre de Sección 2 (post-remate): 2, ambos diferidos por decisión explícita.** (1) La cápsula de tabs desaparece dentro de `/movement` y `/bodycomp` — estructural: exige mover esas pantallas dentro del navigator `(tabs)` con `href:null` (riesgo de deep links/navegación; hacer como mini-tarea dedicada con QA propio). (2) Filas de comida del widget nutrición solo-lectura vs toggle in-place del web — requiere server-action nueva + cola offline (regla 8: endpoints de la rama = 404 en prod hasta el merge); decisión de producto documentada. TODO el resto de P1s (lógica y `cambiosShell`) quedó RESUELTO en la ola de remate (ver arriba). Residuos P2 por unidad anotados con archivo:línea en las specs de `docs/rn-port/specs/seccion-2/`.
+
 ## Dónde retomar
 
-**Siguiente: Sección 2 — Dashboard del alumno completo.** Arranca con el QA visual P0 del usuario (build del 10-jul) ya en cola más abajo: (1) barra blanca en la tab bar inferior en dark/Android, (2) overlay "Entrenamiento completado" sin scrim (contenido se lee detrás), (3) header "Buenas tardes, {nombre}" con texto duplicado/marquee. Metodología igual: inventario → spec con evidencia web (`apps/web/src/app/c/[coach_slug]/dashboard/*` y `perfil`, `check-in`) → implementación → verificación adversarial. Consumir `docs/rn-port/ola0-hallazgos.json` (grep por nombre de componente) al tocar cada compartido.
+**Siguiente: Sección 3 — Dashboard del coach completo**, más **QA visual humano en device real de la Sección 2** (requiere build nueva desde `rnmobiledenuevo`, ya que los 3 P0 del QA del 10-jul están resueltos en código pero no re-verificados visualmente en dispositivo). Metodología igual: inventario → spec con evidencia web → implementación → verificación adversarial + lente de lógica. Consumir `docs/rn-port/ola0-hallazgos.json` al tocar cada compartido.
 
 Deuda que arrastra la Sección 1 (retomar aparte, sólo si se decide en frío): residuos P2 por unidad (ver "Resultado Sección 1" arriba) más verificación QA visual en device real. Los 3 P1 de workout (badge A/B, historial/PR, expo-audio) y el bug sistémico de `border-default` en dark **ya están resueltos** (ver "P1 resueltos" e "Historial de entrenos" arriba).
+
+Deuda que arrastra la Sección 2 (post-remate): solo los 2 P1 diferidos (cápsula en movement/bodycomp — estructural; toggle de comidas del widget — necesita server-action + cola offline) + residuos P2 por unidad. Los demás P1 de lógica y `cambiosShell` quedaron resueltos en la ola de remate del mismo día.
 
 ## Decisiones tomadas (globales / metodología)
 
@@ -97,11 +128,14 @@ Deuda que arrastra la Sección 1 (retomar aparte, sólo si se decide en frío): 
 
 ## QA visual reportado por el usuario (build del 10-jul, dashboard alumno) — entrada P0 para Sección 2
 
-1. **Barra blanca fea en el navbar** (tab bar inferior): franja blanca visible alrededor/detrás de la tab bar flotante en dark mode. Revisar fondo del contenedor de tabs / safe area / edge-to-edge en Android.
-2. **Overlay "Entrenamiento completado"** (toast/badge verde con check): NO tapa el contenido de atrás — el texto de la card se lee a través/alrededor. Debe llevar backdrop/scrim u opacidad plena como en web (verificar contra el equivalente web).
-3. **Header "Buenas tardes, Catalina" superpuesto con otro texto** (se ve texto duplicado/marquee detrás del saludo). Posible doble render del header o animación de entrada rota.
+**Los 3 — ✅ RESUELTOS en código, verificado 2026-07-11 (ver "Resultado Sección 2"). Pendiente: re-confirmar en device con build nueva.**
+
+1. ~~**Barra blanca fea en el navbar**~~ — ✅ resuelto, `AlumnoMobileChrome.tsx:221-229` (2do velo opaco eliminado, sólo BlurView).
+2. ~~**Overlay "Entrenamiento completado" sin scrim**~~ — ✅ resuelto, `components/alumno/home/HeroSection.tsx:139-173` (fondo opaco scheme-aware).
+3. ~~**Header duplicado/marquee**~~ — ✅ resuelto, `home.tsx:270-289` (saludo sólo se pinta post-loading, sin swap).
 
 ## Hallazgos pendientes / bloqueos
 
 - ~1,293 discrepancias de componentes compartidos pendientes de aplicar (ver `docs/rn-port/ola0-hallazgos.json`).
 - Sección 1 cerrada con residuos: sólo residuos P2 por unidad + verificación QA visual en device pendiente. Los 3 P1 funcionales (badge Semana A/B, historial previo + detección de PR, `expo-audio`) y el bug sistémico de `border-default` en dark **ya están resueltos** (ver "Resultado Sección 1").
+- Sección 2 cerrada con residuos: ver "Resultado Sección 2" — 5 `cambiosShell` sin aplicar, 4 P1 de lógica dentro de unidad, residuos P2, QA visual en device pendiente de re-confirmar tras fix de los 3 P0.

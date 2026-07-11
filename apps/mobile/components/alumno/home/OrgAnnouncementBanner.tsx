@@ -1,13 +1,6 @@
 import { StyleSheet, Text, View } from 'react-native'
 import { MotiView } from 'moti'
-import { useTheme } from '../../../context/ThemeContext'
 import type { OrgAnnouncement } from '../../../lib/org-announcements'
-
-// info-* es una rampa DS FIJA (nunca white-label). Valores verbatim de global.css.
-const INFO = {
-  light: { bg: '#E8F1FF', border: 'rgba(38,128,255,0.30)', fg: '#1462DC' },
-  dark: { bg: 'rgba(38,128,255,0.18)', border: 'rgba(38,128,255,0.30)', fg: '#7FB0FF' },
-}
 
 interface Props {
   announcements: OrgAnnouncement[]
@@ -15,9 +8,7 @@ interface Props {
 
 /** §1 dashboard alumno — avisos activos de la org. Espejo de web OrgAnnouncementBanner. */
 export function OrgAnnouncementBanner({ announcements }: Props) {
-  const { resolvedScheme } = useTheme()
   if (announcements.length === 0) return null
-  const c = INFO[resolvedScheme]
 
   return (
     <MotiView
@@ -28,9 +19,17 @@ export function OrgAnnouncementBanner({ announcements }: Props) {
       style={styles.stack}
     >
       {announcements.map((a) => (
-        <View key={a.id} style={[styles.card, { backgroundColor: c.bg, borderColor: c.border }]}>
-          <Text className="font-sans-bold text-[13.5px]" style={{ color: c.fg }}>{a.title}</Text>
-          <Text className="font-sans text-[13px]" style={[styles.body, { color: c.fg }]}>{a.body}</Text>
+        // info-* es rampa DS FIJA (nunca white-label). Tokens espejan web:
+        // borde info-500/30, fondo info-100 (dark tinta el -100 al 18% == web --info-100 dark).
+        <View
+          key={a.id}
+          className="rounded-card border border-info-500/30 bg-info-100 dark:bg-info-100/[0.18]"
+          style={styles.card}
+        >
+          <Text className="font-sans-bold text-sm text-info-600">{a.title}</Text>
+          <Text className="font-sans text-sm text-info-600" style={styles.body}>
+            {a.body}
+          </Text>
         </View>
       ))}
     </MotiView>
@@ -39,6 +38,6 @@ export function OrgAnnouncementBanner({ announcements }: Props) {
 
 const styles = StyleSheet.create({
   stack: { gap: 8 },
-  card: { borderWidth: 1, borderRadius: 20, paddingHorizontal: 16, paddingVertical: 12 },
+  card: { paddingHorizontal: 16, paddingVertical: 12 },
   body: { marginTop: 2, lineHeight: 18 },
 })

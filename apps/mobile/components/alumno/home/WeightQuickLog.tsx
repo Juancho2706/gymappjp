@@ -1,10 +1,9 @@
-import { useState } from 'react'
-import { Text, TextInput, TouchableOpacity, View } from 'react-native'
+import { useRef, useState } from 'react'
+import { Pressable, Text, TextInput, View } from 'react-native'
 import { useTheme } from '../../../context/ThemeContext'
 import { FONT } from '../../../lib/typography'
 import { supabase } from '../../../lib/supabase'
 import { getTodayInSantiago } from '../../../lib/date-utils'
-import { DANGER_600, SUCCESS_500 } from './types'
 
 /**
  * E1-03 WeightQuickLog (web `weight/WeightQuickLog.tsx`): registro rapido de peso
@@ -17,8 +16,14 @@ export function WeightQuickLog({ clientId, onSaved }: { clientId: string; onSave
   const [pending, setPending] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
+  const [focused, setFocused] = useState(false)
+  // Guarda de reentrada SINCRONA por ref (patron check-in.tsx:204-205): `disabled={pending}`
+  // / `if (pending)` solo surten efecto tras re-render (batching React 18), dejando ventana
+  // entre dos taps nativos -> insert duplicado. La ref se lee/setea antes de cualquier await.
+  const submittingRef = useRef(false)
 
   async function save() {
+    if (submittingRef.current) return
     setError(null)
     setSuccess(false)
     const w = parseFloat(value.replace(',', '.'))
@@ -26,20 +31,25 @@ export function WeightQuickLog({ clientId, onSaved }: { clientId: string; onSave
       setError('Ingresa un peso válido (20–400 kg).')
       return
     }
+    submittingRef.current = true
     setPending(true)
-    const { error: err } = await supabase.from('check_ins').insert({
-      client_id: clientId,
-      date: getTodayInSantiago().iso,
-      weight: w,
-    })
-    setPending(false)
-    if (err) {
-      setError('No se pudo guardar. Intenta de nuevo.')
-      return
+    try {
+      const { error: err } = await supabase.from('check_ins').insert({
+        client_id: clientId,
+        date: getTodayInSantiago().iso,
+        weight: w,
+      })
+      if (err) {
+        setError('No se pudo guardar. Intenta de nuevo.')
+        return
+      }
+      setValue('')
+      setSuccess(true)
+      onSaved()
+    } finally {
+      submittingRef.current = false
+      setPending(false)
     }
-    setValue('')
-    setSuccess(true)
-    onSaved()
   }
 
   return (
@@ -50,26 +60,29 @@ export function WeightQuickLog({ clientId, onSaved }: { clientId: string; onSave
           testID="weight-quick-log-input"
           value={value}
           onChangeText={(t) => setValue(t.replace(/[^0-9.,]/g, ''))}
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
           keyboardType="decimal-pad"
           placeholder="72.5"
           placeholderTextColor={theme.mutedForeground}
           editable={!pending}
           className="rounded-control bg-surface-sunken border-subtle text-strong"
-          style={{ height: 44, borderWidth: 1.5, borderColor: theme.border, paddingHorizontal: 12, fontFamily: FONT.uiSemibold, fontSize: 14, color: theme.foreground, fontVariant: ['tabular-nums'] }}
+          // Focus = borde marca (web `focus-visible:border-sport-500`). Fabric #45798:
+          // NO condicionar el arbol/wrapper; solo cambia el borderColor del propio input.
+          style={{ height: 44, borderWidth: 1.5, borderColor: focused ? theme.primary : theme.border, paddingHorizontal: 12, fontFamily: FONT.uiSemibold, fontSize: 14, color: theme.foreground, fontVariant: ['tabular-nums'] }}
         />
       </View>
-      <TouchableOpacity
+      <Pressable
         testID="weight-quick-log-save"
         onPress={save}
         disabled={pending}
-        activeOpacity={0.85}
         className="rounded-control bg-cta-fill"
-        style={{ height: 44, paddingHorizontal: 16, alignItems: 'center', justifyContent: 'center', opacity: pending ? 0.5 : 1 }}
+        style={({ pressed }) => ({ height: 44, minWidth: 44, paddingHorizontal: 16, alignItems: 'center', justifyContent: 'center', opacity: pending ? 0.5 : 1, transform: [{ scale: pressed ? 0.97 : 1 }] })}
       >
         <Text className="text-on-sport" style={{ fontFamily: FONT.uiBold, fontSize: 12 }}>{pending ? '…' : 'Guardar'}</Text>
-      </TouchableOpacity>
-      {error ? <Text style={{ width: '100%', fontFamily: FONT.uiSemibold, fontSize: 12, color: DANGER_600 }}>{error}</Text> : null}
-      {success ? <Text style={{ width: '100%', fontFamily: FONT.uiSemibold, fontSize: 12, color: SUCCESS_500 }}>Registrado.</Text> : null}
+      </Pressable>
+      {error ? <Text className="text-danger-600" style={{ width: '100%', fontFamily: FONT.uiSemibold, fontSize: 12 }}>{error}</Text> : null}
+      {success ? <Text className="text-success-700" style={{ width: '100%', fontFamily: FONT.uiSemibold, fontSize: 12 }}>Registrado.</Text> : null}
     </View>
   )
 }

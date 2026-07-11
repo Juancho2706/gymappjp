@@ -1,17 +1,68 @@
 import { useEffect, useState } from 'react'
 import { Text, TouchableOpacity, View } from 'react-native'
-import { Apple, Check, Flame } from 'lucide-react-native'
+import { AlertTriangle, Apple, Check, Flame } from 'lucide-react-native'
 import { useTheme } from '../../../context/ThemeContext'
 import { FONT } from '../../../lib/typography'
 import { supabase } from '../../../lib/supabase'
 import { getTodayInSantiago, nutritionMealApplies } from '../../../lib/date-utils'
-import { calculateConsumedMacrosWithCompletionFallback, normalizeMealForMacros } from '../../../lib/nutrition-utils'
+import {
+  applyMealFoodSwaps,
+  calculateConsumedMacrosWithCompletionFallback,
+  normalizeMealForMacros,
+  portionPctMapFromMealLogs,
+  type FoodMacrosRow,
+  type MealWithFoodItems,
+} from '../../../lib/nutrition-utils'
 import { Badge } from '../../Badge'
 import { Card } from '../../Card'
 import { MACRO_COLORS } from '../../MacroRingSummary'
-import { EMBER_500 } from './types'
+import { DANGER_500, EMBER_500, SUCCESS_500 } from './types'
 
 interface MealRow { id: string; name: string }
+interface SwapLog {
+  meal_id: string
+  original_food_id: string
+  swapped_food_id: string
+  swapped_quantity?: number | null
+  swapped_unit?: string | null
+}
+
+/**
+ * Aplica los intercambios de una comida ya normalizada. Arma `swapFoodsByOriginal`
+ * (lookup de la opcion elegida dentro de swap_options) y delega en el helper canonico
+ * `applyMealFoodSwaps` (nutrition-engine macros.ts:239-269). Espejo verbatim del widget
+ * web NutritionDailySummary.tsx:79-121.
+ */
+function applySwapsToMeal(meal: MealWithFoodItems, swapByMealFood: ReadonlyMap<string, SwapLog>): MealWithFoodItems {
+  if (swapByMealFood.size === 0) return meal
+  const swapFoodsByOriginal = new Map<
+    string,
+    { swappedFood: FoodMacrosRow; swappedQuantity?: number | null; swappedUnit?: string | null }
+  >()
+  for (const item of meal.food_items) {
+    const originalFoodId = item.foods.id
+    if (!originalFoodId) continue
+    const swap = swapByMealFood.get(`${meal.id}:${originalFoodId}`)
+    if (!swap) continue
+    const option = (item.swap_options ?? []).find((x) => x.food_id === swap.swapped_food_id)
+    if (!option) continue
+    swapFoodsByOriginal.set(originalFoodId, {
+      swappedFood: {
+        id: option.food_id,
+        name: option.name,
+        calories: option.calories,
+        protein_g: option.protein_g,
+        carbs_g: option.carbs_g,
+        fats_g: option.fats_g,
+        serving_size: option.serving_size,
+        serving_unit: option.serving_unit ?? null,
+      },
+      swappedQuantity: swap.swapped_quantity ?? null,
+      swappedUnit: swap.swapped_unit ?? null,
+    })
+  }
+  return applyMealFoodSwaps(meal, swapFoodsByOriginal)
+}
 interface Loaded {
   planName: string
   consumedCal: number
@@ -26,20 +77,37 @@ interface Loaded {
  * §13 NutritionDailySummary (web `nutrition/NutritionDailySummary.tsx`). Respeta
  * el gate del dominio (el shell no la monta si nutrition esta OFF). Header (apple
  * + plan + "Ver todo →"), kcal hero + badge "N restantes", 3 MacroBar (P/C/G),
- * lista de comidas con estado de completado + CTA. Desviacion: el toggle de
- * completar comida (optimista + cola offline) vive en la pantalla de Nutrición;
- * aca las filas son read-only y navegan al plan.
+ * lista de comidas con estado de completado + CTA. Macros = paridad con el widget
+ * web: aplica intercambios de alimento (nutrition_meal_food_swaps) y porciones
+ * parciales (consumed_quantity) antes de contar (web :79-134).
+ *
+ * DESVIACION DOCUMENTADA (regla 2/10): las filas de comida son read-only y navegan
+ * al plan. El web (MealCompletionRow.tsx:40-124) las hace toggle interactivo
+ * (useOptimistic + toggleMealCompletion + cola offline). En RN ese toggle vive en
+ * la pantalla de Nutrición (/alumno/nutricion): el alumno sigue pudiendo completar
+ * la comida, solo que no desde este widget-resumen. Decision de jefe (spec §7);
+ * portar la mutacion aca exigiria server-action/endpoint inexistente en RN (regla 8).
  */
 export function NutritionDailySummary({ clientId, onSeeAll }: { clientId: string; onSeeAll: () => void }) {
   const { theme } = useTheme()
   const [data, setData] = useState<Loaded | null>(null)
   const [noPlan, setNoPlan] = useState(false)
 
+  // Guarda de cancelacion last-write-wins: en un cambio rapido de clientId A→B,
+  // el load(A) en vuelo se marca `ignore` para que su resolucion tardia no pise el
+  // estado del load(B). Ademas reseteamos data/noPlan a su estado de carga para no
+  // dejar render stale del alumno anterior mientras llega el fetch nuevo.
   useEffect(() => {
-    load()
+    let ignore = false
+    setData(null)
+    setNoPlan(false)
+    load(() => ignore)
+    return () => {
+      ignore = true
+    }
   }, [clientId])
 
-  async function load() {
+  async function load(isIgnored: () => boolean) {
     const { iso: todayIso } = getTodayInSantiago()
     const { data: plan } = await supabase
       .from('nutrition_plans')
@@ -53,26 +121,45 @@ export function NutritionDailySummary({ clientId, onSeeAll }: { clientId: string
       .eq('is_active', true)
       .maybeSingle()
 
+    if (isIgnored()) return
     if (!plan) { setNoPlan(true); return }
 
-    const mealsForDay = ((plan as any).nutrition_meals ?? []).filter((m: any) => nutritionMealApplies(m, todayIso))
+    // Web ordena las comidas por order_index (dashboard.queries.ts:276 .order('order_index', asc));
+    // el select anidado de PostgREST no garantiza orden, asi que ordenamos aca para paridad visual.
+    const mealsForDay = ((plan as any).nutrition_meals ?? [])
+      .filter((m: any) => nutritionMealApplies(m, todayIso))
+      .sort((a: any, b: any) => (a.order_index ?? 0) - (b.order_index ?? 0))
 
     const { data: logData } = await supabase
       .from('daily_nutrition_logs')
-      .select('id, nutrition_meal_logs ( meal_id, is_completed, consumed_quantity )')
+      .select(
+        'id, nutrition_meal_logs ( meal_id, is_completed, consumed_quantity ), nutrition_meal_food_swaps ( meal_id, original_food_id, swapped_food_id, swapped_quantity, swapped_unit )'
+      )
       .eq('client_id', clientId)
       .eq('plan_id', plan.id)
       .eq('log_date', todayIso)
       .maybeSingle()
 
+    if (isIgnored()) return
+
     const mealLogs = (logData as any)?.nutrition_meal_logs ?? []
+    const mealSwaps: SwapLog[] = (logData as any)?.nutrition_meal_food_swaps ?? []
     const completed = new Set<string>(mealLogs.filter((l: any) => l.is_completed).map((l: any) => l.meal_id))
+
+    // Web NutritionDailySummary.tsx:75-121 — index swaps por `${meal_id}:${original_food_id}`.
+    const swapByMealFood = new Map<string, SwapLog>()
+    for (const s of mealSwaps) swapByMealFood.set(`${s.meal_id}:${s.original_food_id}`, s)
 
     const normalized = mealsForDay.map((m: any) =>
       normalizeMealForMacros({ id: m.id, day_of_week: m.day_of_week, food_items: m.nutrition_meal_food_items })
     )
+    // Aplica intercambios de alimento antes de contar macros (paridad con applyMealFoodSwaps,
+    // nutrition-engine macros.ts:239-269): si no hay swaps, la comida queda intacta.
+    const mealsWithSwaps = normalized.map((meal: MealWithFoodItems) => applySwapsToMeal(meal, swapByMealFood))
+    // Porcion parcial registrada por comida (consumed_quantity) — escala macros (web :123).
+    const portionMap = portionPctMapFromMealLogs(mealLogs)
     const goals = { calories: plan.daily_calories ?? 0, protein: plan.protein_g ?? 0, carbs: plan.carbs_g ?? 0, fats: plan.fats_g ?? 0 }
-    const consumed = calculateConsumedMacrosWithCompletionFallback(normalized, completed, goals)
+    const consumed = calculateConsumedMacrosWithCompletionFallback(mealsWithSwaps, completed, goals, portionMap)
 
     setData({
       planName: plan.name,
@@ -131,17 +218,23 @@ export function NutritionDailySummary({ clientId, onSeeAll }: { clientId: string
         </Badge>
       </View>
 
-      {data.macros.map((m) => <MacroBar key={m.label} {...m} />)}
+      {/* Web separa las 3 barras con space-y-2 (8px), no el gap-4 (16px) del Card. */}
+      <View style={{ gap: 8 }}>
+        {data.macros.map((m) => <MacroBar key={m.label} {...m} />)}
+      </View>
 
       <View style={{ gap: 8 }}>
         {data.meals.map((meal) => {
           const done = data.completed.has(meal.id)
           return (
             <TouchableOpacity key={meal.id} onPress={onSeeAll} activeOpacity={0.7} style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-              <View style={{ width: 24, height: 24, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: done ? EMBER_500 : 'transparent', borderWidth: done ? 0 : 1.5, borderColor: theme.border }}>
-                {done ? <Check size={14} color="#fff" strokeWidth={3} /> : null}
+              <View
+                className={done ? undefined : 'bg-surface-sunken'}
+                style={{ width: 32, height: 32, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: done ? SUCCESS_500 : undefined, borderWidth: done ? 0 : 1.5, borderColor: theme.border }}
+              >
+                {done ? <Check size={16} color="#fff" strokeWidth={3} /> : null}
               </View>
-              <Text className={done ? 'text-muted' : 'text-strong'} numberOfLines={1} style={{ flex: 1, fontFamily: FONT.uiSemibold, fontSize: 13.5 }}>{meal.name}</Text>
+              <Text className={done ? 'text-subtle' : 'text-strong'} numberOfLines={1} style={{ flex: 1, fontFamily: FONT.uiSemibold, fontSize: 13.5, textDecorationLine: done ? 'line-through' : 'none' }}>{meal.name}</Text>
             </TouchableOpacity>
           )
         })}
@@ -161,14 +254,26 @@ export function NutritionDailySummary({ clientId, onSeeAll }: { clientId: string
 
 function MacroBar({ label, value, target, color }: { label: string; value: number; target: number; color: string }) {
   const pct = target > 0 ? Math.min(100, (value / target) * 100) : 0
+  const over = target > 0 && value > target
+  const rv = Math.round(value)
+  const rt = Math.round(target)
   return (
-    <View style={{ gap: 4 }}>
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+    <View
+      style={{ gap: 4 }}
+      accessible
+      accessibilityRole="progressbar"
+      accessibilityLabel={label}
+      accessibilityValue={{ min: 0, max: rt, now: rv }}
+    >
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
         <Text className="text-muted" style={{ fontFamily: FONT.uiSemibold, fontSize: 11 }}>{label}</Text>
-        <Text className="text-strong" style={{ fontFamily: FONT.uiSemibold, fontSize: 11, fontVariant: ['tabular-nums'] }}>{Math.round(value)}/{Math.round(target)}g</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+          <Text className="text-body" style={{ fontFamily: FONT.uiSemibold, fontSize: 11, fontVariant: ['tabular-nums'] }}>{rv}/{rt}g</Text>
+          {over ? <AlertTriangle size={12} color={DANGER_500} strokeWidth={2.5} /> : null}
+        </View>
       </View>
       <View className="bg-surface-sunken" style={{ height: 8, borderRadius: 999, overflow: 'hidden' }}>
-        <View style={{ height: 8, borderRadius: 999, width: `${pct}%`, backgroundColor: color }} />
+        <View style={{ height: 8, borderRadius: 999, width: `${pct}%`, backgroundColor: over ? DANGER_500 : color }} />
       </View>
     </View>
   )

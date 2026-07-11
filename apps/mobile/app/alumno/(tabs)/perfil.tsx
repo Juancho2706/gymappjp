@@ -29,7 +29,7 @@ import { signOutAndCleanup } from '../../../lib/auth-actions'
 import { authenticate, isBiometricAvailable, isBiometricLockEnabled, setBiometricLockEnabled } from '../../../lib/biometric'
 import { getClientProfile } from '../../../lib/client'
 import { getWorkoutDaySummaries } from '../../../lib/history.queries'
-import { fmtVolume, getMonthlyRecap, type MonthlyRecap } from '../../../lib/monthly-summary'
+import { getMonthlyRecap, type MonthlyRecap } from '../../../lib/monthly-summary'
 import { clearBranding } from '../../../lib/branding'
 import { useTheme } from '../../../context/ThemeContext'
 import { SHADOWS } from '../../../lib/shadows'
@@ -38,16 +38,19 @@ import { ListRow } from '../../../components/ListRow'
 import { StatCard } from '../../../components/StatCard'
 import { Switch } from '../../../components/Switch'
 import {
+  ShareCardDate,
   ShareCardEyebrow,
   ShareCardHero,
   ShareCardPill,
   ShareCardPreview,
+  ShareCardSubtitle,
   ShareCardTitle,
   type ShareCardVariant,
 } from '../../../components/ShareCard'
 import { EvaLoaderScreen } from '../../../components/EvaLoader'
 import { AppBackground } from '../../../components/AppBackground'
 import { RestAlarmPreference } from '../../../components/alumno/RestAlarmPreference'
+import { MonthlySummaryShareCard } from '../../../components/alumno/MonthlySummaryShareCard'
 import { useEntitlements } from '../../../lib/entitlements'
 
 // Correo de contacto — una sola fuente, espejo de `SALES_EMAIL` (web `lib/brand-assets`).
@@ -252,6 +255,9 @@ export default function AlumnoPerfilScreen() {
   const [detail, setDetail] = useState<AlumnoDetail | null>(null)
   const [stats, setStats] = useState<{ totalWorkouts: number; streak: number }>({ totalWorkouts: 0, streak: 0 })
   const [monthly, setMonthly] = useState<MonthlyRecap | null>(null)
+  // Nombre del programa activo — pill del hero + pill de la share-card de progreso
+  // (web ProfileClient.tsx:255-262 y canvas:770-776 vía getActiveProgram, page.tsx:37/57).
+  const [programName, setProgramName] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [showPasswordModal, setShowPasswordModal] = useState(false)
   const [newPassword, setNewPassword] = useState('')
@@ -269,7 +275,7 @@ export default function AlumnoPerfilScreen() {
     const client = await getClientProfile()
     if (!client) { setLoading(false); return }
 
-    const [{ data: { user } }, { data }, { data: coachData }, daySummaries, monthlyRecap] = await Promise.all([
+    const [{ data: { user } }, { data }, { data: coachData }, daySummaries, monthlyRecap, { data: programRow }] = await Promise.all([
       supabase.auth.getUser(),
       supabase.from('clients').select('full_name, phone, goal_weight_kg, subscription_start_date').eq('id', client.id).maybeSingle(),
       supabase.from('coaches').select('subscription_tier').eq('id', client.coachId).maybeSingle(),
@@ -277,6 +283,8 @@ export default function AlumnoPerfilScreen() {
       getWorkoutDaySummaries(client.id, 365).catch(() => []),
       // Resumen del mes calendario (Santiago) para la share-card mensual — fail-open (nunca lanza).
       getMonthlyRecap(client.id),
+      // Programa activo (solo el nombre) — mirror de getActiveProgram web (dashboard.queries.ts:84-101).
+      supabase.from('workout_programs').select('name').eq('client_id', client.id).eq('is_active', true).maybeSingle(),
     ])
 
     setDetail({
@@ -292,6 +300,7 @@ export default function AlumnoPerfilScreen() {
       streak: computeStreak(daySummaries.map((d) => d.dayKey)),
     })
     setMonthly(monthlyRecap)
+    setProgramName((programRow as { name?: string | null } | null)?.name?.trim() || null)
     setLoading(false)
   }
 
@@ -342,6 +351,9 @@ export default function AlumnoPerfilScreen() {
 
   const hasExtras = detail?.phone || detail?.goalWeightKg != null || detail?.subscriptionStartDate
   const firstName = (detail?.fullName ?? '').trim().split(/\s+/)[0] || 'Atleta'
+  // Marca del coach para el título "Constancia con {marca}" (mismo fallback que el chrome
+  // de la card — ShareCard.tsx:371; web usa brand.brandName → 'EVA', canvas:733).
+  const brandName = branding?.displayName?.trim() || 'EVA'
   const streakSubtitle = stats.streak > 0
     ? `${stats.streak} ${stats.streak === 1 ? 'día' : 'días'} seguidos activo`
     : 'Enciende tu racha'
@@ -373,15 +385,18 @@ export default function AlumnoPerfilScreen() {
                   <Text className="font-display-black text-on-dark" style={{ fontSize: 22, letterSpacing: -0.4 }} numberOfLines={1}>
                     {detail?.fullName ?? '-'}
                   </Text>
-                  {detail?.email ? (
-                    <Text className="font-sans text-on-dark-muted" style={{ fontSize: 13, marginTop: 2 }} numberOfLines={1}>
-                      {detail.email}
-                    </Text>
-                  ) : null}
-                  {branding ? (
-                    <Text className="font-sans-medium text-on-dark-muted" style={{ fontSize: 13, marginTop: 2 }} numberOfLines={1}>
-                      Coach: {branding.displayName}
-                    </Text>
+                  {/* Coach line — mirror de web ProfileClient.tsx:254 (SIEMPRE visible, fallback 'tu coach'
+                      igual que web page.tsx:49). Web NO muestra email en el hero (spec §2.1). */}
+                  <Text className="font-sans text-on-dark-muted" style={{ fontSize: 13, marginTop: 2 }} numberOfLines={1}>
+                    Coach: {branding?.displayName?.trim() || 'tu coach'}
+                  </Text>
+                  {/* Pill del programa activo — mirror de web ProfileClient.tsx:255-262 (sport-500 + texto blanco). */}
+                  {programName ? (
+                    <View className="self-start rounded-pill bg-sport-500" style={{ marginTop: 8, paddingHorizontal: 10, paddingVertical: 4 }}>
+                      <Text className="font-sans-bold text-white" style={{ fontSize: 11.5 }} numberOfLines={1}>
+                        {programName}
+                      </Text>
+                    </View>
                   ) : null}
                 </View>
               </Card>
@@ -454,14 +469,14 @@ export default function AlumnoPerfilScreen() {
                 coach tiene el módulo activo; sin módulo NO se renderiza (cero superficie). */}
             {(showMovement || showBodyComp) ? (
               <View>
-                <SectionTitle>Seguimiento</SectionTitle>
+                <SectionTitle>Módulos</SectionTitle>
                 <Card padding="none">
                   {showMovement ? (
                     <ListRow
                       testID="perfil-movimiento-row"
                       leading={<IconTile Icon={PersonStanding} tone="sport" />}
                       title="Movimiento"
-                      subtitle="Tu evaluación y evolución"
+                      subtitle="Screening · solo lectura"
                       showChevron
                       onPress={() => router.push('/alumno/movement')}
                     />
@@ -471,8 +486,8 @@ export default function AlumnoPerfilScreen() {
                     <ListRow
                       testID="perfil-bodycomp-row"
                       leading={<IconTile Icon={Scale} tone="sport" />}
-                      title="Composición corporal"
-                      subtitle="Tus mediciones en el tiempo"
+                      title="Composición"
+                      subtitle="BIA / ISAK · solo lectura"
                       showChevron
                       onPress={() => router.push('/alumno/bodycomp')}
                     />
@@ -621,11 +636,7 @@ export default function AlumnoPerfilScreen() {
           <ShareOption
             Icon={CalendarDays}
             title="Resumen mensual"
-            subtitle={
-              monthly
-                ? `${monthly.monthLabel}: ${monthly.sessions} ${monthly.sessions === 1 ? 'sesión' : 'sesiones'} · ${fmtVolume(monthly.volumeKg)}`
-                : 'Tu mes en números'
-            }
+            subtitle={monthly ? `${monthly.monthLabel} · sesiones y volumen` : 'Tu mes en números'}
             tone="sport"
             testID="perfil-share-monthly"
             onPress={() => pickShare('monthly')}
@@ -633,48 +644,62 @@ export default function AlumnoPerfilScreen() {
         </View>
       </Sheet>
 
-      {/* Tarjetas compartibles (always-dark canvas, marca del coach) */}
+      {/* Tarjetas compartibles (always-dark canvas, marca del coach). Contenido/copy = verbatim
+          del canvas web (workout-pr-card-canvas.ts) y del texto compartido de los modales web. */}
+
+      {/* Progreso — mirror de renderProgressCardToBlob (canvas:725-761). */}
       <ShareCardPreview
         visible={activeShare === 'progress'}
         onClose={() => setActiveShare(null)}
         variant="progress"
-        shareMessage="Mi progreso en EVA 💪"
-        fileName="eva-progreso"
+        shareMessage="Mi progreso 💪"
+        fileName="mi-progreso"
       >
         <ShareCardEyebrow>MI PROGRESO</ShareCardEyebrow>
-        <ShareCardTitle>{firstName}</ShareCardTitle>
-        <ShareCardHero value={String(stats.totalWorkouts)} unit="entrenos" />
-        <ShareCardPill>{`${stats.streak} ${stats.streak === 1 ? 'día' : 'días'} de racha`}</ShareCardPill>
+        <ShareCardTitle>{`Constancia con ${brandName}`}</ShareCardTitle>
+        <ShareCardSubtitle>{firstName}</ShareCardSubtitle>
+        <ShareCardHero value={String(stats.totalWorkouts)} unit={stats.totalWorkouts === 1 ? 'entreno' : 'entrenos'} />
+        <ShareCardPill tone={stats.streak > 0 ? 'success' : 'neutral'}>
+          {stats.streak > 0 ? `Racha · ${stats.streak} ${stats.streak === 1 ? 'día' : 'días'}` : 'Recién empezando'}
+        </ShareCardPill>
+        {/* Fecha (canvas:764-767) + pill del programa si hay (canvas:770-776). */}
+        <ShareCardDate />
+        {programName ? <ShareCardPill tone="neutral">{programName}</ShareCardPill> : null}
       </ShareCardPreview>
 
+      {/* Racha — mirror de renderStreakCardToBlob (canvas:810-843). */}
       <ShareCardPreview
         visible={activeShare === 'streak'}
         onClose={() => setActiveShare(null)}
         variant="streak"
-        shareMessage="Mi racha en EVA 🔥"
-        fileName="eva-racha"
+        shareMessage="Mi racha 🔥"
+        fileName="mi-racha"
       >
         <ShareCardEyebrow>RACHA</ShareCardEyebrow>
-        <ShareCardTitle>{firstName}</ShareCardTitle>
+        <ShareCardTitle>{stats.streak > 0 ? 'Racha encendida' : 'Enciende tu racha'}</ShareCardTitle>
+        <ShareCardSubtitle>{firstName}</ShareCardSubtitle>
         <ShareCardHero value={String(stats.streak)} unit={stats.streak === 1 ? 'día' : 'días'} />
-        <ShareCardPill>{`${stats.totalWorkouts} entrenos totales`}</ShareCardPill>
+        <ShareCardPill tone={stats.streak > 0 ? 'ember' : 'neutral'}>
+          {stats.streak > 0 ? 'seguidos activo' : 'Empieza hoy tu racha'}
+        </ShareCardPill>
+        {/* Pill del mes: "N entrenos este mes" (canvas:846-853, monthly.sessions ya cargado) + fecha (canvas:859). */}
+        {(monthly?.sessions ?? 0) > 0 ? (
+          <ShareCardPill tone="neutral">
+            {`${monthly!.sessions} ${monthly!.sessions === 1 ? 'entreno' : 'entrenos'} este mes`}
+          </ShareCardPill>
+        ) : null}
+        <ShareCardDate />
       </ShareCardPreview>
 
-      <ShareCardPreview
+      {/* Resumen mensual — componente consolidado (eyebrow mes + subtítulo + hero + grid 3 tiles),
+          alimentado con el recap ya cargado en load(). */}
+      <MonthlySummaryShareCard
         visible={activeShare === 'monthly'}
         onClose={() => setActiveShare(null)}
-        variant="monthly"
-        shareMessage="Mi mes en EVA 📅"
-        fileName="eva-mes"
-      >
-        <ShareCardEyebrow>RESUMEN DEL MES</ShareCardEyebrow>
-        <ShareCardTitle>{monthly?.monthLabel ?? firstName}</ShareCardTitle>
-        <ShareCardHero
-          value={String(monthly?.sessions ?? 0)}
-          unit={(monthly?.sessions ?? 0) === 1 ? 'sesión' : 'sesiones'}
-        />
-        <ShareCardPill>{`${fmtVolume(monthly?.volumeKg ?? 0)} levantados`}</ShareCardPill>
-      </ShareCardPreview>
+        recap={monthly}
+        firstName={firstName}
+        streak={stats.streak}
+      />
 
       {/* Cambiar contraseña — Dialog EVA DS */}
       <Dialog

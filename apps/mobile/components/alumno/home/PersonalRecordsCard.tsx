@@ -10,7 +10,9 @@ import { PRDetailSheet } from './PRDetailSheet'
 
 interface PR { exerciseId: string; exerciseName: string; weightKg: number; achievedAt: string }
 
-const FRESH_MS = 14 * 86400000
+// Ventana de frescura del badge NUEVO = ULTIMAS 24 h, espejo del data-layer web
+// (dashboard.queries.ts:286,346,359 calcula `fresh` con dayMs = 24h). Antes 14 dias.
+const FRESH_MS = 24 * 3600000
 
 function fmtShort(iso: string): string {
   const ymd = getSantiagoIsoYmdForUtcInstant(iso)
@@ -38,7 +40,8 @@ export function PersonalRecordsCard({ clientId, onTecnica }: { clientId: string;
   return (
     <Card variant="inverse" padding="md">
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 12 }}>
-        <Trophy size={13} color="#7FB2FF" strokeWidth={2.4} />
+        {/* Trophy hereda text-sport-400 (#5C9DFF) del web con strokeWidth default 2. */}
+        <Trophy size={13} color="#5C9DFF" />
         <Text className="text-sport-400" style={{ fontFamily: FONT.uiBold, fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.6 }}>Records personales</Text>
       </View>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
@@ -50,18 +53,21 @@ export function PersonalRecordsCard({ clientId, onTecnica }: { clientId: string;
               testID={`pr-tile-${pr.exerciseId}`}
               onPress={() => { setSelected(pr); setOpen(true) }}
               activeOpacity={0.8}
-              style={{ width: '47.5%', flexGrow: 1, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.05)', paddingHorizontal: 12, paddingVertical: 10, gap: 2 }}
+              // flexBasis/maxWidth 47.5% (sin flexGrow) espeja `grid grid-cols-2`: un tile impar
+              // ocupa media fila en vez de estirarse a 100%. rounded-control (14) via className.
+              className="rounded-control"
+              style={{ flexBasis: '47.5%', maxWidth: '47.5%', backgroundColor: 'rgba(255,255,255,0.05)', paddingHorizontal: 12, paddingVertical: 10, gap: 4 }}
             >
               {fresh ? (
                 <View className="bg-cta-fill" style={{ position: 'absolute', right: 8, top: 8, borderRadius: 999, paddingHorizontal: 6, paddingVertical: 1 }}>
-                  <Text style={{ color: '#fff', fontFamily: FONT.displayBlack, fontSize: 8, letterSpacing: 0.3 }}>NUEVO</Text>
+                  <Text style={{ color: '#fff', fontFamily: FONT.uiExtra, fontSize: 8, letterSpacing: 0.24 }}>NUEVO</Text>
                 </View>
               ) : null}
               <Text className="text-sport-500" style={{ fontFamily: FONT.displayBlack, fontSize: 19, fontVariant: ['tabular-nums'] }}>
                 {pr.weightKg}<Text className="text-on-dark-muted" style={{ fontFamily: FONT.uiSemibold, fontSize: 10 }}> kg</Text>
               </Text>
-              <Text className="text-on-dark-muted" numberOfLines={1} style={{ fontFamily: FONT.uiSemibold, fontSize: 11 }}>{pr.exerciseName}</Text>
-              <Text className="text-on-dark-muted" style={{ fontSize: 10, opacity: 0.7 }}>{fmtShort(pr.achievedAt)}</Text>
+              <Text className="text-on-dark-muted" numberOfLines={2} style={{ fontFamily: FONT.uiSemibold, fontSize: 11, lineHeight: 14 }}>{pr.exerciseName}</Text>
+              <Text className="text-on-dark-muted" style={{ fontFamily: FONT.ui, fontSize: 10, opacity: 0.7, fontVariant: ['tabular-nums'] }}>{fmtShort(pr.achievedAt)}</Text>
             </TouchableOpacity>
           )
         })}

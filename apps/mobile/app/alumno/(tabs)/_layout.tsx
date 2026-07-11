@@ -53,7 +53,17 @@ export default function AlumnoTabsLayout() {
         tabBar={(props) => <AlumnoMobileChrome {...props} />}
         screenOptions={{
           headerShown: false,
-          sceneStyle: { paddingBottom: insets.bottom + ALUMNO_TABBAR_CLEARANCE },
+          // P0-1 (b) edge-to-edge: sin backgroundColor la escena cae al fondo gris
+          // claro del DefaultTheme de react-navigation y tapa el bg-surface-app en
+          // dark (franja clara detras/bajo la capsula flotante). Transparente => el
+          // <View bg-surface-app> pinta hasta el borde fisico inferior (SDK54 dibuja
+          // edge-to-edge), 1:1 con el web donde el body surface-app cubre el viewport
+          // bajo la capsula fija (ClientNav.tsx:471-474). El coach fija theme.background
+          // via el shim imperativo; el alumno difiere al View de tokens NativeWind.
+          sceneStyle: {
+            backgroundColor: 'transparent',
+            paddingBottom: insets.bottom + ALUMNO_TABBAR_CLEARANCE,
+          },
         }}
       >
         <Tabs.Screen name="home" options={{ title: 'Inicio' }} />

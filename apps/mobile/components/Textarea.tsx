@@ -77,21 +77,14 @@ export const Textarea = forwardRef<TextInput, TextareaProps>(function Textarea(
   const isDisabled = rest.editable === false
   const minHeight = minRows * LINE_HEIGHT + 20 // + vertical padding
 
-  // Border token: error wins, then focus (brand sport ramp), else default.
-  const borderClass = error ? 'border-danger-500' : focused ? 'border-sport-600' : 'border-default'
+  // ⚠️ P0 focus-hop (bug RN core #45798, New Architecture/Fabric): enfocar NO debe
+  // cambiar la FORMA ni las CLASES del árbol del TextInput. Mismo patrón que Input.tsx
+  // (fix e17e67b9): borde por `style` (borderColor estable, className del contenedor
+  // SIEMPRE la misma) y focus-ring como hermano absoluto SIEMPRE montado que solo varía
+  // `opacity` (0→1), sin elevation en Android. El foco jamás remonta ni re-clasifica el subárbol.
+  const borderColor = error ? theme.destructive : focused ? theme.primary : theme.border
   const bgClass = isDisabled ? 'bg-surface-sunken' : 'bg-surface-card'
-
-  // Soft brand focus ring (best-effort: iOS shadow; brand-aware via theme.primary).
-  const focusRing: ViewStyle | null =
-    focused && !error
-      ? {
-          shadowColor: theme.primary,
-          shadowOffset: { width: 0, height: 0 },
-          shadowOpacity: 0.35,
-          shadowRadius: 5,
-          elevation: 0,
-        }
-      : null
+  const showRing = focused && !error
 
   const count = typeof value === 'string' ? value.length : 0
   const atLimit = typeof maxLength === 'number' && count >= maxLength
@@ -120,23 +113,31 @@ export const Textarea = forwardRef<TextInput, TextareaProps>(function Textarea(
         </View>
       )}
 
-      <View
-        className={`rounded-control ${bgClass} ${borderClass}`}
-        style={[{ minHeight }, styles.box, focusRing]}
-      >
-        <TextInput
-          ref={ref}
-          multiline
-          textAlignVertical="top"
-          className="flex-1 text-strong"
-          placeholderTextColor={theme.mutedForeground}
-          value={value}
-          maxLength={maxLength}
-          onFocus={handleFocus}
-          onBlur={handleBlur}
-          {...rest}
-          style={styles.input}
+      <View style={styles.field}>
+        {/* Focus-ring: capa hermana SIEMPRE montada. El foco solo cambia su opacity
+            (y su shadow, iOS). Sin elevation → invisible en Android (cero re-layout). */}
+        <View
+          pointerEvents="none"
+          style={[styles.ring, { opacity: showRing ? 1 : 0, shadowColor: theme.primary, backgroundColor: theme.card }]}
         />
+        <View
+          className={`rounded-control ${bgClass}`}
+          style={[{ minHeight }, styles.box, { borderColor }]}
+        >
+          <TextInput
+            ref={ref}
+            multiline
+            textAlignVertical="top"
+            className="flex-1 text-strong"
+            placeholderTextColor={theme.mutedForeground}
+            value={value}
+            maxLength={maxLength}
+            onFocus={handleFocus}
+            onBlur={handleBlur}
+            {...rest}
+            style={[styles.input, isDisabled && styles.inputDisabled]}
+          />
+        </View>
       </View>
 
       <View style={styles.footerRow}>
@@ -165,6 +166,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   label: { fontSize: 13, fontFamily: FONT_LABEL },
+  field: { position: 'relative' },
+  ring: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderRadius: 14,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.35,
+    shadowRadius: 5,
+  },
   box: { paddingHorizontal: 14, paddingVertical: 10, borderWidth: 1.5 },
   input: {
     fontSize: 15,
@@ -173,6 +186,7 @@ const styles = StyleSheet.create({
     paddingVertical: 0,
     minHeight: LINE_HEIGHT,
   },
+  inputDisabled: { opacity: 0.6 },
   footerRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',

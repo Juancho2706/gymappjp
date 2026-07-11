@@ -183,16 +183,22 @@ export function ShareCardHero({ value, unit, color }: { value: string; unit?: st
   )
 }
 
-/** Rounded pill (context line under the hero). `tone` tints success/neutral. */
+/** Rounded pill (context line under the hero). `tone` tints success/ember/neutral. */
 export function ShareCardPill({
   children,
   tone = 'neutral',
 }: {
   children: ReactNode
-  tone?: 'neutral' | 'success' | 'accent'
+  tone?: 'neutral' | 'success' | 'accent' | 'ember'
 }) {
-  const bg = tone === 'success' ? 'rgba(52,211,153,0.14)' : tone === 'accent' ? W10 : W08
-  const fg = tone === 'success' ? '#34D399' : W72
+  // 'ember' mirrors the streak pill in the web canvas (ember 0.14 bg / ember text,
+  // workout-pr-card-canvas.ts:841-842).
+  const bg =
+    tone === 'success' ? 'rgba(52,211,153,0.14)'
+    : tone === 'ember' ? withAlpha(EMBER_500, 0.14)
+    : tone === 'accent' ? W10
+    : W08
+  const fg = tone === 'success' ? '#34D399' : tone === 'ember' ? EMBER_500 : W72
   return (
     <View style={[styles.pill, { backgroundColor: bg }]}>
       <Text style={[styles.pillText, { color: fg }]} numberOfLines={1}>

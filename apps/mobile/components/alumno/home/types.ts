@@ -22,6 +22,8 @@ export interface Plan {
   title: string
   day_of_week: number | null
   assigned_date: string | null
+  /** Variante A/B del plan (solo relevante en programas ab_mode). Espejo de `workout_plans.week_variant`. */
+  week_variant: string | null
   blockCount: number
   blocks: HeroBlock[]
 }
@@ -40,6 +42,8 @@ export interface Program {
   phases: ProgramPhase[] | null
   weeksToRepeat: number
   startDate: string | null
+  /** Programa A/B (semanas alternadas). Espejo de `workout_programs.ab_mode`. */
+  abMode: boolean
 }
 
 export interface RecentWorkout {
@@ -80,8 +84,8 @@ export interface HomeData {
   streak: number
 }
 
-/** Estado de un dia del programa en la semana actual (espejo de `WeekDayStatus`). */
-export type DayStatus = 'today' | 'done' | 'pending' | 'upcoming'
+/** Estado de un dia del programa en la semana actual (espejo de `WeekDayStatus`, incluye 'rest' = dia sin plan). */
+export type DayStatus = 'today' | 'done' | 'pending' | 'upcoming' | 'rest'
 
 export interface PlanDayView {
   plan: Plan
@@ -110,3 +114,4 @@ export const SUCCESS_500 = '#1FB877'
 // Etiquetas de dia — verbatim del diseno.
 export const WEEK_LETTERS = ['L', 'M', 'X', 'J', 'V', 'S', 'D'] // Lun..Dom (tira semanal)
 export const DAY_SHORT = ['', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'] // dbDay 1..7
+export const DAY_FULL = ['', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'] // dbDay 1..7 (web DAY_NAMES_FULL)

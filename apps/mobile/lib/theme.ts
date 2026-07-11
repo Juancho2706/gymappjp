@@ -46,6 +46,13 @@ export interface Theme {
    * style.borderColor (igual que `border` para el divisor) para resolver el alpha.
    */
   borderDefault: string
+  /**
+   * aqua-700 (recovery foreground): color imperativo scheme-aware para el icono
+   * lucide de descanso (RestDayCard). Lucide-react-native toma `color`, no className
+   * dark-aware, así que el flip (light #0A6E8D / dark #6FD3EA) se resuelve acá.
+   * Espejo de `--color-aqua-700` (web globals.css: light :366 / dark :632).
+   */
+  aqua700: string
   destructive: string
   success: string
   // Extended (new - matches web design system)
@@ -54,6 +61,14 @@ export interface Theme {
   mutedForeground: string
   secondary: string
   secondaryForeground: string
+  /**
+   * ink-300 (border-strong / empty-ring stroke): color imperativo scheme-aware
+   * para trazos DS que una className no expresa (SVG `stroke` del ProgressRing
+   * vacío). FLIPEA en dark. Espejo de `--ink-300` web (globals.css: light :340
+   * #A8B1BD / dark :638 #414C5A); web `ComplianceRing.tsx:26` usa var(--ink-300)
+   * como `emptyStroke`.
+   */
+  ink300: string
   accent: string
   accentForeground: string
   cyan: string
@@ -95,10 +110,15 @@ const DS = {
   danger500: '#F4365A',
   success500: '#1FB877',
   aqua500: '#18ABD4', // recovery
+  // aqua-700 (recovery foreground): FLIPEA en dark. Icono/foreground sobre chip aqua-100.
+  // Espejo web globals.css: light :root #0A6E8D (:366) / dark .dark #6FD3EA (:632).
+  aqua700Light: '#0A6E8D', // --aqua-700 light
+  aqua700Dark: '#6FD3EA', // --aqua-700 dark
   white: '#FFFFFF',
   // Light neutrals
   inkStrong: '#0B0E13', // ink-950 / text-strong (light)
   inkMuted: '#5A6573', // ink-500 / text-muted (light)
+  ink300Light: '#A8B1BD', // ink-300 / border-strong / empty-ring stroke (light) — web globals.css:340
   paper: '#FBFCFD', // surface-app (light)
   sunkenLight: '#F4F6F8', // ink-50 / surface-sunken (light)
   borderLight: '#E6E9ED', // ink-100 / border-subtle (light)
@@ -107,6 +127,7 @@ const DS = {
   // Dark neutrals
   textStrongDark: '#F4F6F8',
   textMutedDark: '#8A95A3',
+  ink300Dark: '#414C5A', // ink-300 (dark) — web globals.css:638
   surfaceAppDark: '#0A0D12',
   surfaceCardDark: '#161B22',
   surfaceSunkenDark: '#1F262F',
@@ -150,6 +171,7 @@ export const lightTheme: Theme = freezeTheme({
   muted: DS.sunkenLight,
   border: DS.borderLight,
   borderDefault: DS.borderDefaultLight,
+  aqua700: DS.aqua700Light,
   destructive: DS.danger500,
   success: DS.success500,
   // Extended
@@ -158,6 +180,7 @@ export const lightTheme: Theme = freezeTheme({
   mutedForeground: DS.inkMuted,
   secondary: DS.sunkenLight,
   secondaryForeground: DS.inkStrong,
+  ink300: DS.ink300Light,
   accent: DS.sunkenLight,
   accentForeground: DS.sport500, // brand; applyCoachBranding() overrides
   cyan: DS.aqua500,
@@ -181,6 +204,7 @@ export const darkTheme: Theme = freezeTheme({
   muted: DS.surfaceSunkenDark,
   border: DS.borderDark,
   borderDefault: DS.borderDefaultDark,
+  aqua700: DS.aqua700Dark,
   destructive: DS.danger500,
   success: DS.success500,
   // Extended
@@ -189,6 +213,7 @@ export const darkTheme: Theme = freezeTheme({
   mutedForeground: DS.textMutedDark,
   secondary: DS.surfaceSunkenDark,
   secondaryForeground: DS.textStrongDark,
+  ink300: DS.ink300Dark,
   accent: DS.surfaceSunkenDark,
   accentForeground: DS.sport500, // brand; applyCoachBranding() overrides
   cyan: DS.aqua500,

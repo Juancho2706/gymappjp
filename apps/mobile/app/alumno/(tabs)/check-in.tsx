@@ -16,7 +16,7 @@ import * as FileSystem from 'expo-file-system'
 import * as ImageManipulator from 'expo-image-manipulator'
 import * as ImagePicker from 'expo-image-picker'
 import { decode } from 'base64-arraybuffer'
-import { ArrowRight, Camera, Check, ChevronLeft, History, Lock, Minus, Plus, ShieldAlert, X } from 'lucide-react-native'
+import { ArrowRight, Camera, Check, ChevronLeft, History, Lock, Minus, Plus, RefreshCw, ShieldAlert, WifiOff, X } from 'lucide-react-native'
 import { MotiView } from 'moti'
 import { Confetti } from 'react-native-fast-confetti'
 import { supabase } from '../../../lib/supabase'
@@ -40,7 +40,10 @@ const ICON_WHITE = '#FFFFFF'
 interface LastCheckIn {
   weight: number | null
   energy_level: number | null
-  date: string
+  // Ordenamos/mostramos por created_at (espejo web check-in.queries.ts:38,40): el insert web NO
+  // setea `date`, asi que filas creadas por web tienen date NULL; leer por date las ocultaba/
+  // desordenaba. created_at siempre esta presente (timestamp por defecto).
+  created_at: string
 }
 
 export default function CheckInScreen() {
@@ -57,9 +60,29 @@ export default function CheckInScreen() {
   const [backPhotoUri, setBackPhotoUri] = useState<string | null>(null)
   const [notes, setNotes] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  // Guarda anti doble-tap SINCRONA (Fabric #45798-adyacente): el state `submitting` solo bloquea
+  // el Button tras el re-render, y el onPress vigente captura `submitting=false` en su closure.
+  // Como submit() hace red (getClientProfile/getUser) antes de setSubmitting, hay una ventana en
+  // que dos taps rapidos pasan la guarda de state => dos inserts en check_ins. El ref se setea
+  // sincronamente en el mismo tick del primer tap y cierra esa ventana. Web no sufre (server
+  // action + boton disabled sincrono).
+  const submittingRef = useRef(false)
+  // Error de envio inline (espejo web CheckInForm.tsx:677-685 + 703-706): card WifiOff en el
+  // paso 3 + boton que pasa a "Reintentar". Reemplaza el Alert global anterior (mas rico: el
+  // alumno ve el error en contexto y reintenta sin cerrar un modal).
+  const [submitError, setSubmitError] = useState<string | null>(null)
   const [done, setDone] = useState(false)
+  // Direccion del swap de pasos (1 adelante / -1 atras) para la transicion slide+fade (espejo
+  // web stepVariants CheckInForm.tsx:121-136); gateada por reduced motion.
+  const [direction, setDirection] = useState<1 | -1>(1)
   const [lastCheckIn, setLastCheckIn] = useState<LastCheckIn | null>(null)
   const prefilledRef = useRef(false)
+  // Dirty-flag anti-race: loadLastCheckIn() es async mientras el paso 1 ya es interactivo. Web
+  // prellena desde datos presentes en el render inicial (sin ventana de carrera), pero aca la
+  // query puede retornar DESPUES de que el alumno ya tocó el stepper/slider. prefilledRef solo
+  // frena el 2do load; este ref se marca en la PRIMERA edicion manual (peso o energia) y hace
+  // que el prefill NUNCA pise la edicion del usuario.
+  const editedRef = useRef(false)
   const scrollRef = useRef<ScrollView>(null)
 
   const { iso: todayIso } = getTodayInSantiago()
@@ -80,15 +103,16 @@ export default function CheckInScreen() {
     if (!client) return
     const { data } = await supabase
       .from('check_ins')
-      .select('weight, energy_level, date')
+      .select('weight, energy_level, created_at')
       .eq('client_id', client.id)
-      .order('date', { ascending: false })
+      .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle()
     if (data) {
       setLastCheckIn(data as LastCheckIn)
       // Prefill una vez desde el ultimo check-in (parity web: arranca en el ultimo peso/energia).
-      if (!prefilledRef.current) {
+      // editedRef: si el alumno ya edito antes de que retorne la query, NO pisamos su edicion.
+      if (!prefilledRef.current && !editedRef.current) {
         prefilledRef.current = true
         const d = data as LastCheckIn
         if (d.weight != null) setWeight(d.weight.toFixed(1))
@@ -184,12 +208,15 @@ export default function CheckInScreen() {
   }
 
   async function submit() {
-    if (submitting) return
+    if (submittingRef.current) return
+    submittingRef.current = true
     setSubmitting(true)
+    setSubmitError(null)
 
     const client = await getClientProfile()
     if (!client) {
       Alert.alert('Error', 'No se pudo obtener tu perfil.')
+      submittingRef.current = false
       setSubmitting(false)
       return
     }
@@ -197,6 +224,7 @@ export default function CheckInScreen() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user || user.id !== client.userId) {
       Alert.alert('Error de sesión', 'Inicia sesión de nuevo.')
+      submittingRef.current = false
       setSubmitting(false)
       return
     }
@@ -216,9 +244,11 @@ export default function CheckInScreen() {
       if (!backPhotoPath) droppedPhotos++
     }
 
+    // NO seteamos `date` (espejo web check-in.actions.ts:193-200): el insert web solo escribe
+    // weight/energy/notes/fotos y la lectura ordena por created_at. Setearlo generaba un residual
+    // de off-by-one en la vista del coach vs filas creadas por web (date NULL).
     const { error } = await supabase.from('check_ins').insert({
       client_id: client.id,
-      date: getTodayInSantiago().iso,
       weight: weight ? parseFloat(weight) : null,
       energy_level: energyLevel,
       front_photo_url: frontPhotoPath,
@@ -226,10 +256,12 @@ export default function CheckInScreen() {
       notes: notes.trim() || null,
     })
 
+    submittingRef.current = false
     setSubmitting(false)
 
     if (error) {
-      Alert.alert('Error', 'No se pudo guardar el check-in. Intenta de nuevo.')
+      // Espejo web CheckInForm.tsx:314 (copy verbatim del toast de error).
+      setSubmitError('No se pudo enviar el check-in. Intenta de nuevo.')
     } else {
       setDone(true) // celebración: confetti + pantalla de éxito se montan con `done`
       setStep(1)
@@ -239,28 +271,38 @@ export default function CheckInScreen() {
       prefilledRef.current = false
       loadLastCheckIn()
       // El check-in NUNCA se aborta por una foto, pero sí avisamos si alguna no subió.
+      // Copy verbatim del toast.warning web (CheckInForm.tsx:305-306); RN usa Alert (adaptacion).
       if (droppedPhotos > 0) {
         Alert.alert(
           'Check-in guardado',
           droppedPhotos === 1
-            ? 'Tu check-in se guardó, pero una foto no pudo subirse. Puedes volver a intentarlo en el próximo check-in.'
-            : 'Tu check-in se guardó, pero las fotos no pudieron subirse. Puedes volver a intentarlo en el próximo check-in.'
+            ? 'Una foto no pudo subirse y va a omitirse; tu check-in se envía igual.'
+            : 'Las fotos no pudieron subirse y van a omitirse; tu check-in se envía igual.'
         )
       }
     }
   }
 
   function adjustWeight(delta: number) {
+    editedRef.current = true
     setWeight((w) => Math.max(0, (parseFloat(w) || 0) + delta).toFixed(1))
   }
 
+  // Cambio manual de energia: marca dirty (mismo anti-race que el peso) antes de setear.
+  function handleEnergyChange(v: number | null) {
+    editedRef.current = true
+    setEnergyLevel(v)
+  }
+
   function goNext() {
+    setDirection(1)
     if (step === 1) setStep(2)
     else if (step === 2) setStep(3)
     else submit()
   }
 
   function goPrev() {
+    setDirection(-1)
     if (step === 2) setStep(1)
     else if (step === 3) setStep(2)
   }
@@ -309,14 +351,26 @@ export default function CheckInScreen() {
     <SafeAreaView style={styles.container} className="bg-surface-app">
       <AppBackground />
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
-        {/* TopBar: eyebrow "Paso X de 3" + titulo (espejo web) */}
+        {/* TopBar: boton Atras + eyebrow "Paso X de 3" + titulo (espejo web CheckInForm.tsx:362-378) */}
         <View style={styles.topBar}>
-          <Text className="text-muted" style={TYPE.eyebrow}>
-            Paso {step} de 3
-          </Text>
-          <Text className="text-strong" style={[textStyle('2xl', FONT.displayBlack, { lh: 'tight', ls: 'tighter' }), { fontSize: 26 }]}>
-            Check-in mensual
-          </Text>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Atrás"
+            onPress={() => router.push('/alumno/home')}
+            className="bg-surface-sunken"
+            style={styles.backBtn}
+            testID="checkin-topbar-back"
+          >
+            <ChevronLeft size={20} color={theme.foreground} strokeWidth={2} />
+          </Pressable>
+          <View style={styles.topBarCol}>
+            <Text className="text-muted" style={TYPE.eyebrow}>
+              Paso {step} de 3
+            </Text>
+            <Text className="text-strong" style={[textStyle('2xl', FONT.displayBlack, { lh: 'tight', ls: 'tighter' }), { fontSize: 26 }]}>
+              Check-in mensual
+            </Text>
+          </View>
         </View>
 
         {/* Stepper (3 barras, activa mas ancha) */}
@@ -349,45 +403,68 @@ export default function CheckInScreen() {
           scrollEventThrottle={16}
         >
           {step === 1 && (
-            <StepOne
-              theme={theme}
-              lastCheckIn={lastCheckIn}
-              todayIso={todayIso}
-              weight={weight}
-              adjustWeight={adjustWeight}
-              energyLevel={energyLevel}
-              setEnergyLevel={setEnergyLevel}
-              onNext={goNext}
-            />
+            <MotiView
+              key="step1"
+              from={{ opacity: motion.reduced ? 1 : 0, translateX: motion.reduced ? 0 : direction * 40 }}
+              animate={{ opacity: 1, translateX: 0 }}
+              transition={{ type: 'timing', duration: motion.reduced ? 0 : 280 }}
+            >
+              <StepOne
+                theme={theme}
+                lastCheckIn={lastCheckIn}
+                todayIso={todayIso}
+                weight={weight}
+                adjustWeight={adjustWeight}
+                energyLevel={energyLevel}
+                setEnergyLevel={handleEnergyChange}
+                onNext={goNext}
+              />
+            </MotiView>
           )}
 
           {step === 2 && (
-            <StepTwo
-              theme={theme}
-              resolvedScheme={resolvedScheme}
-              frontPhotoUri={frontPhotoUri}
-              backPhotoUri={backPhotoUri}
-              onPickFront={() => choosePhotoSource('front')}
-              onPickBack={() => choosePhotoSource('back')}
-              onClearFront={() => setFrontPhotoUri(null)}
-              onClearBack={() => setBackPhotoUri(null)}
-              onNext={goNext}
-              onPrev={goPrev}
-            />
+            <MotiView
+              key="step2"
+              from={{ opacity: motion.reduced ? 1 : 0, translateX: motion.reduced ? 0 : direction * 40 }}
+              animate={{ opacity: 1, translateX: 0 }}
+              transition={{ type: 'timing', duration: motion.reduced ? 0 : 280 }}
+            >
+              <StepTwo
+                theme={theme}
+                resolvedScheme={resolvedScheme}
+                frontPhotoUri={frontPhotoUri}
+                backPhotoUri={backPhotoUri}
+                onPickFront={() => choosePhotoSource('front')}
+                onPickBack={() => choosePhotoSource('back')}
+                onClearFront={() => setFrontPhotoUri(null)}
+                onClearBack={() => setBackPhotoUri(null)}
+                onNext={goNext}
+                onPrev={goPrev}
+              />
+            </MotiView>
           )}
 
           {step === 3 && (
-            <StepThree
-              weight={weight}
-              energyLevel={energyLevel}
-              frontPhotoUri={frontPhotoUri}
-              backPhotoUri={backPhotoUri}
-              notes={notes}
-              setNotes={setNotes}
-              submitting={submitting}
-              onSubmit={goNext}
-              onPrev={goPrev}
-            />
+            <MotiView
+              key="step3"
+              from={{ opacity: motion.reduced ? 1 : 0, translateX: motion.reduced ? 0 : direction * 40 }}
+              animate={{ opacity: 1, translateX: 0 }}
+              transition={{ type: 'timing', duration: motion.reduced ? 0 : 280 }}
+            >
+              <StepThree
+                theme={theme}
+                weight={weight}
+                energyLevel={energyLevel}
+                frontPhotoUri={frontPhotoUri}
+                backPhotoUri={backPhotoUri}
+                notes={notes}
+                setNotes={setNotes}
+                submitting={submitting}
+                submitError={submitError}
+                onSubmit={goNext}
+                onPrev={goPrev}
+              />
+            </MotiView>
           )}
         </ScrollView>
       </KeyboardAvoidingView>
@@ -420,7 +497,7 @@ function StepOne({
               <Text className="text-muted" style={textStyle('3xs', FONT.uiBold)}>Tu último check-in</Text>
               <Text className="text-strong" style={textStyle('xs', FONT.uiSemibold)}>
                 {lastCheckIn.weight != null ? `${lastCheckIn.weight} kg` : '—'} · Energía{' '}
-                {lastCheckIn.energy_level ?? '—'}/10 · {formatRelativeDate(lastCheckIn.date.slice(0, 10), todayIso)}
+                {lastCheckIn.energy_level ?? '—'}/10 · {formatRelativeDate(lastCheckIn.created_at.slice(0, 10), todayIso)}
               </Text>
             </>
           ) : (
@@ -434,8 +511,8 @@ function StepOne({
         </View>
       </Card>
 
-      {/* Peso actual */}
-      <Card padding="lg" style={{ gap: 14 }}>
+      {/* Peso actual — gap 12 (espejo web gap-3 CheckInForm.tsx:443; Ola 0 #4) */}
+      <Card padding="lg" style={{ gap: 12 }}>
         <Text className="text-strong" style={textStyle('xs', FONT.uiSemibold)}>Peso actual</Text>
         <View style={styles.weightRow}>
           <Pressable
@@ -465,11 +542,12 @@ function StepOne({
         </View>
       </Card>
 
-      {/* Nivel de energia */}
-      <Card padding="lg" style={{ gap: 14 }}>
+      {/* Nivel de energia — gap 12 (espejo web gap-3 CheckInForm.tsx:474; Ola 0 #4) */}
+      <Card padding="lg" style={{ gap: 12 }}>
         <View style={styles.energyHead}>
           <Text className="text-strong" style={textStyle('xs', FONT.uiSemibold)}>Nivel de energía</Text>
-          <Text className="text-sport-600" style={textStyle('md', FONT.displayBold, { ls: 'tighter' })}>
+          {/* Numeral: Archivo 900 (web font-black CheckInForm.tsx:477) + tabular-nums (Ola 0 #1, #2) */}
+          <Text className="text-sport-600" style={[textStyle('md', FONT.displayBlack, { ls: 'tighter' }), { fontVariant: ['tabular-nums'] }]}>
             {energyLevel ?? '—'}
             <Text className="text-muted" style={textStyle('2xs', FONT.uiSemibold)}>/10</Text>
           </Text>
@@ -599,8 +677,9 @@ function PhotoPickerSlot({
 }
 
 function StepThree({
-  weight, energyLevel, frontPhotoUri, backPhotoUri, notes, setNotes, submitting, onSubmit, onPrev,
+  theme, weight, energyLevel, frontPhotoUri, backPhotoUri, notes, setNotes, submitting, submitError, onSubmit, onPrev,
 }: {
+  theme: any
   weight: string
   energyLevel: number | null
   frontPhotoUri: string | null
@@ -608,6 +687,7 @@ function StepThree({
   notes: string
   setNotes: (v: string) => void
   submitting: boolean
+  submitError: string | null
   onSubmit: () => void
   onPrev: () => void
 }) {
@@ -635,11 +715,22 @@ function StepThree({
         </View>
       </Card>
 
+      {/* Error de envio inline (espejo web CheckInForm.tsx:677-685) */}
+      {submitError ? (
+        <View className="border border-danger-500 bg-danger-100" style={styles.errorCard}>
+          <WifiOff size={17} color={theme.destructive} strokeWidth={2} />
+          <View style={{ flex: 1 }}>
+            <Text className="text-danger-600" style={textStyle('xs', FONT.uiBold)}>No pudimos enviar tu check-in</Text>
+            <Text className="text-danger-600" style={[textStyle('2xs', FONT.ui, { lh: 'relaxed' }), { marginTop: 2 }]}>{submitError}</Text>
+          </View>
+        </View>
+      ) : null}
+
       <View style={styles.navRow}>
         <Button label="Atrás" leftIcon={ChevronLeft} variant="secondary" size="lg" disabled={submitting} onPress={onPrev} testID="checkin-back" />
         <Button
-          label="Enviar check-in"
-          rightIcon={Check}
+          label={submitError ? 'Reintentar' : 'Enviar check-in'}
+          rightIcon={submitError ? RefreshCw : Check}
           variant="sport"
           size="lg"
           loading={submitting}
@@ -655,7 +746,8 @@ function StepThree({
 function SummaryMetric({ label, value }: { label: string; value: string }) {
   return (
     <View style={styles.summaryMetric}>
-      <Text className="text-strong" style={[textStyle('lg', FONT.displayBold, { ls: 'tighter' }), { fontVariant: ['tabular-nums'] }]}>{value}</Text>
+      {/* Archivo 900 (web font-black CheckInForm.tsx:670) — misma familia P2 que el numeral de energia */}
+      <Text className="text-strong" style={[textStyle('lg', FONT.displayBlack, { ls: 'tighter' }), { fontVariant: ['tabular-nums'] }]}>{value}</Text>
       <Text className="text-muted" style={textStyle('3xs', FONT.uiSemibold)}>{label}</Text>
     </View>
   )
@@ -663,7 +755,9 @@ function SummaryMetric({ label, value }: { label: string; value: string }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  topBar: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 6, gap: 2 },
+  topBar: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 20, paddingTop: 12, paddingBottom: 6 },
+  topBarCol: { flex: 1, gap: 2 },
+  backBtn: { width: 40, height: 40, borderRadius: 14, alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginLeft: -4 },
   stepperRow: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 20, paddingVertical: 10 },
   stepSeg: { height: 6, borderRadius: 999 },
   disclaimer: {
@@ -687,6 +781,10 @@ const styles = StyleSheet.create({
   privacyRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   summaryRow: { flexDirection: 'row', justifyContent: 'space-between' },
   summaryMetric: { flex: 1, alignItems: 'center', gap: 2 },
+  errorCard: {
+    flexDirection: 'row', alignItems: 'flex-start', gap: 10, borderRadius: 14,
+    paddingHorizontal: 14, paddingVertical: 12,
+  },
   navRow: { flexDirection: 'row', gap: 10, marginTop: 4 },
   successWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32, paddingBottom: 48 },
   successCircle: { width: 88, height: 88, borderRadius: 44, alignItems: 'center', justifyContent: 'center', marginBottom: 20 },

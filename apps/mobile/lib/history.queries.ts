@@ -145,7 +145,7 @@ export async function getPersonalRecords(clientId: string) {
     const histMax = maxByExercise.get(exId) ?? 0
     if ((log.weight_kg ?? 0) >= histMax) {
       seen.add(exId)
-      prs.push({ exerciseId: exId, exerciseName: nameMap.get(exId) ?? exId, weightKg: log.weight_kg!, achievedAt: log.logged_at })
+      prs.push({ exerciseId: exId, exerciseName: nameMap.get(exId) ?? 'Ejercicio', weightKg: log.weight_kg!, achievedAt: log.logged_at })
     }
   }
   return prs.sort((a, b) => b.weightKg - a.weightKg).slice(0, 5)

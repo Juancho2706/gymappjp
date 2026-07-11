@@ -105,8 +105,16 @@ const PRIMARY_TABS: TabDef[] = [
 ]
 
 // Routes reached from the "Más" sheet — keep the Más tab lit while inside them
-// (mirror of web `moreRoutes`). `workout` is immersive and hides the chrome.
-const MORE_ROUTES = ['perfil', 'history']
+// (mirror of web `moreRoutes`, ClientNav.tsx:128-129: history + perfil + los
+// items de módulo movimiento/bodycomp). `workout` is immersive and hides the
+// chrome. Los slugs son los NOMBRES DE RUTA RN (== filename), no los del web:
+// las pantallas viven en `movement.tsx`/`bodycomp.tsx` (el web usa `/movimiento`).
+// Hoy viven como hermanas de `(tabs)`, así que al entrar la cápsula desaparece
+// (el Tabs navigator se desmonta); estos slugs sólo empiezan a matchear cuando
+// esas pantallas se nesten como `href:null` DENTRO de `(tabs)` con estos MISMOS
+// nombres (`movement`/`bodycomp`) — cambio de shell en _layout.tsx + mover los
+// archivos, otra unidad (ver cambiosShell).
+const MORE_ROUTES = ['perfil', 'history', 'movement', 'bodycomp']
 
 export function AlumnoMobileChrome({
   state,
@@ -201,14 +209,15 @@ export function AlumnoMobileChrome({
         pointerEvents="box-none"
         style={[styles.capsuleAnchor, { bottom: insets.bottom + 16 }, capsuleInsetStyle]}
       >
-        {/* Capsula flotante 1:1 con el coach/web: UN solo shell esmerilado. El
-            BlurView frostea el CONTENIDO real que scrollea por debajo (NADA opaco
-            detras) y un unico velo translucido va ENCIMA para legibilidad, con
-            borde hairline + sombra md. El bug historico de la "franja": habia un
-            backing `bg-surface-card/70` DETRAS del blur (+ un 2º velo /60), asi
-            que el blur frosteaba ESE backing, no el contenido — la pastilla se
-            leia como un slab solido de fondo. Sin backing, la capsula flota y el
-            scroll pasa por debajo hasta el borde inferior (paridad PWA). */}
+        {/* Capsula flotante 1:1 con web/coach: UN solo material esmerilado. El
+            BlurView frostea el CONTENIDO real que scrollea por debajo — es el
+            equivalente del `backdropFilter` del web (`ClientNav.tsx:479-482`), que
+            usa UNA sola capa translucida, NUNCA un backing/velo opaco. P0-1 (franja
+            blanca en dark): antes se apilaba un `<View bg-surface-card/70>` (70%
+            opaco) ENCIMA del blur que, sumado al borde, se leia como slab claro; se
+            elimino para dejar el BlurView como superficie translucida unica (== la
+            capa unica del web). Borde = hairline `border-subtle` (dark = blanco@7%
+            ~= el text-strong@9% del web `:482`, translucido, no un canto opaco). */}
         <View
           className="overflow-hidden rounded-[30px] border border-subtle"
           style={[styles.capsuleShell, shadow('md', resolvedScheme)]}
@@ -218,7 +227,6 @@ export function AlumnoMobileChrome({
             tint={isDark ? 'dark' : 'light'}
             style={StyleSheet.absoluteFill}
           />
-          <View pointerEvents="none" className="bg-surface-card/70" style={StyleSheet.absoluteFill} />
 
           <View
             style={styles.row}

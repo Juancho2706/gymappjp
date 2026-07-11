@@ -1,6 +1,7 @@
 import { Text, View } from 'react-native'
 import { MotiView } from 'moti'
 import { useTheme } from '../../../context/ThemeContext'
+import { resolveSportRamp } from '../../../lib/theme'
 import { useEvaMotion } from '../../../lib/motion'
 import { FONT } from '../../../lib/typography'
 import type { ProgramPhase } from './types'
@@ -20,18 +21,27 @@ export function ProgramPhaseBar({
   currentWeek: number
   totalWeeks: number
 }) {
-  const { theme } = useTheme()
+  const { branding } = useTheme()
   const motion = useEvaMotion()
   const pct = totalWeeks > 0 ? Math.min(100, (currentWeek / totalWeeks) * 100) : 0
+  // Relleno = --sport-500 (marca cruda, scheme-independiente igual que web
+  // `bg-sport-500`), resuelto imperativo para el backgroundColor del MotiView
+  // (className no lo maneja en el componente animado). `theme.primary` divergía:
+  // es el accent clampeado que flipea light/dark, cosa que web no hace.
+  const sportFill = resolveSportRamp(branding?.primaryColor).sport500
 
-  if (!phases || phases.length === 0) {
+  // Guard con Array.isArray: un objeto truthy con `length` undefined pasaría el
+  // check previo y crashearía en `phases.map` (paridad web ProgramPhaseBar.tsx:24).
+  if (!phases || !Array.isArray(phases) || phases.length === 0) {
     return (
-      <View className="bg-surface-sunken" style={{ height: 8, borderRadius: 999, overflow: 'hidden' }}>
+      <View className="bg-track dark:bg-track/10" style={{ height: 8, borderRadius: 999, overflow: 'hidden' }}>
         <MotiView
           from={{ width: '0%' }}
           animate={{ width: `${pct}%` }}
-          transition={{ type: 'timing', duration: motion.reduced ? 0 : 700 }}
-          style={{ height: 8, borderRadius: 999, backgroundColor: theme.primary }}
+          // Spring lazy (stiffness 80 / damping 20) = web `springs.lazy`; en
+          // reduce-motion colapsa a timing 0 (sin movimiento espacial).
+          transition={motion.reduced ? { type: 'timing', duration: 0 } : { type: 'spring', stiffness: 80, damping: 20 }}
+          style={{ height: 8, borderRadius: 999, backgroundColor: sportFill }}
         />
       </View>
     )

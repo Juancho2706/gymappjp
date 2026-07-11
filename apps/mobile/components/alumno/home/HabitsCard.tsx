@@ -1,10 +1,20 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native'
 import { Check, Droplets, Footprints, Moon } from 'lucide-react-native'
+import { MotiView } from 'moti'
+import { Easing } from 'react-native-reanimated'
+import { cssInterop } from 'nativewind'
 import { useTheme } from '../../../context/ThemeContext'
 import { FONT } from '../../../lib/typography'
-import { upsertDailyHabits, type HabitsData } from '../../../lib/habits.queries'
-import { AQUA_700 } from './types'
+import { getDailyHabits, upsertDailyHabits, type HabitsData } from '../../../lib/habits.queries'
+import { toast } from '../../Toast'
+import { Card } from '../../Card'
+
+// NativeWind maneja el `color` del glyph via clases `text-*` (patron DS, ver
+// tools.tsx) → aqua-700 (rampa fija) y sport-600 (marca white-label) resuelven
+// dark-aware en runtime, sin hardcodear hex.
+cssInterop(Droplets, { className: { target: 'style', nativeStyleToProp: { color: true } } })
+cssInterop(Footprints, { className: { target: 'style', nativeStyleToProp: { color: true } } })
 
 const WATER_OPTIONS = [250, 500, 750, 1000, 1500, 2000, 2500, 3000]
 const WATER_TARGET = 3000
@@ -13,10 +23,11 @@ const FASTING_DEFAULT_H = 16
 const SUPPLEMENTS_GENERIC = 'Suplementos'
 
 /**
- * §12 HabitsCard (web `habits/HabitsCard.tsx`, ruling D4: los habitos viven en el
+ * §11 HabitsCard (web `habits/HabitsCard.tsx`, ruling D4: los habitos viven en el
  * dashboard como en web). Agua (barra 3L + chips quick-add), Pasos (input), Sueño
  * (7 chips full-width), Ayuno + Suplementos (2 toggles). Solo editable el dia de
- * hoy. Persiste con `upsertDailyHabits` (optimista).
+ * hoy. Persiste con `upsertDailyHabits` (optimista); en error → toast (web :72).
+ * El titulo de seccion "Hábitos de hoy" (accent aqua-700) lo pone el shell.
  */
 export function HabitsCard({ clientId, logDate, isToday, initialData }: { clientId: string; logDate: string; isToday: boolean; initialData: HabitsData | null }) {
   const { theme } = useTheme()
@@ -25,17 +36,40 @@ export function HabitsCard({ clientId, logDate, isToday, initialData }: { client
   const [sleepHours, setSleepHours] = useState<number | null>(initialData?.sleep_hours ?? null)
   const [fastingHours, setFastingHours] = useState<number | null>(initialData?.fasting_hours ?? null)
   const [supplements, setSupplements] = useState<string[]>(initialData?.supplements ?? [])
+  // Espejo del isPending web (useTransition): deshabilita TODOS los controles
+  // mientras se persiste, evitando upserts concurrentes (Ola0 P2 #11).
+  const [saving, setSaving] = useState(false)
 
-  function save(patch: Partial<HabitsData>) {
+  // Refetch/sync al montar y al cambiar cliente/fecha o cuando el shell recarga
+  // `habitsToday` (pull-to-refresh) → re-sincroniza TODO el estado desde el servidor
+  // (web HabitsCard.tsx:47-57).
+  useEffect(() => {
+    let alive = true
+    getDailyHabits(clientId, logDate).then((d) => {
+      if (!alive) return
+      setWaterMl(d?.water_ml ?? null)
+      setSteps(d?.steps != null ? String(d.steps) : '')
+      setSleepHours(d?.sleep_hours ?? null)
+      setFastingHours(d?.fasting_hours ?? null)
+      setSupplements(d?.supplements ?? [])
+    })
+    return () => { alive = false }
+  }, [clientId, logDate, initialData])
+
+  async function save(patch: Partial<HabitsData>) {
     if (!isToday) return
-    void upsertDailyHabits(clientId, logDate, patch)
+    setSaving(true)
+    const { error } = await upsertDailyHabits(clientId, logDate, patch)
+    setSaving(false)
+    if (error) toast.error(error.message || 'Error al guardar hábitos')
   }
 
-  const handleWater = (ml: number) => { const next = waterMl === ml ? null : ml; setWaterMl(next); save({ water_ml: next }) }
-  const handleSleep = (h: number) => { const next = sleepHours === h ? null : h; setSleepHours(next); save({ sleep_hours: next }) }
-  const toggleFasting = () => { const next = fastingHours && fastingHours > 0 ? null : FASTING_DEFAULT_H; setFastingHours(next); save({ fasting_hours: next }) }
-  const toggleSupps = () => { const next = supplements.length > 0 ? [] : [SUPPLEMENTS_GENERIC]; setSupplements(next); save({ supplements: next }) }
-  const handleStepsBlur = () => { const v = parseInt(steps, 10); const next = isNaN(v) || v < 0 ? null : v; setSteps(next == null ? '' : String(next)); save({ steps: next }) }
+  const disabled = !isToday || saving
+  const handleWater = (ml: number) => { const next = waterMl === ml ? null : ml; setWaterMl(next); void save({ water_ml: next }) }
+  const handleSleep = (h: number) => { const next = sleepHours === h ? null : h; setSleepHours(next); void save({ sleep_hours: next }) }
+  const toggleFasting = () => { const next = fastingHours && fastingHours > 0 ? null : FASTING_DEFAULT_H; setFastingHours(next); void save({ fasting_hours: next }) }
+  const toggleSupps = () => { const next = supplements.length > 0 ? [] : [SUPPLEMENTS_GENERIC]; setSupplements(next); void save({ supplements: next }) }
+  const handleStepsBlur = () => { const v = parseInt(steps, 10); const next = isNaN(v) || v < 0 ? null : v; setSteps(next == null ? '' : String(next)); void save({ steps: next }) }
 
   const waterL = (waterMl ?? 0) / 1000
   const fastingOn = !!fastingHours && fastingHours > 0
@@ -46,20 +80,25 @@ export function HabitsCard({ clientId, logDate, isToday, initialData }: { client
   ]
 
   return (
-    <View className="rounded-card bg-surface-card border border-subtle" style={{ padding: 16, gap: 16 }}>
+    <Card padding={16} style={{ gap: 16 }}>
       {/* Agua */}
       <View>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-            <Droplets size={15} color={AQUA_700} strokeWidth={2.25} />
+            <Droplets size={15} className="text-aqua-700" strokeWidth={2.25} />
             <Text className="text-strong" style={{ fontFamily: FONT.uiBold, fontSize: 13 }}>Agua</Text>
           </View>
           <Text className="text-muted" style={{ fontFamily: FONT.uiBold, fontSize: 12.5, fontVariant: ['tabular-nums'] }}>
-            <Text style={{ color: AQUA_700 }}>{waterL.toFixed(waterL % 1 ? 1 : 0)}</Text> / 3 L
+            <Text className="text-aqua-700">{waterL.toFixed(waterL % 1 ? 1 : 0)}</Text> / 3 L
           </Text>
         </View>
         <View className="bg-surface-sunken" style={{ height: 8, borderRadius: 999, overflow: 'hidden', marginBottom: 10 }}>
-          <View style={{ height: 8, borderRadius: 999, backgroundColor: AQUA_700, width: `${Math.min(100, ((waterMl ?? 0) / WATER_TARGET) * 100)}%` }} />
+          <MotiView
+            className="bg-aqua-700"
+            animate={{ width: `${Math.min(100, ((waterMl ?? 0) / WATER_TARGET) * 100)}%` }}
+            transition={{ type: 'timing', duration: 220, easing: Easing.bezier(0.22, 1, 0.36, 1) }}
+            style={{ height: 8, borderRadius: 999 }}
+          />
         </View>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
           {WATER_OPTIONS.map((v) => {
@@ -67,12 +106,13 @@ export function HabitsCard({ clientId, logDate, isToday, initialData }: { client
             return (
               <TouchableOpacity
                 key={v}
-                disabled={!isToday}
+                disabled={disabled}
                 onPress={() => handleWater(v)}
                 activeOpacity={0.75}
-                style={{ borderRadius: 999, borderWidth: 1.5, borderColor: on ? AQUA_700 : theme.border, backgroundColor: on ? AQUA_700 + '1F' : 'transparent', paddingHorizontal: 10, paddingVertical: 6, opacity: !isToday && !on ? 0.5 : 1 }}
+                className={on ? 'border-aqua-700 bg-aqua-100' : 'border-subtle'}
+                style={{ borderRadius: 999, borderWidth: 1.5, paddingHorizontal: 10, paddingVertical: 6 }}
               >
-                <Text style={{ fontFamily: FONT.uiBold, fontSize: 12, color: on ? AQUA_700 : theme.mutedForeground }}>{v < 1000 ? v : `${v / 1000}L`}</Text>
+                <Text className={on ? 'text-aqua-700' : 'text-subtle'} style={{ fontFamily: FONT.uiBold, fontSize: 12 }}>{v < 1000 ? v : `${v / 1000}L`}</Text>
               </TouchableOpacity>
             )
           })}
@@ -82,7 +122,7 @@ export function HabitsCard({ clientId, logDate, isToday, initialData }: { client
       {/* Pasos */}
       <View>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 }}>
-          <Footprints size={15} color={theme.primary} strokeWidth={2.25} />
+          <Footprints size={15} className="text-sport-600" strokeWidth={2.25} />
           <Text className="text-strong" style={{ fontFamily: FONT.uiBold, fontSize: 13 }}>Pasos</Text>
         </View>
         <TextInput
@@ -92,11 +132,11 @@ export function HabitsCard({ clientId, logDate, isToday, initialData }: { client
           onEndEditing={handleStepsBlur}
           onBlur={handleStepsBlur}
           keyboardType="number-pad"
-          editable={isToday}
+          editable={!disabled}
           placeholder="Ej: 8000"
           placeholderTextColor={theme.mutedForeground}
           className="rounded-control bg-surface-sunken text-strong"
-          style={{ height: 42, borderWidth: 1.5, borderColor: theme.border, paddingHorizontal: 12, fontFamily: FONT.monoBold, fontSize: 14, color: theme.foreground, opacity: isToday ? 1 : 0.5 }}
+          style={{ height: 42, borderWidth: 1.5, borderColor: theme.border, paddingHorizontal: 12, fontFamily: FONT.monoBold, fontSize: 14, color: theme.foreground, opacity: disabled ? 0.5 : 1 }}
         />
       </View>
 
@@ -112,12 +152,13 @@ export function HabitsCard({ clientId, logDate, isToday, initialData }: { client
             return (
               <TouchableOpacity
                 key={v}
-                disabled={!isToday}
+                disabled={disabled}
                 onPress={() => handleSleep(v)}
                 activeOpacity={0.75}
-                style={{ flex: 1, minWidth: 0, height: 42, borderRadius: 10, borderWidth: 1.5, borderColor: on ? theme.primary : theme.border, backgroundColor: on ? theme.primary + '1A' : 'transparent', alignItems: 'center', justifyContent: 'center', opacity: !isToday && !on ? 0.5 : 1 }}
+                className={on ? 'border-sport-500 bg-sport-100' : 'border-subtle'}
+                style={{ flex: 1, minWidth: 0, height: 42, borderRadius: theme.radius.control, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' }}
               >
-                <Text style={{ fontFamily: FONT.uiBold, fontSize: 12.5, color: on ? theme.primary : theme.mutedForeground }}>{v}</Text>
+                <Text className={on ? 'text-sport-600' : 'text-subtle'} style={{ fontFamily: FONT.uiBold, fontSize: 12.5 }}>{v}</Text>
               </TouchableOpacity>
             )
           })}
@@ -129,12 +170,16 @@ export function HabitsCard({ clientId, logDate, isToday, initialData }: { client
         {toggles.map((t) => (
           <TouchableOpacity
             key={t.label}
-            disabled={!isToday}
+            disabled={disabled}
             onPress={t.onPress}
             activeOpacity={0.75}
-            style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8, borderRadius: 10, borderWidth: 1.5, borderColor: t.on ? theme.primary : theme.border, backgroundColor: t.on ? theme.primary + '1A' : 'transparent', paddingHorizontal: 12, paddingVertical: 10, opacity: !isToday && !t.on ? 0.5 : 1 }}
+            className={t.on ? 'border-sport-500 bg-sport-100' : 'border-subtle'}
+            style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8, borderRadius: theme.radius.control, borderWidth: 1.5, paddingHorizontal: 12, paddingVertical: 10 }}
           >
-            <View style={{ width: 22, height: 22, borderRadius: 6, alignItems: 'center', justifyContent: 'center', backgroundColor: t.on ? theme.primary : 'transparent', borderWidth: t.on ? 0 : 2, borderColor: theme.foreground }}>
+            <View
+              className={t.on ? 'bg-sport-500' : 'border-strong'}
+              style={{ width: 22, height: 22, borderRadius: 6, alignItems: 'center', justifyContent: 'center', borderWidth: t.on ? 0 : 2 }}
+            >
               {t.on ? <Check size={13} color="#fff" strokeWidth={3} /> : null}
             </View>
             <Text className={t.on ? 'text-strong' : 'text-muted'} style={{ fontFamily: FONT.uiBold, fontSize: 12.5 }}>{t.label}</Text>
@@ -142,7 +187,7 @@ export function HabitsCard({ clientId, logDate, isToday, initialData }: { client
         ))}
       </View>
 
-      {!isToday ? <Text className="text-subtle" style={{ textAlign: 'center', fontSize: 10 }}>Solo se puede editar el día de hoy</Text> : null}
-    </View>
+      {!isToday ? <Text className="text-subtle" style={{ textAlign: 'center', fontSize: 10, fontFamily: FONT.ui }}>Solo se puede editar el día de hoy</Text> : null}
+    </Card>
   )
 }
