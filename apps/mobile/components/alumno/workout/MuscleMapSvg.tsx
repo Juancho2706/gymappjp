@@ -182,7 +182,11 @@ export function MuscleMapSvg({ groups, reducedMotion }: MuscleMapSvgProps) {
               fill={fill}
               stroke={stroke}
               strokeWidth={strokeWidth}
-              accessibilityRole="image"
+              // Web: <motion.g role="img" aria-label> (MuscleMapSvg.tsx:157-158). En RN, el tipo
+              // GProps de react-native-svg (CommonPathProps→AccessibilityProps) NO expone
+              // accessibilityRole, sólo accessibilityLabel/accessible/testID. Usamos `accessible`
+              // para que el grupo se anuncie con su label de intensidad (misma lectura de VoiceOver).
+              accessible
               accessibilityLabel={`${REGION_LABEL[region]}, intensidad ${litTier} de 4`}
             >
               {shapes.map((s, i) => (
