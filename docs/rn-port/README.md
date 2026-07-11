@@ -82,6 +82,15 @@ f) CHECKPOINT   — commit descriptivo + push SIEMPRE antes de la siguiente
 4. **QA visual humano es insustituible**: los agentes leen código, no píxeles.
    Cada sección cerrada debe validarse con una build real en dispositivo
    (los 3 P0 del dashboard los encontró el usuario, no la flota).
+5. **La verificación adversarial de paridad no caza bugs de lógica/estado**:
+   comparar spec vs RN elemento por elemento encuentra deltas visuales, pero
+   se le escapan races, guardas ausentes y early-returns muertos — una pasada
+   externa con **lente de lógica** (no de paridad) fue la que cazó los 3 bugs
+   de estado de la Sección 1 (ver `porting-status.md` §Bugs de lógica). Cada
+   sección debe incluir además ese lente. Y al cierre de cada sección,
+   **re-verificar los claims del doc contra HEAD antes de commitear**: los
+   P1 #1/#2 de la Sección 1 quedaron declarados abiertos en el doc estando ya
+   arreglados en código (el fix precedía al commit del doc por ~25 min).
 
 ## 3. Lo hecho (cronología)
 
@@ -104,13 +113,25 @@ port + hasta 6 rondas de verificación adversarial.
 - El flujo del ejecutor quedó **usable y fiel en lo visible**; los residuos
   P2 son deltas sub-pixel, compromisos de design-system o adaptaciones
   idiomáticas sancionadas (detalle por unidad en `docs/porting-status.md`).
-- **3 P1 funcionales abiertos** (deuda rastreada): badge "Semana A/B" sin
-  gate por `ab_mode`; historial previo/detección de PR con el anti-patrón que
-  web ya corrigió; `expo-audio` declarado pero no instalado (cues de timer
-  mudos). Fixes puntuales descritos en `porting-status.md` §Residuos P1.
-- **1 bug sistémico de fundación**: `border-default` sin alpha compila a
-  blanco opaco en dark (web: blanco@13%) — afecta Card/Input/etc.; el fix va
-  en el theme, no por pantalla.
+- **3 P1 funcionales — ✅ RESUELTOS** (verificado 2026-07-11): el badge
+  "Semana A/B" sin gate por `ab_mode` y el historial previo/detección de PR
+  con el anti-patrón que web ya corrigió ya estaban arreglados en código
+  desde el commit `8725b033` (el doc había quedado desactualizado, no el
+  código); `expo-audio` resultó un falso gap de entorno local — el paquete
+  está resuelto en `pnpm-lock.yaml` (1.0.16) e instalado, y el audio funciona
+  en build CI fresco. Detalle en `porting-status.md` §P1 resueltos.
+- **Bug sistémico de fundación — ✅ RESUELTO** (mini-ola 2026-07-11):
+  `border-default` (y `border-subtle`/`border-strong`, mismo defecto) sin
+  alpha compilaban a color opaco en dark (web: blanco@13%). Fix aplicado por
+  la vía web (alpha horneado en el token, no theme imperativo):
+  `tailwind.config.js` + `global.css` claro/oscuro + `lib/theme.ts`. Detalle
+  en `porting-status.md` §Historial de entrenos.
+- **3 bugs de lógica/estado encontrados por verificación adversarial externa
+  con lente de lógica** (no de paridad pixel), arreglados en la misma
+  mini-ola: race del auto-avance del modo Pasos en `ExecutorV2.tsx`;
+  doble-commit por el botón "Listo" del keypad sin guarda; `syncError`/
+  "Reintentar" inalcanzable en series tipadas (estos dos últimos en
+  `SetRow.tsx`). Detalle en `porting-status.md` §Bugs de lógica.
 - Gates al cierre: `tsc --noEmit` limpio; paridad de tokens 86/86 OK.
 
 ### CI / infraestructura (10-jul)
@@ -135,21 +156,22 @@ port + hasta 6 rondas de verificación adversarial.
 
 ### Deuda transversal (no pertenece a una sección)
 
-1. **Los 3 P1 de la Sección 1** (badge A/B, historial/PR, expo-audio) — fixes
-   quirúrgicos descritos en `porting-status.md`; caben en una mini-ola o a mano.
-2. **Bug sistémico `border-default` en dark** — fix en theme imperativo
-   (`theme.borderDefault` con alpha), arregla Card/Input/botones globalmente.
-3. **1,293 discrepancias de la Ola 0 sin aplicar** — se consumen por sección
+> Los 3 P1 de la Sección 1 (badge A/B, historial/PR, expo-audio) y el bug
+> sistémico de `border-default` en dark **ya están resueltos** (verificado
+> 2026-07-11 — ver §3 arriba y `porting-status.md`). La deuda restante de la
+> Sección 1 es sólo la de los ítems 1 y 3 de abajo.
+
+1. **1,293 discrepancias de la Ola 0 sin aplicar** — se consumen por sección
    (grep por componente en `ola0-hallazgos.json` al tocar cada pantalla); las
    de primitivas compartidas (Button/Card/Sheet/Dialog…) convendría aplicarlas
    en una **mini-ola de primitivas** antes de la Sección 3, porque benefician
    a todas las secciones a la vez.
-4. **91 componentes media/baja sin auditar** de la Ola 0 — los cubren las
+2. **91 componentes media/baja sin auditar** de la Ola 0 — los cubren las
    secciones al llegar a sus pantallas.
-5. **Residuos P2 de la Sección 1** — lista completa por unidad en
-   `porting-status.md`; decidir en frío cuáles valen la pena (muchos son
-   compromisos deliberados de design-system).
-6. **QA visual humano por sección** — build por Google Play internal tras
+3. **Residuos P2 de la Sección 1 + verificación en device** — lista completa
+   por unidad en `porting-status.md`; decidir en frío cuáles residuos P2
+   valen la pena (muchos son compromisos deliberados de design-system).
+4. **QA visual humano por sección** — build por Google Play internal tras
    cada cierre de sección; lo que el usuario vea se registra como P0 de la
    sección siguiente (así se hizo con el dashboard).
 

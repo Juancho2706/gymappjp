@@ -77,10 +77,21 @@ jobs:
         run: |
           node -e "
             const fs = require('fs');
+            const url = process.env.SUPABASE_URL;
+            const key = process.env.SUPABASE_KEY;
+            // Secrets vacios -> JSON.stringify dropea el undefined y el AAB/IPA
+            // compila sin Supabase (crash 'supabaseUrl is required' en runtime).
+            const missing = [];
+            if (!url || !url.trim()) missing.push('NEXT_PUBLIC_SUPABASE_URL');
+            if (!key || !key.trim()) missing.push('NEXT_PUBLIC_SUPABASE_ANON_KEY');
+            if (missing.length) {
+              console.error('ERROR: secret(s) vacio(s) para profile ' + process.env.BUILD_PROFILE + ': ' + missing.join(', ') + '. Configuralos en GitHub Actions secrets; sin ellos la app compila pero arranca sin Supabase.');
+              process.exit(1);
+            }
             const eas = JSON.parse(fs.readFileSync('eas.json', 'utf8'));
             const profile = eas.build[process.env.BUILD_PROFILE];
-            profile.env.EXPO_PUBLIC_SUPABASE_URL = process.env.SUPABASE_URL;
-            profile.env.EXPO_PUBLIC_SUPABASE_ANON_KEY = process.env.SUPABASE_KEY;
+            profile.env.EXPO_PUBLIC_SUPABASE_URL = url;
+            profile.env.EXPO_PUBLIC_SUPABASE_ANON_KEY = key;
             fs.writeFileSync('eas.json', JSON.stringify(eas, null, 2));
           "
 
@@ -164,10 +175,21 @@ jobs:
         run: |
           node -e "
             const fs = require('fs');
+            const url = process.env.SUPABASE_URL;
+            const key = process.env.SUPABASE_KEY;
+            // Secrets vacios -> JSON.stringify dropea el undefined y el AAB/IPA
+            // compila sin Supabase (crash 'supabaseUrl is required' en runtime).
+            const missing = [];
+            if (!url || !url.trim()) missing.push('NEXT_PUBLIC_SUPABASE_URL');
+            if (!key || !key.trim()) missing.push('NEXT_PUBLIC_SUPABASE_ANON_KEY');
+            if (missing.length) {
+              console.error('ERROR: secret(s) vacio(s) para profile ' + process.env.BUILD_PROFILE + ': ' + missing.join(', ') + '. Configuralos en GitHub Actions secrets; sin ellos la app compila pero arranca sin Supabase.');
+              process.exit(1);
+            }
             const eas = JSON.parse(fs.readFileSync('eas.json', 'utf8'));
             const profile = eas.build[process.env.BUILD_PROFILE];
-            profile.env.EXPO_PUBLIC_SUPABASE_URL = process.env.SUPABASE_URL;
-            profile.env.EXPO_PUBLIC_SUPABASE_ANON_KEY = process.env.SUPABASE_KEY;
+            profile.env.EXPO_PUBLIC_SUPABASE_URL = url;
+            profile.env.EXPO_PUBLIC_SUPABASE_ANON_KEY = key;
             fs.writeFileSync('eas.json', JSON.stringify(eas, null, 2));
           "
 

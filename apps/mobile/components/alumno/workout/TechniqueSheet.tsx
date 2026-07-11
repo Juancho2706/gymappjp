@@ -52,10 +52,11 @@ function MediaImage({ uri, padded = false, height }: { uri: string; padded?: boo
   // gif (padded): letterbox `bg-surface-sunken` = web `bg-muted` (WorkoutExecutionClient.tsx:2030) — en paridad.
   // imagen-fallback (no padded): letterbox BLANCO + hairline inferior = web `bg-white border-b border-border/50`
   // (:2062, con `--border` = `--border-subtle`, globals.css:235). El blanco forzado en ambos temas se espeja con
-  // `bg-white` (--color-white, global.css:39) y el hairline con `border-subtle/50` (mismo canal + alpha del web).
+  // `bg-white` (--color-white, global.css:39) y el hairline con `border-subtle` (el token ya trae el alpha horneado
+  // por modo; el modificador /50 dejó de aplicar al pasar el token a var() — ver tailwind.config.js borderColor).
   return (
     <View
-      className={`overflow-hidden ${padded ? 'bg-surface-sunken p-space-5' : 'border-b border-subtle/50 bg-white'}`}
+      className={`overflow-hidden ${padded ? 'bg-surface-sunken p-space-5' : 'border-b border-subtle bg-white'}`}
       style={{ width: '100%', height }}
     >
       <Image source={{ uri }} style={{ flex: 1 }} contentFit="contain" />
@@ -110,10 +111,10 @@ function TechniqueMedia({ exercise }: { exercise: SessionExercise }) {
     // Letterbox BLANCO + hairline inferior = web mp4 `bg-white border-b border-border/50` (:2048), blanco
     // forzado en ambos temas. `letterbox="#ffffff"` pinta el fondo del video (contenedor + WebView/HTML) de
     // blanco en vez del #000 por defecto; el `#fff` = --color-white (global.css:39), patrón hex-que-coincide-
-    // con-canal-DS documentado. El `border-b border-subtle/50` (= web border-subtle/50) va en el envoltorio.
+    // con-canal-DS documentado. El `border-b border-subtle` (hairline con alpha horneado en el token) va en el envoltorio.
     if (isMp4) {
       return (
-        <View className="border-b border-subtle/50 bg-white">
+        <View className="border-b border-subtle bg-white">
           {/* Altura FIJA = web `h-48 md:h-64` (:2048), no el 16:9 derivado del ancho. */}
           <VideoPlayer url={videoUrl} autoPlay frameless letterbox="#ffffff" style={{ height: mediaHeight }} title={exercise.name} />
         </View>

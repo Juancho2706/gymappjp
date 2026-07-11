@@ -44,6 +44,64 @@ const CHIP_EFFORT_STYLE: TextStyle = textStyle('3xs', FONT.monoSemibold)
 const CHIP_TYPED_STYLE: TextStyle = { ...textStyle('xs', FONT.mono), fontVariant: ['tabular-nums'] }
 
 /**
+ * Fila de error de sync (mensaje rojo + Editar + Reintentar) — mirror web A.4.e (`LogSetForm.tsx:738-748`
+ * strength · `:1098-1108` tipada, que muestran `state.error` + 'Reintentar'). Compartida por el chip
+ * strength y la fila TIPADA logueada para que ambas variantes ofrezcan el MISMO affordance de
+ * corrección/reintento (antes la tipada con `onRpeUpdate` retornaba temprano y nunca lo mostraba).
+ * `onEdit` abre la fila editable (keypad sembrado, adaptación RN del `setEditing(true)` web);
+ * `onRetry` re-dispara el commit del mismo payload para el error transitorio de red.
+ */
+function SyncErrorRow({
+  setNumber,
+  message,
+  onEdit,
+  onRetry,
+}: {
+  setNumber: number
+  message: string
+  onEdit: () => void
+  onRetry?: () => void
+}) {
+  return (
+    <View className="flex-row items-center gap-2 px-1">
+      <Text style={TYPE.caption} className="flex-1 text-danger-500" numberOfLines={2}>
+        {message}
+      </Text>
+      <Pressable
+        testID={`edit-set-${setNumber}`}
+        onPress={onEdit}
+        hitSlop={8}
+        accessibilityRole="button"
+        accessibilityLabel={`Editar la serie ${setNumber} para corregir el valor`}
+        className="rounded-control border border-danger-500/30 px-2 py-1 active:bg-danger-500/10"
+      >
+        <Text
+          style={{ fontFamily: FONT.uiBold, fontSize: 10, letterSpacing: 0.4, textTransform: 'uppercase' }}
+          className="text-danger-500"
+        >
+          Editar
+        </Text>
+      </Pressable>
+      <Pressable
+        testID={`retry-set-${setNumber}`}
+        onPress={onRetry}
+        hitSlop={8}
+        accessibilityRole="button"
+        accessibilityLabel={`Reintentar guardar la serie ${setNumber}`}
+        className="rounded-control border border-danger-500/30 px-2 py-1 active:bg-danger-500/10"
+      >
+        <Text
+          style={{ fontFamily: FONT.uiBold, fontSize: 10, letterSpacing: 0.4, textTransform: 'uppercase' }}
+          className="text-danger-500"
+        >
+          Reintentar
+        </Text>
+      </Pressable>
+    </View>
+  )
+}
+
+/**
  * Fila de una serie (mobile). Espeja el chip recap de `LogSetForm` de web: la serie logueada muestra
  * su marca (`{peso} × {reps}` en mono, "×" atenuada) + RPE/RIR, y la activa es un tap que abre el
  * TypedKeypad. El prompt "Toca para registrar" va en Hanken (sans), NO en mono — el mono se reserva a
@@ -121,7 +179,13 @@ export function SetRow({
     return (
       <View
         testID={`set-row-${setNumber}`}
-        className="gap-2 rounded-control border border-sport-500/25 bg-sport-500/[0.06] px-3 py-2"
+        className={`gap-2 rounded-control border px-3 py-2 ${
+          syncError
+            ? // Fallo de guardado real (con conexión) ⇒ contenedor ROJO, igual que el chip strength
+              // (`:198-201`) y señal del error de sync que la web pinta con `state.error` (`:1098-1108`).
+              'border-danger-500/40 bg-danger-500/[0.06]'
+            : 'border-sport-500/25 bg-sport-500/[0.06]'
+        }`}
       >
         <Pressable
           onPress={onPress}
@@ -185,6 +249,13 @@ export function SetRow({
           )}
           <EffortScale kind="rpe" value={log.rpe ?? null} onSelect={(v) => onRpeUpdate(rpePayload(v))} compact />
         </MotiView>
+
+        {/* Estado de error de sync — MISMO affordance que la fila strength (`:334-346`), antes inalcanzable
+            aquí por el early-return. Mirror web `LogSetForm.tsx:1098-1108`: mensaje rojo + Reintentar dentro
+            de la fila logueada tipada, junto a la escala RPE. `onEdit` = reabrir el keypad sembrado (onPress). */}
+        {syncError && (
+          <SyncErrorRow setNumber={setNumber} message={syncError} onEdit={onPress} onRetry={onRetry} />
+        )}
       </View>
     )
   }
@@ -335,41 +406,7 @@ export function SetRow({
     return (
       <View className="gap-1.5">
         {chip}
-        <View className="flex-row items-center gap-2 px-1">
-          <Text style={TYPE.caption} className="flex-1 text-danger-500" numberOfLines={2}>
-            {syncError}
-          </Text>
-          <Pressable
-            testID={`edit-set-${setNumber}`}
-            onPress={onPress}
-            hitSlop={8}
-            accessibilityRole="button"
-            accessibilityLabel={`Editar la serie ${setNumber} para corregir el valor`}
-            className="rounded-control border border-danger-500/30 px-2 py-1 active:bg-danger-500/10"
-          >
-            <Text
-              style={{ fontFamily: FONT.uiBold, fontSize: 10, letterSpacing: 0.4, textTransform: 'uppercase' }}
-              className="text-danger-500"
-            >
-              Editar
-            </Text>
-          </Pressable>
-          <Pressable
-            testID={`retry-set-${setNumber}`}
-            onPress={onRetry}
-            hitSlop={8}
-            accessibilityRole="button"
-            accessibilityLabel={`Reintentar guardar la serie ${setNumber}`}
-            className="rounded-control border border-danger-500/30 px-2 py-1 active:bg-danger-500/10"
-          >
-            <Text
-              style={{ fontFamily: FONT.uiBold, fontSize: 10, letterSpacing: 0.4, textTransform: 'uppercase' }}
-              className="text-danger-500"
-            >
-              Reintentar
-            </Text>
-          </Pressable>
-        </View>
+        <SyncErrorRow setNumber={setNumber} message={syncError} onEdit={onPress} onRetry={onRetry} />
       </View>
     )
   }
@@ -582,10 +619,12 @@ export function ActiveSetRow({
   const [committing, setCommitting] = useState(false)
   const commitTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   useEffect(() => () => { if (commitTimer.current) clearTimeout(commitTimer.current) }, [])
-  const handleConfirm = () => {
+  // withHaptic=false cuando el disparo viene del keypad: TypedKeypad ya ejecuta haptics.setDone()
+  // en su propio botón "Listo" y duplicarla aquí produce doble vibración en un solo tap.
+  const handleConfirm = (withHaptic = true) => {
     if (committing) return
     setCommitting(true)
-    haptics.setDone()
+    if (withHaptic) haptics.setDone()
     commit()
     commitTimer.current = setTimeout(() => setCommitting(false), 1200)
   }
@@ -696,7 +735,7 @@ export function ActiveSetRow({
         {typedMode ? (
           <Pressable
             testID={`confirm-set-${setNumber}`}
-            onPress={handleConfirm}
+            onPress={() => handleConfirm()}
             disabled={committing}
             className={`h-11 w-11 items-center justify-center rounded-full border-2 border-white/25 active:opacity-90 ${
               committing ? 'opacity-70' : ''
@@ -726,7 +765,7 @@ export function ActiveSetRow({
         ) : (
           <Pressable
             testID={`confirm-set-${setNumber}`}
-            onPress={handleConfirm}
+            onPress={() => handleConfirm()}
             disabled={committing}
             className={`h-12 min-w-[104px] flex-row items-center justify-center gap-2 rounded-control bg-sport-500 px-4 active:opacity-90 ${
               committing ? 'opacity-70' : ''
@@ -846,9 +885,12 @@ export function ActiveSetRow({
               value={values[openKey] ?? ''}
               onChange={(v) => patch({ [openKey]: v }, idxOf(openKey))}
               onNext={goNext}
+              // "Listo" del keypad pasa por handleConfirm (misma guarda `committing` que el botón
+              // etiquetado, `:585-591`): un doble-tap antes de que el Modal desmonte encolaba la serie DOS
+              // veces al llamar commit() directo. handleConfirm ignora el 2º tap y añade haptic/spinner.
               onDone={() => {
                 setOpenKey(null)
-                commit()
+                handleConfirm(false)
               }}
               // Botón X del panel (mirror web `NumericKeypadSheet.tsx:193-200`, que SIEMPRE muestra la X):
               // cierra SIN guardar, igual que el scrim tap-fuera. Añade la affordance explícita de cierre.

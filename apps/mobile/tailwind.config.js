@@ -114,10 +114,18 @@ module.exports = {
       },
 
       // Semantic borders -> border-subtle / border-default / border-strong / border-inverse
+      // subtle/default/strong resuelven un COLOR COMPLETO por modo (var() directo, sin
+      // ch()/<alpha-value>) espejando el web: `@utility border-* { border-color: var(--border-*) }`
+      // (apps/web globals.css:151-153). En dark el token ES rgba(255 255 255 / .07|.13|.22)
+      // (global.css DARK), con el alpha HORNEADO en el valor — NO un canal. Con ch() la clase
+      // bare compilaría rgb(255 255 255 / 1) = borde BLANCO OPACO en dark (el bug sistémico).
+      // Corolario: el modificador /[x] ya NO aplica sobre estos (var() no acepta <alpha-value>);
+      // usar la clase bare (el alpha vive en el token). `inverse` sí queda en canal porque se
+      // consume con modificador explícito (border-inverse/10, border-inverse/50).
       borderColor: {
-        subtle: ch('border-subtle'),
-        default: ch('border-default'),
-        strong: ch('border-strong'),
+        subtle: 'var(--color-border-subtle)',
+        default: 'var(--color-border-default)',
+        strong: 'var(--color-border-strong)',
         inverse: ch('border-inverse'),
       },
 

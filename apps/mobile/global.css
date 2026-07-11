@@ -103,11 +103,13 @@
     --color-text-on-dark-muted: 147 157 171;/* #939DAB */
     --color-text-link: 20 98 220;           /* sport-600 */
 
-    /* Borders & dividers */
-    --color-border-subtle: 230 233 237;     /* ink-100 (solid) */
-    --color-border-default: 205 211 219;    /* ink-200 */
-    --color-border-strong: 168 177 189;     /* ink-300 */
-    --color-border-inverse: 255 255 255;    /* apply /10 -> rgba(255,255,255,.10) */
+    /* Borders & dividers — subtle/default/strong llevan el color COMPLETO por modo
+       (no canal): la clase bare border-* consume var(--color-border-*) directo, espejo
+       de web globals.css:413-415 (--border-subtle=ink-100, -default=ink-200, -strong=ink-300). */
+    --color-border-subtle: #E6E9ED;         /* ink-100 (solid) */
+    --color-border-default: #CDD3DB;        /* ink-200 (solid) */
+    --color-border-strong: #A8B1BD;         /* ink-300 (solid) */
+    --color-border-inverse: 255 255 255;    /* canal: apply /10 -> rgba(255,255,255,.10) */
 
     /* Neutral track for meters/sparklines (flips in dark) */
     --color-track: 230 233 237;             /* ink-100 */
@@ -204,10 +206,12 @@
     --color-text-on-dark-muted: 147 157 171;
     --color-text-link: 92 157 255;          /* sport-400 */
 
-    /* Borders & dividers — translucent white (apply alpha; see notes) */
-    --color-border-subtle: 255 255 255;     /* apply /[0.07] */
-    --color-border-default: 255 255 255;    /* apply /[0.13] */
-    --color-border-strong: 255 255 255;     /* apply /[0.22] */
+    /* Borders & dividers — blanco translúcido con el alpha HORNEADO en el token
+       (color completo, no canal) espejo 1:1 de web globals.css:600-602. La clase bare
+       border-* ya resuelve el alpha correcto; NO usar modificador /[x] sobre estos. */
+    --color-border-subtle: rgba(255, 255, 255, 0.07);
+    --color-border-default: rgba(255, 255, 255, 0.13);
+    --color-border-strong: rgba(255, 255, 255, 0.22);
 
     /* Meters / tracks */
     --color-track: 255 255 255;             /* apply /[0.10] */

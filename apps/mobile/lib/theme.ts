@@ -385,10 +385,12 @@ export const LIGHT_SCHEME_VARS: Record<string, string> = {
   '--color-text-on-dark': '244 246 248',
   '--color-text-on-dark-muted': '147 157 171',
   '--color-text-link': '20 98 220',
-  // Bordes / divisores
-  '--color-border-subtle': '230 233 237',
-  '--color-border-default': '205 211 219',
-  '--color-border-strong': '168 177 189',
+  // Bordes / divisores — subtle/default/strong son COLOR COMPLETO (no canal): la clase
+  // bare border-* los consume via var() directo (tailwind.config.js), así que el valor
+  // forzado-claro debe ser el hex sólido (ink-100/200/300), no los canales "r g b".
+  '--color-border-subtle': '#E6E9ED',
+  '--color-border-default': '#CDD3DB',
+  '--color-border-strong': '#A8B1BD',
   '--color-track': '230 233 237',
   // Accion / marca fuerte
   '--color-action-primary': '11 14 19',

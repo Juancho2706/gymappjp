@@ -1004,9 +1004,17 @@ function ExecutorV2Inner({ planId }: { planId: string }) {
     if (!isStepComplete(active, sessionLogs)) return
     // Todo completo ⇒ el web no reposiciona; nosotros tampoco.
     if (steps.every((st) => isStepComplete(st, sessionLogs))) return
-    autoAdvancedRef.current.add(active.key)
     const target = firstIncompleteStepIndex(steps, sessionLogs)
-    const t = setTimeout(() => setStepIndex((i) => (i === stepIndex ? target : i)), 350)
+    // El `add` al ref va DENTRO del timer (no síncrono): al cerrar el paso, `sessionLogs` cambia dos
+    // veces (log optimista → log reconciliado del server). Marcar síncrono hacía que el segundo update
+    // (con buena red, <350ms) disparara el cleanup —matando el timer— y el re-run saliera por el guard
+    // `has(active.key)` sin reprogramar → el paso quedaba atascado. Marcando sólo al DISPARAR, un timer
+    // cancelado se reprograma en el re-run; espeja el fire único de `scrollToNextIncomplete` del web
+    // (WEC:1499), que no se recalcula en la reconciliación.
+    const t = setTimeout(() => {
+      autoAdvancedRef.current.add(active.key)
+      setStepIndex((i) => (i === stepIndex ? target : i))
+    }, 350)
     return () => clearTimeout(t)
   }, [sessionLogs, stepIndex, viewMode, steps])
 

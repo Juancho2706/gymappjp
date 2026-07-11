@@ -105,7 +105,7 @@ export function ExchangeTargetsEditor({
             <View
               key={group.id}
               testID="exchange-group-row"
-              className={on ? 'border-subtle bg-surface-card' : 'border-subtle/60'}
+              className={on ? 'border-subtle bg-surface-card' : 'border-subtle'}
               style={[styles.groupRow, !on && { opacity: 0.85 }]}
             >
               <View style={[styles.groupDot, { backgroundColor: color }]}>
