@@ -120,6 +120,9 @@ Deuda que arrastra la Sección 1 (retomar aparte, sólo si se decide en frío): 
 
 Deuda que arrastra la Sección 2 (post-remate): solo los 2 P1 diferidos (cápsula en movement/bodycomp — estructural; toggle de comidas del widget — necesita server-action + cola offline) + residuos P2 por unidad. Los demás P1 de lógica y `cambiosShell` quedaron resueltos en la ola de remate del mismo día.
 
+QA Ronda 6 lote A del CEO (Xiaomi, dark, 2026-07-11, `docs/audits/rn-parity-qa/ronda-6-ceo-20260711.md`) aplicada sobre la rama post-Sección 2: 3 unidades PASS (`gear-settings`, `rest-timer-background`, `lista-rows-tecnica`), 2 unidades pendientes de resultado (`serie-edit-save` QA-1, `share-pr` QA-4/QA-5).
+Pendiente: re-build nueva desde `rnmobiledenuevo` + re-test en device Xiaomi de las 3 unidades PASS, y completar QA-1/QA-4/QA-5 que quedaron fuera de este lote.
+
 ## Decisiones tomadas (globales / metodología)
 
 1. Ola 0 recortada de 123→41 componentes y luego cortada tras las auditorías: el valor (tokens + hallazgos) ya estaba capturado y la cuota de Fable estaba por agotarse.

@@ -77,14 +77,46 @@ export function getSantiagoIsoYmdForUtcInstant(isoUtc: string): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
+/**
+ * Offset de Santiago respecto a UTC (ms; negativo al oeste, p.ej. -4h en invierno CL) para un instante
+ * UTC dado, INDEPENDIENTE de la TZ del runtime: `formatToParts` con `timeZone` fijo da la hora de pared
+ * de Santiago y `Date.UTC` la reinterpreta sin mirar la TZ del dispositivo. Se muestrea a mediodía para
+ * no caer en el salto de DST (que ocurre a medianoche local).
+ */
+function santiagoUtcOffsetMs(atUtcMs: number): number {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: SANTIAGO_TZ,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  }).formatToParts(new Date(atUtcMs))
+  const p: Record<string, string> = {}
+  for (const part of parts) p[part.type] = part.value
+  let hour = Number(p.hour)
+  if (hour === 24) hour = 0 // algunos motores devuelven '24' a medianoche
+  const sanWallAsUtcMs = Date.UTC(Number(p.year), Number(p.month) - 1, Number(p.day), hour, Number(p.minute), Number(p.second))
+  return sanWallAsUtcMs - atUtcMs
+}
+
 export function getSantiagoUtcBoundsForDay(isoDate: string): { startIso: string; endIso: string } {
-  const noonUtc = new Date(`${isoDate}T12:00:00Z`)
-  const sanDateAsLocal = toSantiagoDate(noonUtc)
-  const offsetMs = noonUtc.getTime() - sanDateAsLocal.getTime()
-  const midnightUtcMs = new Date(`${isoDate}T00:00:00Z`).getTime() + offsetMs
+  // Ventana [start,end) del día de Santiago en UTC, INDEPENDIENTE de la TZ del dispositivo. Antes el
+  // offset se derivaba con `toSantiagoDate`, cuyo `new Date(y,m,d,...)` interpreta los componentes en la
+  // TZ LOCAL del runtime: en un teléfono en Santiago el offset salía 0 y la ventana colapsaba a
+  // [00:00Z,00:00Z) en vez de [04:00Z,04:00Z), dejando FUERA los logs de la tarde/noche (>= ~20:00 local
+  // ya viven en el día UTC siguiente) → el SELECT del día no veía la fila y el re-guardado reinsertaba,
+  // chocando con el índice único `workout_logs_one_set_per_day` (23505). Con `Date.UTC` + `formatToParts`
+  // de TZ fija el resultado es idéntico corriera donde corriera (verificado bit a bit contra la impl vieja
+  // en runtime UTC, y correcto además en device Santiago para invierno UTC-4 y verano DST UTC-3).
+  const midnightUtcMs = new Date(`${isoDate}T00:00:00Z`).getTime()
+  const offsetMs = santiagoUtcOffsetMs(new Date(`${isoDate}T12:00:00Z`).getTime())
+  const startMs = midnightUtcMs - offsetMs
   return {
-    startIso: new Date(midnightUtcMs).toISOString(),
-    endIso: new Date(midnightUtcMs + 86_400_000).toISOString(),
+    startIso: new Date(startMs).toISOString(),
+    endIso: new Date(startMs + 86_400_000).toISOString(),
   }
 }
 

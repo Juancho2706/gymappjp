@@ -9,10 +9,11 @@
  * da el audio/háptica in-app, así que la barra CANCELA la notificación programada
  * (ver `RestTimerBar`) para no duplicar el beep.
  *
- * Permiso: la barra NUNCA promptea (paridad web `RestTimer.tsx:134-137`). La notif
- * de background solo se programa si el permiso YA está concedido (`getRestNotifPermission`,
- * lectura sin prompt). El único prompt interactivo vive tras el botón "Activar permisos"
- * del panel de ajustes (`requestRestNotifPermission`). Sin permiso ⇒ no-op seguro.
+ * Permiso (fix QA-3): la barra pide permiso la PRIMERA vez que arranca un descanso vía
+ * `ensureRestNotifPermission` (lazy + cacheado → nunca re-pregunta; diverge a propósito de
+ * la web, que nunca promptea, porque en móvil el aviso de fondo es una capacidad nativa
+ * sancionada por el CEO). `scheduleRestEndNotification` sigue SIN promptear: sólo programa si
+ * el permiso YA está concedido. Sin permiso ⇒ no-op seguro (el timer sigue en foreground).
  */
 import * as Notifications from 'expo-notifications'
 import { Platform } from 'react-native'

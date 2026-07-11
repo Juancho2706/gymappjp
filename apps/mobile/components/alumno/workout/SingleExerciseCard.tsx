@@ -189,7 +189,14 @@ export function SingleExerciseCard({
   const setRows = Array.from({ length: block.sets }).map((_, i) => {
     const setNumber = i + 1
     const log = blockLogs.find((l) => l.set_number === setNumber)
-    if (!log && setNumber === firstUnlogged) {
+    // Paridad web (QA-6): TODA serie sin registrar se pinta como fila de registro INLINE expandida
+    // (`SingleExerciseCard` web:394-424 monta un `LogSetForm` por serie; `collapsed = isLogged && !editing`,
+    // `LogSetForm.tsx:368` → sólo las LOGUEADAS colapsan a recap). La protagonista (`firstUnlogged`) va
+    // grande; las futuras van compactas (`isActive={false}`). Antes RN colapsaba las futuras a un chip
+    // "Toca para registrar" que abría el teclado en Modal directo (gesto que el CEO rechaza); ahora el
+    // teclado sólo aparece al tocar una caja (FieldBox), igual que la web abre el keypad en `onFocus` del input.
+    if (!log) {
+      const isActiveSet = setNumber === firstUnlogged
       const seed =
         restoredDraft && restoredDraft.blockId === block.id && restoredDraft.setNumber === setNumber
           ? restoredDraft.values
@@ -200,9 +207,12 @@ export function SingleExerciseCard({
           blockId={block.id}
           setNumber={setNumber}
           typedMode={typedMode}
+          isActive={isActiveSet}
           suggestedWeight={suggestedWeightKg ?? null}
           seedValues={seed}
-          autofill={autofill}
+          // Autollenado "= usar última vez" apunta SÓLO a la serie activa (mirror web `fillByBlock` con
+          // `setNumber === firstUnlogged`, SingleExerciseCard web:297/416); las futuras no lo reciben.
+          autofill={isActiveSet ? autofill : null}
           // Header de objetivo repetido en el teclado (DB-5, mirror web NumericKeypadSheet:204-228):
           // el scrim atenúa el objetivo/"Última vez" de la card mientras el alumno tipea.
           header={{

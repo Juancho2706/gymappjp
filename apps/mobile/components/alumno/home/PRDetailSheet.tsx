@@ -121,6 +121,7 @@ export function PRDetailSheet({
   const canShare = currentWeight != null && exerciseId != null
 
   return (
+    <>
     <Sheet open={open} onClose={onClose} title={exerciseName} snapPoints={['55%', '88%']}>
       {/* Un solo hijo con gap 20 espeja el `gap-5` del body web (Sheet.tsx aplica gap 14 entre
           hijos del scroll — no configurable — asi que agrupamos y controlamos el gap aqui). */}
@@ -215,8 +216,22 @@ export function PRDetailSheet({
           <ArrowUpRight size={16} color={theme.foreground} strokeWidth={2.2} />
         </TouchableOpacity>
       </View>
+    </Sheet>
 
-      {/* share-card branded del record (motor ShareCard, mirror WorkoutSummaryOverlay PR block) */}
+      {/* share-card branded del record (motor ShareCard, mirror WorkoutSummaryOverlay PR block).
+          MONTAJE (QA-6): se pinta como HERMANO del <Sheet>, NO dentro de su cuerpo. El <Sheet> es un
+          @gorhom BottomSheetModal que se teletransporta vía <Portal> (BottomSheetModal.tsx:537,
+          containerComponent=React.Fragment :54) hacia un <PortalHost> que es JSX plano DENTRO de la misma
+          ventana de la Activity — NO es un <Modal> RN nativo. Por eso este ShareCardPreview (un <Modal> RN)
+          es un ÚNICO Dialog sobre la Activity: el caso documentado SEGURO ("Top-level consumers keep the
+          default Modal", ShareCard.tsx:502-503), NO el brick de dos Dialogs anidados de QA-5 (que exige
+          Modal-dentro-de-Modal RN, ShareCard.tsx:498-501). Sacarlo del BottomSheetScrollView del cuerpo
+          desacopla su ciclo de vida del teardown animado del sheet y elimina toda fragilidad de "Modal RN
+          dentro del portal @gorhom" cuando la Activity nativa de compartir manda la app a background y vuelve.
+          NO se usa `embedded`: ese overlay absolute-fill necesita un ancestro full-screen que aquí no existe
+          (el único host de portal es el root dinámico de @gorhom `bottom-sheet-portal-<id>`, inalcanzable por
+          nombre; un <Portal> plano apunta al host 'root' que nadie renderiza — PortalProvider lo renombra).
+          El <Modal> RN nativo es el único mecanismo full-screen en scope, y aquí es el patrón seguro. */}
       <ShareCardPreview
         visible={shareOpen}
         onClose={() => setShareOpen(false)}
@@ -235,6 +250,6 @@ export function PRDetailSheet({
         <ShareCardDate />
         <ShareCardPill>1RM estimado · {fmtDecimalCL(shareEstimated1RM)} kg</ShareCardPill>
       </ShareCardPreview>
-    </Sheet>
+    </>
   )
 }

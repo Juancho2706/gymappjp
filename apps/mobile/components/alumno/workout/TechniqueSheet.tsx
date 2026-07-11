@@ -149,7 +149,12 @@ export function TechniqueSheet({
       showCloseButton={false}
       // Nombre del ejercicio como accessible name del sheet (lo daba el título del header antes).
       accessibilityLabel={exercise?.name}
-      snapPoints={['55%', '90%']}
+      // dynamicSizing en vez de snapPoints fijos: misma causa que QA-2 (tuerca) — bajo @gorhom v5 +
+      // reanimated v4 la medición de porcentajes puede resolver a 0 y el sheet se presenta con altura
+      // nula ("Técnica no abre nada", QA-7 en device). Content-hug con tope 90% = patrón del
+      // SubstituteExerciseSheet y del WorkoutSettingsSheet (paridad con el DialogContent web h-auto).
+      dynamicSizing
+      snapPoints={['90%']}
       // El medio (índice 0) queda FIJADO fuera del scroll = web `shrink-0` fuera de la zona
       // `overflow-y-auto` (WorkoutExecutionClient.tsx:2015/2030/2048/2062 vs :2076): el gif/video
       // permanece a la vista mientras las instrucciones scrollean. Su marco lleva fondo opaco

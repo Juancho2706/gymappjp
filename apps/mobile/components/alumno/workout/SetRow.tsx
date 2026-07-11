@@ -419,6 +419,10 @@ export function SetRow({
 // (mono 600, `LogSetForm.tsx:576-579`). Antes salía en `FONT.monoBold` (JetBrainsMono 700), un peso por
 // encima del semibold del web. La cara 600 ya está cargada y en uso (OBJECTIVE_STYLE, `TypedKeypad.tsx`).
 const BOX_VALUE_STYLE = textStyle('2xl', FONT.monoSemibold, { ls: 'tight' })
+// Variante COMPACTA del valor de caja (filas NO protagonistas): la web baja el input a `text-base` (16px)
+// para las series aún-no-activas (`LogSetForm.tsx:578` `isActive ? 'h-14 text-2xl' : 'h-11 text-base'`).
+// Mismo peso/familia (mono 600); sólo cambia el tamaño. 'md' = 16px del DS (typography.ts) = text-base.
+const BOX_VALUE_COMPACT_STYLE = textStyle('md', FONT.monoSemibold, { ls: 'tight' })
 
 type FieldMode = 'weight' | 'reps' | 'decimal' | 'integer'
 interface RowField {
@@ -428,19 +432,23 @@ interface RowField {
   mode: FieldMode
 }
 
-/** Caja de input visible (label arriba + borde + valor/placeholder). Tap abre el TypedKeypad. */
+/** Caja de input visible (label arriba + borde + valor/placeholder). Tap abre el TypedKeypad.
+ *  `compact` = fila NO protagonista (serie aún no activa): caja más baja (h-11) y valor a 16px, mirror del
+ *  `isActive ? 'h-14 text-2xl' : 'h-11 text-base'` de la web (`LogSetForm.tsx:578`). */
 function FieldBox({
   label,
   value,
   active,
   onPress,
   testID,
+  compact = false,
 }: {
   label: string
   value: string
   active: boolean
   onPress: () => void
   testID: string
+  compact?: boolean
 }) {
   return (
     <Pressable
@@ -457,11 +465,11 @@ function FieldBox({
         {label}
       </Text>
       <View
-        className={`h-14 items-center justify-center rounded-control border bg-white/[0.06] ${
+        className={`${compact ? 'h-11' : 'h-14'} items-center justify-center rounded-control border bg-white/[0.06] ${
           active ? 'border-sport-500' : 'border-inverse'
         }`}
       >
-        <Text style={BOX_VALUE_STYLE} className={value ? 'text-on-dark' : 'text-on-dark-muted/40'}>
+        <Text style={compact ? BOX_VALUE_COMPACT_STYLE : BOX_VALUE_STYLE} className={value ? 'text-on-dark' : 'text-on-dark-muted/40'}>
           {value || '-'}
         </Text>
       </View>
@@ -508,6 +516,7 @@ export function ActiveSetRow({
   seedValues,
   autofill,
   header,
+  isActive = true,
   isEditing = false,
   onDraftChange,
   onCommit,
@@ -517,6 +526,15 @@ export function ActiveSetRow({
   typedMode: TypedKeypadMode | null
   /** Peso sugerido (sobrecarga) — pre-llena la caja KG en strength. */
   suggestedWeight: number | null
+  /**
+   * Serie PROTAGONISTA (primera sin registrar del bloque/ronda). Espeja el `isActive` de la web
+   * (`LogSetForm.tsx:170`): SOLO controla la JERARQUÍA visual — la fila activa va grande (cajas h-14,
+   * badge sport, botón etiquetado "Listo", nota disponible) y las series futuras van COMPACTAS (cajas
+   * h-11, badge muted, botón circular check, sin nota), igual que la web pinta TODA serie sin registrar
+   * como formulario inline expandido (protagonista + recesivas) en vez de un chip "Toca para registrar".
+   * Default true = comportamiento previo (una sola fila activa). No cambia el motor de logging.
+   */
+  isActive?: boolean
   /**
    * Se está EDITANDO una serie ya cerrada (no una nueva): el botón dice 'Guardar' en vez de 'Listo'
    * (mirror web `label={isLogged ? 'Guardar' : 'Listo'}`, `LogSetForm.tsx:696`). Default false = serie
@@ -634,15 +652,20 @@ export function ActiveSetRow({
   return (
     <View
       testID={`active-set-row-${setNumber}`}
-      className="gap-3 rounded-control border border-sport-500/50 bg-sport-500/[0.06] p-3"
+      // Contenedor: protagonista = borde/fondo sport; recesiva (serie futura) = borde inverse + fondo
+      // tenue, mirror web `isActive ? 'border-sport-500/50 bg-sport-500/[0.06]' : 'border-inverse bg-white/[0.02]'`
+      // (`LogSetForm.tsx:596-597`).
+      className={`gap-3 rounded-control border p-3 ${
+        isActive ? 'border-sport-500/50 bg-sport-500/[0.06]' : 'border-inverse bg-white/[0.02]'
+      }`}
     >
       {/* Cajas KG × REPS (strength) o campos tipados — label arriba + borde, tap abre el keypad */}
       <View className="flex-row items-end gap-2.5">
-        <View className="h-14 w-7 items-center justify-center">
-          <View className="h-7 w-7 items-center justify-center rounded-full bg-sport-500/20">
-            {/* Badge de la fila activa: web `h-7 w-7 text-[13px] font-black tabular-nums` (`LogSetForm.tsx:620-626`).
-                Antes TYPE.mono (JetBrains 400) en vez del font-black web → mismo arreglo que el chip. */}
-            <Text style={BADGE_ACTIVE_STYLE} className="text-sport-300">
+        <View className={`${isActive ? 'h-14' : 'h-11'} w-7 items-center justify-center`}>
+          {/* Badge: protagonista = h-7 sport-500/20 + 13px sport-300; recesiva = h-6 white/[0.06] + 11px
+              muted (mirror web `LogSetForm.tsx:620-626`, `isActive ? h-7 w-7 text-[13px] ... : h-6 w-6 text-[11px] ...`). */}
+          <View className={`items-center justify-center rounded-full ${isActive ? 'h-7 w-7 bg-sport-500/20' : 'h-6 w-6 bg-white/[0.06]'}`}>
+            <Text style={isActive ? BADGE_ACTIVE_STYLE : BADGE_CHIP_STYLE} className={isActive ? 'text-sport-300' : 'text-on-dark-muted'}>
               {setNumber}
             </Text>
           </View>
@@ -656,6 +679,7 @@ export function ActiveSetRow({
               active={openKey === f.key}
               onPress={() => openField(f.key)}
               testID={`set-field-${setNumber}-${f.key}`}
+              compact={!isActive}
             />
           ))
         ) : (
@@ -666,12 +690,13 @@ export function ActiveSetRow({
               active={openKey === 'weight'}
               onPress={() => openField('weight')}
               testID={`set-field-${setNumber}-weight`}
+              compact={!isActive}
             />
-            {/* Padding inferior del × = `pb-3` (12px): mirror del span '×' de la fila ACTIVA web,
-                `pb-3 text-xl` (`LogSetForm.tsx:652`). Antes `pb-4` (16px) lo alineaba 4px más arriba
-                respecto a las cajas h-14. `text-xl` ya coincide vía textStyle('xl'). */}
-            <View className="pb-3">
-              <Text style={textStyle('xl', FONT.ui)} className="text-on-dark-muted">
+            {/* Padding/tamaño del × por jerarquía = mirror del span '×' web `isActive ? 'pb-3 text-xl' :
+                'pb-2 text-base'` (`LogSetForm.tsx:652`): protagonista pb-3 + xl (alinea con cajas h-14),
+                recesiva pb-2 + base (alinea con cajas h-11). */}
+            <View className={isActive ? 'pb-3' : 'pb-2'}>
+              <Text style={textStyle(isActive ? 'xl' : 'md', FONT.ui)} className="text-on-dark-muted">
                 ×
               </Text>
             </View>
@@ -681,6 +706,7 @@ export function ActiveSetRow({
               active={openKey === 'reps'}
               onPress={() => openField('reps')}
               testID={`set-field-${setNumber}-reps`}
+              compact={!isActive}
             />
           </>
         )}
@@ -704,7 +730,7 @@ export function ActiveSetRow({
                 {RPE_HELP}
               </Text>
             )}
-            <EffortScale kind="rpe" value={int(values.rpe)} onSelect={(v) => patch({ rpe: String(v) })} />
+            <EffortScale kind="rpe" value={int(values.rpe)} onSelect={(v) => patch({ rpe: String(v) })} compact={!isActive} />
           </View>
           <View>
             <View className="mb-1 flex-row items-center gap-1">
@@ -718,7 +744,7 @@ export function ActiveSetRow({
                 {RIR_HELP}
               </Text>
             )}
-            <EffortScale kind="rir" value={int(values.rir)} onSelect={(v) => patch({ rir: String(v) })} />
+            <EffortScale kind="rir" value={int(values.rir)} onSelect={(v) => patch({ rir: String(v) })} compact={!isActive} />
           </View>
         </View>
       )}
@@ -732,7 +758,11 @@ export function ActiveSetRow({
             sin `label` ⇒ el círculo w-11/w-8 rounded-full de `:1158-1168`); la web reserva el círculo para las
             filas no protagonistas. Commit intacto en ambos. */}
       <View className="flex-row justify-end">
-        {typedMode ? (
+        {/* Botón circular (sin label) para TIPADAS y para las series de fuerza NO protagonistas (recesivas):
+            mirror web `SubmitSetButton` sin `label` (`LogSetForm.tsx:696` pasa label sólo cuando isActive;
+            las tipadas y las filas compactas caen al círculo `:1158-1168`). El botón etiquetado "Listo"/
+            "Guardar" queda SÓLO para la fila de fuerza activa protagonista. */}
+        {typedMode || !isActive ? (
           <Pressable
             testID={`confirm-set-${setNumber}`}
             onPress={() => handleConfirm()}
@@ -807,8 +837,9 @@ export function ActiveSetRow({
 
       {/* Nota rápida por serie (strength) — mirror web A.4.d (`LogSetForm.tsx:699-736`): toggle + input
           desplegable, máx 300 chars, viaja al coach vía `values.note` → `buildStrengthPayload`. Va DESPUÉS
-          del botón, como en web (`:699` tras `:695`). */}
-      {!typedMode && (
+          del botón, como en web (`:699` tras `:695`). SÓLO en la fila protagonista/edición: la web gatea
+          con `showNoteControls = isActive || editing` (`:366`), así las series futuras compactas no la muestran. */}
+      {!typedMode && (isActive || isEditing) && (
         <View>
           <Pressable
             testID={`note-toggle-${setNumber}`}

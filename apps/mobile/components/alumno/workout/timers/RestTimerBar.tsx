@@ -20,7 +20,7 @@ import {
 } from './timer-colors'
 import { isRestTimerMuted, setRestTimerMuted, subscribeRestTimerPrefs } from './rest-timer-preferences'
 import { playTimerCue } from './sound'
-import { cancelRestEndNotification, scheduleRestEndNotification } from './rest-notification'
+import { cancelRestEndNotification, ensureRestNotifPermission, scheduleRestEndNotification } from './rest-notification'
 
 /**
  * Descanso PROTAGONISTA (E2-09) — barra/overlay inferior con cuenta regresiva.
@@ -100,6 +100,7 @@ export function RestTimerBar({
   const endTimeRef = useRef<number | null>(null)
   const timeLeftRef = useRef(initialSeconds)
   const isActiveRef = useRef(autoStart)
+  const mountedRef = useRef(true)
   const alarmIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const alarmCountRef = useRef(0)
   const alarmRingingRef = useRef(false)
@@ -115,11 +116,11 @@ export function RestTimerBar({
     return unsub
   }, [])
 
-  // Permiso de notificaciones: la barra NUNCA promptea al montar (paridad con la
-  // web `RestTimer.tsx:132-148`, que solo consulta `Notification.permission` y calla
-  // sin permiso — "cero prompts nuevos en medio del entreno"). El único prompt vive
-  // tras el botón "Activar permisos" del panel de ajustes (`WorkoutSettingsSheet`).
-  // Si ya está concedido, la notif de background se programa en el handler de AppState.
+  // Permiso de notificaciones (fix QA-3): ver el efecto `ensureRestNotifPermission` más
+  // abajo — se pide la PRIMERA vez que se monta un descanso. Diverge a propósito de la web
+  // (`RestTimer.tsx:132-148`, que nunca promptea): en móvil el aviso de fondo es una
+  // capacidad NATIVA que el CEO sancionó pedir una vez para que el cronómetro suene aunque
+  // el alumno apague la pantalla o salga de la app.
 
   const stopAlarm = useCallback(() => {
     if (alarmIntervalRef.current) {
@@ -134,6 +135,7 @@ export function RestTimerBar({
   // Limpieza dura al desmontar: corta el loop de alarma y cancela cualquier
   // notificación de fin programada (descanso saltado / cerrado no debe sonar luego).
   useEffect(() => () => {
+    mountedRef.current = false
     if (alarmIntervalRef.current) clearInterval(alarmIntervalRef.current)
     void cancelRestEndNotification()
   }, [])
@@ -180,25 +182,67 @@ export function RestTimerBar({
     }, 3000)
   }, [stopAlarm])
 
+  // Cronómetro real de fondo (fix QA-3): mantiene la notificación local de FIN de descanso
+  // sincronizada con `endTimeRef` (el timestamp ABSOLUTO de término). Se (re)programa cuando
+  // cambia el fin (arranque, ±15s, reanudar) y se cancela al pausar/saltar/terminar. Es
+  // idempotente: `scheduleRestEndNotification` cancela la programación previa antes de crear
+  // la nueva. `endTimeRef` sólo es no-null mientras el descanso corre, así que basta con leerlo.
+  const syncEndNotification = useCallback(async () => {
+    const end = endTimeRef.current
+    if (!end) {
+      await cancelRestEndNotification()
+      return
+    }
+    const remaining = Math.max(0, Math.ceil((end - Date.now()) / 1000))
+    if (remaining <= 0) {
+      await cancelRestEndNotification()
+      return
+    }
+    await scheduleRestEndNotification(remaining)
+  }, [])
+
+  // Permiso de notificaciones (fix QA-3, pedido explícito del CEO): se solicita la PRIMERA
+  // vez que se monta un descanso. `ensureRestNotifPermission` es lazy + cacheado a nivel de
+  // módulo → nunca vuelve a preguntar (flujo amable). Al concederlo, arma la notif de fondo;
+  // si lo niega, el cronómetro sigue 100% en foreground (audio/háptica in-app) y no re-pregunta.
+  useEffect(() => {
+    void ensureRestNotifPermission().then(() => {
+      if (mountedRef.current) void syncEndNotification()
+    })
+  }, [syncEndNotification])
+
   // Cuenta regresiva basada en endTime (resiste throttling de background).
   useEffect(() => {
     let interval: ReturnType<typeof setInterval> | undefined
     if (isActive && timeLeft > 0) {
-      if (!endTimeRef.current) endTimeRef.current = Date.now() + timeLeft * 1000
+      if (!endTimeRef.current) {
+        endTimeRef.current = Date.now() + timeLeft * 1000
+        // Arma la notif local de fin AL ARRANCAR el descanso (no al minimizar). Así el aviso
+        // persiste aunque el SO congele/mate el JS al apagar la pantalla o irse a background —
+        // crítico en OEMs agresivos (Xiaomi/MIUI), donde el handler de AppState podría no
+        // alcanzar a programarla a tiempo al momento de minimizar.
+        void syncEndNotification()
+      }
       interval = setInterval(() => {
         if (!endTimeRef.current) return
         const next = Math.max(0, Math.ceil((endTimeRef.current - Date.now()) / 1000))
         timeLeftRef.current = next
         setTimeLeft(next)
+        // El JS sólo tickea en FOREGROUND: en los últimos segundos cancela la notif de fondo
+        // para que el 0 lo cubra la alarma IN-APP (evita el doble aviso notif del SO + alarma
+        // in-app). Si el alumno minimiza en esta ventana, el handler de AppState la reprograma.
+        if (next <= 2) void cancelRestEndNotification()
         if (next === 0) triggerAlarm()
       }, 500)
     } else if (timeLeft === 0 && isActive) {
       triggerAlarm()
     } else if (!isActive) {
+      // Pausa: descarta el fin absoluto y cancela la notif de fondo (no debe sonar en pausa).
       endTimeRef.current = null
+      void cancelRestEndNotification()
     }
     return () => clearInterval(interval)
-  }, [isActive, timeLeft, triggerAlarm])
+  }, [isActive, timeLeft, triggerAlarm, syncEndNotification])
 
   // Beeps/hápticos suaves 3-2-1 en los últimos 3s (el 0 lo cubre la alarma).
   useEffect(() => {
@@ -216,13 +260,14 @@ export function RestTimerBar({
     }
   }, [timeLeft, isActive])
 
-  // AppState: al IRSE a background con el descanso corriendo, programa una
-  // notificación local que dispare al terminar (el JS se congela; el SO la
-  // entrega). Al VOLVER a foreground, cancela esa notif (el cue lo da el timer
-  // in-app) y recomputa desde endTime (corrige el tiempo congelado).
+  // AppState: al VOLVER a foreground cancela la notif de fondo (el cue lo da el timer
+  // in-app) y recomputa desde endTime (corrige el tiempo congelado). Al IRSE a background
+  // reafirma la notif para el tiempo restante — la notif YA quedó armada al arrancar el
+  // descanso (ver countdown effect); esto la reprograma por si la cancelamos en los últimos
+  // segundos en foreground y el alumno minimizó justo ahí. Idempotente.
   useEffect(() => {
-    const sub = AppState.addEventListener('change', (next) => {
-      if (next === 'active') {
+    const sub = AppState.addEventListener('change', (nextState) => {
+      if (nextState === 'active') {
         void cancelRestEndNotification()
         if (!endTimeRef.current) return
         const remaining = Math.max(0, Math.ceil((endTimeRef.current - Date.now()) / 1000))
@@ -230,14 +275,12 @@ export function RestTimerBar({
         setTimeLeft(remaining)
         if (remaining === 0) triggerAlarm()
       } else {
-        // background / inactive: si corre, agenda el cue nativo de fin.
-        if (!isActiveRef.current || !endTimeRef.current) return
-        const remaining = Math.max(0, Math.ceil((endTimeRef.current - Date.now()) / 1000))
-        if (remaining > 0) void scheduleRestEndNotification(remaining)
+        // background / inactive: reafirma la notif de fondo para el tiempo restante.
+        void syncEndNotification()
       }
     })
     return () => sub.remove()
-  }, [triggerAlarm])
+  }, [triggerAlarm, syncEndNotification])
 
   const toggleTimer = useCallback(() => {
     void haptics.tap()
@@ -278,8 +321,10 @@ export function RestTimerBar({
       } else {
         endTimeRef.current = null
       }
+      // Reprograma/cancela la notif de fondo tras cambiar el fin absoluto (±15s).
+      void syncEndNotification()
     },
-    [stopAlarm],
+    [stopAlarm, syncEndNotification],
   )
 
   const toggleMute = useCallback(() => {

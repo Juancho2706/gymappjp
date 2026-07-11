@@ -737,7 +737,47 @@ export function useWorkoutSession(planId: string): WorkoutSessionState {
           if (dups.length) await supabase.from('workout_logs').delete().in('id', dups.map((d) => d.id))
         } else {
           const ins = await supabase.from('workout_logs').insert({ ...logData, logged_at: new Date().toISOString() })
-          error = ins.error
+          // 23505 = choque contra el índice único de prod `workout_logs_one_set_per_day`
+          // (client_id, block_id, set_number, día-Santiago(logged_at)): la fila de ESTA serie de HOY YA
+          // existe pero el SELECT por ventana de día no la vio. Igual que la web (workout-log.actions.ts:
+          // 143-169) el "upsert por día" manual no es atómico y el índice lo respalda; acá se degrada el
+          // insert perdedor a UPDATE de la fila ganadora (last-wins), NO se propaga como error.
+          // Dos gatillos convergen en este 23505:
+          //  (a) carrera flush-offline vs submit online de la misma serie (idéntico a web), y
+          //  (b) EDICIÓN de tarde/noche en la TZ del dispositivo: `getSantiagoUtcBoundsForDay` corre la
+          //      ventana [start,end) del día cuando el runtime NO es UTC (device en Santiago), así que un
+          //      log posterior a las ~20:00 cae FUERA de la ventana del SELECT aunque el índice lo trate
+          //      como el MISMO día → el primer guardado (INSERT) entra pero la edición volvía a INSERT y
+          //      chocaba con el índice; sin este manejo el chip rojo era permanente. La causa raíz de la
+          //      ventana (date-utils.getSantiagoUtcBoundsForDay dependía de la TZ del device) YA está
+          //      corregida en lib/date-utils.ts, así que ahora la ventana [start,end) es confiable en
+          //      device: tras el fix este 23505 sólo lo dispara la carrera (a). El manejo queda igual
+          //      como red de seguridad y paridad 1:1 con web.
+          // La fila ganadora se relocaliza por (client, block, set) DENTRO de la ventana del día (misma
+          // que el SELECT de arriba, ahora confiable — mirror de workout-log.actions.ts:150-151; el
+          // índice garantiza 1 sola por día) y se escribe encima → la edición PERSISTE y el chip se
+          // limpia al reintentar con éxito. Si aun así no aparece (RLS/borde de día raro), éxito
+          // silencioso como en web (workout-log.actions.ts:162-165): la serie ya quedó guardada.
+          if ((ins.error as { code?: string } | null)?.code === '23505') {
+            const { data: winner } = await supabase
+              .from('workout_logs')
+              .select('id')
+              .eq('client_id', cid)
+              .eq('block_id', payload.blockId)
+              .eq('set_number', payload.setNumber)
+              .gte('logged_at', startIso)
+              .lt('logged_at', endIso)
+              .order('logged_at', { ascending: false })
+              .limit(1)
+            if (winner && winner.length > 0) {
+              const upd = await supabase.from('workout_logs').update(logData).eq('id', (winner[0] as { id: string }).id)
+              error = upd.error
+            } else {
+              error = null
+            }
+          } else {
+            error = ins.error
+          }
         }
       } catch (e) {
         error = { message: (e as { message?: string })?.message ?? 'error' }

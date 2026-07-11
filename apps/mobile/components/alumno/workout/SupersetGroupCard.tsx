@@ -395,11 +395,18 @@ export function SupersetGroupCard({
                         </Text>
                       )}
                     </View>
-                    {isNext ? (
+                    {!log ? (
                       <ActiveSetRow
                         blockId={m.block.id}
                         setNumber={round}
                         typedMode={m.typedMode}
+                        // Paridad web (QA-6): TODA serie sin registrar de la ronda es una fila de registro
+                        // INLINE expandida (la web monta un `LogSetForm` por celda miembro×ronda; sólo las
+                        // logueadas colapsan). La protagonista (`isNext`, primera incompleta del orden
+                        // intercalado) va grande; el resto de celdas sin loguear van compactas. Antes sólo
+                        // `isNext` era ActiveSetRow y las demás caían al chip "Toca para registrar" → teclado
+                        // Modal directo (gesto rechazado); ahora el teclado sólo abre al tocar una caja.
+                        isActive={isNext}
                         suggestedWeight={m.suggested ?? null}
                         seedValues={seed}
                         // Header de objetivo repetido en el teclado (DB-5, mirror web NumericKeypadSheet:204-228).

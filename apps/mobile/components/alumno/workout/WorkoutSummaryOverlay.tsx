@@ -590,13 +590,19 @@ export function WorkoutSummaryOverlay({
         </View>
       </SafeAreaView>
 
-      {/* E2-16: share-card branded del resumen de sesión */}
+      {/* E2-16: share-card branded del resumen de sesión.
+          `embedded`: este preview vive DENTRO del <Modal> del overlay de resumen. Un <Modal> RN anidado
+          en otro <Modal> apila dos ventanas Dialog de Android; al volver de la Activity de compartir
+          (background→foreground) Android no restaura el Dialog anidado y deja una pantalla gris vacía
+          (QA-5 brick). En modo embedded el preview se pinta como overlay absoluto (una sola ventana
+          nativa), espejo de los portales-hermanos del web. */}
       <ShareCardPreview
         visible={shareOpen}
         onClose={() => setShareOpen(false)}
         variant="default"
         shareMessage={sessionShareMsg}
         fileName="eva-entreno"
+        embedded
       >
         <ShareCardEyebrow color={brand}>ENTRENAMIENTO</ShareCardEyebrow>
         <ShareCardTitle>{planTitle}</ShareCardTitle>
@@ -613,6 +619,9 @@ export function WorkoutSummaryOverlay({
         // Nombre del PNG = `record-{slug}` (ShareCard añade .png) → paridad con el web
         // `record-{slug}.png` (PRShareCardModal.tsx:42,72). Antes era el estático 'eva-record'.
         fileName={prCard ? `record-${slugify(prCard.exerciseName)}` : 'eva-record'}
+        // Anidado en el <Modal> del resumen → overlay embebido (una sola ventana nativa), evita el
+        // brick gris al volver de compartir (QA-5). Ver el ShareCardPreview del resumen arriba.
+        embedded
       >
         {prCard ? (
           <>
