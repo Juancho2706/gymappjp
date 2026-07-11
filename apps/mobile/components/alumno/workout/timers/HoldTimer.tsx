@@ -62,7 +62,12 @@ export function HoldTimer({ initialSeconds, label, onClose }: HoldTimerProps) {
     // Web HoldTimer.tsx:34 dispara triggerHaptic([200,100,400]); en Android replicamos
     // el patrón exacto (en iOS, tap fijo — igual que la web).
     timerHaptics.holdDone()
-    playTimerCue('done')
+    // Web HoldTimer.tsx:33 dispara `playTimerSound(readRestTimerSound(), readRestTimerVolume())`
+    // SIN leer ningún flag de mute: `readRestTimerMuted` se consume SOLO en la barra de descanso
+    // (RestTimer.tsx:14,61), así que mutear el rest-timer NO silencia el beep de fin de hold en web
+    // (sólo lo gatea el volumen 0–1). Para espejarlo, `force: true` omite el gate de mute de
+    // `playTimerCue` (que sí aplica al 'alarm'/'tick' del rest-timer). La háptica ya sonó arriba.
+    playTimerCue('done', { force: true })
     setIsActive(false)
     endTimeRef.current = null
   }, [])
@@ -194,7 +199,7 @@ export function HoldTimer({ initialSeconds, label, onClose }: HoldTimerProps) {
             onPress={toggle}
             accessibilityRole="button"
             accessibilityLabel={isActive ? 'Pausar' : 'Reanudar'}
-            style={styles.utilBtn}
+            style={({ pressed }) => [styles.utilBtn, pressed && styles.utilBtnPressed]}
           >
             {isActive ? <Pause size={14} color={ON_DARK_MUTED} /> : <Play size={14} color={ON_DARK_MUTED} />}
           </Pressable>
@@ -203,7 +208,7 @@ export function HoldTimer({ initialSeconds, label, onClose }: HoldTimerProps) {
             onPress={restart}
             accessibilityRole="button"
             accessibilityLabel="Repetir hold"
-            style={styles.utilBtn}
+            style={({ pressed }) => [styles.utilBtn, pressed && styles.utilBtnPressed]}
           >
             <RotateCcw size={14} color={ON_DARK_MUTED} />
           </Pressable>
@@ -212,7 +217,7 @@ export function HoldTimer({ initialSeconds, label, onClose }: HoldTimerProps) {
             onPress={onClose}
             accessibilityRole="button"
             accessibilityLabel="Cerrar timer"
-            style={styles.utilBtn}
+            style={({ pressed }) => [styles.utilBtn, pressed && styles.utilBtnPressed]}
           >
             <X size={14} color={ON_DARK_MUTED} />
           </Pressable>
@@ -269,4 +274,9 @@ const styles = StyleSheet.create({
   // en 36px; ahora el círculo visible es 44px y ya cumple el touch-target sin hitSlop. El icono
   // sigue en 14px (w-3.5 h-3.5). borderRadius 22 = diámetro/2 → círculo perfecto.
   utilBtn: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
+  // Feedback táctil de pulsación: espeja el `active:scale-[0.97]` del primitivo web `Button`
+  // (button.tsx:14, aplicado a los tres botones ghost/icon de la fila). En touch `:active` da un
+  // micro-encogido al presionar Pausar/Repetir/Cerrar; RN lo reproduce con `pressed && scale 0.97`.
+  // (La otra mitad `hover:bg-white/10` es sólo desktop y se omite correctamente.)
+  utilBtnPressed: { transform: [{ scale: 0.97 }] },
 })

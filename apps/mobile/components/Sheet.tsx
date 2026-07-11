@@ -95,6 +95,15 @@ export interface SheetProps extends OverlayCommonProps {
    */
   forceDark?: boolean
   /**
+   * Extra bottom padding (px) added ON TOP of the safe-area inset for the scroll/body
+   * content when there is NO footer. Default 24. Opt-in override for callers whose web
+   * source pins an exact body `pb` and needs 1:1 parity — e.g. the substitution sheet's
+   * body uses `pb-[calc(1.25rem+env(safe-area-inset-bottom,0px))]` = 20px + safe-area
+   * (web SubstituteExerciseSheet.tsx:89), so it passes 20 to shave the default 24→20.
+   * Ignored when a `footer` is present (footer path keeps its fixed 12px gap).
+   */
+  bodyPadBottomOffset?: number
+  /**
    * Type-scale size of the title. Default `'lg'` (18px) for the standard sheet. Callers whose web
    * source renders a larger heading pass `'xl'` (21px) for scale parity — e.g. the technique modal
    * mirrors web `DialogTitle text-xl` (WorkoutExecutionClient.tsx:2079). Uppercase / tracking-tighter
@@ -125,6 +134,7 @@ export function Sheet({
   accessibilityLabel,
   forceDark = false,
   titleSize = 'lg',
+  bodyPadBottomOffset = 24,
   children,
 }: SheetProps) {
   const { resolvedScheme } = useTheme()
@@ -178,7 +188,7 @@ export function Sheet({
       </View>
     ) : null
 
-  const bodyPadBottom = footer ? 12 : insets.bottom + 24
+  const bodyPadBottom = footer ? 12 : insets.bottom + bodyPadBottomOffset
 
   return (
     <BottomSheetModal

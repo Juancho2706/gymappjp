@@ -10,8 +10,12 @@
  *     seguro (nunca lanza, no rompe el typecheck: no hay import estático).
  *   · Tras instalar y registrar un asset vía `registerTimerCue`, reproduce.
  *
- * Gating: el sonido respeta `isRestTimerMuted()` (default web = ON). La háptica
- * NO pasa por acá y nunca se silencia.
+ * Gating: la ALARMA y el TICK del rest-timer respetan `isRestTimerMuted()` (default
+ * web = ON), espejando que en web `readRestTimerMuted` se lee SOLO en la barra de
+ * descanso (RestTimer.tsx:14,61). Los cues de HOLD ('done') y de INTERVALO
+ * ('phase'/'finish') se piden con `{ force: true }` porque en web su sonido es
+ * INDEPENDIENTE del mute del rest-timer (HoldTimer.tsx:33 / IntervalTimer.tsx:44 no
+ * leen mute). La háptica NO pasa por acá y nunca se silencia.
  *
  * NOTA de integración: los assets de sonido YA están bundleados y registrados al
  * cargar el módulo (un `.wav` por timbre + el tick de countdown, ver abajo). Sólo
@@ -92,11 +96,14 @@ export function primeTimerAudio(): void {
  * Reproduce un cue si (1) no está muteado, (2) expo-audio está instalado y
  * (3) hay un asset registrado para ese cue. Cualquier ausencia → no-op.
  *
- * `opts.force` OMITE el gate de mute: para PREVIEWS por acción directa del usuario
- * en ajustes (elegir timbre / mover volumen / "Probar sonido"). Paridad con la web,
- * donde el panel `WorkoutTimerSettingsPanel` reproduce `playTimerSound` SIEMPRE al
- * cambiar sonido/volumen (`:56-64`), sin gatear por mute (el mute vive sólo en la
- * barra, no en el panel). La cuenta regresiva (tick) y la alarma real sí respetan mute.
+ * `opts.force` OMITE el gate de mute. Se usa en dos casos con paridad web:
+ *   (1) PREVIEWS por acción directa del usuario en ajustes (elegir timbre / mover
+ *       volumen / "Probar sonido") — el panel `WorkoutTimerSettingsPanel` reproduce
+ *       `playTimerSound` SIEMPRE al cambiar sonido/volumen (`:56-64`), sin gatear.
+ *   (2) Los cues de HOLD ('done') e INTERVALO ('phase'/'finish'), cuyo sonido en web
+ *       es INDEPENDIENTE del mute del rest-timer (HoldTimer.tsx:33 / IntervalTimer.tsx:44
+ *       no leen `readRestTimerMuted`, que vive sólo en la barra de descanso).
+ * La cuenta regresiva (tick) y la ALARMA real del rest-timer sí respetan mute.
  */
 export function playTimerCue(kind: TimerCueKind, opts?: { force?: boolean }): void {
   if (!opts?.force && isRestTimerMuted()) return

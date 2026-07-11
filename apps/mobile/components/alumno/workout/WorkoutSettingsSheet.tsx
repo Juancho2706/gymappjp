@@ -87,7 +87,10 @@ export function WorkoutSettingsSheet({ open, onClose }: { open: boolean; onClose
         </View>
       </Card>
 
-      <RestAlarmPreference />
+      {/* Eyebrow "Alarma" para paridad textual con el H3 de la sección B del panel web
+          (`WorkoutTimerSettingsPanel.tsx:95`: H3 = "Alarma"). El card reutilizado del Perfil
+          usa por default "Alarma de descanso" cuando vive solo; aquí se sobreescribe. */}
+      <RestAlarmPreference eyebrow="Alarma" />
 
       <NotificationPermissionCard />
     </Sheet>

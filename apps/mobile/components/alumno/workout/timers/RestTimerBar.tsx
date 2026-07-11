@@ -504,13 +504,18 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: 14 },
   ringWrap: { width: 96, height: 96, position: 'relative' },
   ringCenter: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center' },
-  // Web `RestTimer.tsx:357`: `.eva-metric text-[1.75rem] leading-none` = 28px, line-height 1,
-  // cifras tabulares (font-variant-numeric). Fijo a 28 (no '3xl'=31) + tabular para que los
-  // dígitos no salten de ancho al descontar (1:11 → 1:09).
+  // Web `RestTimer.tsx:357` usa `.eva-metric text-[1.75rem] leading-none`; `.eva-metric`
+  // (globals.css:1272-1277) = `font-family: var(--font-display); font-weight: 800;
+  // font-variant-numeric: tabular-nums; letter-spacing: -0.01em`. Es decir el contador se
+  // pinta en la fuente DISPLAY (Archivo ExtraBold), NO monoespaciada → aquí `FONT.displayBold`
+  // (Archivo_800ExtraBold, typography.ts:38) para igualar el typeface. Se conserva
+  // `tabular-nums` (eva-metric lo usa para que los dígitos no salten de ancho al descontar,
+  // 1:11 → 1:09) y se añade letterSpacing -0.28 (−0.01em · 28px). Fijo a 28 (no '3xl'=31).
   bigTime: {
-    fontFamily: FONT.monoBold,
+    fontFamily: FONT.displayBold,
     fontSize: 28,
     lineHeight: 28,
+    letterSpacing: -0.28,
     fontVariant: ['tabular-nums', 'lining-nums'],
     color: ON_DARK,
   },

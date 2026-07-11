@@ -128,7 +128,7 @@ export function StopwatchTimer({ onClose }: StopwatchTimerProps) {
               onPress={addLap}
               accessibilityRole="button"
               accessibilityLabel="Marcar vuelta"
-              style={styles.utilBtn}
+              style={({ pressed }) => [styles.utilBtn, pressed && styles.utilBtnPressed]}
             >
               <Flag size={14} color={ON_DARK_MUTED} />
             </Pressable>
@@ -137,7 +137,7 @@ export function StopwatchTimer({ onClose }: StopwatchTimerProps) {
               onPress={togglePause}
               accessibilityRole="button"
               accessibilityLabel={isActive ? 'Pausar' : 'Reanudar'}
-              style={styles.utilBtn}
+              style={({ pressed }) => [styles.utilBtn, pressed && styles.utilBtnPressed]}
             >
               {isActive ? <Pause size={14} color={ON_DARK_MUTED} /> : <Play size={14} color={ON_DARK_MUTED} />}
             </Pressable>
@@ -146,7 +146,7 @@ export function StopwatchTimer({ onClose }: StopwatchTimerProps) {
               onPress={reset}
               accessibilityRole="button"
               accessibilityLabel="Reiniciar"
-              style={styles.utilBtn}
+              style={({ pressed }) => [styles.utilBtn, pressed && styles.utilBtnPressed]}
             >
               <RotateCcw size={14} color={ON_DARK_MUTED} />
             </Pressable>
@@ -155,7 +155,7 @@ export function StopwatchTimer({ onClose }: StopwatchTimerProps) {
               onPress={onClose}
               accessibilityRole="button"
               accessibilityLabel="Cerrar cronómetro"
-              style={styles.utilBtn}
+              style={({ pressed }) => [styles.utilBtn, pressed && styles.utilBtnPressed]}
             >
               <X size={14} color={ON_DARK_MUTED} />
             </Pressable>
@@ -213,6 +213,10 @@ const styles = StyleSheet.create({
   // circulares. Icono en 14px. Antes 36px + hitSlop dejaba el círculo visible en 36px; ahora es 44px
   // y cumple el touch-target sin hitSlop. borderRadius 22 = diámetro/2.
   utilBtn: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
+  // Feedback táctil de pulsación: espeja el `active:scale-[0.97]` del primitivo web `Button`
+  // (button.tsx:14) que llevan los botones Vuelta/Pausar/Reiniciar/Cerrar. `hover:bg-white/10`
+  // es sólo desktop y se omite; el `:active` (relevante en touch) se reproduce con scale 0.97.
+  utilBtnPressed: { transform: [{ scale: 0.97 }] },
   laps: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 6 },
   // Web Stopwatch.tsx:116 `rounded` = 4px (default Tailwind, no hay token de 4px en la escala RN).
   lapChip: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.06)' },

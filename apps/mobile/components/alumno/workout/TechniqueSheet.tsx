@@ -229,7 +229,11 @@ export function TechniqueSheet({
         accessibilityLabel="Entendido"
         className="mt-space-3 w-full items-center justify-center rounded-control bg-surface-sunken py-3"
       >
-        <Text style={textStyle('sm', FONT.uiBold)} className="text-body">
+        {/* 16px bold: el <button> web no fija tamaño de texto → por el preflight de Tailwind
+            (button { font-size: 100% }) hereda el 1rem/16px del body (WorkoutExecutionClient.tsx:2107,
+            sin utilidad text-*), 2px por encima de los pasos (text-sm/14px) para conservar la
+            jerarquía del CTA primario. `md` = 16px del DS (typography.ts:53), equivalente a --text-base. */}
+        <Text style={textStyle('md', FONT.uiBold)} className="text-body">
           Entendido
         </Text>
       </TouchableOpacity>

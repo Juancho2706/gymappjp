@@ -31,6 +31,7 @@ import { useTheme } from '../../../context/ThemeContext'
 import { useEvaMotion } from '../../../lib/motion'
 import { haptics } from '../../../lib/haptics'
 import { SHADOWS } from '../../../lib/shadows'
+import { resolveSportRamp } from '../../../lib/theme'
 import { FONT } from '../../../lib/typography'
 import { epleyOneRM } from '../../../lib/profile-analytics'
 import type { CheckInReminder } from '../../../lib/checkin-thresholds'
@@ -220,12 +221,21 @@ export function WorkoutSummaryOverlay({
   onDone,
   onClose,
 }: WorkoutSummaryOverlayProps) {
-  const { theme } = useTheme()
+  const { theme, branding } = useTheme()
   const motion = useEvaMotion()
   const brand = theme.primary
   // Tinte sport-300 derivado de la marca del coach — espejo de web layout.tsx:290
   // (--sport-300 = deriveSportTokens(primaryColor).ramp['300']). Usado en el eyebrow "Lo que viene".
   const sport300 = useMemo(() => deriveSportTokens(brand).ramp['300'], [brand])
+  // --sport-500 = MARCA EXACTA verbatim del coach (brand-kit index.ts:297 `ramp['500'] === brandHex`),
+  // distinto de --theme-primary (`theme.primary` = accent CONTRAST-CLAMPED, layout.tsx:276,308). El web
+  // tiñe con --sport-500 el círculo del check (WorkoutSummaryOverlay.tsx:270) y los valores del hero
+  // Duración/adaptativo (:288,:292); con --theme-primary sólo las barras (:470) y "Volver al inicio"
+  // (:520). Para un brand que requiera clamp en canvas oscuro ambos difieren, así que derivamos del
+  // primaryColor CRUDO (`branding.primaryColor`) vía resolveSportRamp — el mismo helper que alimenta las
+  // vars --color-sport-* de NativeWind. (Pasar `theme.primary` sería un no-op: ramp['500'] devuelve su
+  // input verbatim; el fix real exige el color de marca crudo, no el accent ya clampado.)
+  const sport500 = useMemo(() => resolveSportRamp(branding?.primaryColor).sport500, [branding?.primaryColor])
 
   const session = useMemo(
     () => summarizeSessionByKind(blocks, logs, substitutedBlockIds),
@@ -335,7 +345,10 @@ export function WorkoutSummaryOverlay({
         <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 24, paddingBottom: 20, gap: 24 }} showsVerticalScrollIndicator={false}>
           {/* Header */}
           <FadeIn play={visible} reduced={motion.reduced} y={12} duration={350} style={{ alignItems: 'center', gap: 6 }}>
-            <View style={[{ width: 76, height: 76, borderRadius: 38, alignItems: 'center', justifyContent: 'center', backgroundColor: brand, marginBottom: 8 }, theme.shadowGlowBlue]}>
+            {/* Círculo del check: fondo --sport-500 (marca verbatim), NO --theme-primary clamped
+                (web WorkoutSummaryOverlay.tsx:270). marginBottom 10 + gap:6 del FadeIn = 16px al título,
+                espejo del wrapper `mb-4` web (:267). */}
+            <View style={[{ width: 76, height: 76, borderRadius: 38, alignItems: 'center', justifyContent: 'center', backgroundColor: sport500, marginBottom: 10 }, theme.shadowGlowBlue]}>
               <Check size={36} color="#fff" strokeWidth={2} />
             </View>
             <Text style={{ fontFamily: DISPLAY, fontSize: 28, letterSpacing: -0.6, color: ON_DARK, textAlign: 'center' }}>¡Sesión completada!</Text>
@@ -346,11 +359,11 @@ export function WorkoutSummaryOverlay({
           <FadeIn play={visible} reduced={motion.reduced} y={8} delay={50} style={{ gap: 8 }}>
             <View style={{ flexDirection: 'row', gap: 8 }}>
               <View style={{ flex: 1, borderRadius: 14, borderWidth: 1, borderColor: BORDER_INV, backgroundColor: INK_900, paddingHorizontal: 16, paddingVertical: 20, alignItems: 'center' }}>
-                <Text style={{ fontFamily: MONO, fontSize: 34, color: brand }}>{durationLabel}</Text>
+                <Text style={{ fontFamily: MONO, fontSize: 34, color: sport500 }}>{durationLabel}</Text>
                 <Text style={{ fontFamily: SEMIBOLD, fontSize: 11, color: ON_DARK_MUTED, marginTop: 8 }}>Duración</Text>
               </View>
               <View style={{ flex: 1, borderRadius: 14, borderWidth: 1, borderColor: BORDER_INV, backgroundColor: INK_900, paddingHorizontal: 16, paddingVertical: 20, alignItems: 'center' }}>
-                <Text style={{ fontFamily: MONO, fontSize: 34, color: brand }}>
+                <Text style={{ fontFamily: MONO, fontSize: 34, color: sport500 }}>
                   {heroSecondary.value}
                   {heroSecondary.unit ? <Text style={{ fontFamily: BOLD, fontSize: 16, color: ON_DARK_MUTED }}> {heroSecondary.unit}</Text> : null}
                 </Text>
@@ -486,11 +499,14 @@ export function WorkoutSummaryOverlay({
               ScrollView aplica `gap: 24` uniforme, así que sumamos 8px extra (marginBottom) para
               llegar a los 32px del web en la separación Músculos→'Lo que viene'. */}
           {(hasMuscleMap || muscleGroupVolume.length > 0) && (
-            <View style={{ gap: 10, marginBottom: 8 }}>
-              <Text style={{ fontFamily: BOLD, fontSize: 12, letterSpacing: 1.2, textTransform: 'uppercase', color: ON_DARK_MUTED }}>Músculos trabajados</Text>
-              {/* px-3 pt-3 pb-1 (web WorkoutSummaryOverlay.tsx:455). */}
+            <View style={{ marginBottom: 8 }}>
+              {/* Separaciones internas EXPLÍCITAS (web WorkoutSummaryOverlay.tsx): título h3 `mb-3` = 12px
+                  hasta el mapa (:447) y contenedor del mapa `mb-4` = 16px hasta las barras (:455). Antes
+                  un `gap:10` uniforme daba 10/10; fijamos marginBottom 12 (título) y 16 (mapa). */}
+              <Text style={{ fontFamily: BOLD, fontSize: 12, letterSpacing: 1.2, textTransform: 'uppercase', color: ON_DARK_MUTED, marginBottom: 12 }}>Músculos trabajados</Text>
+              {/* px-3 pt-3 pb-1 + mb-4 (web WorkoutSummaryOverlay.tsx:455). */}
               {hasMuscleMap && (
-                <FadeIn play={visible} reduced={motion.reduced} y={8} duration={300} style={{ borderRadius: 20, borderWidth: 1, borderColor: BORDER_INV, backgroundColor: W03, paddingHorizontal: 12, paddingTop: 12, paddingBottom: 4 }}>
+                <FadeIn play={visible} reduced={motion.reduced} y={8} duration={300} style={{ marginBottom: 16, borderRadius: 20, borderWidth: 1, borderColor: BORDER_INV, backgroundColor: W03, paddingHorizontal: 12, paddingTop: 12, paddingBottom: 4 }}>
                   <MuscleMapSvg groups={session.muscleWork} reducedMotion={motion.reduced} />
                 </FadeIn>
               )}
@@ -558,7 +574,8 @@ export function WorkoutSummaryOverlay({
             style={({ pressed }) => ({ height: 40, borderRadius: 14, borderWidth: 1, borderColor: BORDER_INV, backgroundColor: pressed ? 'rgba(255,255,255,0.14)' : W08, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 })}
           >
             <Share2 size={16} color={ON_DARK} />
-            <Text style={{ fontFamily: BOLD, fontSize: 14, color: ON_DARK }}>Compartir logro</Text>
+            {/* Web (WorkoutSummaryOverlay.tsx:509): `font-semibold text-sm` (peso 600), no bold. */}
+            <Text style={{ fontFamily: SEMIBOLD, fontSize: 14, color: ON_DARK }}>Compartir logro</Text>
           </Pressable>
           <Pressable
             testID="summary-done"
@@ -609,7 +626,10 @@ export function WorkoutSummaryOverlay({
                 prevWeightKg>0; con máximo histórico 0 muestra el literal neutro "Primer récord personal"
                 (tono neutro, no success), no "0 → X kg · +100%". */}
             {prCard.prevWeightKg > 0 ? (
-              <ShareCardPill tone="success">{fmtDecimalCL(prCard.prevWeightKg)} → {fmtDecimalCL(prCard.newWeightKg)} kg{prCard.pct > 0 ? ` · +${fmtDecimalCL(prCard.pct)}%` : ''}</ShareCardPill>
+              // Canvas web (workout-pr-card-canvas.ts:676-679): con prevWeightKg>0 SIEMPRE pinta
+              // "· +pct%" (sin guard pct>0; ese guard sólo vive en la card del overlay web :356, no en
+              // el canvas que esta ShareCard replica). Reflejamos el canvas: mostramos "· +pct%" siempre.
+              <ShareCardPill tone="success">{fmtDecimalCL(prCard.prevWeightKg)} → {fmtDecimalCL(prCard.newWeightKg)} kg · +{fmtDecimalCL(prCard.pct)}%</ShareCardPill>
             ) : (
               <ShareCardPill>Primer récord personal</ShareCardPill>
             )}

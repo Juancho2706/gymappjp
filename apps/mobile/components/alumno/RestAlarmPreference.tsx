@@ -57,7 +57,18 @@ function getSnapshot() {
   return snapCache
 }
 
-export function RestAlarmPreference() {
+interface RestAlarmPreferenceProps {
+  /**
+   * Texto del eyebrow de sección. En el Perfil del alumno (E4-19) la card vive sola,
+   * por eso el default se autodescribe ("Alarma de descanso"). Dentro del panel de
+   * ajustes del ejecutor la sección ya está rotulada como "Alarma" en la web
+   * (`WorkoutTimerSettingsPanel.tsx:95`, H3 = "Alarma"), así que ahí se pasa `eyebrow="Alarma"`
+   * para paridad textual exacta con el panel web. El copy secundario coincide en ambos.
+   */
+  eyebrow?: string
+}
+
+export function RestAlarmPreference({ eyebrow = 'Alarma de descanso' }: RestAlarmPreferenceProps = {}) {
   const { theme } = useTheme()
   const { muted, sound, volume } = useSyncExternalStore(subscribeRestTimerPrefs, getSnapshot, getSnapshot)
 
@@ -94,7 +105,7 @@ export function RestAlarmPreference() {
           {/* Eyebrow de sección (espeja el H3 web `WorkoutTimerSettingsPanel.tsx:95`:
               `text-xs font-bold uppercase tracking-widest text-muted-foreground`). */}
           <Text className="text-xs font-sans-bold uppercase tracking-[1.2px] text-muted">
-            Alarma de descanso
+            {eyebrow}
           </Text>
           <Text className="text-sm font-sans text-muted mt-1">
             Sonido y volumen cuando termina el descanso.

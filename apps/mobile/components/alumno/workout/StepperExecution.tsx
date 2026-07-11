@@ -164,17 +164,18 @@ export function StepperExecution({
     // Semántica de agrupación del carrusel — paridad web `<section aria-roledescription="carrusel de
     // ejercicios" aria-label="Ejercicios de la rutina">` (StepperExecution.tsx:87-91). El web usa una
     // descripción PURAMENTE textual (`aria-roledescription`) sobre un rol genérico region/group: NO
-    // promete gestos de incremento/decremento. Por eso aquí se deja SOLO el `accessibilityLabel` (espejo
-    // de esa naturaleza descriptiva) y NO `accessibilityRole="adjustable"`: ese rol haría que
-    // VoiceOver/TalkBack anunciaran el contenedor como ajustable y ofrecieran swipe up/down para
-    // "ajustar" que no harían nada (no hay `accessibilityActions`/`onAccessibilityAction` cableados),
-    // prometiendo una interacción inexistente que el web tampoco expone. SIN `accessible={true}` para no
-    // colapsar el foco de los hijos (nav, rail, card): el lector expone la etiqueta del grupo pero sigue
-    // enfocando cada control por separado.
+    // promete gestos de incremento/decremento. RN carece de una API de roledescription de texto libre,
+    // así que el descriptor "carrusel" se PLIEGA dentro del `accessibilityLabel` ("Ejercicios de la
+    // rutina, carrusel") — así el lector SÍ anuncia el descriptor de carrusel como en web, sin recurrir a
+    // `accessibilityRole="adjustable"`: ese rol haría que VoiceOver/TalkBack anunciaran el contenedor
+    // como ajustable y ofrecieran swipe up/down para "ajustar" que no harían nada (no hay
+    // `accessibilityActions`/`onAccessibilityAction` cableados), prometiendo una interacción inexistente
+    // que el web tampoco expone. SIN `accessible={true}` para no colapsar el foco de los hijos (nav,
+    // rail, card): el lector expone la etiqueta del grupo pero sigue enfocando cada control por separado.
     <View
       className="w-full flex-1 self-center"
       style={{ maxWidth: 768 }}
-      accessibilityLabel="Ejercicios de la rutina"
+      accessibilityLabel="Ejercicios de la rutina, carrusel"
     >
       {/* Chrome, rail, paso y pie viven DENTRO del scroll y se desplazan CON el contenido — paridad web:
           los cuatro son hijos del mismo `<section className="…px-4 py-4 pb-32">` en flujo normal de
@@ -267,7 +268,11 @@ export function StepperExecution({
                 // default de framer para un tween de opacidad es `easeInOut` (NO lineal). Se espeja con
                 // `Easing.inOut(Easing.ease)`, el easeInOut estándar. Normal: curva direccional `dirSlide`.
                 transition={{ type: 'timing', duration: motion.reduced ? 120 : 260, easing: motion.reduced ? Easing.inOut(Easing.ease) : DIR_SLIDE }}
-                accessibilityLabel={`Ejercicio ${idx + 1} de ${total}`}
+                // Grupo del paso — paridad web `role="group" aria-roledescription="ejercicio"
+                // aria-label="Ejercicio X de Y"` (StepperExecution.tsx:163-165). RN no tiene
+                // roledescription de texto libre, así que el descriptor "ejercicio" se pliega al final del
+                // `accessibilityLabel` para preservar el matiz de rol que anuncia el lector en web.
+                accessibilityLabel={`Ejercicio ${idx + 1} de ${total}, ejercicio`}
               >
                 {renderStep(idx)}
               </MotiView>

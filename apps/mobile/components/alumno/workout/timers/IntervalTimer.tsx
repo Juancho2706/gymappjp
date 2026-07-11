@@ -82,7 +82,11 @@ export function IntervalTimer({ phases, onClose }: IntervalTimerProps) {
     // fijo idiomático por evento (igual que la web, que ahí no diferencia por patrón).
     if (double) timerHaptics.intervalFinish()
     else timerHaptics.intervalPhase()
-    playTimerCue(double ? 'finish' : 'phase')
+    // Web IntervalTimer.tsx:44 dispara `playTimerSound(readRestTimerSound(), readRestTimerVolume())`
+    // SIN leer ningún flag de mute (`readRestTimerMuted` se consume SOLO en RestTimer.tsx:14,61), así
+    // que mutear el rest-timer NO silencia los beeps de cambio/fin de fase en web (sólo el volumen 0–1).
+    // Para espejarlo, `force: true` omite el gate de mute de `playTimerCue`. La háptica ya sonó arriba.
+    playTimerCue(double ? 'finish' : 'phase', { force: true })
   }, [])
 
   const advance = useCallback(() => {
@@ -213,10 +217,14 @@ export function IntervalTimer({ phases, onClose }: IntervalTimerProps) {
             <Pressable
               testID="interval-timer-wakelock"
               onPress={toggleWakeLock}
-              accessibilityRole="button"
               accessibilityLabel="Mantener pantalla encendida"
-              accessibilityState={{ selected: wakeLockOn }}
-              style={[styles.utilBtn, wakeLockOn ? styles.wakeOn : null]}
+              // Web IntervalTimer.tsx:153 `aria-pressed={wakeLockOn}`: el botón Sun se anuncia como
+              // toggle/pressed. En RN el semántico equivalente es `accessibilityRole="togglebutton"`
+              // + `accessibilityState={{ checked }}` (el lector lo lee como 'activado/desactivado');
+              // `selected` mapeaba a otra semántica (listas/tabs), no a toggle.
+              accessibilityRole="togglebutton"
+              accessibilityState={{ checked: wakeLockOn }}
+              style={({ pressed }) => [styles.utilBtn, wakeLockOn ? styles.wakeOn : null, pressed && styles.utilBtnPressed]}
             >
               <Sun size={14} color={wakeLockOn ? WARNING_500 : ON_DARK_MUTED} />
             </Pressable>
@@ -228,7 +236,7 @@ export function IntervalTimer({ phases, onClose }: IntervalTimerProps) {
                   accessibilityRole="button"
                   accessibilityLabel={isActive ? 'Pausar' : 'Reanudar'}
                   hitSlop={6}
-                  style={styles.utilBtn}
+                  style={({ pressed }) => [styles.utilBtn, pressed && styles.utilBtnPressed]}
                 >
                   {isActive ? <Pause size={14} color={ON_DARK_MUTED} /> : <Play size={14} color={ON_DARK_MUTED} />}
                 </Pressable>
@@ -238,7 +246,7 @@ export function IntervalTimer({ phases, onClose }: IntervalTimerProps) {
                   accessibilityRole="button"
                   accessibilityLabel="Saltar fase"
                   hitSlop={6}
-                  style={styles.utilBtn}
+                  style={({ pressed }) => [styles.utilBtn, pressed && styles.utilBtnPressed]}
                 >
                   <SkipForward size={14} color={ON_DARK_MUTED} />
                 </Pressable>
@@ -249,7 +257,7 @@ export function IntervalTimer({ phases, onClose }: IntervalTimerProps) {
               onPress={onClose}
               accessibilityRole="button"
               accessibilityLabel="Cerrar timer"
-              style={styles.utilBtn}
+              style={({ pressed }) => [styles.utilBtn, pressed && styles.utilBtnPressed]}
             >
               <X size={14} color={ON_DARK_MUTED} />
             </Pressable>
@@ -317,6 +325,10 @@ const styles = StyleSheet.create({
   // 36px + hitSlop dejaba el círculo/pill visible en 36px; ahora es 44px y cumple el touch-target sin
   // hitSlop. borderRadius 22 = diámetro/2.
   utilBtn: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
+  // Feedback táctil de pulsación: espeja el `active:scale-[0.97]` del primitivo web `Button`
+  // (button.tsx:14) que llevan Wake-lock/Pausar/Saltar/Cerrar. `hover:bg-white/10` es sólo desktop
+  // y se omite; el `:active` (touch) se reproduce con scale 0.97 (encima del pill ámbar si wake ON).
+  utilBtnPressed: { transform: [{ scale: 0.97 }] },
   wakeOn: { backgroundColor: `${WARNING_500}1A` }, // warning-500 @ 10% (espeja `bg-[var(--warning-500)]/10`)
   track: { marginTop: 6, height: 4, borderRadius: 999, backgroundColor: TRACK_ON_DARK, overflow: 'hidden' },
   fill: { height: '100%', borderRadius: 999 },

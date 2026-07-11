@@ -128,6 +128,10 @@ export function SubstituteExerciseSheet({ open, onOpenChange, blockId, prescribe
       // split web `shrink-0` header (L76) + `overflow-y-auto` body (L89). El header sigue DENTRO del
       // contenido medido, así que dynamicSizing hugea bien. Es el hijo 0 (abajo).
       stickyHeaderIndices={[0]}
+      // Body `pb` en paridad EXACTA con el web: `pb-[calc(1.25rem+env(safe-area-inset-bottom,0px))]`
+      // = 20px + safe-area (SubstituteExerciseSheet.tsx:89). El default del Sheet compartido es
+      // safe+24; pasamos 20 para igualar el web sin tocar el resto de sheets (prop opt-in, default 24).
+      bodyPadBottomOffset={20}
       forceDark
       // El grabber lo dibuja ESTE componente dentro de su header, igual que el web (el grabber vive en
       // SubstituteExerciseSheet.tsx:77, DENTRO del header; el `sheet.tsx` base web NO trae grabber). Por
@@ -257,9 +261,12 @@ function LoadingSkeleton() {
         <View key={i} className="flex-row items-center rounded-card border border-inverse bg-white/[0.03]" style={styles.row}>
           <Animated.View style={{ opacity, flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
             <View className="rounded-control bg-white/[0.06]" style={styles.thumb} />
+            {/* borderRadius 4 = web `rounded` (0.25rem) de las dos barras (SubstituteExerciseSheet.tsx:96-97).
+                No hay token DS de 4px (la escala de radios arranca en xs=6px) y el web usa aquí el default
+                crudo de Tailwind (no un `--radius-*`), así que el literal 4 es el valor de paridad honesto. */}
             <View style={{ flex: 1, gap: 8 }}>
-              <View className="bg-white/[0.06]" style={{ height: 14, width: '66%', borderRadius: 6 }} />
-              <View className="bg-white/[0.05]" style={{ height: 12, width: '33%', borderRadius: 6 }} />
+              <View className="bg-white/[0.06]" style={{ height: 14, width: '66%', borderRadius: 4 }} />
+              <View className="bg-white/[0.05]" style={{ height: 12, width: '33%', borderRadius: 4 }} />
             </View>
           </Animated.View>
         </View>
@@ -346,7 +353,10 @@ const styles = StyleSheet.create({
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginTop: 4 },
   badge: { paddingHorizontal: 8, paddingVertical: 2 },
   usePill: { paddingHorizontal: 12, paddingVertical: 8 },
-  centerState: { alignItems: 'center', gap: 12, paddingVertical: 40, paddingHorizontal: 8 },
+  // Sin paddingHorizontal propio: el bloque error/vacío hereda SOLO los 20px del contentContainer
+  // del Sheet, igual que el web (`flex flex-col items-center … py-10` sin px propio, hereda el px-5
+  // del body — SubstituteExerciseSheet.tsx:105 y :121). `py-10` = 40px verticales.
+  centerState: { alignItems: 'center', gap: 12, paddingVertical: 40 },
   retryBtn: { paddingHorizontal: 16, minHeight: 44, marginTop: 4 },
   emptyIcon: { width: 56, height: 56 },
 })
