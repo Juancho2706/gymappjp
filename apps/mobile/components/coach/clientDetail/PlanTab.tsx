@@ -8,12 +8,14 @@ import { Button, EmptyState, ProgressBar, Sheet } from '../../../components'
 import { StatCard, CardHeader, Pill, cd, dayName } from './shared'
 import { filterPlansForStructureView, resolveActiveWeekVariantForDisplay } from '../../../lib/program-week-variant'
 import type { CoachClientDetailData, ProgramBlock, ProgramDay } from '../../../lib/coach-client-detail'
+import { getTodayInSantiago } from '../../../lib/date-utils'
 
 function resolveProgramWeek(program: NonNullable<CoachClientDetailData['activeProgram']>): number | null {
   if (!program.start_date) return null
   const start = new Date(`${program.start_date}T12:00:00`).getTime()
   if (!Number.isFinite(start)) return null
-  const diffDays = Math.max(0, Math.floor((Date.now() - start) / 86400000))
+  const today = new Date(`${getTodayInSantiago().iso}T12:00:00`).getTime()
+  const diffDays = Math.max(0, Math.floor((today - start) / 86400000))
   return Math.min(Math.max(1, Math.ceil((diffDays + 1) / 7)), Math.max(1, program.weeks_to_repeat))
 }
 
@@ -22,7 +24,8 @@ export function PlanTab({ data, onEdit }: { data: CoachClientDetailData; onEdit:
   const program = data.activeProgram
   const [selected, setSelected] = useState<ProgramBlock | null>(null)
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set())
-  const todayDow = new Date().getDay() === 0 ? 7 : new Date().getDay()
+  const santiagoToday = new Date(`${getTodayInSantiago().iso}T12:00:00`)
+  const todayDow = santiagoToday.getDay() === 0 ? 7 : santiagoToday.getDay()
 
   if (!program) {
     return (

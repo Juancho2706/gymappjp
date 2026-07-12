@@ -82,7 +82,7 @@ export function avgEnergySince(
 /** Color HEX del nivel de energia (consumo RN). La web usa su propio `energyColor` (clase Tailwind). */
 export function energyColorHex(level: number | null | undefined): string {
   if (level == null) return '#6B7280'
-  if (level >= 8) return '#10B981'
-  if (level >= 5) return '#F59E0B'
+  if (level >= 7) return '#10B981'
+  if (level >= 4) return '#F59E0B'
   return '#EF4444'
 }

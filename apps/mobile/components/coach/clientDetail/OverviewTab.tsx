@@ -5,6 +5,7 @@ import { useRouter } from 'expo-router'
 import { Activity, CalendarDays, Check, ChevronRight, Dumbbell, Flame, HeartPulse, LayoutGrid, Pencil, Ruler, Scale, Wrench } from 'lucide-react-native'
 import { useTheme } from '../../../context/ThemeContext'
 import { Button, ComplianceRing, Input, ProgressBar, SegmentedTabs, Sheet } from '../../../components'
+import { getTodayInSantiago } from '../../../lib/date-utils'
 import { CalendarHeatmap } from '../charts/CalendarHeatmap'
 import { StatCard, CardHeader, MetricBox, Pill, cd, formatDate, dayName, relativeDays } from './shared'
 import {
@@ -93,7 +94,7 @@ export function OverviewTab({
   const latestCheckIn = checkIns[0] ?? null
 
   const recentPhotos = useMemo(
-    () => checkIns.filter((c) => c.front_photo_url).slice(0, 3),
+    () => checkIns.filter((c) => c.front_photo_url || c.side_photo_url || c.back_photo_url).slice(0, 3),
     [checkIns]
   )
 
@@ -104,7 +105,9 @@ export function OverviewTab({
   const checkPct = Math.min(1, compliance.checkInCompliancePercent / 100)
 
   // Próximo entreno (por día de semana).
-  const todayDow = new Date().getDay() === 0 ? 7 : new Date().getDay()
+  const santiagoToday = getTodayInSantiago().iso
+  const todayDate = new Date(`${santiagoToday}T12:00:00`)
+  const todayDow = todayDate.getDay() === 0 ? 7 : todayDate.getDay()
   const nextPlan = useMemo(() => {
     const plans = (activeProgram?.workoutPlans ?? []).filter((p) => p.day_of_week != null)
     if (!plans.length) return null
@@ -114,7 +117,7 @@ export function OverviewTab({
 
   // A-F5: banner de triage (motor de 7 reglas portado).
   const planDaysRemaining = activeProgram?.end_date
-    ? Math.ceil((new Date(`${activeProgram.end_date}T23:59:59`).getTime() - Date.now()) / 86400000)
+    ? Math.ceil((new Date(`${activeProgram.end_date}T12:00:00`).getTime() - todayDate.getTime()) / 86400000)
     : undefined
   const lastWorkoutDate = workoutDates371.length ? workoutDates371[workoutDates371.length - 1] : null
   const topAlert = getProfileTopAlert({
@@ -148,7 +151,7 @@ export function OverviewTab({
         <MetricBox value={`${bestStreak}d`} label="Mejor racha" color="#F59E0B" />
         <MetricBox value={String(sessions30d)} label="Sesiones 30d" />
         <MetricBox value={String(workoutDates371.length)} label="Entrenos (año)" />
-        <MetricBox value={`${compliance.nutritionWeeklyAvgPct}%`} label="Adherencia" />
+        <MetricBox value={`${Math.round(workoutPct * 100)}%`} label="Adherencia" />
         <MetricBox value={delta30 != null ? `${delta30 > 0 ? '+' : ''}${delta30} kg` : '—'} label="Δ peso 30d" color={delta30 == null ? undefined : delta30 > 0 ? '#EF4444' : theme.success} />
         <MetricBox value={currentWeek && activeProgram ? `${currentWeek}/${activeProgram.weeks_to_repeat}` : '—'} label="Semana plan" />
         <MetricBox value={`${compliance.checkInCompliancePercent}%`} label="Regularidad" />
@@ -201,9 +204,10 @@ export function OverviewTab({
           <View style={styles.photoRow}>
             {recentPhotos.map((c) => {
               const photos = [c.front_photo_url, c.side_photo_url, c.back_photo_url].filter(Boolean) as string[]
+              const cover = photos[0]
               return (
                 <TouchableOpacity key={c.id} activeOpacity={0.85} onPress={() => onOpenPhoto(photos, 0)} style={{ alignItems: 'center', gap: 4 }}>
-                  <Image source={{ uri: c.front_photo_url! }} style={[styles.photo, { borderColor: theme.border }]} contentFit="cover" transition={150} />
+                  <Image source={{ uri: cover }} style={[styles.photo, { borderColor: theme.border }]} contentFit="cover" transition={150} />
                   <Text style={[styles.photoDate, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{formatDate(c.date)}</Text>
                 </TouchableOpacity>
               )
@@ -214,6 +218,7 @@ export function OverviewTab({
 
       {/* Biometría editable */}
       <BiometriaCard client={client!} currentWeight={currentWeight} reload={reload} />
+      <Button label="Editar plan" variant="sport" leftIcon={Pencil} onPress={onEditProgram} full />
     </View>
   )
 }

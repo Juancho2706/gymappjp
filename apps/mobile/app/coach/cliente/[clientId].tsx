@@ -34,6 +34,8 @@ import {
 } from '../../../lib/profile-analytics'
 import { exportClientDossierPdf } from '../../../lib/client-dossier-pdf'
 import { getTodayInSantiago } from '../../../lib/date-utils'
+import { daysBetweenCalendar } from '../../../lib/checkin-thresholds'
+import { deriveClientStatus } from '@eva/profile-analytics'
 
 const round1 = (n: number) => Math.round(n * 10) / 10
 
@@ -210,12 +212,23 @@ export default function ClientDetailScreen() {
       ? `Semana ${planCur}`
       : 'Sin programa activo'
 
-  let statusLevel: HeroStatusLevel = 'ok'
-  let statusLabel = 'Al día'
-  const reasons: string[] = []
-  if (client.is_archived) { statusLevel = 'neutral'; statusLabel = 'Archivado' }
-  else if (!client.is_active) { statusLevel = 'neutral'; statusLabel = 'Inactivo' }
-  else if (derived.attention) { statusLevel = 'attention'; statusLabel = 'Atención'; reasons.push(derived.attention) }
+  const todayForStatus = getTodayInSantiago().iso
+  const lastCheckinForStatus = data.checkIns[0]?.date ?? null
+  const lastWorkoutForStatus = data.workoutDates371.length ? data.workoutDates371[data.workoutDates371.length - 1] : null
+  const programDaysRemaining = data.activeProgram?.end_date
+    ? daysBetweenCalendar(todayForStatus, data.activeProgram.end_date)
+    : null
+  const derivedStatus = deriveClientStatus({
+    attentionScore: derived.attention ? 25 : 0,
+    daysSinceCheckin: lastCheckinForStatus ? daysBetweenCalendar(lastCheckinForStatus, todayForStatus) : null,
+    daysSinceWorkout: lastWorkoutForStatus ? daysBetweenCalendar(lastWorkoutForStatus, todayForStatus) : null,
+    hasActiveWorkoutProgram: Boolean(data.activeProgram),
+    nutritionAdherencePct: data.activeNutrition ? data.compliance?.nutritionWeeklyAvgPct ?? null : null,
+    planDaysRemaining: programDaysRemaining,
+  })
+  const statusLevel: HeroStatusLevel = derivedStatus.level
+  const statusLabel = derivedStatus.label
+  const reasons = derivedStatus.reasons
 
   const workoutsThisWeek = data.compliance?.workoutsThisWeek ?? 0
   const workoutsTarget = Math.max(1, data.compliance?.workoutsTarget ?? 1)

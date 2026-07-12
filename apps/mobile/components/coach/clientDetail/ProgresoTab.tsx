@@ -64,19 +64,24 @@ export function ProgresoTab({ data, onOpenPhoto, reload }: { data: CoachClientDe
   return (
     <View style={{ gap: 14 }}>
       {/* AreaChart de peso */}
-      {points.length >= 2 ? (
+      {points.length >= 1 ? (
         <StatCard>
-          <CardHeader icon={Scale} title="Evolución de peso" right={
+          <CardHeader icon={Scale} title="Peso · tendencia" right={
             client ? <GoalWeightEditor client={client} reload={reload} /> : null
           } />
-          <AreaTrend
-            points={points}
-            color={theme.primary}
-            suffix=" kg"
-            decimals={1}
-            referenceY={client?.goal_weight_kg ?? null}
-            onActiveIndex={setActiveIdx}
-          />
+          <Text style={[styles.bmiValue, { color: theme.foreground, fontFamily: 'Archivo_800ExtraBold' }]}>{actual?.toFixed(1)} kg</Text>
+          {points.length >= 2 ? (
+            <AreaTrend
+              points={points}
+              color={theme.primary}
+              suffix=" kg"
+              decimals={1}
+              referenceY={client?.goal_weight_kg ?? null}
+              onActiveIndex={setActiveIdx}
+            />
+          ) : (
+            <Text style={[cd.sub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Registra otro check-in para ver la tendencia.</Text>
+          )}
           {active ? (
             <View style={[styles.tooltip, { backgroundColor: theme.secondary, borderColor: theme.border, borderRadius: theme.radius.lg }]}>
               {active.front_photo_url ? (
@@ -90,9 +95,9 @@ export function ProgresoTab({ data, onOpenPhoto, reload }: { data: CoachClientDe
                 {active.notes ? <Text numberOfLines={2} style={[styles.tipMeta, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{active.notes}</Text> : null}
               </View>
             </View>
-          ) : (
+          ) : points.length >= 2 ? (
             <Text style={[cd.sub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Toca la gráfica para ver cada check-in.</Text>
-          )}
+          ) : null}
         </StatCard>
       ) : null}
 
@@ -371,7 +376,11 @@ function CompositionSection({ clientId, hasModule }: { clientId: string; hasModu
 
   useEffect(() => {
     // Guard de money-safety: aunque el padre solo monta con módulo ON, no pegamos a DB sin él.
-    if (!hasModule) return
+    if (!hasModule) {
+      setRows([])
+      setLoading(false)
+      return
+    }
     let alive = true
     setLoading(true)
     ;(async () => {
@@ -402,6 +411,16 @@ function CompositionSection({ clientId, hasModule }: { clientId: string; hasModu
   }, [hasBia, hasIsak])
 
   const goCapture = () => router.push(`/coach/bodycomp/${clientId}`)
+
+  if (!hasModule) {
+    return (
+      <StatCard>
+        <CardHeader icon={Ruler} title="Composición corporal" />
+        <Text style={[cd.sub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>El módulo de composición corporal está desactivado.</Text>
+        <Button label="Desbloquear" variant="outline" onPress={() => router.push('/coach/(tabs)/settings')} style={{ marginTop: 4 }} />
+      </StatCard>
+    )
+  }
 
   if (loading) {
     return (
