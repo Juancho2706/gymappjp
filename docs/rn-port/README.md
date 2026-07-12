@@ -69,10 +69,11 @@ f) CHECKPOINT   — commit descriptivo + push SIEMPRE antes de la siguiente
 
 ### Lecciones aprendidas (para no repetir)
 
-1. **Criterio de convergencia**: exigir "2 rondas consecutivas en cero
-   absoluto" hace que auditores perfeccionistas nunca cierren (rascan P2
-   infinitos). Usar **"cero P0/P1"** como criterio y tope de rondas como
-   correa. Los P2 se listan y se decide en frío.
+1. **Criterio de convergencia histórico**: Secciones 1–2 usaron "cero P0/P1"
+   y dejaron P2 documentados para evitar auditorías infinitas. Para el cierre
+   1:1, `PLAN-OLAS-1A1.md` reemplaza ese criterio por **cero P2 accionable de
+   paridad**: se corrige toda diferencia observable y sólo se aceptan
+   adaptaciones nativas justificadas.
 2. **Orden de la cola**: en pipelines grandes, las auditorías saturan la
    concurrencia y los fixes quedan atrás. Secciones acotadas (10-15 unidades)
    convergen; olas de 120+ componentes no.
@@ -144,15 +145,20 @@ port + hasta 6 rondas de verificación adversarial.
 
 ## 4. Lo que falta (explícito, por sección)
 
-> Orden recomendado. Cada sección = una ola con el pipeline de §2.
+> El orden y criterio de entrada vigente están en
+> [`PLAN-OLAS-1A1.md`](./PLAN-OLAS-1A1.md). Desde 2026-07-12 no se cierra una
+> unidad con P2 accionables: entra todo delta observable contra el responsive y
+> se excluyen mejoras nativas/refactors sin efecto de paridad.
 
 | # | Sección | Alcance web (fuente de verdad) | Entrada ya pagada |
 |---|---------|-------------------------------|-------------------|
-| 2 | **Dashboard del alumno** | `c/[coach_slug]/dashboard`, `perfil`, `check-in` | **3 P0 del QA del usuario** (tab bar con franja blanca en dark; overlay "Entrenamiento completado" sin scrim; header saludo con texto duplicado) + hallazgos de HeroSection, WeightWidget, AdherenceStrip, StreakWidget, NutritionDailySummary en `ola0-hallazgos.json` |
-| 3 | **Dashboard del coach** | `coach/dashboard`, nav (sidebar/topbar/búsqueda), directorio `coach/clients`, ficha de cliente | Hallazgos de CoachSidebar, CoachTopBar, CoachGlobalSearch, PulseHero/KPIs/Agenda, DirRowCard, ProfileOverviewB3 en `ola0-hallazgos.json` |
-| 4 | **Nutrición (alumno y coach)** | `c/[coach_slug]/nutrition*`, `coach/nutrition-*`, `foods`, `recipes`, `meal-groups` | Hallazgos de MealCard, MealIngredientRow, MacroRingSummary, NutritionTabB5 |
+| 2R | **Cierre absoluto del alumno portado** | Secciones 1–2 + chrome periférico | Cápsula movement/bodycomp, toggle de comidas inline, fuente white-label, P2 visuales comprobados y sheets que fallen en device |
+| 3 | **Dashboard del coach** (activa) | `coach/dashboard`, nav, directorio `coach/clients`, ficha de cliente | 14 specs/briefs existentes; terminar checkpoint antes de 2R |
+| 4A | **Nutrición del alumno** | `c/[coach_slug]/nutrition*` | Requiere specs formales; `MacroRingSummary` tiene divergencia estructural/color confirmada |
+| 4B | **Nutrición del coach** | `coach/nutrition-*`, `foods`, `recipes`, `meal-groups` | Hallazgos de NutritionTabB5 y catálogos |
 | 5 | **Builder del coach** | `coach/builder`, `program-builder`, `workout-programs`, `templates` | Hallazgos de BlockEditSheet, ExerciseBlock |
-| 6 | **Resto** (inventariar) | bodycomp, cardio, movement, exercises, settings, onboarding, auth, tools, support… | Mapa de rutas web ya conocido |
+| 6 | **Resto por dominio** (inventariar) | bodycomp, movement, exercises, settings, onboarding, auth, tools, support… | Dividir en lotes de 10–15 unidades, no una ola monolítica |
+| 7 | **Certificación transversal** | todas las rutas web↔RN | rutas, Ola 0, tokens/crudos, light/dark, marca EVA/custom y QA release |
 
 ### Deuda transversal (no pertenece a una sección)
 
@@ -163,14 +169,14 @@ port + hasta 6 rondas de verificación adversarial.
 
 1. **1,293 discrepancias de la Ola 0 sin aplicar** — se consumen por sección
    (grep por componente en `ola0-hallazgos.json` al tocar cada pantalla); las
-   de primitivas compartidas (Button/Card/Sheet/Dialog…) convendría aplicarlas
-   en una **mini-ola de primitivas** antes de la Sección 3, porque benefician
-   a todas las secciones a la vez.
+   de primitivas compartidas (Button/Card/Sheet/Dialog…) se aplican dentro de
+   la primera unidad que demuestre el delta y luego se regresionan en todos sus
+   consumidores; no se hace un refactor global preventivo.
 2. **91 componentes media/baja sin auditar** de la Ola 0 — los cubren las
    secciones al llegar a sus pantallas.
-3. **Residuos P2 de la Sección 1 + verificación en device** — lista completa
-   por unidad en `porting-status.md`; decidir en frío cuáles residuos P2
-   valen la pena (muchos son compromisos deliberados de design-system).
+3. **Residuos P2 de las Secciones 1–2 + verificación en device** — entran en
+   Ola 2R si son diferencias observables contra web. Sólo se excluyen
+   adaptaciones nativas obligatorias o límites reales documentados.
 4. **QA visual humano por sección** — build por Google Play internal tras
    cada cierre de sección; lo que el usuario vea se registra como P0 de la
    sección siguiente (así se hizo con el dashboard).
@@ -178,8 +184,7 @@ port + hasta 6 rondas de verificación adversarial.
 ## 5. Cómo retomar
 
 1. Leer `docs/porting-status.md` (estado vivo, "Dónde retomar").
-2. Lanzar la siguiente sección con el pipeline de §2 (el script de la
-   Sección 1 sirve de plantilla: inventario→spec→port→verify con tope de
-   rondas; ajustar el criterio de convergencia a "cero P0/P1").
+2. Seguir el orden de `PLAN-OLAS-1A1.md` con el pipeline de §2. El criterio de
+   convergencia es cero P0/P1 **y cero P2 accionable de paridad**.
 3. Checkpoint + push al cierre; actualizar `porting-status.md`; build + QA
    visual humano; los hallazgos del QA entran como P0 de la ola siguiente.

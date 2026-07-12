@@ -127,11 +127,32 @@ Una pasada adicional con **lente de lógica** (no de paridad pixel) sobre unidad
 
 ## Dónde retomar
 
-**Siguiente: Sección 3 — Dashboard del coach completo**, más **QA visual humano en device real de la Sección 2** (requiere build nueva desde `rnmobiledenuevo`, ya que los 3 P0 del QA del 10-jul están resueltos en código pero no re-verificados visualmente en dispositivo). Metodología igual: inventario → spec con evidencia web → implementación → verificación adversarial + lente de lógica. Consumir `docs/rn-port/ola0-hallazgos.json` al tocar cada compartido.
+**Plan vigente:** `docs/rn-port/PLAN-OLAS-1A1.md`. Se mantiene primero la
+**Sección 3 — Dashboard del coach completo** porque su checkpoint de 14 unidades
+ya está activo. Al cerrarlo, sigue **Ola 2R — cierre absoluto del alumno** y
+después **Ola 4A — Nutrición completa del alumno**. El nuevo criterio no acepta
+P2 visuales accionables: todo arreglo debe eliminar una diferencia demostrada
+contra el responsive/PWA; mejoras nativas y refactors sin efecto visible quedan
+fuera.
 
-Deuda que arrastra la Sección 1 (retomar aparte, sólo si se decide en frío): residuos P2 por unidad (ver "Resultado Sección 1" arriba) más verificación QA visual en device real. Los 3 P1 de workout (badge A/B, historial/PR, expo-audio) y el bug sistémico de `border-default` en dark **ya están resueltos** (ver "P1 resueltos" e "Historial de entrenos" arriba).
+Ola 2R incluye: cápsula persistente en movement/bodycomp; toggle inline de
+comidas del Home; propagación de `brand_font_key` donde web usa `--brand-font`;
+residuos visuales comprobados de Secciones 1–2; y smoke de sheets desde frío
+(migrar a `nativeModal` sólo los que reproduzcan el fallo).
 
-Deuda que arrastra la Sección 2 (post-remate): solo los 2 P1 diferidos (cápsula en movement/bodycomp — estructural; toggle de comidas del widget — necesita server-action + cola offline) + residuos P2 por unidad. Los demás P1 de lógica y `cambiosShell` quedaron resueltos en la ola de remate del mismo día.
+Ola 4A rehace la auditoría formal de `c/[coach_slug]/nutrition/**`. Hallazgo de
+entrada confirmado: `MacroRingSummary` web es card inverse, kcal/proteína ember,
+carbos sport white-label y grasas aqua; RN actual es card normal, kcal success y
+carbos azul fijo. No basta recolorear: debe portarse la composición responsive.
+
+Deuda que arrastra la Sección 1: residuos P2 por unidad (ver "Resultado Sección
+1") pasan a Ola 2R si el comparador confirma una diferencia visible contra web,
+más QA visual en device. Los 3 P1 de workout y el bug de `border-default` ya
+están resueltos.
+
+Deuda que arrastra la Sección 2: los 2 P1 diferidos, fuente white-label global y
+residuos P2 accionables pasan a Ola 2R. Los demás P1 de lógica y `cambiosShell`
+quedaron resueltos en la ola de remate.
 
 QA Ronda 6 lote A del CEO (Xiaomi, dark, 2026-07-11, `docs/audits/rn-parity-qa/ronda-6-ceo-20260711.md`) aplicada sobre la rama post-Sección 2: 3 unidades PASS (`gear-settings`, `rest-timer-background`, `lista-rows-tecnica`), 2 unidades pendientes de resultado (`serie-edit-save` QA-1, `share-pr` QA-4/QA-5).
 
@@ -155,5 +176,9 @@ Pendiente: build nueva (nativa si se agregó notifee) + re-test QA-10/QA-14 + sm
 ## Hallazgos pendientes / bloqueos
 
 - ~1,293 discrepancias de componentes compartidos pendientes de aplicar (ver `docs/rn-port/ola0-hallazgos.json`).
-- Sección 1 cerrada con residuos: sólo residuos P2 por unidad + verificación QA visual en device pendiente. Los 3 P1 funcionales (badge Semana A/B, historial previo + detección de PR, `expo-audio`) y el bug sistémico de `border-default` en dark **ya están resueltos** (ver "Resultado Sección 1").
-- Sección 2 cerrada con residuos: ver "Resultado Sección 2" — 5 `cambiosShell` sin aplicar, 4 P1 de lógica dentro de unidad, residuos P2, QA visual en device pendiente de re-confirmar tras fix de los 3 P0.
+- Sección 1: los 3 P1 funcionales y `border-default` están resueltos; los P2
+  observables y QA device pasan a Ola 2R.
+- Sección 2: quedan los 2 P1 diferidos, fuente white-label, P2 accionables y QA
+  device; el resto de P1/cambiosShell quedó resuelto en la ola de remate.
+- Nutrición alumno: falta Ola 4A formal; `MacroRingSummary` tiene divergencia
+  estructural y de contrato de color confirmada.
