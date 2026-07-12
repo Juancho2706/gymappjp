@@ -93,7 +93,7 @@ export default function CoachHomeScreen() {
             <AlertTriangle size={28} color={theme.destructive} strokeWidth={1.9} />
           </View>
           <Text className="font-display-bold text-[18px] text-strong" style={{ textAlign: 'center' }}>
-            Algo falló al cargar el dashboard
+            Algo fallo al cargar el dashboard
           </Text>
           <Text
             className="font-sans text-[13px] text-muted"
