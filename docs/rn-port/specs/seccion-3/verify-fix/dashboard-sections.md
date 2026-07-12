@@ -19,10 +19,23 @@ Fecha: 2026-07-12. Estado: tanda A aplicada; unidad aún abierta.
   tonos sport/success/ember; campana con `useFocusEffect`, imagen y rollback;
   NextStepInset con estructura y tonos web.
 
+## Cerrado en tanda B
+
+- `MobileClientStatsSheet` migrado de modal central a `Sheet nativeModal` con
+  máximo 88%, handle 38×4 y sin botón X, espejo del bottom sheet responsive y
+  sin el primer-present fuera de pantalla de `@gorhom` + Reanimated 4.
+- Cabecera 19 px + promedio 20 px; tabs segmentados Adherencia/Nutrición; copy
+  verbatim y orden ascendente.
+- Filas planas con avatar inicial 34 px, porcentaje mono 12.5, track 5 px y
+  color `sport-500` ≥75 / `warning-500` ≥50 / `danger-500` por debajo.
+- Eliminada del sheet la telemetría RN extra (sparklines, peso, racha, energía,
+  semana y fuerza) ausente en la fuente web.
+- Mapping de dashboard conserva datasets independientes: cada pestaña muestra
+  sólo alumnos presentes en adherencia o nutrición; hint de sets usa `·`
+  verbatim y ya no inventa filas nutricionales a 0%.
+
 ## Pendiente antes de cerrar unidad
 
-- `MobileClientStatsSheet`: promedio en header, color por umbral, anatomía de filas
-  y decidir el host visual bottom-sheet conservando seguridad `nativeModal`.
 - Modales onboarding/free/public-code y sus estados/copy.
 - Barrido final de exports montados, claro/oscuro y marca custom.
 - Gates completos de la tanda y QA visual device.

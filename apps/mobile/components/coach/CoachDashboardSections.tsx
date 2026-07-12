@@ -73,6 +73,7 @@ import type { CoachProfile } from '../../lib/coach'
 import { getRecommendedTier, TIER_CONFIG } from '../../lib/coach-tiers'
 import { canUseNutrition } from '../../lib/coach-tiers'
 import { NativeDialog } from '../NativeDialog'
+import { Sheet } from '../Sheet'
 import { Button } from '../Button'
 import { Card } from '../Card'
 import { StatCard } from '../StatCard'
@@ -3280,31 +3281,10 @@ export function MobileRevenueSheet({
   )
 }
 
-function MiniSparkline({ values, color }: { values: number[]; color: string }) {
-  const max = Math.max(1, ...values)
-  const barW = 8
-  const barGap = 3
-  const h = 22
-  const totalW = values.length * barW + (values.length - 1) * barGap
-  return (
-    <Svg width={totalW} height={h}>
-      {values.map((v, i) => {
-        const barH = Math.max(2, (v / max) * h)
-        return (
-          <Rect
-            key={i}
-            x={i * (barW + barGap)}
-            y={h - barH}
-            width={barW}
-            height={barH}
-            rx={2}
-            fill={color}
-            opacity={0.3 + (v / max) * 0.7}
-          />
-        )
-      })}
-    </Svg>
-  )
+function clientStatsColor(pct: number, theme: ReturnType<typeof useTheme>['theme']): string {
+  if (pct >= 75) return theme.primary
+  if (pct >= 50) return WARNING_500
+  return theme.destructive
 }
 
 export function MobileClientStatsSheet({
@@ -3319,145 +3299,127 @@ export function MobileClientStatsSheet({
   const router = useRouter()
   const { theme } = useTheme()
   const [tab, setTab] = useState<'adherence' | 'nutrition'>('adherence')
-  const sorted = [...clientStats].sort((a, b) => {
+  const rows = clientStats.filter((client) =>
+    tab === 'adherence' ? client.hasAdherenceData : client.hasNutritionData,
+  )
+  const sorted = [...rows].sort((a, b) => {
     const av = tab === 'adherence' ? a.adherencePct : a.nutritionPct
     const bv = tab === 'adherence' ? b.adherencePct : b.nutritionPct
     return av - bv
   })
+  const avg = sorted.length
+    ? Math.round(
+        sorted.reduce(
+          (total, client) => total + (tab === 'adherence' ? client.adherencePct : client.nutritionPct),
+          0,
+        ) / sorted.length,
+      )
+    : 0
 
   return (
-    <NativeDialog open={open} title="Detalle por alumno" onClose={onClose}>
-      <View style={styles.statsSheet}>
-        <Text style={[styles.revenueHint, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
-          Ordenado de menor a mayor cumplimiento.
-        </Text>
-        <View style={styles.statsTabs}>
-          <StatsTabButton active={tab === 'adherence'} label="Adherencia" onPress={() => setTab('adherence')} />
-          <StatsTabButton active={tab === 'nutrition'} label="Nutricion" onPress={() => setTab('nutrition')} />
-        </View>
-        {sorted.length === 0 ? (
-          <Text style={[styles.emptySub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
-            Sin datos.
+    <Sheet
+      open={open}
+      onClose={onClose}
+      nativeModal
+      snapPoints={['88%']}
+      showHandle={false}
+      showCloseButton={false}
+      accessibilityLabel="Detalle por alumno"
+    >
+      <View style={{ marginHorizontal: -2 }}>
+        <View className="mx-auto mb-3.5 h-1 w-[38px] rounded-pill bg-ink-200" />
+        <View className="mb-1 flex-row items-center justify-between">
+          <Text className="font-display-extra text-[19px] text-strong">Detalle por alumno</Text>
+          <Text
+            className="font-display-extra text-[20px]"
+            style={{ color: clientStatsColor(avg, theme), fontVariant: ['tabular-nums'] }}
+          >
+            {avg}%
           </Text>
+        </View>
+
+        <View className="mb-3.5 flex-row gap-[2px] rounded-control bg-surface-sunken p-[3px]">
+          {([
+            ['adherence', 'Adherencia'],
+            ['nutrition', 'Nutrición'],
+          ] as const).map(([key, label]) => {
+            const active = tab === key
+            return (
+              <TouchableOpacity
+                key={key}
+                activeOpacity={0.82}
+                accessibilityRole="tab"
+                accessibilityState={{ selected: active }}
+                onPress={() => setTab(key)}
+                className={`h-9 flex-1 items-center justify-center rounded-control ${active ? 'bg-surface-card' : 'bg-transparent'}`}
+                style={active ? shadow('xs', theme.scheme) : undefined}
+              >
+                <Text className={`font-sans-bold text-[13.5px] ${active ? 'text-strong' : 'text-subtle'}`}>
+                  {label}
+                </Text>
+              </TouchableOpacity>
+            )
+          })}
+        </View>
+
+        <Text className="mb-2.5 font-sans text-[11.5px] text-subtle">
+          Ordenado por menor cumplimiento — los que necesitan ayuda primero.
+        </Text>
+
+        {sorted.length === 0 ? (
+          <Text className="py-8 text-center font-sans text-sm text-muted">Sin datos.</Text>
         ) : (
-          <ScrollView style={styles.statsList} nestedScrollEnabled>
-            {sorted.map((client) => {
-              const pct = tab === 'adherence' ? client.adherencePct : client.nutritionPct
-              const hint = tab === 'adherence' ? client.adherenceHint : client.nutritionHint
-              const sparkValues = tab === 'adherence' ? client.adherenceHistory4w : []
-              const hasDelta = client.weightDelta7d !== null
-              const deltaUp = hasDelta && (client.weightDelta7d ?? 0) >= 0
-              return (
-                <TouchableOpacity
-                  key={client.clientId}
-                  activeOpacity={0.78}
-                  onPress={() => {
-                    onClose()
-                    router.push(`/coach/cliente/${client.clientId}`)
-                  }}
-                  style={[
-                    styles.statsRow,
-                    {
-                      borderColor: theme.border,
-                      backgroundColor: theme.background === '#F5F5F5' ? 'rgba(255,255,255,0.42)' : 'rgba(255,255,255,0.04)',
-                      borderRadius: theme.radius.xl,
-                    },
-                  ]}
-                >
-                  <View style={styles.statsRowHeader}>
-                    <Text style={[styles.rowTitle, { color: theme.foreground, fontFamily: FONT.uiBold }]} numberOfLines={1}>
-                      {client.clientName}
-                    </Text>
-                    <Text style={[styles.statsPct, { color: theme.foreground, fontFamily: FONT.uiBold }]}>
-                      {pct}%
-                    </Text>
-                  </View>
-                  <View style={[styles.progressTrack, { backgroundColor: theme.muted }]}>
-                    <View style={[styles.progressFill, { width: `${pct}%`, backgroundColor: theme.primary }]} />
-                  </View>
-                  <Text style={[styles.rowSub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]} numberOfLines={1}>
-                    {hint}
-                  </Text>
-                  {(sparkValues.length > 0 || hasDelta || client.streak > 0 || client.latestEnergyLevel !== null) ? (
-                    <View style={styles.statsExtras}>
-                      {sparkValues.length > 0 && (
-                        <MiniSparkline values={sparkValues} color={theme.primary} />
-                      )}
-                      {hasDelta && (
-                        <View style={[styles.statsDeltaBadge, { backgroundColor: deltaUp ? 'rgba(16,185,129,0.15)' : 'rgba(244,63,94,0.15)' }]}>
-                          {deltaUp
-                            ? <ArrowUpRight size={11} color="#10B981" />
-                            : <ArrowDownRight size={11} color="#F43F5E" />}
-                          <Text style={[styles.statsDeltaText, { color: deltaUp ? '#10B981' : '#F43F5E', fontFamily: FONT.uiBold }]}>
-                            {Math.abs(client.weightDelta7d ?? 0).toFixed(1)}kg 7d
-                          </Text>
-                        </View>
-                      )}
-                      {client.streak > 0 && (
-                        <View style={[styles.statsChip, { backgroundColor: 'rgba(245,158,11,0.15)' }]}>
-                          <Zap size={11} color="#F59E0B" />
-                          <Text style={[styles.statsChipText, { color: '#F59E0B', fontFamily: FONT.uiBold }]}>
-                            {client.streak}d racha
-                          </Text>
-                        </View>
-                      )}
-                      {client.latestEnergyLevel !== null && (
-                        <View style={[styles.statsChip, { backgroundColor: hexToRgba(theme.primary, 0.12) }]}>
-                          <Text style={[styles.statsChipText, { color: theme.primary, fontFamily: FONT.uiBold }]}>
-                            ⚡ {client.latestEnergyLevel}/10
-                          </Text>
-                        </View>
-                      )}
+          <ScrollView style={{ maxHeight: 520 }} showsVerticalScrollIndicator={false}>
+            <View style={{ gap: 2 }}>
+              {sorted.map((client) => {
+                const pct = tab === 'adherence' ? client.adherencePct : client.nutritionPct
+                const hint = tab === 'adherence' ? client.adherenceHint : client.nutritionHint
+                const color = clientStatsColor(pct, theme)
+                return (
+                  <TouchableOpacity
+                    key={client.clientId}
+                    activeOpacity={0.82}
+                    onPress={() => {
+                      onClose()
+                      router.push(`/coach/cliente/${client.clientId}`)
+                    }}
+                    className="flex-row items-center gap-3 px-1 py-2.5"
+                  >
+                    <View className="h-[34px] w-[34px] shrink-0 items-center justify-center rounded-pill bg-ink-900">
+                      <Text className="font-display-extra text-sm text-sport-400">
+                        {client.clientName.charAt(0)}
+                      </Text>
                     </View>
-                  ) : null}
-                  {(client.planCurrentWeek !== null || client.oneRMDelta !== null) ? (
-                    <View style={styles.statsExtras}>
-                      {client.planCurrentWeek !== null && client.planTotalWeeks !== null && (
-                        <Text style={[styles.statsPlanText, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
-                          Semana {client.planCurrentWeek}/{client.planTotalWeeks}
-                          {client.planDaysRemaining ? ` · ${client.planDaysRemaining}d restantes` : ''}
+                    <View className="min-w-0 flex-1">
+                      <View className="mb-[5px] flex-row items-baseline justify-between">
+                        <Text className="flex-1 font-sans-bold text-[13.5px] text-strong" numberOfLines={1}>
+                          {client.clientName}
                         </Text>
-                      )}
-                      {client.oneRMDelta !== null && (
-                        <View style={[styles.statsDeltaBadge, { backgroundColor: client.oneRMDelta >= 0 ? 'rgba(16,185,129,0.15)' : 'rgba(244,63,94,0.15)' }]}>
-                          {client.oneRMDelta >= 0
-                            ? <TrendingUp size={11} color="#10B981" />
-                            : <TrendingDown size={11} color="#F43F5E" />}
-                          <Text style={[styles.statsDeltaText, { color: client.oneRMDelta >= 0 ? '#10B981' : '#F43F5E', fontFamily: FONT.uiBold }]}>
-                            {client.oneRMDelta > 0 ? '+' : ''}{client.oneRMDelta.toFixed(1)}% fuerza 7d
-                          </Text>
-                        </View>
-                      )}
+                        <Text
+                          className="ml-2 shrink-0 text-[12.5px]"
+                          style={{ color, fontFamily: FONT.monoBold, fontVariant: ['tabular-nums'] }}
+                        >
+                          {pct}%
+                        </Text>
+                      </View>
+                      <View className="h-[5px] w-full overflow-hidden rounded-pill bg-track">
+                        <View
+                          className="h-full rounded-pill"
+                          style={{ width: `${Math.max(0, Math.min(100, pct))}%`, backgroundColor: color }}
+                        />
+                      </View>
+                      <Text className="mt-1 font-sans text-[11px] text-subtle" numberOfLines={1}>
+                        {hint}
+                      </Text>
                     </View>
-                  ) : null}
-                </TouchableOpacity>
-              )
-            })}
+                  </TouchableOpacity>
+                )
+              })}
+            </View>
           </ScrollView>
         )}
       </View>
-    </NativeDialog>
-  )
-}
-
-function StatsTabButton({ active, label, onPress }: { active: boolean; label: string; onPress: () => void }) {
-  const { theme } = useTheme()
-  return (
-    <TouchableOpacity
-      activeOpacity={0.8}
-      onPress={onPress}
-      style={[
-        styles.statsTab,
-        {
-          backgroundColor: active ? theme.primary : theme.muted,
-          borderRadius: 999,
-        },
-      ]}
-    >
-      <Text style={[styles.statsTabText, { color: active ? '#FFFFFF' : theme.mutedForeground, fontFamily: FONT.uiBold }]}>
-        {label}
-      </Text>
-    </TouchableOpacity>
+    </Sheet>
   )
 }
 
@@ -4336,50 +4298,6 @@ const styles = StyleSheet.create({
     fontSize: 10,
     letterSpacing: 0.7,
     textTransform: 'uppercase',
-  },
-  statsSheet: {
-    gap: 12,
-  },
-  statsTabs: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  statsTab: {
-    flex: 1,
-    minHeight: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 12,
-  },
-  statsTabText: {
-    fontSize: 13,
-  },
-  statsList: {
-    maxHeight: 430,
-  },
-  statsRow: {
-    borderWidth: 1,
-    padding: 12,
-    gap: 8,
-    marginBottom: 10,
-  },
-  statsRowHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 12,
-  },
-  statsPct: {
-    fontSize: 14,
-  },
-  progressTrack: {
-    height: 6,
-    borderRadius: 999,
-    overflow: 'hidden',
-  },
-  progressFill: {
-    height: '100%',
-    borderRadius: 999,
   },
   emptyPanel: {
     alignItems: 'center',

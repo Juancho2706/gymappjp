@@ -62,6 +62,8 @@ export type MobileClientPaymentSummary = {
 export type MobileClientStats = {
   clientId: string
   clientName: string
+  hasAdherenceData: boolean
+  hasNutritionData: boolean
   adherencePct: number
   nutritionPct: number
   adherenceHint: string
@@ -328,30 +330,35 @@ type MobileDashboardApiResponse = {
 }
 
 function mapApiDashboard(payload: MobileDashboardApiResponse): MobileDashboardData {
+  const adherenceByClient = new Map(payload.dashboard.adherenceStats.map((stat) => [stat.clientId, stat]))
   const nutritionByClient = new Map(payload.dashboard.nutritionStats.map((stat) => [stat.clientId, stat]))
 
-  const clientStats: MobileClientStats[] = payload.dashboard.adherenceStats.map((stat) => {
-    const nutrition = nutritionByClient.get(stat.clientId)
+  const clientIds = new Set([...adherenceByClient.keys(), ...nutritionByClient.keys()])
+  const clientStats: MobileClientStats[] = [...clientIds].map((clientId) => {
+    const stat = adherenceByClient.get(clientId)
+    const nutrition = nutritionByClient.get(clientId)
     return {
-      clientId: stat.clientId,
-      clientName: stat.clientName,
-      adherencePct: stat.percentage,
+      clientId,
+      clientName: stat?.clientName ?? nutrition?.clientName ?? '',
+      hasAdherenceData: Boolean(stat),
+      hasNutritionData: Boolean(nutrition),
+      adherencePct: stat?.percentage ?? 0,
       nutritionPct: nutrition?.percentage ?? 0,
-      adherenceHint: `${stat.completedSets}/${stat.totalSets} sets - ${stat.lastPlan}`,
+      adherenceHint: stat ? `${stat.completedSets}/${stat.totalSets} sets · ${stat.lastPlan}` : '',
       nutritionHint: nutrition
         ? `${Math.round(nutrition.consumed.cal)} / ${Math.round(nutrition.target.cal)} kcal`
-        : 'Sin datos de nutricion',
-      adherenceHistory4w: stat.adherenceHistory4w ?? [],
-      weightHistory30d: stat.weightHistory30d ?? [],
-      currentWeight: stat.currentWeight ?? null,
-      weightDelta7d: stat.weightDelta7d ?? null,
-      oneRMDelta: stat.oneRMDelta ?? null,
-      streak: stat.streak ?? 0,
-      latestEnergyLevel: stat.latestEnergyLevel ?? null,
-      planDaysRemaining: stat.planDaysRemaining ?? null,
-      planCurrentWeek: stat.planCurrentWeek ?? null,
-      planTotalWeeks: stat.planTotalWeeks ?? null,
-      attentionScore: stat.attentionScore ?? 0,
+        : '',
+      adherenceHistory4w: stat?.adherenceHistory4w ?? [],
+      weightHistory30d: stat?.weightHistory30d ?? [],
+      currentWeight: stat?.currentWeight ?? null,
+      weightDelta7d: stat?.weightDelta7d ?? null,
+      oneRMDelta: stat?.oneRMDelta ?? null,
+      streak: stat?.streak ?? 0,
+      latestEnergyLevel: stat?.latestEnergyLevel ?? null,
+      planDaysRemaining: stat?.planDaysRemaining ?? null,
+      planCurrentWeek: stat?.planCurrentWeek ?? null,
+      planTotalWeeks: stat?.planTotalWeeks ?? null,
+      attentionScore: stat?.attentionScore ?? 0,
     }
   })
 
@@ -685,6 +692,8 @@ async function getCoachDashboardDataMobileLocal(): Promise<MobileDashboardData |
     return {
       clientId: client.id,
       clientName: client.full_name,
+      hasAdherenceData: true,
+      hasNutritionData: nutritionPctByClient.has(client.id),
       adherencePct,
       nutritionPct,
       adherenceHint: latestWorkoutRow ? `Ultimo entreno: ${latestWorkoutRow.logged_at.slice(0, 10)}` : 'Sin entrenos en 30 dias',
