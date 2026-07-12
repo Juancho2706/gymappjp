@@ -257,7 +257,7 @@ async function persistProgram(opts: {
 }
 
 export default function ProgramBuilderScreen() {
-  const { clientId, clientName, templateId, mode } = useLocalSearchParams<{ clientId?: string; clientName?: string; templateId?: string; mode?: string }>()
+  const { clientId, clientName, templateId, programId: programIdParam, mode } = useLocalSearchParams<{ clientId?: string; clientName?: string; templateId?: string; programId?: string; mode?: string }>()
   // Template mode = build/edit a reusable program with client_id null (no client).
   const isTemplate = mode === 'template' || !!templateId
   const { theme, resolvedScheme } = useTheme()
@@ -419,12 +419,21 @@ export default function ProgramBuilderScreen() {
         () => {
           const q = supabase.from('workout_programs').select(PROGRAM_SELECT_RICH)
           if (templateId) return q.eq('id', templateId).maybeSingle()
-          const cq = q.eq('client_id', clientId!).eq('is_active', true)
+          // P1 buscador: abrir el programa CONCRETO por id (espejo web builder/[clientId]?programId,
+          // builder.queries.ts:84-97 filtra por `id`, NO por is_active). Sin programId → el programa
+          // activo del alumno (default RN al entrar desde la ficha).
+          const cq = programIdParam
+            ? q.eq('id', programIdParam).eq('client_id', clientId!)
+            : q.eq('client_id', clientId!).eq('is_active', true)
           return (orgId ? cq.eq('org_id', orgId) : cq.is('org_id', null)).maybeSingle()
         },
         () => {
           const q = supabase.from('workout_programs').select(PROGRAM_SELECT)
-          return templateId ? q.eq('id', templateId).maybeSingle() : q.eq('client_id', clientId!).eq('is_active', true).maybeSingle()
+          if (templateId) return q.eq('id', templateId).maybeSingle()
+          const cq = programIdParam
+            ? q.eq('id', programIdParam).eq('client_id', clientId!)
+            : q.eq('client_id', clientId!).eq('is_active', true)
+          return cq.maybeSingle()
         }
       )
 
@@ -457,7 +466,7 @@ export default function ProgramBuilderScreen() {
       reshapeReady.current = true
       setLoading(false)
     })()
-  }, [clientId, templateId])
+  }, [clientId, templateId, programIdParam])
 
   // Autosave del borrador (debounce). Pausado mientras se ofrece restaurar uno previo.
   useEffect(() => {

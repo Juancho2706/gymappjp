@@ -1,6 +1,7 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Alert, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import type { ViewStyle } from 'react-native'
+import { useFocusEffect, useLocalSearchParams } from 'expo-router'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { FlashList } from '@shopify/flash-list'
 import { Image } from 'expo-image'
@@ -39,6 +40,9 @@ type ListItem = { type: 'header'; muscle: string; count: number } | { type: 'row
 export default function EjerciciosScreen() {
   const { theme } = useTheme()
   const insets = useSafeAreaInsets()
+  // Buscador global del coach → navega a `/coach/ejercicios?q=<nombre>` (CoachSearchPalette).
+  // Espejo web: ExerciseCatalogClient.tsx:38 siembra `search` desde `searchParams.get('q')`.
+  const params = useLocalSearchParams<{ q?: string | string[] }>()
   const formRef = useRef<BottomSheetModal>(null)
   const previewRef = useRef<BottomSheetModal>(null)
 
@@ -67,6 +71,16 @@ export default function EjerciciosScreen() {
   }, [])
 
   useEffect(() => { load() }, [load])
+
+  // Siembra la búsqueda desde `?q` al enfocar el tab (gotcha 6b: los tabs no se desmontan, así que
+  // un `useEffect` de un disparo no vería un `q` nuevo llegado tras el primer montaje).
+  useFocusEffect(
+    useCallback(() => {
+      const raw = params.q
+      const incoming = Array.isArray(raw) ? raw[0] : raw
+      if (incoming != null && incoming.length > 0) setQuery(incoming)
+    }, [params.q])
+  )
 
   const customCount = useMemo(() => exercises.filter((e) => e.isOwn).length, [exercises])
   const systemCount = exercises.length - customCount

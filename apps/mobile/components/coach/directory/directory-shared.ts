@@ -49,29 +49,36 @@ export function lastInfo(date: string | null): { label: string; dot: string } {
   return { label: `Hace ${days}d`, dot }
 }
 
+// Orden/labels 1:1 con el web (`DirectoryActionBar` → `directory-types.ts:22-29`).
+// Los `value` son las claves internas del motor de orden RN (`sortClients`), NO se
+// tocan; solo el label + el orden de aparición espejan el sort-sheet web.
 export const SORT_OPTIONS: { label: string; value: DirectorySortKey }[] = [
   { label: 'Urgencia (default)', value: 'attention_score' },
   { label: 'Nombre A→Z', value: 'name_asc' },
-  { label: 'Última sesión', value: 'last_workout' },
-  { label: 'Días plan restantes', value: 'plan_days' },
-  { label: 'Adherencia', value: 'adherence' },
+  { label: 'Última actividad', value: 'last_workout' },
+  { label: 'Adherencia ↓', value: 'adherence' },
   { label: 'Peso: mayor cambio', value: 'weight_change' },
+  { label: 'Días programa', value: 'plan_days' },
 ]
 
+// Labels del chip de estado 1:1 con el web (`DirectoryActionBar.tsx:158-163`
+// `statusLabels`). Solo consumido por el chip activo en `clientes.tsx`.
 export const STATUS_OPTIONS: { label: string; value: StatusFilter }[] = [
   { label: 'Todos', value: 'any' },
-  { label: 'Activos', value: 'active' },
-  { label: 'Pausados', value: 'paused' },
-  { label: 'Cambio de contraseña pendiente', value: 'pending_sync' },
+  { label: 'Activo', value: 'active' },
+  { label: 'Pausado', value: 'paused' },
+  { label: 'Pendiente sync', value: 'pending_sync' },
   { label: 'Archivados', value: 'archived' },
 ]
 
+// Labels del chip de riesgo/programa 1:1 con el web (`DirectoryActionBar.tsx:150-168`
+// `riskLabels` + `programLabels`; el modelo RN funde ambos en `riskFilter`).
 export const RISK_LABELS: Record<string, string> = {
-  urgent: 'Riesgo',
-  review: 'Atención',
+  urgent: 'Atención urgente',
+  review: 'En riesgo',
   on_track: 'On track',
   expired_program: 'Programa vencido',
-  password_reset: 'Cambio de contraseña',
+  password_reset: 'Pendiente sync',
   no_program: 'Sin programa',
   with_program: 'Con programa',
   nutrition_low: 'Nutrición baja',

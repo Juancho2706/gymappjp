@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { Linking, ScrollView, Share, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
-import { useRouter } from 'expo-router'
+import { useFocusEffect, useRouter } from 'expo-router'
 import * as Clipboard from 'expo-clipboard'
 import { Image } from 'expo-image'
 import {
@@ -307,7 +307,9 @@ function MobileBanner({
   onPress?: () => void
 }) {
   const { theme } = useTheme()
-  const toneColor = tone === 'danger' ? '#F43F5E' : tone === 'warn' ? '#F59E0B' : theme.primary
+  // danger → token danger-500 (theme.destructive #F4365A), no rose-500 #F43F5E
+  // (web BillingBanners.tsx:97 usa var(--danger-500)); warn = warning-500, info = sport (theme.primary).
+  const toneColor = tone === 'danger' ? theme.destructive : tone === 'warn' ? '#F59E0B' : theme.primary
   return (
     <TouchableOpacity
       activeOpacity={0.84}
@@ -1960,6 +1962,14 @@ function NewsFeedRow({ item, onNavigate }: { item: CoachNewsItem; onNavigate: ()
           {item.title}
         </Text>
         <NewsContent text={item.content} />
+        {item.image_url ? (
+          // Espejo de NewsBellButton.tsx:151-160 (mt-1.5 max-h-40 w-full rounded-md object-cover).
+          <Image
+            source={{ uri: item.image_url }}
+            style={{ marginTop: 6, width: '100%', height: 160, borderRadius: theme.radius.md }}
+            contentFit="cover"
+          />
+        ) : null}
         {item.cta_url ? (
           <TouchableOpacity
             activeOpacity={0.8}
@@ -1988,28 +1998,37 @@ export function CoachNewsBell({ tileStyle }: { tileStyle: object }) {
   const [unreadCount, setUnreadCount] = useState(0)
   const [open, setOpen] = useState(false)
 
-  useEffect(() => {
-    let mounted = true
-    getCoachNews()
-      .then((res) => {
-        if (!mounted) return
-        setItems(res.items ?? [])
-        setUnreadCount(res.unreadCount ?? 0)
-      })
-      .catch(() => {
-        // Silencioso: la campana es no-critica; sin novedades = sin badge.
-      })
-    return () => {
-      mounted = false
-    }
-  }, [])
+  // Gotcha 6b: la campana vive en un tab de expo-router que NO se desmonta → un
+  // `useEffect` de un disparo congela el badge. `useFocusEffect` refetcha el feed
+  // en cada foco de home (espejo del refresh en `visibilitychange` del
+  // NewsFeedProvider web) para que el conteo refleje la verdad del servidor.
+  useFocusEffect(
+    useCallback(() => {
+      let active = true
+      getCoachNews()
+        .then((res) => {
+          if (!active) return
+          setItems(res.items ?? [])
+          setUnreadCount(res.unreadCount ?? 0)
+        })
+        .catch(() => {
+          // Silencioso: la campana es no-critica; sin novedades = sin badge.
+        })
+      return () => {
+        active = false
+      }
+    }, [])
+  )
 
   const openSheet = useCallback(() => {
     setOpen(true)
     if (unreadCount > 0) {
+      const previousCount = unreadCount
       setUnreadCount(0)
       markCoachNewsRead().catch(() => {
-        // Si falla, el badge reaparece en el proximo fetch (al re-montar el home).
+        // Rollback optimista (espejo de `setUnreadCount(previousCount)` del
+        // NewsFeedProvider web): si el POST falla, restaura el badge.
+        setUnreadCount(previousCount)
       })
     }
   }, [unreadCount])
@@ -2191,7 +2210,9 @@ export function MobilePulseHero({
             </Text>
             <Text
               className="font-display-bold text-[27px]"
-              style={{ lineHeight: 27, letterSpacing: -0.27, color: s.danger ? theme.destructive : theme.foreground, fontVariant: ['tabular-nums'] }}
+              // Número "En riesgo" = danger-600 scheme-aware (web PulseHero.tsx:106-108
+              // usa var(--danger-600): light #BE183C / dark #FF7C97), NO danger-500.
+              style={{ lineHeight: 27, letterSpacing: -0.27, color: s.danger ? (resolvedScheme === 'dark' ? '#FF7C97' : '#BE183C') : theme.foreground, fontVariant: ['tabular-nums'] }}
             >
               {s.value}
             </Text>

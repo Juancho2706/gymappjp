@@ -38,7 +38,7 @@ export function DirectoryOptionSheet({
               style={[styles.option, { backgroundColor: active ? theme.muted : 'transparent' }]}
               onPress={() => { onSelect(opt.value); onClose() }}
             >
-              <View style={{ width: 18 }}>{active ? <Check size={16} color={theme.primary} /> : null}</View>
+              <View style={{ width: 18 }}>{active ? <Check size={15} color={theme.primary} /> : null}</View>
               <Text
                 style={[
                   styles.optionText,
@@ -57,7 +57,7 @@ export function DirectoryOptionSheet({
 }
 
 const styles = StyleSheet.create({
-  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' },
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)' },
   sheet: {
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
@@ -69,5 +69,5 @@ const styles = StyleSheet.create({
   handle: { width: 36, height: 4, borderRadius: 2, alignSelf: 'center', marginBottom: 16 },
   title: { fontSize: 18, marginBottom: 8, fontFamily: FONT.displayBold },
   option: { flexDirection: 'row', alignItems: 'center', gap: 10, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 12 },
-  optionText: { fontSize: 15 },
+  optionText: { fontSize: 13.5 },
 })

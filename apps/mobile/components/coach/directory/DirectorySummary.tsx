@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react'
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native'
+import { useEffect, useRef, useState } from 'react'
+import { Animated, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
+import { MotiView } from 'moti'
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { AlertOctagon, AlertTriangle, ChevronDown, ChevronRight } from 'lucide-react-native'
+import { AlertOctagon, AlertTriangle, ArrowRight, ChevronDown } from 'lucide-react-native'
 import { useTheme } from '../../../context/ThemeContext'
 import { FONT } from '../../../lib/typography'
 import type { DirectoryRiskFilter, DirectoryStats } from '../../../lib/clients-directory'
@@ -10,8 +11,24 @@ import { DANGER, EMBER, WARNING } from './directory-shared'
 /**
  * DirectorySummary — "Resumen · hoy" (triage). Realización móvil del web `CoachWarRoom`:
  * 2 PulseCard jerárquicas (Riesgo / Atención, botón-filtro) + grilla de 4 MetricChip
- * (Total / Activos / On track / Sin plan). Cada tile filtra el directorio.
+ * (Total / Activos / Adher. / Nutri.). Cada tile filtra el directorio.
  */
+
+/**
+ * Count-up al montar/cambiar el valor — espejo del `AnimatedNumber` web
+ * (framer `useSpring` stiffness 120 / damping 22 / mass 0.4, `CoachWarRoom.tsx:47-61`).
+ * useNativeDriver false porque leemos el valor en JS para pintar el texto.
+ */
+function useCountUp(value: number): number {
+  const anim = useRef(new Animated.Value(0)).current
+  const [display, setDisplay] = useState(0)
+  useEffect(() => {
+    const id = anim.addListener((s) => setDisplay(Math.round(s.value)))
+    Animated.spring(anim, { toValue: value, stiffness: 120, damping: 22, mass: 0.4, useNativeDriver: false }).start()
+    return () => anim.removeListener(id)
+  }, [value, anim])
+  return display
+}
 
 // ─── Pulse card (prioridad: Riesgo / Atención) — botón-filtro jerárquico ───────
 function PulseCard({
@@ -35,10 +52,16 @@ function PulseCard({
 }) {
   const { theme } = useTheme()
   const color = tone === 'danger' ? DANGER : WARNING
-  const fg = selected ? '#fff' : color
+  // Espejo web (`DirPulseCard`): label = text-white/95, flecha/valor = white pleno,
+  // hint = text-white/80 cuando `selected` (CoachWarRoom.tsx:110,117,123,128).
+  const labelColor = selected ? 'rgba(255,255,255,0.95)' : color
+  const valueColor = selected ? '#fff' : value > 0 ? color : theme.mutedForeground
+  const shown = useCountUp(value)
   return (
     <TouchableOpacity
       testID={testID}
+      accessibilityRole="button"
+      accessibilityState={{ selected }}
       style={[
         pulseStyles.card,
         {
@@ -51,13 +74,13 @@ function PulseCard({
     >
       <View style={pulseStyles.top}>
         <View style={pulseStyles.labelRow}>
-          <Icon size={14} color={fg} />
-          <Text style={[pulseStyles.label, { color: fg }]}>{label}</Text>
+          <Icon size={14} color={labelColor} />
+          <Text style={[pulseStyles.label, { color: labelColor }]}>{label}</Text>
         </View>
-        {value > 0 ? <ChevronRight size={15} color={fg} /> : null}
+        {value > 0 ? <ArrowRight size={15} color={selected ? '#fff' : color} /> : null}
       </View>
-      <Text style={[pulseStyles.value, { color: selected ? '#fff' : value > 0 ? color : theme.mutedForeground }]}>{value}</Text>
-      <Text numberOfLines={1} style={[pulseStyles.hint, { color: selected ? 'rgba(255,255,255,0.85)' : theme.mutedForeground }]}>{hint}</Text>
+      <Text style={[pulseStyles.value, { color: valueColor }]}>{shown}</Text>
+      <Text numberOfLines={1} style={[pulseStyles.hint, { color: selected ? 'rgba(255,255,255,0.8)' : theme.mutedForeground }]}>{hint}</Text>
     </TouchableOpacity>
   )
 }
@@ -81,9 +104,15 @@ function MetricChip({
   testID?: string
 }) {
   const { theme } = useTheme()
+  const shown = useCountUp(value)
+  // P0 (Ola0): el chip seleccionado pinta el fondo con `theme.foreground` (dark = casi-blanco);
+  // el texto debe usar `theme.card` — su inverso REAL en ambos temas (espejo web `--surface-card`,
+  // CoachWarRoom.tsx:162-166,175). `#fff` sobre `theme.foreground` = invisible en dark.
   return (
     <TouchableOpacity
       testID={testID}
+      accessibilityRole="button"
+      accessibilityState={{ selected, disabled: !onPress }}
       disabled={!onPress}
       onPress={onPress}
       activeOpacity={onPress ? 0.8 : 1}
@@ -95,11 +124,11 @@ function MetricChip({
         },
       ]}
     >
-      <Text numberOfLines={1} style={[chipStyles.value, { color: selected ? '#fff' : color }]}>
-        {value}
+      <Text numberOfLines={1} style={[chipStyles.value, { color: selected ? theme.card : color }]}>
+        {shown}
         {suffix ?? ''}
       </Text>
-      <Text numberOfLines={1} style={[chipStyles.label, { color: selected ? 'rgba(255,255,255,0.72)' : theme.mutedForeground }]}>{label}</Text>
+      <Text numberOfLines={1} style={[chipStyles.label, { color: selected ? theme.card : theme.mutedForeground, opacity: selected ? 0.7 : 1 }]}>{label}</Text>
     </TouchableOpacity>
   )
 }
@@ -162,7 +191,7 @@ export function DirectorySummary({
       </TouchableOpacity>
 
       {open ? (
-        <>
+        <MotiView from={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ type: 'timing', duration: 220 }} style={styles.expanded}>
           <View style={styles.pulseRow}>
             {pulseTiles.map((t) => (
               <PulseCard key={t.key} testID={`directory-pulse-${t.key}`} label={t.label} value={t.value} hint={t.hint} tone={t.tone} icon={t.icon}
@@ -175,14 +204,15 @@ export function DirectorySummary({
                 selected={t.selected} onPress={t.onPress} />
             ))}
           </View>
-        </>
+        </MotiView>
       ) : null}
     </View>
   )
 }
 
 const pulseStyles = StyleSheet.create({
-  card: { flex: 1, minWidth: 0, gap: 5, padding: 14, borderRadius: 20, borderWidth: 1.5 },
+  // Espejo web px-3.5 py-[13px] (CoachWarRoom.tsx:102): H 14 / V 13.
+  card: { flex: 1, minWidth: 0, gap: 5, paddingHorizontal: 14, paddingVertical: 13, borderRadius: 20, borderWidth: 1.5 },
   top: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   labelRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   label: { fontSize: 11.5, fontFamily: FONT.uiExtra, letterSpacing: 0.23 },
@@ -191,7 +221,8 @@ const pulseStyles = StyleSheet.create({
 })
 
 const chipStyles = StyleSheet.create({
-  chip: { flex: 1, minWidth: 0, gap: 1, paddingHorizontal: 8, paddingVertical: 9, borderRadius: 14, borderWidth: 1.5 },
+  // Espejo web px-[7px] py-2 (CoachWarRoom.tsx:157): H 7 / V 8.
+  chip: { flex: 1, minWidth: 0, gap: 1, paddingHorizontal: 7, paddingVertical: 8, borderRadius: 14, borderWidth: 1.5 },
   value: { fontSize: 15.5, lineHeight: 17, fontFamily: FONT.displayBlack, fontVariant: ['tabular-nums'] },
   label: { fontSize: 9.5, fontFamily: FONT.uiSemibold },
 })
@@ -201,6 +232,7 @@ const styles = StyleSheet.create({
   eyebrowRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 2 },
   eyebrow: { fontSize: 11, fontFamily: FONT.uiExtra, textTransform: 'uppercase', letterSpacing: 0.88 },
   collapsed: { flex: 1, fontSize: 12, fontFamily: FONT.uiMedium },
+  expanded: { gap: 8 }, // espejo web `space-y-2` dentro del bloque animate-fade-in
   pulseRow: { flexDirection: 'row', gap: 8 },
   metricRow: { flexDirection: 'row', gap: 6 },
 })

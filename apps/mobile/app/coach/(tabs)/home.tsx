@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { RefreshControl, Text, View } from 'react-native'
-import { useRouter } from 'expo-router'
-import { AlertTriangle } from 'lucide-react-native'
+import { useFocusEffect, useRouter } from 'expo-router'
+import { AlertTriangle, RotateCcw } from 'lucide-react-native'
 import { CoachMainWrapper } from '../../../components/coach/CoachMainWrapper'
 import { Button } from '../../../components/Button'
 import { EvaLoaderScreen } from '../../../components/EvaLoader'
@@ -30,6 +30,8 @@ export default function CoachHomeScreen() {
   const [data, setData] = useState<MobileDashboardData | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [statsOpen, setStatsOpen] = useState(false)
+  // Espejo de `data` para decidir initial vs refresh en cada foco sin re-disparar en loop.
+  const dataRef = useRef<MobileDashboardData | null>(null)
 
   const load = useCallback(async (mode: 'initial' | 'refresh' = 'initial') => {
     if (mode === 'initial') setLoading(true)
@@ -39,6 +41,7 @@ export default function CoachHomeScreen() {
     try {
       const next = await getCoachDashboardDataMobile()
       setData(next)
+      dataRef.current = next
       if (!next) setError('No se pudo cargar tu perfil de coach.')
     } catch {
       setError('No se pudo cargar el dashboard.')
@@ -48,17 +51,34 @@ export default function CoachHomeScreen() {
     }
   }, [])
 
-  useEffect(() => {
-    load()
-  }, [load])
+  // Gotcha 6b: el tab de expo-router no se desmonta → un `useEffect` de un disparo
+  // congela KPIs/agenda al volver. `useFocusEffect` refetcha en cada foco: 'initial'
+  // (loader full-screen) la primera vez / tras error; 'refresh' (barra) si ya hay datos.
+  useFocusEffect(
+    useCallback(() => {
+      void load(dataRef.current ? 'refresh' : 'initial')
+    }, [load])
+  )
 
   if (loading) {
     return <EvaLoaderScreen subtitle="Cargando tu panel…" />
   }
 
-  if (!data || error) {
+  // Solo la ausencia de datos reemplaza el dashboard (paridad con el error boundary web,
+  // que solo pinta la card en un throw de render y jamas descarta contenido ya pintado).
+  // Un pull-to-refresh fallido setea `error` pero conserva `data` → dashboard intacto.
+  if (!data) {
     return (
-      <CoachMainWrapper>
+      <CoachMainWrapper
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => load('refresh')}
+            tintColor={theme.primary}
+            colors={[theme.primary]}
+          />
+        }
+      >
         <View className="items-center justify-center gap-3 px-6" style={{ paddingVertical: 48 }}>
           <View
             className="items-center justify-center rounded-2xl border"
@@ -73,7 +93,7 @@ export default function CoachHomeScreen() {
             <AlertTriangle size={28} color={theme.destructive} strokeWidth={1.9} />
           </View>
           <Text className="font-display-bold text-[18px] text-strong" style={{ textAlign: 'center' }}>
-            No pudimos cargar tu panel
+            Algo fallo al cargar el dashboard
           </Text>
           <Text
             className="font-sans text-[13px] text-muted"
@@ -81,7 +101,7 @@ export default function CoachHomeScreen() {
           >
             {error ?? 'Error desconocido. Intenta recargar en un momento.'}
           </Text>
-          <Button label="Reintentar" variant="outline" onPress={() => load('refresh')} />
+          <Button label="Reintentar" variant="outline" leftIcon={RotateCcw} onPress={() => load('initial')} />
         </View>
       </CoachMainWrapper>
     )

@@ -40,6 +40,8 @@ export function DirectoryAlertBanner({
     >
       <TouchableOpacity
         testID={testID}
+        accessibilityRole="button"
+        accessibilityLabel={message}
         style={[styles.wrap, { backgroundColor: theme.card, borderColor: theme.border, borderLeftWidth: 3, borderLeftColor: color }]}
         onPress={onPress}
         activeOpacity={0.8}

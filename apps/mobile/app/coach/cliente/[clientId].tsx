@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Alert, Linking, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
 import type { NativeScrollEvent, NativeSyntheticEvent } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { useLocalSearchParams, useRouter } from 'expo-router'
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
 import { Archive, ArchiveRestore, Pencil, User } from 'lucide-react-native'
 import { useTheme } from '../../../context/ThemeContext'
 import { Button, EmptyState, NativeDialog, TopBar } from '../../../components'
@@ -73,9 +73,11 @@ export default function ClientDetailScreen() {
   const [lightbox, setLightbox] = useState<{ photos: string[]; index: number } | null>(null)
   const [exportingPdf, setExportingPdf] = useState(false)
   const lastY = useRef(0)
+  const loadedOnceRef = useRef(false)
 
-  async function load() {
-    setLoading(true)
+  const load = useCallback(async (opts?: { silent?: boolean }) => {
+    if (!clientId) return
+    if (!opts?.silent) setLoading(true)
     try {
       const res = await getCoachClientDetail(clientId)
       setData(res)
@@ -83,10 +85,21 @@ export default function ClientDetailScreen() {
     } catch (e) {
       console.warn('[client-detail] load failed', e)
     } finally {
-      setLoading(false)
+      if (!opts?.silent) setLoading(false)
+      loadedOnceRef.current = true
     }
-  }
-  useEffect(() => { load() }, [clientId])
+  }, [clientId])
+
+  // GOTCHA 6b: la ficha hace fetch propio y es una ruta stack-push (no se
+  // desmonta al abrir program-builder / nutrition-builder). useFocusEffect
+  // re-corre load() al VOLVER del builder → los datos no quedan stale. La
+  // primera carga muestra el loader full-screen; los refrescos on-focus son
+  // silenciosos (sin flash del loader).
+  useFocusEffect(
+    useCallback(() => {
+      void load({ silent: loadedOnceRef.current })
+    }, [load]),
+  )
 
   useEffect(() => {
     let cancelled = false
@@ -206,6 +219,12 @@ export default function ClientDetailScreen() {
 
   const workoutsThisWeek = data.compliance?.workoutsThisWeek ?? 0
   const workoutsTarget = Math.max(1, data.compliance?.workoutsTarget ?? 1)
+  // Chip "% plan": mismo calculo que el web (client-detail.service.ts:354 →
+  // nutritionCompliancePercent = round(mealsDoneHoy / mealsTotalHoy)) — cumplimiento de
+  // HOY, no el promedio semanal. El valor del chip "Comidas hoy" (mealsDone/mealsTotal) y
+  // su sub "% plan" deben leer la MISMA ventana (dia), como en ClientProfileHero.tsx:124,331-338.
+  const mealsDoneToday = derived.today?.mealsDone ?? 0
+  const mealsTotalToday = Math.max(1, derived.today?.mealsTotal ?? 1)
   const heroChips: HeroChips = {
     weightValue: derived.currentWeight,
     weightDelta: derived.weightDelta,
@@ -214,7 +233,7 @@ export default function ClientDetailScreen() {
     workoutsTarget,
     mealsDone: derived.today ? derived.today.mealsDone : null,
     mealsTotal: derived.today ? derived.today.mealsTotal : null,
-    nutritionPct: data.compliance?.nutritionWeeklyAvgPct ?? 0,
+    nutritionPct: Math.min(100, Math.round((mealsDoneToday / mealsTotalToday) * 100)),
   }
 
   // 5 pestañas (sin Facturacion — removida del chrome, RULING D2). Labels 1:1 con

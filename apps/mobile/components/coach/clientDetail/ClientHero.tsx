@@ -7,6 +7,7 @@ import { Badge, Card } from '../../../components'
 import { GlowBorderCard } from '../../../components/GlowBorderCard'
 import { HapticPressable } from '../../../components/HapticPressable'
 import { FONT } from '../../../lib/typography'
+import { hexToChannels } from '../../../lib/theme'
 
 // Neutrales de superficie inversa (fijos en light+dark porque la Card del hero es
 // siempre una superficie ink oscura — mirror del token-contract §2/§3, mismo
@@ -66,6 +67,20 @@ export interface ClientHeroProps {
   exportingPdf?: boolean
 }
 
+// Fondo del hero en DARK — paridad con el web, que fuerza
+// `dark:bg-[color-mix(in_srgb,var(--surface-card)_55%,var(--surface-app))]`
+// (≈ #11151B, near-black) porque el `surface-inverse` dark (#2A323D) leia "plomo"
+// y lavaba el texto (feedback CEO). Se DERIVA de los mismos tokens del theme
+// (theme.card = surface-card, theme.background = surface-app) con los mismos
+// porcentajes 55/45 del color-mix web — no es un hex crudo autoral. En LIGHT no
+// se aplica: la Card conserva `bg-surface-inverse` (ink-950).
+function mixSurfaces(cardHex: string, appHex: string): string {
+  const [cr, cg, cb] = hexToChannels(cardHex).split(' ').map(Number)
+  const [ar, ag, ab] = hexToChannels(appHex).split(' ').map(Number)
+  const m = (c: number, a: number) => Math.round(c * 0.55 + a * 0.45)
+  return `rgb(${m(cr, ar)}, ${m(cg, ag)}, ${m(cb, ab)})`
+}
+
 function initialsOf(name: string): string {
   return (
     name
@@ -96,6 +111,8 @@ export function ClientHero({
 }: ClientHeroProps) {
   const { theme, resolvedScheme } = useTheme()
   const iconStrong = STRONG_ICON[resolvedScheme]
+  // Dark: near-black derivado (mezcla card→app) para no leer "plomo"; light: keep surface-inverse.
+  const heroBg = resolvedScheme === 'dark' ? mixSurfaces(theme.card, theme.background) : null
 
   return (
     <MotiView from={{ opacity: 0, translateY: 12 }} animate={{ opacity: 1, translateY: 0 }} transition={{ type: 'timing', duration: 360 }} style={styles.root}>
@@ -133,7 +150,7 @@ export function ClientHero({
 
       {/* Hero inverso con marco animado de marca (GlowBorderCard). */}
       <GlowBorderCard>
-        <Card variant="inverse" padding={20} radius="card" style={{ borderColor: 'transparent', gap: 0 }}>
+        <Card variant="inverse" padding={20} radius="card" style={{ borderColor: 'transparent', gap: 0, ...(heroBg ? { backgroundColor: heroBg } : null) }}>
           <View style={styles.identityRow}>
             <View className={RING_CLASS[statusLevel]} style={styles.ring}>
               <View className="bg-surface-inverse" style={[styles.ringInner, { borderColor: theme.card }]}>

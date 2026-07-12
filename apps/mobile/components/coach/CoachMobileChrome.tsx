@@ -4,7 +4,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { BlurView } from 'expo-blur'
 import { useRouter } from 'expo-router'
 import {
-  Activity,
   ClipboardCheck,
   CreditCard,
   Dumbbell,
@@ -12,6 +11,7 @@ import {
   Home,
   LifeBuoy,
   MoreHorizontal,
+  PersonStanding,
   Settings,
   Shield,
   UserRound,
@@ -65,7 +65,7 @@ const NAV_ROUTE: Record<string, MobileNavRoute> = {
   // Modulos toggleables + team viven fuera del Tabs (stack) => solo en el sheet "Mas".
   team: { path: '/coach/settings/team', icon: Shield, label: 'Equipo' },
   cardio: { path: '/coach/cardio', icon: HeartPulse, label: 'Cardio' },
-  movement: { path: '/coach/movement', icon: Activity, label: 'Movimiento' },
+  movement: { path: '/coach/movement', icon: PersonStanding, label: 'Movimiento' },
   reactivate: { path: '/coach/reactivate', icon: CreditCard, label: 'Reactivar' },
 }
 
@@ -190,8 +190,11 @@ export function CoachMobileTabBar({
           style={[
             styles.capsule,
             {
-              bottom: insets.bottom + 8,
-              backgroundColor: hexToRgba(isDark ? '#0E1117' : '#FFFFFF', isDark ? 0.62 : 0.74),
+              bottom: insets.bottom + 16,
+              // Web capsula: color-mix(--surface-card 74%) (CoachSidebar.tsx:345). Tokenizado a
+              // theme.card (surface-card: #FFFFFF light / #161B22 dark) — antes hex crudo
+              // '#0E1117'/'#FFFFFF' con alpha 0.62/0.74 (Ola 0 4.1.5).
+              backgroundColor: hexToRgba(theme.card, 0.74),
               borderColor: hexToRgba(theme.foreground, 0.09),
             },
           ]}
@@ -231,9 +234,9 @@ export function CoachMobileTabBar({
               >
                 <View style={[styles.iconWrap, { transform: [{ translateY: focused ? -1 : 0 }] }]}>
                   <Icon
-                    size={23}
+                    size={24}
                     color={color}
-                    strokeWidth={focused ? 2.4 : 2.1}
+                    strokeWidth={2}
                     fill={focused ? hexToRgba(theme.primary, 0.18) : 'transparent'}
                   />
                 </View>
@@ -254,7 +257,7 @@ export function CoachMobileTabBar({
             style={styles.tabBtn}
           >
             <View style={styles.iconWrap}>
-              <MoreHorizontal size={23} color={theme.mutedForeground} strokeWidth={2.1} />
+              <MoreHorizontal size={24} color={theme.mutedForeground} strokeWidth={2} />
             </View>
             <Text numberOfLines={1} style={[styles.tabLabel, { color: theme.mutedForeground, fontWeight: '600' }]}>
               Más
@@ -263,7 +266,13 @@ export function CoachMobileTabBar({
         </BlurView>
       </View>
 
-      <Sheet open={masOpen} onClose={() => setMasOpen(false)} title="Más" snapPoints={['55%']}>
+      {/* Gotcha 6a (QA-12, ronda 7): el sheet "Más" es CRITICO — unica via a Suscripción/Check-ins/
+          Mi cuenta/Soporte/Equipo/Cardio/Movimiento en mobile. Bajo el stack actual (@gorhom 5.2.14 +
+          reanimated 4 + Fabric) el PRIMER present() del camino @gorhom puede resolver contra
+          containerHeight -999 (sheet off-screen en cold-start desde Home). Se fuerza `nativeModal`
+          (camino <Modal> RN, patron KeypadHost) que no depende del hosting-container: API identica,
+          '55%' pasa a ser el cap de maxHeight. */}
+      <Sheet open={masOpen} onClose={() => setMasOpen(false)} title="Más" snapPoints={['55%']} nativeModal>
         {overflow.map((entry) => {
           const Icon = entry.icon
           return (
@@ -309,8 +318,8 @@ function ReactivateBar({
         style={[
           styles.capsule,
           {
-            bottom: insets.bottom + 8,
-            backgroundColor: hexToRgba(isDark ? '#0E1117' : '#FFFFFF', isDark ? 0.62 : 0.74),
+            bottom: insets.bottom + 16,
+            backgroundColor: hexToRgba(theme.card, 0.74),
             borderColor: hexToRgba(theme.foreground, 0.09),
           },
         ]}

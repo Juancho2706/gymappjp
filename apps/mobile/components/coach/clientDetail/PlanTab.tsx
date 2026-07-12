@@ -1,10 +1,10 @@
-import { useMemo, useRef, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import { Image } from 'expo-image'
-import { BottomSheetModal, BottomSheetScrollView } from '@gorhom/bottom-sheet'
-import { ChevronDown, Dumbbell, LayoutGrid, Moon, Pencil } from 'lucide-react-native'
+import { ChevronDown, ClipboardX, Clock, Dumbbell, Gauge, LayoutGrid, Moon, Pencil, Plus, Target, Timer, Weight } from 'lucide-react-native'
+import type { LucideIcon } from 'lucide-react-native'
 import { useTheme } from '../../../context/ThemeContext'
-import { Button, EmptyState, ProgressBar } from '../../../components'
+import { Button, EmptyState, ProgressBar, Sheet } from '../../../components'
 import { StatCard, CardHeader, Pill, cd, dayName } from './shared'
 import { filterPlansForStructureView, resolveActiveWeekVariantForDisplay } from '../../../lib/program-week-variant'
 import type { CoachClientDetailData, ProgramBlock, ProgramDay } from '../../../lib/coach-client-detail'
@@ -20,13 +20,19 @@ function resolveProgramWeek(program: NonNullable<CoachClientDetailData['activePr
 export function PlanTab({ data, onEdit }: { data: CoachClientDetailData; onEdit: () => void }) {
   const { theme } = useTheme()
   const program = data.activeProgram
-  const sheetRef = useRef<BottomSheetModal>(null)
   const [selected, setSelected] = useState<ProgramBlock | null>(null)
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set())
   const todayDow = new Date().getDay() === 0 ? 7 : new Date().getDay()
 
   if (!program) {
-    return <EmptyState icon={Dumbbell} title="Sin programa activo" subtitle="Este alumno no tiene un programa asignado." />
+    return (
+      <EmptyState
+        icon={ClipboardX}
+        title="Sin programa asignado"
+        subtitle="Este alumno no tiene un plan de entrenamiento activo."
+        action={<Button label="Crear o asignar programa" variant="sport" leftIcon={Plus} onPress={onEdit} full />}
+      />
+    )
   }
   const currentWeek = resolveProgramWeek(program)
 
@@ -41,7 +47,6 @@ export function PlanTab({ data, onEdit }: { data: CoachClientDetailData; onEdit:
 
   function openBlock(block: ProgramBlock) {
     setSelected(block)
-    sheetRef.current?.present()
   }
   function toggle(id: string) {
     setExpanded((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n })
@@ -56,7 +61,7 @@ export function PlanTab({ data, onEdit }: { data: CoachClientDetailData; onEdit:
         <Text numberOfLines={1} style={[cd.big, { color: theme.foreground, fontFamily: 'Archivo_700Bold' }]}>{program.name}</Text>
         <View style={cd.metaRow}>
           <Pill label={program.program_structure_type === 'cycle' ? 'Cíclico' : 'Semanal'} />
-          {program.ab_mode ? <Pill label={`A/B · ${activeVariant} esta sem.`} tone="warning" /> : null}
+          {program.ab_mode ? <Pill label={`A/B · ${activeVariant} esta sem.`} /> : null}
           <Pill label={`${program.weeks_to_repeat} sem.`} />
           {program.cycle_length ? <Pill label={`Ciclo ${program.cycle_length}d`} /> : null}
           <Pill label={`${program.planCount} días`} />
@@ -78,14 +83,23 @@ export function PlanTab({ data, onEdit }: { data: CoachClientDetailData; onEdit:
         <Text style={[cd.empty, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Programa sin días cargados.</Text>
       )}
 
-      <Button label="Editar en el builder" variant="outline" leftIcon={Pencil} onPress={onEdit} full />
+      <Button label="Editar en builder" variant="sport" leftIcon={Pencil} onPress={onEdit} full />
 
-      <BottomSheetModal ref={sheetRef} index={0} snapPoints={['70%']} enableDynamicSizing={false} enablePanDownToClose
-        backgroundStyle={{ backgroundColor: theme.card }} handleIndicatorStyle={{ backgroundColor: theme.mutedForeground }}>
-        <BottomSheetScrollView contentContainerStyle={styles.sheet}>
-          {selected ? <ExerciseDetail block={selected} /> : null}
-        </BottomSheetScrollView>
-      </BottomSheetModal>
+      {/* QA-12 (gotcha 6a / ronda 7): el sheet de detalle del ejercicio es CRÍTICO para el flujo del
+          coach y antes usaba `@gorhom/bottom-sheet` crudo con snap fijo 70% + enableDynamicSizing=false.
+          Bajo reanimated 4 / Fabric el hosting-container siembra su alto en -999 y el primer present()
+          montaba el sheet fuera de pantalla ("no abre al primer tap, sí tras visitar otra tab"). El wrapper
+          `<Sheet nativeModal>` lo renderiza vía `<Modal>` RN (content-hug, patrón KeypadHost) y expone la
+          misma API declarativa open/onClose; `snapPoints` = tope de max-height (paridad web max-h-[88vh]). */}
+      <Sheet
+        open={selected != null}
+        onClose={() => setSelected(null)}
+        nativeModal
+        snapPoints={['85%']}
+        footer={<Button label="Cerrar" variant="secondary" onPress={() => setSelected(null)} full />}
+      >
+        {selected ? <ExerciseDetail block={selected} /> : null}
+      </Sheet>
     </View>
   )
 }
@@ -130,31 +144,46 @@ function DayCard({ plan, isToday, open, onToggle, onBlock }: { plan: ProgramDay;
 
 function ExerciseDetail({ block }: { block: ProgramBlock }) {
   const { theme } = useTheme()
-  const rows: { label: string; value: string }[] = [
-    { label: 'Series × reps', value: `${block.sets} × ${block.reps}` },
-    block.target_weight_kg != null ? { label: 'Peso objetivo', value: `${block.target_weight_kg} kg` } : null,
-    block.rest_time ? { label: 'Descanso', value: String(block.rest_time) } : null,
-    block.tempo ? { label: 'Tempo', value: String(block.tempo) } : null,
-    block.rir != null ? { label: 'RIR', value: String(block.rir) } : null,
-  ].filter(Boolean) as { label: string; value: string }[]
+  // Orden y filtros VERBATIM del web (ProgramTabB7.tsx:478-500): Series × reps → Obj. peso →
+  // Descanso → RIR → Tempo; RIR solo si `!= null && !== ''`. Icono sport por fila.
+  const rows: { label: string; value: string; Icon: LucideIcon }[] = [
+    { label: 'Series × reps', value: `${block.sets} × ${block.reps}`, Icon: Dumbbell },
+    block.target_weight_kg != null ? { label: 'Obj. peso', value: `${block.target_weight_kg} kg`, Icon: Weight } : null,
+    block.rest_time ? { label: 'Descanso', value: String(block.rest_time), Icon: Timer } : null,
+    block.rir != null && block.rir !== '' ? { label: 'RIR', value: String(block.rir), Icon: Gauge } : null,
+    block.tempo ? { label: 'Tempo', value: String(block.tempo), Icon: Clock } : null,
+  ].filter(Boolean) as { label: string; value: string; Icon: LucideIcon }[]
 
   return (
     <View style={{ gap: 14 }}>
       <Text style={[styles.sheetTitle, { color: theme.foreground, fontFamily: 'Archivo_800ExtraBold' }]}>{block.exerciseName}</Text>
-      <Text style={[styles.sheetMuscle, { color: theme.mutedForeground, fontFamily: 'HankenGrotesk_600SemiBold' }]}>{block.muscleGroup ?? 'Sin grupo'}</Text>
+      <View style={styles.muscleRow}>
+        {block.muscleGroup ? (
+          <View style={[styles.muscleChip, { borderColor: theme.border }]}>
+            <Target size={12} color={theme.mutedForeground} />
+            <Text style={[styles.muscleChipTxt, { color: theme.mutedForeground, fontFamily: 'HankenGrotesk_700Bold' }]}>{block.muscleGroup}</Text>
+          </View>
+        ) : (
+          <Text style={[styles.sheetMuscle, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Ejercicio del programa</Text>
+        )}
+      </View>
       {block.gifUrl ? (
         <Image source={{ uri: block.gifUrl }} style={[styles.gif, { backgroundColor: theme.secondary, borderColor: theme.border }]} contentFit="contain" transition={150} />
       ) : null}
-      <View style={{ gap: 0 }}>
-        {rows.map((r, i) => (
-          <View key={r.label} style={[styles.detailRow, i < rows.length - 1 && { borderBottomColor: theme.border, borderBottomWidth: StyleSheet.hairlineWidth }]}>
-            <Text style={[styles.detailLabel, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{r.label}</Text>
-            <Text style={[styles.detailValue, { color: theme.foreground, fontFamily: 'Archivo_700Bold' }]}>{r.value}</Text>
-          </View>
-        ))}
-      </View>
+      {rows.length ? (
+        <View style={[styles.prescriptionBox, { borderColor: theme.border, borderRadius: theme.radius.md }]}>
+          {rows.map((r, i) => (
+            <View key={r.label} style={[styles.detailRow, i > 0 && { borderTopColor: theme.border, borderTopWidth: StyleSheet.hairlineWidth }]}>
+              <r.Icon size={17} color={theme.primary} />
+              <Text style={[styles.detailLabel, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{r.label}</Text>
+              <Text style={[styles.detailValue, { color: theme.foreground, fontFamily: 'Archivo_700Bold' }]}>{r.value}</Text>
+            </View>
+          ))}
+        </View>
+      ) : null}
       {block.notes ? (
         <View style={[styles.notes, { backgroundColor: theme.secondary, borderColor: theme.border, borderRadius: theme.radius.lg }]}>
+          <Text style={[styles.notesHeader, { color: theme.mutedForeground, fontFamily: 'Archivo_800ExtraBold' }]}>NOTAS DEL COACH</Text>
           <Text style={[styles.notesTxt, { color: theme.foreground, fontFamily: theme.fontSans }]}>{block.notes}</Text>
         </View>
       ) : null}
@@ -175,13 +204,17 @@ const styles = StyleSheet.create({
   blockList: { gap: 8, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: 'transparent', paddingTop: 2 },
   blockRow: { flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10 },
   prescription: { fontSize: 13 },
-  sheet: { paddingHorizontal: 18, paddingBottom: 40 },
   sheetTitle: { fontSize: 20, letterSpacing: -0.4 },
-  sheetMuscle: { fontSize: 13, marginTop: -8 },
+  sheetMuscle: { fontSize: 13 },
+  muscleRow: { flexDirection: 'row', flexWrap: 'wrap' },
+  muscleChip: { flexDirection: 'row', alignItems: 'center', gap: 4, borderWidth: 1, borderRadius: 999, paddingHorizontal: 8, height: 22 },
+  muscleChipTxt: { fontSize: 11 },
   gif: { width: '100%', height: 220, borderRadius: 14, borderWidth: 1 },
-  detailRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 11 },
-  detailLabel: { fontSize: 13 },
-  detailValue: { fontSize: 14 },
+  prescriptionBox: { borderWidth: 1, overflow: 'hidden' },
+  detailRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 11, paddingHorizontal: 14 },
+  detailLabel: { fontSize: 13, flex: 1 },
+  detailValue: { fontSize: 15 },
   notes: { borderWidth: 1, padding: 12 },
+  notesHeader: { fontSize: 11, letterSpacing: 0.4, marginBottom: 4 },
   notesTxt: { fontSize: 13, lineHeight: 19 },
 })

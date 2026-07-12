@@ -8,7 +8,7 @@ import { Badge, type BadgeTone } from '../Badge'
 import { Card } from '../Card'
 import { FONT } from '../../lib/typography'
 import { subscriptionDaysRemaining, type DirectoryClient, type PulseRow } from '../../lib/clients-directory'
-import { DANGER, SUCCESS, WARNING } from './directory/directory-shared'
+import { DANGER, EMBER, SUCCESS, WARNING } from './directory/directory-shared'
 
 /** Altura fija de la card (modo cards) — usada por la animación de stack. */
 export const CLIENT_CARD_HEIGHT = 362
@@ -35,10 +35,12 @@ function lastLog(date: string | null): { label: string; days: number } {
   return { label: `Hace ${days}d`, days }
 }
 
-function attentionMeta(score: number, streak: number): { label: string; tone: BadgeTone } {
-  if (score >= 50) return { label: 'Urgente', tone: 'danger' }
+// Copy/tono 1:1 web ClientCardV2AttentionBadge: >=50 "Atención urgente" danger,
+// >=25 "Revisar" warning, score 0 & streak>10 "Destacado" success + Star, else "On track".
+function attentionMeta(score: number, streak: number): { label: string; tone: BadgeTone; icon?: typeof Star } {
+  if (score >= 50) return { label: 'Atención urgente', tone: 'danger' }
   if (score >= 25) return { label: 'Revisar', tone: 'warning' }
-  if (score === 0 && streak > 10) return { label: 'Destacado', tone: 'ember' }
+  if (score === 0 && streak > 10) return { label: 'Destacado', tone: 'success', icon: Star }
   return { label: 'On track', tone: 'success' }
 }
 
@@ -48,7 +50,7 @@ export const ClientCard = memo(function ClientCard({ client, pulse, onPress, onW
   const adherence = pulse?.percentage ?? 0
   const ringColor = adherence > 80 ? SUCCESS : adherence > 50 ? WARNING : DANGER
   const att = attentionMeta(pulse?.attentionScore ?? client.attentionScore, pulse?.streak ?? 0)
-  const ll = lastLog(pulse?.lastWorkoutDate ?? client.lastWorkoutDate)
+  const ll = lastLog(pulse?.lastWorkoutDate ?? null)
   const llDot = ll.days < 3 ? SUCCESS : ll.days < 7 ? WARNING : DANGER
   const stars = pulse?.latestEnergyLevel != null ? Math.min(5, Math.max(0, Math.round(pulse.latestEnergyLevel / 2))) : 0
   const weightVals = (pulse?.weightHistory30d ?? []).map((d) => d.value)
@@ -83,7 +85,7 @@ export const ClientCard = memo(function ClientCard({ client, pulse, onPress, onW
         <View style={{ flex: 1, minWidth: 0 }}>
           <View style={styles.nameRow}>
             <Text numberOfLines={1} style={[styles.name, { color: theme.foreground, fontFamily: FONT.displayBold }]} onPress={onPress} testID="client-card-name">{client.fullName}</Text>
-            <Badge tone={att.tone} variant="soft" size="sm">{att.label}</Badge>
+            <Badge tone={att.tone} variant="soft" size="sm" icon={att.icon ? <att.icon size={11} color={SUCCESS} /> : undefined}>{att.label}</Badge>
           </View>
           <Text numberOfLines={1} style={[styles.email, { color: theme.mutedForeground, fontFamily: FONT.ui }]}>{client.email}</Text>
         </View>
@@ -139,25 +141,29 @@ export const ClientCard = memo(function ClientCard({ client, pulse, onPress, onW
 
       {/* Nutrición (barra de adherencia) */}
       {nutri > 0 ? (
-        <View style={[styles.block, { backgroundColor: (nutriRisk ? DANGER : SUCCESS) + '12', borderColor: (nutriRisk ? DANGER : SUCCESS) + '28' }]}>
+        <View style={[styles.block, { backgroundColor: (nutriRisk ? DANGER : EMBER) + '12', borderColor: (nutriRisk ? DANGER : EMBER) + '28' }]}>
           <View style={styles.blockTop}>
-            <Apple size={12} color={nutriRisk ? DANGER : SUCCESS} />
+            <Apple size={12} color={nutriRisk ? DANGER : EMBER} />
             <Text numberOfLines={1} style={[styles.blockName, { color: nutriRisk ? DANGER : theme.foreground }]}>{nutriRisk ? 'Baja adherencia nutricional' : 'Nutrición'}</Text>
             <Text style={[styles.blockDim, { color: nutriRisk ? DANGER : theme.foreground }]}>{nutri}%</Text>
           </View>
-          <Bar value={Math.min(1, nutri / 100)} color={nutriRisk ? DANGER : SUCCESS} theme={theme} />
+          <Bar value={Math.min(1, nutri / 100)} color={nutriRisk ? DANGER : EMBER} theme={theme} />
         </View>
       ) : null}
 
       {subDays != null ? (
-        <Text style={[styles.subTxt, { color: subDays <= 5 ? DANGER : theme.mutedForeground }]}>Suscripción: {subDays > 0 ? `${subDays}d restantes` : 'vencida'}</Text>
+        // 1:1 web: label muted + valor coloreado (<=5 danger / else brand); "{n} días"/"Vencida".
+        <Text style={styles.subTxt}>
+          <Text style={{ color: theme.mutedForeground }}>Suscripción: </Text>
+          <Text style={{ color: subDays <= 5 ? DANGER : theme.primary }}>{subDays > 0 ? `${subDays} días` : 'Vencida'}</Text>
+        </Text>
       ) : null}
 
       {/* Footer actions */}
       <View style={[styles.footer, { borderTopColor: theme.border }]}>
         {onWhatsApp ? <FootBtn testID="client-card-whatsapp" theme={theme} icon={Smartphone} label="WA" color={SUCCESS} onPress={onWhatsApp} /> : null}
         <FootBtn testID="client-card-profile" theme={theme} icon={Eye} label="Perfil" onPress={onPress} />
-        <FootBtn testID="client-card-workout" theme={theme} icon={Dumbbell} label="Entreno" onPress={onWorkout} />
+        <FootBtn testID="client-card-workout" theme={theme} icon={Dumbbell} label="Workout" onPress={onWorkout} />
         <FootBtn testID="client-card-nutrition" theme={theme} icon={Apple} label="Nutri" onPress={onNutrition} />
       </View>
 

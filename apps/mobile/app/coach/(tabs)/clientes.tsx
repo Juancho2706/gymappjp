@@ -1,10 +1,10 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Alert, FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import Animated, { Extrapolation, interpolate, useAnimatedScrollHandler, useAnimatedStyle, useSharedValue, type SharedValue } from 'react-native-reanimated'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import * as Clipboard from 'expo-clipboard'
-import { useRouter } from 'expo-router'
+import { useFocusEffect, useRouter } from 'expo-router'
 import {
   ArrowUpDown,
   Check,
@@ -14,6 +14,7 @@ import {
   Link as LinkIcon,
   List as ListIcon,
   Search,
+  SearchX,
   SlidersHorizontal,
   Users,
   UserPlus,
@@ -21,7 +22,7 @@ import {
 } from 'lucide-react-native'
 import { useTheme } from '../../../context/ThemeContext'
 import { useEntitlements } from '../../../lib/entitlements'
-import { Input, NativeDialog, ScreenHeader } from '../../../components'
+import { Button, Input, NativeDialog, ScreenHeader } from '../../../components'
 import { EvaLoaderScreen } from '../../../components/EvaLoader'
 import { AppBackground } from '../../../components/AppBackground'
 import { ClientCard, CLIENT_CARD_HEIGHT } from '../../../components/coach/ClientCard'
@@ -109,7 +110,23 @@ export default function ClientesScreen() {
   const [headerH, setHeaderH] = useState(0)
   const onScroll = useAnimatedScrollHandler((e) => { scrollY.value = e.contentOffset.y })
 
-  useEffect(() => { load() }, [])
+  // Gotcha 6b: la pantalla vive en un tab persistente (no se desmonta). Un
+  // `useEffect(load,[])` de un disparo dejaba el roster CONGELADO al volver de la
+  // ficha (tras archivar/pausar/eliminar). `useFocusEffect` refresca en cada foco:
+  // primer foco = carga con loader; focos posteriores = refresco en background
+  // (sin loader ni spinner de pull) para que el retorno sea invisible pero fresco.
+  const isFirstFocus = useRef(true)
+  useFocusEffect(
+    useCallback(() => {
+      if (isFirstFocus.current) {
+        isFirstFocus.current = false
+        load()
+      } else {
+        getCoachDirectoryClients().then(setClients).catch(() => {})
+        loadPulse()
+      }
+    }, [])
+  )
   useEffect(() => {
     AsyncStorage.getItem('eva_alumnos_view').then((v) => { if (v === 'cards' || v === 'list') setViewMode(v) })
     getCoachProfile().then((c) => { if (c?.slug) setCoachSlug(c.slug); if (c?.maxClients) setMaxClients(c.maxClients) }).catch(() => {})
@@ -178,11 +195,12 @@ export default function ClientesScreen() {
     AsyncStorage.setItem('eva_alumnos_alerts_dismissed', JSON.stringify(next)).catch(() => {})
   }
 
-  const hasActiveFilters = riskFilter !== 'all' || statusFilter !== 'any'
-  const activeFilterCount = (riskFilter !== 'all' ? 1 : 0) + (statusFilter !== 'any' ? 1 : 0)
   const sortLabel = SORT_OPTIONS.find((o) => o.value === sortKey)?.label ?? 'Urgencia'
 
   const toggleRisk = (f: DirectoryRiskFilter) => setRiskFilter(riskFilter === f ? 'all' : f)
+  // Espejo `clearAll` web (`DirectoryActionBar.tsx:200-205`): resetea riesgo/programa
+  // (fundidos en riskFilter), estado y búsqueda.
+  const clearFilters = () => { setRiskFilter('all'); setStatusFilter('any'); setSearch('') }
 
   // ── Acciones rápidas por alumno ──────────────────────────────────────────
   function handleWhatsApp(c: DirectoryClient) {
@@ -239,14 +257,42 @@ export default function ClientesScreen() {
       { text: 'Eliminar', style: 'destructive', onPress: () => deleteClient(c.id).then(() => load(true)).catch((e: any) => Alert.alert('Error', e?.message ?? 'No se pudo.')) },
     ])
   }
+  // Editar datos: la superficie de edición en móvil es la ficha (NativeDialog "Editar
+  // alumno" con EditClientForm), a diferencia del modal inline del web. Ver PENDIENTE-
+  // DECISION-CEO en el resumen (cambio de gesto: modal inline → navegar a ficha).
+  function handleEdit(c: DirectoryClient) {
+    router.push(`/coach/cliente/${c.id}`)
+  }
+  function handleArchive(c: DirectoryClient) {
+    // Espejo web ClientActionsSheet archive (:222-227): archivar/desarchivar con
+    // confirmación (TX-5, acción reversible pero sensible).
+    const archiving = !c.isArchived
+    Alert.alert(
+      archiving ? 'Archivar alumno' : 'Desarchivar alumno',
+      archiving ? `${c.fullName} se moverá al archivo y dejará de contar como alumno activo.` : `${c.fullName} volverá a tu cartera activa.`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: archiving ? 'Archivar' : 'Desarchivar',
+          style: archiving ? 'destructive' : 'default',
+          onPress: () => setClientStatus(c.id, { is_archived: archiving }).then(() => load(true)).catch((e: any) => Alert.alert('Error', e?.message ?? 'No se pudo.')),
+        },
+      ]
+    )
+  }
   // Estable (useCallback): permite que DirRowCard (memo) omita re-render cuando llega el pulse de otras filas.
   const goProfile = useCallback((c: DirectoryClient) => router.push(`/coach/cliente/${c.id}`), [router])
   const goWorkout = (c: DirectoryClient) => router.push(`/coach/program-builder?clientId=${c.id}&clientName=${encodeURIComponent(c.fullName)}`)
   const goNutrition = () => router.push('/coach/nutricion')
 
+  // Chips activos 1:1 con el web (`DirectoryActionBar.tsx:170-198`): riesgo/programa
+  // (fundidos en riskFilter), estado y búsqueda. El badge de "Filtrar" y el highlight
+  // = chips.length (web `active={chips.length > 0}`).
   const chips: { key: string; label: string; onClear: () => void }[] = []
   if (riskFilter !== 'all') chips.push({ key: 'risk', label: RISK_LABELS[riskFilter] ?? riskFilter, onClear: () => setRiskFilter('all') })
   if (statusFilter !== 'any') chips.push({ key: 'status', label: STATUS_OPTIONS.find((o) => o.value === statusFilter)?.label ?? statusFilter, onClear: () => setStatusFilter('any') })
+  if (search) chips.push({ key: 'search', label: `“${search}”`, onClear: () => setSearch('') })
+  const filterActive = chips.length > 0
 
   const headerNode = (
     <>
@@ -308,7 +354,7 @@ export default function ClientesScreen() {
               <X size={12} color={theme.card} style={{ opacity: 0.7 }} />
             </TouchableOpacity>
           ))}
-          <TouchableOpacity testID="directory-clear-filters" onPress={() => { setRiskFilter('all'); setStatusFilter('any') }} activeOpacity={0.7}>
+          <TouchableOpacity testID="directory-clear-filters" onPress={clearFilters} activeOpacity={0.7}>
             <Text style={[styles.clearLink, { color: theme.mutedForeground }]}>Limpiar</Text>
           </TouchableOpacity>
         </View>
@@ -317,23 +363,39 @@ export default function ClientesScreen() {
       {/* Sort label / result count */}
       <View style={styles.sortRow}>
         <Text style={[styles.sortLabel, { color: theme.mutedForeground }]}>
-          {displayed.length} alumno{displayed.length !== 1 ? 's' : ''} <Text style={{ color: theme.border }}>·</Text> {sortLabel}
+          {displayed.length} alumno{displayed.length !== 1 ? 's' : ''}{statusFilter === 'archived' ? ' archivados' : ''} <Text style={{ color: theme.border }}>·</Text> {sortLabel}
         </Text>
       </View>
     </>
   )
 
-  const emptyNode = (
+  // Dos estados vacíos distintos, 1:1 con el web:
+  //  · roster cero → `ClientsDirectoryEmpty.tsx:12-45` ("Suma tu primer alumno" + CTAs Crear/Importar).
+  //  · filtro/búsqueda sin resultados → `ClientsDirectoryClient.tsx:266-284` (SearchX + "Limpiar filtros").
+  const emptyNode = clients.length === 0 ? (
     <View style={styles.emptyWrap}>
       <View style={[styles.emptyIcon, { backgroundColor: hexToRgba(theme.primary, 0.1) }]}>
-        <Users size={32} color={theme.primary} strokeWidth={1.75} />
+        <Users size={34} color={theme.primary} strokeWidth={1.75} />
       </View>
-      <Text style={[styles.emptyTitle, { color: theme.foreground }]}>
-        {search || hasActiveFilters ? 'Sin resultados' : 'Sin alumnos aún'}
-      </Text>
+      <Text style={[styles.emptyTitle, { color: theme.foreground }]}>Suma tu primer alumno</Text>
       <Text style={[styles.emptySub, { color: theme.mutedForeground }]}>
-        {search || hasActiveFilters ? 'Prueba ajustando los filtros o la búsqueda.' : 'Usa el botón Nuevo alumno para agregar tu primer alumno.'}
+        Crea un alumno y recibirá su acceso, o importa tu cartera completa desde Excel/CSV.
       </Text>
+      <View style={styles.emptyCtas}>
+        <Button label="Crear alumno" variant="sport" size="lg" full leftIcon={UserPlus} onPress={() => setShowCreate(true)} />
+        <Button label="Importar cartera" variant="secondary" size="lg" full leftIcon={FileUp} onPress={() => setShowImport(true)} />
+      </View>
+    </View>
+  ) : (
+    <View style={styles.filteredEmptyWrap}>
+      <View style={[styles.filteredEmptyCard, { borderColor: theme.border, backgroundColor: theme.muted }]}>
+        <View style={[styles.filteredEmptyIcon, { backgroundColor: theme.card }]}>
+          <SearchX size={24} color={theme.mutedForeground} />
+        </View>
+        <Text style={[styles.filteredEmptyTitle, { color: theme.foreground }]}>Sin resultados</Text>
+        <Text style={[styles.filteredEmptySub, { color: theme.mutedForeground }]}>Ningún alumno coincide con estos filtros.</Text>
+        <Button label="Limpiar filtros" variant="primary" size="sm" onPress={clearFilters} style={styles.filteredEmptyBtn} />
+      </View>
     </View>
   )
 
@@ -385,7 +447,7 @@ export default function ClientesScreen() {
         <Input
           testID="directory-search-input"
           leftIcon={Search}
-          placeholder="Buscar alumno..."
+          placeholder="Buscar alumno…"
           value={search}
           onChangeText={setSearch}
           clearButtonMode="while-editing"
@@ -393,8 +455,8 @@ export default function ClientesScreen() {
           autoCorrect={false}
           containerStyle={{ flex: 1 }}
         />
-        <BarButton testID="directory-filter-btn" label="Filtrar" theme={theme} onPress={() => setShowFilterSheet(true)} active={hasActiveFilters} badge={activeFilterCount}>
-          <SlidersHorizontal size={16} color={hasActiveFilters ? theme.card : theme.mutedForeground} />
+        <BarButton testID="directory-filter-btn" label="Filtrar" theme={theme} onPress={() => setShowFilterSheet(true)} active={filterActive} badge={chips.length}>
+          <SlidersHorizontal size={16} color={filterActive ? theme.card : theme.mutedForeground} />
         </BarButton>
         <BarButton testID="directory-sort-btn" label="Ordenar" theme={theme} onPress={() => setShowSortSheet(true)} onLongPress={() => setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))}>
           <ArrowUpDown size={16} color={theme.mutedForeground} />
@@ -445,11 +507,13 @@ export default function ClientesScreen() {
               pulse={pulseById.get(item.id)}
               onOpen={goProfile}
               onWhatsApp={item.phone && coachSlug ? handleWhatsApp : undefined}
+              onEdit={handleEdit}
               onShare={handleShare}
               onWorkout={goWorkout}
               onNutrition={goNutrition}
               onReset={handleReset}
               onToggle={handleToggle}
+              onArchive={handleArchive}
               onDelete={handleDelete}
             />
           )}
@@ -476,7 +540,7 @@ export default function ClientesScreen() {
       {/* Sheets */}
       <DirectoryOptionSheet
         visible={showSortSheet}
-        title="Ordenar"
+        title="Ordenar por"
         options={SORT_OPTIONS}
         selected={sortKey}
         onSelect={(v) => setSortKey(v as DirectorySortKey)}
@@ -624,7 +688,15 @@ const styles = StyleSheet.create({
   emptyWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12, paddingHorizontal: 32, paddingTop: 48 },
   emptyIcon: { width: 72, height: 72, borderRadius: 20, alignItems: 'center', justifyContent: 'center', marginBottom: 4 },
   emptyTitle: { fontSize: 22, letterSpacing: -0.5, fontFamily: FONT.displayBlack },
-  emptySub: { fontSize: 13, textAlign: 'center', lineHeight: 20, fontFamily: FONT.ui },
+  emptySub: { fontSize: 13, textAlign: 'center', lineHeight: 20, maxWidth: 280, fontFamily: FONT.ui },
+  emptyCtas: { width: '100%', maxWidth: 280, gap: 10, marginTop: 10 },
+  // Filtro/búsqueda sin resultados — card punteada (espejo web ClientsDirectoryClient:266-284).
+  filteredEmptyWrap: { paddingHorizontal: 16, paddingTop: 24 },
+  filteredEmptyCard: { borderWidth: 1, borderStyle: 'dashed', borderRadius: 18, paddingHorizontal: 16, paddingVertical: 36, alignItems: 'center' },
+  filteredEmptyIcon: { width: 52, height: 52, borderRadius: 26, alignItems: 'center', justifyContent: 'center', marginBottom: 12 },
+  filteredEmptyTitle: { fontSize: 16, fontFamily: FONT.displayBold },
+  filteredEmptySub: { fontSize: 13, textAlign: 'center', marginTop: 4, fontFamily: FONT.ui },
+  filteredEmptyBtn: { marginTop: 14, alignSelf: 'center' },
   fab: {
     position: 'absolute',
     right: 16,

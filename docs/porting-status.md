@@ -112,6 +112,14 @@ Una pasada adicional con **lente de lógica** (no de paridad pixel) sobre unidad
 
 **P1 abiertos totales al cierre de Sección 2 (post-remate): 2, ambos diferidos por decisión explícita.** (1) La cápsula de tabs desaparece dentro de `/movement` y `/bodycomp` — estructural: exige mover esas pantallas dentro del navigator `(tabs)` con `href:null` (riesgo de deep links/navegación; hacer como mini-tarea dedicada con QA propio). (2) Filas de comida del widget nutrición solo-lectura vs toggle in-place del web — requiere server-action nueva + cola offline (regla 8: endpoints de la rama = 404 en prod hasta el merge); decisión de producto documentada. TODO el resto de P1s (lógica y `cambiosShell`) quedó RESUELTO en la ola de remate (ver arriba). Residuos P2 por unidad anotados con archivo:línea en las specs de `docs/rn-port/specs/seccion-2/`.
 
+## Checkpoint parcial Sección 3 — port recuperado (2026-07-11)
+
+- Recuperado desde `stash@{0}` el port parcial que acompañaba las 14 specs del checkpoint `c49439a6`: 23 archivos RN del coach (chrome, dashboard, directorio y ficha), sin tocar alumno/ejecutor.
+- `ImportClientsForm.tsx` recuperado con el wizard completo y corrección de fecha: si la fila no trae `subscriptionStartDate`, se omite; nunca se inventa el día UTC.
+- `NutricionTab.tsx` estaba revertido a medias (imports nuevos con cuerpo anterior). Se reparó el baseline para compilar; su paridad sustantiva sigue pendiente y debe rehacerse contra `ficha-nutricion-facturacion.md`.
+- Gates del checkpoint: `pnpm exec tsc --noEmit` limpio; tokens `86/86`; `pnpm exec expo export --platform android` limpio.
+- Este checkpoint NO cierra unidades: falta verificación adversarial elemento-por-elemento, lente runtime/cableado/frescura y completar los P0/P1 de cada spec. Doble-FAB sigue sin implementar por decisión CEO pendiente.
+
 ## Dónde retomar
 
 **Siguiente: Sección 3 — Dashboard del coach completo**, más **QA visual humano en device real de la Sección 2** (requiere build nueva desde `rnmobiledenuevo`, ya que los 3 P0 del QA del 10-jul están resueltos en código pero no re-verificados visualmente en dispositivo). Metodología igual: inventario → spec con evidencia web → implementación → verificación adversarial + lente de lógica. Consumir `docs/rn-port/ola0-hallazgos.json` al tocar cada compartido.

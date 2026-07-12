@@ -1,11 +1,12 @@
 import { useMemo, useState } from 'react'
-import { Alert, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native'
+import { Linking, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native'
+import { useRouter } from 'expo-router'
 import { Check, Upload } from 'lucide-react-native'
 import * as DocumentPicker from 'expo-document-picker'
 import * as FileSystem from 'expo-file-system/legacy'
 import { Button } from '../../../components'
 import { FONT } from '../../../lib/typography'
-import { apiFetch } from '../../../lib/api'
+import { apiFetch, getApiBaseUrl } from '../../../lib/api'
 import {
   IMPORT_FIELD_LABELS,
   MAX_IMPORT_ROWS,
@@ -59,6 +60,7 @@ export function ImportClientsForm({
   onDone: () => void
   onCancel: () => void
 }) {
+  const router = useRouter()
   const [step, setStep] = useState(1)
   const [sheet, setSheet] = useState<ParsedSheet | null>(null)
   const [mapping, setMapping] = useState<ColumnMapping>({})
@@ -76,6 +78,14 @@ export function ImportClientsForm({
     const parsed = parseCsvToSheet(text, filename)
     if (!parsed.headers.length || !parsed.rows.length) {
       setUploadError('El archivo está vacío o solo tiene encabezados.')
+      return
+    }
+    // Espejo Step1Upload web (Step1Upload.tsx:61-64): rechazar > MAX_IMPORT_ROWS filas de
+    // datos en vez de truncar en silencio (parseCsvToSheet.slice(1, 1+MAX_IMPORT_ROWS) corta
+    // sin avisar). Se cuenta sobre el texto crudo con la misma lógica de split del parser.
+    const dataRowCount = text.replace(/﻿/g, '').split(/\r?\n/).map((l) => l.trim()).filter(Boolean).length - 1
+    if (dataRowCount > MAX_IMPORT_ROWS) {
+      setUploadError(`El archivo tiene más de ${MAX_IMPORT_ROWS} filas. Dividilo en partes de hasta ${MAX_IMPORT_ROWS} alumnos.`)
       return
     }
     setUploadError(null)
@@ -138,7 +148,10 @@ export function ImportClientsForm({
             fullName: r.full_name,
             email: (r.email ?? '').toLowerCase(),
             phone: r.phone ?? '',
-            subscriptionStartDate: r.subscription_start_date ?? new Date().toISOString().slice(0, 10),
+            // Sin default inventado (gotcha 6d): si la fila no trae fecha, se omite y el
+            // endpoint la guarda como null — igual que el import web. NUNCA `new Date()`
+            // (día UTC, no día Santiago) como relleno silencioso.
+            subscriptionStartDate: r.subscription_start_date ?? undefined,
             tempPassword: `Eva${Math.floor(100000 + Math.random() * 900000)}!`,
             ageConfirmed: true,
           },
@@ -160,8 +173,13 @@ export function ImportClientsForm({
     return (
       <View style={{ gap: 12 }}>
         <Text style={{ color: theme.foreground, fontFamily: FONT.displayBold, fontSize: 17 }}>
-          {result.ok} creados{result.skipped ? ` · ${result.skipped} omitidos` : ''}{result.fail ? ` · ${result.fail} con error` : ''}
+          ✅ {result.ok} alumnos importados
         </Text>
+        {result.fail > 0 ? (
+          <Text style={{ color: theme.mutedForeground, fontFamily: FONT.ui, fontSize: 13 }}>
+            {result.fail} fallaron · {result.skipped} omitidos
+          </Text>
+        ) : null}
         {result.errors.map((e, i) => (
           <Text key={i} style={{ color: theme.destructive, fontSize: 12, fontFamily: FONT.ui }}>{e}</Text>
         ))}
@@ -289,7 +307,7 @@ export function ImportClientsForm({
           <View style={{ gap: 8 }}>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
               <SummaryPill color={SUCCESS} label={`${validCount} válidas`} />
-              {warnCount ? <SummaryPill color={WARNING} label={`${warnCount} advertencia`} /> : null}
+              {warnCount ? <SummaryPill color={WARNING} label={`${warnCount} con advertencia`} /> : null}
               {errorCount ? <SummaryPill color={theme.destructive} label={`${errorCount} con error`} /> : null}
             </View>
             {annotated.slice(0, 50).map((r, i) => {
@@ -319,18 +337,22 @@ export function ImportClientsForm({
         <ScrollView style={scrollStyle} showsVerticalScrollIndicator={false}>
           <View style={{ gap: 12 }}>
             <View style={{ borderWidth: 1, borderColor: theme.border, borderRadius: theme.radius.lg, padding: 14, gap: 6 }}>
-              <Text style={{ color: theme.foreground, fontSize: 15, fontFamily: FONT.displayBold }}>{toImport.length} alumnos serán creados</Text>
+              <Text style={{ color: theme.foreground, fontSize: 15, fontFamily: FONT.displayBold }}>📥 {toImport.length} alumnos serán creados</Text>
               <Text style={{ color: theme.mutedForeground, fontSize: 12.5, fontFamily: FONT.ui }}>
                 {activeCount} actuales + {toImport.length} nuevos = {activeCount + toImport.length}{maxClients > 0 ? ` / ${maxClients} del plan` : ''}
               </Text>
-              <Text style={{ color: theme.mutedForeground, fontSize: 12.5, fontFamily: FONT.ui }}>Cada alumno recibe un email de bienvenida con su contraseña temporal.</Text>
+              <Text style={{ color: theme.mutedForeground, fontSize: 12.5, fontFamily: FONT.ui }}>✉️ {toImport.length} emails de bienvenida se enviarán</Text>
+              <Text style={{ color: theme.mutedForeground, fontSize: 12.5, fontFamily: FONT.ui }}>⏱️ Tiempo estimado: ~{Math.ceil(toImport.length / 10) * 2} segundos</Text>
             </View>
 
             {wouldExceedLimit ? (
-              <View style={{ borderWidth: 1, borderColor: theme.destructive + '55', backgroundColor: theme.destructive + '0D', borderRadius: theme.radius.lg, padding: 12 }}>
+              <View style={{ borderWidth: 1, borderColor: theme.destructive + '55', backgroundColor: theme.destructive + '0D', borderRadius: theme.radius.lg, padding: 12, gap: 6 }}>
                 <Text style={{ color: theme.destructive, fontSize: 12.5, fontFamily: FONT.uiSemibold }}>
-                  Tu plan permite {maxClients} alumnos y tienes {activeCount}. No puedes importar {toImport.length} más. Sube de plan o reduce las filas.
+                  Tu plan permite {maxClients} alumnos y tienes {activeCount}. No puedes importar {toImport.length} alumnos más.
                 </Text>
+                <TouchableOpacity testID="import-clients-upgrade" onPress={() => { onCancel(); router.push('/coach/subscription') }}>
+                  <Text style={{ color: theme.destructive, fontSize: 12.5, fontFamily: FONT.uiBold, textDecorationLine: 'underline' }}>Actualiza tu plan →</Text>
+                </TouchableOpacity>
               </View>
             ) : null}
 
@@ -344,8 +366,14 @@ export function ImportClientsForm({
                 {consent ? <Check size={14} color="#fff" /> : null}
               </View>
               <Text style={{ color: theme.mutedForeground, fontSize: 12, flex: 1, fontFamily: FONT.ui, lineHeight: 17 }}>
-                Confirmo que tengo el consentimiento expreso de las personas listadas para procesar sus datos conforme a la Ley 19.628 (modificada por la Ley 21.719). Alumnos 14+ o con consentimiento de tutor.
+                Confirmo que tengo el consentimiento expreso de las personas listadas para procesar sus datos personales conforme a la{' '}
+                <Text style={{ color: theme.foreground, fontFamily: FONT.uiBold }}>Ley 19.628</Text> sobre Protección de la Vida Privada (Chile), modificada por la{' '}
+                <Text style={{ color: theme.foreground, fontFamily: FONT.uiBold }}>Ley 21.719</Text>.
               </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity testID="import-clients-privacy" onPress={() => Linking.openURL(`${getApiBaseUrl()}/privacy`).catch(() => {})} style={{ alignSelf: 'center' }}>
+              <Text style={{ color: theme.mutedForeground, fontSize: 11.5, fontFamily: FONT.ui, textDecorationLine: 'underline' }}>Política de privacidad y DPA</Text>
             </TouchableOpacity>
           </View>
         </ScrollView>
@@ -368,7 +396,7 @@ export function ImportClientsForm({
         ) : step === 3 ? (
           <Button testID="import-clients-preview-continue" label={`Continuar (${toImport.length})`} onPress={() => setStep(4)} disabled={toImport.length === 0} style={{ flex: 1 }} />
         ) : (
-          <Button testID="import-clients-run" label={busy ? 'Importando…' : `Importar ${toImport.length}`} onPress={runImport} loading={busy} disabled={busy || !consent || wouldExceedLimit || toImport.length === 0} style={{ flex: 1 }} />
+          <Button testID="import-clients-run" label={busy ? 'Importando...' : `Importar ${toImport.length} alumnos`} onPress={runImport} loading={busy} disabled={busy || !consent || wouldExceedLimit || toImport.length === 0} style={{ flex: 1 }} />
         )}
       </View>
     </View>

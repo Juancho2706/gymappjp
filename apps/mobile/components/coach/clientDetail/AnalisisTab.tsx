@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import { Activity, AlertTriangle, BarChart3, ChevronLeft, ChevronRight, Dumbbell, Radar, TrendingUp } from 'lucide-react-native'
 import { Directions, Gesture, GestureDetector } from 'react-native-gesture-handler'
+import { cssInterop } from 'nativewind'
 import * as Haptics from 'expo-haptics'
 import { useTheme } from '../../../context/ThemeContext'
 import { EmptyState, ProgressBar } from '../../../components'
@@ -21,6 +22,11 @@ import {
   type ExerciseStrengthSeries,
 } from '../../../lib/profile-analytics'
 import type { ClientDayDetail, CoachClientDetailData } from '../../../lib/coach-client-detail'
+
+// Deja que NativeWind maneje el color del icono lucide vía className (text-warning-*)
+// para que el token resuelva claro/oscuro + white-label — mismo patrón que
+// SubstituteExerciseSheet.tsx:18-21. Evita hex crudo en el color imperativo.
+cssInterop(AlertTriangle, { className: { target: 'style', nativeStyleToProp: { color: true } } })
 
 export function AnalisisTab({
   data,
@@ -91,9 +97,9 @@ export function AnalisisTab({
             </View>
           ))}
           {imbalances.map((im, i) => (
-            <View key={i} style={[styles.alert, { backgroundColor: '#F59E0B14', borderColor: '#F59E0B40' }]}>
-              <AlertTriangle size={14} color="#F59E0B" />
-              <Text style={[styles.alertTxt, { color: '#F59E0B', fontFamily: 'HankenGrotesk_600SemiBold' }]}>
+            <View key={i} className="flex-row items-center gap-2 rounded-control border border-warning-600/25 bg-warning-100 px-2.5 py-2">
+              <AlertTriangle className="text-warning-600" size={14} />
+              <Text className="flex-1 text-warning-700" style={{ fontSize: 12, fontFamily: 'HankenGrotesk_600SemiBold' }}>
                 {im.stronger} entrena {im.ratio}× más volumen que {im.weaker}.
               </Text>
             </View>
@@ -105,7 +111,7 @@ export function AnalisisTab({
       {hasWeighted && tonnagePoints.length >= 1 ? (
         <StatCard>
           <CardHeader icon={TrendingUp} title="Tonelaje diario + media móvil 7" />
-          <BarComposed points={tonnagePoints} barColor={theme.primary} lineColor="#F59E0B" suffix=" kg" />
+          <BarComposed points={tonnagePoints} barColor={theme.primary} lineColor={theme.cyan} suffix=" kg" />
           <Text style={[cd.sub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Barras = tonelaje del día · Línea = media móvil de 7 sesiones.</Text>
         </StatCard>
       ) : null}
@@ -156,7 +162,7 @@ function StrengthCard({ series }: { series: ExerciseStrengthSeries }) {
         trend != null ? <Pill label={`${trend > 0 ? '▲ +' : trend < 0 ? '▼ ' : ''}${trend} kg`} tone={trend > 0 ? 'success' : trend < 0 ? 'danger' : undefined} /> : null
       } />
       {points.length >= 2 ? (
-        <AreaTrend points={points} color="#06B6D4" suffix=" kg" decimals={1} height={150} onActiveIndex={setActive} />
+        <AreaTrend points={points} color={theme.primary} suffix=" kg" decimals={1} height={150} onActiveIndex={setActive} />
       ) : (
         <Text style={[cd.sub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Necesita más sesiones para graficar.</Text>
       )}
@@ -166,7 +172,7 @@ function StrengthCard({ series }: { series: ExerciseStrengthSeries }) {
         </Text>
       ) : null}
       <View style={cd.grid2}>
-        {peak ? <MetricBox value={`${peak.oneRm} kg`} label="Pico 1RM" sub={peak.label} color="#06B6D4" /> : null}
+        {peak ? <MetricBox value={`${peak.oneRm} kg`} label="Pico 1RM" sub={peak.label} color={theme.primary} /> : null}
         <MetricBox value={`${series.series.length}`} label="Sesiones" />
         <MetricBox value={`${Math.round(series.totalVolume).toLocaleString('es-CL')}`} label="Volumen total" />
       </View>
@@ -267,7 +273,7 @@ function SessionDetail({ detail }: { detail: ClientDayDetail }) {
             {g.sets.map((set, i) => (
               <View key={i} style={[styles.setPill, { backgroundColor: theme.secondary, borderColor: theme.border }]}>
                 <Text style={[styles.setTxt, { color: theme.foreground, fontFamily: 'HankenGrotesk_600SemiBold' }]}>
-                  {set.weightKg ?? 0}×{set.repsDone ?? 0}{set.rpe != null ? ` · RPE ${set.rpe}` : ''}
+                  {set.weightKg != null ? set.weightKg : 'PC'}×{set.repsDone != null ? set.repsDone : '—'}{set.rpe != null ? ` · RPE ${set.rpe}` : ''}
                 </Text>
               </View>
             ))}
@@ -279,8 +285,6 @@ function SessionDetail({ detail }: { detail: ClientDayDetail }) {
 }
 
 const styles = StyleSheet.create({
-  alert: { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 8 },
-  alertTxt: { fontSize: 12, flex: 1 },
   strip: { gap: 8, paddingTop: 2 },
   chip: { width: 50, paddingVertical: 8, alignItems: 'center', gap: 2, borderWidth: 1 },
   chipDow: { fontSize: 10, textTransform: 'uppercase' },

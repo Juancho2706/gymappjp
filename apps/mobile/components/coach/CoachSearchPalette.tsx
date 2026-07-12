@@ -21,9 +21,11 @@ import {
  * CONTROLADO por el consumidor: el chrome/header monta `<CoachSearchPalette visible onClose />` y
  * dispara `visible` desde un botón de búsqueda (ver notas de integración). No dibuja el trigger.
  *
- * Traducción de rutas web → mobile (por grupo, no se parsea el `href` salvo el clientId del programa):
+ * Traducción de rutas web → mobile (por grupo; del `href` del programa se parsean clientId y programId):
  *  - Alumnos   → `/coach/cliente/{id}`
- *  - Programas → asignado: `/coach/program-builder?clientId={clientId}`; plantilla: tab `/coach/builder`
+ *  - Programas → asignado: `/coach/program-builder?clientId={clientId}&programId={id}` (abre el programa concreto);
+ *                plantilla: `/coach/program-builder?templateId={programId}` (abre la plantilla concreta);
+ *                fallback: tab `/coach/builder`
  *  - Ejercicios→ tab `/coach/ejercicios?q={nombre}`
  *  - Recetas   → tab `/coach/nutricion?tab=recipes`
  */
@@ -34,10 +36,19 @@ type SearchKind = 'client' | 'program' | 'exercise' | 'recipe'
 /** Payload que viaja en cada fila y vuelve en `onSelect` para decidir la navegación. */
 type NavHit = CoachSearchHit & { kind: SearchKind }
 
-/** `/coach/builder/{clientId}?programId=…` (web) → clientId; null para plantillas. */
-function clientIdFromProgramHref(href: string): string | null {
-  const m = /\/coach\/builder\/([^/?]+)/.exec(href)
-  return m ? decodeURIComponent(m[1]) : null
+/**
+ * Parsea el `href` web del programa en sus dos identificadores.
+ * Web `programHref` (coach-search.service.ts:55-59): asignado `/coach/builder/{clientId}?programId={id}`;
+ * plantilla `/coach/workout-programs/builder?programId={id}`.
+ * Devuelve `clientId` (null en plantillas) y `programId` (el id del programa/plantilla concreto).
+ */
+function parseProgramHref(href: string): { clientId: string | null; programId: string | null } {
+  const clientMatch = /\/coach\/builder\/([^/?]+)/.exec(href)
+  const programMatch = /[?&]programId=([^&]+)/.exec(href)
+  return {
+    clientId: clientMatch ? decodeURIComponent(clientMatch[1]) : null,
+    programId: programMatch ? decodeURIComponent(programMatch[1]) : null,
+  }
 }
 
 export function CoachSearchPalette({
@@ -128,8 +139,24 @@ export function CoachSearchPalette({
         router.push(`/coach/cliente/${hit.id}`)
         return
       case 'program': {
-        const clientId = clientIdFromProgramHref(hit.href)
-        router.push(clientId ? `/coach/program-builder?clientId=${clientId}` : '/coach/builder')
+        // P1 Ola0: web abre SIEMPRE el programa concreto. Portamos ambos ids:
+        //  - asignado → clientId (el builder mobile carga el programa activo del alumno).
+        //  - plantilla → templateId={programId} (program-builder.tsx:260,421 abre la plantilla por id;
+        //    mismo param que usa builder.tsx:153). Antes caía al tab genérico sin identificar.
+        const { clientId, programId } = parseProgramHref(hit.href)
+        if (clientId) {
+          // Espejo web `/coach/builder/{clientId}?programId={id}`: pasamos AMBOS ids para abrir el
+          // programa concreto (no el activo del alumno, que puede no ser el buscado).
+          router.push(
+            programId
+              ? `/coach/program-builder?clientId=${clientId}&programId=${programId}`
+              : `/coach/program-builder?clientId=${clientId}`
+          )
+        } else if (programId) {
+          router.push(`/coach/program-builder?templateId=${programId}`)
+        } else {
+          router.push('/coach/builder')
+        }
         return
       }
       case 'exercise':
@@ -151,7 +178,7 @@ export function CoachSearchPalette({
       onSelect={handleSelect}
       status={status}
       minChars={COACH_SEARCH_MIN_CHARS}
-      placeholder="Buscar alumnos, programas, ejercicios…"
+      placeholder="Buscar alumno, programa, ejercicio…"
       idleHint="Busca alumnos, programas, ejercicios o recetas de tu espacio."
     />
   )
