@@ -93,7 +93,7 @@ export default function CoachHomeScreen() {
             <AlertTriangle size={28} color={theme.destructive} strokeWidth={1.9} />
           </View>
           <Text className="font-display-bold text-[18px] text-strong" style={{ textAlign: 'center' }}>
-            Algo fallo al cargar el dashboard
+            Algo falló al cargar el dashboard
           </Text>
           <Text
             className="font-sans text-[13px] text-muted"
@@ -134,7 +134,7 @@ export default function CoachHomeScreen() {
           coachName={data.coach.fullName || data.coach.brandName || 'Coach'}
           logoUrl={data.coach.logoUrl}
           onInsights={() => setStatsOpen(true)}
-          onAvatar={() => router.push('/coach/(tabs)/perfil')}
+          onAvatar={() => router.push('/coach/(tabs)/settings')}
           pendingCount={data.topRiskClients.length + data.expiringPrograms.length + data.pendingCheckinsCount}
         />
 

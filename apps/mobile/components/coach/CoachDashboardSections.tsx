@@ -10,10 +10,12 @@ import {
   ArrowUpRight,
   Bell,
   Bug,
+  Calendar,
   CalendarClock,
   CalendarX,
   Check,
   CheckCircle2,
+  ClipboardCheck,
   ChevronDown,
   ChevronRight,
   Clock,
@@ -1768,13 +1770,19 @@ export function MobileGreetingHeader({
   const hasMultipleWorkspaces = (workspaces?.length ?? 0) > 1
   const firstName = coachName?.split(' ')[0] || 'Coach'
   // Saludo por hora del dia (espejo useTimeOfDayGreeting web) — neutralizado (sin voseo).
-  const hour = new Date().getHours()
-  const greeting = hour < 6 ? 'Buenas noches' : hour < 13 ? 'Buenos dias' : hour < 20 ? 'Buenas tardes' : 'Buenas noches'
+  const now = new Date()
+  const hour = Number(new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Santiago',
+    hour: '2-digit',
+    hour12: false,
+  }).format(now)) % 24
+  const greeting = hour < 6 ? 'Buenas noches' : hour < 13 ? 'Buenos días' : hour < 20 ? 'Buenas tardes' : 'Buenas noches'
   const dateStr = new Intl.DateTimeFormat('es-ES', {
+    timeZone: 'America/Santiago',
     weekday: 'long',
     day: 'numeric',
     month: 'long',
-  }).format(new Date())
+  }).format(now)
   const dateCap = dateStr.charAt(0).toUpperCase() + dateStr.slice(1)
 
   const iconBtn = {
@@ -2688,28 +2696,36 @@ export function MobileTodayAgenda({ items }: { items: MobileAgendaItem[] }) {
           <CalendarClock size={16} color={theme.primary} />
           <Text className="font-display-black text-[18px] text-strong">Agenda de hoy</Text>
         </View>
-        <Text className="font-sans text-[12px] text-muted">{items.length} pendientes</Text>
+        <Text className="font-sans text-[12px] text-muted">0 de {items.length} hechas</Text>
       </View>
       {items.length === 0 ? (
         <Card padding="md" radius="card">
-          <EmptyPanel icon={<CheckCircle2 size={25} color="#10B981" />} title="Todo cerrado" subtitle="Sin pendientes en el dia." />
+          <EmptyPanel icon={<CheckCircle2 size={25} color={theme.success} />} title="Todo cerrado" subtitle="Sin pendientes en el día." />
         </Card>
       ) : (
         <Card padding="none" radius="card" style={{ overflow: 'hidden' }}>
-          {items.map((item, index) => (
+          {items.map((item, index) => {
+            const startMinutes = 9 * 60 + index * 90
+            const slot = `${String(Math.floor(startMinutes / 60) % 24).padStart(2, '0')}:${String(startMinutes % 60).padStart(2, '0')}`
+            const AgendaIcon = item.kind === 'programa_vence'
+              ? CalendarClock
+              : item.kind === 'checkin_pendiente'
+                ? ClipboardCheck
+                : item.kind === 'sin_ejercicio'
+                  ? Dumbbell
+                  : Calendar
+            return (
             <View key={item.id}>
               {index > 0 ? (
                 <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: theme.border, marginHorizontal: 14 }} />
               ) : null}
               <ListRow
                 leading={
-                  <View
-                    className="h-8 w-8 items-center justify-center rounded-pill"
-                    style={{ backgroundColor: theme.muted }}
-                  >
-                    <Text style={{ fontSize: 16, lineHeight: 20 }}>
-                      {item.kind === 'programa_vence' ? '⏳' : item.kind === 'checkin_pendiente' ? '📷' : '💪'}
-                    </Text>
+                  <View style={{ width: 86, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                    <Text style={{ width: 42, color: theme.mutedForeground, fontFamily: FONT.monoBold, fontSize: 12, fontVariant: ['tabular-nums'] }}>{slot}</Text>
+                    <View className="h-8 w-8 items-center justify-center rounded-pill" style={{ backgroundColor: theme.muted }}>
+                      <AgendaIcon size={15} color={theme.foreground} />
+                    </View>
                   </View>
                 }
                 title={item.clientName}
@@ -2718,7 +2734,8 @@ export function MobileTodayAgenda({ items }: { items: MobileAgendaItem[] }) {
                 onPress={() => router.push(`/coach/cliente/${item.clientId}`)}
               />
             </View>
-          ))}
+            )
+          })}
         </Card>
       )}
     </View>
