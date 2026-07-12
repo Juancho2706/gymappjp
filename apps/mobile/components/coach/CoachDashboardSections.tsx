@@ -84,6 +84,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 import { apiFetch, getApiBaseUrl } from '../../lib/api'
 import { getCoachNews, markCoachNewsRead, type CoachNewsItem } from '../../lib/coach-news'
 import { FONT } from '../../lib/typography'
+import { shadow } from '../../lib/shadows'
 import { useWorkspace } from '../../lib/workspace'
 import { CoachSearchPalette } from './CoachSearchPalette'
 import { WorkspaceSwitcherSheet } from './WorkspaceSwitcherSheet'
@@ -1835,8 +1836,21 @@ export function MobileGreetingHeader({
           accessibilityLabel={hasMultipleWorkspaces ? 'Cambiar workspace' : 'Tu cuenta'}
           onPress={hasMultipleWorkspaces ? () => setSwitcherOpen(true) : onAvatar}
           testID="coach-avatar-workspace"
+          style={{ position: 'relative' }}
         >
           <Avatar src={logoUrl} name={coachName} size={40} />
+          {hasMultipleWorkspaces ? (
+            <View
+              pointerEvents="none"
+              style={[
+                styles.workspaceCaret,
+                { borderColor: theme.background, backgroundColor: theme.card },
+                shadow('sm', theme.scheme),
+              ]}
+            >
+              <ChevronDown size={12} color={theme.mutedForeground} strokeWidth={2.2} />
+            </View>
+          ) : null}
         </TouchableOpacity>
       </View>
       <CoachSearchPalette visible={searchOpen} onClose={() => setSearchOpen(false)} />
@@ -3492,6 +3506,17 @@ const styles = StyleSheet.create({
     gap: 10,
     paddingTop: 6,
     paddingBottom: 14,
+  },
+  workspaceCaret: {
+    position: 'absolute',
+    right: -2,
+    bottom: -2,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   banner: {
     borderWidth: 1,

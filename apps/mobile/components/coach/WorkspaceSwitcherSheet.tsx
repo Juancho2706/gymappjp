@@ -27,14 +27,19 @@ import { useWorkspace, type WorkspaceKind, type WorkspaceRef } from '../../lib/w
 // (WorkspaceSwitchSheet.tsx:105-106). Aislado a Check; los demas usos pasan `color`, sin regresion.
 cssInterop(Check, { className: { target: 'style', nativeStyleToProp: { color: true } } })
 
-// Iconografia por tipo — espejo de `iconFor()` web (WorkspaceSwitchSheet.tsx:16-22): standalone =
-// Dumbbell, team = UsersRound, enterprise = Building2. El subtitulo se mantiene LOCALIZADO (frases DS
-// en latino neutro) en vez del tipo crudo web — mas legible, no cambia el gesto (spec D4).
+// Iconografía por tipo y subtítulo crudo — espejo de `iconFor()` +
+// `ws.type.replace(/_/g, ' ')` web (WorkspaceSwitchSheet.tsx:16-22,100-102).
 const KIND_META: Record<WorkspaceKind, { icon: LucideIcon; subtitle: string }> = {
-  standalone: { icon: Dumbbell, subtitle: 'Tu negocio personal' },
-  team_owner: { icon: UsersRound, subtitle: 'Equipo · lo gestionas' },
-  team_member: { icon: UsersRound, subtitle: 'Equipo' },
-  enterprise: { icon: Building2, subtitle: 'Organización' },
+  standalone: { icon: Dumbbell, subtitle: 'coach standalone' },
+  team_owner: { icon: UsersRound, subtitle: 'coach team' },
+  team_member: { icon: UsersRound, subtitle: 'coach team' },
+  enterprise: { icon: Building2, subtitle: 'enterprise coach' },
+}
+
+function workspaceDisplayLabel(ws: WorkspaceRef): string {
+  if (ws.kind === 'enterprise') return `${ws.label} - Coach`
+  if (ws.kind === 'team_owner' || ws.kind === 'team_member') return `${ws.label} - Equipo`
+  return ws.label
 }
 
 export interface WorkspaceSwitcherSheetProps {
@@ -54,6 +59,7 @@ function WorkspaceOption({ ws, onPick }: { ws: WorkspaceRef; onPick: (ws: Worksp
   const meta = KIND_META[ws.kind]
   const Icon = meta.icon
   const active = ws.isActive
+  const displayLabel = workspaceDisplayLabel(ws)
 
   // Fila activa tintada (web :84); inactiva con tinte de press (web hover:bg-surface-sunken).
   const rowBg = active ? 'bg-sport-100' : pressed ? 'bg-surface-sunken' : 'bg-surface-card'
@@ -64,7 +70,7 @@ function WorkspaceOption({ ws, onPick }: { ws: WorkspaceRef; onPick: (ws: Worksp
       testID={`workspace-option-${ws.id}`}
       accessibilityRole="button"
       accessibilityState={{ selected: active }}
-      accessibilityLabel={`${ws.label}${active ? ', activo' : ''}`}
+      accessibilityLabel={`${displayLabel}${active ? ', activo' : ''}`}
       onPress={() => onPick(ws)}
       onPressIn={() => {
         setPressed(true)
@@ -82,9 +88,9 @@ function WorkspaceOption({ ws, onPick }: { ws: WorkspaceRef; onPick: (ws: Worksp
 
       <View className="flex-1" style={{ minWidth: 0 }}>
         <Text className="text-[14.5px] font-sans-bold text-strong" numberOfLines={1}>
-          {ws.label}
+          {displayLabel}
         </Text>
-        <Text className="mt-0.5 text-[11.5px] text-subtle" numberOfLines={1}>
+        <Text className="mt-0.5 text-[11.5px] capitalize text-subtle" numberOfLines={1}>
           {meta.subtitle}
         </Text>
       </View>
