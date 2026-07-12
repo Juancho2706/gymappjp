@@ -1,4 +1,5 @@
-import { Modal, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, useWindowDimensions, View } from 'react-native'
+import { Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, useWindowDimensions, View } from 'react-native'
+import { useRef } from 'react'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import {
   Apple,
@@ -17,7 +18,15 @@ import {
   type LucideIcon,
 } from 'lucide-react-native'
 import { FONT } from '../../../lib/typography'
-import type { DirectoryClient } from '../../../lib/clients-directory'
+
+export interface ClientActionSubject {
+  id: string
+  fullName: string
+  email: string
+  phone: string | null
+  isActive: boolean
+  isArchived: boolean
+}
 
 /**
  * ClientActionsSheet — bottom-sheet de acciones por alumno (fila del directorio),
@@ -54,9 +63,10 @@ export function ClientActionsSheet({
   onToggle,
   onArchive,
   onDelete,
+  includeNativeShortcuts = true,
 }: {
   visible: boolean
-  client: DirectoryClient
+  client: ClientActionSubject
   theme: any
   onClose: () => void
   onProfile: () => void
@@ -69,6 +79,8 @@ export function ClientActionsSheet({
   onToggle: () => void
   onArchive?: () => void
   onDelete: () => void
+  /** Directory keeps RN shortcuts; profile uses the exact web action set. */
+  includeNativeShortcuts?: boolean
 }) {
   const { height } = useWindowDimensions()
   const insets = useSafeAreaInsets()
@@ -81,14 +93,22 @@ export function ClientActionsSheet({
 
   const paused = !client.isActive
   const archived = client.isArchived === true
+  const pendingActionRef = useRef<(() => void) | null>(null)
+  const runPendingAction = () => {
+    const action = pendingActionRef.current
+    pendingActionRef.current = null
+    action?.()
+  }
 
   const actions: { key: string; icon: LucideIcon; label: string; toneClass: string; danger?: boolean; on: () => void }[] = [
     { key: 'profile', icon: IdCard, label: 'Ver ficha completa', toneClass: 'text-strong', on: onProfile },
     ...(onWhatsApp ? [{ key: 'whatsapp', icon: MessageCircle, label: 'Enviar WhatsApp', toneClass: 'text-success-600', on: onWhatsApp }] : []),
     ...(onEdit ? [{ key: 'edit', icon: UserPen, label: 'Editar datos', toneClass: 'text-strong', on: onEdit }] : []),
-    { key: 'share', icon: Share2, label: 'Compartir acceso', toneClass: 'text-strong', on: onShare },
-    { key: 'workout', icon: Dumbbell, label: 'Programa de entreno', toneClass: 'text-sport-600', on: onWorkout },
-    { key: 'nutrition', icon: Apple, label: 'Nutrición', toneClass: 'text-ember-600', on: onNutrition },
+    ...(includeNativeShortcuts ? [
+      { key: 'share', icon: Share2, label: 'Compartir acceso', toneClass: 'text-strong', on: onShare },
+      { key: 'workout', icon: Dumbbell, label: 'Programa de entreno', toneClass: 'text-sport-600', on: onWorkout },
+      { key: 'nutrition', icon: Apple, label: 'Nutrición', toneClass: 'text-ember-600', on: onNutrition },
+    ] : []),
     { key: 'reset', icon: KeyRound, label: 'Resetear contraseña', toneClass: 'text-info-600', on: onReset },
     { key: 'toggle', icon: paused ? CirclePlay : CirclePause, label: paused ? 'Reactivar acceso' : 'Pausar acceso', toneClass: 'text-warning-600', on: onToggle },
     ...(onArchive
@@ -98,7 +118,7 @@ export function ClientActionsSheet({
   ]
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose} onDismiss={runPendingAction}>
       <Pressable style={styles.overlay} onPress={onClose} />
       <View
         accessibilityViewIsModal
@@ -135,7 +155,11 @@ export function ClientActionsSheet({
                 accessibilityLabel={a.label}
                 activeOpacity={0.75}
                 style={styles.action}
-                onPress={() => { onClose(); a.on() }}
+                onPress={() => {
+                  pendingActionRef.current = a.on
+                  onClose()
+                  if (Platform.OS !== 'ios') setTimeout(runPendingAction, 250)
+                }}
               >
                 <Icon size={19} className={a.toneClass} />
                 <Text className={a.danger ? 'text-danger-600' : 'text-strong'} style={styles.actionLabel}>{a.label}</Text>

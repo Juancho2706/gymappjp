@@ -4,8 +4,8 @@ Fecha: 2026-07-12
 
 ## Estado
 
-Unidad en progreso. Tanda A cerró shell, hero, tabs, FAB y helpers de fecha.
-Pendiente antes de cerrar: menú ⋮ completo y soporte team de sus endpoints.
+Unidad cerrada a nivel código/spec. Tanda A cerró shell, hero, tabs, FAB y
+helpers; Tanda B cerró acciones, autorización multi-workspace y derivados.
 
 ## Tanda A
 
@@ -27,10 +27,36 @@ Pendiente antes de cerrar: menú ⋮ completo y soporte team de sus endpoints.
   abre `wa.me` sin mensaje, igual al FAB web.
 - No se tocaron tabs hermanos ni árbol alumno/ejecutor.
 
-## Pendiente
+## Tanda B
 
-- Reemplazar ActionSheet reducido por acciones web completas: editar, WhatsApp
-  con acceso, reset, pausar, archivar y eliminar.
-- Ampliar reset/status/delete mobile para workspace team antes de cablear esas
-  acciones; autorización servidor obligatoria.
-- Verificación final y gates completos de cierre.
+- Menú ⋮ usa el sheet completo en el orden web: ficha, WhatsApp, editar, reset,
+  pausar/reactivar, archivar/desarchivar y eliminar; los tres shortcuts RN del
+  directorio se ocultan en esta superficie.
+- WhatsApp del menú usa el copy web y URL de recurso: `/t/{teamSlug}` para team,
+  `/c/{inviteCode || slug}` para el resto. Si no puede resolverla, la acción no
+  aparece.
+- Reset devuelve clave temporal copiable; pausa y archivo muestran copy web;
+  eliminar exige escribir el nombre y vuelve al directorio tras éxito.
+- PATCH/DELETE/reset reciben el workspace RN. Servidor revalida bearer,
+  membresía/rol, team vigente y scope del alumno antes de toda mutación.
+- DELETE preserva la identidad Auth cuando el alumno también es coach y falla
+  cerrado si no puede comprobarlo; un fallo de GoTrue conserva estado
+  reintentable. Desarchivar revalida el cupo standalone y archivar/desarchivar
+  conserva los correos y enlaces correctos para standalone/team/enterprise.
+- La transición sheet→confirmación queda encolada hasta el dismiss; el
+  directorio mantiene el sheet montado durante el cierre para no perder la
+  acción en iOS.
+- Peso cae al intake; score acumula señales de check-in, entreno, nutrición y
+  ciclo; racha actual usa actividad workout + comidas completadas de 371 días.
+- Query base del cliente propaga fallos de red para que el retry sea alcanzable;
+  fallos parciales ricos siguen degradando sin ocultar la identidad del alumno.
+- Editor se desmonta al cerrar y bloquea X/Android Back mientras guarda.
+
+## Gates
+
+- `pnpm exec tsc --noEmit` mobile — PASS.
+- `pnpm exec tsc --noEmit` web — PASS.
+- `node scripts/check-token-parity.mjs` — PASS, 86/86.
+- `pnpm exec expo export --platform android` — PASS.
+- `pnpm exec vitest run packages/profile-analytics/client-status.test.ts packages/profile-analytics/overview.test.ts` — PASS, 13/13.
+- Smoke device light/dark × EVA/custom — pendiente.

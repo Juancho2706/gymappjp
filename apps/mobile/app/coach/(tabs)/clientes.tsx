@@ -63,7 +63,7 @@ import {
   type SortDir,
   type StatusFilter,
 } from '../../../lib/clients-directory'
-import { clientLoginUrl, deleteClient, openWhatsApp, resetClientPassword, setClientStatus, shareLogin } from '../../../lib/client-actions'
+import { clientLoginUrl, deleteClient, openWhatsApp, resetClientPassword, setClientStatus, shareLogin, teamClientLoginUrl } from '../../../lib/client-actions'
 import { getCoachProfile } from '../../../lib/coach'
 import { canImportClients, type SubscriptionTier } from '../../../lib/coach-tiers'
 import { getCoachOrgContext, type CoachOrgContext } from '../../../lib/org'
@@ -71,6 +71,7 @@ import { useWorkspace } from '../../../lib/workspace'
 import { FONT } from '../../../lib/typography'
 import { GLOWS, shadow } from '../../../lib/shadows'
 import { getSantiagoIsoYmdForUtcInstant } from '../../../lib/date-utils'
+import { supabase } from '../../../lib/supabase'
 
 const DAY_MS = 24 * 60 * 60 * 1000
 
@@ -327,6 +328,7 @@ export default function ClientesScreen() {
   const [pulseById, setPulseById] = useState<Map<string, PulseRow>>(new Map())
   const [pulseError, setPulseError] = useState(false)
   const [coachSlug, setCoachSlug] = useState<string>('')
+  const [teamSlug, setTeamSlug] = useState<string>('')
   const [coachPrimaryColor, setCoachPrimaryColor] = useState<string | null>(null)
   const [maxClients, setMaxClients] = useState<number>(0)
   const [subscriptionTier, setSubscriptionTier] = useState<SubscriptionTier | null>(null)
@@ -343,6 +345,9 @@ export default function ClientesScreen() {
   const [resetting, setResetting] = useState(false)
   const [resetError, setResetError] = useState<string | null>(null)
   const [actionsClient, setActionsClient] = useState<DirectoryClient | null>(null)
+  const lastActionsClientRef = useRef<DirectoryClient | null>(null)
+  if (actionsClient) lastActionsClientRef.current = actionsClient
+  const actionsSubject = actionsClient ?? lastActionsClientRef.current
 
   // Gotcha 6b: la pantalla vive en un tab persistente (no se desmonta). Un
   // `useEffect(load,[])` de un disparo dejaba el roster CONGELADO al volver de la
@@ -360,6 +365,16 @@ export default function ClientesScreen() {
         fetchDirectoryData().catch(() => {})
       }
     }, [workspace.ready, workspace.orgId, workspace.teamId])
+  )
+  useFocusEffect(
+    useCallback(() => {
+      if (!workspace.teamId) { setTeamSlug(''); return }
+      let active = true
+      setTeamSlug('')
+      void supabase.from('teams').select('slug').eq('id', workspace.teamId).maybeSingle()
+        .then(({ data }) => { if (active) setTeamSlug(data?.slug?.trim() ?? '') })
+      return () => { active = false }
+    }, [workspace.teamId])
   )
   useFocusEffect(
     useCallback(() => {
@@ -502,18 +517,19 @@ export default function ClientesScreen() {
   const clearFilters = () => { setRiskFilter('all'); setProgramFilter('all'); setStatusFilter('any'); setSearch('') }
 
   // ── Acciones rápidas por alumno ──────────────────────────────────────────
+  const portalUrl = workspace.teamId ? (teamSlug ? teamClientLoginUrl(teamSlug) : null) : (coachSlug ? clientLoginUrl(coachSlug) : null)
   function handleWhatsApp(c: DirectoryClient) {
-    if (!c.phone || !coachSlug) return
-    openWhatsApp(c.phone, c.fullName, clientLoginUrl(coachSlug)).catch(() => {})
+    if (!c.phone || !portalUrl) return
+    openWhatsApp(c.phone, c.fullName, portalUrl).catch(() => {})
   }
   function handleShare(c: DirectoryClient) {
-    if (!coachSlug) return
-    shareLogin(c.fullName, clientLoginUrl(coachSlug)).catch(() => {})
+    if (!portalUrl) return
+    shareLogin(c.fullName, portalUrl).catch(() => {})
   }
   // Copiar el portal de alumnos al portapapeles (espejo web CoachWarRoom copiar-portal).
   function handleCopyPortal() {
-    if (!coachSlug) return
-    Clipboard.setStringAsync(clientLoginUrl(coachSlug))
+    if (!portalUrl) return
+    Clipboard.setStringAsync(portalUrl)
       .then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000) })
       .catch(() => {})
   }
@@ -528,7 +544,7 @@ export default function ClientesScreen() {
         {
           text: pausing ? 'Pausar' : 'Activar',
           style: pausing ? 'destructive' : 'default',
-          onPress: () => setClientStatus(c.id, { is_active: !c.isActive }).then(() => load(true)).catch((e: any) => Alert.alert('Error', e?.message ?? 'No se pudo.')),
+          onPress: () => setClientStatus(c.id, { is_active: !c.isActive }, { kind: workspace.kind, teamId: workspace.teamId, orgId: workspace.orgId }).then(() => load(true)).catch((e: any) => Alert.alert('Error', e?.message ?? 'No se pudo.')),
         },
       ]
     )
@@ -543,7 +559,7 @@ export default function ClientesScreen() {
     setResetting(true)
     setResetError(null)
     try {
-      setResetPassword(await resetClientPassword(resetTarget.id))
+      setResetPassword(await resetClientPassword(resetTarget.id, { kind: workspace.kind, teamId: workspace.teamId, orgId: workspace.orgId }))
     } catch (error) {
       setResetError(error instanceof Error ? error.message : 'No se pudo resetear la contraseña.')
     } finally {
@@ -560,7 +576,7 @@ export default function ClientesScreen() {
     setDeleting(true)
     setDeleteError(null)
     try {
-      await deleteClient(deleteTarget.id)
+      await deleteClient(deleteTarget.id, { kind: workspace.kind, teamId: workspace.teamId, orgId: workspace.orgId })
       setDeleteTarget(null)
       setDeleteConfirm('')
       await load(true)
@@ -588,7 +604,7 @@ export default function ClientesScreen() {
         {
           text: archiving ? 'Archivar' : 'Desarchivar',
           style: archiving ? 'destructive' : 'default',
-          onPress: () => setClientStatus(c.id, { is_archived: archiving }).then(() => load(true)).catch((e: any) => Alert.alert('Error', e?.message ?? 'No se pudo.')),
+          onPress: () => setClientStatus(c.id, { is_archived: archiving }, { kind: workspace.kind, teamId: workspace.teamId, orgId: workspace.orgId }).then(() => load(true)).catch((e: any) => Alert.alert('Error', e?.message ?? 'No se pudo.')),
         },
       ]
     )
@@ -610,7 +626,7 @@ export default function ClientesScreen() {
 
   const headerActions = (
     <View style={styles.headerActions}>
-      {coachSlug ? (
+      {portalUrl ? (
         <TouchableOpacity
           testID="directory-copy-portal"
           accessibilityRole="button"
@@ -815,7 +831,7 @@ export default function ClientesScreen() {
                 theme={theme}
                 pulse={pulseById.get(item.id)}
                 onOpen={goProfile}
-                onWhatsApp={item.phone && coachSlug ? handleWhatsApp : undefined}
+                onWhatsApp={item.phone && portalUrl ? handleWhatsApp : undefined}
                 onEdit={handleEdit}
                 onShare={handleShare}
                 onWorkout={goWorkout}
@@ -924,22 +940,22 @@ export default function ClientesScreen() {
         workspace={{ kind: workspace.kind, teamId: workspace.teamId, orgId: workspace.orgId }}
       />
 
-      {actionsClient ? (
+      {actionsSubject ? (
         <ClientActionsSheet
-          visible
-          client={actionsClient}
+          visible={actionsClient !== null}
+          client={actionsSubject}
           theme={theme}
           onClose={() => setActionsClient(null)}
-          onProfile={() => goProfile(actionsClient)}
-          onWhatsApp={actionsClient.phone && coachSlug ? () => handleWhatsApp(actionsClient) : undefined}
-          onEdit={() => handleEdit(actionsClient)}
-          onShare={() => handleShare(actionsClient)}
-          onWorkout={() => goWorkout(actionsClient)}
+          onProfile={() => goProfile(actionsSubject)}
+          onWhatsApp={actionsSubject.phone && portalUrl ? () => handleWhatsApp(actionsSubject) : undefined}
+          onEdit={() => handleEdit(actionsSubject)}
+          onShare={() => handleShare(actionsSubject)}
+          onWorkout={() => goWorkout(actionsSubject)}
           onNutrition={goNutrition}
-          onReset={() => handleReset(actionsClient)}
-          onToggle={() => handleToggle(actionsClient)}
-          onArchive={() => handleArchive(actionsClient)}
-          onDelete={() => handleDelete(actionsClient)}
+          onReset={() => handleReset(actionsSubject)}
+          onToggle={() => handleToggle(actionsSubject)}
+          onArchive={() => handleArchive(actionsSubject)}
+          onDelete={() => handleDelete(actionsSubject)}
         />
       ) : null}
 

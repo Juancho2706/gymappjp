@@ -42,6 +42,8 @@ export interface CoachClientDetail {
   phone: string | null
   is_active: boolean | null
   is_archived: boolean | null
+  org_id: string | null
+  team_id: string | null
   goal_weight_kg: number | null
   height_cm: number | null
   initial_weight_kg: number | null
@@ -605,15 +607,17 @@ export async function getCoachClientDetail(clientId: string): Promise<{
   workoutLogsAll: WorkoutLogRow[]
   muscleVolumeReps: MuscleVolumeSetsEntry[]
   workoutDates371: string[]
+  nutritionActivityDates371: string[]
   hasTrained: boolean
 }> {
   // Cliente primero (independiente) → el detalle SIEMPRE abre, aunque las queries
   // ricas fallen en una prod sin columnas enterprise/Codex.
-  const { data: clientData } = await supabase
+  const { data: clientData, error: clientError } = await supabase
     .from('clients')
-    .select('id, full_name, email, phone, is_active, is_archived, goal_weight_kg, subscription_start_date, created_at')
+    .select('id, full_name, email, phone, is_active, is_archived, org_id, team_id, goal_weight_kg, subscription_start_date, created_at')
     .eq('id', clientId)
     .maybeSingle()
+  if (clientError) throw clientError
   const baseClient: CoachClientDetail | null = clientData
     ? ({ ...(clientData as any), height_cm: null, initial_weight_kg: null, sex: null } as CoachClientDetail)
     : null
@@ -642,13 +646,14 @@ export async function getCoachClientDetail(clientId: string): Promise<{
     workoutLogsAll: [] as WorkoutLogRow[],
     muscleVolumeReps: [] as MuscleVolumeSetsEntry[],
     workoutDates371: [] as string[],
+    nutritionActivityDates371: [] as string[],
     hasTrained: false,
   }
   try {
   const { iso: todayIso } = getTodayInSantiago()
   const sevenDaysAgo = isoDateAddDays(todayIso, -7)
   const fourteenDaysAgo = isoDateAddDays(todayIso, -14)
-  const thirtyDaysAgo = isoDateAddDays(todayIso, -30)
+  const activityStart = isoDateAddDays(todayIso, -371)
   const since30 = new Date(Date.now() - 30 * 86400000).toISOString()
 
   // Volumen por SERIES (calistenia/cardio): NO hay RPC equivalente (get_client_muscle_volume
@@ -734,7 +739,7 @@ export async function getCoachClientDetail(clientId: string): Promise<{
         .from('daily_nutrition_logs')
         .select('log_date, target_calories_at_log, target_protein_at_log, target_carbs_at_log, target_fats_at_log, nutrition_meal_logs ( meal_id, is_completed, consumed_quantity )')
         .eq('client_id', clientId)
-        .gte('log_date', thirtyDaysAgo)
+        .gte('log_date', activityStart)
         .order('log_date', { ascending: false }),
       supabase
         .from('workout_sessions' as never)
@@ -930,6 +935,10 @@ export async function getCoachClientDetail(clientId: string): Promise<{
     workoutLogsAll: [],
     muscleVolumeReps: buildMuscleVolumeBySets((setsLogsRes.data as any[] | null) ?? []),
     workoutDates371: [...workoutDays371].sort(),
+    nutritionActivityDates371: nutritionRows
+      .filter((row) => (row.nutrition_meal_logs ?? []).some((meal) => meal.is_completed === true))
+      .map((row) => row.log_date)
+      .sort(),
     hasTrained:
       workoutDays371.size > 0 ||
       workoutDays30.size > 0 ||
