@@ -4,9 +4,9 @@ import { MotiView } from 'moti'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { AlertOctagon, AlertTriangle, ArrowRight, ChevronDown } from 'lucide-react-native'
 import { useTheme } from '../../../context/ThemeContext'
+import { deriveSportTokens } from '@eva/brand-kit'
 import { FONT } from '../../../lib/typography'
 import type { DirectoryRiskFilter, DirectoryStats } from '../../../lib/clients-directory'
-import { DANGER, EMBER, WARNING } from './directory-shared'
 
 /**
  * DirectorySummary — "Resumen · hoy" (triage). Realización móvil del web `CoachWarRoom`:
@@ -50,12 +50,24 @@ function PulseCard({
   onPress: () => void
   testID?: string
 }) {
-  const { theme } = useTheme()
-  const color = tone === 'danger' ? DANGER : WARNING
+  const { theme, resolvedScheme } = useTheme()
+  const dark = resolvedScheme === 'dark'
+  const toneTokens = tone === 'danger'
+    ? {
+        fg: dark ? '#FF7C97' : '#BE183C',
+        bg: dark ? 'rgba(244,54,90,0.18)' : '#FCDDE4',
+        solid: theme.destructive,
+      }
+    : {
+        fg: dark ? '#FFD489' : '#8F5A05',
+        bg: dark ? 'rgba(245,165,36,0.18)' : '#FDEFD3',
+        solid: '#F5A524',
+      }
+  const subtle = dark ? '#86919E' : '#646F7D'
   // Espejo web (`DirPulseCard`): label = text-white/95, flecha/valor = white pleno,
   // hint = text-white/80 cuando `selected` (CoachWarRoom.tsx:110,117,123,128).
-  const labelColor = selected ? 'rgba(255,255,255,0.95)' : color
-  const valueColor = selected ? '#fff' : value > 0 ? color : theme.mutedForeground
+  const labelColor = selected ? 'rgba(255,255,255,0.95)' : toneTokens.fg
+  const valueColor = selected ? '#fff' : value > 0 ? toneTokens.fg : subtle
   const shown = useCountUp(value)
   return (
     <TouchableOpacity
@@ -65,8 +77,8 @@ function PulseCard({
       style={[
         pulseStyles.card,
         {
-          backgroundColor: selected ? color : color + '1A',
-          borderColor: selected ? color : theme.border,
+          backgroundColor: selected ? toneTokens.solid : toneTokens.bg,
+          borderColor: selected ? toneTokens.solid : theme.border,
         },
       ]}
       onPress={onPress}
@@ -77,7 +89,7 @@ function PulseCard({
           <Icon size={14} color={labelColor} />
           <Text style={[pulseStyles.label, { color: labelColor }]}>{label}</Text>
         </View>
-        {value > 0 ? <ArrowRight size={15} color={selected ? '#fff' : color} /> : null}
+        {value > 0 ? <ArrowRight size={15} color={selected ? '#fff' : toneTokens.fg} /> : null}
       </View>
       <Text style={[pulseStyles.value, { color: valueColor }]}>{shown}</Text>
       <Text numberOfLines={1} style={[pulseStyles.hint, { color: selected ? 'rgba(255,255,255,0.8)' : theme.mutedForeground }]}>{hint}</Text>
@@ -120,7 +132,7 @@ function MetricChip({
         chipStyles.chip,
         {
           backgroundColor: selected ? theme.foreground : theme.card,
-          borderColor: selected ? theme.foreground : theme.border,
+          borderColor: selected ? theme.ink300 : theme.border,
         },
       ]}
     >
@@ -148,7 +160,13 @@ export function DirectorySummary({
   avgAdherence: number
   nutritionLowCount: number
 }) {
-  const { theme } = useTheme()
+  const { theme, resolvedScheme } = useTheme()
+  const dark = resolvedScheme === 'dark'
+  const subtle = dark ? '#86919E' : '#646F7D'
+  const sport = deriveSportTokens(theme.primary)
+  const sport600 = dark ? sport.dark['600'] : sport.ramp['600']
+  const danger600 = dark ? '#FF7C97' : '#BE183C'
+  const ember700 = dark ? '#FFB79E' : '#C23E14'
   // "Resumen · hoy" colapsable + persistente (espejo web `eva.dir.resumenOpen`).
   const [open, setOpen] = useState(true)
   useEffect(() => {
@@ -169,25 +187,25 @@ export function DirectorySummary({
   // Métricas secundarias — grilla de 4 (1:1 web: Total · Activos · Adher.% · Nutri.).
   const metricTiles: { key: string; label: string; value: number; suffix?: string; color: string; selected: boolean; onPress?: () => void }[] = [
     { key: 'total', label: 'Total', value: stats.total, color: theme.foreground, selected: riskFilter === 'all', onPress: onSetAllRisk },
-    { key: 'active', label: 'Activos', value: stats.active, color: theme.primary, selected: false },
+    { key: 'active', label: 'Activos', value: stats.active, color: sport600, selected: false },
     { key: 'adherence', label: 'Adher.', value: avgAdherence, suffix: '%', color: theme.foreground, selected: false },
-    { key: 'nutrition', label: 'Nutri.', value: nutritionLowCount, color: EMBER, selected: riskFilter === 'nutrition_low', onPress: () => onToggleRisk('nutrition_low') },
+    { key: 'nutrition', label: 'Nutri.', value: nutritionLowCount, color: ember700, selected: riskFilter === 'nutrition_low', onPress: () => onToggleRisk('nutrition_low') },
   ]
 
   return (
     <View style={styles.summary}>
       <TouchableOpacity testID="directory-resumen-toggle" activeOpacity={0.7} onPress={toggleOpen} style={styles.eyebrowRow}>
-        <Text style={[styles.eyebrow, { color: theme.mutedForeground }]}>Resumen · hoy</Text>
+        <Text style={[styles.eyebrow, { color: subtle }]}>Resumen · hoy</Text>
         {!open ? (
           <Text numberOfLines={1} style={[styles.collapsed, { color: theme.mutedForeground }]}>
             {stats.active} activos
             {stats.urgentCount > 0 ? (
-              <Text style={{ color: DANGER, fontFamily: FONT.uiBold }}> · {stats.urgentCount} en riesgo</Text>
+              <Text style={{ color: danger600, fontFamily: FONT.uiBold }}> · {stats.urgentCount} en riesgo</Text>
             ) : null}
             {` · ${avgAdherence}% adher.`}
           </Text>
         ) : null}
-        <ChevronDown size={18} color={theme.mutedForeground} style={{ marginLeft: open ? 'auto' : 0, transform: [{ rotate: open ? '180deg' : '0deg' }] }} />
+        <ChevronDown size={18} color={subtle} style={{ marginLeft: open ? 'auto' : 0, transform: [{ rotate: open ? '180deg' : '0deg' }] }} />
       </TouchableOpacity>
 
       {open ? (
