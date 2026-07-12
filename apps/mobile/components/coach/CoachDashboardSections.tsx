@@ -35,7 +35,6 @@ import {
   Plus,
   Receipt,
   Rocket,
-  Search,
   Sparkles,
   Smartphone,
   Wrench,
@@ -43,6 +42,7 @@ import {
   TrendingUp,
   TriangleAlert,
   UserPlus,
+  Upload,
   Users,
   Utensils,
   X,
@@ -57,6 +57,7 @@ import { LinearGradient } from 'expo-linear-gradient'
 import { CartesianChart, Area, Line, Bar, useChartPressState } from 'victory-native'
 import { useFont, Circle, Text as SkiaText } from '@shopify/react-native-skia'
 import { useDerivedValue, type SharedValue } from 'react-native-reanimated'
+import { deriveSportTokens } from '@eva/brand-kit'
 import { useTheme } from '../../context/ThemeContext'
 import type {
   MobileActivityItem,
@@ -86,8 +87,10 @@ import { getCoachNews, markCoachNewsRead, type CoachNewsItem } from '../../lib/c
 import { FONT } from '../../lib/typography'
 import { shadow } from '../../lib/shadows'
 import { useWorkspace } from '../../lib/workspace'
-import { CoachSearchPalette } from './CoachSearchPalette'
 import { WorkspaceSwitcherSheet } from './WorkspaceSwitcherSheet'
+import { AnimatedNumber } from '../AnimatedNumber'
+
+const WARNING_500 = '#F5A524' // --warning-500
 
 function hexToRgba(hex: string, alpha: number): string {
   const clean = hex.replace('#', '')
@@ -154,7 +157,7 @@ export function MobileBillingBanners({ coach, activeClientCount }: { coach: Coac
 
   if (blocked) {
     return (
-      <MobileBanner tone="danger" icon={TriangleAlert} onPress={() => openCoachWebPath('/coach/subscription')}>
+      <MobileBanner tone="danger" icon={TriangleAlert} actionLabel="Reactivar" onPress={() => openCoachWebPath('/coach/subscription')}>
         <Text>Tu suscripcion esta cancelada. Reactiva para recuperar acceso.</Text>
       </MobileBanner>
     )
@@ -166,13 +169,18 @@ export function MobileBillingBanners({ coach, activeClientCount }: { coach: Coac
     const recTier = showRec ? getRecommendedTier(activeClientCount) : null
     const recConfig = recTier ? TIER_CONFIG[recTier] : null
     return (
-      <MobileBanner tone="warn" icon={Clock}>
+      <MobileBanner
+        tone="warn"
+        icon={Clock}
+        actionLabel={showRec && recConfig ? `Activar ${recConfig.label}` : 'Renovar'}
+        onPress={() => openCoachWebPath(showRec && recTier ? `/coach/reactivate?tier=${recTier}` : '/coach/subscription')}
+      >
         <Text>
           Cancelaste tu plan. Acceso hasta por {days} dia{days === 1 ? '' : 's'}.
         </Text>
         {showRec && recConfig ? (
           <Text>
-            Con {activeClientCount} alumnos: Plan {recConfig.label} hasta {recConfig.maxClients}.
+            Con {activeClientCount} alumnos: Plan {recConfig.label} (hasta {recConfig.maxClients}) ·
           </Text>
         ) : null}
       </MobileBanner>
@@ -185,13 +193,18 @@ export function MobileBillingBanners({ coach, activeClientCount }: { coach: Coac
     const recTier = showRec ? getRecommendedTier(activeClientCount) : null
     const recConfig = recTier ? TIER_CONFIG[recTier] : null
     return (
-      <MobileBanner tone="info" icon={Clock}>
+      <MobileBanner
+        tone="info"
+        icon={Clock}
+        actionLabel={showRec && recConfig ? `Activar ${recConfig.label}` : 'Activar plan'}
+        onPress={() => openCoachWebPath(showRec && recTier ? `/coach/reactivate?tier=${recTier}` : '/coach/subscription')}
+      >
         <Text>
-          Periodo de prueba - {days} dia{days === 1 ? '' : 's'} restantes.
+          Periodo de prueba · {days} dia{days === 1 ? '' : 's'} restantes.
         </Text>
         {showRec && recConfig ? (
           <Text>
-            Con {activeClientCount} alumnos: Plan {recConfig.label} hasta {recConfig.maxClients}.
+            Con {activeClientCount} alumnos: Plan {recConfig.label} (hasta {recConfig.maxClients}) ·
           </Text>
         ) : null}
       </MobileBanner>
@@ -302,41 +315,43 @@ function MobileBanner({
   tone,
   icon: Icon,
   children,
+  actionLabel,
   onPress,
 }: {
   tone: 'info' | 'warn' | 'danger'
   icon: LucideIcon
   children: ReactNode
+  actionLabel: string
   onPress?: () => void
 }) {
-  const { theme } = useTheme()
-  // danger → token danger-500 (theme.destructive #F4365A), no rose-500 #F43F5E
-  // (web BillingBanners.tsx:97 usa var(--danger-500)); warn = warning-500, info = sport (theme.primary).
-  const toneColor = tone === 'danger' ? theme.destructive : tone === 'warn' ? '#F59E0B' : theme.primary
+  const { theme, resolvedScheme } = useTheme()
+  const dark = resolvedScheme === 'dark'
+  const sport = deriveSportTokens(theme.primary)
+  const palette = tone === 'danger'
+    ? { border: theme.destructive, background: dark ? 'rgba(244,54,90,0.18)' : '#FCDDE4', foreground: dark ? '#FF9CB0' : '#A8163A' }
+    : tone === 'warn'
+      ? { border: WARNING_500, background: dark ? 'rgba(245,165,36,0.18)' : '#FDEFD3', foreground: dark ? '#FFD489' : '#8F5A05' }
+      : { border: theme.primary, background: dark ? hexToRgba(theme.primary, 0.2) : sport.ramp['100'], foreground: dark ? sport.dark['700'] : sport.ramp['700'] }
   return (
     <TouchableOpacity
       activeOpacity={0.84}
-      onPress={onPress ?? (() => openCoachWebPath('/coach/subscription'))}
+      onPress={onPress}
+      accessibilityRole="link"
       style={[
         styles.banner,
         {
-          borderColor: hexToRgba(toneColor, 0.32),
-          backgroundColor: hexToRgba(toneColor, 0.1),
+          borderColor: hexToRgba(palette.border, 0.3),
+          backgroundColor: palette.background,
           borderRadius: theme.radius.xl,
         },
       ]}
     >
-      <Icon size={18} color={toneColor} strokeWidth={2.2} />
+      <Icon size={16} color={palette.foreground} strokeWidth={2} />
       <View style={styles.bannerCopy}>
-        <Text style={[styles.bannerText, { color: theme.foreground, fontFamily: theme.fontSans }]}>
+        <Text style={[styles.bannerText, { color: palette.foreground, fontFamily: theme.fontSans }]}>
           {children}
         </Text>
-        <View style={[styles.bannerCta, { backgroundColor: toneColor }]}>
-          <CreditCard size={13} color="#FFFFFF" strokeWidth={2.3} />
-          <Text style={[styles.bannerCtaText, { fontFamily: FONT.uiBold }]}>
-            Revisar plan
-          </Text>
-        </View>
+        <Text style={[styles.bannerAction, { color: palette.foreground, fontFamily: FONT.uiBold }]}>{actionLabel}</Text>
       </View>
     </TouchableOpacity>
   )
@@ -1131,27 +1146,26 @@ export function MobileQuickActionsFab({
 
   const actions: Array<{ label: string; icon: LucideIcon; on: () => void }> = [
     { label: 'Crear alumno', icon: UserPlus, on: () => { setSheet(false); setModal('client') } },
-    { label: 'Crear programa', icon: Layers, on: () => { setSheet(false); router.push('/coach/(tabs)/builder') } },
-    { label: 'Crear nutricion', icon: Utensils, on: () => { setSheet(false); router.push('/coach/(tabs)/nutricion') } },
-    { label: 'Registrar pago', icon: Receipt, on: () => { setSheet(false); setModal('payment') } },
+    { label: 'Importar', icon: Upload, on: () => { setSheet(false); router.push('/coach/(tabs)/clientes') } },
+    { label: 'Programa', icon: Dumbbell, on: () => { setSheet(false); router.push('/coach/(tabs)/builder') } },
   ]
 
   return (
     <>
       <TouchableOpacity
         accessibilityRole="button"
-        accessibilityLabel="Acciones rapidas"
+        accessibilityLabel="Acciones rápidas"
+        className="bg-cta-fill"
         activeOpacity={0.85}
         onPress={() => setSheet(true)}
         style={[
           {
             position: 'absolute',
-            right: 18,
-            bottom: insets.bottom + 84,
+            right: 20,
+            bottom: insets.bottom + 92,
             width: 56,
             height: 56,
             borderRadius: 28,
-            backgroundColor: theme.primary,
             alignItems: 'center',
             justifyContent: 'center',
           },
@@ -1161,7 +1175,7 @@ export function MobileQuickActionsFab({
         <Plus size={26} color="#FFFFFF" strokeWidth={2.4} />
       </TouchableOpacity>
 
-      <NativeDialog open={sheet} title="Accion rapida" onClose={() => setSheet(false)}>
+      <NativeDialog open={sheet} title="Acción rápida" onClose={() => setSheet(false)}>
         <View style={{ gap: 2 }}>
           {actions.map((a) => {
             const Icon = a.icon
@@ -1755,7 +1769,6 @@ export function MobileGreetingHeader({
   logoUrl,
   onInsights,
   onAvatar,
-  pendingCount = 0,
 }: {
   coachName: string
   logoUrl?: string | null
@@ -1766,25 +1779,16 @@ export function MobileGreetingHeader({
 }) {
   const { theme } = useTheme()
   const { workspaces } = useWorkspace()
-  const [searchOpen, setSearchOpen] = useState(false)
   const [switcherOpen, setSwitcherOpen] = useState(false)
   const hasMultipleWorkspaces = (workspaces?.length ?? 0) > 1
   const firstName = coachName?.split(' ')[0] || 'Coach'
-  // Saludo por hora del dia (espejo useTimeOfDayGreeting web) — neutralizado (sin voseo).
   const now = new Date()
-  const hour = Number(new Intl.DateTimeFormat('en-US', {
-    timeZone: 'America/Santiago',
-    hour: '2-digit',
-    hour12: false,
-  }).format(now)) % 24
-  const greeting = hour < 6 ? 'Buenas noches' : hour < 13 ? 'Buenos días' : hour < 20 ? 'Buenas tardes' : 'Buenas noches'
   const dateStr = new Intl.DateTimeFormat('es-ES', {
     timeZone: 'America/Santiago',
     weekday: 'long',
     day: 'numeric',
     month: 'long',
   }).format(now)
-  const dateCap = dateStr.charAt(0).toUpperCase() + dateStr.slice(1)
 
   const iconBtn = {
     width: 40,
@@ -1800,33 +1804,19 @@ export function MobileGreetingHeader({
   return (
     <View style={styles.greeting}>
       <View style={{ flex: 1, minWidth: 0 }}>
-        <Text className="font-sans-semibold text-[12px] uppercase text-muted" style={{ lineHeight: 16, letterSpacing: 2.16 }}>
-          {dateCap}
+        <Text className="font-sans-semibold text-[13px] text-muted" numberOfLines={1}>
+          {dateStr}
         </Text>
         <Text
-          className="font-display-black text-[31px] text-strong"
-          style={{ lineHeight: 34, letterSpacing: -0.93 }}
+          className="font-display-black text-[28px] text-strong"
+          style={{ lineHeight: 29.4, letterSpacing: -0.84 }}
           numberOfLines={1}
         >
-          {greeting}, <Text className="text-sport-500">{firstName}</Text>
-        </Text>
-        <Text className="font-sans text-[13px] text-muted" style={{ marginTop: 3 }}>
-          {pendingCount > 0
-            ? `Tienes ${pendingCount} pendiente${pendingCount === 1 ? '' : 's'} hoy.`
-            : 'Todo al día. Buen momento para planificar.'}
+          Hola, {firstName}
         </Text>
       </View>
 
       <View className="flex-row items-center" style={{ gap: 6 }}>
-        <TouchableOpacity
-          activeOpacity={0.8}
-          accessibilityLabel="Buscar"
-          onPress={() => setSearchOpen(true)}
-          style={iconBtn}
-          testID="coach-global-search"
-        >
-          <Search size={19} color={theme.foreground} strokeWidth={2.1} />
-        </TouchableOpacity>
         <TouchableOpacity activeOpacity={0.8} accessibilityLabel="Insights" onPress={onInsights} style={iconBtn}>
           <Sparkles size={19} color={theme.foreground} strokeWidth={2.1} />
         </TouchableOpacity>
@@ -1853,7 +1843,6 @@ export function MobileGreetingHeader({
           ) : null}
         </TouchableOpacity>
       </View>
-      <CoachSearchPalette visible={searchOpen} onClose={() => setSearchOpen(false)} />
       <WorkspaceSwitcherSheet open={switcherOpen} onClose={() => setSwitcherOpen(false)} />
     </View>
   )
@@ -2196,7 +2185,7 @@ export function MobilePulseHero({
       value: String(kpi.riskCount),
       danger: kpi.riskCount > 0,
       onPress: onRiesgoPress,
-      sub: pulseDeltaView(kpi.riskCount > 0 ? -1 : 0, 'down', theme, resolvedScheme),
+      sub: pulseDeltaView(0, 'down', theme, resolvedScheme),
     },
     {
       key: 'adherencia',
@@ -2230,14 +2219,14 @@ export function MobilePulseHero({
             <Text className="font-sans-extra uppercase text-[10.5px] tracking-[0.6px] text-muted" numberOfLines={1}>
               {s.label}
             </Text>
-            <Text
-              className="font-display-bold text-[27px]"
+            <AnimatedNumber
+              value={Number(s.value.replace('%', ''))}
+              duration={820}
+              format={(value) => `${Math.round(value)}${s.key === 'adherencia' ? '%' : ''}`}
               // Número "En riesgo" = danger-600 scheme-aware (web PulseHero.tsx:106-108
               // usa var(--danger-600): light #BE183C / dark #FF7C97), NO danger-500.
-              style={{ lineHeight: 27, letterSpacing: -0.27, color: s.danger ? (resolvedScheme === 'dark' ? '#FF7C97' : '#BE183C') : theme.foreground, fontVariant: ['tabular-nums'] }}
-            >
-              {s.value}
-            </Text>
+              style={{ fontFamily: FONT.displayBold, fontSize: 27, lineHeight: 27, letterSpacing: -0.27, color: s.danger ? (resolvedScheme === 'dark' ? '#FF7C97' : '#BE183C') : theme.foreground, fontVariant: ['tabular-nums'] }}
+            />
             {s.spark ? (
               <View className="flex-row items-end" style={{ gap: 6, width: '100%' }}>
                 <View className="flex-row items-center" style={{ gap: 2 }}>
@@ -3503,8 +3492,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 10,
-    paddingTop: 6,
+    gap: 8,
     paddingBottom: 14,
   },
   workspaceCaret: {
@@ -3520,10 +3508,11 @@ const styles = StyleSheet.create({
   },
   banner: {
     borderWidth: 1,
-    padding: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     flexDirection: 'row',
-    gap: 10,
-    alignItems: 'flex-start',
+    gap: 12,
+    alignItems: 'center',
   },
   bannerCopy: {
     flex: 1,
@@ -3534,21 +3523,10 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 19,
   },
-  bannerCta: {
+  bannerAction: {
     alignSelf: 'flex-start',
-    minHeight: 32,
-    borderRadius: 999,
-    paddingHorizontal: 11,
-    paddingVertical: 7,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  bannerCtaText: {
-    color: '#FFFFFF',
-    fontSize: 11,
-    textTransform: 'uppercase',
-    letterSpacing: 0.7,
+    fontSize: 14,
+    textDecorationLine: 'underline',
   },
   tierStack: {
     gap: 8,
