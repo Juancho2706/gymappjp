@@ -1,14 +1,27 @@
-import { memo, useState } from 'react'
+import { memo, useMemo, useState } from 'react'
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native'
-import { Apple, MoreVertical } from 'lucide-react-native'
-import { MotiView } from 'moti'
-import { Badge } from '../../Badge'
+import { AlertOctagon, AlertTriangle, Apple, Check, MoreVertical, type LucideIcon } from 'lucide-react-native'
 import { ProgressRing } from '../../ProgressRing'
 import { ClientActionsSheet } from './ClientActionsSheet'
+import { useTheme } from '../../../context/ThemeContext'
 import { FONT } from '../../../lib/typography'
 import { shadow } from '../../../lib/shadows'
+import { resolveSportRamp } from '../../../lib/theme'
 import type { DirectoryClient, PulseRow } from '../../../lib/clients-directory'
-import { DANGER, SEV_HEX, WARNING, lastInfo, severityMeta, statusMeta } from './directory-shared'
+import { DANGER, WARNING, lastInfo } from './directory-shared'
+
+function severityMeta(score: number): { label: string; Icon: LucideIcon; bg: string; fg: string } {
+  if (score >= 50) return { label: 'Riesgo', Icon: AlertOctagon, bg: 'bg-danger-100 dark:bg-danger-100/[0.18]', fg: 'text-danger-700' }
+  if (score >= 25) return { label: 'Atención', Icon: AlertTriangle, bg: 'bg-warning-100 dark:bg-warning-100/[0.18]', fg: 'text-warning-700' }
+  return { label: 'On track', Icon: Check, bg: 'bg-success-100 dark:bg-success-100/[0.18]', fg: 'text-success-700' }
+}
+
+function statusMeta(item: DirectoryClient): { key: string; label: string; bg: string; fg: string } {
+  if (item.isArchived) return { key: 'archived', label: 'Archivado', bg: 'bg-surface-sunken', fg: 'text-subtle' }
+  if (!item.isActive) return { key: 'paused', label: 'Pausado', bg: 'bg-ink-100', fg: 'text-ink-600' }
+  if (item.forcePwChange) return { key: 'pending_sync', label: 'Pend. sync', bg: 'bg-info-100 dark:bg-info-100/[0.18]', fg: 'text-info-700' }
+  return { key: 'active', label: 'Activo', bg: 'bg-success-100 dark:bg-success-100/[0.18]', fg: 'text-success-700' }
+}
 
 /**
  * DirRowCard — fila del directorio (vista lista). Espejo 1:1 de web `DirRowCard`:
@@ -17,7 +30,6 @@ import { DANGER, SEV_HEX, WARNING, lastInfo, severityMeta, statusMeta } from './
  */
 export const DirRowCard = memo(function DirRowCard({
   item,
-  index,
   theme,
   pulse,
   onOpen,
@@ -46,12 +58,14 @@ export const DirRowCard = memo(function DirRowCard({
   onArchive?: (c: DirectoryClient) => void
   onDelete?: (c: DirectoryClient) => void
 }) {
+  const { branding } = useTheme()
   const [menu, setMenu] = useState(false)
+  const sport500 = useMemo(() => resolveSportRamp(branding?.primaryColor).sport500, [branding?.primaryColor])
   // 1:1 web: la adherencia SIEMPRE muestra un valor (0% sin pulse), el anillo se
   // colorea por ese valor (0 → danger) y el badge de severidad SOLO aparece con pulse.
   const adherence = pulse?.percentage ?? 0
   const sev = severityMeta(pulse?.attentionScore ?? 0)
-  const ringColor = adherence >= 75 ? theme.primary : adherence >= 50 ? WARNING : DANGER
+  const ringColor = adherence >= 75 ? sport500 : adherence >= 50 ? WARNING : DANGER
   // Sin fecha de entreno: label "—" + dot danger (1:1 web lastLabel(null)/lastDot(999)),
   // no el "Sin entrenos"/gris que devuelve lastInfo() para otros consumidores.
   const lastWorkout = pulse?.lastWorkoutDate
@@ -60,18 +74,9 @@ export const DirRowCard = memo(function DirRowCard({
   const nutriRisk = (pulse?.attentionFlags ?? []).includes('NUTRICION_RIESGO') || nutritionPct < 60
   const hasNutritionData = nutritionPct > 0
   const st = statusMeta(item)
-  // Separador "·" = border-strong (mas fuerte que border), scheme-aware (1:1 web).
-  const sepColor = theme.scheme === 'dark' ? 'rgba(255,255,255,0.22)' : '#A8B1BD'
-  // Nutricion en riesgo = ember-700 scheme-aware (1:1 web text-[var(--ember-700)],
-  // globals.css light :357 #C23E14 / dark :631 #FFB79E) — mismo patron que sepColor.
-  const emberFg = theme.scheme === 'dark' ? '#FFB79E' : '#C23E14'
 
   return (
-    <MotiView
-      from={{ opacity: 0, translateY: 10 }}
-      animate={{ opacity: 1, translateY: 0 }}
-      transition={{ type: 'timing', duration: 300, delay: Math.min(index * 40, 320) }}
-    >
+    <View>
       <TouchableOpacity
         testID={`directory-row-${item.id}`}
         style={[styles.card, shadow('xs', theme.scheme), { backgroundColor: theme.card, borderColor: theme.border }]}
@@ -99,23 +104,28 @@ export const DirRowCard = memo(function DirRowCard({
           <View style={styles.nameRow}>
             <Text style={[styles.name, { color: theme.foreground }]} numberOfLines={1}>{item.fullName}</Text>
             {pulse ? (
-              <Badge tone={sev.tone} variant="soft" size="sm" icon={<sev.Icon size={11} color={SEV_HEX[sev.tone]} />}>{sev.label}</Badge>
+              <View className={`${sev.bg} rounded-pill`} style={styles.severityPill}>
+                <sev.Icon size={11} className={sev.fg} />
+                <Text className={sev.fg} style={styles.severityText}>{sev.label}</Text>
+              </View>
             ) : null}
           </View>
           <View style={styles.metricsRow}>
             <Text style={[styles.metricStrong, { color: theme.foreground }]}>{adherence}%</Text>
-            <Text style={[styles.dotSep, { color: sepColor }]}>·</Text>
+            <Text style={[styles.dotSep, { color: theme.ink300 }]}>·</Text>
             <Text style={[styles.metric, { color: theme.mutedForeground }]}>{li.label}</Text>
             {hasNutritionData && nutriRisk ? (
               <>
-                <Text style={[styles.dotSep, { color: sepColor }]}>·</Text>
-                <Apple size={12} color={emberFg} />
-                <Text style={[styles.metricNutri, { color: emberFg }]}>{nutritionPct}%</Text>
+                <Text style={[styles.dotSep, { color: theme.ink300 }]}>·</Text>
+                <View style={styles.nutritionMetric}>
+                  <Apple size={12} className="text-ember-700" />
+                  <Text className="text-ember-700" style={styles.metricNutri}>{nutritionPct}%</Text>
+                </View>
               </>
             ) : null}
             {st.key !== 'active' ? (
-              <View style={{ marginLeft: 2 }}>
-                <Badge tone={st.tone} variant="soft" size="sm">{st.label}</Badge>
+              <View className={`${st.bg} rounded-pill`} style={styles.statusPill}>
+                <Text className={st.fg} style={styles.statusText}>{st.label}</Text>
               </View>
             ) : null}
           </View>
@@ -126,10 +136,10 @@ export const DirRowCard = memo(function DirRowCard({
           accessibilityRole="button"
           accessibilityLabel={`Acciones de ${item.fullName}`}
           hitSlop={8}
-          onPress={() => setMenu(true)}
+          onPress={(event) => { event.stopPropagation(); setMenu(true) }}
           style={styles.menuBtn}
         >
-          <MoreVertical size={18} color={theme.mutedForeground} />
+          <MoreVertical size={18} className="text-ink-700" />
         </TouchableOpacity>
       </TouchableOpacity>
 
@@ -149,7 +159,7 @@ export const DirRowCard = memo(function DirRowCard({
         onArchive={onArchive ? () => onArchive(item) : undefined}
         onDelete={() => onDelete?.(item)}
       />
-    </MotiView>
+    </View>
   )
 })
 
@@ -167,10 +177,15 @@ const styles = StyleSheet.create({
   info: { flex: 1, gap: 4, minWidth: 0 },
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: 6, minWidth: 0 },
   name: { fontSize: 15.5, fontFamily: FONT.displayBlack, letterSpacing: -0.39, flexShrink: 1 },
+  severityPill: { height: 19, flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 6, flexShrink: 0 },
+  severityText: { fontSize: 10.5, fontFamily: FONT.uiBold },
   metricsRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
   metricStrong: { fontSize: 12, fontFamily: FONT.monoBold },
-  metric: { fontSize: 12, fontFamily: FONT.uiMedium },
+  metric: { fontSize: 12, fontFamily: FONT.ui },
+  nutritionMetric: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   metricNutri: { fontSize: 12, fontFamily: FONT.uiSemibold },
   dotSep: { fontSize: 12 },
-  menuBtn: { padding: 2, marginRight: -2 },
+  statusPill: { paddingHorizontal: 6, paddingVertical: 1 },
+  statusText: { fontSize: 10.5, fontFamily: FONT.uiBold },
+  menuBtn: { width: 36, height: 36, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
 })
