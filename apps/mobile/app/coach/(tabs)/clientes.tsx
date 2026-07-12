@@ -50,6 +50,7 @@ import {
   getCoachDirectoryPulse,
   sortClients,
   type DirectoryClient,
+  type DirectoryProgramFilter,
   type DirectoryRiskFilter,
   type DirectorySortKey,
   type PulseRow,
@@ -60,6 +61,7 @@ import { clientLoginUrl, deleteClient, openWhatsApp, resetClientPassword, setCli
 import { getCoachProfile } from '../../../lib/coach'
 import { FONT } from '../../../lib/typography'
 import { GLOWS } from '../../../lib/shadows'
+import { getSantiagoIsoYmdForUtcInstant } from '../../../lib/date-utils'
 
 const CARD_GAP = 12
 const CARD_STEP = CLIENT_CARD_HEIGHT + CARD_GAP
@@ -92,6 +94,7 @@ export default function ClientesScreen() {
   const [refreshing, setRefreshing] = useState(false)
   const [search, setSearch] = useState('')
   const [riskFilter, setRiskFilter] = useState<DirectoryRiskFilter>('all')
+  const [programFilter, setProgramFilter] = useState<DirectoryProgramFilter>('all')
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('any')
   const [sortKey, setSortKey] = useState<DirectorySortKey>('attention_score')
   const [showSortSheet, setShowSortSheet] = useState(false)
@@ -106,6 +109,15 @@ export default function ClientesScreen() {
   const [pulseError, setPulseError] = useState(false)
   const [coachSlug, setCoachSlug] = useState<string>('')
   const [maxClients, setMaxClients] = useState<number>(0)
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<DirectoryClient | null>(null)
+  const [deleteConfirm, setDeleteConfirm] = useState('')
+  const [deleting, setDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
+  const [resetTarget, setResetTarget] = useState<DirectoryClient | null>(null)
+  const [resetPassword, setResetPassword] = useState<string | null>(null)
+  const [resetting, setResetting] = useState(false)
+  const [resetError, setResetError] = useState<string | null>(null)
   const scrollY = useSharedValue(0)
   const [headerH, setHeaderH] = useState(0)
   const onScroll = useAnimatedScrollHandler((e) => { scrollY.value = e.contentOffset.y })
@@ -145,11 +157,17 @@ export default function ClientesScreen() {
   async function load(silent = false) {
     if (!silent) setLoading(true)
     else setRefreshing(true)
-    const data = await getCoachDirectoryClients()
-    setClients(data)
-    setLoading(false)
-    setRefreshing(false)
-    loadPulse()
+    setLoadError(null)
+    try {
+      const data = await getCoachDirectoryClients()
+      setClients(data)
+      loadPulse()
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : 'No se pudo cargar la cartera.')
+    } finally {
+      setLoading(false)
+      setRefreshing(false)
+    }
   }
 
   // Pulse (métricas ricas) en paralelo — las cards lo muestran cuando llega.
@@ -164,9 +182,9 @@ export default function ClientesScreen() {
   const stats = useMemo(() => buildStats(clients), [clients])
 
   const displayed = useMemo(() => {
-    const filtered = filterClients(clients, search, riskFilter, statusFilter, pulseById)
+    const filtered = filterClients(clients, search, riskFilter, statusFilter, pulseById, programFilter)
     return sortClients(filtered, sortKey, sortDir, pulseById)
-  }, [clients, search, riskFilter, statusFilter, sortKey, sortDir, pulseById])
+  }, [clients, search, riskFilter, programFilter, statusFilter, sortKey, sortDir, pulseById])
 
   const urgentBanner = stats.urgentCount > 0
   const expiredBanner = stats.expiredProgramCount > 0
@@ -184,7 +202,7 @@ export default function ClientesScreen() {
   const archivedCount = useMemo(() => clients.filter((c) => c.isArchived).length, [clients])
 
   // Swipe-to-dismiss alerts: hidden until the next day OR until the count changes.
-  const todayIso = new Date().toISOString().slice(0, 10)
+  const todayIso = getSantiagoIsoYmdForUtcInstant(new Date().toISOString())
   const isDismissed = (key: string, count: number) => {
     const d = dismissed[key]
     return !!d && d.date === todayIso && d.count === count
@@ -200,7 +218,7 @@ export default function ClientesScreen() {
   const toggleRisk = (f: DirectoryRiskFilter) => setRiskFilter(riskFilter === f ? 'all' : f)
   // Espejo `clearAll` web (`DirectoryActionBar.tsx:200-205`): resetea riesgo/programa
   // (fundidos en riskFilter), estado y búsqueda.
-  const clearFilters = () => { setRiskFilter('all'); setStatusFilter('any'); setSearch('') }
+  const clearFilters = () => { setRiskFilter('all'); setProgramFilter('all'); setStatusFilter('any'); setSearch('') }
 
   // ── Acciones rápidas por alumno ──────────────────────────────────────────
   function handleWhatsApp(c: DirectoryClient) {
@@ -235,27 +253,41 @@ export default function ClientesScreen() {
     )
   }
   function handleReset(c: DirectoryClient) {
-    // TX-5: confirmar — resetear contraseña es irreversible (invalida la actual).
-    Alert.alert(
-      'Resetear contraseña',
-      `Se generará una contraseña temporal para ${c.fullName}. La actual dejará de funcionar.`,
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Resetear',
-          style: 'destructive',
-          onPress: () => resetClientPassword(c.id)
-            .then((temp) => Alert.alert('Contraseña reseteada', `Contraseña temporal de ${c.fullName}: ${temp}\n\nDeberá cambiarla al ingresar.`))
-            .catch((e: any) => Alert.alert('Error', e?.message ?? 'No se pudo.')),
-        },
-      ]
-    )
+    setResetTarget(c)
+    setResetPassword(null)
+    setResetError(null)
+  }
+  async function confirmReset() {
+    if (!resetTarget || resetting) return
+    setResetting(true)
+    setResetError(null)
+    try {
+      setResetPassword(await resetClientPassword(resetTarget.id))
+    } catch (error) {
+      setResetError(error instanceof Error ? error.message : 'No se pudo resetear la contraseña.')
+    } finally {
+      setResetting(false)
+    }
   }
   function handleDelete(c: DirectoryClient) {
-    Alert.alert('Eliminar alumno', `¿Eliminar a ${c.fullName}? No se puede deshacer.`, [
-      { text: 'Cancelar', style: 'cancel' },
-      { text: 'Eliminar', style: 'destructive', onPress: () => deleteClient(c.id).then(() => load(true)).catch((e: any) => Alert.alert('Error', e?.message ?? 'No se pudo.')) },
-    ])
+    setDeleteConfirm('')
+    setDeleteError(null)
+    setDeleteTarget(c)
+  }
+  async function confirmDelete() {
+    if (!deleteTarget || deleting || deleteConfirm.trim().toLowerCase() !== deleteTarget.fullName.toLowerCase()) return
+    setDeleting(true)
+    setDeleteError(null)
+    try {
+      await deleteClient(deleteTarget.id)
+      setDeleteTarget(null)
+      setDeleteConfirm('')
+      await load(true)
+    } catch (error) {
+      setDeleteError(error instanceof Error ? error.message : 'No se pudo eliminar el alumno.')
+    } finally {
+      setDeleting(false)
+    }
   }
   // Editar datos: la superficie de edición en móvil es la ficha (NativeDialog "Editar
   // alumno" con EditClientForm), a diferencia del modal inline del web. Ver PENDIENTE-
@@ -290,6 +322,7 @@ export default function ClientesScreen() {
   // = chips.length (web `active={chips.length > 0}`).
   const chips: { key: string; label: string; onClear: () => void }[] = []
   if (riskFilter !== 'all') chips.push({ key: 'risk', label: RISK_LABELS[riskFilter] ?? riskFilter, onClear: () => setRiskFilter('all') })
+  if (programFilter !== 'all') chips.push({ key: 'program', label: programFilter === 'with_program' ? 'Con programa' : programFilter === 'no_program' ? 'Sin programa' : 'Vencido', onClear: () => setProgramFilter('all') })
   if (statusFilter !== 'any') chips.push({ key: 'status', label: STATUS_OPTIONS.find((o) => o.value === statusFilter)?.label ?? statusFilter, onClear: () => setStatusFilter('any') })
   if (search) chips.push({ key: 'search', label: `“${search}”`, onClear: () => setSearch('') })
   const filterActive = chips.length > 0
@@ -330,7 +363,7 @@ export default function ClientesScreen() {
         <DirectoryAlertBanner testID="directory-alert-urgent" message={`${stats.urgentCount} alumno${stats.urgentCount !== 1 ? 's' : ''} con atención urgente`} color={DANGER} onPress={() => setRiskFilter('urgent')} onDismiss={() => dismissAlert('urgent', stats.urgentCount)} />
       )}
       {expiredBanner && !isDismissed('expired', stats.expiredProgramCount) && (
-        <DirectoryAlertBanner testID="directory-alert-expired" message={`${stats.expiredProgramCount} programa${stats.expiredProgramCount !== 1 ? 's' : ''} vencido${stats.expiredProgramCount !== 1 ? 's' : ''}`} color={WARNING} onPress={() => setRiskFilter('expired_program')} onDismiss={() => dismissAlert('expired', stats.expiredProgramCount)} />
+        <DirectoryAlertBanner testID="directory-alert-expired" message={`${stats.expiredProgramCount} programa${stats.expiredProgramCount !== 1 ? 's' : ''} vencido${stats.expiredProgramCount !== 1 ? 's' : ''}`} color={WARNING} onPress={() => setProgramFilter('expired_program')} onDismiss={() => dismissAlert('expired', stats.expiredProgramCount)} />
       )}
       {syncBanner && !isDismissed('sync', stats.pendingSyncCount) && (
         <DirectoryAlertBanner testID="directory-alert-sync" message={`${stats.pendingSyncCount} alumno${stats.pendingSyncCount !== 1 ? 's' : ''} con cambio de contraseña pendiente`} color={INFO} onPress={() => setRiskFilter('password_reset')} onDismiss={() => dismissAlert('sync', stats.pendingSyncCount)} />
@@ -404,6 +437,22 @@ export default function ClientesScreen() {
       <SafeAreaView edges={[]} style={[styles.container, { backgroundColor: theme.background }]}>
         <ScreenHeader title="Alumnos" subtitle="Cargando..." />
         <EvaLoaderScreen subtitle="Cargando alumnos…" />
+      </SafeAreaView>
+    )
+  }
+
+  if (loadError && clients.length === 0) {
+    return (
+      <SafeAreaView edges={[]} style={[styles.container, { backgroundColor: theme.background }]}>
+        <AppBackground />
+        <ScreenHeader title="Alumnos" subtitle="Tu seguimiento de hoy" />
+        <View style={styles.filteredEmptyWrap}>
+          <View style={[styles.filteredEmptyCard, { borderColor: theme.border, backgroundColor: theme.card }]}>
+            <Text style={[styles.filteredEmptyTitle, { color: theme.foreground }]}>No pudimos cargar tus alumnos</Text>
+            <Text style={[styles.filteredEmptySub, { color: theme.mutedForeground }]}>{loadError}</Text>
+            <Button label="Reintentar" variant="primary" size="sm" onPress={() => load()} style={styles.filteredEmptyBtn} />
+          </View>
+        </View>
       </SafeAreaView>
     )
   }
@@ -555,6 +604,8 @@ export default function ClientesScreen() {
         onStatusChange={setStatusFilter}
         riskFilter={riskFilter}
         onRiskChange={setRiskFilter}
+        programFilter={programFilter}
+        onProgramChange={setProgramFilter}
         archivedCount={archivedCount}
       />
       <CreateClientModal
@@ -572,6 +623,78 @@ export default function ClientesScreen() {
           onDone={() => { setShowImport(false); load() }}
           onCancel={() => setShowImport(false)}
         />
+      </NativeDialog>
+      <NativeDialog
+        open={deleteTarget !== null}
+        title="Eliminar alumno"
+        onClose={() => { if (!deleting) setDeleteTarget(null) }}
+      >
+        {deleteTarget ? (
+          <View style={{ gap: 14 }}>
+            <Text style={{ color: theme.mutedForeground, fontFamily: FONT.ui, fontSize: 13.5, lineHeight: 19 }}>
+              Esta acción elimina a {deleteTarget.fullName} y no se puede deshacer.
+            </Text>
+            <View style={{ gap: 6 }}>
+              <Text style={{ color: theme.mutedForeground, fontFamily: FONT.ui, fontSize: 12 }}>
+                Escribe <Text style={{ color: theme.foreground, fontFamily: FONT.uiBold }}>{deleteTarget.fullName}</Text> para confirmar:
+              </Text>
+              <Input
+                testID="directory-delete-confirm-input"
+                value={deleteConfirm}
+                onChangeText={setDeleteConfirm}
+                placeholder={deleteTarget.fullName}
+                editable={!deleting}
+                autoCapitalize="words"
+              />
+            </View>
+            {deleteError ? <Text style={{ color: theme.destructive, fontFamily: FONT.uiSemibold, fontSize: 13 }}>{deleteError}</Text> : null}
+            <View style={{ flexDirection: 'row', gap: 10 }}>
+              <Button label="Cancelar" variant="ghost" onPress={() => setDeleteTarget(null)} disabled={deleting} style={{ flex: 1 }} />
+              <Button
+                testID="directory-delete-confirm"
+                label={deleting ? 'Eliminando…' : 'Eliminar'}
+                variant="danger"
+                onPress={confirmDelete}
+                loading={deleting}
+                disabled={deleting || deleteConfirm.trim().toLowerCase() !== deleteTarget.fullName.toLowerCase()}
+                style={{ flex: 1 }}
+              />
+            </View>
+          </View>
+        ) : null}
+      </NativeDialog>
+      <NativeDialog
+        open={resetTarget !== null}
+        title={resetPassword ? 'Contraseña reseteada' : 'Resetear contraseña'}
+        onClose={() => { if (!resetting) setResetTarget(null) }}
+      >
+        {resetTarget ? (
+          <View style={{ gap: 14 }}>
+            {resetPassword ? (
+              <>
+                <Text style={{ color: theme.mutedForeground, fontFamily: FONT.ui, fontSize: 13.5, lineHeight: 19 }}>
+                  Comparte esta contraseña temporal con {resetTarget.fullName}. Deberá cambiarla al ingresar.
+                </Text>
+                <View style={{ padding: 14, borderRadius: 14, borderWidth: 1, borderColor: theme.border, backgroundColor: theme.muted }}>
+                  <Text selectable style={{ color: theme.foreground, fontFamily: FONT.monoBold, fontSize: 18, textAlign: 'center' }}>{resetPassword}</Text>
+                </View>
+                <Button testID="directory-reset-copy" label="Copiar contraseña" variant="primary" leftIcon={LinkIcon} onPress={() => Clipboard.setStringAsync(resetPassword)} full />
+                <Button label="Cerrar" variant="ghost" onPress={() => setResetTarget(null)} full />
+              </>
+            ) : (
+              <>
+                <Text style={{ color: theme.mutedForeground, fontFamily: FONT.ui, fontSize: 13.5, lineHeight: 19 }}>
+                  Se generará una contraseña temporal para {resetTarget.fullName}. La actual dejará de funcionar.
+                </Text>
+                {resetError ? <Text style={{ color: theme.destructive, fontFamily: FONT.uiSemibold, fontSize: 13 }}>{resetError}</Text> : null}
+                <View style={{ flexDirection: 'row', gap: 10 }}>
+                  <Button label="Cancelar" variant="ghost" onPress={() => setResetTarget(null)} disabled={resetting} style={{ flex: 1 }} />
+                  <Button testID="directory-reset-confirm" label={resetting ? 'Reseteando…' : 'Resetear'} variant="danger" onPress={confirmReset} loading={resetting} disabled={resetting} style={{ flex: 1 }} />
+                </View>
+              </>
+            )}
+          </View>
+        ) : null}
       </NativeDialog>
     </SafeAreaView>
   )

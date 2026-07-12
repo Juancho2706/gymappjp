@@ -1,7 +1,7 @@
 import { Modal, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import { Check } from 'lucide-react-native'
 import { FONT } from '../../../lib/typography'
-import type { DirectoryRiskFilter, StatusFilter } from '../../../lib/clients-directory'
+import type { DirectoryProgramFilter, DirectoryRiskFilter, StatusFilter } from '../../../lib/clients-directory'
 
 /**
  * DirectoryFilterSheet — bottom-sheet de filtros con 3 grupos (Estado · Riesgo ·
@@ -22,7 +22,7 @@ const RISK_ROWS: { v: DirectoryRiskFilter; l: string }[] = [
   { v: 'on_track', l: 'On track' },
   { v: 'nutrition_low', l: 'Nutrición baja (<60%)' },
 ]
-const PROGRAM_ROWS: { v: DirectoryRiskFilter; l: string }[] = [
+const PROGRAM_ROWS: { v: DirectoryProgramFilter; l: string }[] = [
   { v: 'with_program', l: 'Con programa' },
   { v: 'no_program', l: 'Sin programa' },
   { v: 'expired_program', l: 'Vencido' },
@@ -71,6 +71,8 @@ export function DirectoryFilterSheet({
   onStatusChange,
   riskFilter,
   onRiskChange,
+  programFilter,
+  onProgramChange,
   archivedCount = 0,
 }: {
   visible: boolean
@@ -80,6 +82,8 @@ export function DirectoryFilterSheet({
   onStatusChange: (v: StatusFilter) => void
   riskFilter: DirectoryRiskFilter
   onRiskChange: (v: DirectoryRiskFilter) => void
+  programFilter: DirectoryProgramFilter
+  onProgramChange: (v: DirectoryProgramFilter) => void
   archivedCount?: number
 }) {
   return (
@@ -124,8 +128,8 @@ export function DirectoryFilterSheet({
               testID={`directory-filter-programa-${it.v}`}
               theme={theme}
               label={it.l}
-              active={riskFilter === it.v}
-              onPress={() => onRiskChange(riskFilter === it.v ? 'all' : it.v)}
+              active={programFilter === it.v}
+              onPress={() => onProgramChange(programFilter === it.v ? 'all' : it.v)}
             />
           ))}
         </ScrollView>

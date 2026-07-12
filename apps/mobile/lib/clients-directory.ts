@@ -23,6 +23,8 @@ export type DirectoryRiskFilter =
   | 'with_program'
   | 'nutrition_low'
 
+export type DirectoryProgramFilter = 'all' | 'with_program' | 'no_program' | 'expired_program'
+
 export type SortDir = 'asc' | 'desc'
 
 /** Métricas ricas por alumno (1:1 web DirectoryPulseRow) servidas por /api/mobile/coach/clients/pulse. */
@@ -215,7 +217,8 @@ export function filterClients(
   search: string,
   riskFilter: DirectoryRiskFilter,
   statusFilter: StatusFilter,
-  pulseById?: Map<string, PulseRow>
+  pulseById?: Map<string, PulseRow>,
+  programFilter: DirectoryProgramFilter = 'all'
 ): DirectoryClient[] {
   return clients.filter((c) => {
     const q = search.toLowerCase()
@@ -235,16 +238,18 @@ export function filterClients(
     if (riskFilter === 'urgent') matchesRisk = c.attentionScore >= 50
     else if (riskFilter === 'review') matchesRisk = c.attentionScore >= 25 && c.attentionScore < 50
     else if (riskFilter === 'on_track') matchesRisk = c.attentionScore < 25
-    else if (riskFilter === 'expired_program') matchesRisk = c.planDaysRemaining !== null && c.planDaysRemaining <= 0
     else if (riskFilter === 'password_reset') matchesRisk = c.forcePwChange
-    else if (riskFilter === 'no_program') matchesRisk = !c.hasActiveProgram
-    else if (riskFilter === 'with_program') matchesRisk = c.hasActiveProgram
     else if (riskFilter === 'nutrition_low') {
       const p = pulseById?.get(c.id)
       matchesRisk = !!p && (p.attentionFlags?.includes('NUTRICION_RIESGO') || (p.nutritionPercentage > 0 && p.nutritionPercentage < 60))
     }
 
-    return matchesSearch && matchesStatus && matchesRisk
+    let matchesProgram = true
+    if (programFilter === 'with_program') matchesProgram = c.hasActiveProgram
+    else if (programFilter === 'no_program') matchesProgram = !c.hasActiveProgram
+    else if (programFilter === 'expired_program') matchesProgram = c.planDaysRemaining !== null && c.planDaysRemaining <= 0
+
+    return matchesSearch && matchesStatus && matchesRisk && matchesProgram
   })
 }
 
