@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { Alert, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native'
 import { Activity, Apple, ChevronDown, ChevronLeft, ChevronRight, Check, Droplets, Flame, Footprints, Heart, Lock, MessageSquare, Moon, Pencil, RotateCcw, Salad, Save, Scale, Send, SlidersHorizontal, Timer, Utensils } from 'lucide-react-native'
 import { useFocusEffect } from 'expo-router'
@@ -10,7 +10,7 @@ import { FONT } from '../../../lib/typography'
 import { BarComposed, type BarComposedPoint } from '../charts/BarComposed'
 import { StatCard, CardHeader, MetricBox, cd, formatDate, adherenceColor } from './shared'
 import { deriveNutritionCoachAlerts, type NutritionCoachAlert } from '../../../lib/nutrition-coach-alerts'
-import { getTodayInSantiago } from '../../../lib/date-utils'
+import { getTodayInSantiago, isoDateAddDays } from '../../../lib/date-utils'
 import {
   addCoachMealComment,
   getCoachNutritionZoneC,
@@ -54,6 +54,23 @@ export function NutricionTab({
   const { theme } = useTheme()
   const { activeNutrition, nutritionTimeline, nutritionMonthlyAvgPct, nutritionStreakDays, compliance, favoriteFoods, checkIns } = data
   const todayIso = getTodayInSantiago().iso
+  const [zoneC, setZoneC] = useState<NutritionZoneCData | null>(null)
+  const [zoneLoading, setZoneLoading] = useState(true)
+
+  const reloadZoneC = useCallback(async () => {
+    setZoneLoading(true)
+    try {
+      setZoneC(await getCoachNutritionZoneC(clientId, todayIso))
+    } catch (error) {
+      console.warn('[nutrition-zone-c] load failed', error)
+    } finally {
+      setZoneLoading(false)
+    }
+  }, [clientId, todayIso])
+
+  useFocusEffect(useCallback(() => {
+    void reloadZoneC()
+  }, [reloadZoneC]))
 
   const alerts = useMemo(
     () => deriveNutritionCoachAlerts({
@@ -68,25 +85,49 @@ export function NutricionTab({
     [activeNutrition, compliance, nutritionMonthlyAvgPct, nutritionTimeline, todayIso]
   )
 
+  const nutritionDomainEnabled = !zoneC?.prefsEnabled
+    || (zoneC.override[DOMAIN_ENABLED_KEY] ?? zoneC.domainEnabledBase)
+
+  if (!zoneLoading && zoneC && !nutritionDomainEnabled) {
+    return (
+      <View style={{ gap: 14 }}>
+        <StatCard>
+          <View style={styles.disabledState}>
+            <Utensils size={28} color={theme.mutedForeground} />
+            <Text style={[styles.disabledTitle, { color: theme.foreground, fontFamily: FONT.displayBlack }]}>Nutrición desactivada para este alumno</Text>
+            <Text style={[styles.disabledCopy, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Apagaste el módulo de nutrición para este alumno en tus preferencias. Sus datos se conservan; vuelve a activarlo para ver plan, macros y adherencia.</Text>
+          </View>
+        </StatCard>
+        <FeaturePrefsOverridePanel zc={zoneC} clientId={clientId} onSaved={reloadZoneC} />
+      </View>
+    )
+  }
+
   if (!activeNutrition) {
     return (
       <View style={{ gap: 14 }}>
         <EmptyState icon={Apple} title="Sin plan de nutrición" subtitle="Este alumno no tiene un plan activo." />
         {onEditNutrition ? <Button label="Asignar plan de nutrición" leftIcon={Apple} onPress={onEditNutrition} full /> : null}
-        <CoachNutritionZoneC clientId={clientId} todayIso={todayIso} />
+        <CoachNutritionZoneC zc={zoneC} loading={zoneLoading} clientId={clientId} todayIso={todayIso} reload={reloadZoneC} />
       </View>
     )
   }
 
-  const today = nutritionTimeline.find((t) => t.date === todayIso) ?? nutritionTimeline[0]
+  const today = nutritionTimeline.find((t) => t.date === todayIso)
   const kcalPct = today && today.targetCalories > 0 ? Math.min(1, today.consumedCalories / today.targetCalories) : 0
   const todayCompliance = today ? today.compliancePct / 100 : 0
 
   const asc = [...nutritionTimeline].reverse() // oldest→newest
   const chartPoints: BarComposedPoint[] = asc.map((t, i) => ({ i, bar: t.consumedCalories, avg: t.targetCalories, label: formatDate(t.date) }))
-  const heat = asc.slice(-30)
+  const timelineByDate = new Map(nutritionTimeline.map((entry) => [entry.date, entry]))
+  const heat = Array.from({ length: 30 }, (_, index) => {
+    const date = isoDateAddDays(todayIso, index - 29)
+    return { date, entry: timelineByDate.get(date) }
+  })
 
   const weekAvg = compliance?.nutritionWeeklyAvgPct ?? 0
+  const previousWeekAvg = compliance?.nutritionPrevWeeklyAvgPct ?? 0
+  const weekDelta = weekAvg - previousWeekAvg
 
   const recentWeights = checkIns.slice(0, 3)
 
@@ -130,25 +171,40 @@ export function NutricionTab({
           <ComplianceRing value={todayCompliance} label="Comidas" color={adherenceColor(today?.compliancePct ?? 0, theme)} size={64} />
         </View>
         {today ? (
-          <Text style={[cd.sub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
-            {today.consumedCalories} / {today.targetCalories} kcal · {today.mealsDone}/{today.mealsTotal} comidas
-          </Text>
-        ) : null}
+          <View style={{ gap: 10 }}>
+            <Text style={[cd.sub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+              {today.consumedCalories} / {today.targetCalories} kcal · {today.mealsDone}/{today.mealsTotal} comidas
+            </Text>
+            <ProgressBar value={today.targetProtein > 0 ? today.consumedProtein / today.targetProtein : 0} color={MACRO_COLORS.protein} label="Proteína" trailing={`${today.consumedProtein} / ${today.targetProtein} g`} />
+            <ProgressBar value={today.targetCarbs > 0 ? today.consumedCarbs / today.targetCarbs : 0} color={MACRO_COLORS.carbs} label="Carbohidratos" trailing={`${today.consumedCarbs} / ${today.targetCarbs} g`} />
+            <ProgressBar value={today.targetFats > 0 ? today.consumedFats / today.targetFats : 0} color={MACRO_COLORS.fats} label="Grasas" trailing={`${today.consumedFats} / ${today.targetFats} g`} />
+          </View>
+        ) : (
+          <Text style={[cd.empty, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Sin registro nutricional hoy.</Text>
+        )}
       </StatCard>
 
       {/* Métricas de adherencia */}
       <View style={cd.grid2}>
         <MetricBox value={`${weekAvg}%`} label="Adherencia 7d" />
-        <MetricBox value={`${nutritionMonthlyAvgPct}%`} label="Adherencia 30d" />
-        <MetricBox value={`${nutritionStreakDays}d`} label="Racha" color={WARNING} />
+        <MetricBox value={nutritionMonthlyAvgPct == null ? '—' : `${nutritionMonthlyAvgPct}%`} label="Adherencia 30d" />
+        <MetricBox value={`${weekDelta >= 0 ? '+' : ''}${weekDelta} pp`} label="Sem. vs ant." color={weekDelta >= 0 ? theme.success : theme.destructive} />
+        <MetricBox value={`${nutritionStreakDays}d`} label="Racha ≥80%" color={WARNING} />
       </View>
 
       {/* Heatmap adherencia 30d */}
       <StatCard>
         <CardHeader icon={Activity} title="Adherencia (30 días)" />
         <View style={styles.heatRow}>
-          {heat.map((t) => (
-            <View key={t.date} style={[styles.heatCell, { backgroundColor: adherenceColor(t.compliancePct, theme), opacity: t.mealsTotal > 0 ? 1 : 0.28 }]} />
+          {heat.map(({ date, entry }) => (
+            <View
+              key={date}
+              accessibilityLabel={`${formatDate(date)}: ${entry ? `${entry.compliancePct}% de adherencia` : 'sin registro'}`}
+              style={[styles.heatCell, {
+                backgroundColor: !entry ? theme.border : entry.compliancePct >= 80 ? theme.success : entry.compliancePct >= 60 ? WARNING : theme.destructive,
+                opacity: entry ? 1 : 0.45,
+              }]}
+            />
           ))}
         </View>
       </StatCard>
@@ -181,26 +237,27 @@ export function NutricionTab({
               <Text style={[cd.rowMetric, { color: theme.primary, fontFamily: FONT.display }]}>{c.weight != null ? `${c.weight} kg` : '—'}</Text>
             </View>
           ))}
-          <Text style={[cd.sub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Cruzá la adherencia con la evolución de peso para ajustar el plan.</Text>
+          <Text style={[cd.sub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Cruza el peso declarado en check-in con la adherencia a comidas de esta semana (~{Math.round(weekAvg)}%). Los datos son autodeclarados por el alumno.</Text>
         </StatCard>
       ) : null}
 
       {/* Favoritos */}
       {favoriteFoods.length ? (
         <StatCard>
-          <CardHeader icon={Heart} title="Favoritos del alumno" color={theme.destructive} />
+          <CardHeader icon={Heart} title="Favoritos del alumno" color={theme.mutedForeground} />
           <View style={styles.favWrap}>
-            {favoriteFoods.slice(0, 12).map((f) => (
-              <View key={f.id} style={[styles.favChip, { backgroundColor: theme.destructive + '18', borderColor: theme.destructive + '44', borderRadius: theme.radius.sm }]}>
-                <Text numberOfLines={1} style={[styles.favTxt, { color: theme.destructive, fontFamily: FONT.uiBold }]}>{f.name}</Text>
+            {favoriteFoods.map((f) => (
+              <View key={f.id} style={[styles.favChip, { backgroundColor: theme.secondary, borderColor: theme.border, borderRadius: theme.radius.sm }]}>
+                <Text numberOfLines={1} style={[styles.favTxt, { color: theme.foreground, fontFamily: FONT.uiBold }]}>{f.name}</Text>
               </View>
             ))}
           </View>
+          <Text style={[cd.sub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Alimentos que el alumno marcó como favoritos.</Text>
         </StatCard>
       ) : null}
 
       {/* Zona C · Alertas y contexto (coach) */}
-      <CoachNutritionZoneC clientId={clientId} todayIso={todayIso} />
+      <CoachNutritionZoneC zc={zoneC} loading={zoneLoading} clientId={clientId} todayIso={todayIso} reload={reloadZoneC} />
     </View>
   )
 }
@@ -273,11 +330,13 @@ function DayNutritionDetail({ timeline, selectedDate, onSelectDate, dayDetail, l
         <StatCard>
           <CardHeader icon={Flame} title="Hábitos del día" />
           <View style={styles.habitGrid}>
-            <Habit icon={Droplets} label="Agua" value={habits.water_ml != null ? `${habits.water_ml} ml` : '—'} />
+            <Habit icon={Droplets} label="Agua" value={habits.water_ml != null ? (habits.water_ml >= 1000 ? `${(habits.water_ml / 1000).toFixed(1)} L` : `${habits.water_ml} ml`) : '—'} />
             <Habit icon={Footprints} label="Pasos" value={habits.steps != null ? habits.steps.toLocaleString('es-CL') : '—'} />
             <Habit icon={Moon} label="Sueño" value={habits.sleep_hours != null ? `${habits.sleep_hours}h` : '—'} />
-            <Habit icon={Activity} label="Ayuno" value={habits.fasting_hours != null ? `${habits.fasting_hours}h` : '—'} />
+            <Habit icon={Timer} label="Ayuno" value={habits.fasting_hours != null ? `${habits.fasting_hours}h` : '—'} />
           </View>
+          {habits.supplements?.length ? <Text style={[cd.sub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Suplementos: {habits.supplements.join(', ')}</Text> : null}
+          {habits.notes ? <Text style={[cd.sub, { color: theme.foreground, fontFamily: theme.fontSans }]}>Nota del alumno: {habits.notes}</Text> : null}
         </StatCard>
       ) : null}
     </View>
@@ -298,22 +357,13 @@ function Habit({ icon: Icon, label, value }: { icon: any; label: string; value: 
 // ── Zona C · Alertas y contexto (coach) ──────────────────────────────────────
 // Espejo de NutritionTabB5 zona C: override de "Funciones", hilo de comentarios del día,
 // editor de umbrales de micros y nota privada. Carga su propio contexto (getCoachNutritionZoneC).
-function CoachNutritionZoneC({ clientId, todayIso }: { clientId: string; todayIso: string }) {
-  const { theme } = useTheme()
-  const [zc, setZc] = useState<NutritionZoneCData | null>(null)
-  const [loading, setLoading] = useState(true)
-
-  const reload = useCallback(async () => {
-    try {
-      setZc(await getCoachNutritionZoneC(clientId, todayIso))
-    } catch (e) {
-      console.warn('[nutrition-zone-c] load failed', e)
-    } finally {
-      setLoading(false)
-    }
-  }, [clientId, todayIso])
-  useEffect(() => { reload() }, [reload])
-
+function CoachNutritionZoneC({ zc, loading, clientId, todayIso, reload }: {
+  zc: NutritionZoneCData | null
+  loading: boolean
+  clientId: string
+  todayIso: string
+  reload: () => Promise<void>
+}) {
   if (loading) return <View style={{ paddingVertical: 16 }}><EvaLoader size="sm" subtitle="Cargando zona coach…" /></View>
   if (!zc) return null
 
@@ -661,6 +711,9 @@ const styles = StyleSheet.create({
   favWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   favChip: { maxWidth: '48%', borderWidth: 1, paddingHorizontal: 8, paddingVertical: 5 },
   favTxt: { fontSize: 11 },
+  disabledState: { alignItems: 'center', gap: 8, paddingVertical: 18, paddingHorizontal: 10 },
+  disabledTitle: { fontSize: 14, textTransform: 'uppercase', textAlign: 'center' },
+  disabledCopy: { fontSize: 12, lineHeight: 18, textAlign: 'center' },
   // Zona C
   zoneHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingTop: 6 },
   zoneBadge: { width: 34, height: 34, borderRadius: 10, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },

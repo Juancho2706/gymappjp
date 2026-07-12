@@ -117,6 +117,7 @@ Una pasada adicional con **lente de lógica** (no de paridad pixel) sobre unidad
 - Recuperado desde `stash@{0}` el port parcial que acompañaba las 14 specs del checkpoint `c49439a6`: 23 archivos RN del coach (chrome, dashboard, directorio y ficha), sin tocar alumno/ejecutor.
 - `ImportClientsForm.tsx` recuperado con el wizard completo y corrección de fecha: si la fila no trae `subscriptionStartDate`, se omite; nunca se inventa el día UTC.
 - `NutricionTab.tsx` estaba revertido a medias (imports nuevos con cuerpo anterior). Se reparó el baseline para compilar; su paridad sustantiva sigue pendiente y debe rehacerse contra `ficha-nutricion-facturacion.md`.
+- Tanda nutrición 1 aplicada: dominio OFF con escape de preferencias; carga propia migrada a `useFocusEffect`; card Hoy sin fallback a otro día; barras P/C/G; delta semanal; heatmap de 30 días calendario y umbrales 80/60; `null` mensual como `—`; favoritos neutrales sin truncar; contexto de check-in y hábitos completos (agua L/ml, suplementos, nota, Timer). Permanecen los P1 que exigen ampliar datos/acciones RN: duplicar plan, restricciones, ciclos e historial denso del día.
 - Gates del checkpoint: `pnpm exec tsc --noEmit` limpio; tokens `86/86`; `pnpm exec expo export --platform android` limpio.
 - Este checkpoint NO cierra unidades: falta verificación adversarial elemento-por-elemento, lente runtime/cableado/frescura y completar los P0/P1 de cada spec. Doble-FAB sigue sin implementar por decisión CEO pendiente.
 
