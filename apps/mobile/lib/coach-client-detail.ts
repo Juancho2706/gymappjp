@@ -128,6 +128,7 @@ export interface ActiveProgramInfo {
   program_structure_type: string | null
   ab_mode: boolean | null
   cycle_length: number | null
+  program_phases: { name: string; weeks: number; color?: string }[]
   workoutPlans: ProgramDay[]
 }
 
@@ -144,6 +145,8 @@ export interface ProgramBlock {
   exerciseName: string
   muscleGroup: string | null
   gifUrl: string | null
+  thumbnailUrl: string | null
+  supersetGroup: string | null
 }
 
 export interface ProgramDay {
@@ -196,6 +199,13 @@ export interface WorkoutDaySet {
   weightKg: number | null
   repsDone: number | null
   rpe: number | null
+  rir: number | null
+  note: string | null
+  substitutedExerciseName: string | null
+  substitutionReason: string | null
+  targetReps: string | null
+  targetWeightKg: number | null
+  planName: string | null
 }
 
 export interface NutritionDayFood {
@@ -691,12 +701,12 @@ export async function getCoachClientDetail(clientId: string): Promise<{
       supabase
         .from('workout_programs')
         .select(`
-          id, name, start_date, end_date, weeks_to_repeat, program_structure_type, ab_mode, cycle_length,
+          id, name, start_date, end_date, weeks_to_repeat, program_structure_type, ab_mode, cycle_length, program_phases,
           workout_plans (
             id, title, day_of_week, week_variant,
             workout_blocks (
-              id, order_index, sets, reps, rest_time, tempo, rir, target_weight_kg, notes,
-              exercises ( name, muscle_group, gif_url )
+              id, order_index, sets, reps, rest_time, tempo, rir, target_weight_kg, notes, superset_group,
+              exercises ( name, muscle_group, gif_url, thumbnail_url )
             )
           )
         `)
@@ -768,6 +778,11 @@ export async function getCoachClientDetail(clientId: string): Promise<{
         program_structure_type: rawProgram.program_structure_type ?? null,
         ab_mode: rawProgram.ab_mode ?? null,
         cycle_length: rawProgram.cycle_length ?? null,
+        program_phases: (Array.isArray(rawProgram.program_phases) ? rawProgram.program_phases : []).map((phase: any) => ({
+          name: String(phase?.name ?? 'Fase'),
+          weeks: Math.max(1, Number(phase?.weeks) || 1),
+          ...(typeof phase?.color === 'string' ? { color: phase.color } : {}),
+        })),
         workoutPlans: ((rawProgram.workout_plans ?? []) as any[])
           .map((plan) => ({
             id: plan.id as string,
@@ -789,6 +804,8 @@ export async function getCoachClientDetail(clientId: string): Promise<{
                 exerciseName: block.exercises?.name ?? 'Ejercicio',
                 muscleGroup: block.exercises?.muscle_group ?? null,
                 gifUrl: block.exercises?.gif_url ?? null,
+                thumbnailUrl: block.exercises?.thumbnail_url ?? null,
+                supersetGroup: block.superset_group ?? null,
               })),
           }))
           .sort((a, b) => (a.day_of_week ?? 99) - (b.day_of_week ?? 99)),
@@ -934,7 +951,8 @@ export async function getCoachClientDayDetail(clientId: string, date: string): P
     supabase
       .from('workout_logs')
       .select(`
-        set_number, weight_kg, reps_done, rpe, logged_at,
+        set_number, weight_kg, reps_done, rpe, rir, note, substituted_exercise_name, substitution_reason,
+        target_reps_at_log, target_weight_at_log, plan_name_at_log, logged_at,
         workout_blocks (
           exercises ( name, muscle_group )
         )
@@ -970,6 +988,13 @@ export async function getCoachClientDayDetail(clientId: string, date: string): P
     weightKg: row.weight_kg ?? null,
     repsDone: row.reps_done ?? null,
     rpe: row.rpe ?? null,
+    rir: row.rir ?? null,
+    note: row.note ?? null,
+    substitutedExerciseName: row.substituted_exercise_name ?? null,
+    substitutionReason: row.substitution_reason ?? null,
+    targetReps: row.target_reps_at_log ?? null,
+    targetWeightKg: row.target_weight_at_log ?? null,
+    planName: row.plan_name_at_log ?? null,
   }))
 
   const nutritionMeals = (((nutritionRes.data as any)?.nutrition_meal_logs ?? []) as any[])

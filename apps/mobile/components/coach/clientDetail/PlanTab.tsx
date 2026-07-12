@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import { Image } from 'expo-image'
-import { ChevronDown, ClipboardX, Clock, Dumbbell, Gauge, LayoutGrid, Moon, Pencil, Plus, Target, Timer, Weight } from 'lucide-react-native'
+import { ChevronDown, ClipboardX, Clock, Dumbbell, Gauge, LayoutGrid, Moon, Pencil, Plus, Repeat2, Target, Timer, Weight } from 'lucide-react-native'
 import type { LucideIcon } from 'lucide-react-native'
 import { useTheme } from '../../../context/ThemeContext'
 import { Button, EmptyState, ProgressBar, Sheet } from '../../../components'
@@ -9,6 +9,7 @@ import { StatCard, CardHeader, Pill, cd, dayName } from './shared'
 import { filterPlansForStructureView, resolveActiveWeekVariantForDisplay } from '../../../lib/program-week-variant'
 import type { CoachClientDetailData, ProgramBlock, ProgramDay } from '../../../lib/coach-client-detail'
 import { getTodayInSantiago } from '../../../lib/date-utils'
+import { ProgramPhasesBar } from '../ProgramPhasesBar'
 
 function resolveProgramWeek(program: NonNullable<CoachClientDetailData['activeProgram']>): number | null {
   if (!program.start_date) return null
@@ -38,6 +39,9 @@ export function PlanTab({ data, onEdit }: { data: CoachClientDetailData; onEdit:
     )
   }
   const currentWeek = resolveProgramWeek(program)
+  const daysRemaining = program.end_date
+    ? Math.ceil((new Date(`${program.end_date}T12:00:00`).getTime() - new Date(`${getTodayInSantiago().iso}T12:00:00`).getTime()) / 86400000)
+    : null
 
   // A-F2: resolver variante AB/cíclica activa (no renderizar planes crudo).
   const structure = (program.program_structure_type as 'weekly' | 'cycle' | null) || 'weekly'
@@ -68,7 +72,9 @@ export function PlanTab({ data, onEdit }: { data: CoachClientDetailData; onEdit:
           <Pill label={`${program.weeks_to_repeat} sem.`} />
           {program.cycle_length ? <Pill label={`Ciclo ${program.cycle_length}d`} /> : null}
           <Pill label={`${program.planCount} días`} />
+          {daysRemaining != null ? <Pill label={daysRemaining < 0 ? 'Vencido' : daysRemaining === 0 ? 'Vence hoy' : `${daysRemaining} días`} tone={daysRemaining <= 3 ? 'warning' : 'success'} /> : <Pill label="En curso" tone="success" />}
         </View>
+        {program.program_phases.length ? <ProgramPhasesBar phases={program.program_phases.map((phase) => ({ ...phase, color: phase.color ?? theme.primary }))} weeks={program.weeks_to_repeat} /> : null}
         {currentWeek ? (
           <View style={{ gap: 6 }}>
             <View style={styles.weekRow}>
@@ -135,6 +141,12 @@ function DayCard({ plan, isToday, open, onToggle, onBlock }: { plan: ProgramDay;
               <View style={{ flex: 1, minWidth: 0 }}>
                 <Text numberOfLines={1} style={[cd.rowTitle, { color: theme.foreground, fontFamily: 'HankenGrotesk_600SemiBold' }]}>{block.exerciseName}</Text>
                 <Text style={[cd.rowSub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{block.muscleGroup ?? 'Sin grupo'}</Text>
+                {block.supersetGroup ? (
+                  <View style={styles.supersetMeta}>
+                    <Repeat2 size={11} color={theme.primary} />
+                    <Text style={[styles.supersetTxt, { color: theme.primary, fontFamily: theme.fontSans }]}>Superserie {block.supersetGroup}</Text>
+                  </View>
+                ) : null}
               </View>
               <Text style={[styles.prescription, { color: theme.primary, fontFamily: 'Archivo_700Bold' }]}>{block.sets}×{block.reps}</Text>
             </TouchableOpacity>
@@ -170,8 +182,8 @@ function ExerciseDetail({ block }: { block: ProgramBlock }) {
           <Text style={[styles.sheetMuscle, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Ejercicio del programa</Text>
         )}
       </View>
-      {block.gifUrl ? (
-        <Image source={{ uri: block.gifUrl }} style={[styles.gif, { backgroundColor: theme.secondary, borderColor: theme.border }]} contentFit="contain" transition={150} />
+      {block.gifUrl || block.thumbnailUrl ? (
+        <Image source={{ uri: block.gifUrl ?? block.thumbnailUrl! }} style={[styles.gif, { backgroundColor: theme.secondary, borderColor: theme.border }]} contentFit="contain" transition={150} />
       ) : null}
       {rows.length ? (
         <View style={[styles.prescriptionBox, { borderColor: theme.border, borderRadius: theme.radius.md }]}>
@@ -207,6 +219,8 @@ const styles = StyleSheet.create({
   blockList: { gap: 8, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: 'transparent', paddingTop: 2 },
   blockRow: { flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10 },
   prescription: { fontSize: 13 },
+  supersetMeta: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 3 },
+  supersetTxt: { fontSize: 10.5 },
   sheetTitle: { fontSize: 20, letterSpacing: -0.4 },
   sheetMuscle: { fontSize: 13 },
   muscleRow: { flexDirection: 'row', flexWrap: 'wrap' },

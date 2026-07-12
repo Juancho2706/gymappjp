@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
-import { Activity, AlertTriangle, BarChart3, ChevronLeft, ChevronRight, Dumbbell, Radar, TrendingUp } from 'lucide-react-native'
+import { Activity, AlertTriangle, BarChart3, ChevronLeft, ChevronRight, Dumbbell, Radar, StickyNote, TrendingUp } from 'lucide-react-native'
 import { Directions, Gesture, GestureDetector } from 'react-native-gesture-handler'
 import { cssInterop } from 'nativewind'
 import * as Haptics from 'expo-haptics'
@@ -267,14 +267,22 @@ function SessionDetail({ detail }: { detail: ClientDayDetail }) {
       <CardHeader icon={Dumbbell} title="Detalle de la sesión" right={<Pill label={`${Math.round(totalTonnage).toLocaleString('es-CL')} kg`} />} />
       {grouped.map(([name, g], gi) => (
         <View key={name} style={[gi < grouped.length - 1 && { borderBottomColor: theme.border, borderBottomWidth: StyleSheet.hairlineWidth, paddingBottom: 8 }]}>
+          {g.sets.some((set) => set.substitutedExerciseName) ? (
+            <View style={[styles.substitutionBanner, { backgroundColor: theme.secondary, borderColor: theme.border }]}>
+              <AlertTriangle size={14} className="text-warning-600" />
+              <Text style={[styles.substitutionText, { color: theme.foreground, fontFamily: theme.fontSans }]}>Ejercicio sustituido por máquina ocupada</Text>
+            </View>
+          ) : null}
           <Text numberOfLines={1} style={[cd.rowTitle, { color: theme.foreground, fontFamily: 'HankenGrotesk_600SemiBold' }]}>{name}</Text>
           <Text style={[cd.rowSub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{g.muscle ?? 'Sin grupo'}</Text>
           <View style={styles.setWrap}>
             {g.sets.map((set, i) => (
               <View key={i} style={[styles.setPill, { backgroundColor: theme.secondary, borderColor: theme.border }]}>
-                <Text style={[styles.setTxt, { color: theme.foreground, fontFamily: 'HankenGrotesk_600SemiBold' }]}>
-                  {set.weightKg != null ? set.weightKg : 'PC'}×{set.repsDone != null ? set.repsDone : '—'}{set.rpe != null ? ` · RPE ${set.rpe}` : ''}
+                <Text style={[styles.setTxt, { color: set.targetWeightKg != null && set.weightKg != null ? (set.weightKg >= set.targetWeightKg ? theme.success : theme.destructive) : theme.foreground, fontFamily: 'HankenGrotesk_600SemiBold' }]}>
+                  {set.weightKg != null ? set.weightKg : 'PC'}×{set.repsDone != null ? set.repsDone : '—'}{set.rpe != null ? ` · RPE ${set.rpe}` : ''}{set.rir != null ? ` · RIR ${set.rir}` : ''}
                 </Text>
+                {set.targetReps || set.targetWeightKg != null ? <Text style={[styles.setMeta, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Meta: {set.targetWeightKg != null ? `${set.targetWeightKg} kg` : 'PC'} × {set.targetReps ?? '—'}</Text> : null}
+                {set.note ? <View style={styles.noteRow}><StickyNote size={11} color={theme.mutedForeground} /><Text style={[styles.setMeta, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{set.note}</Text></View> : null}
               </View>
             ))}
           </View>
@@ -293,5 +301,9 @@ const styles = StyleSheet.create({
   navDate: { fontSize: 14, textTransform: 'capitalize' },
   setWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 6 },
   setPill: { borderWidth: 1, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4 },
+  setMeta: { fontSize: 10.5, lineHeight: 14 },
+  noteRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },
+  substitutionBanner: { flexDirection: 'row', alignItems: 'center', gap: 7, borderWidth: 1, borderRadius: 10, paddingHorizontal: 9, paddingVertical: 7, marginBottom: 7 },
+  substitutionText: { fontSize: 11.5, flex: 1 },
   setTxt: { fontSize: 12 },
 })
