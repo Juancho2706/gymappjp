@@ -34,8 +34,22 @@ Fecha: 2026-07-12. Estado: tanda A aplicada; unidad aún abierta.
   sólo alumnos presentes en adherencia o nutrición; hint de sets usa `·`
   verbatim y ya no inventa filas nutricionales a 0%.
 
+## Cerrado en tanda C
+
+- `MobileFreeWelcomeModal` replica el dialog web: gradiente `sport-100`, icono
+  sport, título/copy con acentos, pasos sport/ember/success, Pro y precio
+  `$29.990/mes`, “Nutrición” y CTA `Empezar ahora →` sport.
+- `MobileOnboardingGuideChip` reconciliado con el
+  `CoachOnboardingChecklist` realmente montado: ramps sport 100/200/300/600/700,
+  copies con acentos, filas navegables, toggle Marcar visto/Desmarcar de Marca,
+  upsell sólo sin nutrición, Saltar guía y estado reanudable “Continuar guía”.
+- Estado 4/4 usa card success 100/500/700, copy `¡Activación lista!` y target de
+  cierre 44 px como web.
+- `MobilePublicCodeRequiredModal` se conserva: es un flujo operativo RN de
+  confirmación del nuevo link público sin contraparte responsive; no es una
+  mejora visual ni sustituye un elemento web.
+
 ## Pendiente antes de cerrar unidad
 
-- Modales onboarding/free/public-code y sus estados/copy.
 - Barrido final de exports montados, claro/oscuro y marca custom.
 - Gates completos de la tanda y QA visual device.

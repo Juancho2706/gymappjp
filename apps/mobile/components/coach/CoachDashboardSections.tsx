@@ -467,8 +467,16 @@ export function MobilePublicCodeRequiredModal({
 const FREE_WELCOME_KEY = 'eva_free_welcome_seen'
 
 export function MobileFreeWelcomeModal({ enabled }: { enabled: boolean }) {
-  const { theme } = useTheme()
+  const { theme, resolvedScheme } = useTheme()
   const [open, setOpen] = useState(false)
+  const dark = resolvedScheme === 'dark'
+  const sport = deriveSportTokens(theme.primary)
+  const sport100 = dark ? hexToRgba(theme.primary, 0.2) : sport.ramp['100']
+  const sport600 = dark ? sport.dark['600'] : sport.ramp['600']
+  const ember100 = dark ? 'rgba(255,106,61,0.20)' : '#FFEDE6'
+  const ember700 = dark ? '#FFB79E' : '#C23E14'
+  const success100 = dark ? 'rgba(31,184,119,0.18)' : '#DBF5EA'
+  const success600 = dark ? '#4FD9A0' : '#0F7D50'
 
   useEffect(() => {
     if (!enabled) return
@@ -489,25 +497,30 @@ export function MobileFreeWelcomeModal({ enabled }: { enabled: boolean }) {
   return (
     <NativeDialog open={open} onClose={dismiss} maxWidth={390}>
       <View style={styles.freeWelcome}>
-        <View style={[styles.freeWelcomeHero, { borderBottomColor: theme.border }]}>
-          <View style={[styles.freeWelcomeIcon, { borderColor: 'rgba(16,185,129,0.3)', backgroundColor: 'rgba(16,185,129,0.18)' }]}>
-            <Sparkles size={31} color="#10B981" />
+        <LinearGradient
+          colors={[sport100, 'transparent']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={[styles.freeWelcomeHero, { borderBottomColor: theme.border }]}
+        >
+          <View style={[styles.freeWelcomeIcon, { borderColor: hexToRgba(theme.primary, 0.3), backgroundColor: sport100, borderRadius: theme.radius.md }]}>
+            <Sparkles size={32} color={sport600} />
           </View>
           <Text style={[styles.freeWelcomeTitle, { color: theme.foreground, fontFamily: FONT.displayBold }]}>
-            Bienvenido a EVA
+            ¡Bienvenido a EVA!
           </Text>
           <Text style={[styles.freeWelcomeSub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
-            Tu plan gratuito esta activo. Puedes empezar ahora mismo.
+            Tu plan gratuito está activo. Puedes empezar ahora mismo.
           </Text>
-        </View>
+        </LinearGradient>
 
         <View style={styles.freeWelcomeSection}>
           <Text style={[styles.freeWelcomeEyebrow, { color: theme.mutedForeground, fontFamily: FONT.uiBold }]}>
             PRIMEROS PASOS
           </Text>
-          <WelcomeStep icon={Users} color="#38BDF8" title="Agrega tu primer alumno" subtitle="Hasta 3 alumnos en el plan Free" />
-          <WelcomeStep icon={Zap} color="#8B5CF6" title="Crea tu primera rutina" subtitle="Constructor de programas sin limites" />
-          <WelcomeStep icon={Palette} color="#F59E0B" title="Personaliza tu app con Starter" subtitle="Tu logo y colores desde el siguiente plan" />
+          <WelcomeStep icon={Users} color={sport600} backgroundColor={sport100} title="Agrega tu primer alumno" subtitle="Hasta 3 alumnos en el plan Free" />
+          <WelcomeStep icon={Zap} color={ember700} backgroundColor={ember100} title="Crea tu primera rutina" subtitle="Constructor de programas sin límites" />
+          <WelcomeStep icon={Palette} color={success600} backgroundColor={success100} title="Personaliza tu app con Pro" subtitle="Tu logo y colores desde $29.990/mes" />
         </View>
 
         <View style={styles.freeWelcomeSection}>
@@ -521,7 +534,7 @@ export function MobileFreeWelcomeModal({ enabled }: { enabled: boolean }) {
               { ok: true, text: 'App para tus alumnos' },
               { ok: true, text: 'Check-ins' },
               { ok: false, text: 'Marca personalizada' },
-              { ok: false, text: 'Nutricion' },
+              { ok: false, text: 'Nutrición' },
             ].map((item) => (
               <View key={item.text} style={styles.freePlanItem}>
                 {item.ok ? (
@@ -548,7 +561,7 @@ export function MobileFreeWelcomeModal({ enabled }: { enabled: boolean }) {
         </View>
 
         <View style={styles.freeWelcomeActions}>
-          <Button label="Empezar ahora" onPress={dismiss} full />
+          <Button label="Empezar ahora →" variant="sport" onPress={dismiss} full />
           <Button
             label="Ver todos los planes"
             variant="ghost"
@@ -568,18 +581,20 @@ export function MobileFreeWelcomeModal({ enabled }: { enabled: boolean }) {
 function WelcomeStep({
   icon: Icon,
   color,
+  backgroundColor,
   title,
   subtitle,
 }: {
   icon: LucideIcon
   color: string
+  backgroundColor: string
   title: string
   subtitle: string
 }) {
   const { theme } = useTheme()
   return (
     <View style={styles.welcomeStep}>
-      <View style={[styles.welcomeStepIcon, { backgroundColor: hexToRgba(color, 0.15) }]}>
+      <View style={[styles.welcomeStepIcon, { backgroundColor }]}>
         <Icon size={16} color={color} />
       </View>
       <View style={styles.welcomeStepCopy}>
@@ -1237,13 +1252,26 @@ export function MobileOnboardingGuideChip({
   activePlans: number
   hasStudentSignal30d: boolean
 }) {
-  const { theme } = useTheme()
+  const { theme, resolvedScheme } = useTheme()
   const router = useRouter()
+  const dark = resolvedScheme === 'dark'
+  const sport = deriveSportTokens(theme.primary)
+  const sport100 = dark ? sport.dark['100'] : sport.ramp['100']
+  const sport200 = sport.ramp['200']
+  const sport300 = sport.ramp['300']
+  const sport600 = dark ? sport.dark['600'] : sport.ramp['600']
+  const sport700 = dark ? sport.dark['700'] : sport.ramp['700']
+  const success100 = dark ? 'rgba(31,184,119,0.18)' : '#DBF5EA'
+  const success700 = dark ? '#6FE3B4' : '#0E7A50'
+  const isFree = coach.subscriptionTier === 'free'
+  const nutritionEnabled = canUseNutrition(coach.subscriptionTier)
+  const [brandOverride, setBrandOverride] = useState<boolean | null>(null)
+  const brandDone = brandOverride ?? Boolean(coach.hasCoachLogo)
   const steps = [
-    { key: 'brand', label: 'Personaliza tu marca', done: Boolean(coach.hasCoachLogo) },
-    { key: 'client', label: 'Suma tu primer alumno', done: totalClients > 0 },
-    { key: 'plan', label: 'Crea tu primer plan', done: activePlans > 0 },
-    { key: 'checkin', label: 'Recibe el primer check-in', done: hasStudentSignal30d },
+    { key: 'brand', label: 'Personaliza tu marca', done: brandDone, route: isFree ? 'subscription' : 'brand' },
+    { key: 'client', label: 'Suma tu primer alumno', done: totalClients > 0, route: 'clients' },
+    { key: 'plan', label: 'Crea tu primer plan', done: activePlans > 0, route: 'programs' },
+    { key: 'checkin', label: 'Recibe el primer check-in', done: hasStudentSignal30d, route: 'clients' },
   ]
   const doneCount = steps.filter((s) => s.done).length
   const allDone = doneCount === steps.length
@@ -1254,8 +1282,17 @@ export function MobileOnboardingGuideChip({
 
   useEffect(() => {
     let mounted = true
-    AsyncStorage.getItem(GUIDE_CHIP_HIDDEN_KEY(coach.id))
-      .then((v) => { if (mounted) { setHidden(v === '1'); setReady(true) } })
+    Promise.all([
+      AsyncStorage.getItem(GUIDE_CHIP_HIDDEN_KEY(coach.id)),
+      AsyncStorage.getItem(`${GUIDE_CHIP_HIDDEN_KEY(coach.id)}:brand`),
+    ])
+      .then(([hiddenValue, brandValue]) => {
+        if (!mounted) return
+        setHidden(hiddenValue === '1')
+        if (brandValue === '1') setBrandOverride(true)
+        if (brandValue === '0') setBrandOverride(false)
+        setReady(true)
+      })
       .catch(() => { if (mounted) setReady(true) })
     return () => { mounted = false }
   }, [coach.id])
@@ -1270,7 +1307,42 @@ export function MobileOnboardingGuideChip({
     })
   }
 
-  if (!ready || hidden) return null
+  function resumeGuide() {
+    setHidden(false)
+    AsyncStorage.removeItem(GUIDE_CHIP_HIDDEN_KEY(coach.id)).catch(() => null)
+  }
+
+  function toggleBrandStep() {
+    const next = !brandDone
+    setBrandOverride(next)
+    AsyncStorage.setItem(`${GUIDE_CHIP_HIDDEN_KEY(coach.id)}:brand`, next ? '1' : '0').catch(() => null)
+  }
+
+  function openStep(route: string) {
+    if (route === 'subscription') openCoachWebPath('/coach/subscription')
+    else if (route === 'brand') router.push('/coach/settings/brand')
+    else if (route === 'programs') router.push('/coach/(tabs)/builder')
+    else router.push('/coach/(tabs)/clientes')
+  }
+
+  if (!ready) return null
+  if (hidden && allDone) return null
+  if (hidden) {
+    return (
+      <View
+        className="flex-row items-center gap-[11px] px-[13px] py-1"
+        style={{ borderWidth: 1, borderColor: sport200, backgroundColor: sport100, borderRadius: theme.radius.md }}
+      >
+        <Rocket size={16} color={sport600} />
+        <Text className="flex-1 font-sans-bold text-[13px]" style={{ color: sport700 }}>
+          Sigues con pasos pendientes en tu guía de inicio.
+        </Text>
+        <TouchableOpacity onPress={resumeGuide} className="min-h-11 justify-center px-1">
+          <Text className="font-sans-extra text-[12.5px]" style={{ color: sport700 }}>Continuar guía</Text>
+        </TouchableOpacity>
+      </View>
+    )
+  }
 
   // Momento aha: circuito completo → card de celebracion (cerrable).
   if (allDone) {
@@ -1278,19 +1350,19 @@ export function MobileOnboardingGuideChip({
       <Card
         padding="md"
         radius="card"
-        style={{ flexDirection: 'row', alignItems: 'center', gap: 11, backgroundColor: 'rgba(16,185,129,0.1)', borderColor: 'rgba(16,185,129,0.32)', borderWidth: 1 }}
+        style={{ flexDirection: 'row', alignItems: 'center', gap: 11, backgroundColor: success100, borderColor: hexToRgba(theme.success, 0.3), borderWidth: 1 }}
       >
-        <View className="h-9 w-9 items-center justify-center rounded-pill" style={{ backgroundColor: '#10B981' }}>
+        <View className="h-9 w-9 items-center justify-center rounded-pill" style={{ backgroundColor: theme.success }}>
           <PartyPopper size={18} color="#FFFFFF" />
         </View>
         <View className="flex-1" style={{ minWidth: 0 }}>
-          <Text className="font-sans-bold text-[14.5px]" style={{ color: '#10B981' }}>
-            Activacion lista
+          <Text className="font-sans-extra text-[14.5px]" style={{ color: success700 }}>
+            ¡Activación lista!
           </Text>
-          <Text className="font-sans text-[12.5px] text-muted">Tu cuenta esta configurada. A entrenar.</Text>
+          <Text className="font-sans text-[12.5px]" style={{ color: success700, opacity: 0.85 }}>Tu cuenta está configurada. A entrenar.</Text>
         </View>
-        <TouchableOpacity onPress={skip} accessibilityLabel="Cerrar" hitSlop={8}>
-          <X size={18} color={theme.mutedForeground} />
+        <TouchableOpacity onPress={skip} accessibilityLabel="Cerrar" className="h-11 w-11 items-center justify-center">
+          <X size={18} color={success700} />
         </TouchableOpacity>
       </Card>
     )
@@ -1304,31 +1376,31 @@ export function MobileOnboardingGuideChip({
         className="flex-row items-center gap-3 px-3 py-[11px]"
         style={{
           borderWidth: 1,
-          borderColor: hexToRgba(theme.primary, 0.28),
+          borderColor: sport200,
           borderBottomWidth: open ? 0 : 1,
-          backgroundColor: hexToRgba(theme.primary, 0.08),
+          backgroundColor: sport100,
           borderTopLeftRadius: theme.radius.md,
           borderTopRightRadius: theme.radius.md,
           borderBottomLeftRadius: open ? 0 : theme.radius.md,
           borderBottomRightRadius: open ? 0 : theme.radius.md,
         }}
       >
-        <Rocket size={16} color={theme.primary} />
-        <Text className="flex-1 font-sans-bold text-[13px]" style={{ color: theme.primary }}>
-          Guia de inicio
+        <Rocket size={16} color={sport600} />
+        <Text className="flex-1 font-sans-bold text-[13px]" style={{ color: sport700 }}>
+          Guía de inicio
         </Text>
         <View className="flex-row items-center" style={{ gap: 4 }}>
           {steps.map((s) => (
             <View
               key={s.key}
-              style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: s.done ? theme.primary : hexToRgba(theme.primary, 0.3) }}
+              style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: s.done ? theme.primary : sport300, opacity: s.done ? 1 : 0.5 }}
             />
           ))}
         </View>
-        <Text className="font-sans-extra text-[12.5px]" style={{ color: theme.primary, minWidth: 26, textAlign: 'right' }}>
+        <Text className="font-sans-extra text-[12.5px]" style={{ color: sport700, minWidth: 26, textAlign: 'right' }}>
           {doneCount}/{steps.length}
         </Text>
-        <ChevronDown size={16} color={theme.primary} style={{ transform: [{ rotate: open ? '180deg' : '0deg' }] }} />
+        <ChevronDown size={16} color={sport600} style={{ transform: [{ rotate: open ? '180deg' : '0deg' }] }} />
       </TouchableOpacity>
 
       {open ? (
@@ -1336,8 +1408,8 @@ export function MobileOnboardingGuideChip({
           style={{
             borderWidth: 1,
             borderTopWidth: 0,
-            borderColor: hexToRgba(theme.primary, 0.28),
-            backgroundColor: hexToRgba(theme.primary, 0.08),
+            borderColor: sport200,
+            backgroundColor: sport100,
             borderBottomLeftRadius: theme.radius.md,
             borderBottomRightRadius: theme.radius.md,
             paddingHorizontal: 13,
@@ -1355,36 +1427,45 @@ export function MobileOnboardingGuideChip({
                     height: 20,
                     backgroundColor: s.done ? theme.primary : 'transparent',
                     borderWidth: s.done ? 0 : 2,
-                    borderColor: hexToRgba(theme.primary, 0.4),
+                    borderColor: sport300,
                   }}
                 >
                   {s.done ? <Check size={12} color="#FFFFFF" strokeWidth={3} /> : null}
                 </View>
-                <Text
-                  className="font-sans-semibold text-[13.5px]"
-                  style={{ color: s.done ? theme.mutedForeground : theme.foreground, textDecorationLine: s.done ? 'line-through' : 'none', opacity: s.done ? 0.75 : 1 }}
-                >
-                  {s.label}
-                </Text>
+                <TouchableOpacity onPress={() => openStep(s.route)} className="flex-1 py-0.5">
+                  <Text
+                    className="font-sans-semibold text-[13.5px]"
+                    style={{ color: s.done ? sport600 : sport700, textDecorationLine: s.done ? 'line-through' : 'none', opacity: s.done ? 0.7 : 1 }}
+                  >
+                    {s.label}
+                  </Text>
+                </TouchableOpacity>
+                {s.key === 'brand' ? (
+                  <TouchableOpacity onPress={toggleBrandStep} className="min-h-11 justify-center px-1">
+                    <Text className="font-sans-extra text-[12px]" style={{ color: sport700 }}>
+                      {s.done ? 'Desmarcar' : 'Marcar visto'}
+                    </Text>
+                  </TouchableOpacity>
+                ) : null}
               </View>
             ))}
           </View>
 
-          <View
+          {!nutritionEnabled ? <View
             className="flex-row items-center"
-            style={{ gap: 9, marginTop: 12, paddingTop: 12, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: hexToRgba(theme.primary, 0.2) }}
+            style={{ gap: 9, marginTop: 12, paddingTop: 12, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: sport200 }}
           >
-            <Sparkles size={15} color={theme.primary} />
-            <Text className="flex-1 font-sans text-[12px]" style={{ color: theme.foreground, lineHeight: 16 }}>
-              Suma planes de nutricion con <Text className="font-sans-bold" style={{ color: theme.primary }}>Pro</Text>.
+            <Sparkles size={15} color={sport600} />
+            <Text className="flex-1 font-sans text-[12px]" style={{ color: sport700, lineHeight: 16 }}>
+              Suma planes de nutrición con <Text className="font-sans-bold">Pro</Text>.
             </Text>
             <TouchableOpacity onPress={() => openCoachWebPath('/coach/subscription')} hitSlop={6}>
-              <Text className="font-sans-extra text-[12px]" style={{ color: theme.primary }}>Mejorar</Text>
+              <Text className="font-sans-extra text-[12px]" style={{ color: sport700 }}>Mejorar</Text>
             </TouchableOpacity>
-          </View>
+          </View> : null}
 
-          <TouchableOpacity onPress={skip} style={{ marginTop: 10 }} hitSlop={6}>
-            <Text className="font-sans-bold text-[12px]" style={{ color: theme.mutedForeground }}>Saltar guia</Text>
+          <TouchableOpacity onPress={skip} className="mt-1 min-h-11 justify-center pr-2">
+            <Text className="font-sans-bold text-[12px]" style={{ color: sport600 }}>Saltar guía</Text>
           </TouchableOpacity>
         </View>
       ) : null}
@@ -3610,23 +3691,21 @@ const styles = StyleSheet.create({
   freeWelcomeHero: {
     alignItems: 'center',
     paddingHorizontal: 24,
-    paddingTop: 28,
-    paddingBottom: 22,
+    paddingTop: 32,
+    paddingBottom: 24,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    backgroundColor: 'rgba(16,185,129,0.08)',
   },
   freeWelcomeIcon: {
     width: 64,
     height: 64,
-    borderRadius: 18,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 14,
+    marginBottom: 16,
   },
   freeWelcomeTitle: {
-    fontSize: 21,
-    lineHeight: 26,
+    fontSize: 20,
+    lineHeight: 24,
     textAlign: 'center',
   },
   freeWelcomeSub: {
@@ -3637,8 +3716,8 @@ const styles = StyleSheet.create({
   },
   freeWelcomeSection: {
     paddingHorizontal: 24,
-    paddingTop: 18,
-    gap: 12,
+    paddingTop: 20,
+    gap: 16,
   },
   freeWelcomeEyebrow: {
     fontSize: 10,
@@ -3650,9 +3729,9 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   welcomeStepIcon: {
-    width: 30,
-    height: 30,
-    borderRadius: 9,
+    width: 28,
+    height: 28,
+    borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 1,
@@ -3687,8 +3766,8 @@ const styles = StyleSheet.create({
   },
   freeWelcomeActions: {
     paddingHorizontal: 24,
-    paddingTop: 18,
-    paddingBottom: 22,
+    paddingTop: 16,
+    paddingBottom: 24,
     gap: 8,
   },
   onboardingSkeleton: {
