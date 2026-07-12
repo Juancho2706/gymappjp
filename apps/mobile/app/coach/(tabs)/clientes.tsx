@@ -1,33 +1,37 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Alert, FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
+import { Alert, FlatList, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import Animated, { Extrapolation, interpolate, runOnJS, useAnimatedScrollHandler, useAnimatedStyle, useSharedValue, type SharedValue } from 'react-native-reanimated'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import * as Clipboard from 'expo-clipboard'
 import { useFocusEffect, useRouter } from 'expo-router'
 import {
+  Apple,
   ArrowUpDown,
   Check,
+  ChevronDown,
   ChevronRight,
+  ChevronUp,
   FileUp,
   LayoutGrid,
   Link as LinkIcon,
-  List as ListIcon,
+  MoreVertical,
   Search,
   SearchX,
   SlidersHorizontal,
+  Table2,
   Users,
   UserPlus,
   X,
 } from 'lucide-react-native'
+import { deriveSportTokens } from '@eva/brand-kit'
 import { useTheme } from '../../../context/ThemeContext'
 import { useEntitlements } from '../../../lib/entitlements'
-import { Button, Input, NativeDialog, ScreenHeader } from '../../../components'
+import { Button, Input, NativeDialog } from '../../../components'
 import { EvaLoaderScreen } from '../../../components/EvaLoader'
 import { AppBackground } from '../../../components/AppBackground'
 import { useCoachTabbarScroll } from '../../../components/coach/CoachTabbarScroll'
-import { ClientCard, CLIENT_CARD_HEIGHT } from '../../../components/coach/ClientCard'
 import { DirRowCard } from '../../../components/coach/directory/DirRowCard'
+import { ClientActionsSheet } from '../../../components/coach/directory/ClientActionsSheet'
 import { DirectorySummary } from '../../../components/coach/directory/DirectorySummary'
 import { DirectoryAlertBanner } from '../../../components/coach/directory/DirectoryAlertBanner'
 import { DirectoryOptionSheet } from '../../../components/coach/directory/DirectoryOptionSheet'
@@ -41,6 +45,7 @@ import {
   RISK_LABELS,
   SORT_OPTIONS,
   STATUS_OPTIONS,
+  SUCCESS,
   WARNING,
   hexToRgba,
 } from '../../../components/coach/directory/directory-shared'
@@ -60,32 +65,240 @@ import {
 } from '../../../lib/clients-directory'
 import { clientLoginUrl, deleteClient, openWhatsApp, resetClientPassword, setClientStatus, shareLogin } from '../../../lib/client-actions'
 import { getCoachProfile } from '../../../lib/coach'
+import { useWorkspace } from '../../../lib/workspace'
 import { FONT } from '../../../lib/typography'
-import { GLOWS } from '../../../lib/shadows'
+import { GLOWS, shadow } from '../../../lib/shadows'
 import { getSantiagoIsoYmdForUtcInstant } from '../../../lib/date-utils'
 
-const CARD_GAP = 12
-const CARD_STEP = CLIENT_CARD_HEIGHT + CARD_GAP
+const DAY_MS = 24 * 60 * 60 * 1000
 
-// Item con animación de "stack": al scrollear abajo las cards se apilan arriba; al subir, salen y bajan.
-function StackCardItem({ index, scrollY, headerH, children }: { index: number; scrollY: SharedValue<number>; headerH: number; children: React.ReactNode }) {
-  const animStyle = useAnimatedStyle(() => {
-    const slot = index * CARD_STEP
-    const diff = scrollY.value - headerH - slot
-    const translateY = diff > 0 ? diff - interpolate(diff, [0, CARD_STEP], [0, 8], Extrapolation.CLAMP) : 0
-    const scale = interpolate(diff, [0, CARD_STEP], [1, 0.94], Extrapolation.CLAMP)
-    const opacity = interpolate(diff, [0, CARD_STEP * 2, CARD_STEP * 4], [1, 1, 0.4], Extrapolation.CLAMP)
-    return { transform: [{ translateY }, { scale }], opacity }
-  })
-  return <Animated.View style={[{ marginBottom: CARD_GAP }, animStyle]}>{children}</Animated.View>
+function defaultSortDir(key: DirectorySortKey): SortDir {
+  return key === 'name_asc' || key === 'plan_days' ? 'asc' : 'desc'
+}
+
+function daysSince(value: string | null): number | null {
+  if (!value) return null
+  const stamp = new Date(value).getTime()
+  return Number.isFinite(stamp) ? Math.max(0, Math.floor((Date.now() - stamp) / DAY_MS)) : null
+}
+
+function lastActivityLabel(days: number | null): string {
+  if (days == null) return '—'
+  if (days === 0) return 'Hoy'
+  if (days === 1) return 'Ayer'
+  return `Hace ${days}d`
+}
+
+function statusMeta(client: DirectoryClient) {
+  if (client.isArchived) return { label: 'Archivado', bg: 'bg-surface-sunken', fg: 'text-subtle' }
+  if (!client.isActive) return { label: 'Pausado', bg: 'bg-ink-100', fg: 'text-ink-600' }
+  if (client.forcePwChange) return { label: 'Pend. sync', bg: 'bg-info-100 dark:bg-info-100/[0.18]', fg: 'text-info-600' }
+  return { label: 'Activo', bg: 'bg-success-100 dark:bg-success-100/[0.18]', fg: 'text-success-700' }
+}
+
+const DENSE_COLS = {
+  name: 150,
+  status: 84,
+  score: 64,
+  adherence: 96,
+  weight: 92,
+  last: 78,
+  program: 150,
+  days: 56,
+  actions: 44,
+} as const
+
+function DenseHeaderCell({
+  label,
+  width,
+  sort,
+  sortKey,
+  sortDir,
+  onSort,
+  center = false,
+}: {
+  label: string
+  width: number
+  sort?: DirectorySortKey
+  sortKey: DirectorySortKey
+  sortDir: SortDir
+  onSort: (key: DirectorySortKey) => void
+  center?: boolean
+}) {
+  const active = sort === sortKey
+  const SortIcon = sortDir === 'asc' ? ChevronUp : ChevronDown
+  return (
+    <TouchableOpacity
+      disabled={!sort}
+      activeOpacity={sort ? 0.72 : 1}
+      onPress={() => sort && onSort(sort)}
+      style={[styles.denseHeaderCell, { width }, center && styles.denseCenter]}
+    >
+      <Text numberOfLines={1} className={active ? 'text-strong' : 'text-subtle'} style={styles.denseHeaderText}>{label}</Text>
+      {active ? <SortIcon size={12} className="text-strong" /> : null}
+    </TouchableOpacity>
+  )
+}
+
+function DenseDirectoryTable({
+  clients,
+  pulseById,
+  sortKey,
+  sortDir,
+  onHeaderSort,
+  onOpen,
+  onActions,
+  theme,
+}: {
+  clients: DirectoryClient[]
+  pulseById: Map<string, PulseRow>
+  sortKey: DirectorySortKey
+  sortDir: SortDir
+  onHeaderSort: (key: DirectorySortKey) => void
+  onOpen: (client: DirectoryClient) => void
+  onActions: (client: DirectoryClient) => void
+  theme: any
+}) {
+  return (
+    <View style={[styles.denseShell, { borderColor: theme.border, borderRadius: theme.radius.card }]}>
+      <View style={styles.denseTableRow}>
+        <View style={[styles.denseFixedColumn, { width: DENSE_COLS.name, borderColor: theme.border }]}>
+          <View className="border-b border-default bg-surface-sunken">
+            <DenseHeaderCell label="Alumno" width={DENSE_COLS.name} sort="name_asc" sortKey={sortKey} sortDir={sortDir} onSort={onHeaderSort} />
+          </View>
+          {clients.map((client, index) => (
+            <TouchableOpacity
+              key={client.id}
+              activeOpacity={0.76}
+              onPress={() => onOpen(client)}
+              className={`bg-surface-card ${index < clients.length - 1 ? 'border-b border-subtle' : ''}`}
+              style={[styles.denseNameCell, { width: DENSE_COLS.name }]}
+            >
+              <View className="bg-ink-900" style={styles.denseAvatar}>
+                <Text className="text-sport-400" style={styles.denseAvatarText}>{client.fullName?.[0] ?? '?'}</Text>
+              </View>
+              <View style={styles.denseNameCopy}>
+                <Text numberOfLines={1} className="text-strong" style={styles.denseName}>{client.fullName}</Text>
+                <Text numberOfLines={1} className="text-subtle" style={styles.denseEmail}>{client.email || '—'}</Text>
+              </View>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} bounces={false}>
+          <View>
+            <View className="border-b border-default bg-surface-sunken" style={styles.denseHeaderRow}>
+              <DenseHeaderCell label="Estado" width={DENSE_COLS.status} sortKey={sortKey} sortDir={sortDir} onSort={onHeaderSort} />
+              <DenseHeaderCell label="Score" width={DENSE_COLS.score} sort="attention_score" sortKey={sortKey} sortDir={sortDir} onSort={onHeaderSort} center />
+              <DenseHeaderCell label="Adh." width={DENSE_COLS.adherence} sort="adherence" sortKey={sortKey} sortDir={sortDir} onSort={onHeaderSort} />
+              <DenseHeaderCell label="Peso" width={DENSE_COLS.weight} sort="weight_change" sortKey={sortKey} sortDir={sortDir} onSort={onHeaderSort} />
+              <DenseHeaderCell label="Último" width={DENSE_COLS.last} sort="last_workout" sortKey={sortKey} sortDir={sortDir} onSort={onHeaderSort} />
+              <DenseHeaderCell label="Programa" width={DENSE_COLS.program} sortKey={sortKey} sortDir={sortDir} onSort={onHeaderSort} />
+              <DenseHeaderCell label="Días" width={DENSE_COLS.days} sort="plan_days" sortKey={sortKey} sortDir={sortDir} onSort={onHeaderSort} center />
+              <DenseHeaderCell label="" width={DENSE_COLS.actions} sortKey={sortKey} sortDir={sortDir} onSort={onHeaderSort} center />
+            </View>
+            {clients.map((client, index) => {
+              const pulse = pulseById.get(client.id)
+              const status = statusMeta(client)
+              const score = pulse?.attentionScore ?? client.attentionScore
+              const adherence = pulse?.percentage ?? 0
+              const nutritionPct = pulse?.nutritionPercentage ?? 0
+              const nutritionRisk = !!pulse && ((pulse.attentionFlags ?? []).includes('NUTRICION_RIESGO') || (nutritionPct > 0 && nutritionPct < 60))
+              const lastDays = daysSince(pulse?.lastWorkoutDate ?? client.lastWorkoutDate)
+              const delta = pulse?.weightDelta7d
+              const scoreTone = score >= 50
+                ? { bg: 'bg-danger-100 dark:bg-danger-100/[0.18]', fg: 'text-danger-700' }
+                : score >= 25
+                  ? { bg: 'bg-warning-100 dark:bg-warning-100/[0.18]', fg: 'text-warning-700' }
+                  : { bg: 'bg-success-100 dark:bg-success-100/[0.18]', fg: 'text-success-700' }
+              const adherenceColor = adherence >= 75 ? SUCCESS : adherence >= 50 ? WARNING : DANGER
+              const dotColor = lastDays != null && lastDays < 3 ? SUCCESS : lastDays != null && lastDays < 7 ? WARNING : DANGER
+              return (
+                <TouchableOpacity
+                  key={client.id}
+                  activeOpacity={0.76}
+                  onPress={() => onOpen(client)}
+                  className={`bg-surface-card ${index < clients.length - 1 ? 'border-b border-subtle' : ''}`}
+                  style={styles.denseDataRow}
+                >
+                  <View style={[styles.denseCell, { width: DENSE_COLS.status }]}>
+                    <View className={`${status.bg} rounded-pill`} style={styles.denseStatusPill}>
+                      <Text className={status.fg} style={styles.denseStatusText}>{status.label}</Text>
+                    </View>
+                  </View>
+                  <View style={[styles.denseCell, styles.denseCenter, { width: DENSE_COLS.score }]}>
+                    <View className={`${scoreTone.bg} rounded-xs`} style={styles.denseScorePill}>
+                      <Text className={scoreTone.fg} style={styles.denseScoreText}>{score}</Text>
+                    </View>
+                  </View>
+                  <View style={[styles.denseCell, { width: DENSE_COLS.adherence }]}>
+                    {nutritionRisk ? <Apple size={13} className="text-ember-700" /> : null}
+                    <View className="bg-surface-sunken rounded-pill" style={styles.denseAdherenceTrack}>
+                      <View style={[styles.denseAdherenceFill, { width: `${Math.max(0, Math.min(100, adherence))}%`, backgroundColor: adherenceColor }]} />
+                    </View>
+                    <Text className="text-strong" style={styles.denseMetricSmall}>{adherence}</Text>
+                  </View>
+                  <View style={[styles.denseCell, { width: DENSE_COLS.weight }]}>
+                    <View>
+                      <Text className="text-strong" style={styles.denseMetric}>{pulse?.currentWeight != null ? `${pulse.currentWeight} kg` : '—'}</Text>
+                      {delta != null ? (
+                        <Text className={delta < 0 ? 'text-success-600' : delta > 0 ? 'text-danger-600' : 'text-subtle'} style={styles.denseDelta}>
+                          {delta > 0 ? '+' : ''}{delta} (7d)
+                        </Text>
+                      ) : null}
+                    </View>
+                  </View>
+                  <View style={[styles.denseCell, { width: DENSE_COLS.last }]}>
+                    <View style={[styles.denseDot, { backgroundColor: dotColor }]} />
+                    <Text numberOfLines={1} className="text-body" style={styles.denseLast}>{lastActivityLabel(lastDays)}</Text>
+                  </View>
+                  <View style={[styles.denseCell, { width: DENSE_COLS.program }]}>
+                    <Text numberOfLines={1} className={client.activeProgramName ? 'text-body' : 'text-subtle'} style={styles.denseProgram}>{client.activeProgramName ?? '—'}</Text>
+                  </View>
+                  <View style={[styles.denseCell, styles.denseCenter, { width: DENSE_COLS.days }]}>
+                    <Text className={client.planDaysRemaining != null && client.planDaysRemaining <= 0 ? 'text-danger-600' : 'text-strong'} style={styles.denseMetric}>
+                      {client.planDaysRemaining ?? '—'}
+                    </Text>
+                  </View>
+                  <View style={[styles.denseCell, styles.denseCenter, { width: DENSE_COLS.actions }]}>
+                    <TouchableOpacity
+                      accessibilityRole="button"
+                      accessibilityLabel={`Acciones de ${client.fullName}`}
+                      onPress={(event) => { event.stopPropagation(); onActions(client) }}
+                      style={styles.denseActionsBtn}
+                    >
+                      <MoreVertical size={16} className="text-subtle" />
+                    </TouchableOpacity>
+                  </View>
+                </TouchableOpacity>
+              )
+            })}
+          </View>
+        </ScrollView>
+      </View>
+    </View>
+  )
+}
+
+function DirectoryScreenHeader({ theme, trailing }: { theme: any; trailing?: React.ReactNode }) {
+  return (
+    <View style={styles.screenHeader}>
+      <View style={styles.screenHeaderCopy}>
+        <Text style={[styles.screenEyebrow, { color: theme.mutedForeground }]}>Tu seguimiento de hoy</Text>
+        <Text style={[styles.screenTitle, { color: theme.foreground }]}>Alumnos</Text>
+      </View>
+      {trailing ? <View>{trailing}</View> : null}
+    </View>
+  )
 }
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 
 export default function ClientesScreen() {
-  const { reportScrollY, onScroll: onTabbarScroll } = useCoachTabbarScroll()
+  const { onScroll: onTabbarScroll } = useCoachTabbarScroll()
   const { theme } = useTheme()
   const router = useRouter()
+  const workspace = useWorkspace()
   // Acceso a Herramientas (hub /coach/tools): mismo gate que el sidebar web (toolsEnabled)
   // — visible solo con ≥1 modulo del hub activo (cardio/movimiento/composicion).
   const { hasModule } = useEntitlements()
@@ -105,11 +318,13 @@ export default function ClientesScreen() {
   const [showImport, setShowImport] = useState(false)
   const [copied, setCopied] = useState(false)
   const [dismissed, setDismissed] = useState<Record<string, { date: string; count: number }>>({})
-  const [viewMode, setViewMode] = useState<'list' | 'cards'>('list')
+  const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards')
+  const [visibleTableCount, setVisibleTableCount] = useState(48)
   const [sortDir, setSortDir] = useState<SortDir>('desc')
   const [pulseById, setPulseById] = useState<Map<string, PulseRow>>(new Map())
   const [pulseError, setPulseError] = useState(false)
   const [coachSlug, setCoachSlug] = useState<string>('')
+  const [coachPrimaryColor, setCoachPrimaryColor] = useState<string | null>(null)
   const [maxClients, setMaxClients] = useState<number>(0)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<DirectoryClient | null>(null)
@@ -120,17 +335,7 @@ export default function ClientesScreen() {
   const [resetPassword, setResetPassword] = useState<string | null>(null)
   const [resetting, setResetting] = useState(false)
   const [resetError, setResetError] = useState<string | null>(null)
-  const scrollY = useSharedValue(0)
-  const [headerH, setHeaderH] = useState(0)
-  const lastReportedY = useSharedValue(0)
-  const onScroll = useAnimatedScrollHandler((e) => {
-    const y = e.contentOffset.y
-    scrollY.value = y
-    if (Math.abs(y - lastReportedY.value) > 6) {
-      lastReportedY.value = y
-      runOnJS(reportScrollY)(y)
-    }
-  })
+  const [actionsClient, setActionsClient] = useState<DirectoryClient | null>(null)
 
   // Gotcha 6b: la pantalla vive en un tab persistente (no se desmonta). Un
   // `useEffect(load,[])` de un disparo dejaba el roster CONGELADO al volver de la
@@ -140,23 +345,24 @@ export default function ClientesScreen() {
   const isFirstFocus = useRef(true)
   useFocusEffect(
     useCallback(() => {
+      if (!workspace.ready) return
       if (isFirstFocus.current) {
         isFirstFocus.current = false
         load()
       } else {
-        getCoachDirectoryClients().then(setClients).catch(() => {})
-        loadPulse()
+        fetchDirectoryData().catch(() => {})
       }
-    }, [])
+    }, [workspace.ready, workspace.orgId, workspace.teamId])
   )
   useEffect(() => {
-    AsyncStorage.getItem('eva_alumnos_view').then((v) => { if (v === 'cards' || v === 'list') setViewMode(v) })
-    getCoachProfile().then((c) => { if (c?.slug) setCoachSlug(c.slug); if (c?.maxClients) setMaxClients(c.maxClients) }).catch(() => {})
+    getCoachProfile().then((c) => {
+      if (c?.slug) setCoachSlug(c.slug)
+      if (c?.maxClients) setMaxClients(c.maxClients)
+      if (c?.primaryColor) setCoachPrimaryColor(c.primaryColor)
+    }).catch(() => {})
   }, [])
   function toggleView() {
-    const next = viewMode === 'list' ? 'cards' : 'list'
-    setViewMode(next)
-    AsyncStorage.setItem('eva_alumnos_view', next).catch(() => {})
+    setViewMode((current) => current === 'cards' ? 'table' : 'cards')
   }
   useEffect(() => {
     AsyncStorage.getItem('eva_alumnos_alerts_dismissed').then((raw) => {
@@ -169,14 +375,30 @@ export default function ClientesScreen() {
     else setRefreshing(true)
     setLoadError(null)
     try {
-      const data = await getCoachDirectoryClients()
-      setClients(data)
-      loadPulse()
+      await fetchDirectoryData()
     } catch (error) {
       setLoadError(error instanceof Error ? error.message : 'No se pudo cargar la cartera.')
     } finally {
       setLoading(false)
       setRefreshing(false)
+    }
+  }
+
+  async function fetchDirectoryData() {
+    const [clientsResult, pulseResult] = await Promise.allSettled([
+      getCoachDirectoryClients({ orgId: workspace.orgId, teamId: workspace.teamId }),
+      getCoachDirectoryPulse(),
+    ])
+    if (clientsResult.status === 'rejected') throw clientsResult.reason
+    setClients(clientsResult.value)
+    if (pulseResult.status === 'fulfilled') {
+      setPulseById(pulseResult.value)
+      setPulseError(false)
+    } else {
+      setPulseById(new Map())
+      // El endpoint pulse mobile aún no admite team; la web también entrega pulse
+      // vacío en ese workspace. No inventar un error visual exclusivo de RN.
+      setPulseError(!workspace.teamId)
     }
   }
 
@@ -189,12 +411,31 @@ export default function ClientesScreen() {
       .catch(() => setPulseError(true))
   }
 
-  const stats = useMemo(() => buildStats(clients), [clients])
+  // La fuente de score es el pulse del servidor, igual que web. El roster local
+  // solo actua como fallback mientras llega la respuesta rica.
+  const clientsWithPulseScore = useMemo(
+    () => clients.map((client) => {
+      const pulse = pulseById.get(client.id)
+      return {
+        ...client,
+        attentionScore: pulse?.attentionScore ?? 0,
+        lastWorkoutDate: pulse?.lastWorkoutDate ?? client.lastWorkoutDate,
+      }
+    }),
+    [clients, pulseById]
+  )
+
+  const stats = useMemo(() => buildStats(clientsWithPulseScore), [clientsWithPulseScore])
 
   const displayed = useMemo(() => {
-    const filtered = filterClients(clients, search, riskFilter, statusFilter, pulseById, programFilter)
+    const filtered = filterClients(clientsWithPulseScore, search, riskFilter, statusFilter, pulseById, programFilter)
     return sortClients(filtered, sortKey, sortDir, pulseById)
-  }, [clients, search, riskFilter, programFilter, statusFilter, sortKey, sortDir, pulseById])
+  }, [clientsWithPulseScore, search, riskFilter, programFilter, statusFilter, sortKey, sortDir, pulseById])
+  const visibleTableClients = useMemo(() => displayed.slice(0, visibleTableCount), [displayed, visibleTableCount])
+  const tableRemaining = Math.max(0, displayed.length - visibleTableCount)
+  useEffect(() => {
+    setVisibleTableCount(48)
+  }, [search, riskFilter, programFilter, statusFilter, sortKey, sortDir, viewMode])
 
   const urgentBanner = stats.urgentCount > 0
   const expiredBanner = stats.expiredProgramCount > 0
@@ -224,6 +465,18 @@ export default function ClientesScreen() {
   }
 
   const sortLabel = SORT_OPTIONS.find((o) => o.value === sortKey)?.label ?? 'Urgencia'
+  const sportTokens = useMemo(() => deriveSportTokens(coachPrimaryColor || theme.primary), [coachPrimaryColor, theme.primary])
+  const toolsTileBackground = theme.scheme === 'dark' ? sportTokens.dark['100'] : sportTokens.ramp['100']
+  const toolsTileForeground = theme.scheme === 'dark' ? sportTokens.dark['600'] : sportTokens.ramp['600']
+
+  const handleSortChange = (key: DirectorySortKey) => {
+    setSortKey(key)
+    setSortDir(defaultSortDir(key))
+  }
+  const handleHeaderSort = (key: DirectorySortKey) => {
+    if (sortKey === key) setSortDir((current) => current === 'asc' ? 'desc' : 'asc')
+    else handleSortChange(key)
+  }
 
   const toggleRisk = (f: DirectoryRiskFilter) => setRiskFilter(riskFilter === f ? 'all' : f)
   // Espejo `clearAll` web (`DirectoryActionBar.tsx:200-205`): resetea riesgo/programa
@@ -337,24 +590,57 @@ export default function ClientesScreen() {
   if (search) chips.push({ key: 'search', label: `“${search}”`, onClear: () => setSearch('') })
   const filterActive = chips.length > 0
 
+  const headerActions = (
+    <View style={styles.headerActions}>
+      {coachSlug ? (
+        <TouchableOpacity
+          testID="directory-copy-portal"
+          accessibilityRole="button"
+          accessibilityLabel="Copiar portal de alumnos"
+          activeOpacity={0.8}
+          onPress={handleCopyPortal}
+          style={[styles.headerIconBtn, { backgroundColor: theme.muted, borderRadius: theme.radius.control }]}
+        >
+          {copied ? <Check size={18} color={theme.primary} /> : <LinkIcon size={18} color={theme.foreground} />}
+        </TouchableOpacity>
+      ) : null}
+      <TouchableOpacity
+        testID="directory-import-btn"
+        accessibilityRole="button"
+        accessibilityLabel="Importar alumnos"
+        activeOpacity={0.8}
+        onPress={() => setShowImport(true)}
+        style={[styles.headerIconBtn, { backgroundColor: theme.muted, borderRadius: theme.radius.control }]}
+      >
+        <FileUp size={18} color={theme.foreground} />
+      </TouchableOpacity>
+    </View>
+  )
+
   const headerNode = (
     <>
+      <DirectoryScreenHeader theme={theme} trailing={headerActions} />
+
       {/* Entrada Herramientas (hub /coach/tools) — card prominente, espejo CoachWarRoom móvil */}
       {toolsEnabled && (
         <TouchableOpacity
           testID="directory-tools-card"
           activeOpacity={0.85}
           onPress={() => router.push('/coach/tools')}
-          style={[styles.toolsCard, { backgroundColor: theme.card, borderColor: theme.border }]}
+          style={[
+            styles.toolsCard,
+            shadow('xs', theme.scheme),
+            { backgroundColor: theme.card, borderColor: theme.border, borderRadius: theme.radius.card },
+          ]}
         >
-          <View style={[styles.toolsTile, { backgroundColor: hexToRgba(theme.primary, 0.12) }]}>
-            <LayoutGrid size={19} color={theme.primary} />
+          <View style={[styles.toolsTile, { backgroundColor: toolsTileBackground }]}>
+            <LayoutGrid size={19} color={toolsTileForeground} />
           </View>
           <View style={{ flex: 1, minWidth: 0 }}>
             <Text style={[styles.toolsCardTitle, { color: theme.foreground }]}>Herramientas</Text>
             <Text numberOfLines={1} style={[styles.toolsCardSub, { color: theme.mutedForeground }]}>Cardio · Movimiento · Composición</Text>
           </View>
-          <ChevronRight size={18} color={theme.mutedForeground} />
+          <ChevronRight size={18} color={theme.ink300} />
         </TouchableOpacity>
       )}
 
@@ -388,27 +674,55 @@ export default function ClientesScreen() {
         </TouchableOpacity>
       )}
 
-      {/* Active filter chips */}
-      {chips.length > 0 && (
-        <View style={styles.chipRow}>
-          {chips.map((c) => (
-            <TouchableOpacity key={c.key} testID={`directory-chip-${c.key}`} style={[styles.filterChip, { backgroundColor: theme.foreground }]} onPress={c.onClear} activeOpacity={0.85}>
-              <Text style={[styles.filterChipText, { color: theme.card }]}>{c.label}</Text>
-              <X size={12} color={theme.card} style={{ opacity: 0.7 }} />
-            </TouchableOpacity>
-          ))}
-          <TouchableOpacity testID="directory-clear-filters" onPress={clearFilters} activeOpacity={0.7}>
-            <Text style={[styles.clearLink, { color: theme.mutedForeground }]}>Limpiar</Text>
-          </TouchableOpacity>
-        </View>
-      )}
+      {clients.length > 0 ? (
+        <>
+          {/* Action bar web: despues de WarRoom/Herramientas y antes de chips/conteo. */}
+          <View style={styles.actionBar}>
+            <Input
+              testID="directory-search-input"
+              leftIcon={Search}
+              placeholder="Buscar alumno…"
+              value={search}
+              onChangeText={setSearch}
+              clearButtonMode="while-editing"
+              autoCapitalize="none"
+              autoCorrect={false}
+              containerStyle={{ flex: 1 }}
+            />
+            <BarButton testID="directory-filter-btn" label="Filtros" theme={theme} onPress={() => setShowFilterSheet(true)} active={filterActive} badge={chips.length}>
+              <SlidersHorizontal size={16} color={filterActive ? theme.card : theme.mutedForeground} />
+            </BarButton>
+            <BarButton testID="directory-sort-btn" label="Ordenar" theme={theme} onPress={() => setShowSortSheet(true)}>
+              <ArrowUpDown size={16} color={theme.mutedForeground} />
+            </BarButton>
+            <BarButton testID="directory-view-toggle" label={viewMode === 'cards' ? 'Ver como tabla' : 'Ver como tarjetas'} theme={theme} onPress={toggleView}>
+              {viewMode === 'cards' ? <Table2 size={16} color={theme.mutedForeground} /> : <LayoutGrid size={16} color={theme.mutedForeground} />}
+            </BarButton>
+          </View>
 
-      {/* Sort label / result count */}
-      <View style={styles.sortRow}>
-        <Text style={[styles.sortLabel, { color: theme.mutedForeground }]}>
-          {displayed.length} alumno{displayed.length !== 1 ? 's' : ''}{statusFilter === 'archived' ? ' archivados' : ''} <Text style={{ color: theme.border }}>·</Text> {sortLabel}
-        </Text>
-      </View>
+          {/* Active filter chips */}
+          {chips.length > 0 && (
+            <View style={styles.chipRow}>
+              {chips.map((c) => (
+                <TouchableOpacity key={c.key} testID={`directory-chip-${c.key}`} style={[styles.filterChip, { backgroundColor: theme.foreground }]} onPress={c.onClear} activeOpacity={0.85}>
+                  <Text style={[styles.filterChipText, { color: theme.card }]}>{c.label}</Text>
+                  <X size={12} color={theme.card} style={{ opacity: 0.7 }} />
+                </TouchableOpacity>
+              ))}
+              <TouchableOpacity testID="directory-clear-filters" onPress={clearFilters} activeOpacity={0.7}>
+                <Text style={[styles.clearLink, { color: theme.mutedForeground }]}>Limpiar</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {/* Sort label / result count */}
+          <View style={styles.sortRow}>
+            <Text style={[styles.sortLabel, { color: theme.mutedForeground }]}>
+              {displayed.length} alumno{displayed.length !== 1 ? 's' : ''}{statusFilter === 'archived' ? ' archivados' : ''} <Text style={{ color: theme.ink300 }}>·</Text> {sortLabel}
+            </Text>
+          </View>
+        </>
+      ) : null}
     </>
   )
 
@@ -445,7 +759,7 @@ export default function ClientesScreen() {
   if (loading) {
     return (
       <SafeAreaView edges={[]} style={[styles.container, { backgroundColor: theme.background }]}>
-        <ScreenHeader title="Alumnos" subtitle="Cargando..." />
+        <DirectoryScreenHeader theme={theme} />
         <EvaLoaderScreen subtitle="Cargando alumnos…" />
       </SafeAreaView>
     )
@@ -455,7 +769,7 @@ export default function ClientesScreen() {
     return (
       <SafeAreaView edges={[]} style={[styles.container, { backgroundColor: theme.background }]}>
         <AppBackground />
-        <ScreenHeader title="Alumnos" subtitle="Tu seguimiento de hoy" />
+        <DirectoryScreenHeader theme={theme} />
         <View style={styles.filteredEmptyWrap}>
           <View style={[styles.filteredEmptyCard, { borderColor: theme.border, backgroundColor: theme.card }]}>
             <Text style={[styles.filteredEmptyTitle, { color: theme.foreground }]}>No pudimos cargar tus alumnos</Text>
@@ -470,111 +784,30 @@ export default function ClientesScreen() {
   return (
     <SafeAreaView edges={[]} style={[styles.container, { backgroundColor: theme.background }]}>
       <AppBackground />
-      <ScreenHeader
-        title="Alumnos"
-        subtitle="Tu seguimiento de hoy"
-        trailing={
-          <View style={styles.headerActions}>
-            {coachSlug ? (
-              <TouchableOpacity
-                testID="directory-copy-portal"
-                accessibilityRole="button"
-                accessibilityLabel="Copiar portal de alumnos"
-                activeOpacity={0.8}
-                onPress={handleCopyPortal}
-                style={[styles.headerIconBtn, { backgroundColor: theme.card, borderColor: theme.border }]}
-              >
-                {copied ? <Check size={18} color={theme.primary} /> : <LinkIcon size={18} color={theme.foreground} />}
-              </TouchableOpacity>
-            ) : null}
-            <TouchableOpacity
-              testID="directory-import-btn"
-              accessibilityRole="button"
-              accessibilityLabel="Importar alumnos"
-              activeOpacity={0.8}
-              onPress={() => setShowImport(true)}
-              style={[styles.headerIconBtn, { backgroundColor: theme.card, borderColor: theme.border }]}
-            >
-              <FileUp size={18} color={theme.foreground} />
-            </TouchableOpacity>
-          </View>
-        }
-      />
-
-      {/* Search + action bar */}
-      <View style={styles.actionBar}>
-        <Input
-          testID="directory-search-input"
-          leftIcon={Search}
-          placeholder="Buscar alumno…"
-          value={search}
-          onChangeText={setSearch}
-          clearButtonMode="while-editing"
-          autoCapitalize="none"
-          autoCorrect={false}
-          containerStyle={{ flex: 1 }}
-        />
-        <BarButton testID="directory-filter-btn" label="Filtrar" theme={theme} onPress={() => setShowFilterSheet(true)} active={filterActive} badge={chips.length}>
-          <SlidersHorizontal size={16} color={filterActive ? theme.card : theme.mutedForeground} />
-        </BarButton>
-        <BarButton testID="directory-sort-btn" label="Ordenar" theme={theme} onPress={() => setShowSortSheet(true)} onLongPress={() => setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))}>
-          <ArrowUpDown size={16} color={theme.mutedForeground} />
-        </BarButton>
-        <BarButton testID="directory-view-toggle" label={viewMode === 'list' ? 'Ver como tarjetas' : 'Ver como lista'} theme={theme} onPress={toggleView}>
-          {viewMode === 'list' ? <LayoutGrid size={16} color={theme.mutedForeground} /> : <ListIcon size={16} color={theme.mutedForeground} />}
-        </BarButton>
-      </View>
 
       {viewMode === 'cards' ? (
-        <Animated.FlatList
-          data={displayed}
-          keyExtractor={(c) => c.id}
-          renderItem={({ item, index }) => (
-            <StackCardItem index={index} scrollY={scrollY} headerH={headerH}>
-              <ClientCard
-                client={item}
-                pulse={pulseById.get(item.id)}
-                onPress={() => goProfile(item)}
-                onWhatsApp={item.phone && coachSlug ? () => handleWhatsApp(item) : undefined}
-                onShareLogin={() => handleShare(item)}
-                onToggleStatus={() => handleToggle(item)}
-                onResetPw={() => handleReset(item)}
-                onDelete={() => handleDelete(item)}
-                onWorkout={() => goWorkout(item)}
-                onNutrition={goNutrition}
-              />
-            </StackCardItem>
-          )}
-          contentContainerStyle={styles.cardsList}
-          showsVerticalScrollIndicator={false}
-          onScroll={onScroll}
-          scrollEventThrottle={16}
-          onRefresh={() => load(true)}
-          refreshing={refreshing}
-          ListHeaderComponent={<View onLayout={(e) => setHeaderH(e.nativeEvent.layout.height)}>{headerNode}</View>}
-          ListEmptyComponent={emptyNode}
-        />
-      ) : (
         <FlatList
           data={displayed}
           keyExtractor={(c) => c.id}
           renderItem={({ item, index }) => (
-            <DirRowCard
-              item={item}
-              index={index}
-              theme={theme}
-              pulse={pulseById.get(item.id)}
-              onOpen={goProfile}
-              onWhatsApp={item.phone && coachSlug ? handleWhatsApp : undefined}
-              onEdit={handleEdit}
-              onShare={handleShare}
-              onWorkout={goWorkout}
-              onNutrition={goNutrition}
-              onReset={handleReset}
-              onToggle={handleToggle}
-              onArchive={handleArchive}
-              onDelete={handleDelete}
-            />
+            <View style={styles.directoryRowWrap}>
+              <DirRowCard
+                item={item}
+                index={index}
+                theme={theme}
+                pulse={pulseById.get(item.id)}
+                onOpen={goProfile}
+                onWhatsApp={item.phone && coachSlug ? handleWhatsApp : undefined}
+                onEdit={handleEdit}
+                onShare={handleShare}
+                onWorkout={goWorkout}
+                onNutrition={goNutrition}
+                onReset={handleReset}
+                onToggle={handleToggle}
+                onArchive={handleArchive}
+                onDelete={handleDelete}
+              />
+            </View>
           )}
           contentContainerStyle={styles.list}
           showsVerticalScrollIndicator={false}
@@ -585,18 +818,62 @@ export default function ClientesScreen() {
           ListHeaderComponent={headerNode}
           ListEmptyComponent={emptyNode}
         />
+      ) : (
+        <FlatList
+          data={[] as DirectoryClient[]}
+          keyExtractor={(c) => c.id}
+          renderItem={() => null}
+          contentContainerStyle={styles.tableList}
+          showsVerticalScrollIndicator={false}
+          onScroll={onTabbarScroll}
+          scrollEventThrottle={16}
+          onRefresh={() => load(true)}
+          refreshing={refreshing}
+          ListHeaderComponent={
+            <>
+              {headerNode}
+              {displayed.length > 0 ? (
+                <>
+                  <DenseDirectoryTable
+                    clients={visibleTableClients}
+                    pulseById={pulseById}
+                    sortKey={sortKey}
+                    sortDir={sortDir}
+                    onHeaderSort={handleHeaderSort}
+                    onOpen={goProfile}
+                    onActions={setActionsClient}
+                    theme={theme}
+                  />
+                  {tableRemaining > 0 ? (
+                    <View style={styles.loadMoreWrap}>
+                      <TouchableOpacity
+                        activeOpacity={0.78}
+                        onPress={() => setVisibleTableCount((current) => Math.min(current + 48, displayed.length))}
+                        style={[styles.loadMoreButton, { backgroundColor: theme.muted, borderColor: theme.border }]}
+                      >
+                        <Text style={[styles.loadMoreText, { color: theme.foreground }]}>Cargar más ({tableRemaining} restantes)</Text>
+                      </TouchableOpacity>
+                    </View>
+                  ) : null}
+                </>
+              ) : emptyNode}
+            </>
+          }
+        />
       )}
 
-      {/* FAB: Nuevo Alumno (pill extendido, acción primaria) */}
-      <TouchableOpacity
-        testID="directory-fab-new-client"
-        style={[styles.fab, { backgroundColor: theme.primary }, GLOWS.sport]}
-        onPress={() => setShowCreate(true)}
-        activeOpacity={0.9}
-      >
-        <UserPlus size={19} color="#fff" />
-        <Text style={styles.fabLabel}>Nuevo alumno</Text>
-      </TouchableOpacity>
+      {/* FAB web: existe con roster; el zero-state usa sus CTAs propios. */}
+      {clients.length > 0 ? (
+        <TouchableOpacity
+          testID="directory-fab-new-client"
+          style={[styles.fab, { backgroundColor: theme.primary }, GLOWS.sport]}
+          onPress={() => setShowCreate(true)}
+          activeOpacity={0.9}
+        >
+          <UserPlus size={19} color="#fff" />
+          <Text style={styles.fabLabel}>Nuevo alumno</Text>
+        </TouchableOpacity>
+      ) : null}
 
       {/* Sheets */}
       <DirectoryOptionSheet
@@ -604,7 +881,7 @@ export default function ClientesScreen() {
         title="Ordenar por"
         options={SORT_OPTIONS}
         selected={sortKey}
-        onSelect={(v) => setSortKey(v as DirectorySortKey)}
+        onSelect={(v) => handleSortChange(v as DirectorySortKey)}
         onClose={() => setShowSortSheet(false)}
         theme={theme}
       />
@@ -626,6 +903,25 @@ export default function ClientesScreen() {
         onCreated={() => load()}
         theme={theme}
       />
+
+      {actionsClient ? (
+        <ClientActionsSheet
+          visible
+          client={actionsClient}
+          theme={theme}
+          onClose={() => setActionsClient(null)}
+          onProfile={() => goProfile(actionsClient)}
+          onWhatsApp={actionsClient.phone && coachSlug ? () => handleWhatsApp(actionsClient) : undefined}
+          onEdit={() => handleEdit(actionsClient)}
+          onShare={() => handleShare(actionsClient)}
+          onWorkout={() => goWorkout(actionsClient)}
+          onNutrition={goNutrition}
+          onReset={() => handleReset(actionsClient)}
+          onToggle={() => handleToggle(actionsClient)}
+          onArchive={() => handleArchive(actionsClient)}
+          onDelete={() => handleDelete(actionsClient)}
+        />
+      ) : null}
 
       <NativeDialog open={showImport} title="Importar alumnos" onClose={() => setShowImport(false)}>
         <ImportClientsForm
@@ -716,7 +1012,6 @@ export default function ClientesScreen() {
 function BarButton({
   theme,
   onPress,
-  onLongPress,
   active,
   badge,
   testID,
@@ -725,7 +1020,6 @@ function BarButton({
 }: {
   theme: any
   onPress: () => void
-  onLongPress?: () => void
   active?: boolean
   badge?: number
   testID?: string
@@ -745,7 +1039,6 @@ function BarButton({
         },
       ]}
       onPress={onPress}
-      onLongPress={onLongPress}
       activeOpacity={0.75}
     >
       {children}
@@ -760,6 +1053,18 @@ function BarButton({
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  screenHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 16,
+  },
+  screenHeaderCopy: { flex: 1, minWidth: 0 },
+  screenEyebrow: { fontSize: 12, fontFamily: FONT.uiBold, textTransform: 'uppercase', letterSpacing: 0.96 },
+  screenTitle: { fontSize: 26, lineHeight: 29, letterSpacing: -0.78, fontFamily: FONT.displayBlack },
   actionBar: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -789,8 +1094,8 @@ const styles = StyleSheet.create({
   },
   barBadgeTxt: { color: '#fff', fontSize: 10, fontFamily: FONT.uiExtra },
   headerActions: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  headerIconBtn: { width: 40, height: 40, borderRadius: 12, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
-  toolsCard: { flexDirection: 'row', alignItems: 'center', gap: 12, marginHorizontal: 16, marginBottom: 12, borderWidth: 1, borderRadius: 18, paddingHorizontal: 13, paddingVertical: 11 },
+  headerIconBtn: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
+  toolsCard: { flexDirection: 'row', alignItems: 'center', gap: 12, marginHorizontal: 16, marginBottom: 12, borderWidth: 1, paddingHorizontal: 13, paddingVertical: 11 },
   toolsTile: { width: 38, height: 38, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
   toolsCardTitle: { fontSize: 14, fontFamily: FONT.uiBold },
   toolsCardSub: { fontSize: 11.5, marginTop: 1, fontFamily: FONT.ui },
@@ -818,8 +1123,40 @@ const styles = StyleSheet.create({
   pulseErr: { marginHorizontal: 16, marginBottom: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, borderWidth: 1, borderRadius: 14, paddingHorizontal: 12, paddingVertical: 10 },
   pulseErrTxt: { fontSize: 12, flexShrink: 1, fontFamily: FONT.uiSemibold },
   pulseErrAction: { fontSize: 12, fontFamily: FONT.uiBold, textTransform: 'uppercase', letterSpacing: 0.4 },
-  list: { paddingHorizontal: 16, paddingBottom: 120, gap: 8 },
-  cardsList: { paddingHorizontal: 16, paddingBottom: 150 },
+  list: { paddingBottom: 120 },
+  directoryRowWrap: { marginHorizontal: 16, marginBottom: 8 },
+  tableList: { paddingBottom: 120 },
+  denseShell: { marginHorizontal: 16, borderWidth: 1, overflow: 'hidden' },
+  denseTableRow: { flexDirection: 'row', alignItems: 'flex-start' },
+  denseFixedColumn: { zIndex: 2, borderRightWidth: 1 },
+  denseHeaderRow: { flexDirection: 'row', height: 38 },
+  denseHeaderCell: { height: 38, flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 10 },
+  denseHeaderText: { fontSize: 10.5, fontFamily: FONT.uiBold, textTransform: 'uppercase', letterSpacing: 0.525 },
+  denseCenter: { justifyContent: 'center' },
+  denseNameCell: { height: 52, flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 10 },
+  denseAvatar: { width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  denseAvatarText: { fontSize: 13, fontFamily: FONT.displayBold },
+  denseNameCopy: { flex: 1, minWidth: 0 },
+  denseName: { fontSize: 13, fontFamily: FONT.uiBold },
+  denseEmail: { fontSize: 10.5, marginTop: 1, fontFamily: FONT.ui },
+  denseDataRow: { height: 52, flexDirection: 'row', alignItems: 'stretch' },
+  denseCell: { height: 52, flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10 },
+  denseStatusPill: { paddingHorizontal: 8, paddingVertical: 2 },
+  denseStatusText: { fontSize: 11, fontFamily: FONT.uiBold },
+  denseScorePill: { minWidth: 26, paddingHorizontal: 6, paddingVertical: 2, alignItems: 'center' },
+  denseScoreText: { fontSize: 12.5, fontFamily: FONT.monoBold },
+  denseAdherenceTrack: { height: 5, minWidth: 20, flex: 1, overflow: 'hidden' },
+  denseAdherenceFill: { height: 5 },
+  denseMetricSmall: { fontSize: 11.5, fontFamily: FONT.monoBold },
+  denseMetric: { fontSize: 12.5, fontFamily: FONT.monoBold },
+  denseDelta: { fontSize: 10.5, fontFamily: FONT.uiSemibold },
+  denseDot: { width: 8, height: 8, borderRadius: 4, flexShrink: 0 },
+  denseLast: { fontSize: 12, fontFamily: FONT.ui },
+  denseProgram: { fontSize: 12, fontFamily: FONT.ui, flexShrink: 1 },
+  denseActionsBtn: { width: 30, height: 30, alignItems: 'center', justifyContent: 'center' },
+  loadMoreWrap: { alignItems: 'center', paddingHorizontal: 16, paddingBottom: 32, paddingTop: 12 },
+  loadMoreButton: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 24, paddingVertical: 8 },
+  loadMoreText: { fontSize: 14, fontFamily: FONT.uiSemibold },
   emptyWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12, paddingHorizontal: 32, paddingTop: 48 },
   emptyIcon: { width: 72, height: 72, borderRadius: 20, alignItems: 'center', justifyContent: 'center', marginBottom: 4 },
   emptyTitle: { fontSize: 22, letterSpacing: -0.5, fontFamily: FONT.displayBlack },

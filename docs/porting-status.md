@@ -131,6 +131,7 @@ Una pasada adicional con **lente de lógica** (no de paridad pixel) sobre unidad
 - Tanda C dashboard/sections aplicada (unidad aún abierta): FreeWelcome replica gradiente, tokens, copy, Pro/precio y CTA web; guía compacta recupera ramps sport, navegación por paso, toggle de Marca, upsell condicionado, Saltar/Continuar y celebración success. PublicCodeRequired se conserva como flujo operativo RN sin contraparte visual web. Falta barrido final light/dark + marca custom. Reporte vivo: `docs/rn-port/specs/seccion-3/verify-fix/dashboard-sections.md`.
 - Tanda D dashboard/sections cerrada a nivel código/spec: tier banners, FocusList, Novedades y NewsBell reconciliados con sus componentes realmente montados; campana usa bottom `Sheet nativeModal` 80%. Barrido de exports activos sin deltas accionables conocidos. Falta certificación visual device light/dark × EVA/custom. Reporte final: `docs/rn-port/specs/seccion-3/verify-fix/dashboard-sections.md`.
 - Tanda directory/summary cerrada a nivel código/spec: resumen colapsable, Pulse cards y Metric chips alineados en count-up, glifos, paddings, opacidades y ramps scheme-aware; corregido contraste seleccionado dark mediante `surface-card`/`border-strong`. Header y Herramientas quedan para `directory-screen`. Reporte: `docs/rn-port/specs/seccion-3/verify-fix/directory-summary.md`.
+- Tanda directory/screen cerrada a nivel código/spec: header móvil y card Herramientas alineados en jerarquía/tokens; action bar vuelve a scrollear tras el WarRoom; la vista principal usa row-cards y la segunda vista ahora es la tabla densa web de 9 columnas con primera columna fija, sort por header y sheet de acciones. Eliminados parallax, persistencia de vista y long-press sin equivalente PWA; score usa pulse servidor y el roster ya scopea standalone/org/team. Zero-state oculta action bar/FAB como web. Doble-FAB no implementado. Reporte: `docs/rn-port/specs/seccion-3/verify-fix/directory-screen.md`.
 - Gates del checkpoint: `pnpm exec tsc --noEmit` limpio; tokens `86/86`; `pnpm exec expo export --platform android` limpio.
 - Este checkpoint NO cierra unidades: falta verificación adversarial elemento-por-elemento, lente runtime/cableado/frescura y completar los P0/P1 de cada spec. Doble-FAB sigue sin implementar por decisión CEO pendiente.
 
@@ -143,6 +144,9 @@ después **Ola 4A — Nutrición completa del alumno**. El nuevo criterio no ace
 P2 visuales accionables: todo arreglo debe eliminar una diferencia demostrada
 contra el responsive/PWA; mejoras nativas y refactors sin efecto visible quedan
 fuera.
+
+Próxima unidad Sección 3: `directory-row-cards`; después `directory-sheets`,
+`directory-create-import` y las cuatro unidades de ficha aún sin reporte final.
 
 Ola 2R incluye: cápsula persistente en movement/bodycomp; toggle inline de
 comidas del Home; propagación de `brand_font_key` donde web usa `--brand-font`;
