@@ -1433,12 +1433,11 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                                                 className="h-full overflow-y-auto"
                                                 style={{
                                                     width: `${100 / days.length}%`,
-                                                    /* FAB + Guardar flotan SOBRE la lista (patrón FAB): la lista
-                                                       corre por detrás de los botones hasta el borde inferior, sin
-                                                       banda muerta. Solo se reserva el safe-area del home indicator
-                                                       + un respiro chico; NO la altura del stack (eso creaba la
-                                                       "barra negra" al pie tapando la última tarjeta). */
-                                                    paddingBottom: `calc(env(safe-area-inset-bottom, 0px) + 24px)`,
+                                                    /* SIN padding-bottom: el FAB + Guardar flotan (fixed) SOBRE la
+                                                       lista; la lista corre por detrás de los botones hasta el borde
+                                                       inferior. Cualquier reserva aquí (la vieja de +96px, o safe-area)
+                                                       dejaba una banda muerta al pie tapando la última tarjeta — la
+                                                       "barra negra" que reportó el CEO. */
                                                     WebkitOverflowScrolling: 'touch',
                                                 } as React.CSSProperties}
                                             >
