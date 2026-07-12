@@ -35,6 +35,7 @@ import {
 import { exportClientDossierPdf } from '../../../lib/client-dossier-pdf'
 import { getTodayInSantiago } from '../../../lib/date-utils'
 import { daysBetweenCalendar } from '../../../lib/checkin-thresholds'
+import { filterPlansForStructureView, resolveActiveWeekVariantForDisplay } from '../../../lib/program-week-variant'
 import { deriveClientStatus } from '@eva/profile-analytics'
 
 const round1 = (n: number) => Math.round(n * 10) / 10
@@ -42,7 +43,7 @@ const round1 = (n: number) => Math.round(n * 10) / 10
 // A-F18: etiqueta relativa de "ultima actividad".
 function relActivityLabel(iso: string | null): string {
   if (!iso) return 'Sin actividad'
-  const d = Math.floor((Date.now() - new Date(`${iso}T12:00:00`).getTime()) / 86400000)
+  const d = daysBetweenCalendar(iso.slice(0, 10), getTodayInSantiago().iso)
   if (d <= 0) return 'Hoy'
   if (d === 1) return 'Ayer'
   if (d < 30) return `Hace ${d}d`
@@ -66,6 +67,7 @@ export default function ClientDetailScreen() {
   const [tab, setTab] = useState<ClientTab>('overview')
   const [data, setData] = useState<CoachClientDetailData | null>(null)
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [selectedDate, setSelectedDate] = useState(() => getTodayInSantiago().iso)
   const [dayDetail, setDayDetail] = useState<ClientDayDetail | null>(null)
   const [dayLoading, setDayLoading] = useState(false)
@@ -75,21 +77,37 @@ export default function ClientDetailScreen() {
   const [lightbox, setLightbox] = useState<{ photos: string[]; index: number } | null>(null)
   const [exportingPdf, setExportingPdf] = useState(false)
   const lastY = useRef(0)
+  const tabStickyY = useRef(Number.MAX_SAFE_INTEGER)
+  const [tabStuck, setTabStuck] = useState(false)
   const loadedOnceRef = useRef(false)
+  const loadSeqRef = useRef(0)
+  const daySeqRef = useRef(0)
 
   const load = useCallback(async (opts?: { silent?: boolean }) => {
     if (!clientId) return
+    const seq = ++loadSeqRef.current
     if (!opts?.silent) setLoading(true)
+    setLoadError(null)
     try {
       const res = await getCoachClientDetail(clientId)
-      setData(res)
-      setSelectedDate((prev) => res.activity.find((d) => d.workout || d.nutrition || d.checkIn)?.date ?? prev)
+      if (seq === loadSeqRef.current) setData(res)
     } catch (e) {
       console.warn('[client-detail] load failed', e)
+      if (seq === loadSeqRef.current) setLoadError('No pudimos cargar la ficha. Revisa tu conexión e intenta de nuevo.')
     } finally {
-      if (!opts?.silent) setLoading(false)
-      loadedOnceRef.current = true
+      if (seq === loadSeqRef.current) {
+        if (!opts?.silent) setLoading(false)
+        loadedOnceRef.current = true
+      }
     }
+  }, [clientId])
+
+  useEffect(() => {
+    loadedOnceRef.current = false
+    loadSeqRef.current += 1
+    daySeqRef.current += 1
+    setSelectedDate(getTodayInSantiago().iso)
+    setDayDetail(null)
   }, [clientId])
 
   // GOTCHA 6b: la ficha hace fetch propio y es una ruta stack-push (no se
@@ -103,25 +121,25 @@ export default function ClientDetailScreen() {
     }, [load]),
   )
 
-  useEffect(() => {
-    let cancelled = false
-    async function loadDay() {
+  useFocusEffect(
+    useCallback(() => {
       if (!clientId || !selectedDate) return
+      const seq = ++daySeqRef.current
       setDayLoading(true)
-      const detail = await getCoachClientDayDetail(clientId, selectedDate)
-      if (!cancelled) { setDayDetail(detail); setDayLoading(false) }
-    }
-    loadDay()
-    return () => { cancelled = true }
-  }, [clientId, selectedDate])
+      void getCoachClientDayDetail(clientId, selectedDate)
+        .then((detail) => { if (seq === daySeqRef.current) setDayDetail(detail) })
+        .catch((error) => { console.warn('[client-detail] day load failed', error) })
+        .finally(() => { if (seq === daySeqRef.current) setDayLoading(false) })
+      return () => { daySeqRef.current += 1 }
+    }, [clientId, selectedDate]),
+  )
 
   const client = data?.client ?? null
 
   function openWhatsApp() {
     const digits = (client?.phone ?? '').replace(/\D/g, '')
-    if (!digits) { Alert.alert('Sin telefono', 'Este alumno no tiene telefono cargado.'); return }
-    const msg = `Hola ${client?.full_name?.split(' ')[0] ?? ''}! Te escribo desde EVA.`
-    Linking.openURL(`https://wa.me/${digits}?text=${encodeURIComponent(msg)}`).catch(() => {})
+    if (digits.length < 10) return
+    Linking.openURL(`https://wa.me/${digits}`).catch(() => {})
   }
 
   function openBuilder() {
@@ -170,10 +188,8 @@ export default function ClientDetailScreen() {
     const lastActivityIso = [lastWorkout, lastCheckin].filter(Boolean).sort().pop() ?? null
     let planCurrentWeek: number | null = null
     if (data.activeProgram?.start_date && data.activeProgram.weeks_to_repeat) {
-      const start = new Date(`${data.activeProgram.start_date}T12:00:00`).getTime()
-      if (Number.isFinite(start)) {
-        planCurrentWeek = Math.min(Math.max(1, Math.ceil((Math.max(0, (Date.now() - start) / 86400000) + 1) / 7)), Math.max(1, data.activeProgram.weeks_to_repeat))
-      }
+      const elapsedDays = Math.max(0, daysBetweenCalendar(data.activeProgram.start_date, todayIso))
+      planCurrentWeek = Math.min(Math.floor(elapsedDays / 7) + 1, Math.max(1, data.activeProgram.weeks_to_repeat))
     }
 
     return { currentWeight, weightDelta, streak, trainingAge, today, weeklyPRs, attention, lastActivityIso, planCurrentWeek }
@@ -181,6 +197,7 @@ export default function ClientDetailScreen() {
 
   function onScroll(e: NativeSyntheticEvent<NativeScrollEvent>) {
     const y = e.nativeEvent.contentOffset.y
+    setTabStuck(y >= tabStickyY.current - 1)
     if (y < 36) setCompact(false)
     else if (y - lastY.current > 8) setCompact(true)
     else if (lastY.current - y > 8) setCompact(false)
@@ -198,7 +215,12 @@ export default function ClientDetailScreen() {
     return (
       <SafeAreaView edges={['top']} style={[styles.container, { backgroundColor: theme.background }]}>
         <TopBar back title="Alumno" onBack={() => router.back()} />
-        <EmptyState icon={User} title="Alumno no encontrado" subtitle="Vuelve a la lista de alumnos." />
+        <EmptyState
+          icon={User}
+          title={loadError ? 'No pudimos cargar la ficha' : 'Alumno no encontrado'}
+          subtitle={loadError ?? 'Vuelve a la lista de alumnos.'}
+          action={loadError ? <Button label="Reintentar" variant="secondary" onPress={() => load()} /> : undefined}
+        />
       </SafeAreaView>
     )
   }
@@ -218,12 +240,22 @@ export default function ClientDetailScreen() {
   const programDaysRemaining = data.activeProgram?.end_date
     ? daysBetweenCalendar(todayForStatus, data.activeProgram.end_date)
     : null
+  const daysSinceCheckin = lastCheckinForStatus ? daysBetweenCalendar(lastCheckinForStatus, todayForStatus) : null
+  const daysSinceWorkout = lastWorkoutForStatus ? daysBetweenCalendar(lastWorkoutForStatus, todayForStatus) : null
+  const todayMealsDone = derived.today?.mealsDone ?? 0
+  const todayMealsTotal = Math.max(1, derived.today?.mealsTotal ?? 0)
+  const todayNutritionPct = Math.min(100, Math.round((todayMealsDone / todayMealsTotal) * 100))
+  const attentionScore =
+    (daysSinceCheckin != null && daysSinceCheckin > 30 ? 25 : 0) +
+    (data.activeProgram && (daysSinceWorkout == null || daysSinceWorkout >= 7) ? 25 : 0) +
+    (data.activeNutrition && todayNutritionPct < 60 ? 20 : 0) +
+    (programDaysRemaining != null && programDaysRemaining <= 0 ? 15 : programDaysRemaining != null && programDaysRemaining <= 3 ? 8 : 0)
   const derivedStatus = deriveClientStatus({
-    attentionScore: derived.attention ? 25 : 0,
-    daysSinceCheckin: lastCheckinForStatus ? daysBetweenCalendar(lastCheckinForStatus, todayForStatus) : null,
-    daysSinceWorkout: lastWorkoutForStatus ? daysBetweenCalendar(lastWorkoutForStatus, todayForStatus) : null,
+    attentionScore,
+    daysSinceCheckin,
+    daysSinceWorkout,
     hasActiveWorkoutProgram: Boolean(data.activeProgram),
-    nutritionAdherencePct: data.activeNutrition ? data.compliance?.nutritionWeeklyAvgPct ?? null : null,
+    nutritionAdherencePct: data.activeNutrition ? todayNutritionPct : null,
     planDaysRemaining: programDaysRemaining,
   })
   const statusLevel: HeroStatusLevel = derivedStatus.level
@@ -236,17 +268,15 @@ export default function ClientDetailScreen() {
   // nutritionCompliancePercent = round(mealsDoneHoy / mealsTotalHoy)) — cumplimiento de
   // HOY, no el promedio semanal. El valor del chip "Comidas hoy" (mealsDone/mealsTotal) y
   // su sub "% plan" deben leer la MISMA ventana (dia), como en ClientProfileHero.tsx:124,331-338.
-  const mealsDoneToday = derived.today?.mealsDone ?? 0
-  const mealsTotalToday = Math.max(1, derived.today?.mealsTotal ?? 1)
   const heroChips: HeroChips = {
     weightValue: derived.currentWeight,
     weightDelta: derived.weightDelta,
     adherencePct: Math.min(100, Math.round((workoutsThisWeek / workoutsTarget) * 100)),
     workoutsThisWeek,
     workoutsTarget,
-    mealsDone: derived.today ? derived.today.mealsDone : null,
-    mealsTotal: derived.today ? derived.today.mealsTotal : null,
-    nutritionPct: Math.min(100, Math.round((mealsDoneToday / mealsTotalToday) * 100)),
+    mealsDone: todayMealsDone,
+    mealsTotal: todayMealsTotal,
+    nutritionPct: todayNutritionPct,
   }
 
   // 5 pestañas (sin Facturacion — removida del chrome, RULING D2). Labels 1:1 con
@@ -254,9 +284,23 @@ export default function ClientDetailScreen() {
   const tabs: TabItem[] = [
     { value: 'overview', label: 'Resumen' },
     { value: 'progreso', label: 'Progreso', badge: data.checkIns.length || null },
-    { value: 'analisis', label: 'Entreno', badge: derived.weeklyPRs.length || null },
-    { value: 'plan', label: 'Programa', badge: data.activeProgram?.planCount || null },
-    { value: 'nutricion', label: 'Nutrición', badge: derived.attention && data.activeNutrition && (data.compliance?.nutritionWeeklyAvgPct ?? 0) < 60 ? '!' : null },
+    { value: 'analisis', label: 'Entreno', badge: data.personalRecords.length || derived.weeklyPRs.length || null },
+    {
+      value: 'plan',
+      label: 'Programa',
+      badge: data.activeProgram
+        ? filterPlansForStructureView(
+            data.activeProgram.workoutPlans,
+            data.activeProgram.program_structure_type === 'cycle' ? 'cycle' : 'weekly',
+            { abMode: Boolean(data.activeProgram.ab_mode), activeVariant: resolveActiveWeekVariantForDisplay(data.activeProgram, planCur) },
+          ).filter((plan) => plan.blocks.length > 0).length || null
+        : null,
+    },
+    {
+      value: 'nutricion',
+      label: 'Nutrición',
+      badge: data.activeNutrition && heroChips.nutritionPct < 60 ? '!' : data.nutritionMeals.length || null,
+    },
   ]
 
   function onOpenPhoto(photos: string[], index: number) { setLightbox({ photos, index }) }
@@ -286,7 +330,7 @@ export default function ClientDetailScreen() {
   return (
     <SafeAreaView edges={['top']} style={[styles.container, { backgroundColor: theme.background }]}>
       <AppBackground />
-      <TopBar back title={client.full_name} onBack={() => router.back()} />
+      <TopBar back backLabel="Alumnos" backColor={theme.mutedForeground} onBack={() => router.back()} />
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false} stickyHeaderIndices={[1]} onScroll={onScroll} scrollEventThrottle={16}>
         {/* 0 — Hero */}
@@ -308,7 +352,9 @@ export default function ClientDetailScreen() {
         />
 
         {/* 1 — Tab bar (sticky) */}
-        <ClientTabBar items={tabs} value={tab} onChange={setTab} />
+        <View onLayout={(event) => { tabStickyY.current = event.nativeEvent.layout.y }}>
+          <ClientTabBar items={tabs} value={tab} onChange={setTab} stuck={tabStuck} />
+        </View>
 
         {/* 2 — Content */}
         <View style={styles.tabContent}>
@@ -328,7 +374,7 @@ export default function ClientDetailScreen() {
       </ScrollView>
 
       {/* Barra flotante persistente — solo WhatsApp (rediseno). */}
-      <ProfileFloatingActions onWhatsApp={openWhatsApp} compact={compact} />
+      <ProfileFloatingActions onWhatsApp={openWhatsApp} compact={compact} enabled={(client.phone ?? '').replace(/\D/g, '').length >= 10} />
 
       {/* Menu de acciones del alumno (⋮) — editar datos / archivar. */}
       <ActionSheet

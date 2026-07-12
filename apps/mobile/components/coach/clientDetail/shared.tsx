@@ -2,10 +2,13 @@ import type { ReactNode } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 import { useTheme } from '../../../context/ThemeContext'
 import { Card } from '../../../components'
+import { getTodayInSantiago } from '../../../lib/date-utils'
+import { daysBetweenCalendar } from '../../../lib/checkin-thresholds'
 
 // ── Helpers de formato (compartidos por todas las tabs del detalle) ──────────
 export function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString('es-CL', { day: 'numeric', month: 'short', year: 'numeric' })
+  const value = iso.length <= 10 ? `${iso}T12:00:00` : iso
+  return new Date(value).toLocaleDateString('es-CL', { day: 'numeric', month: 'short', year: 'numeric' })
 }
 export function formatCurrency(n: number): string {
   return `$${Math.round(n).toLocaleString('es-CL')}`
@@ -15,9 +18,9 @@ export function dayName(day: number): string {
 }
 export function relativeDays(iso: string | null): string {
   if (!iso) return '—'
-  const d = new Date(iso).getTime()
-  if (!Number.isFinite(d)) return '—'
-  const days = Math.floor((Date.now() - d) / 86400000)
+  const dayKey = iso.slice(0, 10)
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dayKey)) return '—'
+  const days = daysBetweenCalendar(dayKey, getTodayInSantiago().iso)
   if (days <= 0) return 'Hoy'
   if (days === 1) return 'Ayer'
   if (days < 30) return `Hace ${days} días`

@@ -8,6 +8,7 @@ import { GlowBorderCard } from '../../../components/GlowBorderCard'
 import { HapticPressable } from '../../../components/HapticPressable'
 import { FONT } from '../../../lib/typography'
 import { hexToChannels } from '../../../lib/theme'
+import { shadow } from '../../../lib/shadows'
 
 // Neutrales de superficie inversa (fijos en light+dark porque la Card del hero es
 // siempre una superficie ink oscura — mirror del token-contract §2/§3, mismo
@@ -133,16 +134,16 @@ export function ClientHero({
               accessibilityState={{ disabled: exportingPdf, busy: exportingPdf }}
               testID="ficha-export-pdf"
               className="rounded-control border border-default bg-surface-card"
-              style={[styles.iconBtn, exportingPdf ? { opacity: 0.6 } : null]}
+              style={[styles.iconBtn, shadow('sm', resolvedScheme), exportingPdf ? { opacity: 0.6 } : null]}
             >
               {exportingPdf ? (
-                <ActivityIndicator size="small" color={theme.primary} />
+                <ActivityIndicator size="small" color={iconStrong} />
               ) : (
                 <Download size={18} color={iconStrong} strokeWidth={2} />
               )}
             </HapticPressable>
           ) : null}
-          <HapticPressable onPress={onMore} accessibilityRole="button" accessibilityLabel="Más opciones" testID="ficha-more" className="rounded-control border border-default bg-surface-card" style={styles.iconBtn}>
+          <HapticPressable onPress={onMore} accessibilityRole="button" accessibilityLabel="Más opciones" testID="ficha-more" className="rounded-control border border-default bg-surface-card" style={[styles.iconBtn, shadow('sm', resolvedScheme)]}>
             <MoreVertical size={18} color={iconStrong} strokeWidth={2} />
           </HapticPressable>
         </View>
@@ -161,13 +162,13 @@ export function ClientHero({
               <View style={styles.badgeRow}>
                 <Badge tone={STATUS_TONE[statusLevel]} size="sm">{statusLabel}</Badge>
                 {reasons.length > 0 ? (
-                  <Text numberOfLines={2} style={[styles.reasons, { color: ON_DARK_MUTED }]}>{reasons.join(' · ')}</Text>
+                  <Text style={[styles.reasons, { color: ON_DARK_MUTED }]}>{reasons.join(' · ')}</Text>
                 ) : null}
               </View>
               <Text numberOfLines={1} style={[styles.email, { color: ON_DARK_MUTED }]}>{email}</Text>
               <View style={styles.metaRow}>
                 <MetaItem icon={<Flame size={14} color={EMBER} />} text={`${streak} d de racha de actividad`} color={ON_DARK_MUTED} />
-                <MetaItem icon={<Activity size={14} color="#5C9DFF" />} text={lastActivityLabel} color={ON_DARK_MUTED} />
+                <MetaItem icon={<Activity size={14} className="text-sport-400" />} text={lastActivityLabel} color={ON_DARK_MUTED} />
                 <MetaItem icon={<Calendar size={14} color={ON_DARK_MUTED} />} text={`Desde ${sinceLabel}`} color={ON_DARK_MUTED} />
                 <MetaItem icon={<Target size={14} color={ON_DARK_MUTED} />} text={`~${trainingAge}`} color={ON_DARK_MUTED} />
               </View>
@@ -177,7 +178,7 @@ export function ClientHero({
           {/* 4 chips 2×2 (el programa/semana vive en el eyebrow, no en un chip). */}
           <View style={styles.chipGrid}>
             <HeroChip label="Peso" value={chips.weightValue != null && chips.weightValue > 0 ? `${chips.weightValue} kg` : '—'} sub={<WeightDeltaSub delta={chips.weightDelta} />} />
-            <HeroChip label="Adherencia" value={`${chips.adherencePct}%`} sub={<ChipBar value={chips.adherencePct} color="#2680FF" />} />
+            <HeroChip label="Adherencia" value={`${chips.adherencePct}%`} sub={<ChipBar value={chips.adherencePct} />} />
             <HeroChip label="Workouts" value={`${chips.workoutsThisWeek}/${chips.workoutsTarget}`} sub={<Text style={[styles.chipSub, { color: ON_DARK_MUTED }]}>esta semana</Text>} />
             <HeroChip
               label="Comidas hoy"
@@ -220,11 +221,11 @@ function WeightDeltaSub({ delta }: { delta: number | null }) {
   )
 }
 
-function ChipBar({ value, color }: { value: number; color: string }) {
+function ChipBar({ value }: { value: number }) {
   const pct = Math.min(100, Math.max(0, value))
   return (
     <View style={styles.barTrack}>
-      <View style={{ width: `${pct}%`, height: '100%', borderRadius: 99, backgroundColor: color }} />
+      <View className="bg-sport-500" style={{ width: `${pct}%`, height: '100%', borderRadius: 99 }} />
     </View>
   )
 }
@@ -242,11 +243,11 @@ function HeroChip({ label, value, sub }: { label: string; value: string; sub: Re
 const styles = StyleSheet.create({
   root: { gap: 12 },
   topbar: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 },
-  eyebrow: { fontSize: 10, textTransform: 'uppercase', letterSpacing: 1.4, fontFamily: FONT.uiBold },
+  eyebrow: { fontSize: 10, textTransform: 'uppercase', letterSpacing: 1, fontFamily: FONT.uiBold },
   name: { fontSize: 24, letterSpacing: -1.2, marginTop: 2, fontFamily: FONT.displayBlack },
   topActions: { flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 0 },
   iconBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
-  identityRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 14 },
+  identityRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 16 },
   ring: { width: 64, height: 64, borderRadius: 32, padding: 2, flexShrink: 0 },
   ringInner: { flex: 1, borderRadius: 30, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
   initials: { fontSize: 20, letterSpacing: -0.4 },

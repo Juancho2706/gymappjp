@@ -7,6 +7,9 @@ import { MotiView } from 'moti'
 import { ChevronRight } from 'lucide-react-native'
 import * as Haptics from 'expo-haptics'
 import { useTheme } from '../../../context/ThemeContext'
+import { useReducedMotion } from 'react-native-reanimated'
+import { hexToRgba } from '../../../lib/theme'
+import { shadow } from '../../../lib/shadows'
 
 export type ClientTab = 'overview' | 'progreso' | 'analisis' | 'plan' | 'nutricion' | 'facturacion'
 
@@ -22,20 +25,26 @@ export interface TabItem {
 // inactiva = superficie con borde. Full-bleed contra el gutter. Fade + chevron
 // animado a la derecha cuando las pills desbordan y no se llego al final.
 // El comportamiento sticky lo maneja el ScrollView de la pantalla.
-export function ClientTabBar({ items, value, onChange }: { items: TabItem[]; value: ClientTab; onChange: (v: ClientTab) => void }) {
+export function ClientTabBar({ items, value, onChange, stuck = false }: { items: TabItem[]; value: ClientTab; onChange: (v: ClientTab) => void; stuck?: boolean }) {
   const { theme, resolvedScheme } = useTheme()
   const isDark = resolvedScheme === 'dark'
   const [viewW, setViewW] = useState(0)
   const [contentW, setContentW] = useState(0)
   const [scrollX, setScrollX] = useState(0)
+  const [hintDismissed, setHintDismissed] = useState(false)
+  const reducedMotion = useReducedMotion()
 
   const canScrollRight = contentW > viewW + 4 && scrollX + viewW < contentW - 4
 
   const onLayout = (e: LayoutChangeEvent) => setViewW(e.nativeEvent.layout.width)
-  const onScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => setScrollX(e.nativeEvent.contentOffset.x)
+  const onScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const x = e.nativeEvent.contentOffset.x
+    setScrollX(x)
+    if (x > 10) setHintDismissed(true)
+  }
 
   return (
-    <View className="border-b border-subtle" style={styles.wrap}>
+    <View className={`border-b ${stuck ? 'border-default' : 'border-subtle'}`} style={[styles.wrap, stuck ? shadow('sm', resolvedScheme) : null]}>
       {/* Glass: surface-app 80% + backdrop-blur 12px (1:1 con el contenedor sticky web). */}
       <BlurView
         intensity={isDark ? 20 : 30}
@@ -44,7 +53,7 @@ export function ClientTabBar({ items, value, onChange }: { items: TabItem[]; val
         pointerEvents="none"
         style={StyleSheet.absoluteFill}
       />
-      <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: isDark ? 'rgba(10,13,18,0.8)' : 'rgba(251,252,253,0.8)' }]} />
+      <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: hexToRgba(theme.background, 0.8) }]} />
       <View style={styles.inner}>
         <ScrollView
           horizontal
@@ -92,9 +101,11 @@ export function ClientTabBar({ items, value, onChange }: { items: TabItem[]; val
               end={{ x: 1, y: 0.5 }}
               style={StyleSheet.absoluteFill}
             />
-            <MotiView from={{ translateX: 0 }} animate={{ translateX: 4 }} transition={{ loop: true, type: 'timing', duration: 1100, repeatReverse: true }} style={styles.chevron}>
-              <ChevronRight size={16} color={theme.mutedForeground} />
-            </MotiView>
+            {!hintDismissed ? (
+              <MotiView from={{ translateX: 0 }} animate={{ translateX: reducedMotion ? 0 : 4 }} transition={{ loop: !reducedMotion, type: 'timing', duration: 1100, repeatReverse: true }} style={styles.chevron}>
+                <ChevronRight size={16} color={theme.mutedForeground} />
+              </MotiView>
+            ) : null}
           </View>
         ) : null}
       </View>
@@ -105,11 +116,11 @@ export function ClientTabBar({ items, value, onChange }: { items: TabItem[]; val
 const styles = StyleSheet.create({
   wrap: { marginHorizontal: -16 },
   inner: { position: 'relative' },
-  scroll: { gap: 6, paddingHorizontal: 16, paddingVertical: 10 },
+  scroll: { gap: 6, paddingHorizontal: 20, paddingVertical: 8 },
   tab: { height: 38, flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14 },
   label: { fontSize: 13.5 },
   badge: { minWidth: 18, height: 18, paddingHorizontal: 5, alignItems: 'center', justifyContent: 'center' },
   badgeTxt: { fontSize: 11 },
-  fade: { position: 'absolute', right: 0, top: 0, bottom: 0, width: 56, alignItems: 'flex-end', justifyContent: 'center', paddingRight: 4 },
+  fade: { position: 'absolute', right: 0, top: 0, bottom: 0, width: 64, alignItems: 'flex-end', justifyContent: 'center', paddingRight: 4 },
   chevron: { },
 })

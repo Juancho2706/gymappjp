@@ -27,7 +27,7 @@ function WhatsAppGlyph({ size = 19 }: { size?: number }) {
   )
 }
 
-export function ProfileFloatingActions({ onWhatsApp, compact }: { onWhatsApp: () => void; compact: boolean }) {
+export function ProfileFloatingActions({ onWhatsApp, compact, enabled = true }: { onWhatsApp: () => void; compact: boolean; enabled?: boolean }) {
   const insets = useSafeAreaInsets()
   return (
     <MotiView
@@ -42,14 +42,17 @@ export function ProfileFloatingActions({ onWhatsApp, compact }: { onWhatsApp: ()
         style={styles.btnShell}
       >
         <Pressable
+          disabled={!enabled}
           onPress={() => {
+            if (!enabled) return
             Haptics.selectionAsync().catch(() => {})
             onWhatsApp()
           }}
           accessibilityRole="button"
-          accessibilityLabel="Contactar por WhatsApp"
+          accessibilityLabel={enabled ? 'Contactar por WhatsApp' : 'Sin teléfono para WhatsApp'}
+          accessibilityState={{ disabled: !enabled }}
           testID="ficha-whatsapp"
-          style={({ pressed }) => [styles.btn, pressed && { opacity: 0.9 }]}
+          style={({ pressed }) => [styles.btn, !enabled ? styles.disabled : null, pressed && enabled ? { opacity: 0.9 } : null]}
         >
           <WhatsAppGlyph />
           <Text style={styles.label}>WhatsApp</Text>
@@ -88,4 +91,5 @@ const styles = StyleSheet.create({
     backgroundColor: WA_GREEN,
   },
   label: { color: '#FFFFFF', fontFamily: FONT.uiBold, fontSize: 14 },
+  disabled: { opacity: 0.85 },
 })
