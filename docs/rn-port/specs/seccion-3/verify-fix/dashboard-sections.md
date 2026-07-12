@@ -1,6 +1,6 @@
-# Verificación en curso — dashboard-sections (Sección 3 coach)
+# Verificación final — dashboard-sections (Sección 3 coach)
 
-Fecha: 2026-07-12. Estado: tanda A aplicada; unidad aún abierta.
+Fecha: 2026-07-12. Estado: paridad de código/spec cerrada; QA device pendiente.
 
 ## Cerrado en tanda A
 
@@ -49,7 +49,21 @@ Fecha: 2026-07-12. Estado: tanda A aplicada; unidad aún abierta.
   confirmación del nuevo link público sin contraparte responsive; no es una
   mejora visual ni sustituye un elemento web.
 
-## Pendiente antes de cerrar unidad
+## Cerrado en tanda D
 
-- Barrido final de exports montados, claro/oscuro y marca custom.
-- Gates completos de la tanda y QA visual device.
+- `MobileTierUsageBanners`: copy `·`, acentos/flechas, ramps warning/success,
+  track y CTAs `Expandir límite →`, `Ver planes →`, `Conversemos →` verbatim.
+- `MobileFocusList`: gradiente inverse específico por scheme, espaciado, pesos,
+  sport-400, status tokens y copies `Ningún`, `día`, `atención`, `próximo`.
+- `MobileNovedades`: copy con acentos, filas de actividad 13.5 px/11 px,
+  fotos circulares 34 px, señal check-in y time 11.5 px como `NewsFeed`.
+- `CoachNewsBell`: migrado de modal central a bottom `Sheet nativeModal` 80%,
+  conserva refetch por foco, imagen, badge optimista y rollback.
+- Barrido de exports realmente montados completado. Exports legacy no montados
+  no se usaron como fuente ni se confundieron con el árbol responsive activo.
+
+## Gates y residual
+
+- TypeScript, tokens 86/86 y export Android: verdes por tanda.
+- Residual: smoke visual humano en device light/dark × EVA/custom. No quedan
+  diferencias de código accionables conocidas en esta unidad.
