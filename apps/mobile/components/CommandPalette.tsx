@@ -16,7 +16,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Search, X } from 'lucide-react-native'
 import type { LucideIcon } from 'lucide-react-native'
 import { useTheme } from '../context/ThemeContext'
-import { TYPE, textStyle, FONT } from '../lib/typography'
+import { TYPE, FONT } from '../lib/typography'
 import { Avatar } from './Avatar'
 
 /**
@@ -96,7 +96,7 @@ function Highlighted({ label, query }: { label: string; query: string }) {
   return (
     <>
       {label.slice(0, idx)}
-      <Text className="text-sport-700" style={{ fontFamily: FONT.uiExtra }}>
+      <Text className="text-sport-700" style={{ fontFamily: FONT.uiBold }}>
         {label.slice(idx, idx + q.length)}
       </Text>
       {label.slice(idx + q.length)}
@@ -151,15 +151,24 @@ export function CommandPalette<T = unknown>({
           className="flex-row items-center border-b border-subtle bg-surface-app"
           style={styles.searchRow}
         >
-          <View
-            className="flex-1 flex-row items-center rounded-control border border-default bg-surface-sunken"
-            style={styles.field}
-          >
+          <View style={styles.fieldWrap}>
+            {/* El modal autofoca este campo al abrir, por eso el estado focus del
+                web es permanente mientras está visible. Ring hermano estable:
+                mismo patrón anti-Fabric de Input.tsx, sin árbol condicional. */}
+            <View
+              pointerEvents="none"
+              className="border-[3px] border-focus-ring/40"
+              style={styles.focusRing}
+            />
+            <View
+              className="flex-1 flex-row items-center rounded-control border border-sport-500 bg-surface-card"
+              style={styles.field}
+            >
             <View style={styles.leadIcon}>
               {status === 'loading' ? (
-                <ActivityIndicator size="small" color={theme.primary} />
+                <ActivityIndicator size="small" color={theme.mutedForeground} />
               ) : (
-                <Search size={18} color={theme.mutedForeground} />
+                <Search size={17} color={theme.mutedForeground} />
               )}
             </View>
             <TextInput
@@ -172,22 +181,28 @@ export function CommandPalette<T = unknown>({
               autoCapitalize="none"
               spellCheck={false}
               returnKeyType="search"
+              accessibilityLabel="Buscar alumno, programa, ejercicio o receta"
+              onSubmitEditing={() => {
+                const first = groups.find((group) => group.items.length > 0)?.items[0]
+                if (first) handleSelect(first)
+              }}
               className="flex-1 text-strong"
               style={[styles.input, { fontFamily: FONT.uiMedium }]}
             />
-            {query.length > 0 ? (
-              <Pressable
-                onPress={() => {
-                  onQueryChange('')
-                  inputRef.current?.focus()
-                }}
-                hitSlop={10}
-                accessibilityLabel="Limpiar"
-                style={styles.clearBtn}
-              >
-                <X size={15} color={theme.mutedForeground} />
-              </Pressable>
-            ) : null}
+              {query.length > 0 ? (
+                <Pressable
+                  onPress={() => {
+                    onQueryChange('')
+                    inputRef.current?.focus()
+                  }}
+                  hitSlop={10}
+                  accessibilityLabel="Limpiar"
+                  style={({ pressed }) => [styles.clearBtn, pressed && { backgroundColor: theme.muted }]}
+                >
+                  <X size={14} color={theme.mutedForeground} />
+                </Pressable>
+              ) : null}
+            </View>
           </View>
           <Pressable onPress={onClose} hitSlop={8} style={styles.cancelBtn} accessibilityLabel="Cerrar">
             <Text className="text-link" style={[TYPE.label]}>
@@ -202,7 +217,7 @@ export function CommandPalette<T = unknown>({
         >
           {isEmpty ? (
             <View style={styles.stateWrap}>
-              <Text className="text-muted" style={[TYPE.body, styles.center]}>
+              <Text className="text-muted" style={[styles.emptyText, styles.center]}>
                 Sin resultados para{' '}
                 <Text className="text-strong" style={{ fontFamily: FONT.uiBold }}>
                   «{trimmed}»
@@ -228,7 +243,7 @@ export function CommandPalette<T = unknown>({
                   <View key={group.key} style={styles.group}>
                     <View style={styles.groupHeading}>
                       {GroupIcon ? <GroupIcon size={12} color={theme.mutedForeground} /> : null}
-                      <Text className="text-subtle" style={TYPE.eyebrow}>
+                      <Text className="text-subtle" style={styles.groupHeadingText}>
                         {group.label}
                       </Text>
                     </View>
@@ -263,22 +278,27 @@ function Row<T>({
   return (
     <Pressable
       onPress={() => onPress(item)}
-      android_ripple={{ color: theme.border }}
-      style={({ pressed }) => [styles.row, pressed && { backgroundColor: theme.mutedForeground + '14' }]}
+      android_ripple={{ color: theme.primary }}
+      style={[styles.row, { borderRadius: theme.radius.md }]}
+      className="active:bg-sport-100"
       accessibilityRole="button"
       accessibilityLabel={item.label}
     >
-      <Leading item={item} Icon={Icon} theme={theme} />
-      <View style={styles.rowText}>
-        <Text className="text-strong" numberOfLines={1} style={[styles.rowTitle, { fontFamily: FONT.uiSemibold }]}>
-          <Highlighted label={item.label} query={query} />
-        </Text>
-        {item.sublabel ? (
-          <Text className="text-muted" numberOfLines={1} style={textStyle('2xs', FONT.ui)}>
-            {item.sublabel}
-          </Text>
-        ) : null}
-      </View>
+      {({ pressed }) => (
+        <>
+          <Leading item={item} Icon={Icon} theme={theme} />
+          <View style={styles.rowText}>
+            <Text className={pressed ? 'text-sport-700' : 'text-strong'} numberOfLines={1} style={[styles.rowTitle, { fontFamily: FONT.uiSemibold }]}>
+              <Highlighted label={item.label} query={query} />
+            </Text>
+            {item.sublabel ? (
+              <Text className="text-muted" numberOfLines={1} style={styles.rowSublabel}>
+                {item.sublabel}
+              </Text>
+            ) : null}
+          </View>
+        </>
+      )}
     </Pressable>
   )
 }
@@ -297,14 +317,14 @@ function Leading<T>({
   }
   if (item.thumbUrl) {
     return (
-      <View className="border border-subtle bg-surface-sunken" style={styles.thumb}>
+      <View className="border border-subtle bg-white dark:bg-surface-sunken" style={[styles.thumb, { borderRadius: theme.radius.md }]}>
         <Image source={{ uri: item.thumbUrl }} style={styles.thumbImg} contentFit="cover" />
       </View>
     )
   }
   return (
-    <View className="bg-surface-sunken" style={styles.thumb}>
-      {Icon ? <Icon size={16} color={theme.mutedForeground} /> : null}
+    <View className="bg-surface-sunken" style={[styles.thumb, { borderRadius: theme.radius.md }]}>
+      {Icon ? <Icon size={15} color={theme.mutedForeground} /> : null}
     </View>
   )
 }
@@ -312,19 +332,31 @@ function Leading<T>({
 const styles = StyleSheet.create({
   flex: { flex: 1 },
   searchRow: { paddingHorizontal: 12, paddingVertical: 10, gap: 8 },
-  field: { height: 44, paddingHorizontal: 10, gap: 6, borderWidth: 1.5 },
+  fieldWrap: { flex: 1, position: 'relative' },
+  focusRing: {
+    position: 'absolute',
+    top: -3,
+    left: -3,
+    right: -3,
+    bottom: -3,
+    borderRadius: 17,
+  },
+  field: { height: 44, paddingHorizontal: 10, gap: 6, borderWidth: 1 },
   leadIcon: { width: 20, alignItems: 'center', justifyContent: 'center' },
-  input: { flex: 1, fontSize: 15, paddingVertical: 0 },
+  input: { flex: 1, fontSize: 14, paddingVertical: 0 },
   clearBtn: { width: 24, height: 24, alignItems: 'center', justifyContent: 'center' },
   cancelBtn: { paddingHorizontal: 4, paddingVertical: 6 },
   stateWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 40, paddingTop: 48 },
   center: { textAlign: 'center' },
+  emptyText: { fontFamily: FONT.ui, fontSize: 14 },
   listContent: { paddingTop: 8 },
   group: { paddingTop: 6 },
   groupHeading: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 16, paddingTop: 8, paddingBottom: 4 },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 14, paddingVertical: 10, marginHorizontal: 6, borderRadius: 12 },
+  groupHeadingText: { fontFamily: FONT.uiBold, fontSize: 11, letterSpacing: 0.66, textTransform: 'uppercase' },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 10, paddingVertical: 8, marginHorizontal: 6 },
   rowText: { flex: 1, minWidth: 0, gap: 2 },
-  rowTitle: { fontSize: 14.5 },
-  thumb: { width: 32, height: 32, borderRadius: 10, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+  rowTitle: { fontSize: 13.5 },
+  rowSublabel: { fontFamily: FONT.ui, fontSize: 11.5 },
+  thumb: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
   thumbImg: { width: '100%', height: '100%' },
 })

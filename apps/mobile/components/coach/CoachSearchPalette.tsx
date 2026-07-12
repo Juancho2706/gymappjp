@@ -89,8 +89,11 @@ export function CoachSearchPalette({
       return
     }
 
-    setStatus('loading')
     debounceRef.current = setTimeout(() => {
+      // Web inicia el estado loading DESPUÉS del debounce, justo cuando lanza
+      // la request (CoachGlobalSearch.tsx:88-104). Evita que el spinner aparezca
+      // 250 ms antes que en la fuente de verdad con cada pulsación.
+      setStatus('loading')
       const ac = new AbortController()
       abortRef.current = ac
       searchCoachWorkspace(q, ac.signal)
