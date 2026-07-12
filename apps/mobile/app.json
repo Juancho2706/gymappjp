@@ -9,7 +9,7 @@
     "newArchEnabled": true,
     "icon": "./assets/icon.png",
     "splash": {
-      "image": "./assets/splash-eva-v2.png",
+      "image": "./assets/eva-mark-filled.png",
       "resizeMode": "contain",
       "backgroundColor": "#07080C"
     },

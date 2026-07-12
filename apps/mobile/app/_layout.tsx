@@ -1,6 +1,6 @@
 import 'react-native-gesture-handler'
 import '../global.css'
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { BottomSheetModalProvider } from '@gorhom/bottom-sheet'
@@ -40,7 +40,7 @@ import type { ErrorBoundaryProps } from 'expo-router'
 import { supabase } from '../lib/supabase'
 import { ThemeProvider } from '../context/ThemeContext'
 import { configurePushHandler, setupAndroidChannel, syncPushToken } from '../lib/push'
-import { BrandedSplash } from '../components/alumno/BrandedSplash'
+import { LaunchSplash } from '../components/shared/LaunchSplash'
 import { Toaster } from '../components/Toast'
 import { AppErrorBoundary } from '../components/AppErrorBoundary'
 import { BiometricLock } from '../components/BiometricLock'
@@ -213,6 +213,7 @@ export default function RootLayout() {
     JetBrainsMono_700Bold,
   })
   const [splashDone, setSplashDone] = useState(false)
+  const finishSplash = useCallback(() => setSplashDone(true), [])
 
   useEffect(() => {
     if (fontsLoaded) SplashScreen.hideAsync()
@@ -248,7 +249,7 @@ export default function RootLayout() {
             </View>
             {/* Transient feedback overlay — single mount point (parity with web <Toaster/>). */}
             <Toaster />
-            {!splashDone && <BrandedSplash onFinish={() => setSplashDone(true)} />}
+            {!splashDone && <LaunchSplash onFinish={finishSplash} />}
           </BottomSheetModalProvider>
         </ThemeProvider>
       </SafeAreaProvider>
