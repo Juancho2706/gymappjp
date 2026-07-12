@@ -12,12 +12,26 @@ interface NativeDialogProps {
   children: ReactNode
   maxWidth?: number
   showClose?: boolean
+  closeDisabled?: boolean
+  unmountOnClose?: boolean
 }
 
-export function NativeDialog({ open, title, onClose, children, maxWidth, showClose = true }: NativeDialogProps) {
+export function NativeDialog({
+  open,
+  title,
+  onClose,
+  children,
+  maxWidth,
+  showClose = true,
+  closeDisabled = false,
+  unmountOnClose = false,
+}: NativeDialogProps) {
   const { theme } = useTheme()
+  const requestClose = () => {
+    if (!closeDisabled) onClose()
+  }
   return (
-    <Modal visible={open} transparent animationType="fade" onRequestClose={onClose}>
+    <Modal visible={open} transparent animationType="fade" onRequestClose={requestClose}>
       <View style={styles.backdrop}>
         <MotiView
           from={{ opacity: 0, translateY: 10 }}
@@ -30,12 +44,17 @@ export function NativeDialog({ open, title, onClose, children, maxWidth, showClo
               {title}
             </Text>
             {showClose ? (
-              <HapticPressable onPress={onClose} style={styles.close}>
+              <HapticPressable
+                onPress={requestClose}
+                disabled={closeDisabled}
+                accessibilityState={{ disabled: closeDisabled }}
+                style={[styles.close, closeDisabled ? styles.closeDisabled : null]}
+              >
                 <X size={18} color={theme.mutedForeground} />
               </HapticPressable>
             ) : null}
           </View>
-          {children}
+          {!unmountOnClose || open ? children : null}
         </MotiView>
       </View>
     </Modal>
@@ -53,4 +72,5 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
   title: { fontSize: 18, flex: 1 },
   close: { width: 34, height: 34, alignItems: 'center', justifyContent: 'center' },
+  closeDisabled: { opacity: 0.45 },
 })

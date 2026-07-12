@@ -507,6 +507,9 @@ importers:
       victory-native:
         specifier: ^41.20.3
         version: 41.20.3(2140ecb855da1a0d83959274614a8f6e)
+      xlsx:
+        specifier: https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz
+        version: https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz
       zod:
         specifier: ^4.3.6
         version: 4.3.6

@@ -1,11 +1,15 @@
 import { useState } from 'react'
-import { KeyboardAvoidingView, Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
+import { ActivityIndicator, KeyboardAvoidingView, Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
+import type { ViewStyle } from 'react-native'
 import { useRouter } from 'expo-router'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { CheckCircle2, Eye, EyeOff, Lock, MessageCircle, UserPlus, X } from 'lucide-react-native'
+import type { LucideIcon } from 'lucide-react-native'
 import { CreateClientSchema } from '@eva/schemas'
-import { Button, Input } from '../../../components'
+import { Input } from '../../../components'
 import { FONT } from '../../../lib/typography'
-import { apiFetch } from '../../../lib/api'
+import { ApiError, apiFetch } from '../../../lib/api'
+import type { Theme } from '../../../lib/theme'
 import { DANGER, SUCCESS, WARNING } from './directory-shared'
 
 interface CreateForm {
@@ -22,13 +26,76 @@ const EMPTY: CreateForm = { fullName: '', email: '', phone: '', subscriptionStar
 type FieldErrors = {
   full_name?: string[]
   email?: string[]
+  subscription_start_date?: string[]
   temp_password?: string[]
   age_confirmed?: string[]
 }
 
 type SuccessInfo = { clientName: string; phone: string; loginUrl: string | null }
 
+type CreateWorkspace = {
+  kind: 'standalone' | 'team_owner' | 'team_member' | 'enterprise'
+  teamId: string | null
+  orgId: string | null
+}
+
 type CreateClientResponse = { ok: true; clientName: string; newClientPhone: string | null; loginUrl: string | null }
+
+function isValidIsoDate(value: string): boolean {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value)
+  if (!match) return false
+  const year = Number(match[1])
+  const month = Number(match[2])
+  const day = Number(match[3])
+  const date = new Date(Date.UTC(year, month - 1, day))
+  return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day
+}
+
+function ModalButton({
+  label,
+  onPress,
+  theme,
+  variant,
+  loading = false,
+  disabled = false,
+  leftIcon: LeftIcon,
+  style,
+  testID,
+}: {
+  label: string
+  onPress: () => void
+  theme: Theme
+  variant: 'secondary' | 'sport'
+  loading?: boolean
+  disabled?: boolean
+  leftIcon?: LucideIcon
+  style?: ViewStyle
+  testID?: string
+}) {
+  const blocked = disabled || loading
+  const foreground = variant === 'sport' ? theme.primaryForeground : theme.mutedForeground
+
+  return (
+    <TouchableOpacity
+      testID={testID}
+      accessibilityRole="button"
+      accessibilityState={{ disabled: blocked, busy: loading }}
+      activeOpacity={0.82}
+      disabled={blocked}
+      onPress={onPress}
+      className={variant === 'sport' ? 'bg-cta-fill' : 'bg-surface-card'}
+      style={[
+        styles.modalButton,
+        variant === 'secondary' ? { borderColor: theme.borderDefault, borderWidth: 1 } : null,
+        blocked ? styles.modalButtonDisabled : null,
+        style,
+      ]}
+    >
+      {loading ? <ActivityIndicator size="small" color={foreground} /> : LeftIcon ? <LeftIcon size={16} color={foreground} /> : null}
+      <Text style={[styles.modalButtonLabel, { color: foreground }]}>{label}</Text>
+    </TouchableOpacity>
+  )
+}
 
 /**
  * CreateClientModal — bottom-sheet "Agregar Nuevo Alumno" (POST /api/mobile/coach/clients).
@@ -44,6 +111,7 @@ export function CreateClientModal({
   onCreated,
   theme,
   maxClients,
+  workspace,
 }: {
   visible: boolean
   onClose: () => void
@@ -51,8 +119,10 @@ export function CreateClientModal({
   theme: any
   /** Cupo del plan; espeja `currentLimit` del 402 para el título del gate de upgrade. */
   maxClients?: number
+  workspace: CreateWorkspace
 }) {
   const router = useRouter()
+  const insets = useSafeAreaInsets()
   const [form, setForm] = useState<CreateForm>(EMPTY)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -73,7 +143,17 @@ export function CreateClientModal({
     onClose()
   }
 
+  function requestClose() {
+    if (!loading) handleClose()
+  }
+
   async function handleSubmit() {
+    setError(null)
+    const startDate = form.subscriptionStartDate.trim()
+    if (startDate && !isValidIsoDate(startDate)) {
+      setFieldErrors({ subscription_start_date: ['Ingresa una fecha válida.'] })
+      return
+    }
     const parsed = CreateClientSchema.safeParse({
       full_name: form.fullName.trim(),
       email: form.email.trim(),
@@ -100,6 +180,7 @@ export function CreateClientModal({
           subscriptionStartDate: parsed.data.subscription_start_date?.trim() || undefined,
           tempPassword: parsed.data.temp_password,
           ageConfirmed: true,
+          workspace,
         },
       })
       // Alumno creado: refrescar la cartera por debajo.
@@ -110,12 +191,15 @@ export function CreateClientModal({
       } else {
         handleClose()
       }
-    } catch (e: any) {
-      if (e?.code === 'UPGRADE_REQUIRED') {
-        setUpgradeLimit(typeof maxClients === 'number' ? maxClients : undefined)
+    } catch (e: unknown) {
+      if (e instanceof ApiError && e.code === 'UPGRADE_REQUIRED') {
+        // `apiFetch` conserva el mensaje/codigo del endpoint pero no campos extra.
+        // El endpoint incluye el cupo en ambos; el prop sigue teniendo prioridad.
+        const limitFromMessage = Number(e.message.match(/\d+/)?.[0])
+        setUpgradeLimit(typeof maxClients === 'number' && maxClients > 0 ? maxClients : Number.isFinite(limitFromMessage) ? limitFromMessage : undefined)
         setPhase('upgrade')
       } else {
-        setError(e?.message ?? 'No se pudo crear el alumno.')
+        setError(e instanceof Error ? e.message : 'No se pudo crear el alumno.')
       }
     } finally {
       setLoading(false)
@@ -131,10 +215,19 @@ export function CreateClientModal({
   }
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={handleClose}>
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={requestClose}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
-        <Pressable style={styles.overlay} onPress={handleClose} />
-        <View style={[styles.sheet, { backgroundColor: theme.card }]}>
+        <Pressable className="bg-black/60" style={styles.overlay} onPress={requestClose} />
+        <View
+          style={[
+            styles.sheet,
+            {
+              backgroundColor: theme.card,
+              borderColor: theme.border,
+              paddingBottom: Math.max(insets.bottom, 12),
+            },
+          ]}
+        >
           <View style={[styles.handle, { backgroundColor: theme.border }]} />
 
           {phase === 'success' && success ? (
@@ -149,9 +242,16 @@ export function CreateClientModal({
                 <Text style={{ color: theme.foreground, fontFamily: FONT.uiSemibold }}>{success.clientName}</Text>{' '}
                 por WhatsApp.
               </Text>
-              <TouchableOpacity testID="create-client-whatsapp" activeOpacity={0.85} onPress={sendWhatsApp} style={styles.waButton}>
-                <MessageCircle size={20} color="#fff" />
-                <Text style={styles.waLabel}>Enviar link por WhatsApp</Text>
+              <TouchableOpacity
+                testID="create-client-whatsapp"
+                accessibilityRole="link"
+                accessibilityLabel="Enviar link por WhatsApp"
+                activeOpacity={0.85}
+                onPress={sendWhatsApp}
+                style={styles.waButton}
+              >
+                <MessageCircle size={20} color={theme.primaryForeground} />
+                <Text style={[styles.waLabel, { color: theme.primaryForeground }]}>Enviar link por WhatsApp</Text>
               </TouchableOpacity>
               <TouchableOpacity testID="create-client-skip" onPress={handleClose} hitSlop={8}>
                 <Text style={[styles.stateLink, { color: theme.mutedForeground }]}>Omitir por ahora</Text>
@@ -170,13 +270,13 @@ export function CreateClientModal({
               <Text style={[styles.stateBody, { color: theme.mutedForeground }]}>
                 Haz upgrade para seguir creciendo. Tus alumnos actuales no se ven afectados.
               </Text>
-              <Button
+              <ModalButton
                 testID="create-client-upgrade"
                 label="Ver planes →"
+                theme={theme}
                 variant="sport"
-                size="lg"
-                full
                 onPress={() => { handleClose(); router.push('/coach/subscription') }}
+                style={styles.fullButton}
               />
               <TouchableOpacity testID="create-client-upgrade-dismiss" onPress={handleClose} hitSlop={8}>
                 <Text style={[styles.stateLink, { color: theme.mutedForeground }]}>Ahora no</Text>
@@ -193,19 +293,21 @@ export function CreateClientModal({
                     Se creará una cuenta con contraseña temporal. El alumno deberá cambiarla en su primer ingreso.
                   </Text>
                 </View>
-                <TouchableOpacity testID="create-client-close" onPress={handleClose} hitSlop={8}>
+                <TouchableOpacity
+                  testID="create-client-close"
+                  accessibilityRole="button"
+                  accessibilityLabel="Cerrar"
+                  accessibilityState={{ disabled: loading }}
+                  disabled={loading}
+                  onPress={requestClose}
+                  hitSlop={8}
+                >
                   <X size={20} color={theme.mutedForeground} />
                 </TouchableOpacity>
               </View>
 
-              <ScrollView style={{ maxHeight: 420 }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-                <View style={{ gap: 12, paddingBottom: 4 }}>
-                  {error && (
-                    <View style={[styles.errorBox, { backgroundColor: DANGER + '18', borderColor: DANGER + '40' }]}>
-                      <Text style={[styles.errorText, { color: DANGER }]}>{error}</Text>
-                    </View>
-                  )}
-
+              <ScrollView style={styles.formScroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+                <View style={styles.formFields}>
                   <Input
                     testID="create-client-fullName"
                     label="Nombre completo"
@@ -242,8 +344,10 @@ export function CreateClientModal({
                     value={form.subscriptionStartDate}
                     onChangeText={(v) => setForm((f) => ({ ...f, subscriptionStartDate: v }))}
                     placeholder="AAAA-MM-DD"
+                    maxLength={10}
                     autoCapitalize="none"
                     autoCorrect={false}
+                    error={fieldErrors.subscription_start_date?.[0]}
                   />
                   <Input
                     testID="create-client-tempPassword"
@@ -264,12 +368,15 @@ export function CreateClientModal({
                   {/* Confirmación de edad — Ley 21.719 */}
                   <TouchableOpacity
                     testID="create-client-age"
+                    accessibilityRole="checkbox"
+                    accessibilityState={{ checked: form.ageConfirmed }}
+                    accessibilityLabel="Confirmo que el alumno tiene 14 años o más o que cuento con consentimiento de su tutor legal"
                     activeOpacity={0.82}
                     onPress={() => setForm((f) => ({ ...f, ageConfirmed: !f.ageConfirmed }))}
                     style={styles.checkboxRow}
                   >
                     <View style={[styles.checkbox, { borderColor: form.ageConfirmed ? SUCCESS : theme.border, backgroundColor: form.ageConfirmed ? SUCCESS : 'transparent' }]}>
-                      {form.ageConfirmed ? <CheckCircle2 size={14} color="#fff" /> : null}
+                      {form.ageConfirmed ? <CheckCircle2 size={14} color={theme.primaryForeground} /> : null}
                     </View>
                     <Text style={[styles.checkboxLabel, { color: theme.mutedForeground }]}>
                       Confirmo que el alumno tiene 14 años o más, o que cuento con el consentimiento de su tutor legal (Ley 21.719).
@@ -278,24 +385,30 @@ export function CreateClientModal({
                   {fieldErrors.age_confirmed?.[0] ? (
                     <Text style={[styles.fieldError, { color: theme.destructive }]}>{fieldErrors.age_confirmed[0]}</Text>
                   ) : null}
+
+                  {error ? (
+                    <View style={[styles.errorBox, { backgroundColor: DANGER + '18', borderColor: DANGER + '40' }]}>
+                      <Text style={[styles.errorText, { color: DANGER }]}>{error}</Text>
+                    </View>
+                  ) : null}
                 </View>
               </ScrollView>
 
               <View style={styles.footer}>
-                <Button
+                <ModalButton
                   testID="create-client-cancel"
                   label="Cancelar"
+                  theme={theme}
                   variant="secondary"
-                  size="lg"
                   onPress={handleClose}
                   disabled={loading}
                   style={{ flex: 1 }}
                 />
-                <Button
+                <ModalButton
                   testID="create-client-submit"
                   label={loading ? 'Creando alumno...' : 'Crear Alumno'}
+                  theme={theme}
                   variant="sport"
-                  size="lg"
                   leftIcon={UserPlus}
                   loading={loading}
                   disabled={loading}
@@ -303,7 +416,6 @@ export function CreateClientModal({
                   style={{ flex: 1 }}
                 />
               </View>
-              <View style={{ height: 12 }} />
             </>
           )}
         </View>
@@ -313,13 +425,16 @@ export function CreateClientModal({
 }
 
 const styles = StyleSheet.create({
-  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' },
+  overlay: { flex: 1 },
   sheet: {
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
+    borderWidth: 1,
+    borderBottomWidth: 0,
     paddingHorizontal: 20,
     paddingTop: 12,
     gap: 12,
+    maxHeight: '92%',
   },
   handle: { width: 36, height: 4, borderRadius: 2, alignSelf: 'center', marginBottom: 4 },
   header: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 4 },
@@ -328,19 +443,33 @@ const styles = StyleSheet.create({
   errorBox: { borderRadius: 12, borderWidth: 1, padding: 12 },
   errorText: { fontSize: 13, fontFamily: FONT.uiSemibold },
   fieldError: { fontSize: 12, fontFamily: FONT.uiSemibold, marginTop: -6 },
+  formScroll: { flexShrink: 1 },
+  formFields: { gap: 16, paddingBottom: 4 },
   checkboxRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginTop: 2 },
   checkbox: { width: 20, height: 20, borderRadius: 6, borderWidth: 1.5, marginTop: 1, alignItems: 'center', justifyContent: 'center' },
   checkboxLabel: { flex: 1, fontSize: 12, lineHeight: 17, fontFamily: FONT.ui },
-  footer: { flexDirection: 'row', gap: 10, marginTop: 4 },
+  footer: { flexDirection: 'row', gap: 12, marginTop: 8 },
+  modalButton: {
+    height: 44,
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  modalButtonDisabled: { opacity: 0.6 },
+  modalButtonLabel: { fontSize: 14, fontFamily: FONT.uiBold },
+  fullButton: { width: '100%' },
   // Estados B/C (éxito / upgrade)
-  stateWrap: { alignItems: 'center', gap: 16, paddingVertical: 12, paddingHorizontal: 4 },
+  stateWrap: { alignItems: 'center', gap: 20, paddingVertical: 16, paddingHorizontal: 4 },
   stateCircle: { width: 64, height: 64, borderRadius: 32, alignItems: 'center', justifyContent: 'center' },
   stateTitle: { fontSize: 18, fontFamily: FONT.displayBold, textAlign: 'center' },
   stateBody: { fontSize: 14, lineHeight: 20, textAlign: 'center', fontFamily: FONT.ui },
   stateLink: { fontSize: 14, fontFamily: FONT.uiSemibold },
   waButton: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
-    backgroundColor: '#25D366', borderRadius: 14, paddingVertical: 14, width: '100%',
+    backgroundColor: '#25D366', borderRadius: 12, paddingVertical: 12, width: '100%',
   },
-  waLabel: { color: '#fff', fontSize: 14, fontFamily: FONT.uiBold },
+  waLabel: { fontSize: 14, fontFamily: FONT.uiBold },
 })

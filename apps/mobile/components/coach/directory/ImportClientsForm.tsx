@@ -1,12 +1,13 @@
 import { useMemo, useState } from 'react'
-import { Linking, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native'
+import { ActivityIndicator, Linking, ScrollView, Text, TextInput, TouchableOpacity, View, useWindowDimensions } from 'react-native'
 import { useRouter } from 'expo-router'
-import { Check, Upload } from 'lucide-react-native'
+import { Check, Download, Upload } from 'lucide-react-native'
 import * as DocumentPicker from 'expo-document-picker'
 import * as FileSystem from 'expo-file-system/legacy'
+import { decode } from 'base64-arraybuffer'
 import { Button } from '../../../components'
 import { FONT } from '../../../lib/typography'
-import { apiFetch, getApiBaseUrl } from '../../../lib/api'
+import { ApiError, apiFetch, getApiBaseUrl } from '../../../lib/api'
 import {
   IMPORT_FIELD_LABELS,
   MAX_IMPORT_ROWS,
@@ -27,25 +28,53 @@ import { SUCCESS, WARNING } from './directory-shared'
 /**
  * ImportClientsForm — wizard de importación de alumnos en 4 pasos, espejo del web
  * `/coach/clients/import` (Step1Upload → Step2MapColumns → Step3Preview → Step4Confirm):
- *  1. Subir/pegar CSV (mobile = CSV/texto; xlsx es web-only, DocumentPicker no lo parsea).
+ *  1. Subir XLSX/XLS/CSV o pegar CSV (SheetJS + DocumentPicker nativo).
  *  2. Mapear columnas del archivo a campos EVA (auto-detección + override manual).
  *  3. Revisar filas validadas (válidas / advertencias / errores; duplicados se omiten).
  *  4. Confirmar con tier-gate de cupos (`activeCount + filas > maxClients`) + consentimiento
- *     legal (Ley 19.628). Escribe fila por fila vía `POST /api/mobile/coach/clients`
- *     (scoping + cap server-side; el gate de UI espeja el de web pero el servidor manda).
+ *     legal (Ley 19.628). Un solo POST batch crea la auditoría y procesa chunks de 10 en servidor
+ *     (workspace/scoping/cap se vuelven a autorizar allí; el gate de UI es solo espejo).
  * Contenido de `NativeDialog` (scroll interno acotado).
  */
-const STEP_LABELS = ['Subir', 'Mapear', 'Revisar', 'Confirmar']
+const STEP_LABELS = ['Subir archivo', 'Mapear columnas', 'Revisar datos', 'Confirmar']
 
 const FIELD_CHIPS: { value: ImportField | 'ignore'; label: string }[] = [
-  { value: 'ignore', label: 'Ignorar' },
-  { value: 'full_name', label: 'Nombre' },
+  { value: 'ignore', label: '-- No importar --' },
+  { value: 'full_name', label: 'Nombre completo' },
   { value: 'email', label: 'Email' },
   { value: 'phone', label: 'Teléfono' },
-  { value: 'subscription_start_date', label: 'Fecha' },
+  { value: 'subscription_start_date', label: 'Fecha de inicio' },
 ]
 
-type ImportResult = { ok: number; fail: number; skipped: number; errors: string[] }
+const MAX_BYTES = 5 * 1024 * 1024
+const ACCEPTED_EXTS = ['.xlsx', '.xls', '.csv']
+const ACCEPTED_MIME = [
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.ms-excel',
+  'text/csv',
+  'application/csv',
+]
+
+type ImportRowError = {
+  row: number
+  fullName: string
+  email: string
+  error: string
+}
+
+type ImportResult = { ok: number; fail: number; skipped: number; errors: ImportRowError[] }
+
+type ImportWorkspace = {
+  kind: 'standalone' | 'team_owner' | 'team_member' | 'enterprise'
+  teamId: string | null
+  orgId: string | null
+}
+
+type BatchImportResponse = {
+  ok: true
+  summary: { total: number; succeeded: number; failed: number; skipped: number }
+  rowErrors: Array<{ row: number; full_name: string; email: string; error: string }>
+}
 
 export function ImportClientsForm({
   theme,
@@ -53,14 +82,21 @@ export function ImportClientsForm({
   activeCount,
   onDone,
   onCancel,
+  workspace,
+  access,
+  onBlockingChange,
 }: {
   theme: any
   maxClients: number
   activeCount: number
   onDone: () => void
   onCancel: () => void
+  workspace: ImportWorkspace
+  access: 'allowed' | 'upgrade' | 'loading' | 'load_error' | 'role_blocked'
+  onBlockingChange?: (blocking: boolean) => void
 }) {
   const router = useRouter()
+  const { height: windowHeight } = useWindowDimensions()
   const [step, setStep] = useState(1)
   const [sheet, setSheet] = useState<ParsedSheet | null>(null)
   const [mapping, setMapping] = useState<ColumnMapping>({})
@@ -69,9 +105,80 @@ export function ImportClientsForm({
   const [uploadError, setUploadError] = useState<string | null>(null)
   const [consent, setConsent] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [parsing, setParsing] = useState(false)
   const [result, setResult] = useState<ImportResult | null>(null)
 
-  const scrollStyle = { maxHeight: 380 } as const
+  const scrollStyle = { maxHeight: Math.min(500, windowHeight * 0.52) } as const
+
+  const accessGate = access === 'loading' ? (
+    <View style={{ minHeight: 180, alignItems: 'center', justifyContent: 'center', gap: 10 }}>
+      <ActivityIndicator size="small" color={theme.primary} />
+      <Text style={{ color: theme.mutedForeground, fontSize: 13, fontFamily: FONT.ui }}>Cargando…</Text>
+    </View>
+  ) : access === 'load_error' ? (
+    <View style={{ gap: 16 }}>
+      <View className="border-danger-600/25 bg-danger-100 dark:bg-danger-100/[0.12]" style={{ borderWidth: 1, borderRadius: theme.radius.lg, padding: 16, gap: 6 }}>
+        <Text className="text-strong" style={{ fontSize: 17, fontFamily: FONT.displayBold }}>No pudimos validar tu plan</Text>
+        <Text className="text-muted" style={{ fontSize: 13, lineHeight: 18, fontFamily: FONT.ui }}>Cierra esta ventana y vuelve a intentarlo.</Text>
+      </View>
+      <Button label="Cerrar" variant="secondary" onPress={onCancel} full />
+    </View>
+  ) : access === 'role_blocked' ? (
+    <View style={{ gap: 16 }}>
+      <View className="border-subtle bg-surface-card" style={{ borderWidth: 1, borderRadius: theme.radius.lg, padding: 16, gap: 6 }}>
+        <Text className="text-strong" style={{ fontSize: 17, fontFamily: FONT.displayBold }}>Importación no disponible</Text>
+        <Text className="text-muted" style={{ fontSize: 13, lineHeight: 18, fontFamily: FONT.ui }}>Tu rol no permite importar alumnos.</Text>
+      </View>
+      <Button label="Cerrar" variant="secondary" onPress={onCancel} full />
+    </View>
+  ) : access === 'upgrade' ? (() => {
+    const features = [
+      'Importa hasta 1.000 alumnos desde .xlsx / .csv',
+      'Detección automática de columnas (nombre, email, tel)',
+      'Preview con errores marcados antes de confirmar',
+      'Cumplimiento Ley 19.628 — checkbox de consentimiento',
+    ]
+    return (
+      <ScrollView style={{ maxHeight: Math.min(560, windowHeight * 0.62) }} showsVerticalScrollIndicator={false}>
+        <View style={{ gap: 16 }}>
+          <View className="border-success-500/20 bg-success-100 dark:bg-success-100/[0.12]" style={{ borderWidth: 1, borderRadius: theme.radius.lg, padding: 18, gap: 10 }}>
+            <View className="bg-success-500/15" style={{ width: 48, height: 48, borderRadius: theme.radius.md, alignItems: 'center', justifyContent: 'center' }}>
+              <Upload size={24} className="text-success-600" />
+            </View>
+            <Text className="text-strong" style={{ fontSize: 22, fontFamily: FONT.displayBold }}>Importar Alumnos desde Excel</Text>
+            <Text className="text-muted" style={{ fontSize: 13.5, lineHeight: 19, fontFamily: FONT.ui }}>
+              Migra toda tu cartera de alumnos desde Excel en minutos, sin cargar uno por uno. Disponible en{' '}
+              <Text className="text-strong" style={{ fontFamily: FONT.uiSemibold }}>Starter</Text>.
+            </Text>
+          </View>
+          <View className="border-subtle bg-surface-card" style={{ borderWidth: 1, borderRadius: theme.radius.lg, padding: 16, gap: 14 }}>
+            <View>
+              <Text className="text-muted" style={{ fontSize: 11, fontFamily: FONT.uiSemibold, textTransform: 'uppercase', letterSpacing: 0.6 }}>Disponible en Starter</Text>
+              <Text className="text-strong" style={{ fontSize: 22, fontFamily: FONT.displayBold, marginTop: 4 }}>$19.990<Text className="text-muted" style={{ fontSize: 13, fontFamily: FONT.ui }}> /mes</Text></Text>
+            </View>
+            <View style={{ gap: 10 }}>
+              {features.map((feature) => (
+                <View key={feature} style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 9 }}>
+                  <Check size={16} className="text-success-600" style={{ marginTop: 1 }} />
+                  <Text className="text-muted" style={{ flex: 1, fontSize: 13, lineHeight: 18, fontFamily: FONT.ui }}>{feature}</Text>
+                </View>
+              ))}
+            </View>
+            <TouchableOpacity
+              testID="import-clients-upsell"
+              accessibilityRole="button"
+              activeOpacity={0.82}
+              className="bg-success-500"
+              style={{ minHeight: 44, borderRadius: theme.radius.md, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 16 }}
+              onPress={() => { onCancel(); router.push({ pathname: '/coach/subscription', params: { upgrade: 'starter' } }) }}
+            >
+              <Text className="text-on-sport" style={{ fontSize: 14, fontFamily: FONT.uiSemibold }}>Importar alumnos con Starter →</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </ScrollView>
+    )
+  })() : null
 
   // ─── Paso 1: cargar hoja ───────────────────────────────────────────────────
   function loadSheet(text: string, filename: string) {
@@ -100,16 +207,58 @@ export function ImportClientsForm({
 
   async function pickFile() {
     try {
+      setUploadError(null)
       const res = await DocumentPicker.getDocumentAsync({
-        type: ['text/csv', 'text/comma-separated-values', 'application/csv', 'application/vnd.ms-excel', 'text/plain'],
+        type: ACCEPTED_MIME,
         copyToCacheDirectory: true,
       })
       if (res.canceled || !res.assets?.[0]) return
       const asset = res.assets[0]
-      const content = await FileSystem.readAsStringAsync(asset.uri)
-      loadSheet(content, asset.name ?? 'archivo.csv')
+      const ext = `.${(asset.name ?? '').split('.').pop()?.toLowerCase()}`
+      if (!ACCEPTED_EXTS.includes(ext) && !ACCEPTED_MIME.includes(asset.mimeType ?? '')) {
+        setUploadError('Formato no soportado. Usa .xlsx, .xls o .csv.')
+        return
+      }
+      const fileInfo = asset.size == null ? await FileSystem.getInfoAsync(asset.uri) : null
+      const fileSize = asset.size ?? (fileInfo?.exists && 'size' in fileInfo ? fileInfo.size : 0)
+      if (fileSize > MAX_BYTES) {
+        setUploadError('El archivo supera el límite de 5 MB.')
+        return
+      }
+      setParsing(true)
+      onBlockingChange?.(true)
+      const base64 = await FileSystem.readAsStringAsync(asset.uri, { encoding: FileSystem.EncodingType.Base64 })
+      const XLSX = await import('xlsx')
+      const workbook = XLSX.read(decode(base64), { type: 'array', cellDates: true, raw: false })
+      const worksheet = workbook.Sheets[workbook.SheetNames[0]]
+      const aoa = XLSX.utils.sheet_to_json<(string | number | null)[]>(worksheet, {
+        header: 1,
+        blankrows: false,
+        defval: null,
+      })
+      if (aoa.length < 2) {
+        setUploadError('El archivo está vacío o solo tiene encabezados.')
+        return
+      }
+      const [headerRow, ...dataRows] = aoa
+      if (dataRows.length > MAX_IMPORT_ROWS) {
+        setUploadError(`El archivo tiene más de ${MAX_IMPORT_ROWS} filas. Dividilo en partes de hasta ${MAX_IMPORT_ROWS} alumnos.`)
+        return
+      }
+      const headers = headerRow.map((cell) => String(cell ?? ''))
+      const rows = dataRows.map((row) => headers.map((_, index) => String(row[index] ?? '')))
+      const parsed: ParsedSheet = { headers, rows, filename: asset.name ?? 'import.xlsx' }
+      setSheet(parsed)
+      const auto = matchHeaders(headers)
+      const nextMapping: ColumnMapping = {}
+      auto.forEach((match, index) => { nextMapping[index] = match.field })
+      setMapping(nextMapping)
+      setStep(2)
     } catch {
-      setUploadError('No se pudo leer el archivo. Debe ser un CSV de texto.')
+      setUploadError('No se pudo leer el archivo. Verifica que sea un Excel o CSV válido.')
+    } finally {
+      setParsing(false)
+      onBlockingChange?.(false)
     }
   }
 
@@ -132,58 +281,94 @@ export function ImportClientsForm({
   const toImport = useMemo(() => importableRows(annotated), [annotated])
 
   // ─── Paso 4: tier-gate + confirmación ────────────────────────────────────────
-  const wouldExceedLimit = maxClients > 0 && activeCount + toImport.length > maxClients
+  const wouldExceedLimit = workspace.kind === 'standalone' && maxClients > 0 && activeCount + toImport.length > maxClients
+
+  if (accessGate) return accessGate
 
   async function runImport() {
     if (!consent || wouldExceedLimit || !toImport.length) return
     setBusy(true)
-    let ok = 0, fail = 0, skipped = 0
-    const errors: string[] = []
-    for (const r of toImport) {
-      try {
-        await apiFetch('/api/mobile/coach/clients', {
-          method: 'POST',
-          authenticated: true,
-          body: {
-            fullName: r.full_name,
-            email: (r.email ?? '').toLowerCase(),
-            phone: r.phone ?? '',
-            // Sin default inventado (gotcha 6d): si la fila no trae fecha, se omite y el
-            // endpoint la guarda como null — igual que el import web. NUNCA `new Date()`
-            // (día UTC, no día Santiago) como relleno silencioso.
-            subscriptionStartDate: r.subscription_start_date ?? undefined,
-            tempPassword: `Eva${Math.floor(100000 + Math.random() * 900000)}!`,
-            ageConfirmed: true,
-          },
-        })
-        ok += 1
-      } catch (e: any) {
-        const msg = String(e?.message ?? '')
-        if (e?.code === 'EMAIL_UNAVAILABLE' || /ya (esta|está) registrado/i.test(msg)) skipped += 1
-        else fail += 1
-        if (errors.length < 5) errors.push(`${r.full_name}: ${msg || 'error'}`)
-      }
+    onBlockingChange?.(true)
+    setUploadError(null)
+    try {
+      const response = await apiFetch<BatchImportResponse>('/api/mobile/coach/clients/import', {
+        method: 'POST',
+        authenticated: true,
+        body: {
+          rows: toImport.map((row) => ({
+            source_row: row._rowIndex + 1,
+            full_name: row.full_name,
+            email: row.email,
+            phone: row.phone || null,
+            subscription_start_date: row.subscription_start_date || null,
+          })),
+          filename: sheet?.filename ?? 'import.xlsx',
+          consentConfirmed: true,
+          workspace,
+        },
+      })
+      setResult({
+        ok: response.summary.succeeded,
+        fail: response.summary.failed,
+        skipped: response.summary.skipped,
+        errors: response.rowErrors.map((error) => ({
+          row: error.row,
+          fullName: error.full_name,
+          email: error.email,
+          error: error.error,
+        })),
+      })
+    } catch (error) {
+      const message = error instanceof ApiError && error.code === 'UPGRADE_REQUIRED'
+        ? 'Tu plan actual no incluye la importación de alumnos. Actualiza tu plan para continuar.'
+        : error instanceof Error ? error.message : 'No se pudo importar la cartera.'
+      setUploadError(message)
+    } finally {
+      setBusy(false)
+      onBlockingChange?.(false)
     }
-    setBusy(false)
-    setResult({ ok, fail, skipped, errors })
   }
 
   // ─── Result screen ────────────────────────────────────────────────────────────
   if (result) {
     return (
-      <View style={{ gap: 12 }}>
-        <Text style={{ color: theme.foreground, fontFamily: FONT.displayBold, fontSize: 17 }}>
-          ✅ {result.ok} alumnos importados
-        </Text>
-        {result.fail > 0 ? (
-          <Text style={{ color: theme.mutedForeground, fontFamily: FONT.ui, fontSize: 13 }}>
-            {result.fail} fallaron · {result.skipped} omitidos
+      <View style={{ gap: 16 }}>
+        <View style={{ alignItems: 'center', gap: 4, borderWidth: 1, borderColor: `${SUCCESS}4D`, borderRadius: theme.radius.lg, backgroundColor: `${SUCCESS}1A`, padding: 20 }}>
+          <Text style={{ color: SUCCESS, fontFamily: FONT.displayBold, fontSize: 22, textAlign: 'center' }}>
+            ✅ {result.ok} alumnos importados
           </Text>
+          {result.fail > 0 ? (
+            <Text style={{ color: theme.mutedForeground, fontFamily: FONT.ui, fontSize: 13 }}>
+              {result.fail} fallaron · {result.skipped} omitidos
+            </Text>
+          ) : null}
+        </View>
+        {result.errors.length > 0 ? (
+          <View style={{ borderWidth: 1, borderColor: theme.border, borderRadius: theme.radius.md, overflow: 'hidden' }}>
+            <View style={{ borderBottomWidth: 1, borderBottomColor: theme.border, backgroundColor: theme.secondary, paddingHorizontal: 12, paddingVertical: 8 }}>
+              <Text style={{ color: theme.foreground, fontSize: 13, fontFamily: FONT.uiSemibold }}>
+                Filas con error ({result.errors.length})
+              </Text>
+            </View>
+            <ScrollView style={{ maxHeight: 180 }} nestedScrollEnabled>
+              {result.errors.map((error, index) => (
+                <View
+                  key={`${error.row}-${error.email}`}
+                  style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 8, paddingHorizontal: 12, paddingVertical: 8, borderBottomWidth: index < result.errors.length - 1 ? 1 : 0, borderBottomColor: theme.border }}
+                >
+                  <Text style={{ color: theme.destructive, fontSize: 11, fontFamily: FONT.mono }}>#{error.row}</Text>
+                  <View style={{ flex: 1, gap: 2 }}>
+                    <Text style={{ color: theme.mutedForeground, fontSize: 12, fontFamily: FONT.ui }}>
+                      {error.fullName} ({error.email})
+                    </Text>
+                    <Text style={{ color: theme.destructive, fontSize: 11, fontFamily: FONT.ui }}>{error.error}</Text>
+                  </View>
+                </View>
+              ))}
+            </ScrollView>
+          </View>
         ) : null}
-        {result.errors.map((e, i) => (
-          <Text key={i} style={{ color: theme.destructive, fontSize: 12, fontFamily: FONT.ui }}>{e}</Text>
-        ))}
-        <Button testID="import-clients-done" label="Ir a mi cartera" onPress={onDone} full />
+        <Button testID="import-clients-done" label="Ir a mi cartera →" variant="sport" onPress={onDone} full />
       </View>
     )
   }
@@ -191,26 +376,32 @@ export function ImportClientsForm({
   return (
     <View style={{ gap: 14 }}>
       {/* Stepper */}
-      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
         {STEP_LABELS.map((label, idx) => {
           const num = idx + 1
           const done = step > num
           const current = step === num
           return (
-            <View key={label} style={{ flexDirection: 'row', alignItems: 'center', flex: idx < STEP_LABELS.length - 1 ? 1 : 0 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <View key={label} style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <TouchableOpacity
+                accessibilityRole="button"
+                accessibilityLabel={`${label}, paso ${num} de ${STEP_LABELS.length}`}
+                accessibilityState={{ disabled: !done, selected: current }}
+                activeOpacity={done ? 0.75 : 1}
+                disabled={!done}
+                onPress={() => setStep(num)}
+              >
                 <View style={{
-                  width: 24, height: 24, borderRadius: 12, alignItems: 'center', justifyContent: 'center',
+                  width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center',
                   backgroundColor: done || current ? theme.primary : theme.secondary,
                 }}>
-                  {done ? <Check size={14} color="#fff" /> : (
-                    <Text style={{ color: current ? '#fff' : theme.mutedForeground, fontSize: 11, fontFamily: FONT.uiBold }}>{num}</Text>
+                  {done ? <Check size={14} color={theme.primaryForeground} /> : (
+                    <Text style={{ color: current ? theme.primaryForeground : theme.mutedForeground, fontSize: 12, fontFamily: FONT.uiBold }}>{num}</Text>
                   )}
                 </View>
-                <Text style={{ color: current ? theme.foreground : theme.mutedForeground, fontSize: 11.5, fontFamily: FONT.uiSemibold }}>{label}</Text>
-              </View>
+              </TouchableOpacity>
               {idx < STEP_LABELS.length - 1 ? (
-                <View style={{ flex: 1, height: 1, marginHorizontal: 6, backgroundColor: step > num ? theme.primary : theme.border }} />
+                <View style={{ width: 32, height: 1, marginHorizontal: 12, backgroundColor: step > num ? theme.primary : theme.border }} />
               ) : null}
             </View>
           )
@@ -220,23 +411,70 @@ export function ImportClientsForm({
       {/* ─── Paso 1: Subir ─── */}
       {step === 1 ? (
         <ScrollView style={scrollStyle} showsVerticalScrollIndicator={false}>
-          <View style={{ gap: 12 }}>
-            <Text style={{ color: theme.mutedForeground, fontFamily: FONT.ui, fontSize: 12.5, lineHeight: 18 }}>
-              Sube un CSV (columnas <Text style={{ fontFamily: FONT.uiBold }}>nombre, email, teléfono, fecha de inicio</Text>) o pega el texto. La primera fila son los encabezados y detectamos las columnas automáticamente. Cada alumno recibe una contraseña temporal. Máximo {MAX_IMPORT_ROWS} filas.
+          <View style={{ gap: 16 }}>
+            <TouchableOpacity
+              testID="import-clients-pick-file"
+              accessibilityRole="button"
+              accessibilityLabel="Seleccionar archivo Excel o CSV"
+              activeOpacity={0.78}
+              disabled={parsing}
+              onPress={pickFile}
+              style={{ alignItems: 'center', justifyContent: 'center', gap: 12, borderWidth: 2, borderStyle: 'dashed', borderColor: theme.border, borderRadius: theme.radius.lg, paddingHorizontal: 20, paddingVertical: 28 }}
+            >
+              <View style={{ width: 56, height: 56, alignItems: 'center', justifyContent: 'center', borderRadius: theme.radius.md, backgroundColor: `${theme.primary}1A` }}>
+                <Upload size={28} color={theme.primary} strokeWidth={1.5} />
+              </View>
+              <View style={{ alignItems: 'center', gap: 4 }}>
+                <Text style={{ color: theme.foreground, fontFamily: FONT.uiSemibold, fontSize: 14, textAlign: 'center' }}>
+                  {parsing ? 'Procesando archivo...' : 'Arrastra tu archivo o haz click para seleccionar'}
+                </Text>
+                <Text style={{ color: theme.mutedForeground, fontFamily: FONT.ui, fontSize: 12, textAlign: 'center' }}>
+                  .xlsx, .xls o .csv · Máximo 5 MB · Hasta 1.000 alumnos
+                </Text>
+              </View>
+            </TouchableOpacity>
+
+            <Text style={{ color: theme.mutedForeground, fontFamily: FONT.ui, fontSize: 12, textAlign: 'center' }}>
+              o pega el contenido CSV
             </Text>
-            <Button testID="import-clients-pick-file" label={sheet ? `Archivo: ${sheet.filename}` : 'Subir CSV'} variant="outline" leftIcon={Upload} onPress={pickFile} full />
             <TextInput
               testID="import-clients-paste"
               value={pasteText}
               onChangeText={setPasteText}
               multiline
-              placeholder={'…o pega aquí:\nnombre,email,telefono,inicio\nJuan Pérez,juan@mail.com,+569...,01/03/2026'}
+              placeholder={'nombre,email,telefono,inicio\nJuan Pérez,juan@mail.com,+569...,01/03/2026'}
               placeholderTextColor={theme.mutedForeground}
-              style={{ minHeight: 100, borderWidth: 1, borderColor: theme.border, borderRadius: theme.radius.lg, backgroundColor: theme.secondary, color: theme.foreground, padding: 12, textAlignVertical: 'top', fontFamily: FONT.ui, fontSize: 13 }}
+              style={{ minHeight: 100, borderWidth: 1, borderColor: theme.border, borderRadius: theme.radius.md, backgroundColor: theme.secondary, color: theme.foreground, padding: 12, textAlignVertical: 'top', fontFamily: FONT.ui, fontSize: 13 }}
             />
             {uploadError ? (
-              <Text style={{ color: theme.destructive, fontSize: 12.5, fontFamily: FONT.uiSemibold }}>{uploadError}</Text>
+              <View style={{ borderWidth: 1, borderColor: `${theme.destructive}4D`, borderRadius: theme.radius.md, backgroundColor: `${theme.destructive}1A`, paddingHorizontal: 12, paddingVertical: 10 }}>
+                <Text style={{ color: theme.destructive, fontSize: 12.5, fontFamily: FONT.ui }}>{uploadError}</Text>
+              </View>
             ) : null}
+
+            <View style={{ borderWidth: 1, borderColor: theme.border, borderRadius: theme.radius.md, backgroundColor: theme.card, padding: 14, gap: 10 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                <Text style={{ color: theme.foreground, fontSize: 13, fontFamily: FONT.uiSemibold }}>¿Qué columnas necesito?</Text>
+                <TouchableOpacity
+                  testID="import-clients-template"
+                  accessibilityRole="link"
+                  onPress={() => Linking.openURL(`${getApiBaseUrl()}/templates/import-alumnos.xlsx`).catch(() => {})}
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: 5, borderRadius: theme.radius.sm, backgroundColor: `${theme.primary}1A`, paddingHorizontal: 9, paddingVertical: 6 }}
+                >
+                  <Download size={14} color={theme.primary} />
+                  <Text style={{ color: theme.primary, fontSize: 11, fontFamily: FONT.uiSemibold }}>Descargar template</Text>
+                </TouchableOpacity>
+              </View>
+              <View style={{ gap: 4 }}>
+                <HelpRow theme={theme} label="Nombre completo" detail="requerido" />
+                <HelpRow theme={theme} label="Email" detail="requerido" />
+                <HelpRow theme={theme} label="Teléfono" detail="opcional" />
+                <HelpRow theme={theme} label="Fecha de inicio" detail="opcional (DD/MM/AAAA)" />
+              </View>
+              <Text style={{ color: theme.mutedForeground, fontSize: 11.5, fontFamily: FONT.ui, lineHeight: 16 }}>
+                Los nombres de columna pueden estar en español o inglés. Los detectamos automáticamente.
+              </Text>
+            </View>
           </View>
         </ScrollView>
       ) : null}
@@ -246,7 +484,7 @@ export function ImportClientsForm({
         <ScrollView style={scrollStyle} showsVerticalScrollIndicator={false}>
           <View style={{ gap: 10 }}>
             <Text style={{ color: theme.mutedForeground, fontFamily: FONT.ui, fontSize: 12.5 }}>
-              Verifica el mapeo de cada columna del archivo a su campo EVA.
+              Detectamos las siguientes columnas. Verifica que el mapeo sea correcto.
             </Text>
             {sheet.headers.map((header, colIdx) => {
               const match = autoMatches[colIdx]
@@ -284,7 +522,7 @@ export function ImportClientsForm({
                             backgroundColor: selected ? theme.primary : 'transparent',
                           }}
                         >
-                          <Text style={{ color: selected ? '#fff' : theme.mutedForeground, fontSize: 11.5, fontFamily: FONT.uiSemibold }}>{label}</Text>
+                          <Text style={{ color: selected ? theme.primaryForeground : theme.mutedForeground, fontSize: 11.5, fontFamily: FONT.uiSemibold }}>{label}</Text>
                         </TouchableOpacity>
                       )
                     })}
@@ -293,9 +531,11 @@ export function ImportClientsForm({
               )
             })}
             {missingRequired.length ? (
-              <Text style={{ color: theme.destructive, fontSize: 12.5, fontFamily: FONT.uiSemibold }}>
-                Debes mapear: {missingRequired.map((f) => IMPORT_FIELD_LABELS[f]).join(', ')}
-              </Text>
+              <View style={{ borderWidth: 1, borderColor: `${theme.destructive}4D`, borderRadius: theme.radius.md, backgroundColor: `${theme.destructive}1A`, paddingHorizontal: 12, paddingVertical: 10 }}>
+                <Text style={{ color: theme.destructive, fontSize: 12.5, fontFamily: FONT.ui }}>
+                  Debes mapear: {missingRequired.map((f) => IMPORT_FIELD_LABELS[f]).join(', ')}
+                </Text>
+              </View>
             ) : null}
           </View>
         </ScrollView>
@@ -304,30 +544,48 @@ export function ImportClientsForm({
       {/* ─── Paso 3: Revisar ─── */}
       {step === 3 ? (
         <ScrollView style={scrollStyle} showsVerticalScrollIndicator={false}>
-          <View style={{ gap: 8 }}>
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
-              <SummaryPill color={SUCCESS} label={`${validCount} válidas`} />
-              {warnCount ? <SummaryPill color={WARNING} label={`${warnCount} con advertencia`} /> : null}
-              {errorCount ? <SummaryPill color={theme.destructive} label={`${errorCount} con error`} /> : null}
+          <View style={{ gap: 14 }}>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+              <SummaryPill color={SUCCESS} label={`✅ ${validCount} válidas`} />
+              {warnCount ? <SummaryPill color={WARNING} label={`⚠️ ${warnCount} con advertencia`} /> : null}
+              {errorCount ? <SummaryPill color={theme.destructive} label={`❌ ${errorCount} con error`} /> : null}
             </View>
-            {annotated.slice(0, 50).map((r, i) => {
-              const dot = r._status === 'error' ? theme.destructive : r._status === 'warning' ? WARNING : SUCCESS
-              const note = r._status === 'error' ? r._errors[0] : r._status === 'warning' ? r._warnings[0] : null
-              return (
-                <View key={i} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderColor: theme.border, borderRadius: theme.radius.md, paddingHorizontal: 10, paddingVertical: 7 }}>
-                  <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: dot }} />
-                  <View style={{ flex: 1 }}>
-                    <Text numberOfLines={1} style={{ color: theme.foreground, fontSize: 12.5, fontFamily: FONT.ui }}>
-                      {r.full_name || '(sin nombre)'} · {r.email || '(sin email)'}
-                    </Text>
-                    {note ? <Text numberOfLines={1} style={{ color: dot, fontSize: 11, fontFamily: FONT.uiSemibold }}>{note}</Text> : null}
-                  </View>
+            <ScrollView horizontal showsHorizontalScrollIndicator>
+              <View style={{ width: 680, borderWidth: 1, borderColor: theme.border, borderRadius: theme.radius.md, overflow: 'hidden' }}>
+                <View style={{ flexDirection: 'row', backgroundColor: theme.secondary, paddingHorizontal: 10, paddingVertical: 8 }}>
+                  <TableCell width={38} text="#" color={theme.mutedForeground} semibold />
+                  <TableCell width={145} text="Nombre" color={theme.mutedForeground} semibold />
+                  <TableCell width={190} text="Email" color={theme.mutedForeground} semibold />
+                  <TableCell width={125} text="Teléfono" color={theme.mutedForeground} semibold />
+                  <TableCell width={160} text="Estado" color={theme.mutedForeground} semibold />
                 </View>
-              )
-            })}
-            {annotated.length > 50 ? (
-              <Text style={{ color: theme.mutedForeground, fontSize: 11.5, fontFamily: FONT.ui }}>Mostrando 50 de {annotated.length} filas.</Text>
-            ) : null}
+                {annotated.slice(0, 50).map((row, index) => {
+                  const statusColor = row._status === 'error' ? theme.destructive : row._status === 'warning' ? WARNING : SUCCESS
+                  const status = row._status === 'error'
+                    ? `Error: ${row._errors[0]}`
+                    : row._status === 'warning'
+                      ? `⚠ ${row._warnings[0]}`
+                      : '✓ OK'
+                  return (
+                    <View
+                      key={row._rowIndex}
+                      style={{ flexDirection: 'row', paddingHorizontal: 10, paddingVertical: 8, borderTopWidth: 1, borderTopColor: theme.border, backgroundColor: row._status === 'error' ? `${theme.destructive}0D` : row._status === 'warning' ? `${WARNING}0D` : theme.card }}
+                    >
+                      <TableCell width={38} text={String(row._rowIndex + 1)} color={theme.mutedForeground} />
+                      <TableCell width={145} text={row.full_name || '—'} color={row.full_name ? theme.foreground : theme.destructive} />
+                      <TableCell width={190} text={row.email || '—'} color={row.email ? theme.foreground : theme.destructive} />
+                      <TableCell width={125} text={row.phone || '—'} color={theme.mutedForeground} />
+                      <TableCell width={160} text={status} color={statusColor} />
+                    </View>
+                  )
+                })}
+                {annotated.length > 50 ? (
+                  <View style={{ borderTopWidth: 1, borderTopColor: theme.border, paddingHorizontal: 12, paddingVertical: 8 }}>
+                    <Text style={{ color: theme.mutedForeground, fontSize: 11.5, fontFamily: FONT.ui }}>Mostrando 50 de {annotated.length} filas.</Text>
+                  </View>
+                ) : null}
+              </View>
+            </ScrollView>
           </View>
         </ScrollView>
       ) : null}
@@ -338,8 +596,10 @@ export function ImportClientsForm({
           <View style={{ gap: 12 }}>
             <View style={{ borderWidth: 1, borderColor: theme.border, borderRadius: theme.radius.lg, padding: 14, gap: 6 }}>
               <Text style={{ color: theme.foreground, fontSize: 15, fontFamily: FONT.displayBold }}>📥 {toImport.length} alumnos serán creados</Text>
-              <Text style={{ color: theme.mutedForeground, fontSize: 12.5, fontFamily: FONT.ui }}>
-                {activeCount} actuales + {toImport.length} nuevos = {activeCount + toImport.length}{maxClients > 0 ? ` / ${maxClients} del plan` : ''}
+                <Text style={{ color: theme.mutedForeground, fontSize: 12.5, fontFamily: FONT.ui }}>
+                {workspace.kind === 'standalone'
+                  ? `${activeCount} actuales + ${toImport.length} nuevos = ${activeCount + toImport.length} / ${maxClients} del plan`
+                  : `${activeCount} actuales + ${toImport.length} nuevos = ${activeCount + toImport.length}`}
               </Text>
               <Text style={{ color: theme.mutedForeground, fontSize: 12.5, fontFamily: FONT.ui }}>✉️ {toImport.length} emails de bienvenida se enviarán</Text>
               <Text style={{ color: theme.mutedForeground, fontSize: 12.5, fontFamily: FONT.ui }}>⏱️ Tiempo estimado: ~{Math.ceil(toImport.length / 10) * 2} segundos</Text>
@@ -350,7 +610,7 @@ export function ImportClientsForm({
                 <Text style={{ color: theme.destructive, fontSize: 12.5, fontFamily: FONT.uiSemibold }}>
                   Tu plan permite {maxClients} alumnos y tienes {activeCount}. No puedes importar {toImport.length} alumnos más.
                 </Text>
-                <TouchableOpacity testID="import-clients-upgrade" onPress={() => { onCancel(); router.push('/coach/subscription') }}>
+                <TouchableOpacity testID="import-clients-upgrade" onPress={() => { onCancel(); router.push({ pathname: '/coach/subscription', params: { upgrade: 'true' } }) }}>
                   <Text style={{ color: theme.destructive, fontSize: 12.5, fontFamily: FONT.uiBold, textDecorationLine: 'underline' }}>Actualiza tu plan →</Text>
                 </TouchableOpacity>
               </View>
@@ -363,7 +623,7 @@ export function ImportClientsForm({
               style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10, borderWidth: 1, borderColor: consent ? theme.primary : theme.border, borderRadius: theme.radius.lg, padding: 12, backgroundColor: theme.secondary }}
             >
               <View style={{ width: 22, height: 22, borderRadius: 6, borderWidth: 1, marginTop: 1, borderColor: consent ? theme.primary : theme.border, backgroundColor: consent ? theme.primary : 'transparent', alignItems: 'center', justifyContent: 'center' }}>
-                {consent ? <Check size={14} color="#fff" /> : null}
+                {consent ? <Check size={14} color={theme.primaryForeground} /> : null}
               </View>
               <Text style={{ color: theme.mutedForeground, fontSize: 12, flex: 1, fontFamily: FONT.ui, lineHeight: 17 }}>
                 Confirmo que tengo el consentimiento expreso de las personas listadas para procesar sus datos personales conforme a la{' '}
@@ -379,24 +639,30 @@ export function ImportClientsForm({
         </ScrollView>
       ) : null}
 
+      {step !== 1 && uploadError ? (
+        <View style={{ borderWidth: 1, borderColor: `${theme.destructive}4D`, borderRadius: theme.radius.md, backgroundColor: `${theme.destructive}1A`, paddingHorizontal: 12, paddingVertical: 10 }}>
+          <Text style={{ color: theme.destructive, fontSize: 12.5, fontFamily: FONT.ui }}>{uploadError}</Text>
+        </View>
+      ) : null}
+
       {/* ─── Footer nav ─── */}
       <View style={{ flexDirection: 'row', gap: 10 }}>
         <Button
           testID="import-clients-back"
-          label={step === 1 ? 'Cancelar' : 'Volver'}
+          label={step === 1 ? 'Cancelar' : '← Volver'}
           variant="secondary"
           onPress={step === 1 ? onCancel : () => setStep((s) => s - 1)}
-          disabled={busy}
+          disabled={busy || parsing}
           style={{ flex: 1 }}
         />
         {step === 1 ? (
-          <Button testID="import-clients-parse" label="Continuar" onPress={() => pasteText.trim() ? loadSheet(pasteText, 'pegado.csv') : pickFile()} disabled={!pasteText.trim() && !sheet} style={{ flex: 1 }} />
+          <Button testID="import-clients-parse" label={parsing ? 'Procesando archivo...' : 'Continuar →'} variant="sport" onPress={() => pasteText.trim() ? loadSheet(pasteText, 'pegado.csv') : pickFile()} disabled={parsing || (!pasteText.trim() && !sheet)} style={{ flex: 1 }} />
         ) : step === 2 ? (
-          <Button testID="import-clients-map-continue" label="Continuar" onPress={continueFromMap} disabled={missingRequired.length > 0} style={{ flex: 1 }} />
+          <Button testID="import-clients-map-continue" label="Continuar →" variant="sport" onPress={continueFromMap} disabled={missingRequired.length > 0} style={{ flex: 1 }} />
         ) : step === 3 ? (
-          <Button testID="import-clients-preview-continue" label={`Continuar (${toImport.length})`} onPress={() => setStep(4)} disabled={toImport.length === 0} style={{ flex: 1 }} />
+          <Button testID="import-clients-preview-continue" label={`Continuar con ${validCount} alumnos →`} variant="sport" onPress={() => setStep(4)} disabled={validCount === 0} style={{ flex: 1 }} />
         ) : (
-          <Button testID="import-clients-run" label={busy ? 'Importando...' : `Importar ${toImport.length} alumnos`} onPress={runImport} loading={busy} disabled={busy || !consent || wouldExceedLimit || toImport.length === 0} style={{ flex: 1 }} />
+          <Button testID="import-clients-run" label={busy ? 'Importando...' : `Importar ${toImport.length} alumnos`} variant="sport" onPress={runImport} loading={busy} disabled={busy || !consent || wouldExceedLimit || toImport.length === 0} style={{ flex: 1 }} />
         )}
       </View>
     </View>
@@ -408,5 +674,21 @@ function SummaryPill({ color, label }: { color: string; label: string }) {
     <View style={{ backgroundColor: color + '22', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4 }}>
       <Text style={{ color, fontSize: 12, fontFamily: FONT.uiSemibold }}>{label}</Text>
     </View>
+  )
+}
+
+function HelpRow({ theme, label, detail }: { theme: any; label: string; detail: string }) {
+  return (
+    <Text style={{ color: theme.mutedForeground, fontSize: 12.5, fontFamily: FONT.ui }}>
+      <Text style={{ color: theme.foreground, fontFamily: FONT.uiMedium }}>{label}</Text> — {detail}
+    </Text>
+  )
+}
+
+function TableCell({ width, text, color, semibold = false }: { width: number; text: string; color: string; semibold?: boolean }) {
+  return (
+    <Text numberOfLines={1} style={{ width, color, fontSize: 11.5, fontFamily: semibold ? FONT.uiMedium : FONT.ui }}>
+      {text}
+    </Text>
   )
 }

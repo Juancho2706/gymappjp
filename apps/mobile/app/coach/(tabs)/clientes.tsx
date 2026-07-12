@@ -65,6 +65,8 @@ import {
 } from '../../../lib/clients-directory'
 import { clientLoginUrl, deleteClient, openWhatsApp, resetClientPassword, setClientStatus, shareLogin } from '../../../lib/client-actions'
 import { getCoachProfile } from '../../../lib/coach'
+import { canImportClients, type SubscriptionTier } from '../../../lib/coach-tiers'
+import { getCoachOrgContext, type CoachOrgContext } from '../../../lib/org'
 import { useWorkspace } from '../../../lib/workspace'
 import { FONT } from '../../../lib/typography'
 import { GLOWS, shadow } from '../../../lib/shadows'
@@ -316,6 +318,7 @@ export default function ClientesScreen() {
   const [showFilterSheet, setShowFilterSheet] = useState(false)
   const [showCreate, setShowCreate] = useState(false)
   const [showImport, setShowImport] = useState(false)
+  const [importBlocking, setImportBlocking] = useState(false)
   const [copied, setCopied] = useState(false)
   const [dismissed, setDismissed] = useState<Record<string, { date: string; count: number }>>({})
   const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards')
@@ -326,6 +329,10 @@ export default function ClientesScreen() {
   const [coachSlug, setCoachSlug] = useState<string>('')
   const [coachPrimaryColor, setCoachPrimaryColor] = useState<string | null>(null)
   const [maxClients, setMaxClients] = useState<number>(0)
+  const [subscriptionTier, setSubscriptionTier] = useState<SubscriptionTier | null>(null)
+  const [profileReady, setProfileReady] = useState(false)
+  const [orgRole, setOrgRole] = useState<CoachOrgContext['orgRole']>(null)
+  const [orgContextReady, setOrgContextReady] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<DirectoryClient | null>(null)
   const [deleteConfirm, setDeleteConfirm] = useState('')
@@ -354,13 +361,24 @@ export default function ClientesScreen() {
       }
     }, [workspace.ready, workspace.orgId, workspace.teamId])
   )
-  useEffect(() => {
-    getCoachProfile().then((c) => {
-      if (c?.slug) setCoachSlug(c.slug)
-      if (c?.maxClients) setMaxClients(c.maxClients)
-      if (c?.primaryColor) setCoachPrimaryColor(c.primaryColor)
-    }).catch(() => {})
-  }, [])
+  useFocusEffect(
+    useCallback(() => {
+      setProfileReady(false)
+      setOrgContextReady(false)
+      Promise.all([
+        getCoachProfile().catch(() => null),
+        getCoachOrgContext().catch(() => null),
+      ]).then(([c, org]) => {
+        if (c?.slug) setCoachSlug(c.slug)
+        if (c?.maxClients) setMaxClients(c.maxClients)
+        setSubscriptionTier(c?.subscriptionTier ?? null)
+        if (c?.primaryColor) setCoachPrimaryColor(c.primaryColor)
+        setProfileReady(true)
+        setOrgRole(org?.orgRole ?? null)
+        setOrgContextReady(true)
+      })
+    }, [])
+  )
   function toggleView() {
     setViewMode((current) => current === 'cards' ? 'table' : 'cards')
   }
@@ -900,8 +918,10 @@ export default function ClientesScreen() {
       <CreateClientModal
         visible={showCreate}
         onClose={() => setShowCreate(false)}
-        onCreated={() => load()}
+        onCreated={() => { fetchDirectoryData().catch(() => {}) }}
         theme={theme}
+        maxClients={maxClients}
+        workspace={{ kind: workspace.kind, teamId: workspace.teamId, orgId: workspace.orgId }}
       />
 
       {actionsClient ? (
@@ -923,11 +943,26 @@ export default function ClientesScreen() {
         />
       ) : null}
 
-      <NativeDialog open={showImport} title="Importar alumnos" onClose={() => setShowImport(false)}>
+      <NativeDialog
+        open={showImport}
+        title="Importar alumnos"
+        onClose={() => { if (!importBlocking) setShowImport(false) }}
+        closeDisabled={importBlocking}
+        unmountOnClose
+      >
         <ImportClientsForm
           theme={theme}
           maxClients={maxClients}
           activeCount={clients.filter((c) => !c.isArchived).length}
+          workspace={{ kind: workspace.kind, teamId: workspace.teamId, orgId: workspace.orgId }}
+          access={
+            workspace.kind === 'standalone'
+              ? !profileReady ? 'loading' : subscriptionTier === null ? 'load_error' : canImportClients(subscriptionTier) ? 'allowed' : 'upgrade'
+              : workspace.kind === 'enterprise'
+                ? !orgContextReady ? 'loading' : orgRole === 'org_owner' || orgRole === 'org_admin' ? 'allowed' : 'role_blocked'
+                : 'allowed'
+          }
+          onBlockingChange={setImportBlocking}
           onDone={() => { setShowImport(false); load() }}
           onCancel={() => setShowImport(false)}
         />
