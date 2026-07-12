@@ -15,6 +15,7 @@ import { AppBackground } from '../../../components/AppBackground'
 import { toast } from '../../../components/Toast'
 import { ExerciseFormSheet } from '../../../components/coach/ExerciseFormSheet'
 import { ExercisePreviewSheet } from '../../../components/coach/ExercisePreviewSheet'
+import { useCoachTabbarScroll } from '../../../components/coach/CoachTabbarScroll'
 import { resolveCanCreateExercises, cloneExercise, exerciseThumb, filterExercises, listCoachExercises, MUSCLE_GROUPS, youtubeId, type ExerciseRow } from '../../../lib/exercises'
 
 const DIFFICULTY_LABEL: Record<string, string> = {
@@ -38,6 +39,7 @@ const MUSCLE_ORDER = [...(MUSCLE_GROUPS as readonly string[])]
 type ListItem = { type: 'header'; muscle: string; count: number } | { type: 'row'; row: ExerciseRow }
 
 export default function EjerciciosScreen() {
+  const { onScroll } = useCoachTabbarScroll()
   const { theme } = useTheme()
   const insets = useSafeAreaInsets()
   // Buscador global del coach → navega a `/coach/ejercicios?q=<nombre>` (CoachSearchPalette).
@@ -245,6 +247,8 @@ export default function EjerciciosScreen() {
             )
           }
           contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 4, paddingBottom: insets.bottom + 96 }}
+          onScroll={onScroll}
+          scrollEventThrottle={16}
           ItemSeparatorComponent={() => <View style={{ height: 8 }} />}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load('refresh')} tintColor={theme.primary} />}
           ListEmptyComponent={

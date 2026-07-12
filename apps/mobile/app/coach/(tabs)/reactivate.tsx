@@ -4,19 +4,20 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import { MotiView } from 'moti'
 import { AlertTriangle, ExternalLink, Users } from 'lucide-react-native'
-import { useTheme } from '../../context/ThemeContext'
-import { Badge, Button, Card } from '../../components'
-import { EvaLoaderScreen } from '../../components/EvaLoader'
-import { AppBackground } from '../../components/AppBackground'
-import { FONT, TYPE, textStyle } from '../../lib/typography'
-import { signOutAndCleanup } from '../../lib/auth-actions'
-import { useWorkspace } from '../../lib/workspace'
+import { useTheme } from '../../../context/ThemeContext'
+import { Badge, Button, Card } from '../../../components'
+import { EvaLoaderScreen } from '../../../components/EvaLoader'
+import { AppBackground } from '../../../components/AppBackground'
+import { useCoachTabbarScroll } from '../../../components/coach/CoachTabbarScroll'
+import { FONT, TYPE, textStyle } from '../../../lib/typography'
+import { signOutAndCleanup } from '../../../lib/auth-actions'
+import { useWorkspace } from '../../../lib/workspace'
 import {
   STATUS_LABELS,
   TIER_LABELS,
   getCoachSubscriptionOverview,
   type CoachSubscriptionOverview,
-} from '../../lib/coach-subscription'
+} from '../../../lib/coach-subscription'
 
 // MONEY-SAFETY: la reactivacion (pago) es SIEMPRE link-out al navegador — jamas se procesa in-app.
 // Mismo host que el resto del billing mobile (subscription tab): apex 307 -> www, inocuo en browser.
@@ -50,6 +51,7 @@ function headlineFor(status: string): { title: string; body: string } {
  */
 export default function CoachReactivateScreen() {
   const { theme, resolvedScheme } = useTheme()
+  const { onScroll } = useCoachTabbarScroll()
   const router = useRouter()
   const insets = useSafeAreaInsets()
   const { subscriptionState } = useWorkspace()
@@ -91,6 +93,8 @@ export default function CoachReactivateScreen() {
       <ScrollView
         contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + 24 }]}
         showsVerticalScrollIndicator={false}
+        onScroll={onScroll}
+        scrollEventThrottle={16}
       >
         <MotiView from={{ opacity: 0, translateY: 12 }} animate={{ opacity: 1, translateY: 0 }} transition={{ type: 'timing', duration: 420 }}>
           <View className="bg-warning-100" style={styles.iconWrap}>

@@ -28,6 +28,7 @@ import { SHADOWS } from '../../../lib/shadows'
 import { useWorkspace } from '../../../lib/workspace'
 import { getCoachProfile, type CoachProfile } from '../../../lib/coach'
 import { canUseBranding } from '../../../lib/coach-tiers'
+import { useCoachTabbarScroll } from '../../../components/coach/CoachTabbarScroll'
 
 /**
  * E7-02 · Hub de Opciones (coach) — espejo RN del hub móvil web (`apps/web/.../coach/settings/page.tsx`,
@@ -43,7 +44,7 @@ import { canUseBranding } from '../../../lib/coach-tiers'
  *  · Módulos     → /coach/modules           (catálogo E6-12)
  *  · Funciones   → /coach/settings/features  (stub; lo llena fase 3)
  *  · Áreas       → /coach/settings/areas     (stub; lo llena fase 3)
- *  · Equipo      → /coach/settings/team       (solo si kind es team_*)
+ *  · Equipo      → /coach/team                (solo si kind es team_*)
  */
 
 // Let NativeWind drive the lucide icon `color` via `text-*` classes (DS pattern, ver perfil.tsx).
@@ -165,6 +166,7 @@ function RowDivider() {
 }
 
 export default function CoachSettingsHubScreen() {
+  const { onScroll } = useCoachTabbarScroll()
   const router = useRouter()
   const ws = useWorkspace()
   const [profile, setProfile] = useState<CoachProfile | null>(null)
@@ -202,7 +204,7 @@ export default function CoachSettingsHubScreen() {
     <View className="flex-1 bg-surface-app">
       <AppBackground />
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
-        <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
+        <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 120 }} showsVerticalScrollIndicator={false} onScroll={onScroll} scrollEventThrottle={16}>
           {/* Título */}
           <View style={{ paddingTop: 16, paddingBottom: 4 }}>
             <Text className="font-display-black text-strong" style={{ fontSize: 21, letterSpacing: -0.6, textTransform: 'uppercase' }}>
@@ -273,7 +275,7 @@ export default function CoachSettingsHubScreen() {
                   title="Mi Equipo"
                   subtitle="Marca del pool, miembros y accesos"
                   showChevron
-                  onPress={() => router.push('/coach/settings/team')}
+                  onPress={() => router.push('/coach/team')}
                 />
               </Card>
             </View>

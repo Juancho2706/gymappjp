@@ -15,6 +15,7 @@ import { FONT, textStyle } from '../../../lib/typography'
 import { Input, NativeDialog } from '../../../components'
 import { EvaLoaderScreen } from '../../../components/EvaLoader'
 import { AppBackground } from '../../../components/AppBackground'
+import { useCoachTabbarScroll } from '../../../components/coach/CoachTabbarScroll'
 import { themedIcon, type ThemedIcon } from '../../../components/coach/programs/themed-icon'
 import { ProgramRow } from '../../../components/coach/programs/ProgramRow'
 import { ProgramPreviewCard } from '../../../components/coach/programs/ProgramPreviewCard'
@@ -62,6 +63,7 @@ const TABS: { value: FilterType; label: string }[] = [
 ]
 
 export default function BuilderScreen() {
+  const { onScroll } = useCoachTabbarScroll()
   const { resolvedScheme } = useTheme()
   const router = useRouter()
   const [programs, setPrograms] = useState<ProgramItem[]>([])
@@ -298,6 +300,8 @@ export default function BuilderScreen() {
           keyExtractor={(item) => item.id}
           contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 4, paddingBottom: 110 }}
           showsVerticalScrollIndicator={false}
+          onScroll={onScroll}
+          scrollEventThrottle={16}
           ListHeaderComponent={
             <View className="gap-space-3 pb-space-3">
               {/* Navegación a catálogo / áreas */}

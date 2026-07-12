@@ -69,6 +69,8 @@ export interface Theme {
    * como `emptyStroke`.
    */
   ink300: string
+  /** Neutral fijo para navegación inactiva; --ink-400 no cambia por scheme/brand. */
+  ink400: string
   accent: string
   accentForeground: string
   cyan: string
@@ -119,6 +121,7 @@ const DS = {
   inkStrong: '#0B0E13', // ink-950 / text-strong (light)
   inkMuted: '#5A6573', // ink-500 / text-muted (light)
   ink300Light: '#A8B1BD', // ink-300 / border-strong / empty-ring stroke (light) — web globals.css:340
+  ink400: '#818C9A', // --ink-400; tabs inactivos, fijo en light/dark
   paper: '#FBFCFD', // surface-app (light)
   sunkenLight: '#F4F6F8', // ink-50 / surface-sunken (light)
   borderLight: '#E6E9ED', // ink-100 / border-subtle (light)
@@ -181,6 +184,7 @@ export const lightTheme: Theme = freezeTheme({
   secondary: DS.sunkenLight,
   secondaryForeground: DS.inkStrong,
   ink300: DS.ink300Light,
+  ink400: DS.ink400,
   accent: DS.sunkenLight,
   accentForeground: DS.sport500, // brand; applyCoachBranding() overrides
   cyan: DS.aqua500,
@@ -214,6 +218,7 @@ export const darkTheme: Theme = freezeTheme({
   secondary: DS.surfaceSunkenDark,
   secondaryForeground: DS.textStrongDark,
   ink300: DS.ink300Dark,
+  ink400: DS.ink400,
   accent: DS.surfaceSunkenDark,
   accentForeground: DS.sport500, // brand; applyCoachBranding() overrides
   cyan: DS.aqua500,

@@ -36,6 +36,7 @@ import { useTheme } from '../../../context/ThemeContext'
 import { Badge, Button, EmptyState, Input, NativeDialog, Sheet, Textarea } from '../../../components'
 import { EvaLoaderScreen } from '../../../components/EvaLoader'
 import { AppBackground } from '../../../components/AppBackground'
+import { useCoachTabbarScroll } from '../../../components/coach/CoachTabbarScroll'
 import { FONT } from '../../../lib/typography'
 import { SHADOWS, type Scheme } from '../../../lib/shadows'
 import { MACRO_COLORS } from '../../../components/MacroRingSummary'
@@ -473,6 +474,7 @@ function TemplatesTab({
 }: {
   theme: any; templates: TemplateSummary[]; onEdit: (t: TemplateSummary) => void; onAssign: (t: TemplateSummary) => void; onDuplicate: (t: TemplateSummary) => void; onDelete: (t: TemplateSummary) => void; onCreate: () => void
 }) {
+  const { onScroll } = useCoachTabbarScroll()
   const [query, setQuery] = useState('')
   const [sort, setSort] = useState<TplSort>('recent')
   const [filterOpen, setFilterOpen] = useState(false)
@@ -498,7 +500,7 @@ function TemplatesTab({
   return (
     <View style={{ flex: 1 }}>
       <SearchFilterBar theme={theme} value={query} onChange={setQuery} placeholder="Buscar plantilla…" onFilter={() => setFilterOpen(true)} filtersActive={sort !== 'recent'} />
-      <ScrollView contentContainerStyle={styles.tabBody} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={styles.tabBody} showsVerticalScrollIndicator={false} onScroll={onScroll} scrollEventThrottle={16}>
         {list.map((t) => {
           const kcal = t.daily_calories ?? 0
           const p = t.protein_g ?? 0, c = t.carbs_g ?? 0, f = t.fats_g ?? 0
@@ -585,6 +587,7 @@ function ClientsBoardTab({
   onAssignEmpty: (c: Client) => void
   onReload: () => void
 }) {
+  const { onScroll } = useCoachTabbarScroll()
   const [query, setQuery] = useState('')
   const [sort, setSort] = useState<BoardSort>('name')
   const [filterOpen, setFilterOpen] = useState(false)
@@ -633,7 +636,7 @@ function ClientsBoardTab({
       {globalEmpty ? (
         <EmptyState icon={Users} title="No hay alumnos en tu cartera" subtitle="Cuando asignes planes de nutrición, tus alumnos activos aparecerán acá." />
       ) : (
-        <ScrollView contentContainerStyle={styles.tabBody} showsVerticalScrollIndicator={false}>
+        <ScrollView contentContainerStyle={styles.tabBody} showsVerticalScrollIndicator={false} onScroll={onScroll} scrollEventThrottle={16}>
           <BoardColumn theme={theme} title="Sincronizados" subtitle="Siguen una plantilla — los cambios se propagan." accent={theme.primary} rows={synced} onManage={onManage} onUnassign={confirmUnassign} />
           <BoardColumn theme={theme} title="Personalizados" subtitle="Editados a mano — no sincronizan con la plantilla." accent={EMBER} rows={custom} onManage={onManage} onUnassign={confirmUnassign} />
 
@@ -744,6 +747,7 @@ function PlanCard({
 // ─── Tab: Alimentos (FoodLibrary embebida — E3-19) ────────────────────────────────
 function FoodsTab({ theme, onFoodsChanged }: { theme: any; onFoodsChanged: () => void }) {
   const router = useRouter()
+  const { onScroll } = useCoachTabbarScroll()
   const [foods, setFoods] = useState<FoodRow[]>([])
   const [loading, setLoading] = useState(true)
   const [query, setQuery] = useState('')
@@ -864,6 +868,8 @@ function FoodsTab({ theme, onFoodsChanged }: { theme: any; onFoodsChanged: () =>
           contentContainerStyle={styles.foodsList}
           ItemSeparatorComponent={() => <View style={{ height: 8 }} />}
           showsVerticalScrollIndicator={false}
+          onScroll={onScroll}
+          scrollEventThrottle={16}
           ListEmptyComponent={
             <View style={{ paddingTop: 40 }}>
               <EmptyState icon={Apple} title={scope === 'mine' ? 'Sin alimentos propios' : 'Sin resultados'} subtitle={scope === 'mine' ? 'Toca Nuevo para crear tu primer alimento.' : 'Prueba con otro término de búsqueda.'} />
@@ -990,6 +996,7 @@ function RecipesTab({
 }: {
   theme: any; recipes: CoachRecipeRow[]; clients: Client[]; onReload: () => void
 }) {
+  const { onScroll } = useCoachTabbarScroll()
   const [query, setQuery] = useState('')
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState<CoachRecipeRow | null>(null)
@@ -1047,6 +1054,8 @@ function RecipesTab({
           contentContainerStyle={styles.recipesList}
           ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
           showsVerticalScrollIndicator={false}
+          onScroll={onScroll}
+          scrollEventThrottle={16}
           ListEmptyComponent={
             <View style={{ paddingTop: 24 }}>
               <EmptyState icon={Search} title="Sin recetas" subtitle={`Ninguna receta coincide con «${query.trim()}».`} />

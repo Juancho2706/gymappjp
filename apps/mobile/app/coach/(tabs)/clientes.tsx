@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Alert, FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import Animated, { Extrapolation, interpolate, useAnimatedScrollHandler, useAnimatedStyle, useSharedValue, type SharedValue } from 'react-native-reanimated'
+import Animated, { Extrapolation, interpolate, runOnJS, useAnimatedScrollHandler, useAnimatedStyle, useSharedValue, type SharedValue } from 'react-native-reanimated'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import * as Clipboard from 'expo-clipboard'
 import { useFocusEffect, useRouter } from 'expo-router'
@@ -25,6 +25,7 @@ import { useEntitlements } from '../../../lib/entitlements'
 import { Button, Input, NativeDialog, ScreenHeader } from '../../../components'
 import { EvaLoaderScreen } from '../../../components/EvaLoader'
 import { AppBackground } from '../../../components/AppBackground'
+import { useCoachTabbarScroll } from '../../../components/coach/CoachTabbarScroll'
 import { ClientCard, CLIENT_CARD_HEIGHT } from '../../../components/coach/ClientCard'
 import { DirRowCard } from '../../../components/coach/directory/DirRowCard'
 import { DirectorySummary } from '../../../components/coach/directory/DirectorySummary'
@@ -82,6 +83,7 @@ function StackCardItem({ index, scrollY, headerH, children }: { index: number; s
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 
 export default function ClientesScreen() {
+  const { reportScrollY, onScroll: onTabbarScroll } = useCoachTabbarScroll()
   const { theme } = useTheme()
   const router = useRouter()
   // Acceso a Herramientas (hub /coach/tools): mismo gate que el sidebar web (toolsEnabled)
@@ -120,7 +122,15 @@ export default function ClientesScreen() {
   const [resetError, setResetError] = useState<string | null>(null)
   const scrollY = useSharedValue(0)
   const [headerH, setHeaderH] = useState(0)
-  const onScroll = useAnimatedScrollHandler((e) => { scrollY.value = e.contentOffset.y })
+  const lastReportedY = useSharedValue(0)
+  const onScroll = useAnimatedScrollHandler((e) => {
+    const y = e.contentOffset.y
+    scrollY.value = y
+    if (Math.abs(y - lastReportedY.value) > 6) {
+      lastReportedY.value = y
+      runOnJS(reportScrollY)(y)
+    }
+  })
 
   // Gotcha 6b: la pantalla vive en un tab persistente (no se desmonta). Un
   // `useEffect(load,[])` de un disparo dejaba el roster CONGELADO al volver de la
@@ -568,6 +578,8 @@ export default function ClientesScreen() {
           )}
           contentContainerStyle={styles.list}
           showsVerticalScrollIndicator={false}
+          onScroll={onTabbarScroll}
+          scrollEventThrottle={16}
           onRefresh={() => load(true)}
           refreshing={refreshing}
           ListHeaderComponent={headerNode}

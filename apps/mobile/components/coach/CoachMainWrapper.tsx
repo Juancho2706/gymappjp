@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { MotiView } from 'moti'
 import { useTheme } from '../../context/ThemeContext'
 import { AppBackground } from '../AppBackground'
+import { useCoachTabbarScroll } from './CoachTabbarScroll'
 
 interface CoachMainWrapperProps {
   children: ReactNode
@@ -14,6 +15,7 @@ interface CoachMainWrapperProps {
 
 export function CoachMainWrapper({ children, scroll = true, refreshControl }: CoachMainWrapperProps) {
   const { theme } = useTheme()
+  const { onScroll } = useCoachTabbarScroll()
   const insets = useSafeAreaInsets()
   // Clear the translucent blur tab bar + iPhone home indicator.
   const bottomPad = insets.bottom + 84
@@ -41,6 +43,8 @@ export function CoachMainWrapper({ children, scroll = true, refreshControl }: Co
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
           refreshControl={refreshControl}
+          onScroll={onScroll}
+          scrollEventThrottle={16}
         >
           {content}
         </ScrollView>
