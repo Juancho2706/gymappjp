@@ -24,6 +24,8 @@ import type {
 } from '@eva/bodycomp'
 import { supabase } from './supabase'
 import { apiFetch } from './api'
+import type { ClientActionWorkspace } from './client-actions'
+import { getSantiagoIsoYmdForUtcInstant } from './date-utils'
 
 export type BodyCompMethod = 'bia' | 'isak'
 
@@ -81,6 +83,31 @@ export async function listMeasurements(clientId: string, method: BodyCompMethod)
   return data.map(normalizeRow)
 }
 
+export type ScopedBodyCompMeasurements = {
+  bia: BodyCompRow[]
+  isak: BodyCompRow[]
+}
+
+/** Lectura inline de ficha con scope explicito del recurso; no depende del workspace preferido web. */
+export async function listScopedMeasurements(
+  clientId: string,
+  workspace: ClientActionWorkspace,
+): Promise<ScopedBodyCompMeasurements> {
+  const params = [
+    `workspaceKind=${encodeURIComponent(workspace.kind)}`,
+    ...(workspace.teamId ? [`teamId=${encodeURIComponent(workspace.teamId)}`] : []),
+    ...(workspace.orgId ? [`orgId=${encodeURIComponent(workspace.orgId)}`] : []),
+  ].join('&')
+  const response = await apiFetch<{ ok: true; bia: any[]; isak: any[] }>(
+    `/api/mobile/coach/clients/${clientId}/bodycomp?${params}`,
+    { authenticated: true },
+  )
+  return {
+    bia: Array.isArray(response.bia) ? response.bia.map(normalizeRow) : [],
+    isak: Array.isArray(response.isak) ? response.isak.map(normalizeRow) : [],
+  }
+}
+
 /**
  * Fecha (ISO) de la medicion mas reciente del alumno, cualquiera sea el metodo — para el
  * estado "ultima medicion hace X" en la ficha. Read-only PostgREST (misma RLS `bcm_select` que
@@ -103,11 +130,14 @@ export async function getLastBodycompMeasuredAt(clientId: string): Promise<strin
  * Guarda una medicion BIA via el endpoint mobile (gate de dinero server-side:
  * assertModule → 403 MODULE_OFF sin el modulo). El server persiste `metrics` tal cual (no calcula).
  */
-export async function saveBiaMeasurement(input: Omit<BiaCreateInput, 'method'>): Promise<string> {
+export async function saveBiaMeasurement(
+  input: Omit<BiaCreateInput, 'method'>,
+  workspace: ClientActionWorkspace,
+): Promise<string> {
   const res = await apiFetch<{ ok: true; measurementId: string }>('/api/mobile/bodycomp/bia', {
     method: 'POST',
     authenticated: true,
-    body: { ...input, method: 'bia' },
+    body: { ...input, method: 'bia', workspace },
   })
   return res.measurementId
 }
@@ -116,11 +146,14 @@ export async function saveBiaMeasurement(input: Omit<BiaCreateInput, 'method'>):
  * Guarda una medicion ISAK via el endpoint mobile. El cliente envia SOLO los crudos + la ecuacion;
  * el server calcula los `metrics` derivados (computeIsak). Gate assertModule server-side.
  */
-export async function saveIsakMeasurement(input: Omit<IsakCreateInput, 'method'>): Promise<string> {
+export async function saveIsakMeasurement(
+  input: Omit<IsakCreateInput, 'method'>,
+  workspace: ClientActionWorkspace,
+): Promise<string> {
   const res = await apiFetch<{ ok: true; measurementId: string }>('/api/mobile/bodycomp/isak', {
     method: 'POST',
     authenticated: true,
-    body: { ...input, method: 'isak' },
+    body: { ...input, method: 'isak', workspace },
   })
   return res.measurementId
 }
@@ -130,6 +163,19 @@ export async function deleteMeasurement(id: string): Promise<void> {
   await apiFetch<{ ok: true }>(`/api/mobile/bodycomp/${id}`, {
     method: 'DELETE',
     authenticated: true,
+  })
+}
+
+/** Soft-delete inline de ficha con clientId + workspace explicitamente autorizados server-side. */
+export async function deleteScopedMeasurement(
+  clientId: string,
+  id: string,
+  workspace: ClientActionWorkspace,
+): Promise<void> {
+  await apiFetch<{ ok: true }>(`/api/mobile/coach/clients/${clientId}/bodycomp/${id}`, {
+    method: 'DELETE',
+    authenticated: true,
+    body: { workspace },
   })
 }
 
@@ -224,8 +270,13 @@ const MONTHS_SHORT = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 's
 
 /** dd <mes> (Intl es-CL no es fiable en Hermes → formateo manual). */
 export function fmtShort(iso: string): string {
-  const d = new Date(iso)
-  return `${String(d.getDate()).padStart(2, '0')} ${MONTHS_SHORT[d.getMonth()]}`
+  const dayKey = /^\d{4}-\d{2}-\d{2}$/.test(iso)
+    ? iso
+    : getSantiagoIsoYmdForUtcInstant(iso)
+  const [, month, day] = dayKey.match(/^(\d{4})-(\d{2})-(\d{2})$/) ?? []
+  const monthIndex = Number(month) - 1
+  if (!day || monthIndex < 0 || monthIndex >= MONTHS_SHORT.length) return '—'
+  return `${day} ${MONTHS_SHORT[monthIndex]}`
 }
 
 /** Etiqueta "InBody 570 · 05 jun" (dispositivo + fecha). */

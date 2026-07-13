@@ -1,8 +1,20 @@
 # TEST_STATUS — Estado de las suites
 
-> Doc canónico referenciado en `CLAUDE.md`. Última actualización: 2026-06-13 (plan estrategia 05 — billing add-ons self-service).
+> Doc canónico referenciado en `CLAUDE.md`. Última actualización: 2026-07-12 (paridad RN — ficha coach Resumen/Progreso).
 >
 > Regla 2026-06-10 (memoria `feedback-test-each-batch`): por tanda solo `pnpm typecheck` + `pnpm test` (vitest local). Playwright/SQL contra Supabase y sandbox MP (tocan red/MP) se corren **únicamente en el GATE autorizado**, con OK explícito del usuario. Las suites nuevas se ESCRIBEN en sus fases y quedan pendientes de gate.
+
+## Paridad RN — ficha coach Resumen/Progreso (2026-07-12)
+
+- TypeScript `apps/mobile` y `apps/web`: verde.
+- Tokens DS: 86/86.
+- Vitest focalizado: 11 archivos, 120 tests verdes. Incluye analytics de
+  perfil, timeline nutricional/plan A-B, workspace/entitlements, autorización
+  enterprise y body composition.
+- Expo export Android: verde.
+- Auditoría adversarial R7: Overview, Progreso y cross-security sin
+  P0/P1/P2 accionables.
+- Smoke device light/dark × EVA/custom: pendiente.
 
 ## Vitest (unit — se corren por tanda)
 

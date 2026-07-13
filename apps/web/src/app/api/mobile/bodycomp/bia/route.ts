@@ -1,7 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient as createSupabaseClient } from '@supabase/supabase-js'
-import { createServiceRoleClient } from '@/lib/supabase/admin-client'
-import { saveBodyComposition } from '@/services/bodycomp/body-composition.service'
+import {
+    mobileContextOwnsClient,
+    resolveMobileClientMutationContext,
+} from '../../coach/clients/_mutation-auth'
+import {
+    BodyCompositionKillSwitchError,
+    bodyCompositionAccessFromExplicitScope,
+    saveBodyCompositionWithAccess,
+} from '@/services/bodycomp/body-composition.service'
 
 /**
  * Endpoint mobile para GUARDAR una medicion BIA de composicion corporal. Espejo de
@@ -9,48 +15,42 @@ import { saveBodyComposition } from '@/services/bodycomp/body-composition.servic
  * debe escribir por PostgREST directo: el gate del modulo (`body_composition`) hoy solo vive en la
  * UI mobile (hasModule client-side), asi que un coach SIN el modulo podria insertar por API directa
  * (evasion de cobro). Aca corre el MISMO gate server-side que la web:
- *   - admin (service-role): resolver el userId del bearer.
- *   - userClient (token-scoped, RLS): el service ejecuta kill-switch + Zod + write-access +
- *     assertModule('body_composition') + (consentimiento si team) + insert (RLS = techo).
+ *   - `_mutation-auth`: bearer autoritativo + workspace explicito + ownership del alumno.
+ *   - service: kill-switch + Zod + assertModule por recurso + consentimiento team + insert.
  * Mutacion => auth por getUser (autoritativo), no jose.
  */
 
-function bearerToken(request: NextRequest): string | null {
-    const auth = request.headers.get('authorization') || request.headers.get('Authorization')
-    if (!auth?.startsWith('Bearer ')) return null
-    return auth.slice('Bearer '.length).trim() || null
-}
-
 export async function POST(request: NextRequest) {
-    const token = bearerToken(request)
-    if (!token) return NextResponse.json({ error: 'Unauthorized', code: 'MISSING_TOKEN' }, { status: 401 })
-
-    const admin = createServiceRoleClient()
-    const { data: ud, error: uerr } = await admin.auth.getUser(token)
-    if (uerr || !ud.user) return NextResponse.json({ error: 'Unauthorized', code: 'INVALID_TOKEN' }, { status: 401 })
-    const userId = ud.user.id
-
-    const body = await request.json().catch(() => null)
-    if (!body || typeof body !== 'object') return NextResponse.json({ error: 'Datos inválidos' }, { status: 400 })
-
-    // Client token-scoped: RLS + triggers como el web user-scoped. El service valida con
-    // BodyCompositionCreateSchema (defensa en profundidad) y corre assertModule antes de persistir.
-    const userClient = createSupabaseClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-        { global: { headers: { Authorization: `Bearer ${token}` } }, auth: { persistSession: false, autoRefreshToken: false } }
-    )
+    const rawBody = await request.json().catch(() => null)
+    const body = rawBody && typeof rawBody === 'object' ? rawBody as Record<string, unknown> : {}
+    if (body.workspace === undefined) {
+        return NextResponse.json({ error: 'Workspace requerido.', code: 'WORKSPACE_REQUIRED' }, { status: 400 })
+    }
+    const context = await resolveMobileClientMutationContext(request, body.workspace)
+    if ('error' in context) return context.error
+    const clientId = typeof body.clientId === 'string' ? body.clientId : ''
+    if (!clientId || !(await mobileContextOwnsClient(context, clientId))) {
+        return NextResponse.json({ error: 'Alumno no encontrado.', code: 'NOT_FOUND' }, { status: 404 })
+    }
 
     try {
         // Forzamos method='bia' (el endpoint /isak es el unico que acepta ISAK) — el resto del shape
         // (clientId, metrics, deviceBrand/Model, weightKg/heightCm, notes) lo valida el schema.
-        const input = { ...(body as Record<string, unknown>), method: 'bia' as const }
-        const { row } = await saveBodyComposition(userClient, userId, input)
+        const { workspace: _workspace, ...payload } = body
+        const input = { ...payload, method: 'bia' as const }
+        const access = bodyCompositionAccessFromExplicitScope(context.scope)
+        const { row } = await saveBodyCompositionWithAccess(context.userDb, context.userId, input, clientId, access)
         return NextResponse.json({ ok: true, measurementId: row.id })
     } catch (e) {
         const msg = e instanceof Error ? e.message : 'No se pudo guardar la medición.'
+        if (e instanceof BodyCompositionKillSwitchError) {
+            return NextResponse.json({ error: msg, code: 'MODULE_DISABLED' }, { status: 503 })
+        }
         if (msg.startsWith('Modulo no habilitado')) {
             return NextResponse.json({ error: msg, code: 'MODULE_OFF' }, { status: 403 })
+        }
+        if (msg.includes('consentimiento')) {
+            return NextResponse.json({ error: msg, code: 'CONSENT_REQUIRED' }, { status: 403 })
         }
         return NextResponse.json({ error: msg }, { status: 400 })
     }

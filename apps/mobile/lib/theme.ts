@@ -55,6 +55,8 @@ export interface Theme {
   aqua700: string
   destructive: string
   success: string
+  /** --warning-500; imperative status color for native/SVG props. */
+  warning: string
   // Extended (new - matches web design system)
   primaryForeground: string
   foreground: string
@@ -111,6 +113,9 @@ const DS = {
   sport500: '#2680FF', // brand (applyCoachBranding overrides at runtime)
   danger500: '#F4365A',
   success500: '#1FB877',
+  warning500: '#F5A524',
+  ember500: '#FF6A3D',
+  ember100: '#FFEDE6',
   aqua500: '#18ABD4', // recovery
   // aqua-700 (recovery foreground): FLIPEA en dark. Icono/foreground sobre chip aqua-100.
   // Espejo web globals.css: light :root #0A6E8D (:366) / dark .dark #6FD3EA (:632).
@@ -177,6 +182,7 @@ export const lightTheme: Theme = freezeTheme({
   aqua700: DS.aqua700Light,
   destructive: DS.danger500,
   success: DS.success500,
+  warning: DS.warning500,
   // Extended
   primaryForeground: DS.white, // text-on-sport
   foreground: DS.inkStrong,
@@ -211,6 +217,7 @@ export const darkTheme: Theme = freezeTheme({
   aqua700: DS.aqua700Dark,
   destructive: DS.danger500,
   success: DS.success500,
+  warning: DS.warning500,
   // Extended
   primaryForeground: DS.white,
   foreground: DS.textStrongDark,
@@ -303,6 +310,18 @@ export function resolveSportRamp(primaryColor?: string | null): {
 } {
   const { ramp } = deriveSportTokens(primaryColor || DEFAULT_BRAND)
   return { sport300: ramp['300'], sport400: ramp['400'], sport500: ramp['500'] }
+}
+
+/** Exact gradient stops used by tokenized `ember-100 → sport-100` celebratory surfaces. */
+export function resolveCelebrationSurfaceRamp(
+  primaryColor: string | null | undefined,
+  scheme: 'light' | 'dark',
+): { ember100: string; sport100: string } {
+  const sport = deriveSportTokens(primaryColor || DEFAULT_BRAND)
+  return {
+    ember100: scheme === 'dark' ? hexToRgba(DS.ember500, 0.2) : DS.ember100,
+    sport100: scheme === 'dark' ? sport.dark['100'] : sport.ramp['100'],
+  }
 }
 
 /**

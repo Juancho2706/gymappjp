@@ -59,6 +59,46 @@ export type WriteAccess = CoachClientScope & {
     teamId: string | null
 }
 
+export type ExplicitBodyCompositionScope =
+    | { type: 'standalone' }
+    | { type: 'team'; teamId: string }
+    | { type: 'enterprise'; orgId: string }
+
+/** Adapta un scope ya autorizado por el endpoint mobile al contrato interno del servicio. */
+export function bodyCompositionAccessFromExplicitScope(scope: ExplicitBodyCompositionScope): WriteAccess {
+    if (scope.type === 'team') {
+        return { orgId: null, activeTeamId: scope.teamId, viaTeam: true, teamId: scope.teamId }
+    }
+    return {
+        orgId: scope.type === 'enterprise' ? scope.orgId : null,
+        activeTeamId: null,
+        viaTeam: false,
+        teamId: null,
+    }
+}
+
+function bodyCompositionEntitlementContext(userId: string, access: WriteAccess) {
+    // Enterprise no ofrece este modulo en v1 (config mobile/web = []). Contexto vacio => fail-closed.
+    if (access.orgId) return {}
+    return access.viaTeam ? { teamId: access.teamId } : { coachId: userId }
+}
+
+function assertBodyCompositionWorkspaceSupported(access: WriteAccess): void {
+    if (access.orgId) throw new Error('Modulo no habilitado: body_composition')
+}
+
+function bodyCompositionRowMatchesAccess(
+    row: repo.BodyCompositionRow,
+    userId: string,
+    access: WriteAccess,
+): boolean {
+    if (access.orgId) return false
+    if (access.viaTeam && access.teamId) {
+        return row.team_id === access.teamId && row.org_id == null
+    }
+    return row.team_id == null && row.org_id == null && row.coach_id === userId
+}
+
 /**
  * Verifica que el coach autenticado puede ESCRIBIR mediciones del cliente bajo su workspace
  * activo (analogo a assertCoachClientReadAccess, sin importarlo). Devuelve el contexto resuelto.
@@ -111,6 +151,8 @@ export type SaveBodyCompositionResult = {
     row: repo.BodyCompositionRow
 }
 
+type ParsedBodyCompositionInput = ReturnType<typeof BodyCompositionCreateSchema.parse>
+
 /**
  * Guarda una medicion (BIA o ISAK). `input` es el payload crudo del cliente; se valida con el
  * MISMO schema que usa el formulario. `db` es el cliente request-scoped (RLS = techo).
@@ -128,9 +170,32 @@ export async function saveBodyComposition(
 
     // 3) Scoping + write-access bajo el workspace activo.
     const access = await assertCoachClientWriteAccess(db, userId, parsed.clientId)
-    const ctx = access.viaTeam
-        ? { teamId: access.teamId }
-        : { coachId: userId }
+
+    return persistBodyComposition(db, userId, parsed, access)
+}
+
+/** Guarda usando un scope del recurso ya autenticado por el endpoint mobile. */
+export async function saveBodyCompositionWithAccess(
+    db: DB,
+    userId: string,
+    input: unknown,
+    clientId: string,
+    access: WriteAccess,
+): Promise<SaveBodyCompositionResult> {
+    await assertBodyCompositionEnabled()
+    const parsed = BodyCompositionCreateSchema.parse(input)
+    if (parsed.clientId !== clientId) throw new Error('Client not found')
+    return persistBodyComposition(db, userId, parsed, access)
+}
+
+async function persistBodyComposition(
+    db: DB,
+    userId: string,
+    parsed: ParsedBodyCompositionInput,
+    access: WriteAccess,
+): Promise<SaveBodyCompositionResult> {
+    assertBodyCompositionWorkspaceSupported(access)
+    const ctx = bodyCompositionEntitlementContext(userId, access)
 
     // 4) Entitlement del modulo por contexto del recurso (team manda; si no, coach).
     await assertModule(db, 'body_composition', ctx)
@@ -218,10 +283,42 @@ export async function deleteBodyComposition(
     if (!existing) throw new Error('Medicion no encontrada.')
 
     const access = await assertCoachClientWriteAccess(db, userId, existing.client_id)
-    const ctx = access.viaTeam ? { teamId: access.teamId } : { coachId: userId }
-    await assertModule(db, 'body_composition', ctx)
+    await deleteExistingBodyComposition(db, userId, existing, access)
+}
 
-    const { error } = await repo.softDelete(db, id)
+/** Soft-delete con scope del recurso ya autenticado por el endpoint mobile. */
+export async function deleteBodyCompositionWithAccess(
+    db: DB,
+    userId: string,
+    id: string,
+    clientId: string,
+    access: WriteAccess,
+): Promise<void> {
+    await assertBodyCompositionEnabled()
+
+    const existing = await repo.getById(db, id)
+    if (
+        !existing ||
+        existing.client_id !== clientId ||
+        !bodyCompositionRowMatchesAccess(existing, userId, access)
+    ) throw new Error('Medicion no encontrada.')
+
+    await deleteExistingBodyComposition(db, userId, existing, access)
+}
+
+async function deleteExistingBodyComposition(
+    db: DB,
+    userId: string,
+    existing: repo.BodyCompositionRow,
+    access: WriteAccess,
+): Promise<void> {
+    assertBodyCompositionWorkspaceSupported(access)
+    if (!bodyCompositionRowMatchesAccess(existing, userId, access)) {
+        throw new Error('Medicion no encontrada.')
+    }
+    await assertModule(db, 'body_composition', bodyCompositionEntitlementContext(userId, access))
+
+    const { error } = await repo.softDelete(db, existing.id)
     if (error) throw new Error(error)
 
     if (access.viaTeam && access.teamId) {
@@ -254,13 +351,16 @@ export async function listClientMeasurements(
     access: WriteAccess,
     clientId: string
 ): Promise<ClientMeasurements> {
+    assertBodyCompositionWorkspaceSupported(access)
     if (access.viaTeam && access.teamId) {
         await assertHealthConsent(db, clientId, access.teamId)
     }
-    const [bia, isak] = await Promise.all([
+    const [biaRows, isakRows] = await Promise.all([
         repo.listByClientAndMethod(db, clientId, 'bia'),
         repo.listByClientAndMethod(db, clientId, 'isak'),
     ])
+    const bia = biaRows.filter((row) => bodyCompositionRowMatchesAccess(row, userId, access))
+    const isak = isakRows.filter((row) => bodyCompositionRowMatchesAccess(row, userId, access))
     if (access.viaTeam && access.teamId) {
         await logTeamClientAccess(db, {
             teamId: access.teamId,
@@ -272,6 +372,18 @@ export async function listClientMeasurements(
         })
     }
     return { bia, isak }
+}
+
+/** Lectura completa con kill-switch + entitlement para un scope explicito ya autorizado. */
+export async function listClientMeasurementsWithAccess(
+    db: DB,
+    userId: string,
+    access: WriteAccess,
+    clientId: string,
+): Promise<ClientMeasurements> {
+    await assertBodyCompositionEnabled()
+    await assertModule(db, 'body_composition', bodyCompositionEntitlementContext(userId, access))
+    return listClientMeasurements(db, userId, access, clientId)
 }
 
 const MODULE_KEY = 'body_composition' as const

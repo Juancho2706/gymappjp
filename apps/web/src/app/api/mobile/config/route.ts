@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import { verifyMobileBearer } from '@/lib/mobile-auth'
+import { resolveMobileClientMutationContext } from '../coach/clients/_mutation-auth'
 import {
     MODULE_KEYS,
     type EnabledModules,
@@ -211,8 +212,28 @@ export async function GET(request: NextRequest) {
 
     let rawModules: EnabledModules = {}
     let scope: NutritionScope = { coachId: null, clientId: null, teamId: null, orgId: null }
+    const requestedKind = request.nextUrl.searchParams.get('workspaceKind')
 
-    if (coachRow.data) {
+    if (requestedKind) {
+        const requestedWorkspace = {
+            kind: requestedKind,
+            teamId: request.nextUrl.searchParams.get('teamId') || null,
+            orgId: request.nextUrl.searchParams.get('orgId') || null,
+        }
+        const context = await resolveMobileClientMutationContext(request, requestedWorkspace)
+        if ('error' in context) return context.error
+        if (context.scope.type === 'team') {
+            rawModules = await getTeamEnabledModules(admin, context.scope.teamId)
+            scope = { coachId: userId, clientId: null, teamId: context.scope.teamId, orgId: null }
+        } else if (context.scope.type === 'enterprise') {
+            // Enterprise conserva módulos personales fuera del workspace, igual que web.
+            rawModules = {}
+            scope = { coachId: userId, clientId: null, teamId: null, orgId: context.scope.orgId }
+        } else {
+            rawModules = await getCoachEnabledModules(admin, userId)
+            scope = { coachId: userId, clientId: null, teamId: null, orgId: null }
+        }
+    } else if (coachRow.data) {
         // Coach standalone v1: teamId null (mobile aun no opera workspaces de pool).
         rawModules = asEnabledModules(coachRow.data.enabled_modules)
         scope = { coachId: userId, clientId: null, teamId: null, orgId: null }

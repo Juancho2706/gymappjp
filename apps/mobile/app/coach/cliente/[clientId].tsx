@@ -33,7 +33,8 @@ import { getTodayInSantiago, isoDateAddDays } from '../../../lib/date-utils'
 import { daysBetweenCalendar } from '../../../lib/checkin-thresholds'
 import { filterPlansForStructureView, resolveActiveWeekVariantForDisplay } from '../../../lib/program-week-variant'
 import { deriveClientStatus } from '@eva/profile-analytics'
-import { deleteClient, resetClientPassword, setClientStatus } from '../../../lib/client-actions'
+import { deleteClient, resetClientPassword, setClientStatus, type ClientActionWorkspace } from '../../../lib/client-actions'
+import { getWorkspaceEntitlements } from '../../../lib/entitlements'
 import { useWorkspace } from '../../../lib/workspace'
 import { getCoachProfile } from '../../../lib/coach'
 import { getApiBaseUrl } from '../../../lib/api'
@@ -88,6 +89,12 @@ export default function ClientDetailScreen() {
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState('')
   const [deleting, setDeleting] = useState(false)
+  const [resourceModuleFlags, setResourceModuleFlags] = useState({ cardio: false, movement: false, bodycomp: false })
+  const [resourceModulesReady, setResourceModulesReady] = useState(false)
+  const resourceModulesReadyRef = useRef(false)
+  const resourceModulesScopeRef = useRef('')
+  const [resourceModulesError, setResourceModulesError] = useState<string | null>(null)
+  const [resourceModulesRetry, setResourceModulesRetry] = useState(0)
   const lastY = useRef(0)
   const tabStickyY = useRef(Number.MAX_SAFE_INTEGER)
   const [tabStuck, setTabStuck] = useState(false)
@@ -96,12 +103,16 @@ export default function ClientDetailScreen() {
   const daySeqRef = useRef(0)
 
   const load = useCallback(async (opts?: { silent?: boolean }) => {
-    if (!clientId) return
+    if (!clientId || !workspace.ready) return
     const seq = ++loadSeqRef.current
     if (!opts?.silent) setLoading(true)
     setLoadError(null)
     try {
-      const res = await getCoachClientDetail(clientId)
+      const res = await getCoachClientDetail(clientId, {
+        kind: workspace.kind,
+        teamId: workspace.teamId,
+        orgId: workspace.orgId,
+      })
       if (seq === loadSeqRef.current) setData(res)
     } catch (e) {
       console.warn('[client-detail] load failed', e)
@@ -112,7 +123,7 @@ export default function ClientDetailScreen() {
         loadedOnceRef.current = true
       }
     }
-  }, [clientId])
+  }, [clientId, workspace.ready, workspace.kind, workspace.teamId, workspace.orgId])
 
   useEffect(() => {
     loadedOnceRef.current = false
@@ -179,12 +190,51 @@ export default function ClientDetailScreen() {
 
   const resourceWorkspace = client?.team_id
     ? workspace.workspaces.find((entry) => entry.teamId === client.team_id)
-    : client?.org_id ? workspace.workspaces.find((entry) => entry.orgId === client.org_id) : null
-  const actionWorkspace = {
-    kind: resourceWorkspace?.kind ?? workspace.kind,
-    teamId: client?.team_id ?? workspace.teamId,
-    orgId: client?.org_id ?? workspace.orgId,
-  } as const
+    : client?.org_id
+      ? workspace.workspaces.find((entry) => entry.orgId === client.org_id)
+      : workspace.workspaces.find((entry) => entry.kind === 'standalone')
+  const actionWorkspace: ClientActionWorkspace = {
+    kind: resourceWorkspace?.kind ?? (client?.team_id ? workspace.kind : client?.org_id ? 'enterprise' : 'standalone'),
+    teamId: client?.team_id ?? null,
+    orgId: client?.org_id ?? null,
+  }
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!client) return
+      let active = true
+      const scopeKey = `${client.id}:${actionWorkspace.kind}:${actionWorkspace.teamId ?? ''}:${actionWorkspace.orgId ?? ''}`
+      if (resourceModulesScopeRef.current !== scopeKey) {
+        resourceModulesScopeRef.current = scopeKey
+        resourceModulesReadyRef.current = false
+      }
+      setResourceModulesError(null)
+      if (!resourceModulesReadyRef.current) {
+        setResourceModulesReady(false)
+        setResourceModuleFlags({ cardio: false, movement: false, bodycomp: false })
+      }
+      void getWorkspaceEntitlements(actionWorkspace)
+        .then((config) => {
+          if (!active) return
+          const next = {
+            cardio: config.enabledModules.includes('cardio'),
+            movement: config.enabledModules.includes('movement_assessment'),
+            bodycomp: config.enabledModules.includes('body_composition'),
+          }
+          setResourceModuleFlags(next)
+          resourceModulesReadyRef.current = true
+          setResourceModulesReady(true)
+        })
+        .catch((error) => {
+          if (active) {
+            setResourceModulesError(error instanceof Error ? error.message : 'No pudimos cargar los módulos.')
+            setResourceModulesReady(resourceModulesReadyRef.current)
+          }
+          console.warn('[client-detail] resource entitlements failed', error)
+        })
+      return () => { active = false }
+    }, [client?.id, actionWorkspace.kind, actionWorkspace.teamId, actionWorkspace.orgId, resourceModulesRetry]),
+  )
 
   function openMenuWhatsApp() {
     if (!client?.phone || !client || !loginUrl) return
@@ -470,10 +520,35 @@ export default function ClientDetailScreen() {
 
         {/* 2 — Content */}
         <View style={styles.tabContent}>
+          {resourceModulesError ? (
+            <View className="border border-warning-500 bg-warning-100 dark:bg-warning-100/[0.14]" style={{ borderRadius: 14, padding: 12, gap: 8 }}>
+              <Text className="text-strong" style={{ fontSize: 12.5 }}>No pudimos actualizar los módulos de este espacio.</Text>
+              <Button label="Reintentar" variant="outline" onPress={() => setResourceModulesRetry((value) => value + 1)} />
+            </View>
+          ) : null}
           {tab === 'overview' ? (
-            <OverviewTab data={data} reload={load} onOpenPhoto={onOpenPhoto} onEditProgram={openBuilder} />
+            <OverviewTab
+              data={data}
+              reload={() => { void load({ silent: true }) }}
+              onOpenPhoto={onOpenPhoto}
+              onEditProgram={openBuilder}
+              onViewNutrition={() => setTab('nutricion')}
+              onViewProgress={() => setTab('progreso')}
+              onOpenProgram={() => setTab('plan')}
+              workspace={actionWorkspace}
+              moduleFlags={resourceModuleFlags}
+              modulesReady={resourceModulesReady}
+            />
           ) : tab === 'progreso' ? (
-            <ProgresoTab data={data} onOpenPhoto={onOpenPhoto} reload={load} />
+            <ProgresoTab
+              data={data}
+              onOpenPhoto={onOpenPhoto}
+              reload={() => { void load({ silent: true }) }}
+              bodyCompEnabled={resourceModuleFlags.bodycomp}
+              bodyCompInlineAllowed={actionWorkspace.kind !== 'enterprise'}
+              bodyCompReady={resourceModulesReady}
+              workspace={actionWorkspace}
+            />
           ) : tab === 'analisis' ? (
             <AnalisisTab data={data} selectedDate={selectedDate} onSelectDate={setSelectedDate} dayDetail={dayDetail} dayLoading={dayLoading} />
           ) : tab === 'plan' ? (
@@ -507,7 +582,7 @@ export default function ClientDetailScreen() {
       />
 
       <NativeDialog open={editOpen} title="Editar alumno" onClose={() => { if (!editSaving) setEditOpen(false) }} closeDisabled={editSaving} unmountOnClose>
-        <EditClientForm client={client} onDone={() => { setEditOpen(false); load() }} onCancel={() => setEditOpen(false)} onSavingChange={setEditSaving} />
+        <EditClientForm client={client} workspace={actionWorkspace} onDone={() => { setEditOpen(false); void load({ silent: true }) }} onCancel={() => setEditOpen(false)} onSavingChange={setEditSaving} />
       </NativeDialog>
 
       <NativeDialog open={resetOpen} title={resetPassword ? 'Clave temporal lista' : 'Resetear contraseña'} onClose={() => { if (!resetting) setResetOpen(false) }} closeDisabled={resetting} unmountOnClose>
@@ -565,7 +640,7 @@ function Field({ label, value, onChangeText, theme, ...rest }: any) {
   )
 }
 
-function EditClientForm({ client, onDone, onCancel, onSavingChange }: { client: CoachClientDetail; onDone: () => void; onCancel: () => void; onSavingChange: (saving: boolean) => void }) {
+function EditClientForm({ client, workspace, onDone, onCancel, onSavingChange }: { client: CoachClientDetail; workspace: ClientActionWorkspace; onDone: () => void; onCancel: () => void; onSavingChange: (saving: boolean) => void }) {
   const { theme } = useTheme()
   const [fullName, setFullName] = useState(client.full_name)
   const [phone, setPhone] = useState(client.phone ?? '')
@@ -584,7 +659,7 @@ function EditClientForm({ client, onDone, onCancel, onSavingChange }: { client: 
       phone: phone.trim() || null,
       goal_weight_kg: goalWeight.trim() ? Number(goalWeight) : null,
       subscription_start_date: startDate.trim() || null,
-    })
+    }, workspace)
     setSaving(false)
     onSavingChange(false)
     if (!r.ok) setError(r.error ?? 'No se pudo guardar.')

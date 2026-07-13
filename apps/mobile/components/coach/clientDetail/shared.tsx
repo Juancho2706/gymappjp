@@ -2,13 +2,20 @@ import type { ReactNode } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 import { useTheme } from '../../../context/ThemeContext'
 import { Card } from '../../../components'
-import { getTodayInSantiago } from '../../../lib/date-utils'
+import { getSantiagoIsoYmdForUtcInstant, getTodayInSantiago, parseDbDate } from '../../../lib/date-utils'
 import { daysBetweenCalendar } from '../../../lib/checkin-thresholds'
 
 // ── Helpers de formato (compartidos por todas las tabs del detalle) ──────────
 export function formatDate(iso: string): string {
-  const value = iso.length <= 10 ? `${iso}T12:00:00` : iso
-  return new Date(value).toLocaleDateString('es-CL', { day: 'numeric', month: 'short', year: 'numeric' })
+  const dateOnly = /^\d{4}-\d{2}-\d{2}$/.test(iso)
+  const value = dateOnly ? new Date(`${iso}T12:00:00Z`) : parseDbDate(iso)
+  if (!value || Number.isNaN(value.getTime())) return '—'
+  return value.toLocaleDateString('es-CL', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    timeZone: 'America/Santiago',
+  })
 }
 export function formatCurrency(n: number): string {
   return `$${Math.round(n).toLocaleString('es-CL')}`
@@ -18,7 +25,11 @@ export function dayName(day: number): string {
 }
 export function relativeDays(iso: string | null): string {
   if (!iso) return '—'
-  const dayKey = iso.slice(0, 10)
+  const parsed = parseDbDate(iso)
+  if (!parsed) return '—'
+  const dayKey = /^\d{4}-\d{2}-\d{2}$/.test(iso)
+    ? iso
+    : getSantiagoIsoYmdForUtcInstant(parsed.toISOString())
   if (!/^\d{4}-\d{2}-\d{2}$/.test(dayKey)) return '—'
   const days = daysBetweenCalendar(dayKey, getTodayInSantiago().iso)
   if (days <= 0) return 'Hoy'
@@ -54,7 +65,20 @@ export function CardHeader({ icon: Icon, title, color, right }: { icon?: any; ti
 
 export function Pill({ label, color, tone }: { label: string; color?: string; tone?: 'warning' | 'danger' | 'success' }) {
   const { theme } = useTheme()
-  const c = color ?? (tone === 'warning' ? '#F5A524' : tone === 'danger' ? theme.destructive : tone === 'success' ? theme.success : theme.primary)
+  if (!color && tone) {
+    const shell = tone === 'warning'
+      ? 'border-warning-500 bg-warning-100 dark:bg-warning-100/[0.14]'
+      : tone === 'danger'
+        ? 'border-danger-500 bg-danger-100 dark:bg-danger-100/[0.14]'
+        : 'border-success-500 bg-success-100 dark:bg-success-100/[0.14]'
+    const text = tone === 'warning' ? 'text-warning-700' : tone === 'danger' ? 'text-danger-600' : 'text-success-600'
+    return (
+      <View className={`rounded-control ${shell}`} style={s.pill}>
+        <Text className={text} style={[s.pillTxt, { fontFamily: 'HankenGrotesk_700Bold' }]}>{label}</Text>
+      </View>
+    )
+  }
+  const c = color ?? theme.primary
   return (
     <View className="rounded-control" style={[s.pill, { backgroundColor: c + '16', borderColor: c + '44' }]}>
       <Text style={[s.pillTxt, { color: c, fontFamily: 'HankenGrotesk_700Bold' }]}>{label}</Text>
@@ -102,7 +126,7 @@ const s = cd
 // Color por adherencia (compartido nutrición).
 export function adherenceColor(pct: number, theme: any): string {
   if (pct >= 80) return theme.success
-  if (pct >= 50) return '#F59E0B'
+  if (pct >= 50) return theme.warning
   if (pct > 0) return theme.destructive
   return theme.border
 }

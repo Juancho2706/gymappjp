@@ -20,6 +20,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 import { supabase } from './supabase'
 import { apiFetch } from './api'
 import { setRemoteFlags, clearRemoteFlags } from './flags'
+import type { ClientActionWorkspace } from './client-actions'
 import {
     DEFAULT_CONFIG,
     hasModuleIn,
@@ -46,9 +47,10 @@ interface StoreState {
 
 let state: StoreState = { config: DEFAULT_CONFIG, loading: true, ready: false }
 const listeners = new Set<() => void>()
-let inFlight: Promise<void> | null = null
+let refreshQueue: Promise<void> = Promise.resolve()
 let hydratedFromCache = false
 let globalListenersWired = false
+let resetVersion = 0
 
 function emit() {
     for (const l of listeners) l()
@@ -95,35 +97,77 @@ async function hasSession(): Promise<boolean> {
     }
 }
 
-/**
- * Revalida contra /api/mobile/config. Deduplicado por `inFlight`. Solo con sesion (sin ella no
- * pega al endpoint para no gatillar el 401 -> signOut del bridge). Ante fallo de red conserva la
- * cache y solo sale de `loading`.
- */
-export function refreshEntitlements(): Promise<void> {
-    if (inFlight) return inFlight
-    inFlight = (async () => {
-        try {
-            if (!(await hasSession())) {
-                setState({ loading: false })
-                return
-            }
-            const raw = await apiFetch<RawMobileConfig>('/api/mobile/config', { authenticated: true })
-            const config = normalizeConfig(raw)
-            setRemoteFlags(config.flags)
-            setState({ config, ready: true, loading: false })
-            try {
-                await AsyncStorage.setItem(CACHE_KEY, serializeConfig(config))
-            } catch {
-                /* persistencia best-effort */
-            }
-        } catch {
-            setState({ loading: false })
-        } finally {
-            inFlight = null
+function configPath(workspace: ClientActionWorkspace | null): string {
+    if (!workspace) return '/api/mobile/config'
+    const params = [
+        `workspaceKind=${encodeURIComponent(workspace.kind)}`,
+        ...(workspace.teamId ? [`teamId=${encodeURIComponent(workspace.teamId)}`] : []),
+        ...(workspace.orgId ? [`orgId=${encodeURIComponent(workspace.orgId)}`] : []),
+    ].join('&')
+    return `/api/mobile/config?${params}`
+}
+
+async function resolveActiveCoachWorkspace(): Promise<ClientActionWorkspace | null> {
+    try {
+        // Dynamic import: workspace.ts usa apiFetch y refresca entitlements tras un switch. Mantener
+        // este borde dinamico evita un ciclo de inicializacion entre ambos stores app-wide.
+        const { getActiveCoachWorkspace } = await import('./workspace')
+        return await getActiveCoachWorkspace()
+    } catch {
+        return null
+    }
+}
+
+async function performRefresh(
+    version: number,
+    explicitWorkspace?: ClientActionWorkspace,
+): Promise<void> {
+    if (version !== resetVersion) return
+    setState({ loading: true })
+    try {
+        if (!(await hasSession())) {
+            if (version === resetVersion) setState({ loading: false })
+            return
         }
-    })()
-    return inFlight
+        // Coach: siempre manda scope explicito del workspace activo. Alumno/no-coach: null conserva
+        // el resolver legacy de /api/mobile/config (coach/team/org del propio alumno).
+        const workspace = explicitWorkspace ?? await resolveActiveCoachWorkspace()
+        const raw = await apiFetch<RawMobileConfig>(configPath(workspace), { authenticated: true })
+        const config = normalizeConfig(raw)
+        if (version !== resetVersion) return
+        setRemoteFlags(config.flags)
+        setState({ config, ready: true, loading: false })
+        try {
+            await AsyncStorage.setItem(CACHE_KEY, serializeConfig(config))
+        } catch {
+            /* persistencia best-effort */
+        }
+    } catch {
+        if (version === resetVersion) setState({ loading: false })
+    }
+}
+
+/**
+ * Revalida contra /api/mobile/config para el workspace coach ACTIVO. Las llamadas se serializan:
+ * un TOKEN_REFRESHED durante el switch puede encolar una revalidacion implicita, pero la explicita
+ * del switch corre despues y queda como estado final. Sin sesion no llama al endpoint.
+ */
+export function refreshEntitlements(explicitWorkspace?: ClientActionWorkspace): Promise<void> {
+    // Capturar la generacion al ENCOLAR: una request del usuario anterior nunca puede arrancar tras
+    // un SIGNED_OUT/SIGNED_IN y aplicar config al usuario nuevo.
+    const version = resetVersion
+    const task = refreshQueue.then(() => performRefresh(version, explicitWorkspace))
+    refreshQueue = task.catch(() => {})
+    return task
+}
+
+/**
+ * Resuelve módulos para un recurso/workspace concreto sin contaminar el cache global.
+ * La ficha puede pertenecer a otro pool distinto del workspace preferido del switcher.
+ */
+export async function getWorkspaceEntitlements(workspace: ClientActionWorkspace): Promise<MobileConfig> {
+    const raw = await apiFetch<RawMobileConfig>(configPath(workspace), { authenticated: true })
+    return normalizeConfig(raw)
 }
 
 async function bootstrap(): Promise<void> {
@@ -134,6 +178,7 @@ async function bootstrap(): Promise<void> {
 /** Limpia la config (logout). El proximo login re-hidrata/revalida. */
 export function resetEntitlements(): void {
     hydratedFromCache = false
+    resetVersion += 1
     clearRemoteFlags()
     setState({ config: DEFAULT_CONFIG, ready: false, loading: false })
     void AsyncStorage.removeItem(CACHE_KEY).catch(() => {})

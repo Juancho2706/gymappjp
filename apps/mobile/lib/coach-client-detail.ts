@@ -15,14 +15,22 @@ import type {
 } from './profile-analytics'
 import { selectStrengthCardsFromSeries } from './profile-analytics'
 import {
-  calculateConsumedMacrosWithCompletionFallback,
   normalizeMealForMacros,
-  portionPctMapFromMealLogs,
   sumMealMacros,
   type MealWithFoodItems,
 } from './nutrition-utils'
+import {
+  activePlanNutritionComplianceForDay,
+  averageNutritionTimelineCompliance,
+  buildNutritionTimeline,
+  checkInRegularityPercentAsOfSantiago,
+  effectiveWorkoutTarget,
+  filterTimelineForActivePlan,
+  type NutritionTimelineEntry,
+} from './coach-client-detail-logic'
 import { supabase } from './supabase'
 import { apiFetch } from './api'
+import type { ClientActionWorkspace } from './client-actions'
 import {
   resolveSections,
   resolveDomainEnabled,
@@ -90,20 +98,7 @@ export interface NutritionMealPlanEntry {
   fats: number
 }
 
-export interface NutritionTimelineEntry {
-  date: string
-  mealsDone: number
-  mealsTotal: number
-  compliancePct: number
-  targetCalories: number
-  consumedCalories: number
-  targetProtein: number
-  consumedProtein: number
-  targetCarbs: number
-  consumedCarbs: number
-  targetFats: number
-  consumedFats: number
-}
+export type { NutritionTimelineEntry } from './coach-client-detail-logic'
 
 export interface FavoriteFoodEntry {
   id: string
@@ -231,6 +226,46 @@ export interface HabitsDayEntry {
   notes: string | null
 }
 
+export interface DailyHabitRow extends HabitsDayEntry {
+  log_date: string
+}
+
+export interface DailyHabitsSummary {
+  today: DailyHabitRow | null
+  daysLogged: number
+  avg: {
+    water_ml: number | null
+    steps: number | null
+    sleep_hours: number | null
+    fasting_hours: number | null
+  }
+}
+
+function summarizeDailyHabits(rows: DailyHabitRow[], todayIso: string): DailyHabitsSummary {
+  const average = (key: 'water_ml' | 'steps' | 'sleep_hours' | 'fasting_hours') => {
+    const values = rows.map((row) => row[key]).filter((value): value is number => typeof value === 'number')
+    return values.length
+      ? Math.round((values.reduce((sum, value) => sum + value, 0) / values.length) * 10) / 10
+      : null
+  }
+  return {
+    today: rows.find((row) => row.log_date === todayIso) ?? null,
+    daysLogged: rows.filter((row) =>
+      row.water_ml != null ||
+      row.steps != null ||
+      row.sleep_hours != null ||
+      row.fasting_hours != null ||
+      (row.supplements?.length ?? 0) > 0
+    ).length,
+    avg: {
+      water_ml: average('water_ml'),
+      steps: average('steps'),
+      sleep_hours: average('sleep_hours'),
+      fasting_hours: average('fasting_hours'),
+    },
+  }
+}
+
 export interface ClientDayDetail {
   date: string
   workoutSets: WorkoutDaySet[]
@@ -250,11 +285,6 @@ function nutritionAveragePct(rows: { nutrition_meal_logs?: { is_completed?: bool
   return Math.round(sum / rows.length)
 }
 
-function dayOfWeekIso(iso: string): number {
-  const jsDay = new Date(`${iso}T12:00:00`).getDay()
-  return jsDay === 0 ? 7 : jsDay
-}
-
 function nutritionStreakDays(todayIso: string, rows: NutritionTimelineEntry[]): number {
   const byDate = new Map(rows.map((row) => [row.date, row]))
   let streak = 0
@@ -265,24 +295,6 @@ function nutritionStreakDays(todayIso: string, rows: NutritionTimelineEntry[]): 
     streak++
   }
   return streak
-}
-
-function checkInRegularityPercent(asOfIso: string, checkIns: CheckInEntry[]): number {
-  const latest = checkIns
-    .map((row) => row.date.slice(0, 10))
-    .filter((date) => date <= asOfIso)
-    .sort()
-    .pop()
-  if (!latest) return 0
-
-  const diffDays = Math.round(
-    (new Date(`${asOfIso}T12:00:00`).getTime() - new Date(`${latest}T12:00:00`).getTime()) / 86400000
-  )
-  if (diffDays <= 7) return 100
-  if (diffDays <= 14) return 70
-  if (diffDays <= 21) return 45
-  if (diffDays <= 30) return 25
-  return 0
 }
 
 function buildActivityWindow(todayIso: string): Map<string, ActivityDay> {
@@ -370,66 +382,6 @@ function buildNutritionMeals(rawNutrition: any): { entries: NutritionMealPlanEnt
     })
   }
   return { entries, macroMeals }
-}
-
-function buildNutritionTimeline(
-  todayIso: string,
-  rows: any[],
-  macroMeals: MealWithFoodItems[],
-  goals: { calories: number; protein: number; carbs: number; fats: number }
-): NutritionTimelineEntry[] {
-  const byDate = new Map<string, any>()
-  for (const row of rows) byDate.set(row.log_date, row)
-
-  const out: NutritionTimelineEntry[] = []
-  for (let i = 29; i >= 0; i--) {
-    const date = isoDateAddDays(todayIso, -i)
-    const row = byDate.get(date)
-    const logs = ((row?.nutrition_meal_logs ?? []) as any[]).map((log) => ({
-      meal_id: String(log.meal_id ?? ''),
-      is_completed: !!log.is_completed,
-      consumed_quantity: log.consumed_quantity ?? null,
-    }))
-    const applicableMeals = macroMeals.filter((meal) => {
-      const entry = meal as MealWithFoodItems & { day_of_week?: number | null }
-      return entry.day_of_week == null || entry.day_of_week === dayOfWeekIso(date)
-    })
-    const total = logs.length || applicableMeals.length
-    const done = logs.filter((log) => log.is_completed).length
-    const completedMealIds = new Set(logs.filter((log) => log.is_completed).map((log) => log.meal_id))
-    // Snapshot-first target por día para TODOS los macros (espejo del motor canónico
-    // computeNutritionAdherence: targetMacros = snapshot del día si existe, si no liveTarget).
-    // Cada macro cae a su valor live SOLO si la columna del snapshot es null en ese día.
-    const dayTarget = {
-      calories: Number(row?.target_calories_at_log ?? goals.calories ?? 0),
-      protein: Number(row?.target_protein_at_log ?? goals.protein ?? 0),
-      carbs: Number(row?.target_carbs_at_log ?? goals.carbs ?? 0),
-      fats: Number(row?.target_fats_at_log ?? goals.fats ?? 0),
-    }
-    // El fallback de consumo (planes sin food_items) escala por el target DEL DÍA,
-    // no por el live → P/C/F históricos correctos.
-    const consumed = calculateConsumedMacrosWithCompletionFallback(
-      applicableMeals,
-      completedMealIds,
-      dayTarget,
-      portionPctMapFromMealLogs(logs)
-    )
-    out.push({
-      date,
-      mealsDone: done,
-      mealsTotal: total,
-      compliancePct: total > 0 ? Math.round((done / total) * 100) : 0,
-      targetCalories: dayTarget.calories,
-      consumedCalories: Math.round(consumed.calories),
-      targetProtein: dayTarget.protein,
-      consumedProtein: Math.round(consumed.protein),
-      targetCarbs: dayTarget.carbs,
-      consumedCarbs: Math.round(consumed.carbs),
-      targetFats: dayTarget.fats,
-      consumedFats: Math.round(consumed.fats),
-    })
-  }
-  return out.reverse()
 }
 
 export interface DaySeriesPoint { date: string; v: number }
@@ -582,7 +534,7 @@ function mapWeeklyPrsRpc(rows: any[]): WeeklyWeightPR[] {
     .sort((a, b) => b.newOneRm - a.newOneRm)
 }
 
-export async function getCoachClientDetail(clientId: string): Promise<{
+export async function getCoachClientDetail(clientId: string, workspace?: ClientActionWorkspace): Promise<{
   client: CoachClientDetail | null
   checkIns: CheckInEntry[]
   payments: PaymentEntry[]
@@ -600,7 +552,8 @@ export async function getCoachClientDetail(clientId: string): Promise<{
   weeklyPRs: WeeklyWeightPR[]
   nutritionMeals: NutritionMealPlanEntry[]
   nutritionTimeline: NutritionTimelineEntry[]
-  nutritionMonthlyAvgPct: number
+  nutritionMonthlyAvgPct: number | null
+  nutritionTodayCompliancePct: number
   nutritionStreakDays: number
   favoriteFoods: FavoriteFoodEntry[]
   workoutLogs: WorkoutLogRow[]
@@ -608,15 +561,29 @@ export async function getCoachClientDetail(clientId: string): Promise<{
   muscleVolumeReps: MuscleVolumeSetsEntry[]
   workoutDates371: string[]
   nutritionActivityDates371: string[]
+  dailyHabits: DailyHabitRow[]
+  dailyHabitsSummary: DailyHabitsSummary
+  lastWorkoutAt: string | null
   hasTrained: boolean
 }> {
   // Cliente primero (independiente) → el detalle SIEMPRE abre, aunque las queries
   // ricas fallen en una prod sin columnas enterprise/Codex.
-  const { data: clientData, error: clientError } = await supabase
+  let clientQuery = supabase
     .from('clients')
     .select('id, full_name, email, phone, is_active, is_archived, org_id, team_id, goal_weight_kg, subscription_start_date, created_at')
     .eq('id', clientId)
-    .maybeSingle()
+  if (workspace?.kind === 'team_owner' || workspace?.kind === 'team_member') {
+    clientQuery = workspace.teamId
+      ? clientQuery.eq('team_id', workspace.teamId).is('org_id', null)
+      : clientQuery.eq('team_id', '__invalid_workspace__')
+  } else if (workspace?.kind === 'enterprise') {
+    clientQuery = workspace.orgId
+      ? clientQuery.eq('org_id', workspace.orgId).is('team_id', null)
+      : clientQuery.eq('org_id', '__invalid_workspace__')
+  } else if (workspace) {
+    clientQuery = clientQuery.is('team_id', null).is('org_id', null)
+  }
+  const { data: clientData, error: clientError } = await clientQuery.maybeSingle()
   if (clientError) throw clientError
   const baseClient: CoachClientDetail | null = clientData
     ? ({ ...(clientData as any), height_cm: null, initial_weight_kg: null, sex: null } as CoachClientDetail)
@@ -639,7 +606,8 @@ export async function getCoachClientDetail(clientId: string): Promise<{
     weeklyPRs: [] as WeeklyWeightPR[],
     nutritionMeals: [] as NutritionMealPlanEntry[],
     nutritionTimeline: [] as NutritionTimelineEntry[],
-    nutritionMonthlyAvgPct: 0,
+    nutritionMonthlyAvgPct: null,
+    nutritionTodayCompliancePct: 0,
     nutritionStreakDays: 0,
     favoriteFoods: [] as FavoriteFoodEntry[],
     workoutLogs: [] as WorkoutLogRow[],
@@ -647,12 +615,17 @@ export async function getCoachClientDetail(clientId: string): Promise<{
     muscleVolumeReps: [] as MuscleVolumeSetsEntry[],
     workoutDates371: [] as string[],
     nutritionActivityDates371: [] as string[],
+    dailyHabits: [] as DailyHabitRow[],
+    dailyHabitsSummary: summarizeDailyHabits([], getTodayInSantiago().iso),
+    lastWorkoutAt: null as string | null,
     hasTrained: false,
   }
+  if (!baseClient) return EMPTY
   try {
   const { iso: todayIso } = getTodayInSantiago()
   const sevenDaysAgo = isoDateAddDays(todayIso, -7)
   const fourteenDaysAgo = isoDateAddDays(todayIso, -14)
+  const habitsFromIso = isoDateAddDays(todayIso, -6)
   const activityStart = isoDateAddDays(todayIso, -371)
   const since30 = new Date(Date.now() - 30 * 86400000).toISOString()
 
@@ -684,6 +657,8 @@ export async function getCoachClientDetail(clientId: string): Promise<{
     activityDatesRes,
     setsLogsRes,
     favoriteFoodsRes,
+    dailyHabitsRes,
+    lastWorkoutRes,
   ] = await Promise.all([
       // Biometria (talla/peso inicial/sexo) vive en client_intake, NO en clients (esas
       // columnas no existen en clients). El coach la lee por RLS (client_intake_coach FOR ALL).
@@ -737,7 +712,7 @@ export async function getCoachClientDetail(clientId: string): Promise<{
       supabase.rpc('get_client_workout_day_counts', { p_client_id: clientId, p_days_back: 30 }),
       supabase
         .from('daily_nutrition_logs')
-        .select('log_date, target_calories_at_log, target_protein_at_log, target_carbs_at_log, target_fats_at_log, nutrition_meal_logs ( meal_id, is_completed, consumed_quantity )')
+        .select('log_date, plan_id, target_calories_at_log, target_protein_at_log, target_carbs_at_log, target_fats_at_log, nutrition_meal_logs ( meal_id, is_completed, consumed_quantity )')
         .eq('client_id', clientId)
         .gte('log_date', activityStart)
         .order('log_date', { ascending: false }),
@@ -770,6 +745,18 @@ export async function getCoachClientDetail(clientId: string): Promise<{
         .eq('client_id' as never, clientId as never)
         .eq('preference_type' as never, 'favorite' as never)
         .limit(20),
+      supabase
+        .from('daily_habits')
+        .select('log_date, water_ml, steps, sleep_hours, fasting_hours, supplements, notes')
+        .eq('client_id', clientId)
+        .gte('log_date', habitsFromIso)
+        .order('log_date', { ascending: false }),
+      // TopAlert necesita un instante real; una fecha YYYY-MM-DD se parsea como UTC y
+      // produce falsos >=7 dias cerca del cierre del dia en Santiago.
+      supabase.rpc('get_clients_last_workout_date', {
+        p_client_ids: [clientId],
+        p_since: getSantiagoUtcBoundsForDay(activityStart).startIso,
+      }),
     ])
 
   const rawProgram = programRes.data as any
@@ -854,6 +841,7 @@ export async function getCoachClientDetail(clientId: string): Promise<{
     nutritionRows.filter((row) => row.log_date >= fourteenDaysAgo && row.log_date < sevenDaysAgo)
   )
   const rawNutrition = nutritionRes.data as any
+  const dailyHabits = ((dailyHabitsRes.data as DailyHabitRow[] | null) ?? [])
   const { entries: nutritionMeals, macroMeals } = buildNutritionMeals(rawNutrition)
   for (const meal of macroMeals as (MealWithFoodItems & { day_of_week?: number | null })[]) {
     const matching = nutritionMeals.find((entry) => entry.id === meal.id)
@@ -865,7 +853,22 @@ export async function getCoachClientDetail(clientId: string): Promise<{
     carbs: Number(rawNutrition?.carbs_g ?? 0),
     fats: Number(rawNutrition?.fats_g ?? 0),
   }
-  const nutritionTimeline = buildNutritionTimeline(todayIso, (nutritionLogsRes.data as any[] | null) ?? [], macroMeals, nutritionGoals)
+  const activeNutritionPlanId = typeof rawNutrition?.id === 'string' ? rawNutrition.id : null
+  const nutritionTimeline = buildNutritionTimeline(
+    todayIso,
+    (nutritionLogsRes.data as any[] | null) ?? [],
+    macroMeals as (MealWithFoodItems & { day_of_week?: number | null })[],
+    nutritionGoals,
+    activeNutritionPlanId,
+  )
+  const activePlanTimeline = filterTimelineForActivePlan(nutritionTimeline, activeNutritionPlanId)
+  const nutritionTodayCompliancePct = activePlanNutritionComplianceForDay(
+    todayIso,
+    (nutritionLogsRes.data as any[] | null) ?? [],
+    macroMeals as (MealWithFoodItems & { day_of_week?: number | null })[],
+    activeNutritionPlanId,
+  )
+  const lastWorkoutAt = String(((lastWorkoutRes.data as any[] | null) ?? [])[0]?.last_logged_at ?? '') || null
 
   const activityByDate = buildActivityWindow(todayIso)
   for (const day of workoutDays30) activityByDate.get(day) && (activityByDate.get(day)!.workout = true)
@@ -903,11 +906,11 @@ export async function getCoachClientDetail(clientId: string): Promise<{
     compliance: {
       workoutsThisWeek: workoutThisWeek.size,
       workoutsPrevWeek: workoutPrevWeek.size,
-      workoutsTarget: Math.max(1, program?.planCount ?? 1),
+      workoutsTarget: effectiveWorkoutTarget(program),
       nutritionWeeklyAvgPct: nutritionThisWeek,
       nutritionPrevWeeklyAvgPct: nutritionPrevWeek,
-      checkInCompliancePercent: checkInRegularityPercent(todayIso, checkIns),
-      checkInCompliancePercentWeekAgo: checkInRegularityPercent(sevenDaysAgo, checkIns),
+      checkInCompliancePercent: checkInRegularityPercentAsOfSantiago(todayIso, checkIns),
+      checkInCompliancePercentWeekAgo: checkInRegularityPercentAsOfSantiago(sevenDaysAgo, checkIns),
     },
     activity: Array.from(activityByDate.values()).reverse(),
     // ── Análisis de entrenamiento: AGREGADO EN DB (RPC), no iterando logs crudos en JS ──
@@ -921,10 +924,9 @@ export async function getCoachClientDetail(clientId: string): Promise<{
     weeklyPRs: mapWeeklyPrsRpc(weeklyPrsRes.data as any[]),
     nutritionMeals,
     nutritionTimeline,
-    nutritionMonthlyAvgPct: Math.round(
-      nutritionTimeline.reduce((sum, row) => sum + row.compliancePct, 0) / Math.max(1, nutritionTimeline.length)
-    ),
-    nutritionStreakDays: nutritionStreakDays(todayIso, nutritionTimeline),
+    nutritionMonthlyAvgPct: averageNutritionTimelineCompliance(activePlanTimeline),
+    nutritionTodayCompliancePct,
+    nutritionStreakDays: nutritionStreakDays(todayIso, activePlanTimeline),
     favoriteFoods: (((favoriteFoodsRes.data as any[] | null) ?? [])
       .map((row) => row.foods)
       .filter(Boolean) as any[])
@@ -939,6 +941,9 @@ export async function getCoachClientDetail(clientId: string): Promise<{
       .filter((row) => (row.nutrition_meal_logs ?? []).some((meal) => meal.is_completed === true))
       .map((row) => row.log_date)
       .sort(),
+    dailyHabits,
+    dailyHabitsSummary: summarizeDailyHabits(dailyHabits, todayIso),
+    lastWorkoutAt,
     hasTrained:
       workoutDays371.size > 0 ||
       workoutDays30.size > 0 ||
@@ -1031,8 +1036,21 @@ export async function getCoachClientDayDetail(clientId: string, date: string): P
 // (viven en client_intake) → biometria va por upsertClientBiometrics, no por aca.
 export async function updateCoachClient(
   clientId: string,
-  fields: { full_name?: string; phone?: string | null; goal_weight_kg?: number | null; subscription_start_date?: string | null }
+  fields: { full_name?: string; phone?: string | null; goal_weight_kg?: number | null; subscription_start_date?: string | null },
+  workspace?: ClientActionWorkspace,
 ): Promise<{ ok: boolean; error?: string }> {
+  if (workspace) {
+    try {
+      await apiFetch(`/api/mobile/coach/clients/${clientId}`, {
+        method: 'PATCH',
+        authenticated: true,
+        body: { ...fields, workspace },
+      })
+      return { ok: true }
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : 'No se pudo actualizar el alumno.' }
+    }
+  }
   const { error } = await supabase.from('clients').update(fields).eq('id', clientId)
   if (error) return { ok: false, error: error.message }
   return { ok: true }
@@ -1045,7 +1063,8 @@ export async function updateCoachClient(
 // availability son NOT NULL sin default → INSERT con placeholders (0 / '') en lo no editado.
 export async function upsertClientBiometrics(
   clientId: string,
-  input: { heightCm: number | null; weightKg: number | null; sex: ClientSex | null }
+  input: { heightCm: number | null; weightKg: number | null; sex: ClientSex | null },
+  workspace?: ClientActionWorkspace,
 ): Promise<{ ok: boolean; error?: string }> {
   const { heightCm, weightKg, sex } = input
   if (heightCm != null && (!Number.isFinite(heightCm) || heightCm < 50 || heightCm > 260)) {
@@ -1056,50 +1075,42 @@ export async function upsertClientBiometrics(
   }
   if (sex != null && !SEX_VALUES.includes(sex)) return { ok: false, error: 'Sexo invalido.' }
 
-  const { data: existing, error: readErr } = await supabase
-    .from('client_intake')
-    .select('id')
-    .eq('client_id', clientId)
-    .maybeSingle()
-  if (readErr) return { ok: false, error: readErr.message }
-
-  if (existing) {
-    // UPDATE parcial: height/weight solo si vienen (null = "no tocar", igual que web); sex sí se limpia.
-    const { error } = await supabase
-      .from('client_intake')
-      .update({ height_cm: heightCm ?? undefined, weight_kg: weightKg ?? undefined, sex })
-      .eq('client_id', clientId)
-    if (error) return { ok: false, error: error.message }
+  try {
+    await apiFetch(`/api/mobile/coach/clients/${clientId}/biometrics`, {
+      method: 'PATCH',
+      authenticated: true,
+      body: { heightCm, weightKg, sex, ...(workspace ? { workspace } : {}) },
+    })
     return { ok: true }
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : 'No se pudo guardar la biometría.' }
   }
-  const { error } = await supabase.from('client_intake').insert({
-    client_id: clientId,
-    height_cm: heightCm ?? 0,
-    weight_kg: weightKg ?? 0,
-    sex,
-    goals: '',
-    experience_level: '',
-    availability: '',
-  })
-  if (error) return { ok: false, error: error.message }
-  return { ok: true }
 }
 
-export async function markCoachCheckInReviewed(clientId: string, checkInId: string): Promise<{ ok: boolean; error?: string }> {
-  const { data } = await supabase.auth.getUser()
-  const userId = data.user?.id
-  if (!userId) return { ok: false, error: 'Unauthorized' }
-  const { error } = await supabase
-    .from('check_ins')
-    .update({ reviewed_at: new Date().toISOString(), reviewed_by: userId })
-    .eq('id', checkInId)
-    .eq('client_id', clientId)
-    .is('reviewed_at', null)
-  if (error) {
-    if (isMissingColumnError(error)) return { ok: false, error: 'Marcar revisado estará disponible al actualizar tu cuenta.' }
-    return { ok: false, error: error.message }
+async function setCoachCheckInReviewed(
+  clientId: string,
+  checkInId: string,
+  reviewed: boolean,
+  workspace?: ClientActionWorkspace,
+): Promise<{ ok: boolean; error?: string }> {
+  try {
+    await apiFetch(`/api/mobile/coach/clients/${clientId}/check-ins/${checkInId}/reviewed`, {
+      method: 'PATCH',
+      authenticated: true,
+      body: { reviewed, ...(workspace ? { workspace } : {}) },
+    })
+    return { ok: true }
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : 'No se pudo actualizar el check-in.' }
   }
-  return { ok: true }
+}
+
+export function markCoachCheckInReviewed(clientId: string, checkInId: string, workspace?: ClientActionWorkspace) {
+  return setCoachCheckInReviewed(clientId, checkInId, true, workspace)
+}
+
+export function unmarkCoachCheckInReviewed(clientId: string, checkInId: string, workspace?: ClientActionWorkspace) {
+  return setCoachCheckInReviewed(clientId, checkInId, false, workspace)
 }
 
 export async function setCoachClientArchived(clientId: string, archived: boolean): Promise<{ ok: boolean; error?: string }> {

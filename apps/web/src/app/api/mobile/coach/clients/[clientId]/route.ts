@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { z } from 'zod'
 import {
     applyMobileClientScope,
     mobileContextOwnsClient,
@@ -9,6 +10,22 @@ import { sendTransactionalEmail } from '@/lib/email/send-email'
 import { buildClientArchivedEmail, buildClientUnarchivedEmail } from '@/lib/email/transactional-templates'
 import { resolveStudentEmailBranding } from '@/lib/email/email-brand'
 import { getCoachPublicIdentifier } from '@/lib/coach/public-identifier'
+
+const isoDateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'La fecha debe usar el formato YYYY-MM-DD.').refine((value) => {
+    const [year, month, day] = value.split('-').map(Number)
+    const date = new Date(Date.UTC(year!, month! - 1, day!))
+    return date.getUTCFullYear() === year && date.getUTCMonth() === month! - 1 && date.getUTCDate() === day
+}, 'La fecha no es valida.')
+
+const clientPatchSchema = z.object({
+    is_active: z.boolean().optional(),
+    is_archived: z.boolean().optional(),
+    goal_weight_kg: z.number().min(20).max(400).nullable().optional(),
+    full_name: z.string().trim().min(2).max(100).optional(),
+    phone: z.string().trim().max(50).nullable().optional(),
+    subscription_start_date: isoDateSchema.nullable().optional(),
+    workspace: z.unknown().optional(),
+}).strict()
 
 export async function DELETE(request: NextRequest, { params }: { params: Promise<{ clientId: string }> }) {
     const { clientId } = await params
@@ -48,9 +65,15 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     if (!(await mobileContextOwnsClient(a, clientId))) {
         return NextResponse.json({ error: 'Alumno no encontrado.', code: 'NOT_FOUND' }, { status: 404 })
     }
-    const patch: { is_active?: boolean; is_archived?: boolean } = {}
-    if (typeof body.is_active === 'boolean') patch.is_active = body.is_active
-    if (typeof body.is_archived === 'boolean') patch.is_archived = body.is_archived
+    const parsed = clientPatchSchema.safeParse(body)
+    if (!parsed.success) {
+        return NextResponse.json({
+            error: 'Datos del alumno invalidos.',
+            code: 'VALIDATION_ERROR',
+            fieldErrors: parsed.error.flatten().fieldErrors,
+        }, { status: 400 })
+    }
+    const { workspace: _workspace, ...patch } = parsed.data
     if (Object.keys(patch).length === 0) return NextResponse.json({ error: 'Nada que actualizar.', code: 'NO_FIELDS' }, { status: 400 })
     if (patch.is_archived === false && a.scope.type === 'standalone') {
         const [{ data: coach }, { count, error: countError }] = await Promise.all([
@@ -67,8 +90,12 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
             return NextResponse.json({ error: `Tu plan permite ${maxClients} alumnos activos. Archiva otro alumno o actualiza tu plan.`, code: 'UPGRADE_REQUIRED' }, { status: 402 })
         }
     }
-    const { error } = await applyMobileClientScope(a.admin.from('clients').update(patch).eq('id', clientId), a)
+    const { data: updated, error } = await applyMobileClientScope(
+        a.admin.from('clients').update(patch).eq('id', clientId),
+        a,
+    ).select('id').maybeSingle()
     if (error) return NextResponse.json({ error: error.message, code: 'UPDATE_FAILED' }, { status: 500 })
+    if (!updated) return NextResponse.json({ error: 'Alumno no encontrado.', code: 'NOT_FOUND' }, { status: 404 })
     if (typeof patch.is_archived === 'boolean') {
         const [{ data: client }, { data: coach }, authUser] = await Promise.all([
             applyMobileClientScope(a.admin.from('clients').select('full_name, email').eq('id', clientId), a).maybeSingle(),

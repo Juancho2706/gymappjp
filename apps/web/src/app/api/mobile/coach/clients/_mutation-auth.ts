@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
+import { createClient as createSupabaseClient, type SupabaseClient } from '@supabase/supabase-js'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
+import type { Database } from '@/lib/database.types'
 import { resolvePreferredWorkspace } from '@/services/auth/workspace.service'
 
 export const mobileClientWorkspaceSchema = z.object({
@@ -17,6 +19,8 @@ type ClientMutationScope =
 
 export type MobileClientMutationContext = {
     admin: ReturnType<typeof createServiceRoleClient>
+    /** Cliente request-scoped para dominios sensibles que deben conservar RLS como techo. */
+    userDb: SupabaseClient<Database>
     userId: string
     scope: ClientMutationScope
 }
@@ -118,13 +122,24 @@ export async function resolveMobileClientMutationContext(
             }, { status: 403 }),
         }
     }
-    return { admin, userId: data.user.id, scope }
+    const userDb = createSupabaseClient<Database>(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+        {
+            global: { headers: { Authorization: `Bearer ${token}` } },
+            auth: { persistSession: false, autoRefreshToken: false },
+        },
+    )
+    return { admin, userDb, userId: data.user.id, scope }
 }
 
 export function applyMobileClientScope(query: any, ctx: MobileClientMutationContext) {
     if (ctx.scope.type === 'team') return query.eq('team_id', ctx.scope.teamId).is('org_id', null)
     if (ctx.scope.type === 'enterprise') {
-        return query.eq('coach_id', ctx.userId).eq('org_id', ctx.scope.orgId).is('team_id', null)
+        // `mobileContextOwnsClient` ya validó la asignación activa. No repetir `coach_id = userId`:
+        // en enterprise la reasignación canónica vive en `coach_client_assignments` y la fila
+        // `clients.coach_id` puede conservar al creador original.
+        return query.eq('org_id', ctx.scope.orgId).is('team_id', null)
     }
     return query.eq('coach_id', ctx.userId).is('org_id', null).is('team_id', null)
 }
@@ -133,6 +148,26 @@ export async function mobileContextOwnsClient(
     ctx: MobileClientMutationContext,
     clientId: string,
 ): Promise<boolean> {
+    if (ctx.scope.type === 'enterprise') {
+        const [{ data: client, error: clientError }, { data: assignment, error: assignmentError }] = await Promise.all([
+            ctx.admin
+                .from('clients')
+                .select('id')
+                .eq('id', clientId)
+                .eq('org_id', ctx.scope.orgId)
+                .is('team_id', null)
+                .maybeSingle(),
+            ctx.admin
+                .from('coach_client_assignments')
+                .select('id')
+                .eq('org_id', ctx.scope.orgId)
+                .eq('client_id', clientId)
+                .eq('coach_id', ctx.userId)
+                .is('deleted_at', null)
+                .maybeSingle(),
+        ])
+        return !clientError && !assignmentError && Boolean(client && assignment)
+    }
     const { data } = await applyMobileClientScope(
         ctx.admin.from('clients').select('id').eq('id', clientId),
         ctx,

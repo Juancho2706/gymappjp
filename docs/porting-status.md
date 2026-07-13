@@ -136,6 +136,7 @@ Una pasada adicional con **lente de lógica** (no de paridad pixel) sobre unidad
 - Tanda directory/sheets cerrada a nivel código/spec: los tres `Modal` nativos ganan max-height responsivo, scroll, safe-area, X 32 px, scrim 60%, checks `sport-600`, `text-subtle`, CTA `cta-fill`, avatar `ink-900/sport-400`, tonos de acción -600 y semántica accesible. Filtros mantiene Estado/Riesgo/Programa independientes; acciones sensibles conservan confirmación nativa con guard/copia ya implementados en el screen. Reporte: `docs/rn-port/specs/seccion-3/verify-fix/directory-sheets.md`.
 - Tanda directory/create-import cerrada a nivel código/spec: alta individual con formulario completo, validación, éxito WhatsApp y gate de límite; importador XLSX/XLS/CSV de cuatro pasos, upsell Starter, consentimiento y errores por fila. La escritura masiva usa endpoint batch auditado/chunks de 10/password criptográfico y ambos flujos reciben el workspace RN activo, revalidado en servidor para standalone/team/enterprise. El wizard se desmonta al cerrar y bloquea cierre durante parse/import. Reporte: `docs/rn-port/specs/seccion-3/verify-fix/directory-create-import.md`.
 - Tanda ficha/shell-hero cerrada a nivel código/spec: header, calendario Santiago, hero white-label, score/racha/peso, tabbar glass/stuck, badges, FAB y cargas por foco alineados. Menú ⋮ completo con confirms/copy web; PATCH/DELETE/reset autorizan workspace RN explícito y team pool sin confiar en IDs cliente. DELETE protege al coach-as-client y falla cerrado; desarchivar revalida cupo; correos y rutas respetan standalone/team/enterprise. El sheet permanece montado hasta `onDismiss`, evitando perder acciones en iOS. Reporte: `docs/rn-port/specs/seccion-3/verify-fix/ficha-shell-hero.md`.
+- Tanda ficha/overview-progreso cerrada a nivel código/spec: Resumen replica rings, KPI, programa/fases, nutrición, métricas, hábitos, check-in, fotos, módulos y biometría; Progreso replica peso, IMC, energía, proyección, comparador, historial y bodycomp BIA/ISAK. Timeline nutricional ya no inventa días, A/B cuenta solo planes con bloques y todas las fechas sensibles usan Santiago. Bodycomp conserva RLS token-scoped, consentimiento/logs team y rechazo enterprise. R7 terminó sin P0/P1/P2 accionables. Reporte: `docs/rn-port/specs/seccion-3/verify-fix/ficha-overview-progreso.md`.
 - Gates del checkpoint: `pnpm exec tsc --noEmit` limpio; tokens `86/86`; `pnpm exec expo export --platform android` limpio.
 - Las unidades marcadas “cerrada” ya pasaron verificación adversarial de código/spec; el smoke visual device light/dark × EVA/custom sigue pendiente donde cada reporte lo indique. Doble-FAB sigue sin implementar por decisión CEO pendiente.
 
@@ -149,8 +150,8 @@ P2 visuales accionables: todo arreglo debe eliminar una diferencia demostrada
 contra el responsive/PWA; mejoras nativas y refactors sin efecto visible quedan
 fuera.
 
-Próxima unidad Sección 3: `ficha-overview-progreso`; después
-`ficha-analisis-plan` y `ficha-nutricion-facturacion`.
+Próxima unidad Sección 3: `ficha-analisis-plan`; después
+`ficha-nutricion-facturacion`.
 
 Ola 2R incluye: cápsula persistente en movement/bodycomp; toggle inline de
 comidas del Home; propagación de `brand_font_key` donde web usa `--brand-font`;

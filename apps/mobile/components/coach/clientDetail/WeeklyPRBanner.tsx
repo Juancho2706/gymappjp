@@ -1,122 +1,123 @@
-import { useEffect, useState } from 'react'
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native'
-import { MotiView } from 'moti'
-import * as Haptics from 'expo-haptics'
-import { ChevronRight, Trophy } from 'lucide-react-native'
+import { useEffect, useRef, useState } from 'react'
+import { StyleSheet, Text, View } from 'react-native'
+import { LinearGradient } from 'expo-linear-gradient'
+import { Confetti } from 'react-native-fast-confetti'
+import { useReducedMotion } from 'react-native-reanimated'
+import { Trophy } from 'lucide-react-native'
 import { useTheme } from '../../../context/ThemeContext'
+import { Badge } from '../../../components'
+import { SHADOWS } from '../../../lib/shadows'
+import { FONT } from '../../../lib/typography'
+import { resolveCelebrationSurfaceRamp } from '../../../lib/theme'
+import { PHASE_COLORS } from '../ProgramConfigSheet'
 import type { WeeklyWeightPR } from '../../../lib/profile-analytics'
 
-const CONFETTI_COLORS = ['#F59E0B', '#10B981', '#3B82F6', '#EF4444', '#8B5CF6', '#06B6D4']
-const PIECES = Array.from({ length: 16 }, (_, i) => i)
+// Contrato DS de ProgramConfigSheet: sport · violet · success · warning · ember · aqua.
+const VIOLET = PHASE_COLORS[1]
 
-function Confetti({ burstKey }: { burstKey: number }) {
-  return (
-    <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-      {PIECES.map((i) => {
-        const angle = (i / PIECES.length) * Math.PI * 2
-        const dist = 60 + (i % 4) * 22
-        const dx = Math.cos(angle) * dist
-        const dy = Math.sin(angle) * dist - 20
-        return (
-          <MotiView
-            key={`${burstKey}-${i}`}
-            from={{ opacity: 1, translateX: 0, translateY: 0, scale: 0.4, rotate: '0deg' }}
-            animate={{ opacity: 0, translateX: dx, translateY: dy, scale: 1, rotate: `${(i % 2 ? 1 : -1) * 220}deg` }}
-            transition={{ type: 'timing', duration: 900, delay: (i % 5) * 40 }}
-            style={[
-              styles.piece,
-              { backgroundColor: CONFETTI_COLORS[i % CONFETTI_COLORS.length], borderRadius: i % 3 === 0 ? 6 : 2 },
-            ]}
-          />
-        )
-      })}
-    </View>
-  )
-}
-
-/** Banner de PR 1RM semanal con animación celebratoria — 1:1 con WeeklyPRBanner web. */
+/**
+ * Banner del primer PR semanal — espejo de `TrainingTabB4Panels.WeeklyPRBanner`.
+ * Es estático: el resto se resume en “+N ejercicios más”; no hay pager ni gestos RN extra.
+ */
 export function WeeklyPRBanner({ prs }: { prs: WeeklyWeightPR[] }) {
-  const { theme } = useTheme()
-  const [idx, setIdx] = useState(0)
-  const [burstKey, setBurstKey] = useState(0)
+  const { theme, branding } = useTheme()
+  const reduceMotion = useReducedMotion()
+  const fired = useRef(false)
+  const [showConfetti, setShowConfetti] = useState(false)
 
   useEffect(() => {
-    if (prs.length > 0) {
-      setBurstKey((k) => k + 1)
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {})
-    }
-  }, [prs.length])
+    if (prs.length === 0 || reduceMotion || fired.current) return
+    fired.current = true
+    const timer = setTimeout(() => setShowConfetti(true), 280)
+    return () => clearTimeout(timer)
+  }, [prs.length, reduceMotion])
 
   if (prs.length === 0) return null
-  const pr = prs[Math.min(idx, prs.length - 1)]!
 
-  function next() {
-    setIdx((i) => (i + 1) % prs.length)
-    setBurstKey((k) => k + 1)
-    Haptics.selectionAsync().catch(() => {})
-  }
+  const top = prs[0]!
+  const more = prs.length - 1
+  const { ember100, sport100 } = resolveCelebrationSurfaceRamp(branding?.primaryColor, theme.scheme)
+  const confettiColors = [theme.primary, theme.success, theme.warning, VIOLET, theme.primaryForeground]
 
   return (
-    <View style={styles.outer}>
-      <MotiView
-        key={burstKey}
-        from={{ opacity: 0, scale: 0.92 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ type: 'spring', damping: 12, stiffness: 160 }}
-        style={[styles.card, { backgroundColor: '#F59E0B', borderRadius: theme.radius.xl }]}
+    <View style={styles.root}>
+      <View
+        className="border-ember-200"
+        style={[
+          styles.frame,
+          SHADOWS[theme.scheme].sm,
+          { backgroundColor: theme.card, borderRadius: theme.radius.card },
+        ]}
       >
-        <View style={styles.headRow}>
-          <View style={styles.iconWrap}>
-            <Trophy size={22} color="#F59E0B" strokeWidth={2.4} />
+        <LinearGradient
+          colors={[ember100, sport100]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.card}
+        >
+          <View style={styles.header}>
+            <Trophy size={20} className="text-ember-700" />
+            <Text className="text-ember-700" style={styles.kicker}>
+              Récord de la semana
+            </Text>
           </View>
-          <View style={{ flex: 1, minWidth: 0 }}>
-            <Text style={styles.kicker}>¡NUEVO RÉCORD ESTA SEMANA!</Text>
-            <Text numberOfLines={1} style={styles.exercise}>{pr.exerciseName}</Text>
-            <Text style={styles.muscle}>{pr.muscleGroup}</Text>
-          </View>
-          {prs.length > 1 ? (
-            <TouchableOpacity onPress={next} hitSlop={10} style={styles.nextBtn}>
-              <Text style={styles.nextTxt}>{idx + 1}/{prs.length}</Text>
-              <ChevronRight size={16} color="#FFFFFF" />
-            </TouchableOpacity>
-          ) : null}
-        </View>
 
-        <View style={styles.statsRow}>
-          <View style={styles.statBox}>
-            <Text style={styles.statVal}>{pr.newWeightKg} kg × {pr.newReps}</Text>
-            <Text style={styles.statLabel}>Mejor serie</Text>
+          <View style={styles.mainLine}>
+            <Text className="text-strong" style={styles.exercise}>
+              {top.exerciseName}
+            </Text>
+            <Text className="text-strong" style={styles.bestSet}>
+              {top.newWeightKg} kg × {top.newReps}
+            </Text>
+            {top.pctChange != null ? (
+              <Badge tone="success" size="sm">+{top.pctChange}% 1RM</Badge>
+            ) : null}
           </View>
-          <View style={styles.statBox}>
-            <Text style={styles.statVal}>{pr.newOneRm} kg</Text>
-            <Text style={styles.statLabel}>1RM estimado</Text>
-          </View>
-          {pr.pctChange != null ? (
-            <View style={styles.statBox}>
-              <Text style={styles.statVal}>▲ {pr.pctChange}%</Text>
-              <Text style={styles.statLabel}>vs {pr.prevOneRm} kg</Text>
-            </View>
-          ) : null}
+
+          <Text className="text-muted" style={styles.beforeLine}>
+            Antes: {top.prevWeightKg} kg × {top.prevReps} · e1RM {top.prevOneRm} → {top.newOneRm} kg
+            {more > 0 ? ` · +${more} ejercicio${more === 1 ? '' : 's'} más` : ''}
+          </Text>
+        </LinearGradient>
+      </View>
+
+      {showConfetti && !reduceMotion ? (
+        <View pointerEvents="none" style={styles.confettiLayer}>
+          <Confetti
+            autoplay
+            isInfinite={false}
+            fadeOutOnEnd
+            count={90}
+            autoStartDelay={0}
+            fallDuration={2600}
+            blastDuration={300}
+            colors={confettiColors}
+            onAnimationEnd={() => setShowConfetti(false)}
+          />
         </View>
-        <Confetti burstKey={burstKey} />
-      </MotiView>
+      ) : null}
     </View>
   )
 }
 
 const styles = StyleSheet.create({
-  outer: { overflow: 'visible' },
-  card: { padding: 16, gap: 14, overflow: 'hidden' },
-  headRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  iconWrap: { width: 44, height: 44, borderRadius: 14, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center' },
-  kicker: { fontSize: 10, letterSpacing: 1, color: 'rgba(255,255,255,0.9)', fontFamily: 'HankenGrotesk_700Bold' },
-  exercise: { fontSize: 18, color: '#FFFFFF', fontFamily: 'Archivo_900Black', letterSpacing: -0.3, marginTop: 2 },
-  muscle: { fontSize: 12, color: 'rgba(255,255,255,0.82)', fontFamily: 'HankenGrotesk_600SemiBold' },
-  nextBtn: { flexDirection: 'row', alignItems: 'center', gap: 2, backgroundColor: 'rgba(255,255,255,0.2)', paddingHorizontal: 8, paddingVertical: 5, borderRadius: 999 },
-  nextTxt: { fontSize: 11, color: '#FFFFFF', fontFamily: 'HankenGrotesk_700Bold' },
-  statsRow: { flexDirection: 'row', gap: 8 },
-  statBox: { flex: 1, backgroundColor: 'rgba(255,255,255,0.16)', borderRadius: 12, paddingVertical: 9, paddingHorizontal: 10, gap: 2 },
-  statVal: { fontSize: 15, color: '#FFFFFF', fontFamily: 'Archivo_900Black' },
-  statLabel: { fontSize: 9.5, color: 'rgba(255,255,255,0.82)', fontFamily: 'HankenGrotesk_600SemiBold', textTransform: 'uppercase', letterSpacing: 0.4 },
-  piece: { position: 'absolute', top: '50%', left: '50%', width: 9, height: 9 },
+  root: { position: 'relative', overflow: 'visible' },
+  frame: { borderWidth: 1, overflow: 'hidden' },
+  card: { padding: 16 },
+  header: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 8 },
+  kicker: {
+    fontSize: 13,
+    fontFamily: FONT.uiExtra,
+    textTransform: 'uppercase',
+    letterSpacing: 0.26,
+  },
+  mainLine: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'baseline', gap: 10 },
+  exercise: { fontSize: 16, fontFamily: FONT.uiExtra },
+  bestSet: {
+    fontSize: 20,
+    fontFamily: FONT.displayBlack,
+    fontVariant: ['tabular-nums', 'lining-nums'],
+  },
+  beforeLine: { marginTop: 4, fontSize: 12, lineHeight: 17, fontFamily: FONT.uiSemibold },
+  confettiLayer: { ...StyleSheet.absoluteFillObject, zIndex: 20, overflow: 'visible' },
 })

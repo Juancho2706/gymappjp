@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Pressable, Text, View } from 'react-native'
+import { Alert, Pressable, Text, View } from 'react-native'
 import * as Haptics from 'expo-haptics'
 import { Building2, Check, Dumbbell, UsersRound } from 'lucide-react-native'
 import type { LucideIcon } from 'lucide-react-native'
@@ -112,9 +112,13 @@ export function WorkspaceSwitcherSheet({ open, onClose }: WorkspaceSwitcherSheet
   // Oculto si no hay a donde cambiar (paridad con web: el avatar de 1-solo es Link, no sheet).
   if (workspaces.length <= 1) return null
 
-  function handlePick(ws: WorkspaceRef) {
-    if (!ws.isActive) setActiveWorkspace(ws.id)
-    onClose()
+  async function handlePick(ws: WorkspaceRef) {
+    try {
+      await setActiveWorkspace(ws.id)
+      onClose()
+    } catch (error) {
+      Alert.alert('No pudimos cambiar de espacio', error instanceof Error ? error.message : 'Intenta nuevamente.')
+    }
   }
 
   return (

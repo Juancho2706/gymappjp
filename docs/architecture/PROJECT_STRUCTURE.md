@@ -141,6 +141,13 @@ apps/mobile/app/
                          settings, subscription, support, perfil
 ```
 
+La ficha RN del coach usa endpoints mobile de recurso bajo
+`apps/web/src/app/api/mobile/coach/clients/[clientId]/` para biometría,
+check-ins y bodycomp. Cada request lleva el workspace explícito; bodycomp usa
+un cliente token-scoped para conservar RLS como techo. La preferencia de team
+activo es local en RN porque `workspace_preferences` no representa un
+`last_team_id`; no se simula persistencia server-side ambigua.
+
 Notas:
 - Selector de rol / walkthrough / codigo son RN-nativos (la web es coach-slug-scoped, sin selector).
 - Motor de negocio en packages puros compartidos (`@eva/workout-engine`, `nutrition-engine`, `cardio`, `bodycomp`, `plan-builder`) — anti-drift.

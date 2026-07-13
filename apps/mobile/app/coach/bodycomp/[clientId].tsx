@@ -1,19 +1,21 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { useLocalSearchParams, useRouter } from 'expo-router'
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { ArrowLeft, ArrowRight, Save } from 'lucide-react-native'
 import { computeIsak } from '@eva/bodycomp'
 import type { BiaMetrics, BodyFatEquation, IsakRawInput } from '@eva/bodycomp'
 import { useTheme } from '../../../context/ThemeContext'
 import { FONT } from '../../../lib/typography'
-import { useEntitlements } from '../../../lib/entitlements'
+import { getWorkspaceEntitlements } from '../../../lib/entitlements'
+import { useWorkspace } from '../../../lib/workspace'
+import type { ClientActionWorkspace } from '../../../lib/client-actions'
 import {
-  deleteMeasurement,
+  deleteScopedMeasurement,
   getBodycompClientName,
   isakResultToView,
-  listMeasurements,
+  listScopedMeasurements,
   saveBiaMeasurement,
   saveIsakMeasurement,
   type BodyCompRow,
@@ -56,10 +58,18 @@ export default function BodyCompScreen() {
   const { clientId } = useLocalSearchParams<{ clientId: string }>()
   const { theme } = useTheme()
   const router = useRouter()
-  const { hasModule, ready } = useEntitlements()
-  const enabled = hasModule('body_composition')
+  const workspace = useWorkspace()
+  const actionWorkspace: ClientActionWorkspace = {
+    kind: workspace.kind,
+    teamId: workspace.teamId,
+    orgId: workspace.orgId,
+  }
 
   const [loading, setLoading] = useState(true)
+  const [entitlementsReady, setEntitlementsReady] = useState(false)
+  const [enabled, setEnabled] = useState(false)
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [retryKey, setRetryKey] = useState(0)
   const [clientName, setClientName] = useState<string | null>(null)
   const [biaRows, setBiaRows] = useState<BodyCompRow[]>([])
   const [isakRows, setIsakRows] = useState<BodyCompRow[]>([])
@@ -67,33 +77,60 @@ export default function BodyCompScreen() {
   const [trendMethod, setTrendMethod] = useState<Method>('bia')
   const [deletingId, setDeletingId] = useState<string | null>(null)
 
-  const reload = useCallback(async () => {
-    if (!clientId) return
-    const [bia, isak] = await Promise.all([
-      listMeasurements(clientId, 'bia'),
-      listMeasurements(clientId, 'isak'),
-    ])
-    setBiaRows(bia)
-    setIsakRows(isak)
-  }, [clientId])
+  const fetchMeasurements = useCallback(async () => {
+    if (!clientId) return { bia: [], isak: [] }
+    return listScopedMeasurements(clientId, actionWorkspace)
+  }, [clientId, actionWorkspace.kind, actionWorkspace.teamId, actionWorkspace.orgId])
 
-  useEffect(() => {
-    if (!enabled || !clientId) {
-      setLoading(false)
-      return
-    }
-    let cancelled = false
-    void (async () => {
+  const reload = useCallback(async () => {
+    const measurements = await fetchMeasurements()
+    setBiaRows(measurements.bia)
+    setIsakRows(measurements.isak)
+  }, [fetchMeasurements])
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!clientId || !workspace.ready) return
+      let active = true
+      setEntitlementsReady(false)
+      setEnabled(false)
       setLoading(true)
-      const [name] = await Promise.all([getBodycompClientName(clientId), reload()])
-      if (cancelled) return
-      setClientName(name)
-      setLoading(false)
-    })()
-    return () => {
-      cancelled = true
-    }
-  }, [clientId, enabled, reload])
+      setLoadError(null)
+      setClientName(null)
+      void (async () => {
+        try {
+          const config = await getWorkspaceEntitlements(actionWorkspace)
+          if (!active) return
+          const moduleEnabled = config.enabledModules.includes('body_composition')
+          setEnabled(moduleEnabled)
+          setEntitlementsReady(true)
+          if (!moduleEnabled) {
+            setClientName(null)
+            setBiaRows([])
+            setIsakRows([])
+            setLoading(false)
+            return
+          }
+          const [name, measurements] = await Promise.all([getBodycompClientName(clientId), fetchMeasurements()])
+          if (!active) return
+          setClientName(name)
+          setBiaRows(measurements.bia)
+          setIsakRows(measurements.isak)
+          setLoading(false)
+        } catch (error) {
+          if (!active) return
+          console.warn('[bodycomp] scoped load failed', error)
+          setEntitlementsReady(true)
+          setLoadError(error instanceof Error ? error.message : 'No se pudo cargar la composición corporal.')
+          setClientName(null)
+          setBiaRows([])
+          setIsakRows([])
+          setLoading(false)
+        }
+      })()
+      return () => { active = false }
+    }, [clientId, workspace.ready, actionWorkspace.kind, actionWorkspace.teamId, actionWorkspace.orgId, fetchMeasurements, retryKey]),
+  )
 
   const onSaved = useCallback(
     async (method: Method) => {
@@ -115,11 +152,17 @@ export default function BodyCompScreen() {
           onPress: async () => {
             setDeletingId(id)
             try {
-              await deleteMeasurement(id)
-              await reload()
-              toast.success('Medición eliminada')
+              await deleteScopedMeasurement(clientId as string, id, actionWorkspace)
             } catch (e) {
               toast.error(e instanceof Error ? e.message : 'No se pudo eliminar.')
+              setDeletingId(null)
+              return
+            }
+            try {
+              await reload()
+              toast.success('Medición eliminada')
+            } catch {
+              toast.error('Medición eliminada, pero no pudimos actualizar el historial. Reintenta.')
             } finally {
               setDeletingId(null)
             }
@@ -127,7 +170,7 @@ export default function BodyCompScreen() {
         },
       ])
     },
-    [reload],
+    [clientId, actionWorkspace.kind, actionWorkspace.teamId, actionWorkspace.orgId, reload],
   )
 
   return (
@@ -139,8 +182,15 @@ export default function BodyCompScreen() {
         onBack={() => router.back()}
         showBadge
       />
-      {!ready || (enabled && loading) ? (
+      {!workspace.ready || !entitlementsReady || (enabled && loading) ? (
         <EvaLoaderScreen subtitle="Cargando composición…" />
+      ) : loadError ? (
+        <View style={styles.body}>
+          <Card>
+            <Text style={{ color: theme.destructive, fontFamily: FONT.ui }}>{loadError}</Text>
+            <Button label="Reintentar" variant="secondary" onPress={() => setRetryKey((value) => value + 1)} />
+          </Card>
+        </View>
       ) : !enabled ? (
         <ModuleOffNotice moduleKey="body_composition" />
       ) : (
@@ -160,9 +210,9 @@ export default function BodyCompScreen() {
           />
 
           {tab === 'bia' ? (
-            <BiaCaptureForm clientId={clientId as string} onSaved={() => onSaved('bia')} />
+            <BiaCaptureForm clientId={clientId as string} workspace={actionWorkspace} onSaved={() => onSaved('bia')} />
           ) : tab === 'isak' ? (
-            <IsakWizard clientId={clientId as string} onSaved={() => onSaved('isak')} />
+            <IsakWizard clientId={clientId as string} workspace={actionWorkspace} onSaved={() => onSaved('isak')} />
           ) : (
             <View style={{ gap: 14 }}>
               <SegmentedTabs
@@ -246,7 +296,7 @@ const BIA_METRIC_FIELDS: { key: string; label: string }[] = [
 ]
 const BIA_METRIC_KEYS = BIA_METRIC_FIELDS.map((f) => f.key)
 
-function BiaCaptureForm({ clientId, onSaved }: { clientId: string; onSaved: () => void }) {
+function BiaCaptureForm({ clientId, workspace, onSaved }: { clientId: string; workspace: ClientActionWorkspace; onSaved: () => Promise<void> }) {
   const { theme } = useTheme()
   const [values, setValues] = useState<Record<string, string>>({})
   const [saving, setSaving] = useState(false)
@@ -275,11 +325,17 @@ function BiaCaptureForm({ clientId, onSaved }: { clientId: string; onSaved: () =
         weightKg: toNum(values.weightKg) ?? null,
         heightCm: toNum(values.heightCm) ?? null,
         notes: values.notes?.trim() || null,
-      })
-      setValues({})
-      onSaved()
+      }, workspace)
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'No se pudo guardar la medición.')
+      setSaving(false)
+      return
+    }
+    setValues({})
+    try {
+      await onSaved()
+    } catch {
+      toast.error('Medición guardada, pero no pudimos actualizar el historial. Reintenta.')
     } finally {
       setSaving(false)
     }
@@ -413,7 +469,7 @@ function buildDomain(values: Record<string, string>, sex: 'male' | 'female'): Is
 
 const isakCacheKey = (clientId: string) => `eva_bodycomp_isak_${clientId}`
 
-function IsakWizard({ clientId, onSaved }: { clientId: string; onSaved: () => void }) {
+function IsakWizard({ clientId, workspace, onSaved }: { clientId: string; workspace: ClientActionWorkspace; onSaved: () => Promise<void> }) {
   const { theme } = useTheme()
   const [step, setStep] = useState(0)
   const [values, setValues] = useState<Record<string, string>>({})
@@ -494,13 +550,19 @@ function IsakWizard({ clientId, onSaved }: { clientId: string; onSaved: () => vo
         bodyFatEquation: equation,
         weightKg: domain.weightKg,
         heightCm: domain.heightCm,
-      })
-      await AsyncStorage.removeItem(isakCacheKey(clientId)).catch(() => {})
-      setValues({})
-      setStep(0)
-      onSaved()
+      }, workspace)
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'No se pudo guardar la medición.')
+      setSaving(false)
+      return
+    }
+    await AsyncStorage.removeItem(isakCacheKey(clientId)).catch(() => {})
+    setValues({})
+    setStep(0)
+    try {
+      await onSaved()
+    } catch {
+      toast.error('Medición guardada, pero no pudimos actualizar el historial. Reintenta.')
     } finally {
       setSaving(false)
     }
@@ -600,8 +662,8 @@ function IsakWizard({ clientId, onSaved }: { clientId: string; onSaved: () => vo
           {previewView ? (
             <IsakResultCard view={previewView} isValidated={false} title="Vista previa" />
           ) : (
-            <View style={[styles.warnBox, { backgroundColor: '#F5A52418' }]}>
-              <Text style={[styles.warnTxt, { color: '#B4700A', fontFamily: FONT.uiSemibold }]}>
+            <View className="bg-warning-100 dark:bg-warning-100/[0.14]" style={styles.warnBox}>
+              <Text className="text-warning-700" style={[styles.warnTxt, { fontFamily: FONT.uiSemibold }]}>
                 Completa todas las medidas para ver el cálculo. Faltan datos o hay valores fuera de rango
                 {equation === 'durnin_womersley' ? ' (Durnin-Womersley requiere la edad)' : ''}.
               </Text>

@@ -20,6 +20,7 @@ import { useSyncExternalStore } from 'react'
 import { AppState, type AppStateStatus } from 'react-native'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { supabase } from './supabase'
+import type { ClientActionWorkspace } from './client-actions'
 import {
     applyActiveWorkspace,
     DEFAULT_WORKSPACE_CONTEXT,
@@ -58,11 +59,17 @@ interface StoreState {
     ready: boolean
 }
 
-let state: StoreState = { context: DEFAULT_WORKSPACE_CONTEXT, loading: true, ready: false }
+let state: StoreState = {
+    context: DEFAULT_WORKSPACE_CONTEXT,
+    loading: true,
+    ready: false,
+}
 const listeners = new Set<() => void>()
 let inFlight: Promise<void> | null = null
 let hydratedFromCache = false
 let globalListenersWired = false
+/** null hasta resolver red; evita tratar un alumno enterprise como coach por sus claims. */
+let hasCoachIdentity: boolean | null = null
 
 function emit() {
     for (const l of listeners) l()
@@ -206,9 +213,11 @@ export function refreshWorkspace(): Promise<void> {
         try {
             const raw = await fetchRawWorkspaceData()
             if (!raw) {
+                hasCoachIdentity = false
                 setState({ context: DEFAULT_WORKSPACE_CONTEXT, ready: true, loading: false })
                 return
             }
+            hasCoachIdentity = raw.coach != null
             const context = deriveWorkspaceContext(raw, preferredWorkspaceId)
             setState({ context, ready: true, loading: false })
             try {
@@ -234,7 +243,12 @@ async function bootstrap(): Promise<void> {
 export function resetWorkspace(): void {
     hydratedFromCache = false
     preferredWorkspaceId = null
-    setState({ context: DEFAULT_WORKSPACE_CONTEXT, ready: false, loading: false })
+    hasCoachIdentity = null
+    setState({
+        context: DEFAULT_WORKSPACE_CONTEXT,
+        ready: false,
+        loading: false,
+    })
     void AsyncStorage.removeItem(CACHE_KEY).catch(() => {})
     void AsyncStorage.removeItem(ACTIVE_KEY).catch(() => {})
 }
@@ -244,21 +258,50 @@ export function resetWorkspace(): void {
  * via `applyActiveWorkspace` sobre la lista ya derivada, persiste la preferencia (ACTIVE_KEY) para
  * que sobreviva arranques/revalidaciones, y re-persiste el contexto. `id` desconocido => no-op.
  */
-export function setActiveWorkspace(id: string): void {
-    if (id === preferredWorkspaceId && state.context.workspaces.find((w) => w.id === id)?.isActive) return
+export async function setActiveWorkspace(id: string): Promise<void> {
+    const target = state.context.workspaces.find((workspace) => workspace.id === id)
+    if (!target) return
     const next = applyActiveWorkspace(state.context, id)
-    if (next === state.context) return // id no presente en la lista
-    preferredWorkspaceId = id
-    setState({ context: next })
-    void AsyncStorage.setItem(ACTIVE_KEY, id).catch(() => {})
-    void AsyncStorage.setItem(CACHE_KEY, serializeWorkspaceContext(next)).catch(() => {})
+    if (next !== state.context) {
+        preferredWorkspaceId = id
+        setState({ context: next })
+        void AsyncStorage.setItem(ACTIVE_KEY, id).catch(() => {})
+        void AsyncStorage.setItem(CACHE_KEY, serializeWorkspaceContext(next)).catch(() => {})
+    }
+    // El workspace activo es una preferencia estrictamente local. Los entitlements sí se
+    // revalidan contra el servidor pasando el scope explícito, incluso si el usuario vuelve a
+    // tocar el workspace ya activo. Import dinámico para no crear ciclo workspace <-> entitlements.
+    const { refreshEntitlements } = await import('./entitlements')
+    await refreshEntitlements(workspaceActionScope(target))
+}
+
+function workspaceActionScope(ref: WorkspaceContext['workspaces'][number]): ClientActionWorkspace {
+    return {
+        kind: ref.kind,
+        teamId: ref.teamId,
+        orgId: ref.orgId,
+    }
+}
+
+/**
+ * Scope explicito para `/api/mobile/config`. Resuelve red antes de responder para no confundir un
+ * alumno con un coach por una cache/claim enterprise. `null` mantiene el flujo alumno legacy.
+ */
+export async function getActiveCoachWorkspace(): Promise<ClientActionWorkspace | null> {
+    await hydrateFromCache()
+    if (hasCoachIdentity == null || !state.ready) await refreshWorkspace()
+    if (hasCoachIdentity !== true) return null
+    const active = state.context.workspaces.find((workspace) => workspace.isActive)
+    return active ? workspaceActionScope(active) : null
 }
 
 function wireGlobalListeners(): void {
     if (globalListenersWired) return
     globalListenersWired = true
     AppState.addEventListener('change', (s: AppStateStatus) => {
-        if (s === 'active' && listeners.size > 0) void refreshWorkspace()
+        if (s === 'active' && listeners.size > 0) {
+            void refreshWorkspace()
+        }
     })
     supabase.auth.onAuthStateChange((event) => {
         if (event === 'SIGNED_OUT') {
@@ -277,7 +320,7 @@ export interface WorkspaceValue extends WorkspaceContext {
     /** Fuerza una revalidacion (pull-to-refresh, tras cambiar de workspace). */
     refresh: () => Promise<void>
     /** Cambia el workspace ACTIVO (switcher E7-07) y persiste la preferencia. */
-    setActiveWorkspace: (id: string) => void
+    setActiveWorkspace: (id: string) => Promise<void>
 }
 
 /**
