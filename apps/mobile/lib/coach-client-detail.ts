@@ -31,6 +31,14 @@ import {
 import { supabase } from './supabase'
 import { apiFetch } from './api'
 import type { ClientActionWorkspace } from './client-actions'
+import { resolveProfileAnalyticsLoadMode } from './profile-analytics-load-policy'
+import {
+  buildEnterpriseProfileAnalyticsFallback,
+  type EnterpriseActivityLogDbRow,
+  type EnterpriseAnalyticsLogDbRow,
+  type EnterpriseExerciseMeta,
+  type EnterpriseProfileAnalyticsFallback,
+} from './enterprise-profile-analytics'
 import {
   resolveSections,
   resolveDomainEnabled,
@@ -203,6 +211,14 @@ export interface WorkoutDaySet {
   targetReps: string | null
   targetWeightKg: number | null
   planName: string | null
+  blockTargetWeightKg: number | null
+  blockReps: string | null
+  blockSets: number | null
+  blockRir: string | null
+  blockTempo: string | null
+  progressionMode: string | null
+  progressionValue: number | null
+  planTitle: string | null
 }
 
 export interface NutritionDayFood {
@@ -386,6 +402,23 @@ function buildNutritionMeals(rawNutrition: any): { entries: NutritionMealPlanEnt
 
 export interface DaySeriesPoint { date: string; v: number }
 
+class CoachClientAnalyticsLoadError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'CoachClientAnalyticsLoadError'
+  }
+}
+
+function resultError(result: { error?: unknown } | null | undefined): unknown | null {
+  return result?.error ?? null
+}
+
+function analyticsErrorMessage(error: unknown): string {
+  return error && typeof error === 'object' && 'message' in error && typeof error.message === 'string'
+    ? error.message
+    : 'No se pudieron cargar los datos de entrenamiento.'
+}
+
 // Serie diaria de volumen (tonelaje = Σ peso×reps) desde logs ya fetchados.
 function buildVolumeSeries(rows: any[]): DaySeriesPoint[] {
   const map = new Map<string, number>()
@@ -534,6 +567,76 @@ function mapWeeklyPrsRpc(rows: any[]): WeeklyWeightPR[] {
     .sort((a, b) => b.newOneRm - a.newOneRm)
 }
 
+const ENTERPRISE_LOG_PAGE_SIZE = 1000
+
+async function fetchEnterpriseLogPages<T>(
+  select: string,
+  clientId: string,
+  sinceIso: string,
+  weightedOnly: boolean,
+): Promise<T[]> {
+  const rows: T[] = []
+  for (let from = 0; ; from += ENTERPRISE_LOG_PAGE_SIZE) {
+    let query = supabase
+      .from('workout_logs')
+      .select(select)
+      .eq('client_id', clientId)
+      .gte('logged_at', sinceIso)
+    if (weightedOnly) query = query.gt('weight_kg', 0)
+    const { data, error } = await query
+      .order('logged_at', { ascending: true })
+      .order('id', { ascending: true })
+      .range(from, from + ENTERPRISE_LOG_PAGE_SIZE - 1)
+    if (error) throw error
+    const page = (data as T[] | null) ?? []
+    rows.push(...page)
+    if (page.length < ENTERPRISE_LOG_PAGE_SIZE) break
+  }
+  return rows
+}
+
+async function loadEnterpriseProfileAnalyticsFallback(
+  clientId: string,
+  todayIso: string,
+): Promise<EnterpriseProfileAnalyticsFallback> {
+  // 548d replica la ventana acotada del dossier web; 371d es la ventana del heatmap.
+  // Ambas queries viajan con el access token del coach y quedan limitadas por RLS.
+  const [analyticsRows, activityRows] = await Promise.all([
+    fetchEnterpriseLogPages<EnterpriseAnalyticsLogDbRow>(
+      `
+        exercise_id, exercise_name_at_log, weight_kg, reps_done, logged_at,
+        workout_blocks ( exercise_id, exercises ( name, muscle_group ) )
+      `,
+      clientId,
+      getSantiagoUtcBoundsForDay(isoDateAddDays(todayIso, -548)).startIso,
+      true,
+    ),
+    fetchEnterpriseLogPages<EnterpriseActivityLogDbRow>(
+      'logged_at',
+      clientId,
+      getSantiagoUtcBoundsForDay(isoDateAddDays(todayIso, -371)).startIso,
+      false,
+    ),
+  ])
+
+  // workout_logs.exercise_id es snapshot sin FK. Resolver metadata en una query minima
+  // mantiene visibles tambien los logs huerfanos cuyo bloque historico fue borrado.
+  const exerciseIds = [...new Set(analyticsRows.map((row) => row.exercise_id).filter((id): id is string => !!id))]
+  const exerciseMeta = new Map<string, EnterpriseExerciseMeta>()
+  for (let from = 0; from < exerciseIds.length; from += 200) {
+    const { data, error } = await supabase
+      .from('exercises')
+      .select('id, name, muscle_group')
+      .in('id', exerciseIds.slice(from, from + 200))
+    if (error) throw error
+    for (const row of (data as { id: string; name: string; muscle_group: string | null }[] | null) ?? []) {
+      exerciseMeta.set(row.id, { name: row.name, muscleGroup: row.muscle_group })
+    }
+  }
+
+  return buildEnterpriseProfileAnalyticsFallback(analyticsRows, activityRows, todayIso, exerciseMeta)
+}
+
 export async function getCoachClientDetail(clientId: string, workspace?: ClientActionWorkspace): Promise<{
   client: CoachClientDetail | null
   checkIns: CheckInEntry[]
@@ -627,7 +730,7 @@ export async function getCoachClientDetail(clientId: string, workspace?: ClientA
   const fourteenDaysAgo = isoDateAddDays(todayIso, -14)
   const habitsFromIso = isoDateAddDays(todayIso, -6)
   const activityStart = isoDateAddDays(todayIso, -371)
-  const since30 = new Date(Date.now() - 30 * 86400000).toISOString()
+  const since30 = getSantiagoUtcBoundsForDay(isoDateAddDays(todayIso, -29)).startIso
 
   // Volumen por SERIES (calistenia/cardio): NO hay RPC equivalente (get_client_muscle_volume
   // sólo agrega peso×reps), así que mantenemos un fetch crudo MÍNIMO de 30d sólo para
@@ -759,6 +862,49 @@ export async function getCoachClientDetail(clientId: string, workspace?: ClientA
       }),
     ])
 
+  const rpcRows = (result: { data?: unknown } | null | undefined) =>
+    Array.isArray(result?.data) ? result.data.length : result?.data == null ? 0 : 1
+  const criticalAnalyticsResults = [
+    dayCounts30Res,
+    muscleVolumeRes,
+    exercisePrsRes,
+    strengthSeriesRes,
+    tonnageRes,
+    weeklyPrsRes,
+    activityDatesRes,
+    lastWorkoutRes,
+  ]
+  const criticalAnalyticsError = criticalAnalyticsResults
+    .map((result) => resultError(result))
+    .find((error) => error != null) ?? null
+  const aggregateRowCounts = [
+    dayCounts30Res,
+    muscleVolumeRes,
+    exercisePrsRes,
+    strengthSeriesRes,
+    tonnageRes,
+    weeklyPrsRes,
+    activityDatesRes,
+  ].map((result) => rpcRows(result))
+  const analyticsLoadMode = resolveProfileAnalyticsLoadMode(
+    workspace?.kind,
+    criticalAnalyticsError != null,
+    aggregateRowCounts,
+  )
+  let enterpriseFallback: EnterpriseProfileAnalyticsFallback | null = null
+  if (analyticsLoadMode === 'fallback') {
+    try {
+      enterpriseFallback = await loadEnterpriseProfileAnalyticsFallback(clientId, todayIso)
+    } catch (error) {
+      console.warn('[coach-client-detail] enterprise analytics fallback', error)
+      throw new CoachClientAnalyticsLoadError(analyticsErrorMessage(criticalAnalyticsError ?? error))
+    }
+  } else if (analyticsLoadMode === 'error' && criticalAnalyticsError) {
+    // Standalone/team no tienen una segunda fuente. No convertir un error de red/RPC
+    // en KPIs cero: el shell conserva los datos previos y ofrece retry.
+    throw new CoachClientAnalyticsLoadError(analyticsErrorMessage(criticalAnalyticsError))
+  }
+
   const rawProgram = programRes.data as any
   const program = rawProgram
     ? {
@@ -808,12 +954,18 @@ export async function getCoachClientDetail(clientId: string, workspace?: ClientA
   const checkIns = (checkInRes.data as CheckInEntry[] | null) ?? []
   // Días con series (30d) — la RPC ya devuelve `day` en zona Santiago (YYYY-MM-DD).
   const workoutDays30 = new Set<string>()
-  for (const row of (dayCounts30Res.data as { day: string; sets: number }[] | null) ?? []) {
+  const workoutDayCountRows = ((dayCounts30Res.data as { day: string; sets: number }[] | null) ?? []).length
+    ? (dayCounts30Res.data as { day: string; sets: number }[])
+    : enterpriseFallback?.workoutDayCounts30 ?? []
+  for (const row of workoutDayCountRows) {
     if (row.day) workoutDays30.add(row.day.slice(0, 10))
   }
   // Fechas de actividad del último año — RPC en zona Santiago (YYYY-MM-DD).
   const workoutDays371 = new Set<string>()
-  for (const row of (activityDatesRes.data as { day: string }[] | null) ?? []) {
+  const workoutDateRows = ((activityDatesRes.data as { day: string }[] | null) ?? []).length
+    ? (activityDatesRes.data as { day: string }[])
+    : (enterpriseFallback?.workoutDates371 ?? []).map((day) => ({ day }))
+  for (const row of workoutDateRows) {
     if (row.day) workoutDays371.add(row.day.slice(0, 10))
   }
 
@@ -868,7 +1020,7 @@ export async function getCoachClientDetail(clientId: string, workspace?: ClientA
     macroMeals as (MealWithFoodItems & { day_of_week?: number | null })[],
     activeNutritionPlanId,
   )
-  const lastWorkoutAt = String(((lastWorkoutRes.data as any[] | null) ?? [])[0]?.last_logged_at ?? '') || null
+  const lastWorkoutAt = String(((lastWorkoutRes.data as any[] | null) ?? [])[0]?.last_logged_at ?? '') || enterpriseFallback?.lastWorkoutAt || null
 
   const activityByDate = buildActivityWindow(todayIso)
   for (const day of workoutDays30) activityByDate.get(day) && (activityByDate.get(day)!.workout = true)
@@ -914,14 +1066,24 @@ export async function getCoachClientDetail(clientId: string, workspace?: ClientA
     },
     activity: Array.from(activityByDate.values()).reverse(),
     // ── Análisis de entrenamiento: AGREGADO EN DB (RPC), no iterando logs crudos en JS ──
-    personalRecords: mapExercisePrsRpc(exercisePrsRes.data as any[]),
-    muscleVolume: mapMuscleVolumeRpc(muscleVolumeRes.data as any[]),
+    personalRecords: ((exercisePrsRes.data as any[] | null)?.length ?? 0) > 0
+      ? mapExercisePrsRpc(exercisePrsRes.data as any[])
+      : enterpriseFallback?.personalRecords ?? [],
+    muscleVolume: ((muscleVolumeRes.data as any[] | null)?.length ?? 0) > 0
+      ? mapMuscleVolumeRpc(muscleVolumeRes.data as any[])
+      : enterpriseFallback?.muscleVolume ?? [],
     // volumeSeries/strengthSeries (DaySeriesPoint) sin consumidores actuales → stub vacío.
     volumeSeries: [],
     strengthSeries: [],
-    strengthCards: mapStrengthSeriesRpc(strengthSeriesRes.data as any[], 4),
-    tonnageSeries: mapDailyTonnageRpc(tonnageRes.data as any[]),
-    weeklyPRs: mapWeeklyPrsRpc(weeklyPrsRes.data as any[]),
+    // La vista sin filtro corta a 4; al elegir grupo muscular debe poder mostrar
+    // TODAS las series de ese grupo, igual que el panel web.
+    strengthCards: ((strengthSeriesRes.data as any[] | null)?.length ?? 0) > 0
+      ? mapStrengthSeriesRpc(strengthSeriesRes.data as any[], Number.POSITIVE_INFINITY)
+      : enterpriseFallback?.strengthCards ?? [],
+    tonnageSeries: ((tonnageRes.data as any[] | null)?.length ?? 0) > 0
+      ? mapDailyTonnageRpc(tonnageRes.data as any[])
+      : enterpriseFallback?.tonnageSeries ?? [],
+    weeklyPRs: enterpriseFallback?.weeklyPRs ?? mapWeeklyPrsRpc(weeklyPrsRes.data as any[]),
     nutritionMeals,
     nutritionTimeline,
     nutritionMonthlyAvgPct: averageNutritionTimelineCompliance(activePlanTimeline),
@@ -949,17 +1111,41 @@ export async function getCoachClientDetail(clientId: string, workspace?: ClientA
       workoutDays30.size > 0 ||
       ((exercisePrsRes.data as any[] | null)?.length ?? 0) > 0 ||
       ((muscleVolumeRes.data as any[] | null)?.length ?? 0) > 0 ||
-      ((strengthSeriesRes.data as any[] | null)?.length ?? 0) > 0,
+      ((strengthSeriesRes.data as any[] | null)?.length ?? 0) > 0 ||
+      enterpriseFallback?.hasTrained === true,
   }
   } catch (e) {
     console.warn('[coach-client-detail] partial load', e)
+    if (e instanceof CoachClientAnalyticsLoadError) throw e
     return EMPTY
   }
 }
 
 export type CoachClientDetailData = Awaited<ReturnType<typeof getCoachClientDetail>>
 
-export async function getCoachClientDayDetail(clientId: string, date: string): Promise<ClientDayDetail> {
+export async function getCoachClientDayDetail(
+  clientId: string,
+  date: string,
+  workspace: ClientActionWorkspace,
+): Promise<ClientDayDetail> {
+  // El fetch diario vive fuera del payload principal; repetir el preflight explícito evita que
+  // un coach multi-workspace consulte por clientId un recurso perteneciente a otro pool.
+  let clientQuery = supabase.from('clients').select('id').eq('id', clientId)
+  if (workspace.kind === 'team_owner' || workspace.kind === 'team_member') {
+    clientQuery = workspace.teamId
+      ? clientQuery.eq('team_id', workspace.teamId).is('org_id', null)
+      : clientQuery.eq('team_id', '__invalid_workspace__')
+  } else if (workspace.kind === 'enterprise') {
+    clientQuery = workspace.orgId
+      ? clientQuery.eq('org_id', workspace.orgId).is('team_id', null)
+      : clientQuery.eq('org_id', '__invalid_workspace__')
+  } else {
+    clientQuery = clientQuery.is('team_id', null).is('org_id', null)
+  }
+  const { data: scopedClient, error: scopeError } = await clientQuery.maybeSingle()
+  if (scopeError) throw scopeError
+  if (!scopedClient) throw new Error('Client not found')
+
   const { startIso, endIso } = getSantiagoUtcBoundsForDay(date)
   const [workoutRes, nutritionRes, habitsRes] = await Promise.all([
     supabase
@@ -968,7 +1154,9 @@ export async function getCoachClientDayDetail(clientId: string, date: string): P
         set_number, weight_kg, reps_done, rpe, rir, note, substituted_exercise_name, substitution_reason,
         target_reps_at_log, target_weight_at_log, plan_name_at_log, logged_at,
         workout_blocks (
-          exercises ( name, muscle_group )
+          target_weight_kg, reps, sets, rir, progression_mode, progression_value, tempo,
+          exercises ( name, muscle_group ),
+          workout_plans ( title )
         )
       `)
       .eq('client_id', clientId)
@@ -995,6 +1183,12 @@ export async function getCoachClientDayDetail(clientId: string, date: string): P
       .maybeSingle(),
   ])
 
+  // Los builders PostgREST no rechazan la promesa ante error: resuelven `{ data, error }`.
+  // Propagarlo explicitamente permite que la pantalla muestre su estado de error + retry
+  // en vez de confundir una falla de red/RLS con una sesion vacia.
+  const detailError = workoutRes.error ?? nutritionRes.error ?? habitsRes.error
+  if (detailError) throw detailError
+
   const workoutSets = ((workoutRes.data as any[] | null) ?? []).map((row) => ({
     exerciseName: row.workout_blocks?.exercises?.name ?? 'Ejercicio',
     muscleGroup: row.workout_blocks?.exercises?.muscle_group ?? null,
@@ -1009,6 +1203,14 @@ export async function getCoachClientDayDetail(clientId: string, date: string): P
     targetReps: row.target_reps_at_log ?? null,
     targetWeightKg: row.target_weight_at_log ?? null,
     planName: row.plan_name_at_log ?? null,
+    blockTargetWeightKg: row.workout_blocks?.target_weight_kg ?? null,
+    blockReps: row.workout_blocks?.reps ?? null,
+    blockSets: row.workout_blocks?.sets ?? null,
+    blockRir: row.workout_blocks?.rir ?? null,
+    blockTempo: row.workout_blocks?.tempo ?? null,
+    progressionMode: row.workout_blocks?.progression_mode ?? null,
+    progressionValue: row.workout_blocks?.progression_value ?? null,
+    planTitle: row.workout_blocks?.workout_plans?.title ?? null,
   }))
 
   const nutritionMeals = (((nutritionRes.data as any)?.nutrition_meal_logs ?? []) as any[])

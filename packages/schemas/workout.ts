@@ -30,7 +30,7 @@ function preprocessSets(val: unknown): number {
 function preprocessDayOfWeek(val: unknown): number {
     const n = typeof val === 'number' ? val : Number(val)
     if (!Number.isFinite(n)) return 1
-    return Math.min(28, Math.max(1, Math.round(n)))
+    return Math.round(n)
 }
 
 function preprocessIntInRange(min: number, max: number, fallback: number) {
@@ -174,8 +174,18 @@ export const ProgramPhaseSchema = z.object({
     color: z.string().max(32).optional(),
 })
 
+const WEEKLY_WORKOUT_DAYS = 7
+const MAX_WORKOUT_CYCLE_DAYS = 14
+const DEFAULT_WORKOUT_CYCLE_DAYS = 7
+
 export const WorkoutDaySchema = z.object({
-    day_of_week: z.preprocess(preprocessDayOfWeek, z.number().int().min(1).max(28)),
+    day_of_week: z.preprocess(
+        preprocessDayOfWeek,
+        z.number()
+            .int()
+            .min(1, 'El día del programa debe ser al menos 1')
+            .max(MAX_WORKOUT_CYCLE_DAYS, `El día del programa no puede superar ${MAX_WORKOUT_CYCLE_DAYS}`)
+    ),
     title: z.string().max(100, 'Máximo 100 caracteres en el título del día').optional(),
     week_variant: z.enum(['A', 'B']).optional().default('A'),
     blocks: z.array(WorkoutBlockSchema).min(1, 'Agrega al menos un ejercicio'),
@@ -202,10 +212,14 @@ export const WorkoutProgramSchema = z.object({
         (v) => {
             if (v === null || v === undefined || v === '') return undefined
             const n = typeof v === 'number' ? v : Number(v)
-            if (!Number.isFinite(n)) return 7
-            return Math.min(28, Math.max(1, Math.round(n)))
+            if (!Number.isFinite(n)) return DEFAULT_WORKOUT_CYCLE_DAYS
+            return Math.round(n)
         },
-        z.number().int().min(1).max(28).optional()
+        z.number()
+            .int()
+            .min(1, 'La longitud del ciclo debe ser de al menos 1 día')
+            .max(MAX_WORKOUT_CYCLE_DAYS, `La longitud del ciclo no puede superar ${MAX_WORKOUT_CYCLE_DAYS} días`)
+            .optional()
     ),
     start_date_flexible: z.boolean().optional(),
     program_notes: z.string().max(2000).nullable().optional(),
@@ -213,6 +227,30 @@ export const WorkoutProgramSchema = z.object({
     program_phases: z.array(ProgramPhaseSchema).max(24).optional(),
     source_template_id: z.string().uuid().nullable().optional(),
     days: z.array(WorkoutDaySchema).min(1, 'Agrega al menos un día de entrenamiento'),
+}).superRefine((program, ctx) => {
+    // `program_structure_type` ausente es weekly en el servicio de guardado. Mantener
+    // ese mismo default aquí evita que un payload legacy salte la regla semanal.
+    const structureType = program.program_structure_type ?? 'weekly'
+    const cycleLength = program.cycle_length ?? DEFAULT_WORKOUT_CYCLE_DAYS
+
+    program.days.forEach((day, index) => {
+        if (structureType === 'weekly' && day.day_of_week > WEEKLY_WORKOUT_DAYS) {
+            ctx.addIssue({
+                code: 'custom',
+                message: `Los programas semanales solo permiten días del 1 al ${WEEKLY_WORKOUT_DAYS}`,
+                path: ['days', index, 'day_of_week'],
+            })
+            return
+        }
+
+        if (structureType === 'cycle' && day.day_of_week > cycleLength) {
+            ctx.addIssue({
+                code: 'custom',
+                message: `El día ${day.day_of_week} supera la longitud del ciclo (${cycleLength} días)`,
+                path: ['days', index, 'day_of_week'],
+            })
+        }
+    })
 })
 
 export const WorkoutLogSetSchema = z.object({

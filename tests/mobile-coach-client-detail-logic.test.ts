@@ -5,7 +5,11 @@ import {
   buildNutritionTimeline,
   checkInRegularityPercentAsOfSantiago,
   effectiveWorkoutTarget,
+  filterTrainingStrengthSeries,
   filterTimelineForActivePlan,
+  isValidIsoYmd,
+  selectTrainingRadarRows,
+  trainingProgressionLabel,
 } from '../apps/mobile/lib/coach-client-detail-logic'
 import { deriveNutritionCoachAlerts } from '../apps/mobile/lib/nutrition-coach-alerts'
 
@@ -119,5 +123,31 @@ describe('coach client detail pure parity', () => {
       ],
     }
     expect(effectiveWorkoutTarget(program, new Date('2026-07-13T12:00:00Z'))).toBe(1)
+  })
+
+  it('Entreno filtra fuerza y radar como web', () => {
+    const strength = [
+      { id: 'a', muscleGroup: 'Pecho', totalVolume: 10 },
+      { id: 'b', muscleGroup: 'Pecho', totalVolume: 30 },
+      { id: 'c', muscleGroup: 'Piernas', totalVolume: 100 },
+      { id: 'd', muscleGroup: 'Espalda', totalVolume: 90 },
+      { id: 'e', muscleGroup: 'Brazos', totalVolume: 80 },
+    ]
+    expect(filterTrainingStrengthSeries(strength, null).map((row) => row.id)).toEqual(['a', 'b', 'c', 'd'])
+    expect(filterTrainingStrengthSeries(strength, 'Pecho').map((row) => row.id)).toEqual(['b', 'a'])
+    const radar = selectTrainingRadarRows([
+      { muscleGroup: 'Cero', volume: 0 },
+      { muscleGroup: 'B', volume: 20 },
+      { muscleGroup: 'A', volume: 40 },
+    ])
+    expect(radar.map((row) => row.muscleGroup)).toEqual(['A', 'B'])
+  })
+
+  it('Entreno valida fecha y copy de progresión', () => {
+    expect(isValidIsoYmd('2026-02-29')).toBe(false)
+    expect(isValidIsoYmd('2026-07-12')).toBe(true)
+    expect(trainingProgressionLabel('weekly_linear', 2.5)).toBe('Lineal +2.5/sem')
+    expect(trainingProgressionLabel('double', null)).toBe('Doble progresión')
+    expect(trainingProgressionLabel('adaptive', null)).toBeNull()
   })
 })

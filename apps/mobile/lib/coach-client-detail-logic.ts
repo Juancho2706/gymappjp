@@ -188,6 +188,31 @@ export function averageNutritionTimelineCompliance(rows: NutritionTimelineEntry[
     : null
 }
 
+type TrainingStrengthSeries = { muscleGroup: string; totalVolume: number }
+type TrainingRadarRow = { muscleGroup: string; volume: number }
+
+export function filterTrainingStrengthSeries<T extends TrainingStrengthSeries>(rows: T[], muscle: string | null): T[] {
+  return muscle
+    ? rows.filter((row) => row.muscleGroup === muscle).sort((a, b) => b.totalVolume - a.totalVolume)
+    : rows.slice(0, 4)
+}
+
+export function selectTrainingRadarRows<T extends TrainingRadarRow>(rows: T[]): T[] {
+  return [...rows].filter((row) => row.volume > 0).sort((a, b) => b.volume - a.volume).slice(0, 8)
+}
+
+export function trainingProgressionLabel(mode: string | null, value: number | null): string | null {
+  if (mode === 'weekly_linear') return value != null ? `Lineal +${value}/sem` : 'Lineal'
+  if (mode === 'double') return 'Doble progresión'
+  return null
+}
+
+export function isValidIsoYmd(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false
+  const parsed = new Date(`${value}T12:00:00Z`)
+  return Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value
+}
+
 type TargetProgram = {
   ab_mode?: boolean | null
   start_date?: string | null

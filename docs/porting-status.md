@@ -137,6 +137,7 @@ Una pasada adicional con **lente de lógica** (no de paridad pixel) sobre unidad
 - Tanda directory/create-import cerrada a nivel código/spec: alta individual con formulario completo, validación, éxito WhatsApp y gate de límite; importador XLSX/XLS/CSV de cuatro pasos, upsell Starter, consentimiento y errores por fila. La escritura masiva usa endpoint batch auditado/chunks de 10/password criptográfico y ambos flujos reciben el workspace RN activo, revalidado en servidor para standalone/team/enterprise. El wizard se desmonta al cerrar y bloquea cierre durante parse/import. Reporte: `docs/rn-port/specs/seccion-3/verify-fix/directory-create-import.md`.
 - Tanda ficha/shell-hero cerrada a nivel código/spec: header, calendario Santiago, hero white-label, score/racha/peso, tabbar glass/stuck, badges, FAB y cargas por foco alineados. Menú ⋮ completo con confirms/copy web; PATCH/DELETE/reset autorizan workspace RN explícito y team pool sin confiar en IDs cliente. DELETE protege al coach-as-client y falla cerrado; desarchivar revalida cupo; correos y rutas respetan standalone/team/enterprise. El sheet permanece montado hasta `onDismiss`, evitando perder acciones en iOS. Reporte: `docs/rn-port/specs/seccion-3/verify-fix/ficha-shell-hero.md`.
 - Tanda ficha/overview-progreso cerrada a nivel código/spec: Resumen replica rings, KPI, programa/fases, nutrición, métricas, hábitos, check-in, fotos, módulos y biometría; Progreso replica peso, IMC, energía, proyección, comparador, historial y bodycomp BIA/ISAK. Timeline nutricional ya no inventa días, A/B cuenta solo planes con bloques y todas las fechas sensibles usan Santiago. Bodycomp conserva RLS token-scoped, consentimiento/logs team y rechazo enterprise. R7 terminó sin P0/P1/P2 accionables. Reporte: `docs/rn-port/specs/seccion-3/verify-fix/ficha-overview-progreso.md`.
+- Tanda ficha/analisis-plan cerrada a nivel código/spec: Análisis replica PR, fuerza filtrable, radar, tonelaje e historial/detalle; Programa replica card inversa, fases, A/B, descansos, superseries y sheet nativo. Entreno/Nutrición separan fecha/error/retry Santiago; analytics enterprise tiene fallback RLS. Builder aísla drafts/workspaces, detecta conflictos por `updated_at`, reconcilia IDs como web y conserva bloques al reducir ciclos. Plantillas/asignación respetan scope, opciones y retry parcial; el bridge Bearer post-asignación reproduce el correo white-label web con revalidación e idempotencia por programa. Contrato/migración alinean ciclos a 14 días; migración pendiente del gate seguro de Supabase branch. R8 terminó sin P0/P1/P2 RN accionables. Reporte: `docs/rn-port/specs/seccion-3/verify-fix/ficha-analisis-plan.md`.
 - Gates del checkpoint: `pnpm exec tsc --noEmit` limpio; tokens `86/86`; `pnpm exec expo export --platform android` limpio.
 - Las unidades marcadas “cerrada” ya pasaron verificación adversarial de código/spec; el smoke visual device light/dark × EVA/custom sigue pendiente donde cada reporte lo indique. Doble-FAB sigue sin implementar por decisión CEO pendiente.
 
@@ -150,8 +151,7 @@ P2 visuales accionables: todo arreglo debe eliminar una diferencia demostrada
 contra el responsive/PWA; mejoras nativas y refactors sin efecto visible quedan
 fuera.
 
-Próxima unidad Sección 3: `ficha-analisis-plan`; después
-`ficha-nutricion-facturacion`.
+Próxima unidad Sección 3: `ficha-nutricion-facturacion`.
 
 Ola 2R incluye: cápsula persistente en movement/bodycomp; toggle inline de
 comidas del Home; propagación de `brand_font_key` donde web usa `--brand-font`;

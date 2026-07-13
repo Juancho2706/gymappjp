@@ -9,7 +9,9 @@ import {
     CardioProfileUpdateSchema,
     IntervalConfigSchema,
     WorkoutBlockSchema,
+    WorkoutDaySchema,
     WorkoutLogSetSchema,
+    WorkoutProgramSchema,
     isCardioBlockComplete,
 } from './workout'
 
@@ -27,6 +29,104 @@ const SYSTEM_SEED_IDS = [
     '0000a5ec-0000-0000-0000-000000000005', // mobility
     '0000a5ec-0000-0000-0000-000000000030', // conditioning
 ]
+
+const programDay = (day: number, variant: 'A' | 'B' = 'A') => ({
+    day_of_week: day,
+    week_variant: variant,
+    blocks: [baseBlock],
+})
+
+const programPayload = (overrides: Record<string, unknown> = {}) => ({
+    programName: 'Programa de prueba',
+    weeksToRepeat: 4,
+    days: [programDay(1)],
+    ...overrides,
+})
+
+describe('WorkoutProgramSchema — límites de estructura', () => {
+    it('acepta un ciclo de 14 días, incluido día 14', () => {
+        const result = WorkoutProgramSchema.safeParse(programPayload({
+            program_structure_type: 'cycle',
+            cycle_length: 14,
+            days: [programDay(1), programDay(14)],
+        }))
+
+        expect(result.success).toBe(true)
+    })
+
+    it('rechaza day_of_week y cycle_length sobre 14', () => {
+        const invalidDay = WorkoutDaySchema.safeParse(programDay(15))
+        const invalidCycle = WorkoutProgramSchema.safeParse(programPayload({
+            program_structure_type: 'cycle',
+            cycle_length: 15,
+        }))
+
+        expect(invalidDay.success).toBe(false)
+        expect(invalidCycle.success).toBe(false)
+        if (!invalidDay.success) {
+            expect(invalidDay.error.issues[0]?.message).toBe('El día del programa no puede superar 14')
+        }
+        if (!invalidCycle.success) {
+            expect(invalidCycle.error.issues[0]?.message).toBe('La longitud del ciclo no puede superar 14 días')
+        }
+    })
+
+    it('trata estructura omitida como weekly y rechaza días 8-14', () => {
+        const result = WorkoutProgramSchema.safeParse(programPayload({ days: [programDay(8)] }))
+
+        expect(result.success).toBe(false)
+        if (!result.success) {
+            expect(result.error.issues).toContainEqual(expect.objectContaining({
+                path: ['days', 0, 'day_of_week'],
+                message: 'Los programas semanales solo permiten días del 1 al 7',
+            }))
+        }
+    })
+
+    it('rechaza un día mayor que cycle_length', () => {
+        const result = WorkoutProgramSchema.safeParse(programPayload({
+            program_structure_type: 'cycle',
+            cycle_length: 4,
+            days: [programDay(5)],
+        }))
+
+        expect(result.success).toBe(false)
+        if (!result.success) {
+            expect(result.error.issues).toContainEqual(expect.objectContaining({
+                path: ['days', 0, 'day_of_week'],
+                message: 'El día 5 supera la longitud del ciclo (4 días)',
+            }))
+        }
+    })
+
+    it('preserva variantes A/B del mismo día en weekly y cycle', () => {
+        const weekly = WorkoutProgramSchema.safeParse(programPayload({
+            program_structure_type: 'weekly',
+            ab_mode: true,
+            days: [programDay(7, 'A'), programDay(7, 'B')],
+        }))
+        const cycle = WorkoutProgramSchema.safeParse(programPayload({
+            program_structure_type: 'cycle',
+            cycle_length: 10,
+            ab_mode: true,
+            days: [programDay(10, 'A'), programDay(10, 'B')],
+        }))
+
+        expect(weekly.success).toBe(true)
+        expect(cycle.success).toBe(true)
+    })
+
+    it('mantiene el fallback legacy de 7 días para ciclos sin cycle_length', () => {
+        expect(WorkoutProgramSchema.safeParse(programPayload({
+            program_structure_type: 'cycle',
+            days: [programDay(7)],
+        })).success).toBe(true)
+        expect(WorkoutProgramSchema.safeParse(programPayload({
+            program_structure_type: 'cycle',
+            days: [programDay(8)],
+        })).success).toBe(false)
+    })
+})
 
 describe('WorkoutBlockSchema.section_template_id', () => {
     it.each(SYSTEM_SEED_IDS)('acepta el UUID seed system %s', id => {

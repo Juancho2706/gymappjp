@@ -3,6 +3,15 @@ import { decode } from 'base64-arraybuffer'
 import { supabase } from './supabase'
 import { selectWithFallback } from './db-compat'
 import { getCoachOrgContext } from './org'
+import type { ClientActionWorkspace } from './client-actions'
+import {
+  builderExerciseWorkspaceFilter,
+  exerciseMatchesBuilderWorkspace,
+} from './exercise-workspace'
+export {
+  builderExerciseWorkspaceFilter,
+  exerciseMatchesBuilderWorkspace,
+} from './exercise-workspace'
 
 // Coach exercise library. Reads via Supabase (RLS: system exercises +
 // coach-owned). Mutations run under the coach session (RLS enforces coach_id =
@@ -64,6 +73,7 @@ export interface ExerciseRow {
   video_end_time: number | null
   coach_id: string | null
   org_id: string | null
+  team_id?: string | null
   /** true when owned by the current coach (custom), false for system catalog. */
   isOwn: boolean
 }
@@ -154,6 +164,36 @@ const SELECT_COLUMNS =
 // Sin columnas enterprise (org_id) — para prod standalone que aún no las tiene.
 const SELECT_COLUMNS_MIN =
   'id, name, muscle_group, exercise_type, equipment, difficulty, body_part, secondary_muscles, instructions, video_url, gif_url, image_url, video_start_time, video_end_time, coach_id'
+
+const BUILDER_EXERCISE_COLUMNS =
+  'id, name, muscle_group, exercise_type, equipment, difficulty, body_part, secondary_muscles, instructions, video_url, gif_url, image_url, video_start_time, video_end_time, coach_id, org_id, team_id'
+
+/**
+ * Catálogo del builder con scope explícito; no consulta claims/JWT legacy.
+ * RLS es el techo y el filtro puro posterior evita mezclar filas visibles de otro workspace.
+ * Los errores se propagan para que el builder no degrade a un catálogo incorrecto.
+ */
+export async function listBuilderExercisesForWorkspace(
+  coachId: string,
+  workspace: ClientActionWorkspace,
+): Promise<{ exercises: ExerciseRow[]; coachId: string }> {
+  const filter = builderExerciseWorkspaceFilter(coachId, workspace)
+  const { data, error } = await supabase
+    .from('exercises')
+    .select(BUILDER_EXERCISE_COLUMNS)
+    .or(filter)
+    .is('deleted_at', null)
+    .order('muscle_group')
+    .order('name')
+  if (error) throw error
+
+  const rows = ((data as Omit<ExerciseRow, 'isOwn'>[] | null) ?? [])
+    .filter((row) => exerciseMatchesBuilderWorkspace(row, coachId, workspace))
+  return {
+    coachId,
+    exercises: rows.map((row) => ({ ...row, isOwn: row.coach_id === coachId })),
+  }
+}
 
 /**
  * ¿El workspace activo permite crear/editar ejercicios? (E5-10, ruling D1).

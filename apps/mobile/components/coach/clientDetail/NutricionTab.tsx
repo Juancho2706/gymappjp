@@ -41,6 +41,8 @@ export function NutricionTab({
   onSelectDate,
   dayDetail,
   dayLoading,
+  dayError,
+  onRetryDay,
   onEditNutrition,
 }: {
   clientId: string
@@ -49,6 +51,8 @@ export function NutricionTab({
   onSelectDate: (date: string) => void
   dayDetail: ClientDayDetail | null
   dayLoading: boolean
+  dayError: string | null
+  onRetryDay: () => void
   onEditNutrition?: () => void
 }) {
   const { theme } = useTheme()
@@ -225,6 +229,8 @@ export function NutricionTab({
         onSelectDate={onSelectDate}
         dayDetail={dayDetail}
         loading={dayLoading}
+        error={dayError}
+        onRetry={onRetryDay}
       />
 
       {/* Check-in context */}
@@ -262,12 +268,14 @@ export function NutricionTab({
   )
 }
 
-function DayNutritionDetail({ timeline, selectedDate, onSelectDate, dayDetail, loading }: {
+function DayNutritionDetail({ timeline, selectedDate, onSelectDate, dayDetail, loading, error, onRetry }: {
   timeline: CoachClientDetailData['nutritionTimeline']
   selectedDate: string
   onSelectDate: (date: string) => void
   dayDetail: ClientDayDetail | null
   loading: boolean
+  error: string | null
+  onRetry: () => void
 }) {
   const { theme } = useTheme()
   const [openMeals, setOpenMeals] = useState<Set<number>>(() => new Set())
@@ -294,6 +302,11 @@ function DayNutritionDetail({ timeline, selectedDate, onSelectDate, dayDetail, l
         </View>
         {loading ? (
           <View style={{ paddingVertical: 20 }}><EvaLoader size="sm" subtitle="Cargando día…" /></View>
+        ) : error ? (
+          <View style={{ gap: 12, alignItems: 'center', paddingVertical: 20 }}>
+            <Text style={[cd.empty, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{error}</Text>
+            <Button label="Reintentar" variant="secondary" onPress={onRetry} />
+          </View>
         ) : meals.length ? (
           <>
             <ProgressBar value={done / meals.length} color={done / meals.length >= 0.8 ? theme.success : WARNING} height={7} />

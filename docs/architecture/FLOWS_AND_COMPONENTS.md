@@ -1,6 +1,6 @@
 # Flows and Component Map
 
-Ultima modificacion: 2026-06-15 (media de ejercicios — mirror de thumbnails + recorte de video + player ExerciseVideo)
+Ultima modificacion: 2026-07-12 (paridad RN — ficha coach Análisis/Programa + builder no destructivo)
 
 ## Zonas de producto
 
@@ -29,6 +29,11 @@ Ultima modificacion: 2026-06-15 (media de ejercicios — mirror de thumbnails + 
 | Editar bloques | `components/DayColumn.tsx`, `BlockEditSheet.tsx` | `usePlanBuilder`, `ExerciseBlock` |
 | Guardar programa | `_actions/builder.actions.ts` | delega a `services/workout/workout.service.ts` |
 | Asignar template | `AssignToClientsDialog.tsx` | `assignProgramToClientsAction` |
+
+Web y RN comparten `@eva/workout-engine/workout-save-reconcile`: programas ya
+asignados se reconcilian en sitio por día/variante y posición de bloque para
+preservar IDs e historial. RN agrega control optimista por `updated_at`, scope
+explícito standalone/team/enterprise y drafts aislados por programa/workspace.
 
 ## Flujo: alumno entrena
 
@@ -74,6 +79,10 @@ Ultima modificacion: 2026-06-15 (media de ejercicios — mirror de thumbnails + 
 | Abrir ficha | `apps/mobile/app/coach/cliente/[clientId].tsx` | carga por `useFocusEffect`, scope standalone/team/enterprise explícito |
 | Resumen | `OverviewTab.tsx` | cumplimiento, KPI, programa, hábitos, check-in, fotos y biometría |
 | Progreso | `ProgresoTab.tsx` | peso/IMC/energía, fotos, historial y bodycomp BIA/ISAK |
+| Análisis | `AnalisisTab.tsx` | PR, fuerza, radar, tonelaje y detalle de sesión por fecha Santiago |
+| Programa | `PlanTab.tsx` | vigencia, fases, A/B, microciclo, superseries y detalle `nativeModal` |
+| Editar programa | `program-builder.tsx` | reconcile compartido, conflicto `updated_at`, ciclos 14d, catálogo/workspace explícito |
+| Asignar plantilla | `program-builder.tsx` + `/api/mobile/coach/program-assignment-notifications` | persiste por alumno, retry parcial y correo white-label server-side idempotente |
 | Mutar ficha | `/api/mobile/coach/clients/[clientId]/*` | bearer autoritativo + workspace + ownership/asignación activa |
 | Leer/escribir bodycomp | endpoints `bodycomp` mobile + `body-composition.service.ts` | RLS token-scoped, entitlement, consentimiento team, tenant filter y access log |
 

@@ -34,6 +34,7 @@ import { daysBetweenCalendar } from '../../../lib/checkin-thresholds'
 import { filterPlansForStructureView, resolveActiveWeekVariantForDisplay } from '../../../lib/program-week-variant'
 import { deriveClientStatus } from '@eva/profile-analytics'
 import { deleteClient, resetClientPassword, setClientStatus, type ClientActionWorkspace } from '../../../lib/client-actions'
+import { clientActionWorkspaceQuery } from '../../../lib/client-action-workspace'
 import { getWorkspaceEntitlements } from '../../../lib/entitlements'
 import { useWorkspace } from '../../../lib/workspace'
 import { getCoachProfile } from '../../../lib/coach'
@@ -71,9 +72,16 @@ export default function ClientDetailScreen() {
   const [data, setData] = useState<CoachClientDetailData | null>(null)
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
-  const [selectedDate, setSelectedDate] = useState(() => getTodayInSantiago().iso)
-  const [dayDetail, setDayDetail] = useState<ClientDayDetail | null>(null)
-  const [dayLoading, setDayLoading] = useState(false)
+  const [trainingDate, setTrainingDate] = useState(() => getTodayInSantiago().iso)
+  const [nutritionDate, setNutritionDate] = useState(() => getTodayInSantiago().iso)
+  const [trainingDayDetail, setTrainingDayDetail] = useState<ClientDayDetail | null>(null)
+  const [trainingDayLoading, setTrainingDayLoading] = useState(false)
+  const [trainingDayError, setTrainingDayError] = useState<string | null>(null)
+  const [trainingDayRetry, setTrainingDayRetry] = useState(0)
+  const [nutritionDayDetail, setNutritionDayDetail] = useState<ClientDayDetail | null>(null)
+  const [nutritionDayLoading, setNutritionDayLoading] = useState(false)
+  const [nutritionDayError, setNutritionDayError] = useState<string | null>(null)
+  const [nutritionDayRetry, setNutritionDayRetry] = useState(0)
   const [editOpen, setEditOpen] = useState(false)
   const [editSaving, setEditSaving] = useState(false)
   const [moreOpen, setMoreOpen] = useState(false)
@@ -129,8 +137,17 @@ export default function ClientDetailScreen() {
     loadedOnceRef.current = false
     loadSeqRef.current += 1
     daySeqRef.current += 1
-    setSelectedDate(getTodayInSantiago().iso)
-    setDayDetail(null)
+    const todayIso = getTodayInSantiago().iso
+    setTrainingDate(todayIso)
+    setNutritionDate(todayIso)
+    setTrainingDayDetail(null)
+    setTrainingDayLoading(false)
+    setTrainingDayError(null)
+    setTrainingDayRetry(0)
+    setNutritionDayDetail(null)
+    setNutritionDayLoading(false)
+    setNutritionDayError(null)
+    setNutritionDayRetry(0)
   }, [clientId])
 
   // GOTCHA 6b: la ficha hace fetch propio y es una ruta stack-push (no se
@@ -166,18 +183,66 @@ export default function ClientDetailScreen() {
     }, [data?.client?.team_id]),
   )
 
+  const activeDayKind = tab === 'analisis' ? 'training' : tab === 'nutricion' ? 'nutrition' : null
+  const activeDayDate = activeDayKind === 'training' ? trainingDate : activeDayKind === 'nutrition' ? nutritionDate : null
+  const activeDayRetry = activeDayKind === 'training'
+    ? trainingDayRetry
+    : activeDayKind === 'nutrition'
+      ? nutritionDayRetry
+      : 0
+  const selectTrainingDate = useCallback((date: string) => {
+    if (date === trainingDate) return
+    setTrainingDayDetail(null)
+    setTrainingDayError(null)
+    setTrainingDayLoading(true)
+    setTrainingDate(date)
+  }, [trainingDate])
+  const selectNutritionDate = useCallback((date: string) => {
+    if (date === nutritionDate) return
+    setNutritionDayDetail(null)
+    setNutritionDayError(null)
+    setNutritionDayLoading(true)
+    setNutritionDate(date)
+  }, [nutritionDate])
+
   useFocusEffect(
     useCallback(() => {
-      if (!clientId || !selectedDate) return
+      if (!clientId || !activeDayKind || !activeDayDate) return
       const seq = ++daySeqRef.current
-      setDayLoading(true)
-      setDayDetail(null)
-      void getCoachClientDayDetail(clientId, selectedDate)
-        .then((detail) => { if (seq === daySeqRef.current) setDayDetail(detail) })
-        .catch((error) => { console.warn('[client-detail] day load failed', error) })
-        .finally(() => { if (seq === daySeqRef.current) setDayLoading(false) })
+      if (activeDayKind === 'training') {
+        setTrainingDayLoading(true)
+        setTrainingDayDetail(null)
+        setTrainingDayError(null)
+      } else {
+        setNutritionDayLoading(true)
+        setNutritionDayDetail(null)
+        setNutritionDayError(null)
+      }
+      void getCoachClientDayDetail(clientId, activeDayDate, {
+        kind: workspace.kind,
+        teamId: workspace.teamId,
+        orgId: workspace.orgId,
+      })
+        .then((detail) => {
+          if (seq !== daySeqRef.current) return
+          if (activeDayKind === 'training') setTrainingDayDetail(detail)
+          else setNutritionDayDetail(detail)
+        })
+        .catch((error) => {
+          console.warn('[client-detail] day load failed', error)
+          if (seq === daySeqRef.current) {
+            const message = 'No pudimos cargar esta sesión. Revisa tu conexión e intenta de nuevo.'
+            if (activeDayKind === 'training') setTrainingDayError(message)
+            else setNutritionDayError(message)
+          }
+        })
+        .finally(() => {
+          if (seq !== daySeqRef.current) return
+          if (activeDayKind === 'training') setTrainingDayLoading(false)
+          else setNutritionDayLoading(false)
+        })
       return () => { daySeqRef.current += 1 }
-    }, [clientId, selectedDate]),
+    }, [clientId, activeDayKind, activeDayDate, activeDayRetry, workspace.kind, workspace.teamId, workspace.orgId]),
   )
 
   const client = data?.client ?? null
@@ -270,7 +335,13 @@ export default function ClientDetailScreen() {
 
   function openBuilder() {
     if (!client) return
-    router.push(`/coach/program-builder?clientId=${client.id}&clientName=${encodeURIComponent(client.full_name)}`)
+    const params = [
+      `clientId=${encodeURIComponent(client.id)}`,
+      `clientName=${encodeURIComponent(client.full_name)}`,
+      ...(data?.activeProgram?.id ? [`programId=${encodeURIComponent(data.activeProgram.id)}`] : []),
+      clientActionWorkspaceQuery(actionWorkspace),
+    ].join('&')
+    router.push(`/coach/program-builder?${params}`)
   }
 
   function confirmArchive() {
@@ -550,11 +621,23 @@ export default function ClientDetailScreen() {
               workspace={actionWorkspace}
             />
           ) : tab === 'analisis' ? (
-            <AnalisisTab data={data} selectedDate={selectedDate} onSelectDate={setSelectedDate} dayDetail={dayDetail} dayLoading={dayLoading} />
+            <AnalisisTab
+              data={data}
+              selectedDate={trainingDate}
+              onSelectDate={selectTrainingDate}
+              dayDetail={trainingDayDetail?.date === trainingDate ? trainingDayDetail : null}
+              dayLoading={trainingDayLoading || (trainingDayDetail?.date !== trainingDate && trainingDayError == null)}
+              dayError={trainingDayError}
+              onRetryDay={() => setTrainingDayRetry((value) => value + 1)}
+            />
           ) : tab === 'plan' ? (
             <PlanTab data={data} onEdit={openBuilder} />
           ) : (
-            <NutricionTab clientId={client.id} data={data} selectedDate={selectedDate} onSelectDate={setSelectedDate} dayDetail={dayDetail} dayLoading={dayLoading}
+            <NutricionTab clientId={client.id} data={data} selectedDate={nutritionDate} onSelectDate={selectNutritionDate}
+              dayDetail={nutritionDayDetail?.date === nutritionDate ? nutritionDayDetail : null}
+              dayLoading={nutritionDayLoading || (nutritionDayDetail?.date !== nutritionDate && nutritionDayError == null)}
+              dayError={nutritionDayError}
+              onRetryDay={() => setNutritionDayRetry((value) => value + 1)}
               onEditNutrition={() => router.push(`/coach/nutrition-builder?clientId=${client.id}&clientName=${encodeURIComponent(client.full_name)}`)} />
           )}
         </View>

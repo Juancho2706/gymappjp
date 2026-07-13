@@ -12,6 +12,8 @@ export * from './nutrition'
 export * from './coach'
 // Workout logging schemas
 export * from './workout'
+// Bridge mobile: notificación transaccional posterior a una asignación ya persistida.
+export * from './program-assignment-notification'
 
 // SERVER-ONLY (web / Next.js server actions only)
 // OrgCreateCoachSchema, OrgInviteSchema, etc. reference org_id / coach_id from DB.

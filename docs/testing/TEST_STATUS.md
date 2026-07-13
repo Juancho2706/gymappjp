@@ -1,8 +1,24 @@
 # TEST_STATUS — Estado de las suites
 
-> Doc canónico referenciado en `CLAUDE.md`. Última actualización: 2026-07-12 (paridad RN — ficha coach Resumen/Progreso).
+> Doc canónico referenciado en `CLAUDE.md`. Última actualización: 2026-07-12 (paridad RN — ficha coach Análisis/Programa).
 >
 > Regla 2026-06-10 (memoria `feedback-test-each-batch`): por tanda solo `pnpm typecheck` + `pnpm test` (vitest local). Playwright/SQL contra Supabase y sandbox MP (tocan red/MP) se corren **únicamente en el GATE autorizado**, con OK explícito del usuario. Las suites nuevas se ESCRIBEN en sus fases y quedan pendientes de gate.
+
+## Paridad RN — ficha coach Análisis/Programa (2026-07-12)
+
+- TypeScript `apps/mobile` y `apps/web`: verde.
+- Tokens DS: 86/86.
+- Vitest focalizado final: 15 archivos, 115 tests verdes. Incluye analytics
+  standalone/team/enterprise, reconcile compartido web/RN, persistencia y
+  rollback del builder, drafts/workspaces, ciclos 14, schemas, catálogo y el
+  bridge idempotente de correo post-asignación.
+- Scans: `git diff --check`, colores crudos del scope, límite 31 legado y árbol
+  del alumno: verdes.
+- Expo export Android: verde.
+- Auditoría adversarial R8: Análisis, Programa, asignación y cross-workspace sin
+  P0/P1/P2 RN accionables; el último gap de correo web→RN quedó cerrado.
+- Migración de constraints 14d: escrita; pendiente de Supabase branch gate.
+- Smoke device light/dark × EVA/custom: pendiente.
 
 ## Paridad RN — ficha coach Resumen/Progreso (2026-07-12)
 

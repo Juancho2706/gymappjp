@@ -46,7 +46,7 @@ export function BarComposed({
   const font = useFont(INTER_FONT, 9)
   const { state, isActive } = useChartPressState({ x: 0, y: { bar: 0, avg: 0 } })
   const bColor = barColor ?? theme.primary
-  const lColor = lineColor ?? '#F59E0B'
+  const lColor = lineColor ?? theme.warning
 
   useAnimatedReaction(
     () => (isActive ? Math.round(state.x.value.value) : -1),

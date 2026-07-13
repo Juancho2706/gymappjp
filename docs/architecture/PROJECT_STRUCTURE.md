@@ -26,7 +26,7 @@ packages/
   feature-prefs/     @eva/feature-prefs: resolucion de feature-prefs por seccion (puro TS) compartido web/mobile
   module-catalog/    @eva/module-catalog: catalogo de modulos de pago (MODULE_KEYS) compartido web/mobile
   nutrition-engine/  @eva/nutrition-engine: motor unico de adherencia/racha/anillos/micros compartido web/mobile
-  workout-engine/    @eva/workout-engine: motor puro de ejecucion (pasos, keypad, summary, typed, PRs) compartido web/mobile (paridad RN, elimina drift)
+  workout-engine/    @eva/workout-engine: motor puro de ejecución + reconcile no destructivo de programas compartido web/mobile
   plan-builder/      @eva/plan-builder: logica pura del builder de programas (areas, superseries, A/B, completitud por tipo)
   cardio/            @eva/cardio: calculos puros de zonas/pace/plantillas de cardio
   bodycomp/          @eva/bodycomp: computo ISAK/BIA/somatotype/antropometria (movido desde apps/web/src/domain/bodycomp)
@@ -124,7 +124,7 @@ apps/mobile/app/
     exercise/            Aprender: detalle ejercicio
     (tabs)/              home, workout, nutricion, check-in, exercises, history, perfil
   coach/
-    program-builder.tsx  Builder de programas (polimorfico, areas, A/B, fases)
+    program-builder.tsx  Builder de programas (workspace explícito, drafts, reconcile, A/B, fases, ciclos 14d)
     nutrition-builder.tsx Builder de plan (template/client-plan, intercambios, swaps)
     meal-groups.tsx      Grupos de comidas
     foods.tsx            Redirect a nutricion?tab=foods
@@ -147,6 +147,19 @@ check-ins y bodycomp. Cada request lleva el workspace explícito; bodycomp usa
 un cliente token-scoped para conservar RLS como techo. La preferencia de team
 activo es local en RN porque `workspace_preferences` no representa un
 `last_team_id`; no se simula persistencia server-side ambigua.
+
+Análisis/Programa de la ficha cargan detalle diario por fecha Santiago y estado
+separado por dominio. El builder usa catálogos scopeados, conflicto optimista
+por `updated_at` y `@eva/workout-engine/workout-save-reconcile` para preservar
+IDs de planes/bloques e historial igual que web. Los contratos compartidos y
+la migración `20260712233000` fijan ciclos de 1–14 días; la migración debe pasar
+el gate de Supabase branch antes de mergearse/aplicarse.
+
+La asignación masiva RN persiste por RLS y luego llama
+`/api/mobile/coach/program-assignment-notifications`. El endpoint revalida el
+Bearer y el workspace con el resolver canónico, lee por repository y emite el
+correo white-label desde un adapter Resend idempotente; nunca expone secretos
+de email al dispositivo ni muta el programa ya asignado.
 
 Notas:
 - Selector de rol / walkthrough / codigo son RN-nativos (la web es coach-slug-scoped, sin selector).
