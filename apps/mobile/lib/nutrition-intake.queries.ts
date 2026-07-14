@@ -1,3 +1,4 @@
+import { parseGtin, normalizeFoodSearchText } from '@eva/nutrition-engine'
 import { supabase } from './supabase'
 import { calculateFoodItemMacros } from './nutrition-utils'
 
@@ -54,6 +55,12 @@ export interface IntakeMacros {
   fats: number
 }
 
+export type BarcodeLookupResult =
+  | { status: 'found'; barcode: string; food: IntakeFood }
+  | { status: 'invalid'; barcode: string }
+  | { status: 'not_found'; barcode: string }
+  | { status: 'unavailable'; barcode: string }
+
 const FOOD_SELECT =
   'id, name, brand, calories, protein_g, carbs_g, fats_g, serving_size, serving_unit, is_liquid'
 const ENTRY_SELECT = `id, log_date, food_id, custom_name, quantity, unit, source, created_at, food:foods(${FOOD_SELECT})`
@@ -62,20 +69,91 @@ const SEARCH_MIN_CHARS = 2
 
 /**
  * Busca alimentos del catálogo visibles para el alumno (RLS de `foods`: globales +
- * los del coach del alumno). Búsqueda por nombre (ilike), igual que el food picker
- * mobile del coach (`nutrition-builder.searchFoods`).
+ * los del coach del alumno). `name_search` ya existe en producción y es la misma
+ * fuente usada por web; la migración draft agrega un índice trigram para escalar.
  */
 export async function searchIntakeFoods(term: string, limit = 30): Promise<IntakeFood[]> {
-  const trimmed = term.trim()
-  if (trimmed.length < SEARCH_MIN_CHARS) return []
+  const normalized = normalizeFoodSearchText(term)
+  if (normalized.length < SEARCH_MIN_CHARS) return []
   const { data, error } = await supabase
     .from('foods')
     .select(FOOD_SELECT)
-    .ilike('name', `%${trimmed}%`)
+    .ilike('name_search', `%${normalized}%`)
     .order('name')
     .limit(limit)
   if (error || !data) return []
   return data as unknown as IntakeFood[]
+}
+
+/**
+ * Busca un GTIN/EAN/UPC EXCLUSIVAMENTE en el catálogo local de Supabase.
+ *
+ * La columna `foods.barcode` vive en una migración draft aditiva. Hasta que esa
+ * migración sea aprobada, PostgREST responderá columna inexistente y el helper
+ * devolverá `unavailable`; la UI mantiene búsqueda manual y no rompe Nutrición.
+ */
+export async function findIntakeFoodByBarcode(rawCode: string): Promise<BarcodeLookupResult> {
+  const barcode = parseGtin(rawCode)
+  if (!barcode) return { status: 'invalid', barcode: rawCode.replace(/\D/g, '') }
+
+  const client = supabase as unknown as {
+    from: (table: string) => {
+      select: (columns: string) => {
+        eq: (column: string, value: string) => {
+          limit: (count: number) => {
+            maybeSingle: () => Promise<{ data: unknown; error: { code?: string } | null }>
+          }
+        }
+      }
+    }
+  }
+
+  try {
+    const { data, error } = await client
+      .from('foods')
+      .select(`${FOOD_SELECT}, barcode`)
+      .eq('barcode', barcode)
+      .limit(1)
+      .maybeSingle()
+
+    if (error) return { status: 'unavailable', barcode }
+    if (!data) return { status: 'not_found', barcode }
+    return { status: 'found', barcode, food: data as IntakeFood }
+  } catch {
+    return { status: 'unavailable', barcode }
+  }
+}
+
+/**
+ * Registra best-effort un código válido no encontrado para curación posterior.
+ * La tabla es parte de la misma migración draft; antes de aplicarla el error se
+ * ignora deliberadamente y el flujo existente sigue disponible.
+ */
+export async function recordMissingFoodBarcode(clientId: string, rawCode: string): Promise<void> {
+  const barcode = parseGtin(rawCode)
+  if (!barcode) return
+
+  try {
+    const client = supabase as unknown as {
+      from: (table: string) => {
+        upsert: (
+          values: Record<string, unknown>,
+          options: { onConflict: string },
+        ) => Promise<{ error: unknown }>
+      }
+    }
+    await client.from('food_catalog_missing_codes').upsert(
+      {
+        client_id: clientId,
+        barcode,
+        country_code: 'CL',
+        last_seen_at: new Date().toISOString(),
+      },
+      { onConflict: 'client_id,barcode' },
+    )
+  } catch {
+    // La migración aún no está aplicada, no hay conexión o RLS rechazó: no bloquea.
+  }
 }
 
 /** Entradas de intake del alumno para un día (YYYY-MM-DD), más viejas primero. */
