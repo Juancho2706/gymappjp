@@ -6,6 +6,8 @@ import { Barcode, ChevronLeft, Clock3, Loader2, Plus, Search } from 'lucide-reac
 import { toast } from 'sonner'
 import {
   NUTRITION_INTAKE_ACTIONS,
+  NUTRITION_MEAL_SLOTS,
+  NUTRITION_MEAL_SLOT_LABELS,
   calculateFoodItemMacros,
   formatFoodReference,
   normalizeFoodSearchText,
@@ -13,6 +15,7 @@ import {
   preferredFoodIntakeQuantity,
   preferredFoodIntakeUnit,
   type NutritionIntakeActionId,
+  type NutritionMealSlot,
 } from '@eva/nutrition-engine'
 import { createClient } from '@/lib/supabase/client'
 import { cn } from '@/lib/utils'
@@ -51,14 +54,27 @@ function allowedUnits(food: Food): readonly IntakeUnit[] {
   return food.is_liquid || food.serving_unit === 'ml' ? ['ml', 'un'] : ['g', 'un']
 }
 
-function foodReference(food: Food): string {
-  return formatFoodReference(food)
+function defaultMealSlot(): NutritionMealSlot {
+  const hour = new Date().getHours()
+  if (hour < 10) return 'breakfast'
+  if (hour < 12) return 'morning_snack'
+  if (hour < 16) return 'lunch'
+  if (hour < 19) return 'afternoon_snack'
+  return 'dinner'
+}
+
+function captureMethod(source: IntakeSource): 'search' | 'barcode' | 'recent' | 'copy' {
+  if (source === 'quickadd') return 'barcode'
+  if (source === 'recent') return 'recent'
+  if (source === 'copy') return 'copy'
+  return 'search'
 }
 
 export function AddFoodClient({ coachSlug, backHref, today, recents }: Props) {
   const router = useRouter()
   const supabase = useMemo(() => createClient(), [])
   const [mode, setMode] = useState<NutritionIntakeActionId>('search')
+  const [mealSlot, setMealSlot] = useState<NutritionMealSlot>('other')
   const [term, setTerm] = useState('')
   const [barcodeInput, setBarcodeInput] = useState('')
   const [results, setResults] = useState<Food[]>([])
@@ -68,6 +84,8 @@ export function AddFoodClient({ coachSlug, backHref, today, recents }: Props) {
   const [searching, setSearching] = useState(false)
   const [lookingUpBarcode, setLookingUpBarcode] = useState(false)
   const [isPending, startTransition] = useTransition()
+
+  useEffect(() => setMealSlot(defaultMealSlot()), [])
 
   useEffect(() => {
     if (mode !== 'search' || selected) return
@@ -109,14 +127,10 @@ export function AddFoodClient({ coachSlug, backHref, today, recents }: Props) {
 
   function changeUnit(nextUnit: IntakeUnit) {
     if (!selected) return
-    const previousPreferred = preferredFoodIntakeUnit(selected.food)
-    const previousDefault = previousPreferred === 'un'
-      ? 1
-      : preferredFoodIntakeQuantity(selected.food)
     const currentQuantity = Number(quantity.replace(',', '.'))
-
+    const previousDefault = unit === 'un' ? 1 : preferredFoodIntakeQuantity(selected.food)
     setUnit(nextUnit)
-    if (currentQuantity === previousDefault || !Number.isFinite(currentQuantity)) {
+    if (!Number.isFinite(currentQuantity) || currentQuantity === previousDefault) {
       setQuantity(nextUnit === 'un' ? '1' : String(preferredFoodIntakeQuantity({
         ...selected.food,
         serving_unit: nextUnit,
@@ -184,6 +198,8 @@ export function AddFoodClient({ coachSlug, backHref, today, recents }: Props) {
         quantity: parsedQuantity,
         unit,
         source: selected.source,
+        mealSlot,
+        captureMethod: captureMethod(selected.source),
       })
 
       if (!result.success) {
@@ -191,7 +207,7 @@ export function AddFoodClient({ coachSlug, backHref, today, recents }: Props) {
         return
       }
 
-      toast.success(`${selected.food.name} agregado al consumo de hoy`)
+      toast.success(`${selected.food.name} agregado a ${NUTRITION_MEAL_SLOT_LABELS[mealSlot].toLowerCase()}`)
       router.push(backHref)
       router.refresh()
     })
@@ -209,7 +225,7 @@ export function AddFoodClient({ coachSlug, backHref, today, recents }: Props) {
 
   return (
     <div className="min-h-dvh bg-background">
-      <header className="sticky top-0 z-40 border-b border-border/70 bg-background/90 backdrop-blur-xl pt-safe">
+      <header className="sticky top-0 z-40 border-b border-border/70 bg-background/90 pt-safe backdrop-blur-xl">
         <div className="mx-auto flex min-h-16 max-w-5xl items-center gap-3 px-4 py-2">
           <button
             type="button"
@@ -220,15 +236,35 @@ export function AddFoodClient({ coachSlug, backHref, today, recents }: Props) {
             <ChevronLeft className="h-5 w-5" />
           </button>
           <div className="min-w-0 flex-1">
-            <h1 className="truncate font-display text-xl font-extrabold tracking-tight text-foreground">
-              Registrar alimento
-            </h1>
+            <h1 className="truncate font-display text-xl font-extrabold tracking-tight text-foreground">Registrar alimento</h1>
             <p className="text-[11px] font-semibold text-muted-foreground">Consumo real · Hoy</p>
           </div>
         </div>
       </header>
 
       <main className="mx-auto max-w-lg space-y-4 px-4 py-5 pb-28 md:max-w-5xl">
+        <section className="rounded-card border border-border bg-card p-4 shadow-sm">
+          <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">¿En qué comida?</p>
+          <div className="mt-3 flex gap-2 overflow-x-auto pb-1 scrollbar-none">
+            {NUTRITION_MEAL_SLOTS.map((slot) => (
+              <button
+                type="button"
+                key={slot}
+                onClick={() => setMealSlot(slot)}
+                aria-pressed={mealSlot === slot}
+                className={cn(
+                  'h-10 shrink-0 rounded-full border px-3 text-xs font-extrabold transition-colors',
+                  mealSlot === slot
+                    ? 'border-ember-500 bg-ember-100 text-ember-700 dark:bg-ember-500/15 dark:text-ember-300'
+                    : 'border-border bg-muted/40 text-muted-foreground',
+                )}
+              >
+                {NUTRITION_MEAL_SLOT_LABELS[slot]}
+              </button>
+            ))}
+          </div>
+        </section>
+
         {!selected ? (
           <>
             <div className="grid grid-cols-3 gap-2">
@@ -267,11 +303,8 @@ export function AddFoodClient({ coachSlug, backHref, today, recents }: Props) {
                     placeholder="Buscar pollo, marraqueta, yogur…"
                     className="h-13 w-full rounded-control border border-border bg-card pl-12 pr-12 text-sm font-semibold text-foreground outline-none transition focus:border-ember-500 focus:ring-4 focus:ring-ember-500/10"
                   />
-                  {searching && (
-                    <Loader2 className="absolute right-4 top-1/2 h-5 w-5 -translate-y-1/2 animate-spin text-muted-foreground" />
-                  )}
+                  {searching && <Loader2 className="absolute right-4 top-1/2 h-5 w-5 -translate-y-1/2 animate-spin text-muted-foreground" />}
                 </div>
-
                 {term.trim().length < 2 ? (
                   <Hint>Escribe al menos dos letras. EVA consulta el catálogo local guardado en Supabase.</Hint>
                 ) : results.length === 0 && !searching ? (
@@ -288,11 +321,9 @@ export function AddFoodClient({ coachSlug, backHref, today, recents }: Props) {
                   <div className="flex h-12 w-12 items-center justify-center rounded-control bg-ember-100 text-ember-700 dark:bg-ember-500/15 dark:text-ember-300">
                     <Barcode className="h-6 w-6" />
                   </div>
-                  <h2 className="mt-4 font-display text-xl font-extrabold tracking-tight text-foreground">
-                    Buscar por código
-                  </h2>
+                  <h2 className="mt-4 font-display text-xl font-extrabold tracking-tight text-foreground">Buscar por código</h2>
                   <p className="mt-2 max-w-xl text-sm leading-relaxed text-muted-foreground">
-                    Escribe el EAN/GTIN del envase. EVA consulta su catálogo local; no realiza una llamada externa por cada búsqueda.
+                    Escribe el EAN/GTIN del envase. EVA consulta su catálogo local, sin llamadas externas por búsqueda.
                   </p>
                 </div>
                 <div className="flex gap-2">
@@ -313,27 +344,26 @@ export function AddFoodClient({ coachSlug, backHref, today, recents }: Props) {
                     {lookingUpBarcode ? <Loader2 className="h-5 w-5 animate-spin" /> : <Search className="h-5 w-5" />}
                   </button>
                 </div>
-                <Hint>En React Native este mismo flujo usa la cámara. En web, PWA y desktop la entrada manual siempre queda disponible.</Hint>
+                <Hint>En React Native este flujo usa la cámara. En web y PWA la entrada manual queda disponible.</Hint>
               </section>
             )}
 
             {mode === 'recent' && (
-              recents.length > 0 ? (
-                <FoodList foods={recents} onPick={(food) => pickFood(food, 'recent')} />
-              ) : (
-                <Hint>Tus alimentos recientes aparecerán aquí después del primer registro.</Hint>
-              )
+              recents.length > 0
+                ? <FoodList foods={recents} onPick={(food) => pickFood(food, 'recent')} />
+                : <Hint>Tus alimentos recientes aparecerán aquí después del primer registro.</Hint>
             )}
           </>
         ) : (
           <section className="space-y-4">
             <div className="rounded-card border border-border bg-card p-5 shadow-sm">
-              <h2 className="font-display text-2xl font-extrabold tracking-tight text-foreground">
-                {selected.food.name}
-              </h2>
+              <p className="text-[10px] font-black uppercase tracking-widest text-ember-700 dark:text-ember-300">
+                {NUTRITION_MEAL_SLOT_LABELS[mealSlot]}
+              </p>
+              <h2 className="mt-1 font-display text-2xl font-extrabold tracking-tight text-foreground">{selected.food.name}</h2>
               {selected.food.brand && <p className="mt-1 text-sm font-semibold text-muted-foreground">{selected.food.brand}</p>}
               <p className="mt-2 font-mono text-[11px] font-semibold text-muted-foreground">
-                Base nutricional: {foodReference(selected.food)}
+                Base nutricional: {formatFoodReference(selected.food)}
               </p>
 
               <div className="mt-5 flex gap-2">
@@ -420,7 +450,7 @@ function FoodList({ foods, onPick }: { foods: Food[]; onPick: (food: Food) => vo
           <span className="min-w-0 flex-1">
             <span className="block truncate text-sm font-extrabold text-foreground">{food.name}</span>
             <span className="mt-0.5 block truncate text-[11px] font-semibold text-muted-foreground">
-              {food.brand ? `${food.brand} · ` : ''}{foodReference(food)}
+              {food.brand ? `${food.brand} · ` : ''}{formatFoodReference(food)}
             </span>
           </span>
           <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-ember-100 text-ember-700 dark:bg-ember-500/15 dark:text-ember-300">
