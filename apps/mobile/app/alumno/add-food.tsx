@@ -13,16 +13,13 @@ import {
 import { CameraView, type BarcodeScanningResult, useCameraPermissions } from 'expo-camera'
 import { router } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import {
-  Barcode,
-  ChevronLeft,
-  Clock3,
-  Plus,
-  Search,
-  ScanLine,
-} from 'lucide-react-native'
+import { Barcode, ChevronLeft, Clock3, Plus, Search, ScanLine } from 'lucide-react-native'
 import {
   NUTRITION_INTAKE_ACTIONS,
+  calculateFoodItemMacros,
+  formatFoodReference,
+  preferredFoodIntakeQuantity,
+  preferredFoodIntakeUnit,
   type NutritionIntakeActionId,
 } from '@eva/nutrition-engine'
 import { AppBackground } from '../../components/AppBackground'
@@ -33,7 +30,6 @@ import { FONT } from '../../lib/typography'
 import {
   findIntakeFoodByBarcode,
   insertIntakeEntry,
-  intakeEntryMacros,
   listRecentIntakeFoods,
   recordMissingFoodBarcode,
   searchIntakeFoods,
@@ -43,8 +39,11 @@ import {
 } from '../../lib/nutrition-intake.queries'
 
 const EMBER = '#FF6A3D'
-const UNITS: IntakeUnit[] = ['g', 'ml', 'un']
 const SEARCH_DEBOUNCE_MS = 300
+
+function allowedUnits(food: IntakeFood): readonly IntakeUnit[] {
+  return food.is_liquid || food.serving_unit === 'ml' ? ['ml', 'un'] : ['g', 'un']
+}
 
 export default function AddFoodScreen() {
   const { theme } = useTheme()
@@ -70,25 +69,24 @@ export default function AddFoodScreen() {
 
   useEffect(() => {
     let alive = true
-    Promise.all([getClientProfile(), listRecentIntakeFoodsFromSession()])
-      .then(([client, recentFoods]) => {
+    async function load() {
+      try {
+        const client = await getClientProfile()
         if (!alive) return
         setClientId(client?.id ?? null)
-        setRecents(recentFoods)
-      })
-      .finally(() => {
+        if (client) {
+          const recentFoods = await listRecentIntakeFoods(client.id, 12)
+          if (alive) setRecents(recentFoods)
+        }
+      } finally {
         if (alive) setLoading(false)
-      })
+      }
+    }
+    void load()
     return () => {
       alive = false
     }
   }, [])
-
-  async function listRecentIntakeFoodsFromSession(): Promise<IntakeFood[]> {
-    const client = await getClientProfile()
-    if (!client) return []
-    return listRecentIntakeFoods(client.id, 12)
-  }
 
   useEffect(() => {
     if (mode !== 'search' || selected) return
@@ -118,11 +116,26 @@ export default function AddFoodScreen() {
   }, [mode, selected, term])
 
   function pickFood(food: IntakeFood, source: IntakeSource) {
+    const preferredUnit = preferredFoodIntakeUnit(food) as IntakeUnit
     setSelected({ food, source })
-    setQuantity(String(Math.round(food.serving_size) || 100))
-    setUnit(food.is_liquid ? 'ml' : 'g')
+    setUnit(preferredUnit)
+    setQuantity(String(preferredFoodIntakeQuantity(food)))
     setScannerOpen(false)
     setScannerLocked(false)
+  }
+
+  function changeUnit(nextUnit: IntakeUnit) {
+    if (!selected) return
+    const current = Number(quantity.replace(',', '.'))
+    const currentDefault = unit === 'un' ? 1 : preferredFoodIntakeQuantity(selected.food)
+    setUnit(nextUnit)
+    if (!Number.isFinite(current) || current === currentDefault) {
+      setQuantity(nextUnit === 'un' ? '1' : String(preferredFoodIntakeQuantity({
+        ...selected.food,
+        serving_unit: nextUnit,
+        is_liquid: nextUnit === 'ml',
+      })))
+    }
   }
 
   async function lookupBarcode(rawCode: string) {
@@ -153,10 +166,7 @@ export default function AddFoodScreen() {
       return
     }
 
-    Alert.alert(
-      'Catálogo por código aún no disponible',
-      'La búsqueda normal sigue funcionando. El soporte de códigos se activará después de aprobar la migración aditiva del catálogo.',
-    )
+    Alert.alert('No se pudo consultar', 'Revisa tu conexión o busca el alimento por nombre.')
   }
 
   async function openScanner() {
@@ -210,18 +220,12 @@ export default function AddFoodScreen() {
   const preview = useMemo(() => {
     if (!selected) return null
     const parsedQuantity = Number(quantity.replace(',', '.'))
-    return intakeEntryMacros({
-      id: 'preview',
-      log_date: today,
-      food_id: selected.food.id,
-      custom_name: null,
+    return calculateFoodItemMacros({
       quantity: Number.isFinite(parsedQuantity) && parsedQuantity > 0 ? parsedQuantity : 0,
       unit,
-      source: selected.source,
-      created_at: '',
-      food: selected.food,
+      foods: selected.food,
     })
-  }, [quantity, selected, today, unit])
+  }, [quantity, selected, unit])
 
   if (loading) {
     return (
@@ -346,6 +350,7 @@ export default function AddFoodScreen() {
                   </Text>
                   <Pressable
                     onPress={openScanner}
+                    accessibilityRole="button"
                     style={{ height: 50, borderRadius: 16, backgroundColor: EMBER, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 8 }}
                   >
                     <ScanLine size={18} color="#FFFFFF" />
@@ -376,13 +381,11 @@ export default function AddFoodScreen() {
                   <Pressable
                     disabled={lookingUpBarcode}
                     onPress={() => lookupBarcode(barcodeInput)}
+                    accessibilityRole="button"
+                    accessibilityLabel="Buscar código"
                     style={{ width: 54, height: 50, borderRadius: 16, backgroundColor: theme.foreground, alignItems: 'center', justifyContent: 'center', opacity: lookingUpBarcode ? 0.55 : 1 }}
                   >
-                    {lookingUpBarcode ? (
-                      <ActivityIndicator color={theme.background} />
-                    ) : (
-                      <Search size={19} color={theme.background} />
-                    )}
+                    {lookingUpBarcode ? <ActivityIndicator color={theme.background} /> : <Search size={19} color={theme.background} />}
                   </Pressable>
                 </View>
               </View>
@@ -408,6 +411,9 @@ export default function AddFoodScreen() {
                     {selected.food.brand}
                   </Text>
                 ) : null}
+                <Text style={{ color: theme.mutedForeground, fontFamily: FONT.monoMedium, fontSize: 10.5, marginTop: 7 }}>
+                  Base nutricional: {formatFoodReference(selected.food)}
+                </Text>
               </View>
 
               <View style={{ flexDirection: 'row', gap: 10 }}>
@@ -416,6 +422,7 @@ export default function AddFoodScreen() {
                   onChangeText={setQuantity}
                   keyboardType="decimal-pad"
                   selectTextOnFocus
+                  accessibilityLabel="Cantidad"
                   style={{
                     width: 112,
                     height: 52,
@@ -430,12 +437,14 @@ export default function AddFoodScreen() {
                   }}
                 />
                 <View style={{ flex: 1, flexDirection: 'row', gap: 6 }}>
-                  {UNITS.map((value) => {
+                  {allowedUnits(selected.food).map((value) => {
                     const active = unit === value
                     return (
                       <Pressable
                         key={value}
-                        onPress={() => setUnit(value)}
+                        onPress={() => changeUnit(value)}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected: active }}
                         style={{
                           flex: 1,
                           height: 52,
@@ -456,6 +465,12 @@ export default function AddFoodScreen() {
                 </View>
               </View>
 
+              {unit === 'un' ? (
+                <Text style={{ color: theme.mutedForeground, fontFamily: FONT.uiMedium, fontSize: 11.5 }}>
+                  1 unidad equivale aproximadamente a {selected.food.serving_size || 100} g.
+                </Text>
+              ) : null}
+
               {preview ? (
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
                   <Metric label="kcal" value={preview.calories} color={EMBER} />
@@ -469,6 +484,7 @@ export default function AddFoodScreen() {
             <View style={{ flexDirection: 'row', gap: 10 }}>
               <Pressable
                 onPress={() => setSelected(null)}
+                accessibilityRole="button"
                 style={{ flex: 1, height: 52, borderRadius: 17, borderWidth: 1.5, borderColor: theme.border, alignItems: 'center', justifyContent: 'center' }}
               >
                 <Text style={{ color: theme.foreground, fontFamily: FONT.uiBold, fontSize: 14 }}>Volver</Text>
@@ -476,6 +492,7 @@ export default function AddFoodScreen() {
               <Pressable
                 disabled={saving}
                 onPress={save}
+                accessibilityRole="button"
                 style={{ flex: 1.4, height: 52, borderRadius: 17, backgroundColor: EMBER, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 8, opacity: saving ? 0.6 : 1 }}
               >
                 {saving ? <ActivityIndicator color="#FFFFFF" /> : <Plus size={18} color="#FFFFFF" />}
@@ -487,14 +504,17 @@ export default function AddFoodScreen() {
       </ScrollView>
 
       {scannerOpen ? (
-        <View style={{ position: 'absolute', inset: 0, backgroundColor: '#000000', zIndex: 100 }}>
+        <View style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, backgroundColor: '#000000', zIndex: 100 }}>
           <CameraView
             style={{ flex: 1 }}
             facing="back"
             onBarcodeScanned={scannerLocked ? undefined : handleBarcodeScanned}
             barcodeScannerSettings={{ barcodeTypes: ['ean13', 'ean8', 'upc_a', 'upc_e', 'itf14'] }}
           />
-          <View style={{ position: 'absolute', inset: 0, alignItems: 'center', justifyContent: 'center' }} pointerEvents="none">
+          <View
+            style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, alignItems: 'center', justifyContent: 'center' }}
+            pointerEvents="none"
+          >
             <View style={{ width: '78%', height: 180, borderRadius: 24, borderWidth: 3, borderColor: '#FFFFFF' }} />
             <Text style={{ color: '#FFFFFF', fontFamily: FONT.uiBold, fontSize: 14, marginTop: 18 }}>
               Centra el código dentro del marco
@@ -502,6 +522,7 @@ export default function AddFoodScreen() {
           </View>
           <Pressable
             onPress={() => setScannerOpen(false)}
+            accessibilityRole="button"
             style={{ position: 'absolute', top: insets.top + 12, left: 16, height: 46, paddingHorizontal: 16, borderRadius: 16, backgroundColor: 'rgba(0,0,0,0.65)', alignItems: 'center', justifyContent: 'center' }}
           >
             <Text style={{ color: '#FFFFFF', fontFamily: FONT.uiBold, fontSize: 14 }}>Cerrar</Text>
@@ -546,6 +567,7 @@ function FoodList({ foods, onPick }: { foods: IntakeFood[]; onPick: (food: Intak
         <Pressable
           key={food.id}
           onPress={() => onPick(food)}
+          accessibilityRole="button"
           style={{
             minHeight: 64,
             paddingHorizontal: 16,
@@ -562,7 +584,7 @@ function FoodList({ foods, onPick }: { foods: IntakeFood[]; onPick: (food: Intak
               {food.name}
             </Text>
             <Text style={{ color: theme.mutedForeground, fontFamily: FONT.uiMedium, fontSize: 11.5, marginTop: 2 }} numberOfLines={1}>
-              {food.brand ? `${food.brand} · ` : ''}{food.serving_size} {food.serving_unit ?? 'g'} · {food.calories} kcal
+              {food.brand ? `${food.brand} · ` : ''}{formatFoodReference(food)}
             </Text>
           </View>
           <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: `${EMBER}18`, alignItems: 'center', justifyContent: 'center' }}>
