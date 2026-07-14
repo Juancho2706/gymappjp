@@ -94,7 +94,7 @@ export function NutritionGuidanceProgress({ plan, habits }: Props) {
 
       {goals.length > 0 && (
         <div className="mt-4 grid grid-cols-2 gap-2">
-          {goals.map((goal) => <Goal key={goal.key} {...goal} />)}
+          {goals.map(({ key, ...goal }) => <Goal key={key} {...goal} />)}
         </div>
       )}
 
