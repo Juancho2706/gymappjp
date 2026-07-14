@@ -109,10 +109,6 @@ export async function getNutritionClientDetailV2(input: {
   return NutritionClientDetailReadModelSchema.parse(raw)
 }
 
-const MutationResponseSchema = NutritionIntakeMutationSchema.pick({
-  idempotencyKey: true,
-}).transform(() => undefined)
-
 function parseMutationResponse(raw: unknown): { ok: true; id: string; action: 'record' | 'correct' } {
   if (!raw || typeof raw !== 'object') throw new Error('Invalid Nutrition V2 mutation response')
   const value = raw as Record<string, unknown>
@@ -131,7 +127,6 @@ export async function recordNutritionIntakeV2(
   signal?: AbortSignal,
 ): Promise<{ ok: true; id: string; action: 'record' }> {
   const validated = NutritionIntakeMutationSchema.parse(payload)
-  MutationResponseSchema.parse(validated)
   const raw = await apiFetch<unknown>('/api/mobile/nutrition-v2/intake', {
     method: 'POST',
     authenticated: true,
