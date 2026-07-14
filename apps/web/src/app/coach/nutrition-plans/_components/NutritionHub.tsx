@@ -11,6 +11,7 @@ import { ActivePlansBoard } from './ActivePlansBoard'
 import { NutritionRosterMasterDetail } from './NutritionRosterMasterDetail'
 import type { ActivePlanBoardRow } from '../_data/nutrition-coach.queries'
 import { FoodLibrary } from './FoodLibrary'
+import { FoodCatalogCurationQueue } from './FoodCatalogCurationQueue'
 import type { AssignModalClient } from './AssignModal'
 import { NutritionOnboarding } from './NutritionOnboarding'
 import { CoachNutritionGuideDialog } from './CoachNutritionGuideDialog'
@@ -178,7 +179,10 @@ export function NutritionHub({
         </TabsContent>
 
         <TabsContent value="foods" className="mt-0 focus-visible:outline-none">
-          <FoodLibrary initialFoods={foods.foods} totalFoods={foods.total} coachId={coachId} />
+          <div className="space-y-3">
+            <FoodCatalogCurationQueue />
+            <FoodLibrary initialFoods={foods.foods} totalFoods={foods.total} coachId={coachId} />
+          </div>
         </TabsContent>
 
         <TabsContent value="recipes" className="mt-0 focus-visible:outline-none">
