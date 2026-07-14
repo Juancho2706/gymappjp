@@ -166,7 +166,7 @@ export async function listRecentIntakeFoods(clientId: string, limit = 8): Promis
 
   const seen = new Set<string>()
   const out: IntakeFood[] = []
-  for (const row of data as Array<{ food_id: string | null; food: IntakeFood | null }>) {
+  for (const row of data as unknown as Array<{ food_id: string | null; food: IntakeFood | null }>) {
     if (!row.food || !row.food_id || seen.has(row.food_id)) continue
     seen.add(row.food_id)
     out.push(row.food)
