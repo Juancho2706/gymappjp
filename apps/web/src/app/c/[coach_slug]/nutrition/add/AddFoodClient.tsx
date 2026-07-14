@@ -2,19 +2,16 @@
 
 import { useEffect, useMemo, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import {
-  Barcode,
-  ChevronLeft,
-  Clock3,
-  Loader2,
-  Plus,
-  Search,
-} from 'lucide-react'
+import { Barcode, ChevronLeft, Clock3, Loader2, Plus, Search } from 'lucide-react'
 import { toast } from 'sonner'
 import {
   NUTRITION_INTAKE_ACTIONS,
+  calculateFoodItemMacros,
+  formatFoodReference,
   normalizeFoodSearchText,
   parseGtin,
+  preferredFoodIntakeQuantity,
+  preferredFoodIntakeUnit,
   type NutritionIntakeActionId,
 } from '@eva/nutrition-engine'
 import { createClient } from '@/lib/supabase/client'
@@ -49,6 +46,14 @@ interface Props {
 
 const FOOD_SELECT =
   'id, name, brand, calories, protein_g, carbs_g, fats_g, serving_size, serving_unit, is_liquid'
+
+function allowedUnits(food: Food): readonly IntakeUnit[] {
+  return food.is_liquid || food.serving_unit === 'ml' ? ['ml', 'un'] : ['g', 'un']
+}
+
+function foodReference(food: Food): string {
+  return formatFoodReference(food)
+}
 
 export function AddFoodClient({ coachSlug, backHref, today, recents }: Props) {
   const router = useRouter()
@@ -96,9 +101,28 @@ export function AddFoodClient({ coachSlug, backHref, today, recents }: Props) {
   }, [mode, selected, supabase, term])
 
   function pickFood(food: Food, source: IntakeSource) {
+    const preferredUnit = preferredFoodIntakeUnit(food) as IntakeUnit
     setSelected({ food, source })
-    setQuantity(String(Math.round(food.serving_size) || 100))
-    setUnit(food.is_liquid ? 'ml' : 'g')
+    setUnit(preferredUnit)
+    setQuantity(String(preferredFoodIntakeQuantity(food)))
+  }
+
+  function changeUnit(nextUnit: IntakeUnit) {
+    if (!selected) return
+    const previousPreferred = preferredFoodIntakeUnit(selected.food)
+    const previousDefault = previousPreferred === 'un'
+      ? 1
+      : preferredFoodIntakeQuantity(selected.food)
+    const currentQuantity = Number(quantity.replace(',', '.'))
+
+    setUnit(nextUnit)
+    if (currentQuantity === previousDefault || !Number.isFinite(currentQuantity)) {
+      setQuantity(nextUnit === 'un' ? '1' : String(preferredFoodIntakeQuantity({
+        ...selected.food,
+        serving_unit: nextUnit,
+        is_liquid: nextUnit === 'ml',
+      })))
+    }
   }
 
   async function lookupBarcode() {
@@ -129,7 +153,7 @@ export function AddFoodClient({ coachSlug, backHref, today, recents }: Props) {
         .maybeSingle()
 
       if (error) {
-        toast.info('El catálogo por código se activará después de aprobar la migración aditiva. Puedes buscar por nombre.')
+        toast.error('No se pudo consultar el catálogo local. Prueba buscando por nombre.')
         return
       }
       if (!data) {
@@ -176,15 +200,11 @@ export function AddFoodClient({ coachSlug, backHref, today, recents }: Props) {
   const preview = useMemo(() => {
     if (!selected) return null
     const parsed = Number(quantity.replace(',', '.'))
-    const qty = Number.isFinite(parsed) && parsed > 0 ? parsed : 0
-    const grams = unit === 'un' ? qty * selected.food.serving_size : qty
-    const factor = grams / 100
-    return {
-      calories: selected.food.calories * factor,
-      protein: selected.food.protein_g * factor,
-      carbs: selected.food.carbs_g * factor,
-      fats: selected.food.fats_g * factor,
-    }
+    return calculateFoodItemMacros({
+      quantity: Number.isFinite(parsed) && parsed > 0 ? parsed : 0,
+      unit,
+      foods: selected.food,
+    })
   }, [quantity, selected, unit])
 
   return (
@@ -312,6 +332,9 @@ export function AddFoodClient({ coachSlug, backHref, today, recents }: Props) {
                 {selected.food.name}
               </h2>
               {selected.food.brand && <p className="mt-1 text-sm font-semibold text-muted-foreground">{selected.food.brand}</p>}
+              <p className="mt-2 font-mono text-[11px] font-semibold text-muted-foreground">
+                Base nutricional: {foodReference(selected.food)}
+              </p>
 
               <div className="mt-5 flex gap-2">
                 <input
@@ -321,12 +344,12 @@ export function AddFoodClient({ coachSlug, backHref, today, recents }: Props) {
                   className="h-13 w-28 rounded-control border border-border bg-muted px-4 font-mono text-base font-bold text-foreground outline-none focus:border-ember-500"
                   aria-label="Cantidad"
                 />
-                <div className="grid min-w-0 flex-1 grid-cols-3 gap-2">
-                  {UNITS.map((value) => (
+                <div className={cn('grid min-w-0 flex-1 gap-2', allowedUnits(selected.food).length === 2 ? 'grid-cols-2' : 'grid-cols-3')}>
+                  {allowedUnits(selected.food).map((value) => (
                     <button
                       type="button"
                       key={value}
-                      onClick={() => setUnit(value)}
+                      onClick={() => changeUnit(value)}
                       className={cn(
                         'h-13 rounded-control border text-sm font-extrabold transition-transform active:scale-[.97]',
                         unit === value
@@ -339,6 +362,12 @@ export function AddFoodClient({ coachSlug, backHref, today, recents }: Props) {
                   ))}
                 </div>
               </div>
+
+              {unit === 'un' && (
+                <p className="mt-2 text-xs font-semibold text-muted-foreground">
+                  1 unidad equivale aproximadamente a {selected.food.serving_size || 100} g.
+                </p>
+              )}
 
               {preview && (
                 <div className="mt-5 flex flex-wrap gap-2">
@@ -391,7 +420,7 @@ function FoodList({ foods, onPick }: { foods: Food[]; onPick: (food: Food) => vo
           <span className="min-w-0 flex-1">
             <span className="block truncate text-sm font-extrabold text-foreground">{food.name}</span>
             <span className="mt-0.5 block truncate text-[11px] font-semibold text-muted-foreground">
-              {food.brand ? `${food.brand} · ` : ''}{food.serving_size} {food.serving_unit ?? 'g'} · {food.calories} kcal
+              {food.brand ? `${food.brand} · ` : ''}{foodReference(food)}
             </span>
           </span>
           <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-ember-100 text-ember-700 dark:bg-ember-500/15 dark:text-ember-300">
