@@ -1,248 +1,407 @@
 #!/usr/bin/env node
 
-/**
- * Importa un catálogo chileno PREPARADO a Supabase en lotes.
- *
- * Este script NO descarga datos ni llama proveedores externos. Recibe JSON/JSONL
- * local, normaliza nombres/GTIN y hace upsert por `catalog_key` después de que las
- * migraciones draft del catálogo hayan sido revisadas y aplicadas.
- *
- * Uso:
- *   pnpm catalog:import:cl -- ./catalogo-cl.json --dry-run
- *   pnpm catalog:import:cl -- ./catalogo-cl.jsonl --batch=200
- *
- * Variables para escritura real:
- *   NEXT_PUBLIC_SUPABASE_URL (o SUPABASE_URL)
- *   SUPABASE_SERVICE_ROLE_KEY
- */
-
-import { readFile } from 'node:fs/promises'
-import { resolve } from 'node:path'
+import fs from 'node:fs'
+import path from 'node:path'
+import crypto from 'node:crypto'
 import process from 'node:process'
 import { createClient } from '@supabase/supabase-js'
+import dotenv from 'dotenv'
 
-const args = process.argv.slice(2)
-const inputArg = args.find((arg) => !arg.startsWith('--'))
-const dryRun = args.includes('--dry-run')
-const batchArg = args.find((arg) => arg.startsWith('--batch='))
-const batchSize = clamp(Number(batchArg?.split('=')[1] ?? 200), 1, 500)
+dotenv.config({ path: path.resolve(process.cwd(), '.env.local') })
+dotenv.config({ path: path.resolve(process.cwd(), '.env') })
 
-if (!inputArg) {
-  fail('Falta el archivo de entrada. Usa JSON o JSONL.')
+const argv = process.argv.slice(2)
+const argValue = (name) => {
+  const prefix = `${name}=`
+  const found = argv.find((arg) => arg.startsWith(prefix))
+  return found ? found.slice(prefix.length) : null
+}
+const hasFlag = (name) => argv.includes(name)
+
+const fileArg = argValue('--file') ?? argv.find((arg) => !arg.startsWith('--')) ?? null
+const batchSize = Math.max(1, Number(argValue('--batch-size') ?? argValue('--batch') ?? 250))
+const source = argValue('--source') ?? 'import'
+const dryRun = hasFlag('--dry-run')
+const apply = hasFlag('--apply')
+const allowRemote = hasFlag('--allow-remote')
+
+if (!fileArg) {
+  console.error(
+    'Uso: pnpm catalog:import:cl -- --file=./catalog.json [--dry-run] [--apply] [--allow-remote] [--source=import] [--batch-size=250]',
+  )
+  process.exit(1)
 }
 
-const inputPath = resolve(process.cwd(), inputArg)
-const raw = await readFile(inputPath, 'utf8')
-const sourceRows = parseInput(raw, inputPath)
+const allowedSources = new Set([
+  'import',
+  'eva',
+  'coach',
+  'team',
+  'open_food_facts',
+  'usda',
+  'other',
+])
+const allowedVerification = new Set([
+  'unverified',
+  'community',
+  'coach_verified',
+  'eva_verified',
+  'rejected',
+])
 
-const accepted = []
-const rejected = []
-const seenKeys = new Set()
-
-for (let index = 0; index < sourceRows.length; index += 1) {
-  try {
-    const row = normalizeRow(sourceRows[index])
-    if (seenKeys.has(row.catalog_key)) {
-      rejected.push({ row: index + 1, reason: `catalog_key duplicada en archivo: ${row.catalog_key}` })
-      continue
-    }
-    seenKeys.add(row.catalog_key)
-    accepted.push(row)
-  } catch (error) {
-    rejected.push({ row: index + 1, reason: error instanceof Error ? error.message : String(error) })
-  }
+if (!allowedSources.has(source)) {
+  console.error(`Fuente inválida: ${source}`)
+  process.exit(1)
 }
 
-console.log(`Archivo: ${inputPath}`)
-console.log(`Filas leídas: ${sourceRows.length}`)
-console.log(`Aceptadas: ${accepted.length}`)
-console.log(`Rechazadas: ${rejected.length}`)
-console.log(`Modo: ${dryRun ? 'DRY RUN (sin escritura)' : 'ESCRITURA'}`)
-
-if (rejected.length > 0) {
-  console.log('\nPrimeros rechazos:')
-  for (const item of rejected.slice(0, 25)) {
-    console.log(`  fila ${item.row}: ${item.reason}`)
-  }
+const inputPath = path.resolve(process.cwd(), fileArg)
+if (!fs.existsSync(inputPath)) {
+  console.error(`Archivo no encontrado: ${inputPath}`)
+  process.exit(1)
 }
 
-if (dryRun) {
-  console.log('\nMuestra normalizada:')
-  console.log(JSON.stringify(accepted.slice(0, 3), null, 2))
-  process.exit(rejected.length > 0 ? 2 : 0)
+const fileBuffer = fs.readFileSync(inputPath)
+const fileText = fileBuffer.toString('utf8')
+const checksum = crypto.createHash('sha256').update(fileBuffer).digest('hex')
+const ext = path.extname(inputPath).toLowerCase()
+const sourceRows = ext === '.jsonl'
+  ? fileText.split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line))
+  : JSON.parse(fileText)
+
+if (!Array.isArray(sourceRows)) {
+  console.error('El archivo debe contener un arreglo JSON o líneas JSONL.')
+  process.exit(1)
 }
 
-if (accepted.length === 0) {
-  fail('No hay filas válidas para importar.')
+function numberOrNull(value) {
+  if (value === null || value === undefined || value === '') return null
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : null
 }
 
-const supabaseUrl = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL
-const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-if (!supabaseUrl || !serviceRoleKey) {
-  fail('Faltan SUPABASE_URL/NEXT_PUBLIC_SUPABASE_URL o SUPABASE_SERVICE_ROLE_KEY.')
-}
-
-const supabase = createClient(supabaseUrl, serviceRoleKey, {
-  auth: { persistSession: false, autoRefreshToken: false },
-})
-
-let imported = 0
-for (let start = 0; start < accepted.length; start += batchSize) {
-  const batch = accepted.slice(start, start + batchSize)
-  const { error } = await supabase
-    .from('foods')
-    .upsert(batch, { onConflict: 'catalog_key', ignoreDuplicates: false })
-
-  if (error) {
-    fail(`Falló lote ${start + 1}-${start + batch.length}: ${error.message}`)
-  }
-
-  imported += batch.length
-  console.log(`Importadas ${imported}/${accepted.length}`)
-}
-
-console.log('\nImportación completada.')
-console.log('No se realizaron llamadas a fuentes externas.')
-console.log('Revisa una muestra en Supabase antes de habilitar barcode para usuarios.')
-
-function parseInput(text, path) {
-  if (path.toLowerCase().endsWith('.jsonl') || path.toLowerCase().endsWith('.ndjson')) {
-    return text
-      .split(/\r?\n/)
-      .map((line) => line.trim())
-      .filter(Boolean)
-      .map((line, index) => {
-        try {
-          return JSON.parse(line)
-        } catch {
-          throw new Error(`JSON inválido en línea ${index + 1}`)
-        }
-      })
-  }
-
-  const value = JSON.parse(text)
-  if (!Array.isArray(value)) throw new Error('El JSON raíz debe ser un array.')
-  return value
-}
-
-function normalizeRow(input) {
-  if (!input || typeof input !== 'object' || Array.isArray(input)) {
-    throw new Error('La fila debe ser un objeto.')
-  }
-
-  const name = requiredText(input.name, 'name')
-  const barcode = parseGtin(requiredText(input.barcode, 'barcode'))
-  if (!barcode) throw new Error(`GTIN inválido: ${input.barcode ?? ''}`)
-
-  const brand = optionalText(input.brand)
-  const aliases = Array.isArray(input.aliases)
-    ? input.aliases.map((value) => String(value).trim()).filter(Boolean)
-    : []
-  const servingSize = positiveNumber(input.serving_size, 'serving_size')
-  const servingUnit = optionalText(input.serving_unit) ?? 'g'
-  const calories = nonNegativeNumber(input.calories, 'calories')
-  const protein = nonNegativeNumber(input.protein_g, 'protein_g')
-  const carbs = nonNegativeNumber(input.carbs_g, 'carbs_g')
-  const fats = nonNegativeNumber(input.fats_g, 'fats_g')
-
-  return {
-    catalog_key: `gtin:${barcode}`,
-    barcode,
-    name,
-    brand,
-    name_search: normalizeSearchText(name, brand, ...aliases),
-    search_aliases: aliases,
-    country_code: 'CL',
-    catalog_source: optionalText(input.catalog_source) ?? 'import',
-    source_ref: optionalText(input.source_ref),
-    verification_status: optionalText(input.verification_status) ?? 'unverified',
-    serving_size: Math.round(servingSize),
-    serving_unit: servingUnit,
-    calories: Math.round(calories),
-    protein_g: Math.round(protein),
-    carbs_g: Math.round(carbs),
-    fats_g: Math.round(fats),
-    fiber_g: optionalNonNegativeNumber(input.fiber_g),
-    sodium_mg: optionalNonNegativeNumber(input.sodium_mg),
-    sugar_g: optionalNonNegativeNumber(input.sugar_g),
-    saturated_fat_g: optionalNonNegativeNumber(input.saturated_fat_g),
-    is_liquid: Boolean(input.is_liquid ?? servingUnit === 'ml'),
-    category: optionalText(input.category) ?? 'otro',
-    household_grams: optionalNonNegativeNumber(input.household_grams),
-    household_label: optionalText(input.household_label),
-    package_quantity: optionalNonNegativeNumber(input.package_quantity),
-    package_unit: optionalText(input.package_unit),
-    product_image_path: optionalText(input.product_image_path),
-    coach_id: null,
-    org_id: null,
-    updated_at: new Date().toISOString(),
-  }
-}
-
-function normalizeSearchText(...parts) {
-  return parts
-    .flat()
-    .filter((part) => typeof part === 'string' && part.trim())
-    .join(' ')
+function normalizedText(value) {
+  return String(value ?? '')
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
-    .toLocaleLowerCase('es-CL')
+    .toLowerCase()
     .replace(/[^a-z0-9]+/g, ' ')
     .trim()
-    .replace(/\s+/g, ' ')
 }
 
-function parseGtin(value) {
-  const digits = String(value ?? '').replace(/\D/g, '')
-  if (![8, 12, 13, 14].includes(digits.length)) return null
-  const body = digits.slice(0, -1)
+function gtinCheckDigit(body) {
   let sum = 0
   let weight = 3
   for (let index = body.length - 1; index >= 0; index -= 1) {
     sum += Number(body[index]) * weight
     weight = weight === 3 ? 1 : 3
   }
-  const check = (10 - (sum % 10)) % 10
-  return check === Number(digits.at(-1)) ? digits : null
+  return String((10 - (sum % 10)) % 10)
 }
 
-function requiredText(value, field) {
-  const text = optionalText(value)
-  if (!text) throw new Error(`${field} es obligatorio.`)
-  return text
+function normalizeGtin(value) {
+  const digits = String(value ?? '').replace(/\D/g, '')
+  if (![8, 12, 13, 14].includes(digits.length)) return null
+  const body = digits.slice(0, -1)
+  return gtinCheckDigit(body) === digits.slice(-1) ? digits : null
 }
 
-function optionalText(value) {
-  if (value == null) return null
-  const text = String(value).trim()
-  return text || null
+function slug(value) {
+  return normalizedText(value).replace(/\s+/g, '-').replace(/^-|-$/g, '')
 }
 
-function positiveNumber(value, field) {
-  const number = Number(value)
-  if (!Number.isFinite(number) || number <= 0) throw new Error(`${field} debe ser > 0.`)
-  return number
+function catalogKey(row, index) {
+  const supplied = row.catalog_key ?? row.catalogKey
+  if (supplied) return String(supplied).trim()
+  return [
+    'cl',
+    row.brand ? slug(row.brand) : 'sin-marca',
+    slug(row.name ?? row.nombre),
+    row.package_quantity ?? row.packageQuantity ?? row.serving_size ?? row.servingSize ?? index + 1,
+    row.package_unit ?? row.packageUnit ?? row.serving_unit ?? row.servingUnit ?? 'g',
+  ].filter(Boolean).join(':')
 }
 
-function nonNegativeNumber(value, field) {
-  const number = Number(value)
-  if (!Number.isFinite(number) || number < 0) throw new Error(`${field} debe ser >= 0.`)
-  return number
+function normalizeMedia(raw) {
+  if (!raw || typeof raw !== 'object') return null
+  const objectPath = String(raw.object_path ?? raw.objectPath ?? '').trim()
+  if (!objectPath) return null
+  const kind = String(raw.kind ?? 'product_photo')
+  const license = String(raw.license ?? 'unknown')
+  if (!['product_photo', 'eva_illustration', 'category_fallback'].includes(kind)) return null
+  if (!['eva_owned', 'supplier_authorized', 'public_domain', 'cc_by', 'cc_by_sa', 'unknown'].includes(license)) return null
+  return {
+    kind,
+    bucket: 'food-media',
+    object_path: objectPath,
+    version: Math.max(1, Math.trunc(numberOrNull(raw.version) ?? 1)),
+    width: numberOrNull(raw.width),
+    height: numberOrNull(raw.height),
+    mime_type: raw.mime_type ?? raw.mimeType ?? null,
+    blurhash: raw.blurhash ?? null,
+    license,
+    source_url: raw.source_url ?? raw.sourceUrl ?? null,
+    attribution: raw.attribution ?? null,
+    is_primary: raw.is_primary ?? raw.isPrimary ?? true,
+  }
 }
 
-function optionalNonNegativeNumber(value) {
-  if (value == null || value === '') return null
-  const number = Number(value)
-  if (!Number.isFinite(number) || number < 0) return null
-  return number
+function normalizeRow(row, index) {
+  const name = String(row.name ?? row.nombre ?? '').trim()
+  const servingSize = numberOrNull(row.serving_size ?? row.servingSize ?? row.porcion)
+  const calories = numberOrNull(row.calories ?? row.kcal)
+  const protein = numberOrNull(row.protein_g ?? row.proteinG ?? row.protein)
+  const carbs = numberOrNull(row.carbs_g ?? row.carbsG ?? row.carbs)
+  const fats = numberOrNull(row.fats_g ?? row.fatsG ?? row.fats)
+
+  if (!name) return { error: 'name_required' }
+  if (servingSize === null || servingSize <= 0) return { error: 'invalid_serving_size' }
+  if ([calories, protein, carbs, fats].some((value) => value === null || value < 0)) {
+    return { error: 'invalid_macros' }
+  }
+
+  const rawBarcode = row.barcode ?? row.gtin ?? null
+  const barcode = rawBarcode ? normalizeGtin(rawBarcode) : null
+  if (rawBarcode && !barcode) return { error: 'invalid_gtin' }
+
+  const countryCode = String(row.country_code ?? row.countryCode ?? 'CL').toUpperCase()
+  if (!/^[A-Z]{2}$/.test(countryCode)) return { error: 'invalid_country_code' }
+
+  const verificationStatus = String(
+    row.verification_status ?? row.verificationStatus ?? 'unverified',
+  )
+  if (!allowedVerification.has(verificationStatus)) {
+    return { error: 'invalid_verification_status' }
+  }
+
+  const aliases = Array.isArray(row.search_aliases ?? row.searchAliases)
+    ? (row.search_aliases ?? row.searchAliases).map(normalizedText).filter(Boolean)
+    : []
+
+  return {
+    food: {
+      name,
+      serving_size: servingSize,
+      calories,
+      protein_g: protein,
+      carbs_g: carbs,
+      fats_g: fats,
+      fiber_g: numberOrNull(row.fiber_g ?? row.fiberG ?? row.fiber),
+      sodium_mg: numberOrNull(row.sodium_mg ?? row.sodiumMg ?? row.sodium),
+      sugar_g: numberOrNull(row.sugar_g ?? row.sugarG),
+      saturated_fat_g: numberOrNull(row.saturated_fat_g ?? row.saturatedFatG),
+      serving_unit: row.serving_unit ?? row.servingUnit ?? 'g',
+      category: row.category ?? row.categoria ?? 'otro',
+      brand: row.brand ?? row.marca ?? null,
+      barcode,
+      country_code: countryCode,
+      catalog_source: row.catalog_source ?? row.catalogSource ?? source,
+      source_ref: row.source_ref ?? row.sourceRef ?? null,
+      verification_status: verificationStatus,
+      search_aliases: [...new Set(aliases)],
+      package_quantity: numberOrNull(row.package_quantity ?? row.packageQuantity),
+      package_unit: row.package_unit ?? row.packageUnit ?? null,
+      catalog_key: catalogKey(row, index),
+      updated_at: new Date().toISOString(),
+    },
+    media: normalizeMedia(row.media ?? row.image ?? null),
+  }
 }
 
-function clamp(value, min, max) {
-  if (!Number.isFinite(value)) return min
-  return Math.min(max, Math.max(min, Math.trunc(value)))
+const stagingRows = []
+const accepted = []
+const rejected = []
+const seenKeys = new Set()
+const seenGtins = new Set()
+
+for (let index = 0; index < sourceRows.length; index += 1) {
+  const normalized = normalizeRow(sourceRows[index], index)
+  if (normalized.error) {
+    rejected.push({ row: index + 1, reason: normalized.error })
+    stagingRows.push({
+      sourceRow: index + 1,
+      payload: sourceRows[index],
+      normalizedGtin: null,
+      normalizedCatalogKey: null,
+      status: 'rejected',
+      rejectionReason: normalized.error,
+    })
+    continue
+  }
+
+  const { food, media } = normalized
+  const duplicate = seenKeys.has(food.catalog_key)
+    || (food.barcode && seenGtins.has(food.barcode))
+
+  if (duplicate) {
+    stagingRows.push({
+      sourceRow: index + 1,
+      payload: { food, media },
+      normalizedGtin: food.barcode,
+      normalizedCatalogKey: food.catalog_key,
+      status: 'duplicate',
+      rejectionReason: 'duplicate_in_file',
+    })
+    continue
+  }
+
+  seenKeys.add(food.catalog_key)
+  if (food.barcode) seenGtins.add(food.barcode)
+  accepted.push({ sourceRow: index + 1, food, media })
+  stagingRows.push({
+    sourceRow: index + 1,
+    payload: { food, media },
+    normalizedGtin: food.barcode,
+    normalizedCatalogKey: food.catalog_key,
+    status: 'accepted',
+    rejectionReason: null,
+  })
 }
 
-function fail(message) {
-  console.error(`ERROR: ${message}`)
+const duplicateCount = stagingRows.filter((row) => row.status === 'duplicate').length
+console.log(JSON.stringify({
+  input: sourceRows.length,
+  accepted: accepted.length,
+  rejected: rejected.length,
+  duplicates: duplicateCount,
+  mode: dryRun ? 'dry-run' : apply ? 'stage-and-apply' : 'stage-only',
+  sampleRejections: rejected.slice(0, 10),
+}, null, 2))
+
+if (dryRun) process.exit(rejected.length > 0 ? 2 : 0)
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL
+const serviceRole = process.env.SUPABASE_SERVICE_ROLE_KEY
+if (!supabaseUrl || !serviceRole) {
+  console.error('Faltan NEXT_PUBLIC_SUPABASE_URL/SUPABASE_URL o SUPABASE_SERVICE_ROLE_KEY.')
   process.exit(1)
 }
+
+const host = new URL(supabaseUrl).hostname
+const isLocal = host === 'localhost' || host === '127.0.0.1'
+if (!isLocal && !allowRemote) {
+  console.error('Import remoto bloqueado. Revisa el staging y usa --allow-remote explícitamente.')
+  process.exit(1)
+}
+
+const supabase = createClient(supabaseUrl, serviceRole, {
+  auth: { persistSession: false, autoRefreshToken: false },
+})
+
+const { data: batch, error: batchError } = await supabase
+  .from('food_catalog_import_batches')
+  .insert({
+    source,
+    country_code: 'CL',
+    file_name: path.basename(inputPath),
+    checksum,
+    status: 'validating',
+    total_rows: sourceRows.length,
+    accepted_rows: accepted.length,
+    rejected_rows: rejected.length,
+    duplicate_rows: duplicateCount,
+    metadata: { mode: apply ? 'apply' : 'stage', scriptVersion: 2 },
+  })
+  .select('id')
+  .single()
+
+if (batchError || !batch) {
+  console.error('No se pudo crear el lote:', batchError)
+  process.exit(1)
+}
+
+for (let index = 0; index < stagingRows.length; index += batchSize) {
+  const chunk = stagingRows.slice(index, index + batchSize).map((row) => ({
+    batch_id: batch.id,
+    source_row: row.sourceRow,
+    payload: row.payload,
+    normalized_gtin: row.normalizedGtin,
+    normalized_catalog_key: row.normalizedCatalogKey,
+    status: row.status,
+    rejection_reason: row.rejectionReason,
+  }))
+  const { error } = await supabase.from('food_catalog_import_rows').insert(chunk)
+  if (error) {
+    await supabase.from('food_catalog_import_batches')
+      .update({ status: 'failed', completed_at: new Date().toISOString() })
+      .eq('id', batch.id)
+    console.error(`Falló staging en filas ${index + 1}-${index + chunk.length}:`, error)
+    process.exit(1)
+  }
+}
+
+if (!apply) {
+  await supabase.from('food_catalog_import_batches')
+    .update({ status: 'ready', completed_at: new Date().toISOString() })
+    .eq('id', batch.id)
+  console.log(`Lote ${batch.id} listo para revisión. No se publicaron alimentos.`)
+  process.exit(rejected.length > 0 ? 2 : 0)
+}
+
+const resolvedByCatalogKey = new Map()
+for (let index = 0; index < accepted.length; index += batchSize) {
+  const chunk = accepted.slice(index, index + batchSize)
+  const { data, error } = await supabase
+    .from('foods')
+    .upsert(chunk.map(({ food }) => food), { onConflict: 'catalog_key' })
+    .select('id, catalog_key')
+
+  if (error) {
+    await supabase.from('food_catalog_import_batches')
+      .update({ status: 'failed', completed_at: new Date().toISOString() })
+      .eq('id', batch.id)
+    console.error(`Falló aplicación en filas ${index + 1}-${index + chunk.length}:`, error)
+    process.exit(1)
+  }
+
+  for (const row of data ?? []) resolvedByCatalogKey.set(row.catalog_key, row.id)
+}
+
+const mediaRows = accepted
+  .filter(({ media }) => media)
+  .map(({ food, media }) => ({ ...media, food_id: resolvedByCatalogKey.get(food.catalog_key) }))
+  .filter((row) => row.food_id)
+
+if (mediaRows.length > 0) {
+  const foodIds = [...new Set(mediaRows.filter((row) => row.is_primary).map((row) => row.food_id))]
+  if (foodIds.length > 0) {
+    const { error } = await supabase.from('food_media')
+      .update({ is_primary: false })
+      .in('food_id', foodIds)
+      .eq('is_primary', true)
+    if (error) {
+      console.error('No se pudieron preparar imágenes primarias:', error)
+      process.exit(1)
+    }
+  }
+
+  for (let index = 0; index < mediaRows.length; index += batchSize) {
+    const chunk = mediaRows.slice(index, index + batchSize)
+    const { error } = await supabase
+      .from('food_media')
+      .upsert(chunk, { onConflict: 'food_id,object_path' })
+    if (error) {
+      console.error('No se pudieron aplicar metadatos de imágenes:', error)
+      process.exit(1)
+    }
+  }
+}
+
+for (const row of accepted) {
+  const foodId = resolvedByCatalogKey.get(row.food.catalog_key)
+  if (!foodId) continue
+  const { error } = await supabase.from('food_catalog_import_rows')
+    .update({ resolved_food_id: foodId })
+    .eq('batch_id', batch.id)
+    .eq('source_row', row.sourceRow)
+  if (error) {
+    console.error(`No se pudo enlazar staging fila ${row.sourceRow}:`, error)
+    process.exit(1)
+  }
+}
+
+await supabase.from('food_catalog_import_batches')
+  .update({ status: 'imported', completed_at: new Date().toISOString() })
+  .eq('id', batch.id)
+
+console.log(`Lote ${batch.id} aplicado: ${accepted.length} alimentos, ${mediaRows.length} imágenes.`)
+process.exit(rejected.length > 0 ? 2 : 0)
