@@ -146,13 +146,7 @@ export function formatNutritionCalories(value: number): string {
 }
 
 export interface NutritionMacroValue {
-  /** Canonical field for React Native and non-React consumers. */
   macro: NutritionMacroKey
-  /**
-   * Web compatibility field. React reserves the JSX `key` prop, so create values
-   * with `createNutritionMacroValue()` instead of manually spreading this object.
-   */
-  key: NutritionMacroKey
   consumed: number
   target: number
   unit?: string
@@ -161,9 +155,9 @@ export interface NutritionMacroValue {
 
 export function createNutritionMacroValue(
   macro: NutritionMacroKey,
-  value: Omit<NutritionMacroValue, 'macro' | 'key'>,
+  value: Omit<NutritionMacroValue, 'macro'>,
 ): NutritionMacroValue {
-  return { macro, key: macro, ...value }
+  return { macro, ...value }
 }
 
 export interface NutritionFoodRowModel {
