@@ -16,11 +16,14 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Barcode, ChevronLeft, Clock3, Plus, Search, ScanLine } from 'lucide-react-native'
 import {
   NUTRITION_INTAKE_ACTIONS,
+  NUTRITION_MEAL_SLOT_IDS,
+  NUTRITION_MEAL_SLOT_LABELS,
   calculateFoodItemMacros,
   formatFoodReference,
   preferredFoodIntakeQuantity,
   preferredFoodIntakeUnit,
   type NutritionIntakeActionId,
+  type NutritionMealSlot,
 } from '@eva/nutrition-engine'
 import { AppBackground } from '../../components/AppBackground'
 import { useTheme } from '../../context/ThemeContext'
@@ -45,12 +48,22 @@ function allowedUnits(food: IntakeFood): readonly IntakeUnit[] {
   return food.is_liquid || food.serving_unit === 'ml' ? ['ml', 'un'] : ['g', 'un']
 }
 
+function defaultMealSlot(): NutritionMealSlot {
+  const hour = new Date().getHours()
+  if (hour < 10) return 'breakfast'
+  if (hour < 12) return 'morning_snack'
+  if (hour < 16) return 'lunch'
+  if (hour < 19) return 'afternoon_snack'
+  return 'dinner'
+}
+
 export default function AddFoodScreen() {
   const { theme } = useTheme()
   const insets = useSafeAreaInsets()
   const [cameraPermission, requestCameraPermission] = useCameraPermissions()
   const [clientId, setClientId] = useState<string | null>(null)
   const [mode, setMode] = useState<NutritionIntakeActionId>('search')
+  const [mealSlot, setMealSlot] = useState<NutritionMealSlot>('other')
   const [term, setTerm] = useState('')
   const [barcodeInput, setBarcodeInput] = useState('')
   const [results, setResults] = useState<IntakeFood[]>([])
@@ -66,6 +79,8 @@ export default function AddFoodScreen() {
   const [saving, setSaving] = useState(false)
 
   const today = getTodayInSantiago().iso
+
+  useEffect(() => setMealSlot(defaultMealSlot()), [])
 
   useEffect(() => {
     let alive = true
@@ -204,6 +219,8 @@ export default function AddFoodScreen() {
       quantity: parsedQuantity,
       unit,
       source: selected.source,
+      mealSlot,
+      foodSnapshot: selected.food,
     })
     setSaving(false)
 
@@ -212,9 +229,11 @@ export default function AddFoodScreen() {
       return
     }
 
-    Alert.alert('Alimento registrado', `${selected.food.name} fue agregado al consumo de hoy.`, [
-      { text: 'Listo', onPress: () => router.back() },
-    ])
+    Alert.alert(
+      'Alimento registrado',
+      `${selected.food.name} fue agregado a ${NUTRITION_MEAL_SLOT_LABELS[mealSlot].toLowerCase()}.`,
+      [{ text: 'Listo', onPress: () => router.back() }],
+    )
   }
 
   const preview = useMemo(() => {
@@ -288,6 +307,39 @@ export default function AddFoodScreen() {
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 36, gap: 16 }}
       >
+        <View style={{ borderRadius: 20, borderWidth: 1, borderColor: theme.border, backgroundColor: theme.card, padding: 14, gap: 10 }}>
+          <Text style={{ color: theme.mutedForeground, fontFamily: FONT.uiExtra, fontSize: 10, letterSpacing: 0.8, textTransform: 'uppercase' }}>
+            ¿En qué comida?
+          </Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+            {NUTRITION_MEAL_SLOT_IDS.map((slot) => {
+              const active = slot === mealSlot
+              return (
+                <Pressable
+                  key={slot}
+                  onPress={() => setMealSlot(slot)}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: active }}
+                  style={{
+                    minHeight: 42,
+                    borderRadius: 999,
+                    borderWidth: 1.5,
+                    borderColor: active ? EMBER : theme.border,
+                    backgroundColor: active ? `${EMBER}18` : theme.muted,
+                    paddingHorizontal: 14,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <Text style={{ color: active ? EMBER : theme.mutedForeground, fontFamily: FONT.uiBold, fontSize: 12 }}>
+                    {NUTRITION_MEAL_SLOT_LABELS[slot]}
+                  </Text>
+                </Pressable>
+              )
+            })}
+          </ScrollView>
+        </View>
+
         {!selected ? (
           <>
             <View style={{ flexDirection: 'row', gap: 8 }}>
@@ -314,10 +366,7 @@ export default function AddFoodScreen() {
                     }}
                   >
                     <Icon size={19} color={active ? EMBER : theme.mutedForeground} strokeWidth={2.2} />
-                    <Text
-                      numberOfLines={1}
-                      style={{ color: active ? EMBER : theme.foreground, fontFamily: FONT.uiBold, fontSize: 11.5 }}
-                    >
+                    <Text numberOfLines={1} style={{ color: active ? EMBER : theme.foreground, fontFamily: FONT.uiBold, fontSize: 11.5 }}>
                       {action.shortLabel}
                     </Text>
                   </Pressable>
@@ -365,18 +414,7 @@ export default function AddFoodScreen() {
                     keyboardType="number-pad"
                     placeholder="Escribe EAN / GTIN"
                     placeholderTextColor={theme.mutedForeground}
-                    style={{
-                      flex: 1,
-                      height: 50,
-                      borderRadius: 16,
-                      borderWidth: 1.5,
-                      borderColor: theme.border,
-                      backgroundColor: theme.card,
-                      paddingHorizontal: 14,
-                      color: theme.foreground,
-                      fontFamily: FONT.monoMedium,
-                      fontSize: 14,
-                    }}
+                    style={{ flex: 1, height: 50, borderRadius: 16, borderWidth: 1.5, borderColor: theme.border, backgroundColor: theme.card, paddingHorizontal: 14, color: theme.foreground, fontFamily: FONT.monoMedium, fontSize: 14 }}
                   />
                   <Pressable
                     disabled={lookingUpBarcode}
@@ -403,7 +441,10 @@ export default function AddFoodScreen() {
           <View style={{ gap: 16 }}>
             <View style={{ padding: 18, borderRadius: 24, backgroundColor: theme.card, borderWidth: 1, borderColor: theme.border, gap: 14 }}>
               <View>
-                <Text style={{ color: theme.foreground, fontFamily: FONT.displayBold, fontSize: 20 }} numberOfLines={2}>
+                <Text style={{ color: EMBER, fontFamily: FONT.uiExtra, fontSize: 10, letterSpacing: 0.8, textTransform: 'uppercase' }}>
+                  {NUTRITION_MEAL_SLOT_LABELS[mealSlot]}
+                </Text>
+                <Text style={{ color: theme.foreground, fontFamily: FONT.displayBold, fontSize: 20, marginTop: 3 }} numberOfLines={2}>
                   {selected.food.name}
                 </Text>
                 {selected.food.brand ? (
@@ -423,18 +464,7 @@ export default function AddFoodScreen() {
                   keyboardType="decimal-pad"
                   selectTextOnFocus
                   accessibilityLabel="Cantidad"
-                  style={{
-                    width: 112,
-                    height: 52,
-                    borderRadius: 16,
-                    borderWidth: 1.5,
-                    borderColor: theme.border,
-                    backgroundColor: theme.muted,
-                    paddingHorizontal: 14,
-                    color: theme.foreground,
-                    fontFamily: FONT.monoMedium,
-                    fontSize: 17,
-                  }}
+                  style={{ width: 112, height: 52, borderRadius: 16, borderWidth: 1.5, borderColor: theme.border, backgroundColor: theme.muted, paddingHorizontal: 14, color: theme.foreground, fontFamily: FONT.monoMedium, fontSize: 17 }}
                 />
                 <View style={{ flex: 1, flexDirection: 'row', gap: 6 }}>
                   {allowedUnits(selected.food).map((value) => {
@@ -445,16 +475,7 @@ export default function AddFoodScreen() {
                         onPress={() => changeUnit(value)}
                         accessibilityRole="button"
                         accessibilityState={{ selected: active }}
-                        style={{
-                          flex: 1,
-                          height: 52,
-                          borderRadius: 16,
-                          borderWidth: 1.5,
-                          borderColor: active ? EMBER : theme.border,
-                          backgroundColor: active ? `${EMBER}18` : theme.muted,
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                        }}
+                        style={{ flex: 1, height: 52, borderRadius: 16, borderWidth: 1.5, borderColor: active ? EMBER : theme.border, backgroundColor: active ? `${EMBER}18` : theme.muted, alignItems: 'center', justifyContent: 'center' }}
                       >
                         <Text style={{ color: active ? EMBER : theme.mutedForeground, fontFamily: FONT.uiBold, fontSize: 13 }}>
                           {value}
@@ -511,10 +532,7 @@ export default function AddFoodScreen() {
             onBarcodeScanned={scannerLocked ? undefined : handleBarcodeScanned}
             barcodeScannerSettings={{ barcodeTypes: ['ean13', 'ean8', 'upc_a', 'upc_e', 'itf14'] }}
           />
-          <View
-            style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, alignItems: 'center', justifyContent: 'center' }}
-            pointerEvents="none"
-          >
+          <View style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, alignItems: 'center', justifyContent: 'center' }} pointerEvents="none">
             <View style={{ width: '78%', height: 180, borderRadius: 24, borderWidth: 3, borderColor: '#FFFFFF' }} />
             <Text style={{ color: '#FFFFFF', fontFamily: FONT.uiBold, fontSize: 14, marginTop: 18 }}>
               Centra el código dentro del marco
@@ -533,15 +551,7 @@ export default function AddFoodScreen() {
   )
 }
 
-function SearchField({
-  value,
-  onChangeText,
-  searching,
-}: {
-  value: string
-  onChangeText: (value: string) => void
-  searching: boolean
-}) {
+function SearchField({ value, onChangeText, searching }: { value: string; onChangeText: (value: string) => void; searching: boolean }) {
   const { theme } = useTheme()
   return (
     <View style={{ height: 52, borderRadius: 17, borderWidth: 1.5, borderColor: theme.border, backgroundColor: theme.card, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14 }}>
@@ -568,16 +578,7 @@ function FoodList({ foods, onPick }: { foods: IntakeFood[]; onPick: (food: Intak
           key={food.id}
           onPress={() => onPick(food)}
           accessibilityRole="button"
-          style={{
-            minHeight: 64,
-            paddingHorizontal: 16,
-            paddingVertical: 11,
-            flexDirection: 'row',
-            alignItems: 'center',
-            gap: 12,
-            borderTopWidth: index === 0 ? 0 : 1,
-            borderTopColor: theme.border,
-          }}
+          style={{ minHeight: 64, paddingHorizontal: 16, paddingVertical: 11, flexDirection: 'row', alignItems: 'center', gap: 12, borderTopWidth: index === 0 ? 0 : 1, borderTopColor: theme.border }}
         >
           <View style={{ flex: 1 }}>
             <Text style={{ color: theme.foreground, fontFamily: FONT.uiSemibold, fontSize: 14 }} numberOfLines={1}>
