@@ -17,6 +17,9 @@ export default defineConfig({
     alias: {
       '@': path.resolve(__dirname, './apps/web/src'),
       '@eva/brand-kit': path.resolve(__dirname, './packages/brand-kit/index.ts'),
+      '@eva/nutrition-v2': path.resolve(__dirname, './packages/nutrition-v2/index.ts'),
+      '@eva/nutrition-v2/design': path.resolve(__dirname, './packages/nutrition-v2/design.ts'),
+      '@eva/nutrition-v2/contracts': path.resolve(__dirname, './packages/nutrition-v2/contracts.ts'),
       // Subpath ANTES del paquete raiz (resolucion por prefijo).
       '@eva/schemas/screening': path.resolve(__dirname, './packages/schemas/screening.ts'),
       '@eva/schemas/bodycomp': path.resolve(__dirname, './packages/schemas/bodycomp.ts'),
