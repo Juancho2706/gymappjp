@@ -9,11 +9,13 @@ import { getTodayInSantiago } from '@/lib/date-utils'
  */
 export const getActiveNutritionPlan = cache(async (userId: string) => {
   const supabase = await createClient()
-  const { data } = await supabase
+  const loose = supabase as any
+  const { data } = await loose
     .from('nutrition_plans')
     .select(
       `
       id, client_id, coach_id, name, daily_calories, protein_g, carbs_g, fats_g, instructions, is_active, plan_mode,
+      hydration_target_ml, steps_target, sleep_target_hours, fasting_target_hours, supplement_guidance, protocol_notes,
       nutrition_meals (
         id, name, description, order_index, plan_id, day_of_week,
         food_items (
