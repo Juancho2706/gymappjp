@@ -74,6 +74,21 @@ function loose(): LooseClient {
   return supabase as unknown as LooseClient
 }
 
+function defaultMealSlotForHour(hour = new Date().getHours()): NutritionMealSlot {
+  if (hour < 10) return 'breakfast'
+  if (hour < 12) return 'morning_snack'
+  if (hour < 16) return 'lunch'
+  if (hour < 19) return 'afternoon_snack'
+  return 'dinner'
+}
+
+function captureMethodFromSource(source: IntakeSource | undefined): IntakeCaptureMethod {
+  if (source === 'quickadd') return 'barcode'
+  if (source === 'recent') return 'recent'
+  if (source === 'copy') return 'copy'
+  return 'search'
+}
+
 export async function searchIntakeFoods(term: string, limit = 30): Promise<IntakeFood[]> {
   const normalized = normalizeFoodSearchText(term)
   if (normalized.length < SEARCH_MIN_CHARS) return []
@@ -178,7 +193,16 @@ export async function insertIntakeEntry(input: InsertIntakeInput): Promise<Intak
   if (!(input.foodId || input.customName)) return null
   if (!Number.isFinite(input.quantity) || input.quantity <= 0) return null
 
-  const snapshot = input.foodSnapshot
+  let snapshot = input.foodSnapshot ?? null
+  if (!snapshot && input.foodId) {
+    const { data } = await loose()
+      .from('foods')
+      .select(FOOD_SELECT)
+      .eq('id', input.foodId)
+      .maybeSingle()
+    snapshot = (data as IntakeFood | null) ?? null
+  }
+
   const { data, error } = await loose()
     .from('nutrition_intake_entries')
     .insert({
@@ -189,8 +213,8 @@ export async function insertIntakeEntry(input: InsertIntakeInput): Promise<Intak
       quantity: input.quantity,
       unit: input.unit,
       source: input.source ?? 'offplan',
-      meal_slot: input.mealSlot ?? 'other',
-      capture_method: input.captureMethod ?? 'search',
+      meal_slot: input.mealSlot ?? defaultMealSlotForHour(),
+      capture_method: input.captureMethod ?? captureMethodFromSource(input.source),
       snapshot_name: snapshot?.name ?? input.customName ?? null,
       snapshot_brand: snapshot?.brand ?? null,
       snapshot_calories: snapshot?.calories ?? null,
