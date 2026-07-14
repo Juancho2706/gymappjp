@@ -15,8 +15,10 @@ function cx(...values: Array<string | false | null | undefined>): string {
   return values.filter(Boolean).join(' ')
 }
 
-function easingCss(value: readonly [number, number, number, number]): string {
-  return `cubic-bezier(${value.join(',')})`
+function easingTuple(
+  value: readonly [number, number, number, number],
+): [number, number, number, number] {
+  return [value[0], value[1], value[2], value[3]]
 }
 
 const toneClasses: Record<NutritionTone, string> = {
@@ -129,7 +131,7 @@ export function SelectableStrategyCard({
       onClick={() => onSelect(strategy)}
       transition={{
         duration: reduceMotion ? 0 : NUTRITION_MOTION.selection.duration / 1000,
-        ease: easingCss(NUTRITION_MOTION.selection.easing),
+        ease: easingTuple(NUTRITION_MOTION.selection.easing),
       }}
       type="button"
       whileTap={reduceMotion || disabled ? undefined : { scale: NUTRITION_MOTION.press.scale }}
@@ -249,7 +251,7 @@ export function AnimatedListItem({ children, layoutId }: { children: ReactNode; 
       layoutId={layoutId}
       transition={{
         duration: reduceMotion ? 0 : NUTRITION_MOTION.layout.duration / 1000,
-        ease: easingCss(NUTRITION_MOTION.layout.easing),
+        ease: easingTuple(NUTRITION_MOTION.layout.easing),
       }}
     >
       {children}
