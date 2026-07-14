@@ -4,7 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 import {
-  NUTRITION_MEAL_SLOTS,
+  NUTRITION_MEAL_SLOT_IDS,
   type NutritionMealSlot,
 } from '@eva/nutrition-engine'
 import {
@@ -23,7 +23,7 @@ const addIntakeEntrySchema = z
     quantity: z.number().positive().max(100000),
     unit: z.enum(['g', 'ml', 'un']),
     source: z.enum(INTAKE_SOURCES).optional(),
-    mealSlot: z.enum(NUTRITION_MEAL_SLOTS).optional(),
+    mealSlot: z.enum(NUTRITION_MEAL_SLOT_IDS).optional(),
     captureMethod: z.enum(INTAKE_CAPTURE_METHODS).optional(),
   })
   .refine((value) => Boolean(value.foodId) || Boolean(value.customName), {
