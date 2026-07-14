@@ -1,0 +1,28 @@
+[
+  {
+    "barcode": "4006381333931",
+    "name": "Producto de ejemplo",
+    "brand": "Marca ejemplo",
+    "aliases": ["nombre local", "nombre alternativo"],
+    "serving_size": 100,
+    "serving_unit": "g",
+    "calories": 180,
+    "protein_g": 8,
+    "carbs_g": 24,
+    "fats_g": 6,
+    "fiber_g": 3,
+    "sodium_mg": 210,
+    "sugar_g": 4,
+    "saturated_fat_g": 1.5,
+    "category": "otro",
+    "is_liquid": false,
+    "household_grams": 30,
+    "household_label": "1 porción",
+    "package_quantity": 300,
+    "package_unit": "g",
+    "catalog_source": "import",
+    "source_ref": "archivo-proveedor-2026-07",
+    "verification_status": "unverified",
+    "product_image_path": null
+  }
+]
