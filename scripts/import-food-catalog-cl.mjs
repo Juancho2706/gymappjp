@@ -41,7 +41,7 @@ const seenKeys = new Set()
 
 for (let index = 0; index < sourceRows.length; index += 1) {
   try {
-    const row = normalizeRow(sourceRows[index], index + 1)
+    const row = normalizeRow(sourceRows[index])
     if (seenKeys.has(row.catalog_key)) {
       rejected.push({ row: index + 1, reason: `catalog_key duplicada en archivo: ${row.catalog_key}` })
       continue
@@ -125,7 +125,7 @@ function parseInput(text, path) {
   return value
 }
 
-function normalizeRow(input, rowNumber) {
+function normalizeRow(input) {
   if (!input || typeof input !== 'object' || Array.isArray(input)) {
     throw new Error('La fila debe ser un objeto.')
   }
@@ -176,7 +176,6 @@ function normalizeRow(input, rowNumber) {
     coach_id: null,
     org_id: null,
     updated_at: new Date().toISOString(),
-    _source_row: rowNumber,
   }
 }
 
