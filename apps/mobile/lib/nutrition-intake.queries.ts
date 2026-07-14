@@ -175,6 +175,20 @@ export async function listRecentIntakeFoods(clientId: string, limit = 8): Promis
   return out
 }
 
+export async function listFavoriteIntakeFoods(clientId: string): Promise<IntakeFood[]> {
+  const { data, error } = await loose()
+    .from('client_food_preferences')
+    .select(`food_id, food:foods(${FOOD_SELECT})`)
+    .eq('client_id', clientId)
+    .eq('preference_type', 'favorite')
+    .order('created_at', { ascending: false })
+  if (error || !data) return []
+
+  return (data as unknown as Array<{ food_id: string; food: IntakeFood | null }>)
+    .map((row) => row.food)
+    .filter((food): food is IntakeFood => food !== null)
+}
+
 export interface InsertIntakeInput {
   clientId: string
   logDate: string
