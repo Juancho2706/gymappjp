@@ -1,7 +1,6 @@
 export {
   BuilderInspector,
   BuilderStepList,
-  CoachAttentionCard,
   FoodRow,
   FoodThumbnail,
   MealSlotCard,
@@ -19,5 +18,10 @@ export {
   SyncOfflineState,
   type NutritionCardProps,
 } from './NutritionV2Kit'
-export { MacroBudget, MacroProgress, StudentPreview } from './NutritionV2Overrides'
+export {
+  CoachAttentionCard,
+  MacroBudget,
+  MacroProgress,
+  StudentPreview,
+} from './NutritionV2Overrides'
 export * from './NutritionV2Motion'
