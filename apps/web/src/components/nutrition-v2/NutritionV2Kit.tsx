@@ -15,16 +15,11 @@ import {
   WifiOff,
 } from 'lucide-react'
 import {
-  NUTRITION_MACROS,
   NUTRITION_STRATEGIES,
-  formatNutritionAmount,
   formatNutritionCalories,
-  nutritionProgressPercent,
-  resolveMacroProgressState,
   type NutritionAttentionModel,
   type NutritionBuilderStepModel,
   type NutritionFoodRowModel,
-  type NutritionMacroValue,
   type NutritionMealSlotModel,
   type NutritionStrategy,
   type NutritionSyncState,
@@ -73,7 +68,12 @@ export function NutritionPageShell({
     <main className={cx('mx-auto w-full max-w-[1440px] px-4 py-5 md:px-6 md:py-8', className)}>
       <NutritionHeader eyebrow={eyebrow} title={title} description={description} actions={actions} />
       {toolbar ? <div className="mt-5">{toolbar}</div> : null}
-      <div className={cx('mt-6 grid min-w-0 gap-6', aside && 'xl:grid-cols-[minmax(0,1fr)_320px]')}>
+      <div
+        className={cx(
+          'mt-6 grid min-w-0 gap-6',
+          aside ? 'xl:grid-cols-[minmax(0,1fr)_320px]' : false,
+        )}
+      >
         <section className="min-w-0">{children}</section>
         {aside ? <aside className="min-w-0 xl:sticky xl:top-6 xl:self-start">{aside}</aside> : null}
       </div>
@@ -149,116 +149,11 @@ export function PlanVersionBadge({
     superseded: { label: 'Anterior', tone: 'neutral' as const },
     archived: { label: 'Archivado', tone: 'neutral' as const },
   }[status]
-
   return (
-    <span
-      className={cx(
-        'inline-flex items-center gap-1.5 rounded-pill border px-2.5 py-1 text-xs font-semibold',
-        toneClasses[config.tone],
-      )}
-    >
+    <span className={cx('inline-flex items-center gap-1.5 rounded-pill border px-2.5 py-1 text-xs font-semibold', toneClasses[config.tone])}>
       v{version} · {config.label}
       {effectiveLabel ? <span className="font-normal opacity-80">· {effectiveLabel}</span> : null}
     </span>
-  )
-}
-
-const macroBarClasses = {
-  protein: 'bg-ember-500',
-  carbs: 'bg-sport-500',
-  fats: 'bg-aqua-500',
-} as const
-
-const macroTextClasses = {
-  protein: 'text-ember-700 dark:text-ember-300',
-  carbs: 'text-sport-700 dark:text-sport-300',
-  fats: 'text-aqua-700 dark:text-aqua-300',
-} as const
-
-export function MacroBudget({
-  calories,
-  macros,
-  compact = false,
-  className,
-}: {
-  calories?: { consumed: number; target: number }
-  macros: NutritionMacroValue[]
-  compact?: boolean
-  className?: string
-}) {
-  return (
-    <section
-      aria-label="Presupuesto nutricional"
-      className={cx('rounded-card border border-border-subtle bg-surface-card p-4 shadow-sm', className)}
-    >
-      {calories ? (
-        <div className="mb-4 flex flex-wrap items-end justify-between gap-3 border-b border-border-subtle pb-4">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-subtle">Energía</p>
-            <p className="mt-1 font-display text-2xl font-bold text-strong">
-              {formatNutritionCalories(calories.consumed)}
-              <span className="ml-1 text-sm font-medium text-muted">/ {formatNutritionCalories(calories.target)}</span>
-            </p>
-          </div>
-          <p className="text-sm font-semibold text-ember-700 dark:text-ember-300">
-            {formatNutritionCalories(Math.max(calories.target - calories.consumed, 0))} restantes
-          </p>
-        </div>
-      ) : null}
-      <div className={cx('grid gap-3', compact ? 'grid-cols-3' : 'sm:grid-cols-3')}>
-        {macros.map((macro) => (
-          <MacroProgress key={macro.key} {...macro} compact={compact} />
-        ))}
-      </div>
-    </section>
-  )
-}
-
-export function MacroProgress({
-  key: macroKey,
-  consumed,
-  target,
-  unit = 'g',
-  tolerancePercent = 5,
-  compact = false,
-}: NutritionMacroValue & { compact?: boolean }) {
-  const meta = NUTRITION_MACROS[macroKey]
-  const percent = nutritionProgressPercent(consumed, target)
-  const state = resolveMacroProgressState(consumed, target, tolerancePercent)
-  const stateLabel = {
-    empty: 'Sin registros',
-    under: 'Bajo el rango',
-    'in-range': 'En rango',
-    over: 'Sobre el rango',
-  }[state]
-
-  return (
-    <div className={cx('min-w-0', compact ? 'space-y-1.5' : 'space-y-2')}>
-      <div className="flex items-center justify-between gap-2">
-        <span className={cx('truncate text-xs font-semibold', macroTextClasses[macroKey])}>
-          {compact ? meta.shortLabel : meta.label}
-        </span>
-        <span className="text-[11px] font-medium text-muted">{stateLabel}</span>
-      </div>
-      <div
-        aria-label={`${meta.label}: ${consumed} de ${target} ${unit}`}
-        aria-valuemax={target}
-        aria-valuemin={0}
-        aria-valuenow={Math.min(consumed, target)}
-        role="progressbar"
-        className="h-2 overflow-hidden rounded-pill bg-surface-sunken"
-      >
-        <div
-          className={cx('h-full rounded-pill transition-[width] duration-[var(--dur-base)]', macroBarClasses[macroKey])}
-          style={{ width: `${percent}%` }}
-        />
-      </div>
-      <p className="font-mono text-xs text-muted">
-        <span className="font-semibold text-strong">{formatNutritionAmount(consumed, unit, 1)}</span>
-        {' / '}
-        {formatNutritionAmount(target, unit, 1)}
-      </p>
-    </div>
   )
 }
 
@@ -281,7 +176,6 @@ export function MealTimeline({
       />
     )
   }
-
   return (
     <ol aria-label="Registro de comidas del día" className="relative space-y-4 before:absolute before:bottom-5 before:left-[17px] before:top-5 before:w-px before:bg-border-subtle">
       {slots.map((slot) => (
@@ -310,16 +204,13 @@ export function MealSlotCard({ slot, actions }: { slot: NutritionMealSlotModel; 
     corrected: { label: 'Corregido', tone: 'info' as const },
     offline: { label: 'Pendiente de sincronizar', tone: 'warning' as const },
   }[slot.state]
-
   return (
     <article className="rounded-card border border-border-subtle bg-surface-card p-4 shadow-sm">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="flex flex-wrap items-center gap-2">
             <h3 className="font-display text-lg font-semibold text-strong">{slot.name}</h3>
-            <span className={cx('rounded-pill border px-2 py-0.5 text-[11px] font-semibold', toneClasses[state.tone])}>
-              {state.label}
-            </span>
+            <span className={cx('rounded-pill border px-2 py-0.5 text-[11px] font-semibold', toneClasses[state.tone])}>{state.label}</span>
           </div>
           {slot.timeLabel ? (
             <p className="mt-1 inline-flex items-center gap-1 text-xs text-muted">
@@ -333,64 +224,31 @@ export function MealSlotCard({ slot, actions }: { slot: NutritionMealSlotModel; 
           <span className="font-mono text-sm font-semibold text-strong">{formatNutritionCalories(slot.subtotalCalories)}</span>
         ) : null}
       </div>
-
       <div className="mt-4 divide-y divide-border-subtle">
-        {slot.foods.length > 0 ? (
-          slot.foods.map((food) => <FoodRow key={food.id} food={food} />)
-        ) : (
-          <p className="py-4 text-sm text-muted">Aún no registras alimentos en esta franja.</p>
-        )}
+        {slot.foods.length > 0 ? slot.foods.map((food) => <FoodRow key={food.id} food={food} />) : <p className="py-4 text-sm text-muted">Aún no registras alimentos en esta franja.</p>}
       </div>
       {actions ? <div className="mt-4 flex flex-wrap gap-2 border-t border-border-subtle pt-4">{actions}</div> : null}
     </article>
   )
 }
 
-export function FoodThumbnail({
-  src,
-  alt,
-  size = 'md',
-}: {
-  src?: string | null
-  alt: string
-  size?: 'sm' | 'md' | 'lg'
-}) {
+export function FoodThumbnail({ src, alt, size = 'md' }: { src?: string | null; alt: string; size?: 'sm' | 'md' | 'lg' }) {
   const sizeClass = { sm: 'h-9 w-9', md: 'h-12 w-12', lg: 'h-16 w-16' }[size]
   if (!src) {
     return (
-      <span
-        aria-label={`Sin imagen para ${alt}`}
-        className={cx(
-          'inline-flex shrink-0 items-center justify-center rounded-control border border-border-subtle bg-surface-sunken text-subtle',
-          sizeClass,
-        )}
-        role="img"
-      >
+      <span aria-label={`Sin imagen para ${alt}`} className={cx('inline-flex shrink-0 items-center justify-center rounded-control border border-border-subtle bg-surface-sunken text-subtle', sizeClass)} role="img">
         <ImageIcon aria-hidden="true" className="h-5 w-5" />
       </span>
     )
   }
-
   return (
     // eslint-disable-next-line @next/next/no-img-element
-    <img
-      alt={alt}
-      className={cx('shrink-0 rounded-control border border-border-subtle object-cover', sizeClass)}
-      loading="lazy"
-      src={src}
-    />
+    <img alt={alt} className={cx('shrink-0 rounded-control border border-border-subtle object-cover', sizeClass)} loading="lazy" src={src} />
   )
 }
 
 export function FoodRow({ food, actions }: { food: NutritionFoodRowModel; actions?: ReactNode }) {
-  const statusLabel = {
-    default: null,
-    pending: 'Guardando',
-    corrected: 'Corregido',
-    offline: 'Sin sincronizar',
-    error: 'Error',
-  }[food.status ?? 'default']
-
+  const statusLabel = { default: null, pending: 'Guardando', corrected: 'Corregido', offline: 'Sin sincronizar', error: 'Error' }[food.status ?? 'default']
   return (
     <div className="flex min-w-0 items-center gap-3 py-3">
       <FoodThumbnail alt={food.name} src={food.thumbnailUrl} />
@@ -399,10 +257,7 @@ export function FoodRow({ food, actions }: { food: NutritionFoodRowModel; action
           <p className="truncate text-sm font-semibold text-strong">{food.name}</p>
           {statusLabel ? <span className="text-[11px] font-semibold text-amber-700 dark:text-amber-300">{statusLabel}</span> : null}
         </div>
-        <p className="mt-0.5 truncate text-xs text-muted">
-          {food.quantityLabel}
-          {food.detail ? ` · ${food.detail}` : ''}
-        </p>
+        <p className="mt-0.5 truncate text-xs text-muted">{food.quantityLabel}{food.detail ? ` · ${food.detail}` : ''}</p>
         <p className="mt-1 font-mono text-[11px] text-subtle">
           {food.calories !== null && food.calories !== undefined ? `${formatNutritionCalories(food.calories)} · ` : ''}
           P {food.proteinG ?? 0} · C {food.carbsG ?? 0} · G {food.fatsG ?? 0}
@@ -413,15 +268,7 @@ export function FoodRow({ food, actions }: { food: NutritionFoodRowModel; action
   )
 }
 
-export function SyncOfflineState({
-  state,
-  label,
-  onRetry,
-}: {
-  state: NutritionSyncState
-  label?: string
-  onRetry?: () => void
-}) {
+export function SyncOfflineState({ state, label, onRetry }: { state: NutritionSyncState; label?: string; onRetry?: () => void }) {
   const config = {
     synced: { icon: Cloud, text: label ?? 'Sincronizado', tone: 'success' as const },
     pending: { icon: Cloud, text: label ?? 'Pendiente', tone: 'warning' as const },
@@ -430,16 +277,11 @@ export function SyncOfflineState({
     offline: { icon: CloudOff, text: label ?? 'Sin conexión', tone: 'warning' as const },
   }[state]
   const Icon = config.icon
-
   return (
     <span className={cx('inline-flex items-center gap-1.5 rounded-pill border px-2.5 py-1 text-xs font-semibold', toneClasses[config.tone])}>
       <Icon aria-hidden="true" className={cx('h-3.5 w-3.5', state === 'syncing' && 'animate-spin')} />
       {config.text}
-      {onRetry && state === 'error' ? (
-        <button className="ml-1 underline underline-offset-2" onClick={onRetry} type="button">
-          Reintentar
-        </button>
-      ) : null}
+      {onRetry && state === 'error' ? <button className="ml-1 underline underline-offset-2" onClick={onRetry} type="button">Reintentar</button> : null}
     </span>
   )
 }
@@ -459,25 +301,10 @@ export function NutritionStatePanel({
   action?: ReactNode
   className?: string
 }) {
-  const Icon = {
-    empty: Utensils,
-    error: AlertTriangle,
-    permission: ShieldAlert,
-    offline: WifiOff,
-    info: Info,
-  }[icon]
-
+  const Icon = { empty: Utensils, error: AlertTriangle, permission: ShieldAlert, offline: WifiOff, info: Info }[icon]
   return (
-    <section
-      className={cx(
-        'flex min-h-48 flex-col items-center justify-center rounded-card border p-6 text-center',
-        toneClasses[tone],
-        className,
-      )}
-    >
-      <span className="mb-4 inline-flex h-11 w-11 items-center justify-center rounded-full bg-current/10">
-        <Icon aria-hidden="true" className="h-5 w-5" />
-      </span>
+    <section className={cx('flex min-h-48 flex-col items-center justify-center rounded-card border p-6 text-center', toneClasses[tone], className)}>
+      <span className="mb-4 inline-flex h-11 w-11 items-center justify-center rounded-full bg-current/10"><Icon aria-hidden="true" className="h-5 w-5" /></span>
       <h3 className="font-display text-lg font-semibold">{title}</h3>
       <p className="mt-2 max-w-md text-sm leading-6 opacity-80">{description}</p>
       {action ? <div className="mt-5">{action}</div> : null}
@@ -491,48 +318,27 @@ export function NutritionSkeleton({ variant = 'today', rows = 3 }: { variant?: '
       <div className="h-28 animate-pulse rounded-card bg-surface-sunken motion-reduce:animate-none" />
       {variant === 'builder' ? (
         <div className="grid gap-4 lg:grid-cols-[220px_minmax(0,1fr)_280px]">
-          <div className="h-96 animate-pulse rounded-card bg-surface-sunken motion-reduce:animate-none" />
-          <div className="h-96 animate-pulse rounded-card bg-surface-sunken motion-reduce:animate-none" />
-          <div className="h-96 animate-pulse rounded-card bg-surface-sunken motion-reduce:animate-none" />
+          {Array.from({ length: 3 }, (_, index) => <div key={index} className="h-96 animate-pulse rounded-card bg-surface-sunken motion-reduce:animate-none" />)}
         </div>
-      ) : (
-        Array.from({ length: rows }, (_, index) => (
-          <div key={index} className="h-32 animate-pulse rounded-card bg-surface-sunken motion-reduce:animate-none" />
-        ))
-      )}
+      ) : Array.from({ length: rows }, (_, index) => <div key={index} className="h-32 animate-pulse rounded-card bg-surface-sunken motion-reduce:animate-none" />)}
     </div>
   )
 }
 
-export function CoachAttentionCard({
-  item,
-  onAction,
-}: {
-  item: NutritionAttentionModel
-  onAction?: (id: string) => void
-}) {
+export function CoachAttentionCard({ item, onAction }: { item: NutritionAttentionModel; onAction?: (id: string) => void }) {
   return (
     <article className={cx('rounded-card border p-4', toneClasses[item.tone])}>
       <div className="flex items-start gap-3">
         <span className="mt-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-current/10">
-          {item.tone === 'warning' || item.tone === 'danger' ? (
-            <AlertTriangle aria-hidden="true" className="h-4 w-4" />
-          ) : (
-            <Info aria-hidden="true" className="h-4 w-4" />
-          )}
+          {item.tone === 'warning' || item.tone === 'danger' ? <AlertTriangle aria-hidden="true" className="h-4 w-4" /> : <Info aria-hidden="true" className="h-4 w-4" />}
         </span>
         <div className="min-w-0 flex-1">
           <h3 className="font-semibold">{item.title}</h3>
           <p className="mt-1 text-sm opacity-85">{item.description}</p>
           <p className="mt-2 text-xs font-medium opacity-70">Motivo: {item.reason}</p>
         </div>
-        <button
-          className="inline-flex min-h-11 shrink-0 items-center gap-1 rounded-control px-3 text-sm font-semibold hover:bg-current/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          onClick={() => onAction?.(item.id)}
-          type="button"
-        >
-          {item.actionLabel}
-          <ChevronRight aria-hidden="true" className="h-4 w-4" />
+        <button className="inline-flex min-h-11 shrink-0 items-center gap-1 rounded-control px-3 text-sm font-semibold hover:bg-current/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" onClick={() => onAction?.(item.id)} type="button">
+          {item.actionLabel}<ChevronRight aria-hidden="true" className="h-4 w-4" />
         </button>
       </div>
     </article>
@@ -545,29 +351,11 @@ export function BuilderStepList({ steps }: { steps: NutritionBuilderStepModel[] 
       <ol className="space-y-1">
         {steps.map((step, index) => (
           <li key={step.id}>
-            <div
-              aria-current={step.state === 'current' ? 'step' : undefined}
-              className={cx(
-                'flex min-h-11 items-start gap-3 rounded-control px-3 py-2',
-                step.state === 'current' && 'bg-ember-100 text-ember-800 dark:bg-ember-100/20 dark:text-ember-300',
-                step.state === 'error' && 'bg-rose-50 text-rose-800 dark:bg-rose-950/30 dark:text-rose-300',
-              )}
-            >
-              <span
-                className={cx(
-                  'mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-xs font-bold',
-                  step.state === 'complete' && 'border-emerald-500 bg-emerald-500 text-white',
-                  step.state === 'current' && 'border-ember-500 bg-ember-500 text-white',
-                  step.state === 'upcoming' && 'border-border-default bg-surface-sunken text-muted',
-                  step.state === 'error' && 'border-rose-500 bg-rose-500 text-white',
-                )}
-              >
+            <div aria-current={step.state === 'current' ? 'step' : undefined} className={cx('flex min-h-11 items-start gap-3 rounded-control px-3 py-2', step.state === 'current' && 'bg-ember-100 text-ember-800 dark:bg-ember-100/20 dark:text-ember-300', step.state === 'error' && 'bg-rose-50 text-rose-800 dark:bg-rose-950/30 dark:text-rose-300')}>
+              <span className={cx('mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-xs font-bold', step.state === 'complete' && 'border-emerald-500 bg-emerald-500 text-white', step.state === 'current' && 'border-ember-500 bg-ember-500 text-white', step.state === 'upcoming' && 'border-border-default bg-surface-sunken text-muted', step.state === 'error' && 'border-rose-500 bg-rose-500 text-white')}>
                 {step.state === 'complete' ? <Check aria-hidden="true" className="h-3.5 w-3.5" /> : index + 1}
               </span>
-              <span className="min-w-0">
-                <span className="block text-sm font-semibold">{step.label}</span>
-                {step.description ? <span className="mt-0.5 block text-xs opacity-70">{step.description}</span> : null}
-              </span>
+              <span className="min-w-0"><span className="block text-sm font-semibold">{step.label}</span>{step.description ? <span className="mt-0.5 block text-xs opacity-70">{step.description}</span> : null}</span>
             </div>
           </li>
         ))}
@@ -579,35 +367,10 @@ export function BuilderStepList({ steps }: { steps: NutritionBuilderStepModel[] 
 export function BuilderInspector({ title = 'Inspector', children, footer }: { title?: string; children: ReactNode; footer?: ReactNode }) {
   return (
     <aside className="rounded-card border border-border-subtle bg-surface-card shadow-sm">
-      <div className="border-b border-border-subtle px-4 py-3">
-        <h2 className="font-display text-base font-semibold text-strong">{title}</h2>
-      </div>
+      <div className="border-b border-border-subtle px-4 py-3"><h2 className="font-display text-base font-semibold text-strong">{title}</h2></div>
       <div className="space-y-4 p-4">{children}</div>
       {footer ? <div className="border-t border-border-subtle p-4">{footer}</div> : null}
     </aside>
-  )
-}
-
-export function StudentPreview({
-  title = 'Vista del alumno',
-  themeLabel,
-  children,
-}: {
-  title?: string
-  themeLabel?: string
-  children: ReactNode
-}) {
-  return (
-    <section className="overflow-hidden rounded-[32px] border-8 border-[#151922] bg-surface-app shadow-xl">
-      <div className="flex h-7 items-center justify-center bg-[#151922]">
-        <span className="h-1.5 w-20 rounded-pill bg-white/20" />
-      </div>
-      <div className="flex items-center justify-between border-b border-border-subtle bg-surface-card px-4 py-3">
-        <p className="text-sm font-semibold text-strong">{title}</p>
-        {themeLabel ? <span className="text-xs text-muted">{themeLabel}</span> : null}
-      </div>
-      <div className="max-h-[620px] overflow-y-auto p-3">{children}</div>
-    </section>
   )
 }
 
@@ -627,15 +390,12 @@ export function ResponsiveDataAdapter<T>({
   empty?: ReactNode
 }) {
   if (items.length === 0) return <>{empty ?? null}</>
-
   return (
     <>
       <div className="space-y-3 md:hidden">{items.map((item) => <div key={getKey(item)}>{renderCard(item)}</div>)}</div>
       <div className="hidden overflow-x-auto rounded-card border border-border-subtle bg-surface-card md:block">
         <table className="w-full min-w-[760px] border-collapse text-left text-sm">
-          <thead className="bg-surface-sunken text-xs uppercase tracking-wide text-muted">
-            <tr>{headers.map((header) => <th key={header} className="px-4 py-3 font-semibold">{header}</th>)}</tr>
-          </thead>
+          <thead className="bg-surface-sunken text-xs uppercase tracking-wide text-muted"><tr>{headers.map((header) => <th key={header} className="px-4 py-3 font-semibold">{header}</th>)}</tr></thead>
           <tbody className="divide-y divide-border-subtle">{items.map((item) => <tr key={getKey(item)}>{renderRow(item)}</tr>)}</tbody>
         </table>
       </div>
@@ -645,13 +405,8 @@ export function ResponsiveDataAdapter<T>({
 
 export function NutritionRefreshButton({ onClick, children = 'Actualizar' }: { onClick?: () => void; children?: ReactNode }) {
   return (
-    <button
-      className="inline-flex min-h-11 items-center gap-2 rounded-control border border-border-default bg-surface-card px-3 text-sm font-semibold text-strong transition-colors hover:bg-surface-sunken focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-      onClick={onClick}
-      type="button"
-    >
-      <RefreshCcw aria-hidden="true" className="h-4 w-4" />
-      {children}
+    <button className="inline-flex min-h-11 items-center gap-2 rounded-control border border-border-default bg-surface-card px-3 text-sm font-semibold text-strong transition-colors hover:bg-surface-sunken focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" onClick={onClick} type="button">
+      <RefreshCcw aria-hidden="true" className="h-4 w-4" />{children}
     </button>
   )
 }
