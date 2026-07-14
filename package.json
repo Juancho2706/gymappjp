@@ -15,6 +15,7 @@
     "test:e2e": "playwright test",
     "test:e2e:nutrition": "playwright test tests/nutrition-student-smoke.spec.ts",
     "check:tokens": "node scripts/check-token-parity.mjs",
+    "check:nutrition-v2-boundaries": "node scripts/check-nutrition-v2-boundaries.mjs",
     "supa": "node_modules/.bin/supabase.cmd",
     "supabase:disable-signup": "node scripts/disable-supabase-signup.mjs",
     "catalog:import:cl": "node scripts/import-food-catalog-cl.mjs",
