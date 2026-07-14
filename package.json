@@ -17,6 +17,7 @@
     "check:tokens": "node scripts/check-token-parity.mjs",
     "supa": "node_modules/.bin/supabase.cmd",
     "supabase:disable-signup": "node scripts/disable-supabase-signup.mjs",
+    "catalog:import:cl": "node scripts/import-food-catalog-cl.mjs",
     "audit:nutrition-empty-meals": "node scripts/audit-nutrition-empty-meals.mjs",
     "check:meal-completions-deprecation": "node scripts/check-meal-completions-deprecation.mjs",
     "audit:nutrition-empty-meals:strict": "node scripts/audit-nutrition-empty-meals.mjs --fail-on-find",
