@@ -2,9 +2,9 @@ import { z } from 'zod'
 
 export const FoodVerificationStatusSchema = z.enum([
   'unverified',
-  'community_reported',
-  'reviewing',
-  'verified',
+  'community',
+  'coach_verified',
+  'eva_verified',
   'rejected',
 ])
 
