@@ -20,7 +20,7 @@ Patrones relevantes:
 - expediente con historia médica, alimentaria, social y mediciones;
 - reportes visuales y materiales educativos.
 
-**Conclusión para EVA:** es el producto más parecido a lo que debe representar Nutrición Pro. EVA ya tiene intercambios, variantes, micronutrientes y composición corporal; el salto pendiente es unir prescripción, consumo real, recetas estructuradas y revisión profesional en un mismo flujo.
+**Conclusión para EVA:** es el producto más parecido a lo que debe representar Nutrición Pro. EVA ya une prescripción, consumo real, recetas estructuradas, intercambios, micronutrientes, composición corporal, hábitos y revisión profesional en un mismo flujo.
 
 ### Healthie — referente de expediente y trabajo multidisciplinario
 
@@ -37,7 +37,7 @@ Patrones relevantes:
 - portal del paciente;
 - reportes, mensajería y seguimiento.
 
-**Conclusión para EVA:** no copiar el EHR completo. Adoptar el principio de una ficha longitudinal: evaluación inicial, objetivos, plan vigente, consumo real, notas del profesional y evolución, con permisos claros para EVA Teams.
+**Conclusión para EVA:** no copiar el EHR completo. Mantener una ficha longitudinal compuesta por evaluación, objetivos, plan vigente, consumo real, notas, hábitos y evolución, con permisos claros para EVA Teams.
 
 ### Practice Better + That Clean Life — referente de protocolos y educación
 
@@ -52,7 +52,7 @@ Patrones relevantes:
 - recomendaciones, objetivos de nutrientes e hidratación;
 - meal plans reutilizables dentro de programas/protocolos.
 
-**Conclusión para EVA:** el plan no debe ser solo una lista de gramos. Debe poder incluir indicaciones, hábitos, hidratación, restricciones, recursos y seguimiento, manteniendo el núcleo nutricional cuantificable.
+**Conclusión para EVA:** el plan ya puede incluir indicaciones, objetivos de hábitos/hidratación, suplementos y protocolo, manteniendo el núcleo nutricional cuantificable y sin recomendaciones automáticas.
 
 ### Fitia — referente de fricción baja para el alumno
 
@@ -66,7 +66,7 @@ Patrones relevantes:
 - recetas y planificación semanal;
 - navegación orientada a la acción cotidiana.
 
-**Conclusión para EVA:** tomar velocidad y jerarquía, no copiar identidad visual. EVA debe superar a Fitia al mostrar además qué prescribió el profesional y por qué.
+**Conclusión para EVA:** tomar velocidad y jerarquía, no copiar identidad visual. EVA supera ese patrón al distinguir lo prescrito por el profesional del consumo real adicional y al incorporar revisión profesional.
 
 ## 2. Diferenciación Base vs Nutrición Pro
 
@@ -96,38 +96,41 @@ Valor: permitir que un nutricionista evalúe, prescriba, ajuste y documente prof
 - objetivos basados en composición corporal;
 - recetas estructuradas con ingredientes, porciones y macros;
 - análisis prescrito vs consumido;
-- adherencia por comida, horario y grupo alimentario;
+- adherencia por comida y consumo real;
 - restricciones, alergias, preferencias y antecedentes;
 - notas privadas y evolución longitudinal;
-- plantillas, protocolos y reportes;
+- metas de agua, pasos, sueño y ayuno;
+- indicaciones de suplementos y protocolo escrito;
+- plantillas y exportaciones existentes;
 - revisión compartida y auditada dentro de EVA Teams.
 
-El registro básico no debe bloquearse detrás de Pro. Pro monetiza la capacidad profesional, no el simple hecho de buscar comida.
+El registro básico no se bloquea detrás de Pro. Pro monetiza la capacidad profesional, no el simple hecho de buscar comida.
 
-## 3. Arquitectura de información recomendada
+## 3. Arquitectura de información implementada
 
 ### Alumno — pantalla diaria
 
-Orden estable en las tres superficies:
+Orden estable:
 
 1. fecha y estado del día;
 2. consumido vs objetivo;
 3. CTA principal `Registrar alimento`;
 4. próxima comida;
-5. comidas del día;
-6. consumo real adicional;
-7. recomendación/nota del profesional;
-8. accesos secundarios: recetas, compras, recap e historial.
+5. objetivos/hábitos del profesional;
+6. consumo real agrupado por franja;
+7. comidas del plan;
+8. recomendación/nota del profesional;
+9. recetas, compras, recap e historial.
 
 ### Profesional — workspace de nutrición
 
-1. **Hoy / seguimiento:** alumnos con riesgo o pendientes;
+1. **Seguimiento de hoy:** alumnos con riesgo o pendientes;
 2. **Planes:** activos, plantillas y asignación;
-3. **Alimentos:** catálogo, validación y productos faltantes;
+3. **Alimentos:** catálogo, validación y GTIN faltantes;
 4. **Recetas:** ideas Base y recetas estructuradas Pro;
-5. **Pro:** intercambios, micronutrientes, evaluaciones y reportes.
+5. **Pro:** intercambios, micronutrientes, objetivos, protocolos y reportes existentes.
 
-No mezclar todas las herramientas en una pantalla vertical. Usar master-detail en desktop y navegación por tabs/sheets en móvil.
+Desktop usa tablas/master-detail; móvil usa tarjetas, tabs y sheets.
 
 ## 4. Principios UI/UX
 
@@ -137,13 +140,13 @@ No mezclar todas las herramientas en una pantalla vertical. Usar master-detail e
 - Ember identifica Nutrición; Sport queda para marca/acciones globales;
 - números en mono solo para métricas, cantidades y códigos;
 - tarjetas con menos cajas anidadas y más jerarquía tipográfica;
-- `consumo real`, no lenguaje culpabilizante como `fuera de plan`;
+- `consumo real`, sin lenguaje culpabilizante;
 - mostrar siempre la base del dato: `por 100 g`, `por 100 ml`, `1 un ≈ X g` o `por porción`;
 - no usar color como única señal;
 - targets táctiles mínimos de 44 px;
-- skeleton, vacío, error, offline y sin permisos diseñados explícitamente;
+- skeleton, vacío, error y sin permisos diseñados;
 - acciones frecuentes al alcance del pulgar;
-- listas grandes paginadas, con debounce y resultados recientes primero;
+- listas paginadas/debounced;
 - no cargar imágenes grandes en listas.
 
 ## 5. Reglas de exactitud de datos
@@ -151,53 +154,46 @@ No mezclar todas las herramientas en una pantalla vertical. Usar master-detail e
 1. `foods.calories/protein_g/carbs_g/fats_g` representan valores por 100 g/ml.
 2. `g` y `ml`: factor = cantidad / 100.
 3. `un`: factor = cantidad × `serving_size` / 100.
-4. La UI nunca debe presentar `serving_size` junto a kcal por 100 g como si fueran la misma porción.
-5. Cada registro histórico debe conservar snapshots de nombre, marca, porción y nutrientes.
+4. La UI no presenta `serving_size` junto a kcal por 100 g como si fueran la misma porción.
+5. Cada registro histórico conserva snapshots de nombre, marca, porción y nutrientes.
 6. Una receta estructurada calcula totales desde ingredientes y divide entre `servings`.
 7. Si el profesional modifica un alimento después, el consumo histórico no cambia.
-8. Alimentos y recetas deben mostrar procedencia y estado de verificación cuando sea relevante para el profesional.
+8. Alimentos y recetas muestran procedencia/estado de verificación cuando es relevante para el profesional.
+9. Metas y protocolos proceden del profesional; EVA no prescribe ni completa automáticamente.
 
-## 6. Roadmap recomendado
+## 6. Estado del roadmap
 
-### P0 — exactitud y base local
+### Completado
 
-- corregir unidades y etiquetas de referencia;
-- activar catálogo local/barcode;
-- importar lote piloto Chile;
-- capturar códigos no encontrados;
-- snapshots de consumo.
-
-### P1 — diario de alumno
-
-- shell consumido vs objetivo;
-- registro rápido;
-- favoritos;
-- comidas por franja;
+- exactitud de unidades y etiquetas;
+- esquema de catálogo local/barcode;
+- cola de códigos no encontrados y curación con RLS;
+- snapshots de consumo;
+- diario consumido vs objetivo;
+- búsqueda, barcode, recientes y favoritos;
+- franjas de comida;
 - historial editable del día;
-- offline y sincronización.
+- recetas profesionales estructuradas;
+- cockpit prescrito vs consumido;
+- alertas transparentes y tendencias de adherencia existentes;
+- metas de hábitos/hidratación;
+- indicaciones y protocolos profesionales;
+- paridad web/RN del flujo principal.
 
-### P2 — recetas profesionales
+### Pendiente operativo
 
-- evolucionar `nutrition_recipes`, no revivir tablas legacy;
-- ingredientes estructurados ligados a `foods`;
-- porciones, tiempo, categoría y macros por porción;
-- receta insertable en plan;
-- lista de compras derivada.
+- importar y verificar un lote piloto de productos comerciales chilenos;
+- QA física Android/iOS de cámara, teclado, gestos y safe areas;
+- smoke test completo con cuentas coach/alumno/team;
+- promoción manual del PR después de aprobación.
 
-### P3 — cockpit profesional
+### Evolución posterior al lanzamiento
 
-- prescrito vs consumido;
-- alertas configurables;
-- tendencias de adherencia;
-- micronutrientes y grupos alimentarios;
-- revisión semanal y notas privadas.
-
-### P4 — protocolos y reportes
-
-- objetivos, hábitos, hidratación y recomendaciones;
-- plantillas reutilizables;
-- PDF/reporte longitudinal;
-- permisos y auditoría para Teams.
+- reportes longitudinales más ricos y exportables;
+- materiales educativos versionados;
+- consolidación de lista de compras desde recetas estructuradas;
+- analítica agregada de grupos alimentarios y micronutrientes;
+- herramientas clínicas adicionales solo cuando exista requerimiento validado.
 
 ## 7. Qué no implementar
 
@@ -206,5 +202,5 @@ No mezclar todas las herramientas en una pantalla vertical. Usar master-detail e
 - score opaco sin explicar el cálculo;
 - recomendaciones médicas automáticas;
 - copiar visualmente marcas, textos o interfaces propietarias;
-- otro sistema paralelo de recetas;
+- otro sistema paralelo de recetas, favoritos, hábitos o protocolos;
 - migraciones destructivas sobre producción.
