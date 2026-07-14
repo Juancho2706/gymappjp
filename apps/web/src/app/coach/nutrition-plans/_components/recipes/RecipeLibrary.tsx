@@ -2,10 +2,11 @@
 
 import { useMemo, useState, useTransition } from 'react'
 import Image from 'next/image'
-import { ChefHat, Users, Pencil, Trash2, Loader2, Search, X } from 'lucide-react'
+import { ChefHat, Clock3, Users, Pencil, Trash2, Loader2, Search, Scale, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { CreateRecipeDialog } from './CreateRecipeDialog'
+import { StructuredRecipeDialog } from './StructuredRecipeDialog'
 import { AssignRecipeModal, type RecipeAssignClient } from './AssignRecipeModal'
 import { deleteRecipeAction } from '../../_actions/recipes.actions'
 import type { RecipeRow } from '@/services/nutrition-recipes.service'
@@ -16,50 +17,59 @@ import { TierBadge } from '@/components/nutrition/TierBadge'
 type Props = {
   recipes: RecipeRow[]
   clients: RecipeAssignClient[]
+  nutritionProEnabled: boolean
 }
 
-export function RecipeLibrary({ recipes, clients }: Props) {
+export function RecipeLibrary({ recipes, clients, nutritionProEnabled }: Props) {
   const [assignTarget, setAssignTarget] = useState<RecipeRow | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [pending, startTransition] = useTransition()
   const [query, setQuery] = useState('')
 
   const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase()
-    if (!q) return recipes
-    return recipes.filter(
-      (r) =>
-        r.name.toLowerCase().includes(q) ||
-        (r.ingredients_text?.toLowerCase().includes(q) ?? false)
+    const normalized = query.trim().toLocaleLowerCase('es-CL')
+    if (!normalized) return recipes
+    return recipes.filter((recipe) =>
+      recipe.name.toLocaleLowerCase('es-CL').includes(normalized)
+      || (recipe.ingredients_text?.toLocaleLowerCase('es-CL').includes(normalized) ?? false)
+      || (recipe.category?.toLocaleLowerCase('es-CL').includes(normalized) ?? false),
     )
   }, [recipes, query])
 
-  const handleDelete = (recipe: RecipeRow) => {
+  function handleDelete(recipe: RecipeRow) {
     setDeletingId(recipe.id)
     startTransition(async () => {
-      const res = await deleteRecipeAction({ recipeId: recipe.id })
+      const result = await deleteRecipeAction({ recipeId: recipe.id })
       setDeletingId(null)
-      if (!res.success) {
-        toast.error(res.error ?? 'No se pudo eliminar la receta.')
+      if (!result.success) {
+        toast.error(result.error ?? 'No se pudo eliminar la receta.')
         return
       }
       toast.success('Receta eliminada')
     })
   }
 
+  const createActions = (
+    <div className="flex flex-col gap-2 sm:flex-row">
+      <CreateRecipeDialog />
+      {nutritionProEnabled && <StructuredRecipeDialog />}
+    </div>
+  )
+
   return (
     <div className="space-y-6">
-      <div className="flex flex-col md:flex-row gap-3 md:items-center justify-between">
-        <div className="space-y-1.5 max-w-md">
-          <div className="flex items-center gap-1.5">
+      <div className="flex flex-col justify-between gap-3 md:flex-row md:items-center">
+        <div className="max-w-lg space-y-1.5">
+          <div className="flex flex-wrap items-center gap-1.5">
             <TierBadge tier="base" />
-            <InfoTooltip content="Ideas de recetas para inspirar a tus alumnos. Viene incluido en el módulo de nutrición (Base). No afectan macros ni adherencia." />
+            {nutritionProEnabled && <TierBadge tier="pro" />}
+            <InfoTooltip content="Las ideas Base sirven como inspiración. Las recetas Pro usan ingredientes del catálogo, calculan macros por porción y pueden formar parte de la prescripción profesional." />
           </div>
-          <p className="text-xs text-muted-foreground leading-relaxed">
-            Ideas de recetas — inspiración para tus alumnos. No afectan macros ni adherencia.
+          <p className="text-xs leading-relaxed text-muted-foreground">
+            Crea ideas rápidas o preparaciones cuantificables con porciones y macros consistentes.
           </p>
         </div>
-        <CreateRecipeDialog />
+        {createActions}
       </div>
 
       {recipes.length > 0 && (
@@ -67,9 +77,9 @@ export function RecipeLibrary({ recipes, clients }: Props) {
           <div className="relative min-w-0">
             <Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-[var(--text-subtle)]" />
             <Input
-              placeholder="Buscar receta…"
+              placeholder="Buscar receta, ingrediente o categoría…"
               value={query}
-              onChange={(e) => setQuery(e.target.value)}
+              onChange={(event) => setQuery(event.target.value)}
               className="h-11 rounded-control border-default bg-surface-card pl-10 pr-10 text-base shadow-sm placeholder:text-muted md:text-sm"
               aria-label="Buscar receta"
             />
@@ -103,15 +113,15 @@ export function RecipeLibrary({ recipes, clients }: Props) {
       )}
 
       {recipes.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-border bg-card/50 p-10 text-center">
+        <div className="rounded-card border border-dashed border-default bg-surface-card p-10 text-center">
           <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-[var(--ember-100)] text-[var(--ember-600)]">
             <ChefHat className="h-6 w-6" />
           </div>
-          <p className="text-sm font-bold text-foreground">Todavía no tienes recetas</p>
-          <p className="text-xs text-muted-foreground mt-1 mb-4 max-w-xs mx-auto">
-            Crea ideas de recetas para inspirar a tus alumnos. Toma unos 30 segundos.
+          <p className="text-sm font-bold text-strong">Todavía no tienes recetas</p>
+          <p className="mx-auto mb-4 mt-1 max-w-sm text-xs leading-relaxed text-muted">
+            Empieza con una idea Base o crea una receta profesional calculada desde tus alimentos.
           </p>
-          <CreateRecipeDialog />
+          <div className="flex justify-center">{createActions}</div>
         </div>
       ) : filtered.length === 0 ? (
         <div className="rounded-card border border-dashed border-default bg-surface-card px-6 py-10 text-center">
@@ -121,85 +131,147 @@ export function RecipeLibrary({ recipes, clients }: Props) {
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filtered.map((recipe) => (
-            <div
-              key={recipe.id}
-              className="group flex flex-col rounded-2xl border border-border bg-card overflow-hidden transition-all hover:border-[color:var(--ember-300)] hover:shadow-lg"
-            >
-              {recipe.image_url ? (
-                <div className="relative aspect-[16/9] w-full bg-muted">
-                  <Image
-                    src={recipe.image_url}
-                    alt={recipe.name}
-                    fill
-                    sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
-                    className="object-cover"
-                    unoptimized
-                  />
-                </div>
-              ) : (
-                <div className="flex aspect-[16/9] w-full items-center justify-center bg-gradient-to-br from-[var(--ember-100)] to-card">
-                  <ChefHat className="h-8 w-8 text-[var(--ember-300)]" />
-                </div>
-              )}
-
-              <div className="flex flex-1 flex-col p-4 space-y-3">
-                <h3 className="font-black text-base leading-tight tracking-tight text-foreground line-clamp-2">
-                  {recipe.name}
-                </h3>
-
-                {recipe.ingredients_text && (
-                  <p className="text-xs text-muted-foreground line-clamp-3 whitespace-pre-line">
-                    {recipe.ingredients_text}
-                  </p>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {filtered.map((recipe) => {
+            const structured = recipe.recipe_mode === 'structured'
+            return (
+              <article
+                key={recipe.id}
+                className="group flex flex-col overflow-hidden rounded-card border border-border bg-card transition-all hover:border-[color:var(--ember-300)] hover:shadow-lg"
+              >
+                {recipe.image_url ? (
+                  <div className="relative aspect-[16/9] w-full bg-muted">
+                    <Image
+                      src={recipe.image_url}
+                      alt={recipe.name}
+                      fill
+                      sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                      className="object-cover"
+                      unoptimized
+                    />
+                  </div>
+                ) : (
+                  <div className="flex aspect-[16/9] w-full items-center justify-center bg-gradient-to-br from-[var(--ember-100)] to-card">
+                    {structured ? (
+                      <Scale className="h-8 w-8 text-[var(--ember-400)]" />
+                    ) : (
+                      <ChefHat className="h-8 w-8 text-[var(--ember-300)]" />
+                    )}
+                  </div>
                 )}
 
-                <div className="mt-auto flex items-center gap-2 pt-2">
-                  <Button
-                    size="sm"
-                    variant="primary"
-                    className="flex-1 h-9 gap-1.5 font-bold uppercase tracking-widest text-[10px]"
-                    onClick={() => setAssignTarget(recipe)}
-                  >
-                    <Users className="w-3.5 h-3.5" />
-                    Compartir
-                  </Button>
-                  <CreateRecipeDialog
-                    recipe={recipe}
-                    trigger={
-                      <button
-                        type="button"
-                        aria-label="Editar receta"
-                        className="h-9 w-9 inline-flex items-center justify-center rounded-xl border border-border bg-background hover:bg-muted transition-colors"
-                      >
-                        <Pencil className="w-3.5 h-3.5 text-muted-foreground" />
-                      </button>
-                    }
-                  />
-                  <button
-                    type="button"
-                    aria-label="Eliminar receta"
-                    disabled={pending && deletingId === recipe.id}
-                    onClick={() => handleDelete(recipe)}
-                    className="h-9 w-9 inline-flex items-center justify-center rounded-xl border border-border bg-background hover:bg-[var(--danger-100)] hover:border-[color:var(--danger-500)] transition-colors disabled:opacity-50"
-                  >
-                    {pending && deletingId === recipe.id ? (
-                      <Loader2 className="w-3.5 h-3.5 animate-spin text-[var(--danger-500)]" />
+                <div className="flex flex-1 flex-col space-y-3 p-4">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <h3 className="line-clamp-2 text-base font-black leading-tight tracking-tight text-foreground">
+                        {recipe.name}
+                      </h3>
+                      {recipe.category && (
+                        <p className="mt-1 truncate text-[11px] font-semibold text-muted">{recipe.category}</p>
+                      )}
+                    </div>
+                    <TierBadge tier={structured ? 'pro' : 'base'} />
+                  </div>
+
+                  {structured ? (
+                    <>
+                      <div className="flex flex-wrap gap-1.5">
+                        <span className="rounded-pill bg-ember-100 px-2.5 py-1 font-mono text-[11px] font-black tabular-nums text-ember-700 dark:bg-ember-500/15 dark:text-ember-300">
+                          {Math.round(recipe.calories_per_serving ?? 0)} kcal
+                        </span>
+                        <span className="rounded-pill bg-surface-sunken px-2.5 py-1 font-mono text-[10.5px] font-bold tabular-nums text-muted">
+                          P {Math.round(recipe.protein_g_per_serving ?? 0)}g
+                        </span>
+                        <span className="rounded-pill bg-surface-sunken px-2.5 py-1 font-mono text-[10.5px] font-bold tabular-nums text-muted">
+                          C {Math.round(recipe.carbs_g_per_serving ?? 0)}g
+                        </span>
+                        <span className="rounded-pill bg-surface-sunken px-2.5 py-1 font-mono text-[10.5px] font-bold tabular-nums text-muted">
+                          G {Math.round(recipe.fats_g_per_serving ?? 0)}g
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-3 text-[11px] font-semibold text-muted">
+                        <span>{recipe.servings} {recipe.servings === 1 ? 'porción' : 'porciones'}</span>
+                        {recipe.prep_time_minutes != null && (
+                          <span className="inline-flex items-center gap-1">
+                            <Clock3 className="h-3.5 w-3.5" />
+                            {recipe.prep_time_minutes} min
+                          </span>
+                        )}
+                      </div>
+                    </>
+                  ) : recipe.ingredients_text ? (
+                    <p className="line-clamp-3 whitespace-pre-line text-xs text-muted-foreground">
+                      {recipe.ingredients_text}
+                    </p>
+                  ) : (
+                    <p className="text-xs text-muted">Idea de receta sin ingredientes detallados.</p>
+                  )}
+
+                  <div className="mt-auto flex items-center gap-2 pt-2">
+                    <Button
+                      size="sm"
+                      variant="primary"
+                      className="h-9 flex-1 gap-1.5 text-[10px] font-bold uppercase tracking-widest"
+                      onClick={() => setAssignTarget(recipe)}
+                    >
+                      <Users className="h-3.5 w-3.5" />
+                      Compartir
+                    </Button>
+
+                    {structured ? (
+                      nutritionProEnabled && (
+                        <StructuredRecipeDialog
+                          recipe={recipe}
+                          trigger={(
+                            <button
+                              type="button"
+                              aria-label="Editar receta profesional"
+                              className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-border bg-background transition-colors hover:bg-muted"
+                            >
+                              <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
+                            </button>
+                          )}
+                        />
+                      )
                     ) : (
-                      <Trash2 className="w-3.5 h-3.5 text-[var(--danger-500)]" />
+                      <CreateRecipeDialog
+                        recipe={recipe}
+                        trigger={(
+                          <button
+                            type="button"
+                            aria-label="Editar idea de receta"
+                            className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-border bg-background transition-colors hover:bg-muted"
+                          >
+                            <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
+                          </button>
+                        )}
+                      />
                     )}
-                  </button>
+
+                    <button
+                      type="button"
+                      aria-label="Eliminar receta"
+                      disabled={pending && deletingId === recipe.id}
+                      onClick={() => handleDelete(recipe)}
+                      className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-border bg-background transition-colors hover:border-[color:var(--danger-500)] hover:bg-[var(--danger-100)] disabled:opacity-50"
+                    >
+                      {pending && deletingId === recipe.id ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin text-[var(--danger-500)]" />
+                      ) : (
+                        <Trash2 className="h-3.5 w-3.5 text-[var(--danger-500)]" />
+                      )}
+                    </button>
+                  </div>
                 </div>
-              </div>
-            </div>
-          ))}
+              </article>
+            )
+          })}
         </div>
       )}
 
       <AssignRecipeModal
         open={assignTarget !== null}
-        onOpenChange={(o) => !o && setAssignTarget(null)}
+        onOpenChange={(value) => !value && setAssignTarget(null)}
         recipe={assignTarget}
         clients={clients}
       />
