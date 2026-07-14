@@ -6,7 +6,7 @@ import { Barcode, ChevronLeft, Clock3, Loader2, Plus, Search } from 'lucide-reac
 import { toast } from 'sonner'
 import {
   NUTRITION_INTAKE_ACTIONS,
-  NUTRITION_MEAL_SLOTS,
+  NUTRITION_MEAL_SLOT_IDS,
   NUTRITION_MEAL_SLOT_LABELS,
   calculateFoodItemMacros,
   formatFoodReference,
@@ -246,7 +246,7 @@ export function AddFoodClient({ coachSlug, backHref, today, recents }: Props) {
         <section className="rounded-card border border-border bg-card p-4 shadow-sm">
           <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">¿En qué comida?</p>
           <div className="mt-3 flex gap-2 overflow-x-auto pb-1 scrollbar-none">
-            {NUTRITION_MEAL_SLOTS.map((slot) => (
+            {NUTRITION_MEAL_SLOT_IDS.map((slot) => (
               <button
                 type="button"
                 key={slot}
