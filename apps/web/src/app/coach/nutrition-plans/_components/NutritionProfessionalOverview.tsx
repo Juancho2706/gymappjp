@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { AlertTriangle, ArrowRight, CheckCircle2, ClipboardList, Users } from 'lucide-react'
 import { TierBadge } from '@/components/nutrition/TierBadge'
 import type { NutritionOversight } from '../_data/nutrition-oversight.queries'
+import { NutritionGuidanceDialog } from './NutritionGuidanceDialog'
 
 interface Props {
   oversight: NutritionOversight
@@ -66,7 +67,7 @@ export function NutritionProfessionalOverview({ oversight, nutritionProEnabled }
 
       <div className="overflow-hidden rounded-card border border-subtle bg-surface-card">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[860px] border-collapse text-left">
+          <table className="w-full min-w-[900px] border-collapse text-left">
             <thead className="bg-surface-sunken">
               <tr className="text-[10px] font-black uppercase tracking-wider text-subtle">
                 <th className="px-4 py-3">Alumno</th>
@@ -75,7 +76,7 @@ export function NutritionProfessionalOverview({ oversight, nutritionProEnabled }
                 <th className="px-3 py-3 text-right">Total / meta</th>
                 <th className="px-3 py-3 text-right">Adherencia</th>
                 <th className="px-3 py-3">Estado</th>
-                <th className="w-12 px-3 py-3" />
+                <th className="w-24 px-3 py-3" />
               </tr>
             </thead>
             <tbody>
@@ -120,13 +121,20 @@ export function NutritionProfessionalOverview({ oversight, nutritionProEnabled }
                       <p className="mt-1 max-w-[190px] text-[10px] leading-snug text-muted">{row.reason}</p>
                     </td>
                     <td className="px-3 py-3">
-                      <Link
-                        href={`/coach/nutrition-plans/client/${row.clientId}`}
-                        aria-label={`Abrir nutrición de ${row.clientName}`}
-                        className="flex h-9 w-9 items-center justify-center rounded-control text-muted transition-colors hover:bg-surface-sunken hover:text-strong"
-                      >
-                        <ArrowRight className="h-4 w-4" />
-                      </Link>
+                      <div className="flex items-center justify-end gap-1">
+                        <NutritionGuidanceDialog
+                          planId={row.planId}
+                          clientName={row.clientName}
+                          disabled={!nutritionProEnabled}
+                        />
+                        <Link
+                          href={`/coach/nutrition-plans/client/${row.clientId}`}
+                          aria-label={`Abrir nutrición de ${row.clientName}`}
+                          className="flex h-9 w-9 items-center justify-center rounded-control text-muted transition-colors hover:bg-surface-sunken hover:text-strong"
+                        >
+                          <ArrowRight className="h-4 w-4" />
+                        </Link>
+                      </div>
                     </td>
                   </tr>
                 )
