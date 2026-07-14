@@ -1,3 +1,4 @@
+import type { SupabaseClient } from '@supabase/supabase-js'
 import {
   calculateIntakeEntriesTotals,
   calculateIntakeEntryMacros,
@@ -66,9 +67,7 @@ const FOOD_SELECT =
 const ENTRY_SELECT = `*, food:foods(${FOOD_SELECT})`
 const SEARCH_MIN_CHARS = 2
 
-type LooseClient = {
-  from: (table: string) => any
-}
+type LooseClient = SupabaseClient
 
 function loose(): LooseClient {
   return supabase as unknown as LooseClient
