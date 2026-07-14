@@ -30,7 +30,7 @@ export type IntakeFoodRef = {
   serving_unit: string | null
   household_grams: number | null
   household_label: string | null
-  is_liquid: boolean
+  is_liquid: boolean | null
 }
 
 export type IntakeEntryWithFood = IntakeEntryRow & {
