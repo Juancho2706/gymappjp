@@ -1,15 +1,14 @@
+import type { NutritionMealSlot } from './catalog'
 import { calculateFoodItemMacros } from './macros'
 
-export const NUTRITION_MEAL_SLOTS = [
+export const NUTRITION_MEAL_SLOT_IDS = [
   'breakfast',
   'morning_snack',
   'lunch',
   'afternoon_snack',
   'dinner',
   'other',
-] as const
-
-export type NutritionMealSlot = (typeof NUTRITION_MEAL_SLOTS)[number]
+] as const satisfies readonly NutritionMealSlot[]
 
 export const NUTRITION_MEAL_SLOT_LABELS: Record<NutritionMealSlot, string> = {
   breakfast: 'Desayuno',
@@ -68,7 +67,7 @@ function safeNumber(value: unknown): number {
 }
 
 export function normalizeNutritionMealSlot(value: unknown): NutritionMealSlot {
-  return NUTRITION_MEAL_SLOTS.includes(value as NutritionMealSlot)
+  return NUTRITION_MEAL_SLOT_IDS.includes(value as NutritionMealSlot)
     ? (value as NutritionMealSlot)
     : 'other'
 }
