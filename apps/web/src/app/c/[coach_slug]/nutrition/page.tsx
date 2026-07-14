@@ -38,6 +38,8 @@ import { getNutritionWeeklyRecap } from './_data/recap.queries'
 import { WeeklyRecapCard } from './_components/WeeklyRecapCard'
 import { NutritionDailyOverview } from './_components/NutritionDailyOverview'
 import { NutritionIntakeLedger } from './_components/NutritionIntakeLedger'
+import { NutritionGuidanceProgress } from './_components/NutritionGuidanceProgress'
+import { getDailyHabits } from './_actions/habits.actions'
 import { getClientBasePath } from '@/lib/client/base-path'
 
 export const metadata: Metadata = { title: 'Plan Nutricional' }
@@ -62,9 +64,9 @@ export default async function ClientNutritionPage({ params }: Props) {
   const clientScope = await getClientScope(user.id)
   const prefsInput = {
     domain: 'nutrition' as const,
-    coachId: plan.coach_id ?? '',
+    coachId: String(plan.coach_id ?? ''),
     clientId: user.id,
-    planId: plan.id,
+    planId: String(plan.id),
     clientTeamId: clientScope.teamId,
     clientOrgId: clientScope.orgId,
   }
@@ -85,15 +87,16 @@ export default async function ClientNutritionPage({ params }: Props) {
     domainEnabled,
     sectionFlags,
     weeklyRecap,
+    dailyHabits,
   ] = await Promise.all([
-    getNutritionLogForDate(user.id, plan.id, today),
-    getNutritionAdherence30d(user.id, plan.id),
+    getNutritionLogForDate(user.id, String(plan.id), today),
+    getNutritionAdherence30d(user.id, String(plan.id)),
     getHeroComplianceBundle(user.id, coach_slug),
     getStudentExchangeData({
       clientId: user.id,
-      planId: plan.id,
-      planCoachId: plan.coach_id ?? null,
-      planMode: (plan as { plan_mode?: string | null }).plan_mode,
+      planId: String(plan.id),
+      planCoachId: plan.coach_id == null ? null : String(plan.coach_id),
+      planMode: plan.plan_mode == null ? null : String(plan.plan_mode),
     }),
     getAssignedRecipesForClient(user.id),
     headers(),
@@ -101,24 +104,25 @@ export default async function ClientNutritionPage({ params }: Props) {
     getShoppingList(user.id),
     getRecentIntakeFoods(10),
     getIntakeEntriesForDate(today),
-    getPlanDayMicros(user.id, plan.id, today),
-    getMicroTargetsForClient(plan.coach_id ?? null, user.id),
-    getNutritionProEnabledForClient(plan.id),
+    getPlanDayMicros(user.id, String(plan.id), today),
+    getMicroTargetsForClient(plan.coach_id == null ? null : String(plan.coach_id), user.id),
+    getNutritionProEnabledForClient(String(plan.id)),
     resolveNutritionDomainEnabled({
-      coachId: plan.coach_id ?? '',
+      coachId: String(plan.coach_id ?? ''),
       clientId: user.id,
       clientTeamId: clientScope.teamId,
       clientOrgId: clientScope.orgId,
     }),
     resolveFeaturePrefs(prefsInput),
     getNutritionWeeklyRecap(user.id),
+    getDailyHabits(user.id, today),
   ])
 
   if (!domainEnabled) {
     return <NutritionDomainOff coachSlug={coach_slug} />
   }
 
-  const plateProportion = platePropFromMacros(plan.protein_g ?? 0, plan.carbs_g ?? 0)
+  const plateProportion = platePropFromMacros(Number(plan.protein_g) || 0, Number(plan.carbs_g) || 0)
   const hasTodayWorkout = heroBundle.hero.hasWorkout
   const pdfBrand = pdfBrandFromProxyHeaders(headersList)
   const addHref = `${base}/nutrition/add`
@@ -141,7 +145,7 @@ export default async function ClientNutritionPage({ params }: Props) {
           <div className="flex flex-1 items-center justify-between gap-2">
             <div className="min-w-0">
               <h1 className="truncate text-lg font-black tracking-tight text-foreground">Plan Nutricional</h1>
-              <p className="truncate text-[10px] font-medium text-muted-foreground">{plan.name}</p>
+              <p className="truncate text-[10px] font-medium text-muted-foreground">{String(plan.name)}</p>
             </div>
             <div className="flex items-center gap-2">
               <Link
@@ -170,18 +174,32 @@ export default async function ClientNutritionPage({ params }: Props) {
             </summary>
             <div className="px-4 pb-4">
               <p className="whitespace-pre-wrap text-sm leading-relaxed text-muted-foreground">
-                {plan.instructions}
+                {String(plan.instructions)}
               </p>
             </div>
           </details>
         )}
 
         <NutritionDailyOverview
-          plan={plan}
+          plan={plan as never}
           todayLog={todayLog as Record<string, unknown> | null}
           intakeEntries={intakeEntries}
           today={today}
           addHref={addHref}
+        />
+
+        <NutritionGuidanceProgress
+          plan={{
+            hydration_target_ml: plan.hydration_target_ml == null ? null : Number(plan.hydration_target_ml),
+            steps_target: plan.steps_target == null ? null : Number(plan.steps_target),
+            sleep_target_hours: plan.sleep_target_hours == null ? null : Number(plan.sleep_target_hours),
+            fasting_target_hours: plan.fasting_target_hours == null ? null : Number(plan.fasting_target_hours),
+            supplement_guidance: Array.isArray(plan.supplement_guidance)
+              ? plan.supplement_guidance.map(String)
+              : [],
+            protocol_notes: plan.protocol_notes == null ? null : String(plan.protocol_notes),
+          }}
+          habits={dailyHabits}
         />
 
         <NutritionIntakeLedger
@@ -192,7 +210,7 @@ export default async function ClientNutritionPage({ params }: Props) {
 
         <NutritionShell
           hasTodayWorkout={hasTodayWorkout}
-          plan={plan}
+          plan={plan as never}
           initialLog={todayLog as Record<string, unknown> | null}
           adherence={adherence}
           userId={user.id}
