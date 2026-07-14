@@ -31,9 +31,10 @@ import {
 } from '../../../lib/nutrition-intake.queries'
 
 /**
- * OffPlanLogger (E4-11, seam // E4-SEAM-offplan) — registro de ingesta FUERA de
- * plan del alumno. Espejo funcional del web `OffPlanLogger`:
- *  - trigger "Registrar algo más" → hoja inferior con búsqueda debounced sobre el
+ * OffPlanLogger (E4-11, seam // E4-SEAM-offplan) — diario de CONSUMO REAL del
+ * alumno. El nombre técnico/DB se conserva por compatibilidad, pero la interfaz
+ * usa lenguaje neutral y profesional:
+ *  - trigger "Registrar alimento" → hoja inferior con búsqueda debounced sobre el
  *    catálogo (RLS: global + coach) + fila de "Recientes" para quick-add,
  *  - al elegir un alimento se pide CANTIDAD (+ unidad g/ml/un) y se inserta,
  *  - lista de lo registrado hoy (con borrar) y su subtotal de macros.
@@ -44,7 +45,7 @@ import {
  *
  * Solo se puede AGREGAR/BORRAR en el día de hoy (`isToday`). En días históricos la
  * sección es de solo lectura pero igual reporta su subtotal para que los anillos
- * del día reflejen lo que se comió fuera de plan (paridad con la web).
+ * del día reflejen lo que se consumió realmente (paridad con la web).
  *
  * Suma al total del día vía `onTotalsChange(extra)`: el shell la agrega al
  * `consumed` que alimenta `MacroRingSummary` (los anillos NO se editan aquí).
@@ -66,7 +67,7 @@ export interface OffPlanLoggerProps {
   logDate: string
   /** Solo el día de hoy permite agregar/borrar (histórico = lectura). */
   isToday: boolean
-  /** Reporta el subtotal de macros fuera de plan al shell para sumarlo al día. */
+  /** Reporta el subtotal del consumo real al shell para sumarlo al día. */
   onTotalsChange?: (extra: IntakeMacros) => void
 }
 
@@ -204,7 +205,7 @@ export function OffPlanLogger({ clientId, logDate, isToday, onTotalsChange }: Of
           className="text-strong"
           style={{ flex: 1, fontFamily: FONT.displayBold, fontSize: 17, letterSpacing: -0.3 }}
         >
-          Fuera de plan
+          Consumo real
         </Text>
         {hasEntries && (
           <View
@@ -270,8 +271,7 @@ export function OffPlanLogger({ clientId, logDate, isToday, onTotalsChange }: Of
       ) : (
         isToday && (
           <Text className="text-subtle" style={{ fontFamily: FONT.ui, fontSize: 11.5, lineHeight: 16 }}>
-            ¿Comiste algo que no estaba en tu plan? Regístralo para que tus totales del día
-            reflejen lo que comiste de verdad.
+            Registra lo que realmente consumiste para que tus totales y el seguimiento de tu profesional sean más precisos.
           </Text>
         )
       )}
@@ -294,7 +294,7 @@ export function OffPlanLogger({ clientId, logDate, isToday, onTotalsChange }: Of
         >
           <Plus size={16} color={theme.foreground} strokeWidth={2.25} />
           <Text className="text-strong" style={{ fontFamily: FONT.uiBold, fontSize: 14 }}>
-            Registrar algo más
+            Registrar alimento
           </Text>
         </Pressable>
       )}
@@ -322,7 +322,7 @@ export function OffPlanLogger({ clientId, logDate, isToday, onTotalsChange }: Of
 
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 18, paddingTop: 10, paddingBottom: 8 }}>
             <Text className="text-strong" style={{ flex: 1, fontFamily: FONT.displayBold, fontSize: 18, letterSpacing: -0.3 }}>
-              {selected ? '¿Cuánto comiste?' : 'Registrar algo más'}
+              {selected ? '¿Cuánto consumiste?' : 'Registrar alimento'}
             </Text>
             <Pressable
               testID="off-plan-close"
