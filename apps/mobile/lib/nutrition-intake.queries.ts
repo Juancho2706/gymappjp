@@ -1,28 +1,16 @@
-import { parseGtin, normalizeFoodSearchText } from '@eva/nutrition-engine'
+import {
+  calculateIntakeEntriesTotals,
+  calculateIntakeEntryMacros,
+  normalizeFoodSearchText,
+  parseGtin,
+  type NutritionMealSlot,
+} from '@eva/nutrition-engine'
 import { supabase } from './supabase'
-import { calculateFoodItemMacros } from './nutrition-utils'
-
-/**
- * Off-plan intake (registro fuera de plan) — capa de datos del ALUMNO en mobile.
- *
- * Paridad funcional con la web (`services/nutrition-intake.service.ts` +
- * `_actions/intake.actions.ts`). A diferencia de la web (que va por server action),
- * el alumno mobile escribe DIRECTO por PostgREST con su sesión — igual que el resto
- * de la nutrición del alumno (`toggleMealCompletion`, `updateMealConsumedPortion`…).
- *
- * SEGURIDAD (feature BASE tier, NO gated → sin money-safety gate):
- * `nutrition_intake_entries` es client-scoped por RLS. La única policy de escritura
- * es `nutrition_intake_client_all` → `auth.uid() = client_id` (USING + WITH CHECK)
- * con GRANT INSERT/UPDATE/DELETE a `authenticated`
- * (migración `20260618180002_nutrition_intake_entries.sql`). El `clientId` que se
- * pasa acá NO es la fuente de autorización: la RLS + la sesión lo son. Un alumno no
- * puede insertar/leer/borrar filas de otro `client_id` aunque manipule el argumento.
- */
 
 export type IntakeUnit = 'g' | 'ml' | 'un'
 export type IntakeSource = 'offplan' | 'quickadd' | 'recent' | 'copy'
+export type IntakeCaptureMethod = 'search' | 'barcode' | 'recent' | 'copy' | 'manual'
 
-/** Subconjunto del catálogo resuelto para calcular macros de una entrada. */
 export interface IntakeFood {
   id: string
   name: string
@@ -31,6 +19,7 @@ export interface IntakeFood {
   protein_g: number
   carbs_g: number
   fats_g: number
+  fiber_g?: number | null
   serving_size: number
   serving_unit: string | null
   is_liquid: boolean | null
@@ -44,6 +33,17 @@ export interface IntakeEntry {
   quantity: number
   unit: string
   source: string
+  meal_slot?: NutritionMealSlot | null
+  capture_method?: IntakeCaptureMethod | null
+  snapshot_name?: string | null
+  snapshot_brand?: string | null
+  snapshot_calories?: number | null
+  snapshot_protein_g?: number | null
+  snapshot_carbs_g?: number | null
+  snapshot_fats_g?: number | null
+  snapshot_fiber_g?: number | null
+  snapshot_serving_size?: number | null
+  snapshot_serving_unit?: string | null
   created_at: string
   food: IntakeFood | null
 }
@@ -62,16 +62,18 @@ export type BarcodeLookupResult =
   | { status: 'unavailable'; barcode: string }
 
 const FOOD_SELECT =
-  'id, name, brand, calories, protein_g, carbs_g, fats_g, serving_size, serving_unit, is_liquid'
-const ENTRY_SELECT = `id, log_date, food_id, custom_name, quantity, unit, source, created_at, food:foods(${FOOD_SELECT})`
-
+  'id, name, brand, calories, protein_g, carbs_g, fats_g, fiber_g, serving_size, serving_unit, is_liquid'
+const ENTRY_SELECT = `*, food:foods(${FOOD_SELECT})`
 const SEARCH_MIN_CHARS = 2
 
-/**
- * Busca alimentos del catálogo visibles para el alumno (RLS de `foods`: globales +
- * los del coach del alumno). `name_search` ya existe en producción y es la misma
- * fuente usada por web; la migración draft agrega un índice trigram para escalar.
- */
+type LooseClient = {
+  from: (table: string) => any
+}
+
+function loose(): LooseClient {
+  return supabase as unknown as LooseClient
+}
+
 export async function searchIntakeFoods(term: string, limit = 30): Promise<IntakeFood[]> {
   const normalized = normalizeFoodSearchText(term)
   if (normalized.length < SEARCH_MIN_CHARS) return []
@@ -85,31 +87,12 @@ export async function searchIntakeFoods(term: string, limit = 30): Promise<Intak
   return data as unknown as IntakeFood[]
 }
 
-/**
- * Busca un GTIN/EAN/UPC EXCLUSIVAMENTE en el catálogo local de Supabase.
- *
- * La columna `foods.barcode` vive en una migración draft aditiva. Hasta que esa
- * migración sea aprobada, PostgREST responderá columna inexistente y el helper
- * devolverá `unavailable`; la UI mantiene búsqueda manual y no rompe Nutrición.
- */
 export async function findIntakeFoodByBarcode(rawCode: string): Promise<BarcodeLookupResult> {
   const barcode = parseGtin(rawCode)
   if (!barcode) return { status: 'invalid', barcode: rawCode.replace(/\D/g, '') }
 
-  const client = supabase as unknown as {
-    from: (table: string) => {
-      select: (columns: string) => {
-        eq: (column: string, value: string) => {
-          limit: (count: number) => {
-            maybeSingle: () => Promise<{ data: unknown; error: { code?: string } | null }>
-          }
-        }
-      }
-    }
-  }
-
   try {
-    const { data, error } = await client
+    const { data, error } = await loose()
       .from('foods')
       .select(`${FOOD_SELECT}, barcode`)
       .eq('barcode', barcode)
@@ -124,25 +107,12 @@ export async function findIntakeFoodByBarcode(rawCode: string): Promise<BarcodeL
   }
 }
 
-/**
- * Registra best-effort un código válido no encontrado para curación posterior.
- * La tabla es parte de la misma migración draft; antes de aplicarla el error se
- * ignora deliberadamente y el flujo existente sigue disponible.
- */
 export async function recordMissingFoodBarcode(clientId: string, rawCode: string): Promise<void> {
   const barcode = parseGtin(rawCode)
   if (!barcode) return
 
   try {
-    const client = supabase as unknown as {
-      from: (table: string) => {
-        upsert: (
-          values: Record<string, unknown>,
-          options: { onConflict: string },
-        ) => Promise<{ error: unknown }>
-      }
-    }
-    await client.from('food_catalog_missing_codes').upsert(
+    await loose().from('food_catalog_missing_codes').upsert(
       {
         client_id: clientId,
         barcode,
@@ -152,31 +122,26 @@ export async function recordMissingFoodBarcode(clientId: string, rawCode: string
       { onConflict: 'client_id,barcode' },
     )
   } catch {
-    // La migración aún no está aplicada, no hay conexión o RLS rechazó: no bloquea.
+    // No bloquea el registro manual si falla conectividad o permisos.
   }
 }
 
-/** Entradas de intake del alumno para un día (YYYY-MM-DD), más viejas primero. */
 export async function listIntakeEntriesForDate(
   clientId: string,
-  isoDate: string
+  isoDate: string,
 ): Promise<IntakeEntry[]> {
-  const { data, error } = await supabase
+  const { data, error } = await loose()
     .from('nutrition_intake_entries')
     .select(ENTRY_SELECT)
     .eq('client_id', clientId)
     .eq('log_date', isoDate)
     .order('created_at', { ascending: true })
   if (error || !data) return []
-  return data as unknown as IntakeEntry[]
+  return data as IntakeEntry[]
 }
 
-/**
- * Alimentos del catálogo usados recientemente por el alumno (dedupe por uso más
- * reciente). Para el quick-add de "Recientes". Solo entradas con `food_id`.
- */
 export async function listRecentIntakeFoods(clientId: string, limit = 8): Promise<IntakeFood[]> {
-  const { data, error } = await supabase
+  const { data, error } = await loose()
     .from('nutrition_intake_entries')
     .select(`food_id, created_at, food:foods(${FOOD_SELECT})`)
     .eq('client_id', clientId)
@@ -187,7 +152,7 @@ export async function listRecentIntakeFoods(clientId: string, limit = 8): Promis
 
   const seen = new Set<string>()
   const out: IntakeFood[] = []
-  for (const row of data as unknown as Array<{ food_id: string | null; food: IntakeFood | null }>) {
+  for (const row of data as Array<{ food_id: string | null; food: IntakeFood | null }>) {
     if (!row.food || !row.food_id || seen.has(row.food_id)) continue
     seen.add(row.food_id)
     out.push(row.food)
@@ -204,14 +169,17 @@ export interface InsertIntakeInput {
   quantity: number
   unit: IntakeUnit
   source?: IntakeSource
+  mealSlot?: NutritionMealSlot
+  captureMethod?: IntakeCaptureMethod
+  foodSnapshot?: IntakeFood | null
 }
 
-/** Inserta una entrada fuera de plan y devuelve la fila con el alimento resuelto. */
 export async function insertIntakeEntry(input: InsertIntakeInput): Promise<IntakeEntry | null> {
   if (!(input.foodId || input.customName)) return null
   if (!Number.isFinite(input.quantity) || input.quantity <= 0) return null
 
-  const { data, error } = await supabase
+  const snapshot = input.foodSnapshot
+  const { data, error } = await loose()
     .from('nutrition_intake_entries')
     .insert({
       client_id: input.clientId,
@@ -221,16 +189,26 @@ export async function insertIntakeEntry(input: InsertIntakeInput): Promise<Intak
       quantity: input.quantity,
       unit: input.unit,
       source: input.source ?? 'offplan',
+      meal_slot: input.mealSlot ?? 'other',
+      capture_method: input.captureMethod ?? 'search',
+      snapshot_name: snapshot?.name ?? input.customName ?? null,
+      snapshot_brand: snapshot?.brand ?? null,
+      snapshot_calories: snapshot?.calories ?? null,
+      snapshot_protein_g: snapshot?.protein_g ?? null,
+      snapshot_carbs_g: snapshot?.carbs_g ?? null,
+      snapshot_fats_g: snapshot?.fats_g ?? null,
+      snapshot_fiber_g: snapshot?.fiber_g ?? null,
+      snapshot_serving_size: snapshot?.serving_size ?? null,
+      snapshot_serving_unit: snapshot?.serving_unit ?? null,
     })
     .select(ENTRY_SELECT)
     .single()
   if (error || !data) return null
-  return data as unknown as IntakeEntry
+  return data as IntakeEntry
 }
 
-/** Borra una entrada del alumno (RLS exige propiedad). */
 export async function deleteIntakeEntry(clientId: string, entryId: string): Promise<boolean> {
-  const { error } = await supabase
+  const { error } = await loose()
     .from('nutrition_intake_entries')
     .delete()
     .eq('id', entryId)
@@ -238,42 +216,22 @@ export async function deleteIntakeEntry(clientId: string, entryId: string): Prom
   return !error
 }
 
-/**
- * Macros de UNA entrada. Reusa `calculateFoodItemMacros` (misma escala g/ml = qty/100,
- * un = qty*serving_size/100 que el resto de la nutrición mobile). Entradas de nombre
- * libre (sin `food`) no aportan macros conocidos → 0.
- */
 export function intakeEntryMacros(entry: IntakeEntry): IntakeMacros {
-  if (!entry.food) return { calories: 0, protein: 0, carbs: 0, fats: 0 }
-  const m = calculateFoodItemMacros({
-    quantity: entry.quantity,
-    unit: entry.unit,
-    foods: {
-      id: entry.food.id,
-      name: entry.food.name,
-      calories: entry.food.calories,
-      protein_g: entry.food.protein_g,
-      carbs_g: entry.food.carbs_g,
-      fats_g: entry.food.fats_g,
-      serving_size: entry.food.serving_size,
-      serving_unit: entry.food.serving_unit,
-    },
-  })
-  return { calories: m.calories, protein: m.protein, carbs: m.carbs, fats: m.fats }
+  const macros = calculateIntakeEntryMacros(entry)
+  return {
+    calories: macros.calories,
+    protein: macros.protein,
+    carbs: macros.carbs,
+    fats: macros.fats,
+  }
 }
 
-/** Suma las macros de todas las entradas de un día (el "extra" fuera de plan). */
 export function sumIntakeMacros(entries: IntakeEntry[]): IntakeMacros {
-  return entries.reduce<IntakeMacros>(
-    (acc, e) => {
-      const m = intakeEntryMacros(e)
-      return {
-        calories: Math.round((acc.calories + m.calories) * 10) / 10,
-        protein: Math.round((acc.protein + m.protein) * 10) / 10,
-        carbs: Math.round((acc.carbs + m.carbs) * 10) / 10,
-        fats: Math.round((acc.fats + m.fats) * 10) / 10,
-      }
-    },
-    { calories: 0, protein: 0, carbs: 0, fats: 0 }
-  )
+  const macros = calculateIntakeEntriesTotals(entries)
+  return {
+    calories: macros.calories,
+    protein: macros.protein,
+    carbs: macros.carbs,
+    fats: macros.fats,
+  }
 }
