@@ -17,6 +17,9 @@ import { getCoachRecipes } from './_data/recipes.queries'
 import { resolveNutritionDomainEnabled } from '@/services/feature-prefs.service'
 import { createClient } from '@/lib/supabase/server'
 import { hasModule } from '@/services/entitlements.service'
+import { getTodayInSantiago } from '@/lib/date-utils'
+import { getNutritionOversight } from './_data/nutrition-oversight.queries'
+import { NutritionProfessionalOverview } from './_components/NutritionProfessionalOverview'
 
 type NutritionPlanRow = {
   id: string
@@ -42,9 +45,7 @@ export default async function NutritionPlansPage() {
       <main className="mx-auto max-w-2xl animate-fade-in space-y-4 px-4 py-8">
         <UpgradeGateTracker gate="nutrition" currentTier={tier} />
         <div className="px-1">
-          <h1 className="font-display text-2xl font-extrabold leading-tight tracking-[-0.02em] text-strong">
-            Nutrición
-          </h1>
+          <h1 className="font-display text-2xl font-extrabold leading-tight tracking-[-0.02em] text-strong">Nutrición</h1>
           <p className="mt-0.5 text-[13px] text-muted">Módulo Pro</p>
         </div>
 
@@ -52,16 +53,10 @@ export default async function NutritionPlansPage() {
           <span className="mb-3 inline-flex h-14 w-14 items-center justify-center rounded-control bg-[var(--sport-500)] text-white">
             <Utensils className="h-7 w-7" />
           </span>
-          <h2
-            className="font-display text-[24px] font-black leading-tight tracking-[-0.02em]"
-            style={{ color: 'var(--text-on-dark)' }}
-          >
+          <h2 className="font-display text-[24px] font-black leading-tight tracking-[-0.02em]" style={{ color: 'var(--text-on-dark)' }}>
             Desbloquea Nutrición
           </h2>
-          <p
-            className="mx-auto mt-2 max-w-sm text-sm leading-relaxed"
-            style={{ color: 'var(--text-on-dark-muted)' }}
-          >
+          <p className="mx-auto mt-2 max-w-sm text-sm leading-relaxed" style={{ color: 'var(--text-on-dark-muted)' }}>
             Arma planes de alimentación profesionales para tus alumnos. Disponible en el plan{' '}
             <strong style={{ color: 'var(--text-on-dark)' }}>Pro</strong>.
           </p>
@@ -139,9 +134,7 @@ export default async function NutritionPlansPage() {
             <p className="mt-0.5 text-[10.5px] text-subtle">/mes</p>
           </div>
           <div className="relative flex-1 rounded-card border-[1.5px] border-[color:var(--sport-500)] bg-surface-card p-4">
-            <span className="absolute -top-2.5 right-3 rounded-pill bg-sport-500 px-2 py-0.5 text-[10px] font-extrabold text-white">
-              -20%
-            </span>
+            <span className="absolute -top-2.5 right-3 rounded-pill bg-sport-500 px-2 py-0.5 text-[10px] font-extrabold text-white">-20%</span>
             <p className="mb-1 text-xs font-bold text-muted">Anual</p>
             <p className="eva-metric text-[22px] text-strong">${proAnnualMonthly.toLocaleString('es-CL')}</p>
             <p className="mt-0.5 text-[10.5px] text-subtle">/mes · facturado anual</p>
@@ -195,6 +188,9 @@ export default async function NutritionPlansPage() {
     }),
   ])
 
+  const { iso: todayIso } = getTodayInSantiago()
+  const oversight = await getNutritionOversight(activePlans, todayIso)
+
   const assignClients = coachClientsRaw.map((client) => {
     const plans = client.nutrition_plans as NutritionPlanRow[] | null | undefined
     const active = plans?.find((plan) => plan.is_active && planHasMeals(plan))
@@ -219,6 +215,12 @@ export default async function NutritionPlansPage() {
           <OrgTemplatesSection orgName="tu organización" templates={orgTemplates} />
         </div>
       )}
+
+      <NutritionProfessionalOverview
+        oversight={oversight}
+        nutritionProEnabled={nutritionProEnabled}
+      />
+
       <NutritionHub
         coachId={coachId}
         templates={templates}
