@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import { Barcode, ChevronLeft, Clock3, Loader2, Plus, Search } from 'lucide-react'
+import { Barcode, ChevronLeft, Clock3, Heart, Loader2, Plus, Search } from 'lucide-react'
 import { toast } from 'sonner'
 import {
   NUTRITION_INTAKE_ACTIONS,
@@ -20,6 +20,7 @@ import {
 import { createClient } from '@/lib/supabase/client'
 import { cn } from '@/lib/utils'
 import { addIntakeEntryAction } from '../_actions/intake.actions'
+import { toggleClientFoodPreference } from '../_actions/nutrition.actions'
 
 const UNITS = ['g', 'ml', 'un'] as const
 type IntakeUnit = (typeof UNITS)[number]
@@ -41,10 +42,12 @@ type Food = {
 type SelectedFood = { food: Food; source: IntakeSource }
 
 interface Props {
+  clientId: string
   coachSlug: string
   backHref: string
   today: string
   recents: Food[]
+  initialFavorites: Food[]
 }
 
 const FOOD_SELECT =
@@ -70,7 +73,14 @@ function captureMethod(source: IntakeSource): 'search' | 'barcode' | 'recent' | 
   return 'search'
 }
 
-export function AddFoodClient({ coachSlug, backHref, today, recents }: Props) {
+export function AddFoodClient({
+  clientId,
+  coachSlug,
+  backHref,
+  today,
+  recents,
+  initialFavorites,
+}: Props) {
   const router = useRouter()
   const supabase = useMemo(() => createClient(), [])
   const [mode, setMode] = useState<NutritionIntakeActionId>('search')
@@ -78,12 +88,16 @@ export function AddFoodClient({ coachSlug, backHref, today, recents }: Props) {
   const [term, setTerm] = useState('')
   const [barcodeInput, setBarcodeInput] = useState('')
   const [results, setResults] = useState<Food[]>([])
+  const [favorites, setFavorites] = useState(initialFavorites)
+  const [togglingFavoriteId, setTogglingFavoriteId] = useState<string | null>(null)
   const [selected, setSelected] = useState<SelectedFood | null>(null)
   const [quantity, setQuantity] = useState('100')
   const [unit, setUnit] = useState<IntakeUnit>('g')
   const [searching, setSearching] = useState(false)
   const [lookingUpBarcode, setLookingUpBarcode] = useState(false)
   const [isPending, startTransition] = useTransition()
+
+  const favoriteIds = useMemo(() => new Set(favorites.map((food) => food.id)), [favorites])
 
   useEffect(() => setMealSlot(defaultMealSlot()), [])
 
@@ -123,6 +137,30 @@ export function AddFoodClient({ coachSlug, backHref, today, recents }: Props) {
     setSelected({ food, source })
     setUnit(preferredUnit)
     setQuantity(String(preferredFoodIntakeQuantity(food)))
+  }
+
+  async function toggleFavorite(food: Food) {
+    if (togglingFavoriteId) return
+    setTogglingFavoriteId(food.id)
+    const result = await toggleClientFoodPreference({
+      clientId,
+      foodId: food.id,
+      preferenceType: 'favorite',
+    })
+    setTogglingFavoriteId(null)
+
+    if (!result.success) {
+      toast.error('No se pudo cambiar el favorito. Puede estar protegido por una restricción alimentaria.')
+      return
+    }
+
+    setFavorites((current) => {
+      if (result.active) {
+        return current.some((row) => row.id === food.id) ? current : [food, ...current]
+      }
+      return current.filter((row) => row.id !== food.id)
+    })
+    toast.success(result.active ? 'Agregado a favoritos' : 'Quitado de favoritos')
   }
 
   function changeUnit(nextUnit: IntakeUnit) {
@@ -267,10 +305,16 @@ export function AddFoodClient({ coachSlug, backHref, today, recents }: Props) {
 
         {!selected ? (
           <>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
               {NUTRITION_INTAKE_ACTIONS.map((action) => {
                 const active = action.id === mode
-                const Icon = action.id === 'search' ? Search : action.id === 'barcode' ? Barcode : Clock3
+                const Icon = action.id === 'search'
+                  ? Search
+                  : action.id === 'barcode'
+                    ? Barcode
+                    : action.id === 'favorite'
+                      ? Heart
+                      : Clock3
                 return (
                   <button
                     type="button"
@@ -284,7 +328,7 @@ export function AddFoodClient({ coachSlug, backHref, today, recents }: Props) {
                         : 'border-border bg-card text-muted-foreground hover:bg-muted/50',
                     )}
                   >
-                    <Icon className="h-5 w-5" />
+                    <Icon className={cn('h-5 w-5', action.id === 'favorite' && active && 'fill-current')} />
                     <span className="text-xs font-extrabold">{action.shortLabel}</span>
                   </button>
                 )
@@ -310,7 +354,13 @@ export function AddFoodClient({ coachSlug, backHref, today, recents }: Props) {
                 ) : results.length === 0 && !searching ? (
                   <Hint>No encontramos “{term.trim()}”. Prueba con otra palabra o una marca.</Hint>
                 ) : (
-                  <FoodList foods={results} onPick={(food) => pickFood(food, 'offplan')} />
+                  <FoodList
+                    foods={results}
+                    favoriteIds={favoriteIds}
+                    togglingFavoriteId={togglingFavoriteId}
+                    onPick={(food) => pickFood(food, 'offplan')}
+                    onToggleFavorite={toggleFavorite}
+                  />
                 )}
               </section>
             )}
@@ -349,19 +399,59 @@ export function AddFoodClient({ coachSlug, backHref, today, recents }: Props) {
             )}
 
             {mode === 'recent' && (
-              recents.length > 0
-                ? <FoodList foods={recents} onPick={(food) => pickFood(food, 'recent')} />
-                : <Hint>Tus alimentos recientes aparecerán aquí después del primer registro.</Hint>
+              recents.length > 0 ? (
+                <FoodList
+                  foods={recents}
+                  favoriteIds={favoriteIds}
+                  togglingFavoriteId={togglingFavoriteId}
+                  onPick={(food) => pickFood(food, 'recent')}
+                  onToggleFavorite={toggleFavorite}
+                />
+              ) : (
+                <Hint>Tus alimentos recientes aparecerán aquí después del primer registro.</Hint>
+              )
+            )}
+
+            {mode === 'favorite' && (
+              favorites.length > 0 ? (
+                <FoodList
+                  foods={favorites}
+                  favoriteIds={favoriteIds}
+                  togglingFavoriteId={togglingFavoriteId}
+                  onPick={(food) => pickFood(food, 'offplan')}
+                  onToggleFavorite={toggleFavorite}
+                />
+              ) : (
+                <Hint>Marca el corazón en cualquier alimento para encontrarlo aquí rápidamente.</Hint>
+              )
             )}
           </>
         ) : (
           <section className="space-y-4">
             <div className="rounded-card border border-border bg-card p-5 shadow-sm">
-              <p className="text-[10px] font-black uppercase tracking-widest text-ember-700 dark:text-ember-300">
-                {NUTRITION_MEAL_SLOT_LABELS[mealSlot]}
-              </p>
-              <h2 className="mt-1 font-display text-2xl font-extrabold tracking-tight text-foreground">{selected.food.name}</h2>
-              {selected.food.brand && <p className="mt-1 text-sm font-semibold text-muted-foreground">{selected.food.brand}</p>}
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-ember-700 dark:text-ember-300">
+                    {NUTRITION_MEAL_SLOT_LABELS[mealSlot]}
+                  </p>
+                  <h2 className="mt-1 font-display text-2xl font-extrabold tracking-tight text-foreground">{selected.food.name}</h2>
+                  {selected.food.brand && <p className="mt-1 text-sm font-semibold text-muted-foreground">{selected.food.brand}</p>}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => toggleFavorite(selected.food)}
+                  disabled={togglingFavoriteId === selected.food.id}
+                  aria-label={favoriteIds.has(selected.food.id) ? 'Quitar de favoritos' : 'Agregar a favoritos'}
+                  className={cn(
+                    'flex h-11 w-11 shrink-0 items-center justify-center rounded-control border transition-colors disabled:opacity-50',
+                    favoriteIds.has(selected.food.id)
+                      ? 'border-ember-400 bg-ember-100 text-ember-700 dark:bg-ember-500/15 dark:text-ember-300'
+                      : 'border-border bg-muted/40 text-muted-foreground',
+                  )}
+                >
+                  <Heart className={cn('h-5 w-5', favoriteIds.has(selected.food.id) && 'fill-current')} />
+                </button>
+              </div>
               <p className="mt-2 font-mono text-[11px] font-semibold text-muted-foreground">
                 Base nutricional: {formatFoodReference(selected.food)}
               </p>
@@ -434,30 +524,63 @@ export function AddFoodClient({ coachSlug, backHref, today, recents }: Props) {
   )
 }
 
-function FoodList({ foods, onPick }: { foods: Food[]; onPick: (food: Food) => void }) {
+function FoodList({
+  foods,
+  favoriteIds,
+  togglingFavoriteId,
+  onPick,
+  onToggleFavorite,
+}: {
+  foods: Food[]
+  favoriteIds: Set<string>
+  togglingFavoriteId: string | null
+  onPick: (food: Food) => void
+  onToggleFavorite: (food: Food) => void
+}) {
   return (
     <div className="overflow-hidden rounded-card border border-border bg-card shadow-sm">
-      {foods.map((food, index) => (
-        <button
-          type="button"
-          key={food.id}
-          onClick={() => onPick(food)}
-          className={cn(
-            'flex min-h-16 w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/45 active:bg-muted',
-            index > 0 && 'border-t border-border/70',
-          )}
-        >
-          <span className="min-w-0 flex-1">
-            <span className="block truncate text-sm font-extrabold text-foreground">{food.name}</span>
-            <span className="mt-0.5 block truncate text-[11px] font-semibold text-muted-foreground">
-              {food.brand ? `${food.brand} · ` : ''}{formatFoodReference(food)}
-            </span>
-          </span>
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-ember-100 text-ember-700 dark:bg-ember-500/15 dark:text-ember-300">
-            <Plus className="h-4 w-4" />
-          </span>
-        </button>
-      ))}
+      {foods.map((food, index) => {
+        const favorite = favoriteIds.has(food.id)
+        return (
+          <div
+            key={food.id}
+            className={cn(
+              'flex min-h-16 items-center gap-2 px-2 py-1.5 transition-colors hover:bg-muted/45',
+              index > 0 && 'border-t border-border/70',
+            )}
+          >
+            <button
+              type="button"
+              onClick={() => onPick(food)}
+              className="flex min-w-0 flex-1 items-center gap-3 rounded-control px-2 py-2 text-left active:bg-muted"
+            >
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-sm font-extrabold text-foreground">{food.name}</span>
+                <span className="mt-0.5 block truncate text-[11px] font-semibold text-muted-foreground">
+                  {food.brand ? `${food.brand} · ` : ''}{formatFoodReference(food)}
+                </span>
+              </span>
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-ember-100 text-ember-700 dark:bg-ember-500/15 dark:text-ember-300">
+                <Plus className="h-4 w-4" />
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => onToggleFavorite(food)}
+              disabled={togglingFavoriteId === food.id}
+              aria-label={favorite ? `Quitar ${food.name} de favoritos` : `Agregar ${food.name} a favoritos`}
+              className={cn(
+                'flex h-11 w-11 shrink-0 items-center justify-center rounded-control transition-colors disabled:opacity-50',
+                favorite
+                  ? 'bg-ember-100 text-ember-700 dark:bg-ember-500/15 dark:text-ember-300'
+                  : 'text-muted-foreground hover:bg-muted',
+              )}
+            >
+              <Heart className={cn('h-4.5 w-4.5', favorite && 'fill-current')} />
+            </button>
+          </div>
+        )
+      })}
     </div>
   )
 }
