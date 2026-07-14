@@ -3,66 +3,22 @@ import { z } from 'zod'
 import {
   NutritionIntakeCorrectionSchema,
   NutritionIntakeMutationSchema,
+  type NutritionIntakeMutation,
 } from '@eva/nutrition-v2'
 import {
   gateNutritionV2Api,
   jsonNoStore,
   logNutritionV2Api,
   rpcErrorResponse,
+  type NutritionV2ApiGate,
 } from '../_shared'
 
 const ResponseIdSchema = z.string().uuid()
 
-export async function POST(request: NextRequest) {
-  const startedAt = Date.now()
-  const route = 'mobile.nutrition-v2.intake'
-  const gate = await gateNutritionV2Api(request, {
-    surface: 'mobileStudent',
-    mutation: true,
-  })
+type SupportedAction = 'record' | 'correct'
 
-  if (!gate.ok) {
-    logNutritionV2Api({ route, startedAt, status: gate.response.status })
-    return gate.response
-  }
-
-  const body = await request.json().catch(() => null)
-  const action = body?.action
-
-  if (action !== 'record' && action !== 'correct') {
-    logNutritionV2Api({ route, startedAt, status: 400, errorCode: 'INVALID_ACTION' })
-    return jsonNoStore({ error: 'Acción inválida.', code: 'INVALID_ACTION' }, 400)
-  }
-
-  const parsed = action === 'record'
-    ? NutritionIntakeMutationSchema.safeParse(body?.payload)
-    : NutritionIntakeCorrectionSchema.safeParse(body?.payload)
-
-  if (!parsed.success) {
-    logNutritionV2Api({ route, startedAt, status: 400, errorCode: 'INVALID_PAYLOAD' })
-    return jsonNoStore(
-      {
-        error: 'Datos de consumo inválidos.',
-        code: 'INVALID_PAYLOAD',
-        fields: parsed.error.issues.map((issue) => ({
-          path: issue.path.join('.'),
-          message: issue.message,
-        })),
-      },
-      400,
-    )
-  }
-
-  const payload = parsed.data
-  if (!gate.clientId || payload.clientId !== gate.clientId) {
-    logNutritionV2Api({ route, startedAt, status: 403, errorCode: 'CLIENT_SCOPE_MISMATCH' })
-    return jsonNoStore(
-      { error: 'El registro no pertenece a este alumno.', code: 'CLIENT_SCOPE_MISMATCH' },
-      403,
-    )
-  }
-
-  const commonArgs = {
+function commonRpcArgs(payload: NutritionIntakeMutation): Record<string, unknown> {
+  return {
     p_client_id: payload.clientId,
     p_local_date: payload.localDate,
     p_occurred_at: payload.occurredAt,
@@ -80,28 +36,25 @@ export async function POST(request: NextRequest) {
     p_note: payload.note,
     p_snapshot: payload.snapshot,
   }
+}
 
-  const rpcName = action === 'record'
-    ? 'record_nutrition_intake_v2'
-    : 'correct_nutrition_intake_v2'
-
-  const args = action === 'record'
-    ? commonArgs
-    : {
-        p_corrects_entry_id: payload.correctsEntryId,
-        p_correction_reason: payload.correctionReason,
-        ...commonArgs,
-      }
-
-  const { data, error } = await gate.rpc.rpc(rpcName, args)
+async function executeMutation(input: {
+  gate: NutritionV2ApiGate
+  action: SupportedAction
+  rpcName: string
+  args: Record<string, unknown>
+  startedAt: number
+}) {
+  const route = 'mobile.nutrition-v2.intake'
+  const { data, error } = await input.gate.rpc.rpc(input.rpcName, input.args)
   if (error) {
     const response = rpcErrorResponse(error, 'NUTRITION_V2_INTAKE_FAILED')
     logNutritionV2Api({
       route,
-      startedAt,
+      startedAt: input.startedAt,
       status: response.status,
       errorCode: error.code || 'NUTRITION_V2_INTAKE_FAILED',
-      rolloutReason: gate.rolloutReason,
+      rolloutReason: input.gate.rolloutReason,
     })
     return response
   }
@@ -110,10 +63,10 @@ export async function POST(request: NextRequest) {
   if (!id.success) {
     logNutritionV2Api({
       route,
-      startedAt,
+      startedAt: input.startedAt,
       status: 500,
       errorCode: 'INVALID_RPC_RESPONSE',
-      rolloutReason: gate.rolloutReason,
+      rolloutReason: input.gate.rolloutReason,
     })
     return jsonNoStore(
       { error: 'Respuesta de escritura inválida.', code: 'INVALID_RPC_RESPONSE' },
@@ -121,14 +74,101 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  const responsePayload = { ok: true, id: id.data, action }
-  const status = action === 'record' ? 201 : 200
+  const responsePayload = { ok: true as const, id: id.data, action: input.action }
+  const status = input.action === 'record' ? 201 : 200
   logNutritionV2Api({
     route,
-    startedAt,
+    startedAt: input.startedAt,
     status,
     payload: responsePayload,
-    rolloutReason: gate.rolloutReason,
+    rolloutReason: input.gate.rolloutReason,
   })
   return jsonNoStore(responsePayload, status)
+}
+
+export async function POST(request: NextRequest) {
+  const startedAt = Date.now()
+  const route = 'mobile.nutrition-v2.intake'
+  const gate = await gateNutritionV2Api(request, {
+    surface: 'mobileStudent',
+    mutation: true,
+  })
+
+  if (!gate.ok) {
+    logNutritionV2Api({ route, startedAt, status: gate.response.status })
+    return gate.response
+  }
+
+  const body = await request.json().catch(() => null)
+  const action = body?.action
+
+  if (action === 'record') {
+    const parsed = NutritionIntakeMutationSchema.safeParse(body?.payload)
+    if (!parsed.success) return invalidPayload(parsed.error, startedAt)
+    if (!gate.clientId || parsed.data.clientId !== gate.clientId) {
+      return scopeMismatch(startedAt)
+    }
+    return executeMutation({
+      gate,
+      action: 'record',
+      rpcName: 'record_nutrition_intake_v2',
+      args: commonRpcArgs(parsed.data),
+      startedAt,
+    })
+  }
+
+  if (action === 'correct') {
+    const parsed = NutritionIntakeCorrectionSchema.safeParse(body?.payload)
+    if (!parsed.success) return invalidPayload(parsed.error, startedAt)
+    if (!gate.clientId || parsed.data.clientId !== gate.clientId) {
+      return scopeMismatch(startedAt)
+    }
+    return executeMutation({
+      gate,
+      action: 'correct',
+      rpcName: 'correct_nutrition_intake_v2',
+      args: {
+        p_corrects_entry_id: parsed.data.correctsEntryId,
+        p_correction_reason: parsed.data.correctionReason,
+        ...commonRpcArgs(parsed.data),
+      },
+      startedAt,
+    })
+  }
+
+  logNutritionV2Api({ route, startedAt, status: 400, errorCode: 'INVALID_ACTION' })
+  return jsonNoStore({ error: 'Acción inválida.', code: 'INVALID_ACTION' }, 400)
+}
+
+function invalidPayload(error: z.ZodError, startedAt: number) {
+  logNutritionV2Api({
+    route: 'mobile.nutrition-v2.intake',
+    startedAt,
+    status: 400,
+    errorCode: 'INVALID_PAYLOAD',
+  })
+  return jsonNoStore(
+    {
+      error: 'Datos de consumo inválidos.',
+      code: 'INVALID_PAYLOAD',
+      fields: error.issues.map((issue) => ({
+        path: issue.path.join('.'),
+        message: issue.message,
+      })),
+    },
+    400,
+  )
+}
+
+function scopeMismatch(startedAt: number) {
+  logNutritionV2Api({
+    route: 'mobile.nutrition-v2.intake',
+    startedAt,
+    status: 403,
+    errorCode: 'CLIENT_SCOPE_MISMATCH',
+  })
+  return jsonNoStore(
+    { error: 'El registro no pertenece a este alumno.', code: 'CLIENT_SCOPE_MISMATCH' },
+    403,
+  )
 }
