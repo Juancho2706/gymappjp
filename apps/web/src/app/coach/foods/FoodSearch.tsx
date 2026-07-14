@@ -155,8 +155,7 @@ export function FoodSearch({ onFoodSelected }: Props) {
               <Button
                 type="button"
                 size="sm"
-                variant="ember"
-                className="h-10 w-full rounded-control font-bold sm:h-9 sm:w-auto"
+                className="h-10 w-full rounded-control border-transparent bg-ember-500 font-bold text-white hover:bg-ember-600 sm:h-9 sm:w-auto"
                 onClick={() => onFoodSelected(food)}
               >
                 Seleccionar
