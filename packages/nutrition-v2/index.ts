@@ -1,4 +1,7 @@
 export * from './design'
+export * from './read-models'
+export * from './catalog'
+export * from './rollout'
 export {
   NutritionActorRoleSchema,
   NutritionCaptureMethodSchema,
