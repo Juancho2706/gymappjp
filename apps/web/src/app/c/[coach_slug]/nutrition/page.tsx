@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft } from 'lucide-react'
+import { ArrowLeft, Plus } from 'lucide-react'
 import type { Metadata } from 'next'
 import { InfoTooltip } from '@/components/ui/info-tooltip'
 import { getTodayInSantiago } from '@/lib/date-utils'
@@ -145,11 +145,20 @@ export default async function ClientNutritionPage({ params }: Props) {
             <ArrowLeft className="w-5 h-5" />
           </Link>
           <div className="flex-1 flex items-center justify-between gap-2">
-            <div>
-              <h1 className="text-lg font-black tracking-tight text-foreground">Plan Nutricional</h1>
-              <p className="text-[10px] text-muted-foreground font-medium">{plan.name}</p>
+            <div className="min-w-0">
+              <h1 className="truncate text-lg font-black tracking-tight text-foreground">Plan Nutricional</h1>
+              <p className="truncate text-[10px] text-muted-foreground font-medium">{plan.name}</p>
             </div>
-            <InfoTooltip content="Registra tus comidas del día. Toca cada comida para marcarla como completada y ver los macros. El anillo te muestra cuánto del objetivo diario llevas." />
+            <div className="flex items-center gap-2">
+              <Link
+                href={`${base}/nutrition/add`}
+                aria-label="Registrar alimento"
+                className="flex h-10 w-10 items-center justify-center rounded-full bg-ember-500 text-white shadow-sm transition-transform hover:bg-ember-600 active:scale-[.97]"
+              >
+                <Plus className="h-5 w-5" strokeWidth={2.5} />
+              </Link>
+              <InfoTooltip content="Registra tus comidas del día. Toca cada comida para marcarla como completada y usa el botón + para añadir lo que realmente consumiste." />
+            </div>
           </div>
         </div>
       </header>
