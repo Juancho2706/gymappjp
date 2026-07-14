@@ -10,7 +10,8 @@ const securityHeaders = [
   { key: 'Referrer-Policy',          value: 'strict-origin-when-cross-origin' },
   // HSTS: 2 años, subdomains — sin preload (irreversible, agregar solo cuando estemos seguros)
   { key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains' },
-  { key: 'Permissions-Policy',        value: 'camera=(), microphone=(), geolocation=()' },
+  // Cámara permitida únicamente al mismo origen para el scanner PWA de Nutrición V2.
+  { key: 'Permissions-Policy',        value: 'camera=(self), microphone=(), geolocation=()' },
 ]
 
 const nextConfig: NextConfig = {
