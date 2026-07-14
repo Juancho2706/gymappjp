@@ -1,8 +1,8 @@
 'use client'
 
-import type { ButtonHTMLAttributes, ReactNode } from 'react'
+import type { ReactNode } from 'react'
 import { AlertTriangle, Check, LoaderCircle, Save } from 'lucide-react'
-import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
+import { AnimatePresence, motion, useReducedMotion, type HTMLMotionProps } from 'framer-motion'
 import {
   NUTRITION_MOTION,
   NUTRITION_STRATEGIES,
@@ -29,6 +29,13 @@ const toneClasses: Record<NutritionTone, string> = {
   info: 'border-sky-600 bg-sky-600 text-white hover:bg-sky-700',
 }
 
+type NutritionMotionButtonProps = Omit<HTMLMotionProps<'button'>, 'children'> & {
+  children: ReactNode
+  tone?: NutritionTone
+  pending?: boolean
+  success?: boolean
+}
+
 export function NutritionMotionButton({
   tone = 'nutrition',
   pending = false,
@@ -37,11 +44,7 @@ export function NutritionMotionButton({
   className,
   disabled,
   ...props
-}: ButtonHTMLAttributes<HTMLButtonElement> & {
-  tone?: NutritionTone
-  pending?: boolean
-  success?: boolean
-}) {
+}: NutritionMotionButtonProps) {
   const reduceMotion = useReducedMotion()
   const isDisabled = disabled || pending
 
@@ -164,11 +167,7 @@ export function AnimatedStatusCheck({
 
   return (
     <motion.div
-      animate={
-        error && !reduceMotion
-          ? { x: [0, -3, 3, -2, 2, 0] }
-          : { x: 0 }
-      }
+      animate={error && !reduceMotion ? { x: [0, -3, 3, -2, 2, 0] } : { x: 0 }}
       aria-live="polite"
       className={cx(
         'inline-flex min-h-9 items-center gap-2 rounded-pill border px-3 text-sm font-semibold',
