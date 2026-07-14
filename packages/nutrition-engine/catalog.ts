@@ -1,7 +1,7 @@
 export const SUPPORTED_GTIN_LENGTHS = [8, 12, 13, 14] as const
 
 export type SupportedGtinLength = (typeof SUPPORTED_GTIN_LENGTHS)[number]
-export type NutritionIntakeActionId = 'search' | 'barcode' | 'recent'
+export type NutritionIntakeActionId = 'search' | 'barcode' | 'recent' | 'favorite'
 export type NutritionMealSlot = 'breakfast' | 'morning_snack' | 'lunch' | 'afternoon_snack' | 'dinner' | 'other'
 
 export type NutritionIntakeAction = {
@@ -34,6 +34,12 @@ export const NUTRITION_INTAKE_ACTIONS: readonly NutritionIntakeAction[] = [
     label: 'Usar reciente',
     shortLabel: 'Recientes',
     description: 'Registra de nuevo algo que consumiste hace poco.',
+  },
+  {
+    id: 'favorite',
+    label: 'Usar favorito',
+    shortLabel: 'Favoritos',
+    description: 'Accede rápidamente a tus alimentos guardados.',
   },
 ] as const
 
