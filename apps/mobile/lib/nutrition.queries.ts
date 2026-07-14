@@ -1,8 +1,12 @@
+import type { SupabaseClient } from '@supabase/supabase-js'
 import { supabase } from './supabase'
 
 export async function getActiveNutritionPlanFull(clientId: string) {
-  return supabase.from('nutrition_plans').select(`
+  const loose = supabase as unknown as SupabaseClient
+  return loose.from('nutrition_plans').select(`
     id, name, daily_calories, protein_g, carbs_g, fats_g, instructions, coach_id,
+    hydration_target_ml, steps_target, sleep_target_hours, fasting_target_hours,
+    supplement_guidance, protocol_notes,
     nutrition_meals (
       id, name, description, order_index, day_of_week,
       nutrition_meal_food_items:food_items (
