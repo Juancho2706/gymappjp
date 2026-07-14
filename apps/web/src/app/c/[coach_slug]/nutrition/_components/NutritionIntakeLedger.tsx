@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation'
 import { ChevronDown, Plus, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import {
-  NUTRITION_MEAL_SLOTS,
+  NUTRITION_MEAL_SLOT_IDS,
   NUTRITION_MEAL_SLOT_LABELS,
   calculateIntakeEntryMacros,
   calculateIntakeEntriesTotals,
@@ -42,12 +42,12 @@ export function NutritionIntakeLedger({ entries: initialEntries, coachSlug, addH
   const totals = useMemo(() => calculateIntakeEntriesTotals(entries), [entries])
   const groups = useMemo(() => {
     const map = new Map<NutritionMealSlot, IntakeEntryWithFood[]>()
-    for (const slot of NUTRITION_MEAL_SLOTS) map.set(slot, [])
+    for (const slot of NUTRITION_MEAL_SLOT_IDS) map.set(slot, [])
     for (const entry of entries) {
       const slot = normalizeNutritionMealSlot(entry.meal_slot)
       map.get(slot)!.push(entry)
     }
-    return NUTRITION_MEAL_SLOTS
+    return NUTRITION_MEAL_SLOT_IDS
       .map((slot) => ({ slot, entries: map.get(slot) ?? [] }))
       .filter((group) => group.entries.length > 0)
   }, [entries])
