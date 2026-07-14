@@ -1,4 +1,5 @@
 import { cache } from 'react'
+import type { SupabaseClient } from '@supabase/supabase-js'
 import { format, parseISO, subDays } from 'date-fns'
 import { createClient } from '@/lib/supabase/server'
 import { getTodayInSantiago } from '@/lib/date-utils'
@@ -9,7 +10,7 @@ import { getTodayInSantiago } from '@/lib/date-utils'
  */
 export const getActiveNutritionPlan = cache(async (userId: string) => {
   const supabase = await createClient()
-  const loose = supabase as any
+  const loose = supabase as unknown as SupabaseClient
   const { data } = await loose
     .from('nutrition_plans')
     .select(
@@ -31,7 +32,7 @@ export const getActiveNutritionPlan = cache(async (userId: string) => {
     .maybeSingle()
   // Un plan activo sin comidas es un draft auto-creado (el coach pulsó "Asignar" pero aún no lo
   // armó): se trata como "sin plan" para el alumno → no muestra un plan vacío.
-  if (data && (data.nutrition_meals?.length ?? 0) === 0) return null
+  if (data && ((data.nutrition_meals as unknown[] | null)?.length ?? 0) === 0) return null
   return data
 })
 
