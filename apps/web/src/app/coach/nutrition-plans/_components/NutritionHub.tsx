@@ -42,6 +42,7 @@ type Props = {
   foods: FoodLib
   recipes: RecipeRow[]
   coachId: string
+  nutritionProEnabled: boolean
 }
 
 export function NutritionHub({
@@ -52,12 +53,12 @@ export function NutritionHub({
   foods,
   recipes,
   coachId,
+  nutritionProEnabled,
 }: Props) {
-  // Deep-link ?tab= desde la búsqueda global del topbar (p. ej. una receta abre ?tab=recipes).
   const searchParams = useSearchParams()
   const initialTab = searchParams.get('tab')
   const [hubTab, setHubTab] = useState(
-    ['templates', 'clients', 'foods', 'recipes'].includes(initialTab ?? '') ? initialTab! : 'clients'
+    ['templates', 'clients', 'foods', 'recipes'].includes(initialTab ?? '') ? initialTab! : 'clients',
   )
   const hasClients = assignClients.length > 0
   const showCreate = hubTab === 'clients' || hubTab === 'templates'
@@ -97,64 +98,52 @@ export function NutritionHub({
   )
 
   return (
-    <div className="w-full max-w-[2000px] mx-auto animate-fade-in flex flex-col gap-5">
-      {/* Móvil: TopBar título + subtítulo + acciones (1:1 diseño eva-app). Desktop se
-          integra en la fila del header sticky de abajo — se oculta acá. */}
+    <div className="mx-auto flex w-full max-w-[2000px] animate-fade-in flex-col gap-5">
       <div className="flex items-start justify-between gap-4 px-1 md:hidden">
         <div className="min-w-0">
-          <h1 className="font-display font-extrabold text-2xl leading-tight text-[var(--text-strong)]">
+          <h1 className="font-display text-2xl font-extrabold leading-tight text-[var(--text-strong)]">
             Nutrición
           </h1>
-          <p className="text-[13px] text-[var(--text-muted)] mt-0.5">Planes, alimentos y recetas</p>
+          <p className="mt-0.5 text-[13px] text-[var(--text-muted)]">Planes, alimentos y recetas</p>
         </div>
-        <div className="flex items-center gap-2 shrink-0">{actions}</div>
+        <div className="flex shrink-0 items-center gap-2">{actions}</div>
       </div>
 
-      <Tabs value={hubTab} onValueChange={setHubTab} className="w-full flex flex-col gap-5">
-        {/* Header compacto: móvil = tabs centrados; desktop = título + strip de tabs CLAVADO a
-            la derecha del título (left-aligned) + acciones en un slot derecho (md:ml-auto) que
-            absorbe la diferencia de ancho entre pestañas (con/sin "+ Plantilla"). Así el strip
-            no "baila" al cambiar de pestaña. */}
-        <div className="sticky top-[var(--coach-mobile-content-top-offset)] md:top-0 z-20 bg-background/80 backdrop-blur-md -mx-4 px-4 md:mx-0 md:px-0 pb-4 pt-2 md:py-2 flex justify-center md:flex-wrap md:items-center md:justify-start md:gap-x-6 md:gap-y-3">
+      <Tabs value={hubTab} onValueChange={setHubTab} className="flex w-full flex-col gap-5">
+        <div className="sticky top-[var(--coach-mobile-content-top-offset)] z-20 -mx-4 flex justify-center bg-background/80 px-4 pb-4 pt-2 backdrop-blur-md md:top-0 md:mx-0 md:flex-wrap md:items-center md:justify-start md:gap-x-6 md:gap-y-3 md:px-0 md:py-2">
           <div className="hidden min-w-0 shrink-0 md:block">
-            <h1 className="font-display font-extrabold text-2xl leading-tight text-[var(--text-strong)]">
+            <h1 className="font-display text-2xl font-extrabold leading-tight text-[var(--text-strong)]">
               Nutrición
             </h1>
-            <p className="text-[13px] text-[var(--text-muted)] mt-0.5">Planes, alimentos y recetas</p>
+            <p className="mt-0.5 text-[13px] text-[var(--text-muted)]">Planes, alimentos y recetas</p>
           </div>
-          {/* Strip de tabs: móvil full-width centrado; desktop ancho de contenido, anclado
-              junto al título (shrink-0 = nunca lo comprimen las acciones) */}
           <div className="flex w-full max-w-2xl items-center md:w-auto md:min-w-0 md:max-w-none md:shrink-0">
             <TabsList
-              className="bg-surface-sunken p-[3px] h-auto flex gap-1 w-full md:w-auto rounded-control"
+              className="flex h-auto w-full gap-1 rounded-control bg-surface-sunken p-[3px] md:w-auto"
               style={{ '--theme-primary': 'var(--theme-primary)' } as CSSProperties}
             >
-              {hubTabs.map((t) => (
+              {hubTabs.map((tab) => (
                 <TabsTrigger
-                  key={t.value}
-                  value={t.value}
-                  className="group/tab flex-1 min-w-0 md:flex-none md:min-w-[88px] h-[46px] flex flex-col items-center justify-center gap-0.5 rounded-[11px] px-1 md:px-4 transition-[background-color,box-shadow] duration-150 data-active:bg-surface-card data-active:shadow-sm"
+                  key={tab.value}
+                  value={tab.value}
+                  className="group/tab flex h-[46px] min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-[11px] px-1 transition-[background-color,box-shadow] duration-150 data-active:bg-surface-card data-active:shadow-sm md:min-w-[88px] md:flex-none md:px-4"
                 >
-                <span className="max-w-full truncate text-[12.5px] leading-none font-semibold text-[var(--text-muted)] group-data-[active]/tab:font-extrabold group-data-[active]/tab:text-[var(--text-strong)]">
-                  {t.shortLabel ? (
-                    <>
-                      <span className="hidden sm:inline">{t.label}</span>
-                      <span className="sm:hidden">{t.shortLabel}</span>
-                    </>
-                  ) : (
-                    t.label
-                  )}
-                </span>
-                <span className="font-mono text-[10.5px] leading-none font-bold tabular-nums text-[var(--text-subtle)] group-data-[active]/tab:text-[color:var(--theme-primary)]">
-                  {t.count}
-                </span>
-              </TabsTrigger>
-            ))}
+                  <span className="max-w-full truncate text-[12.5px] font-semibold leading-none text-[var(--text-muted)] group-data-[active]/tab:font-extrabold group-data-[active]/tab:text-[var(--text-strong)]">
+                    {tab.shortLabel ? (
+                      <>
+                        <span className="hidden sm:inline">{tab.label}</span>
+                        <span className="sm:hidden">{tab.shortLabel}</span>
+                      </>
+                    ) : tab.label}
+                  </span>
+                  <span className="font-mono text-[10.5px] font-bold leading-none tabular-nums text-[var(--text-subtle)] group-data-[active]/tab:text-[color:var(--theme-primary)]">
+                    {tab.count}
+                  </span>
+                </TabsTrigger>
+              ))}
             </TabsList>
           </div>
-          {/* Acciones: slot derecho — md:ml-auto lo empuja a la orilla y absorbe la diferencia
-              de ancho (con/sin "+ Plantilla") sin mover el strip de tabs */}
-          <div className="hidden items-center gap-2 shrink-0 md:ml-auto md:flex">{actions}</div>
+          <div className="hidden shrink-0 items-center gap-2 md:ml-auto md:flex">{actions}</div>
         </div>
 
         <TabsContent value="templates" className="mt-0 focus-visible:outline-none">
@@ -172,8 +161,6 @@ export function NutritionHub({
         </TabsContent>
 
         <TabsContent value="clients" className="mt-0 focus-visible:outline-none">
-          {/* Móvil: board vertical (1:1 diseño móvil, sin tocar). Desktop (md+): master-detail
-              espacioso — rail de alumnos (riesgo-first) + ficha de nutrición embebida. */}
           <div className="md:hidden">
             <ActivePlansBoard
               coachId={coachId}
@@ -196,14 +183,19 @@ export function NutritionHub({
 
         <TabsContent value="recipes" className="mt-0 focus-visible:outline-none">
           <div className="space-y-3">
-            {/* Banner "Base" — recetas son inspiración (1:1 diseño) */}
-            <div className="flex items-center gap-2.5 rounded-card bg-surface-sunken px-3.5 py-2.5">
-              <TierBadge tier="base" />
-              <span className="text-xs leading-snug text-[var(--text-muted)]">
-                Vienen incluidas en el módulo. Son inspiración — no afectan macros ni adherencia.
+            <div className="flex items-start gap-2.5 rounded-card bg-surface-sunken px-3.5 py-3">
+              <TierBadge tier={nutritionProEnabled ? 'pro' : 'base'} />
+              <span className="text-xs leading-relaxed text-[var(--text-muted)]">
+                {nutritionProEnabled
+                  ? 'Ideas Base para inspirar y recetas Pro cuantificables con porciones, ingredientes y macros.'
+                  : 'Las ideas Base inspiran a tus alumnos y no afectan macros. Activa Nutrición Pro para recetas cuantificables.'}
               </span>
             </div>
-            <RecipeLibrary recipes={recipes} clients={assignClients} />
+            <RecipeLibrary
+              recipes={recipes}
+              clients={assignClients}
+              nutritionProEnabled={nutritionProEnabled}
+            />
           </div>
         </TabsContent>
       </Tabs>
