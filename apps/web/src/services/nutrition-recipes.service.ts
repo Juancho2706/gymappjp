@@ -174,7 +174,7 @@ export async function createRecipe(
   if (error || !data) {
     return { success: false, error: error?.message ?? 'No se pudo crear la receta.' }
   }
-  return { success: true, recipe: data as RecipeRow }
+  return { success: true, recipe: data as unknown as RecipeRow }
 }
 
 /** Actualiza una idea Base sin alterar accidentalmente recetas estructuradas. */
@@ -206,7 +206,7 @@ export async function updateRecipe(
   const { data, error } = await query.select(RECIPE_COLUMNS).maybeSingle()
   if (error) return { success: false, error: error.message }
   if (!data) return { success: false, error: 'Receta Base no encontrada.' }
-  return { success: true, recipe: data as RecipeRow }
+  return { success: true, recipe: data as unknown as RecipeRow }
 }
 
 /**
@@ -320,7 +320,7 @@ export async function searchCoachRecipes(
     : query.eq('coach_id', scope.coachId).is('team_id', null)
 
   const { data } = await query
-  return (data ?? []) as Pick<RecipeRow, 'id' | 'name' | 'image_url'>[]
+  return (data ?? []) as unknown as Pick<RecipeRow, 'id' | 'name' | 'image_url'>[]
 }
 
 export async function assignRecipeToClients(
