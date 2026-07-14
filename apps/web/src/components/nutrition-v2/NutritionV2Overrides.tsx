@@ -1,11 +1,14 @@
 import type { ReactNode } from 'react'
+import { AlertTriangle, Info } from 'lucide-react'
 import {
   NUTRITION_MACROS,
   formatNutritionAmount,
   formatNutritionCalories,
   nutritionProgressPercent,
   resolveMacroProgressState,
+  type NutritionAttentionModel,
   type NutritionMacroValue,
+  type NutritionTone,
 } from '@eva/nutrition-v2'
 
 function cx(...values: Array<string | false | null | undefined>): string {
@@ -23,6 +26,16 @@ const macroTextClasses = {
   carbs: 'text-sport-700 dark:text-sport-300',
   fats: 'text-aqua-700 dark:text-aqua-300',
 } as const
+
+const toneClasses: Record<NutritionTone, string> = {
+  neutral: 'border-border-subtle bg-surface-card text-strong',
+  brand: 'border-sport-300/50 bg-sport-100/70 text-sport-700 dark:border-sport-600/40 dark:bg-sport-100/20 dark:text-sport-300',
+  nutrition: 'border-ember-300/50 bg-ember-100/70 text-ember-700 dark:border-ember-600/40 dark:bg-ember-100/20 dark:text-ember-300',
+  success: 'border-emerald-300/60 bg-emerald-50 text-emerald-800 dark:border-emerald-700/50 dark:bg-emerald-950/30 dark:text-emerald-300',
+  warning: 'border-amber-300/60 bg-amber-50 text-amber-900 dark:border-amber-700/50 dark:bg-amber-950/30 dark:text-amber-200',
+  danger: 'border-rose-300/60 bg-rose-50 text-rose-800 dark:border-rose-700/50 dark:bg-rose-950/30 dark:text-rose-300',
+  info: 'border-sky-300/60 bg-sky-50 text-sky-800 dark:border-sky-700/50 dark:bg-sky-950/30 dark:text-sky-300',
+}
 
 export function MacroBudget({
   calories,
@@ -108,6 +121,31 @@ export function MacroProgress({
         {formatNutritionAmount(target, unit, 1)}
       </p>
     </div>
+  )
+}
+
+export function CoachAttentionCard({
+  item,
+  action,
+}: {
+  item: NutritionAttentionModel
+  action?: ReactNode
+}) {
+  const Icon = item.tone === 'warning' || item.tone === 'danger' ? AlertTriangle : Info
+  return (
+    <article className={cx('rounded-card border p-4', toneClasses[item.tone])}>
+      <div className="flex items-start gap-3">
+        <span className="mt-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-current/10">
+          <Icon aria-hidden="true" className="h-4 w-4" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <h3 className="font-semibold">{item.title}</h3>
+          <p className="mt-1 text-sm opacity-85">{item.description}</p>
+          <p className="mt-2 text-xs font-medium opacity-70">Motivo: {item.reason}</p>
+        </div>
+        {action ? <div className="shrink-0">{action}</div> : null}
+      </div>
+    </article>
   )
 }
 
