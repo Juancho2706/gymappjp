@@ -21,7 +21,7 @@ import { RecipeIdeasSection } from './_components/RecipeIdeasSection'
 import { pdfBrandFromProxyHeaders } from '@/lib/nutrition-pdf-brand'
 import { getClientMealComments } from './_data/nutrition-notes.queries'
 import { getShoppingList } from './_data/shopping.queries'
-import { getRecentIntakeFoods } from './_data/intake.queries'
+import { getIntakeEntriesForDate, getRecentIntakeFoods } from './_data/intake.queries'
 import {
   getPlanDayMicros,
   getMicroTargetsForClient,
@@ -36,10 +36,11 @@ import {
 import { NutritionDomainOff } from './_components/NutritionDomainOff'
 import { getNutritionWeeklyRecap } from './_data/recap.queries'
 import { WeeklyRecapCard } from './_components/WeeklyRecapCard'
+import { NutritionDailyOverview } from './_components/NutritionDailyOverview'
+import { NutritionIntakeLedger } from './_components/NutritionIntakeLedger'
+import { getClientBasePath } from '@/lib/client/base-path'
 
 export const metadata: Metadata = { title: 'Plan Nutricional' }
-
-import { getClientBasePath } from '@/lib/client/base-path'
 
 interface Props {
   params: Promise<{ coach_slug: string }>
@@ -58,7 +59,6 @@ export default async function ClientNutritionPage({ params }: Props) {
   }
 
   const { iso: today } = getTodayInSantiago()
-  // Scope del alumno (team/org) — alimenta el resolver de feature-prefs (capa base = team en §4.9).
   const clientScope = await getClientScope(user.id)
   const prefsInput = {
     domain: 'nutrition' as const,
@@ -78,6 +78,7 @@ export default async function ClientNutritionPage({ params }: Props) {
     notes,
     shoppingList,
     offPlanRecents,
+    intakeEntries,
     dayMicros,
     microTargets,
     nutritionProEnabled,
@@ -88,24 +89,21 @@ export default async function ClientNutritionPage({ params }: Props) {
     getNutritionLogForDate(user.id, plan.id, today),
     getNutritionAdherence30d(user.id, plan.id),
     getHeroComplianceBundle(user.id, coach_slug),
-    // Módulo nutrition_exchanges: bundle vacío si el plan es 'grams' o el módulo está OFF (AC5).
     getStudentExchangeData({
       clientId: user.id,
       planId: plan.id,
       planCoachId: plan.coach_id ?? null,
       planMode: (plan as { plan_mode?: string | null }).plan_mode,
     }),
-    // Feature L: recetas-idea asignadas por el coach (inspiración, solo lectura).
     getAssignedRecipesForClient(user.id),
     headers(),
-    // Overhaul (base tier): notas del día, lista de compras, recientes off-plan, micros.
     getClientMealComments(today),
     getShoppingList(user.id),
     getRecentIntakeFoods(10),
+    getIntakeEntriesForDate(today),
     getPlanDayMicros(user.id, plan.id, today),
     getMicroTargetsForClient(plan.coach_id ?? null, user.id),
     getNutritionProEnabledForClient(plan.id),
-    // Master switch del dominio + visibilidad por seccion (fail-OPEN con flag OFF, §4.4).
     resolveNutritionDomainEnabled({
       coachId: plan.coach_id ?? '',
       clientId: user.id,
@@ -113,45 +111,41 @@ export default async function ClientNutritionPage({ params }: Props) {
       clientOrgId: clientScope.orgId,
     }),
     resolveFeaturePrefs(prefsInput),
-    // Recap semanal motivacional (K): on-demand desde el motor, tono adaptativo.
     getNutritionWeeklyRecap(user.id),
   ])
 
-  // Dominio apagado por el coach => ocultar TODA la nutricion (menu + contenido), nunca blanco.
   if (!domainEnabled) {
     return <NutritionDomainOff coachSlug={coach_slug} />
   }
 
-  // Proporción del plato derivada del split de macros del plan (guía, no meta).
   const plateProportion = platePropFromMacros(plan.protein_g ?? 0, plan.carbs_g ?? 0)
   const hasTodayWorkout = heroBundle.hero.hasWorkout
-  // Marca del tenant resuelta SERVER-SIDE desde headers del proxy (free tier ⇒ EVA, AC4).
-  // El logo del PDF se resuelve aparte, server-side y lazy (resolveClientPdfLogoDataUrl).
   const pdfBrand = pdfBrandFromProxyHeaders(headersList)
+  const addHref = `${base}/nutrition/add`
 
   return (
     <div className="min-h-dvh bg-background">
       <div
-        className="fixed top-0 right-0 w-72 h-72 opacity-[0.06] blur-3xl rounded-full pointer-events-none"
+        className="pointer-events-none fixed right-0 top-0 h-72 w-72 rounded-full opacity-[0.06] blur-3xl"
         style={{ backgroundColor: 'var(--theme-primary)' }}
       />
 
-      <header className="sticky top-0 z-40 bg-background/80 backdrop-blur-xl border-b border-border/10 pt-safe">
+      <header className="sticky top-0 z-40 border-b border-border/10 bg-background/80 pt-safe backdrop-blur-xl">
         <div className="mx-auto flex max-w-lg items-center gap-3 px-4 py-3.5 md:max-w-5xl">
           <Link
             href={`${base}/dashboard`}
-            className="w-9 h-9 flex items-center justify-center -ml-1 rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-all"
+            className="-ml-1 flex h-9 w-9 items-center justify-center rounded-xl text-muted-foreground transition-all hover:bg-muted/50 hover:text-foreground"
           >
-            <ArrowLeft className="w-5 h-5" />
+            <ArrowLeft className="h-5 w-5" />
           </Link>
-          <div className="flex-1 flex items-center justify-between gap-2">
+          <div className="flex flex-1 items-center justify-between gap-2">
             <div className="min-w-0">
               <h1 className="truncate text-lg font-black tracking-tight text-foreground">Plan Nutricional</h1>
-              <p className="truncate text-[10px] text-muted-foreground font-medium">{plan.name}</p>
+              <p className="truncate text-[10px] font-medium text-muted-foreground">{plan.name}</p>
             </div>
             <div className="flex items-center gap-2">
               <Link
-                href={`${base}/nutrition/add`}
+                href={addHref}
                 aria-label="Registrar alimento"
                 className="flex h-10 w-10 items-center justify-center rounded-full bg-ember-500 text-white shadow-sm transition-transform hover:bg-ember-600 active:scale-[.97]"
               >
@@ -163,24 +157,38 @@ export default async function ClientNutritionPage({ params }: Props) {
         </div>
       </header>
 
-      <main className="max-w-lg md:max-w-5xl mx-auto px-4 py-5 pb-28 space-y-5 relative z-0">
+      <main className="relative z-0 mx-auto max-w-lg space-y-5 px-4 py-5 pb-28 md:max-w-5xl">
         <PushNotificationBanner />
 
         {weeklyRecap && <WeeklyRecapCard recap={weeklyRecap} />}
 
         {plan.instructions && (
-          <details className="bg-muted/30 border border-border rounded-2xl">
-            <summary className="px-4 py-3 text-xs font-black uppercase tracking-widest text-muted-foreground cursor-pointer list-none flex items-center justify-between">
+          <details className="rounded-2xl border border-border bg-muted/30">
+            <summary className="flex cursor-pointer list-none items-center justify-between px-4 py-3 text-xs font-black uppercase tracking-widest text-muted-foreground">
               Indicaciones del coach
               <span className="text-muted-foreground/50">▼</span>
             </summary>
             <div className="px-4 pb-4">
-              <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-wrap">
+              <p className="whitespace-pre-wrap text-sm leading-relaxed text-muted-foreground">
                 {plan.instructions}
               </p>
             </div>
           </details>
         )}
+
+        <NutritionDailyOverview
+          plan={plan}
+          todayLog={todayLog as Record<string, unknown> | null}
+          intakeEntries={intakeEntries}
+          today={today}
+          addHref={addHref}
+        />
+
+        <NutritionIntakeLedger
+          entries={intakeEntries}
+          coachSlug={coach_slug}
+          addHref={addHref}
+        />
 
         <NutritionShell
           hasTodayWorkout={hasTodayWorkout}
