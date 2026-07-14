@@ -146,7 +146,7 @@ export function formatNutritionCalories(value: number): string {
 }
 
 export interface NutritionMacroValue {
-  key: NutritionMacroKey
+  macro: NutritionMacroKey
   consumed: number
   target: number
   unit?: string
