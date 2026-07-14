@@ -1,0 +1,15 @@
+-- DRAFT — complemento aditivo para importaciones idempotentes del catálogo local.
+-- NO APLICAR SIN REVISION. No modifica datos y finaliza en ROLLBACK.
+
+BEGIN;
+
+ALTER TABLE public.foods
+  ADD COLUMN IF NOT EXISTS catalog_key text;
+
+CREATE UNIQUE INDEX IF NOT EXISTS foods_catalog_key_unique_idx
+  ON public.foods (catalog_key);
+
+COMMENT ON COLUMN public.foods.catalog_key IS
+  'Clave estable para upserts por lote. Productos con GTIN usan gtin:<barcode>; filas legacy pueden permanecer NULL.';
+
+ROLLBACK;
