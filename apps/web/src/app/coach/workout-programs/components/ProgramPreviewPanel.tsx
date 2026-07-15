@@ -1,6 +1,6 @@
 'use client'
 
-import { Copy, Dumbbell, Flame, GitMerge, Layers, Pencil, Trash2, UserPlus, Wind } from 'lucide-react'
+import { Copy, Dumbbell, Flame, Layers, Pencil, Trash2, UserPlus, Wind } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -341,7 +341,6 @@ export interface ProgramPreviewPanelProps {
     onEdit?: () => void
     onAssign?: () => void
     onDuplicate?: () => void
-    onSync?: () => void
     onDelete?: () => void
 }
 
@@ -350,18 +349,16 @@ function PreviewActions({
     onEdit,
     onAssign,
     onDuplicate,
-    onSync,
     onDelete,
 }: {
     program: ProgramListModel
     onEdit?: () => void
     onAssign?: () => void
     onDuplicate?: () => void
-    onSync?: () => void
     onDelete?: () => void
 }) {
     const isTemplate = !program.client_id
-    const hasAny = onEdit || onAssign || onDuplicate || onSync || onDelete
+    const hasAny = onEdit || onAssign || onDuplicate || onDelete
     if (!hasAny) return null
 
     return (
@@ -382,26 +379,12 @@ function PreviewActions({
                 )
             )}
             <div className="grid grid-cols-3 gap-2">
-                {isTemplate
-                    ? onEdit && (
-                          <Button type="button" variant="secondary" className="h-auto flex-col gap-1.5 py-3" onClick={onEdit}>
-                              <Pencil className="size-[18px] text-muted" />
-                              <span className="text-xs font-bold">Editar</span>
-                          </Button>
-                      )
-                    : program.source_template_id &&
-                      onSync && (
-                          <Button
-                              type="button"
-                              variant="secondary"
-                              className="h-auto flex-col gap-1.5 py-3"
-                              onClick={onSync}
-                              title="Trae los últimos cambios de la plantilla base a este programa. Los ejercicios personalizados (override) se conservan."
-                          >
-                              <GitMerge className="size-[18px] text-muted" />
-                              <span className="text-xs font-bold">Sincronizar</span>
-                          </Button>
-                      )}
+                {isTemplate && onEdit && (
+                    <Button type="button" variant="secondary" className="h-auto flex-col gap-1.5 py-3" onClick={onEdit}>
+                        <Pencil className="size-[18px] text-muted" />
+                        <span className="text-xs font-bold">Editar</span>
+                    </Button>
+                )}
                 {onDuplicate && (
                     <Button type="button" variant="secondary" className="h-auto flex-col gap-1.5 py-3" onClick={onDuplicate}>
                         <Copy className="size-[18px] text-muted" />
@@ -432,14 +415,13 @@ export function ProgramPreviewPanel({
     onEdit,
     onAssign,
     onDuplicate,
-    onSync,
     onDelete,
 }: ProgramPreviewPanelProps) {
     const isDesktop = useIsDesktopMd()
 
     if (!program) return null
 
-    const hasActions = !!(onEdit || onAssign || onDuplicate || onSync || onDelete)
+    const hasActions = !!(onEdit || onAssign || onDuplicate || onDelete)
 
     const stats = getProgramStats(program)
     const progress = program.client_id ? assignedProgress(program) : null
@@ -501,7 +483,6 @@ export function ProgramPreviewPanel({
             onEdit={onEdit}
             onAssign={onAssign}
             onDuplicate={onDuplicate}
-            onSync={onSync}
             onDelete={onDelete}
         />
     ) : (

@@ -53,7 +53,6 @@ import {
     assignProgramToClientsAction,
     deleteWorkoutProgramAction,
     duplicateWorkoutProgramAction,
-    syncProgramFromTemplateAction,
 } from '../builder/[clientId]/_actions/builder.actions'
 import { motion, useReducedMotion } from 'framer-motion'
 import { InfoTooltip } from '@/components/ui/info-tooltip'
@@ -221,8 +220,6 @@ export function WorkoutProgramsClient({
     const [assignmentStartDate, setAssignmentStartDate] = useState(new Date().toISOString().split('T')[0])
     const [assignmentDurationWeeks, setAssignmentDurationWeeks] = useState('4')
     const [assignmentDays, setAssignmentDays] = useState<number[]>([])
-    const [showSyncDialog, setShowSyncDialog] = useState(false)
-    const [programToSync, setProgramToSync] = useState<ProgramListModel | null>(null)
     const [programToDelete, setProgramToDelete] = useState<ProgramListModel | null>(null)
     const [programToDuplicate, setProgramToDuplicate] = useState<ProgramListModel | null>(null)
     const [duplicateNameInput, setDuplicateNameInput] = useState('')
@@ -296,12 +293,6 @@ export function WorkoutProgramsClient({
         setIsPreviewOpen(false)
         openDuplicateDialog(p)
     }
-    const previewSync = () => {
-        if (!programToPreview) return
-        setProgramToSync(programToPreview)
-        setIsPreviewOpen(false)
-        setShowSyncDialog(true)
-    }
     const previewDelete = () => {
         if (!programToPreview) return
         const p = programToPreview
@@ -367,19 +358,6 @@ export function WorkoutProgramsClient({
                 }
                 setIsAssignOpen(false)
                 setSelectedClients([])
-                router.refresh()
-            }
-            setActionProgramId(null)
-        })
-    }
-
-    const handleSync = (program: ProgramListModel) => {
-        setActionProgramId(program.id)
-        startTransition(async () => {
-            const result = await syncProgramFromTemplateAction(program.id)
-            if (result.error) toast.error(result.error)
-            else {
-                toast.success('Programa sincronizado desde la plantilla')
                 router.refresh()
             }
             setActionProgramId(null)
@@ -1139,28 +1117,6 @@ export function WorkoutProgramsClient({
                 </DialogContent>
             </Dialog>
 
-            <AlertDialog open={showSyncDialog} onOpenChange={setShowSyncDialog}>
-                <AlertDialogContent>
-                    <AlertDialogHeader>
-                        <AlertDialogTitle>¿Sincronizar desde plantilla base?</AlertDialogTitle>
-                        <AlertDialogDescription>
-                            Se actualizará el programa con los cambios de su plantilla vinculada. Los bloques marcados
-                            como override se respetan.
-                        </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                        <AlertDialogAction
-                            onClick={() => {
-                                if (programToSync) handleSync(programToSync)
-                            }}
-                        >
-                            Sincronizar
-                        </AlertDialogAction>
-                    </AlertDialogFooter>
-                </AlertDialogContent>
-            </AlertDialog>
-
             <ProgramPreviewPanel
                 program={programToPreview}
                 open={isPreviewOpen}
@@ -1169,7 +1125,6 @@ export function WorkoutProgramsClient({
                 onEdit={previewEdit}
                 onAssign={previewAssign}
                 onDuplicate={previewDuplicate}
-                onSync={programToPreview?.source_template_id ? previewSync : undefined}
                 onDelete={previewDelete}
             />
         </div>
