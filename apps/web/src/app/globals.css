@@ -653,6 +653,12 @@ html.dark {
 }
 html {
   color-scheme: light;
+  /* Pinta el lienzo raíz con la superficie del tema (flip claro/oscuro via
+     --background). Sin esto, en dark mode iOS pinta las zonas que el body no
+     cubre (safe-area del home indicator, overscroll, gap de dvh en páginas
+     overflow-hidden como el builder) con el canvas NEGRO puro del navegador
+     → "barra negra" al pie. body ya pinta encima; esto es solo backstop. */
+  background-color: var(--background);
 }
 
 /* ============================================================
