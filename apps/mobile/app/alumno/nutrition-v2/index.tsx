@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AppState, RefreshControl, ScrollView, Text, View } from 'react-native'
 import { useRouter } from 'expo-router'
 import {
@@ -62,9 +62,22 @@ export default function StudentNutritionV2Screen() {
     }
   }, [])
 
+  const mountedRef = useRef(true)
+  const controllerRef = useRef<AbortController | null>(null)
+
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+      controllerRef.current?.abort()
+    }
+  }, [])
+
   const load = useCallback(async (force = false) => {
     if (!userId || !enabled) return
+    controllerRef.current?.abort()
     const controller = new AbortController()
+    controllerRef.current = controller
 
     if (!force) {
       const cached = await readNutritionV2Cache({
@@ -75,7 +88,7 @@ export default function StudentNutritionV2Screen() {
         schema: NutritionTodayReadModelSchema,
         allowStale: true,
       })
-      if (cached) {
+      if (mountedRef.current && cached) {
         setModel(cached.payload)
         setOffline(cached.stale)
         setLoading(false)
@@ -84,6 +97,7 @@ export default function StudentNutritionV2Screen() {
 
     try {
       const fresh = await getNutritionTodayV2({ date, signal: controller.signal })
+      if (!mountedRef.current) return
       setModel(fresh)
       setOffline(false)
       await writeNutritionV2Cache({
@@ -93,19 +107,20 @@ export default function StudentNutritionV2Screen() {
         scopeKey: date,
         payload: fresh,
       })
+      if (!mountedRef.current) return
       const flushed = await flushNutritionV2MutationQueue(userId)
-      setPending(flushed.pending)
+      if (mountedRef.current) setPending(flushed.pending)
     } catch (error) {
       if (error instanceof Error && error.name === 'AbortError') return
-      setOffline(true)
+      if (mountedRef.current) setOffline(true)
       const queue = await getNutritionV2QueueStatus(userId)
-      setPending(queue.pending)
+      if (mountedRef.current) setPending(queue.pending)
     } finally {
-      setLoading(false)
-      setRefreshing(false)
+      if (mountedRef.current) {
+        setLoading(false)
+        setRefreshing(false)
+      }
     }
-
-    return () => controller.abort()
   }, [date, enabled, userId])
 
   useEffect(() => {

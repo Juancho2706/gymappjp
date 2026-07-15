@@ -13,7 +13,10 @@ import { createNutritionMacroValue } from '@eva/nutrition-v2'
 import { getTodayInSantiago } from '@/lib/date-utils'
 import { getNutritionPlansPageCoach } from '../../nutrition-plans/_data/nutrition-page.queries'
 import { getPreferredWorkspaceForRender } from '@/services/auth/workspace-render-cache'
-import { getNutritionClientDetailV2ForWeb } from '@/services/nutrition-v2-read.service'
+import {
+  getNutritionClientDetailV2ForWeb,
+  nutritionV2CoachScopeFromWorkspace,
+} from '@/services/nutrition-v2-read.service'
 import { isNutritionV2Enabled } from '@/services/nutrition-v2-rollout.service'
 
 interface Props {
@@ -38,8 +41,10 @@ export default async function CoachNutritionV2ClientPage({ params }: Props) {
   })
   if (!enabled) redirect('/coach/nutrition-plans')
 
+  // Propagate the active workspace: the scoped RPC denies (42501) a client outside this pool.
+  const scope = nutritionV2CoachScopeFromWorkspace(workspace)
   const { iso: today } = getTodayInSantiago()
-  const detail = await getNutritionClientDetailV2ForWeb({ clientId, date: today })
+  const detail = await getNutritionClientDetailV2ForWeb({ clientId, scope, date: today })
 
   return (
     <NutritionPageShell

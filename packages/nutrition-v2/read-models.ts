@@ -193,6 +193,33 @@ export const NutritionClientDetailReadModelSchema = z.object({
   privateNote: z.object({ note: z.string(), updatedAt: IsoDateTimeSchema }).nullable(),
 })
 
+/**
+ * Active-workspace scope carried by every professional (coach/nutritionist) read.
+ * Mirrors the server contract of `nutrition_v2_client_matches_workspace`
+ * (migration 20260714211000): a standalone coach pool, a `teams` pool or an
+ * `organizations` pool. The cross-field invariant is enforced here so the boundary
+ * (web gateway + mobile API) fails closed instead of ever reading "sin scope".
+ */
+export const NutritionV2CoachScopeTypeSchema = z.enum(['standalone', 'team', 'organization'])
+
+export const NutritionV2CoachScopeSchema = z
+  .object({
+    scopeType: NutritionV2CoachScopeTypeSchema,
+    teamId: NullableUuidSchema,
+    orgId: NullableUuidSchema,
+  })
+  .superRefine((value, ctx) => {
+    if (value.scopeType === 'standalone' && (value.teamId !== null || value.orgId !== null)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'standalone scope must not carry teamId or orgId' })
+    }
+    if (value.scopeType === 'team' && (value.teamId === null || value.orgId !== null)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'team scope requires teamId and no orgId' })
+    }
+    if (value.scopeType === 'organization' && (value.orgId === null || value.teamId !== null)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'organization scope requires orgId and no teamId' })
+    }
+  })
+
 export type NutritionTotals = z.infer<typeof NutritionTotalsSchema>
 export type NutritionIntakeReadItem = z.infer<typeof NutritionIntakeReadItemSchema>
 export type NutritionMealSlotRead = z.infer<typeof NutritionMealSlotReadSchema>
@@ -203,6 +230,8 @@ export type NutritionHistoryPageReadModel = z.infer<typeof NutritionHistoryPageR
 export type NutritionCoachHubItem = z.infer<typeof NutritionCoachHubItemSchema>
 export type NutritionCoachHubPageReadModel = z.infer<typeof NutritionCoachHubPageReadModelSchema>
 export type NutritionClientDetailReadModel = z.infer<typeof NutritionClientDetailReadModelSchema>
+export type NutritionV2CoachScopeType = z.infer<typeof NutritionV2CoachScopeTypeSchema>
+export type NutritionV2CoachScope = z.infer<typeof NutritionV2CoachScopeSchema>
 
 export function parseNutritionReadModel<T>(schema: z.ZodType<T>, input: unknown): T {
   return schema.parse(input)

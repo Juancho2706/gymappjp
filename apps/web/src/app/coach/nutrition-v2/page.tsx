@@ -11,7 +11,10 @@ import {
 } from '@/components/nutrition-v2'
 import { getNutritionPlansPageCoach } from '../nutrition-plans/_data/nutrition-page.queries'
 import { getPreferredWorkspaceForRender } from '@/services/auth/workspace-render-cache'
-import { getNutritionCoachHubV2ForWeb } from '@/services/nutrition-v2-read.service'
+import {
+  getNutritionCoachHubV2ForWeb,
+  nutritionV2CoachScopeFromWorkspace,
+} from '@/services/nutrition-v2-read.service'
 import { isNutritionV2Enabled } from '@/services/nutrition-v2-rollout.service'
 
 interface Props {
@@ -38,7 +41,10 @@ export default async function CoachNutritionV2Page({ searchParams }: Props) {
   })
   if (!enabled) redirect('/coach/nutrition-plans')
 
+  // Propagate the active workspace to the scoped RPC so the roster never mixes coach pools.
+  const scope = nutritionV2CoachScopeFromWorkspace(workspace)
   const hub = await getNutritionCoachHubV2ForWeb({
+    scope,
     cursorUpdatedAt: query.cursorUpdatedAt ?? null,
     cursorClientId: query.cursorClientId ?? null,
     pageSize: 25,

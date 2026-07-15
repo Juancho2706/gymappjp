@@ -12,7 +12,9 @@ import {
   type NutritionHistoryPageReadModel,
   type NutritionPlanReadModel,
   type NutritionTodayReadModel,
+  type NutritionV2CoachScope,
 } from '@eva/nutrition-v2'
+import type { WorkspaceSummary } from '@/domain/auth/types'
 import { createClient } from '@/lib/supabase/server'
 
 type RpcClient = {
@@ -99,14 +101,42 @@ export function getNutritionHistoryV2ForWeb(input: {
   })
 }
 
+/**
+ * Maps the RSC-resolved workspace (`getPreferredWorkspaceForRender`) to the professional read scope.
+ * Fail-closed: any workspace that is not a coach pool (null, enterprise staff, a student workspace)
+ * throws instead of degrading to an unscoped read — the coach roster/detail must never mix pools.
+ */
+export function nutritionV2CoachScopeFromWorkspace(
+  workspace: WorkspaceSummary | null,
+): NutritionV2CoachScope {
+  switch (workspace?.type) {
+    case 'coach_standalone':
+      return { scopeType: 'standalone', teamId: null, orgId: null }
+    case 'coach_team':
+      return { scopeType: 'team', teamId: workspace.teamId, orgId: null }
+    case 'enterprise_coach':
+      return { scopeType: 'organization', teamId: null, orgId: workspace.orgId }
+    default:
+      throw new Error(
+        `Nutrition V2 coach read requires a coach workspace, got: ${workspace?.type ?? 'null'}`,
+      )
+  }
+}
+
 export function getNutritionCoachHubV2ForWeb(input: {
+  scope: NutritionV2CoachScope
   cursorUpdatedAt?: string | null
   cursorClientId?: string | null
   pageSize?: number
-} = {}): Promise<NutritionCoachHubPageReadModel> {
+}): Promise<NutritionCoachHubPageReadModel> {
+  // Scoped RPC: server-side it re-validates coach membership against auth.uid()
+  // (private.nutrition_v2_client_matches_workspace). `get_nutrition_coach_hub_v2` is revoked.
   return rpcRead({
-    name: 'get_nutrition_coach_hub_v2',
+    name: 'get_nutrition_coach_hub_scoped_v2',
     args: {
+      p_scope_type: input.scope.scopeType,
+      p_team_id: input.scope.teamId,
+      p_org_id: input.scope.orgId,
       p_cursor_updated_at: input.cursorUpdatedAt ?? null,
       p_cursor_client_id: input.cursorClientId ?? null,
       p_page_size: input.pageSize ?? 25,
@@ -117,13 +147,19 @@ export function getNutritionCoachHubV2ForWeb(input: {
 
 export function getNutritionClientDetailV2ForWeb(input: {
   clientId: string
+  scope: NutritionV2CoachScope
   date: string
   timezone?: string
 }): Promise<NutritionClientDetailReadModel> {
+  // Scoped RPC: server-side it enforces the workspace against auth.uid() and delegates to the same
+  // detail implementation. `get_nutrition_client_detail_v2` (unscoped) is no longer used here.
   return rpcRead({
-    name: 'get_nutrition_client_detail_v2',
+    name: 'get_nutrition_client_detail_scoped_v2',
     args: {
       p_client_id: input.clientId,
+      p_scope_type: input.scope.scopeType,
+      p_team_id: input.scope.teamId,
+      p_org_id: input.scope.orgId,
       p_local_date: input.date,
       p_timezone: input.timezone ?? 'America/Santiago',
     },

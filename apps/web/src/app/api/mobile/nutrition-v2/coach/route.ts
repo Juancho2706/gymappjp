@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server'
 import {
   NutritionClientDetailReadModelSchema,
   NutritionCoachHubPageReadModelSchema,
+  NutritionV2CoachScopeSchema,
 } from '@eva/nutrition-v2'
 import {
   gateNutritionV2Api,
@@ -32,6 +33,21 @@ export async function GET(request: NextRequest) {
     return gate.response
   }
 
+  // The client sends the ACTIVE coach workspace as query params. Membership is NOT trusted from the
+  // wire: the scoped RPC (get_nutrition_*_scoped_v2) re-validates it server-side against auth.uid()
+  // via private.nutrition_v2_client_matches_workspace. Here we only enforce the shape (fail-closed:
+  // unknown scopeType / mismatched team/org ids => 400, never an unscoped read).
+  const scopeResult = NutritionV2CoachScopeSchema.safeParse({
+    scopeType: request.nextUrl.searchParams.get('scopeType'),
+    teamId: request.nextUrl.searchParams.get('teamId') || null,
+    orgId: request.nextUrl.searchParams.get('orgId') || null,
+  })
+  if (!scopeResult.success) {
+    logNutritionV2Api({ route, startedAt, status: 400, errorCode: 'INVALID_WORKSPACE_SCOPE' })
+    return jsonNoStore({ error: 'Workspace inválido.', code: 'INVALID_WORKSPACE_SCOPE' }, 400)
+  }
+  const scope = scopeResult.data
+
   const view = request.nextUrl.searchParams.get('view') ?? 'hub'
   let rpcName: string
   let args: Record<string, unknown>
@@ -54,8 +70,11 @@ export async function GET(request: NextRequest) {
       return jsonNoStore({ error: 'Cursor inválido.', code: 'INVALID_CURSOR_CLIENT' }, 400)
     }
 
-    rpcName = 'get_nutrition_coach_hub_v2'
+    rpcName = 'get_nutrition_coach_hub_scoped_v2'
     args = {
+      p_scope_type: scope.scopeType,
+      p_team_id: scope.teamId,
+      p_org_id: scope.orgId,
       p_cursor_updated_at: cursorUpdatedAt || null,
       p_cursor_client_id: cursorClientId || null,
       p_page_size: pageSize,
@@ -74,8 +93,15 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    rpcName = 'get_nutrition_client_detail_v2'
-    args = { p_client_id: clientId, p_local_date: date, p_timezone: timezone }
+    rpcName = 'get_nutrition_client_detail_scoped_v2'
+    args = {
+      p_client_id: clientId,
+      p_scope_type: scope.scopeType,
+      p_team_id: scope.teamId,
+      p_org_id: scope.orgId,
+      p_local_date: date,
+      p_timezone: timezone,
+    }
     parse = (data) => NutritionClientDetailReadModelSchema.parse(data)
   } else {
     logNutritionV2Api({ route, startedAt, status: 400, errorCode: 'INVALID_VIEW' })

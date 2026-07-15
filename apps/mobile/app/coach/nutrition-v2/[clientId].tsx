@@ -18,7 +18,12 @@ import {
 } from '@eva/nutrition-v2'
 import { isEnabled } from '../../../lib/flags'
 import { useEntitlements } from '../../../lib/entitlements'
-import { getNutritionClientDetailV2 } from '../../../lib/nutrition-v2.api'
+import { useWorkspace } from '../../../lib/workspace'
+import {
+  getNutritionClientDetailV2,
+  nutritionV2CoachScope,
+  nutritionV2CoachScopeCacheKey,
+} from '../../../lib/nutrition-v2.api'
 import {
   readNutritionV2Cache,
   writeNutritionV2Cache,
@@ -39,11 +44,26 @@ export default function CoachNutritionV2ClientScreen() {
   const params = useLocalSearchParams<{ clientId: string }>()
   const clientId = Array.isArray(params.clientId) ? params.clientId[0] : params.clientId
   const entitlements = useEntitlements()
+  const {
+    ready: workspaceReady,
+    kind: workspaceKind,
+    teamId: workspaceTeamId,
+    orgId: workspaceOrgId,
+  } = useWorkspace()
   const [userId, setUserId] = useState<string | null>(null)
   const [detail, setDetail] = useState<NutritionClientDetailReadModel | null>(null)
   const [loading, setLoading] = useState(true)
   const [offline, setOffline] = useState(false)
   const date = useMemo(todayInSantiago, [])
+  // Fail-closed: only fetch once the workspace resolved AND collapses to a valid coach scope.
+  const scope = useMemo(
+    () =>
+      workspaceReady
+        ? nutritionV2CoachScope({ kind: workspaceKind, teamId: workspaceTeamId, orgId: workspaceOrgId })
+        : null,
+    [workspaceReady, workspaceKind, workspaceTeamId, workspaceOrgId],
+  )
+  const scopeCacheKey = scope ? nutritionV2CoachScopeCacheKey(scope) : null
   const enabled = entitlements.ready && isEnabled('nutritionV2Coach')
 
   useEffect(() => {
@@ -57,11 +77,13 @@ export default function CoachNutritionV2ClientScreen() {
   }, [])
 
   useEffect(() => {
-    if (!enabled || !userId || !clientId) {
-      if (entitlements.ready) setLoading(false)
+    if (!enabled || !userId || !clientId || !scope || !scopeCacheKey) {
+      if (entitlements.ready && workspaceReady) setLoading(false)
       return
     }
 
+    // Fold the workspace scope into the cache key so two pools of the same coach never collide.
+    const detailScopeKey = `${scopeCacheKey}:${date}`
     const controller = new AbortController()
     let active = true
 
@@ -70,7 +92,7 @@ export default function CoachNutritionV2ClientScreen() {
         userId,
         clientId,
         kind: 'clientDetail',
-        scopeKey: date,
+        scopeKey: detailScopeKey,
         schema: NutritionClientDetailReadModelSchema,
         allowStale: true,
       })
@@ -83,6 +105,7 @@ export default function CoachNutritionV2ClientScreen() {
       try {
         const fresh = await getNutritionClientDetailV2({
           clientId,
+          scope,
           date,
           signal: controller.signal,
         })
@@ -93,7 +116,7 @@ export default function CoachNutritionV2ClientScreen() {
           userId,
           clientId,
           kind: 'clientDetail',
-          scopeKey: date,
+          scopeKey: detailScopeKey,
           payload: fresh,
         })
       } catch (error) {
@@ -108,9 +131,9 @@ export default function CoachNutritionV2ClientScreen() {
       active = false
       controller.abort()
     }
-  }, [clientId, date, enabled, entitlements.ready, userId])
+  }, [clientId, date, enabled, entitlements.ready, workspaceReady, userId, scope, scopeCacheKey])
 
-  if (!entitlements.ready || loading) {
+  if (!entitlements.ready || !workspaceReady || loading) {
     return (
       <View className="flex-1 bg-surface-app px-4 pt-6">
         <NutritionSkeleton variant="coach" />
@@ -118,7 +141,7 @@ export default function CoachNutritionV2ClientScreen() {
     )
   }
 
-  if (!enabled || !clientId) {
+  if (!enabled || !clientId || !scope) {
     return (
       <View className="flex-1 bg-surface-app px-4 pt-6">
         <NutritionStatePanel

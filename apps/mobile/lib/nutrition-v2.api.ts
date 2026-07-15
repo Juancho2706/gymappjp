@@ -13,8 +13,16 @@ import {
   type NutritionIntakeMutation,
   type NutritionPlanReadModel,
   type NutritionTodayReadModel,
+  type NutritionV2CoachScope,
 } from '@eva/nutrition-v2'
 import { apiFetch } from './api'
+
+// Pure workspace->scope helpers live in a RN-free module so they stay unit-testable.
+export {
+  nutritionV2CoachScope,
+  nutritionV2CoachScopeCacheKey,
+  type NutritionV2WorkspaceInput,
+} from './nutrition-v2-scope'
 
 function params(values: Record<string, string | number | null | undefined>): string {
   const search = new URLSearchParams()
@@ -74,14 +82,18 @@ export async function getNutritionHistoryV2(input: {
 }
 
 export async function getNutritionCoachHubV2(input: {
+  scope: NutritionV2CoachScope
   cursorUpdatedAt?: string | null
   cursorClientId?: string | null
   pageSize?: number
   signal?: AbortSignal
-} = {}): Promise<NutritionCoachHubPageReadModel> {
+}): Promise<NutritionCoachHubPageReadModel> {
   const raw = await apiFetch<unknown>(
     `/api/mobile/nutrition-v2/coach${params({
       view: 'hub',
+      scopeType: input.scope.scopeType,
+      teamId: input.scope.teamId,
+      orgId: input.scope.orgId,
       cursorUpdatedAt: input.cursorUpdatedAt,
       cursorClientId: input.cursorClientId,
       pageSize: input.pageSize ?? 25,
@@ -93,6 +105,7 @@ export async function getNutritionCoachHubV2(input: {
 
 export async function getNutritionClientDetailV2(input: {
   clientId: string
+  scope: NutritionV2CoachScope
   date: string
   timezone?: string
   signal?: AbortSignal
@@ -101,6 +114,9 @@ export async function getNutritionClientDetailV2(input: {
     `/api/mobile/nutrition-v2/coach${params({
       view: 'client',
       clientId: input.clientId,
+      scopeType: input.scope.scopeType,
+      teamId: input.scope.teamId,
+      orgId: input.scope.orgId,
       date: input.date,
       timezone: input.timezone ?? 'America/Santiago',
     })}`,

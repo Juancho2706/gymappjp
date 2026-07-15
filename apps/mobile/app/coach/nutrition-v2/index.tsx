@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import { useRouter } from 'expo-router'
 import { FlashList } from '@shopify/flash-list'
@@ -19,7 +19,12 @@ import {
 import { supabase } from '../../../lib/supabase'
 import { isEnabled } from '../../../lib/flags'
 import { useEntitlements } from '../../../lib/entitlements'
-import { getNutritionCoachHubV2 } from '../../../lib/nutrition-v2.api'
+import { useWorkspace } from '../../../lib/workspace'
+import {
+  getNutritionCoachHubV2,
+  nutritionV2CoachScope,
+  nutritionV2CoachScopeCacheKey,
+} from '../../../lib/nutrition-v2.api'
 import {
   readNutritionV2Cache,
   writeNutritionV2Cache,
@@ -30,6 +35,12 @@ export default function CoachNutritionV2Screen() {
   const router = useRouter()
   const { theme } = useTheme()
   const entitlements = useEntitlements()
+  const {
+    ready: workspaceReady,
+    kind: workspaceKind,
+    teamId: workspaceTeamId,
+    orgId: workspaceOrgId,
+  } = useWorkspace()
   const [userId, setUserId] = useState<string | null>(null)
   const [page, setPage] = useState<NutritionCoachHubPageReadModel | null>(null)
   const [items, setItems] = useState<NutritionCoachHubItem[]>([])
@@ -37,6 +48,15 @@ export default function CoachNutritionV2Screen() {
   const [refreshing, setRefreshing] = useState(false)
   const [loadingMore, setLoadingMore] = useState(false)
   const [offline, setOffline] = useState(false)
+  // Fail-closed: only fetch once the workspace resolved AND collapses to a valid coach scope.
+  const scope = useMemo(
+    () =>
+      workspaceReady
+        ? nutritionV2CoachScope({ kind: workspaceKind, teamId: workspaceTeamId, orgId: workspaceOrgId })
+        : null,
+    [workspaceReady, workspaceKind, workspaceTeamId, workspaceOrgId],
+  )
+  const scopeCacheKey = scope ? nutritionV2CoachScopeCacheKey(scope) : null
   const enabled = entitlements.ready && isEnabled('nutritionV2Coach')
 
   useEffect(() => {
@@ -50,13 +70,14 @@ export default function CoachNutritionV2Screen() {
   }, [])
 
   const loadFirst = useCallback(async (force = false) => {
-    if (!userId || !enabled) return
+    if (!userId || !enabled || !scope || !scopeCacheKey) return
+    const firstPageKey = `${scopeCacheKey}:first-page`
 
     if (!force) {
       const cached = await readNutritionV2Cache({
         userId,
         kind: 'coachHub',
-        scopeKey: 'first-page',
+        scopeKey: firstPageKey,
         schema: NutritionCoachHubPageReadModelSchema,
         allowStale: true,
       })
@@ -69,14 +90,14 @@ export default function CoachNutritionV2Screen() {
     }
 
     try {
-      const fresh = await getNutritionCoachHubV2({ pageSize: 25 })
+      const fresh = await getNutritionCoachHubV2({ scope, pageSize: 25 })
       setPage(fresh)
       setItems(fresh.items)
       setOffline(false)
       await writeNutritionV2Cache({
         userId,
         kind: 'coachHub',
-        scopeKey: 'first-page',
+        scopeKey: firstPageKey,
         payload: fresh,
       })
     } catch {
@@ -85,13 +106,14 @@ export default function CoachNutritionV2Screen() {
       setLoading(false)
       setRefreshing(false)
     }
-  }, [enabled, userId])
+  }, [enabled, userId, scope, scopeCacheKey])
 
   const loadMore = useCallback(async () => {
-    if (!page?.hasMore || !page.nextCursor || loadingMore) return
+    if (!page?.hasMore || !page.nextCursor || loadingMore || !scope) return
     setLoadingMore(true)
     try {
       const next = await getNutritionCoachHubV2({
+        scope,
         cursorUpdatedAt: page.nextCursor.updatedAt,
         cursorClientId: page.nextCursor.clientId,
         pageSize: 25,
@@ -107,13 +129,13 @@ export default function CoachNutritionV2Screen() {
     } finally {
       setLoadingMore(false)
     }
-  }, [loadingMore, page])
+  }, [loadingMore, page, scope])
 
   useEffect(() => {
-    if (userId && enabled) void loadFirst()
-  }, [enabled, loadFirst, userId])
+    if (userId && enabled && scope) void loadFirst()
+  }, [enabled, loadFirst, userId, scope])
 
-  if (!entitlements.ready || loading) {
+  if (!entitlements.ready || !workspaceReady) {
     return (
       <View className="flex-1 bg-surface-app px-4 pt-6">
         <NutritionSkeleton variant="coach" />
@@ -121,7 +143,7 @@ export default function CoachNutritionV2Screen() {
     )
   }
 
-  if (!enabled) {
+  if (!enabled || !scope) {
     return (
       <View className="flex-1 bg-surface-app px-4 pt-6">
         <NutritionStatePanel
@@ -129,6 +151,14 @@ export default function CoachNutritionV2Screen() {
           title="Centro V2 no habilitado"
           description="El rollout del coach está apagado o este workspace no pertenece al canary."
         />
+      </View>
+    )
+  }
+
+  if (loading) {
+    return (
+      <View className="flex-1 bg-surface-app px-4 pt-6">
+        <NutritionSkeleton variant="coach" />
       </View>
     )
   }
