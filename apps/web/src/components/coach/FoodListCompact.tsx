@@ -22,9 +22,11 @@ type Props = {
   coachId: string
   emptyLabel?: string
   onDelete?: (foodId: string) => void
+  /** Al tocar un alimento abre su ficha. Opt-in: sin este prop la lista no es clickeable. */
+  onSelectFood?: (foodId: string) => void
 }
 
-export function FoodListCompact({ items, coachId, emptyLabel = 'No hay alimentos con estos filtros.', onDelete }: Props) {
+export function FoodListCompact({ items, coachId, emptyLabel = 'No hay alimentos con estos filtros.', onDelete, onSelectFood }: Props) {
   return (
     <div className="rounded-2xl border border-border/60 bg-card/40 overflow-hidden">
       <div className="flex items-center gap-2 px-3 py-2 border-b border-border/50 bg-muted/20">
@@ -56,7 +58,25 @@ export function FoodListCompact({ items, coachId, emptyLabel = 'No hay alimentos
           return (
             <li
               key={food.id}
-              className={cn('px-3 py-2.5 md:py-2 transition-colors hover:bg-muted/30', isMine && 'bg-primary/[0.04]')}
+              onClick={onSelectFood ? () => onSelectFood(food.id) : undefined}
+              onKeyDown={
+                onSelectFood
+                  ? (e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault()
+                        onSelectFood(food.id)
+                      }
+                    }
+                  : undefined
+              }
+              role={onSelectFood ? 'button' : undefined}
+              tabIndex={onSelectFood ? 0 : undefined}
+              aria-label={onSelectFood ? `Ver ficha de ${food.name}` : undefined}
+              className={cn(
+                'px-3 py-2.5 md:py-2 transition-colors hover:bg-muted/30',
+                isMine && 'bg-primary/[0.04]',
+                onSelectFood && 'cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-primary)]/50',
+              )}
             >
               <div className="md:hidden space-y-1">
                 <div className="flex items-start justify-between gap-2">
@@ -75,7 +95,10 @@ export function FoodListCompact({ items, coachId, emptyLabel = 'No hay alimentos
                     {isMine && onDelete && (
                       <button
                         type="button"
-                        onClick={() => onDelete(food.id)}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          onDelete(food.id)
+                        }}
                         className="rounded p-1 text-muted-foreground hover:text-[var(--danger-500)] hover:bg-[var(--danger-500)]/10 transition-colors"
                         aria-label={`Eliminar ${food.name}`}
                       >
@@ -125,7 +148,10 @@ export function FoodListCompact({ items, coachId, emptyLabel = 'No hay alimentos
                   {isMine && onDelete && (
                     <button
                       type="button"
-                      onClick={() => onDelete(food.id)}
+                      onClick={(e) => {
+                          e.stopPropagation()
+                          onDelete(food.id)
+                        }}
                       className="rounded p-0.5 text-muted-foreground hover:text-[var(--danger-500)] hover:bg-[var(--danger-500)]/10 transition-colors"
                       aria-label={`Eliminar ${food.name}`}
                     >

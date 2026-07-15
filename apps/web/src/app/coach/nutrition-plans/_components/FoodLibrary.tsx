@@ -20,6 +20,13 @@ import { toast } from 'sonner'
 import { useFormStatus } from 'react-dom'
 import { searchCoachFoodLibrary } from '../_actions/food-library.actions'
 import { FoodListCompact, type FoodListItem } from '@/components/coach/FoodListCompact'
+import { FoodDetailSheet } from '@/components/coach/FoodDetailSheet'
+import { getCoachFoodDetail } from '../_actions/food-detail.actions'
+import {
+  OPEN_FOOD_FACTS_GENERIC_ATTRIBUTION,
+  OPEN_FOOD_FACTS_URL,
+  type FoodDetailData,
+} from '@/lib/food-detail'
 
 type Food = FoodListItem
 
@@ -61,6 +68,24 @@ export function FoodLibrary({ initialFoods, totalFoods, coachId }: Props) {
   const skipNextFetch = useRef(true)
   const sentinelRef = useRef<HTMLDivElement>(null)
   const pendingDeletes = useRef<Map<string, { food: Food; timer: ReturnType<typeof setTimeout> }>>(new Map())
+  const [detailOpen, setDetailOpen] = useState(false)
+  const [detail, setDetail] = useState<FoodDetailData | null>(null)
+  const [detailLoading, setDetailLoading] = useState(false)
+
+  const openDetail = useCallback((foodId: string) => {
+    setDetail(null)
+    setDetailLoading(true)
+    setDetailOpen(true)
+    getCoachFoodDetail(foodId)
+      .then((d) => {
+        setDetail(d)
+        setDetailLoading(false)
+      })
+      .catch(() => {
+        setDetail(null)
+        setDetailLoading(false)
+      })
+  }, [])
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(search.trim()), 350)
@@ -411,7 +436,7 @@ export function FoodLibrary({ initialFoods, totalFoods, coachId }: Props) {
             <div key={i} className="h-14 animate-pulse rounded-xl bg-muted/40" />
           ))}
         </div>
-      : <FoodListCompact items={displayed} coachId={coachId} onDelete={handleDelete} />}
+      : <FoodListCompact items={displayed} coachId={coachId} onDelete={handleDelete} onSelectFood={openDetail} />}
 
       <div ref={sentinelRef} className="h-4" />
       {loadingMore && (
@@ -424,6 +449,26 @@ export function FoodLibrary({ initialFoods, totalFoods, coachId }: Props) {
           Todos los alimentos cargados
         </p>
       )}
+
+      {/* Atribución OFF a nivel de catálogo (obligación de licencia ODbL). */}
+      <p className="px-1 pt-1 text-center text-[10.5px] leading-relaxed text-subtle">
+        {OPEN_FOOD_FACTS_GENERIC_ATTRIBUTION}{' '}
+        <a
+          href={OPEN_FOOD_FACTS_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="underline hover:text-muted"
+        >
+          Ver Open Food Facts
+        </a>
+      </p>
+
+      <FoodDetailSheet
+        open={detailOpen}
+        onOpenChange={setDetailOpen}
+        detail={detail}
+        loading={detailLoading}
+      />
     </div>
   )
 }
