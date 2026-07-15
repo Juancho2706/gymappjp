@@ -118,9 +118,11 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
             return {
                 ...d,
                 title: plan?.title || '',
-                blocks: (plan?.workout_blocks ?? []).map((b: any) =>
-                    mapDbBlockToBuilderBlock(b, exerciseById, `block-${b.id || Math.random().toString()}`, d.id),
-                ),
+                blocks: [...(plan?.workout_blocks ?? [])]
+                    .sort((a: any, b: any) => (a.order_index ?? 0) - (b.order_index ?? 0))
+                    .map((b: any) =>
+                        mapDbBlockToBuilderBlock(b, exerciseById, `block-${b.id || Math.random().toString()}`, d.id),
+                    ),
             }
         })
     }

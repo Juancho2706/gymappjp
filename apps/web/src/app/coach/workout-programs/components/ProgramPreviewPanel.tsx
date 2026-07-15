@@ -391,7 +391,13 @@ function PreviewActions({
                       )
                     : program.source_template_id &&
                       onSync && (
-                          <Button type="button" variant="secondary" className="h-auto flex-col gap-1.5 py-3" onClick={onSync}>
+                          <Button
+                              type="button"
+                              variant="secondary"
+                              className="h-auto flex-col gap-1.5 py-3"
+                              onClick={onSync}
+                              title="Trae los últimos cambios de la plantilla base a este programa. Los ejercicios personalizados (override) se conservan."
+                          >
                               <GitMerge className="size-[18px] text-muted" />
                               <span className="text-xs font-bold">Sincronizar</span>
                           </Button>
