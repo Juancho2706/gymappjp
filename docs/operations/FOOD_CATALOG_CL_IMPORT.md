@@ -4,6 +4,8 @@ Este procedimiento mantiene búsquedas y escaneo dentro de Supabase. Web, PWA y 
 
 **Estado al 15 de julio de 2026:** esquema aplicado, importador disponible, sin lote piloto importado.
 
+**Calibración USDA (Fase 1 — ejecutada 2026-07-15):** los 316 alimentos globales se calibraron contra USDA FoodData Central (CC0; SR Legacy + Foundation). Resultado en prod: 137 filas con macros reemplazados (`catalog_source='usda'`, `source_ref=fdc_id`, `verification_status='eva_verified'`), 97 enriquecidas solo con micros (fibra/sodio/azúcar/grasa saturada donde faltaban), 18 excluidas por tener marca o match "separable lean only" (la etiqueta del producto manda sobre el genérico USDA) y 24 matches de confianza media con desvío >40% pendientes de revisión manual. Motivo del reemplazo masivo: muchas filas guardaban macros POR PORCIÓN cuando el motor (`calculateFoodItemMacros`) interpreta SIEMPRE por 100 g/ml (ej.: Almendras 45→579 kcal/100 g). Backup completo previo en la tabla `_bak_foods_global_20260715` (borrar ~2026-07-29 si no hay reclamos). Estrategia completa de datos (USDA + capa chilena propia + semilla Open Food Facts CL + crowdsourcing): ver plan en `docs/product/nutrition-v2/` y el análisis de licencias (ODbL/CC0/NC-ND) de la sección 0 de `VALIDATION_RISKS_AND_KNOWN_BLOCKERS_2026.md`.
+
 ---
 
 ## 1. Infraestructura aplicada
