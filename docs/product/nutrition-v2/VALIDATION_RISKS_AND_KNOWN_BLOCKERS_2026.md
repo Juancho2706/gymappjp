@@ -85,6 +85,27 @@ tx-rollback antes de prod; riesgo INACTIVO hoy: rollout cerrado, 0 datos V2):**
   bypasea con re-exports barrel.
 - Bucket `food-media` público permite listing (advisor WARN; vacío hoy).
 
+### ACTUALIZACIÓN 2026-07-15 (madrugada) — Tandas 6 y 7 del alumno + catálogo
+
+- **Tanda 6 CERRADA (web + RN):** Hoy del alumno con registro completo — "Lo comí"
+  por item prescrito, registro libre desde catálogo (búsqueda + scanner), editar
+  vía correction chain, retirar = corrección a contribución cero (paridad
+  web/RN, cadena de auditoría intacta; NO existe RPC de void — un intento de
+  usarlo fue cazado por la revisión adversarial), cierre del día idempotente.
+  RN con offline real: productor de la cola cableado (A3 cerrada: suites de
+  cache y cola con dedup/backoff/dead-letter/corrupción/aislamiento).
+- **Tanda 7 RN CERRADA:** tabs Hoy/Plan/Historial; Plan con estrategia/objetivos/
+  franjas; Historial con cursor pagination + dedupe + detalle lazy por día.
+- **Quick-wins:** doble-total V1 explicado (Plan vs extras), gate de dominio en
+  /nutrition/add, getClaims en habits, curación por server action.
+- **Navbar coach RN:** rebote exagerado corregido (port al patrón Reanimated del
+  alumno; causa: Moti+useState reiniciando springs). Logout coach a 1 tap.
+- **Catálogo:** 586 genéricos globales (270 USDA nuevos traducidos + 316
+  calibrados). Semilla OFF Chile: 4.312 productos con barcode LISTOS en lotes
+  locales (gate de calidad aplicado) — PENDIENTE de OK del CEO para el apply.
+- **Pendiente de las Tandas:** 8 (Centro/Ficha coach completos), 9 (Builder V2),
+  10 (gamificación), 11-12 (hardening y canary). E2E/device QA sin correr.
+
 ### Estado CI tras la ola
 
 Vitest 2374/2374 ✅ (local), typecheck web ✅, mobile tsc ✅ (tras cierre del WIP de
