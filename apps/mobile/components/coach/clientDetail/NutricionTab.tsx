@@ -1,9 +1,9 @@
 import { useCallback, useMemo, useState, type ReactNode } from 'react'
 import { Alert, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native'
-import { Activity, AlertTriangle, Apple, Calendar, ChevronDown, ChevronLeft, ChevronRight, Check, Droplets, Flame, Footprints, Lock, MessageSquare, Moon, Pencil, RotateCcw, Save, Scale, Send, SlidersHorizontal, Timer, Utensils } from 'lucide-react-native'
+import { Activity, Apple, ChevronDown, ChevronLeft, ChevronRight, Check, Droplets, Flame, Footprints, Heart, Lock, MessageSquare, Moon, Pencil, RotateCcw, Salad, Save, Scale, Send, SlidersHorizontal, Timer, Utensils } from 'lucide-react-native'
 import { useFocusEffect } from 'expo-router'
 import { useTheme } from '../../../context/ThemeContext'
-import { Button, Card, ProgressBar } from '../../../components'
+import { Button, Card, ComplianceRing, EmptyState, MacroPill, ProgressBar } from '../../../components'
 import { EvaLoader } from '../../../components/EvaLoader'
 import { MACRO_COLORS } from '../../MacroRingSummary'
 import { FONT } from '../../../lib/typography'
@@ -28,21 +28,6 @@ import { NUTRITION_SECTIONS, DOMAIN_ENABLED_KEY, type NutritionSectionKey, type 
 
 function alertColor(variant: NutritionCoachAlert['variant'], theme: { destructive: string; warning: string; primary: string }): string {
   return variant === 'danger' ? theme.destructive : variant === 'warning' ? theme.warning : theme.primary
-}
-
-function ZoneHeader({ letter, title, subtitle }: { letter: 'A' | 'B' | 'C'; title: string; subtitle: string }) {
-  const { theme } = useTheme()
-  return (
-    <View style={styles.zoneHeader} accessibilityRole="header">
-      <View style={[styles.zoneBadge, { backgroundColor: theme.secondary, borderRadius: theme.radius.md }]}>
-        <Text style={[styles.zoneBadgeTxt, { color: theme.primary, fontFamily: FONT.displayBlack }]}>{letter}</Text>
-      </View>
-      <View style={{ flex: 1 }}>
-        <Text style={[styles.zoneTitle, { color: theme.foreground, fontFamily: FONT.displayBlack }]}>{title}</Text>
-        <Text style={[styles.zoneSub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{subtitle}</Text>
-      </View>
-    </View>
-  )
 }
 
 function DetailAccordion({ title, children }: { title: string; children: ReactNode }) {
@@ -758,6 +743,10 @@ const styles = StyleSheet.create({
   disabledState: { alignItems: 'center', gap: 8, paddingVertical: 18, paddingHorizontal: 10 },
   disabledTitle: { fontSize: 14, textTransform: 'uppercase', textAlign: 'center' },
   disabledCopy: { fontSize: 12, lineHeight: 18, textAlign: 'center' },
+  // DetailAccordion (Card padding=0 → el botón aporta su propio padding)
+  detailAccordionButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, paddingHorizontal: 14, paddingVertical: 13 },
+  detailAccordionTitle: { flex: 1, fontSize: 12, textTransform: 'uppercase', letterSpacing: 0.7 },
+  detailAccordionBody: { borderTopWidth: StyleSheet.hairlineWidth, paddingHorizontal: 14, paddingVertical: 12, gap: 10 },
   // Zona C
   zoneHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingTop: 6 },
   zoneBadge: { width: 34, height: 34, borderRadius: 10, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },

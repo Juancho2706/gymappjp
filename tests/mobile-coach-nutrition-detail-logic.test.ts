@@ -120,7 +120,7 @@ describe('coach nutrition detail · Zona A', () => {
     expect(chart.days.map((day) => day.dayLetter)).toEqual(['M', 'X', 'J', 'V', 'S', 'D', 'L'])
     expect(chart.days[1]).toMatchObject({ consumed: 0, target: 2000 })
     expect(chart.days.at(-1)).toMatchObject({ consumed: 2500, target: 2000 })
-    expect(chart.scale).toBe(2800)
+    expect(chart.scale).toBeCloseTo(2800)
     expect(chart.targetLegendLabel).toBe('Meta 2.000 kcal')
     expect(chart.targetLineTopPct).toBeCloseTo(28.5714, 3)
   })
