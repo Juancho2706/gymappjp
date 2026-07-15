@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react'
-import { Linking, Pressable, ScrollView, Text, View } from 'react-native'
+import { Alert, Linking, Pressable, ScrollView, Text, View } from 'react-native'
 import { useRouter } from 'expo-router'
 import { cssInterop } from 'nativewind'
 import {
   CreditCard,
   LayoutGrid,
   LifeBuoy,
+  LogOut,
   Moon,
   Package,
   Palette,
@@ -29,6 +30,7 @@ import { useWorkspace } from '../../../lib/workspace'
 import { getCoachProfile, type CoachProfile } from '../../../lib/coach'
 import { canUseBranding } from '../../../lib/coach-tiers'
 import { useCoachTabbarScroll } from '../../../components/coach/CoachTabbarScroll'
+import { signOutAndRedirectHome } from '../../../lib/auth-actions'
 
 /**
  * E7-02 · Hub de Opciones (coach) — espejo RN del hub móvil web (`apps/web/.../coach/settings/page.tsx`,
@@ -48,7 +50,7 @@ import { useCoachTabbarScroll } from '../../../components/coach/CoachTabbarScrol
  */
 
 // Let NativeWind drive the lucide icon `color` via `text-*` classes (DS pattern, ver perfil.tsx).
-for (const Icon of [CreditCard, LayoutGrid, LifeBuoy, Moon, Package, Palette, SlidersHorizontal, Sun, Trash2, UserCog, Users]) {
+for (const Icon of [CreditCard, LayoutGrid, LifeBuoy, LogOut, Moon, Package, Palette, SlidersHorizontal, Sun, Trash2, UserCog, Users]) {
   cssInterop(Icon, { className: { target: 'style', nativeStyleToProp: { color: true } } })
 }
 
@@ -195,6 +197,13 @@ export default function CoachSettingsHubScreen() {
       ? 'Gestionado'
       : `Plan ${TIER_LABEL[tier] ?? 'Starter'}`
   const heroSubtitle = isTeam ? 'Pool de coaches' : managed ? 'Cuenta gestionada por tu organización' : 'Tu negocio EVA'
+
+  function confirmLogout() {
+    Alert.alert('Cerrar sesión', '¿Seguro que quieres cerrar tu sesión en este dispositivo?', [
+      { text: 'Cancelar', style: 'cancel' },
+      { text: 'Cerrar sesión', style: 'destructive', onPress: () => { void signOutAndRedirectHome() } },
+    ])
+  }
 
   if (loading) {
     return <EvaLoaderScreen subtitle="Cargando opciones…" />
@@ -354,6 +363,19 @@ export default function CoachSettingsHubScreen() {
                 subtitle="Tema, contraseña y cierre de sesión"
                 showChevron
                 onPress={() => router.push('/coach/perfil')}
+              />
+              <RowDivider />
+              <ListRow
+                testID="hub-logout"
+                accessibilityLabel="Cerrar sesión"
+                leading={
+                  <View className="items-center justify-center rounded-control bg-danger-100" style={{ width: 46, height: 46 }}>
+                    <LogOut size={22} strokeWidth={2} className="text-danger-600" />
+                  </View>
+                }
+                title={<Text className="text-danger-600">Cerrar sesión</Text>}
+                subtitle="Salir de tu cuenta en este dispositivo"
+                onPress={confirmLogout}
               />
             </Card>
           </View>

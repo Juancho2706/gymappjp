@@ -1,16 +1,22 @@
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { BlurView } from 'expo-blur'
 import { useRouter } from 'expo-router'
 import { Dumbbell, Home, LayoutDashboard, Settings, Shield, Users, Utensils, type LucideIcon } from 'lucide-react-native'
-import { MotiView } from 'moti'
-import { deriveSportTokens } from '@eva/brand-kit'
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+  withTiming,
+  type SharedValue,
+} from 'react-native-reanimated'
+import { SPRING, deriveSportTokens } from '@eva/brand-kit'
 import { coachWorkspaceTypeFromKind, getVisibleNavItems, type NavModule } from '@eva/coach-nav'
 import { useTheme } from '../../context/ThemeContext'
 import { useWorkspace } from '../../lib/workspace'
 import { useEntitlements } from '../../lib/entitlements'
-import { useCoachTabbarScroll } from './CoachTabbarScroll'
+import { resetCoachTabbarScroll, useCoachTabbarMinimized } from './CoachTabbarScroll'
 
 type TabRoute = { key: string; name: string }
 type MobileNavRoute = { tab?: string; path: string; icon: LucideIcon; label: string }
@@ -26,9 +32,21 @@ const NAV_ROUTE: Record<string, MobileNavRoute> = {
   reactivate: { tab: 'reactivate', path: '/coach/reactivate', icon: LayoutDashboard, label: 'Reactivar' },
 }
 
-// Orden verbatim del responsive web; después de filtrar permisos toma hasta cinco
-// accesos directos y nunca reserva un slot artificial para “Más”.
+// Orden verbatim del responsive web; despues de filtrar permisos toma hasta cinco
+// accesos directos y nunca reserva un slot artificial para "Mas".
 const MOBILE_TAB_KEYS = ['dashboard', 'clients', 'programs', 'nutrition', 'options', 'settings_team', 'team', 'reactivate'] as const
+
+// Resorte compartido SPRING.ui de @eva/brand-kit (damping 18 / stiffness 220 /
+// mass 1) — MISMO resorte que la capsula del alumno (AlumnoMobileChrome) y que la
+// PWA (var(--ease-spring)), para que el achicar/agrandar al scrollear y el desliz
+// del indicador se sientan 1:1 con el alumno. El ancho de la barra vive en un
+// shared value (cero setState en el path animado) → el spring nunca se reinicia
+// contra un blanco movil (era el rebote irregular reportado por el CEO).
+const NAV_SPRING = SPRING.ui
+const CAPSULE_PAD = 8
+const INSET_OPEN = 14
+const INSET_MIN = 72
+const LABEL_H = 14
 
 function hexToRgba(hex: string, alpha: number): string {
   const clean = hex.replace('#', '')
@@ -52,13 +70,16 @@ export function CoachMobileTabBar({
   const router = useRouter()
   const { kind, subscriptionState } = useWorkspace()
   const { hasModule, nutritionEnabled } = useEntitlements()
-  const { minimized, reset } = useCoachTabbarScroll()
-  const [barWidth, setBarWidth] = useState(0)
+  const minimized = useCoachTabbarMinimized()
   const isDark = mode !== 'light'
 
   const routes = state.routes
   const activeName = routes[state.index]?.name
-  useEffect(() => reset(), [activeName, reset])
+
+  // Revelar la capsula al cambiar de tab (misma semantica que el alumno).
+  useEffect(() => {
+    resetCoachTabbarScroll()
+  }, [activeName])
 
   const visible = getVisibleNavItems({
     activeWorkspaceType: coachWorkspaceTypeFromKind(kind),
@@ -71,6 +92,48 @@ export function CoachMobileTabBar({
   })
 
   const blocked = visible.length === 1 && visible[0].key === 'reactivate'
+
+  // ---- drivers Reanimated (declarados antes de cualquier return para no romper
+  // el orden de hooks; el caso `blocked` renderiza ReactivateTabBar, que tiene los
+  // suyos). ----
+  const barW = useSharedValue(0)
+  const mini = useSharedValue(minimized ? 1 : 0)
+
+  const byKey = new Map(visible.map((item) => [item.key, item]))
+  const barItems = MOBILE_TAB_KEYS
+    .map((key) => byKey.get(key))
+    .filter((item): item is NavModule => !!item && !!NAV_ROUTE[item.key])
+    .slice(0, 5)
+
+  const n = barItems.length || 1
+  const activeIndex = barItems.findIndex((item) => NAV_ROUTE[item.key]?.tab === activeName)
+  const activeIdx = useSharedValue(activeIndex)
+  const sport = deriveSportTokens(theme.primary)
+  const activeColor = isDark ? sport.dark['600'] : sport.ramp['600']
+
+  useEffect(() => {
+    mini.value = minimized ? 1 : 0
+  }, [minimized, mini])
+  useEffect(() => {
+    activeIdx.value = activeIndex
+  }, [activeIndex, activeIdx])
+
+  const capsuleInsetStyle = useAnimatedStyle(() => {
+    const inset = withSpring(mini.value ? INSET_MIN : INSET_OPEN, NAV_SPRING)
+    return { left: inset, right: inset }
+  })
+
+  const indicatorStyle = useAnimatedStyle(() => {
+    const inner = barW.value - CAPSULE_PAD * 2
+    const w = n > 0 ? inner / n : 0
+    const idx = activeIdx.value
+    return {
+      width: w,
+      transform: [{ translateX: withSpring(CAPSULE_PAD + (idx < 0 ? 0 : idx) * w, NAV_SPRING) }],
+      opacity: withTiming(idx < 0 ? 0 : 1, { duration: 160 }),
+    }
+  })
+
   if (blocked) {
     return (
       <ReactivateTabBar
@@ -82,20 +145,6 @@ export function CoachMobileTabBar({
       />
     )
   }
-
-  const byKey = new Map(visible.map((item) => [item.key, item]))
-  const barItems = MOBILE_TAB_KEYS
-    .map((key) => byKey.get(key))
-    .filter((item): item is NavModule => !!item && !!NAV_ROUTE[item.key])
-    .slice(0, 5)
-
-  const n = barItems.length || 1
-  const activeIndex = barItems.findIndex((item) => NAV_ROUTE[item.key]?.tab === activeName)
-  const innerWidth = Math.max(0, barWidth - 16)
-  const slotWidth = innerWidth / n
-  const indicatorLeft = 8 + Math.max(0, activeIndex) * slotWidth
-  const sport = deriveSportTokens(theme.primary)
-  const activeColor = isDark ? sport.dark['600'] : sport.ramp['600']
 
   function goTab(item: NavModule) {
     const mobileRoute = NAV_ROUTE[item.key]
@@ -112,10 +161,10 @@ export function CoachMobileTabBar({
 
   return (
     <View pointerEvents="box-none" style={StyleSheet.absoluteFill}>
-      <MotiView
-        animate={{ left: minimized ? 72 : 14, right: minimized ? 72 : 14 }}
-        transition={{ type: 'spring', damping: 18, stiffness: 200 }}
-        onLayout={(event) => setBarWidth(event.nativeEvent.layout.width)}
+      <Animated.View
+        onLayout={(event) => {
+          barW.value = event.nativeEvent.layout.width
+        }}
         style={[
           styles.capsule,
           {
@@ -123,6 +172,7 @@ export function CoachMobileTabBar({
             backgroundColor: hexToRgba(theme.card, 0.74),
             borderColor: hexToRgba(theme.foreground, 0.09),
           },
+          capsuleInsetStyle,
         ]}
       >
         <BlurView
@@ -132,59 +182,89 @@ export function CoachMobileTabBar({
           style={StyleSheet.absoluteFill}
         />
 
-        {activeIndex >= 0 && slotWidth > 0 ? (
-          <MotiView
-            animate={{ left: indicatorLeft }}
-            transition={{ type: 'spring', damping: 18, stiffness: 200 }}
-            style={[
-              styles.indicator,
-              {
-                width: slotWidth,
-                backgroundColor: hexToRgba(theme.primary, 0.15),
-                borderColor: hexToRgba(theme.primary, 0.24),
-              },
-            ]}
-          />
-        ) : null}
+        <Animated.View
+          pointerEvents="none"
+          style={[
+            styles.indicator,
+            {
+              left: 0,
+              backgroundColor: hexToRgba(theme.primary, 0.15),
+              borderColor: hexToRgba(theme.primary, 0.24),
+            },
+            indicatorStyle,
+          ]}
+        />
 
         {barItems.map((item) => {
           const route = NAV_ROUTE[item.key]!
           const focused = route.tab === activeName
-          const Icon = route.icon
-          const color = focused ? activeColor : theme.ink400
           return (
-            <TouchableOpacity
+            <CoachTabTile
               key={item.key}
-              activeOpacity={0.82}
-              accessibilityRole="button"
-              accessibilityState={focused ? { selected: true } : {}}
-              accessibilityLabel={route.label}
               testID={`coach-tab-${item.key}`}
+              icon={route.icon}
+              label={route.label}
+              focused={focused}
+              activeColor={activeColor}
+              inactiveColor={theme.ink400}
+              mini={mini}
               onPress={() => goTab(item)}
-              style={[styles.tabButton, { gap: minimized ? 0 : 3, paddingVertical: minimized ? 5 : 6 }]}
-            >
-              <View style={[styles.iconWrap, { transform: [{ translateY: focused ? -1 : 0 }] }]}>
-                <Icon
-                  size={24}
-                  color={color}
-                  strokeWidth={2}
-                  fill={focused ? hexToRgba(activeColor, 0.18) : 'transparent'}
-                />
-              </View>
-              <MotiView
-                animate={{ height: minimized ? 0 : 14, opacity: minimized ? 0 : 1 }}
-                transition={{ type: 'timing', duration: 180 }}
-                style={styles.labelClip}
-              >
-                <Text numberOfLines={1} style={[styles.tabLabel, { color, fontWeight: focused ? '800' : '600' }]}>
-                  {route.label}
-                </Text>
-              </MotiView>
-            </TouchableOpacity>
+            />
           )
         })}
-      </MotiView>
+      </Animated.View>
     </View>
+  )
+}
+
+function CoachTabTile({
+  testID,
+  icon: Icon,
+  label,
+  focused,
+  activeColor,
+  inactiveColor,
+  mini,
+  onPress,
+}: {
+  testID: string
+  icon: LucideIcon
+  label: string
+  focused: boolean
+  activeColor: string
+  inactiveColor: string
+  mini: SharedValue<number>
+  onPress: () => void
+}) {
+  const color = focused ? activeColor : inactiveColor
+  const labelStyle = useAnimatedStyle(() => ({
+    opacity: withTiming(mini.value ? 0 : 1, { duration: 200 }),
+    maxHeight: withTiming(mini.value ? 0 : LABEL_H, { duration: 200 }),
+  }))
+  return (
+    <TouchableOpacity
+      activeOpacity={0.82}
+      accessibilityRole="button"
+      accessibilityState={focused ? { selected: true } : {}}
+      accessibilityLabel={label}
+      testID={testID}
+      onPress={onPress}
+      style={styles.tabButton}
+    >
+      <View style={[styles.iconWrap, { transform: [{ translateY: focused ? -1 : 0 }] }]}>
+        <Icon
+          size={24}
+          color={color}
+          strokeWidth={2}
+          fill={focused ? hexToRgba(activeColor, 0.18) : 'transparent'}
+        />
+      </View>
+      <Animated.View style={[styles.labelClip, labelStyle]}>
+        <Text numberOfLines={1} style={[styles.tabLabel, { color, fontWeight: focused ? '800' : '600' }]}>
+          {label}
+        </Text>
+      </Animated.View>
+    </TouchableOpacity>
   )
 }
 
@@ -197,14 +277,27 @@ function ReactivateTabBar({ minimized, bottom, isDark, theme, onPress }: {
 }) {
   const sport = deriveSportTokens(theme.primary)
   const color = isDark ? sport.dark['600'] : sport.ramp['600']
+  const mini = useSharedValue(minimized ? 1 : 0)
+  useEffect(() => {
+    mini.value = minimized ? 1 : 0
+  }, [minimized, mini])
+
+  const insetStyle = useAnimatedStyle(() => {
+    const inset = withSpring(mini.value ? INSET_MIN : INSET_OPEN, NAV_SPRING)
+    return { left: inset, right: inset }
+  })
+  const labelStyle = useAnimatedStyle(() => ({
+    opacity: withTiming(mini.value ? 0 : 1, { duration: 200 }),
+    maxHeight: withTiming(mini.value ? 0 : LABEL_H, { duration: 200 }),
+  }))
+
   return (
     <View pointerEvents="box-none" style={StyleSheet.absoluteFill}>
-      <MotiView
-        animate={{ left: minimized ? 72 : 14, right: minimized ? 72 : 14 }}
-        transition={{ type: 'spring', damping: 18, stiffness: 200 }}
+      <Animated.View
         style={[
           styles.capsule,
           { bottom, backgroundColor: hexToRgba(theme.card, 0.74), borderColor: hexToRgba(theme.foreground, 0.09) },
+          insetStyle,
         ]}
       >
         <BlurView intensity={isDark ? 30 : 50} tint={isDark ? 'dark' : 'light'} experimentalBlurMethod="dimezisBlurView" style={StyleSheet.absoluteFill} />
@@ -216,14 +309,14 @@ function ReactivateTabBar({ minimized, bottom, isDark, theme, onPress }: {
           accessibilityLabel="Reactivar"
           testID="coach-tab-reactivate"
           onPress={onPress}
-          style={[styles.tabButton, { gap: minimized ? 0 : 3, paddingVertical: minimized ? 5 : 6 }]}
+          style={styles.tabButton}
         >
           <LayoutDashboard size={24} color={color} strokeWidth={2} fill={hexToRgba(color, 0.18)} />
-          <MotiView animate={{ height: minimized ? 0 : 14, opacity: minimized ? 0 : 1 }} transition={{ type: 'timing', duration: 180 }} style={styles.labelClip}>
+          <Animated.View style={[styles.labelClip, labelStyle]}>
             <Text style={[styles.tabLabel, { color, fontWeight: '800' }]}>Reactivar</Text>
-          </MotiView>
+          </Animated.View>
         </TouchableOpacity>
-      </MotiView>
+      </Animated.View>
     </View>
   )
 }
@@ -233,7 +326,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     flexDirection: 'row',
     alignItems: 'stretch',
-    padding: 8,
+    padding: CAPSULE_PAD,
     borderRadius: 30,
     borderWidth: 1,
     overflow: 'hidden',
@@ -254,6 +347,8 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 3,
+    paddingVertical: 6,
     zIndex: 1,
   },
   iconWrap: { width: 24, height: 24, alignItems: 'center', justifyContent: 'center' },
