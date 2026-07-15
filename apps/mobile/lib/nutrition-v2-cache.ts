@@ -126,7 +126,7 @@ export async function clearNutritionV2CacheForUser(userId: string): Promise<void
   try {
     const prefix = `${PREFIX}:${safeSegment(userId)}:`
     const keys = (await AsyncStorage.getAllKeys()).filter((key) => key.startsWith(prefix))
-    if (keys.length > 0) await AsyncStorage.multiRemove(keys)
+    await Promise.all(keys.map((key) => AsyncStorage.removeItem(key)))
   } catch {
     // Best effort on logout or account switch.
   }
