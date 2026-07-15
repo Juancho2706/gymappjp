@@ -109,7 +109,11 @@ export async function getNutritionClientDetailV2(input: {
   return NutritionClientDetailReadModelSchema.parse(raw)
 }
 
-function parseMutationResponse(raw: unknown): { ok: true; id: string; action: 'record' | 'correct' } {
+type NutritionMutationResponse =
+  | { ok: true; id: string; action: 'record' }
+  | { ok: true; id: string; action: 'correct' }
+
+function parseMutationResponse(raw: unknown): NutritionMutationResponse {
   if (!raw || typeof raw !== 'object') throw new Error('Invalid Nutrition V2 mutation response')
   const value = raw as Record<string, unknown>
   if (
@@ -119,7 +123,7 @@ function parseMutationResponse(raw: unknown): { ok: true; id: string; action: 'r
   ) {
     throw new Error('Invalid Nutrition V2 mutation response')
   }
-  return value as { ok: true; id: string; action: 'record' | 'correct' }
+  return value as NutritionMutationResponse
 }
 
 export async function recordNutritionIntakeV2(
