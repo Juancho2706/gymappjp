@@ -4,7 +4,9 @@ on:
   pull_request:
     branches: [rnmobiledenuevo, main, master]
     paths:
-      - 'apps/web/src/app/c/[coach_slug]/nutrition-v2/**'
+      # NOTA: [coach_slug] literal no puede usarse en paths — GitHub lo interpreta
+      # como character-class de glob y el workflow ni se registra (startup failure).
+      - 'apps/web/src/app/c/**/nutrition-v2/**'
       - 'apps/web/src/app/coach/nutrition-v2/**'
       - 'apps/web/src/components/nutrition-v2/**'
       - 'apps/mobile/app/alumno/nutrition-v2/**'
