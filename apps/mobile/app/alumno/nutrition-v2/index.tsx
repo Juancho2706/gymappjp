@@ -2,6 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Alert, AppState, Pressable, RefreshControl, ScrollView, Text, TextInput, View } from 'react-native'
 import { useFocusEffect, useRouter } from 'expo-router'
 import * as Haptics from 'expo-haptics'
+import { FlashList } from '@shopify/flash-list'
+import { MotiView } from 'moti'
+import { History, ListChecks, Utensils } from 'lucide-react-native'
 import {
   FoodRow,
   MacroBudget,
@@ -16,18 +19,25 @@ import {
 } from '../../../components/nutrition-v2'
 import { Sheet as ActionSheet } from '../../../components/Sheet'
 import {
+  NUTRITION_STRATEGIES,
+  NutritionHistoryPageReadModelSchema,
+  NutritionPlanReadModelSchema,
   NutritionTodayReadModelSchema,
   createNutritionMacroValue,
+  formatNutritionAmount,
   formatNutritionCalories,
   type NutritionFoodRowModel,
+  type NutritionHistoryDay,
+  type NutritionHistoryPageReadModel,
   type NutritionIntakeReadItem,
   type NutritionMealSlotRead,
+  type NutritionPlanReadModel,
   type NutritionTodayReadModel,
 } from '@eva/nutrition-v2'
 import { supabase } from '../../../lib/supabase'
 import { isEnabled } from '../../../lib/flags'
 import { useEntitlements } from '../../../lib/entitlements'
-import { getNutritionTodayV2 } from '../../../lib/nutrition-v2.api'
+import { getNutritionHistoryV2, getNutritionPlanV2, getNutritionTodayV2 } from '../../../lib/nutrition-v2.api'
 import {
   readNutritionV2Cache,
   writeNutritionV2Cache,
@@ -50,6 +60,15 @@ import {
   submitCorrectIntake,
   submitRecordIntake,
 } from '../../../lib/nutrition-v2-intake-runner'
+import { useEvaMotion } from '../../../lib/motion'
+import { useTheme } from '../../../context/ThemeContext'
+import {
+  canLoadMoreHistory,
+  historyDayHasDetail,
+  historyDayIsLegacy,
+  mergeHistoryPages,
+  nextHistoryCursor,
+} from '../../../lib/nutrition-v2-history'
 
 const TZ = 'America/Santiago'
 
@@ -70,7 +89,7 @@ interface OptimisticOverlay {
 
 const EMPTY_OVERLAY: OptimisticOverlay = { addedBySlot: {}, addedUnassigned: [], hiddenIds: [] }
 
-export default function StudentNutritionV2Screen() {
+function TodayTab() {
   const router = useRouter()
   const entitlements = useEntitlements()
   const [userId, setUserId] = useState<string | null>(null)
@@ -489,17 +508,13 @@ export default function StudentNutritionV2Screen() {
           />
         }
       >
-        <NutritionHeader
-          eyebrow="Canary privado"
-          title="Nutrición"
-          description="Tu consumo real frente al snapshot del día."
-          actions={
-            <SyncOfflineState
-              state={offline ? 'offline' : pending > 0 ? 'pending' : 'synced'}
-              label={pending > 0 ? `${pending} pendiente${pending === 1 ? '' : 's'}` : undefined}
-            />
-          }
-        />
+        <View className="flex-row items-center justify-between gap-3">
+          <Text className="min-w-0 flex-1 text-sm text-text-muted">Tu consumo real frente al snapshot del día.</Text>
+          <SyncOfflineState
+            state={offline ? 'offline' : pending > 0 ? 'pending' : 'synced'}
+            label={pending > 0 ? `${pending} pendiente${pending === 1 ? '' : 's'}` : undefined}
+          />
+        </View>
 
         {model.plan ? (
           <View className="flex-row flex-wrap gap-2">
@@ -829,4 +844,725 @@ function EntryActionSheet({
       ) : null}
     </ActionSheet>
   )
+}
+
+// ---------------------------------------------------------------------------
+// Tabs shell (Tanda 7): Hoy / Plan / Historial. `TodayTab` above keeps the full
+// registro experience verbatim; Plan and History are read-only tabs that mirror
+// the web semantics (apps/web .../nutrition-v2/page.tsx) with cache-first loads.
+// ---------------------------------------------------------------------------
+
+type NutritionV2Tab = 'today' | 'plan' | 'history'
+type PlanVariant = NutritionPlanReadModel['dayVariants'][number]
+type DayDetailState = { loading: boolean; model: NutritionTodayReadModel | null; offline: boolean }
+
+export default function StudentNutritionV2Screen() {
+  const router = useRouter()
+  const entitlements = useEntitlements()
+  const enabled = entitlements.ready && isEnabled('nutritionV2Student')
+  const { reduced, duration } = useEvaMotion()
+  const [tab, setTab] = useState<NutritionV2Tab>('today')
+
+  if (!entitlements.ready) {
+    return (
+      <View className="flex-1 bg-surface-app px-4 pt-6">
+        <NutritionSkeleton variant="today" />
+      </View>
+    )
+  }
+
+  if (!enabled) {
+    return (
+      <View className="flex-1 bg-surface-app px-4 pt-6">
+        <NutritionStatePanel
+          icon="permission"
+          title="Nutrición V2 no está habilitada"
+          description="Esta pantalla solo se abre para scopes canary autorizados desde el servidor."
+          action={
+            <NutritionMotionButton
+              accessibilityLabel="Volver a nutrición actual"
+              onPress={() => router.replace('/alumno/(tabs)/nutricion')}
+              tone="neutral"
+            >
+              Volver a Nutrición
+            </NutritionMotionButton>
+          }
+        />
+      </View>
+    )
+  }
+
+  return (
+    <View className="flex-1 bg-surface-app">
+      <View className="gap-4 px-4 pb-3 pt-5">
+        <NutritionHeader
+          eyebrow="Canary privado"
+          title="Nutrición"
+          description="Prescripción, consumo real e historial en una sola experiencia."
+        />
+        <NutritionTabBar value={tab} onChange={setTab} />
+      </View>
+      <MotiView
+        key={tab}
+        className="flex-1"
+        from={reduced ? undefined : { opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ type: 'timing', duration: duration('base') }}
+      >
+        {tab === 'today' ? <TodayTab /> : null}
+        {tab === 'plan' ? <PlanTab /> : null}
+        {tab === 'history' ? <HistoryTab /> : null}
+      </MotiView>
+    </View>
+  )
+}
+
+const NUTRITION_V2_TABS: { key: NutritionV2Tab; label: string; Icon: typeof Utensils }[] = [
+  { key: 'today', label: 'Hoy', Icon: Utensils },
+  { key: 'plan', label: 'Plan', Icon: ListChecks },
+  { key: 'history', label: 'Historial', Icon: History },
+]
+
+function NutritionTabBar({ value, onChange }: { value: NutritionV2Tab; onChange: (tab: NutritionV2Tab) => void }) {
+  const { theme } = useTheme()
+  return (
+    <View
+      accessibilityRole="tablist"
+      className="flex-row gap-1 rounded-control border border-border-subtle bg-surface-card p-1"
+    >
+      {NUTRITION_V2_TABS.map(({ key, label, Icon }) => {
+        const active = key === value
+        return (
+          <Pressable
+            key={key}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: active }}
+            accessibilityLabel={label}
+            onPress={() => {
+              if (!active) {
+                void Haptics.selectionAsync()
+                onChange(key)
+              }
+            }}
+            className={`min-h-11 flex-1 flex-row items-center justify-center gap-1.5 rounded-control ${active ? 'bg-ember-500' : ''}`}
+          >
+            <Icon color={active ? '#FFFFFF' : theme.textSecondary} size={16} />
+            <Text className={`text-sm font-semibold ${active ? 'text-white' : 'text-text-muted'}`}>{label}</Text>
+          </Pressable>
+        )
+      })}
+    </View>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Plan tab
+// ---------------------------------------------------------------------------
+
+function PlanTab() {
+  const [userId, setUserId] = useState<string | null>(null)
+  const [plan, setPlan] = useState<NutritionPlanReadModel | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
+  const [offline, setOffline] = useState(false)
+  const date = useMemo(todayInSantiago, [])
+
+  const mountedRef = useRef(true)
+  const controllerRef = useRef<AbortController | null>(null)
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+      controllerRef.current?.abort()
+    }
+  }, [])
+
+  useEffect(() => {
+    let active = true
+    void supabase.auth.getSession().then(({ data }) => {
+      if (active) setUserId(data.session?.user.id ?? null)
+    })
+    return () => {
+      active = false
+    }
+  }, [])
+
+  const load = useCallback(
+    async (force = false) => {
+      if (!userId) return
+      controllerRef.current?.abort()
+      const controller = new AbortController()
+      controllerRef.current = controller
+
+      if (!force) {
+        const cached = await readNutritionV2Cache({
+          userId,
+          clientId: userId,
+          kind: 'plan',
+          scopeKey: date,
+          schema: NutritionPlanReadModelSchema,
+          allowStale: true,
+        })
+        if (mountedRef.current && cached) {
+          setPlan(cached.payload)
+          setOffline(cached.stale)
+          setLoading(false)
+        }
+      }
+
+      try {
+        const fresh = await getNutritionPlanV2({ date, signal: controller.signal })
+        if (!mountedRef.current) return
+        setPlan(fresh)
+        setOffline(false)
+        await writeNutritionV2Cache({ userId, clientId: userId, kind: 'plan', scopeKey: date, payload: fresh })
+      } catch (error) {
+        if (error instanceof Error && error.name === 'AbortError') return
+        if (mountedRef.current) setOffline(true)
+      } finally {
+        if (mountedRef.current) {
+          setLoading(false)
+          setRefreshing(false)
+        }
+      }
+    },
+    [date, userId],
+  )
+
+  useEffect(() => {
+    if (userId) void load()
+  }, [load, userId])
+
+  const refreshControl = (
+    <RefreshControl
+      refreshing={refreshing}
+      onRefresh={() => {
+        setRefreshing(true)
+        void load(true)
+      }}
+    />
+  )
+
+  if (loading) {
+    return (
+      <View className="flex-1 px-4 pt-2">
+        <NutritionSkeleton variant="today" />
+      </View>
+    )
+  }
+
+  if (!plan?.plan) {
+    return (
+      <ScrollView className="flex-1" contentContainerClassName="px-4 pb-12 pt-2" refreshControl={refreshControl}>
+        <NutritionStatePanel
+          icon={offline ? 'offline' : 'empty'}
+          tone={offline ? 'warning' : 'neutral'}
+          title={offline ? 'Sin conexión' : 'No hay un plan vigente'}
+          description={
+            offline
+              ? 'No pudimos actualizar tu plan y no hay copia guardada en este dispositivo.'
+              : 'El plan aparecerá cuando tu coach publique una versión con fecha efectiva.'
+          }
+        />
+      </ScrollView>
+    )
+  }
+
+  const summary = plan.plan
+  const defaultVariant = plan.dayVariants.find((variant) => variant.isDefault) ?? plan.dayVariants[0] ?? null
+
+  return (
+    <ScrollView className="flex-1" contentContainerClassName="gap-4 px-4 pb-12 pt-2" refreshControl={refreshControl}>
+      {offline ? (
+        <View className="items-end">
+          <SyncOfflineState state="offline" />
+        </View>
+      ) : null}
+
+      <NutritionCard>
+        <View className="flex-row flex-wrap items-center gap-2">
+          <StrategyBadge strategy={summary.strategy} />
+          <PlanVersionBadge version={summary.versionNumber} status={summary.status} />
+        </View>
+        <Text className="mt-3 font-display text-2xl font-bold text-text-strong">{summary.name}</Text>
+        <Text className="mt-1 text-xs text-text-muted">
+          Vigente desde {summary.effectiveFrom}
+          {summary.effectiveTo ? ` hasta ${summary.effectiveTo}` : ' · versión actual'}
+        </Text>
+        <Text className="mt-2 text-xs leading-4 text-text-subtle">{NUTRITION_STRATEGIES[summary.strategy].description}</Text>
+      </NutritionCard>
+
+      {defaultVariant ? <PlanObjectives targets={defaultVariant.targets} /> : null}
+
+      <PlanRulesCard permissions={plan.permissions} />
+
+      {plan.visibleNotes ? (
+        <NutritionCard tone="info">
+          <Text className="text-[11px] font-semibold uppercase tracking-wide text-text-subtle">Protocolo</Text>
+          <Text className="mt-1 text-sm leading-5 text-text-body">{plan.visibleNotes}</Text>
+        </NutritionCard>
+      ) : null}
+
+      {plan.dayVariants.map((variant) => (
+        <PlanVariantCard key={variant.id} variant={variant} />
+      ))}
+
+      <Text className="text-center text-xs text-text-muted">Actualizado {plan.asOfDate} · {plan.timezone}</Text>
+    </ScrollView>
+  )
+}
+
+function PlanObjectives({ targets }: { targets: PlanVariant['targets'] }) {
+  const rows: { label: string; value: string }[] = []
+  if (targets.calories != null) rows.push({ label: 'Energía', value: formatNutritionCalories(targets.calories) })
+  if (targets.proteinG != null) rows.push({ label: 'Proteína', value: formatNutritionAmount(targets.proteinG, 'g') })
+  if (targets.carbsG != null) rows.push({ label: 'Carbohidratos', value: formatNutritionAmount(targets.carbsG, 'g') })
+  if (targets.fatsG != null) rows.push({ label: 'Grasas', value: formatNutritionAmount(targets.fatsG, 'g') })
+  if (targets.fiberG != null) rows.push({ label: 'Fibra', value: formatNutritionAmount(targets.fiberG, 'g') })
+  if (rows.length === 0) return null
+  return (
+    <NutritionCard>
+      <Text className="text-[11px] font-semibold uppercase tracking-wide text-text-subtle">Objetivos diarios</Text>
+      <View className="mt-3 flex-row flex-wrap gap-y-3">
+        {rows.map((row) => (
+          <View key={row.label} className="min-w-[30%] flex-1 pr-2">
+            <Text className="font-display text-lg font-bold text-text-strong">{row.value}</Text>
+            <Text className="text-xs text-text-muted">{row.label}</Text>
+          </View>
+        ))}
+      </View>
+    </NutritionCard>
+  )
+}
+
+function PlanRulesCard({ permissions }: { permissions: NutritionPlanReadModel['permissions'] }) {
+  const chips: string[] = []
+  chips.push(permissions.canRegisterFreely ? 'Registro libre habilitado' : 'Solo alimentos prescritos')
+  if (permissions.canAdjustPrescribedQuantity) {
+    chips.push(
+      permissions.quantityAdjustmentPercent != null
+        ? `Ajuste de cantidad ±${permissions.quantityAdjustmentPercent}%`
+        : 'Ajuste de cantidad permitido',
+    )
+  }
+  if (permissions.canSubstitute) chips.push('Intercambios permitidos')
+  if (permissions.canMoveMealSlot) chips.push('Puedes mover comidas de franja')
+  if (permissions.canSkipOptionalItems) chips.push('Puedes omitir opcionales')
+  return (
+    <NutritionCard>
+      <Text className="text-[11px] font-semibold uppercase tracking-wide text-text-subtle">Reglas del plan</Text>
+      <View className="mt-3 flex-row flex-wrap gap-2">
+        {chips.map((chip) => (
+          <View key={chip} className="rounded-pill border border-border-subtle bg-surface-sunken px-2.5 py-1">
+            <Text className="text-xs font-medium text-text-body">{chip}</Text>
+          </View>
+        ))}
+      </View>
+    </NutritionCard>
+  )
+}
+
+function PlanVariantCard({ variant }: { variant: PlanVariant }) {
+  return (
+    <NutritionCard>
+      <View className="flex-row flex-wrap items-center justify-between gap-2">
+        <Text className="font-display text-lg font-semibold text-text-strong">{variant.label}</Text>
+        {variant.isDefault ? (
+          <View className="rounded-pill border border-ember-300 bg-ember-100 px-2 py-0.5">
+            <Text className="text-[10px] font-semibold text-ember-700">Por defecto</Text>
+          </View>
+        ) : null}
+      </View>
+      <Text className="mt-1 text-xs text-text-muted">
+        {variant.mealSlots.length} franja{variant.mealSlots.length === 1 ? '' : 's'}
+        {variant.targets.calories != null ? ` · ${formatNutritionCalories(variant.targets.calories)}` : ''}
+      </Text>
+      {variant.mealSlots.map((slot) => (
+        <View key={slot.id} className="mt-3">
+          <View className="flex-row items-center justify-between gap-2">
+            <Text className="text-sm font-semibold text-text-strong">{slot.name}</Text>
+            {slot.startTime ? <Text className="text-xs text-text-muted">{slot.startTime}</Text> : null}
+          </View>
+          {slot.instructions ? <Text className="mt-0.5 text-xs leading-4 text-text-subtle">{slot.instructions}</Text> : null}
+          {slot.prescriptionItems.length > 0 ? (
+            slot.prescriptionItems.map((item, index) => (
+              <View key={item.id} className={index > 0 ? 'border-t border-border-subtle' : undefined}>
+                <FoodRow
+                  food={{
+                    id: item.id,
+                    name: item.name ?? 'Alimento prescrito',
+                    detail: item.brand,
+                    quantityLabel: `${item.quantity} ${item.unit}${item.optional ? ' · opcional' : ''}`,
+                    calories: item.macros.calories,
+                    proteinG: item.macros.proteinG,
+                    carbsG: item.macros.carbsG,
+                    fatsG: item.macros.fatsG,
+                  }}
+                />
+              </View>
+            ))
+          ) : (
+            <Text className="py-2 text-xs text-text-muted">Franja flexible sin alimentos prescritos.</Text>
+          )}
+        </View>
+      ))}
+    </NutritionCard>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// History tab
+// ---------------------------------------------------------------------------
+
+function HistoryTab() {
+  const [userId, setUserId] = useState<string | null>(null)
+  const [page, setPage] = useState<NutritionHistoryPageReadModel | null>(null)
+  const [items, setItems] = useState<NutritionHistoryDay[]>([])
+  const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [offline, setOffline] = useState(false)
+  const [expanded, setExpanded] = useState<string | null>(null)
+  const [details, setDetails] = useState<Record<string, DayDetailState>>({})
+
+  const mountedRef = useRef(true)
+  const controllerRef = useRef<AbortController | null>(null)
+  const moreControllerRef = useRef<AbortController | null>(null)
+  const detailControllerRef = useRef<AbortController | null>(null)
+
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+      controllerRef.current?.abort()
+      moreControllerRef.current?.abort()
+      detailControllerRef.current?.abort()
+    }
+  }, [])
+
+  useEffect(() => {
+    let active = true
+    void supabase.auth.getSession().then(({ data }) => {
+      if (active) setUserId(data.session?.user.id ?? null)
+    })
+    return () => {
+      active = false
+    }
+  }, [])
+
+  const loadFirst = useCallback(
+    async (force = false) => {
+      if (!userId) return
+      controllerRef.current?.abort()
+      const controller = new AbortController()
+      controllerRef.current = controller
+
+      if (!force) {
+        const cached = await readNutritionV2Cache({
+          userId,
+          clientId: userId,
+          kind: 'history',
+          scopeKey: 'first-page',
+          schema: NutritionHistoryPageReadModelSchema,
+          allowStale: true,
+        })
+        if (mountedRef.current && cached) {
+          setPage(cached.payload)
+          setItems(cached.payload.items)
+          setOffline(cached.stale)
+          setLoading(false)
+        }
+      }
+
+      try {
+        const fresh = await getNutritionHistoryV2({ pageSize: 14, signal: controller.signal })
+        if (!mountedRef.current) return
+        setPage(fresh)
+        setItems(fresh.items)
+        setOffline(false)
+        await writeNutritionV2Cache({ userId, clientId: userId, kind: 'history', scopeKey: 'first-page', payload: fresh })
+      } catch (error) {
+        if (error instanceof Error && error.name === 'AbortError') return
+        if (mountedRef.current) setOffline(true)
+      } finally {
+        if (mountedRef.current) {
+          setLoading(false)
+          setRefreshing(false)
+        }
+      }
+    },
+    [userId],
+  )
+
+  const loadMore = useCallback(async () => {
+    if (loadingMore || !canLoadMoreHistory(page)) return
+    const before = page ? nextHistoryCursor(page) : null
+    if (!before) return
+    setLoadingMore(true)
+    moreControllerRef.current?.abort()
+    const controller = new AbortController()
+    moreControllerRef.current = controller
+    try {
+      const next = await getNutritionHistoryV2({ before, pageSize: 14, signal: controller.signal })
+      if (!mountedRef.current) return
+      setItems((current) => mergeHistoryPages(current, next.items))
+      setPage(next)
+      setOffline(false)
+    } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') return
+      if (mountedRef.current) setOffline(true)
+    } finally {
+      if (mountedRef.current) setLoadingMore(false)
+    }
+  }, [loadingMore, page])
+
+  const toggleDay = useCallback(
+    async (day: NutritionHistoryDay) => {
+      const localDate = day.localDate
+      if (expanded === localDate) {
+        setExpanded(null)
+        return
+      }
+      void Haptics.selectionAsync()
+      setExpanded(localDate)
+      if (!historyDayHasDetail(day) || details[localDate]?.model || details[localDate]?.loading) return
+      if (!userId) return
+      setDetails((prev) => ({ ...prev, [localDate]: { loading: true, model: null, offline: false } }))
+      detailControllerRef.current?.abort()
+      const controller = new AbortController()
+      detailControllerRef.current = controller
+      const scopeKey = `history-day:${localDate}`
+
+      const cached = await readNutritionV2Cache({
+        userId,
+        clientId: userId,
+        kind: 'today',
+        scopeKey,
+        schema: NutritionTodayReadModelSchema,
+        allowStale: true,
+      })
+      if (mountedRef.current && cached) {
+        setDetails((prev) => ({ ...prev, [localDate]: { loading: true, model: cached.payload, offline: cached.stale } }))
+      }
+
+      try {
+        const model = await getNutritionTodayV2({ date: localDate, signal: controller.signal })
+        if (!mountedRef.current) return
+        setDetails((prev) => ({ ...prev, [localDate]: { loading: false, model, offline: false } }))
+        await writeNutritionV2Cache({ userId, clientId: userId, kind: 'today', scopeKey, payload: model })
+      } catch (error) {
+        if (error instanceof Error && error.name === 'AbortError') return
+        if (!mountedRef.current) return
+        setDetails((prev) => ({
+          ...prev,
+          [localDate]: { loading: false, model: prev[localDate]?.model ?? null, offline: true },
+        }))
+      }
+    },
+    [details, expanded, userId],
+  )
+
+  useEffect(() => {
+    if (userId) void loadFirst()
+  }, [loadFirst, userId])
+
+  if (loading) {
+    return (
+      <View className="flex-1 px-4 pt-2">
+        <NutritionSkeleton variant="history" />
+      </View>
+    )
+  }
+
+  return (
+    <FlashList
+      data={items}
+      keyExtractor={(item) => item.localDate}
+      onEndReached={() => void loadMore()}
+      onEndReachedThreshold={0.4}
+      refreshing={refreshing}
+      onRefresh={() => {
+        setRefreshing(true)
+        void loadFirst(true)
+      }}
+      contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 48 }}
+      ItemSeparatorComponent={() => <View className="h-3" />}
+      ListEmptyComponent={
+        <NutritionStatePanel
+          icon={offline ? 'offline' : 'empty'}
+          tone={offline ? 'warning' : 'neutral'}
+          title={offline ? 'Sin conexión' : 'Todavía no hay historial'}
+          description={
+            offline
+              ? 'No pudimos cargar tu historial y no hay copia guardada en este dispositivo.'
+              : 'Tus días aparecerán aquí después del primer registro o snapshot del plan.'
+          }
+        />
+      }
+      ListFooterComponent={
+        loadingMore ? (
+          <View className="items-center py-5">
+            <Text className="text-sm text-text-muted">Cargando días anteriores…</Text>
+          </View>
+        ) : !canLoadMoreHistory(page) && items.length > 0 ? (
+          <View className="items-center py-5">
+            <Text className="text-xs text-text-subtle">No hay más días.</Text>
+          </View>
+        ) : null
+      }
+      renderItem={({ item }) => (
+        <HistoryDayCard
+          day={item}
+          expanded={expanded === item.localDate}
+          detail={details[item.localDate] ?? null}
+          onToggle={() => void toggleDay(item)}
+        />
+      )}
+    />
+  )
+}
+
+function HistoryDayCard({
+  day,
+  expanded,
+  detail,
+  onToggle,
+}: {
+  day: NutritionHistoryDay
+  expanded: boolean
+  detail: DayDetailState | null
+  onToggle: () => void
+}) {
+  const hasDetail = historyDayHasDetail(day)
+  const legacy = historyDayIsLegacy(day)
+  return (
+    <NutritionCard>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityState={{ expanded, disabled: !hasDetail }}
+        accessibilityLabel={`Día ${day.localDate}. ${day.activeEntryCount} registros, ${formatNutritionCalories(day.consumed.calories)} consumidas.`}
+        disabled={!hasDetail}
+        onPress={onToggle}
+      >
+        <View className="flex-row items-start justify-between gap-3">
+          <View className="min-w-0 flex-1">
+            <View className="flex-row flex-wrap items-center gap-2">
+              <Text className="font-display text-lg font-semibold text-text-strong">{day.localDate}</Text>
+              {day.strategy ? <StrategyBadge compact strategy={day.strategy} /> : null}
+              {legacy ? (
+                <View className="rounded-pill border border-warning-500/40 bg-warning-500/10 px-2 py-0.5">
+                  <Text className="text-[10px] font-semibold text-warning-700">Historial anterior</Text>
+                </View>
+              ) : null}
+            </View>
+            <Text className="mt-1 text-xs text-text-muted">
+              {day.activeEntryCount} registro{day.activeEntryCount === 1 ? '' : 's'}
+              {day.correctionCount > 0 ? ` · ${day.correctionCount} corrección${day.correctionCount === 1 ? '' : 'es'}` : ''}
+              {day.lastRecordedAt ? ` · último ${formatClock(day.lastRecordedAt)}` : ''}
+            </Text>
+          </View>
+          <View className="items-end">
+            <Text className="font-mono text-sm font-semibold text-text-strong">{formatNutritionCalories(day.consumed.calories)}</Text>
+            <Text className="text-[10px] text-text-subtle">de {formatNutritionCalories(day.targets.calories ?? 0)}</Text>
+          </View>
+        </View>
+
+        <View className="mt-3 flex-row flex-wrap gap-x-4 gap-y-1">
+          <HistoryMacro label="P" consumed={day.consumed.proteinG} target={day.targets.proteinG} />
+          <HistoryMacro label="C" consumed={day.consumed.carbsG} target={day.targets.carbsG} />
+          <HistoryMacro label="G" consumed={day.consumed.fatsG} target={day.targets.fatsG} />
+        </View>
+
+        {hasDetail ? (
+          <Text className="mt-2 text-xs font-semibold text-ember-700">{expanded ? 'Ocultar detalle' : 'Ver detalle'}</Text>
+        ) : legacy ? (
+          <Text className="mt-2 text-xs text-text-subtle">Este día proviene del historial anterior y no tiene detalle por alimento.</Text>
+        ) : null}
+      </Pressable>
+
+      {expanded && hasDetail ? (
+        <View className="mt-3 border-t border-border-subtle pt-3">
+          {detail?.loading && !detail.model ? (
+            <Text className="py-2 text-sm text-text-muted">Cargando detalle del día…</Text>
+          ) : detail?.model ? (
+            <HistoryDayDetail model={detail.model} offline={detail.offline} />
+          ) : (
+            <Text className="py-2 text-sm text-warning-700">No pudimos cargar el detalle. Reintenta abriendo el día.</Text>
+          )}
+        </View>
+      ) : null}
+    </NutritionCard>
+  )
+}
+
+function HistoryMacro({ label, consumed, target }: { label: string; consumed: number; target: number | null }) {
+  return (
+    <Text className="font-mono text-xs text-text-muted">
+      <Text className="font-semibold text-text-body">{label}</Text> {Math.round(consumed)}
+      {target != null ? `/${Math.round(target)}` : ''} g
+    </Text>
+  )
+}
+
+function HistoryDayDetail({ model, offline }: { model: NutritionTodayReadModel; offline: boolean }) {
+  const slotsWithIntake = model.mealSlots
+    .map((slot) => ({ slot, entries: slot.intakeItems.filter((entry) => entry.status !== 'voided') }))
+    .filter((group) => group.entries.length > 0)
+  const unassigned = model.unassignedIntake.filter((entry) => entry.status !== 'voided')
+
+  if (slotsWithIntake.length === 0 && unassigned.length === 0) {
+    return <Text className="py-2 text-sm text-text-muted">Sin registros de alimentos este día.</Text>
+  }
+
+  return (
+    <View className="gap-3">
+      {offline ? (
+        <View className="items-start">
+          <SyncOfflineState state="offline" label="Detalle guardado" />
+        </View>
+      ) : null}
+      {slotsWithIntake.map(({ slot, entries }) => (
+        <View key={slot.id}>
+          <Text className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-text-subtle">{slot.name}</Text>
+          {entries.map((entry, index) => (
+            <View key={entry.id} className={index > 0 ? 'border-t border-border-subtle' : undefined}>
+              <FoodRow food={historyEntryToRow(entry)} />
+            </View>
+          ))}
+        </View>
+      ))}
+      {unassigned.length > 0 ? (
+        <View>
+          <Text className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-text-subtle">Sin franja</Text>
+          {unassigned.map((entry, index) => (
+            <View key={entry.id} className={index > 0 ? 'border-t border-border-subtle' : undefined}>
+              <FoodRow food={historyEntryToRow(entry)} />
+            </View>
+          ))}
+        </View>
+      ) : null}
+    </View>
+  )
+}
+
+function historyEntryToRow(entry: NutritionIntakeReadItem): NutritionFoodRowModel {
+  return {
+    id: entry.id,
+    name: entry.snapshot.name,
+    detail: entry.snapshot.brand,
+    quantityLabel: `${entry.quantity} ${entry.unit}`,
+    calories: entry.totals.calories,
+    proteinG: entry.totals.proteinG,
+    carbsG: entry.totals.carbsG,
+    fatsG: entry.totals.fatsG,
+    status: entry.status === 'corrected' ? 'corrected' : 'default',
+  }
+}
+
+function formatClock(iso: string): string {
+  try {
+    return new Intl.DateTimeFormat('es-CL', { timeZone: TZ, hour: '2-digit', minute: '2-digit' }).format(new Date(iso))
+  } catch {
+    return ''
+  }
 }
