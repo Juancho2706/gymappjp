@@ -16,6 +16,7 @@ import {
   nutritionV2CoachScopeFromWorkspace,
 } from '@/services/nutrition-v2-read.service'
 import { isNutritionV2Enabled } from '@/services/nutrition-v2-rollout.service'
+import { NutritionHubTabs } from './_components/NutritionHubTabs'
 
 interface Props {
   searchParams: Promise<{
@@ -75,6 +76,9 @@ export default async function CoachNutritionV2Page({ searchParams }: Props) {
         </div>
       }
     >
+      <NutritionHubTabs
+        roster={
+          <>
       <div className="mb-5 grid gap-3 sm:grid-cols-3">
         <Metric label="Alumnos en esta página" value={hub.items.length} />
         <Metric
@@ -147,6 +151,9 @@ export default async function CoachNutritionV2Page({ searchParams }: Props) {
           Ver más alumnos
         </Link>
       ) : null}
+          </>
+        }
+      />
     </NutritionPageShell>
   )
 }

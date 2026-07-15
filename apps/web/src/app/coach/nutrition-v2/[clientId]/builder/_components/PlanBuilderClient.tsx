@@ -2,21 +2,25 @@
 
 import { useMemo, useReducer, useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import { Check, ChevronLeft, ChevronRight, Loader2, Plus, Search, Trash2 } from 'lucide-react'
+import { AlertTriangle, Check, ChevronLeft, ChevronRight, Loader2, Plus, Search, Trash2 } from 'lucide-react'
 import { BuilderStepList, NutritionCard, StrategyBadge } from '@/components/nutrition-v2'
 import {
   NUTRITION_STRATEGIES,
   buildNutritionIdempotencyKey,
+  type FoodCatalogCursor,
   type FoodCatalogItem,
   type NutritionStrategy,
 } from '@eva/nutrition-v2'
 import {
   BUILDER_UNITS,
+  CoachFoodInputSchema,
   assembleAndValidateDraft,
   builderReducer,
   createEmptyBuilderState,
+  customMacrosOf,
   dayTotals,
   itemMacros,
+  macroEnergyMismatch,
   slotSubtotal,
   strategyUsesSlots,
   validateStep,
@@ -25,7 +29,12 @@ import {
   type BuilderSlot,
   type BuilderState,
 } from '../_lib/draft-builder'
-import { publishPlanAction, searchFoodCatalogCoachAction } from '../_actions/builder.actions'
+import {
+  createCoachFoodAction,
+  publishPlanAction,
+  searchFoodCatalogCoachAction,
+} from '../_actions/builder.actions'
+import { FoodResultCard } from './FoodResultCard'
 
 type Dispatch = (action: import('../_lib/draft-builder').BuilderAction) => void
 
@@ -51,6 +60,8 @@ function mapCatalogItemToFood(item: FoodCatalogItem): BuilderFood {
 
 const inputClass =
   'min-h-11 w-full rounded-control border border-border-default bg-surface-card px-3 text-sm text-strong outline-none focus:border-ember-500'
+const macroInputClass =
+  'min-h-9 w-full rounded-control border border-border-default bg-surface-card px-2 text-sm tabular-nums text-strong outline-none focus:border-ember-500'
 const labelClass = 'mb-1 block text-xs font-semibold uppercase tracking-wide text-muted'
 
 function macroLine(m: { calories: number; proteinG: number; carbsG: number; fatsG: number }): string {
@@ -60,21 +71,53 @@ function macroLine(m: { calories: number; proteinG: number; carbsG: number; fats
 function FoodSearch({ clientId, onPick }: { clientId: string; onPick: (food: BuilderFood) => void }) {
   const [query, setQuery] = useState('')
   const [items, setItems] = useState<FoodCatalogItem[]>([])
+  const [cursor, setCursor] = useState<FoodCatalogCursor | null>(null)
+  const [hasMore, setHasMore] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const activeQuery = useRef('')
 
   async function run() {
-    if (query.trim().length === 0) return
+    const q = query.trim()
+    if (q.length === 0) return
     setLoading(true)
     setError(null)
-    const res = await searchFoodCatalogCoachAction({ clientId, query: query.trim() })
+    activeQuery.current = q
+    const res = await searchFoodCatalogCoachAction({ clientId, query: q })
     setLoading(false)
     if (!res.ok) {
       setError(res.error)
       setItems([])
+      setCursor(null)
+      setHasMore(false)
       return
     }
     setItems(res.result.items)
+    setCursor(res.result.nextCursor)
+    setHasMore(res.result.hasMore)
+  }
+
+  async function loadMore() {
+    if (!cursor || loadingMore) return
+    setLoadingMore(true)
+    const res = await searchFoodCatalogCoachAction({ clientId, query: activeQuery.current, cursor })
+    setLoadingMore(false)
+    if (!res.ok) {
+      setError(res.error)
+      return
+    }
+    setItems((prev) => [...prev, ...res.result.items])
+    setCursor(res.result.nextCursor)
+    setHasMore(res.result.hasMore)
+  }
+
+  function pick(item: FoodCatalogItem) {
+    onPick(mapCatalogItemToFood(item))
+    setItems([])
+    setCursor(null)
+    setHasMore(false)
+    setQuery('')
   }
 
   return (
@@ -104,31 +147,140 @@ function FoodSearch({ clientId, onPick }: { clientId: string; onPick: (food: Bui
       </div>
       {error ? <p className="mt-2 text-xs text-rose-600 dark:text-rose-300">{error}</p> : null}
       {items.length > 0 ? (
-        <ul className="mt-2 max-h-56 space-y-1 overflow-y-auto">
-          {items.map((item) => (
-            <li key={item.id}>
-              <button
-                type="button"
-                onClick={() => {
-                  onPick(mapCatalogItemToFood(item))
-                  setItems([])
-                  setQuery('')
-                }}
-                className="flex w-full items-center justify-between gap-2 rounded-control border border-border-subtle bg-surface-card px-3 py-2 text-left text-sm hover:border-ember-400"
-              >
-                <span className="min-w-0">
-                  <span className="block truncate font-medium text-strong">{item.name}</span>
-                  <span className="block truncate text-xs text-muted">
-                    {item.brand ? item.brand + ' | ' : ''}
-                    {Math.round(item.calories)} kcal / 100{item.servingUnit === 'ml' ? 'ml' : 'g'}
-                  </span>
-                </span>
-                <Plus className="h-4 w-4 shrink-0 text-ember-600" />
-              </button>
-            </li>
-          ))}
-        </ul>
+        <div className="mt-2 space-y-2">
+          <ul className="max-h-96 space-y-2 overflow-y-auto">
+            {items.map((item) => (
+              <li key={item.id}>
+                <FoodResultCard item={item} onPick={() => pick(item)} />
+              </li>
+            ))}
+          </ul>
+          {hasMore ? (
+            <button
+              type="button"
+              onClick={() => void loadMore()}
+              disabled={loadingMore}
+              className="inline-flex min-h-9 w-full items-center justify-center gap-1 rounded-control border border-border-default bg-surface-card px-3 text-xs font-semibold text-strong disabled:opacity-60"
+            >
+              {loadingMore ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+              Mas resultados
+            </button>
+          ) : null}
+        </div>
       ) : null}
+    </div>
+  )
+}
+
+function PortionMacros({ item }: { item: BuilderItem }) {
+  const m = itemMacros(item)
+  return (
+    <div className="shrink-0 text-right">
+      <p className="font-mono text-sm font-semibold tabular-nums text-strong">{Math.round(m.calories)} kcal</p>
+      <p className="font-mono text-[11px] tabular-nums text-muted">
+        P {Math.round(m.proteinG)} · C {Math.round(m.carbsG)} · G {Math.round(m.fatsG)}
+      </p>
+    </div>
+  )
+}
+
+const CUSTOM_MACRO_FIELDS: Array<{ field: keyof Pick<BuilderItem, 'customCalories' | 'customProteinG' | 'customCarbsG' | 'customFatsG'>; label: string }> = [
+  { field: 'customCalories', label: 'kcal' },
+  { field: 'customProteinG', label: 'P (g)' },
+  { field: 'customCarbsG', label: 'C (g)' },
+  { field: 'customFatsG', label: 'G (g)' },
+]
+
+function FreeFoodFields({
+  item,
+  slotKey,
+  clientId,
+  dispatch,
+}: {
+  item: BuilderItem
+  slotKey: string
+  clientId: string
+  dispatch: Dispatch
+}) {
+  const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
+  const macros = customMacrosOf(item)
+  const showWarning = macroEnergyMismatch(macros)
+  const unit = item.unit === 'ml' ? 'ml' : 'g'
+
+  async function handleSave() {
+    setSaveError(null)
+    const parsed = CoachFoodInputSchema.safeParse({
+      clientId,
+      name: (item.customName ?? '').trim(),
+      brand: null,
+      unit,
+      calories: macros.calories,
+      proteinG: macros.proteinG,
+      carbsG: macros.carbsG,
+      fatsG: macros.fatsG,
+    })
+    if (!parsed.success) {
+      setSaveError('Completa el nombre y macros validas (no negativas) antes de guardar.')
+      return
+    }
+    setSaving(true)
+    const res = await createCoachFoodAction(parsed.data)
+    setSaving(false)
+    if (!res.ok) {
+      setSaveError(res.error)
+      return
+    }
+    dispatch({
+      type: 'UPDATE_ITEM',
+      slotKey,
+      itemKey: item.key,
+      patch: {
+        food: res.food,
+        customName: null,
+        customCalories: '',
+        customProteinG: '',
+        customCarbsG: '',
+        customFatsG: '',
+      },
+    })
+  }
+
+  return (
+    <div className="mt-2 rounded-control border border-border-subtle bg-surface-sunken p-2.5">
+      <p className={labelClass}>Macros por 100 {unit}</p>
+      <div className="grid grid-cols-4 gap-2">
+        {CUSTOM_MACRO_FIELDS.map(({ field, label }) => (
+          <div key={field}>
+            <label className="mb-0.5 block text-[10px] font-medium uppercase tracking-wide text-subtle">{label}</label>
+            <input
+              className={macroInputClass}
+              inputMode="decimal"
+              placeholder="0"
+              value={item[field]}
+              onChange={(e) => dispatch({ type: 'UPDATE_ITEM', slotKey, itemKey: item.key, patch: { [field]: e.target.value } })}
+            />
+          </div>
+        ))}
+      </div>
+      {showWarning ? (
+        <p className="mt-2 flex items-start gap-1.5 text-[11px] text-amber-700 dark:text-amber-300">
+          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          Las kcal no cuadran con las macros (4P + 4C + 9G). Puedes guardar igual, pero revisa los valores.
+        </p>
+      ) : null}
+      <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+        <button
+          type="button"
+          onClick={() => void handleSave()}
+          disabled={saving}
+          className="inline-flex min-h-9 items-center gap-1.5 rounded-control border border-border-default bg-surface-card px-3 text-xs font-semibold text-strong disabled:opacity-60"
+        >
+          {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
+          Guardar en mi catalogo
+        </button>
+        {saveError ? <span className="text-[11px] text-rose-600 dark:text-rose-300">{saveError}</span> : null}
+      </div>
     </div>
   )
 }
@@ -136,24 +288,36 @@ function FoodSearch({ clientId, onPick }: { clientId: string; onPick: (food: Bui
 function ItemRow({
   item,
   slotKey,
+  clientId,
   dispatch,
   error,
 }: {
   item: BuilderItem
   slotKey: string
+  clientId: string
   dispatch: Dispatch
   error?: { food?: string; quantity?: string }
 }) {
-  const macros = itemMacros(item)
+  const unitOptions = item.food ? BUILDER_UNITS : (['g', 'ml'] as const)
   return (
     <div className="rounded-control border border-border-subtle bg-surface-card p-3">
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <p className="truncate text-sm font-semibold text-strong">
-            {item.food ? item.food.name : item.customName || 'Alimento libre'}
-          </p>
-          <p className="text-xs text-muted">{macroLine(macros)}</p>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          {item.food ? (
+            <>
+              <p className="truncate text-sm font-semibold text-strong">{item.food.name}</p>
+              {item.food.brand ? <p className="truncate text-xs text-muted">{item.food.brand}</p> : null}
+            </>
+          ) : (
+            <input
+              className={inputClass}
+              placeholder="Nombre del alimento libre"
+              value={item.customName ?? ''}
+              onChange={(e) => dispatch({ type: 'UPDATE_ITEM', slotKey, itemKey: item.key, patch: { customName: e.target.value } })}
+            />
+          )}
         </div>
+        <PortionMacros item={item} />
         <button
           type="button"
           aria-label="Quitar item"
@@ -163,17 +327,10 @@ function ItemRow({
           <Trash2 className="h-4 w-4" />
         </button>
       </div>
-      {!item.food ? (
+
+      <div className="mt-2 flex items-center gap-2">
         <input
-          className={inputClass + ' mt-2'}
-          placeholder="Nombre del alimento"
-          value={item.customName ?? ''}
-          onChange={(e) => dispatch({ type: 'UPDATE_ITEM', slotKey, itemKey: item.key, patch: { customName: e.target.value } })}
-        />
-      ) : null}
-      <div className="mt-2 flex gap-2">
-        <input
-          className={inputClass}
+          className={inputClass + ' max-w-32'}
           inputMode="decimal"
           placeholder="Cantidad"
           value={item.quantity}
@@ -184,13 +341,16 @@ function ItemRow({
           value={item.unit}
           onChange={(e) => dispatch({ type: 'UPDATE_ITEM', slotKey, itemKey: item.key, patch: { unit: e.target.value as BuilderItem['unit'] } })}
         >
-          {BUILDER_UNITS.map((u) => (
+          {unitOptions.map((u) => (
             <option key={u} value={u}>
               {u}
             </option>
           ))}
         </select>
       </div>
+
+      {!item.food ? <FreeFoodFields item={item} slotKey={slotKey} clientId={clientId} dispatch={dispatch} /> : null}
+
       {error?.food ? <p className="mt-1 text-xs text-rose-600 dark:text-rose-300">{error.food}</p> : null}
       {error?.quantity ? <p className="mt-1 text-xs text-rose-600 dark:text-rose-300">{error.quantity}</p> : null}
     </div>
@@ -249,6 +409,7 @@ function SlotEditor({
             key={item.key}
             item={item}
             slotKey={slot.key}
+            clientId={clientId}
             dispatch={dispatch}
             error={{ food: errors['item.' + item.key + '.food'], quantity: errors['item.' + item.key + '.quantity'] }}
           />
@@ -263,11 +424,14 @@ function SlotEditor({
           className="mt-2 inline-flex min-h-11 items-center gap-1 rounded-control border border-border-default bg-surface-card px-3 text-sm font-semibold text-strong"
         >
           <Plus className="h-4 w-4" />
-          Alimento libre (sin catalogo)
+          Alimento libre (con macros)
         </button>
       </div>
 
-      <p className="mt-3 text-xs font-semibold text-muted">Subtotal franja: {macroLine(subtotal)}</p>
+      <div className="mt-3 flex items-center justify-between gap-2 rounded-control bg-surface-sunken px-3 py-2">
+        <span className="text-xs font-semibold uppercase tracking-wide text-muted">Subtotal franja</span>
+        <span className="font-mono text-xs tabular-nums text-strong">{macroLine(subtotal)}</span>
+      </div>
     </NutritionCard>
   )
 }
@@ -399,7 +563,10 @@ function ConstructionStep({
         <Plus className="h-4 w-4" />
         Agregar franja
       </button>
-      <p className="text-sm font-semibold text-muted">Total del dia: {macroLine(totals)}</p>
+      <div className="sticky bottom-0 z-10 -mx-1 flex items-center justify-between gap-2 rounded-control border border-border-default bg-surface-card/95 px-4 py-3 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-surface-card/80">
+        <span className="text-xs font-semibold uppercase tracking-wide text-muted">Total del dia</span>
+        <span className="font-mono text-sm font-semibold tabular-nums text-strong">{macroLine(totals)}</span>
+      </div>
     </div>
   )
 }

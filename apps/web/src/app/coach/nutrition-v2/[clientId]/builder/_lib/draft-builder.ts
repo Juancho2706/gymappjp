@@ -6,6 +6,7 @@
  * que vera el alumno) y la construccion de filas de insercion con mocks.
  */
 
+import { z } from 'zod'
 import {
   NutritionPlanDraftSchema,
   type NutritionPlanDraft,
@@ -41,6 +42,10 @@ export interface BuilderItem {
   unit: BuilderUnit
   optional: boolean
   notes: string | null
+  customCalories: string
+  customProteinG: string
+  customCarbsG: string
+  customFatsG: string
 }
 
 export interface BuilderSlot {
@@ -101,7 +106,19 @@ export function createEmptyBuilderState(effectiveFrom: string): BuilderState {
 }
 
 export function createEmptyItem(key: string): BuilderItem {
-  return { key, food: null, customName: null, quantity: '', unit: 'g', optional: false, notes: null }
+  return {
+    key,
+    food: null,
+    customName: null,
+    quantity: '',
+    unit: 'g',
+    optional: false,
+    notes: null,
+    customCalories: '',
+    customProteinG: '',
+    customCarbsG: '',
+    customFatsG: '',
+  }
 }
 
 export function createEmptySlot(key: string, name = ''): BuilderSlot {
@@ -208,7 +225,6 @@ const ZERO_MACROS: ItemMacros = { calories: 0, proteinG: 0, carbsG: 0, fatsG: 0,
 /**
  * Macros de un item prescrito para una cantidad/unidad. Reutiliza EXACTAMENTE el
  * motor compartido (calculateFoodItemMacros): el mismo calculo que vera el alumno.
- * La fibra usa el mismo factor (el motor solo devuelve las 4 macros base).
  */
 export function computeItemMacros(food: BuilderFood, quantity: number, unit: string): ItemMacros {
   if (!Number.isFinite(quantity) || quantity <= 0) return ZERO_MACROS
@@ -229,9 +245,30 @@ export function computeItemMacros(food: BuilderFood, quantity: number, unit: str
   return { calories: m.calories, proteinG: m.protein, carbsG: m.carbs, fatsG: m.fats, fiberG: fiber }
 }
 
+function toNonNegNumber(value: string): number {
+  const n = Number(String(value).trim())
+  return Number.isFinite(n) && n >= 0 ? n : 0
+}
+
+/**
+ * Macros de un alimento libre con macros declaradas por 100 g/ml, escaladas por la
+ * cantidad prescrita. Da paridad de preview con el alumno sin depender del catalogo.
+ */
+export function computeCustomItemMacros(item: BuilderItem, quantity: number): ItemMacros {
+  if (!Number.isFinite(quantity) || quantity <= 0) return ZERO_MACROS
+  const factor = quantity / 100
+  return {
+    calories: Math.round(toNonNegNumber(item.customCalories) * factor * 10) / 10,
+    proteinG: Math.round(toNonNegNumber(item.customProteinG) * factor * 10) / 10,
+    carbsG: Math.round(toNonNegNumber(item.customCarbsG) * factor * 10) / 10,
+    fatsG: Math.round(toNonNegNumber(item.customFatsG) * factor * 10) / 10,
+    fiberG: 0,
+  }
+}
+
 export function itemMacros(item: BuilderItem): ItemMacros {
-  if (!item.food) return ZERO_MACROS
-  return computeItemMacros(item.food, Number(item.quantity), item.unit)
+  if (item.food) return computeItemMacros(item.food, Number(item.quantity), item.unit)
+  return computeCustomItemMacros(item, Number(item.quantity))
 }
 
 function addMacros(a: ItemMacros, b: ItemMacros): ItemMacros {
@@ -250,6 +287,56 @@ export function slotSubtotal(slot: BuilderSlot): ItemMacros {
 
 export function dayTotals(state: BuilderState): ItemMacros {
   return state.slots.reduce((acc, slot) => addMacros(acc, slotSubtotal(slot)), ZERO_MACROS)
+}
+
+// -- Alimento libre con macros (contrato de la accion "Guardar en mi catalogo") --
+
+/**
+ * Macros por 100 g/ml de un alimento libre. No-negativos y con topes razonables.
+ * Reusado por el cliente (validacion de formulario) y el servidor (server action).
+ */
+export const CoachFoodInputSchema = z.object({
+  clientId: z.string().uuid(),
+  name: z.string().trim().min(1).max(180),
+  brand: z.string().trim().max(180).nullable().default(null),
+  unit: z.enum(['g', 'ml']).default('g'),
+  calories: z.number().nonnegative().max(2000),
+  proteinG: z.number().nonnegative().max(500),
+  carbsG: z.number().nonnegative().max(500),
+  fatsG: z.number().nonnegative().max(500),
+})
+
+export type CoachFoodInput = z.infer<typeof CoachFoodInputSchema>
+
+/**
+ * Warning NO bloqueante: las kcal declaradas se alejan >40% del valor de Atwater
+ * (4P + 4C + 9G). Guarda contra division por cero (todo en cero => sin warning).
+ */
+export function macroEnergyMismatch(m: {
+  calories: number
+  proteinG: number
+  carbsG: number
+  fatsG: number
+}): boolean {
+  const atwater = 4 * m.proteinG + 4 * m.carbsG + 9 * m.fatsG
+  if (atwater <= 0 && m.calories <= 0) return false
+  const base = atwater > 0 ? atwater : m.calories
+  return Math.abs(m.calories - atwater) > 0.4 * base
+}
+
+/** Extrae las macros por 100 del item libre como numeros (para el schema/preview/warning). */
+export function customMacrosOf(item: BuilderItem): {
+  calories: number
+  proteinG: number
+  carbsG: number
+  fatsG: number
+} {
+  return {
+    calories: toNonNegNumber(item.customCalories),
+    proteinG: toNonNegNumber(item.customProteinG),
+    carbsG: toNonNegNumber(item.customCarbsG),
+    fatsG: toNonNegNumber(item.customFatsG),
+  }
 }
 
 export interface StepValidation {
@@ -343,7 +430,6 @@ function targetsToMacros(targets: BuilderTargets) {
 
 export interface AssembleOptions {
   clientId: string
-  /** Presente al crear una NUEVA version sobre un plan existente. */
   planId?: string | null
   timezone?: string
 }

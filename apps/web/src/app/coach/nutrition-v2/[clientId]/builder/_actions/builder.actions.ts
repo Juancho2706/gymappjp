@@ -366,3 +366,74 @@ export async function searchFoodCatalogCoachAction(
   }
   return { ok: true, result: result.data }
 }
+
+/**
+ * Crea un alimento coach-scoped desde el "alimento libre con macros" del builder.
+ * Fail-closed: re-verifica el gate/scope via authorizeCoach. Escribe con macros POR 100
+ * (serving_size = 100), catalog_source='coach' y verification_status='coach_verified';
+ * coach_id = auth.uid() lo exige la RLS foods_insert_own (org_id NULL). Devuelve el
+ * alimento como BuilderFood para que el item pase a referenciar su id.
+ */
+const CreateCoachFoodInputSchema = z.object({
+  clientId: z.string().uuid(),
+  name: z.string().trim().min(1).max(180),
+  brand: z.string().trim().max(180).nullable().default(null),
+  unit: z.enum(['g', 'ml']).default('g'),
+  calories: z.number().nonnegative().max(2000),
+  proteinG: z.number().nonnegative().max(500),
+  carbsG: z.number().nonnegative().max(500),
+  fatsG: z.number().nonnegative().max(500),
+})
+
+export async function createCoachFoodAction(
+  input: unknown,
+): Promise<{ ok: true; food: BuilderFood } | ActionFailure> {
+  const parsed = CreateCoachFoodInputSchema.safeParse(input)
+  if (!parsed.success) {
+    return fail('INVALID_PAYLOAD', 'El alimento tiene datos invalidos.', zodFields(parsed.error))
+  }
+  const { clientId, name, brand, unit, calories, proteinG, carbsG, fatsG } = parsed.data
+
+  const auth = await authorizeCoach(clientId)
+  if (!auth.ok) return auth
+  const { db, userId } = auth
+
+  const ins = await db
+    .from('foods')
+    .insert({
+      name,
+      brand,
+      coach_id: userId,
+      org_id: null,
+      calories,
+      protein_g: proteinG,
+      carbs_g: carbsG,
+      fats_g: fatsG,
+      serving_size: 100,
+      serving_unit: unit,
+      is_liquid: unit === 'ml',
+      category: 'otro',
+      country_code: 'CL',
+      catalog_source: 'coach',
+      verification_status: 'coach_verified',
+    })
+    .select('id')
+    .single()
+  if (ins.error || !ins.data) return mapWriteError(ins.error ?? { message: 'no food' }, 'alimento')
+
+  revalidatePath('/coach/nutrition-v2/' + clientId)
+
+  const food: BuilderFood = {
+    id: ins.data.id,
+    name,
+    brand,
+    calories,
+    proteinG,
+    carbsG,
+    fatsG,
+    fiberG: null,
+    servingSize: 100,
+    servingUnit: unit,
+  }
+  return { ok: true, food }
+}

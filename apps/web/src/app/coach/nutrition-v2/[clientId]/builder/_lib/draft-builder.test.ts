@@ -2,16 +2,23 @@ import { describe, it, expect } from 'vitest'
 import { NutritionPlanDraftSchema } from '@eva/nutrition-v2'
 import { calculateFoodItemMacros } from '@eva/nutrition-engine'
 import {
+  CoachFoodInputSchema,
   assembleDraft,
   assembleAndValidateDraft,
   buildItemInsertRow,
   buildSlotInsertRow,
   buildVariantInsertRow,
   builderReducer,
+  computeCustomItemMacros,
   computeItemMacros,
   createEmptyBuilderState,
+  createEmptyItem,
+  customMacrosOf,
+  itemMacros,
+  macroEnergyMismatch,
   validateStep,
   type BuilderFood,
+  type BuilderItem,
   type BuilderState,
   type DraftPrescriptionItem,
 } from './draft-builder'
@@ -31,6 +38,32 @@ const FOOD: BuilderFood = {
   fiberG: 2,
   servingSize: 50,
   servingUnit: 'g',
+}
+
+function foodItem(overrides: Partial<BuilderItem> = {}): BuilderItem {
+  return {
+    ...createEmptyItem('i1'),
+    food: FOOD,
+    customName: null,
+    quantity: '200',
+    unit: 'g',
+    ...overrides,
+  }
+}
+
+function customItem(overrides: Partial<BuilderItem> = {}): BuilderItem {
+  return {
+    ...createEmptyItem('c1'),
+    food: null,
+    customName: 'Colacion casera',
+    quantity: '200',
+    unit: 'g',
+    customCalories: '100',
+    customProteinG: '10',
+    customCarbsG: '20',
+    customFatsG: '5',
+    ...overrides,
+  }
 }
 
 function flexibleState(): BuilderState {
@@ -58,9 +91,7 @@ function structuredState(): BuilderState {
         key: 'slot-a',
         name: 'Desayuno',
         startTime: '08:00',
-        items: [
-          { key: 'i1', food: FOOD, customName: null, quantity: '200', unit: 'g', optional: false, notes: null },
-        ],
+        items: [foodItem()],
       },
     ],
   }
@@ -91,6 +122,80 @@ describe('computeItemMacros', () => {
   })
 })
 
+describe('alimento libre con macros', () => {
+  it('computeCustomItemMacros escala las macros por 100 por la cantidad', () => {
+    const macros = computeCustomItemMacros(customItem(), 200)
+    expect(macros.calories).toBe(200)
+    expect(macros.proteinG).toBe(20)
+    expect(macros.carbsG).toBe(40)
+    expect(macros.fatsG).toBe(10)
+  })
+
+  it('itemMacros refleja las macros del item libre (preview del dia)', () => {
+    const macros = itemMacros(customItem({ quantity: '150' }))
+    expect(macros.calories).toBe(150)
+    expect(macros.proteinG).toBe(15)
+  })
+
+  it('item libre sin macros aporta cero (no rompe el preview)', () => {
+    const macros = itemMacros(customItem({ customCalories: '', customProteinG: '', customCarbsG: '', customFatsG: '' }))
+    expect(macros.calories).toBe(0)
+    expect(macros.proteinG).toBe(0)
+  })
+
+  it('customMacrosOf coacciona vacios/negativos a cero', () => {
+    const m = customMacrosOf(customItem({ customCalories: '', customProteinG: '-5' }))
+    expect(m.calories).toBe(0)
+    expect(m.proteinG).toBe(0)
+    expect(m.carbsG).toBe(20)
+  })
+})
+
+describe('CoachFoodInputSchema', () => {
+  const valid = {
+    clientId: CLIENT_ID,
+    name: 'Colacion casera',
+    unit: 'g' as const,
+    calories: 180,
+    proteinG: 10,
+    carbsG: 20,
+    fatsG: 5,
+  }
+
+  it('acepta macros no-negativas y aplica default de brand', () => {
+    const parsed = CoachFoodInputSchema.safeParse(valid)
+    expect(parsed.success).toBe(true)
+    if (parsed.success) expect(parsed.data.brand).toBeNull()
+  })
+
+  it('rechaza macros negativas', () => {
+    expect(CoachFoodInputSchema.safeParse({ ...valid, proteinG: -1 }).success).toBe(false)
+    expect(CoachFoodInputSchema.safeParse({ ...valid, calories: -10 }).success).toBe(false)
+  })
+
+  it('rechaza nombre vacio', () => {
+    expect(CoachFoodInputSchema.safeParse({ ...valid, name: '   ' }).success).toBe(false)
+  })
+
+  it('rechaza unidad fuera de g/ml', () => {
+    expect(CoachFoodInputSchema.safeParse({ ...valid, unit: 'un' }).success).toBe(false)
+  })
+})
+
+describe('macroEnergyMismatch', () => {
+  it('sin warning cuando las kcal cuadran con Atwater', () => {
+    expect(macroEnergyMismatch({ calories: 165, proteinG: 10, carbsG: 20, fatsG: 5 })).toBe(false)
+  })
+
+  it('warning cuando las kcal se alejan mas de 40%', () => {
+    expect(macroEnergyMismatch({ calories: 400, proteinG: 10, carbsG: 20, fatsG: 5 })).toBe(true)
+  })
+
+  it('todo en cero no dispara warning', () => {
+    expect(macroEnergyMismatch({ calories: 0, proteinG: 0, carbsG: 0, fatsG: 0 })).toBe(false)
+  })
+})
+
 describe('assembleDraft', () => {
   it('flexible: una variante por defecto, sin franjas, valida contra el contrato', () => {
     const draft = assembleDraft(flexibleState(), { clientId: CLIENT_ID })
@@ -112,6 +217,17 @@ describe('assembleDraft', () => {
     expect(slot.items[0].foodId).toBe(FOOD_ID)
     expect(slot.items[0].quantity).toBe(200)
     expect(slot.items[0].unit).toBe('g')
+  })
+
+  it('item libre (sin food) va al payload como customName + cantidad', () => {
+    const state = structuredState()
+    state.slots[0].items = [customItem()]
+    const draft = assembleAndValidateDraft(state, { clientId: CLIENT_ID })
+    const item = draft.dayVariants[0].mealSlots[0].items[0]
+    expect(item.foodId).toBeNull()
+    expect(item.customName).toBe('Colacion casera')
+    expect(item.quantity).toBe(200)
+    expect(item.unit).toBe('g')
   })
 
   it('propaga planId cuando es una nueva version', () => {
@@ -158,6 +274,12 @@ describe('validateStep', () => {
     expect(validateStep(bad, 2).ok).toBe(false)
     expect(validateStep(structuredState(), 2).ok).toBe(true)
   })
+
+  it('paso 2 acepta un item libre con nombre y cantidad', () => {
+    const state = structuredState()
+    state.slots[0].items = [customItem()]
+    expect(validateStep(state, 2).ok).toBe(true)
+  })
 })
 
 describe('builderReducer', () => {
@@ -187,6 +309,25 @@ describe('builderReducer', () => {
     expect(state.slots[0].items).toHaveLength(1)
     expect(state.slots[0].items[0].quantity).toBe('50')
     expect(state.slots[0].items[0].unit).toBe('g')
+  })
+
+  it('UPDATE_ITEM setea las macros custom del alimento libre', () => {
+    let state = builderReducer(createEmptyBuilderState('2026-07-20'), {
+      type: 'SET_STRATEGY',
+      strategy: 'structured',
+      firstSlotKey: 'slotK',
+    })
+    const slotKey = state.slots[0].key
+    state = builderReducer(state, { type: 'ADD_ITEM', slotKey, key: 'freeK', food: null })
+    state = builderReducer(state, {
+      type: 'UPDATE_ITEM',
+      slotKey,
+      itemKey: 'freeK',
+      patch: { customName: 'Avena', quantity: '100', customCalories: '380', customProteinG: '13', customCarbsG: '67', customFatsG: '7' },
+    })
+    const item = state.slots[0].items[0]
+    expect(item.customName).toBe('Avena')
+    expect(itemMacros(item).calories).toBe(380)
   })
 })
 
