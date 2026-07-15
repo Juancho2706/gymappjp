@@ -1,5 +1,4 @@
 {
-  "ignoreCommand": "exit 0",
   "buildCommand": "pnpm --filter @eva/web build",
   "outputDirectory": "apps/web/.next",
   "installCommand": "pnpm install --frozen-lockfile",
