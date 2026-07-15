@@ -8,6 +8,91 @@ Este archivo debe actualizarse cada vez que se cierre o descubra un bloqueo. Es 
 
 ---
 
+## 0. ACTUALIZACIÓN 2026-07-14 — merge a `rnmobiledenuevo` + estabilización
+
+La rama se mergeó (fast-forward) a `rnmobiledenuevo`; PR #121 quedó MERGED y la rama
+`Nuevascosasrnopenai` fue eliminada. Se corrió una revisión multi-agente completa del
+código entrante (13 áreas, verificación adversarial). Cambios de estado:
+
+### Cerrado en la ola de estabilización (rama `fix/nutrition-v2-stabilization`)
+
+- **P0.1 Vitest** → VERDE. Era 1 solo test: `tests/mobile/flags.test.ts` asertaba el
+  registro de flags sin `nutritionV2Student/Coach`. Expectativa actualizada.
+- **P0.2 Gateways profesionales** → RESUELTO end-to-end. Contrato nuevo
+  `NutritionV2CoachScopeSchema` (`packages/nutrition-v2/read-models.ts`) con invariantes
+  cruzadas; web (`nutrition-v2-read.service.ts` + pages coach) y API móvil
+  (`api/mobile/nutrition-v2/coach/route.ts`) llaman las RPC scoped con
+  `p_scope_type/p_team_id/p_org_id`; RN obtiene el workspace de `useWorkspace()`
+  (NO de `useEntitlements()` como decía el handoff — ese hook no expone scope) vía
+  `lib/nutrition-v2-scope.ts` (puro, testeable) y la cache local pliega el workspace
+  en la key. 14 tests nuevos (contrato, 400 fail-closed, cache keys).
+- **P1.1 Cancelación RN** → RESUELTO en `alumno/nutrition-v2/index.tsx` con
+  `mountedRef`+`controllerRef` (variante ref porque `load` tiene 4 call sites).
+- **P0 NUEVO (no documentado): `packages/nutrition-v2` sin `package.json`** → RESUELTO.
+  pnpm no registraba el paquete y Metro no resuelve `@eva/nutrition-v2` → el bundle RN
+  no compilaba (web/vitest lo ocultaban vía tsconfig paths). Fix: package.json +
+  `"@eva/nutrition-v2": "workspace:*"` en `apps/mobile` + lockfile.
+- **CI boundaries roto en GitHub** → RESUELTO. `paths` con `[coach_slug]` literal es
+  character-class de glob: GitHub ni registraba el workflow (runs `push`, 0 jobs).
+  Reemplazado por `c/**/nutrition-v2/**`.
+- **vercel.json CSP**: se restauró `https://us.i.posthog.com` explícito (sin regresión
+  funcional — `*.posthog.com` ya lo cubría — pero se elimina el token duplicado).
+  `ignoreCommand` (pausa de builds) SE MANTIENE hasta CI verde y bloque listo.
+
+### Hallazgos NUEVOS de la revisión (backlog priorizado)
+
+**P1 — SQL, requieren migración de seguimiento (validar con protocolo DB: EXPLAIN +
+tx-rollback antes de prod; riesgo INACTIVO hoy: rollout cerrado, 0 datos V2):**
+
+1. `nutrition_v2_guard_intake_mutation` (mig 190000 ~L349): en UPDATE solo inspecciona
+   `OLD.idempotency_key` → un authenticated puede promover una fila V1 propia a entrada
+   "V2" forjada (idempotency_key null→valor + snapshot_* arbitrarios) saltando el RPC
+   canónico y la auditoría. Fix: rechazar transición null→not-null fuera del allowlist.
+2. `publish_idempotency_key` (mig 190000 ~L241 + 190500 L486): índice único GLOBAL y
+   lookup cross-tenant ANTES del check de permisos → colisión entre tenants devuelve el
+   version id ajeno. Fix: unicidad por `(plan_id, key)` y filtrar el pre-check.
+3. History read model (mig 210500 ~L24): `candidate_dates` UNION sin cota inferior
+   escanea TODO el historial del alumno por página, y el CTE se recomputa 2 veces →
+   O(total) por página. Fix: empujar `p_before` a cada rama + índices `(client_id,
+   log_date DESC)` + un solo pase.
+4. `supabase/tests/nutrition_v2_domain_rollback.sql`: nunca ejercita los read models
+   nuevos ni denegación cross-tenant (42501 para un sub sin relación). Ampliar.
+
+**P1 — aplicación:**
+
+5. Pantalla alumno V1 web: `NutritionDailyOverview` (nuevo) + hero de `NutritionShell`
+   muestran DOS totales de kcal contradictorios cuando hay intake off-plan (el nuevo
+   suma off-plan a lo prescrito; el shell solo plan). Unificar antes de que llegue a
+   usuarios (hoy solo vive en `rnmobiledenuevo`).
+
+**P2 seleccionados (lista completa en los reportes de revisión):**
+
+- Rate limiting ausente en POST intake / catalog search+report (Upstash ya existe en el repo).
+- Cola offline V2 = código muerto: `enqueueNutritionV2Mutation` sin productor (la
+  pantalla alumno V2 es read-only); `flushPromise` singleton no segmentado por usuario.
+- `clearNutritionV2CacheForUser`/`clearNutritionV2QueueForUser` sin cablear en logout.
+- Scanner add-food V1 (RN) re-dispara en bucle ante not_found (falta `scannerPaused`
+  como en scanner.tsx V2); idempotency key del reporte PWA usa `Date.now()` (anula dedup).
+- Cambios V1 (add-food, guidance, "Consumo real") van SIN flag → llegan al 100% al
+  mergear a master; decidir si se gatean.
+- `/c/[slug]/nutrition/add` no aplica el gate de dominio de nutrición (bypass por URL).
+- `FoodCatalogCurationQueue` muta PostgREST directo desde el cliente (RLS lo acota,
+  pero rompe el data-flow del repo); `getDailyHabits` usa `getUser()` en hot path.
+- SQL: publish futuro expone versión no vigente; drafts no borrables por authenticated;
+  `serving_size=0` explota macros (greatest 0.0001); payloads sin LIMIT; ventanas 7d en
+  UTC; `normalize_text` IMMUTABLE sobre unaccent STABLE; importador permite
+  auto-declarar `eva_verified` y `--apply` no es atómico; checker de boundaries se
+  bypasea con re-exports barrel.
+- Bucket `food-media` público permite listing (advisor WARN; vacío hoy).
+
+### Estado CI tras la ola
+
+Vitest 2374/2374 ✅ (local), typecheck web ✅, mobile tsc ✅ (tras cierre del WIP de
+NutricionTab), boundaries por primera vez registrable en GitHub. `ignoreCommand`
+sigue activo en `vercel.json` (retirar cuando el CEO decida generar Preview).
+
+---
+
 ## 1. Estado de CI observado
 
 Última corrida revisada después de corregir errores móviles:
