@@ -50,6 +50,8 @@ export const getTemplateBuilderData = cache(async (programId?: string) => {
             `)
             .eq('id', programId)
             .eq('coach_id', user.id)
+            // PostgREST no garantiza el orden de embeds sin .order() explicito.
+            .order('order_index', { referencedTable: 'workout_plans.workout_blocks', ascending: true })
 
         // Scope to active workspace — enterprise coach only sees programs from their org
         if (orgId) {

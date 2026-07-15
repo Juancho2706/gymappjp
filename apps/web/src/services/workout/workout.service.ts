@@ -1334,6 +1334,9 @@ export async function syncProgramFromTemplateAction(programId: string): Promise<
         .select('*, workout_plans ( *, workout_blocks ( * ) )')
         .eq('id', programId)
         .eq('coach_id', user.id)
+        // Defensa: mergeBlocksForSync ordena internamente, pero el orden del embed
+        // no esta garantizado por PostgREST sin .order() explicito.
+        .order('order_index', { referencedTable: 'workout_plans.workout_blocks', ascending: true })
     programQuery = applyOrgScope(programQuery, scope.orgId)
     const { data: program, error: pErr } = await programQuery.single()
 
@@ -1349,6 +1352,7 @@ export async function syncProgramFromTemplateAction(programId: string): Promise<
         .eq('id', templateId)
         .eq('coach_id', user.id)
         .is('client_id', null)
+        .order('order_index', { referencedTable: 'workout_plans.workout_blocks', ascending: true })
     templateQuery = applyOrgScope(templateQuery, scope.orgId)
     const { data: template, error: tErr } = await templateQuery.maybeSingle()
 
