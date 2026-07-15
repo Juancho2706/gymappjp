@@ -92,6 +92,11 @@ export function NutritionDailyOverview({ plan, todayLog, intakeEntries, today, a
   const realAdditional = calculateIntakeEntriesTotals(intakeEntries)
   const total = combineNutritionMacros(prescribedConsumed, realAdditional)
   const caloriesPct = nutritionTargetPercent(total.calories, targets.calories)
+  const hasExtras =
+    realAdditional.calories > 0 ||
+    realAdditional.protein > 0 ||
+    realAdditional.carbs > 0 ||
+    realAdditional.fats > 0
   const nextMeal = meals.find((meal) => !completed.has(meal.id)) ?? null
   const completedCount = meals.filter((meal) => completed.has(meal.id)).length
 
@@ -102,7 +107,9 @@ export function NutritionDailyOverview({ plan, todayLog, intakeEntries, today, a
           <div>
             <div className="flex items-center gap-2 text-ember-700 dark:text-ember-300">
               <Target className="h-4 w-4" />
-              <span className="text-[10px] font-black uppercase tracking-[0.12em]">Consumido vs objetivo</span>
+              <span className="text-[10px] font-black uppercase tracking-[0.12em]">
+                {hasExtras ? 'Plan + extras vs objetivo' : 'Consumido vs objetivo'}
+              </span>
             </div>
             <p className="mt-2 font-mono text-3xl font-black tracking-tight tabular-nums text-foreground">
               {Math.round(total.calories).toLocaleString('es-CL')}
@@ -110,9 +117,27 @@ export function NutritionDailyOverview({ plan, todayLog, intakeEntries, today, a
                 / {Math.round(targets.calories).toLocaleString('es-CL')} kcal
               </span>
             </p>
-            <p className="mt-1 text-xs font-semibold text-muted-foreground">
-              {Math.round(prescribedConsumed.calories)} kcal del plan + {Math.round(realAdditional.calories)} kcal registradas
-            </p>
+            {hasExtras ? (
+              <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] font-semibold">
+                <span className="text-muted-foreground">
+                  Del plan:{' '}
+                  <span className="font-mono tabular-nums text-foreground">
+                    {Math.round(prescribedConsumed.calories).toLocaleString('es-CL')} kcal
+                  </span>
+                </span>
+                <span className="text-ember-700 dark:text-ember-300">
+                  Extras registrados:{' '}
+                  <span className="font-mono tabular-nums">
+                    +{Math.round(realAdditional.calories).toLocaleString('es-CL')} kcal
+                  </span>
+                </span>
+              </div>
+            ) : (
+              <p className="mt-1 text-xs font-semibold text-muted-foreground">
+                Del plan · {Math.round(prescribedConsumed.calories).toLocaleString('es-CL')} de{' '}
+                {Math.round(targets.calories).toLocaleString('es-CL')} kcal
+              </p>
+            )}
           </div>
           <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full border-4 border-ember-500/20 bg-card font-mono text-sm font-black tabular-nums text-ember-700 dark:text-ember-300">
             {caloriesPct}%

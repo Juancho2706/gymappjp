@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, useTransition } from 'react'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { Barcode, CheckCircle2, ChevronDown, Link2, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -8,6 +8,7 @@ import { createClient } from '@/lib/supabase/client'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { FoodSearch, type Food } from '@/app/coach/foods/FoodSearch'
+import { resolveMissingFoodCodeAction } from '../_actions/curation.actions'
 
 interface MissingCodeRow {
   id: string
@@ -33,7 +34,7 @@ export function FoodCatalogCurationQueue() {
   const [rows, setRows] = useState<MissingCodeRow[]>([])
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState<MissingCodeRow | null>(null)
-  const [resolving, setResolving] = useState(false)
+  const [isPending, startTransition] = useTransition()
 
   useEffect(() => {
     let active = true
@@ -54,26 +55,23 @@ export function FoodCatalogCurationQueue() {
     }
   }, [supabase])
 
-  async function resolveWithFood(food: Food) {
-    if (!selected || resolving) return
-    setResolving(true)
-    const { error } = await supabase
-      .from('food_catalog_missing_codes')
-      .update({
-        resolved_food_id: food.id,
-        resolved_at: new Date().toISOString(),
+  function resolveWithFood(food: Food) {
+    if (!selected || isPending) return
+    const target = selected
+    startTransition(async () => {
+      const result = await resolveMissingFoodCodeAction({
+        missingCodeId: target.id,
+        resolvedFoodId: food.id,
       })
-      .eq('id', selected.id)
+      if (!result.success) {
+        toast.error(result.error ?? 'No se pudo vincular el código.')
+        return
+      }
 
-    setResolving(false)
-    if (error) {
-      toast.error('No se pudo vincular el código.')
-      return
-    }
-
-    setRows((current) => current.filter((row) => row.id !== selected.id))
-    setSelected(null)
-    toast.success(`${selected.barcode} vinculado con ${food.name}`)
+      setRows((current) => current.filter((row) => row.id !== target.id))
+      setSelected(null)
+      toast.success(`${target.barcode} vinculado con ${food.name}`)
+    })
   }
 
   if (loading) {
@@ -147,7 +145,7 @@ export function FoodCatalogCurationQueue() {
           <p className="text-xs leading-relaxed text-muted">
             Busca el producto exacto. Si todavía no existe, cierra este diálogo y créalo primero en la biblioteca de alimentos.
           </p>
-          <div className={resolving ? 'pointer-events-none opacity-60' : ''}>
+          <div className={isPending ? 'pointer-events-none opacity-60' : ''}>
             <FoodSearch onFoodSelected={resolveWithFood} />
           </div>
         </DialogContent>

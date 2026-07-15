@@ -13,10 +13,9 @@ export async function upsertDailyHabits(
 
   const { clientId, logDate, coachSlug, waterMl, steps, sleepHours, fastingHours, supplements, notes } = parsed.data
   const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user || user.id !== clientId) return { success: false, error: 'No autorizado' }
+  const { data: claims } = await supabase.auth.getClaims()
+  const userId = claims?.claims?.sub as string | undefined
+  if (!userId || userId !== clientId) return { success: false, error: 'No autorizado' }
 
   const { error } = await supabase.from('daily_habits').upsert(
     {
@@ -51,10 +50,9 @@ export async function getDailyHabits(
   notes: string | null
 } | null> {
   const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user || user.id !== clientId) return null
+  const { data: claims } = await supabase.auth.getClaims()
+  const userId = claims?.claims?.sub as string | undefined
+  if (!userId || userId !== clientId) return null
 
   const { data } = await supabase
     .from('daily_habits')

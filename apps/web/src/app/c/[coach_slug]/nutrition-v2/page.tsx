@@ -2,8 +2,6 @@ import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { ArrowLeft, History, ListChecks, Utensils } from 'lucide-react'
 import {
-  MacroBudget,
-  MealTimeline,
   NutritionCard,
   NutritionPageShell,
   NutritionStatePanel,
@@ -11,8 +9,6 @@ import {
   PlanVersionBadge,
   StrategyBadge,
 } from '@/components/nutrition-v2'
-import type { NutritionMealSlotModel } from '@eva/nutrition-v2'
-import { createNutritionMacroValue } from '@eva/nutrition-v2'
 import { getTodayInSantiago } from '@/lib/date-utils'
 import { getClientBasePath } from '@/lib/client/base-path'
 import { getClientNutritionUser } from '../nutrition/_data/nutrition-auth.queries'
@@ -23,6 +19,7 @@ import {
   getNutritionTodayV2ForWeb,
 } from '@/services/nutrition-v2-read.service'
 import { isNutritionV2Enabled } from '@/services/nutrition-v2-rollout.service'
+import { TodayExperience } from './_components/TodayExperience'
 
 export const metadata = { title: 'Nutrición V2' }
 
@@ -79,7 +76,7 @@ export default async function StudentNutritionV2Page({ params, searchParams }: P
         </NutritionToolbar>
       }
     >
-      {view === 'today' ? <TodayView clientId={user.id} date={today} /> : null}
+      {view === 'today' ? <TodayView clientId={user.id} date={today} base={base} /> : null}
       {view === 'plan' ? <PlanView clientId={user.id} date={today} /> : null}
       {view === 'history' ? (
         <HistoryView clientId={user.id} before={query.before ?? null} base={base} />
@@ -115,7 +112,7 @@ function ViewLink({
   )
 }
 
-async function TodayView({ clientId, date }: { clientId: string; date: string }) {
+async function TodayView({ clientId, date, base }: { clientId: string; date: string; base: string }) {
   const today = await getNutritionTodayV2ForWeb({ clientId, date })
 
   if (!today.plan) {
@@ -128,87 +125,13 @@ async function TodayView({ clientId, date }: { clientId: string; date: string })
     )
   }
 
-  const slots: NutritionMealSlotModel[] = today.mealSlots.map((slot) => {
-    const intakeFoods = slot.intakeItems.map((item) => ({
-      id: item.id,
-      name: item.snapshot.name,
-      detail: item.snapshot.brand,
-      quantityLabel: `${item.quantity} ${item.unit}`,
-      calories: item.totals.calories,
-      proteinG: item.totals.proteinG,
-      carbsG: item.totals.carbsG,
-      fatsG: item.totals.fatsG,
-      status: 'default' as const,
-    }))
-    const prescribedFoods = slot.prescriptionItems.map((item) => ({
-      id: item.id,
-      name: item.name ?? 'Alimento prescrito',
-      detail: item.brand,
-      quantityLabel: `${item.quantity} ${item.unit}`,
-      calories: item.macros.calories,
-      proteinG: item.macros.proteinG,
-      carbsG: item.macros.carbsG,
-      fatsG: item.macros.fatsG,
-      status: 'default' as const,
-    }))
-
-    return {
-      id: slot.id,
-      name: slot.name,
-      timeLabel: slot.startTime,
-      prescriptionLabel: slot.prescriptionItems.length > 0
-        ? `${slot.prescriptionItems.length} elemento${slot.prescriptionItems.length === 1 ? '' : 's'} esperado${slot.prescriptionItems.length === 1 ? '' : 's'}`
-        : null,
-      state: intakeFoods.length > 0
-        ? 'consumed'
-        : prescribedFoods.length > 0
-          ? 'prescribed'
-          : 'empty',
-      subtotalCalories: intakeFoods.reduce((sum, food) => sum + (food.calories ?? 0), 0),
-      foods: intakeFoods.length > 0 ? intakeFoods : prescribedFoods,
-    }
-  })
-
   return (
-    <div className="space-y-5">
-      <div className="flex flex-wrap items-center gap-2">
-        <StrategyBadge strategy={today.plan.strategy} />
-        <PlanVersionBadge
-          version={today.plan.versionNumber}
-          status={today.plan.status}
-          effectiveLabel={`desde ${today.plan.effectiveFrom}`}
-        />
-      </div>
-      <MacroBudget
-        calories={{
-          consumed: today.consumed.calories,
-          target: today.targets.calories ?? 0,
-        }}
-        macros={[
-          createNutritionMacroValue('protein', {
-            consumed: today.consumed.proteinG,
-            target: today.targets.proteinG ?? 0,
-          }),
-          createNutritionMacroValue('carbs', {
-            consumed: today.consumed.carbsG,
-            target: today.targets.carbsG ?? 0,
-          }),
-          createNutritionMacroValue('fats', {
-            consumed: today.consumed.fatsG,
-            target: today.targets.fatsG ?? 0,
-          }),
-        ]}
-      />
-      <MealTimeline slots={slots} />
-      {today.unassignedIntake.length > 0 ? (
-        <NutritionCard tone="info">
-          <h2 className="font-display text-lg font-semibold">Otros registros</h2>
-          <p className="mt-1 text-sm opacity-80">
-            {today.unassignedIntake.length} registro{today.unassignedIntake.length === 1 ? '' : 's'} sin franja asignada.
-          </p>
-        </NutritionCard>
-      ) : null}
-    </div>
+    <TodayExperience
+      today={today}
+      clientId={clientId}
+      revalidatePath={`${base}/nutrition-v2`}
+      scanHref={`${base}/nutrition-v2/scanner`}
+    />
   )
 }
 

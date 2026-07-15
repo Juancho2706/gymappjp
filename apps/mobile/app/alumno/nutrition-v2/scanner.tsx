@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Pressable, ScrollView, Text, TextInput, View } from 'react-native'
+import { Alert, Pressable, ScrollView, Text, TextInput, View } from 'react-native'
 import { CameraView, useCameraPermissions, type BarcodeScanningResult } from 'expo-camera'
 import { Flashlight, FlashlightOff, ScanBarcode } from 'lucide-react-native'
 import {
@@ -18,6 +18,13 @@ import {
   lookupFoodByGtinV2,
   reportMissingFoodGtinV2,
 } from '../../../lib/nutrition-v2-catalog.api'
+import * as Haptics from 'expo-haptics'
+import { buildRecordIntakeMutation } from '../../../lib/nutrition-v2-intake'
+import {
+  getStableDeviceId,
+  newNutritionV2OperationId,
+  submitRecordIntake,
+} from '../../../lib/nutrition-v2-intake-runner'
 
 const BARCODE_TYPES = ['ean13', 'ean8', 'upc_a', 'upc_e'] as const
 
@@ -31,6 +38,9 @@ export default function NutritionV2ScannerScreen() {
   const [reported, setReported] = useState(false)
   const [torch, setTorch] = useState(false)
   const [scannerPaused, setScannerPaused] = useState(false)
+  const [deviceId, setDeviceId] = useState<string | null>(null)
+  const [adding, setAdding] = useState(false)
+  const [addedId, setAddedId] = useState<string | null>(null)
   const lastScanRef = useRef<{ code: string; at: number } | null>(null)
   const enabled = entitlements.ready && isEnabled('nutritionV2Student')
   const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL ?? ''
@@ -39,6 +49,9 @@ export default function NutritionV2ScannerScreen() {
     let active = true
     void supabase.auth.getSession().then(({ data }) => {
       if (active) setUserId(data.session?.user.id ?? null)
+    })
+    void getStableDeviceId().then((id) => {
+      if (active) setDeviceId(id)
     })
     return () => {
       active = false
@@ -86,6 +99,61 @@ export default function NutritionV2ScannerScreen() {
       version: result.food.media.version,
     })
   }, [result, supabaseUrl])
+
+  const addToDay = useCallback(async () => {
+    if (!userId || !deviceId || adding) return
+    if (!result || (result.status !== 'found' && result.status !== 'pending_verification')) return
+    const food = result.food
+    setAdding(true)
+    try {
+      const localDate = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'America/Santiago',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      }).format(new Date())
+      const payload = buildRecordIntakeMutation({
+        clientId: userId,
+        deviceId,
+        operationId: newNutritionV2OperationId(),
+        localDate,
+        occurredAt: new Date().toISOString(),
+        timezone: 'America/Santiago',
+        foodId: food.id,
+        quantity: food.servingSize > 0 ? food.servingSize : 100,
+        unit: food.servingUnit === 'ml' ? 'ml' : 'g',
+        mealSlot: null,
+        source: 'offplan',
+        captureMethod: 'barcode',
+        snapshot: {
+          name: food.name,
+          brand: food.brand,
+          calories: food.calories,
+          proteinG: food.proteinG,
+          carbsG: food.carbsG,
+          fatsG: food.fatsG,
+          fiberG: food.fiberG,
+          servingSize: food.servingSize,
+          servingUnit: food.servingUnit,
+        },
+      })
+      const outcome = await submitRecordIntake(userId, payload)
+      void Haptics.notificationAsync(
+        outcome.status === 'recorded'
+          ? Haptics.NotificationFeedbackType.Success
+          : Haptics.NotificationFeedbackType.Warning,
+      )
+      if (outcome.status === 'recorded' || outcome.status === 'queued') {
+        setAddedId(food.id)
+      } else {
+        Alert.alert('No se pudo registrar', outcome.error.message)
+      }
+    } catch {
+      Alert.alert('No se pudo registrar', 'Intenta nuevamente.')
+    } finally {
+      setAdding(false)
+    }
+  }, [adding, deviceId, result, userId])
 
   if (!entitlements.ready) {
     return <View className="flex-1 bg-surface-app" />
@@ -170,6 +238,13 @@ export default function NutritionV2ScannerScreen() {
           mediaUrl={mediaUrl}
           result={result}
           reported={reported}
+          adding={adding}
+          added={
+            addedId != null &&
+            (result.status === 'found' || result.status === 'pending_verification') &&
+            addedId === result.food.id
+          }
+          onAdd={() => void addToDay()}
           onReport={async () => {
             if (!userId || result.status !== 'not_found') return
             setLoading(true)
@@ -244,12 +319,18 @@ function ResultCard({
   result,
   mediaUrl,
   reported,
+  adding = false,
+  added = false,
+  onAdd,
   onReport,
   onScanAgain,
 }: {
   result: FoodBarcodeLookupReadModel
   mediaUrl: string | null
   reported: boolean
+  adding?: boolean
+  added?: boolean
+  onAdd?: () => void
   onReport: () => Promise<void>
   onScanAgain: () => void
 }) {
@@ -308,7 +389,16 @@ function ResultCard({
           </Text>
         </View>
       </View>
-      <View className="mt-4">
+      <View className="mt-4 gap-2">
+        <NutritionMotionButton
+          accessibilityLabel="Agregar al día"
+          disabled={added}
+          success={added}
+          pending={adding}
+          onPress={() => onAdd?.()}
+        >
+          {added ? 'Agregado al día' : 'Agregar al día'}
+        </NutritionMotionButton>
         <NutritionMotionButton accessibilityLabel="Escanear otro código" tone="neutral" onPress={onScanAgain}>
           Escanear otro
         </NutritionMotionButton>
