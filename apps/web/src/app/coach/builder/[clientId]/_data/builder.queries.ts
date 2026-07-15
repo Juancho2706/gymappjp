@@ -95,6 +95,9 @@ export const getBuilderData = cache(async (clientId: string, programId?: string)
                 )
             `)
             .eq('id', programId)
+            // PostgREST no garantiza el orden de embeds sin .order() explicito —
+            // sin esto, los bloques llegan en orden de heap (aleatorio tras updates).
+            .order('order_index', { referencedTable: 'workout_plans.workout_blocks', ascending: true })
         if (activeTeamId) {
             // Pool colaborativo: el programa del alumno del pool puede ser de otro coach del team.
             // RLS valida la fila; el client gate de arriba ya exige que el alumno sea de ESTE pool.
