@@ -303,6 +303,9 @@ importers:
       '@eva/nutrition-engine':
         specifier: workspace:*
         version: link:../../packages/nutrition-engine
+      '@eva/nutrition-v2':
+        specifier: workspace:*
+        version: link:../../packages/nutrition-v2
       '@eva/plan-builder':
         specifier: workspace:*
         version: link:../../packages/plan-builder
@@ -580,6 +583,8 @@ importers:
   packages/module-catalog: {}
 
   packages/nutrition-engine: {}
+
+  packages/nutrition-v2: {}
 
   packages/plan-builder:
     dependencies:

@@ -57,6 +57,6 @@ describe('flags: resolucion local vs remota', () => {
   })
 
   it('FLAGS es la unica fuente de verdad de las keys conocidas', () => {
-    expect(Object.keys(FLAGS)).toEqual(['executorV2'])
+    expect(Object.keys(FLAGS)).toEqual(['executorV2', 'nutritionV2Student', 'nutritionV2Coach'])
   })
 })

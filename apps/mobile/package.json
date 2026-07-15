@@ -21,6 +21,7 @@
     "@eva/feature-prefs": "workspace:*",
     "@eva/module-catalog": "workspace:*",
     "@eva/nutrition-engine": "workspace:*",
+    "@eva/nutrition-v2": "workspace:*",
     "@eva/plan-builder": "workspace:*",
     "@eva/profile-analytics": "workspace:*",
     "@eva/workout-engine": "workspace:*",
