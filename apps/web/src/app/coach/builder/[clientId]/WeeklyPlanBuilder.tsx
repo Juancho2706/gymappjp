@@ -8,14 +8,14 @@ import {
     useSensor, useSensors, type DragEndEvent, type DragOverEvent, DragStartEvent, DragOverlay,
 } from '@dnd-kit/core'
 import { sortableKeyboardCoordinates } from '@dnd-kit/sortable'
-import { Save, ArrowLeft, Loader2, Settings, Plus, LayoutTemplate, Eye, Users, Undo2, Redo2, BarChart3, Printer, Search, RefreshCw, MoreVertical, ChevronLeft, ChevronRight, CircleHelp, Pencil, Moon, SlidersHorizontal, History, X, Check, type LucideIcon } from 'lucide-react'
+import { Save, ArrowLeft, Loader2, Settings, Plus, LayoutTemplate, Eye, Users, Undo2, Redo2, BarChart3, Printer, Search, MoreVertical, ChevronLeft, ChevronRight, CircleHelp, Pencil, Moon, SlidersHorizontal, History, X, Check, type LucideIcon } from 'lucide-react'
 import Link from 'next/link'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/dropdown-menu'
 import { EditedByBadge } from '@/components/coach/EditedByBadge'
-import { saveWorkoutProgramAction, syncProgramFromTemplateAction, type WorkoutProgramInput } from './_actions/builder.actions'
+import { saveWorkoutProgramAction, type WorkoutProgramInput } from './_actions/builder.actions'
 import type { Tables } from '@/lib/database.types'
 import { toast } from 'sonner'
 const TemplatePickerDialog = dynamic(
@@ -1122,21 +1122,6 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                                     <DropdownMenuItem onClick={() => setShowPrint(true)}>
                                         <Printer className="w-4 h-4" /> Imprimir / PDF
                                     </DropdownMenuItem>
-                                    {client && initialProgram?.id && sourceTemplateId && (
-                                        <DropdownMenuItem
-                                            disabled={isPending}
-                                            onClick={() => {
-                                                if (!initialProgram?.id) return
-                                                startTransition(async () => {
-                                                    const r = await syncProgramFromTemplateAction(initialProgram.id)
-                                                    if (r.error) toast.error(r.error)
-                                                    else { toast.success('Sincronizado con la plantilla base.'); router.refresh() }
-                                                })
-                                            }}
-                                        >
-                                            <RefreshCw className="w-4 h-4" /> Sync plantilla
-                                        </DropdownMenuItem>
-                                    )}
                                     <DropdownMenuSeparator />
                                     <DropdownMenuItem onClick={undo} disabled={!canUndo}>
                                         <Undo2 className="w-4 h-4" /> Deshacer
@@ -1201,30 +1186,6 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                                 <span className="hidden xl:inline text-[13px] font-bold">Configurar</span>
                             </Button>
                         </div>
-
-                        {client && initialProgram?.id && sourceTemplateId && (
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                className="hidden lg:flex h-10 w-10 items-center justify-center gap-2 px-0 text-[13px] font-bold border-[var(--aqua-600)]/30 text-[var(--aqua-600)] hover:bg-[var(--aqua-500)]/10 xl:w-auto xl:px-3"
-                                disabled={isPending}
-                                title="Copiar cambios de la plantilla base (no pisa bloques marcados Modif.)"
-                                onClick={() => {
-                                    if (!initialProgram?.id) return
-                                    startTransition(async () => {
-                                        const r = await syncProgramFromTemplateAction(initialProgram.id)
-                                        if (r.error) toast.error(r.error)
-                                        else {
-                                            toast.success('Sincronizado con la plantilla base.')
-                                            router.refresh()
-                                        }
-                                    })
-                                }}
-                            >
-                                <RefreshCw className="w-4 h-4" />
-                                <span className="hidden xl:inline">Sync plantilla</span>
-                            </Button>
-                        )}
 
                         {/* Save — desktop (en móvil vive en la save-bar inferior) */}
                         <Button
@@ -1462,7 +1423,6 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                                                     onToggleSuperset={handleToggleSuperset}
                                                     onSetBlockArea={handleSetBlockArea}
                                                     onToggleBlockOverride={handleToggleBlockOverride}
-                                                    templateLinked={!!(client?.id && sourceTemplateId)}
                                                 />
                                             </div>
                                         ))}
@@ -1491,7 +1451,6 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                                             onToggleSuperset={handleToggleSuperset}
                                             onSetBlockArea={handleSetBlockArea}
                                             onToggleBlockOverride={handleToggleBlockOverride}
-                                            templateLinked={!!(client?.id && sourceTemplateId)}
                                         />
                                     </div>
                                 ))}
