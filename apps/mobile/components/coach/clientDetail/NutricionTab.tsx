@@ -1,9 +1,9 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useMemo, useState, type ReactNode } from 'react'
 import { Alert, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native'
-import { Activity, Apple, ChevronDown, ChevronLeft, ChevronRight, Check, Droplets, Flame, Footprints, Heart, Lock, MessageSquare, Moon, Pencil, RotateCcw, Salad, Save, Scale, Send, SlidersHorizontal, Timer, Utensils } from 'lucide-react-native'
+import { Activity, AlertTriangle, Apple, Calendar, ChevronDown, ChevronLeft, ChevronRight, Check, Droplets, Flame, Footprints, Lock, MessageSquare, Moon, Pencil, RotateCcw, Save, Scale, Send, SlidersHorizontal, Timer, Utensils } from 'lucide-react-native'
 import { useFocusEffect } from 'expo-router'
 import { useTheme } from '../../../context/ThemeContext'
-import { Button, EmptyState, ComplianceRing, ProgressBar, MacroPill } from '../../../components'
+import { Button, Card, ProgressBar } from '../../../components'
 import { EvaLoader } from '../../../components/EvaLoader'
 import { MACRO_COLORS } from '../../MacroRingSummary'
 import { FONT } from '../../../lib/typography'
@@ -26,12 +26,43 @@ import {
 } from '../../../lib/coach-client-detail'
 import { NUTRITION_SECTIONS, DOMAIN_ENABLED_KEY, type NutritionSectionKey, type SectionPrefs } from '@eva/feature-prefs'
 
-// Ámbar de "warning": el DS mobile aún no expone un token semántico de warning (solo
-// destructive/success), así que se centraliza acá el único literal en vez de esparcirlo.
-const WARNING = '#F59E0B'
+function alertColor(variant: NutritionCoachAlert['variant'], theme: { destructive: string; warning: string; primary: string }): string {
+  return variant === 'danger' ? theme.destructive : variant === 'warning' ? theme.warning : theme.primary
+}
 
-function alertColor(variant: NutritionCoachAlert['variant'], theme: { destructive: string; primary: string }): string {
-  return variant === 'danger' ? theme.destructive : variant === 'warning' ? WARNING : theme.primary
+function ZoneHeader({ letter, title, subtitle }: { letter: 'A' | 'B' | 'C'; title: string; subtitle: string }) {
+  const { theme } = useTheme()
+  return (
+    <View style={styles.zoneHeader} accessibilityRole="header">
+      <View style={[styles.zoneBadge, { backgroundColor: theme.secondary, borderRadius: theme.radius.md }]}>
+        <Text style={[styles.zoneBadgeTxt, { color: theme.primary, fontFamily: FONT.displayBlack }]}>{letter}</Text>
+      </View>
+      <View style={{ flex: 1 }}>
+        <Text style={[styles.zoneTitle, { color: theme.foreground, fontFamily: FONT.displayBlack }]}>{title}</Text>
+        <Text style={[styles.zoneSub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{subtitle}</Text>
+      </View>
+    </View>
+  )
+}
+
+function DetailAccordion({ title, children }: { title: string; children: ReactNode }) {
+  const { theme } = useTheme()
+  const [open, setOpen] = useState(false)
+  return (
+    <Card padding={0} radius="card">
+      <TouchableOpacity
+        accessibilityRole="button"
+        accessibilityState={{ expanded: open }}
+        activeOpacity={0.8}
+        onPress={() => setOpen((value) => !value)}
+        style={styles.detailAccordionButton}
+      >
+        <Text style={[styles.detailAccordionTitle, { color: theme.mutedForeground, fontFamily: FONT.displayBlack }]}>{title}</Text>
+        <ChevronDown size={18} color={theme.mutedForeground} style={{ transform: [{ rotate: open ? '180deg' : '0deg' }] }} />
+      </TouchableOpacity>
+      {open ? <View style={[styles.detailAccordionBody, { borderTopColor: theme.border }]}>{children}</View> : null}
+    </Card>
+  )
 }
 
 export function NutricionTab({
@@ -193,7 +224,7 @@ export function NutricionTab({
         <MetricBox value={`${weekAvg}%`} label="Adherencia 7d" />
         <MetricBox value={nutritionMonthlyAvgPct == null ? '—' : `${nutritionMonthlyAvgPct}%`} label="Adherencia 30d" />
         <MetricBox value={`${weekDelta >= 0 ? '+' : ''}${weekDelta} pp`} label="Sem. vs ant." color={weekDelta >= 0 ? theme.success : theme.destructive} />
-        <MetricBox value={`${nutritionStreakDays}d`} label="Racha ≥80%" color={WARNING} />
+        <MetricBox value={`${nutritionStreakDays}d`} label="Racha ≥80%" color={theme.warning} />
       </View>
 
       {/* Heatmap adherencia 30d */}
@@ -205,7 +236,7 @@ export function NutricionTab({
               key={date}
               accessibilityLabel={`${formatDate(date)}: ${entry ? `${entry.compliancePct}% de adherencia` : 'sin registro'}`}
               style={[styles.heatCell, {
-                backgroundColor: !entry ? theme.border : entry.compliancePct >= 80 ? theme.success : entry.compliancePct >= 60 ? WARNING : theme.destructive,
+                backgroundColor: !entry ? theme.border : entry.compliancePct >= 80 ? theme.success : entry.compliancePct >= 60 ? theme.warning : theme.destructive,
                 opacity: entry ? 1 : 0.45,
               }]}
             />
@@ -309,7 +340,7 @@ function DayNutritionDetail({ timeline, selectedDate, onSelectDate, dayDetail, l
           </View>
         ) : meals.length ? (
           <>
-            <ProgressBar value={done / meals.length} color={done / meals.length >= 0.8 ? theme.success : WARNING} height={7} />
+            <ProgressBar value={done / meals.length} color={done / meals.length >= 0.8 ? theme.success : theme.warning} height={7} />
             {meals.map((meal, i) => {
               const isOpen = openMeals.has(i)
               const hasFoods = meal.foods.length > 0
@@ -525,8 +556,8 @@ function NutrientRow({ def, initial, clientId, onSaved }: { def: NutrientDef; in
     <View style={[styles.nutrientRow, { borderColor: theme.border, backgroundColor: theme.secondary, borderRadius: theme.radius.lg }]}>
       <View style={styles.nutrientHead}>
         <Text style={[styles.nutrientLabel, { color: theme.foreground, fontFamily: FONT.uiBold }]}>{def.label}</Text>
-        <View style={[styles.intentPill, { backgroundColor: (capTone ? WARNING : theme.success) + '22' }]}>
-          <Text style={[styles.intentTxt, { color: capTone ? WARNING : theme.success, fontFamily: FONT.uiBold }]}>{capTone ? 'Tope' : 'Meta'}</Text>
+        <View style={[styles.intentPill, { backgroundColor: (capTone ? theme.warning : theme.success) + '22' }]}>
+          <Text style={[styles.intentTxt, { color: capTone ? theme.warning : theme.success, fontFamily: FONT.uiBold }]}>{capTone ? 'Tope' : 'Meta'}</Text>
         </View>
       </View>
       <Text style={[styles.nutrientHint, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{def.hint}</Text>
@@ -572,9 +603,9 @@ function PrivateNotePanel({ notes, clientId, onSaved }: { notes: CoachPrivateNot
   const older = notes.slice(1)
   return (
     <StatCard>
-      <CardHeader icon={Lock} title="Nota privada" color={WARNING} />
-      <View style={[styles.privateBadge, { backgroundColor: WARNING + '22' }]}>
-        <Text style={[styles.privateBadgeTxt, { color: WARNING, fontFamily: FONT.uiBold }]}>Privada — el alumno no la ve</Text>
+      <CardHeader icon={Lock} title="Nota privada" color={theme.warning} />
+      <View style={[styles.privateBadge, { backgroundColor: theme.warning + '22' }]}>
+        <Text style={[styles.privateBadgeTxt, { color: theme.warning, fontFamily: FONT.uiBold }]}>Privada — el alumno no la ve</Text>
       </View>
       <TextInput
         value={body}
@@ -644,8 +675,8 @@ function FeaturePrefsOverridePanel({ zc, clientId, onSaved }: { zc: NutritionZon
       <TouchableOpacity onPress={() => setOpen((o) => !o)} activeOpacity={0.8} style={styles.prefsHead}>
         <View style={{ flex: 1, paddingRight: 10 }}>
           <View style={styles.prefsTitleRow}>
-            <SlidersHorizontal size={15} color={WARNING} />
-            <Text style={[styles.prefsTitle, { color: WARNING, fontFamily: FONT.uiBold }]}>Funciones para este alumno{overrideCount ? ` · ${overrideCount}` : ''}</Text>
+            <SlidersHorizontal size={15} color={theme.warning} />
+            <Text style={[styles.prefsTitle, { color: theme.warning, fontFamily: FONT.uiBold }]}>Funciones para este alumno{overrideCount ? ` · ${overrideCount}` : ''}</Text>
           </View>
           <Text style={[styles.prefsSub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Sobrescribe el default {baseLabel} solo para este alumno</Text>
         </View>
