@@ -3,7 +3,7 @@
 import { useMemo, useReducer, useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { AlertTriangle, Check, ChevronLeft, ChevronRight, Loader2, Plus, Search, Trash2 } from 'lucide-react'
-import { BuilderStepList, NutritionCard, StrategyBadge } from '@/components/nutrition-v2'
+import { BuilderStepList, MacroBudget, NutritionCard, StrategyBadge } from '@/components/nutrition-v2'
 import {
   NUTRITION_STRATEGIES,
   buildNutritionIdempotencyKey,
@@ -28,6 +28,7 @@ import {
   type BuilderItem,
   type BuilderSlot,
   type BuilderState,
+  type ItemMacros,
 } from '../_lib/draft-builder'
 import {
   createCoachFoodAction,
@@ -35,6 +36,8 @@ import {
   searchFoodCatalogCoachAction,
 } from '../_actions/builder.actions'
 import { FoodResultCard } from './FoodResultCard'
+import { foodCategoryIconUrlFromName } from './food-card-presentation'
+import { FoodThumb } from './FoodImage'
 
 type Dispatch = (action: import('../_lib/draft-builder').BuilderAction) => void
 
@@ -59,13 +62,24 @@ function mapCatalogItemToFood(item: FoodCatalogItem): BuilderFood {
 }
 
 const inputClass =
-  'min-h-11 w-full rounded-control border border-border-default bg-surface-card px-3 text-sm text-strong outline-none focus:border-ember-500'
+  'min-h-11 w-full rounded-control border border-border-default bg-surface-card px-3 text-sm text-strong outline-none transition-colors focus:border-ember-500 focus:ring-2 focus:ring-ember-500/25'
 const macroInputClass =
-  'min-h-9 w-full rounded-control border border-border-default bg-surface-card px-2 text-sm tabular-nums text-strong outline-none focus:border-ember-500'
+  'min-h-9 w-full rounded-control border border-border-default bg-surface-card px-2 text-sm tabular-nums text-strong outline-none transition-colors focus:border-ember-500 focus:ring-2 focus:ring-ember-500/25'
 const labelClass = 'mb-1 block text-xs font-semibold uppercase tracking-wide text-muted'
+const primaryButtonClass =
+  'inline-flex min-h-11 items-center gap-1 rounded-control bg-ember-500 px-5 text-sm font-semibold text-white transition-colors hover:bg-ember-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-surface-app disabled:opacity-60'
+const secondaryButtonClass =
+  'inline-flex min-h-11 items-center gap-1 rounded-control border border-border-default bg-surface-card px-4 text-sm font-semibold text-strong transition-colors hover:bg-surface-sunken focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50'
+const iconButtonClass =
+  'rounded-control p-2 text-muted transition-colors hover:bg-surface-sunken hover:text-rose-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
 
 function macroLine(m: { calories: number; proteinG: number; carbsG: number; fatsG: number }): string {
   return Math.round(m.calories) + ' kcal | P ' + Math.round(m.proteinG) + ' | C ' + Math.round(m.carbsG) + ' | G ' + Math.round(m.fatsG)
+}
+
+function numOr0(value: string): number {
+  const n = Number(String(value).trim())
+  return Number.isFinite(n) && n >= 0 ? n : 0
 }
 
 function FoodSearch({ clientId, onPick }: { clientId: string; onPick: (food: BuilderFood) => void }) {
@@ -125,6 +139,9 @@ function FoodSearch({ clientId, onPick }: { clientId: string; onPick: (food: Bui
       <div className="flex gap-2">
         <input
           className={inputClass}
+          type="search"
+          inputMode="search"
+          aria-label="Buscar alimento del catalogo"
           placeholder="Buscar alimento del catalogo"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
@@ -139,7 +156,7 @@ function FoodSearch({ clientId, onPick }: { clientId: string; onPick: (food: Bui
           type="button"
           onClick={() => void run()}
           disabled={loading}
-          className="inline-flex min-h-11 items-center gap-1 rounded-control bg-ember-500 px-3 text-sm font-semibold text-white disabled:opacity-60"
+          className={primaryButtonClass + ' shrink-0 px-3'}
         >
           {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
           Buscar
@@ -147,10 +164,10 @@ function FoodSearch({ clientId, onPick }: { clientId: string; onPick: (food: Bui
       </div>
       {error ? <p className="mt-2 text-xs text-rose-600 dark:text-rose-300">{error}</p> : null}
       {items.length > 0 ? (
-        <div className="mt-2 space-y-2">
-          <ul className="max-h-96 space-y-2 overflow-y-auto">
+        <div className="mt-3 space-y-3">
+          <ul className="grid max-h-[30rem] grid-cols-2 gap-2 overflow-y-auto pr-1 sm:grid-cols-3 xl:grid-cols-4">
             {items.map((item) => (
-              <li key={item.id}>
+              <li key={item.id} className="min-w-0">
                 <FoodResultCard item={item} onPick={() => pick(item)} />
               </li>
             ))}
@@ -160,7 +177,7 @@ function FoodSearch({ clientId, onPick }: { clientId: string; onPick: (food: Bui
               type="button"
               onClick={() => void loadMore()}
               disabled={loadingMore}
-              className="inline-flex min-h-9 w-full items-center justify-center gap-1 rounded-control border border-border-default bg-surface-card px-3 text-xs font-semibold text-strong disabled:opacity-60"
+              className={secondaryButtonClass + ' min-h-9 w-full justify-center text-xs'}
             >
               {loadingMore ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
               Mas resultados
@@ -249,11 +266,14 @@ function FreeFoodFields({
   return (
     <div className="mt-2 rounded-control border border-border-subtle bg-surface-sunken p-2.5">
       <p className={labelClass}>Macros por 100 {unit}</p>
-      <div className="grid grid-cols-4 gap-2">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         {CUSTOM_MACRO_FIELDS.map(({ field, label }) => (
           <div key={field}>
-            <label className="mb-0.5 block text-[10px] font-medium uppercase tracking-wide text-subtle">{label}</label>
+            <label className="mb-0.5 block text-[10px] font-medium uppercase tracking-wide text-subtle" htmlFor={`cm-${item.key}-${field}`}>
+              {label}
+            </label>
             <input
+              id={`cm-${item.key}-${field}`}
               className={macroInputClass}
               inputMode="decimal"
               placeholder="0"
@@ -274,7 +294,7 @@ function FreeFoodFields({
           type="button"
           onClick={() => void handleSave()}
           disabled={saving}
-          className="inline-flex min-h-9 items-center gap-1.5 rounded-control border border-border-default bg-surface-card px-3 text-xs font-semibold text-strong disabled:opacity-60"
+          className={secondaryButtonClass + ' min-h-9 px-3 text-xs'}
         >
           {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
           Guardar en mi catalogo
@@ -299,18 +319,22 @@ function ItemRow({
   error?: { food?: string; quantity?: string }
 }) {
   const unitOptions = item.food ? BUILDER_UNITS : (['g', 'ml'] as const)
+  const displayName = item.food ? item.food.name : item.customName
+  const iconUrl = foodCategoryIconUrlFromName(displayName)
   return (
-    <div className="rounded-control border border-border-subtle bg-surface-card p-3">
-      <div className="flex items-start justify-between gap-3">
+    <div className="rounded-control border border-border-subtle bg-surface-card p-2.5">
+      <div className="flex items-start gap-2.5">
+        <FoodThumb imageUrl={null} iconUrl={iconUrl} alt={displayName || 'Alimento'} />
         <div className="min-w-0 flex-1">
           {item.food ? (
             <>
-              <p className="truncate text-sm font-semibold text-strong">{item.food.name}</p>
-              {item.food.brand ? <p className="truncate text-xs text-muted">{item.food.brand}</p> : null}
+              <p className="line-clamp-2 text-sm font-semibold leading-snug text-strong">{item.food.name}</p>
+              {item.food.brand ? <p className="mt-0.5 truncate text-xs text-muted">{item.food.brand}</p> : null}
             </>
           ) : (
             <input
               className={inputClass}
+              aria-label="Nombre del alimento libre"
               placeholder="Nombre del alimento libre"
               value={item.customName ?? ''}
               onChange={(e) => dispatch({ type: 'UPDATE_ITEM', slotKey, itemKey: item.key, patch: { customName: e.target.value } })}
@@ -320,9 +344,9 @@ function ItemRow({
         <PortionMacros item={item} />
         <button
           type="button"
-          aria-label="Quitar item"
+          aria-label={`Quitar ${displayName || 'alimento'}`}
           onClick={() => dispatch({ type: 'REMOVE_ITEM', slotKey, itemKey: item.key })}
-          className="rounded-control p-2 text-muted hover:text-rose-600"
+          className={iconButtonClass}
         >
           <Trash2 className="h-4 w-4" />
         </button>
@@ -332,12 +356,14 @@ function ItemRow({
         <input
           className={inputClass + ' max-w-32'}
           inputMode="decimal"
+          aria-label="Cantidad"
           placeholder="Cantidad"
           value={item.quantity}
           onChange={(e) => dispatch({ type: 'UPDATE_ITEM', slotKey, itemKey: item.key, patch: { quantity: e.target.value } })}
         />
         <select
           className={inputClass + ' max-w-24'}
+          aria-label="Unidad"
           value={item.unit}
           onChange={(e) => dispatch({ type: 'UPDATE_ITEM', slotKey, itemKey: item.key, patch: { unit: e.target.value as BuilderItem['unit'] } })}
         >
@@ -373,8 +399,9 @@ function SlotEditor({
     <NutritionCard>
       <div className="flex items-start justify-between gap-2">
         <div className="flex-1">
-          <label className={labelClass}>Nombre de la franja</label>
+          <label className={labelClass} htmlFor={`slot-name-${slot.key}`}>Nombre de la franja</label>
           <input
+            id={`slot-name-${slot.key}`}
             className={inputClass}
             placeholder="Desayuno, Almuerzo..."
             value={slot.name}
@@ -385,8 +412,9 @@ function SlotEditor({
           ) : null}
         </div>
         <div className="w-28">
-          <label className={labelClass}>Hora</label>
+          <label className={labelClass} htmlFor={`slot-time-${slot.key}`}>Hora</label>
           <input
+            id={`slot-time-${slot.key}`}
             className={inputClass}
             type="time"
             value={slot.startTime}
@@ -395,9 +423,9 @@ function SlotEditor({
         </div>
         <button
           type="button"
-          aria-label="Quitar franja"
+          aria-label={`Quitar franja ${slot.name || 'sin nombre'}`}
           onClick={() => dispatch({ type: 'REMOVE_SLOT', slotKey: slot.key })}
-          className="mt-6 rounded-control p-2 text-muted hover:text-rose-600"
+          className={iconButtonClass + ' mt-6'}
         >
           <Trash2 className="h-4 w-4" />
         </button>
@@ -421,7 +449,7 @@ function SlotEditor({
         <button
           type="button"
           onClick={() => dispatch({ type: 'ADD_ITEM', slotKey: slot.key, key: genId(), food: null })}
-          className="mt-2 inline-flex min-h-11 items-center gap-1 rounded-control border border-border-default bg-surface-card px-3 text-sm font-semibold text-strong"
+          className={secondaryButtonClass + ' mt-2'}
         >
           <Plus className="h-4 w-4" />
           Alimento libre (con macros)
@@ -439,7 +467,7 @@ function SlotEditor({
 function StrategyStep({ state, dispatch }: { state: BuilderState; dispatch: Dispatch }) {
   const options: NutritionStrategy[] = ['structured', 'flexible', 'hybrid']
   return (
-    <div className="space-y-3">
+    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
       {options.map((key) => {
         const meta = NUTRITION_STRATEGIES[key]
         const active = state.strategy === key
@@ -447,15 +475,18 @@ function StrategyStep({ state, dispatch }: { state: BuilderState; dispatch: Disp
           <button
             key={key}
             type="button"
+            aria-pressed={active}
             onClick={() => dispatch({ type: 'SET_STRATEGY', strategy: key, firstSlotKey: genId() })}
             className={
-              'block w-full rounded-card border p-4 text-left transition ' +
-              (active ? 'border-ember-500 bg-ember-100/60 dark:bg-ember-100/10' : 'border-border-default bg-surface-card hover:border-ember-300')
+              'flex h-full flex-col rounded-card border p-4 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ' +
+              (active
+                ? 'border-ember-500 bg-ember-100/60 dark:bg-ember-100/10'
+                : 'border-border-default bg-surface-card hover:border-ember-300')
             }
           >
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-2">
               <span className="font-display text-base font-semibold text-strong">{meta.label}</span>
-              {active ? <Check className="h-5 w-5 text-ember-600" /> : null}
+              {active ? <Check className="h-5 w-5 shrink-0 text-ember-600 dark:text-ember-300" /> : null}
             </div>
             <p className="mt-1 text-sm text-muted">{meta.description}</p>
           </button>
@@ -481,10 +512,11 @@ function TargetsStep({
     { field: 'fatsG', label: 'Grasas (g)' },
   ]
   return (
-    <div className="space-y-4">
+    <div className="max-w-4xl space-y-5">
       <div>
-        <label className={labelClass}>Nombre del plan</label>
+        <label className={labelClass} htmlFor="plan-name">Nombre del plan</label>
         <input
+          id="plan-name"
           className={inputClass}
           placeholder="Plan de definicion"
           value={state.planName}
@@ -492,37 +524,81 @@ function TargetsStep({
         />
         {errors.planName ? <p className="mt-1 text-xs text-rose-600 dark:text-rose-300">{errors.planName}</p> : null}
       </div>
-      <div className="grid grid-cols-2 gap-3">
-        {macroFields.map(({ field, label }) => (
-          <div key={field}>
-            <label className={labelClass}>{label}</label>
-            <input
-              className={inputClass}
-              inputMode="decimal"
-              value={state.targets[field]}
-              onChange={(e) => dispatch({ type: 'SET_TARGET', field, value: e.target.value })}
-            />
-            {errors[field] ? <p className="mt-1 text-xs text-rose-600 dark:text-rose-300">{errors[field]}</p> : null}
+      <div className="grid gap-5 lg:grid-cols-2">
+        <fieldset className="space-y-3">
+          <legend className={labelClass}>Metas diarias</legend>
+          <div className="grid grid-cols-2 gap-3">
+            {macroFields.map(({ field, label }) => (
+              <div key={field}>
+                <label className={labelClass} htmlFor={`target-${field}`}>{label}</label>
+                <input
+                  id={`target-${field}`}
+                  className={inputClass}
+                  inputMode="decimal"
+                  value={state.targets[field]}
+                  onChange={(e) => dispatch({ type: 'SET_TARGET', field, value: e.target.value })}
+                />
+                {errors[field] ? <p className="mt-1 text-xs text-rose-600 dark:text-rose-300">{errors[field]}</p> : null}
+              </div>
+            ))}
           </div>
-        ))}
+        </fieldset>
+        <fieldset className="rounded-card border border-border-subtle p-3">
+          <legend className="px-1 text-xs font-semibold uppercase tracking-wide text-muted">Permisos del alumno</legend>
+          {([
+            ['canRegisterFreely', 'Puede registrar alimentos libremente'],
+            ['canAdjustPrescribedQuantity', 'Puede ajustar la cantidad prescrita'],
+            ['canSubstitute', 'Puede sustituir alimentos'],
+          ] as const).map(([field, label]) => (
+            <label key={field} className="flex min-h-11 items-center gap-2 text-sm text-body">
+              <input
+                type="checkbox"
+                className="h-4 w-4 accent-ember-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                checked={state.permissions[field]}
+                onChange={(e) => dispatch({ type: 'SET_PERMISSION', field, value: e.target.checked })}
+              />
+              {label}
+            </label>
+          ))}
+        </fieldset>
       </div>
-      <fieldset className="rounded-card border border-border-subtle p-3">
-        <legend className="px-1 text-xs font-semibold uppercase tracking-wide text-muted">Permisos del alumno</legend>
-        {([
-          ['canRegisterFreely', 'Puede registrar alimentos libremente'],
-          ['canAdjustPrescribedQuantity', 'Puede ajustar la cantidad prescrita'],
-          ['canSubstitute', 'Puede sustituir alimentos'],
-        ] as const).map(([field, label]) => (
-          <label key={field} className="flex min-h-11 items-center gap-2 text-sm text-body">
-            <input
-              type="checkbox"
-              checked={state.permissions[field]}
-              onChange={(e) => dispatch({ type: 'SET_PERMISSION', field, value: e.target.checked })}
-            />
-            {label}
-          </label>
-        ))}
-      </fieldset>
+    </div>
+  )
+}
+
+function DaySummary({ state, totals }: { state: BuilderState; totals: ItemMacros }) {
+  return (
+    <div className="space-y-3">
+      <h3 className="font-display text-base font-semibold text-strong">Resumen del dia</h3>
+      <MacroBudget
+        calories={{ consumed: totals.calories, target: numOr0(state.targets.calories) }}
+        macros={[
+          { macro: 'protein', consumed: totals.proteinG, target: numOr0(state.targets.proteinG) },
+          { macro: 'carbs', consumed: totals.carbsG, target: numOr0(state.targets.carbsG) },
+          { macro: 'fats', consumed: totals.fatsG, target: numOr0(state.targets.fatsG) },
+        ]}
+      />
+      <NutritionCard>
+        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">Por franja</p>
+        {state.slots.length === 0 ? (
+          <p className="text-sm text-muted">Agrega una franja para ver el desglose del dia.</p>
+        ) : (
+          <ul className="space-y-2">
+            {state.slots.map((slot) => {
+              const s = slotSubtotal(slot)
+              return (
+                <li key={slot.key} className="flex items-center justify-between gap-2">
+                  <span className="min-w-0 truncate text-xs text-body">
+                    {slot.name.trim() || 'Sin nombre'}
+                    <span className="text-subtle"> · {slot.items.length} item{slot.items.length === 1 ? '' : 's'}</span>
+                  </span>
+                  <span className="shrink-0 font-mono text-xs tabular-nums text-strong">{Math.round(s.calories)} kcal</span>
+                </li>
+              )
+            })}
+          </ul>
+        )}
+      </NutritionCard>
     </div>
   )
 }
@@ -538,6 +614,7 @@ function ConstructionStep({
   dispatch: Dispatch
   errors: Record<string, string>
 }) {
+  const totals = dayTotals(state)
   if (!strategyUsesSlots(state.strategy)) {
     return (
       <NutritionCard tone="neutral">
@@ -548,24 +625,32 @@ function ConstructionStep({
       </NutritionCard>
     )
   }
-  const totals = dayTotals(state)
   return (
-    <div className="space-y-4">
-      {errors.slots ? <p className="text-sm text-rose-600 dark:text-rose-300">{errors.slots}</p> : null}
-      {state.slots.map((slot) => (
-        <SlotEditor key={slot.key} slot={slot} clientId={clientId} dispatch={dispatch} errors={errors} />
-      ))}
-      <button
-        type="button"
-        onClick={() => dispatch({ type: 'ADD_SLOT', key: genId() })}
-        className="inline-flex min-h-11 items-center gap-1 rounded-control border border-dashed border-border-default bg-surface-card px-4 text-sm font-semibold text-strong"
-      >
-        <Plus className="h-4 w-4" />
-        Agregar franja
-      </button>
-      <div className="sticky bottom-0 z-10 -mx-1 flex items-center justify-between gap-2 rounded-control border border-border-default bg-surface-card/95 px-4 py-3 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-surface-card/80">
-        <span className="text-xs font-semibold uppercase tracking-wide text-muted">Total del dia</span>
-        <span className="font-mono text-sm font-semibold tabular-nums text-strong">{macroLine(totals)}</span>
+    <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
+      <div className="min-w-0 space-y-4">
+        {errors.slots ? <p className="text-sm text-rose-600 dark:text-rose-300">{errors.slots}</p> : null}
+        {state.slots.map((slot) => (
+          <SlotEditor key={slot.key} slot={slot} clientId={clientId} dispatch={dispatch} errors={errors} />
+        ))}
+        <button
+          type="button"
+          onClick={() => dispatch({ type: 'ADD_SLOT', key: genId() })}
+          className={secondaryButtonClass + ' border-dashed px-4'}
+        >
+          <Plus className="h-4 w-4" />
+          Agregar franja
+        </button>
+
+        <div className="sticky bottom-0 z-10 -mx-1 flex items-center justify-between gap-2 rounded-control border border-border-default bg-surface-card/95 px-4 py-3 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-surface-card/80 lg:hidden">
+          <span className="text-xs font-semibold uppercase tracking-wide text-muted">Total del dia</span>
+          <span className="font-mono text-sm font-semibold tabular-nums text-strong">{macroLine(totals)}</span>
+        </div>
+      </div>
+
+      <div className="hidden lg:block">
+        <div className="lg:sticky lg:top-6">
+          <DaySummary state={state} totals={totals} />
+        </div>
       </div>
     </div>
   )
@@ -584,14 +669,14 @@ function ReviewStep({
   const totals = dayTotals(state)
   const meta = state.strategy ? NUTRITION_STRATEGIES[state.strategy] : null
   return (
-    <div className="space-y-4">
+    <div className="max-w-3xl space-y-4">
       <NutritionCard>
         <div className="flex flex-wrap items-center gap-2">
           {state.strategy ? <StrategyBadge strategy={state.strategy} /> : null}
           <span className="font-display text-lg font-semibold text-strong">{state.planName || 'Sin nombre'}</span>
         </div>
         {meta ? <p className="mt-1 text-sm text-muted">{meta.description}</p> : null}
-        <dl className="mt-3 grid grid-cols-2 gap-3 text-sm">
+        <dl className="mt-3 grid gap-3 text-sm sm:grid-cols-2">
           <div>
             <dt className="text-xs uppercase tracking-wide text-muted">Metas diarias</dt>
             <dd className="text-body">
@@ -610,22 +695,25 @@ function ReviewStep({
         </dl>
       </NutritionCard>
 
-      <div>
-        <label className={labelClass}>Vigente desde</label>
-        <input
-          className={inputClass + ' max-w-56'}
-          type="date"
-          value={state.effectiveFrom}
-          onChange={(e) => dispatch({ type: 'SET_EFFECTIVE_FROM', value: e.target.value })}
-        />
-      </div>
+      <div className="grid gap-4 md:grid-cols-2 md:items-start">
+        <div>
+          <label className={labelClass} htmlFor="effective-from">Vigente desde</label>
+          <input
+            id="effective-from"
+            className={inputClass}
+            type="date"
+            value={state.effectiveFrom}
+            onChange={(e) => dispatch({ type: 'SET_EFFECTIVE_FROM', value: e.target.value })}
+          />
+        </div>
 
-      <NutritionCard tone="neutral">
-        <p className="text-xs text-muted">
-          Fuera de este MVP: plantillas y asignacion multiple, editar una version ya publicada (para cambios crea una
-          nueva version), variantes por dia de la semana y fecha de vigencia programada.
-        </p>
-      </NutritionCard>
+        <NutritionCard tone="neutral">
+          <p className="text-xs text-muted">
+            Fuera de este MVP: plantillas y asignacion multiple, editar una version ya publicada (para cambios crea una
+            nueva version), variantes por dia de la semana y fecha de vigencia programada.
+          </p>
+        </NutritionCard>
+      </div>
 
       {publishError ? (
         <p className="rounded-control border border-rose-300 bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:border-rose-800 dark:bg-rose-950/40 dark:text-rose-300">
@@ -711,8 +799,8 @@ export function PlanBuilderClient({
   }
 
   return (
-    <div className="grid gap-5 lg:grid-cols-[240px_1fr]">
-      <div className="space-y-3">
+    <div className="grid gap-5 lg:grid-cols-[240px_minmax(0,1fr)]">
+      <div className="space-y-3 lg:sticky lg:top-6 lg:self-start">
         <BuilderStepList steps={steps} />
         {existingPlan ? (
           <p className="rounded-control border border-border-subtle bg-surface-card px-3 py-2 text-xs text-muted">
@@ -721,7 +809,7 @@ export function PlanBuilderClient({
         ) : null}
       </div>
 
-      <div className="space-y-5">
+      <div className="min-w-0 space-y-5">
         {state.step === 0 ? <StrategyStep state={state} dispatch={dispatch} /> : null}
         {state.step === 1 ? (
           <TargetsStep state={state} dispatch={dispatch} errors={showErrors ? validation.errors : {}} />
@@ -732,31 +820,17 @@ export function PlanBuilderClient({
         {state.step === 3 ? <ReviewStep state={state} dispatch={dispatch} publishError={publishError} /> : null}
 
         <div className="flex items-center justify-between gap-2 border-t border-border-subtle pt-4">
-          <button
-            type="button"
-            onClick={handlePrev}
-            disabled={state.step === 0 || isPending}
-            className="inline-flex min-h-11 items-center gap-1 rounded-control border border-border-default bg-surface-card px-4 text-sm font-semibold text-strong disabled:opacity-50"
-          >
+          <button type="button" onClick={handlePrev} disabled={state.step === 0 || isPending} className={secondaryButtonClass}>
             <ChevronLeft className="h-4 w-4" />
             Atras
           </button>
           {state.step < 3 ? (
-            <button
-              type="button"
-              onClick={handleNext}
-              className="inline-flex min-h-11 items-center gap-1 rounded-control bg-ember-500 px-5 text-sm font-semibold text-white"
-            >
+            <button type="button" onClick={handleNext} className={primaryButtonClass}>
               Siguiente
               <ChevronRight className="h-4 w-4" />
             </button>
           ) : (
-            <button
-              type="button"
-              onClick={handlePublish}
-              disabled={isPending}
-              className="inline-flex min-h-11 items-center gap-2 rounded-control bg-ember-500 px-5 text-sm font-semibold text-white disabled:opacity-60"
-            >
+            <button type="button" onClick={handlePublish} disabled={isPending} className={primaryButtonClass + ' gap-2'}>
               {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
               Publicar plan
             </button>

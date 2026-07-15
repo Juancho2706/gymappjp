@@ -44,9 +44,28 @@ const FoodDetailRowSchema = z
     country_code: z.string().nullable().default(null),
     catalog_source: z.string().default('eva'),
     verification_status: z.string().default('unverified'),
+    product_image_path: z.string().nullable().default(null),
+    // Recurso embebido (PostgREST) — puede llegar null si la fila no tiene media.
+    food_media: z
+      .array(
+        z.object({
+          object_path: z.string(),
+          source_url: z.string().nullable().default(null),
+          is_primary: z.boolean().default(false),
+          kind: z.string().default('product_photo'),
+        }),
+      )
+      .nullable()
+      .default(null),
   })
-  .transform(
-    (r): FoodDetailData => ({
+  .transform((r): FoodDetailData => {
+    const media = Array.isArray(r.food_media) ? r.food_media : []
+    const primaryPhoto =
+      media.find((m) => m.is_primary) ??
+      media.find((m) => m.kind === 'product_photo') ??
+      media[0] ??
+      null
+    return ({
       id: r.id,
       name: r.name,
       brand: r.brand,
@@ -70,11 +89,19 @@ const FoodDetailRowSchema = z
       countryCode: r.country_code,
       source: r.catalog_source,
       verificationStatus: r.verification_status,
-    }),
-  )
+      imagePath: primaryPhoto?.object_path ?? r.product_image_path,
+      imageSourceUrl: primaryPhoto?.source_url ?? null,
+    })
+  })
 
 const FOOD_DETAIL_COLUMNS =
-  'id, name, brand, category, calories, protein_g, carbs_g, fats_g, fiber_g, sodium_mg, sugar_g, saturated_fat_g, is_liquid, serving_size, serving_unit, household_grams, household_label, package_quantity, package_unit, barcode, country_code, catalog_source, verification_status'
+  'id, name, brand, category, calories, protein_g, carbs_g, fats_g, fiber_g, sodium_mg, sugar_g, saturated_fat_g, is_liquid, serving_size, serving_unit, household_grams, household_label, package_quantity, package_unit, barcode, country_code, catalog_source, verification_status, product_image_path'
+
+// Igual que la base pero embebe la media curada (foto + source_url para "Ver original").
+// El embed puede fallar en entornos donde la relación PostgREST no exista: en ese
+// caso la query cae a FOOD_DETAIL_COLUMNS (mismo schema tolerante) sin regresión.
+const FOOD_DETAIL_COLUMNS_WITH_MEDIA =
+  FOOD_DETAIL_COLUMNS + ', food_media(object_path, source_url, is_primary, kind)'
 
 type FoodDetailQueryClient = {
   from: (table: 'foods') => {
@@ -102,11 +129,19 @@ export async function getCoachFoodDetail(foodId: string): Promise<FoodDetailData
   if (!user) return null
 
   const client = supabase as unknown as FoodDetailQueryClient
-  const { data, error } = await client
+  let { data, error } = await client
     .from('foods')
-    .select(FOOD_DETAIL_COLUMNS)
+    .select(FOOD_DETAIL_COLUMNS_WITH_MEDIA)
     .eq('id', parsedId.data)
     .maybeSingle()
+  if (error) {
+    // Fallback sin embed (p. ej. relación PostgREST ausente) — nunca rompe la ficha.
+    ;({ data, error } = await client
+      .from('foods')
+      .select(FOOD_DETAIL_COLUMNS)
+      .eq('id', parsedId.data)
+      .maybeSingle())
+  }
   if (error || !data) return null
 
   const parsed = FoodDetailRowSchema.safeParse(data)

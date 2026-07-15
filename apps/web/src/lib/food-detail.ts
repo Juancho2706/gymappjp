@@ -10,6 +10,12 @@
  * para que ninguna superficie lo omita.
  */
 
+import {
+  foodCategoryIconUrl,
+  foodImageUrl,
+  foodLightboxUrl,
+} from '@/lib/food-image'
+
 /** Forma neutral que consume `FoodDetailSheet` (camelCase, agnóstica de la capa de datos). */
 export interface FoodDetailData {
   id: string
@@ -41,6 +47,16 @@ export interface FoodDetailData {
   source: string
   /** `foods.verification_status`: unverified | community | coach_verified | eva_verified | rejected. */
   verificationStatus: string
+  /**
+   * Path del objeto de la foto de producto en el bucket `food-media`
+   * (ej. `off/3/012/345/front.jpg`) o null. Se resuelve a URL con `foodImageUrl`.
+   */
+  imagePath: string | null
+  /**
+   * URL externa de la foto (`food_media.source_url`) para el enlace "Ver original"
+   * del lightbox, o null si la fila no la trae.
+   */
+  imageSourceUrl: string | null
 }
 
 export const OPEN_FOOD_FACTS_URL = 'https://world.openfoodfacts.org'
@@ -156,4 +172,48 @@ export function formatBarcode(barcode: string | null | undefined): string {
   const digits = barcode.replace(/\D/g, '')
   if (digits.length === 0) return '—'
   return digits.replace(/(\d{4})(?=\d)/g, '$1 ').trim()
+}
+
+
+/**
+ * Imagen resuelta de la ficha del alimento (presentación PURA).
+ *
+ * Combina la foto de producto (si existe) con el icono estático de categoría
+ * como fallback. No consume Image Transformations: las URLs apuntan al bucket
+ * público `food-media` (fotos) o a `/food-icons/*.webp` (iconos del build).
+ */
+export interface FoodDetailImage {
+  /** true = hay foto de producto real (renderizar `<img>`); false = usar icono. */
+  hasPhoto: boolean
+  /** URL de la foto tamaño base para el header de la ficha, o null. */
+  headerUrl: string | null
+  /** URL de la variante grande (512px) para el lightbox, o null. */
+  lightboxUrl: string | null
+  /** URL de respaldo (tamaño base) si la variante grande falla al cargar. */
+  fallbackUrl: string | null
+  /** Icono estático de categoría (siempre presente; cae a `otro`). */
+  iconUrl: string
+  /** URL externa "Ver original" (o null si no aplica). */
+  sourceUrl: string | null
+}
+
+/**
+ * Resuelve las URLs de imagen de una ficha. Puro y testeable: delega en los
+ * helpers de `food-image` (que leen `NEXT_PUBLIC_SUPABASE_URL`). Si no hay
+ * `imagePath` o falta la base pública, `hasPhoto` es false y la UI muestra el
+ * icono de categoría.
+ */
+export function resolveFoodDetailImage(
+  detail: Pick<FoodDetailData, 'imagePath' | 'category' | 'imageSourceUrl'>,
+): FoodDetailImage {
+  const headerUrl = foodImageUrl(detail.imagePath)
+  const lightboxUrl = foodLightboxUrl(detail.imagePath)
+  return {
+    hasPhoto: headerUrl != null,
+    headerUrl,
+    lightboxUrl,
+    fallbackUrl: headerUrl,
+    iconUrl: foodCategoryIconUrl(detail.category),
+    sourceUrl: detail.imageSourceUrl ?? null,
+  }
 }

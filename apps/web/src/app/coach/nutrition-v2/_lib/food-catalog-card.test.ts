@@ -131,6 +131,22 @@ describe('foodCatalogItemToDetail', () => {
     expect(detail.verificationStatus).toBe('community')
   })
 
+  it('maps media objectPath/sourceUrl to imagePath/imageSourceUrl', () => {
+    const detail = foodCatalogItemToDetail(makeItem())
+    expect(detail.imagePath).toBe('cl/yogurt natural.webp')
+    expect(detail.imageSourceUrl).toBeNull()
+    const withSource = foodCatalogItemToDetail(
+      makeItem({ media: { ...makeItem().media!, sourceUrl: 'https://world.openfoodfacts.org/product/x' } }),
+    )
+    expect(withSource.imageSourceUrl).toBe('https://world.openfoodfacts.org/product/x')
+  })
+
+  it('nulls image fields when there is no media', () => {
+    const detail = foodCatalogItemToDetail(makeItem({ media: null }))
+    expect(detail.imagePath).toBeNull()
+    expect(detail.imageSourceUrl).toBeNull()
+  })
+
   it('derives isLiquid from the serving unit and nulls household fields', () => {
     expect(foodCatalogItemToDetail(makeItem({ servingUnit: 'ml' })).isLiquid).toBe(true)
     const detail = foodCatalogItemToDetail(makeItem({ servingUnit: 'g' }))

@@ -133,5 +133,7 @@ export function foodCatalogItemToDetail(item: FoodCatalogItem): FoodDetailData {
     countryCode: item.countryCode,
     source: item.source,
     verificationStatus: item.verificationStatus,
+    imagePath: item.media?.objectPath ?? null,
+    imageSourceUrl: item.media?.sourceUrl ?? null,
   }
 }

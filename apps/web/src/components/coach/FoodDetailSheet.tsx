@@ -1,6 +1,7 @@
 'use client'
 
-import { Barcode, ExternalLink, Loader2 } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { Barcode, ExternalLink, Loader2, Maximize2 } from 'lucide-react'
 import {
   Sheet,
   SheetContent,
@@ -8,11 +9,13 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet'
+import { ImageLightbox } from '@/components/ImageLightbox'
 import { cn } from '@/lib/utils'
 import {
   formatBarcode,
   getFoodSourceAttribution,
   getFoodVerificationLabel,
+  resolveFoodDetailImage,
   type FoodDetailData,
   type FoodVerificationTone,
 } from '@/lib/food-detail'
@@ -64,9 +67,21 @@ function MicroRow({ label, value }: { label: string; value: string }) {
 }
 
 export function FoodDetailSheet({ open, onOpenChange, detail, loading = false }: Props) {
+  const [lightboxOpen, setLightboxOpen] = useState(false)
+  const [headerFailed, setHeaderFailed] = useState(false)
+
+  // Al cambiar de alimento, reinicia el estado de la foto del header.
+  useEffect(() => {
+    setHeaderFailed(false)
+  }, [detail?.id])
+
   const attribution = detail ? getFoodSourceAttribution(detail.source) : null
   const verification = detail ? getFoodVerificationLabel(detail.verificationStatus) : null
   const basis = detail ? unitBasis(detail) : '100 g'
+  const image = detail ? resolveFoodDetailImage(detail) : null
+  const showPhoto = !!image?.hasPhoto && !headerFailed
+  // Credito de la foto: OFF solo cuando la procedencia lo respalda.
+  const photoIsOff = !!detail && (detail.source === 'open_food_facts' || !!image?.sourceUrl)
 
   const micros = detail
     ? ([
@@ -86,6 +101,26 @@ export function FoodDetailSheet({ open, onOpenChange, detail, loading = false }:
     detail && detail.packageQuantity && detail.packageUnit
       ? fmt(detail.packageQuantity, 0) + ' ' + detail.packageUnit
       : null
+
+  const lightboxFooter =
+    detail && image ? (
+      <span>
+        {photoIsOff ? 'Foto: Open Food Facts (CC-BY-SA)' : 'Foto del producto'}
+        {image.sourceUrl ? (
+          <>
+            {' · '}
+            <a
+              href={image.sourceUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-semibold text-white underline underline-offset-2 hover:text-white"
+            >
+              Ver original
+            </a>
+          </>
+        ) : null}
+      </span>
+    ) : null
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -117,6 +152,44 @@ export function FoodDetailSheet({ open, onOpenChange, detail, loading = false }:
             </p>
           ) : (
             <>
+              {/* Header visual: foto de producto (ampliable) o icono de categoria. */}
+              {image ? (
+                showPhoto ? (
+                  <button
+                    type="button"
+                    onClick={() => setLightboxOpen(true)}
+                    aria-label={'Ampliar foto de ' + detail.name}
+                    className="eva-press group relative flex h-44 w-full items-center justify-center overflow-hidden rounded-card border border-subtle bg-surface-sunken sm:h-52"
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element -- imagen de Storage: cero Image Transformations */}
+                    <img
+                      src={image.headerUrl ?? undefined}
+                      alt={detail.name}
+                      onError={() => setHeaderFailed(true)}
+                      draggable={false}
+                      className="max-h-full max-w-full select-none object-contain p-3"
+                    />
+                    <span className="absolute bottom-2 right-2 flex size-8 items-center justify-center rounded-full border border-black/10 bg-white/85 text-slate-700 shadow-sm backdrop-blur-sm transition-colors group-hover:bg-white dark:border-white/10 dark:bg-black/55 dark:text-white">
+                      <Maximize2 className="size-4" aria-hidden />
+                    </span>
+                  </button>
+                ) : (
+                  <div
+                    className="flex h-36 w-full items-center justify-center rounded-card border border-subtle bg-surface-sunken sm:h-40"
+                    aria-hidden
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element -- icono estatico del build: cero Image Transformations */}
+                    <img
+                      src={image.iconUrl}
+                      alt=""
+                      width={80}
+                      height={80}
+                      className="size-[72px] opacity-90 sm:size-20"
+                    />
+                  </div>
+                )
+              ) : null}
+
               {verification && (
                 <div className="flex flex-wrap items-center gap-2">
                   <span
@@ -209,6 +282,16 @@ export function FoodDetailSheet({ open, onOpenChange, detail, loading = false }:
           )}
         </div>
       </SheetContent>
+
+      <ImageLightbox
+        open={lightboxOpen}
+        onOpenChange={setLightboxOpen}
+        src={image?.lightboxUrl ?? null}
+        fallbackSrc={image?.fallbackUrl ?? null}
+        alt={detail?.name ?? ''}
+        title={detail?.name ? 'Foto de ' + detail.name : 'Foto del alimento'}
+        footer={lightboxFooter}
+      />
     </Sheet>
   )
 }
