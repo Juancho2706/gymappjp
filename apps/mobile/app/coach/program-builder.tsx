@@ -54,7 +54,7 @@ import {
   templateMatchesActionWorkspace,
 } from '../../lib/client-action-workspace'
 import { getActiveCoachWorkspace } from '../../lib/workspace'
-import { activeSwapRollbackPlan, assertClientProgramNameUnchanged, canAssignProgramToClients, duplicateTemplateNameError, filterTemplatePlansForAssignment, normalizeAssignmentWeeks, persistedPlanGroupName, programPlanTitle, resolveProgramScheduleMetadata, restorableProgramMetadata, shouldAutosaveProgramDraft, withoutProgramActive, type ProgramMetadataSnapshot } from '../../lib/program-persistence'
+import { activeSwapRollbackPlan, canAssignProgramToClients, duplicateTemplateNameError, filterTemplatePlansForAssignment, normalizeAssignmentWeeks, persistedPlanGroupName, programPlanTitle, resolveProgramScheduleMetadata, restorableProgramMetadata, shouldAutosaveProgramDraft, withoutProgramActive, type ProgramMetadataSnapshot } from '../../lib/program-persistence'
 import { resolveOnDark } from '../../lib/theme'
 import { getSantiagoIsoYmdForUtcInstant } from '../../lib/date-utils'
 import { apiFetch } from '../../lib/api'
@@ -375,11 +375,6 @@ async function persistProgram(opts: {
     if (snapshot.error) throw snapshot.error
     if (!snapshot.data) throw new Error('El programa ya no está disponible en este espacio de trabajo.')
     metadataSnapshot = snapshot.data as ProgramMetadataSnapshot
-    assertClientProgramNameUnchanged({
-      clientId: opts.clientId,
-      existingName: metadataSnapshot.name,
-      requestedName: opts.meta.name,
-    })
     if (!opts.force && hasProgramOptimisticConflict({
       expectedUpdatedAt: opts.expectedUpdatedAt,
       currentUpdatedAt: metadataSnapshot.updated_at,

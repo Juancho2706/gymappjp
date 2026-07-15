@@ -135,12 +135,15 @@ El esquema valida (resumen relevante):
 
 ### Rama A — programa existente (`programId` presente)
 
-1. Relee el programa actual (`name, client_id`), acotado por `client_id` si es de alumno o por
+1. Relee el programa actual (`client_id`), acotado por `client_id` si es de alumno o por
    `coach_id` si es plantilla, + `applyOrgScope`. Si no existe → `'Programa no encontrado.'`
    (nota: para alumnos del pool, el acceso se acota por `client_id`, no por creador — cualquier
    miembro del pool puede editar).
-2. **Bloqueo de rename de programa asignado:** si el programa ya tiene `client_id` y el nombre
-   cambia → `'No se puede cambiar el nombre de un programa ya asignado a un alumno.'`
+2. **Rename de programa asignado PERMITIDO (2026-07-15):** el guard legacy que devolvia
+   `'No se puede cambiar el nombre de un programa ya asignado a un alumno.'` se elimino — databa
+   de cuando plantilla↔programa se ligaban por nombre; hoy el vinculo es `source_template_id`,
+   el sync (6.6) conserva el nombre propio del programa y no hay unicidad de nombre para
+   programas de alumno.
 3. **Unicidad de nombre de plantilla:** si es plantilla, valida que no exista otra plantilla del
    coach con el mismo `name` (`client_id IS NULL`, `neq id`) → `'Ya tienes una plantilla guardada
    con el nombre "X".'`

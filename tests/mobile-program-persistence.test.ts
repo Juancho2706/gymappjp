@@ -7,8 +7,6 @@ import {
   programPlanTitle,
   withoutProgramActive,
   canAssignProgramToClients,
-  assertClientProgramNameUnchanged,
-  CLIENT_PROGRAM_NAME_IMMUTABLE_ERROR,
   duplicateTemplateNameError,
   EMPTY_TEMPLATE_ASSIGNMENT_ERROR,
   filterTemplatePlansForAssignment,
@@ -128,17 +126,7 @@ describe('mobile program persistence compensation', () => {
     expect(canAssignProgramToClients({ isTemplate: false, programId: 'client-program' })).toBe(false)
   })
 
-  it('bloquea el cambio de nombre de un programa de alumno con el copy web exacto', () => {
-    expect(() => assertClientProgramNameUnchanged({
-      clientId: 'client-1',
-      existingName: 'Programa original',
-      requestedName: 'Programa nuevo',
-    })).toThrow(CLIENT_PROGRAM_NAME_IMMUTABLE_ERROR)
-    expect(() => assertClientProgramNameUnchanged({
-      clientId: 'client-1',
-      existingName: 'Programa original',
-      requestedName: 'Programa original',
-    })).not.toThrow()
+  it('usa el copy web exacto para plantilla duplicada', () => {
     expect(duplicateTemplateNameError('Fuerza')).toBe('Ya tienes una plantilla guardada con el nombre "Fuerza".')
   })
 

@@ -427,7 +427,7 @@ export async function saveWorkoutProgramAction(payload: WorkoutProgramInput, sav
             // el programa de un alumno del pool, no solo el creador). Plantillas: por coach.
                 let currentProgramQuery = supabase
                     .from('workout_programs')
-                    .select('name, client_id')
+                    .select('client_id')
                     .eq('id', finalProgramId)
                 currentProgramQuery = clientId
                     ? currentProgramQuery.eq('client_id', clientId)
@@ -441,12 +441,11 @@ export async function saveWorkoutProgramAction(payload: WorkoutProgramInput, sav
             }
 
             if (currentProgram) {
-                // 1. Validar que no se cambie el nombre si ya está asignado
-                if (currentProgram.client_id && currentProgram.name !== programName) {
-                    return { error: 'No se puede cambiar el nombre de un programa ya asignado a un alumno.' }
-                }
+                // El nombre de un programa asignado SÍ es editable (el guard legacy que lo
+                // bloqueaba databa de cuando plantilla↔programa se ligaban por nombre; hoy el
+                // vínculo es source_template_id y el sync conserva el nombre propio del programa).
 
-                // 2. Validar unicidad de nombre si es una plantilla (ahora o antes)
+                // Validar unicidad de nombre si es una plantilla (ahora o antes)
                 if (!clientId) {
                     let existingNameQuery = supabase
                         .from('workout_programs')

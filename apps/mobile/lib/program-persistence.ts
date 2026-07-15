@@ -117,19 +117,8 @@ export function canAssignProgramToClients(input: { isTemplate: boolean; programI
   return input.isTemplate && Boolean(input.programId)
 }
 
-export const CLIENT_PROGRAM_NAME_IMMUTABLE_ERROR = 'No se puede cambiar el nombre de un programa ya asignado a un alumno.'
 export const EMPTY_TEMPLATE_ASSIGNMENT_ERROR = 'Esta plantilla no tiene días de entrenamiento para copiar.'
 export const UNMATCHED_TEMPLATE_DAYS_ERROR = 'Los días seleccionados no coinciden con ningún día de esta plantilla. Quita la selección de días o elige otros.'
-
-export function assertClientProgramNameUnchanged(input: {
-  clientId?: string | null
-  existingName?: string | null
-  requestedName: string
-}): void {
-  if (input.clientId && input.existingName !== input.requestedName) {
-    throw new Error(CLIENT_PROGRAM_NAME_IMMUTABLE_ERROR)
-  }
-}
 
 export function duplicateTemplateNameError(programName: string): string {
   return `Ya tienes una plantilla guardada con el nombre "${programName}".`
