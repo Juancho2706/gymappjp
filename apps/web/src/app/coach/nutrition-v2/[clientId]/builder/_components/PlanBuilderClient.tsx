@@ -1,6 +1,7 @@
 'use client'
 
 import { useMemo, useReducer, useRef, useState, useTransition } from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { AlertTriangle, Check, ChevronLeft, ChevronRight, Loader2, Plus, Search, Trash2 } from 'lucide-react'
 import { BuilderStepList, MacroBudget, NutritionCard, StrategyBadge } from '@/components/nutrition-v2'
@@ -464,34 +465,88 @@ function SlotEditor({
   )
 }
 
-function StrategyStep({ state, dispatch }: { state: BuilderState; dispatch: Dispatch }) {
+// Ruta canonica de compra del addon. Se inlinea aca porque el modulo _lib/nutrition-pro.ts
+// es server-only (import 'server-only') y no puede importarse en un client component.
+const NUTRITION_PRO_UPGRADE_HREF = '/coach/settings/modules'
+// Estrategias que exigen el addon Nutricion Pro (frontera CEO): solo 'hybrid'. La UI marca
+// y deshabilita estas opciones sin addon; el servidor (publishPlanAction) es la barrera real.
+const PRO_STRATEGIES: readonly NutritionStrategy[] = ['hybrid']
+
+function ProBadge() {
+  return (
+    <span className="shrink-0 rounded-pill border border-ember-300/60 bg-ember-100/70 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-ember-700 dark:border-ember-600/40 dark:bg-ember-100/20 dark:text-ember-300">
+      Pro
+    </span>
+  )
+}
+
+function StrategyStep({
+  state,
+  dispatch,
+  nutritionProEnabled,
+}: {
+  state: BuilderState
+  dispatch: Dispatch
+  nutritionProEnabled: boolean
+}) {
   const options: NutritionStrategy[] = ['structured', 'flexible', 'hybrid']
   return (
-    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-      {options.map((key) => {
-        const meta = NUTRITION_STRATEGIES[key]
-        const active = state.strategy === key
-        return (
-          <button
-            key={key}
-            type="button"
-            aria-pressed={active}
-            onClick={() => dispatch({ type: 'SET_STRATEGY', strategy: key, firstSlotKey: genId() })}
-            className={
-              'flex h-full flex-col rounded-card border p-4 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ' +
-              (active
-                ? 'border-ember-500 bg-ember-100/60 dark:bg-ember-100/10'
-                : 'border-border-default bg-surface-card hover:border-ember-300')
-            }
+    <div className="space-y-3">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {options.map((key) => {
+          const meta = NUTRITION_STRATEGIES[key]
+          const active = state.strategy === key
+          const isPro = PRO_STRATEGIES.includes(key)
+          const locked = isPro && !nutritionProEnabled
+          return (
+            <button
+              key={key}
+              type="button"
+              aria-pressed={active}
+              aria-disabled={locked}
+              disabled={locked}
+              title={locked ? 'Disponible con Nutricion Pro' : meta.description}
+              onClick={() => {
+                if (locked) return
+                dispatch({ type: 'SET_STRATEGY', strategy: key, firstSlotKey: genId() })
+              }}
+              className={
+                'flex h-full flex-col rounded-card border p-4 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ' +
+                (locked
+                  ? 'cursor-not-allowed border-border-subtle bg-surface-sunken opacity-90'
+                  : active
+                    ? 'border-ember-500 bg-ember-100/60 dark:bg-ember-100/10'
+                    : 'border-border-default bg-surface-card hover:border-ember-300')
+              }
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span className="flex items-center gap-2 font-display text-base font-semibold text-strong">
+                  {meta.label}
+                  {isPro ? <ProBadge /> : null}
+                </span>
+                {active && !locked ? <Check className="h-5 w-5 shrink-0 text-ember-600 dark:text-ember-300" /> : null}
+              </div>
+              <p className="mt-1 text-sm text-muted">{meta.description}</p>
+              {locked ? (
+                <span className="mt-2 text-xs font-medium text-ember-700 dark:text-ember-300">
+                  Disponible con Nutricion Pro
+                </span>
+              ) : null}
+            </button>
+          )
+        })}
+      </div>
+      {!nutritionProEnabled ? (
+        <p className="text-xs text-muted">
+          La estrategia hibrida es parte de Nutricion Pro.{' '}
+          <Link
+            href={NUTRITION_PRO_UPGRADE_HREF}
+            className="font-semibold text-ember-700 underline underline-offset-2 dark:text-ember-300"
           >
-            <div className="flex items-center justify-between gap-2">
-              <span className="font-display text-base font-semibold text-strong">{meta.label}</span>
-              {active ? <Check className="h-5 w-5 shrink-0 text-ember-600 dark:text-ember-300" /> : null}
-            </div>
-            <p className="mt-1 text-sm text-muted">{meta.description}</p>
-          </button>
-        )
-      })}
+            Ver modulos
+          </Link>
+        </p>
+      ) : null}
     </div>
   )
 }
@@ -735,10 +790,12 @@ export function PlanBuilderClient({
   clientId,
   existingPlan,
   today,
+  nutritionProEnabled,
 }: {
   clientId: string
   existingPlan: { id: string; versionNumber: number; strategy: NutritionStrategy } | null
   today: string
+  nutritionProEnabled: boolean
 }) {
   const router = useRouter()
   const [state, dispatch] = useReducer(builderReducer, today, createEmptyBuilderState)
@@ -810,7 +867,9 @@ export function PlanBuilderClient({
       </div>
 
       <div className="min-w-0 space-y-5">
-        {state.step === 0 ? <StrategyStep state={state} dispatch={dispatch} /> : null}
+        {state.step === 0 ? (
+          <StrategyStep state={state} dispatch={dispatch} nutritionProEnabled={nutritionProEnabled} />
+        ) : null}
         {state.step === 1 ? (
           <TargetsStep state={state} dispatch={dispatch} errors={showErrors ? validation.errors : {}} />
         ) : null}

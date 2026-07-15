@@ -10,6 +10,11 @@ import {
   nutritionV2CoachScopeFromWorkspace,
 } from '@/services/nutrition-v2-read.service'
 import { isNutritionV2Enabled } from '@/services/nutrition-v2-rollout.service'
+import { createClient } from '@/lib/supabase/server'
+import {
+  hasNutritionProV2,
+  nutritionProCtxFromWorkspace,
+} from '@/app/coach/nutrition-v2/_lib/nutrition-pro'
 import { PlanBuilderClient } from './_components/PlanBuilderClient'
 
 interface Props {
@@ -43,6 +48,14 @@ export default async function CoachNutritionV2BuilderPage({ params }: Props) {
     ? { id: existing.id, versionNumber: existing.versionNumber, strategy: existing.strategy }
     : null
 
+  // Espejo UI del addon Nutricion Pro: marca/deshabilita las opciones Pro (estrategia hibrida)
+  // en el wizard. La barrera real vive en publishPlanAction (re-valida server-side).
+  const supabase = await createClient()
+  const nutritionProEnabled = await hasNutritionProV2(
+    supabase,
+    nutritionProCtxFromWorkspace(user.id, workspace),
+  )
+
   return (
     <NutritionPageShell
       eyebrow={existingPlan ? 'Nueva version del plan' : 'Nuevo plan V2'}
@@ -58,7 +71,12 @@ export default async function CoachNutritionV2BuilderPage({ params }: Props) {
         </Link>
       }
     >
-      <PlanBuilderClient clientId={clientId} existingPlan={existingPlan} today={today} />
+      <PlanBuilderClient
+        clientId={clientId}
+        existingPlan={existingPlan}
+        today={today}
+        nutritionProEnabled={nutritionProEnabled}
+      />
     </NutritionPageShell>
   )
 }

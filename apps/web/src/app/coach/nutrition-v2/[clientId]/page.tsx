@@ -18,6 +18,13 @@ import {
   nutritionV2CoachScopeFromWorkspace,
 } from '@/services/nutrition-v2-read.service'
 import { isNutritionV2Enabled } from '@/services/nutrition-v2-rollout.service'
+import { createClient } from '@/lib/supabase/server'
+import {
+  NUTRITION_PRO_UPGRADE_HREF,
+  filterHistoryDaysToBaseWindow,
+  hasNutritionProV2,
+  nutritionProCtxFromWorkspace,
+} from '@/app/coach/nutrition-v2/_lib/nutrition-pro'
 
 interface Props {
   params: Promise<{ clientId: string }>
@@ -48,6 +55,18 @@ export default async function CoachNutritionV2ClientPage({ params, searchParams 
   const { iso: today } = getTodayInSantiago()
   const detail = await getNutritionClientDetailV2ForWeb({ clientId, scope, date: today })
   const hasPlan = detail.plan.plan !== null
+
+  // Gate del addon Nutricion Pro: sin addon, el historial del alumno para el coach se
+  // limita a la ventana BASE (~30 dias). Los RPC de lectura no aceptan corte temporal,
+  // asi que recortamos server-side post-fetch (ver nutrition-pro.ts). El alumno no cambia.
+  const supabase = await createClient()
+  const nutritionProEnabled = await hasNutritionProV2(
+    supabase,
+    nutritionProCtxFromWorkspace(user.id, workspace),
+  )
+  const recentDays = nutritionProEnabled
+    ? detail.recentDays
+    : filterHistoryDaysToBaseWindow(detail.recentDays, today)
 
   return (
     <NutritionPageShell
@@ -207,8 +226,17 @@ export default async function CoachNutritionV2ClientPage({ params, searchParams 
 
           <section>
             <h2 className="mb-3 font-display text-xl font-semibold text-strong">Ultimos dias</h2>
+            {!nutritionProEnabled ? (
+              <Link
+                href={NUTRITION_PRO_UPGRADE_HREF}
+                className="mb-3 inline-flex items-center gap-2 rounded-control border border-border-subtle bg-surface-sunken px-3 py-2 text-xs text-muted transition-colors hover:text-strong"
+              >
+                <LockKeyhole className="h-3.5 w-3.5 text-ember-600 dark:text-ember-300" />
+                Historico completo con Nutricion Pro
+              </Link>
+            ) : null}
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-              {detail.recentDays.map((day) => (
+              {recentDays.map((day) => (
                 <NutritionCard key={day.localDate}>
                   <p className="font-semibold text-strong">{day.localDate}</p>
                   <p className="mt-1 text-sm text-muted">

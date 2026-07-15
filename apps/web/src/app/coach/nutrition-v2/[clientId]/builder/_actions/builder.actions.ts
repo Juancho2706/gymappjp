@@ -12,6 +12,15 @@ import { createClient } from '@/lib/supabase/server'
 import { getPreferredWorkspaceForRender } from '@/services/auth/workspace-render-cache'
 import { isNutritionV2Enabled } from '@/services/nutrition-v2-rollout.service'
 import { nutritionV2CoachScopeFromWorkspace } from '@/services/nutrition-v2-read.service'
+import type { SupabaseClient } from '@supabase/supabase-js'
+import {
+  NUTRITION_PRO_FEATURE_LABEL,
+  hasNutritionProV2,
+  nutritionProCtxFromWorkspace,
+  requiredNutritionProFeature,
+  type NutritionProCtx,
+  type NutritionProFeature,
+} from '@/app/coach/nutrition-v2/_lib/nutrition-pro'
 import { getNutritionPlansPageCoach } from '../../../../nutrition-plans/_data/nutrition-page.queries'
 import {
   buildItemInsertRow,
@@ -51,7 +60,13 @@ interface NutritionV2Db {
   rpc(name: string, args?: Record<string, unknown>): Promise<DbResult<unknown>>
 }
 
-type ActionFailure = { ok: false; code: string; error: string; fields?: Array<{ path: string; message: string }> }
+type ActionFailure = {
+  ok: false
+  code: string
+  error: string
+  feature?: NutritionProFeature
+  fields?: Array<{ path: string; message: string }>
+}
 type PublishSuccess = { ok: true; versionId: string; planId: string }
 
 function fail(code: string, error: string, fields?: ActionFailure['fields']): ActionFailure {
@@ -77,7 +92,7 @@ const SearchInputSchema = z.object({
 
 async function authorizeCoach(
   clientId: string,
-): Promise<{ ok: true; db: NutritionV2Db; userId: string } | ActionFailure> {
+): Promise<{ ok: true; db: NutritionV2Db; userId: string; proCtx: NutritionProCtx } | ActionFailure> {
   const { user } = await getNutritionPlansPageCoach()
   if (!user) return fail('UNAUTHENTICATED', 'Debes iniciar sesion para editar planes.')
 
@@ -102,7 +117,7 @@ async function authorizeCoach(
   }
 
   const db = (await createClient()) as unknown as NutritionV2Db
-  return { ok: true, db, userId: user.id }
+  return { ok: true, db, userId: user.id, proCtx: nutritionProCtxFromWorkspace(user.id, workspace) }
 }
 
 function mapWriteError(error: DbError, phase: string): ActionFailure {
@@ -187,6 +202,24 @@ export async function publishPlanAction(input: unknown): Promise<PublishSuccess 
   const auth = await authorizeCoach(draft.clientId)
   if (!auth.ok) return auth
   const { db, userId } = auth
+
+  // Gate comercial del addon Nutricion Pro (frontera CEO): strategy 'hybrid', mas de una
+  // variante, o notas privadas/protocolo exigen el addon `nutrition_exchanges`. BASE publica
+  // structured/flexible con UNA variante y sin notas privadas/protocolo, sin friccion. El
+  // draft llega como `unknown`, asi que este assert server-side es la barrera real (la UI
+  // solo espeja). Sin addon => error tipado UPGRADE_REQUIRED, nunca un 500.
+  const proFeature = requiredNutritionProFeature(draft)
+  if (proFeature) {
+    const proEnabled = await hasNutritionProV2(db as unknown as SupabaseClient, auth.proCtx)
+    if (!proEnabled) {
+      return {
+        ok: false,
+        code: 'UPGRADE_REQUIRED',
+        feature: proFeature,
+        error: `Activa Nutricion Pro para publicar ${NUTRITION_PRO_FEATURE_LABEL[proFeature]}.`,
+      }
+    }
+  }
 
   const existing = await db
     .from('nutrition_plan_versions_v2')

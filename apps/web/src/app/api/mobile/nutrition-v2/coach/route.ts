@@ -4,12 +4,17 @@ import {
   NutritionCoachHubPageReadModelSchema,
   NutritionV2CoachScopeSchema,
 } from '@eva/nutrition-v2'
+import type { SupabaseClient } from '@supabase/supabase-js'
 import {
   gateNutritionV2Api,
   jsonNoStore,
   logNutritionV2Api,
   rpcErrorResponse,
 } from '../_shared'
+import {
+  filterHistoryDaysToBaseWindow,
+  hasNutritionProV2,
+} from '@/app/coach/nutrition-v2/_lib/nutrition-pro'
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
@@ -52,6 +57,7 @@ export async function GET(request: NextRequest) {
   let rpcName: string
   let args: Record<string, unknown>
   let parse: (data: unknown) => unknown
+  let detailDate = ''
 
   if (view === 'hub') {
     const cursorUpdatedAt = request.nextUrl.searchParams.get('cursorUpdatedAt')
@@ -93,6 +99,7 @@ export async function GET(request: NextRequest) {
       )
     }
 
+    detailDate = date
     rpcName = 'get_nutrition_client_detail_scoped_v2'
     args = {
       p_client_id: clientId,
@@ -122,7 +129,28 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const payload = parse(data)
+    let payload = parse(data)
+
+    // Gate del addon Nutricion Pro para la ficha del coach en movil: sin addon, el historial
+    // del alumno se limita a la ventana BASE (~30 dias). Mismo corte server-side post-fetch que
+    // la ficha web (los RPC no aceptan limite temporal). El gate resuelve el coach; para el
+    // scope de pool usamos el teamId del scope ya validado (fail-closed via RLS al leer modulos).
+    if (view === 'client') {
+      const proEnabled = await hasNutritionProV2(gate.rpc as unknown as SupabaseClient, {
+        coachId: gate.coachId,
+        teamId: scope.scopeType === 'team' ? scope.teamId : null,
+      })
+      if (!proEnabled) {
+        const detail = payload as { recentDays?: Array<{ localDate: string }> }
+        if (Array.isArray(detail.recentDays)) {
+          payload = {
+            ...detail,
+            recentDays: filterHistoryDaysToBaseWindow(detail.recentDays, detailDate),
+          }
+        }
+      }
+    }
+
     logNutritionV2Api({
       route,
       startedAt,
