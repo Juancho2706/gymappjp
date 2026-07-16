@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Pressable, Text, View } from 'react-native'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Pressable, ScrollView, Text, View } from 'react-native'
 import { useRouter } from 'expo-router'
 import { FlashList } from '@shopify/flash-list'
-import { ChevronRight, Users } from 'lucide-react-native'
+import { ChevronLeft, ChevronRight, Plus, Users } from 'lucide-react-native'
 import {
   NutritionHeader,
   NutritionSkeleton,
@@ -29,7 +29,24 @@ import {
   readNutritionV2Cache,
   writeNutritionV2Cache,
 } from '../../../lib/nutrition-v2-cache'
+import {
+  NUTRITION_ATTENTION_FILTER_OPTIONS,
+  applyNutritionAttentionFilter,
+  isNutritionHubPageComplete,
+  localDateOf,
+  mapNutritionHubMetrics,
+  nutritionAttentionLabel,
+  nutritionHubMetricScopeLabel,
+  nutritionPlanCtaLabel,
+  nutritionV2BuilderHref,
+  type NutritionAttentionFilter,
+} from '../../../lib/nutrition-v2-hub'
 import { useTheme } from '../../../context/ThemeContext'
+
+const PAGE_SIZE = 25
+const COACH_TIMEZONE = 'America/Santiago'
+
+type HubCursor = { updatedAt: string; clientId: string }
 
 export default function CoachNutritionV2Screen() {
   const router = useRouter()
@@ -44,10 +61,14 @@ export default function CoachNutritionV2Screen() {
   const [userId, setUserId] = useState<string | null>(null)
   const [page, setPage] = useState<NutritionCoachHubPageReadModel | null>(null)
   const [items, setItems] = useState<NutritionCoachHubItem[]>([])
+  const [pageIndex, setPageIndex] = useState(0)
+  const [attention, setAttention] = useState<NutritionAttentionFilter>('all')
   const [loading, setLoading] = useState(true)
+  const [paging, setPaging] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
-  const [loadingMore, setLoadingMore] = useState(false)
   const [offline, setOffline] = useState(false)
+  // Pila de cursores ancestros: cursors[i] es el cursor con que se cargo la pagina i (null = primera).
+  const cursorsRef = useRef<Array<HubCursor | null>>([null])
   // Fail-closed: only fetch once the workspace resolved AND collapses to a valid coach scope.
   const scope = useMemo(
     () =>
@@ -58,6 +79,10 @@ export default function CoachNutritionV2Screen() {
   )
   const scopeCacheKey = scope ? nutritionV2CoachScopeCacheKey(scope) : null
   const enabled = entitlements.ready && isEnabled('nutritionV2Coach')
+  const todayLocalDate = useMemo(
+    () => localDateOf(new Date().toISOString(), COACH_TIMEZONE) ?? '',
+    [],
+  )
 
   useEffect(() => {
     let active = true
@@ -68,6 +93,17 @@ export default function CoachNutritionV2Screen() {
       active = false
     }
   }, [])
+
+  const fetchPage = useCallback(
+    async (cursor: HubCursor | null): Promise<NutritionCoachHubPageReadModel> =>
+      getNutritionCoachHubV2({
+        scope: scope!,
+        cursorUpdatedAt: cursor?.updatedAt,
+        cursorClientId: cursor?.clientId,
+        pageSize: PAGE_SIZE,
+      }),
+    [scope],
+  )
 
   const loadFirst = useCallback(async (force = false) => {
     if (!userId || !enabled || !scope || !scopeCacheKey) return
@@ -90,7 +126,9 @@ export default function CoachNutritionV2Screen() {
     }
 
     try {
-      const fresh = await getNutritionCoachHubV2({ scope, pageSize: 25 })
+      const fresh = await fetchPage(null)
+      cursorsRef.current = [null]
+      setPageIndex(0)
       setPage(fresh)
       setItems(fresh.items)
       setOffline(false)
@@ -106,34 +144,55 @@ export default function CoachNutritionV2Screen() {
       setLoading(false)
       setRefreshing(false)
     }
-  }, [enabled, userId, scope, scopeCacheKey])
+  }, [enabled, fetchPage, userId, scope, scopeCacheKey])
 
-  const loadMore = useCallback(async () => {
-    if (!page?.hasMore || !page.nextCursor || loadingMore || !scope) return
-    setLoadingMore(true)
-    try {
-      const next = await getNutritionCoachHubV2({
-        scope,
-        cursorUpdatedAt: page.nextCursor.updatedAt,
-        cursorClientId: page.nextCursor.clientId,
-        pageSize: 25,
-      })
-      setItems((current) => {
-        const known = new Set(current.map((item) => item.clientId))
-        return [...current, ...next.items.filter((item) => !known.has(item.clientId))]
-      })
-      setPage(next)
-      setOffline(false)
-    } catch {
-      setOffline(true)
-    } finally {
-      setLoadingMore(false)
-    }
-  }, [loadingMore, page, scope])
+  const goToPage = useCallback(
+    async (targetIndex: number, cursor: HubCursor | null) => {
+      if (!scope || paging) return
+      setPaging(true)
+      try {
+        const next = await fetchPage(cursor)
+        cursorsRef.current[targetIndex] = cursor
+        setPage(next)
+        setItems(next.items)
+        setPageIndex(targetIndex)
+        setOffline(false)
+      } catch {
+        setOffline(true)
+      } finally {
+        setPaging(false)
+      }
+    },
+    [fetchPage, paging, scope],
+  )
+
+  const onNext = useCallback(() => {
+    if (!page?.hasMore || !page.nextCursor) return
+    void goToPage(pageIndex + 1, page.nextCursor)
+  }, [goToPage, page, pageIndex])
+
+  const onPrev = useCallback(() => {
+    if (pageIndex === 0) return
+    void goToPage(pageIndex - 1, cursorsRef.current[pageIndex - 1] ?? null)
+  }, [goToPage, pageIndex])
 
   useEffect(() => {
     if (userId && enabled && scope) void loadFirst()
   }, [enabled, loadFirst, userId, scope])
+
+  const metrics = useMemo(
+    () => mapNutritionHubMetrics(items, { todayLocalDate, timeZone: COACH_TIMEZONE }),
+    [items, todayLocalDate],
+  )
+  const pageComplete = isNutritionHubPageComplete({
+    hasMore: page?.hasMore ?? false,
+    hasIncomingCursor: pageIndex > 0,
+  })
+  const scopeLabel = nutritionHubMetricScopeLabel(pageComplete)
+  const visibleItems = useMemo(
+    () => applyNutritionAttentionFilter(items, attention),
+    [attention, items],
+  )
 
   if (!entitlements.ready || !workspaceReady) {
     return (
@@ -166,10 +225,8 @@ export default function CoachNutritionV2Screen() {
   return (
     <View className="flex-1 bg-surface-app">
       <FlashList
-        data={items}
+        data={visibleItems}
         keyExtractor={(item) => item.clientId}
-        onEndReached={() => void loadMore()}
-        onEndReachedThreshold={0.4}
         onRefresh={() => {
           setRefreshing(true)
           void loadFirst(true)
@@ -185,35 +242,67 @@ export default function CoachNutritionV2Screen() {
               actions={<SyncOfflineState state={offline ? 'offline' : 'synced'} />}
             />
             <View className="flex-row gap-3">
-              <Metric label="Alumnos" value={items.length} />
-              <Metric
-                label="Atención"
-                value={items.filter((item) => item.attentionReason !== 'none').length}
-              />
+              <Metric label="Con plan" value={metrics.withPlan} />
+              <Metric label="Sin plan" value={metrics.withoutPlan} />
+              <Metric label="Actividad hoy" value={metrics.activeToday} />
             </View>
+            <Text className="text-xs text-text-muted">
+              {metrics.total} {metrics.total === 1 ? 'alumno' : 'alumnos'} {scopeLabel}
+            </Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              contentContainerClassName="gap-2 pr-2"
+            >
+              {NUTRITION_ATTENTION_FILTER_OPTIONS.map((option) => {
+                const active = attention === option.value
+                return (
+                  <Pressable
+                    key={option.value}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: active }}
+                    accessibilityLabel={`Filtrar: ${option.label}`}
+                    onPress={() => setAttention(option.value)}
+                    className={`min-h-9 items-center justify-center rounded-pill border px-3 ${active ? 'border-ember-500 bg-ember-100' : 'border-border-subtle bg-surface-card'}`}
+                  >
+                    <Text className={`text-xs font-semibold ${active ? 'text-ember-700' : 'text-text-muted'}`}>
+                      {option.label}
+                    </Text>
+                  </Pressable>
+                )
+              })}
+            </ScrollView>
           </View>
         }
         ListEmptyComponent={
           <NutritionStatePanel
-            title="No hay alumnos en este scope"
-            description="El Centro respeta el workspace activo y no mezcla pools."
+            title={attention === 'all' ? 'No hay alumnos en este scope' : 'Nadie coincide con el filtro'}
+            description={
+              attention === 'all'
+                ? 'El Centro respeta el workspace activo y no mezcla pools.'
+                : 'Cambia el filtro de atención para ver al resto del roster.'
+            }
           />
         }
         ListFooterComponent={
-          loadingMore ? (
-            <View className="items-center py-5">
-              <Text className="text-sm text-text-muted">Cargando más alumnos…</Text>
-            </View>
-          ) : null
+          <PaginationBar
+            pageIndex={pageIndex}
+            hasMore={page?.hasMore ?? false}
+            paging={paging}
+            onPrev={onPrev}
+            onNext={onNext}
+            theme={theme}
+          />
         }
         ItemSeparatorComponent={() => <View className="h-3" />}
         renderItem={({ item }) => (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={`Abrir ficha nutricional de ${item.clientName}`}
-            onPress={() => router.push(`/coach/nutrition-v2/${item.clientId}`)}
-          >
-            <NutritionCard>
+          <NutritionCard>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`Abrir ficha nutricional de ${item.clientName}`}
+              onPress={() => router.push(`/coach/nutrition-v2/${item.clientId}`)}
+            >
               <View className="flex-row items-center gap-3">
                 <View className="h-11 w-11 items-center justify-center rounded-full bg-ember-100">
                   <Users color={theme.scheme === 'dark' ? '#FFB79E' : '#C23E14'} size={20} />
@@ -230,14 +319,25 @@ export default function CoachNutritionV2Screen() {
                   </Text>
                   {item.attentionReason !== 'none' ? (
                     <Text className="mt-1 text-xs font-semibold text-warning-700">
-                      {attentionLabel(item.attentionReason)}
+                      {nutritionAttentionLabel(item.attentionReason)}
                     </Text>
                   ) : null}
                 </View>
                 <ChevronRight color={theme.textSecondary} size={20} />
               </View>
-            </NutritionCard>
-          </Pressable>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`${nutritionPlanCtaLabel(item.planStatus)} para ${item.clientName}`}
+              onPress={() => router.push(nutritionV2BuilderHref(item.clientId))}
+              className="mt-3 min-h-11 flex-row items-center justify-center gap-1.5 rounded-control border border-ember-300 bg-ember-100 px-3"
+            >
+              <Plus color={theme.scheme === 'dark' ? '#FFB79E' : '#C23E14'} size={15} />
+              <Text className="text-sm font-semibold text-ember-700">
+                {nutritionPlanCtaLabel(item.planStatus)}
+              </Text>
+            </Pressable>
+          </NutritionCard>
         )}
       />
     </View>
@@ -253,9 +353,57 @@ function Metric({ label, value }: { label: string; value: number }) {
   )
 }
 
-function attentionLabel(reason: NutritionCoachHubItem['attentionReason']): string {
-  if (reason === 'no_plan') return 'Sin plan V2'
-  if (reason === 'draft_pending') return 'Borrador pendiente'
-  if (reason === 'no_recent_intake') return 'Sin consumo reciente'
-  return 'Al día'
+function PaginationBar({
+  pageIndex,
+  hasMore,
+  paging,
+  onPrev,
+  onNext,
+  theme,
+}: {
+  pageIndex: number
+  hasMore: boolean
+  paging: boolean
+  onPrev: () => void
+  onNext: () => void
+  theme: { textSecondary: string }
+}) {
+  const canPrev = pageIndex > 0 && !paging
+  const canNext = hasMore && !paging
+  if (pageIndex === 0 && !hasMore) {
+    return paging ? (
+      <View className="items-center py-5">
+        <Text className="text-sm text-text-muted">Cargando…</Text>
+      </View>
+    ) : null
+  }
+  return (
+    <View className="mt-5 flex-row items-center justify-between">
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Página anterior"
+        accessibilityState={{ disabled: !canPrev }}
+        disabled={!canPrev}
+        onPress={onPrev}
+        className={`min-h-11 flex-row items-center gap-1.5 rounded-control border px-3 ${canPrev ? 'border-border-default bg-surface-card' : 'border-border-subtle bg-surface-sunken opacity-50'}`}
+      >
+        <ChevronLeft color={theme.textSecondary} size={18} />
+        <Text className="text-sm font-semibold text-text-body">Anterior</Text>
+      </Pressable>
+      <Text className="text-xs font-semibold text-text-muted">
+        {paging ? 'Cargando…' : `Página ${pageIndex + 1}`}
+      </Text>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Página siguiente"
+        accessibilityState={{ disabled: !canNext }}
+        disabled={!canNext}
+        onPress={onNext}
+        className={`min-h-11 flex-row items-center gap-1.5 rounded-control border px-3 ${canNext ? 'border-border-default bg-surface-card' : 'border-border-subtle bg-surface-sunken opacity-50'}`}
+      >
+        <Text className="text-sm font-semibold text-text-body">Siguiente</Text>
+        <ChevronRight color={theme.textSecondary} size={18} />
+      </Pressable>
+    </View>
+  )
 }

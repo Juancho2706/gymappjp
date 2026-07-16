@@ -364,10 +364,13 @@ export function FoodThumbnail({
   src,
   alt,
   size = 'md',
+  fallbackEmoji,
 }: {
   src?: string | null
   alt: string
   size?: 'sm' | 'md' | 'lg'
+  /** Emoji local (placeholder por categoria) que reemplaza al icono lucide cuando no hay foto. */
+  fallbackEmoji?: string | null
 }) {
   const { theme } = useTheme()
   const dimension = { sm: 36, md: 48, lg: 64 }[size]
@@ -379,7 +382,11 @@ export function FoodThumbnail({
         className="shrink-0 items-center justify-center rounded-control border border-border-subtle bg-surface-sunken"
         style={{ width: dimension, height: dimension }}
       >
-        <ImageIcon color={theme.textSecondary} size={20} />
+        {fallbackEmoji ? (
+          <Text style={{ fontSize: Math.round(dimension * 0.5) }}>{fallbackEmoji}</Text>
+        ) : (
+          <ImageIcon color={theme.textSecondary} size={20} />
+        )}
       </View>
     )
   }
@@ -396,7 +403,16 @@ export function FoodThumbnail({
   )
 }
 
-export function FoodRow({ food, actions }: { food: NutritionFoodRowModel; actions?: ReactNode }) {
+export function FoodRow({
+  food,
+  actions,
+  fallbackEmoji,
+}: {
+  food: NutritionFoodRowModel
+  actions?: ReactNode
+  /** Emoji local (placeholder por categoria) reenviado al thumbnail cuando el alimento no trae foto. */
+  fallbackEmoji?: string | null
+}) {
   const statusLabel = {
     default: null,
     pending: 'Guardando',
@@ -407,7 +423,7 @@ export function FoodRow({ food, actions }: { food: NutritionFoodRowModel; action
 
   return (
     <View className="min-h-16 flex-row items-center gap-3 py-3">
-      <FoodThumbnail alt={food.name} src={food.thumbnailUrl} />
+      <FoodThumbnail alt={food.name} src={food.thumbnailUrl} fallbackEmoji={fallbackEmoji} />
       <View className="min-w-0 flex-1">
         <View className="flex-row flex-wrap items-center gap-2">
           <Text className="min-w-0 shrink font-semibold text-text-strong" numberOfLines={1}>

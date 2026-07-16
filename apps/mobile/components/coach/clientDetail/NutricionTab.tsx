@@ -25,6 +25,7 @@ import {
   type NutritionZoneCData,
 } from '../../../lib/coach-client-detail'
 import { NUTRITION_SECTIONS, DOMAIN_ENABLED_KEY, type NutritionSectionKey, type SectionPrefs } from '@eva/feature-prefs'
+import { NutritionV2Summary, useCoachNutritionV2Detail } from './nutrition/NutritionV2Summary'
 
 function alertColor(variant: NutritionCoachAlert['variant'], theme: { destructive: string; warning: string; primary: string }): string {
   return variant === 'danger' ? theme.destructive : variant === 'warning' ? theme.warning : theme.primary
@@ -50,7 +51,7 @@ function DetailAccordion({ title, children }: { title: string; children: ReactNo
   )
 }
 
-export function NutricionTab({
+function NutricionTabV1({
   clientId,
   data,
   selectedDate,
@@ -787,3 +788,22 @@ const styles = StyleSheet.create({
   prefLockTxt: { fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.5 },
   prefsFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginTop: 2 },
 })
+
+// ── Composicion V2 (paralelo del tab web de Tanda 8) ─────────────────────────
+// Con el flag `nutritionV2Coach` ON Y un fetch V2 del alumno resuelto, se muestra el resumen V2
+// (plan vigente + consumo de hoy vs metas + CTA a la ficha completa). Sin flag o ante CUALQUIER
+// fallo del fetch, se cae al tab V1 EXACTAMENTE igual (fail-open, cero regresion).
+export function NutricionTab(props: Parameters<typeof NutricionTabV1>[0]) {
+  const gate = useCoachNutritionV2Detail(props.clientId)
+  if (gate.active && gate.detail) {
+    return (
+      <NutritionV2Summary
+        detail={gate.detail}
+        clientId={props.clientId}
+        offline={gate.offline}
+        onEditNutrition={props.onEditNutrition}
+      />
+    )
+  }
+  return <NutricionTabV1 {...props} />
+}

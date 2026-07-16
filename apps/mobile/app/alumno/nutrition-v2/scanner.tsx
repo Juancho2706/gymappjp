@@ -18,6 +18,10 @@ import {
   lookupFoodByGtinV2,
   reportMissingFoodGtinV2,
 } from '../../../lib/nutrition-v2-catalog.api'
+import {
+  foodCategoryEmoji,
+  foodOdblAttributionLine,
+} from '../../../lib/nutrition-v2-food-media'
 import * as Haptics from 'expo-haptics'
 import { buildRecordIntakeMutation } from '../../../lib/nutrition-v2-intake'
 import {
@@ -372,10 +376,16 @@ function ResultCard({
     )
   }
 
+  const attribution = foodOdblAttributionLine(result.food.source)
   return (
     <NutritionCard tone={result.status === 'found' ? 'success' : 'warning'}>
       <View className="flex-row items-center gap-3">
-        <FoodThumbnail alt={result.food.name} src={mediaUrl} size="lg" />
+        <FoodThumbnail
+          alt={result.food.name}
+          src={mediaUrl}
+          size="lg"
+          fallbackEmoji={foodCategoryEmoji(result.food.category)}
+        />
         <View className="min-w-0 flex-1">
           <Text className="font-display text-lg font-semibold text-text-strong" numberOfLines={2}>
             {result.food.name}
@@ -389,6 +399,9 @@ function ResultCard({
           </Text>
         </View>
       </View>
+      {attribution ? (
+        <Text className="mt-3 text-[10px] text-text-subtle">{attribution}</Text>
+      ) : null}
       <View className="mt-4 gap-2">
         <NutritionMotionButton
           accessibilityLabel="Agregar al día"

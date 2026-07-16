@@ -17,6 +17,13 @@ import { useEntitlements } from '../../../lib/entitlements'
 import { supabase } from '../../../lib/supabase'
 import { searchFoodCatalogV2 } from '../../../lib/nutrition-v2-catalog.api'
 import {
+  CATALOG_ODBL_GENERIC_LINE,
+  catalogHasOpenFoodFactsSource,
+  foodCategoryEmoji,
+  foodMediaThumbnailUrl,
+  foodOdblAttributionLine,
+} from '../../../lib/nutrition-v2-food-media'
+import {
   buildRecordIntakeMutation,
   computeIntakeTotals,
 } from '../../../lib/nutrition-v2-intake'
@@ -278,30 +285,37 @@ export default function NutritionV2AddFoodScreen() {
               description="Prueba con otra palabra, una marca, o escanea el código del producto."
             />
           ) : (
-            <View className="rounded-card border border-border-subtle bg-surface-card">
-              {results.map((food, index) => (
-                <Pressable
-                  key={food.id}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Agregar ${food.name}`}
-                  onPress={() => pickFood(food)}
-                  className={index > 0 ? 'border-t border-border-subtle px-3' : 'px-3'}
-                >
-                  <FoodRow
-                    food={{
-                      id: food.id,
-                      name: food.name,
-                      detail: food.brand,
-                      quantityLabel: `${food.servingSize} ${food.servingUnit}`,
-                      calories: food.calories,
-                      proteinG: food.proteinG,
-                      carbsG: food.carbsG,
-                      fatsG: food.fatsG,
-                    }}
-                  />
-                </Pressable>
-              ))}
-            </View>
+            <>
+              <View className="rounded-card border border-border-subtle bg-surface-card">
+                {results.map((food, index) => (
+                  <Pressable
+                    key={food.id}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Agregar ${food.name}`}
+                    onPress={() => pickFood(food)}
+                    className={index > 0 ? 'border-t border-border-subtle px-3' : 'px-3'}
+                  >
+                    <FoodRow
+                      food={{
+                        id: food.id,
+                        name: food.name,
+                        detail: food.brand,
+                        quantityLabel: `${food.servingSize} ${food.servingUnit}`,
+                        calories: food.calories,
+                        proteinG: food.proteinG,
+                        carbsG: food.carbsG,
+                        fatsG: food.fatsG,
+                        thumbnailUrl: foodMediaThumbnailUrl(food.media),
+                      }}
+                      fallbackEmoji={foodCategoryEmoji(food.category)}
+                    />
+                  </Pressable>
+                ))}
+              </View>
+              {catalogHasOpenFoodFactsSource(results) ? (
+                <Text className="text-[10px] text-text-subtle">{CATALOG_ODBL_GENERIC_LINE}</Text>
+              ) : null}
+            </>
           )}
         </>
       ) : (
@@ -311,6 +325,9 @@ export default function NutritionV2AddFoodScreen() {
               {selected.name}
             </Text>
             {selected.brand ? <Text className="mt-1 text-sm text-text-muted">{selected.brand}</Text> : null}
+            {foodOdblAttributionLine(selected.source) ? (
+              <Text className="mt-1 text-[10px] text-text-subtle">{foodOdblAttributionLine(selected.source)}</Text>
+            ) : null}
 
             <View className="mt-4 flex-row items-center gap-2">
               <TextInput
