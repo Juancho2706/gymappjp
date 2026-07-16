@@ -28,6 +28,7 @@ on:
         options:
           - staging
           - prodpreview
+          - previewv2
           - production
       submit_ios:
         description: 'Auto-submit iOS IPA to TestFlight after build'
@@ -68,7 +69,7 @@ jobs:
           token: ${{ secrets.EXPO_TOKEN }}
 
       - name: Inject prod env vars into eas.json for prodpreview/production
-        if: ${{ inputs.profile == 'prodpreview' || inputs.profile == 'production' }}
+        if: ${{ inputs.profile == 'prodpreview' || inputs.profile == 'previewv2' || inputs.profile == 'production' }}
         working-directory: apps/${{ inputs.app }}
         env:
           SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
@@ -166,7 +167,7 @@ jobs:
           fi
 
       - name: Inject prod env vars into eas.json for prodpreview/production
-        if: ${{ inputs.profile == 'prodpreview' || inputs.profile == 'production' }}
+        if: ${{ inputs.profile == 'prodpreview' || inputs.profile == 'previewv2' || inputs.profile == 'production' }}
         working-directory: apps/${{ inputs.app }}
         env:
           SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
