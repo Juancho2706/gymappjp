@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
-import { ArrowLeft, History, ListChecks, Utensils } from 'lucide-react'
+import { ArrowLeft, History, Info, ListChecks, Utensils } from 'lucide-react'
 import {
   NutritionCard,
   NutritionPageShell,
@@ -21,7 +21,7 @@ import {
 import { isNutritionV2Enabled } from '@/services/nutrition-v2-rollout.service'
 import { TodayExperience } from './_components/TodayExperience'
 
-export const metadata = { title: 'Nutrición V2' }
+export const metadata = { title: 'Nutrición' }
 
 interface Props {
   params: Promise<{ coach_slug: string }>
@@ -50,7 +50,7 @@ export default async function StudentNutritionV2Page({ params, searchParams }: P
 
   return (
     <NutritionPageShell
-      eyebrow="Canary privado"
+      eyebrow="Vista previa"
       title="Nutrición"
       description="Prescripción, consumo real e historial en una sola experiencia."
       actions={
@@ -104,8 +104,8 @@ function ViewLink({
       href={href}
       className={
         active
-          ? 'inline-flex min-h-10 items-center gap-2 rounded-control bg-primary/100 px-3 text-sm font-semibold text-white'
-          : 'inline-flex min-h-10 items-center gap-2 rounded-control px-3 text-sm font-semibold text-muted hover:bg-surface-sunken hover:text-strong'
+          ? 'inline-flex min-h-10 flex-1 items-center justify-center gap-2 rounded-control bg-primary/100 px-3 text-sm font-semibold text-white'
+          : 'inline-flex min-h-10 flex-1 items-center justify-center gap-2 rounded-control px-3 text-sm font-semibold text-muted hover:bg-surface-sunken hover:text-strong'
       }
     >
       {icon}
@@ -115,26 +115,47 @@ function ViewLink({
 }
 
 async function TodayView({ clientId, date, base }: { clientId: string; date: string; base: string }) {
-  const today = await getNutritionTodayV2ForWeb({ clientId, date })
+  // El empty-state depende SOLO del plan vigente en vivo (misma senal que el tab "Plan" y que la
+  // ficha del coach). El registro del dia (`today.plan`) puede seguir apuntando al plan anterior o
+  // venir vacio si se genero antes de publicar el nuevo: eso NO oculta la pantalla, se refleja con
+  // un aviso honesto arriba y el alumno igual puede registrar lo que coma.
+  const [today, plan] = await Promise.all([
+    getNutritionTodayV2ForWeb({ clientId, date }),
+    getNutritionPlanV2ForWeb({ clientId, date }),
+  ])
 
-  if (!today.plan) {
+  if (!plan.plan) {
     return (
       <NutritionStatePanel
         icon="empty"
         illustration="sin-plan"
-        title="Tu plan V2 todavía no está publicado"
+        title="Tu plan todavía no está publicado"
         description="Cuando tu coach publique la primera versión, aparecerán aquí tus objetivos, comidas y registros."
       />
     )
   }
 
+  const showTodayPlanLag = today.plan === null || today.plan.id !== plan.plan.id
+  const lagMessage =
+    today.plan === null
+      ? 'Tu nuevo plan ya está publicado. Las metas y comidas de hoy se activan mañana; hoy puedes registrar lo que comas.'
+      : 'Tu nuevo plan ya está publicado. Hoy todavía ves las metas del plan anterior; desde mañana se aplican las del nuevo.'
+
   return (
-    <TodayExperience
-      today={today}
-      clientId={clientId}
-      revalidatePath={`${base}/nutrition-v2`}
-      scanHref={`${base}/nutrition-v2/scanner`}
-    />
+    <>
+      {showTodayPlanLag ? (
+        <div className="mb-4 flex items-start gap-2 rounded-control border border-border-subtle bg-surface-sunken px-4 py-3 text-sm text-body">
+          <Info className="mt-0.5 h-4 w-4 shrink-0 text-muted" aria-hidden="true" />
+          <p>{lagMessage}</p>
+        </div>
+      ) : null}
+      <TodayExperience
+        today={today}
+        clientId={clientId}
+        revalidatePath={`${base}/nutrition-v2`}
+        scanHref={`${base}/nutrition-v2/scanner`}
+      />
+    </>
   )
 }
 
@@ -204,7 +225,9 @@ async function HistoryView({
                 {formatNutritionShortDate(day.localDate, { todayIso: today, relative: true })}
               </h2>
               <p className="mt-1 text-sm tabular-nums text-muted">
-                {day.activeEntryCount} registro{day.activeEntryCount === 1 ? '' : 's'} · {day.consumed.calories} kcal
+                {day.legacyDisclosure && day.activeEntryCount === 0
+                  ? 'Registrado en el sistema anterior'
+                  : `${day.activeEntryCount} registro${day.activeEntryCount === 1 ? '' : 's'} · ${day.consumed.calories} kcal`}
               </p>
             </div>
             {day.legacyDisclosure ? (

@@ -4,6 +4,7 @@ import { CameraView, useCameraPermissions, type BarcodeScanningResult } from 'ex
 import { Flashlight, FlashlightOff, ScanBarcode } from 'lucide-react-native'
 import {
   FoodThumbnail,
+  MacroChipRow,
   NutritionCard,
   NutritionHeader,
   NutritionMotionButton,
@@ -183,8 +184,8 @@ export default function NutritionV2ScannerScreen() {
       <View className="flex-1 bg-surface-app px-4 pt-6">
         <NutritionStatePanel
           icon="permission"
-          title="Scanner V2 no habilitado"
-          description="El lector solo está disponible para alumnos incluidos en el canary de Nutrición V2."
+          title="El lector todavía no está disponible"
+          description="Tu coach todavía no activó esta vista para ti."
         />
       </View>
     )
@@ -410,9 +411,15 @@ function ResultCard({
             {result.food.name}
           </Text>
           <Text className="mt-1 text-sm text-text-muted">{result.food.brand ?? 'Sin marca'}</Text>
-          <Text className="mt-2 font-mono text-xs text-text-body">
-            {result.food.calories} kcal · P {result.food.proteinG} · C {result.food.carbsG} · G {result.food.fatsG}
-          </Text>
+          <View className="mt-2">
+            <MacroChipRow
+              calories={result.food.calories}
+              proteinG={result.food.proteinG}
+              carbsG={result.food.carbsG}
+              fatsG={result.food.fatsG}
+              size="sm"
+            />
+          </View>
           <Text className="mt-1 text-xs font-semibold text-text-muted">
             {result.status === 'found' ? 'Verificado' : 'Pendiente de verificación'}
           </Text>

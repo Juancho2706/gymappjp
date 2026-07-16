@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
-import { ChevronLeft, ChevronRight, FilePlus2, Search, Users, X } from 'lucide-react'
+import { ChevronLeft, ChevronRight, FilePlus2, Search, X } from 'lucide-react'
 import type { NutritionCoachHubItem } from '@eva/nutrition-v2'
 import {
   CoachAttentionCard,
@@ -36,7 +36,7 @@ import {
 const BASE_PATH = '/coach/nutrition-v2'
 
 function attentionTitle(reason: Exclude<AttentionReason, 'none'>): string {
-  if (reason === 'no_plan') return 'Sin plan V2 publicado'
+  if (reason === 'no_plan') return 'Sin plan publicado'
   if (reason === 'draft_pending') return 'Borrador pendiente'
   return 'Sin consumo reciente'
 }
@@ -135,14 +135,10 @@ export function HubRoster({
             Resumen de la pagina
           </p>
         )}
-        <div className="grid gap-3 sm:grid-cols-3">
-          <Metric label="Con plan V2" value={metrics.withPlan} scoped={!metricsAreTotals} />
-          <Metric label="Sin plan V2" value={metrics.withoutPlan} scoped={!metricsAreTotals} />
-          <Metric
-            label="Con actividad hoy"
-            value={metrics.activeToday}
-            scoped={!metricsAreTotals}
-          />
+        <div className="grid grid-cols-3 gap-2 sm:gap-3">
+          <Metric label="Con plan" value={metrics.withPlan} />
+          <Metric label="Sin plan" value={metrics.withoutPlan} />
+          <Metric label="Activos hoy" value={metrics.activeToday} />
         </div>
       </div>
 
@@ -212,7 +208,7 @@ export function HubRoster({
           icon="empty"
           illustration="sin-alumnos"
           title="No hay alumnos en este scope"
-          description="El Centro V2 respeta el workspace activo y no mezcla alumnos de otros equipos u organizaciones."
+          description="Este centro respeta el workspace activo y no mezcla alumnos de otros equipos u organizaciones."
         />
       ) : visible.length === 0 ? (
         <div>
@@ -255,7 +251,7 @@ export function HubRoster({
                     ) : null}
                   </div>
                   <p className="mt-1 text-sm text-muted">
-                    {item.planName ?? 'Sin plan V2 publicado'} · {item.intakeEntries7d} registros en 7 dias
+                    {item.planName ?? 'Sin plan publicado'} · {item.intakeEntries7d} registros en 7 dias
                   </p>
                 </div>
                 <div className="mt-3 flex flex-wrap gap-2">
@@ -318,7 +314,7 @@ export function HubRoster({
                     </td>
                     <td className="px-4 py-2.5 text-muted">
                       <div className="flex items-center gap-2">
-                        <span className="truncate">{item.planName ?? 'Sin plan V2'}</span>
+                        <span className="truncate">{item.planName ?? 'Sin plan'}</span>
                         {item.versionNumber && item.planStatus === 'published' ? (
                           <PlanVersionBadge version={item.versionNumber} status="published" />
                         ) : null}
@@ -397,31 +393,13 @@ export function HubRoster({
   )
 }
 
-function Metric({
-  label,
-  value,
-  scoped,
-}: {
-  label: string
-  value: number
-  scoped: boolean
-}) {
+function Metric({ label, value }: { label: string; value: number }) {
+  // Métrica compacta: número grande + etiqueta corta, tres siempre en una fila
+  // (grid-cols-3) para no comerse la pantalla en móvil. Sin ícono decorativo.
   return (
-    <NutritionCard>
-      <Users className="h-5 w-5 text-primary" />
-      <p
-        className={
-          scoped
-            ? 'mt-3 font-display text-2xl font-bold text-strong'
-            : 'mt-3 font-display text-3xl font-bold text-strong'
-        }
-      >
-        {value}
-      </p>
-      <p className="mt-1 text-sm text-muted">
-        {label}
-        {scoped ? <span className="text-subtle"> · en esta pagina</span> : null}
-      </p>
-    </NutritionCard>
+    <div className="rounded-card border border-border-subtle bg-surface-card p-3 text-strong shadow-sm sm:p-4">
+      <p className="font-display text-2xl font-bold tabular-nums text-strong sm:text-3xl">{value}</p>
+      <p className="mt-0.5 truncate text-[11px] text-muted sm:text-sm">{label}</p>
+    </div>
   )
 }

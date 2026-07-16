@@ -118,6 +118,16 @@ describe('foodCatalogItemToCardModel', () => {
     const card = foodCatalogItemToCardModel(makeItem({ media: null }), BASE)
     expect(card.thumbnailUrl).toBeNull()
   })
+
+  it('exposes a category icon fallback for the known category', () => {
+    const card = foodCatalogItemToCardModel(makeItem({ category: 'lacteo' }), BASE)
+    expect(card.categoryIconUrl).toBe('/food-icons/lacteo.webp')
+  })
+
+  it('falls back to the generic icon for an unknown category', () => {
+    const card = foodCatalogItemToCardModel(makeItem({ category: 'no-existe' }), BASE)
+    expect(card.categoryIconUrl).toBe('/food-icons/otro.webp')
+  })
 })
 
 describe('foodCatalogItemToDetail', () => {

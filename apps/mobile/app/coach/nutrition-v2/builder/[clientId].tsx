@@ -25,6 +25,8 @@ import {
   StrategyBadge,
   StudentPreview,
 } from '../../../../components/nutrition-v2'
+// Import por ruta directa (no via el barrel index.ts): respeta el contrato de MacroChipRow.
+import { MacroChipRow } from '../../../../components/nutrition-v2/MacroChipRow'
 import {
   NUTRITION_STRATEGIES,
   type FoodCatalogItem,
@@ -83,6 +85,21 @@ function todayInSantiago(): string {
   }).format(new Date())
 }
 
+// Dia calendario siguiente a una fecha ISO (YYYY-MM-DD), en UTC para no depender de la zona
+// del dispositivo. Usado por "Empezar manana" cuando la fecha choca con el plan vigente.
+function nextDayIso(iso: string): string {
+  const parts = iso.split('-')
+  if (parts.length !== 3) return iso
+  const [y, m, d] = parts.map((p) => Number(p))
+  if (!Number.isFinite(y) || !Number.isFinite(m) || !Number.isFinite(d)) return iso
+  const dt = new Date(Date.UTC(y, m - 1, d))
+  dt.setUTCDate(dt.getUTCDate() + 1)
+  const yy = dt.getUTCFullYear()
+  const mm = String(dt.getUTCMonth() + 1).padStart(2, '0')
+  const dd = String(dt.getUTCDate()).padStart(2, '0')
+  return `${yy}-${mm}-${dd}`
+}
+
 function first(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : value
 }
@@ -114,6 +131,7 @@ export default function CoachNutritionV2BuilderScreen() {
   const [showErrors, setShowErrors] = useState(false)
   const [publishing, setPublishing] = useState(false)
   const [publishError, setPublishError] = useState<string | null>(null)
+  const [dateConflict, setDateConflict] = useState(false)
   const [upsell, setUpsell] = useState<string | null>(null)
   const [searchSlotKey, setSearchSlotKey] = useState<string | null>(null)
   const operationId = useRef(genKey('op'))
@@ -172,39 +190,60 @@ export default function CoachNutritionV2BuilderScreen() {
     [hasNutritionPro],
   )
 
-  const handlePublish = useCallback(async () => {
-    if (!userId || !clientId) return
-    setPublishError(null)
-    let draft
-    try {
-      draft = assembleAndValidateDraft(state, { clientId, planId })
-    } catch {
-      setShowErrors(true)
-      setPublishError('El plan tiene datos incompletos. Revisa los pasos marcados y vuelve a intentar.')
-      return
-    }
-    const idempotencyKey = buildPublishIdempotencyKey({ clientId, operationId: operationId.current })
-    setPublishing(true)
-    const res = await publishDraftRN({
-      db: supabase as unknown as NutritionV2WriteClient,
-      userId,
-      draft,
-      idempotencyKey,
-      effectiveFrom: state.effectiveFrom || today,
-      hasNutritionPro,
-    })
-    if (!mountedRef.current) return
-    setPublishing(false)
-    if (res.ok) {
-      router.replace(`/coach/nutrition-v2/${clientId}?published=1`)
-      return
-    }
-    if (res.code === 'UPGRADE_REQUIRED') {
-      setUpsell(res.error)
-      return
-    }
-    setPublishError(res.error)
-  }, [userId, clientId, planId, state, today, hasNutritionPro, router])
+  const handlePublish = useCallback(
+    async (effectiveFromOverride?: string) => {
+      if (!userId || !clientId) return
+      setPublishError(null)
+      setDateConflict(false)
+      let draft
+      try {
+        draft = assembleAndValidateDraft(state, { clientId, planId })
+      } catch {
+        setShowErrors(true)
+        setPublishError('El plan tiene datos incompletos. Revisa los pasos marcados y vuelve a intentar.')
+        return
+      }
+      // Clave fresca por intento: evita reutilizar la de un intento fallido (versiones huerfanas).
+      operationId.current = genKey('op')
+      const idempotencyKey = buildPublishIdempotencyKey({ clientId, operationId: operationId.current })
+      setPublishing(true)
+      const res = await publishDraftRN({
+        db: supabase as unknown as NutritionV2WriteClient,
+        userId,
+        draft,
+        idempotencyKey,
+        effectiveFrom: effectiveFromOverride ?? state.effectiveFrom ?? today,
+        hasNutritionPro,
+      })
+      if (!mountedRef.current) return
+      setPublishing(false)
+      if (res.ok) {
+        router.replace(`/coach/nutrition-v2/${clientId}?published=1`)
+        return
+      }
+      if (res.code === 'UPGRADE_REQUIRED') {
+        setUpsell(res.error)
+        return
+      }
+      // Choque de fecha con el plan vigente: en vez del error criptico, ofrecemos "Empezar manana".
+      if (res.code === 'EFFECTIVE_DATE') {
+        setDateConflict(true)
+        return
+      }
+      setPublishError(res.error)
+    },
+    [userId, clientId, planId, state, today, hasNutritionPro, router],
+  )
+
+  // "Empezar manana": mueve la vigencia al dia siguiente y reintenta la publicacion. El plan
+  // vigente del alumno no esta disponible en esta pantalla, asi que avanzamos desde la fecha
+  // elegida (por defecto hoy) — suficiente para el caso reproducible (plan vigente desde hoy).
+  const handleStartTomorrow = useCallback(() => {
+    const nextFrom = nextDayIso(state.effectiveFrom || today)
+    dispatch({ type: 'SET_EFFECTIVE_FROM', value: nextFrom })
+    setDateConflict(false)
+    void handlePublish(nextFrom)
+  }, [state.effectiveFrom, today, handlePublish])
 
   const handleSelectFood = useCallback(
     (food: FoodCatalogItem) => {
@@ -287,7 +326,15 @@ export default function CoachNutritionV2BuilderScreen() {
               onSearch={(slotKey) => setSearchSlotKey(slotKey)}
             />
           ) : null}
-          {state.step === 3 ? <ReviewStep state={state} publishError={publishError} /> : null}
+          {state.step === 3 ? (
+            <ReviewStep
+              state={state}
+              publishError={publishError}
+              dateConflict={dateConflict}
+              publishing={publishing}
+              onStartTomorrow={handleStartTomorrow}
+            />
+          ) : null}
         </ScrollView>
 
         <View className="flex-row items-center justify-between gap-3 border-t border-border-subtle bg-surface-app px-4 py-3">
@@ -503,10 +550,6 @@ function TargetsStep({
 
 type BuilderDispatch = React.Dispatch<import('../../../../lib/nutrition-v2-builder').BuilderAction>
 
-function macroLine(m: { calories: number; proteinG: number; carbsG: number; fatsG: number }): string {
-  return `${Math.round(m.calories)} kcal · P ${Math.round(m.proteinG)} · C ${Math.round(m.carbsG)} · G ${Math.round(m.fatsG)}`
-}
-
 function UnitToggle({ unit, onChange }: { unit: BuilderUnit; onChange: (unit: BuilderUnit) => void }) {
   return (
     <Pressable
@@ -616,7 +659,9 @@ function ItemEditor({
         </View>
       ) : null}
 
-      <Text className="mt-2 font-mono text-xs text-text-muted">{macroLine(macros)}</Text>
+      <View className="mt-2">
+        <MacroChipRow size="sm" calories={macros.calories} proteinG={macros.proteinG} carbsG={macros.carbsG} fatsG={macros.fatsG} />
+      </View>
     </View>
   )
 }
@@ -702,9 +747,10 @@ function SlotEditor({
       </View>
 
       {slot.items.length > 0 ? (
-        <Text className="mt-3 border-t border-border-subtle pt-2 font-mono text-xs font-semibold text-text-strong">
-          Subtotal: {macroLine(subtotal)}
-        </Text>
+        <View className="mt-3 border-t border-border-subtle pt-2">
+          <Text className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-text-muted">Subtotal franja</Text>
+          <MacroChipRow size="sm" calories={subtotal.calories} proteinG={subtotal.proteinG} carbsG={subtotal.carbsG} fatsG={subtotal.fatsG} />
+        </View>
       ) : null}
     </NutritionCard>
   )
@@ -750,7 +796,10 @@ function ConstructionStep({
         <Text className="text-sm font-semibold text-text-muted">Agregar franja</Text>
       </Pressable>
       {state.slots.length > 0 ? (
-        <Text className="px-1 font-mono text-xs font-semibold text-text-strong">Total del día: {macroLine(totals)}</Text>
+        <View className="px-1">
+          <Text className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-text-muted">Total del día</Text>
+          <MacroChipRow calories={totals.calories} proteinG={totals.proteinG} carbsG={totals.carbsG} fatsG={totals.fatsG} />
+        </View>
       ) : null}
     </View>
   )
@@ -760,7 +809,19 @@ function ConstructionStep({
 // Paso 3 — Revisión y publicar
 // ---------------------------------------------------------------------------
 
-function ReviewStep({ state, publishError }: { state: BuilderState; publishError: string | null }) {
+function ReviewStep({
+  state,
+  publishError,
+  dateConflict,
+  publishing,
+  onStartTomorrow,
+}: {
+  state: BuilderState
+  publishError: string | null
+  dateConflict: boolean
+  publishing: boolean
+  onStartTomorrow: () => void
+}) {
   const strategy = state.strategy ?? 'flexible'
   const totals = dayTotals(state)
   const usesSlots = strategyUsesSlots(state.strategy)
@@ -810,13 +871,35 @@ function ReviewStep({ state, publishError }: { state: BuilderState; publishError
                   )}
                 </View>
               ))}
-              <Text className="px-1 font-mono text-xs font-semibold text-text-strong">Total: {macroLine(totals)}</Text>
+              <View className="px-1">
+                <Text className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-text-muted">Total prescrito</Text>
+                <MacroChipRow calories={totals.calories} proteinG={totals.proteinG} carbsG={totals.carbsG} fatsG={totals.fatsG} />
+              </View>
             </View>
           ) : (
             <Text className="text-sm text-text-muted">Registro libre del alumno contra las metas diarias.</Text>
           )}
         </View>
       </StudentPreview>
+
+      {dateConflict ? (
+        <View className="gap-3 rounded-card border border-border-default bg-surface-card p-4">
+          <View className="gap-1">
+            <Text className="font-display text-base font-semibold text-text-strong">Ya hay un plan vigente desde hoy</Text>
+            <Text className="text-sm leading-5 text-text-muted">
+              Para no pisar el plan actual, empieza el nuevo mañana. El de hoy sigue activo hasta entonces.
+            </Text>
+          </View>
+          <NutritionMotionButton
+            accessibilityLabel="Empezar el plan nuevo mañana"
+            pending={publishing}
+            disabled={publishing}
+            onPress={onStartTomorrow}
+          >
+            Empezar mañana
+          </NutritionMotionButton>
+        </View>
+      ) : null}
 
       {publishError ? (
         <View className="rounded-control border border-danger-500/30 bg-danger-500/10 p-3">

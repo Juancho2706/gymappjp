@@ -2,6 +2,7 @@
 
 import { BadgeCheck, ShieldCheck } from 'lucide-react'
 import type { FoodCatalogItem } from '@eva/nutrition-v2'
+import { MacroChipRow } from '@/components/nutrition-v2'
 import { foodCardImage } from './food-card-presentation'
 import { FoodCoverImage } from './FoodImage'
 
@@ -89,9 +90,15 @@ export function FoodResultCard({ item, onPick }: { item: FoodCatalogItem; onPick
         {item.brand ? <span className="truncate text-xs font-medium text-body">{item.brand}</span> : null}
         {meta ? <span className="truncate text-[11px] text-muted">{meta}</span> : null}
 
-        <span className="mt-auto block border-t border-border-subtle pt-2 font-mono text-[11px] tabular-nums text-subtle">
-          {Math.round(item.calories)} kcal · P {Math.round(item.proteinG)} · C {Math.round(item.carbsG)} · G{' '}
-          {Math.round(item.fatsG)} <span className="text-muted">/ 100 {unitPer100}</span>
+        <span className="mt-auto block border-t border-border-subtle pt-2">
+          <MacroChipRow
+            calories={item.calories}
+            proteinG={item.proteinG}
+            carbsG={item.carbsG}
+            fatsG={item.fatsG}
+            per={`/ 100 ${unitPer100}`}
+            size="sm"
+          />
         </span>
       </span>
     </button>

@@ -462,8 +462,8 @@ function TodayTab() {
       <View className="flex-1 bg-surface-app px-4 pt-6">
         <NutritionStatePanel
           icon="permission"
-          title="Nutrición V2 no está habilitada"
-          description="Esta pantalla solo se abre para scopes canary autorizados desde el servidor."
+          title="Nutrición todavía no está disponible para ti"
+          description="Tu coach todavía no activó esta vista para ti."
           action={
             <NutritionMotionButton
               accessibilityLabel="Volver a nutrición actual"
@@ -619,8 +619,8 @@ function TodayTab() {
 
         {!model.plan ? (
           <NutritionStatePanel
-            title="Tu plan V2 todavía no está publicado"
-            description="Puedes registrar alimentos libremente; cuando tu coach publique el plan verás las franjas prescritas."
+            title="Aún no hay comidas prescritas para hoy"
+            description="Puedes registrar lo que comas libremente. Si tu coach acaba de publicar un plan nuevo, las comidas prescritas aparecen a partir de mañana."
           />
         ) : null}
 
@@ -926,8 +926,8 @@ export default function StudentNutritionV2Screen() {
       <View className="flex-1 bg-surface-app px-4 pt-6">
         <NutritionStatePanel
           icon="permission"
-          title="Nutrición V2 no está habilitada"
-          description="Esta pantalla solo se abre para scopes canary autorizados desde el servidor."
+          title="Nutrición todavía no está disponible para ti"
+          description="Tu coach todavía no activó esta vista para ti."
           action={
             <NutritionMotionButton
               accessibilityLabel="Volver a nutrición actual"
@@ -946,7 +946,7 @@ export default function StudentNutritionV2Screen() {
     <View className="flex-1 bg-surface-app">
       <View className="gap-4 px-4 pb-3 pt-5">
         <NutritionHeader
-          eyebrow="Canary privado"
+          eyebrow="Vista previa"
           title="Nutrición"
           description="Prescripción, consumo real e historial en una sola experiencia."
         />
@@ -1508,9 +1508,13 @@ function HistoryDayCard({
               ) : null}
             </View>
             <Text className="mt-1 text-xs text-text-muted">
-              {day.activeEntryCount} registro{day.activeEntryCount === 1 ? '' : 's'}
-              {day.correctionCount > 0 ? ` · ${day.correctionCount} corrección${day.correctionCount === 1 ? '' : 'es'}` : ''}
-              {day.lastRecordedAt ? ` · último ${formatClock(day.lastRecordedAt)}` : ''}
+              {legacy && day.activeEntryCount === 0
+                ? 'Registrado en el sistema anterior'
+                : `${day.activeEntryCount} registro${day.activeEntryCount === 1 ? '' : 's'}${
+                    day.correctionCount > 0
+                      ? ` · ${day.correctionCount} corrección${day.correctionCount === 1 ? '' : 'es'}`
+                      : ''
+                  }${day.lastRecordedAt ? ` · último ${formatClock(day.lastRecordedAt)}` : ''}`}
             </Text>
           </View>
           <View className="items-end">

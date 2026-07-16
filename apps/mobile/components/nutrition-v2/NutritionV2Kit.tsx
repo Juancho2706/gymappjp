@@ -39,6 +39,7 @@ import {
 } from '@eva/nutrition-v2'
 import { useTheme } from '../../context/ThemeContext'
 import { useEvaMotion } from '../../lib/motion'
+import { MacroChipRow } from './MacroChipRow'
 
 function cx(...values: Array<string | false | null | undefined>): string {
   return values.filter(Boolean).join(' ')
@@ -437,10 +438,15 @@ export function FoodRow({
           {food.quantityLabel}
           {food.detail ? ` · ${food.detail}` : ''}
         </Text>
-        <Text className="mt-1 font-mono text-[10px] text-text-subtle">
-          {food.calories !== null && food.calories !== undefined ? `${formatNutritionCalories(food.calories)} · ` : ''}
-          P {food.proteinG ?? 0} · C {food.carbsG ?? 0} · G {food.fatsG ?? 0}
-        </Text>
+        <View className="mt-1">
+          <MacroChipRow
+            calories={food.calories}
+            proteinG={food.proteinG}
+            carbsG={food.carbsG}
+            fatsG={food.fatsG}
+            size="sm"
+          />
+        </View>
       </View>
       {actions ? <View className="shrink-0">{actions}</View> : null}
     </View>

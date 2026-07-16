@@ -2,8 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Image from 'next/image'
-import { ImageIcon, Loader2, Search, X } from 'lucide-react'
-import { NutritionStatePanel } from '@/components/nutrition-v2'
+import { Loader2, Search, X } from 'lucide-react'
+import { MacroChipRow, NutritionStatePanel } from '@/components/nutrition-v2'
 import { FoodDetailSheet } from '@/components/coach/FoodDetailSheet'
 import {
   OPEN_FOOD_FACTS_GENERIC_ATTRIBUTION,
@@ -186,12 +186,16 @@ export function FoodCatalogBrowser({ countryCode = 'CL' }: { countryCode?: strin
                     className="size-12 shrink-0 rounded-control border border-border-subtle object-cover"
                   />
                 ) : (
-                  <span
+                  <Image
+                    src={model.categoryIconUrl}
+                    alt=""
                     aria-hidden
-                    className="flex size-12 shrink-0 items-center justify-center rounded-control border border-border-subtle bg-surface-sunken text-subtle"
-                  >
-                    <ImageIcon className="size-5" />
-                  </span>
+                    width={48}
+                    height={48}
+                    unoptimized
+                    loading="lazy"
+                    className="size-12 shrink-0 rounded-control border border-border-subtle bg-primary/10 object-contain p-1.5"
+                  />
                 )}
 
                 <div className="min-w-0 flex-1">
@@ -209,10 +213,16 @@ export function FoodCatalogBrowser({ countryCode = 'CL' }: { countryCode?: strin
                   <p className="mt-0.5 truncate text-xs text-muted">
                     {[model.brand, model.packageLabel, model.sourceLabel].filter(Boolean).join(" · ")}
                   </p>
-                  <p className="eva-mono mt-1 truncate text-[11px] tabular-nums text-subtle">
-                    {model.calories} kcal · P {model.proteinG} · C {model.carbsG} · G {model.fatsG}
-                    <span className="ml-1 text-subtle">({model.basisLabel})</span>
-                  </p>
+                  <div className="mt-1">
+                    <MacroChipRow
+                      calories={item.calories}
+                      proteinG={item.proteinG}
+                      carbsG={item.carbsG}
+                      fatsG={item.fatsG}
+                      per={model.basisLabel}
+                      size="sm"
+                    />
+                  </div>
                 </div>
               </button>
             </li>

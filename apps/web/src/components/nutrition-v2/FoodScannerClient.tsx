@@ -9,6 +9,7 @@ import {
 import { createClient } from '@/lib/supabase/client'
 import {
   FoodThumbnail,
+  MacroChipRow,
   NutritionCard,
   NutritionMotionButton,
   NutritionStatePanel,
@@ -367,9 +368,15 @@ function ScannerResult({
         <div className="min-w-0 flex-1">
           <h2 className="font-display text-xl font-semibold text-strong">{result.food.name}</h2>
           <p className="mt-1 text-sm text-muted">{result.food.brand ?? 'Sin marca'}</p>
-          <p className="mt-2 font-mono text-xs text-body">
-            {result.food.calories} kcal · P {result.food.proteinG} · C {result.food.carbsG} · G {result.food.fatsG}
-          </p>
+          <div className="mt-2">
+            <MacroChipRow
+              calories={result.food.calories}
+              proteinG={result.food.proteinG}
+              carbsG={result.food.carbsG}
+              fatsG={result.food.fatsG}
+              size="sm"
+            />
+          </div>
           <p className="mt-2 text-xs font-semibold opacity-80">
             {result.status === 'found' ? 'Verificado' : 'Pendiente de verificación'}
           </p>

@@ -15,7 +15,7 @@ import { getClientNutritionUser } from '../../nutrition/_data/nutrition-auth.que
 import { getClientScope } from '../../nutrition/_data/client-scope.queries'
 
 /**
- * Registro de consumo del alumno para el canary Nutrición V2.
+ * Registro de consumo del alumno para nutrición.
  *
  * Reglas duras respetadas:
  * - Toda escritura pasa por un RPC idempotente (record_/correct_/void_/ensure_),

@@ -10,6 +10,7 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet'
 import { ImageLightbox } from '@/components/ImageLightbox'
+import { MacroChipRow } from '@/components/nutrition-v2'
 import { cn } from '@/lib/utils'
 import {
   formatBarcode,
@@ -43,18 +44,6 @@ function unitBasis(detail: FoodDetailData): string {
 
 function fmt(value: number, digits = 1): string {
   return Number.isInteger(value) ? String(value) : value.toFixed(digits)
-}
-
-function MacroTile({ label, value, unit, className }: { label: string; value: string; unit: string; className?: string }) {
-  return (
-    <div className="rounded-control border border-subtle bg-surface-sunken px-3 py-2.5">
-      <p className="text-[10px] font-black uppercase tracking-widest text-muted">{label}</p>
-      <p className={cn('eva-mono mt-0.5 text-base font-bold tabular-nums text-strong', className)}>
-        {value}
-        <span className="ml-0.5 text-[11px] font-semibold text-subtle">{unit}</span>
-      </p>
-    </div>
-  )
 }
 
 function MicroRow({ label, value }: { label: string; value: string }) {
@@ -207,12 +196,13 @@ export function FoodDetailSheet({ open, onOpenChange, detail, loading = false }:
                 <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-muted">
                   Por {basis}
                 </p>
-                <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                  <MacroTile label="Kcal" value={fmt(detail.calories, 0)} unit="" className="text-strong" />
-                  <MacroTile label="Proteína" value={fmt(detail.proteinG)} unit="g" className="text-[var(--ember-600)]" />
-                  <MacroTile label="Carbos" value={fmt(detail.carbsG)} unit="g" className="text-[var(--sport-600)]" />
-                  <MacroTile label="Grasas" value={fmt(detail.fatsG)} unit="g" className="text-[var(--aqua-600)]" />
-                </div>
+                <MacroChipRow
+                  calories={detail.calories}
+                  proteinG={detail.proteinG}
+                  carbsG={detail.carbsG}
+                  fatsG={detail.fatsG}
+                  size="md"
+                />
               </section>
 
               {micros.length > 0 && (

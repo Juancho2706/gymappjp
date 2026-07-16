@@ -5,6 +5,7 @@ import * as Haptics from 'expo-haptics'
 import { ChevronLeft, ScanBarcode, Search } from 'lucide-react-native'
 import {
   FoodRow,
+  MacroChipRow,
   NutritionCard,
   NutritionHeader,
   NutritionMotionButton,
@@ -223,8 +224,8 @@ export default function NutritionV2AddFoodScreen() {
       <View className="flex-1 bg-surface-app px-4 pt-6">
         <NutritionStatePanel
           icon="permission"
-          title="Registro V2 no habilitado"
-          description="Esta pantalla solo se abre para scopes canary autorizados desde el servidor."
+          title="El registro todavía no está disponible"
+          description="Tu coach todavía no activó esta vista para ti."
           action={
             <NutritionMotionButton
               accessibilityLabel="Volver a nutrición actual"
@@ -398,11 +399,14 @@ export default function NutritionV2AddFoodScreen() {
             ) : null}
 
             {preview ? (
-              <View className="mt-4 flex-row flex-wrap gap-2">
-                <MacroChip label="kcal" value={preview.calories} />
-                <MacroChip label="P" value={preview.proteinG} />
-                <MacroChip label="C" value={preview.carbsG} />
-                <MacroChip label="G" value={preview.fatsG} />
+              <View className="mt-4">
+                <MacroChipRow
+                  calories={preview.calories}
+                  proteinG={preview.proteinG}
+                  carbsG={preview.carbsG}
+                  fatsG={preview.fatsG}
+                  size="md"
+                />
               </View>
             ) : null}
           </NutritionCard>
@@ -437,15 +441,6 @@ export default function NutritionV2AddFoodScreen() {
       )}
     </ScrollView>
       <CelebrationOverlay celebration={celebration} onDone={() => setCelebration(null)} />
-    </View>
-  )
-}
-
-function MacroChip({ label, value }: { label: string; value: number }) {
-  return (
-    <View className="flex-row items-center gap-1 rounded-pill border border-border-subtle bg-surface-sunken px-3 py-1.5">
-      <Text className="font-mono text-sm font-semibold text-text-strong">{Math.round(value)}</Text>
-      <Text className="text-xs font-semibold text-text-muted">{label}</Text>
     </View>
   )
 }

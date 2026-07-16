@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Barcode, CheckCircle2, Link2, Loader2, Plus, Search, X } from 'lucide-react'
 import { toast } from 'sonner'
-import { NutritionStatePanel } from '@/components/nutrition-v2'
+import { MacroChipRow, NutritionStatePanel } from '@/components/nutrition-v2'
 import type { FoodCatalogItem } from '@eva/nutrition-v2'
 import {
   createCoachFoodForCurationAction,
@@ -381,11 +381,19 @@ function CatalogPicker({
               >
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-semibold text-strong">{food.name}</p>
-                  <p className="mt-0.5 truncate text-[11px] text-muted">
-                    {[food.brand, `${Math.round(food.calories)} kcal / ${food.servingSize}${food.servingUnit}`]
-                      .filter(Boolean)
-                      .join(' · ')}
-                  </p>
+                  {food.brand ? (
+                    <p className="mt-0.5 truncate text-[11px] text-muted">{food.brand}</p>
+                  ) : null}
+                  <div className="mt-1">
+                    <MacroChipRow
+                      calories={food.calories}
+                      proteinG={food.proteinG}
+                      carbsG={food.carbsG}
+                      fatsG={food.fatsG}
+                      per={`/ ${food.servingSize} ${food.servingUnit}`}
+                      size="sm"
+                    />
+                  </div>
                 </div>
                 <Link2 className="h-4 w-4 shrink-0 text-primary" />
               </button>

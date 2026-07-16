@@ -45,7 +45,13 @@ export default async function CoachNutritionV2BuilderPage({ params }: Props) {
   const detail = await getNutritionClientDetailV2ForWeb({ clientId, scope, date: today })
   const existing = detail.plan.plan
   const existingPlan = existing
-    ? { id: existing.id, versionNumber: existing.versionNumber, strategy: existing.strategy }
+    ? {
+        id: existing.id,
+        versionNumber: existing.versionNumber,
+        strategy: existing.strategy,
+        effectiveFrom: existing.effectiveFrom,
+        name: existing.name,
+      }
     : null
 
   // Espejo UI del addon Nutricion Pro: marca/deshabilita las opciones Pro (estrategia hibrida)

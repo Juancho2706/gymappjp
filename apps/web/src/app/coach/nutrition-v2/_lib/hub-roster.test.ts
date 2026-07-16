@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  ATTENTION_FILTER_OPTIONS,
   applyRosterFilters,
   encodeCursorStack,
   filterPickerEntries,
@@ -283,5 +284,13 @@ describe("filterPickerEntries", () => {
 
   it("devuelve vacio sin coincidencias", () => {
     expect(filterPickerEntries(roster, "zzz")).toEqual([])
+  })
+})
+
+describe("ATTENTION_FILTER_OPTIONS", () => {
+  it("no expone jerga interna (sufijo V2) en las etiquetas visibles", () => {
+    for (const option of ATTENTION_FILTER_OPTIONS) {
+      expect(option.label).not.toMatch(/V2/)
+    }
   })
 })

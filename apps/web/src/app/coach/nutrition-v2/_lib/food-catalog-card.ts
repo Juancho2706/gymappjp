@@ -18,6 +18,7 @@ import {
   type FoodDetailData,
   type FoodVerificationTone,
 } from '@/lib/food-detail'
+import { foodCategoryIconUrl } from '@/lib/food-image'
 
 export interface FoodCatalogCardModel {
   id: string
@@ -32,6 +33,8 @@ export interface FoodCatalogCardModel {
   verificationTone: FoodVerificationTone
   /** URL publica del thumbnail (product photo / ilustracion) o null. */
   thumbnailUrl: string | null
+  /** Icono estatico de categoria (fallback garantizado cuando no hay thumbnail). */
+  categoryIconUrl: string
   /** Base de las macros mostradas ("por 100 g" / "por 100 ml"). */
   basisLabel: string
   /** Macros compactas ya formateadas para la card. */
@@ -92,6 +95,7 @@ export function foodCatalogItemToCardModel(
     verificationLabel: verification.label,
     verificationTone: verification.tone,
     thumbnailUrl: resolveFoodMediaUrl(item.media, supabaseBaseUrl),
+    categoryIconUrl: foodCategoryIconUrl(item.category),
     basisLabel,
     calories: fmt(item.calories, 0),
     proteinG: fmt(item.proteinG),

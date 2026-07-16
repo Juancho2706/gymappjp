@@ -6,6 +6,9 @@ import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { AlertTriangle, Check, ChevronLeft, ChevronRight, Loader2, Plus, Search, Trash2 } from 'lucide-react'
 import { BuilderStepList, MacroBudget, NutritionCard, StrategyBadge } from '@/components/nutrition-v2'
+// Import por ruta directa (no via el barrel index.ts): desacopla del orden de edicion de otros
+// modulos y respeta el contrato del componente MacroChipRow.
+import { MacroChipRow } from '@/components/nutrition-v2/MacroChipRow'
 import {
   NUTRITION_STRATEGIES,
   buildNutritionIdempotencyKey,
@@ -37,7 +40,10 @@ import {
   publishPlanAction,
   searchFoodCatalogCoachAction,
 } from '../_actions/builder.actions'
+import { archivePlanAction } from '@/app/coach/nutrition-v2/_actions/nutrition-archive.actions'
+import { effectiveDateConflicts, nextDayIso } from '../_lib/publish-conflict'
 import { FoodResultCard } from './FoodResultCard'
+import { PublishConflictDialog } from './PublishConflictDialog'
 import { foodCategoryIconUrlFromName, resolveFoodImageUrl } from './food-card-presentation'
 import { foodCategoryIconUrl } from '@/lib/food-image'
 import { FoodThumb } from './FoodImage'
@@ -80,13 +86,18 @@ const secondaryButtonClass =
 const iconButtonClass =
   'rounded-control p-2 text-muted transition-colors hover:bg-surface-sunken hover:text-rose-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
 
-function macroLine(m: { calories: number; proteinG: number; carbsG: number; fatsG: number }): string {
-  return Math.round(m.calories) + ' kcal | P ' + Math.round(m.proteinG) + ' | C ' + Math.round(m.carbsG) + ' | G ' + Math.round(m.fatsG)
-}
-
 function numOr0(value: string): number {
   const n = Number(String(value).trim())
   return Number.isFinite(n) && n >= 0 ? n : 0
+}
+
+// Convierte una meta escrita (string) a numero, o null cuando esta vacia/invalida — asi
+// MacroChipRow oculta la pastilla en vez de mostrar un cero enganoso.
+function numOrNull(value: string): number | null {
+  const t = String(value).trim()
+  if (t === '') return null
+  const n = Number(t)
+  return Number.isFinite(n) ? n : null
 }
 
 function FoodSearch({ clientId, onPick }: { clientId: string; onPick: (food: BuilderFood) => void }) {
@@ -199,11 +210,14 @@ function FoodSearch({ clientId, onPick }: { clientId: string; onPick: (food: Bui
 function PortionMacros({ item }: { item: BuilderItem }) {
   const m = itemMacros(item)
   return (
-    <div className="shrink-0 text-right">
-      <p className="font-mono text-sm font-semibold tabular-nums text-strong">{Math.round(m.calories)} kcal</p>
-      <p className="font-mono text-[11px] tabular-nums text-muted">
-        P {Math.round(m.proteinG)} · C {Math.round(m.carbsG)} · G {Math.round(m.fatsG)}
-      </p>
+    <div className="shrink-0">
+      <MacroChipRow
+        size="sm"
+        calories={m.calories}
+        proteinG={m.proteinG}
+        carbsG={m.carbsG}
+        fatsG={m.fatsG}
+      />
     </div>
   )
 }
@@ -464,9 +478,15 @@ function SlotEditor({
         </button>
       </div>
 
-      <div className="mt-3 flex items-center justify-between gap-2 rounded-control bg-surface-sunken px-3 py-2">
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-control bg-surface-sunken px-3 py-2">
         <span className="text-xs font-semibold uppercase tracking-wide text-muted">Subtotal franja</span>
-        <span className="font-mono text-xs tabular-nums text-strong">{macroLine(subtotal)}</span>
+        <MacroChipRow
+          size="sm"
+          calories={subtotal.calories}
+          proteinG={subtotal.proteinG}
+          carbsG={subtotal.carbsG}
+          fatsG={subtotal.fatsG}
+        />
       </div>
     </NutritionCard>
   )
@@ -715,9 +735,9 @@ function ConstructionStep({
           Agregar franja
         </button>
 
-        <div className="sticky bottom-0 z-10 -mx-1 flex items-center justify-between gap-2 rounded-control border border-border-default bg-surface-card/95 px-4 py-3 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-surface-card/80 lg:hidden">
+        <div className="sticky bottom-0 z-10 -mx-1 flex flex-wrap items-center justify-between gap-2 rounded-control border border-border-default bg-surface-card/95 px-4 py-3 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-surface-card/80 lg:hidden">
           <span className="text-xs font-semibold uppercase tracking-wide text-muted">Total del dia</span>
-          <span className="font-mono text-sm font-semibold tabular-nums text-strong">{macroLine(totals)}</span>
+          <MacroChipRow calories={totals.calories} proteinG={totals.proteinG} carbsG={totals.carbsG} fatsG={totals.fatsG} />
         </div>
       </div>
 
@@ -752,17 +772,23 @@ function ReviewStep({
         {meta ? <p className="mt-1 text-sm text-muted">{meta.description}</p> : null}
         <dl className="mt-3 grid gap-3 text-sm sm:grid-cols-2">
           <div>
-            <dt className="text-xs uppercase tracking-wide text-muted">Metas diarias</dt>
+            <dt className="mb-1 text-xs uppercase tracking-wide text-muted">Metas diarias</dt>
             <dd className="text-body">
-              {state.targets.calories || '-'} kcal | P {state.targets.proteinG || '-'} | C {state.targets.carbsG || '-'} | G{' '}
-              {state.targets.fatsG || '-'}
+              <MacroChipRow
+                calories={numOrNull(state.targets.calories)}
+                proteinG={numOrNull(state.targets.proteinG)}
+                carbsG={numOrNull(state.targets.carbsG)}
+                fatsG={numOrNull(state.targets.fatsG)}
+              />
             </dd>
           </div>
           {usesSlots ? (
             <div>
-              <dt className="text-xs uppercase tracking-wide text-muted">Franjas / total prescrito</dt>
+              <dt className="mb-1 text-xs uppercase tracking-wide text-muted">
+                Total prescrito · {state.slots.length} {state.slots.length === 1 ? 'franja' : 'franjas'}
+              </dt>
               <dd className="text-body">
-                {state.slots.length} franjas | {macroLine(totals)}
+                <MacroChipRow calories={totals.calories} proteinG={totals.proteinG} carbsG={totals.carbsG} fatsG={totals.fatsG} />
               </dd>
             </div>
           ) : null}
@@ -783,8 +809,9 @@ function ReviewStep({
 
         <NutritionCard tone="neutral">
           <p className="text-xs text-muted">
-            Fuera de este MVP: plantillas y asignacion multiple, editar una version ya publicada (para cambios crea una
-            nueva version), variantes por dia de la semana y fecha de vigencia programada.
+            Para copiar este plan a otros alumnos, usa &quot;Asignar a otros alumnos&quot; desde la ficha después de publicar.
+            Cada cambio publica una versión nueva y la anterior queda en el historial. Las plantillas reutilizables todavía
+            no están disponibles.
           </p>
         </NutritionCard>
       </div>
@@ -812,7 +839,13 @@ export function PlanBuilderClient({
   nutritionProEnabled,
 }: {
   clientId: string
-  existingPlan: { id: string; versionNumber: number; strategy: NutritionStrategy } | null
+  existingPlan: {
+    id: string
+    versionNumber: number
+    strategy: NutritionStrategy
+    effectiveFrom: string
+    name: string
+  } | null
   today: string
   nutritionProEnabled: boolean
 }) {
@@ -820,6 +853,8 @@ export function PlanBuilderClient({
   const [state, dispatch] = useReducer(builderReducer, today, createEmptyBuilderState)
   const [showErrors, setShowErrors] = useState(false)
   const [publishError, setPublishError] = useState<string | null>(null)
+  const [conflictOpen, setConflictOpen] = useState(false)
+  const [conflictError, setConflictError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
   const operationId = useRef(genId())
 
@@ -848,39 +883,124 @@ export function PlanBuilderClient({
     dispatch({ type: 'PREV_STEP' })
   }
 
-  function handlePublish() {
-    setPublishError(null)
-    let draft
-    try {
-      draft = assembleAndValidateDraft(state, { clientId, planId: existingPlan?.id ?? null })
-    } catch {
-      setShowErrors(true)
-      setPublishError('El plan tiene datos incompletos. Revisa los pasos marcados y vuelve a intentar.')
-      return
-    }
-    const idempotencyKey = buildNutritionIdempotencyKey({
+  const goToPublished = () => router.push('/coach/nutrition-v2/' + clientId + '?published=1')
+
+  // Clave de idempotencia FRESCA por cada intento real: cambia el destino (misma version vs
+  // plan nuevo) y evita reutilizar la clave de un intento fallido (riesgo de versiones draft
+  // huerfanas). El bloqueo de doble-submit lo da isPending + botones deshabilitados.
+  function freshIdempotencyKey(): string {
+    operationId.current = genId()
+    return buildNutritionIdempotencyKey({
       clientId,
       deviceId: 'web-builder',
       operationId: operationId.current,
       kind: 'publish',
     })
+  }
+
+  // Publica el draft. `forceNewPlan` fuerza planId null => persistAndPublishDraft crea un plan
+  // nuevo (rama "Reemplazar"); si no, publica una nueva version del plan vigente. `inModal`
+  // enruta los errores al modal de conflicto en vez del error de la revision.
+  function runPublish(opts: { forceNewPlan?: boolean; effectiveFrom?: string; inModal?: boolean } = {}) {
+    const { forceNewPlan = false, inModal = false } = opts
+    const effectiveFrom = opts.effectiveFrom ?? state.effectiveFrom
+    const setError = inModal ? setConflictError : setPublishError
+    setPublishError(null)
+    setConflictError(null)
+
+    let draft
+    try {
+      draft = assembleAndValidateDraft(state, {
+        clientId,
+        planId: forceNewPlan ? null : (existingPlan?.id ?? null),
+      })
+    } catch {
+      setShowErrors(true)
+      setError('El plan tiene datos incompletos. Revisa los pasos marcados y vuelve a intentar.')
+      if (inModal) setConflictOpen(false)
+      return
+    }
+
+    const idempotencyKey = freshIdempotencyKey()
     startTransition(async () => {
+      const res = await publishPlanAction({ draft, idempotencyKey, effectiveFrom })
+      if (res.ok) {
+        goToPublished()
+        return
+      }
+      // Red de seguridad: si el pre-chequeo no disparo (carrera con otra pestana/RN) el RPC
+      // igual rechaza la fecha => abre el mismo modal en vez del texto rojo crudo.
+      if (res.code === 'EFFECTIVE_DATE' && !inModal) {
+        setConflictError(null)
+        setConflictOpen(true)
+        return
+      }
+      setError(res.error)
+    })
+  }
+
+  function handlePublish() {
+    // Pre-chequeo sin ida y vuelta: si la fecha elegida choca con el plan que ya rige, abre el
+    // modal de decision directo. El RPC sigue siendo la barrera real (ver runPublish).
+    if (existingPlan && effectiveDateConflicts(state.effectiveFrom, existingPlan.effectiveFrom)) {
+      setConflictError(null)
+      setConflictOpen(true)
+      return
+    }
+    runPublish()
+  }
+
+  function handleConflictOpenChange(next: boolean) {
+    if (isPending) return
+    setConflictOpen(next)
+    if (!next) setConflictError(null)
+  }
+
+  // "Empezar manana": mueve la vigencia al dia siguiente a la del plan vigente (garantiza que el
+  // RPC la acepte) y republica como nueva version del mismo plan.
+  function handleStartTomorrow() {
+    const base = existingPlan?.effectiveFrom || state.effectiveFrom || today
+    const nextFrom = nextDayIso(base)
+    dispatch({ type: 'SET_EFFECTIVE_FROM', value: nextFrom })
+    runPublish({ effectiveFrom: nextFrom, inModal: true })
+  }
+
+  // "Archivar el actual y reemplazar": archiva el plan vigente y publica el draft como PLAN
+  // NUEVO (planId null) con la misma fecha. Encadena dos mutaciones bajo un solo isPending.
+  function handleReplaceToday() {
+    if (!existingPlan) return
+    setConflictError(null)
+    startTransition(async () => {
+      const archived = await archivePlanAction({ clientId, planId: existingPlan.id })
+      if (!archived.ok) {
+        setConflictError(archived.error)
+        return
+      }
+      let draft
+      try {
+        draft = assembleAndValidateDraft(state, { clientId, planId: null })
+      } catch {
+        setConflictError('El plan tiene datos incompletos. Revisa los pasos marcados y vuelve a intentar.')
+        return
+      }
+      const idempotencyKey = freshIdempotencyKey()
       const res = await publishPlanAction({ draft, idempotencyKey, effectiveFrom: state.effectiveFrom })
       if (res.ok) {
-        router.push('/coach/nutrition-v2/' + clientId + '?published=1')
-      } else {
-        setPublishError(res.error)
+        goToPublished()
+        return
       }
+      setConflictError(res.error)
     })
   }
 
   return (
+    <>
     <div className="grid gap-5 lg:grid-cols-[240px_minmax(0,1fr)]">
       <div className="space-y-3 lg:sticky lg:top-6 lg:self-start">
         <BuilderStepList steps={steps} />
         {existingPlan ? (
           <p className="rounded-control border border-border-subtle bg-surface-card px-3 py-2 text-xs text-muted">
-            Al publicar se creara la version v{existingPlan.versionNumber + 1} y la actual pasara a anterior.
+            Al publicar se creará la versión {existingPlan.versionNumber + 1} y la actual pasará a histórico.
           </p>
         ) : null}
       </div>
@@ -916,5 +1036,17 @@ export function PlanBuilderClient({
         </div>
       </div>
     </div>
+
+    <PublishConflictDialog
+      open={conflictOpen}
+      planName={existingPlan?.name ?? ''}
+      canReplace={existingPlan != null}
+      isPending={isPending}
+      error={conflictError}
+      onOpenChange={handleConflictOpenChange}
+      onStartTomorrow={handleStartTomorrow}
+      onReplaceToday={handleReplaceToday}
+    />
+    </>
   )
 }
