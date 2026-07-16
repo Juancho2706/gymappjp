@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest'
 import {
   FoodBarcodeLookupReadModelSchema,
   FoodCatalogSearchReadModelSchema,
+  NutritionHistoryDaySchema,
   NutritionTodayReadModelSchema,
+  describeLegacyHistoryDay,
   resolveNutritionV2Rollout,
 } from './index'
 
@@ -113,6 +115,128 @@ describe('nutrition V2 read contracts', () => {
 
     expect(parsed.plan).toBeNull()
     expect(parsed.consumed.entryCount).toBe(0)
+  })
+})
+
+describe('nutrition V2 history day contract', () => {
+  const baseDay = {
+    localDate: '2026-05-10',
+    snapshotId: null,
+    planVersionId: null,
+    strategy: null,
+    targets: {
+      calories: null,
+      proteinG: null,
+      carbsG: null,
+      fatsG: null,
+      fiberG: null,
+      sodiumMg: null,
+      waterMl: null,
+    },
+    consumed: { calories: 0, proteinG: 0, carbsG: 0, fatsG: 0, fiberG: 0, entryCount: 0 },
+    activeEntryCount: 0,
+    correctionCount: 0,
+    legacyCompletionCount: 3,
+    legacyDisclosure: 'legacy_completion_without_food_detail' as const,
+    lastRecordedAt: null,
+  }
+
+  it('parses a cached day payload without the additive legacy fields', () => {
+    const parsed = NutritionHistoryDaySchema.parse(baseDay)
+    expect(parsed.legacyEntryCount).toBeUndefined()
+    expect(parsed.legacyConsumed).toBeUndefined()
+    expect(parsed.legacyMeals).toBeUndefined()
+  })
+
+  it('parses a day carrying legacy macros and completed meal names', () => {
+    const parsed = NutritionHistoryDaySchema.parse({
+      ...baseDay,
+      legacyEntryCount: 4,
+      legacyConsumed: { calories: 1820, proteinG: 130, carbsG: 190, fatsG: 60 },
+      legacyMeals: ['Desayuno', 'Almuerzo', 'Cena'],
+    })
+    expect(parsed.legacyConsumed?.calories).toBe(1820)
+    expect(parsed.legacyMeals).toEqual(['Desayuno', 'Almuerzo', 'Cena'])
+  })
+
+  it('keeps a legacy day with no macros explicit (null legacyConsumed)', () => {
+    const parsed = NutritionHistoryDaySchema.parse({
+      ...baseDay,
+      legacyEntryCount: 0,
+      legacyConsumed: null,
+      legacyMeals: null,
+    })
+    expect(parsed.legacyConsumed).toBeNull()
+    expect(parsed.legacyMeals).toBeNull()
+  })
+})
+
+describe('describeLegacyHistoryDay', () => {
+  it('surfaces legacy macros for a legacy-only day', () => {
+    const view = describeLegacyHistoryDay({
+      activeEntryCount: 0,
+      legacyDisclosure: 'legacy_completion_without_food_detail',
+      legacyCompletionCount: 3,
+      legacyEntryCount: 4,
+      legacyConsumed: { calories: 1820, proteinG: 130, carbsG: 190, fatsG: 60 },
+      legacyMeals: ['Desayuno', 'Almuerzo'],
+    })
+    expect(view.isLegacy).toBe(true)
+    expect(view.legacyOnly).toBe(true)
+    expect(view.hasMacros).toBe(true)
+    expect(view.mealsLabel).toBe('Desayuno · Almuerzo')
+  })
+
+  it('labels completions without macros and pluralizes correctly', () => {
+    const many = describeLegacyHistoryDay({
+      activeEntryCount: 0,
+      legacyDisclosure: 'legacy_completion_without_food_detail',
+      legacyCompletionCount: 3,
+      legacyEntryCount: 0,
+      legacyConsumed: null,
+      legacyMeals: null,
+    })
+    expect(many.hasMacros).toBe(false)
+    expect(many.completionsLabel).toBe('3 comidas completadas')
+
+    const one = describeLegacyHistoryDay({
+      activeEntryCount: 0,
+      legacyDisclosure: 'legacy_completion_without_food_detail',
+      legacyCompletionCount: 1,
+      legacyEntryCount: 0,
+      legacyConsumed: { calories: 0, proteinG: 0, carbsG: 0, fatsG: 0 },
+      legacyMeals: [],
+    })
+    expect(one.completionsLabel).toBe('1 comida completada')
+    expect(one.mealsLabel).toBeNull()
+  })
+
+  it('treats a day with new records plus legacy data as mixed (secondary line)', () => {
+    const view = describeLegacyHistoryDay({
+      activeEntryCount: 5,
+      legacyDisclosure: 'legacy_completion_without_food_detail',
+      legacyCompletionCount: 2,
+      legacyEntryCount: 3,
+      legacyConsumed: { calories: 900, proteinG: 40, carbsG: 90, fatsG: 30 },
+      legacyMeals: ['Colación'],
+    })
+    expect(view.legacyOnly).toBe(false)
+    expect(view.secondaryLabel).toBe('Sistema anterior · 900 kcal')
+  })
+
+  it('is inert when there is no legacy data (cached payload without fields)', () => {
+    const view = describeLegacyHistoryDay({
+      activeEntryCount: 4,
+      legacyDisclosure: null,
+      legacyCompletionCount: 0,
+      legacyEntryCount: undefined,
+      legacyConsumed: undefined,
+      legacyMeals: undefined,
+    })
+    expect(view.isLegacy).toBe(false)
+    expect(view.legacyOnly).toBe(false)
+    expect(view.secondaryLabel).toBeNull()
+    expect(view.mealsLabel).toBeNull()
   })
 })
 

@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { ArrowLeft, History, Info, ListChecks, Utensils } from 'lucide-react'
 import {
+  MacroChipRow,
   NutritionCard,
   NutritionPageShell,
   NutritionStatePanel,
@@ -9,6 +10,7 @@ import {
   PlanVersionBadge,
   StrategyBadge,
 } from '@/components/nutrition-v2'
+import { describeLegacyHistoryDay } from '@eva/nutrition-v2'
 import { formatNutritionShortDate, getTodayInSantiago } from '@/lib/date-utils'
 import { getClientBasePath } from '@/lib/client/base-path'
 import { getClientNutritionUser } from '../nutrition/_data/nutrition-auth.queries'
@@ -217,27 +219,51 @@ async function HistoryView({
 
   return (
     <div className="space-y-3">
-      {history.items.map((day) => (
-        <NutritionCard key={day.localDate}>
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <h2 className="font-display text-lg font-semibold text-strong">
-                {formatNutritionShortDate(day.localDate, { todayIso: today, relative: true })}
-              </h2>
-              <p className="mt-1 text-sm tabular-nums text-muted">
-                {day.legacyDisclosure && day.activeEntryCount === 0
-                  ? 'Registrado en el sistema anterior'
-                  : `${day.activeEntryCount} registro${day.activeEntryCount === 1 ? '' : 's'} · ${day.consumed.calories} kcal`}
-              </p>
+      {history.items.map((day) => {
+        const legacy = describeLegacyHistoryDay(day)
+        const showLegacyMacros = legacy.legacyOnly && legacy.hasMacros && legacy.consumed != null
+        return (
+          <NutritionCard key={day.localDate}>
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <h2 className="font-display text-lg font-semibold text-strong">
+                  {formatNutritionShortDate(day.localDate, { todayIso: today, relative: true })}
+                </h2>
+                {showLegacyMacros && legacy.consumed ? (
+                  <div className="mt-1">
+                    <MacroChipRow
+                      calories={legacy.consumed.calories}
+                      proteinG={legacy.consumed.proteinG}
+                      carbsG={legacy.consumed.carbsG}
+                      fatsG={legacy.consumed.fatsG}
+                      size="sm"
+                    />
+                  </div>
+                ) : (
+                  <p className="mt-1 text-sm tabular-nums text-muted">
+                    {legacy.legacyOnly
+                      ? legacy.completionCount > 0
+                        ? legacy.completionsLabel
+                        : 'Registrado en el sistema anterior'
+                      : `${day.activeEntryCount} registro${day.activeEntryCount === 1 ? '' : 's'} · ${day.consumed.calories} kcal`}
+                  </p>
+                )}
+                {legacy.isLegacy && !legacy.legacyOnly && legacy.secondaryLabel ? (
+                  <p className="mt-1 text-xs tabular-nums text-subtle">{legacy.secondaryLabel}</p>
+                ) : null}
+                {legacy.isLegacy && legacy.mealsLabel ? (
+                  <p className="mt-1 line-clamp-2 text-xs text-subtle">{legacy.mealsLabel}</p>
+                ) : null}
+              </div>
+              {legacy.isLegacy ? (
+                <span className="shrink-0 rounded-pill border border-amber-300 bg-amber-50 px-2 py-1 text-[11px] font-semibold text-amber-800">
+                  Historial anterior
+                </span>
+              ) : null}
             </div>
-            {day.legacyDisclosure ? (
-              <span className="rounded-pill border border-amber-300 bg-amber-50 px-2 py-1 text-[11px] font-semibold text-amber-800">
-                Historial anterior
-              </span>
-            ) : null}
-          </div>
-        </NutritionCard>
-      ))}
+          </NutritionCard>
+        )
+      })}
       {history.hasMore && history.nextCursor ? (
         <Link
           className="inline-flex min-h-11 items-center rounded-control border border-border-default bg-surface-card px-4 text-sm font-semibold text-strong"

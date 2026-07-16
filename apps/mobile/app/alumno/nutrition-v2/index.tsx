@@ -8,6 +8,7 @@ import { History, ListChecks, Utensils } from 'lucide-react-native'
 import {
   FoodRow,
   MacroBudget,
+  MacroChipRow,
   NutritionCard,
   NutritionHeader,
   NutritionMotionButton,
@@ -26,6 +27,7 @@ import {
   NutritionPlanReadModelSchema,
   NutritionTodayReadModelSchema,
   createNutritionMacroValue,
+  describeLegacyHistoryDay,
   formatNutritionAmount,
   formatNutritionCalories,
   type NutritionFoodRowModel,
@@ -1485,12 +1487,22 @@ function HistoryDayCard({
 }) {
   const hasDetail = historyDayHasDetail(day)
   const legacy = historyDayIsLegacy(day)
+  const legacyInfo = describeLegacyHistoryDay(day)
+  const showLegacyMacros = legacyInfo.legacyOnly && legacyInfo.hasMacros && legacyInfo.consumed != null
+  const legacyHasContent = showLegacyMacros || legacyInfo.completionCount > 0 || legacyInfo.mealsLabel != null
+  const accessibilitySummary = legacyInfo.legacyOnly
+    ? showLegacyMacros && legacyInfo.consumed
+      ? `Historial anterior, ${formatNutritionCalories(legacyInfo.consumed.calories)}.`
+      : legacyInfo.completionCount > 0
+        ? `Historial anterior, ${legacyInfo.completionsLabel}.`
+        : 'Registrado en el sistema anterior.'
+    : `${day.activeEntryCount} registros, ${formatNutritionCalories(day.consumed.calories)} consumidas.`
   return (
     <NutritionCard>
       <Pressable
         accessibilityRole="button"
         accessibilityState={{ expanded, disabled: !hasDetail }}
-        accessibilityLabel={`Día ${formatNutritionShortDate(day.localDate, { relative: true })}. ${day.activeEntryCount} registros, ${formatNutritionCalories(day.consumed.calories)} consumidas.`}
+        accessibilityLabel={`Día ${formatNutritionShortDate(day.localDate, { relative: true })}. ${accessibilitySummary}`}
         disabled={!hasDetail}
         onPress={onToggle}
       >
@@ -1507,31 +1519,57 @@ function HistoryDayCard({
                 </View>
               ) : null}
             </View>
-            <Text className="mt-1 text-xs text-text-muted">
-              {legacy && day.activeEntryCount === 0
-                ? 'Registrado en el sistema anterior'
-                : `${day.activeEntryCount} registro${day.activeEntryCount === 1 ? '' : 's'}${
-                    day.correctionCount > 0
-                      ? ` · ${day.correctionCount} corrección${day.correctionCount === 1 ? '' : 'es'}`
-                      : ''
-                  }${day.lastRecordedAt ? ` · último ${formatClock(day.lastRecordedAt)}` : ''}`}
-            </Text>
+            {showLegacyMacros && legacyInfo.consumed ? (
+              <View className="mt-1">
+                <MacroChipRow
+                  calories={legacyInfo.consumed.calories}
+                  proteinG={legacyInfo.consumed.proteinG}
+                  carbsG={legacyInfo.consumed.carbsG}
+                  fatsG={legacyInfo.consumed.fatsG}
+                  size="sm"
+                />
+              </View>
+            ) : (
+              <Text className="mt-1 text-xs text-text-muted">
+                {legacyInfo.legacyOnly
+                  ? legacyInfo.completionCount > 0
+                    ? legacyInfo.completionsLabel
+                    : 'Registrado en el sistema anterior'
+                  : `${day.activeEntryCount} registro${day.activeEntryCount === 1 ? '' : 's'}${
+                      day.correctionCount > 0
+                        ? ` · ${day.correctionCount} corrección${day.correctionCount === 1 ? '' : 'es'}`
+                        : ''
+                    }${day.lastRecordedAt ? ` · último ${formatClock(day.lastRecordedAt)}` : ''}`}
+              </Text>
+            )}
+            {legacy && !legacyInfo.legacyOnly && legacyInfo.secondaryLabel ? (
+              <Text className="mt-1 text-[11px] text-text-subtle">{legacyInfo.secondaryLabel}</Text>
+            ) : null}
+            {legacy && legacyInfo.mealsLabel ? (
+              <Text numberOfLines={2} className="mt-1 text-[11px] text-text-subtle">
+                {legacyInfo.mealsLabel}
+              </Text>
+            ) : null}
           </View>
-          <View className="items-end">
-            <Text className="font-mono text-sm font-semibold text-text-strong">{formatNutritionCalories(day.consumed.calories)}</Text>
-            <Text className="text-[10px] text-text-subtle">de {formatNutritionCalories(day.targets.calories ?? 0)}</Text>
-          </View>
+          {!legacyInfo.legacyOnly ? (
+            <View className="items-end">
+              <Text className="font-mono text-sm font-semibold text-text-strong">{formatNutritionCalories(day.consumed.calories)}</Text>
+              <Text className="text-[10px] text-text-subtle">de {formatNutritionCalories(day.targets.calories ?? 0)}</Text>
+            </View>
+          ) : null}
         </View>
 
-        <View className="mt-3 flex-row flex-wrap gap-x-4 gap-y-1">
-          <HistoryMacro label="P" consumed={day.consumed.proteinG} target={day.targets.proteinG} />
-          <HistoryMacro label="C" consumed={day.consumed.carbsG} target={day.targets.carbsG} />
-          <HistoryMacro label="G" consumed={day.consumed.fatsG} target={day.targets.fatsG} />
-        </View>
+        {!legacyInfo.legacyOnly ? (
+          <View className="mt-3 flex-row flex-wrap gap-x-4 gap-y-1">
+            <HistoryMacro label="P" consumed={day.consumed.proteinG} target={day.targets.proteinG} />
+            <HistoryMacro label="C" consumed={day.consumed.carbsG} target={day.targets.carbsG} />
+            <HistoryMacro label="G" consumed={day.consumed.fatsG} target={day.targets.fatsG} />
+          </View>
+        ) : null}
 
         {hasDetail ? (
           <Text className="mt-2 text-xs font-semibold text-primary">{expanded ? 'Ocultar detalle' : 'Ver detalle'}</Text>
-        ) : legacy ? (
+        ) : legacy && !legacyHasContent ? (
           <Text className="mt-2 text-xs text-text-subtle">Este día proviene del historial anterior y no tiene detalle por alimento.</Text>
         ) : null}
       </Pressable>

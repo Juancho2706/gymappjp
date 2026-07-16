@@ -3,13 +3,14 @@ import { redirect } from 'next/navigation'
 import { ArrowLeft, CheckCircle2, Info, LockKeyhole, Plus } from 'lucide-react'
 import {
   MacroBudget,
+  MacroChipRow,
   NutritionCard,
   NutritionPageShell,
   NutritionStatePanel,
   PlanVersionBadge,
   StrategyBadge,
 } from '@/components/nutrition-v2'
-import { createNutritionMacroValue } from '@eva/nutrition-v2'
+import { createNutritionMacroValue, describeLegacyHistoryDay } from '@eva/nutrition-v2'
 import { getTodayInSantiago } from '@/lib/date-utils'
 import { getNutritionPlansPageCoach } from '../../nutrition-plans/_data/nutrition-page.queries'
 import { getPreferredWorkspaceForRender } from '@/services/auth/workspace-render-cache'
@@ -310,14 +311,47 @@ export default async function CoachNutritionV2ClientPage({ params, searchParams 
               </Link>
             ) : null}
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-              {recentDays.map((day) => (
-                <NutritionCard key={day.localDate}>
-                  <p className="font-semibold text-strong">{day.localDate}</p>
-                  <p className="mt-1 text-sm text-muted">
-                    {day.consumed.calories} kcal · {day.activeEntryCount} registros
-                  </p>
-                </NutritionCard>
-              ))}
+              {recentDays.map((day) => {
+                const legacy = describeLegacyHistoryDay(day)
+                const showLegacyMacros = legacy.legacyOnly && legacy.hasMacros && legacy.consumed != null
+                return (
+                  <NutritionCard key={day.localDate}>
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="font-semibold text-strong">{day.localDate}</p>
+                      {legacy.isLegacy ? (
+                        <span className="shrink-0 rounded-pill border border-amber-300 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-800">
+                          Historial anterior
+                        </span>
+                      ) : null}
+                    </div>
+                    {showLegacyMacros && legacy.consumed ? (
+                      <div className="mt-1">
+                        <MacroChipRow
+                          calories={legacy.consumed.calories}
+                          proteinG={legacy.consumed.proteinG}
+                          carbsG={legacy.consumed.carbsG}
+                          fatsG={legacy.consumed.fatsG}
+                          size="sm"
+                        />
+                      </div>
+                    ) : (
+                      <p className="mt-1 text-sm text-muted">
+                        {legacy.legacyOnly
+                          ? legacy.completionCount > 0
+                            ? legacy.completionsLabel
+                            : 'Registrado en el sistema anterior'
+                          : `${day.consumed.calories} kcal · ${day.activeEntryCount} registros`}
+                      </p>
+                    )}
+                    {legacy.isLegacy && !legacy.legacyOnly && legacy.secondaryLabel ? (
+                      <p className="mt-1 text-xs text-subtle">{legacy.secondaryLabel}</p>
+                    ) : null}
+                    {legacy.isLegacy && legacy.mealsLabel ? (
+                      <p className="mt-1 line-clamp-2 text-xs text-subtle">{legacy.mealsLabel}</p>
+                    ) : null}
+                  </NutritionCard>
+                )
+              })}
             </div>
           </section>
 

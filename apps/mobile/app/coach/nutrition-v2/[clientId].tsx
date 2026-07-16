@@ -4,6 +4,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router'
 import { ArrowLeft, Info, LockKeyhole } from 'lucide-react-native'
 import {
   MacroBudget,
+  MacroChipRow,
   NutritionHeader,
   NutritionMotionButton,
   NutritionSkeleton,
@@ -15,6 +16,7 @@ import {
 import {
   NutritionClientDetailReadModelSchema,
   createNutritionMacroValue,
+  describeLegacyHistoryDay,
   type NutritionClientDetailReadModel,
 } from '@eva/nutrition-v2'
 import { isEnabled } from '../../../lib/flags'
@@ -374,20 +376,58 @@ export default function CoachNutritionV2ClientScreen() {
           {recentDays.length === 0 ? (
             <Text className="text-sm text-text-muted">Sin registros en la ventana disponible.</Text>
           ) : (
-            recentDays.map((day) => (
-              <View
-                className="flex-row items-center justify-between border-b border-border-subtle pb-3"
-                key={day.localDate}
-              >
-                <View>
-                  <Text className="font-semibold text-text-strong">{day.localDate}</Text>
-                  <Text className="mt-0.5 text-xs text-text-muted">{day.activeEntryCount} registros</Text>
+            recentDays.map((day) => {
+              const legacy = describeLegacyHistoryDay(day)
+              const showLegacyMacros = legacy.legacyOnly && legacy.hasMacros && legacy.consumed != null
+              return (
+                <View className="border-b border-border-subtle pb-3" key={day.localDate}>
+                  <View className="flex-row items-start justify-between gap-3">
+                    <View className="min-w-0 flex-1">
+                      <View className="flex-row flex-wrap items-center gap-2">
+                        <Text className="font-semibold text-text-strong">{day.localDate}</Text>
+                        {legacy.isLegacy ? (
+                          <View className="rounded-pill border border-warning-500/40 bg-warning-500/10 px-2 py-0.5">
+                            <Text className="text-[10px] font-semibold text-warning-700">Historial anterior</Text>
+                          </View>
+                        ) : null}
+                      </View>
+                      {showLegacyMacros && legacy.consumed ? (
+                        <View className="mt-1">
+                          <MacroChipRow
+                            calories={legacy.consumed.calories}
+                            proteinG={legacy.consumed.proteinG}
+                            carbsG={legacy.consumed.carbsG}
+                            fatsG={legacy.consumed.fatsG}
+                            size="sm"
+                          />
+                        </View>
+                      ) : (
+                        <Text className="mt-0.5 text-xs text-text-muted">
+                          {legacy.legacyOnly
+                            ? legacy.completionCount > 0
+                              ? legacy.completionsLabel
+                              : 'Registrado en el sistema anterior'
+                            : `${day.activeEntryCount} registros`}
+                        </Text>
+                      )}
+                      {legacy.isLegacy && !legacy.legacyOnly && legacy.secondaryLabel ? (
+                        <Text className="mt-1 text-[11px] text-text-subtle">{legacy.secondaryLabel}</Text>
+                      ) : null}
+                      {legacy.isLegacy && legacy.mealsLabel ? (
+                        <Text numberOfLines={2} className="mt-1 text-[11px] text-text-subtle">
+                          {legacy.mealsLabel}
+                        </Text>
+                      ) : null}
+                    </View>
+                    {!legacy.legacyOnly ? (
+                      <Text className="font-mono text-sm font-semibold text-text-strong">
+                        {day.consumed.calories} kcal
+                      </Text>
+                    ) : null}
+                  </View>
                 </View>
-                <Text className="font-mono text-sm font-semibold text-text-strong">
-                  {day.consumed.calories} kcal
-                </Text>
-              </View>
-            ))
+              )
+            })
           )}
         </View>
       </NutritionCard>

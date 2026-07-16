@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   NutritionIntakeCorrectionSchema,
   NutritionIntakeMutationSchema,
+  NutritionIntakeSourceSchema,
   type FoodCatalogItem,
   type NutritionIntakeReadItem,
   type NutritionMealSlotRead,
@@ -135,6 +136,24 @@ describe('buildCatalogIntakePayload', () => {
     // 200 g de un alimento 130 kcal/100 g -> 260 kcal.
     const total = (parsed.snapshot.calories ?? 0) * rpcFactor(parsed.quantity, parsed.unit, parsed.snapshot.servingSize)
     expect(Math.round(total)).toBe(260)
+  })
+
+  it('lock del contrato: el alimento libre usa source valido y un source inventado se rechaza', () => {
+    const payload = buildCatalogIntakePayload({
+      context: CTX,
+      food: FOOD,
+      quantity: 100,
+      unit: 'g',
+      mealSlotCode: null,
+      idempotencyKey: 'intake-abcdefgh12',
+    })
+    // Regresion (perdida silenciosa QA): el dialogo del alumno registra 'offplan', que SI pertenece
+    // al contrato del RPC. Fijamos el valor exacto y su pertenencia al enum.
+    expect(payload.source).toBe('offplan')
+    expect(NutritionIntakeSourceSchema.options).toContain(payload.source)
+    // Fail-closed: un source fuera del contrato hace fallar la validacion de la mutacion.
+    const tampered = { ...payload, source: 'quien-sabe' }
+    expect(NutritionIntakeMutationSchema.safeParse(tampered).success).toBe(false)
   })
 })
 

@@ -32,6 +32,20 @@
         "EXPO_PUBLIC_API_URL": "https://www.eva-app.cl"
       }
     },
+    "previewv2": {
+      "distribution": "internal",
+      "autoIncrement": true,
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "APP_ENV": "production",
+        "EXPO_ROUTER_APP_ROOT": "apps/mobile/app",
+        "EXPO_PUBLIC_SENTRY_DSN": "https://7c0dbb7f424c24fb62f29c9aacca97e1@o4511408707141632.ingest.us.sentry.io/4511702402138112",
+        "SENTRY_DISABLE_AUTO_UPLOAD": "true",
+        "EXPO_PUBLIC_API_URL": "https://gymappjp-git-rnmobiledenuevo-juancho2706s-projects.vercel.app"
+      }
+    },
     "staging": {
       "channel": "staging",
       "distribution": "internal",

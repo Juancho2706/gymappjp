@@ -1,11 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { rpc, getUser, getScope, isEnabled, revalidate } = vi.hoisted(() => ({
+const { rpc, getUser, getScope, isEnabled, revalidate, rateIntake, rateSearch } = vi.hoisted(() => ({
   rpc: vi.fn(),
   getUser: vi.fn(),
   getScope: vi.fn(),
   isEnabled: vi.fn(),
   revalidate: vi.fn(),
+  rateIntake: vi.fn(),
+  rateSearch: vi.fn(),
 }))
 
 vi.mock('next/cache', () => ({ revalidatePath: revalidate }))
@@ -13,6 +15,10 @@ vi.mock('@/lib/supabase/server', () => ({ createClient: vi.fn(async () => ({ rpc
 vi.mock('../../nutrition/_data/nutrition-auth.queries', () => ({ getClientNutritionUser: getUser }))
 vi.mock('../../nutrition/_data/client-scope.queries', () => ({ getClientScope: getScope }))
 vi.mock('@/services/nutrition-v2-rollout.service', () => ({ isNutritionV2Enabled: isEnabled }))
+vi.mock('@/lib/rate-limit', () => ({
+  rateLimitNutritionIntake: rateIntake,
+  rateLimitNutritionCatalogSearch: rateSearch,
+}))
 
 import {
   closeDayAction,
@@ -65,6 +71,8 @@ beforeEach(() => {
   getScope.mockResolvedValue({ coachId: null, teamId: null, orgId: null })
   isEnabled.mockResolvedValue(true)
   rpc.mockResolvedValue({ data: NEW_ID, error: null })
+  rateIntake.mockResolvedValue({ ok: true })
+  rateSearch.mockResolvedValue({ ok: true })
 })
 
 describe('recordIntakeAction', () => {
@@ -132,6 +140,38 @@ describe('recordIntakeAction', () => {
 
     expect(res.ok).toBe(false)
     if (!res.ok) expect(res.code).toBe('SCOPE_DENIED')
+    expect(revalidate).not.toHaveBeenCalled()
+  })
+
+  it('rechaza un source fuera del contrato con INVALID_PAYLOAD sin tocar el RPC', async () => {
+    // Regresion (perdida silenciosa QA): un source invalido debe ser un fallo HONESTO con shape
+    // { ok:false, code, error }, nunca un ok:true fantasma que la UI presente como guardado.
+    const bad = { ...basePayload(), source: 'quien-sabe' }
+    const res = await recordIntakeAction({ payload: bad, revalidatePath: REVALIDATE })
+
+    expect(res.ok).toBe(false)
+    if (!res.ok) {
+      expect(res.code).toBe('INVALID_PAYLOAD')
+      expect(typeof res.error).toBe('string')
+      expect(res.error.length).toBeGreaterThan(0)
+    }
+    expect(rpc).not.toHaveBeenCalled()
+    expect(revalidate).not.toHaveBeenCalled()
+  })
+
+  it('el rate limit devuelve un error honesto (RATE_LIMITED) y NO escribe ni revalida', async () => {
+    // La causa raiz de la perdida silenciosa: el ok:false del rate limit debe llegar como error
+    // visible (shape correcto), no tragarse. El registro NUNCA se persiste en este caso.
+    rateIntake.mockResolvedValue({ ok: false, retryAfter: 5 })
+    const res = await recordIntakeAction({ payload: basePayload(), revalidatePath: REVALIDATE })
+
+    expect(res.ok).toBe(false)
+    if (!res.ok) {
+      expect(res.code).toBe('RATE_LIMITED')
+      expect(typeof res.error).toBe('string')
+      expect(res.error.length).toBeGreaterThan(0)
+    }
+    expect(rpc).not.toHaveBeenCalled()
     expect(revalidate).not.toHaveBeenCalled()
   })
 })

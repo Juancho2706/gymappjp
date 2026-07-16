@@ -3,6 +3,7 @@
 import { useMemo, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import Image from 'next/image'
 import { AlertTriangle, CheckCircle2, Pencil, Plus, ScanBarcode, Trash2, Utensils } from 'lucide-react'
 import {
   createNutritionMacroValue,
@@ -13,6 +14,7 @@ import {
 import {
   FoodRow,
   MacroBudget,
+  MacroChipRow,
   NutritionCard,
   NutritionMotionButton,
   NutritionStatePanel,
@@ -21,6 +23,7 @@ import {
 } from '@/components/nutrition-v2'
 import { formatNutritionShortDate } from '@/lib/date-utils'
 import { TodayModal } from './TodayModal'
+import { foodResultImage } from './food-result-image'
 import {
   buildCatalogIntakePayload,
   buildCorrectionPayload,
@@ -80,18 +83,33 @@ export function TodayExperience({
       try {
         const res = await action()
         if (!res.ok) {
+          // Fallo honesto del server (rate limit, scope, validacion, RPC): NO se cierra el
+          // dialogo ni se refresca — el estado optimista jamas se confirma y el error se
+          // muestra DENTRO del dialogo (ver DialogError), no en un banner tapado por el sheet.
           setError(res.error ?? 'No se pudo completar la acción.')
           return
         }
         onSuccess?.()
         router.refresh()
+      } catch {
+        // La server action lanzo (red caida, timeout de rate-limit, excepcion del server):
+        // sin este catch el error se tragaba en silencio y el registro se perdia sin aviso.
+        setError('No pudimos guardar tu registro. Revisa tu conexión e inténtalo de nuevo.')
       } finally {
         setBusyId(null)
       }
     })
   }
 
-  const closeDialog = () => setDialog({ kind: 'none' })
+  // Abrir/cerrar limpia el error para que no arrastre un mensaje viejo dentro del nuevo dialogo.
+  const openDialog = (next: DialogState) => {
+    setError(null)
+    setDialog(next)
+  }
+  const closeDialog = () => {
+    setError(null)
+    setDialog({ kind: 'none' })
+  }
 
   return (
     <div className="space-y-5">
@@ -143,7 +161,7 @@ export function TodayExperience({
 
       {/* CTA principal unico */}
       <div className="flex flex-wrap gap-2">
-        <NutritionMotionButton onClick={() => setDialog({ kind: 'register' })}>
+        <NutritionMotionButton onClick={() => openDialog({ kind: 'register' })}>
           <Plus className="h-4 w-4" aria-hidden="true" />
           Registrar alimento
         </NutritionMotionButton>
@@ -200,7 +218,7 @@ export function TodayExperience({
                     <div className="flex items-center gap-1">
                       <IconButton
                         label="Editar cantidad"
-                        onClick={() => setDialog({ kind: 'edit', entry })}
+                        onClick={() => openDialog({ kind: 'edit', entry })}
                         disabled={isPending}
                       >
                         <Pencil className="h-4 w-4" aria-hidden="true" />
@@ -208,7 +226,7 @@ export function TodayExperience({
                       <IconButton
                         label="Retirar registro"
                         tone="danger"
-                        onClick={() => setDialog({ kind: 'void', entry })}
+                        onClick={() => openDialog({ kind: 'void', entry })}
                         disabled={isPending}
                       >
                         <Trash2 className="h-4 w-4" aria-hidden="true" />
@@ -230,7 +248,7 @@ export function TodayExperience({
             Congela tus objetivos y registros de hoy en tu historial.
           </p>
         </div>
-        <NutritionMotionButton tone="neutral" onClick={() => setDialog({ kind: 'close' })}>
+        <NutritionMotionButton tone="neutral" onClick={() => openDialog({ kind: 'close' })}>
           <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
           Cerrar mi día
         </NutritionMotionButton>
@@ -240,6 +258,7 @@ export function TodayExperience({
         <RegisterFoodDialog
           clientId={clientId}
           slotOptions={slotOptions}
+          error={error}
           onClose={closeDialog}
           onSubmit={(food, quantity, unit, mealSlotCode) => {
             runMutation(
@@ -266,6 +285,7 @@ export function TodayExperience({
       {dialog.kind === 'edit' ? (
         <EditQuantityDialog
           entry={dialog.entry}
+          error={error}
           onClose={closeDialog}
           submitting={isPending && busyId === `edit:${dialog.entry.id}`}
           onSubmit={(newQuantity, reason) => {
@@ -291,6 +311,7 @@ export function TodayExperience({
       {dialog.kind === 'void' ? (
         <VoidEntryDialog
           entry={dialog.entry}
+          error={error}
           onClose={closeDialog}
           submitting={isPending && busyId === `void:${dialog.entry.id}`}
           onSubmit={(reason) => {
@@ -344,12 +365,47 @@ export function TodayExperience({
             </div>
           }
         >
+          <DialogError message={error} />
           <p className="text-sm text-body">
             Tu coach verá el resumen de este día tal como quedó al cerrarlo.
           </p>
         </TodayModal>
       ) : null}
     </div>
+  )
+}
+
+/**
+ * Alerta de error DENTRO de un dialogo/sheet. Vive en el mismo contexto de apilamiento que el
+ * sheet (por encima del nav flotante), asi que el fallo del server SIEMPRE se ve — a diferencia
+ * del banner global de la pantalla, que quedaba tapado por el overlay del dialogo.
+ */
+function DialogError({ message }: { message: string | null }) {
+  if (!message) return null
+  return (
+    <div
+      aria-live="assertive"
+      className="mb-4 flex items-start gap-2 rounded-card border border-rose-300/60 bg-rose-50 p-3 text-sm text-rose-800 dark:border-rose-700/50 dark:bg-rose-950/30 dark:text-rose-300"
+      role="alert"
+    >
+      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+      <span>{message}</span>
+    </div>
+  )
+}
+
+/** Miniatura de un resultado de busqueda: foto real del producto o icono de categoria (respaldo). */
+function FoodResultThumb({ imageUrl, iconUrl, alt }: { imageUrl: string | null; iconUrl: string; alt: string }) {
+  return (
+    <span className="relative grid h-11 w-11 shrink-0 place-items-center overflow-hidden rounded-control border border-border-subtle bg-surface-sunken">
+      {imageUrl ? (
+        <Image alt={alt} src={imageUrl} width={44} height={44} unoptimized loading="lazy" className="h-11 w-11 object-cover" />
+      ) : (
+        <span className="absolute inset-0 grid place-items-center bg-primary/10">
+          <Image alt="" aria-hidden="true" src={iconUrl} width={24} height={24} unoptimized loading="lazy" className="h-6 w-6 object-contain" />
+        </span>
+      )}
+    </span>
   )
 }
 
@@ -453,15 +509,20 @@ function PrescribedSection({
   )
 }
 
+/** Base publica de Storage para resolver la foto del producto (client-side, NEXT_PUBLIC). */
+const SUPABASE_BASE = process.env.NEXT_PUBLIC_SUPABASE_URL ?? null
+
 function RegisterFoodDialog({
   clientId,
   slotOptions,
+  error,
   onClose,
   onSubmit,
   submitting,
 }: {
   clientId: string
   slotOptions: Array<{ code: string; label: string }>
+  error: string | null
   onClose: () => void
   onSubmit: (food: FoodCatalogItem, quantity: number, unit: string, mealSlotCode: string | null) => void
   submitting: boolean
@@ -536,14 +597,30 @@ function RegisterFoodDialog({
         ) : null
       }
     >
+      <DialogError message={error} />
       {selected ? (
         <div className="space-y-4">
-          <div className="rounded-card border border-border-subtle bg-surface-sunken p-3">
-            <p className="text-sm font-semibold text-strong">{selected.name}</p>
-            <p className="mt-0.5 text-xs text-muted">{selected.brand ?? 'Sin marca'}</p>
-            <p className="mt-1 font-mono text-[11px] text-subtle">
-              {selected.calories} kcal por {selected.servingSize} {selected.servingUnit}
-            </p>
+          <div className="flex items-start gap-3 rounded-card border border-border-subtle bg-surface-sunken p-3">
+            {(() => {
+              const image = foodResultImage(selected, SUPABASE_BASE)
+              return <FoodResultThumb imageUrl={image.imageUrl} iconUrl={image.iconUrl} alt={selected.name} />
+            })()}
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-semibold text-strong">{selected.name}</p>
+              <p className="mt-0.5 truncate text-xs text-muted">
+                {[selected.brand, selected.category].filter(Boolean).join(' · ') || 'Sin marca'}
+              </p>
+              <span className="mt-1.5 block">
+                <MacroChipRow
+                  calories={selected.calories}
+                  proteinG={selected.proteinG}
+                  carbsG={selected.carbsG}
+                  fatsG={selected.fatsG}
+                  per={`por ${selected.servingSize} ${selected.servingUnit}`}
+                  size="sm"
+                />
+              </span>
+            </div>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <label className="block">
@@ -610,23 +687,36 @@ function RegisterFoodDialog({
             <p className="text-sm text-amber-700 dark:text-amber-300">{searchError}</p>
           ) : null}
           <ul className="divide-y divide-border-subtle">
-            {results.map((food) => (
-              <li key={food.id}>
-                <button
-                  type="button"
-                  onClick={() => selectFood(food)}
-                  className="flex w-full items-center justify-between gap-3 py-3 text-left hover:bg-surface-sunken focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                >
-                  <span className="min-w-0">
-                    <span className="block truncate text-sm font-semibold text-strong">{food.name}</span>
-                    <span className="block truncate text-xs text-muted">
-                      {food.brand ?? 'Sin marca'} · {food.calories} kcal / {food.servingSize} {food.servingUnit}
+            {results.map((food) => {
+              const image = foodResultImage(food, SUPABASE_BASE)
+              const meta = [food.brand, food.category].filter(Boolean).join(' · ')
+              return (
+                <li key={food.id}>
+                  <button
+                    type="button"
+                    onClick={() => selectFood(food)}
+                    className="flex w-full items-center gap-3 py-3 text-left hover:bg-surface-sunken focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    <FoodResultThumb imageUrl={image.imageUrl} iconUrl={image.iconUrl} alt={food.name} />
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-semibold text-strong">{food.name}</span>
+                      {meta ? <span className="block truncate text-xs text-muted">{meta}</span> : null}
+                      <span className="mt-1 block">
+                        <MacroChipRow
+                          calories={food.calories}
+                          proteinG={food.proteinG}
+                          carbsG={food.carbsG}
+                          fatsG={food.fatsG}
+                          per={`/ 100 ${food.servingUnit === 'ml' ? 'ml' : 'g'}`}
+                          size="sm"
+                        />
+                      </span>
                     </span>
-                  </span>
-                  <Plus className="h-4 w-4 shrink-0 text-primary dark:text-primary" aria-hidden="true" />
-                </button>
-              </li>
-            ))}
+                    <Plus className="h-4 w-4 shrink-0 text-primary dark:text-primary" aria-hidden="true" />
+                  </button>
+                </li>
+              )
+            })}
           </ul>
         </div>
       )}
@@ -636,11 +726,13 @@ function RegisterFoodDialog({
 
 function EditQuantityDialog({
   entry,
+  error,
   onClose,
   onSubmit,
   submitting,
 }: {
   entry: NutritionIntakeReadItem
+  error: string | null
   onClose: () => void
   onSubmit: (newQuantity: number, reason: string) => void
   submitting: boolean
@@ -673,6 +765,7 @@ function EditQuantityDialog({
       }
     >
       <div className="space-y-4">
+        <DialogError message={error} />
         <label className="block">
           <span className="mb-1 block text-xs font-semibold text-muted">Nueva cantidad ({entry.unit})</span>
           <input
@@ -699,11 +792,13 @@ function EditQuantityDialog({
 
 function VoidEntryDialog({
   entry,
+  error,
   onClose,
   onSubmit,
   submitting,
 }: {
   entry: NutritionIntakeReadItem
+  error: string | null
   onClose: () => void
   onSubmit: (reason: string) => void
   submitting: boolean
@@ -734,6 +829,7 @@ function VoidEntryDialog({
       }
     >
       <div className="space-y-3">
+        <DialogError message={error} />
         <p className="text-sm text-body">
           El registro dejará de contar en tu día, pero se conserva en el historial para tu coach.
         </p>

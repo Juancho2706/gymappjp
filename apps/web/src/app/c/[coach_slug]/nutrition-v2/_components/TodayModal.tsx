@@ -45,7 +45,10 @@ export function TodayModal({
   return (
     <div
       aria-hidden={false}
-      className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-0 pb-safe backdrop-blur-sm md:items-center md:p-4"
+      // z-[100]: por ENCIMA de la capsula flotante del nav del alumno (ClientNav, z-index 59) y
+      // del sheet "Mas" (z-[60]). El backdrop cubre el nav para que no tape los inputs ni los
+      // botones Registrar/Cambiar del sheet (bug QA: navbar encima del dialogo).
+      className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50 p-0 pb-safe backdrop-blur-sm md:items-center md:p-4"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) onClose()
       }}

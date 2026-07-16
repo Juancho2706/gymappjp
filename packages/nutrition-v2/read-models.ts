@@ -146,6 +146,19 @@ export const NutritionHistoryDaySchema = z.object({
   correctionCount: z.number().int().nonnegative(),
   legacyCompletionCount: z.number().int().nonnegative(),
   legacyDisclosure: z.enum(['legacy_completion_without_food_detail']).nullable(),
+  // Datos del sistema anterior (aditivos). OPCIONALES: respuestas cacheadas del RPC previo
+  // (sobre todo la cache de RN) no traen estos campos y deben seguir parseando.
+  legacyEntryCount: z.number().int().nonnegative().optional(),
+  legacyConsumed: z
+    .object({
+      calories: z.number().finite().nonnegative(),
+      proteinG: z.number().finite().nonnegative(),
+      carbsG: z.number().finite().nonnegative(),
+      fatsG: z.number().finite().nonnegative(),
+    })
+    .nullable()
+    .optional(),
+  legacyMeals: z.array(z.string()).nullable().optional(),
   lastRecordedAt: IsoDateTimeSchema.nullable(),
 })
 
@@ -235,4 +248,64 @@ export type NutritionV2CoachScope = z.infer<typeof NutritionV2CoachScopeSchema>
 
 export function parseNutritionReadModel<T>(schema: z.ZodType<T>, input: unknown): T {
   return schema.parse(input)
+}
+
+/**
+ * Presentación de un día que trae datos del sistema anterior de nutrición
+ * (registros y comidas del sistema clásico). Deriva, desde los campos aditivos
+ * del read-model, qué mostrarle al alumno y al coach en la lista de historial.
+ *
+ * Fuente única de las frases visibles para garantizar paridad exacta web/RN.
+ * Las cifras de macros salen de `legacyConsumed`; los nombres de comidas de
+ * `legacyMeals`. Los campos aditivos pueden venir ausentes (cache antigua) → se
+ * tratan como 0 / null sin romper el render.
+ */
+export function describeLegacyHistoryDay(
+  day: Pick<
+    NutritionHistoryDay,
+    | 'activeEntryCount'
+    | 'legacyDisclosure'
+    | 'legacyCompletionCount'
+    | 'legacyEntryCount'
+    | 'legacyConsumed'
+    | 'legacyMeals'
+  >,
+): {
+  isLegacy: boolean
+  legacyOnly: boolean
+  consumed: { calories: number; proteinG: number; carbsG: number; fatsG: number } | null
+  hasMacros: boolean
+  completionCount: number
+  completionsLabel: string
+  meals: string[]
+  mealsLabel: string | null
+  secondaryLabel: string | null
+} {
+  const isLegacy = day.legacyDisclosure !== null
+  const consumed = day.legacyConsumed ?? null
+  const hasMacros = consumed != null && consumed.calories > 0
+  const completionCount = day.legacyCompletionCount ?? 0
+  const meals = (day.legacyMeals ?? []).filter((name) => name != null && name.trim().length > 0)
+  const mealsLabel = meals.length > 0 ? meals.join(' · ') : null
+  const completionsLabel = `${completionCount} comida${completionCount === 1 ? '' : 's'} completada${
+    completionCount === 1 ? '' : 's'
+  }`
+  const legacyOnly = isLegacy && day.activeEntryCount === 0
+  const secondaryLabel = hasMacros
+    ? `Sistema anterior · ${Math.round(consumed!.calories)} kcal`
+    : completionCount > 0
+      ? `Sistema anterior · ${completionsLabel}`
+      : null
+
+  return {
+    isLegacy,
+    legacyOnly,
+    consumed,
+    hasMacros,
+    completionCount,
+    completionsLabel,
+    meals,
+    mealsLabel,
+    secondaryLabel,
+  }
 }
