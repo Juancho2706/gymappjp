@@ -64,12 +64,12 @@ function mapCatalogItemToFood(item: FoodCatalogItem): BuilderFood {
 }
 
 const inputClass =
-  'min-h-11 w-full rounded-control border border-border-default bg-surface-card px-3 text-sm text-strong outline-none transition-colors focus:border-ember-500 focus:ring-2 focus:ring-ember-500/25'
+  'min-h-11 w-full rounded-control border border-border-default bg-surface-card px-3 text-sm text-strong outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/25'
 const macroInputClass =
-  'min-h-9 w-full rounded-control border border-border-default bg-surface-card px-2 text-sm tabular-nums text-strong outline-none transition-colors focus:border-ember-500 focus:ring-2 focus:ring-ember-500/25'
+  'min-h-9 w-full rounded-control border border-border-default bg-surface-card px-2 text-sm tabular-nums text-strong outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/25'
 const labelClass = 'mb-1 block text-xs font-semibold uppercase tracking-wide text-muted'
 const primaryButtonClass =
-  'inline-flex min-h-11 items-center gap-1 rounded-control bg-ember-500 px-5 text-sm font-semibold text-white transition-colors hover:bg-ember-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-surface-app disabled:opacity-60'
+  'inline-flex min-h-11 items-center gap-1 rounded-control bg-primary/100 px-5 text-sm font-semibold text-white transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-surface-app disabled:opacity-60'
 const secondaryButtonClass =
   'inline-flex min-h-11 items-center gap-1 rounded-control border border-border-default bg-surface-card px-4 text-sm font-semibold text-strong transition-colors hover:bg-surface-sunken focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50'
 const iconButtonClass =
@@ -475,7 +475,7 @@ const PRO_STRATEGIES: readonly NutritionStrategy[] = ['hybrid']
 
 function ProBadge() {
   return (
-    <span className="shrink-0 rounded-pill border border-ember-300/60 bg-ember-100/70 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-ember-700 dark:border-ember-600/40 dark:bg-ember-100/20 dark:text-ember-300">
+    <span className="shrink-0 rounded-pill border border-primary/30 bg-primary/10 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-primary dark:border-primary/40 dark:bg-primary/15 dark:text-primary">
       Pro
     </span>
   )
@@ -516,8 +516,8 @@ function StrategyStep({
                 (locked
                   ? 'cursor-not-allowed border-border-subtle bg-surface-sunken opacity-90'
                   : active
-                    ? 'border-ember-500 bg-ember-100/60 dark:bg-ember-100/10'
-                    : 'border-border-default bg-surface-card hover:border-ember-300')
+                    ? 'border-primary bg-primary/10 dark:bg-primary/10'
+                    : 'border-border-default bg-surface-card hover:border-primary/40')
               }
             >
               <div className="flex items-center justify-between gap-2">
@@ -525,11 +525,11 @@ function StrategyStep({
                   {meta.label}
                   {isPro ? <ProBadge /> : null}
                 </span>
-                {active && !locked ? <Check className="h-5 w-5 shrink-0 text-ember-600 dark:text-ember-300" /> : null}
+                {active && !locked ? <Check className="h-5 w-5 shrink-0 text-primary dark:text-primary" /> : null}
               </div>
               <p className="mt-1 text-sm text-muted">{meta.description}</p>
               {locked ? (
-                <span className="mt-2 text-xs font-medium text-ember-700 dark:text-ember-300">
+                <span className="mt-2 text-xs font-medium text-primary dark:text-primary">
                   Disponible con Nutricion Pro
                 </span>
               ) : null}
@@ -538,7 +538,7 @@ function StrategyStep({
         })}
       </div>
       {!nutritionProEnabled ? (
-        <div className="flex items-center gap-2.5 rounded-card border border-ember-300/50 bg-ember-100/40 p-3 dark:border-ember-600/30 dark:bg-ember-100/10">
+        <div className="flex items-center gap-2.5 rounded-card border border-primary/30 bg-primary/10 p-3 dark:border-primary/30 dark:bg-primary/10">
           {/* Ícono del módulo Nutrición Pro (asset del CEO, estático @2x). */}
           <Image
             src="/module-icons/nutrition-pro@2x.webp"
@@ -553,7 +553,7 @@ function StrategyStep({
             La estrategia hibrida es parte de Nutricion Pro.{' '}
             <Link
               href={NUTRITION_PRO_UPGRADE_HREF}
-              className="font-semibold text-ember-700 underline underline-offset-2 dark:text-ember-300"
+              className="font-semibold text-primary underline underline-offset-2 dark:text-primary"
             >
               Ver modulos
             </Link>
@@ -621,7 +621,7 @@ function TargetsStep({
             <label key={field} className="flex min-h-11 items-center gap-2 text-sm text-body">
               <input
                 type="checkbox"
-                className="h-4 w-4 accent-ember-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="h-4 w-4 accent-[var(--theme-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 checked={state.permissions[field]}
                 onChange={(e) => dispatch({ type: 'SET_PERMISSION', field, value: e.target.checked })}
               />

@@ -24,7 +24,7 @@ function easingTuple(
 const toneClasses: Record<NutritionTone, string> = {
   neutral: 'border-border-default bg-surface-card text-strong hover:bg-surface-sunken',
   brand: 'border-sport-500 bg-sport-500 text-on-sport hover:bg-sport-600',
-  nutrition: 'border-ember-500 bg-ember-500 text-white hover:bg-ember-600',
+  nutrition: 'border-primary bg-primary/100 text-white hover:bg-primary/90',
   success: 'border-emerald-600 bg-emerald-600 text-white hover:bg-emerald-700',
   warning: 'border-amber-500 bg-amber-500 text-slate-950 hover:bg-amber-600',
   danger: 'border-rose-600 bg-rose-600 text-white hover:bg-rose-700',
@@ -118,14 +118,14 @@ export function SelectableStrategyCard({
         reduceMotion
           ? undefined
           : {
-              borderColor: selected ? 'var(--ember-500)' : 'var(--border-subtle)',
+              borderColor: selected ? 'var(--theme-primary)' : 'var(--border-subtle)',
               y: selected ? -2 : 0,
             }
       }
       aria-pressed={selected}
       className={cx(
         'relative min-h-36 w-full rounded-card border bg-surface-card p-4 text-left shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-55',
-        selected ? 'border-ember-500 ring-2 ring-ember-500/20' : 'border-border-subtle hover:border-border-default',
+        selected ? 'border-primary ring-2 ring-primary/20' : 'border-border-subtle hover:border-border-default',
       )}
       disabled={disabled}
       onClick={() => onSelect(strategy)}
@@ -143,7 +143,7 @@ export function SelectableStrategyCard({
           <motion.span
             animate={{ opacity: 1, scale: 1 }}
             aria-hidden="true"
-            className="absolute right-4 top-4 inline-flex h-7 w-7 items-center justify-center rounded-full bg-ember-500 text-white"
+            className="absolute right-4 top-4 inline-flex h-7 w-7 items-center justify-center rounded-full bg-primary/100 text-white"
             exit={{ opacity: 0, scale: 0.7 }}
             initial={reduceMotion ? false : { opacity: 0, scale: 0.7 }}
             transition={{ duration: reduceMotion ? 0 : NUTRITION_MOTION.feedback.duration / 1000 }}

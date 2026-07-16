@@ -372,9 +372,9 @@ export default function NutritionV2AddFoodScreen() {
                         void Haptics.selectionAsync()
                         setUnit(value)
                       }}
-                      className={`min-h-12 flex-1 items-center justify-center rounded-control border ${active ? 'border-ember-500 bg-ember-100' : 'border-border-default bg-surface-app'}`}
+                      className={`min-h-12 flex-1 items-center justify-center rounded-control border ${active ? 'border-primary bg-primary/10' : 'border-border-default bg-surface-app'}`}
                     >
-                      <Text className={`text-sm font-semibold ${active ? 'text-ember-700' : 'text-text-muted'}`}>{value}</Text>
+                      <Text className={`text-sm font-semibold ${active ? 'text-primary' : 'text-text-muted'}`}>{value}</Text>
                     </Pressable>
                   )
                 })}
@@ -390,7 +390,7 @@ export default function NutritionV2AddFoodScreen() {
                 className="mt-3 flex-row items-center justify-between rounded-control border border-border-subtle bg-surface-app px-3 py-3"
               >
                 <Text className="text-sm text-text-body">Asignar a {slotName ?? 'la franja'}</Text>
-                <View className={`h-6 w-11 justify-center rounded-pill px-0.5 ${assignSlot ? 'bg-ember-500' : 'bg-surface-sunken'}`}>
+                <View className={`h-6 w-11 justify-center rounded-pill px-0.5 ${assignSlot ? 'bg-primary' : 'bg-surface-sunken'}`}>
                   <View className={`h-5 w-5 rounded-full bg-white ${assignSlot ? 'self-end' : 'self-start'}`} />
                 </View>
               </Pressable>

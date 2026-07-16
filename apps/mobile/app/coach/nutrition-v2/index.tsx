@@ -264,9 +264,9 @@ export default function CoachNutritionV2Screen() {
                     accessibilityState={{ selected: active }}
                     accessibilityLabel={`Filtrar: ${option.label}`}
                     onPress={() => setAttention(option.value)}
-                    className={`min-h-9 items-center justify-center rounded-pill border px-3 ${active ? 'border-ember-500 bg-ember-100' : 'border-border-subtle bg-surface-card'}`}
+                    className={`min-h-9 items-center justify-center rounded-pill border px-3 ${active ? 'border-primary bg-primary/10' : 'border-border-subtle bg-surface-card'}`}
                   >
-                    <Text className={`text-xs font-semibold ${active ? 'text-ember-700' : 'text-text-muted'}`}>
+                    <Text className={`text-xs font-semibold ${active ? 'text-primary' : 'text-text-muted'}`}>
                       {option.label}
                     </Text>
                   </Pressable>
@@ -304,8 +304,8 @@ export default function CoachNutritionV2Screen() {
               onPress={() => router.push(`/coach/nutrition-v2/${item.clientId}`)}
             >
               <View className="flex-row items-center gap-3">
-                <View className="h-11 w-11 items-center justify-center rounded-full bg-ember-100">
-                  <Users color={theme.scheme === 'dark' ? '#FFB79E' : '#C23E14'} size={20} />
+                <View className="h-11 w-11 items-center justify-center rounded-full bg-primary/10">
+                  <Users color={theme.primary} size={20} />
                 </View>
                 <View className="min-w-0 flex-1">
                   <View className="flex-row flex-wrap items-center gap-2">
@@ -330,10 +330,10 @@ export default function CoachNutritionV2Screen() {
               accessibilityRole="button"
               accessibilityLabel={`${nutritionPlanCtaLabel(item.planStatus)} para ${item.clientName}`}
               onPress={() => router.push(nutritionV2BuilderHref(item.clientId))}
-              className="mt-3 min-h-11 flex-row items-center justify-center gap-1.5 rounded-control border border-ember-300 bg-ember-100 px-3"
+              className="mt-3 min-h-11 flex-row items-center justify-center gap-1.5 rounded-control border border-primary/30 bg-primary/10 px-3"
             >
-              <Plus color={theme.scheme === 'dark' ? '#FFB79E' : '#C23E14'} size={15} />
-              <Text className="text-sm font-semibold text-ember-700">
+              <Plus color={theme.primary} size={15} />
+              <Text className="text-sm font-semibold text-primary">
                 {nutritionPlanCtaLabel(item.planStatus)}
               </Text>
             </Pressable>

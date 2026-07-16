@@ -27,6 +27,7 @@ import {
   nutritionProCtxFromWorkspace,
 } from '@/app/coach/nutrition-v2/_lib/nutrition-pro'
 import { AssignPlanToClientsDialog, type AssignRosterEntry } from '../_components/AssignPlanToClientsDialog'
+import { canAssignSourcePlan } from '../_lib/assign-plan'
 
 interface Props {
   params: Promise<{ clientId: string }>
@@ -57,6 +58,14 @@ export default async function CoachNutritionV2ClientPage({ params, searchParams 
   const { iso: today } = getTodayInSantiago()
   const detail = await getNutritionClientDetailV2ForWeb({ clientId, scope, date: today })
   const hasPlan = detail.plan.plan !== null
+  // "Asignar a otros alumnos" solo tiene sentido si la FUENTE tiene una version publicada
+  // vigente (la misma senal que decide el empty-state de abajo, `detail.today.plan`). Un plan
+  // superseded/sin variantes no es copiable, por eso no gatilla el CTA ni la carga del roster.
+  const canAssign = canAssignSourcePlan({
+    vigentePlanStatus: detail.today.plan?.status ?? null,
+    hasPlanStructure: detail.plan.plan !== null,
+    variantCount: detail.plan.dayVariants.length,
+  })
 
   // Gate del addon Nutricion Pro: sin addon, el historial del alumno para el coach se
   // limita a la ventana BASE (~30 dias). Los RPC de lectura no aceptan corte temporal,
@@ -73,7 +82,7 @@ export default async function CoachNutritionV2ClientPage({ params, searchParams 
   // Roster del workspace para "Asignar a otros alumnos": solo se carga si hay plan publicado.
   // Pagina el hub scoped (keyset por updatedAt) hasta un tope y excluye al alumno fuente.
   let assignRoster: AssignRosterEntry[] = []
-  if (hasPlan) {
+  if (canAssign) {
     const collected: AssignRosterEntry[] = []
     let cursor: { updatedAt: string; clientId: string } | null = null
     for (let page = 0; page < 8; page += 1) {
@@ -111,7 +120,7 @@ export default async function CoachNutritionV2ClientPage({ params, searchParams 
             <ArrowLeft className="h-4 w-4" />
             Centro
           </Link>
-          {hasPlan && detail.plan.plan ? (
+          {canAssign && detail.plan.plan ? (
             <AssignPlanToClientsDialog
               sourceClientId={clientId}
               sourcePlanVersion={detail.plan.plan.versionNumber}
@@ -122,7 +131,7 @@ export default async function CoachNutritionV2ClientPage({ params, searchParams 
           ) : null}
           <Link
             href={`/coach/nutrition-v2/${clientId}/builder`}
-            className="inline-flex min-h-11 items-center gap-2 rounded-control bg-ember-500 px-4 text-sm font-semibold text-white"
+            className="inline-flex min-h-11 items-center gap-2 rounded-control bg-primary/100 px-4 text-sm font-semibold text-white"
           >
             <Plus className="h-4 w-4" />
             {hasPlan ? 'Nueva version' : 'Crear plan'}
@@ -132,7 +141,7 @@ export default async function CoachNutritionV2ClientPage({ params, searchParams 
       aside={
         <NutritionCard tone="neutral">
           <div className="flex items-center gap-2">
-            <LockKeyhole className="h-4 w-4 text-ember-600" />
+            <LockKeyhole className="h-4 w-4 text-primary" />
             <h2 className="font-display text-base font-semibold text-strong">Nota profesional</h2>
           </div>
           <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-body">
@@ -157,7 +166,7 @@ export default async function CoachNutritionV2ClientPage({ params, searchParams 
           action={
             <Link
               href={`/coach/nutrition-v2/${clientId}/builder`}
-              className="inline-flex min-h-11 items-center gap-2 rounded-control bg-ember-500 px-4 text-sm font-semibold text-white"
+              className="inline-flex min-h-11 items-center gap-2 rounded-control bg-primary/100 px-4 text-sm font-semibold text-white"
             >
               <Plus className="h-4 w-4" />
               Crear plan
@@ -270,7 +279,7 @@ export default async function CoachNutritionV2ClientPage({ params, searchParams 
                 href={NUTRITION_PRO_UPGRADE_HREF}
                 className="mb-3 inline-flex items-center gap-2 rounded-control border border-border-subtle bg-surface-sunken px-3 py-2 text-xs text-muted transition-colors hover:text-strong"
               >
-                <LockKeyhole className="h-3.5 w-3.5 text-ember-600 dark:text-ember-300" />
+                <LockKeyhole className="h-3.5 w-3.5 text-primary dark:text-primary" />
                 Historico completo con Nutricion Pro
               </Link>
             ) : null}

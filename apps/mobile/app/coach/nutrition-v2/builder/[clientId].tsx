@@ -624,7 +624,7 @@ function SlotEditor({
   return (
     <NutritionCard>
       <View className="flex-row items-start justify-between gap-2">
-        <Text className="font-mono text-[11px] font-semibold uppercase tracking-wide text-ember-600">
+        <Text className="font-mono text-[11px] font-semibold uppercase tracking-wide text-primary">
           Franja {index + 1}
         </Text>
         <Pressable
@@ -669,11 +669,11 @@ function SlotEditor({
         <Pressable
           accessibilityLabel="Buscar alimento del catálogo"
           accessibilityRole="button"
-          className="min-h-11 flex-1 flex-row items-center justify-center gap-1.5 rounded-control border border-ember-300 bg-ember-100 px-3"
+          className="min-h-11 flex-1 flex-row items-center justify-center gap-1.5 rounded-control border border-primary/30 bg-primary/10 px-3"
           onPress={() => onSearch(slot.key)}
         >
-          <Search color={theme.scheme === 'dark' ? '#FFB79E' : '#C23E14'} size={15} />
-          <Text className="text-sm font-semibold text-ember-700">Buscar alimento</Text>
+          <Search color={theme.primary} size={15} />
+          <Text className="text-sm font-semibold text-primary">Buscar alimento</Text>
         </Pressable>
         <Pressable
           accessibilityLabel="Agregar alimento libre"
@@ -940,13 +940,14 @@ function FoodSearchModal({
 
 function UpsellSheet({ reason, onClose }: { reason: string | null; onClose: () => void }) {
   const router = useRouter()
+  const { theme } = useTheme()
   return (
     <Modal visible={reason !== null} transparent animationType="fade" onRequestClose={onClose}>
       <Pressable className="flex-1 justify-end bg-black/40" onPress={onClose}>
         <Pressable className="rounded-t-sheet border-t border-border-subtle bg-surface-app px-5 pb-8 pt-5" onPress={() => {}}>
           <View className="mb-3 h-1.5 w-12 self-center rounded-pill bg-border-default" />
           <View className="mb-2 flex-row items-center gap-2">
-            <Lock color="#C23E14" size={18} />
+            <Lock color={theme.primary} size={18} />
             <Text className="font-display text-lg font-bold text-text-strong">Nutrición Pro</Text>
           </View>
           <Text className="text-sm leading-5 text-text-body">

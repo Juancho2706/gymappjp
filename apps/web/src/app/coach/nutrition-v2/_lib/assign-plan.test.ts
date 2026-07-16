@@ -3,6 +3,7 @@ import { NutritionPlanDraftSchema } from '@eva/nutrition-v2'
 import {
   MAX_ASSIGN_TARGETS,
   aggregateAssignResults,
+  canAssignSourcePlan,
   assignmentKeyForClient,
   buildDraftForTarget,
   validateAssignTargets,
@@ -156,5 +157,38 @@ describe('aggregateAssignResults', () => {
       { clientId: B, ok: false, error: 'x' },
     ])
     expect(summary).toEqual({ total: 2, succeeded: 1, failed: 1 })
+  })
+})
+
+
+describe("canAssignSourcePlan", () => {
+  it("permite asignar cuando hay plan publicado vigente con variantes", () => {
+    expect(
+      canAssignSourcePlan({ vigentePlanStatus: "published", hasPlanStructure: true, variantCount: 1 }),
+    ).toBe(true)
+  })
+
+  it("bloquea si no hay plan vigente hoy (today.plan null)", () => {
+    expect(
+      canAssignSourcePlan({ vigentePlanStatus: null, hasPlanStructure: true, variantCount: 2 }),
+    ).toBe(false)
+  })
+
+  it("bloquea un plan superseded (publicado en el pasado pero sin vigencia hoy)", () => {
+    expect(
+      canAssignSourcePlan({ vigentePlanStatus: "superseded", hasPlanStructure: true, variantCount: 1 }),
+    ).toBe(false)
+  })
+
+  it("bloquea si el read model no trae cabecera de plan", () => {
+    expect(
+      canAssignSourcePlan({ vigentePlanStatus: "published", hasPlanStructure: false, variantCount: 1 }),
+    ).toBe(false)
+  })
+
+  it("bloquea si el plan no tiene variantes que copiar", () => {
+    expect(
+      canAssignSourcePlan({ vigentePlanStatus: "published", hasPlanStructure: true, variantCount: 0 }),
+    ).toBe(false)
   })
 })

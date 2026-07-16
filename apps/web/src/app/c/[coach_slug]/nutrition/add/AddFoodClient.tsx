@@ -394,7 +394,7 @@ export function AddFoodClient({
                     {lookingUpBarcode ? <Loader2 className="h-5 w-5 animate-spin" /> : <Search className="h-5 w-5" />}
                   </button>
                 </div>
-                <Hint>En React Native este flujo usa la cámara. En web y PWA la entrada manual queda disponible.</Hint>
+                <Hint>En la app móvil puedes escanear con la cámara. Aquí también puedes ingresar el código manualmente.</Hint>
               </section>
             )}
 

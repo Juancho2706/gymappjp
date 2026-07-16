@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   applyRosterFilters,
   encodeCursorStack,
+  filterPickerEntries,
   isRosterPageComplete,
   mapHubMetrics,
   normalizeText,
@@ -254,5 +255,33 @@ describe('cursor stack (paginacion anterior/siguiente)', () => {
 
   it('tolera entradas corruptas devolviendolas como null', () => {
     expect(parseCursorStack('sinseparador')).toEqual([null])
+  })
+})
+
+
+describe("filterPickerEntries", () => {
+  const roster = [
+    { clientId: "c1", clientName: "Ana Perez" },
+    { clientId: "c2", clientName: "Benja Nuñez" },
+    { clientId: "c3", clientName: "Camila Rios" },
+  ]
+
+  it("devuelve una copia intacta cuando la query esta vacia", () => {
+    const out = filterPickerEntries(roster, "")
+    expect(out).toHaveLength(3)
+    expect(out).not.toBe(roster)
+  })
+
+  it("filtra por nombre ignorando mayusculas", () => {
+    expect(filterPickerEntries(roster, "ana").map((e) => e.clientId)).toEqual(["c1"])
+  })
+
+  it("es tolerante a acentos en ambos sentidos", () => {
+    expect(filterPickerEntries(roster, "nunez").map((e) => e.clientId)).toEqual(["c2"])
+    expect(filterPickerEntries(roster, "PÉREZ").map((e) => e.clientId)).toEqual(["c1"])
+  })
+
+  it("devuelve vacio sin coincidencias", () => {
+    expect(filterPickerEntries(roster, "zzz")).toEqual([])
   })
 })

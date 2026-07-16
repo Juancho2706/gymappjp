@@ -127,7 +127,7 @@ export function AssignPlanToClientsDialog({
         onClick={() => onOpenChange(true)}
         className="inline-flex min-h-11 items-center gap-2 rounded-control border border-border-default bg-surface-card px-4 text-sm font-semibold text-strong hover:bg-surface-sunken"
       >
-        <UserPlus className="h-4 w-4 text-ember-600 dark:text-ember-300" />
+        <UserPlus className="h-4 w-4 text-primary dark:text-primary" />
         Asignar a otros alumnos
       </button>
 
@@ -188,7 +188,7 @@ export function AssignPlanToClientsDialog({
                 <button
                   type="button"
                   onClick={() => setOpen(false)}
-                  className="inline-flex min-h-11 items-center gap-2 rounded-control bg-ember-500 px-4 text-sm font-semibold text-white hover:bg-ember-600"
+                  className="inline-flex min-h-11 items-center gap-2 rounded-control bg-primary/100 px-4 text-sm font-semibold text-white hover:bg-primary/90"
                 >
                   Listo
                 </button>
@@ -224,7 +224,7 @@ export function AssignPlanToClientsDialog({
                       {selected.size} seleccionado{selected.size === 1 ? '' : 's'}
                     </span>
                     <span className="flex gap-2">
-                      <button type="button" onClick={selectAllVisible} className="font-semibold text-ember-600 hover:underline dark:text-ember-300">
+                      <button type="button" onClick={selectAllVisible} className="font-semibold text-primary hover:underline dark:text-primary">
                         Seleccionar visibles
                       </button>
                       {selected.size > 0 ? (
@@ -246,7 +246,7 @@ export function AssignPlanToClientsDialog({
                             className={
                               'flex cursor-pointer items-center gap-3 rounded-control border px-3 py-2.5 text-sm transition-colors ' +
                               (isSelected
-                                ? 'border-ember-400 bg-ember-50 text-strong dark:border-ember-500/40 dark:bg-ember-500/10'
+                                ? 'border-primary/50 bg-primary/10 text-strong dark:border-primary/40 dark:bg-primary/10'
                                 : 'border-border-default bg-surface-card text-body hover:bg-surface-sunken')
                             }
                           >
@@ -255,7 +255,7 @@ export function AssignPlanToClientsDialog({
                               type="checkbox"
                               checked={isSelected}
                               onChange={() => toggle(entry.clientId)}
-                              className="h-4 w-4 shrink-0 rounded border-border-default accent-ember-500"
+                              className="h-4 w-4 shrink-0 rounded border-border-default accent-[var(--theme-primary)]"
                             />
                             <span className="min-w-0 flex-1 truncate font-semibold">{entry.clientName}</span>
                             {entry.hasPlan ? (
@@ -264,7 +264,7 @@ export function AssignPlanToClientsDialog({
                                 Ya tiene plan
                               </span>
                             ) : null}
-                            {isSelected ? <Check className="h-4 w-4 shrink-0 text-ember-600 dark:text-ember-300" /> : null}
+                            {isSelected ? <Check className="h-4 w-4 shrink-0 text-primary dark:text-primary" /> : null}
                           </label>
                         </li>
                       )
@@ -300,7 +300,7 @@ export function AssignPlanToClientsDialog({
                     type="button"
                     onClick={handleConfirm}
                     disabled={selected.size === 0 || isPending}
-                    className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-control bg-ember-500 px-4 text-sm font-semibold text-white hover:bg-ember-600 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-control bg-primary/100 px-4 text-sm font-semibold text-white hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />}
                     {isPending

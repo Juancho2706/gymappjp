@@ -328,7 +328,7 @@ export default function CoachNutritionV2ClientScreen() {
 
       <NutritionCard>
         <View className="flex-row items-center gap-2">
-          <LockKeyhole color={theme.scheme === 'dark' ? '#FFB79E' : '#C23E14'} size={16} />
+          <LockKeyhole color={theme.primary} size={16} />
           <Text className="font-display text-lg font-semibold text-text-strong">Nota profesional</Text>
         </View>
         <Text className="mt-2 text-sm leading-5 text-text-body">
@@ -346,7 +346,7 @@ export default function CoachNutritionV2ClientScreen() {
             onPress={() => router.push('/coach/settings/modules')}
             className="mt-3 flex-row items-center gap-2 self-start rounded-control border border-border-subtle bg-surface-sunken px-3 py-2"
           >
-            <LockKeyhole color={theme.scheme === 'dark' ? '#FFB79E' : '#C23E14'} size={14} />
+            <LockKeyhole color={theme.primary} size={14} />
             <Text className="text-xs font-semibold text-text-muted">{NUTRITION_PRO_HISTORY_BANNER_LABEL}</Text>
           </Pressable>
         ) : null}

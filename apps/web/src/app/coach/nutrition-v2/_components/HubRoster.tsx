@@ -268,7 +268,7 @@ export function HubRoster({
                   </Link>
                   <Link
                     href={`${BASE_PATH}/${item.clientId}/builder`}
-                    className="inline-flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-control bg-ember-500 px-3 text-sm font-semibold text-white hover:bg-ember-600"
+                    className="inline-flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-control bg-primary/100 px-3 text-sm font-semibold text-white hover:bg-primary/90"
                   >
                     <FilePlus2 className="h-4 w-4" />
                     {planCtaLabel(item.planStatus)}
@@ -354,7 +354,7 @@ export function HubRoster({
                         </Link>
                         <Link
                           href={`${BASE_PATH}/${item.clientId}/builder`}
-                          className="inline-flex min-h-9 items-center gap-1.5 rounded-control bg-ember-500 px-2.5 text-xs font-semibold text-white hover:bg-ember-600"
+                          className="inline-flex min-h-9 items-center gap-1.5 rounded-control bg-primary/100 px-2.5 text-xs font-semibold text-white hover:bg-primary/90"
                         >
                           <FilePlus2 className="h-3.5 w-3.5" />
                           {planCtaLabel(item.planStatus)}
@@ -408,7 +408,7 @@ function Metric({
 }) {
   return (
     <NutritionCard>
-      <Users className="h-5 w-5 text-ember-600" />
+      <Users className="h-5 w-5 text-primary" />
       <p
         className={
           scoped

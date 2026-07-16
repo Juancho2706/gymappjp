@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
-import { ArrowLeft, Plus } from 'lucide-react'
+import { ArrowLeft } from 'lucide-react'
 import { NutritionPageShell } from '@/components/nutrition-v2'
 import { getNutritionPlansPageCoach } from '../nutrition-plans/_data/nutrition-page.queries'
 import { getPreferredWorkspaceForRender } from '@/services/auth/workspace-render-cache'
@@ -11,6 +11,7 @@ import {
 import { isNutritionV2Enabled } from '@/services/nutrition-v2-rollout.service'
 import { NutritionHubTabs } from './_components/NutritionHubTabs'
 import { HubRoster } from './_components/HubRoster'
+import { NewPlanPickerButton, type NewPlanPickerEntry } from './_components/NewPlanPickerButton'
 import { localDateOf, mapHubMetrics, parseRosterFilters } from './_lib/hub-roster'
 
 const COACH_TIMEZONE = 'America/Santiago'
@@ -51,6 +52,31 @@ export default async function CoachNutritionV2Page({ searchParams }: Props) {
     pageSize: 25,
   })
 
+  // Roster completo del workspace para el picker global "Nuevo plan" (CTA sin alumno
+  // seleccionado). Pagina el hub scoped (keyset por updatedAt) hasta un tope; el picker
+  // filtra client-side. Independiente de la paginacion visible del roster de abajo.
+  const pickerRoster: NewPlanPickerEntry[] = []
+  {
+    let cursor: { updatedAt: string; clientId: string } | null = null
+    for (let page = 0; page < 8; page += 1) {
+      const chunk = await getNutritionCoachHubV2ForWeb({
+        scope,
+        cursorUpdatedAt: cursor?.updatedAt ?? null,
+        cursorClientId: cursor?.clientId ?? null,
+        pageSize: 50,
+      })
+      for (const item of chunk.items) {
+        pickerRoster.push({
+          clientId: item.clientId,
+          clientName: item.clientName,
+          planStatus: item.planStatus,
+        })
+      }
+      if (!chunk.hasMore || !chunk.nextCursor) break
+      cursor = chunk.nextCursor
+    }
+  }
+
   const initialFilters = parseRosterFilters(query)
   const todayLocalDate = localDateOf(new Date().toISOString(), COACH_TIMEZONE) ?? ''
   const metrics = mapHubMetrics(hub.items, { todayLocalDate, timeZone: COACH_TIMEZONE })
@@ -69,14 +95,7 @@ export default async function CoachNutritionV2Page({ searchParams }: Props) {
             <ArrowLeft className="h-4 w-4" />
             Volver a V1
           </Link>
-          <button
-            disabled
-            title="Elige un alumno del roster para crear su plan"
-            className="inline-flex min-h-11 items-center gap-2 rounded-control bg-ember-500 px-4 text-sm font-semibold text-white opacity-55"
-          >
-            <Plus className="h-4 w-4" />
-            Nuevo plan
-          </button>
+          <NewPlanPickerButton roster={pickerRoster} />
         </div>
       }
     >

@@ -76,11 +76,13 @@ export default async function StudentNutritionV2Page({ params, searchParams }: P
         </NutritionToolbar>
       }
     >
-      {view === 'today' ? <TodayView clientId={user.id} date={today} base={base} /> : null}
-      {view === 'plan' ? <PlanView clientId={user.id} date={today} /> : null}
-      {view === 'history' ? (
-        <HistoryView clientId={user.id} before={query.before ?? null} base={base} />
-      ) : null}
+      <div className="mx-auto w-full max-w-2xl">
+        {view === 'today' ? <TodayView clientId={user.id} date={today} base={base} /> : null}
+        {view === 'plan' ? <PlanView clientId={user.id} date={today} /> : null}
+        {view === 'history' ? (
+          <HistoryView clientId={user.id} before={query.before ?? null} base={base} />
+        ) : null}
+      </div>
     </NutritionPageShell>
   )
 }
@@ -102,7 +104,7 @@ function ViewLink({
       href={href}
       className={
         active
-          ? 'inline-flex min-h-10 items-center gap-2 rounded-control bg-ember-500 px-3 text-sm font-semibold text-white'
+          ? 'inline-flex min-h-10 items-center gap-2 rounded-control bg-primary/100 px-3 text-sm font-semibold text-white'
           : 'inline-flex min-h-10 items-center gap-2 rounded-control px-3 text-sm font-semibold text-muted hover:bg-surface-sunken hover:text-strong'
       }
     >
@@ -161,7 +163,7 @@ async function PlanView({ clientId, date }: { clientId: string; date: string }) 
       {plan.dayVariants.map((variant) => (
         <NutritionCard key={variant.id}>
           <h3 className="font-display text-lg font-semibold text-strong">{variant.label}</h3>
-          <p className="mt-1 text-sm text-muted">
+          <p className="mt-1 text-sm tabular-nums text-muted">
             {variant.mealSlots.length} franja{variant.mealSlots.length === 1 ? '' : 's'} · {variant.targets.calories ?? 0} kcal
           </p>
         </NutritionCard>
@@ -197,7 +199,7 @@ async function HistoryView({
           <div className="flex items-start justify-between gap-3">
             <div>
               <h2 className="font-display text-lg font-semibold text-strong">{day.localDate}</h2>
-              <p className="mt-1 text-sm text-muted">
+              <p className="mt-1 text-sm tabular-nums text-muted">
                 {day.activeEntryCount} registro{day.activeEntryCount === 1 ? '' : 's'} · {day.consumed.calories} kcal
               </p>
             </div>

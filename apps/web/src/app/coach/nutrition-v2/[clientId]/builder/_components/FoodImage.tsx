@@ -31,7 +31,7 @@ export function FoodCoverImage({
           className="object-cover"
         />
       ) : (
-        <span className="absolute inset-0 grid place-items-center bg-ember-100/40 dark:bg-ember-100/10">
+        <span className="absolute inset-0 grid place-items-center bg-primary/10 dark:bg-primary/10">
           <Image alt="" aria-hidden="true" src={iconUrl} width={48} height={48} unoptimized loading="lazy" className="h-12 w-12 object-contain" />
         </span>
       )}

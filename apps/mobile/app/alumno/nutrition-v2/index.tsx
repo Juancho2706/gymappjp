@@ -675,7 +675,7 @@ function TodaySlotCard({
   const badge = consumedRows.length > 0
     ? { label: 'Consumido', tone: 'text-success-700' }
     : slot.prescriptionItems.length > 0
-      ? { label: 'Esperado', tone: 'text-ember-700' }
+      ? { label: 'Esperado', tone: 'text-primary' }
       : { label: 'Sin registros', tone: 'text-text-muted' }
 
   return (
@@ -865,9 +865,9 @@ function EntryActionSheet({
                       void Haptics.selectionAsync()
                       setUnit(value)
                     }}
-                    className={`min-h-12 flex-1 items-center justify-center rounded-control border ${active ? 'border-ember-500 bg-ember-100' : 'border-border-default bg-surface-app'}`}
+                    className={`min-h-12 flex-1 items-center justify-center rounded-control border ${active ? 'border-primary bg-primary/10' : 'border-border-default bg-surface-app'}`}
                   >
-                    <Text className={`text-sm font-semibold ${active ? 'text-ember-700' : 'text-text-muted'}`}>{value}</Text>
+                    <Text className={`text-sm font-semibold ${active ? 'text-primary' : 'text-text-muted'}`}>{value}</Text>
                   </Pressable>
                 )
               })}
@@ -993,7 +993,7 @@ function NutritionTabBar({ value, onChange }: { value: NutritionV2Tab; onChange:
                 onChange(key)
               }
             }}
-            className={`min-h-11 flex-1 flex-row items-center justify-center gap-1.5 rounded-control ${active ? 'bg-ember-500' : ''}`}
+            className={`min-h-11 flex-1 flex-row items-center justify-center gap-1.5 rounded-control ${active ? 'bg-primary' : ''}`}
           >
             <Icon color={active ? '#FFFFFF' : theme.textSecondary} size={16} />
             <Text className={`text-sm font-semibold ${active ? 'text-white' : 'text-text-muted'}`}>{label}</Text>
@@ -1217,8 +1217,8 @@ function PlanVariantCard({ variant }: { variant: PlanVariant }) {
       <View className="flex-row flex-wrap items-center justify-between gap-2">
         <Text className="font-display text-lg font-semibold text-text-strong">{variant.label}</Text>
         {variant.isDefault ? (
-          <View className="rounded-pill border border-ember-300 bg-ember-100 px-2 py-0.5">
-            <Text className="text-[10px] font-semibold text-ember-700">Por defecto</Text>
+          <View className="rounded-pill border border-primary/30 bg-primary/10 px-2 py-0.5">
+            <Text className="text-[10px] font-semibold text-primary">Por defecto</Text>
           </View>
         ) : null}
       </View>
@@ -1523,7 +1523,7 @@ function HistoryDayCard({
         </View>
 
         {hasDetail ? (
-          <Text className="mt-2 text-xs font-semibold text-ember-700">{expanded ? 'Ocultar detalle' : 'Ver detalle'}</Text>
+          <Text className="mt-2 text-xs font-semibold text-primary">{expanded ? 'Ocultar detalle' : 'Ver detalle'}</Text>
         ) : legacy ? (
           <Text className="mt-2 text-xs text-text-subtle">Este día proviene del historial anterior y no tiene detalle por alimento.</Text>
         ) : null}

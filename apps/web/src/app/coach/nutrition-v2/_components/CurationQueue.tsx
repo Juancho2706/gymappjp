@@ -264,7 +264,7 @@ function ResolveDialog({
               aria-pressed={mode === key}
               className={
                 mode === key
-                  ? 'inline-flex min-h-9 flex-1 items-center justify-center gap-1.5 rounded-[8px] bg-ember-500 px-3 text-sm font-semibold text-white'
+                  ? 'inline-flex min-h-9 flex-1 items-center justify-center gap-1.5 rounded-[8px] bg-primary/100 px-3 text-sm font-semibold text-white'
                   : 'inline-flex min-h-9 flex-1 items-center justify-center gap-1.5 rounded-[8px] px-3 text-sm font-semibold text-muted hover:text-strong'
               }
             >
@@ -387,7 +387,7 @@ function CatalogPicker({
                       .join(' · ')}
                   </p>
                 </div>
-                <Link2 className="h-4 w-4 shrink-0 text-ember-600" />
+                <Link2 className="h-4 w-4 shrink-0 text-primary" />
               </button>
             </li>
           ))}
@@ -518,7 +518,7 @@ function CreateFoodForm({
       <button
         type="submit"
         disabled={!valid}
-        className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-control bg-ember-500 px-4 text-sm font-semibold text-white disabled:opacity-50"
+        className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-control bg-primary/100 px-4 text-sm font-semibold text-white disabled:opacity-50"
       >
         <Plus className="h-4 w-4" />
         Crear y vincular

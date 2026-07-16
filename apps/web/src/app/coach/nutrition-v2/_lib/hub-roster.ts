@@ -129,6 +129,26 @@ function compareBySort(a: RosterItemLike, b: RosterItemLike, sort: SortKey): num
   }
 }
 
+/** Minima forma que necesita el picker "Nuevo plan" del hub (selector de alumno). */
+export interface PickerEntryLike {
+  clientId: string
+  clientName: string
+}
+
+/**
+ * Filtra el roster del picker "Nuevo plan" por nombre, tolerante a acentos/mayusculas.
+ * Query vacia => copia intacta del roster (preserva el orden del servidor). Puro: alimenta
+ * el selector de alumno del hub sin queries nuevas (el picker ya recibe el roster cargado).
+ */
+export function filterPickerEntries<T extends PickerEntryLike>(
+  entries: readonly T[],
+  query: string,
+): T[] {
+  const needle = normalizeText(query)
+  if (needle.length === 0) return [...entries]
+  return entries.filter((entry) => normalizeText(entry.clientName).includes(needle))
+}
+
 /**
  * Label del CTA de plan por alumno en el roster. Espeja el criterio de
  * `nutritionTabV2.logic.ts` (`builderCtaLabel`): si ya hay un plan PUBLICADO se ofrece

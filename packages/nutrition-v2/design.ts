@@ -96,7 +96,8 @@ export const NUTRITION_MOTION = {
 export const NUTRITION_WEB_TONE_CLASSES: Record<NutritionTone, string> = {
   neutral: 'border-border-subtle bg-surface-card text-strong',
   brand: 'border-sport-300/50 bg-sport-100/70 text-sport-700 dark:border-sport-600/40 dark:bg-sport-100/20 dark:text-sport-300',
-  nutrition: 'border-ember-300/50 bg-ember-100/70 text-ember-700 dark:border-ember-600/40 dark:bg-ember-100/20 dark:text-ember-300',
+  // white-label: acento nutricion = primary del coach (antes ember/naranja fijo)
+  nutrition: 'border-primary/30 bg-primary/10 text-primary',
   success: 'border-emerald-300/60 bg-emerald-50 text-emerald-800 dark:border-emerald-700/50 dark:bg-emerald-950/30 dark:text-emerald-300',
   warning: 'border-amber-300/60 bg-amber-50 text-amber-900 dark:border-amber-700/50 dark:bg-amber-950/30 dark:text-amber-200',
   danger: 'border-rose-300/60 bg-rose-50 text-rose-800 dark:border-rose-700/50 dark:bg-rose-950/30 dark:text-rose-300',
@@ -106,7 +107,8 @@ export const NUTRITION_WEB_TONE_CLASSES: Record<NutritionTone, string> = {
 export const NUTRITION_NATIVE_TONE_CLASSES: Record<NutritionTone, string> = {
   neutral: 'border-border-subtle bg-surface-card',
   brand: 'border-sport-300 bg-sport-100',
-  nutrition: 'border-ember-300 bg-ember-100',
+  // white-label: acento nutricion = primary del coach (antes ember/naranja fijo)
+  nutrition: 'border-primary/30 bg-primary/10',
   success: 'border-success-500/30 bg-success-500/10',
   warning: 'border-warning-500/30 bg-warning-500/10',
   danger: 'border-danger-500/30 bg-danger-500/10',

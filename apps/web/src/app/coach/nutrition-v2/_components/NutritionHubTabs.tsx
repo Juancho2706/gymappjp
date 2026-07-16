@@ -41,7 +41,7 @@ export function NutritionHubTabs({ roster }: { roster: ReactNode }) {
               onClick={() => setActive(tab.key)}
               className={
                 on
-                  ? 'inline-flex min-h-10 flex-1 items-center justify-center gap-2 rounded-[10px] bg-ember-500 px-3 text-sm font-semibold text-white'
+                  ? 'inline-flex min-h-10 flex-1 items-center justify-center gap-2 rounded-[10px] bg-primary/100 px-3 text-sm font-semibold text-white'
                   : 'inline-flex min-h-10 flex-1 items-center justify-center gap-2 rounded-[10px] px-3 text-sm font-semibold text-muted hover:bg-surface-sunken'
               }
             >

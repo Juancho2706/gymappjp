@@ -47,7 +47,7 @@ function cx(...values: Array<string | false | null | undefined>): string {
 const toneClasses: Record<NutritionTone, string> = {
   neutral: 'border-border-subtle bg-surface-card',
   brand: 'border-sport-300 bg-sport-100',
-  nutrition: 'border-ember-300 bg-ember-100',
+  nutrition: 'border-primary/30 bg-primary/10',
   success: 'border-success-500/30 bg-success-500/10',
   warning: 'border-warning-500/30 bg-warning-500/10',
   danger: 'border-danger-500/30 bg-danger-500/10',
@@ -57,7 +57,7 @@ const toneClasses: Record<NutritionTone, string> = {
 const toneTextClasses: Record<NutritionTone, string> = {
   neutral: 'text-text-strong',
   brand: 'text-sport-700',
-  nutrition: 'text-ember-700',
+  nutrition: 'text-primary',
   success: 'text-success-700',
   warning: 'text-warning-700',
   danger: 'text-danger-700',
@@ -118,7 +118,7 @@ export function NutritionHeader({
       <View className="flex-row items-start justify-between gap-3">
         <View className="min-w-0 flex-1">
           {eyebrow ? (
-            <Text className="mb-1 font-mono text-[11px] font-semibold uppercase tracking-[1.5px] text-ember-600">
+            <Text className="mb-1 font-mono text-[11px] font-semibold uppercase tracking-[1.5px] text-primary">
               {eyebrow}
             </Text>
           ) : null}
@@ -153,10 +153,10 @@ export function StrategyBadge({ strategy, compact = false }: { strategy: Nutriti
   return (
     <View
       accessibilityLabel={`${meta.label}. ${meta.description}`}
-      className="self-start flex-row items-center gap-1.5 rounded-pill border border-ember-300 bg-ember-100 px-2.5 py-1"
+      className="self-start flex-row items-center gap-1.5 rounded-pill border border-primary/30 bg-primary/10 px-2.5 py-1"
     >
-      <Utensils color={theme.scheme === 'dark' ? '#FFB79E' : '#C23E14'} size={14} />
-      <Text className="text-xs font-semibold text-ember-700">{compact ? meta.shortLabel : meta.label}</Text>
+      <Utensils color={theme.primary} size={14} />
+      <Text className="text-xs font-semibold text-primary">{compact ? meta.shortLabel : meta.label}</Text>
     </View>
   )
 }
@@ -206,7 +206,7 @@ export function MacroBudget({
             </Text>
             <Text className="mt-0.5 text-xs text-text-muted">de {formatNutritionCalories(calories.target)}</Text>
           </View>
-          <Text className="text-sm font-semibold text-ember-700">
+          <Text className="text-sm font-semibold text-primary">
             {formatNutritionCalories(Math.max(calories.target - calories.consumed, 0))} restantes
           </Text>
         </View>
@@ -296,7 +296,7 @@ export function MealTimeline({
             <View
               className={cx(
                 'mt-5 h-4 w-4 rounded-full border-[3px] border-surface-app',
-                slot.state === 'consumed' ? 'bg-success-500' : slot.state === 'offline' ? 'bg-warning-500' : 'bg-ember-500',
+                slot.state === 'consumed' ? 'bg-success-500' : slot.state === 'offline' ? 'bg-warning-500' : 'bg-primary',
               )}
             />
             {index < slots.length - 1 ? <View className="min-h-20 w-px flex-1 bg-border-subtle" /> : null}
@@ -501,7 +501,7 @@ export function NutritionStatePanel({
   const color = {
     neutral: theme.textSecondary,
     brand: theme.primary,
-    nutrition: '#FF6A3D',
+    nutrition: theme.primary,
     success: theme.success,
     warning: theme.warning,
     danger: theme.destructive,
@@ -647,7 +647,7 @@ export function SelectableStrategyCard({
         <View
           className={cx(
             'min-h-36 rounded-card border bg-surface-card p-4',
-            selected ? 'border-ember-500' : 'border-border-subtle',
+            selected ? 'border-primary' : 'border-border-subtle',
             disabled && 'opacity-50',
           )}
         >
@@ -660,7 +660,7 @@ export function SelectableStrategyCard({
               style={{ position: 'absolute', right: 16, top: 16 }}
               transition={{ type: 'timing', duration: duration('base') }}
             >
-              <View className="h-7 w-7 items-center justify-center rounded-full bg-ember-500">
+              <View className="h-7 w-7 items-center justify-center rounded-full bg-primary">
                 <Check color={theme.primaryForeground} size={16} />
               </View>
             </MotiView>
@@ -743,7 +743,7 @@ export function BuilderStepList({ steps }: { steps: NutritionBuilderStepModel[] 
           accessibilityState={{ selected: step.state === 'current' }}
           className={cx(
             'min-h-11 flex-row items-start gap-3 rounded-control px-3 py-2',
-            step.state === 'current' && 'bg-ember-100',
+            step.state === 'current' && 'bg-primary/10',
             step.state === 'error' && 'bg-danger-100/40',
           )}
           key={step.id}
@@ -752,7 +752,7 @@ export function BuilderStepList({ steps }: { steps: NutritionBuilderStepModel[] 
             className={cx(
               'mt-0.5 h-6 w-6 shrink-0 items-center justify-center rounded-full border',
               step.state === 'complete' && 'border-success-500 bg-success-500',
-              step.state === 'current' && 'border-ember-500 bg-ember-500',
+              step.state === 'current' && 'border-primary bg-primary',
               step.state === 'upcoming' && 'border-border-default bg-surface-sunken',
               step.state === 'error' && 'border-danger-500 bg-danger-500',
             )}

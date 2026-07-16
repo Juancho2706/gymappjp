@@ -30,7 +30,7 @@ const macroTextClasses = {
 const toneClasses: Record<NutritionTone, string> = {
   neutral: 'border-border-subtle bg-surface-card text-strong',
   brand: 'border-sport-300/50 bg-sport-100/70 text-sport-700 dark:border-sport-600/40 dark:bg-sport-100/20 dark:text-sport-300',
-  nutrition: 'border-ember-300/50 bg-ember-100/70 text-ember-700 dark:border-ember-600/40 dark:bg-ember-100/20 dark:text-ember-300',
+  nutrition: 'border-primary/30 bg-primary/10 text-primary',
   success: 'border-emerald-300/60 bg-emerald-50 text-emerald-800 dark:border-emerald-700/50 dark:bg-emerald-950/30 dark:text-emerald-300',
   warning: 'border-amber-300/60 bg-amber-50 text-amber-900 dark:border-amber-700/50 dark:bg-amber-950/30 dark:text-amber-200',
   danger: 'border-rose-300/60 bg-rose-50 text-rose-800 dark:border-rose-700/50 dark:bg-rose-950/30 dark:text-rose-300',
@@ -57,12 +57,12 @@ export function MacroBudget({
         <div className="mb-4 flex flex-wrap items-end justify-between gap-3 border-b border-border-subtle pb-4">
           <div>
             <p className="text-xs font-semibold uppercase tracking-wide text-subtle">Energía</p>
-            <p className="mt-1 font-display text-2xl font-bold text-strong">
+            <p className="mt-1 font-display text-2xl font-bold tabular-nums text-strong">
               {formatNutritionCalories(calories.consumed)}
               <span className="ml-1 text-sm font-medium text-muted">/ {formatNutritionCalories(calories.target)}</span>
             </p>
           </div>
-          <p className="text-sm font-semibold text-ember-700 dark:text-ember-300">
+          <p className="text-sm font-semibold tabular-nums text-primary">
             {formatNutritionCalories(Math.max(calories.target - calories.consumed, 0))} restantes
           </p>
         </div>

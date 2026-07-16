@@ -66,7 +66,7 @@ export function FoodResultCard({ item, onPick }: { item: FoodCatalogItem; onPick
       type="button"
       onClick={onPick}
       aria-label={`Agregar ${item.name}${item.brand ? ` (${item.brand})` : ''}`}
-      className="group flex h-full w-full flex-col overflow-hidden rounded-card border border-border-subtle bg-surface-card text-left transition hover:border-ember-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      className="group flex h-full w-full flex-col overflow-hidden rounded-card border border-border-subtle bg-surface-card text-left transition hover:border-primary/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
       <FoodCoverImage imageUrl={image.imageUrl} iconUrl={image.iconUrl} alt={item.name} />
 

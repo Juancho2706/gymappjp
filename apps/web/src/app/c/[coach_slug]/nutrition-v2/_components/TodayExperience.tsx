@@ -179,7 +179,7 @@ export function TodayExperience({
       {/* Consumido hoy */}
       <section aria-label="Consumido hoy" className="space-y-3">
         <div className="flex items-center gap-2">
-          <Utensils className="h-4 w-4 text-ember-600 dark:text-ember-300" aria-hidden="true" />
+          <Utensils className="h-4 w-4 text-primary dark:text-primary" aria-hidden="true" />
           <h2 className="font-display text-lg font-semibold text-strong">Consumido hoy</h2>
         </div>
         {entries.length === 0 ? (
@@ -621,7 +621,7 @@ function RegisterFoodDialog({
                       {food.brand ?? 'Sin marca'} · {food.calories} kcal / {food.servingSize} {food.servingUnit}
                     </span>
                   </span>
-                  <Plus className="h-4 w-4 shrink-0 text-ember-600 dark:text-ember-300" aria-hidden="true" />
+                  <Plus className="h-4 w-4 shrink-0 text-primary dark:text-primary" aria-hidden="true" />
                 </button>
               </li>
             ))}
