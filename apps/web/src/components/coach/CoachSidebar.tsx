@@ -26,7 +26,7 @@ import {
 import { cn } from '@/lib/utils'
 import { Avatar } from '@/components/ui/avatar'
 import { EvaBrandIcon } from '@/components/landing/LandingBrandMark'
-import { getVisibleNavItems, splitForSidebar, type NavModule } from '@eva/coach-nav'
+import { getVisibleNavItems, splitForSidebar, isNavItemActiveForPath, type NavModule } from '@eva/coach-nav'
 import type { WorkspaceSummary, WorkspaceType } from '@/domain/auth/types'
 import type { EnabledModules } from '@/services/entitlements.service'
 
@@ -177,16 +177,15 @@ export function CoachSidebar({ coachName, coachBrand, subscriptionStatus, enterp
         .map((k) => visibleNavItems.find((i) => i.key === k))
         .filter((i): i is NavModule => i != null)
         .slice(0, 5)
-    const mobileActiveIndex = mobileTabs.findIndex(
-        (i) => pathname === i.href || pathname.startsWith(i.href + '/')
-    )
+    const mobileActiveIndex = mobileTabs.findIndex((i) => isNavItemActiveForPath(i, pathname))
     const mobileN = mobileTabs.length || 1
 
-    const isActiveHref = (href: string) => pathname === href || pathname.startsWith(href + '/')
+    // Item-aware: además de `href` respeta `activeAliases` (swap V2 bajo canary ilumina Nutrición).
+    const isNavItemActive = (item: NavModule) => isNavItemActiveForPath(item, pathname)
 
     // DESKTOP — link vertical del sidebar (.dt-nav-item). Transcripción verbatim del diseño.
     const renderNavLink = (item: NavModule, secondary = false) => {
-        const isActive = isActiveHref(item.href)
+        const isActive = isNavItemActive(item)
         const Icon = navIcon(item)
         const label = displayLabel(item)
         return (
@@ -371,7 +370,7 @@ export function CoachSidebar({ coachName, coachBrand, subscriptionStatus, enterp
                         }}
                     />
                     {mobileTabs.map((item) => {
-                        const active = isActiveHref(item.href)
+                        const active = isNavItemActive(item)
                         const Icon = navIcon(item)
                         const label = displayLabel(item)
                         return (

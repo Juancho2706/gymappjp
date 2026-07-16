@@ -4,6 +4,7 @@ import {
     splitNavItems,
     splitForSidebar,
     coachWorkspaceTypeFromKind,
+    isNavItemActiveForPath,
     NAV_MODULES,
     type NavModule,
 } from './nav'
@@ -322,5 +323,37 @@ describe('coachWorkspaceTypeFromKind — puente enum mobile (WorkspaceKind) -> w
         }).map((i) => i.key)
         expect(soloKeys).toContain('options')
         expect(soloKeys).not.toContain('team')
+    })
+})
+
+describe('isNavItemActiveForPath — matcher de ruta activa (href + activeAliases, swap V2 canary)', () => {
+    const nutrition = NAV_MODULES.find((m) => m.key === 'nutrition')!
+    const dashboard = NAV_MODULES.find((m) => m.key === 'dashboard')!
+
+    it('el registro declara el alias /coach/nutrition-v2 en la entrada Nutrición', () => {
+        expect(nutrition.href).toBe('/coach/nutrition-plans')
+        expect(nutrition.activeAliases).toContain('/coach/nutrition-v2')
+    })
+
+    it('Nutrición activa en su href canónico (exacto y subruta)', () => {
+        expect(isNavItemActiveForPath(nutrition, '/coach/nutrition-plans')).toBe(true)
+        expect(isNavItemActiveForPath(nutrition, '/coach/nutrition-plans/new')).toBe(true)
+    })
+
+    it('Nutrición activa en el alias V2 (exacto y subruta) — swap del cockpit bajo canary', () => {
+        expect(isNavItemActiveForPath(nutrition, '/coach/nutrition-v2')).toBe(true)
+        expect(isNavItemActiveForPath(nutrition, '/coach/nutrition-v2/some-client-id')).toBe(true)
+    })
+
+    it('Nutrición NO activa en rutas ajenas ni en prefijos falsos del alias', () => {
+        expect(isNavItemActiveForPath(nutrition, '/coach/dashboard')).toBe(false)
+        expect(isNavItemActiveForPath(nutrition, '/coach/nutrition-v2extra')).toBe(false)
+        expect(isNavItemActiveForPath(nutrition, '/coach/nutrition-plans-archive')).toBe(false)
+    })
+
+    it('un item sin activeAliases (dashboard) no se ilumina por rutas de otro item', () => {
+        expect(dashboard.activeAliases).toBeUndefined()
+        expect(isNavItemActiveForPath(dashboard, '/coach/nutrition-v2')).toBe(false)
+        expect(isNavItemActiveForPath(dashboard, '/coach/dashboard')).toBe(true)
     })
 })

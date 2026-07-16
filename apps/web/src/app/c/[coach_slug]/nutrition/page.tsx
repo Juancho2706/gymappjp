@@ -41,6 +41,8 @@ import { NutritionIntakeLedger } from './_components/NutritionIntakeLedger'
 import { NutritionGuidanceProgress } from './_components/NutritionGuidanceProgress'
 import { getDailyHabits } from './_actions/habits.actions'
 import { getClientBasePath } from '@/lib/client/base-path'
+import { isNutritionV2Enabled } from '@/services/nutrition-v2-rollout.service'
+import { NutritionV2Banner } from './_components/NutritionV2Banner'
 
 export const metadata: Metadata = { title: 'Plan Nutricional' }
 
@@ -88,6 +90,7 @@ export default async function ClientNutritionPage({ params }: Props) {
     sectionFlags,
     weeklyRecap,
     dailyHabits,
+    nutritionV2StudentEnabled,
   ] = await Promise.all([
     getNutritionLogForDate(user.id, String(plan.id), today),
     getNutritionAdherence30d(user.id, String(plan.id)),
@@ -116,6 +119,14 @@ export default async function ClientNutritionPage({ params }: Props) {
     resolveFeaturePrefs(prefsInput),
     getNutritionWeeklyRecap(user.id),
     getDailyHabits(user.id, today),
+    isNutritionV2Enabled({
+      surface: 'webStudent',
+      userId: user.id,
+      clientId: user.id,
+      coachId: clientScope.coachId,
+      teamId: clientScope.teamId,
+      orgId: clientScope.orgId,
+    }),
   ])
 
   if (!domainEnabled) {
@@ -162,6 +173,10 @@ export default async function ClientNutritionPage({ params }: Props) {
       </header>
 
       <main className="relative z-0 mx-auto max-w-lg space-y-5 px-4 py-5 pb-28 md:max-w-5xl">
+        {nutritionV2StudentEnabled && (
+          <NutritionV2Banner href={`${base}/nutrition-v2`} />
+        )}
+
         <PushNotificationBanner />
 
         {weeklyRecap && <WeeklyRecapCard recap={weeklyRecap} />}

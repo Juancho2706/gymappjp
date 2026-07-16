@@ -68,6 +68,13 @@ export type NavModule = {
      * esto es PREFERENCIA, no capability.
      */
     featureDomain?: string
+    /**
+     * Rutas EXTRA (además de `href`) bajo las cuales esta entrada se marca como activa en el nav.
+     * Uso: swaps bajo canary donde una ruta alterna (ej. `/coach/nutrition-v2`) debe iluminar el
+     * mismo item que la ruta canónica (`/coach/nutrition-plans`). El matcher (`isNavItemActiveForPath`)
+     * trata cada alias con el mismo prefijo que `href` (exacto o subruta). Ausente ⇒ solo `href`.
+     */
+    activeAliases?: ReadonlyArray<string>
 }
 
 const ALL: ReadonlyArray<CoachWorkspaceType> = ['coach_standalone', 'enterprise_coach', 'coach_team']
@@ -88,7 +95,7 @@ export const NAV_MODULES: ReadonlyArray<NavModule> = [
     { key: 'programs', href: '/coach/workout-programs', label: 'Programas', shortLabel: 'Planes', icon: 'ClipboardList', contexts: ALL },
     // Movida 2 (declutter IA): 'exercises' ya NO es entrada top-level (paso a un boton dentro de
     // Programas). La ruta /coach/exercises sigue VIVA (deep links / app alumno). Cero cambio de capability.
-    { key: 'nutrition', href: '/coach/nutrition-plans', label: 'Nutrición', shortLabel: 'Nutri', icon: 'Apple', contexts: ALL, featureDomain: 'nutrition' },
+    { key: 'nutrition', href: '/coach/nutrition-plans', label: 'Nutrición', shortLabel: 'Nutri', icon: 'Apple', contexts: ALL, featureDomain: 'nutrition', activeAliases: ['/coach/nutrition-v2'] },
     // Movida 1 (hub "Opciones"): standalone colapsa Mi Marca + Suscripcion en UNA entrada
     // "Opciones" -> /coach/settings (cards dentro del hub). Cero cambio de capability.
     { key: 'options', href: '/coach/settings', label: 'Opciones', shortLabel: 'Opcs.', icon: 'Settings', contexts: ['coach_standalone'] },
@@ -171,6 +178,19 @@ export function getVisibleNavItems(ctx: VisibleNavContext): NavModule[] {
         if (item.featureDomain && disabledDomains?.has(item.featureDomain)) return false
         return true
     })
+}
+
+/**
+ * ¿La entrada `item` está activa para `pathname`? Coincide su `href` o cualquiera de sus
+ * `activeAliases`, con el criterio de prefijo estándar del nav: match EXACTO o SUBRUTA
+ * (`pathname === base || pathname.startsWith(base + '/')`). PURA (sin React/router), para que web
+ * y mobile compartan el matcher y sea unit-testeable. Habilita que rutas alternas bajo canary
+ * (ej. `/coach/nutrition-v2`) iluminen el mismo item que la ruta canónica.
+ */
+export function isNavItemActiveForPath(item: NavModule, pathname: string): boolean {
+    const matches = (base: string) => pathname === base || pathname.startsWith(base + '/')
+    if (matches(item.href)) return true
+    return (item.activeAliases ?? []).some(matches)
 }
 
 /**

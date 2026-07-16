@@ -20,6 +20,7 @@ import { hasModule } from '@/services/entitlements.service'
 import { getTodayInSantiago } from '@/lib/date-utils'
 import { getNutritionOversight } from './_data/nutrition-oversight.queries'
 import { NutritionProfessionalOverview } from './_components/NutritionProfessionalOverview'
+import { shouldSwapCockpitToNutritionV2 } from './_lib/nutrition-v2-swap'
 
 type NutritionPlanRow = {
   id: string
@@ -35,6 +36,13 @@ export default async function NutritionPlansPage() {
   if (!user) return null
 
   const coachId = user.id
+
+  // Swap del cockpit bajo canary (reversible por flag): si el gate V2 está habilitado para
+  // este coach/workspace, servimos el Centro V2. El gate es el MISMO que consume el hub V2
+  // (que redirige de vuelta a V1 cuando está OFF), así que no se forma loop. Ver _lib/nutrition-v2-swap.
+  if (await shouldSwapCockpitToNutritionV2(coachId)) {
+    redirect('/coach/nutrition-v2')
+  }
   const tier = (coach?.subscription_tier ?? 'starter') as SubscriptionTier
   const capabilities = getTierCapabilities(tier)
   if (!capabilities.canUseNutrition) {
