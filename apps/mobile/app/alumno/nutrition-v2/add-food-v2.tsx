@@ -328,6 +328,7 @@ export default function NutritionV2AddFoodScreen() {
                         thumbnailUrl: foodMediaThumbnailUrl(food.media),
                       }}
                       fallbackEmoji={foodCategoryEmoji(food.category)}
+                      nameLines={2}
                     />
                   </Pressable>
                 ))}

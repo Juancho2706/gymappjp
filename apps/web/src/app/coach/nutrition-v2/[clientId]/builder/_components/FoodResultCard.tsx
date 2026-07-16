@@ -66,11 +66,13 @@ export function FoodResultCard({ item, onPick }: { item: FoodCatalogItem; onPick
       type="button"
       onClick={onPick}
       aria-label={`Agregar ${item.name}${item.brand ? ` (${item.brand})` : ''}`}
-      className="group flex h-full w-full flex-col overflow-hidden rounded-card border border-border-subtle bg-surface-card text-left transition hover:border-primary/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      className="group flex h-full w-full flex-row items-center gap-3 overflow-hidden rounded-card border border-border-subtle bg-surface-card p-2 text-left transition hover:border-primary/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:flex-col sm:items-stretch sm:gap-0 sm:p-0"
     >
-      <FoodCoverImage imageUrl={image.imageUrl} iconUrl={image.iconUrl} alt={item.name} />
+      <span className="w-14 shrink-0 overflow-hidden rounded-control sm:w-full sm:rounded-none">
+        <FoodCoverImage imageUrl={image.imageUrl} iconUrl={image.iconUrl} alt={item.name} />
+      </span>
 
-      <span className="flex min-w-0 flex-1 flex-col gap-1.5 p-3">
+      <span className="flex min-w-0 flex-1 flex-col gap-1.5 p-0 sm:p-3">
         <span className="flex items-start justify-between gap-2">
           <span className="line-clamp-2 min-w-0 text-sm font-semibold leading-snug text-strong">{item.name}</span>
           <span

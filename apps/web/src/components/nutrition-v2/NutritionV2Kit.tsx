@@ -318,17 +318,23 @@ export function NutritionStatePanel({
     <section className={cx('flex min-h-48 flex-col items-center justify-center rounded-card border p-6 text-center', toneClasses[tone], className)}>
       {art ? (
         // Decorativa: el título + descripción ya anuncian el estado al lector de pantalla.
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          alt=""
+        <span
           aria-hidden="true"
-          src={art.src}
-          srcSet={art.srcSet}
-          width={144}
-          height={144}
-          loading="lazy"
-          className="mb-5 h-32 w-32 select-none object-contain sm:h-36 sm:w-36"
-        />
+          className="mb-5 grid h-36 w-36 place-items-center rounded-full sm:h-40 sm:w-40"
+          style={{ background: 'color-mix(in oklab, var(--theme-primary) 10%, transparent)' }}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            alt=""
+            aria-hidden="true"
+            src={art.src}
+            srcSet={art.srcSet}
+            width={144}
+            height={144}
+            loading="lazy"
+            className="h-24 w-24 select-none object-contain sm:h-28 sm:w-28"
+          />
+        </span>
       ) : (
         <span className="mb-4 inline-flex h-11 w-11 items-center justify-center rounded-full bg-current/10"><Icon aria-hidden="true" className="h-5 w-5" /></span>
       )}
@@ -362,7 +368,6 @@ export function CoachAttentionCard({ item, onAction }: { item: NutritionAttentio
         <div className="min-w-0 flex-1">
           <h3 className="font-semibold">{item.title}</h3>
           <p className="mt-1 text-sm opacity-85">{item.description}</p>
-          <p className="mt-2 text-xs font-medium opacity-70">Motivo: {item.reason}</p>
         </div>
         <button className="inline-flex min-h-11 shrink-0 items-center gap-1 rounded-control px-3 text-sm font-semibold hover:bg-current/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" onClick={() => onAction?.(item.id)} type="button">
           {item.actionLabel}<ChevronRight aria-hidden="true" className="h-4 w-4" />

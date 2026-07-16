@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
-import { ArrowLeft, CheckCircle2, LockKeyhole, Plus } from 'lucide-react'
+import { ArrowLeft, CheckCircle2, Info, LockKeyhole, Plus } from 'lucide-react'
 import {
   MacroBudget,
   NutritionCard,
@@ -60,10 +60,10 @@ export default async function CoachNutritionV2ClientPage({ params, searchParams 
   const detail = await getNutritionClientDetailV2ForWeb({ clientId, scope, date: today })
   const hasPlan = detail.plan.plan !== null
   // "Asignar a otros alumnos" solo tiene sentido si la FUENTE tiene una version publicada
-  // vigente (la misma senal que decide el empty-state de abajo, `detail.today.plan`). Un plan
-  // superseded/sin variantes no es copiable, por eso no gatilla el CTA ni la carga del roster.
+  // vigente (la misma senal en vivo que decide el empty-state de abajo, `detail.plan.plan`). Un
+  // plan superseded/sin variantes no es copiable, por eso no gatilla el CTA ni la carga del roster.
   const canAssign = canAssignSourcePlan({
-    vigentePlanStatus: detail.today.plan?.status ?? null,
+    vigentePlanStatus: detail.plan.plan?.status ?? null,
     hasPlanStructure: detail.plan.plan !== null,
     variantCount: detail.plan.dayVariants.length,
   })
@@ -107,9 +107,20 @@ export default async function CoachNutritionV2ClientPage({ params, searchParams 
     assignRoster = collected
   }
 
+  // El plan vigente (`detail.plan.plan`) es la senal en vivo del plan activo/publicado. El bloque
+  // "hoy" se calcula sobre el registro del dia, que puede haberse generado antes de publicar el
+  // plan nuevo: en ese caso mostramos la ficha completa con un aviso, no un empty-state.
+  const todayPlan = detail.today.plan
+  const activePlan = detail.plan.plan
+  const showTodayPlanLag = activePlan !== null && (todayPlan === null || todayPlan.id !== activePlan.id)
+  const todayPlanLagMessage =
+    todayPlan === null
+      ? 'El plan vigente ya está publicado. El registro de hoy todavía no tiene metas asignadas; desde mañana se aplican las del nuevo plan.'
+      : 'El plan vigente ya está publicado. Los registros de hoy siguen mostrando el plan anterior; desde mañana se usa el nuevo.'
+
   return (
     <NutritionPageShell
-      eyebrow="Ficha nutricional V2"
+      eyebrow="Ficha nutricional"
       title={detail.client.fullName}
       description="Plan vigente, consumo del dia, historial reciente y nota profesional aislada."
       actions={
@@ -159,17 +170,16 @@ export default async function CoachNutritionV2ClientPage({ params, searchParams 
         </div>
       ) : null}
 
-      {/* Un plan solo esta vigente si el snapshot de hoy lo referencia (detail.today.plan) Y el
-          plan logico sigue activo (detail.plan.plan, que get_nutrition_plan_read_v2 resuelve
-          filtrando lifecycle_status='active'). Tras archivar, el plan-read devuelve null de
-          inmediato aunque el snapshot de HOY siga materializado (ensure_day_snapshot no se
-          recomputa el mismo dia). Requerir ambas senales hace que la ficha refleje el archivado
-          sin tocar snapshots (historial inmutable). */}
-      {!detail.today.plan || !detail.plan.plan ? (
+      {/* El empty-state depende SOLO del plan vigente en vivo (`detail.plan.plan`, que
+          get_nutrition_plan_read_v2 resuelve filtrando lifecycle_status='active'). Tras archivar,
+          ese read model devuelve null de inmediato. El registro del dia (`detail.today.plan`) puede
+          seguir apuntando al plan anterior o venir vacio si se genero antes de publicar el nuevo:
+          eso NO oculta la ficha, se refleja con un aviso inline mas abajo. */}
+      {!detail.plan.plan ? (
         <NutritionStatePanel
           illustration="sin-plan"
-          title="Sin plan V2 vigente"
-          description="Crea y publica una version antes de revisar objetivos y adherencia canonica."
+          title="Sin plan vigente"
+          description="Crea y publica un plan para revisar objetivos y adherencia."
           action={
             <Link
               href={`/coach/nutrition-v2/${clientId}/builder`}
@@ -183,13 +193,20 @@ export default async function CoachNutritionV2ClientPage({ params, searchParams 
       ) : (
         <div className="space-y-5">
           <div className="flex flex-wrap items-center gap-2">
-            <StrategyBadge strategy={detail.today.plan.strategy} />
+            <StrategyBadge strategy={(detail.today.plan ?? detail.plan.plan).strategy} />
             <PlanVersionBadge
-              version={detail.today.plan.versionNumber}
-              status={detail.today.plan.status}
-              effectiveLabel={`desde ${detail.today.plan.effectiveFrom}`}
+              version={(detail.today.plan ?? detail.plan.plan).versionNumber}
+              status={(detail.today.plan ?? detail.plan.plan).status}
+              effectiveLabel={`desde ${(detail.today.plan ?? detail.plan.plan).effectiveFrom}`}
             />
           </div>
+
+          {showTodayPlanLag ? (
+            <div className="flex items-start gap-2 rounded-control border border-border-subtle bg-surface-sunken px-4 py-3 text-sm text-body">
+              <Info className="mt-0.5 h-4 w-4 shrink-0 text-muted" />
+              <p>{todayPlanLagMessage}</p>
+            </div>
+          ) : null}
 
           <MacroBudget
             calories={{

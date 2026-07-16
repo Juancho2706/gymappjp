@@ -168,7 +168,7 @@ describe("canAssignSourcePlan", () => {
     ).toBe(true)
   })
 
-  it("bloquea si no hay plan vigente hoy (today.plan null)", () => {
+  it("bloquea si no hay plan activo/publicado vigente (plan.plan null)", () => {
     expect(
       canAssignSourcePlan({ vigentePlanStatus: null, hasPlanStructure: true, variantCount: 2 }),
     ).toBe(false)

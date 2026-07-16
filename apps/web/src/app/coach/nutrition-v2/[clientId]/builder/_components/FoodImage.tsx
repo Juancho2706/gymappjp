@@ -54,7 +54,9 @@ export function FoodThumb({
       {imageUrl ? (
         <Image alt={alt} src={imageUrl} width={40} height={40} unoptimized loading="lazy" className="h-10 w-10 object-cover" />
       ) : (
-        <Image alt="" aria-hidden="true" src={iconUrl} width={24} height={24} unoptimized loading="lazy" className="h-6 w-6 object-contain" />
+        <span className="absolute inset-0 grid place-items-center bg-primary/10 dark:bg-primary/10">
+          <Image alt="" aria-hidden="true" src={iconUrl} width={24} height={24} unoptimized loading="lazy" className="h-6 w-6 object-contain" />
+        </span>
       )}
     </span>
   )

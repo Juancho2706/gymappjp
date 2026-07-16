@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Pressable, ScrollView, Text, View } from 'react-native'
 import { useLocalSearchParams, useRouter } from 'expo-router'
-import { ArrowLeft, LockKeyhole } from 'lucide-react-native'
+import { ArrowLeft, Info, LockKeyhole } from 'lucide-react-native'
 import {
   MacroBudget,
   NutritionHeader,
@@ -197,9 +197,19 @@ export default function CoachNutritionV2ClientScreen() {
     )
   }
 
-  const planStatus = detail.today.plan ? 'published' : null
+  // El plan vigente (`detail.plan.plan`) es la senal en vivo del plan activo/publicado. El bloque
+  // "hoy" se calcula sobre el registro del dia, que puede haberse generado antes de publicar el
+  // plan nuevo: en ese caso mostramos la ficha completa con un aviso, no un empty-state.
+  const todayPlan = detail.today.plan
+  const activePlan = detail.plan.plan
+  const planStatus = activePlan ? 'published' : null
   const ctaLabel = nutritionPlanCtaLabel(planStatus)
   const builderHref = nutritionV2BuilderHref(detail.client.id)
+  const showTodayPlanLag = activePlan !== null && (todayPlan === null || todayPlan.id !== activePlan.id)
+  const todayPlanLagMessage =
+    todayPlan === null
+      ? 'El plan vigente ya está publicado. El registro de hoy todavía no tiene metas asignadas; desde mañana se aplican las del nuevo plan.'
+      : 'El plan vigente ya está publicado. Los registros de hoy siguen mostrando el plan anterior; desde mañana se usa el nuevo.'
 
   return (
     <ScrollView
@@ -218,28 +228,35 @@ export default function CoachNutritionV2ClientScreen() {
         </Pressable>
         <View className="min-w-0 flex-1">
           <NutritionHeader
-            eyebrow="Ficha nutricional V2"
+            eyebrow="Ficha nutricional"
             title={detail.client.fullName}
-            description={offline ? 'Mostrando la última copia disponible.' : 'Datos canónicos del día.'}
+            description={offline ? 'Mostrando la última copia disponible.' : 'Resumen del día del alumno.'}
           />
         </View>
       </View>
 
-      {detail.today.plan ? (
+      {detail.plan.plan ? (
         <View className="flex-row flex-wrap gap-2">
-          <StrategyBadge strategy={detail.today.plan.strategy} />
+          <StrategyBadge strategy={(detail.today.plan ?? detail.plan.plan).strategy} />
           <PlanVersionBadge
-            version={detail.today.plan.versionNumber}
-            status={detail.today.plan.status}
-            effectiveLabel={`desde ${detail.today.plan.effectiveFrom}`}
+            version={(detail.today.plan ?? detail.plan.plan).versionNumber}
+            status={(detail.today.plan ?? detail.plan.plan).status}
+            effectiveLabel={`desde ${(detail.today.plan ?? detail.plan.plan).effectiveFrom}`}
           />
         </View>
       ) : null}
 
-      {!detail.today.plan ? (
+      {showTodayPlanLag ? (
+        <View className="flex-row items-start gap-2 rounded-control border border-border-subtle bg-surface-sunken px-4 py-3">
+          <Info color={theme.primary} size={16} />
+          <Text className="flex-1 text-sm leading-5 text-text-body">{todayPlanLagMessage}</Text>
+        </View>
+      ) : null}
+
+      {!detail.plan.plan ? (
         <NutritionStatePanel
-          title="Sin plan V2 vigente"
-          description="Crea y publica una versión antes de revisar objetivos y adherencia canónica."
+          title="Sin plan vigente"
+          description="Crea y publica un plan para revisar objetivos y adherencia."
           action={
             <NutritionMotionButton
               accessibilityLabel="Crear plan"
@@ -282,7 +299,7 @@ export default function CoachNutritionV2ClientScreen() {
         </>
       )}
 
-      {detail.today.plan && detail.plan.dayVariants.length > 0 ? (
+      {detail.plan.plan && detail.plan.dayVariants.length > 0 ? (
         <View className="gap-3">
           <Text className="font-display text-xl font-semibold text-text-strong">Estructura prescrita</Text>
           {detail.plan.dayVariants.map((variant) => (

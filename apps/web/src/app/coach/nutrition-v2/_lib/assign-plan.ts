@@ -31,15 +31,15 @@ export const MAX_ASSIGN_TARGETS = 30
 
 /**
  * ¿El alumno FUENTE puede prestar su plan a otros? Solo si tiene una version PUBLICADA
- * VIGENTE (la que hoy resuelve el snapshot del alumno) y estructura que copiar. No basta
- * con que exista una cabecera de plan en el read model: un plan `superseded` (publicado en
+ * VIGENTE (la que resuelve en vivo el read model del plan activo) y estructura que copiar. No
+ * basta con que exista una cabecera de plan en el read model: un plan `superseded` (publicado en
  * el pasado pero sin vigencia hoy) o un plan sin variantes no es copiable — no tendria
  * sentido "asignar un plan que no existe". Espeja la senal que gobierna el empty-state de
- * la ficha (`detail.today.plan`). Puro: la ficha lo usa para mostrar/ocultar el CTA y el
+ * la ficha (`detail.plan.plan`). Puro: la ficha lo usa para mostrar/ocultar el CTA y el
  * server action mantiene su propia barrera (RLS + re-fetch de la estructura del plan).
  */
 export interface AssignEligibilityInput {
-  /** Estado del plan que hoy resuelve el snapshot del alumno: `detail.today.plan?.status ?? null`. */
+  /** Estado del plan activo/publicado en vivo: `detail.plan.plan?.status ?? null`. */
   vigentePlanStatus: "published" | "superseded" | null
   /** ¿El read model del plan trae cabecera (`detail.plan.plan !== null`)? */
   hasPlanStructure: boolean

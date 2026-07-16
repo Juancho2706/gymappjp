@@ -15,6 +15,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router'
 import { Check, ChevronLeft, ChevronRight, Lock, Plus, Search, Trash2, X } from 'lucide-react-native'
 import {
   BuilderStepList,
+  FoodThumbnail,
   NutritionCard,
   NutritionHeader,
   NutritionMotionButton,
@@ -56,6 +57,7 @@ import {
   type BuilderUnit,
   type NutritionV2WriteClient,
 } from '../../../../lib/nutrition-v2-builder'
+import { foodCategoryEmoji, foodMediaThumbnailUrl } from '../../../../lib/nutrition-v2-food-media'
 
 const STRATEGY_ORDER: NutritionStrategy[] = ['structured', 'flexible', 'hybrid']
 
@@ -538,18 +540,28 @@ function ItemEditor({
   return (
     <View className="rounded-control border border-border-subtle bg-surface-sunken p-3">
       <View className="flex-row items-start justify-between gap-2">
-        <View className="min-w-0 flex-1">
-          {isCustom ? (
-            <TextInput
-              value={item.customName ?? ''}
-              onChangeText={(value) => patch({ customName: value })}
-              placeholder="Nombre del alimento"
-              placeholderTextColor={theme.mutedForeground}
-              className="min-h-10 rounded-control border border-border-default bg-surface-card px-2.5 py-1.5 text-sm font-semibold text-text-strong"
-            />
-          ) : (
-            <Text className="text-sm font-semibold text-text-strong">{item.food?.name}</Text>
-          )}
+        <View className="min-w-0 flex-1 flex-row items-start gap-2.5">
+          <FoodThumbnail
+            alt={item.food?.name ?? item.customName ?? 'Alimento'}
+            src={item.food ? foodMediaThumbnailUrl(item.food.media) : null}
+            fallbackEmoji={item.food ? foodCategoryEmoji(item.food.category) : null}
+            size="sm"
+          />
+          <View className="min-w-0 flex-1">
+            {isCustom ? (
+              <TextInput
+                value={item.customName ?? ''}
+                onChangeText={(value) => patch({ customName: value })}
+                placeholder="Nombre del alimento"
+                placeholderTextColor={theme.mutedForeground}
+                className="min-h-10 rounded-control border border-border-default bg-surface-card px-2.5 py-1.5 text-sm font-semibold text-text-strong"
+              />
+            ) : (
+              <Text className="text-sm font-semibold text-text-strong" numberOfLines={2}>
+                {item.food?.name}
+              </Text>
+            )}
+          </View>
         </View>
         <Pressable
           accessibilityLabel="Quitar alimento"
@@ -916,15 +928,25 @@ function FoodSearchModal({
                 key={food.id}
                 accessibilityLabel={`Agregar ${food.name}`}
                 accessibilityRole="button"
-                className="min-h-14 rounded-control border border-border-subtle bg-surface-card px-3 py-2.5"
+                className="min-h-14 flex-row items-center gap-3 rounded-control border border-border-subtle bg-surface-card px-3 py-2.5"
                 onPress={() => onSelect(food)}
               >
-                <Text className="text-sm font-semibold text-text-strong">{food.name}</Text>
-                <Text className="mt-0.5 text-xs text-text-muted">
-                  {[food.brand, `${Math.round(food.calories)} kcal / ${food.servingSize}${food.servingUnit}`]
-                    .filter(Boolean)
-                    .join(' · ')}
-                </Text>
+                <FoodThumbnail
+                  alt={food.name}
+                  src={foodMediaThumbnailUrl(food.media)}
+                  fallbackEmoji={foodCategoryEmoji(food.category)}
+                  size="sm"
+                />
+                <View className="min-w-0 flex-1">
+                  <Text className="text-sm font-semibold text-text-strong" numberOfLines={2}>
+                    {food.name}
+                  </Text>
+                  <Text className="mt-0.5 text-xs text-text-muted" numberOfLines={1}>
+                    {[food.brand, `${Math.round(food.calories)} kcal / ${food.servingSize}${food.servingUnit}`]
+                      .filter(Boolean)
+                      .join(' · ')}
+                  </Text>
+                </View>
               </Pressable>
             ))
           )}

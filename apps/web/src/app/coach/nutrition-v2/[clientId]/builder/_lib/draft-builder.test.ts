@@ -38,6 +38,8 @@ const FOOD: BuilderFood = {
   fiberG: 2,
   servingSize: 50,
   servingUnit: 'g',
+  category: null,
+  media: null,
 }
 
 function foodItem(overrides: Partial<BuilderItem> = {}): BuilderItem {

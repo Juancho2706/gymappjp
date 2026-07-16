@@ -48,6 +48,8 @@ export interface BuilderFood {
   fiberG: number | null
   servingSize: number
   servingUnit: string
+  category: string | null
+  media: { bucket: string; objectPath: string; version: number } | null
 }
 
 export interface BuilderItem {
@@ -606,6 +608,8 @@ export function mapFoodCatalogItemToBuilderFood(item: FoodCatalogItem): BuilderF
     fiberG: item.fiberG,
     servingSize: item.servingSize,
     servingUnit: item.servingUnit,
+    category: item.category,
+    media: item.media,
   }
 }
 
@@ -756,6 +760,8 @@ function toBuilderFood(row: FoodRow): BuilderFood {
     fiberG: row.fiber_g,
     servingSize: row.serving_size,
     servingUnit: row.serving_unit ?? 'g',
+    category: null,
+    media: null,
   }
 }
 

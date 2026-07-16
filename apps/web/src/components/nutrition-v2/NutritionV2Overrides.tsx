@@ -141,7 +141,6 @@ export function CoachAttentionCard({
         <div className="min-w-0 flex-1">
           <h3 className="font-semibold">{item.title}</h3>
           <p className="mt-1 text-sm opacity-85">{item.description}</p>
-          <p className="mt-2 text-xs font-medium opacity-70">Motivo: {item.reason}</p>
         </div>
         {action ? <div className="shrink-0">{action}</div> : null}
       </div>

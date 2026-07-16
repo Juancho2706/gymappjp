@@ -183,6 +183,8 @@ export async function createCoachFoodAction(
     fiberG: null,
     servingSize: 100,
     servingUnit: unit,
+    category: 'otro',
+    media: null,
   }
   return { ok: true, food }
 }

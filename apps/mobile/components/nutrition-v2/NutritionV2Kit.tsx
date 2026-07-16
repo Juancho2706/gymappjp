@@ -407,11 +407,13 @@ export function FoodRow({
   food,
   actions,
   fallbackEmoji,
+  nameLines = 1,
 }: {
   food: NutritionFoodRowModel
   actions?: ReactNode
   /** Emoji local (placeholder por categoria) reenviado al thumbnail cuando el alimento no trae foto. */
   fallbackEmoji?: string | null
+  nameLines?: 1 | 2
 }) {
   const statusLabel = {
     default: null,
@@ -426,7 +428,7 @@ export function FoodRow({
       <FoodThumbnail alt={food.name} src={food.thumbnailUrl} fallbackEmoji={fallbackEmoji} />
       <View className="min-w-0 flex-1">
         <View className="flex-row flex-wrap items-center gap-2">
-          <Text className="min-w-0 shrink font-semibold text-text-strong" numberOfLines={1}>
+          <Text className="min-w-0 shrink font-semibold text-text-strong" numberOfLines={nameLines}>
             {food.name}
           </Text>
           {statusLabel ? <Text className="text-[10px] font-semibold text-warning-700">{statusLabel}</Text> : null}
@@ -718,7 +720,6 @@ export function CoachAttentionCard({
         <View className="min-w-0 flex-1">
           <Text className={cx('font-semibold', toneTextClasses[item.tone])}>{item.title}</Text>
           <Text className="mt-1 text-sm leading-5 text-text-body">{item.description}</Text>
-          <Text className="mt-2 text-xs font-medium text-text-muted">Motivo: {item.reason}</Text>
         </View>
         <Pressable
           accessibilityLabel={`${item.actionLabel}: ${item.title}`}

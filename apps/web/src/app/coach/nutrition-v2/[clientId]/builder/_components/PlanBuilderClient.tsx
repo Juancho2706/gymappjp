@@ -38,8 +38,11 @@ import {
   searchFoodCatalogCoachAction,
 } from '../_actions/builder.actions'
 import { FoodResultCard } from './FoodResultCard'
-import { foodCategoryIconUrlFromName } from './food-card-presentation'
+import { foodCategoryIconUrlFromName, resolveFoodImageUrl } from './food-card-presentation'
+import { foodCategoryIconUrl } from '@/lib/food-image'
 import { FoodThumb } from './FoodImage'
+
+const SUPABASE_BASE = process.env.NEXT_PUBLIC_SUPABASE_URL ?? null
 
 type Dispatch = (action: import('../_lib/draft-builder').BuilderAction) => void
 
@@ -60,6 +63,8 @@ function mapCatalogItemToFood(item: FoodCatalogItem): BuilderFood {
     fiberG: item.fiberG,
     servingSize: item.servingSize,
     servingUnit: item.servingUnit,
+    category: item.category,
+    media: item.media,
   }
 }
 
@@ -167,7 +172,7 @@ function FoodSearch({ clientId, onPick }: { clientId: string; onPick: (food: Bui
       {error ? <p className="mt-2 text-xs text-rose-600 dark:text-rose-300">{error}</p> : null}
       {items.length > 0 ? (
         <div className="mt-3 space-y-3">
-          <ul className="grid max-h-[30rem] grid-cols-2 gap-2 overflow-y-auto pr-1 sm:grid-cols-3 xl:grid-cols-4">
+          <ul className="grid max-h-[30rem] grid-cols-1 gap-2 overflow-y-auto pr-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {items.map((item) => (
               <li key={item.id} className="min-w-0">
                 <FoodResultCard item={item} onPick={() => pick(item)} />
@@ -322,11 +327,12 @@ function ItemRow({
 }) {
   const unitOptions = item.food ? BUILDER_UNITS : (['g', 'ml'] as const)
   const displayName = item.food ? item.food.name : item.customName
-  const iconUrl = foodCategoryIconUrlFromName(displayName)
+  const imageUrl = item.food ? resolveFoodImageUrl(item.food.media as FoodCatalogItem['media'], SUPABASE_BASE) : null
+  const iconUrl = item.food ? foodCategoryIconUrl(item.food.category) : foodCategoryIconUrlFromName(item.customName)
   return (
     <div className="rounded-control border border-border-subtle bg-surface-card p-2.5">
       <div className="flex items-start gap-2.5">
-        <FoodThumb imageUrl={null} iconUrl={iconUrl} alt={displayName || 'Alimento'} />
+        <FoodThumb imageUrl={imageUrl} iconUrl={iconUrl} alt={displayName || 'Alimento'} />
         <div className="min-w-0 flex-1">
           {item.food ? (
             <>

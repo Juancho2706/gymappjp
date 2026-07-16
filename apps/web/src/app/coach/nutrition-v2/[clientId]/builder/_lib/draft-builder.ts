@@ -32,6 +32,8 @@ export interface BuilderFood {
   fiberG: number | null
   servingSize: number
   servingUnit: string
+  category: string | null
+  media: { bucket: string; objectPath: string; version: number } | null
 }
 
 export interface BuilderItem {

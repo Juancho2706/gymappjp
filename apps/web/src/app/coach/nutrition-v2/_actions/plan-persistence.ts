@@ -158,6 +158,8 @@ function toBuilderFood(row: FoodRow): BuilderFood {
     fiberG: row.fiber_g,
     servingSize: row.serving_size,
     servingUnit: row.serving_unit ?? 'g',
+    category: null,
+    media: null,
   }
 }
 
