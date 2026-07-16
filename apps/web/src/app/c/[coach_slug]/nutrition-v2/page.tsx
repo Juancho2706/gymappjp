@@ -9,7 +9,7 @@ import {
   PlanVersionBadge,
   StrategyBadge,
 } from '@/components/nutrition-v2'
-import { getTodayInSantiago } from '@/lib/date-utils'
+import { formatNutritionShortDate, getTodayInSantiago } from '@/lib/date-utils'
 import { getClientBasePath } from '@/lib/client/base-path'
 import { getClientNutritionUser } from '../nutrition/_data/nutrition-auth.queries'
 import { getClientScope } from '../nutrition/_data/client-scope.queries'
@@ -80,7 +80,7 @@ export default async function StudentNutritionV2Page({ params, searchParams }: P
         {view === 'today' ? <TodayView clientId={user.id} date={today} base={base} /> : null}
         {view === 'plan' ? <PlanView clientId={user.id} date={today} /> : null}
         {view === 'history' ? (
-          <HistoryView clientId={user.id} before={query.before ?? null} base={base} />
+          <HistoryView clientId={user.id} before={query.before ?? null} base={base} today={today} />
         ) : null}
       </div>
     </NutritionPageShell>
@@ -176,10 +176,12 @@ async function HistoryView({
   clientId,
   before,
   base,
+  today,
 }: {
   clientId: string
   before: string | null
   base: string
+  today: string
 }) {
   const history = await getNutritionHistoryV2ForWeb({ clientId, before, pageSize: 14 })
   if (history.items.length === 0) {
@@ -198,7 +200,9 @@ async function HistoryView({
         <NutritionCard key={day.localDate}>
           <div className="flex items-start justify-between gap-3">
             <div>
-              <h2 className="font-display text-lg font-semibold text-strong">{day.localDate}</h2>
+              <h2 className="font-display text-lg font-semibold text-strong">
+                {formatNutritionShortDate(day.localDate, { todayIso: today, relative: true })}
+              </h2>
               <p className="mt-1 text-sm tabular-nums text-muted">
                 {day.activeEntryCount} registro{day.activeEntryCount === 1 ? '' : 's'} · {day.consumed.calories} kcal
               </p>

@@ -211,9 +211,9 @@ export function MacroBudget({
           </Text>
         </View>
       ) : null}
-      <View className={cx('gap-3', compact && 'flex-row')}>
+      <View className="flex-row gap-3">
         {macros.map((macro) => (
-          <View key={macro.macro} className={cx(compact && 'min-w-0 flex-1')}>
+          <View key={macro.macro} className="min-w-0 flex-1">
             <MacroProgress {...macro} compact={compact} />
           </View>
         ))}
@@ -243,7 +243,7 @@ export function MacroProgress({
 
   return (
     <View className={cx('min-w-0', compact ? 'gap-1.5' : 'gap-2')}>
-      <View className="flex-row items-center justify-between gap-2">
+      <View className="flex-row flex-wrap items-center justify-between gap-x-2 gap-y-1">
         <Text className={cx('text-xs font-semibold', macroTextClasses[macro])}>{compact ? meta.shortLabel : meta.label}</Text>
         <Text className="text-[10px] font-medium text-text-muted">{stateLabel}</Text>
       </View>

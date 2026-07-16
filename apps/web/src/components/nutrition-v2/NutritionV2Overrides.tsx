@@ -67,7 +67,7 @@ export function MacroBudget({
           </p>
         </div>
       ) : null}
-      <div className={cx('grid gap-3', compact ? 'grid-cols-3' : 'sm:grid-cols-3')}>
+      <div className="grid grid-cols-3 gap-3">
         {macros.map((macro) => (
           <MacroProgress key={macro.macro} {...macro} compact={compact} />
         ))}
@@ -96,7 +96,7 @@ export function MacroProgress({
 
   return (
     <div className={cx('min-w-0', compact ? 'space-y-1.5' : 'space-y-2')}>
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
         <span className={cx('truncate text-xs font-semibold', macroTextClasses[macro])}>
           {compact ? meta.shortLabel : meta.label}
         </span>

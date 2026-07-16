@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   daysSinceSantiagoInstant,
+  formatNutritionShortDate,
   getNutritionDayOfWeekFromIsoYmdInSantiago,
   getSantiagoIsoYmdForUtcInstant,
   getSantiagoUtcBoundsForDay,
@@ -110,6 +111,33 @@ describe('date-utils — daysSinceSantiagoInstant (banner check-in, off-by-one n
   it('respeta el borde nocturno también en verano (UTC-3)', () => {
     // 2026-01-16T02:00Z = 2026-01-15 23:00 en Santiago → día = 2026-01-15; hoy 2026-01-16 = 1.
     expect(daysSinceSantiagoInstant('2026-01-16T02:00:00.000Z', '2026-01-16')).toBe(1)
+  })
+})
+
+describe('date-utils — formatNutritionShortDate (fecha legible es-CL para el alumno)', () => {
+  it('formato corto sin año cuando es el año en curso ("jue 16 jul")', () => {
+    expect(formatNutritionShortDate('2026-07-16', { todayIso: '2026-07-20' })).toBe('jue 16 jul')
+  })
+
+  it('agrega el año solo cuando difiere del año en curso ("mié 1 ene 2025")', () => {
+    expect(formatNutritionShortDate('2025-01-01', { todayIso: '2026-07-20' })).toBe('mié 1 ene 2025')
+  })
+
+  it('con relative devuelve Hoy / Ayer como palabra', () => {
+    expect(formatNutritionShortDate('2026-07-20', { todayIso: '2026-07-20', relative: true })).toBe('Hoy')
+    expect(formatNutritionShortDate('2026-07-19', { todayIso: '2026-07-20', relative: true })).toBe('Ayer')
+  })
+
+  it('sin relative no usa Hoy/Ayer aunque sea el día de hoy', () => {
+    expect(formatNutritionShortDate('2026-07-20', { todayIso: '2026-07-20' })).toBe('lun 20 jul')
+  })
+
+  it('timezone-safe: 2026-03-01 no se corre al día anterior por zona', () => {
+    expect(formatNutritionShortDate('2026-03-01', { todayIso: '2026-07-20' })).toBe('dom 1 mar')
+  })
+
+  it('string fuera de patrón se devuelve tal cual (defensivo)', () => {
+    expect(formatNutritionShortDate('no-es-fecha')).toBe('no-es-fecha')
   })
 })
 

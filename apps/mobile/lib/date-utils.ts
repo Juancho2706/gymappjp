@@ -140,6 +140,44 @@ export function formatRelativeDate(dateStr: string, todayIso?: string): string {
   return new Date(`${dateStr}T12:00:00`).toLocaleDateString('es-CL', { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
+/**
+ * Formatea una fecha date-only `YYYY-MM-DD` a formato corto humano es-CL
+ * ("mié 16 jul"; agrega el año solo si difiere del año en curso). Timezone-safe:
+ * parsea los componentes a mano y formatea en UTC, así el día no se corre por zona.
+ * Con `relative`, hoy/ayer se muestran como palabra. Fuera de patrón → tal cual.
+ */
+export function formatNutritionShortDate(
+  dateStr: string,
+  options: { todayIso?: string; relative?: boolean } = {},
+): string {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateStr)
+  if (!match) return dateStr
+  const year = Number(match[1])
+  const date = new Date(Date.UTC(year, Number(match[2]) - 1, Number(match[3])))
+  if (Number.isNaN(date.getTime())) return dateStr
+
+  const today = options.todayIso ?? getTodayInSantiago().iso
+  if (options.relative) {
+    const diff = Math.round(
+      (new Date(`${today}T12:00:00`).getTime() - new Date(`${dateStr}T12:00:00`).getTime()) / 86400000,
+    )
+    if (diff === 0) return 'Hoy'
+    if (diff === 1) return 'Ayer'
+  }
+
+  const withYear = year !== Number(today.slice(0, 4))
+  const parts = new Intl.DateTimeFormat('es-CL', {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+    ...(withYear ? { year: 'numeric' } : {}),
+    timeZone: 'UTC',
+  }).formatToParts(date)
+  const part = (type: string) => (parts.find((p) => p.type === type)?.value ?? '').replace(/\.$/, '')
+  const base = `${part('weekday')} ${part('day')} ${part('month')}`
+  return withYear ? `${base} ${part('year')}` : base
+}
+
 export function timeGreeting(now = new Date()): string {
   const h = toSantiagoDate(now).getHours()
   if (h >= 5 && h < 12) return 'Buenos días'

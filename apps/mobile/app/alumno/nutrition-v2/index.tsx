@@ -37,6 +37,7 @@ import {
   type NutritionTodayReadModel,
 } from '@eva/nutrition-v2'
 import { supabase } from '../../../lib/supabase'
+import { formatNutritionShortDate } from '../../../lib/date-utils'
 import { isEnabled } from '../../../lib/flags'
 import { useEntitlements } from '../../../lib/entitlements'
 import { getNutritionHistoryV2, getNutritionPlanV2, getNutritionTodayV2 } from '../../../lib/nutrition-v2.api'
@@ -570,7 +571,7 @@ function TodayTab() {
             <PlanVersionBadge
               version={model.plan.versionNumber}
               status={model.plan.status}
-              effectiveLabel={`desde ${model.plan.effectiveFrom}`}
+              effectiveLabel={`desde ${formatNutritionShortDate(model.plan.effectiveFrom)}`}
             />
           </View>
         ) : null}
@@ -624,7 +625,7 @@ function TodayTab() {
         ) : null}
 
         <Text className="text-center text-xs text-text-muted">
-          Snapshot {model.localDate} · {model.timezone}
+          Registro del día · {formatNutritionShortDate(model.localDate, { relative: true })}
         </Text>
       </ScrollView>
 
@@ -1135,8 +1136,8 @@ function PlanTab() {
         </View>
         <Text className="mt-3 font-display text-2xl font-bold text-text-strong">{summary.name}</Text>
         <Text className="mt-1 text-xs text-text-muted">
-          Vigente desde {summary.effectiveFrom}
-          {summary.effectiveTo ? ` hasta ${summary.effectiveTo}` : ' · versión actual'}
+          Vigente desde {formatNutritionShortDate(summary.effectiveFrom)}
+          {summary.effectiveTo ? ` hasta ${formatNutritionShortDate(summary.effectiveTo)}` : ' · versión actual'}
         </Text>
         <Text className="mt-2 text-xs leading-4 text-text-subtle">{NUTRITION_STRATEGIES[summary.strategy].description}</Text>
       </NutritionCard>
@@ -1156,7 +1157,7 @@ function PlanTab() {
         <PlanVariantCard key={variant.id} variant={variant} />
       ))}
 
-      <Text className="text-center text-xs text-text-muted">Actualizado {plan.asOfDate} · {plan.timezone}</Text>
+      <Text className="text-center text-xs text-text-muted">Actualizado {formatNutritionShortDate(plan.asOfDate, { relative: true })}</Text>
     </ScrollView>
   )
 }
@@ -1489,14 +1490,16 @@ function HistoryDayCard({
       <Pressable
         accessibilityRole="button"
         accessibilityState={{ expanded, disabled: !hasDetail }}
-        accessibilityLabel={`Día ${day.localDate}. ${day.activeEntryCount} registros, ${formatNutritionCalories(day.consumed.calories)} consumidas.`}
+        accessibilityLabel={`Día ${formatNutritionShortDate(day.localDate, { relative: true })}. ${day.activeEntryCount} registros, ${formatNutritionCalories(day.consumed.calories)} consumidas.`}
         disabled={!hasDetail}
         onPress={onToggle}
       >
         <View className="flex-row items-start justify-between gap-3">
           <View className="min-w-0 flex-1">
             <View className="flex-row flex-wrap items-center gap-2">
-              <Text className="font-display text-lg font-semibold text-text-strong">{day.localDate}</Text>
+              <Text className="font-display text-lg font-semibold text-text-strong">
+                {formatNutritionShortDate(day.localDate, { relative: true })}
+              </Text>
               {day.strategy ? <StrategyBadge compact strategy={day.strategy} /> : null}
               {legacy ? (
                 <View className="rounded-pill border border-warning-500/40 bg-warning-500/10 px-2 py-0.5">

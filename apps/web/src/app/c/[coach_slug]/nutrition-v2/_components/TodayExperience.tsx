@@ -19,6 +19,7 @@ import {
   PlanVersionBadge,
   StrategyBadge,
 } from '@/components/nutrition-v2'
+import { formatNutritionShortDate } from '@/lib/date-utils'
 import { TodayModal } from './TodayModal'
 import {
   buildCatalogIntakePayload,
@@ -100,7 +101,7 @@ export function TodayExperience({
           <PlanVersionBadge
             version={today.plan.versionNumber}
             status={today.plan.status}
-            effectiveLabel={`desde ${today.plan.effectiveFrom}`}
+            effectiveLabel={`desde ${formatNutritionShortDate(today.plan.effectiveFrom)}`}
           />
         ) : null}
         {today.snapshotId ? (
