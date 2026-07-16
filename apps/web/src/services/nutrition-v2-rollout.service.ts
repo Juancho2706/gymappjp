@@ -4,6 +4,7 @@ import { cache } from 'react'
 
 import {
   DEFAULT_NUTRITION_V2_ROLLOUT,
+  NutritionV2RolloutConfigSchema,
   resolveNutritionV2Rollout,
   type NutritionV2RolloutConfig,
   type NutritionV2RolloutContext,
@@ -27,8 +28,7 @@ export const readNutritionV2RolloutConfig = cache(
     try {
       const { get } = await import('@vercel/edge-config')
       const raw = await get<unknown>(EDGE_CONFIG_KEY)
-      const decision = resolveNutritionV2Rollout(raw, { surface: 'webStudent' })
-      if (decision.reason === 'invalid_config') return DEFAULT_NUTRITION_V2_ROLLOUT
+      if (!NutritionV2RolloutConfigSchema.safeParse(raw).success) return DEFAULT_NUTRITION_V2_ROLLOUT
       return raw as NutritionV2RolloutConfig
     } catch {
       return DEFAULT_NUTRITION_V2_ROLLOUT

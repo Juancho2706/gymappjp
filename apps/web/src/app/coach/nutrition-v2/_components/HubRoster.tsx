@@ -128,7 +128,7 @@ export function HubRoster({
     filters.search.trim().length > 0 || filters.attention !== 'all' || filters.sort !== 'default'
 
   return (
-    <div>
+    <div data-testid="nutrition-v2-hub-roster">
       <div className="mb-5">
         {metricsAreTotals ? null : (
           <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">

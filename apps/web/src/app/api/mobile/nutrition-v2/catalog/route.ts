@@ -11,6 +11,11 @@ import {
   logNutritionV2Api,
   rpcErrorResponse,
 } from '../_shared'
+import {
+  jsonRateLimited,
+  rateLimitNutritionCatalogReport,
+  rateLimitNutritionCatalogSearch,
+} from '@/lib/rate-limit'
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
@@ -25,6 +30,12 @@ export async function GET(request: NextRequest) {
   if (!gate.ok) {
     logNutritionV2Api({ route, startedAt, status: gate.response.status })
     return gate.response
+  }
+
+  const limited = await rateLimitNutritionCatalogSearch(gate.userId)
+  if (!limited.ok) {
+    logNutritionV2Api({ route, startedAt, status: 429, errorCode: 'RATE_LIMIT', rolloutReason: gate.rolloutReason })
+    return jsonRateLimited(limited.retryAfter)
   }
 
   const operation = request.nextUrl.searchParams.get('operation') ?? 'search'
@@ -113,6 +124,12 @@ export async function POST(request: NextRequest) {
   if (!gate.ok) {
     logNutritionV2Api({ route, startedAt, status: gate.response.status })
     return gate.response
+  }
+
+  const limited = await rateLimitNutritionCatalogReport(gate.userId)
+  if (!limited.ok) {
+    logNutritionV2Api({ route, startedAt, status: 429, errorCode: 'RATE_LIMIT', rolloutReason: gate.rolloutReason })
+    return jsonRateLimited(limited.retryAfter)
   }
 
   const body = await request.json().catch(() => null)

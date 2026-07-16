@@ -176,22 +176,24 @@ export default async function CoachNutritionV2ClientPage({ params, searchParams 
           seguir apuntando al plan anterior o venir vacio si se genero antes de publicar el nuevo:
           eso NO oculta la ficha, se refleja con un aviso inline mas abajo. */}
       {!detail.plan.plan ? (
-        <NutritionStatePanel
-          illustration="sin-plan"
-          title="Sin plan vigente"
-          description="Crea y publica un plan para revisar objetivos y adherencia."
-          action={
-            <Link
-              href={`/coach/nutrition-v2/${clientId}/builder`}
-              className="inline-flex min-h-11 items-center gap-2 rounded-control bg-primary/100 px-4 text-sm font-semibold text-white"
-            >
-              <Plus className="h-4 w-4" />
-              Crear plan
-            </Link>
-          }
-        />
+        <div data-testid="nutrition-v2-plan-empty">
+          <NutritionStatePanel
+            illustration="sin-plan"
+            title="Sin plan vigente"
+            description="Crea y publica un plan para revisar objetivos y adherencia."
+            action={
+              <Link
+                href={`/coach/nutrition-v2/${clientId}/builder`}
+                className="inline-flex min-h-11 items-center gap-2 rounded-control bg-primary/100 px-4 text-sm font-semibold text-white"
+              >
+                <Plus className="h-4 w-4" />
+                Crear plan
+              </Link>
+            }
+          />
+        </div>
       ) : (
-        <div className="space-y-5">
+        <div className="space-y-5" data-testid="nutrition-v2-plan-vigente">
           <div className="flex flex-wrap items-center gap-2">
             <StrategyBadge strategy={(detail.today.plan ?? detail.plan.plan).strategy} />
             <PlanVersionBadge

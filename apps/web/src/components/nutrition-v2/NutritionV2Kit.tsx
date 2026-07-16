@@ -379,7 +379,7 @@ export function CoachAttentionCard({ item, onAction }: { item: NutritionAttentio
 
 export function BuilderStepList({ steps }: { steps: NutritionBuilderStepModel[] }) {
   return (
-    <nav aria-label="Pasos del constructor" className="rounded-card border border-border-subtle bg-surface-card p-3">
+    <nav data-testid="nutrition-v2-builder-stepper" aria-label="Pasos del constructor" className="rounded-card border border-border-subtle bg-surface-card p-3">
       <ol className="space-y-1">
         {steps.map((step, index) => (
           <li key={step.id}>

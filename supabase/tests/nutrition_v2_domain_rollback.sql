@@ -20,6 +20,12 @@ create temporary table nutrition_v2_test_context (
   variant_id uuid not null,
   slot_id uuid not null,
   item_id uuid not null,
+  plan2_id uuid not null,
+  version2_id uuid not null,
+  variant2_id uuid not null,
+  plan3_id uuid not null,
+  version3_id uuid not null,
+  other_coach_id uuid not null,
   test_date date not null
 ) on commit drop;
 
@@ -33,6 +39,12 @@ insert into nutrition_v2_test_context (
   variant_id,
   slot_id,
   item_id,
+  plan2_id,
+  version2_id,
+  variant2_id,
+  plan3_id,
+  version3_id,
+  other_coach_id,
   test_date
 )
 select
@@ -43,11 +55,18 @@ select
   gen_random_uuid(),
   gen_random_uuid(),
   gen_random_uuid(),
+  gen_random_uuid(),
+  gen_random_uuid(),
+  gen_random_uuid(),
+  gen_random_uuid(),
+  gen_random_uuid(),
+  gen_random_uuid(),
   date '2099-12-31'
 from public.clients c
 where c.org_id is null
   and c.team_id is null
   and c.coach_id is not null
+  and c.is_archived = false
 limit 1;
 
 do $$
@@ -199,6 +218,129 @@ select
   3
 from nutrition_v2_test_context;
 
+-- Second logical plan (flexible) with a publishable draft. Used to prove the publish
+-- idempotency key is scoped per plan and never leaks a foreign plan's version id.
+insert into public.nutrition_plans_v2 (
+  id,
+  client_id,
+  coach_id,
+  org_id,
+  team_id,
+  name,
+  strategy,
+  created_by,
+  updated_by
+)
+select
+  plan2_id,
+  client_id,
+  coach_id,
+  null,
+  null,
+  'Segundo plan de prueba',
+  'flexible',
+  coach_id,
+  coach_id
+from nutrition_v2_test_context;
+
+insert into public.nutrition_plan_versions_v2 (
+  id,
+  plan_id,
+  version_number,
+  status,
+  strategy,
+  timezone,
+  student_permissions,
+  created_by,
+  updated_by
+)
+select
+  version2_id,
+  plan2_id,
+  1,
+  'draft',
+  'flexible',
+  'America/Santiago',
+  '{"canRegisterFreely":true,"canAdjustPrescribedQuantity":true}'::jsonb,
+  coach_id,
+  coach_id
+from nutrition_v2_test_context;
+
+insert into public.nutrition_day_variants_v2 (
+  id,
+  version_id,
+  variant_key,
+  label,
+  is_default,
+  target_calories,
+  target_protein_g,
+  target_carbs_g,
+  target_fats_g
+)
+select
+  variant2_id,
+  version2_id,
+  'default',
+  'Día base',
+  true,
+  2000,
+  150,
+  220,
+  60
+from nutrition_v2_test_context;
+
+-- Third logical plan, archived, still carrying a draft version. Used to prove the coach hub
+-- attention counter ignores drafts of archived plans (regression of 20260716180000).
+insert into public.nutrition_plans_v2 (
+  id,
+  client_id,
+  coach_id,
+  org_id,
+  team_id,
+  name,
+  strategy,
+  lifecycle_status,
+  archived_at,
+  created_by,
+  updated_by
+)
+select
+  plan3_id,
+  client_id,
+  coach_id,
+  null,
+  null,
+  'Plan archivado de prueba',
+  'flexible',
+  'archived',
+  now(),
+  coach_id,
+  coach_id
+from nutrition_v2_test_context;
+
+insert into public.nutrition_plan_versions_v2 (
+  id,
+  plan_id,
+  version_number,
+  status,
+  strategy,
+  timezone,
+  student_permissions,
+  created_by,
+  updated_by
+)
+select
+  version3_id,
+  plan3_id,
+  1,
+  'draft',
+  'flexible',
+  'America/Santiago',
+  '{}'::jsonb,
+  coach_id,
+  coach_id
+from nutrition_v2_test_context;
+
 do $$
 declare
   ctx nutrition_v2_test_context%rowtype;
@@ -231,6 +373,171 @@ begin
     set current_published_version_id = null
     where id = ctx.plan_id;
     raise exception 'nutrition_v2_plan_pointer_guard_failed';
+  exception
+    when sqlstate '42501' then null;
+  end;
+end;
+$$;
+
+-- Publish idempotency is scoped per plan: the same key retried on the same plan is a no-op,
+-- but that key reused on a DIFFERENT plan must publish that plan's own draft and never return
+-- the foreign plan's version id (regression of the T11 publish-key finding).
+do $$
+declare
+  ctx nutrition_v2_test_context%rowtype;
+  same_plan_id uuid;
+  cross_plan_id uuid;
+  cross_retry_id uuid;
+begin
+  select * into ctx from nutrition_v2_test_context;
+
+  same_plan_id := public.publish_nutrition_plan_v2(
+    ctx.version_id,
+    ctx.test_date,
+    'publish:rollback-smoke:001'
+  );
+  if same_plan_id <> ctx.version_id then
+    raise exception 'SMOKE FALLO: reintento de publish sobre el mismo plan no fue idempotente';
+  end if;
+
+  cross_plan_id := public.publish_nutrition_plan_v2(
+    ctx.version2_id,
+    ctx.test_date,
+    'publish:rollback-smoke:001'
+  );
+  if cross_plan_id = ctx.version_id then
+    raise exception 'SMOKE FALLO: la clave de publish se filtro entre planes distintos';
+  end if;
+  if cross_plan_id <> ctx.version2_id then
+    raise exception 'SMOKE FALLO: publish del segundo plan no devolvio su propia version';
+  end if;
+
+  cross_retry_id := public.publish_nutrition_plan_v2(
+    ctx.version2_id,
+    ctx.test_date,
+    'publish:rollback-smoke:001'
+  );
+  if cross_retry_id <> ctx.version2_id then
+    raise exception 'SMOKE FALLO: reintento de publish del segundo plan no fue idempotente';
+  end if;
+end;
+$$;
+
+-- Coach read models: hub, scoped client detail (which internally drives Today and the Plan
+-- read model) and the paginated history page.
+do $$
+declare
+  ctx nutrition_v2_test_context%rowtype;
+  hub jsonb;
+  found jsonb := null;
+  detail jsonb;
+  history jsonb;
+  cursor_updated timestamptz := null;
+  cursor_client uuid := null;
+  page_count integer := 0;
+begin
+  select * into ctx from nutrition_v2_test_context;
+
+  -- Walk the keyset pages until the synthetic client surfaces on its coach roster.
+  loop
+    page_count := page_count + 1;
+    hub := public.get_nutrition_coach_hub_scoped_v2(
+      'standalone',
+      null,
+      null,
+      cursor_updated,
+      cursor_client,
+      50
+    );
+    if jsonb_typeof(hub -> 'items') <> 'array' then
+      raise exception 'SMOKE FALLO: el hub del coach no devolvio items como arreglo';
+    end if;
+
+    select elem into found
+    from jsonb_array_elements(hub -> 'items') as t(elem)
+    where (elem ->> 'clientId')::uuid = ctx.client_id
+    limit 1;
+
+    exit when found is not null;
+    exit when not coalesce((hub ->> 'hasMore')::boolean, false);
+    cursor_updated := (hub #>> '{nextCursor,updatedAt}')::timestamptz;
+    cursor_client := (hub #>> '{nextCursor,clientId}')::uuid;
+    exit when page_count > 500;
+  end loop;
+
+  if found is null then
+    raise exception 'SMOKE FALLO: el cliente sintetico no aparece en el hub del coach';
+  end if;
+  if found ->> 'planId' is null then
+    raise exception 'SMOKE FALLO: el hub no muestra plan asignado tras publicar';
+  end if;
+  -- The only draft in play belongs to the archived plan, so the attention counter must be zero.
+  if coalesce((found ->> 'pendingDrafts')::integer, -1) <> 0 then
+    raise exception 'SMOKE FALLO: pendingDrafts conto borradores de un plan archivado';
+  end if;
+  if found ->> 'attentionReason' = 'draft_pending' then
+    raise exception 'SMOKE FALLO: attentionReason marca borrador pendiente de un plan archivado';
+  end if;
+
+  detail := public.get_nutrition_client_detail_scoped_v2(
+    ctx.client_id,
+    'standalone',
+    null,
+    null,
+    ctx.test_date,
+    'America/Santiago'
+  );
+  if jsonb_typeof(detail -> 'today') <> 'object' then
+    raise exception 'SMOKE FALLO: el detalle scoped no trae el bloque de hoy';
+  end if;
+  if jsonb_typeof(detail #> '{plan,plan}') is distinct from 'object' then
+    raise exception 'SMOKE FALLO: el detalle scoped trae plan nulo tras publicar';
+  end if;
+  if jsonb_typeof(detail -> 'recentDays') <> 'array' then
+    raise exception 'SMOKE FALLO: el detalle scoped no trae dias recientes como arreglo';
+  end if;
+
+  history := public.get_nutrition_history_page_v2(ctx.client_id, null, 14);
+  if jsonb_typeof(history -> 'items') <> 'array' then
+    raise exception 'SMOKE FALLO: la pagina de historial no devolvio items como arreglo';
+  end if;
+  if history -> 'hasMore' is null then
+    raise exception 'SMOKE FALLO: la pagina de historial no trae la bandera hasMore';
+  end if;
+end;
+$$;
+
+-- Cross-tenant denial: a synthetic coach with no relationship to the client is rejected with
+-- 42501 by both the scoped detail and the history page.
+select set_config(
+  'request.jwt.claim.sub',
+  (select other_coach_id::text from nutrition_v2_test_context),
+  true
+);
+
+do $$
+declare
+  ctx nutrition_v2_test_context%rowtype;
+begin
+  select * into ctx from nutrition_v2_test_context;
+
+  begin
+    perform public.get_nutrition_client_detail_scoped_v2(
+      ctx.client_id,
+      'standalone',
+      null,
+      null,
+      ctx.test_date,
+      'America/Santiago'
+    );
+    raise exception 'SMOKE FALLO: el detalle de un cliente ajeno no fue denegado';
+  exception
+    when sqlstate '42501' then null;
+  end;
+
+  begin
+    perform public.get_nutrition_history_page_v2(ctx.client_id, null, 14);
+    raise exception 'SMOKE FALLO: el historial de un cliente ajeno no fue denegado';
   exception
     when sqlstate '42501' then null;
   end;
@@ -387,6 +694,50 @@ begin
   if matched_rows <> 1 then
     raise exception 'nutrition_v2_history_adapter_failed';
   end if;
+end;
+$$;
+
+-- T11 guard regression: a student owns a genuine V1 row (no idempotency key) and must NOT be
+-- able to forge a canonical V2 entry by setting idempotency_key directly. occurred_at and
+-- timezone are supplied so the write satisfies the occurred/timezone CHECK — the only thing
+-- allowed to reject it is the mutation guard. If the guard is unpatched the UPDATE succeeds and
+-- this block fails loudly instead of silently.
+do $$
+declare
+  ctx nutrition_v2_test_context%rowtype;
+  legacy_entry_id uuid;
+begin
+  select * into ctx from nutrition_v2_test_context;
+
+  insert into public.nutrition_intake_entries (
+    client_id,
+    log_date,
+    quantity,
+    unit,
+    source,
+    capture_method,
+    custom_name
+  ) values (
+    ctx.client_id,
+    ctx.test_date,
+    100,
+    'g',
+    'offplan',
+    'manual',
+    'Registro V1 de prueba'
+  )
+  returning id into legacy_entry_id;
+
+  begin
+    update public.nutrition_intake_entries
+    set idempotency_key = 'promote:rollback-smoke:001',
+        occurred_at = timestamptz '2099-12-31 18:00:00-03',
+        timezone = 'America/Santiago'
+    where id = legacy_entry_id;
+    raise exception 'SMOKE FALLO: promocion V1->V2 permitida (guard sin parchear)';
+  exception
+    when sqlstate '42501' then null;
+  end;
 end;
 $$;
 

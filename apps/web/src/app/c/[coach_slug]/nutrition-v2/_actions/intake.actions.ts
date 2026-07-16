@@ -9,6 +9,7 @@ import {
   type NutritionIntakeMutation,
 } from '@eva/nutrition-v2'
 import { createClient } from '@/lib/supabase/server'
+import { rateLimitNutritionCatalogSearch, rateLimitNutritionIntake } from '@/lib/rate-limit'
 import { isNutritionV2Enabled } from '@/services/nutrition-v2-rollout.service'
 import { getClientNutritionUser } from '../../nutrition/_data/nutrition-auth.queries'
 import { getClientScope } from '../../nutrition/_data/client-scope.queries'
@@ -91,6 +92,7 @@ function zodFields(error: z.ZodError): ActionFailure['fields'] {
  */
 async function authorizeStudentWrite(
   clientId: string,
+  limiter: 'intake' | 'catalog-search' = 'intake',
 ): Promise<{ ok: true; supabase: RpcClient; userId: string } | ActionFailure> {
   const { user, hasClientRow } = await getClientNutritionUser()
   if (!user || !hasClientRow) {
@@ -98,6 +100,15 @@ async function authorizeStudentWrite(
   }
   if (user.id !== clientId) {
     return fail('CLIENT_SCOPE_MISMATCH', 'El registro no pertenece a tu cuenta.')
+  }
+
+  // Limite por alumno autenticado, antes de tocar la base (no hay IP en una server action).
+  const limited =
+    limiter === 'catalog-search'
+      ? await rateLimitNutritionCatalogSearch(user.id)
+      : await rateLimitNutritionIntake(user.id)
+  if (!limited.ok) {
+    return fail('RATE_LIMITED', 'Demasiadas solicitudes. Espera un momento y vuelve a intentar.')
   }
 
   const scope = await getClientScope(user.id)
@@ -265,7 +276,7 @@ export async function searchFoodCatalogAction(
     return fail('INVALID_PAYLOAD', 'Búsqueda inválida.', zodFields(parsed.error))
   }
 
-  const auth = await authorizeStudentWrite(parsed.data.clientId)
+  const auth = await authorizeStudentWrite(parsed.data.clientId, 'catalog-search')
   if (!auth.ok) return auth
 
   const { data, error } = await auth.supabase.rpc('search_food_catalog_v2', {

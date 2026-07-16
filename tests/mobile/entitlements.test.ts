@@ -4,12 +4,15 @@
 import { describe, it, expect } from 'vitest'
 import {
     DEFAULT_CONFIG,
+    ENTITLEMENTS_CACHE_TTL_MS,
     MODULE_KEYS,
     hasModuleIn,
     normalizeConfig,
     parseCachedConfig,
+    parseCachedConfigEnvelope,
     resolveEffectiveModules,
     serializeConfig,
+    serializeConfigEnvelope,
     type MobileConfig,
 } from '../../apps/mobile/lib/entitlements-core'
 
@@ -117,5 +120,47 @@ describe('entitlements-core: cache serialize/parse', () => {
         expect(parsed.enabledModules).toEqual(['cardio'])
         expect(parsed.featurePrefs.nutritionEnabled).toBe(true)
         expect(parsed.flags).toEqual({})
+    })
+})
+
+describe('entitlements-core: envelope TTL de flags de rollout V2', () => {
+    const now = 1_000_000_000_000
+    const cfg = normalizeConfig({
+        enabledModules: ['cardio'],
+        flags: { executorV2: true, nutritionV2Coach: true, nutritionV2Student: true },
+    })
+
+    it('envelope fresco (dentro del TTL): los flags de rollout V2 cacheados aplican', () => {
+        const raw = serializeConfigEnvelope(cfg, now)
+        const parsed = parseCachedConfigEnvelope(raw, now + ENTITLEMENTS_CACHE_TTL_MS - 1)
+        expect(parsed.flags.nutritionV2Coach).toBe(true)
+        expect(parsed.flags.nutritionV2Student).toBe(true)
+        expect(parsed.flags.executorV2).toBe(true)
+        expect(parsed.enabledModules).toEqual(['cardio'])
+    })
+
+    it('envelope vencido: descarta SOLO los flags de rollout V2 (fail-closed), conserva el resto', () => {
+        const raw = serializeConfigEnvelope(cfg, now)
+        const parsed = parseCachedConfigEnvelope(raw, now + ENTITLEMENTS_CACHE_TTL_MS + 1)
+        expect('nutritionV2Coach' in parsed.flags).toBe(false)
+        expect('nutritionV2Student' in parsed.flags).toBe(false)
+        // executorV2 (no es rollout) y los modulos comerciales sobreviven al vencimiento.
+        expect(parsed.flags.executorV2).toBe(true)
+        expect(parsed.enabledModules).toEqual(['cardio'])
+    })
+
+    it('formato viejo sin timestamp (config directa) => descarta flags de rollout por no poder fecharlos', () => {
+        const legacy = serializeConfig(cfg)
+        const parsed = parseCachedConfigEnvelope(legacy, now)
+        expect('nutritionV2Coach' in parsed.flags).toBe(false)
+        expect('nutritionV2Student' in parsed.flags).toBe(false)
+        expect(parsed.flags.executorV2).toBe(true)
+        expect(parsed.enabledModules).toEqual(['cardio'])
+    })
+
+    it('cache nula / corrupta => DEFAULT_CONFIG (nunca lanza)', () => {
+        expect(parseCachedConfigEnvelope(null, now)).toEqual(DEFAULT_CONFIG)
+        expect(parseCachedConfigEnvelope('', now)).toEqual(DEFAULT_CONFIG)
+        expect(parseCachedConfigEnvelope('{no es json', now)).toEqual(DEFAULT_CONFIG)
     })
 })

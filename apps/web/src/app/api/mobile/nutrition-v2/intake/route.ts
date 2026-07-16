@@ -12,6 +12,7 @@ import {
   rpcErrorResponse,
   type NutritionV2ApiGate,
 } from '../_shared'
+import { jsonRateLimited, rateLimitNutritionIntake } from '@/lib/rate-limit'
 
 const ResponseIdSchema = z.string().uuid()
 
@@ -97,6 +98,12 @@ export async function POST(request: NextRequest) {
   if (!gate.ok) {
     logNutritionV2Api({ route, startedAt, status: gate.response.status })
     return gate.response
+  }
+
+  const limited = await rateLimitNutritionIntake(gate.userId)
+  if (!limited.ok) {
+    logNutritionV2Api({ route, startedAt, status: 429, errorCode: 'RATE_LIMIT', rolloutReason: gate.rolloutReason })
+    return jsonRateLimited(limited.retryAfter)
   }
 
   const body = await request.json().catch(() => null)

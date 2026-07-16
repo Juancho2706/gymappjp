@@ -3,6 +3,7 @@ import 'server-only'
 import { z } from 'zod'
 import type { NutritionPlanDraft } from '@eva/nutrition-v2'
 import { createClient } from '@/lib/supabase/server'
+import { rateLimitNutritionCatalogSearch, rateLimitNutritionCoachWrite } from '@/lib/rate-limit'
 import { getPreferredWorkspaceForRender } from '@/services/auth/workspace-render-cache'
 import { isNutritionV2Enabled } from '@/services/nutrition-v2-rollout.service'
 import { nutritionV2CoachScopeFromWorkspace } from '@/services/nutrition-v2-read.service'
@@ -99,9 +100,23 @@ export interface AuthorizedCoach {
   workspace: WorkspaceSummary | null
 }
 
-export async function authorizeCoach(clientId: string): Promise<AuthorizedCoach | ActionFailure> {
+export async function authorizeCoach(
+  clientId: string,
+  limiter: 'coach-write' | 'catalog-search' = 'coach-write',
+): Promise<AuthorizedCoach | ActionFailure> {
   const { user } = await getNutritionPlansPageCoach()
   if (!user) return fail('UNAUTHENTICATED', 'Debes iniciar sesion para editar planes.')
+
+  // Limite por coach autenticado antes de tocar la base (no hay IP en una server action):
+  // la busqueda de catalogo usa su propio cupo laxo; el resto (publicar/asignar/archivar/crear)
+  // comparte el cupo de escritura.
+  const limited =
+    limiter === 'catalog-search'
+      ? await rateLimitNutritionCatalogSearch(user.id)
+      : await rateLimitNutritionCoachWrite(user.id)
+  if (!limited.ok) {
+    return fail('RATE_LIMITED', 'Demasiadas solicitudes. Espera un momento y vuelve a intentar.')
+  }
 
   const workspace = await getPreferredWorkspaceForRender(user.id)
   const teamId = workspace?.type === 'coach_team' ? workspace.teamId : null

@@ -139,3 +139,56 @@ export function parseCachedConfig(raw: string | null | undefined): MobileConfig 
         return DEFAULT_CONFIG
     }
 }
+
+/**
+ * TTL de los flags de rollout tecnico (Nutricion V2) en la cache de entitlements. El enforcement real
+ * es server-side (el gate movil revalida el rollout por request); este TTL solo acota cuanto tiempo la
+ * UI puede seguir mostrando V2 tras un apagado, sin romper el arranque offline del alumno dentro de la
+ * ventana. Los modulos comerciales conservan su semantica actual (no expiran aca).
+ */
+export const ENTITLEMENTS_CACHE_TTL_MS = 24 * 60 * 60 * 1000
+
+/** Flags fail-closed que NO deben sobrevivir un cache vencido (quedan en su default local `false`). */
+const ROLLOUT_FLAG_KEYS = ['nutritionV2Student', 'nutritionV2Coach'] as const
+
+/** Envelope persistido: config + momento de la ultima obtencion exitosa (para el TTL de rollout). */
+export function serializeConfigEnvelope(config: MobileConfig, fetchedAt: number): string {
+    return JSON.stringify({ fetchedAt, config })
+}
+
+function stripRolloutFlags(config: MobileConfig): MobileConfig {
+    const flags = { ...config.flags }
+    let changed = false
+    for (const key of ROLLOUT_FLAG_KEYS) {
+        if (key in flags) {
+            delete flags[key]
+            changed = true
+        }
+    }
+    return changed ? { ...config, flags } : config
+}
+
+/**
+ * Parsea el envelope cacheado y decide que flags aplican. Si la ultima obtencion exitosa supera el TTL
+ * (o el formato es viejo sin timestamp, imposible de fechar), descarta SOLO los flags de rollout V2 —
+ * los deja fail-closed — y conserva el resto del config. Cualquier corrupcion => DEFAULT_CONFIG.
+ */
+export function parseCachedConfigEnvelope(raw: string | null | undefined, now: number): MobileConfig {
+    if (!raw) return DEFAULT_CONFIG
+    let parsed: unknown
+    try {
+        parsed = JSON.parse(raw)
+    } catch {
+        return DEFAULT_CONFIG
+    }
+    if (!parsed || typeof parsed !== 'object') return DEFAULT_CONFIG
+
+    const envelope = parsed as { fetchedAt?: unknown; config?: unknown }
+    const hasEnvelope =
+        typeof envelope.fetchedAt === 'number' &&
+        !!envelope.config &&
+        typeof envelope.config === 'object'
+    const config = normalizeConfig((hasEnvelope ? envelope.config : parsed) as RawMobileConfig)
+    const fresh = hasEnvelope && now - (envelope.fetchedAt as number) <= ENTITLEMENTS_CACHE_TTL_MS
+    return fresh ? config : stripRolloutFlags(config)
+}

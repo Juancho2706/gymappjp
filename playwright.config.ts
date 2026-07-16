@@ -48,8 +48,8 @@ export default defineConfig({
     {
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] },
-      // tests/separation corre en su propio project (necesita el setup de auth).
-      testIgnore: /tests[\\/]separation[\\/]/,
+      // tests/separation y tests/nutrition-v2 corren en sus propios projects.
+      testIgnore: /tests[\\/](separation|nutrition-v2)[\\/]/,
     },
 
     /* Suite de separación de flujos (standalone / enterprise / team).
@@ -58,6 +58,18 @@ export default defineConfig({
       name: 'separation',
       testMatch: /tests[\\/]separation[\\/].+\.spec\.ts$/,
       dependencies: ['setup'],
+      fullyParallel: false,
+      use: { ...devices['Desktop Chrome'] },
+    },
+
+    /* Nutrición V2 (canary). Los specs 1-4 corren contra el Preview de Vercel
+     * (PLAYWRIGHT_BASE_URL) con las cuentas canary reales y se auto-omiten sin esa env;
+     * fail-closed corre en dev local (sin EDGE_CONFIG). Serial: mutan estado compartido
+     * de un único alumno QA en prod. Cada spec se loguea solo (sin dependencia de 'setup').
+     * Correr con --workers=1. */
+    {
+      name: 'nutrition-v2',
+      testMatch: /tests[\\/]nutrition-v2[\\/].+\.spec\.ts$/,
       fullyParallel: false,
       use: { ...devices['Desktop Chrome'] },
     },
@@ -83,18 +95,23 @@ export default defineConfig({
     // },
   ],
 
-  webServer: {
-    command: 'npm run dev',
-    url: 'http://127.0.0.1:3000',
-    reuseExistingServer: !process.env.CI,
-    timeout: 120_000,
-    // Pass local Supabase vars explicitly so the dev server never uses prod DB
-    // regardless of what .env.local contains.
-    env: {
-      NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY!,
-      NEXT_PUBLIC_SITE_URL: process.env.NEXT_PUBLIC_SITE_URL ?? 'http://127.0.0.1:3000',
-    },
-  },
+  // Con PLAYWRIGHT_BASE_URL seteado apuntamos a un servidor remoto (Preview de Vercel /
+  // canary): no levantamos el dev server local. Sin esa env, arranca el dev local contra
+  // Supabase local (comportamiento por defecto de la suite).
+  webServer: process.env.PLAYWRIGHT_BASE_URL
+    ? undefined
+    : {
+        command: 'npm run dev',
+        url: 'http://127.0.0.1:3000',
+        reuseExistingServer: !process.env.CI,
+        timeout: 120_000,
+        // Pass local Supabase vars explicitly so the dev server never uses prod DB
+        // regardless of what .env.local contains.
+        env: {
+          NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL!,
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+          SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY!,
+          NEXT_PUBLIC_SITE_URL: process.env.NEXT_PUBLIC_SITE_URL ?? 'http://127.0.0.1:3000',
+        },
+      },
 });

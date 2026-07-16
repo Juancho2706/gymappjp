@@ -96,7 +96,7 @@ export async function searchFoodCatalogCoachAction(
     return fail('INVALID_PAYLOAD', 'Busqueda invalida.', zodFields(parsed.error))
   }
 
-  const auth = await authorizeCoach(parsed.data.clientId)
+  const auth = await authorizeCoach(parsed.data.clientId, 'catalog-search')
   if (!auth.ok) return auth
 
   const search = await auth.db.rpc('search_food_catalog_v2', {

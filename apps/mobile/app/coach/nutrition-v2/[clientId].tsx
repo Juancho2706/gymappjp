@@ -18,7 +18,7 @@ import {
   type NutritionClientDetailReadModel,
 } from '@eva/nutrition-v2'
 import { isEnabled } from '../../../lib/flags'
-import { useEntitlements } from '../../../lib/entitlements'
+import { useEntitlements, useNutritionV2CoachFlagForClient } from '../../../lib/entitlements'
 import { useWorkspace } from '../../../lib/workspace'
 import {
   getNutritionClientDetailV2,
@@ -77,7 +77,10 @@ export default function CoachNutritionV2ClientScreen() {
     [workspaceReady, workspaceKind, workspaceTeamId, workspaceOrgId],
   )
   const scopeCacheKey = scope ? nutritionV2CoachScopeCacheKey(scope) : null
-  const enabled = entitlements.ready && isEnabled('nutritionV2Coach')
+  // Canary por alumno: alcanza esta ficha aunque el flag global del coach esté apagado; el flag global
+  // sigue prendiendo V2 por sí solo (OR) sin esperar esta consulta.
+  const clientCanaryV2 = useNutritionV2CoachFlagForClient(clientId)
+  const enabled = entitlements.ready && (isEnabled('nutritionV2Coach') || clientCanaryV2)
   const hasNutritionPro = entitlements.hasModule(NUTRITION_PRO_MODULE_KEY)
 
   useEffect(() => {

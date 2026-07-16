@@ -14,7 +14,7 @@
  * app-wide sin envolver el arbol (mas liviano que el patron ThemeContext y sin tocar _layout).
  * `entitlements-core.ts` concentra la logica PURA testeable; aca solo va la glue de RN.
  */
-import { useSyncExternalStore } from 'react'
+import { useEffect, useState, useSyncExternalStore } from 'react'
 import { AppState, type AppStateStatus } from 'react-native'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { supabase } from './supabase'
@@ -26,9 +26,9 @@ import {
     hasModuleIn,
     isNutritionSectionVisibleIn,
     normalizeConfig,
-    parseCachedConfig,
+    parseCachedConfigEnvelope,
     resolveEffectiveModules,
-    serializeConfig,
+    serializeConfigEnvelope,
     type MobileConfig,
     type ModuleKey,
     type NutritionSectionKey,
@@ -36,6 +36,9 @@ import {
 } from './entitlements-core'
 
 const CACHE_KEY = 'eva_entitlements_config'
+/** TTL corto de la resolucion `nutritionV2Coach` por alumno (canary por alumno alcanzando mobile). */
+const CLIENT_FLAG_TTL_MS = 15 * 60 * 1000
+const CLIENT_FLAG_PREFIX = 'eva_nutrition_v2_coach_flag'
 
 interface StoreState {
     config: MobileConfig
@@ -80,7 +83,7 @@ async function hydrateFromCache(): Promise<void> {
     try {
         const raw = await AsyncStorage.getItem(CACHE_KEY)
         if (!raw) return
-        const cached = parseCachedConfig(raw)
+        const cached = parseCachedConfigEnvelope(raw, Date.now())
         setRemoteFlags(cached.flags)
         setState({ config: cached, ready: true, loading: false })
     } catch {
@@ -97,14 +100,15 @@ async function hasSession(): Promise<boolean> {
     }
 }
 
-function configPath(workspace: ClientActionWorkspace | null): string {
-    if (!workspace) return '/api/mobile/config'
-    const params = [
-        `workspaceKind=${encodeURIComponent(workspace.kind)}`,
-        ...(workspace.teamId ? [`teamId=${encodeURIComponent(workspace.teamId)}`] : []),
-        ...(workspace.orgId ? [`orgId=${encodeURIComponent(workspace.orgId)}`] : []),
-    ].join('&')
-    return `/api/mobile/config?${params}`
+function configPath(workspace: ClientActionWorkspace | null, clientId?: string | null): string {
+    const params: string[] = []
+    if (workspace) {
+        params.push(`workspaceKind=${encodeURIComponent(workspace.kind)}`)
+        if (workspace.teamId) params.push(`teamId=${encodeURIComponent(workspace.teamId)}`)
+        if (workspace.orgId) params.push(`orgId=${encodeURIComponent(workspace.orgId)}`)
+    }
+    if (clientId) params.push(`clientId=${encodeURIComponent(clientId)}`)
+    return params.length ? `/api/mobile/config?${params.join('&')}` : '/api/mobile/config'
 }
 
 async function resolveActiveCoachWorkspace(): Promise<ClientActionWorkspace | null> {
@@ -138,7 +142,7 @@ async function performRefresh(
         setRemoteFlags(config.flags)
         setState({ config, ready: true, loading: false })
         try {
-            await AsyncStorage.setItem(CACHE_KEY, serializeConfig(config))
+            await AsyncStorage.setItem(CACHE_KEY, serializeConfigEnvelope(config, Date.now()))
         } catch {
             /* persistencia best-effort */
         }
@@ -170,6 +174,99 @@ export async function getWorkspaceEntitlements(workspace: ClientActionWorkspace)
     return normalizeConfig(raw)
 }
 
+// --- Flag `nutritionV2Coach` resuelto POR alumno (canary por alumno) --------------------------------
+// El flag global del coach (canary por coach / mode on) sigue prendiendo V2 sin esta consulta; esto
+// solo cubre el caso "canary acotado SOLO por alumno", invisible al flag global. Cache corta memoria +
+// disco por workspace+alumno para no repegar en cada montaje de ficha/constructor.
+
+type ClientFlagEntry = { value: boolean; fetchedAt: number }
+const clientFlagMemory = new Map<string, ClientFlagEntry>()
+
+function clientFlagKey(workspace: ClientActionWorkspace | null, clientId: string): string {
+    const w = workspace ? `${workspace.kind}:${workspace.teamId ?? '-'}:${workspace.orgId ?? '-'}` : 'none'
+    return `${w}:${clientId}`
+}
+
+function isClientFlagFresh(entry: ClientFlagEntry | undefined, now: number): entry is ClientFlagEntry {
+    return !!entry && now - entry.fetchedAt <= CLIENT_FLAG_TTL_MS
+}
+
+async function readClientFlagFromDisk(key: string, now: number): Promise<boolean | null> {
+    try {
+        const raw = await AsyncStorage.getItem(`${CLIENT_FLAG_PREFIX}:${key}`)
+        if (!raw) return null
+        const entry = JSON.parse(raw) as Partial<ClientFlagEntry>
+        if (typeof entry.value !== 'boolean' || typeof entry.fetchedAt !== 'number') return null
+        if (!isClientFlagFresh(entry as ClientFlagEntry, now)) return null
+        clientFlagMemory.set(key, entry as ClientFlagEntry)
+        return entry.value
+    } catch {
+        return null
+    }
+}
+
+async function clearClientFlagDisk(): Promise<void> {
+    try {
+        const keys = (await AsyncStorage.getAllKeys()).filter((k) => k.startsWith(`${CLIENT_FLAG_PREFIX}:`))
+        if (keys.length) await AsyncStorage.multiRemove(keys)
+    } catch {
+        /* best-effort */
+    }
+}
+
+/**
+ * Resuelve `nutritionV2Coach` CON el clientId de la ruta pegando a /api/mobile/config?clientId=…, para
+ * que un canary acotado por alumno alcance la ficha/constructor del coach en mobile. Fail-closed: sin
+ * sesion, sin clientId o ante fallo => `false` (la pantalla cae al flag global por OR). TTL corto en
+ * memoria + disco, key plegada por workspace+alumno.
+ */
+export async function fetchNutritionV2CoachFlagForClient(clientId: string): Promise<boolean> {
+    if (!clientId) return false
+    const now = Date.now()
+    if (!(await hasSession())) return false
+    const workspace = await resolveActiveCoachWorkspace()
+    const key = clientFlagKey(workspace, clientId)
+
+    const memo = clientFlagMemory.get(key)
+    if (isClientFlagFresh(memo, now)) return memo.value
+    const disk = await readClientFlagFromDisk(key, now)
+    if (disk !== null) return disk
+
+    try {
+        const raw = await apiFetch<RawMobileConfig>(configPath(workspace, clientId), { authenticated: true })
+        const value = normalizeConfig(raw).flags.nutritionV2Coach === true
+        const entry: ClientFlagEntry = { value, fetchedAt: now }
+        clientFlagMemory.set(key, entry)
+        void AsyncStorage.setItem(`${CLIENT_FLAG_PREFIX}:${key}`, JSON.stringify(entry)).catch(() => {})
+        return value
+    } catch {
+        return false
+    }
+}
+
+/**
+ * Hook para ficha/constructor/summary del coach: `true` si el rollout `nutritionV2Coach` aplica a ESTE
+ * alumno. Default `false` hasta resolver / ante fallo; la pantalla lo combina por OR con el flag global
+ * (que sigue prendiendo V2 sin esperar esta consulta).
+ */
+export function useNutritionV2CoachFlagForClient(clientId: string | null | undefined): boolean {
+    const [enabled, setEnabled] = useState(false)
+    useEffect(() => {
+        if (!clientId) {
+            setEnabled(false)
+            return
+        }
+        let active = true
+        void fetchNutritionV2CoachFlagForClient(clientId).then((value) => {
+            if (active) setEnabled(value)
+        })
+        return () => {
+            active = false
+        }
+    }, [clientId])
+    return enabled
+}
+
 async function bootstrap(): Promise<void> {
     await hydrateFromCache()
     await refreshEntitlements()
@@ -179,6 +276,8 @@ async function bootstrap(): Promise<void> {
 export function resetEntitlements(): void {
     hydratedFromCache = false
     resetVersion += 1
+    clientFlagMemory.clear()
+    void clearClientFlagDisk()
     clearRemoteFlags()
     setState({ config: DEFAULT_CONFIG, ready: false, loading: false })
     void AsyncStorage.removeItem(CACHE_KEY).catch(() => {})

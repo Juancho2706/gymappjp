@@ -36,6 +36,31 @@ describe('nutrition V2 rollout', () => {
     expect(resolveNutritionV2Rollout(config, { surface: 'webStudent', clientId }).enabled).toBe(true)
     expect(resolveNutritionV2Rollout(config, { surface: 'webCoach', coachId }).reason).toBe('surface_off')
   })
+
+  it('reaches the mobileCoach surface via a client-only canary (drift A)', () => {
+    const config = {
+      mode: 'canary',
+      clientIds: [clientId],
+      coachIds: [],
+      teamIds: [],
+      orgIds: [],
+      surfaces: {
+        webStudent: false,
+        webCoach: false,
+        mobileStudent: false,
+        mobileCoach: true,
+      },
+    }
+
+    // Con el clientId de la ficha en el contexto, un canary acotado solo por alumno alcanza al coach.
+    expect(resolveNutritionV2Rollout(config, { surface: 'mobileCoach', coachId, clientId })).toEqual({
+      enabled: true,
+      mode: 'canary',
+      reason: 'client_canary',
+    })
+    // Sin el clientId (roster global del coach) el alumno no entra al canary del coach => queda en V1.
+    expect(resolveNutritionV2Rollout(config, { surface: 'mobileCoach', coachId }).reason).toBe('not_in_canary')
+  })
 })
 
 describe('nutrition V2 read contracts', () => {

@@ -4,6 +4,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
+import { rateLimitNutritionCoachWrite } from '@/lib/rate-limit'
 import { getPreferredWorkspaceForRender } from '@/services/auth/workspace-render-cache'
 import { isNutritionV2Enabled } from '@/services/nutrition-v2-rollout.service'
 import { nutritionV2CoachScopeFromWorkspace } from '@/services/nutrition-v2-read.service'
@@ -36,11 +37,21 @@ export interface MissingCodeRow {
 type ListSuccess = { ok: true; items: MissingCodeRow[]; hasMore: boolean; nextOffset: number | null }
 type ResolveSuccess = { ok: true }
 
-async function authorizeHubCoach(): Promise<
+async function authorizeHubCoach(
+  enforceCoachWriteLimit = false,
+): Promise<
   { ok: true; db: SupabaseClient; userId: string } | ActionFailure
 > {
   const { user } = await getNutritionPlansPageCoach()
   if (!user) return fail('UNAUTHENTICATED', 'Debes iniciar sesion para gestionar la curacion.')
+
+  // Solo las mutaciones (resolver/crear) consumen cupo; el listado es lectura y no limita.
+  if (enforceCoachWriteLimit) {
+    const limited = await rateLimitNutritionCoachWrite(user.id)
+    if (!limited.ok) {
+      return fail('RATE_LIMITED', 'Demasiadas solicitudes. Espera un momento y vuelve a intentar.')
+    }
+  }
 
   const workspace = await getPreferredWorkspaceForRender(user.id)
   const teamId = workspace?.type === 'coach_team' ? workspace.teamId : null
@@ -138,7 +149,7 @@ export async function resolveMissingFoodCodeHubAction(
   const parsed = ResolveInputSchema.safeParse(input)
   if (!parsed.success) return fail('INVALID_PAYLOAD', 'Datos invalidos.')
 
-  const auth = await authorizeHubCoach()
+  const auth = await authorizeHubCoach(true)
   if (!auth.ok) return auth
 
   const { error } = await auth.db
@@ -182,7 +193,7 @@ export async function createCoachFoodForCurationAction(
   const parsed = CreateAndResolveInputSchema.safeParse(input)
   if (!parsed.success) return fail('INVALID_PAYLOAD', 'El alimento tiene datos invalidos.')
 
-  const auth = await authorizeHubCoach()
+  const auth = await authorizeHubCoach(true)
   if (!auth.ok) return auth
   const { db, userId } = auth
   const data = parsed.data

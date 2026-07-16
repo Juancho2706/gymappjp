@@ -432,6 +432,7 @@ function PrescribedSection({
                       </span>
                     ) : (
                       <NutritionMotionButton
+                        data-testid="nutrition-v2-lo-comi"
                         tone="success"
                         className="min-h-10 px-3 text-xs"
                         pending={isPending && busyId === `eat:${item.id}`}

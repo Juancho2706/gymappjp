@@ -470,3 +470,141 @@ export async function rateLimitExerciseMediaUploadByIp(
         return { ok: true }
     }
 }
+
+// ── Nutrición V2 rate limiters ────────────────────────────────────────────────
+
+let nutritionIntakeRatelimit: Ratelimit | null | undefined
+let nutritionCatalogSearchRatelimit: Ratelimit | null | undefined
+let nutritionCatalogReportRatelimit: Ratelimit | null | undefined
+let nutritionCoachWriteRatelimit: Ratelimit | null | undefined
+
+function getNutritionIntakeRatelimit(): Ratelimit | null {
+    if (nutritionIntakeRatelimit !== undefined) return nutritionIntakeRatelimit
+    const redis = redisFromEnv()
+    if (!redis) { nutritionIntakeRatelimit = null; return null }
+    nutritionIntakeRatelimit = new Ratelimit({
+        redis,
+        // 30/min por alumno: cubre registrar/corregir/retirar/cerrar dia. Un alumno real
+        // registra ~1 vez por comida; 30/min da margen a reintentos de UI sin abrir la puerta
+        // a scripting.
+        limiter: Ratelimit.slidingWindow(30, '1 m'),
+        prefix: 'ratelimit:nutrition-v2-intake',
+    })
+    return nutritionIntakeRatelimit
+}
+
+function getNutritionCatalogSearchRatelimit(): Ratelimit | null {
+    if (nutritionCatalogSearchRatelimit !== undefined) return nutritionCatalogSearchRatelimit
+    const redis = redisFromEnv()
+    if (!redis) { nutritionCatalogSearchRatelimit = null; return null }
+    nutritionCatalogSearchRatelimit = new Ratelimit({
+        redis,
+        // 60/min: la busqueda de catalogo es incremental (debounce) -> ventana generosa para el
+        // tecleo legitimo, sin habilitar scraping del catalogo. Espeja rateLimitCoachSearch.
+        limiter: Ratelimit.slidingWindow(60, '1 m'),
+        prefix: 'ratelimit:nutrition-v2-catalog-search',
+    })
+    return nutritionCatalogSearchRatelimit
+}
+
+function getNutritionCatalogReportRatelimit(): Ratelimit | null {
+    if (nutritionCatalogReportRatelimit !== undefined) return nutritionCatalogReportRatelimit
+    const redis = redisFromEnv()
+    if (!redis) { nutritionCatalogReportRatelimit = null; return null }
+    nutritionCatalogReportRatelimit = new Ratelimit({
+        redis,
+        limiter: Ratelimit.slidingWindow(10, '1 h'),
+        prefix: 'ratelimit:nutrition-v2-catalog-report',
+    })
+    return nutritionCatalogReportRatelimit
+}
+
+function getNutritionCoachWriteRatelimit(): Ratelimit | null {
+    if (nutritionCoachWriteRatelimit !== undefined) return nutritionCoachWriteRatelimit
+    const redis = redisFromEnv()
+    if (!redis) { nutritionCoachWriteRatelimit = null; return null }
+    nutritionCoachWriteRatelimit = new Ratelimit({
+        redis,
+        // 20/min por coach: cubre publicar/asignar/archivar plan y crear alimento/resolver codigo.
+        // Son gestos manuales poco frecuentes por diseno de UI (no loops); 20/min es holgado para
+        // un coach armando un plan a mano.
+        limiter: Ratelimit.slidingWindow(20, '1 m'),
+        prefix: 'ratelimit:nutrition-v2-coach-write',
+    })
+    return nutritionCoachWriteRatelimit
+}
+
+/**
+ * fail-OPEN (espeja rateLimitRecipesSearch/rateLimitPayment): sin Redis permite. Es data de
+ * nutricion del propio alumno y la RLS + el RPC DEFINER ya acotan el alcance; negar el registro
+ * de una comida real por una caida de Redis es peor que dejar pasar.
+ */
+export async function rateLimitNutritionIntake(
+    userId: string
+): Promise<{ ok: true } | { ok: false; retryAfter: number }> {
+    const limiter = getNutritionIntakeRatelimit()
+    if (!limiter) return { ok: true }
+    try {
+        const res = await limiter.limit(`nutrition-v2-intake:${userId}`)
+        await res.pending.catch(() => undefined)
+        if (res.success) return { ok: true }
+        return { ok: false, retryAfter: Math.max(1, Math.ceil((res.reset - Date.now()) / 1000)) }
+    } catch {
+        return { ok: true }
+    }
+}
+
+/** fail-OPEN (espeja rateLimitCoachSearch): la busqueda de catalogo es lectura; sin Redis permite. */
+export async function rateLimitNutritionCatalogSearch(
+    userId: string
+): Promise<{ ok: true } | { ok: false; retryAfter: number }> {
+    const limiter = getNutritionCatalogSearchRatelimit()
+    if (!limiter) return { ok: true }
+    try {
+        const res = await limiter.limit(`nutrition-v2-catalog-search:${userId}`)
+        await res.pending.catch(() => undefined)
+        if (res.success) return { ok: true }
+        return { ok: false, retryAfter: Math.max(1, Math.ceil((res.reset - Date.now()) / 1000)) }
+    } catch {
+        return { ok: true }
+    }
+}
+
+/**
+ * fail-CLOSED (espeja rateLimitCardChange): reportar un codigo faltante es el unico write de
+ * "curacion" que un alumno no-coach puede disparar, y podria usarse para llenar la cola de
+ * codigos con basura. Negamos antes que dejar pasar por una caida de Redis. 10/hora por alumno.
+ */
+export async function rateLimitNutritionCatalogReport(
+    userId: string
+): Promise<{ ok: true } | { ok: false; retryAfter: number }> {
+    const limiter = getNutritionCatalogReportRatelimit()
+    if (!limiter) return { ok: false, retryAfter: 3600 }
+    try {
+        const res = await limiter.limit(`nutrition-v2-catalog-report:${userId}`)
+        await res.pending.catch(() => undefined)
+        if (res.success) return { ok: true }
+        return { ok: false, retryAfter: Math.max(1, Math.ceil((res.reset - Date.now()) / 1000)) }
+    } catch {
+        return { ok: false, retryAfter: 3600 }
+    }
+}
+
+/**
+ * fail-OPEN (mismo criterio que rateLimitAdmin): accion humana de un profesional autenticado,
+ * no mueve dinero directo. Sin Redis permite. 20/min por coach.
+ */
+export async function rateLimitNutritionCoachWrite(
+    coachId: string
+): Promise<{ ok: true } | { ok: false; retryAfter: number }> {
+    const limiter = getNutritionCoachWriteRatelimit()
+    if (!limiter) return { ok: true }
+    try {
+        const res = await limiter.limit(`nutrition-v2-coach-write:${coachId}`)
+        await res.pending.catch(() => undefined)
+        if (res.success) return { ok: true }
+        return { ok: false, retryAfter: Math.max(1, Math.ceil((res.reset - Date.now()) / 1000)) }
+    } catch {
+        return { ok: true }
+    }
+}

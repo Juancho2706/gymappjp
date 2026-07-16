@@ -8,6 +8,7 @@ import {
   type FoodCatalogCursor,
 } from '@eva/nutrition-v2'
 import { createClient } from '@/lib/supabase/server'
+import { rateLimitNutritionCatalogSearch } from '@/lib/rate-limit'
 import { getPreferredWorkspaceForRender } from '@/services/auth/workspace-render-cache'
 import { isNutritionV2Enabled } from '@/services/nutrition-v2-rollout.service'
 import { nutritionV2CoachScopeFromWorkspace } from '@/services/nutrition-v2-read.service'
@@ -49,6 +50,11 @@ const SearchInputSchema = z.object({
 async function authorizeHubCoach(): Promise<{ ok: true; db: CatalogRpc } | ActionFailure> {
   const { user } = await getNutritionPlansPageCoach()
   if (!user) return fail('UNAUTHENTICATED', 'Debes iniciar sesion para ver el catalogo.')
+
+  const limited = await rateLimitNutritionCatalogSearch(user.id)
+  if (!limited.ok) {
+    return fail('RATE_LIMITED', 'Demasiadas solicitudes. Espera un momento y vuelve a intentar.')
+  }
 
   const workspace = await getPreferredWorkspaceForRender(user.id)
   const teamId = workspace?.type === 'coach_team' ? workspace.teamId : null

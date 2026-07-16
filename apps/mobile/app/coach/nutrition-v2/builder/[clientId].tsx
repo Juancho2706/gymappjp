@@ -32,7 +32,7 @@ import {
 } from '@eva/nutrition-v2'
 import { useTheme } from '../../../../context/ThemeContext'
 import { isEnabled } from '../../../../lib/flags'
-import { useEntitlements } from '../../../../lib/entitlements'
+import { useEntitlements, useNutritionV2CoachFlagForClient } from '../../../../lib/entitlements'
 import { useWorkspace } from '../../../../lib/workspace'
 import { nutritionV2CoachScope } from '../../../../lib/nutrition-v2.api'
 import { searchFoodCatalogV2 } from '../../../../lib/nutrition-v2-catalog.api'
@@ -104,7 +104,10 @@ export default function CoachNutritionV2BuilderScreen() {
     () => (workspaceReady ? nutritionV2CoachScope({ kind, teamId, orgId }) : null),
     [workspaceReady, kind, teamId, orgId],
   )
-  const enabled = entitlements.ready && isEnabled('nutritionV2Coach')
+  // Canary por alumno: alcanza el constructor aunque el flag global del coach esté apagado; el flag
+  // global sigue prendiendo V2 por sí solo (OR) sin esperar esta consulta.
+  const clientCanaryV2 = useNutritionV2CoachFlagForClient(clientId)
+  const enabled = entitlements.ready && (isEnabled('nutritionV2Coach') || clientCanaryV2)
   const hasNutritionPro = entitlements.hasModule(NUTRITION_PRO_MODULE_KEY)
 
   const [state, dispatch] = useReducer(builderReducer, today, createEmptyBuilderState)
