@@ -10,6 +10,8 @@ import {
   NutritionMotionButton,
   NutritionStatePanel,
   SyncOfflineState,
+  CelebrationOverlay,
+  type CelebrationInstance,
 } from '../../../components/nutrition-v2'
 import type { FoodCatalogItem } from '@eva/nutrition-v2'
 import { isEnabled } from '../../../lib/flags'
@@ -32,6 +34,8 @@ import {
   newNutritionV2OperationId,
   submitRecordIntake,
 } from '../../../lib/nutrition-v2-intake-runner'
+import { decideMealLoggedCelebration, type CelebrationDecision } from '../../../lib/nutrition-v2-celebrations'
+import { claimMealLoggedCelebration } from '../../../lib/nutrition-v2-celebrations.storage'
 
 const SEARCH_DEBOUNCE_MS = 300
 
@@ -66,6 +70,12 @@ export default function NutritionV2AddFoodScreen() {
   const [assignSlot, setAssignSlot] = useState(true)
   const [saving, setSaving] = useState(false)
   const [saveState, setSaveState] = useState<'idle' | 'queued' | 'error'>('idle')
+  const [celebration, setCelebration] = useState<CelebrationInstance | null>(null)
+  const celebrationNonce = useRef(0)
+  const fireCelebration = useCallback((decision: CelebrationDecision) => {
+    celebrationNonce.current += 1
+    setCelebration({ ...decision, nonce: celebrationNonce.current })
+  }, [])
 
   const date = useMemo(todayInSantiago, [])
   const enabled = entitlements.ready && isEnabled('nutritionV2Student')
@@ -184,7 +194,16 @@ export default function NutritionV2AddFoodScreen() {
             ? Haptics.NotificationFeedbackType.Success
             : Haptics.NotificationFeedbackType.Warning,
         )
-        router.back()
+        const claimed = await claimMealLoggedCelebration(userId, date)
+        const decision = decideMealLoggedCelebration(!claimed)
+        if (decision && mountedRef.current) {
+          fireCelebration(decision)
+          setTimeout(() => {
+            if (mountedRef.current) router.back()
+          }, 1300)
+        } else {
+          router.back()
+        }
         return
       }
       setSaveState('error')
@@ -193,7 +212,7 @@ export default function NutritionV2AddFoodScreen() {
     } finally {
       if (mountedRef.current) setSaving(false)
     }
-  }, [assignSlot, date, deviceId, parsedQuantity, router, saving, selected, slotCode, unit, userId, validQuantity])
+  }, [assignSlot, date, deviceId, fireCelebration, parsedQuantity, router, saving, selected, slotCode, unit, userId, validQuantity])
 
   if (!entitlements.ready) {
     return <View className="flex-1 bg-surface-app" />
@@ -221,6 +240,7 @@ export default function NutritionV2AddFoodScreen() {
   }
 
   return (
+    <View className="flex-1 bg-surface-app">
     <ScrollView
       className="flex-1 bg-surface-app"
       contentContainerClassName="gap-5 px-4 pb-12 pt-5"
@@ -415,6 +435,8 @@ export default function NutritionV2AddFoodScreen() {
         </View>
       )}
     </ScrollView>
+      <CelebrationOverlay celebration={celebration} onDone={() => setCelebration(null)} />
+    </View>
   )
 }
 

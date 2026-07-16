@@ -83,7 +83,7 @@ export function CurationQueue({ countryCode = 'CL' }: { countryCode?: string }) 
 
   if (error) {
     return (
-      <NutritionStatePanel icon="error" tone="danger" title="No se pudo cargar la cola" description={error} />
+      <NutritionStatePanel icon="error" tone="danger" illustration="error-amable" title="No se pudo cargar la cola" description={error} />
     )
   }
 
@@ -91,6 +91,7 @@ export function CurationQueue({ countryCode = 'CL' }: { countryCode?: string }) 
     return (
       <NutritionStatePanel
         icon="empty"
+        illustration="catalogo-vacio"
         title="Sin codigos por revisar"
         description="Cuando tus alumnos escaneen productos que aun no existen en el catalogo local, apareceran aqui para que los vincules."
       />

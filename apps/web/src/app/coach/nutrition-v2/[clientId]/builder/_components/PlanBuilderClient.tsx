@@ -2,6 +2,7 @@
 
 import { useMemo, useReducer, useRef, useState, useTransition } from 'react'
 import Link from 'next/link'
+import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { AlertTriangle, Check, ChevronLeft, ChevronRight, Loader2, Plus, Search, Trash2 } from 'lucide-react'
 import { BuilderStepList, MacroBudget, NutritionCard, StrategyBadge } from '@/components/nutrition-v2'
@@ -537,15 +538,27 @@ function StrategyStep({
         })}
       </div>
       {!nutritionProEnabled ? (
-        <p className="text-xs text-muted">
-          La estrategia hibrida es parte de Nutricion Pro.{' '}
-          <Link
-            href={NUTRITION_PRO_UPGRADE_HREF}
-            className="font-semibold text-ember-700 underline underline-offset-2 dark:text-ember-300"
-          >
-            Ver modulos
-          </Link>
-        </p>
+        <div className="flex items-center gap-2.5 rounded-card border border-ember-300/50 bg-ember-100/40 p-3 dark:border-ember-600/30 dark:bg-ember-100/10">
+          {/* Ícono del módulo Nutrición Pro (asset del CEO, estático @2x). */}
+          <Image
+            src="/module-icons/nutrition-pro@2x.webp"
+            alt=""
+            aria-hidden="true"
+            width={32}
+            height={32}
+            unoptimized
+            className="h-8 w-8 shrink-0 object-contain"
+          />
+          <p className="text-xs text-muted">
+            La estrategia hibrida es parte de Nutricion Pro.{' '}
+            <Link
+              href={NUTRITION_PRO_UPGRADE_HREF}
+              className="font-semibold text-ember-700 underline underline-offset-2 dark:text-ember-300"
+            >
+              Ver modulos
+            </Link>
+          </p>
+        </div>
       ) : null}
     </div>
   )

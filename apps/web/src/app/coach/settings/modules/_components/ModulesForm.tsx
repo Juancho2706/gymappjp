@@ -1,17 +1,22 @@
 'use client'
 
 import Link from 'next/link'
-import { CheckCircle2, ClipboardList, HeartPulse, Info, Lock, Mail, PersonStanding, Scale, UserRound, Utensils, Wrench, Eye, EyeOff, type LucideIcon } from 'lucide-react'
+import Image from 'next/image'
+import { CheckCircle2, ClipboardList, Info, Lock, Mail, UserRound, Wrench, Eye, EyeOff } from 'lucide-react'
 import { SELF_SERVICE_ADDONS_ENABLED, type SubscriptionTier } from '@/lib/constants'
 import { useCaptureModuleInterest } from '@/lib/posthog/events'
 import { MODULE_CATALOG_KEYS, MODULE_CATALOG, type ModuleKey } from '@eva/module-catalog'
 
-/** Ícono por módulo — espejo del `moduleCatalog` del kit (heart-pulse / person-standing / scale / utensils). */
-const MODULE_ICONS: Record<ModuleKey, LucideIcon> = {
-    cardio: HeartPulse,
-    movement_assessment: PersonStanding,
-    body_composition: Scale,
-    nutrition_exchanges: Utensils,
+/**
+ * Ilustración por módulo — assets del CEO en `/module-icons/` (mapea por MODULE_KEY;
+ * `nutrition_exchanges` → nutrition-pro). Se apunta a la variante @2x para nitidez retina
+ * en el tile de 46px (imagen estática, `unoptimized`).
+ */
+const MODULE_ICON_SRC: Record<ModuleKey, string> = {
+    cardio: '/module-icons/cardio@2x.webp',
+    movement_assessment: '/module-icons/movement@2x.webp',
+    body_composition: '/module-icons/body-composition@2x.webp',
+    nutrition_exchanges: '/module-icons/nutrition-pro@2x.webp',
 }
 
 /** Alcance de uso (kit: chip "Se configura en el plan" vs "Se usa con un alumno"). */
@@ -70,7 +75,7 @@ export function ModulesForm({
                     const entry = MODULE_CATALOG[key]
                     const active = modules[key] === true
                     const inMaintenance = active && killedByOperator[key] === true
-                    const ModuleIcon = MODULE_ICONS[key]
+                    const moduleIconSrc = MODULE_ICON_SRC[key]
                     const planScoped = PLAN_SCOPED_MODULES.has(key)
 
                     return (
@@ -87,7 +92,19 @@ export function ModulesForm({
                                             : { background: 'var(--surface-sunken)', color: 'var(--text-subtle)' }
                                     }
                                 >
-                                    <ModuleIcon className="h-[22px] w-[22px]" />
+                                    <Image
+                                        src={moduleIconSrc}
+                                        alt=""
+                                        aria-hidden="true"
+                                        width={30}
+                                        height={30}
+                                        unoptimized
+                                        className={
+                                            active
+                                                ? 'h-[30px] w-[30px] object-contain'
+                                                : 'h-[30px] w-[30px] object-contain opacity-70 grayscale'
+                                        }
+                                    />
                                 </span>
                                 <div className="min-w-0 flex-1">
                                     <div className="flex flex-wrap items-center gap-2">

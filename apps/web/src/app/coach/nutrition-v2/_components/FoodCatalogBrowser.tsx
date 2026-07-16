@@ -151,16 +151,18 @@ export function FoodCatalogBrowser({ countryCode = 'CL' }: { countryCode?: strin
       </div>
 
       {error ? (
-        <NutritionStatePanel icon="error" tone="danger" title="No se pudo buscar" description={error} />
+        <NutritionStatePanel icon="error" tone="danger" illustration="error-amable" title="No se pudo buscar" description={error} />
       ) : showInvite ? (
         <NutritionStatePanel
           icon="empty"
+          illustration="catalogo-vacio"
           title="Busca en el catalogo"
           description="Escribe al menos 2 caracteres para encontrar alimentos por nombre o marca."
         />
       ) : showEmpty ? (
         <NutritionStatePanel
           icon="empty"
+          illustration="sin-resultados"
           title="Sin resultados"
           description="No encontramos alimentos para esa busqueda. Prueba con otro nombre o marca."
         />

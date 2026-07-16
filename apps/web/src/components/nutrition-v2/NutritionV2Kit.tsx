@@ -25,6 +25,10 @@ import {
   type NutritionSyncState,
   type NutritionTone,
 } from '@eva/nutrition-v2'
+import {
+  nutritionIllustrationSource,
+  type NutritionIllustration,
+} from './state-illustration'
 
 function cx(...values: Array<string | false | null | undefined>): string {
   return values.filter(Boolean).join(' ')
@@ -291,6 +295,7 @@ export function NutritionStatePanel({
   description,
   icon = 'empty',
   tone = 'neutral',
+  illustration,
   action,
   className,
 }: {
@@ -298,13 +303,35 @@ export function NutritionStatePanel({
   description: string
   icon?: 'empty' | 'error' | 'permission' | 'offline' | 'info'
   tone?: NutritionTone
+  /**
+   * Ilustración del CEO para el estado vacío/error. Reemplaza el glifo lucide
+   * por el arte de `/illustrations/` (retina vía @2x srcSet, imagen estática).
+   * Aditivo: sin esta prop, el panel se comporta exactamente como antes.
+   */
+  illustration?: NutritionIllustration
   action?: ReactNode
   className?: string
 }) {
   const Icon = { empty: Utensils, error: AlertTriangle, permission: ShieldAlert, offline: WifiOff, info: Info }[icon]
+  const art = illustration ? nutritionIllustrationSource(illustration) : null
   return (
     <section className={cx('flex min-h-48 flex-col items-center justify-center rounded-card border p-6 text-center', toneClasses[tone], className)}>
-      <span className="mb-4 inline-flex h-11 w-11 items-center justify-center rounded-full bg-current/10"><Icon aria-hidden="true" className="h-5 w-5" /></span>
+      {art ? (
+        // Decorativa: el título + descripción ya anuncian el estado al lector de pantalla.
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          alt=""
+          aria-hidden="true"
+          src={art.src}
+          srcSet={art.srcSet}
+          width={144}
+          height={144}
+          loading="lazy"
+          className="mb-5 h-32 w-32 select-none object-contain sm:h-36 sm:w-36"
+        />
+      ) : (
+        <span className="mb-4 inline-flex h-11 w-11 items-center justify-center rounded-full bg-current/10"><Icon aria-hidden="true" className="h-5 w-5" /></span>
+      )}
       <h3 className="font-display text-lg font-semibold">{title}</h3>
       <p className="mt-2 max-w-md text-sm leading-6 opacity-80">{description}</p>
       {action ? <div className="mt-5">{action}</div> : null}

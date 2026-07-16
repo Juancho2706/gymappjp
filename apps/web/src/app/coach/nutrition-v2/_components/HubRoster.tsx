@@ -210,6 +210,7 @@ export function HubRoster({
       {items.length === 0 ? (
         <NutritionStatePanel
           icon="empty"
+          illustration="sin-alumnos"
           title="No hay alumnos en este scope"
           description="El Centro V2 respeta el workspace activo y no mezcla alumnos de otros equipos u organizaciones."
         />
@@ -217,6 +218,7 @@ export function HubRoster({
         <div>
           <NutritionStatePanel
             icon="empty"
+            illustration="sin-resultados"
             title="Sin coincidencias"
             description="Ningun alumno de esta pagina coincide con los filtros. Ajusta la busqueda o limpia los filtros."
             action={

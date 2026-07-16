@@ -151,6 +151,7 @@ export default async function CoachNutritionV2ClientPage({ params, searchParams 
 
       {!detail.today.plan ? (
         <NutritionStatePanel
+          illustration="sin-plan"
           title="Sin plan V2 vigente"
           description="Crea y publica una version antes de revisar objetivos y adherencia canonica."
           action={

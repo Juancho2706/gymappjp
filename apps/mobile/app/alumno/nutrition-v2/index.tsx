@@ -16,6 +16,8 @@ import {
   PlanVersionBadge,
   StrategyBadge,
   SyncOfflineState,
+  CelebrationOverlay,
+  type CelebrationInstance,
 } from '../../../components/nutrition-v2'
 import { Sheet as ActionSheet } from '../../../components/Sheet'
 import {
@@ -61,6 +63,16 @@ import {
   submitRecordIntake,
 } from '../../../lib/nutrition-v2-intake-runner'
 import { useEvaMotion } from '../../../lib/motion'
+import {
+  decideDayCloseCelebration,
+  decideMealLoggedCelebration,
+  isNutritionDayComplete,
+  type CelebrationDecision,
+} from '../../../lib/nutrition-v2-celebrations'
+import {
+  claimDayCloseCelebration,
+  claimMealLoggedCelebration,
+} from '../../../lib/nutrition-v2-celebrations.storage'
 import { useTheme } from '../../../context/ThemeContext'
 import {
   canLoadMoreHistory,
@@ -101,6 +113,12 @@ function TodayTab() {
   const [pending, setPending] = useState(0)
   const [overlay, setOverlay] = useState<OptimisticOverlay>(EMPTY_OVERLAY)
   const [actionEntry, setActionEntry] = useState<NutritionIntakeReadItem | null>(null)
+  const [celebration, setCelebration] = useState<CelebrationInstance | null>(null)
+  const celebrationNonce = useRef(0)
+  const fireCelebration = useCallback((decision: CelebrationDecision) => {
+    celebrationNonce.current += 1
+    setCelebration({ ...decision, nonce: celebrationNonce.current })
+  }, [])
   const date = useMemo(todayInSantiago, [])
   const enabled = entitlements.ready && isEnabled('nutritionV2Student')
 
@@ -283,6 +301,11 @@ function TodayTab() {
       const outcome = await submitRecordIntake(userId, payload)
       if (!mountedRef.current) return
       if (outcome.status === 'recorded') {
+        void (async () => {
+          const claimed = await claimMealLoggedCelebration(userId, date)
+          const decision = decideMealLoggedCelebration(!claimed)
+          if (decision && mountedRef.current) fireCelebration(decision)
+        })()
         void load(true)
       } else if (outcome.status === 'queued') {
         markRowOffline(slot.code, tempId)
@@ -293,7 +316,7 @@ function TodayTab() {
         Alert.alert('No se pudo registrar', outcome.error.message)
       }
     },
-    [addRow, date, deviceId, load, markRowOffline, model, refreshPending, removeRow, userId],
+    [addRow, date, deviceId, fireCelebration, load, markRowOffline, model, refreshPending, removeRow, userId],
   )
 
   const onVoidEntry = useCallback(
@@ -399,6 +422,31 @@ function TodayTab() {
     },
     [router],
   )
+
+  const dayComplete = useMemo(() => {
+    if (!model) return false
+    const hidden = new Set(overlay.hiddenIds)
+    return isNutritionDayComplete(
+      model.mealSlots.map((slot) => ({
+        hasPrescription: slot.prescriptionItems.length > 0,
+        hasConsumption:
+          slot.intakeItems.some((e) => !hidden.has(e.id) && e.status !== 'voided') ||
+          (overlay.addedBySlot[slot.code]?.length ?? 0) > 0,
+      })),
+    )
+  }, [model, overlay])
+
+  useEffect(() => {
+    if (!userId || !dayComplete) return
+    let active = true
+    void claimDayCloseCelebration(userId, date).then((claimed) => {
+      const decision = decideDayCloseCelebration(dayComplete, !claimed)
+      if (active && decision) fireCelebration(decision)
+    })
+    return () => {
+      active = false
+    }
+  }, [userId, dayComplete, date, fireCelebration])
 
   if (!entitlements.ready || loading) {
     return (
@@ -586,6 +634,7 @@ function TodayTab() {
         onEdit={onEditEntry}
         onVoid={onVoidEntry}
       />
+      <CelebrationOverlay celebration={celebration} onDone={() => setCelebration(null)} />
     </>
   )
 }

@@ -25,3 +25,11 @@ export {
   StudentPreview,
 } from './NutritionV2Overrides'
 export * from './NutritionV2Motion'
+export {
+  NUTRITION_ILLUSTRATIONS,
+  resolveNutritionIllustration,
+  nutritionIllustrationSource,
+  type NutritionIllustration,
+  type NutritionEmptyState,
+  type NutritionIllustrationSource,
+} from './state-illustration'

@@ -325,6 +325,7 @@ function ScannerResult({
       <NutritionStatePanel
         icon="error"
         tone="danger"
+        illustration="error-amable"
         title="Código inválido"
         description="El número no corresponde a un GTIN-8, UPC o EAN válido."
         action={<NutritionMotionButton onClick={onReset}>Probar otro</NutritionMotionButton>}
@@ -337,6 +338,7 @@ function ScannerResult({
       <NutritionStatePanel
         icon="info"
         tone="warning"
+        illustration="catalogo-vacio"
         title="Producto todavía no disponible"
         description="Puedes reportarlo para revisión antes de incorporarlo al catálogo chileno."
         action={

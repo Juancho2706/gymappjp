@@ -119,6 +119,7 @@ async function TodayView({ clientId, date, base }: { clientId: string; date: str
     return (
       <NutritionStatePanel
         icon="empty"
+        illustration="sin-plan"
         title="Tu plan V2 todavía no está publicado"
         description="Cuando tu coach publique la primera versión, aparecerán aquí tus objetivos, comidas y registros."
       />
@@ -140,6 +141,7 @@ async function PlanView({ clientId, date }: { clientId: string; date: string }) 
   if (!plan.plan) {
     return (
       <NutritionStatePanel
+        illustration="sin-plan"
         title="No hay un plan vigente"
         description="El plan aparecerá cuando tu coach publique una versión con fecha efectiva."
       />
@@ -181,6 +183,7 @@ async function HistoryView({
   if (history.items.length === 0) {
     return (
       <NutritionStatePanel
+        illustration="historial-vacio"
         title="Todavía no hay historial"
         description="Tus días aparecerán aquí después del primer registro o snapshot del plan."
       />

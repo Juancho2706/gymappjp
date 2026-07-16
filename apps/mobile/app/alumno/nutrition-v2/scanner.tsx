@@ -8,6 +8,8 @@ import {
   NutritionHeader,
   NutritionMotionButton,
   NutritionStatePanel,
+  CelebrationOverlay,
+  type CelebrationInstance,
 } from '../../../components/nutrition-v2'
 import type { FoodBarcodeLookupReadModel } from '@eva/nutrition-v2'
 import { isEnabled } from '../../../lib/flags'
@@ -29,6 +31,8 @@ import {
   newNutritionV2OperationId,
   submitRecordIntake,
 } from '../../../lib/nutrition-v2-intake-runner'
+import { decideScannerHitCelebration, type CelebrationDecision } from '../../../lib/nutrition-v2-celebrations'
+import { claimScannerHitCelebration } from '../../../lib/nutrition-v2-celebrations.storage'
 
 const BARCODE_TYPES = ['ean13', 'ean8', 'upc_a', 'upc_e'] as const
 
@@ -45,6 +49,12 @@ export default function NutritionV2ScannerScreen() {
   const [deviceId, setDeviceId] = useState<string | null>(null)
   const [adding, setAdding] = useState(false)
   const [addedId, setAddedId] = useState<string | null>(null)
+  const [celebration, setCelebration] = useState<CelebrationInstance | null>(null)
+  const celebrationNonce = useRef(0)
+  const fireCelebration = useCallback((decision: CelebrationDecision) => {
+    celebrationNonce.current += 1
+    setCelebration({ ...decision, nonce: celebrationNonce.current })
+  }, [])
   const lastScanRef = useRef<{ code: string; at: number } | null>(null)
   const enabled = entitlements.ready && isEnabled('nutritionV2Student')
   const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL ?? ''
@@ -72,12 +82,17 @@ export default function NutritionV2ScannerScreen() {
       const next = await lookupFoodByGtinV2({ gtin: code, countryCode: 'CL' })
       setResult(next)
       setManualCode(code)
+      if ((next.status === 'found' || next.status === 'pending_verification') && userId) {
+        const claimed = await claimScannerHitCelebration(userId)
+        const decision = decideScannerHitCelebration(!claimed)
+        if (decision) fireCelebration(decision)
+      }
     } catch {
       setResult(null)
     } finally {
       setLoading(false)
     }
-  }, [loading])
+  }, [fireCelebration, loading, userId])
 
   const onBarcodeScanned = useCallback((event: BarcodeScanningResult) => {
     if (scannerPaused || loading) return
@@ -192,11 +207,13 @@ export default function NutritionV2ScannerScreen() {
           }
         />
         <ManualLookup code={manualCode} loading={loading} onChange={setManualCode} onLookup={lookup} />
+        <CelebrationOverlay celebration={celebration} onDone={() => setCelebration(null)} />
       </View>
     )
   }
 
   return (
+    <View className="flex-1 bg-surface-app">
     <ScrollView
       className="flex-1 bg-surface-app"
       contentContainerClassName="gap-5 px-4 pb-12 pt-5"
@@ -277,6 +294,8 @@ export default function NutritionV2ScannerScreen() {
         />
       ) : null}
     </ScrollView>
+      <CelebrationOverlay celebration={celebration} onDone={() => setCelebration(null)} />
+    </View>
   )
 }
 

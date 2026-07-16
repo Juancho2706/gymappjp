@@ -54,6 +54,7 @@ export function NutritionTabV2({ view }: { view: NutritionTabV2ViewModel }) {
 
       {!view.hasActivePlan ? (
         <NutritionStatePanel
+          illustration="sin-plan"
           title="Sin plan V2 vigente"
           description="Este alumno todavía no tiene una versión publicada de su plan de nutrición V2. Crea la primera para ver metas, franjas y adherencia canónica."
           icon="empty"
