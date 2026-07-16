@@ -27,6 +27,7 @@ import {
   nutritionProCtxFromWorkspace,
 } from '@/app/coach/nutrition-v2/_lib/nutrition-pro'
 import { AssignPlanToClientsDialog, type AssignRosterEntry } from '../_components/AssignPlanToClientsDialog'
+import { ArchivePlanButton } from '../_components/ArchivePlanButton'
 import { canAssignSourcePlan } from '../_lib/assign-plan'
 
 interface Props {
@@ -158,7 +159,13 @@ export default async function CoachNutritionV2ClientPage({ params, searchParams 
         </div>
       ) : null}
 
-      {!detail.today.plan ? (
+      {/* Un plan solo esta vigente si el snapshot de hoy lo referencia (detail.today.plan) Y el
+          plan logico sigue activo (detail.plan.plan, que get_nutrition_plan_read_v2 resuelve
+          filtrando lifecycle_status='active'). Tras archivar, el plan-read devuelve null de
+          inmediato aunque el snapshot de HOY siga materializado (ensure_day_snapshot no se
+          recomputa el mismo dia). Requerir ambas senales hace que la ficha refleje el archivado
+          sin tocar snapshots (historial inmutable). */}
+      {!detail.today.plan || !detail.plan.plan ? (
         <NutritionStatePanel
           illustration="sin-plan"
           title="Sin plan V2 vigente"
@@ -292,6 +299,21 @@ export default async function CoachNutritionV2ClientPage({ params, searchParams 
                   </p>
                 </NutritionCard>
               ))}
+            </div>
+          </section>
+
+          {/* Zona inferior discreta: archivar el plan vigente. Aislado del CTA primario del header
+              para evitar clicks accidentales. Tras archivar, la ficha pasa a "Sin plan vigente". */}
+          <section className="border-t border-border-subtle pt-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <p className="text-xs text-muted">
+                Archivar retira el plan de la vista del alumno. El historial registrado se conserva.
+              </p>
+              <ArchivePlanButton
+                clientId={clientId}
+                planId={detail.plan.plan.id}
+                planName={detail.plan.plan.name}
+              />
             </div>
           </section>
         </div>
