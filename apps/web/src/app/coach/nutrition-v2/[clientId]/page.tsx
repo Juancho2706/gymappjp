@@ -15,6 +15,7 @@ import { getNutritionPlansPageCoach } from '../../nutrition-plans/_data/nutritio
 import { getPreferredWorkspaceForRender } from '@/services/auth/workspace-render-cache'
 import {
   getNutritionClientDetailV2ForWeb,
+  getNutritionCoachHubV2ForWeb,
   nutritionV2CoachScopeFromWorkspace,
 } from '@/services/nutrition-v2-read.service'
 import { isNutritionV2Enabled } from '@/services/nutrition-v2-rollout.service'
@@ -25,6 +26,7 @@ import {
   hasNutritionProV2,
   nutritionProCtxFromWorkspace,
 } from '@/app/coach/nutrition-v2/_lib/nutrition-pro'
+import { AssignPlanToClientsDialog, type AssignRosterEntry } from '../_components/AssignPlanToClientsDialog'
 
 interface Props {
   params: Promise<{ clientId: string }>
@@ -68,6 +70,33 @@ export default async function CoachNutritionV2ClientPage({ params, searchParams 
     ? detail.recentDays
     : filterHistoryDaysToBaseWindow(detail.recentDays, today)
 
+  // Roster del workspace para "Asignar a otros alumnos": solo se carga si hay plan publicado.
+  // Pagina el hub scoped (keyset por updatedAt) hasta un tope y excluye al alumno fuente.
+  let assignRoster: AssignRosterEntry[] = []
+  if (hasPlan) {
+    const collected: AssignRosterEntry[] = []
+    let cursor: { updatedAt: string; clientId: string } | null = null
+    for (let page = 0; page < 8; page += 1) {
+      const hub = await getNutritionCoachHubV2ForWeb({
+        scope,
+        cursorUpdatedAt: cursor?.updatedAt ?? null,
+        cursorClientId: cursor?.clientId ?? null,
+        pageSize: 50,
+      })
+      for (const item of hub.items) {
+        if (item.clientId === clientId) continue
+        collected.push({
+          clientId: item.clientId,
+          clientName: item.clientName,
+          hasPlan: item.planStatus === 'published',
+        })
+      }
+      if (!hub.hasMore || !hub.nextCursor) break
+      cursor = hub.nextCursor
+    }
+    assignRoster = collected
+  }
+
   return (
     <NutritionPageShell
       eyebrow="Ficha nutricional V2"
@@ -82,6 +111,15 @@ export default async function CoachNutritionV2ClientPage({ params, searchParams 
             <ArrowLeft className="h-4 w-4" />
             Centro
           </Link>
+          {hasPlan && detail.plan.plan ? (
+            <AssignPlanToClientsDialog
+              sourceClientId={clientId}
+              sourcePlanVersion={detail.plan.plan.versionNumber}
+              sourcePlanName={detail.plan.plan.name}
+              roster={assignRoster}
+              today={today}
+            />
+          ) : null}
           <Link
             href={`/coach/nutrition-v2/${clientId}/builder`}
             className="inline-flex min-h-11 items-center gap-2 rounded-control bg-ember-500 px-4 text-sm font-semibold text-white"
