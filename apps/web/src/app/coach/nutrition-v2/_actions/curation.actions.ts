@@ -187,34 +187,69 @@ export async function createCoachFoodForCurationAction(
   const { db, userId } = auth
   const data = parsed.data
 
-  const ins = await db
-    .from('foods')
-    .insert({
-      name: data.name,
-      brand: data.brand,
-      coach_id: userId,
-      org_id: null,
-      calories: data.calories,
-      protein_g: data.proteinG,
-      carbs_g: data.carbsG,
-      fats_g: data.fatsG,
-      serving_size: 100,
-      serving_unit: data.unit,
-      is_liquid: data.unit === 'ml',
-      category: 'otro',
-      country_code: 'CL',
-      catalog_source: 'coach',
-      verification_status: 'coach_verified',
-    })
-    .select('id')
-    .single()
+  // LIMITACIÓN CONOCIDA: insert(foods) + update(missing_codes) NO son atómicos (no hay RPC
+  // transaccional a mano). Mitigamos el riesgo del retry en dos frentes:
+  //  1) Idempotencia best-effort ANTES de crear: si un intento previo ya dejó un alimento
+  //     coach-scoped con el mismo nombre normalizado, lo reusamos en vez de duplicar. No es
+  //     garantía fuerte (no hay índice único sobre el nombre), solo reduce duplicados.
+  //  2) Compensación best-effort DESPUÉS: si el vínculo falla y el alimento lo creamos en
+  //     esta llamada, lo borramos para no dejarlo huérfano.
+  const normalizedName = data.name.trim().toLowerCase()
+  // Escapamos comodines de ILIKE (% y _ y \) para que el nombre matchee literal (ej "Leche 2%").
+  const likePattern = data.name.trim().replace(/[\%_]/g, (m) => `\${m}`)
 
-  if (ins.error || !ins.data) {
-    if (ins.error?.code === '42501') return fail('SCOPE_DENIED', 'No tienes permiso para crear alimentos.')
+  let foodId: string | null = null
+  const existing = await db
+    .from('foods')
+    .select('id, name')
+    .eq('coach_id', userId)
+    .is('org_id', null)
+    .eq('catalog_source', 'coach')
+    .ilike('name', likePattern)
+    .limit(20)
+  if (!existing.error && existing.data) {
+    const match = (existing.data as Array<{ id: string; name: string }>).find(
+      (row) => row.name.trim().toLowerCase() === normalizedName,
+    )
+    if (match) foodId = match.id
+  }
+
+  const createdNow = foodId === null
+  if (createdNow) {
+    const ins = await db
+      .from('foods')
+      .insert({
+        name: data.name,
+        brand: data.brand,
+        coach_id: userId,
+        org_id: null,
+        calories: data.calories,
+        protein_g: data.proteinG,
+        carbs_g: data.carbsG,
+        fats_g: data.fatsG,
+        serving_size: 100,
+        serving_unit: data.unit,
+        is_liquid: data.unit === 'ml',
+        category: 'otro',
+        country_code: 'CL',
+        catalog_source: 'coach',
+        verification_status: 'coach_verified',
+      })
+      .select('id')
+      .single()
+
+    if (ins.error || !ins.data) {
+      if (ins.error?.code === '42501') return fail('SCOPE_DENIED', 'No tienes permiso para crear alimentos.')
+      return fail('FOOD_CREATE_FAILED', 'No se pudo crear el alimento. Intenta nuevamente.')
+    }
+    foodId = (ins.data as { id: string }).id
+  }
+
+  if (foodId === null) {
+    // Inalcanzable (o reusamos un id o lo insertamos); defensivo para el narrowing.
     return fail('FOOD_CREATE_FAILED', 'No se pudo crear el alimento. Intenta nuevamente.')
   }
 
-  const foodId = (ins.data as { id: string }).id
   const resolve = await db
     .from('food_catalog_missing_codes')
     .update({ resolved_food_id: foodId, resolved_at: new Date().toISOString() })
@@ -222,6 +257,13 @@ export async function createCoachFoodForCurationAction(
     .is('resolved_at', null)
 
   if (resolve.error) {
+    // Compensación best-effort: solo borramos si el alimento lo creamos en ESTA llamada (no
+    // si reusamos uno preexistente). RLS `foods_delete_own` acota el DELETE al coach dueño.
+    // Si el DELETE también falla queda un huérfano, pero el chequeo de idempotencia de arriba
+    // lo reusará en el próximo retry sin duplicar.
+    if (createdNow) {
+      await db.from('foods').delete().eq('id', foodId).eq('coach_id', userId)
+    }
     return fail('CURATION_RESOLVE_FAILED', 'Se creo el alimento pero no se pudo vincular el codigo.')
   }
 

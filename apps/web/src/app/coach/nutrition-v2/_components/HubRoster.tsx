@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
-import { ChevronRight, FilePlus2, Search, Users, X } from 'lucide-react'
+import { ChevronLeft, ChevronRight, FilePlus2, Search, Users, X } from 'lucide-react'
 import type { NutritionCoachHubItem } from '@eva/nutrition-v2'
 import {
   CoachAttentionCard,
@@ -16,6 +16,10 @@ import {
   ATTENTION_FILTER_OPTIONS,
   SORT_OPTIONS,
   applyRosterFilters,
+  encodeCursorStack,
+  isRosterPageComplete,
+  parseCursorStack,
+  planCtaLabel,
   serializeRosterFilters,
   type AttentionFilter,
   type AttentionReason,
@@ -59,41 +63,87 @@ export function HubRoster({
   const searchParams = useSearchParams()
   const [filters, setFilters] = useState<RosterFilters>(initialFilters)
 
-  // Sincroniza los filtros a la URL sin navegar (shareable, sin refetch). El cursor
-  // vigente se preserva desde los searchParams de la navegacion RSC.
+  // Estado de paginacion leido de la URL (fuente de verdad RSC). `incomingCursor` es el
+  // cursor con que el servidor cargo ESTA pagina (null en la primera); `prevStackRaw` es
+  // la pila codificada de cursores ancestros para "Pagina anterior".
+  const incomingCursorUpdatedAt = searchParams.get('cursorUpdatedAt')
+  const incomingCursorClientId = searchParams.get('cursorClientId')
+  const incomingCursor =
+    incomingCursorUpdatedAt && incomingCursorClientId
+      ? { updatedAt: incomingCursorUpdatedAt, clientId: incomingCursorClientId }
+      : null
+  const prevStackRaw = searchParams.get('pc')
+  const hasIncomingCursor = incomingCursor !== null
+
+  // Solo cuando la pagina es el roster completo (sin cursor de entrada ni pagina siguiente)
+  // las metricas son totales reales; con paginacion son un resumen de la pagina visible.
+  const metricsAreTotals = isRosterPageComplete({ hasMore, hasIncomingCursor })
+
+  // Sincroniza los filtros a la URL sin navegar (shareable, sin refetch). Preserva el
+  // cursor vigente y la pila de anteriores para no romper la paginacion al filtrar.
   useEffect(() => {
     if (typeof window === 'undefined') return
     const params = new URLSearchParams()
-    const cursorUpdatedAt = searchParams.get('cursorUpdatedAt')
-    const cursorClientId = searchParams.get('cursorClientId')
-    if (cursorUpdatedAt) params.set('cursorUpdatedAt', cursorUpdatedAt)
-    if (cursorClientId) params.set('cursorClientId', cursorClientId)
+    if (incomingCursorUpdatedAt) params.set('cursorUpdatedAt', incomingCursorUpdatedAt)
+    if (incomingCursorClientId) params.set('cursorClientId', incomingCursorClientId)
+    if (prevStackRaw) params.set('pc', prevStackRaw)
     for (const [key, value] of Object.entries(serializeRosterFilters(filters))) {
       params.set(key, value)
     }
     const qs = params.toString()
     window.history.replaceState(window.history.state, '', qs ? `${BASE_PATH}?${qs}` : BASE_PATH)
-  }, [filters, searchParams])
+  }, [filters, incomingCursorUpdatedAt, incomingCursorClientId, prevStackRaw])
 
   const visible = useMemo(() => applyRosterFilters(items, filters), [items, filters])
 
-  const loadMoreHref = useMemo(() => {
+  // "Pagina siguiente": empuja el cursor de ESTA pagina a la pila y navega al siguiente.
+  const nextHref = useMemo(() => {
     if (!nextCursor) return null
     const params = new URLSearchParams(serializeRosterFilters(filters))
     params.set('cursorUpdatedAt', nextCursor.updatedAt)
     params.set('cursorClientId', nextCursor.clientId)
+    const stack = [...parseCursorStack(prevStackRaw), incomingCursor]
+    params.set('pc', encodeCursorStack(stack))
     return `${BASE_PATH}?${params.toString()}`
-  }, [nextCursor, filters])
+  }, [nextCursor, filters, prevStackRaw, incomingCursor])
+
+  // "Pagina anterior": saca el tope de la pila (cursor de la pagina previa) y navega alla.
+  // Sin pila (deep-link a una pagina interna) cae de vuelta a la primera, que el keyset
+  // por updatedAt desc garantiza como raiz.
+  const prevHref = useMemo(() => {
+    if (!hasIncomingCursor) return null
+    const stack = parseCursorStack(prevStackRaw)
+    const target = stack.length > 0 ? stack[stack.length - 1] : null
+    const remaining = stack.slice(0, -1)
+    const params = new URLSearchParams(serializeRosterFilters(filters))
+    if (target) {
+      params.set('cursorUpdatedAt', target.updatedAt)
+      params.set('cursorClientId', target.clientId)
+    }
+    if (remaining.length > 0) params.set('pc', encodeCursorStack(remaining))
+    return `${BASE_PATH}?${params.toString()}`
+  }, [hasIncomingCursor, filters, prevStackRaw])
 
   const isFiltered =
     filters.search.trim().length > 0 || filters.attention !== 'all' || filters.sort !== 'default'
 
   return (
     <div>
-      <div className="mb-5 grid gap-3 sm:grid-cols-3">
-        <Metric label="Con plan V2" value={metrics.withPlan} />
-        <Metric label="Sin plan V2" value={metrics.withoutPlan} />
-        <Metric label="Con actividad hoy" value={metrics.activeToday} />
+      <div className="mb-5">
+        {metricsAreTotals ? null : (
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">
+            Resumen de la pagina
+          </p>
+        )}
+        <div className="grid gap-3 sm:grid-cols-3">
+          <Metric label="Con plan V2" value={metrics.withPlan} scoped={!metricsAreTotals} />
+          <Metric label="Sin plan V2" value={metrics.withoutPlan} scoped={!metricsAreTotals} />
+          <Metric
+            label="Con actividad hoy"
+            value={metrics.activeToday}
+            scoped={!metricsAreTotals}
+          />
+        </div>
       </div>
 
       <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center">
@@ -106,7 +156,7 @@ export function HubRoster({
             onChange={(event) =>
               setFilters((prev) => ({ ...prev, search: event.target.value.slice(0, 120) }))
             }
-            placeholder="Buscar alumno por nombre…"
+            placeholder="Buscar en esta pagina…"
             aria-label="Buscar alumno en el roster"
             className="min-h-11 w-full rounded-control border border-border-default bg-surface-card pl-10 pr-4 text-base text-strong outline-none placeholder:text-muted focus:ring-2 focus:ring-ring md:text-sm"
           />
@@ -164,21 +214,28 @@ export function HubRoster({
           description="El Centro V2 respeta el workspace activo y no mezcla alumnos de otros equipos u organizaciones."
         />
       ) : visible.length === 0 ? (
-        <NutritionStatePanel
-          icon="empty"
-          title="Sin coincidencias"
-          description="Ningun alumno de esta pagina coincide con los filtros. Ajusta la busqueda o limpia los filtros."
-          action={
-            <button
-              type="button"
-              onClick={() => setFilters({ search: '', attention: 'all', sort: 'default' })}
-              className="inline-flex min-h-11 items-center gap-1.5 rounded-control border border-border-default bg-surface-card px-3 text-sm font-semibold text-strong"
-            >
-              <X className="h-4 w-4" />
-              Limpiar filtros
-            </button>
-          }
-        />
+        <div>
+          <NutritionStatePanel
+            icon="empty"
+            title="Sin coincidencias"
+            description="Ningun alumno de esta pagina coincide con los filtros. Ajusta la busqueda o limpia los filtros."
+            action={
+              <button
+                type="button"
+                onClick={() => setFilters({ search: '', attention: 'all', sort: 'default' })}
+                className="inline-flex min-h-11 items-center gap-1.5 rounded-control border border-border-default bg-surface-card px-3 text-sm font-semibold text-strong"
+              >
+                <X className="h-4 w-4" />
+                Limpiar filtros
+              </button>
+            }
+          />
+          {hasMore ? (
+            <p className="mt-3 text-center text-xs text-muted">
+              Hay mas alumnos en otras paginas. La busqueda solo cubre la pagina actual.
+            </p>
+          ) : null}
+        </div>
       ) : (
         <>
           {/* Movil: cards */}
@@ -212,7 +269,7 @@ export function HubRoster({
                     className="inline-flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-control bg-ember-500 px-3 text-sm font-semibold text-white hover:bg-ember-600"
                   >
                     <FilePlus2 className="h-4 w-4" />
-                    Crear plan
+                    {planCtaLabel(item.planStatus)}
                   </Link>
                 </div>
                 {item.attentionReason !== 'none' ? (
@@ -298,7 +355,7 @@ export function HubRoster({
                           className="inline-flex min-h-9 items-center gap-1.5 rounded-control bg-ember-500 px-2.5 text-xs font-semibold text-white hover:bg-ember-600"
                         >
                           <FilePlus2 className="h-3.5 w-3.5" />
-                          Crear plan
+                          {planCtaLabel(item.planStatus)}
                         </Link>
                       </div>
                     </td>
@@ -310,24 +367,59 @@ export function HubRoster({
         </>
       )}
 
-      {hasMore && loadMoreHref ? (
-        <Link
-          href={loadMoreHref}
-          className="mt-5 inline-flex min-h-11 items-center rounded-control border border-border-default bg-surface-card px-4 text-sm font-semibold text-strong hover:bg-surface-sunken"
-        >
-          Ver mas alumnos
-        </Link>
+      {prevHref || (hasMore && nextHref) ? (
+        <div className="mt-5 flex items-center justify-between gap-2">
+          {prevHref ? (
+            <Link
+              href={prevHref}
+              className="inline-flex min-h-11 items-center gap-1.5 rounded-control border border-border-default bg-surface-card px-4 text-sm font-semibold text-strong hover:bg-surface-sunken"
+            >
+              <ChevronLeft className="h-4 w-4" />
+              Pagina anterior
+            </Link>
+          ) : (
+            <span />
+          )}
+          {hasMore && nextHref ? (
+            <Link
+              href={nextHref}
+              className="inline-flex min-h-11 items-center gap-1.5 rounded-control border border-border-default bg-surface-card px-4 text-sm font-semibold text-strong hover:bg-surface-sunken"
+            >
+              Pagina siguiente
+              <ChevronRight className="h-4 w-4" />
+            </Link>
+          ) : null}
+        </div>
       ) : null}
     </div>
   )
 }
 
-function Metric({ label, value }: { label: string; value: number }) {
+function Metric({
+  label,
+  value,
+  scoped,
+}: {
+  label: string
+  value: number
+  scoped: boolean
+}) {
   return (
     <NutritionCard>
       <Users className="h-5 w-5 text-ember-600" />
-      <p className="mt-3 font-display text-3xl font-bold text-strong">{value}</p>
-      <p className="mt-1 text-sm text-muted">{label}</p>
+      <p
+        className={
+          scoped
+            ? 'mt-3 font-display text-2xl font-bold text-strong'
+            : 'mt-3 font-display text-3xl font-bold text-strong'
+        }
+      >
+        {value}
+      </p>
+      <p className="mt-1 text-sm text-muted">
+        {label}
+        {scoped ? <span className="text-subtle"> · en esta pagina</span> : null}
+      </p>
     </NutritionCard>
   )
 }

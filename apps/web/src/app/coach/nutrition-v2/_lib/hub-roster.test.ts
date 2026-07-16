@@ -1,9 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import {
   applyRosterFilters,
+  encodeCursorStack,
+  isRosterPageComplete,
   mapHubMetrics,
   normalizeText,
+  parseCursorStack,
   parseRosterFilters,
+  planCtaLabel,
   serializeRosterFilters,
   type RosterFilters,
   type RosterItemLike,
@@ -202,5 +206,53 @@ describe('mapHubMetrics', () => {
   it('ignores unparseable timestamps for activeToday', () => {
     const items = [item({ clientId: 'x', planId: 'p', lastIntakeAt: 'not-a-date' })]
     expect(mapHubMetrics(items, opts).activeToday).toBe(0)
+  })
+})
+
+describe('planCtaLabel', () => {
+  it('ofrece "Nueva versión" solo cuando hay plan publicado', () => {
+    expect(planCtaLabel('published')).toBe('Nueva versión')
+  })
+
+  it('cae a "Crear plan" sin plan o con borrador (no publicado)', () => {
+    expect(planCtaLabel(null)).toBe('Crear plan')
+    expect(planCtaLabel('draft')).toBe('Crear plan')
+    expect(planCtaLabel('superseded')).toBe('Crear plan')
+  })
+})
+
+describe('isRosterPageComplete (metricas totales vs resumen de pagina)', () => {
+  it('es total solo sin cursor de entrada y sin pagina siguiente', () => {
+    expect(isRosterPageComplete({ hasMore: false, hasIncomingCursor: false })).toBe(true)
+  })
+
+  it('con pagina siguiente -> resumen de pagina', () => {
+    expect(isRosterPageComplete({ hasMore: true, hasIncomingCursor: false })).toBe(false)
+  })
+
+  it('con cursor de entrada (pagina interna) -> resumen de pagina', () => {
+    expect(isRosterPageComplete({ hasMore: false, hasIncomingCursor: true })).toBe(false)
+  })
+})
+
+describe('cursor stack (paginacion anterior/siguiente)', () => {
+  it('round-trip preserva cursores y el centinela null', () => {
+    const stack = [
+      null,
+      { updatedAt: '2026-07-14T18:00:00.000Z', clientId: '11111111-1111-4111-8111-111111111111' },
+    ]
+    expect(parseCursorStack(encodeCursorStack(stack))).toEqual(stack)
+  })
+
+  it('distingue pila vacia de una pila con un solo null', () => {
+    expect(encodeCursorStack([])).toBe('')
+    expect(parseCursorStack('')).toEqual([])
+    expect(parseCursorStack(null)).toEqual([])
+    // [null] NO debe colapsar a [] (por eso el centinela '_')
+    expect(parseCursorStack(encodeCursorStack([null]))).toEqual([null])
+  })
+
+  it('tolera entradas corruptas devolviendolas como null', () => {
+    expect(parseCursorStack('sinseparador')).toEqual([null])
   })
 })

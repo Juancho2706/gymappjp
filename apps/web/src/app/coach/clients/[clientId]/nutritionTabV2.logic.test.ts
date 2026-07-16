@@ -3,7 +3,7 @@ import type {
   NutritionClientDetailReadModel,
   NutritionHistoryDay,
 } from '@eva/nutrition-v2'
-import { buildNutritionTabV2ViewModel } from './nutritionTabV2.logic'
+import { buildNutritionTabV2ViewModel, formatLocalDateEsCl } from './nutritionTabV2.logic'
 
 const CLIENT_ID = '11111111-1111-4111-8111-111111111111'
 
@@ -134,9 +134,12 @@ describe('buildNutritionTabV2ViewModel', () => {
       versionNumber: 3,
       status: 'published',
       effectiveFrom: '2026-07-01',
+      effectiveFromLabel: formatLocalDateEsCl('2026-07-01'),
       name: 'Plan hipertrofia',
       visibleNotes: 'Prioriza proteína en el desayuno.',
     })
+    // La etiqueta visible NO es la fecha ISO cruda.
+    expect(vm.plan?.effectiveFromLabel).not.toBe('2026-07-01')
     expect(vm.today.calories).toEqual({ consumed: 1200, target: 2000 })
     expect(vm.today.remainingCalories).toBe(800)
     expect(vm.today.entryCount).toBe(4)
@@ -148,8 +151,18 @@ describe('buildNutritionTabV2ViewModel', () => {
     ])
     expect(vm.showHistoryUpgradeCta).toBe(false)
     expect(vm.recentDays).toEqual([
-      { localDate: '2026-07-14', calories: 1900, entryCount: 5 },
-      { localDate: '2026-07-13', calories: 1750, entryCount: 3 },
+      {
+        localDate: '2026-07-14',
+        label: formatLocalDateEsCl('2026-07-14'),
+        calories: 1900,
+        entryCount: 5,
+      },
+      {
+        localDate: '2026-07-13',
+        label: formatLocalDateEsCl('2026-07-13'),
+        calories: 1750,
+        entryCount: 3,
+      },
     ])
   })
 
@@ -204,5 +217,29 @@ describe('buildNutritionTabV2ViewModel', () => {
     })
     // target 2000 - consumed 1200 = 800
     expect(vm.today.remainingCalories).toBe(800)
+  })
+})
+
+describe('formatLocalDateEsCl', () => {
+  it('formatea es-CL con día/mes/año legibles', () => {
+    const out = formatLocalDateEsCl('2026-07-15')
+    expect(out).toContain('15')
+    expect(out).toContain('2026')
+    expect(out.toLowerCase()).toContain('jul')
+  })
+
+  it('NO corre el día por timezone en fechas límite de año (sin shift a dic 31 2025)', () => {
+    // `new Date('2026-01-01')` sería medianoche UTC -> en zonas negativas (Chile) mostraría
+    // 2025-12-31. El formateo por componentes en UTC debe mantener el 1 de enero de 2026.
+    const out = formatLocalDateEsCl('2026-01-01')
+    expect(out).toContain('2026')
+    expect(out).not.toContain('2025')
+    expect(out).not.toContain('31')
+    expect(out.toLowerCase()).not.toContain('dic')
+  })
+
+  it('devuelve el string tal cual si no calza el patrón YYYY-MM-DD', () => {
+    expect(formatLocalDateEsCl('no-es-fecha')).toBe('no-es-fecha')
+    expect(formatLocalDateEsCl('2026/07/15')).toBe('2026/07/15')
   })
 })

@@ -42,6 +42,8 @@ export interface NutritionTabV2ViewModel {
     versionNumber: number
     status: 'published' | 'superseded'
     effectiveFrom: string
+    /** `effectiveFrom` formateado es-CL ("15 jul 2026") para pintar sin fechas ISO crudas. */
+    effectiveFromLabel: string
     name: string | null
     visibleNotes: string | null
   } | null
@@ -54,7 +56,7 @@ export interface NutritionTabV2ViewModel {
     mealSlotCount: number
   }
   /** Últimos días (ya recortados a la ventana base si no hay addon Pro). */
-  recentDays: Array<{ localDate: string; calories: number; entryCount: number }>
+  recentDays: Array<{ localDate: string; label: string; calories: number; entryCount: number }>
   /** Sin addon Pro -> mostrar CTA "Histórico completo con Nutrición Pro". */
   showHistoryUpgradeCta: boolean
 }
@@ -78,6 +80,31 @@ const DEFAULT_HISTORY_UPGRADE_HREF = '/coach/settings/modules'
 
 function num(value: number | null | undefined): number {
   return typeof value === 'number' && Number.isFinite(value) ? value : 0
+}
+
+const ES_CL_DATE_FORMAT = new Intl.DateTimeFormat('es-CL', {
+  day: 'numeric',
+  month: 'short',
+  year: 'numeric',
+  timeZone: 'UTC',
+})
+
+/**
+ * Formatea una fecha LOCAL `YYYY-MM-DD` a es-CL ("15 jul 2026") SIN desfase de zona.
+ * Parseamos los componentes a mano y construimos la fecha en UTC (y la formateamos en UTC),
+ * de modo que el día jamás se corre por timezone: `new Date('2026-07-15')` sería medianoche
+ * UTC y en zonas negativas (Chile) mostraría el día anterior. Si el string no calza con el
+ * patrón, se devuelve tal cual (defensivo).
+ */
+export function formatLocalDateEsCl(localDate: string): string {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(localDate)
+  if (!match) return localDate
+  const year = Number(match[1])
+  const month = Number(match[2])
+  const day = Number(match[3])
+  const date = new Date(Date.UTC(year, month - 1, day))
+  if (Number.isNaN(date.getTime())) return localDate
+  return ES_CL_DATE_FORMAT.format(date)
 }
 
 /**
@@ -134,6 +161,7 @@ export function buildNutritionTabV2ViewModel(
           versionNumber: activePlan.versionNumber,
           status: activePlan.status,
           effectiveFrom: activePlan.effectiveFrom,
+          effectiveFromLabel: formatLocalDateEsCl(activePlan.effectiveFrom),
           name: detail.plan.plan?.name ?? activePlan.name,
           visibleNotes: detail.plan.visibleNotes,
         }
@@ -147,6 +175,7 @@ export function buildNutritionTabV2ViewModel(
     },
     recentDays: recentDaysForDisplay.map((day) => ({
       localDate: day.localDate,
+      label: formatLocalDateEsCl(day.localDate),
       calories: num(day.consumed.calories),
       entryCount: day.activeEntryCount,
     })),

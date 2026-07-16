@@ -1,5 +1,7 @@
 import 'server-only'
 
+import { cache } from 'react'
+
 import {
   DEFAULT_NUTRITION_V2_ROLLOUT,
   resolveNutritionV2Rollout,
@@ -14,19 +16,25 @@ const EDGE_CONFIG_KEY = 'NUTRITION_V2_ROLLOUT'
  * Rollout is intentionally separate from commercial feature preferences.
  * Missing env, Edge Config errors and malformed payloads all resolve OFF.
  */
-export async function readNutritionV2RolloutConfig(): Promise<NutritionV2RolloutConfig> {
-  if (!process.env.EDGE_CONFIG) return DEFAULT_NUTRITION_V2_ROLLOUT
+// Memoizada por request (React.cache): el cockpit resuelve el rollout en el path crítico
+// de TODOS los coaches V1, y sin dedupe cada render golpearía Edge Config repetidas veces.
+// server-only garantiza que el cache es por request de servidor, nunca compartido entre
+// usuarios.
+export const readNutritionV2RolloutConfig = cache(
+  async (): Promise<NutritionV2RolloutConfig> => {
+    if (!process.env.EDGE_CONFIG) return DEFAULT_NUTRITION_V2_ROLLOUT
 
-  try {
-    const { get } = await import('@vercel/edge-config')
-    const raw = await get<unknown>(EDGE_CONFIG_KEY)
-    const decision = resolveNutritionV2Rollout(raw, { surface: 'webStudent' })
-    if (decision.reason === 'invalid_config') return DEFAULT_NUTRITION_V2_ROLLOUT
-    return raw as NutritionV2RolloutConfig
-  } catch {
-    return DEFAULT_NUTRITION_V2_ROLLOUT
-  }
-}
+    try {
+      const { get } = await import('@vercel/edge-config')
+      const raw = await get<unknown>(EDGE_CONFIG_KEY)
+      const decision = resolveNutritionV2Rollout(raw, { surface: 'webStudent' })
+      if (decision.reason === 'invalid_config') return DEFAULT_NUTRITION_V2_ROLLOUT
+      return raw as NutritionV2RolloutConfig
+    } catch {
+      return DEFAULT_NUTRITION_V2_ROLLOUT
+    }
+  },
+)
 
 export async function resolveNutritionV2RolloutDecision(
   context: NutritionV2RolloutContext,

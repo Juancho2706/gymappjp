@@ -75,7 +75,7 @@ export function NutritionTabV2({ view }: { view: NutritionTabV2ViewModel }) {
               <PlanVersionBadge
                 version={view.plan.versionNumber}
                 status={view.plan.status}
-                effectiveLabel={`desde ${view.plan.effectiveFrom}`}
+                effectiveLabel={`desde ${view.plan.effectiveFromLabel}`}
               />
             </div>
           ) : null}
@@ -138,7 +138,7 @@ export function NutritionTabV2({ view }: { view: NutritionTabV2ViewModel }) {
               <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                 {view.recentDays.map((day) => (
                   <NutritionCard key={day.localDate}>
-                    <p className="font-semibold text-strong">{day.localDate}</p>
+                    <p className="font-semibold text-strong">{day.label}</p>
                     <p className="mt-1 text-sm text-muted">
                       {Math.round(day.calories)} kcal · {day.entryCount} registro
                       {day.entryCount === 1 ? '' : 's'}

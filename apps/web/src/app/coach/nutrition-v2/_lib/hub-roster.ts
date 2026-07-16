@@ -129,6 +129,68 @@ function compareBySort(a: RosterItemLike, b: RosterItemLike, sort: SortKey): num
   }
 }
 
+/**
+ * Label del CTA de plan por alumno en el roster. Espeja el criterio de
+ * `nutritionTabV2.logic.ts` (`builderCtaLabel`): si ya hay un plan PUBLICADO se ofrece
+ * "Nueva versión"; en cualquier otro caso (sin plan o solo borrador) "Crear plan". El
+ * hub solo expone `planStatus === 'published'` para la insignia de versión, por eso el
+ * mismo umbral gobierna el CTA (un borrador pendiente sigue siendo "Crear plan").
+ */
+export function planCtaLabel(planStatus: string | null): 'Crear plan' | 'Nueva versión' {
+  return planStatus === 'published' ? 'Nueva versión' : 'Crear plan'
+}
+
+/**
+ * ¿La página cargada es el roster COMPLETO (sin paginación en juego)? Solo entonces las
+ * métricas de cabecera son totales reales del scope. En cuanto haya una página siguiente
+ * (`hasMore`) o hayamos entrado vía cursor (`hasIncomingCursor`), las métricas son un
+ * resumen de la página visible y deben rotularse como tal.
+ */
+export function isRosterPageComplete(opts: {
+  hasMore: boolean
+  hasIncomingCursor: boolean
+}): boolean {
+  return !opts.hasMore && !opts.hasIncomingCursor
+}
+
+export interface RosterCursor {
+  updatedAt: string
+  clientId: string
+}
+
+// Delimitadores de la pila de cursores en la URL (param `pc`). El cursor null (primera
+// página, sin keyset) se codifica como '_' para distinguirlo de la pila vacía: sin el
+// centinela, [null] y [] colapsarían al mismo string ''. Ni ISO datetime ni UUID
+// contienen '|' ni '~', así que el split es seguro.
+const CURSOR_STACK_SEP = '~'
+const CURSOR_FIELD_SEP = '|'
+const CURSOR_NULL_TOKEN = '_'
+
+/**
+ * Codifica la pila de cursores ancestros (para "Página anterior") en un string apto para
+ * la URL. Cada entrada es el cursor con que se cargó una página previa; null = primera
+ * página (sin cursor).
+ */
+export function encodeCursorStack(stack: ReadonlyArray<RosterCursor | null>): string {
+  return stack
+    .map((c) => (c ? `${c.updatedAt}${CURSOR_FIELD_SEP}${c.clientId}` : CURSOR_NULL_TOKEN))
+    .join(CURSOR_STACK_SEP)
+}
+
+/** Inversa de `encodeCursorStack`; tolera entradas corruptas devolviéndolas como null. */
+export function parseCursorStack(raw: string | null | undefined): Array<RosterCursor | null> {
+  if (!raw) return []
+  return raw.split(CURSOR_STACK_SEP).map((entry) => {
+    if (entry === CURSOR_NULL_TOKEN || entry === '') return null
+    const idx = entry.indexOf(CURSOR_FIELD_SEP)
+    if (idx < 0) return null
+    const updatedAt = entry.slice(0, idx)
+    const clientId = entry.slice(idx + 1)
+    if (!updatedAt || !clientId) return null
+    return { updatedAt, clientId }
+  })
+}
+
 /** Lee los filtros desde un record de searchParams (server-side o cliente). */
 export function parseRosterFilters(
   params: Record<string, string | string[] | undefined>,
