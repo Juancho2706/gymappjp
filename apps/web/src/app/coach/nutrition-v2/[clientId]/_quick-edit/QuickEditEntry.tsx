@@ -48,13 +48,15 @@ export function QuickEditEntry({
 
   return (
     <>
+      {/* Icono solo (pedido CEO 2026-07-17): el lapiz basta; el label vive en aria/title. */}
       <button
         type="button"
         onClick={() => setEditing(true)}
-        className="inline-flex min-h-11 items-center gap-1.5 rounded-control bg-primary/100 px-3.5 text-sm font-semibold text-white transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:gap-2 md:px-4"
+        aria-label={QE_COPY.enter}
+        title={QE_COPY.enter}
+        className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-control bg-primary text-white transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
-        <Pencil className="h-4 w-4" />
-        {QE_COPY.enter}
+        <Pencil className="h-[18px] w-[18px]" />
       </button>
       <DropdownMenu>
         <DropdownMenuTrigger

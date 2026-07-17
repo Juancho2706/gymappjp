@@ -111,7 +111,7 @@ type RawPlan = V1PlanRow & { is_active: boolean; meals: RawMeal[] | null }
 type RawMeal = V1MealRow & { items: V1FoodItemRow[] | null }
 
 const PLAN_SELECT = `
-  id, client_id, coach_id, org_id, team_id, name, plan_mode,
+  id, client_id, coach_id, org_id, name, plan_mode,
   daily_calories, protein_g, carbs_g, fats_g, instructions, updated_at, is_active,
   hydration_target_ml, steps_target, sleep_target_hours, fasting_target_hours,
   supplement_guidance, protocol_notes,
@@ -146,7 +146,9 @@ function toTree(raw: RawPlan): V1PlanTree {
       client_id: raw.client_id,
       coach_id: raw.coach_id,
       org_id: raw.org_id ?? null,
-      team_id: raw.team_id ?? null,
+      // nutrition_plans V1 NO tiene team_id (verificado contra prod); el scope de
+      // team en V2 se resuelve por can_manage_client, no por esta columna.
+      team_id: null,
       name: raw.name,
       plan_mode: raw.plan_mode,
       daily_calories: raw.daily_calories,
