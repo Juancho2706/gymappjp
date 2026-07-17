@@ -43,6 +43,12 @@ import {
 } from '../../../lib/nutrition-v2-pro'
 import { supabase } from '../../../lib/supabase'
 import { useTheme } from '../../../context/ThemeContext'
+import { toast } from '../../../components/Toast'
+import {
+  QUICK_EDIT_COPY,
+  QuickEditMode,
+  publishSuccessToast,
+} from '../../../components/nutrition-v2/quick-edit'
 
 function todayInSantiago(): string {
   return new Intl.DateTimeFormat('en-CA', {
@@ -69,6 +75,10 @@ export default function CoachNutritionV2ClientScreen() {
   const [detail, setDetail] = useState<NutritionClientDetailReadModel | null>(null)
   const [loading, setLoading] = useState(true)
   const [offline, setOffline] = useState(false)
+  // Modo edicion in-place del plan vigente (quick-edit) + nonce para re-leer la ficha
+  // tras publicar (el read model re-hidrata el baseline con la version nueva).
+  const [editing, setEditing] = useState(false)
+  const [reloadNonce, setReloadNonce] = useState(0)
   const date = useMemo(todayInSantiago, [])
   // Fail-closed: only fetch once the workspace resolved AND collapses to a valid coach scope.
   const scope = useMemo(
@@ -150,7 +160,7 @@ export default function CoachNutritionV2ClientScreen() {
       active = false
       controller.abort()
     }
-  }, [clientId, date, enabled, entitlements.ready, workspaceReady, userId, scope, scopeCacheKey])
+  }, [clientId, date, enabled, entitlements.ready, workspaceReady, userId, scope, scopeCacheKey, reloadNonce])
 
   const recentDays = useMemo(() => {
     if (!detail) return []
@@ -215,6 +225,32 @@ export default function CoachNutritionV2ClientScreen() {
     todayPlan === null
       ? 'El plan vigente ya está publicado. El registro de hoy todavía no tiene metas asignadas; desde mañana se aplican las del nuevo plan.'
       : 'El plan vigente ya está publicado. Los registros de hoy siguen mostrando el plan anterior; desde mañana se usa el nuevo.'
+
+  // Modo edicion in-place (quick-edit): misma ruta, estado cliente. Al publicar, la
+  // ficha re-lee el read model (reloadNonce) y el baseline se re-hidrata solo.
+  if (editing && activePlan && userId) {
+    const clientFullName = detail.client.fullName
+    return (
+      <QuickEditMode
+        clientId={detail.client.id}
+        clientName={clientFullName}
+        planModel={detail.plan}
+        hasNutritionPro={hasNutritionPro}
+        userId={userId}
+        todayIso={date}
+        onExit={() => setEditing(false)}
+        onPublished={() => {
+          setEditing(false)
+          toast.success(publishSuccessToast(clientFullName))
+          setReloadNonce((n) => n + 1)
+        }}
+        onStaleReload={() => {
+          setEditing(false)
+          setReloadNonce((n) => n + 1)
+        }}
+      />
+    )
+  }
 
   return (
     <ScrollView
@@ -300,6 +336,15 @@ export default function CoachNutritionV2ClientScreen() {
             <Text className="mt-3 text-sm leading-5 text-text-body">
               {detail.plan.visibleNotes || 'Sin indicaciones visibles.'}
             </Text>
+            <View className="mt-4">
+              <NutritionMotionButton
+                accessibilityLabel={QUICK_EDIT_COPY.enter}
+                disabled={!userId}
+                onPress={() => setEditing(true)}
+              >
+                {QUICK_EDIT_COPY.enter}
+              </NutritionMotionButton>
+            </View>
           </NutritionCard>
         </>
       )}
@@ -432,11 +477,14 @@ export default function CoachNutritionV2ClientScreen() {
         </View>
       </NutritionCard>
 
+      {/* Con plan vigente el camino primario es "Editar plan" (card); el wizard queda como
+          camino secundario "Rehacer con el asistente" (qe-design §1.2.A). */}
       <NutritionMotionButton
-        accessibilityLabel={ctaLabel}
+        accessibilityLabel={activePlan ? QUICK_EDIT_COPY.redo : ctaLabel}
+        tone={activePlan ? 'neutral' : 'nutrition'}
         onPress={() => router.push(builderHref)}
       >
-        {ctaLabel}
+        {activePlan ? QUICK_EDIT_COPY.redo : ctaLabel}
       </NutritionMotionButton>
     </ScrollView>
   )
