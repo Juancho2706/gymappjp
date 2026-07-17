@@ -81,14 +81,14 @@ export const MODULE_CATALOG: Record<ModuleKey, ModuleCatalogEntry> = {
     nutrition_exchanges: {
         label: 'Nutrición Pro',
         pitch:
-            'El plan de nutrición a nivel profesional: pautas por porciones e intercambios (el método de los nutricionistas), plantillas reutilizables, micronutrientes avanzados y objetivos por composición corporal. ' +
-            'Todo exportable a PDF con tu marca.',
+            'El plan de nutrición a nivel profesional: desde pautas por porciones e intercambios (el método de los nutricionistas) hasta planes híbridos que combinan franjas guiadas con libertad de registro. ' +
+            'Suma variantes de día, micronutrientes avanzados, objetivos finos por alumno y notas clínicas privadas y de protocolo que solo ves tú.',
         surfaces: [
-            'Modo Intercambios dentro del plan nutricional',
-            'Plantillas de plan reutilizables',
-            'Micronutrientes avanzados en el plan',
-            'Objetivos por composición corporal',
-            'PDF de pauta con tu marca',
+            'Estrategias avanzadas del plan (intercambios y plan híbrido)',
+            'Variantes de día en un mismo plan',
+            'Micronutrientes avanzados en la ficha del alumno',
+            'Notas clínicas privadas y de protocolo',
+            'Histórico completo de nutrición del alumno',
         ],
         priceClp: 9990,
     },
