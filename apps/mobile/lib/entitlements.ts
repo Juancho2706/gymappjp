@@ -208,7 +208,8 @@ async function readClientFlagFromDisk(key: string, now: number): Promise<boolean
 async function clearClientFlagDisk(): Promise<void> {
     try {
         const keys = (await AsyncStorage.getAllKeys()).filter((k) => k.startsWith(`${CLIENT_FLAG_PREFIX}:`))
-        if (keys.length) await AsyncStorage.multiRemove(keys)
+        // multiRemove ya no existe en la interfaz de @react-native-async-storage v3.
+        if (keys.length) await Promise.all(keys.map((k) => AsyncStorage.removeItem(k)))
     } catch {
         /* best-effort */
     }
