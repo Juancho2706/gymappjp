@@ -145,6 +145,61 @@ export function getNutritionCoachHubV2ForWeb(input: {
   })
 }
 
+// Interfaz minima para leer `nutrition_v2_conversion_links` (patron identico a `RpcClient` mas
+// arriba: cast acotado, cero `any` fuera de esta forma). TODO(nutrition-v2-conversion): la tabla
+// aun no esta en `database.types.ts` — la crea la migracion aditiva
+// `20260717120000_nutrition_v2_conversion_links.sql` (specs/nutrition-v2-conversion/SPEC.md
+// §Trazabilidad), pendiente de aplicar a prod (protocolo aditivo-en-LIVE). Regenerar
+// `database.types.ts` y retirar este cast cuando la migracion este LIVE.
+type ConversionLinkClient = {
+  from: (table: string) => {
+    select: (columns: string) => {
+      eq: (
+        column: string,
+        value: string,
+      ) => {
+        maybeSingle: () => Promise<{
+          data: { converted_at: string } | null
+          error: { message: string; code?: string } | null
+        }>
+      }
+    }
+  }
+}
+
+/**
+ * Link de trazabilidad V1->V2 del plan vigente (si existe). Alimenta el banner "plan convertido"
+ * de la ficha del coach (SPEC AC8). RLS en `nutrition_v2_conversion_links` ya scopea la fila al
+ * coach dueno (`coach_id = auth.uid()`); el filtro por `v2_plan_id` acota a lo sumo un link
+ * (1 plan V1 -> 1 plan V2, el mismo plan sobrevive los re-sync que solo versionan).
+ *
+ * No-bloqueante por diseno: si la tabla no existe todavia (migracion sin aplicar) o el read
+ * falla por cualquier razon, degrada a `null` (sin banner) en vez de romper la ficha — el aviso
+ * es informativo, nunca critico para ver el plan del alumno.
+ */
+export async function getNutritionConversionLinkForWeb(input: {
+  v2PlanId: string
+}): Promise<{ convertedAt: string } | null> {
+  noStore()
+  const client = await createClient()
+  const { data, error } = await (client as unknown as ConversionLinkClient)
+    .from('nutrition_v2_conversion_links')
+    .select('converted_at')
+    .eq('v2_plan_id', input.v2PlanId)
+    .maybeSingle()
+
+  if (error) {
+    console.error('nutrition_v2_web_read', {
+      rpc: 'nutrition_v2_conversion_links.select',
+      ok: false,
+      errorCode: error.code ?? 'READ_ERROR',
+    })
+    return null
+  }
+
+  return data ? { convertedAt: data.converted_at } : null
+}
+
 export function getNutritionClientDetailV2ForWeb(input: {
   clientId: string
   scope: NutritionV2CoachScope

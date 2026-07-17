@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
-import { ArrowLeft, History, Info, ListChecks, Utensils } from 'lucide-react'
+import { History, Info, ListChecks, Utensils } from 'lucide-react'
 import {
   MacroChipRow,
   NutritionCard,
@@ -62,15 +62,7 @@ export default async function StudentNutritionV2Page({ params, searchParams }: P
       eyebrow="Vista previa"
       title="Nutrición"
       description="Prescripción, consumo real e historial en una sola experiencia."
-      actions={
-        <Link
-          href={`${base}/dashboard`}
-          className="inline-flex min-h-11 items-center gap-2 rounded-control border border-border-default bg-surface-card px-3 text-sm font-semibold text-strong"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Volver
-        </Link>
-      }
+      backHref={`${base}/dashboard`}
       toolbar={
         <NutritionToolbar>
           <ViewLink active={view === 'today'} href={`${base}/nutrition-v2`} icon={<Utensils className="h-4 w-4" />}>

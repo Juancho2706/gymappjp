@@ -33,8 +33,15 @@ alimentos + navbar propia en prod; catálogo genérico dedupeado (532 alimentos)
 - [ ] Métricas del canary (runbook §5) + presupuesto de performance.
 
 ### Antes de merge a master
-- [ ] **Asistente de conversión de planes V1→V2** (coach-driven, draft pre-llenado, el coach
-      revisa y publica). Bloquea la deprecación de V1, no T12. Esfuerzo M. **No construido.**
+- [x] **Conversión de planes V1→V2**: se reemplazó el asistente coach-driven por una
+      **conversión dark automática** (decisión CEO 2026-07-17: cero fricción para coaches).
+      Construida en `feat/nutrition-v2-conversion`: mapeo puro (`packages/nutrition-v2/conversion.ts`,
+      19 tests), driver CLI dry-run/apply (`scripts/nutrition-v2-conversion/`), migración
+      `20260717120000` (tabla puente `nutrition_v2_conversion_links` + wrapper de publish
+      impersonado service-role-only), banner "plan convertido" en la ficha coach.
+      Spec: `specs/nutrition-v2-conversion/`. **Falta operar** (con GO del CEO):
+      aplicar migración → dry-run + reporte de fidelidad → `--apply` (dark) →
+      re-sync semanal hasta el flip. Planes `exchanges` (6, solo socios/e2e) = manual.
 - [x] Decisión sobre cambios V1 sin flag → **aceptar con QA dirigido** (CEO, 2026-07-16).
 - [x] Herramientas V1: retirar duplicado hábitos, mantener swaps Pro, adoptar favoritos+export,
       eliminar notas/compras/recetas al deprecar (CEO). Favoritos+compartir ya adoptados.

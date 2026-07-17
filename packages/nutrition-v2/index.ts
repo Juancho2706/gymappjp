@@ -1,5 +1,10 @@
 export * from './design'
 export * from './aura'
+// NOTE: './conversion' is deliberately NOT re-exported here. It is driver-only code
+// (V1->V2 migration script) never invoked at app runtime, and it uses APIs with weak
+// Hermes support (String.prototype.normalize). Keeping it out of this barrel prevents
+// Metro from bundling dead conversion logic into the RN app. The driver imports it via
+// the '@eva/nutrition-v2/conversion' subpath export (see package.json).
 export * from './read-models'
 export * from './catalog'
 export * from './rollout'

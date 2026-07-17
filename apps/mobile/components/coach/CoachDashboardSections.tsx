@@ -81,6 +81,7 @@ import { Avatar } from '../Avatar'
 import { Badge } from '../Badge'
 import { ListRow } from '../ListRow'
 import { SegmentedTabs } from '../SegmentedTabs'
+import { NavIconRN } from '../NavIconRN'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { apiFetch, getApiBaseUrl } from '../../lib/api'
@@ -2133,7 +2134,7 @@ export function CoachNewsBell({ tileStyle }: { tileStyle: object }) {
   return (
     <>
       <TouchableOpacity activeOpacity={0.8} accessibilityLabel="Novedades" testID="coach-news-bell" onPress={openSheet} style={tileStyle}>
-        <Bell size={19} color={theme.foreground} strokeWidth={2.1} />
+        <NavIconRN concept="novedades" size={19} color={theme.foreground} />
         {badge ? (
           <View
             style={{

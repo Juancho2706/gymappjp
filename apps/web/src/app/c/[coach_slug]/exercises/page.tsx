@@ -1,7 +1,8 @@
 import { redirect } from "next/navigation";
 import type { Metadata } from "next";
+import Link from "next/link";
 import { ClientExerciseCatalog } from "./ClientExerciseCatalog";
-import { Dumbbell } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { getClientExerciseCatalogData } from "./_data/exercises.queries";
 import { getClientBasePath } from "@/lib/client/base-path";
 
@@ -27,16 +28,20 @@ export default async function ClientExercisesPage({ params, searchParams }: Prop
 
   return (
     <div className="min-h-dvh bg-surface-app pb-32 md:pb-0">
-      {/* Móvil (<760): header sticky branded — pantalla alumno verbatim */}
-      <header className="sticky top-0 z-40 flex items-center gap-[11px] border-b border-subtle px-4 py-4 pt-safe backdrop-blur-xl md:hidden bg-[color-mix(in_srgb,var(--surface-app)_80%,transparent)]">
-        <div className="flex h-[38px] w-[38px] flex-shrink-0 items-center justify-center rounded-control bg-sport-100 text-sport-600">
-          <Dumbbell className="h-5 w-5" />
-        </div>
-        <div>
-          <h1 className="font-display text-[22px] font-black leading-none tracking-[-0.02em] text-strong">
+      {/* Móvil (<760): header sticky branded — flecha + título (patrón nutrición) */}
+      <header className="sticky top-0 z-40 flex items-center gap-1 border-b border-subtle px-4 pb-3.5 pt-[calc(env(safe-area-inset-top,0px)+14px)] backdrop-blur-xl md:hidden bg-[color-mix(in_srgb,var(--surface-app)_80%,transparent)]">
+        <Link
+          href={`${base}/dashboard`}
+          aria-label="Volver"
+          className="-ml-2 flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full text-strong transition-colors active:bg-surface-card"
+        >
+          <ArrowLeft className="h-5 w-5" />
+        </Link>
+        <div className="min-w-0">
+          <h1 className="truncate font-display text-[22px] font-black leading-none tracking-[-0.02em] text-strong">
             Aprender
           </h1>
-          <p className="mt-0.5 text-[12.5px] text-muted">
+          <p className="mt-0.5 truncate text-[12.5px] text-muted">
             Técnica de cada ejercicio
           </p>
         </div>
