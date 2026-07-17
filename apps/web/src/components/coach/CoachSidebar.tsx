@@ -25,6 +25,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Avatar } from '@/components/ui/avatar'
+import { CoachNavIcon, type CoachNavConcept } from '@/components/coach/CoachNavIcon'
 import { EvaBrandIcon } from '@/components/landing/LandingBrandMark'
 import { getVisibleNavItems, splitForSidebar, isNavItemActiveForPath, type NavModule } from '@eva/coach-nav'
 import type { WorkspaceSummary, WorkspaceType } from '@/domain/auth/types'
@@ -108,6 +109,21 @@ const navIcon = (item: NavModule): LucideIcon => ICON_OVERRIDE[item.key] ?? ICON
 
 /** Capsula flotante movil — claves de los tabs PRIMARIOS (espejo del coachTabs del diseño eva-app). */
 const MOBILE_TAB_KEYS = ['dashboard', 'clients', 'programs', 'nutrition', 'options', 'settings_team', 'team', 'reactivate'] as const
+
+/**
+ * Glifo propio (silueta del CEO) por clave de nav — SOLO para la cápsula móvil. Reemplaza al
+ * icono lucide conservando tamaño/color por estado del call site. Las claves sin entrada
+ * (p.ej. `reactivate`) caen al icono lucide (`navIcon`). El sidebar desktop NO usa este mapa.
+ */
+const MOBILE_GLYPH_BY_KEY: Record<string, CoachNavConcept> = {
+    dashboard: 'home',
+    clients: 'alumnos',
+    programs: 'programas',
+    nutrition: 'nutricion',
+    options: 'ajustes',
+    settings_team: 'ajustes',
+    team: 'equipo',
+}
 
 export function CoachSidebar({ coachName, coachBrand, subscriptionStatus, enterpriseContext, activeWorkspaceType, enabledModules, disabledDomains, logoUrl }: CoachSidebarProps) {
     const pathname = usePathname()
@@ -372,6 +388,7 @@ export function CoachSidebar({ coachName, coachBrand, subscriptionStatus, enterp
                     {mobileTabs.map((item) => {
                         const active = isNavItemActive(item)
                         const Icon = navIcon(item)
+                        const glyph = MOBILE_GLYPH_BY_KEY[item.key]
                         const label = displayLabel(item)
                         return (
                             <Link
@@ -401,11 +418,13 @@ export function CoachSidebar({ coachName, coachBrand, subscriptionStatus, enterp
                                 <span
                                     className={cn(
                                         'inline-flex h-6 w-6 items-center justify-center',
-                                        active && '[&_svg]:fill-current [&_svg]:[fill-opacity:0.18]'
+                                        // El fill-current es un truco para el trazo lucide del activo;
+                                        // los glifos ya son siluetas rellenas (heredan `color`).
+                                        active && !glyph && '[&_svg]:fill-current [&_svg]:[fill-opacity:0.18]'
                                     )}
                                     style={{ transform: active ? 'translateY(-1px)' : 'none', transition: 'transform var(--dur-base) var(--ease-spring)' }}
                                 >
-                                    <Icon size={24} />
+                                    {glyph ? <CoachNavIcon concept={glyph} className="h-6 w-6" /> : <Icon size={24} />}
                                 </span>
                                 <span
                                     style={{

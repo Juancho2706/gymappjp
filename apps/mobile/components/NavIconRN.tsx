@@ -25,6 +25,15 @@ const SOURCES = {
   'cerrar-sesion': require('../assets/nav-icons/cerrar-sesion.png'),
   entrenamiento: require('../assets/nav-icons/entrenamiento.png'),
   aprender: require('../assets/nav-icons/aprender.png'),
+  // Siluetas del coach (mismo set blanco-sobre-alfa que el alumno).
+  alumnos: require('../assets/nav-icons/alumnos.png'),
+  programas: require('../assets/nav-icons/programas.png'),
+  equipo: require('../assets/nav-icons/equipo.png'),
+  ajustes: require('../assets/nav-icons/ajustes.png'),
+  herramientas: require('../assets/nav-icons/herramientas.png'),
+  suscripcion: require('../assets/nav-icons/suscripcion.png'),
+  buscar: require('../assets/nav-icons/buscar.png'),
+  novedades: require('../assets/nav-icons/novedades.png'),
 } as const
 
 export type NavConceptRN = keyof typeof SOURCES

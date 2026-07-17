@@ -25,12 +25,12 @@ type MobileNavRoute = { tab?: string; path: string; icon: LucideIcon; label: str
 
 const NAV_ROUTE: Record<string, MobileNavRoute> = {
   dashboard: { tab: 'home', path: '/coach/home', icon: Home, label: 'Inicio', concept: 'home' },
-  clients: { tab: 'clientes', path: '/coach/clientes', icon: Users, label: 'Alumnos' },
-  programs: { tab: 'builder', path: '/coach/builder', icon: Dumbbell, label: 'Programas', concept: 'entrenamiento' },
+  clients: { tab: 'clientes', path: '/coach/clientes', icon: Users, label: 'Alumnos', concept: 'alumnos' },
+  programs: { tab: 'builder', path: '/coach/builder', icon: Dumbbell, label: 'Programas', concept: 'programas' },
   nutrition: { tab: 'nutricion', path: '/coach/nutricion', icon: Utensils, label: 'Nutrición', concept: 'nutricion' },
-  options: { tab: 'settings', path: '/coach/settings', icon: Settings, label: 'Opciones' },
-  settings_team: { tab: 'settings', path: '/coach/settings', icon: Settings, label: 'Opciones' },
-  team: { tab: 'team', path: '/coach/team', icon: Shield, label: 'Equipo' },
+  options: { tab: 'settings', path: '/coach/settings', icon: Settings, label: 'Opciones', concept: 'ajustes' },
+  settings_team: { tab: 'settings', path: '/coach/settings', icon: Settings, label: 'Opciones', concept: 'ajustes' },
+  team: { tab: 'team', path: '/coach/team', icon: Shield, label: 'Equipo', concept: 'equipo' },
   reactivate: { tab: 'reactivate', path: '/coach/reactivate', icon: LayoutDashboard, label: 'Reactivar' },
 }
 
