@@ -1,4 +1,3 @@
-import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { NutritionPageShell } from '@/components/nutrition-v2'
 import { getNutritionPlansPageCoach } from '../nutrition-plans/_data/nutrition-page.queries'
@@ -101,15 +100,6 @@ export default async function CoachNutritionV2Page({ searchParams }: Props) {
           />
         }
       />
-      <p className="mt-10 border-t border-border-subtle pt-4 text-center text-xs text-muted">
-        ¿Buscas la versión anterior?{' '}
-        <Link
-          href="/coach/nutrition-plans"
-          className="font-semibold underline underline-offset-2 hover:text-strong"
-        >
-          Ir a Nutrición V1
-        </Link>
-      </p>
     </NutritionPageShell>
   )
 }
