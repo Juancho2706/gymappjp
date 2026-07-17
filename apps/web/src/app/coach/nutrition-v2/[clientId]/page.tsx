@@ -32,6 +32,7 @@ import { AssignPlanToClientsDialog, type AssignRosterEntry } from '../_component
 import { ArchivePlanButton } from '../_components/ArchivePlanButton'
 import { ConvertedPlanBanner } from '../_components/ConvertedPlanBanner'
 import { canAssignSourcePlan } from '../_lib/assign-plan'
+import { QuickEditEntry } from './_quick-edit/QuickEditEntry'
 
 interface Props {
   params: Promise<{ clientId: string }>
@@ -137,13 +138,24 @@ export default async function CoachNutritionV2ClientPage({ params, searchParams 
       title={detail.client.fullName}
       backHref="/coach/nutrition-v2"
       actions={
-        <Link
-          href={`/coach/nutrition-v2/${clientId}/builder`}
-          className="inline-flex min-h-11 items-center gap-1.5 rounded-control bg-primary/100 px-3.5 text-sm font-semibold text-white transition-colors hover:bg-primary/90 md:gap-2 md:px-4"
-        >
-          <Plus className="h-4 w-4" />
-          {hasPlan ? 'Nueva version' : 'Crear plan'}
-        </Link>
+        // Con plan vigente la CTA primaria es EDITAR in-place (quick-edit); el wizard queda
+        // como camino secundario "Rehacer con el asistente" en el menu "..." del entry.
+        hasPlan ? (
+          <QuickEditEntry
+            clientId={clientId}
+            clientName={detail.client.fullName}
+            planModel={detail.plan}
+            today={today}
+          />
+        ) : (
+          <Link
+            href={`/coach/nutrition-v2/${clientId}/builder`}
+            className="inline-flex min-h-11 items-center gap-1.5 rounded-control bg-primary/100 px-3.5 text-sm font-semibold text-white transition-colors hover:bg-primary/90 md:gap-2 md:px-4"
+          >
+            <Plus className="h-4 w-4" />
+            Crear plan
+          </Link>
+        )
       }
       aside={
         <NutritionCard tone="neutral">
