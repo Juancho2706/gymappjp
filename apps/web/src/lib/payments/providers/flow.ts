@@ -22,6 +22,7 @@ import {
     type FlowPaymentStatus,
 } from '@/lib/payments/providers/flow-normalize'
 import { parseOneShotAddonReference, parseTierUpgradeReference } from '@/lib/payments/providers/mercadopago'
+import { ProviderRequestError } from '@/lib/payments/provider-error'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 
 type FlowCycle = 'monthly' | 'quarterly' | 'annual'
@@ -93,7 +94,14 @@ export class FlowProvider implements PaymentsProvider {
         } catch {
             /* body no-JSON */
         }
-        throw new Error(`Flow ${service} failed (HTTP ${res.status})${code != null ? ` code=${code}` : ''}: ${message ?? text}`)
+        // ProviderRequestError = subtipo de Error con el MISMO message (cero regresión — los callers
+        // que hacen `/already been used/i.test(msg)` o leen `.message` siguen igual) + el status HTTP
+        // tipado, que el cron paid-expiry usa para distinguir un not-found de un fallo transitorio.
+        throw new ProviderRequestError(
+            'flow',
+            res.status,
+            `Flow ${service} failed (HTTP ${res.status})${code != null ? ` code=${code}` : ''}: ${message ?? text}`
+        )
     }
 
     /** POST firmado (application/x-www-form-urlencoded). El `apiKey` se inyecta acá. */
