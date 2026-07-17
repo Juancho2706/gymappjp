@@ -164,6 +164,22 @@ Si no puedes resolver en 30 minutos:
 | `/api/cron/purge-data` | Domingos 03:00 | Purga datos de cuentas borradas/expiradas según política de retención; registra en `purge_audit`. |
 | `/api/cron/audit-checksum` | Domingos 02:00 | Calcula y almacena checksum de tablas de auditoría para detectar manipulación (`audit_log_checksums`). |
 | `/api/cron/mp-reconcile` | Viernes 10:00 | Reconcilia suscripciones de MercadoPago contra el estado local (detecta cancelaciones silenciosas, retries fallidos). |
+| `/api/cron/flow-reconcile` | Diario 11:00 | Backstop ALERT-ONLY de Flow: divergencias de estado/período + sync acotado del compuesto (audit `coach.flow_*`). |
+| `/api/cron/paid-expiry` | Diario 12:30 | Backstop **provider-verified**: expira suscripciones PAGAS (`payment_provider` mp/flow) con período vencido cuyo evento terminal se perdió (webhook out-of-band). Ver detalle abajo. |
+
+### `paid-expiry` — backstop de suscripciones pagas con webhook terminal perdido
+
+**Problema que cubre.** Un evento terminal del gateway que EVA nunca recibió por webhook (ej. la migración de cuenta MP del 2026-07-05 canceló preapprovals POR API en la cuenta vieja = cancelación out-of-band, sin notificación) deja al coach con `subscription_status='active'` congelado y `current_period_end` vencido. El gate `hasEffectiveAccess` con status `'active'` NUNCA mira la fecha → Pro gratis indefinido (fuga de revenue silenciosa; caso real joaquinamr7, 16-jul). Ni `trial-expiry` (solo `'trialing'`) ni `mp/flow-reconcile` (alert-only) lo bajan.
+
+**Decisión provider-verified (no negociable).** NUNCA expira solo por la fecha — eso cortaría a un coach que el gateway AÚN puede cobrar (dunning). Antes de expirar verifica el estado REAL en el gateway (`fetchCheckoutSnapshot`: MP preapproval / Flow subscription) y decide con la función pura `resolvePaidExpiryDecision`:
+1. Remota MUERTA (MP `cancelled` / Flow status 4 `cancelada` / rechazada, o 404 not-found) → **EXPIRE**.
+2. DB `canceled` sin id de suscripción → **EXPIRE** (cancelación ya procesada, nada que verificar).
+3. Remota VIVA (`authorized`/`active`/`pending`/`paused`) → **ALERT-ONLY** (nulear el id rompería el matching del webhook de recuperación del dunning = cobro real perdido).
+4. Error transitorio de red/5xx, o `'active'` sin id verificable → **ALERT-ONLY** (fail-safe).
+
+**Acción EXPIRE** (espejo del terminal del webhook): `subscription_status='expired'`, `current_period_end=null`, nulea SOLO el id del provider correspondiente (`subscription_mp_id` o `subscription_provider_external_id`); PRESERVA `subscription_tier`/`max_clients`/`billing_cycle` (la página de reactivación pre-selecciona el plan). Cancela add-ons vivos (`cancelAllForCoach` → trigger D1 apaga módulos) y revierte el cupón vivo (`revertActiveCouponForCoach`) — reusa los MISMOS helpers que el webhook. Audit: `coach.paid_expired_auto`; alertas: `coach.paid_expiry_alert`; resumen de corrida: `cron.paid_expiry_ran` + email a `ADMIN_EMAILS` (expirados / alertados con razón / errores).
+
+**Excluye a propósito:** `payment_provider` admin/beta/internal (comps y cortesías manuales) y statuses org_managed/team_managed/expired/pending_payment. Gracia de 24h en la query (no corta en el borde de una renovación cuyo webhook está en vuelo). Schedule 12:30 UTC, escalonado tras trial-expiry (12:00), mp-reconcile (10:00) y flow-reconcile (11:00).
 
 ### Crons retirados del schedule en F1 (handlers vivos — sin disparo automático)
 

@@ -6,6 +6,7 @@ import {
     type SubscriptionTier,
 } from '@/lib/constants'
 import { parseCheckoutExternalReference } from '@/lib/payments/checkout-external-reference'
+import { ProviderRequestError } from '@/lib/payments/provider-error'
 import { MODULE_KEYS, type ModuleKey } from '@/services/entitlements.service'
 import type {
     CreateCheckoutInput,
@@ -179,7 +180,15 @@ async function mpRequest(path: string) {
     if (!response.ok) {
         const text = await response.text()
         const requestId = response.headers.get('x-request-id')
-        throw new Error(`MercadoPago request failed (${response.status})${requestId ? ` [x-request-id: ${requestId}]` : ''}: ${text}`)
+        // ProviderRequestError = subtipo de Error con el MISMO message (cero regresión) + el status
+        // HTTP tipado, que el cron paid-expiry usa para distinguir 404 (suscripción muerta) de un
+        // fallo transitorio (fail-safe alert-only).
+        throw new ProviderRequestError(
+            'mercadopago',
+            response.status,
+            `MercadoPago request failed (${response.status})${requestId ? ` [x-request-id: ${requestId}]` : ''}: ${text}`,
+            requestId
+        )
     }
     return response.json()
 }
