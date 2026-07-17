@@ -18,8 +18,8 @@
  * en `apps/mobile/assets/badges/<badge>.webp`. */
 export type CelebrationBadge = 'primer-registro' | 'dia-cerrado' | 'primer-escaneo'
 
-/** Los tres momentos que disparan una posible celebración. */
-export type CelebrationMoment = 'meal-logged' | 'day-closed' | 'scanner-hit'
+/** Los momentos que disparan una posible celebración. */
+export type CelebrationMoment = 'meal-logged' | 'day-closed' | 'scanner-hit' | 'energy-goal'
 
 /** `full` = celebración completa (cierre del día): confeti + spring largo.
  * `micro` = micro-pop breve (registro / escaneo): badge con spring corto. */
@@ -66,6 +66,20 @@ export function decideScannerHitCelebration(alreadyCelebratedEver: boolean): Cel
   return { badge: 'primer-escaneo', variant: 'micro' }
 }
 
+/**
+ * Cruce de la meta de energía del día → celebración completa `dia-cerrado`
+ * (confeti + spring largo), SOLO si se alcanzó la meta y no se celebró ya hoy.
+ * Se celebra el HÁBITO de llegar a tu objetivo, nunca "quemar" ni un déficit.
+ * Sin meta el caller nunca marca `reached` (ver `energyGoalReached`) → silencio.
+ */
+export function decideEnergyGoalCelebration(
+  reached: boolean,
+  alreadyCelebratedToday: boolean,
+): CelebrationDecision | null {
+  if (!reached || alreadyCelebratedToday) return null
+  return { badge: 'dia-cerrado', variant: 'full' }
+}
+
 // ---------------------------------------------------------------------------
 // "Día completo" — definición de HÁBITO (no calórica). El día se considera
 // cerrado cuando existe al menos una franja prescrita y TODAS las franjas
@@ -106,6 +120,11 @@ export function dayClosedDailyKey(userId: string, localDate: string): string {
 /** Marca persistente (una sola vez absoluta) del primer escaneo: `nutriCeleb:scan:<userId>`. */
 export function scannerHitKey(userId: string): string {
   return `${KEY_PREFIX}:scan:${userId}`
+}
+
+/** Marca diaria del cruce de la meta de energía: `nutriCeleb:energy:<userId>:<YYYY-MM-DD>`. */
+export function energyGoalDailyKey(userId: string, localDate: string): string {
+  return `${KEY_PREFIX}:energy:${userId}:${localDate}`
 }
 
 // ---------------------------------------------------------------------------

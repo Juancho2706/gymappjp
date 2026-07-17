@@ -1,4 +1,5 @@
 export * from './design'
+export * from './aura'
 export * from './read-models'
 export * from './catalog'
 export * from './rollout'

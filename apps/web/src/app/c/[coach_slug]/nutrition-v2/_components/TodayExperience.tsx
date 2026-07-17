@@ -6,13 +6,12 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { AlertTriangle, CheckCircle2, Pencil, Plus, ScanBarcode, Trash2, Utensils } from 'lucide-react'
 import {
-  createNutritionMacroValue,
+  firstNameFromFullName,
   type FoodCatalogItem,
   type NutritionIntakeReadItem,
   type NutritionTodayReadModel,
 } from '@eva/nutrition-v2'
 import {
-  MacroBudget,
   MacroChipRow,
   NutritionCard,
   NutritionMotionButton,
@@ -21,6 +20,7 @@ import {
   StrategyBadge,
 } from '@/components/nutrition-v2'
 import { formatNutritionShortDate } from '@/lib/date-utils'
+import { AuraHero } from './AuraHero'
 import { TodayModal } from './TodayModal'
 import { NutritionFoodRow } from './NutritionFoodRow'
 import { foodResultImage } from './food-result-image'
@@ -59,11 +59,14 @@ export function TodayExperience({
   clientId,
   revalidatePath,
   scanHref,
+  clientName,
 }: {
   today: NutritionTodayReadModel
   clientId: string
   revalidatePath: string
   scanHref: string
+  /** Nombre completo del alumno para el saludo del héroe (opcional; sin él, saludo sin nombre). */
+  clientName?: string | null
 }) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
@@ -133,22 +136,15 @@ export function TodayExperience({
         ) : null}
       </div>
 
-      <MacroBudget
-        calories={{ consumed: today.consumed.calories, target: today.targets.calories ?? 0 }}
-        macros={[
-          createNutritionMacroValue('protein', {
-            consumed: today.consumed.proteinG,
-            target: today.targets.proteinG ?? 0,
-          }),
-          createNutritionMacroValue('carbs', {
-            consumed: today.consumed.carbsG,
-            target: today.targets.carbsG ?? 0,
-          }),
-          createNutritionMacroValue('fats', {
-            consumed: today.consumed.fatsG,
-            target: today.targets.fatsG ?? 0,
-          }),
-        ]}
+      <AuraHero
+        greetingName={firstNameFromFullName(clientName)}
+        dateKey={today.localDate}
+        calories={{ consumed: today.consumed.calories, target: today.targets.calories }}
+        macros={{
+          protein: { consumed: today.consumed.proteinG, target: today.targets.proteinG },
+          carbs: { consumed: today.consumed.carbsG, target: today.targets.carbsG },
+          fats: { consumed: today.consumed.fatsG, target: today.targets.fatsG },
+        }}
       />
 
       {error ? (

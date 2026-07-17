@@ -6,8 +6,8 @@ import { FlashList } from '@shopify/flash-list'
 import { MotiView } from 'moti'
 import { History, ListChecks, Utensils } from 'lucide-react-native'
 import {
+  AuraHero,
   FoodRow,
-  MacroBudget,
   MacroChipRow,
   NutritionCard,
   NutritionHeader,
@@ -26,8 +26,9 @@ import {
   NutritionHistoryPageReadModelSchema,
   NutritionPlanReadModelSchema,
   NutritionTodayReadModelSchema,
-  createNutritionMacroValue,
   describeLegacyHistoryDay,
+  energyGoalReached,
+  firstNameFromFullName,
   formatNutritionAmount,
   formatNutritionCalories,
   type NutritionFoodRowModel,
@@ -69,12 +70,14 @@ import {
 import { useEvaMotion } from '../../../lib/motion'
 import {
   decideDayCloseCelebration,
+  decideEnergyGoalCelebration,
   decideMealLoggedCelebration,
   isNutritionDayComplete,
   type CelebrationDecision,
 } from '../../../lib/nutrition-v2-celebrations'
 import {
   claimDayCloseCelebration,
+  claimEnergyGoalCelebration,
   claimMealLoggedCelebration,
 } from '../../../lib/nutrition-v2-celebrations.storage'
 import { useTheme } from '../../../context/ThemeContext'
@@ -109,6 +112,7 @@ function TodayTab() {
   const router = useRouter()
   const entitlements = useEntitlements()
   const [userId, setUserId] = useState<string | null>(null)
+  const [clientName, setClientName] = useState<string | null>(null)
   const [deviceId, setDeviceId] = useState<string | null>(null)
   const [model, setModel] = useState<NutritionTodayReadModel | null>(null)
   const [loading, setLoading] = useState(true)
@@ -139,8 +143,14 @@ function TodayTab() {
 
   useEffect(() => {
     let active = true
-    void supabase.auth.getSession().then(({ data }) => {
-      if (active) setUserId(data.session?.user.id ?? null)
+    void supabase.auth.getSession().then(async ({ data }) => {
+      const uid = data.session?.user.id ?? null
+      if (active) setUserId(uid)
+      if (uid) {
+        // Nombre para el saludo del héroe (RLS limita a la fila propia). Sin fila/nombre => saludo sin nombre.
+        const { data: row } = await supabase.from('clients').select('full_name').eq('id', uid).maybeSingle()
+        if (active) setClientName((row?.full_name as string | null) ?? null)
+      }
     })
     void getStableDeviceId().then((id) => {
       if (active) setDeviceId(id)
@@ -452,6 +462,35 @@ function TodayTab() {
     }
   }, [userId, dayComplete, date, fireCelebration])
 
+  // Energía consumida del día incluyendo el overlay optimista (mismo cálculo que el render).
+  const consumedCalories = useMemo(() => {
+    if (!model) return 0
+    const hidden = new Set(overlay.hiddenIds)
+    let cal = model.consumed.calories
+    for (const rows of Object.values(overlay.addedBySlot)) for (const row of rows) cal += row.calories ?? 0
+    for (const row of overlay.addedUnassigned) cal += row.calories ?? 0
+    const sub = (items: NutritionIntakeReadItem[]) => {
+      for (const it of items) if (hidden.has(it.id)) cal -= it.totals.calories
+    }
+    model.mealSlots.forEach((slot) => sub(slot.intakeItems))
+    sub(model.unassignedIntake)
+    return Math.max(cal, 0)
+  }, [model, overlay])
+
+  // Cruce de la meta de energía → celebración completa (confeti + badge), una vez por día.
+  useEffect(() => {
+    if (!userId || !model) return
+    if (!energyGoalReached(consumedCalories, model.targets.calories)) return
+    let active = true
+    void claimEnergyGoalCelebration(userId, date).then((claimed) => {
+      const decision = decideEnergyGoalCelebration(true, !claimed)
+      if (active && decision) fireCelebration(decision)
+    })
+    return () => {
+      active = false
+    }
+  }, [userId, model, consumedCalories, date, fireCelebration])
+
   if (!entitlements.ready || loading) {
     return (
       <View className="flex-1 bg-surface-app px-4 pt-6">
@@ -579,13 +618,14 @@ function TodayTab() {
           </View>
         ) : null}
 
-        <MacroBudget
-          calories={{ consumed: consumed.calories, target: model.targets.calories ?? 0 }}
-          macros={[
-            createNutritionMacroValue('protein', { consumed: consumed.proteinG, target: model.targets.proteinG ?? 0 }),
-            createNutritionMacroValue('carbs', { consumed: consumed.carbsG, target: model.targets.carbsG ?? 0 }),
-            createNutritionMacroValue('fats', { consumed: consumed.fatsG, target: model.targets.fatsG ?? 0 }),
-          ]}
+        <AuraHero
+          greetingName={firstNameFromFullName(clientName)}
+          calories={{ consumed: consumed.calories, target: model.targets.calories }}
+          macros={{
+            protein: { consumed: consumed.proteinG, target: model.targets.proteinG },
+            carbs: { consumed: consumed.carbsG, target: model.targets.carbsG },
+            fats: { consumed: consumed.fatsG, target: model.targets.fatsG },
+          }}
         />
 
         {model.mealSlots.length > 0 ? (

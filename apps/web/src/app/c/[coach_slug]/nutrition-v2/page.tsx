@@ -20,7 +20,7 @@ import {
 import { formatNutritionShortDate, getTodayInSantiago } from '@/lib/date-utils'
 import { getClientBasePath } from '@/lib/client/base-path'
 import { getClientNutritionUser } from '../nutrition/_data/nutrition-auth.queries'
-import { getClientScope } from '../nutrition/_data/client-scope.queries'
+import { getClientDisplayName, getClientScope } from '../nutrition/_data/client-scope.queries'
 import {
   getNutritionHistoryV2ForWeb,
   getNutritionPlanV2ForWeb,
@@ -128,9 +128,10 @@ async function TodayView({ clientId, date, base }: { clientId: string; date: str
   // ficha del coach). El registro del dia (`today.plan`) puede seguir apuntando al plan anterior o
   // venir vacio si se genero antes de publicar el nuevo: eso NO oculta la pantalla, se refleja con
   // un aviso honesto arriba y el alumno igual puede registrar lo que coma.
-  const [today, plan] = await Promise.all([
+  const [today, plan, clientName] = await Promise.all([
     getNutritionTodayV2ForWeb({ clientId, date }),
     getNutritionPlanV2ForWeb({ clientId, date }),
+    getClientDisplayName(clientId),
   ])
 
   if (!plan.plan) {
@@ -161,6 +162,7 @@ async function TodayView({ clientId, date, base }: { clientId: string; date: str
       <TodayExperience
         today={today}
         clientId={clientId}
+        clientName={clientName}
         revalidatePath={`${base}/nutrition-v2`}
         scanHref={`${base}/nutrition-v2/scanner`}
       />

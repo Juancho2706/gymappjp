@@ -12,6 +12,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import {
   dayClosedDailyKey,
+  energyGoalDailyKey,
   mealLoggedDailyKey,
   scannerHitKey,
 } from './nutrition-v2-celebrations'
@@ -47,4 +48,9 @@ export function claimDayCloseCelebration(userId: string, localDate: string): Pro
 /** Primer escaneo con hit — una sola vez absoluta (por usuario). */
 export function claimScannerHitCelebration(userId: string): Promise<boolean> {
   return claim(scannerHitKey(userId))
+}
+
+/** Cruce de la meta de energía del día (por usuario+fecha). */
+export function claimEnergyGoalCelebration(userId: string, localDate: string): Promise<boolean> {
+  return claim(energyGoalDailyKey(userId, localDate))
 }
