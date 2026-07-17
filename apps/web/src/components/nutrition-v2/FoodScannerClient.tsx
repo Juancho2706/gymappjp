@@ -14,6 +14,7 @@ import {
   NutritionMotionButton,
   NutritionStatePanel,
 } from '@/components/nutrition-v2'
+import { missingFoodReportKey } from '@/components/nutrition-v2/missing-food-report-key'
 
 type DetectedBarcode = { rawValue: string; format?: string }
 type BarcodeDetectorInstance = {
@@ -186,7 +187,9 @@ export function FoodScannerClient({ clientId }: { clientId: string }) {
         p_captured_brand: null,
         p_package_photo_path: null,
         p_source: 'pwa_scanner',
-        p_idempotency_key: `missing:${clientId}:${result.gtin}:${Date.now()}`,
+        // Clave ESTABLE por contenido (alumno + gtin + dia local): un reintento NO crea un
+        // reporte duplicado (antes usaba Date.now(), que rompia la deduplicacion del RPC).
+        p_idempotency_key: missingFoodReportKey({ clientId, gtin: result.gtin }),
       })
       if (error || typeof data !== 'string') throw new Error(error?.message ?? 'Invalid response')
       setReported(true)

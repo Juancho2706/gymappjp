@@ -24,6 +24,23 @@ export function effectiveDateConflicts(
 }
 
 /**
+ * "Archivar y reemplazar" archiva el plan vigente y DESPUES publica el nuevo. Esta funcion pura
+ * decide si, tras intentar el archivado, se puede avanzar a publicar.
+ *
+ * El archivado es idempotente: el UPDATE exige `lifecycle_status = 'active'`, asi que archivar
+ * un plan ya archivado (por un reintento, otra pestana o RN) afecta 0 filas y el action devuelve
+ * `PLAN_NOT_FOUND`. Ese caso ya cumple el objetivo (el plan viejo dejo de regir), asi que se
+ * puede continuar a publicar. Cualquier OTRO fallo bloquea el flujo: no seguimos si no estamos
+ * seguros de que el plan viejo quedo fuera de vigencia.
+ */
+export function canProceedToPublishAfterArchive(result: {
+  ok: boolean
+  code?: string
+}): boolean {
+  return result.ok || result.code === 'PLAN_NOT_FOUND'
+}
+
+/**
  * Devuelve el dia calendario siguiente a una fecha ISO (YYYY-MM-DD). Usa aritmetica en UTC
  * para no depender de la zona horaria del navegador (evita corrimientos de un dia). Si la
  * entrada no es una fecha ISO valida, la devuelve sin cambios (el servidor validara).

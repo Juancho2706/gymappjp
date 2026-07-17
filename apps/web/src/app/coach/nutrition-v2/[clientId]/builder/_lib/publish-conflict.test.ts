@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { effectiveDateConflicts, nextDayIso } from './publish-conflict'
+import {
+  canProceedToPublishAfterArchive,
+  effectiveDateConflicts,
+  nextDayIso,
+} from './publish-conflict'
 
 describe('effectiveDateConflicts (gate del modal de publicacion)', () => {
   it('hay conflicto cuando la fecha elegida es la misma que la vigente', () => {
@@ -42,5 +46,23 @@ describe('nextDayIso ("Empezar manana")', () => {
 
   it('no corrige fechas invalidas (las delega al servidor)', () => {
     expect(nextDayIso('no-es-fecha')).toBe('no-es-fecha')
+  })
+})
+
+describe('canProceedToPublishAfterArchive ("Archivar y reemplazar" — orden seguro)', () => {
+  it('avanza a publicar cuando el archivado fue exitoso', () => {
+    expect(canProceedToPublishAfterArchive({ ok: true })).toBe(true)
+  })
+
+  it('avanza a publicar cuando el plan ya no estaba activo (PLAN_NOT_FOUND, archivado idempotente)', () => {
+    // Otra pestana/RN o un reintento ya lo archivo: el objetivo (plan viejo fuera de vigencia)
+    // ya se cumplio, asi que se puede publicar el nuevo.
+    expect(canProceedToPublishAfterArchive({ ok: false, code: 'PLAN_NOT_FOUND' })).toBe(true)
+  })
+
+  it('bloquea cuando el archivado fallo por permisos u otro motivo (no dejar al alumno a medias)', () => {
+    expect(canProceedToPublishAfterArchive({ ok: false, code: 'SCOPE_DENIED' })).toBe(false)
+    expect(canProceedToPublishAfterArchive({ ok: false, code: 'WRITE_FAILED' })).toBe(false)
+    expect(canProceedToPublishAfterArchive({ ok: false })).toBe(false)
   })
 })

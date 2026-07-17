@@ -41,7 +41,7 @@ import {
   searchFoodCatalogCoachAction,
 } from '../_actions/builder.actions'
 import { archivePlanAction } from '@/app/coach/nutrition-v2/_actions/nutrition-archive.actions'
-import { effectiveDateConflicts, nextDayIso } from '../_lib/publish-conflict'
+import { canProceedToPublishAfterArchive, effectiveDateConflicts, nextDayIso } from '../_lib/publish-conflict'
 import { FoodResultCard } from './FoodResultCard'
 import { PublishConflictDialog } from './PublishConflictDialog'
 import { foodCategoryIconUrlFromName, resolveFoodImageUrl } from './food-card-presentation'
@@ -857,6 +857,13 @@ export function PlanBuilderClient({
   const [conflictError, setConflictError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
   const operationId = useRef(genId())
+  // Estado de recuperacion del "Archivar y reemplazar" (ver handleReplaceToday). Sobreviven a un
+  // fallo parcial para que el REINTENTO no repita el paso ya cumplido ni cree planes duplicados:
+  // - replaceArchivedRef: el plan viejo YA se archivo -> el reintento salta directo a publicar.
+  // - replaceKeyRef: clave de idempotencia ESTABLE del reemplazo -> re-publicar devuelve el MISMO
+  //   plan/version en vez de crear un duplicado. Se resetean al cerrar el modal (fresh open limpio).
+  const replaceArchivedRef = useRef(false)
+  const replaceKeyRef = useRef<string | null>(null)
 
   const validation = useMemo(() => validateStep(state, state.step), [state])
 
@@ -953,7 +960,13 @@ export function PlanBuilderClient({
   function handleConflictOpenChange(next: boolean) {
     if (isPending) return
     setConflictOpen(next)
-    if (!next) setConflictError(null)
+    if (!next) {
+      setConflictError(null)
+      // Cada apertura del modal arranca limpia: el proximo "Archivar y reemplazar" es una
+      // operacion nueva (nuevo archivado + nueva clave de idempotencia).
+      replaceArchivedRef.current = false
+      replaceKeyRef.current = null
+    }
   }
 
   // "Empezar manana": mueve la vigencia al dia siguiente a la del plan vigente (garantiza que el
@@ -967,29 +980,67 @@ export function PlanBuilderClient({
 
   // "Archivar el actual y reemplazar": archiva el plan vigente y publica el draft como PLAN
   // NUEVO (planId null) con la misma fecha. Encadena dos mutaciones bajo un solo isPending.
+  //
+  // ORDEN: archivar PRIMERO, publicar despues (no al reves). El RPC de publicacion re-deriva el
+  // snapshot del dia EN CURSO del alumno recorriendo TODOS sus planes activos y desempatando por
+  // (effective_from desc, version_number desc). Como el reemplazo usa la MISMA fecha de vigencia
+  // (hoy), publicar primero dejaria dos planes activos empatados en fecha y el plan VIEJO (mayor
+  // version_number) podria ganar y congelar el snapshot equivocado —y archivar despues NO vuelve a
+  // re-derivarlo—. Archivar primero saca al plan viejo de la seleccion antes de que el publish
+  // re-derive, garantizando que el snapshot de hoy tome el plan nuevo.
+  //
+  // RECUPERACION (el riesgo del orden archivar-primero es que si el publish falla, el alumno queda
+  // sin plan vigente): la operacion es reanudable. Si el archivado ya ocurrio, un reintento lo
+  // SALTA (replaceArchivedRef) y solo reintenta el publish; la clave de idempotencia es ESTABLE
+  // (replaceKeyRef) para no crear un plan duplicado al reintentar.
   function handleReplaceToday() {
     if (!existingPlan) return
     setConflictError(null)
+
+    // Validamos el draft del plan NUEVO ANTES de archivar nada: si esta incompleto, no tocamos el
+    // plan vigente del alumno.
+    let draft
+    try {
+      draft = assembleAndValidateDraft(state, { clientId, planId: null })
+    } catch {
+      setConflictError('El plan tiene datos incompletos. Revisa los pasos marcados y vuelve a intentar.')
+      return
+    }
+
+    // Clave de idempotencia ESTABLE por operacion de reemplazo (se fija una sola vez y se reusa en
+    // los reintentos): re-publicar con la misma clave devuelve el mismo plan/version, nunca un duplicado.
+    if (!replaceKeyRef.current) {
+      operationId.current = genId()
+      replaceKeyRef.current = buildNutritionIdempotencyKey({
+        clientId,
+        deviceId: 'web-builder',
+        operationId: operationId.current,
+        kind: 'publish',
+      })
+    }
+    const idempotencyKey = replaceKeyRef.current
+
     startTransition(async () => {
-      const archived = await archivePlanAction({ clientId, planId: existingPlan.id })
-      if (!archived.ok) {
-        setConflictError(archived.error)
-        return
+      // PASO 1 — archivar el plan vigente (idempotente; se salta si ya se hizo en un intento previo).
+      if (!replaceArchivedRef.current) {
+        const archived = await archivePlanAction({ clientId, planId: existingPlan.id })
+        if (!archived.ok && !canProceedToPublishAfterArchive(archived)) {
+          setConflictError(archived.error)
+          return
+        }
+        replaceArchivedRef.current = true
       }
-      let draft
-      try {
-        draft = assembleAndValidateDraft(state, { clientId, planId: null })
-      } catch {
-        setConflictError('El plan tiene datos incompletos. Revisa los pasos marcados y vuelve a intentar.')
-        return
-      }
-      const idempotencyKey = freshIdempotencyKey()
+
+      // PASO 2 — publicar el draft como plan NUEVO. Si falla, el alumno quedo momentaneamente sin
+      // plan vigente; ofrecemos reintentar SOLO la publicacion (sin re-archivar) con un mensaje honesto.
       const res = await publishPlanAction({ draft, idempotencyKey, effectiveFrom: state.effectiveFrom })
       if (res.ok) {
         goToPublished()
         return
       }
-      setConflictError(res.error)
+      setConflictError(
+        'Archivamos el plan anterior, pero no pudimos publicar el nuevo, así que el alumno quedó sin plan vigente. Vuelve a tocar "Archivar el actual y reemplazar" para reintentar solo la publicación (no se archivará de nuevo).',
+      )
     })
   }
 

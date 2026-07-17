@@ -38,6 +38,7 @@ import { ReducedMotionConfig, ReduceMotion } from 'react-native-reanimated'
 import * as Sentry from '@sentry/react-native'
 import type { ErrorBoundaryProps } from 'expo-router'
 import { supabase } from '../lib/supabase'
+import { registerSessionCacheJanitor } from '../lib/auth-actions'
 import { ThemeProvider } from '../context/ThemeContext'
 import { configurePushHandler, setupAndroidChannel, syncPushToken } from '../lib/push'
 import { LaunchSplash } from '../components/shared/LaunchSplash'
@@ -119,6 +120,7 @@ function RootLayoutNav() {
   }, [])
 
   useEffect(() => {
+    registerSessionCacheJanitor()
     supabase.auth.getSession().then(({ data }) => setSession(data.session))
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_, s) => setSession(s))
     return () => subscription.unsubscribe()
