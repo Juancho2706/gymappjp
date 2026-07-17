@@ -75,15 +75,17 @@ export function NutritionPageShell({
   return (
     <main
       className={cx(
-        'mx-auto w-full max-w-[1440px] px-4 pb-5 pt-[calc(env(safe-area-inset-top,0px)+1.25rem)] md:px-6 md:pb-8 md:pt-8',
+        // Gutter movil de 12px: en ~390px las cards necesitan todo el ancho posible;
+        // md: recupera el margen amplio de escritorio.
+        'mx-auto w-full max-w-[1440px] px-3 pb-5 pt-[calc(env(safe-area-inset-top,0px)+1.25rem)] md:px-6 md:pb-8 md:pt-8',
         className,
       )}
     >
       <NutritionHeader eyebrow={eyebrow} title={title} description={description} actions={actions} backHref={backHref} />
-      {toolbar ? <div className="mt-5">{toolbar}</div> : null}
+      {toolbar ? <div className="mt-4 md:mt-5">{toolbar}</div> : null}
       <div
         className={cx(
-          'mt-6 grid min-w-0 gap-6',
+          'mt-5 grid min-w-0 gap-5 md:mt-6 md:gap-6',
           aside ? 'xl:grid-cols-[minmax(0,1fr)_320px]' : false,
         )}
       >
@@ -108,10 +110,12 @@ export function NutritionHeader({
   backHref?: string
 }) {
   if (backHref) {
-    // Variante compacta (alumno móvil): flecha + título en una sola fila,
-    // espejo del header del Plan Nutricional V1.
+    // Variante compacta (movil): una sola fila [flecha][eyebrow+titulo] [CTA].
+    // El eyebrow va como overline sobre el titulo (no como pill a la derecha) para
+    // dejar el borde derecho libre a UNA accion primaria; el resto de acciones se
+    // demueve al contenido de la pagina.
     return (
-      <header className="flex items-center gap-1">
+      <header className="flex items-center gap-1.5">
         <Link
           href={backHref}
           aria-label="Volver"
@@ -120,16 +124,16 @@ export function NutritionHeader({
           <ArrowLeft className="h-5 w-5" />
         </Link>
         <div className="min-w-0 flex-1">
+          {eyebrow ? (
+            <p className="truncate font-mono text-[10px] font-semibold uppercase leading-4 tracking-[0.16em] text-primary">
+              {eyebrow}
+            </p>
+          ) : null}
           <h1 className="truncate font-display text-[22px] font-black leading-tight tracking-[-0.02em] text-strong md:text-3xl">
             {title}
           </h1>
           {description ? <p className="mt-0.5 truncate text-[12.5px] leading-4 text-muted">{description}</p> : null}
         </div>
-        {eyebrow ? (
-          <span className="shrink-0 rounded-full border border-border-subtle bg-surface-card px-2.5 py-1 font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-primary">
-            {eyebrow}
-          </span>
-        ) : null}
         {actions ? <div className="flex shrink-0 items-center gap-2">{actions}</div> : null}
       </header>
     )
@@ -145,7 +149,9 @@ export function NutritionHeader({
         <h1 className="font-display text-3xl font-bold tracking-tight text-strong md:text-4xl">{title}</h1>
         {description ? <p className="mt-2 max-w-3xl text-sm leading-6 text-muted md:text-base">{description}</p> : null}
       </div>
-      {actions ? <div className="-order-1 flex shrink-0 flex-wrap items-center gap-2 md:order-none">{actions}</div> : null}
+      {/* Movil: el titulo manda; las acciones van DEBAJO del bloque de titulo (nunca antes,
+          apiladas arriba rompen la jerarquia). Desktop conserva la fila titulo/acciones. */}
+      {actions ? <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div> : null}
     </header>
   )
 }

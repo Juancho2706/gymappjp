@@ -122,12 +122,14 @@ export function AssignPlanToClientsDialog({
 
   return (
     <>
+      {/* Trigger secundario compacto: vive junto a los badges del plan en la ficha,
+          no en el header (alli manda la CTA primaria "Nueva version"). */}
       <button
         type="button"
         onClick={() => onOpenChange(true)}
-        className="inline-flex min-h-11 items-center gap-2 rounded-control border border-border-default bg-surface-card px-4 text-sm font-semibold text-strong hover:bg-surface-sunken"
+        className="inline-flex min-h-10 items-center gap-1.5 rounded-control border border-border-subtle bg-surface-card px-3 text-xs font-semibold text-body transition-colors hover:bg-surface-sunken hover:text-strong"
       >
-        <UserPlus className="h-4 w-4 text-primary dark:text-primary" />
+        <UserPlus className="h-3.5 w-3.5 text-primary dark:text-primary" />
         Asignar a otros alumnos
       </button>
 

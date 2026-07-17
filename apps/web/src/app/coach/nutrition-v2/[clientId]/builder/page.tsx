@@ -1,6 +1,4 @@
-import Link from 'next/link'
 import { redirect } from 'next/navigation'
-import { ArrowLeft } from 'lucide-react'
 import { NutritionPageShell } from '@/components/nutrition-v2'
 import { getTodayInSantiago } from '@/lib/date-utils'
 import { getNutritionPlansPageCoach } from '../../../nutrition-plans/_data/nutrition-page.queries'
@@ -63,19 +61,14 @@ export default async function CoachNutritionV2BuilderPage({ params }: Props) {
   )
 
   return (
+    // Header compacto (backHref): flecha de vuelta + nombre del alumno en una sola fila.
+    // La flecha reemplaza al boton "Volver a la ficha" (misma ruta), asi el header movil no
+    // apila pills antes del titulo. Eyebrow corto para que el pill no aplaste el titulo en 390px.
     <NutritionPageShell
-      eyebrow={existingPlan ? 'Nueva version del plan' : 'Nuevo plan V2'}
+      backHref={`/coach/nutrition-v2/${clientId}`}
+      eyebrow={existingPlan ? 'Nueva versión' : 'Nuevo plan'}
       title={detail.client.fullName}
-      description="Define la estrategia, las metas y (si aplica) las franjas prescritas. Al publicar, el plan queda vigente para el alumno."
-      actions={
-        <Link
-          href={`/coach/nutrition-v2/${clientId}`}
-          className="inline-flex min-h-11 items-center gap-2 rounded-control border border-border-default bg-surface-card px-3 text-sm font-semibold text-strong"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Volver a la ficha
-        </Link>
-      }
+      description="Estrategia, metas y publicación del plan"
     >
       <PlanBuilderClient
         clientId={clientId}

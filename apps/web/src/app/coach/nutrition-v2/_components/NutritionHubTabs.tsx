@@ -10,7 +10,7 @@ type TabKey = 'roster' | 'foods' | 'curation'
 const TABS: Array<{ key: TabKey; label: string; icon: typeof Users }> = [
   { key: 'roster', label: 'Alumnos', icon: Users },
   { key: 'foods', label: 'Alimentos', icon: Apple },
-  { key: 'curation', label: 'Curacion', icon: ScanLine },
+  { key: 'curation', label: 'Curación', icon: ScanLine },
 ]
 
 /**
@@ -26,7 +26,7 @@ export function NutritionHubTabs({ roster }: { roster: ReactNode }) {
     <div>
       <div
         role="tablist"
-        aria-label="Secciones del centro de nutricion"
+        aria-label="Secciones del centro de nutrición"
         className="mb-5 flex gap-1 rounded-control border border-border-default bg-surface-card p-1"
       >
         {TABS.map((tab) => {

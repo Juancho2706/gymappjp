@@ -20,7 +20,7 @@ test.describe('Nutrición V2 · Centro del coach (canary)', () => {
     // Con el canary ON NO debe redirigir a la V1 (/coach/nutrition-plans).
     await expect(page).toHaveURL(/\/coach\/nutrition-v2(\?|$)/, { timeout: 25_000 })
     await expect(
-      page.getByRole('heading', { level: 1, name: 'Centro de Nutricion' }),
+      page.getByRole('heading', { level: 1, name: 'Centro de Nutrición' }),
     ).toBeVisible({ timeout: 25_000 })
 
     const roster = page.getByTestId('nutrition-v2-hub-roster')

@@ -1,6 +1,5 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
-import { ArrowLeft } from 'lucide-react'
 import { NutritionPageShell } from '@/components/nutrition-v2'
 import { getNutritionPlansPageCoach } from '../nutrition-plans/_data/nutrition-page.queries'
 import { getPreferredWorkspaceForRender } from '@/services/auth/workspace-render-cache'
@@ -82,22 +81,14 @@ export default async function CoachNutritionV2Page({ searchParams }: Props) {
   const metrics = mapHubMetrics(hub.items, { todayLocalDate, timeZone: COACH_TIMEZONE })
 
   return (
+    // Header compacto del shell (backHref): [flecha al dashboard][titulo+desc][CTA primaria].
+    // Una sola CTA visible ("Nuevo plan"); V1 es legacy saliente y vive como link discreto
+    // al pie, no como pill protagonista en el header.
     <NutritionPageShell
-      eyebrow="Canary privado"
-      title="Centro de Nutricion"
-      description="Revisa planes, consumo reciente y alumnos que requieren atencion."
-      actions={
-        <div className="flex flex-wrap gap-2">
-          <Link
-            href="/coach/nutrition-plans"
-            className="inline-flex min-h-11 items-center gap-2 rounded-control border border-border-default bg-surface-card px-3 text-sm font-semibold text-strong"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Volver a V1
-          </Link>
-          <NewPlanPickerButton roster={pickerRoster} />
-        </div>
-      }
+      backHref="/coach/dashboard"
+      title="Centro de Nutrición"
+      description="Planes, consumo reciente y alumnos por atender."
+      actions={<NewPlanPickerButton roster={pickerRoster} />}
     >
       <NutritionHubTabs
         roster={
@@ -110,6 +101,15 @@ export default async function CoachNutritionV2Page({ searchParams }: Props) {
           />
         }
       />
+      <p className="mt-10 border-t border-border-subtle pt-4 text-center text-xs text-muted">
+        ¿Buscas la versión anterior?{' '}
+        <Link
+          href="/coach/nutrition-plans"
+          className="font-semibold underline underline-offset-2 hover:text-strong"
+        >
+          Ir a Nutrición V1
+        </Link>
+      </p>
     </NutritionPageShell>
   )
 }

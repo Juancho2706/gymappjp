@@ -4,7 +4,7 @@ import { useMemo, useReducer, useRef, useState, useTransition } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
-import { AlertTriangle, Check, ChevronLeft, ChevronRight, Loader2, Plus, Search, Trash2 } from 'lucide-react'
+import { AlertTriangle, Check, ChevronLeft, ChevronRight, Info, Loader2, Plus, Search, Trash2 } from 'lucide-react'
 import { BuilderStepList, MacroBudget, NutritionCard, StrategyBadge } from '@/components/nutrition-v2'
 // Import por ruta directa (no via el barrel index.ts): desacopla del orden de edicion de otros
 // modulos y respeta el contrato del componente MacroChipRow.
@@ -14,6 +14,7 @@ import {
   buildNutritionIdempotencyKey,
   type FoodCatalogCursor,
   type FoodCatalogItem,
+  type NutritionBuilderStepModel,
   type NutritionStrategy,
 } from '@eva/nutrition-v2'
 import {
@@ -825,6 +826,53 @@ function ReviewStep({
   )
 }
 
+// Stepper compacto para movil (patron "text stepper" de wizards 2026: "Paso X de N" + barra
+// segmentada de progreso). Muestra SOLO el paso actual para no empujar el contenido hacia abajo
+// en pantallas angostas; la lista completa de pasos vive en BuilderStepList (desktop, lg+).
+// Presentacional puro: consume el mismo modelo de pasos que BuilderStepList.
+function MobileBuilderStepper({ steps }: { steps: NutritionBuilderStepModel[] }) {
+  const activeIndex = steps.findIndex((s) => s.state === 'current' || s.state === 'error')
+  const currentIndex = activeIndex === -1 ? 0 : activeIndex
+  const current = steps[currentIndex]
+  const next = steps[currentIndex + 1]
+  const hasError = current?.state === 'error'
+  return (
+    <div
+      data-testid="nutrition-v2-builder-stepper-mobile"
+      aria-label="Progreso del constructor"
+      className="rounded-card border border-border-subtle bg-surface-card p-3 lg:hidden"
+    >
+      <div className="flex items-baseline justify-between gap-3">
+        <p className="min-w-0 truncate font-display text-sm font-semibold text-strong">
+          {current?.label}
+          {current?.description ? (
+            <span className="font-sans text-xs font-normal text-muted"> · {current.description}</span>
+          ) : null}
+        </p>
+        <p className="shrink-0 font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-muted">
+          Paso {currentIndex + 1} de {steps.length}
+        </p>
+      </div>
+      <div className="mt-2 flex gap-1" aria-hidden="true">
+        {steps.map((s, i) => (
+          <span
+            key={s.id}
+            className={
+              'h-1 flex-1 rounded-pill transition-colors ' +
+              (i === currentIndex && hasError
+                ? 'bg-rose-500'
+                : i <= currentIndex
+                  ? 'bg-primary/100'
+                  : 'bg-border-subtle')
+            }
+          />
+        ))}
+      </div>
+      {next ? <p className="mt-1.5 truncate text-[11px] text-subtle">Siguiente: {next.label}</p> : null}
+    </div>
+  )
+}
+
 const STEP_META = [
   { id: 'estrategia', label: 'Estrategia' },
   { id: 'objetivos', label: 'Objetivos' },
@@ -1048,10 +1096,18 @@ export function PlanBuilderClient({
     <>
     <div className="grid gap-5 lg:grid-cols-[240px_minmax(0,1fr)]">
       <div className="space-y-3 lg:sticky lg:top-6 lg:self-start">
-        <BuilderStepList steps={steps} />
+        <MobileBuilderStepper steps={steps} />
+        <div className="hidden lg:block">
+          <BuilderStepList steps={steps} />
+        </div>
         {existingPlan ? (
-          <p className="rounded-control border border-border-subtle bg-surface-card px-3 py-2 text-xs text-muted">
-            Al publicar se creará la versión {existingPlan.versionNumber + 1} y la actual pasará a histórico.
+          // Aviso de versionado: informativo, jerarquia menor que el stepper (icono + texto
+          // secundario sobre fondo hundido, sin competir con las cards de contenido).
+          <p className="flex items-start gap-2 rounded-control border border-border-subtle bg-surface-sunken px-3 py-2 text-xs leading-relaxed text-muted">
+            <Info aria-hidden="true" className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
+            <span>
+              Al publicar se creará la versión {existingPlan.versionNumber + 1} y la actual pasará a histórico.
+            </span>
           </p>
         ) : null}
       </div>
@@ -1068,18 +1124,25 @@ export function PlanBuilderClient({
         ) : null}
         {state.step === 3 ? <ReviewStep state={state} dispatch={dispatch} publishError={publishError} /> : null}
 
-        <div className="flex items-center justify-between gap-2 border-t border-border-subtle pt-4">
-          <button type="button" onClick={handlePrev} disabled={state.step === 0 || isPending} className={secondaryButtonClass}>
+        {/* Controles del wizard: en movil la CTA primaria crece (target grande en la thumb zone);
+            en sm+ vuelve a su ancho natural. "Atras" siempre visible (navegacion libre). */}
+        <div className="flex items-center justify-between gap-3 border-t border-border-subtle pt-4">
+          <button type="button" onClick={handlePrev} disabled={state.step === 0 || isPending} className={secondaryButtonClass + ' shrink-0'}>
             <ChevronLeft className="h-4 w-4" />
             Atras
           </button>
           {state.step < 3 ? (
-            <button type="button" onClick={handleNext} className={primaryButtonClass}>
+            <button type="button" onClick={handleNext} className={primaryButtonClass + ' flex-1 justify-center sm:flex-none'}>
               Siguiente
               <ChevronRight className="h-4 w-4" />
             </button>
           ) : (
-            <button type="button" onClick={handlePublish} disabled={isPending} className={primaryButtonClass + ' gap-2'}>
+            <button
+              type="button"
+              onClick={handlePublish}
+              disabled={isPending}
+              className={primaryButtonClass + ' flex-1 justify-center gap-2 sm:flex-none'}
+            >
               {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
               Publicar plan
             </button>

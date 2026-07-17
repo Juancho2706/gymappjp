@@ -44,19 +44,22 @@ export function NewPlanPickerButton({ roster }: { roster: NewPlanPickerEntry[] }
 
   return (
     <>
+      {/* En el header compacto del hub (movil ~390px) el label no cabe junto al titulo:
+          bajo `sm` queda icono solo (44px, aria-label) y desde `sm` icono + texto. */}
       <button
         type="button"
         onClick={() => onOpenChange(true)}
-        className="inline-flex min-h-11 items-center gap-2 rounded-control bg-primary px-4 text-sm font-semibold text-white hover:bg-primary/90"
+        aria-label="Nuevo plan"
+        className="inline-flex min-h-11 min-w-11 items-center justify-center gap-2 rounded-control bg-primary px-3 text-sm font-semibold text-white hover:bg-primary/90 sm:px-4"
       >
-        <Plus className="h-4 w-4" />
-        Nuevo plan
+        <Plus className="h-5 w-5 sm:h-4 sm:w-4" />
+        <span className="hidden sm:inline">Nuevo plan</span>
       </button>
 
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle className="normal-case tracking-tight">Nuevo plan de nutricion</DialogTitle>
+            <DialogTitle className="normal-case tracking-tight">Nuevo plan de nutrición</DialogTitle>
             <DialogDescription>
               Elige el alumno para abrir su builder y crear (o versionar) su plan.
             </DialogDescription>

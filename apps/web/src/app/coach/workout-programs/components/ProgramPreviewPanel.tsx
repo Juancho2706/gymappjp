@@ -364,6 +364,12 @@ function PreviewActions({
     const hasAny = onEdit || onAssign || onDuplicate || onSync || onDelete
     if (!hasAny) return null
 
+    // Cantidad real de acciones secundarias visibles: el grid se reparte el ancho
+    // completo sin dejar el hueco fantasma de un tercer boton ausente
+    // (p.ej. 'Sincronizar' retirado, o programas sin plantilla base).
+    const firstSlotVisible = isTemplate ? !!onEdit : !!(program.source_template_id && onSync)
+    const secondaryCount = [firstSlotVisible, !!onDuplicate, !!onDelete].filter(Boolean).length
+
     return (
         <div className="flex w-full flex-col gap-2.5">
             {isTemplate ? (
@@ -381,7 +387,8 @@ function PreviewActions({
                     </Button>
                 )
             )}
-            <div className="grid grid-cols-3 gap-2">
+            {secondaryCount > 0 && (
+                <div className={cn('grid gap-2', secondaryCount === 3 ? 'grid-cols-3' : secondaryCount === 2 ? 'grid-cols-2' : 'grid-cols-1')}>
                 {isTemplate
                     ? onEdit && (
                           <Button type="button" variant="secondary" className="h-auto flex-col gap-1.5 py-3" onClick={onEdit}>
@@ -419,7 +426,8 @@ function PreviewActions({
                         <span className="text-xs font-bold">Eliminar</span>
                     </Button>
                 )}
-            </div>
+                </div>
+            )}
         </div>
     )
 }

@@ -129,21 +129,25 @@ export function HubRoster({
 
   return (
     <div data-testid="nutrition-v2-hub-roster">
-      <div className="mb-5">
+      {/* Stats como UNA card segmentada (divide-x): menos ruido de bordes que tres tiles
+          sueltos y los numeros respiran mas anchos en movil ~390px. */}
+      <div className="mb-4">
         {metricsAreTotals ? null : (
           <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">
-            Resumen de la pagina
+            Resumen de la página
           </p>
         )}
-        <div className="grid grid-cols-3 gap-2 sm:gap-3">
+        <div className="grid grid-cols-3 divide-x divide-border-subtle rounded-card border border-border-subtle bg-surface-card shadow-sm">
           <Metric label="Con plan" value={metrics.withPlan} />
           <Metric label="Sin plan" value={metrics.withoutPlan} />
           <Metric label="Activos hoy" value={metrics.activeToday} />
         </div>
       </div>
 
-      <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center">
-        <div className="relative flex-1">
+      {/* Filtros en dos filas fijas: busqueda ancho completo + selects compartiendo fila
+          (antes en movil se apilaban en 3-4 filas y comprimian el contenido). */}
+      <div className="mb-5 space-y-2">
+        <div className="relative">
           <Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-subtle" />
           <input
             type="search"
@@ -152,55 +156,58 @@ export function HubRoster({
             onChange={(event) =>
               setFilters((prev) => ({ ...prev, search: event.target.value.slice(0, 120) }))
             }
-            placeholder="Buscar en esta pagina…"
+            placeholder="Buscar en esta página…"
             aria-label="Buscar alumno en el roster"
             className="min-h-11 w-full rounded-control border border-border-default bg-surface-card pl-10 pr-4 text-base text-strong outline-none placeholder:text-muted focus:ring-2 focus:ring-ring md:text-sm"
           />
         </div>
-        <label className="sr-only" htmlFor="roster-attention">
-          Filtrar por estado de atencion
-        </label>
-        <select
-          id="roster-attention"
-          value={filters.attention}
-          onChange={(event) =>
-            setFilters((prev) => ({ ...prev, attention: event.target.value as AttentionFilter }))
-          }
-          className="min-h-11 rounded-control border border-border-default bg-surface-card px-3 text-sm font-semibold text-strong outline-none focus:ring-2 focus:ring-ring"
-        >
-          {ATTENTION_FILTER_OPTIONS.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
-        <label className="sr-only" htmlFor="roster-sort">
-          Ordenar roster
-        </label>
-        <select
-          id="roster-sort"
-          value={filters.sort}
-          onChange={(event) =>
-            setFilters((prev) => ({ ...prev, sort: event.target.value as SortKey }))
-          }
-          className="min-h-11 rounded-control border border-border-default bg-surface-card px-3 text-sm font-semibold text-strong outline-none focus:ring-2 focus:ring-ring"
-        >
-          {SORT_OPTIONS.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
-        {isFiltered ? (
-          <button
-            type="button"
-            onClick={() => setFilters({ search: '', attention: 'all', sort: 'default' })}
-            className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-control border border-border-default bg-surface-card px-3 text-sm font-semibold text-muted hover:text-strong"
+        <div className="flex items-center gap-2">
+          <label className="sr-only" htmlFor="roster-attention">
+            Filtrar por estado de atención
+          </label>
+          <select
+            id="roster-attention"
+            value={filters.attention}
+            onChange={(event) =>
+              setFilters((prev) => ({ ...prev, attention: event.target.value as AttentionFilter }))
+            }
+            className="min-h-11 min-w-0 flex-1 rounded-control border border-border-default bg-surface-card px-3 text-sm font-semibold text-strong outline-none focus:ring-2 focus:ring-ring sm:flex-none"
           >
-            <X className="h-4 w-4" />
-            Limpiar
-          </button>
-        ) : null}
+            {ATTENTION_FILTER_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+          <label className="sr-only" htmlFor="roster-sort">
+            Ordenar roster
+          </label>
+          <select
+            id="roster-sort"
+            value={filters.sort}
+            onChange={(event) =>
+              setFilters((prev) => ({ ...prev, sort: event.target.value as SortKey }))
+            }
+            className="min-h-11 min-w-0 flex-1 rounded-control border border-border-default bg-surface-card px-3 text-sm font-semibold text-strong outline-none focus:ring-2 focus:ring-ring sm:flex-none"
+          >
+            {SORT_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+          {isFiltered ? (
+            <button
+              type="button"
+              onClick={() => setFilters({ search: '', attention: 'all', sort: 'default' })}
+              aria-label="Limpiar filtros"
+              className="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-1.5 rounded-control border border-border-default bg-surface-card px-3 text-sm font-semibold text-muted hover:text-strong"
+            >
+              <X className="h-4 w-4" />
+              <span className="hidden sm:inline">Limpiar</span>
+            </button>
+          ) : null}
+        </div>
       </div>
 
       {items.length === 0 ? (
@@ -230,7 +237,7 @@ export function HubRoster({
           />
           {hasMore ? (
             <p className="mt-3 text-center text-xs text-muted">
-              Hay mas alumnos en otras paginas. La busqueda solo cubre la pagina actual.
+              Hay más alumnos en otras páginas. La búsqueda solo cubre la página actual.
             </p>
           ) : null}
         </div>
@@ -394,12 +401,12 @@ export function HubRoster({
 }
 
 function Metric({ label, value }: { label: string; value: number }) {
-  // Métrica compacta: número grande + etiqueta corta, tres siempre en una fila
-  // (grid-cols-3) para no comerse la pantalla en móvil. Sin ícono decorativo.
+  // Segmento de la card de stats: número grande + etiqueta corta. El contenedor pone
+  // borde/fondo una sola vez (divide-x entre segmentos); aquí solo padding interno.
   return (
-    <div className="rounded-card border border-border-subtle bg-surface-card p-3 text-strong shadow-sm sm:p-4">
-      <p className="font-display text-2xl font-bold tabular-nums text-strong sm:text-3xl">{value}</p>
-      <p className="mt-0.5 truncate text-[11px] text-muted sm:text-sm">{label}</p>
+    <div className="min-w-0 px-3 py-3 sm:px-4">
+      <p className="font-display text-2xl font-bold leading-tight tabular-nums text-strong sm:text-3xl">{value}</p>
+      <p className="mt-0.5 truncate text-[11px] font-medium text-muted sm:text-sm">{label}</p>
     </div>
   )
 }

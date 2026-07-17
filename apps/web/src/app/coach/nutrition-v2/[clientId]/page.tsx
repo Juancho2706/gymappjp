@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
-import { ArrowLeft, CheckCircle2, Info, LockKeyhole, Plus } from 'lucide-react'
+import { CheckCircle2, Info, LockKeyhole, Plus } from 'lucide-react'
 import {
   MacroBudget,
   MacroChipRow,
@@ -130,36 +130,20 @@ export default async function CoachNutritionV2ClientPage({ params, searchParams 
   const convertedAtLabel = conversionLink ? formatDateDdMmYyyySantiago(conversionLink.convertedAt) : null
 
   return (
+    // Header movil compacto: flecha (vuelve al Centro) + eyebrow/nombre + UNA CTA primaria.
+    // "Asignar a otros alumnos" se demueve a accion secundaria junto a los badges del plan.
     <NutritionPageShell
       eyebrow="Ficha nutricional"
       title={detail.client.fullName}
-      description="Plan vigente, consumo del dia, historial reciente y nota profesional aislada."
+      backHref="/coach/nutrition-v2"
       actions={
-        <div className="flex flex-wrap gap-2">
-          <Link
-            href="/coach/nutrition-v2"
-            className="inline-flex min-h-11 items-center gap-2 rounded-control border border-border-default bg-surface-card px-3 text-sm font-semibold text-strong"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Centro
-          </Link>
-          {canAssign && detail.plan.plan ? (
-            <AssignPlanToClientsDialog
-              sourceClientId={clientId}
-              sourcePlanVersion={detail.plan.plan.versionNumber}
-              sourcePlanName={detail.plan.plan.name}
-              roster={assignRoster}
-              today={today}
-            />
-          ) : null}
-          <Link
-            href={`/coach/nutrition-v2/${clientId}/builder`}
-            className="inline-flex min-h-11 items-center gap-2 rounded-control bg-primary/100 px-4 text-sm font-semibold text-white"
-          >
-            <Plus className="h-4 w-4" />
-            {hasPlan ? 'Nueva version' : 'Crear plan'}
-          </Link>
-        </div>
+        <Link
+          href={`/coach/nutrition-v2/${clientId}/builder`}
+          className="inline-flex min-h-11 items-center gap-1.5 rounded-control bg-primary/100 px-3.5 text-sm font-semibold text-white transition-colors hover:bg-primary/90 md:gap-2 md:px-4"
+        >
+          <Plus className="h-4 w-4" />
+          {hasPlan ? 'Nueva version' : 'Crear plan'}
+        </Link>
       }
       aside={
         <NutritionCard tone="neutral">
@@ -209,6 +193,8 @@ export default async function CoachNutritionV2ClientPage({ params, searchParams 
             <ConvertedPlanBanner planId={detail.plan.plan.id} convertedAtLabel={convertedAtLabel} />
           ) : null}
 
+          {/* Fila de estado del plan: badges a la izquierda, "Asignar a otros alumnos" como
+              accion secundaria a la derecha (fuera del header; solo con plan publicado copiable). */}
           <div className="flex flex-wrap items-center gap-2">
             <StrategyBadge strategy={(detail.today.plan ?? detail.plan.plan).strategy} />
             <PlanVersionBadge
@@ -216,6 +202,17 @@ export default async function CoachNutritionV2ClientPage({ params, searchParams 
               status={(detail.today.plan ?? detail.plan.plan).status}
               effectiveLabel={`desde ${(detail.today.plan ?? detail.plan.plan).effectiveFrom}`}
             />
+            {canAssign ? (
+              <div className="ml-auto">
+                <AssignPlanToClientsDialog
+                  sourceClientId={clientId}
+                  sourcePlanVersion={detail.plan.plan.versionNumber}
+                  sourcePlanName={detail.plan.plan.name}
+                  roster={assignRoster}
+                  today={today}
+                />
+              </div>
+            ) : null}
           </div>
 
           {showTodayPlanLag ? (
