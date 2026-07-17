@@ -186,3 +186,26 @@ export function formatSantiagoMonthLabel(now = new Date()): string {
     const month = (parts.month || '').replace(/^\w/u, (c) => c.toUpperCase())
     return `${month} ${parts.year}`
 }
+
+/**
+ * Formatea un timestamp ISO (`timestamptz`, ej. `nutrition_v2_conversion_links.converted_at`)
+ * a `dd-mm-yyyy` en **America/Santiago**. DST-safe: deriva los componentes con
+ * `Intl.DateTimeFormat` (mismo patrón que `getSantiagoMonthPrefix`), nunca con
+ * `new Date(toLocaleString(...))` que depende de la TZ del host. Timestamp inválido → cadena
+ * vacía (defensivo; el llamador decide si ocultar el dato).
+ */
+export function formatDateDdMmYyyySantiago(isoTimestamp: string): string {
+    const instant = new Date(isoTimestamp)
+    if (Number.isNaN(instant.getTime())) return ''
+    const parts = Object.fromEntries(
+        new Intl.DateTimeFormat('en-CA', {
+            timeZone: SANTIAGO_TZ,
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric',
+        })
+            .formatToParts(instant)
+            .map((p) => [p.type, p.value])
+    )
+    return `${parts.day}-${parts.month}-${parts.year}`
+}

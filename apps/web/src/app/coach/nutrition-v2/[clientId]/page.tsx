@@ -11,12 +11,13 @@ import {
   StrategyBadge,
 } from '@/components/nutrition-v2'
 import { createNutritionMacroValue, describeLegacyHistoryDay } from '@eva/nutrition-v2'
-import { getTodayInSantiago } from '@/lib/date-utils'
+import { formatDateDdMmYyyySantiago, getTodayInSantiago } from '@/lib/date-utils'
 import { getNutritionPlansPageCoach } from '../../nutrition-plans/_data/nutrition-page.queries'
 import { getPreferredWorkspaceForRender } from '@/services/auth/workspace-render-cache'
 import {
   getNutritionClientDetailV2ForWeb,
   getNutritionCoachHubV2ForWeb,
+  getNutritionConversionLinkForWeb,
   nutritionV2CoachScopeFromWorkspace,
 } from '@/services/nutrition-v2-read.service'
 import { isNutritionV2Enabled } from '@/services/nutrition-v2-rollout.service'
@@ -29,6 +30,7 @@ import {
 } from '@/app/coach/nutrition-v2/_lib/nutrition-pro'
 import { AssignPlanToClientsDialog, type AssignRosterEntry } from '../_components/AssignPlanToClientsDialog'
 import { ArchivePlanButton } from '../_components/ArchivePlanButton'
+import { ConvertedPlanBanner } from '../_components/ConvertedPlanBanner'
 import { canAssignSourcePlan } from '../_lib/assign-plan'
 
 interface Props {
@@ -119,6 +121,14 @@ export default async function CoachNutritionV2ClientPage({ params, searchParams 
       ? 'El plan vigente ya está publicado. El registro de hoy todavía no tiene metas asignadas; desde mañana se aplican las del nuevo plan.'
       : 'El plan vigente ya está publicado. Los registros de hoy siguen mostrando el plan anterior; desde mañana se usa el nuevo.'
 
+  // Banner "plan convertido" (SPEC AC8): solo se consulta cuando hay plan vigente, y solo se
+  // renderiza si existe link (`nutrition_v2_conversion_links`). Sin plan o sin link → cero query
+  // extra visible / cero render, el read degrada a `null` si la tabla no esta disponible.
+  const conversionLink = activePlan
+    ? await getNutritionConversionLinkForWeb({ v2PlanId: activePlan.id })
+    : null
+  const convertedAtLabel = conversionLink ? formatDateDdMmYyyySantiago(conversionLink.convertedAt) : null
+
   return (
     <NutritionPageShell
       eyebrow="Ficha nutricional"
@@ -195,6 +205,10 @@ export default async function CoachNutritionV2ClientPage({ params, searchParams 
         </div>
       ) : (
         <div className="space-y-5" data-testid="nutrition-v2-plan-vigente">
+          {convertedAtLabel ? (
+            <ConvertedPlanBanner planId={detail.plan.plan.id} convertedAtLabel={convertedAtLabel} />
+          ) : null}
+
           <div className="flex flex-wrap items-center gap-2">
             <StrategyBadge strategy={(detail.today.plan ?? detail.plan.plan).strategy} />
             <PlanVersionBadge
