@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import Image from 'next/image'
 import { usePathname, useRouter } from 'next/navigation'
 import {
     Home,
@@ -24,7 +23,7 @@ import { createClient } from '@/lib/supabase/client'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { PwaNavButton } from './PwaNavButton'
 import { NavIcon, type NavConcept } from './NavIcon'
-import { BRAND_APP_ICON } from '@/lib/brand-assets'
+import { ThemedLogo } from '@/components/brand/ThemedLogo'
 
 interface Props {
     coachSlug: string
@@ -33,6 +32,8 @@ interface Props {
     basePath?: string
     coachBrand: string
     coachLogoUrl: string
+    /** Logo modo oscuro del coach; cae al claro si no existe. */
+    coachLogoDarkUrl?: string
     /** Espejo del modulo movement_assessment (resuelto server-side; gate real en la page). */
     showMovement?: boolean
     /** Espejo del modulo body_composition (resuelto server-side; gate real en la page). */
@@ -50,7 +51,7 @@ interface Props {
 // Si falta, se renderiza el `icon` de lucide de siempre (ej. "Aprender").
 type NavItem = { href: string; label: string; short: string; icon: LucideIcon; concept?: NavConcept }
 
-export function ClientNav({ coachSlug, basePath, coachBrand, coachLogoUrl, showMovement = false, showBodyComposition = false, showNutrition = true }: Props) {
+export function ClientNav({ coachSlug, basePath, coachBrand, coachLogoUrl, coachLogoDarkUrl, showMovement = false, showBodyComposition = false, showNutrition = true }: Props) {
     const base = basePath ?? `/c/${coachSlug}`
     const pathname = usePathname()
     const router = useRouter()
@@ -295,8 +296,9 @@ export function ClientNav({ coachSlug, basePath, coachBrand, coachLogoUrl, showM
                 <div className={cn('flex items-center border-b border-subtle py-6', isCollapsed ? 'flex-col justify-center gap-4 px-0' : 'justify-between px-6')}>
                     <div className={cn('flex min-w-0 items-center gap-3', isCollapsed && 'justify-center')}>
                         <div className={cn('relative h-10 flex-shrink-0', isCollapsed ? 'w-10' : 'w-[6.75rem]')}>
-                            <Image
-                                src={coachLogoUrl === BRAND_APP_ICON ? BRAND_APP_ICON : coachLogoUrl}
+                            <ThemedLogo
+                                light={coachLogoUrl}
+                                dark={coachLogoDarkUrl}
                                 alt={`${coachBrand} logo`}
                                 fill
                                 sizes={isCollapsed ? '40px' : '108px'}

@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
-import Image from 'next/image'
 import { usePathname } from 'next/navigation'
 import { useTheme } from 'next-themes'
 import { ChevronRight, ArrowLeft, Table2, PanelLeft, ChevronsUpDown, Sun, Moon, LogOut, Loader2 } from 'lucide-react'
@@ -11,6 +10,7 @@ import { CoachGlobalSearch } from '@/components/coach/CoachGlobalSearch'
 import { useRosterView } from '@/components/coach/RosterViewContext'
 import { useCoachSignOut } from '@/app/coach/settings/_components/CoachSignOut'
 import { Avatar } from '@/components/ui/avatar'
+import { ThemedLogo } from '@/components/brand/ThemedLogo'
 import { cn } from '@/lib/utils'
 import type { WorkspaceSummary } from '@/domain/auth/types'
 
@@ -35,6 +35,8 @@ export interface CoachTopBarProps {
     primaryColor?: string
     /** Logo de marca del coach — imagen del avatar de cuenta (fallback iniciales). */
     logoUrl?: string | null
+    /** Logo modo oscuro del coach; cae al claro si no existe. */
+    logoUrlDark?: string | null
     /** Workspaces del usuario. Con más de uno se muestra el chevron ↕ → /workspace/select. */
     workspaces?: WorkspaceSummary[]
     /** Etiqueta del workspace activo (tooltip del avatar cuando hay multi-workspace). */
@@ -167,7 +169,7 @@ function TopBarLogoutButton() {
     )
 }
 
-export function CoachTopBar({ coachName, coachBrand, logoUrl, workspaces, currentWorkspaceLabel }: CoachTopBarProps) {
+export function CoachTopBar({ coachName, coachBrand, logoUrl, logoUrlDark, workspaces, currentWorkspaceLabel }: CoachTopBarProps) {
     const pathname = usePathname()
     const inputRef = useRef<HTMLInputElement>(null)
     // Toggle Tabla/Ficha: solo se muestra mientras /coach/clients está montado (active).
@@ -273,7 +275,7 @@ export function CoachTopBar({ coachName, coachBrand, logoUrl, workspaces, curren
                 >
                     {logoUrl ? (
                         <span className="relative h-8 w-8 shrink-0 overflow-hidden rounded-full border border-subtle bg-white dark:bg-[var(--surface-sunken)]">
-                            <Image src={logoUrl} alt={avatarName} fill sizes="32px" className="object-contain p-1" />
+                            <ThemedLogo light={logoUrl} dark={logoUrlDark} alt={avatarName} fill sizes="32px" className="object-contain p-1" />
                         </span>
                     ) : (
                         <Avatar name={avatarName} size="sm" />

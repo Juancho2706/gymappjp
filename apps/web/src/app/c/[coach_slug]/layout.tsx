@@ -327,7 +327,7 @@ export default async function ClientBrandLayout({ children, params }: Props) {
                 data-logo-dark={logoUrlDark || undefined}
                 data-loader-variant={loaderVariant}
             >
-                <NetworkProvider brandName={brandName} logoUrl={logoUrl} primaryColor={primaryColor}>
+                <NetworkProvider brandName={brandName} logoUrl={logoUrl} logoUrlDark={logoUrlDark || undefined} primaryColor={primaryColor}>
                   <BasePathProvider value={basePath}>
                     <OfflineNutritionQueueSync />
                     <OfflineWorkoutQueueSync />
@@ -336,6 +336,7 @@ export default async function ClientBrandLayout({ children, params }: Props) {
                         basePath={basePath}
                         coachBrand={brandName}
                         coachLogoUrl={logoUrl}
+                        coachLogoDarkUrl={logoUrlDark || undefined}
                         showMovement={showMovement}
                         showBodyComposition={showBodyComposition}
                         showNutrition={showNutrition}

@@ -1,17 +1,18 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import Image from 'next/image'
 import { WifiOff } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { ThemedLogo } from '@/components/brand/ThemedLogo'
 
 interface Props {
     brandName: string
     logoUrl?: string
+    /** Logo modo oscuro del coach/team; cae al claro si no existe. */
+    logoUrlDark?: string
     primaryColor: string
 }
 
-export function OfflineScreen({ brandName, logoUrl, primaryColor }: Props) {
+export function OfflineScreen({ brandName, logoUrl, logoUrlDark, primaryColor }: Props) {
     return (
         <div className="fixed inset-0 z-[200] flex flex-col items-center justify-center bg-background p-6 text-center">
             {/* Ambient glow */}
@@ -25,7 +26,7 @@ export function OfflineScreen({ brandName, logoUrl, primaryColor }: Props) {
             <div className="relative z-10 flex flex-col items-center gap-5">
                 {logoUrl ? (
                     <div className="relative w-20 h-20 rounded-2xl overflow-hidden border border-border/50 shadow-lg">
-                        <Image src={logoUrl} alt={brandName} fill sizes="80px" className="object-contain p-2" />
+                        <ThemedLogo light={logoUrl} dark={logoUrlDark} alt={brandName} fill sizes="80px" className="object-contain p-2" />
                     </div>
                 ) : (
                     <div
@@ -59,7 +60,7 @@ export function OfflineScreen({ brandName, logoUrl, primaryColor }: Props) {
 /**
  * Provider que envuelve la app del alumno y muestra OfflineScreen cuando no hay red.
  */
-export function NetworkProvider({ children, brandName, logoUrl, primaryColor }: Props & { children: React.ReactNode }) {
+export function NetworkProvider({ children, brandName, logoUrl, logoUrlDark, primaryColor }: Props & { children: React.ReactNode }) {
     const [isOnline, setIsOnline] = useState(true)
 
     useEffect(() => {
@@ -78,7 +79,7 @@ export function NetworkProvider({ children, brandName, logoUrl, primaryColor }: 
     }, [])
 
     if (!isOnline) {
-        return <OfflineScreen brandName={brandName} logoUrl={logoUrl} primaryColor={primaryColor} />
+        return <OfflineScreen brandName={brandName} logoUrl={logoUrl} logoUrlDark={logoUrlDark} primaryColor={primaryColor} />
     }
 
     return <>{children}</>

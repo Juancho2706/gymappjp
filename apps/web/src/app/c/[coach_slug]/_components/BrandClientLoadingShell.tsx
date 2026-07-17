@@ -15,6 +15,7 @@ export async function BrandClientLoadingShell({
     const iconModeRaw = h.get('x-coach-loader-icon-mode') ?? 'eva'
     const iconMode = (iconModeRaw === 'coach' || iconModeRaw === 'none') ? iconModeRaw : 'eva' as const
     const coachLogoUrl = h.get('x-coach-logo-url') || undefined
+    const coachLogoDarkUrl = h.get('x-coach-logo-url-dark') || undefined
     const primaryColor = h.get('x-coach-primary-color') || undefined
 
     return (
@@ -27,6 +28,7 @@ export async function BrandClientLoadingShell({
             primaryColor={!textColor ? primaryColor : undefined}
             iconMode={iconMode}
             coachLogoUrl={iconMode === 'coach' ? coachLogoUrl : undefined}
+            coachLogoDarkUrl={iconMode === 'coach' ? coachLogoDarkUrl : undefined}
         >
             {children}
         </ClientLoadingShell>

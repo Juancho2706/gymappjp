@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import Image from 'next/image'
 import { usePathname } from 'next/navigation'
 import {
     House,
@@ -25,6 +24,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Avatar } from '@/components/ui/avatar'
+import { ThemedLogo } from '@/components/brand/ThemedLogo'
 import { CoachNavIcon, type CoachNavConcept } from '@/components/coach/CoachNavIcon'
 import { EvaBrandIcon } from '@/components/landing/LandingBrandMark'
 import { getVisibleNavItems, splitForSidebar, isNavItemActiveForPath, type NavModule } from '@eva/coach-nav'
@@ -45,6 +45,8 @@ interface CoachSidebarProps {
     currentWorkspaceLabel?: string
     /** Logo de marca del coach — usado como imagen del avatar del pie (fallback iniciales). */
     logoUrl?: string | null
+    /** Logo modo oscuro del coach; cae al claro si no existe. */
+    logoUrlDark?: string | null
     /** Workspace ACTIVO — gobierna qué módulos del nav se muestran (separación de flujos). */
     activeWorkspaceType?: WorkspaceType | null
     /** Módulos toggleables habilitados para el contexto activo (resuelto server-side en el layout). */
@@ -125,7 +127,7 @@ const MOBILE_GLYPH_BY_KEY: Record<string, CoachNavConcept> = {
     team: 'equipo',
 }
 
-export function CoachSidebar({ coachName, coachBrand, subscriptionStatus, enterpriseContext, activeWorkspaceType, enabledModules, disabledDomains, logoUrl }: CoachSidebarProps) {
+export function CoachSidebar({ coachName, coachBrand, subscriptionStatus, enterpriseContext, activeWorkspaceType, enabledModules, disabledDomains, logoUrl, logoUrlDark }: CoachSidebarProps) {
     const pathname = usePathname()
     const [manualCollapsed, setManualCollapsed] = useState(false)
     // Modo "compact" del diseño (760 ≤ vw < 1080): el sidebar SIEMPRE es el rail de 76px;
@@ -306,7 +308,7 @@ export function CoachSidebar({ coachName, coachBrand, subscriptionStatus, enterp
                     <div className={cn('flex min-w-0 items-center gap-2.5 rounded-[var(--radius-md)] p-1.5', isCollapsed && 'justify-center p-0')}>
                         {logoUrl ? (
                             <span className="relative h-8 w-8 shrink-0 overflow-hidden rounded-full border border-subtle bg-white dark:bg-[var(--surface-sunken)]">
-                                <Image src={logoUrl} alt={avatarName} fill sizes="32px" className="object-contain p-1" />
+                                <ThemedLogo light={logoUrl} dark={logoUrlDark} alt={avatarName} fill sizes="32px" className="object-contain p-1" />
                             </span>
                         ) : (
                             <Avatar name={avatarName} size="sm" />

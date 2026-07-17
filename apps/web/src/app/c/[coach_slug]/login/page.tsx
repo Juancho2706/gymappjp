@@ -15,6 +15,7 @@ import { BRAND_PRIMARY_COLOR } from '@/lib/brand-assets'
 import { resolveLoginLayout, parseLoaderConfig, type LoginLayoutKey } from '@/lib/brand-composer'
 import { CompositeLoaderView, LoaderVariantView } from '@/components/loaders/variants'
 import { EvaRouteLoader } from '@/components/ui/EvaRouteLoader'
+import { ThemedLogo } from '@/components/brand/ThemedLogo'
 
 interface Props {
     params: Promise<{ coach_slug: string }>
@@ -77,6 +78,7 @@ export default async function ClientLoginPage({ params }: Props) {
     })
     const accentRgb = generateBrandPalette(theme.light.accent).primaryRgb.replace(/,\s*/g, ' ')
     const logoUrl = brandingAllowed ? coach.logo_url : null
+    const logoUrlDark = brandingAllowed ? coach.logo_url_dark : null
     // Fuente solo en el wordmark/título (decisión #4); inputs/cuerpo en Inter (primera pantalla, sin cache).
     const brandFontStack = resolveBrandFontStack(brandingAllowed ? (presetBrand.brand_font_key ?? '') : '')
 
@@ -102,7 +104,7 @@ export default async function ClientLoginPage({ params }: Props) {
                     WebkitBackdropFilter: glass ? 'blur(6px)' : undefined,
                 }}
             >
-                <Image src={logoUrl} alt={coach.brand_name} fill className="object-contain" style={{ padding: px * 0.16 }} />
+                <ThemedLogo light={logoUrl} dark={logoUrlDark} alt={coach.brand_name} fill className="object-contain" style={{ padding: px * 0.16 }} />
             </div>
         ) : (
             <div
@@ -126,6 +128,7 @@ export default async function ClientLoginPage({ params }: Props) {
             config={loaderConfig}
             brandName={coach.brand_name}
             iconSrc={loaderConfig.symbol === 'logo' ? (logoUrl || BRAND_APP_ICON) : BRAND_APP_ICON}
+            iconSrcDark={loaderConfig.symbol === 'logo' && logoUrl ? (logoUrlDark || logoUrl) : undefined}
             size="lg"
         />
     ) : loaderVariant !== 'eva' ? (
@@ -133,6 +136,7 @@ export default async function ClientLoginPage({ params }: Props) {
             variant={loaderVariant}
             brandName={coach.brand_name}
             iconSrc={logoUrl || BRAND_APP_ICON}
+            iconSrcDark={logoUrl ? (logoUrlDark || logoUrl) : undefined}
             size="lg"
         />
     ) : (
@@ -142,6 +146,7 @@ export default async function ClientLoginPage({ params }: Props) {
             customText={coach.brand_name}
             iconMode={logoUrl ? 'coach' : 'eva'}
             coachLogoUrl={logoUrl || undefined}
+            coachLogoDarkUrl={logoUrlDark || undefined}
             primaryColor={theme.light.accent}
         />
     )
