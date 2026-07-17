@@ -2,6 +2,7 @@ export * from './design'
 export * from './read-models'
 export * from './catalog'
 export * from './rollout'
+export * from './food-category'
 export {
   NutritionActorRoleSchema,
   NutritionCaptureMethodSchema,

@@ -12,7 +12,6 @@ import {
   type NutritionTodayReadModel,
 } from '@eva/nutrition-v2'
 import {
-  FoodRow,
   MacroBudget,
   MacroChipRow,
   NutritionCard,
@@ -23,6 +22,7 @@ import {
 } from '@/components/nutrition-v2'
 import { formatNutritionShortDate } from '@/lib/date-utils'
 import { TodayModal } from './TodayModal'
+import { NutritionFoodRow } from './NutritionFoodRow'
 import { foodResultImage } from './food-result-image'
 import {
   buildCatalogIntakePayload,
@@ -31,25 +31,28 @@ import {
   buildVoidPayload,
   consumedEntries,
   contextFromToday,
-  entryToFoodRow,
   isPrescriptionConsumed,
   mealSlotOptions,
   newIdempotencyKey,
 } from './nutrition-today.logic'
 import {
-  closeDayAction,
   correctIntakeAction,
   recordIntakeAction,
   searchFoodCatalogAction,
   voidIntakeAction,
 } from '../_actions/intake.actions'
 
+// NOTA: `closeDayAction` (cierre manual del día) se retiró de la UI por decisión del CEO — los
+// registros ya se guardan solos, la card "Cerrar mi día" confundía. El action y su RPC siguen
+// VIVOS en `../_actions/intake.actions` como mecanismo interno para un cierre automático futuro;
+// aquí simplemente ya no se invocan. El chip "Día registrado" se conserva para días cerrados
+// históricamente (render condicional por `today.snapshotId`).
+
 type DialogState =
   | { kind: 'none' }
   | { kind: 'register' }
   | { kind: 'edit'; entry: NutritionIntakeReadItem }
   | { kind: 'void'; entry: NutritionIntakeReadItem }
-  | { kind: 'close' }
 
 export function TodayExperience({
   today,
@@ -211,9 +214,16 @@ export function TodayExperience({
           <NutritionCard>
             <div className="divide-y divide-border-subtle">
               {entries.map((entry) => (
-                <FoodRow
+                <NutritionFoodRow
                   key={entry.id}
-                  food={entryToFoodRow(entry)}
+                  name={entry.snapshot.name}
+                  detail={entry.snapshot.brand}
+                  quantityLabel={`${entry.quantity} ${entry.unit}`}
+                  calories={entry.totals.calories}
+                  proteinG={entry.totals.proteinG}
+                  carbsG={entry.totals.carbsG}
+                  fatsG={entry.totals.fatsG}
+                  statusLabel={entry.status === 'corrected' ? 'Corregido' : null}
                   actions={
                     <div className="flex items-center gap-1">
                       <IconButton
@@ -239,20 +249,6 @@ export function TodayExperience({
           </NutritionCard>
         )}
       </section>
-
-      {/* Cierre del dia */}
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-card border border-border-subtle bg-surface-card p-4 shadow-sm">
-        <div className="min-w-0">
-          <p className="font-display text-base font-semibold text-strong">Cerrar mi día</p>
-          <p className="mt-0.5 text-sm text-muted">
-            Congela tus objetivos y registros de hoy en tu historial.
-          </p>
-        </div>
-        <NutritionMotionButton tone="neutral" onClick={() => openDialog({ kind: 'close' })}>
-          <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
-          Cerrar mi día
-        </NutritionMotionButton>
-      </div>
 
       {dialog.kind === 'register' ? (
         <RegisterFoodDialog
@@ -331,45 +327,6 @@ export function TodayExperience({
             )
           }}
         />
-      ) : null}
-
-      {dialog.kind === 'close' ? (
-        <TodayModal
-          title="Cerrar mi día"
-          description="Se guardará una foto de tus objetivos y registros de hoy. Puedes seguir registrando después."
-          open
-          onClose={closeDialog}
-          footer={
-            <div className="flex justify-end gap-2">
-              <NutritionMotionButton tone="neutral" onClick={closeDialog}>
-                Cancelar
-              </NutritionMotionButton>
-              <NutritionMotionButton
-                pending={isPending && busyId === 'close'}
-                onClick={() =>
-                  runMutation(
-                    'close',
-                    () =>
-                      closeDayAction({
-                        clientId,
-                        localDate: today.localDate,
-                        timezone: today.timezone,
-                        revalidatePath,
-                      }),
-                    closeDialog,
-                  )
-                }
-              >
-                Confirmar cierre
-              </NutritionMotionButton>
-            </div>
-          }
-        >
-          <DialogError message={error} />
-          <p className="text-sm text-body">
-            Tu coach verá el resumen de este día tal como quedó al cerrarlo.
-          </p>
-        </TodayModal>
       ) : null}
     </div>
   )
@@ -469,18 +426,16 @@ function PrescribedSection({
             {slot.prescriptionItems.map((item) => {
               const consumed = isPrescriptionConsumed(today, item.id)
               return (
-                <FoodRow
+                <NutritionFoodRow
                   key={item.id}
-                  food={{
-                    id: item.id,
-                    name: item.name ?? 'Alimento prescrito',
-                    detail: item.brand,
-                    quantityLabel: `${item.quantity} ${item.unit}`,
-                    calories: item.macros.calories,
-                    proteinG: item.macros.proteinG,
-                    carbsG: item.macros.carbsG,
-                    fatsG: item.macros.fatsG,
-                  }}
+                  name={item.name ?? 'Alimento prescrito'}
+                  detail={item.brand}
+                  quantityLabel={`${item.quantity} ${item.unit}${item.optional ? ' · opcional' : ''}`}
+                  calories={item.macros.calories}
+                  proteinG={item.macros.proteinG}
+                  carbsG={item.macros.carbsG}
+                  fatsG={item.macros.fatsG}
+                  note={item.notes}
                   actions={
                     consumed ? (
                       <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700 dark:text-emerald-300">

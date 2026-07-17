@@ -10,7 +10,13 @@ import {
   PlanVersionBadge,
   StrategyBadge,
 } from '@/components/nutrition-v2'
-import { describeLegacyHistoryDay } from '@eva/nutrition-v2'
+import {
+  NUTRITION_STRATEGIES,
+  describeLegacyHistoryDay,
+  formatNutritionAmount,
+  formatNutritionCalories,
+  type NutritionPlanReadModel,
+} from '@eva/nutrition-v2'
 import { formatNutritionShortDate, getTodayInSantiago } from '@/lib/date-utils'
 import { getClientBasePath } from '@/lib/client/base-path'
 import { getClientNutritionUser } from '../nutrition/_data/nutrition-auth.queries'
@@ -22,6 +28,7 @@ import {
 } from '@/services/nutrition-v2-read.service'
 import { isNutritionV2Enabled } from '@/services/nutrition-v2-rollout.service'
 import { TodayExperience } from './_components/TodayExperience'
+import { NutritionFoodRow } from './_components/NutritionFoodRow'
 
 export const metadata = { title: 'Nutrición' }
 
@@ -161,6 +168,10 @@ async function TodayView({ clientId, date, base }: { clientId: string; date: str
   )
 }
 
+type PlanVariant = NutritionPlanReadModel['dayVariants'][number]
+type PlanSlot = PlanVariant['mealSlots'][number]
+type PlanItem = PlanSlot['prescriptionItems'][number]
+
 async function PlanView({ clientId, date }: { clientId: string; date: string }) {
   const plan = await getNutritionPlanV2ForWeb({ clientId, date })
   if (!plan.plan) {
@@ -173,26 +184,217 @@ async function PlanView({ clientId, date }: { clientId: string; date: string }) 
     )
   }
 
+  const summary = plan.plan
+  const defaultVariant = plan.dayVariants.find((variant) => variant.isDefault) ?? plan.dayVariants[0] ?? null
+
   return (
     <div className="space-y-4">
+      {/* Encabezado del plan */}
       <NutritionCard>
         <div className="flex flex-wrap items-center gap-2">
-          <StrategyBadge strategy={plan.plan.strategy} />
-          <PlanVersionBadge version={plan.plan.versionNumber} status={plan.plan.status} />
+          <StrategyBadge strategy={summary.strategy} />
+          <PlanVersionBadge version={summary.versionNumber} status={summary.status} />
         </div>
-        <h2 className="mt-4 font-display text-2xl font-bold text-strong">{plan.plan.name}</h2>
-        {plan.visibleNotes ? <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-body">{plan.visibleNotes}</p> : null}
+        <h2 className="mt-4 font-display text-2xl font-bold text-strong">{summary.name}</h2>
+        <p className="mt-1 text-xs text-muted">
+          Vigente desde {formatNutritionShortDate(summary.effectiveFrom)}
+          {summary.effectiveTo ? ` hasta ${formatNutritionShortDate(summary.effectiveTo)}` : ' · versión actual'}
+        </p>
+        <p className="mt-2 text-sm leading-6 text-body">{NUTRITION_STRATEGIES[summary.strategy].description}</p>
+        {plan.visibleNotes ? (
+          <div className="mt-4 rounded-control border border-border-subtle bg-surface-sunken p-3">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-subtle">Notas de tu coach</p>
+            <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-body">{plan.visibleNotes}</p>
+          </div>
+        ) : null}
       </NutritionCard>
+
+      {/* Metas diarias */}
+      {defaultVariant ? <PlanObjectivesCard targets={defaultVariant.targets} /> : null}
+
+      {/* Reglas del plan */}
+      <PlanRulesCard permissions={plan.permissions} />
+
+      {/* Detalle por variante de día */}
       {plan.dayVariants.map((variant) => (
-        <NutritionCard key={variant.id}>
-          <h3 className="font-display text-lg font-semibold text-strong">{variant.label}</h3>
-          <p className="mt-1 text-sm tabular-nums text-muted">
-            {variant.mealSlots.length} franja{variant.mealSlots.length === 1 ? '' : 's'} · {variant.targets.calories ?? 0} kcal
-          </p>
-        </NutritionCard>
+        <PlanVariantCard key={variant.id} variant={variant} showTargets={plan.dayVariants.length > 1} />
       ))}
     </div>
   )
+}
+
+/** Metas diarias del plan (energía + macros), en una grilla legible. */
+function PlanObjectivesCard({ targets }: { targets: PlanVariant['targets'] }) {
+  const rows: Array<{ label: string; value: string }> = []
+  if (targets.calories != null) rows.push({ label: 'Energía', value: formatNutritionCalories(targets.calories) })
+  if (targets.proteinG != null) rows.push({ label: 'Proteína', value: formatNutritionAmount(targets.proteinG, 'g') })
+  if (targets.carbsG != null) rows.push({ label: 'Carbohidratos', value: formatNutritionAmount(targets.carbsG, 'g') })
+  if (targets.fatsG != null) rows.push({ label: 'Grasas', value: formatNutritionAmount(targets.fatsG, 'g') })
+  if (targets.fiberG != null) rows.push({ label: 'Fibra', value: formatNutritionAmount(targets.fiberG, 'g') })
+  if (rows.length === 0) return null
+  return (
+    <NutritionCard>
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-subtle">Metas diarias</p>
+      <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3">
+        {rows.map((row) => (
+          <div key={row.label}>
+            <dd className="font-display text-lg font-bold tabular-nums text-strong">{row.value}</dd>
+            <dt className="text-xs text-muted">{row.label}</dt>
+          </div>
+        ))}
+      </dl>
+    </NutritionCard>
+  )
+}
+
+/** Reglas/permisos del alumno como pastillas (qué puede ajustar, sustituir, etc.). */
+function PlanRulesCard({ permissions }: { permissions: NutritionPlanReadModel['permissions'] }) {
+  const chips: string[] = []
+  chips.push(permissions.canRegisterFreely ? 'Registro libre habilitado' : 'Solo alimentos prescritos')
+  if (permissions.canAdjustPrescribedQuantity) {
+    chips.push(
+      permissions.quantityAdjustmentPercent != null
+        ? `Ajuste de cantidad ±${permissions.quantityAdjustmentPercent}%`
+        : 'Ajuste de cantidad permitido',
+    )
+  }
+  if (permissions.canSubstitute) chips.push('Intercambios permitidos')
+  if (permissions.canMoveMealSlot) chips.push('Puedes mover comidas de franja')
+  if (permissions.canSkipOptionalItems) chips.push('Puedes omitir opcionales')
+  return (
+    <NutritionCard>
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-subtle">Reglas del plan</p>
+      <div className="mt-3 flex flex-wrap gap-2">
+        {chips.map((chip) => (
+          <span
+            key={chip}
+            className="rounded-pill border border-border-subtle bg-surface-sunken px-2.5 py-1 text-xs font-medium text-body"
+          >
+            {chip}
+          </span>
+        ))}
+      </div>
+    </NutritionCard>
+  )
+}
+
+/** Detalle de una variante de día: franjas con hora, indicaciones y alimentos con macros. */
+function PlanVariantCard({ variant, showTargets }: { variant: PlanVariant; showTargets: boolean }) {
+  return (
+    <NutritionCard>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h3 className="font-display text-lg font-semibold text-strong">{variant.label}</h3>
+        {variant.isDefault ? (
+          <span className="rounded-pill border border-primary/30 bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary dark:border-primary/40 dark:bg-primary/15 dark:text-primary">
+            Por defecto
+          </span>
+        ) : null}
+      </div>
+      <p className="mt-1 text-sm tabular-nums text-muted">
+        {variant.mealSlots.length} franja{variant.mealSlots.length === 1 ? '' : 's'}
+        {variant.targets.calories != null ? ` · ${formatNutritionCalories(variant.targets.calories)}` : ''}
+      </p>
+      {showTargets ? (
+        <span className="mt-2 block">
+          <MacroChipRow
+            calories={variant.targets.calories}
+            proteinG={variant.targets.proteinG}
+            carbsG={variant.targets.carbsG}
+            fatsG={variant.targets.fatsG}
+            size="sm"
+          />
+        </span>
+      ) : null}
+      <div className="mt-2 space-y-4">
+        {variant.mealSlots.length === 0 ? (
+          <p className="text-sm text-muted">
+            Plan sin franjas fijas: sigue tus metas diarias y registra lo que comas.
+          </p>
+        ) : (
+          variant.mealSlots.map((slot) => <PlanSlotBlock key={slot.id} slot={slot} />)
+        )}
+      </div>
+    </NutritionCard>
+  )
+}
+
+/** Una franja del plan: encabezado (hora), indicaciones, alimentos prescritos y subtotal. */
+function PlanSlotBlock({ slot }: { slot: PlanSlot }) {
+  const timeLabel = slot.startTime
+    ? slot.endTime
+      ? `${slot.startTime}–${slot.endTime}`
+      : slot.startTime
+    : null
+  const subtotal = slot.prescriptionItems.reduce((sum, item) => sum + (item.macros.calories ?? 0), 0)
+  const hasItems = slot.prescriptionItems.length > 0
+  const targetChips =
+    slot.targets.calories != null ||
+    slot.targets.proteinG != null ||
+    slot.targets.carbsG != null ||
+    slot.targets.fatsG != null
+
+  return (
+    <div className="rounded-control border border-border-subtle bg-surface-sunken/40 p-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <h4 className="font-display text-base font-semibold text-strong">{slot.name}</h4>
+          {timeLabel ? <span className="font-mono text-xs text-muted">{timeLabel}</span> : null}
+        </div>
+        {hasItems && subtotal > 0 ? (
+          <span className="font-mono text-xs font-semibold text-strong">{formatNutritionCalories(subtotal)}</span>
+        ) : null}
+      </div>
+      {slot.instructions ? (
+        <p className="mt-1 text-xs leading-5 text-subtle">{slot.instructions}</p>
+      ) : null}
+      {hasItems ? (
+        <div className="mt-2 divide-y divide-border-subtle">
+          {slot.prescriptionItems.map((item) => (
+            <NutritionFoodRow
+              key={item.id}
+              name={item.name ?? 'Alimento prescrito'}
+              detail={item.brand}
+              quantityLabel={`${item.quantity} ${item.unit}${item.optional ? ' · opcional' : ''}`}
+              calories={item.macros.calories}
+              proteinG={item.macros.proteinG}
+              carbsG={item.macros.carbsG}
+              fatsG={item.macros.fatsG}
+              note={describeItemGuidance(item)}
+            />
+          ))}
+        </div>
+      ) : targetChips ? (
+        <div className="mt-2">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-subtle">Objetivo de la franja</p>
+          <span className="mt-1 block">
+            <MacroChipRow
+              calories={slot.targets.calories}
+              proteinG={slot.targets.proteinG}
+              carbsG={slot.targets.carbsG}
+              fatsG={slot.targets.fatsG}
+              size="sm"
+            />
+          </span>
+        </div>
+      ) : (
+        <p className="mt-2 text-xs text-muted">Franja flexible sin alimentos prescritos.</p>
+      )}
+    </div>
+  )
+}
+
+/** Nota de guía de un item prescrito: rango de cantidad ajustable + indicaciones del coach. */
+function describeItemGuidance(item: PlanItem): string | null {
+  const unit = item.unit
+  const range =
+    item.minimumQuantity != null && item.maximumQuantity != null
+      ? `Ajustable entre ${formatNutritionAmount(item.minimumQuantity, unit)} y ${formatNutritionAmount(item.maximumQuantity, unit)}`
+      : item.maximumQuantity != null
+        ? `Hasta ${formatNutritionAmount(item.maximumQuantity, unit)}`
+        : item.minimumQuantity != null
+          ? `Desde ${formatNutritionAmount(item.minimumQuantity, unit)}`
+          : null
+  return [range, item.notes].filter(Boolean).join(' · ') || null
 }
 
 async function HistoryView({

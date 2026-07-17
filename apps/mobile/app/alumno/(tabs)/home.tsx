@@ -30,6 +30,8 @@ import { RecentWorkouts } from '../../../components/alumno/home/RecentWorkouts'
 import { OrgAnnouncementBanner } from '../../../components/alumno/home/OrgAnnouncementBanner'
 import { HabitsCard } from '../../../components/alumno/home/HabitsCard'
 import { NutritionDailySummary } from '../../../components/alumno/home/NutritionDailySummary'
+import { NutritionDailySummaryV2 } from '../../../components/alumno/home/NutritionDailySummaryV2'
+import { isEnabled } from '../../../lib/flags'
 import { DAY_FULL, EMBER_500, WEEK_LETTERS } from '../../../components/alumno/home/types'
 import type { HomeData, PendingDay, Plan, PlanDayView, Program } from '../../../components/alumno/home/types'
 
@@ -58,7 +60,11 @@ function startOfWeekMonday(d: Date): Date {
 export default function AlumnoHomeScreen() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
-  const { nutritionEnabled } = useEntitlements()
+  const { nutritionEnabled, ready: entitlementsReady } = useEntitlements()
+  // Rollout técnico de Nutrición V2 (surface mobileStudent) resuelto por el servidor y espejado
+  // en el flag local; fail-closed hasta que entitlements estén listos. Mismo patrón que la
+  // pantalla /alumno/nutrition-v2.
+  const nutritionV2Enabled = entitlementsReady && isEnabled('nutritionV2Student')
   const onScrollChrome = useAlumnoScrollHandler()
   const [data, setData] = useState<HomeData | null>(null)
   const [loading, setLoading] = useState(true)
@@ -461,12 +467,19 @@ export default function AlumnoHomeScreen() {
           </View>
         ) : null}
 
-        {/* §12 Nutricion de hoy (gate) */}
+        {/* §12 Nutricion de hoy (gate) — V1 clásica o resumen V2 según el rollout mobileStudent */}
         {data?.client && nutritionEnabled ? (
-          <View>
-            <SectionTitle accent={EMBER_500} action="Ver nutrición" onAction={() => router.push('/alumno/nutricion')} actionTestID="home-nutrition-link">Nutrición de hoy</SectionTitle>
-            <NutritionDailySummary clientId={data.client.id} reloadSignal={reloadKey} onSeeAll={() => router.push('/alumno/nutricion')} />
-          </View>
+          nutritionV2Enabled ? (
+            <View>
+              <SectionTitle accent={EMBER_500} action="Ver nutrición" onAction={() => router.push('/alumno/nutrition-v2')} actionTestID="home-nutrition-link">Nutrición de hoy</SectionTitle>
+              <NutritionDailySummaryV2 clientId={data.client.id} reloadSignal={reloadKey} onSeeAll={() => router.push('/alumno/nutrition-v2')} />
+            </View>
+          ) : (
+            <View>
+              <SectionTitle accent={EMBER_500} action="Ver nutrición" onAction={() => router.push('/alumno/nutricion')} actionTestID="home-nutrition-link">Nutrición de hoy</SectionTitle>
+              <NutritionDailySummary clientId={data.client.id} reloadSignal={reloadKey} onSeeAll={() => router.push('/alumno/nutricion')} />
+            </View>
+          )
         ) : null}
         </View>
       </ScrollView>

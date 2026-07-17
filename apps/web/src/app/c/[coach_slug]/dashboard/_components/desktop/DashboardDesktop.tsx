@@ -10,7 +10,7 @@ import { WeightWidget } from '../weight/WeightWidget'
 import { PersonalRecordsCard } from '../records/PersonalRecordsCard'
 import { RecentWorkoutsSection } from '../history/RecentWorkoutsSection'
 import { HabitsTrackerWidget } from '../habits/HabitsTrackerWidget'
-import { NutritionDailySummary } from '../nutrition/NutritionDailySummary'
+import { NutritionTodaySection, NutritionTodaySectionFallback } from '../nutrition/NutritionTodaySection'
 import { SectionTitle } from '../shared/SectionTitle'
 import {
     CheckInSkeleton,
@@ -19,7 +19,6 @@ import {
     HabitsSkeleton,
     HeroAndComplianceSkeleton,
     HistorySkeleton,
-    NutritionSkeleton,
     PersonalRecordsSkeleton,
     ProgramSkeleton,
     WeightSkeleton,
@@ -111,14 +110,10 @@ export function DashboardDesktop({
                         </div>
                     </div>
 
-                    <div>
-                        <SectionTitle accent="var(--ember-500)" action="Ver nutrición" actionHref={`${base}/nutrition`}>
-                            Nutrición de hoy
-                        </SectionTitle>
-                        <Suspense fallback={<NutritionSkeleton />}>
-                            <NutritionDailySummary userId={userId} coachSlug={coachSlug} />
-                        </Suspense>
-                    </div>
+                    {/* Nutrición de hoy — V1 clásica o resumen V2 según el rollout webStudent */}
+                    <Suspense fallback={<NutritionTodaySectionFallback base={base} />}>
+                        <NutritionTodaySection userId={userId} coachSlug={coachSlug} base={base} />
+                    </Suspense>
                 </div>
             </div>
         </div>

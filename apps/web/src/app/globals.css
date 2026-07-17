@@ -1052,6 +1052,16 @@ body.immersive-workout-mode main {
   padding-bottom: 0 !important;
 }
 
+/* Sheets de Nutrición V2 (alumno) — ocultar la cápsula flotante del nav mientras un sheet esté
+   abierto. El TodayModal marca <body class="eva-v2-sheet-open"> al montar (contador de
+   referencias). Fix determinista al bug de apilamiento: el <main> del alumno es `relative z-0`
+   y atrapa el z-[100] del modal en su propio contexto, mientras la cápsula (z-index:59) es
+   hermana del main y pintaba por encima. Solo el nav mobile: el sheet es full-viewport en mobile;
+   en desktop el modal es centrado y no lo tapa el sidebar. */
+body.eva-v2-sheet-open nav.client-nav-mobile {
+  display: none !important;
+}
+
 /* Perfil alumno — exportar / imprimir informe */
 @media print {
   .coach-layout-container > aside {

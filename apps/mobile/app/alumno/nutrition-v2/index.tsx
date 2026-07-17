@@ -40,6 +40,7 @@ import {
 } from '@eva/nutrition-v2'
 import { supabase } from '../../../lib/supabase'
 import { formatNutritionShortDate } from '../../../lib/date-utils'
+import { foodCategoryEmojiFromName } from '../../../lib/nutrition-v2-food-media'
 import { isEnabled } from '../../../lib/flags'
 import { useEntitlements } from '../../../lib/entitlements'
 import { getNutritionHistoryV2, getNutritionPlanV2, getNutritionTodayV2 } from '../../../lib/nutrition-v2.api'
@@ -712,6 +713,7 @@ function TodaySlotCard({
                   carbsG: item.macros.carbsG,
                   fatsG: item.macros.fatsG,
                 }}
+                fallbackEmoji={foodCategoryEmojiFromName(item.name)}
                 actions={
                   <NutritionMotionButton
                     accessibilityLabel={`Comí ${item.name ?? 'lo prescrito'}`}
@@ -736,6 +738,7 @@ function TodaySlotCard({
               <View key={row.id} className={index > 0 ? 'border-t border-border-subtle' : undefined}>
                 <FoodRow
                   food={row}
+                  fallbackEmoji={foodCategoryEmojiFromName(row.name)}
                   actions={
                     entry ? (
                       <Pressable
@@ -785,6 +788,7 @@ function UnassignedCard({
           <View key={row.id} className={index > 0 ? 'border-t border-border-subtle' : undefined}>
             <FoodRow
               food={row}
+              fallbackEmoji={foodCategoryEmojiFromName(row.name)}
               actions={
                 entry ? (
                   <Pressable
@@ -1250,6 +1254,7 @@ function PlanVariantCard({ variant }: { variant: PlanVariant }) {
                     carbsG: item.macros.carbsG,
                     fatsG: item.macros.fatsG,
                   }}
+                  fallbackEmoji={foodCategoryEmojiFromName(item.name)}
                 />
               </View>
             ))
@@ -1620,7 +1625,7 @@ function HistoryDayDetail({ model, offline }: { model: NutritionTodayReadModel; 
           <Text className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-text-subtle">{slot.name}</Text>
           {entries.map((entry, index) => (
             <View key={entry.id} className={index > 0 ? 'border-t border-border-subtle' : undefined}>
-              <FoodRow food={historyEntryToRow(entry)} />
+              <FoodRow food={historyEntryToRow(entry)} fallbackEmoji={foodCategoryEmojiFromName(entry.snapshot.name)} />
             </View>
           ))}
         </View>
@@ -1630,7 +1635,7 @@ function HistoryDayDetail({ model, offline }: { model: NutritionTodayReadModel; 
           <Text className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-text-subtle">Sin franja</Text>
           {unassigned.map((entry, index) => (
             <View key={entry.id} className={index > 0 ? 'border-t border-border-subtle' : undefined}>
-              <FoodRow food={historyEntryToRow(entry)} />
+              <FoodRow food={historyEntryToRow(entry)} fallbackEmoji={foodCategoryEmojiFromName(entry.snapshot.name)} />
             </View>
           ))}
         </View>

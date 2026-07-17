@@ -18,6 +18,8 @@
  * el pie de una lista mixta, `catalogHasOpenFoodFactsSource` decide si mostrar la linea generica.
  */
 
+import { foodCategoryFromName } from '@eva/nutrition-v2'
+
 /** Forma minima del objeto `media` de un item del catalogo. */
 export interface FoodMediaLike {
   bucket: string
@@ -72,6 +74,16 @@ const FOOD_CATEGORY_EMOJI: Record<string, string> = {
 export function foodCategoryEmoji(category: string | null | undefined): string {
   if (category && category in FOOD_CATEGORY_EMOJI) return FOOD_CATEGORY_EMOJI[category]
   return FOOD_CATEGORY_EMOJI.otro
+}
+
+/**
+ * Emoji placeholder derivado del NOMBRE del alimento. Se usa en las filas del alumno
+ * (prescripcion / consumo del tab Hoy y del tab Plan), cuyo read model solo trae el
+ * nombre (sin la columna `category`): deriva la categoria con la heuristica compartida
+ * web/RN (`foodCategoryFromName`) y devuelve su emoji. Siempre valido (cae a "otro").
+ */
+export function foodCategoryEmojiFromName(name: string | null | undefined): string {
+  return foodCategoryEmoji(foodCategoryFromName(name))
 }
 
 /** Linea de atribucion OFF (ODbL) para el resultado del scanner y la ficha del alimento. */

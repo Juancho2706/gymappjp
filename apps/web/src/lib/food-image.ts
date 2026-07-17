@@ -15,6 +15,8 @@
  * https://github.com/microsoft/fluentui-emoji
  */
 
+import { foodCategoryFromName } from '@eva/nutrition-v2'
+
 /**
  * Las 10 categorias de alimentos del catalogo (espejo de `VALID_FOOD_CATEGORIES`
  * en `@eva/schemas`). Cada una tiene un icono estatico homonimo.
@@ -76,6 +78,16 @@ export function foodCategoryIconUrl(
   const key =
     category && FOOD_ICON_SET.has(category) ? (category as FoodIconCategory) : 'otro'
   return `/food-icons/${key}.webp`
+}
+
+/**
+ * Icono estatico de categoria derivado del NOMBRE de un alimento. Se usa cuando el
+ * read model solo trae el nombre (items prescritos / consumidos del alumno, sin la
+ * columna `category`): deriva la categoria canonica con la heuristica compartida
+ * web/RN (`foodCategoryFromName`) y devuelve su icono. Siempre valido (cae a `otro`).
+ */
+export function foodCategoryIconUrlFromName(name: string | null | undefined): string {
+  return foodCategoryIconUrl(foodCategoryFromName(name))
 }
 
 /**
