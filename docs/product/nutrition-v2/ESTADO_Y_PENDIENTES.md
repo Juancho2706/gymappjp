@@ -25,6 +25,14 @@ alimentos + navbar propia en prod; catálogo genérico dedupeado (532 alimentos)
 - AURA (rediseño del Hoy del alumno, web + RN), favoritos y "Compartir el día" en V2,
   navbar con 10 siluetas propias tintables.
 - Suite E2E Playwright validada: 4/4 specs canary contra prod (`tests/nutrition-v2/`).
+- **Edición rápida del plan (2026-07-17)**: modo edición in-place en la ficha (web +
+  RN), cantidades/swap/franjas/metas con "N cambios sin publicar" → Publicar; wizard
+  queda como "Rehacer con el asistente". Requiere aplicar migración `20260717130000`
+  (supersede intra-día + guard optimista del publish) — pendiente GO, junto con la de
+  conversión `20260717120000`.
+- **Deprecación por etapas construida (2026-07-17)**: con flag V2 activo, `/nutrition`
+  y `/nutrition/add` del alumno redirigen a V2 (V1 intacta con flag apagado); sin
+  banner ni "Vista previa"; hub coach sin link a V1.
 
 ## Qué FALTA
 
