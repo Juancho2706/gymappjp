@@ -43,6 +43,10 @@
     {
       "path": "/api/cron/mirror-exercise-thumbnails",
       "schedule": "0 4 * * *"
+    },
+    {
+      "path": "/api/cron/paid-expiry",
+      "schedule": "30 12 * * *"
     }
   ],
   "headers": [
