@@ -1,45 +1,21 @@
 # EVA Nutrición V2 — índice de documentación
 
-**Rama de trabajo:** `Nuevascosasrnopenai`  
-**PR:** #121 — draft  
-**Base:** `rnmobiledenuevo`  
-**Supabase productivo:** `constant` (`jikjeokundmaafuytdcx`)  
-**Última actualización del handoff:** 15 de julio de 2026
+**Rama de trabajo:** `rnmobiledenuevo`
+**Supabase productivo:** `jikjeokundmaafuytdcx`
+**Estado:** implementado y estabilizado, en canary solo para josefit. Última actualización: 2026-07-17.
 
-Este directorio es la fuente de orientación para continuar el rework de Nutrición V2. No asumir que una migración aplicada o una ruta canary equivale a una funcionalidad terminada.
+> Este índice apunta a los docs vigentes. Los handoffs y roadmaps congelados (estado al
+> 2026-07-15) se archivaron en [`../../archive/nutrition-v2/`](../../archive/nutrition-v2/)
+> porque su contenido quedó superado por lo implementado. No los uses como estado actual.
 
-## Lectura obligatoria para Claude CLI
+## Fuente de verdad del estado
 
-Leer en este orden:
-
-1. [`CLAUDE_CLI_HANDOFF_2026-07-15.md`](./CLAUDE_CLI_HANDOFF_2026-07-15.md)  
-   Punto de entrada operativo, reglas, comandos, orden de trabajo y bloqueos inmediatos.
-2. [`CURRENT_IMPLEMENTATION_AND_FILE_MAP_2026.md`](./CURRENT_IMPLEMENTATION_AND_FILE_MAP_2026.md)  
-   Qué existe realmente y dónde vive cada pieza.
-3. [`VALIDATION_RISKS_AND_KNOWN_BLOCKERS_2026.md`](./VALIDATION_RISKS_AND_KNOWN_BLOCKERS_2026.md)  
-   Estado de CI, riesgos técnicos, inconsistencias detectadas y pruebas pendientes.
-4. [`REMAINING_ROADMAP_AND_DEFINITION_OF_DONE_2026.md`](./REMAINING_ROADMAP_AND_DEFINITION_OF_DONE_2026.md)  
-   Trabajo restante desde la estabilización de Tandas 4–5 hasta el retiro de V1.
-5. [`TANDA_4_READ_MODELS_CACHE_OFFLINE_HANDOFF_2026.md`](./TANDA_4_READ_MODELS_CACHE_OFFLINE_HANDOFF_2026.md)  
-   Read models, rollout, gateways web/RN, caché y cola offline.
-6. [`TANDA_5_CATALOG_SCANNERS_MEDIA_HANDOFF_2026.md`](./TANDA_5_CATALOG_SCANNERS_MEDIA_HANDOFF_2026.md)  
-   Catálogo local, GTIN, scanners, Storage, media e importación Chile.
-7. [`../NUTRITION_V2_MASTER_EXECUTION_PLAN_2026.md`](../NUTRITION_V2_MASTER_EXECUTION_PLAN_2026.md)  
-   Visión completa y tandas 0–12.
-8. [`../NUTRITION_TOTAL_REWORK_AUDIT_2026.md`](../NUTRITION_TOTAL_REWORK_AUDIT_2026.md)  
-   Auditoría funcional original y contexto V1.
-
-## Tandas documentadas
-
-| Tanda | Estado de handoff | Documento |
-|---|---|---|
-| 0 | Cerrada | [`TANDA_0_BASELINE_GUARDRAILS_2026.md`](./TANDA_0_BASELINE_GUARDRAILS_2026.md) |
-| 1 | Cerrada como contrato de producto | [`TANDA_1_PRODUCT_CONTRACT_WIREFRAMES_2026.md`](./TANDA_1_PRODUCT_CONTRACT_WIREFRAMES_2026.md) |
-| 2 | Kit y contratos creados; requiere integración visual futura | [`TANDA_2_DESIGN_SYSTEM_COMPONENTS_2026.md`](./TANDA_2_DESIGN_SYSTEM_COMPONENTS_2026.md) |
-| 3 | Dominio aditivo aplicado y probado | [`TANDA_3_ADDITIVE_DOMAIN_2026.md`](./TANDA_3_ADDITIVE_DOMAIN_2026.md) |
-| 4 | Implementación avanzada, no cerrada para rollout | [`TANDA_4_READ_MODELS_CACHE_OFFLINE_HANDOFF_2026.md`](./TANDA_4_READ_MODELS_CACHE_OFFLINE_HANDOFF_2026.md) |
-| 5 | Infraestructura y scanners creados, sin catálogo piloto ni cierre de QA | [`TANDA_5_CATALOG_SCANNERS_MEDIA_HANDOFF_2026.md`](./TANDA_5_CATALOG_SCANNERS_MEDIA_HANDOFF_2026.md) |
-| 6–12 | Pendientes | [`REMAINING_ROADMAP_AND_DEFINITION_OF_DONE_2026.md`](./REMAINING_ROADMAP_AND_DEFINITION_OF_DONE_2026.md) |
+1. [`ESTADO_Y_PENDIENTES.md`](./ESTADO_Y_PENDIENTES.md) — **empieza acá.** Qué está listo,
+   qué falta, decisiones tomadas, datos útiles. Doc vivo que reemplaza a los handoffs.
+2. [`TANDA_1_PRODUCT_CONTRACT_WIREFRAMES_2026.md`](./TANDA_1_PRODUCT_CONTRACT_WIREFRAMES_2026.md)
+   — contrato de producto y wireframes (referencia de diseño vigente).
+3. [`ASSETS_CEO_2026-07.md`](./ASSETS_CEO_2026-07.md) — inventario de assets (ilustraciones,
+   íconos de alimentos, navbar, badges).
 
 ## Runbooks operativos
 
@@ -47,15 +23,19 @@ Leer en este orden:
 - [`../../operations/FOOD_CATALOG_CL_IMPORT.md`](../../operations/FOOD_CATALOG_CL_IMPORT.md)
 - [`../../operations/food-catalog-cl.example.json`](../../operations/food-catalog-cl.example.json)
 
-## Reglas de oro
+## Reglas no negociables del rework
 
-- No modificar `master` ni `rnmobiledenuevo` desde esta entrega.
-- Mantener PR #121 en draft.
-- Supabase es producción: solo migraciones aditivas y versionadas.
-- No activar `nutrition_v2` globalmente.
-- No usar APIs externas de alimentos en runtime.
-- No inventar datos históricos.
-- No mezclar componentes V1 dentro de rutas V2.
-- No promover Tandas 4 o 5 a “completadas” hasta cerrar los bloqueos del documento de validación.
-- Ejecutar CI completo antes de solicitar merge.
-- Generar un único Preview de Vercel al finalizar un bloque de dos tandas, no por cada corrección.
+- Supabase es producción: solo migraciones aditivas y versionadas, validadas BEGIN/ROLLBACK.
+- No activar `nutrition_v2` globalmente; rollout solo canary/allowlist con flags fail-closed.
+- No inventar datos históricos; correcciones vía correction chain (el original se conserva).
+- No mezclar componentes V1 dentro de rutas V2 (CI: `pnpm check:nutrition-v2-boundaries`).
+- No usar APIs externas de alimentos en runtime (catálogo local Chile en Supabase).
+- No exponer service role en web/PWA/RN; RPCs profesionales solo versión scoped.
+- Paridad web responsive/PWA/RN, light/dark/white-label, accesibilidad.
+
+## Histórico archivado
+
+Handoffs, roadmaps y tandas cerradas en [`../../archive/nutrition-v2/`](../../archive/nutrition-v2/):
+`CLAUDE_CLI_HANDOFF_2026-07-15`, `CURRENT_IMPLEMENTATION_AND_FILE_MAP_2026`,
+`REMAINING_ROADMAP_AND_DEFINITION_OF_DONE_2026`, `TANDA_0/2/3/4/5_*`. Se conservan como
+contexto; NO representan el estado actual (ver `ESTADO_Y_PENDIENTES.md`).
