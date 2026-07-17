@@ -1,6 +1,8 @@
 import type { HTMLAttributes, ReactNode } from 'react'
+import Link from 'next/link'
 import {
   AlertTriangle,
+  ArrowLeft,
   Check,
   ChevronRight,
   Clock3,
@@ -54,6 +56,7 @@ export function NutritionPageShell({
   title,
   description,
   actions,
+  backHref,
   toolbar,
   children,
   aside,
@@ -63,14 +66,20 @@ export function NutritionPageShell({
   title: string
   description?: string
   actions?: ReactNode
+  backHref?: string
   toolbar?: ReactNode
   children: ReactNode
   aside?: ReactNode
   className?: string
 }) {
   return (
-    <main className={cx('mx-auto w-full max-w-[1440px] px-4 py-5 md:px-6 md:py-8', className)}>
-      <NutritionHeader eyebrow={eyebrow} title={title} description={description} actions={actions} />
+    <main
+      className={cx(
+        'mx-auto w-full max-w-[1440px] px-4 pb-5 pt-[calc(env(safe-area-inset-top,0px)+1.25rem)] md:px-6 md:pb-8 md:pt-8',
+        className,
+      )}
+    >
+      <NutritionHeader eyebrow={eyebrow} title={title} description={description} actions={actions} backHref={backHref} />
       {toolbar ? <div className="mt-5">{toolbar}</div> : null}
       <div
         className={cx(
@@ -90,12 +99,41 @@ export function NutritionHeader({
   title,
   description,
   actions,
+  backHref,
 }: {
   eyebrow?: string
   title: string
   description?: string
   actions?: ReactNode
+  backHref?: string
 }) {
+  if (backHref) {
+    // Variante compacta (alumno móvil): flecha + título en una sola fila,
+    // espejo del header del Plan Nutricional V1.
+    return (
+      <header className="flex items-center gap-1">
+        <Link
+          href={backHref}
+          aria-label="Volver"
+          className="-ml-2 flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-strong transition-colors hover:bg-surface-card active:bg-surface-card"
+        >
+          <ArrowLeft className="h-5 w-5" />
+        </Link>
+        <div className="min-w-0 flex-1">
+          <h1 className="truncate font-display text-[22px] font-black leading-tight tracking-[-0.02em] text-strong md:text-3xl">
+            {title}
+          </h1>
+          {description ? <p className="mt-0.5 truncate text-[12.5px] leading-4 text-muted">{description}</p> : null}
+        </div>
+        {eyebrow ? (
+          <span className="shrink-0 rounded-full border border-border-subtle bg-surface-card px-2.5 py-1 font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-primary">
+            {eyebrow}
+          </span>
+        ) : null}
+        {actions ? <div className="flex shrink-0 items-center gap-2">{actions}</div> : null}
+      </header>
+    )
+  }
   return (
     <header className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
       <div className="min-w-0">

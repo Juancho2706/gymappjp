@@ -1,7 +1,9 @@
 'use client'
 
 import Link from 'next/link'
-import { ArrowUpRight, LockKeyhole, Plus, Utensils } from 'lucide-react'
+import { useRouter } from 'next/navigation'
+import { useTransition, type ReactNode } from 'react'
+import { ArrowUpRight, LoaderCircle, LockKeyhole, Plus, Utensils } from 'lucide-react'
 import {
   MacroBudget,
   NutritionCard,
@@ -22,6 +24,47 @@ import type { NutritionTabV2ViewModel } from './nutritionTabV2.logic'
  * white-label sin ramas extra). Importar el kit V2 en esta ruta V1 no viola el boundary checker
  * (solo prohíbe montar los shells V1 dentro de rutas V2, no el kit V2 dentro de V1).
  */
+/**
+ * Link con feedback de navegación: al hacer click muestra spinner + label de espera
+ * hasta que el router transiciona (la ficha V2 tarda en resolver server-side; sin
+ * esto el coach quedaba mirando la pantalla sin saber si cargaba — QA CEO 2026-07-17).
+ * El destino además tiene loading.tsx, así el skeleton aparece apenas transiciona.
+ */
+function PendingNavLink({
+  href,
+  className,
+  pendingLabel,
+  children,
+}: {
+  href: string
+  className: string
+  pendingLabel: string
+  children: ReactNode
+}) {
+  const router = useRouter()
+  const [isPending, startTransition] = useTransition()
+  return (
+    <Link
+      href={href}
+      aria-busy={isPending}
+      className={`${className}${isPending ? ' pointer-events-none opacity-70' : ''}`}
+      onClick={(e) => {
+        e.preventDefault()
+        startTransition(() => router.push(href))
+      }}
+    >
+      {isPending ? (
+        <>
+          <LoaderCircle className="h-4 w-4 animate-spin" />
+          {pendingLabel}
+        </>
+      ) : (
+        children
+      )}
+    </Link>
+  )
+}
+
 export function NutritionTabV2({ view }: { view: NutritionTabV2ViewModel }) {
   return (
     <section className="min-w-0 space-y-6">
@@ -35,20 +78,22 @@ export function NutritionTabV2({ view }: { view: NutritionTabV2ViewModel }) {
           </h2>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Link
+          <PendingNavLink
             href={view.detailHref}
             className="inline-flex min-h-11 items-center gap-2 rounded-control border border-border-default bg-surface-card px-3 text-sm font-semibold text-strong transition-colors hover:bg-surface-sunken"
+            pendingLabel="Abriendo ficha…"
           >
             Abrir ficha nutrición completa
             <ArrowUpRight className="h-4 w-4" />
-          </Link>
-          <Link
+          </PendingNavLink>
+          <PendingNavLink
             href={view.builderHref}
             className="inline-flex min-h-11 items-center gap-2 rounded-control bg-ember-500 px-4 text-sm font-semibold text-white transition-colors hover:bg-ember-600"
+            pendingLabel="Abriendo builder…"
           >
             <Plus className="h-4 w-4" />
             {view.builderCtaLabel}
-          </Link>
+          </PendingNavLink>
         </div>
       </header>
 
