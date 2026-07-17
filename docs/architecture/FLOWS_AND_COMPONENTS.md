@@ -140,6 +140,7 @@ El coach standalone tiene **un solo preapproval MercadoPago** cuyo monto = base 
 | Baja | `POST /api/payments/addons/cancel` → `requestAddonCancellation` | regla 4 (ya cobrado) → `cancel_pending` + PUT que baja el monto YA + `expires_at` al corte; regla 3 (mensual sin cobrar, compromiso minimo) → `cancel_pending` SIN PUT (el corte lo cobra igual), `expires_at` diferido al 1er cobro |
 | Webhook | `app/api/payments/webhook/route.ts` | materializa filas del `external_reference` (preapproval `authorized` + one-shot aprobado); `markFirstCharged` (set-once, mensual); snapshot `billing_snapshots` por cada cobro; evento `updated` = confirmacion del PUT (alerta drift si difiere); rama `expire` → `cancelAllForCoach` |
 | Reconcile diario | `app/api/cron/mp-reconcile/route.ts` (`0 10 * * *`) | expira `cancel_pending` vencidos; alerta drift de monto, kill-switch prolongado (`EVA_DISABLED_MODULES` > N dias sobre add-on facturable) y `paused` prolongado (dunning > N dias) |
+| Backstop pagos vencidos | `app/api/cron/paid-expiry/route.ts` (`30 12 * * *`) | expira suscripciones PAGAS con período vencido cuyo evento terminal se perdió (webhook out-of-band); PROVIDER-VERIFIED via `fetchCheckoutSnapshot` + función pura `resolvePaidExpiryDecision`; solo corta si la sub remota está muerta (MP cancelled / Flow status 4 / 404), si no ALERT-ONLY; espejo del terminal del webhook (`cancelAllForCoach` + `revertActiveCouponForCoach`) |
 
 ## Flujo: media de ejercicios (thumbnails durables + recorte de video)
 
