@@ -55,7 +55,7 @@ test.describe('Nutrición V2 · Builder publica un plan (canary)', () => {
     await page.getByRole('button', { name: 'Buscar' }).first().click()
 
     // Elige el primer resultado del catálogo (cada card es un botón "Agregar <alimento>").
-    const firstResult = page.getByRole('button', { name: /^Agregar / }).first()
+    const firstResult = page.getByRole('button', { name: /^Agregar (?!franja)/ }).first()
     await expect(firstResult).toBeVisible({ timeout: 20_000 })
     await firstResult.click()
 
@@ -66,6 +66,14 @@ test.describe('Nutrición V2 · Builder publica un plan (canary)', () => {
     // Paso 4 · Revisar y publicar (la fecha "Vigente desde" ya trae hoy por defecto).
     await expect(page.getByText(planName, { exact: false })).toBeVisible({ timeout: 15_000 })
     await page.getByRole('button', { name: 'Publicar plan' }).click()
+
+    // Si una corrida previa dejó un plan vigente HOY, aparece el modal de conflicto:
+    // resolvemos con "Archivar el actual y reemplazar" (idempotencia entre corridas).
+    const conflict = page.getByRole('dialog', { name: /ya hay un plan vigente/i })
+    const conflictVisible = await conflict.isVisible({ timeout: 5_000 }).catch(() => false)
+    if (conflictVisible) {
+      await conflict.getByRole('button', { name: /archivar el actual y reemplazar/i }).click()
+    }
 
     // Al publicar aterriza en la ficha del alumno con el banner de éxito y el plan vigente.
     await page.waitForURL(new RegExp(`/coach/nutrition-v2/${clientId}\\?published=1`), {

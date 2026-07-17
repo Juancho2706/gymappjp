@@ -107,7 +107,7 @@ export function NutritionHeader({
         <h1 className="font-display text-3xl font-bold tracking-tight text-strong md:text-4xl">{title}</h1>
         {description ? <p className="mt-2 max-w-3xl text-sm leading-6 text-muted md:text-base">{description}</p> : null}
       </div>
-      {actions ? <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div> : null}
+      {actions ? <div className="-order-1 flex shrink-0 flex-wrap items-center gap-2 md:order-none">{actions}</div> : null}
     </header>
   )
 }

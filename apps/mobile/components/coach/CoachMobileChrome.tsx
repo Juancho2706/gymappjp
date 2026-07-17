@@ -16,16 +16,18 @@ import { coachWorkspaceTypeFromKind, getVisibleNavItems, type NavModule } from '
 import { useTheme } from '../../context/ThemeContext'
 import { useWorkspace } from '../../lib/workspace'
 import { useEntitlements } from '../../lib/entitlements'
+import { NavIconRN, type NavConceptRN } from '../NavIconRN'
 import { resetCoachTabbarScroll, useCoachTabbarMinimized } from './CoachTabbarScroll'
 
 type TabRoute = { key: string; name: string }
-type MobileNavRoute = { tab?: string; path: string; icon: LucideIcon; label: string }
+// `concept` cablea la silueta propia del CEO (NavIconRN); si falta, se usa `icon` de lucide.
+type MobileNavRoute = { tab?: string; path: string; icon: LucideIcon; label: string; concept?: NavConceptRN }
 
 const NAV_ROUTE: Record<string, MobileNavRoute> = {
-  dashboard: { tab: 'home', path: '/coach/home', icon: Home, label: 'Inicio' },
+  dashboard: { tab: 'home', path: '/coach/home', icon: Home, label: 'Inicio', concept: 'home' },
   clients: { tab: 'clientes', path: '/coach/clientes', icon: Users, label: 'Alumnos' },
-  programs: { tab: 'builder', path: '/coach/builder', icon: Dumbbell, label: 'Programas' },
-  nutrition: { tab: 'nutricion', path: '/coach/nutricion', icon: Utensils, label: 'Nutrición' },
+  programs: { tab: 'builder', path: '/coach/builder', icon: Dumbbell, label: 'Programas', concept: 'entrenamiento' },
+  nutrition: { tab: 'nutricion', path: '/coach/nutricion', icon: Utensils, label: 'Nutrición', concept: 'nutricion' },
   options: { tab: 'settings', path: '/coach/settings', icon: Settings, label: 'Opciones' },
   settings_team: { tab: 'settings', path: '/coach/settings', icon: Settings, label: 'Opciones' },
   team: { tab: 'team', path: '/coach/team', icon: Shield, label: 'Equipo' },
@@ -203,6 +205,7 @@ export function CoachMobileTabBar({
               key={item.key}
               testID={`coach-tab-${item.key}`}
               icon={route.icon}
+              concept={route.concept}
               label={route.label}
               focused={focused}
               activeColor={activeColor}
@@ -220,6 +223,7 @@ export function CoachMobileTabBar({
 function CoachTabTile({
   testID,
   icon: Icon,
+  concept,
   label,
   focused,
   activeColor,
@@ -229,6 +233,7 @@ function CoachTabTile({
 }: {
   testID: string
   icon: LucideIcon
+  concept?: NavConceptRN
   label: string
   focused: boolean
   activeColor: string
@@ -252,12 +257,16 @@ function CoachTabTile({
       style={styles.tabButton}
     >
       <View style={[styles.iconWrap, { transform: [{ translateY: focused ? -1 : 0 }] }]}>
-        <Icon
-          size={24}
-          color={color}
-          strokeWidth={2}
-          fill={focused ? hexToRgba(activeColor, 0.18) : 'transparent'}
-        />
+        {concept ? (
+          <NavIconRN concept={concept} size={24} color={color} />
+        ) : (
+          <Icon
+            size={24}
+            color={color}
+            strokeWidth={2}
+            fill={focused ? hexToRgba(activeColor, 0.18) : 'transparent'}
+          />
+        )}
       </View>
       <Animated.View style={[styles.labelClip, labelStyle]}>
         <Text numberOfLines={1} style={[styles.tabLabel, { color, fontWeight: focused ? '800' : '600' }]}>

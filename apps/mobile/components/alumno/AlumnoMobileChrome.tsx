@@ -32,6 +32,7 @@ import { SPRING } from '../../lib/motion'
 import { shadow } from '../../lib/shadows'
 import { Sheet } from '../Sheet'
 import { ListRow } from '../ListRow'
+import { NavIconRN, type NavConceptRN } from '../NavIconRN'
 
 /**
  * AlumnoMobileChrome — floating navigation capsule for the alumno tree (E1-01).
@@ -93,15 +94,17 @@ type TabDef = {
   label: string
   icon: LucideIcon
   testID: string
+  /** Silueta propia del CEO (NavIconRN). Si falta, se usa `icon` de lucide. */
+  concept?: NavConceptRN
 }
 
 // The four thumb-zone primaries (web order). Nutrición is gated by the domain
 // master switch (useEntitlements); the rest live behind "Más".
 const PRIMARY_TABS: TabDef[] = [
-  { name: 'home', label: 'Inicio', icon: Home, testID: 'tab-home' },
-  { name: 'nutricion', label: 'Nutrición', icon: Apple, testID: 'tab-nutricion' },
-  { name: 'exercises', label: 'Aprender', icon: Dumbbell, testID: 'tab-exercises' },
-  { name: 'check-in', label: 'Check-in', icon: CheckCircle, testID: 'tab-check-in' },
+  { name: 'home', label: 'Inicio', icon: Home, testID: 'tab-home', concept: 'home' },
+  { name: 'nutricion', label: 'Nutrición', icon: Apple, testID: 'tab-nutricion', concept: 'nutricion' },
+  { name: 'exercises', label: 'Aprender', icon: Dumbbell, testID: 'tab-exercises', concept: 'aprender' },
+  { name: 'check-in', label: 'Check-in', icon: CheckCircle, testID: 'tab-check-in', concept: 'check-in' },
 ]
 
 // Routes reached from the "Más" sheet — keep the Más tab lit while inside them
@@ -127,7 +130,7 @@ export function AlumnoMobileChrome({
   navigation: any
 }) {
   const insets = useSafeAreaInsets()
-  const { resolvedScheme } = useTheme()
+  const { resolvedScheme, theme } = useTheme()
   const { nutritionEnabled } = useEntitlements()
   const minimized = useChromeMinimized()
 
@@ -254,9 +257,12 @@ export function AlumnoMobileChrome({
               <TabTile
                 key={t.name}
                 icon={t.icon}
+                concept={t.concept}
                 label={t.label}
                 testID={t.testID}
                 active={activeName === t.name}
+                activeColor={theme.primary}
+                inactiveColor={theme.mutedForeground}
                 mini={mini}
                 onPress={() => go(t.name)}
               />
@@ -267,9 +273,12 @@ export function AlumnoMobileChrome({
                 (backdrop / swipe / boton X) y el cambio de ruta. */}
             <TabTile
               icon={MoreHorizontal}
+              concept="mas"
               label="Más"
               testID="tab-mas"
               active={isMoreActive}
+              activeColor={theme.primary}
+              inactiveColor={theme.mutedForeground}
               mini={mini}
               onPress={() => setMoreOpen(true)}
             />
@@ -290,7 +299,7 @@ export function AlumnoMobileChrome({
           accessibilityLabel="Mi perfil"
           leading={
             <View className="h-9 w-9 items-center justify-center rounded-control bg-primary/[0.12]">
-              <UserRound className="text-primary" size={18} strokeWidth={2.2} />
+              <NavIconRN concept="perfil" size={18} color={theme.primary} />
             </View>
           }
           title="Mi perfil"
@@ -303,7 +312,7 @@ export function AlumnoMobileChrome({
           accessibilityLabel="Historial"
           leading={
             <View className="h-9 w-9 items-center justify-center rounded-control bg-surface-sunken">
-              <History className="text-muted" size={18} strokeWidth={2.2} />
+              <NavIconRN concept="historial" size={18} color={theme.mutedForeground} />
             </View>
           }
           title="Historial"
@@ -319,7 +328,7 @@ export function AlumnoMobileChrome({
             onPress={handleSignOut}
             className="flex-row items-center gap-3 rounded-control px-space-4 py-space-3"
           >
-            <LogOut className="text-danger-600" size={20} strokeWidth={2.2} />
+            <NavIconRN concept="cerrar-sesion" size={20} color={theme.destructive} />
             <Text className="font-sans-semibold text-[15px] text-danger-600">Cerrar sesión</Text>
           </Pressable>
         </View>
@@ -330,16 +339,22 @@ export function AlumnoMobileChrome({
 
 function TabTile({
   icon: Icon,
+  concept,
   label,
   testID,
   active,
+  activeColor,
+  inactiveColor,
   mini,
   onPress,
 }: {
   icon: LucideIcon
+  concept?: NavConceptRN
   label: string
   testID: string
   active: boolean
+  activeColor: string
+  inactiveColor: string
   mini: SharedValue<number>
   onPress: () => void
 }) {
@@ -359,11 +374,15 @@ function TabTile({
       style={styles.tile}
     >
       <View style={{ transform: [{ translateY: active ? -1 : 0 }] }}>
-        <Icon
-          className={active ? 'text-primary' : 'text-muted'}
-          size={22}
-          strokeWidth={active ? 2.4 : 2.1}
-        />
+        {concept ? (
+          <NavIconRN concept={concept} size={22} color={active ? activeColor : inactiveColor} />
+        ) : (
+          <Icon
+            className={active ? 'text-primary' : 'text-muted'}
+            size={22}
+            strokeWidth={active ? 2.4 : 2.1}
+          />
+        )}
       </View>
       <Animated.View style={[styles.labelWrap, labelStyle]}>
         <Text

@@ -58,11 +58,22 @@ export async function expectNoRuntimeError(page: Page) {
 }
 
 // ── Login de coach + fijar workspace standalone ───────────────────────────────
-export async function loginCoach(page: Page) {
+export /** Cierra el banner de consentimiento de cookies si está presente (bloquea clicks en móvil/limpio). */
+async function dismissCookieConsent(page: import('@playwright/test').Page): Promise<void> {
+  const reject = page.getByRole('dialog', { name: /consentimiento/i }).getByRole('button', { name: /rechazar|cerrar/i }).first()
+  try {
+    await reject.click({ timeout: 2500 })
+  } catch {
+    // sin banner: seguir
+  }
+}
+
+async function loginCoach(page: Page) {
   await page.goto('/login')
+  await dismissCookieConsent(page)
   await page.getByRole('textbox', { name: /email/i }).fill(COACH_EMAIL)
   await page.getByRole('textbox', { name: /contraseña/i }).fill(COACH_PASSWORD)
-  await page.getByRole('button', { name: /ingresar|iniciar/i }).click()
+  await page.getByRole('button', { name: /entrar|ingresar|iniciar/i }).click()
   // Multi-contexto puede caer en /workspace/select o en el último workspace usado. El patrón
   // EXCLUYE /login (un glob amplio matchearía la propia página de login → wait vacío).
   await page.waitForURL(/\/(workspace\/select|coach\/dashboard|coach\/|org\/|c\/)/, {
@@ -93,9 +104,10 @@ export async function loginCoachStandalone(page: Page) {
 // ── Login de alumna (shell /c/[slug]) ─────────────────────────────────────────
 export async function loginStudent(page: Page) {
   await page.goto(`/c/${COACH_SLUG}/login`)
-  await page.getByLabel('Email').fill(STUDENT_EMAIL)
-  await page.getByLabel('Contraseña').fill(STUDENT_PASSWORD)
-  await page.getByRole('button', { name: 'Ingresar' }).click()
+  await dismissCookieConsent(page)
+  await page.getByRole('textbox', { name: /email/i }).fill(STUDENT_EMAIL)
+  await page.getByRole('textbox', { name: /contraseña/i }).fill(STUDENT_PASSWORD)
+  await page.getByRole('button', { name: /entrar|ingresar|iniciar/i }).click()
   await page.waitForURL(new RegExp(`/c/${COACH_SLUG}/(dashboard|nutrition)`), { timeout: 30_000 })
 }
 
