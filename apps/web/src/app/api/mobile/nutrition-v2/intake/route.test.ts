@@ -30,7 +30,7 @@ vi.mock('@supabase/supabase-js', () => ({
 }))
 
 let intakeAllowed = true
-const rateLimitNutritionIntake = vi.fn(async () =>
+const rateLimitNutritionIntake = vi.fn(async (..._a: unknown[]) =>
   intakeAllowed ? { ok: true as const } : { ok: false as const, retryAfter: 30 },
 )
 vi.mock('@/lib/rate-limit', () => ({

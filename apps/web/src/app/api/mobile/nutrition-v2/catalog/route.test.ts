@@ -32,10 +32,10 @@ vi.mock('@supabase/supabase-js', () => ({
 let searchAllowed = true
 // Espeja el contrato fail-CLOSED del reporte sin Redis: por default niega.
 let reportResult: { ok: true } | { ok: false; retryAfter: number } = { ok: false, retryAfter: 3600 }
-const rateLimitNutritionCatalogSearch = vi.fn(async () =>
+const rateLimitNutritionCatalogSearch = vi.fn(async (..._a: unknown[]) =>
   searchAllowed ? { ok: true as const } : { ok: false as const, retryAfter: 45 },
 )
-const rateLimitNutritionCatalogReport = vi.fn(async () => reportResult)
+const rateLimitNutritionCatalogReport = vi.fn(async (..._a: unknown[]) => reportResult)
 vi.mock('@/lib/rate-limit', () => ({
   rateLimitNutritionCatalogSearch: (...a: unknown[]) => rateLimitNutritionCatalogSearch(...a),
   rateLimitNutritionCatalogReport: (...a: unknown[]) => rateLimitNutritionCatalogReport(...a),
