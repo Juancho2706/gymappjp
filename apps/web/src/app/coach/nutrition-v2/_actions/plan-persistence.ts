@@ -77,6 +77,12 @@ export function mapWriteError(error: DbError, phase: string): ActionFailure {
   if (code === '42501') {
     return fail('SCOPE_DENIED', 'No tienes permiso para editar el plan de este alumno.')
   }
+  if (message.includes('publish_stale_base')) {
+    return fail(
+      'STALE_BASE',
+      'Este plan cambio en otra sesion. Recarga para ver la version vigente antes de editar.',
+    )
+  }
   if (message.includes('effective_date_must_follow_current_version')) {
     return fail('EFFECTIVE_DATE', 'La fecha de vigencia debe ser posterior a la de la version vigente.')
   }
@@ -260,8 +266,15 @@ export async function persistAndPublishDraft(input: {
   draft: NutritionPlanDraft
   idempotencyKey: string
   effectiveFrom: string
+  /**
+   * Compare-and-swap opcional (quick-edit): id de la version vigente sobre la que se baso la
+   * edicion. Se pasa como `p_expected_current_version_id` al RPC; si la version vigente cambio
+   * (publicacion concurrente), el RPC lanza `nutrition_v2_publish_stale_base` -> STALE_BASE.
+   * El builder wizard NO lo envia (undefined) -> el RPC omite el guard (comportamiento intacto).
+   */
+  expectedCurrentVersionId?: string
 }): Promise<PublishSuccess | ActionFailure> {
-  const { db, userId, draft, idempotencyKey, effectiveFrom } = input
+  const { db, userId, draft, idempotencyKey, effectiveFrom, expectedCurrentVersionId } = input
 
   const existing = await db
     .from('nutrition_plan_versions_v2')
@@ -416,6 +429,9 @@ export async function persistAndPublishDraft(input: {
     p_version_id: versionId,
     p_effective_from: effectiveFrom,
     p_idempotency_key: idempotencyKey,
+    // Solo el quick-edit envia el guard optimista; el builder pasa undefined -> PostgREST resuelve
+    // a la firma con default null y el RPC omite el compare-and-swap.
+    ...(expectedCurrentVersionId ? { p_expected_current_version_id: expectedCurrentVersionId } : {}),
   })
   if (publishRes.error) return mapWriteError(publishRes.error, 'publicacion')
 
