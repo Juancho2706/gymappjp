@@ -59,7 +59,6 @@ export default async function StudentNutritionV2Page({ params, searchParams }: P
 
   return (
     <NutritionPageShell
-      eyebrow="Vista previa"
       title="Nutrición"
       description="Prescripción, consumo real e historial en una sola experiencia."
       backHref={`${base}/dashboard`}

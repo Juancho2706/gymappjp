@@ -41,7 +41,6 @@ import { NutritionIntakeLedger } from './_components/NutritionIntakeLedger'
 import { NutritionGuidanceProgress } from './_components/NutritionGuidanceProgress'
 import { getClientBasePath } from '@/lib/client/base-path'
 import { isNutritionV2Enabled } from '@/services/nutrition-v2-rollout.service'
-import { NutritionV2Banner } from './_components/NutritionV2Banner'
 
 export const metadata: Metadata = { title: 'Plan Nutricional' }
 
@@ -126,6 +125,13 @@ export default async function ClientNutritionPage({ params }: Props) {
     }),
   ])
 
+  // Deprecación por etapas (decisión CEO 2026-07-17): con V2 activo para este
+  // alumno, V1 deja de mostrarse — la experiencia canónica vive en /nutrition-v2.
+  // Con el flag apagado (fail-closed) esta página sigue siendo V1 intacta.
+  if (nutritionV2StudentEnabled) {
+    redirect(`${base}/nutrition-v2`)
+  }
+
   if (!domainEnabled) {
     return <NutritionDomainOff coachSlug={coach_slug} />
   }
@@ -170,10 +176,6 @@ export default async function ClientNutritionPage({ params }: Props) {
       </header>
 
       <main className="relative z-0 mx-auto max-w-lg space-y-5 px-4 py-5 pb-28 md:max-w-5xl">
-        {nutritionV2StudentEnabled && (
-          <NutritionV2Banner href={`${base}/nutrition-v2`} />
-        )}
-
         <PushNotificationBanner />
 
         {weeklyRecap && <WeeklyRecapCard recap={weeklyRecap} />}
