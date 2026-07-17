@@ -14,7 +14,7 @@ export type { OffPlanLoggerProps }
 export function OffPlanLogger(props: OffPlanLoggerProps) {
   return (
     <View style={{ gap: 12 }}>
-      <NutritionGuidanceCard clientId={props.clientId} logDate={props.logDate} />
+      <NutritionGuidanceCard clientId={props.clientId} />
       <RealIntakeLogger {...props} />
     </View>
   )

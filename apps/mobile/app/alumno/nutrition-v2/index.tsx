@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Alert, AppState, Pressable, RefreshControl, ScrollView, Text, TextInput, View } from 'react-native'
+import { Alert, AppState, Pressable, RefreshControl, ScrollView, Share, Text, TextInput, View } from 'react-native'
 import { useFocusEffect, useRouter } from 'expo-router'
 import * as Haptics from 'expo-haptics'
 import { FlashList } from '@shopify/flash-list'
@@ -26,6 +26,7 @@ import {
   NutritionHistoryPageReadModelSchema,
   NutritionPlanReadModelSchema,
   NutritionTodayReadModelSchema,
+  buildNutritionDayShareText,
   describeLegacyHistoryDay,
   energyGoalReached,
   firstNameFromFullName,
@@ -437,6 +438,44 @@ function TodayTab() {
     [router],
   )
 
+  // Compartir: arma un TEXTO resumen del día (mismo helper puro que la web → microcopy 1:1) y lo
+  // comparte con el Share nativo. Toma la instantánea del servidor (`model`) para que macros e
+  // ítems sean coherentes entre sí; solo datos del propio alumno, sin datos privados del coach.
+  const onShareDay = useCallback(async () => {
+    if (!model) return
+    // Mismo conjunto y orden que "Consumido hoy" de la web (`consumedEntries`): por hora asc.
+    const items = [...model.mealSlots.flatMap((slot) => slot.intakeItems), ...model.unassignedIntake]
+      .slice()
+      .sort((a, b) => a.occurredAt.localeCompare(b.occurredAt))
+      .map((entry) => ({
+        name: entry.snapshot.name,
+        quantity: entry.quantity,
+        unit: entry.unit,
+      }))
+    const text = buildNutritionDayShareText({
+      localDate: model.localDate,
+      planName: model.plan?.name ?? null,
+      consumed: {
+        calories: model.consumed.calories,
+        proteinG: model.consumed.proteinG,
+        carbsG: model.consumed.carbsG,
+        fatsG: model.consumed.fatsG,
+      },
+      targets: {
+        calories: model.targets.calories,
+        proteinG: model.targets.proteinG,
+        carbsG: model.targets.carbsG,
+        fatsG: model.targets.fatsG,
+      },
+      items,
+    })
+    try {
+      await Share.share({ message: text })
+    } catch {
+      // El usuario canceló el diálogo de compartir o el share nativo falló: sin acción.
+    }
+  }, [model])
+
   const dayComplete = useMemo(() => {
     if (!model) return false
     const hidden = new Set(overlay.hiddenIds)
@@ -658,6 +697,10 @@ function TodayTab() {
 
         <NutritionMotionButton accessibilityLabel="Registrar un alimento libre" onPress={() => onRegister()}>
           + Registrar alimento
+        </NutritionMotionButton>
+
+        <NutritionMotionButton accessibilityLabel="Compartir mi día" tone="neutral" onPress={() => void onShareDay()}>
+          Compartir mi día
         </NutritionMotionButton>
 
         {!model.plan ? (

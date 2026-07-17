@@ -14,6 +14,8 @@
  * (`calculateFoodItemMacros`) — sin copiar lógica de web.
  */
 
+import type { SupabaseClient } from '@supabase/supabase-js'
+import type { FoodCatalogItem } from '@eva/nutrition-v2'
 import { supabase } from './supabase'
 import { calculateFoodItemMacros } from './nutrition-utils'
 import type { FoodItemForMacros, FoodMacrosRow } from './nutrition-utils'
@@ -236,4 +238,73 @@ export async function getClientFoodFavorites(clientId: string): Promise<Set<stri
     .eq('client_id', clientId)
     .eq('preference_type', 'favorite')
   return new Set((data ?? []).map((r) => r.food_id as string))
+}
+
+type FavoriteFoodRow = {
+  id: string
+  name: string
+  brand: string | null
+  category: string | null
+  calories: number | null
+  protein_g: number | null
+  carbs_g: number | null
+  fats_g: number | null
+  fiber_g: number | null
+  serving_size: number | null
+  serving_unit: string | null
+}
+
+/** Mapea una fila de `foods` (RLS-scoped) al item del catálogo V2 que consume la UI. */
+function toFavoriteCatalogItem(row: FavoriteFoodRow): FoodCatalogItem {
+  const servingSize = typeof row.serving_size === 'number' && row.serving_size > 0 ? row.serving_size : 100
+  return {
+    id: row.id,
+    catalogKey: null,
+    gtin: null,
+    name: row.name,
+    brand: row.brand,
+    category: row.category,
+    countryCode: null,
+    servingSize,
+    servingUnit: row.serving_unit ?? 'g',
+    calories: Math.max(row.calories ?? 0, 0),
+    proteinG: Math.max(row.protein_g ?? 0, 0),
+    carbsG: Math.max(row.carbs_g ?? 0, 0),
+    fatsG: Math.max(row.fats_g ?? 0, 0),
+    fiberG: row.fiber_g,
+    sodiumMg: null,
+    sugarG: null,
+    saturatedFatG: null,
+    packageQuantity: null,
+    packageUnit: null,
+    source: 'manual',
+    sourceRef: null,
+    verificationStatus: 'unverified',
+    media: null,
+  }
+}
+
+/**
+ * Foods favoritos del alumno hidratados como items del catálogo V2 (acceso rápido
+ * "Tus favoritos" del registro V2). Lectura RLS-scoped directa: el join `foods`
+ * queda filtrado a lo que el alumno puede ver, y el orden respeta la recencia del
+ * favorito. Sin RPC ni DDL nuevos (misma tabla V1 `client_food_preferences`).
+ * Cliente "loose" para el embed `foods` (mismo patrón que `listFavoriteIntakeFoods`).
+ */
+export async function listFavoriteFoodsV2(clientId: string): Promise<FoodCatalogItem[]> {
+  const { data, error } = await (supabase as unknown as SupabaseClient)
+    .from('client_food_preferences')
+    .select(
+      'created_at, food:foods(id, name, brand, category, calories, protein_g, carbs_g, fats_g, fiber_g, serving_size, serving_unit)',
+    )
+    .eq('client_id', clientId)
+    .eq('preference_type', 'favorite')
+    .order('created_at', { ascending: false })
+    .limit(50)
+  if (error || !data) return []
+
+  return (data as unknown as Array<{ food: FavoriteFoodRow | null }>)
+    .map((row) => row.food)
+    .filter((food): food is FavoriteFoodRow => food != null)
+    .map(toFavoriteCatalogItem)
 }

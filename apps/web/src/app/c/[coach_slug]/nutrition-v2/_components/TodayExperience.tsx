@@ -1,12 +1,15 @@
 'use client'
 
-import { useMemo, useState, useTransition } from 'react'
+import { useEffect, useMemo, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
-import { AlertTriangle, CheckCircle2, Pencil, Plus, ScanBarcode, Trash2, Utensils } from 'lucide-react'
+import { toast } from 'sonner'
+import { AlertTriangle, CheckCircle2, Pencil, Plus, ScanBarcode, Share2, Star, Trash2, Utensils } from 'lucide-react'
 import {
+  buildNutritionDayShareText,
   firstNameFromFullName,
+  sortFoodsByFavoriteFirst,
   type FoodCatalogItem,
   type NutritionIntakeReadItem,
   type NutritionTodayReadModel,
@@ -41,6 +44,11 @@ import {
   searchFoodCatalogAction,
   voidIntakeAction,
 } from '../_actions/intake.actions'
+import {
+  getFavoriteFoodIdsAction,
+  listFavoriteFoodsAction,
+  toggleFavoriteFoodAction,
+} from '../_actions/favorites.actions'
 
 // NOTA: `closeDayAction` (cierre manual del día) se retiró de la UI por decisión del CEO — los
 // registros ya se guardan solos, la card "Cerrar mi día" confundía. El action y su RPC siguen
@@ -117,6 +125,45 @@ export function TodayExperience({
     setDialog({ kind: 'none' })
   }
 
+  // Compartir: arma un TEXTO resumen del dia (mismo helper puro que RN → microcopy 1:1) y lo
+  // comparte por Web Share API; si no existe (desktop), cae al portapapeles + toast. Solo datos
+  // del propio alumno (fecha, kcal/meta, macros, lo consumido) — sin datos privados del coach.
+  const handleShare = async () => {
+    const text = buildNutritionDayShareText({
+      localDate: today.localDate,
+      planName: today.plan?.name ?? null,
+      consumed: {
+        calories: today.consumed.calories,
+        proteinG: today.consumed.proteinG,
+        carbsG: today.consumed.carbsG,
+        fatsG: today.consumed.fatsG,
+      },
+      targets: {
+        calories: today.targets.calories,
+        proteinG: today.targets.proteinG,
+        carbsG: today.targets.carbsG,
+        fatsG: today.targets.fatsG,
+      },
+      items: entries.map((entry) => ({ name: entry.snapshot.name, quantity: entry.quantity, unit: entry.unit })),
+    })
+    try {
+      if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
+        await navigator.share({ title: 'Mi día de nutrición', text })
+        return
+      }
+    } catch (shareError) {
+      // El usuario canceló el diálogo nativo de compartir: no es un error que mostrar.
+      if (shareError instanceof DOMException && shareError.name === 'AbortError') return
+      // Cualquier otro fallo del share nativo cae al portapapeles abajo.
+    }
+    try {
+      await navigator.clipboard.writeText(text)
+      toast.success('Resumen copiado. Pégalo donde quieras compartirlo.')
+    } catch {
+      toast.error('No se pudo compartir. Intenta de nuevo.')
+    }
+  }
+
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center gap-2">
@@ -171,6 +218,14 @@ export function TodayExperience({
           <ScanBarcode className="h-4 w-4" aria-hidden="true" />
           Escanear
         </Link>
+        <button
+          type="button"
+          onClick={() => void handleShare()}
+          className="inline-flex min-h-11 items-center gap-2 rounded-control border border-border-default bg-surface-card px-4 text-sm font-semibold text-strong transition-colors hover:bg-surface-sunken"
+        >
+          <Share2 className="h-4 w-4" aria-hidden="true" />
+          Compartir
+        </button>
       </div>
 
       {/* Prescripcion del dia con "Lo comi" por item */}
@@ -362,6 +417,81 @@ function FoodResultThumb({ imageUrl, iconUrl, alt }: { imageUrl: string | null; 
   )
 }
 
+/** Estrella para marcar/desmarcar un alimento como favorito del alumno. */
+function FavoriteStarButton({
+  active,
+  busy,
+  onClick,
+}: {
+  active: boolean
+  busy: boolean
+  onClick: () => void
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={active ? 'Quitar de favoritos' : 'Agregar a favoritos'}
+      aria-pressed={active}
+      disabled={busy}
+      onClick={onClick}
+      className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-control text-muted transition-colors hover:bg-surface-sunken hover:text-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+    >
+      <Star
+        className={active ? 'h-5 w-5 fill-amber-400 text-amber-400' : 'h-5 w-5'}
+        aria-hidden="true"
+      />
+    </button>
+  )
+}
+
+/**
+ * Fila de un alimento del catálogo (resultado de búsqueda o favorito): toca la fila para
+ * elegirlo, o la estrella para marcarlo como favorito. Miniatura idéntica a la del resto
+ * de la experiencia (foto del producto o icono de categoría de respaldo).
+ */
+function CatalogPickRow({
+  food,
+  isFavorite,
+  favBusy,
+  onSelect,
+  onToggleFavorite,
+}: {
+  food: FoodCatalogItem
+  isFavorite: boolean
+  favBusy: boolean
+  onSelect: (food: FoodCatalogItem) => void
+  onToggleFavorite: (food: FoodCatalogItem) => void
+}) {
+  const image = foodResultImage(food, SUPABASE_BASE)
+  const meta = [food.brand, food.category].filter(Boolean).join(' · ')
+  return (
+    <li className="flex items-center gap-2">
+      <button
+        type="button"
+        onClick={() => onSelect(food)}
+        className="flex min-w-0 flex-1 items-center gap-3 py-3 text-left hover:bg-surface-sunken focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        <FoodResultThumb imageUrl={image.imageUrl} iconUrl={image.iconUrl} alt={food.name} />
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-sm font-semibold text-strong">{food.name}</span>
+          {meta ? <span className="block truncate text-xs text-muted">{meta}</span> : null}
+          <span className="mt-1 block">
+            <MacroChipRow
+              calories={food.calories}
+              proteinG={food.proteinG}
+              carbsG={food.carbsG}
+              fatsG={food.fatsG}
+              per={`/ 100 ${food.servingUnit === 'ml' ? 'ml' : 'g'}`}
+              size="sm"
+            />
+          </span>
+        </span>
+      </button>
+      <FavoriteStarButton active={isFavorite} busy={favBusy} onClick={() => onToggleFavorite(food)} />
+    </li>
+  )
+}
+
 function IconButton({
   label,
   onClick,
@@ -486,6 +616,64 @@ function RegisterFoodDialog({
   const [quantity, setQuantity] = useState('')
   const [unit, setUnit] = useState('')
   const [mealSlot, setMealSlot] = useState<string>('')
+  // Favoritos: ids para la estrella + orden, y foods hidratados para el acceso rápido.
+  const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set())
+  const [favoriteFoods, setFavoriteFoods] = useState<FoodCatalogItem[]>([])
+  const [favBusyId, setFavBusyId] = useState<string | null>(null)
+
+  useEffect(() => {
+    let active = true
+    void getFavoriteFoodIdsAction({ clientId }).then((res) => {
+      if (active && res.ok) setFavoriteIds(new Set(res.ids))
+    })
+    void listFavoriteFoodsAction({ clientId }).then((res) => {
+      if (active && res.ok) setFavoriteFoods(res.items)
+    })
+    return () => {
+      active = false
+    }
+  }, [clientId])
+
+  // Toggle optimista con rollback: la marca aparece al instante; si el server falla, revierte
+  // el id y la lista de favoritos y avisa. Reusa la tabla V1 vía la action V2 (allergy-safe).
+  const toggleFavorite = (food: FoodCatalogItem) => {
+    const wasFav = favoriteIds.has(food.id)
+    setFavoriteIds((prev) => {
+      const next = new Set(prev)
+      if (wasFav) next.delete(food.id)
+      else next.add(food.id)
+      return next
+    })
+    setFavoriteFoods((prev) => {
+      if (wasFav) return prev.filter((f) => f.id !== food.id)
+      return prev.some((f) => f.id === food.id) ? prev : [food, ...prev]
+    })
+    setFavBusyId(food.id)
+    void toggleFavoriteFoodAction({ clientId, foodId: food.id }).then((res) => {
+      setFavBusyId((cur) => (cur === food.id ? null : cur))
+      if (!res.ok) {
+        setFavoriteIds((prev) => {
+          const next = new Set(prev)
+          if (wasFav) next.add(food.id)
+          else next.delete(food.id)
+          return next
+        })
+        setFavoriteFoods((prev) => {
+          if (wasFav) return prev.some((f) => f.id === food.id) ? prev : [food, ...prev]
+          return prev.filter((f) => f.id !== food.id)
+        })
+        toast.error(res.error)
+      }
+    })
+  }
+
+  // Favoritos PRIMERO en los resultados (reordena client-side, sin tocar el RPC de búsqueda).
+  const orderedResults = useMemo(() => sortFoodsByFavoriteFirst(results, favoriteIds), [results, favoriteIds])
+  // Paridad con RN: al borrar la búsqueda (<2 chars) se limpian los resultados y reaparece "Tus favoritos".
+  useEffect(() => {
+    if (query.trim().length < 2) setResults([])
+  }, [query])
+  const showFavoritesShortcut = query.trim().length < 2 && results.length === 0 && favoriteFoods.length > 0
 
   const runSearch = () => {
     const trimmed = query.trim()
@@ -637,38 +825,42 @@ function RegisterFoodDialog({
           {searchError ? (
             <p className="text-sm text-amber-700 dark:text-amber-300">{searchError}</p>
           ) : null}
-          <ul className="divide-y divide-border-subtle">
-            {results.map((food) => {
-              const image = foodResultImage(food, SUPABASE_BASE)
-              const meta = [food.brand, food.category].filter(Boolean).join(' · ')
-              return (
-                <li key={food.id}>
-                  <button
-                    type="button"
-                    onClick={() => selectFood(food)}
-                    className="flex w-full items-center gap-3 py-3 text-left hover:bg-surface-sunken focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  >
-                    <FoodResultThumb imageUrl={image.imageUrl} iconUrl={image.iconUrl} alt={food.name} />
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-sm font-semibold text-strong">{food.name}</span>
-                      {meta ? <span className="block truncate text-xs text-muted">{meta}</span> : null}
-                      <span className="mt-1 block">
-                        <MacroChipRow
-                          calories={food.calories}
-                          proteinG={food.proteinG}
-                          carbsG={food.carbsG}
-                          fatsG={food.fatsG}
-                          per={`/ 100 ${food.servingUnit === 'ml' ? 'ml' : 'g'}`}
-                          size="sm"
-                        />
-                      </span>
-                    </span>
-                    <Plus className="h-4 w-4 shrink-0 text-primary dark:text-primary" aria-hidden="true" />
-                  </button>
-                </li>
-              )
-            })}
-          </ul>
+
+          {showFavoritesShortcut ? (
+            <div className="space-y-1.5">
+              <div className="flex items-center gap-1.5 text-xs font-semibold text-muted">
+                <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" aria-hidden="true" />
+                Tus favoritos
+              </div>
+              <ul className="divide-y divide-border-subtle">
+                {favoriteFoods.map((food) => (
+                  <CatalogPickRow
+                    key={food.id}
+                    food={food}
+                    isFavorite={favoriteIds.has(food.id)}
+                    favBusy={favBusyId === food.id}
+                    onSelect={selectFood}
+                    onToggleFavorite={toggleFavorite}
+                  />
+                ))}
+              </ul>
+            </div>
+          ) : null}
+
+          {orderedResults.length > 0 ? (
+            <ul className="divide-y divide-border-subtle">
+              {orderedResults.map((food) => (
+                <CatalogPickRow
+                  key={food.id}
+                  food={food}
+                  isFavorite={favoriteIds.has(food.id)}
+                  favBusy={favBusyId === food.id}
+                  onSelect={selectFood}
+                  onToggleFavorite={toggleFavorite}
+                />
+              ))}
+            </ul>
+          ) : null}
         </div>
       )}
     </TodayModal>

@@ -39,7 +39,6 @@ import { WeeklyRecapCard } from './_components/WeeklyRecapCard'
 import { NutritionDailyOverview } from './_components/NutritionDailyOverview'
 import { NutritionIntakeLedger } from './_components/NutritionIntakeLedger'
 import { NutritionGuidanceProgress } from './_components/NutritionGuidanceProgress'
-import { getDailyHabits } from './_actions/habits.actions'
 import { getClientBasePath } from '@/lib/client/base-path'
 import { isNutritionV2Enabled } from '@/services/nutrition-v2-rollout.service'
 import { NutritionV2Banner } from './_components/NutritionV2Banner'
@@ -89,7 +88,6 @@ export default async function ClientNutritionPage({ params }: Props) {
     domainEnabled,
     sectionFlags,
     weeklyRecap,
-    dailyHabits,
     nutritionV2StudentEnabled,
   ] = await Promise.all([
     getNutritionLogForDate(user.id, String(plan.id), today),
@@ -118,7 +116,6 @@ export default async function ClientNutritionPage({ params }: Props) {
     }),
     resolveFeaturePrefs(prefsInput),
     getNutritionWeeklyRecap(user.id),
-    getDailyHabits(user.id, today),
     isNutritionV2Enabled({
       surface: 'webStudent',
       userId: user.id,
@@ -205,16 +202,11 @@ export default async function ClientNutritionPage({ params }: Props) {
 
         <NutritionGuidanceProgress
           plan={{
-            hydration_target_ml: plan.hydration_target_ml == null ? null : Number(plan.hydration_target_ml),
-            steps_target: plan.steps_target == null ? null : Number(plan.steps_target),
-            sleep_target_hours: plan.sleep_target_hours == null ? null : Number(plan.sleep_target_hours),
-            fasting_target_hours: plan.fasting_target_hours == null ? null : Number(plan.fasting_target_hours),
             supplement_guidance: Array.isArray(plan.supplement_guidance)
               ? plan.supplement_guidance.map(String)
               : [],
             protocol_notes: plan.protocol_notes == null ? null : String(plan.protocol_notes),
           }}
-          habits={dailyHabits}
         />
 
         <NutritionIntakeLedger

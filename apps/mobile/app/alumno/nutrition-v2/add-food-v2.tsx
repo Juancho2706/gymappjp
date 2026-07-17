@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Pressable, ScrollView, Text, TextInput, View } from 'react-native'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import * as Haptics from 'expo-haptics'
-import { ChevronLeft, ScanBarcode, Search } from 'lucide-react-native'
+import { ChevronLeft, Search, Star } from 'lucide-react-native'
 import {
   FoodRow,
   MacroChipRow,
@@ -14,11 +14,16 @@ import {
   CelebrationOverlay,
   type CelebrationInstance,
 } from '../../../components/nutrition-v2'
-import type { FoodCatalogItem } from '@eva/nutrition-v2'
+import { sortFoodsByFavoriteFirst, type FoodCatalogItem } from '@eva/nutrition-v2'
 import { isEnabled } from '../../../lib/flags'
 import { useEntitlements } from '../../../lib/entitlements'
 import { supabase } from '../../../lib/supabase'
 import { searchFoodCatalogV2 } from '../../../lib/nutrition-v2-catalog.api'
+import {
+  getClientFoodFavorites,
+  listFavoriteFoodsV2,
+  toggleClientFoodFavorite,
+} from '../../../lib/nutrition-swaps'
 import {
   CATALOG_ODBL_GENERIC_LINE,
   catalogHasOpenFoodFactsSource,
@@ -66,6 +71,9 @@ export default function NutritionV2AddFoodScreen() {
   const [results, setResults] = useState<FoodCatalogItem[]>([])
   const [searching, setSearching] = useState(false)
   const [selected, setSelected] = useState<FoodCatalogItem | null>(null)
+  const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set())
+  const [favoriteFoods, setFavoriteFoods] = useState<FoodCatalogItem[]>([])
+  const [favBusyId, setFavBusyId] = useState<string | null>(null)
   const [quantity, setQuantity] = useState('100')
   const [unit, setUnit] = useState('g')
   const [assignSlot, setAssignSlot] = useState(true)
@@ -135,6 +143,22 @@ export default function NutritionV2AddFoodScreen() {
     }
   }, [selected, term])
 
+  // Favoritos del alumno (misma tabla V1 `client_food_preferences`): ids para la estrella y el
+  // orden, y foods hidratados para el acceso rápido "Tus favoritos" con el buscador vacío.
+  useEffect(() => {
+    if (!userId) return
+    let active = true
+    void getClientFoodFavorites(userId).then((ids) => {
+      if (active) setFavoriteIds(ids)
+    })
+    void listFavoriteFoodsV2(userId).then((foods) => {
+      if (active) setFavoriteFoods(foods)
+    })
+    return () => {
+      active = false
+    }
+  }, [userId])
+
   const pickFood = useCallback((food: FoodCatalogItem) => {
     void Haptics.selectionAsync()
     setSelected(food)
@@ -142,6 +166,45 @@ export default function NutritionV2AddFoodScreen() {
     setUnit(nextUnit)
     setQuantity(String(food.servingSize > 0 ? food.servingSize : 100))
   }, [])
+
+  // Toggle optimista con rollback: la estrella cambia al instante; si el server falla, revierte
+  // el id y la lista de favoritos. Reusa `toggleClientFoodFavorite` (allergy/intolerance-safe).
+  const toggleFavorite = useCallback((food: FoodCatalogItem) => {
+    if (!userId) return
+    void Haptics.selectionAsync()
+    const wasFav = favoriteIds.has(food.id)
+    setFavoriteIds((prev) => {
+      const next = new Set(prev)
+      if (wasFav) next.delete(food.id)
+      else next.add(food.id)
+      return next
+    })
+    setFavoriteFoods((prev) => {
+      if (wasFav) return prev.filter((f) => f.id !== food.id)
+      return prev.some((f) => f.id === food.id) ? prev : [food, ...prev]
+    })
+    setFavBusyId(food.id)
+    void toggleClientFoodFavorite({ clientId: userId, foodId: food.id }).then((res) => {
+      if (!mountedRef.current) return
+      setFavBusyId((cur) => (cur === food.id ? null : cur))
+      if (!res.success) {
+        setFavoriteIds((prev) => {
+          const next = new Set(prev)
+          if (wasFav) next.add(food.id)
+          else next.delete(food.id)
+          return next
+        })
+        setFavoriteFoods((prev) => {
+          if (wasFav) return prev.some((f) => f.id === food.id) ? prev : [food, ...prev]
+          return prev.filter((f) => f.id !== food.id)
+        })
+      }
+    })
+  }, [favoriteIds, userId])
+
+  // Favoritos PRIMERO en los resultados (reordena en cliente, sin tocar la búsqueda).
+  const orderedResults = useMemo(() => sortFoodsByFavoriteFirst(results, favoriteIds), [results, favoriteIds])
+  const showFavoritesShortcut = term.trim().length < 2 && favoriteFoods.length > 0
 
   const parsedQuantity = Number(quantity.replace(',', '.'))
   const validQuantity = Number.isFinite(parsedQuantity) && parsedQuantity > 0
@@ -292,11 +355,33 @@ export default function NutritionV2AddFoodScreen() {
           </NutritionMotionButton>
 
           {term.trim().length < 2 ? (
-            <NutritionStatePanel
-              icon="info"
-              title="Busca en el catálogo de EVA"
-              description="Escribe al menos dos letras. Consultamos el catálogo local, sin llamadas externas."
-            />
+            showFavoritesShortcut ? (
+              <View className="gap-2">
+                <View className="flex-row items-center gap-1.5">
+                  <Star size={14} color="#FBBF24" fill="#FBBF24" />
+                  <Text className="text-xs font-semibold text-text-muted">Tus favoritos</Text>
+                </View>
+                <View className="rounded-card border border-border-subtle bg-surface-card">
+                  {favoriteFoods.map((food, index) => (
+                    <CatalogPickRow
+                      key={food.id}
+                      food={food}
+                      index={index}
+                      isFavorite={favoriteIds.has(food.id)}
+                      favBusy={favBusyId === food.id}
+                      onPick={pickFood}
+                      onToggleFavorite={toggleFavorite}
+                    />
+                  ))}
+                </View>
+              </View>
+            ) : (
+              <NutritionStatePanel
+                icon="info"
+                title="Busca en el catálogo de EVA"
+                description="Escribe al menos dos letras. Consultamos el catálogo local, sin llamadas externas."
+              />
+            )
           ) : searching ? (
             <NutritionStatePanel icon="info" title="Buscando…" description="Consultando el catálogo de EVA." />
           ) : results.length === 0 ? (
@@ -308,33 +393,19 @@ export default function NutritionV2AddFoodScreen() {
           ) : (
             <>
               <View className="rounded-card border border-border-subtle bg-surface-card">
-                {results.map((food, index) => (
-                  <Pressable
+                {orderedResults.map((food, index) => (
+                  <CatalogPickRow
                     key={food.id}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Agregar ${food.name}`}
-                    onPress={() => pickFood(food)}
-                    className={index > 0 ? 'border-t border-border-subtle px-3' : 'px-3'}
-                  >
-                    <FoodRow
-                      food={{
-                        id: food.id,
-                        name: food.name,
-                        detail: food.brand,
-                        quantityLabel: `${food.servingSize} ${food.servingUnit}`,
-                        calories: food.calories,
-                        proteinG: food.proteinG,
-                        carbsG: food.carbsG,
-                        fatsG: food.fatsG,
-                        thumbnailUrl: foodMediaThumbnailUrl(food.media),
-                      }}
-                      fallbackEmoji={foodCategoryEmoji(food.category)}
-                      nameLines={2}
-                    />
-                  </Pressable>
+                    food={food}
+                    index={index}
+                    isFavorite={favoriteIds.has(food.id)}
+                    favBusy={favBusyId === food.id}
+                    onPick={pickFood}
+                    onToggleFavorite={toggleFavorite}
+                  />
                 ))}
               </View>
-              {catalogHasOpenFoodFactsSource(results) ? (
+              {catalogHasOpenFoodFactsSource(orderedResults) ? (
                 <Text className="text-[10px] text-text-subtle">{CATALOG_ODBL_GENERIC_LINE}</Text>
               ) : null}
             </>
@@ -442,5 +513,64 @@ export default function NutritionV2AddFoodScreen() {
     </ScrollView>
       <CelebrationOverlay celebration={celebration} onDone={() => setCelebration(null)} />
     </View>
+  )
+}
+
+/**
+ * Fila de un alimento del catálogo (resultado o favorito): toca la fila para elegirlo, o la
+ * estrella para marcarlo/desmarcarlo como favorito. La estrella es una Pressable anidada, así
+ * que su toque no dispara el pick de la fila (responder RN al hijo más profundo).
+ */
+function CatalogPickRow({
+  food,
+  index,
+  isFavorite,
+  favBusy,
+  onPick,
+  onToggleFavorite,
+}: {
+  food: FoodCatalogItem
+  index: number
+  isFavorite: boolean
+  favBusy: boolean
+  onPick: (food: FoodCatalogItem) => void
+  onToggleFavorite: (food: FoodCatalogItem) => void
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`Agregar ${food.name}`}
+      onPress={() => onPick(food)}
+      className={index > 0 ? 'border-t border-border-subtle px-3' : 'px-3'}
+    >
+      <FoodRow
+        food={{
+          id: food.id,
+          name: food.name,
+          detail: food.brand,
+          quantityLabel: `${food.servingSize} ${food.servingUnit}`,
+          calories: food.calories,
+          proteinG: food.proteinG,
+          carbsG: food.carbsG,
+          fatsG: food.fatsG,
+          thumbnailUrl: foodMediaThumbnailUrl(food.media),
+        }}
+        fallbackEmoji={foodCategoryEmoji(food.category)}
+        nameLines={2}
+        actions={
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={isFavorite ? `Quitar ${food.name} de favoritos` : `Agregar ${food.name} a favoritos`}
+            accessibilityState={{ selected: isFavorite, busy: favBusy }}
+            disabled={favBusy}
+            hitSlop={8}
+            onPress={() => onToggleFavorite(food)}
+            className="h-11 w-11 items-center justify-center"
+          >
+            <Star size={20} color={isFavorite ? '#FBBF24' : '#818C9A'} fill={isFavorite ? '#FBBF24' : 'transparent'} />
+          </Pressable>
+        }
+      />
+    </Pressable>
   )
 }
