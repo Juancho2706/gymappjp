@@ -84,6 +84,7 @@ export default async function CoachNutritionV2Page({ searchParams }: Props) {
     // Una sola CTA visible ("Nuevo plan"); V1 es legacy saliente y vive como link discreto
     // al pie, no como pill protagonista en el header.
     <NutritionPageShell
+      flushMobile
       backHref="/coach/dashboard"
       title="Centro de Nutrición"
       description="Planes, consumo reciente y alumnos por atender."

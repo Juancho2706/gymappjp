@@ -24,6 +24,7 @@ import { ThemeToggle } from '@/components/ThemeToggle'
 import { PwaNavButton } from './PwaNavButton'
 import { NavIcon, type NavConcept } from './NavIcon'
 import { ThemedLogo } from '@/components/brand/ThemedLogo'
+import { NavPendingFeedback } from '@/components/navigation/NavPendingFeedback'
 
 interface Props {
     coachSlug: string
@@ -64,10 +65,18 @@ export function ClientNav({ coachSlug, basePath, coachBrand, coachLogoUrl, coach
     const [minimized, setMinimized] = useState(false)
     const reduce = useReducedMotion()
 
-    // Reset navigating state when pathname changes
+    // Confirmación: la ruta cambió (commit) → limpiar pending (el activo vuelve a pathname).
     useEffect(() => {
         setIsNavigating(null)
     }, [pathname])
+
+    // Revert: navegación fallida/colgada (offline, error de red) → soltar el pending para no
+    // dejar píldora + overlay pegados en un ítem al que nunca se llegó.
+    useEffect(() => {
+        if (!isNavigating) return
+        const t = setTimeout(() => setIsNavigating(null), 8000)
+        return () => clearTimeout(t)
+    }, [isNavigating])
 
     // Cerrar el panel "Más" al navegar (cambio de ruta).
     useEffect(() => {
@@ -129,18 +138,21 @@ export function ClientNav({ coachSlug, basePath, coachBrand, coachLogoUrl, coach
     const moreRoutes: string[] = [historyItem.href, `${base}/perfil`, ...moduleItems.map((i) => i.href)]
     const isMoreActive = moreRoutes.some((href) => pathname === href || pathname.startsWith(href + '/'))
 
-    // Estado activo del nav primario — preserva la ejecución `/workout` y el pulso optimista
-    // `isNavigating`. (Historial ya es un link propio del sidebar desktop, así que /workout-history
-    // deja de forzar "Inicio" activo — resaltar Historial es lo correcto.)
+    // Estado activo del nav primario — preserva la ejecución `/workout`. Con pending activo, el
+    // ítem tocado es EL ÚNICO activo (pendingHref ?? pathname): el OR anterior dejaba TAMBIÉN
+    // activo el de la ruta actual → el findIndex de la píldora móvil devolvía el VIEJO si venía
+    // antes en la lista y la píldora no saltaba hasta el commit de la navegación.
     const isActiveHref = (href: string) =>
-        pathname === href ||
-        pathname.startsWith(href + '/workout') ||
-        isNavigating === href
+        isNavigating != null
+            ? isNavigating === href
+            : pathname === href || pathname.startsWith(href + '/workout')
 
     // Píldora deslizante de la cápsula flotante (mobile): índice del tab activo entre los
     // `baseItems` + el botón "Más" (último). -1 => ninguno (indicador oculto).
     const mobileTabCount = baseItems.length + 1
-    const mobileMoreActive = isMoreActive || moreOpen
+    // Con pending activo, "Más" cede el activo al ítem tocado (mismo criterio que isActiveHref);
+    // el sheet abierto sigue resaltando "Más".
+    const mobileMoreActive = moreOpen || (isNavigating == null && isMoreActive)
     const mobileActiveIndex = mobileMoreActive
         ? baseItems.length
         : baseItems.findIndex((i) => isActiveHref(i.href))
@@ -288,6 +300,10 @@ export function ClientNav({ coachSlug, basePath, coachBrand, coachLogoUrl, coach
 
     return (
         <>
+            {/* Feedback de contenido INSTANTÁNEO del tap: barra 2px white-label + atenuar <main>.
+                Vive mientras pathname != href tocado; el loading.tsx del server lo reemplaza. */}
+            {isNavigating != null && <NavPendingFeedback color="var(--theme-primary)" />}
+
             {/* ============================ DESKTOP SIDEBAR ============================ */}
             {/* El mobile usa el bottom bar "4 + Más" más abajo. */}
             <aside

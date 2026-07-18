@@ -160,7 +160,9 @@ export default async function CoachSettingsPage() {
     // y la facturación la maneja EVA — acá queda lo del coach como persona: módulos y cuenta.
     if (coach.subscription_status === 'team_managed') {
         return (
-            <div className="mx-auto max-w-3xl animate-fade-in space-y-6 px-4 py-6 md:px-8">
+            // Móvil: SIN px/py propios — CoachMainWrapper ya da el gutter px-5 py-6 (patrón
+            // Alumnos). Desktop conserva max-w-3xl + px-8 py-6.
+            <div className="mx-auto max-w-3xl animate-fade-in space-y-6 md:px-8 md:py-6">
                 <div>
                     <h1 className="font-display text-xl font-black uppercase tracking-tighter text-strong md:text-2xl">Opciones</h1>
                     <p className="mt-2 text-sm leading-relaxed text-muted">
@@ -316,7 +318,8 @@ export default async function CoachSettingsPage() {
     //  · Desktop (≥760): SettingsShell de 2 paneles 1:1 con DesktopOpciones.
     return (
         <>
-            <div className="mx-auto max-w-3xl animate-fade-in space-y-6 px-4 py-6 md:hidden">
+            {/* Móvil: SIN px/py propios — CoachMainWrapper ya da el gutter px-5 py-6 (patrón Alumnos). */}
+            <div className="mx-auto max-w-3xl animate-fade-in space-y-6 md:hidden">
                 <div>
                     <h1 className="font-display text-xl font-black uppercase tracking-tighter text-strong">Opciones</h1>
                     <p className="mt-2 text-sm leading-relaxed text-muted">

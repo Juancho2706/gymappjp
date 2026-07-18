@@ -135,6 +135,7 @@ export default async function CoachNutritionV2ClientPage({ params, searchParams 
     // Header movil compacto: flecha (vuelve al Centro) + eyebrow/nombre + UNA CTA primaria.
     // "Asignar a otros alumnos" se demueve a accion secundaria junto a los badges del plan.
     <NutritionPageShell
+      flushMobile
       eyebrow="Ficha nutricional"
       title={detail.client.fullName}
       backHref="/coach/nutrition-v2"
