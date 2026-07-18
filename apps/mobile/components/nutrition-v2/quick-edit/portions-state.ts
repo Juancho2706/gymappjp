@@ -4,11 +4,14 @@
  * Sin react-native: tipos + hidratacion desde el read model + reducer + contador +
  * inyeccion en el draft canonico + filas de insert con snapshot congelado.
  *
- * Por que vive ACA y no en `lib/nutrition-v2-quick-edit.ts`: el estado principal del
- * quick-edit RN es propiedad de esa lib (fuera del alcance de esta tarea — regla de
- * reparticion de archivos disjuntos). Esta capa es ADITIVA y paralela: se cuelga del
- * `QuickEditState` por `slot.key` sin tocar sus tipos ni su reducer. Candidato a
- * consolidarse en la lib cuando ese archivo quede libre.
+ * CONSOLIDADO (follow-up PR #129/#131): los tipos compartidos con la persistencia
+ * (`QuickEditPortionGroup`/`QuickEditPortionTarget`/`QuickEditPortionsState`) y las
+ * piezas del publish (`injectExchangeTargetsIntoDraft`, `buildPortionTargetInsertRows`)
+ * viven ahora en `lib/nutrition-v2-quick-edit.ts` (junto a `publishQuickEditRN`, que
+ * acepta el estado de porciones como parametro opcional) y se RE-EXPORTAN aqui para
+ * conservar la superficie publica del modulo. Aqui queda lo propio de la UI: estado
+ * editable, hidratacion desde el read model, reducer y contador — capa ADITIVA que se
+ * cuelga del `QuickEditState` por `slot.key` sin tocar sus tipos ni su reducer.
  *
  * Decisiones espejadas del web (SPEC R1/R2 + brief T1.2):
  *  - Capa opcional: plan sin targets => estado vacio => CERO UI y draft byte-identico.
@@ -19,75 +22,38 @@
  *    por construccion (clamp 0,5..99) y no existe estado invalido que validar.
  */
 
-import type { NutritionPlanDraft, NutritionPlanReadModel } from '@eva/nutrition-v2'
-import type { QuickEditState } from '../../../lib/nutrition-v2-quick-edit'
+import type { NutritionPlanReadModel } from '@eva/nutrition-v2'
+import type {
+  QuickEditPortionGroup,
+  QuickEditPortionTarget,
+  QuickEditPortionsState,
+  QuickEditState,
+} from '../../../lib/nutrition-v2-quick-edit'
 
 // ---------------------------------------------------------------------------
-// Tipos
+// Re-exports de las piezas consolidadas en la lib (superficie publica estable)
+// ---------------------------------------------------------------------------
+
+export {
+  buildPortionTargetInsertRows,
+  injectExchangeTargetsIntoDraft,
+} from '../../../lib/nutrition-v2-quick-edit'
+export type {
+  DraftExchangeTarget,
+  PortionComposedPart,
+  PortionGroupRef,
+  PortionTargetInsertRow,
+  QuickEditPortionGroup,
+  QuickEditPortionTarget,
+  QuickEditPortionsState,
+} from '../../../lib/nutrition-v2-quick-edit'
+
+// ---------------------------------------------------------------------------
+// Tipos locales de la hidratacion
 // ---------------------------------------------------------------------------
 
 type ReadSlot = NutritionPlanReadModel['dayVariants'][number]['mealSlots'][number]
 type ReadExchangeTarget = NonNullable<ReadSlot['exchangeTargets']>[number]
-
-type DraftSlot = NutritionPlanDraft['dayVariants'][number]['mealSlots'][number]
-export type DraftExchangeTarget = NonNullable<DraftSlot['exchangeTargets']>[number]
-
-export interface PortionGroupRef {
-  calories: number
-  proteinG: number
-  carbsG: number
-  fatsG: number
-}
-
-/** Parte base ENRIQUECIDA del `composed_of` (SPEC R2/A2), tal cual viaja en el read model. */
-export interface PortionComposedPart {
-  code: string
-  portions: number
-  ref: PortionGroupRef
-}
-
-/**
- * Grupo elegible para el picker de altas. F1: derivado de los targets que el plan YA
- * tiene (snapshots congelados del read model) — nunca el catalogo vivo (hallazgo F3).
- * `ref`/`composedOf` se conservan para re-congelar el snapshot al publicar.
- */
-export interface QuickEditPortionGroup {
-  exchangeGroupId: string
-  groupCode: string
-  groupName: string
-  color: string | null
-  ref: PortionGroupRef
-  composedOf: PortionComposedPart[] | null
-  macrosConfirmed: boolean
-  /** Posicion estable en el dict del plan → fallback deterministico de color. */
-  sortOrder: number
-}
-
-/** Target editable de una franja (espejo movil de `QePortionTarget` web). */
-export interface QuickEditPortionTarget {
-  key: string
-  /** Id de la fila en la version base; null = alta de esta edicion. */
-  id: string | null
-  exchangeGroupId: string
-  groupCode: string
-  groupName: string
-  color: string | null
-  macrosConfirmed: boolean
-  /** Multiplo de 0,5 en [0,5..99] SIEMPRE (stepper de botones; sin estado invalido). */
-  portions: number
-  /** '' = sin nota (TextInput). Se normaliza a null al proyectar. */
-  notes: string
-}
-
-/**
- * Targets por `slot.key` del QuickEditState de la lib. Sin entrada (o []) = franja sin
- * porciones. Los slots eliminados del estado principal conservan su entrada aca (asi el
- * RESTORE_SLOT del undo recupera tambien sus porciones); al publicar y al contar solo se
- * miran los slots VIVOS del estado principal.
- */
-export interface QuickEditPortionsState {
-  bySlot: Record<string, QuickEditPortionTarget[]>
-}
 
 export const EMPTY_PORTIONS_STATE: QuickEditPortionsState = { bySlot: {} }
 
@@ -309,120 +275,7 @@ export function hasAnyPortionTargets(
   return false
 }
 
-// ---------------------------------------------------------------------------
-// Inyeccion en el draft canonico
-// ---------------------------------------------------------------------------
-
-/**
- * Cuelga `exchangeTargets` en los slots del draft que `quickEditStateToDraft` (lib)
- * ensamblo, caminando draft y estado EN PARALELO (la lib mapea variantes/franjas por
- * indice en el mismo orden). Franja sin targets => slot IDENTICO al de antes (sin la
- * clave): un plan sin porciones publica un draft byte-identico al actual.
- */
-export function injectExchangeTargetsIntoDraft(
-  draft: NutritionPlanDraft,
-  editState: QuickEditState,
-  portions: QuickEditPortionsState,
-): NutritionPlanDraft {
-  return {
-    ...draft,
-    dayVariants: draft.dayVariants.map((variant, variantIndex) => {
-      const stateVariant = editState.variants[variantIndex]
-      if (!stateVariant) return variant
-      return {
-        ...variant,
-        mealSlots: variant.mealSlots.map((slot, slotIndex) => {
-          const stateSlot = stateVariant.slots[slotIndex]
-          if (!stateSlot) return slot
-          const targets = portions.bySlot[stateSlot.key] ?? []
-          if (targets.length === 0) return slot
-          return {
-            ...slot,
-            exchangeTargets: targets.map(
-              (target, orderIndex): DraftExchangeTarget => ({
-                ...(target.id ? { id: target.id } : {}),
-                exchangeGroupId: target.exchangeGroupId,
-                portions: target.portions,
-                notes: notesNorm(target.notes),
-                orderIndex,
-              }),
-            ),
-          }
-        }),
-      }
-    }),
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Filas de insert con snapshot congelado (freeze en la persistencia — SPEC R2/A1)
-// ---------------------------------------------------------------------------
-
-/**
- * Fila de `nutrition_slot_exchange_targets_v2` (espejo del `ExchangeTargetInsertRow`
- * del draft-builder web). En RN el cliente ES el escritor (PostgREST directo, igual que
- * items/slots del quick-edit): el snapshot se RE-CONGELA por valor desde el snapshot del
- * read model (que a su vez fue congelado server-side al persistirse la version base) —
- * nunca desde el catalogo vivo. `snapshot_composed_of` ya viene ENRIQUECIDO (A2).
- */
-export type PortionTargetInsertRow = {
-  version_id: string
-  meal_slot_id: string
-  exchange_group_id: string
-  portions: number
-  notes: string | null
-  order_index: number
-  snapshot_group_code: string
-  snapshot_group_name: string
-  snapshot_ref_calories: number
-  snapshot_ref_protein_g: number
-  snapshot_ref_carbs_g: number
-  snapshot_ref_fats_g: number
-  snapshot_composed_of: PortionComposedPart[] | null
-  snapshot_macros_confirmed: boolean
-}
-
-/**
- * Emite las filas de una franja resolviendo cada grupo contra el dict congelado del
- * plan. Devuelve `null` si algun grupo no es resolvible (jamas una fila con
- * `snapshot_*` NULL — SPEC R2/B5): el caller corta el publish con error explicito.
- * En F1 esto no deberia ocurrir (las altas salen del mismo dict), es cinturon.
- */
-export function buildPortionTargetInsertRows(input: {
-  versionId: string
-  mealSlotId: string
-  targets: readonly DraftExchangeTarget[]
-  groupsById: ReadonlyMap<string, QuickEditPortionGroup>
-}): PortionTargetInsertRow[] | null {
-  const { versionId, mealSlotId, targets, groupsById } = input
-  const rows: PortionTargetInsertRow[] = []
-  for (let index = 0; index < targets.length; index += 1) {
-    const target = targets[index]
-    const group = groupsById.get(target.exchangeGroupId)
-    if (!group) return null
-    rows.push({
-      version_id: versionId,
-      meal_slot_id: mealSlotId,
-      exchange_group_id: group.exchangeGroupId,
-      portions: target.portions,
-      notes: target.notes ?? null,
-      order_index: index,
-      snapshot_group_code: group.groupCode,
-      snapshot_group_name: group.groupName,
-      snapshot_ref_calories: group.ref.calories,
-      snapshot_ref_protein_g: group.ref.proteinG,
-      snapshot_ref_carbs_g: group.ref.carbsG,
-      snapshot_ref_fats_g: group.ref.fatsG,
-      snapshot_composed_of:
-        group.composedOf === null
-          ? null
-          : group.composedOf.map((part) => ({
-              code: part.code,
-              portions: part.portions,
-              ref: { ...part.ref },
-            })),
-      snapshot_macros_confirmed: group.macrosConfirmed,
-    })
-  }
-  return rows
-}
+// La inyeccion en el draft canonico (`injectExchangeTargetsIntoDraft`) y las filas de
+// insert con snapshot congelado (`buildPortionTargetInsertRows`) viven en
+// `lib/nutrition-v2-quick-edit.ts` (re-exportadas arriba): son parte del pipeline de
+// publish, no del estado de UI.

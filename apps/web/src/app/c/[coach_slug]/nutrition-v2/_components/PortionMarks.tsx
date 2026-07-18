@@ -140,7 +140,7 @@ export function usePortionMarks({
       try {
         const res = await undoPortionIntakeAction({ clientId, entryId: record.entryId })
         if (!res.ok) {
-          toast.error(humanizeStudentWriteError(res.error, 'No se pudo deshacer la porción.'))
+          toast.error(humanizeStudentWriteError(res.error, PORTIONS_COPY.student.undoFailed))
           return
         }
         // El attempt del ordinal sube en CADA deshacer (B2/M1): re-marcar después
@@ -152,7 +152,7 @@ export function usePortionMarks({
         removePending(key)
         router.refresh()
       } catch {
-        toast.error('No se pudo deshacer la porción. Revisa tu conexión.')
+        toast.error(PORTIONS_COPY.student.undoFailedOffline)
       }
     },
     [clientId, localDate, removePending, router, storage],

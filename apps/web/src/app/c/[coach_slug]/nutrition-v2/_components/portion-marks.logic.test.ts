@@ -23,8 +23,11 @@ import {
   NUTRITION_DEVICE_ID_STORAGE_KEY,
   pendingInCell,
   pendingPortionsSum,
+  PORTION_SEGMENT_CAP,
   portionAttemptKey,
   portionAttemptStorageKey,
+  portionBarFractions,
+  portionChipIsCompact,
   portionsCountLabelEs,
   prunePortionAttemptMap,
   reconcilePendingMarks,
@@ -216,6 +219,28 @@ describe('extraPortionsValue', () => {
     expect(extraPortionsValue(2, 3)).toBe(1)
     expect(extraPortionsValue(2, 3.57)).toBe(1.6)
     expect(extraPortionsValue(2, 1.5)).toBe(0)
+  })
+})
+
+describe('cap visual de segmentos (H4)', () => {
+  it('segmentos discretos hasta 8; barra compacta con más de 8', () => {
+    expect(PORTION_SEGMENT_CAP).toBe(8)
+    expect(portionChipIsCompact(1)).toBe(false)
+    expect(portionChipIsCompact(8)).toBe(false)
+    // 8,5 porciones = 9 segmentos (8 enteros + semicírculo) ⇒ compacta.
+    expect(portionChipIsCompact(8.5)).toBe(true)
+    expect(portionChipIsCompact(10)).toBe(true)
+    expect(portionChipIsCompact(99)).toBe(true)
+    expect(portionChipIsCompact(0)).toBe(false)
+  })
+
+  it('portionBarFractions cuantiza como los segmentos: floor(x·2)/2 y cap al prescrito', () => {
+    expect(portionBarFractions(10, 3, 2)).toEqual({ marked: 0.3, derived: 0.2 })
+    // 0,7 derivadas pintan 0,5 (misma regla de display que segmentsForTarget).
+    expect(portionBarFractions(10, 0, 0.7)).toEqual({ marked: 0, derived: 0.05 })
+    // El exceso NO entra a la barra (va al badge "+n").
+    expect(portionBarFractions(10, 12, 3)).toEqual({ marked: 1, derived: 0 })
+    expect(portionBarFractions(0, 2, 1)).toEqual({ marked: 0, derived: 0 })
   })
 })
 

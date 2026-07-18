@@ -146,15 +146,19 @@ function PortionSlotSectionBase({
                 onPress={() => handleConfirmExtra(target)}
                 className="min-h-9 items-center justify-center rounded-control bg-primary px-3"
               >
-                <Text className="text-xs font-semibold text-white">Marcar extra</Text>
+                <Text className="text-xs font-semibold text-white">
+                  {PORTIONS_COPY.student.extraConfirmYes}
+                </Text>
               </Pressable>
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel="Cancelar porción extra"
+                accessibilityLabel={PORTIONS_COPY.student.extraCancelAria}
                 onPress={closeConfirm}
                 className="min-h-9 items-center justify-center rounded-control px-2"
               >
-                <Text className="text-xs font-semibold text-text-muted">Cancelar</Text>
+                <Text className="text-xs font-semibold text-text-muted">
+                  {PORTIONS_COPY.student.extraCancel}
+                </Text>
               </Pressable>
             </MotiView>
           ) : null}

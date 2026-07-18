@@ -2,15 +2,20 @@
 
 > Fuente única de verdad del estado actual. Reemplaza a los handoffs/roadmaps congelados
 > (archivados en `docs/archive/nutrition-v2/`). Verificado contra código y prod, no contra docs.
-> Última actualización: **2026-07-17** (cierre sesión RNBUILD 2.0).
+> Última actualización: **2026-07-18** (porciones F1 construido Y operado en prod + PR #131 QA).
 
 ## Estado en una línea
 
-Dominio V2 **implementado y estabilizado**, en **canary solo para josefit**. No falta código
-grande para T12 — falta **validación** (device QA, métricas canary) y **2 construcciones
-acotadas** (asistente de conversión de planes V1→V2, olas de fidelidad RN). 5 rondas de QA del
-CEO cerradas; rediseño AURA del alumno en vivo; suite E2E validada 4/4 canary; 580 íconos de
-alimentos + navbar propia en prod; catálogo genérico dedupeado (532 alimentos).
+Nutrición V2 **en vivo para todos** (FLIP `mode=on`, ya no es canary josefit-only — ver
+`project_nutrition_v1v2_dark_conversion.md`), con **Porciones F1** operando encima
+(migraciones `20260718140000`/`150000` aplicadas, RLS isolation ALL PASSED, conversión de
+5 planes `exchanges` V1→V2 delta 0, catálogo 2.586/4.778 alimentos etiquetados por grupo +
+95 filas basura borradas) y **ronda 1 de QA del CEO cerrada con 4 fixes** (PR #131:
+registro desde scanner, subtotal de franja con porciones, tab Curación contenida, loader
+del login). El **gate de acceso de alumnos** (gracia 7d post-vencimiento → solo-lectura)
+también está vivo en prod. No falta código grande de dominio — falta **operación de cola**
+(merge de duplicados del catálogo, deprecación física de V1, QA device en rondas
+siguientes) y la **paridad visual RN** (olas 2R-7) queda como el próximo gran bloque.
 
 ## Qué está LISTO (no re-hacer)
 
@@ -33,57 +38,102 @@ alimentos + navbar propia en prod; catálogo genérico dedupeado (532 alimentos)
 - **Deprecación por etapas construida (2026-07-17)**: con flag V2 activo, `/nutrition`
   y `/nutrition/add` del alumno redirigen a V2 (V1 intacta con flag apagado); sin
   banner ni "Vista previa"; hub coach sin link a V1.
+- **FLIP a `mode=on` (2026-07-18)**: nutrición V2 en vivo para todos los coaches/alumnos,
+  no solo josefit. 53 planes convertidos; los 4 módulos van incluidos en todo plan pago.
+  Rollback disponible via Edge Config (`mode=off`).
+- **Porciones F1 — construido y OPERADO en prod (2026-07-18)**: PRs #129/#130 mergeados
+  (olas 0-5: dominio+contratos, builder coach web/RN, marcar-porción alumno PWA/RN,
+  conversión de planes `exchanges`, pipeline de clasificación del catálogo, matriz Q +
+  RLS isolation + auditoría visual). Migraciones `20260718140000` (dominio) y
+  `20260718150000` (read-models) **aplicadas en prod** (BEGIN/ROLLBACK previo + advisors
+  + `tests/team/portions-isolation.sql` ALL PASSED). Conversión de 5 planes `exchanges`
+  V1 ejecutada (Alan/ali de jotap primero) con **delta 0** de fidelidad. Catálogo:
+  **2.586/4.778 alimentos (54,1%) etiquetados por grupo** (163 overrides investigados y
+  citados SMAE/INTA/ADA en `scripts/nutrition-portions/research/`) + **95 filas basura
+  borradas** (duplicados exactos, no-latinos, suplementos compuestos sin FKs; respaldo
+  JSON + `--down`). Ver commits `be7a2568`, `0d7ea0bd`, `34a237d5`, `ce732c69`.
+- **Ronda 1 de QA del CEO cerrada (PR #131, commit `d86b8783`)**: 4 fixes — registro de
+  intake desde el scanner de código de barras, subtotal de franja del alumno incluye
+  porciones marcadas, tab "Curación" del catálogo contenido (overflow), loader del login.
+  Ya mergeado a `master`.
 
 ## Qué FALTA
 
-### Bloquea T12 (validación, no código)
-- [ ] **QA en device del CEO** (doc dedicado, APK `previewv2`). Nunca corrido en device real.
-- [ ] Métricas del canary (runbook §5) + presupuesto de performance.
+> `mode=on` ya está en vivo (2026-07-18) — las secciones "T12 rollout" y "antes de
+> merge" de versiones previas de este doc quedaron resueltas y se retiran; lo que sigue
+> es operación de cola sobre lo YA construido y operado.
 
-### Antes de merge a master
-- [x] **Conversión de planes V1→V2**: se reemplazó el asistente coach-driven por una
-      **conversión dark automática** (decisión CEO 2026-07-17: cero fricción para coaches).
-      Construida en `feat/nutrition-v2-conversion`: mapeo puro (`packages/nutrition-v2/conversion.ts`,
-      19 tests), driver CLI dry-run/apply (`scripts/nutrition-v2-conversion/`), migración
-      `20260717120000` (tabla puente `nutrition_v2_conversion_links` + wrapper de publish
-      impersonado service-role-only), banner "plan convertido" en la ficha coach.
-      Spec: `specs/nutrition-v2-conversion/`. **Falta operar** (con GO del CEO):
-      aplicar migración → dry-run + reporte de fidelidad → `--apply` (dark) →
-      re-sync semanal hasta el flip. Planes `exchanges` (6, solo socios/e2e) = manual.
-- [x] Decisión sobre cambios V1 sin flag → **aceptar con QA dirigido** (CEO, 2026-07-16).
-- [x] Herramientas V1: retirar duplicado hábitos, mantener swaps Pro, adoptar favoritos+export,
-      eliminar notas/compras/recetas al deprecar (CEO). Favoritos+compartir ya adoptados.
+### Catálogo de porciones (operación de cola)
+- [ ] **Merge de los ~104 duplicados con uso** (foods con FKs activas que `cleanup-foods.mjs`
+      dejó reportados como "requiere merge" en vez de borrar). Requiere decidir food
+      canónico por grupo y re-apuntar referencias.
+      Fuente: reporte de `ce732c69` (verificar conteo exacto contra el reporte en `tmp/` —
+      no versionado). *(verificar)*
+- [ ] **Tier bajo del clasificador**: alimentos que el pipeline heurístico dejó sin grupo
+      asignado (confianza insuficiente) — pendiente revisión manual o segunda pasada de
+      overrides. Cantidad exacta: *(verificar en el reporte de `scripts/nutrition-portions/report.mjs`)*.
+- [ ] Purga de objetos de Storage de los íconos redundantes tras el dedup (heredado, sigue
+      pendiente).
 
-### Paridad RN 1:1 (razón de la rama `rnmobiledenuevo`)
-- Funcional ~95% (auditoría de junio obsoleta). Falta **fidelidad visual** (~40%):
-  olas 2R / 4A / 4B / 5 / 6 / 7 sin correr. Insumo: `docs/rn-port/specs/seccion-3/` (13/14 cerradas;
-  falta ficha-nutrición-facturación, su mitad nutrición ya la superó V2).
-- Si se deprecia V1 (decisión ③ = sí, post mode-on), las olas 4A/4B se achican.
+### Deprecación física de nutrición V1
+- [x] Deprecación por etapas (redirects `/nutrition` → V2) construida y en vivo con
+      `mode=on`.
+- [ ] **Deprecación física**: retiro del código/tablas V1 del alumno (notas, compras,
+      recetas — ya aprobado por CEO) y de las rutas legacy. Aún no ejecutada; es limpieza
+      de cola, no bloquea a nadie porque V1 ya no es la superficie activa.
+- [ ] Badge "Historial anterior" sin variante dark; borrar `_bak_foods_global_20260715`
+      (~29 jul) y `_bak_foods_dedup_20260717` tras confirmar el dedup, más los respaldos
+      de la limpieza del catálogo de porciones en `tmp/`.
 
-### T12 rollout (por etapas)
-- [ ] Ampliar canary a 2–3 coaches de confianza o clientIds puntuales → semana de observación →
-      `mode on` por superficie. Infra de canary fino ya funciona (por alumno, web + móvil).
-- [ ] Deprecar nutrición V1 del alumno (redirects + retiro por etapas) tras mode-on.
+### QA en device (rondas siguientes)
+- [x] Ronda 1 de QA del CEO en device sobre porciones F1 — cerrada, 4 fixes, PR #131 en
+      `master` (ver arriba).
+- [ ] Rondas siguientes de QA device (porciones + nutrición V2 general) a medida que el
+      CEO las corra. Métricas de uso real (adherencia a intercambios, ratio marcado vs.
+      registro libre) aún sin instrumentar/revisar. *(verificar si hay runbook de métricas
+      posterior al de `docs/operations/NUTRITION_V2_ROLLOUT_RUNBOOK.md`, escrito para la
+      fase canary y no actualizado post-flip)*.
 
-### Cosmético / tolerable post-lanzamiento
-- [ ] Purga de objetos de Storage de los íconos redundantes tras el dedup.
-- [ ] Merge de los grupos REVISAR-CEO del informe de duplicados (11 grupos).
-- [ ] Badge "Historial anterior" sin variante dark; borrar `_bak_foods_global_20260715` (~29 jul)
-      y `_bak_foods_dedup_20260717` tras confirmar el dedup.
-- [ ] 9 worktrees obsoletos + ramas viejas → limpiar a mano (`git worktree remove`, nunca rm -rf).
+### SIGUIENTE GRANDE: paridad visual RN (olas 2R-7)
+- Funcional ~95% (auditoría de junio obsoleta como plan, no como estado funcional).
+  Falta **fidelidad visual**: olas 2R / 4A / 4B / 5 / 6 / 7 del mega-plan de paridad
+  (`specs/rn-mobile-parity-redesign/PLAN.md`, `docs/rn-port/`) sin correr. Insumo:
+  `docs/rn-port/specs/seccion-3/` (13/14 cerradas; falta ficha-nutrición-facturación,
+  cuya mitad nutrición ya quedó superada por V2).
+  Con V1 deprecándose, las olas 4A/4B (nutrición RN) se achican en alcance.
+- Es el próximo bloque grande de trabajo tras cerrar la cola de porciones/catálogo.
+
+### Housekeeping general
+- [ ] 9 worktrees obsoletos + ramas viejas → limpiar a mano (`git worktree remove`, nunca
+      `rm -rf`).
 
 ## Datos útiles
 
-- Canary: Edge Config `NUTRITION_V2_ROLLOUT` (mode canary, coachIds=[josefit `503412d0-…`]).
+- Edge Config `NUTRITION_V2_ROLLOUT`: **`mode=on`** desde 2026-07-18 (ya no canary
+  josefit-only; rollback = `mode=off`).
 - Preview: `gymappjp-git-rnmobiledenuevo-juancho2706s-projects.vercel.app`.
 - Build device: perfil `previewv2` (GitHub Actions → Mobile Build → branch `rnmobiledenuevo`;
   desinstalar la app de Play antes de sideload — firma distinta).
 - Cuentas QA: coach josefit `503412d0-…`; alumnas Camila `6a8adf41-…`, Catalina `ba265b0b-…`.
+- **Gate de acceso de alumnos** (feature separada, vive en la misma migración de fecha
+  2026-07-18): alumno de coach sin pago vigente entra en gracia de 7 días desde el fin
+  del pago, luego pasa a solo-lectura (RLS/RPC + capas de app, PR #128, LIVE). Kill-switch:
+  `STUDENT_ACCESS_GATE`. Ancla de prueba: joaquin, corte de gracia 2026-07-23. Migración:
+  `supabase/migrations/20260718120000_student_access_grace_gate.sql`. Sin doc dedicado en
+  `docs/` — spec parcial en `specs/nutrition-portions/SPEC.md`/`TASKS.md` (referencias
+  cruzadas). *(verificar si conviene un doc propio)*.
+- Porciones F1: migraciones `supabase/migrations/20260718140000_nutrition_portions_v2.sql`
+  y `20260718150000_nutrition_portions_read_models.sql`, ambas aplicadas en prod.
 
 ## Docs y runbooks vigentes
 
 - Este doc (estado + pendientes) · `README.md` (índice) · `TANDA_1_PRODUCT_CONTRACT_WIREFRAMES_2026.md`
   (contrato de producto) · `ASSETS_CEO_2026-07.md` (inventario de assets).
-- Runbooks operativos: `docs/operations/NUTRITION_V2_ROLLOUT_RUNBOOK.md`,
+- Porciones F1: `specs/nutrition-portions/SPEC.md` / `PLAN.md` / `TASKS.md` / `QA-VISUAL.md`.
+- Conversión V1→V2 (planes normales, no `exchanges`): `specs/nutrition-v2-conversion/`.
+- Runbooks operativos: `docs/operations/NUTRITION_V2_ROLLOUT_RUNBOOK.md` (escrito en fase
+  canary — **verificar** si sigue vigente post-flip a `mode=on`),
   `docs/operations/FOOD_CATALOG_CL_IMPORT.md`.
+- Paridad RN (siguiente grande): `specs/rn-mobile-parity-redesign/PLAN.md`,
+  `docs/rn-port/README.md`, `docs/porting-status.md`.
 - Histórico congelado: `docs/archive/nutrition-v2/` (handoffs, roadmaps, tandas cerradas).

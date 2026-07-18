@@ -115,7 +115,7 @@ function PortionTargetRow({
   function handleRemove() {
     const removed = target
     dispatch({ type: 'REMOVE_PORTION_TARGET', variantKey, slotKey, targetKey: target.key })
-    toast(`Grupo ${removed.groupName} eliminado`, {
+    toast(PORTIONS_COPY.builder.groupRemoved(removed.groupName), {
       duration: 5000,
       action: {
         label: QE_COPY.undo,

@@ -500,6 +500,37 @@ export function buildPortionCoverageView(input: {
   }
 }
 
+/**
+ * Cap visual de segmentos (hallazgo H4 del QA visual): con prescripciones grandes los
+ * segmentos comprimen el nombre a cero y desbordan el chip en 360 px, así que con MÁS
+ * de 8 segmentos el chip colapsa a una barra de progreso continua + contador n/N
+ * (misma semántica marcadas/derivadas con los dos estilos de relleno). Segmentos
+ * discretos SOLO con <=8. Espejo web en `_components/portion-marks.logic.ts`.
+ */
+export const PORTION_SEGMENT_CAP = 8
+
+/** true ⇒ representación compacta (barra continua + n/N); false ⇒ segmentos discretos. */
+export function portionChipIsCompact(prescribed: number): boolean {
+  return Math.ceil(Math.max(prescribed, 0)) > PORTION_SEGMENT_CAP
+}
+
+/**
+ * Fracciones [0..1] de la barra compacta con la MISMA cuantización de los segmentos
+ * (display por floor(x·2)/2, cap al prescrito, marcado-a-mano primero): `marked` se
+ * pinta con relleno pleno y `derived` con el estilo derivado; el exceso sigue yendo
+ * al badge "+n", nunca a la barra.
+ */
+export function portionBarFractions(
+  prescribed: number,
+  marcadas: number,
+  derivadas: number,
+): { marked: number; derived: number } {
+  if (prescribed <= 0) return { marked: 0, derived: 0 }
+  const totalFill = Math.min(floorHalf(Math.max(marcadas, 0) + Math.max(derivadas, 0)), prescribed)
+  const marked = Math.min(floorHalf(Math.max(marcadas, 0)), totalFill)
+  return { marked: marked / prescribed, derived: (totalFill - marked) / prescribed }
+}
+
 /** Vista de un chip del resumen del día (fila "Porciones de hoy"). */
 export function buildDayCoverageView(
   row: NutritionDayCoverageRead,

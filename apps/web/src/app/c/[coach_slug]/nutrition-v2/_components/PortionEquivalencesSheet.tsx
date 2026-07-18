@@ -85,7 +85,7 @@ export function PortionEquivalencesSheet({
         <>
           <motion.button
             animate={{ opacity: 1 }}
-            aria-label="Cerrar"
+            aria-label={PORTIONS_COPY.student.close}
             className="fixed inset-0 z-50 bg-black/50"
             exit={{ opacity: 0 }}
             initial={{ opacity: 0 }}
@@ -129,7 +129,7 @@ export function PortionEquivalencesSheet({
                 ) : null}
               </div>
               <button
-                aria-label="Cerrar"
+                aria-label={PORTIONS_COPY.student.close}
                 className="flex h-11 w-11 shrink-0 items-center justify-center rounded-control text-muted transition-colors hover:bg-surface-sunken hover:text-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 onClick={onClose}
                 type="button"
@@ -177,10 +177,10 @@ export function PortionEquivalencesSheet({
                   className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted"
                 />
                 <input
-                  aria-label="Buscar alimento equivalente"
+                  aria-label={PORTIONS_COPY.student.sheetSearchAria}
                   className="min-h-11 w-full rounded-control border border-border-default bg-surface-app pl-9 pr-3 text-sm text-strong outline-none placeholder:text-muted focus:ring-2 focus:ring-ring"
                   onChange={(event) => setSearch(event.target.value)}
-                  placeholder="Buscar alimento"
+                  placeholder={PORTIONS_COPY.student.sheetSearchPlaceholder}
                   type="search"
                   value={search}
                 />
@@ -191,8 +191,8 @@ export function PortionEquivalencesSheet({
               {foods.length === 0 ? (
                 <p className="py-8 text-center text-xs text-muted">
                   {search.trim().length > 0
-                    ? 'Sin resultados para tu búsqueda.'
-                    : 'Aún no hay alimentos clasificados en este grupo. Igual puedes marcar tu porción o registrar lo que comiste.'}
+                    ? PORTIONS_COPY.student.sheetNoResults
+                    : PORTIONS_COPY.student.sheetEmpty}
                 </p>
               ) : (
                 <ul className="divide-y divide-border-subtle">

@@ -103,7 +103,7 @@ function GroupList({
     return (
       <div className="flex items-center justify-center gap-2 py-6 text-sm text-muted">
         <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin" />
-        Cargando grupos…
+        {PORTIONS_COPY.builder.pickerLoading}
       </div>
     )
   }
@@ -111,14 +111,14 @@ function GroupList({
     // Estado de error del catálogo con reintento (SPEC UX-c). La franja sigue editable.
     return (
       <div className="flex flex-col items-center gap-2 py-5 text-center">
-        <p className="text-sm text-muted">{groupsError ?? 'No pudimos cargar los grupos.'}</p>
+        <p className="text-sm text-muted">{groupsError ?? PORTIONS_COPY.builder.pickerError}</p>
         <button
           type="button"
           onClick={controller.retryGroups}
           className="inline-flex min-h-9 items-center gap-1.5 rounded-control border border-border-default bg-surface-card px-3 text-sm font-semibold text-strong transition-colors hover:bg-surface-sunken focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           <RefreshCcw aria-hidden="true" className="h-3.5 w-3.5" />
-          Reintentar
+          {PORTIONS_COPY.builder.pickerRetry}
         </button>
       </div>
     )

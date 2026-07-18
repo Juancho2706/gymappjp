@@ -1,0 +1,106 @@
+-- =============================================================================
+-- PROPUESTA (NO APLICAR TAL CUAL) — Follow-ups de salud DB 2026-07-18
+-- Extension .PROPUESTA.sql.txt a proposito: NO la levanta ninguna herramienta.
+-- Origen: docs/audits/db-salud-2026-07-18.md
+-- Antes de convertir a .sql y aplicar: leer los TODO, verificar nombres de
+-- columnas contra el esquema vivo y validar con tx-rollback + advisors.
+-- Todo aca es aditivo salvo el bloque C1 (destructivo, comentado).
+-- =============================================================================
+
+
+-- -----------------------------------------------------------------------------
+-- C1  (CRITICO / SEGURIDAD)  Borrar respaldos publicos sin RLS.
+--     Resuelve: 2x rls_disabled_in_public (ERROR) + 3x no_primary_key +
+--     ruido de unused_index + 1x rls_enabled_no_policy.
+--     DESTRUCTIVO. Descomentar SOLO tras checklist:
+--       [ ] Operacion de catalogo/foods cerrada (dedup ya aplicada en prod).
+--       [ ] SELECT count(*) de cada _bak revisado; no se necesita revertir,
+--           o existe respaldo logico (pg_dump de la tabla) guardado aparte.
+--       [ ] grep en el repo: ninguna migracion/RPC/vista referencia estas tablas.
+-- -----------------------------------------------------------------------------
+-- DROP TABLE IF EXISTS public._bak_foods_global_20260715;
+-- DROP TABLE IF EXISTS public._bak_foods_dedup_20260717;
+-- DROP TABLE IF EXISTS public._bak_workout_logs_dups_20260707;
+
+
+-- -----------------------------------------------------------------------------
+-- P1  Indices de cobertura para FKs del write-path de nutricion V2.
+--     Aditivo. CREATE INDEX CONCURRENTLY NO corre dentro de una transaccion:
+--     ejecutar cada sentencia por separado, FUERA de BEGIN/COMMIT.
+--     Barato AHORA (tablas ~vacias); indexar en caliente luego cuesta Disk IO.
+--     TODO: confirmar nombre exacto de cada columna contra information_schema
+--           (los nombres de abajo se infieren del nombre del constraint FK).
+-- -----------------------------------------------------------------------------
+
+-- Ingesta del alumno: la tabla que mas va a crecer.
+CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_nutrition_intake_entries_corrected_by
+  ON public.nutrition_intake_entries (corrected_by);
+
+-- Snapshots diarios.
+CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_nutrition_day_snapshots_v2_plan_id
+  ON public.nutrition_day_snapshots_v2 (plan_id);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_nutrition_day_snapshots_v2_day_variant_id
+  ON public.nutrition_day_snapshots_v2 (day_variant_id);
+
+-- Audit log (crece con cada cambio).
+CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_nutrition_v2_audit_log_plan_id
+  ON public.nutrition_v2_audit_log (plan_id);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_nutrition_v2_audit_log_intake_entry_id
+  ON public.nutrition_v2_audit_log (intake_entry_id);
+
+-- Estructura de plan / porciones (crecen con cada plan y version).
+CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_nutrition_slot_exchange_targets_v2_slot_version
+  ON public.nutrition_slot_exchange_targets_v2 (slot_version);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_nutrition_prescription_items_v2_slot_version
+  ON public.nutrition_prescription_items_v2 (slot_version);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_nutrition_meal_slots_v2_variant_version
+  ON public.nutrition_meal_slots_v2 (variant_version);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_nutrition_plan_versions_v2_parent_version_id
+  ON public.nutrition_plan_versions_v2 (parent_version_id);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_nutrition_plans_v2_current_version
+  ON public.nutrition_plans_v2 (current_version);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_nutrition_v2_conversion_links_v2_version_id
+  ON public.nutrition_v2_conversion_links (v2_version_id);
+
+-- Import de catalogo (baja frecuencia; opcional, dejar si molesta el advisor).
+-- CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_food_catalog_import_rows_resolved_food_id
+--   ON public.food_catalog_import_rows (resolved_food_id);
+-- CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_food_catalog_missing_codes_resolved_food_id
+--   ON public.food_catalog_missing_codes (resolved_food_id);
+
+
+-- -----------------------------------------------------------------------------
+-- P3  auth_rls_initplan: envolver auth.<fn>()/current_setting() en (select ...)
+--     para que se evalue UNA vez por query en vez de por fila.
+--     NO reescribir a ciegas: el USING/WITH CHECK de cada policy tiene logica
+--     de scope propia. Primero traer las definiciones vivas:
+--
+--        select schemaname, tablename, policyname, cmd, qual, with_check
+--        from pg_policies
+--        where schemaname='public'
+--          and tablename in (
+--            'nutrition_plans_v2','nutrition_plan_versions_v2',
+--            'nutrition_plan_private_notes_v2','nutrition_v2_conversion_links');
+--
+--     Luego, por cada policy, recrear identica cambiando SOLO
+--        auth.uid()            ->  (select auth.uid())
+--        current_setting(...)  ->  (select current_setting(...))
+--     Policies afectadas (6):
+--        nutrition_plans_v2 : nutrition_plans_v2_select, nutrition_plans_v2_insert
+--        nutrition_plan_versions_v2 : nutrition_plan_versions_v2_insert
+--        nutrition_plan_private_notes_v2 : _insert, _update
+--        nutrition_v2_conversion_links : nutrition_v2_conversion_links_select
+--
+--     TODO: pegar aca los DROP POLICY / CREATE POLICY reales una vez leidos.
+-- -----------------------------------------------------------------------------
+
+
+-- -----------------------------------------------------------------------------
+-- NO INCLUIDO A PROPOSITO:
+--  * unused_index de tablas veteranas (P2): requiere idx_scan historico y
+--    descartar UNIQUE/soporte-FK. Bisturi manual, no barrido.
+--  * extension_in_public (pg_trgm / unaccent): mover de esquema puede romper
+--    search_path de la busqueda de catalogo. Aceptar/diferir.
+--  * multiple_permissive_policies / security_definer / FK compuesta de
+--    porciones: patrones deliberados del repo. NO tocar (ver informe §2).
+-- -----------------------------------------------------------------------------

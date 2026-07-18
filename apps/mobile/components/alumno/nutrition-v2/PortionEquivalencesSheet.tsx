@@ -191,7 +191,7 @@ export function PortionEquivalencesSheet({
 
           {foods.length === 0 ? (
             <Text className="py-6 text-center text-sm text-text-muted">
-              Aún no hay alimentos de referencia para este grupo.
+              {PORTIONS_COPY.student.sheetEmpty}
             </Text>
           ) : (
             <View>
