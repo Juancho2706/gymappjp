@@ -9,7 +9,8 @@
  * clasificado a JSON (gitignoreado) y, con `--apply`, corre los UPDATE guardados.
  */
 
-import { classifyFood, GROUP_REFS, type FoodRow, type ExchangeGroupCode, type ClassificationTier } from './heuristics'
+import { GROUP_REFS, type FoodRow, type ExchangeGroupCode, type ClassificationTier } from './heuristics.ts'
+import { classifyFoodWithOverrides } from './heuristics-overrides.ts'
 
 // ---------------------------------------------------------------------------
 // Tipos
@@ -34,6 +35,10 @@ export interface ExchangeGroupDbRow {
   ref_protein_g: number | string
   ref_carbs_g: number | string
   ref_fats_g: number | string
+  /** Grupos compuestos (LEG = 1P+1C): sus ref_* en DB son 0 y el perfil efectivo
+   *  se deriva de las bases. El fixture guarda el perfil EFECTIVO (es el que usa
+   *  el clasificador), asi que la verificacion los compara contra la suma. */
+  composed_of?: Array<{ code: string; portions: number }> | null
   deleted_at?: string | null
 }
 
@@ -105,11 +110,35 @@ export function verifyGroupRefs(dbGroups: ExchangeGroupDbRow[]): RefVerification
       mismatches.push({ code: ref.code, field: 'missing_in_db' })
       continue
     }
+    // Grupo compuesto (composed_of poblado, p.ej. LEG=1P+1C): sus ref_* en DB son 0
+    // por diseno — el perfil efectivo es la suma portions x ref de las bases. El
+    // fixture guarda ese perfil efectivo (el clasificador matchea contra el), asi
+    // que aqui se compara contra la suma derivada de la DB, no contra los 0s.
+    let dbCal = toNum(db.ref_calories)
+    let dbProt = toNum(db.ref_protein_g)
+    let dbCarb = toNum(db.ref_carbs_g)
+    let dbFat = toNum(db.ref_fats_g)
+    if (Array.isArray(db.composed_of) && db.composed_of.length > 0) {
+      dbCal = 0; dbProt = 0; dbCarb = 0; dbFat = 0
+      for (const part of db.composed_of) {
+        const base = dbSystem.get(part.code)
+        if (!base) {
+          mismatches.push({ code: ref.code, field: 'missing_in_db' })
+          dbCal = Number.NaN
+          break
+        }
+        dbCal += part.portions * toNum(base.ref_calories)
+        dbProt += part.portions * toNum(base.ref_protein_g)
+        dbCarb += part.portions * toNum(base.ref_carbs_g)
+        dbFat += part.portions * toNum(base.ref_fats_g)
+      }
+      if (Number.isNaN(dbCal)) continue
+    }
     const checks: Array<[RefMismatch['field'], number, number]> = [
-      ['ref_calories', ref.refCalories, toNum(db.ref_calories)],
-      ['ref_protein_g', ref.refProteinG, toNum(db.ref_protein_g)],
-      ['ref_carbs_g', ref.refCarbsG, toNum(db.ref_carbs_g)],
-      ['ref_fats_g', ref.refFatsG, toNum(db.ref_fats_g)],
+      ['ref_calories', ref.refCalories, dbCal],
+      ['ref_protein_g', ref.refProteinG, dbProt],
+      ['ref_carbs_g', ref.refCarbsG, dbCarb],
+      ['ref_fats_g', ref.refFatsG, dbFat],
     ]
     for (const [field, fixture, dbVal] of checks) {
       if (Number.isNaN(dbVal) || Math.abs(fixture - dbVal) > REF_EPSILON) {
@@ -142,7 +171,9 @@ export function systemGroupIdByCode(dbGroups: ExchangeGroupDbRow[]): Map<string,
 
 export function classifyDataset(foods: FoodDbRow[]): ClassifiedRow[] {
   return foods.map((food) => {
-    const c = classifyFood(food)
+    // Paso PREVIO de overrides curados (heuristics-overrides.ts); si ninguno matchea,
+    // cae al clasificador puro de 3 senales (classifyFood).
+    const c = classifyFoodWithOverrides(food)
     return {
       foodId: food.id,
       name: food.name ?? '',
