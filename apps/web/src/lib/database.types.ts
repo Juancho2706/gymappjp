@@ -1062,6 +1062,7 @@ export type Database = {
           current_period_end: string | null
           enabled_modules: Json
           full_name: string
+          paid_access_ended_at?: string | null
           health_data_consent_at: string | null
           id: string
           invite_code: string
@@ -1123,6 +1124,7 @@ export type Database = {
           created_at?: string
           current_period_end?: string | null
           enabled_modules?: Json
+          paid_access_ended_at?: string | null
           full_name: string
           health_data_consent_at?: string | null
           id: string
@@ -1185,6 +1187,7 @@ export type Database = {
           created_at?: string
           current_period_end?: string | null
           enabled_modules?: Json
+          paid_access_ended_at?: string | null
           full_name?: string
           health_data_consent_at?: string | null
           id?: string

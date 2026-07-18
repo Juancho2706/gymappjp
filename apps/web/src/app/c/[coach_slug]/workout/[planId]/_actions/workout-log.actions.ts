@@ -4,6 +4,8 @@ import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { WorkoutLogSetSchema } from '@eva/schemas'
 import { getTodayInSantiago, getSantiagoUtcBoundsForDay } from '@/lib/date-utils'
+import { STUDENT_ACCESS_COPY } from '@/lib/student-access'
+import { resolveStudentAccessForClient } from '@/lib/student-access.server'
 
 export type LogState = {
     error?: string
@@ -11,8 +13,10 @@ export type LogState = {
     /**
      * Código de clase de error para que el flush de la cola offline decida reintentar vs DESCARTAR.
      * `invalid_block` = el block_id no existe (huérfano de reseed / FK 23503) → descartar, no reintentar.
+     * `coach_paused` = la cuenta del coach está en pausa (post-gracia, solo-lectura) → el flush NO debe
+     * reintentar en loop; el registro no entrará hasta que el coach reactive.
      */
-    code?: 'invalid_block' | 'unauthenticated' | 'validation' | 'db'
+    code?: 'invalid_block' | 'unauthenticated' | 'validation' | 'db' | 'coach_paused'
 }
 
 export async function logSetAction(
@@ -74,6 +78,14 @@ export async function logSetAction(
     const { data: __cl } = await supabase.auth.getClaims()
     const user = __cl?.claims?.sub ? { id: __cl.claims.sub as string } : null
     if (!user) return { error: 'No autenticado.', code: 'unauthenticated' }
+
+    // Gate de suscripcion del coach: post-gracia (readonly) el alumno NO registra. En ok/grace pasa
+    // normal. Defense-in-depth (la RLS es la barrera real); aqui devolvemos un error TIPADO en vez de
+    // un 500 opaco. Fail-open ante fallo de lectura de esta capa.
+    const access = await resolveStudentAccessForClient(supabase, user.id)
+    if (access.state === 'readonly') {
+        return { error: STUDENT_ACCESS_COPY.pausedWriteError, code: 'coach_paused' }
+    }
 
     // R3 (auditoria 2026-06-11): todas las operaciones son sobre workout_logs propios del alumno
     // (client_manage_logs) → cliente user-scoped. RLS ademas acota el DELETE de duplicados.

@@ -11,12 +11,14 @@ import {
   NutritionPlanDraftSchema,
   type NutritionPlanDraft,
   type NutritionStrategy,
+  type NutritionExchangeTarget,
 } from '@eva/nutrition-v2'
 import { calculateFoodItemMacros, type FoodMacrosRow } from '@eva/nutrition-engine'
 
 export type DraftDayVariant = NutritionPlanDraft['dayVariants'][number]
 export type DraftMealSlot = DraftDayVariant['mealSlots'][number]
 export type DraftPrescriptionItem = DraftMealSlot['items'][number]
+export type DraftExchangeTarget = NutritionExchangeTarget
 
 export const BUILDER_UNITS = ['g', 'ml', 'un'] as const
 export type BuilderUnit = (typeof BUILDER_UNITS)[number]
@@ -583,4 +585,163 @@ export function buildItemInsertRow(input: {
     snapshot_fats_g: macros ? macros.fatsG : null,
     snapshot_fiber_g: macros ? macros.fiberG : null,
   }
+}
+
+// -- Porciones (intercambios): FREEZE del snapshot al persistir el draft (T0.3) --
+//
+// Igual que `buildItemInsertRow` congela las macros del item resolviendo `foods`
+// server-side (draft-builder.ts:555+), esta capa congela el snapshot del GRUPO de
+// intercambio: `exchange_groups` NO esta versionado (riesgo #1 del SPEC R2), asi que
+// editar/soft-borrar un grupo despues de publicar NO debe mover el read-model ni los
+// macros derivados. El grupo se resuelve server-side (en plan-persistence) y llega a
+// esta funcion PURA ya resuelto; aqui solo se copian valores primitivos a la fila
+// (congelacion por valor). `snapshot_composed_of` va ENRIQUECIDO (SPEC R2/A2): cada
+// parte base (LEG -> P + C) lleva sus `ref_*` congelados en el mismo momento, para que
+// el read-model reconstruya el diccionario contra valores congelados sin tocar el motor.
+
+/**
+ * Grupo de intercambio resuelto server-side para el freeze (subset de `exchange_groups`).
+ * La persistencia lo resuelve por `id` (incluso soft-borrado, en la medida en que la RLS
+ * lo permita — ver nota en plan-persistence). `composedOf` es la forma CRUDA del catalogo
+ * (`[{code, portions}]`, SIN `ref`); el enriquecimiento con `ref` ocurre aqui al emitir.
+ */
+export interface BuilderExchangeGroup {
+  id: string
+  code: string
+  name: string
+  refCalories: number
+  refProteinG: number
+  refCarbsG: number
+  refFatsG: number
+  composedOf: Array<{ code: string; portions: number }> | null
+  macrosConfirmed: boolean
+}
+
+/** Parte base ENRIQUECIDA del `snapshot_composed_of` (SPEC R2/A2). */
+export interface ExchangeComposedPartSnapshot {
+  code: string
+  portions: number
+  ref: { calories: number; proteinG: number; carbsG: number; fatsG: number }
+}
+
+/**
+ * Fila de `nutrition_slot_exchange_targets_v2` con el snapshot congelado. `type` (no
+ * `interface`) a proposito: asi conserva la firma de indice implicita y es asignable al
+ * `insert(Record<string, unknown>[])` del cliente (igual que el row inferido de items).
+ */
+export type ExchangeTargetInsertRow = {
+  version_id: string
+  meal_slot_id: string
+  exchange_group_id: string
+  portions: number
+  notes: string | null
+  order_index: number
+  snapshot_group_code: string
+  snapshot_group_name: string
+  snapshot_ref_calories: number
+  snapshot_ref_protein_g: number
+  snapshot_ref_carbs_g: number
+  snapshot_ref_fats_g: number
+  snapshot_composed_of: ExchangeComposedPartSnapshot[] | null
+  snapshot_macros_confirmed: boolean
+}
+
+export type ExchangeGroupSnapshotErrorReason = 'GROUP_NOT_FOUND' | 'BASE_GROUP_NOT_FOUND'
+
+/**
+ * Falla explicita del freeze: un target referencia un grupo que no se pudo resolver
+ * (o una parte base de un compuesto). NUNCA se emite una fila con `snapshot_*` NULL
+ * (SPEC R2/B5): antes de eso, se rompe en voz alta. La persistencia la traduce a un
+ * `ActionFailure` limpio.
+ */
+export class ExchangeGroupSnapshotError extends Error {
+  readonly reason: ExchangeGroupSnapshotErrorReason
+  readonly exchangeGroupId: string | null
+  readonly baseCode: string | null
+  constructor(
+    reason: ExchangeGroupSnapshotErrorReason,
+    detail: { exchangeGroupId?: string | null; baseCode?: string | null },
+  ) {
+    super(
+      reason === 'GROUP_NOT_FOUND'
+        ? `Exchange group not resolvable: ${detail.exchangeGroupId ?? '?'}`
+        : `Composed base group not resolvable: ${detail.baseCode ?? '?'}`,
+    )
+    this.name = 'ExchangeGroupSnapshotError'
+    this.reason = reason
+    this.exchangeGroupId = detail.exchangeGroupId ?? null
+    this.baseCode = detail.baseCode ?? null
+  }
+}
+
+/**
+ * Fila de target de porciones con `snapshot_*` congelado. Espeja `buildItemInsertRow`.
+ * PURA: recibe el grupo ya resuelto (`group`) y un resolutor de grupos base por codigo
+ * (`resolveBaseGroup`, para enriquecer `composed_of`). Lanza `ExchangeGroupSnapshotError`
+ * si el grupo o una parte base no existen — jamas produce snapshot NULL.
+ */
+export function buildExchangeTargetInsertRow(input: {
+  versionId: string
+  mealSlotId: string
+  orderIndex: number
+  target: DraftExchangeTarget
+  group: BuilderExchangeGroup | null
+  resolveBaseGroup: (code: string) => BuilderExchangeGroup | null
+}): ExchangeTargetInsertRow {
+  const { versionId, mealSlotId, orderIndex, target, group, resolveBaseGroup } = input
+  if (!group) {
+    throw new ExchangeGroupSnapshotError('GROUP_NOT_FOUND', { exchangeGroupId: target.exchangeGroupId })
+  }
+
+  const composedOf: ExchangeComposedPartSnapshot[] | null =
+    group.composedOf == null
+      ? null
+      : group.composedOf.map((part) => {
+          const base = resolveBaseGroup(part.code)
+          if (!base) {
+            throw new ExchangeGroupSnapshotError('BASE_GROUP_NOT_FOUND', { baseCode: part.code })
+          }
+          // Congela por VALOR el ref del grupo base AL EMITIR (SPEC R2/A2): editar
+          // los ref_* de P/C despues NO mueve este objeto (test de freeze Q6).
+          return {
+            code: part.code,
+            portions: part.portions,
+            ref: {
+              calories: base.refCalories,
+              proteinG: base.refProteinG,
+              carbsG: base.refCarbsG,
+              fatsG: base.refFatsG,
+            },
+          }
+        })
+
+  return {
+    version_id: versionId,
+    meal_slot_id: mealSlotId,
+    exchange_group_id: group.id,
+    portions: target.portions,
+    notes: target.notes ?? null,
+    order_index: orderIndex,
+    snapshot_group_code: group.code,
+    snapshot_group_name: group.name,
+    snapshot_ref_calories: group.refCalories,
+    snapshot_ref_protein_g: group.refProteinG,
+    snapshot_ref_carbs_g: group.refCarbsG,
+    snapshot_ref_fats_g: group.refFatsG,
+    snapshot_composed_of: composedOf,
+    snapshot_macros_confirmed: group.macrosConfirmed,
+  }
+}
+
+/** Ids de grupo referenciados por todos los targets de porciones del draft (dedupe). */
+export function collectExchangeGroupIds(draft: NutritionPlanDraft): string[] {
+  const ids = new Set<string>()
+  for (const variant of draft.dayVariants) {
+    for (const slot of variant.mealSlots) {
+      for (const target of slot.exchangeTargets ?? []) {
+        ids.add(target.exchangeGroupId)
+      }
+    }
+  }
+  return [...ids]
 }

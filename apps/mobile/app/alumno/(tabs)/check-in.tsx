@@ -23,6 +23,8 @@ import { supabase } from '../../../lib/supabase'
 import { clearAppBadge } from '../../../lib/badge'
 import { getClientProfile } from '../../../lib/client'
 import { getTodayInSantiago, formatRelativeDate } from '../../../lib/date-utils'
+import { useEntitlements } from '../../../lib/entitlements'
+import { isCoachAccountPausedError, STUDENT_ACCESS_COPY } from '../../../lib/student-access-copy'
 import { useTheme } from '../../../context/ThemeContext'
 import { useEvaMotion } from '../../../lib/motion'
 import { useAlumnoScrollHandler } from '../../../lib/alumno-chrome-scroll'
@@ -53,6 +55,10 @@ export default function CheckInScreen() {
   const motion = useEvaMotion()
   const onScrollChrome = useAlumnoScrollHandler()
   const router = useRouter()
+  // Estado de acceso por suscripcion del coach (ya resuelto por /api/mobile/config): con 'blocked'
+  // el submit cortocircuita ANTES de subir fotos/insertar — la RLS rebota con un 42501 crudo (sin
+  // 'COACH_ACCOUNT_PAUSED') que isCoachAccountPausedError no reconoce (fix r2 'ux').
+  const { studentAccess } = useEntitlements()
   const [step, setStep] = useState<1 | 2 | 3>(1)
   // Peso: stepper +/- 0.1kg con default 70.0 (espejo web); se prellenar con el
   // ultimo check-in cuando carga (una sola vez, sin pisar edicion del alumno).
@@ -211,6 +217,15 @@ export default function CheckInScreen() {
 
   async function submit() {
     if (submittingRef.current) return
+
+    // Cortocircuito post-gracia (fix r2 'ux'): el estado 'blocked' ya se conoce — copy honesto de
+    // pausa SIN pegar al server (el insert rebotaria en RLS con un 42501 crudo => "Intenta de
+    // nuevo" enganoso) y SIN subir fotos que el check-in jamas va a persistir.
+    if (studentAccess.state === 'blocked') {
+      setSubmitError(STUDENT_ACCESS_COPY.pausedWriteError)
+      return
+    }
+
     submittingRef.current = true
     setSubmitting(true)
     setSubmitError(null)
@@ -262,8 +277,15 @@ export default function CheckInScreen() {
     setSubmitting(false)
 
     if (error) {
-      // Espejo web CheckInForm.tsx:314 (copy verbatim del toast de error).
-      setSubmitError('No se pudo enviar el check-in. Intenta de nuevo.')
+      // Espejo web CheckInForm.tsx:314 (copy verbatim del toast de error). COACH_ACCOUNT_PAUSED
+      // (gate de suscripcion del coach) ⇒ copy humano honesto en vez de "intenta de nuevo". El caso
+      // 'blocked' conocido ya cortocircuito al inicio de submit (el closure captura el estado del
+      // render, no puede cambiar dentro de esta ejecucion).
+      setSubmitError(
+        isCoachAccountPausedError(error)
+          ? STUDENT_ACCESS_COPY.pausedWriteError
+          : 'No se pudo enviar el check-in. Intenta de nuevo.'
+      )
     } else {
       setDone(true) // celebración: confetti + pantalla de éxito se montan con `done`
       setStep(1)

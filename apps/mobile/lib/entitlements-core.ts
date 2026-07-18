@@ -33,6 +33,26 @@ export interface MobileFeaturePrefs {
 
 export type RemoteFlagsPayload = Record<string, boolean>
 
+/**
+ * Estado de acceso del ALUMNO por suscripcion de su coach (politica CEO 2026-07-18), resuelto
+ * server-side por /api/mobile/config:
+ *  - 'active': acceso normal (incluye coach free vigente y managed/team/enterprise).
+ *  - 'grace': el coach perdio acceso efectivo pero corre la ventana de 7 dias post period_end —
+ *    alumno 100% funcional + banner discreto.
+ *  - 'blocked': post-gracia — SOLO-LECTURA (ve plan/historial/rachas; el registro rebota en DB
+ *    con COACH_ACCOUNT_PAUSED; la UI explica, no solo falla).
+ * Fail-OPEN a 'active' (payload ausente/viejo/corrupto): el guard duro vive en DB; esta capa es
+ * solo mensaje. Espejo del contrato web (apps/web/src/lib/student-access.ts).
+ */
+export type StudentAccessState = 'active' | 'grace' | 'blocked'
+export interface StudentAccess {
+    state: StudentAccessState
+    /** ISO del fin de la gracia (informativo; el banner del alumno NO muestra countdown). */
+    graceEndsAt: string | null
+}
+
+export const DEFAULT_STUDENT_ACCESS: StudentAccess = { state: 'active', graceEndsAt: null }
+
 /** Forma CRUDA del payload de /api/mobile/config (campos opcionales por version/db-compat). */
 export interface RawMobileConfig {
     enabledModules?: unknown
@@ -40,6 +60,7 @@ export interface RawMobileConfig {
     featurePrefs?: { nutritionEnabled?: unknown; sections?: unknown } | null
     featurePrefsEnabled?: unknown
     flags?: unknown
+    studentAccess?: unknown
 }
 
 /** Config NORMALIZADA que consume la app (tipos garantizados). */
@@ -48,6 +69,7 @@ export interface MobileConfig {
     disabledModules: ModuleKey[]
     featurePrefs: MobileFeaturePrefs
     flags: RemoteFlagsPayload
+    studentAccess: StudentAccess
 }
 
 /** Config por defecto fail-safe (sin red / sin cache): 0 modulos, nutricion visible, sin gating. */
@@ -56,6 +78,7 @@ export const DEFAULT_CONFIG: MobileConfig = {
     disabledModules: [],
     featurePrefs: { nutritionEnabled: true, nutritionSections: {} },
     flags: {},
+    studentAccess: DEFAULT_STUDENT_ACCESS,
 }
 
 function isModuleKey(v: unknown): v is ModuleKey {
@@ -88,6 +111,22 @@ function toSectionFlags(v: unknown): Partial<Record<NutritionSectionKey, boolean
     return out
 }
 
+/**
+ * Normaliza `studentAccess` del payload. Acepta ambos vocabularios del server (web
+ * student-access.ts emite 'ok'/'grace'/'readonly'; el espejo mobile usa 'active'/'grace'/'blocked'):
+ * 'readonly' => 'blocked', 'ok'/desconocido/invalido => fail-OPEN a 'active'.
+ */
+function toStudentAccess(v: unknown): StudentAccess {
+    if (!v || typeof v !== 'object') return DEFAULT_STUDENT_ACCESS
+    const raw = (v as { state?: unknown }).state
+    const state: StudentAccessState | null =
+        raw === 'grace' ? 'grace' : raw === 'blocked' || raw === 'readonly' ? 'blocked' : null
+    if (state === null) return DEFAULT_STUDENT_ACCESS
+    const rawEnds = (v as { graceEndsAt?: unknown }).graceEndsAt
+    const graceEndsAt = typeof rawEnds === 'string' && rawEnds.length > 0 ? rawEnds : null
+    return { state, graceEndsAt }
+}
+
 /** Normaliza (y valida tipos de) el payload crudo del endpoint. NUNCA lanza. */
 export function normalizeConfig(raw: RawMobileConfig | null | undefined): MobileConfig {
     if (!raw || typeof raw !== 'object') return DEFAULT_CONFIG
@@ -98,6 +137,7 @@ export function normalizeConfig(raw: RawMobileConfig | null | undefined): Mobile
         disabledModules: toModuleKeys(raw.disabledModules),
         featurePrefs: { nutritionEnabled, nutritionSections: toSectionFlags(raw.featurePrefs?.sections) },
         flags: toFlags(raw.flags),
+        studentAccess: toStudentAccess(raw.studentAccess),
     }
 }
 
@@ -164,6 +204,11 @@ function stripRolloutFlags(config: MobileConfig): MobileConfig {
             delete flags[key]
             changed = true
         }
+    }
+    // studentAccess tampoco sobrevive un cache vencido: un 'grace'/'blocked' viejo no debe seguir
+    // banneando a un alumno cuyo coach ya reactivo (fail-open; el guard duro vive en DB).
+    if (config.studentAccess.state !== 'active') {
+        return { ...config, flags, studentAccess: DEFAULT_STUDENT_ACCESS }
     }
     return changed ? { ...config, flags } : config
 }

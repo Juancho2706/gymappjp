@@ -33,6 +33,7 @@ import {
     type ModuleKey,
     type NutritionSectionKey,
     type RawMobileConfig,
+    type StudentAccess,
 } from './entitlements-core'
 
 const CACHE_KEY = 'eva_entitlements_config'
@@ -317,6 +318,12 @@ export interface EntitlementsValue {
      * de `sectionFlags` de web, fail-OPEN: ausente/`true` => visible; solo `false` explicito oculta.
      */
     isNutritionSectionEnabled: (key: NutritionSectionKey) => boolean
+    /**
+     * Estado de acceso del ALUMNO por suscripcion del coach (politica CEO 2026-07-18), resuelto por
+     * /api/mobile/config. Fail-open 'active'; 'grace' => banner discreto; 'blocked' => solo-lectura
+     * (la UI explica; el guard duro vive en DB). Solo aplica al arbol alumno.
+     */
+    studentAccess: StudentAccess
     /** Fuerza una revalidacion (pull-to-refresh, reintento manual). */
     refresh: () => Promise<void>
 }
@@ -335,6 +342,7 @@ export function useEntitlements(): EntitlementsValue {
         nutritionEnabled: s.config.featurePrefs.nutritionEnabled,
         hasModule: (key) => hasModuleIn(s.config, key),
         isNutritionSectionEnabled: (key) => isNutritionSectionVisibleIn(s.config, key),
+        studentAccess: s.config.studentAccess,
         refresh: refreshEntitlements,
     }
 }

@@ -232,6 +232,10 @@ export async function POST(request: Request) {
                 subscription_status: status,
                 current_period_end: nextPeriodEnd,
                 payment_provider: provider.name,
+                // Reactivación con preapproval vivo → limpiar el ancla de la gracia de ALUMNOS cuando el
+                // coach recupera acceso efectivo (active/trialing). La gracia de alumnos ancla en
+                // coalesce(paid_access_ended_at, current_period_end); dejarla stale mantendría la ventana.
+                ...(isPaidLike ? { paid_access_ended_at: null } : {}),
                 subscription_tier: tier,
                 billing_cycle: billingCycle,
                 max_clients: getTierMaxClients(tier),

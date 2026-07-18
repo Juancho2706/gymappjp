@@ -52,6 +52,7 @@ type CandidateCoach = {
     subscription_provider: string | null
     subscription_mp_id: string | null
     subscription_provider_external_id: string | null
+    current_period_end: string | null
 }
 
 /**
@@ -101,6 +102,11 @@ async function expireCoach(
     const idCol = providerIdColumn(coach)
     const update: Record<string, unknown> = {
         subscription_status: 'expired',
+        // ANCLA de la gracia de ALUMNOS (política CEO 2026-07-18): capturamos el period_end vigente
+        // ANTES de nulearlo, para que la gracia de 7 días de los alumnos pueda anclar aunque este
+        // flujo deje current_period_end en NULL. La reactivación limpia esta columna. Si el period_end
+        // ya venía null (raro), anclamos en el corte (nowIso) — generoso, nunca punitivo con el alumno.
+        paid_access_ended_at: coach.current_period_end ?? nowIso,
         current_period_end: null,
         [idCol]: null,
     }
@@ -148,7 +154,7 @@ export async function GET(req: Request) {
     const { data: candidates, error } = await admin
         .from('coaches')
         .select(
-            'id, slug, subscription_status, subscription_provider, subscription_mp_id, subscription_provider_external_id'
+            'id, slug, subscription_status, subscription_provider, subscription_mp_id, subscription_provider_external_id, current_period_end'
         )
         .in('payment_provider', ['mercadopago', 'flow'])
         .in('subscription_status', ['active', 'canceled', 'past_due', 'paused'])

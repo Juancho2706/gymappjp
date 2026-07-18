@@ -23,6 +23,7 @@ import {
   StrategyBadge,
 } from '@/components/nutrition-v2'
 import { formatNutritionShortDate } from '@/lib/date-utils'
+import { humanizeStudentWriteError } from '@/lib/student-access'
 import { AuraHero } from './AuraHero'
 import { TodayModal } from './TodayModal'
 import { NutritionFoodRow } from './NutritionFoodRow'
@@ -100,7 +101,8 @@ export function TodayExperience({
           // Fallo honesto del server (rate limit, scope, validacion, RPC): NO se cierra el
           // dialogo ni se refresca — el estado optimista jamas se confirma y el error se
           // muestra DENTRO del dialogo (ver DialogError), no en un banner tapado por el sheet.
-          setError(res.error ?? 'No se pudo completar la acción.')
+          // COACH_ACCOUNT_PAUSED (gate de suscripcion del coach) llega como codigo => copy humano.
+          setError(humanizeStudentWriteError(res.error, 'No se pudo completar la acción.'))
           return
         }
         onSuccess?.()
@@ -662,7 +664,7 @@ function RegisterFoodDialog({
           if (wasFav) return prev.some((f) => f.id === food.id) ? prev : [food, ...prev]
           return prev.filter((f) => f.id !== food.id)
         })
-        toast.error(res.error)
+        toast.error(humanizeStudentWriteError(res.error))
       }
     })
   }

@@ -15,9 +15,13 @@ import {
 } from '@/app/coach/nutrition-v2/_lib/nutrition-pro'
 import type { WorkspaceSummary } from '@/domain/auth/types'
 import {
+  buildExchangeTargetInsertRow,
   buildItemInsertRow,
   buildSlotInsertRow,
   buildVariantInsertRow,
+  collectExchangeGroupIds,
+  ExchangeGroupSnapshotError,
+  type BuilderExchangeGroup,
   type BuilderFood,
 } from '@/app/coach/nutrition-v2/[clientId]/builder/_lib/draft-builder'
 
@@ -194,6 +198,124 @@ function collectFoodIds(draft: NutritionPlanDraft): string[] {
     }
   }
   return [...ids]
+}
+
+// -- Porciones (intercambios): resolucion server-side de grupos para el FREEZE (T0.3) --
+//
+// El snapshot de cada target se congela al persistir el draft (mecanica identica a las
+// macros de items: `foods` se resuelve server-side y `buildItemInsertRow` congela). Aqui
+// se resuelven los `exchange_groups` referenciados por el draft, mas los grupos BASE que
+// aparecen en `composed_of` (LEG -> P + C), para enriquecer el snapshot (SPEC R2/A2).
+//
+// NOTA (codigo gana sobre SPEC — anotada): el SPEC B5/R2 pide resolver el grupo por id
+// INCLUSO soft-borrado. La policy `xg_select` de `exchange_groups`
+// (20260611093001_nutrition_exchanges.sql) exige `deleted_at IS NULL`, de modo que el
+// cliente RLS-scoped del coach NO lee grupos soft-borrados: si el grupo esta soft-borrado
+// (o no existe), la resolucion falla con error EXPLICITO (`EXCHANGE_GROUP_NOT_FOUND`),
+// jamas snapshot NULL — se respeta el invariante duro. Cerrar del todo el sub-caso
+// soft-borrado exigiria una lectura service-role acotada por id (cambio de scope de
+// seguridad, fuera de T0.3); queda como follow-up.
+
+interface ExchangeGroupRow {
+  id: string
+  code: string
+  name: string
+  ref_calories: number
+  ref_protein_g: number
+  ref_carbs_g: number
+  ref_fats_g: number
+  composed_of: Array<{ code: string; portions: number }> | null
+  macros_confirmed: boolean
+  is_system: boolean
+}
+
+const EXCHANGE_GROUP_COLUMNS =
+  'id, code, name, ref_calories, ref_protein_g, ref_carbs_g, ref_fats_g, composed_of, macros_confirmed, is_system'
+
+function toBuilderExchangeGroup(row: ExchangeGroupRow): BuilderExchangeGroup {
+  return {
+    id: row.id,
+    code: row.code,
+    name: row.name,
+    refCalories: row.ref_calories,
+    refProteinG: row.ref_protein_g,
+    refCarbsG: row.ref_carbs_g,
+    refFatsG: row.ref_fats_g,
+    composedOf: row.composed_of,
+    macrosConfirmed: row.macros_confirmed,
+  }
+}
+
+export interface ResolvedExchangeGroups {
+  byId: Map<string, BuilderExchangeGroup>
+  byCode: Map<string, BuilderExchangeGroup>
+}
+
+/**
+ * Resuelve, RLS-scoped, todos los grupos de intercambio que el draft necesita para el
+ * freeze: (1) los referenciados directo por los targets (por id); (2) los grupos BASE por
+ * codigo referenciados en `composed_of` de esos grupos (LEG -> P + C), tomando el grupo
+ * system VIVO por codigo. Falla-cerrado con `ActionFailure` si algun grupo no se resuelve
+ * (nunca deja pasar un target sin snapshot). Draft sin porciones ⇒ mapas vacios (Q1: el
+ * camino de escritura queda byte-identico a hoy).
+ */
+export async function resolveExchangeGroupsForDraft(
+  db: NutritionV2Db,
+  draft: NutritionPlanDraft,
+): Promise<{ ok: true; groups: ResolvedExchangeGroups } | ActionFailure> {
+  const ids = collectExchangeGroupIds(draft)
+  const byId = new Map<string, BuilderExchangeGroup>()
+  const byCode = new Map<string, BuilderExchangeGroup>()
+  if (ids.length === 0) return { ok: true, groups: { byId, byCode } }
+
+  // 1) Grupos directos por id (RLS: system + propios + team activo; soft-borrado no visible).
+  for (const id of ids) {
+    const res = await db
+      .from('exchange_groups')
+      .select<ExchangeGroupRow>(EXCHANGE_GROUP_COLUMNS)
+      .eq('id', id)
+      .maybeSingle()
+    if (res.error) return mapWriteError(res.error, 'grupos')
+    if (!res.data) {
+      return fail(
+        'EXCHANGE_GROUP_NOT_FOUND',
+        'Un grupo de porciones del plan ya no esta disponible. Recarga el builder para actualizar los grupos.',
+      )
+    }
+    const group = toBuilderExchangeGroup(res.data)
+    byId.set(group.id, group)
+    if (!byCode.has(group.code)) byCode.set(group.code, group)
+  }
+
+  // 2) Grupos BASE por codigo referenciados en `composed_of` y aun no resueltos. Se toma el
+  //    grupo SYSTEM vivo por codigo (LEG->P+C son system; los custom compuestos estan fuera
+  //    de alcance F1 — SPEC R3). Congelar aqui el ref_* VIGENTE del base es lo correcto.
+  const neededBaseCodes = new Set<string>()
+  for (const group of byId.values()) {
+    for (const part of group.composedOf ?? []) {
+      if (!byCode.has(part.code)) neededBaseCodes.add(part.code)
+    }
+  }
+  for (const code of neededBaseCodes) {
+    const res = await db
+      .from('exchange_groups')
+      .select<ExchangeGroupRow>(EXCHANGE_GROUP_COLUMNS)
+      .eq('code', code)
+      .eq('is_system', true)
+      .maybeSingle()
+    if (res.error) return mapWriteError(res.error, 'grupos-base')
+    if (!res.data) {
+      return fail(
+        'EXCHANGE_BASE_GROUP_NOT_FOUND',
+        'No se pudo resolver un grupo base de un compuesto (por ejemplo Legumbres). Reintenta.',
+      )
+    }
+    const base = toBuilderExchangeGroup(res.data)
+    if (!byCode.has(base.code)) byCode.set(base.code, base)
+    if (!byId.has(base.id)) byId.set(base.id, base)
+  }
+
+  return { ok: true, groups: { byId, byCode } }
 }
 
 /**
@@ -387,6 +509,15 @@ export async function persistAndPublishDraft(input: {
     if (foodRes.data) foodMap.set(id, toBuilderFood(foodRes.data))
   }
 
+  // Resolucion server-side de los grupos de porciones para el freeze (SPEC R2/A2). Se
+  // resuelve una sola vez para todo el draft (grupos directos + bases de compuestos) y se
+  // congela por target en el loop de abajo. Falla-cerrado si algun grupo no resuelve.
+  const groupsRes = await resolveExchangeGroupsForDraft(db, draft)
+  if (!groupsRes.ok) return groupsRes
+  const { byId: exchangeGroupsById, byCode: exchangeGroupsByCode } = groupsRes.groups
+  const resolveBaseGroup = (code: string): BuilderExchangeGroup | null =>
+    exchangeGroupsByCode.get(code) ?? null
+
   for (const variant of draft.dayVariants) {
     const variantIns = await db
       .from('nutrition_day_variants_v2')
@@ -421,6 +552,41 @@ export async function persistAndPublishDraft(input: {
         )
         const itemsIns = await db.from('nutrition_prescription_items_v2').insert(itemRows)
         if (itemsIns.error) return mapWriteError(itemsIns.error, 'items')
+      }
+
+      // Targets de porciones de la franja, congelados en la MISMA pasada de escritura del
+      // draft (misma "tx" en el sentido de esta arquitectura: mismas llamadas PostgREST
+      // pre-publish que items/franjas; no hay tx SQL que cruce todas — ver cabecera del
+      // modulo). El snapshot ya viene resuelto/enriquecido; `publish_nutrition_plan_v2`
+      // queda INTACTO (A1). Los grupos fueron validados arriba; el throw defensivo de
+      // `buildExchangeTargetInsertRow` se traduce a un ActionFailure limpio por si acaso.
+      const exchangeTargets = slot.exchangeTargets ?? []
+      if (exchangeTargets.length > 0) {
+        let targetRows
+        try {
+          targetRows = exchangeTargets.map((target, index) =>
+            buildExchangeTargetInsertRow({
+              versionId,
+              mealSlotId,
+              orderIndex: index,
+              target,
+              group: exchangeGroupsById.get(target.exchangeGroupId) ?? null,
+              resolveBaseGroup,
+            }),
+          )
+        } catch (err) {
+          if (err instanceof ExchangeGroupSnapshotError) {
+            return fail(
+              err.reason === 'BASE_GROUP_NOT_FOUND'
+                ? 'EXCHANGE_BASE_GROUP_NOT_FOUND'
+                : 'EXCHANGE_GROUP_NOT_FOUND',
+              'No se pudo congelar un grupo de porciones del plan. Recarga el builder e intenta de nuevo.',
+            )
+          }
+          throw err
+        }
+        const targetsIns = await db.from('nutrition_slot_exchange_targets_v2').insert(targetRows)
+        if (targetsIns.error) return mapWriteError(targetsIns.error, 'porciones')
       }
     }
   }

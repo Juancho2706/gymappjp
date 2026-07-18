@@ -21,6 +21,7 @@ import { resolveBrandTheme, deriveSportTokens, resolvePresetBranding } from '@ev
 import { isBrandingAllowed, type SubscriptionTier } from '@eva/tiers'
 import { resolveBrandFontStack } from '@/lib/brand-fonts'
 import { resolveLoaderVariant } from '@/lib/brand-loaders'
+import { STUDENT_ACCESS_COPY, STUDENT_ACCESS_STATE_HEADER } from '@/lib/student-access'
 
 interface Props {
     children: React.ReactNode
@@ -170,6 +171,16 @@ export default async function ClientBrandLayout({ children, params }: Props) {
         ? BRAND_APP_ICON
         : (headersList.get('x-coach-logo-url') || BRAND_APP_ICON)
     const brandName = headersList.get('x-coach-brand-name') ?? 'Mi Coach'
+    // Gate de suscripcion del coach (politica CEO 2026-07-18): el branch `/c` del proxy setea
+    // `x-student-access-state` en 'grace' (ventana de 7 dias post period_end — alumno 100% funcional,
+    // banner discreto) o 'readonly' (post-gracia: el proxy sirve SOLO las superficies de lectura —
+    // plan/historial/rachas — y esta pagina muestra el banner honesto persistente; las escrituras
+    // rebotan en actions/RLS con COACH_ACCOUNT_PAUSED). Fail-quiet: header ausente => sin banner
+    // (tambien cubre el kill-switch STUDENT_ACCESS_GATE apagado — el proxy no manda nada). Sin
+    // countdown para el alumno por decision CEO; la presion vive en el dashboard del COACH.
+    const studentAccessState = headersList.get(STUDENT_ACCESS_STATE_HEADER)
+    const isStudentGrace = studentAccessState === 'grace'
+    const isStudentReadonly = studentAccessState === 'readonly'
     // B-9: enterprise client whose coach left the org — show a reassignment prompt.
     const isOrphan = headersList.get('x-workspace-orphan') === 'true'
     const orphanOrgName = headersList.get('x-orphan-org-name') ?? ''
@@ -347,6 +358,25 @@ export default async function ClientBrandLayout({ children, params }: Props) {
                         enlaces apuntaban a listados de tienda inexistentes). */}
 
                     <main className="relative z-0 flex-1 overflow-auto bg-muted/20 pb-[var(--mobile-content-bottom-offset)] dark:bg-background md:pb-0 has-[.is-workout-page]:pb-0">
+                        {isStudentGrace && (
+                            <div className="mx-auto mt-3 max-w-2xl px-4 pt-safe">
+                                {/* info-* = rampa DS fija (nunca white-label): banner discreto, tono
+                                    informativo — el alumno sigue 100% funcional durante la gracia. */}
+                                <div className="rounded-xl border border-[var(--info-500)]/30 bg-[var(--info-100)] px-4 py-3 text-sm text-[var(--info-600)]" role="status">
+                                    {STUDENT_ACCESS_COPY.graceBanner}
+                                </div>
+                            </div>
+                        )}
+                        {isStudentReadonly && (
+                            <div className="mx-auto mt-3 max-w-2xl px-4 pt-safe">
+                                {/* warning-* = rampa DS fija (nunca white-label): banner honesto del modo
+                                    solo-lectura post-gracia (espejo del StudentAccessBanner 'blocked' RN). */}
+                                <div className="rounded-xl border border-[var(--warning-500)]/30 bg-[var(--warning-100)] px-4 py-3 text-sm text-[var(--warning-700)]" role="status">
+                                    <strong className="font-bold">{STUDENT_ACCESS_COPY.pausedTitle}.</strong>{' '}
+                                    {STUDENT_ACCESS_COPY.pausedWriteError}
+                                </div>
+                            </div>
+                        )}
                         {isOrphan && (
                             <div className="mx-auto mt-3 max-w-2xl px-4 pt-safe">
                                 <div className="rounded-xl border border-amber-400/30 bg-amber-400/10 px-4 py-3 text-sm text-amber-700 dark:text-amber-300">

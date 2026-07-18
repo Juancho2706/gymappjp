@@ -11,6 +11,8 @@ import {
 import { createClient } from '@/lib/supabase/server'
 import { rateLimitNutritionCatalogSearch, rateLimitNutritionIntake } from '@/lib/rate-limit'
 import { isNutritionV2Enabled } from '@/services/nutrition-v2-rollout.service'
+import { COACH_ACCOUNT_PAUSED_CODE, STUDENT_ACCESS_COPY } from '@/lib/student-access'
+import { resolveStudentAccessForCoach } from '@/lib/student-access.server'
 import { getClientNutritionUser } from '../../nutrition/_data/nutrition-auth.queries'
 import { getClientScope } from '../../nutrition/_data/client-scope.queries'
 
@@ -124,13 +126,32 @@ async function authorizeStudentWrite(
     return fail('ROLLOUT_DISABLED', 'La nueva experiencia de nutrición no está habilitada para tu cuenta.')
   }
 
-  const supabase = (await createClient()) as unknown as RpcClient
+  const supabaseReal = await createClient()
+
+  // Gate de suscripcion del coach: post-gracia (readonly) el alumno NO escribe intake. La busqueda de
+  // catalogo (limiter 'catalog-search') es SOLO LECTURA → no se gatea (el alumno readonly igual navega).
+  // Defense-in-depth: la RPC SECURITY DEFINER / RLS es la barrera real; aqui devolvemos error tipado.
+  if (limiter !== 'catalog-search') {
+    const access = await resolveStudentAccessForCoach(supabaseReal, scope.coachId)
+    if (access.state === 'readonly') {
+      return fail(COACH_ACCOUNT_PAUSED_CODE, STUDENT_ACCESS_COPY.pausedWriteError)
+    }
+  }
+
+  const supabase = supabaseReal as unknown as RpcClient
   return { ok: true, supabase, userId: user.id }
 }
 
 function mapRpcError(error: { message: string; code?: string }): ActionFailure {
   // 42501 = scope denegado por el DEFINER; 22023 = validación de dominio del RPC.
   const code = error.code ?? 'RPC_ERROR'
+  // Gate de suscripcion del coach en la RPC (SECURITY DEFINER, migracion 20260718120000): 'coach_account_paused'
+  // tambien viaja con errcode 42501, pero es solo-lectura por coach en pausa, NO un scope denegado. Se
+  // distingue por el mensaje para devolver el codigo tipado + copy honesto (defensa: la RPC gatea aunque
+  // el guard de la action haya fail-open).
+  if (error.message?.includes('coach_account_paused')) {
+    return fail(COACH_ACCOUNT_PAUSED_CODE, STUDENT_ACCESS_COPY.pausedWriteError)
+  }
   if (code === '42501') {
     return fail('SCOPE_DENIED', 'No tienes permiso para modificar este registro.')
   }

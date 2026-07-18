@@ -1,5 +1,6 @@
 import * as Sentry from '@sentry/react-native'
 import { supabase } from './supabase'
+import { humanizeStudentWriteError, isCoachAccountPausedError } from './student-access-copy'
 
 // P0 (expulsion alumno): DEBE ser el host CANONICO. El apex `eva-app.cl` responde 307 -> `www.eva-app.cl`
 // (redirect CROSS-ORIGIN); `fetch` sigue el redirect pero DESCARTA el header `Authorization` al cambiar
@@ -88,8 +89,13 @@ export async function apiFetch<T>(path: string, options: ApiOptions = {}): Promi
 
   const payload = await res.json().catch(() => null)
   if (!res.ok) {
+    // COACH_ACCOUNT_PAUSED (gate de suscripcion del coach, politica CEO 2026-07-18): el codigo
+    // tecnico jamas llega crudo a una pantalla — se humaniza aca, en el borde de red compartido.
+    const raw = payload?.error || 'No se pudo completar la solicitud.'
     throw new ApiError(
-      payload?.error || 'No se pudo completar la solicitud.',
+      isCoachAccountPausedError(payload) || isCoachAccountPausedError(raw)
+        ? humanizeStudentWriteError(raw)
+        : raw,
       res.status,
       payload?.code
     )
