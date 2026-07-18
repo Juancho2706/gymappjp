@@ -65,6 +65,7 @@ export default async function CoachNutritionV2BuilderPage({ params }: Props) {
     // La flecha reemplaza al boton "Volver a la ficha" (misma ruta), asi el header movil no
     // apila pills antes del titulo. Eyebrow corto para que el pill no aplaste el titulo en 390px.
     <NutritionPageShell
+      flushMobile
       backHref={`/coach/nutrition-v2/${clientId}`}
       eyebrow={existingPlan ? 'Nueva versión' : 'Nuevo plan'}
       title={detail.client.fullName}

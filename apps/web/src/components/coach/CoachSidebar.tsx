@@ -24,6 +24,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Avatar } from '@/components/ui/avatar'
+import { NavPendingFeedback } from '@/components/navigation/NavPendingFeedback'
 import { ThemedLogo } from '@/components/brand/ThemedLogo'
 import { CoachNavIcon, type CoachNavConcept } from '@/components/coach/CoachNavIcon'
 import { EvaBrandIcon } from '@/components/landing/LandingBrandMark'
@@ -138,14 +139,23 @@ export function CoachSidebar({ coachName, coachBrand, subscriptionStatus, enterp
     // (TabBar.jsx `minimized`: insets 14→72, labels fade). El scroll vive en <main>
     // (overflow-y-auto), no en window.
     const [tabbarMinimized, setTabbarMinimized] = useState(false)
-    // Pulso optimista del tap (espejo de ClientNav): feedback INMEDIATO en el ítem tocado
-    // mientras el server stremea la ruta (con prefetch={false} el click paga el round-trip).
+    // Pildora + pulso OPTIMISTAS del tap (espejo de ClientNav): feedback INMEDIATO en el ítem
+    // tocado mientras el server stremea la ruta. `isNavigating` (href tocado) MANDA sobre
+    // `pathname` para resolver el activo — la píldora salta al TAP, no al commit.
     const [isNavigating, setIsNavigating] = useState<string | null>(null)
 
-    // Reset del estado pending cuando la ruta efectivamente cambió.
+    // Confirmación: la ruta cambió (commit) → limpiar pending (el activo vuelve a pathname).
     useEffect(() => {
         setIsNavigating(null)
     }, [pathname])
+
+    // Revert: navegación fallida/colgada (offline, error de red) → soltar el pending para no
+    // dejar píldora + overlay pegados en un ítem al que nunca se llegó.
+    useEffect(() => {
+        if (!isNavigating) return
+        const t = setTimeout(() => setIsNavigating(null), 8000)
+        return () => clearTimeout(t)
+    }, [isNavigating])
 
     useEffect(() => {
         const saved = localStorage.getItem('sidebar-collapsed')
@@ -199,8 +209,11 @@ export function CoachSidebar({ coachName, coachBrand, subscriptionStatus, enterp
     const { primary: primaryNavItems } = splitForSidebar(visibleNavItems)
 
     // Item-aware: además de `href` respeta `activeAliases` (swap V2 bajo canary ilumina Nutrición).
-    // Incluye `isNavigating` para que el activo (y la píldora móvil) salte AL TIRO al ítem tocado.
-    const isNavItemActive = (item: NavModule) => isNavItemActiveForPath(item, pathname) || isNavigating === item.href
+    // Con pending activo, el ítem tocado es EL ÚNICO activo (pendingHref ?? pathname). El OR
+    // anterior dejaba TAMBIÉN activo el de la ruta actual → el findIndex de la píldora móvil
+    // devolvía el VIEJO si venía antes en la lista y la píldora no saltaba hasta el commit.
+    const isNavItemActive = (item: NavModule) =>
+        isNavigating != null ? isNavigating === item.href : isNavItemActiveForPath(item, pathname)
 
     // MOBILE — cápsula flotante (eva-app coachTabs): hasta 5 tabs full-label, sin "Más".
     const mobileTabs = MOBILE_TAB_KEYS
@@ -219,7 +232,13 @@ export function CoachSidebar({ coachName, coachBrand, subscriptionStatus, enterp
             <Link
                 key={item.href}
                 href={item.href}
-                prefetch={false}
+                // Prefetch DEFAULT (auto) de Next — espejo de ClientNav. Es seguro y barato acá:
+                // (1) el matcher del proxy EXCLUYE los prefetch de /coach/* via `missing`
+                //     (next-router-prefetch / purpose:prefetch) → el bundle de auth/workspace/
+                //     coaches NO corre en prefetch (src/proxy.ts, entry 2 del matcher);
+                // (2) en rutas dinámicas el prefetch solo baja el árbol hasta el loading.tsx del
+                //     segmento (los 5 ítems del menú lo tienen) — sin data de página, una vez por
+                //     sesión (cache de prefetch del router). El tap pinta el skeleton al instante.
                 title={isCollapsed ? label : undefined}
                 aria-label={label}
                 onClick={() => {
@@ -259,6 +278,10 @@ export function CoachSidebar({ coachName, coachBrand, subscriptionStatus, enterp
 
     return (
         <>
+            {/* Feedback de contenido INSTANTÁNEO del tap: barra 2px sport + atenuar <main>.
+                Vive mientras pathname != href tocado; el loading.tsx del server lo reemplaza. */}
+            {isNavigating != null && <NavPendingFeedback color="var(--sport-500)" />}
+
             {/* ===================== DESKTOP SIDEBAR (.dt-side) ===================== */}
             <aside
                 className={cn(
@@ -409,7 +432,9 @@ export function CoachSidebar({ coachName, coachBrand, subscriptionStatus, enterp
                             <Link
                                 key={item.href}
                                 href={item.href}
-                                prefetch={false}
+                                // Prefetch default (auto): baja solo hasta el loading.tsx del
+                                // segmento y el proxy excluye prefetch de /coach — ver nota en
+                                // renderNavLink. Tap → skeleton al instante.
                                 aria-label={label}
                                 onClick={() => {
                                     if (!isNavItemActiveForPath(item, pathname)) setIsNavigating(item.href)

@@ -61,6 +61,7 @@ export function NutritionPageShell({
   children,
   aside,
   className,
+  flushMobile,
 }: {
   eyebrow?: string
   title: string
@@ -71,13 +72,22 @@ export function NutritionPageShell({
   children: ReactNode
   aside?: ReactNode
   className?: string
+  /**
+   * Paginas del COACH (dentro de CoachMainWrapper): el shell del panel ya aporta el gutter
+   * movil px-5 py-6 + safe-area top (patron Alumnos) — sumar el px-3/pt propio de este
+   * componente apachurraba la seccion vs. /coach/clients. `true` cede el gutter movil al
+   * wrapper y conserva el padding de escritorio. Las paginas del ALUMNO (/c/...) no lo pasan.
+   */
+  flushMobile?: boolean
 }) {
   return (
     <main
       className={cx(
         // Gutter movil de 12px: en ~390px las cards necesitan todo el ancho posible;
         // md: recupera el margen amplio de escritorio.
-        'mx-auto w-full max-w-[1440px] px-3 pb-5 pt-[calc(env(safe-area-inset-top,0px)+1.25rem)] md:px-6 md:pb-8 md:pt-8',
+        flushMobile
+          ? 'mx-auto w-full max-w-[1440px] md:px-6 md:pb-8 md:pt-8'
+          : 'mx-auto w-full max-w-[1440px] px-3 pb-5 pt-[calc(env(safe-area-inset-top,0px)+1.25rem)] md:px-6 md:pb-8 md:pt-8',
         className,
       )}
     >

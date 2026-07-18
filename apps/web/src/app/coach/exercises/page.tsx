@@ -29,7 +29,9 @@ export default async function CoachExercisesPage() {
     const { globalExercises, customExercises, byMuscle } = await getExerciseCatalog(coach.id, orgId, activeTeamId)
 
     return (
-        <div className="p-4 md:p-8 max-w-6xl mx-auto animate-fade-in">
+        // Móvil: SIN padding propio — CoachMainWrapper ya da el gutter px-5 (patrón Alumnos).
+        // Desktop conserva su p-8 + max-w-6xl.
+        <div className="md:p-8 max-w-6xl mx-auto animate-fade-in">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 md:mb-8 gap-4">
                 <div>
                     <h1 className="font-display text-2xl md:text-3xl font-extrabold tracking-[-0.03em] text-strong">
