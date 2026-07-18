@@ -260,7 +260,7 @@ export function PortionsSection({
                   aria-label={`Quitar ${name}`}
                   onClick={() => controller.removeGroup(slotKey, target.exchangeGroupId)}
                   whileTap={reduceMotion ? undefined : { scale: NUTRITION_MOTION.press.scale }}
-                  className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-control text-muted transition-colors hover:bg-surface-sunken hover:text-rose-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-control text-muted transition-colors hover:bg-surface-sunken hover:text-rose-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:hover:text-rose-400"
                 >
                   <Trash2 aria-hidden="true" className="h-4 w-4" />
                 </motion.button>

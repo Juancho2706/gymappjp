@@ -145,6 +145,7 @@ function PortionTargetRow({
           accessibilityLabel={`Nota para ${target.groupName}`}
           disabled={disabled}
           onPress={() => setNotesOpen((open) => !open || target.notes.trim() !== '')}
+          hitSlop={6}
           className="h-11 w-8 items-center justify-center rounded-control"
         >
           <StickyNote color={showNotes ? theme.primary : theme.mutedForeground} size={16} />
@@ -154,6 +155,7 @@ function PortionTargetRow({
           accessibilityLabel={`Quitar porciones de ${target.groupName}`}
           disabled={disabled}
           onPress={() => onRemove(target, index)}
+          hitSlop={6}
           className="h-11 w-8 items-center justify-center rounded-control"
         >
           <Trash2 color={theme.destructive} size={16} />
