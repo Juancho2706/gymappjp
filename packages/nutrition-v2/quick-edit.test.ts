@@ -11,6 +11,38 @@ const SLOT = '77777777-7777-4777-8777-777777777777'
 const ITEM_FOOD = '88888888-8888-4888-8888-888888888888'
 const ITEM_CUSTOM = '99999999-9999-4999-8999-999999999999'
 const FOOD = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+const TARGET_C = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
+const TARGET_V = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc'
+const GROUP_C = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd'
+const GROUP_V = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee'
+const GROUP_P = 'ffffffff-ffff-4fff-8fff-ffffffffffff'
+
+type ReadSlot = NutritionPlanReadModel['dayVariants'][number]['mealSlots'][number]
+type ReadExchangeTarget = NonNullable<ReadSlot['exchangeTargets']>[number]
+
+function readTarget(overrides: Partial<ReadExchangeTarget> = {}): ReadExchangeTarget {
+  return {
+    id: TARGET_C,
+    exchangeGroupId: GROUP_C,
+    groupCode: 'C',
+    groupName: 'Cereales',
+    color: '#F59E0B',
+    portions: 2,
+    notes: null,
+    orderIndex: 0,
+    ref: { calories: 70, proteinG: 2, carbsG: 15, fatsG: 0.5 },
+    composedOf: null,
+    macrosConfirmed: true,
+    ...overrides,
+  }
+}
+
+/** Read model con targets de porciones en la primera franja (capa opcional presente). */
+function planReadModelWithPortions(targets: ReadExchangeTarget[]): NutritionPlanReadModel {
+  const model = planReadModel()
+  model.dayVariants[0].mealSlots[0] = { ...model.dayVariants[0].mealSlots[0], exchangeTargets: targets }
+  return model
+}
 
 function fullTargets(calories: number | null) {
   return { calories, proteinG: null, carbsG: null, fatsG: null, fiberG: null, sodiumMg: null, waterMl: null }
@@ -158,6 +190,47 @@ describe('readModelToDraft', () => {
   })
 })
 
+describe('readModelToDraft — porciones (capa opcional)', () => {
+  it('plan sin porciones: el draft NO incluye la clave exchangeTargets (identico a antes)', () => {
+    const draft = readModelToDraft(planReadModel(), CLIENT)!
+    expect(draft.dayVariants[0].mealSlots[0]).not.toHaveProperty('exchangeTargets')
+  })
+
+  it('roundtrip: los targets del read model vuelven al draft con los campos del contrato', () => {
+    const model = planReadModelWithPortions([
+      readTarget(),
+      readTarget({
+        id: TARGET_V,
+        exchangeGroupId: GROUP_V,
+        groupCode: 'V',
+        groupName: 'Verduras',
+        portions: 1.5,
+        notes: 'crudas de preferencia',
+        orderIndex: 1,
+      }),
+    ])
+    const draft = readModelToDraft(model, CLIENT)!
+    const targets = draft.dayVariants[0].mealSlots[0].exchangeTargets
+    expect(targets).toHaveLength(2)
+    expect(targets![0]).toEqual({
+      id: TARGET_C,
+      exchangeGroupId: GROUP_C,
+      portions: 2,
+      notes: null,
+      orderIndex: 0,
+    })
+    expect(targets![1]).toEqual({
+      id: TARGET_V,
+      exchangeGroupId: GROUP_V,
+      portions: 1.5,
+      notes: 'crudas de preferencia',
+      orderIndex: 1,
+    })
+    // El draft hidratado con porciones re-valida limpio contra el contrato del server.
+    expect(() => NutritionPlanDraftSchema.parse(draft)).not.toThrow()
+  })
+})
+
 describe('countDraftChanges', () => {
   const baseline = () => readModelToDraft(planReadModel(), CLIENT)!
 
@@ -242,6 +315,67 @@ describe('countDraftChanges', () => {
     current.name = 'Plan renovado'
     expect(countDraftChanges(baseline(), current)).toBe(1)
   })
+})
+
+describe('countDraftChanges — porciones', () => {
+  const portionsBaseline = () =>
+    readModelToDraft(
+      planReadModelWithPortions([
+        readTarget(),
+        readTarget({
+          id: TARGET_V,
+          exchangeGroupId: GROUP_V,
+          groupCode: 'V',
+          groupName: 'Verduras',
+          portions: 1.5,
+          orderIndex: 1,
+        }),
+      ]),
+      CLIENT,
+    )!
+
+  it('plan con porciones sin editar => 0 cambios', () => {
+    expect(countDraftChanges(portionsBaseline(), portionsBaseline())).toBe(0)
+  })
+
+  it('cambiar porciones 2 -> 1,5 => 1', () => {
+    const current = portionsBaseline()
+    current.dayVariants[0].mealSlots[0].exchangeTargets![0].portions = 1.5
+    expect(countDraftChanges(portionsBaseline(), current)).toBe(1)
+  })
+
+  it('cambiar las notas de un target => 1', () => {
+    const current = portionsBaseline()
+    current.dayVariants[0].mealSlots[0].exchangeTargets![0].notes = 'integrales'
+    expect(countDraftChanges(portionsBaseline(), current)).toBe(1)
+  })
+
+  it('alta de un grupo + baja de otro => 2', () => {
+    const current = portionsBaseline()
+    const targets = current.dayVariants[0].mealSlots[0].exchangeTargets!
+    // Baja: sale Verduras. Alta: entra Proteinas (target nuevo de la UI, sin id).
+    targets.splice(1, 1)
+    targets.push({ exchangeGroupId: GROUP_P, portions: 1, notes: null, orderIndex: 1 })
+    expect(countDraftChanges(portionsBaseline(), current)).toBe(2)
+  })
+
+  it('agregar porciones a una franja que no tenia => 1 por grupo agregado', () => {
+    const current = baselinePlain()
+    current.dayVariants[0].mealSlots[0].exchangeTargets = [
+      { exchangeGroupId: GROUP_C, portions: 2, notes: null, orderIndex: 0 },
+    ]
+    expect(countDraftChanges(baselinePlain(), current)).toBe(1)
+  })
+
+  it('quitar TODOS los targets => 1 cambio por target quitado', () => {
+    const current = portionsBaseline()
+    current.dayVariants[0].mealSlots[0].exchangeTargets = []
+    expect(countDraftChanges(portionsBaseline(), current)).toBe(2)
+  })
+
+  function baselinePlain() {
+    return readModelToDraft(planReadModel(), CLIENT)!
+  }
 })
 
 describe('QUICK_EDIT_ERROR_CODES', () => {

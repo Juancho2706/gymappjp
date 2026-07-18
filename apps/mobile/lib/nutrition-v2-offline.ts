@@ -246,3 +246,36 @@ export async function clearNutritionV2QueueForUser(userId: string): Promise<void
   const queue = await readQueue()
   await writeQueue(queue.filter((item) => item.userId !== userId)).catch(() => {})
 }
+
+/**
+ * Idempotency keys de las mutaciones AÚN encoladas del usuario. Lo usa la capa de
+ * porciones (nutrition-v2-portions) para reconciliar su delta optimista: una marca
+ * `queued` cuya key ya no está en la cola fue flusheada (el servidor ya la cuenta).
+ */
+export async function getNutritionV2QueuedKeys(userId: string): Promise<string[]> {
+  const queue = await readQueue()
+  return queue.filter((item) => item.userId === userId).map((item) => item.idempotencyKey)
+}
+
+/**
+ * Cancela UNA mutación encolada por su idempotency key (deshacer-en-cola del
+ * marcar-porción — SPEC UX-c / hallazgo M1: la entrada local se cancela SIN generar
+ * void; el contador `attempt` del ordinal lo incrementa el caller igual).
+ *
+ * Espera cualquier flush en vuelo antes del read-modify-write para no resucitar ni
+ * perder items por una escritura concurrente. Devuelve `false` si la key ya no está
+ * (p. ej. un flush la envió): el caller debe asumir que el intake EXISTE server-side.
+ */
+export async function removeNutritionV2QueuedMutation(
+  userId: string,
+  idempotencyKey: string,
+): Promise<boolean> {
+  if (flushPromise) await flushPromise.catch(() => {})
+  const queue = await readQueue()
+  const next = queue.filter(
+    (item) => !(item.userId === userId && item.idempotencyKey === idempotencyKey),
+  )
+  if (next.length === queue.length) return false
+  await writeQueue(next)
+  return true
+}

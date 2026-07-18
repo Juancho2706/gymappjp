@@ -42,6 +42,19 @@ export type V1FoodItemRow = {
   food: V1FoodRow | null
 }
 
+/**
+ * Fila de `meal_exchange_targets` V1 (por `meal_id`). El loader la embebe en la comida
+ * (igual que `food` viene embebido por item). `portions` V1 permite 0,5 (numeric);
+ * `notes` opcional. `exchange_group_id` referencia `exchange_groups` (system o custom
+ * del coach) — el mapper lo resuelve contra `opts.exchangeGroups` (hallazgo B6).
+ */
+export type V1MealExchangeTargetRow = {
+  id: string
+  exchange_group_id: string
+  portions: number
+  notes?: string | null
+}
+
 export type V1MealRow = {
   id: string
   name: string
@@ -50,6 +63,42 @@ export type V1MealRow = {
   /** V1: 1=Lun..7=Dom, NULL=todos los dias. */
   day_of_week: number | null
   items: V1FoodItemRow[]
+  /**
+   * Targets de porciones de la comida (`meal_exchange_targets`). Ausente/[] en planes
+   * `grams` (byte-identical al comportamiento previo). En planes `exchanges` el loader
+   * la puebla; el orden del array fija el `order_index` de las filas V2.
+   */
+  exchangeTargets?: V1MealExchangeTargetRow[]
+}
+
+/**
+ * Grupo de intercambio resuelto para el freeze del snapshot (subset de `exchange_groups`).
+ * El mapper es PURO y NO consulta DB: el loader de impersonacion carga los grupos (system
+ * + custom del coach), los mapea a esta forma y los pasa por `opts.exchangeGroups`
+ * (hallazgo B6, igual que hoy pasa `food` por item). `composedOf` es la forma CRUDA del
+ * catalogo (`[{code, portions}]`, SIN `ref`); el enriquecimiento con `ref` ocurre al
+ * emitir la fila (espejo de `buildExchangeTargetInsertRow` del builder). `isSystem`
+ * prioriza al grupo system cuando dos grupos comparten `code` al resolver una base de
+ * `composed_of` (LEG->P+C).
+ */
+export type ConversionExchangeGroup = {
+  id: string
+  code: string
+  name: string
+  refCalories: number
+  refProteinG: number
+  refCarbsG: number
+  refFatsG: number
+  composedOf: Array<{ code: string; portions: number }> | null
+  macrosConfirmed: boolean
+  isSystem: boolean
+}
+
+/** Parte base ENRIQUECIDA del `snapshot_composed_of` (SPEC R2/A2). */
+export type ExchangeComposedPartSnapshot = {
+  code: string
+  portions: number
+  ref: { calories: number; proteinG: number; carbsG: number; fatsG: number }
 }
 
 export type V1PlanRow = {
@@ -110,6 +159,17 @@ export type ConversionFidelity = {
   /** Items V1 con quantity <= 0 (violan CHECK quantity>0): saltados, nunca inventados. */
   zeroQuantityItemsSkipped: number
   noAcarreado: string[]
+  // --- Porciones (planes exchanges — R7) ---
+  /** Estrategia V2 asignada: 'structured' (solo porciones) o 'hybrid' (porciones + items). */
+  strategy: 'structured' | 'hybrid'
+  /** Filas de target emitidas, contadas POR FUENTE (una vez por comida/grupo; el fan-out no duplica). */
+  exchangeTargetCount: number
+  /** Porciones-in por grupo (codigo -> Σ porciones, contadas por fuente). Para fidelidad por grupo. */
+  exchangeGroupPortions: Record<string, number>
+  /** Macros derivados de las porciones (paridad con el engine: Σ porciones × ref, expansion LEG). */
+  exchangeDerivedMacros: MacroTotals
+  /** Targets cuyo grupo (o una base de su composed_of) no se pudo resolver: NUNCA se inventan. */
+  unmappedExchangeTargets: string[]
 }
 
 export type ConversionBundle = {
@@ -119,6 +179,12 @@ export type ConversionBundle = {
   variantRows: Record<string, unknown>[]
   slotRows: Record<string, unknown>[]
   itemRows: Record<string, unknown>[]
+  /**
+   * Filas INSERT-READY para `nutrition_slot_exchange_targets_v2` con `snapshot_*`
+   * ENRIQUECIDO congelado (espejo de `buildExchangeTargetInsertRow`). Vacio en planes
+   * `grams`. El driver las inserta DESPUES de los slots (FK compuesta) y ANTES de publicar.
+   */
+  exchangeTargetRows: Record<string, unknown>[]
   idempotencyKey: string
   fidelity: ConversionFidelity
 }
@@ -130,6 +196,12 @@ export type ConversionOpts = {
   versionNumber: number
   /** Fecha local Santiago del dia de la corrida (la usa el driver al llamar al RPC). */
   effectiveFromLocalDate: string
+  /**
+   * Catalogo de grupos de intercambio (system + custom del coach) que el loader carga y
+   * pasa al mapper PURO (hallazgo B6). Ausente/[] en planes `grams`. Necesario para
+   * resolver `meal_exchange_targets.exchange_group_id` y congelar el snapshot enriquecido.
+   */
+  exchangeGroups?: ConversionExchangeGroup[]
 }
 
 // ---------------------------------------------------------------------------
@@ -208,6 +280,16 @@ function addTotals(a: MacroTotals, b: MacroTotals): MacroTotals {
   }
 }
 
+/** Redondeo a 1 decimal de cada macro (por comida), espejo de `roundTotals` del engine. */
+function roundMacros(t: MacroTotals): MacroTotals {
+  return {
+    calories: round1(t.calories),
+    proteinG: round1(t.proteinG),
+    carbsG: round1(t.carbsG),
+    fatsG: round1(t.fatsG),
+  }
+}
+
 function slugify(value: string): string {
   return value
     .normalize('NFD')
@@ -260,6 +342,107 @@ type VariantPlan = {
 }
 
 // ---------------------------------------------------------------------------
+// Porciones (intercambios) — helpers puros del freeze del snapshot (R7/A2)
+// ---------------------------------------------------------------------------
+
+/**
+ * Fila de `nutrition_slot_exchange_targets_v2` con `snapshot_*` congelado. Nombres de
+ * columna EXACTOS: supabase/migrations/20260718140000_nutrition_portions_v2.sql.
+ */
+type ExchangeTargetInsertRow = {
+  id: string
+  version_id: string
+  meal_slot_id: string
+  exchange_group_id: string
+  portions: number
+  notes: string | null
+  order_index: number
+  snapshot_group_code: string
+  snapshot_group_name: string
+  snapshot_ref_calories: number
+  snapshot_ref_protein_g: number
+  snapshot_ref_carbs_g: number
+  snapshot_ref_fats_g: number
+  snapshot_composed_of: ExchangeComposedPartSnapshot[] | null
+  snapshot_macros_confirmed: boolean
+}
+
+/** Indice de grupos por id + resolutor de base por codigo (prioriza system, como el engine). */
+function buildGroupIndex(groups: ConversionExchangeGroup[]): {
+  byId: Map<string, ConversionExchangeGroup>
+  resolveBaseByCode: (code: string) => ConversionExchangeGroup | null
+} {
+  const byId = new Map(groups.map((g) => [g.id, g]))
+  const byCode = new Map<string, ConversionExchangeGroup[]>()
+  for (const g of groups) {
+    const list = byCode.get(g.code) ?? []
+    list.push(g)
+    byCode.set(g.code, list)
+  }
+  const resolveBaseByCode = (code: string): ConversionExchangeGroup | null => {
+    const cands = byCode.get(code) ?? []
+    return cands.find((g) => g.isSystem) ?? cands[0] ?? null
+  }
+  return { byId, resolveBaseByCode }
+}
+
+/**
+ * `snapshot_composed_of` ENRIQUECIDO (SPEC R2/A2): cada parte base (LEG->P+C) lleva sus
+ * `ref_*` congelados por VALOR. Espejo de `buildExchangeTargetInsertRow`. Devuelve
+ * `{ unmappedBase }` si una base no resuelve — el mapper lo trata como target NO mapeable
+ * (jamas snapshot parcial/NULL, jamas grupo inventado).
+ */
+function enrichComposedOf(
+  group: ConversionExchangeGroup,
+  resolveBaseByCode: (code: string) => ConversionExchangeGroup | null,
+): { ok: true; parts: ExchangeComposedPartSnapshot[] | null } | { ok: false; unmappedBase: string } {
+  if (group.composedOf == null) return { ok: true, parts: null }
+  const parts: ExchangeComposedPartSnapshot[] = []
+  for (const part of group.composedOf) {
+    const base = resolveBaseByCode(part.code)
+    if (!base) return { ok: false, unmappedBase: part.code }
+    parts.push({
+      code: part.code,
+      portions: part.portions,
+      ref: {
+        calories: base.refCalories,
+        proteinG: base.refProteinG,
+        carbsG: base.refCarbsG,
+        fatsG: base.refFatsG,
+      },
+    })
+  }
+  return { ok: true, parts }
+}
+
+/**
+ * Macros derivados de UNA fila de target ya congelada, leidos del snapshot ENRIQUECIDO
+ * (sin catalogo vivo): grupo simple -> ref × porciones; compuesto -> Σ base.ref ×
+ * (parte × porciones). Espejo de `expandComposedGroups`+`macrosForTargets` del engine.
+ * SIN redondeo (el redondeo se aplica al total por comida, como el engine).
+ */
+function deriveMacrosFromSnapshotRow(row: ExchangeTargetInsertRow): MacroTotals {
+  const p = row.portions
+  if (row.snapshot_composed_of == null) {
+    return {
+      calories: row.snapshot_ref_calories * p,
+      proteinG: row.snapshot_ref_protein_g * p,
+      carbsG: row.snapshot_ref_carbs_g * p,
+      fatsG: row.snapshot_ref_fats_g * p,
+    }
+  }
+  const acc: MacroTotals = { ...ZERO }
+  for (const part of row.snapshot_composed_of) {
+    const factor = part.portions * p
+    acc.calories += part.ref.calories * factor
+    acc.proteinG += part.ref.proteinG * factor
+    acc.carbsG += part.ref.carbsG * factor
+    acc.fatsG += part.ref.fatsG * factor
+  }
+  return acc
+}
+
+// ---------------------------------------------------------------------------
 // Mapper
 // ---------------------------------------------------------------------------
 
@@ -270,7 +453,10 @@ export function mapV1PlanToV2Conversion(
   const { plan, meals } = tree
 
   // --- Skips tipados (orden determinista) ---
-  if (plan.plan_mode !== 'grams') {
+  // Solo 'grams' y 'exchanges' existen (CHECK nutrition_plans_plan_mode_chk). Un modo
+  // desconocido (dato imposible hoy) cae a manual en vez de reventar. Los planes
+  // 'exchanges' YA NO se saltean (R7): se mapean a targets de porciones.
+  if (plan.plan_mode !== 'grams' && plan.plan_mode !== 'exchanges') {
     return { ok: false, reason: 'exchanges_manual', detail: `plan_mode=${plan.plan_mode}` }
   }
   if (meals.length === 0) {
@@ -298,6 +484,16 @@ export function mapV1PlanToV2Conversion(
   const planId = opts.existingV2PlanId ?? newId()
   const versionId = newId()
 
+  // --- Estrategia V2 (R7): porciones son una CAPA sobre structured/hybrid, no una 4ta
+  // enum. Un plan con porciones Y items fijos = 'hybrid' (registro libre); solo porciones
+  // (o solo items = grams) = 'structured' (estricto). El indicador es la coexistencia de
+  // ambas fuentes en el plan. ---
+  const hasPortions = meals.some((m) => (m.exchangeTargets ?? []).length > 0)
+  const hasItems = meals.some((m) => m.items.length > 0)
+  const strategy: 'structured' | 'hybrid' = hasPortions && hasItems ? 'hybrid' : 'structured'
+  // Espejo de defaultPermissionsFor(strategy): 'structured' estricto, 'hybrid' registro libre.
+  const canRegisterFreely = strategy === 'hybrid'
+
   // --- planRow (null en re-sync) ---
   const planRow: Record<string, unknown> | null = opts.existingV2PlanId
     ? null
@@ -308,7 +504,7 @@ export function mapV1PlanToV2Conversion(
         org_id: plan.org_id ?? null,
         team_id: plan.team_id ?? null,
         name: plan.name,
-        strategy: 'structured',
+        strategy,
         lifecycle_status: 'active',
         created_by: plan.coach_id,
         updated_by: plan.coach_id,
@@ -322,12 +518,12 @@ export function mapV1PlanToV2Conversion(
     plan_id: planId,
     version_number: opts.versionNumber,
     status: 'draft',
-    strategy: 'structured',
+    strategy,
     timezone: 'America/Santiago',
-    // Permisos estrictos de 'structured' — espejo de defaultPermissionsFor('structured')
-    // + el objeto que persiste assembleDraft (draft-builder.ts:493-500).
+    // Permisos espejo de defaultPermissionsFor(strategy) + el objeto que persiste
+    // assembleDraft (draft-builder.ts:493-502). Solo canRegisterFreely varia por estrategia.
     student_permissions: {
-      canRegisterFreely: false,
+      canRegisterFreely,
       canAdjustPrescribedQuantity: true,
       quantityAdjustmentPercent: null,
       canSubstitute: false,
@@ -395,10 +591,15 @@ export function mapV1PlanToV2Conversion(
     }
   }
 
-  // --- Materializar variantes -> slots -> items ---
+  // --- Materializar variantes -> slots -> items + targets de porciones ---
   const variantRows: Record<string, unknown>[] = []
   const slotRows: Record<string, unknown>[] = []
   const itemRows: Record<string, unknown>[] = []
+  const exchangeTargetRows: Record<string, unknown>[] = []
+
+  // Indice de grupos de intercambio (R7): el mapper resuelve el snapshot enriquecido
+  // contra el catalogo que le pasa el loader; NO consulta DB.
+  const { byId: groupById, resolveBaseByCode } = buildGroupIndex(opts.exchangeGroups ?? [])
 
   // Dedup por fuente (un item/comida NULL se repite en varias variantes; se cuenta 1 vez).
   const seenMeals = new Set<string>()
@@ -406,6 +607,11 @@ export function mapV1PlanToV2Conversion(
   const seenItemMacros = new Map<string, MacroTotals>()
   const swapItemIds = new Set<string>()
   const zeroQtyItemIds = new Set<string>()
+  // Targets de porciones deduplicados por id de fuente (una comida dow-NULL se replica en
+  // varias variantes; su target se cuenta UNA vez — test de conteo explicito, R7/B6).
+  const seenTargets = new Map<string, ExchangeTargetInsertRow>()
+  // Targets no mapeables (grupo o base de composed_of sin resolver): listados, jamas inventados.
+  const unmappedTargets = new Set<string>()
 
   variantPlans.forEach((variant, variantIndex) => {
     const variantId = newId()
@@ -441,12 +647,63 @@ export function mapV1PlanToV2Conversion(
         order_index: meal.order_index,
       })
 
+      seenMeals.add(meal.id)
+
+      // --- Targets de porciones de la comida -> filas de nutrition_slot_exchange_targets_v2
+      // con snapshot ENRIQUECIDO congelado (espejo de buildExchangeTargetInsertRow). Se
+      // emiten en CADA variante donde aparece la comida (fan-out), apuntando al slot de esa
+      // variante; el dedup por-fuente (seenTargets) los cuenta una sola vez. ---
+      const mealTargets = meal.exchangeTargets ?? []
+      mealTargets.forEach((target, targetIndex) => {
+        // V1 no exige pasos de 0,5 (su CHECK es solo 0<p<=99); V2 SI. Un valor V1 fuera de
+        // la grilla 0,5 (o <=0 / >99) NO se puede representar sin redondear = inventar dato:
+        // se lista como no mapeable en vez de reventar el CHECK al insertar (R7, cero invencion).
+        if (
+          !Number.isFinite(target.portions) ||
+          target.portions <= 0 ||
+          target.portions > 99 ||
+          !Number.isInteger(target.portions * 2)
+        ) {
+          unmappedTargets.add(`meal=${meal.id} group_id=${target.exchange_group_id} portions=${target.portions}`)
+          return
+        }
+        const group = groupById.get(target.exchange_group_id)
+        if (!group) {
+          unmappedTargets.add(`meal=${meal.id} group_id=${target.exchange_group_id}`)
+          return
+        }
+        const enriched = enrichComposedOf(group, resolveBaseByCode)
+        if (!enriched.ok) {
+          unmappedTargets.add(`meal=${meal.id} group=${group.code} base=${enriched.unmappedBase}`)
+          return
+        }
+        const targetRow: ExchangeTargetInsertRow = {
+          id: newId(),
+          version_id: versionId,
+          meal_slot_id: slotId,
+          exchange_group_id: group.id,
+          portions: target.portions,
+          notes: target.notes && target.notes.trim() !== '' ? target.notes.trim() : null,
+          order_index: targetIndex,
+          snapshot_group_code: group.code,
+          snapshot_group_name: group.name,
+          snapshot_ref_calories: group.refCalories,
+          snapshot_ref_protein_g: group.refProteinG,
+          snapshot_ref_carbs_g: group.refCarbsG,
+          snapshot_ref_fats_g: group.refFatsG,
+          snapshot_composed_of: enriched.parts,
+          snapshot_macros_confirmed: group.macrosConfirmed,
+        }
+        exchangeTargetRows.push(targetRow)
+        if (!seenTargets.has(target.id)) seenTargets.set(target.id, targetRow)
+      })
+
       if (meal.items.length === 0) {
-        seenMeals.add(meal.id)
-        textOnlyMeals.add(meal.id)
+        // Comida sin items: es "solo texto" unicamente si TAMPOCO tiene porciones. Una
+        // franja solo-porciones NO es texto puro (tiene prescripcion real).
+        if (mealTargets.length === 0) textOnlyMeals.add(meal.id)
         return
       }
-      seenMeals.add(meal.id)
 
       meal.items.forEach((item, itemIndex) => {
         const food = item.food as V1FoodRow
@@ -519,6 +776,48 @@ export function mapV1PlanToV2Conversion(
     v2Totals = addTotals(v2Totals, macros)
   }
 
+  // --- Fidelidad de porciones (R7) ---
+  // exchangeGroupPortions: porciones-in por grupo, sumadas desde la FUENTE (cada comida una
+  // vez), solo targets resolubles. exchangeDerivedMacros: macros derivados desde el snapshot
+  // ENRIQUECIDO de los targets EMITIDOS-deduplicados (out) — mismo algoritmo que el engine
+  // (Σ por comida redondeado a 1 decimal, luego total). El test cruza ambos contra el engine.
+  const exchangeGroupPortions: Record<string, number> = {}
+  for (const meal of meals) {
+    for (const target of meal.exchangeTargets ?? []) {
+      // Mismo criterio de emitibilidad que arriba: grilla 0,5 valida + grupo/base resolubles.
+      if (
+        !Number.isFinite(target.portions) ||
+        target.portions <= 0 ||
+        target.portions > 99 ||
+        !Number.isInteger(target.portions * 2)
+      ) {
+        continue
+      }
+      const group = groupById.get(target.exchange_group_id)
+      if (!group) continue
+      if (!enrichComposedOf(group, resolveBaseByCode).ok) continue
+      exchangeGroupPortions[group.code] = round1((exchangeGroupPortions[group.code] ?? 0) + target.portions)
+    }
+  }
+  // Derivados por comida (redondeo por comida como el engine), agrupando los targets emitidos
+  // por su meal_slot_id. Se usa un solo slot por comida-fuente (el primer target visto lo fija).
+  const derivedBySlot = new Map<string, MacroTotals>()
+  for (const row of Array.from(seenTargets.values())) {
+    const slot = row.meal_slot_id
+    const prev = derivedBySlot.get(slot) ?? { ...ZERO }
+    const m = deriveMacrosFromSnapshotRow(row)
+    derivedBySlot.set(slot, {
+      calories: prev.calories + m.calories,
+      proteinG: prev.proteinG + m.proteinG,
+      carbsG: prev.carbsG + m.carbsG,
+      fatsG: prev.fatsG + m.fatsG,
+    })
+  }
+  let exchangeDerivedMacros: MacroTotals = { ...ZERO }
+  for (const perMeal of Array.from(derivedBySlot.values())) {
+    exchangeDerivedMacros = addTotals(exchangeDerivedMacros, roundMacros(perMeal))
+  }
+
   const noAcarreado: string[] = []
   if (plan.steps_target != null) noAcarreado.push('steps_target')
   if (plan.sleep_target_hours != null) noAcarreado.push('sleep_target_hours')
@@ -536,6 +835,7 @@ export function mapV1PlanToV2Conversion(
     variantRows,
     slotRows,
     itemRows,
+    exchangeTargetRows,
     idempotencyKey,
     fidelity: {
       v1Totals,
@@ -547,6 +847,11 @@ export function mapV1PlanToV2Conversion(
       swapsAsNotes: swapItemIds.size,
       zeroQuantityItemsSkipped: zeroQtyItemIds.size,
       noAcarreado,
+      strategy,
+      exchangeTargetCount: seenTargets.size,
+      exchangeGroupPortions,
+      exchangeDerivedMacros,
+      unmappedExchangeTargets: Array.from(unmappedTargets),
     },
   }
 }

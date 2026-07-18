@@ -179,6 +179,17 @@ export const NutritionIntakeMutationSchema = z
       fiberG: z.number().nonnegative().nullable().default(null),
       servingSize: z.number().positive().nullable().default(null),
       servingUnit: z.string().trim().max(32).nullable().default(null),
+      // Porciones (SPEC R4, transporte B1): viajan DENTRO del snapshot hasta el RPC,
+      // que las extrae a columnas. `.optional()` (sin default): un re-parse del
+      // mutation (route mobile / cola offline) NUNCA debe stripearlas ni inventarlas
+      // — ausentes quedan ausentes y un intake normal no gana llaves nuevas.
+      exchangeGroupCode: z.string().trim().min(1).max(32).optional(),
+      exchangePortions: z
+        .number()
+        .positive()
+        .max(99)
+        .refine((v) => v * 2 === Math.floor(v * 2), 'exchangePortions debe ir en pasos de 0,5')
+        .optional(),
     }),
   })
   .superRefine((value, ctx) => {

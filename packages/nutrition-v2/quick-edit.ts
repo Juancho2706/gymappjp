@@ -32,6 +32,9 @@ type DraftDayVariant = NutritionPlanDraft['dayVariants'][number]
 type DraftMealSlot = DraftDayVariant['mealSlots'][number]
 type DraftPrescriptionItem = DraftMealSlot['items'][number]
 
+type ReadExchangeTarget = NonNullable<ReadMealSlot['exchangeTargets']>[number]
+type DraftExchangeTarget = NonNullable<DraftMealSlot['exchangeTargets']>[number]
+
 function itemFromRead(item: ReadPrescriptionItem, orderIndex: number): DraftPrescriptionItem {
   const hasCatalogSource = Boolean(item.foodId) || Boolean(item.recipeId)
   return {
@@ -54,7 +57,24 @@ function itemFromRead(item: ReadPrescriptionItem, orderIndex: number): DraftPres
   }
 }
 
+/**
+ * Target de porciones del read model (snapshot congelado) -> target del draft de entrada.
+ * Solo viajan los campos del contrato (`NutritionExchangeTargetSchema`): el server vuelve
+ * a congelar `snapshot_*` al persistir (T0.3); los campos snapshot del read model
+ * (groupCode/ref/composedOf...) NO pertenecen al draft.
+ */
+function exchangeTargetFromRead(target: ReadExchangeTarget, orderIndex: number): DraftExchangeTarget {
+  return {
+    ...(target.id ? { id: target.id } : {}),
+    exchangeGroupId: target.exchangeGroupId,
+    portions: target.portions,
+    notes: target.notes,
+    orderIndex,
+  }
+}
+
 function slotFromRead(slot: ReadMealSlot, orderIndex: number): DraftMealSlot {
+  const exchangeTargets = slot.exchangeTargets ?? []
   return {
     ...(slot.id ? { id: slot.id } : {}),
     code: slot.code,
@@ -67,6 +87,11 @@ function slotFromRead(slot: ReadMealSlot, orderIndex: number): DraftMealSlot {
     instructions: slot.instructions,
     orderIndex,
     items: slot.prescriptionItems.map(itemFromRead),
+    // Capa opcional de porciones: un plan sin porciones hidrata un draft IDENTICO al de
+    // antes (sin la clave), preservando el criterio Q1 y los publishes byte-compatibles.
+    ...(exchangeTargets.length > 0
+      ? { exchangeTargets: exchangeTargets.map(exchangeTargetFromRead) }
+      : {}),
   }
 }
 
@@ -211,6 +236,37 @@ function matchById<T extends { id?: string }>(
   return { pairs, added, removed }
 }
 
+function exchangeTargetChanged(a: DraftExchangeTarget, b: DraftExchangeTarget): boolean {
+  return a.portions !== b.portions || (a.notes ?? null) !== (b.notes ?? null)
+}
+
+/**
+ * Cuenta cambios de porciones de una franja emparejando por `exchangeGroupId` (unico por
+ * franja — CHECK `unique(meal_slot_id, exchange_group_id)` de la tabla): agregado = 1,
+ * quitado = 1, porciones o notas distintas = 1. El orden NO cuenta (igual que items).
+ */
+function countExchangeTargetChanges(
+  baseline: DraftExchangeTarget[],
+  current: DraftExchangeTarget[],
+): number {
+  const baselineByGroup = new Map(baseline.map((target) => [target.exchangeGroupId, target]))
+  const seen = new Set<string>()
+  let count = 0
+  for (const target of current) {
+    const base = baselineByGroup.get(target.exchangeGroupId)
+    if (!base) {
+      count += 1
+      continue
+    }
+    seen.add(target.exchangeGroupId)
+    if (exchangeTargetChanged(base, target)) count += 1
+  }
+  for (const target of baseline) {
+    if (!seen.has(target.exchangeGroupId)) count += 1
+  }
+  return count
+}
+
 function countSlotChanges(baseline: DraftMealSlot, current: DraftMealSlot): number {
   let count = slotHeaderChanged(baseline, current) ? 1 : 0
   const { pairs, added, removed } = matchById(baseline.items, current.items)
@@ -218,6 +274,7 @@ function countSlotChanges(baseline: DraftMealSlot, current: DraftMealSlot): numb
   for (const [base, cur] of pairs) {
     if (itemChanged(base, cur)) count += 1
   }
+  count += countExchangeTargetChanges(baseline.exchangeTargets ?? [], current.exchangeTargets ?? [])
   return count
 }
 

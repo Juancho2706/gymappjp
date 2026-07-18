@@ -22,6 +22,7 @@ import {
 import { qeSlotSubtotal, type QeSlot } from './quick-edit-state'
 import { useQuickEdit, genQuickEditKey } from './QuickEditProvider'
 import { EditableItemRow } from './EditableItemRow'
+import { EditablePortionsCard } from './EditablePortionsCard'
 import { FoodPickerSheet } from './FoodPickerSheet'
 import { QE_COPY } from './microcopy'
 
@@ -152,6 +153,10 @@ export function EditableSlotCard({
         <Plus className="h-4 w-4" />
         {QE_COPY.addFood}
       </button>
+
+      {/* Seccion "Porciones a eleccion" (SPEC UX-a): hermana de los items, bajo "+ Alimento".
+          Se pinta sola solo si el plan usa porciones (capa invisible si no). */}
+      <EditablePortionsCard variantKey={variantKey} slot={slot} />
 
       <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-control bg-surface-sunken px-3 py-2">
         <span className="text-xs font-semibold uppercase tracking-wide text-muted">Subtotal franja</span>
