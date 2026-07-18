@@ -13,7 +13,7 @@
     "@expo-google-fonts/hanken-grotesk": "^0.2.3",
     "@expo-google-fonts/inter": "^0.2.3",
     "@expo-google-fonts/jetbrains-mono": "^0.2.3",
-    "@expo-google-fonts/montserrat": "^0.2.3",
+    "@expo-google-fonts/montserrat": "^0.4.2",
     "@eva/bodycomp": "workspace:*",
     "@eva/calc": "workspace:*",
     "@eva/cardio": "workspace:*",
