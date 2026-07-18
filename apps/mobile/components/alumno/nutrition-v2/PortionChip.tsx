@@ -16,6 +16,8 @@ import { PORTIONS_COPY } from '../../../lib/nutrition-portions-copy'
 import {
   formatPortionsCl,
   nextPortionStep,
+  portionBarFractions,
+  portionChipIsCompact,
   type PortionCoverageView,
   type PortionHalfKind,
   type PortionSegmentView,
@@ -108,6 +110,9 @@ function PortionChipBase({ target, view, color, onPress, onLongPress, disabled }
   const { theme } = useTheme()
   const { reduced, duration } = useEvaMotion()
   const step = nextPortionStep(view)
+  // Cap visual H4: >8 segmentos ⇒ barra continua compacta (jamás desborda en 360 px).
+  const compact = portionChipIsCompact(view.prescribed)
+  const bar = compact ? portionBarFractions(view.prescribed, view.marcadas, view.derivadas) : null
   const aria =
     step.portions === 0.5
       ? PORTIONS_COPY.student.halfChipAria(
@@ -143,7 +148,7 @@ function PortionChipBase({ target, view, color, onPress, onLongPress, disabled }
           <Text className="min-w-0 flex-1 text-sm font-medium text-text-strong" numberOfLines={1}>
             {target.groupName}
           </Text>
-          {/* Segmentos decorativos: el contador n/N es el texto real (a11y del SPEC). */}
+          {/* Segmentos/barra decorativos: el contador n/N es el texto real (a11y del SPEC). */}
           <MotiView
             key={`${view.marcadas}-${view.derivadas}`}
             accessibilityElementsHidden
@@ -153,9 +158,15 @@ function PortionChipBase({ target, view, color, onPress, onLongPress, disabled }
             transition={{ type: 'timing', duration: duration('fast') }}
             className="flex-row items-center gap-1"
           >
-            {view.segments.map((segment) => (
-              <Segment key={segment.key} segment={segment} />
-            ))}
+            {compact && bar ? (
+              // Barra continua compacta (H4): relleno pleno = marcadas, atenuado = derivadas.
+              <View className="h-2.5 w-16 flex-row overflow-hidden rounded-full border border-border-default bg-surface-sunken">
+                <View className="h-full bg-primary" style={{ width: `${bar.marked * 100}%` }} />
+                <View className="h-full bg-primary/70" style={{ width: `${bar.derived * 100}%` }} />
+              </View>
+            ) : (
+              view.segments.map((segment) => <Segment key={segment.key} segment={segment} />)
+            )}
           </MotiView>
           {view.unsynced ? (
             <View className="h-1.5 w-1.5 rounded-full bg-warning-500" />

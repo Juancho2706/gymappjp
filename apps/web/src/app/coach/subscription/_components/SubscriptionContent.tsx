@@ -1032,7 +1032,7 @@ export function SubscriptionContent({ embedded = false }: { embedded?: boolean }
                         onChange={(e) => setReason(e.target.value)}
                         className="mt-1.5 w-full rounded-control border border-default bg-surface-sunken p-3 text-sm text-strong outline-none focus:border-[var(--brand)]"
                         rows={3}
-                        placeholder="Contanos el motivo…"
+                        placeholder="Cuéntanos el motivo…"
                     />
                     <div className="mt-3 flex flex-col gap-2">
                         <button

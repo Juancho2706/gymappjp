@@ -151,7 +151,7 @@ export async function POST(request: Request) {
             return NextResponse.json(
                 {
                     code: 'FLOW_PLAN_CHANGE_UNSUPPORTED',
-                    error: 'El cambio de plan de una suscripcion Flow estara disponible proximamente.',
+                    error: 'El cambio de plan de una suscripción Flow estará disponible próximamente.',
                 },
                 { status: 400 }
             )
@@ -167,7 +167,7 @@ export async function POST(request: Request) {
             return NextResponse.json(
                 {
                     code: 'FLOW_PLAN_CHANGE_UNSUPPORTED',
-                    error: 'El cambio de plan con Flow estara disponible proximamente. Usa Mercado Pago para este cambio.',
+                    error: 'El cambio de plan con Flow estará disponible próximamente. Usa Mercado Pago para este cambio.',
                 },
                 { status: 400 }
             )

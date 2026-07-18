@@ -67,7 +67,7 @@ function PortionsStepper({
     <View className="flex-row items-center gap-1">
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={`Restar media porción de ${groupName}`}
+        accessibilityLabel={PORTIONS_COPY.builder.stepDownAria(groupName)}
         disabled={!canDecrement}
         onPress={() => onStep(-1)}
         className={`h-11 w-11 items-center justify-center rounded-control border border-border-default bg-surface-card ${canDecrement ? '' : 'opacity-40'}`}
@@ -83,7 +83,7 @@ function PortionsStepper({
       </Text>
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={`Sumar media porción de ${groupName}`}
+        accessibilityLabel={PORTIONS_COPY.builder.stepUpAria(groupName)}
         disabled={!canIncrement}
         onPress={() => onStep(1)}
         className={`h-11 w-11 items-center justify-center rounded-control border border-border-default bg-surface-card ${canIncrement ? '' : 'opacity-40'}`}
@@ -142,7 +142,7 @@ function PortionTargetRow({
         />
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={`Nota para ${target.groupName}`}
+          accessibilityLabel={PORTIONS_COPY.builder.noteFor(target.groupName)}
           disabled={disabled}
           onPress={() => setNotesOpen((open) => !open || target.notes.trim() !== '')}
           hitSlop={6}
@@ -163,11 +163,11 @@ function PortionTargetRow({
       </View>
       {showNotes ? (
         <TextInput
-          accessibilityLabel={`Nota para ${target.groupName}`}
+          accessibilityLabel={PORTIONS_COPY.builder.noteFor(target.groupName)}
           value={target.notes}
           onChangeText={(value) => onSetNotes(target.key, value)}
           editable={!disabled}
-          placeholder="Nota (opcional)"
+          placeholder={PORTIONS_COPY.builder.notePlaceholder}
           placeholderTextColor={theme.mutedForeground}
           maxLength={1000}
           className="mt-1 min-h-11 rounded-control border border-border-default bg-surface-card px-2.5 py-2 text-sm text-text-strong"

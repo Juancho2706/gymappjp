@@ -19,6 +19,7 @@ import { z } from 'zod'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/lib/database.types'
 import type { ExchangeGroup } from '@eva/nutrition-engine'
+import { PORTIONS_COPY } from '@/lib/nutrition-portions-copy'
 import { getExchangeGroupsForCoach } from '@/services/nutrition-exchanges/nutrition-exchanges.service'
 import {
   authorizeCoach,
@@ -61,6 +62,6 @@ export async function loadExchangeGroupsForBuilderAction(input: unknown): Promis
   } catch {
     // El picker muestra estado de error con reintento (SPEC UX-c); los items fijos
     // de la franja nunca se bloquean por esta falla.
-    return fail('GROUPS_LOAD_FAILED', 'No pudimos cargar los grupos.')
+    return fail('GROUPS_LOAD_FAILED', PORTIONS_COPY.builder.pickerError)
   }
 }

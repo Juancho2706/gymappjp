@@ -18,6 +18,8 @@ import {
   extraPortionsValue,
   formatPortionsEs,
   orderedExchangeTargets,
+  portionBarFractions,
+  portionChipIsCompact,
   segmentsForTarget,
   slotHasPortionTargets,
   type PortionSegment,
@@ -102,7 +104,14 @@ function PortionChip({
   const coverage = api.coverageFor(slot.code, target)
   const next = api.nextMarkFor(slot.code, target)
   const pending = api.hasInFlight(slot.code, target.groupCode)
-  const segments = segmentsForTarget(target.portions, coverage.marcadas, coverage.derivadas)
+  // Cap visual H4: >8 segmentos ⇒ barra continua compacta (jamás desborda en 360 px).
+  const compact = portionChipIsCompact(target.portions)
+  const bar = compact
+    ? portionBarFractions(target.portions, coverage.marcadas, coverage.derivadas)
+    : null
+  const segments = compact
+    ? []
+    : segmentsForTarget(target.portions, coverage.marcadas, coverage.derivadas)
   // Estilo pending (NutritionSyncState-like) sobre el último segmento CON llenado.
   const lastFilledIndex = segments.reduce(
     (acc, segment, index) => (segment.marked + segment.derived > 0 ? index : acc),
@@ -165,20 +174,46 @@ function PortionChip({
         <span
           aria-hidden="true"
           className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-amber-500"
-          title="Guardando…"
+          title={PORTIONS_COPY.student.saving}
         />
       ) : null}
-      <span aria-hidden="true" className="flex shrink-0 items-center gap-1">
-        {segments.map((segment, index) => (
-          <SegmentDot
-            derivedTitle={derivedTitle}
-            key={index}
-            pending={pending && index === lastFilledIndex}
-            reduceMotion={reduceMotion}
-            segment={segment}
+      {compact && bar ? (
+        // Barra continua compacta (H4): relleno pleno = marcadas, atenuado = derivadas.
+        <span
+          aria-hidden="true"
+          className={cx(
+            'relative inline-block h-2.5 w-16 shrink-0 overflow-hidden rounded-full border bg-surface-sunken',
+            bar.marked + bar.derived > 0 ? 'border-primary/60' : 'border-border-default',
+            pending && 'opacity-60',
+          )}
+          title={bar.derived > 0 && derivedTitle ? derivedTitle : undefined}
+        >
+          <motion.span
+            animate={{ width: `${(bar.marked + bar.derived) * 100}%` }}
+            className="absolute inset-y-0 left-0 bg-primary/70"
+            initial={false}
+            transition={{ duration: reduceMotion ? 0 : NUTRITION_MOTION.selection.duration / 1000 }}
           />
-        ))}
-      </span>
+          <motion.span
+            animate={{ width: `${bar.marked * 100}%` }}
+            className="absolute inset-y-0 left-0 bg-primary"
+            initial={false}
+            transition={{ duration: reduceMotion ? 0 : NUTRITION_MOTION.selection.duration / 1000 }}
+          />
+        </span>
+      ) : (
+        <span aria-hidden="true" className="flex shrink-0 items-center gap-1">
+          {segments.map((segment, index) => (
+            <SegmentDot
+              derivedTitle={derivedTitle}
+              key={index}
+              pending={pending && index === lastFilledIndex}
+              reduceMotion={reduceMotion}
+              segment={segment}
+            />
+          ))}
+        </span>
+      )}
       {extra > 0 ? (
         <span className="shrink-0 rounded-pill border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[10px] font-bold text-amber-800 dark:border-amber-700/60 dark:bg-amber-950/40 dark:text-amber-300">
           {PORTIONS_COPY.student.extraBadge(formatPortionsEs(extra))}
@@ -242,7 +277,7 @@ export function PortionSlotSection({
                       onClick={() => setConfirmGroup(null)}
                       tone="neutral"
                     >
-                      Cancelar
+                      {PORTIONS_COPY.student.extraCancel}
                     </NutritionMotionButton>
                     <NutritionMotionButton
                       className="min-h-9 px-3 text-xs"
@@ -252,7 +287,7 @@ export function PortionSlotSection({
                       }}
                       tone="warning"
                     >
-                      Marcar
+                      {PORTIONS_COPY.student.extraConfirmYes}
                     </NutritionMotionButton>
                   </span>
                 </div>

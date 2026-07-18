@@ -74,6 +74,9 @@ const {
   nextPortionStep,
   pendingPortionsFor,
   pickLastSyntheticIntake,
+  PORTION_SEGMENT_CAP,
+  portionBarFractions,
+  portionChipIsCompact,
   prunePortionAttemptDates,
   reconcilePendingPortionMarks,
   registerPortionUndo,
@@ -450,5 +453,31 @@ describe('cancelQueuedPortionMark / getQueuedPortionKeys', () => {
     await offline.enqueueNutritionV2Mutation({ action: 'record', userId: 'otro', payload: payload('key-x') })
     await expect(cancelQueuedPortionMark(USER, 'key-x')).resolves.toBe(false)
     expect(await getQueuedPortionKeys('otro')).toEqual(new Set(['key-x']))
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Cap visual de segmentos (H4) — espejo del web portion-marks.logic
+// ---------------------------------------------------------------------------
+
+describe('portionChipIsCompact / portionBarFractions (H4)', () => {
+  it('segmentos discretos hasta 8; barra compacta con más de 8', () => {
+    expect(PORTION_SEGMENT_CAP).toBe(8)
+    expect(portionChipIsCompact(1)).toBe(false)
+    expect(portionChipIsCompact(8)).toBe(false)
+    // 8,5 porciones = 9 segmentos (8 enteros + semicírculo) ⇒ compacta.
+    expect(portionChipIsCompact(8.5)).toBe(true)
+    expect(portionChipIsCompact(10)).toBe(true)
+    expect(portionChipIsCompact(99)).toBe(true)
+    expect(portionChipIsCompact(0)).toBe(false)
+  })
+
+  it('portionBarFractions cuantiza como los segmentos: floor(x·2)/2 y cap al prescrito', () => {
+    expect(portionBarFractions(10, 3, 2)).toEqual({ marked: 0.3, derived: 0.2 })
+    // 0,7 derivadas pintan 0,5 (misma regla de display que los segmentos).
+    expect(portionBarFractions(10, 0, 0.7)).toEqual({ marked: 0, derived: 0.05 })
+    // El exceso NO entra a la barra (va al badge "+n").
+    expect(portionBarFractions(10, 12, 3)).toEqual({ marked: 1, derived: 0 })
+    expect(portionBarFractions(0, 2, 1)).toEqual({ marked: 0, derived: 0 })
   })
 })

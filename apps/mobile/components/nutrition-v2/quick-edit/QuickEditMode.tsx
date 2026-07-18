@@ -29,6 +29,7 @@ import {
   countQuickEditChanges,
   loadQuickEditFoods,
   planModelToQuickEditState,
+  publishQuickEditRN,
   quickEditReducer,
   quickEditUsesSlots,
   validateQuickEditState,
@@ -41,13 +42,13 @@ import {
   type QuickEditPortionGroup,
   type QuickEditPortionTarget,
 } from './portions-state'
-import { publishQuickEditWithPortions } from './portions-publish'
 import { EditableSlotCard } from './EditableSlotCard'
 import { TargetsEditorCard } from './TargetsEditorCard'
 import { FoodSearchSheet, type FoodSearchMode } from './FoodSearchSheet'
 import { PublishBar, UndoSnackbar } from './PublishBar'
 import { ProUpsellSheet, PublishConfirmSheet, StaleBaseSheet } from './QuickEditSheets'
 import { QUICK_EDIT_COPY, discardConfirmBody } from './microcopy'
+import { PORTIONS_COPY } from '../../../lib/nutrition-portions-copy'
 
 let keySeq = 0
 function genKey(prefix: string): string {
@@ -231,7 +232,7 @@ export function QuickEditMode({
     (slotKey: string, target: QuickEditPortionTarget, index: number) => {
       dispatchPortions({ type: 'REMOVE_TARGET', slotKey, targetKey: target.key })
       pushUndo({
-        message: `Grupo ${target.groupName} eliminado`,
+        message: PORTIONS_COPY.builder.groupRemoved(target.groupName),
         restore: () => dispatchPortions({ type: 'RESTORE_TARGET', slotKey, index, target }),
       })
     },
@@ -326,16 +327,15 @@ export function QuickEditMode({
     }
     setPublishing(true)
     setPublishError(null)
-    // Espejo de publishQuickEditRN + capa de porciones (targets con snapshot congelado
+    // Publish canonico de la lib CON capa de porciones (targets con snapshot congelado
     // por el MISMO pipeline: tablas versionadas + publish_nutrition_plan_v2).
-    const res = await publishQuickEditWithPortions({
+    const res = await publishQuickEditRN({
       db: supabase as unknown as NutritionV2WriteClient,
       userId,
       clientId,
       baseline,
       state,
-      portions: portionsState,
-      portionGroupsById,
+      portions: { state: portionsState, groupsById: portionGroupsById },
       idempotencyKey: intentKeyRef.current,
       todayIso,
       hasNutritionPro,
