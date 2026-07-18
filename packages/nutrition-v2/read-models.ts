@@ -140,7 +140,11 @@ export const NutritionExchangeGroupReadSchema = z.object({
  */
 export const NutritionSlotExchangeTargetReadSchema = z.object({
   id: z.string().uuid(),
-  exchangeGroupId: z.string().uuid(),
+  // z.guid(), NO z.uuid(): los 9 grupos system de exchange_groups tienen ids
+  // deterministas no-RFC del seed V1 (0000e8c0-...-0001, nibble de version 0) y
+  // z.uuid() de Zod 4 los rechaza — rompia el parse del Today de TODO plan con
+  // porciones (incidente prod 2026-07-18; gotcha conocido del repo: seeds -> guid).
+  exchangeGroupId: z.guid(),
   groupCode: z.string(),
   groupName: z.string(),
   color: z.string().nullable(),
@@ -164,7 +168,8 @@ export const NutritionSlotExchangeTargetReadSchema = z.object({
  */
 export const NutritionExchangeFoodReadSchema = z.object({
   foodId: z.string().uuid(),
-  exchangeGroupId: z.string().uuid(),
+  // z.guid() por los ids no-RFC del seed de exchange_groups (ver arriba).
+  exchangeGroupId: z.guid(),
   groupCode: z.string(),
   name: z.string(),
   brand: z.string().nullable(),

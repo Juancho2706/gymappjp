@@ -89,7 +89,10 @@ export const NutritionPrescriptionItemSchema = z
  */
 export const NutritionExchangeTargetSchema = z.object({
   id: z.string().uuid().optional(),
-  exchangeGroupId: z.string().uuid(),
+  // z.guid(), NO z.uuid(): los grupos system del seed V1 llevan ids deterministas
+  // no-RFC (0000e8c0-...) que z.uuid() de Zod 4 rechaza — bloqueaba publicar
+  // porciones desde el builder y el parse del read-model (incidente 2026-07-18).
+  exchangeGroupId: z.guid(),
   portions: z
     .number()
     .positive()
