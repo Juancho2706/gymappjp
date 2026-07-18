@@ -15,7 +15,7 @@ jobs:
       # version comes from the root package.json "packageManager" field (pnpm@11.5.0);
       # passing `version:` here too triggers ERR_PNPM_BAD_PM_VERSION.
       - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: lts/*
           cache: pnpm
@@ -46,7 +46,7 @@ jobs:
       # version comes from the root package.json "packageManager" field (pnpm@11.5.0);
       # passing `version:` here too triggers ERR_PNPM_BAD_PM_VERSION.
       - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: lts/*
           cache: pnpm
@@ -95,7 +95,7 @@ jobs:
       # version comes from the root package.json "packageManager" field (pnpm@11.5.0);
       # passing `version:` here too triggers ERR_PNPM_BAD_PM_VERSION.
       - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: lts/*
           cache: pnpm
