@@ -1,0 +1,497 @@
+<title>Porciones — clasificación del catálogo</title>
+<!--
+  Plantilla del artifact del reporte CEO — pipeline de clasificación del catálogo
+  de foods por grupo de intercambio (SPEC nutrition-portions R8 paso 3, TASKS T4.3).
+
+  MECANISMO DE INTERPOLACIÓN (documentado a propósito — así lo consume report.mjs):
+    - Esta plantilla NO se publica tal cual. `scripts/nutrition-portions/report.mjs`
+      lee este archivo y reemplaza EXACTAMENTE UNA VEZ el token
+      `__EVA_PORTIONS_REPORT_` + `DATA__` (escrito partido AQUÍ a propósito: el
+      token completo debe existir UNA sola vez en el archivo, dentro del <script>
+      del final) por el JSON del modelo (`JSON.stringify(model)` con todo `<`
+      escapado como secuencia unicode para que jamás cierre el <script> ni
+      inyecte HTML).
+    - El resultado queda en tmp/nutrition-portions/report-artifact-*.html (ruta
+      gitignoreada) y ESE archivo es el que el orquestador publica como Artifact.
+    - Si el token no fue interpolado, el <script> es un error de sintaxis y la
+      página muestra el aviso <noscript>-style del final: nunca datos falsos.
+    - Sin doctype/html/head/body propios: el publicador de Artifacts envuelve el
+      contenido. Autocontenida: cero requests externos (CSP del artifact los
+      bloquea), CSS y JS inline, sin fuentes remotas.
+
+  Tema: tokens CSS en `.pr` con dark por prefers-color-scheme Y override por
+  data-theme del visor (el toggle gana en ambos sentidos).
+-->
+<style>
+  .pr {
+    color-scheme: light;
+    /* Croma warm-neutral + rampa ordinal azul de confianza (alto→bajo) validada
+       (ordinal, 3 pasos, una sola tonalidad, extremos ≥2:1 sobre superficie). */
+    --bg: #f9f9f7;
+    --surface: #fcfcfb;
+    --ink: #0b0b0b;
+    --ink-2: #52514e;
+    --muted: #898781;
+    --grid: #e1e0d9;
+    --line: #c3c2b7;
+    --border: rgba(11, 11, 11, 0.10);
+    --chip: #f0efec;
+    --t-alto: #184f95;
+    --t-medio: #3987e5;
+    --t-bajo: #86b6ef;
+    --good: #006300;
+    --bad: #d03b3b;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    line-height: 1.5;
+    padding: 32px 20px 48px;
+    min-height: 100vh;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) .pr {
+      color-scheme: dark;
+      --bg: #0d0d0d;
+      --surface: #1a1a19;
+      --ink: #ffffff;
+      --ink-2: #c3c2b7;
+      --muted: #898781;
+      --grid: #2c2c2a;
+      --line: #383835;
+      --border: rgba(255, 255, 255, 0.10);
+      --chip: #383835;
+      --t-alto: #9ec5f4;
+      --t-medio: #3987e5;
+      --t-bajo: #184f95;
+      --good: #0ca30c;
+      --bad: #d03b3b;
+    }
+  }
+  :root[data-theme="dark"] .pr {
+    color-scheme: dark;
+    --bg: #0d0d0d;
+    --surface: #1a1a19;
+    --ink: #ffffff;
+    --ink-2: #c3c2b7;
+    --muted: #898781;
+    --grid: #2c2c2a;
+    --line: #383835;
+    --border: rgba(255, 255, 255, 0.10);
+    --chip: #383835;
+    --t-alto: #9ec5f4;
+    --t-medio: #3987e5;
+    --t-bajo: #184f95;
+    --good: #0ca30c;
+    --bad: #d03b3b;
+  }
+
+  .pr * { box-sizing: border-box; }
+  .pr-wrap { max-width: 980px; margin: 0 auto; display: flex; flex-direction: column; gap: 28px; }
+
+  .pr header h1 { font-size: 1.55rem; font-weight: 700; margin: 4px 0 2px; text-wrap: balance; }
+  .pr .eyebrow { font-size: 0.72rem; font-weight: 600; letter-spacing: 0.09em; text-transform: uppercase; color: var(--muted); }
+  .pr .meta-line { font-size: 0.82rem; color: var(--ink-2); margin-top: 6px; }
+  .pr .meta-line code { font-family: ui-monospace, Consolas, monospace; font-size: 0.78rem; background: var(--chip); padding: 1px 5px; border-radius: 4px; }
+
+  .pr h2 { font-size: 1.05rem; font-weight: 700; margin: 0 0 4px; }
+  .pr .sub { font-size: 0.84rem; color: var(--ink-2); margin: 0 0 12px; max-width: 65ch; }
+
+  .pr section { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 18px 20px; }
+
+  /* KPI tiles */
+  .pr .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+  .pr .tile { border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; display: flex; flex-direction: column; gap: 2px; }
+  .pr .tile .lbl { font-size: 0.68rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+  .pr .tile .val { font-size: 1.5rem; font-weight: 700; }
+  .pr .tile .note { font-size: 0.74rem; color: var(--ink-2); }
+
+  /* Medidor de la meta ≥80% */
+  .pr .goal-track { position: relative; height: 16px; border-radius: 8px; background: var(--grid); overflow: hidden; margin: 14px 0 6px; }
+  .pr .goal-fill { height: 100%; border-radius: 8px; background: var(--t-medio); }
+  .pr .goal-mark { position: absolute; top: -4px; bottom: -4px; width: 2px; background: var(--ink); }
+  .pr .goal-legend { display: flex; justify-content: space-between; font-size: 0.76rem; color: var(--ink-2); }
+  .pr .verdict { display: inline-flex; align-items: center; gap: 7px; font-size: 0.84rem; font-weight: 600; margin-top: 8px; }
+  .pr .verdict .dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+  .pr .verdict.ok { color: var(--good); }
+  .pr .verdict.ok .dot { background: var(--good); }
+  .pr .verdict.miss { color: var(--bad); }
+  .pr .verdict.miss .dot { background: var(--bad); }
+
+  /* Leyenda de tiers */
+  .pr .legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 0.78rem; color: var(--ink-2); margin-bottom: 10px; }
+  .pr .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .pr .sw { width: 11px; height: 11px; border-radius: 3px; flex: none; }
+
+  /* Tablas */
+  .pr .tbl-wrap { overflow-x: auto; }
+  .pr table { border-collapse: collapse; width: 100%; font-size: 0.83rem; }
+  .pr th { font-size: 0.68rem; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: var(--muted); text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  .pr td { padding: 6px 10px; border-bottom: 1px solid var(--grid); vertical-align: top; }
+  .pr td.num, .pr th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .pr td.dim { color: var(--ink-2); }
+  .pr td.reason { color: var(--ink-2); font-size: 0.78rem; max-width: 34ch; }
+  .pr tr:hover > td { background: color-mix(in srgb, var(--chip) 55%, transparent); }
+
+  .pr .gchip { display: inline-flex; align-items: center; justify-content: center; min-width: 30px; padding: 1px 6px; border-radius: 5px; background: var(--chip); font-weight: 700; font-size: 0.72rem; letter-spacing: 0.03em; }
+  .pr .gname { margin-left: 8px; }
+
+  /* Barras apiladas por grupo (magnitud = largo vs grupo mayor; tier = rampa ordinal) */
+  .pr .barcell { min-width: 180px; }
+  .pr .bar { display: flex; gap: 2px; height: 13px; align-items: stretch; }
+  .pr .bar i { display: block; border-radius: 2px; min-width: 2px; }
+  .pr .bar i:first-child { border-top-left-radius: 6px; border-bottom-left-radius: 6px; }
+  .pr .bar i:last-child { border-top-right-radius: 6px; border-bottom-right-radius: 6px; }
+  .pr .f-alto { background: var(--t-alto); }
+  .pr .f-medio { background: var(--t-medio); }
+  .pr .f-bajo { background: var(--t-bajo); }
+
+  /* Grupos colapsables de muestras */
+  .pr details { border: 1px solid var(--border); border-radius: 8px; margin-bottom: 10px; }
+  .pr summary { cursor: pointer; padding: 9px 12px; display: flex; align-items: center; gap: 8px; font-size: 0.86rem; font-weight: 600; list-style: none; }
+  .pr summary::-webkit-details-marker { display: none; }
+  .pr summary::before { content: "▸"; color: var(--muted); font-size: 0.75rem; transition: transform 120ms ease; }
+  .pr details[open] > summary::before { transform: rotate(90deg); }
+  .pr summary .count { margin-left: auto; font-size: 0.74rem; font-weight: 500; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+  .pr details .tbl-wrap { padding: 0 12px 12px; }
+
+  /* Filtro del tier bajo */
+  .pr .filter { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
+  .pr .filter input { flex: 1 1 220px; max-width: 340px; padding: 7px 11px; border-radius: 7px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); font: inherit; font-size: 0.84rem; }
+  .pr .filter .hits { font-size: 0.76rem; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+
+  .pr .foot { font-size: 0.8rem; color: var(--ink-2); max-width: 72ch; }
+  .pr .foot strong { color: var(--ink); }
+
+  .pr .empty { font-size: 0.82rem; color: var(--muted); font-style: italic; }
+  .pr .err { border: 1px solid var(--bad); border-radius: 8px; padding: 14px 16px; color: var(--bad); font-size: 0.9rem; }
+
+  .pr :focus-visible { outline: 2px solid var(--t-medio); outline-offset: 2px; }
+  @media (prefers-reduced-motion: reduce) {
+    .pr summary::before { transition: none; }
+  }
+  @media (max-width: 420px) {
+    .pr { padding: 20px 10px 36px; }
+    .pr section { padding: 14px 12px; }
+  }
+</style>
+
+<div class="pr">
+  <div class="pr-wrap">
+    <header>
+      <div class="eyebrow">Nutrición V2 · Porciones · Pipeline de catálogo</div>
+      <h1>Clasificación del catálogo de alimentos por grupo de intercambio</h1>
+      <div class="meta-line" id="pr-meta"></div>
+    </header>
+
+    <div class="err" id="pr-noscript">
+      Este reporte se llena con JavaScript a partir del dataset del dry-run. Si ves
+      este mensaje, la plantilla se publicó sin interpolar los datos (token
+      __EVA_PORTIONS_REPORT_ sin reemplazar) o el script falló.
+    </div>
+
+    <section aria-label="Resumen">
+      <h2>Resumen</h2>
+      <p class="sub">Dry-run del clasificador (cero escrituras). Nada de esto está aplicado a la base: el <code>--apply</code> corre solo después del GO y nunca pisa clasificaciones manuales existentes.</p>
+      <div class="tiles" id="pr-kpis"></div>
+      <div id="pr-goal"></div>
+    </section>
+
+    <section aria-label="Distribución por grupo">
+      <h2>Distribución por grupo</h2>
+      <p class="sub">Largo de barra = tamaño del grupo (relativo al grupo más numeroso); los segmentos separan la confianza. Los conteos exactos van en las columnas.</p>
+      <div class="legend">
+        <span><i class="sw f-alto"></i> Tier alto — se aplica automático tras GO</span>
+        <span><i class="sw f-medio"></i> Tier medio — requiere esta revisión humana</span>
+        <span><i class="sw f-bajo"></i> Tier bajo — queda sin clasificar</span>
+      </div>
+      <div class="tbl-wrap" id="pr-dist"></div>
+    </section>
+
+    <section aria-label="Revisión humana del tier medio">
+      <h2>Revisión humana — tier medio</h2>
+      <p class="sub" id="pr-medio-sub"></p>
+      <div id="pr-medio"></div>
+    </section>
+
+    <section aria-label="Muestras del tier alto">
+      <h2>Muestras — tier alto</h2>
+      <p class="sub" id="pr-alto-sub"></p>
+      <div id="pr-alto"></div>
+    </section>
+
+    <section aria-label="Tier bajo, lista completa">
+      <h2>Tier bajo — lista completa (quedan sin clasificar)</h2>
+      <p class="sub" id="pr-bajo-sub"></p>
+      <div class="filter">
+        <input type="search" id="pr-bajo-filter" placeholder="Filtrar por nombre, categoría o razón…" aria-label="Filtrar la lista de tier bajo" />
+        <span class="hits" id="pr-bajo-hits"></span>
+      </div>
+      <div class="tbl-wrap" id="pr-bajo"></div>
+    </section>
+
+    <footer class="foot" id="pr-foot"></footer>
+  </div>
+</div>
+
+<script>
+  /*
+   * `report.mjs` reemplaza el token de abajo por el JSON del modelo (con `<`
+   * escapado como <). Si no fue interpolado, esta línea es un error de
+   * sintaxis y queda visible el aviso #pr-noscript de arriba — nunca datos falsos.
+   */
+  var DATA = __EVA_PORTIONS_REPORT_DATA__;
+
+  (function () {
+    'use strict';
+    var D = DATA;
+    document.getElementById('pr-noscript').style.display = 'none';
+
+    var nf = new Intl.NumberFormat('es-CL');
+    function fmtInt(n) { return nf.format(n); }
+    function fmtPct(x) {
+      return x.toLocaleString('es-CL', { minimumFractionDigits: 0, maximumFractionDigits: 1 }) + ' %';
+    }
+    /* Construcción SOLO via textContent: los nombres de foods son datos, jamás HTML. */
+    function el(tag, cls, text) {
+      var n = document.createElement(tag);
+      if (cls) n.className = cls;
+      if (text !== undefined && text !== null) n.textContent = String(text);
+      return n;
+    }
+    function td(cls, text) { return el('td', cls, text); }
+    function th(cls, text) { return el('th', cls, text); }
+
+    /* ---- Header meta ---- */
+    (function () {
+      var meta = document.getElementById('pr-meta');
+      var host = '';
+      try { host = new URL(D.target).host; } catch (e) { host = D.target || ''; }
+      meta.appendChild(document.createTextNode('Dataset del ' + (D.datasetGeneratedAt || '—') + ' · destino '));
+      var code = el('code', null, host);
+      meta.appendChild(code);
+      meta.appendChild(document.createTextNode(' · reporte generado ' + (D.generatedAt || '—') + ' · modo ' + (D.datasetMode || 'DRY-RUN')));
+    })();
+
+    /* ---- KPI tiles ---- */
+    (function () {
+      var box = document.getElementById('pr-kpis');
+      var t = D.totals;
+      function tile(lbl, val, note) {
+        var d = el('div', 'tile');
+        d.appendChild(el('div', 'lbl', lbl));
+        d.appendChild(el('div', 'val', val));
+        if (note) d.appendChild(el('div', 'note', note));
+        return d;
+      }
+      box.appendChild(tile('Foods totales', fmtInt(t.total)));
+      box.appendChild(tile('Tier alto', fmtInt(t.byTier.alto), fmtPct(t.pctByTier.alto) + ' del total'));
+      box.appendChild(tile('Tier medio', fmtInt(t.byTier.medio), fmtPct(t.pctByTier.medio) + ' del total'));
+      box.appendChild(tile('Tier bajo', fmtInt(t.byTier.bajo), fmtPct(t.pctByTier.bajo) + ' — sin clasificar'));
+      box.appendChild(tile('Con grupo candidato', fmtInt(t.classified), fmtPct(t.pctClassified) + ' del total'));
+    })();
+
+    /* ---- Meta ≥80% ---- */
+    (function () {
+      var box = document.getElementById('pr-goal');
+      var m = D.meta;
+      var track = el('div', 'goal-track');
+      var fill = el('div', 'goal-fill');
+      fill.style.width = Math.min(100, m.pctAltoMedio) + '%';
+      track.appendChild(fill);
+      var mark = el('div', 'goal-mark');
+      mark.style.left = m.goalPct + '%';
+      mark.setAttribute('aria-hidden', 'true');
+      track.appendChild(mark);
+      track.setAttribute('role', 'img');
+      track.setAttribute('aria-label', 'Tier alto más medio: ' + fmtPct(m.pctAltoMedio) + ' del catálogo. Meta: ' + m.goalPct + ' por ciento.');
+      box.appendChild(track);
+      var leg = el('div', 'goal-legend');
+      leg.appendChild(el('span', null, 'Alto + medio: ' + fmtPct(m.pctAltoMedio) + ' del catálogo'));
+      leg.appendChild(el('span', null, 'Meta F1: ≥ ' + m.goalPct + ' %'));
+      box.appendChild(leg);
+      var v = el('div', 'verdict ' + (m.met ? 'ok' : 'miss'));
+      v.appendChild(el('span', 'dot'));
+      v.appendChild(el('span', null, m.met
+        ? 'Meta cumplida — ' + fmtPct(m.pctAltoMedio) + ' en tier alto+medio'
+        : 'Meta NO cumplida — ' + fmtPct(m.pctAltoMedio) + ' en tier alto+medio (falta ' + fmtPct(Math.max(0, Math.round((m.goalPct - m.pctAltoMedio) * 10) / 10)) + ')'));
+      box.appendChild(v);
+    })();
+
+    /* ---- Distribución por grupo ---- */
+    (function () {
+      var wrap = document.getElementById('pr-dist');
+      var table = el('table');
+      var thead = el('thead');
+      var hr = el('tr');
+      ['Grupo', '', 'Alto', 'Medio', 'Bajo', 'Total', '% de clasificados'].forEach(function (h, i) {
+        hr.appendChild(th(i >= 2 ? 'num' : null, h));
+      });
+      thead.appendChild(hr);
+      table.appendChild(thead);
+      var tbody = el('tbody');
+      var max = 1;
+      D.groups.forEach(function (g) { if (g.total > max) max = g.total; });
+      D.groups.forEach(function (g) {
+        var tr = el('tr');
+        var name = td(null);
+        name.appendChild(el('span', 'gchip', g.code));
+        name.appendChild(el('span', 'gname', g.name));
+        tr.appendChild(name);
+        var barTd = td('barcell');
+        if (g.total > 0) {
+          var bar = el('div', 'bar');
+          bar.style.width = Math.max(2, (g.total / max) * 100) + '%';
+          bar.setAttribute('aria-hidden', 'true');
+          [['alto', g.alto], ['medio', g.medio], ['bajo', g.bajo]].forEach(function (seg) {
+            if (seg[1] > 0) {
+              var i = el('i', 'f-' + seg[0]);
+              i.style.flexGrow = String(seg[1]);
+              i.title = 'Tier ' + seg[0] + ': ' + fmtInt(seg[1]);
+              bar.appendChild(i);
+            }
+          });
+          barTd.appendChild(bar);
+        }
+        tr.appendChild(barTd);
+        tr.appendChild(td('num', fmtInt(g.alto)));
+        tr.appendChild(td('num', fmtInt(g.medio)));
+        tr.appendChild(td('num', fmtInt(g.bajo)));
+        tr.appendChild(td('num', fmtInt(g.total)));
+        tr.appendChild(td('num', g.total > 0 ? fmtPct(g.pctOfClassified) : '—'));
+        tbody.appendChild(tr);
+      });
+      /* Fila residual: foods sin grupo candidato (todo tier bajo). */
+      var trNull = el('tr');
+      var nn = td('dim');
+      nn.appendChild(el('span', 'gchip', '—'));
+      nn.appendChild(el('span', 'gname', 'Sin grupo candidato'));
+      trNull.appendChild(nn);
+      trNull.appendChild(td('barcell'));
+      trNull.appendChild(td('num', '0'));
+      trNull.appendChild(td('num', '0'));
+      trNull.appendChild(td('num', fmtInt(D.totals.unclassified)));
+      trNull.appendChild(td('num', fmtInt(D.totals.unclassified)));
+      trNull.appendChild(td('num', '—'));
+      tbody.appendChild(trNull);
+      table.appendChild(tbody);
+      wrap.appendChild(table);
+    })();
+
+    /* ---- Tablas de muestras (alto / medio) ---- */
+    function sampleTable(rows) {
+      var wrap = el('div', 'tbl-wrap');
+      var table = el('table');
+      var thead = el('thead');
+      var hr = el('tr');
+      hr.appendChild(th(null, 'Alimento'));
+      hr.appendChild(th(null, 'Categoría'));
+      hr.appendChild(th('num', 'Porción'));
+      hr.appendChild(th(null, 'Medida'));
+      hr.appendChild(th(null, 'Señales'));
+      hr.appendChild(th(null, 'Razón'));
+      thead.appendChild(hr);
+      table.appendChild(thead);
+      var tbody = el('tbody');
+      rows.forEach(function (r) {
+        var tr = el('tr');
+        tr.appendChild(td(null, r.name));
+        tr.appendChild(td('dim', r.category || '—'));
+        tr.appendChild(td('num', r.grams != null ? fmtInt(r.grams) + ' g' : '—'));
+        tr.appendChild(td('dim', r.label || '—'));
+        tr.appendChild(td('dim', r.signals));
+        tr.appendChild(td('reason', r.reason));
+        tbody.appendChild(tr);
+      });
+      table.appendChild(tbody);
+      wrap.appendChild(table);
+      return wrap;
+    }
+
+    function renderSamples(containerId, subId, groups, tierLabel, openFirst) {
+      var box = document.getElementById(containerId);
+      var sub = document.getElementById(subId);
+      if (!groups.length) {
+        sub.textContent = 'No hay foods en tier ' + tierLabel + '.';
+        box.appendChild(el('p', 'empty', 'Sin filas.'));
+        return;
+      }
+      sub.textContent = 'Hasta ' + D.sampleSize + ' muestras deterministas por grupo (espaciadas sobre el listado ordenado por nombre).' + (tierLabel === 'medio' ? ' Este tier SOLO se aplica si el GO lo incluye tras revisar estas muestras.' : '');
+      groups.forEach(function (g, idx) {
+        var det = el('details');
+        if (openFirst && idx === 0) det.open = true;
+        var sum = el('summary');
+        sum.appendChild(el('span', 'gchip', g.code));
+        sum.appendChild(el('span', null, g.name));
+        sum.appendChild(el('span', 'count', fmtInt(g.rows.length) + ' de ' + fmtInt(g.total)));
+        det.appendChild(sum);
+        det.appendChild(sampleTable(g.rows));
+        box.appendChild(det);
+      });
+    }
+
+    renderSamples('pr-medio', 'pr-medio-sub', D.samples.medio, 'medio', true);
+    renderSamples('pr-alto', 'pr-alto-sub', D.samples.alto, 'alto', false);
+
+    /* ---- Tier bajo: lista completa con filtro ---- */
+    (function () {
+      var rows = D.tierBajo.rows;
+      document.getElementById('pr-bajo-sub').textContent =
+        fmtInt(D.tierBajo.count) + ' alimentos en tier bajo. Quedan SIN clasificar: el --apply nunca los toca; se retomarán en pasadas posteriores o a mano.';
+      var wrap = document.getElementById('pr-bajo');
+      var table = el('table');
+      var thead = el('thead');
+      var hr = el('tr');
+      hr.appendChild(th(null, 'Alimento'));
+      hr.appendChild(th(null, 'Categoría'));
+      hr.appendChild(th(null, 'Grupo candidato'));
+      hr.appendChild(th(null, 'Señales'));
+      hr.appendChild(th(null, 'Razón'));
+      thead.appendChild(hr);
+      table.appendChild(thead);
+      var tbody = el('tbody');
+      var trRefs = [];
+      rows.forEach(function (r) {
+        var tr = el('tr');
+        tr.appendChild(td(null, r.name));
+        tr.appendChild(td('dim', r.category || '—'));
+        var gc = td('dim');
+        if (r.group) gc.appendChild(el('span', 'gchip', r.group));
+        else gc.textContent = '—';
+        tr.appendChild(gc);
+        tr.appendChild(td('dim', r.signals));
+        tr.appendChild(td('reason', r.reason));
+        tbody.appendChild(tr);
+        trRefs.push({ tr: tr, hay: (r.name + ' ' + (r.category || '') + ' ' + (r.group || '') + ' ' + r.reason).toLowerCase() });
+      });
+      table.appendChild(tbody);
+      wrap.appendChild(table);
+
+      var input = document.getElementById('pr-bajo-filter');
+      var hits = document.getElementById('pr-bajo-hits');
+      function applyFilter() {
+        var q = input.value.trim().toLowerCase();
+        var shown = 0;
+        trRefs.forEach(function (ref) {
+          var show = q === '' || ref.hay.indexOf(q) !== -1;
+          ref.tr.style.display = show ? '' : 'none';
+          if (show) shown += 1;
+        });
+        hits.textContent = q === '' ? fmtInt(trRefs.length) + ' filas' : fmtInt(shown) + ' de ' + fmtInt(trRefs.length);
+      }
+      input.addEventListener('input', applyFilter);
+      applyFilter();
+    })();
+
+    /* ---- Footer ---- */
+    (function () {
+      var f = document.getElementById('pr-foot');
+      f.appendChild(el('div', null, 'Operación (post-conversión de los 6 planes exchanges, SPEC R8 paso 5): con tu GO explícito se corre --apply (tier alto automático; medio solo si este reporte lo aprueba), con respaldo previo y re-dry-run de verificación (delta = 0). Reversible con --down desde el respaldo. Los foods ya clasificados a mano JAMÁS se pisan.'));
+      var s = el('div');
+      s.style.marginTop = '6px';
+      var strong = el('strong', null, 'Decisión pedida: ');
+      s.appendChild(strong);
+      s.appendChild(document.createTextNode('GO / NO-GO del apply, y si el tier medio entra o se queda afuera en esta pasada.'));
+      f.appendChild(s);
+    })();
+  })();
+</script>

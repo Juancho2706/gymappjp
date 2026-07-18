@@ -19,10 +19,22 @@
  *   # Dry-run (default, no escribe): reporte MD+JSON en ./tmp/nutrition-v2-conversion
  *   node --import tsx scripts/nutrition-v2-conversion/convert-v1-plans.ts
  *   node --import tsx scripts/nutrition-v2-conversion/convert-v1-plans.ts --coach josefit
+ *   # Orden de corrida (SPEC R7: Alan y ali de jotap primero) — ids de CLIENTE V1, no de plan:
+ *   node --import tsx scripts/nutrition-v2-conversion/convert-v1-plans.ts --priority <alanClientId>,<aliClientId>
  *   # Apply (escribe en dark):
  *   $env:NUTRITION_V2_CONVERT_CONFIRM='yes'; node --import tsx scripts/nutrition-v2-conversion/convert-v1-plans.ts --apply
  *
- * Flags: --dry-run (default) | --apply | --coach <slug> | --out <dir>
+ * Flags: --dry-run (default) | --apply | --coach <slug> | --out <dir> | --priority <id1,id2,...>
+ *        | --allow-unmapped-exchanges
+ *
+ * Porciones (planes `exchanges`, SPEC R7/T3.2) — gate fail-closed:
+ *   Si un plan tiene targets de porciones no mapeables (`fidelity.unmappedExchangeTargets`:
+ *   grupo/base sin resolver o fuera de la grilla 0,5), el driver NO lo aplica por default
+ *   (outcome `blocked_unmapped` en apply, `would_block_unmapped` en dry-run). El reporte
+ *   MD+JSON siempre lista el desglose por comida/grupo (porciones-in V1 vs mapeadas), sin
+ *   inventar el dato faltante. `--allow-unmapped-exchanges` es el override EXPLICITO y
+ *   documentado (SPEC/T3.2): permite escribir el resto del plan a sabiendas de que esos
+ *   targets puntuales quedan fuera — usar solo tras revision manual del reporte.
  *
  * Env: NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY (apps/web/.env.local o .env.local).
  * IDEMPOTENTE: re-ejecutar sin cambios en V1 = no-op (link + publish_idempotency_key).
@@ -38,12 +50,25 @@ import { fileURLToPath } from 'node:url'
 import {
   mapV1PlanToV2Conversion,
   type ConversionBundle,
+  type ConversionExchangeGroup,
   type ConversionFidelity,
   type V1FoodItemRow,
+  type V1MealExchangeTargetRow,
   type V1MealRow,
   type V1PlanRow,
   type V1PlanTree,
 } from '@eva/nutrition-v2/conversion'
+import {
+  buildGroupLookup,
+  declaredPortionsByGroupCode,
+  isFailClosedBlocked,
+  mealExchangeBreakdown,
+  parsePriorityIds,
+  renderGroupComparisonLine,
+  renderMealExchangeTable,
+  reorderByPriority,
+  type MealExchangeTargetView,
+} from './report'
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url))
 config({ path: resolve(__dirname, '../../apps/web/.env.local') })
@@ -65,6 +90,10 @@ const APPLY = process.argv.includes('--apply')
 const DRY_RUN = !APPLY // dry-run es el default
 const COACH_SLUG = flagValue('--coach') ?? null
 const OUT_DIR = flagValue('--out') ?? resolve(__dirname, '../../tmp/nutrition-v2-conversion')
+// Orden de corrida parametrizable (SPEC R7: Alan y ali de jotap primero) — ids de client_id V1.
+const PRIORITY_CLIENT_IDS = parsePriorityIds(flagValue('--priority'))
+// Override EXPLICITO y documentado del gate fail-closed de porciones no mapeables (T3.2).
+const ALLOW_UNMAPPED_EXCHANGES = process.argv.includes('--allow-unmapped-exchanges')
 
 /** Fecha local de Santiago (YYYY-MM-DD) del dia de la corrida. */
 function santiagoToday(): string {
@@ -85,6 +114,8 @@ type PlanOutcome =
   | 'noop' // link vigente sin cambios (idempotente)
   | 'would_convert' // dry-run: se convertiria (nuevo)
   | 'would_resync' // dry-run: se re-sincronizaria
+  | 'blocked_unmapped' // apply: gate fail-closed — targets de porciones no mapeables, NO se escribio (T3.2)
+  | 'would_block_unmapped' // dry-run: idem, se bloquearia si se corriera --apply asi
   | 'skipped' // fuera de alcance / anomalia de datos
   | 'error' // fallo de escritura
 
@@ -101,14 +132,22 @@ type PlanReport = {
   v2PlanId?: string
   v2VersionId?: string
   fidelity?: ConversionFidelity
+  /** Desglose por comida/grupo de los targets de porciones DECLARADOS en V1 (T3.2, criterio 9). */
+  exchangeBreakdown?: MealExchangeTargetView[]
 }
 
 // ---------------------------------------------------------------------------
 // Lectura del arbol V1
 // ---------------------------------------------------------------------------
 
+type RawExchangeTarget = {
+  id: string
+  exchange_group_id: string
+  portions: number | string
+  notes: string | null
+}
 type RawPlan = V1PlanRow & { is_active: boolean; meals: RawMeal[] | null }
-type RawMeal = V1MealRow & { items: V1FoodItemRow[] | null }
+type RawMeal = V1MealRow & { items: V1FoodItemRow[] | null; exchange_targets: RawExchangeTarget[] | null }
 
 const PLAN_SELECT = `
   id, client_id, coach_id, org_id, name, plan_mode,
@@ -120,7 +159,8 @@ const PLAN_SELECT = `
     items:food_items (
       id, food_id, quantity, unit, swap_options,
       food:foods ( id, name, calories, protein_g, carbs_g, fats_g, fiber_g, serving_size, serving_unit )
-    )
+    ),
+    exchange_targets:meal_exchange_targets ( id, exchange_group_id, portions, notes )
   )
 `
 
@@ -139,6 +179,19 @@ function toTree(raw: RawPlan): V1PlanTree {
       swap_options: it.swap_options,
       food: it.food ?? null,
     })),
+    // Porciones (R7): targets por comida embebidos, ordenados por id para un order_index
+    // determinista entre corridas (meal_exchange_targets no tiene columna de orden).
+    exchangeTargets: (m.exchange_targets ?? [])
+      .slice()
+      .sort((a, b) => a.id.localeCompare(b.id))
+      .map(
+        (t): V1MealExchangeTargetRow => ({
+          id: t.id,
+          exchange_group_id: t.exchange_group_id,
+          portions: Number(t.portions),
+          notes: t.notes,
+        }),
+      ),
   }))
   return {
     plan: {
@@ -169,6 +222,63 @@ function toTree(raw: RawPlan): V1PlanTree {
 }
 
 // ---------------------------------------------------------------------------
+// Catalogo de grupos de intercambio (plumbing de grupos al mapper PURO — hallazgo B6)
+// ---------------------------------------------------------------------------
+
+type RawExchangeGroup = {
+  id: string
+  code: string
+  name: string
+  ref_calories: number | string
+  ref_protein_g: number | string
+  ref_carbs_g: number | string
+  ref_fats_g: number | string
+  composed_of: unknown
+  macros_confirmed: boolean
+  is_system: boolean
+}
+
+/** Parsea composed_of jsonb -> [{code, portions}] | null (forma cruda, sin ref). */
+function parseComposedOf(raw: unknown): Array<{ code: string; portions: number }> | null {
+  if (!Array.isArray(raw) || raw.length === 0) return null
+  const parts: Array<{ code: string; portions: number }> = []
+  for (const entry of raw) {
+    if (!entry || typeof entry !== 'object') continue
+    const code = (entry as Record<string, unknown>).code
+    const portions = Number((entry as Record<string, unknown>).portions)
+    if (typeof code === 'string' && code.trim() !== '' && Number.isFinite(portions) && portions > 0) {
+      parts.push({ code: code.trim(), portions })
+    }
+  }
+  return parts.length > 0 ? parts : null
+}
+
+/**
+ * Carga TODOS los grupos de intercambio (system + custom de cualquier coach). Se cargan
+ * incluso los soft-borrados (deleted_at): un plan viejo puede referenciar un grupo que el
+ * builder ya no ofrece y el freeze debe resolverlo por id igual (hallazgo B5). El mapper es
+ * PURO: recibe este catalogo por `opts.exchangeGroups` y resuelve por id sin tocar la DB.
+ */
+async function loadExchangeGroups(db: SupabaseClient): Promise<ConversionExchangeGroup[]> {
+  const { data, error } = await db
+    .from('exchange_groups')
+    .select('id, code, name, ref_calories, ref_protein_g, ref_carbs_g, ref_fats_g, composed_of, macros_confirmed, is_system')
+  if (error) throw new Error(`load exchange_groups: ${error.message}`)
+  return ((data ?? []) as RawExchangeGroup[]).map((g) => ({
+    id: g.id,
+    code: g.code,
+    name: g.name,
+    refCalories: Number(g.ref_calories),
+    refProteinG: Number(g.ref_protein_g),
+    refCarbsG: Number(g.ref_carbs_g),
+    refFatsG: Number(g.ref_fats_g),
+    composedOf: parseComposedOf(g.composed_of),
+    macrosConfirmed: g.macros_confirmed,
+    isSystem: g.is_system,
+  }))
+}
+
+// ---------------------------------------------------------------------------
 // Escritura V2 (service-role) — espejo del orden de persistAndPublishDraft
 // ---------------------------------------------------------------------------
 
@@ -194,6 +304,9 @@ async function persistAndPublish(
   await insertRows(db, 'nutrition_day_variants_v2', bundle.variantRows)
   await insertRows(db, 'nutrition_meal_slots_v2', bundle.slotRows)
   await insertRows(db, 'nutrition_prescription_items_v2', bundle.itemRows)
+  // Targets de porciones DESPUES de los slots (FK compuesta meal_slot_id+version_id) y
+  // ANTES de publicar. Snapshot ENRIQUECIDO ya congelado por el mapper (R7).
+  await insertRows(db, 'nutrition_slot_exchange_targets_v2', bundle.exchangeTargetRows)
 
   const { data, error } = await db.rpc('nutrition_v2_convert_publish', {
     p_actor: actorCoachId,
@@ -372,7 +485,20 @@ function macroLine(f: ConversionFidelity): string {
   return `V1 ${v1.calories}kcal / V2 ${v2.calories}kcal ${match ? 'consistente' : 'DRIFT'} · comidas ${f.mealCount} · slots ${f.slotCount} · items ${f.itemCount}`
 }
 
-function buildMarkdown(reports: PlanReport[], mode: string, effectiveFrom: string): string {
+/** Metadata de la corrida, ecoada en el header del reporte para trazabilidad (T3.2). */
+type RunMeta = {
+  priorityClientIds: string[]
+  allowUnmappedExchanges: boolean
+}
+
+/** Linea de porciones (R7): estrategia + conteo + Σ macros derivados, cuando el plan las trae. */
+function exchangeSummaryLine(f: ConversionFidelity): string | null {
+  if (f.exchangeTargetCount === 0 && f.unmappedExchangeTargets.length === 0) return null
+  const d = f.exchangeDerivedMacros
+  return `porciones: estrategia ${f.strategy} · ${f.exchangeTargetCount} target(s) mapeados · derivado ${d.calories}kcal/${d.proteinG}P/${d.carbsG}C/${d.fatsG}G · ${f.unmappedExchangeTargets.length} no mapeable(s)`
+}
+
+function buildMarkdown(reports: PlanReport[], mode: string, effectiveFrom: string, meta: RunMeta): string {
   const byCoach = new Map<string, PlanReport[]>()
   for (const r of reports) {
     const key = r.coachSlug ?? r.coachId
@@ -391,6 +517,17 @@ function buildMarkdown(reports: PlanReport[], mode: string, effectiveFrom: strin
   lines.push(`- Fecha de corrida (Santiago): ${effectiveFrom}`)
   lines.push(`- Planes evaluados: ${reports.length}`)
   lines.push(`- Resumen: ${Object.entries(counts).map(([k, v]) => `${k}=${v}`).join(' · ') || '—'}`)
+  lines.push(
+    `- Orden de corrida (--priority): ${meta.priorityClientIds.length > 0 ? meta.priorityClientIds.join(', ') : '(sin priorizar, orden natural)'}`,
+  )
+  lines.push(
+    `- Gate fail-closed de porciones no mapeables: ${meta.allowUnmappedExchanges ? 'DESACTIVADO por --allow-unmapped-exchanges (override explicito — revisar el desglose de cada plan igual)' : 'activo (default) — un plan con targets no mapeables NO se aplica'}`,
+  )
+  if ((counts.blocked_unmapped ?? 0) > 0 || (counts.would_block_unmapped ?? 0) > 0) {
+    lines.push(
+      `- **ATENCION**: ${(counts.blocked_unmapped ?? 0) + (counts.would_block_unmapped ?? 0)} plan(es) con targets de porciones no mapeables — ver desglose por comida/grupo abajo antes de decidir override o correccion manual en V1.`,
+    )
+  }
   lines.push('')
   for (const [coach, list] of Array.from(byCoach.entries()).sort()) {
     lines.push(`## Coach ${coach}`)
@@ -404,7 +541,7 @@ function buildMarkdown(reports: PlanReport[], mode: string, effectiveFrom: strin
       lines.push(`| ${r.planName} | ${r.clientId} | ${r.outcome} | ${info} |`)
     }
     lines.push('')
-    // No-acarreado / anomalias detalladas por plan.
+    // No-acarreado / anomalias detalladas por plan + porciones (R7/T3.2).
     for (const r of list) {
       const f = r.fidelity
       if (!f) continue
@@ -414,20 +551,48 @@ function buildMarkdown(reports: PlanReport[], mode: string, effectiveFrom: strin
       if (f.swapsAsNotes > 0) notes.push(`swaps_as_notes: ${f.swapsAsNotes}`)
       if (f.zeroQuantityItemsSkipped > 0) notes.push(`items qty<=0 saltados: ${f.zeroQuantityItemsSkipped}`)
       if (notes.length > 0) lines.push(`- **${r.planName}**: ${notes.join(' · ')}`)
+
+      const exchangeLine = exchangeSummaryLine(f)
+      if (exchangeLine) {
+        const blocked = r.outcome === 'blocked_unmapped' || r.outcome === 'would_block_unmapped'
+        lines.push(`- **${r.planName}** — ${exchangeLine}${blocked ? ' — **BLOQUEADO** (fail-closed, sin override)' : ''}`)
+        const breakdown = r.exchangeBreakdown ?? []
+        const comparison = renderGroupComparisonLine(
+          declaredPortionsByGroupCode(breakdown),
+          f.exchangeGroupPortions,
+        )
+        if (comparison) lines.push(`  - Por grupo (in declarado en V1 vs out mapeado): ${comparison}`)
+        const table = renderMealExchangeTable(breakdown)
+        if (table) {
+          lines.push('')
+          lines.push(
+            table
+              .split('\n')
+              .map((line) => `  ${line}`)
+              .join('\n'),
+          )
+          lines.push('')
+        }
+      }
     }
     lines.push('')
   }
   return lines.join('\n')
 }
 
-function writeReport(reports: PlanReport[], mode: string, effectiveFrom: string): { md: string; json: string } {
+function writeReport(
+  reports: PlanReport[],
+  mode: string,
+  effectiveFrom: string,
+  meta: RunMeta,
+): { md: string; json: string } {
   mkdirSync(OUT_DIR, { recursive: true })
   const stamp = new Date().toISOString().replace(/[:.]/g, '-')
   const base = `conversion-${DRY_RUN ? 'dryrun' : 'apply'}-${stamp}`
   const mdPath = resolve(OUT_DIR, `${base}.md`)
   const jsonPath = resolve(OUT_DIR, `${base}.json`)
-  writeFileSync(mdPath, buildMarkdown(reports, mode, effectiveFrom), 'utf8')
-  writeFileSync(jsonPath, JSON.stringify({ mode, effectiveFrom, reports }, null, 2), 'utf8')
+  writeFileSync(mdPath, buildMarkdown(reports, mode, effectiveFrom, meta), 'utf8')
+  writeFileSync(jsonPath, JSON.stringify({ mode, effectiveFrom, meta, reports }, null, 2), 'utf8')
   return { md: mdPath, json: jsonPath }
 }
 
@@ -456,6 +621,10 @@ async function main(): Promise<void> {
   const effectiveFrom = santiagoToday()
   console.log(`Target: ${url}`)
   console.log(`Modo: ${mode} · coach: ${COACH_SLUG ?? '(todos)'} · effective_from: ${effectiveFrom}`)
+  console.log(
+    `Orden (--priority): ${PRIORITY_CLIENT_IDS.length > 0 ? PRIORITY_CLIENT_IDS.join(', ') : '(sin priorizar)'} · ` +
+      `gate porciones no mapeables: ${ALLOW_UNMAPPED_EXCHANGES ? 'DESACTIVADO (--allow-unmapped-exchanges)' : 'activo'}`,
+  )
   if (APPLY) {
     console.log('Continuando en 3 segundos... (Ctrl+C para abortar)')
     await new Promise((r) => setTimeout(r, 3000))
@@ -482,7 +651,9 @@ async function main(): Promise<void> {
   if (coachIdFilter) query = query.eq('coach_id', coachIdFilter)
   const { data: rawPlans, error: plansErr } = await query
   if (plansErr) throw new Error(`load plans: ${plansErr.message}`)
-  const plans = (rawPlans ?? []) as RawPlan[]
+  // Orden de corrida parametrizable (SPEC R7): los client_id de --priority van primero, en su
+  // orden; el resto conserva el orden natural devuelto por la query. Sin --priority, no-op.
+  const plans = reorderByPriority((rawPlans ?? []) as RawPlan[], (p) => p.client_id, PRIORITY_CLIENT_IDS)
 
   // Resolver slugs de los coaches involucrados (para el reporte).
   const coachIds = Array.from(new Set(plans.map((p) => p.coach_id)))
@@ -494,6 +665,10 @@ async function main(): Promise<void> {
 
   const links = await loadLinks(db)
   const clientsWithActiveV2 = await loadClientsWithActiveV2(db)
+  // Catalogo de grupos para el mapper (planes exchanges — R7). Cargado una vez.
+  const exchangeGroups = await loadExchangeGroups(db)
+  // Indice id -> {code, name} para el desglose de fidelidad por comida/grupo del reporte (T3.2).
+  const groupLookup = buildGroupLookup(exchangeGroups)
 
   // Duplicados: >1 plan activo por cliente -> gana max(updated_at); el resto skipped_duplicate.
   const byClient = new Map<string, RawPlan[]>()
@@ -535,6 +710,7 @@ async function main(): Promise<void> {
       versionNumber,
       effectiveFromLocalDate: effectiveFrom,
       existingV2PlanId: link?.v2_plan_id,
+      exchangeGroups,
     })
 
     if (!result.ok) {
@@ -545,6 +721,11 @@ async function main(): Promise<void> {
       reports.push({ ...base, outcome: 'skipped', reason, detail: `${result.reason}${result.detail ? `: ${result.detail}` : ''}` })
       continue
     }
+
+    // Desglose por comida/grupo de los targets de porciones DECLARADOS en V1 (T3.2, criterio 9).
+    // Deterministico sobre `tree`+`result.fidelity.unmappedExchangeTargets`: idem para el re-map
+    // de un re-sync (mismo arbol, misma resolucion de grupos), asi que se computa una sola vez.
+    const exchangeBreakdown = mealExchangeBreakdown(tree.meals, groupLookup, result.fidelity.unmappedExchangeTargets)
 
     // Cliente con V2 activo pero SIN link a este plan V1. Dos casos, distinguidos por la
     // idempotency key determinista de la conversion:
@@ -632,13 +813,33 @@ async function main(): Promise<void> {
       }
     }
 
+    // Gate fail-closed (T3.2, criterio 9): un plan con targets de porciones no mapeables NO se
+    // aplica salvo el override EXPLICITO --allow-unmapped-exchanges. Cero invencion: nunca se
+    // completa el dato faltante, se bloquea el plan entero (o se deja pasar entero con el
+    // override, y el reporte igual lista lo que quedo sin mapear).
+    const exchangeBlocked = isFailClosedBlocked(result.fidelity.unmappedExchangeTargets.length, ALLOW_UNMAPPED_EXCHANGES)
+
     if (DRY_RUN) {
       reports.push({
         ...base,
-        outcome: isResync ? 'would_resync' : 'would_convert',
+        outcome: exchangeBlocked ? 'would_block_unmapped' : isResync ? 'would_resync' : 'would_convert',
         idempotencyKey: result.idempotencyKey,
         v2PlanId: link?.v2_plan_id,
         fidelity: result.fidelity,
+        exchangeBreakdown,
+      })
+      continue
+    }
+
+    if (exchangeBlocked) {
+      reports.push({
+        ...base,
+        outcome: 'blocked_unmapped',
+        reason: 'blocked_unmapped_exchanges',
+        detail: `${result.fidelity.unmappedExchangeTargets.length} target(s) de porciones no mapeables: ${result.fidelity.unmappedExchangeTargets.join('; ')} — usa --allow-unmapped-exchanges para forzar (override documentado, T3.2) o corrige el dato en V1`,
+        idempotencyKey: result.idempotencyKey,
+        fidelity: result.fidelity,
+        exchangeBreakdown,
       })
       continue
     }
@@ -680,6 +881,7 @@ async function main(): Promise<void> {
           versionNumber: vnum,
           effectiveFromLocalDate: effectiveFrom,
           existingV2PlanId: link.v2_plan_id,
+          exchangeGroups,
         })
         if (!remapped.ok) throw new Error(`remap re-sync fallo: ${remapped.reason}`)
         bundle = remapped
@@ -717,6 +919,7 @@ async function main(): Promise<void> {
         v2PlanId,
         v2VersionId: publishedVersionId,
         fidelity: bundle.fidelity,
+        exchangeBreakdown,
       })
     } catch (err) {
       reports.push({
@@ -728,7 +931,8 @@ async function main(): Promise<void> {
     }
   }
 
-  const paths = writeReport(reports, mode, effectiveFrom)
+  const runMeta: RunMeta = { priorityClientIds: PRIORITY_CLIENT_IDS, allowUnmappedExchanges: ALLOW_UNMAPPED_EXCHANGES }
+  const paths = writeReport(reports, mode, effectiveFrom, runMeta)
   const counts = reports.reduce<Record<string, number>>((acc, r) => {
     acc[r.outcome] = (acc[r.outcome] ?? 0) + 1
     return acc
@@ -736,7 +940,8 @@ async function main(): Promise<void> {
   console.log('\nResumen:', counts)
   console.log(`Reporte MD:   ${paths.md}`)
   console.log(`Reporte JSON: ${paths.json}`)
-  if (reports.some((r) => r.outcome === 'error')) process.exitCode = 1
+  // 'blocked_unmapped' es un fallo operativo (fail-closed): la corrida no convirtio ese plan.
+  if (reports.some((r) => r.outcome === 'error' || r.outcome === 'blocked_unmapped')) process.exitCode = 1
 }
 
 main().catch((err) => {
