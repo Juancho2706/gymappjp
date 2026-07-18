@@ -1,3 +1,4 @@
+import { Suspense } from 'react'
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { History, Info, ListChecks, Utensils } from 'lucide-react'
@@ -77,13 +78,37 @@ export default async function StudentNutritionV2Page({ params, searchParams }: P
       }
     >
       <div className="mx-auto w-full max-w-2xl">
-        {view === 'today' ? <TodayView clientId={user.id} date={today} base={base} /> : null}
-        {view === 'plan' ? <PlanView clientId={user.id} date={today} /> : null}
+        {/* Streaming: el shell + toolbar pintan de inmediato y cada vista (fan-out de
+            queries en su componente async) baja por Suspense — el tap del menú no queda
+            esperando el payload completo (QA CEO 2026-07-18). Cero cambio de datos. */}
+        {view === 'today' ? (
+          <Suspense fallback={<ViewSkeleton />}>
+            <TodayView clientId={user.id} date={today} base={base} />
+          </Suspense>
+        ) : null}
+        {view === 'plan' ? (
+          <Suspense fallback={<ViewSkeleton />}>
+            <PlanView clientId={user.id} date={today} />
+          </Suspense>
+        ) : null}
         {view === 'history' ? (
-          <HistoryView clientId={user.id} before={query.before ?? null} base={base} today={today} />
+          <Suspense fallback={<ViewSkeleton />}>
+            <HistoryView clientId={user.id} before={query.before ?? null} base={base} today={today} />
+          </Suspense>
         ) : null}
       </div>
     </NutritionPageShell>
+  )
+}
+
+/** Skeleton sobrio de una vista (cards apiladas) mientras stremea su fan-out de datos. */
+function ViewSkeleton() {
+  return (
+    <div aria-hidden="true" className="space-y-4">
+      <div className="h-40 animate-pulse rounded-card border border-border-subtle bg-surface-sunken/60" />
+      <div className="h-28 animate-pulse rounded-card border border-border-subtle bg-surface-sunken/60" />
+      <div className="h-28 animate-pulse rounded-card border border-border-subtle bg-surface-sunken/60" />
+    </div>
   )
 }
 

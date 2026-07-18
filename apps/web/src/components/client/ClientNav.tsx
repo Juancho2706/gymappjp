@@ -167,7 +167,10 @@ export function ClientNav({ coachSlug, basePath, coachBrand, coachLogoUrl, coach
             <Link
                 key={item.href}
                 href={item.href}
-                prefetch={false}
+                // Prefetch DEFAULT (auto) de Next: en rutas dinámicas solo baja el árbol hasta el
+                // loading boundary del segmento (todas las rutas del menú lo tienen) — barato, y el
+                // tap pinta el loader al instante en vez de esperar el round-trip. El proxy en /c
+                // corre también en prefetch por diseño (solo SELECTs, ver matcher de src/proxy.ts).
                 onClick={() => {
                     if (pathname !== item.href) setIsNavigating(item.href)
                 }}
@@ -224,7 +227,8 @@ export function ClientNav({ coachSlug, basePath, coachBrand, coachLogoUrl, coach
             <Link
                 key={item.href}
                 href={item.href}
-                prefetch={false}
+                // Prefetch default (auto): baja solo hasta el loading.tsx del segmento — ver nota
+                // en renderDesktopLink. Feedback inmediato del tap en la cápsula mobile.
                 aria-label={item.label}
                 aria-current={isActive ? 'page' : undefined}
                 title={item.label}

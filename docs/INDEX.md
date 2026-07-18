@@ -9,6 +9,12 @@
 > `docs/audits/*`, `docs/archive/*` y `docs/rn-port/specs/seccion-{2,3}/*` tienen decenas
 > de archivos por carpeta; para esas se listó 1 línea por **subcarpeta/serie** (con conteo
 > de archivos) en vez de 1 línea por archivo individual — están indicadas explícitamente.
+>
+> **Actualización 2026-07-18**: los 4 docs marcados como candidatos a archivar en la
+> sección homónima (`PROJECT_STRUCTURE.md`, `rn-web-parity-2026-06-21.md`,
+> `pagos-flow-mercadopago-opcion-b.md`, `nutrition-v2/README.md`) fueron movidos a
+> `docs/archive/` con nota de archivado; el resto del INDEX sigue reflejando el barrido
+> original (nada más se movió ni se borró).
 
 ## 0. Punto de entrada
 
@@ -24,7 +30,7 @@
 | Doc | Estado | Qué es |
 |---|---|---|
 | `docs/product/nutrition-v2/ESTADO_Y_PENDIENTES.md` | **VIVO — fuente única de verdad** | Doc de estado de la sesión RNBUILD, actualizado en esta tarea (2026-07-18): V2 en `mode=on`, Porciones F1 operado en prod, gate de alumnos, pendientes reales. |
-| `docs/product/nutrition-v2/README.md` | histórico **(desactualizado)** | Índice de la carpeta; dice "canary solo para josefit" y fecha 2026-07-17 — contradice el flip a `mode=on` del 18-jul. Actualizar o apuntar a `ESTADO_Y_PENDIENTES.md`. |
+| `docs/product/nutrition-v2/README.md` | VIVO (reescrito 2026-07-18) | Índice mínimo de la carpeta; apunta a `ESTADO_Y_PENDIENTES.md` como fuente de verdad. El índice anterior (canary/josefit, desactualizado) se archivó en `docs/archive/nutrition-v2/README.md`. |
 | `docs/product/nutrition-v2/TANDA_1_PRODUCT_CONTRACT_WIREFRAMES_2026.md` | histórico | Contrato de producto + wireframes de la Tanda 1 (14-jul), cerrada. Sigue citado como vigente por el README de la carpeta — es insumo de diseño, no de estado. |
 | `docs/product/nutrition-v2/VALIDATION_RISKS_AND_KNOWN_BLOCKERS_2026.md` | histórico **(verificar vigencia)** | Riesgos/bloqueos conocidos al 15-jul; declara que debe actualizarse en cada cierre de bloqueo — no confirmado si se mantuvo tras el flip. |
 | `docs/product/nutrition-v2/ADDON_GATING_AUDIT_2026-07-15.md` | histórico | Auditoría puntual (15-jul): el addon "Nutrición Pro" no estaba cableado en V2. Verificar si sigue sin resolver o ya se cerró (los 4 módulos quedaron incluidos en todo plan pago el 17-jul, commit `3a91e041`, lo que probablemente vuelve obsoleto el hallazgo). |
@@ -64,7 +70,7 @@
 | `docs/rn-port/specs/seccion-3/*` (≈35 archivos: briefs, verify-fix, reports, _exec) | VIVO / histórico mixto **(verificar caso a caso)** | Specs + briefs + verificaciones de la Sección 3 (dashboard coach, directory, ficha). Según `ESTADO_Y_PENDIENTES.md`: 13/14 cerradas, falta `ficha-nutricion-facturacion` (su mitad nutrición ya la superó V2 — ese spec puntual puede quedar obsoleto). |
 | `docs/audits/rn-parity-qa/*` (19 archivos) | histórico | Series de auditoría/QA de paridad RN-web (rondas CEO 1,2,4,6,7 + barridos E8 + auditorías R4/R5). Registro de rondas ya cerradas; insumo de por qué se hicieron los fixes, no estado actual. |
 | `docs/audits/rn-mobile-vs-web-parity.md` | histórico | Auditoría de paridad, snapshot único. |
-| `docs/audits/rn-web-parity-2026-06-21.md` | **OBSOLETO-candidato-a-archivar** | Auditoría de paridad de junio-2026, explícitamente calificada "obsoleta como plan" en `ESTADO_Y_PENDIENTES.md` (aunque el estado funcional ~95% que reporta sigue citado). Ya vive en `project_rn_web_parity_audit.md` (memoria) como "informe, no plan". |
+| `docs/archive/audits/rn-web-parity-2026-06-21.md` | histórico (ya archivado 2026-07-18) | Auditoría de paridad de junio-2026, explícitamente calificada "obsoleta como plan" en `ESTADO_Y_PENDIENTES.md` (aunque el estado funcional ~95% que reporta sigue citado). Ya vive en `project_rn_web_parity_audit.md` (memoria) como "informe, no plan". Reemplazada por `docs/audits/rn-parity-qa/*`. |
 | `docs/audits/alumno-web-vs-mobile.md` | histórico | Comparación puntual alumno web vs. mobile. |
 | `docs/audits/coach-mobile-readiness-review.md`, `mobile-native-advantages.md`, `mobile-roadmap.md`, `mobile-shared-foundation.md`, `mobile-ux-design-language.md` | histórico | Serie de auditorías/roadmaps de la estrategia mobile, previos al port 1:1 actual — insumo de diseño ya decidido (RN Expo + NativeWind, ver memoria `project_rn_mobile_stack.md`). |
 | `docs/audits/pwa-screens-map-2026-06-22.md` | histórico | Mapa de pantallas PWA de junio, insumo del inventario del port. |
@@ -100,7 +106,7 @@
 
 | Doc | Estado | Qué es |
 |---|---|---|
-| `docs/architecture/PROJECT_STRUCTURE.md` | **OBSOLETO-candidato-a-archivar** | Dice "rama activa `v2/enterprise`", "Supabase local para desarrollo", fechado 2026-05-21. El repo hoy trabaja contra Supabase remota/prod desde `master` (ver `project_v2_working_rules.md`: "local-only OBSOLETO"). Reescribir o archivar. |
+| `docs/archive/architecture/PROJECT_STRUCTURE.md` | histórico (ya archivado 2026-07-18) | Dice "rama activa `v2/enterprise`", "Supabase local para desarrollo", fechado 2026-05-21. El repo hoy trabaja contra Supabase remota/prod desde `master` (ver `project_v2_working_rules.md`: "local-only OBSOLETO"). Reemplazado por `docs/architecture/FLOWS_AND_COMPONENTS.md`. |
 | `docs/architecture/FLOWS_AND_COMPONENTS.md` | VIVO | Mapa de zonas/rutas/flujos, actualizado 2026-07-12 (paridad RN ficha coach). Más reciente que `PROJECT_STRUCTURE.md`; sigue siendo referencia útil. |
 | `docs/architecture/AUTH_UX.md` | histórico **(verificar)** | Blueprint de auth/seguridad web→RN, fechado 2026-05-23, rama `v2/enterprise`. Confirmar si el blueprint visual sigue vigente tras el rediseño EVA DS y el login Google (PRs #108/#109). |
 | `docs/architecture/CLEAN_ARCHITECTURE_AUDIT.md` | histórico | Auditoría puntual (23-may) de `_data/*.queries.ts`, "AUDIT ONLY", ligada al Plan B Sesión 1 — snapshot, no vivo. |
@@ -133,7 +139,7 @@
 | Doc | Estado | Qué es |
 |---|---|---|
 | `docs/plans/enterprise-reference-matrices.md` | histórico | Matrices de referencia del Plan C Enterprise (1-jun), entregable de documentación ya cerrado. |
-| `docs/plans/pagos-flow-mercadopago-opcion-b.md` | histórico (superado) | Informe/pre-spec de pagos multi-gateway Flow+MP (30-jun). El dual-gateway ya está **LIVE en prod** (PRs #115-118, memoria `project_flow_multigateway_build.md`) — este doc es el diseño previo a la implementación, no el estado. |
+| `docs/archive/plans/pagos-flow-mercadopago-opcion-b.md` | histórico (ya archivado 2026-07-18) | Informe/pre-spec de pagos multi-gateway Flow+MP (30-jun). El dual-gateway ya está **LIVE en prod** (PRs #115-118, memoria `project_flow_multigateway_build.md`) — este doc es el diseño previo a la implementación, no el estado. |
 | `docs/plans/plan-c-enterprise-dashboard-revenue-mvp.md` | histórico | Plan C, "MVP implementado ~96%" al 1-jun; Enterprise quedó luego archivado a favor de Teams-first (memoria `project_teams_first_strategy.md`) — confirmar si el resto pendiente aquí sigue teniendo sentido. |
 | `docs/archive/estrategia/00-DIRECTOR.md`, `01-PLAN-archivado-enterprise.md`, `2026-06-11-teams-first-modulos-addons.md` | histórico (ya archivado) | Planes estratégicos ya ejecutados: Teams-first, addons, archivado de Enterprise. |
 | `docs/archive/movida/*` (7 archivos) | histórico (ya archivado) | Esfuerzo comercial "Movida" — deal cancelado 2026-06-16 (memoria `project_movida_deal.md`). |
@@ -162,7 +168,10 @@ corresponden.
 |---|---|---|
 | `docs/archive/specs/` | 63 | Specs de features ya shippeadas (exercise-creator, discount-codes, whitelabel-v2/r2, coach-settings-restructure, addons-billing, identity-workspace-access, enterprise-subdomain, enterprise-alumno-separation, busqueda-global, checkins-revisado, client-excel-import, coach-change-card, exec-fase-l, movida-*, redesign-eva-ds, pagos-multigateway-flow). |
 | `docs/archive/nutrition-overhaul-2026-06/` | 14 | Overhaul de nutrición de junio — superado por V2. |
-| `docs/archive/nutrition-v2/` | 8 | Handoffs/tandas de V2 — superados por `ESTADO_Y_PENDIENTES.md`. |
+| `docs/archive/nutrition-v2/` | 9 | Handoffs/tandas de V2 + el índice `README.md` anterior (canary/josefit) — superados por `ESTADO_Y_PENDIENTES.md` y el `README.md` nuevo. |
+| `docs/archive/architecture/` | 1 | `PROJECT_STRUCTURE.md` — describía rama `v2/enterprise`/Supabase local, superado por `FLOWS_AND_COMPONENTS.md`. Archivado 2026-07-18. |
+| `docs/archive/audits/` | 1 | `rn-web-parity-2026-06-21.md` — auditoría pre-rediseño, superada por `docs/audits/rn-parity-qa/*`. Archivado 2026-07-18. |
+| `docs/archive/plans/` | 1 | `pagos-flow-mercadopago-opcion-b.md` — diseño previo al dual-gateway Flow+MP, ya LIVE en prod. Archivado 2026-07-18. |
 | `docs/archive/movida/` | 7 (+2 en `negociacion/`) | Esfuerzo Movida, deal cancelado. |
 | `docs/archive/ops-local-only/` | 5 | Runbooks del flujo local-only, obsoleto (Supabase remota es la verdad hoy). |
 | `docs/archive/estrategia/` | 3 | Teams-first / archivado de Enterprise. |
@@ -179,29 +188,30 @@ corresponden.
 
 ## Candidatos a archivar
 
+> **EJECUTADO 2026-07-18**: los ítems 1-4 de abajo fueron archivados/reescritos (ver
+> secciones 1, 2, 4, 7 y 10 arriba). Se conserva el texto original de la señal como
+> registro de la decisión. Ítems 5-6 siguen abiertos/informativos, sin tocar.
+
 Docs que **no viven en `docs/archive/`** pero que, por contenido, ya quedaron
 superados o contradicen el estado real. No se movieron — es una señal para decisión
 humana.
 
-1. **`docs/architecture/PROJECT_STRUCTURE.md`** — describe rama activa `v2/enterprise` y
-   flujo Supabase local como el de trabajo; el repo opera hoy desde `master` contra
-   Supabase remota/prod (regla vigente en memoria `project_v2_working_rules.md`: "local-only
-   OBSOLETO"). Mantenerlo sin marcar induce a un colaborador nuevo a trabajar contra un
-   flujo que ya no existe.
+1. ~~**`docs/architecture/PROJECT_STRUCTURE.md`**~~ — **hecho**: movido a
+   `docs/archive/architecture/PROJECT_STRUCTURE.md` con nota de archivado; describía rama
+   activa `v2/enterprise` y flujo Supabase local como el de trabajo, superado por
+   `docs/architecture/FLOWS_AND_COMPONENTS.md`.
 
-2. **`docs/audits/rn-web-parity-2026-06-21.md`** — la propia `ESTADO_Y_PENDIENTES.md` lo
-   califica "obsoleta como plan" (aunque su cifra de ~95% funcional siga citada de
-   memoria). Vive fuera de `archive/` pese a estar reemplazada por las auditorías
-   `rn-parity-qa/*` y el `PLAN-OLAS-1A1.md` actuales.
+2. ~~**`docs/audits/rn-web-parity-2026-06-21.md`**~~ — **hecho**: movido a
+   `docs/archive/audits/rn-web-parity-2026-06-21.md` con nota de archivado; reemplazada por
+   las auditorías `rn-parity-qa/*` y el `PLAN-OLAS-1A1.md` actuales.
 
-3. **`docs/plans/pagos-flow-mercadopago-opcion-b.md`** — es el diseño *previo* a una
-   implementación que ya está LIVE en prod (dual-gateway Flow+MP, PRs #115-118). El plan
-   quedó ejecutado; mantenerlo en `plans/` (no en `archive/`) sugiere que sigue por hacerse.
+3. ~~**`docs/plans/pagos-flow-mercadopago-opcion-b.md`**~~ — **hecho**: movido a
+   `docs/archive/plans/pagos-flow-mercadopago-opcion-b.md` con nota de archivado; el
+   dual-gateway ya está LIVE en prod (PRs #115-118).
 
-4. **`docs/product/nutrition-v2/README.md`** — afirma "canario solo para josefit" y fecha
-   17-jul; el flip a `mode=on` (18-jul) lo dejó desactualizado un día después de escrito.
-   No es candidato a archivar (sigue siendo el índice de la carpeta), pero necesita edición
-   inmediata para no confundir a quien lo lea antes que `ESTADO_Y_PENDIENTES.md`.
+4. ~~**`docs/product/nutrition-v2/README.md`**~~ — **hecho**: el índice desactualizado
+   (canario/josefit, 17-jul) se archivó en `docs/archive/nutrition-v2/README.md`; en su
+   lugar hay un `README.md` nuevo y mínimo que apunta a `ESTADO_Y_PENDIENTES.md`.
 
 5. **`docs/product/nutrition-v2/ADDON_GATING_AUDIT_2026-07-15.md`** — reporta que el addon
    "Nutrición Pro" no estaba cableado en V2; dos días después (17-jul) los 4 módulos
@@ -214,5 +224,6 @@ humana.
    patrón (overhaul → V2 → porciones) ya pasó dos veces por el ciclo "vivo → archivado";
    nada que hacer, correctamente ubicados.
 
-**NO se tocó ningún archivo.** Este INDEX es señal para que el CEO o un agente futuro
+Los ítems 1-4 se archivaron el 2026-07-18 (`git mv` + nota de archivado + `docs/INDEX.md`
+actualizado). Los ítems 5-6 siguen sin tocar — son señal para que el CEO o un agente futuro
 decida mover/fusionar/reescribir con contexto humano.

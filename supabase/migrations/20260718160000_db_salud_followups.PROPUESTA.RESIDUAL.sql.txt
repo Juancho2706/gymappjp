@@ -1,10 +1,25 @@
 -- =============================================================================
--- PROPUESTA (NO APLICAR TAL CUAL) — Follow-ups de salud DB 2026-07-18
+-- PROPUESTA RESIDUAL (NO APLICAR TAL CUAL) — Follow-ups de salud DB 2026-07-18
 -- Extension .PROPUESTA.sql.txt a proposito: NO la levanta ninguna herramienta.
 -- Origen: docs/audits/db-salud-2026-07-18.md
--- Antes de convertir a .sql y aplicar: leer los TODO, verificar nombres de
--- columnas contra el esquema vivo y validar con tx-rollback + advisors.
--- Todo aca es aditivo salvo el bloque C1 (destructivo, comentado).
+--
+-- >>> YA SE EXTRAJO LO APLICABLE <<<
+-- El bloque P1 (indices de cobertura FK del write-path) se verifico contra el
+-- esquema vivo el 2026-07-19 y se movio a la migracion real:
+--     supabase/migrations/20260719100000_fk_write_path_indexes.sql
+-- La verificacion corrigio 5 nombres que la propuesta original habia INFERIDO mal:
+--   - nutrition_intake_entries.corrected_by      -> corrected_by_entry_id
+--   - nutrition_plans_v2.current_version         -> current_published_version_id
+--   - nutrition_slot_exchange_targets_v2.slot_version   -> FK COMPUESTA {meal_slot_id,version_id}
+--   - nutrition_prescription_items_v2.slot_version      -> FK COMPUESTA {meal_slot_id,version_id}
+--   - nutrition_meal_slots_v2.variant_version           -> FK COMPUESTA {day_variant_id,version_id}
+--   - tabla nutrition_v2_conversion_links_v2     -> nutrition_v2_conversion_links (sin sufijo)
+-- Las 3 FKs COMPUESTAS quedaron FUERA de la migracion: estan cubiertas por el
+-- prefijo (leading column) de sus indices UNIQUE/orden existentes (§A3 del informe).
+--
+-- Lo que sigue en este archivo NO esta listo para aplicar (requiere trabajo manual
+-- o esta agendado): DROP de _bak (C1), reescritura de policies initplan (P3), e
+-- indices opcionales de import de baja frecuencia.
 -- =============================================================================
 
 
@@ -12,7 +27,10 @@
 -- C1  (CRITICO / SEGURIDAD)  Borrar respaldos publicos sin RLS.
 --     Resuelve: 2x rls_disabled_in_public (ERROR) + 3x no_primary_key +
 --     ruido de unused_index + 1x rls_enabled_no_policy.
---     DESTRUCTIVO. Descomentar SOLO tras checklist:
+--
+--     >>> NO VA EN NINGUNA MIGRACION AHORA <<<
+--     La limpieza de tablas _bak esta AGENDADA para ~22-jul (ver MEMORY).
+--     Es destructivo. Se deja comentado con checklist previo:
 --       [ ] Operacion de catalogo/foods cerrada (dedup ya aplicada en prod).
 --       [ ] SELECT count(*) de cada _bak revisado; no se necesita revertir,
 --           o existe respaldo logico (pg_dump de la tabla) guardado aparte.
@@ -24,48 +42,24 @@
 
 
 -- -----------------------------------------------------------------------------
--- P1  Indices de cobertura para FKs del write-path de nutricion V2.
---     Aditivo. CREATE INDEX CONCURRENTLY NO corre dentro de una transaccion:
---     ejecutar cada sentencia por separado, FUERA de BEGIN/COMMIT.
---     Barato AHORA (tablas ~vacias); indexar en caliente luego cuesta Disk IO.
---     TODO: confirmar nombre exacto de cada columna contra information_schema
---           (los nombres de abajo se infieren del nombre del constraint FK).
+-- P1  Indices de cobertura FK del write-path  ->  YA EXTRAIDO / VERIFICADO.
+--     Ver supabase/migrations/20260719100000_fk_write_path_indexes.sql
+--     Este bloque queda aca solo como rastro historico; no reaplicar.
 -- -----------------------------------------------------------------------------
+-- (movido — 8 indices verificados en la migracion real)
 
--- Ingesta del alumno: la tabla que mas va a crecer.
-CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_nutrition_intake_entries_corrected_by
-  ON public.nutrition_intake_entries (corrected_by);
 
--- Snapshots diarios.
-CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_nutrition_day_snapshots_v2_plan_id
-  ON public.nutrition_day_snapshots_v2 (plan_id);
-CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_nutrition_day_snapshots_v2_day_variant_id
-  ON public.nutrition_day_snapshots_v2 (day_variant_id);
-
--- Audit log (crece con cada cambio).
-CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_nutrition_v2_audit_log_plan_id
-  ON public.nutrition_v2_audit_log (plan_id);
-CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_nutrition_v2_audit_log_intake_entry_id
-  ON public.nutrition_v2_audit_log (intake_entry_id);
-
--- Estructura de plan / porciones (crecen con cada plan y version).
-CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_nutrition_slot_exchange_targets_v2_slot_version
-  ON public.nutrition_slot_exchange_targets_v2 (slot_version);
-CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_nutrition_prescription_items_v2_slot_version
-  ON public.nutrition_prescription_items_v2 (slot_version);
-CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_nutrition_meal_slots_v2_variant_version
-  ON public.nutrition_meal_slots_v2 (variant_version);
-CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_nutrition_plan_versions_v2_parent_version_id
-  ON public.nutrition_plan_versions_v2 (parent_version_id);
-CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_nutrition_plans_v2_current_version
-  ON public.nutrition_plans_v2 (current_version);
-CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_nutrition_v2_conversion_links_v2_version_id
-  ON public.nutrition_v2_conversion_links (v2_version_id);
-
--- Import de catalogo (baja frecuencia; opcional, dejar si molesta el advisor).
--- CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_food_catalog_import_rows_resolved_food_id
+-- -----------------------------------------------------------------------------
+-- P1-opcional  Import de catalogo (baja frecuencia, tablas HOY con 0 filas).
+--     NO se incluyo en la migracion del write-path: no es write-path del alumno
+--     y no hay filas. Dejar como opcional; crear solo si el advisor molesta.
+--     Columnas y tablas VERIFICADAS 2026-07-19:
+--       food_catalog_import_rows.resolved_food_id  -> foods.id
+--       food_catalog_missing_codes.resolved_food_id -> foods.id
+-- -----------------------------------------------------------------------------
+-- CREATE INDEX IF NOT EXISTS ix_food_catalog_import_rows_resolved_food_id
 --   ON public.food_catalog_import_rows (resolved_food_id);
--- CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_food_catalog_missing_codes_resolved_food_id
+-- CREATE INDEX IF NOT EXISTS ix_food_catalog_missing_codes_resolved_food_id
 --   ON public.food_catalog_missing_codes (resolved_food_id);
 
 

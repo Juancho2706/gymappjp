@@ -4,10 +4,10 @@ import { expectNoRuntimeError, loginCoachStandalone, requireCanaryCoach } from '
 /**
  * MUTACIONES EN PRODUCCIÓN: ninguna. Spec de SOLO LECTURA.
  *
- * Entorno: Preview de Vercel (PLAYWRIGHT_BASE_URL) con el canary de Nutrición V2 activo para
- * el coach josefit. Loguea al coach, fija su workspace standalone y verifica que
- * /coach/nutrition-v2 carga el Centro con el roster (no redirige a la V1). No crea, edita ni
- * borra datos de ningún alumno.
+ * Entorno: Preview de Vercel (PLAYWRIGHT_BASE_URL) con Nutrición V2 activo para el coach de
+ * prueba E2E (Aurora Strength — cuenta propia, NUNCA el workspace del CEO). Loguea al coach,
+ * fija su workspace standalone y verifica que /coach/nutrition-v2 carga el Centro con el roster
+ * (no redirige a la V1). No crea, edita ni borra datos de ningún alumno.
  */
 test.describe('Nutrición V2 · Centro del coach (canary)', () => {
   test.beforeEach(requireCanaryCoach)

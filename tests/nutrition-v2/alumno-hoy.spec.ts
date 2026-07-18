@@ -9,11 +9,12 @@ import {
 
 /**
  * MUTACIÓN EN PRODUCCIÓN (mínima, auto-revertida):
- *   La alumna QA (Camila) marca UN alimento prescrito con "Lo comí" y el MISMO spec lo
- *   revierte retirando el registro desde la UI ("Retirar registro"). La adherencia queda
- *   neutralizada vía corrección; el registro original + la corrección persisten en la base
- *   por diseño (correction chain). No toca a ningún otro alumno. Precondición: Camila tiene un plan V2 con
- *   una prescripción pendiente hoy (lo crea builder-publish). Si no la hay, hace skip.
+ *   El alumno de prueba E2E (E2E Solo Alumno — cuenta propia, nunca del CEO) marca UN alimento
+ *   prescrito con "Lo comí" y el MISMO spec lo revierte retirando el registro desde la UI
+ *   ("Retirar registro"). La adherencia queda neutralizada vía corrección; el registro original
+ *   + la corrección persisten en la base por diseño (correction chain). No toca a ningún otro
+ *   alumno. Precondición: el alumno E2E tiene un plan V2 con una prescripción pendiente hoy (lo
+ *   crea builder-publish). Si no la hay, hace skip.
  *
  * Entorno: Preview de Vercel (PLAYWRIGHT_BASE_URL) con el canary activo para la alumna.
  */
