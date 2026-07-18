@@ -7,13 +7,16 @@ import {
 } from '@eva/nutrition-v2'
 import {
   applyQuickEditToDraft,
+  collectPortionGroups,
   createCatalogItem,
   normalizeTimeHHMM,
   qeItemMacros,
   quickEditReducer,
   readModelToEditState,
+  stepPortionsText,
   stepQuantityText,
   validateQuickEdit,
+  type QePortionGroup,
   type QuickEditState,
 } from './quick-edit-state'
 import type { BuilderFood } from '../builder/_lib/draft-builder'
@@ -258,5 +261,181 @@ describe('quick-edit-state (web)', () => {
     expect(stepQuantityText('3', 5, -1)).toBe('3')
     expect(normalizeTimeHHMM('08:00:00')).toBe('08:00')
     expect(normalizeTimeHHMM(null)).toBe('')
+  })
+})
+
+// ── Porciones (T1.2): hidratacion, contador, stepper 0,5 y proyeccion al draft ──────────
+
+const TARGET_ID = '99999999-9999-4999-8999-999999999999'
+const GROUP_C_ID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+const GROUP_V_ID = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
+
+function makePlanModelWithPortions(): NutritionPlanReadModel {
+  const model = makePlanModel()
+  model.dayVariants[0].mealSlots[0] = {
+    ...model.dayVariants[0].mealSlots[0],
+    exchangeTargets: [
+      {
+        id: TARGET_ID,
+        exchangeGroupId: GROUP_C_ID,
+        groupCode: 'C',
+        groupName: 'Cereales',
+        color: '#F59E0B',
+        portions: 2,
+        notes: null,
+        orderIndex: 0,
+        ref: { calories: 70, proteinG: 2, carbsG: 15, fatsG: 0.5 },
+        composedOf: null,
+        macrosConfirmed: true,
+      },
+      {
+        id: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+        exchangeGroupId: GROUP_V_ID,
+        groupCode: 'V',
+        groupName: 'Verduras',
+        color: '#22C55E',
+        portions: 1.5,
+        notes: null,
+        orderIndex: 1,
+        ref: { calories: 25, proteinG: 2, carbsG: 5, fatsG: 0 },
+        composedOf: null,
+        macrosConfirmed: false,
+      },
+    ],
+  }
+  return model
+}
+
+function hydratePortions() {
+  const planModel = makePlanModelWithPortions()
+  const state = readModelToEditState(planModel)
+  const baseDraft = readModelToDraft(planModel, CLIENT_ID)
+  if (!state || !baseDraft) throw new Error('fixture sin plan')
+  return {
+    state,
+    baseline: applyQuickEditToDraft(baseDraft, state),
+    currentOf: (s: QuickEditState) => applyQuickEditToDraft(baseDraft, s),
+    groups: collectPortionGroups(planModel),
+  }
+}
+
+describe('quick-edit-state — porciones', () => {
+  it('plan SIN porciones: portionTargets vacio, cero grupos elegibles y draft sin la clave', () => {
+    const { state } = hydrate()
+    expect(state.variants[0].slots[0].portionTargets).toEqual([])
+    expect(collectPortionGroups(makePlanModel())).toEqual([])
+    expect(currentDraftOf(state).dayVariants[0].mealSlots[0]).not.toHaveProperty('exchangeTargets')
+  })
+
+  it('hidratar y proyectar sin editar = 0 cambios; el draft con porciones pasa el schema', () => {
+    const { state, baseline, currentOf } = hydratePortions()
+    expect(state.variants[0].slots[0].portionTargets).toHaveLength(2)
+    expect(countDraftChanges(baseline, currentOf(state))).toBe(0)
+    expect(() => NutritionPlanDraftSchema.parse(currentOf(state))).not.toThrow()
+  })
+
+  it('stepper 0,5: 2 -> 1,5 cuenta 1 cambio; nunca baja de 0,5', () => {
+    const { state, baseline, currentOf } = hydratePortions()
+    const edited = quickEditReducer(state, {
+      type: 'STEP_PORTION_TARGET',
+      variantKey: VARIANT_ID,
+      slotKey: SLOT_ID,
+      targetKey: TARGET_ID,
+      direction: -1,
+    })
+    expect(edited.variants[0].slots[0].portionTargets[0].portions).toBe('1.5')
+    expect(countDraftChanges(baseline, currentOf(edited))).toBe(1)
+    expect(stepPortionsText('0.5', -1)).toBe('0.5')
+    expect(stepPortionsText('1,5', 1)).toBe('2')
+  })
+
+  it('alta desde el picker + baja de otro grupo = 2 cambios; no duplica un grupo ya presente', () => {
+    const { state, baseline, currentOf, groups } = hydratePortions()
+    const cereales = groups.find((g) => g.groupCode === 'C') as QePortionGroup
+    // Cinturon de unicidad: agregar un grupo ya presente en la franja no hace nada.
+    const dupe = quickEditReducer(state, {
+      type: 'ADD_PORTION_TARGET',
+      variantKey: VARIANT_ID,
+      slotKey: SLOT_ID,
+      key: 'nueva-key',
+      group: cereales,
+    })
+    expect(dupe.variants[0].slots[0].portionTargets).toHaveLength(2)
+
+    // Baja de Verduras + alta de Cereales en una franja NUEVA no aplica aqui; simulamos
+    // baja de V y re-alta de V (target nuevo sin id) => baja+alta = 2 cambios.
+    const removed = quickEditReducer(state, {
+      type: 'REMOVE_PORTION_TARGET',
+      variantKey: VARIANT_ID,
+      slotKey: SLOT_ID,
+      targetKey: TARGET_ID,
+    })
+    const verduras = groups.find((g) => g.groupCode === 'V') as QePortionGroup
+    const readded = quickEditReducer(removed, {
+      type: 'REMOVE_PORTION_TARGET',
+      variantKey: VARIANT_ID,
+      slotKey: SLOT_ID,
+      targetKey: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+    })
+    const withNew = quickEditReducer(readded, {
+      type: 'ADD_PORTION_TARGET',
+      variantKey: VARIANT_ID,
+      slotKey: SLOT_ID,
+      key: 'nueva-v',
+      group: verduras,
+    })
+    // Quedo: C quitado (1) + V quitado y re-agregado con las MISMAS porciones default 1
+    // (V baseline era 1,5 -> nuevo target 1: cuenta como cambio de porciones = 1).
+    expect(countDraftChanges(baseline, currentOf(withNew))).toBe(2)
+  })
+
+  it('quitar + restaurar en su posicion = undo local exacto (0 cambios)', () => {
+    const { state, baseline, currentOf } = hydratePortions()
+    const removedTarget = state.variants[0].slots[0].portionTargets[0]
+    const removed = quickEditReducer(state, {
+      type: 'REMOVE_PORTION_TARGET',
+      variantKey: VARIANT_ID,
+      slotKey: SLOT_ID,
+      targetKey: TARGET_ID,
+    })
+    expect(countDraftChanges(baseline, currentOf(removed))).toBe(1)
+    const restored = quickEditReducer(removed, {
+      type: 'RESTORE_PORTION_TARGET',
+      variantKey: VARIANT_ID,
+      slotKey: SLOT_ID,
+      index: 0,
+      target: removedTarget,
+    })
+    expect(countDraftChanges(baseline, currentOf(restored))).toBe(0)
+  })
+
+  it('validacion: porciones fuera de 0,5 en 0,5 bloquean el publish', () => {
+    const { state } = hydratePortions()
+    const bad = quickEditReducer(state, {
+      type: 'SET_PORTION_TARGET',
+      variantKey: VARIANT_ID,
+      slotKey: SLOT_ID,
+      targetKey: TARGET_ID,
+      value: '1.3',
+    })
+    const validation = validateQuickEdit(bad)
+    expect(validation.ok).toBe(false)
+    expect(validation.errors[`portion.${TARGET_ID}.portions`]).toBeTruthy()
+    // Coma decimal es-CL valida.
+    const comma = quickEditReducer(state, {
+      type: 'SET_PORTION_TARGET',
+      variantKey: VARIANT_ID,
+      slotKey: SLOT_ID,
+      targetKey: TARGET_ID,
+      value: '1,5',
+    })
+    expect(validateQuickEdit(comma).ok).toBe(true)
+  })
+
+  it('collectPortionGroups: unicos por grupo, ordenados por codigo, con ref del snapshot', () => {
+    const { groups } = hydratePortions()
+    expect(groups.map((g) => g.groupCode)).toEqual(['C', 'V'])
+    expect(groups[0].ref.carbsG).toBe(15)
+    expect(groups[1].macrosConfirmed).toBe(false)
   })
 })

@@ -45,6 +45,13 @@ import { archivePlanAction } from '@/app/coach/nutrition-v2/_actions/nutrition-a
 import { canProceedToPublishAfterArchive, effectiveDateConflicts, nextDayIso } from '../_lib/publish-conflict'
 import { FoodResultCard } from './FoodResultCard'
 import { PublishConflictDialog } from './PublishConflictDialog'
+// Porciones a elección (T1.1): capa opcional sobre structured/hybrid (SPEC R1). El estado
+// vive en un controller hermano del reducer (no se toca _lib/draft-builder) y se inyecta
+// al draft canónico justo antes de publicar (attachPortionsAndValidate).
+import { PortionsSection, usePortionsBuilder, type PortionsController } from './PortionsSection'
+import { PortionsDeriveCard } from './PortionsDeriveCard'
+import { PortionsReviewSection } from './PortionsReviewChips'
+import { attachPortionsAndValidate } from './portions-state'
 import { foodCategoryIconUrlFromName, resolveFoodImageUrl } from './food-card-presentation'
 import { foodCategoryIconUrl } from '@/lib/food-image'
 import { FoodThumb } from './FoodImage'
@@ -411,11 +418,13 @@ function SlotEditor({
   clientId,
   dispatch,
   errors,
+  portions,
 }: {
   slot: BuilderSlot
   clientId: string
   dispatch: Dispatch
   errors: Record<string, string>
+  portions: PortionsController
 }) {
   const subtotal = slotSubtotal(slot)
   return (
@@ -478,6 +487,11 @@ function SlotEditor({
           Alimento libre (con macros)
         </button>
       </div>
+
+      {/* NUEVO (SPEC UX-a): sección "Porciones a elección", hermana de la lista de
+          alimentos, debajo de "+ Alimento". Solo existe en structured/hybrid (SlotEditor
+          no se monta en planes flexibles — R1). */}
+      <PortionsSection slotKey={slot.key} slotName={slot.name} controller={portions} />
 
       <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-control bg-surface-sunken px-3 py-2">
         <span className="text-xs font-semibold uppercase tracking-wide text-muted">Subtotal franja</span>
@@ -704,11 +718,13 @@ function ConstructionStep({
   clientId,
   dispatch,
   errors,
+  portions,
 }: {
   state: BuilderState
   clientId: string
   dispatch: Dispatch
   errors: Record<string, string>
+  portions: PortionsController
 }) {
   const totals = dayTotals(state)
   if (!strategyUsesSlots(state.strategy)) {
@@ -726,7 +742,7 @@ function ConstructionStep({
       <div className="min-w-0 space-y-4">
         {errors.slots ? <p className="text-sm text-rose-600 dark:text-rose-300">{errors.slots}</p> : null}
         {state.slots.map((slot) => (
-          <SlotEditor key={slot.key} slot={slot} clientId={clientId} dispatch={dispatch} errors={errors} />
+          <SlotEditor key={slot.key} slot={slot} clientId={clientId} dispatch={dispatch} errors={errors} portions={portions} />
         ))}
         <button
           type="button"
@@ -756,10 +772,12 @@ function ReviewStep({
   state,
   dispatch,
   publishError,
+  portions,
 }: {
   state: BuilderState
   dispatch: Dispatch
   publishError: string | null
+  portions: PortionsController
 }) {
   const usesSlots = strategyUsesSlots(state.strategy)
   const totals = dayTotals(state)
@@ -796,6 +814,10 @@ function ReviewStep({
           ) : null}
         </dl>
       </NutritionCard>
+
+      {/* NUEVO (SPEC UX-a): chips read-only portionsSummaryLabel por franja + banner de
+          macros referenciales. El MacroBudget/totales existentes no se duplican. */}
+      {usesSlots ? <PortionsReviewSection slots={state.slots} controller={portions} /> : null}
 
       <div className="grid gap-4 md:grid-cols-2 md:items-start">
         <div>
@@ -900,6 +922,10 @@ export function PlanBuilderClient({
 }) {
   const router = useRouter()
   const [state, dispatch] = useReducer(builderReducer, today, createEmptyBuilderState)
+  // Porciones a elección: controller hermano del reducer (mapa slot.key → targets +
+  // catálogo de grupos con carga perezosa). Claves de franjas borradas quedan huérfanas
+  // sin efecto: attach/derive filtran por las franjas vivas de state.slots.
+  const portions = usePortionsBuilder(clientId)
   const [showErrors, setShowErrors] = useState(false)
   const [publishError, setPublishError] = useState<string | null>(null)
   const [conflictOpen, setConflictOpen] = useState(false)
@@ -970,6 +996,9 @@ export function PlanBuilderClient({
         clientId,
         planId: forceNewPlan ? null : (existingPlan?.id ?? null),
       })
+      // Inyecta los targets de porciones al draft canónico (capa opcional R1): sin
+      // porciones (o plan flexible, sin franjas) el draft queda byte-idéntico al de hoy.
+      draft = attachPortionsAndValidate(draft, state.slots.map((s) => s.key), portions.bySlot)
     } catch {
       setShowErrors(true)
       setError('El plan tiene datos incompletos. Revisa los pasos marcados y vuelve a intentar.')
@@ -1051,6 +1080,7 @@ export function PlanBuilderClient({
     let draft
     try {
       draft = assembleAndValidateDraft(state, { clientId, planId: null })
+      draft = attachPortionsAndValidate(draft, state.slots.map((s) => s.key), portions.bySlot)
     } catch {
       setConflictError('El plan tiene datos incompletos. Revisa los pasos marcados y vuelve a intentar.')
       return
@@ -1118,12 +1148,26 @@ export function PlanBuilderClient({
           <StrategyStep state={state} dispatch={dispatch} nutritionProEnabled={nutritionProEnabled} />
         ) : null}
         {state.step === 1 ? (
-          <TargetsStep state={state} dispatch={dispatch} errors={showErrors ? validation.errors : {}} />
+          <>
+            {/* NUEVO (SPEC UX-a / R6): con porciones en el draft, ofrece precargar los
+                target_* derivados. Solo precarga tras el tap; nunca sobrescribe sola. */}
+            <PortionsDeriveCard
+              liveSlotKeys={state.slots.map((s) => s.key)}
+              controller={portions}
+              onApply={(totals) => {
+                dispatch({ type: 'SET_TARGET', field: 'calories', value: String(Math.round(totals.calories)) })
+                dispatch({ type: 'SET_TARGET', field: 'proteinG', value: String(Math.round(totals.proteinG)) })
+                dispatch({ type: 'SET_TARGET', field: 'carbsG', value: String(Math.round(totals.carbsG)) })
+                dispatch({ type: 'SET_TARGET', field: 'fatsG', value: String(Math.round(totals.fatsG)) })
+              }}
+            />
+            <TargetsStep state={state} dispatch={dispatch} errors={showErrors ? validation.errors : {}} />
+          </>
         ) : null}
         {state.step === 2 ? (
-          <ConstructionStep state={state} clientId={clientId} dispatch={dispatch} errors={showErrors ? validation.errors : {}} />
+          <ConstructionStep state={state} clientId={clientId} dispatch={dispatch} errors={showErrors ? validation.errors : {}} portions={portions} />
         ) : null}
-        {state.step === 3 ? <ReviewStep state={state} dispatch={dispatch} publishError={publishError} /> : null}
+        {state.step === 3 ? <ReviewStep state={state} dispatch={dispatch} publishError={publishError} portions={portions} /> : null}
 
         {/* Controles del wizard: en movil la CTA primaria crece (target grande en la thumb zone);
             en sm+ vuelve a su ancho natural. "Atras" siempre visible (navegacion libre). */}

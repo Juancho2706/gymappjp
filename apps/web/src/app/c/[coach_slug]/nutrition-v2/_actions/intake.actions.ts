@@ -6,6 +6,8 @@ import {
   FoodCatalogSearchReadModelSchema,
   NutritionIntakeCorrectionSchema,
   NutritionIntakeMutationSchema,
+  buildNutritionIdempotencyKey,
+  buildNutritionPortionIntakeKey,
   type NutritionIntakeMutation,
 } from '@eva/nutrition-v2'
 import { createClient } from '@/lib/supabase/server'
@@ -315,4 +317,219 @@ export async function searchFoodCatalogAction(
     return fail('CATALOG_CONTRACT_MISMATCH', 'El catálogo devolvió un formato inesperado.')
   }
   return { ok: true, result: result.data }
+}
+
+// ── Marcar / deshacer porción (SPEC R4 + criterio 4) ─────────────────────────
+//
+// El marcar-porción es un intake SINTÉTICO: un tap del alumno registra las
+// ref-macros congeladas del grupo (× porciones marcadas) por el MISMO RPC canónico
+// (`record_nutrition_intake_v2`). El deshacer anula por el MISMO camino void
+// (`correct_nutrition_intake_v2`), NUNCA delete. Precisiones obligatorias:
+// - Idempotency key SIEMPRE por el helper canónico `buildNutritionPortionIntakeKey`
+//   (ordinal + attempt), de modo que re-marcar tras deshacer nunca colisiona con el
+//   intake anulado (hallazgos M2/B2).
+// - Transporte B1: `exchangeGroupCode`/`exchangePortions` viajan DENTRO de
+//   `p_snapshot` (el cuerpo nuevo del RPC los extrae a columnas; el viejo los ignora).
+//   Por eso NO se re-valida el snapshot con `NutritionIntakeMutationSchema` (que
+//   descartaría esas 2 llaves extra); la entrada real se valida con su propio schema.
+// - Modelo de confianza S2: self-report; sin validación server extra en F1. La
+//   cobertura es AUTO-DECLARADA (self-scope). No se revalida ref contra el snapshot
+//   vigente del target (hardening F2).
+// - No se llama `revalidatePath` aquí: no está en el contrato de entrada y la UI del
+//   alumno mantiene un delta optimista de `marcadas` reconciliado por idempotency key
+//   contra el próximo read-model (SPEC UX-c, hallazgo F1-front).
+
+export type MarkPortionInput = {
+  clientId: string
+  localDate: string
+  timezone?: string
+  slotCode: string
+  groupCode: string
+  groupName: string
+  portions: 0.5 | 1
+  ordinal: number
+  attempt: number
+  deviceId: string
+  ref: { calories: number; proteinG: number; carbsG: number; fatsG: number }
+}
+
+export type UndoPortionInput = { clientId: string; entryId: string }
+
+type PortionMarkSuccess = { ok: true; data: { entryId: string } }
+type PortionUndoSuccess = { ok: true; data: { correctionEntryId: string } }
+
+const PortionRefSchema = z.object({
+  calories: z.number().finite(),
+  proteinG: z.number().finite(),
+  carbsG: z.number().finite(),
+  fatsG: z.number().finite(),
+})
+
+const MarkPortionInputSchema = z.object({
+  clientId: z.string().uuid(),
+  localDate: z.string().date(),
+  timezone: z.string().trim().min(1).max(80).default('America/Santiago'),
+  slotCode: z.string().trim().min(1).max(64),
+  groupCode: z.string().trim().min(1).max(64),
+  groupName: z.string().trim().min(1).max(180),
+  portions: z.union([z.literal(0.5), z.literal(1)]),
+  ordinal: z.number().int().nonnegative(),
+  attempt: z.number().int().min(1),
+  deviceId: z.string().trim().min(1).max(200),
+  ref: PortionRefSchema,
+})
+
+const UndoPortionInputSchema = z.object({
+  clientId: z.string().uuid(),
+  entryId: z.string().uuid(),
+})
+
+/**
+ * Marca una porción cumplida (tap del alumno). Registra un intake sintético con
+ * `source='prescription'`, `custom_name` = nombre del grupo, `meal_slot` = franja,
+ * macros del snapshot = ref del grupo POR PORCIÓN (SIN multiplicar), y
+ * `exchangeGroupCode`/`exchangePortions` transportados dentro de `p_snapshot`.
+ * El escalado a porciones lo hace el SERVIDOR: `private.nutrition_v2_entry_factor`
+ * (migración 20260714210000) para unidad no-g/ml devuelve `quantity` tal cual, y los
+ * totales del read-model son `snapshot_macros × factor`. Con `p_quantity = portions`
+ * y `p_unit = 'porción'` el total queda `ref × portions` EXACTO (0,5 aporta ref×0,5).
+ * Multiplicar el snapshot aquí duplicaría la escala (ref × portions²). Paridad 1:1 con
+ * RN (apps/mobile/lib/nutrition-v2-portions.ts, canon T2.3).
+ * La idempotency key la emite el helper canónico con (ordinal, attempt).
+ */
+export async function markPortionIntakeAction(
+  input: MarkPortionInput,
+): Promise<PortionMarkSuccess | ActionFailure> {
+  const parsed = MarkPortionInputSchema.safeParse(input)
+  if (!parsed.success) {
+    return fail('INVALID_PAYLOAD', 'Datos de la porción inválidos.', zodFields(parsed.error))
+  }
+  const data = parsed.data
+
+  const auth = await authorizeStudentWrite(data.clientId)
+  if (!auth.ok) return auth
+
+  const key = buildNutritionPortionIntakeKey({
+    clientId: data.clientId,
+    deviceId: data.deviceId,
+    localDate: data.localDate,
+    slotCode: data.slotCode,
+    groupCode: data.groupCode,
+    ordinal: data.ordinal,
+    attempt: data.attempt,
+  })
+
+  const portions = data.portions
+  const snapshot = {
+    name: data.groupName,
+    brand: null,
+    // Macros = ref del grupo POR PORCIÓN, SIN multiplicar. El servidor escala por
+    // `p_quantity` vía `private.nutrition_v2_entry_factor` (totales = snapshot × factor,
+    // factor = quantity para unidad 'porción'). Multiplicar aquí duplicaría la escala.
+    calories: data.ref.calories,
+    proteinG: data.ref.proteinG,
+    carbsG: data.ref.carbsG,
+    fatsG: data.ref.fatsG,
+    fiberG: null,
+    servingSize: null,
+    servingUnit: null,
+    // Transporte B1: el cuerpo nuevo del RPC extrae estas 2 llaves a columnas; el
+    // cuerpo viejo (prod sin la migración) simplemente las ignora.
+    exchangeGroupCode: data.groupCode,
+    exchangePortions: portions,
+  }
+
+  const { data: rpcData, error } = await auth.supabase.rpc('record_nutrition_intake_v2', {
+    p_client_id: data.clientId,
+    p_local_date: data.localDate,
+    p_occurred_at: new Date().toISOString(),
+    p_timezone: data.timezone,
+    p_food_id: null,
+    p_custom_name: data.groupName,
+    p_quantity: portions,
+    p_unit: 'porción',
+    p_meal_slot: data.slotCode,
+    p_source: 'prescription',
+    p_capture_method: 'prescription',
+    p_plan_version_id: null,
+    p_prescription_item_id: null,
+    p_idempotency_key: key,
+    p_note: null,
+    p_snapshot: snapshot,
+  })
+  if (error) return mapRpcError(error)
+
+  const entryId = z.string().uuid().safeParse(rpcData)
+  if (!entryId.success) {
+    return fail('INVALID_RESPONSE', 'La base devolvió una respuesta inesperada.')
+  }
+  return { ok: true, data: { entryId: entryId.data } }
+}
+
+/**
+ * Deshace una porción marcada. Anula por el MISMO camino void que `voidIntakeAction`:
+ * una CORRECCIÓN de contribución CERO vía `correct_nutrition_intake_v2` (nunca delete).
+ * El RPC además fuerza `exchange_portions = null` en la correctora (belt B3), así que
+ * el contador de porciones Y los macros revierten. La correctora no aporta cobertura
+ * ni macros; su fecha/franja son inmateriales (se usa la fecha actual).
+ */
+export async function undoPortionIntakeAction(
+  input: UndoPortionInput,
+): Promise<PortionUndoSuccess | ActionFailure> {
+  const parsed = UndoPortionInputSchema.safeParse(input)
+  if (!parsed.success) {
+    return fail('INVALID_PAYLOAD', 'Datos para deshacer la porción inválidos.', zodFields(parsed.error))
+  }
+  const data = parsed.data
+
+  const auth = await authorizeStudentWrite(data.clientId)
+  if (!auth.ok) return auth
+
+  // Key estable por entry anulada: re-deshacer la misma entry es idempotente (y el RPC
+  // corta con 'only_active_entries_can_correct' si ya fue corregida).
+  const key = buildNutritionIdempotencyKey({
+    kind: 'correction',
+    clientId: data.clientId,
+    deviceId: 'portion-undo',
+    operationId: `void-${data.entryId}`,
+  })
+  const nowIso = new Date().toISOString()
+
+  const { data: rpcData, error } = await auth.supabase.rpc('correct_nutrition_intake_v2', {
+    p_corrects_entry_id: data.entryId,
+    p_correction_reason: 'Porción deshecha',
+    p_client_id: data.clientId,
+    p_local_date: nowIso.slice(0, 10),
+    p_occurred_at: nowIso,
+    p_timezone: 'America/Santiago',
+    p_food_id: null,
+    p_custom_name: 'Porción deshecha',
+    p_quantity: 1,
+    p_unit: 'porción',
+    p_meal_slot: null,
+    p_source: 'manual',
+    p_capture_method: 'manual',
+    p_plan_version_id: null,
+    p_prescription_item_id: null,
+    p_idempotency_key: key,
+    p_note: null,
+    p_snapshot: {
+      name: 'Porción deshecha',
+      brand: null,
+      calories: 0,
+      proteinG: 0,
+      carbsG: 0,
+      fatsG: 0,
+      fiberG: 0,
+      servingSize: null,
+      servingUnit: null,
+    },
+  })
+  if (error) return mapRpcError(error)
+
+  const correctionEntryId = z.string().uuid().safeParse(rpcData)
+  if (!correctionEntryId.success) {
+    return fail('INVALID_RESPONSE', 'La base devolvió una respuesta inesperada.')
+  }
+  return { ok: true, data: { correctionEntryId: correctionEntryId.data } }
 }

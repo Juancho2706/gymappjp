@@ -32,9 +32,11 @@ import {
 import { quickEditPublishAction } from '../../_actions/quick-edit.actions'
 import {
   applyQuickEditToDraft,
+  collectPortionGroups,
   quickEditReducer,
   readModelToEditState,
   validateQuickEdit,
+  type QePortionGroup,
   type QuickEditAction,
   type QuickEditState,
 } from './quick-edit-state'
@@ -54,6 +56,12 @@ interface QuickEditContextValue {
   visibleNotes: string | null
   protocolNotes: string | null
   permissions: NutritionPlanReadModel['permissions']
+  /**
+   * Grupos de porciones que el plan ya usa (snapshots congelados del read model), para el
+   * picker de la seccion "Porciones a eleccion". [] = plan sin capa de porciones (la
+   * seccion no se pinta — SPEC UX-c "capa invisible").
+   */
+  portionGroups: QePortionGroup[]
   /** dd-mm-yyyy si la version vigente arranca en el futuro; null = aplica desde hoy. */
   futureDateLabel: string | null
   changeCount: number
@@ -105,6 +113,7 @@ export function QuickEditProvider({
   const initialState = useMemo(() => readModelToEditState(planModel), [planModel])
   // El server pisa effectiveFrom (max(hoy, base)) y las notas (carry-over §2.3).
   const baseDraft = useMemo(() => readModelToDraft(planModel, clientId), [planModel, clientId])
+  const portionGroups = useMemo(() => collectPortionGroups(planModel), [planModel])
 
   if (!initialState || !baseDraft) {
     throw new Error('QuickEditProvider requiere un plan vigente en el read model')
@@ -276,6 +285,7 @@ export function QuickEditProvider({
     visibleNotes: planModel.visibleNotes,
     protocolNotes: planModel.protocolNotes,
     permissions: planModel.permissions,
+    portionGroups,
     futureDateLabel,
     changeCount,
     errors: validation.errors,

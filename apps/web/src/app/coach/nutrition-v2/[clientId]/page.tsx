@@ -33,6 +33,7 @@ import { ArchivePlanButton } from '../_components/ArchivePlanButton'
 import { ConvertedPlanBanner } from '../_components/ConvertedPlanBanner'
 import { canAssignSourcePlan } from '../_lib/assign-plan'
 import { QuickEditEntry } from './_quick-edit/QuickEditEntry'
+import { PortionDayCoverageCard } from './PortionDayCoverageCard'
 
 interface Props {
   params: Promise<{ clientId: string }>
@@ -254,6 +255,11 @@ export default async function CoachNutritionV2ClientPage({ params, searchParams 
               }),
             ]}
           />
+
+          {/* Fila "Porciones" read-only bajo los macros del día (SPEC UX-b). Misma
+              fuente que el alumno (read-model), cero cálculo nuevo; sin targets de
+              porciones el componente no renderiza nada. */}
+          <PortionDayCoverageCard coverage={detail.today.dayCoverage} />
 
           <div className="grid gap-4 lg:grid-cols-2">
             <NutritionCard>

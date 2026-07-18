@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Alert, AppState, Pressable, RefreshControl, ScrollView, Share, Text, TextInput, View } from 'react-native'
 import { useFocusEffect, useRouter } from 'expo-router'
 import * as Haptics from 'expo-haptics'
@@ -22,7 +22,21 @@ import {
 } from '../../../components/nutrition-v2'
 import { Sheet as ActionSheet } from '../../../components/Sheet'
 import {
+  PortionDayCoverageRow,
+  PortionEquivalencesSheet,
+  PortionSlotSection,
+  PortionSnackbar,
+  coverageViewFor,
+  usePortionMarks,
+} from '../../../components/alumno/nutrition-v2'
+import type {
+  PendingPortionMark,
+  PendingPortionVoid,
+  PortionCoverageView,
+} from '../../../lib/nutrition-v2-portions'
+import {
   NUTRITION_STRATEGIES,
+  type NutritionSlotExchangeTargetRead,
   NutritionHistoryPageReadModelSchema,
   NutritionPlanReadModelSchema,
   NutritionTodayReadModelSchema,
@@ -108,6 +122,11 @@ interface OptimisticOverlay {
 }
 
 const EMPTY_OVERLAY: OptimisticOverlay = { addedBySlot: {}, addedUnassigned: [], hiddenIds: [] }
+// Constantes de referencia ESTABLE para props de cards memoizadas (hallazgo M3):
+// `?? []` inline crearía un array nuevo por render y rompería React.memo.
+const EMPTY_ROWS: NutritionFoodRowModel[] = []
+const EMPTY_PORTION_MARKS: PendingPortionMark[] = []
+const EMPTY_PORTION_VOIDS: PendingPortionVoid[] = []
 
 function TodayTab() {
   const router = useRouter()
@@ -123,6 +142,10 @@ function TodayTab() {
   const [overlay, setOverlay] = useState<OptimisticOverlay>(EMPTY_OVERLAY)
   const [actionEntry, setActionEntry] = useState<NutritionIntakeReadItem | null>(null)
   const [celebration, setCelebration] = useState<CelebrationInstance | null>(null)
+  // Porciones: sheet de equivalencias abierto + puente hacia la reconciliación del
+  // delta optimista (el hook se declara DESPUÉS de `load`, así que va por ref).
+  const [equivOpen, setEquivOpen] = useState<{ slotCode: string; groupCode: string } | null>(null)
+  const portionsReconcile = useRef<(fetchStartedAt: number) => void>(() => {})
   const celebrationNonce = useRef(0)
   const fireCelebration = useCallback((decision: CelebrationDecision) => {
     celebrationNonce.current += 1
@@ -184,21 +207,25 @@ function TodayTab() {
     }
 
     try {
+      const fetchStartedAt = Date.now()
       const fresh = await getNutritionTodayV2({ date, signal: controller.signal })
       if (!mountedRef.current) return
       setModel(fresh)
       setOffline(false)
       setOverlay(EMPTY_OVERLAY)
+      portionsReconcile.current(fetchStartedAt)
       await writeNutritionV2Cache({ userId, clientId: userId, kind: 'today', scopeKey: date, payload: fresh })
       if (!mountedRef.current) return
       const flushed = await flushNutritionV2MutationQueue(userId)
       if (mountedRef.current) setPending(flushed.pending)
       if (flushed.sent > 0 && mountedRef.current) {
         // Server truth changed after replay: refetch once so consumed reflects flushed writes.
+        const replayStartedAt = Date.now()
         const replayed = await getNutritionTodayV2({ date }).catch(() => null)
         if (replayed && mountedRef.current) {
           setModel(replayed)
           setOverlay(EMPTY_OVERLAY)
+          portionsReconcile.current(replayStartedAt)
           await writeNutritionV2Cache({ userId, clientId: userId, kind: 'today', scopeKey: date, payload: replayed })
         }
       }
@@ -239,6 +266,31 @@ function TodayTab() {
     const q = await getNutritionV2QueueStatus(userId)
     if (mountedRef.current) setPending(q.pending)
   }, [userId])
+
+  // ── Porciones (SPEC nutrition-portions UX-b/UX-c). Callbacks ESTABLES para no
+  // romper el React.memo de las cards por franja (hallazgo M3). ──
+  const requestReload = useCallback(() => {
+    void load(true)
+  }, [load])
+  const onQueuedChange = useCallback(() => {
+    void refreshPending()
+  }, [refreshPending])
+  const portions = usePortionMarks({
+    userId,
+    deviceId,
+    model,
+    date,
+    timezone: TZ,
+    requestReload,
+    onQueuedChange,
+  })
+  useEffect(() => {
+    portionsReconcile.current = portions.reconcile
+  }, [portions.reconcile])
+  const onOpenEquivalences = useCallback((slotCode: string, groupCode: string) => {
+    setEquivOpen({ slotCode, groupCode })
+  }, [])
+  const hiddenSet = useMemo(() => new Set(overlay.hiddenIds), [overlay.hiddenIds])
 
   const addRow = useCallback((slotCode: string | null, row: NutritionFoodRowModel) => {
     setOverlay((prev) =>
@@ -583,7 +635,6 @@ function TodayTab() {
     )
   }
 
-  const hiddenSet = new Set(overlay.hiddenIds)
   const extra = { calories: 0, proteinG: 0, carbsG: 0, fatsG: 0 }
   for (const rows of Object.values(overlay.addedBySlot)) {
     for (const row of rows) {
@@ -622,6 +673,32 @@ function TodayTab() {
     ...model.unassignedIntake.filter((e) => !hiddenSet.has(e.id)).map(intakeToRow),
     ...overlay.addedUnassigned,
   ]
+
+  // Sheet de equivalencias: datos derivados de la franja abierta (solo cuando está
+  // abierto; sin hooks — el early-return de arriba lo permite).
+  const equivSlot = equivOpen
+    ? model.mealSlots.find((slot) => slot.code === equivOpen.slotCode) ?? null
+    : null
+  const equivTargets = equivSlot?.exchangeTargets ?? []
+  const equivViews: Record<string, PortionCoverageView> = {}
+  if (equivSlot) {
+    const slotPending = portions.pendingBySlot[equivSlot.code] ?? EMPTY_PORTION_MARKS
+    const slotVoids = portions.voidsBySlot[equivSlot.code] ?? EMPTY_PORTION_VOIDS
+    for (const target of equivTargets) {
+      equivViews[target.groupCode] = coverageViewFor(target, slotPending, slotVoids)
+    }
+  }
+  const onSheetMark = (target: NutritionSlotExchangeTargetRead, step: 1 | 0.5) => {
+    if (!equivSlot) return
+    const view = equivViews[target.groupCode]
+    const completes = view ? view.coverage + step + 1e-9 >= view.prescribed : false
+    portions.mark(equivSlot.code, target, step, completes)
+  }
+  const onSheetRegister = () => {
+    if (!equivSlot) return
+    setEquivOpen(null)
+    onRegister(equivSlot)
+  }
 
   return (
     <>
@@ -667,16 +744,28 @@ function TodayTab() {
           }}
         />
 
+        {portions.active && (model.dayCoverage?.length ?? 0) > 0 ? (
+          <PortionDayCoverageRow
+            dayCoverage={model.dayCoverage!}
+            pendingByGroup={portions.pendingByGroup}
+            voidedByGroup={portions.voidedByGroup}
+          />
+        ) : null}
+
         {model.mealSlots.length > 0 ? (
           model.mealSlots.map((slot) => (
             <TodaySlotCard
               key={slot.id}
               slot={slot}
-              addedRows={overlay.addedBySlot[slot.code] ?? []}
+              addedRows={overlay.addedBySlot[slot.code] ?? EMPTY_ROWS}
               hiddenSet={hiddenSet}
               onAte={onAtePrescribed}
-              onRegister={() => onRegister(slot)}
+              onRegisterSlot={onRegister}
               onEntryAction={setActionEntry}
+              portionPending={portions.pendingBySlot[slot.code] ?? EMPTY_PORTION_MARKS}
+              portionVoids={portions.voidsBySlot[slot.code] ?? EMPTY_PORTION_VOIDS}
+              onMarkPortion={portions.mark}
+              onOpenEquivalences={onOpenEquivalences}
             />
           ))
         ) : (
@@ -721,6 +810,16 @@ function TodayTab() {
         onEdit={onEditEntry}
         onVoid={onVoidEntry}
       />
+      <PortionEquivalencesSheet
+        open={equivOpen}
+        targets={equivTargets}
+        exchangeFoods={model.exchangeFoods ?? []}
+        views={equivViews}
+        onClose={() => setEquivOpen(null)}
+        onMark={onSheetMark}
+        onRegister={onSheetRegister}
+      />
+      <PortionSnackbar state={portions.snackbar} onDismiss={portions.dismissSnackbar} />
       <CelebrationOverlay celebration={celebration} onDone={() => setCelebration(null)} />
     </>
   )
@@ -740,20 +839,35 @@ function intakeToRow(entry: NutritionIntakeReadItem): NutritionFoodRowModel {
   }
 }
 
-function TodaySlotCard({
+// Memoizada (hallazgo M3): marcar una porción solo cambia `portionPending`/`portionVoids`
+// de SU franja (buckets con referencia estable), así las demás cards no re-renderizan.
+const TodaySlotCard = memo(function TodaySlotCard({
   slot,
   addedRows,
   hiddenSet,
   onAte,
-  onRegister,
+  onRegisterSlot,
   onEntryAction,
+  portionPending,
+  portionVoids,
+  onMarkPortion,
+  onOpenEquivalences,
 }: {
   slot: NutritionMealSlotRead
   addedRows: NutritionFoodRowModel[]
   hiddenSet: Set<string>
   onAte: (slot: NutritionMealSlotRead, item: NutritionMealSlotRead['prescriptionItems'][number]) => void
-  onRegister: () => void
+  onRegisterSlot: (slot: NutritionMealSlotRead) => void
   onEntryAction: (entry: NutritionIntakeReadItem) => void
+  portionPending: PendingPortionMark[]
+  portionVoids: PendingPortionVoid[]
+  onMarkPortion: (
+    slotCode: string,
+    target: NutritionSlotExchangeTargetRead,
+    portions: 1 | 0.5,
+    completes: boolean,
+  ) => void
+  onOpenEquivalences: (slotCode: string, groupCode: string) => void
 }) {
   const activeEntries = slot.intakeItems.filter((e) => !hiddenSet.has(e.id))
   const entriesById = new Map(activeEntries.map((e) => [e.id, e]))
@@ -812,6 +926,17 @@ function TodaySlotCard({
         </View>
       ) : null}
 
+      {(slot.exchangeTargets?.length ?? 0) > 0 ? (
+        <PortionSlotSection
+          slotCode={slot.code}
+          targets={slot.exchangeTargets!}
+          pending={portionPending}
+          voids={portionVoids}
+          onMark={onMarkPortion}
+          onOpenEquivalences={onOpenEquivalences}
+        />
+      ) : null}
+
       {consumedRows.length > 0 ? (
         <View className="mt-3">
           <Text className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-text-subtle">Consumido</Text>
@@ -843,13 +968,17 @@ function TodaySlotCard({
       ) : null}
 
       <View className="mt-3">
-        <NutritionMotionButton accessibilityLabel={`Registrar en ${slot.name}`} tone="neutral" onPress={onRegister}>
+        <NutritionMotionButton
+          accessibilityLabel={`Registrar en ${slot.name}`}
+          tone="neutral"
+          onPress={() => onRegisterSlot(slot)}
+        >
           + Registrar en {slot.name}
         </NutritionMotionButton>
       </View>
     </NutritionCard>
   )
-}
+})
 
 function UnassignedCard({
   entries,

@@ -29,13 +29,19 @@ import {
   countQuickEditChanges,
   loadQuickEditFoods,
   planModelToQuickEditState,
-  publishQuickEditRN,
   quickEditReducer,
   quickEditUsesSlots,
   validateQuickEditState,
-  type QuickEditAction,
   type QuickEditState,
 } from '../../../lib/nutrition-v2-quick-edit'
+import {
+  countPortionsChanges,
+  hydrateQuickEditPortions,
+  portionsReducer,
+  type QuickEditPortionGroup,
+  type QuickEditPortionTarget,
+} from './portions-state'
+import { publishQuickEditWithPortions } from './portions-publish'
 import { EditableSlotCard } from './EditableSlotCard'
 import { TargetsEditorCard } from './TargetsEditorCard'
 import { FoodSearchSheet, type FoodSearchMode } from './FoodSearchSheet'
@@ -60,7 +66,8 @@ interface SearchTarget {
 
 interface UndoEntry {
   message: string
-  restore: QuickEditAction
+  /** Undo LOCAL del draft (despacha al reducer que corresponda; nunca toca backend). */
+  restore: () => void
 }
 
 /**
@@ -97,13 +104,21 @@ export function QuickEditMode({
   // fresco). Si la ficha recibe un read model mas nuevo mientras se edita (carrera
   // cache→fresh), el diff NO se corrompe y el guard optimista del publish detecta la
   // base obsoleta (STALE_BASE) — la salida segura es Recargar.
-  const [frozen] = useState(() => ({
-    baseline: buildQuickEditBaseline(planModel),
-    initial: planModelToQuickEditState(planModel, genKey),
-  }))
+  const [frozen] = useState(() => {
+    const initial = planModelToQuickEditState(planModel, genKey)
+    return {
+      baseline: buildQuickEditBaseline(planModel),
+      initial,
+      // Capa de porciones (T1.4): estado paralelo por slot.key + dict de grupos del
+      // plan (snapshots congelados del read model; catalogo vivo jamas).
+      portions: hydrateQuickEditPortions(planModel, initial),
+    }
+  })
   const baseline = frozen.baseline
   const initialState = frozen.initial
   const [state, dispatch] = useReducer(quickEditReducer, initialState)
+  const [portionsState, dispatchPortions] = useReducer(portionsReducer, frozen.portions.initial)
+  const portionGroups = frozen.portions.groups
 
   const [foodsById, setFoodsById] = useState<ReadonlyMap<string, BuilderFood>>(new Map())
   const [showErrors, setShowErrors] = useState(false)
@@ -142,7 +157,22 @@ export function QuickEditMode({
     }
   }, [initialState])
 
-  const count = useMemo(() => countQuickEditChanges(initialState, state), [initialState, state])
+  const portionGroupsById = useMemo(
+    () => new Map(portionGroups.map((group) => [group.exchangeGroupId, group])),
+    [portionGroups],
+  )
+  // Franjas VIVAS del estado principal: las porciones de franjas eliminadas no cuentan
+  // ni publican (la baja de la franja ya cuenta 1 y arrastra sus targets).
+  const liveSlotKeys = useMemo(
+    () => new Set(state.variants.flatMap((variant) => variant.slots.map((slot) => slot.key))),
+    [state],
+  )
+  const count = useMemo(
+    () =>
+      countQuickEditChanges(initialState, state) +
+      countPortionsChanges(frozen.portions.initial, portionsState, liveSlotKeys),
+    [initialState, state, frozen.portions.initial, portionsState, liveSlotKeys],
+  )
   const validation = useMemo(() => validateQuickEditState(state), [state])
   const errors = showErrors ? validation.errors : {}
 
@@ -176,7 +206,7 @@ export function QuickEditMode({
 
   const handleUndo = useCallback(() => {
     if (undoTimerRef.current) clearTimeout(undoTimerRef.current)
-    if (undo) dispatch(undo.restore)
+    if (undo) undo.restore()
     setUndo(null)
   }, [undo])
 
@@ -190,11 +220,27 @@ export function QuickEditMode({
       dispatch({ type: 'REMOVE_ITEM', variantKey, slotKey, itemKey })
       pushUndo({
         message: QUICK_EDIT_COPY.deletedUndo,
-        restore: { type: 'RESTORE_ITEM', variantKey, slotKey, index, item },
+        restore: () => dispatch({ type: 'RESTORE_ITEM', variantKey, slotKey, index, item }),
       })
     },
     [state, pushUndo],
   )
+
+  // Baja de un target de porciones con Deshacer (mismo snackbar de 5 s de los items).
+  const handleRemovePortion = useCallback(
+    (slotKey: string, target: QuickEditPortionTarget, index: number) => {
+      dispatchPortions({ type: 'REMOVE_TARGET', slotKey, targetKey: target.key })
+      pushUndo({
+        message: `Grupo ${target.groupName} eliminado`,
+        restore: () => dispatchPortions({ type: 'RESTORE_TARGET', slotKey, index, target }),
+      })
+    },
+    [pushUndo],
+  )
+
+  const handleAddPortion = useCallback((slotKey: string, group: QuickEditPortionGroup) => {
+    dispatchPortions({ type: 'ADD_TARGET', slotKey, key: genKey('ptarget'), group })
+  }, [])
 
   const handleRemoveSlot = useCallback(
     (variantKey: string, slotKey: string) => {
@@ -217,9 +263,11 @@ export function QuickEditMode({
             style: 'destructive',
             onPress: () => {
               dispatch({ type: 'REMOVE_SLOT', variantKey, slotKey })
+              // Las porciones de la franja quedan intactas en su estado paralelo
+              // (keyed por slot.key): el RESTORE_SLOT las recupera solo.
               pushUndo({
                 message: QUICK_EDIT_COPY.slotDeletedUndo,
-                restore: { type: 'RESTORE_SLOT', variantKey, index, slot },
+                restore: () => dispatch({ type: 'RESTORE_SLOT', variantKey, index, slot }),
               })
             },
           },
@@ -278,12 +326,16 @@ export function QuickEditMode({
     }
     setPublishing(true)
     setPublishError(null)
-    const res = await publishQuickEditRN({
+    // Espejo de publishQuickEditRN + capa de porciones (targets con snapshot congelado
+    // por el MISMO pipeline: tablas versionadas + publish_nutrition_plan_v2).
+    const res = await publishQuickEditWithPortions({
       db: supabase as unknown as NutritionV2WriteClient,
       userId,
       clientId,
       baseline,
       state,
+      portions: portionsState,
+      portionGroupsById,
       idempotencyKey: intentKeyRef.current,
       todayIso,
       hasNutritionPro,
@@ -307,7 +359,7 @@ export function QuickEditMode({
       return
     }
     setPublishError(res.message)
-  }, [baseline, userId, clientId, state, todayIso, hasNutritionPro, onPublished])
+  }, [baseline, userId, clientId, state, portionsState, portionGroupsById, todayIso, hasNutritionPro, onPublished])
 
   const handlePublishRequest = useCallback(() => {
     if (count === 0 || publishing) return
@@ -422,6 +474,18 @@ export function QuickEditMode({
                       foodsById={foodsById}
                       errors={errors}
                       disabled={publishing}
+                      portionTargets={portionsState.bySlot[slot.key] ?? []}
+                      portionGroups={portionGroups}
+                      onPortionStep={(targetKey, direction) =>
+                        dispatchPortions({ type: 'STEP_PORTIONS', slotKey: slot.key, targetKey, direction })
+                      }
+                      onPortionNotes={(targetKey, value) =>
+                        dispatchPortions({ type: 'SET_NOTES', slotKey: slot.key, targetKey, value })
+                      }
+                      onPortionRemove={(target, targetIndex) =>
+                        handleRemovePortion(slot.key, target, targetIndex)
+                      }
+                      onPortionAdd={(group) => handleAddPortion(slot.key, group)}
                       onSlotPatch={(patch) =>
                         dispatch({ type: 'UPDATE_SLOT', variantKey: variant.key, slotKey: slot.key, patch })
                       }
