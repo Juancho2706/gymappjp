@@ -4,6 +4,7 @@ import { assembleDraft, type BuilderState } from '../_lib/draft-builder'
 import {
   addPortionGroup,
   attachPortionsAndValidate,
+  combineSubtotals,
   derivePortionTotals,
   esDecimal,
   formatPortionsEs,
@@ -11,6 +12,7 @@ import {
   parsePortionsInput,
   removePortionGroup,
   setPortionValue,
+  slotPortionTotals,
   snapPortions,
   sortGroupsForPicker,
   stepPortionValue,
@@ -147,6 +149,66 @@ describe('derivePortionTotals (paridad engine, expansión composed_of)', () => {
     }
     const totals = derivePortionTotals(['s1', 's2'], map, GROUPS)
     expect(totals).toEqual({ calories: 285, proteinG: 17, carbsG: 45, fatsG: 5 })
+  })
+})
+
+// Fix QA F1-2: subtotal de franja = items fijos + derivado de porciones.
+describe('slotPortionTotals / combineSubtotals (subtotal de franja)', () => {
+  const ID_LAC = 'a0000000-0000-4000-8000-000000000005'
+  // Refs REALES del seed system (_POST_DEPLOY_20260611093002_nutrition_exchanges_seed.sql):
+  // LAC = 95 kcal / 9 P / 12 C / 2 G · P = 55 kcal / 7 P / 0 C / 3 G.
+  const REAL_GROUPS: ExchangeGroup[] = [
+    group({ id: ID_LAC, slug: 'lacteos', code: 'LAC', name: 'Lacteo', refCalories: 95, refProteinG: 9, refCarbsG: 12, refFatsG: 2, sortOrder: 50 }),
+    group({ id: ID_P, slug: 'proteinas-bajo-grasa', code: 'P', name: 'Proteinas (bajo grasa)', refCalories: 55, refProteinG: 7, refCarbsG: 0, refFatsG: 3, sortOrder: 20 }),
+  ]
+  const MAP: PortionsBySlot = {
+    desayuno: [
+      { exchangeGroupId: ID_LAC, portions: 1.5 },
+      { exchangeGroupId: ID_P, portions: 2.5 },
+    ],
+  }
+
+  it('LAC 1,5 + P 2,5 con refs reales => números exactos', () => {
+    // 95×1,5 + 55×2,5 = 280 kcal · 9×1,5 + 7×2,5 = 31 P · 12×1,5 = 18 C · 2×1,5 + 3×2,5 = 10,5 G
+    expect(slotPortionTotals(MAP, 'desayuno', REAL_GROUPS)).toEqual({
+      calories: 280,
+      proteinG: 31,
+      carbsG: 18,
+      fatsG: 10.5,
+    })
+  })
+
+  it('franja con CERO items fijos: el subtotal combinado es el derivado de porciones', () => {
+    const items = { calories: 0, proteinG: 0, carbsG: 0, fatsG: 0, fiberG: 0 }
+    const combined = combineSubtotals(items, slotPortionTotals(MAP, 'desayuno', REAL_GROUPS))
+    expect(combined).toEqual({ calories: 280, proteinG: 31, carbsG: 18, fatsG: 10.5, fiberG: 0 })
+  })
+
+  it('items fijos + porciones se suman (redondeo a 1 decimal)', () => {
+    const items = { calories: 120.4, proteinG: 10.2, carbsG: 5.5, fatsG: 1.1, fiberG: 2 }
+    const combined = combineSubtotals(items, slotPortionTotals(MAP, 'desayuno', REAL_GROUPS))
+    expect(combined).toEqual({ calories: 400.4, proteinG: 41.2, carbsG: 23.5, fatsG: 11.6, fiberG: 2 })
+  })
+
+  it('franja sin porciones => MISMO objeto de items (idéntico a antes)', () => {
+    const items = { calories: 120, proteinG: 10, carbsG: 5, fatsG: 1, fiberG: 0 }
+    expect(slotPortionTotals(MAP, 'sin-porciones', REAL_GROUPS)).toBeNull()
+    expect(combineSubtotals(items, null)).toBe(items)
+  })
+
+  it('catálogo sin cargar (groups null) => null: solo items, sin NaN', () => {
+    expect(slotPortionTotals(MAP, 'desayuno', null)).toBeNull()
+  })
+
+  it('expande compuestos LEG vía grupos base (macrosForTargets)', () => {
+    // GROUPS del archivo: C = 70/2/15/0, P = 75/11/0/5; LEG = 1P + 1C.
+    const map: PortionsBySlot = { s1: [{ exchangeGroupId: ID_LEG, portions: 2 }] }
+    expect(slotPortionTotals(map, 's1', GROUPS)).toEqual({
+      calories: 290,
+      proteinG: 26,
+      carbsG: 30,
+      fatsG: 10,
+    })
   })
 })
 

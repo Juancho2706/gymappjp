@@ -39,14 +39,16 @@ export function NutritionHubTabs({ roster }: { roster: ReactNode }) {
               type="button"
               aria-selected={on}
               onClick={() => setActive(tab.key)}
+              // min-w-0 permite que flex-1 encoja el pill activo dentro del contenedor en 360px;
+              // el ícono se oculta bajo sm para que los 3 labels quepan sin desbordar ni truncar.
               className={
                 on
-                  ? 'inline-flex min-h-10 flex-1 items-center justify-center gap-2 rounded-[10px] bg-primary/100 px-3 text-sm font-semibold text-white'
-                  : 'inline-flex min-h-10 flex-1 items-center justify-center gap-2 rounded-[10px] px-3 text-sm font-semibold text-muted hover:bg-surface-sunken'
+                  ? 'inline-flex min-h-11 min-w-0 flex-1 items-center justify-center gap-2 rounded-[10px] bg-primary/100 px-2 text-sm font-semibold text-white sm:px-3'
+                  : 'inline-flex min-h-11 min-w-0 flex-1 items-center justify-center gap-2 rounded-[10px] px-2 text-sm font-semibold text-muted hover:bg-surface-sunken sm:px-3'
               }
             >
-              <Icon className="h-4 w-4" />
-              {tab.label}
+              <Icon className="hidden h-4 w-4 shrink-0 sm:block" />
+              <span className="truncate">{tab.label}</span>
             </button>
           )
         })}

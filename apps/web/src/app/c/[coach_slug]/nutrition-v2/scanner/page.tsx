@@ -4,8 +4,10 @@ import { ArrowLeft } from 'lucide-react'
 import { FoodScannerClient } from '@/components/nutrition-v2/FoodScannerClient'
 import { NutritionPageShell } from '@/components/nutrition-v2'
 import { getClientBasePath } from '@/lib/client/base-path'
+import { getTodayInSantiago } from '@/lib/date-utils'
 import { getClientNutritionUser } from '../../nutrition/_data/nutrition-auth.queries'
 import { getClientScope } from '../../nutrition/_data/client-scope.queries'
+import { getNutritionTodayV2ForWeb } from '@/services/nutrition-v2-read.service'
 import { isNutritionV2Enabled } from '@/services/nutrition-v2-rollout.service'
 
 export const metadata = { title: 'Escanear alimento' }
@@ -31,6 +33,19 @@ export default async function NutritionV2ScannerPage({ params }: Props) {
   })
   if (!enabled) redirect(`${base}/nutrition`)
 
+  // Contexto de registro (P0 QA: el scan no dejaba registrar): mismo read model del Today
+  // que usa TodayExperience, reducido a lo minimo que el dialogo de cantidad/franja necesita.
+  const { iso: date } = getTodayInSantiago()
+  const today = await getNutritionTodayV2ForWeb({ clientId: user.id, date })
+  const registration = {
+    localDate: today.localDate,
+    timezone: today.timezone,
+    planVersionId: today.plan?.versionId ?? null,
+    snapshotId: today.snapshotId,
+    slotOptions: today.mealSlots.map((slot) => ({ code: slot.code, label: slot.name })),
+    revalidatePath: `${base}/nutrition-v2`,
+  }
+
   return (
     <NutritionPageShell
       eyebrow="Catálogo local Chile"
@@ -46,7 +61,7 @@ export default async function NutritionV2ScannerPage({ params }: Props) {
         </Link>
       }
     >
-      <FoodScannerClient clientId={user.id} />
+      <FoodScannerClient clientId={user.id} registration={registration} />
     </NutritionPageShell>
   )
 }

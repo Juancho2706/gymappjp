@@ -21,6 +21,8 @@ export const PORTIONS_COPY = {
       `Tus porciones suman ~${kcal} kcal · ${p} P · ${c} C · ${g} G`,
     deriveCta: 'Usar como objetivos',
     unconfirmedBanner: 'Algunos grupos tienen macros referenciales. Los totales son aproximados.',
+    /** Fix QA F1-2: nota bajo el subtotal de franja cuando incluye porciones. kcal ya redondeada (entero). */
+    subtotalPortionsNote: (kcal: string) => `Incluye ~${kcal} kcal de porciones a elección`,
   },
   student: {
     coverageTitle: 'Porciones de hoy',
