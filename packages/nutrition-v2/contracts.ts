@@ -78,6 +78,29 @@ export const NutritionPrescriptionItemSchema = z
     }
   })
 
+/**
+ * Target de porciones (intercambios) prescrito en una franja. Es una CAPA OPCIONAL
+ * sobre `structured`/`hybrid` (SPEC R1): la sola presencia de targets vuelve "por
+ * porciones" a la franja, sin tocar la enum `strategy`. Media porción vía múltiplos
+ * de 0,5 (SPEC R2); mínimo 0,5, máximo 99. Espeja el CHECK de la tabla
+ * `nutrition_slot_exchange_targets_v2` (`portions > 0 and portions <= 99 and
+ * (portions*2) = floor(portions*2)`). Los `snapshot_*` se congelan server-side al
+ * persistir el draft (T0.3), NO viven en este contrato de entrada.
+ */
+export const NutritionExchangeTargetSchema = z.object({
+  id: z.string().uuid().optional(),
+  exchangeGroupId: z.string().uuid(),
+  portions: z
+    .number()
+    .positive()
+    .max(99)
+    .refine((n) => Number.isInteger(n * 2), {
+      message: 'Las porciones deben ir en múltiplos de 0,5.',
+    }),
+  notes: z.string().trim().max(1000).nullable().default(null),
+  orderIndex: z.number().int().nonnegative().default(0),
+})
+
 export const NutritionMealSlotSchema = z.object({
   id: z.string().uuid().optional(),
   code: z.string().trim().min(1).max(64),
@@ -90,6 +113,16 @@ export const NutritionMealSlotSchema = z.object({
   instructions: z.string().trim().max(2000).nullable().default(null),
   orderIndex: z.number().int().nonnegative().default(0),
   items: z.array(NutritionPrescriptionItemSchema).default([]),
+  // Capa OPCIONAL de porciones: un draft sin porciones queda idéntico a hoy;
+  // `flexible` no lleva porciones en F1 (SPEC R1).
+  //
+  // NOTA (código gana sobre SPEC): TASKS pedía `default([])`, pero eso vuelve el
+  // campo REQUERIDO en el tipo de salida y rompería los múltiples constructores
+  // literales existentes del tipo de la franja (draft-builder.ts=T0.3,
+  // quick-edit.ts=T1.2, assign-plan.ts, quick-edit-state.ts) — archivos de OTRAS
+  // tareas/olas que no puedo tocar. Se usa `.optional()`: contrato de consumo
+  // idéntico (ausente = sin porciones; downstream resuelve con `?? []`).
+  exchangeTargets: z.array(NutritionExchangeTargetSchema).optional(),
 })
 
 export const NutritionDayVariantSchema = z.object({
@@ -191,6 +224,7 @@ export const NutritionLegacyHistoryItemSchema = z.object({
   disclosure: z.literal('legacy_completion_without_food_detail'),
 })
 
+export type NutritionExchangeTarget = z.infer<typeof NutritionExchangeTargetSchema>
 export type NutritionStrategy = z.infer<typeof NutritionStrategySchema>
 export type NutritionPlanStatus = z.infer<typeof NutritionPlanStatusSchema>
 export type NutritionEntryStatus = z.infer<typeof NutritionEntryStatusSchema>
@@ -215,4 +249,64 @@ export function buildNutritionIdempotencyKey(input: {
     throw new Error('Invalid nutrition idempotency key length')
   }
   return normalized
+}
+
+/**
+ * `operationId` canónico del marcar-porción (SPEC R4/B2/M1). Forma exacta:
+ * `{fecha}-{slotCode}-{groupCode}-{ordinal}-a{attempt}`.
+ *
+ * - `ordinal`: índice (0-based) de la porción DENTRO de (fecha, franja, grupo);
+ *   la 1ª porción marcada de C en el almuerzo del día es el ordinal 0, la 2ª el 1…
+ * - `attempt`: contador local por `(fecha, franja, grupo, ordinal)` que se
+ *   INCREMENTA en cada deshacer de ese ordinal (incluso si el deshacer solo canceló
+ *   una entrada aún encolada). Así re-marcar tras deshacer produce una key NUEVA —
+ *   nunca colisiona con el intake anulado — mientras el replay offline de la MISMA
+ *   marca (mismo attempt) conserva su key (dedup extremo-a-extremo).
+ *
+ * `buildNutritionIdempotencyKey` ya sanitiza `[^a-z0-9_-]` y lowercasea, de modo que
+ * la fecha `2026-07-18` y los códigos se normalizan sin colisionar.
+ */
+export function nutritionPortionOperationId(input: {
+  localDate: string
+  slotCode: string
+  groupCode: string
+  ordinal: number
+  attempt: number
+}): string {
+  if (!Number.isInteger(input.ordinal) || input.ordinal < 0) {
+    throw new Error('nutritionPortionOperationId: ordinal debe ser entero >= 0')
+  }
+  if (!Number.isInteger(input.attempt) || input.attempt < 1) {
+    throw new Error('nutritionPortionOperationId: attempt debe ser entero >= 1')
+  }
+  return `${input.localDate}-${input.slotCode}-${input.groupCode}-${input.ordinal}-a${input.attempt}`
+}
+
+/**
+ * Idempotency key canónica del intake sintético de una porción marcada. Emite SIEMPRE
+ * por `buildNutritionIdempotencyKey` (helper canónico — hallazgo M2) con el
+ * `operationId` de porción. `kind` es 'intake' porque el void del marcar-porción usa
+ * el mismo camino de corrección que cualquier intake (SPEC R4).
+ */
+export function buildNutritionPortionIntakeKey(input: {
+  clientId: string
+  deviceId: string
+  localDate: string
+  slotCode: string
+  groupCode: string
+  ordinal: number
+  attempt: number
+}): string {
+  return buildNutritionIdempotencyKey({
+    kind: 'intake',
+    clientId: input.clientId,
+    deviceId: input.deviceId,
+    operationId: nutritionPortionOperationId({
+      localDate: input.localDate,
+      slotCode: input.slotCode,
+      groupCode: input.groupCode,
+      ordinal: input.ordinal,
+      attempt: input.attempt,
+    }),
+  })
 }

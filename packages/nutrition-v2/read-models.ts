@@ -73,6 +73,82 @@ export const NutritionPrescriptionItemReadSchema = z.object({
   }),
 })
 
+// ---------------------------------------------------------------------------
+// Porciones (intercambios) V2 — capa OPCIONAL del read-model (SPEC R2/R3/R5).
+// Todos los campos son .optional(): un plan sin porciones deja el read-model
+// byte-idéntico (criterio Q1) y una cache anterior (RN) sigue parseando (criterio 8).
+// ---------------------------------------------------------------------------
+
+/** Macros de referencia POR PORCIÓN, congelados en el snapshot del target. */
+export const NutritionExchangeRefSchema = z.object({
+  calories: z.number().finite(),
+  proteinG: z.number().finite(),
+  carbsG: z.number().finite(),
+  fatsG: z.number().finite(),
+})
+
+/**
+ * Parte de un grupo compuesto (LEG = 1P + 1C) ENRIQUECIDA con los `ref_*` congelados
+ * del grupo base (SPEC R2/A2). El read-model reconstruye el diccionario contra estos
+ * valores congelados, de modo que editar el `ref_*` de P o C tras publicar NO mueve
+ * los macros del plan con LEG — sin tocar el engine.
+ */
+export const NutritionExchangeComposedPartSchema = z.object({
+  code: z.string(),
+  portions: z.number().finite(),
+  ref: NutritionExchangeRefSchema,
+})
+
+/**
+ * Entrada del diccionario de grupos reconstruido desde snapshots. Forma ESPEJO de
+ * `ExchangeGroup` de `@eva/nutrition-engine` (test de contrato de forma en ambos
+ * bordes — A4) para que `expandComposedGroups`/`findByCode` resuelvan contra valores
+ * congelados SIN modificar el motor (18 tests intactos). `id` es `string` (no uuid):
+ * los grupos BASE sintetizados desde `composed_of` llevan un id determinista.
+ */
+export const NutritionExchangeGroupReadSchema = z.object({
+  id: z.string(),
+  slug: z.string(),
+  code: z.string(),
+  name: z.string(),
+  coachId: z.string().nullable(),
+  teamId: z.string().nullable(),
+  isSystem: z.boolean(),
+  refCalories: z.number().finite(),
+  refProteinG: z.number().finite(),
+  refCarbsG: z.number().finite(),
+  refFatsG: z.number().finite(),
+  color: z.string().nullable(),
+  sortOrder: z.number().finite(),
+  composedOf: z.array(NutritionExchangeComposedPartSchema).nullable(),
+  macrosConfirmed: z.boolean(),
+})
+
+/**
+ * Target de porciones de una franja en el read-model. Trae el snapshot congelado
+ * (`snapshot_*` de la tabla) + la cobertura DESGLOSADA (SPEC R5, hallazgo F2-front):
+ * `marcadas` (Σ porciones de intakes sintéticos activos) y `derivadas` (Σ
+ * gramos/`exchange_portion_grams` de alimentos reales activos) POR SEPARADO, más la
+ * suma `coverage`. Los tres son `.optional()`: la UI pinta segmentos marcados-a-mano
+ * vs derivados-de-alimento, y una cache vieja sin cobertura sigue válida.
+ */
+export const NutritionSlotExchangeTargetReadSchema = z.object({
+  id: z.string().uuid(),
+  exchangeGroupId: z.string().uuid(),
+  groupCode: z.string(),
+  groupName: z.string(),
+  color: z.string().nullable(),
+  portions: z.number().finite().positive(),
+  notes: z.string().nullable(),
+  orderIndex: z.number().int().nonnegative(),
+  ref: NutritionExchangeRefSchema,
+  composedOf: z.array(NutritionExchangeComposedPartSchema).nullable(),
+  macrosConfirmed: z.boolean(),
+  marcadas: z.number().finite().nonnegative().optional(),
+  derivadas: z.number().finite().nonnegative().optional(),
+  coverage: z.number().finite().nonnegative().optional(),
+})
+
 export const NutritionMealSlotReadSchema = z.object({
   id: z.string().uuid(),
   code: z.string(),
@@ -85,6 +161,8 @@ export const NutritionMealSlotReadSchema = z.object({
   targets: NutritionMacroTargetsSchema.partial(),
   prescriptionItems: z.array(NutritionPrescriptionItemReadSchema),
   intakeItems: z.array(NutritionIntakeReadItemSchema),
+  // Capa OPCIONAL de porciones (SPEC R2). Ausente ⇒ franja sin porciones.
+  exchangeTargets: z.array(NutritionSlotExchangeTargetReadSchema).optional(),
 })
 
 export const NutritionPlanSummaryReadSchema = z.object({
@@ -111,6 +189,10 @@ export const NutritionTodayReadModelSchema = z.object({
   permissions: NutritionStudentPermissionsSchema,
   mealSlots: z.array(NutritionMealSlotReadSchema),
   unassignedIntake: z.array(NutritionIntakeReadItemSchema),
+  // Diccionario de grupos reconstruido desde snapshots (SPEC R3/A2). OPCIONAL: solo
+  // presente si el plan tiene porciones. Alimenta el sheet de equivalencias y la
+  // expansión de compuestos SIN pegarle a `exchange_groups` (hallazgo F3).
+  exchangeGroups: z.array(NutritionExchangeGroupReadSchema).optional(),
   syncToken: z.string(),
 })
 
@@ -132,6 +214,10 @@ export const NutritionPlanReadModelSchema = z.object({
     targets: NutritionMacroTargetsSchema,
     mealSlots: z.array(NutritionMealSlotReadSchema.omit({ intakeItems: true })),
   })),
+  // Diccionario de grupos reconstruido desde snapshots (SPEC R3/A2). OPCIONAL: mismo
+  // borde de forma `ExchangeGroup[]` que Today (A4). En la ficha del coach alimenta la
+  // fila "Porciones" read-only sin cálculo nuevo.
+  exchangeGroups: z.array(NutritionExchangeGroupReadSchema).optional(),
   syncToken: z.string(),
 })
 
@@ -233,6 +319,10 @@ export const NutritionV2CoachScopeSchema = z
     }
   })
 
+export type NutritionExchangeRef = z.infer<typeof NutritionExchangeRefSchema>
+export type NutritionExchangeComposedPart = z.infer<typeof NutritionExchangeComposedPartSchema>
+export type NutritionExchangeGroupRead = z.infer<typeof NutritionExchangeGroupReadSchema>
+export type NutritionSlotExchangeTargetRead = z.infer<typeof NutritionSlotExchangeTargetReadSchema>
 export type NutritionTotals = z.infer<typeof NutritionTotalsSchema>
 export type NutritionIntakeReadItem = z.infer<typeof NutritionIntakeReadItemSchema>
 export type NutritionMealSlotRead = z.infer<typeof NutritionMealSlotReadSchema>
@@ -248,6 +338,208 @@ export type NutritionV2CoachScope = z.infer<typeof NutritionV2CoachScopeSchema>
 
 export function parseNutritionReadModel<T>(schema: z.ZodType<T>, input: unknown): T {
   return schema.parse(input)
+}
+
+// ---------------------------------------------------------------------------
+// Porciones (intercambios) — reconstrucción del diccionario y cobertura (SPEC R3/R5).
+// Puro: sin IO, sin acceso a `exchange_groups` vivo. Reutilizable por el builder del
+// read-model (server), el sheet de equivalencias y los tests de paridad del engine.
+// ---------------------------------------------------------------------------
+
+/** Los 9 grupos system de V1 (SPEC R3). Se usan para marcar `isSystem` al reconstruir. */
+export const SYSTEM_EXCHANGE_CODES = new Set([
+  'C',
+  'P',
+  'F',
+  'V',
+  'LAC',
+  'ARL',
+  'SP',
+  'G',
+  'LEG',
+])
+
+/** Prefijo de id determinista para grupos BASE sintetizados desde `composed_of`. */
+const SNAPSHOT_BASE_ID_PREFIX = 'snapshot-base:'
+
+/**
+ * Reconstruye el diccionario `ExchangeGroup[]` (forma del engine) desde los snapshots
+ * congelados de los targets de una versión (SPEC R2/R3/A2). Incluye:
+ *
+ *  1. un grupo por cada target prescrito (con su `groupName` y `ref_*` congelados);
+ *  2. los grupos BASE embebidos en `composedOf` (LEG ⇒ P + C) que NO fueron
+ *     prescritos directo, sintetizados desde el `ref` congelado de cada parte — con
+ *     un id determinista `snapshot-base:{code}` — para que `findByCode`/
+ *     `expandComposedGroups` del engine resuelvan LEG contra los valores de P y C
+ *     vigentes AL PUBLICAR, no el catálogo vivo.
+ *
+ * Nunca lee `exchange_groups` en runtime: todo sale del snapshot. El resultado es
+ * asignable a `ExchangeGroup[]` del engine (contrato de forma en ambos bordes — A4).
+ */
+export function reconstructExchangeGroups(
+  targets: ReadonlyArray<
+    Pick<
+      NutritionSlotExchangeTargetRead,
+      'exchangeGroupId' | 'groupCode' | 'groupName' | 'color' | 'ref' | 'composedOf' | 'macrosConfirmed'
+    >
+  >,
+): NutritionExchangeGroupRead[] {
+  const byId = new Map<string, NutritionExchangeGroupRead>()
+  const byCode = new Map<string, NutritionExchangeGroupRead>()
+  let order = 0
+
+  const put = (group: NutritionExchangeGroupRead): void => {
+    if (byId.has(group.id)) return
+    byId.set(group.id, group)
+    if (!byCode.has(group.code)) byCode.set(group.code, group)
+  }
+
+  // 1) Grupos directos de los targets (traen nombre y ref completos).
+  for (const target of targets) {
+    if (byId.has(target.exchangeGroupId)) continue
+    put({
+      id: target.exchangeGroupId,
+      slug: target.groupCode.toLowerCase(),
+      code: target.groupCode,
+      name: target.groupName,
+      coachId: null,
+      teamId: null,
+      isSystem: SYSTEM_EXCHANGE_CODES.has(target.groupCode),
+      refCalories: target.ref.calories,
+      refProteinG: target.ref.proteinG,
+      refCarbsG: target.ref.carbsG,
+      refFatsG: target.ref.fatsG,
+      color: target.color,
+      sortOrder: order++,
+      composedOf: target.composedOf,
+      macrosConfirmed: target.macrosConfirmed,
+    })
+  }
+
+  // 2) Grupos BASE embebidos en `composed_of` que no fueron prescritos directo.
+  for (const target of targets) {
+    for (const part of target.composedOf ?? []) {
+      if (byCode.has(part.code)) continue
+      put({
+        id: `${SNAPSHOT_BASE_ID_PREFIX}${part.code}`,
+        slug: part.code.toLowerCase(),
+        code: part.code,
+        name: part.code,
+        coachId: null,
+        teamId: null,
+        isSystem: true,
+        refCalories: part.ref.calories,
+        refProteinG: part.ref.proteinG,
+        refCarbsG: part.ref.carbsG,
+        refFatsG: part.ref.fatsG,
+        color: null,
+        sortOrder: order++,
+        composedOf: null,
+        macrosConfirmed: true,
+      })
+    }
+  }
+
+  return [...byId.values()]
+}
+
+/** Intake (real o sintético) para el cálculo de cobertura de porciones (SPEC R5). */
+export interface PortionCoverageIntake {
+  /** Solo las cadenas ACTIVAS suman cobertura (el void neutraliza — SPEC R4/B3). */
+  status: NutritionIntakeReadItem['status']
+  /** Código de franja (`meal_slot_code`). null ⇒ solo aporta al resumen del día. */
+  mealSlotCode: string | null
+  // --- Intake SINTÉTICO (marcar-porción): `marcadas`. ---
+  /** Código congelado del grupo (`exchange_group_code`). */
+  exchangeGroupCode?: string | null
+  /** Porciones marcadas (`exchange_portions`), múltiplos de 0,5. */
+  exchangePortions?: number | null
+  // --- Intake REAL (alimento clasificado): `derivadas`. ---
+  /** Código del grupo del food (catálogo VIGENTE al leer — SPEC R5/A3). */
+  foodExchangeGroupCode?: string | null
+  /** Cantidad convertida a gramos, o null si la unidad no es convertible. */
+  quantityGrams?: number | null
+  /** `foods.exchange_portion_grams` del food. */
+  exchangePortionGrams?: number | null
+}
+
+/** Cobertura desglosada de un grupo (SPEC R5): marcadas + derivadas = coverage. */
+export interface PortionCoverageCell {
+  marcadas: number
+  derivadas: number
+  coverage: number
+}
+
+/** Clave estable `{slotCode} {groupCode}` del mapa de cobertura por franja. */
+export function portionCoverageKey(slotCode: string, groupCode: string): string {
+  return `${slotCode} ${groupCode}`
+}
+
+function roundCoverage(value: number): number {
+  return Math.round(value * 10000) / 10000
+}
+
+/**
+ * Cobertura de porciones por (franja, grupo) desde los intakes (SPEC R5). Suma SOLO
+ * cadenas ACTIVAS (el void escribe `exchange_portions=null` Y aquí se descartan las
+ * no-activas — doble cinturón, hallazgo B3):
+ *
+ *  - `marcadas(s,g)` = Σ `exchangePortions` de intakes sintéticos activos con
+ *    `mealSlotCode=s` y `exchangeGroupCode=g`.
+ *  - `derivadas(s,g)` = Σ `quantityGrams / exchangePortionGrams` de intakes reales
+ *    activos con `mealSlotCode=s` cuyo food tiene grupo `g`; unidades no convertibles
+ *    a gramos o foods sin `exchange_portion_grams` NO aportan cobertura.
+ *  - `coverage(s,g)` = `marcadas + derivadas`.
+ *
+ * Los targets de porciones NUNCA entran aquí (viven del lado TARGET) — no hay doble
+ * conteo estructural (SPEC R5/criterio 6). Intakes con `mealSlotCode=null` se omiten
+ * (solo aportan al resumen del día, nunca a un chip de franja).
+ */
+export function computePortionCoverage(
+  intakes: ReadonlyArray<PortionCoverageIntake>,
+): Map<string, PortionCoverageCell> {
+  const cells = new Map<string, PortionCoverageCell>()
+  const cellFor = (slotCode: string, groupCode: string): PortionCoverageCell => {
+    const key = portionCoverageKey(slotCode, groupCode)
+    let cell = cells.get(key)
+    if (!cell) {
+      cell = { marcadas: 0, derivadas: 0, coverage: 0 }
+      cells.set(key, cell)
+    }
+    return cell
+  }
+
+  for (const intake of intakes) {
+    if (intake.status !== 'active') continue
+    if (intake.mealSlotCode == null) continue
+
+    // Sintético (marcar-porción) ⇒ marcadas.
+    if (
+      intake.exchangeGroupCode != null &&
+      intake.exchangePortions != null &&
+      intake.exchangePortions > 0
+    ) {
+      const cell = cellFor(intake.mealSlotCode, intake.exchangeGroupCode)
+      cell.marcadas = roundCoverage(cell.marcadas + intake.exchangePortions)
+      cell.coverage = roundCoverage(cell.marcadas + cell.derivadas)
+      continue
+    }
+
+    // Real (alimento clasificado) ⇒ derivadas.
+    if (
+      intake.foodExchangeGroupCode != null &&
+      intake.quantityGrams != null &&
+      intake.quantityGrams > 0 &&
+      intake.exchangePortionGrams != null &&
+      intake.exchangePortionGrams > 0
+    ) {
+      const cell = cellFor(intake.mealSlotCode, intake.foodExchangeGroupCode)
+      cell.derivadas = roundCoverage(cell.derivadas + intake.quantityGrams / intake.exchangePortionGrams)
+      cell.coverage = roundCoverage(cell.marcadas + cell.derivadas)
+    }
+  }
+
+  return cells
 }
 
 /**
