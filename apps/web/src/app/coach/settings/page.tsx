@@ -188,12 +188,12 @@ export default async function CoachSettingsPage() {
 
                 {/* Funciones del equipo — visibilidad de nutrición (solo gestores; la query/RLS gatean) */}
                 <div className="space-y-3">
-                    <Eyebrow>Lo que paga el equipo</Eyebrow>
+                    <Eyebrow>Incluido con el equipo</Eyebrow>
                     <HubCard
                         href="/coach/settings/modules"
                         icon={Package}
                         title="Módulos del equipo"
-                        desc="Catálogo de módulos del pool"
+                        desc="Herramientas profesionales del pool"
                         badge={{ label: `${activeModuleCount} activos`, tone: 'sport' }}
                     />
                 </div>
@@ -281,13 +281,12 @@ export default async function CoachSettingsPage() {
     }
     if (modulesRes.ctx) {
         sections.modulos = (
-            <PaneBody desc="Conoce los módulos disponibles para tu cuenta.">
+            <PaneBody desc="Herramientas profesionales incluidas en los planes pagos.">
                 <ModulesForm
                     modules={modulesRes.ctx.modules}
                     killedByOperator={modulesRes.ctx.killedByOperator}
-                    isTeamManager={modulesRes.ctx.isTeamManager}
                     scope={modulesRes.ctx.scope}
-                    tier={modulesRes.ctx.tier}
+                    hasPaidPlan={modulesRes.ctx.hasPaidPlan}
                     nutritionVisible={modulesRes.ctx.nutritionVisible}
                 />
             </PaneBody>
@@ -354,7 +353,7 @@ export default async function CoachSettingsPage() {
                     )}
                 </div>
 
-                {/* Plan: suscripción base + módulos de pago, juntos. */}
+                {/* Plan: suscripción base + módulos incluidos, juntos. */}
                 <div className="space-y-3">
                     <Eyebrow>Plan</Eyebrow>
                     <HubCard
@@ -367,7 +366,7 @@ export default async function CoachSettingsPage() {
                         href="/coach/settings/modules"
                         icon={Package}
                         title="Módulos"
-                        desc="Catálogo de módulos disponibles"
+                        desc="Herramientas profesionales incluidas en los planes pagos"
                         badge={{ label: `${ADDON_MODULE_KEYS.length} módulos`, tone: 'sport' }}
                     />
                 </div>

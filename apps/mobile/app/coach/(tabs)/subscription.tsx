@@ -7,7 +7,6 @@ import {
   Check,
   CreditCard,
   ExternalLink,
-  Gift,
   HeartPulse,
   Lock,
   Receipt,
@@ -31,7 +30,6 @@ import {
 } from '../../../lib/coach-subscription'
 import {
   BILLING_CYCLE_CONFIG,
-  getTierCapabilities,
   type SubscriptionTier,
 } from '@eva/tiers'
 import { MODULE_CATALOG, MODULE_CATALOG_KEYS, type ModuleKey } from '@eva/module-catalog'
@@ -41,7 +39,6 @@ import { MODULE_CATALOG, MODULE_CATALOG_KEYS, type ModuleKey } from '@eva/module
 const WEB = 'https://www.eva-app.cl'
 const SUB_URL = `${WEB}/coach/subscription`
 const CARD_URL = `${WEB}/coach/subscription/update-card`
-const ADDONS_URL = `${WEB}/coach/subscription#addons`
 const REACTIVATE_URL = `${WEB}/coach/reactivate`
 
 // --text-on-dark (ink-50): literal DS neutral para íconos sobre superficie inversa (mismo que Button).
@@ -74,10 +71,6 @@ function openUrl(url: string) {
 function clp(n: number): string {
   return '$' + Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.')
 }
-function longDate(iso: string | null): string {
-  if (!iso) return '—'
-  return new Date(iso).toLocaleDateString('es-CL', { day: 'numeric', month: 'long', year: 'numeric' })
-}
 function shortDate(iso: string | null): string {
   if (!iso) return '—'
   return new Date(iso).toLocaleDateString('es-CL', { day: 'numeric', month: 'short' })
@@ -93,32 +86,18 @@ const STATUS_TONE: Record<string, BadgeTone> = {
   paused: 'warning',
 }
 
-/** Estado por add-on (espejo EXACTO de CoachAddonView del web §F5.1). */
+/**
+ * Estado por módulo. Decisión CEO 2026-07-17: los 4 módulos vienen INCLUIDOS con cualquier
+ * plan pago (ya no se compran/activan/desactivan). Incluido = plan pago activo o fila
+ * coach_addons viva (p. ej. cortesía de un coach free). Free sin cortesía => "Con plan pago".
+ */
 function addonBadge(
-  key: ModuleKey,
   row: CoachAddonView | undefined,
-  canUseNutrition: boolean,
+  hasPaidPlan: boolean,
 ): { label: string; tone: BadgeTone; icon: LucideIcon | null; lit: boolean } {
-  const isCourtesy = row?.source === 'admin_grant'
-  const isActive = row?.status === 'active' && row.source === 'self_service'
-  const isCancelPendingCharged =
-    row?.status === 'cancel_pending' && row.source === 'self_service' && row.firstChargedAt !== null
-  const isCommitted =
-    row?.status === 'cancel_pending' && row.source === 'self_service' && row.firstChargedAt === null
-  const requiresNutritionTier = key === 'nutrition_exchanges' && !canUseNutrition
-
-  if (isCourtesy) return { label: 'Activo sin costo', tone: 'info', icon: Gift, lit: true }
-  if (isActive) return { label: 'Activo', tone: 'success', icon: Check, lit: true }
-  if (isCancelPendingCharged)
-    return {
-      label: `Se desactiva el ${row?.expiresAt ? longDate(row.expiresAt) : 'fin del período'}`,
-      tone: 'warning',
-      icon: null,
-      lit: false,
-    }
-  if (isCommitted) return { label: 'Baja programada', tone: 'warning', icon: null, lit: false }
-  if (requiresNutritionTier) return { label: 'Requiere plan Pro+', tone: 'neutral', icon: Lock, lit: false }
-  return { label: `${clp(MODULE_CATALOG[key].priceClp)}/mes`, tone: 'neutral', icon: null, lit: false }
+  const hasLiveRow = row !== undefined && row.status !== 'cancelled'
+  if (hasPaidPlan || hasLiveRow) return { label: 'Incluido en tu plan', tone: 'success', icon: Check, lit: true }
+  return { label: 'Con plan pago', tone: 'neutral', icon: Lock, lit: false }
 }
 
 /** Una fila paga (self_service) manda sobre la cortesía; solo grant => "Cortesía EVA". */
@@ -197,7 +176,8 @@ export default function SubscriptionScreen() {
   const tierLabel = TIER_LABELS[tier] ?? coach.subscriptionTier
   const statusLabel = STATUS_LABELS[status] ?? status
   const statusTone = STATUS_TONE[status] ?? 'neutral'
-  const canUseNutrition = getTierCapabilities(tier).canUseNutrition
+  // Plan pago con acceso (espejo del hasActivePaidPlan web): decide "Incluido en tu plan".
+  const hasPaidPlan = tier !== 'free' && (status === 'active' || status === 'trialing')
   const cycleLabel = BILLING_CYCLE_CONFIG[coach.billingCycle]?.label.toLowerCase() ?? ''
 
   const isActive = status === 'active'
@@ -323,13 +303,13 @@ export default function SubscriptionScreen() {
           </Card>
         ) : null}
 
-        {/* Módulos add-on — display de estados (incl. Cortesía EVA); compra/baja = web-only */}
+        {/* Módulos incluidos — informativo (CEO 2026-07-17): vienen con el plan pago, sin compra/baja */}
         <View style={styles.section}>
-          <Text style={[TYPE.eyebrow, styles.sectionTitle]} className="text-muted">Módulos add-on</Text>
+          <Text style={[TYPE.eyebrow, styles.sectionTitle]} className="text-muted">Módulos incluidos</Text>
           <Card variant="default" padding="none" radius="card">
             {MODULE_CATALOG_KEYS.map((key, i) => {
               const row = addonForKey(addons, key)
-              const b = addonBadge(key, row, canUseNutrition)
+              const b = addonBadge(row, hasPaidPlan)
               const Icon = ADDON_ICON[key]
               const BadgeIcon = b.icon
               const badgeIconColor =
@@ -359,13 +339,11 @@ export default function SubscriptionScreen() {
               )
             })}
           </Card>
-          <Button
-            label="Gestionar módulos en la web"
-            variant="ghost"
-            leftIcon={ExternalLink}
-            onPress={() => openUrl(ADDONS_URL)}
-            full
-          />
+          <Text style={TYPE.caption} className="text-muted">
+            {hasPaidPlan
+              ? 'Vienen incluidos en tu plan, sin costo extra. Úsalos desde Herramientas.'
+              : 'Vienen incluidos en cualquier plan pago. En el plan Free no están disponibles.'}
+          </Text>
         </View>
 
         {/* Historial de pagos */}

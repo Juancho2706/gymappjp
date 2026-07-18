@@ -169,9 +169,9 @@ export default function CoachFeaturesScreen() {
 
           {managedLock ? null : (
             <Text className="font-sans text-muted" style={{ fontSize: 12, lineHeight: 18, marginTop: 18, paddingHorizontal: 2 }}>
-              <Text className="font-sans-bold text-strong">Módulos</Text> es lo que compraste (entitlements de pago).{' '}
+              <Text className="font-sans-bold text-strong">Módulos</Text> es lo que incluye tu plan.{' '}
               <Text className="font-sans-bold text-strong">Funciones</Text> es lo que decides mostrar de eso. Apagar una
-              función nunca cancela un módulo ni borra datos — solo la oculta.
+              función nunca quita un módulo ni borra datos — solo la oculta.
             </Text>
           )}
         </ScrollView>
@@ -364,13 +364,13 @@ function DomainGroup({ data, scopeCtx, entitledByModule, canEdit }: DomainGroupP
                     <Pressable
                       testID={`features-unlock-${section.key}`}
                       accessibilityRole="button"
-                      onPress={() => Linking.openURL('https://eva-app.cl/coach/subscription#addons').catch(() => {})}
+                      onPress={() => Linking.openURL('https://eva-app.cl/coach/subscription').catch(() => {})}
                       hitSlop={8}
                       className="flex-row items-center rounded-pill bg-sport-100"
                       style={{ gap: 5, paddingHorizontal: 11, paddingVertical: 8 }}
                     >
                       <Lock size={13} strokeWidth={2.2} className="text-sport-600" />
-                      <Text className="font-sans-bold text-sport-600" style={{ fontSize: 12 }}>Desbloquear</Text>
+                      <Text className="font-sans-bold text-sport-600" style={{ fontSize: 12 }}>Mejorar plan</Text>
                     </Pressable>
                   ) : (
                     <Switch

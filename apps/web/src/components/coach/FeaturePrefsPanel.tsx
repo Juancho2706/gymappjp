@@ -38,7 +38,8 @@ import {
  *  1. Selector de PRESET (1 pregunta, doble como onboarding, descartable).
  *  2. Master switch del dominio (key reservada `_enabled`).
  *  3. Expander "Ajustar secciones" -> toggles por seccion (skip core), con badge Base/Pro +
- *     InfoTooltip. Las secciones Pro sin entitlement van LOCKED con CTA a /coach/subscription#addons.
+ *     InfoTooltip. Las secciones Pro sin entitlement van LOCKED con CTA al upgrade de plan
+ *     (/coach/subscription) — los módulos vienen incluidos en los planes pagos (CEO 2026-07-17).
  *
  * Todos los writes son optimistas (estado local) + toast, y revierten el estado si la action falla.
  * Cada grupo escribe via setCoach/TeamFeaturePrefs con SU dominio. Targets >=44px, respeta
@@ -389,16 +390,11 @@ function DomainFuncionesGroup({
 
                                                             {locked ? (
                                                                 <a
-                                                                    href="/coach/subscription#addons"
+                                                                    href="/coach/subscription"
                                                                     className="inline-flex min-h-[44px] shrink-0 items-center gap-1.5 rounded-xl border border-primary/30 bg-primary/5 px-3 text-xs font-semibold text-primary transition-colors hover:bg-primary/10"
                                                                 >
                                                                     <Lock className="h-3.5 w-3.5" />{' '}
-                                                                    Desbloquear con{' '}
-                                                                    {
-                                                                        MODULE_CATALOG[
-                                                                            section.requiresModule!
-                                                                        ].label
-                                                                    }
+                                                                    Incluido en planes pagos
                                                                 </a>
                                                             ) : (
                                                                 <label className="flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center">

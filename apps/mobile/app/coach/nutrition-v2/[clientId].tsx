@@ -410,7 +410,7 @@ export default function CoachNutritionV2ClientScreen() {
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={NUTRITION_PRO_HISTORY_BANNER_LABEL}
-            onPress={() => router.push('/coach/settings/modules')}
+            onPress={() => router.push('/coach/modules')}
             className="mt-3 flex-row items-center gap-2 self-start rounded-control border border-border-subtle bg-surface-sunken px-3 py-2"
           >
             <LockKeyhole color={theme.primary} size={14} />

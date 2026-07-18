@@ -755,8 +755,8 @@ function CompositionSection({ clientId, hasModule, entitlementsReady, inlineAllo
               <Ruler size={20} color={theme.mutedForeground} />
             </View>
             <Text style={[styles.teaserTitle, { color: theme.foreground, fontFamily: FONT.displayBold }]}>Composición corporal</Text>
-            <Text style={[styles.teaserCopy, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>%Grasa, masa muscular y antropometría (protocolo ISAK). Parte del módulo Composición corporal.</Text>
-            <Button label="Desbloquear" variant="sport" onPress={() => router.push('/coach/modules')} style={{ marginTop: 2 }} />
+            <Text style={[styles.teaserCopy, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>%Grasa, masa muscular y antropometría (protocolo ISAK). Parte del módulo Composición corporal, incluido en los planes pagos.</Text>
+            <Button label="Mejorar mi plan" variant="sport" onPress={() => router.push('/coach/modules')} style={{ marginTop: 2 }} />
           </View>
         </View>
       </StatCard>

@@ -38,10 +38,6 @@ function bearerToken(request: NextRequest): string | null {
     return auth.slice('Bearer '.length).trim() || null
 }
 
-function asEnabledModules(value: unknown): EnabledModules {
-    return value && typeof value === 'object' ? (value as EnabledModules) : {}
-}
-
 /** Lee FEATURE_PREFS_ENABLED de Edge Config. Fail-open para V1. */
 async function readFeaturePrefsEnabled(): Promise<boolean> {
     if (!process.env.EDGE_CONFIG) return false
@@ -272,7 +268,10 @@ export async function GET(request: NextRequest) {
                 orgId: null,
             }
         } else if (context.scope.type === 'enterprise') {
-            rawModules = {}
+            // Enterprise = org paga (coach `org_managed`, acceso siempre) ⇒ los 4 módulos incluidos.
+            // Se resuelve por el coach (espejo de la web, que resuelve enterprise vía el coach): el
+            // resolver deriva ON para `org_managed`. UNION con cualquier flag crudo del coach.
+            rawModules = await getCoachEnabledModules(admin, userId)
             scope = {
                 coachId: userId,
                 clientId: null,
@@ -284,7 +283,9 @@ export async function GET(request: NextRequest) {
             scope = { coachId: userId, clientId: null, teamId: null, orgId: null }
         }
     } else if (coachRow.data) {
-        rawModules = asEnabledModules(coachRow.data.enabled_modules)
+        // Standalone coach (sin workspaceKind): pasar por el resolver para heredar la derivación
+        // "pago ⇒ los 4 módulos incluidos" (UNION con sus flags crudos/cortesías).
+        rawModules = await getCoachEnabledModules(admin, userId)
         scope = { coachId: userId, clientId: null, teamId: null, orgId: null }
     } else if (clientRow.data) {
         const c = clientRow.data as {

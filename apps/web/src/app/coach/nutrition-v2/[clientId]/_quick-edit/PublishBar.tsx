@@ -12,8 +12,9 @@ import { AlertTriangle, Loader2, LockKeyhole, RefreshCcw } from 'lucide-react'
 import { useQuickEdit } from './QuickEditProvider'
 import { QE_COPY } from './microcopy'
 
-// Ruta canonica de compra del addon (inlineada: _lib/nutrition-pro.ts es server-only).
-const NUTRITION_PRO_UPGRADE_HREF = '/coach/settings/modules'
+// Ruta canonica de upgrade de plan (inlineada: _lib/nutrition-pro.ts es server-only).
+// Nutricion Pro viene incluido en los planes pagos — el CTA apunta al cambio de plan.
+const NUTRITION_PRO_UPGRADE_HREF = '/coach/subscription'
 
 export function PublishBar() {
   const { changeCount, isPending, publishError, upgradeRequired, openConfirm, retryPublish, discardChanges } =
@@ -31,7 +32,7 @@ export function PublishBar() {
             <p>
               {QE_COPY.upgradeRequired}{' '}
               <Link href={NUTRITION_PRO_UPGRADE_HREF} className="font-semibold text-primary underline underline-offset-2">
-                Ver módulos
+                Mejorar mi plan
               </Link>
             </p>
           </div>

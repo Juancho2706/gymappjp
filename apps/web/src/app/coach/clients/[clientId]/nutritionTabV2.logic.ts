@@ -76,7 +76,8 @@ export interface BuildNutritionTabV2Input {
   historyUpgradeHref?: string
 }
 
-const DEFAULT_HISTORY_UPGRADE_HREF = '/coach/settings/modules'
+// Nutricion Pro viene incluido en los planes pagos — el CTA apunta al upgrade de plan.
+const DEFAULT_HISTORY_UPGRADE_HREF = '/coach/subscription'
 
 function num(value: number | null | undefined): number {
   return typeof value === 'number' && Number.isFinite(value) ? value : 0

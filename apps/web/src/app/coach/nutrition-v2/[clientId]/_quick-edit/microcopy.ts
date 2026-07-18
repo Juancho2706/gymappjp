@@ -56,7 +56,7 @@ export const QE_COPY = {
   addSlot: 'Agregar franja',
   removeSlot: 'Eliminar franja',
   freeFood: 'Alimento libre',
-  upgradeRequired: 'Este cambio requiere Nutrición Pro.',
+  upgradeRequired: 'Este cambio requiere Nutrición Pro, incluido en los planes pagos.',
   invalidDraft: 'Hay campos con valores inválidos. Revisa las cantidades y nombres marcados.',
   flexibleTargetsOnly:
     'Plan flexible: sin franjas prescritas. Ajusta las metas diarias; el alumno registra libremente contra ellas.',

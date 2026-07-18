@@ -36,9 +36,10 @@ export interface ModuleCatalogEntry {
     /** Dónde viven sus utilidades cuando el módulo está activo. */
     surfaces: string[]
     /**
-     * Precio mensual self-service en CLP para el coach standalone (precio de lista, uniforme).
-     * Solo informativo en la UI de catálogo; el cobro real lo congela `coach_addons.price_clp`
-     * por compra (webhook). En modo team el precio es por contrato (no se usa este valor).
+     * Precio mensual de lista LEGACY en CLP (era del self-service de add-ons).
+     * Decisión CEO 2026-07-17: los módulos vienen INCLUIDOS en los planes pagos y la UI ya
+     * NO renderiza este precio en ninguna superficie. El campo se conserva solo para el riel
+     * de billing histórico (`coach_addons.price_clp` congelado por compra) y el admin.
      */
     priceClp: number
 }

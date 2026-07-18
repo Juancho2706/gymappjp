@@ -6,11 +6,9 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import {
     ADDON_CONFIG,
     ADDON_MODULE_KEYS,
-    ADDON_PAYMENT_RULES,
     BILLING_CYCLE_CONFIG,
     comparePlanDirection,
     FLOW_ENABLED,
-    getAddonPaymentRulesForCycle,
     getDefaultBillingCycleForTier,
     getTierAllowedBillingCycles,
     getTierCapabilities,
@@ -20,7 +18,6 @@ import {
     isBillingCycleAllowedForTier,
     isSaleTier,
     SALE_TIERS,
-    SELF_SERVICE_ADDONS_ENABLED,
     TIER_CONFIG,
     TIER_STUDENT_RANGE_LABEL,
     type BillingCycle,
@@ -29,9 +26,8 @@ import {
     type SubscriptionTier,
 } from '@/lib/constants'
 import type { ModuleKey } from '@/services/entitlements.service'
-import { useCaptureAddonFunnel } from '@/lib/posthog/events'
 import Link from 'next/link'
-import { Check, CheckCircle2, Info, Puzzle, Lock, Gift, ArrowLeft, ArrowRight, CreditCard, HeartPulse, Activity, Ruler, Utensils, X, type LucideIcon } from 'lucide-react'
+import { Check, CheckCircle2, Info, Lock, ArrowLeft, ArrowRight, CreditCard, HeartPulse, Activity, Ruler, Utensils, X, type LucideIcon } from 'lucide-react'
 import { CouponRedeemCard } from './CouponRedeemCard'
 
 const TIER_BADGE: Partial<Record<SubscriptionTier, { label: string; cls: string }>> = {
@@ -121,10 +117,8 @@ export function SubscriptionContent({ embedded = false }: { embedded?: boolean }
     // Refs para hacer scroll-into-view del banner relevante al setearse (off-screen en móvil).
     const blockedMsgRef = useRef<HTMLDivElement | null>(null)
     const feedbackBannerRef = useRef<HTMLDivElement | null>(null)
-    // ids estables para semántica de diálogo / aria de los modales hechos a mano.
+    // id estable para semántica de diálogo / aria del modal hecho a mano.
     const upgradeModalTitleId = useId()
-    const addonModalTitleId = useId()
-    const cancelAddonModalTitleId = useId()
     // Restaurar el foco al disparador del modal al cerrarlo (a11y de diálogo).
     const modalTriggerRef = useRef<HTMLElement | null>(null)
     const [coach, setCoach] = useState<CoachSubscription | null>(null)
@@ -146,42 +140,15 @@ export function SubscriptionContent({ embedded = false }: { embedded?: boolean }
     // Alumnos activos standalone (del endpoint) — bloquea downgrades que no caben (OVER_CAPACITY).
     const [activeClientCount, setActiveClientCount] = useState(0)
 
-    // ── Add-ons (plan 05 F5) ──────────────────────────────────────────────────
+    // ── Add-ons EXISTENTES (solo lectura — money-safety) ──────────────────────
+    // Decisión CEO 2026-07-17: los módulos vienen incluidos en los planes pagos y ya NO se
+    // compran/activan/desactivan acá. Las filas coach_addons vivas (cortesías / históricas)
+    // se conservan y siguen sumando al desglose: por eso `addons` sigue leyéndose del endpoint.
     const [addons, setAddons] = useState<CoachAddonView[]>([])
     const [billing, setBilling] = useState<BillingBreakdown | null>(null)
     // Cupón vivo (F5): spec re-resuelto server-side → la UI computa el precio descontado de cualquier
     // tier/cycle con la MISMA fn pura (computeDiscountedClp) que cobra el server (mostrado == cobrado).
     const [activeCoupon, setActiveCoupon] = useState<{ code: string | null; discountClp: number; spec: DiscountSpec } | null>(null)
-    const [addonModalKey, setAddonModalKey] = useState<ModuleKey | null>(null)
-    const [addonTermsAccepted, setAddonTermsAccepted] = useState(false)
-    const [addonSaving, setAddonSaving] = useState(false)
-    const [cancelAddonKey, setCancelAddonKey] = useState<ModuleKey | null>(null)
-    const [cancelAddonEffective, setCancelAddonEffective] = useState<string | null | undefined>(undefined)
-    const captureAddonFunnel = useCaptureAddonFunnel()
-
-    // Add-ons NUEVOS elegidos durante el cambio/alta de plan: se pagan JUNTO al plan en UN solo
-    // checkout (el server arma el monto compuesto en create-preference; el webhook materializa las
-    // filas coach_addons al confirmar el pago). Visible solo con el flag de lanzamiento (en prod
-    // oculto hasta el flip). Espejo del combo del signup (register/page.tsx).
-    const [upgradeAddons, setUpgradeAddons] = useState<ModuleKey[]>([])
-    // nutrition_exchanges requiere Pro+: si el tier elegido no la soporta, sacarla de la selección
-    // (el server igual la rechazaría con 400, pero la UI no debe ofrecer algo inusable).
-    useEffect(() => {
-        if (getTierCapabilities(selectedTier).canUseNutrition) return
-        setUpgradeAddons((prev) =>
-            prev.includes('nutrition_exchanges') ? prev.filter((k) => k !== 'nutrition_exchanges') : prev
-        )
-    }, [selectedTier])
-    // Issue #12: un módulo que ya tiene fila VIVA no debe viajar en el combo del cambio de plan
-    // (lo cobraría dos veces / el server lo rechazaría). Lo sacamos de la selección si aparece vivo
-    // tras un refresh de estado.
-    useEffect(() => {
-        const liveKeys = new Set(addons.filter((a) => a.status !== 'cancelled').map((a) => a.moduleKey))
-        setUpgradeAddons((prev) => {
-            const next = prev.filter((k) => !liveKeys.has(k))
-            return next.length === prev.length ? prev : next
-        })
-    }, [addons])
 
     useEffect(() => {
         let isMounted = true
@@ -268,7 +235,7 @@ export function SubscriptionContent({ embedded = false }: { embedded?: boolean }
             void refreshStatus()
         } else if (addon === 'failure') {
             setSuccessMessage(null)
-            setError('No se pudo completar el pago del módulo. No se realizó ningún cobro. Puedes intentarlo nuevamente desde el catálogo de módulos.')
+            setError('No se pudo completar el pago del módulo. No se realizó ningún cobro.')
         }
 
         if (upgrade === 'success') {
@@ -315,12 +282,9 @@ export function SubscriptionContent({ embedded = false }: { embedded?: boolean }
     // sumamos cierre con Escape y restauración del foco al disparador al cerrar. El autofocus del
     // primer interactivo se hace por panel (ref callback). Un único handler cubre los tres modales:
     // el que esté abierto define la acción de cierre.
-    const anyModalOpen = showUpgradeConfirm || addonModalKey !== null || cancelAddonKey !== null
+    const anyModalOpen = showUpgradeConfirm
     function closeAllModals() {
         setShowUpgradeConfirm(false)
-        setAddonModalKey(null)
-        setCancelAddonKey(null)
-        setCancelAddonEffective(undefined)
     }
     useEffect(() => {
         if (!anyModalOpen) return
@@ -349,17 +313,6 @@ export function SubscriptionContent({ embedded = false }: { embedded?: boolean }
         }
     }, [selectedTier, selectedCycle])
 
-    // Funnel add-ons (analítica pasiva): catálogo visible una vez cargado el coach.
-    const catalogViewedRef = useRef(false)
-    useEffect(() => {
-        if (catalogViewedRef.current || !coach) return
-        catalogViewedRef.current = true
-        captureAddonFunnel('addon_catalog_viewed', {
-            billing_cycle: (coach.billing_cycle ?? 'monthly') as BillingCycle,
-            tier: coach.subscription_tier as SubscriptionTier,
-        })
-    }, [coach, captureAddonFunnel])
-
     async function handleChangePlan(gateway: 'mercadopago' | 'flow' = 'mercadopago') {
         setSaving(true)
         setError(null)
@@ -368,7 +321,9 @@ export function SubscriptionContent({ embedded = false }: { embedded?: boolean }
             const response = await fetch('/api/payments/create-preference', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ tier: selectedTier, billingCycle: selectedCycle, addons: upgradeAddons, gateway }),
+                // addons: [] — los módulos vienen incluidos en el plan (decisión CEO 2026-07-17);
+                // ya no viajan add-ons nuevos en el checkout de cambio de plan.
+                body: JSON.stringify({ tier: selectedTier, billingCycle: selectedCycle, addons: [], gateway }),
             })
             const payload = await response.json()
             if (!response.ok) {
@@ -429,26 +384,13 @@ export function SubscriptionContent({ embedded = false }: { embedded?: boolean }
     }
 
     const selectedPrice = getTierPriceClp(selectedTier, selectedCycle)
-    // Total compuesto en vivo = plan + add-ons elegidos (mismo descuento por ciclo del plan). Es
-    // SOLO el preview de la UI; el monto real lo recalcula el server en el checkout (nunca confía
-    // en montos del cliente).
-    const upgradeAddonsCycleTotal = upgradeAddons.reduce((sum, key) => {
-        const { months, discountPercent } = BILLING_CYCLE_CONFIG[selectedCycle]
-        return sum + Math.round(ADDON_CONFIG[key].priceClpMensual * months * (1 - discountPercent / 100))
-    }, 0)
-    const selectedComposite = selectedPrice + upgradeAddonsCycleTotal
+    // Sin add-ons nuevos en el checkout (módulos incluidos en el plan): el compuesto es el plan solo.
+    const selectedComposite = selectedPrice
     // F5: precio del plan elegido CON el cupón vivo aplicado. Usa computeDiscountedClp (la MISMA fn pura
-    // que el server) sobre el composite del tier/cycle elegido → el preview mostrado == lo que cobrará el
+    // que el server) sobre el tier/cycle elegido → el preview mostrado == lo que cobrará el
     // server (sin drift). Solo display; el monto real lo recomputa el server en el checkout.
-    const selectedAddonLines = upgradeAddons.map((key) => {
-        const { months, discountPercent } = BILLING_CYCLE_CONFIG[selectedCycle]
-        return {
-            moduleKey: key,
-            cycleAmountClp: Math.round(ADDON_CONFIG[key].priceClpMensual * months * (1 - discountPercent / 100)),
-        }
-    })
     const selectedCouponResult = activeCoupon
-        ? computeDiscountedClp({ baseClp: selectedPrice, addons: selectedAddonLines, spec: activeCoupon.spec })
+        ? computeDiscountedClp({ baseClp: selectedPrice, addons: [], spec: activeCoupon.spec })
         : null
     const selectedCompositeNet = selectedCouponResult ? selectedCouponResult.netClp : selectedComposite
     const selectedCouponDiscount = selectedCouponResult ? selectedCouponResult.discountClp : 0
@@ -485,14 +427,6 @@ export function SubscriptionContent({ embedded = false }: { embedded?: boolean }
     // cambiar. Deshabilita "Continuar" (si llegara al server, devuelve 400/no-op igualmente).
     const isNoOpChange = selectedTier === coachTier && selectedCycle === coachCycle
 
-    // ── Add-ons: estado de cada módulo a partir de las filas vivas del endpoint ──
-    function addonForKey(key: ModuleKey): CoachAddonView | undefined {
-        // Una fila paga (self_service) manda sobre el grant para mostrar acción de baja;
-        // si solo hay grant, mostramos "Cortesía EVA".
-        const live = addons.filter((a) => a.moduleKey === key && a.status !== 'cancelled')
-        return live.find((a) => a.source === 'self_service') ?? live.find((a) => a.source === 'admin_grant')
-    }
-
     async function refreshStatus() {
         try {
             const response = await fetch('/api/payments/subscription-status')
@@ -507,75 +441,6 @@ export function SubscriptionContent({ embedded = false }: { embedded?: boolean }
             setActiveClientCount(typeof payload.activeClientCount === 'number' ? payload.activeClientCount : 0)
         } catch {
             /* transient — el estado previo sigue visible */
-        }
-    }
-
-    function openAddonModal(key: ModuleKey) {
-        setAddonTermsAccepted(false)
-        setAddonModalKey(key)
-        captureAddonFunnel('addon_modal_opened', { module_key: key, billing_cycle: coachCycle, tier: coachTier })
-    }
-
-    async function handleAddAddon() {
-        if (!addonModalKey || !addonTermsAccepted) return
-        const key = addonModalKey
-        setAddonSaving(true)
-        setError(null)
-        setSuccessMessage(null)
-        captureAddonFunnel('addon_confirmed', { module_key: key, billing_cycle: coachCycle, tier: coachTier })
-        try {
-            const response = await fetch('/api/payments/addons', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ moduleKey: key, acceptedTermsVersion: ADDON_PAYMENT_RULES.version }),
-            })
-            const payload = await response.json()
-            if (!response.ok) throw new Error(payload.error ?? 'No se pudo agregar el módulo.')
-            // Coach FLOW (Ola 5): el cambio de plan es SÍNCRONO — Flow ya cobró la diferencia y el
-            // módulo quedó activo. NO hay redirect a checkout: cerramos el modal, refrescamos el estado
-            // (para que el módulo nuevo aparezca) y mostramos el banner de éxito existente.
-            if (payload.kind === 'flow_change_applied') {
-                captureAddonFunnel('addon_flow_applied', { module_key: key, billing_cycle: coachCycle, tier: coachTier })
-                setAddonModalKey(null)
-                setSuccessMessage('Tu módulo quedó activo y se suma a tu próximo cobro.')
-                await refreshStatus()
-                return
-            }
-            // MercadoPago (todos los ciclos): el endpoint devuelve la URL del one-shot prorrateado.
-            if (payload.kind === 'one_shot_checkout' && payload.checkoutUrl) {
-                captureAddonFunnel('addon_oneshot_redirected', { module_key: key, billing_cycle: coachCycle, tier: coachTier })
-                window.location.href = payload.checkoutUrl
-                return
-            }
-            throw new Error('No se pudo iniciar el pago del módulo.')
-        } catch (err) {
-            setError(err instanceof Error ? err.message : 'Error inesperado')
-        } finally {
-            setAddonSaving(false)
-        }
-    }
-
-    async function handleCancelAddon() {
-        if (!cancelAddonKey) return
-        const key = cancelAddonKey
-        setAddonSaving(true)
-        setError(null)
-        setSuccessMessage(null)
-        try {
-            const response = await fetch('/api/payments/addons/cancel', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ moduleKey: key }),
-            })
-            const payload = await response.json()
-            if (!response.ok) throw new Error(payload.error ?? 'No se pudo quitar el módulo.')
-            setCancelAddonEffective(payload.effectiveAt ?? null)
-            await refreshStatus()
-        } catch (err) {
-            setError(err instanceof Error ? err.message : 'Error inesperado')
-            setCancelAddonKey(null)
-        } finally {
-            setAddonSaving(false)
         }
     }
 
@@ -744,93 +609,44 @@ export function SubscriptionContent({ embedded = false }: { embedded?: boolean }
                 <CouponRedeemCard />
             </div>
 
-            {/* ── Módulos add-on — superficie de venta permitida #2 (anti-hostigamiento) ── */}
+            {/* ── Módulos incluidos — informativo, ya NO es superficie de venta (CEO 2026-07-17):
+                los 4 módulos vienen incluidos con cualquier plan pago; no se compran ni se dan de
+                baja por separado. El ancla #addons se conserva para deep-links antiguos. ── */}
             {coach ? (
                 <section id="addons" className="mb-5">
-                    <p className="mb-2 px-1 text-[13px] font-bold uppercase tracking-wide text-muted">Módulos add-on</p>
+                    <p className="mb-2 px-1 text-[13px] font-bold uppercase tracking-wide text-muted">Módulos incluidos</p>
                     <div className="overflow-hidden rounded-card border border-subtle bg-surface-card">
                         {ADDON_MODULE_KEYS.map((key, i) => {
                             const cfg = ADDON_CONFIG[key]
                             const Icon = ADDON_ICON[key]
-                            const row = addonForKey(key)
-                            // Estado por módulo (plan 05 F5.1).
-                            const isCourtesy = row?.source === 'admin_grant'
-                            const isActive = row?.status === 'active' && row.source === 'self_service'
-                            const isCancelPendingCharged = row?.status === 'cancel_pending' && row.source === 'self_service' && row.firstChargedAt !== null
-                            const isCommitted = row?.status === 'cancel_pending' && row.source === 'self_service' && row.firstChargedAt === null
-                            // D8: nutrition_exchanges requiere tier con nutrición (Pro+).
-                            const requiresNutritionTier = key === 'nutrition_exchanges' && !getTierCapabilities(coachTier).canUseNutrition
-                            const canAdd = hasActivePaidPlan && !requiresNutritionTier && !row
-                            const lit = isActive || isCourtesy
-                            // Badge de estado (texto + paleta), espejo del modState del diseño.
-                            const badge: { label: string; cls: string; icon: 'gift' | 'check' | 'lock' | null } =
-                                isCourtesy
-                                    ? { label: 'Activo sin costo', cls: 'bg-sky-500/15 text-sky-600 dark:text-sky-400', icon: 'gift' }
-                                    : isActive
-                                    ? { label: 'Activo', cls: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400', icon: 'check' }
-                                    : isCancelPendingCharged
-                                    ? { label: `Se desactiva el ${row?.expiresAt ? new Date(row.expiresAt).toLocaleDateString('es-CL', { day: 'numeric', month: 'long' }) : 'fin del período'}`, cls: 'bg-amber-500/15 text-amber-600 dark:text-amber-400', icon: null }
-                                    : isCommitted
-                                    ? { label: 'Baja programada', cls: 'bg-amber-500/15 text-amber-600 dark:text-amber-400', icon: null }
-                                    : requiresNutritionTier
-                                    ? { label: 'Requiere plan Pro+', cls: 'bg-surface-sunken text-muted', icon: 'lock' }
-                                    : { label: `$${cfg.priceClpMensual.toLocaleString('es-CL')}/mes`, cls: 'bg-surface-sunken text-muted', icon: null }
+                            const included = hasActivePaidPlan
                             return (
                                 <div key={key}>
                                     {i > 0 && <div className="mx-3.5 h-px bg-[var(--border-subtle)]" />}
                                     <div className="flex items-center gap-3 px-3.5 py-3">
-                                        <span className={`flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-control ${lit ? 'bg-sport-100 text-sport-600' : 'bg-surface-sunken text-subtle'}`}>
+                                        <span className={`flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-control ${included ? 'bg-sport-100 text-sport-600' : 'bg-surface-sunken text-subtle'}`}>
                                             <Icon className="h-[18px] w-[18px]" />
                                         </span>
                                         <div className="min-w-0 flex-1">
                                             <p className="text-sm font-bold text-strong">{cfg.label}</p>
-                                            <span className={`mt-1 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ${badge.cls}`}>
-                                                {badge.icon === 'gift' && <Gift className="h-3 w-3" />}
-                                                {badge.icon === 'check' && <Check className="h-3 w-3" />}
-                                                {badge.icon === 'lock' && <Lock className="h-3 w-3" />}
-                                                {badge.label}
+                                            <span className={`mt-1 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ${included ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400' : 'bg-surface-sunken text-muted'}`}>
+                                                {included ? <Check className="h-3 w-3" /> : <Lock className="h-3 w-3" />}
+                                                {included ? 'Incluido en tu plan' : 'Con plan pago'}
                                             </span>
                                         </div>
-                                        {/* Acción Agregar / Quitar */}
-                                        {isActive || isCancelPendingCharged || isCommitted ? (
-                                            <button
-                                                type="button"
-                                                disabled={addonSaving || isCancelPendingCharged || isCommitted || !SELF_SERVICE_ADDONS_ENABLED}
-                                                onClick={(e) => { modalTriggerRef.current = e.currentTarget; setCancelAddonEffective(undefined); setCancelAddonKey(key) }}
-                                                className="shrink-0 h-9 rounded-control px-3.5 text-xs font-semibold text-[var(--danger-600)] hover:bg-[var(--danger-100)] disabled:opacity-60 disabled:hover:bg-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
-                                            >
-                                                {isCancelPendingCharged || isCommitted ? 'Baja solicitada' : 'Quitar'}
-                                            </button>
-                                        ) : canAdd ? (
-                                            <button
-                                                type="button"
-                                                disabled={addonSaving || !SELF_SERVICE_ADDONS_ENABLED}
-                                                onClick={(e) => { modalTriggerRef.current = e.currentTarget; openAddonModal(key) }}
-                                                className="shrink-0 h-9 rounded-control border border-default bg-surface-sunken px-3.5 text-xs font-semibold text-strong hover:bg-surface-card disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
-                                            >
-                                                Agregar
-                                            </button>
-                                        ) : null}
                                     </div>
                                 </div>
                             )
                         })}
                     </div>
 
-                    {!hasActivePaidPlan && (
-                        <p className="mt-3 rounded-control border border-subtle bg-surface-sunken px-3 py-2 text-xs text-muted">
-                            Los módulos add-on están disponibles con un plan pago activo.
-                        </p>
-                    )}
-                    {hasActivePaidPlan && !SELF_SERVICE_ADDONS_ENABLED && (
-                        <p className="mt-3 rounded-control border border-subtle bg-surface-sunken px-3 py-2 text-xs text-muted">
-                            La compra y baja de módulos estará disponible muy pronto. Si necesitas un módulo ahora,
-                            escríbenos a <a href="mailto:contacto@eva-app.cl" className="text-primary hover:opacity-80">contacto@eva-app.cl</a>.
-                        </p>
-                    )}
-                    {hasActivePaidPlan && SELF_SERVICE_ADDONS_ENABLED && (
+                    {hasActivePaidPlan ? (
                         <p className="mt-2 px-1 text-[11px] text-subtle">
-                            Activa un módulo acá; usalo desde Alumnos › Herramientas. Cada uno se cobra aparte de tu plan.
+                            Vienen incluidos en tu plan, sin costo extra. Úsalos desde Alumnos › Herramientas.
+                        </p>
+                    ) : (
+                        <p className="mt-3 rounded-control border border-subtle bg-surface-sunken px-3 py-2 text-xs text-muted">
+                            Estos módulos vienen incluidos en cualquier plan pago. Elige un plan abajo para activarlos.
                         </p>
                     )}
                 </section>
@@ -958,82 +774,17 @@ export function SubscriptionContent({ embedded = false }: { embedded?: boolean }
                     </div>
                 )}
 
-                {/* Combo plan + add-ons (plan 05): elige módulos para pagarlos JUNTO al plan en un
-                    solo checkout. Visible solo con el flag de lanzamiento (en prod oculto). */}
-                {SELF_SERVICE_ADDONS_ENABLED && (
-                    <div className="rounded-control border border-subtle bg-surface-card p-4">
-                        <p className="mb-1 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted">
-                            <Puzzle className="h-3.5 w-3.5" aria-hidden="true" /> Sumar módulos (opcional · se pagan junto al plan)
-                        </p>
-                        {/* Aclaración (issue #12): estos módulos se cobran CON el plan al corte; el catálogo
-                            "Agregar ahora" de arriba cobra una proración inmediata. Dos superficies distintas. */}
-                        <p className="mb-2 text-[11px] text-muted">
-                            Se cobran junto a tu plan en el mismo checkout y toman efecto al corte. Si necesitas
-                            un módulo de inmediato, usa &quot;Agregar&quot; en la sección Módulos add-on (cobro prorrateado ahora).
-                        </p>
-                        <div className="space-y-1.5">
-                            {ADDON_MODULE_KEYS.map((key) => {
-                                const cfg = ADDON_CONFIG[key]
-                                const needsNutrition =
-                                    key === 'nutrition_exchanges' && !getTierCapabilities(selectedTier).canUseNutrition
-                                // Un módulo con fila VIVA (activa/cortesía/baja-pendiente) ya está contratado:
-                                // no debe ofrecerse acá (lo cobraría dos veces / el server lo rechazaría).
-                                const alreadyLive = !!addonForKey(key)
-                                const disabled = needsNutrition || alreadyLive
-                                const checked = upgradeAddons.includes(key)
-                                return (
-                                    <label
-                                        key={key}
-                                        className={`flex items-center justify-between gap-2 rounded-control border px-3 py-2 text-sm ${
-                                            disabled
-                                                ? 'cursor-not-allowed border-subtle opacity-50'
-                                                : 'cursor-pointer border-subtle hover:bg-surface-sunken'
-                                        }`}
-                                    >
-                                        <span className="flex items-center gap-2">
-                                            <input
-                                                type="checkbox"
-                                                disabled={disabled}
-                                                checked={checked && !alreadyLive}
-                                                onChange={(e) =>
-                                                    setUpgradeAddons((prev) =>
-                                                        e.target.checked
-                                                            ? [...new Set([...prev, key])]
-                                                            : prev.filter((k) => k !== key)
-                                                    )
-                                                }
-                                                className="h-4 w-4 rounded border-border"
-                                            />
-                                            <span className="text-strong">{cfg.label}</span>
-                                            {alreadyLive ? (
-                                                <span className="text-[10px] font-semibold text-emerald-500">ya activo</span>
-                                            ) : needsNutrition ? (
-                                                <span className="text-[10px] font-semibold text-amber-500">requiere Pro+</span>
-                                            ) : null}
-                                        </span>
-                                        <span className="text-muted">
-                                            ${cfg.priceClpMensual.toLocaleString('es-CL')}/mes
-                                        </span>
-                                    </label>
-                                )
-                            })}
-                        </div>
-                    </div>
-                )}
+                {/* Nota informativa: los módulos ya vienen con el plan (sin combo de compra). */}
+                <p className="px-1 text-[11.5px] text-subtle">
+                    Todos los planes pagos incluyen los 4 módulos profesionales sin costo extra.
+                </p>
 
-                {/* Transparencia de precio (real) — desglose cupón/combo antes del CTA */}
-                {(selectedCouponDiscount > 0 || upgradeAddons.length > 0) && (
+                {/* Transparencia de precio (real) — desglose del cupón antes del CTA */}
+                {selectedCouponDiscount > 0 && activeCoupon && (
                     <div className="rounded-control border border-subtle bg-surface-sunken px-4 py-3 text-[12px]">
-                        {selectedCouponDiscount > 0 && activeCoupon && (
-                            <p className="font-medium text-emerald-600 dark:text-emerald-400">
-                                Cupón {activeCoupon.code} aplicado · −${selectedCouponDiscount.toLocaleString('es-CL')}
-                            </p>
-                        )}
-                        {upgradeAddons.length > 0 && (
-                            <p className="text-muted">
-                                plan ${selectedPrice.toLocaleString('es-CL')} + {upgradeAddons.length} módulo(s) ${upgradeAddonsCycleTotal.toLocaleString('es-CL')}
-                            </p>
-                        )}
+                        <p className="font-medium text-emerald-600 dark:text-emerald-400">
+                            Cupón {activeCoupon.code} aplicado · −${selectedCouponDiscount.toLocaleString('es-CL')}
+                        </p>
                     </div>
                 )}
 
@@ -1100,13 +851,6 @@ export function SubscriptionContent({ embedded = false }: { embedded?: boolean }
                                         )}
                                         . El monto exacto de la diferencia se calcula en el checkout seguro de Mercado Pago.
                                     </p>
-                                    {upgradeAddons.length > 0 && (
-                                        <p className="text-muted text-xs">
-                                            Nota: en un upgrade de plan, los módulos elegidos en &quot;Sumar módulos&quot;
-                                            ({upgradeAddons.map((k) => ADDON_CONFIG[k].label).join(', ')}) no se incluyen en
-                                            este cobro inmediato. Agrégalos desde la sección Módulos add-on cuando el plan esté activo.
-                                        </p>
-                                    )}
                                 </>
                             ) : (
                                 <>
@@ -1136,11 +880,6 @@ export function SubscriptionContent({ embedded = false }: { embedded?: boolean }
                                         </strong>
                                         {selectedCouponDiscount > 0 && activeCoupon && (
                                             <span className="text-emerald-500"> (cupón {activeCoupon.code}: −${selectedCouponDiscount.toLocaleString('es-CL')})</span>
-                                        )}
-                                        {upgradeAddons.length > 0 && (
-                                            <span className="text-muted">
-                                                {' '}(plan ${selectedPrice.toLocaleString('es-CL')} + {upgradeAddons.map((k) => ADDON_CONFIG[k].label).join(', ')})
-                                            </span>
                                         )}
                                         .
                                     </p>
@@ -1218,174 +957,6 @@ export function SubscriptionContent({ embedded = false }: { embedded?: boolean }
                                 Cancelar
                             </button>
                         </div>
-                    </div>
-                </div>
-            )}
-
-            {/* ── Modal de confirmación de ALTA de add-on (plan 05 F5.2) ── */}
-            {addonModalKey && (() => {
-                const cfg = ADDON_CONFIG[addonModalKey]
-                const rules = getAddonPaymentRulesForCycle(coachCycle)
-                return (
-                    <div
-                        className="fixed inset-0 z-50 flex items-end justify-center bg-[var(--surface-overlay)] md:items-center md:px-4"
-                        onClick={() => setAddonModalKey(null)}
-                    >
-                        <div
-                            role="dialog"
-                            aria-modal="true"
-                            aria-labelledby={addonModalTitleId}
-                            onClick={(e) => e.stopPropagation()}
-                            className="w-full rounded-t-sheet bg-surface-card p-6 pb-[calc(env(safe-area-inset-bottom,0px)+1.5rem)] shadow-[var(--shadow-sheet)] max-h-[88dvh] overflow-y-auto md:max-w-lg md:rounded-card md:border md:border-subtle md:shadow-2xl md:max-h-[90dvh]"
-                        >
-                            <div className="mx-auto mb-4 h-1 w-[38px] rounded-full bg-[var(--ink-200)] md:hidden" aria-hidden="true" />
-                            <h2 id={addonModalTitleId} className="font-display text-xl font-extrabold tracking-tight text-strong">Agregar {cfg.label}</h2>
-                            <p className="mt-1 text-sm text-muted">{cfg.description}</p>
-
-                            {/* Desglose: el total compuesto en vivo lo da el endpoint (billing.totalClp) */}
-                            <div className="mt-4 space-y-1.5 rounded-control border border-subtle bg-surface-sunken p-4 text-sm">
-                                <div className="flex justify-between text-muted">
-                                    <span>Tu plan ({TIER_CONFIG[coachTier]?.label ?? coachTier})</span>
-                                    <span className="text-strong">${(billing?.baseClp ?? getTierPriceClp(coachTier, coachCycle)).toLocaleString('es-CL')} CLP</span>
-                                </div>
-                                <div className="flex justify-between text-muted">
-                                    <span>{cfg.label}</span>
-                                    <span className="text-strong">${cfg.priceClpMensual.toLocaleString('es-CL')} CLP / mes</span>
-                                </div>
-                                <p className="pt-1 text-xs text-muted">
-                                    Pagas ahora un monto único prorrateado por los días que restan de tu ciclo.
-                                    Desde la renovación, el valor del módulo se suma a tu cobro habitual. El monto exacto
-                                    del pago inicial se calcula en el checkout seguro de Mercado Pago.
-                                </p>
-                                {activeCoupon &&
-                                    activeCoupon.spec.type === 'percent' &&
-                                    (activeCoupon.spec.target === 'total' ||
-                                        (activeCoupon.spec.target === 'module' &&
-                                            (activeCoupon.spec.moduleKeys?.includes(addonModalKey ?? '') ?? false))) && (
-                                        <p className="pt-1 text-xs font-medium text-emerald-600 dark:text-emerald-400">
-                                            Tu cupón {activeCoupon.code} ({Math.min(100, Math.max(0, activeCoupon.spec.value))}%)
-                                            también se aplica a este módulo: el pago prorrateado y tu cobro mensual vienen con
-                                            el descuento.
-                                        </p>
-                                    )}
-                            </div>
-
-                            {/* Las 5 reglas textuales (variante por ciclo) */}
-                            <div className="mt-4">
-                                <p className="text-xs font-semibold uppercase tracking-wide text-muted">Condiciones de cobro</p>
-                                <ol className="mt-2 space-y-2">
-                                    {rules.rules.map((r) => (
-                                        <li key={r.number} className="text-xs text-muted">
-                                            <span className="font-semibold text-strong">{r.title}.</span> {r.text}
-                                        </li>
-                                    ))}
-                                </ol>
-                            </div>
-
-                            {/* Checkbox obligatorio: habilita el CTA. Autofocus al abrir (primer interactivo). */}
-                            <label className="mt-4 flex items-start gap-2 text-xs text-muted">
-                                <input
-                                    type="checkbox"
-                                    ref={(el) => { if (el) el.focus() }}
-                                    checked={addonTermsAccepted}
-                                    onChange={(e) => {
-                                        setAddonTermsAccepted(e.target.checked)
-                                        if (e.target.checked) {
-                                            captureAddonFunnel('addon_terms_accepted', { module_key: addonModalKey, billing_cycle: coachCycle, tier: coachTier })
-                                        }
-                                    }}
-                                    className="mt-0.5 h-4 w-4 rounded border-border shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
-                                />
-                                <span>Acepto estas condiciones de cobro, renovación y término.</span>
-                            </label>
-
-                            <div className="mt-5 flex flex-col gap-1.5">
-                                <button
-                                    type="button"
-                                    onClick={() => void handleAddAddon()}
-                                    disabled={!addonTermsAccepted || addonSaving || !SELF_SERVICE_ADDONS_ENABLED}
-                                    className="flex h-12 w-full items-center justify-center gap-2 rounded-control bg-sport-500 text-sm font-bold text-white transition-colors hover:bg-sport-600 disabled:opacity-60 disabled:hover:bg-sport-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
-                                >
-                                    {addonSaving ? 'Procesando...' : (
-                                        <>
-                                            <span>Ir a pagar</span>
-                                            <ArrowRight className="h-4 w-4" />
-                                        </>
-                                    )}
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => setAddonModalKey(null)}
-                                    className="h-11 w-full rounded-control text-sm font-semibold text-muted hover:text-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
-                                >
-                                    Cancelar
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                )
-            })()}
-
-            {/* ── Modal de BAJA de add-on (plan 05 F5.2) ── */}
-            {cancelAddonKey && (
-                <div
-                    className="fixed inset-0 z-50 flex items-end justify-center bg-[var(--surface-overlay)] md:items-center md:px-4"
-                    onClick={() => { setCancelAddonKey(null); setCancelAddonEffective(undefined) }}
-                >
-                    <div
-                        role="dialog"
-                        aria-modal="true"
-                        aria-labelledby={cancelAddonModalTitleId}
-                        onClick={(e) => e.stopPropagation()}
-                        className="w-full rounded-t-sheet bg-surface-card p-6 pb-[calc(env(safe-area-inset-bottom,0px)+1.5rem)] shadow-[var(--shadow-sheet)] max-h-[88dvh] overflow-y-auto md:max-w-md md:rounded-card md:border md:border-subtle md:shadow-2xl md:max-h-[90dvh]"
-                    >
-                        <div className="mx-auto mb-4 h-1 w-[38px] rounded-full bg-[var(--ink-200)] md:hidden" aria-hidden="true" />
-                        {cancelAddonEffective === undefined ? (
-                            <>
-                                <h2 id={cancelAddonModalTitleId} className="font-display text-xl font-extrabold tracking-tight text-strong">Quitar {ADDON_CONFIG[cancelAddonKey].label}</h2>
-                                <p className="mt-2 text-sm text-muted">
-                                    Conservas el acceso hasta el final del período que ya pagaste. No hay reembolsos por
-                                    fracciones no usadas. ¿Confirmas que quieres quitar este módulo?
-                                </p>
-                                <div className="mt-5 flex flex-col gap-1.5">
-                                    <button
-                                        type="button"
-                                        onClick={() => void handleCancelAddon()}
-                                        disabled={addonSaving || !SELF_SERVICE_ADDONS_ENABLED}
-                                        className="h-12 w-full rounded-control border border-[var(--danger-100)] text-sm font-bold text-[var(--danger-600)] transition-colors hover:bg-[var(--danger-100)] disabled:opacity-60 disabled:hover:bg-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--danger-500)] focus-visible:ring-offset-2"
-                                    >
-                                        {addonSaving ? 'Procesando...' : 'Quitar módulo'}
-                                    </button>
-                                    <button
-                                        type="button"
-                                        ref={(el) => { if (el) el.focus() }}
-                                        onClick={() => setCancelAddonKey(null)}
-                                        className="h-11 w-full rounded-control text-sm font-semibold text-muted hover:text-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
-                                    >
-                                        Volver
-                                    </button>
-                                </div>
-                            </>
-                        ) : (
-                            <>
-                                <h2 id={cancelAddonModalTitleId} className="font-display text-xl font-extrabold tracking-tight text-strong">Baja registrada</h2>
-                                <p className="mt-2 text-sm text-muted" data-testid="addon-cancel-effective">
-                                    {cancelAddonEffective
-                                        ? `Conservas el acceso a ${ADDON_CONFIG[cancelAddonKey].label} hasta el ${new Date(cancelAddonEffective).toLocaleDateString('es-CL', { day: 'numeric', month: 'long', year: 'numeric' })}. Sin reembolso de fracciones.`
-                                        : `Tu primer cobro incluirá igualmente ${ADDON_CONFIG[cancelAddonKey].label} (compromiso mínimo de un ciclo). Después de ese cobro se programa su término. Sin reembolso de fracciones.`}
-                                </p>
-                                <div className="mt-5">
-                                    <button
-                                        type="button"
-                                        ref={(el) => { if (el) el.focus() }}
-                                        onClick={() => { setCancelAddonKey(null); setCancelAddonEffective(undefined) }}
-                                        className="h-12 w-full rounded-control bg-sport-500 text-sm font-bold text-white transition-colors hover:bg-sport-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
-                                    >
-                                        Entendido
-                                    </button>
-                                </div>
-                            </>
-                        )}
                     </div>
                 </div>
             )}

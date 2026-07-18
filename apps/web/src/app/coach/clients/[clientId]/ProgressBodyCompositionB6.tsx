@@ -196,13 +196,13 @@ function CompositionTeaser() {
                     </div>
                     <p className="text-muted" style={{ fontSize: 12, maxWidth: 320, lineHeight: 1.35 }}>
                         %Grasa, masa muscular y antropometría (protocolo ISAK). Parte del módulo
-                        Composición corporal.
+                        Composición corporal, incluido en los planes pagos.
                     </p>
                     <Link
-                        href="/coach/settings/modules"
+                        href="/coach/subscription"
                         className="mt-1 inline-flex min-h-9 items-center rounded-control bg-[var(--cta-fill)] px-4 text-xs font-bold text-[color:var(--text-on-sport)] transition-opacity hover:opacity-90"
                     >
-                        Desbloquear
+                        Mejorar mi plan
                     </Link>
                 </div>
             </div>

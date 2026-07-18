@@ -141,3 +141,4 @@ docs/audits/**/*.png
 docs/audits/menus/
 # Inputs crudos de partner/deal (anidocs) — binarios grandes, deal Movida cancelado
 docs/anidocs/
+tmp/

@@ -69,6 +69,11 @@ const SHARED_TIER_FEATURES = [
     'Dashboard coach',
 ] as const
 
+// Decisión CEO 2026-07-17: los 4 módulos profesionales (cardio, evaluación de movimiento,
+// composición corporal y nutrición por intercambios) vienen INCLUIDOS en todo plan pago.
+// Ya no se venden como add-ons; el valor lo captura la suscripción.
+const MODULES_INCLUDED_FEATURE = '4 módulos profesionales incluidos'
+
 /** Rango de alumnos por tier (copy marketing / UI). */
 export const TIER_STUDENT_RANGE_LABEL: Record<SubscriptionTier, string> = {
     free: 'Hasta 3 alumnos',
@@ -109,33 +114,33 @@ export const TIER_CONFIG: Record<SubscriptionTier, TierConfig> = {
         maxClients: 10,
         monthlyPriceClp: 19990,
         isMostAffordable: true,
-        features: [...SHARED_TIER_FEATURES],
+        features: [...SHARED_TIER_FEATURES, MODULES_INCLUDED_FEATURE],
     },
     pro: {
         label: 'Pro',
         maxClients: 30,
         monthlyPriceClp: 29990,
-        features: [...SHARED_TIER_FEATURES, 'Branding personalizado', 'Planes de nutrición'],
+        features: [...SHARED_TIER_FEATURES, MODULES_INCLUDED_FEATURE, 'Branding personalizado', 'Planes de nutrición'],
     },
     elite: {
         label: 'Elite',
         maxClients: 100,
         monthlyPriceClp: 44990,
-        features: [...SHARED_TIER_FEATURES, 'Branding personalizado', 'Planes de nutrición'],
+        features: [...SHARED_TIER_FEATURES, MODULES_INCLUDED_FEATURE, 'Branding personalizado', 'Planes de nutrición'],
     },
     // LEGACY — fuera de venta, grandfathered + placeholder team/org_managed (migracion 20260609230000). NO borrar.
     growth: {
         label: 'Growth',
         maxClients: 120,
         monthlyPriceClp: 84990,
-        features: [...SHARED_TIER_FEATURES, 'Branding personalizado', 'Planes de nutrición'],
+        features: [...SHARED_TIER_FEATURES, MODULES_INCLUDED_FEATURE, 'Branding personalizado', 'Planes de nutrición'],
     },
     // LEGACY — fuera de venta, grandfathered + placeholder team/org_managed (migracion 20260609230000). NO borrar.
     scale: {
         label: 'Scale',
         maxClients: 500,
         monthlyPriceClp: 190000,
-        features: [...SHARED_TIER_FEATURES, 'Branding personalizado', 'Planes de nutrición'],
+        features: [...SHARED_TIER_FEATURES, MODULES_INCLUDED_FEATURE, 'Branding personalizado', 'Planes de nutrición'],
     },
 }
 

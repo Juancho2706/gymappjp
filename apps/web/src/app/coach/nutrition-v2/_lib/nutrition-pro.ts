@@ -34,8 +34,8 @@ export const NUTRITION_PRO_MODULE_KEY = 'nutrition_exchanges' as const
 /** Ventana de historial (dias) visible para el coach base, sin el addon Pro. */
 export const NUTRITION_PRO_HISTORY_DAYS_BASE = 30
 
-/** Ruta canonica de compra/activacion del addon (misma que ModuleOffNotice V1). */
-export const NUTRITION_PRO_UPGRADE_HREF = '/coach/settings/modules'
+/** Ruta canonica de upgrade de plan (los modulos vienen incluidos en los planes pagos). */
+export const NUTRITION_PRO_UPGRADE_HREF = '/coach/subscription'
 
 /** Contexto de recurso para resolver el entitlement (pool manda; si no, el coach). */
 export type NutritionProCtx = { coachId?: string | null; teamId?: string | null }

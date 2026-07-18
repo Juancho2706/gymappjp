@@ -493,9 +493,10 @@ function SlotEditor({
   )
 }
 
-// Ruta canonica de compra del addon. Se inlinea aca porque el modulo _lib/nutrition-pro.ts
+// Ruta canonica de upgrade de plan. Se inlinea aca porque el modulo _lib/nutrition-pro.ts
 // es server-only (import 'server-only') y no puede importarse en un client component.
-const NUTRITION_PRO_UPGRADE_HREF = '/coach/settings/modules'
+// Nutricion Pro viene incluido en los planes pagos — el CTA apunta al cambio de plan.
+const NUTRITION_PRO_UPGRADE_HREF = '/coach/subscription'
 // Estrategias que exigen el addon Nutricion Pro (frontera CEO): solo 'hybrid'. La UI marca
 // y deshabilita estas opciones sin addon; el servidor (publishPlanAction) es la barrera real.
 const PRO_STRATEGIES: readonly NutritionStrategy[] = ['hybrid']
@@ -577,12 +578,12 @@ function StrategyStep({
             className="h-8 w-8 shrink-0 object-contain"
           />
           <p className="text-xs text-muted">
-            La estrategia hibrida es parte de Nutricion Pro.{' '}
+            La estrategia hibrida es parte de Nutricion Pro, incluido en los planes pagos.{' '}
             <Link
               href={NUTRITION_PRO_UPGRADE_HREF}
               className="font-semibold text-primary underline underline-offset-2 dark:text-primary"
             >
-              Ver modulos
+              Mejorar mi plan
             </Link>
           </p>
         </div>

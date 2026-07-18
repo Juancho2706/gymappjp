@@ -94,10 +94,6 @@ const CTA_SPORT =
 const CTA_SECONDARY =
     'flex min-h-12 w-full items-center justify-center gap-2 rounded-control border-[1.5px] border-default bg-surface-card px-[18px] text-[15px] font-bold text-strong transition-colors hover:bg-surface-sunken active:scale-[0.97]'
 
-function fmtClp(n: number) {
-    return '$' + n.toLocaleString('es-CL')
-}
-
 function SectionTitle({ children }: { children: React.ReactNode }) {
     return (
         <h2 className="pt-1 font-display text-[17px] font-extrabold tracking-[-0.02em] text-strong">
@@ -151,7 +147,7 @@ function ModuleHubCard({
                     </Badge>
                 ) : (
                     <Badge tone="neutral" variant="soft" size="sm">
-                        De pago
+                        Con plan pago
                     </Badge>
                 )}
             </div>
@@ -179,9 +175,10 @@ function ModuleHubCard({
                     <span className="text-[12.5px] font-semibold leading-snug">Pídelo al owner de tu equipo</span>
                 </div>
             ) : (
-                <Link href="/coach/settings/modules" className={CTA_SECONDARY}>
+                // Incluido en los planes pagos (CEO 2026-07-17): el CTA lleva al upgrade de plan.
+                <Link href="/coach/subscription" className={CTA_SECONDARY}>
                     <Lock className="size-4" aria-hidden />
-                    Desbloquear · {fmtClp(ADDON_CONFIG[tool.key].priceClpMensual)}/mes
+                    Incluido en los planes pagos · Mejorar plan
                 </Link>
             )}
         </Card>
@@ -364,19 +361,19 @@ export function ToolsHub({
                         </p>
                         {!managed ? (
                             <Link
-                                href="/coach/settings/modules"
+                                href="/coach/subscription"
                                 className={cn(CTA_SPORT, 'mt-[18px] min-h-14 text-[17px]')}
                             >
-                                Ver planes y módulos
+                                Incluidas en los planes pagos — Ver planes
                                 <ArrowRight className="size-5" aria-hidden />
                             </Link>
                         ) : (
                             <p className="mt-4 text-[12.5px] font-semibold text-on-dark-muted">
-                                Pedile al owner de tu equipo que active los módulos.
+                                Pídele al owner de tu equipo que active los módulos.
                             </p>
                         )}
                     </Card>
-                    <SectionTitle>Lo que puedes desbloquear</SectionTitle>
+                    <SectionTitle>Incluido en los planes pagos</SectionTitle>
                     <div className="flex flex-col gap-3">
                         {[...TOOLS, PLAN_TOOL].map((t) => (
                             <ModuleHubCard key={t.key} tool={t} active={false} managed={managed} />

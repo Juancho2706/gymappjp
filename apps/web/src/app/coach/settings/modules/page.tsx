@@ -30,8 +30,8 @@ export default async function CoachModulesPage() {
                     <h1 className="font-display text-2xl font-black tracking-tight text-strong">Módulos</h1>
                     <p className="mt-1 text-sm text-muted">
                         {ctx.scope === 'team'
-                            ? `Equipo "${ctx.teamName}" — conoce los módulos disponibles para tu cuenta.`
-                            : 'Conoce los módulos disponibles para tu cuenta.'}
+                            ? `Equipo "${ctx.teamName}" — herramientas profesionales incluidas en tu cuenta.`
+                            : 'Herramientas profesionales incluidas en los planes pagos.'}
                     </p>
                 </div>
             </div>
@@ -39,9 +39,8 @@ export default async function CoachModulesPage() {
             <ModulesForm
                 modules={ctx.modules}
                 killedByOperator={ctx.killedByOperator}
-                isTeamManager={ctx.isTeamManager}
                 scope={ctx.scope}
-                tier={ctx.tier}
+                hasPaidPlan={ctx.hasPaidPlan}
                 nutritionVisible={ctx.nutritionVisible}
             />
         </div>

@@ -2,9 +2,7 @@
 
 import Link from 'next/link'
 import Image from 'next/image'
-import { CheckCircle2, ClipboardList, Info, Lock, Mail, UserRound, Wrench, Eye, EyeOff } from 'lucide-react'
-import { SELF_SERVICE_ADDONS_ENABLED, type SubscriptionTier } from '@/lib/constants'
-import { useCaptureModuleInterest } from '@/lib/posthog/events'
+import { CheckCircle2, ClipboardList, Info, Lock, UserRound, Wrench, Eye, EyeOff, ArrowRight } from 'lucide-react'
 import { MODULE_CATALOG_KEYS, MODULE_CATALOG, type ModuleKey } from '@eva/module-catalog'
 
 /**
@@ -22,59 +20,48 @@ const MODULE_ICON_SRC: Record<ModuleKey, string> = {
 /** Alcance de uso (kit: chip "Se configura en el plan" vs "Se usa con un alumno"). */
 const PLAN_SCOPED_MODULES: ReadonlySet<ModuleKey> = new Set(['nutrition_exchanges'])
 
-/** Precio de lista en CLP (es-CL: punto como separador de miles, sin decimales). */
-const clpFormatter = new Intl.NumberFormat('es-CL', {
-    style: 'currency',
-    currency: 'CLP',
-    maximumFractionDigits: 0,
-})
-
-const MAILTO_STANDALONE =
-    'mailto:contacto@eva-app.cl?subject=Quiero%20activar%20un%20m%C3%B3dulo'
-const MAILTO_TEAM =
-    'mailto:contacto@eva-app.cl?subject=M%C3%B3dulos%20para%20mi%20equipo'
-
 /**
- * Settings > Módulos — CATÁLOGO READ-ONLY (compra-only, plan estrategia 03 / F1.2).
- * Ya no hay switches ni guardado: el coach NO se auto-activa módulos (la escritura quedó
- * SOLO en service-role — override admin del CEO). Por cada módulo: badge Activo/De pago,
- * pitch + superficies (copy canónico en @eva/module-catalog) y CTA por contexto. Cada click
- * de CTA captura `module_interest_cta_clicked` (telemetría de intención, PostHog ya gated
- * por consentimiento de cookies). Anti-hostigamiento: 1 de las 2 únicas superficies de venta.
+ * Settings > Módulos — catálogo read-only de las herramientas profesionales.
+ *
+ * Decisión CEO 2026-07-17: los 4 módulos vienen INCLUIDOS con cualquier plan pago
+ * (starter/pro/elite y equivalentes team/enterprise). Ya no se compran, activan ni
+ * desactivan por separado — esta página dejó de ser superficie de venta de add-ons.
+ * Coach pago: cada módulo muestra "Incluido en tu plan". Coach free: upsell único de
+ * UPGRADE de suscripción (patrón existente de /coach/subscription, sin checkout nuevo).
  */
 export function ModulesForm({
     modules,
     killedByOperator,
-    isTeamManager,
     scope,
-    tier,
+    hasPaidPlan,
     nutritionVisible,
 }: {
     modules: Record<ModuleKey, boolean>
     killedByOperator: Record<ModuleKey, boolean>
-    isTeamManager: boolean
     scope: 'team' | 'standalone'
-    tier: SubscriptionTier
+    /** ¿Plan pago con acceso efectivo? Decide "Incluido en tu plan" vs upsell de upgrade. */
+    hasPaidPlan: boolean
     /** ¿Está visible el dominio Nutrición? Solo aplica a `nutrition_exchanges` (cross-link a Funciones). */
     nutritionVisible: boolean
 }) {
-    const captureInterest = useCaptureModuleInterest()
-
     return (
         <div className="space-y-4">
-            {/* Comprar ≠ usar — banner info del kit */}
+            {/* Incluido ≠ configurar — banner info del kit */}
             <div className="flex items-start gap-2.5 rounded-control px-3.5 py-[11px]" style={{ background: 'var(--sport-100)' }}>
                 <Info className="mt-0.5 h-[17px] w-[17px] shrink-0" style={{ color: 'var(--sport-600)' }} />
                 <p className="text-[12.5px] font-semibold leading-normal" style={{ color: 'var(--sport-700)' }}>
-                    Activa un módulo acá; usalo desde <b>Alumnos › Herramientas</b>. Cada uno se cobra aparte de tu plan.
+                    {hasPaidPlan
+                        ? <>Estos módulos vienen incluidos en tu plan. Úsalos desde <b>Alumnos › Herramientas</b>.</>
+                        : <>Los módulos vienen incluidos en cualquier plan pago. En el plan Free no están disponibles.</>}
                 </p>
             </div>
 
             <ul className="space-y-3">
                 {MODULE_CATALOG_KEYS.map((key) => {
                     const entry = MODULE_CATALOG[key]
-                    const active = modules[key] === true
-                    const inMaintenance = active && killedByOperator[key] === true
+                    // Incluido = plan pago (todos) o entitlement puntual ya activo (ej. cortesía).
+                    const included = hasPaidPlan || modules[key] === true
+                    const inMaintenance = included && killedByOperator[key] === true
                     const moduleIconSrc = MODULE_ICON_SRC[key]
                     const planScoped = PLAN_SCOPED_MODULES.has(key)
 
@@ -87,7 +74,7 @@ export function ModulesForm({
                                 <span
                                     className="flex h-[46px] w-[46px] shrink-0 items-center justify-center rounded-[13px]"
                                     style={
-                                        active
+                                        included
                                             ? { background: 'var(--sport-100)', color: 'var(--sport-600)' }
                                             : { background: 'var(--surface-sunken)', color: 'var(--text-subtle)' }
                                     }
@@ -100,7 +87,7 @@ export function ModulesForm({
                                         height={30}
                                         unoptimized
                                         className={
-                                            active
+                                            included
                                                 ? 'h-[30px] w-[30px] object-contain'
                                                 : 'h-[30px] w-[30px] object-contain opacity-70 grayscale'
                                         }
@@ -109,13 +96,13 @@ export function ModulesForm({
                                 <div className="min-w-0 flex-1">
                                     <div className="flex flex-wrap items-center gap-2">
                                         <p className="text-base font-bold text-strong">{entry.label}</p>
-                                        {active ? (
+                                        {included ? (
                                             <span className="inline-flex shrink-0 items-center gap-1 rounded-pill px-2.5 py-1 text-xs font-bold" style={{ background: 'var(--success-100)', color: 'var(--success-700)' }}>
-                                                <CheckCircle2 className="h-3.5 w-3.5" /> Activo
+                                                <CheckCircle2 className="h-3.5 w-3.5" /> Incluido
                                             </span>
                                         ) : (
                                             <span className="inline-flex shrink-0 items-center gap-1 rounded-pill bg-surface-sunken px-2.5 py-1 text-xs font-bold text-muted">
-                                                <Lock className="h-3.5 w-3.5" /> De pago
+                                                <Lock className="h-3.5 w-3.5" /> Con plan pago
                                             </span>
                                         )}
                                     </div>
@@ -146,10 +133,10 @@ export function ModulesForm({
                                 ))}
                             </div>
 
-                            {active && (
+                            {included && (
                                 <p className="mt-3 flex items-center gap-1.5 text-[12.5px] font-semibold" style={{ color: 'var(--success-700)' }}>
                                     <CheckCircle2 className="h-[15px] w-[15px] shrink-0" />
-                                    Incluido en tu cuenta
+                                    Incluido en tu plan
                                 </p>
                             )}
 
@@ -161,7 +148,7 @@ export function ModulesForm({
                             )}
 
                             {/* Cross-link a Funciones — solo Nutrición Pro tiene capa de visibilidad. */}
-                            {active && key === 'nutrition_exchanges' && (
+                            {included && key === 'nutrition_exchanges' && (
                                 nutritionVisible ? (
                                     <p className="mt-3 flex items-center gap-1.5 text-xs" style={{ color: 'var(--success-700)' }}>
                                         <Eye className="h-3.5 w-3.5 shrink-0" />
@@ -170,7 +157,7 @@ export function ModulesForm({
                                 ) : (
                                     <p className="mt-3 flex flex-wrap items-center gap-1.5 text-xs font-semibold" style={{ color: 'var(--warning-600)' }}>
                                         <EyeOff className="h-3.5 w-3.5 shrink-0" />
-                                        Activo pero oculto.
+                                        Incluido pero oculto.
                                         <Link
                                             href="/coach/settings/funciones"
                                             className="font-bold underline underline-offset-2 hover:no-underline"
@@ -180,99 +167,26 @@ export function ModulesForm({
                                     </p>
                                 )
                             )}
-
-                            {!active && (
-                                <div className="mt-3 flex flex-wrap items-center gap-x-2.5 gap-y-2">
-                                    <ModuleCta
-                                        moduleKey={key}
-                                        scope={scope}
-                                        isTeamManager={isTeamManager}
-                                        tier={tier}
-                                        onCapture={captureInterest}
-                                    />
-                                    {scope === 'standalone' && (
-                                        <span className="ml-auto shrink-0 text-right">
-                                            <span className="eva-metric block text-base text-strong">
-                                                {clpFormatter.format(entry.priceClp)}
-                                            </span>
-                                            <span className="-mt-0.5 block text-[11px] text-subtle">/ mes</span>
-                                        </span>
-                                    )}
-                                </div>
-                            )}
                         </li>
                     )
                 })}
             </ul>
 
-            {scope === 'standalone' && (
-                <p className="pt-1 text-center text-[11.5px] leading-relaxed text-subtle">
-                    El cobro se prorratea al período. Gestiona bajas desde Suscripción.
-                </p>
+            {/* Upsell ÚNICO de upgrade (coach free standalone) — reusa el flujo de /coach/subscription. */}
+            {!hasPaidPlan && scope === 'standalone' && (
+                <div className="rounded-card border border-subtle bg-surface-card p-4">
+                    <p className="text-sm font-bold text-strong">Incluidos en todos los planes pagos</p>
+                    <p className="mt-1 text-[13px] leading-relaxed text-muted">
+                        Al pasar a un plan pago, estos 4 módulos se activan automáticamente en tu cuenta.
+                    </p>
+                    <Link
+                        href="/coach/subscription"
+                        className="mt-3 inline-flex items-center gap-1.5 rounded-control bg-[var(--sport-500)] px-4 py-2 text-sm font-bold text-[var(--text-on-sport)] shadow-[var(--glow-sport)] transition-all hover:bg-[var(--cta-fill)] hover:-translate-y-0.5"
+                    >
+                        Ver planes <ArrowRight className="h-4 w-4" />
+                    </Link>
+                </div>
             )}
         </div>
-    )
-}
-
-const CTA_LINK_CLASS =
-    'inline-flex items-center gap-1.5 rounded-control bg-[var(--sport-500)] px-4 py-2 text-sm font-bold text-[var(--text-on-sport)] shadow-[var(--glow-sport)] transition-all hover:bg-[var(--cta-fill)] hover:-translate-y-0.5'
-
-function ModuleCta({
-    moduleKey,
-    scope,
-    isTeamManager,
-    tier,
-    onCapture,
-}: {
-    moduleKey: ModuleKey
-    scope: 'team' | 'standalone'
-    isTeamManager: boolean
-    tier: SubscriptionTier
-    onCapture: (
-        moduleKey: string,
-        ctaContext: 'standalone_mailto' | 'team_manager_mailto' | 'self_service',
-        tier: SubscriptionTier
-    ) => void
-}) {
-    // Team — miembro sin gestión: sin link, solo guía hacia el owner.
-    if (scope === 'team' && !isTeamManager) {
-        return <p className="text-xs text-muted">Pídelo al owner de tu equipo.</p>
-    }
-
-    // Team — gestor (owner / co-gestor): mailto conversacional.
-    if (scope === 'team') {
-        return (
-            <a
-                href={MAILTO_TEAM}
-                className={CTA_LINK_CLASS}
-                onClick={() => onCapture(moduleKey, 'team_manager_mailto', tier)}
-            >
-                <Mail className="h-4 w-4" /> Conversemos — contacto@eva-app.cl
-            </a>
-        )
-    }
-
-    // Standalone — CTA final self-service (plan 05) gated por SELF_SERVICE_ADDONS_ENABLED.
-    if (SELF_SERVICE_ADDONS_ENABLED) {
-        return (
-            <a
-                href="/coach/subscription#addons"
-                className={CTA_LINK_CLASS}
-                onClick={() => onCapture(moduleKey, 'self_service', tier)}
-            >
-                <Lock className="h-4 w-4" /> Desbloquear
-            </a>
-        )
-    }
-
-    // Standalone — CTA interino (mailto) mientras self-service está OFF (D4).
-    return (
-        <a
-            href={MAILTO_STANDALONE}
-            className={CTA_LINK_CLASS}
-            onClick={() => onCapture(moduleKey, 'standalone_mailto', tier)}
-        >
-            <Mail className="h-4 w-4" /> Desbloquear — escríbenos a contacto@eva-app.cl
-        </a>
     )
 }

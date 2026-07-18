@@ -295,6 +295,10 @@ export function PreciosSection({ exerciseCount }: { exerciseCount: number }) {
                             <span style={{ color: '#8A8A93' }}>✗</span>
                             {t('pf_4', 'Sin módulo de nutrición')}
                         </li>
+                        <li style={{ ...liStyle, color: '#8A8A93' }}>
+                            <span style={{ color: '#8A8A93' }}>✗</span>
+                            {t('pf_5', 'Sin módulos profesionales')}
+                        </li>
                     </ul>
                     <Link href="/register" style={ghostCta('free')} {...hoverHandlers('free')}>
                         {t('pf_cta', 'Empezar gratis')}
@@ -391,6 +395,10 @@ export function PreciosSection({ exerciseCount }: { exerciseCount: number }) {
                             <span style={brandCheck}>✓</span>
                             {t('pp_4', 'Check-ins, progreso y alertas')}
                         </li>
+                        <li style={liStyle}>
+                            <span style={brandCheck}>✓</span>
+                            {t('pp_5', '4 módulos profesionales incluidos')}
+                        </li>
                     </ul>
                     <Link
                         href={`/register?tier=pro&cycle=${billing}`}
@@ -462,6 +470,10 @@ export function PreciosSection({ exerciseCount }: { exerciseCount: number }) {
                         <li style={liStyle}>
                             <span style={{ color: '#4ADE80' }}>✓</span>
                             {t('pe_4', 'Soporte prioritario')}
+                        </li>
+                        <li style={liStyle}>
+                            <span style={{ color: '#4ADE80' }}>✓</span>
+                            {t('pe_5', '4 módulos profesionales incluidos')}
                         </li>
                     </ul>
                     <Link

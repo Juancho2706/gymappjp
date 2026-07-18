@@ -36,9 +36,10 @@ import { useTheme } from '../../context/ThemeContext'
 
 /**
  * Hub /coach/tools (E6-02) — launcher de los módulos que el coach USA (espejo mobile del
- * `ToolsHub` web `apps/web/.../coach/tools`). "Comprar != usar": los ENTITLED se listan arriba
- * con CTA "Usar"; los NO entitled NO se esconden — aparecen como locked-cards con upsell
- * ("Desbloquear · $X/mes"), y el empty-state VENDE (card inverse "Potencia tu evaluación").
+ * `ToolsHub` web `apps/web/.../coach/tools`). Los módulos vienen INCLUIDOS en los planes pagos
+ * (CEO 2026-07-17): los ENTITLED se listan arriba con CTA "Usar"; los NO entitled (coach Free)
+ * NO se esconden — aparecen como locked-cards con upsell de UPGRADE de plan (sin precios por
+ * módulo), y el empty-state lleva al catálogo/planes.
  * La capa del plan (`nutrition_exchanges`) va aparte: se configura DENTRO de un plan, no acá.
  *
  * Money-safety: solo VISIBILIDAD; el gate de dinero vive server-side en /api/mobile/*. El picker
@@ -53,12 +54,6 @@ for (const Icon of [
 ]) {
   cssInterop(Icon, { className: { target: 'style', nativeStyleToProp: { color: true } } })
 }
-
-const clpFormatter = new Intl.NumberFormat('es-CL', {
-  style: 'currency',
-  currency: 'CLP',
-  maximumFractionDigits: 0,
-})
 
 type ToolScope = 'student' | 'plan'
 type ToolDef = {
@@ -202,7 +197,7 @@ export default function ToolsHubScreen() {
               <View style={{ gap: 14 }}>
                 {/* Empty-state que VENDE — nada comprado (no se esconde el catálogo). */}
                 <SellCard managed={managed} onExplore={() => router.push('/coach/modules')} />
-                <SectionTitle>Lo que puedes desbloquear</SectionTitle>
+                <SectionTitle>Incluido en los planes pagos</SectionTitle>
                 <View style={{ gap: 12 }}>
                   {[...TOOLS, PLAN_TOOL].map((tool) => (
                     <ModuleHubCard key={tool.key} tool={tool} active={false} managed={managed} onPrimary={primaryFor(tool, false)} />
@@ -305,7 +300,7 @@ function SellCard({ managed, onExplore }: { managed: boolean; onExplore: () => v
       </Text>
       {!managed ? (
         <Button
-          label="Ver planes y módulos"
+          label="Incluidas en los planes pagos — Ver planes"
           variant="sport"
           onPress={onExplore}
           full
@@ -370,7 +365,7 @@ function ModuleHubCard({
           </Badge>
         ) : (
           <Badge tone="neutral" variant="soft" size="sm">
-            De pago
+            Con plan pago
           </Badge>
         )}
       </View>
@@ -394,7 +389,7 @@ function ModuleHubCard({
         </View>
       ) : (
         <Button
-          label={`Desbloquear · ${clpFormatter.format(MODULE_CATALOG[tool.key].priceClp)}/mes`}
+          label="Incluido en planes pagos · Ver planes"
           variant="secondary"
           leftIcon={Lock}
           onPress={onPrimary}

@@ -11,10 +11,11 @@ import type { ModuleKey } from '../lib/entitlements-core'
  * NEUTRO, sin urgencia ni precio — regla anti-hostigamiento del plan 05 §2.6). Copy verbatim de
  * la web por las 4 superficies (cardio, movement, body_composition, nutrition_exchanges).
  *
- * CTA CONTEXTUAL: por defecto (coach) abre el catalogo de modulos en la web
- * (`/coach/settings/modules`, unica superficie con disponibilidad/precio) porque la app aun no
- * tiene esa pantalla nativa (Ola 2 T13). Los consumidores pueden pasar un `cta` propio (p. ej. la
- * vista del alumno, que no compra: "contacta a tu coach") o `cta={null}` para no mostrar boton.
+ * Decision CEO 2026-07-17: los modulos vienen INCLUIDOS con cualquier plan pago, asi que este
+ * aviso solo lo ve un coach en plan Free. CTA CONTEXTUAL: por defecto (coach) abre el upgrade
+ * de suscripcion en la web (`/coach/subscription` — la app no compra in-app). Los consumidores
+ * pueden pasar un `cta` propio (p. ej. la vista del alumno: "contacta a tu coach") o
+ * `cta={null}` para no mostrar boton.
  */
 
 type ModuleCopy = { icon: LucideIcon; title: string; description: string }
@@ -63,9 +64,9 @@ export function ModuleOffNotice({
     const resolvedCta: CtaProp =
         cta === undefined
             ? {
-                  label: 'Ver módulos disponibles',
+                  label: 'Ver planes',
                   onPress: () => {
-                      void Linking.openURL(`${getApiBaseUrl()}/coach/settings/modules`).catch(() => {})
+                      void Linking.openURL(`${getApiBaseUrl()}/coach/subscription`).catch(() => {})
                   },
               }
             : cta
@@ -89,6 +90,11 @@ export function ModuleOffNotice({
             <Text style={[styles.description, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
                 {copy.description}
             </Text>
+            {cta === undefined ? (
+                <Text style={[styles.description, { color: theme.foreground, fontFamily: theme.fontSans, fontWeight: '600' }]}>
+                    Este módulo viene incluido en cualquier plan pago de EVA.
+                </Text>
+            ) : null}
             {resolvedCta ? (
                 <Button label={resolvedCta.label} variant="sport" onPress={resolvedCta.onPress} style={styles.cta} />
             ) : null}
