@@ -1,6 +1,6 @@
 // MODULE_KEYS / ModuleKey: fuente canónica en entitlements.service (array plano +
 // tipo derivado, sin acoplar Supabase/Next). Mismo patrón que admin/module-labels.ts.
-import { MODULE_KEYS, type ModuleKey } from '@/services/entitlements.service'
+import { MODULE_KEYS, type ModuleKey } from '@/lib/module-keys'
 // BillingCycle se RE-EXPORTA más abajo desde @eva/tiers; acá lo importamos como
 // binding local porque `getAddonPaymentRulesForCycle` lo usa en su firma (un
 // re-export `export type {}` no crea binding utilizable dentro del módulo).

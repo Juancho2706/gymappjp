@@ -17,16 +17,13 @@ type DB = SupabaseClient<Database>
  * this only for show/hide. Defaults OFF (`{}`).
  */
 
-export const MODULE_KEYS = [
-    'cardio',
-    'movement_assessment',
-    'body_composition',
-    'nutrition_exchanges',
-] as const
-
-export type ModuleKey = (typeof MODULE_KEYS)[number]
-
-export type EnabledModules = Partial<Record<ModuleKey, boolean>>
+// Fuente canónica movida a lib/module-keys (módulo hoja) para romper el ciclo
+// entitlements → coach-subscription-gate → constants → entitlements que reventaba
+// el build de producción. Se re-exporta para no tocar a los consumidores.
+export { MODULE_KEYS } from '@/lib/module-keys'
+export type { ModuleKey, EnabledModules } from '@/lib/module-keys'
+import { MODULE_KEYS } from '@/lib/module-keys'
+import type { ModuleKey, EnabledModules } from '@/lib/module-keys'
 
 /**
  * Kill-switch de PLATAFORMA (flag de operador, por encima del entitlement del tenant):
