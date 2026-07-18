@@ -18,7 +18,7 @@ export function ChartCard({ title, subtitle, icon: Icon, children }: ChartCardPr
       <View style={styles.header}>
         {Icon ? <Icon size={17} color={theme.primary} /> : null}
         <View style={styles.copy}>
-          <Text style={[styles.title, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]} numberOfLines={1}>
+          <Text style={[styles.title, { color: theme.foreground, fontFamily: 'Archivo_700Bold' }]} numberOfLines={1}>
             {title}
           </Text>
           {subtitle ? (

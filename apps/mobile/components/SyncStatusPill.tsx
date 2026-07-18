@@ -1,6 +1,17 @@
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native'
+import { ActivityIndicator, Text, View } from 'react-native'
 import { CheckCircle2, RefreshCw } from 'lucide-react-native'
-import { useTheme } from '../context/ThemeContext'
+import { FONT, textStyle } from '../lib/typography'
+
+/**
+ * SyncStatusPill — offline-queue status chip (EVA DS re-skin, patron A).
+ *
+ * Pending state = brand/sport accent, synced state = success accent. Fills and
+ * borders use DS token utilities (className) so light/dark resolve at runtime;
+ * no `theme` object. lucide/ActivityIndicator need literal color strings, so
+ * they use the DS hex mirrors of sport-500 / success-500.
+ */
+const SPORT_500 = '#2680FF' // DS --color-sport-500 / --color-brand (rgb 38 128 255)
+const SUCCESS_500 = '#1FB877' // DS --color-success-500 (rgb 31 184 119)
 
 interface SyncStatusPillProps {
   pending?: number
@@ -8,40 +19,27 @@ interface SyncStatusPillProps {
 }
 
 export function SyncStatusPill({ pending = 0, syncing }: SyncStatusPillProps) {
-  const { theme } = useTheme()
   const hasPending = pending > 0
 
   return (
     <View
-      style={[
-        styles.wrap,
-        {
-          backgroundColor: hasPending ? theme.primary + '15' : theme.success + '14',
-          borderColor: hasPending ? theme.primary + '40' : theme.success + '35',
-          borderRadius: theme.radius.lg,
-        },
-      ]}
+      className={`flex-row items-center gap-1.5 rounded-lg border px-2.5 py-1.5 ${
+        hasPending ? 'border-sport-500/40 bg-sport-500/10' : 'border-success-500/25 bg-success-500/10'
+      }`}
     >
       {syncing ? (
-        <ActivityIndicator size="small" color={theme.primary} />
+        <ActivityIndicator size="small" color={SPORT_500} />
       ) : hasPending ? (
-        <RefreshCw size={13} color={theme.primary} />
+        <RefreshCw size={13} color={SPORT_500} />
       ) : (
-        <CheckCircle2 size={13} color={theme.success} />
+        <CheckCircle2 size={13} color={SUCCESS_500} />
       )}
       <Text
-        style={[
-          styles.text,
-          { color: hasPending ? theme.primary : theme.success, fontFamily: 'Montserrat_700Bold' },
-        ]}
+        className={hasPending ? 'text-sport-700' : 'text-success-700'}
+        style={[textStyle('3xs', FONT.uiBold), { letterSpacing: 0.2 }]}
       >
         {syncing ? 'Sync' : hasPending ? `${pending} pendientes` : 'Sincronizado'}
       </Text>
     </View>
   )
 }
-
-const styles = StyleSheet.create({
-  wrap: { borderWidth: 1, paddingHorizontal: 10, paddingVertical: 7, flexDirection: 'row', alignItems: 'center', gap: 6 },
-  text: { fontSize: 11, letterSpacing: 0.2 },
-})

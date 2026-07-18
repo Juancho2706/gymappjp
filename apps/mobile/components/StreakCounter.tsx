@@ -32,7 +32,7 @@ export function StreakCounter({ days }: StreakCounterProps) {
       >
         <Flame size={14} color={orange} strokeWidth={2.25} />
       </MotiView>
-      <Text style={[styles.value, { color: orange, fontFamily: 'Montserrat_700Bold' }]}>
+      <Text style={[styles.value, { color: orange, fontFamily: 'Archivo_700Bold' }]}>
         {days}
       </Text>
       <Text style={[styles.label, { color: orange, fontFamily: theme.fontSans }]}>

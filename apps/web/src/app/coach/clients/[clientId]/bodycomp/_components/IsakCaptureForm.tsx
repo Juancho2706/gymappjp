@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
-import { computeIsak } from '@/domain/bodycomp'
+import { computeIsak } from '@eva/bodycomp'
 import {
     BodyCompositionCreateSchema,
     IsakRawInputSchema,
@@ -78,7 +78,7 @@ function buildRawInput(values: Record<string, string>, sex: 'male' | 'female'): 
 
 /**
  * Captura antropometrica ISAK por pasos (pliegues -> perimetros -> diametros -> revision). El
- * preview en vivo de la revision usa las MISMAS funciones puras de `domain/bodycomp` que el
+ * preview en vivo de la revision usa las MISMAS funciones puras de `@eva/bodycomp` que el
  * servidor (paridad garantizada): lo que se ve es exactamente lo que se persistira en `metrics`.
  */
 export function IsakCaptureForm({

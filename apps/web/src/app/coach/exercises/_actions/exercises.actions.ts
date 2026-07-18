@@ -15,7 +15,7 @@ const SUPABASE_MEDIA_PREFIX = `${process.env.NEXT_PUBLIC_SUPABASE_URL ?? ''}/sto
 
 const exerciseSchema = z.object({
     name: z.string().min(2, 'El nombre debe tener al menos 2 caracteres').max(100),
-    muscle_group: z.string().min(1, 'Seleccioná un grupo muscular'),
+    muscle_group: z.string().min(1, 'Selecciona un grupo muscular'),
     // Polimórfico (specs/movida-entrenamiento): default strength = comportamiento de siempre.
     exercise_type: z.enum(['strength', 'cardio', 'mobility', 'roller']).default('strength'),
     equipment: z.string().optional(),
@@ -29,7 +29,7 @@ const exerciseSchema = z.object({
         .transform((v) => v || undefined)
         .refine(
             (v) => !v || normalizeYoutubeEmbedUrl(v) !== null,
-            'URL de YouTube inválida. Usá un link de youtube.com o youtu.be'
+            'URL de YouTube inválida. Usa un link de youtube.com o youtu.be'
         ),
     gif_url: z
         .string()

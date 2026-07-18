@@ -1,5 +1,5 @@
 import type { Json } from '@/lib/database.types'
-import type { IsakRawInput, IsakResult } from '@/domain/bodycomp'
+import type { IsakRawInput, IsakResult } from '@eva/bodycomp'
 import type { BiaMetricsDto, IsakRawInputDto } from '@eva/schemas/bodycomp'
 
 /**
@@ -10,7 +10,7 @@ import type { BiaMetricsDto, IsakRawInputDto } from '@eva/schemas/bodycomp'
 
 /**
  * DTO ISAK validado -> input de dominio para `computeIsak`. La forma del schema espeja
- * `domain/bodycomp/types.ts`, asi que es una traduccion 1:1 explicita (no un cast ciego):
+ * `@eva/bodycomp` (types.ts), asi que es una traduccion 1:1 explicita (no un cast ciego):
  * mantenerla literal hace que un drift entre schema y dominio falle en typecheck aqui.
  */
 export function isakRawToDomain(dto: IsakRawInputDto): IsakRawInput {

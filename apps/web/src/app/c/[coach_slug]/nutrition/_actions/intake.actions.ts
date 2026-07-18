@@ -3,12 +3,16 @@
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
-import { NutritionIntakeService, INTAKE_SOURCES } from '@/services/nutrition-intake.service'
-
-/**
- * Off-plan intake (registro fuera de plan) — server actions del alumno.
- * El `clientId` SIEMPRE se deriva de la sesión (getClaims), nunca del body.
- */
+import {
+  NUTRITION_MEAL_SLOT_IDS,
+  type NutritionMealSlot,
+} from '@eva/nutrition-engine'
+import {
+  NutritionIntakeService,
+  INTAKE_CAPTURE_METHODS,
+  INTAKE_SOURCES,
+  type IntakeCaptureMethod,
+} from '@/services/nutrition-intake.service'
 
 const addIntakeEntrySchema = z
   .object({
@@ -19,8 +23,10 @@ const addIntakeEntrySchema = z
     quantity: z.number().positive().max(100000),
     unit: z.enum(['g', 'ml', 'un']),
     source: z.enum(INTAKE_SOURCES).optional(),
+    mealSlot: z.enum(NUTRITION_MEAL_SLOT_IDS).optional(),
+    captureMethod: z.enum(INTAKE_CAPTURE_METHODS).optional(),
   })
-  .refine((v) => Boolean(v.foodId) || Boolean(v.customName), {
+  .refine((value) => Boolean(value.foodId) || Boolean(value.customName), {
     message: 'Debes indicar un alimento del catálogo o un nombre libre.',
   })
 
@@ -29,47 +35,62 @@ const deleteIntakeEntrySchema = z.object({
   entryId: z.string().uuid(),
 })
 
-/** Resuelve el id del alumno autenticado desde la sesión (no del body). */
 async function resolveAuthedClientId(
-  supabase: Awaited<ReturnType<typeof createClient>>
+  supabase: Awaited<ReturnType<typeof createClient>>,
 ): Promise<string | null> {
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) return null
+  const { data: claims } = await supabase.auth.getClaims()
+  const userId = claims?.claims?.sub as string | undefined
+  if (!userId) return null
 
   const { data: clientRow } = await supabase
     .from('clients')
     .select('id')
-    .eq('id', user.id)
+    .eq('id', userId)
     .maybeSingle()
 
   return clientRow?.id ?? null
 }
 
+function captureMethodFromSource(source: string | undefined): IntakeCaptureMethod {
+  if (source === 'recent') return 'recent'
+  if (source === 'copy') return 'copy'
+  if (source === 'quickadd') return 'barcode'
+  return 'search'
+}
+
 export async function addIntakeEntryAction(
-  raw: z.infer<typeof addIntakeEntrySchema>
+  raw: z.infer<typeof addIntakeEntrySchema>,
 ): Promise<{ success: boolean; error?: string }> {
   const parsed = addIntakeEntrySchema.safeParse(raw)
   if (!parsed.success) {
     return { success: false, error: parsed.error.issues[0]?.message }
   }
 
-  const { coachSlug, logDate, foodId, customName, quantity, unit, source } = parsed.data
+  const {
+    coachSlug,
+    logDate,
+    foodId,
+    customName,
+    quantity,
+    unit,
+    source,
+    mealSlot,
+    captureMethod,
+  } = parsed.data
 
   const supabase = await createClient()
   const clientId = await resolveAuthedClientId(supabase)
   if (!clientId) return { success: false, error: 'No autorizado' }
 
-  // Si referencia el catálogo, validar que el alimento sea visible para el
-  // alumno (RLS de foods) antes de insertar — evita food_id colgante.
+  let foodSnapshot = null
   if (foodId) {
     const { data: food } = await supabase
       .from('foods')
-      .select('id')
+      .select('id, name, brand, calories, protein_g, carbs_g, fats_g, fiber_g, serving_size, serving_unit, household_grams, household_label, is_liquid')
       .eq('id', foodId)
       .maybeSingle()
     if (!food) return { success: false, error: 'Alimento no encontrado' }
+    foodSnapshot = food
   }
 
   const service = new NutritionIntakeService(supabase)
@@ -81,6 +102,9 @@ export async function addIntakeEntryAction(
     quantity,
     unit,
     source: source ?? 'offplan',
+    mealSlot: (mealSlot ?? 'other') as NutritionMealSlot,
+    captureMethod: captureMethod ?? captureMethodFromSource(source),
+    foodSnapshot,
   })
 
   if (!inserted) return { success: false, error: 'No se pudo registrar' }
@@ -91,7 +115,7 @@ export async function addIntakeEntryAction(
 }
 
 export async function deleteIntakeEntryAction(
-  raw: z.infer<typeof deleteIntakeEntrySchema>
+  raw: z.infer<typeof deleteIntakeEntrySchema>,
 ): Promise<{ success: boolean; error?: string }> {
   const parsed = deleteIntakeEntrySchema.safeParse(raw)
   if (!parsed.success) {
@@ -99,7 +123,6 @@ export async function deleteIntakeEntryAction(
   }
 
   const { coachSlug, entryId } = parsed.data
-
   const supabase = await createClient()
   const clientId = await resolveAuthedClientId(supabase)
   if (!clientId) return { success: false, error: 'No autorizado' }

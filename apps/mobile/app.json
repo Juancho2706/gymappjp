@@ -9,7 +9,7 @@
     "newArchEnabled": true,
     "icon": "./assets/icon.png",
     "splash": {
-      "image": "./assets/eva-icon.png",
+      "image": "./assets/eva-mark-filled.png",
       "resizeMode": "contain",
       "backgroundColor": "#07080C"
     },
@@ -19,7 +19,7 @@
       "buildNumber": "3",
       "supportsTablet": false,
       "infoPlist": {
-        "NSCameraUsageDescription": "Para enviar fotos de progreso a tu coach",
+        "NSCameraUsageDescription": "EVA usa la cámara para fotos de progreso y escanear códigos de barras de alimentos.",
         "NSPhotoLibraryUsageDescription": "Para seleccionar tu foto de perfil",
         "NSMotionUsageDescription": "Para contar tus pasos durante el entrenamiento",
         "NSFaceIDUsageDescription": "Usá Face ID para entrar a EVA de forma segura.",
@@ -37,11 +37,13 @@
         "backgroundColor": "#000000"
       },
       "permissions": [
+        "android.permission.CAMERA",
         "android.permission.RECEIVE_BOOT_COMPLETED",
         "android.permission.VIBRATE",
         "android.permission.USE_BIOMETRIC",
         "android.permission.USE_FINGERPRINT",
-        "android.permission.RECORD_AUDIO"
+        "android.permission.RECORD_AUDIO",
+        "android.permission.POST_NOTIFICATIONS"
       ],
       "intentFilters": [
         {
@@ -95,6 +97,12 @@
       "expo-router",
       "expo-updates",
       [
+        "expo-camera",
+        {
+          "cameraPermission": "EVA usa la cámara para fotos de progreso y escanear códigos de barras de alimentos."
+        }
+      ],
+      [
         "expo-image-picker",
         {
           "photosPermission": "EVA necesita acceso a tu galería para el check-in semanal."
@@ -103,7 +111,16 @@
       "./plugins/with-android-cleartext",
       "./plugins/with-gradle-jvmargs",
       "./plugins/with-privacy-manifest",
-      "expo-secure-store"
+      "react-native-notify-kit",
+      "expo-secure-store",
+      "./plugins/with-ios-modular-headers",
+      [
+        "@sentry/react-native/expo",
+        {
+          "organization": "eva-zs",
+          "project": "eva-mobile"
+        }
+      ]
     ],
     "updates": {
       "url": "https://u.expo.dev/a5f4f7c0-861c-48b1-9ed6-fc46e7843844",

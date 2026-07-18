@@ -64,14 +64,14 @@ export async function registerAction(
     // Honeypot check — bots fill hidden fields, humans don't
     const honeypot = formData.get('website') as string
     if (honeypot) {
-        return { error: 'Algo salió mal. Intentá de nuevo en unos minutos.' }
+        return { error: 'Algo salió mal. Intenta de nuevo en unos minutos.' }
     }
 
     // Cloudflare Turnstile verification (only if secret key is configured)
     if (process.env.TURNSTILE_SECRET_KEY) {
         const turnstileToken = formData.get('cf-turnstile-response') as string
         if (!turnstileToken) {
-            return { error: 'Verificación de seguridad requerida. Recargá la página e intentá de nuevo.' }
+            return { error: 'Verificación de seguridad requerida. Recarga la página e intenta de nuevo.' }
         }
         const verifyRes = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
             method: 'POST',
@@ -80,7 +80,7 @@ export async function registerAction(
         })
         const verifyData = await verifyRes.json() as { success: boolean }
         if (!verifyData.success) {
-            return { error: 'Verificación de seguridad fallida. Intentá de nuevo.' }
+            return { error: 'Verificación de seguridad fallida. Intenta de nuevo.' }
         }
     }
 
@@ -121,7 +121,7 @@ export async function registerAction(
         .replace(/^-|-$/g, '')
 
     if (RESERVED_SLUGS.has(baseSlug)) {
-        return { error: 'Este nombre de marca no está disponible. Intentá con otro nombre.' }
+        return { error: 'Este nombre de marca no está disponible. Intenta con otro nombre.' }
     }
 
     const adminDb = createServiceRoleClient()
@@ -139,7 +139,7 @@ export async function registerAction(
                 .eq('subscription_tier', 'free')
                 .gte('created_at', sevenDaysAgo)
             if ((count ?? 0) >= 3) {
-                return { error: 'No se pudo completar el registro. Si creés que es un error, contacta soporte.' }
+                return { error: 'No se pudo completar el registro. Si crees que es un error, contacta soporte.' }
             }
         }
     }
@@ -232,7 +232,7 @@ export async function registerAction(
         if (!emailSent.ok) {
             await adminDb.from('coaches').delete().eq('id', authData.user.id)
             await adminDb.auth.admin.deleteUser(authData.user.id)
-            return { error: 'No pudimos enviar el correo de confirmación. Revisá el email e intentá de nuevo.' }
+            return { error: 'No pudimos enviar el correo de confirmación. Revisa el email e intenta de nuevo.' }
         }
         // Welcome/drip emails fire after email is confirmed (in /auth/confirm route).
         redirect(`/verify-email?email=${encodeURIComponent(emailSan)}`)

@@ -1,6 +1,7 @@
 import { getCoachProfile, type CoachProfile } from './coach'
 import { supabase } from './supabase'
 import { apiFetch } from './api'
+import { selectWithFallback } from './db-compat'
 
 export type MobileKpiSummary = {
   mrrCurrentMonth: number
@@ -44,6 +45,8 @@ export type MobileActivityItem = {
   date: string
   clientId?: string | null
   photoUrl?: string | null
+  /** Solo items `check-in`: `true` si el coach ya lo reviso (`reviewed_at != null`). Alimenta la senal + filtro del feed (1:1 con ActivityItemClient web). */
+  reviewed?: boolean
 }
 
 export type MobileClientPaymentSummary = {
@@ -59,6 +62,8 @@ export type MobileClientPaymentSummary = {
 export type MobileClientStats = {
   clientId: string
   clientName: string
+  hasAdherenceData: boolean
+  hasNutritionData: boolean
   adherencePct: number
   nutritionPct: number
   adherenceHint: string
@@ -99,6 +104,8 @@ export type MobileDashboardData = {
   agenda: MobileAgendaItem[]
   expiringPrograms: MobileExpiringProgramItem[]
   recentActivities: MobileActivityItem[]
+  /** Check-ins recientes (ventana del feed) sin revisar por el coach. Alimenta el badge "por revisar" (1:1 con DashboardV2Data). */
+  pendingCheckinsCount: number
   /** D-F1: true cuando el endpoint falló y se usó el cálculo local degradado (adherencia heurística, sin nutrición/peso/streak). */
   degraded?: boolean
 }
@@ -117,6 +124,7 @@ type CheckInRow = {
   date?: string | null
   weight?: number | null
   energy_level?: number | null
+  reviewed_at?: string | null
 }
 
 type WorkoutLogRow = {
@@ -304,6 +312,7 @@ type MobileDashboardApiResponse = {
     topRiskClients: MobileRiskAlertItem[]
     agenda: MobileAgendaItem[]
     expiringPrograms: MobileExpiringProgramItem[]
+    pendingCheckinsCount?: number
     recentActivities: Array<{
       id: string
       type: 'nuevo alumno' | 'check-in' | 'workout'
@@ -313,6 +322,7 @@ type MobileDashboardApiResponse = {
       href: string
       photoUrl?: string | null
       clientId?: string | null
+      reviewed?: boolean
     }>
     areaData: MobileChartPoint[]
     barData: MobileChartPoint[]
@@ -320,30 +330,35 @@ type MobileDashboardApiResponse = {
 }
 
 function mapApiDashboard(payload: MobileDashboardApiResponse): MobileDashboardData {
+  const adherenceByClient = new Map(payload.dashboard.adherenceStats.map((stat) => [stat.clientId, stat]))
   const nutritionByClient = new Map(payload.dashboard.nutritionStats.map((stat) => [stat.clientId, stat]))
 
-  const clientStats: MobileClientStats[] = payload.dashboard.adherenceStats.map((stat) => {
-    const nutrition = nutritionByClient.get(stat.clientId)
+  const clientIds = new Set([...adherenceByClient.keys(), ...nutritionByClient.keys()])
+  const clientStats: MobileClientStats[] = [...clientIds].map((clientId) => {
+    const stat = adherenceByClient.get(clientId)
+    const nutrition = nutritionByClient.get(clientId)
     return {
-      clientId: stat.clientId,
-      clientName: stat.clientName,
-      adherencePct: stat.percentage,
+      clientId,
+      clientName: stat?.clientName ?? nutrition?.clientName ?? '',
+      hasAdherenceData: Boolean(stat),
+      hasNutritionData: Boolean(nutrition),
+      adherencePct: stat?.percentage ?? 0,
       nutritionPct: nutrition?.percentage ?? 0,
-      adherenceHint: `${stat.completedSets}/${stat.totalSets} sets - ${stat.lastPlan}`,
+      adherenceHint: stat ? `${stat.completedSets}/${stat.totalSets} sets · ${stat.lastPlan}` : '',
       nutritionHint: nutrition
         ? `${Math.round(nutrition.consumed.cal)} / ${Math.round(nutrition.target.cal)} kcal`
-        : 'Sin datos de nutricion',
-      adherenceHistory4w: stat.adherenceHistory4w ?? [],
-      weightHistory30d: stat.weightHistory30d ?? [],
-      currentWeight: stat.currentWeight ?? null,
-      weightDelta7d: stat.weightDelta7d ?? null,
-      oneRMDelta: stat.oneRMDelta ?? null,
-      streak: stat.streak ?? 0,
-      latestEnergyLevel: stat.latestEnergyLevel ?? null,
-      planDaysRemaining: stat.planDaysRemaining ?? null,
-      planCurrentWeek: stat.planCurrentWeek ?? null,
-      planTotalWeeks: stat.planTotalWeeks ?? null,
-      attentionScore: stat.attentionScore ?? 0,
+        : '',
+      adherenceHistory4w: stat?.adherenceHistory4w ?? [],
+      weightHistory30d: stat?.weightHistory30d ?? [],
+      currentWeight: stat?.currentWeight ?? null,
+      weightDelta7d: stat?.weightDelta7d ?? null,
+      oneRMDelta: stat?.oneRMDelta ?? null,
+      streak: stat?.streak ?? 0,
+      latestEnergyLevel: stat?.latestEnergyLevel ?? null,
+      planDaysRemaining: stat?.planDaysRemaining ?? null,
+      planCurrentWeek: stat?.planCurrentWeek ?? null,
+      planTotalWeeks: stat?.planTotalWeeks ?? null,
+      attentionScore: stat?.attentionScore ?? 0,
     }
   })
 
@@ -355,6 +370,8 @@ function mapApiDashboard(payload: MobileDashboardApiResponse): MobileDashboardDa
     date: item.date,
     clientId: item.clientId ?? null,
     photoUrl: item.photoUrl ?? null,
+    // Solo check-ins traen `reviewed`; se conserva undefined en el resto (no rompe el filtro del feed).
+    reviewed: item.type === 'check-in' ? Boolean(item.reviewed) : undefined,
   }))
 
   return {
@@ -373,6 +390,7 @@ function mapApiDashboard(payload: MobileDashboardApiResponse): MobileDashboardDa
     agenda: payload.dashboard.agenda,
     expiringPrograms: payload.dashboard.expiringPrograms,
     recentActivities,
+    pendingCheckinsCount: payload.dashboard.pendingCheckinsCount ?? 0,
   }
 }
 
@@ -447,12 +465,21 @@ async function getCoachDashboardDataMobileLocal(): Promise<MobileDashboardData |
       .from('workout_plans')
       .select('id', { count: 'exact', head: true })
       .eq('coach_id', coach.id),
-    supabase
-      .from('check_ins')
-      .select('id, client_id, created_at, date, weight, energy_level')
-      .gte('created_at', thirtyDaysAgoIso)
-      .order('created_at', { ascending: false })
-      .limit(300),
+    // reviewed_at alimenta el badge/filtro de Novedades; puede faltar en DBs legacy → fallback sin ella.
+    selectWithFallback<CheckInRow[]>(
+      () => supabase
+        .from('check_ins')
+        .select('id, client_id, created_at, date, weight, energy_level, reviewed_at')
+        .gte('created_at', thirtyDaysAgoIso)
+        .order('created_at', { ascending: false })
+        .limit(300) as unknown as PromiseLike<{ data: CheckInRow[] | null; error: { code?: string; message?: string } | null }>,
+      () => supabase
+        .from('check_ins')
+        .select('id, client_id, created_at, date, weight, energy_level')
+        .gte('created_at', thirtyDaysAgoIso)
+        .order('created_at', { ascending: false })
+        .limit(300) as unknown as PromiseLike<{ data: CheckInRow[] | null; error: { code?: string; message?: string } | null }>
+    ),
     supabase
       .from('workout_logs')
       .select('id, client_id, logged_at')
@@ -665,6 +692,8 @@ async function getCoachDashboardDataMobileLocal(): Promise<MobileDashboardData |
     return {
       clientId: client.id,
       clientName: client.full_name,
+      hasAdherenceData: true,
+      hasNutritionData: nutritionPctByClient.has(client.id),
       adherencePct,
       nutritionPct,
       adherenceHint: latestWorkoutRow ? `Ultimo entreno: ${latestWorkoutRow.logged_at.slice(0, 10)}` : 'Sin entrenos en 30 dias',
@@ -711,6 +740,7 @@ async function getCoachDashboardDataMobileLocal(): Promise<MobileDashboardData |
       date: checkIn.created_at,
       clientId: client.id,
       photoUrl: null,
+      reviewed: Boolean(checkIn.reviewed_at),
     })
   })
 
@@ -759,6 +789,8 @@ async function getCoachDashboardDataMobileLocal(): Promise<MobileDashboardData |
     agenda,
     expiringPrograms,
     recentActivities: activities.slice(0, 8),
+    // "Por revisar": check-ins recientes (coach-scoped) sin reviewed_at — misma semantica que el endpoint V2.
+    pendingCheckinsCount: checkIns.filter((c) => !c.reviewed_at).length,
     degraded: false,
   }
 }

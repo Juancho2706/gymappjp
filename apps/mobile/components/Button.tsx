@@ -4,6 +4,7 @@ import type { LucideIcon } from 'lucide-react-native'
 import * as Haptics from 'expo-haptics'
 import { MotiView } from 'moti'
 import { useTheme } from '../context/ThemeContext'
+import { SHADOWS } from '../lib/shadows'
 
 /**
  * EVA Button — primary action control (RN port of the DS `Button`).
@@ -81,15 +82,6 @@ const TEXT_CLASS: Record<Variant, string> = {
 const ON_DARK = '#F4F6F8' // --text-on-dark (ink-50)
 const ON_SPORT = '#FFFFFF' // --text-on-sport
 
-// Cool-tinted DS elevation (rgba 13 18 28) — neutral shadow tint, not a token.
-const SHADOW_SM: ViewStyle = {
-  shadowColor: '#0D121C',
-  shadowOffset: { width: 0, height: 1 },
-  shadowOpacity: 0.05,
-  shadowRadius: 2,
-  elevation: 1,
-}
-
 export function Button({
   label,
   variant = 'primary',
@@ -114,7 +106,7 @@ export function Button({
     : variant === 'sport' || variant === 'electric'
       ? theme.shadowGlowBlue
       : variant === 'primary'
-        ? SHADOW_SM
+        ? SHADOWS[theme.scheme].sm
         : null
 
   function triggerHaptic() {

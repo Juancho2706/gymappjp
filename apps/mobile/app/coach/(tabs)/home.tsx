@@ -1,7 +1,9 @@
-import { useCallback, useEffect, useState } from 'react'
-import { RefreshControl, StyleSheet, Text, View } from 'react-native'
-import { useRouter } from 'expo-router'
+import { useCallback, useRef, useState } from 'react'
+import { RefreshControl, Text, View } from 'react-native'
+import { useFocusEffect, useRouter } from 'expo-router'
+import { AlertTriangle, RotateCcw } from 'lucide-react-native'
 import { CoachMainWrapper } from '../../../components/coach/CoachMainWrapper'
+import { Button } from '../../../components/Button'
 import { EvaLoaderScreen } from '../../../components/EvaLoader'
 import {
   MobileBillingBanners,
@@ -28,6 +30,8 @@ export default function CoachHomeScreen() {
   const [data, setData] = useState<MobileDashboardData | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [statsOpen, setStatsOpen] = useState(false)
+  // Espejo de `data` para decidir initial vs refresh en cada foco sin re-disparar en loop.
+  const dataRef = useRef<MobileDashboardData | null>(null)
 
   const load = useCallback(async (mode: 'initial' | 'refresh' = 'initial') => {
     if (mode === 'initial') setLoading(true)
@@ -37,6 +41,7 @@ export default function CoachHomeScreen() {
     try {
       const next = await getCoachDashboardDataMobile()
       setData(next)
+      dataRef.current = next
       if (!next) setError('No se pudo cargar tu perfil de coach.')
     } catch {
       setError('No se pudo cargar el dashboard.')
@@ -46,33 +51,66 @@ export default function CoachHomeScreen() {
     }
   }, [])
 
-  useEffect(() => {
-    load()
-  }, [load])
+  // Gotcha 6b: el tab de expo-router no se desmonta → un `useEffect` de un disparo
+  // congela KPIs/agenda al volver. `useFocusEffect` refetcha en cada foco: 'initial'
+  // (loader full-screen) la primera vez / tras error; 'refresh' (barra) si ya hay datos.
+  useFocusEffect(
+    useCallback(() => {
+      void load(dataRef.current ? 'refresh' : 'initial')
+    }, [load])
+  )
 
   if (loading) {
     return <EvaLoaderScreen subtitle="Cargando tu panel…" />
   }
 
-  if (!data || error) {
+  // Solo la ausencia de datos reemplaza el dashboard (paridad con el error boundary web,
+  // que solo pinta la card en un throw de render y jamas descarta contenido ya pintado).
+  // Un pull-to-refresh fallido setea `error` pero conserva `data` → dashboard intacto.
+  if (!data) {
     return (
-      <CoachMainWrapper>
-        <View style={[styles.errorCard, { backgroundColor: theme.card, borderColor: theme.border, borderRadius: theme.radius['2xl'] }]}>
-          <Text style={[styles.errorTitle, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>
+      <CoachMainWrapper
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => load('refresh')}
+            tintColor={theme.primary}
+            colors={[theme.primary]}
+          />
+        }
+      >
+        <View className="items-center justify-center gap-3 px-6" style={{ paddingVertical: 48 }}>
+          <View
+            className="items-center justify-center rounded-2xl border"
+            style={{
+              width: 64,
+              height: 64,
+              backgroundColor: theme.destructive + '14',
+              borderColor: theme.destructive + '33',
+              marginBottom: 4,
+            }}
+          >
+            <AlertTriangle size={28} color={theme.destructive} strokeWidth={1.9} />
+          </View>
+          <Text className="font-display-bold text-[18px] text-strong" style={{ textAlign: 'center' }}>
             Algo fallo al cargar el dashboard
           </Text>
-          <Text style={[styles.errorText, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+          <Text
+            className="font-sans text-[13px] text-muted"
+            style={{ textAlign: 'center', lineHeight: 19, maxWidth: 300 }}
+          >
             {error ?? 'Error desconocido. Intenta recargar en un momento.'}
           </Text>
+          <Button label="Reintentar" variant="outline" leftIcon={RotateCcw} onPress={() => load('initial')} />
         </View>
       </CoachMainWrapper>
     )
   }
 
-  const pendingCount = data.agenda.length + data.topRiskClients.length
+  // Umbral 80 = misma fuente que el banner interno (MobileTierUsageBanners → TeamsBridge >= 80).
   const showTierBanners =
     data.coach.subscriptionTier === 'free' ||
-    (data.coach.subscriptionTier === 'elite' && data.kpi.totalClients >= 48)
+    (data.coach.subscriptionTier === 'elite' && data.kpi.totalClients >= 80)
 
   return (
     <View style={{ flex: 1 }}>
@@ -95,10 +133,9 @@ export default function CoachHomeScreen() {
         <MobileGreetingHeader
           coachName={data.coach.fullName || data.coach.brandName || 'Coach'}
           logoUrl={data.coach.logoUrl}
-          hasNotifications={pendingCount > 0}
-          onInsights={() => router.push('/coach/(tabs)/settings')}
-          onNotifications={() => router.push('/coach/(tabs)/check-ins')}
-          onAvatar={() => router.push('/coach/(tabs)/perfil')}
+          onInsights={() => setStatsOpen(true)}
+          onAvatar={() => router.push('/coach/(tabs)/settings')}
+          pendingCount={data.topRiskClients.length + data.expiringPrograms.length + data.pendingCheckinsCount}
         />
 
         {/* P1 — Pulse hero (Activos · En riesgo · Adherencia) */}
@@ -122,7 +159,11 @@ export default function CoachHomeScreen() {
         <MobileTodayAgenda items={data.agenda} />
 
         {/* Novedades — programas por vencer + actividad reciente */}
-        <MobileNovedades expiringPrograms={data.expiringPrograms} activities={data.recentActivities} />
+        <MobileNovedades
+          expiringPrograms={data.expiringPrograms}
+          activities={data.recentActivities}
+          pendingCheckins={data.pendingCheckinsCount}
+        />
 
         {/* P3 — Guia de inicio como chip expandible */}
         <MobileOnboardingGuideChip
@@ -155,24 +196,3 @@ export default function CoachHomeScreen() {
     </View>
   )
 }
-
-const styles = StyleSheet.create({
-  loading: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  errorCard: {
-    borderWidth: 1,
-    padding: 18,
-    gap: 8,
-  },
-  errorTitle: {
-    fontSize: 19,
-    lineHeight: 24,
-  },
-  errorText: {
-    fontSize: 13,
-    lineHeight: 19,
-  },
-})

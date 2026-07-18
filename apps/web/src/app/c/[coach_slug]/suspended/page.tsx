@@ -26,7 +26,7 @@ export default async function SuspendedPage({ params }: Props) {
                 Acceso pausado
             </h1>
             <p className="text-text-muted max-w-sm leading-relaxed">
-                {isTeam ? 'Tu equipo' : 'Tu coach'} pausó temporalmente tu acceso. Contactá a <strong className="text-text-strong">{brandName}</strong> para reactivar tu cuenta.
+                {isTeam ? 'Tu equipo' : 'Tu coach'} pausó temporalmente tu acceso. Contacta a <strong className="text-text-strong">{brandName}</strong> para reactivar tu cuenta.
             </p>
             <p className="text-text-subtle text-sm mt-1.5 mb-8 max-w-sm leading-relaxed">
                 Todos tus progresos y datos están a salvo.

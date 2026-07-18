@@ -16,9 +16,13 @@ import { addIntakeEntryAction } from '../_actions/intake.actions'
 import type { IntakeSource } from '@/services/nutrition-intake.service'
 
 /**
- * Registro fuera de plan (off-plan intake) del alumno — base tier.
+ * Registro de consumo real del alumno — base tier.
  *
- * Botón "Registrar algo más" → bottom-sheet centrado (max-w-lg, desktop-safe)
+ * El nombre técnico y la fuente DB continúan siendo `offplan` por compatibilidad,
+ * pero la interfaz usa lenguaje neutral: el alumno registra lo que efectivamente
+ * consumió, estuviera o no dentro de la prescripción.
+ *
+ * Botón "Registrar alimento" → bottom-sheet centrado (max-w-lg, desktop-safe)
  * con búsqueda debounced sobre el catálogo del coach (RLS: global + coach propio)
  * y una fila de "Recientes" de quick-add. Inserta vía `addIntakeEntryAction`
  * (el `clientId` lo deriva la sesión, nunca el body).
@@ -50,7 +54,7 @@ export interface OffPlanLoggerProps {
   today: string
 }
 
-/** Tooltip accesible con el "por qué" del registro fuera de plan. */
+/** Tooltip accesible con el propósito del diario de consumo real. */
 function InfoTooltip({ text }: { text: string }) {
   return (
     <Popover>
@@ -152,7 +156,7 @@ export function OffPlanLogger({ recents, coachSlug, today }: OffPlanLoggerProps)
         className="flex h-12 w-full items-center justify-center gap-2 rounded-control border border-dashed border-border bg-background px-4 text-sm font-bold text-foreground transition-colors hover:border-foreground/40 hover:bg-muted/40 touch-manipulation"
       >
         <Plus className="h-4 w-4" aria-hidden />
-        Registrar algo más
+        Registrar alimento
       </button>
 
       <AnimatePresence>
@@ -187,9 +191,9 @@ export function OffPlanLogger({ recents, coachSlug, today }: OffPlanLoggerProps)
                   id={titleId}
                   className="min-w-0 flex-1 truncate text-base font-black tracking-tight text-foreground"
                 >
-                  Registrar algo más
+                  Registrar alimento
                 </h3>
-                <InfoTooltip text="Registra algo que comiste fuera del plan — base." />
+                <InfoTooltip text="Registra lo que realmente consumiste para que tus totales y el seguimiento del profesional sean más precisos." />
                 <button
                   type="button"
                   onClick={() => setOpen(false)}

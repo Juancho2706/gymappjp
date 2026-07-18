@@ -13,6 +13,17 @@ export interface ProgramRowProps {
     isSelected?: boolean
 }
 
+/**
+ * Monograma del programa (2 iniciales) — identifica cada card sin repetir el
+ * mismo ícono genérico en toda la lista (QA CEO 2026-07-17).
+ */
+export function programMonogram(name: string): string {
+    const words = name.trim().split(/\s+/).filter(Boolean)
+    if (words.length === 0) return '·'
+    const letters = words.length >= 2 ? [words[0][0], words[1][0]] : [words[0][0], words[0][1] ?? '']
+    return letters.join('').toUpperCase()
+}
+
 /** Progreso real del plan asignado a partir de start_date + weeks_to_repeat. */
 export function assignedProgress(p: ProgramListModel): { curWeek: number; weeks: number; pct: number } | null {
     const weeks = p.weeks_to_repeat || 0
@@ -64,8 +75,8 @@ export function ProgramRow({ program, onOpen, isSelected }: ProgramRowProps) {
                 onClick={onOpen}
                 className="flex w-full items-center gap-3 px-3 py-3 text-left focus-visible:outline-none"
             >
-                <span className="flex size-11 shrink-0 items-center justify-center rounded-md bg-[var(--sport-100)] text-[var(--sport-600)]">
-                    <Dumbbell className="size-5" />
+                <span className="flex size-11 shrink-0 items-center justify-center rounded-md bg-[var(--sport-100)] font-display text-[15px] font-black tracking-tight text-[var(--sport-600)]">
+                    {programMonogram(program.name)}
                 </span>
                 <div className="min-w-0 flex-1">
                     <div className="truncate text-[15px] font-bold text-strong">{program.name}</div>
@@ -154,8 +165,8 @@ export function ProgramCard({ program, onOpen, isSelected }: ProgramRowProps) {
             {/* .dt-progcard-top */}
             <div className="mb-1 flex items-center justify-between">
                 {/* .dt-progcard-ico (40px · radius-md) */}
-                <span className="flex size-10 items-center justify-center rounded-[var(--radius-md)] bg-[var(--sport-100)] text-[var(--sport-600)]">
-                    <Dumbbell className="size-5" />
+                <span className="flex size-10 items-center justify-center rounded-[var(--radius-md)] bg-[var(--sport-100)] font-display text-[13px] font-black tracking-tight text-[var(--sport-600)]">
+                    {programMonogram(program.name)}
                 </span>
                 <CardBadge program={program} />
             </div>

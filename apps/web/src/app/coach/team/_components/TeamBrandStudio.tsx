@@ -335,7 +335,7 @@ export function TeamBrandStudio({ teamId, teamSlug, brand, canEdit }: Props) {
         const setPicked = which === 'light' ? setLogoPicked : setLogoDarkPicked
         const setRemoved = which === 'light' ? setLogoRemoved : setLogoDarkRemoved
         if (!f) { setPrev(null); setFile(null); setPicked(false); setLogoErr((e) => ({ ...e, [which]: null })); return }
-        if (f.type && !f.type.startsWith('image/')) { setLogoErr((e) => ({ ...e, [which]: 'Elegí una imagen (PNG o JPG).' })); return }
+        if (f.type && !f.type.startsWith('image/')) { setLogoErr((e) => ({ ...e, [which]: 'Elige una imagen (PNG o JPG).' })); return }
         if (f.size > 15 * 1024 * 1024) { setLogoErr((e) => ({ ...e, [which]: 'La imagen es muy pesada (máx 15 MB).' })); return }
         setLogoErr((e) => ({ ...e, [which]: null }))
         setLogoBusy((b) => ({ ...b, [which]: true }))
@@ -346,14 +346,14 @@ export function TeamBrandStudio({ teamId, teamSlug, brand, canEdit }: Props) {
             setPicked(true)
             setRemoved(false)
         } catch {
-            setLogoErr((e) => ({ ...e, [which]: 'No pudimos procesar esta imagen. Probá con un PNG o JPG.' }))
+            setLogoErr((e) => ({ ...e, [which]: 'No pudimos procesar esta imagen. Prueba con un PNG o JPG.' }))
         } finally {
             setLogoBusy((b) => ({ ...b, [which]: false }))
         }
     }
 
     function submit(fd: FormData) {
-        if (logoBusy.light || logoBusy.dark) { setFeedback({ type: 'error', msg: 'Esperá a que termine de optimizar el logo.' }); return }
+        if (logoBusy.light || logoBusy.dark) { setFeedback({ type: 'error', msg: 'Espera a que termine de optimizar el logo.' }); return }
         setFeedback(null)
         startTransition(async () => {
             // Subir logos DIRECTO a Storage (signed URL, bypass Cloudflare WAF) y pasar los paths al
@@ -361,13 +361,13 @@ export function TeamBrandStudio({ teamId, teamSlug, brand, canEdit }: Props) {
             if (logoFile) {
                 const t = await createTeamLogoUploadUrlAction(teamId, { variant: 'light', contentType: logoFile.type || 'image/png', size: logoFile.size })
                 if (!t.success) { setFeedback({ type: 'error', msg: t.error }); return }
-                if (!(await putToSignedUrl(t.signedUrl, logoFile))) { setFeedback({ type: 'error', msg: 'No se pudo subir el logo claro. Reintentá.' }); return }
+                if (!(await putToSignedUrl(t.signedUrl, logoFile))) { setFeedback({ type: 'error', msg: 'No se pudo subir el logo claro. Reintenta.' }); return }
                 fd.set('logo_path', t.path)
             }
             if (logoDarkFile) {
                 const t = await createTeamLogoUploadUrlAction(teamId, { variant: 'dark', contentType: logoDarkFile.type || 'image/png', size: logoDarkFile.size })
                 if (!t.success) { setFeedback({ type: 'error', msg: t.error }); return }
-                if (!(await putToSignedUrl(t.signedUrl, logoDarkFile))) { setFeedback({ type: 'error', msg: 'No se pudo subir el logo oscuro. Reintentá.' }); return }
+                if (!(await putToSignedUrl(t.signedUrl, logoDarkFile))) { setFeedback({ type: 'error', msg: 'No se pudo subir el logo oscuro. Reintenta.' }); return }
                 fd.set('logo_dark_path', t.path)
             }
             const res = await updateTeamBrandAction(teamId, fd)

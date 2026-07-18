@@ -1,8 +1,8 @@
 'use client'
 
-import Image from 'next/image'
 import { useMemo, useSyncExternalStore } from 'react'
 import { BRAND_APP_ICON } from '@/lib/brand-assets'
+import { ThemedLogo } from '@/components/brand/ThemedLogo'
 import { cn } from '@/lib/utils'
 import { EvaTreefrogLoader } from '@/components/loaders/EvaTreefrogLoader'
 import { LoaderVariantView, CompositeLoaderView } from '@/components/loaders/variants'
@@ -63,6 +63,8 @@ type EvaRouteLoaderProps = {
     iconMode?: IconMode
     /** Coach's own logo URL (used when iconMode === 'coach') */
     coachLogoUrl?: string
+    /** Coach's dark-mode logo (used when iconMode === 'coach'); falls back to the light logo. */
+    coachLogoDarkUrl?: string
 }
 
 export function EvaRouteLoader({
@@ -75,6 +77,7 @@ export function EvaRouteLoader({
     primaryColor,
     iconMode = 'eva',
     coachLogoUrl,
+    coachLogoDarkUrl,
 }: EvaRouteLoaderProps) {
     const loaderVariant = useCoachLoaderVariant()
     const loaderConfig = useCoachLoaderConfig()
@@ -114,7 +117,10 @@ export function EvaRouteLoader({
     }
 
     const showIcon = iconMode !== 'none'
-    const iconSrc = iconMode === 'coach' && coachLogoUrl ? coachLogoUrl : BRAND_APP_ICON
+    const isCoachIcon = iconMode === 'coach' && Boolean(coachLogoUrl)
+    const iconSrc = isCoachIcon ? (coachLogoUrl as string) : BRAND_APP_ICON
+    // Solo el logo del coach tiene variante dark; el ícono EVA es el mismo en ambos temas.
+    const iconSrcDark = isCoachIcon ? (coachLogoDarkUrl || coachLogoUrl) : undefined
 
     // white-label W1b: si el coach compuso su propio loader (loader_config), tiene prioridad sobre
     // la variante y el loader EVA. El símbolo 'logo' usa el logo del coach (o EVA como fallback).
@@ -124,6 +130,7 @@ export function EvaRouteLoader({
                 config={loaderConfig}
                 brandName={displayText}
                 iconSrc={showIcon ? iconSrc : undefined}
+                iconSrcDark={showIcon ? iconSrcDark : undefined}
                 subtitle={subtitle}
                 size={size === 'sm' ? 'md' : size}
             />
@@ -138,6 +145,7 @@ export function EvaRouteLoader({
                 variant={loaderVariant}
                 brandName={displayText}
                 iconSrc={showIcon ? iconSrc : undefined}
+                iconSrcDark={showIcon ? iconSrcDark : undefined}
                 subtitle={subtitle}
                 size={size === 'sm' ? 'md' : size}
             />
@@ -161,8 +169,9 @@ export function EvaRouteLoader({
             )}>
                 {showIcon && (
                     <div className="eva-loader-icon-wrap relative shrink-0">
-                        <Image
-                            src={iconSrc}
+                        <ThemedLogo
+                            light={iconSrc}
+                            dark={iconSrcDark}
                             alt=""
                             width={iconPx}
                             height={iconPx}
@@ -214,6 +223,7 @@ function BrandMarkSlot({
     primaryColor,
     iconMode,
     coachLogoUrl,
+    coachLogoDarkUrl,
 }: {
     subtitle?: string
     top: 'route' | 'treefrog'
@@ -224,11 +234,12 @@ function BrandMarkSlot({
     primaryColor?: string
     iconMode?: IconMode
     coachLogoUrl?: string
+    coachLogoDarkUrl?: string
 }) {
     return (
         <div className={cn('relative flex flex-col items-center justify-center', compact ? 'py-2' : 'py-3')}>
             {top === 'route' ? (
-                <EvaRouteLoader subtitle={subtitle} size="lg" className="py-1" customText={customText} useCustom={useCustom} textColor={textColor} primaryColor={primaryColor} iconMode={iconMode} coachLogoUrl={coachLogoUrl} />
+                <EvaRouteLoader subtitle={subtitle} size="lg" className="py-1" customText={customText} useCustom={useCustom} textColor={textColor} primaryColor={primaryColor} iconMode={iconMode} coachLogoUrl={coachLogoUrl} coachLogoDarkUrl={coachLogoDarkUrl} />
             ) : (
                 <EvaTreefrogLoader compact={Boolean(compact)} subtitle={subtitle} className="py-1" />
             )}
@@ -252,6 +263,8 @@ export type CoachLoadingShellProps = {
     iconMode?: IconMode
     /** Coach's own logo URL (used when iconMode === 'coach') */
     coachLogoUrl?: string
+    /** Coach's dark-mode logo (used when iconMode === 'coach'); falls back to the light logo. */
+    coachLogoDarkUrl?: string
 }
 
 export function CoachLoadingShell({
@@ -265,6 +278,7 @@ export function CoachLoadingShell({
     primaryColor,
     iconMode,
     coachLogoUrl,
+    coachLogoDarkUrl,
 }: CoachLoadingShellProps) {
     const hasChildren = children != null && children !== false
 
@@ -272,7 +286,7 @@ export function CoachLoadingShell({
         return (
             <div className="fixed inset-0 z-50 flex animate-in flex-col bg-background fade-in duration-300">
                 <div className="flex shrink-0 justify-center px-3 pt-[max(0.5rem,env(safe-area-inset-top))] pb-1 sm:px-4">
-                    <BrandMarkSlot subtitle={subtitle} top={top} compact customText={customText} useCustom={useCustom} textColor={textColor} primaryColor={primaryColor} iconMode={iconMode} coachLogoUrl={coachLogoUrl} />
+                    <BrandMarkSlot subtitle={subtitle} top={top} compact customText={customText} useCustom={useCustom} textColor={textColor} primaryColor={primaryColor} iconMode={iconMode} coachLogoUrl={coachLogoUrl} coachLogoDarkUrl={coachLogoDarkUrl} />
                 </div>
                 <div className="flex min-h-0 flex-1 flex-col overflow-hidden">{children}</div>
             </div>
@@ -288,7 +302,7 @@ export function CoachLoadingShell({
                     'max-md:-my-6 max-md:py-6'
                 )}
             >
-                <BrandMarkSlot subtitle={subtitle} top={top} compact customText={customText} useCustom={useCustom} textColor={textColor} primaryColor={primaryColor} iconMode={iconMode} coachLogoUrl={coachLogoUrl} />
+                <BrandMarkSlot subtitle={subtitle} top={top} compact customText={customText} useCustom={useCustom} textColor={textColor} primaryColor={primaryColor} iconMode={iconMode} coachLogoUrl={coachLogoUrl} coachLogoDarkUrl={coachLogoDarkUrl} />
             </div>
         )
     }
@@ -296,7 +310,7 @@ export function CoachLoadingShell({
     return (
         <div className="space-y-8 animate-in fade-in duration-300">
             <div className="flex justify-center">
-                <BrandMarkSlot subtitle={subtitle} top={top} compact customText={customText} useCustom={useCustom} textColor={textColor} primaryColor={primaryColor} iconMode={iconMode} coachLogoUrl={coachLogoUrl} />
+                <BrandMarkSlot subtitle={subtitle} top={top} compact customText={customText} useCustom={useCustom} textColor={textColor} primaryColor={primaryColor} iconMode={iconMode} coachLogoUrl={coachLogoUrl} coachLogoDarkUrl={coachLogoDarkUrl} />
             </div>
             {children}
         </div>

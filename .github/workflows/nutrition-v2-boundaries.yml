@@ -1,0 +1,32 @@
+name: Nutrition V2 Boundaries
+
+on:
+  pull_request:
+    branches: [rnmobiledenuevo, main, master]
+    paths:
+      # NOTA: [coach_slug] literal no puede usarse en paths — GitHub lo interpreta
+      # como character-class de glob y el workflow ni se registra (startup failure).
+      - 'apps/web/src/app/c/**/nutrition-v2/**'
+      - 'apps/web/src/app/coach/nutrition-v2/**'
+      - 'apps/web/src/components/nutrition-v2/**'
+      - 'apps/mobile/app/alumno/nutrition-v2/**'
+      - 'apps/mobile/app/coach/nutrition-v2/**'
+      - 'apps/mobile/components/nutrition-v2/**'
+      - 'packages/nutrition-v2/**'
+      - 'scripts/check-nutrition-v2-boundaries.mjs'
+      - 'package.json'
+      - '.github/workflows/nutrition-v2-boundaries.yml'
+  workflow_dispatch:
+
+jobs:
+  architecture-boundary:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - run: pnpm run check:nutrition-v2-boundaries

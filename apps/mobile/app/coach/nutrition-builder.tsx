@@ -3,34 +3,122 @@ import { ActivityIndicator, Alert, KeyboardAvoidingView, Platform, ScrollView, S
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { BottomSheetModal } from '@gorhom/bottom-sheet'
-import { ArrowLeftRight, Calculator, ChevronDown, ChevronLeft, ChevronUp, Plus, Trash2, UtensilsCrossed, X } from 'lucide-react-native'
+import { ArrowLeftRight, Calculator, ChevronDown, ChevronLeft, ChevronUp, Layers, Lock, PenLine, Plus, Sparkles, Trash2, Utensils, UtensilsCrossed, X } from 'lucide-react-native'
 import { MotiView } from 'moti'
 import { useTheme } from '../../context/ThemeContext'
-import { Button, NativeDialog } from '../../components'
+import { Button, Input, NativeDialog, Textarea } from '../../components'
 import { EvaLoaderScreen } from '../../components/EvaLoader'
-import { calcMacros, ACTIVITY_LABELS, GOAL_ADJUSTMENTS, type ActivityKey, type GoalKey } from '../../lib/macro-calculator'
+import { shadow, GLOWS } from '../../lib/shadows'
+import { FONT } from '../../lib/typography'
+import {
+  computeMifflinStJeor,
+  computeTDEE,
+  deriveCalorieTarget,
+  deriveMacroTargets,
+  gramsToHousehold,
+  hasUnconfirmedMacros,
+  type ActivityLevel,
+  type Goal,
+  type Sex,
+} from '@eva/nutrition-engine'
 import { FoodSearchSheet } from '../../components/coach/FoodSearchSheet'
 import { FoodSwapSheet } from '../../components/coach/FoodSwapSheet'
+import { BodyCompGoalsSheet } from '../../components/coach/BodyCompGoalsSheet'
+import { useEntitlements } from '../../lib/entitlements'
 import {
   DAY_OF_WEEK,
   draftItemMacros,
   draftTotals,
   emptyPlanDraft,
+  emptyRestrictionSets,
   foodToDraftItem,
   getClientFoodFavorites,
+  getClientFoodRestrictions,
   getPlanDraft,
   newMeal,
   saveClientPlan,
+  type ClientFoodRestrictionSets,
   type DraftMeal,
   type FoodRow,
   type PlanDraft,
   type SwapOption,
 } from '../../lib/nutrition-builder'
 import { coerceSwapOptionUnit } from '../../lib/nutrition-utils'
+import { saveMealAsGroup } from '../../lib/meal-groups'
+import { ProgressBar } from '../../components/ProgressBar'
 import { getTemplateDraft, saveTemplate } from '../../lib/nutrition-templates'
+import type { NutritionPlanMode } from '@eva/nutrition-engine'
+import { ExchangeModePanel } from '../../components/coach/ExchangeModePanel'
+import { ExchangeTargetsEditor, type ExchangeSaveState } from '../../components/coach/ExchangeTargetsEditor'
+import {
+  assignMealDayVariant,
+  createPlanDayVariant,
+  deletePlanDayVariant,
+  fetchCoachExchangeGroups,
+  fetchExchangeEquivalences,
+  fetchPlanExchangeEditorData,
+  saveMealExchangeTargets,
+  setPlanExchangeMode,
+  type DayVariant,
+  type ExchangeGroup,
+  type ExchangeTargetDraft,
+} from '../../lib/nutrition-exchanges.coach'
+import { exportNutritionExchangePdf } from '../../lib/nutrition-exchange-pdf'
+import { resolveNutritionExportBrand } from '../../lib/nutrition-day-export'
 
-// Acento de dominio nutrición / intercambios (ember-500, fijo — token-contract).
-const EMBER = '#FF6A3D'
+// Acento de dominio nutrición / intercambios: ember-500 (token-contract). Se
+// consume como color literal SOLO para el glyph lucide (surfaces/text usan las
+// utilities className bg-ember-*/text-ember-* que sí flipean en dark). Fuente
+// única = GLOWS.ember del módulo DS de elevación (ningún hex se escribe acá).
+const EMBER_ICON = GLOWS.ember.shadowColor as string
+
+// Hero "Objetivo diario" (card surface-inverse). Macros en tono -400 para leer sobre
+// el fondo oscuro (espejo web: ember-400 / sport-400 / aqua-400). Colores de dominio FIJOS.
+const HERO_INVERSE = '#0B0E13' // --surface-inverse
+const HERO_ON_DARK = '#F4F6F8'
+const HERO_ON_DARK_MUTED = 'rgba(244,246,248,0.6)'
+const HERO_PROTEIN = '#FF8A5C' // ember-400
+const HERO_CARBS = '#5297FF' // sport-400
+const HERO_FATS = '#57C7E6' // aqua-400
+
+// UI-facing keys → engine types (fuente de verdad única: @eva/nutrition-engine).
+type ActivityKey = ActivityLevel
+type GoalKey = Goal
+
+const GOAL_LABELS: Record<GoalKey, string> = {
+  lose: 'Déficit (bajar grasa)',
+  maintain: 'Mantención',
+  gain: 'Volumen (ganar músculo)',
+}
+
+const ACTIVITY_LABELS: Record<ActivityKey, string> = {
+  sedentary: 'Sedentario',
+  light: 'Ligero (1–3 d/sem)',
+  moderate: 'Moderado (3–5 d/sem)',
+  active: 'Activo (6–7 d/sem)',
+  very_active: 'Muy activo',
+}
+
+/**
+ * Objetivos Mifflin-St Jeor → TDEE → calorías → macros, delegando 100% en
+ * @eva/nutrition-engine (mismas firmas que el web PlanBuilderSidebar → mismos
+ * números para el mismo alumno/objetivo).
+ */
+function calcMacros(
+  weightKg: number,
+  heightCm: number,
+  ageYears: number,
+  gender: 'M' | 'F',
+  activity: ActivityKey,
+  goal: GoalKey
+): { calories: number; protein: number; carbs: number; fats: number } {
+  const sex: Sex = gender === 'M' ? 'male' : 'female'
+  const bmr = computeMifflinStJeor({ sex, weightKg, heightCm, age: ageYears })
+  const tdee = computeTDEE(bmr, activity)
+  const calories = deriveCalorieTarget(tdee, goal)
+  const macros = deriveMacroTargets(calories, weightKg, goal)
+  return { calories, protein: macros.protein_g, carbs: macros.carbs_g, fats: macros.fats_g }
+}
 
 function unitsForFood(item: { unit: string; serving_unit?: string; is_liquid?: boolean }) {
   const units = item.is_liquid || item.serving_unit === 'ml' ? ['ml', 'un'] : ['g', 'un']
@@ -38,7 +126,8 @@ function unitsForFood(item: { unit: string; serving_unit?: string; is_liquid?: b
 }
 
 export default function NutritionBuilderScreen() {
-  const { theme } = useTheme()
+  const { theme, resolvedScheme, branding } = useTheme()
+  const { hasModule } = useEntitlements()
   const router = useRouter()
   const { clientId, clientName, planId, templateId, mode } = useLocalSearchParams<{ clientId?: string; clientName?: string; planId?: string; templateId?: string; mode?: string }>()
   const isTemplate = mode === 'template' || !!templateId
@@ -53,13 +142,35 @@ export default function NutritionBuilderScreen() {
   const [saving, setSaving] = useState(false)
   // Objetivos = suma de alimentos automáticamente, salvo que el coach los edite a mano.
   const [macrosManual, setMacrosManual] = useState(false)
+  // Hero "Objetivo diario": edición de metas colapsable (PenLine).
+  const [goalsOpen, setGoalsOpen] = useState(false)
   const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set())
+  // E5-17: restricciones dietarias del alumno (alergia/intolerancia/disgusto) — correctness de salud.
+  const [restrictions, setRestrictions] = useState<ClientFoodRestrictionSets>(emptyRestrictionSets())
   // Target del editor de intercambios (qué alimento de qué comida).
   const [swapTarget, setSwapTarget] = useState<{ mealUid: string; itemUid: string } | null>(null)
   const [showEmptyWarn, setShowEmptyWarn] = useState(false)
   // N-F3: calculadora de metas (Mifflin-St Jeor).
   const [calcOpen, setCalcOpen] = useState(false)
   const [calc, setCalc] = useState({ weight: '', height: '', age: '', gender: 'M' as 'M' | 'F', activity: 'moderate' as ActivityKey, goal: 'maintain' as GoalKey })
+  // E5-20: panel Pro "objetivos por composición corporal" (gated body_composition, solo plan de alumno).
+  const [bodyCompOpen, setBodyCompOpen] = useState(false)
+  const bodyCompModule = hasModule('body_composition')
+
+  // E6-06: Nutrición Pro / intercambios. GATE (money-safety + Pro es POR-ALUMNO):
+  // solo plan de alumno (mode client-plan) + módulo ON. Sin esto: CERO fetch, CERO render.
+  const hasExchangesModule = hasModule('nutrition_exchanges')
+  const showExchanges = !isTemplate && hasExchangesModule
+  const [planMode, setPlanMode] = useState<NutritionPlanMode>('grams')
+  const [exGroups, setExGroups] = useState<ExchangeGroup[]>([])
+  const [exTargetsByMeal, setExTargetsByMeal] = useState<Record<string, ExchangeTargetDraft[]>>({})
+  const [exVariants, setExVariants] = useState<DayVariant[]>([])
+  const [exVariantByMeal, setExVariantByMeal] = useState<Record<string, string | null>>({})
+  const [exSaveState, setExSaveState] = useState<Record<string, ExchangeSaveState>>({})
+  const [togglePending, setTogglePending] = useState(false)
+  const [variantPending, setVariantPending] = useState(false)
+  const [pdfPending, setPdfPending] = useState(false)
+  const exSaveTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
 
   useEffect(() => {
     (async () => {
@@ -83,6 +194,12 @@ export default function NutritionBuilderScreen() {
     getClientFoodFavorites(clientId).then(setFavoriteIds).catch(() => {})
   }, [clientId, isTemplate])
 
+  // E5-17: restricciones del alumno (solo plan de alumno) → badges + bloqueo de alérgenos.
+  useEffect(() => {
+    if (isTemplate || !clientId) { setRestrictions(emptyRestrictionSets()); return }
+    getClientFoodRestrictions(clientId).then(setRestrictions).catch(() => {})
+  }, [clientId, isTemplate])
+
   const totals = draftTotals(draft.meals)
 
   // Auto: objetivos siguen la suma de alimentos (salvo edición manual del coach).
@@ -96,6 +213,18 @@ export default function NutritionBuilderScreen() {
   function updateMeal(uid: string, p: Partial<DraftMeal>) { setMeals((ms) => ms.map((m) => (m.uid === uid ? { ...m, ...p } : m))) }
   function removeMeal(uid: string) { setMeals((ms) => ms.filter((m) => m.uid !== uid).map((m, i) => ({ ...m, order_index: i }))) }
   function addMeal() { setMeals((ms) => [...ms, newMeal(ms.length)]) }
+  function handleSaveMealAsGroup(meal: DraftMeal) {
+    const items = meal.items.filter((it) => it.food_id).map((it) => ({ food_id: it.food_id, quantity: it.quantity, unit: it.unit }))
+    if (!items.length) { Alert.alert('Comida vacía', 'Agrega al menos un alimento antes de guardarla como grupo.'); return }
+    Alert.alert('Guardar como grupo', `Se creará el grupo "${meal.name || 'Comida'}" con ${items.length} alimento(s) para reutilizarlo en tus planes.`, [
+      { text: 'Cancelar', style: 'cancel' },
+      { text: 'Guardar', onPress: async () => {
+        const r = await saveMealAsGroup(meal.name || 'Comida', items)
+        if (!r.ok) { Alert.alert('Error', r.error ?? 'No se pudo guardar el grupo.'); return }
+        Alert.alert('Grupo guardado', 'Ya puedes reutilizarlo en tus planes.')
+      } },
+    ])
+  }
   function moveMeal(uid: string, dir: -1 | 1) {
     setMeals((ms) => {
       const i = ms.findIndex((m) => m.uid === uid); const j = i + dir
@@ -179,13 +308,125 @@ export default function NutritionBuilderScreen() {
     setMeals((ms) => ms.map((m) => (m.uid === mealUid ? { ...m, items: m.items.filter((it) => it.uid !== itemUid) } : m)))
   }
 
+  // Carga de datos del modo intercambios (grupos del catálogo + targets/variantes del plan).
+  // SOLO con módulo ON + plan de alumno guardado (draft.id): sin módulo NO toca el PostgREST.
+  useEffect(() => {
+    if (!showExchanges || !draft.id) return
+    let alive = true
+    ;(async () => {
+      const [groups, editor] = await Promise.all([
+        fetchCoachExchangeGroups(),
+        fetchPlanExchangeEditorData(draft.id!),
+      ])
+      if (!alive) return
+      setExGroups(groups)
+      setPlanMode(editor.planMode)
+      setExTargetsByMeal(editor.targetsByMealId)
+      setExVariants(editor.variants)
+      setExVariantByMeal(editor.variantByMealId)
+    })().catch(() => {})
+    return () => { alive = false }
+  }, [showExchanges, draft.id])
+
+  // Limpia timers de autosave pendientes al desmontar (evita setState huérfano).
+  useEffect(() => () => { for (const t of Object.values(exSaveTimers.current)) clearTimeout(t) }, [])
+
+  async function handleToggleMode(next: boolean) {
+    if (!draft.id) return
+    const mode: NutritionPlanMode = next ? 'exchanges' : 'grams'
+    setTogglePending(true)
+    const res = await setPlanExchangeMode(draft.id, mode)
+    setTogglePending(false)
+    if (!res.ok) { Alert.alert('No se pudo cambiar el modo', res.error ?? 'Intenta de nuevo.'); return }
+    setPlanMode(mode)
+  }
+
+  // Autosave debounced (700 ms) por comida — espejo del builder web. Escribe SOLO por endpoint.
+  function handleTargetsChange(mealId: string, targets: ExchangeTargetDraft[]) {
+    setExTargetsByMeal((prev) => ({ ...prev, [mealId]: targets }))
+    setExSaveState((s) => ({ ...s, [mealId]: 'saving' }))
+    clearTimeout(exSaveTimers.current[mealId])
+    exSaveTimers.current[mealId] = setTimeout(async () => {
+      const res = await saveMealExchangeTargets(mealId, targets)
+      setExSaveState((s) => ({ ...s, [mealId]: res.ok ? 'saved' : 'error' }))
+      if (res.ok) {
+        setTimeout(() => setExSaveState((s) => (s[mealId] === 'saved' ? { ...s, [mealId]: 'idle' } : s)), 1500)
+      }
+    }, 700)
+  }
+
+  async function handleVariantAssign(mealId: string, variantId: string | null) {
+    const prev = exVariantByMeal[mealId] ?? null
+    setExVariantByMeal((m) => ({ ...m, [mealId]: variantId }))
+    const res = await assignMealDayVariant(mealId, variantId)
+    if (!res.ok) {
+      setExVariantByMeal((m) => ({ ...m, [mealId]: prev }))
+      Alert.alert('No se pudo asignar la variante', res.error ?? 'Intenta de nuevo.')
+    }
+  }
+
+  async function handleCreateVariant(name: string) {
+    if (!draft.id || !name.trim()) return
+    setVariantPending(true)
+    const res = await createPlanDayVariant(draft.id, name.trim())
+    setVariantPending(false)
+    if (!res.ok || !res.variant) { Alert.alert('No se pudo crear la variante', res.error ?? 'Intenta de nuevo.'); return }
+    setExVariants((v) => [...v, res.variant!])
+  }
+
+  async function handleDeleteVariant(variantId: string) {
+    setVariantPending(true)
+    const res = await deletePlanDayVariant(variantId)
+    setVariantPending(false)
+    if (!res.ok) { Alert.alert('No se pudo eliminar la variante', res.error ?? 'Intenta de nuevo.'); return }
+    setExVariants((v) => v.filter((x) => x.id !== variantId))
+    setExVariantByMeal((m) => {
+      const n = { ...m }
+      for (const k of Object.keys(n)) if (n[k] === variantId) n[k] = null
+      return n
+    })
+  }
+
+  async function handleDownloadExchangePdf(format: 'compact' | 'equivalences') {
+    if (!draft.id) return
+    setPdfPending(true)
+    try {
+      const meals = draft.meals
+        .filter((m) => m.id)
+        .map((m) => ({ name: m.name, targets: exTargetsByMeal[m.id!] ?? [], dayVariantId: exVariantByMeal[m.id!] ?? null }))
+      let equivalences: Awaited<ReturnType<typeof fetchExchangeEquivalences>> = []
+      if (format === 'equivalences') {
+        const usedGroupIds = [...new Set(meals.flatMap((m) => m.targets.map((t) => t.exchangeGroupId)))]
+        equivalences = await fetchExchangeEquivalences(usedGroupIds)
+      }
+      const brand = resolveNutritionExportBrand(branding)
+      await exportNutritionExchangePdf(
+        {
+          planName: draft.name,
+          goals: { calories: draft.daily_calories, protein: draft.protein_g, carbs: draft.carbs_g, fats: draft.fats_g },
+          instructions: draft.instructions,
+          meals,
+          groups: exGroups,
+          variants: exVariants,
+          equivalences,
+          format,
+        },
+        brand
+      )
+    } catch (e: any) {
+      Alert.alert('No se pudo generar el PDF', e?.message ?? 'Intenta de nuevo.')
+    } finally {
+      setPdfPending(false)
+    }
+  }
+
   async function save() {
     if (draft.name.trim().length < 2) { Alert.alert('Falta el nombre', isTemplate ? 'Indicá un nombre para la plantilla.' : 'Indicá un nombre para el plan.'); return }
-    if (draft.meals.length === 0) { Alert.alert('Sin comidas', 'Agregá al menos una comida antes de guardar.'); return }
+    if (draft.meals.length === 0) { Alert.alert('Sin comidas', 'Agrega al menos una comida antes de guardar.'); return }
     const empties = draft.meals.filter((m) => m.items.length === 0)
     if (empties.length > 0) {
       setShowEmptyWarn(true)
-      Alert.alert('Comidas incompletas', `Completá al menos 1 alimento en: ${empties.map((m) => m.name || 'Sin nombre').join(', ')}.`)
+      Alert.alert('Comidas incompletas', `Completa al menos 1 alimento en: ${empties.map((m) => m.name || 'Sin nombre').join(', ')}.`)
       return
     }
     setSaving(true)
@@ -197,27 +438,27 @@ export default function NutritionBuilderScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView edges={['top']} style={[styles.root, { backgroundColor: theme.background }]}>
+      <SafeAreaView edges={['top']} className="flex-1 bg-surface-app">
         <EvaLoaderScreen subtitle="Cargando plan…" />
       </SafeAreaView>
     )
   }
 
   return (
-    <SafeAreaView edges={['top', 'bottom']} style={[styles.root, { backgroundColor: theme.background }]}>
-      {/* Header */}
-      <View style={[styles.header, { borderBottomColor: theme.border }]}>
-        <TouchableOpacity onPress={() => router.back()} hitSlop={10} style={styles.headerBack} activeOpacity={0.7}>
+    <SafeAreaView edges={['top', 'bottom']} className="flex-1 bg-surface-app">
+      {/* TopBar DS: volver · título · guardar */}
+      <View className="border-subtle" style={styles.header}>
+        <TouchableOpacity testID="nutrition-builder-back" onPress={() => router.back()} hitSlop={10} style={styles.headerBack} activeOpacity={0.7}>
           <ChevronLeft size={20} color={theme.primary} />
-          <Text style={[styles.headerBackText, { color: theme.primary, fontFamily: 'Archivo_700Bold' }]}>Volver</Text>
+          <Text className="font-sans-semibold text-primary" style={styles.headerBackText}>Volver</Text>
         </TouchableOpacity>
-        <Text numberOfLines={1} style={[styles.headerTitle, { color: theme.foreground, fontFamily: 'Archivo_700Bold' }]}>
+        <Text numberOfLines={1} className="font-display-bold text-strong" style={styles.headerTitle}>
           {isTemplate ? (templateId ? 'Editar plantilla' : 'Nueva plantilla') : (planId ? 'Editar plan' : 'Nuevo plan')}
         </Text>
-        <TouchableOpacity onPress={save} disabled={saving} activeOpacity={0.85}
-          style={[styles.saveBtn, { backgroundColor: theme.primary, opacity: saving ? 0.6 : 1 }]}>
+        <TouchableOpacity testID="nutrition-builder-save" onPress={save} disabled={saving} activeOpacity={0.85}
+          className="bg-primary rounded-control" style={[styles.saveBtn, saving && { opacity: 0.6 }]}>
           {saving ? <ActivityIndicator size="small" color={theme.primaryForeground} /> : (
-            <Text style={[styles.saveText, { color: theme.primaryForeground, fontFamily: 'Archivo_700Bold' }]}>Guardar</Text>
+            <Text className="font-display text-primary-foreground" style={styles.saveText}>Guardar</Text>
           )}
         </TouchableOpacity>
       </View>
@@ -225,147 +466,260 @@ export default function NutritionBuilderScreen() {
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
         <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
           {clientName ? (
-            <Text style={[styles.clientLabel, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Plan para {clientName}</Text>
+            <Text className="font-sans text-muted" style={styles.clientLabel}>Plan para {clientName}</Text>
           ) : null}
 
           {/* Plan meta */}
-          <Field theme={theme} label="Nombre del plan" value={draft.name} onChangeText={(v: string) => patch({ name: v })} placeholder="Ej: Definición — 2000 kcal" />
+          <Input label="Nombre del plan" value={draft.name} onChangeText={(v: string) => patch({ name: v })} placeholder="Ej: Definición — 2000 kcal" />
+
+          {/* Hero inverse — Objetivo diario (espejo PlanBuilderSidebar) */}
+          <View style={[styles.hero, { backgroundColor: HERO_INVERSE }]}>
+            <View style={styles.heroTop}>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text className="font-sans-bold text-sport-500" style={styles.heroEyebrow}>Objetivo diario</Text>
+                <Text style={styles.heroKcal}>
+                  {draft.daily_calories > 0 ? draft.daily_calories.toLocaleString('es-CL') : '—'}
+                  <Text style={styles.heroKcalUnit}> kcal</Text>
+                </Text>
+              </View>
+              <TouchableOpacity testID="objetivos-edit-toggle" onPress={() => setGoalsOpen((v) => !v)} activeOpacity={0.8} style={styles.heroEditBtn}>
+                <PenLine size={18} color={HERO_ON_DARK} />
+              </TouchableOpacity>
+            </View>
+            <View style={styles.heroMacros}>
+              {([['Proteína', draft.protein_g, HERO_PROTEIN], ['Carbos', draft.carbs_g, HERO_CARBS], ['Grasas', draft.fats_g, HERO_FATS]] as const).map(([n, v, c]) => (
+                <View key={n} style={{ flex: 1 }}>
+                  <Text style={styles.heroMacroLabel}>{n}</Text>
+                  <Text style={[styles.heroMacroVal, { color: c }]}>
+                    {Math.round(v)}<Text style={styles.heroMacroUnit}>g</Text>
+                  </Text>
+                </View>
+              ))}
+            </View>
+          </View>
 
           <View style={styles.objHeaderRow}>
-            <Label theme={theme}>Objetivos diarios</Label>
+            <Label>Metas{macrosManual ? ' (manual)' : ''}</Label>
             {macrosManual ? (
-              <TouchableOpacity onPress={() => setMacrosManual(false)} activeOpacity={0.7}>
-                <Text style={[styles.autoChip, { color: theme.primary, fontFamily: 'HankenGrotesk_600SemiBold' }]}>↺ Auto desde alimentos</Text>
+              <TouchableOpacity testID="objetivos-auto-toggle" onPress={() => setMacrosManual(false)} activeOpacity={0.7}>
+                <Text className="font-sans-semibold text-primary" style={styles.autoChip}>↺ Auto desde alimentos</Text>
               </TouchableOpacity>
             ) : (
-              <Text style={[styles.autoChip, { color: theme.success, fontFamily: 'HankenGrotesk_600SemiBold' }]}>Auto desde alimentos ✓</Text>
+              <Text className="font-sans-semibold text-success-600" style={styles.autoChip}>Auto desde alimentos ✓</Text>
             )}
           </View>
-          <View style={styles.macroRow}>
-            <MacroField theme={theme} label="kcal" value={draft.daily_calories} onChange={(n) => { setMacrosManual(true); patch({ daily_calories: n }) }} />
-            <MacroField theme={theme} label="Prot (g)" value={draft.protein_g} onChange={(n) => { setMacrosManual(true); patch({ protein_g: n }) }} />
-            <MacroField theme={theme} label="Carbs (g)" value={draft.carbs_g} onChange={(n) => { setMacrosManual(true); patch({ carbs_g: n }) }} />
-            <MacroField theme={theme} label="Gras (g)" value={draft.fats_g} onChange={(n) => { setMacrosManual(true); patch({ fats_g: n }) }} />
-          </View>
+          {goalsOpen ? (
+            <View style={styles.macroRow}>
+              <MacroField theme={theme} label="kcal" value={draft.daily_calories} onChange={(n) => { setMacrosManual(true); patch({ daily_calories: n }) }} />
+              <MacroField theme={theme} label="Prot (g)" value={draft.protein_g} onChange={(n) => { setMacrosManual(true); patch({ protein_g: n }) }} />
+              <MacroField theme={theme} label="Carbs (g)" value={draft.carbs_g} onChange={(n) => { setMacrosManual(true); patch({ carbs_g: n }) }} />
+              <MacroField theme={theme} label="Gras (g)" value={draft.fats_g} onChange={(n) => { setMacrosManual(true); patch({ fats_g: n }) }} />
+            </View>
+          ) : null}
 
           <Button label="Calcular metas (Mifflin-St Jeor)" variant="outline" leftIcon={Calculator} onPress={() => setCalcOpen(true)} full />
 
-          {/* Live totals from foods */}
-          <View style={[styles.totals, { backgroundColor: theme.secondary, borderColor: theme.border, borderRadius: theme.radius.lg }]}>
-            <Text style={[styles.totalsLabel, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Suma de alimentos</Text>
-            <Text style={[styles.totalsValue, { color: theme.foreground, fontFamily: 'JetBrainsMono_500Medium' }]}>
-              {totals.kcal} kcal · P{totals.protein} C{totals.carbs} G{totals.fats}
-            </Text>
+          {/* E5-20: objetivos por composición corporal (Pro, solo plan de alumno) */}
+          {!isTemplate ? (
+            <TouchableOpacity
+              testID="bodycomp-open"
+              onPress={() => setBodyCompOpen(true)}
+              activeOpacity={0.85}
+              className="border-sport-500/40 bg-sport-500/5 rounded-control"
+              style={styles.bodyCompBtn}
+            >
+              {bodyCompModule ? <Sparkles size={15} color={theme.foreground} /> : <Lock size={14} color={theme.mutedForeground} />}
+              <Text className="font-sans-semibold text-sport-700" style={styles.bodyCompBtnText}>
+                Objetivos por composición corporal
+              </Text>
+              <View className="bg-sport-500/15 rounded-pill" style={styles.proBadge}>
+                <Text className="font-sans-bold text-sport-600" style={styles.proBadgeText}>PRO</Text>
+              </View>
+            </TouchableOpacity>
+          ) : null}
+
+          {/* Live totals from foods — Progress vs meta (espejo "Suma real (alimentos)" web) */}
+          <View className="bg-surface-sunken border border-subtle rounded-lg" style={styles.totals}>
+            <View style={styles.totalsHead}>
+              <Text className="font-sans-bold text-muted" style={styles.totalsLabel}>Suma de alimentos</Text>
+              <Text className="font-mono-bold text-strong" style={styles.totalsSum}>
+                {totals.kcal} / {draft.daily_calories || '—'} kcal
+              </Text>
+            </View>
+            <ProgressBar value={draft.daily_calories > 0 ? totals.kcal / draft.daily_calories : 0} height={8} />
+            <View style={styles.totalsGrid}>
+              <Text className="font-mono text-muted" style={styles.totalsMacro}>P {totals.protein}</Text>
+              <Text className="font-mono text-muted" style={styles.totalsMacro}>C {totals.carbs}</Text>
+              <Text className="font-mono text-muted" style={styles.totalsMacro}>G {totals.fats}</Text>
+            </View>
           </View>
 
-          <Field theme={theme} label="Instrucciones (opcional)" value={draft.instructions} onChangeText={(v: string) => patch({ instructions: v })} placeholder="Notas para el alumno" multiline />
+          {/* E6-06: Nutrición Pro / modo intercambios (gated hasModule + plan de alumno) */}
+          {showExchanges ? (() => {
+            const exMeals = draft.meals
+              .filter((m) => m.id)
+              .map((m) => ({ targets: exTargetsByMeal[m.id!] ?? [], dayVariantId: exVariantByMeal[m.id!] ?? null }))
+            const provisional = exMeals.some((m) => hasUnconfirmedMacros(m.targets, exGroups))
+            return (
+              <ExchangeModePanel
+                active={planMode === 'exchanges'}
+                canToggle={!!draft.id}
+                togglePending={togglePending}
+                onToggleMode={handleToggleMode}
+                mealsForTotals={exMeals}
+                groups={exGroups}
+                variants={exVariants}
+                goals={{ calories: draft.daily_calories, protein: draft.protein_g, carbs: draft.carbs_g, fats: draft.fats_g }}
+                provisional={provisional}
+                variantPending={variantPending}
+                onCreateVariant={handleCreateVariant}
+                onDeleteVariant={handleDeleteVariant}
+                brandName={resolveNutritionExportBrand(branding).brandName}
+                pdfPending={pdfPending}
+                onDownloadPdf={handleDownloadExchangePdf}
+              />
+            )
+          })() : null}
+
+          <Textarea label="Instrucciones (opcional)" value={draft.instructions} onChangeText={(v: string) => patch({ instructions: v })} placeholder="Notas para el alumno" minRows={3} />
 
           {/* Meals */}
-          <Label theme={theme}>Comidas</Label>
+          <Label>Comidas</Label>
           {draft.meals.map((meal, mealIdx) => (
-            <MotiView key={meal.uid} from={{ opacity: 0, translateY: 8 }} animate={{ opacity: 1, translateY: 0 }} transition={{ type: 'timing', duration: 220 }}
-              style={[styles.mealCard, { backgroundColor: theme.card, borderColor: theme.border, borderRadius: theme.radius.xl }]}>
-              <View style={styles.mealTop}>
-                <TextInput value={meal.name} onChangeText={(v) => updateMeal(meal.uid, { name: v })} placeholder="Nombre comida" placeholderTextColor={theme.mutedForeground}
-                  style={[styles.mealName, { color: theme.foreground, fontFamily: 'Archivo_700Bold' }]} />
-                <TouchableOpacity onPress={() => moveMeal(meal.uid, -1)} disabled={mealIdx === 0} hitSlop={6} style={styles.moveBtn}>
-                  <ChevronUp size={17} color={mealIdx === 0 ? theme.muted : theme.mutedForeground} />
-                </TouchableOpacity>
-                <TouchableOpacity onPress={() => moveMeal(meal.uid, 1)} disabled={mealIdx === draft.meals.length - 1} hitSlop={6} style={styles.moveBtn}>
-                  <ChevronDown size={17} color={mealIdx === draft.meals.length - 1 ? theme.muted : theme.mutedForeground} />
-                </TouchableOpacity>
-                <TouchableOpacity onPress={() => removeMeal(meal.uid)} hitSlop={8} activeOpacity={0.7}>
-                  <Trash2 size={17} color={theme.destructive} />
-                </TouchableOpacity>
-              </View>
+            <MotiView key={meal.uid} from={{ opacity: 0, translateY: 8 }} animate={{ opacity: 1, translateY: 0 }} transition={{ type: 'timing', duration: 220 }}>
+              <View className="bg-surface-card border border-subtle rounded-card" style={[styles.mealCard, shadow('sm', resolvedScheme)]}>
+                <View style={styles.mealTop}>
+                  {/* Anatomía web: badge tonal ember con Utensils junto al nombre */}
+                  <View className="bg-ember-100 rounded-control" style={styles.mealBadge}>
+                    <Utensils size={18} color={EMBER_ICON} />
+                  </View>
+                  <Input containerStyle={styles.mealNameWrap} value={meal.name} onChangeText={(v: string) => updateMeal(meal.uid, { name: v })} placeholder="Nombre de la comida" />
+                  <TouchableOpacity testID="meal-save-as-group" onPress={() => handleSaveMealAsGroup(meal)} hitSlop={6} activeOpacity={0.7} style={styles.moveBtn}>
+                    <Layers size={16} color={theme.mutedForeground} />
+                  </TouchableOpacity>
+                  <TouchableOpacity testID="meal-move-up" onPress={() => moveMeal(meal.uid, -1)} disabled={mealIdx === 0} hitSlop={6} style={styles.moveBtn}>
+                    <ChevronUp size={17} color={mealIdx === 0 ? theme.muted : theme.mutedForeground} />
+                  </TouchableOpacity>
+                  <TouchableOpacity testID="meal-move-down" onPress={() => moveMeal(meal.uid, 1)} disabled={mealIdx === draft.meals.length - 1} hitSlop={6} style={styles.moveBtn}>
+                    <ChevronDown size={17} color={mealIdx === draft.meals.length - 1 ? theme.muted : theme.mutedForeground} />
+                  </TouchableOpacity>
+                  <TouchableOpacity testID="meal-remove" onPress={() => removeMeal(meal.uid)} hitSlop={8} activeOpacity={0.7} style={styles.moveBtn}>
+                    <Trash2 size={17} color={theme.destructive} />
+                  </TouchableOpacity>
+                </View>
 
-              {/* Day of week */}
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.dayRow}>
-                {DAY_OF_WEEK.map((d) => {
-                  const active = meal.day_of_week === d.value
+                {/* Día del plan */}
+                <Text className="font-sans-bold text-muted" style={styles.dayLabel}>Día del plan</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.dayRow}>
+                  {DAY_OF_WEEK.map((d) => {
+                    const active = meal.day_of_week === d.value
+                    return (
+                      <TouchableOpacity key={String(d.value)} testID="meal-day-chip" onPress={() => updateMeal(meal.uid, { day_of_week: d.value })} activeOpacity={0.8}
+                        className={active ? 'border-primary bg-primary/10' : 'border-subtle'} style={styles.dayChip}>
+                        <Text className={`font-sans-semibold ${active ? 'text-primary' : 'text-muted'}`} style={styles.dayChipText}>{d.label}</Text>
+                      </TouchableOpacity>
+                    )
+                  })}
+                </ScrollView>
+
+                {/* Items */}
+                {meal.items.map((it, itemIdx) => {
+                  const im = draftItemMacros(it)
+                  const swapCount = it.swapOptions?.length ?? 0
                   return (
-                    <TouchableOpacity key={String(d.value)} onPress={() => updateMeal(meal.uid, { day_of_week: d.value })} activeOpacity={0.8}
-                      style={[styles.dayChip, { borderColor: active ? theme.primary : theme.border, backgroundColor: active ? theme.primary + '1A' : 'transparent' }]}>
-                      <Text style={{ fontSize: 12, fontFamily: 'HankenGrotesk_600SemiBold', color: active ? theme.primary : theme.mutedForeground }}>{d.label}</Text>
-                    </TouchableOpacity>
+                    <View key={it.uid} style={{ gap: 6 }}>
+                      <View className="bg-surface-sunken border border-subtle rounded-control" style={styles.itemRow}>
+                        <View style={{ flex: 1, minWidth: 0 }}>
+                          <Text numberOfLines={1} className="font-sans-semibold text-strong" style={styles.itemName}>{it.name}</Text>
+                          <Text className="font-mono text-muted" style={styles.itemMacro}>
+                            {Math.round(im.calories)} kcal · P{Math.round(im.protein)} C{Math.round(im.carbs)} G{Math.round(im.fats)}
+                          </Text>
+                          {/* E5-21: medida casera '120 g (1 taza)' — solo en gramos y si el alimento la trae. */}
+                          {(it.unit || 'g').toLowerCase() === 'g' && it.household_grams && it.household_label ? (
+                            <Text className="font-sans text-muted" style={styles.itemHousehold}>
+                              ≈ {gramsToHousehold({ household_grams: it.household_grams, household_label: it.household_label }, it.quantity)}
+                            </Text>
+                          ) : null}
+                        </View>
+                        <TextInput
+                          testID="item-qty"
+                          value={String(it.quantity)}
+                          onChangeText={(v) => updateItemQty(meal.uid, it.uid, v)}
+                          keyboardType="number-pad"
+                          textAlignVertical="center"
+                          placeholderTextColor={theme.mutedForeground}
+                          className="bg-surface-card border border-default text-strong font-mono"
+                          style={styles.qtyInput}
+                        />
+                        <View style={styles.unitWrap}>
+                          {unitsForFood(it).map((u) => {
+                            const active = it.unit === u
+                            return (
+                              <TouchableOpacity key={u} testID="item-unit-chip" onPress={() => updateItemUnit(meal.uid, it.uid, u)} activeOpacity={0.8}
+                                className={active ? 'bg-primary' : ''} style={styles.unitChip}>
+                                <Text className={`font-sans-semibold ${active ? 'text-primary-foreground' : 'text-muted'}`} style={styles.unitChipText}>{u}</Text>
+                              </TouchableOpacity>
+                            )
+                          })}
+                        </View>
+                        <TouchableOpacity testID="item-remove" onPress={() => removeItem(meal.uid, it.uid)} hitSlop={6} activeOpacity={0.7}>
+                          <X size={16} color={theme.mutedForeground} />
+                        </TouchableOpacity>
+                      </View>
+                      <View style={styles.itemActionRow}>
+                        <TouchableOpacity testID="item-swap" onPress={() => openSwap(meal.uid, it.uid)} activeOpacity={0.8}
+                          className={swapCount ? 'border-ember-300 bg-ember-100' : 'border-subtle'} style={[styles.swapBtn, { flex: 1 }]}>
+                          <ArrowLeftRight size={13} color={swapCount ? EMBER_ICON : theme.mutedForeground} />
+                          <Text className={`font-sans-semibold ${swapCount ? 'text-ember-700' : 'text-muted'}`} style={styles.swapBtnText}>
+                            {swapCount ? `${swapCount} alternativa${swapCount !== 1 ? 's' : ''}` : 'Configurar cambios'}
+                          </Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity testID="item-move-up" onPress={() => moveItem(meal.uid, it.uid, -1)} disabled={itemIdx === 0} hitSlop={6} style={styles.moveBtn}>
+                          <ChevronUp size={16} color={itemIdx === 0 ? theme.muted : theme.mutedForeground} />
+                        </TouchableOpacity>
+                        <TouchableOpacity testID="item-move-down" onPress={() => moveItem(meal.uid, it.uid, 1)} disabled={itemIdx === meal.items.length - 1} hitSlop={6} style={styles.moveBtn}>
+                          <ChevronDown size={16} color={itemIdx === meal.items.length - 1 ? theme.muted : theme.mutedForeground} />
+                        </TouchableOpacity>
+                      </View>
+                    </View>
                   )
                 })}
-              </ScrollView>
 
-              {/* Items */}
-              {meal.items.map((it, itemIdx) => {
-                const im = draftItemMacros(it)
-                const swapCount = it.swapOptions?.length ?? 0
-                return (
-                  <View key={it.uid} style={{ gap: 6 }}>
-                    <View style={[styles.itemRow, { borderColor: theme.border }]}>
-                      <View style={{ flex: 1, minWidth: 0 }}>
-                        <Text numberOfLines={1} style={[styles.itemName, { color: theme.foreground, fontFamily: 'HankenGrotesk_600SemiBold' }]}>{it.name}</Text>
-                        <Text style={[styles.itemMacro, { color: theme.mutedForeground, fontFamily: 'JetBrainsMono_400Regular' }]}>
-                          {Math.round(im.calories)} kcal · P{Math.round(im.protein)} C{Math.round(im.carbs)} G{Math.round(im.fats)}
-                        </Text>
-                      </View>
-                      <TextInput
-                        value={String(it.quantity)}
-                        onChangeText={(v) => updateItemQty(meal.uid, it.uid, v)}
-                        keyboardType="number-pad"
-                        textAlignVertical="center"
-                        style={[styles.qtyInput, { borderColor: theme.border, color: theme.foreground, backgroundColor: theme.secondary, fontFamily: theme.fontSans }]}
-                      />
-                      <View style={styles.unitWrap}>
-                        {unitsForFood(it).map((u) => {
-                          const active = it.unit === u
-                          return (
-                            <TouchableOpacity key={u} onPress={() => updateItemUnit(meal.uid, it.uid, u)} activeOpacity={0.8}
-                              style={[styles.unitChip, active && { backgroundColor: theme.primary }]}>
-                              <Text style={{ fontSize: 11, fontFamily: 'HankenGrotesk_600SemiBold', color: active ? theme.primaryForeground : theme.mutedForeground }}>{u}</Text>
-                            </TouchableOpacity>
-                          )
-                        })}
-                      </View>
-                      <TouchableOpacity onPress={() => removeItem(meal.uid, it.uid)} hitSlop={6} activeOpacity={0.7}>
-                        <X size={16} color={theme.mutedForeground} />
-                      </TouchableOpacity>
-                    </View>
-                    <View style={styles.itemActionRow}>
-                      <TouchableOpacity onPress={() => openSwap(meal.uid, it.uid)} activeOpacity={0.8}
-                        style={[styles.swapBtn, { flex: 1, borderColor: swapCount ? EMBER + '66' : theme.border, backgroundColor: swapCount ? EMBER + '14' : 'transparent' }]}>
-                        <ArrowLeftRight size={13} color={swapCount ? EMBER : theme.mutedForeground} />
-                        <Text style={[styles.swapBtnText, { color: swapCount ? EMBER : theme.mutedForeground, fontFamily: 'HankenGrotesk_600SemiBold' }]}>
-                          {swapCount ? `${swapCount} alternativa${swapCount !== 1 ? 's' : ''}` : 'Configurar cambios'}
-                        </Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity onPress={() => moveItem(meal.uid, it.uid, -1)} disabled={itemIdx === 0} hitSlop={6} style={styles.moveBtn}>
-                        <ChevronUp size={16} color={itemIdx === 0 ? theme.muted : theme.mutedForeground} />
-                      </TouchableOpacity>
-                      <TouchableOpacity onPress={() => moveItem(meal.uid, it.uid, 1)} disabled={itemIdx === meal.items.length - 1} hitSlop={6} style={styles.moveBtn}>
-                        <ChevronDown size={16} color={itemIdx === meal.items.length - 1 ? theme.muted : theme.mutedForeground} />
-                      </TouchableOpacity>
-                    </View>
+                {/* E6-06: editor de porciones por grupo (solo modo intercambios) */}
+                {showExchanges && planMode === 'exchanges' ? (
+                  <ExchangeTargetsEditor
+                    mealId={meal.id ?? meal.uid}
+                    persistable={!!meal.id}
+                    groups={exGroups}
+                    targets={meal.id ? (exTargetsByMeal[meal.id] ?? []) : []}
+                    onChange={handleTargetsChange}
+                    variants={exVariants}
+                    variantId={meal.id ? (exVariantByMeal[meal.id] ?? null) : null}
+                    onVariantChange={handleVariantAssign}
+                    saveState={meal.id ? (exSaveState[meal.id] ?? 'idle') : 'idle'}
+                  />
+                ) : null}
+
+                {showEmptyWarn && meal.items.length === 0 ? (
+                  <View className="border border-warning-500/40 bg-warning-100 rounded-control" style={styles.warnBox}>
+                    <Text className="font-sans-semibold text-warning-700" style={styles.warnText}>Comida vacía: agrega al menos un alimento para conservar la consistencia del plan.</Text>
                   </View>
-                )
-              })}
+                ) : null}
 
-              {showEmptyWarn && meal.items.length === 0 ? (
-                <View style={[styles.warnBox, { borderColor: '#F9731640', backgroundColor: '#F9731614' }]}>
-                  <Text style={[styles.warnText, { color: '#F97316', fontFamily: 'HankenGrotesk_600SemiBold' }]}>Comida vacía: agregá al menos 1 alimento.</Text>
-                </View>
-              ) : null}
+                <Textarea label="Nota para el alumno (opcional)" value={meal.notes} onChangeText={(v: string) => updateMeal(meal.uid, { notes: v })} placeholder="Ej: Puedes reemplazar el arroz por papa. Comer 30 min antes del entrenamiento." maxLength={500} minRows={2} />
 
-              <TextInput value={meal.notes} onChangeText={(v) => updateMeal(meal.uid, { notes: v })} placeholder="Nota para el alumno (opcional)" placeholderTextColor={theme.mutedForeground} maxLength={500} multiline
-                style={[styles.notesInput, { borderColor: theme.border, backgroundColor: theme.secondary, color: theme.foreground, fontFamily: theme.fontSans }]} />
-
-              <TouchableOpacity onPress={() => openFoodSearch(meal.uid)} activeOpacity={0.8}
-                style={[styles.addFood, { borderColor: theme.primary + '55' }]}>
-                <Plus size={15} color={theme.primary} />
-                <Text style={[styles.addFoodText, { color: theme.primary, fontFamily: 'HankenGrotesk_600SemiBold' }]}>Agregar alimento</Text>
-              </TouchableOpacity>
+                <TouchableOpacity testID="meal-add-food" onPress={() => openFoodSearch(meal.uid)} activeOpacity={0.8}
+                  className="border-primary/40" style={styles.addFood}>
+                  <Plus size={15} color={theme.primary} />
+                  <Text className="font-sans-semibold text-primary" style={styles.addFoodText}>Agregar alimento</Text>
+                </TouchableOpacity>
+              </View>
             </MotiView>
           ))}
 
-          <TouchableOpacity onPress={addMeal} activeOpacity={0.85} style={[styles.addMeal, { borderColor: theme.border, backgroundColor: theme.card }]}>
+          <TouchableOpacity testID="add-meal" onPress={addMeal} activeOpacity={0.85} className="bg-surface-card border border-subtle rounded-xl" style={styles.addMeal}>
             <UtensilsCrossed size={17} color={theme.foreground} />
-            <Text style={[styles.addMealText, { color: theme.foreground, fontFamily: 'Archivo_700Bold' }]}>Agregar comida</Text>
+            <Text className="font-display text-strong" style={styles.addMealText}>Agregar comida</Text>
           </TouchableOpacity>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -375,9 +729,23 @@ export default function NutritionBuilderScreen() {
         onSelect={handleFoodSelected}
         excludedIds={searchMode === 'swap' ? swapExcluded : undefined}
         favoriteIds={!isTemplate && favoriteIds.size ? favoriteIds : undefined}
+        allergyIds={!isTemplate ? restrictions.allergyIds : undefined}
+        intoleranceIds={!isTemplate ? restrictions.intoleranceIds : undefined}
+        dislikeIds={!isTemplate ? restrictions.dislikeIds : undefined}
         title={searchMode === 'swap' ? 'Agregar alternativa' : undefined}
       />
       <FoodSwapSheet ref={swapSheetRef} item={swapItem} onAddPress={onAddSwapPress} onUpdateSwap={updateSwap} onRemoveSwap={removeSwap} />
+
+      {/* E5-20: sheet Pro de objetivos por composición corporal */}
+      <BodyCompGoalsSheet
+        open={bodyCompOpen}
+        onClose={() => setBodyCompOpen(false)}
+        hasModule={bodyCompModule}
+        onApply={(g) => {
+          setMacrosManual(true)
+          patch({ daily_calories: g.calories, protein_g: g.protein, carbs_g: g.carbs, fats_g: g.fats })
+        }}
+      />
 
       {/* N-F3: calculadora de metas (Mifflin-St Jeor) */}
       <NativeDialog open={calcOpen} title="Calcular metas" onClose={() => setCalcOpen(false)}>
@@ -387,9 +755,9 @@ export default function NutritionBuilderScreen() {
             <CalcField theme={theme} label="Altura (cm)" value={calc.height} onChangeText={(v: string) => setCalc((c) => ({ ...c, height: v }))} />
             <CalcField theme={theme} label="Edad" value={calc.age} onChangeText={(v: string) => setCalc((c) => ({ ...c, age: v }))} />
           </View>
-          <CalcChips theme={theme} label="Sexo" value={calc.gender} options={[{ k: 'M', l: 'Hombre' }, { k: 'F', l: 'Mujer' }]} onPick={(k) => setCalc((c) => ({ ...c, gender: k as 'M' | 'F' }))} />
-          <CalcChips theme={theme} label="Actividad" value={calc.activity} options={(Object.keys(ACTIVITY_LABELS) as ActivityKey[]).map((k) => ({ k, l: ACTIVITY_LABELS[k] }))} onPick={(k) => setCalc((c) => ({ ...c, activity: k as ActivityKey }))} />
-          <CalcChips theme={theme} label="Objetivo" value={calc.goal} options={(Object.keys(GOAL_ADJUSTMENTS) as GoalKey[]).map((k) => ({ k, l: GOAL_ADJUSTMENTS[k].label }))} onPick={(k) => setCalc((c) => ({ ...c, goal: k as GoalKey }))} />
+          <CalcChips label="Sexo" value={calc.gender} options={[{ k: 'M', l: 'Hombre' }, { k: 'F', l: 'Mujer' }]} onPick={(k) => setCalc((c) => ({ ...c, gender: k as 'M' | 'F' }))} />
+          <CalcChips label="Actividad" value={calc.activity} options={(Object.keys(ACTIVITY_LABELS) as ActivityKey[]).map((k) => ({ k, l: ACTIVITY_LABELS[k] }))} onPick={(k) => setCalc((c) => ({ ...c, activity: k as ActivityKey }))} />
+          <CalcChips label="Objetivo" value={calc.goal} options={(Object.keys(GOAL_LABELS) as GoalKey[]).map((k) => ({ k, l: GOAL_LABELS[k] }))} onPick={(k) => setCalc((c) => ({ ...c, goal: k as GoalKey }))} />
           <Button label="Aplicar metas sugeridas" onPress={() => {
             const w = Number(calc.weight), h = Number(calc.height), a = Number(calc.age)
             if (!(w > 0 && h > 0 && a > 0)) { Alert.alert('Datos incompletos', 'Indicá peso, altura y edad.'); return }
@@ -404,41 +772,31 @@ export default function NutritionBuilderScreen() {
   )
 }
 
-function Label({ children, theme }: { children: React.ReactNode; theme: any }) {
-  return <Text style={[styles.label, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{children}</Text>
-}
-
-function Field({ theme, label, multiline, ...rest }: any) {
-  return (
-    <View style={{ gap: 6 }}>
-      <Text style={[styles.fieldLabel, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{label}</Text>
-      <TextInput placeholderTextColor={theme.mutedForeground} multiline={multiline}
-        style={[styles.input, multiline && { height: 80, textAlignVertical: 'top', paddingTop: 10 }, { borderColor: theme.border, backgroundColor: theme.secondary, color: theme.foreground, fontFamily: theme.fontSans }]} {...rest} />
-    </View>
-  )
+function Label({ children }: { children: React.ReactNode }) {
+  return <Text className="text-muted font-sans-bold" style={styles.label}>{children}</Text>
 }
 
 function CalcField({ theme, label, value, onChangeText }: { theme: any; label: string; value: string; onChangeText: (v: string) => void }) {
   return (
     <View style={{ flex: 1, gap: 5 }}>
-      <Text style={[styles.macroLabel, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{label}</Text>
+      <Text className="text-muted font-sans" style={styles.macroLabel}>{label}</Text>
       <TextInput value={value} onChangeText={onChangeText} keyboardType="number-pad" placeholder="0" placeholderTextColor={theme.mutedForeground}
-        style={[styles.macroInput, { borderColor: theme.border, backgroundColor: theme.secondary, color: theme.foreground, fontFamily: theme.fontSans }]} />
+        className="bg-surface-card border border-default text-strong font-sans" style={styles.macroInput} />
     </View>
   )
 }
 
-function CalcChips({ theme, label, value, options, onPick }: { theme: any; label: string; value: string; options: { k: string; l: string }[]; onPick: (k: string) => void }) {
+function CalcChips({ label, value, options, onPick }: { label: string; value: string; options: { k: string; l: string }[]; onPick: (k: string) => void }) {
   return (
     <View style={{ gap: 6 }}>
-      <Text style={[styles.fieldLabel, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{label}</Text>
+      <Text className="text-muted font-sans" style={styles.fieldLabel}>{label}</Text>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
         {options.map((o) => {
           const on = o.k === value
           return (
             <TouchableOpacity key={o.k} onPress={() => onPick(o.k)} activeOpacity={0.8}
-              style={{ borderWidth: 1, borderRadius: 999, paddingHorizontal: 11, paddingVertical: 7, borderColor: on ? theme.primary : theme.border, backgroundColor: on ? theme.primary + '1A' : 'transparent' }}>
-              <Text style={{ fontSize: 12, fontFamily: 'HankenGrotesk_600SemiBold', color: on ? theme.primary : theme.mutedForeground }}>{o.l}</Text>
+              className={on ? 'border-primary bg-primary/10' : 'border-subtle'} style={styles.calcChip}>
+              <Text className={`font-sans-semibold ${on ? 'text-primary' : 'text-muted'}`} style={styles.calcChipText}>{o.l}</Text>
             </TouchableOpacity>
           )
         })}
@@ -450,55 +808,79 @@ function CalcChips({ theme, label, value, options, onPick }: { theme: any; label
 function MacroField({ theme, label, value, onChange }: { theme: any; label: string; value: number; onChange: (n: number) => void }) {
   return (
     <View style={{ flex: 1, gap: 5 }}>
-      <Text style={[styles.macroLabel, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{label}</Text>
+      <Text className="text-muted font-sans" style={styles.macroLabel}>{label}</Text>
       <TextInput value={value ? String(value) : ''} onChangeText={(v) => onChange(Number(v.replace(/[^0-9]/g, '')) || 0)} keyboardType="number-pad"
         placeholder="0" placeholderTextColor={theme.mutedForeground}
-        style={[styles.macroInput, { borderColor: theme.border, backgroundColor: theme.secondary, color: theme.foreground, fontFamily: theme.fontSans }]} />
+        className="bg-surface-card border border-default text-strong font-sans" style={styles.macroInput} />
     </View>
   )
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1 },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 12, paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth },
   headerBack: { flexDirection: 'row', alignItems: 'center', gap: 2, width: 84 },
   headerBackText: { fontSize: 13 },
   headerTitle: { flex: 1, textAlign: 'center', fontSize: 15 },
-  saveBtn: { width: 84, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  saveBtn: { width: 84, height: 36, alignItems: 'center', justifyContent: 'center' },
   saveText: { fontSize: 13 },
   scroll: { paddingHorizontal: 16, paddingVertical: 16, paddingBottom: 60, gap: 12 },
   clientLabel: { fontSize: 13 },
   label: { fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.8, marginTop: 4 },
   fieldLabel: { fontSize: 12 },
-  input: { minHeight: 46, borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, fontSize: 15 },
   macroRow: { flexDirection: 'row', gap: 8 },
   objHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 6 },
   autoChip: { fontSize: 11 },
   macroLabel: { fontSize: 11 },
-  macroInput: { height: 46, borderWidth: 1, borderRadius: 10, paddingHorizontal: 8, fontSize: 15, textAlign: 'center' },
-  totals: { borderWidth: 1, paddingHorizontal: 14, paddingVertical: 10, gap: 3 },
+  macroInput: { height: 46, borderRadius: 10, paddingHorizontal: 8, fontSize: 15, textAlign: 'center' },
+  calcChip: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 11, paddingVertical: 7 },
+  calcChipText: { fontSize: 12 },
+  bodyCompBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, paddingHorizontal: 14, paddingVertical: 11 },
+  bodyCompBtnText: { flex: 1, fontSize: 13 },
+  proBadge: { paddingHorizontal: 7, paddingVertical: 2 },
+  proBadgeText: { fontSize: 9, letterSpacing: 0.5 },
+
+  // Hero "Objetivo diario" inverse
+  hero: { borderRadius: 16, padding: 20 },
+  heroTop: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 },
+  heroEyebrow: { fontSize: 11, textTransform: 'uppercase', letterSpacing: 1.1 },
+  heroKcal: { fontSize: 30, marginTop: 2, color: HERO_ON_DARK, fontFamily: FONT.displayBlack, letterSpacing: -0.5, fontVariant: ['tabular-nums'] },
+  heroKcalUnit: { fontSize: 14, color: HERO_ON_DARK_MUTED, fontFamily: FONT.uiSemibold },
+  heroEditBtn: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.1)' },
+  heroMacros: { flexDirection: 'row', gap: 16, marginTop: 14 },
+  heroMacroLabel: { fontSize: 11, marginBottom: 2, color: HERO_ON_DARK_MUTED, fontFamily: FONT.ui },
+  heroMacroVal: { fontSize: 18, fontFamily: FONT.displayBlack, fontVariant: ['tabular-nums'] },
+  heroMacroUnit: { fontSize: 11, color: HERO_ON_DARK_MUTED, fontFamily: FONT.uiSemibold },
+
+  totals: { paddingHorizontal: 14, paddingVertical: 12, gap: 8 },
+  totalsHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
   totalsLabel: { fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.8 },
-  totalsValue: { fontSize: 15 },
-  mealCard: { padding: 14, borderWidth: 1, gap: 10 },
-  mealTop: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  mealName: { flex: 1, fontSize: 16, paddingVertical: 2 },
+  totalsSum: { fontSize: 12, fontVariant: ['tabular-nums'] },
+  totalsGrid: { flexDirection: 'row', gap: 8 },
+  totalsMacro: { flex: 1, fontSize: 10, fontVariant: ['tabular-nums'] },
+  mealCard: { padding: 14, gap: 10 },
+  mealTop: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  mealBadge: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
+  mealNameWrap: { flex: 1 },
+  dayLabel: { fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.8 },
   dayRow: { gap: 6, paddingVertical: 2 },
   dayChip: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 11, paddingVertical: 6 },
-  itemRow: { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 8 },
+  dayChipText: { fontSize: 12 },
+  itemRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 10, paddingVertical: 8 },
   itemName: { fontSize: 13 },
   itemMacro: { fontSize: 11, marginTop: 2 },
-  qtyInput: { width: 62, height: 44, borderWidth: 1, borderRadius: 9, textAlign: 'center', fontSize: 16, lineHeight: 20, paddingTop: 0, paddingBottom: 0, paddingHorizontal: 6, includeFontPadding: false },
-  unitWrap: { flexDirection: 'row', gap: 2, backgroundColor: 'transparent' },
+  itemHousehold: { fontSize: 11, marginTop: 1 },
+  qtyInput: { width: 62, height: 44, borderRadius: 9, textAlign: 'center', fontSize: 16, lineHeight: 20, paddingTop: 0, paddingBottom: 0, paddingHorizontal: 6, includeFontPadding: false },
+  unitWrap: { flexDirection: 'row', gap: 2 },
   unitChip: { paddingHorizontal: 7, paddingVertical: 6, borderRadius: 7 },
+  unitChipText: { fontSize: 11 },
   addFood: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, borderWidth: 1, borderStyle: 'dashed', borderRadius: 10, paddingVertical: 10 },
   addFoodText: { fontSize: 13 },
   swapBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, borderWidth: 1, borderRadius: 9, paddingVertical: 8 },
   swapBtnText: { fontSize: 11.5 },
   itemActionRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   moveBtn: { width: 34, height: 34, alignItems: 'center', justifyContent: 'center', borderRadius: 8 },
-  warnBox: { borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 9 },
+  warnBox: { paddingHorizontal: 12, paddingVertical: 9 },
   warnText: { fontSize: 12, lineHeight: 16 },
-  notesInput: { minHeight: 56, borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingTop: 9, fontSize: 14, textAlignVertical: 'top' },
-  addMeal: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderWidth: 1, borderRadius: 14, paddingVertical: 14, marginTop: 4 },
+  addMeal: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 14, marginTop: 4 },
   addMealText: { fontSize: 14 },
 })

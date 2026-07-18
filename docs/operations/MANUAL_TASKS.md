@@ -206,18 +206,33 @@
 ---
 
 ### MT-13 — Google Play Developer account ($25 USD) · 1️⃣ Solo una vez (pago único)
-**Estado:** EN ESPERA — esperar dinero la próxima semana
+**Estado:** CUENTA VERIFICADA (identidad aprobada 2026-07-10) — falta crear la app y el primer release
 
-**Pasos (cuando tengas los $25):**
-1. Ir a [play.google.com/console](https://play.google.com/console)
-2. Crear cuenta: **Payment: $25 USD** (único, no recurrente) con tarjeta de crédito/débito
-3. Verificar identidad (pueden pedir foto de cédula o pasaporte)
-4. Crear nueva app:
-   - Package name: `cl.evaapp.eva`
-   - Nombre: "EVA - Entrenamiento Personalizado"
-   - Default language: Spanish (Chile)
-5. Completar la sección "App content" (rating, content policy)
-6. Avísame cuando esté creada → yo configuro el resto de `eas.json`
+**Contexto (investigado y verificado contra docs oficiales 2026-07-10):**
+- El track **Internal testing** es el equivalente a TestFlight: hasta 100 testers, sin review de Google, builds disponibles en minutos (la PRIMERA publicación puede tardar hasta 48h), updates automáticos vía Play Store. NO requiere store listing, data safety, content rating ni declaraciones — esas solo bloquean closed/open/production.
+- Cuenta personal post nov-2023: para **producción pública** Google exige un closed test con 12 testers opt-in por 14 días consecutivos. NO afecta a internal testing.
+- La **primera subida de AAB debe ser manual** por la UI de Play Console (limitación de la Google Play Developer API; ver `expo/fyi/first-android-submission.md`). Desde la segunda, `eas submit` automatiza.
+- Google Play solo acepta **AAB** (no APK). El profile `production` de `eas.json` genera AAB (keystore remoto EAS); al subir el primer AAB, aceptar Play App Signing (default, botón Continue — la upload key de EAS se registra sola).
+
+**Pasos restantes (una vez):**
+1. Play Console → **Create app**: nombre "EVA - Entrenamiento Personalizado", idioma Spanish (Latin America), tipo App, Free, aceptar las 3 declaraciones (policies / export laws / Play App Signing ToS). El package `cl.evaapp.eva` queda fijado con la primera subida — es PERMANENTE.
+2. Testing → Internal testing → pestaña **Testers** → crear lista con el email del dev (y los que quieras, máx 100).
+3. Correr el workflow `mobile-build.yml` (app=mobile, platform=android, profile=**production**) → descargar el artifact `.aab` → subirlo MANUAL en Internal testing → publicar release.
+4. Abrir el **link de opt-in** (pestaña Testers) en el celular con la cuenta Google de la lista → "Become a tester" → instalar desde Play Store.
+5. **Service account** (para automatizar `eas submit`):
+   a. [console.cloud.google.com](https://console.cloud.google.com) → crear proyecto (o reusar) → IAM → Service Accounts → Create (ej. `eas-submit-eva`), sin roles IAM.
+   b. En el service account → Keys → Add key → JSON → descargar.
+   c. En la API Library del MISMO proyecto → habilitar **Google Play Android Developer API**.
+   d. Play Console → **Users and permissions** → Invite new user → pegar el email del service account (`...@<proyecto>.iam.gserviceaccount.com`) → App permissions: agregar la app EVA → permiso **"Release apps to testing tracks"** (la vieja página "API access" ya no se usa; Google eliminó el requisito de linkear el Cloud project).
+   e. Guardar el JSON como GitHub Secret **`GOOGLE_SERVICE_ACCOUNT_JSON`** (contenido completo del archivo). Si `eas submit` da 403 recién configurado: la propagación de permisos puede tardar 24-48h.
+   - **Gotcha org policy (visto 2026-07-10):** si el proyecto GCP está dentro de una organización, la creación de la clave JSON falla con `iam.disableServiceAccountKeyCreation` (secure-by-default, orgs creadas desde may-2024). Fix A: crear el proyecto con Location = "No organization" (OJO: una cuenta administrada por la org NO puede — deniega `resourcemanager.projects.create` sobre "Sin organización"; cambiar al Gmail personal del Play Console, que sí puede, y crear el proyecto ahí). Fix B: override de la política en el proyecto (requiere rol Organization Policy Administrator a NIVEL org; el Super Admin de Workspace puede autootorgárselo) → Organization Policies → `iam.disableServiceAccountKeyCreation` → Override parent's policy → Enforcement Off → crear la clave → reactivar (no es retroactiva, la clave sigue viva).
+6. Desde ahí: workflow con profile=production + `submit_android=true` → el step `Submit AAB to Google Play` sube automático al track internal (track definido en `eas.json` → `submit.production.android`).
+
+**Gotchas de versionCode y errores de `eas submit` (verificados):**
+- El primer AAB (subida manual) DEBE salir del mismo workflow (build EAS con `appVersionSource: remote` + `autoIncrement`) para que el contador remoto de versionCode quede alineado con Play. Si alguna vez se sube un binario de otro origen, el siguiente submit falla con "does not allow any existing users to upgrade" → sincronizar con `eas build:version:set`.
+- "The app is missing the required metadata" en `eas submit` = app sin release previo en el track (workaround: `releaseStatus: draft` en eas.json); la primera subida manual lo evita.
+- "Changes cannot be sent for review automatically" = la app/track quedó en estado rejected en Play → flag `changesNotSentForReview: true`.
+- `releaseStatus` default = `completed` (publica directo en el track); EXPO_TOKEN NO reemplaza el service account JSON — son credenciales distintas (Expo vs Google).
 
 ---
 
@@ -887,6 +902,29 @@ Al quedar inscrita la sociedad (EVA Technology SpA, en proceso jun-2026), revisa
 
 ---
 
+## MT-40 — Sentry RN (app mobile) + source maps EAS · ⏳ Antes del primer build EAS de E0
+
+Telemetría de errores para `apps/mobile` (E0-G1). El código ya está cableado y **gateado por env**:
+sin `EXPO_PUBLIC_SENTRY_DSN` es no-op total (cero red, cero riesgo de crash). Falta la config manual:
+
+**Pasos:**
+1. En [sentry.io](https://sentry.io) → New Project → **React Native** → nombre `eva-mobile` (proyecto
+   separado del web `eva-web` de MT-30; distinto SDK y volumen de eventos).
+2. Copiar el DSN (formato `https://abc123@o123456.ingest.sentry.io/789`).
+3. En **EAS** (env vars del build, `eas.json` o EAS dashboard → Environment variables):
+   - `EXPO_PUBLIC_SENTRY_DSN` = el DSN → Production (y Preview si se quiere telemetría en staging).
+   - **No** setearlo en dev local: el init ya ignora `__DEV__` (`enabled: !__DEV__`), pero mantenerlo
+     fuera del entorno de desarrollo evita ruido.
+4. `@sentry/react-native` es **lib nativa** → requiere un **build EAS nuevo** (batch nativo de E0,
+   junto con las demás libs nativas de la etapa). No llega por OTA.
+
+**Pendiente aparte — source maps EAS (requiere el DSN del paso 2, por eso se difiere):**
+- Configurar upload de source maps en el build EAS (plugin `@sentry/react-native/expo` +
+  `SENTRY_AUTH_TOKEN`/`SENTRY_ORG`/`SENTRY_PROJECT` como secrets del build). Sin esto, los stack
+  traces en Sentry salen minificados. Hacerlo una vez que exista el proyecto y el DSN.
+
+---
+
 ## Nota — Search Console y páginas /enterprise
 
 Search Console removal de `/enterprise` y `/legal/contrato-enterprise`: **INNECESARIO** (verificado 2026-06-11, Google no tiene nada indexado de esas rutas). El `noindex` agregado en ambas páginas queda como cinturón de seguridad preventivo.
@@ -903,3 +941,13 @@ Search Console removal de `/enterprise` y `/legal/contrato-enterprise`: **INNECE
 
 Notas: el flip de `NEXT_PUBLIC_FLOW_ENABLED` exige redeploy (inlined build-time). Rollback = quitar/poner `false` + redeploy (kill-switch, cero regresion MP). Gotcha QA Preview: `NEXT_PUBLIC_SITE_URL` de Preview apunta a un alias fijo → el retorno de Webpay cae en un dominio sin sesion (rebote a /login); en prod no ocurre (eva-app.cl).
 
+
+## MT-42 — Google Sign-In mobile: credenciales iOS/Android reales · ⏳ Cuando el CEO quiera activar login Google en la app
+
+El plugin `@react-native-google-signin/google-signin` fue REMOVIDO de `apps/mobile/app.json` (2026-07-09) porque el placeholder `iosUrlScheme` rompía la validación de TestFlight (RFC1738). El código JS queda fail-closed (`isGoogleSignInAvailable()` oculta el botón sin credenciales). Para activar:
+
+1. Google Cloud Console (mismo proyecto del client web `NEXT_PUBLIC_GOOGLE_CLIENT_ID`) → Credentials → Create OAuth client ID → tipo **iOS** (bundle `cl.evaapp.eva`) → copiar el client ID → el `iosUrlScheme` es ese ID INVERTIDO (`com.googleusercontent.apps.XXXX`).
+2. Crear también OAuth client tipo **Android** (package `cl.evaapp.eva` + SHA1 del keystore EAS — `eas credentials`).
+3. Restaurar en `app.json` plugins: `["@react-native-google-signin/google-signin", { "iosUrlScheme": "<invertido>" }]`.
+4. `EXPO_PUBLIC_GOOGLE_CLIENT_ID` (el **web** client ID, mismo del sitio) en `eas.json` env de prodpreview/production.
+5. Rebuild ambas plataformas (lib nativa).

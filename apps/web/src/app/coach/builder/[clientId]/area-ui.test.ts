@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { areaShortLabel, buildAreaVMs } from './area-ui'
-import { LEGACY_SECTION_AREA_ID } from '@/lib/workout-areas'
+import { LEGACY_SECTION_AREA_ID } from '@eva/workout-engine'
 import type { WorkoutArea } from '@/domain/workout/types'
 
 const sys = (id: string, name: string, slug: string, sort_order: number): WorkoutArea =>

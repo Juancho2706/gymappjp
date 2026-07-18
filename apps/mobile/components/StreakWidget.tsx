@@ -47,7 +47,7 @@ export function StreakWidget({ streak }: Props) {
         </Text>
       ) : (
         <>
-          <Text style={[styles.value, { color: ORANGE, fontFamily: 'Montserrat_700Bold' }]}>
+          <Text style={[styles.value, { color: ORANGE, fontFamily: 'Archivo_700Bold' }]}>
             {streak}
           </Text>
           <Text style={[styles.label, { color: ORANGE, fontFamily: theme.fontSans }]}>

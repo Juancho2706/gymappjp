@@ -8,7 +8,7 @@ import {
     updateSectionTemplate,
     type WorkoutSectionTemplateRow,
 } from '@/infrastructure/db/workout.repository'
-import { nextCustomSortOrder, slugifyAreaName } from '@/lib/workout-areas'
+import { nextCustomSortOrder, slugifyAreaName } from '@eva/workout-engine'
 
 type DB = SupabaseClient<Database>
 

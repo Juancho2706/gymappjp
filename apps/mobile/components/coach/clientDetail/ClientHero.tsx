@@ -1,125 +1,267 @@
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native'
+import type { ReactNode } from 'react'
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native'
 import { MotiView } from 'moti'
-import { AlertTriangle, Clock, FileText, Flame, MessageCircle } from 'lucide-react-native'
+import { Activity, Calendar, Download, Flame, Minus, MoreVertical, Target, TrendingDown, TrendingUp } from 'lucide-react-native'
 import { useTheme } from '../../../context/ThemeContext'
-import { Avatar, Badge, Card } from '../../../components'
+import { Badge, Card } from '../../../components'
+import { GlowBorderCard } from '../../../components/GlowBorderCard'
+import { HapticPressable } from '../../../components/HapticPressable'
+import { FONT } from '../../../lib/typography'
+import { hexToChannels } from '../../../lib/theme'
+import { shadow } from '../../../lib/shadows'
 
-export interface HeroChip { icon: any; label: string; value: string; color?: string }
+// Neutrales de superficie inversa (fijos en light+dark porque la Card del hero es
+// siempre una superficie ink oscura — mirror del token-contract §2/§3, mismo
+// patron que StatCard/InfoTooltip). El acento de MARCA (theme.primary) SI viene
+// del branding white-label.
+const ON_DARK = '#F4F6F8' // ink-50
+const ON_DARK_MUTED = '#939DAB'
+const EMBER = '#FF8A5B' // ember-400 — flama de racha / subida de peso
+const WARNING = '#F5A524' // warning-500 — plan bajo
+// Iconos del TopBar (viven sobre la superficie clara de la app, no sobre el hero):
+// texto-strong por esquema (lucide toma color prop, no clase) — mirror InfoTooltip.
+const STRONG_ICON = { light: '#101828', dark: '#F4F6F8' } as const
 
-// Fixed inverse-surface neutrals (token-contract §2/§3 — same in light & dark,
-// since the hero Card is always a dark ink surface). Mirrors StatCard internals.
-const TEXT_ON_DARK = '#F4F6F8' // ink-50
-const TEXT_ON_DARK_MUTED = '#939DAB'
-const DANGER_ON_DARK = '#FF9CB0' // danger-700 (dark) — legible on the ink hero
-const FLAME = '#F5A524' // warning-500 (streak)
+export type HeroStatusLevel = 'ok' | 'attention' | 'urgent' | 'neutral'
+
+const STATUS_TONE: Record<HeroStatusLevel, 'success' | 'warning' | 'danger' | 'neutral'> = {
+  ok: 'success',
+  attention: 'warning',
+  urgent: 'danger',
+  neutral: 'neutral',
+}
+// Anillo del avatar por nivel — tokens DS (className, brand/scheme-aware).
+const RING_CLASS: Record<HeroStatusLevel, string> = {
+  ok: 'bg-success-500',
+  attention: 'bg-warning-500',
+  urgent: 'bg-danger-500',
+  neutral: 'bg-ink-500',
+}
+
+export interface HeroChips {
+  weightValue: number | null
+  weightDelta: number | null
+  adherencePct: number
+  workoutsThisWeek: number
+  workoutsTarget: number
+  mealsDone: number | null
+  mealsTotal: number | null
+  nutritionPct: number
+}
+
+export interface ClientHeroProps {
+  name: string
+  email: string
+  eyebrow: string
+  statusLabel: string
+  statusLevel: HeroStatusLevel
+  reasons?: string[]
+  streak: number
+  lastActivityLabel: string
+  sinceLabel: string
+  trainingAge: string
+  chips: HeroChips
+  onMore: () => void
+  /** Genera y comparte el dossier PDF del alumno (E5-13). */
+  onExportPdf?: () => void
+  /** Muestra spinner en el botón mientras se genera el dossier. */
+  exportingPdf?: boolean
+}
+
+// Fondo del hero en DARK — paridad con el web, que fuerza
+// `dark:bg-[color-mix(in_srgb,var(--surface-card)_55%,var(--surface-app))]`
+// (≈ #11151B, near-black) porque el `surface-inverse` dark (#2A323D) leia "plomo"
+// y lavaba el texto (feedback CEO). Se DERIVA de los mismos tokens del theme
+// (theme.card = surface-card, theme.background = surface-app) con los mismos
+// porcentajes 55/45 del color-mix web — no es un hex crudo autoral. En LIGHT no
+// se aplica: la Card conserva `bg-surface-inverse` (ink-950).
+function mixSurfaces(cardHex: string, appHex: string): string {
+  const [cr, cg, cb] = hexToChannels(cardHex).split(' ').map(Number)
+  const [ar, ag, ab] = hexToChannels(appHex).split(' ').map(Number)
+  const m = (c: number, a: number) => Math.round(c * 0.55 + a * 0.45)
+  return `rgb(${m(cr, ar)}, ${m(cg, ag)}, ${m(cb, ab)})`
+}
+
+function initialsOf(name: string): string {
+  return (
+    name
+      .split(' ')
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((w) => w[0])
+      .join('')
+      .toUpperCase() || '?'
+  )
+}
 
 export function ClientHero({
   name,
   email,
+  eyebrow,
   statusLabel,
-  statusTone,
-  attention,
-  trainingAge,
+  statusLevel,
+  reasons = [],
   streak,
+  lastActivityLabel,
+  sinceLabel,
+  trainingAge,
   chips,
-  onWhatsApp,
+  onMore,
   onExportPdf,
-  exporting,
-}: {
-  name: string
-  email: string
-  statusLabel: string
-  statusTone: 'success' | 'muted'
-  attention?: string | null
-  trainingAge: string
-  streak: number
-  chips: HeroChip[]
-  onWhatsApp: () => void
-  onExportPdf: () => void
-  exporting?: boolean
-}) {
-  const { theme } = useTheme()
+  exportingPdf = false,
+}: ClientHeroProps) {
+  const { theme, resolvedScheme } = useTheme()
+  const iconStrong = STRONG_ICON[resolvedScheme]
+  // Dark: near-black derivado (mezcla card→app) para no leer "plomo"; light: keep surface-inverse.
+  const heroBg = resolvedScheme === 'dark' ? mixSurfaces(theme.card, theme.background) : null
+
   return (
-    <MotiView
-      from={{ opacity: 0, translateY: 12 }}
-      animate={{ opacity: 1, translateY: 0 }}
-      transition={{ type: 'timing', duration: 360 }}
-    >
-      <Card variant="inverse" padding={18} radius="card" style={styles.card}>
-        <View style={styles.top}>
-          <Avatar name={name} size="lg" ring="sport" />
-          <View style={{ flex: 1, minWidth: 0, gap: 3 }}>
-            <Text numberOfLines={1} style={[styles.name, { color: TEXT_ON_DARK }]}>{name}</Text>
-            <Text numberOfLines={1} style={[styles.email, { color: TEXT_ON_DARK_MUTED }]}>{email}</Text>
-            <View style={styles.metaRow}>
-              <Badge label={statusLabel} tone={statusTone === 'success' ? 'success' : 'neutral'} />
-              <View style={styles.metaItem}>
-                <Clock size={11} color={TEXT_ON_DARK_MUTED} />
-                <Text style={[styles.metaTxt, { color: TEXT_ON_DARK_MUTED }]}>{trainingAge}</Text>
+    <MotiView from={{ opacity: 0, translateY: 12 }} animate={{ opacity: 1, translateY: 0 }} transition={{ type: 'timing', duration: 360 }} style={styles.root}>
+      {/* TopBar: eyebrow "{PROGRAMA} · Semana {N}" + nombre · acciones */}
+      <View style={styles.topbar}>
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text numberOfLines={1} className="text-muted" style={styles.eyebrow}>{eyebrow}</Text>
+          <Text numberOfLines={2} className="text-strong" style={styles.name}>{name}</Text>
+        </View>
+        <View style={styles.topActions}>
+          {/* Export PDF — genera y comparte el dossier del alumno (E5-13, expo-print). */}
+          {onExportPdf ? (
+            <HapticPressable
+              onPress={exportingPdf ? undefined : onExportPdf}
+              disabled={exportingPdf}
+              accessibilityRole="button"
+              accessibilityLabel="Exportar dossier PDF"
+              accessibilityState={{ disabled: exportingPdf, busy: exportingPdf }}
+              testID="ficha-export-pdf"
+              className="rounded-control border border-default bg-surface-card"
+              style={[styles.iconBtn, shadow('sm', resolvedScheme), exportingPdf ? { opacity: 0.6 } : null]}
+            >
+              {exportingPdf ? (
+                <ActivityIndicator size="small" color={iconStrong} />
+              ) : (
+                <Download size={18} color={iconStrong} strokeWidth={2} />
+              )}
+            </HapticPressable>
+          ) : null}
+          <HapticPressable onPress={onMore} accessibilityRole="button" accessibilityLabel="Más opciones" testID="ficha-more" className="rounded-control border border-default bg-surface-card" style={[styles.iconBtn, shadow('sm', resolvedScheme)]}>
+            <MoreVertical size={18} color={iconStrong} strokeWidth={2} />
+          </HapticPressable>
+        </View>
+      </View>
+
+      {/* Hero inverso con marco animado de marca (GlowBorderCard). */}
+      <GlowBorderCard>
+        <Card variant="inverse" padding={20} radius="card" style={{ borderColor: 'transparent', gap: 0, ...(heroBg ? { backgroundColor: heroBg } : null) }}>
+          <View style={styles.identityRow}>
+            <View className={RING_CLASS[statusLevel]} style={styles.ring}>
+              <View className="bg-surface-inverse" style={[styles.ringInner, { borderColor: theme.card }]}>
+                <Text className="font-display-bold text-sport-400" style={styles.initials}>{initialsOf(name)}</Text>
               </View>
-              {streak > 0 ? (
-                <View style={styles.metaItem}>
-                  <Flame size={11} color={FLAME} />
-                  <Text style={[styles.metaTxt, { color: FLAME, fontFamily: 'HankenGrotesk_700Bold' }]}>{streak}d racha</Text>
-                </View>
-              ) : null}
+            </View>
+            <View style={{ flex: 1, minWidth: 0, gap: 6 }}>
+              <View style={styles.badgeRow}>
+                <Badge tone={STATUS_TONE[statusLevel]} size="sm">{statusLabel}</Badge>
+                {reasons.length > 0 ? (
+                  <Text style={[styles.reasons, { color: ON_DARK_MUTED }]}>{reasons.join(' · ')}</Text>
+                ) : null}
+              </View>
+              <Text numberOfLines={1} style={[styles.email, { color: ON_DARK_MUTED }]}>{email}</Text>
+              <View style={styles.metaRow}>
+                <MetaItem icon={<Flame size={14} color={EMBER} />} text={`${streak} d de racha de actividad`} color={ON_DARK_MUTED} />
+                <MetaItem icon={<Activity size={14} className="text-sport-400" />} text={lastActivityLabel} color={ON_DARK_MUTED} />
+                <MetaItem icon={<Calendar size={14} color={ON_DARK_MUTED} />} text={`Desde ${sinceLabel}`} color={ON_DARK_MUTED} />
+                <MetaItem icon={<Target size={14} color={ON_DARK_MUTED} />} text={`~${trainingAge}`} color={ON_DARK_MUTED} />
+              </View>
             </View>
           </View>
-        </View>
 
-        {attention ? (
-          <View style={styles.attention}>
-            <AlertTriangle size={14} color={DANGER_ON_DARK} />
-            <Text style={[styles.attentionTxt, { color: DANGER_ON_DARK }]}>{attention}</Text>
+          {/* 4 chips 2×2 (el programa/semana vive en el eyebrow, no en un chip). */}
+          <View style={styles.chipGrid}>
+            <HeroChip label="Peso" value={chips.weightValue != null && chips.weightValue > 0 ? `${chips.weightValue} kg` : '—'} sub={<WeightDeltaSub delta={chips.weightDelta} />} />
+            <HeroChip label="Adherencia" value={`${chips.adherencePct}%`} sub={<ChipBar value={chips.adherencePct} />} />
+            <HeroChip label="Workouts" value={`${chips.workoutsThisWeek}/${chips.workoutsTarget}`} sub={<Text style={[styles.chipSub, { color: ON_DARK_MUTED }]}>esta semana</Text>} />
+            <HeroChip
+              label="Comidas hoy"
+              value={chips.mealsDone != null && chips.mealsTotal != null ? `${chips.mealsDone}/${chips.mealsTotal}` : '—'}
+              sub={<Text style={[styles.chipSub, { color: chips.nutritionPct >= 80 ? theme.success : WARNING }]}>{chips.nutritionPct}% plan</Text>}
+            />
           </View>
-        ) : null}
-
-        <View style={styles.chips}>
-          {chips.map((c, i) => {
-            const Icon = c.icon
-            return (
-              <View key={i} className="border border-inverse rounded-md" style={styles.chip}>
-                <View style={styles.chipTop}>
-                  <Icon size={13} color={c.color ?? theme.primary} />
-                  <Text style={[styles.chipLabel, { color: TEXT_ON_DARK_MUTED }]} numberOfLines={1}>{c.label}</Text>
-                </View>
-                <Text style={[styles.chipVal, { color: c.color ?? TEXT_ON_DARK }]} numberOfLines={1}>{c.value}</Text>
-              </View>
-            )
-          })}
-        </View>
-
-        <View style={styles.actions}>
-          <TouchableOpacity activeOpacity={0.85} onPress={onWhatsApp} style={[styles.actionBtn, { backgroundColor: '#25D36622', borderColor: '#25D36655' }]}>
-            <MessageCircle size={16} color="#25D366" />
-            <Text style={[styles.actionTxt, { color: '#25D366' }]}>WhatsApp</Text>
-          </TouchableOpacity>
-          <TouchableOpacity activeOpacity={0.85} onPress={onExportPdf} disabled={exporting} style={[styles.actionBtn, { backgroundColor: theme.primary + '26', borderColor: theme.primary + '55', opacity: exporting ? 0.6 : 1 }]}>
-            <FileText size={16} color={theme.primary} />
-            <Text style={[styles.actionTxt, { color: theme.primary }]}>{exporting ? 'Generando…' : 'Export PDF'}</Text>
-          </TouchableOpacity>
-        </View>
-      </Card>
+        </Card>
+      </GlowBorderCard>
     </MotiView>
   )
 }
 
+function MetaItem({ icon, text, color }: { icon: ReactNode; text: string; color: string }) {
+  return (
+    <View style={styles.metaItem}>
+      {icon}
+      <Text style={[styles.metaTxt, { color }]}>{text}</Text>
+    </View>
+  )
+}
+
+function WeightDeltaSub({ delta }: { delta: number | null }) {
+  const { theme } = useTheme()
+  if (delta == null || delta === 0) {
+    return (
+      <View style={styles.subRow}>
+        <Minus size={12} color={ON_DARK_MUTED} />
+        <Text style={[styles.chipSub, { color: ON_DARK_MUTED }]}>sin cambio</Text>
+      </View>
+    )
+  }
+  const up = delta > 0
+  const color = up ? EMBER : theme.success // subida = ember, bajada = success
+  return (
+    <View style={styles.subRow}>
+      {up ? <TrendingUp size={12} color={color} /> : <TrendingDown size={12} color={color} />}
+      <Text style={[styles.chipSub, { color }]}>{up ? `+${Math.abs(delta).toFixed(1)}` : delta.toFixed(1)} kg</Text>
+    </View>
+  )
+}
+
+function ChipBar({ value }: { value: number }) {
+  const pct = Math.min(100, Math.max(0, value))
+  return (
+    <View style={styles.barTrack}>
+      <View className="bg-sport-500" style={{ width: `${pct}%`, height: '100%', borderRadius: 99 }} />
+    </View>
+  )
+}
+
+function HeroChip({ label, value, sub }: { label: string; value: string; sub: ReactNode }) {
+  return (
+    <View style={styles.chip}>
+      <Text numberOfLines={1} style={[styles.chipLabel, { color: ON_DARK_MUTED }]}>{label}</Text>
+      <Text numberOfLines={1} style={[styles.chipVal, { color: ON_DARK }]}>{value}</Text>
+      <View style={{ marginTop: 2 }}>{sub}</View>
+    </View>
+  )
+}
+
 const styles = StyleSheet.create({
-  card: { gap: 14 },
-  top: { flexDirection: 'row', alignItems: 'center', gap: 14 },
-  name: { fontSize: 19, letterSpacing: -0.3, fontFamily: 'Archivo_800ExtraBold' },
-  email: { fontSize: 12.5, fontFamily: 'HankenGrotesk_400Regular' },
-  metaRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 4, flexWrap: 'wrap' },
-  metaItem: { flexDirection: 'row', alignItems: 'center', gap: 3 },
-  metaTxt: { fontSize: 11, fontFamily: 'HankenGrotesk_400Regular' },
-  attention: { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 9, backgroundColor: 'rgba(244,54,90,0.14)', borderColor: 'rgba(244,54,90,0.40)' },
-  attentionTxt: { fontSize: 12, flex: 1, fontFamily: 'HankenGrotesk_600SemiBold' },
-  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  chip: { width: '47%', flexGrow: 1, backgroundColor: 'rgba(255,255,255,0.07)', paddingVertical: 9, paddingHorizontal: 10, gap: 3, alignItems: 'flex-start' },
-  chipTop: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  chipLabel: { fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.4, fontFamily: 'HankenGrotesk_600SemiBold' },
-  chipVal: { fontSize: 16, letterSpacing: -0.2, fontFamily: 'Archivo_900Black', fontVariant: ['tabular-nums'] },
-  actions: { flexDirection: 'row', gap: 10 },
-  actionBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, paddingVertical: 11, borderWidth: 1, borderRadius: 14 },
-  actionTxt: { fontSize: 13, fontFamily: 'HankenGrotesk_700Bold' },
+  root: { gap: 12 },
+  topbar: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 },
+  eyebrow: { fontSize: 10, textTransform: 'uppercase', letterSpacing: 1, fontFamily: FONT.uiBold },
+  name: { fontSize: 24, letterSpacing: -1.2, marginTop: 2, fontFamily: FONT.displayBlack },
+  topActions: { flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 0 },
+  iconBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+  identityRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 16 },
+  ring: { width: 64, height: 64, borderRadius: 32, padding: 2, flexShrink: 0 },
+  ringInner: { flex: 1, borderRadius: 30, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
+  initials: { fontSize: 20, letterSpacing: -0.4 },
+  badgeRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8 },
+  reasons: { flex: 1, minWidth: 0, fontSize: 11.5, fontFamily: FONT.ui },
+  email: { fontSize: 12.5, fontFamily: FONT.ui },
+  metaRow: { flexDirection: 'row', flexWrap: 'wrap', columnGap: 14, rowGap: 4, marginTop: 2 },
+  metaItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  metaTxt: { fontSize: 11.5, fontFamily: FONT.ui },
+  chipGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 14 },
+  chip: { width: '47%', flexGrow: 1, backgroundColor: 'rgba(255,255,255,0.07)', borderColor: 'rgba(255,255,255,0.10)', borderWidth: 1, borderRadius: 14, paddingVertical: 10, paddingHorizontal: 10 },
+  chipLabel: { fontSize: 10, letterSpacing: 0.4, fontFamily: FONT.uiSemibold },
+  chipVal: { fontSize: 16, letterSpacing: -0.2, marginTop: 3, fontFamily: FONT.displayBlack, fontVariant: ['tabular-nums'] },
+  chipSub: { fontSize: 10.5, fontFamily: FONT.uiBold },
+  subRow: { flexDirection: 'row', alignItems: 'center', gap: 3 },
+  barTrack: { height: 4, borderRadius: 99, overflow: 'hidden', backgroundColor: 'rgba(255,255,255,0.10)', marginTop: 3 },
 })

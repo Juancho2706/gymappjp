@@ -117,10 +117,10 @@ export function BrandUpsell({ tier }: { tier: SubscriptionTier }) {
                     href="/coach/subscription?upgrade=pro"
                     className="mt-5 flex h-12 w-full items-center justify-center gap-2 rounded-control px-6 text-sm font-bold transition-all bg-[var(--sport-500)] text-[var(--text-on-sport)] shadow-[var(--glow-sport)] hover:bg-[var(--cta-fill)]"
                 >
-                    Personalizá tu app con Pro
+                    Personaliza tu app con Pro
                     <ArrowRight className="h-4 w-4" />
                 </Link>
-                <p className="mt-3 text-xs text-on-dark-muted">Sin permanencia · Cancelá cuando quieras</p>
+                <p className="mt-3 text-xs text-on-dark-muted">Sin permanencia · Cancela cuando quieras</p>
             </div>
         </div>
     )

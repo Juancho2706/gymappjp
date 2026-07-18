@@ -1,4 +1,4 @@
-import type { ReconciledSessionLog } from './session-logs.reconcile'
+import type { ReconciledSessionLog } from '@eva/workout-engine'
 
 /**
  * Snapshot LOCAL de las series CONFIRMADAS de la sesión (BUG 2 — "la página se cae y aparece vacía").

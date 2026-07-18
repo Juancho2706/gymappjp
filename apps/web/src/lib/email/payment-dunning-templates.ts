@@ -21,8 +21,8 @@ export type PaymentFailedContext = {
 export function buildPaymentFailedEmail(ctx: PaymentFailedContext) {
     const subject = 'No pudimos procesar el pago de tu suscripción EVA'
     const accessLine = ctx.accessUntil
-        ? `<p style="margin:0 0 20px;font-size:14px;color:#374151;line-height:1.6;">Conservás el acceso hasta el <strong style="color:#111827;">${ctx.accessUntil}</strong>. Mercado Pago reintentará el cobro automáticamente, pero te recomendamos actualizar tu tarjeta para no perder el servicio.</p>`
-        : `<p style="margin:0 0 20px;font-size:14px;color:#374151;line-height:1.6;">Mercado Pago reintentará el cobro automáticamente. Actualizá tu tarjeta para no perder el acceso.</p>`
+        ? `<p style="margin:0 0 20px;font-size:14px;color:#374151;line-height:1.6;">Conservas el acceso hasta el <strong style="color:#111827;">${ctx.accessUntil}</strong>. Mercado Pago reintentará el cobro automáticamente, pero te recomendamos actualizar tu tarjeta para no perder el servicio.</p>`
+        : `<p style="margin:0 0 20px;font-size:14px;color:#374151;line-height:1.6;">Mercado Pago reintentará el cobro automáticamente. Actualiza tu tarjeta para no perder el acceso.</p>`
     const body = `
 ${badge('PAGO RECHAZADO', '#F59E0B')}
 <h1 style="margin:12px 0 16px;font-size:22px;font-weight:800;color:#111827;line-height:1.3;">
@@ -34,7 +34,7 @@ ${badge('PAGO RECHAZADO', '#F59E0B')}
 ${accessLine}
 ${ctaButton('Actualizar mi tarjeta', ctx.subscriptionUrl)}
 <p style="margin:20px 0 0;font-size:13px;color:#6b7280;line-height:1.6;">
-  Si ya lo resolviste, podés ignorar este correo.
+  Si ya lo resolviste, puedes ignorar este correo.
 </p>`
     return { subject, html: wrapEmailLayout(body) }
 }

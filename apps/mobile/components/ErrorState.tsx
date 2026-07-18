@@ -15,14 +15,14 @@ interface ErrorStateProps {
  * Estado de ERROR (Ola 0) — distinto de EmptyState. Para fallos de red/servidor
  * con acción de reintentar. NUNCA disfrazar un error de red como "sin datos".
  */
-export function ErrorState({ icon: Icon = AlertTriangle, title = 'No pudimos cargar', subtitle = 'Revisá tu conexión e intentá de nuevo.', onRetry, retryLabel = 'Reintentar' }: ErrorStateProps) {
+export function ErrorState({ icon: Icon = AlertTriangle, title = 'No pudimos cargar', subtitle = 'Revisa tu conexión e intenta de nuevo.', onRetry, retryLabel = 'Reintentar' }: ErrorStateProps) {
   const { theme } = useTheme()
   return (
     <View style={styles.wrap}>
       <View style={[styles.iconWrap, { backgroundColor: theme.destructive + '14', borderColor: theme.destructive + '33', borderRadius: theme.radius['2xl'] }]}>
         <Icon size={28} color={theme.destructive} strokeWidth={1.75} />
       </View>
-      <Text style={[styles.title, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>{title}</Text>
+      <Text style={[styles.title, { color: theme.foreground, fontFamily: 'Archivo_700Bold' }]}>{title}</Text>
       {subtitle ? <Text style={[styles.sub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{subtitle}</Text> : null}
       {onRetry ? <Button label={retryLabel} variant="outline" onPress={onRetry} /> : null}
     </View>

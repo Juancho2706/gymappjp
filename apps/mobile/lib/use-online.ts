@@ -11,7 +11,8 @@ export function useOnline(onReconnect?: () => void): boolean {
   useEffect(() => {
     let wasOffline = false
     const unsub = NetInfo.addEventListener((state) => {
-      const isUp = Boolean(state.isConnected) && state.isInternetReachable !== false
+      // Optimista: null/undefined (iOS aún resolviendo) = ONLINE. Offline SOLO con negativa explícita.
+      const isUp = state.isConnected !== false && state.isInternetReachable !== false
       setOnline(isUp)
       if (isUp && wasOffline) onReconnect?.()
       wasOffline = !isUp
@@ -24,5 +25,6 @@ export function useOnline(onReconnect?: () => void): boolean {
 /** Chequeo puntual (no-hook) del estado de conexión. */
 export async function checkOnline(): Promise<boolean> {
   const state = await NetInfo.fetch()
-  return Boolean(state.isConnected) && state.isInternetReachable !== false
+  // Optimista: null/undefined = ONLINE; offline SOLO con isConnected/isInternetReachable === false explícito.
+  return state.isConnected !== false && state.isInternetReachable !== false
 }

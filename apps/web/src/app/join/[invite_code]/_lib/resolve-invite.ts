@@ -34,7 +34,7 @@ export type InviteResolution =
           primaryColor: string | null
           logoUrl: string | null
           welcomeMessage: string | null
-          /** Where the new alumno logs in (also the "ya tenés cuenta" link). */
+          /** Where the new alumno logs in (also the "ya tienes cuenta" link). */
           loginHref: string
       }
     | {

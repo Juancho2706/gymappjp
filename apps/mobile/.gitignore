@@ -36,6 +36,9 @@ yarn-error.*
 # EAS local credentials (contains p12 password)
 credentials.json
 
+# Google Play service account key (eas submit android — inyectado en CI desde secret)
+google-service-account.json
+
 # typescript
 *.tsbuildinfo
 

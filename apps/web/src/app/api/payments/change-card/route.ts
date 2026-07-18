@@ -86,7 +86,7 @@ export async function POST(request: Request) {
         // Consentimiento DEDICADO (Ley 19.496/21.398): versión vigente obligatoria (evidencia SERNAC).
         if (acceptedTermsVersion !== CARD_CHANGE_DISCLOSURE.version) {
             return NextResponse.json(
-                { error: 'Debés aceptar las condiciones vigentes del cambio de tarjeta.', code: 'TERMS_OUTDATED' },
+                { error: 'Debes aceptar las condiciones vigentes del cambio de tarjeta.', code: 'TERMS_OUTDATED' },
                 { status: 400 }
             )
         }
@@ -122,7 +122,7 @@ export async function POST(request: Request) {
                     message: error instanceof Error ? error.message : String(error),
                 })
                 return NextResponse.json(
-                    { error: 'No se pudo iniciar el cambio de tarjeta con Webpay. Intentá de nuevo.', code: 'GATEWAY_ERROR' },
+                    { error: 'No se pudo iniciar el cambio de tarjeta con Webpay. Intenta de nuevo.', code: 'GATEWAY_ERROR' },
                     { status: 502 }
                 )
             }

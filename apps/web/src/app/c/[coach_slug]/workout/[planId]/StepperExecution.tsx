@@ -112,7 +112,7 @@ export function StepperExecution({ steps, currentIndex, onIndexChange, renderSte
                 </NavButton>
             </div>
 
-            {/* Rail de progreso: segmentos tappables (saltá a cualquier paso, incluso a editar). */}
+            {/* Rail de progreso: segmentos tappables (salta a cualquier paso, incluso a editar). */}
             <div role="group" aria-label="Progreso de ejercicios" className="mb-4 flex items-stretch gap-1">
                 {steps.map((s, i) => {
                     const state = i === idx ? 'active' : s.complete ? 'done' : 'upcoming'

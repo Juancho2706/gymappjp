@@ -15,7 +15,7 @@ export type LoginState = {
     success?: boolean
 }
 
-const GENERIC_ERROR = 'No pudimos verificar tus credenciales. Revisá email y contraseña.'
+const GENERIC_ERROR = 'No pudimos verificar tus credenciales. Revisa email y contraseña.'
 
 export async function loginAction(
     _prevState: LoginState,

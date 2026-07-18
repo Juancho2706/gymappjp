@@ -11,7 +11,7 @@ export const metadata = { title: 'Auditoría' }
 const AUDIT_INFO = [
     {
         heading: '¿Qué es esta sección?',
-        body: 'Registro inmutable de todas las acciones administrativas realizadas en el panel CEO. Cada vez que modificás un coach, suspendés un trial, o cambiás un tier, queda un log aquí con el admin que lo hizo, la fecha, y los datos que cambiaron.',
+        body: 'Registro inmutable de todas las acciones administrativas realizadas en el panel CEO. Cada vez que modificas un coach, suspendes un trial, o cambias un tier, queda un log aquí con el admin que lo hizo, la fecha, y los datos que cambiaron.',
     },
     {
         heading: 'Columnas',
@@ -23,7 +23,7 @@ const AUDIT_INFO = [
     },
     {
         heading: 'Filtros',
-        body: 'Podés filtrar por tipo de acción, rango de fechas (Desde / Hasta) y UUID del target para ver el historial de un coach específico. El botón "Exportar CSV" descarga hasta 5.000 filas con los filtros activos.',
+        body: 'Puedes filtrar por tipo de acción, rango de fechas (Desde / Hasta) y UUID del target para ver el historial de un coach específico. El botón "Exportar CSV" descarga hasta 5.000 filas con los filtros activos.',
     },
     {
         heading: 'Fuente de datos',

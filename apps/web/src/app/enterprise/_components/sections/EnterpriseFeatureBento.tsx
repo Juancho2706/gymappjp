@@ -36,7 +36,7 @@ export function EnterpriseFeatureBento() {
               </span>
             </h2>
             <p className="text-base text-gray-600 leading-relaxed">
-              No gestionás solo rutinas — gestionás un equipo. EVA Enterprise está
+              No gestionas solo rutinas — gestionas un equipo. EVA Enterprise está
               diseñado para escalar tu talento humano con la misma eficiencia con la
               que sus servidores escalan tus datos.
             </p>

@@ -1,6 +1,6 @@
 import { SupabaseClient } from '@supabase/supabase-js';
 import { Database } from '@/lib/database.types';
-import { reconcileMeals } from './nutrition-propagation.reconcile';
+import { reconcileMeals } from '@eva/nutrition-engine';
 
 type TemplateData = {
     name: string;

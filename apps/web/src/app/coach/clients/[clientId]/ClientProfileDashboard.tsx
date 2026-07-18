@@ -13,6 +13,8 @@ import { SectionTitle } from './_components/SectionTitle'
 import { ProfileOverviewB3 } from './ProfileOverviewB3'
 import { TrainingTabB4Panels } from './TrainingTabB4Panels'
 import { NutritionTabB5 } from './NutritionTabB5'
+import { NutritionTabV2 } from './NutritionTabV2'
+import type { NutritionTabV2ViewModel } from './nutritionTabV2.logic'
 import { ProgressBodyCompositionB6 } from './ProgressBodyCompositionB6'
 import { ProgramTabB7 } from './ProgramTabB7'
 // BillingTabB8 desconectado del chrome de la ficha (rediseño dark-only: 5 pestañas
@@ -23,7 +25,7 @@ import {
     resolveEffectiveWeekVariant,
     workoutPlanMatchesVariant,
 } from '@/lib/workout/programWeekVariant'
-import { effectiveWorkoutSection } from '@/lib/workout-block-grouping'
+import { effectiveWorkoutSection } from '@eva/workout-engine'
 import { updateClientGoalWeight } from './_actions/client-detail.actions'
 import type { NutrientTargetRow } from '@/services/nutrient-targets.service'
 import type { PrivateNoteRow, MealCommentRow } from '@/services/nutrition-notes.service'
@@ -46,6 +48,8 @@ interface ClientProfileDashboardProps {
     nutritionOverrideContext?: ClientFeaturePrefsOverrideContext
     /** Entitlements de módulos de pago (espejo del gate server-side, resueltos en page.tsx). */
     moduleFlags?: { cardio: boolean; movement: boolean; bodycomp: boolean }
+    /** View model del tab Nutrición V2 (canary webCoach resuelto en page.tsx). null/undefined => tab V1. */
+    nutritionV2?: NutritionTabV2ViewModel | null
     /** Fuerza tema oscuro para los charts (la ficha del master-detail es dark-only vía isla CSS;
         next-themes resolvedTheme no la conoce → sin esto los ejes saldrían claros sobre negro). */
     forceDark?: boolean
@@ -61,6 +65,7 @@ export function ClientProfileDashboard({
     nutritionSectionFlags,
     nutritionOverrideContext,
     moduleFlags,
+    nutritionV2,
     forceDark = false,
 }: ClientProfileDashboardProps) {
     const reduceMotion = useReducedMotion()
@@ -479,6 +484,9 @@ export function ClientProfileDashboard({
                         className="relative z-10 grid min-w-0 grid-cols-1 gap-6 md:grid-cols-12"
                     >
                     <div className="min-w-0 space-y-6 animate-in fade-in duration-500 md:col-span-12">
+                        {nutritionV2 ? (
+                        <NutritionTabV2 view={nutritionV2} />
+                        ) : (
                         <NutritionTabB5
                             clientId={client.id}
                             coachId={client.coach_id ?? ''}
@@ -516,6 +524,7 @@ export function ClientProfileDashboard({
                             nutritionSectionFlags={nutritionSectionFlags}
                             nutritionOverrideContext={nutritionOverrideContext}
                         />
+                        )}
                     </div>
                     </motion.div>
                 )}

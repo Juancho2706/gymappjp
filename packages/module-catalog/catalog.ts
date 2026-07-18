@@ -36,9 +36,10 @@ export interface ModuleCatalogEntry {
     /** Dónde viven sus utilidades cuando el módulo está activo. */
     surfaces: string[]
     /**
-     * Precio mensual self-service en CLP para el coach standalone (precio de lista, uniforme).
-     * Solo informativo en la UI de catálogo; el cobro real lo congela `coach_addons.price_clp`
-     * por compra (webhook). En modo team el precio es por contrato (no se usa este valor).
+     * Precio mensual de lista LEGACY en CLP (era del self-service de add-ons).
+     * Decisión CEO 2026-07-17: los módulos vienen INCLUIDOS en los planes pagos y la UI ya
+     * NO renderiza este precio en ninguna superficie. El campo se conserva solo para el riel
+     * de billing histórico (`coach_addons.price_clp` congelado por compra) y el admin.
      */
     priceClp: number
 }
@@ -81,14 +82,14 @@ export const MODULE_CATALOG: Record<ModuleKey, ModuleCatalogEntry> = {
     nutrition_exchanges: {
         label: 'Nutrición Pro',
         pitch:
-            'El plan de nutrición a nivel profesional: pautas por porciones e intercambios (el método de los nutricionistas), plantillas reutilizables, micronutrientes avanzados y objetivos por composición corporal. ' +
-            'Todo exportable a PDF con tu marca.',
+            'El plan de nutrición a nivel profesional: desde pautas por porciones e intercambios (el método de los nutricionistas) hasta planes híbridos que combinan franjas guiadas con libertad de registro. ' +
+            'Suma variantes de día, micronutrientes avanzados, objetivos finos por alumno y notas clínicas privadas y de protocolo que solo ves tú.',
         surfaces: [
-            'Modo Intercambios dentro del plan nutricional',
-            'Plantillas de plan reutilizables',
-            'Micronutrientes avanzados en el plan',
-            'Objetivos por composición corporal',
-            'PDF de pauta con tu marca',
+            'Estrategias avanzadas del plan (intercambios y plan híbrido)',
+            'Variantes de día en un mismo plan',
+            'Micronutrientes avanzados en la ficha del alumno',
+            'Notas clínicas privadas y de protocolo',
+            'Histórico completo de nutrición del alumno',
         ],
         priceClp: 9990,
     },

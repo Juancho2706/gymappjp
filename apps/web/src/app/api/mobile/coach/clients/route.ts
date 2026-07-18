@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { CreateClientSchema } from '@eva/schemas'
+import { z } from 'zod'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import type { Tables } from '@/lib/database.types'
 import { getTierMaxClients, type SubscriptionTier } from '@/lib/constants'
@@ -16,6 +17,19 @@ import {
 } from '@/lib/auth/platform-email'
 import { getCoachPublicIdentifier } from '@/lib/coach/public-identifier'
 import { resolvePreferredWorkspace } from '@/services/auth/workspace.service'
+import { createClientIdentity } from '@/infrastructure/db/client-membership.repository'
+
+const requestedWorkspaceSchema = z.object({
+    kind: z.enum(['standalone', 'team_owner', 'team_member', 'enterprise']),
+    teamId: z.string().uuid().nullable().optional(),
+    orgId: z.string().uuid().nullable().optional(),
+})
+
+type RequestedWorkspace = z.infer<typeof requestedWorkspaceSchema>
+type CreationWorkspace =
+    | { type: 'coach_standalone' }
+    | { type: 'coach_team'; teamId: string; teamName: string; teamSlug: string }
+    | { type: 'enterprise_coach'; orgId: string }
 
 function bearerToken(request: NextRequest): string | null {
     const auth = request.headers.get('authorization') || request.headers.get('Authorization')
@@ -23,11 +37,55 @@ function bearerToken(request: NextRequest): string | null {
     return auth.slice('Bearer '.length).trim() || null
 }
 
-function applyOrgScope<T extends { eq: (column: string, value: string) => T; is: (column: string, value: null) => T }>(
-    query: T,
-    orgId: string | null
-): T {
-    return orgId ? query.eq('org_id', orgId) : query.is('org_id', null)
+async function resolveExplicitWorkspace(
+    admin: ReturnType<typeof createServiceRoleClient>,
+    userId: string,
+    subscriptionStatus: string | null,
+    requested: RequestedWorkspace,
+): Promise<CreationWorkspace | null> {
+    if (requested.kind === 'standalone') {
+        if (requested.teamId || requested.orgId) return null
+        if (subscriptionStatus === 'org_managed' || subscriptionStatus === 'team_managed') return null
+        return { type: 'coach_standalone' }
+    }
+
+    if (requested.kind === 'team_owner' || requested.kind === 'team_member') {
+        if (!requested.teamId || requested.orgId) return null
+        const [{ data: membership }, { data: team }] = await Promise.all([
+            admin
+                .from('team_members')
+                .select('id')
+                .eq('team_id', requested.teamId)
+                .eq('coach_id', userId)
+                .eq('status', 'active')
+                .is('deleted_at', null)
+                .maybeSingle(),
+            admin
+                .from('teams')
+                .select('name, slug, owner_coach_id')
+                .eq('id', requested.teamId)
+                .is('deleted_at', null)
+                .is('suspended_at', null)
+                .maybeSingle(),
+        ])
+        if (!membership || !team) return null
+        const canonicalKind = team.owner_coach_id === userId ? 'team_owner' : 'team_member'
+        if (requested.kind !== canonicalKind) return null
+        return { type: 'coach_team', teamId: requested.teamId, teamName: team.name, teamSlug: team.slug }
+    }
+
+    if (!requested.orgId || requested.teamId) return null
+    const { data: membership } = await admin
+        .from('organization_members')
+        .select('id')
+        .eq('org_id', requested.orgId)
+        .eq('user_id', userId)
+        .eq('coach_id', userId)
+        .eq('role', 'coach')
+        .eq('status', 'active')
+        .is('deleted_at', null)
+        .maybeSingle()
+    return membership ? { type: 'enterprise_coach', orgId: requested.orgId } : null
 }
 
 export async function POST(request: NextRequest) {
@@ -57,6 +115,16 @@ export async function POST(request: NextRequest) {
         )
     }
 
+    const requestedWorkspace = body?.workspace === undefined
+        ? null
+        : requestedWorkspaceSchema.safeParse(body.workspace)
+    if (requestedWorkspace && !requestedWorkspace.success) {
+        return NextResponse.json(
+            { error: 'Workspace invalido.', code: 'WORKSPACE_VALIDATION_ERROR' },
+            { status: 400 },
+        )
+    }
+
     const admin = createServiceRoleClient()
     const { data: userData, error: userError } = await admin.auth.getUser(token)
     const coachUser = userData.user
@@ -67,13 +135,13 @@ export async function POST(request: NextRequest) {
 
     const { data: rawCoachData, error: coachError } = await admin
         .from('coaches')
-        .select('id, slug, invite_code, full_name, brand_name, welcome_message, subscription_tier, max_clients, active_org_id, primary_color, logo_url')
+        .select('id, slug, invite_code, full_name, brand_name, welcome_message, subscription_tier, subscription_status, max_clients, active_org_id, primary_color, logo_url')
         .eq('id', coachUser.id)
         .maybeSingle()
 
     const coach = rawCoachData as Pick<
         Tables<'coaches'>,
-        'id' | 'slug' | 'invite_code' | 'full_name' | 'brand_name' | 'welcome_message' | 'subscription_tier' | 'max_clients' | 'primary_color' | 'logo_url'
+        'id' | 'slug' | 'invite_code' | 'full_name' | 'brand_name' | 'welcome_message' | 'subscription_tier' | 'subscription_status' | 'max_clients' | 'primary_color' | 'logo_url'
     > & { active_org_id?: string | null } | null
 
     if (coachError) {
@@ -83,21 +151,51 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Coach no encontrado.', code: 'COACH_NOT_FOUND' }, { status: 404 })
     }
 
-    const workspace = await resolvePreferredWorkspace(admin, coachUser.id)
-    if (!workspace || (workspace.type !== 'coach_standalone' && workspace.type !== 'enterprise_coach')) {
-        return NextResponse.json({ error: 'Workspace no autorizado para crear alumnos.', code: 'WORKSPACE_NOT_ALLOWED' }, { status: 403 })
+    let workspace: CreationWorkspace | null = null
+    if (requestedWorkspace?.success) {
+        workspace = await resolveExplicitWorkspace(admin, coachUser.id, coach.subscription_status, requestedWorkspace.data)
+    } else {
+        const preferredWorkspace = await resolvePreferredWorkspace(admin, coachUser.id)
+        if (preferredWorkspace?.type === 'coach_standalone') {
+            workspace = { type: 'coach_standalone' }
+        } else if (preferredWorkspace?.type === 'coach_team') {
+            const { data: team } = await admin
+                .from('teams')
+                .select('name, slug')
+                .eq('id', preferredWorkspace.teamId)
+                .is('deleted_at', null)
+                .is('suspended_at', null)
+                .maybeSingle()
+            if (team) workspace = {
+                type: 'coach_team',
+                teamId: preferredWorkspace.teamId,
+                teamName: team.name,
+                teamSlug: team.slug,
+            }
+        } else if (preferredWorkspace?.type === 'enterprise_coach') {
+            workspace = { type: 'enterprise_coach', orgId: preferredWorkspace.orgId }
+        }
+    }
+    if (!workspace) {
+        return NextResponse.json({
+            error: 'Workspace no autorizado para crear alumnos.',
+            code: requestedWorkspace ? 'WORKSPACE_MISMATCH' : 'WORKSPACE_NOT_ALLOWED',
+        }, { status: 403 })
     }
     const orgId = workspace.type === 'enterprise_coach' ? workspace.orgId : null
+    const teamId = workspace.type === 'coach_team' ? workspace.teamId : null
 
     const tier = (coach.subscription_tier ?? 'starter') as SubscriptionTier
     const maxClients = coach.max_clients ?? getTierMaxClients(tier)
-    let countQuery = admin
-        .from('clients')
-        .select('id', { count: 'exact', head: true })
-        .eq('coach_id', coach.id)
-        .eq('is_archived', false)
-    countQuery = applyOrgScope(countQuery, orgId)
-    const { count: activeClientsCount, error: countError } = await countQuery
+    const { count: activeClientsCount, error: countError } = workspace.type === 'coach_standalone'
+        ? await admin
+            .from('clients')
+            .select('id', { count: 'exact', head: true })
+            .eq('coach_id', coach.id)
+            .is('org_id', null)
+            .is('team_id', null)
+            .eq('is_archived', false)
+        : { count: null, error: null }
 
     if (countError) {
         return NextResponse.json(
@@ -163,6 +261,7 @@ export async function POST(request: NextRequest) {
         force_password_change: true,
         age_confirmed_at: new Date().toISOString(),
         org_id: orgId,
+        team_id: teamId,
     })
 
     if (dbError) {
@@ -191,18 +290,28 @@ export async function POST(request: NextRequest) {
         }
     }
 
+    const identity = await createClientIdentity({
+        accountId: newAuthUser.user.id,
+        clientId: newAuthUser.user.id,
+        coachId: coach.id,
+        orgId,
+        teamId,
+    })
+    if (!identity.ok) console.error('createClientIdentity (non-fatal, mobile):', identity.error)
+
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_SITE_URL
     const publicIdentifier = getCoachPublicIdentifier(coach)
-    const loginUrl = appUrl ? `${appUrl}/c/${publicIdentifier}/login` : `https://app.tu-dominio.com/c/${publicIdentifier}/login`
+    const loginPath = workspace.type === 'coach_team' ? `/t/${workspace.teamSlug}/login` : `/c/${publicIdentifier}/login`
+    const loginUrl = appUrl ? `${appUrl}${loginPath}` : `https://app.tu-dominio.com${loginPath}`
     // White-label (W2): marca del coach en el header/CTA solo si es standalone Pro+ (org → EVA).
     const emailBrand = resolveStudentEmailBranding({
-        isStandalone: !orgId,
+        isStandalone: workspace.type === 'coach_standalone',
         tier: coach.subscription_tier,
         logoUrl: coach.logo_url,
         primaryColor: coach.primary_color,
     })
     const welcomeEmail = buildClientWelcomeEmail({
-        brandName: coach.brand_name ?? 'EVA',
+        brandName: workspace.type === 'coach_team' ? workspace.teamName : coach.brand_name ?? 'EVA',
         coachName: coach.full_name ?? 'Tu entrenador',
         clientName: parsed.data.full_name,
         loginUrl,

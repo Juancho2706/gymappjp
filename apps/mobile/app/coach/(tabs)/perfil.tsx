@@ -3,11 +3,10 @@ import { Linking, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View }
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Image } from 'expo-image'
 import { useRouter } from 'expo-router'
-import AsyncStorage from '@react-native-async-storage/async-storage'
 import { Apple, Bell, CreditCard, ExternalLink, LogOut, User } from 'lucide-react-native'
 import { MotiView } from 'moti'
 import { supabase } from '../../../lib/supabase'
-import { signOutAndCleanup } from '../../../lib/auth-actions'
+import { signOutAndRedirectHome } from '../../../lib/auth-actions'
 import { getCoachProfile, CoachProfile } from '../../../lib/coach'
 import { getCoachOrgContext, CoachOrgContext, orgRoleLabel } from '../../../lib/org'
 import { useTheme } from '../../../context/ThemeContext'
@@ -101,9 +100,7 @@ export default function CoachPerfilScreen() {
   }
 
   async function handleLogout() {
-    await signOutAndCleanup()
-    await AsyncStorage.removeItem('eva_user_role')
-    router.replace('/')
+    await signOutAndRedirectHome()
   }
 
   if (loading) {

@@ -5,11 +5,9 @@ import { supabase } from '../../../lib/supabase'
 import { flushLogQueue, flushNutritionQueue, getPendingLogCount, getPendingNutritionCount } from '../../../lib/offline-cache'
 import { getClientProfile } from '../../../lib/client'
 import { sessionFlags } from '../../../lib/session-flags'
-import { useTheme } from '../../../context/ThemeContext'
 import { AlumnoMobileChrome } from '../../../components/alumno/AlumnoMobileChrome'
 
 export default function AlumnoTabsLayout() {
-  const { theme } = useTheme()
   const router = useRouter()
   const appState = useRef(AppState.currentState)
 
@@ -42,15 +40,40 @@ export default function AlumnoTabsLayout() {
     return () => sub.remove()
   }, [])
 
-  // 6→4+Más: barra docked DS (espejo del coach). Inicio · Plan · Aprender · Check-in + "Más"
-  // (Historial, Perfil). El tint activo / inactivo lo resuelve la chrome desde theme.primary.
+  // Capsula flotante DS (E1-01, espejo del ClientNav mobile web): Inicio ·
+  // Nutrición · Aprender · Check-in + "Más" (Historial, Perfil). El tabBar es
+  // absoluto/flotante (altura 0 en el flujo). El web fija la nav (position:fixed,
+  // ClientNav.tsx:471-474) y el CONTENIDO scrollea POR DETRAS: el clearance vive
+  // como padding-bottom del contenedor scrolleable, NO recortando el viewport.
+  // Aqui espejamos eso: la escena ocupa TODA la altura y cada pantalla reserva
+  // `insets.bottom + ALUMNO_TABBAR_CLEARANCE` en el contentContainer de su scroll
+  // (ver ALUMNO_TABBAR_CLEARANCE). El branding activo lo resuelve la chrome via
+  // tokens NativeWind.
   return (
-    <View style={{ flex: 1, backgroundColor: theme.background }}>
+    <View className="flex-1 bg-surface-app">
       <Tabs
         tabBar={(props) => <AlumnoMobileChrome {...props} />}
         screenOptions={{
           headerShown: false,
-          sceneStyle: { backgroundColor: theme.background },
+          // QA-8 (banda negra): antes la escena llevaba `paddingBottom = inset +
+          // clearance`, que RECORTABA el viewport de la escena — el contenedor
+          // full-bleed de cada pantalla (View bg-surface-app + <AppBackground/>
+          // absoluteFill: home.tsx:344-345) terminaba SECO en la linea de recorte y
+          // dejaba abajo una franja de la escena transparente que revelaba el root
+          // <View bg-surface-app> PLANO (sin el glow/grilla del AppBackground), leido
+          // como una banda negra solida bajo la capsula. Sin paddingBottom la escena
+          // ocupa todo el alto: el AppBackground cubre el viewport completo y el
+          // contenido scrollea POR DETRAS de la capsula (1:1 web). El clearance se
+          // reserva en el contentContainer de cada scroll de las 6 tabs
+          // (paddingBottom = insets.bottom + ALUMNO_TABBAR_CLEARANCE via
+          // useSafeAreaInsets, inset-aware — NO en sceneStyle, que recortaria el
+          // viewport y reviviria la banda negra), asi el ultimo item nunca queda
+          // tapado por la capsula. `backgroundColor: transparent` deja al
+          // <View bg-surface-app> pintar hasta el borde fisico inferior (SDK54
+          // edge-to-edge), evitando el fondo gris claro del DefaultTheme.
+          sceneStyle: {
+            backgroundColor: 'transparent',
+          },
         }}
       >
         <Tabs.Screen name="home" options={{ title: 'Inicio' }} />

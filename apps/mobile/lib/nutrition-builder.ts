@@ -1,6 +1,8 @@
 import { supabase } from './supabase'
 import { getCoachOrgContext } from './org'
 import { getTodayInSantiago, isoDateAddDays } from './date-utils'
+import { reconcileMeals } from '@eva/nutrition-engine'
+import { buildMealReconcileInput } from './nutrition-reconcile'
 
 // Coach nutrition plan builder — mirrors the web `upsertClientNutritionPlanJson`
 // (apps/web .../coach/nutrition-plans). Writes nutrition_plans → nutrition_meals
@@ -33,6 +35,9 @@ export interface FoodRow {
   is_liquid: boolean
   category: string | null
   brand: string | null
+  /** Medida casera opcional (household) — alimenta `gramsToHousehold` en la UI. Solo aplica a 'g'. */
+  household_grams?: number | null
+  household_label?: string | null
 }
 
 /** Alternativa de intercambio para un alimento (1:1 con web `food_items.swap_options`). */
@@ -67,6 +72,9 @@ export interface DraftFoodItem {
   serving_size: number
   serving_unit: string
   is_liquid: boolean
+  /** Medida casera del alimento (household, display-only) — para rótulo '120 g (1 taza)'. */
+  household_grams?: number | null
+  household_label?: string | null
   swapOptions: SwapOption[]
 }
 
@@ -136,6 +144,8 @@ export function foodToDraftItem(food: FoodRow): DraftFoodItem {
     serving_size: food.serving_size || 100,
     serving_unit: food.serving_unit || 'g',
     is_liquid: !!food.is_liquid || food.serving_unit === 'ml',
+    household_grams: food.household_grams ?? null,
+    household_label: food.household_label ?? null,
     swapOptions: [],
   }
 }
@@ -230,6 +240,9 @@ export interface CustomFoodInput {
   serving_size: number
   serving_unit: FoodUnit
   category: string
+  /** Medida casera opcional (household). Espejo de web: SOLO se persiste con unidad 'g'. */
+  household_grams?: number | null
+  household_label?: string | null
 }
 
 /** Create a coach-owned food and return it ready to add to a meal. */
@@ -238,6 +251,13 @@ export async function createCustomFood(input: CustomFoodInput): Promise<{ ok: bo
   if (!coachId) return { ok: false, error: 'No autenticado.' }
   if (input.name.trim().length < 2) return { ok: false, error: 'Indicá el nombre del alimento.' }
   if (!Number.isFinite(input.calories) || input.calories < 0) return { ok: false, error: 'Calorías inválidas.' }
+
+  // Medida casera (household) — mismo gate que web `saveCustomFood`: solo aplica a
+  // gramos (en 'un' la unidad YA es la medida) y exige label + gramos > 0; si no,
+  // se persiste null/null.
+  const householdLabelRaw = (input.household_label ?? '').trim()
+  const householdGrams = Number(input.household_grams)
+  const hasHousehold = input.serving_unit === 'g' && householdLabelRaw.length > 0 && Number.isFinite(householdGrams) && householdGrams > 0
 
   const { data, error } = await supabase
     .from('foods')
@@ -252,8 +272,10 @@ export async function createCustomFood(input: CustomFoodInput): Promise<{ ok: bo
       is_liquid: input.serving_unit === 'ml',
       category: input.category,
       coach_id: coachId,
+      household_grams: hasHousehold ? Math.round(householdGrams) : null,
+      household_label: hasHousehold ? householdLabelRaw : null,
     })
-    .select('id, name, calories, protein_g, carbs_g, fats_g, serving_size, serving_unit, is_liquid, category, brand')
+    .select('id, name, calories, protein_g, carbs_g, fats_g, serving_size, serving_unit, is_liquid, category, brand, household_grams, household_label')
     .single()
 
   if (error) return { ok: false, error: error.message }
@@ -318,7 +340,7 @@ export async function searchFoods(query: string, opts: SearchFoodsOptions = {}):
   const { category, scope = 'all', maxCalories, limit = 500 } = opts
   let q = supabase
     .from('foods')
-    .select('id, name, calories, protein_g, carbs_g, fats_g, serving_size, serving_unit, is_liquid, category, brand')
+    .select('id, name, calories, protein_g, carbs_g, fats_g, serving_size, serving_unit, is_liquid, category, brand, household_grams, household_label')
   if (scope === 'mine' && coachId) q = q.eq('coach_id', coachId)
   else if (scope === 'system') q = q.is('coach_id', null)
   else q = q.or(coachId ? `coach_id.is.null,coach_id.eq.${coachId}` : 'coach_id.is.null')
@@ -440,6 +462,35 @@ export async function getClientFoodFavorites(clientId: string): Promise<Set<stri
   return new Set(((data ?? []) as any[]).map((r) => r.food_id as string))
 }
 
+/** Restricciones dietarias del alumno (correctness de salud). Espejo 1:1 del web
+ * `getClientFoodRestrictions`: mismo origen (`client_food_preferences`, RLS coach-scoped)
+ * y los mismos 3 tipos. Los sets alimentan los badges + el bloqueo de alérgenos del buscador. */
+export type ClientFoodRestrictionType = 'dislike' | 'allergy' | 'intolerance'
+export interface ClientFoodRestrictionSets {
+  allergyIds: Set<string>
+  intoleranceIds: Set<string>
+  dislikeIds: Set<string>
+}
+export function emptyRestrictionSets(): ClientFoodRestrictionSets {
+  return { allergyIds: new Set(), intoleranceIds: new Set(), dislikeIds: new Set() }
+}
+export async function getClientFoodRestrictions(clientId: string): Promise<ClientFoodRestrictionSets> {
+  const sets = emptyRestrictionSets()
+  const { data } = await supabase
+    .from('client_food_preferences' as never)
+    .select('food_id, preference_type')
+    .eq('client_id' as never, clientId as never)
+    .in('preference_type' as never, ['dislike', 'allergy', 'intolerance'] as never)
+  for (const r of ((data ?? []) as any[])) {
+    const id = r.food_id as string
+    if (!id) continue
+    if (r.preference_type === 'allergy') sets.allergyIds.add(id)
+    else if (r.preference_type === 'intolerance') sets.intoleranceIds.add(id)
+    else if (r.preference_type === 'dislike') sets.dislikeIds.add(id)
+  }
+  return sets
+}
+
 export async function getPlanDraft(planId: string): Promise<PlanDraft | null> {
   const { data: plan } = await supabase
     .from('nutrition_plans')
@@ -450,7 +501,7 @@ export async function getPlanDraft(planId: string): Promise<PlanDraft | null> {
 
   const { data: meals } = await supabase
     .from('nutrition_meals')
-    .select('id, name, description, order_index, day_of_week, food_items ( food_id, quantity, unit, swap_options, foods ( id, name, calories, protein_g, carbs_g, fats_g, serving_size, serving_unit, is_liquid ) )')
+    .select('id, name, description, order_index, day_of_week, food_items ( food_id, quantity, unit, swap_options, foods ( id, name, calories, protein_g, carbs_g, fats_g, serving_size, serving_unit, is_liquid, household_grams, household_label ) )')
     .eq('plan_id', planId)
     .order('order_index', { ascending: true })
 
@@ -474,6 +525,8 @@ export async function getPlanDraft(planId: string): Promise<PlanDraft | null> {
       serving_size: fi.foods?.serving_size ?? 100,
       serving_unit: fi.foods?.serving_unit ?? 'g',
       is_liquid: !!fi.foods?.is_liquid || fi.foods?.serving_unit === 'ml',
+      household_grams: fi.foods?.household_grams ?? null,
+      household_label: fi.foods?.household_label ?? null,
       swapOptions: parseSwapOptions(fi.swap_options),
     })),
   }))
@@ -528,9 +581,18 @@ export async function saveClientPlan(clientId: string, draft: PlanDraft): Promis
         .order('order_index', { ascending: true })
 
       const existingByIndex = new Map<number, string>((existing ?? []).map((m: any) => [m.order_index, m.id]))
-      const newIndices = new Set(sorted.map((_, i) => i))
 
-      const toDelete = (existing ?? []).filter((m: any) => !newIndices.has(m.order_index)).map((m: any) => m.id)
+      // CASCADE-SAFETY (G08 §2.2): antes borraba las comidas sobrantes INCONDICIONALMENTE ->
+      // destruía nutrition_meal_logs (FK meal_id ON DELETE CASCADE/SET NULL) = pérdida de
+      // adherencia del alumno. Ahora la decisión de qué borrar la toma `reconcileMeals`
+      // (fn pura compartida con web): solo borra las huérfanas SIN logs; las que tienen
+      // historial se CONSERVAN (quedan más allá del nuevo conteo de comidas).
+      const { existingMeals, templateMeals, removalCandidates } = buildMealReconcileInput(
+        (existing ?? []).map((m: any) => ({ id: m.id as string, order_index: m.order_index as number })),
+        sorted.map((meal) => ({ name: meal.name, description: meal.notes ?? '', day_of_week: meal.day_of_week ?? null }))
+      )
+      const loggedMealIds = await fetchLoggedMealIds(removalCandidates)
+      const { toDelete } = reconcileMeals(existingMeals, templateMeals, loggedMealIds)
       if (toDelete.length) {
         await supabase.from('food_items').delete().in('meal_id', toDelete)
         await supabase.from('nutrition_meals').delete().in('id', toDelete)
@@ -574,6 +636,17 @@ export async function saveClientPlan(clientId: string, draft: PlanDraft): Promis
   } catch (e: any) {
     return { ok: false, error: e?.message ?? 'Error al guardar el plan.' }
   }
+}
+
+/**
+ * meal_ids que YA tienen registros de adherencia (`nutrition_meal_logs`). `reconcileMeals` NO
+ * borra las comidas que aparezcan acá (cascade-safety). Réplica PostgREST del fetch de la web
+ * (`nutrition.service.ts`): solo se consultan los candidatos a borrar para acotar la query.
+ */
+export async function fetchLoggedMealIds(mealIds: string[]): Promise<Set<string>> {
+  if (!mealIds.length) return new Set()
+  const { data } = await supabase.from('nutrition_meal_logs').select('meal_id').in('meal_id', mealIds)
+  return new Set(((data ?? []) as any[]).map((r) => r.meal_id as string).filter(Boolean))
 }
 
 async function insertItems(mealId: string, items: DraftFoodItem[]): Promise<void> {

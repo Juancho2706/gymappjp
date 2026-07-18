@@ -7,8 +7,8 @@ import { cn } from '@/lib/utils'
 import {
     groupContiguousSupersetRuns,
     type WorkoutSectionKey,
-} from '@/lib/workout-block-grouping'
-import { executionAreaGroupsFor } from '@/lib/workout-areas'
+    executionAreaGroupsFor,
+} from '@eva/workout-engine'
 import type { WorkoutArea } from '@/domain/workout/types'
 import { getMuscleColor } from '../muscle-colors'
 import type { BuilderBlock, DayState } from '../types'

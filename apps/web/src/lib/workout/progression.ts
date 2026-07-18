@@ -7,8 +7,8 @@
  *
  * Modos (columna `workout_blocks.progression_mode`, elección POR-EJERCICIO del coach):
  *  - `weekly_linear` (default): base + (semana-1) × incremento. Predecible, fiel al plan.
- *  - `double` (doble progresión): mantené el peso hasta completar el TOPE del rango de reps en
- *    todas las series; ahí subís el incremento. Adaptativo, ancla en la última sesión real.
+ *  - `double` (doble progresión): mantén el peso hasta completar el TOPE del rango de reps en
+ *    todas las series; ahí subes el incremento. Adaptativo, ancla en la última sesión real.
  *  - `session_linear` / `adaptive`: reservados (sin motor → no-op seguro, el builder los oculta).
  *
  * Conservador por diseño: ante cualquier dato faltante/raro devuelve el peso base (nunca rompe
@@ -177,8 +177,8 @@ function weeklyLinear(
 }
 
 /**
- * Doble progresión: mantené el peso hasta completar el TOPE del rango de reps en TODAS las series;
- * ahí subís `value` kg. Stateless: solo mira la última sesión registrada del bloque.
+ * Doble progresión: mantén el peso hasta completar el TOPE del rango de reps en TODAS las series;
+ * ahí subes `value` kg. Stateless: solo mira la última sesión registrada del bloque.
  *  - sin rango parseable → cae a weekly_linear (progresión sensata igual).
  *  - sin última sesión (primera vez) → base.
  *  - última sesión completó el tope en todas las series → sube desde el peso de esa sesión.

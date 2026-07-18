@@ -26,7 +26,24 @@
       },
       "env": {
         "APP_ENV": "production",
-        "EXPO_ROUTER_APP_ROOT": "apps/mobile/app"
+        "EXPO_ROUTER_APP_ROOT": "apps/mobile/app",
+        "EXPO_PUBLIC_SENTRY_DSN": "https://7c0dbb7f424c24fb62f29c9aacca97e1@o4511408707141632.ingest.us.sentry.io/4511702402138112",
+        "SENTRY_DISABLE_AUTO_UPLOAD": "true",
+        "EXPO_PUBLIC_API_URL": "https://www.eva-app.cl"
+      }
+    },
+    "previewv2": {
+      "distribution": "internal",
+      "autoIncrement": true,
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "APP_ENV": "production",
+        "EXPO_ROUTER_APP_ROOT": "apps/mobile/app",
+        "EXPO_PUBLIC_SENTRY_DSN": "https://7c0dbb7f424c24fb62f29c9aacca97e1@o4511408707141632.ingest.us.sentry.io/4511702402138112",
+        "SENTRY_DISABLE_AUTO_UPLOAD": "true",
+        "EXPO_PUBLIC_API_URL": "https://gymappjp-git-rnmobiledenuevo-juancho2706s-projects.vercel.app"
       }
     },
     "staging": {
@@ -41,7 +58,8 @@
         "APP_ENV": "staging",
         "EXPO_ROUTER_APP_ROOT": "apps/mobile/app",
         "EXPO_PUBLIC_SUPABASE_URL": "http://10.93.54.116:54321",
-        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH"
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH",
+        "SENTRY_DISABLE_AUTO_UPLOAD": "true"
       }
     },
     "production": {
@@ -49,7 +67,10 @@
       "autoIncrement": true,
       "env": {
         "APP_ENV": "production",
-        "EXPO_ROUTER_APP_ROOT": "apps/mobile/app"
+        "EXPO_ROUTER_APP_ROOT": "apps/mobile/app",
+        "EXPO_PUBLIC_SENTRY_DSN": "https://7c0dbb7f424c24fb62f29c9aacca97e1@o4511408707141632.ingest.us.sentry.io/4511702402138112",
+        "SENTRY_DISABLE_AUTO_UPLOAD": "true",
+        "EXPO_PUBLIC_API_URL": "https://www.eva-app.cl"
       },
       "android": {
         "credentialsSource": "remote"

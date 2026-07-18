@@ -90,7 +90,7 @@ export default async function NewNutritionTemplatePage({ searchParams }: Props) 
             {initialData ? `Desde template: ${initialData.name}` : 'Nueva plantilla'}
           </h1>
           <p className="text-xs text-muted-foreground font-medium">
-            {initialData ? 'Pre-llenado desde template de tu organización — personalizá a tu gusto' : 'Arrastrá comidas y ajustá macros con datos reales'}
+            {initialData ? 'Pre-llenado desde template de tu organización — personaliza a tu gusto' : 'Arrastra comidas y ajusta macros con datos reales'}
           </p>
         </div>
       </header>

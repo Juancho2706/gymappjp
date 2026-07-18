@@ -79,7 +79,7 @@ export function SharePRButton({
             a.remove()
             URL.revokeObjectURL(objectUrl)
         } catch {
-            toast.error('No pudimos generar la imagen. Intentá de nuevo.')
+            toast.error('No pudimos generar la imagen. Intenta de nuevo.')
         } finally {
             setBusy(false)
         }

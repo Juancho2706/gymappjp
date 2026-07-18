@@ -97,7 +97,7 @@ export function PRDetailSheet({ open, onOpenChange, pr, detail, loading, exercis
         try {
             const blob = await renderWorkoutPRCardToBlob(prCard, readShareCardBrand())
             if (!blob) {
-                toast.error('No pudimos generar la imagen. Intentá de nuevo.')
+                toast.error('No pudimos generar la imagen. Intenta de nuevo.')
                 return
             }
             const file = new File([blob], `record-${slugify(prCard.exerciseName)}.png`, { type: 'image/png' })

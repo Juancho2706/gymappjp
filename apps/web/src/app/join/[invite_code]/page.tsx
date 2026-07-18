@@ -139,7 +139,7 @@ export default async function JoinPage({ params }: Props) {
                 </div>
 
                 <p className="mt-4 text-center text-xs text-zinc-400">
-                    ¿Ya tenés cuenta?{' '}
+                    ¿Ya tienes cuenta?{' '}
                     <a href={invite.loginHref} className="underline hover:text-zinc-600">
                         Inicia sesión
                     </a>

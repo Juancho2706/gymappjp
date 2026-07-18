@@ -988,7 +988,7 @@ export async function revokeStaffAction(orgSlug: string, memberId: string) {
 
     if (!target) return { error: 'Miembro no encontrado.' }
     if (target.role === 'org_owner') return { error: 'No se puede revocar al propietario.' }
-    if (target.role === 'coach') return { error: 'Usá "Remover coach" desde el panel de coaches.' }
+    if (target.role === 'coach') return { error: 'Usa "Remover coach" desde el panel de coaches.' }
     if (target.status === 'revoked') return { error: 'Ya está revocado.' }
 
     const { error } = await admin

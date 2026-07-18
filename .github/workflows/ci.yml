@@ -4,7 +4,7 @@ on:
   push:
     branches: [main, master]
   pull_request:
-    branches: [main, master]
+    branches: [main, master, rnmobiledenuevo]
   workflow_dispatch:
 
 jobs:
@@ -25,6 +25,8 @@ jobs:
       # (0 errors; warnings don't fail). Re-introducing a lint error now fails CI.
       - run: pnpm run lint
       - run: pnpm run typecheck
+      # EVA DS token parity gate: web globals.css (contract) must match mobile global.css
+      - run: pnpm run check:tokens
       - run: npx vitest run
       - name: pnpm audit (high+)
         run: pnpm audit --audit-level=high --prod

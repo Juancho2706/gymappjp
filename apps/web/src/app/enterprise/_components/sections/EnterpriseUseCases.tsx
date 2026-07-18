@@ -25,7 +25,7 @@ export function EnterpriseUseCases() {
           </h2>
           <p className="mt-4 text-base sm:text-lg text-gray-500 max-w-xl mx-auto">
             Desde un gym de barrio hasta una cadena nacional. EVA Enterprise se adapta a la
-            estructura que ya tenés.
+            estructura que ya tienes.
           </p>
         </Reveal>
 

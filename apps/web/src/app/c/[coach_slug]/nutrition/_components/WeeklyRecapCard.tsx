@@ -16,7 +16,7 @@ const TONE: Record<
 > = {
   great: {
     title: '¡Semana sólida! 🔥',
-    sub: 'Gran consistencia. Seguí con este ritmo.',
+    sub: 'Gran consistencia. Sigue con este ritmo.',
     ring: 'text-emerald-500',
     bg: 'from-emerald-500/10',
   },
@@ -28,7 +28,7 @@ const TONE: Record<
   },
   gentle: {
     title: 'Semana tranquila',
-    sub: 'Sin dramas. La próxima sumás unos días más y listo.',
+    sub: 'Sin dramas. La próxima sumas unos días más y listo.',
     ring: 'text-amber-500',
     bg: 'from-amber-500/10',
   },

@@ -53,6 +53,44 @@ export function formatRelativeDate(dateStr: string, todayIso?: string): string {
     return format(d1, "d MMM yyyy", { locale: es })
 }
 
+/**
+ * Formatea una fecha date-only `YYYY-MM-DD` a formato corto humano es-CL
+ * ("mié 16 jul"; agrega el año solo si difiere del año en curso: "mié 16 jul 2025").
+ * Timezone-safe: parsea los componentes a mano y formatea en UTC, de modo que el día
+ * jamás se corre por zona (`new Date('2026-07-16')` es medianoche UTC y en Chile mostraría
+ * el día anterior). Con `relative`, hoy/ayer se muestran como palabra. String fuera de
+ * patrón → se devuelve tal cual (defensivo).
+ */
+export function formatNutritionShortDate(
+    dateStr: string,
+    options: { todayIso?: string; relative?: boolean } = {}
+): string {
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateStr)
+    if (!match) return dateStr
+    const year = Number(match[1])
+    const date = new Date(Date.UTC(year, Number(match[2]) - 1, Number(match[3])))
+    if (Number.isNaN(date.getTime())) return dateStr
+
+    const today = options.todayIso ?? getTodayInSantiago().iso
+    if (options.relative) {
+        const diff = differenceInCalendarDays(parseISO(`${today}T12:00:00`), parseISO(`${dateStr}T12:00:00`))
+        if (diff === 0) return 'Hoy'
+        if (diff === 1) return 'Ayer'
+    }
+
+    const withYear = year !== Number(today.slice(0, 4))
+    const parts = new Intl.DateTimeFormat('es-CL', {
+        weekday: 'short',
+        day: 'numeric',
+        month: 'short',
+        ...(withYear ? { year: 'numeric' } : {}),
+        timeZone: 'UTC',
+    }).formatToParts(date)
+    const part = (type: string) => (parts.find((p) => p.type === type)?.value ?? '').replace(/\.$/, '')
+    const base = `${part('weekday')} ${part('day')} ${part('month')}`
+    return withYear ? `${base} ${part('year')}` : base
+}
+
 export function timeGreetingSantiago(now = new Date()): 'Buenos días' | 'Buenas tardes' | 'Buenas noches' {
     const tzStr = now.toLocaleString('en-US', { timeZone: SANTIAGO_TZ })
     const d = new Date(tzStr)
@@ -147,4 +185,27 @@ export function formatSantiagoMonthLabel(now = new Date()): string {
     )
     const month = (parts.month || '').replace(/^\w/u, (c) => c.toUpperCase())
     return `${month} ${parts.year}`
+}
+
+/**
+ * Formatea un timestamp ISO (`timestamptz`, ej. `nutrition_v2_conversion_links.converted_at`)
+ * a `dd-mm-yyyy` en **America/Santiago**. DST-safe: deriva los componentes con
+ * `Intl.DateTimeFormat` (mismo patrón que `getSantiagoMonthPrefix`), nunca con
+ * `new Date(toLocaleString(...))` que depende de la TZ del host. Timestamp inválido → cadena
+ * vacía (defensivo; el llamador decide si ocultar el dato).
+ */
+export function formatDateDdMmYyyySantiago(isoTimestamp: string): string {
+    const instant = new Date(isoTimestamp)
+    if (Number.isNaN(instant.getTime())) return ''
+    const parts = Object.fromEntries(
+        new Intl.DateTimeFormat('en-CA', {
+            timeZone: SANTIAGO_TZ,
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric',
+        })
+            .formatToParts(instant)
+            .map((p) => [p.type, p.value])
+    )
+    return `${parts.day}-${parts.month}-${parts.year}`
 }

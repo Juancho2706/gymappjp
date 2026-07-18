@@ -87,7 +87,7 @@ export function OnboardingCompactLoopStrip() {
                         Tu circuito en un vistazo
                     </p>
                     <p className="mt-1 text-sm font-semibold leading-snug text-foreground sm:text-base">
-                        Configurás en tu panel; tus alumnos entrenan en su app con tu marca.
+                        Configuras en tu panel; tus alumnos entrenan en su app con tu marca.
                     </p>
                 </div>
 

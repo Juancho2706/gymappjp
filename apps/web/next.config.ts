@@ -10,7 +10,8 @@ const securityHeaders = [
   { key: 'Referrer-Policy',          value: 'strict-origin-when-cross-origin' },
   // HSTS: 2 años, subdomains — sin preload (irreversible, agregar solo cuando estemos seguros)
   { key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains' },
-  { key: 'Permissions-Policy',        value: 'camera=(), microphone=(), geolocation=()' },
+  // Cámara permitida únicamente al mismo origen para el scanner PWA de Nutrición V2.
+  { key: 'Permissions-Policy',        value: 'camera=(self), microphone=(), geolocation=()' },
 ]
 
 const nextConfig: NextConfig = {
@@ -20,6 +21,17 @@ const nextConfig: NextConfig = {
       {
         source: '/(.*)',
         headers: securityHeaders,
+      },
+      // AASA/assetlinks se sirven sin extension (spec de Apple/Android) — Vercel infiere
+      // content-type por extension y sin una cae a octet-stream/plain. Forzamos JSON explicito
+      // para que swcd (iOS) y el verificador de App Links (Android) los acepten sin ambiguedad.
+      {
+        source: '/.well-known/apple-app-site-association',
+        headers: [{ key: 'Content-Type', value: 'application/json' }],
+      },
+      {
+        source: '/.well-known/assetlinks.json',
+        headers: [{ key: 'Content-Type', value: 'application/json' }],
       },
     ]
   },

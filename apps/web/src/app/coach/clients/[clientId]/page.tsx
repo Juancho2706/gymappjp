@@ -14,6 +14,22 @@ import {
 } from '@/services/feature-prefs.service'
 import { getCoachNutrientTargets } from './_data/nutrient-targets.queries'
 import { getCoachPrivateNotes, getCoachMealComments } from './_data/nutrition-notes.queries'
+import { getTodayInSantiago } from '@/lib/date-utils'
+import { getPreferredWorkspaceForRender } from '@/services/auth/workspace-render-cache'
+import {
+    getNutritionClientDetailV2ForWeb,
+    nutritionV2CoachScopeFromWorkspace,
+} from '@/services/nutrition-v2-read.service'
+import { isNutritionV2Enabled } from '@/services/nutrition-v2-rollout.service'
+import {
+    filterHistoryDaysToBaseWindow,
+    hasNutritionProV2,
+    nutritionProCtxFromWorkspace,
+} from '@/app/coach/nutrition-v2/_lib/nutrition-pro'
+import {
+    buildNutritionTabV2ViewModel,
+    type NutritionTabV2ViewModel,
+} from './nutritionTabV2.logic'
 
 export default async function ClientProfilePage({ params }: { params: Promise<{ clientId: string }> }) {
     const { clientId } = await params
@@ -87,6 +103,7 @@ async function ProfileContent({ clientId }: { clientId: string }) {
         cardioModule,
         movementModule,
         bodycompModule,
+        nutritionTabV2View,
     ] = await Promise.all([
         getCoachNutrientTargets(clientId),
         getCoachPrivateNotes(clientId),
@@ -115,6 +132,8 @@ async function ProfileContent({ clientId }: { clientId: string }) {
         isOrgScoped
             ? Promise.resolve(false)
             : hasModule(moduleSupabase, 'body_composition', moduleCtx),
+        // Canary V2 embebido en la ficha (surface webCoach). Fail-safe: null => tab V1 intacto.
+        resolveNutritionTabV2(clientId),
     ])
 
     const sortedCheckIns = [...(checkIns || [])].sort(
@@ -174,6 +193,7 @@ async function ProfileContent({ clientId }: { clientId: string }) {
 
             <ClientProfileDashboard
                 data={data}
+                nutritionV2={nutritionTabV2View}
                 coachNutrientTargets={coachNutrientTargets}
                 coachPrivateNotes={coachPrivateNotes}
                 coachMealComments={coachMealComments}
@@ -207,6 +227,66 @@ async function resolveNutritionProEnabled(clientId: string): Promise<boolean> {
     if (!row || row.org_id) return false
     const ctx = row.team_id ? { teamId: row.team_id } : { coachId: row.coach_id }
     return hasModule(supabase, 'nutrition_exchanges', ctx)
+}
+
+/**
+ * Resuelve el tab de Nutrición V2 para la ficha principal cuando el coach tiene el canary
+ * (surface webCoach). Es la decisión server-side del swap: null => la ficha renderiza
+ * `NutritionTabB5` (V1) exactamente igual que hoy (cero regresión). Todo va envuelto en
+ * try/catch porque un fallo del canary, del workspace o de la lectura scoped JAMÁS puede
+ * tumbar la ficha: degrada a V1. Reusa el patrón de la ficha V2 (workspace -> scope -> RPC),
+ * el gate fail-closed y el recorte de historial base sin addon Pro.
+ */
+async function resolveNutritionTabV2(
+    clientId: string,
+): Promise<NutritionTabV2ViewModel | null> {
+    try {
+        const supabase = await createClient()
+        const { data: claimsData } = await supabase.auth.getClaims()
+        const userId = claimsData?.claims?.sub as string | undefined
+        if (!userId) return null
+
+        const workspace = await getPreferredWorkspaceForRender(userId)
+        const teamId = workspace?.type === 'coach_team' ? workspace.teamId : null
+        const orgId = workspace?.type === 'enterprise_coach' ? workspace.orgId : null
+
+        const enabled = await isNutritionV2Enabled({
+            surface: 'webCoach',
+            userId,
+            clientId,
+            coachId: userId,
+            teamId,
+            orgId,
+        })
+        if (!enabled) return null
+
+        // El scope propaga el workspace activo: el RPC scoped niega (42501) un alumno fuera del pool.
+        const scope = nutritionV2CoachScopeFromWorkspace(workspace)
+        const { iso: today } = getTodayInSantiago()
+        const detail = await getNutritionClientDetailV2ForWeb({ clientId, scope, date: today })
+
+        // Sin addon Pro, el histórico del alumno para el coach se limita a la ventana base (~30d).
+        const nutritionProEnabled = await hasNutritionProV2(
+            supabase,
+            nutritionProCtxFromWorkspace(userId, workspace),
+        )
+        const recentDaysForDisplay = nutritionProEnabled
+            ? detail.recentDays
+            : filterHistoryDaysToBaseWindow(detail.recentDays, today)
+
+        return buildNutritionTabV2ViewModel({
+            clientId,
+            detail,
+            nutritionProEnabled,
+            recentDaysForDisplay,
+        })
+    } catch (error) {
+        console.error('nutrition_v2_ficha_tab_resolve_failed', {
+            clientId,
+            error: error instanceof Error ? error.message : String(error),
+        })
+        return null
+    }
 }
 
 function ProfileSkeleton() {

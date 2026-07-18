@@ -23,7 +23,7 @@ function VerifyEmailContent() {
             </div>
 
             <h1 className="font-display text-[25px] font-black tracking-[-0.02em] text-text-strong">
-                Revisá tu email
+                Revisa tu email
             </h1>
             <p className="mt-2 text-sm leading-relaxed text-text-muted">
                 Te enviamos un enlace de confirmación a
@@ -49,7 +49,7 @@ function VerifyEmailContent() {
             </div>
 
             <p className="mt-[18px] text-[12.5px] text-text-subtle">
-                ¿No te llegó? Revisá spam o esperá un minuto.
+                ¿No te llegó? Revisa spam o espera un minuto.
             </p>
 
             <Link

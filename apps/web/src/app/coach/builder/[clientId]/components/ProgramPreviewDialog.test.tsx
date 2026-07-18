@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { buildDayPreviewSections } from './ProgramPreviewDialog'
-import { LEGACY_SECTION_AREA_ID } from '@/lib/workout-areas'
+import { LEGACY_SECTION_AREA_ID } from '@eva/workout-engine'
 import type { WorkoutArea } from '@/domain/workout/types'
 import type { BuilderBlock } from '../types'
 

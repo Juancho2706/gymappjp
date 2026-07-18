@@ -52,9 +52,9 @@ const GUIDES: Guide[] = [
     {
         title: 'Módulos Pro',
         steps: [
-            'Cardio, Evaluación de movimiento, Composición corporal y Nutrición Pro son módulos add-on.',
-            'Actívalos en Opciones › Suscripción (requieren un plan pagado activo); cada uno cuesta $9.990/mes.',
-            'Ya activos, aparecen en la ficha del alumno y enriquecen el builder.',
+            'Cardio, Evaluación de movimiento, Composición corporal y Nutrición Pro son módulos profesionales.',
+            'Vienen incluidos con cualquier plan pago, sin costo extra. En el plan Free no están disponibles.',
+            'Con un plan pago activo aparecen en la ficha del alumno y enriquecen el builder.',
         ],
     },
     {
@@ -133,8 +133,8 @@ const FAQS: Faq[] = [
         a: 'En Alumnos › Importar subes un Excel o CSV, mapeas las columnas y confirmas. La importación masiva está disponible según tu plan.',
     },
     {
-        q: '¿Cómo funcionan los módulos de pago?',
-        a: 'Cardio, Evaluación de movimiento, Composición corporal y Nutrición Pro se activan en Opciones › Suscripción (requieren plan pagado). Cuestan $9.990/mes cada uno y se suman a tu cobro.',
+        q: '¿Cómo funcionan los módulos profesionales?',
+        a: 'Cardio, Evaluación de movimiento, Composición corporal y Nutrición Pro vienen incluidos con cualquier plan pago, sin costo extra. Con tu plan activo se habilitan solos: los usas desde Alumnos › Herramientas y el builder.',
     },
     {
         q: '¿Necesito tarjeta para el plan gratis?',

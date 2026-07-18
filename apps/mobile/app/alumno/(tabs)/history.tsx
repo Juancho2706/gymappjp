@@ -1,12 +1,10 @@
 import { useEffect, useState } from 'react'
-import {
-  FlatList,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native'
-import { ChevronDown, Dumbbell, History } from 'lucide-react-native'
+import { Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
+import { cssInterop } from 'nativewind'
+import { MotiView } from 'moti'
+import { Easing, useReducedMotion } from 'react-native-reanimated'
+import { useRouter } from 'expo-router'
+import { AlertTriangle, Calendar, ChevronDown, ChevronLeft, Dumbbell } from 'lucide-react-native'
 import { getClientProfile } from '../../../lib/client'
 import {
   getWorkoutDaySummaries,
@@ -15,62 +13,194 @@ import {
   type DaySummary,
 } from '../../../lib/history.queries'
 import { useTheme } from '../../../context/ThemeContext'
-import { EmptyState, ScreenHeader } from '../../../components'
+import { Button } from '../../../components'
+import { Card } from '../../../components/Card'
 import { EvaLoaderScreen } from '../../../components/EvaLoader'
-import { SafeAreaView } from 'react-native-safe-area-context'
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { AppBackground } from '../../../components/AppBackground'
+import { ALUMNO_TABBAR_CLEARANCE } from '../../../components/alumno/AlumnoMobileChrome'
 
+const FONT_DISPLAY = 'Archivo_900Black'
 const FONT_BOLD = 'HankenGrotesk_700Bold'
 const FONT_MONO = 'JetBrainsMono_700Bold'
 
+// lucide-react-native no soporta currentColor: sin cssInterop la className text-*
+// es inerte y el icono cae a negro (invisible en dark). En web ChevronLeft/ChevronDown
+// heredan text-strong (page.tsx:41,44,82,84) y Calendar hereda text-subtle
+// (page.tsx:66,68). Mapeamos className→prop `color` igual que Sheet.tsx:44 y
+// perfil.tsx:64, para que los tokens resuelvan light/dark. (Dumbbell no lo necesita:
+// usa color={theme.primary} por prop, :64 y :203.)
+for (const Icon of [ChevronLeft, ChevronDown, Calendar]) {
+  cssInterop(Icon, { className: { target: 'style', nativeStyleToProp: { color: true } } })
+}
+
+// Curva del reveal fade-up de la web (Reveal.tsx:7 `ease: [0.16, 1, 0.3, 1]`), 1:1.
+const EASE_FADEUP = Easing.bezier(0.16, 1, 0.3, 1)
+
+/**
+ * Etiqueta de día 1:1 con la web (dashboard.queries.ts:228-232):
+ * `new Date(day + 'T12:00:00').toLocaleDateString('es-CL', { weekday:'long', day:'numeric', month:'short' })`
+ * → "lunes, 3 mar". El ancla T12:00:00 evita saltos de día por zona horaria. Se
+ * recalcula aquí (no en la query compartida getWorkoutDaySummaries, que usa el
+ * label relativo "Hoy/Ayer" del dashboard) para no alterar el widget/perfil.
+ */
+function formatDayLabel(dayKey: string): string {
+  return new Date(dayKey + 'T12:00:00').toLocaleDateString('es-CL', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'short',
+  })
+}
+
+/**
+ * Header inline (no sticky) — 1:1 con la web (page.tsx:37-63): botón volver al
+ * dashboard, badge con el color de marca del coach al 12%, título display-black
+ * y subtítulo con el rango activo.
+ */
+function HistoryHeader({ monthsLabel, onBack }: { monthsLabel: string; onBack: () => void }) {
+  const { theme } = useTheme()
+  return (
+    <View style={styles.header}>
+      <Pressable
+        onPress={onBack}
+        accessibilityRole="button"
+        accessibilityLabel="Volver al inicio"
+        hitSlop={8}
+        style={[styles.backBtn, { backgroundColor: theme.muted, borderRadius: theme.radius.md }]}
+      >
+        <ChevronLeft size={20} className="text-strong" strokeWidth={2} />
+      </Pressable>
+      <View
+        style={[styles.badge, { backgroundColor: theme.primary + '1F', borderRadius: theme.radius.md }]}
+      >
+        <Dumbbell size={19} color={theme.primary} strokeWidth={2} />
+      </View>
+      <View style={styles.headerText}>
+        <Text className="text-strong" style={[styles.h1, { fontFamily: FONT_DISPLAY }]}>
+          Historial de entrenos
+        </Text>
+        <Text className="text-muted" style={[styles.headerSub, { fontFamily: theme.fontSans }]}>
+          Días con series registradas (últimos {monthsLabel})
+        </Text>
+      </View>
+    </View>
+  )
+}
+
 export default function HistoryScreen() {
   const { theme } = useTheme()
+  const insets = useSafeAreaInsets()
+  const router = useRouter()
+  const reduced = useReducedMotion()
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(false)
   const [expanding, setExpanding] = useState(false)
   const [daysBack, setDaysBack] = useState(HISTORY_DAYS_DEFAULT)
   const [summaries, setSummaries] = useState<DaySummary[]>([])
 
-  useEffect(() => { load(HISTORY_DAYS_DEFAULT).catch(() => setLoading(false)) }, [])
+  useEffect(() => { void load(HISTORY_DAYS_DEFAULT) }, [])
 
-  async function load(days: number) {
-    setLoading(true)
-    const client = await getClientProfile()
-    if (!client) { setLoading(false); return }
+  // `background: true` NO muestra el EvaLoaderScreen a pantalla completa: la lista
+  // actual permanece visible mientras se recarga. Espejo del soft-nav web del botón
+  // "6 meses", que es un <Link> (page.tsx:80-86): la navegación server-side mantiene
+  // el chrome (header + lista) en pantalla. El arranque on-mount y el retry sí usan
+  // el loader completo (no hay nada que preservar todavía).
+  async function load(days: number, opts?: { background?: boolean }) {
+    const background = opts?.background ?? false
+    if (!background) setLoading(true)
+    setError(false)
+    try {
+      const client = await getClientProfile()
+      // Paridad con web (page.tsx:25-27): getClientProfile() devuelve null tanto si no
+      // hay usuario (JWT inválido/expirado) como si no hay fila en clients — los dos casos
+      // que en web hacen `redirect(`${base}/login`)`. Nunca el empty state 'sin series'
+      // (engañoso para una sesión expirada). Login del alumno = codigo.tsx:66, index.tsx:92.
+      if (!client) { router.replace('/(auth)/login?role=alumno'); return }
 
-    // Conteo de series por día agregado en DB (RPC) — 90d por defecto, 180d al "ver más".
-    const data = await getWorkoutDaySummaries(client.id, days)
-    setSummaries(data)
-    setDaysBack(days)
-    setLoading(false)
+      // Conteo de series por día agregado en DB (RPC) — 90d por defecto, 180d al "ver más".
+      const data = await getWorkoutDaySummaries(client.id, days)
+      setSummaries(data)
+      setDaysBack(days)
+    } catch {
+      setError(true)
+    } finally {
+      if (!background) setLoading(false)
+    }
   }
 
   async function showMore() {
+    // Expansión in-place: solo `expanding` (label inline 'Cargando…' del botón),
+    // sin blanquear a loader de pantalla completa — la lista de 3 meses sigue visible.
     setExpanding(true)
     try {
-      await load(HISTORY_DAYS_EXTENDED)
+      await load(HISTORY_DAYS_EXTENDED, { background: true })
     } finally {
       setExpanding(false)
     }
   }
 
-  const monthsLabel = daysBack >= HISTORY_DAYS_EXTENDED ? '6 meses' : '3 meses'
+  // Volver al dashboard (home) — espejo del back web a `${base}/dashboard`.
+  const goBack = () => router.push('/alumno/home')
+
+  const extended = daysBack >= HISTORY_DAYS_EXTENDED
+  const monthsLabel = extended ? '6 meses' : '3 meses'
 
   if (loading) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
         <AppBackground />
-        <ScreenHeader title="Historial" subtitle="Tus entrenamientos" />
-        <EvaLoaderScreen subtitle="Cargando historial…" />
+        <View style={styles.contentFill}>
+          <HistoryHeader monthsLabel={monthsLabel} onBack={goBack} />
+          <EvaLoaderScreen subtitle="Cargando historial…" />
+        </View>
+      </SafeAreaView>
+    )
+  }
+
+  if (error) {
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
+        <AppBackground />
+        <View style={styles.contentFill}>
+        <HistoryHeader monthsLabel={monthsLabel} onBack={goBack} />
+        <View style={styles.errorBox}>
+          <View
+            style={{
+              width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center',
+              backgroundColor: theme.destructive + '14', borderWidth: 1, borderColor: theme.destructive + '33', marginBottom: 4,
+            }}
+          >
+            <AlertTriangle size={26} color={theme.destructive} strokeWidth={1.9} />
+          </View>
+          <Text style={[styles.errorTitle, { color: theme.foreground, fontFamily: FONT_BOLD }]}>
+            No pudimos cargar tu historial
+          </Text>
+          <Text style={[styles.errorSub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+            Revisa tu conexión e intenta de nuevo en un momento.
+          </Text>
+          <Button testID="history-retry" label="Reintentar" variant="outline" onPress={() => load(daysBack)} />
+        </View>
+        </View>
       </SafeAreaView>
     )
   }
 
   if (summaries.length === 0) {
+    // Empty state 1:1 con la web (page.tsx:66-72): Calendar 34 al 40% + una sola línea text-subtle.
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
         <AppBackground />
-        <ScreenHeader title="Historial" subtitle="Tus entrenamientos" />
-        <EmptyState icon={History} title="Sin historial" subtitle="Completá tu primer entrenamiento para verlo aquí." />
+        <View style={styles.contentFill}>
+          <HistoryHeader monthsLabel={monthsLabel} onBack={goBack} />
+          <View style={styles.emptyBox}>
+            <View style={styles.emptyIcon}>
+              <Calendar size={34} className="text-subtle" strokeWidth={2} />
+            </View>
+            <Text className="text-subtle" style={[styles.emptyText, { fontFamily: theme.fontSans }]}>
+              Aún no hay series registradas en este periodo. Cuando completes entrenos, aparecerán aquí.
+            </Text>
+          </View>
+        </View>
       </SafeAreaView>
     )
   }
@@ -78,104 +208,146 @@ export default function HistoryScreen() {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
       <AppBackground />
-      <FlatList
-        data={summaries}
-        keyExtractor={(d) => d.dayKey}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.list}
-        ListHeaderComponent={
-          <ScreenHeader title="Historial" subtitle={`${summaries.length} días de entrenamiento`} />
-        }
-        renderItem={({ item, index }) => {
-          const isFirst = index === 0
-          const isLast = index === summaries.length - 1
-          return (
-            <View
-              style={[
-                styles.row,
-                {
-                  backgroundColor: theme.card,
-                  borderColor: theme.border,
-                  borderTopWidth: isFirst ? 1 : 0,
-                  borderTopLeftRadius: isFirst ? 20 : 0,
-                  borderTopRightRadius: isFirst ? 20 : 0,
-                  borderBottomLeftRadius: isLast ? 20 : 0,
-                  borderBottomRightRadius: isLast ? 20 : 0,
-                },
-              ]}
-            >
-              <View style={[styles.dayChip, { backgroundColor: theme.muted, borderRadius: theme.radius.sm }]}>
-                <Dumbbell size={17} color={theme.primary} strokeWidth={2} />
-              </View>
-              <View style={{ flex: 1, minWidth: 0 }}>
-                <Text style={[styles.dayLabel, { color: theme.foreground, fontFamily: FONT_BOLD }]} numberOfLines={1}>
-                  {item.dateLabel}
-                </Text>
-                <Text style={[styles.daySub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]} numberOfLines={1}>
-                  {item.subtitle}
-                </Text>
-              </View>
-              <View style={[styles.setsPill, { backgroundColor: theme.muted }]}>
-                <Text style={[styles.setsPillText, { color: theme.foreground, fontFamily: FONT_MONO }]}>
-                  {item.sets === 1 ? '1 serie' : `${item.sets} series`}
-                </Text>
-              </View>
-            </View>
-          )
-        }}
-        ListFooterComponent={
-          <View>
-            {daysBack < HISTORY_DAYS_EXTENDED ? (
-              <TouchableOpacity
-                activeOpacity={0.82}
-                onPress={showMore}
-                disabled={expanding}
-                style={[styles.moreBtn, { borderColor: theme.border, backgroundColor: theme.card }]}
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + ALUMNO_TABBAR_CLEARANCE }]}>
+        <View style={styles.content}>
+        <HistoryHeader monthsLabel={monthsLabel} onBack={goBack} />
+
+        <View style={styles.body}>
+          {/* Un solo Card con filas y divisores — 1:1 con WorkoutHistoryList (web).
+              El Card default trae `border border-subtle` (Card.tsx:50); en dark ese token
+              es blanco puro (global.css:208) y la clase bare saldría OPACA, mientras la web
+              lo pinta rgba(255,255,255,0.07) translúcido (card.tsx:16). Se fuerza el color
+              del borde por style con theme.border (= border-subtle, mismo valor del divisor). */}
+          <Card padding="none" style={{ overflow: 'hidden', borderColor: theme.border }}>
+            {summaries.map((item, index) => (
+              <MotiView
+                key={item.dayKey}
+                from={reduced ? { opacity: 1, translateY: 0 } : { opacity: 0, translateY: 24 }}
+                animate={{ opacity: 1, translateY: 0 }}
+                transition={{
+                  type: 'timing',
+                  duration: reduced ? 0 : 450,
+                  // Cascada literal sin tope — espejo de RevealStagger stagger={0.04}
+                  // (WorkoutHistoryList.tsx:16) + staggerChildren sin límite (Reveal.tsx:104):
+                  // cada fila i entra con delay 40ms*i. Sin Math.min(index,12) para que
+                  // los historiales largos (13+ días) sigan escalonando, no entren en bloque.
+                  delay: reduced ? 0 : index * 40,
+                  easing: EASE_FADEUP,
+                }}
               >
-                <ChevronDown size={16} color={theme.primary} strokeWidth={2.25} />
-                <Text style={[styles.moreTxt, { color: theme.foreground, fontFamily: FONT_BOLD }]}>
-                  {expanding ? 'Cargando…' : 'Ver últimos 6 meses'}
-                </Text>
-              </TouchableOpacity>
-            ) : null}
-            <Text style={[styles.disclaimer, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
-              Solo ves tus propios registros. Mostrando los últimos {monthsLabel}.
-            </Text>
-          </View>
-        }
-      />
+                {index > 0 ? (
+                  <View style={{ height: 1, backgroundColor: theme.border, marginHorizontal: 14 }} />
+                ) : null}
+                <View style={styles.row}>
+                  <View style={[styles.dayChip, { backgroundColor: theme.muted, borderRadius: theme.radius.sm }]}>
+                    <Dumbbell size={17} color={theme.primary} strokeWidth={2} />
+                  </View>
+                  <View style={styles.rowText}>
+                    <Text className="text-strong" style={[styles.dayLabel, { fontFamily: FONT_BOLD }]}>
+                      {formatDayLabel(item.dayKey)}
+                    </Text>
+                    <Text className="text-muted" style={[styles.daySub, { fontFamily: theme.fontSans }]}>
+                      {item.subtitle}
+                    </Text>
+                  </View>
+                  <View style={[styles.setsPill, { backgroundColor: theme.muted }]}>
+                    <Text className="text-strong" style={[styles.setsPillText, { fontFamily: FONT_MONO }]}>
+                      {item.sets === 1 ? '1 serie' : `${item.sets} series`}
+                    </Text>
+                  </View>
+                </View>
+              </MotiView>
+            ))}
+          </Card>
+
+          {!extended ? (
+            <TouchableOpacity
+              testID="history-show-more"
+              activeOpacity={0.82}
+              onPress={showMore}
+              disabled={expanding}
+              // Web: border-default + bg-surface-card (page.tsx:82) = borde blanco 13% en dark
+              // (globals.css:601), ink-200 sólido en light (globals.css:414). border-default
+              // es más marcado que border-subtle. El token NativeWind border-default es blanco
+              // PURO en dark (global.css:209 `255 255 255`), así que la clase bare compila
+              // <alpha-value>=1 → blanco OPACO. Se pasa el color imperativo por style.borderColor
+              // (mismo patrón que el divisor con theme.border, :233) para resolver el alpha 13%.
+              className="bg-surface-card"
+              style={[styles.moreBtn, { borderColor: theme.borderDefault }]}
+            >
+              {/* Web: ChevronDown hereda currentColor = text-strong del Link (page.tsx:82,84), no la marca. */}
+              <ChevronDown size={16} className="text-strong" strokeWidth={2} />
+              <Text className="text-strong" style={[styles.moreTxt, { fontFamily: FONT_BOLD }]}>
+                {expanding ? 'Cargando…' : 'Ver últimos 6 meses'}
+              </Text>
+            </TouchableOpacity>
+          ) : null}
+
+          <Text className="text-subtle" style={[styles.disclaimer, { fontFamily: theme.fontSans }]}>
+            Solo ves tus propios registros. Mostrando los últimos {monthsLabel}.
+          </Text>
+        </View>
+        </View>
+      </ScrollView>
     </SafeAreaView>
   )
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  list: { paddingHorizontal: 16, paddingBottom: 40 },
+  // Web: contenedor interno `pb-6` = 24px bajo el disclaimer (page.tsx:36). 1:1.
+  scroll: { paddingBottom: 24 },
+  // Espejo de `mx-auto max-w-2xl` (page.tsx:36): capa el contenido a 42rem (672px)
+  // y lo centra. En teléfono (<672px) width:'100%' llena; en tablet no se estira.
+  content: { width: '100%', maxWidth: 672, alignSelf: 'center' },
+  contentFill: { flex: 1, width: '100%', maxWidth: 672, alignSelf: 'center' },
+  body: { paddingHorizontal: 20 },
+  // Header (web page.tsx:38 `flex items-center gap-[11px] pb-4 pt-1.5`, dentro de px-5).
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 11,
+    paddingHorizontal: 20,
+    paddingTop: 6,
+    paddingBottom: 16,
+  },
+  backBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginLeft: -8 },
+  badge: { width: 38, height: 38, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  headerText: { flex: 1, minWidth: 0 },
+  h1: { fontSize: 21, lineHeight: 21, letterSpacing: -0.42 },
+  headerSub: { fontSize: 12.5, marginTop: 2 },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
     paddingHorizontal: 14,
     paddingVertical: 13,
-    borderLeftWidth: 1,
-    borderRightWidth: 1,
-    borderBottomWidth: 1,
   },
   dayChip: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
-  dayLabel: { fontSize: 14.5, letterSpacing: -0.1, textTransform: 'capitalize' },
-  daySub: { fontSize: 12.5, marginTop: 1 },
-  setsPill: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999 },
-  setsPillText: { fontSize: 12 },
+  rowText: { flex: 1, minWidth: 0 },
+  dayLabel: { fontSize: 14.5, textTransform: 'capitalize' },
+  daySub: { fontSize: 12.5 },
+  setsPill: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999, flexShrink: 0 },
+  setsPillText: { fontSize: 12.5 },
   moreBtn: {
     marginTop: 14,
-    paddingVertical: 13,
+    height: 44,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderRadius: 999,
   },
   moreTxt: { fontSize: 13.5 },
   disclaimer: { fontSize: 11.5, lineHeight: 17, textAlign: 'center', marginTop: 16 },
+  // Empty state (web page.tsx:66-72 `px-5 py-12 text-center text-subtle`). El div
+  // del empty (px-5=20) va anidado en el contenedor con px-5=20 (page.tsx:36), así
+  // que el inset horizontal efectivo es 40px por lado, no 20 — replicamos el px-5 compuesto.
+  emptyBox: { paddingHorizontal: 40, paddingVertical: 48, alignItems: 'center' },
+  emptyIcon: { marginBottom: 10, opacity: 0.4 },
+  emptyText: { fontSize: 14, lineHeight: 21, textAlign: 'center' },
+  errorBox: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 10, paddingHorizontal: 32 },
+  errorTitle: { fontSize: 17, letterSpacing: -0.3, textAlign: 'center' },
+  errorSub: { fontSize: 13, lineHeight: 19, textAlign: 'center', maxWidth: 300, marginBottom: 4 },
 })

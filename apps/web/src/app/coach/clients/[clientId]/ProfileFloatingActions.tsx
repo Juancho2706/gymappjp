@@ -73,12 +73,15 @@ export function ProfileFloatingActions({
             //    md:overflow-y-auto). Es el ÚLTIMO elemento del flujo → reposa al final; el contenedor
             //    es pointer-events:none con hijos auto, así que aunque quede sobre una card no bloquea
             //    su contenido. @5xl/ficha:-mx-6 lo lleva a full-bleed cuando la ficha está en 2 columnas.
-            className="static print:hidden max-md:fixed max-md:inset-x-0 max-md:bottom-[calc(env(safe-area-inset-bottom)+96px)] max-md:z-40 md:sticky md:bottom-0 md:z-40 @5xl/ficha:-mx-6"
+            // Pegado a la cápsula del nav (QA CEO 2026-07-17): 80px expandido y 62px
+            // encogido (el nav minimizado es más bajo → el círculo lo acompaña).
+            className="static print:hidden max-md:fixed max-md:inset-x-0 max-md:bottom-[calc(env(safe-area-inset-bottom)+var(--fab-bottom))] max-md:z-40 md:sticky md:bottom-0 md:z-40 @5xl/ficha:-mx-6"
             style={{
+                ['--fab-bottom' as string]: actMin ? '62px' : '80px',
                 boxSizing: 'border-box',
-                minHeight: 'calc(72px + env(safe-area-inset-bottom))',
+                minHeight: actMin ? 'calc(52px + env(safe-area-inset-bottom))' : 'calc(72px + env(safe-area-inset-bottom))',
                 padding: actMin
-                    ? '0 56px calc(8px + env(safe-area-inset-bottom))'
+                    ? '0 20px calc(6px + env(safe-area-inset-bottom))'
                     : '0 20px calc(8px + env(safe-area-inset-bottom))',
                 display: 'flex',
                 gap: actMin ? 6 : 8,
@@ -89,7 +92,8 @@ export function ProfileFloatingActions({
                     'padding var(--dur-slow) var(--ease-spring), gap var(--dur-base) var(--ease-out)',
             }}
         >
-            {/* WhatsApp — verde, con label */}
+            {/* WhatsApp — expandido: pill verde con label; nav encogida: círculo solo-ícono
+                que acompaña a la cápsula (QA CEO 2026-07-17). */}
             {waHref ? (
                 <a
                     href={waHref}
@@ -98,13 +102,14 @@ export function ProfileFloatingActions({
                     aria-label="Contactar por WhatsApp"
                     className="eva-press"
                     style={{
-                        flex: 1,
-                        height: actMin ? 38 : 44,
+                        flex: actMin ? '0 0 44px' : 1,
+                        width: actMin ? 44 : undefined,
+                        height: 44,
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        gap: 8,
-                        borderRadius: 'var(--radius-control)',
+                        gap: actMin ? 0 : 8,
+                        borderRadius: actMin ? 9999 : 'var(--radius-control)',
                         // Verde profundo + sombra dura: flotando sobre cards el #25D366 brillante
                         // con shadow suave leía como translúcido (feedback CEO 2026-07-04).
                         background: '#16A34A',
@@ -114,11 +119,12 @@ export function ProfileFloatingActions({
                         boxShadow: '0 10px 28px rgba(0,0,0,0.45), 0 2px 8px rgba(0,0,0,0.35)',
                         pointerEvents: 'auto',
                         textDecoration: 'none',
-                        transition: 'height var(--dur-base) var(--ease-out)',
+                        transition:
+                            'flex-basis var(--dur-base) var(--ease-out), border-radius var(--dur-base) var(--ease-out)',
                     }}
                 >
                     <WhatsAppGlyph />
-                    WhatsApp
+                    {actMin ? null : 'WhatsApp'}
                 </a>
             ) : (
                 <button
@@ -126,13 +132,14 @@ export function ProfileFloatingActions({
                     disabled
                     aria-label="Sin teléfono para WhatsApp"
                     style={{
-                        flex: 1,
-                        height: actMin ? 38 : 44,
+                        flex: actMin ? '0 0 44px' : 1,
+                        width: actMin ? 44 : undefined,
+                        height: 44,
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        gap: 8,
-                        borderRadius: 'var(--radius-control)',
+                        gap: actMin ? 0 : 8,
+                        borderRadius: actMin ? 9999 : 'var(--radius-control)',
                         background: '#16A34A',
                         color: '#fff',
                         fontSize: 14,
@@ -143,11 +150,12 @@ export function ProfileFloatingActions({
                         cursor: 'not-allowed',
                         pointerEvents: 'auto',
                         border: 'none',
-                        transition: 'height var(--dur-base) var(--ease-out)',
+                        transition:
+                            'flex-basis var(--dur-base) var(--ease-out), border-radius var(--dur-base) var(--ease-out)',
                     }}
                 >
                     <WhatsAppGlyph />
-                    WhatsApp
+                    {actMin ? null : 'WhatsApp'}
                 </button>
             )}
         </div>

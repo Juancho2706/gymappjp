@@ -28,7 +28,7 @@ export default function ResetPasswordScreen() {
   const [success, setSuccess] = useState(false)
 
   const passwordError = password.length > 0 && password.length < 8 ? 'Mínimo 8 caracteres' : null
-  const confirmError = confirm.length > 0 && password !== confirm ? 'Las contrasenas no coinciden' : null
+  const confirmError = confirm.length > 0 && password !== confirm ? 'Las contraseñas no coinciden' : null
 
   async function handleSave() {
     if (password.length < 8 || password !== confirm) return
@@ -69,12 +69,13 @@ export default function ResetPasswordScreen() {
               <Check size={30} color={theme.success} strokeWidth={1.75} />
             </View>
             <Text className="text-strong font-display-black" style={styles.title}>
-              Contrasena actualizada
+              Contraseña actualizada
             </Text>
             <Text className="text-muted font-sans" style={styles.subtitle}>
-              Ya puedes volver a EVA con tu nueva contrasena.
+              Ya puedes volver a EVA con tu nueva contraseña.
             </Text>
             <Button
+              testID="reset-password-continue"
               label="Continuar"
               variant="sport"
               rightIcon={ArrowRight}
@@ -95,15 +96,16 @@ export default function ResetPasswordScreen() {
               <KeyRound size={26} color={theme.primary} strokeWidth={1.75} />
             </View>
             <Text className="text-strong font-display-black" style={styles.title}>
-              Nueva contrasena
+              Nueva contraseña
             </Text>
             <Text className="text-muted font-sans" style={styles.subtitle}>
-              Elige una contrasena segura de al menos 8 caracteres.
+              Elige una contraseña segura de al menos 8 caracteres.
             </Text>
 
             <View style={styles.form}>
               <PasswordInput
-                label="Nueva contrasena"
+                testID="reset-password-input"
+                label="Nueva contraseña"
                 value={password}
                 onChangeText={setPassword}
                 visible={showPassword}
@@ -112,7 +114,8 @@ export default function ResetPasswordScreen() {
                 autoFocus
               />
               <PasswordInput
-                label="Confirmar contrasena"
+                testID="reset-password-confirm"
+                label="Confirmar contraseña"
                 value={confirm}
                 onChangeText={setConfirm}
                 visible={showConfirm}
@@ -120,7 +123,8 @@ export default function ResetPasswordScreen() {
                 error={confirmError}
               />
               <Button
-                label="Guardar contrasena"
+                testID="reset-password-submit"
+                label="Guardar contraseña"
                 variant="sport"
                 rightIcon={ArrowRight}
                 onPress={handleSave}
@@ -145,6 +149,7 @@ function PasswordInput({
   onToggleVisible,
   error,
   autoFocus,
+  testID,
 }: {
   label: string
   value: string
@@ -153,12 +158,14 @@ function PasswordInput({
   onToggleVisible: () => void
   error: string | null
   autoFocus?: boolean
+  testID?: string
 }) {
   const { theme } = useTheme()
   const Icon = visible ? EyeOff : Eye
 
   return (
     <Input
+      testID={testID}
       label={label}
       leftIcon={Lock}
       placeholder="••••••••"

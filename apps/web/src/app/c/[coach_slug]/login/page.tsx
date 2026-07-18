@@ -15,6 +15,7 @@ import { BRAND_PRIMARY_COLOR } from '@/lib/brand-assets'
 import { resolveLoginLayout, parseLoaderConfig, type LoginLayoutKey } from '@/lib/brand-composer'
 import { CompositeLoaderView, LoaderVariantView } from '@/components/loaders/variants'
 import { EvaRouteLoader } from '@/components/ui/EvaRouteLoader'
+import { ThemedLogo } from '@/components/brand/ThemedLogo'
 
 interface Props {
     params: Promise<{ coach_slug: string }>
@@ -77,6 +78,7 @@ export default async function ClientLoginPage({ params }: Props) {
     })
     const accentRgb = generateBrandPalette(theme.light.accent).primaryRgb.replace(/,\s*/g, ' ')
     const logoUrl = brandingAllowed ? coach.logo_url : null
+    const logoUrlDark = brandingAllowed ? coach.logo_url_dark : null
     // Fuente solo en el wordmark/título (decisión #4); inputs/cuerpo en Inter (primera pantalla, sin cache).
     const brandFontStack = resolveBrandFontStack(brandingAllowed ? (presetBrand.brand_font_key ?? '') : '')
 
@@ -102,7 +104,7 @@ export default async function ClientLoginPage({ params }: Props) {
                     WebkitBackdropFilter: glass ? 'blur(6px)' : undefined,
                 }}
             >
-                <Image src={logoUrl} alt={coach.brand_name} fill className="object-contain" style={{ padding: px * 0.16 }} />
+                <ThemedLogo light={logoUrl} dark={logoUrlDark} alt={coach.brand_name} fill className="object-contain" style={{ padding: px * 0.16 }} />
             </div>
         ) : (
             <div
@@ -126,6 +128,7 @@ export default async function ClientLoginPage({ params }: Props) {
             config={loaderConfig}
             brandName={coach.brand_name}
             iconSrc={loaderConfig.symbol === 'logo' ? (logoUrl || BRAND_APP_ICON) : BRAND_APP_ICON}
+            iconSrcDark={loaderConfig.symbol === 'logo' && logoUrl ? (logoUrlDark || logoUrl) : undefined}
             size="lg"
         />
     ) : loaderVariant !== 'eva' ? (
@@ -133,6 +136,7 @@ export default async function ClientLoginPage({ params }: Props) {
             variant={loaderVariant}
             brandName={coach.brand_name}
             iconSrc={logoUrl || BRAND_APP_ICON}
+            iconSrcDark={logoUrl ? (logoUrlDark || logoUrl) : undefined}
             size="lg"
         />
     ) : (
@@ -142,6 +146,7 @@ export default async function ClientLoginPage({ params }: Props) {
             customText={coach.brand_name}
             iconMode={logoUrl ? 'coach' : 'eva'}
             coachLogoUrl={logoUrl || undefined}
+            coachLogoDarkUrl={logoUrlDark || undefined}
             primaryColor={theme.light.accent}
         />
     )
@@ -186,10 +191,10 @@ export default async function ClientLoginPage({ params }: Props) {
                     className="font-display text-[26px] font-black leading-tight tracking-[-0.02em] text-text-strong"
                     style={{ fontFamily: 'var(--login-font)' }}
                 >
-                    Iniciá sesión
+                    Inicia sesión
                 </h2>
                 <p className="mt-2 text-[15px] leading-relaxed text-text-muted">
-                    Entrená con <b className="text-text-strong">{coach.brand_name}</b>
+                    Entrena con <b className="text-text-strong">{coach.brand_name}</b>
                 </p>
                 <div className="mt-8">{desktopLoginForm}</div>
                 {poweredBy}
@@ -332,7 +337,7 @@ export default async function ClientLoginPage({ params }: Props) {
                     </div>
                     <LoginEntranceItem className="rounded-t-[var(--radius-2xl)] border-t border-subtle bg-surface-card px-6 pb-7 pt-6 shadow-[var(--shadow-lg)]">
                         <p className="mb-[18px] text-center text-[13px] text-text-muted">
-                            Iniciá sesión para entrenar con <b className="text-text-strong">{coach.brand_name}</b>
+                            Inicia sesión para entrenar con <b className="text-text-strong">{coach.brand_name}</b>
                         </p>
                         {loginForm}
                         {poweredBy}
@@ -372,7 +377,7 @@ export default async function ClientLoginPage({ params }: Props) {
 
                     <LoginEntranceItem className="relative z-[2] -mt-[26px] flex-1 rounded-t-[var(--radius-2xl)] bg-surface-app px-6 pb-7 pt-[26px]">
                         <p className="mb-[18px] text-center text-[13px] text-text-muted">
-                            Iniciá sesión para entrenar con <b className="text-text-strong">{coach.brand_name}</b>
+                            Inicia sesión para entrenar con <b className="text-text-strong">{coach.brand_name}</b>
                         </p>
                         {loginForm}
                         {poweredBy}

@@ -76,7 +76,7 @@ export function CompleteOnboardingForm({ defaultName }: { defaultName: string })
                     Un último paso
                 </h1>
                 <p className="mt-2 text-text-muted text-sm">
-                    Completá tu perfil y elegí tu plan para empezar
+                    Completa tu perfil y elige tu plan para empezar
                 </p>
             </div>
 
@@ -126,7 +126,7 @@ export function CompleteOnboardingForm({ defaultName }: { defaultName: string })
 
                     {/* Plan selection */}
                     <section className="space-y-2">
-                        <h2 className="text-sm font-semibold text-foreground">Elegí tu plan</h2>
+                        <h2 className="text-sm font-semibold text-foreground">Elige tu plan</h2>
                         <div className="grid gap-2">
                             {tierOptions.map(([key, option]) => {
                                 const caps = getTierCapabilities(key)

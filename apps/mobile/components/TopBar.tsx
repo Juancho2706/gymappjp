@@ -12,9 +12,12 @@ interface TopBarProps {
   back?: boolean
   /** Override default back-handler (router.back). */
   onBack?: () => void
+  /** Override the destination label beside the back chevron. */
+  backLabel?: string
+  backColor?: string
 }
 
-export function TopBar({ showBrand, title, back, onBack }: TopBarProps) {
+export function TopBar({ showBrand, title, back, onBack, backLabel = 'Volver', backColor }: TopBarProps) {
   const { theme } = useTheme()
   const router = useRouter()
 
@@ -27,21 +30,31 @@ export function TopBar({ showBrand, title, back, onBack }: TopBarProps) {
     <View style={[styles.wrap, title ? { borderBottomColor: theme.border, borderBottomWidth: StyleSheet.hairlineWidth } : null]}>
       <View style={styles.side}>
         {back ? (
-          <TouchableOpacity onPress={handleBack} hitSlop={12} style={styles.backBtn} activeOpacity={0.7}>
-            <ChevronLeft size={18} color={theme.primary} />
-            <Text style={[styles.backLabel, { color: theme.primary, fontFamily: 'Montserrat_700Bold' }]}>
-              Volver
+          <TouchableOpacity
+            testID="topbar-back"
+            accessibilityRole="button"
+            onPress={handleBack}
+            hitSlop={12}
+            style={styles.backBtn}
+            activeOpacity={0.7}
+          >
+            <ChevronLeft size={18} color={backColor ?? theme.primary} />
+            {/* DS: Hanken Grotesk (UI sans), NO Montserrat. Color = brand accent (white-label). */}
+            <Text className="font-sans-semibold" style={[styles.backLabel, { color: backColor ?? theme.primary }]}>
+              {backLabel}
             </Text>
           </TouchableOpacity>
         ) : showBrand ? (
-          <Text style={[styles.brand, { color: theme.foreground, fontFamily: 'Montserrat_800ExtraBold' }]}>
+          // DS: Archivo display black (marca EVA), NO Montserrat.
+          <Text className="font-display-black" style={[styles.brand, { color: theme.foreground }]}>
             EVA
           </Text>
         ) : null}
       </View>
       {title ? (
         <Text
-          style={[styles.title, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}
+          className="font-display-bold"
+          style={[styles.title, { color: theme.foreground }]}
           numberOfLines={1}
         >
           {title}

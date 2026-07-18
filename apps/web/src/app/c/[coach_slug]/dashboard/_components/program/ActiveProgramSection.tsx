@@ -109,7 +109,7 @@ export async function ActiveProgramSection({ userId, coachSlug }: { userId: stri
                     </span>
                     <div className="min-w-0 flex-1">
                         <p className="text-[13px] font-bold leading-tight text-ember-700">
-                            {pending.length === 1 ? 'Tenés 1 día pendiente' : `Tenés ${pending.length} días pendientes`} esta
+                            {pending.length === 1 ? 'Tienes 1 día pendiente' : `Tienes ${pending.length} días pendientes`} esta
                             semana
                         </p>
                         <p className="mt-0.5 truncate text-[11.5px] font-semibold text-ember-700/80">

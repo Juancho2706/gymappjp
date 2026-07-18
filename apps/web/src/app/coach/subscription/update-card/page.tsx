@@ -45,7 +45,7 @@ export default async function UpdateCardPage() {
                     Cambiar tarjeta
                 </h1>
                 <p className="text-sm text-muted">
-                    Actualizá la tarjeta de tu suscripción. Tu plan, monto y fecha de cobro no cambian.
+                    Actualiza la tarjeta de tu suscripción. Tu plan, monto y fecha de cobro no cambian.
                 </p>
             </header>
 

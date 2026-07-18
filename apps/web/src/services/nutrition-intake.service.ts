@@ -1,29 +1,22 @@
 import { SupabaseClient } from '@supabase/supabase-js'
 import { Database } from '@/lib/database.types'
+import type { NutritionMealSlot } from '@eva/nutrition-engine'
 
 /**
- * Off-plan intake (registro fuera de plan) del alumno.
+ * Registro de consumo real del alumno.
  *
- * Tabla `nutrition_intake_entries` es client-scoped por RLS: el alumno solo
- * lee/escribe sus propias filas (`client_id = auth.uid()`). Estos helpers
- * reciben el `SupabaseClient` del servidor (cookies de sesión) — la RLS hace
- * cumplir el scope. Pasamos `clientId` para filtrar/insertar explícitamente,
- * pero NUNCA es la fuente de autorización: eso lo da la sesión + RLS.
+ * RLS mantiene el scope por `client_id = auth.uid()`. Las columnas snapshot
+ * preservan el valor histórico aunque luego se edite el catálogo de alimentos.
  */
 
 type IntakeEntryRow = Database['public']['Tables']['nutrition_intake_entries']['Row']
 
-/**
- * Valores permitidos de `source` — deben coincidir EXACTAMENTE con el
- * CHECK de la migracion de `nutrition_intake_entries`
- * (`source IN ('offplan','quickadd','recent','copy')`). Fuente unica de verdad:
- * el schema Zod de la action y los tests derivan de aca (evita drift codigo/DB).
- */
 export const INTAKE_SOURCES = ['offplan', 'quickadd', 'recent', 'copy'] as const
-
 export type IntakeSource = (typeof INTAKE_SOURCES)[number]
 
-/** Subconjunto del catálogo de alimentos resuelto para una entrada. */
+export const INTAKE_CAPTURE_METHODS = ['search', 'barcode', 'recent', 'copy', 'manual'] as const
+export type IntakeCaptureMethod = (typeof INTAKE_CAPTURE_METHODS)[number]
+
 export type IntakeFoodRef = {
   id: string
   name: string
@@ -32,20 +25,31 @@ export type IntakeFoodRef = {
   protein_g: number
   carbs_g: number
   fats_g: number
+  fiber_g?: number | null
   serving_size: number
   serving_unit: string | null
   household_grams: number | null
   household_label: string | null
-  is_liquid: boolean
+  is_liquid: boolean | null
 }
 
-/** Entrada de intake con el alimento del catálogo resuelto (si aplica). */
 export type IntakeEntryWithFood = IntakeEntryRow & {
+  meal_slot?: NutritionMealSlot | null
+  capture_method?: IntakeCaptureMethod | null
+  snapshot_name?: string | null
+  snapshot_brand?: string | null
+  snapshot_calories?: number | null
+  snapshot_protein_g?: number | null
+  snapshot_carbs_g?: number | null
+  snapshot_fats_g?: number | null
+  snapshot_fiber_g?: number | null
+  snapshot_serving_size?: number | null
+  snapshot_serving_unit?: string | null
   food: IntakeFoodRef | null
 }
 
 const FOOD_REF_SELECT =
-  'id, name, brand, calories, protein_g, carbs_g, fats_g, serving_size, serving_unit, household_grams, household_label, is_liquid'
+  'id, name, brand, calories, protein_g, carbs_g, fats_g, fiber_g, serving_size, serving_unit, household_grams, household_label, is_liquid'
 
 const INTAKE_SELECT = `*, food:foods(${FOOD_REF_SELECT})`
 
@@ -57,17 +61,23 @@ export type InsertIntakeEntryInput = {
   quantity: number
   unit: string
   source?: IntakeSource
+  mealSlot?: NutritionMealSlot | null
+  captureMethod?: IntakeCaptureMethod
+  foodSnapshot?: IntakeFoodRef | null
+}
+
+type LooseClient = SupabaseClient
+
+function loose(client: SupabaseClient<Database>): LooseClient {
+  return client as unknown as LooseClient
 }
 
 export class NutritionIntakeService {
   constructor(private supabase: SupabaseClient<Database>) {}
 
-  /**
-   * Inserta una entrada de intake fuera de plan para el alumno autenticado.
-   * RLS garantiza que `clientId` debe coincidir con `auth.uid()`.
-   */
   async insertIntakeEntry(input: InsertIntakeEntryInput): Promise<IntakeEntryWithFood | null> {
-    const { data, error } = await this.supabase
+    const snapshot = input.foodSnapshot
+    const { data, error } = await loose(this.supabase)
       .from('nutrition_intake_entries')
       .insert({
         client_id: input.clientId,
@@ -77,27 +87,33 @@ export class NutritionIntakeService {
         quantity: input.quantity,
         unit: input.unit,
         source: input.source ?? 'offplan',
+        meal_slot: input.mealSlot ?? 'other',
+        capture_method: input.captureMethod ?? 'search',
+        snapshot_name: snapshot?.name ?? input.customName ?? null,
+        snapshot_brand: snapshot?.brand ?? null,
+        snapshot_calories: snapshot?.calories ?? null,
+        snapshot_protein_g: snapshot?.protein_g ?? null,
+        snapshot_carbs_g: snapshot?.carbs_g ?? null,
+        snapshot_fats_g: snapshot?.fats_g ?? null,
+        snapshot_fiber_g: snapshot?.fiber_g ?? null,
+        snapshot_serving_size: snapshot?.serving_size ?? null,
+        snapshot_serving_unit: snapshot?.serving_unit ?? null,
       })
       .select(INTAKE_SELECT)
       .single()
 
     if (error || !data) {
-      if (error) {
-        // Server-side only (no filtra al cliente): deja rastro del motivo real
-        // del fallo de insert para no debuggear a ciegas (ej. violacion de CHECK).
-        console.error('[nutrition-intake] insert failed:', error.message)
-      }
+      if (error) console.error('[nutrition-intake] insert failed:', error.message)
       return null
     }
     return data as unknown as IntakeEntryWithFood
   }
 
-  /** Lista las entradas de intake del alumno para un día (YYYY-MM-DD). */
   async listIntakeEntriesForDate(
     clientId: string,
-    isoDate: string
+    isoDate: string,
   ): Promise<IntakeEntryWithFood[]> {
-    const { data, error } = await this.supabase
+    const { data, error } = await loose(this.supabase)
       .from('nutrition_intake_entries')
       .select(INTAKE_SELECT)
       .eq('client_id', clientId)
@@ -108,13 +124,8 @@ export class NutritionIntakeService {
     return data as unknown as IntakeEntryWithFood[]
   }
 
-  /**
-   * Alimentos del catálogo usados recientemente por el alumno en su intake,
-   * deduplicados y ordenados por uso más reciente. Para sugerencias de "volver
-   * a registrar". Solo entradas que referencian el catálogo (`food_id` no nulo).
-   */
   async listRecentIntakeFoods(clientId: string, limit = 10): Promise<IntakeFoodRef[]> {
-    const { data, error } = await this.supabase
+    const { data, error } = await loose(this.supabase)
       .from('nutrition_intake_entries')
       .select(`food_id, created_at, food:foods(${FOOD_REF_SELECT})`)
       .eq('client_id', clientId)
@@ -135,9 +146,8 @@ export class NutritionIntakeService {
     return out
   }
 
-  /** Borra una entrada de intake del alumno (RLS exige propiedad). */
   async deleteIntakeEntry(clientId: string, entryId: string): Promise<boolean> {
-    const { error } = await this.supabase
+    const { error } = await loose(this.supabase)
       .from('nutrition_intake_entries')
       .delete()
       .eq('id', entryId)

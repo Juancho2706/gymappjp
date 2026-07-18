@@ -103,11 +103,13 @@
     --color-text-on-dark-muted: 147 157 171;/* #939DAB */
     --color-text-link: 20 98 220;           /* sport-600 */
 
-    /* Borders & dividers */
-    --color-border-subtle: 230 233 237;     /* ink-100 (solid) */
-    --color-border-default: 205 211 219;    /* ink-200 */
-    --color-border-strong: 168 177 189;     /* ink-300 */
-    --color-border-inverse: 255 255 255;    /* apply /10 -> rgba(255,255,255,.10) */
+    /* Borders & dividers — subtle/default/strong llevan el color COMPLETO por modo
+       (no canal): la clase bare border-* consume var(--color-border-*) directo, espejo
+       de web globals.css:413-415 (--border-subtle=ink-100, -default=ink-200, -strong=ink-300). */
+    --color-border-subtle: #E6E9ED;         /* ink-100 (solid) */
+    --color-border-default: #CDD3DB;        /* ink-200 (solid) */
+    --color-border-strong: #A8B1BD;         /* ink-300 (solid) */
+    --color-border-inverse: 255 255 255;    /* canal: apply /10 -> rgba(255,255,255,.10) */
 
     /* Neutral track for meters/sparklines (flips in dark) */
     --color-track: 230 233 237;             /* ink-100 */
@@ -125,6 +127,15 @@
 
     /* Focus ring */
     --color-focus-ring: 38 128 255;         /* apply /40 -> rgba(38,128,255,.40) */
+
+    /* Data-viz categorical (mirrors web globals.css --viz-1..6; the referenced
+       ramp steps do not flip in dark, so these stay constant across themes) */
+    --color-viz-1: 38 128 255;              /* sport-500 */
+    --color-viz-2: 255 106 61;              /* ember-500 */
+    --color-viz-3: 24 171 212;              /* aqua-500 */
+    --color-viz-4: 147 190 255;             /* sport-300 */
+    --color-viz-5: 255 177 153;             /* ember-300 */
+    --color-viz-6: 129 140 154;             /* ink-400 */
 
     /* ============ Legacy compat — existing names remapped to DS aliases ============ */
     --color-primary: 38 128 255;            /* brand (sport-500); brandVars() overrides at runtime */
@@ -182,23 +193,25 @@
     --color-surface-app: 10 13 18;          /* #0A0D12 */
     --color-surface-card: 22 27 34;         /* #161B22 */
     --color-surface-sunken: 31 38 47;       /* #1F262F */
-    --color-surface-inverse: 22 39 60;      /* #16273C (brand-tinted hero) */
-    --color-surface-inverse-2: 14 23 34;    /* #0E1722 */
+    --color-surface-inverse: 42 50 61;      /* #2A323D (neutral, matches web globals.css) */
+    --color-surface-inverse-2: 35 42 51;    /* #232A33 (matches web globals.css) */
     --color-surface-overlay: 0 0 0;         /* apply /62 -> rgba(0,0,0,.62) */
 
     /* Text */
     --color-text-strong: 244 246 248;       /* #F4F6F8 */
     --color-text-body: 205 211 219;         /* #CDD3DB */
-    --color-text-muted: 138 149 163;        /* #8A95A3 */
+    --color-text-muted: 152 162 176;        /* #98A2B0 (matches web globals.css) */
     --color-text-subtle: 134 145 158;       /* #86919E */
     --color-text-on-dark: 244 246 248;
     --color-text-on-dark-muted: 147 157 171;
     --color-text-link: 92 157 255;          /* sport-400 */
 
-    /* Borders & dividers — translucent white (apply alpha; see notes) */
-    --color-border-subtle: 255 255 255;     /* apply /[0.07] */
-    --color-border-default: 255 255 255;    /* apply /[0.13] */
-    --color-border-strong: 255 255 255;     /* apply /[0.22] */
+    /* Borders & dividers — blanco translúcido con el alpha HORNEADO en el token
+       (color completo, no canal) espejo 1:1 de web globals.css:600-602. La clase bare
+       border-* ya resuelve el alpha correcto; NO usar modificador /[x] sobre estos. */
+    --color-border-subtle: rgba(255, 255, 255, 0.07);
+    --color-border-default: rgba(255, 255, 255, 0.13);
+    --color-border-strong: rgba(255, 255, 255, 0.22);
 
     /* Meters / tracks */
     --color-track: 255 255 255;             /* apply /[0.10] */

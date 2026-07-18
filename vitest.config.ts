@@ -17,6 +17,9 @@ export default defineConfig({
     alias: {
       '@': path.resolve(__dirname, './apps/web/src'),
       '@eva/brand-kit': path.resolve(__dirname, './packages/brand-kit/index.ts'),
+      '@eva/nutrition-v2': path.resolve(__dirname, './packages/nutrition-v2/index.ts'),
+      '@eva/nutrition-v2/design': path.resolve(__dirname, './packages/nutrition-v2/design.ts'),
+      '@eva/nutrition-v2/contracts': path.resolve(__dirname, './packages/nutrition-v2/contracts.ts'),
       // Subpath ANTES del paquete raiz (resolucion por prefijo).
       '@eva/schemas/screening': path.resolve(__dirname, './packages/schemas/screening.ts'),
       '@eva/schemas/bodycomp': path.resolve(__dirname, './packages/schemas/bodycomp.ts'),
@@ -26,6 +29,14 @@ export default defineConfig({
       '@eva/nutrition-engine': path.resolve(__dirname, './packages/nutrition-engine/index.ts'),
       '@eva/module-catalog': path.resolve(__dirname, './packages/module-catalog/catalog.ts'),
       '@eva/feature-prefs': path.resolve(__dirname, './packages/feature-prefs/index.ts'),
+      '@eva/workout-engine': path.resolve(__dirname, './packages/workout-engine/index.ts'),
+      '@eva/plan-builder': path.resolve(__dirname, './packages/plan-builder/index.ts'),
+      '@eva/cardio': path.resolve(__dirname, './packages/cardio/index.ts'),
+      '@eva/coach-nav': path.resolve(__dirname, './packages/coach-nav/index.ts'),
+      // Subpath ANTES del paquete raiz (resolucion por prefijo).
+      '@eva/bodycomp/fixtures': path.resolve(__dirname, './packages/bodycomp/fixtures.ts'),
+      '@eva/bodycomp': path.resolve(__dirname, './packages/bodycomp/index.ts'),
+      '@eva/profile-analytics': path.resolve(__dirname, './packages/profile-analytics/index.ts'),
       // `server-only` throws outside an RSC; neutralize it for unit tests that transitively
       // import server modules. Build-time boundary is still enforced by Next.js.
       'server-only': path.resolve(__dirname, './vitest.server-only-stub.ts'),

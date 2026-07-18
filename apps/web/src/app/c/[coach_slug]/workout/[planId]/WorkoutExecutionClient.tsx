@@ -10,26 +10,32 @@ import { ArrowLeft, Info, Dumbbell, Timer, TrendingUp, History, Quote, X, Settin
 import { computeEffectiveTarget } from '@/lib/workout/progression'
 import { LogSetForm, type SetSyncResult } from './LogSetForm'
 import { SingleExerciseCard } from './SingleExerciseCard'
-import { formatTypedObjective } from './typed-keypad'
+import {
+    formatTypedObjective,
+    buildStepModel,
+    firstIncompleteStepIndex,
+    isStepComplete,
+    stepIndexOfBlock,
+    reconcileSessionLogs,
+    type ReconciledSessionLog,
+    applyOptimisticSessionLog,
+    type OptimisticLogPayload,
+    groupContiguousSupersetRuns,
+    type WorkoutSectionKey,
+    executionAreaGroupsFor,
+    isTimeableInterval,
+} from '@eva/workout-engine'
 import { StepperExecution, type StepperStepView } from './StepperExecution'
 import { STEPPER_MODE_KEY } from './rest-timer-preferences'
 import { SubstituteExerciseSheet } from './_components/SubstituteExerciseSheet'
 import { SUBSTITUTION_REASON } from '@/services/workout/exercise-substitution'
 import type { SubstituteCandidate } from './_data/substitution.queries'
-import {
-    buildStepModel,
-    firstIncompleteStepIndex,
-    isStepComplete,
-    stepIndexOfBlock,
-} from '@/lib/workout-stepper'
 import { logSetAction, revalidateWorkoutViewAction } from './_actions/workout-log.actions'
 import {
     flushWorkoutQueue,
     readWorkoutOfflineQueueForPlan,
     workoutLogToFormData,
 } from '@/lib/workout-offline-queue'
-import { reconcileSessionLogs, type ReconciledSessionLog } from './session-logs.reconcile'
-import { applyOptimisticSessionLog, type OptimisticLogPayload } from './session-logs.optimistic'
 import { WorkoutTimerProvider, useWorkoutTimer, parseRestTime } from './WorkoutTimerProvider'
 import { WorkoutKeypadProvider } from './WorkoutKeypadProvider'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose } from '@/components/ui/dialog'
@@ -57,16 +63,10 @@ import { springs } from '@/lib/animation-presets'
 import { useBasePath } from '@/components/client/BasePathProvider'
 import { useScreenWakeLock } from '@/lib/client/use-screen-wake-lock'
 import { markFirstWorkoutCompleted } from '@/lib/pwa/install-signals'
-import {
-    groupContiguousSupersetRuns,
-    type WorkoutSectionKey,
-} from '@/lib/workout-block-grouping'
-import { executionAreaGroupsFor } from '@/lib/workout-areas'
 import { EXERCISE_TYPE_META } from '@/lib/workout-exercise-type'
 import type { IntervalConfig, WorkoutArea, ExerciseType as WorkoutKind } from '@/domain/workout/types'
 import { effectiveExerciseType, compactDistance, compactDuration } from '@/lib/workout-exercise-type'
-import { isTimeableInterval } from '@/lib/workout-interval'
-import { formatPace } from '@/domain/cardio/pace'
+import { formatPace } from '@eva/cardio'
 import { extractYoutubeVideoId } from '@/lib/youtube'
 import { ExerciseVideo } from '@/components/exercise/ExerciseVideo'
 import type { ClientCardioView } from './_data/workout-execution.queries'
@@ -574,7 +574,7 @@ function overloadChipLabel(
         return block.progression_type === 'weight' ? `+${v} kg/sem` : `+${v} rep/ses`
     }
     if (eff.mode === 'double') {
-        return eff.status === 'holding' ? `Mantené ${eff.weightKg} kg` : `Objetivo ${eff.weightKg} kg`
+        return eff.status === 'holding' ? `Mantén ${eff.weightKg} kg` : `Objetivo ${eff.weightKg} kg`
     }
     if (eff.isProgressed && currentWeek != null) return `Sem ${currentWeek} · ${eff.weightKg} kg`
     return `+${v} kg/sem`
@@ -593,16 +593,16 @@ function overloadDetailText(
         return `Sube +${v} ${block.progression_type === 'weight' ? 'kg cada semana' : 'rep cada sesión'}.`
     }
     if (eff.mode === 'double') {
-        if (eff.status === 'holding') return `Doble progresión: mantené ${eff.weightKg} kg y completá ${eff.repsTopToUnlock} reps en todas las series para subir.`
+        if (eff.status === 'holding') return `Doble progresión: mantén ${eff.weightKg} kg y completa ${eff.repsTopToUnlock} reps en todas las series para subir.`
         if (eff.status === 'progressed') {
             return eff.isProgressed
                 ? `Doble progresión: ¡subiste! Objetivo ${eff.weightKg} kg (base ${eff.baseWeightKg}).`
                 : `Doble progresión: objetivo ${eff.weightKg} kg (aún por debajo de la base ${eff.baseWeightKg}).`
         }
-        return `Doble progresión: subí +${v} kg cuando completes ${eff.repsTopToUnlock} reps en todas las series.`
+        return `Doble progresión: sube +${v} kg cuando completes ${eff.repsTopToUnlock} reps en todas las series.`
     }
     if (eff.isProgressed && currentWeek != null) return `Semana ${currentWeek}: objetivo ${eff.weightKg} kg (base ${eff.baseWeightKg} +${eff.addedKg}).`
-    return `Sube +${v} kg cada semana (esta semana arrancás en la base).`
+    return `Sube +${v} kg cada semana (esta semana arrancas en la base).`
 }
 
 interface SupersetGroupCardProps {
@@ -713,7 +713,7 @@ function SupersetGroupCard({
                     </button>
                 </div>
                 <p className="text-[12px] leading-snug text-on-dark-muted">
-                    Rondas: <strong className="text-on-dark">{firstLabel}</strong> → <strong className="text-on-dark">{secondLabel}</strong> sin descanso, descansá al cerrar la ronda.
+                    Rondas: <strong className="text-on-dark">{firstLabel}</strong> → <strong className="text-on-dark">{secondLabel}</strong> sin descanso, descansa al cerrar la ronda.
                 </p>
                 <AnimatePresence initial={false}>
                     {howToOpen && (
@@ -725,8 +725,8 @@ function SupersetGroupCard({
                             className="overflow-hidden"
                         >
                             <p className="rounded-sm border border-[var(--border-inverse)] bg-white/[0.03] p-3 text-[12px] leading-relaxed text-on-dark/90">
-                                Trabajá por rondas: hacé <strong>{firstLabel}</strong>, seguí con <strong>{secondLabel}</strong> sin
-                                descanso, y descansá al <strong>cerrar la ronda</strong>. Repetí hasta completar todas las series.
+                                Trabaja por rondas: haz <strong>{firstLabel}</strong>, sigue con <strong>{secondLabel}</strong> sin
+                                descanso, y descansa al <strong>cerrar la ronda</strong>. Repite hasta completar todas las series.
                             </p>
                         </motion.div>
                     )}
@@ -832,7 +832,7 @@ function SupersetGroupCard({
                                     </span>
                                     {beatIt && (
                                         <span className="inline-flex items-center gap-1 text-[10px] font-bold text-[var(--sport-300)]">
-                                            <TrendingUp className="h-3 w-3" /> Superá tu marca
+                                            <TrendingUp className="h-3 w-3" /> Supera tu marca
                                         </span>
                                     )}
                                 </div>
@@ -935,7 +935,7 @@ function CollapsedExerciseBar({
             onClick={onExpand}
             transition={reducedMotion ? { duration: 0 } : springs.smooth}
             className="relative flex w-full items-center gap-2.5 overflow-hidden rounded-card border border-[var(--sport-500)]/25 bg-[var(--sport-500)]/[0.05] px-3.5 py-2.5 text-left transition-colors hover:bg-[var(--sport-500)]/[0.09] active:scale-[0.99]"
-            aria-label={`${name} — completado, tocá para ver o editar`}
+            aria-label={`${name} — completado, toca para ver o editar`}
         >
             {celebrate && (
                 <motion.span
@@ -1409,7 +1409,7 @@ export function WorkoutExecutionClient({
     const scrollToNextIncomplete = (fromLogs: Props['logs']) => {
         const nextIncomplete = blocks.find((b) => !isBlockComplete(b, fromLogs))
         if (!nextIncomplete) return
-        // Modo stepper: en vez de scrollear, avanzá de PASO (auto-avance suave). Dentro de una
+        // Modo stepper: en vez de scrollear, avanza de PASO (auto-avance suave). Dentro de una
         // superserie este handler solo corre cuando el GRUPO cerró (nextPos == null en `handleLogged`),
         // así que no rompe la guía interleaved A1→B1 (esa sigue con `nextCue` + toast, sin cambiar de paso).
         if (stepperEnabled) {
@@ -1462,7 +1462,7 @@ export function WorkoutExecutionClient({
             if (nextPos) {
                 if (!roundClosed) {
                     const label = `${info.letterByBlock.get(nextPos.blockId) ?? ''}${nextPos.set}`
-                    toast.info(`Sin descanso — seguí con ${label}`)
+                    toast.info(`Sin descanso — sigue con ${label}`)
                 }
                 setTimeout(() => {
                     smoothScrollIntoViewIfNeeded(setRowRefs.current.get(`${nextPos.blockId}:${nextPos.set}`), 'center')
@@ -1529,7 +1529,7 @@ export function WorkoutExecutionClient({
                 toast.warning(
                     `${n} serie${n !== 1 ? 's' : ''} sin sincronizar`,
                     {
-                        description: 'Se guardarán cuando vuelva la conexión. Podés finalizar igual o esperar.',
+                        description: 'Se guardarán cuando vuelva la conexión. Puedes finalizar igual o esperar.',
                         duration: 6000,
                         action: {
                             label: 'Finalizar igual',

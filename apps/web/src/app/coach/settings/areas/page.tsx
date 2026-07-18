@@ -31,7 +31,7 @@ export default async function CoachAreasPage() {
                     <p className="mt-1 text-sm text-muted">
                         {ctx.scope === 'team'
                             ? `Equipo "${ctx.teamName}" — todo el pool arma los días con estas áreas.`
-                            : 'Organizá los días de entrenamiento con tus propias áreas (Movilidad, Core, HYROX…).'}
+                            : 'Organiza los días de entrenamiento con tus propias áreas (Movilidad, Core, HYROX…).'}
                     </p>
                 </div>
             </div>

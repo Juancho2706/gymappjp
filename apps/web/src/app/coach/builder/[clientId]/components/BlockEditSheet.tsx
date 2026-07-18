@@ -13,8 +13,8 @@ import type { BuilderBlock, BuilderCardioContext } from '../types'
 import type { ExerciseType, IntervalConfig, SideMode } from '@/domain/workout/types'
 import { EXERCISE_TYPE_META, effectiveExerciseType } from '@/lib/workout-exercise-type'
 import { exerciseThumbnailUrl } from '@/lib/youtube'
-import { INTERVAL_TEMPLATES } from '@/lib/workout-interval'
-import { HR_ZONES } from '@/domain/cardio/zones'
+import { INTERVAL_TEMPLATES } from '@eva/workout-engine'
+import { HR_ZONES } from '@eva/cardio'
 
 interface ExerciseHistory {
     logged_at: string

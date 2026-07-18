@@ -150,9 +150,9 @@ const styles = StyleSheet.create({
   fillClip: { position: 'absolute', bottom: 0, left: 0, width: MARK, overflow: 'hidden' },
   wordWrap: { marginTop: 10, overflow: 'hidden' },
   row: { flexDirection: 'row', alignItems: 'flex-end', gap: 2 },
-  letter: { fontSize: 76, lineHeight: 80, fontFamily: 'Montserrat_800ExtraBold', letterSpacing: -2, color: '#FFFFFF' },
+  letter: { fontSize: 76, lineHeight: 80, fontFamily: 'Archivo_800ExtraBold', letterSpacing: -2, color: '#FFFFFF' },
   shimmerClip: { ...StyleSheet.absoluteFillObject, overflow: 'hidden' },
   shimmerBar: { position: 'absolute', top: -10, bottom: -10, width: 70, transform: [{ rotate: '18deg' }] },
   accent: { width: width * 0.32, height: 2, borderRadius: 2, marginTop: 16, marginBottom: 18 },
-  tagline: { fontSize: 12, fontFamily: 'Inter_400Regular', color: 'rgba(255,255,255,0.5)', letterSpacing: 2.5, textAlign: 'center' },
+  tagline: { fontSize: 12, fontFamily: 'HankenGrotesk_400Regular', color: 'rgba(255,255,255,0.5)', letterSpacing: 2.5, textAlign: 'center' },
 })

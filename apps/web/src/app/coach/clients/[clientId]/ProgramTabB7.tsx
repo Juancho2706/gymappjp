@@ -31,7 +31,7 @@ import {
     uniqueMuscleGroupsFromBlocks,
 } from './profileProgramStructureUtils'
 import { resolveEffectiveWeekVariant } from '@/lib/workout/programWeekVariant'
-import { groupContiguousSupersetRuns } from '@/lib/workout-block-grouping'
+import { groupContiguousSupersetRuns } from '@eva/workout-engine'
 import { cn } from '@/lib/utils'
 import { SectionTitle } from './_components/SectionTitle'
 
@@ -676,7 +676,7 @@ export function ProgramTabB7({
                         className="p-4 text-sm"
                     >
                         <span style={{ color: TXT_MUTED }}>
-                            No hay días con ejercicios en este programa (revisá variantes de semana en el builder).
+                            No hay días con ejercicios en este programa (revisa variantes de semana en el builder).
                         </span>
                     </div>
                 ) : (

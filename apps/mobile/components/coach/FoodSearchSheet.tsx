@@ -1,7 +1,7 @@
 import { forwardRef, useCallback, useMemo, useState } from 'react'
 import { ActivityIndicator, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
 import { BottomSheetModal, BottomSheetFlatList, BottomSheetScrollView } from '@gorhom/bottom-sheet'
-import { Plus, Search, Star } from 'lucide-react-native'
+import { AlertTriangle, Plus, Search, Star } from 'lucide-react-native'
 import { useTheme } from '../../context/ThemeContext'
 import { MACRO_COLORS } from '../MacroRingSummary'
 import {
@@ -27,11 +27,17 @@ interface Props {
   excludedIds?: string[]
   /** Resalta ★ y ordena arriba los favoritos del alumno. */
   favoriteIds?: Set<string>
+  /** ALERGIA del alumno — badge rojo + confirmación BLOQUEANTE al elegir (correctness de salud). */
+  allergyIds?: Set<string>
+  /** INTOLERANCIA del alumno — badge ámbar de aviso (no bloquea). */
+  intoleranceIds?: Set<string>
+  /** "No le gusta" — badge gris de aviso blando (no bloquea). */
+  dislikeIds?: Set<string>
   /** Título opcional del header (p. ej. "Agregar alternativa"). */
   title?: string
 }
 
-export const FoodSearchSheet = forwardRef<BottomSheetModal, Props>(function FoodSearchSheet({ onSelect, excludedIds, favoriteIds, title }, ref) {
+export const FoodSearchSheet = forwardRef<BottomSheetModal, Props>(function FoodSearchSheet({ onSelect, excludedIds, favoriteIds, allergyIds, intoleranceIds, dislikeIds, title }, ref) {
   const { theme } = useTheme()
   const [mode, setMode] = useState<'search' | 'create'>('search')
   const [query, setQuery] = useState('')
@@ -39,16 +45,26 @@ export const FoodSearchSheet = forwardRef<BottomSheetModal, Props>(function Food
   const [loading, setLoading] = useState(false)
   const [category, setCategory] = useState<string>('todos')
   const [scope, setScope] = useState<FoodScope>('all')
+  // Alimento alérgeno pendiente de confirmación deliberada (bloquea el pick). Espejo del web.
+  const [allergyConfirm, setAllergyConfirm] = useState<FoodRow | null>(null)
   const snapPoints = useMemo(() => ['75%', '95%'], [])
 
   const displayed = useMemo(() => {
     const ex = excludedIds && excludedIds.length ? new Set(excludedIds) : null
     let list = ex ? results.filter((r) => !ex.has(r.id)) : results
-    if (favoriteIds && favoriteIds.size) {
-      list = [...list].sort((a, b) => (favoriteIds.has(b.id) ? 1 : 0) - (favoriteIds.has(a.id) ? 1 : 0))
+    // Rank de afinidad (espejo del web FoodSearchDrawer): favorito arriba, alergia/dislike abajo.
+    const hasAny = (favoriteIds?.size || allergyIds?.size || intoleranceIds?.size || dislikeIds?.size) ?? 0
+    if (hasAny) {
+      const rank = (id: string): number => {
+        if (allergyIds?.has(id)) return -2
+        if (favoriteIds?.has(id)) return 2
+        if (intoleranceIds?.has(id) || dislikeIds?.has(id)) return -1
+        return 0
+      }
+      list = [...list].sort((a, b) => rank(b.id) - rank(a.id))
     }
     return list
-  }, [results, excludedIds, favoriteIds])
+  }, [results, excludedIds, favoriteIds, allergyIds, intoleranceIds, dislikeIds])
 
   const run = useCallback(async (text: string, cat: string = category, sc: FoodScope = scope) => {
     setQuery(text)
@@ -61,8 +77,15 @@ export const FoodSearchSheet = forwardRef<BottomSheetModal, Props>(function Food
   function applyScope(sc: FoodScope) { setScope(sc); run(query, category, sc) }
 
   function pick(food: FoodRow) {
+    setAllergyConfirm(null)
     onSelect(food)
     ;(ref as React.RefObject<BottomSheetModal>).current?.dismiss()
+  }
+
+  // Intercepta el pick: si el alimento es alérgeno del alumno, exige confirmación deliberada.
+  function attemptPick(food: FoodRow) {
+    if (allergyIds?.has(food.id)) { setAllergyConfirm(food); return }
+    pick(food)
   }
 
   return (
@@ -73,7 +96,7 @@ export const FoodSearchSheet = forwardRef<BottomSheetModal, Props>(function Food
       enableDynamicSizing={false}
       enablePanDownToClose
       onChange={(i) => { if (i >= 0 && mode === 'search' && results.length === 0 && query.length === 0) run('') }}
-      onDismiss={() => setMode('search')}
+      onDismiss={() => { setMode('search'); setAllergyConfirm(null) }}
       keyboardBehavior="interactive"
       android_keyboardInputMode="adjustResize"
       backgroundStyle={{ backgroundColor: theme.card }}
@@ -125,19 +148,39 @@ export const FoodSearchSheet = forwardRef<BottomSheetModal, Props>(function Food
             keyboardShouldPersistTaps="handled"
             ListEmptyComponent={!loading ? (
               <Text style={[styles.empty, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
-                {query.length >= 2 ? `Sin resultados. Toca + para crear "${query}".` : 'Escribí para buscar, o toca + para crear.'}
+                {query.length >= 2 ? `Sin resultados. Toca + para crear "${query}".` : 'Escribe para buscar, o toca + para crear.'}
               </Text>
             ) : null}
             renderItem={({ item }) => {
               const fav = favoriteIds?.has(item.id)
+              // Prioridad de restricción (espejo del web): alergia > intolerancia > no le gusta.
+              const isAllergy = allergyIds?.has(item.id) ?? false
+              const isIntolerance = !isAllergy && (intoleranceIds?.has(item.id) ?? false)
+              const isDislike = !isAllergy && !isIntolerance && (dislikeIds?.has(item.id) ?? false)
+              const rowBorder = isAllergy ? theme.destructive + '66' : fav ? theme.primary + '66' : theme.border
+              const rowBg = isAllergy ? theme.destructive + '12' : fav ? theme.primary + '0D' : 'transparent'
               return (
-                <TouchableOpacity style={[styles.row, { borderColor: fav ? theme.primary + '66' : theme.border, backgroundColor: fav ? theme.primary + '0D' : 'transparent' }]} onPress={() => pick(item)} activeOpacity={0.7}>
+                <TouchableOpacity testID="food-search-result" style={[styles.row, { borderColor: rowBorder, backgroundColor: rowBg }]} onPress={() => attemptPick(item)} activeOpacity={0.7}>
                   <View style={{ flex: 1 }}>
                     <View style={styles.nameRow}>
                       {fav ? <Star size={13} color={theme.primary} fill={theme.primary} /> : null}
                       <Text style={[styles.foodName, { color: theme.foreground, fontFamily: 'Archivo_700Bold' }]} numberOfLines={1}>
                         {item.name}{item.brand ? ` · ${item.brand}` : ''}
                       </Text>
+                      {isAllergy ? (
+                        <View testID="food-allergy-badge" className="bg-danger-100 rounded-md" style={styles.restrictBadge}>
+                          <AlertTriangle size={11} color={theme.destructive} />
+                          <Text className="text-danger-600" style={styles.restrictBadgeText}>Alergia</Text>
+                        </View>
+                      ) : isIntolerance ? (
+                        <View testID="food-intolerance-badge" className="bg-warning-100 rounded-md" style={styles.restrictBadge}>
+                          <Text className="text-warning-600" style={styles.restrictBadgeText}>Intolerancia</Text>
+                        </View>
+                      ) : isDislike ? (
+                        <View testID="food-dislike-badge" className="bg-ink-100 rounded-md" style={styles.restrictBadge}>
+                          <Text className="text-muted" style={styles.restrictBadgeText}>No le gusta</Text>
+                        </View>
+                      ) : null}
                     </View>
                     <View style={styles.macroLine}>
                       <Text style={[styles.macroSeg, { color: MACRO_COLORS.kcal }]}>{item.calories} kcal</Text>
@@ -160,6 +203,33 @@ export const FoodSearchSheet = forwardRef<BottomSheetModal, Props>(function Food
           onCreated={(food) => pick(food)}
         />
       )}
+
+      {/* Confirmación BLOQUEANTE de alérgeno (correctness de salud) — espejo del web:
+          solo la ALERGIA bloquea; el override es deliberado ("Agregar igual"). */}
+      {allergyConfirm ? (
+        <View style={styles.allergyOverlay}>
+          <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={() => setAllergyConfirm(null)} />
+          <View className="bg-surface-card border border-danger-500/40" style={styles.allergyCard}>
+            <View style={styles.allergyTitleRow}>
+              <AlertTriangle size={18} color={theme.destructive} />
+              <Text className="text-danger-600" style={styles.allergyTitle}>Posible alérgeno</Text>
+            </View>
+            <Text className="text-body" style={[styles.allergyBody, { color: theme.foreground }]}>
+              Este alumno marcó <Text style={{ fontFamily: 'Archivo_700Bold' }}>{allergyConfirm.name}</Text> como alergia. Agregarlo a su plan puede ser peligroso.
+            </Text>
+            <View style={styles.allergyActions}>
+              <TouchableOpacity testID="allergy-cancel" onPress={() => setAllergyConfirm(null)} activeOpacity={0.8}
+                style={[styles.allergyBtn, { borderWidth: 1, borderColor: theme.border }]}>
+                <Text style={{ color: theme.foreground, fontFamily: 'HankenGrotesk_600SemiBold', fontSize: 14 }}>Cancelar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity testID="allergy-confirm" onPress={() => pick(allergyConfirm)} activeOpacity={0.85}
+                style={[styles.allergyBtn, { backgroundColor: theme.destructive }]}>
+                <Text style={{ color: theme.primaryForeground, fontFamily: 'Archivo_700Bold', fontSize: 14 }}>Agregar igual</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      ) : null}
     </BottomSheetModal>
   )
 })
@@ -173,6 +243,9 @@ function CreateFoodForm({ theme, initialName, onCancel, onCreated }: { theme: an
   const [serving, setServing] = useState('100')
   const [unit, setUnit] = useState<FoodUnit>('g')
   const [category, setCategory] = useState<string>('otro')
+  // Medida casera (household) — solo aplica a gramos (en 'un'/'ml' la unidad ya es la medida).
+  const [householdLabel, setHouseholdLabel] = useState('')
+  const [householdGrams, setHouseholdGrams] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -188,6 +261,8 @@ function CreateFoodForm({ theme, initialName, onCancel, onCreated }: { theme: an
       serving_size: Number(serving) || 100,
       serving_unit: unit,
       category,
+      household_label: unit === 'g' ? householdLabel : null,
+      household_grams: unit === 'g' ? Number(householdGrams) || null : null,
     })
     setSaving(false)
     if (!res.ok || !res.food) { setError(res.error ?? 'No se pudo crear.'); return }
@@ -237,6 +312,36 @@ function CreateFoodForm({ theme, initialName, onCancel, onCreated }: { theme: an
         })}
       </View>
 
+      {/* Medida casera (household) — espejo del web: solo con unidad gramos. */}
+      {unit === 'g' ? (
+        <View className="border border-subtle bg-surface-sunken rounded-control" style={styles.householdBox}>
+          <Text style={[styles.fLabel, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Medida casera (opcional)</Text>
+          <View style={styles.householdRow}>
+            <TextInput
+              testID="household-label"
+              value={householdLabel}
+              onChangeText={setHouseholdLabel}
+              placeholder="Ej: taza, cucharada, palma"
+              placeholderTextColor={theme.mutedForeground}
+              maxLength={30}
+              style={[styles.fInput, { flex: 1, textAlign: 'left', borderColor: theme.border, backgroundColor: theme.card, color: theme.foreground, fontFamily: theme.fontSans }]}
+            />
+            <TextInput
+              testID="household-grams"
+              value={householdGrams}
+              onChangeText={setHouseholdGrams}
+              placeholder="g"
+              placeholderTextColor={theme.mutedForeground}
+              keyboardType="number-pad"
+              style={[styles.fInput, { width: 76, borderColor: theme.border, backgroundColor: theme.card, color: theme.foreground, fontFamily: theme.fontSans }]}
+            />
+          </View>
+          <Text style={[styles.householdHint, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+            El alumno verá ej. 120 g (1 taza). Es solo una referencia; no cambia los macros.
+          </Text>
+        </View>
+      ) : null}
+
       <TouchableOpacity onPress={submit} disabled={saving} activeOpacity={0.85} style={[styles.submitBtn, { backgroundColor: theme.primary, opacity: saving ? 0.6 : 1 }]}>
         {saving ? <ActivityIndicator size="small" color={theme.primaryForeground} /> : (
           <Text style={[styles.submitText, { color: theme.primaryForeground, fontFamily: 'Archivo_700Bold' }]}>Crear y agregar</Text>
@@ -271,6 +376,18 @@ const styles = StyleSheet.create({
   catFilterChip: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 11, paddingVertical: 5 },
   row: { paddingHorizontal: 14, paddingVertical: 12, borderWidth: 1, borderRadius: 10 },
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  restrictBadge: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 6, paddingVertical: 2 },
+  restrictBadgeText: { fontSize: 10, fontFamily: 'HankenGrotesk_600SemiBold', textTransform: 'uppercase', letterSpacing: 0.4 },
+  allergyOverlay: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24, backgroundColor: 'rgba(0,0,0,0.55)' },
+  allergyCard: { width: '100%', maxWidth: 360, borderRadius: 18, padding: 18, gap: 4 },
+  allergyTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  allergyTitle: { fontSize: 12, fontFamily: 'Archivo_700Bold', textTransform: 'uppercase', letterSpacing: 0.8 },
+  allergyBody: { fontSize: 14, lineHeight: 20, marginTop: 8 },
+  allergyActions: { flexDirection: 'row', gap: 10, marginTop: 16 },
+  allergyBtn: { flex: 1, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  householdBox: { padding: 12, gap: 8 },
+  householdRow: { flexDirection: 'row', gap: 8, alignItems: 'center' },
+  householdHint: { fontSize: 11, lineHeight: 15 },
   foodName: { fontSize: 14, flexShrink: 1 },
   macroLine: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4, flexWrap: 'wrap' },
   macroSeg: { fontSize: 12, fontFamily: 'JetBrainsMono_500Medium' },

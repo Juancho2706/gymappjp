@@ -26,7 +26,7 @@ export function EnterpriseFAQ() {
             id="faq-heading"
             className="text-3xl sm:text-4xl md:text-5xl font-display font-black tracking-[-0.02em] text-gray-900"
           >
-            Todo lo que necesitás saber
+            Todo lo que necesitas saber
           </h2>
         </Reveal>
 

@@ -11,9 +11,9 @@ import { z } from 'zod'
  *            NO hay calculo: el server persiste `metrics` tal cual (solo Zod).
  *  - ISAK -> pliegues/perimetros/diametros CRUDOS en `raw_input`; los `metrics` derivados
  *            (Kerr 5C + Heath-Carter + %grasa) los calcula el SERVER con `computeIsak`
- *            (domain/bodycomp), NO el cliente. Por eso el create de ISAK NO acepta `metrics`.
+ *            (@eva/bodycomp), NO el cliente. Por eso el create de ISAK NO acepta `metrics`.
  *
- * Las formas espejan los tipos puros de `apps/web/src/domain/bodycomp/types.ts` (fuente de verdad
+ * Las formas espejan los tipos puros de `@eva/bodycomp` (types.ts) (fuente de verdad
  * del calculo). Aqui se acotan rangos fisiologicos y se rechaza payload desconocido (`.strict()`).
  */
 

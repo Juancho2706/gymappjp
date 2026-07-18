@@ -1,6 +1,6 @@
 import 'react-native-gesture-handler'
 import '../global.css'
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { BottomSheetModalProvider } from '@gorhom/bottom-sheet'
@@ -10,17 +10,6 @@ import * as Linking from 'expo-linking'
 import * as Notifications from 'expo-notifications'
 import * as SplashScreen from 'expo-splash-screen'
 import { useFonts } from 'expo-font'
-import {
-  Inter_400Regular,
-  Inter_500Medium,
-  Inter_600SemiBold,
-  Inter_700Bold,
-} from '@expo-google-fonts/inter'
-import {
-  Montserrat_600SemiBold,
-  Montserrat_700Bold,
-  Montserrat_800ExtraBold,
-} from '@expo-google-fonts/montserrat'
 // EVA Design System families (token-contract.md D3): Archivo (display),
 // Hanken Grotesk (UI/body), JetBrains Mono (metrics/timers).
 import {
@@ -41,24 +30,49 @@ import {
 import {
   JetBrainsMono_400Regular,
   JetBrainsMono_500Medium,
+  JetBrainsMono_600SemiBold,
   JetBrainsMono_700Bold,
 } from '@expo-google-fonts/jetbrains-mono'
 import type { Session } from '@supabase/supabase-js'
 import { ReducedMotionConfig, ReduceMotion } from 'react-native-reanimated'
-import { MotiView } from 'moti'
+import * as Sentry from '@sentry/react-native'
+import type { ErrorBoundaryProps } from 'expo-router'
 import { supabase } from '../lib/supabase'
+import { registerSessionCacheJanitor } from '../lib/auth-actions'
 import { ThemeProvider } from '../context/ThemeContext'
 import { configurePushHandler, setupAndroidChannel, syncPushToken } from '../lib/push'
-import { EvaSplash } from '../components/EvaSplash'
+import { LaunchSplash } from '../components/shared/LaunchSplash'
+import { Toaster } from '../components/Toast'
 import { AppErrorBoundary } from '../components/AppErrorBoundary'
 import { BiometricLock } from '../components/BiometricLock'
 import { isBiometricLockEnabled } from '../lib/biometric'
-import { AppState } from 'react-native'
+import { checkForOtaUpdate } from '../lib/ota'
+import { AppState, View } from 'react-native'
 
 SplashScreen.preventAutoHideAsync()
 
+// Telemetría de errores (E0-G1 / G11 §1.8). Gateado por env: sin DSN es no-op TOTAL
+// (cero llamadas de red, cero riesgo de crash). El DSN se inyecta vía EAS build
+// (EXPO_PUBLIC_SENTRY_DSN); sin él la app corre exactamente igual que hoy.
+const SENTRY_DSN = process.env.EXPO_PUBLIC_SENTRY_DSN
+if (SENTRY_DSN) {
+  Sentry.init({
+    dsn: SENTRY_DSN,
+    debug: false,
+    enabled: !__DEV__,
+    tracesSampleRate: 0,
+  })
+}
+
 // Expo Router: fallback global ante un throw no atrapado (en vez de pantalla blanca).
-export { AppErrorBoundary as ErrorBoundary }
+// Envolvemos el boundary de marca para reportar el error a Sentry (si hay DSN).
+function ReportingErrorBoundary(props: ErrorBoundaryProps) {
+  useEffect(() => {
+    if (SENTRY_DSN && props.error) Sentry.captureException(props.error)
+  }, [props.error])
+  return <AppErrorBoundary {...props} />
+}
+export { ReportingErrorBoundary as ErrorBoundary }
 
 configurePushHandler()
 
@@ -106,9 +120,20 @@ function RootLayoutNav() {
   }, [])
 
   useEffect(() => {
+    registerSessionCacheJanitor()
     supabase.auth.getSession().then(({ data }) => setSession(data.session))
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_, s) => setSession(s))
     return () => subscription.unsubscribe()
+  }, [])
+
+  // OTA en foreground (E0-G6): chequea al abrir y al volver de background.
+  // No-op en __DEV__; throttled a 1 check/hora dentro de lib/ota.ts.
+  useEffect(() => {
+    checkForOtaUpdate()
+    const sub = AppState.addEventListener('change', (s) => {
+      if (s === 'active') checkForOtaUpdate()
+    })
+    return () => sub.remove()
   }, [])
 
   useEffect(() => {
@@ -122,7 +147,18 @@ function RootLayoutNav() {
       // Race-safe: signInWithPassword may have stored the session in supabase
       // before our onAuthStateChange listener updated React state.
       supabase.auth.getSession().then(({ data }) => {
-        if (!data.session) router.replace('/')
+        if (!data.session) {
+          // Telemetria del PUNTO DE EXPULSION: solo llegamos aca si de verdad NO hay sesion en
+          // storage (SIGNED_OUT real). Si esto aparece justo tras cargar el dashboard, la causa
+          // esta aguas arriba (algun signOut) — el breadcrump deja el rastro para diagnosticarlo.
+          Sentry.addBreadcrumb({
+            category: 'auth',
+            level: 'info',
+            message: 'RootLayoutNav: expulsion a login (sesion nula en ruta protegida)',
+            data: { section, subroute },
+          })
+          router.replace('/')
+        }
       })
     }
   }, [session, segments])
@@ -161,14 +197,6 @@ function RootLayoutNav() {
 
 export default function RootLayout() {
   const [fontsLoaded] = useFonts({
-    // Legacy (still used by un-migrated screens)
-    Inter_400Regular,
-    Inter_500Medium,
-    Inter_600SemiBold,
-    Inter_700Bold,
-    Montserrat_600SemiBold,
-    Montserrat_700Bold,
-    Montserrat_800ExtraBold,
     // EVA Design System
     Archivo_400Regular,
     Archivo_500Medium,
@@ -183,9 +211,11 @@ export default function RootLayout() {
     HankenGrotesk_800ExtraBold,
     JetBrainsMono_400Regular,
     JetBrainsMono_500Medium,
+    JetBrainsMono_600SemiBold,
     JetBrainsMono_700Bold,
   })
   const [splashDone, setSplashDone] = useState(false)
+  const finishSplash = useCallback(() => setSplashDone(true), [])
 
   useEffect(() => {
     if (fontsLoaded) SplashScreen.hideAsync()
@@ -197,20 +227,33 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <ReducedMotionConfig mode={ReduceMotion.System} />
       <SafeAreaProvider>
-        <BottomSheetModalProvider>
-          <ThemeProvider>
+        {/* ThemeProvider DEBE envolver a BottomSheetModalProvider (no al revés).
+            @gorhom teletransporta el CONTENIDO de cada BottomSheetModal a su
+            `BottomSheetHostingContainer`, que se renderiza como HERMANO —fuera de
+            `{children}`— del provider. Si ThemeProvider vive dentro del modal
+            provider, ese host queda FUERA del ThemeContext y todo sheet cuyo
+            contenido llame `useTheme()` (ListRow, el propio surface, etc.) lanza
+            "useTheme must be used inside ThemeProvider" → el ErrorBoundary raíz
+            traga la pantalla entera ("Algo salió mal"). Fue el P0 del menú "Más"
+            del alumno (QA ronda 4, hallazgo 9); afecta a TODO sheet (ejecutor,
+            share-card…). Con ThemeProvider afuera, el host —y su `themeVars`
+            View— quedan dentro del contexto y los sheets resuelven tokens/marca. */}
+        <ThemeProvider>
+          <BottomSheetModalProvider>
             <StatusBar style="light" />
-            <MotiView
-              from={{ opacity: 0 }}
-              animate={{ opacity: splashDone ? 1 : 0 }}
-              transition={{ type: 'timing', duration: 300 }}
-              style={{ flex: 1 }}
-            >
+            {/* P0 focus-hop: el navegador va en un View PLANO. Antes lo envolvía un
+                MotiView que animaba opacity — vista animada persistente sobre
+                react-native-screens bajo Fabric, un anti-patrón que amplifica el
+                robo de foco. El cross-fade del arranque lo hace SOLO el overlay del
+                BrandedSplash (fade-out por encima), no un fade-in del navegador. */}
+            <View style={{ flex: 1 }}>
               <RootLayoutNav />
-            </MotiView>
-            {!splashDone && <EvaSplash onFinish={() => setSplashDone(true)} />}
-          </ThemeProvider>
-        </BottomSheetModalProvider>
+            </View>
+            {/* Transient feedback overlay — single mount point (parity with web <Toaster/>). */}
+            <Toaster />
+            {!splashDone && <LaunchSplash onFinish={finishSplash} />}
+          </BottomSheetModalProvider>
+        </ThemeProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   )

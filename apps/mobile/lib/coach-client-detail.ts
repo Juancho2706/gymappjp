@@ -15,13 +15,38 @@ import type {
 } from './profile-analytics'
 import { selectStrengthCardsFromSeries } from './profile-analytics'
 import {
-  calculateConsumedMacrosWithCompletionFallback,
   normalizeMealForMacros,
-  portionPctMapFromMealLogs,
   sumMealMacros,
   type MealWithFoodItems,
 } from './nutrition-utils'
+import {
+  activePlanNutritionComplianceForDay,
+  averageNutritionTimelineCompliance,
+  buildNutritionTimeline,
+  checkInRegularityPercentAsOfSantiago,
+  effectiveWorkoutTarget,
+  filterTimelineForActivePlan,
+  type NutritionTimelineEntry,
+} from './coach-client-detail-logic'
 import { supabase } from './supabase'
+import { apiFetch } from './api'
+import type { ClientActionWorkspace } from './client-actions'
+import { resolveProfileAnalyticsLoadMode } from './profile-analytics-load-policy'
+import {
+  buildEnterpriseProfileAnalyticsFallback,
+  type EnterpriseActivityLogDbRow,
+  type EnterpriseAnalyticsLogDbRow,
+  type EnterpriseExerciseMeta,
+  type EnterpriseProfileAnalyticsFallback,
+} from './enterprise-profile-analytics'
+import {
+  resolveSections,
+  resolveDomainEnabled,
+  NUTRITION_SECTIONS,
+  type SectionPrefs,
+  type ModuleKey,
+  type NutritionSectionKey,
+} from '@eva/feature-prefs'
 
 // Coach-side client detail data. Reads via Supabase (RLS: coach sees own clients).
 // Mutations (update/archive/review) also use the coach session. Service-role never runs in RN.
@@ -33,12 +58,18 @@ export interface CoachClientDetail {
   phone: string | null
   is_active: boolean | null
   is_archived: boolean | null
+  org_id: string | null
+  team_id: string | null
   goal_weight_kg: number | null
   height_cm: number | null
   initial_weight_kg: number | null
+  sex: ClientSex | null
   subscription_start_date: string | null
   created_at: string
 }
+
+export const SEX_VALUES = ['male', 'female', 'other'] as const
+export type ClientSex = (typeof SEX_VALUES)[number]
 
 export interface CheckInEntry {
   id: string
@@ -48,6 +79,7 @@ export interface CheckInEntry {
   energy_level: number | null
   notes: string | null
   front_photo_url: string | null
+  side_photo_url: string | null
   back_photo_url: string | null
   reviewed_at: string | null
 }
@@ -74,20 +106,7 @@ export interface NutritionMealPlanEntry {
   fats: number
 }
 
-export interface NutritionTimelineEntry {
-  date: string
-  mealsDone: number
-  mealsTotal: number
-  compliancePct: number
-  targetCalories: number
-  consumedCalories: number
-  targetProtein: number
-  consumedProtein: number
-  targetCarbs: number
-  consumedCarbs: number
-  targetFats: number
-  consumedFats: number
-}
+export type { NutritionTimelineEntry } from './coach-client-detail-logic'
 
 export interface FavoriteFoodEntry {
   id: string
@@ -114,6 +133,7 @@ export interface ActiveProgramInfo {
   program_structure_type: string | null
   ab_mode: boolean | null
   cycle_length: number | null
+  program_phases: { name: string; weeks: number; color?: string }[]
   workoutPlans: ProgramDay[]
 }
 
@@ -130,6 +150,8 @@ export interface ProgramBlock {
   exerciseName: string
   muscleGroup: string | null
   gifUrl: string | null
+  thumbnailUrl: string | null
+  supersetGroup: string | null
 }
 
 export interface ProgramDay {
@@ -182,6 +204,21 @@ export interface WorkoutDaySet {
   weightKg: number | null
   repsDone: number | null
   rpe: number | null
+  rir: number | null
+  note: string | null
+  substitutedExerciseName: string | null
+  substitutionReason: string | null
+  targetReps: string | null
+  targetWeightKg: number | null
+  planName: string | null
+  blockTargetWeightKg: number | null
+  blockReps: string | null
+  blockSets: number | null
+  blockRir: string | null
+  blockTempo: string | null
+  progressionMode: string | null
+  progressionValue: number | null
+  planTitle: string | null
 }
 
 export interface NutritionDayFood {
@@ -205,6 +242,46 @@ export interface HabitsDayEntry {
   notes: string | null
 }
 
+export interface DailyHabitRow extends HabitsDayEntry {
+  log_date: string
+}
+
+export interface DailyHabitsSummary {
+  today: DailyHabitRow | null
+  daysLogged: number
+  avg: {
+    water_ml: number | null
+    steps: number | null
+    sleep_hours: number | null
+    fasting_hours: number | null
+  }
+}
+
+function summarizeDailyHabits(rows: DailyHabitRow[], todayIso: string): DailyHabitsSummary {
+  const average = (key: 'water_ml' | 'steps' | 'sleep_hours' | 'fasting_hours') => {
+    const values = rows.map((row) => row[key]).filter((value): value is number => typeof value === 'number')
+    return values.length
+      ? Math.round((values.reduce((sum, value) => sum + value, 0) / values.length) * 10) / 10
+      : null
+  }
+  return {
+    today: rows.find((row) => row.log_date === todayIso) ?? null,
+    daysLogged: rows.filter((row) =>
+      row.water_ml != null ||
+      row.steps != null ||
+      row.sleep_hours != null ||
+      row.fasting_hours != null ||
+      (row.supplements?.length ?? 0) > 0
+    ).length,
+    avg: {
+      water_ml: average('water_ml'),
+      steps: average('steps'),
+      sleep_hours: average('sleep_hours'),
+      fasting_hours: average('fasting_hours'),
+    },
+  }
+}
+
 export interface ClientDayDetail {
   date: string
   workoutSets: WorkoutDaySet[]
@@ -224,11 +301,6 @@ function nutritionAveragePct(rows: { nutrition_meal_logs?: { is_completed?: bool
   return Math.round(sum / rows.length)
 }
 
-function dayOfWeekIso(iso: string): number {
-  const jsDay = new Date(`${iso}T12:00:00`).getDay()
-  return jsDay === 0 ? 7 : jsDay
-}
-
 function nutritionStreakDays(todayIso: string, rows: NutritionTimelineEntry[]): number {
   const byDate = new Map(rows.map((row) => [row.date, row]))
   let streak = 0
@@ -239,24 +311,6 @@ function nutritionStreakDays(todayIso: string, rows: NutritionTimelineEntry[]): 
     streak++
   }
   return streak
-}
-
-function checkInRegularityPercent(asOfIso: string, checkIns: CheckInEntry[]): number {
-  const latest = checkIns
-    .map((row) => row.date.slice(0, 10))
-    .filter((date) => date <= asOfIso)
-    .sort()
-    .pop()
-  if (!latest) return 0
-
-  const diffDays = Math.round(
-    (new Date(`${asOfIso}T12:00:00`).getTime() - new Date(`${latest}T12:00:00`).getTime()) / 86400000
-  )
-  if (diffDays <= 7) return 100
-  if (diffDays <= 14) return 70
-  if (diffDays <= 21) return 45
-  if (diffDays <= 30) return 25
-  return 0
 }
 
 function buildActivityWindow(todayIso: string): Map<string, ActivityDay> {
@@ -346,67 +400,24 @@ function buildNutritionMeals(rawNutrition: any): { entries: NutritionMealPlanEnt
   return { entries, macroMeals }
 }
 
-function buildNutritionTimeline(
-  todayIso: string,
-  rows: any[],
-  macroMeals: MealWithFoodItems[],
-  goals: { calories: number; protein: number; carbs: number; fats: number }
-): NutritionTimelineEntry[] {
-  const byDate = new Map<string, any>()
-  for (const row of rows) byDate.set(row.log_date, row)
+export interface DaySeriesPoint { date: string; v: number }
 
-  const out: NutritionTimelineEntry[] = []
-  for (let i = 29; i >= 0; i--) {
-    const date = isoDateAddDays(todayIso, -i)
-    const row = byDate.get(date)
-    const logs = ((row?.nutrition_meal_logs ?? []) as any[]).map((log) => ({
-      meal_id: String(log.meal_id ?? ''),
-      is_completed: !!log.is_completed,
-      consumed_quantity: log.consumed_quantity ?? null,
-    }))
-    const applicableMeals = macroMeals.filter((meal) => {
-      const entry = meal as MealWithFoodItems & { day_of_week?: number | null }
-      return entry.day_of_week == null || entry.day_of_week === dayOfWeekIso(date)
-    })
-    const total = logs.length || applicableMeals.length
-    const done = logs.filter((log) => log.is_completed).length
-    const completedMealIds = new Set(logs.filter((log) => log.is_completed).map((log) => log.meal_id))
-    // Snapshot-first target por día para TODOS los macros (espejo del motor canónico
-    // computeNutritionAdherence: targetMacros = snapshot del día si existe, si no liveTarget).
-    // Cada macro cae a su valor live SOLO si la columna del snapshot es null en ese día.
-    const dayTarget = {
-      calories: Number(row?.target_calories_at_log ?? goals.calories ?? 0),
-      protein: Number(row?.target_protein_at_log ?? goals.protein ?? 0),
-      carbs: Number(row?.target_carbs_at_log ?? goals.carbs ?? 0),
-      fats: Number(row?.target_fats_at_log ?? goals.fats ?? 0),
-    }
-    // El fallback de consumo (planes sin food_items) escala por el target DEL DÍA,
-    // no por el live → P/C/F históricos correctos.
-    const consumed = calculateConsumedMacrosWithCompletionFallback(
-      applicableMeals,
-      completedMealIds,
-      dayTarget,
-      portionPctMapFromMealLogs(logs)
-    )
-    out.push({
-      date,
-      mealsDone: done,
-      mealsTotal: total,
-      compliancePct: total > 0 ? Math.round((done / total) * 100) : 0,
-      targetCalories: dayTarget.calories,
-      consumedCalories: Math.round(consumed.calories),
-      targetProtein: dayTarget.protein,
-      consumedProtein: Math.round(consumed.protein),
-      targetCarbs: dayTarget.carbs,
-      consumedCarbs: Math.round(consumed.carbs),
-      targetFats: dayTarget.fats,
-      consumedFats: Math.round(consumed.fats),
-    })
+class CoachClientAnalyticsLoadError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'CoachClientAnalyticsLoadError'
   }
-  return out.reverse()
 }
 
-export interface DaySeriesPoint { date: string; v: number }
+function resultError(result: { error?: unknown } | null | undefined): unknown | null {
+  return result?.error ?? null
+}
+
+function analyticsErrorMessage(error: unknown): string {
+  return error && typeof error === 'object' && 'message' in error && typeof error.message === 'string'
+    ? error.message
+    : 'No se pudieron cargar los datos de entrenamiento.'
+}
 
 // Serie diaria de volumen (tonelaje = Σ peso×reps) desde logs ya fetchados.
 function buildVolumeSeries(rows: any[]): DaySeriesPoint[] {
@@ -556,7 +567,77 @@ function mapWeeklyPrsRpc(rows: any[]): WeeklyWeightPR[] {
     .sort((a, b) => b.newOneRm - a.newOneRm)
 }
 
-export async function getCoachClientDetail(clientId: string): Promise<{
+const ENTERPRISE_LOG_PAGE_SIZE = 1000
+
+async function fetchEnterpriseLogPages<T>(
+  select: string,
+  clientId: string,
+  sinceIso: string,
+  weightedOnly: boolean,
+): Promise<T[]> {
+  const rows: T[] = []
+  for (let from = 0; ; from += ENTERPRISE_LOG_PAGE_SIZE) {
+    let query = supabase
+      .from('workout_logs')
+      .select(select)
+      .eq('client_id', clientId)
+      .gte('logged_at', sinceIso)
+    if (weightedOnly) query = query.gt('weight_kg', 0)
+    const { data, error } = await query
+      .order('logged_at', { ascending: true })
+      .order('id', { ascending: true })
+      .range(from, from + ENTERPRISE_LOG_PAGE_SIZE - 1)
+    if (error) throw error
+    const page = (data as T[] | null) ?? []
+    rows.push(...page)
+    if (page.length < ENTERPRISE_LOG_PAGE_SIZE) break
+  }
+  return rows
+}
+
+async function loadEnterpriseProfileAnalyticsFallback(
+  clientId: string,
+  todayIso: string,
+): Promise<EnterpriseProfileAnalyticsFallback> {
+  // 548d replica la ventana acotada del dossier web; 371d es la ventana del heatmap.
+  // Ambas queries viajan con el access token del coach y quedan limitadas por RLS.
+  const [analyticsRows, activityRows] = await Promise.all([
+    fetchEnterpriseLogPages<EnterpriseAnalyticsLogDbRow>(
+      `
+        exercise_id, exercise_name_at_log, weight_kg, reps_done, logged_at,
+        workout_blocks ( exercise_id, exercises ( name, muscle_group ) )
+      `,
+      clientId,
+      getSantiagoUtcBoundsForDay(isoDateAddDays(todayIso, -548)).startIso,
+      true,
+    ),
+    fetchEnterpriseLogPages<EnterpriseActivityLogDbRow>(
+      'logged_at',
+      clientId,
+      getSantiagoUtcBoundsForDay(isoDateAddDays(todayIso, -371)).startIso,
+      false,
+    ),
+  ])
+
+  // workout_logs.exercise_id es snapshot sin FK. Resolver metadata en una query minima
+  // mantiene visibles tambien los logs huerfanos cuyo bloque historico fue borrado.
+  const exerciseIds = [...new Set(analyticsRows.map((row) => row.exercise_id).filter((id): id is string => !!id))]
+  const exerciseMeta = new Map<string, EnterpriseExerciseMeta>()
+  for (let from = 0; from < exerciseIds.length; from += 200) {
+    const { data, error } = await supabase
+      .from('exercises')
+      .select('id, name, muscle_group')
+      .in('id', exerciseIds.slice(from, from + 200))
+    if (error) throw error
+    for (const row of (data as { id: string; name: string; muscle_group: string | null }[] | null) ?? []) {
+      exerciseMeta.set(row.id, { name: row.name, muscleGroup: row.muscle_group })
+    }
+  }
+
+  return buildEnterpriseProfileAnalyticsFallback(analyticsRows, activityRows, todayIso, exerciseMeta)
+}
+
+export async function getCoachClientDetail(clientId: string, workspace?: ClientActionWorkspace): Promise<{
   client: CoachClientDetail | null
   checkIns: CheckInEntry[]
   payments: PaymentEntry[]
@@ -574,24 +655,41 @@ export async function getCoachClientDetail(clientId: string): Promise<{
   weeklyPRs: WeeklyWeightPR[]
   nutritionMeals: NutritionMealPlanEntry[]
   nutritionTimeline: NutritionTimelineEntry[]
-  nutritionMonthlyAvgPct: number
+  nutritionMonthlyAvgPct: number | null
+  nutritionTodayCompliancePct: number
   nutritionStreakDays: number
   favoriteFoods: FavoriteFoodEntry[]
   workoutLogs: WorkoutLogRow[]
   workoutLogsAll: WorkoutLogRow[]
   muscleVolumeReps: MuscleVolumeSetsEntry[]
   workoutDates371: string[]
+  nutritionActivityDates371: string[]
+  dailyHabits: DailyHabitRow[]
+  dailyHabitsSummary: DailyHabitsSummary
+  lastWorkoutAt: string | null
   hasTrained: boolean
 }> {
   // Cliente primero (independiente) → el detalle SIEMPRE abre, aunque las queries
   // ricas fallen en una prod sin columnas enterprise/Codex.
-  const { data: clientData } = await supabase
+  let clientQuery = supabase
     .from('clients')
-    .select('id, full_name, email, phone, is_active, is_archived, goal_weight_kg, subscription_start_date, created_at')
+    .select('id, full_name, email, phone, is_active, is_archived, org_id, team_id, goal_weight_kg, subscription_start_date, created_at')
     .eq('id', clientId)
-    .maybeSingle()
+  if (workspace?.kind === 'team_owner' || workspace?.kind === 'team_member') {
+    clientQuery = workspace.teamId
+      ? clientQuery.eq('team_id', workspace.teamId).is('org_id', null)
+      : clientQuery.eq('team_id', '__invalid_workspace__')
+  } else if (workspace?.kind === 'enterprise') {
+    clientQuery = workspace.orgId
+      ? clientQuery.eq('org_id', workspace.orgId).is('team_id', null)
+      : clientQuery.eq('org_id', '__invalid_workspace__')
+  } else if (workspace) {
+    clientQuery = clientQuery.is('team_id', null).is('org_id', null)
+  }
+  const { data: clientData, error: clientError } = await clientQuery.maybeSingle()
+  if (clientError) throw clientError
   const baseClient: CoachClientDetail | null = clientData
-    ? ({ ...(clientData as any), height_cm: null, initial_weight_kg: null } as CoachClientDetail)
+    ? ({ ...(clientData as any), height_cm: null, initial_weight_kg: null, sex: null } as CoachClientDetail)
     : null
   const EMPTY = {
     client: baseClient,
@@ -611,21 +709,28 @@ export async function getCoachClientDetail(clientId: string): Promise<{
     weeklyPRs: [] as WeeklyWeightPR[],
     nutritionMeals: [] as NutritionMealPlanEntry[],
     nutritionTimeline: [] as NutritionTimelineEntry[],
-    nutritionMonthlyAvgPct: 0,
+    nutritionMonthlyAvgPct: null,
+    nutritionTodayCompliancePct: 0,
     nutritionStreakDays: 0,
     favoriteFoods: [] as FavoriteFoodEntry[],
     workoutLogs: [] as WorkoutLogRow[],
     workoutLogsAll: [] as WorkoutLogRow[],
     muscleVolumeReps: [] as MuscleVolumeSetsEntry[],
     workoutDates371: [] as string[],
+    nutritionActivityDates371: [] as string[],
+    dailyHabits: [] as DailyHabitRow[],
+    dailyHabitsSummary: summarizeDailyHabits([], getTodayInSantiago().iso),
+    lastWorkoutAt: null as string | null,
     hasTrained: false,
   }
+  if (!baseClient) return EMPTY
   try {
   const { iso: todayIso } = getTodayInSantiago()
   const sevenDaysAgo = isoDateAddDays(todayIso, -7)
   const fourteenDaysAgo = isoDateAddDays(todayIso, -14)
-  const thirtyDaysAgo = isoDateAddDays(todayIso, -30)
-  const since30 = new Date(Date.now() - 30 * 86400000).toISOString()
+  const habitsFromIso = isoDateAddDays(todayIso, -6)
+  const activityStart = isoDateAddDays(todayIso, -371)
+  const since30 = getSantiagoUtcBoundsForDay(isoDateAddDays(todayIso, -29)).startIso
 
   // Volumen por SERIES (calistenia/cardio): NO hay RPC equivalente (get_client_muscle_volume
   // sólo agrega peso×reps), así que mantenemos un fetch crudo MÍNIMO de 30d sólo para
@@ -639,7 +744,7 @@ export async function getCoachClientDetail(clientId: string): Promise<{
   `
 
   const [
-    clientRes,
+    intakeRes,
     checkInRes,
     paymentRes,
     programRes,
@@ -655,14 +760,22 @@ export async function getCoachClientDetail(clientId: string): Promise<{
     activityDatesRes,
     setsLogsRes,
     favoriteFoodsRes,
+    dailyHabitsRes,
+    lastWorkoutRes,
   ] = await Promise.all([
+      // Biometria (talla/peso inicial/sexo) vive en client_intake, NO en clients (esas
+      // columnas no existen en clients). El coach la lee por RLS (client_intake_coach FOR ALL).
+      // El INSERT placeholder (alumnos sin intake) mete 0 en height/weight NOT NULL → 0 = "sin dato".
+      supabase.from('client_intake').select('height_cm, weight_kg, sex').eq('client_id', clientId).maybeSingle(),
+      // Tiers defensivos (columna faltante = 400 al select entero → degradar en orden):
+      //  1) reviewed_at + side_photo_url  (side = 3ra foto opcional, hoy inexistente en prod)
+      //  2) reviewed_at                    (prod actual)  3) base (DB legacy)
       selectWithFallback<any>(
-        () => supabase.from('clients').select('id, full_name, email, phone, is_active, is_archived, goal_weight_kg, height_cm, initial_weight_kg, subscription_start_date, created_at').eq('id', clientId).maybeSingle(),
-        () => supabase.from('clients').select('id, full_name, email, phone, is_active, is_archived, goal_weight_kg, subscription_start_date, created_at').eq('id', clientId).maybeSingle()
-      ),
-      selectWithFallback<any>(
-        () => supabase.from('check_ins').select('id, date, created_at, weight, energy_level, notes, front_photo_url, back_photo_url, reviewed_at').eq('client_id', clientId).order('date', { ascending: false }).limit(200),
-        () => supabase.from('check_ins').select('id, date, created_at, weight, energy_level, notes, front_photo_url, back_photo_url').eq('client_id', clientId).order('date', { ascending: false }).limit(200)
+        () => supabase.from('check_ins').select('id, date, created_at, weight, energy_level, notes, front_photo_url, side_photo_url, back_photo_url, reviewed_at').eq('client_id', clientId).order('date', { ascending: false }).limit(200),
+        () => selectWithFallback<any>(
+          () => supabase.from('check_ins').select('id, date, created_at, weight, energy_level, notes, front_photo_url, back_photo_url, reviewed_at').eq('client_id', clientId).order('date', { ascending: false }).limit(200),
+          () => supabase.from('check_ins').select('id, date, created_at, weight, energy_level, notes, front_photo_url, back_photo_url').eq('client_id', clientId).order('date', { ascending: false }).limit(200)
+        )
       ),
       selectWithFallback<any>(
         () => supabase.from('client_payments').select('id, amount, payment_date, service_description, status, period_months, receipt_url').eq('client_id', clientId).order('payment_date', { ascending: false }).limit(20),
@@ -671,12 +784,12 @@ export async function getCoachClientDetail(clientId: string): Promise<{
       supabase
         .from('workout_programs')
         .select(`
-          id, name, start_date, end_date, weeks_to_repeat, program_structure_type, ab_mode, cycle_length,
+          id, name, start_date, end_date, weeks_to_repeat, program_structure_type, ab_mode, cycle_length, program_phases,
           workout_plans (
             id, title, day_of_week, week_variant,
             workout_blocks (
-              id, order_index, sets, reps, rest_time, tempo, rir, target_weight_kg, notes,
-              exercises ( name, muscle_group, gif_url )
+              id, order_index, sets, reps, rest_time, tempo, rir, target_weight_kg, notes, superset_group,
+              exercises ( name, muscle_group, gif_url, thumbnail_url )
             )
           )
         `)
@@ -702,9 +815,9 @@ export async function getCoachClientDetail(clientId: string): Promise<{
       supabase.rpc('get_client_workout_day_counts', { p_client_id: clientId, p_days_back: 30 }),
       supabase
         .from('daily_nutrition_logs')
-        .select('log_date, target_calories_at_log, target_protein_at_log, target_carbs_at_log, target_fats_at_log, nutrition_meal_logs ( meal_id, is_completed, consumed_quantity )')
+        .select('log_date, plan_id, target_calories_at_log, target_protein_at_log, target_carbs_at_log, target_fats_at_log, nutrition_meal_logs ( meal_id, is_completed, consumed_quantity )')
         .eq('client_id', clientId)
-        .gte('log_date', thirtyDaysAgo)
+        .gte('log_date', activityStart)
         .order('log_date', { ascending: false }),
       supabase
         .from('workout_sessions' as never)
@@ -735,7 +848,62 @@ export async function getCoachClientDetail(clientId: string): Promise<{
         .eq('client_id' as never, clientId as never)
         .eq('preference_type' as never, 'favorite' as never)
         .limit(20),
+      supabase
+        .from('daily_habits')
+        .select('log_date, water_ml, steps, sleep_hours, fasting_hours, supplements, notes')
+        .eq('client_id', clientId)
+        .gte('log_date', habitsFromIso)
+        .order('log_date', { ascending: false }),
+      // TopAlert necesita un instante real; una fecha YYYY-MM-DD se parsea como UTC y
+      // produce falsos >=7 dias cerca del cierre del dia en Santiago.
+      supabase.rpc('get_clients_last_workout_date', {
+        p_client_ids: [clientId],
+        p_since: getSantiagoUtcBoundsForDay(activityStart).startIso,
+      }),
     ])
+
+  const rpcRows = (result: { data?: unknown } | null | undefined) =>
+    Array.isArray(result?.data) ? result.data.length : result?.data == null ? 0 : 1
+  const criticalAnalyticsResults = [
+    dayCounts30Res,
+    muscleVolumeRes,
+    exercisePrsRes,
+    strengthSeriesRes,
+    tonnageRes,
+    weeklyPrsRes,
+    activityDatesRes,
+    lastWorkoutRes,
+  ]
+  const criticalAnalyticsError = criticalAnalyticsResults
+    .map((result) => resultError(result))
+    .find((error) => error != null) ?? null
+  const aggregateRowCounts = [
+    dayCounts30Res,
+    muscleVolumeRes,
+    exercisePrsRes,
+    strengthSeriesRes,
+    tonnageRes,
+    weeklyPrsRes,
+    activityDatesRes,
+  ].map((result) => rpcRows(result))
+  const analyticsLoadMode = resolveProfileAnalyticsLoadMode(
+    workspace?.kind,
+    criticalAnalyticsError != null,
+    aggregateRowCounts,
+  )
+  let enterpriseFallback: EnterpriseProfileAnalyticsFallback | null = null
+  if (analyticsLoadMode === 'fallback') {
+    try {
+      enterpriseFallback = await loadEnterpriseProfileAnalyticsFallback(clientId, todayIso)
+    } catch (error) {
+      console.warn('[coach-client-detail] enterprise analytics fallback', error)
+      throw new CoachClientAnalyticsLoadError(analyticsErrorMessage(criticalAnalyticsError ?? error))
+    }
+  } else if (analyticsLoadMode === 'error' && criticalAnalyticsError) {
+    // Standalone/team no tienen una segunda fuente. No convertir un error de red/RPC
+    // en KPIs cero: el shell conserva los datos previos y ofrece retry.
+    throw new CoachClientAnalyticsLoadError(analyticsErrorMessage(criticalAnalyticsError))
+  }
 
   const rawProgram = programRes.data as any
   const program = rawProgram
@@ -748,6 +916,11 @@ export async function getCoachClientDetail(clientId: string): Promise<{
         program_structure_type: rawProgram.program_structure_type ?? null,
         ab_mode: rawProgram.ab_mode ?? null,
         cycle_length: rawProgram.cycle_length ?? null,
+        program_phases: (Array.isArray(rawProgram.program_phases) ? rawProgram.program_phases : []).map((phase: any) => ({
+          name: String(phase?.name ?? 'Fase'),
+          weeks: Math.max(1, Number(phase?.weeks) || 1),
+          ...(typeof phase?.color === 'string' ? { color: phase.color } : {}),
+        })),
         workoutPlans: ((rawProgram.workout_plans ?? []) as any[])
           .map((plan) => ({
             id: plan.id as string,
@@ -769,6 +942,8 @@ export async function getCoachClientDetail(clientId: string): Promise<{
                 exerciseName: block.exercises?.name ?? 'Ejercicio',
                 muscleGroup: block.exercises?.muscle_group ?? null,
                 gifUrl: block.exercises?.gif_url ?? null,
+                thumbnailUrl: block.exercises?.thumbnail_url ?? null,
+                supersetGroup: block.superset_group ?? null,
               })),
           }))
           .sort((a, b) => (a.day_of_week ?? 99) - (b.day_of_week ?? 99)),
@@ -779,12 +954,18 @@ export async function getCoachClientDetail(clientId: string): Promise<{
   const checkIns = (checkInRes.data as CheckInEntry[] | null) ?? []
   // Días con series (30d) — la RPC ya devuelve `day` en zona Santiago (YYYY-MM-DD).
   const workoutDays30 = new Set<string>()
-  for (const row of (dayCounts30Res.data as { day: string; sets: number }[] | null) ?? []) {
+  const workoutDayCountRows = ((dayCounts30Res.data as { day: string; sets: number }[] | null) ?? []).length
+    ? (dayCounts30Res.data as { day: string; sets: number }[])
+    : enterpriseFallback?.workoutDayCounts30 ?? []
+  for (const row of workoutDayCountRows) {
     if (row.day) workoutDays30.add(row.day.slice(0, 10))
   }
   // Fechas de actividad del último año — RPC en zona Santiago (YYYY-MM-DD).
   const workoutDays371 = new Set<string>()
-  for (const row of (activityDatesRes.data as { day: string }[] | null) ?? []) {
+  const workoutDateRows = ((activityDatesRes.data as { day: string }[] | null) ?? []).length
+    ? (activityDatesRes.data as { day: string }[])
+    : (enterpriseFallback?.workoutDates371 ?? []).map((day) => ({ day }))
+  for (const row of workoutDateRows) {
     if (row.day) workoutDays371.add(row.day.slice(0, 10))
   }
 
@@ -812,6 +993,7 @@ export async function getCoachClientDetail(clientId: string): Promise<{
     nutritionRows.filter((row) => row.log_date >= fourteenDaysAgo && row.log_date < sevenDaysAgo)
   )
   const rawNutrition = nutritionRes.data as any
+  const dailyHabits = ((dailyHabitsRes.data as DailyHabitRow[] | null) ?? [])
   const { entries: nutritionMeals, macroMeals } = buildNutritionMeals(rawNutrition)
   for (const meal of macroMeals as (MealWithFoodItems & { day_of_week?: number | null })[]) {
     const matching = nutritionMeals.find((entry) => entry.id === meal.id)
@@ -823,7 +1005,22 @@ export async function getCoachClientDetail(clientId: string): Promise<{
     carbs: Number(rawNutrition?.carbs_g ?? 0),
     fats: Number(rawNutrition?.fats_g ?? 0),
   }
-  const nutritionTimeline = buildNutritionTimeline(todayIso, (nutritionLogsRes.data as any[] | null) ?? [], macroMeals, nutritionGoals)
+  const activeNutritionPlanId = typeof rawNutrition?.id === 'string' ? rawNutrition.id : null
+  const nutritionTimeline = buildNutritionTimeline(
+    todayIso,
+    (nutritionLogsRes.data as any[] | null) ?? [],
+    macroMeals as (MealWithFoodItems & { day_of_week?: number | null })[],
+    nutritionGoals,
+    activeNutritionPlanId,
+  )
+  const activePlanTimeline = filterTimelineForActivePlan(nutritionTimeline, activeNutritionPlanId)
+  const nutritionTodayCompliancePct = activePlanNutritionComplianceForDay(
+    todayIso,
+    (nutritionLogsRes.data as any[] | null) ?? [],
+    macroMeals as (MealWithFoodItems & { day_of_week?: number | null })[],
+    activeNutritionPlanId,
+  )
+  const lastWorkoutAt = String(((lastWorkoutRes.data as any[] | null) ?? [])[0]?.last_logged_at ?? '') || enterpriseFallback?.lastWorkoutAt || null
 
   const activityByDate = buildActivityWindow(todayIso)
   for (const day of workoutDays30) activityByDate.get(day) && (activityByDate.get(day)!.workout = true)
@@ -833,9 +1030,13 @@ export async function getCoachClientDetail(clientId: string): Promise<{
     activityByDate.get(day) && (activityByDate.get(day)!.checkIn = true)
   }
 
-  const richClient = clientRes.data as any
+  const intake = intakeRes.data as { height_cm?: number | null; weight_kg?: number | null; sex?: string | null } | null
+  // Placeholder 0 (INSERT sin dato) → null al leer (se muestra "—").
+  const intakeNum = (v: unknown): number | null => { const n = Number(v); return Number.isFinite(n) && n > 0 ? n : null }
+  const rawSex = intake?.sex
+  const intakeSex: ClientSex | null = rawSex === 'male' || rawSex === 'female' || rawSex === 'other' ? rawSex : null
   const client: CoachClientDetail | null = baseClient
-    ? { ...baseClient, height_cm: richClient?.height_cm ?? null, initial_weight_kg: richClient?.initial_weight_kg ?? null }
+    ? { ...baseClient, height_cm: intakeNum(intake?.height_cm), initial_weight_kg: intakeNum(intake?.weight_kg), sex: intakeSex }
     : null
 
   return {
@@ -857,28 +1058,37 @@ export async function getCoachClientDetail(clientId: string): Promise<{
     compliance: {
       workoutsThisWeek: workoutThisWeek.size,
       workoutsPrevWeek: workoutPrevWeek.size,
-      workoutsTarget: Math.max(1, program?.planCount ?? 1),
+      workoutsTarget: effectiveWorkoutTarget(program),
       nutritionWeeklyAvgPct: nutritionThisWeek,
       nutritionPrevWeeklyAvgPct: nutritionPrevWeek,
-      checkInCompliancePercent: checkInRegularityPercent(todayIso, checkIns),
-      checkInCompliancePercentWeekAgo: checkInRegularityPercent(sevenDaysAgo, checkIns),
+      checkInCompliancePercent: checkInRegularityPercentAsOfSantiago(todayIso, checkIns),
+      checkInCompliancePercentWeekAgo: checkInRegularityPercentAsOfSantiago(sevenDaysAgo, checkIns),
     },
     activity: Array.from(activityByDate.values()).reverse(),
     // ── Análisis de entrenamiento: AGREGADO EN DB (RPC), no iterando logs crudos en JS ──
-    personalRecords: mapExercisePrsRpc(exercisePrsRes.data as any[]),
-    muscleVolume: mapMuscleVolumeRpc(muscleVolumeRes.data as any[]),
+    personalRecords: ((exercisePrsRes.data as any[] | null)?.length ?? 0) > 0
+      ? mapExercisePrsRpc(exercisePrsRes.data as any[])
+      : enterpriseFallback?.personalRecords ?? [],
+    muscleVolume: ((muscleVolumeRes.data as any[] | null)?.length ?? 0) > 0
+      ? mapMuscleVolumeRpc(muscleVolumeRes.data as any[])
+      : enterpriseFallback?.muscleVolume ?? [],
     // volumeSeries/strengthSeries (DaySeriesPoint) sin consumidores actuales → stub vacío.
     volumeSeries: [],
     strengthSeries: [],
-    strengthCards: mapStrengthSeriesRpc(strengthSeriesRes.data as any[], 4),
-    tonnageSeries: mapDailyTonnageRpc(tonnageRes.data as any[]),
-    weeklyPRs: mapWeeklyPrsRpc(weeklyPrsRes.data as any[]),
+    // La vista sin filtro corta a 4; al elegir grupo muscular debe poder mostrar
+    // TODAS las series de ese grupo, igual que el panel web.
+    strengthCards: ((strengthSeriesRes.data as any[] | null)?.length ?? 0) > 0
+      ? mapStrengthSeriesRpc(strengthSeriesRes.data as any[], Number.POSITIVE_INFINITY)
+      : enterpriseFallback?.strengthCards ?? [],
+    tonnageSeries: ((tonnageRes.data as any[] | null)?.length ?? 0) > 0
+      ? mapDailyTonnageRpc(tonnageRes.data as any[])
+      : enterpriseFallback?.tonnageSeries ?? [],
+    weeklyPRs: enterpriseFallback?.weeklyPRs ?? mapWeeklyPrsRpc(weeklyPrsRes.data as any[]),
     nutritionMeals,
     nutritionTimeline,
-    nutritionMonthlyAvgPct: Math.round(
-      nutritionTimeline.reduce((sum, row) => sum + row.compliancePct, 0) / Math.max(1, nutritionTimeline.length)
-    ),
-    nutritionStreakDays: nutritionStreakDays(todayIso, nutritionTimeline),
+    nutritionMonthlyAvgPct: averageNutritionTimelineCompliance(activePlanTimeline),
+    nutritionTodayCompliancePct,
+    nutritionStreakDays: nutritionStreakDays(todayIso, activePlanTimeline),
     favoriteFoods: (((favoriteFoodsRes.data as any[] | null) ?? [])
       .map((row) => row.foods)
       .filter(Boolean) as any[])
@@ -889,30 +1099,64 @@ export async function getCoachClientDetail(clientId: string): Promise<{
     workoutLogsAll: [],
     muscleVolumeReps: buildMuscleVolumeBySets((setsLogsRes.data as any[] | null) ?? []),
     workoutDates371: [...workoutDays371].sort(),
+    nutritionActivityDates371: nutritionRows
+      .filter((row) => (row.nutrition_meal_logs ?? []).some((meal) => meal.is_completed === true))
+      .map((row) => row.log_date)
+      .sort(),
+    dailyHabits,
+    dailyHabitsSummary: summarizeDailyHabits(dailyHabits, todayIso),
+    lastWorkoutAt,
     hasTrained:
       workoutDays371.size > 0 ||
       workoutDays30.size > 0 ||
       ((exercisePrsRes.data as any[] | null)?.length ?? 0) > 0 ||
       ((muscleVolumeRes.data as any[] | null)?.length ?? 0) > 0 ||
-      ((strengthSeriesRes.data as any[] | null)?.length ?? 0) > 0,
+      ((strengthSeriesRes.data as any[] | null)?.length ?? 0) > 0 ||
+      enterpriseFallback?.hasTrained === true,
   }
   } catch (e) {
     console.warn('[coach-client-detail] partial load', e)
+    if (e instanceof CoachClientAnalyticsLoadError) throw e
     return EMPTY
   }
 }
 
 export type CoachClientDetailData = Awaited<ReturnType<typeof getCoachClientDetail>>
 
-export async function getCoachClientDayDetail(clientId: string, date: string): Promise<ClientDayDetail> {
+export async function getCoachClientDayDetail(
+  clientId: string,
+  date: string,
+  workspace: ClientActionWorkspace,
+): Promise<ClientDayDetail> {
+  // El fetch diario vive fuera del payload principal; repetir el preflight explícito evita que
+  // un coach multi-workspace consulte por clientId un recurso perteneciente a otro pool.
+  let clientQuery = supabase.from('clients').select('id').eq('id', clientId)
+  if (workspace.kind === 'team_owner' || workspace.kind === 'team_member') {
+    clientQuery = workspace.teamId
+      ? clientQuery.eq('team_id', workspace.teamId).is('org_id', null)
+      : clientQuery.eq('team_id', '__invalid_workspace__')
+  } else if (workspace.kind === 'enterprise') {
+    clientQuery = workspace.orgId
+      ? clientQuery.eq('org_id', workspace.orgId).is('team_id', null)
+      : clientQuery.eq('org_id', '__invalid_workspace__')
+  } else {
+    clientQuery = clientQuery.is('team_id', null).is('org_id', null)
+  }
+  const { data: scopedClient, error: scopeError } = await clientQuery.maybeSingle()
+  if (scopeError) throw scopeError
+  if (!scopedClient) throw new Error('Client not found')
+
   const { startIso, endIso } = getSantiagoUtcBoundsForDay(date)
   const [workoutRes, nutritionRes, habitsRes] = await Promise.all([
     supabase
       .from('workout_logs')
       .select(`
-        set_number, weight_kg, reps_done, rpe, logged_at,
+        set_number, weight_kg, reps_done, rpe, rir, note, substituted_exercise_name, substitution_reason,
+        target_reps_at_log, target_weight_at_log, plan_name_at_log, logged_at,
         workout_blocks (
-          exercises ( name, muscle_group )
+          target_weight_kg, reps, sets, rir, progression_mode, progression_value, tempo,
+          exercises ( name, muscle_group ),
+          workout_plans ( title )
         )
       `)
       .eq('client_id', clientId)
@@ -939,6 +1183,12 @@ export async function getCoachClientDayDetail(clientId: string, date: string): P
       .maybeSingle(),
   ])
 
+  // Los builders PostgREST no rechazan la promesa ante error: resuelven `{ data, error }`.
+  // Propagarlo explicitamente permite que la pantalla muestre su estado de error + retry
+  // en vez de confundir una falla de red/RLS con una sesion vacia.
+  const detailError = workoutRes.error ?? nutritionRes.error ?? habitsRes.error
+  if (detailError) throw detailError
+
   const workoutSets = ((workoutRes.data as any[] | null) ?? []).map((row) => ({
     exerciseName: row.workout_blocks?.exercises?.name ?? 'Ejercicio',
     muscleGroup: row.workout_blocks?.exercises?.muscle_group ?? null,
@@ -946,6 +1196,21 @@ export async function getCoachClientDayDetail(clientId: string, date: string): P
     weightKg: row.weight_kg ?? null,
     repsDone: row.reps_done ?? null,
     rpe: row.rpe ?? null,
+    rir: row.rir ?? null,
+    note: row.note ?? null,
+    substitutedExerciseName: row.substituted_exercise_name ?? null,
+    substitutionReason: row.substitution_reason ?? null,
+    targetReps: row.target_reps_at_log ?? null,
+    targetWeightKg: row.target_weight_at_log ?? null,
+    planName: row.plan_name_at_log ?? null,
+    blockTargetWeightKg: row.workout_blocks?.target_weight_kg ?? null,
+    blockReps: row.workout_blocks?.reps ?? null,
+    blockSets: row.workout_blocks?.sets ?? null,
+    blockRir: row.workout_blocks?.rir ?? null,
+    blockTempo: row.workout_blocks?.tempo ?? null,
+    progressionMode: row.workout_blocks?.progression_mode ?? null,
+    progressionValue: row.workout_blocks?.progression_value ?? null,
+    planTitle: row.workout_blocks?.workout_plans?.title ?? null,
   }))
 
   const nutritionMeals = (((nutritionRes.data as any)?.nutrition_meal_logs ?? []) as any[])
@@ -968,30 +1233,86 @@ export async function getCoachClientDayDetail(clientId: string, date: string): P
   }
 }
 
+// Columnas editables de `clients` (allowlist grantada a authenticated: full_name/phone/
+// goal_weight_kg/subscription_start_date). height_cm/initial_weight_kg NO existen en clients
+// (viven en client_intake) → biometria va por upsertClientBiometrics, no por aca.
 export async function updateCoachClient(
   clientId: string,
-  fields: { full_name?: string; phone?: string | null; goal_weight_kg?: number | null; height_cm?: number | null; initial_weight_kg?: number | null; subscription_start_date?: string | null }
+  fields: { full_name?: string; phone?: string | null; goal_weight_kg?: number | null; subscription_start_date?: string | null },
+  workspace?: ClientActionWorkspace,
 ): Promise<{ ok: boolean; error?: string }> {
+  if (workspace) {
+    try {
+      await apiFetch(`/api/mobile/coach/clients/${clientId}`, {
+        method: 'PATCH',
+        authenticated: true,
+        body: { ...fields, workspace },
+      })
+      return { ok: true }
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : 'No se pudo actualizar el alumno.' }
+    }
+  }
   const { error } = await supabase.from('clients').update(fields).eq('id', clientId)
   if (error) return { ok: false, error: error.message }
   return { ok: true }
 }
 
-export async function markCoachCheckInReviewed(clientId: string, checkInId: string): Promise<{ ok: boolean; error?: string }> {
-  const { data } = await supabase.auth.getUser()
-  const userId = data.user?.id
-  if (!userId) return { ok: false, error: 'Unauthorized' }
-  const { error } = await supabase
-    .from('check_ins')
-    .update({ reviewed_at: new Date().toISOString(), reviewed_by: userId })
-    .eq('id', checkInId)
-    .eq('client_id', clientId)
-    .is('reviewed_at', null)
-  if (error) {
-    if (isMissingColumnError(error)) return { ok: false, error: 'Marcar revisado estará disponible al actualizar tu cuenta.' }
-    return { ok: false, error: error.message }
+// Espejo del write-path web `upsertClientBiometrics` (services/client/client-detail.service.ts):
+// el coach edita talla/peso inicial/sexo de la intake de SU alumno como `authenticated`
+// (RLS `client_intake_coach` FOR ALL; grants de columna confirmados por la auditoria E0-B1).
+// UPSERT manual: ~15 alumnos no tienen fila y height_cm/weight_kg/goals/experience_level/
+// availability son NOT NULL sin default → INSERT con placeholders (0 / '') en lo no editado.
+export async function upsertClientBiometrics(
+  clientId: string,
+  input: { heightCm: number | null; weightKg: number | null; sex: ClientSex | null },
+  workspace?: ClientActionWorkspace,
+): Promise<{ ok: boolean; error?: string }> {
+  const { heightCm, weightKg, sex } = input
+  if (heightCm != null && (!Number.isFinite(heightCm) || heightCm < 50 || heightCm > 260)) {
+    return { ok: false, error: 'La altura debe estar entre 50 y 260 cm.' }
   }
-  return { ok: true }
+  if (weightKg != null && (!Number.isFinite(weightKg) || weightKg < 20 || weightKg > 400)) {
+    return { ok: false, error: 'El peso debe estar entre 20 y 400 kg.' }
+  }
+  if (sex != null && !SEX_VALUES.includes(sex)) return { ok: false, error: 'Sexo invalido.' }
+
+  try {
+    await apiFetch(`/api/mobile/coach/clients/${clientId}/biometrics`, {
+      method: 'PATCH',
+      authenticated: true,
+      body: { heightCm, weightKg, sex, ...(workspace ? { workspace } : {}) },
+    })
+    return { ok: true }
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : 'No se pudo guardar la biometría.' }
+  }
+}
+
+async function setCoachCheckInReviewed(
+  clientId: string,
+  checkInId: string,
+  reviewed: boolean,
+  workspace?: ClientActionWorkspace,
+): Promise<{ ok: boolean; error?: string }> {
+  try {
+    await apiFetch(`/api/mobile/coach/clients/${clientId}/check-ins/${checkInId}/reviewed`, {
+      method: 'PATCH',
+      authenticated: true,
+      body: { reviewed, ...(workspace ? { workspace } : {}) },
+    })
+    return { ok: true }
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : 'No se pudo actualizar el check-in.' }
+  }
+}
+
+export function markCoachCheckInReviewed(clientId: string, checkInId: string, workspace?: ClientActionWorkspace) {
+  return setCoachCheckInReviewed(clientId, checkInId, true, workspace)
+}
+
+export function unmarkCoachCheckInReviewed(clientId: string, checkInId: string, workspace?: ClientActionWorkspace) {
+  return setCoachCheckInReviewed(clientId, checkInId, false, workspace)
 }
 
 export async function setCoachClientArchived(clientId: string, archived: boolean): Promise<{ ok: boolean; error?: string }> {
@@ -1006,7 +1327,7 @@ export async function setCoachClientArchived(clientId: string, archived: boolean
         .eq('coach_id', coach.id)
         .eq('is_archived', false)
       if ((count ?? 0) >= coach.maxClients) {
-        return { ok: false, error: `Alcanzaste el límite de tu plan (${coach.maxClients} alumnos activos). Subí de plan para reactivar.` }
+        return { ok: false, error: `Alcanzaste el límite de tu plan (${coach.maxClients} alumnos activos). Sube de plan para reactivar.` }
       }
     }
   }
@@ -1017,6 +1338,239 @@ export async function setCoachClientArchived(clientId: string, archived: boolean
 
 export async function deleteCoachClientPayment(clientId: string, paymentId: string): Promise<{ ok: boolean; error?: string }> {
   const { error } = await supabase.from('client_payments').delete().eq('id', paymentId).eq('client_id', clientId)
+  if (error) return { ok: false, error: error.message }
+  return { ok: true }
+}
+
+// ── Zona C de nutrición (coach) ──────────────────────────────────────────────
+// Espejo 1:1 de NutritionTabB5 zona C + sus services web (nutrition-notes.service,
+// nutrient-targets.service, feature-prefs.service). Write-paths = mismos que web: PostgREST
+// como el coach `authenticated` (las server actions web NO usan service-role → RLS es el gate,
+// idéntico aquí). La resolución de secciones reusa el paquete puro `@eva/feature-prefs` (cero
+// copia de lógica); el entitlement se computa leyendo `coaches/teams.enabled_modules` directo
+// (patrón sancionado del paquete) + el kill-switch/flag server-only del endpoint /api/mobile/config.
+
+export interface CoachPrivateNoteEntry { id: string; body: string; created_at: string | null; updated_at: string | null }
+export interface CoachMealCommentEntry { id: string; authorRole: 'coach' | 'client'; body: string; created_at: string }
+export interface CoachNutrientTargetEntry {
+  id: string
+  client_id: string | null
+  nutrient_key: string
+  intent: 'aimup' | 'cap'
+  floor_value: number | null
+  target_value: number | null
+  ceiling_value: number | null
+}
+export type NutritionEntitledByModule = Partial<Record<ModuleKey, boolean>>
+
+export interface NutritionZoneCData {
+  privateNotes: CoachPrivateNoteEntry[]
+  mealComments: CoachMealCommentEntry[]
+  nutrientTargets: CoachNutrientTargetEntry[]
+  /** Override crudo `client_feature_prefs.sections` (parcial). Key ausente => heredar. */
+  override: SectionPrefs
+  /** Resolver SIN la capa del alumno (lo que se hereda de coach/team) — estado "heredar". */
+  baseEffective: Record<NutritionSectionKey, boolean>
+  /** Resolver CON el override del alumno (visibilidad efectiva para el gating de la tab). */
+  effective: Record<NutritionSectionKey, boolean>
+  entitledByModule: NutritionEntitledByModule
+  domainEnabledBase: boolean
+  useTeamBase: boolean
+  prefsEnabled: boolean
+  proEnabled: boolean
+}
+
+export async function getCoachNutritionZoneC(clientId: string, logDate: string): Promise<NutritionZoneCData> {
+  const { data: userData } = await supabase.auth.getUser()
+  const coachId = userData.user?.id ?? ''
+
+  // Flag Edge Config (FEATURE_PREFS_ENABLED) + kill-switch de operador — server-only, vía el
+  // endpoint mobile. Fail-OPEN: cualquier fallo => prefs ignoradas = mostrar todo lo entitled.
+  let disabledModules: string[] = []
+  let prefsEnabled = false
+  try {
+    const cfg = await apiFetch<{ disabledModules?: string[]; featurePrefsEnabled?: boolean }>('/api/mobile/config', { authenticated: true })
+    disabledModules = cfg.disabledModules ?? []
+    prefsEnabled = cfg.featurePrefsEnabled === true
+  } catch { /* fail-open */ }
+
+  const [notesRes, commentsRes, targetsRes, overrideRes, clientRes] = await Promise.all([
+    supabase.from('nutrition_private_notes').select('id, body, created_at, updated_at').eq('client_id', clientId).order('updated_at', { ascending: false }),
+    supabase.from('nutrition_meal_comments').select('id, author_role, body, created_at').eq('client_id', clientId).eq('log_date', logDate).order('created_at', { ascending: true }),
+    supabase.from('nutrient_targets').select('id, client_id, nutrient_key, intent, floor_value, target_value, ceiling_value').eq('coach_id', coachId).or(`client_id.eq.${clientId},client_id.is.null`).order('nutrient_key', { ascending: true }),
+    supabase.from('client_feature_prefs').select('sections').eq('client_id', clientId).eq('domain', 'nutrition').maybeSingle(),
+    supabase.from('clients').select('team_id, org_id').eq('id', clientId).maybeSingle(),
+  ])
+
+  const teamId = (clientRes.data as any)?.team_id ?? null
+  const orgId = (clientRes.data as any)?.org_id ?? null
+  const useTeamBase = !!teamId && !orgId
+
+  // Base de preferencias: team si el alumno vive en un pool (base = team), si no el coach.
+  const baseRes = useTeamBase
+    ? await supabase.from('team_feature_prefs').select('preset, sections').eq('team_id', teamId).eq('domain', 'nutrition').maybeSingle()
+    : await supabase.from('coach_feature_prefs').select('preset, sections').eq('coach_id', coachId).eq('domain', 'nutrition').maybeSingle()
+  const basePreset = ((baseRes.data as any)?.preset ?? null) as string | null
+  const baseSections = (((baseRes.data as any)?.sections ?? null)) as SectionPrefs | null
+
+  // Entitlement por módulo (fail-closed). Pool-wins: el team decide; si no, el coach dueño.
+  // Enterprise (org) => sin resolución client-side de módulos => todo false (mismo fail-closed web).
+  let enabledModules: Record<string, unknown> = {}
+  if (useTeamBase) {
+    const { data } = await supabase.from('teams').select('enabled_modules').eq('id', teamId).maybeSingle()
+    enabledModules = ((data as any)?.enabled_modules ?? {}) as Record<string, unknown>
+  } else if (!orgId) {
+    const { data } = await supabase.from('coaches').select('enabled_modules').eq('id', coachId).maybeSingle()
+    enabledModules = ((data as any)?.enabled_modules ?? {}) as Record<string, unknown>
+  }
+  const ent = (k: ModuleKey): boolean => enabledModules[k] === true && !disabledModules.includes(k)
+  const entitledByModule: NutritionEntitledByModule = {
+    cardio: ent('cardio'),
+    movement_assessment: ent('movement_assessment'),
+    body_composition: ent('body_composition'),
+    nutrition_exchanges: ent('nutrition_exchanges'),
+  }
+
+  const override = (((overrideRes.data as any)?.sections ?? {})) as SectionPrefs
+
+  const resolveInput = (clientSections: SectionPrefs | null) => ({
+    domain: 'nutrition' as const,
+    entitledByModule,
+    preset: basePreset,
+    useTeamBase,
+    coachSections: useTeamBase ? null : baseSections,
+    teamSections: useTeamBase ? baseSections : null,
+    clientSections,
+  })
+
+  // Flag OFF/ausente/Edge caído => fail-OPEN: mostrar TODO lo entitled (comportamiento de HOY, espejo web).
+  const failOpen = (): Record<NutritionSectionKey, boolean> => {
+    const out = {} as Record<NutritionSectionKey, boolean>
+    for (const s of NUTRITION_SECTIONS) {
+      out[s.key] = s.core ? true : s.requiresModule ? entitledByModule[s.requiresModule] === true : true
+    }
+    return out
+  }
+
+  const baseEffective = prefsEnabled ? (resolveSections(resolveInput(null)) as Record<NutritionSectionKey, boolean>) : failOpen()
+  const effective = prefsEnabled ? (resolveSections(resolveInput(override)) as Record<NutritionSectionKey, boolean>) : failOpen()
+  const domainEnabledBase = prefsEnabled ? resolveDomainEnabled(resolveInput(null)) : true
+
+  return {
+    privateNotes: (((notesRes.data as any[] | null) ?? [])).map((n) => ({ id: String(n.id), body: String(n.body ?? ''), created_at: n.created_at ?? null, updated_at: n.updated_at ?? null })),
+    mealComments: (((commentsRes.data as any[] | null) ?? [])).map((c) => ({ id: String(c.id), authorRole: c.author_role === 'coach' ? 'coach' : 'client', body: String(c.body ?? ''), created_at: String(c.created_at ?? '') })),
+    nutrientTargets: (((targetsRes.data as any[] | null) ?? [])).map((t) => ({
+      id: String(t.id),
+      client_id: t.client_id ?? null,
+      nutrient_key: String(t.nutrient_key),
+      intent: t.intent === 'cap' ? 'cap' : 'aimup',
+      floor_value: t.floor_value ?? null,
+      target_value: t.target_value ?? null,
+      ceiling_value: t.ceiling_value ?? null,
+    })),
+    override,
+    baseEffective,
+    effective,
+    entitledByModule,
+    domainEnabledBase,
+    useTeamBase,
+    prefsEnabled,
+    proEnabled: effective.micros_advanced === true,
+  }
+}
+
+// Nota privada del coach (una viva por par coach↔alumno). Espejo de NutritionNotesService.upsertPrivateNote.
+export async function upsertCoachPrivateNote(clientId: string, body: string): Promise<{ ok: boolean; error?: string }> {
+  const trimmed = body.trim()
+  if (!trimmed) return { ok: false, error: 'La nota no puede estar vacía.' }
+  const { data: userData } = await supabase.auth.getUser()
+  const coachId = userData.user?.id
+  if (!coachId) return { ok: false, error: 'No autorizado.' }
+  const { data: existing } = await supabase
+    .from('nutrition_private_notes')
+    .select('id')
+    .eq('coach_id', coachId)
+    .eq('client_id', clientId)
+    .order('updated_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  if ((existing as any)?.id) {
+    const { error } = await supabase.from('nutrition_private_notes').update({ body: trimmed, updated_at: new Date().toISOString() }).eq('id', (existing as any).id)
+    if (error) return { ok: false, error: error.message }
+    return { ok: true }
+  }
+  const { error } = await supabase.from('nutrition_private_notes').insert({ coach_id: coachId, client_id: clientId, body: trimmed })
+  if (error) return { ok: false, error: error.message }
+  return { ok: true }
+}
+
+// Comentario bidireccional (author_role='coach', anclado al día) sobre la bitácora del alumno.
+// Espejo de NutritionNotesService.addMealComment. author_id = uid de la sesión (nunca del body).
+export async function addCoachMealComment(clientId: string, logDate: string, body: string): Promise<{ ok: boolean; error?: string }> {
+  const trimmed = body.trim()
+  if (!trimmed) return { ok: false, error: 'El comentario no puede estar vacío.' }
+  const { data: userData } = await supabase.auth.getUser()
+  const authorId = userData.user?.id
+  if (!authorId) return { ok: false, error: 'No autorizado.' }
+  const { error } = await supabase.from('nutrition_meal_comments').insert({
+    client_id: clientId, meal_log_id: null, log_date: logDate, body: trimmed, author_id: authorId, author_role: 'coach',
+  })
+  if (error) return { ok: false, error: error.message }
+  return { ok: true }
+}
+
+// Umbral de micronutriente por (coach, alumno, nutriente). Espejo de NutrientTargetsService.upsertNutrientTarget.
+// El gate de "Nutrición Pro" (micros avanzados) se aplica en la UI (solo se ofrecen si proEnabled);
+// RLS garantiza la pertenencia coach↔alumno igual que la server action web.
+export async function upsertCoachNutrientTarget(input: {
+  clientId: string
+  nutrientKey: string
+  intent: 'aimup' | 'cap'
+  floorValue: number | null
+  targetValue: number | null
+  ceilingValue: number | null
+}): Promise<{ ok: boolean; error?: string }> {
+  if (input.floorValue == null && input.targetValue == null && input.ceilingValue == null) {
+    return { ok: false, error: 'Define al menos un umbral (piso, meta o techo).' }
+  }
+  const { data: userData } = await supabase.auth.getUser()
+  const coachId = userData.user?.id
+  if (!coachId) return { ok: false, error: 'No autorizado.' }
+  const { data: existing } = await supabase
+    .from('nutrient_targets')
+    .select('id')
+    .eq('coach_id', coachId)
+    .eq('client_id', input.clientId)
+    .eq('nutrient_key', input.nutrientKey)
+    .maybeSingle()
+  const payload = {
+    coach_id: coachId,
+    client_id: input.clientId,
+    nutrient_key: input.nutrientKey,
+    floor_value: input.floorValue,
+    target_value: input.targetValue,
+    ceiling_value: input.ceilingValue,
+    intent: input.intent,
+    provenance: 'manual',
+    updated_at: new Date().toISOString(),
+  }
+  if ((existing as any)?.id) {
+    const { error } = await supabase.from('nutrient_targets').update(payload).eq('id', (existing as any).id)
+    if (error) return { ok: false, error: error.message }
+    return { ok: true }
+  }
+  const { error } = await supabase.from('nutrient_targets').insert(payload)
+  if (error) return { ok: false, error: error.message }
+  return { ok: true }
+}
+
+// Override por-alumno de la zona "Funciones" (client_feature_prefs.sections). Escribe SOLO el
+// jsonb de secciones (RLS coach-owner es el gate) — NUNCA toca enabled_modules ni borra datos.
+// Espejo de feature-prefs.actions.setClientFeaturePrefs.
+export async function setClientNutritionOverride(clientId: string, sections: SectionPrefs): Promise<{ ok: boolean; error?: string }> {
+  const { error } = await supabase
+    .from('client_feature_prefs')
+    .upsert({ client_id: clientId, domain: 'nutrition', sections, updated_at: new Date().toISOString() }, { onConflict: 'client_id,domain' })
   if (error) return { ok: false, error: error.message }
   return { ok: true }
 }

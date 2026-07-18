@@ -305,7 +305,7 @@ export function CoachOnboardingChecklist({
             all_done: allDone,
         })
         setDismissed(true)
-        toast('Guía ocultada. Podés retomarla desde el dashboard.', { duration: 3000 })
+        toast('Guía ocultada. Puedes retomarla desde el dashboard.', { duration: 3000 })
     }
 
     function resumeGuide() {
@@ -332,7 +332,7 @@ export function CoachOnboardingChecklist({
                     <Rocket className="size-4" />
                 </span>
                 <span className="flex-1 text-[13px] font-bold text-[var(--sport-700)]">
-                    Seguís con pasos pendientes en tu guía de inicio.
+                    Sigues con pasos pendientes en tu guía de inicio.
                 </span>
                 <button
                     type="button"
@@ -376,12 +376,12 @@ export function CoachOnboardingChecklist({
     const steps: Array<{ key: StepKey; label: string; href: string }> = [
         {
             key: 'profile_branding',
-            label: 'Personalizá tu marca',
+            label: 'Personaliza tu marca',
             href: isFree ? '/coach/subscription' : '/coach/settings?tour=1',
         },
-        { key: 'first_client', label: 'Sumá tu primer alumno', href: '/coach/clients' },
-        { key: 'first_plan', label: 'Creá tu primer plan', href: '/coach/workout-programs' },
-        { key: 'first_checkin', label: 'Recibí el primer check-in', href: '/coach/clients' },
+        { key: 'first_client', label: 'Suma tu primer alumno', href: '/coach/clients' },
+        { key: 'first_plan', label: 'Crea tu primer plan', href: '/coach/workout-programs' },
+        { key: 'first_checkin', label: 'Recibe el primer check-in', href: '/coach/clients' },
     ]
 
     return (
@@ -478,7 +478,7 @@ export function CoachOnboardingChecklist({
                                 <Sparkles className="size-[15px]" />
                             </span>
                             <span className="flex-1 text-xs leading-[1.35] text-[var(--sport-700)]">
-                                Sumá planes de nutrición con <b>Pro</b>.
+                                Suma planes de nutrición con <b>Pro</b>.
                             </span>
                             <Link
                                 href="/coach/subscription"

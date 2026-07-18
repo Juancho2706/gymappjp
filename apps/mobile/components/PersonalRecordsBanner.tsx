@@ -39,7 +39,7 @@ export function PersonalRecordsBanner({ clientId }: Props) {
 
   return (
     <View style={styles.wrap}>
-      <Text style={[styles.title, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>
+      <Text style={[styles.title, { color: theme.foreground, fontFamily: 'Archivo_700Bold' }]}>
         🏆 Récords personales
       </Text>
       <FlatList
@@ -66,10 +66,10 @@ export function PersonalRecordsBanner({ clientId }: Props) {
             >
               <Trophy size={14} color="#F59E0B" strokeWidth={2} />
               <View style={styles.badgeText}>
-                <Text style={[styles.exerciseName, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]} numberOfLines={1}>
+                <Text style={[styles.exerciseName, { color: theme.foreground, fontFamily: 'Archivo_700Bold' }]} numberOfLines={1}>
                   {item.exerciseName}
                 </Text>
-                <Text style={[styles.weight, { color: '#F59E0B', fontFamily: 'Montserrat_800ExtraBold' }]}>
+                <Text style={[styles.weight, { color: '#F59E0B', fontFamily: 'Archivo_800ExtraBold' }]}>
                   {item.weightKg} kg
                 </Text>
               </View>

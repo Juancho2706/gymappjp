@@ -5,7 +5,7 @@
  */
 
 import type { WorkoutArea } from '@/domain/workout/types'
-import { LEGACY_SECTION_AREA_ID, type LegacySectionSlug } from '@/lib/workout-areas'
+import { LEGACY_SECTION_AREA_ID, type LegacySectionSlug } from '@eva/workout-engine'
 
 export type BuilderAreaVM = {
     id: string

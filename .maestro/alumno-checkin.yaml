@@ -1,0 +1,42 @@
+# Flow: alumno completa un check-in semanal (peso + energía, salta fotos, envía).
+# Requiere sesión ya iniciada (correr después de alumno-login.yaml o con estado persistido).
+# Pantallas: apps/mobile/app/alumno/(tabs)/check-in.tsx (wizard de 3 pasos)
+#
+# GOTCHA: sin testID en esta pantalla (verificado E0-G2, 2026-07-08). El botón de avance
+# tiene el mismo label condicional en los 3 pasos salvo el último ("Continuar" / "Enviar
+# check-in", check-in.tsx L341) — se reusa ese texto como ancla de progreso.
+# testIDs faltantes a agregar en mobile (check-in.tsx):
+#   - input de peso -> testID="checkin-weight" (L401-409)
+#   - botones de nivel de energía 1-10 -> testID=`checkin-energy-${n}` (L417-430)
+#   - PhotoPickerSlot frontal/espalda -> testID="checkin-photo-front" / "checkin-photo-back" (L459-475)
+#   - textarea de notas -> testID="checkin-notes" (L549-552)
+#   - boton de avance/envío -> testID="checkin-submit" (L341)
+appId: cl.evaapp.eva
+---
+- launchApp:
+    clearState: false
+
+# Paso 1: tab Check-in (alumno/(tabs)/_layout.tsx L59, título "Check-in")
+- tapOn: "Check-in"
+
+# Step 1 del wizard: peso + energía (check-in.tsx L400-433)
+- assertVisible: "Peso (kg) *"
+- tapOn:
+    text: "75.5" # placeholder del input de peso, L403
+- inputText: "78.2"
+- tapOn: "8" # nivel de energía 8/10, botón numerado L426-428
+- tapOn: "Continuar"
+
+# Step 2 del wizard: fotos de progreso, opcionales — se saltan (check-in.tsx L451-456)
+- assertVisible: "Fotos de progreso"
+- tapOn: "Continuar"
+
+# Step 3 del wizard: notas + resumen + envío (check-in.tsx L549-568)
+- assertVisible: "Resumen"
+- tapOn:
+    text: "¿Cómo te sentiste esta semana?" # placeholder del textarea de notas, L552
+- inputText: "Semana sólida, buena energía."
+- tapOn: "Enviar check-in"
+
+# Confirmación de envío exitoso (done=true en el state; no hay texto estático confirmado en
+# este audit para el estado final — anotar screenshot manual hasta agregar testID de éxito).

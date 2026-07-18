@@ -1,53 +1,52 @@
-import { useEffect, useMemo, useState } from 'react'
-import { Alert, Linking, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Alert, Linking, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
+import * as Clipboard from 'expo-clipboard'
+import type { NativeScrollEvent, NativeSyntheticEvent } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { useLocalSearchParams, useRouter } from 'expo-router'
-import { Apple, Archive, ArchiveRestore, BarChart3, Clock, CreditCard, Dumbbell, LayoutGrid, MessageCircle, Pencil, Plus, Salad, Scale, TrendingUp, User, X } from 'lucide-react-native'
-import { MotiView } from 'moti'
-import * as Haptics from 'expo-haptics'
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
+import { User } from 'lucide-react-native'
 import { useTheme } from '../../../context/ThemeContext'
-import { Button, EmptyState, NativeDialog, TopBar } from '../../../components'
+import { Button, EmptyState, Input, NativeDialog, TopBar } from '../../../components'
 import { EvaLoaderScreen } from '../../../components/EvaLoader'
 import { AppBackground } from '../../../components/AppBackground'
 import { PhotoLightbox } from '../../../components/PhotoLightbox'
-import { ClientHero, type HeroChip } from '../../../components/coach/clientDetail/ClientHero'
+import { ClientHero, type HeroChips, type HeroStatusLevel } from '../../../components/coach/clientDetail/ClientHero'
 import { ClientTabBar, type ClientTab, type TabItem } from '../../../components/coach/clientDetail/ClientTabBar'
+import { ProfileFloatingActions } from '../../../components/coach/clientDetail/ProfileFloatingActions'
+import { ClientActionsSheet } from '../../../components/coach/directory/ClientActionsSheet'
 import { OverviewTab } from '../../../components/coach/clientDetail/OverviewTab'
 import { ProgresoTab } from '../../../components/coach/clientDetail/ProgresoTab'
 import { AnalisisTab } from '../../../components/coach/clientDetail/AnalisisTab'
 import { PlanTab } from '../../../components/coach/clientDetail/PlanTab'
 import { NutricionTab } from '../../../components/coach/clientDetail/NutricionTab'
-import { FacturacionTab } from '../../../components/coach/clientDetail/FacturacionTab'
-import { apiFetch } from '../../../lib/api'
 import {
   getCoachClientDetail,
   getCoachClientDayDetail,
-  setCoachClientArchived,
   updateCoachClient,
   type ClientDayDetail,
   type CoachClientDetail,
   type CoachClientDetailData,
 } from '../../../lib/coach-client-detail'
-import {
-  avgEnergySince,
-  bmiCategory,
-  bmiFromMetric,
-  buildProfileActivityCalendar,
-  epleyOneRM,
-  findWeeklyWeightPRs,
-  formatTrainingAgeLabel,
-  linearRegressionKgPerDay,
-  longestActivityStreak,
-} from '../../../lib/profile-analytics'
-import { exportProgressPdf } from '../../../lib/progress-pdf'
-import { getTodayInSantiago } from '../../../lib/date-utils'
+import { formatTrainingAgeLabel } from '../../../lib/profile-analytics'
+import { exportClientDossierPdf } from '../../../lib/client-dossier-pdf'
+import { getTodayInSantiago, isoDateAddDays } from '../../../lib/date-utils'
+import { daysBetweenCalendar } from '../../../lib/checkin-thresholds'
+import { filterPlansForStructureView, resolveActiveWeekVariantForDisplay } from '../../../lib/program-week-variant'
+import { deriveClientStatus } from '@eva/profile-analytics'
+import { deleteClient, resetClientPassword, setClientStatus, type ClientActionWorkspace } from '../../../lib/client-actions'
+import { clientActionWorkspaceQuery } from '../../../lib/client-action-workspace'
+import { getWorkspaceEntitlements } from '../../../lib/entitlements'
+import { useWorkspace } from '../../../lib/workspace'
+import { getCoachProfile } from '../../../lib/coach'
+import { getApiBaseUrl } from '../../../lib/api'
+import { supabase } from '../../../lib/supabase'
 
 const round1 = (n: number) => Math.round(n * 10) / 10
 
-// A-F18: etiqueta relativa de "última actividad".
+// A-F18: etiqueta relativa de "ultima actividad".
 function relActivityLabel(iso: string | null): string {
   if (!iso) return 'Sin actividad'
-  const d = Math.floor((Date.now() - new Date(`${iso}T12:00:00`).getTime()) / 86400000)
+  const d = daysBetweenCalendar(iso.slice(0, 10), getTodayInSantiago().iso)
   if (d <= 0) return 'Hoy'
   if (d === 1) return 'Ayer'
   if (d < 30) return `Hace ${d}d`
@@ -55,149 +54,387 @@ function relActivityLabel(iso: string | null): string {
   return `Hace ${m} mes${m === 1 ? '' : 'es'}`
 }
 
+// "Desde {mmm yyyy}" a partir de la fecha de inicio (o alta) del alumno.
+function sinceMonthLabel(iso: string | null): string {
+  if (!iso) return '—'
+  const d = new Date(iso.length <= 10 ? `${iso}T12:00:00` : iso)
+  if (!Number.isFinite(d.getTime())) return '—'
+  return d.toLocaleDateString('es-CL', { month: 'short', year: 'numeric' })
+}
+
 export default function ClientDetailScreen() {
   const { clientId } = useLocalSearchParams<{ clientId: string; clientName?: string }>()
   const { theme } = useTheme()
   const router = useRouter()
+  const workspace = useWorkspace()
 
   const [tab, setTab] = useState<ClientTab>('overview')
   const [data, setData] = useState<CoachClientDetailData | null>(null)
   const [loading, setLoading] = useState(true)
-  const [selectedDate, setSelectedDate] = useState(() => getTodayInSantiago().iso)
-  const [dayDetail, setDayDetail] = useState<ClientDayDetail | null>(null)
-  const [dayLoading, setDayLoading] = useState(false)
-  const [payOpen, setPayOpen] = useState(false)
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [trainingDate, setTrainingDate] = useState(() => getTodayInSantiago().iso)
+  const [nutritionDate, setNutritionDate] = useState(() => getTodayInSantiago().iso)
+  const [trainingDayDetail, setTrainingDayDetail] = useState<ClientDayDetail | null>(null)
+  const [trainingDayLoading, setTrainingDayLoading] = useState(false)
+  const [trainingDayError, setTrainingDayError] = useState<string | null>(null)
+  const [trainingDayRetry, setTrainingDayRetry] = useState(0)
+  const [nutritionDayDetail, setNutritionDayDetail] = useState<ClientDayDetail | null>(null)
+  const [nutritionDayLoading, setNutritionDayLoading] = useState(false)
+  const [nutritionDayError, setNutritionDayError] = useState<string | null>(null)
+  const [nutritionDayRetry, setNutritionDayRetry] = useState(0)
   const [editOpen, setEditOpen] = useState(false)
-  const [fabOpen, setFabOpen] = useState(false)
-  const [exporting, setExporting] = useState(false)
+  const [editSaving, setEditSaving] = useState(false)
+  const [moreOpen, setMoreOpen] = useState(false)
+  const [compact, setCompact] = useState(false)
   const [lightbox, setLightbox] = useState<{ photos: string[]; index: number } | null>(null)
+  const [exportingPdf, setExportingPdf] = useState(false)
+  const [loginUrl, setLoginUrl] = useState<string | null>(null)
+  const [resetOpen, setResetOpen] = useState(false)
+  const [resetPassword, setResetPassword] = useState<string | null>(null)
+  const [resetting, setResetting] = useState(false)
+  const [actionError, setActionError] = useState<string | null>(null)
+  const [actionBusy, setActionBusy] = useState(false)
+  const [deleteOpen, setDeleteOpen] = useState(false)
+  const [deleteConfirm, setDeleteConfirm] = useState('')
+  const [deleting, setDeleting] = useState(false)
+  const [resourceModuleFlags, setResourceModuleFlags] = useState({ cardio: false, movement: false, bodycomp: false })
+  const [resourceModulesReady, setResourceModulesReady] = useState(false)
+  const resourceModulesReadyRef = useRef(false)
+  const resourceModulesScopeRef = useRef('')
+  const [resourceModulesError, setResourceModulesError] = useState<string | null>(null)
+  const [resourceModulesRetry, setResourceModulesRetry] = useState(0)
+  const lastY = useRef(0)
+  const tabStickyY = useRef(Number.MAX_SAFE_INTEGER)
+  const [tabStuck, setTabStuck] = useState(false)
+  const loadedOnceRef = useRef(false)
+  const loadSeqRef = useRef(0)
+  const daySeqRef = useRef(0)
 
-  async function load() {
-    setLoading(true)
+  const load = useCallback(async (opts?: { silent?: boolean }) => {
+    if (!clientId || !workspace.ready) return
+    const seq = ++loadSeqRef.current
+    if (!opts?.silent) setLoading(true)
+    setLoadError(null)
     try {
-      const res = await getCoachClientDetail(clientId)
-      setData(res)
-      setSelectedDate((prev) => res.activity.find((d) => d.workout || d.nutrition || d.checkIn)?.date ?? prev)
+      const res = await getCoachClientDetail(clientId, {
+        kind: workspace.kind,
+        teamId: workspace.teamId,
+        orgId: workspace.orgId,
+      })
+      if (seq === loadSeqRef.current) setData(res)
     } catch (e) {
       console.warn('[client-detail] load failed', e)
+      if (seq === loadSeqRef.current) setLoadError('No pudimos cargar la ficha. Revisa tu conexión e intenta de nuevo.')
     } finally {
-      setLoading(false)
+      if (seq === loadSeqRef.current) {
+        if (!opts?.silent) setLoading(false)
+        loadedOnceRef.current = true
+      }
     }
-  }
-  useEffect(() => { load() }, [clientId])
+  }, [clientId, workspace.ready, workspace.kind, workspace.teamId, workspace.orgId])
 
   useEffect(() => {
-    let cancelled = false
-    async function loadDay() {
-      if (!clientId || !selectedDate) return
-      setDayLoading(true)
-      const detail = await getCoachClientDayDetail(clientId, selectedDate)
-      if (!cancelled) { setDayDetail(detail); setDayLoading(false) }
-    }
-    loadDay()
-    return () => { cancelled = true }
-  }, [clientId, selectedDate])
+    loadedOnceRef.current = false
+    loadSeqRef.current += 1
+    daySeqRef.current += 1
+    const todayIso = getTodayInSantiago().iso
+    setTrainingDate(todayIso)
+    setNutritionDate(todayIso)
+    setTrainingDayDetail(null)
+    setTrainingDayLoading(false)
+    setTrainingDayError(null)
+    setTrainingDayRetry(0)
+    setNutritionDayDetail(null)
+    setNutritionDayLoading(false)
+    setNutritionDayError(null)
+    setNutritionDayRetry(0)
+  }, [clientId])
+
+  // GOTCHA 6b: la ficha hace fetch propio y es una ruta stack-push (no se
+  // desmonta al abrir program-builder / nutrition-builder). useFocusEffect
+  // re-corre load() al VOLVER del builder → los datos no quedan stale. La
+  // primera carga muestra el loader full-screen; los refrescos on-focus son
+  // silenciosos (sin flash del loader).
+  useFocusEffect(
+    useCallback(() => {
+      void load({ silent: loadedOnceRef.current })
+    }, [load]),
+  )
+
+  useFocusEffect(
+    useCallback(() => {
+      let active = true
+      const resourceTeamId = data?.client?.team_id ?? null
+      setLoginUrl(null)
+      void Promise.all([
+        getCoachProfile().catch(() => null),
+        resourceTeamId
+          ? supabase.from('teams').select('slug').eq('id', resourceTeamId).maybeSingle()
+          : Promise.resolve({ data: null }),
+      ]).then(([coach, teamResult]) => {
+        if (!active) return
+        const teamSlug = teamResult.data?.slug?.trim()
+        const identifier = coach?.inviteCode?.trim() || coach?.slug?.trim()
+        setLoginUrl(resourceTeamId
+          ? teamSlug ? `${getApiBaseUrl()}/t/${teamSlug}/login` : null
+          : identifier ? `${getApiBaseUrl()}/c/${identifier}/login` : null)
+      })
+      return () => { active = false }
+    }, [data?.client?.team_id]),
+  )
+
+  const activeDayKind = tab === 'analisis' ? 'training' : tab === 'nutricion' ? 'nutrition' : null
+  const activeDayDate = activeDayKind === 'training' ? trainingDate : activeDayKind === 'nutrition' ? nutritionDate : null
+  const activeDayRetry = activeDayKind === 'training'
+    ? trainingDayRetry
+    : activeDayKind === 'nutrition'
+      ? nutritionDayRetry
+      : 0
+  const selectTrainingDate = useCallback((date: string) => {
+    if (date === trainingDate) return
+    setTrainingDayDetail(null)
+    setTrainingDayError(null)
+    setTrainingDayLoading(true)
+    setTrainingDate(date)
+  }, [trainingDate])
+  const selectNutritionDate = useCallback((date: string) => {
+    if (date === nutritionDate) return
+    setNutritionDayDetail(null)
+    setNutritionDayError(null)
+    setNutritionDayLoading(true)
+    setNutritionDate(date)
+  }, [nutritionDate])
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!clientId || !activeDayKind || !activeDayDate) return
+      const seq = ++daySeqRef.current
+      if (activeDayKind === 'training') {
+        setTrainingDayLoading(true)
+        setTrainingDayDetail(null)
+        setTrainingDayError(null)
+      } else {
+        setNutritionDayLoading(true)
+        setNutritionDayDetail(null)
+        setNutritionDayError(null)
+      }
+      void getCoachClientDayDetail(clientId, activeDayDate, {
+        kind: workspace.kind,
+        teamId: workspace.teamId,
+        orgId: workspace.orgId,
+      })
+        .then((detail) => {
+          if (seq !== daySeqRef.current) return
+          if (activeDayKind === 'training') setTrainingDayDetail(detail)
+          else setNutritionDayDetail(detail)
+        })
+        .catch((error) => {
+          console.warn('[client-detail] day load failed', error)
+          if (seq === daySeqRef.current) {
+            const message = 'No pudimos cargar esta sesión. Revisa tu conexión e intenta de nuevo.'
+            if (activeDayKind === 'training') setTrainingDayError(message)
+            else setNutritionDayError(message)
+          }
+        })
+        .finally(() => {
+          if (seq !== daySeqRef.current) return
+          if (activeDayKind === 'training') setTrainingDayLoading(false)
+          else setNutritionDayLoading(false)
+        })
+      return () => { daySeqRef.current += 1 }
+    }, [clientId, activeDayKind, activeDayDate, activeDayRetry, workspace.kind, workspace.teamId, workspace.orgId]),
+  )
 
   const client = data?.client ?? null
 
   function openWhatsApp() {
     const digits = (client?.phone ?? '').replace(/\D/g, '')
-    if (!digits) { Alert.alert('Sin teléfono', 'Este alumno no tiene teléfono cargado.'); return }
-    const msg = `Hola ${client?.full_name?.split(' ')[0] ?? ''}! Te escribo desde EVA.`
-    Linking.openURL(`https://wa.me/${digits}?text=${encodeURIComponent(msg)}`).catch(() => {})
+    if (digits.length < 10) return
+    Linking.openURL(`https://wa.me/${digits}`).catch(() => {})
+  }
+
+  const resourceWorkspace = client?.team_id
+    ? workspace.workspaces.find((entry) => entry.teamId === client.team_id)
+    : client?.org_id
+      ? workspace.workspaces.find((entry) => entry.orgId === client.org_id)
+      : workspace.workspaces.find((entry) => entry.kind === 'standalone')
+  const actionWorkspace: ClientActionWorkspace = {
+    kind: resourceWorkspace?.kind ?? (client?.team_id ? workspace.kind : client?.org_id ? 'enterprise' : 'standalone'),
+    teamId: client?.team_id ?? null,
+    orgId: client?.org_id ?? null,
+  }
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!client) return
+      let active = true
+      const scopeKey = `${client.id}:${actionWorkspace.kind}:${actionWorkspace.teamId ?? ''}:${actionWorkspace.orgId ?? ''}`
+      if (resourceModulesScopeRef.current !== scopeKey) {
+        resourceModulesScopeRef.current = scopeKey
+        resourceModulesReadyRef.current = false
+      }
+      setResourceModulesError(null)
+      if (!resourceModulesReadyRef.current) {
+        setResourceModulesReady(false)
+        setResourceModuleFlags({ cardio: false, movement: false, bodycomp: false })
+      }
+      void getWorkspaceEntitlements(actionWorkspace)
+        .then((config) => {
+          if (!active) return
+          const next = {
+            cardio: config.enabledModules.includes('cardio'),
+            movement: config.enabledModules.includes('movement_assessment'),
+            bodycomp: config.enabledModules.includes('body_composition'),
+          }
+          setResourceModuleFlags(next)
+          resourceModulesReadyRef.current = true
+          setResourceModulesReady(true)
+        })
+        .catch((error) => {
+          if (active) {
+            setResourceModulesError(error instanceof Error ? error.message : 'No pudimos cargar los módulos.')
+            setResourceModulesReady(resourceModulesReadyRef.current)
+          }
+          console.warn('[client-detail] resource entitlements failed', error)
+        })
+      return () => { active = false }
+    }, [client?.id, actionWorkspace.kind, actionWorkspace.teamId, actionWorkspace.orgId, resourceModulesRetry]),
+  )
+
+  function openMenuWhatsApp() {
+    if (!client?.phone || !client || !loginUrl) return
+    const digits = client.phone.replace(/\D/g, '')
+    if (!digits) return
+    const message = `Hola ${client.full_name}! 👋 Soy tu coach. Aquí está tu link para acceder a tu plan: ${loginUrl}`
+    Linking.openURL(`https://wa.me/${digits}?text=${encodeURIComponent(message)}`).catch(() => {})
+  }
+
+  function confirmToggle() {
+    if (!client || actionBusy) return
+    const pausing = client.is_active !== false
+    Alert.alert(
+      pausing ? 'Pausar acceso' : 'Reactivar acceso',
+      pausing
+        ? 'No podrá ver sus rutinas ni registrar datos, pero su historial se mantiene intacto. No libera cupo de tu plan.'
+        : 'Volverá a tener acceso completo a la plataforma.',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: pausing ? 'Pausar' : 'Reactivar',
+          onPress: async () => {
+            if (actionBusy) return
+            setActionBusy(true)
+            try { await setClientStatus(client.id, { is_active: !client.is_active }, actionWorkspace); await load({ silent: true }) }
+            catch (error) { Alert.alert('Error', error instanceof Error ? error.message : 'No se pudo actualizar.') }
+            finally { setActionBusy(false) }
+          },
+        },
+      ],
+    )
   }
 
   function openBuilder() {
     if (!client) return
-    router.push(`/coach/program-builder?clientId=${client.id}&clientName=${encodeURIComponent(client.full_name)}`)
+    const params = [
+      `clientId=${encodeURIComponent(client.id)}`,
+      `clientName=${encodeURIComponent(client.full_name)}`,
+      ...(data?.activeProgram?.id ? [`programId=${encodeURIComponent(data.activeProgram.id)}`] : []),
+      clientActionWorkspaceQuery(actionWorkspace),
+    ].join('&')
+    router.push(`/coach/program-builder?${params}`)
   }
 
   function confirmArchive() {
-    if (!client) return
+    if (!client || actionBusy) return
     const archiving = !client.is_archived
     Alert.alert(
-      archiving ? 'Archivar alumno' : 'Reactivar alumno',
-      archiving ? `${client.full_name} dejará de aparecer como activo.` : `${client.full_name} volverá a estar activo.`,
+      archiving ? 'Archivar alumno' : 'Desarchivar alumno',
+      archiving
+        ? 'Se oculta de la lista y libera cupo de tu plan. No se borra nada: puedes desarchivarlo cuando quieras.'
+        : 'Vuelve a tu lista activa y cuenta para el cupo de tu plan.',
       [
         { text: 'Cancelar', style: 'cancel' },
         {
-          text: archiving ? 'Archivar' : 'Reactivar', style: archiving ? 'destructive' : 'default',
-          onPress: async () => { const r = await setCoachClientArchived(client.id, archiving); if (!r.ok) Alert.alert('Error', r.error ?? 'No se pudo actualizar.'); else load() },
+          text: archiving ? 'Archivar' : 'Desarchivar', style: archiving ? 'destructive' : 'default',
+          onPress: async () => {
+            if (actionBusy) return
+            setActionBusy(true)
+            try { await setClientStatus(client.id, { is_archived: archiving }, actionWorkspace); await load({ silent: true }) }
+            catch (error) { Alert.alert('Error', error instanceof Error ? error.message : 'No se pudo actualizar.') }
+            finally { setActionBusy(false) }
+          },
         },
       ]
     )
   }
 
-  // ── Derivados para hero + badges + PDF ─────────────────────────────────────
+  async function confirmResetPassword() {
+    if (!client || resetting) return
+    setResetting(true)
+    setActionError(null)
+    try { setResetPassword(await resetClientPassword(client.id, actionWorkspace)) }
+    catch (error) { setActionError(error instanceof Error ? error.message : 'No se pudo resetear la contraseña.') }
+    finally { setResetting(false) }
+  }
+
+  async function confirmDeleteClient() {
+    if (!client || deleting || deleteConfirm.trim().toLowerCase() !== client.full_name.toLowerCase()) return
+    setDeleting(true)
+    setActionError(null)
+    try {
+      await deleteClient(client.id, actionWorkspace)
+      setDeleteOpen(false)
+      router.replace('/coach/clientes')
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : 'No se pudo eliminar el alumno.')
+    } finally { setDeleting(false) }
+  }
+
+  // ── Derivados para hero (badge, meta, chips) ──────────────────────────────
   const derived = useMemo(() => {
     if (!data || !client) return null
-    const series = [...data.checkIns].filter((c) => c.weight != null).sort((a, b) => a.date.localeCompare(b.date))
-    const currentWeight = series.length ? Number(series[series.length - 1]!.weight) : null
-    const initialWeight = client.initial_weight_kg ?? (series.length ? Number(series[0]!.weight) : null)
+    const series = [...data.checkIns].filter((c) => c.weight != null).sort((a, b) => String(a.created_at ?? a.date).localeCompare(String(b.created_at ?? b.date)))
+    const currentWeight = series.length ? Number(series[series.length - 1]!.weight) : client.initial_weight_kg
     const weightDelta = series.length >= 2 ? round1(Number(series[series.length - 1]!.weight) - Number(series[series.length - 2]!.weight)) : null
-    const calendar = buildProfileActivityCalendar(data.workoutDates371, data.checkIns.map((c) => c.date))
-    const streak = longestActivityStreak(calendar)
+    const activeDays = new Set([
+      ...data.workoutDates371.map((date) => date.slice(0, 10)),
+      ...data.nutritionActivityDates371,
+    ])
+    let cursor = getTodayInSantiago().iso
+    if (!activeDays.has(cursor)) cursor = isoDateAddDays(cursor, -1)
+    let streak = 0
+    while (activeDays.has(cursor)) { streak += 1; cursor = isoDateAddDays(cursor, -1) }
     const trainingAge = formatTrainingAgeLabel(client.subscription_start_date, client.created_at)
     const todayIso = getTodayInSantiago().iso
     const today = data.nutritionTimeline.find((t) => t.date === todayIso) ?? data.nutritionTimeline[0]
     const weeklyPRs = data.weeklyPRs
-    const pendingPays = data.payments.filter((p) => ['pending', 'pendiente'].includes((p.status ?? '').toLowerCase())).length
 
-    // Attention
+    // Alerta de atencion (motivo del badge).
     let attention: string | null = null
     if (data.compliance && data.compliance.checkInCompliancePercent < 40) attention = 'Check-ins irregulares — conviene contactar.'
     else if (data.activeNutrition && (data.compliance?.nutritionWeeklyAvgPct ?? 0) < 60) attention = 'Adherencia nutricional baja esta semana.'
     else if (data.checkIns[0] && !data.checkIns[0].reviewed_at) attention = 'Hay un check-in sin revisar.'
 
-    // A-F18: última actividad (workout o check-in más reciente) + semana de programa.
+    // Ultima actividad (workout o check-in mas reciente) + semana de programa.
     const lastWorkout = data.workoutDates371.length ? data.workoutDates371[data.workoutDates371.length - 1] : null
     const lastCheckin = data.checkIns[0]?.date ?? null
     const lastActivityIso = [lastWorkout, lastCheckin].filter(Boolean).sort().pop() ?? null
-    let programWeek: string | null = null
+    let planCurrentWeek: number | null = null
     if (data.activeProgram?.start_date && data.activeProgram.weeks_to_repeat) {
-      const start = new Date(`${data.activeProgram.start_date}T12:00:00`).getTime()
-      if (Number.isFinite(start)) {
-        const wk = Math.min(Math.max(1, Math.ceil((Math.max(0, (Date.now() - start) / 86400000) + 1) / 7)), Math.max(1, data.activeProgram.weeks_to_repeat))
-        programWeek = `${wk}/${data.activeProgram.weeks_to_repeat}`
-      }
+      const elapsedDays = Math.max(0, daysBetweenCalendar(data.activeProgram.start_date, todayIso))
+      planCurrentWeek = Math.min(Math.max(1, Math.ceil(elapsedDays / 7)), Math.max(1, data.activeProgram.weeks_to_repeat))
     }
 
-    return { series, currentWeight, initialWeight, weightDelta, streak, trainingAge, today, weeklyPRs, pendingPays, attention, lastActivityIso, programWeek }
+    return { currentWeight, weightDelta, streak, trainingAge, today, weeklyPRs, attention, lastActivityIso, planCurrentWeek }
   }, [data, client])
 
-  async function onExportPdf() {
-    if (!data || !client || !derived) return
-    setExporting(true)
-    try {
-      const slope = linearRegressionKgPerDay(data.checkIns.map((c) => ({ created_at: c.created_at ?? c.date, weight: c.weight })))
-      const bmi = derived.currentWeight != null && client.height_cm != null ? bmiFromMetric(derived.currentWeight, client.height_cm) : null
-      const energy7 = avgEnergySince(data.checkIns.map((c) => ({ created_at: c.created_at ?? c.date, energy_level: c.energy_level })), new Date(Date.now() - 7 * 86400000))
-      await exportProgressPdf({
-        clientName: client.full_name,
-        coachName: null,
-        trainingAge: derived.trainingAge,
-        initialWeight: derived.initialWeight,
-        currentWeight: derived.currentWeight,
-        changeKg: derived.initialWeight != null && derived.currentWeight != null ? round1(derived.currentWeight - derived.initialWeight) : null,
-        projection4w: derived.currentWeight != null ? round1(derived.currentWeight + slope * 28) : null,
-        ritmo30: round1(slope * 30),
-        bmi,
-        bmiCategory: bmi != null ? bmiCategory(bmi) : null,
-        energy7d: energy7,
-        nutritionWeekPct: data.compliance?.nutritionWeeklyAvgPct ?? 0,
-        nutritionMonthPct: data.nutritionMonthlyAvgPct,
-        nutritionStreak: data.nutritionStreakDays,
-        sessions30d: data.sessions30d,
-        sessionsYear: data.workoutDates371.length,
-        checkInsTotal: data.checkIns.length,
-        checkIns: data.checkIns.map((c) => ({ date: c.date, weight: c.weight, energy: c.energy_level, notes: c.notes, photo: c.front_photo_url })),
-        prs: data.personalRecords.map((r) => ({ exerciseName: r.exerciseName, weightKg: r.maxWeightKg, reps: r.repsAtMax ?? 0, oneRm: round1(epleyOneRM(r.maxWeightKg, r.repsAtMax ?? 0)) })),
-      })
-    } catch (e: any) {
-      Alert.alert('No se pudo exportar', e?.message ?? 'Intenta nuevamente.')
-    } finally {
-      setExporting(false)
-    }
+  function onScroll(e: NativeSyntheticEvent<NativeScrollEvent>) {
+    const y = e.nativeEvent.contentOffset.y
+    setTabStuck(y >= tabStickyY.current - 1)
+    if (y < 36) setCompact(false)
+    else if (y - lastY.current > 8) setCompact(true)
+    else if (lastY.current - y > 8) setCompact(false)
+    lastY.current = y
   }
 
   if (loading) {
@@ -211,130 +448,268 @@ export default function ClientDetailScreen() {
     return (
       <SafeAreaView edges={['top']} style={[styles.container, { backgroundColor: theme.background }]}>
         <TopBar back title="Alumno" onBack={() => router.back()} />
-        <EmptyState icon={User} title="Alumno no encontrado" subtitle="Vuelve a la lista de alumnos." />
+        <EmptyState
+          icon={User}
+          title={loadError ? 'No pudimos cargar la ficha' : 'Alumno no encontrado'}
+          subtitle={loadError ?? 'Vuelve a la lista de alumnos.'}
+          action={loadError ? <Button label="Reintentar" variant="secondary" onPress={() => load()} /> : undefined}
+        />
       </SafeAreaView>
     )
   }
 
-  const chips: HeroChip[] = []
-  chips.push({ icon: Scale, label: derived.weightDelta != null ? `Δ ${derived.weightDelta > 0 ? '+' : ''}${derived.weightDelta} kg` : 'Peso', value: derived.currentWeight != null ? `${derived.currentWeight} kg` : '—', color: derived.weightDelta == null ? undefined : derived.weightDelta > 0 ? '#EF4444' : theme.success })
-  chips.push({ icon: Apple, label: 'Adherencia', value: `${data.compliance?.nutritionWeeklyAvgPct ?? 0}%` })
-  chips.push({ icon: Dumbbell, label: 'Entrenos sem', value: `${data.compliance?.workoutsThisWeek ?? 0}/${data.compliance?.workoutsTarget ?? 1}` })
-  if (derived.today) chips.push({ icon: Salad, label: 'Comidas hoy', value: `${derived.today.mealsDone}/${derived.today.mealsTotal}` })
-  chips.push({ icon: Clock, label: 'Última actividad', value: relActivityLabel(derived.lastActivityIso) })
-  if (derived.programWeek) chips.push({ icon: LayoutGrid, label: 'Programa', value: `Sem ${derived.programWeek}` })
+  // ── Hero: eyebrow, estado, chips ──────────────────────────────────────────
+  const programName = data.activeProgram?.name?.trim() || null
+  const planCur = derived.planCurrentWeek
+  const eyebrow = programName
+    ? `${programName}${planCur != null ? ` · Semana ${planCur}` : ''}`
+    : planCur != null
+      ? `Semana ${planCur}`
+      : 'Sin programa activo'
 
+  const todayForStatus = getTodayInSantiago().iso
+  const lastCheckinForStatus = data.checkIns[0]?.date ?? null
+  const lastWorkoutForStatus = data.workoutDates371.length ? data.workoutDates371[data.workoutDates371.length - 1] : null
+  const programDaysRemaining = data.activeProgram?.end_date
+    ? daysBetweenCalendar(todayForStatus, data.activeProgram.end_date)
+    : null
+  const daysSinceCheckin = lastCheckinForStatus ? daysBetweenCalendar(lastCheckinForStatus, todayForStatus) : null
+  const daysSinceWorkout = lastWorkoutForStatus ? daysBetweenCalendar(lastWorkoutForStatus, todayForStatus) : null
+  const todayMealsDone = derived.today?.mealsDone ?? 0
+  const todayMealsTotal = Math.max(1, derived.today?.mealsTotal ?? 0)
+  const todayNutritionPct = Math.min(100, Math.round((todayMealsDone / todayMealsTotal) * 100))
+  const attentionScore =
+    (daysSinceCheckin != null && daysSinceCheckin > 30 ? 25 : 0) +
+    (data.activeProgram && (daysSinceWorkout == null || daysSinceWorkout >= 7) ? 25 : 0) +
+    (todayNutritionPct < 60 ? 20 : 0) +
+    (programDaysRemaining != null && programDaysRemaining <= 0 ? 15 : programDaysRemaining != null && programDaysRemaining <= 3 ? 8 : 0)
+  const derivedStatus = deriveClientStatus({
+    attentionScore,
+    daysSinceCheckin,
+    daysSinceWorkout,
+    hasActiveWorkoutProgram: Boolean(data.activeProgram),
+    nutritionAdherencePct: data.activeNutrition ? todayNutritionPct : null,
+    planDaysRemaining: programDaysRemaining,
+  })
+  const statusLevel: HeroStatusLevel = derivedStatus.level
+  const statusLabel = derivedStatus.label
+  const reasons = derivedStatus.reasons
+
+  const workoutsThisWeek = data.compliance?.workoutsThisWeek ?? 0
+  const workoutsTarget = Math.max(1, data.compliance?.workoutsTarget ?? 1)
+  // Chip "% plan": mismo calculo que el web (client-detail.service.ts:354 →
+  // nutritionCompliancePercent = round(mealsDoneHoy / mealsTotalHoy)) — cumplimiento de
+  // HOY, no el promedio semanal. El valor del chip "Comidas hoy" (mealsDone/mealsTotal) y
+  // su sub "% plan" deben leer la MISMA ventana (dia), como en ClientProfileHero.tsx:124,331-338.
+  const heroChips: HeroChips = {
+    weightValue: derived.currentWeight,
+    weightDelta: derived.weightDelta,
+    adherencePct: Math.min(100, Math.round((workoutsThisWeek / workoutsTarget) * 100)),
+    workoutsThisWeek,
+    workoutsTarget,
+    mealsDone: todayMealsDone,
+    mealsTotal: todayMealsTotal,
+    nutritionPct: todayNutritionPct,
+  }
+
+  // 5 pestañas (sin Facturacion — removida del chrome, RULING D2). Labels 1:1 con
+  // el rediseno web: Resumen · Progreso · Entreno · Programa · Nutricion. Label-only.
   const tabs: TabItem[] = [
-    { value: 'overview', label: 'Resumen', icon: LayoutGrid },
-    { value: 'progreso', label: 'Progreso', icon: TrendingUp, badge: data.checkIns.length || null },
-    { value: 'analisis', label: 'Análisis', icon: BarChart3, badge: derived.weeklyPRs.length || null },
-    { value: 'plan', label: 'Plan', icon: Dumbbell, badge: data.activeProgram?.planCount || null },
-    { value: 'nutricion', label: 'Nutrición', icon: Apple, badge: derived.attention && data.activeNutrition && (data.compliance?.nutritionWeeklyAvgPct ?? 0) < 60 ? '!' : null },
-    { value: 'facturacion', label: 'Pagos', icon: CreditCard, badge: derived.pendingPays || null },
+    { value: 'overview', label: 'Resumen' },
+    { value: 'progreso', label: 'Progreso', badge: data.checkIns.length || null },
+    { value: 'analisis', label: 'Entreno', badge: data.personalRecords.length || derived.weeklyPRs.length || null },
+    {
+      value: 'plan',
+      label: 'Programa',
+      badge: data.activeProgram
+        ? filterPlansForStructureView(
+            data.activeProgram.workoutPlans,
+            data.activeProgram.program_structure_type === 'cycle' ? 'cycle' : 'weekly',
+            { abMode: Boolean(data.activeProgram.ab_mode), activeVariant: resolveActiveWeekVariantForDisplay(data.activeProgram, planCur) },
+          ).filter((plan) => plan.blocks.length > 0).length || null
+        : null,
+    },
+    {
+      value: 'nutricion',
+      label: 'Nutrición',
+      badge: data.activeNutrition && heroChips.nutritionPct < 60 ? '!' : data.nutritionMeals.length || null,
+    },
   ]
 
   function onOpenPhoto(photos: string[], index: number) { setLightbox({ photos, index }) }
 
+  // Export dossier PDF (E5-13): arma el dossier oscuro desde el modelo mobile + fotos firmadas
+  // y abre el share sheet nativo. Cierra sobre statusLevel/statusLabel/derived del render actual.
+  async function handleExportPdf() {
+    if (!data || !client || !derived || exportingPdf) return
+    setExportingPdf(true)
+    try {
+      await exportClientDossierPdf(clientId, data, {
+        statusLabel,
+        statusLevel,
+        streak: derived.streak,
+        trainingAge: derived.trainingAge,
+        lastActivityIso: derived.lastActivityIso,
+        planCurrentWeek: derived.planCurrentWeek,
+      })
+    } catch (e) {
+      console.warn('[dossier-pdf] export failed', e)
+      Alert.alert('No se pudo exportar', 'Hubo un problema generando el dossier. Intenta de nuevo.')
+    } finally {
+      setExportingPdf(false)
+    }
+  }
+
   return (
     <SafeAreaView edges={['top']} style={[styles.container, { backgroundColor: theme.background }]}>
       <AppBackground />
-      <TopBar back title={client.full_name} onBack={() => router.back()} />
+      <TopBar back backLabel="Alumnos" backColor={theme.mutedForeground} onBack={() => router.back()} />
 
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false} stickyHeaderIndices={[1]}>
+      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false} stickyHeaderIndices={[1]} onScroll={onScroll} scrollEventThrottle={16}>
         {/* 0 — Hero */}
         <ClientHero
           name={client.full_name}
           email={client.email}
-          statusLabel={client.is_archived ? 'Archivado' : client.is_active ? 'Activo' : 'Inactivo'}
-          statusTone={client.is_archived ? 'muted' : client.is_active ? 'success' : 'muted'}
-          attention={derived.attention}
-          trainingAge={derived.trainingAge}
+          eyebrow={eyebrow}
+          statusLabel={statusLabel}
+          statusLevel={statusLevel}
+          reasons={reasons}
           streak={derived.streak}
-          chips={chips}
-          onWhatsApp={openWhatsApp}
-          onExportPdf={onExportPdf}
-          exporting={exporting}
+          lastActivityLabel={relActivityLabel(derived.lastActivityIso)}
+          sinceLabel={sinceMonthLabel(client.subscription_start_date || client.created_at)}
+          trainingAge={derived.trainingAge}
+          chips={heroChips}
+          onMore={() => { if (!actionBusy) setMoreOpen(true) }}
+          onExportPdf={handleExportPdf}
+          exportingPdf={exportingPdf}
         />
 
         {/* 1 — Tab bar (sticky) */}
-        <ClientTabBar items={tabs} value={tab} onChange={setTab} />
+        <View onLayout={(event) => { tabStickyY.current = event.nativeEvent.layout.y }}>
+          <ClientTabBar items={tabs} value={tab} onChange={setTab} stuck={tabStuck} />
+        </View>
 
         {/* 2 — Content */}
         <View style={styles.tabContent}>
+          {resourceModulesError ? (
+            <View className="border border-warning-500 bg-warning-100 dark:bg-warning-100/[0.14]" style={{ borderRadius: 14, padding: 12, gap: 8 }}>
+              <Text className="text-strong" style={{ fontSize: 12.5 }}>No pudimos actualizar los módulos de este espacio.</Text>
+              <Button label="Reintentar" variant="outline" onPress={() => setResourceModulesRetry((value) => value + 1)} />
+            </View>
+          ) : null}
           {tab === 'overview' ? (
-            <OverviewTab data={data} reload={load} onOpenPhoto={onOpenPhoto} onEditProgram={openBuilder} />
+            <OverviewTab
+              data={data}
+              reload={() => { void load({ silent: true }) }}
+              onOpenPhoto={onOpenPhoto}
+              onEditProgram={openBuilder}
+              onViewNutrition={() => setTab('nutricion')}
+              onViewProgress={() => setTab('progreso')}
+              onOpenProgram={() => setTab('plan')}
+              workspace={actionWorkspace}
+              moduleFlags={resourceModuleFlags}
+              modulesReady={resourceModulesReady}
+            />
           ) : tab === 'progreso' ? (
-            <ProgresoTab data={data} onOpenPhoto={onOpenPhoto} />
+            <ProgresoTab
+              data={data}
+              onOpenPhoto={onOpenPhoto}
+              reload={() => { void load({ silent: true }) }}
+              bodyCompEnabled={resourceModuleFlags.bodycomp}
+              bodyCompInlineAllowed={actionWorkspace.kind !== 'enterprise'}
+              bodyCompReady={resourceModulesReady}
+              workspace={actionWorkspace}
+            />
           ) : tab === 'analisis' ? (
-            <AnalisisTab data={data} selectedDate={selectedDate} onSelectDate={setSelectedDate} dayDetail={dayDetail} dayLoading={dayLoading} />
+            <AnalisisTab
+              data={data}
+              selectedDate={trainingDate}
+              onSelectDate={selectTrainingDate}
+              dayDetail={trainingDayDetail?.date === trainingDate ? trainingDayDetail : null}
+              dayLoading={trainingDayLoading || (trainingDayDetail?.date !== trainingDate && trainingDayError == null)}
+              dayError={trainingDayError}
+              onRetryDay={() => setTrainingDayRetry((value) => value + 1)}
+            />
           ) : tab === 'plan' ? (
             <PlanTab data={data} onEdit={openBuilder} />
-          ) : tab === 'nutricion' ? (
-            <NutricionTab data={data} selectedDate={selectedDate} onSelectDate={setSelectedDate} dayDetail={dayDetail} dayLoading={dayLoading}
-              onEditNutrition={() => router.push(`/coach/nutrition-builder?clientId=${client.id}&clientName=${encodeURIComponent(client.full_name)}`)} />
           ) : (
-            <FacturacionTab data={data} reload={load} onAddPayment={() => setPayOpen(true)} onOpenPhoto={onOpenPhoto} />
+            <NutricionTab clientId={client.id} data={data} selectedDate={nutritionDate} onSelectDate={selectNutritionDate}
+              dayDetail={nutritionDayDetail?.date === nutritionDate ? nutritionDayDetail : null}
+              dayLoading={nutritionDayLoading || (nutritionDayDetail?.date !== nutritionDate && nutritionDayError == null)}
+              dayError={nutritionDayError}
+              onRetryDay={() => setNutritionDayRetry((value) => value + 1)}
+              onEditNutrition={() => router.push(`/coach/nutrition-builder?clientId=${client.id}&clientName=${encodeURIComponent(client.full_name)}`)} />
           )}
-
-          {tab === 'overview' ? (
-            <>
-              <View style={{ height: 6 }} />
-              <Button
-                label={client.is_archived ? 'Reactivar alumno' : 'Archivar alumno'}
-                variant={client.is_archived ? 'outline' : 'ghost'}
-                leftIcon={client.is_archived ? ArchiveRestore : Archive}
-                onPress={confirmArchive}
-                full
-              />
-            </>
-          ) : null}
         </View>
       </ScrollView>
 
-      {/* FAB */}
-      <Fab open={fabOpen} onToggle={() => setFabOpen((v) => !v)} actions={[
-        { icon: MessageCircle, label: 'WhatsApp', color: '#25D366', onPress: () => { setFabOpen(false); openWhatsApp() } },
-        { icon: Pencil, label: 'Editar datos', onPress: () => { setFabOpen(false); setEditOpen(true) } },
-        { icon: CreditCard, label: 'Registrar pago', onPress: () => { setFabOpen(false); setPayOpen(true) } },
-        { icon: Dumbbell, label: 'Editar programa', onPress: () => { setFabOpen(false); openBuilder() } },
-      ]} />
+      {/* Barra flotante persistente — solo WhatsApp (rediseno). */}
+      <ProfileFloatingActions onWhatsApp={openWhatsApp} compact={compact} enabled={(client.phone ?? '').replace(/\D/g, '').length >= 10} />
 
-      <NativeDialog open={payOpen} title="Registrar pago" onClose={() => setPayOpen(false)}>
-        <PaymentForm clientId={client.id} onDone={() => { setPayOpen(false); load() }} onCancel={() => setPayOpen(false)} />
+      <ClientActionsSheet
+        visible={moreOpen}
+        client={{ id: client.id, fullName: client.full_name, email: client.email, phone: client.phone, isActive: client.is_active !== false, isArchived: client.is_archived === true }}
+        theme={theme}
+        onClose={() => setMoreOpen(false)}
+        onProfile={() => {}}
+        onWhatsApp={client.phone && loginUrl ? openMenuWhatsApp : undefined}
+        onEdit={() => setEditOpen(true)}
+        onShare={() => {}}
+        onWorkout={() => {}}
+        onNutrition={() => {}}
+        onReset={() => { setResetPassword(null); setActionError(null); setResetOpen(true) }}
+        onToggle={confirmToggle}
+        onArchive={confirmArchive}
+        onDelete={() => { setDeleteConfirm(''); setActionError(null); setDeleteOpen(true) }}
+        includeNativeShortcuts={false}
+      />
+
+      <NativeDialog open={editOpen} title="Editar alumno" onClose={() => { if (!editSaving) setEditOpen(false) }} closeDisabled={editSaving} unmountOnClose>
+        <EditClientForm client={client} workspace={actionWorkspace} onDone={() => { setEditOpen(false); void load({ silent: true }) }} onCancel={() => setEditOpen(false)} onSavingChange={setEditSaving} />
       </NativeDialog>
 
-      <NativeDialog open={editOpen} title="Editar alumno" onClose={() => setEditOpen(false)}>
-        <EditClientForm client={client} onDone={() => { setEditOpen(false); load() }} onCancel={() => setEditOpen(false)} />
+      <NativeDialog open={resetOpen} title={resetPassword ? 'Clave temporal lista' : 'Resetear contraseña'} onClose={() => { if (!resetting) setResetOpen(false) }} closeDisabled={resetting} unmountOnClose>
+        {resetPassword ? (
+          <View style={{ gap: 14 }}>
+            <Text style={{ color: theme.mutedForeground, fontSize: 13.5 }}>
+              Compartila con {client.full_name.split(' ')[0]}. Deberá cambiarla al ingresar.
+            </Text>
+            <Button label={resetPassword} variant="secondary" onPress={() => Clipboard.setStringAsync(resetPassword)} full />
+            <Button label="Listo" variant="sport" onPress={() => setResetOpen(false)} full />
+          </View>
+        ) : (
+          <View style={{ gap: 14 }}>
+            <Text style={{ color: theme.mutedForeground, fontSize: 13.5, lineHeight: 19 }}>
+              Se generará una nueva clave temporal para {client.full_name.split(' ')[0]}. Deberá cambiarla al ingresar. La clave anterior deja de funcionar.
+            </Text>
+            {actionError ? <Text style={{ color: theme.destructive, fontSize: 13 }}>{actionError}</Text> : null}
+            <View style={styles.formActions}>
+              <Button label="Cancelar" variant="ghost" onPress={() => setResetOpen(false)} disabled={resetting} style={{ flex: 1 }} />
+              <Button label={resetting ? 'Guardando…' : 'Generar nueva clave'} variant="sport" onPress={confirmResetPassword} loading={resetting} disabled={resetting} style={{ flex: 1 }} />
+            </View>
+          </View>
+        )}
+      </NativeDialog>
+
+      <NativeDialog open={deleteOpen} title="Eliminar alumno" onClose={() => { if (!deleting) setDeleteOpen(false) }} closeDisabled={deleting} unmountOnClose>
+        <View style={{ gap: 14 }}>
+          <Text style={{ color: theme.mutedForeground, fontSize: 13.5, lineHeight: 19 }}>
+            Esta acción eliminará su cuenta y todos sus datos asociados (rutinas, check-ins, progreso). No se puede deshacer.
+          </Text>
+          <Text style={{ color: theme.mutedForeground, fontSize: 12 }}>
+            Escribe <Text style={{ color: theme.foreground }}>{client.full_name}</Text> para confirmar:
+          </Text>
+          <Input value={deleteConfirm} onChangeText={setDeleteConfirm} placeholder={client.full_name} editable={!deleting} />
+          {actionError ? <Text style={{ color: theme.destructive, fontSize: 13 }}>{actionError}</Text> : null}
+          <View style={styles.formActions}>
+            <Button label="Cancelar" variant="ghost" onPress={() => setDeleteOpen(false)} disabled={deleting} style={{ flex: 1 }} />
+            <Button label={deleting ? 'Guardando…' : 'Eliminar definitivamente'} variant="danger" onPress={confirmDeleteClient} loading={deleting} disabled={deleting || deleteConfirm.trim().toLowerCase() !== client.full_name.toLowerCase()} style={{ flex: 1 }} />
+          </View>
+        </View>
       </NativeDialog>
 
       <PhotoLightbox photos={lightbox?.photos ?? []} index={lightbox?.index ?? 0} visible={!!lightbox} onClose={() => setLightbox(null)} />
     </SafeAreaView>
-  )
-}
-
-function Fab({ open, onToggle, actions }: { open: boolean; onToggle: () => void; actions: { icon: any; label: string; color?: string; onPress: () => void }[] }) {
-  const { theme } = useTheme()
-  return (
-    <View style={styles.fabWrap} pointerEvents="box-none">
-      {open ? actions.map((a, i) => {
-        const Icon = a.icon
-        return (
-          <MotiView key={a.label} from={{ opacity: 0, translateY: 12 }} animate={{ opacity: 1, translateY: 0 }} transition={{ type: 'timing', duration: 180, delay: i * 40 }} style={styles.fabAction}>
-            <View style={[styles.fabLabel, { backgroundColor: theme.card, borderColor: theme.border }]}>
-              <Text style={[styles.fabLabelTxt, { color: theme.foreground, fontFamily: 'HankenGrotesk_600SemiBold' }]}>{a.label}</Text>
-            </View>
-            <TouchableOpacity activeOpacity={0.85} onPress={a.onPress} style={[styles.fabMini, { backgroundColor: a.color ?? theme.primary }]}>
-              <Icon size={18} color="#FFFFFF" />
-            </TouchableOpacity>
-          </MotiView>
-        )
-      }) : null}
-      <TouchableOpacity activeOpacity={0.85} onPress={() => { onToggle(); Haptics.selectionAsync().catch(() => {}) }} style={[styles.fab, { backgroundColor: theme.primary }, theme.shadowGlowBlue]}>
-        <MotiView animate={{ rotate: open ? '45deg' : '0deg' }} transition={{ type: 'timing', duration: 180 }}>
-          {open ? <X size={24} color={theme.primaryForeground} /> : <Plus size={24} color={theme.primaryForeground} />}
-        </MotiView>
-      </TouchableOpacity>
-    </View>
   )
 }
 
@@ -348,50 +723,7 @@ function Field({ label, value, onChangeText, theme, ...rest }: any) {
   )
 }
 
-function PaymentForm({ clientId, onDone, onCancel }: { clientId: string; onDone: () => void; onCancel: () => void }) {
-  const { theme } = useTheme()
-  const [amount, setAmount] = useState('')
-  const [paymentDate, setPaymentDate] = useState(() => new Date().toISOString().slice(0, 10))
-  const [description, setDescription] = useState('')
-  const [periodMonths, setPeriodMonths] = useState('')
-  const [saving, setSaving] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  async function submit() {
-    setError(null)
-    const amt = Math.round(Number(String(amount).replace(/\s/g, '')))
-    if (!Number.isFinite(amt) || amt <= 0) { setError('Indica un monto válido.'); return }
-    if (!description.trim()) { setError('Indica un concepto.'); return }
-    const pm = periodMonths.trim() ? Number(periodMonths) : null
-    setSaving(true)
-    try {
-      await apiFetch<{ ok: true }>('/api/mobile/coach/payments', {
-        method: 'POST', authenticated: true,
-        body: { clientId, amount: amt, paymentDate, serviceDescription: description.trim(), periodMonths: pm },
-      })
-      onDone()
-    } catch (e: any) {
-      setError(e?.message ?? 'No se pudo registrar el pago.')
-      setSaving(false)
-    }
-  }
-
-  return (
-    <View style={{ gap: 12 }}>
-      <Field label="Monto (CLP)" value={amount} onChangeText={setAmount} keyboardType="number-pad" placeholder="30000" theme={theme} />
-      <Field label="Fecha" value={paymentDate} onChangeText={setPaymentDate} placeholder="2026-06-02" theme={theme} />
-      <Field label="Concepto" value={description} onChangeText={setDescription} placeholder="Mensualidad" theme={theme} />
-      <Field label="Período (meses, opcional)" value={periodMonths} onChangeText={setPeriodMonths} keyboardType="number-pad" placeholder="1" theme={theme} />
-      {error ? <Text style={{ color: theme.destructive, fontSize: 13 }}>{error}</Text> : null}
-      <View style={styles.formActions}>
-        <Button label="Cancelar" variant="secondary" onPress={onCancel} disabled={saving} style={{ flex: 1 }} />
-        <Button label={saving ? 'Guardando...' : 'Registrar'} onPress={submit} disabled={saving} style={{ flex: 1 }} />
-      </View>
-    </View>
-  )
-}
-
-function EditClientForm({ client, onDone, onCancel }: { client: CoachClientDetail; onDone: () => void; onCancel: () => void }) {
+function EditClientForm({ client, workspace, onDone, onCancel, onSavingChange }: { client: CoachClientDetail; workspace: ClientActionWorkspace; onDone: () => void; onCancel: () => void; onSavingChange: (saving: boolean) => void }) {
   const { theme } = useTheme()
   const [fullName, setFullName] = useState(client.full_name)
   const [phone, setPhone] = useState(client.phone ?? '')
@@ -404,13 +736,15 @@ function EditClientForm({ client, onDone, onCancel }: { client: CoachClientDetai
     setError(null)
     if (fullName.trim().length < 2) { setError('Indica el nombre.'); return }
     setSaving(true)
+    onSavingChange(true)
     const r = await updateCoachClient(client.id, {
       full_name: fullName.trim(),
       phone: phone.trim() || null,
       goal_weight_kg: goalWeight.trim() ? Number(goalWeight) : null,
       subscription_start_date: startDate.trim() || null,
-    })
+    }, workspace)
     setSaving(false)
+    onSavingChange(false)
     if (!r.ok) setError(r.error ?? 'No se pudo guardar.')
     else onDone()
   }
@@ -432,13 +766,7 @@ function EditClientForm({ client, onDone, onCancel }: { client: CoachClientDetai
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  scroll: { paddingHorizontal: 16, paddingVertical: 16, paddingBottom: 96, gap: 14 },
+  scroll: { paddingHorizontal: 16, paddingVertical: 16, paddingBottom: 120, gap: 14 },
   tabContent: { gap: 14, paddingTop: 14 },
   formActions: { flexDirection: 'row', gap: 10, marginTop: 4 },
-  fabWrap: { position: 'absolute', right: 18, bottom: 28, alignItems: 'flex-end', gap: 12 },
-  fab: { width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center' },
-  fabAction: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  fabMini: { width: 46, height: 46, borderRadius: 23, alignItems: 'center', justifyContent: 'center' },
-  fabLabel: { borderWidth: 1, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6 },
-  fabLabelTxt: { fontSize: 12 },
 })

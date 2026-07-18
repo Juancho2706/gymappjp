@@ -40,11 +40,11 @@ const FAQ_ITEMS: Array<{ question: string; answer: string }> = [
     },
     {
         question: '¿Puedo cambiar de plan?',
-        answer: 'Sí. Desde tu panel podés hacer upgrade en cualquier momento. El nuevo plan se activa al término del ciclo actual.',
+        answer: 'Sí. Desde tu panel puedes hacer upgrade en cualquier momento. El nuevo plan se activa al término del ciclo actual.',
     },
     {
         question: '¿Puedo cancelar en cualquier momento?',
-        answer: 'Sí. Al cancelar, conservás acceso completo hasta el último día del período que ya pagaste. Luego pasás al plan Free automáticamente.',
+        answer: 'Sí. Al cancelar, conservas acceso completo hasta el último día del período que ya pagaste. Luego pasas al plan Free automáticamente.',
     },
     {
         question: '¿Hay soporte?',
@@ -137,7 +137,7 @@ const planDisplay: Array<{
 }> = [
     {
         id: 'free',
-        description: 'Probá EVA sin tarjeta de crédito',
+        description: 'Prueba EVA sin tarjeta de crédito',
         icon: Sprout,
         color: 'text-slate-400',
         bg: 'bg-slate-500/10',
@@ -206,14 +206,14 @@ export default function PricingPage() {
             <div className="text-center px-6 py-16 max-w-3xl mx-auto">
                 <div className="inline-flex items-center gap-2 bg-violet-500/10 border border-violet-500/20 rounded-full px-4 py-1.5 text-xs font-medium text-violet-300 mb-6">
                     <Zap className="w-3 h-3" />
-                    Empezá gratis — sin tarjeta de crédito
+                    Empieza gratis — sin tarjeta de crédito
                 </div>
                 <h1 className="text-4xl sm:text-5xl font-bold text-zinc-50 mb-4 leading-tight">
                     Precios en CLP,<br />
                     <span className="text-violet-400">para cada etapa de tu negocio</span>
                 </h1>
                 <p className="text-muted-foreground text-lg max-w-xl mx-auto">
-                    Empezá gratis con 3 alumnos. Cuando tu negocio crezca, elegí el plan que se adapta.
+                    Empieza gratis con 3 alumnos. Cuando tu negocio crezca, elige el plan que se adapta.
                 </p>
             </div>
 
@@ -222,7 +222,7 @@ export default function PricingPage() {
 
                 {/* Group 1: Free */}
                 <div className="mb-3 flex items-center gap-3">
-                    <span className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Empezá gratis</span>
+                    <span className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Empieza gratis</span>
                     <div className="flex-1 border-t border-border" />
                 </div>
                 <div className="grid grid-cols-1 md:max-w-sm md:mx-0 gap-6 mb-10">

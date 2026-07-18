@@ -27,7 +27,7 @@ export function buildClientWelcomeEmail(ctx: WelcomeClientContext) {
   Hola ${ctx.clientName} 👋
 </h1>
 <p style="margin:0 0 20px;font-size:15px;color:#374151;line-height:1.6;">
-  Tu coach <strong>${ctx.coachName}</strong> te dio acceso a <strong>${ctx.brandName}</strong>. Ya podés ingresar y empezar a entrenar.
+  Tu coach <strong>${ctx.coachName}</strong> te dio acceso a <strong>${ctx.brandName}</strong>. Ya puedes ingresar y empezar a entrenar.
 </p>
 
 ${welcomeLine}
@@ -55,7 +55,7 @@ ${welcomeLine}
 </div>
 
 <p style="margin:0;font-size:12px;color:#9ca3af;line-height:1.6;">
-  Te recomendamos cambiar la contraseña la primera vez que inicies sesión. Si tenés algún problema, respondé este correo.
+  Te recomendamos cambiar la contraseña la primera vez que inicies sesión. Si tienes algún problema, responde este correo.
 </p>`
 
     const html = wrapEmailLayout(body, {
@@ -87,10 +87,10 @@ export function buildProgramAssignedEmail(ctx: ProgramAssignedContext) {
     const body = `
 <p style="margin:0 0 4px;font-size:12px;font-weight:700;color:${cta.bg};letter-spacing:0.8px;text-transform:uppercase;">Nuevo programa asignado</p>
 <h1 style="margin:0 0 16px;font-size:22px;font-weight:800;color:#111827;line-height:1.3;">
-  ${ctx.clientName}, ya tenés programa
+  ${ctx.clientName}, ya tienes programa
 </h1>
 <p style="margin:0 0 24px;font-size:15px;color:#374151;line-height:1.6;">
-  Tu coach en <strong>${ctx.brandName}</strong> te asignó un nuevo plan de entrenamiento. Revisálo en tu panel y empezá cuando quieras.
+  Tu coach en <strong>${ctx.brandName}</strong> te asignó un nuevo plan de entrenamiento. Revísalo en tu panel y empieza cuando quieras.
 </p>
 
 <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="margin-bottom:24px;background-color:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:16px;">
@@ -115,11 +115,11 @@ export function buildProgramAssignedEmail(ctx: ProgramAssignedContext) {
 </div>
 
 <p style="margin:0;font-size:12px;color:#9ca3af;">
-  Abrí tu panel para revisar rutinas, bloques y registrar tu primera sesión.
+  Abre tu panel para revisar rutinas, bloques y registrar tu primera sesión.
 </p>`
 
     const html = wrapEmailLayout(body, {
-        previewText: `Tu coach te asignó "${ctx.programName}". ¡Entrá a verlo!`,
+        previewText: `Tu coach te asignó "${ctx.programName}". ¡Entra a verlo!`,
         headerTitle: `Nuevo programa — ${ctx.brandName}`,
         brand: { brandName: ctx.brandName, logoUrl: ctx.logoUrl, primaryColor: ctx.primaryColor },
     })
@@ -135,26 +135,26 @@ type CoachEmailConfirmationContext = {
 }
 
 export function buildCoachEmailConfirmationEmail(ctx: CoachEmailConfirmationContext) {
-    const subject = 'Confirmá tu correo para activar tu cuenta EVA'
+    const subject = 'Confirma tu correo para activar tu cuenta EVA'
 
     const body = `
 <h1 style="margin:0 0 16px;font-size:22px;font-weight:800;color:#111827;line-height:1.3;">
-  Hola ${ctx.coachName}, confirmá tu email
+  Hola ${ctx.coachName}, confirma tu email
 </h1>
 <p style="margin:0 0 24px;font-size:15px;color:#374151;line-height:1.6;">
-  Para activar tu cuenta gratuita de coach en EVA, hacé click en el botón de abajo. El enlace vence en 24 horas.
+  Para activar tu cuenta gratuita de coach en EVA, haz click en el botón de abajo. El enlace vence en 24 horas.
 </p>
 <div style="margin-bottom:24px;">
   ${ctaButton('Confirmar mi correo →', ctx.confirmUrl)}
 </div>
 <p style="margin:0;font-size:12px;color:#9ca3af;line-height:1.6;">
-  Si no creaste esta cuenta, ignorá este mensaje. ¿No ves el botón? Copiá este enlace en el navegador:<br />
+  Si no creaste esta cuenta, ignora este mensaje. ¿No ves el botón? Copia este enlace en el navegador:<br />
   <a href="${ctx.confirmUrl}" style="color:#10B981;word-break:break-all;">${ctx.confirmUrl}</a>
 </p>`
 
     const html = wrapEmailLayout(body, {
-        previewText: 'Confirmá tu correo para activar tu plan gratuito en EVA.',
-        headerTitle: 'Confirmá tu cuenta',
+        previewText: 'Confirma tu correo para activar tu plan gratuito en EVA.',
+        headerTitle: 'Confirma tu cuenta',
     })
 
     return { subject, html }
@@ -179,18 +179,18 @@ export function buildFreeCoachWelcomeEmail(ctx: FreeCoachWelcomeContext) {
   Hola ${ctx.coachName}, bienvenido/a a EVA 🎉
 </h1>
 <p style="margin:0 0 24px;font-size:15px;color:#374151;line-height:1.6;">
-  Tu espacio de coaching para <strong>${ctx.brandName}</strong> ya está listo. Empezá con hasta <strong>3 alumnos</strong> sin costo — sin tarjeta, sin fecha de vencimiento.
+  Tu espacio de coaching para <strong>${ctx.brandName}</strong> ya está listo. Empieza con hasta <strong>3 alumnos</strong> sin costo — sin tarjeta, sin fecha de vencimiento.
 </p>
 
-${featureRow('👥', 'Agregá tu primer alumno', 'Creá el perfil, asignale una rutina y activá el flujo completo de coaching.')}
-${featureRow('💪', 'Construí programas de entrenamiento', 'Constructor visual con GIFs de ejercicios. Sin límite de programas.')}
-${featureRow('📊', 'Check-in y progreso', 'Tus alumnos reportan su semana; vos ves la evolución en tiempo real.')}
+${featureRow('👥', 'Agrega tu primer alumno', 'Crea el perfil, asígnale una rutina y activa el flujo completo de coaching.')}
+${featureRow('💪', 'Construye programas de entrenamiento', 'Constructor visual con GIFs de ejercicios. Sin límite de programas.')}
+${featureRow('📊', 'Check-in y progreso', 'Tus alumnos reportan su semana; tú ves la evolución en tiempo real.')}
 
 <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="margin:24px 0;background-color:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:14px 16px;">
   <tr>
     <td>
       <p style="margin:0;font-size:13px;color:#92400e;line-height:1.6;">
-        <strong>¿Querés crecer más allá de 3 alumnos?</strong> Cuando llegues al límite, upgradear a Starter tarda menos de 2 minutos y activa branding propio y hasta 10 alumnos.
+        <strong>¿Quieres crecer más allá de 3 alumnos?</strong> Cuando llegues al límite, upgradear a Starter tarda menos de 2 minutos y activa branding propio y hasta 10 alumnos.
       </p>
     </td>
   </tr>
@@ -201,11 +201,11 @@ ${featureRow('📊', 'Check-in y progreso', 'Tus alumnos reportan su semana; vos
 </div>
 
 <p style="margin:0;font-size:12px;color:#9ca3af;line-height:1.6;">
-  Si tenés dudas o querés que te demos una mano arrancando, respondé este correo y con gusto te ayudamos.
+  Si tienes dudas o quieres que te demos una mano arrancando, responde este correo y con gusto te ayudamos.
 </p>`
 
     const html = wrapEmailLayout(body, {
-        previewText: `Tu cuenta EVA está lista. Empezá con hasta 3 alumnos gratis.`,
+        previewText: `Tu cuenta EVA está lista. Empieza con hasta 3 alumnos gratis.`,
         headerTitle: 'Bienvenido a EVA',
     })
 
@@ -222,7 +222,7 @@ type UpgradeRequiredContext = {
 }
 
 export function buildUpgradeRequiredEmail(ctx: UpgradeRequiredContext) {
-    const subject = `Alcanzaste el límite de ${ctx.currentLimit} alumnos — expandí tu plan`
+    const subject = `Alcanzaste el límite de ${ctx.currentLimit} alumnos — expande tu plan`
 
     const body = `
 <p style="margin:0 0 4px;font-size:12px;font-weight:700;color:#f59e0b;letter-spacing:0.8px;text-transform:uppercase;">Límite de alumnos alcanzado</p>
@@ -230,7 +230,7 @@ export function buildUpgradeRequiredEmail(ctx: UpgradeRequiredContext) {
   ${ctx.coachName}, tu negocio está creciendo 🚀
 </h1>
 <p style="margin:0 0 20px;font-size:15px;color:#374151;line-height:1.6;">
-  Alcanzaste el límite de <strong>${ctx.currentLimit} alumnos</strong> de tu plan actual. Para seguir agregando clientes, pasá al siguiente nivel.
+  Alcanzaste el límite de <strong>${ctx.currentLimit} alumnos</strong> de tu plan actual. Para seguir agregando clientes, pasa al siguiente nivel.
 </p>
 
 <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="margin-bottom:24px;">
@@ -253,12 +253,12 @@ export function buildUpgradeRequiredEmail(ctx: UpgradeRequiredContext) {
 </div>
 
 <p style="margin:0;font-size:12px;color:#9ca3af;">
-  El cambio es inmediato. Podés pausar o cancelar cuando quieras.
+  El cambio es inmediato. Puedes pausar o cancelar cuando quieras.
 </p>`
 
     const html = wrapEmailLayout(body, {
-        previewText: `Llegaste al límite de ${ctx.currentLimit} alumnos en EVA. Expandí tu plan en 2 minutos.`,
-        headerTitle: 'Expandí tu plan — EVA',
+        previewText: `Llegaste al límite de ${ctx.currentLimit} alumnos en EVA. Expande tu plan en 2 minutos.`,
+        headerTitle: 'Expande tu plan — EVA',
     })
 
     return { subject, html }
@@ -290,7 +290,7 @@ ${featureRow('🛠️', 'Mejoras estructurales en curso', 'Durante estos días v
 ${divider()}
 
 <p style="margin:0 0 16px;font-size:15px;color:#374151;line-height:1.7;">
-  Te pedimos disculpas por cualquier molestia durante la transición y un poco de paciencia. Si algo no funciona como esperás o tenés dudas, escribinos — te respondemos rápido.
+  Te pedimos disculpas por cualquier molestia durante la transición y un poco de paciencia. Si algo no funciona como esperas o tienes dudas, escríbenos — te respondemos rápido.
 </p>
 <div style="margin-bottom:12px;">
   ${ctaButton('Escribir a contacto@eva-app.cl →', 'mailto:contacto@eva-app.cl')}
@@ -358,10 +358,10 @@ ${divider()}
 
 ${featureRow('💪', 'Seguimiento de entrenamientos', 'Historial completo de sesiones de tus alumnos')}
 ${featureRow('📊', 'Panel de alumnos', 'Cada alumno con su progreso, fotos y check-ins')}
-${featureRow('🥗', 'Planes de nutrición', 'Diseñá y asigná planes alimentarios (Pro y superiores)')}
+${featureRow('🥗', 'Planes de nutrición', 'Diseña y asigna planes alimentarios (Pro y superiores)')}
 
 <p style="margin:24px 0 0;font-size:12px;color:#9ca3af;line-height:1.6;">
-  Estás recibiendo este correo porque tenés un período de prueba activo en EVA.
+  Estás recibiendo este correo porque tienes un período de prueba activo en EVA.
 </p>`
 
     const html = wrapEmailLayout(body, {
@@ -402,7 +402,7 @@ ${badge('PERÍODO FINALIZADO', '#6b7280')}
     <td>
       <p style="margin:0 0 6px;font-size:13px;font-weight:700;color:#065f46;">Tus datos están seguros</p>
       <p style="margin:0;font-size:13px;color:#374151;line-height:1.6;">
-        Reactiva en cualquier momento y continuás exactamente donde lo dejaste. Nada se pierde.
+        Reactiva en cualquier momento y continúas exactamente donde lo dejaste. Nada se pierde.
       </p>
     </td>
   </tr>
@@ -487,7 +487,7 @@ ${badge('AVISO IMPORTANTE', '#F59E0B')}
   <tr>
     <td>
       <p style="margin:0;font-size:13px;color:#92400e;line-height:1.6;">
-        Si tenés dudas o querés saber cuándo se reactiva tu acceso, contactá a tu entrenador directamente.
+        Si tienes dudas o quieres saber cuándo se reactiva tu acceso, contacta a tu entrenador directamente.
       </p>
     </td>
   </tr>
@@ -498,7 +498,7 @@ ${badge('AVISO IMPORTANTE', '#F59E0B')}
 </div>
 
 <p style="margin:24px 0 0;font-size:12px;color:#9ca3af;line-height:1.6;">
-  Estás recibiendo este correo porque sos alumno registrado en ${ctx.coachBrandName}.
+  Estás recibiendo este correo porque eres alumno registrado en ${ctx.coachBrandName}.
 </p>`
 
     const html = wrapEmailLayout(body, {
@@ -532,7 +532,7 @@ ${badge('ACCESO RESTAURADO', '#10B981')}
   ¡Tu acceso fue restaurado!
 </h1>
 <p style="margin:0 0 24px;font-size:15px;color:#374151;line-height:1.7;">
-  Hola <strong>${ctx.clientName}</strong>, tu entrenador en <strong>${ctx.coachBrandName}</strong> reactivó tu acceso. Ya podés ingresar y retomar tus entrenamientos exactamente donde los dejaste.
+  Hola <strong>${ctx.clientName}</strong>, tu entrenador en <strong>${ctx.coachBrandName}</strong> reactivó tu acceso. Ya puedes ingresar y retomar tus entrenamientos exactamente donde los dejaste.
 </p>
 
 <div style="margin-bottom:0;">
@@ -544,7 +544,7 @@ ${badge('ACCESO RESTAURADO', '#10B981')}
 </p>`
 
     const html = wrapEmailLayout(body, {
-        previewText: `Tu acceso a ${ctx.coachBrandName} fue restaurado. Ya podés entrar.`,
+        previewText: `Tu acceso a ${ctx.coachBrandName} fue restaurado. Ya puedes entrar.`,
         headerTitle: ctx.coachBrandName,
         brand: { brandName: ctx.coachBrandName, logoUrl: ctx.logoUrl, primaryColor: ctx.primaryColor },
     })
@@ -560,13 +560,13 @@ export function buildBetaTrialEndedFreeEmail(ctx: { coachName: string; appUrl: s
     const body = `
 ${badge('PLAN GRATUITO ACTIVADO', '#6B7280')}
 <h1 style="margin:12px 0 16px;font-size:22px;font-weight:800;color:#111827;line-height:1.3;">
-  Tu prueba terminó, pero seguís con EVA
+  Tu prueba terminó, pero sigues con EVA
 </h1>
 <p style="margin:0 0 16px;font-size:15px;color:#374151;line-height:1.7;">
   Hola <strong>${ctx.coachName}</strong>, tu período de acceso Beta finalizó. Tu cuenta fue movida automáticamente al <strong>Plan Gratuito</strong>.
 </p>
 <p style="margin:0 0 24px;font-size:15px;color:#374151;line-height:1.7;">
-  Con el plan gratuito podés gestionar hasta <strong>3 alumnos activos</strong>. Cuando estés listo para crecer, podés activar un plan pago desde el dashboard.
+  Con el plan gratuito puedes gestionar hasta <strong>3 alumnos activos</strong>. Cuando estés listo para crecer, puedes activar un plan pago desde el dashboard.
 </p>
 
 <div style="margin-bottom:24px;">
@@ -576,11 +576,11 @@ ${badge('PLAN GRATUITO ACTIVADO', '#6B7280')}
 ${divider()}
 
 <p style="margin:16px 0 0;font-size:13px;color:#6B7280;line-height:1.6;">
-  ¿Tenés preguntas? Respondé este email y te ayudamos.
+  ¿Tienes preguntas? Responde este email y te ayudamos.
 </p>`
 
     const html = wrapEmailLayout(body, {
-        previewText: 'Tu período beta terminó — tu cuenta pasó al plan gratuito. Seguís teniendo acceso.',
+        previewText: 'Tu período beta terminó — tu cuenta pasó al plan gratuito. Sigues teniendo acceso.',
         headerTitle: 'EVA — Plataforma para Coaches',
     })
 

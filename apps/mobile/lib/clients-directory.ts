@@ -23,6 +23,8 @@ export type DirectoryRiskFilter =
   | 'with_program'
   | 'nutrition_low'
 
+export type DirectoryProgramFilter = 'all' | 'with_program' | 'no_program' | 'expired_program'
+
 export type SortDir = 'asc' | 'desc'
 
 /** Métricas ricas por alumno (1:1 web DirectoryPulseRow) servidas por /api/mobile/coach/clients/pulse. */
@@ -82,12 +84,8 @@ export function subscriptionDaysRemaining(startDate: string | null): number | nu
 
 /** Pulse (métricas ricas) por id de alumno, vía endpoint mobile (reusa el cálculo web). */
 export async function getCoachDirectoryPulse(): Promise<Map<string, PulseRow>> {
-  try {
-    const res = await apiFetch<{ pulse: PulseRow[] }>('/api/mobile/coach/clients/pulse', { authenticated: true })
-    return new Map((res.pulse ?? []).map((p) => [p.clientId, p]))
-  } catch {
-    return new Map()
-  }
+  const res = await apiFetch<{ pulse: PulseRow[] }>('/api/mobile/coach/clients/pulse', { authenticated: true })
+  return new Map((res.pulse ?? []).map((p) => [p.clientId, p]))
 }
 
 export interface DirectoryStats {
@@ -111,7 +109,12 @@ function calcPlanDaysRemaining(
   return Math.ceil((end.getTime() - Date.now()) / (24 * 60 * 60 * 1000))
 }
 
-export async function getCoachDirectoryClients(): Promise<DirectoryClient[]> {
+export interface CoachDirectoryScope {
+  orgId: string | null
+  teamId: string | null
+}
+
+export async function getCoachDirectoryClients(scope?: CoachDirectoryScope): Promise<DirectoryClient[]> {
   const coach = await getCoachProfile()
   if (!coach) return []
 
@@ -119,14 +122,25 @@ export async function getCoachDirectoryClients(): Promise<DirectoryClient[]> {
   const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
   // TX-4: scoping de org explícito (no solo RLS). Seguro en standalone vía selectWithFallback:
   // si la columna org_id no existe en una prod vieja, cae a la query sin filtro de org.
-  const { orgId } = await getCoachOrgContext().catch(() => ({ orgId: null as string | null }))
+  const legacyOrgContext = scope ? null : await getCoachOrgContext().catch(() => ({ orgId: null as string | null }))
+  const orgId = scope?.orgId ?? legacyOrgContext?.orgId ?? null
+  const teamId = scope?.teamId ?? null
   const clientsSelect = 'id, full_name, email, phone, is_active, is_archived, force_password_change, created_at, subscription_start_date, workout_programs(id, name, start_date, weeks_to_repeat, is_active)'
 
   const [clientsRes, workoutLogsRes, checkInsRes] = await Promise.all([
     selectWithFallback<any>(
       () => {
         const q = supabase.from('clients').select(clientsSelect).eq('coach_id', coach.id)
-        return (orgId ? q.eq('org_id', orgId) : q.is('org_id', null)).order('full_name')
+        if (orgId) return q.eq('org_id', orgId).order('full_name')
+        if (teamId) {
+          return supabase
+            .from('clients')
+            .select(clientsSelect)
+            .is('org_id', null)
+            .eq('team_id', teamId)
+            .order('full_name')
+        }
+        return q.is('org_id', null).is('team_id', null).order('full_name')
       },
       () => supabase.from('clients').select(clientsSelect).eq('coach_id', coach.id).order('full_name')
     ),
@@ -215,7 +229,8 @@ export function filterClients(
   search: string,
   riskFilter: DirectoryRiskFilter,
   statusFilter: StatusFilter,
-  pulseById?: Map<string, PulseRow>
+  pulseById?: Map<string, PulseRow>,
+  programFilter: DirectoryProgramFilter = 'all'
 ): DirectoryClient[] {
   return clients.filter((c) => {
     const q = search.toLowerCase()
@@ -235,16 +250,18 @@ export function filterClients(
     if (riskFilter === 'urgent') matchesRisk = c.attentionScore >= 50
     else if (riskFilter === 'review') matchesRisk = c.attentionScore >= 25 && c.attentionScore < 50
     else if (riskFilter === 'on_track') matchesRisk = c.attentionScore < 25
-    else if (riskFilter === 'expired_program') matchesRisk = c.planDaysRemaining !== null && c.planDaysRemaining <= 0
     else if (riskFilter === 'password_reset') matchesRisk = c.forcePwChange
-    else if (riskFilter === 'no_program') matchesRisk = !c.hasActiveProgram
-    else if (riskFilter === 'with_program') matchesRisk = c.hasActiveProgram
     else if (riskFilter === 'nutrition_low') {
       const p = pulseById?.get(c.id)
       matchesRisk = !!p && (p.attentionFlags?.includes('NUTRICION_RIESGO') || (p.nutritionPercentage > 0 && p.nutritionPercentage < 60))
     }
 
-    return matchesSearch && matchesStatus && matchesRisk
+    let matchesProgram = true
+    if (programFilter === 'with_program') matchesProgram = c.hasActiveProgram
+    else if (programFilter === 'no_program') matchesProgram = !c.hasActiveProgram
+    else if (programFilter === 'expired_program') matchesProgram = c.planDaysRemaining !== null && c.planDaysRemaining <= 0
+
+    return matchesSearch && matchesStatus && matchesRisk && matchesProgram
   })
 }
 

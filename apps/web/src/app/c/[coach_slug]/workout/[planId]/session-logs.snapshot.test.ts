@@ -6,7 +6,7 @@ import {
     clearSessionSnapshot,
     sweepOtherDaySnapshots,
 } from './session-logs.snapshot'
-import type { ReconciledSessionLog } from './session-logs.reconcile'
+import type { ReconciledSessionLog } from '@eva/workout-engine'
 
 const PLAN = 'plan-abc'
 const DAY = '2026-07-07'

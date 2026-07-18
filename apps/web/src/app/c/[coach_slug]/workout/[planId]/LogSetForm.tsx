@@ -17,12 +17,12 @@ import {
 } from '@/lib/workout-offline-queue'
 import { triggerHaptic } from '@/lib/client/haptics'
 import { useCoarsePointer } from '@/lib/client/useCoarsePointer'
-import { formatWeightEsCl } from '@/lib/client/keypad-logic'
+import { formatWeightEsCl } from '@eva/workout-engine'
 import { readDraft, saveDraft, clearDraft, type DraftFields } from './workout-draft-store'
 import { useWorkoutKeypad } from './WorkoutKeypadProvider'
 import { ScaleDots, EffortHelp, RPE_HELP, RIR_HELP } from './EffortScale'
-import { typedKeypadFields, type TypedKeypadMode } from './typed-keypad'
-import type { OptimisticLogPayload } from './session-logs.optimistic'
+import { typedKeypadFields, type TypedKeypadMode } from '@eva/workout-engine'
+import type { OptimisticLogPayload } from '@eva/workout-engine'
 import { cn } from '@/lib/utils'
 import { springs } from '@/lib/animation-presets'
 
@@ -99,7 +99,7 @@ interface Props {
      * del descanso automático: no arranca el descanso del bloque por serie; arranca el descanso
      * COMPLETO del grupo (`groupRestSeconds`) recién cuando la serie CIERRA la ronda
      * (`closesRound()` → true). Si no cierra, no dispara descanso (el padre muestra la guía
-     * "seguí con B1"). Sin esta prop, el comportamiento del descanso es el de siempre.
+     * "sigue con B1"). Sin esta prop, el comportamiento del descanso es el de siempre.
      */
     supersetRest?: {
         groupRestSeconds: number
@@ -375,7 +375,7 @@ function StrengthLogSetForm({
         triggerHaptic(50)
         if (supersetRest) {
             // Superserie: descanso completo del grupo SOLO al cerrar la ronda (semántica intacta);
-            // si no la cierra, seguís con el otro ejercicio → cortá el descanso en curso (auto-skip).
+            // si no la cierra, sigues con el otro ejercicio → corta el descanso en curso (auto-skip).
             if (supersetRest.closesRound()) startRest(String(supersetRest.groupRestSeconds), { label: nextUpLabel })
             else cancelRest()
         } else {
@@ -523,8 +523,8 @@ function StrengthLogSetForm({
                 )}
                 aria-label={
                     isPending
-                        ? `Serie ${setNumber} sin sincronizar — tocá para editar`
-                        : `Serie ${setNumber} registrada — tocá para editar`
+                        ? `Serie ${setNumber} sin sincronizar — toca para editar`
+                        : `Serie ${setNumber} registrada — toca para editar`
                 }
             >
                 {prGlow && (

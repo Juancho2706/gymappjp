@@ -263,6 +263,7 @@ export default async function CoachLayout({
                     enabledModules={enabledModules}
                     disabledDomains={disabledDomains}
                     logoUrl={coach.logo_url}
+                    logoUrlDark={coach.logo_url_dark}
                 />
                 <div className="flex min-w-0 flex-1 flex-col has-[.coach-builder-shell]:min-h-0">
                     {/* RosterViewProvider: puente topbar ↔ pantalla /coach/clients para el
@@ -273,6 +274,7 @@ export default async function CoachLayout({
                             coachBrand={enterpriseContext?.orgName ?? teamContext?.teamName ?? coach.brand_name ?? ''}
                             primaryColor={primaryColor}
                             logoUrl={coach.logo_url}
+                            logoUrlDark={coach.logo_url_dark}
                             workspaces={workspaces}
                             currentWorkspaceLabel={currentWorkspaceLabel}
                         />

@@ -240,7 +240,7 @@ export async function GET(req: Request) {
   Tu próximo cobro mantiene el descuento. Después de ese cobro, el descuento termina y tu suscripción
   vuelve a su precio normal de <strong>$${fullComposite.toLocaleString('es-CL')} CLP</strong> en la siguiente renovación.
 </p>
-<p style="margin:0;font-size:13px;color:#6b7280;">Podés revisar tu plan cuando quieras desde tu cuenta.</p>`
+<p style="margin:0;font-size:13px;color:#6b7280;">Puedes revisar tu plan cuando quieras desde tu cuenta.</p>`
                             const html = wrapEmailLayout(body, { headerTitle: 'EVA', previewText: 'Tu descuento termina pronto' })
                             await sendTransactionalEmail({ to, subject: 'Tu descuento termina pronto', html }).catch((e) =>
                                 console.error('[cron/mp-reconcile] pre-increase email failed:', e)

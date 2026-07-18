@@ -172,7 +172,7 @@ export type NutritionMealMacroSource = {
   }>
 }
 
-function normalizeSwapOptions(raw: Json | null | undefined): FoodItemForMacros['swap_options'] {
+export function normalizeSwapOptions(raw: Json | null | undefined): FoodItemForMacros['swap_options'] {
   if (!Array.isArray(raw)) return []
   return raw
     .map((v) => {

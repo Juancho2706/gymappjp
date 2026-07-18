@@ -6,21 +6,17 @@ import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { AlertTriangle, ArrowRight, Check, CheckCircle2, Users } from 'lucide-react'
 import {
-    ADDON_CONFIG,
-    ADDON_MODULE_KEYS,
     BILLING_CYCLE_CONFIG,
     FLOW_ENABLED,
     getDefaultBillingCycleForTier,
     getTierAllowedBillingCycles,
     getTierBillingCycleSummary,
-    getTierCapabilities,
     getTierMaxClients,
     getTierNutritionSummary,
     getTierPriceClp,
     isBillingCycleAllowedForTier,
     isSaleTier,
     SALE_TIERS,
-    SELF_SERVICE_ADDONS_ENABLED,
     TIER_CONFIG,
     TIER_STUDENT_RANGE_LABEL,
     type BillingCycle,
@@ -41,13 +37,17 @@ interface ReactivateClientProps {
     currentTier: SubscriptionTier
     activeClientCount: number
     subscriptionStatus: string | null
-    /** Ex-add-ons pagos cancelados recientemente (plan 05 F5.6) — pre-marcados, deseleccionables. */
+    /**
+     * Ex-add-ons pagos cancelados recientemente. OBSOLETO (CEO 2026-07-17): los módulos vienen
+     * incluidos en los planes pagos y ya no se recompran al reactivar. Se acepta por
+     * compatibilidad con el server page, pero la UI lo ignora.
+     */
     recentlyCancelledAddons?: ModuleKey[]
     /** Flag de cupones (COUPON_REDEMPTION_ENABLED) leído server-side: muestra el canje de código. */
     couponsEnabled?: boolean
 }
 
-export function ReactivateClient({ currentTier, activeClientCount, subscriptionStatus, recentlyCancelledAddons = [], couponsEnabled = false }: ReactivateClientProps) {
+export function ReactivateClient({ currentTier, activeClientCount, subscriptionStatus, couponsEnabled = false }: ReactivateClientProps) {
     const searchParams = useSearchParams()
 
     // Pre-select the minimum viable tier for the coach's current client count,
@@ -78,10 +78,6 @@ export function ReactivateClient({ currentTier, activeClientCount, subscriptionS
         if (queryCycle && queryCycle in BILLING_CYCLE_CONFIG) return queryCycle as BillingCycle
         return 'monthly'
     })
-    // Pre-marca ex-add-ons (deseleccionables). Solo cuando la compra self-service está activa.
-    const [selectedAddons, setSelectedAddons] = useState<ModuleKey[]>(
-        SELF_SERVICE_ADDONS_ENABLED ? recentlyCancelledAddons : []
-    )
     const [isLoading, setIsLoading] = useState(false)
     const [isConfirming, setIsConfirming] = useState(false)
     const [isActivatingFree, setIsActivatingFree] = useState(false)
@@ -99,25 +95,6 @@ export function ReactivateClient({ currentTier, activeClientCount, subscriptionS
     )
 
     const tierBlockedByClients = useMemo(() => getTierMaxClients(tier) < activeClientCount, [tier, activeClientCount])
-
-    // Add-ons: nutrition_exchanges solo en tier con nutrición (D8). Purga al cambiar de plan.
-    useEffect(() => {
-        const caps = getTierCapabilities(tier)
-        setSelectedAddons((prev) => {
-            const next = prev.filter((k) => (k === 'nutrition_exchanges' ? caps.canUseNutrition : true))
-            return next.length === prev.length ? prev : next
-        })
-    }, [tier])
-
-    // Total en vivo de add-ons (monto por ciclo, mismos descuentos del plan). El precio se
-    // re-congela a lista VIGENTE en la fila nueva (no hereda el viejo) — server-side.
-    const addonsCycleTotal = useMemo(() => {
-        const { months, discountPercent } = BILLING_CYCLE_CONFIG[billingCycle]
-        return selectedAddons.reduce((sum, key) => {
-            const gross = ADDON_CONFIG[key].priceClpMensual * months
-            return sum + Math.round(gross * (1 - discountPercent / 100))
-        }, 0)
-    }, [selectedAddons, billingCycle])
 
     // La cartera supera el plan mas alto a la venta (elite): ya no hay tier al que auto-subir
     // (growth/scale estan fuera de venta). Mostramos el puente a EVA Teams y deshabilitamos el pago.
@@ -209,9 +186,7 @@ export function ReactivateClient({ currentTier, activeClientCount, subscriptionS
                     tier,
                     billingCycle,
                     gateway,
-                    // Add-ons pre-marcados viajan en external_reference del preapproval nuevo (D4 —
-                    // sin one-shot: el preapproval nace con el ciclo completo compuesto).
-                    ...(selectedAddons.length > 0 ? { addons: selectedAddons } : {}),
+                    // Sin add-ons: los módulos vienen incluidos en el plan (CEO 2026-07-17).
                 }),
             })
             const raw = await response.text()
@@ -224,7 +199,7 @@ export function ReactivateClient({ currentTier, activeClientCount, subscriptionS
         } finally {
             setIsLoading(false)
         }
-    }, [billingCycle, tier, selectedAddons])
+    }, [billingCycle, tier])
 
     const handleActivateFree = useCallback(async () => {
         setIsActivatingFree(true)
@@ -304,10 +279,10 @@ export function ReactivateClient({ currentTier, activeClientCount, subscriptionS
                     {activeClientCount > 0 ? (
                         <>
                             Tus <strong>{activeClientCount} alumno{activeClientCount !== 1 ? 's' : ''}</strong> están en
-                            pausa. Elegí un plan para reactivar el acceso.
+                            pausa. Elige un plan para reactivar el acceso.
                         </>
                     ) : (
-                        <>Sin un plan activo no puedes gestionar alumnos ni rutinas. Elegí un plan para reactivar el acceso.</>
+                        <>Sin un plan activo no puedes gestionar alumnos ni rutinas. Elige un plan para reactivar el acceso.</>
                     )}
                 </p>
             </div>
@@ -417,61 +392,6 @@ export function ReactivateClient({ currentTier, activeClientCount, subscriptionS
                 </div>
             ) : null}
 
-            {/* Ex-add-ons pre-marcados (deseleccionables) — plan 05 F5.6. Solo con la compra activa. */}
-            {SELF_SERVICE_ADDONS_ENABLED && recentlyCancelledAddons.length > 0 && (
-                <section className="mb-4">
-                    <h2 className="px-1 text-[13px] font-bold uppercase tracking-wide text-muted">Volver a sumar tus módulos</h2>
-                    <p className="mt-1 px-1 text-xs text-muted">
-                        Tenías estos módulos activos. Vuelven pre-seleccionados al precio de lista vigente —
-                        quita los que no necesites.
-                    </p>
-                    <div className="mt-3 grid gap-2">
-                        {ADDON_MODULE_KEYS.filter((k) => recentlyCancelledAddons.includes(k)).map((key) => {
-                            const cfg = ADDON_CONFIG[key]
-                            const requiresNutrition = key === 'nutrition_exchanges' && !getTierCapabilities(tier).canUseNutrition
-                            const checked = selectedAddons.includes(key)
-                            return (
-                                <label
-                                    key={key}
-                                    className={`flex items-start gap-2 rounded-control border p-3 text-left transition ${
-                                        requiresNutrition
-                                            ? 'border-subtle bg-surface-card opacity-60'
-                                            : checked
-                                                ? 'border-sport-500 bg-sport-100/40 cursor-pointer'
-                                                : 'border-subtle bg-surface-card hover:bg-surface-sunken cursor-pointer'
-                                    }`}
-                                >
-                                    <input
-                                        type="checkbox"
-                                        checked={checked}
-                                        disabled={requiresNutrition}
-                                        onChange={(e) =>
-                                            setSelectedAddons((prev) =>
-                                                e.target.checked ? [...prev, key] : prev.filter((k) => k !== key)
-                                            )
-                                        }
-                                        className="mt-0.5 h-4 w-4 rounded border-border shrink-0"
-                                    />
-                                    <span className="min-w-0 flex-1">
-                                        <span className="flex items-center justify-between gap-2">
-                                            <span className="text-sm font-semibold text-strong">{cfg.label}</span>
-                                            <span className="shrink-0 text-xs font-semibold text-strong">
-                                                ${cfg.priceClpMensual.toLocaleString('es-CL')} CLP / mes
-                                            </span>
-                                        </span>
-                                        {requiresNutrition && (
-                                            <span className="mt-1 inline-block text-[11px] font-medium text-[var(--warning-600)]">
-                                                Requiere un plan con nutrición (Pro o superior).
-                                            </span>
-                                        )}
-                                    </span>
-                                </label>
-                            )
-                        })}
-                    </div>
-                </section>
-            )}
-
             <section className="mb-4 rounded-card border border-subtle bg-surface-card p-4">
                 <p className="text-sm text-muted">
                     Plan seleccionado: <span className="font-semibold text-strong">{selectedTier.label}</span>
@@ -482,13 +402,9 @@ export function ReactivateClient({ currentTier, activeClientCount, subscriptionS
                         <span className="ml-2 text-xs">(mensual base ${monthlyBase.toLocaleString('es-CL')} CLP)</span>
                     )}
                 </p>
-                {selectedAddons.length > 0 && (
-                    <p className="mt-1 text-sm text-muted">
-                        Módulos ({selectedAddons.map((k) => ADDON_CONFIG[k].label).join(', ')}):{' '}
-                        <span className="font-semibold text-strong">+${addonsCycleTotal.toLocaleString('es-CL')} CLP</span>
-                        {' · '}Total <span className="font-semibold text-strong">${(selectedPrice + addonsCycleTotal).toLocaleString('es-CL')} CLP</span>
-                    </p>
-                )}
+                <p className="mt-1 text-sm text-muted">
+                    Módulos profesionales: <span className="font-semibold text-[var(--success-600)]">incluidos en tu plan</span>
+                </p>
                 <ul className="mt-3 list-disc space-y-1 pl-4 text-sm text-muted">
                     {selectedTier.features.map((feature) => (
                         <li key={feature}>{feature}</li>
@@ -574,7 +490,7 @@ export function ReactivateClient({ currentTier, activeClientCount, subscriptionS
                         <div className="min-w-0 flex-1">
                             <p className="text-sm font-semibold text-strong">Continuar con plan gratuito</p>
                             <p className="mt-0.5 text-xs text-muted">
-                                Tenés {activeClientCount} alumno{activeClientCount !== 1 ? 's' : ''} activo{activeClientCount !== 1 ? 's' : ''}. El plan gratuito cubre hasta 3 alumnos — calificás sin archivar a nadie.
+                                Tienes {activeClientCount} alumno{activeClientCount !== 1 ? 's' : ''} activo{activeClientCount !== 1 ? 's' : ''}. El plan gratuito cubre hasta 3 alumnos — calificas sin archivar a nadie.
                             </p>
                             <button
                                 type="button"

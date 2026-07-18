@@ -1,5 +1,7 @@
 import { cache } from 'react'
 import { subDays, format, parseISO } from 'date-fns'
+import type { SupabaseClient } from '@supabase/supabase-js'
+import type { Database } from '@/lib/database.types'
 import { getNutritionAdherenceInputs30d } from '../../dashboard/_data/dashboard.queries'
 import { getNutritionDayOfWeekFromIsoYmdInSantiago, getTodayInSantiago } from '@/lib/date-utils'
 import {
@@ -33,8 +35,8 @@ export type WeeklyRecap = {
 }
 
 export const getNutritionWeeklyRecap = cache(
-  async (clientId: string): Promise<WeeklyRecap | null> => {
-    const inputs = await getNutritionAdherenceInputs30d(clientId)
+  async (clientId: string, db?: SupabaseClient<Database>): Promise<WeeklyRecap | null> => {
+    const inputs = await getNutritionAdherenceInputs30d(clientId, db)
     if (!inputs) return null
     const { plan, logs } = inputs
 

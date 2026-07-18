@@ -43,7 +43,7 @@ export function FreeWelcomeModal() {
                     </div>
                     <h2 className="font-display text-xl font-extrabold tracking-[-0.02em] text-strong">¡Bienvenido a EVA!</h2>
                     <p className="mt-1.5 text-sm text-muted">
-                        Tu plan gratuito está activo. Podés empezar ahora mismo.
+                        Tu plan gratuito está activo. Puedes empezar ahora mismo.
                     </p>
                 </div>
 
@@ -56,7 +56,7 @@ export function FreeWelcomeModal() {
                                 <Users className="h-3.5 w-3.5 text-[var(--sport-600)]" />
                             </div>
                             <div>
-                                <p className="text-sm font-semibold text-strong">Agregá tu primer alumno</p>
+                                <p className="text-sm font-semibold text-strong">Agrega tu primer alumno</p>
                                 <p className="text-xs text-muted">Hasta 3 alumnos en el plan Free</p>
                             </div>
                         </li>
@@ -65,7 +65,7 @@ export function FreeWelcomeModal() {
                                 <Zap className="h-3.5 w-3.5 text-[var(--ember-700)]" />
                             </div>
                             <div>
-                                <p className="text-sm font-semibold text-strong">Creá tu primera rutina</p>
+                                <p className="text-sm font-semibold text-strong">Crea tu primera rutina</p>
                                 <p className="text-xs text-muted">Constructor de programas sin límites</p>
                             </div>
                         </li>
@@ -74,7 +74,7 @@ export function FreeWelcomeModal() {
                                 <Palette className="h-3.5 w-3.5 text-[var(--success-600)]" />
                             </div>
                             <div>
-                                <p className="text-sm font-semibold text-strong">Personalizá tu app con Pro</p>
+                                <p className="text-sm font-semibold text-strong">Personaliza tu app con Pro</p>
                                 <p className="text-xs text-muted">Tu logo y colores desde $29.990/mes</p>
                             </div>
                         </li>

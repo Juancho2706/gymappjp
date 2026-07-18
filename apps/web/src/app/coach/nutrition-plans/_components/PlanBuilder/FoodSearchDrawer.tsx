@@ -749,13 +749,13 @@ export function FoodSearchDrawer({
                     <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-[var(--sport-100)] text-[var(--sport-600)]">
                       <Layers className="h-6 w-6" />
                     </div>
-                    <p className="text-sm text-muted">Aún no tenés grupos de comidas.</p>
+                    <p className="text-sm text-muted">Aún no tienes grupos de comidas.</p>
                     <Link
                       href="/coach/meal-groups"
                       className="inline-flex items-center gap-1.5 rounded-xl border border-dashed border-default px-4 py-2 text-xs font-bold text-sport-600 transition-colors hover:bg-surface-sunken"
                     >
                       <Plus className="h-3.5 w-3.5" />
-                      Creá tu primer grupo
+                      Crea tu primer grupo
                     </Link>
                   </div>
                 ) : (

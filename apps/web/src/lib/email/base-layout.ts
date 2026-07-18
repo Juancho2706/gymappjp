@@ -79,8 +79,8 @@ export function wrapEmailLayout(body: string, opts: BaseEmailOptions = {}): stri
 
     // Footer: siempre mantiene "con tecnología de EVA" discreto (powered-by).
     const senderLine = branded && brandName
-        ? `Enviado por <strong>${brandName}</strong> · con tecnología de EVA. Si no esperabas este correo, podés ignorarlo.`
-        : `Enviado por <strong>EVA Fitness Platform</strong>. Si no esperabas este correo, podés ignorarlo.`
+        ? `Enviado por <strong>${brandName}</strong> · con tecnología de EVA. Si no esperabas este correo, puedes ignorarlo.`
+        : `Enviado por <strong>EVA Fitness Platform</strong>. Si no esperabas este correo, puedes ignorarlo.`
 
     const footer = opts.footerText
         ? `<p style="margin:0 0 4px;">${opts.footerText}</p>`

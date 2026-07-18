@@ -356,7 +356,7 @@ export async function createTeamLogoUploadUrlAction(
     params: { variant: 'light' | 'dark'; contentType: string; size: number }
 ): Promise<TeamLogoUploadUrlResult> {
     const ext = TEAM_LOGO_CONTENT_TYPES[params.contentType]
-    if (!ext) return { error: 'Formato no permitido. Usá PNG, JPG o WebP.' }
+    if (!ext) return { error: 'Formato no permitido. Usa PNG, JPG o WebP.' }
     if (params.size > 2 * 1024 * 1024) return { error: 'La imagen no puede superar 2 MB.' }
 
     const ctx = await resolveTeamManagerContext(teamId)
@@ -369,7 +369,7 @@ export async function createTeamLogoUploadUrlAction(
         .createSignedUploadUrl(path, { upsert: true })
     if (error || !signed) {
         console.error('createSignedUploadUrl (team logo) error:', error)
-        return { error: 'No se pudo preparar la subida del logo. Intentá de nuevo.' }
+        return { error: 'No se pudo preparar la subida del logo. Intenta de nuevo.' }
     }
     return { success: true, signedUrl: signed.signedUrl, path }
 }

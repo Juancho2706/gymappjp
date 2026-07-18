@@ -1,20 +1,22 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Alert, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import type { ViewStyle } from 'react-native'
+import { useFocusEffect, useLocalSearchParams } from 'expo-router'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { FlashList } from '@shopify/flash-list'
 import { Image } from 'expo-image'
 import { BottomSheetModal } from '@gorhom/bottom-sheet'
-import { ChevronRight, Dumbbell, Lock, Plus, Search, X } from 'lucide-react-native'
+import { ChevronRight, Dumbbell, Lock, Plus, Search, Video, X } from 'lucide-react-native'
 import { MotiView } from 'moti'
 import { useTheme } from '../../../context/ThemeContext'
 import { ScreenHeader, Badge, EmptyState, Card, Input } from '../../../components'
 import { EvaLoaderScreen } from '../../../components/EvaLoader'
 import { AppBackground } from '../../../components/AppBackground'
+import { toast } from '../../../components/Toast'
 import { ExerciseFormSheet } from '../../../components/coach/ExerciseFormSheet'
 import { ExercisePreviewSheet } from '../../../components/coach/ExercisePreviewSheet'
-import { canCreateCustomExercises, cloneExercise, exerciseThumb, filterExercises, listCoachExercises, MUSCLE_GROUPS, type ExerciseRow } from '../../../lib/exercises'
-import { getCoachProfile } from '../../../lib/coach'
+import { useCoachTabbarScroll } from '../../../components/coach/CoachTabbarScroll'
+import { resolveCanCreateExercises, cloneExercise, exerciseThumb, filterExercises, listCoachExercises, MUSCLE_GROUPS, youtubeId, type ExerciseRow } from '../../../lib/exercises'
 
 const DIFFICULTY_LABEL: Record<string, string> = {
   beginner: 'Principiante',
@@ -37,8 +39,12 @@ const MUSCLE_ORDER = [...(MUSCLE_GROUPS as readonly string[])]
 type ListItem = { type: 'header'; muscle: string; count: number } | { type: 'row'; row: ExerciseRow }
 
 export default function EjerciciosScreen() {
+  const { onScroll } = useCoachTabbarScroll()
   const { theme } = useTheme()
   const insets = useSafeAreaInsets()
+  // Buscador global del coach → navega a `/coach/ejercicios?q=<nombre>` (CoachSearchPalette).
+  // Espejo web: ExerciseCatalogClient.tsx:38 siembra `search` desde `searchParams.get('q')`.
+  const params = useLocalSearchParams<{ q?: string | string[] }>()
   const formRef = useRef<BottomSheetModal>(null)
   const previewRef = useRef<BottomSheetModal>(null)
 
@@ -48,6 +54,7 @@ export default function EjerciciosScreen() {
   const [query, setQuery] = useState('')
   const [muscle, setMuscle] = useState<string | null>(null)
   const [source, setSource] = useState<Source>('all')
+  const [videoOnly, setVideoOnly] = useState(false)
   const [canCreate, setCanCreate] = useState(true)
   const [editTarget, setEditTarget] = useState<ExerciseRow | null>(null)
   const [previewTarget, setPreviewTarget] = useState<ExerciseRow | null>(null)
@@ -56,9 +63,9 @@ export default function EjerciciosScreen() {
     if (mode === 'initial') setLoading(true)
     else setRefreshing(true)
     try {
-      const [{ exercises: rows }, profile] = await Promise.all([listCoachExercises(), getCoachProfile()])
+      const [{ exercises: rows }, allowed] = await Promise.all([listCoachExercises(), resolveCanCreateExercises()])
       setExercises(rows)
-      setCanCreate(canCreateCustomExercises(profile?.subscriptionTier))
+      setCanCreate(allowed)
     } finally {
       setLoading(false)
       setRefreshing(false)
@@ -66,6 +73,16 @@ export default function EjerciciosScreen() {
   }, [])
 
   useEffect(() => { load() }, [load])
+
+  // Siembra la búsqueda desde `?q` al enfocar el tab (gotcha 6b: los tabs no se desmontan, así que
+  // un `useEffect` de un disparo no vería un `q` nuevo llegado tras el primer montaje).
+  useFocusEffect(
+    useCallback(() => {
+      const raw = params.q
+      const incoming = Array.isArray(raw) ? raw[0] : raw
+      if (incoming != null && incoming.length > 0) setQuery(incoming)
+    }, [params.q])
+  )
 
   const customCount = useMemo(() => exercises.filter((e) => e.isOwn).length, [exercises])
   const systemCount = exercises.length - customCount
@@ -81,10 +98,12 @@ export default function EjerciciosScreen() {
     const bySource = exercises.filter((e) => {
       if (source === 'system' && e.isOwn) return false
       if (source === 'own' && !e.isOwn) return false
+      // "Con video" = enlace de YouTube válido (no gif de ExerciseDB), 1:1 web.
+      if (videoOnly && !youtubeId(e.video_url)) return false
       return true
     })
     return filterExercises(bySource, query.trim(), muscle || 'todos')
-  }, [exercises, query, muscle, source])
+  }, [exercises, query, muscle, source, videoOnly])
 
   // Agrupado por músculo (header + filas) para el FlashList.
   const listData = useMemo<ListItem[]>(() => {
@@ -107,17 +126,18 @@ export default function EjerciciosScreen() {
 
   function openCreate() {
     if (!canCreate) {
-      Alert.alert('Función Pro', 'Crear ejercicios personalizados requiere un plan de pago. Gestioná tu plan desde la web.')
+      Alert.alert('Sin permiso', 'Tu rol en la organización no permite crear ejercicios. Pide acceso a un administrador.')
       return
     }
     setEditTarget(null)
     formRef.current?.present()
   }
 
-  function openPreview(row: ExerciseRow) {
+  // Estable: permite que la fila memoizada (ExerciseCard) omita renders al no cambiar la closure.
+  const openPreview = useCallback((row: ExerciseRow) => {
     setPreviewTarget(row)
     previewRef.current?.present()
-  }
+  }, [])
 
   function openEditFromPreview(row: ExerciseRow) {
     previewRef.current?.dismiss()
@@ -129,13 +149,13 @@ export default function EjerciciosScreen() {
   // E-F8: duplicar un ejercicio del sistema a uno propio editable.
   async function handleCloneFromPreview(row: ExerciseRow) {
     if (!canCreate) {
-      Alert.alert('Función Pro', 'Duplicar ejercicios a tu biblioteca requiere un plan de pago.')
+      Alert.alert('Sin permiso', 'Tu rol en la organización no permite duplicar ejercicios.')
       return
     }
     previewRef.current?.dismiss()
     const r = await cloneExercise(row)
-    if (!r.ok) { Alert.alert('No se pudo duplicar', r.error ?? 'Intenta nuevamente.'); return }
-    Alert.alert('Ejercicio duplicado', 'Se copió a tus ejercicios. Ahora podés editarlo.')
+    if (!r.ok) { toast.error(r.error ?? 'No se pudo duplicar. Intenta nuevamente.'); return }
+    toast.success('Ejercicio duplicado. Se copió a tus ejercicios.')
     load('refresh')
   }
 
@@ -188,8 +208,19 @@ export default function EjerciciosScreen() {
         />
       </View>
 
-      {/* Muscle filter */}
+      {/* Muscle filter + toggle "Con video" (1:1 web ExerciseCatalogClient) */}
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterScroll} contentContainerStyle={styles.filterRow}>
+        <TouchableOpacity
+          testID="filter-con-video"
+          onPress={() => setVideoOnly((v) => !v)}
+          activeOpacity={0.8}
+          className={`flex-row items-center rounded-pill ${videoOnly ? 'bg-sport-500' : 'bg-surface-card border border-default'}`}
+          style={styles.videoChip}
+        >
+          <Video size={14} color={videoOnly ? theme.primaryForeground : theme.mutedForeground} strokeWidth={2.2} />
+          <Text className={`${videoOnly ? 'text-on-sport' : 'text-body'} font-sans-bold`} style={styles.videoChipText}>Con video</Text>
+        </TouchableOpacity>
+        <View style={styles.filterDivider} />
         <FilterChip label="Todos" active={muscle === null} onPress={() => setMuscle(null)} />
         {muscleOptions.map((m) => (
           <FilterChip key={m} label={m} active={muscle === m} onPress={() => setMuscle(m)} />
@@ -198,7 +229,7 @@ export default function EjerciciosScreen() {
 
       {/* List (agrupada por músculo) */}
       <MotiView
-        key={`${source}|${muscle ?? 'all'}`}
+        key={`${source}|${muscle ?? 'all'}|${videoOnly ? 'vid' : 'any'}`}
         from={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ type: 'timing', duration: 220 }}
@@ -212,15 +243,17 @@ export default function EjerciciosScreen() {
             item.type === 'header' ? (
               <GroupHeader muscle={item.muscle} count={item.count} />
             ) : (
-              <ExerciseCard row={item.row} onPress={() => openPreview(item.row)} />
+              <ExerciseCard row={item.row} onOpen={openPreview} />
             )
           }
           contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 4, paddingBottom: insets.bottom + 96 }}
+          onScroll={onScroll}
+          scrollEventThrottle={16}
           ItemSeparatorComponent={() => <View style={{ height: 8 }} />}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load('refresh')} tintColor={theme.primary} />}
           ListEmptyComponent={
             <View style={{ paddingTop: 48 }}>
-              <EmptyState icon={Dumbbell} title="Sin ejercicios" subtitle={query || muscle || source !== 'all' ? 'Probá otro filtro o búsqueda.' : 'Creá tu primer ejercicio personalizado.'} />
+              <EmptyState icon={Dumbbell} title="Sin ejercicios" subtitle={query || muscle || source !== 'all' || videoOnly ? 'Prueba otro filtro o búsqueda.' : 'Crea tu primer ejercicio personalizado.'} />
             </View>
           }
         />
@@ -286,12 +319,12 @@ function GroupHeader({ muscle, count }: { muscle: string; count: number }) {
   )
 }
 
-function ExerciseCard({ row, onPress }: { row: ExerciseRow; onPress: () => void }) {
+const ExerciseCard = memo(function ExerciseCard({ row, onOpen }: { row: ExerciseRow; onOpen: (row: ExerciseRow) => void }) {
   const { theme } = useTheme()
   const meta = [row.equipment, row.difficulty ? DIFFICULTY_LABEL[row.difficulty] ?? row.difficulty : null].filter(Boolean).join(' · ')
   const thumb = exerciseThumb(row)
   return (
-    <Card interactive onPress={onPress} padding={12} radius="card" style={styles.card}>
+    <Card interactive onPress={() => onOpen(row)} padding={12} radius="card" style={styles.card}>
       <View
         className={`${thumb ? 'bg-surface-sunken' : 'bg-ink-950'} rounded-control items-center justify-center`}
         style={styles.thumb}
@@ -312,7 +345,7 @@ function ExerciseCard({ row, onPress }: { row: ExerciseRow; onPress: () => void 
       <ChevronRight size={18} color={theme.mutedForeground} />
     </Card>
   )
-}
+})
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
@@ -327,6 +360,9 @@ const styles = StyleSheet.create({
   filterRow: { paddingHorizontal: 16, gap: 8, paddingBottom: 12, alignItems: 'center' },
   filterChip: { paddingHorizontal: 13, height: 32 },
   filterChipText: { fontSize: 13 },
+  videoChip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 13, height: 32 },
+  videoChipText: { fontSize: 13 },
+  filterDivider: { width: StyleSheet.hairlineWidth, height: 20, backgroundColor: 'rgba(120,120,128,0.35)', alignSelf: 'center' },
   listWrap: { flex: 1 },
   groupHeader: { gap: 8, paddingTop: 14, paddingBottom: 8, paddingHorizontal: 2 },
   dot: { width: 7, height: 7, borderRadius: 4 },

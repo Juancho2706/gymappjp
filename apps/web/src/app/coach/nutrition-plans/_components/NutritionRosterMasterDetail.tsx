@@ -476,7 +476,7 @@ function NoPlanDetail({
         </div>
         <div className="font-display text-[16px] font-extrabold text-strong">Sin plan de nutrición</div>
         <p className="max-w-sm text-[13px] text-muted">
-          {name.split(' ')[0]} todavía no tiene un plan activo. Creá uno desde cero o asignale una plantilla.
+          {name.split(' ')[0]} todavía no tiene un plan activo. Crea uno desde cero o asígnale una plantilla.
         </p>
         <button
           type="button"
@@ -501,7 +501,7 @@ function DetailEmpty() {
       </div>
       <div className="font-display text-lg font-black tracking-tight text-strong">Selecciona un alumno</div>
       <p className="max-w-sm text-sm text-muted">
-        Elegí un alumno para ver y ajustar su plan de nutrición, adherencia e intercambios.
+        Elige un alumno para ver y ajustar su plan de nutrición, adherencia e intercambios.
       </p>
     </div>
   )

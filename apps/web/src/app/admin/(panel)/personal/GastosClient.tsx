@@ -151,7 +151,7 @@ export function GastosClient({ gastos }: { gastos: Gasto[] }) {
 
                 {gastos.length === 0 ? (
                     <div className="px-4 py-10 text-center text-sm text-[--admin-text-3]">
-                        Sin gastos registrados. Agregá el primero arriba.
+                        Sin gastos registrados. Agrega el primero arriba.
                     </div>
                 ) : (
                     <div className="overflow-x-auto">

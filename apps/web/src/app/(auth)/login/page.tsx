@@ -37,7 +37,7 @@ export default async function CoachLoginPage({ searchParams }: CoachLoginPagePro
                         Panel del coach
                     </h1>
                     <p className="mt-1 text-[14.5px] text-text-muted">
-                        Entrá para gestionar tu marca y tus alumnos
+                        Entra para gestionar tu marca y tus alumnos
                     </p>
                 </div>
 

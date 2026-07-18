@@ -656,7 +656,7 @@ export async function POST(request: Request) {
             return NextResponse.json(
                 {
                     code: 'GATEWAY_EMAIL_REJECTED',
-                    error: 'El medio de pago no pudo validar tu correo. Verificá que tu email de la cuenta sea real y accesible, o proba con Mercado Pago.',
+                    error: 'El medio de pago no pudo validar tu correo. Verifica que tu email de la cuenta sea real y accesible, o proba con Mercado Pago.',
                 },
                 { status: 400 }
             )

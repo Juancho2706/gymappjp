@@ -126,9 +126,9 @@ export default function PrivacidadPage() {
                             </Section>
 
                             <Section title="7. Derechos ARCO+ (Art. 5–12 Ley 21.719)">
-                                <p>Tenés derecho a:</p>
+                                <p>Tienes derecho a:</p>
                                 <ul className="list-disc list-inside space-y-1.5 ml-2">
-                                    <li><strong className="text-foreground">Acceso:</strong> conocer qué datos tenemos sobre vos.</li>
+                                    <li><strong className="text-foreground">Acceso:</strong> conocer qué datos tenemos sobre ti.</li>
                                     <li><strong className="text-foreground">Rectificación:</strong> corregir datos inexactos.</li>
                                     <li><strong className="text-foreground">Cancelación / Supresión:</strong> eliminar tu cuenta y datos asociados.</li>
                                     <li><strong className="text-foreground">Oposición:</strong> oponerte al tratamiento para fines de marketing.</li>
@@ -141,13 +141,13 @@ export default function PrivacidadPage() {
                                     Respondemos en máximo 30 días hábiles.
                                 </p>
                                 <p>
-                                    También podés reclamar ante la <strong className="text-foreground">Agencia de Protección de Datos Personales de Chile</strong>.
+                                    También puedes reclamar ante la <strong className="text-foreground">Agencia de Protección de Datos Personales de Chile</strong>.
                                 </p>
                             </Section>
 
                             <Section title="8. Eliminación de cuenta">
                                 <p>
-                                    Podés eliminar tu cuenta desde{' '}
+                                    Puedes eliminar tu cuenta desde{' '}
                                     <strong className="text-foreground">Configuración → Zona de peligro → Eliminar cuenta</strong>.
                                     Al eliminar:
                                 </p>

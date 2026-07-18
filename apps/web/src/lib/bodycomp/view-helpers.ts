@@ -1,5 +1,5 @@
 import type { BodyCompositionRow } from '@/infrastructure/db/body-composition.repository'
-import type { BiaMetrics } from '@/domain/bodycomp'
+import type { BiaMetrics } from '@eva/bodycomp'
 
 /**
  * Helpers PUROS de lectura/formato del jsonb `metrics` persistido (sin React, sin IO) —

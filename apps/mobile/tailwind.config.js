@@ -80,6 +80,12 @@ module.exports = {
         'accent-recovery': ch('accent-recovery'),
         'focus-ring': ch('focus-ring'),
         track: ch('track'),
+
+        // ---- Data-viz categorical palette (mirrors web globals.css --viz-1..6) ----
+        viz: {
+          1: ch('viz-1'), 2: ch('viz-2'), 3: ch('viz-3'),
+          4: ch('viz-4'), 5: ch('viz-5'), 6: ch('viz-6'),
+        },
       },
 
       // Semantic surfaces -> bg-surface-app / bg-surface-card / ...
@@ -108,24 +114,63 @@ module.exports = {
       },
 
       // Semantic borders -> border-subtle / border-default / border-strong / border-inverse
+      // subtle/default/strong resuelven un COLOR COMPLETO por modo (var() directo, sin
+      // ch()/<alpha-value>) espejando el web: `@utility border-* { border-color: var(--border-*) }`
+      // (apps/web globals.css:151-153). En dark el token ES rgba(255 255 255 / .07|.13|.22)
+      // (global.css DARK), con el alpha HORNEADO en el valor — NO un canal. Con ch() la clase
+      // bare compilaría rgb(255 255 255 / 1) = borde BLANCO OPACO en dark (el bug sistémico).
+      // Corolario: el modificador /[x] ya NO aplica sobre estos (var() no acepta <alpha-value>);
+      // usar la clase bare (el alpha vive en el token). `inverse` sí queda en canal porque se
+      // consume con modificador explícito (border-inverse/10, border-inverse/50).
       borderColor: {
-        subtle: ch('border-subtle'),
-        default: ch('border-default'),
-        strong: ch('border-strong'),
+        subtle: 'var(--color-border-subtle)',
+        default: 'var(--color-border-default)',
+        strong: 'var(--color-border-strong)',
         inverse: ch('border-inverse'),
       },
 
       borderRadius: {
-        sm: '7px', md: '10px', lg: '12px', xl: '17px', '2xl': '22px', '3xl': '26px',
+        // Escala DS — mirror 1:1 de apps/web globals.css @theme (--radius-xs..3xl):
+        // las utilidades rounded-* del web compilan contra esos literales, así que
+        // rounded-lg debe medir lo MISMO en ambas plataformas (antes: 7/10/12/17/22/26).
+        xs: '6px', sm: '10px', md: '14px', lg: '20px', xl: '28px', '2xl': '36px', '3xl': '44px',
         // DS semantic radii
         card: '20px', control: '14px', pill: '9999px', sheet: '28px',
       },
+
+      // DS spacing — 4px grid (mirrors web globals.css --space-0..13 + sizing tokens).
+      // Namespaced as `space-*` / `gutter-*` / `control-*` / `icon-*` so these do NOT
+      // override Tailwind's default numeric spacing scale that existing screens use
+      // (p-4 stays 16px). Consume as p-space-5, gap-space-4, w-icon-lg, etc.
+      spacing: {
+        'space-0': '0px', 'space-1': '2px', 'space-2': '4px', 'space-3': '8px',
+        'space-4': '12px', 'space-5': '16px', 'space-6': '20px', 'space-7': '24px',
+        'space-8': '32px', 'space-9': '40px', 'space-10': '48px', 'space-11': '64px',
+        'space-12': '80px', 'space-13': '96px',
+        'gutter-screen': '20px', 'gutter-card': '16px',
+        'hit-min': '44px', 'control-sm': '36px', 'control-md': '48px', 'control-lg': '56px',
+        'icon-xs': '16px', 'icon-sm': '18px', 'icon-md': '20px', 'icon-lg': '24px', 'icon-xl': '32px',
+      },
+      maxWidth: {
+        content: '440px',
+      },
       fontFamily: {
-        // Existing entries (kept so current screens keep compiling)
-        medium: ['Inter_500Medium'],
-        semibold: ['Inter_600SemiBold'],
-        'display-extra': ['Montserrat_800ExtraBold'],
+        // Legacy weight-utility aliases (font-medium / font-semibold / font-display-extra).
+        // On web these are Hanken (UI/body) and Archivo (display) at the given weight —
+        // NOT Inter/Montserrat. Remapped to the EVA families so a re-skin writing
+        // className="font-semibold" gets Hanken, and "font-display-extra" gets Archivo
+        // (mirrors --font-ui=Hanken / --font-display=Archivo in web globals.css).
+        // Duplicates of sans-medium / sans-semibold / display-bold; kept as aliases so
+        // current screens keep compiling. Purge with the Inter/Montserrat legacy sweep.
+        medium: ['HankenGrotesk_500Medium'],
+        semibold: ['HankenGrotesk_600SemiBold'],
+        'display-extra': ['Archivo_800ExtraBold'],
         // DS families (Archivo display / Hanken Grotesk UI / JetBrains mono)
+        // `ui` espeja la utilidad web `font-ui` (--font-ui = Hanken, globals.css @theme).
+        ui: ['HankenGrotesk_400Regular'],
+        // Web h1–h6 renderiza Archivo a peso 600 (globals.css `h1..h6 { font-weight:600 }`);
+        // la cara ya se carga en app/_layout.tsx pero no tenía utilidad.
+        'display-semibold': ['Archivo_600SemiBold'],
         sans: ['HankenGrotesk_400Regular'],
         'sans-medium': ['HankenGrotesk_500Medium'],
         'sans-semibold': ['HankenGrotesk_600SemiBold'],

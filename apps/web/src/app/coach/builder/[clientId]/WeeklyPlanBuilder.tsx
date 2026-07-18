@@ -45,8 +45,7 @@ import { DraggableExerciseCatalog } from './DraggableExerciseCatalog'
 import type { BuilderBlock, BuilderCardioContext, DayState, ProgramPhase } from './types'
 import type { WorkoutArea } from '@/domain/workout/types'
 import { effectiveExerciseType, legacyRepsSummaryFor } from '@/lib/workout-exercise-type'
-import { effectiveAreaKey, orderedAreaIds } from '@/lib/workout-areas'
-import { sanitizeSupersets } from '@/lib/workout-block-grouping'
+import { effectiveAreaKey, orderedAreaIds, sanitizeSupersets } from '@eva/workout-engine'
 import { buildAreaVMs } from './area-ui'
 import { parseProgramPhases, mapDbBlockToBuilderBlock, enrichDaysWithExerciseMedia, createDefaultBlock } from './program-read-mappers'
 
@@ -1225,7 +1224,7 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                 <div className="mx-3 mt-2.5 animate-in slide-in-from-top-1 rounded-card border border-primary/25 bg-primary/10 p-3 md:mx-6 md:rounded-control">
                     <div className="flex flex-col items-stretch justify-center gap-2 sm:flex-row sm:items-center sm:gap-3">
                         <History className="hidden h-4 w-4 shrink-0 text-primary sm:block" />
-                        <p className="flex-1 text-xs font-semibold text-primary">Tenés un borrador sin guardar de esta sesión.</p>
+                        <p className="flex-1 text-xs font-semibold text-primary">Tienes un borrador sin guardar de esta sesión.</p>
                         <div className="flex items-center justify-end gap-2">
                             <Button
                                 size="sm"

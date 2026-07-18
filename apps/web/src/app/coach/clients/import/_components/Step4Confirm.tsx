@@ -95,9 +95,9 @@ export function Step4Confirm({ rows, filename, maxClients, activeCount, onBack }
 
             {wouldExceedLimit && (
                 <div className="rounded-xl border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
-                    Tu plan permite {maxClients} alumnos y tenés {activeCount}. No podés importar {rows.length} alumnos más.
+                    Tu plan permite {maxClients} alumnos y tienes {activeCount}. No puedes importar {rows.length} alumnos más.
                     <a href="/coach/subscription?upgrade=true" className="ml-1 font-semibold underline">
-                        Actualizá tu plan →
+                        Actualiza tu plan →
                     </a>
                 </div>
             )}

@@ -80,7 +80,7 @@ export async function POST(request: Request) {
         const adminBlockedStatuses = new Set(['expired', 'paused'])
         if (!explicitPreapprovalId && adminBlockedStatuses.has(coach.subscription_status ?? '')) {
             return NextResponse.json(
-                { error: 'Tu cuenta tiene acceso restringido. Para reactivar, iniciá un nuevo proceso de pago.' },
+                { error: 'Tu cuenta tiene acceso restringido. Para reactivar, inicia un nuevo proceso de pago.' },
                 { status: 403 }
             )
         }

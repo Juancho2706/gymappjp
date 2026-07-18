@@ -58,7 +58,7 @@ export function PwaNavButton({ isCollapsed }: Props) {
       <Dialog open={expanded} onOpenChange={setExpanded}>
         <DialogContent className="max-w-md bg-card border-border rounded-3xl">
           <DialogHeader>
-            <DialogTitle className="text-xl font-bold">Instalá la app</DialogTitle>
+            <DialogTitle className="text-xl font-bold">Instala la app</DialogTitle>
           </DialogHeader>
           <div className="py-4 flex flex-col items-center text-center">
             <div
@@ -69,8 +69,8 @@ export function PwaNavButton({ isCollapsed }: Props) {
             </div>
             <p className="text-sm text-muted-foreground mb-6 leading-relaxed">
               {isIOS
-                ? 'En iOS: toca el botón Compartir en la barra de Safari, elegí "Añadir a inicio", dejá activado "Abrir como app" y toca Añadir. Después la abrís desde tu pantalla de inicio como una app nativa.'
-                : 'Abrí el menú de tu navegador y elegí "Instalar app" (o "Añadir a pantalla de inicio") para tenerla en tu inicio, sin navegador y más rápida.'}
+                ? 'En iOS: toca el botón Compartir en la barra de Safari, elige "Añadir a inicio", deja activado "Abrir como app" y toca Añadir. Después la abres desde tu pantalla de inicio como una app nativa.'
+                : 'Abre el menú de tu navegador y elige "Instalar app" (o "Añadir a pantalla de inicio") para tenerla en tu inicio, sin navegador y más rápida.'}
             </p>
             {canPrompt && (
               <button

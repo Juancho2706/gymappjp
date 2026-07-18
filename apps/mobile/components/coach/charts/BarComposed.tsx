@@ -5,7 +5,7 @@ import { useDerivedValue, useAnimatedReaction, runOnJS, type SharedValue } from 
 import { useTheme } from '../../../context/ThemeContext'
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
-const INTER_FONT = require('@expo-google-fonts/inter/Inter_400Regular.ttf')
+const INTER_FONT = require('@expo-google-fonts/hanken-grotesk/HankenGrotesk_400Regular.ttf')
 
 export interface BarComposedPoint { i: number; bar: number; avg: number; label: string; [k: string]: string | number }
 
@@ -46,7 +46,7 @@ export function BarComposed({
   const font = useFont(INTER_FONT, 9)
   const { state, isActive } = useChartPressState({ x: 0, y: { bar: 0, avg: 0 } })
   const bColor = barColor ?? theme.primary
-  const lColor = lineColor ?? '#F59E0B'
+  const lColor = lineColor ?? theme.warning
 
   useAnimatedReaction(
     () => (isActive ? Math.round(state.x.value.value) : -1),

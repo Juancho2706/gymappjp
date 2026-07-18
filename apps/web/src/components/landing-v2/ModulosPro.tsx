@@ -9,7 +9,8 @@
  * (los alimenta `#landing-v2-root`) y `data-reveal` para el observer global de reveal.
  *
  * Los 4 módulos = cardio / movement / body_composition / nutrición-Pro (intercambios), alineados
- * con MODULE_KEYS del catálogo real. Precio $9.990/mes uniforme self-service. Ver §6 del spec.
+ * con MODULE_KEYS del catálogo real. Decisión CEO 2026-07-17: ya NO se venden como add-ons —
+ * vienen incluidos en todos los planes pagos (cero precio por módulo en la landing).
  */
 
 import { useState, type CSSProperties } from 'react'
@@ -204,7 +205,7 @@ export default function ModulosPro() {
               color: '#cfe3ff',
             }}
           >
-            add-on · $9.990/mes c/u · enciende solo los que uses
+            incluidos en todos los planes pagos · sin costo extra
           </span>
         </div>
       </div>

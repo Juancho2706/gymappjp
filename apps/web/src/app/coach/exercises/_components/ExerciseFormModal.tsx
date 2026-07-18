@@ -18,6 +18,7 @@ import {
     SelectValue,
 } from '@/components/ui/select'
 import { MUSCLE_GROUPS } from '@/lib/constants'
+import { EXERCISE_TYPE_OPTIONS } from '@eva/workout-engine'
 import {
     createExerciseAction,
     updateExerciseAction,
@@ -63,14 +64,6 @@ const DIFFICULTY_OPTIONS = [
     { value: 'beginner', label: 'Principiante' },
     { value: 'intermediate', label: 'Intermedio' },
     { value: 'advanced', label: 'Avanzado' },
-]
-
-/** Tipos polimórficos (specs/movida-entrenamiento): deciden los ejes del builder/alumno. */
-const EXERCISE_TYPE_OPTIONS = [
-    { value: 'strength', label: 'Fuerza (series × reps)' },
-    { value: 'cardio', label: 'Cardio (duración / distancia / zona FC)' },
-    { value: 'mobility', label: 'Movilidad (holds por lado)' },
-    { value: 'roller', label: 'Foam roller (duración o pasadas)' },
 ]
 
 interface Props {
@@ -181,7 +174,7 @@ export function ExerciseFormModal({ open, onClose, exercise }: Props) {
                         <label className="text-sm font-medium text-strong">Grupo muscular *</label>
                         <Select name="muscle_group" defaultValue={exercise?.muscle_group ?? ''} required>
                             <SelectTrigger>
-                                <SelectValue placeholder="Seleccioná un grupo" />
+                                <SelectValue placeholder="Selecciona un grupo" />
                             </SelectTrigger>
                             <SelectContent>
                                 {MUSCLE_GROUPS.map((mg) => (
@@ -224,7 +217,7 @@ export function ExerciseFormModal({ open, onClose, exercise }: Props) {
                             <label className="text-sm font-medium text-strong">Equipo</label>
                             <Select name="equipment" defaultValue={exercise?.equipment ?? ''}>
                                 <SelectTrigger>
-                                    <SelectValue placeholder="Seleccioná equipo" />
+                                    <SelectValue placeholder="Selecciona equipo" />
                                 </SelectTrigger>
                                 <SelectContent>
                                     {EQUIPMENT_OPTIONS.map((eq) => (
@@ -237,7 +230,7 @@ export function ExerciseFormModal({ open, onClose, exercise }: Props) {
                             <label className="text-sm font-medium text-strong">Dificultad</label>
                             <Select name="difficulty" value={difficulty} onValueChange={(v) => setDifficulty(v ?? '')}>
                                 <SelectTrigger>
-                                    <SelectValue placeholder="Seleccioná dificultad">
+                                    <SelectValue placeholder="Selecciona dificultad">
                                         {difficulty ? (DIFFICULTY_OPTIONS.find((o) => o.value === difficulty)?.label ?? difficulty) : null}
                                     </SelectValue>
                                 </SelectTrigger>

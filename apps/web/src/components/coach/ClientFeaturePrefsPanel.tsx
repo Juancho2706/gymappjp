@@ -175,7 +175,7 @@ export function ClientFeaturePrefsPanel({
                                         return (
                                             <a
                                                 key={section.key}
-                                                href="/coach/subscription#addons"
+                                                href="/coach/subscription"
                                                 className="flex min-h-[40px] items-center justify-between gap-2 rounded-xl border border-border bg-background/60 px-3 py-2"
                                             >
                                                 <span className="flex items-center gap-1.5 text-sm text-muted-foreground">

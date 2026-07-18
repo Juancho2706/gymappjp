@@ -72,7 +72,7 @@ function ForgotPasswordForm() {
                         <Send className="h-[30px] w-[30px]" />
                     </div>
                     <h1 className="font-display text-2xl font-black tracking-[-0.02em] text-text-strong">
-                        Revisá tu correo
+                        Revisa tu correo
                     </h1>
                     <p className="mt-2 text-sm leading-relaxed text-text-muted">
                         Si existe una cuenta asociada a{' '}
@@ -93,7 +93,7 @@ function ForgotPasswordForm() {
                             ¿Olvidaste tu contraseña?
                         </h1>
                         <p className="mt-2 text-sm leading-relaxed text-text-muted">
-                            Ingresá tu email y te enviamos un enlace para crear una nueva.
+                            Ingresa tu email y te enviamos un enlace para crear una nueva.
                         </p>
                     </div>
 
@@ -134,7 +134,7 @@ function ForgotPasswordForm() {
                             href={loginHref}
                             className="font-bold text-sport-600 hover:opacity-80 transition-opacity"
                         >
-                            Iniciá sesión
+                            Inicia sesión
                         </Link>
                     </div>
                 </>

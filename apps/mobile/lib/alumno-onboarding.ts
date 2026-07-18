@@ -40,7 +40,7 @@ export async function submitIntake(input: IntakeInput): Promise<{ ok: boolean; e
 
   if (!Number.isFinite(input.weightKg) || input.weightKg <= 0) return { ok: false, error: 'Indicá un peso válido.' }
   if (!Number.isFinite(input.heightCm) || input.heightCm <= 0) return { ok: false, error: 'Indicá una altura válida.' }
-  if (!input.goals || !input.experienceLevel || !input.availability) return { ok: false, error: 'Completá los campos obligatorios.' }
+  if (!input.goals || !input.experienceLevel || !input.availability) return { ok: false, error: 'Completa los campos obligatorios.' }
 
   const { error: intakeErr } = await supabase.from('client_intake').insert({
     client_id: user.id,

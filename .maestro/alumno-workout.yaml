@@ -1,0 +1,37 @@
+# Flow: alumno entra a su entrenamiento del día y registra una serie.
+# Requiere sesión ya iniciada (correr después de alumno-login.yaml o con estado persistido
+# — Maestro no comparte estado entre flows salvo que se use clearState: false).
+# Pantallas: apps/mobile/app/alumno/(tabs)/home.tsx, apps/mobile/app/alumno/(tabs)/workout.tsx,
+#            apps/mobile/app/alumno/workout/[planId].tsx
+#
+# GOTCHA: sin testID en ninguna de estas pantallas (verificado E0-G2, 2026-07-08).
+# testIDs faltantes a agregar en mobile:
+#   - home.tsx: boton hero "Empezar entrenamiento" -> testID="home-start-workout" (home.tsx L426)
+#   - workout/[planId].tsx: LogInput peso/reps/RPE/RIR -> testID="log-weight"/"log-reps"/"log-rpe"/"log-rir"
+#     (planId.tsx L791-794), boton "Finalizar entrenamiento" -> testID="workout-finish" (L582)
+appId: cl.evaapp.eva
+---
+- launchApp:
+    clearState: false
+
+# Paso 1: Home del alumno — CTA hero de entrenamiento (home.tsx L426)
+- assertVisible: "Entrenos"
+- tapOn: "Empezar entrenamiento"
+
+# Paso 2: detalle del plan del día (alumno/workout/[planId].tsx)
+# Metrics de referencia del bloque de ejercicio, confirman que la pantalla cargó (L729-733)
+- assertVisible: "Series × reps"
+
+# Paso 3: registrar una serie — inputs de log (LogInput, placeholders literales, L791-794)
+- tapOn:
+    text: "kg"
+- inputText: "40"
+- tapOn:
+    text: "reps"
+- inputText: "10"
+- tapOn:
+    text: "RPE"
+- inputText: "8"
+
+# Paso 4: finalizar entrenamiento (L582)
+- tapOn: "Finalizar entrenamiento"

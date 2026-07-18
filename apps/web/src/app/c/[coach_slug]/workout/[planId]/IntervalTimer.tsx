@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { playTimerSound } from '@/lib/audioUtils'
 import { triggerHaptic } from '@/lib/client/haptics'
 import { readRestTimerSound, readRestTimerVolume } from './rest-timer-preferences'
-import { INTERVAL_PHASE_LABEL, type IntervalPhase } from '@/lib/workout-interval'
+import { INTERVAL_PHASE_LABEL, type IntervalPhase } from '@eva/workout-engine'
 
 interface IntervalTimerProps {
     phases: IntervalPhase[]

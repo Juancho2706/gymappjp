@@ -6,7 +6,7 @@ import { cn } from '@/lib/utils'
 import { useTranslation } from '@/lib/i18n/LanguageContext'
 import type { BodyCompositionRow } from '@/infrastructure/db/body-composition.repository'
 import { deltaVsPrev, deviceLabel, readBiaMetrics } from '@/lib/bodycomp/view-helpers'
-import type { BiaMetrics } from '@/domain/bodycomp'
+import type { BiaMetrics } from '@eva/bodycomp'
 import { CountUpValue } from './CountUpValue'
 
 type MetricDef = {

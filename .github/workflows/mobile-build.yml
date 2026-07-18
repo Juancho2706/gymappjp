@@ -28,9 +28,15 @@ on:
         options:
           - staging
           - prodpreview
+          - previewv2
           - production
       submit_ios:
         description: 'Auto-submit iOS IPA to TestFlight after build'
+        required: false
+        default: false
+        type: boolean
+      submit_android:
+        description: 'Auto-submit Android AAB to Google Play internal testing after build (profile production only)'
         required: false
         default: false
         type: boolean
@@ -62,20 +68,44 @@ jobs:
           eas-version: latest
           token: ${{ secrets.EXPO_TOKEN }}
 
-      - name: Inject prod env vars into eas.json for prodpreview
-        if: ${{ inputs.profile == 'prodpreview' }}
+      - name: Inject prod env vars into eas.json for prodpreview/production
+        if: ${{ inputs.profile == 'prodpreview' || inputs.profile == 'previewv2' || inputs.profile == 'production' }}
         working-directory: apps/${{ inputs.app }}
         env:
           SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          BUILD_PROFILE: ${{ inputs.profile }}
         run: |
           node -e "
             const fs = require('fs');
+            const url = process.env.SUPABASE_URL;
+            const key = process.env.SUPABASE_KEY;
+            // Secrets vacios -> JSON.stringify dropea el undefined y el AAB/IPA
+            // compila sin Supabase (crash 'supabaseUrl is required' en runtime).
+            const missing = [];
+            if (!url || !url.trim()) missing.push('NEXT_PUBLIC_SUPABASE_URL');
+            if (!key || !key.trim()) missing.push('NEXT_PUBLIC_SUPABASE_ANON_KEY');
+            if (missing.length) {
+              console.error('ERROR: secret(s) vacio(s) para profile ' + process.env.BUILD_PROFILE + ': ' + missing.join(', ') + '. Configuralos en GitHub Actions secrets; sin ellos la app compila pero arranca sin Supabase.');
+              process.exit(1);
+            }
             const eas = JSON.parse(fs.readFileSync('eas.json', 'utf8'));
-            eas.build.prodpreview.env.EXPO_PUBLIC_SUPABASE_URL = process.env.SUPABASE_URL;
-            eas.build.prodpreview.env.EXPO_PUBLIC_SUPABASE_ANON_KEY = process.env.SUPABASE_KEY;
+            const profile = eas.build[process.env.BUILD_PROFILE];
+            profile.env.EXPO_PUBLIC_SUPABASE_URL = url;
+            profile.env.EXPO_PUBLIC_SUPABASE_ANON_KEY = key;
             fs.writeFileSync('eas.json', JSON.stringify(eas, null, 2));
           "
+
+      # production (sin buildType) genera AAB — formato que exige Google Play.
+      # staging/prodpreview generan APK para sideload directo.
+      - name: Determine Android artifact type
+        id: android_artifact
+        run: |
+          if [ "${{ inputs.profile }}" = "production" ]; then
+            echo "ext=aab" >> "$GITHUB_OUTPUT"
+          else
+            echo "ext=apk" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Build Android (${{ inputs.profile }})
         working-directory: apps/${{ inputs.app }}
@@ -83,14 +113,26 @@ jobs:
           EXPO_ROUTER_APP_ROOT: ${{ github.workspace }}/apps/${{ inputs.app }}/app
           GRADLE_OPTS: "-Xmx5g -XX:MaxMetaspaceSize=2g -XX:+HeapDumpOnOutOfMemoryError -Dkotlin.daemon.jvm.options=-Xmx2g,-XX:MaxMetaspaceSize=1g"
           JAVA_TOOL_OPTIONS: "-Xmx5g -XX:MaxMetaspaceSize=2g"
-        run: eas build --platform android --profile ${{ inputs.profile }} --local --non-interactive --output ./build.apk
+        run: eas build --platform android --profile ${{ inputs.profile }} --local --non-interactive --output ./build.${{ steps.android_artifact.outputs.ext }}
 
-      - name: Upload APK
+      - name: Upload Android artifact
         uses: actions/upload-artifact@v7
         with:
           name: ${{ inputs.app }}-android-${{ inputs.profile }}-${{ github.run_number }}
-          path: apps/${{ inputs.app }}/build.apk
+          path: apps/${{ inputs.app }}/build.${{ steps.android_artifact.outputs.ext }}
           retention-days: 14
+
+      # Requiere que la app exista en Play Console y que la PRIMERA subida se haya
+      # hecho manual por la UI (limitación de la Google Play Developer API).
+      # El track destino (internal) vive en eas.json → submit.production.android.
+      - name: Submit AAB to Google Play (internal testing)
+        if: ${{ inputs.submit_android == true && inputs.profile == 'production' }}
+        working-directory: apps/${{ inputs.app }}
+        env:
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+        run: |
+          printf '%s' "$GOOGLE_SERVICE_ACCOUNT_JSON" > ./google-service-account.json
+          eas submit --platform android --profile production --path ./build.aab --non-interactive
 
   build-ios:
     if: ${{ inputs.platform == 'ios' || inputs.platform == 'all' }}
@@ -124,18 +166,31 @@ jobs:
             exit 1
           fi
 
-      - name: Inject prod env vars into eas.json for prodpreview
-        if: ${{ inputs.profile == 'prodpreview' }}
+      - name: Inject prod env vars into eas.json for prodpreview/production
+        if: ${{ inputs.profile == 'prodpreview' || inputs.profile == 'previewv2' || inputs.profile == 'production' }}
         working-directory: apps/${{ inputs.app }}
         env:
           SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          BUILD_PROFILE: ${{ inputs.profile }}
         run: |
           node -e "
             const fs = require('fs');
+            const url = process.env.SUPABASE_URL;
+            const key = process.env.SUPABASE_KEY;
+            // Secrets vacios -> JSON.stringify dropea el undefined y el AAB/IPA
+            // compila sin Supabase (crash 'supabaseUrl is required' en runtime).
+            const missing = [];
+            if (!url || !url.trim()) missing.push('NEXT_PUBLIC_SUPABASE_URL');
+            if (!key || !key.trim()) missing.push('NEXT_PUBLIC_SUPABASE_ANON_KEY');
+            if (missing.length) {
+              console.error('ERROR: secret(s) vacio(s) para profile ' + process.env.BUILD_PROFILE + ': ' + missing.join(', ') + '. Configuralos en GitHub Actions secrets; sin ellos la app compila pero arranca sin Supabase.');
+              process.exit(1);
+            }
             const eas = JSON.parse(fs.readFileSync('eas.json', 'utf8'));
-            eas.build.prodpreview.env.EXPO_PUBLIC_SUPABASE_URL = process.env.SUPABASE_URL;
-            eas.build.prodpreview.env.EXPO_PUBLIC_SUPABASE_ANON_KEY = process.env.SUPABASE_KEY;
+            const profile = eas.build[process.env.BUILD_PROFILE];
+            profile.env.EXPO_PUBLIC_SUPABASE_URL = url;
+            profile.env.EXPO_PUBLIC_SUPABASE_ANON_KEY = key;
             fs.writeFileSync('eas.json', JSON.stringify(eas, null, 2));
           "
 

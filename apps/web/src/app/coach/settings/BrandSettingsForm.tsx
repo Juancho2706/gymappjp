@@ -312,10 +312,10 @@ export function BrandSettingsForm({ coach }: { coach: Coach }) {
     // imagen se muestran inline en el slot (no toast) — red de seguridad del incidente 2026-07-05.
     const stageLogo = async (file: File, which: 'light' | 'dark') => {
         if (file.type && !file.type.startsWith('image/')) {
-            setLogoErrors((e) => ({ ...e, [which]: 'Elegí una imagen (PNG o JPG).' })); return
+            setLogoErrors((e) => ({ ...e, [which]: 'Elige una imagen (PNG o JPG).' })); return
         }
         if (file.size > MAX_LOGO_RAW) {
-            setLogoErrors((e) => ({ ...e, [which]: 'La imagen es muy pesada (máx 15 MB). Probá con otra.' })); return
+            setLogoErrors((e) => ({ ...e, [which]: 'La imagen es muy pesada (máx 15 MB). Prueba con otra.' })); return
         }
         setLogoErrors((e) => ({ ...e, [which]: null }))
         setLogoOptimizing((o) => ({ ...o, [which]: true }))
@@ -326,7 +326,7 @@ export function BrandSettingsForm({ coach }: { coach: Coach }) {
             if (which === 'light') { setStagedLogo(compressed); setStagedLogoUrl(url) }
             else { setStagedLogoDark(compressed); setStagedLogoDarkUrl(url) }
         } catch {
-            setLogoErrors((e) => ({ ...e, [which]: 'No pudimos procesar esta imagen. Probá con un PNG o JPG.' }))
+            setLogoErrors((e) => ({ ...e, [which]: 'No pudimos procesar esta imagen. Prueba con un PNG o JPG.' }))
         } finally {
             setLogoOptimizing((o) => ({ ...o, [which]: false }))
         }
@@ -354,7 +354,7 @@ export function BrandSettingsForm({ coach }: { coach: Coach }) {
         const ticket = await createLogoUploadUrlAction({ variant, contentType: blob.type || 'image/png', size: blob.size })
         if (!ticket.success) return { error: ticket.error }
         const ok = await putToSignedUrl(ticket.signedUrl, blob)
-        if (!ok) return { error: 'No se pudo subir el logo. Revisá tu conexión e intentá de nuevo.' }
+        if (!ok) return { error: 'No se pudo subir el logo. Revisa tu conexión e intenta de nuevo.' }
         return { path: ticket.path }
     }
 
@@ -362,7 +362,7 @@ export function BrandSettingsForm({ coach }: { coach: Coach }) {
     // sin archivos → pasa Cloudflare) con los paths resultantes; updateBrandSettingsAction los persiste.
     const handleSave = async () => {
         if (isSaving) return
-        if (logoOptimizing.light || logoOptimizing.dark) { toast.error('Esperá a que termine de optimizar el logo.'); return }
+        if (logoOptimizing.light || logoOptimizing.dark) { toast.error('Espera a que termine de optimizar el logo.'); return }
         setIsSaving(true)
         try {
             let lightPath: string | null = null
@@ -381,15 +381,15 @@ export function BrandSettingsForm({ coach }: { coach: Coach }) {
             if (lightPath) fd.set('logo_light_path', lightPath)
             if (darkPath) fd.set('logo_dark_path', darkPath)
             const r2 = await updateBrandSettingsAction(initialState, fd)
-            if (r2.fieldErrors) { setState({ fieldErrors: r2.fieldErrors }); toast.error('Revisá los campos marcados.'); return }
+            if (r2.fieldErrors) { setState({ fieldErrors: r2.fieldErrors }); toast.error('Revisa los campos marcados.'); return }
             if (r2.error) { setState({ error: r2.error }); toast.error(r2.error); return }
             setState({ success: true })
             toast.success('Marca actualizada', { id: 'coach-brand-saved' })
             clearStagedLogos()
             router.refresh()
         } catch {
-            setState({ error: 'No se pudo guardar. Intentá de nuevo.' })
-            toast.error('No se pudo guardar. Intentá de nuevo.')
+            setState({ error: 'No se pudo guardar. Intenta de nuevo.' })
+            toast.error('No se pudo guardar. Intenta de nuevo.')
         } finally {
             setIsSaving(false)
         }

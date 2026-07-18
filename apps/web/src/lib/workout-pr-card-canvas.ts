@@ -813,7 +813,7 @@ export async function renderStreakCardToBlob(data: StreakCardData, brand: ShareC
     // Título.
     ctx.fillStyle = '#ffffff'
     ctx.font = `800 68px ${display}`
-    const titleLines = wrapLines(ctx, streak > 0 ? 'Racha encendida' : 'Encendé tu racha', WIDTH - PAD_X * 2, 2)
+    const titleLines = wrapLines(ctx, streak > 0 ? 'Racha encendida' : 'Enciende tu racha', WIDTH - PAD_X * 2, 2)
     titleLines.forEach((line, i) => ctx.fillText(line, PAD_X, 556 + i * 78))
     const titleBottom = 556 + (titleLines.length - 1) * 78
 
@@ -836,7 +836,7 @@ export async function renderStreakCardToBlob(data: StreakCardData, brand: ShareC
     ctx.fillText(streak === 1 ? 'día' : 'días', PAD_X - 4 + streakW + 24, heroBaseline - 12)
 
     // Copy: "seguidos activo" (junto al hero "N días" → "N días seguidos activo").
-    drawPill(ctx, PAD_X, 940, streak > 0 ? 'seguidos activo' : 'Empezá hoy tu racha', {
+    drawPill(ctx, PAD_X, 940, streak > 0 ? 'seguidos activo' : 'Empieza hoy tu racha', {
         font: `600 34px ${display}`,
         textColor: streak > 0 ? ember : 'rgba(255,255,255,0.7)',
         bg: streak > 0 ? `rgba(${emberRgb.r}, ${emberRgb.g}, ${emberRgb.b}, 0.14)` : 'rgba(255,255,255,0.08)',

@@ -1,0 +1,112 @@
+/**
+ * Helpers de presentación del ejecutor (mobile) — espejo de los helpers inline de
+ * `WorkoutExecutionClient`/`SingleExerciseCard` de web (chip de sobrecarga, formato de
+ * volumen/cronómetro, parse de descanso). Puros y compartidos por las cards + el header.
+ */
+import { compactDuration, type ReconciledSessionLog, type TypedKeypadMode } from '@eva/workout-engine'
+import type { EffectiveTarget } from '../../../lib/workout/progression'
+import type { PrevSet } from '../../../lib/workout-session'
+
+interface OverloadBlock {
+  progression_type: 'weight' | 'reps' | null
+  progression_value: number | null
+  target_weight_kg: number | null
+}
+
+/** Chip compacto de sobrecarga progresiva. null ⇒ sin chip. */
+export function overloadChipLabel(
+  block: OverloadBlock,
+  eff: EffectiveTarget | null,
+  currentWeek: number | null | undefined,
+): string | null {
+  if (!block.progression_type || block.progression_value == null) return null
+  if (block.progression_type === 'weight' && block.target_weight_kg == null) return null
+  const v = block.progression_value
+  if (block.progression_type !== 'weight' || !eff?.modeImplemented) {
+    return block.progression_type === 'weight' ? `+${v} kg/sem` : `+${v} rep/ses`
+  }
+  if (eff.mode === 'double') {
+    return eff.status === 'holding' ? `Mantén ${eff.weightKg} kg` : `Objetivo ${eff.weightKg} kg`
+  }
+  if (eff.isProgressed && currentWeek != null) return `Sem ${currentWeek} · ${eff.weightKg} kg`
+  return `+${v} kg/sem`
+}
+
+/** Explicación completa de la sobrecarga (va a "Detalles"). */
+export function overloadDetailText(
+  block: OverloadBlock,
+  eff: EffectiveTarget | null,
+  currentWeek: number | null | undefined,
+): string | null {
+  if (!block.progression_type || block.progression_value == null) return null
+  if (block.progression_type === 'weight' && block.target_weight_kg == null) return null
+  const v = block.progression_value
+  if (block.progression_type !== 'weight' || !eff?.modeImplemented) {
+    return `Sube +${v} ${block.progression_type === 'weight' ? 'kg cada semana' : 'rep cada sesión'}.`
+  }
+  if (eff.mode === 'double') {
+    if (eff.status === 'holding') return `Doble progresión: mantén ${eff.weightKg} kg y completa ${eff.repsTopToUnlock} reps en todas las series para subir.`
+    if (eff.status === 'progressed') {
+      return eff.isProgressed
+        ? `Doble progresión: ¡subiste! Objetivo ${eff.weightKg} kg (base ${eff.baseWeightKg}).`
+        : `Doble progresión: objetivo ${eff.weightKg} kg (aún por debajo de la base ${eff.baseWeightKg}).`
+    }
+    return `Doble progresión: sube +${v} kg cuando completes ${eff.repsTopToUnlock} reps en todas las series.`
+  }
+  if (eff.isProgressed && currentWeek != null) return `Semana ${currentWeek}: objetivo ${eff.weightKg} kg (base ${eff.baseWeightKg} +${eff.addedKg}).`
+  return `Sube +${v} kg cada semana (esta semana arrancas en la base).`
+}
+
+/** Mejor sesión previa (mayor peso) para "Última vez" + autollenado. */
+export function bestPrevOf(list: PrevSet[]): PrevSet | null {
+  if (!list.length) return null
+  return list.reduce((mx, s) => ((s.weight_kg ?? 0) > (mx.weight_kg ?? 0) ? s : mx), list[0])
+}
+
+/** Parse de descanso "90s"/"2m"/"90" → segundos. */
+export function parseRestTime(restTime: string | null | undefined): number {
+  if (!restTime) return 0
+  const minMatch = restTime.match(/(\d+)\s*m/i)
+  if (minMatch) return parseInt(minMatch[1], 10) * 60
+  const match = restTime.match(/(\d+)/)
+  return match ? parseInt(match[1], 10) : 0
+}
+
+/** mm:ss desde segundos (cronómetro de sesión); desde 1h rueda a H:MM:SS (ej. "1:05:32"). */
+export function fmtElapsed(totalSec: number): string {
+  const h = Math.floor(totalSec / 3600)
+  const m = Math.floor((totalSec % 3600) / 60)
+  const s = totalSec % 60
+  if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
+  return `${m}:${String(s).padStart(2, '0')}`
+}
+
+/** Volumen de sesión compacto (kg → "850 kg" / "5.2 t"). null si 0. */
+export function fmtVolume(kg: number): string | null {
+  if (kg <= 0) return null
+  if (kg >= 1000) return `${(kg / 1000).toFixed(kg >= 10000 ? 0 : 1)} t`
+  return `${Math.round(kg)} kg`
+}
+
+/**
+ * Línea de valores de una serie TIPADA ya registrada (para la SetRow de cardio/movilidad/roller).
+ * Lee las columnas `actual_*` / `reps_done` del log — mismo formato que el objetivo del keypad.
+ * "20 min · 5000 m · 150 bpm" · "45 s" · "30 s · 10 pasadas". Vacío ⇒ "Registrado".
+ */
+export function fmtTypedLoggedLine(
+  log: Pick<ReconciledSessionLog, 'actual_duration_sec' | 'actual_distance_m' | 'actual_avg_hr' | 'actual_hold_sec' | 'reps_done'>,
+  mode: TypedKeypadMode,
+): string {
+  const parts: string[] = []
+  if (mode === 'cardio') {
+    if (log.actual_duration_sec != null && log.actual_duration_sec > 0) parts.push(compactDuration(log.actual_duration_sec))
+    if (log.actual_distance_m != null && log.actual_distance_m > 0) parts.push(`${log.actual_distance_m} m`)
+    if (log.actual_avg_hr != null && log.actual_avg_hr > 0) parts.push(`${log.actual_avg_hr} bpm`)
+  } else if (mode === 'mobility') {
+    if (log.actual_hold_sec != null && log.actual_hold_sec > 0) parts.push(`${log.actual_hold_sec} s`)
+  } else {
+    if (log.actual_duration_sec != null && log.actual_duration_sec > 0) parts.push(`${log.actual_duration_sec} s`)
+    if (log.reps_done != null && log.reps_done > 0) parts.push(`${log.reps_done} pasadas`)
+  }
+  return parts.length ? parts.join(' · ') : 'Registrado'
+}

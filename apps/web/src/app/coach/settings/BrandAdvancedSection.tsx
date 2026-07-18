@@ -184,8 +184,8 @@ export function BrandAdvancedSection({ tier, primaryColor, value, onChange, load
                         <div className="flex items-start gap-2 rounded-xl border border-primary/20 bg-primary/5 p-3">
                             <Sparkles className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
                             <p className="text-[11px] leading-relaxed text-muted">
-                                Tu <b className="text-strong">tema</b> ya define color, fuente y loader. Cambiá algo acá
-                                solo si querés personalizar sobre tu tema.
+                                Tu <b className="text-strong">tema</b> ya define color, fuente y loader. Cambia algo acá
+                                solo si quieres personalizar sobre tu tema.
                             </p>
                         </div>
                     )}
@@ -315,7 +315,7 @@ export function BrandAdvancedSection({ tier, primaryColor, value, onChange, load
                         </button>
                         {accentOpen && (
                             <div className="space-y-3">
-                                <p className="text-xs text-muted">Forzá un color de acento distinto en claro y oscuro. Si lo dejás vacío, se calcula solo desde tu color principal.</p>
+                                <p className="text-xs text-muted">Fuerza un color de acento distinto en claro y oscuro. Si lo dejas vacío, se calcula solo desde tu color principal.</p>
                                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                                     {([['accentLight', 'Acento claro', accentLight, '#047857'], ['accentDark', 'Acento oscuro', accentDark, '#34d399']] as const).map(
                                         ([field, label, val, ph]) => {
@@ -383,7 +383,7 @@ export function BrandAdvancedSection({ tier, primaryColor, value, onChange, load
                                 )}
                             >
                                 <span className="flex items-center gap-1 text-xs font-bold text-strong"><Wand2 className="h-3 w-3 text-primary" /> Crear el mío</span>
-                                <span className="text-[10px] text-muted">Combiná símbolo, animación y texto</span>
+                                <span className="text-[10px] text-muted">Combina símbolo, animación y texto</span>
                             </button>
                         </div>
 
@@ -461,7 +461,7 @@ export function BrandAdvancedSection({ tier, primaryColor, value, onChange, load
                                         placeholder="EVA"
                                         className="h-10 w-full rounded-xl border border-default bg-surface-sunken px-3 text-sm uppercase text-strong outline-none focus:border-primary"
                                     />
-                                    <p className="text-xs text-muted">Vacío = muestra &quot;EVA&quot;. Escribí tu marca para reemplazar el texto de la animación. Máx 10 caracteres.</p>
+                                    <p className="text-xs text-muted">Vacío = muestra &quot;EVA&quot;. Escribe tu marca para reemplazar el texto de la animación. Máx 10 caracteres.</p>
                                 </div>
 
                                 {/* Ícono del loader — solo si la variante lleva ícono central */}

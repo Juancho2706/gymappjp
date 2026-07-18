@@ -1,6 +1,6 @@
 # Flows and Component Map
 
-Ultima modificacion: 2026-06-15 (media de ejercicios — mirror de thumbnails + recorte de video + player ExerciseVideo)
+Ultima modificacion: 2026-07-12 (paridad RN — ficha coach Análisis/Programa + builder no destructivo)
 
 ## Zonas de producto
 
@@ -29,6 +29,11 @@ Ultima modificacion: 2026-06-15 (media de ejercicios — mirror de thumbnails + 
 | Editar bloques | `components/DayColumn.tsx`, `BlockEditSheet.tsx` | `usePlanBuilder`, `ExerciseBlock` |
 | Guardar programa | `_actions/builder.actions.ts` | delega a `services/workout/workout.service.ts` |
 | Asignar template | `AssignToClientsDialog.tsx` | `assignProgramToClientsAction` |
+
+Web y RN comparten `@eva/workout-engine/workout-save-reconcile`: programas ya
+asignados se reconcilian en sitio por día/variante y posición de bloque para
+preservar IDs e historial. RN agrega control optimista por `updated_at`, scope
+explícito standalone/team/enterprise y drafts aislados por programa/workspace.
 
 ## Flujo: alumno entrena
 
@@ -66,6 +71,24 @@ Ultima modificacion: 2026-06-15 (media de ejercicios — mirror de thumbnails + 
 | Abrir wizard | `/c/[coach_slug]/check-in` | `_data/check-in.queries.ts`, `CheckInForm` |
 | Subir fotos | `CheckInForm.tsx` | `_actions/check-in.actions.ts`, bucket `checkins` |
 | Coach revisa | `/coach/clients/[clientId]` | `ProfileCheckInSnapshot`, `ProgressBodyCompositionB6` |
+
+## Flujo RN: coach revisa ficha y progreso
+
+| Paso | Ruta/archivo principal | Componentes/actions |
+|---|---|---|
+| Abrir ficha | `apps/mobile/app/coach/cliente/[clientId].tsx` | carga por `useFocusEffect`, scope standalone/team/enterprise explícito |
+| Resumen | `OverviewTab.tsx` | cumplimiento, KPI, programa, hábitos, check-in, fotos y biometría |
+| Progreso | `ProgresoTab.tsx` | peso/IMC/energía, fotos, historial y bodycomp BIA/ISAK |
+| Análisis | `AnalisisTab.tsx` | PR, fuerza, radar, tonelaje y detalle de sesión por fecha Santiago |
+| Programa | `PlanTab.tsx` | vigencia, fases, A/B, microciclo, superseries y detalle `nativeModal` |
+| Editar programa | `program-builder.tsx` | reconcile compartido, conflicto `updated_at`, ciclos 14d, catálogo/workspace explícito |
+| Asignar plantilla | `program-builder.tsx` + `/api/mobile/coach/program-assignment-notifications` | persiste por alumno, retry parcial y correo white-label server-side idempotente |
+| Mutar ficha | `/api/mobile/coach/clients/[clientId]/*` | bearer autoritativo + workspace + ownership/asignación activa |
+| Leer/escribir bodycomp | endpoints `bodycomp` mobile + `body-composition.service.ts` | RLS token-scoped, entitlement, consentimiento team, tenant filter y access log |
+
+El workspace elegido se persiste localmente en RN y se adjunta a cada operación.
+No existe sincronización server-side del team activo mientras el esquema no
+tenga un identificador de team en `workspace_preferences`.
 
 ## Flujo: enterprise org
 
@@ -155,4 +178,3 @@ Actualizar este archivo cuando:
 ## Pagos dual-gateway (MercadoPago + Flow/Webpay) — feat/pagos-flow-mercadopago
 
 Puerto `PaymentsProvider` (lib/payments/types.ts) con dos implementaciones: `MercadoPagoProvider` (preapproval, una fase) y `FlowProvider` (DOS fases: enrolar tarjeta por redirect Webpay → crear plan+sub server-side). Seleccion por request via `gateway` (Zod) en create-preference, y por `coaches.subscription_provider` persistido para operar subs vivas (`getPaymentsProviderForCoach`). UI: dos botones detras de `NEXT_PUBLIC_FLOW_ENABLED`. Flujo Flow: `create-preference(gateway=flow)` → enrolamiento Webpay → `/coach/subscription/flow-processing` (poll) → `/api/payments/flow/confirm-enrollment` (Fase 2: crea la sub, Flow cobra la 1ra invoice) → activo. Webhook Flow separado (`/api/payments/flow/webhook`, re-fetch firmado + pipeline agnostico `runWebhookPipeline` compartido con MP). Cambios de monto en Flow = `changePlan` a plan deterministico `eva_<tier>_<cycle>_<montoCLP>` (el monto viaja horneado en el planId). Backstops: cron `flow-reconcile` (alert-only: estado, periodo, drift de monto) + expiry de add-ons multi-gateway en `mp-reconcile`. Detalle completo: `specs/pagos-multigateway-flow/PLAN.md` y RUNBOOK §Pagos Flow.
-

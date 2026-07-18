@@ -1,7 +1,9 @@
 import { supabase } from './supabase'
 import { getCoachOrgContext } from './org'
 import { selectWithFallback } from './db-compat'
-import { emptyPlanDraft, parseSwapOptions, serializeSwapOptions, type DraftMeal, type PlanDraft } from './nutrition-builder'
+import { emptyPlanDraft, fetchLoggedMealIds, parseSwapOptions, serializeSwapOptions, type DraftMeal, type PlanDraft } from './nutrition-builder'
+import { reconcileMeals } from '@eva/nutrition-engine'
+import { buildMealReconcileInput } from './nutrition-reconcile'
 
 // Coach nutrition TEMPLATES — mirrors web `nutrition.service.ts`
 // (createOrUpdateTemplateFromJson / propagateTemplateChanges). Templates live in
@@ -17,7 +19,20 @@ export interface TemplateSummary {
   protein_g: number | null
   carbs_g: number | null
   fats_g: number | null
+  goal_type: string | null
+  description: string | null
+  mealNames: string[]
   mealCount: number
+}
+
+/** Etiqueta de objetivo (espejo de goalLabel web — Déficit/Volumen/Mantenimiento). */
+export function goalLabel(goal: string | null | undefined): string | null {
+  if (!goal) return null
+  const g = goal.toLowerCase()
+  if (g.includes('deficit') || g === 'cut') return 'Déficit'
+  if (g.includes('surplus') || g.includes('bulk') || g === 'volume') return 'Volumen'
+  if (g.includes('maint')) return 'Mantenimiento'
+  return null
 }
 
 function uid(prefix: string): string {
@@ -45,7 +60,7 @@ export async function listTemplates(): Promise<TemplateSummary[]> {
   if (!coachId) return []
   // N-F5/TX-4: scoping de org explícito (fallback seguro si no existe la columna org_id).
   const { orgId } = await getCoachOrgContext().catch(() => ({ orgId: null as string | null }))
-  const cols = 'id, name, daily_calories, protein_g, carbs_g, fats_g, template_meals ( id )'
+  const cols = 'id, name, daily_calories, protein_g, carbs_g, fats_g, goal_type, description, template_meals ( id, name, order_index )'
   const { data } = await selectWithFallback<any>(
     () => {
       const q = supabase.from('nutrition_plan_templates').select(cols).eq('coach_id', coachId)
@@ -55,7 +70,11 @@ export async function listTemplates(): Promise<TemplateSummary[]> {
   )
   return (data ?? []).map((t: any) => ({
     id: t.id, name: t.name, daily_calories: t.daily_calories, protein_g: t.protein_g,
-    carbs_g: t.carbs_g, fats_g: t.fats_g, mealCount: t.template_meals?.length ?? 0,
+    carbs_g: t.carbs_g, fats_g: t.fats_g, goal_type: t.goal_type ?? null, description: t.description ?? null,
+    mealNames: [...(t.template_meals ?? [])]
+      .sort((a: any, b: any) => (a.order_index ?? 0) - (b.order_index ?? 0))
+      .map((m: any) => m.name).filter(Boolean),
+    mealCount: t.template_meals?.length ?? 0,
   }))
 }
 
@@ -181,6 +200,15 @@ export async function deleteTemplate(templateId: string): Promise<{ ok: boolean;
   return { ok: true }
 }
 
+/** Duplica una plantilla: clona el borrador con nombre nuevo (id=null → inserta). */
+export async function duplicateTemplate(templateId: string): Promise<{ ok: boolean; error?: string }> {
+  const draft = await getTemplateDraft(templateId)
+  if (!draft) return { ok: false, error: 'Plantilla no encontrada.' }
+  const copy: PlanDraft = { ...draft, id: null, name: `${draft.name} (copia)` }
+  const r = await saveTemplate(copy)
+  return { ok: r.ok, error: r.error }
+}
+
 /** Assign a template to clients: each gets a fresh active plan (template-linked). */
 export async function assignTemplateToClients(templateId: string, clientIds: string[]): Promise<{ ok: boolean; error?: string }> {
   const coachId = await currentCoachId()
@@ -282,11 +310,20 @@ async function propagateTemplate(templateId: string, coachId: string): Promise<v
         )
       }
     }
-    // Borrar comidas sobrantes (plantilla con menos comidas que el plan previo).
-    const surplus = oldMeals.slice(mealsSorted.length).map((m: any) => m.id)
-    if (surplus.length) {
-      await supabase.from('food_items').delete().in('meal_id', surplus)
-      await supabase.from('nutrition_meals').delete().in('id', surplus)
+    // CASCADE-SAFETY (G08 §2.2): antes borraba las comidas sobrantes INCONDICIONALMENTE al
+    // propagar una plantilla más corta -> destruía nutrition_meal_logs (adherencia del alumno).
+    // Ahora `reconcileMeals` (fn pura compartida con web) decide: solo se borran las sobrantes
+    // SIN logs; las que tienen historial se CONSERVAN. `oldMeals` matchea por POSICIÓN (el loop
+    // de arriba usa oldMeals[i]), así que el input de reconcile usa la posición como order_index.
+    const { existingMeals, templateMeals, removalCandidates } = buildMealReconcileInput(
+      oldMeals.map((m: any, i: number) => ({ id: m.id as string, order_index: i })),
+      mealsSorted.map((t: any) => ({ name: t.name as string, description: (t.description ?? '') as string, day_of_week: (t.day_of_week ?? null) as number | null }))
+    )
+    const loggedMealIds = await fetchLoggedMealIds(removalCandidates)
+    const { toDelete } = reconcileMeals(existingMeals, templateMeals, loggedMealIds)
+    if (toDelete.length) {
+      await supabase.from('food_items').delete().in('meal_id', toDelete)
+      await supabase.from('nutrition_meals').delete().in('id', toDelete)
     }
   }
 }

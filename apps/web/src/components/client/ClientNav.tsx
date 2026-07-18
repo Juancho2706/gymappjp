@@ -2,19 +2,15 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import Image from 'next/image'
 import { usePathname, useRouter } from 'next/navigation'
 import {
     Home,
     Apple,
-    LogOut,
     CheckCircle,
     Dumbbell,
     PersonStanding,
     Gauge,
     History,
-    MoreHorizontal,
-    UserRound,
     ChevronRight,
     X,
     PanelLeftClose,
@@ -26,7 +22,8 @@ import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { PwaNavButton } from './PwaNavButton'
-import { BRAND_APP_ICON } from '@/lib/brand-assets'
+import { NavIcon, type NavConcept } from './NavIcon'
+import { ThemedLogo } from '@/components/brand/ThemedLogo'
 
 interface Props {
     coachSlug: string
@@ -35,6 +32,8 @@ interface Props {
     basePath?: string
     coachBrand: string
     coachLogoUrl: string
+    /** Logo modo oscuro del coach; cae al claro si no existe. */
+    coachLogoDarkUrl?: string
     /** Espejo del modulo movement_assessment (resuelto server-side; gate real en la page). */
     showMovement?: boolean
     /** Espejo del modulo body_composition (resuelto server-side; gate real en la page). */
@@ -48,9 +47,11 @@ interface Props {
     showNutrition?: boolean
 }
 
-type NavItem = { href: string; label: string; short: string; icon: LucideIcon }
+// `concept` cablea la silueta propia del CEO (NavIcon, tinte via currentColor).
+// Si falta, se renderiza el `icon` de lucide de siempre (ej. "Aprender").
+type NavItem = { href: string; label: string; short: string; icon: LucideIcon; concept?: NavConcept }
 
-export function ClientNav({ coachSlug, basePath, coachBrand, coachLogoUrl, showMovement = false, showBodyComposition = false, showNutrition = true }: Props) {
+export function ClientNav({ coachSlug, basePath, coachBrand, coachLogoUrl, coachLogoDarkUrl, showMovement = false, showBodyComposition = false, showNutrition = true }: Props) {
     const base = basePath ?? `/c/${coachSlug}`
     const pathname = usePathname()
     const router = useRouter()
@@ -106,21 +107,21 @@ export function ClientNav({ coachSlug, basePath, coachBrand, coachLogoUrl, showM
 
     // Base 4 (zona del pulgar en mobile): Inicio · Plan (si showNutrition) · Aprender · Check-in.
     const baseItems: NavItem[] = [
-        { href: `${base}/dashboard`, label: 'Inicio', short: 'Inicio', icon: Home },
-        ...(showNutrition ? [{ href: `${base}/nutrition`, label: 'Nutrición', short: 'Nutrición', icon: Apple }] : []),
-        { href: `${base}/exercises`, label: 'Aprender', short: 'Aprender', icon: Dumbbell },
-        { href: `${base}/check-in`, label: 'Check-in', short: 'Check-in', icon: CheckCircle },
+        { href: `${base}/dashboard`, label: 'Inicio', short: 'Inicio', icon: Home, concept: 'home' },
+        ...(showNutrition ? [{ href: `${base}/nutrition`, label: 'Nutrición', short: 'Nutrición', icon: Apple, concept: 'nutricion' as NavConcept }] : []),
+        { href: `${base}/exercises`, label: 'Aprender', short: 'Aprender', icon: Dumbbell, concept: 'aprender' },
+        { href: `${base}/check-in`, label: 'Check-in', short: 'Check-in', icon: CheckCircle, concept: 'check-in' },
     ]
 
     // Módulos de pago (entitled server-side). Viven en el grupo "Módulos" del sidebar desktop y en
     // el panel "Más" del mobile.
     const moduleItems: NavItem[] = [
-        ...(showMovement ? [{ href: `${base}/movimiento`, label: 'Movimiento', short: 'Movimiento', icon: PersonStanding }] : []),
-        ...(showBodyComposition ? [{ href: `${base}/bodycomp`, label: 'Composición', short: 'Composición', icon: Gauge }] : []),
+        ...(showMovement ? [{ href: `${base}/movimiento`, label: 'Movimiento', short: 'Movimiento', icon: PersonStanding, concept: 'movimiento' as NavConcept }] : []),
+        ...(showBodyComposition ? [{ href: `${base}/bodycomp`, label: 'Composición', short: 'Composición', icon: Gauge, concept: 'composicion' as NavConcept }] : []),
     ]
 
     // Historial: vive en el sidebar desktop (paridad) y como acceso del sheet "Más" mobile.
-    const historyItem: NavItem = { href: `${base}/workout-history`, label: 'Historial', short: 'Historial', icon: History }
+    const historyItem: NavItem = { href: `${base}/workout-history`, label: 'Historial', short: 'Historial', icon: History, concept: 'historial' }
 
     // Rutas "bajo Más" para el estado activo del tab mobile: Historial, Mi perfil y los módulos
     // entitled. Los módulos ya NO se listan en el sheet (se alcanzan via Mi perfil → /perfil), pero
@@ -188,13 +189,24 @@ export function ClientNav({ coachSlug, basePath, coachBrand, coachLogoUrl, showM
                     )}
                     style={{ backgroundColor: 'var(--theme-primary)' }}
                 />
-                <Icon
-                    className={cn(
-                        'h-5 w-5 flex-shrink-0 transition-transform duration-300 group-hover:scale-110',
-                        isActive ? '' : 'text-muted group-hover:text-strong'
-                    )}
-                    style={isActive ? activeColorStyle : undefined}
-                />
+                {item.concept ? (
+                    <NavIcon
+                        concept={item.concept}
+                        className={cn(
+                            'h-5 w-5 flex-shrink-0 transition-transform duration-300 group-hover:scale-110',
+                            isActive ? '' : 'text-muted group-hover:text-strong'
+                        )}
+                        style={isActive ? activeColorStyle : undefined}
+                    />
+                ) : (
+                    <Icon
+                        className={cn(
+                            'h-5 w-5 flex-shrink-0 transition-transform duration-300 group-hover:scale-110',
+                            isActive ? '' : 'text-muted group-hover:text-strong'
+                        )}
+                        style={isActive ? activeColorStyle : undefined}
+                    />
+                )}
                 <span className={cn('truncate', isCollapsed && 'hidden')} style={isActive ? activeColorStyle : undefined}>
                     {item.label}
                 </span>
@@ -245,7 +257,11 @@ export function ClientNav({ coachSlug, basePath, coachBrand, coachLogoUrl, showM
                     )}
                     style={{ transform: isActive ? 'translateY(-1px)' : 'none', transition: 'transform var(--dur-base) var(--ease-spring)' }}
                 >
-                    <Icon className="h-[22px] w-[22px]" />
+                    {item.concept ? (
+                        <NavIcon concept={item.concept} className="h-[22px] w-[22px]" />
+                    ) : (
+                        <Icon className="h-[22px] w-[22px]" />
+                    )}
                 </span>
                 <span
                     style={{
@@ -280,8 +296,9 @@ export function ClientNav({ coachSlug, basePath, coachBrand, coachLogoUrl, showM
                 <div className={cn('flex items-center border-b border-subtle py-6', isCollapsed ? 'flex-col justify-center gap-4 px-0' : 'justify-between px-6')}>
                     <div className={cn('flex min-w-0 items-center gap-3', isCollapsed && 'justify-center')}>
                         <div className={cn('relative h-10 flex-shrink-0', isCollapsed ? 'w-10' : 'w-[6.75rem]')}>
-                            <Image
-                                src={coachLogoUrl === BRAND_APP_ICON ? BRAND_APP_ICON : coachLogoUrl}
+                            <ThemedLogo
+                                light={coachLogoUrl}
+                                dark={coachLogoDarkUrl}
                                 alt={`${coachBrand} logo`}
                                 fill
                                 sizes={isCollapsed ? '40px' : '108px'}
@@ -345,7 +362,7 @@ export function ClientNav({ coachSlug, basePath, coachBrand, coachLogoUrl, showM
                             isCollapsed ? 'h-10 w-10 justify-center p-0' : 'w-full gap-3 px-3 py-2.5'
                         )}
                     >
-                        <LogOut className="h-4 w-4 flex-shrink-0 group-hover:text-destructive" />
+                        <NavIcon concept="cerrar-sesion" className="h-4 w-4 flex-shrink-0" />
                         {!isCollapsed && <span>Cerrar sesión</span>}
                     </button>
                 </div>
@@ -404,7 +421,7 @@ export function ClientNav({ coachSlug, basePath, coachBrand, coachLogoUrl, showM
                                     className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-control"
                                     style={{ background: 'color-mix(in srgb, var(--theme-primary) 12%, transparent)', color: 'var(--theme-primary)' }}
                                 >
-                                    <UserRound className="h-[18px] w-[18px]" />
+                                    <NavIcon concept="perfil" className="h-[18px] w-[18px]" />
                                 </span>
                                 <div className="min-w-0 flex-1">
                                     <div className="text-sm font-bold text-strong">Mi perfil</div>
@@ -431,7 +448,11 @@ export function ClientNav({ coachSlug, basePath, coachBrand, coachLogoUrl, showM
                                         )}
                                         style={isActive ? activeBgStyle : undefined}
                                     >
-                                        <Icon className={cn('h-5 w-5 flex-shrink-0', isActive ? '' : 'text-muted')} style={isActive ? activeColorStyle : undefined} />
+                                        {historyItem.concept ? (
+                                            <NavIcon concept={historyItem.concept} className={cn('h-5 w-5 flex-shrink-0', isActive ? '' : 'text-muted')} style={isActive ? activeColorStyle : undefined} />
+                                        ) : (
+                                            <Icon className={cn('h-5 w-5 flex-shrink-0', isActive ? '' : 'text-muted')} style={isActive ? activeColorStyle : undefined} />
+                                        )}
                                         <span className="truncate">{historyItem.label}</span>
                                     </Link>
                                 )
@@ -450,7 +471,7 @@ export function ClientNav({ coachSlug, basePath, coachBrand, coachLogoUrl, showM
                                 aria-label="Cerrar sesión"
                                 className="flex min-h-[44px] items-center gap-3 rounded-control border border-transparent px-3 py-2.5 text-sm font-semibold text-destructive/80 transition-colors hover:bg-destructive/10 hover:text-destructive"
                             >
-                                <LogOut className="h-5 w-5 flex-shrink-0" />
+                                <NavIcon concept="cerrar-sesion" className="h-5 w-5 flex-shrink-0" />
                                 <span className="truncate">Cerrar sesión</span>
                             </button>
                         </motion.div>
@@ -536,7 +557,7 @@ export function ClientNav({ coachSlug, basePath, coachBrand, coachLogoUrl, showM
                             )}
                             style={{ transform: mobileMoreActive ? 'translateY(-1px)' : 'none', transition: 'transform var(--dur-base) var(--ease-spring)' }}
                         >
-                            <MoreHorizontal className="h-[22px] w-[22px]" />
+                            <NavIcon concept="mas" className="h-[22px] w-[22px]" />
                         </span>
                         <span
                             style={{

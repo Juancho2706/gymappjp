@@ -94,7 +94,7 @@ export function EnterpriseProblemStatement() {
                   <li className="flex items-start gap-3 text-sm text-gray-800">
                     <CheckCircle2 className="h-4 w-4 text-[#007AFF] shrink-0 mt-0.5" aria-hidden />
                     <span>
-                      <strong>Escalabilidad automática:</strong> Gestionás sin límites operativos.
+                      <strong>Escalabilidad automática:</strong> Gestionas sin límites operativos.
                     </span>
                   </li>
                 </ul>

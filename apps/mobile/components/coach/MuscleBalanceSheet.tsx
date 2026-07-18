@@ -3,10 +3,13 @@ import { StyleSheet, Text, View } from 'react-native'
 import { BottomSheetModal, BottomSheetScrollView } from '@gorhom/bottom-sheet'
 import Svg, { Line, Polygon, Text as SvgText } from 'react-native-svg'
 import { useTheme } from '../../context/ThemeContext'
+import { FONT } from '../../lib/typography'
 import { getMuscleColor } from '../../lib/muscle-colors'
 import type { DayState } from '../../lib/plan-builder/types'
 
 interface Props { days: DayState[] }
+
+const WARNING_500 = '#F5A524' // --color-warning-500 (ratio empuje/jale desequilibrado)
 
 const SIZE = 240
 const C = SIZE / 2
@@ -48,11 +51,11 @@ export const MuscleBalanceSheet = forwardRef<BottomSheetModal, Props>(function M
   return (
     <BottomSheetModal ref={ref} index={0} snapPoints={['85%']} enableDynamicSizing={false} enablePanDownToClose backgroundStyle={{ backgroundColor: theme.card }} handleIndicatorStyle={{ backgroundColor: theme.mutedForeground }}>
       <BottomSheetScrollView contentContainerStyle={styles.body}>
-        <Text style={[styles.title, { color: theme.foreground, fontFamily: 'Archivo_700Bold' }]}>Balance muscular</Text>
+        <Text style={[styles.title, { color: theme.foreground, fontFamily: FONT.display }]}>Balance muscular</Text>
         <Text style={[styles.sub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{data.total} series totales · {data.arr.length} grupos activos</Text>
 
         {data.arr.length === 0 ? (
-          <Text style={[styles.sub, { color: theme.mutedForeground, fontFamily: theme.fontSans, marginTop: 24, textAlign: 'center' }]}>Agregá ejercicios para ver el balance.</Text>
+          <Text style={[styles.sub, { color: theme.mutedForeground, fontFamily: theme.fontSans, marginTop: 24, textAlign: 'center' }]}>Agrega ejercicios para ver el balance.</Text>
         ) : (
           <>
             {n >= 3 ? (
@@ -74,20 +77,20 @@ export const MuscleBalanceSheet = forwardRef<BottomSheetModal, Props>(function M
                 return (
                   <View key={x.muscle} style={styles.row}>
                     <View style={[styles.mDot, { backgroundColor: color }]} />
-                    <Text style={[styles.muscle, { color: theme.foreground, fontFamily: 'HankenGrotesk_600SemiBold' }]} numberOfLines={1}>{x.muscle}</Text>
+                    <Text style={[styles.muscle, { color: theme.foreground, fontFamily: FONT.uiSemibold }]} numberOfLines={1}>{x.muscle}</Text>
                     <View style={[styles.track, { backgroundColor: theme.muted }]}>
                       <View style={{ height: '100%', borderRadius: 5, width: `${Math.round((x.sets / data.max) * 100)}%`, backgroundColor: color }} />
                     </View>
-                    <Text style={[styles.sets, { color: theme.mutedForeground, fontFamily: 'JetBrainsMono_700Bold' }]}>{x.sets}s · {x.ex}ej</Text>
+                    <Text style={[styles.sets, { color: theme.mutedForeground, fontFamily: FONT.monoBold }]}>{x.sets}s · {x.ex}ej</Text>
                   </View>
                 )
               })}
             </View>
 
             {data.push > 0 && data.pull > 0 ? (
-              <View style={[styles.warn, { borderColor: balanced ? theme.success + '33' : '#F5A52433', backgroundColor: balanced ? theme.success + '14' : '#F5A52414' }]}>
-                <Text style={[styles.warnTxt, { color: balanced ? theme.success : '#F5A524', fontFamily: 'HankenGrotesk_700Bold' }]}>
-                  {balanced ? `✓ Ratio empuje/jale equilibrado (${data.push}s / ${data.pull}s)` : ratio > 1.5 ? '⚠ Empuje/jale desequilibrado — sumá más espalda' : '⚠ Jale/empuje desequilibrado — sumá más pecho y hombros'}
+              <View style={[styles.warn, { borderColor: balanced ? theme.success + '33' : WARNING_500 + '33', backgroundColor: balanced ? theme.success + '14' : WARNING_500 + '14' }]}>
+                <Text style={[styles.warnTxt, { color: balanced ? theme.success : WARNING_500, fontFamily: FONT.uiBold }]}>
+                  {balanced ? `✓ Ratio empuje/jale equilibrado (${data.push}s / ${data.pull}s)` : ratio > 1.5 ? '⚠ Empuje/jale desequilibrado — suma más espalda' : '⚠ Jale/empuje desequilibrado — suma más pecho y hombros'}
                 </Text>
               </View>
             ) : null}

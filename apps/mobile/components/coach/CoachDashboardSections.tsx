@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { Linking, ScrollView, Share, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
-import { useRouter } from 'expo-router'
+import { useFocusEffect, useRouter } from 'expo-router'
 import * as Clipboard from 'expo-clipboard'
 import { Image } from 'expo-image'
 import {
@@ -9,10 +9,13 @@ import {
   ArrowRight,
   ArrowUpRight,
   Bell,
+  Bug,
+  Calendar,
   CalendarClock,
-  Camera,
+  CalendarX,
   Check,
   CheckCircle2,
+  ClipboardCheck,
   ChevronDown,
   ChevronRight,
   Clock,
@@ -22,19 +25,24 @@ import {
   ExternalLink,
   Layers,
   LockKeyhole,
+  Megaphone,
   Minus,
   Monitor,
+  OctagonAlert,
   Palette,
   PartyPopper,
+  Pin,
   Plus,
   Receipt,
   Rocket,
   Sparkles,
   Smartphone,
+  Wrench,
   TrendingDown,
   TrendingUp,
   TriangleAlert,
   UserPlus,
+  Upload,
   Users,
   Utensils,
   X,
@@ -49,6 +57,7 @@ import { LinearGradient } from 'expo-linear-gradient'
 import { CartesianChart, Area, Line, Bar, useChartPressState } from 'victory-native'
 import { useFont, Circle, Text as SkiaText } from '@shopify/react-native-skia'
 import { useDerivedValue, type SharedValue } from 'react-native-reanimated'
+import { deriveSportTokens } from '@eva/brand-kit'
 import { useTheme } from '../../context/ThemeContext'
 import type {
   MobileActivityItem,
@@ -64,15 +73,26 @@ import type { CoachProfile } from '../../lib/coach'
 import { getRecommendedTier, TIER_CONFIG } from '../../lib/coach-tiers'
 import { canUseNutrition } from '../../lib/coach-tiers'
 import { NativeDialog } from '../NativeDialog'
+import { Sheet } from '../Sheet'
 import { Button } from '../Button'
 import { Card } from '../Card'
 import { StatCard } from '../StatCard'
 import { Avatar } from '../Avatar'
 import { Badge } from '../Badge'
 import { ListRow } from '../ListRow'
-import { useEffect, useRef, useState } from 'react'
+import { SegmentedTabs } from '../SegmentedTabs'
+import { NavIconRN } from '../NavIconRN'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { apiFetch, getApiBaseUrl } from '../../lib/api'
+import { getCoachNews, markCoachNewsRead, type CoachNewsItem } from '../../lib/coach-news'
+import { FONT } from '../../lib/typography'
+import { shadow } from '../../lib/shadows'
+import { useWorkspace } from '../../lib/workspace'
+import { WorkspaceSwitcherSheet } from './WorkspaceSwitcherSheet'
+import { AnimatedNumber } from '../AnimatedNumber'
+
+const WARNING_500 = '#F5A524' // --warning-500
 
 function hexToRgba(hex: string, alpha: number): string {
   const clean = hex.replace('#', '')
@@ -139,7 +159,7 @@ export function MobileBillingBanners({ coach, activeClientCount }: { coach: Coac
 
   if (blocked) {
     return (
-      <MobileBanner tone="danger" icon={TriangleAlert} onPress={() => openCoachWebPath('/coach/subscription')}>
+      <MobileBanner tone="danger" icon={TriangleAlert} actionLabel="Reactivar" onPress={() => openCoachWebPath('/coach/subscription')}>
         <Text>Tu suscripcion esta cancelada. Reactiva para recuperar acceso.</Text>
       </MobileBanner>
     )
@@ -151,13 +171,18 @@ export function MobileBillingBanners({ coach, activeClientCount }: { coach: Coac
     const recTier = showRec ? getRecommendedTier(activeClientCount) : null
     const recConfig = recTier ? TIER_CONFIG[recTier] : null
     return (
-      <MobileBanner tone="warn" icon={Clock}>
+      <MobileBanner
+        tone="warn"
+        icon={Clock}
+        actionLabel={showRec && recConfig ? `Activar ${recConfig.label}` : 'Renovar'}
+        onPress={() => openCoachWebPath(showRec && recTier ? `/coach/reactivate?tier=${recTier}` : '/coach/subscription')}
+      >
         <Text>
           Cancelaste tu plan. Acceso hasta por {days} dia{days === 1 ? '' : 's'}.
         </Text>
         {showRec && recConfig ? (
           <Text>
-            Con {activeClientCount} alumnos: Plan {recConfig.label} hasta {recConfig.maxClients}.
+            Con {activeClientCount} alumnos: Plan {recConfig.label} (hasta {recConfig.maxClients}) ·
           </Text>
         ) : null}
       </MobileBanner>
@@ -170,13 +195,18 @@ export function MobileBillingBanners({ coach, activeClientCount }: { coach: Coac
     const recTier = showRec ? getRecommendedTier(activeClientCount) : null
     const recConfig = recTier ? TIER_CONFIG[recTier] : null
     return (
-      <MobileBanner tone="info" icon={Clock}>
+      <MobileBanner
+        tone="info"
+        icon={Clock}
+        actionLabel={showRec && recConfig ? `Activar ${recConfig.label}` : 'Activar plan'}
+        onPress={() => openCoachWebPath(showRec && recTier ? `/coach/reactivate?tier=${recTier}` : '/coach/subscription')}
+      >
         <Text>
-          Periodo de prueba - {days} dia{days === 1 ? '' : 's'} restantes.
+          Periodo de prueba · {days} dia{days === 1 ? '' : 's'} restantes.
         </Text>
         {showRec && recConfig ? (
           <Text>
-            Con {activeClientCount} alumnos: Plan {recConfig.label} hasta {recConfig.maxClients}.
+            Con {activeClientCount} alumnos: Plan {recConfig.label} (hasta {recConfig.maxClients}) ·
           </Text>
         ) : null}
       </MobileBanner>
@@ -201,7 +231,7 @@ export function MobileTierUsageBanners({ coach, totalClients }: { coach: CoachPr
 }
 
 function MobileFreeTierBanner({ totalClients }: { totalClients: number }) {
-  const { theme } = useTheme()
+  const { theme, resolvedScheme } = useTheme()
   const max = TIER_CONFIG.free.maxClients
   const used = Math.min(totalClients, max)
   const pct = Math.round((used / max) * 100)
@@ -214,30 +244,32 @@ function MobileFreeTierBanner({ totalClients }: { totalClients: number }) {
       style={[
         styles.tierBanner,
         {
-          borderColor: full ? 'rgba(245,158,11,0.32)' : theme.border,
-          backgroundColor: full ? 'rgba(245,158,11,0.1)' : hexToRgba(theme.card === '#FFFFFF' ? '#FFFFFF' : '#000000', theme.card === '#FFFFFF' ? 0.62 : 0.34),
+          borderColor: full ? hexToRgba(WARNING_500, 0.3) : theme.border,
+          backgroundColor: full
+            ? (resolvedScheme === 'dark' ? 'rgba(245,165,36,0.18)' : '#FDEFD3')
+            : theme.card,
           borderRadius: theme.radius.xl,
         },
       ]}
     >
       <View style={styles.tierMain}>
-        <Text style={[styles.tierTitle, { color: theme.foreground, fontFamily: 'Inter_700Bold' }]}>
-          {used}/{max} alumnos - Plan gratuito
+        <Text style={[styles.tierTitle, { color: theme.foreground, fontFamily: FONT.uiBold }]}>
+          {used}/{max} alumnos · Plan gratuito
         </Text>
-        <View style={[styles.usageTrack, { backgroundColor: theme.muted }]}>
+        <View className="bg-track" style={styles.usageTrack}>
           <View
             style={[
               styles.usageFill,
               {
                 width: `${pct}%`,
-                backgroundColor: full ? '#F59E0B' : '#10B981',
+                backgroundColor: full ? WARNING_500 : theme.success,
               },
             ]}
           />
         </View>
       </View>
-      <Text style={[styles.tierAction, { color: full ? '#F59E0B' : theme.primary, fontFamily: 'Inter_700Bold' }]}>
-        {full ? 'Expandir limite' : 'Ver planes'}
+      <Text style={[styles.tierAction, { color: theme.primary, fontFamily: FONT.uiBold }]}>
+        {full ? 'Expandir límite →' : 'Ver planes →'}
       </Text>
     </TouchableOpacity>
   )
@@ -247,7 +279,7 @@ function MobileFreeTierBanner({ totalClients }: { totalClients: number }) {
 // Coach con cartera grande → puente a EVA Teams, NO upsell a un tier muerto.
 // Sin precios (pre-cierre Movida); CTA = mailto contacto@eva-app.cl. Muere el ?upgrade=growth.
 function MobileTeamsBridgeBanner({ totalClients }: { totalClients: number }) {
-  const { theme } = useTheme()
+  const { theme, resolvedScheme } = useTheme()
   const max = TIER_CONFIG.elite.maxClients
   const pct = Math.round((Math.min(totalClients, max) / max) * 100)
 
@@ -262,22 +294,22 @@ function MobileTeamsBridgeBanner({ totalClients }: { totalClients: number }) {
       style={[
         styles.tierBanner,
         {
-          borderColor: 'rgba(16,185,129,0.32)',
-          backgroundColor: 'rgba(16,185,129,0.1)',
+          borderColor: hexToRgba(theme.success, 0.3),
+          backgroundColor: resolvedScheme === 'dark' ? 'rgba(31,184,119,0.18)' : '#DBF5EA',
           borderRadius: theme.radius.xl,
         },
       ]}
     >
-      <View style={styles.tierMain}>
-        <Text style={[styles.tierTitle, { color: theme.foreground, fontFamily: 'Inter_700Bold' }]}>
-          {totalClients}/{max} alumnos - {pct}% de tu plan Elite
+      <View style={[styles.tierMain, { gap: 2 }]}>
+        <Text style={[styles.tierTitle, { color: theme.foreground, fontFamily: FONT.uiBold }]}>
+          {totalClients}/{max} alumnos · {pct}% de tu plan Elite
         </Text>
         <Text style={[styles.tierSubtitle, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
-          ¿Más de 100 alumnos o trabajas con otros profesionales? Conoce EVA Teams. Te contactamos a la brevedad.
+          ¿Más de 100 alumnos o trabajas con otros profesionales? Conoce EVA Teams
         </Text>
       </View>
-      <Text style={[styles.tierAction, { color: '#10B981', fontFamily: 'Inter_700Bold' }]}>
-        Conocer Teams
+      <Text style={[styles.tierAction, { color: resolvedScheme === 'dark' ? '#4FD9A0' : '#0F7D50', fontFamily: FONT.uiBold }]}>
+        Conversemos →
       </Text>
     </TouchableOpacity>
   )
@@ -287,39 +319,43 @@ function MobileBanner({
   tone,
   icon: Icon,
   children,
+  actionLabel,
   onPress,
 }: {
   tone: 'info' | 'warn' | 'danger'
   icon: LucideIcon
   children: ReactNode
+  actionLabel: string
   onPress?: () => void
 }) {
-  const { theme } = useTheme()
-  const toneColor = tone === 'danger' ? '#F43F5E' : tone === 'warn' ? '#F59E0B' : theme.primary
+  const { theme, resolvedScheme } = useTheme()
+  const dark = resolvedScheme === 'dark'
+  const sport = deriveSportTokens(theme.primary)
+  const palette = tone === 'danger'
+    ? { border: theme.destructive, background: dark ? 'rgba(244,54,90,0.18)' : '#FCDDE4', foreground: dark ? '#FF9CB0' : '#A8163A' }
+    : tone === 'warn'
+      ? { border: WARNING_500, background: dark ? 'rgba(245,165,36,0.18)' : '#FDEFD3', foreground: dark ? '#FFD489' : '#8F5A05' }
+      : { border: theme.primary, background: dark ? hexToRgba(theme.primary, 0.2) : sport.ramp['100'], foreground: dark ? sport.dark['700'] : sport.ramp['700'] }
   return (
     <TouchableOpacity
       activeOpacity={0.84}
-      onPress={onPress ?? (() => openCoachWebPath('/coach/subscription'))}
+      onPress={onPress}
+      accessibilityRole="link"
       style={[
         styles.banner,
         {
-          borderColor: hexToRgba(toneColor, 0.32),
-          backgroundColor: hexToRgba(toneColor, 0.1),
+          borderColor: hexToRgba(palette.border, 0.3),
+          backgroundColor: palette.background,
           borderRadius: theme.radius.xl,
         },
       ]}
     >
-      <Icon size={18} color={toneColor} strokeWidth={2.2} />
+      <Icon size={16} color={palette.foreground} strokeWidth={2} />
       <View style={styles.bannerCopy}>
-        <Text style={[styles.bannerText, { color: theme.foreground, fontFamily: theme.fontSans }]}>
+        <Text style={[styles.bannerText, { color: palette.foreground, fontFamily: theme.fontSans }]}>
           {children}
         </Text>
-        <View style={[styles.bannerCta, { backgroundColor: toneColor }]}>
-          <CreditCard size={13} color="#FFFFFF" strokeWidth={2.3} />
-          <Text style={[styles.bannerCtaText, { fontFamily: 'Inter_700Bold' }]}>
-            Revisar plan
-          </Text>
-        </View>
+        <Text style={[styles.bannerAction, { color: palette.foreground, fontFamily: FONT.uiBold }]}>{actionLabel}</Text>
       </View>
     </TouchableOpacity>
   )
@@ -400,16 +436,16 @@ export function MobilePublicCodeRequiredModal({
         </View>
 
         <View style={[styles.publicCodeBox, { borderColor: theme.border, backgroundColor: theme.secondary, borderRadius: theme.radius.xl }]}>
-          <Text style={[styles.formLabel, { color: theme.mutedForeground, fontFamily: 'Inter_700Bold' }]}>
+          <Text style={[styles.formLabel, { color: theme.mutedForeground, fontFamily: FONT.uiBold }]}>
             NUEVO ACCESO ALUMNOS
           </Text>
           <View style={styles.publicCodeRow}>
-            <Text style={[styles.publicCodeValue, { color: theme.foreground, fontFamily: 'Inter_600SemiBold' }]} numberOfLines={1}>
+            <Text style={[styles.publicCodeValue, { color: theme.foreground, fontFamily: FONT.uiSemibold }]} numberOfLines={1}>
               {studentPath}
             </Text>
             <TouchableOpacity activeOpacity={0.78} onPress={copyLink} style={styles.publicCodeCopy}>
               <Copy size={14} color={theme.primary} />
-              <Text style={[styles.publicCodeCopyText, { color: theme.primary, fontFamily: 'Inter_700Bold' }]}>
+              <Text style={[styles.publicCodeCopyText, { color: theme.primary, fontFamily: FONT.uiBold }]}>
                 {copied ? 'Copiado' : 'Copiar'}
               </Text>
             </TouchableOpacity>
@@ -417,7 +453,7 @@ export function MobilePublicCodeRequiredModal({
         </View>
 
         {error ? (
-          <Text style={[styles.formErrorText, { color: theme.destructive, fontFamily: 'Inter_600SemiBold' }]}>
+          <Text style={[styles.formErrorText, { color: theme.destructive, fontFamily: FONT.uiSemibold }]}>
             {error}
           </Text>
         ) : null}
@@ -434,8 +470,16 @@ export function MobilePublicCodeRequiredModal({
 const FREE_WELCOME_KEY = 'eva_free_welcome_seen'
 
 export function MobileFreeWelcomeModal({ enabled }: { enabled: boolean }) {
-  const { theme } = useTheme()
+  const { theme, resolvedScheme } = useTheme()
   const [open, setOpen] = useState(false)
+  const dark = resolvedScheme === 'dark'
+  const sport = deriveSportTokens(theme.primary)
+  const sport100 = dark ? hexToRgba(theme.primary, 0.2) : sport.ramp['100']
+  const sport600 = dark ? sport.dark['600'] : sport.ramp['600']
+  const ember100 = dark ? 'rgba(255,106,61,0.20)' : '#FFEDE6'
+  const ember700 = dark ? '#FFB79E' : '#C23E14'
+  const success100 = dark ? 'rgba(31,184,119,0.18)' : '#DBF5EA'
+  const success600 = dark ? '#4FD9A0' : '#0F7D50'
 
   useEffect(() => {
     if (!enabled) return
@@ -456,29 +500,34 @@ export function MobileFreeWelcomeModal({ enabled }: { enabled: boolean }) {
   return (
     <NativeDialog open={open} onClose={dismiss} maxWidth={390}>
       <View style={styles.freeWelcome}>
-        <View style={[styles.freeWelcomeHero, { borderBottomColor: theme.border }]}>
-          <View style={[styles.freeWelcomeIcon, { borderColor: 'rgba(16,185,129,0.3)', backgroundColor: 'rgba(16,185,129,0.18)' }]}>
-            <Sparkles size={31} color="#10B981" />
+        <LinearGradient
+          colors={[sport100, 'transparent']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={[styles.freeWelcomeHero, { borderBottomColor: theme.border }]}
+        >
+          <View style={[styles.freeWelcomeIcon, { borderColor: hexToRgba(theme.primary, 0.3), backgroundColor: sport100, borderRadius: theme.radius.md }]}>
+            <Sparkles size={32} color={sport600} />
           </View>
-          <Text style={[styles.freeWelcomeTitle, { color: theme.foreground, fontFamily: 'Montserrat_800ExtraBold' }]}>
-            Bienvenido a EVA
+          <Text style={[styles.freeWelcomeTitle, { color: theme.foreground, fontFamily: FONT.displayBold }]}>
+            ¡Bienvenido a EVA!
           </Text>
           <Text style={[styles.freeWelcomeSub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
-            Tu plan gratuito esta activo. Puedes empezar ahora mismo.
+            Tu plan gratuito está activo. Puedes empezar ahora mismo.
           </Text>
-        </View>
+        </LinearGradient>
 
         <View style={styles.freeWelcomeSection}>
-          <Text style={[styles.freeWelcomeEyebrow, { color: theme.mutedForeground, fontFamily: 'Inter_700Bold' }]}>
+          <Text style={[styles.freeWelcomeEyebrow, { color: theme.mutedForeground, fontFamily: FONT.uiBold }]}>
             PRIMEROS PASOS
           </Text>
-          <WelcomeStep icon={Users} color="#38BDF8" title="Agrega tu primer alumno" subtitle="Hasta 3 alumnos en el plan Free" />
-          <WelcomeStep icon={Zap} color="#8B5CF6" title="Crea tu primera rutina" subtitle="Constructor de programas sin limites" />
-          <WelcomeStep icon={Palette} color="#F59E0B" title="Personaliza tu app con Starter" subtitle="Tu logo y colores desde el siguiente plan" />
+          <WelcomeStep icon={Users} color={sport600} backgroundColor={sport100} title="Agrega tu primer alumno" subtitle="Hasta 3 alumnos en el plan Free" />
+          <WelcomeStep icon={Zap} color={ember700} backgroundColor={ember100} title="Crea tu primera rutina" subtitle="Constructor de programas sin límites" />
+          <WelcomeStep icon={Palette} color={success600} backgroundColor={success100} title="Personaliza tu app con Pro" subtitle="Tu logo y colores desde $29.990/mes" />
         </View>
 
         <View style={styles.freeWelcomeSection}>
-          <Text style={[styles.freeWelcomeEyebrow, { color: theme.mutedForeground, fontFamily: 'Inter_700Bold' }]}>
+          <Text style={[styles.freeWelcomeEyebrow, { color: theme.mutedForeground, fontFamily: FONT.uiBold }]}>
             TU PLAN FREE INCLUYE
           </Text>
           <View style={styles.freePlanGrid}>
@@ -488,7 +537,7 @@ export function MobileFreeWelcomeModal({ enabled }: { enabled: boolean }) {
               { ok: true, text: 'App para tus alumnos' },
               { ok: true, text: 'Check-ins' },
               { ok: false, text: 'Marca personalizada' },
-              { ok: false, text: 'Nutricion' },
+              { ok: false, text: 'Nutrición' },
             ].map((item) => (
               <View key={item.text} style={styles.freePlanItem}>
                 {item.ok ? (
@@ -515,7 +564,7 @@ export function MobileFreeWelcomeModal({ enabled }: { enabled: boolean }) {
         </View>
 
         <View style={styles.freeWelcomeActions}>
-          <Button label="Empezar ahora" onPress={dismiss} full />
+          <Button label="Empezar ahora →" variant="sport" onPress={dismiss} full />
           <Button
             label="Ver todos los planes"
             variant="ghost"
@@ -535,22 +584,24 @@ export function MobileFreeWelcomeModal({ enabled }: { enabled: boolean }) {
 function WelcomeStep({
   icon: Icon,
   color,
+  backgroundColor,
   title,
   subtitle,
 }: {
   icon: LucideIcon
   color: string
+  backgroundColor: string
   title: string
   subtitle: string
 }) {
   const { theme } = useTheme()
   return (
     <View style={styles.welcomeStep}>
-      <View style={[styles.welcomeStepIcon, { backgroundColor: hexToRgba(color, 0.15) }]}>
+      <View style={[styles.welcomeStepIcon, { backgroundColor }]}>
         <Icon size={16} color={color} />
       </View>
       <View style={styles.welcomeStepCopy}>
-        <Text style={[styles.welcomeStepTitle, { color: theme.foreground, fontFamily: 'Inter_700Bold' }]}>
+        <Text style={[styles.welcomeStepTitle, { color: theme.foreground, fontFamily: FONT.uiBold }]}>
           {title}
         </Text>
         <Text style={[styles.welcomeStepSub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
@@ -760,7 +811,7 @@ export function MobileOnboardingChecklist({
     return (
       <View style={[styles.onboardingResume, glass, { borderRadius: theme.radius.xl }]}>
         <CardGlass />
-        <Text style={[styles.onboardingResumeText, { color: theme.foreground, fontFamily: 'Inter_600SemiBold' }]}>
+        <Text style={[styles.onboardingResumeText, { color: theme.foreground, fontFamily: FONT.uiSemibold }]}>
           Sigues con pasos pendientes en tu guia de inicio.
         </Text>
         <Button label="Continuar guia" size="sm" onPress={resumeGuide} />
@@ -773,10 +824,10 @@ export function MobileOnboardingChecklist({
       <CardGlass />
       <View style={styles.onboardingHeader}>
         <View style={styles.onboardingHeaderCopy}>
-          <Text style={[styles.eyebrow, { color: theme.mutedForeground, fontFamily: 'Inter_700Bold' }]}>
+          <Text style={[styles.eyebrow, { color: theme.mutedForeground, fontFamily: FONT.uiBold }]}>
             TU RUTA EN EVA
           </Text>
-          <Text style={[styles.onboardingTitle, { color: theme.foreground, fontFamily: 'Montserrat_800ExtraBold' }]}>
+          <Text style={[styles.onboardingTitle, { color: theme.foreground, fontFamily: FONT.displayBold }]}>
             Pon tu estudio en marcha
           </Text>
           <Text style={[styles.onboardingDescription, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
@@ -784,10 +835,10 @@ export function MobileOnboardingChecklist({
           </Text>
         </View>
         <View style={styles.onboardingProgressBox}>
-          <Text style={[styles.onboardingProgressValue, { color: theme.primary, fontFamily: 'Montserrat_800ExtraBold' }]}>
+          <Text style={[styles.onboardingProgressValue, { color: theme.primary, fontFamily: FONT.displayBold }]}>
             {progressPct}%
           </Text>
-          <Text style={[styles.onboardingProgressLabel, { color: theme.mutedForeground, fontFamily: 'Inter_700Bold' }]}>
+          <Text style={[styles.onboardingProgressLabel, { color: theme.mutedForeground, fontFamily: FONT.uiBold }]}>
             COMPLETADO
           </Text>
           <TouchableOpacity activeOpacity={0.8} onPress={dismiss} style={styles.skipGuideButton}>
@@ -801,7 +852,7 @@ export function MobileOnboardingChecklist({
       {!allDone ? <MobileOnboardingLoopStrip /> : null}
       <MobileOnboardingTwinPanels
         studentPath={studentPath}
-        onOpenPreview={() => router.push('/coach/(tabs)/settings')}
+        onOpenPreview={() => router.push('/coach/settings/brand')}
         onOpenStudentApp={() => Linking.openURL(`${getApiBaseUrl()}${studentPath}`).catch(() => null)}
       />
 
@@ -825,7 +876,7 @@ export function MobileOnboardingChecklist({
             </>
           ) : (
             <>
-              <Button label="Ir a Mi Marca" size="sm" onPress={() => router.push('/coach/(tabs)/settings')} style={styles.stepButton} />
+              <Button label="Ir a Mi Marca" size="sm" onPress={() => router.push('/coach/settings/brand')} style={styles.stepButton} />
               <Button label={completed.profile_branding ? 'Desmarcar paso' : 'Ya lo deje listo'} variant="ghost" size="sm" onPress={toggleBrandStep} style={styles.stepButton} />
             </>
           )}
@@ -856,7 +907,7 @@ export function MobileOnboardingChecklist({
         <View style={[styles.activationReady, { borderColor: 'rgba(16,185,129,0.32)', backgroundColor: 'rgba(16,185,129,0.1)' }]}>
           <Sparkles size={17} color="#10B981" />
           <View style={styles.activationCopy}>
-            <Text style={[styles.activationTitle, { color: '#10B981', fontFamily: 'Inter_700Bold' }]}>
+            <Text style={[styles.activationTitle, { color: '#10B981', fontFamily: FONT.uiBold }]}>
               Activacion lista
             </Text>
             <Text style={[styles.activationText, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
@@ -881,7 +932,7 @@ function MobileOnboardingFreePlan() {
   ]
   return (
     <View style={[styles.onboardingFreeBox, { borderColor: hexToRgba(theme.primary, 0.2), backgroundColor: hexToRgba(theme.primary, 0.06), borderRadius: theme.radius.xl }]}>
-      <Text style={[styles.onboardingFreeTitle, { color: theme.foreground, fontFamily: 'Inter_700Bold' }]}>
+      <Text style={[styles.onboardingFreeTitle, { color: theme.foreground, fontFamily: FONT.uiBold }]}>
         Plan Free - lo que tienes incluido:
       </Text>
       <View style={styles.freePlanGrid}>
@@ -914,7 +965,7 @@ function MobileOnboardingLoopStrip() {
             <View style={[styles.loopIcon, { backgroundColor: index === 0 ? hexToRgba(theme.primary, 0.14) : theme.card }]}>
               <Icon size={15} color={index === 0 ? theme.primary : theme.mutedForeground} />
             </View>
-            <Text style={[styles.loopLabel, { color: theme.mutedForeground, fontFamily: 'Inter_700Bold' }]}>{item.label}</Text>
+            <Text style={[styles.loopLabel, { color: theme.mutedForeground, fontFamily: FONT.uiBold }]}>{item.label}</Text>
           </View>
         )
       })}
@@ -937,7 +988,7 @@ function MobileOnboardingTwinPanels({
       <View style={[styles.twinPanel, { borderColor: theme.border, backgroundColor: theme.muted, borderRadius: theme.radius.xl }]}>
         <View style={styles.twinTitleRow}>
           <Monitor size={15} color={theme.primary} />
-          <Text style={[styles.twinTitle, { color: theme.foreground, fontFamily: 'Inter_700Bold' }]}>Tu panel</Text>
+          <Text style={[styles.twinTitle, { color: theme.foreground, fontFamily: FONT.uiBold }]}>Tu panel</Text>
         </View>
         <Text style={[styles.twinText, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
           Sumas alumnos, armas programas y asignas planes desde tu app de coach.
@@ -946,7 +997,7 @@ function MobileOnboardingTwinPanels({
       <View style={[styles.twinPanel, { borderColor: theme.border, backgroundColor: hexToRgba(theme.primary, 0.08), borderRadius: theme.radius.xl }]}>
         <View style={styles.twinTitleRow}>
           <Smartphone size={15} color={theme.primary} />
-          <Text style={[styles.twinTitle, { color: theme.foreground, fontFamily: 'Inter_700Bold' }]}>Tu alumno</Text>
+          <Text style={[styles.twinTitle, { color: theme.foreground, fontFamily: FONT.uiBold }]}>Tu alumno</Text>
         </View>
         <Text style={[styles.twinText, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
           Entra a {studentPath}, ve su plan y registra entrenos o check-ins.
@@ -979,8 +1030,8 @@ function MobileOnboardingCarousel({ completed }: { completed: Record<OnboardingS
               <Icon size={16} color={done ? '#10B981' : theme.primary} />
               {done ? <CheckCircle2 size={15} color="#10B981" /> : null}
             </View>
-            <Text style={[styles.carouselStep, { color: theme.mutedForeground, fontFamily: 'Inter_700Bold' }]}>PASO {index + 1}</Text>
-            <Text style={[styles.carouselTitle, { color: theme.foreground, fontFamily: 'Inter_700Bold' }]}>{step.title}</Text>
+            <Text style={[styles.carouselStep, { color: theme.mutedForeground, fontFamily: FONT.uiBold }]}>PASO {index + 1}</Text>
+            <Text style={[styles.carouselTitle, { color: theme.foreground, fontFamily: FONT.uiBold }]}>{step.title}</Text>
           </View>
         )
       })}
@@ -1004,7 +1055,7 @@ function MobileOnboardingStepBlock({
     <View style={[styles.stepBlock, { borderColor: theme.border, backgroundColor: theme.card === '#FFFFFF' ? 'rgba(255,255,255,0.48)' : 'rgba(255,255,255,0.04)', borderRadius: theme.radius.xl }]}>
       <View style={styles.stepTitleRow}>
         {done ? <CheckCircle2 size={17} color="#10B981" /> : <View style={[styles.pendingDot, { borderColor: theme.mutedForeground }]} />}
-        <Text style={[styles.stepTitle, { color: theme.foreground, fontFamily: 'Inter_700Bold' }]}>{title}</Text>
+        <Text style={[styles.stepTitle, { color: theme.foreground, fontFamily: FONT.uiBold }]}>{title}</Text>
       </View>
       <Text style={[styles.stepDescription, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
         {description}
@@ -1020,10 +1071,10 @@ function MobileNutritionTierBlock({ subscriptionTier }: { subscriptionTier: Coac
   const enabled = canUseNutrition(subscriptionTier)
   return (
     <View style={[styles.nutritionBlock, { borderColor: enabled ? 'rgba(16,185,129,0.24)' : theme.border, backgroundColor: enabled ? 'rgba(16,185,129,0.08)' : theme.muted, borderRadius: theme.radius.xl }]}>
-      <Text style={[styles.eyebrow, { color: enabled ? '#10B981' : theme.mutedForeground, fontFamily: 'Inter_700Bold' }]}>
+      <Text style={[styles.eyebrow, { color: enabled ? '#10B981' : theme.mutedForeground, fontFamily: FONT.uiBold }]}>
         NUTRICION {enabled ? '(OPCIONAL)' : ''}
       </Text>
-      <Text style={[styles.nutritionTitle, { color: theme.foreground, fontFamily: 'Inter_700Bold' }]}>
+      <Text style={[styles.nutritionTitle, { color: theme.foreground, fontFamily: FONT.uiBold }]}>
         {enabled ? 'Cuando quieras, sigue esta ruta' : 'Planes de nutricion en Pro o superior'}
       </Text>
       <Text style={[styles.nutritionText, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
@@ -1114,27 +1165,26 @@ export function MobileQuickActionsFab({
 
   const actions: Array<{ label: string; icon: LucideIcon; on: () => void }> = [
     { label: 'Crear alumno', icon: UserPlus, on: () => { setSheet(false); setModal('client') } },
-    { label: 'Crear programa', icon: Layers, on: () => { setSheet(false); router.push('/coach/(tabs)/builder') } },
-    { label: 'Crear nutricion', icon: Utensils, on: () => { setSheet(false); router.push('/coach/(tabs)/nutricion') } },
-    { label: 'Registrar pago', icon: Receipt, on: () => { setSheet(false); setModal('payment') } },
+    { label: 'Importar', icon: Upload, on: () => { setSheet(false); router.push('/coach/(tabs)/clientes') } },
+    { label: 'Programa', icon: Dumbbell, on: () => { setSheet(false); router.push('/coach/(tabs)/builder') } },
   ]
 
   return (
     <>
       <TouchableOpacity
         accessibilityRole="button"
-        accessibilityLabel="Acciones rapidas"
+        accessibilityLabel="Acciones rápidas"
+        className="bg-cta-fill"
         activeOpacity={0.85}
         onPress={() => setSheet(true)}
         style={[
           {
             position: 'absolute',
-            right: 18,
-            bottom: insets.bottom + 84,
+            right: 20,
+            bottom: insets.bottom + 92,
             width: 56,
             height: 56,
             borderRadius: 28,
-            backgroundColor: theme.primary,
             alignItems: 'center',
             justifyContent: 'center',
           },
@@ -1144,7 +1194,7 @@ export function MobileQuickActionsFab({
         <Plus size={26} color="#FFFFFF" strokeWidth={2.4} />
       </TouchableOpacity>
 
-      <NativeDialog open={sheet} title="Accion rapida" onClose={() => setSheet(false)}>
+      <NativeDialog open={sheet} title="Acción rápida" onClose={() => setSheet(false)}>
         <View style={{ gap: 2 }}>
           {actions.map((a) => {
             const Icon = a.icon
@@ -1205,13 +1255,26 @@ export function MobileOnboardingGuideChip({
   activePlans: number
   hasStudentSignal30d: boolean
 }) {
-  const { theme } = useTheme()
+  const { theme, resolvedScheme } = useTheme()
   const router = useRouter()
+  const dark = resolvedScheme === 'dark'
+  const sport = deriveSportTokens(theme.primary)
+  const sport100 = dark ? sport.dark['100'] : sport.ramp['100']
+  const sport200 = sport.ramp['200']
+  const sport300 = sport.ramp['300']
+  const sport600 = dark ? sport.dark['600'] : sport.ramp['600']
+  const sport700 = dark ? sport.dark['700'] : sport.ramp['700']
+  const success100 = dark ? 'rgba(31,184,119,0.18)' : '#DBF5EA'
+  const success700 = dark ? '#6FE3B4' : '#0E7A50'
+  const isFree = coach.subscriptionTier === 'free'
+  const nutritionEnabled = canUseNutrition(coach.subscriptionTier)
+  const [brandOverride, setBrandOverride] = useState<boolean | null>(null)
+  const brandDone = brandOverride ?? Boolean(coach.hasCoachLogo)
   const steps = [
-    { key: 'brand', label: 'Personaliza tu marca', done: Boolean(coach.hasCoachLogo) },
-    { key: 'client', label: 'Suma tu primer alumno', done: totalClients > 0 },
-    { key: 'plan', label: 'Crea tu primer plan', done: activePlans > 0 },
-    { key: 'checkin', label: 'Recibe el primer check-in', done: hasStudentSignal30d },
+    { key: 'brand', label: 'Personaliza tu marca', done: brandDone, route: isFree ? 'subscription' : 'brand' },
+    { key: 'client', label: 'Suma tu primer alumno', done: totalClients > 0, route: 'clients' },
+    { key: 'plan', label: 'Crea tu primer plan', done: activePlans > 0, route: 'programs' },
+    { key: 'checkin', label: 'Recibe el primer check-in', done: hasStudentSignal30d, route: 'clients' },
   ]
   const doneCount = steps.filter((s) => s.done).length
   const allDone = doneCount === steps.length
@@ -1222,8 +1285,17 @@ export function MobileOnboardingGuideChip({
 
   useEffect(() => {
     let mounted = true
-    AsyncStorage.getItem(GUIDE_CHIP_HIDDEN_KEY(coach.id))
-      .then((v) => { if (mounted) { setHidden(v === '1'); setReady(true) } })
+    Promise.all([
+      AsyncStorage.getItem(GUIDE_CHIP_HIDDEN_KEY(coach.id)),
+      AsyncStorage.getItem(`${GUIDE_CHIP_HIDDEN_KEY(coach.id)}:brand`),
+    ])
+      .then(([hiddenValue, brandValue]) => {
+        if (!mounted) return
+        setHidden(hiddenValue === '1')
+        if (brandValue === '1') setBrandOverride(true)
+        if (brandValue === '0') setBrandOverride(false)
+        setReady(true)
+      })
       .catch(() => { if (mounted) setReady(true) })
     return () => { mounted = false }
   }, [coach.id])
@@ -1238,7 +1310,42 @@ export function MobileOnboardingGuideChip({
     })
   }
 
-  if (!ready || hidden) return null
+  function resumeGuide() {
+    setHidden(false)
+    AsyncStorage.removeItem(GUIDE_CHIP_HIDDEN_KEY(coach.id)).catch(() => null)
+  }
+
+  function toggleBrandStep() {
+    const next = !brandDone
+    setBrandOverride(next)
+    AsyncStorage.setItem(`${GUIDE_CHIP_HIDDEN_KEY(coach.id)}:brand`, next ? '1' : '0').catch(() => null)
+  }
+
+  function openStep(route: string) {
+    if (route === 'subscription') openCoachWebPath('/coach/subscription')
+    else if (route === 'brand') router.push('/coach/settings/brand')
+    else if (route === 'programs') router.push('/coach/(tabs)/builder')
+    else router.push('/coach/(tabs)/clientes')
+  }
+
+  if (!ready) return null
+  if (hidden && allDone) return null
+  if (hidden) {
+    return (
+      <View
+        className="flex-row items-center gap-[11px] px-[13px] py-1"
+        style={{ borderWidth: 1, borderColor: sport200, backgroundColor: sport100, borderRadius: theme.radius.md }}
+      >
+        <Rocket size={16} color={sport600} />
+        <Text className="flex-1 font-sans-bold text-[13px]" style={{ color: sport700 }}>
+          Sigues con pasos pendientes en tu guía de inicio.
+        </Text>
+        <TouchableOpacity onPress={resumeGuide} className="min-h-11 justify-center px-1">
+          <Text className="font-sans-extra text-[12.5px]" style={{ color: sport700 }}>Continuar guía</Text>
+        </TouchableOpacity>
+      </View>
+    )
+  }
 
   // Momento aha: circuito completo → card de celebracion (cerrable).
   if (allDone) {
@@ -1246,19 +1353,19 @@ export function MobileOnboardingGuideChip({
       <Card
         padding="md"
         radius="card"
-        style={{ flexDirection: 'row', alignItems: 'center', gap: 11, backgroundColor: 'rgba(16,185,129,0.1)', borderColor: 'rgba(16,185,129,0.32)', borderWidth: 1 }}
+        style={{ flexDirection: 'row', alignItems: 'center', gap: 11, backgroundColor: success100, borderColor: hexToRgba(theme.success, 0.3), borderWidth: 1 }}
       >
-        <View className="h-9 w-9 items-center justify-center rounded-pill" style={{ backgroundColor: '#10B981' }}>
+        <View className="h-9 w-9 items-center justify-center rounded-pill" style={{ backgroundColor: theme.success }}>
           <PartyPopper size={18} color="#FFFFFF" />
         </View>
         <View className="flex-1" style={{ minWidth: 0 }}>
-          <Text className="font-sans-bold text-[14.5px]" style={{ color: '#10B981' }}>
-            Activacion lista
+          <Text className="font-sans-extra text-[14.5px]" style={{ color: success700 }}>
+            ¡Activación lista!
           </Text>
-          <Text className="font-sans text-[12.5px] text-muted">Tu cuenta esta configurada. A entrenar.</Text>
+          <Text className="font-sans text-[12.5px]" style={{ color: success700, opacity: 0.85 }}>Tu cuenta está configurada. A entrenar.</Text>
         </View>
-        <TouchableOpacity onPress={skip} accessibilityLabel="Cerrar" hitSlop={8}>
-          <X size={18} color={theme.mutedForeground} />
+        <TouchableOpacity onPress={skip} accessibilityLabel="Cerrar" className="h-11 w-11 items-center justify-center">
+          <X size={18} color={success700} />
         </TouchableOpacity>
       </Card>
     )
@@ -1272,31 +1379,31 @@ export function MobileOnboardingGuideChip({
         className="flex-row items-center gap-3 px-3 py-[11px]"
         style={{
           borderWidth: 1,
-          borderColor: hexToRgba(theme.primary, 0.28),
+          borderColor: sport200,
           borderBottomWidth: open ? 0 : 1,
-          backgroundColor: hexToRgba(theme.primary, 0.08),
+          backgroundColor: sport100,
           borderTopLeftRadius: theme.radius.md,
           borderTopRightRadius: theme.radius.md,
           borderBottomLeftRadius: open ? 0 : theme.radius.md,
           borderBottomRightRadius: open ? 0 : theme.radius.md,
         }}
       >
-        <Rocket size={16} color={theme.primary} />
-        <Text className="flex-1 font-sans-bold text-[13px]" style={{ color: theme.primary }}>
-          Guia de inicio
+        <Rocket size={16} color={sport600} />
+        <Text className="flex-1 font-sans-bold text-[13px]" style={{ color: sport700 }}>
+          Guía de inicio
         </Text>
         <View className="flex-row items-center" style={{ gap: 4 }}>
           {steps.map((s) => (
             <View
               key={s.key}
-              style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: s.done ? theme.primary : hexToRgba(theme.primary, 0.3) }}
+              style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: s.done ? theme.primary : sport300, opacity: s.done ? 1 : 0.5 }}
             />
           ))}
         </View>
-        <Text className="font-sans-extra text-[12.5px]" style={{ color: theme.primary, minWidth: 26, textAlign: 'right' }}>
+        <Text className="font-sans-extra text-[12.5px]" style={{ color: sport700, minWidth: 26, textAlign: 'right' }}>
           {doneCount}/{steps.length}
         </Text>
-        <ChevronDown size={16} color={theme.primary} style={{ transform: [{ rotate: open ? '180deg' : '0deg' }] }} />
+        <ChevronDown size={16} color={sport600} style={{ transform: [{ rotate: open ? '180deg' : '0deg' }] }} />
       </TouchableOpacity>
 
       {open ? (
@@ -1304,8 +1411,8 @@ export function MobileOnboardingGuideChip({
           style={{
             borderWidth: 1,
             borderTopWidth: 0,
-            borderColor: hexToRgba(theme.primary, 0.28),
-            backgroundColor: hexToRgba(theme.primary, 0.08),
+            borderColor: sport200,
+            backgroundColor: sport100,
             borderBottomLeftRadius: theme.radius.md,
             borderBottomRightRadius: theme.radius.md,
             paddingHorizontal: 13,
@@ -1323,36 +1430,45 @@ export function MobileOnboardingGuideChip({
                     height: 20,
                     backgroundColor: s.done ? theme.primary : 'transparent',
                     borderWidth: s.done ? 0 : 2,
-                    borderColor: hexToRgba(theme.primary, 0.4),
+                    borderColor: sport300,
                   }}
                 >
                   {s.done ? <Check size={12} color="#FFFFFF" strokeWidth={3} /> : null}
                 </View>
-                <Text
-                  className="font-sans-semibold text-[13.5px]"
-                  style={{ color: s.done ? theme.mutedForeground : theme.foreground, textDecorationLine: s.done ? 'line-through' : 'none', opacity: s.done ? 0.75 : 1 }}
-                >
-                  {s.label}
-                </Text>
+                <TouchableOpacity onPress={() => openStep(s.route)} className="flex-1 py-0.5">
+                  <Text
+                    className="font-sans-semibold text-[13.5px]"
+                    style={{ color: s.done ? sport600 : sport700, textDecorationLine: s.done ? 'line-through' : 'none', opacity: s.done ? 0.7 : 1 }}
+                  >
+                    {s.label}
+                  </Text>
+                </TouchableOpacity>
+                {s.key === 'brand' ? (
+                  <TouchableOpacity onPress={toggleBrandStep} className="min-h-11 justify-center px-1">
+                    <Text className="font-sans-extra text-[12px]" style={{ color: sport700 }}>
+                      {s.done ? 'Desmarcar' : 'Marcar visto'}
+                    </Text>
+                  </TouchableOpacity>
+                ) : null}
               </View>
             ))}
           </View>
 
-          <View
+          {!nutritionEnabled ? <View
             className="flex-row items-center"
-            style={{ gap: 9, marginTop: 12, paddingTop: 12, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: hexToRgba(theme.primary, 0.2) }}
+            style={{ gap: 9, marginTop: 12, paddingTop: 12, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: sport200 }}
           >
-            <Sparkles size={15} color={theme.primary} />
-            <Text className="flex-1 font-sans text-[12px]" style={{ color: theme.foreground, lineHeight: 16 }}>
-              Suma planes de nutricion con <Text className="font-sans-bold" style={{ color: theme.primary }}>Pro</Text>.
+            <Sparkles size={15} color={sport600} />
+            <Text className="flex-1 font-sans text-[12px]" style={{ color: sport700, lineHeight: 16 }}>
+              Suma planes de nutrición con <Text className="font-sans-bold">Pro</Text>.
             </Text>
             <TouchableOpacity onPress={() => openCoachWebPath('/coach/subscription')} hitSlop={6}>
-              <Text className="font-sans-extra text-[12px]" style={{ color: theme.primary }}>Mejorar</Text>
+              <Text className="font-sans-extra text-[12px]" style={{ color: sport700 }}>Mejorar</Text>
             </TouchableOpacity>
-          </View>
+          </View> : null}
 
-          <TouchableOpacity onPress={skip} style={{ marginTop: 10 }} hitSlop={6}>
-            <Text className="font-sans-bold text-[12px]" style={{ color: theme.mutedForeground }}>Saltar guia</Text>
+          <TouchableOpacity onPress={skip} className="mt-1 min-h-11 justify-center pr-2">
+            <Text className="font-sans-bold text-[12px]" style={{ color: sport600 }}>Saltar guía</Text>
           </TouchableOpacity>
         </View>
       ) : null}
@@ -1459,7 +1575,7 @@ function QuickCreateClientForm({
         <View style={[styles.successBox, { borderColor: 'rgba(16,185,129,0.35)', backgroundColor: 'rgba(16,185,129,0.1)' }]}>
           <CheckCircle2 size={19} color="#10B981" />
           <View style={styles.successCopy}>
-            <Text style={[styles.successTitle, { color: theme.foreground, fontFamily: 'Inter_700Bold' }]}>
+            <Text style={[styles.successTitle, { color: theme.foreground, fontFamily: FONT.uiBold }]}>
               {createdClient.clientName} creado
             </Text>
             <Text style={[styles.successText, { color: theme.mutedForeground, fontFamily: theme.fontSans }]} numberOfLines={2}>
@@ -1479,7 +1595,7 @@ function QuickCreateClientForm({
     <View style={styles.paymentForm}>
       {error ? (
         <View style={[styles.formError, { borderColor: theme.destructive, backgroundColor: theme.destructive + '14' }]}>
-          <Text style={[styles.formErrorText, { color: theme.destructive, fontFamily: 'Inter_600SemiBold' }]}>
+          <Text style={[styles.formErrorText, { color: theme.destructive, fontFamily: FONT.uiSemibold }]}>
             {error}
           </Text>
         </View>
@@ -1592,14 +1708,14 @@ function QuickAddPaymentForm({
     <View style={styles.paymentForm}>
       {error ? (
         <View style={[styles.formError, { borderColor: theme.destructive, backgroundColor: theme.destructive + '14' }]}>
-          <Text style={[styles.formErrorText, { color: theme.destructive, fontFamily: 'Inter_600SemiBold' }]}>
+          <Text style={[styles.formErrorText, { color: theme.destructive, fontFamily: FONT.uiSemibold }]}>
             {error}
           </Text>
         </View>
       ) : null}
 
       <View style={styles.formField}>
-        <Text style={[styles.formLabel, { color: theme.mutedForeground, fontFamily: 'Inter_700Bold' }]}>Alumno</Text>
+        <Text style={[styles.formLabel, { color: theme.mutedForeground, fontFamily: FONT.uiBold }]}>Alumno</Text>
         <ScrollView style={[styles.clientPicker, { borderColor: theme.border, backgroundColor: theme.secondary, borderRadius: theme.radius.lg }]} nestedScrollEnabled>
           {clients.length === 0 ? (
             <Text style={[styles.clientEmpty, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
@@ -1621,7 +1737,7 @@ function QuickAddPaymentForm({
                   <Text
                     style={[
                       styles.clientOptionText,
-                      { color: active ? theme.primary : theme.foreground, fontFamily: 'Inter_600SemiBold' },
+                      { color: active ? theme.primary : theme.foreground, fontFamily: FONT.uiSemibold },
                     ]}
                     numberOfLines={1}
                   >
@@ -1663,7 +1779,7 @@ function FormInput({
   const { theme } = useTheme()
   return (
     <View style={styles.formField}>
-      <Text style={[styles.formLabel, { color: theme.mutedForeground, fontFamily: 'Inter_700Bold' }]}>{label}</Text>
+      <Text style={[styles.formLabel, { color: theme.mutedForeground, fontFamily: FONT.uiBold }]}>{label}</Text>
       <TextInput
         value={value}
         onChangeText={onChangeText}
@@ -1736,26 +1852,28 @@ function useGlassStyle() {
 export function MobileGreetingHeader({
   coachName,
   logoUrl,
-  hasNotifications = true,
   onInsights,
-  onNotifications,
   onAvatar,
 }: {
   coachName: string
   logoUrl?: string | null
-  hasNotifications?: boolean
   onInsights?: () => void
-  onNotifications?: () => void
   onAvatar?: () => void
+  /** Pendientes accionables de hoy (riesgo + programas por vencer + check-ins por revisar). */
+  pendingCount?: number
 }) {
   const { theme } = useTheme()
+  const { workspaces } = useWorkspace()
+  const [switcherOpen, setSwitcherOpen] = useState(false)
+  const hasMultipleWorkspaces = (workspaces?.length ?? 0) > 1
   const firstName = coachName?.split(' ')[0] || 'Coach'
+  const now = new Date()
   const dateStr = new Intl.DateTimeFormat('es-ES', {
+    timeZone: 'America/Santiago',
     weekday: 'long',
     day: 'numeric',
     month: 'long',
-  }).format(new Date())
-  const dateCap = dateStr.charAt(0).toUpperCase() + dateStr.slice(1)
+  }).format(now)
 
   const iconBtn = {
     width: 40,
@@ -1771,12 +1889,12 @@ export function MobileGreetingHeader({
   return (
     <View style={styles.greeting}>
       <View style={{ flex: 1, minWidth: 0 }}>
-        <Text className="font-sans-semibold text-[13px] text-muted" style={{ lineHeight: 16 }}>
-          {dateCap}
+        <Text className="font-sans-semibold text-[13px] text-muted" numberOfLines={1}>
+          {dateStr}
         </Text>
         <Text
           className="font-display-black text-[28px] text-strong"
-          style={{ lineHeight: 29, letterSpacing: -0.84 }}
+          style={{ lineHeight: 29.4, letterSpacing: -0.84 }}
           numberOfLines={1}
         >
           Hola, {firstName}
@@ -1787,39 +1905,280 @@ export function MobileGreetingHeader({
         <TouchableOpacity activeOpacity={0.8} accessibilityLabel="Insights" onPress={onInsights} style={iconBtn}>
           <Sparkles size={19} color={theme.foreground} strokeWidth={2.1} />
         </TouchableOpacity>
-        <TouchableOpacity activeOpacity={0.8} accessibilityLabel="Notificaciones" onPress={onNotifications} style={iconBtn}>
-          <Bell size={19} color={theme.foreground} strokeWidth={2.1} />
-          {hasNotifications ? (
+        <CoachNewsBell tileStyle={iconBtn} />
+        <TouchableOpacity
+          activeOpacity={0.85}
+          accessibilityLabel={hasMultipleWorkspaces ? 'Cambiar workspace' : 'Tu cuenta'}
+          onPress={hasMultipleWorkspaces ? () => setSwitcherOpen(true) : onAvatar}
+          testID="coach-avatar-workspace"
+          style={{ position: 'relative' }}
+        >
+          <Avatar src={logoUrl} name={coachName} size={40} />
+          {hasMultipleWorkspaces ? (
             <View
-              style={{
-                position: 'absolute',
-                top: 8,
-                right: 9,
-                width: 8,
-                height: 8,
-                borderRadius: 4,
-                backgroundColor: theme.destructive,
-                borderWidth: 2,
-                borderColor: theme.card,
-              }}
-            />
+              pointerEvents="none"
+              style={[
+                styles.workspaceCaret,
+                { borderColor: theme.background, backgroundColor: theme.card },
+                shadow('sm', theme.scheme),
+              ]}
+            >
+              <ChevronDown size={12} color={theme.mutedForeground} strokeWidth={2.2} />
+            </View>
           ) : null}
         </TouchableOpacity>
-        <TouchableOpacity activeOpacity={0.85} accessibilityLabel="Tu cuenta" onPress={onAvatar}>
-          <Avatar src={logoUrl} name={coachName} size={40} />
-        </TouchableOpacity>
       </View>
+      <WorkspaceSwitcherSheet open={switcherOpen} onClose={() => setSwitcherOpen(false)} />
     </View>
   )
 }
 
-/** Cabecera de sección DS (título display + acción opcional a la derecha). */
-function SectionHeader({ title, action }: { title: string; action?: string }) {
+// ─── News bell (campana de Novedades) ───────────────────────────────────────
+// 1:1 con la NewsBell web (NewsBellButton.tsx): badge con unreadCount, bottom-sheet
+// con el feed de novedades y marcar-todo-leido al abrir. Misma fuente de datos que web
+// (news_items + news_reads) via /api/mobile/coach/news.
+
+const NEWS_TYPE_META: Record<string, { icon: LucideIcon; bg: string; fg: string }> = {
+  feature: { icon: Sparkles, bg: 'rgba(0,122,255,0.14)', fg: '#0A84FF' },
+  improvement: { icon: Wrench, bg: 'rgba(16,185,129,0.14)', fg: '#10B981' },
+  fix: { icon: Bug, bg: 'rgba(245,158,11,0.14)', fg: '#F59E0B' },
+  announcement: { icon: Megaphone, bg: 'rgba(148,163,184,0.16)', fg: '#94A3B8' },
+}
+const NEWS_TYPE_LABEL: Record<string, string> = {
+  feature: 'Nueva función',
+  improvement: 'Mejora',
+  fix: 'Corrección',
+  announcement: 'Anuncio',
+}
+
+function newsRelativeDate(dateStr: string | null): string {
+  if (!dateStr) return ''
+  const d = new Date(dateStr)
+  const diffDays = Math.floor((Date.now() - d.getTime()) / 86400000)
+  if (diffDays <= 0) return 'Hoy'
+  if (diffDays === 1) return 'Ayer'
+  if (diffDays < 7) return `Hace ${diffDays} días`
+  if (diffDays < 30) return `Hace ${Math.floor(diffDays / 7)} semanas`
+  return d.toLocaleDateString('es-CL', { day: 'numeric', month: 'short' })
+}
+
+// Render inline de **negrita** (unico markdown que el feed usa con frecuencia).
+function NewsInline({ text, color }: { text: string; color: string }) {
+  const parts = text.split(/(\*\*[^*]+\*\*)/)
+  if (parts.length === 1) return <>{text}</>
   return (
-    <View className="flex-row items-center justify-between">
-      <Text className="font-display-bold text-[17px] text-strong">{title}</Text>
-      {action ? <Text className="font-sans text-[12px] text-muted">{action}</Text> : null}
+    <>
+      {parts.map((part, i) =>
+        part.startsWith('**') && part.endsWith('**') ? (
+          <Text key={i} className="font-sans-bold" style={{ color }}>
+            {part.slice(2, -2)}
+          </Text>
+        ) : (
+          <Text key={i}>{part}</Text>
+        )
+      )}
+    </>
+  )
+}
+
+function NewsContent({ text }: { text: string }) {
+  const { theme } = useTheme()
+  const lines = text.split('\n')
+  return (
+    <View style={{ gap: 2 }}>
+      {lines.map((line, i) => {
+        const trimmed = line.trim()
+        if (trimmed === '') return <View key={i} style={{ height: 3 }} />
+        if (trimmed === '---') {
+          return <View key={i} style={{ height: StyleSheet.hairlineWidth, backgroundColor: theme.border, marginVertical: 6 }} />
+        }
+        if (line.startsWith('## ')) {
+          return (
+            <Text key={i} className="font-sans-bold text-[13px] text-strong" style={{ marginTop: 4 }}>
+              <NewsInline text={line.slice(3)} color={theme.foreground} />
+            </Text>
+          )
+        }
+        if (line.startsWith('### ')) {
+          return (
+            <Text key={i} className="font-sans-extra text-[10.5px] text-muted" style={{ letterSpacing: 0.5, marginTop: 3, textTransform: 'uppercase' }}>
+              <NewsInline text={line.slice(4)} color={theme.mutedForeground} />
+            </Text>
+          )
+        }
+        if (line.startsWith('- ')) {
+          return (
+            <View key={i} className="flex-row" style={{ gap: 6, paddingLeft: 4 }}>
+              <Text className="font-sans text-[12px] text-muted">{'•'}</Text>
+              <Text className="flex-1 font-sans text-[12px] text-muted" style={{ lineHeight: 17 }}>
+                <NewsInline text={line.slice(2)} color={theme.foreground} />
+              </Text>
+            </View>
+          )
+        }
+        return (
+          <Text key={i} className="font-sans text-[12px] text-muted" style={{ lineHeight: 17 }}>
+            <NewsInline text={line} color={theme.foreground} />
+          </Text>
+        )
+      })}
     </View>
+  )
+}
+
+function NewsFeedRow({ item, onNavigate }: { item: CoachNewsItem; onNavigate: () => void }) {
+  const { theme } = useTheme()
+  const meta = NEWS_TYPE_META[item.type] ?? NEWS_TYPE_META.announcement
+  const TypeIcon = meta.icon
+  return (
+    <View
+      className="flex-row"
+      style={{
+        gap: 11,
+        paddingVertical: 11,
+        paddingHorizontal: 12,
+        borderRadius: theme.radius.md,
+        backgroundColor: item.is_pinned ? hexToRgba(theme.primary, 0.08) : 'transparent',
+      }}
+    >
+      {item.is_pinned ? (
+        <View style={{ position: 'absolute', left: 2, top: 12, bottom: 12, width: 3, borderRadius: 2, backgroundColor: theme.primary }} />
+      ) : null}
+      <View style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: meta.bg, alignItems: 'center', justifyContent: 'center' }}>
+        <TypeIcon size={16} color={meta.fg} />
+      </View>
+      <View className="flex-1" style={{ minWidth: 0, gap: 2 }}>
+        <View className="flex-row items-center" style={{ gap: 6 }}>
+          <Text className="font-sans-extra text-[10.5px] text-muted" style={{ letterSpacing: 0.6, textTransform: 'uppercase' }}>
+            {NEWS_TYPE_LABEL[item.type] || item.type}
+          </Text>
+          {item.is_pinned ? <Pin size={11} color={theme.primary} /> : null}
+        </View>
+        <Text className="font-sans-bold text-[13px] text-strong" style={{ lineHeight: 18 }}>
+          {item.title}
+        </Text>
+        <NewsContent text={item.content} />
+        {item.image_url ? (
+          // Espejo de NewsBellButton.tsx:151-160 (mt-1.5 max-h-40 w-full rounded-md object-cover).
+          <Image
+            source={{ uri: item.image_url }}
+            style={{ marginTop: 6, width: '100%', height: 160, borderRadius: theme.radius.md }}
+            contentFit="cover"
+          />
+        ) : null}
+        {item.cta_url ? (
+          <TouchableOpacity
+            activeOpacity={0.8}
+            onPress={() => {
+              Linking.openURL(item.cta_url as string).catch(() => null)
+              onNavigate()
+            }}
+            style={{ marginTop: 3 }}
+          >
+            <Text className="font-sans-bold text-[12.5px]" style={{ color: theme.primary }}>
+              {item.cta_label || 'Ver más'} →
+            </Text>
+          </TouchableOpacity>
+        ) : null}
+      </View>
+      <Text className="font-sans text-[11px] text-muted" style={{ flexShrink: 0 }}>
+        {newsRelativeDate(item.published_at)}
+      </Text>
+    </View>
+  )
+}
+
+export function CoachNewsBell({ tileStyle }: { tileStyle: object }) {
+  const { theme } = useTheme()
+  const [items, setItems] = useState<CoachNewsItem[]>([])
+  const [unreadCount, setUnreadCount] = useState(0)
+  const [open, setOpen] = useState(false)
+
+  // Gotcha 6b: la campana vive en un tab de expo-router que NO se desmonta → un
+  // `useEffect` de un disparo congela el badge. `useFocusEffect` refetcha el feed
+  // en cada foco de home (espejo del refresh en `visibilitychange` del
+  // NewsFeedProvider web) para que el conteo refleje la verdad del servidor.
+  useFocusEffect(
+    useCallback(() => {
+      let active = true
+      getCoachNews()
+        .then((res) => {
+          if (!active) return
+          setItems(res.items ?? [])
+          setUnreadCount(res.unreadCount ?? 0)
+        })
+        .catch(() => {
+          // Silencioso: la campana es no-critica; sin novedades = sin badge.
+        })
+      return () => {
+        active = false
+      }
+    }, [])
+  )
+
+  const openSheet = useCallback(() => {
+    setOpen(true)
+    if (unreadCount > 0) {
+      const previousCount = unreadCount
+      setUnreadCount(0)
+      markCoachNewsRead().catch(() => {
+        // Rollback optimista (espejo de `setUnreadCount(previousCount)` del
+        // NewsFeedProvider web): si el POST falla, restaura el badge.
+        setUnreadCount(previousCount)
+      })
+    }
+  }, [unreadCount])
+
+  const badge = unreadCount > 9 ? '9+' : unreadCount > 0 ? String(unreadCount) : null
+
+  return (
+    <>
+      <TouchableOpacity activeOpacity={0.8} accessibilityLabel="Novedades" testID="coach-news-bell" onPress={openSheet} style={tileStyle}>
+        <NavIconRN concept="novedades" size={19} color={theme.foreground} />
+        {badge ? (
+          <View
+            style={{
+              position: 'absolute',
+              top: -4,
+              right: -4,
+              minWidth: 16,
+              height: 16,
+              borderRadius: 8,
+              paddingHorizontal: 3,
+              backgroundColor: theme.destructive,
+              borderWidth: 2,
+              borderColor: theme.card,
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <Text style={{ color: '#FFFFFF', fontSize: 9, fontFamily: 'HankenGrotesk_700Bold', lineHeight: 11 }}>{badge}</Text>
+          </View>
+        ) : null}
+      </TouchableOpacity>
+
+      <Sheet
+        open={open}
+        onClose={() => setOpen(false)}
+        title="Novedades"
+        snapPoints={['80%']}
+        nativeModal
+        accessibilityLabel="Novedades"
+      >
+        {items.length === 0 ? (
+          <View style={{ alignItems: 'center', gap: 8, paddingVertical: 32 }}>
+            <Bell size={26} color={theme.mutedForeground} />
+            <Text className="font-sans text-[13px] text-muted">No hay novedades por ahora.</Text>
+          </View>
+        ) : (
+          <View style={{ gap: 2 }} testID="coach-news-feed">
+            {items.map((item) => (
+              <NewsFeedRow key={item.id} item={item} onNavigate={() => setOpen(false)} />
+            ))}
+          </View>
+        )}
+      </Sheet>
+    </>
   )
 }
 
@@ -1855,13 +2214,16 @@ function pulseDeltaView(
   delta: number,
   goodDir: 'up' | 'down',
   theme: ReturnType<typeof useTheme>['theme'],
+  scheme: 'light' | 'dark',
 ): { txt: string; color: string; icon: LucideIcon } {
   if (!delta) return { txt: 'igual', color: theme.mutedForeground, icon: Minus }
   const dir = delta > 0 ? 'up' : 'down'
   const good = dir === goodDir
+  const dark = scheme === 'dark'
   return {
     txt: (delta > 0 ? '+' : '') + delta,
-    color: good ? '#10B981' : theme.destructive,
+    // success-600 / danger-600 scheme-aware (1:1 con deltaView web).
+    color: good ? (dark ? '#4FD9A0' : '#0F7D50') : (dark ? '#FF7C97' : '#BE183C'),
     icon: dir === 'up' ? TrendingUp : TrendingDown,
   }
 }
@@ -1883,11 +2245,12 @@ export function MobilePulseHero({
   onRiesgoPress: () => void
   onAdherencePress: () => void
 }) {
-  const { theme } = useTheme()
+  const { theme, resolvedScheme } = useTheme()
 
-  // Spark derivado de la adherencia actual (curva suave que termina en el valor real).
-  const a = kpi.avgAdherence
-  const adherenceSpark = [a - 6, a - 3, a - 4, a - 1, a - 2, a + 1, a].map((v) => Math.max(0, Math.min(100, v)))
+  // Serie suave terminando en el valor real (1:1 con sparkSeries de PulseHero.tsx web:
+  // mismo wiggle → misma curva). La pipeline no expone histórico agregado (placeholder).
+  const base = Math.max(0, Math.min(100, kpi.avgAdherence))
+  const adherenceSpark = [-9, -5, -7, -2, -4, 1, 0].map((w) => Math.max(0, Math.min(100, base + w)))
 
   const stats: Array<{
     key: string
@@ -1904,7 +2267,7 @@ export function MobilePulseHero({
       value: String(kpi.totalClients),
       danger: false,
       onPress: onActivosPress,
-      sub: pulseDeltaView(1, 'up', theme),
+      sub: pulseDeltaView(1, 'up', theme, resolvedScheme),
     },
     {
       key: 'riesgo',
@@ -1912,7 +2275,7 @@ export function MobilePulseHero({
       value: String(kpi.riskCount),
       danger: kpi.riskCount > 0,
       onPress: onRiesgoPress,
-      sub: pulseDeltaView(kpi.riskCount > 0 ? -1 : 0, 'down', theme),
+      sub: pulseDeltaView(0, 'down', theme, resolvedScheme),
     },
     {
       key: 'adherencia',
@@ -1920,7 +2283,7 @@ export function MobilePulseHero({
       value: `${kpi.avgAdherence}%`,
       danger: false,
       onPress: onAdherencePress,
-      sub: pulseDeltaView(3, 'up', theme),
+      sub: pulseDeltaView(3, 'up', theme, resolvedScheme),
       spark: adherenceSpark,
     },
   ]
@@ -1946,12 +2309,14 @@ export function MobilePulseHero({
             <Text className="font-sans-extra uppercase text-[10.5px] tracking-[0.6px] text-muted" numberOfLines={1}>
               {s.label}
             </Text>
-            <Text
-              className="font-display-black text-[27px]"
-              style={{ lineHeight: 28, color: s.danger ? theme.destructive : theme.foreground }}
-            >
-              {s.value}
-            </Text>
+            <AnimatedNumber
+              value={Number(s.value.replace('%', ''))}
+              duration={820}
+              format={(value) => `${Math.round(value)}${s.key === 'adherencia' ? '%' : ''}`}
+              // Número "En riesgo" = danger-600 scheme-aware (web PulseHero.tsx:106-108
+              // usa var(--danger-600): light #BE183C / dark #FF7C97), NO danger-500.
+              style={{ fontFamily: FONT.displayBold, fontSize: 27, lineHeight: 27, letterSpacing: -0.27, color: s.danger ? (resolvedScheme === 'dark' ? '#FF7C97' : '#BE183C') : theme.foreground, fontVariant: ['tabular-nums'] }}
+            />
             {s.spark ? (
               <View className="flex-row items-end" style={{ gap: 6, width: '100%' }}>
                 <View className="flex-row items-center" style={{ gap: 2 }}>
@@ -2108,7 +2473,9 @@ export function MobileFocusList({
   onAdherencePress: () => void
 }) {
   const router = useRouter()
-  const { theme } = useTheme()
+  const { theme, resolvedScheme } = useTheme()
+  const sport = deriveSportTokens(theme.primary)
+  const sport400 = sport.ramp['400']
   const hasRisk = items.length > 0
   const riesgoCount = items.length
   const nba = resolveMobileNextBestAction({ kpi, topRiskClients: items, agenda, expiringPrograms })
@@ -2131,22 +2498,29 @@ export function MobileFocusList({
 
   return (
     <Card variant="inverse" padding="md" radius="card" style={{ overflow: 'hidden' }}>
+      <LinearGradient
+        pointerEvents="none"
+        colors={resolvedScheme === 'dark' ? ['#14191F', '#0E1117'] : ['#12161D', '#0B0E13']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={StyleSheet.absoluteFill}
+      />
       <View className="mb-3 flex-row items-center justify-between">
-        <Text className="font-sans-bold uppercase text-[11px] tracking-[1px] text-sport-400">
+        <Text className="font-sans-extra uppercase text-[11px] tracking-[0.88px] text-sport-400">
           Prioridad de hoy
         </Text>
         <View
           className="rounded-pill px-2 py-0.5"
-          style={{ backgroundColor: hasRisk ? '#F4365A' : '#1FB877' }}
+          style={{ backgroundColor: hasRisk ? theme.destructive : theme.success }}
         >
-          <Text className="font-sans-bold text-[11px]" style={{ color: '#0B0E13' }}>
+          <Text className="font-sans-extra text-[11px]" style={{ color: '#0B0E13' }}>
             {riesgoCount}
           </Text>
         </View>
       </View>
 
       {!hasRisk ? (
-        <View className="flex-row items-center gap-3 py-1">
+        <View className="flex-row items-center px-0 pb-2.5 pt-1" style={{ gap: 11 }}>
           <View
             className="h-[38px] w-[38px] items-center justify-center rounded-pill"
             style={{ backgroundColor: 'rgba(31,184,119,0.16)' }}
@@ -2154,17 +2528,17 @@ export function MobileFocusList({
             <CheckCircle2 size={20} color="#4FD9A0" />
           </View>
           <View className="flex-1">
-            <Text className="font-sans-bold text-[15px] text-on-dark">Ningun alumno en riesgo</Text>
-            <Text className="font-sans text-[12.5px] text-on-dark-muted">Todo al dia. Buen trabajo.</Text>
+            <Text className="font-sans-extra text-[15px] text-on-dark">Ningún alumno en riesgo</Text>
+            <Text className="font-sans text-[12.5px] text-on-dark-muted">Todo al día. Buen trabajo.</Text>
           </View>
         </View>
       ) : (
         <>
           <Text
             className="font-display-black text-[20px] text-on-dark"
-            style={{ lineHeight: 23, letterSpacing: -0.4, marginBottom: 12 }}
+            style={{ lineHeight: 22.4, letterSpacing: -0.4, marginBottom: 14 }}
           >
-            {riesgoCount} {riesgoCount === 1 ? 'alumno necesita' : 'alumnos necesitan'} tu atencion
+            {riesgoCount} {riesgoCount === 1 ? 'alumno necesita' : 'alumnos necesitan'} tu atención
           </Text>
           <View>
             {items.map((item, index) => {
@@ -2182,7 +2556,7 @@ export function MobileFocusList({
                       : undefined
                   }
                 >
-                  <Avatar name={item.clientName} size="sm" ring="sport" />
+                  <Avatar name={item.clientName} size="sm" />
                   <View className="flex-1" style={{ minWidth: 0 }}>
                     <Text className="font-sans-bold text-[14px] text-on-dark" numberOfLines={1}>
                       {item.clientName}
@@ -2209,34 +2583,52 @@ export function MobileFocusList({
             })}
           </View>
 
-          {/* NextBestAction embebido — paso complementario sobre la card oscura. */}
-          <TouchableOpacity
-            activeOpacity={0.85}
-            onPress={handleNba}
-            className="mt-3 flex-row items-center gap-2.5 rounded-xl px-3 py-2.5"
-            style={{ backgroundColor: 'rgba(255,255,255,0.05)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' }}
-          >
-            <Sparkles size={16} color={theme.primary} />
-            <View className="flex-1" style={{ minWidth: 0 }}>
-              <Text className="font-sans-bold text-[13px] text-on-dark" numberOfLines={1}>
-                {nba.title}
-              </Text>
-              <Text className="font-sans text-[12px] text-on-dark-muted" numberOfLines={2}>
-                {nba.description}
-              </Text>
-            </View>
-            <Text className="font-sans-bold text-[12px] text-sport-400" numberOfLines={1}>
-              {nba.ctaLabel}
-            </Text>
-          </TouchableOpacity>
+          {/* NextStepInset embebido (1:1 con PriorityCard.tsx): icono por tono en
+              circulo + eyebrow "Tu próximo paso" + titulo + CTA con flecha, radius 10. */}
+          {(() => {
+            const acc = nba.tone === 'warn' ? '#FFC861' : nba.tone === 'positive' ? '#4FD9A0' : '#7FB0FF'
+            const NbaIcon =
+              nba.id === 'programas-vencidos' ? CalendarX
+              : nba.id === 'focus-list' ? OctagonAlert
+              : nba.id === 'adherencia-baja' ? Activity
+              : nba.id === 'mrr-cayendo' ? TrendingDown
+              : nba.id === 'agenda-hoy' ? CalendarClock
+              : CheckCircle2
+            return (
+              <TouchableOpacity
+                activeOpacity={0.85}
+                onPress={handleNba}
+                className="mt-3 w-full flex-row items-center px-3 py-[11px]"
+                style={{ gap: 11, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.05)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.10)' }}
+              >
+                <View className="h-8 w-8 items-center justify-center rounded-pill" style={{ backgroundColor: 'rgba(255,255,255,0.08)' }}>
+                  <NbaIcon size={16} color={acc} />
+                </View>
+                <View className="flex-1" style={{ minWidth: 0 }}>
+                  <Text className="font-sans-extra text-[10px] uppercase" style={{ color: acc, letterSpacing: 0.7 }} numberOfLines={1}>
+                    Tu próximo paso
+                  </Text>
+                  <Text className="font-sans-bold text-[13.5px] text-on-dark" style={{ marginTop: 1 }} numberOfLines={1}>
+                    {nba.title}
+                  </Text>
+                </View>
+                <View className="flex-row items-center" style={{ gap: 3 }}>
+                  <Text className="font-sans-extra text-[12px]" style={{ color: acc }} numberOfLines={1}>
+                    {nba.ctaLabel}
+                  </Text>
+                  <ArrowRight size={13} color={acc} />
+                </View>
+              </TouchableOpacity>
+            )
+          })()}
 
           <TouchableOpacity
             activeOpacity={0.8}
             onPress={() => router.push('/coach/(tabs)/clientes')}
-            className="mt-2 h-9 flex-row items-center justify-center gap-1"
+            className="mt-[9px] h-9 flex-row items-center justify-center gap-1"
           >
-            <Text className="font-sans-bold text-[13px] text-sport-400">Ver todos en Alumnos</Text>
-            <ArrowRight size={14} color={theme.primary} />
+            <Text className="font-sans-extra text-[13px] text-sport-400">Ver todos en Alumnos</Text>
+            <ArrowRight size={14} color={sport400} />
           </TouchableOpacity>
         </>
       )}
@@ -2403,35 +2795,39 @@ export function MobileTodayAgenda({ items }: { items: MobileAgendaItem[] }) {
     <View style={{ gap: 10 }}>
       <View className="flex-row items-center justify-between">
         <View className="flex-row items-center gap-2">
-          <CalendarClock size={17} color={theme.primary} />
-          <Text className="font-display-bold text-[17px] text-strong">Agenda de hoy</Text>
+          <CalendarClock size={16} color={theme.primary} />
+          <Text className="font-display-black text-[18px] text-strong">Agenda de hoy</Text>
         </View>
-        <Text className="font-sans text-[12px] text-muted">{items.length} pendientes</Text>
+        <Text className="font-sans text-[12px] text-muted">0 de {items.length} hechas</Text>
       </View>
       {items.length === 0 ? (
         <Card padding="md" radius="card">
-          <EmptyPanel icon={<CheckCircle2 size={25} color="#10B981" />} title="Todo cerrado" subtitle="Sin pendientes en el dia." />
+          <EmptyPanel icon={<CheckCircle2 size={25} color={theme.success} />} title="Todo cerrado" subtitle="Sin pendientes en el día." />
         </Card>
       ) : (
         <Card padding="none" radius="card" style={{ overflow: 'hidden' }}>
-          {items.map((item, index) => (
+          {items.map((item, index) => {
+            const startMinutes = 9 * 60 + index * 90
+            const slot = `${String(Math.floor(startMinutes / 60) % 24).padStart(2, '0')}:${String(startMinutes % 60).padStart(2, '0')}`
+            const AgendaIcon = item.kind === 'programa_vence'
+              ? CalendarClock
+              : item.kind === 'checkin_pendiente'
+                ? ClipboardCheck
+                : item.kind === 'sin_ejercicio'
+                  ? Dumbbell
+                  : Calendar
+            return (
             <View key={item.id}>
               {index > 0 ? (
                 <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: theme.border, marginHorizontal: 14 }} />
               ) : null}
               <ListRow
                 leading={
-                  <View
-                    className="h-7 w-7 items-center justify-center"
-                    style={{ backgroundColor: hexToRgba(theme.primary, 0.1), borderRadius: 8 }}
-                  >
-                    {item.kind === 'programa_vence' ? (
-                      <Clock size={15} color={theme.primary} />
-                    ) : item.kind === 'checkin_pendiente' ? (
-                      <Camera size={15} color={theme.primary} />
-                    ) : (
-                      <Dumbbell size={15} color={theme.primary} />
-                    )}
+                  <View style={{ width: 86, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                    <Text style={{ width: 42, color: theme.mutedForeground, fontFamily: FONT.monoBold, fontSize: 12, fontVariant: ['tabular-nums'] }}>{slot}</Text>
+                    <View className="h-8 w-8 items-center justify-center rounded-pill" style={{ backgroundColor: theme.muted }}>
+                      <AgendaIcon size={15} color={theme.foreground} />
+                    </View>
                   </View>
                 }
                 title={item.clientName}
@@ -2440,7 +2836,8 @@ export function MobileTodayAgenda({ items }: { items: MobileAgendaItem[] }) {
                 onPress={() => router.push(`/coach/cliente/${item.clientId}`)}
               />
             </View>
-          ))}
+            )
+          })}
         </Card>
       )}
     </View>
@@ -2495,13 +2892,22 @@ export function MobileExpiringPrograms({ items }: { items: MobileExpiringProgram
 
 function ActivityTypeIcon({ type, size, color }: { type: MobileActivityItem['type']; size: number; color: string }) {
   if (type === 'nuevo alumno') return <UserPlus size={size} color={color} />
-  if (type === 'check-in') return <Camera size={size} color={color} />
+  if (type === 'check-in') return <CheckCircle2 size={size} color={color} />
   return <Dumbbell size={size} color={color} />
+}
+
+// Tonos de actividad [bg, fg] — espejo 1:1 del ACT_TONE web (sport / success / ember).
+// Scheme-aware porque los tokens -100/-600/-700 divergen por tema en globals.css.
+function activityTone(type: MobileActivityItem['type'], scheme: 'light' | 'dark'): [string, string] {
+  const dark = scheme === 'dark'
+  if (type === 'nuevo alumno') return dark ? ['rgba(38,128,255,0.20)', '#7FB0FF'] : ['#E8F1FF', '#1462DC']
+  if (type === 'check-in') return dark ? ['rgba(31,184,119,0.18)', '#4FD9A0'] : ['#DBF5EA', '#0F7D50']
+  return dark ? ['rgba(255,106,61,0.20)', '#FFB79E'] : ['#FFEDE6', '#C23E14']
 }
 
 export function MobileActivityFeed({ items }: { items: MobileActivityItem[] }) {
   const router = useRouter()
-  const { theme } = useTheme()
+  const { theme, resolvedScheme } = useTheme()
 
   return (
     <View style={{ gap: 10 }}>
@@ -2518,7 +2924,7 @@ export function MobileActivityFeed({ items }: { items: MobileActivityItem[] }) {
       ) : (
         <Card padding="none" radius="card" style={{ overflow: 'hidden' }}>
           {items.map((item, index) => {
-            const iconColor = item.type === 'nuevo alumno' ? '#10B981' : item.type === 'check-in' ? '#3B82F6' : theme.primary
+            const [toneBg, toneFg] = activityTone(item.type, resolvedScheme)
             return (
               <View key={item.id}>
                 {index > 0 ? (
@@ -2536,9 +2942,9 @@ export function MobileActivityFeed({ items }: { items: MobileActivityItem[] }) {
                     ) : (
                       <View
                         className="h-8 w-8 items-center justify-center rounded-pill"
-                        style={{ backgroundColor: hexToRgba(iconColor, 0.11) }}
+                        style={{ backgroundColor: toneBg }}
                       >
-                        <ActivityTypeIcon type={item.type} size={16} color={iconColor} />
+                        <ActivityTypeIcon type={item.type} size={16} color={toneFg} />
                       </View>
                     )
                   }
@@ -2557,22 +2963,54 @@ export function MobileActivityFeed({ items }: { items: MobileActivityItem[] }) {
   )
 }
 
+type NovedadesFilter = 'todos' | 'pendientes' | 'revisados'
+
+/** `reviewed` llega en el shape V2 (E5-15): check-ins con `reviewed_at != null`. Se lee defensivo. */
+function activityReviewed(it: MobileActivityItem): boolean {
+  return Boolean(it.reviewed)
+}
+
 /**
- * Novedades — programas por vencer + actividad reciente en una sola card.
- * 1:1 con coach-dashboard.jsx → feed (expiringPrograms ++ coachActivity).
+ * Novedades (NewsFeed) — programas por vencer + actividad reciente en una sola card,
+ * con la cola de check-ins encima: badge "por revisar" (ember) + filtro segmentado
+ * (Todos / Por revisar / Revisados) que aparece SOLO si hay check-ins y acota el feed
+ * client-side por estado. 1:1 con NewsFeed.tsx (web). El badge usa el conteo server-side
+ * `pendingCheckins` (ventana del feed, misma semantica que DashboardV2Data.pendingCheckinsCount);
+ * el filtro/senal por fila usan `reviewed` del propio item.
  */
 export function MobileNovedades({
   expiringPrograms,
   activities,
+  pendingCheckins: pendingCheckinsProp,
 }: {
   expiringPrograms: MobileExpiringProgramItem[]
   activities: MobileActivityItem[]
+  /** Conteo server-side de check-ins por revisar (V2). Fallback: derivado de `activities`. */
+  pendingCheckins?: number
 }) {
   const router = useRouter()
-  const { theme } = useTheme()
-  const isEmpty = expiringPrograms.length === 0 && activities.length === 0
-  let rowIndex = -1
+  const { theme, resolvedScheme } = useTheme()
+  const [filter, setFilter] = useState<NovedadesFilter>('todos')
 
+  const hasCheckins = activities.some((a) => a.type === 'check-in')
+  const pendingCheckins =
+    pendingCheckinsProp ?? activities.filter((a) => a.type === 'check-in' && !activityReviewed(a)).length
+
+  // "todos" = programas + toda la actividad; estados de cola = solo check-ins del estado.
+  const showPrograms = filter === 'todos'
+  const shownActivities =
+    filter === 'todos'
+      ? activities
+      : activities.filter((a) => a.type === 'check-in' && activityReviewed(a) === (filter === 'revisados'))
+  const isEmpty = (showPrograms ? expiringPrograms.length : 0) + shownActivities.length === 0
+  const emptyCopy =
+    filter === 'pendientes'
+      ? 'Todo al día. Sin check-ins por revisar.'
+      : filter === 'revisados'
+        ? 'Aún no marcas check-ins como revisados.'
+        : 'Sin novedades por ahora.'
+
+  let rowIndex = -1
   function Divider({ index }: { index: number }) {
     if (index <= 0) return null
     return <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: theme.border, marginHorizontal: 14 }} />
@@ -2580,83 +3018,127 @@ export function MobileNovedades({
 
   return (
     <View style={{ gap: 10 }}>
-      <SectionHeader title="Novedades" />
+      <View className="flex-row items-center" style={{ gap: 8 }}>
+        <Text className="font-display-bold text-[17px] text-strong">Novedades</Text>
+        {pendingCheckins > 0 ? (
+          <Badge tone="ember" variant="soft" size="sm">
+            {`${pendingCheckins > 9 ? '9+' : pendingCheckins} por revisar`}
+          </Badge>
+        ) : null}
+      </View>
+
+      {hasCheckins ? (
+        <SegmentedTabs
+          size="sm"
+          value={filter}
+          onChange={(v) => setFilter(v)}
+          items={[
+            { value: 'todos', label: 'Todos' },
+            { value: 'pendientes', label: 'Por revisar' },
+            { value: 'revisados', label: 'Revisados' },
+          ]}
+        />
+      ) : null}
+
       {isEmpty ? (
         <Card padding="md" radius="card">
           <Text className="font-sans text-[12px] text-muted" style={{ textAlign: 'center' }}>
-            Sin novedades por ahora.
+            {emptyCopy}
           </Text>
         </Card>
       ) : (
         <Card padding="none" radius="card" style={{ overflow: 'hidden' }}>
-          {expiringPrograms.map((it) => {
-            rowIndex += 1
-            const expired = it.daysLeft <= 0
-            const urgent = expired || it.daysLeft <= 2
-            return (
-              <View key={`prog-${it.id}`}>
-                <Divider index={rowIndex} />
-                <TouchableOpacity
-                  activeOpacity={0.82}
-                  onPress={() =>
-                    it.clientId
-                      ? router.push(`/coach/cliente/${it.clientId}`)
-                      : router.push('/coach/(tabs)/builder')
-                  }
-                  className="flex-row items-center gap-3 px-[14px] py-[11px]"
-                >
-                  <View
-                    className="h-[34px] w-[34px] items-center justify-center rounded-pill"
-                    style={{ backgroundColor: urgent ? 'rgba(244,54,90,0.12)' : 'rgba(245,158,11,0.14)' }}
-                  >
-                    <CalendarClock size={16} color={urgent ? '#F4365A' : '#F59E0B'} />
+          {showPrograms
+            ? expiringPrograms.map((it) => {
+                rowIndex += 1
+                const expired = it.daysLeft <= 0
+                const urgent = expired || it.daysLeft <= 2
+                const progDark = resolvedScheme === 'dark'
+                // bg = danger-100 / warning-100 (token solido); fg = danger-600 / warning-600 (1:1 con ProgramRow web).
+                const progBg = urgent
+                  ? (progDark ? 'rgba(244,54,90,0.18)' : '#FCDDE4')
+                  : (progDark ? 'rgba(245,165,36,0.18)' : '#FDEFD3')
+                const progFg = urgent
+                  ? (progDark ? '#FF7C97' : '#BE183C')
+                  : (progDark ? '#FFC861' : '#A8690A')
+                return (
+                  <View key={`prog-${it.id}`}>
+                    <Divider index={rowIndex} />
+                    <TouchableOpacity
+                      activeOpacity={0.82}
+                      testID={`novedades-program-${it.id}`}
+                      onPress={() =>
+                        it.clientId
+                          ? router.push(`/coach/cliente/${it.clientId}`)
+                          : router.push('/coach/(tabs)/builder')
+                      }
+                      className="flex-row items-center gap-3 px-[14px] py-[11px]"
+                    >
+                      <View
+                        className="h-[34px] w-[34px] items-center justify-center rounded-pill"
+                        style={{ backgroundColor: progBg }}
+                      >
+                        <CalendarClock size={16} color={progFg} />
+                      </View>
+                      <View className="flex-1" style={{ minWidth: 0 }}>
+                        <Text className="font-sans text-[13.5px] text-body" numberOfLines={1}>
+                          Plan de <Text className="font-sans-bold text-strong">{it.clientName}</Text>{' '}
+                          {expired ? 'venció' : 'vence pronto'}
+                        </Text>
+                        <Text className="font-sans text-[12px] text-muted" numberOfLines={1}>
+                          {it.name}
+                        </Text>
+                      </View>
+                      <Badge tone={urgent ? 'danger' : 'warning'} variant="soft" size="sm">
+                        {expired ? 'Vencido' : `${it.daysLeft} días`}
+                      </Badge>
+                    </TouchableOpacity>
                   </View>
-                  <View className="flex-1" style={{ minWidth: 0 }}>
-                    <Text className="font-sans text-[13.5px] text-body" numberOfLines={1}>
-                      Plan de <Text className="font-sans-bold text-strong">{it.clientName}</Text>{' '}
-                      {expired ? 'vencio' : 'vence pronto'}
-                    </Text>
-                    <Text className="font-sans text-[12px] text-muted" numberOfLines={1}>
-                      {it.name}
-                    </Text>
-                  </View>
-                  <Badge tone={urgent ? 'danger' : 'warning'} variant="soft" size="sm">
-                    {expired ? 'Vencido' : `${it.daysLeft} dias`}
-                  </Badge>
-                </TouchableOpacity>
-              </View>
-            )
-          })}
-          {activities.map((it) => {
+                )
+              })
+            : null}
+          {shownActivities.map((it) => {
             rowIndex += 1
-            const iconColor = it.type === 'nuevo alumno' ? '#10B981' : it.type === 'check-in' ? '#3B82F6' : theme.primary
+            const [toneBg, toneFg] = activityTone(it.type, resolvedScheme)
+            const isCheckin = it.type === 'check-in'
+            const reviewed = activityReviewed(it)
             return (
               <View key={`act-${it.id}`}>
                 <Divider index={rowIndex} />
-                <ListRow
-                  leading={
-                    it.type === 'check-in' && it.photoUrl ? (
+                <TouchableOpacity
+                  testID={`novedades-activity-${it.id}`}
+                  activeOpacity={0.82}
+                  disabled={!it.clientId}
+                  onPress={it.clientId ? () => router.push(`/coach/cliente/${it.clientId}`) : undefined}
+                  className="flex-row items-center gap-3 px-[14px] py-[11px]"
+                >
+                  {isCheckin && it.photoUrl ? (
                       <Image
                         source={{ uri: it.photoUrl }}
-                        style={{ width: 34, height: 34, borderRadius: 11 }}
+                        style={{ width: 34, height: 34, borderRadius: 17 }}
                         contentFit="cover"
                         transition={200}
                       />
                     ) : (
                       <View
                         className="h-[34px] w-[34px] items-center justify-center rounded-pill"
-                        style={{ backgroundColor: hexToRgba(iconColor, 0.11) }}
+                        style={{ backgroundColor: toneBg }}
                       >
-                        <ActivityTypeIcon type={it.type} size={16} color={iconColor} />
+                        <ActivityTypeIcon type={it.type} size={16} color={toneFg} />
                       </View>
+                    )}
+                  <Text className="min-w-0 flex-1 font-sans-bold text-[13.5px] text-strong" numberOfLines={1}>
+                    {it.title}
+                  </Text>
+                  {isCheckin ? (
+                    reviewed ? (
+                      <CheckCircle2 size={16} color={resolvedScheme === 'dark' ? '#4FD9A0' : '#0F7D50'} />
+                    ) : (
+                      <View className="h-2 w-2 rounded-pill bg-ember-500" />
                     )
-                  }
-                  title={it.title}
-                  subtitle={it.subtitle}
-                  trailing={<Text className="font-sans text-[11px] text-muted">{timeAgo(it.date)}</Text>}
-                  disabled={!it.clientId}
-                  onPress={it.clientId ? () => router.push(`/coach/cliente/${it.clientId}`) : undefined}
-                />
+                  ) : null}
+                  <Text className="font-sans text-[11.5px] text-subtle">{timeAgo(it.date)}</Text>
+                </TouchableOpacity>
               </View>
             )
           })}
@@ -2676,7 +3158,7 @@ export function MobileDashboardCharts({ areaData, barData }: { areaData: MobileC
 }
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
-const INTER_FONT = require('@expo-google-fonts/inter/Inter_400Regular.ttf')
+const INTER_FONT = require('@expo-google-fonts/hanken-grotesk/HankenGrotesk_400Regular.ttf')
 
 // Touch tooltip (Skia, UI-thread) — dot + value where the user presses the chart.
 function ChartTooltip({ xPos, yPos, value, color, font }: {
@@ -2711,7 +3193,7 @@ function MobileSessionsChart({ data }: { data: MobileChartPoint[] }) {
         <View style={[styles.chartIcon, { backgroundColor: 'rgba(59,130,246,0.12)' }]}>
           <TrendingUp size={16} color="#3B82F6" />
         </View>
-        <Text style={[styles.chartTitle, { color: theme.foreground, fontFamily: 'Inter_700Bold' }]}>
+        <Text style={[styles.chartTitle, { color: theme.foreground, fontFamily: FONT.uiBold }]}>
           SESIONES 30 DIAS
         </Text>
       </View>
@@ -2773,7 +3255,7 @@ function MobileGrowthChart({ data }: { data: MobileChartPoint[] }) {
         <View style={[styles.chartIcon, { backgroundColor: 'rgba(34,211,238,0.12)' }]}>
           <Activity size={16} color="#22D3EE" />
         </View>
-        <Text style={[styles.chartTitle, { color: theme.foreground, fontFamily: 'Inter_700Bold' }]}>
+        <Text style={[styles.chartTitle, { color: theme.foreground, fontFamily: FONT.uiBold }]}>
           CRECIMIENTO DE ALUMNOS
         </Text>
       </View>
@@ -2836,12 +3318,12 @@ export function MobileRevenueSheet({
     <NativeDialog open={open} title="Panel de ingresos" onClose={onClose}>
       <View style={styles.revenueSheet}>
         <View style={styles.revenueHeader}>
-          <Text style={[styles.revenueAmount, { color: theme.foreground, fontFamily: 'Montserrat_800ExtraBold' }]}>
+          <Text style={[styles.revenueAmount, { color: theme.foreground, fontFamily: FONT.displayBold }]}>
             {formatCurrency(kpi.mrrCurrentMonth)}
           </Text>
           <View style={styles.revenueDelta}>
             <DeltaIcon size={16} color={deltaColor} />
-            <Text style={[styles.revenueDeltaText, { color: deltaColor, fontFamily: 'Inter_700Bold' }]}>
+            <Text style={[styles.revenueDeltaText, { color: deltaColor, fontFamily: FONT.uiBold }]}>
               {deltaPct > 0 ? '+' : ''}{deltaPct.toFixed(1)}%
             </Text>
           </View>
@@ -2874,7 +3356,7 @@ export function MobileRevenueSheet({
               >
                 <View style={styles.rowCopy}>
                   <View style={styles.revenueNameRow}>
-                    <Text style={[styles.rowTitle, { color: theme.foreground, fontFamily: 'Inter_700Bold' }]} numberOfLines={1}>
+                    <Text style={[styles.rowTitle, { color: theme.foreground, fontFamily: FONT.uiBold }]} numberOfLines={1}>
                       {client.clientName}
                     </Text>
                     <ArrowUpRight size={13} color={theme.mutedForeground} />
@@ -2896,31 +3378,10 @@ export function MobileRevenueSheet({
   )
 }
 
-function MiniSparkline({ values, color }: { values: number[]; color: string }) {
-  const max = Math.max(1, ...values)
-  const barW = 8
-  const barGap = 3
-  const h = 22
-  const totalW = values.length * barW + (values.length - 1) * barGap
-  return (
-    <Svg width={totalW} height={h}>
-      {values.map((v, i) => {
-        const barH = Math.max(2, (v / max) * h)
-        return (
-          <Rect
-            key={i}
-            x={i * (barW + barGap)}
-            y={h - barH}
-            width={barW}
-            height={barH}
-            rx={2}
-            fill={color}
-            opacity={0.3 + (v / max) * 0.7}
-          />
-        )
-      })}
-    </Svg>
-  )
+function clientStatsColor(pct: number, theme: ReturnType<typeof useTheme>['theme']): string {
+  if (pct >= 75) return theme.primary
+  if (pct >= 50) return WARNING_500
+  return theme.destructive
 }
 
 export function MobileClientStatsSheet({
@@ -2935,145 +3396,127 @@ export function MobileClientStatsSheet({
   const router = useRouter()
   const { theme } = useTheme()
   const [tab, setTab] = useState<'adherence' | 'nutrition'>('adherence')
-  const sorted = [...clientStats].sort((a, b) => {
+  const rows = clientStats.filter((client) =>
+    tab === 'adherence' ? client.hasAdherenceData : client.hasNutritionData,
+  )
+  const sorted = [...rows].sort((a, b) => {
     const av = tab === 'adherence' ? a.adherencePct : a.nutritionPct
     const bv = tab === 'adherence' ? b.adherencePct : b.nutritionPct
     return av - bv
   })
+  const avg = sorted.length
+    ? Math.round(
+        sorted.reduce(
+          (total, client) => total + (tab === 'adherence' ? client.adherencePct : client.nutritionPct),
+          0,
+        ) / sorted.length,
+      )
+    : 0
 
   return (
-    <NativeDialog open={open} title="Detalle por alumno" onClose={onClose}>
-      <View style={styles.statsSheet}>
-        <Text style={[styles.revenueHint, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
-          Ordenado de menor a mayor cumplimiento.
-        </Text>
-        <View style={styles.statsTabs}>
-          <StatsTabButton active={tab === 'adherence'} label="Adherencia" onPress={() => setTab('adherence')} />
-          <StatsTabButton active={tab === 'nutrition'} label="Nutricion" onPress={() => setTab('nutrition')} />
-        </View>
-        {sorted.length === 0 ? (
-          <Text style={[styles.emptySub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
-            Sin datos.
+    <Sheet
+      open={open}
+      onClose={onClose}
+      nativeModal
+      snapPoints={['88%']}
+      showHandle={false}
+      showCloseButton={false}
+      accessibilityLabel="Detalle por alumno"
+    >
+      <View style={{ marginHorizontal: -2 }}>
+        <View className="mx-auto mb-3.5 h-1 w-[38px] rounded-pill bg-ink-200" />
+        <View className="mb-1 flex-row items-center justify-between">
+          <Text className="font-display-extra text-[19px] text-strong">Detalle por alumno</Text>
+          <Text
+            className="font-display-extra text-[20px]"
+            style={{ color: clientStatsColor(avg, theme), fontVariant: ['tabular-nums'] }}
+          >
+            {avg}%
           </Text>
+        </View>
+
+        <View className="mb-3.5 flex-row gap-[2px] rounded-control bg-surface-sunken p-[3px]">
+          {([
+            ['adherence', 'Adherencia'],
+            ['nutrition', 'Nutrición'],
+          ] as const).map(([key, label]) => {
+            const active = tab === key
+            return (
+              <TouchableOpacity
+                key={key}
+                activeOpacity={0.82}
+                accessibilityRole="tab"
+                accessibilityState={{ selected: active }}
+                onPress={() => setTab(key)}
+                className={`h-9 flex-1 items-center justify-center rounded-control ${active ? 'bg-surface-card' : 'bg-transparent'}`}
+                style={active ? shadow('xs', theme.scheme) : undefined}
+              >
+                <Text className={`font-sans-bold text-[13.5px] ${active ? 'text-strong' : 'text-subtle'}`}>
+                  {label}
+                </Text>
+              </TouchableOpacity>
+            )
+          })}
+        </View>
+
+        <Text className="mb-2.5 font-sans text-[11.5px] text-subtle">
+          Ordenado por menor cumplimiento — los que necesitan ayuda primero.
+        </Text>
+
+        {sorted.length === 0 ? (
+          <Text className="py-8 text-center font-sans text-sm text-muted">Sin datos.</Text>
         ) : (
-          <ScrollView style={styles.statsList} nestedScrollEnabled>
-            {sorted.map((client) => {
-              const pct = tab === 'adherence' ? client.adherencePct : client.nutritionPct
-              const hint = tab === 'adherence' ? client.adherenceHint : client.nutritionHint
-              const sparkValues = tab === 'adherence' ? client.adherenceHistory4w : []
-              const hasDelta = client.weightDelta7d !== null
-              const deltaUp = hasDelta && (client.weightDelta7d ?? 0) >= 0
-              return (
-                <TouchableOpacity
-                  key={client.clientId}
-                  activeOpacity={0.78}
-                  onPress={() => {
-                    onClose()
-                    router.push(`/coach/cliente/${client.clientId}`)
-                  }}
-                  style={[
-                    styles.statsRow,
-                    {
-                      borderColor: theme.border,
-                      backgroundColor: theme.background === '#F5F5F5' ? 'rgba(255,255,255,0.42)' : 'rgba(255,255,255,0.04)',
-                      borderRadius: theme.radius.xl,
-                    },
-                  ]}
-                >
-                  <View style={styles.statsRowHeader}>
-                    <Text style={[styles.rowTitle, { color: theme.foreground, fontFamily: 'Inter_700Bold' }]} numberOfLines={1}>
-                      {client.clientName}
-                    </Text>
-                    <Text style={[styles.statsPct, { color: theme.foreground, fontFamily: 'Inter_700Bold' }]}>
-                      {pct}%
-                    </Text>
-                  </View>
-                  <View style={[styles.progressTrack, { backgroundColor: theme.muted }]}>
-                    <View style={[styles.progressFill, { width: `${pct}%`, backgroundColor: theme.primary }]} />
-                  </View>
-                  <Text style={[styles.rowSub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]} numberOfLines={1}>
-                    {hint}
-                  </Text>
-                  {(sparkValues.length > 0 || hasDelta || client.streak > 0 || client.latestEnergyLevel !== null) ? (
-                    <View style={styles.statsExtras}>
-                      {sparkValues.length > 0 && (
-                        <MiniSparkline values={sparkValues} color={theme.primary} />
-                      )}
-                      {hasDelta && (
-                        <View style={[styles.statsDeltaBadge, { backgroundColor: deltaUp ? 'rgba(16,185,129,0.15)' : 'rgba(244,63,94,0.15)' }]}>
-                          {deltaUp
-                            ? <ArrowUpRight size={11} color="#10B981" />
-                            : <ArrowDownRight size={11} color="#F43F5E" />}
-                          <Text style={[styles.statsDeltaText, { color: deltaUp ? '#10B981' : '#F43F5E', fontFamily: 'Inter_700Bold' }]}>
-                            {Math.abs(client.weightDelta7d ?? 0).toFixed(1)}kg 7d
-                          </Text>
-                        </View>
-                      )}
-                      {client.streak > 0 && (
-                        <View style={[styles.statsChip, { backgroundColor: 'rgba(245,158,11,0.15)' }]}>
-                          <Zap size={11} color="#F59E0B" />
-                          <Text style={[styles.statsChipText, { color: '#F59E0B', fontFamily: 'Inter_700Bold' }]}>
-                            {client.streak}d racha
-                          </Text>
-                        </View>
-                      )}
-                      {client.latestEnergyLevel !== null && (
-                        <View style={[styles.statsChip, { backgroundColor: hexToRgba(theme.primary, 0.12) }]}>
-                          <Text style={[styles.statsChipText, { color: theme.primary, fontFamily: 'Inter_700Bold' }]}>
-                            ⚡ {client.latestEnergyLevel}/10
-                          </Text>
-                        </View>
-                      )}
+          <ScrollView style={{ maxHeight: 520 }} showsVerticalScrollIndicator={false}>
+            <View style={{ gap: 2 }}>
+              {sorted.map((client) => {
+                const pct = tab === 'adherence' ? client.adherencePct : client.nutritionPct
+                const hint = tab === 'adherence' ? client.adherenceHint : client.nutritionHint
+                const color = clientStatsColor(pct, theme)
+                return (
+                  <TouchableOpacity
+                    key={client.clientId}
+                    activeOpacity={0.82}
+                    onPress={() => {
+                      onClose()
+                      router.push(`/coach/cliente/${client.clientId}`)
+                    }}
+                    className="flex-row items-center gap-3 px-1 py-2.5"
+                  >
+                    <View className="h-[34px] w-[34px] shrink-0 items-center justify-center rounded-pill bg-ink-900">
+                      <Text className="font-display-extra text-sm text-sport-400">
+                        {client.clientName.charAt(0)}
+                      </Text>
                     </View>
-                  ) : null}
-                  {(client.planCurrentWeek !== null || client.oneRMDelta !== null) ? (
-                    <View style={styles.statsExtras}>
-                      {client.planCurrentWeek !== null && client.planTotalWeeks !== null && (
-                        <Text style={[styles.statsPlanText, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
-                          Semana {client.planCurrentWeek}/{client.planTotalWeeks}
-                          {client.planDaysRemaining ? ` · ${client.planDaysRemaining}d restantes` : ''}
+                    <View className="min-w-0 flex-1">
+                      <View className="mb-[5px] flex-row items-baseline justify-between">
+                        <Text className="flex-1 font-sans-bold text-[13.5px] text-strong" numberOfLines={1}>
+                          {client.clientName}
                         </Text>
-                      )}
-                      {client.oneRMDelta !== null && (
-                        <View style={[styles.statsDeltaBadge, { backgroundColor: client.oneRMDelta >= 0 ? 'rgba(16,185,129,0.15)' : 'rgba(244,63,94,0.15)' }]}>
-                          {client.oneRMDelta >= 0
-                            ? <TrendingUp size={11} color="#10B981" />
-                            : <TrendingDown size={11} color="#F43F5E" />}
-                          <Text style={[styles.statsDeltaText, { color: client.oneRMDelta >= 0 ? '#10B981' : '#F43F5E', fontFamily: 'Inter_700Bold' }]}>
-                            {client.oneRMDelta > 0 ? '+' : ''}{client.oneRMDelta.toFixed(1)}% fuerza 7d
-                          </Text>
-                        </View>
-                      )}
+                        <Text
+                          className="ml-2 shrink-0 text-[12.5px]"
+                          style={{ color, fontFamily: FONT.monoBold, fontVariant: ['tabular-nums'] }}
+                        >
+                          {pct}%
+                        </Text>
+                      </View>
+                      <View className="h-[5px] w-full overflow-hidden rounded-pill bg-track">
+                        <View
+                          className="h-full rounded-pill"
+                          style={{ width: `${Math.max(0, Math.min(100, pct))}%`, backgroundColor: color }}
+                        />
+                      </View>
+                      <Text className="mt-1 font-sans text-[11px] text-subtle" numberOfLines={1}>
+                        {hint}
+                      </Text>
                     </View>
-                  ) : null}
-                </TouchableOpacity>
-              )
-            })}
+                  </TouchableOpacity>
+                )
+              })}
+            </View>
           </ScrollView>
         )}
       </View>
-    </NativeDialog>
-  )
-}
-
-function StatsTabButton({ active, label, onPress }: { active: boolean; label: string; onPress: () => void }) {
-  const { theme } = useTheme()
-  return (
-    <TouchableOpacity
-      activeOpacity={0.8}
-      onPress={onPress}
-      style={[
-        styles.statsTab,
-        {
-          backgroundColor: active ? theme.primary : theme.muted,
-          borderRadius: 999,
-        },
-      ]}
-    >
-      <Text style={[styles.statsTabText, { color: active ? '#FFFFFF' : theme.mutedForeground, fontFamily: 'Inter_700Bold' }]}>
-        {label}
-      </Text>
-    </TouchableOpacity>
+    </Sheet>
   )
 }
 
@@ -3083,7 +3526,7 @@ function PaymentStatusBadge({ hasRecentPayment, hasAnyPayment }: { hasRecentPaym
   const color = !hasAnyPayment ? theme.mutedForeground : hasRecentPayment ? '#10B981' : '#F59E0B'
   return (
     <View style={[styles.paymentBadge, { borderColor: hexToRgba(color, 0.42), backgroundColor: hexToRgba(color, 0.12) }]}>
-      <Text style={[styles.paymentBadgeText, { color, fontFamily: 'Inter_700Bold' }]}>{label}</Text>
+      <Text style={[styles.paymentBadgeText, { color, fontFamily: FONT.uiBold }]}>{label}</Text>
     </View>
   )
 }
@@ -3093,7 +3536,7 @@ function EmptyPanel({ icon, title, subtitle }: { icon: ReactNode; title: string;
   return (
     <View style={styles.emptyPanel}>
       {icon}
-      <Text style={[styles.emptyTitle, { color: theme.foreground, fontFamily: 'Inter_700Bold' }]}>
+      <Text style={[styles.emptyTitle, { color: theme.foreground, fontFamily: FONT.uiBold }]}>
         {title}
       </Text>
       <Text style={[styles.emptySub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
@@ -3108,16 +3551,27 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 10,
-    paddingTop: 6,
+    gap: 8,
     paddingBottom: 14,
+  },
+  workspaceCaret: {
+    position: 'absolute',
+    right: -2,
+    bottom: -2,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   banner: {
     borderWidth: 1,
-    padding: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     flexDirection: 'row',
-    gap: 10,
-    alignItems: 'flex-start',
+    gap: 12,
+    alignItems: 'center',
   },
   bannerCopy: {
     flex: 1,
@@ -3128,33 +3582,22 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 19,
   },
-  bannerCta: {
+  bannerAction: {
     alignSelf: 'flex-start',
-    minHeight: 32,
-    borderRadius: 999,
-    paddingHorizontal: 11,
-    paddingVertical: 7,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  bannerCtaText: {
-    color: '#FFFFFF',
-    fontSize: 11,
-    textTransform: 'uppercase',
-    letterSpacing: 0.7,
+    fontSize: 14,
+    textDecorationLine: 'underline',
   },
   tierStack: {
     gap: 8,
   },
   tierBanner: {
     borderWidth: 1,
-    paddingHorizontal: 14,
+    paddingHorizontal: 16,
     paddingVertical: 12,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 12,
+    gap: 16,
   },
   tierMain: {
     flex: 1,
@@ -3171,7 +3614,7 @@ const styles = StyleSheet.create({
   },
   tierAction: {
     flexShrink: 0,
-    fontSize: 11,
+    fontSize: 12,
   },
   usageTrack: {
     height: 6,
@@ -3264,23 +3707,21 @@ const styles = StyleSheet.create({
   freeWelcomeHero: {
     alignItems: 'center',
     paddingHorizontal: 24,
-    paddingTop: 28,
-    paddingBottom: 22,
+    paddingTop: 32,
+    paddingBottom: 24,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    backgroundColor: 'rgba(16,185,129,0.08)',
   },
   freeWelcomeIcon: {
     width: 64,
     height: 64,
-    borderRadius: 18,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 14,
+    marginBottom: 16,
   },
   freeWelcomeTitle: {
-    fontSize: 21,
-    lineHeight: 26,
+    fontSize: 20,
+    lineHeight: 24,
     textAlign: 'center',
   },
   freeWelcomeSub: {
@@ -3291,8 +3732,8 @@ const styles = StyleSheet.create({
   },
   freeWelcomeSection: {
     paddingHorizontal: 24,
-    paddingTop: 18,
-    gap: 12,
+    paddingTop: 20,
+    gap: 16,
   },
   freeWelcomeEyebrow: {
     fontSize: 10,
@@ -3304,9 +3745,9 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   welcomeStepIcon: {
-    width: 30,
-    height: 30,
-    borderRadius: 9,
+    width: 28,
+    height: 28,
+    borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 1,
@@ -3341,8 +3782,8 @@ const styles = StyleSheet.create({
   },
   freeWelcomeActions: {
     paddingHorizontal: 24,
-    paddingTop: 18,
-    paddingBottom: 22,
+    paddingTop: 16,
+    paddingBottom: 24,
     gap: 8,
   },
   onboardingSkeleton: {
@@ -3414,7 +3855,7 @@ const styles = StyleSheet.create({
   skipGuideText: {
     color: '#FFFFFF',
     fontSize: 10,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: FONT.uiBold,
   },
   onboardingFreeBox: {
     borderWidth: 1,
@@ -3952,50 +4393,6 @@ const styles = StyleSheet.create({
     fontSize: 10,
     letterSpacing: 0.7,
     textTransform: 'uppercase',
-  },
-  statsSheet: {
-    gap: 12,
-  },
-  statsTabs: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  statsTab: {
-    flex: 1,
-    minHeight: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 12,
-  },
-  statsTabText: {
-    fontSize: 13,
-  },
-  statsList: {
-    maxHeight: 430,
-  },
-  statsRow: {
-    borderWidth: 1,
-    padding: 12,
-    gap: 8,
-    marginBottom: 10,
-  },
-  statsRowHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 12,
-  },
-  statsPct: {
-    fontSize: 14,
-  },
-  progressTrack: {
-    height: 6,
-    borderRadius: 999,
-    overflow: 'hidden',
-  },
-  progressFill: {
-    height: '100%',
-    borderRadius: 999,
   },
   emptyPanel: {
     alignItems: 'center',

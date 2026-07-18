@@ -9,8 +9,19 @@ import { DURATION, EASING, SPRING, type DurationToken, type SpringToken } from '
 export { DURATION, EASING, SPRING }
 export type { DurationToken, SpringToken }
 
-/** Curvas Easing de Reanimated derivadas de los tokens Bézier compartidos. */
+/** Curvas Easing de Reanimated derivadas de los tokens Bézier compartidos.
+ * out/inOut/spring/emphasis = las curvas EVA DS de la web (--ease-*); las tres
+ * Material (standard/decelerate/accelerate) quedan para los consumidores legacy. */
 export const EASE = {
+  // Lineal (paridad web `ease-linear`): progreso constante, sin curva. Usado por los
+  // rellenos/anillos de progreso de los timers (`transition-all duration-300 ease-linear`).
+  linear: Easing.linear,
+  // EVA DS (paridad web)
+  out: Easing.bezier(EASING.out[0], EASING.out[1], EASING.out[2], EASING.out[3]),
+  inOut: Easing.bezier(EASING.inOut[0], EASING.inOut[1], EASING.inOut[2], EASING.inOut[3]),
+  spring: Easing.bezier(EASING.spring[0], EASING.spring[1], EASING.spring[2], EASING.spring[3]),
+  emphasis: Easing.bezier(EASING.emphasis[0], EASING.emphasis[1], EASING.emphasis[2], EASING.emphasis[3]),
+  // Legacy (Material)
   standard: Easing.bezier(EASING.standard[0], EASING.standard[1], EASING.standard[2], EASING.standard[3]),
   decelerate: Easing.bezier(EASING.decelerate[0], EASING.decelerate[1], EASING.decelerate[2], EASING.decelerate[3]),
   accelerate: Easing.bezier(EASING.accelerate[0], EASING.accelerate[1], EASING.accelerate[2], EASING.accelerate[3]),

@@ -14,8 +14,11 @@
     "test:coverage": "vitest run --coverage",
     "test:e2e": "playwright test",
     "test:e2e:nutrition": "playwright test tests/nutrition-student-smoke.spec.ts",
+    "check:tokens": "node scripts/check-token-parity.mjs",
+    "check:nutrition-v2-boundaries": "node scripts/check-nutrition-v2-boundaries.mjs",
     "supa": "node_modules/.bin/supabase.cmd",
     "supabase:disable-signup": "node scripts/disable-supabase-signup.mjs",
+    "catalog:import:cl": "node scripts/import-food-catalog-cl.mjs",
     "audit:nutrition-empty-meals": "node scripts/audit-nutrition-empty-meals.mjs",
     "check:meal-completions-deprecation": "node scripts/check-meal-completions-deprecation.mjs",
     "audit:nutrition-empty-meals:strict": "node scripts/audit-nutrition-empty-meals.mjs --fail-on-find",
@@ -78,6 +81,7 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
+    "@eva/nutrition-v2": "workspace:*",
     "@playwright/test": "^1.58.2",
     "@tailwindcss/postcss": "^4",
     "@testing-library/dom": "^10.4.1",

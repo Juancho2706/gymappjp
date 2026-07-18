@@ -69,18 +69,18 @@ export function UpsellGate({ variant, currentTier }: Props) {
     const title = isExercises ? 'Mi Biblioteca de Ejercicios' : 'Importar Alumnos desde Excel'
 
     const subtitle = isExercises
-        ? <>Creá tus propios ejercicios con video de YouTube y apareceran en el builder. Disponible en <span className="font-semibold text-foreground">Starter</span>.</>
-        : <>Migrá toda tu cartera de alumnos desde Excel en minutos, sin cargar uno por uno. Disponible en <span className="font-semibold text-foreground">Starter</span>.</>
+        ? <>Crea tus propios ejercicios con video de YouTube y apareceran en el builder. Disponible en <span className="font-semibold text-foreground">Starter</span>.</>
+        : <>Migra toda tu cartera de alumnos desde Excel en minutos, sin cargar uno por uno. Disponible en <span className="font-semibold text-foreground">Starter</span>.</>
 
     const features = isExercises
         ? [
             'Ejercicios propios con video YouTube unlisted',
             'Aparecen en el builder junto a los del sistema',
-            'Filtrá por "Solo míos" para encontrarlos rápido',
-            'Soft-delete: borrá sin romper planes históricos',
+            'Filtra por "Solo míos" para encontrarlos rápido',
+            'Soft-delete: borra sin romper planes históricos',
           ]
         : [
-            'Importá hasta 1.000 alumnos desde .xlsx / .csv',
+            'Importa hasta 1.000 alumnos desde .xlsx / .csv',
             'Detección automática de columnas (nombre, email, tel)',
             'Preview con errores marcados antes de confirmar',
             'Cumplimiento Ley 19.628 — checkbox de consentimiento',
@@ -178,7 +178,7 @@ export function UpsellGate({ variant, currentTier }: Props) {
                 >
                     {ctaLabel}
                 </Link>
-                <p className="text-center text-xs text-muted-foreground">Sin permanencia · Cancelá cuando quieras</p>
+                <p className="text-center text-xs text-muted-foreground">Sin permanencia · Cancela cuando quieras</p>
             </div>
         </div>
     )

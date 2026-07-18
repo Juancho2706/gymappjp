@@ -5,14 +5,18 @@ import Link from 'next/link'
 import { ChevronDown, Pencil } from 'lucide-react'
 import {
     ageFromBirthDate,
+    formatDuration,
+    formatPace,
     hrZonesFromMax,
     hrZonesKarvonen,
+    kmhFromPace,
     maxHrTanaka,
+    paceKmToMile,
+    paceToTimeSec,
     resolveClientZones,
-} from '@/domain/cardio/zones'
-import type { CardioProfile } from '@/domain/cardio/types'
-import { formatDuration, formatPace, kmhFromPace, paceKmToMile, paceToTimeSec } from '@/domain/cardio/pace'
-import { INTERVAL_TEMPLATES, intervalTotalDurationSec } from '@/lib/workout-interval'
+} from '@eva/cardio'
+import type { CardioProfile } from '@eva/cardio'
+import { INTERVAL_TEMPLATES, intervalTotalDurationSec } from '@eva/workout-engine'
 import { Card } from '@/components/ui/card'
 import { Badge, type BadgeTone } from '@/components/ui/badge'
 import { SegmentedControl } from '@/components/ui/segmented-control'
@@ -235,7 +239,7 @@ function CardioZonesTool({ clients }: { clients: CardioClientVM[] }) {
                     {selected ? (
                         <>
                             <div className="mb-3.5 leading-relaxed">
-                                Sin edad ni FC máx no se pueden derivar zonas — completá el perfil del alumno.
+                                Sin edad ni FC máx no se pueden derivar zonas — completa el perfil del alumno.
                             </div>
                             <Link
                                 href={`/coach/cardio/${selected.id}`}
@@ -246,7 +250,7 @@ function CardioZonesTool({ clients }: { clients: CardioClientVM[] }) {
                             </Link>
                         </>
                     ) : (
-                        'Ingresá una edad válida para calcular las zonas.'
+                        'Ingresa una edad válida para calcular las zonas.'
                     )}
                 </Card>
             )}

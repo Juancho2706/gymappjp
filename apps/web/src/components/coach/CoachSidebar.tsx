@@ -2,16 +2,21 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import Image from 'next/image'
 import { usePathname } from 'next/navigation'
 import {
     House,
     Users,
+    UsersRound,
     Dumbbell,
+    Apple,
+    ClipboardList,
     Utensils,
     Settings,
     Shield,
     LifeBuoy,
+    HeartPulse,
+    PersonStanding,
+    LayoutDashboard,
     Building2,
     ChevronsLeft,
     ChevronsRight,
@@ -19,8 +24,10 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Avatar } from '@/components/ui/avatar'
+import { ThemedLogo } from '@/components/brand/ThemedLogo'
+import { CoachNavIcon, type CoachNavConcept } from '@/components/coach/CoachNavIcon'
 import { EvaBrandIcon } from '@/components/landing/LandingBrandMark'
-import { getVisibleNavItems, splitForSidebar, type NavModule } from '@/components/coach/coach-nav'
+import { getVisibleNavItems, splitForSidebar, isNavItemActiveForPath, type NavModule } from '@eva/coach-nav'
 import type { WorkspaceSummary, WorkspaceType } from '@/domain/auth/types'
 import type { EnabledModules } from '@/services/entitlements.service'
 
@@ -38,6 +45,8 @@ interface CoachSidebarProps {
     currentWorkspaceLabel?: string
     /** Logo de marca del coach — usado como imagen del avatar del pie (fallback iniciales). */
     logoUrl?: string | null
+    /** Logo modo oscuro del coach; cae al claro si no existe. */
+    logoUrlDark?: string | null
     /** Workspace ACTIVO — gobierna qué módulos del nav se muestran (separación de flujos). */
     activeWorkspaceType?: WorkspaceType | null
     /** Módulos toggleables habilitados para el contexto activo (resuelto server-side en el layout). */
@@ -81,13 +90,44 @@ const ICON_OVERRIDE: Record<string, LucideIcon> = {
     support: LifeBuoy,
 }
 
+/**
+ * Resolucion del icono string-key del registro (`@eva/coach-nav`, lucide-por-lado) a componente
+ * lucide-react. Fallback cuando la key no tiene override de diseno (cardio/movement/reactivate).
+ */
+const ICON_BY_NAME: Record<string, LucideIcon> = {
+    LayoutDashboard,
+    Users,
+    UsersRound,
+    ClipboardList,
+    Apple,
+    Settings,
+    LifeBuoy,
+    HeartPulse,
+    PersonStanding,
+}
+
 const displayLabel = (item: NavModule) => DISPLAY_LABELS[item.key] ?? item.label
-const navIcon = (item: NavModule): LucideIcon => ICON_OVERRIDE[item.key] ?? item.icon
+const navIcon = (item: NavModule): LucideIcon => ICON_OVERRIDE[item.key] ?? ICON_BY_NAME[item.icon] ?? Settings
 
 /** Capsula flotante movil — claves de los tabs PRIMARIOS (espejo del coachTabs del diseño eva-app). */
 const MOBILE_TAB_KEYS = ['dashboard', 'clients', 'programs', 'nutrition', 'options', 'settings_team', 'team', 'reactivate'] as const
 
-export function CoachSidebar({ coachName, coachBrand, subscriptionStatus, enterpriseContext, activeWorkspaceType, enabledModules, disabledDomains, logoUrl }: CoachSidebarProps) {
+/**
+ * Glifo propio (silueta del CEO) por clave de nav — SOLO para la cápsula móvil. Reemplaza al
+ * icono lucide conservando tamaño/color por estado del call site. Las claves sin entrada
+ * (p.ej. `reactivate`) caen al icono lucide (`navIcon`). El sidebar desktop NO usa este mapa.
+ */
+const MOBILE_GLYPH_BY_KEY: Record<string, CoachNavConcept> = {
+    dashboard: 'home',
+    clients: 'alumnos',
+    programs: 'programas',
+    nutrition: 'nutricion',
+    options: 'ajustes',
+    settings_team: 'ajustes',
+    team: 'equipo',
+}
+
+export function CoachSidebar({ coachName, coachBrand, subscriptionStatus, enterpriseContext, activeWorkspaceType, enabledModules, disabledDomains, logoUrl, logoUrlDark }: CoachSidebarProps) {
     const pathname = usePathname()
     const [manualCollapsed, setManualCollapsed] = useState(false)
     // Modo "compact" del diseño (760 ≤ vw < 1080): el sidebar SIEMPRE es el rail de 76px;
@@ -155,16 +195,15 @@ export function CoachSidebar({ coachName, coachBrand, subscriptionStatus, enterp
         .map((k) => visibleNavItems.find((i) => i.key === k))
         .filter((i): i is NavModule => i != null)
         .slice(0, 5)
-    const mobileActiveIndex = mobileTabs.findIndex(
-        (i) => pathname === i.href || pathname.startsWith(i.href + '/')
-    )
+    const mobileActiveIndex = mobileTabs.findIndex((i) => isNavItemActiveForPath(i, pathname))
     const mobileN = mobileTabs.length || 1
 
-    const isActiveHref = (href: string) => pathname === href || pathname.startsWith(href + '/')
+    // Item-aware: además de `href` respeta `activeAliases` (swap V2 bajo canary ilumina Nutrición).
+    const isNavItemActive = (item: NavModule) => isNavItemActiveForPath(item, pathname)
 
     // DESKTOP — link vertical del sidebar (.dt-nav-item). Transcripción verbatim del diseño.
     const renderNavLink = (item: NavModule, secondary = false) => {
-        const isActive = isActiveHref(item.href)
+        const isActive = isNavItemActive(item)
         const Icon = navIcon(item)
         const label = displayLabel(item)
         return (
@@ -269,7 +308,7 @@ export function CoachSidebar({ coachName, coachBrand, subscriptionStatus, enterp
                     <div className={cn('flex min-w-0 items-center gap-2.5 rounded-[var(--radius-md)] p-1.5', isCollapsed && 'justify-center p-0')}>
                         {logoUrl ? (
                             <span className="relative h-8 w-8 shrink-0 overflow-hidden rounded-full border border-subtle bg-white dark:bg-[var(--surface-sunken)]">
-                                <Image src={logoUrl} alt={avatarName} fill sizes="32px" className="object-contain p-1" />
+                                <ThemedLogo light={logoUrl} dark={logoUrlDark} alt={avatarName} fill sizes="32px" className="object-contain p-1" />
                             </span>
                         ) : (
                             <Avatar name={avatarName} size="sm" />
@@ -349,8 +388,9 @@ export function CoachSidebar({ coachName, coachBrand, subscriptionStatus, enterp
                         }}
                     />
                     {mobileTabs.map((item) => {
-                        const active = isActiveHref(item.href)
+                        const active = isNavItemActive(item)
                         const Icon = navIcon(item)
+                        const glyph = MOBILE_GLYPH_BY_KEY[item.key]
                         const label = displayLabel(item)
                         return (
                             <Link
@@ -380,11 +420,13 @@ export function CoachSidebar({ coachName, coachBrand, subscriptionStatus, enterp
                                 <span
                                     className={cn(
                                         'inline-flex h-6 w-6 items-center justify-center',
-                                        active && '[&_svg]:fill-current [&_svg]:[fill-opacity:0.18]'
+                                        // El fill-current es un truco para el trazo lucide del activo;
+                                        // los glifos ya son siluetas rellenas (heredan `color`).
+                                        active && !glyph && '[&_svg]:fill-current [&_svg]:[fill-opacity:0.18]'
                                     )}
                                     style={{ transform: active ? 'translateY(-1px)' : 'none', transition: 'transform var(--dur-base) var(--ease-spring)' }}
                                 >
-                                    <Icon size={24} />
+                                    {glyph ? <CoachNavIcon concept={glyph} className="h-6 w-6" /> : <Icon size={24} />}
                                 </span>
                                 <span
                                     style={{

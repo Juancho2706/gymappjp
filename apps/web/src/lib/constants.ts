@@ -193,7 +193,7 @@ export const ADDON_CONFIG: Record<ModuleKey, AddonConfigEntry> = {
         priceClpMensual: ADDON_MONTHLY_PRICE_CLP,
         label: 'Nutrición Pro',
         description:
-            'El plan de nutrición a nivel profesional: pautas por porciones e intercambios (método chileno), plantillas reutilizables, micronutrientes avanzados, objetivos por composición corporal y PDF con tu marca. Requiere un plan con nutrición (Pro o superior).',
+            'El plan de nutrición a nivel profesional: pautas por porciones e intercambios (el método de los nutricionistas) o planes híbridos que combinan franjas guiadas con libertad de registro, con variantes de día, micronutrientes avanzados, objetivos finos por alumno y notas clínicas privadas y de protocolo. Requiere un plan con nutrición (Pro o superior).',
     },
 }
 

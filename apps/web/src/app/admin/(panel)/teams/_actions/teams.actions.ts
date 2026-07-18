@@ -40,7 +40,7 @@ export async function createTeamAction(_prev: CreateTeamResult | null, formData:
     const { name, slug: slugInput, seat_limit, owner_mode, owner_email, owner_full_name, owner_temp_password } = parsed.data
 
     const slug = await uniqueTeamSlug(adminClient, slugInput || name)
-    if (!slug) return { error: 'No se pudo generar un slug único. Probá otro nombre.' }
+    if (!slug) return { error: 'No se pudo generar un slug único. Prueba otro nombre.' }
 
     const enabledModules = readModules(formData)
     const email = sanitizePlatformEmail(owner_email)
@@ -54,14 +54,14 @@ export async function createTeamAction(_prev: CreateTeamResult | null, formData:
         const { data: coachId } = await (adminClient.rpc as unknown as (fn: string, args: Record<string, string>) => PromiseLike<{ data: string | null }>)(
             'get_coach_id_by_email', { p_email: email },
         )
-        if (!coachId) return { error: 'No existe un coach con ese email. Usá "Crear cuenta nueva" o revisá el email.' }
+        if (!coachId) return { error: 'No existe un coach con ese email. Usa "Crear cuenta nueva" o revisa el email.' }
         // Aislamiento team<->enterprise: un coach de una organización no puede ser owner de un team.
         const { data: orgMember } = await adminClient
             .from('organization_members').select('id').eq('user_id', coachId).eq('status', 'active').is('deleted_at', null).maybeSingle()
         if (orgMember) return { error: 'Ese coach pertenece a una organización enterprise; no puede ser owner de un team.' }
         ownerCoachId = coachId
     } else {
-        if (!owner_full_name || owner_full_name.trim().length < 2) return { error: 'Para una cuenta nueva, ingresá el nombre del owner.' }
+        if (!owner_full_name || owner_full_name.trim().length < 2) return { error: 'Para una cuenta nueva, ingresa el nombre del owner.' }
         const availability = await assertPlatformEmailAvailable(adminClient, email)
         if (!availability.ok) return { error: availability.error }
 
@@ -104,7 +104,7 @@ export async function createTeamAction(_prev: CreateTeamResult | null, formData:
         .single()
     if (teamError || !team) {
         if (createdNewOwner) { await adminClient.from('coaches').delete().eq('id', ownerCoachId); await adminClient.auth.admin.deleteUser(ownerCoachId) }
-        const friendly = teamError?.code === '23505' ? 'Ese identificador (slug) ya está en uso. Probá otro.' : (teamError?.message ?? 'No se pudo crear el equipo')
+        const friendly = teamError?.code === '23505' ? 'Ese identificador (slug) ya está en uso. Prueba otro.' : (teamError?.message ?? 'No se pudo crear el equipo')
         return { error: friendly }
     }
 

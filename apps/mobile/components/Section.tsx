@@ -16,7 +16,7 @@ export function Section({ title, children }: SectionProps) {
         { backgroundColor: theme.card, borderColor: theme.border, borderRadius: theme.radius.xl },
       ]}
     >
-      <Text style={[styles.title, { color: theme.mutedForeground, fontFamily: 'Montserrat_700Bold' }]}>
+      <Text style={[styles.title, { color: theme.mutedForeground, fontFamily: 'Archivo_700Bold' }]}>
         {title}
       </Text>
       {children}

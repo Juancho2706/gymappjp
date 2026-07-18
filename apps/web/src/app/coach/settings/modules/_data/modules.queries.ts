@@ -1,6 +1,7 @@
 import { cache } from 'react'
 import { createClient } from '@/lib/supabase/server'
 import { getCoach } from '@/lib/coach/get-coach'
+import { hasEffectiveAccess, isManagedSubscription } from '@/lib/coach-subscription-gate'
 import { isCurrentUserTeamManager } from '@/services/auth/team.service'
 import { resolvePreferredWorkspace } from '@/services/auth/workspace.service'
 import {
@@ -18,13 +19,19 @@ export interface ModulesContext {
     teamId: string | null
     teamName: string | null
     /**
-     * Solo discrimina el CTA del catálogo read-only (gestor de team -> "Conversemos";
-     * miembro de team -> "Pídelo al owner"). El catálogo ya NO habilita edición (compra-only,
-     * plan estrategia 03 / F1.2): el único escritor es el override admin (service-role).
+     * Solo discrimina la guía del catálogo read-only (miembro de team sin gestión ->
+     * "Pídelo al owner"). El catálogo ya NO habilita edición: el único escritor es el
+     * override admin (service-role).
      */
     isTeamManager: boolean
-    /** Tier del coach — telemetría de intención de compra (module_interest_cta_clicked). */
+    /** Tier del coach — decide el copy "Incluido en tu plan" vs upsell de upgrade. */
     tier: SubscriptionTier
+    /**
+     * ¿El coach tiene un plan PAGO con acceso efectivo? (decisión CEO 2026-07-17:
+     * los 4 módulos vienen incluidos con cualquier suscripción paga; free no los tiene).
+     * Team/enterprise = managed => pago por diseño (el pool/la org paga).
+     */
+    hasPaidPlan: boolean
     modules: Record<ModuleKey, boolean>
     /** Módulos apagados por el kill-switch de operador (entitlement ON pero en mantenimiento). */
     killedByOperator: Record<ModuleKey, boolean>
@@ -78,6 +85,8 @@ export const getModulesContext = cache(async (): Promise<{ coachId: string | nul
                 teamName: team?.name ?? 'Equipo',
                 isTeamManager,
                 tier,
+                // Team = pool de pago por diseño (el acceso del coach es team_managed).
+                hasPaidPlan: true,
                 modules: normalizeModules(team?.enabled_modules),
                 killedByOperator,
                 nutritionVisible,
@@ -86,9 +95,16 @@ export const getModulesContext = cache(async (): Promise<{ coachId: string | nul
     }
 
     const [{ data: own }, nutritionVisible] = await Promise.all([
-        supabase.from('coaches').select('enabled_modules').eq('id', coach.id).maybeSingle(),
+        supabase
+            .from('coaches')
+            .select('enabled_modules, current_period_end')
+            .eq('id', coach.id)
+            .maybeSingle(),
         resolveNutritionDomainEnabled({ coachId: coach.id }),
     ])
+    const hasPaidPlan =
+        isManagedSubscription(coach.subscription_status) ||
+        (tier !== 'free' && hasEffectiveAccess(coach.subscription_status, own?.current_period_end ?? null))
     return {
         coachId: coach.id,
         orgManaged,
@@ -98,6 +114,7 @@ export const getModulesContext = cache(async (): Promise<{ coachId: string | nul
             teamName: null,
             isTeamManager: false,
             tier,
+            hasPaidPlan,
             modules: normalizeModules(own?.enabled_modules),
             killedByOperator,
             nutritionVisible,

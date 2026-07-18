@@ -32,6 +32,7 @@ export async function BrandCoachLoadingShell({
                         primaryColor={!coach?.loader_text_color ? (preset?.primary_color ?? coach?.primary_color ?? undefined) : undefined}
                         iconMode={(coach?.loader_icon_mode ?? 'eva') as 'eva' | 'coach' | 'none'}
                         coachLogoUrl={coach?.logo_url ?? undefined}
+                        coachLogoDarkUrl={coach?.logo_url_dark ?? undefined}
                     />
                 ) : (
                     <EvaTreefrogLoader compact className="py-1" />

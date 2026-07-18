@@ -16,7 +16,7 @@ import { WeightWidget } from './_components/weight/WeightWidget'
 import { PersonalRecordsCard } from './_components/records/PersonalRecordsCard'
 import { RecentWorkoutsSection } from './_components/history/RecentWorkoutsSection'
 import { HabitsTrackerWidget } from './_components/habits/HabitsTrackerWidget'
-import { NutritionDailySummary } from './_components/nutrition/NutritionDailySummary'
+import { NutritionTodaySection, NutritionTodaySectionFallback } from './_components/nutrition/NutritionTodaySection'
 import { SectionTitle } from './_components/shared/SectionTitle'
 import { DashboardDesktop } from './_components/desktop/DashboardDesktop'
 import { WelcomeModal } from './_components/WelcomeModal'
@@ -29,7 +29,6 @@ import {
     ProgramSkeleton,
     HistorySkeleton,
     WeightSkeleton,
-    NutritionSkeleton,
     HabitsSkeleton,
     ComplianceRingsSkeleton,
     PersonalRecordsSkeleton,
@@ -149,15 +148,10 @@ export default async function ClientDashboardPage({ params }: Props) {
                         </Suspense>
                     </div>
 
-                    {/* Nutrición de hoy */}
-                    <div>
-                        <SectionTitle accent="var(--ember-500)" action="Ver nutrición" actionHref={`${base}/nutrition`}>
-                            Nutrición de hoy
-                        </SectionTitle>
-                        <Suspense fallback={<NutritionSkeleton />}>
-                            <NutritionDailySummary userId={user.id} coachSlug={coach_slug} />
-                        </Suspense>
-                    </div>
+                    {/* Nutrición de hoy — V1 clásica o resumen V2 según el rollout webStudent */}
+                    <Suspense fallback={<NutritionTodaySectionFallback base={base} />}>
+                        <NutritionTodaySection userId={user.id} coachSlug={coach_slug} base={base} />
+                    </Suspense>
                 </div>
 
                 {/* ───────── Desktop (>=760): bento 2-col de DesktopAlumnoDashboard ───────── */}

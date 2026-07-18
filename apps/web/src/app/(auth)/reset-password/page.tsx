@@ -59,10 +59,10 @@ function ResetPasswordForm() {
         <div className="animate-slide-up">
             <div>
                 <h1 className="font-display text-[26px] font-black tracking-[-0.02em] text-text-strong">
-                    Creá una nueva contraseña
+                    Crea una nueva contraseña
                 </h1>
                 <p className="mt-2 text-sm leading-relaxed text-text-muted">
-                    Elegí una contraseña segura de al menos 8 caracteres.
+                    Elige una contraseña segura de al menos 8 caracteres.
                 </p>
             </div>
 
@@ -120,7 +120,7 @@ function ResetPasswordForm() {
 
                 <div className="space-y-2">
                     <Label htmlFor="confirm_password" className="text-text-strong text-[13px] font-semibold">
-                        Repetí la contraseña
+                        Repite la contraseña
                     </Label>
                     <div className="relative">
                         <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted pointer-events-none z-10" />
@@ -128,7 +128,7 @@ function ResetPasswordForm() {
                             id="confirm_password"
                             name="confirm_password"
                             type="password"
-                            placeholder="Volvé a escribirla"
+                            placeholder="Vuelve a escribirla"
                             required
                             value={confirmPassword}
                             onChange={(event) => setConfirmPassword(event.target.value)}
@@ -167,7 +167,7 @@ export default function ResetPasswordPage() {
             <Suspense fallback={
                 <div className="flex flex-col items-center justify-center gap-6 p-12 text-center">
                     <h1 className="text-2xl font-black tracking-[-0.02em] text-text-strong font-display">
-                        Creá una nueva contraseña
+                        Crea una nueva contraseña
                     </h1>
                     <EvaRouteLoader subtitle="Cargando formulario…" size="md" />
                 </div>

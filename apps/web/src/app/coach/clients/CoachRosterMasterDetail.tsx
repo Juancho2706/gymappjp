@@ -322,7 +322,7 @@ function DetailEmpty() {
                 Selecciona un alumno
             </div>
             <p className="max-w-sm text-sm text-muted">
-                Elegí un alumno de la lista para ver su ficha, progreso, entreno y nutrición.
+                Elige un alumno de la lista para ver su ficha, progreso, entreno y nutrición.
             </p>
         </div>
     )

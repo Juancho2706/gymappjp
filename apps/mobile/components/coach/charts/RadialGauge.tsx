@@ -54,7 +54,7 @@ export function RadialGauge({
           ) : null}
         </Svg>
         <View style={[StyleSheet.absoluteFill, styles.center]}>
-          <Text style={[styles.value, { color: theme.foreground, fontFamily: 'Montserrat_800ExtraBold' }]}>
+          <Text style={[styles.value, { color: theme.foreground, fontFamily: 'Archivo_800ExtraBold' }]}>
             {display ?? String(Math.round(value * 10) / 10)}
           </Text>
           <Text style={[styles.label, { color: theme.mutedForeground, fontFamily: theme.fontSans }]} numberOfLines={1}>

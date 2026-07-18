@@ -13,8 +13,7 @@ import { cn, filterExercises } from '@/lib/utils'
 import { ExerciseBlock } from './ExerciseBlock'
 import { DAYS_OF_WEEK } from '../hooks/usePlanBuilder'
 import { buildAreaVMs, type BuilderAreaVM } from '../area-ui'
-import { effectiveAreaKey } from '@/lib/workout-areas'
-import { groupContiguousSupersetRuns } from '@/lib/workout-block-grouping'
+import { effectiveAreaKey, groupContiguousSupersetRuns } from '@eva/workout-engine'
 import type { DayState } from '../types'
 import type { WorkoutArea } from '@/domain/workout/types'
 import type { BuilderBlock } from '../types'
@@ -445,7 +444,7 @@ function DayColumnInner({
                             const bothGrouped = !!block.superset_group && !!nextBlock?.superset_group
                             const linkApplicable = canLinkSuperset && !bothGrouped
                             const linkTooltip = bothGrouped
-                                ? 'Ya están en superseries — desagrupá primero'
+                                ? 'Ya están en superseries — desagrupa primero'
                                 : !sameAreaAsNext
                                     ? 'Solo puedes enlazar con el siguiente ejercicio de la misma área'
                                     : 'Agrupar como superserie con el siguiente ejercicio'

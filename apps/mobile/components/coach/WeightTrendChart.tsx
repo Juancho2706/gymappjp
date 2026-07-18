@@ -5,7 +5,7 @@ import { useDerivedValue, type SharedValue } from 'react-native-reanimated'
 import { useTheme } from '../../context/ThemeContext'
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
-const INTER_FONT = require('@expo-google-fonts/inter/Inter_400Regular.ttf')
+const INTER_FONT = require('@expo-google-fonts/hanken-grotesk/HankenGrotesk_400Regular.ttf')
 
 export interface WeightPoint { label: string; kg: number; [k: string]: string | number }
 

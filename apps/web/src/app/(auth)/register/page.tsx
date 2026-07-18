@@ -11,9 +11,6 @@ import { cn } from '@/lib/utils'
 import { getCurrentOAuthUserProfile } from '@/lib/auth/client-oauth'
 import { GoogleSignInButton } from '@/components/auth/GoogleSignInButton'
 import {
-    ADDON_CONFIG,
-    ADDON_MODULE_KEYS,
-    getAddonPaymentRulesForCycle,
     BILLING_CYCLE_CONFIG,
     getDefaultBillingCycleForTier,
     getTierAllowedBillingCycles,
@@ -22,12 +19,10 @@ import {
     isBillingCycleAllowedForTier,
     isSaleTier,
     SALE_TIERS,
-    SELF_SERVICE_ADDONS_ENABLED,
     TIER_CONFIG,
     type BillingCycle,
     type SaleTier,
 } from '@/lib/constants'
-import type { ModuleKey } from '@/services/entitlements.service'
 
 const initialState: RegisterState = {}
 const googleInitialState: CompleteOnboardingState = {}
@@ -98,8 +93,6 @@ export default function RegisterPage() {
     const [fromGoogle, setFromGoogle] = useState(false)
     const [tier, setTier] = useState<SaleTier>('starter')
     const [billingCycle, setBillingCycle] = useState<BillingCycle>('monthly')
-    // Add-ons opcionales del signup (plan 05 F5.5) — solo tiers pagos.
-    const [selectedAddons, setSelectedAddons] = useState<ModuleKey[]>([])
     // Código de descuento (REGISTER-CODE): manual (campo colapsado) o auto-aplicado desde ?codigo=.
     // Solo se threadea a /processing (el canje + disclosure SERNAC + consentimiento ocurren allá).
     const [couponCode, setCouponCode] = useState('')
@@ -107,15 +100,9 @@ export default function RegisterPage() {
     const [couponAutoApplied, setCouponAutoApplied] = useState(false)
     const selectedTier = useMemo(() => TIER_CONFIG[tier], [tier])
     const selectedPrice = useMemo(() => getTierPriceClp(tier, billingCycle), [tier, billingCycle])
-    // Total en vivo = plan + add-ons seleccionados (monto por ciclo, mismos descuentos del plan).
-    const addonsCycleTotal = useMemo(() => {
-        const { months, discountPercent } = BILLING_CYCLE_CONFIG[billingCycle]
-        return selectedAddons.reduce((sum, key) => {
-            const gross = ADDON_CONFIG[key].priceClpMensual * months
-            return sum + Math.round(gross * (1 - discountPercent / 100))
-        }, 0)
-    }, [selectedAddons, billingCycle])
-    const liveTotal = selectedPrice + addonsCycleTotal
+    // Total en vivo = solo el plan: los módulos vienen INCLUIDOS en los planes pagos
+    // (decisión CEO 2026-07-17) y ya no se compran como add-ons en el signup.
+    const liveTotal = selectedPrice
     const allowedCycles = useMemo(() => getTierAllowedBillingCycles(tier), [tier])
     const allowedCycleOptions = useMemo(
         () => cycleOptions.filter(([key]) => allowedCycles.includes(key)),
@@ -173,32 +160,16 @@ export default function RegisterPage() {
         }
     }, [tier, billingCycle, isFreeTier])
 
-    // Add-ons solo en tiers pagos; nutrition_exchanges solo en tiers con nutrición (D8).
-    // Al cambiar de plan se purgan los add-ons que dejen de ser válidos.
-    useEffect(() => {
-        if (isFreeTier) {
-            if (selectedAddons.length > 0) setSelectedAddons([])
-            return
-        }
-        const caps = getTierCapabilities(tier)
-        setSelectedAddons((prev) => {
-            const next = prev.filter((k) => (k === 'nutrition_exchanges' ? caps.canUseNutrition : true))
-            return next.length === prev.length ? prev : next
-        })
-    }, [tier, isFreeTier, selectedAddons.length])
-
-    const addonsCsv = selectedAddons.join(',')
-
     function nextStep() {
         if (step === 1) {
             if (fromGoogle) {
                 if (!fullName || !brandName) {
-                    setClientError('Completá tu nombre y nombre de marca antes de continuar.')
+                    setClientError('Completa tu nombre y nombre de marca antes de continuar.')
                     return
                 }
             } else {
                 if (!fullName || !brandName || !email || password.length < 8) {
-                    setClientError('Completá tus datos antes de continuar al paso de plan y pago.')
+                    setClientError('Completa tus datos antes de continuar al paso de plan y pago.')
                     return
                 }
             }
@@ -309,7 +280,8 @@ export default function RegisterPage() {
                 <form action={fromGoogle ? googleFormAction : formAction} className="space-y-4">
                     <input type="hidden" name="subscription_tier" value={tier} />
                     <input type="hidden" name="billing_cycle" value={billingCycle} />
-                    <input type="hidden" name="addons" value={addonsCsv} />
+                    {/* Sin add-ons en el signup: los módulos vienen incluidos en el plan (CEO 2026-07-17). */}
+                    <input type="hidden" name="addons" value="" />
                     <input type="hidden" name="coupon_code" value={couponCode} />
                     {/* Honeypot — bots fill this, humans don't */}
                     <input
@@ -346,7 +318,7 @@ export default function RegisterPage() {
                         <>
                     <div>
                         <h1 className="font-display text-[26px] font-black leading-[1.1] tracking-[-0.02em] text-text-strong">
-                            Creá tu cuenta de coach
+                            Crea tu cuenta de coach
                         </h1>
                         <p className="mt-1.5 text-sm text-text-muted">Tu marca, tus alumnos, tu negocio — en una sola app.</p>
                     </div>
@@ -485,15 +457,15 @@ export default function RegisterPage() {
                         <>
                             <div>
                                 <h1 className="font-display text-2xl font-black tracking-[-0.02em] text-text-strong">
-                                    Elegí tu plan
+                                    Elige tu plan
                                 </h1>
-                                <p className="mt-1 text-[13.5px] text-text-muted">Cambiá o cancelá cuando quieras. Empezá gratis si querés probar.</p>
+                                <p className="mt-1 text-[13.5px] text-text-muted">Cambia o cancela cuando quieras. Empieza gratis si quieres probar.</p>
                             </div>
                             <section className="space-y-2">
                                 <div
                                     ref={tierGroupRef}
                                     role="radiogroup"
-                                    aria-label="Elegí tu plan"
+                                    aria-label="Elige tu plan"
                                     className="grid gap-2.5"
                                 >
                                     {tierOptions.map(([key, option], index) => {
@@ -638,69 +610,16 @@ export default function RegisterPage() {
                                 </section>
                             )}
 
-                            {/* Paso opcional de add-ons — solo tiers pagos (plan 05 F5.5). Free: oculto. */}
-                            {!isFreeTier && SELF_SERVICE_ADDONS_ENABLED && (
+                            {/* Módulos: incluidos en los planes pagos (CEO 2026-07-17) — ya no se
+                                compran como add-ons en el signup. El código de descuento se conserva. */}
+                            {!isFreeTier && (
                                 <section className="space-y-2">
-                                    <h2 className="text-sm font-semibold text-foreground">Módulos opcionales</h2>
-                                    <p className="text-xs text-muted-foreground">
-                                        Suma módulos a tu plan. Se cobran junto a tu suscripción y puedes quitarlos cuando quieras.
-                                    </p>
-                                    <div className="grid gap-2">
-                                        {ADDON_MODULE_KEYS.map((key) => {
-                                            const cfg = ADDON_CONFIG[key]
-                                            const requiresNutrition = key === 'nutrition_exchanges' && !getTierCapabilities(tier).canUseNutrition
-                                            const checked = selectedAddons.includes(key)
-                                            return (
-                                                <label
-                                                    key={key}
-                                                    className={cn(
-                                                        'flex items-start gap-2 rounded-control border-[1.5px] p-3 text-left transition',
-                                                        requiresNutrition
-                                                            ? 'border-border-subtle opacity-60'
-                                                            : checked
-                                                                ? 'border-sport-500 bg-sport-100 cursor-pointer'
-                                                                : 'border-border-subtle hover:border-sport-500/40 cursor-pointer'
-                                                    )}
-                                                >
-                                                    <input
-                                                        type="checkbox"
-                                                        checked={checked}
-                                                        disabled={requiresNutrition}
-                                                        onChange={(e) =>
-                                                            setSelectedAddons((prev) =>
-                                                                e.target.checked ? [...prev, key] : prev.filter((k) => k !== key)
-                                                            )
-                                                        }
-                                                        className="peer sr-only"
-                                                    />
-                                                    <CheckTile />
-                                                    <span className="min-w-0 flex-1">
-                                                        <span className="flex items-center justify-between gap-2">
-                                                            <span className="font-semibold text-text-strong text-sm">{cfg.label}</span>
-                                                            <span className="text-xs font-semibold text-text-strong shrink-0">
-                                                                ${cfg.priceClpMensual.toLocaleString('es-CL')} CLP / mes
-                                                            </span>
-                                                        </span>
-                                                        <span className="block text-xs text-text-muted mt-0.5">{cfg.description}</span>
-                                                        {requiresNutrition && (
-                                                            <span className="mt-1 inline-block text-[11px] font-semibold text-[var(--warning-700)]">
-                                                                Requiere un plan con nutrición (Pro o superior).
-                                                            </span>
-                                                        )}
-                                                    </span>
-                                                </label>
-                                            )
-                                        })}
+                                    <div className="rounded-control border border-border-subtle bg-surface-sunken p-3">
+                                        <p className="text-sm font-semibold text-text-strong">Módulos profesionales incluidos</p>
+                                        <p className="mt-0.5 text-xs text-text-muted">
+                                            Cardio, Evaluación de movimiento, Composición corporal y Nutrición Pro vienen con tu plan, sin costo extra.
+                                        </p>
                                     </div>
-                                    {selectedAddons.length > 0 && (
-                                        <div className="rounded-control border border-border-subtle bg-surface-sunken p-3 text-sm">
-                                            <div className="flex justify-between font-semibold text-text-strong">
-                                                <span>Total {BILLING_CYCLE_CONFIG[billingCycle].label.toLowerCase()}</span>
-                                                <span>${liveTotal.toLocaleString('es-CL')} CLP</span>
-                                            </div>
-                                            <p className="mt-1 text-xs text-text-muted">Plan ${selectedPrice.toLocaleString('es-CL')} + módulos ${addonsCycleTotal.toLocaleString('es-CL')} CLP</p>
-                                        </div>
-                                    )}
                                     {/* REGISTER-CODE: código de descuento colapsado (camino primario = link auto-aplicado ?codigo=). */}
                                     <div className="rounded-control border border-border-subtle bg-surface-sunken/60 p-3">
                                         {!couponFieldOpen ? (
@@ -709,7 +628,7 @@ export default function RegisterPage() {
                                                 onClick={() => setCouponFieldOpen(true)}
                                                 className="text-sm font-semibold text-sport-600 hover:underline"
                                             >
-                                                ¿Tenés un código de descuento?
+                                                ¿Tienes un código de descuento?
                                             </button>
                                         ) : couponAutoApplied && couponCode ? (
                                             <p className="text-sm text-[var(--success-600)]">
@@ -728,17 +647,6 @@ export default function RegisterPage() {
                                             </div>
                                         )}
                                     </div>
-
-                                    {/* Las 5 reglas de cobro de los módulos, visibles también en el signup */}
-                                    {selectedAddons.length > 0 && (
-                                        <ol className="space-y-1.5">
-                                            {getAddonPaymentRulesForCycle(billingCycle).rules.map((r) => (
-                                                <li key={r.number} className="text-[11px] text-muted-foreground">
-                                                    <span className="font-semibold text-foreground">{r.title}.</span> {r.text}
-                                                </li>
-                                            ))}
-                                        </ol>
-                                    )}
                                 </section>
                             )}
                         </>
@@ -751,7 +659,7 @@ export default function RegisterPage() {
                                 {isFreeTier ? 'Tu plan gratuito' : 'Resumen antes de pagar'}
                             </h1>
                             <p className="mt-1 text-[13.5px] text-text-muted">
-                                Revisá y confirmá. {isFreeTier ? 'Sin tarjeta de crédito.' : 'El cobro ocurre en el checkout seguro.'}
+                                Revisa y confirma. {isFreeTier ? 'Sin tarjeta de crédito.' : 'El cobro ocurre en el checkout seguro.'}
                             </p>
                         </div>
                         <section className="rounded-card border border-border-subtle bg-surface-card p-4 space-y-3">
@@ -782,12 +690,10 @@ export default function RegisterPage() {
                                         {getTierCapabilities(tier).canUseBranding ? 'Incluida' : 'No incluida'}
                                     </span>
                                 </div>
-                                {!isFreeTier && selectedAddons.length > 0 && (
+                                {!isFreeTier && (
                                     <div className="flex justify-between">
-                                        <span className="text-text-muted">
-                                            Módulos ({selectedAddons.map((k) => ADDON_CONFIG[k].label).join(', ')})
-                                        </span>
-                                        <span className="font-semibold text-text-strong">${addonsCycleTotal.toLocaleString('es-CL')} CLP</span>
+                                        <span className="text-text-muted">Módulos profesionales (4)</span>
+                                        <span className="font-semibold text-[var(--success-600)]">Incluidos</span>
                                     </div>
                                 )}
                                 <div className="flex justify-between border-t border-border-default pt-2 mt-2">
@@ -805,7 +711,7 @@ export default function RegisterPage() {
                                 <div className="flex items-start gap-2 pt-1 text-xs text-text-muted">
                                     <Sparkles className="w-3.5 h-3.5 shrink-0 mt-0.5 text-[var(--success-500)]" />
                                     <span>
-                                        Sin tarjeta de crédito. Acceso inmediato. Podés hacer upgrade cuando quieras desde tu dashboard.
+                                        Sin tarjeta de crédito. Acceso inmediato. Puedes hacer upgrade cuando quieras desde tu dashboard.
                                     </span>
                                 </div>
                             ) : (
@@ -903,12 +809,12 @@ export default function RegisterPage() {
 
                 {step === 1 && (
                     <div className="pt-5 pb-2 text-center text-[13px] text-text-muted">
-                        ¿Ya tenés cuenta?{' '}
+                        ¿Ya tienes cuenta?{' '}
                         <Link
                             href="/login"
                             className="font-bold text-sport-600 hover:opacity-80 transition-opacity"
                         >
-                            Iniciá sesión
+                            Inicia sesión
                         </Link>
                     </div>
                 )}

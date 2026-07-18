@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { computeIsak } from '@/domain/bodycomp'
-import { athleteMaleInput } from '@/domain/bodycomp/fixtures'
+import { computeIsak } from '@eva/bodycomp'
+import { athleteMaleInput } from '@eva/bodycomp/fixtures'
 import { isakResultToMetricsJson } from './body-composition.mappers'
 
 vi.mock('@/services/entitlements.service', () => ({
@@ -29,9 +29,13 @@ import { logTeamClientAccess } from '@/services/team/team.service'
 import { get as edgeConfigGet } from '@vercel/edge-config'
 import * as repo from '@/infrastructure/db/body-composition.repository'
 import {
+    bodyCompositionAccessFromExplicitScope,
     deleteBodyComposition,
+    deleteBodyCompositionWithAccess,
     listClientMeasurements,
+    listClientMeasurementsWithAccess,
     saveBodyComposition,
+    saveBodyCompositionWithAccess,
     type WriteAccess,
 } from './body-composition.service'
 
@@ -44,6 +48,7 @@ const STANDALONE_WS = { type: 'coach_standalone' } as never
 
 const TEAM_ACCESS: WriteAccess = { orgId: null, activeTeamId: TEAM, viaTeam: true, teamId: TEAM }
 const STANDALONE_ACCESS: WriteAccess = { orgId: null, activeTeamId: null, viaTeam: false, teamId: null }
+const ENTERPRISE_ACCESS: WriteAccess = { orgId: 'org-1', activeTeamId: null, viaTeam: false, teamId: null }
 
 /**
  * Stub minimo del cliente Supabase: from(tabla) -> cadena (select/eq/is) -> maybeSingle con el
@@ -65,7 +70,7 @@ function makeDb(tables: Record<string, unknown>) {
 
 const TEAM_CLIENT = { id: CLIENT, team_id: TEAM }
 const CONSENT = { id: 'consent-1' }
-const ROW = { id: 'measurement-1', client_id: CLIENT, method: 'bia' } as never
+const ROW = { id: 'measurement-1', client_id: CLIENT, coach_id: USER, team_id: TEAM, org_id: null, method: 'bia' } as never
 
 const BIA_INPUT = {
     method: 'bia' as const,
@@ -132,6 +137,24 @@ describe('orden de guardas: kill-switch -> Zod -> scope -> assertModule -> conse
 })
 
 describe('gating del modulo (assertModule por workspace ACTIVO)', () => {
+    it('adapta los tres scopes explicitos sin mezclar tenants', () => {
+        expect(bodyCompositionAccessFromExplicitScope({ type: 'standalone' })).toEqual(STANDALONE_ACCESS)
+        expect(bodyCompositionAccessFromExplicitScope({ type: 'team', teamId: TEAM })).toEqual(TEAM_ACCESS)
+        expect(bodyCompositionAccessFromExplicitScope({ type: 'enterprise', orgId: 'org-1' })).toEqual(ENTERPRISE_ACCESS)
+    })
+
+    it('enterprise explicito queda rechazado aunque el coach tenga addon personal', async () => {
+        const db = makeDb({})
+        await expect(
+            saveBodyCompositionWithAccess(db, USER, BIA_INPUT, CLIENT, ENTERPRISE_ACCESS)
+        ).rejects.toThrow(/no habilitado/)
+        await expect(
+            listClientMeasurementsWithAccess(db, USER, ENTERPRISE_ACCESS, CLIENT)
+        ).rejects.toThrow(/no habilitado/)
+        expect(repo.insert).not.toHaveBeenCalled()
+        expect(repo.listByClientAndMethod).not.toHaveBeenCalled()
+    })
+
     it('modulo OFF (assertModule lanza) => save lanza y NO inserta', async () => {
         vi.mocked(resolvePreferredWorkspace).mockResolvedValue(TEAM_WS)
         vi.mocked(assertModule).mockRejectedValue(new Error('Modulo no habilitado: body_composition'))
@@ -258,6 +281,19 @@ describe('lectura (AC6): consentimiento + bitacora view en team', () => {
         )
     })
 
+    it('team no recibe filas historicas estampadas por otro tenant', async () => {
+        const db = makeDb({ client_consents: CONSENT })
+        const foreign = {
+            id: 'measurement-foreign', client_id: CLIENT, coach_id: USER,
+            team_id: 'team-2', org_id: null, method: 'bia',
+        } as never
+        vi.mocked(repo.listByClientAndMethod).mockImplementation(
+            async (_db, _clientId, method) => (method === 'bia' ? [ROW, foreign] : []) as never
+        )
+        const data = await listClientMeasurements(db, USER, TEAM_ACCESS, CLIENT)
+        expect(data.bia.map((row) => row.id)).toEqual(['measurement-1'])
+    })
+
     it('standalone => lista sin exigir consentimiento y SIN bitacora', async () => {
         const db = makeDb({})
         vi.mocked(repo.listByClientAndMethod).mockResolvedValue([])
@@ -268,6 +304,30 @@ describe('lectura (AC6): consentimiento + bitacora view en team', () => {
 })
 
 describe('soft-delete con guardas', () => {
+    it('scope explicito rechaza una medicion estampada por otro team', async () => {
+        vi.mocked(repo.getById).mockResolvedValue({
+            id: 'measurement-1', client_id: CLIENT, coach_id: USER,
+            team_id: 'team-2', org_id: null, method: 'bia',
+        } as never)
+        const db = makeDb({})
+        await expect(
+            deleteBodyCompositionWithAccess(db, USER, 'measurement-1', CLIENT, TEAM_ACCESS)
+        ).rejects.toThrow(/no encontrada/)
+        expect(repo.softDelete).not.toHaveBeenCalled()
+    })
+
+    it('scope explicito team conserva entitlement y bitacora al eliminar', async () => {
+        vi.mocked(repo.getById).mockResolvedValue(ROW)
+        const db = makeDb({})
+        await deleteBodyCompositionWithAccess(db, USER, 'measurement-1', CLIENT, TEAM_ACCESS)
+        expect(assertModule).toHaveBeenCalledWith(db, 'body_composition', { teamId: TEAM })
+        expect(repo.softDelete).toHaveBeenCalledWith(db, 'measurement-1')
+        expect(logTeamClientAccess).toHaveBeenCalledWith(
+            db,
+            expect.objectContaining({ action: 'delete', teamId: TEAM, clientId: CLIENT })
+        )
+    })
+
     it('medicion inexistente => lanza sin tocar el repo de escritura', async () => {
         vi.mocked(repo.getById).mockResolvedValue(null)
         const db = makeDb({})

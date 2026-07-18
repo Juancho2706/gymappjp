@@ -4,6 +4,7 @@ import React, { useCallback, useState } from 'react'
 import Image from 'next/image'
 import { Bell, Bug, Megaphone, Pin, Sparkles, Wrench, type LucideIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { CoachNavIcon } from '@/components/coach/CoachNavIcon'
 import { useNewsFeed } from './NewsFeedProvider'
 import {
   Sheet,
@@ -178,11 +179,16 @@ function NewsFeedList({ onNavigate }: { onNavigate?: () => void }) {
   )
 }
 
-function BellIconWithBadge({ unreadCount }: { unreadCount: number }) {
+function BellIconWithBadge({ unreadCount, glyph = false }: { unreadCount: number; glyph?: boolean }) {
   const badgeContent = unreadCount > 9 ? '9+' : unreadCount > 0 ? String(unreadCount) : null
   return (
     <>
-      <Bell className="h-5 w-5" />
+      {glyph ? (
+        // Chrome MÓVIL del coach: silueta propia del CEO (hereda el color por `currentColor`).
+        <CoachNavIcon concept="novedades" className="h-5 w-5" />
+      ) : (
+        <Bell className="h-5 w-5" />
+      )}
       {badgeContent && (
         <span className="absolute -top-1.5 -right-1.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-ember-500 px-1 text-[10px] font-extrabold text-white shadow-[0_0_0_2px_var(--surface-card)]">
           {badgeContent}
@@ -237,7 +243,7 @@ export function NewsBellButton({
             )}
             aria-label="Novedades"
           >
-            <BellIconWithBadge unreadCount={unreadCount} />
+            <BellIconWithBadge unreadCount={unreadCount} glyph />
           </button>
           <SheetContent side="bottom" className="max-h-[80dvh] rounded-t-2xl">
             <SheetHeader className="pb-4">

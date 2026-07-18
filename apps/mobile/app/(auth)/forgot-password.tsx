@@ -58,6 +58,7 @@ export default function ForgotPasswordScreen() {
               Si existe una cuenta con ese email, recibirás un enlace para restablecer tu contraseña.
             </Text>
             <Button
+              testID="forgot-password-back-to-login"
               label="Volver al login"
               variant="sport"
               rightIcon={ArrowRight}
@@ -81,11 +82,12 @@ export default function ForgotPasswordScreen() {
               Restablecer contraseña
             </Text>
             <Text className="text-muted font-sans" style={styles.subtitle}>
-              Ingresá tu email y te enviaremos un enlace para crear una nueva contraseña.
+              Ingresa tu email y te enviaremos un enlace para crear una nueva contraseña.
             </Text>
 
             <View style={styles.form}>
               <Input
+                testID="forgot-password-email-input"
                 label="Email"
                 leftIcon={Mail}
                 placeholder="tu@email.com"
@@ -97,6 +99,7 @@ export default function ForgotPasswordScreen() {
                 editable={!loading}
               />
               <Button
+                testID="forgot-password-submit"
                 label="Enviar enlace"
                 variant="sport"
                 rightIcon={ArrowRight}

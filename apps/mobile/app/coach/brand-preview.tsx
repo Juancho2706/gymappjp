@@ -83,7 +83,7 @@ export default function BrandPreviewScreen() {
         {/* Check-in */}
         <View style={[styles.card, { backgroundColor: pal.card, borderColor: pal.border }]}>
           <Text style={[styles.cardTitle, { color: pal.fg, fontFamily: 'HankenGrotesk_700Bold' }]}>Check-in semanal</Text>
-          <Text style={[styles.cardSub, { color: pal.muted }]}>Subí tu peso y fotos para tu coach.</Text>
+          <Text style={[styles.cardSub, { color: pal.muted }]}>Sube tu peso y fotos para tu coach.</Text>
           <View style={[styles.ctaOutline, { borderColor: accent }]}><Text style={[styles.ctaOutlineTxt, { color: accent }]}>Hacer check-in</Text></View>
         </View>
       </ScrollView>

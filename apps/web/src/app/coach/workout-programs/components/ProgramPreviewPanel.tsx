@@ -22,8 +22,8 @@ import {
     groupContiguousSupersetRuns,
     type SupersetGroupRow,
     type WorkoutSectionKey,
-} from '@/lib/workout-block-grouping'
-import { executionAreaGroupsFor } from '@/lib/workout-areas'
+    executionAreaGroupsFor,
+} from '@eva/workout-engine'
 import { buildAreaVMs } from '@/app/coach/builder/[clientId]/area-ui'
 import type { WorkoutArea } from '@/domain/workout/types'
 import { useSyncExternalStore } from 'react'
@@ -361,6 +361,13 @@ function PreviewActions({
     const hasAny = onEdit || onAssign || onDuplicate || onDelete
     if (!hasAny) return null
 
+    // Cantidad real de acciones secundarias visibles: el grid se reparte el ancho
+    // completo sin dejar el hueco fantasma de un tercer boton ausente
+    // ('Sincronizar' fue RETIRADO en el PR #124 — incidente de perdida de datos;
+    // en programas asignados solo quedan Duplicar/Eliminar).
+    const firstSlotVisible = isTemplate && !!onEdit
+    const secondaryCount = [firstSlotVisible, !!onDuplicate, !!onDelete].filter(Boolean).length
+
     return (
         <div className="flex w-full flex-col gap-2.5">
             {isTemplate ? (
@@ -378,7 +385,8 @@ function PreviewActions({
                     </Button>
                 )
             )}
-            <div className="grid grid-cols-3 gap-2">
+            {secondaryCount > 0 && (
+                <div className={cn('grid gap-2', secondaryCount === 3 ? 'grid-cols-3' : secondaryCount === 2 ? 'grid-cols-2' : 'grid-cols-1')}>
                 {isTemplate && onEdit && (
                     <Button type="button" variant="secondary" className="h-auto flex-col gap-1.5 py-3" onClick={onEdit}>
                         <Pencil className="size-[18px] text-muted" />
@@ -402,7 +410,8 @@ function PreviewActions({
                         <span className="text-xs font-bold">Eliminar</span>
                     </Button>
                 )}
-            </div>
+                </div>
+            )}
         </div>
     )
 }

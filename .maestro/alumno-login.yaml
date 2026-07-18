@@ -1,12 +1,41 @@
+# Flow: login del alumno (Root -> "Soy alumno" -> código de coach -> credenciales -> Home)
+# Pantallas: apps/mobile/app/index.tsx, apps/mobile/app/alumno/codigo.tsx,
+#            apps/mobile/app/(auth)/login.tsx, apps/mobile/app/alumno/(tabs)/home.tsx
+#
+# GOTCHA: ninguna de estas pantallas tiene testID hoy (verificado E0-G2, 2026-07-08).
+# Selectores por texto visible como fallback temporal — frágiles a copy changes.
+# testIDs faltantes (agregar en un PR de mobile aparte, NO en este flow):
+#   - index.tsx: RoleCard "Soy alumno" -> testID="role-alumno"
+#   - codigo.tsx: input de código -> testID="codigo-input", boton Continuar -> testID="codigo-submit"
+#   - login.tsx: input email -> testID="login-email", input password -> testID="login-password",
+#     boton submit -> testID="login-submit"
+#   - alumno/(tabs)/home.tsx: contenedor raiz -> testID="alumno-home-screen" (ancla de arribo)
 appId: cl.evaapp.eva
 ---
-- launchApp
-- assertVisible: "SOY ALUMNO"
-- tapOn: "SOY ALUMNO"
-- assertVisible: "Correo electrónico"
-- tapOn: "Correo electrónico"
-- inputText: "test@eva-app.cl"
-- tapOn: "Contraseña"
-- inputText: "testpassword123"
+- launchApp:
+    clearState: true
+
+# Paso 0: selector de rol (apps/mobile/app/index.tsx) — "checking" con sesión limpia resuelve rápido
+- assertVisible: "Soy alumno"
+- tapOn: "Soy alumno"
+
+# Paso 1: pantalla de código de coach (apps/mobile/app/alumno/codigo.tsx)
+- assertVisible: "Ingresa tu código"
+- tapOn:
+    text: "ABCDE o eva-app.cl/c/coach" # placeholder del TextInput, ver codigo.tsx L73
+- inputText: "${EVA_COACH_CODE}" # env var Maestro, setear al correr (ver .maestro/README.md)
+- tapOn: "Continuar"
+
+# Paso 2: login con credenciales (apps/mobile/app/(auth)/login.tsx, role=alumno)
+- assertVisible: "Iniciar sesión"
+- tapOn:
+    text: "coach@ejemplo.com" # placeholder del Input Email, ver login.tsx L122 (pantalla compartida con coach)
+- inputText: "${EVA_ALUMNO_EMAIL}"
+- tapOn:
+    text: "••••••••" # placeholder del Input Contraseña, ver login.tsx L136
+- inputText: "${EVA_ALUMNO_PASSWORD}"
 - tapOn: "Iniciar sesión"
-- assertVisible: "Mi entrenamiento"
+
+# Paso 3: arribo a Home del alumno (apps/mobile/app/alumno/(tabs)/home.tsx)
+- assertVisible: "Entrenos"
+- assertVisible: "Nutrición"
