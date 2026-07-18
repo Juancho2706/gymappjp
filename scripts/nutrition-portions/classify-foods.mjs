@@ -113,7 +113,7 @@ async function selectAll(db, table, columns, filter) {
 
 const FOODS_COLUMNS =
   'id, name, category, calories, protein_g, carbs_g, fats_g, serving_size, serving_unit, is_liquid, exchange_group_id, exchange_portion_grams, exchange_portion_label'
-const GROUPS_COLUMNS = 'id, code, name, is_system, ref_calories, ref_protein_g, ref_carbs_g, ref_fats_g, deleted_at'
+const GROUPS_COLUMNS = 'id, code, name, is_system, ref_calories, ref_protein_g, ref_carbs_g, ref_fats_g, composed_of, deleted_at'
 
 // ---------------------------------------------------------------------------
 // Salida a disco (gitignoreada: tmp/)

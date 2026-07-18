@@ -43,7 +43,7 @@
  * coincide.
  */
 
-import { foodCategoryFromName, type NutritionFoodCategory } from '../../packages/nutrition-v2/food-category'
+import { foodCategoryFromName, type NutritionFoodCategory } from '../../packages/nutrition-v2/food-category.ts'
 
 // ---------------------------------------------------------------------------
 // Tipos

@@ -68,7 +68,7 @@ import {
   renderMealExchangeTable,
   reorderByPriority,
   type MealExchangeTargetView,
-} from './report'
+} from './report.ts'
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url))
 config({ path: resolve(__dirname, '../../apps/web/.env.local') })
