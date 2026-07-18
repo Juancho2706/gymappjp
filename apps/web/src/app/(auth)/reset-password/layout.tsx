@@ -5,6 +5,7 @@ export const metadata: Metadata = {
     title: 'Establecer nueva contraseña',
     description:
         'Define una nueva contraseña para tu cuenta EVA tras el enlace de recuperación enviado a tu correo.',
+    robots: { index: false, follow: false },
 }
 
 export default function ResetPasswordLayout({ children }: { children: ReactNode }) {

@@ -1,3 +1,5 @@
+> ARCHIVADO 2026-07-18: auditoría pre-rediseño, calificada "obsoleta como plan" por `ESTADO_Y_PENDIENTES.md` — reemplazada por `docs/audits/rn-parity-qa/*` y `docs/rn-port/PLAN-OLAS-1A1.md`.
+
 # Auditoría de paridad RN mobile ↔ web (PWA) — 2026-06-21
 
 > Objetivo: plan para que `apps/mobile` (Expo RN) sea un port 1:1 visual+funcional de `apps/web` (Next.js PWA, fuente de verdad).

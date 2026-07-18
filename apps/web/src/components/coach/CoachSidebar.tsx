@@ -138,6 +138,14 @@ export function CoachSidebar({ coachName, coachBrand, subscriptionStatus, enterp
     // (TabBar.jsx `minimized`: insets 14→72, labels fade). El scroll vive en <main>
     // (overflow-y-auto), no en window.
     const [tabbarMinimized, setTabbarMinimized] = useState(false)
+    // Pulso optimista del tap (espejo de ClientNav): feedback INMEDIATO en el ítem tocado
+    // mientras el server stremea la ruta (con prefetch={false} el click paga el round-trip).
+    const [isNavigating, setIsNavigating] = useState<string | null>(null)
+
+    // Reset del estado pending cuando la ruta efectivamente cambió.
+    useEffect(() => {
+        setIsNavigating(null)
+    }, [pathname])
 
     useEffect(() => {
         const saved = localStorage.getItem('sidebar-collapsed')
@@ -190,16 +198,17 @@ export function CoachSidebar({ coachName, coachBrand, subscriptionStatus, enterp
     const visibleNavItems = getVisibleNavItems({ activeWorkspaceType, subscriptionStatus, enabledModules, disabledDomains: disabledDomainSet })
     const { primary: primaryNavItems } = splitForSidebar(visibleNavItems)
 
+    // Item-aware: además de `href` respeta `activeAliases` (swap V2 bajo canary ilumina Nutrición).
+    // Incluye `isNavigating` para que el activo (y la píldora móvil) salte AL TIRO al ítem tocado.
+    const isNavItemActive = (item: NavModule) => isNavItemActiveForPath(item, pathname) || isNavigating === item.href
+
     // MOBILE — cápsula flotante (eva-app coachTabs): hasta 5 tabs full-label, sin "Más".
     const mobileTabs = MOBILE_TAB_KEYS
         .map((k) => visibleNavItems.find((i) => i.key === k))
         .filter((i): i is NavModule => i != null)
         .slice(0, 5)
-    const mobileActiveIndex = mobileTabs.findIndex((i) => isNavItemActiveForPath(i, pathname))
+    const mobileActiveIndex = mobileTabs.findIndex((i) => isNavItemActive(i))
     const mobileN = mobileTabs.length || 1
-
-    // Item-aware: además de `href` respeta `activeAliases` (swap V2 bajo canary ilumina Nutrición).
-    const isNavItemActive = (item: NavModule) => isNavItemActiveForPath(item, pathname)
 
     // DESKTOP — link vertical del sidebar (.dt-nav-item). Transcripción verbatim del diseño.
     const renderNavLink = (item: NavModule, secondary = false) => {
@@ -213,13 +222,17 @@ export function CoachSidebar({ coachName, coachBrand, subscriptionStatus, enterp
                 prefetch={false}
                 title={isCollapsed ? label : undefined}
                 aria-label={label}
+                onClick={() => {
+                    if (!isNavItemActiveForPath(item, pathname)) setIsNavigating(item.href)
+                }}
                 className={cn(
                     'group/navitem relative flex w-full items-center gap-[13px] rounded-[var(--radius-md)] border-none font-ui text-[14.5px] font-semibold tracking-[-0.01em] text-left transition-colors duration-150',
                     secondary ? 'h-[42px]' : 'h-[46px]',
                     isCollapsed ? 'mx-auto h-12 w-12 justify-center gap-0 px-0' : 'px-3',
                     isActive
                         ? 'bg-[var(--sport-100)] text-[var(--sport-600)] [font-weight:750]'
-                        : 'text-[var(--text-muted)] hover:bg-[var(--surface-sunken)] hover:text-[var(--text-strong)]'
+                        : 'text-[var(--text-muted)] hover:bg-[var(--surface-sunken)] hover:text-[var(--text-strong)]',
+                    isNavigating === item.href && 'animate-pulse'
                 )}
             >
                 {/* .dt-nav-accent — barra lateral sport del activo */}
@@ -398,7 +411,10 @@ export function CoachSidebar({ coachName, coachBrand, subscriptionStatus, enterp
                                 href={item.href}
                                 prefetch={false}
                                 aria-label={label}
-                                className="eva-tabbar-press"
+                                onClick={() => {
+                                    if (!isNavItemActiveForPath(item, pathname)) setIsNavigating(item.href)
+                                }}
+                                className={cn('eva-tabbar-press', isNavigating === item.href && 'animate-pulse')}
                                 style={{
                                     position: 'relative',
                                     zIndex: 1,

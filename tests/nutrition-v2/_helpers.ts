@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
+import { assertE2eAccounts } from '../e2e-accounts'
 
 /**
  * Helpers compartidos de la suite Nutrición V2. Este archivo NO termina en `.spec.ts`
@@ -6,6 +7,11 @@ import { expect, test, type Page } from '@playwright/test'
  *
  * Credenciales SIEMPRE por env — nunca hardcodeadas. Sin las envs, cada spec se marca skip
  * con un mensaje claro (no rompe CI ni la corrida default local).
+ *
+ * REGLA DURA (incidente 2026-07: los tests archivaron "Plancito 4" de una alumna real del
+ * workspace de demos del CEO): esta suite SOLO toca cuentas de prueba propias. Los defaults
+ * apuntan a la persona E2E standalone (Aurora Strength + su alumno E2E Solo Alumno) y el guard
+ * `assertE2eAccounts` revienta EN SECO si alguien setea un email/slug fuera de tests/e2e-accounts.ts.
  */
 
 // ── Env ──────────────────────────────────────────────────────────────────────
@@ -14,20 +20,23 @@ export const COACH_EMAIL = process.env.E2E_COACH_EMAIL ?? ''
 export const COACH_PASSWORD = process.env.E2E_COACH_PASSWORD ?? ''
 export const STUDENT_EMAIL = process.env.E2E_STUDENT_EMAIL ?? ''
 export const STUDENT_PASSWORD = process.env.E2E_STUDENT_PASSWORD ?? ''
-/** Slug del coach para la shell del alumno (/c/[slug]/…). Misma convención que nutrition-student-smoke. */
-export const COACH_SLUG = process.env.E2E_COACH_SLUG ?? ''
-/** Nombre de la alumna QA tal como aparece en el roster del coach (para ubicar su fila). */
-export const STUDENT_NAME = process.env.E2E_STUDENT_NAME ?? 'Camila'
+/** Slug del coach para la shell del alumno (/c/[slug]/…). Default: fixture E2E standalone. */
+export const COACH_SLUG = process.env.E2E_COACH_SLUG ?? 'e2e-aurora-strength'
+/** Nombre del alumno E2E tal como aparece en el roster del coach (para ubicar su fila). */
+export const STUDENT_NAME = process.env.E2E_STUDENT_NAME ?? 'E2E Solo Alumno'
 /**
- * clientId (UUID) de la alumna QA. Opcional pero recomendado: hace deterministas los specs
- * de builder/ficha sin depender de que la alumna esté en la página 1 del roster.
+ * clientId (UUID) del alumno E2E. Default: E2E Solo Alumno (cuenta de prueba permanente). Hace
+ * deterministas builder/ficha SIN roster-search — este roster-search por nombre fue el mecanismo
+ * exacto del incidente (resolvió una alumna real del workspace del CEO). Overrideable por env
+ * para otras personas E2E, pero el guard exige que sea un clientId de la lista permitida.
  */
-export const STUDENT_CLIENT_ID = process.env.E2E_STUDENT_CLIENT_ID ?? ''
+export const STUDENT_CLIENT_ID =
+  process.env.E2E_STUDENT_CLIENT_ID ?? '01c36cde-a95d-42a7-b165-ba08a8599d22'
 /**
- * Etiqueta del workspace standalone del coach canary (multi-contexto, p.ej. "Jose Fit"). El
- * roster V2 respeta el workspace activo; la alumna QA vive en el standalone.
+ * Etiqueta del workspace standalone del coach E2E (multi-contexto). El roster V2 respeta el
+ * workspace activo; el alumno E2E vive en el standalone. Default: la marca del fixture standalone.
  */
-export const COACH_WORKSPACE_LABEL = process.env.E2E_COACH_WORKSPACE ?? 'Jose Fit'
+export const COACH_WORKSPACE_LABEL = process.env.E2E_COACH_WORKSPACE ?? 'Aurora Strength'
 /** Término de búsqueda del catálogo local para el paso de construcción del builder. */
 export const FOOD_QUERY = process.env.E2E_FOOD_QUERY ?? 'pollo'
 
@@ -39,15 +48,36 @@ export const hasStudentCreds =
 const NO_PREVIEW_MSG =
   'Falta PLAYWRIGHT_BASE_URL: estos specs corren contra el Preview de Vercel con el canary de Nutrición V2 (escriben en Supabase de producción). Sin esa env se omiten para no correr contra local.'
 
+// ── Guard estructural de cuentas (falla en seco ante cualquier fuga a josefit) ──
+/**
+ * Valida TODO lo configurable por env contra tests/e2e-accounts.ts antes de tocar la red.
+ * Si algún email/slug/clientId cae fuera del allowlist (p.ej. apunta a josefit), lanza y el
+ * spec revienta con un mensaje claro — no hay forma de que un spec nuevo termine mutando el
+ * workspace del CEO por accidente. Se corre en cada guard de skip (coach y alumno).
+ */
+function assertOwnE2eAccounts() {
+  assertE2eAccounts(
+    {
+      coachEmail: COACH_EMAIL,
+      studentEmail: STUDENT_EMAIL,
+      coachSlug: COACH_SLUG,
+      clientId: STUDENT_CLIENT_ID,
+    },
+    'nutrition-v2',
+  )
+}
+
 // ── Guards de skip ────────────────────────────────────────────────────────────
 /** Specs 1-4 (lado coach): exigen Preview (Edge Config canary) + credenciales del coach. */
 export function requireCanaryCoach() {
+  assertOwnE2eAccounts()
   test.skip(!hasPreview, NO_PREVIEW_MSG)
   test.skip(!hasCoachCreds, 'Falta E2E_COACH_EMAIL / E2E_COACH_PASSWORD.')
 }
 
 /** Spec 4 (lado alumna): exige Preview + credenciales de la alumna + slug del coach. */
 export function requireCanaryStudent() {
+  assertOwnE2eAccounts()
   test.skip(!hasPreview, NO_PREVIEW_MSG)
   test.skip(!hasStudentCreds, 'Falta E2E_STUDENT_EMAIL / E2E_STUDENT_PASSWORD / E2E_COACH_SLUG.')
 }
@@ -68,7 +98,7 @@ async function dismissCookieConsent(page: import('@playwright/test').Page): Prom
   }
 }
 
-async function loginCoach(page: Page) {
+export async function loginCoach(page: Page) {
   await page.goto('/login')
   await dismissCookieConsent(page)
   await page.getByRole('textbox', { name: /email/i }).fill(COACH_EMAIL)

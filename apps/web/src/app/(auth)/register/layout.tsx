@@ -5,6 +5,8 @@ export const metadata: Metadata = {
     title: 'Crear cuenta de coach',
     description:
         'Regístrate en EVA, la plataforma para personal trainers: alumnos, rutinas, nutrición y app con tu marca.',
+    alternates: { canonical: '/register' },
+    robots: { index: true, follow: true },
 }
 
 export default function RegisterLayout({ children }: { children: ReactNode }) {

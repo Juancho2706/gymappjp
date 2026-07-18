@@ -97,7 +97,6 @@ EVA es un SaaS B2B2C white-label para coaches fitness, personal trainers y gimna
 
 ## Fuentes relacionadas
 
-- `architecture/PROJECT_STRUCTURE.md`
 - `architecture/FLOWS_AND_COMPONENTS.md`
 - `testing/TEST_STATUS.md`
 - `operations/LOCAL_WORKFLOW.md`
