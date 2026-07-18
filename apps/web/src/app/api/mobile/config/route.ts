@@ -20,6 +20,7 @@ import {
     type SectionPrefs,
 } from '@eva/feature-prefs'
 import { resolveNutritionV2RolloutDecision } from '@/services/nutrition-v2-rollout.service'
+import { resolveStudentAccessForCoach } from '@/lib/student-access.server'
 
 /**
  * Config operacional + entitlements para el cliente mobile. Fuente única de verdad de:
@@ -312,6 +313,14 @@ export async function GET(request: NextRequest) {
     const enabledModules = MODULE_KEYS.filter((key) => applied[key] === true)
     const disabledModules = MODULE_KEYS.filter((key) => isModuleKilledByOperator(key))
 
+    // Gate de suscripcion del coach para el alumno RN (politica CEO 2026-07-18). Resuelto server-side
+    // con service-role (bypassa RLS → lectura confiable de las columnas de sub del coach). Solo aplica
+    // a usuarios ALUMNO (scope.clientId); para un coach el campo es null. La app RN usa {state} para
+    // banner (grace) / pantalla honesta (readonly). NOTA: cosmetico — la RLS/RPC es la barrera real.
+    const studentAccess = scope.clientId
+        ? await resolveStudentAccessForCoach(admin, scope.coachId)
+        : null
+
     const featurePrefsEnabled = await readFeaturePrefsEnabled()
     const [{ nutritionEnabled, sections }, studentV2, coachV2] = await Promise.all([
         resolveNutritionPrefs(admin, featurePrefsEnabled, scope, applied),
@@ -339,5 +348,8 @@ export async function GET(request: NextRequest) {
             nutritionV2Student: studentV2.enabled === true,
             nutritionV2Coach: coachV2.enabled === true,
         },
+        studentAccess: studentAccess
+            ? { state: studentAccess.state, graceEndsAt: studentAccess.graceEndsAt }
+            : null,
     })
 }

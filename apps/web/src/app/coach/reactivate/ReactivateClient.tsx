@@ -24,6 +24,7 @@ import {
     type SubscriptionTier,
 } from '@/lib/constants'
 import type { ModuleKey } from '@/services/entitlements.service'
+import { formatStudentAccessDate, resolveStudentGraceEndsAt } from '@/lib/student-access'
 import { ReactivateCouponCard } from './_components/ReactivateCouponCard'
 
 // Solo se ofertan tiers a la venta (free/starter/pro/elite). growth/scale quedan fuera (LEGACY).
@@ -37,6 +38,10 @@ interface ReactivateClientProps {
     currentTier: SubscriptionTier
     activeClientCount: number
     subscriptionStatus: string | null
+    /** Ancla de la gracia de ALUMNOS (period_end vigente al corte) para el banner de presion. */
+    currentPeriodEnd?: string | null
+    /** coaches.paid_access_ended_at (migracion B-datos) — gana sobre currentPeriodEnd al anclar. */
+    paidAccessEndedAt?: string | null
     /**
      * Ex-add-ons pagos cancelados recientemente. OBSOLETO (CEO 2026-07-17): los módulos vienen
      * incluidos en los planes pagos y ya no se recompran al reactivar. Se acepta por
@@ -47,7 +52,7 @@ interface ReactivateClientProps {
     couponsEnabled?: boolean
 }
 
-export function ReactivateClient({ currentTier, activeClientCount, subscriptionStatus, couponsEnabled = false }: ReactivateClientProps) {
+export function ReactivateClient({ currentTier, activeClientCount, subscriptionStatus, currentPeriodEnd = null, paidAccessEndedAt = null, couponsEnabled = false }: ReactivateClientProps) {
     const searchParams = useSearchParams()
 
     // Pre-select the minimum viable tier for the coach's current client count,
@@ -272,20 +277,44 @@ export function ReactivateClient({ currentTier, activeClientCount, subscriptionS
                 </div>
             )}
 
-            {/* Banner warning (kit Reactivar): alumnos en pausa */}
-            <div className="mb-4 flex items-center gap-3 rounded-card border border-[var(--warning-500)] bg-[var(--warning-100)] p-4">
-                <AlertTriangle className="h-[22px] w-[22px] shrink-0 text-[var(--warning-600)]" />
-                <p className="text-[13px] leading-snug text-[var(--warning-600)]">
-                    {activeClientCount > 0 ? (
-                        <>
-                            Tus <strong>{activeClientCount} alumno{activeClientCount !== 1 ? 's' : ''}</strong> están en
-                            pausa. Elige un plan para reactivar el acceso.
-                        </>
-                    ) : (
-                        <>Sin un plan activo no puedes gestionar alumnos ni rutinas. Elige un plan para reactivar el acceso.</>
-                    )}
-                </p>
-            </div>
+            {/* Banner warning (kit Reactivar): alumnos con fecha de corte. Politica CEO 2026-07-18:
+                los alumnos conservan acceso 7 dias post fin del periodo pagado (coalesce
+                paid_access_ended_at → current_period_end) y luego quedan en solo-lectura. La presion
+                de reactivar vive AQUI (el banner del alumno es discreto y sin countdown). Sin ancla
+                de fecha => copy generico (degradacion, p.ej. period_end NULLeado sin backfill). */}
+            {(() => {
+                const graceEndsAt = resolveStudentGraceEndsAt(paidAccessEndedAt, currentPeriodEnd)
+                const graceActive = graceEndsAt != null && graceEndsAt.getTime() > Date.now()
+                return (
+                    <div className="mb-4 flex items-center gap-3 rounded-card border border-[var(--warning-500)] bg-[var(--warning-100)] p-4">
+                        <AlertTriangle className="h-[22px] w-[22px] shrink-0 text-[var(--warning-600)]" />
+                        <p className="text-[13px] leading-snug text-[var(--warning-600)]">
+                            {activeClientCount > 0 && graceEndsAt ? (
+                                graceActive ? (
+                                    <>
+                                        Tus <strong>{activeClientCount} alumno{activeClientCount !== 1 ? 's' : ''}</strong> perderán
+                                        acceso el <strong>{formatStudentAccessDate(graceEndsAt)}</strong>. Elige un plan para
+                                        reactivar antes del corte.
+                                    </>
+                                ) : (
+                                    <>
+                                        Tus <strong>{activeClientCount} alumno{activeClientCount !== 1 ? 's' : ''}</strong> quedaron
+                                        en solo-lectura el <strong>{formatStudentAccessDate(graceEndsAt)}</strong>: ven su plan e
+                                        historial, pero no pueden registrar. Elige un plan para devolverles el acceso.
+                                    </>
+                                )
+                            ) : activeClientCount > 0 ? (
+                                <>
+                                    Tus <strong>{activeClientCount} alumno{activeClientCount !== 1 ? 's' : ''}</strong> están en
+                                    pausa. Elige un plan para reactivar el acceso.
+                                </>
+                            ) : (
+                                <>Sin un plan activo no puedes gestionar alumnos ni rutinas. Elige un plan para reactivar el acceso.</>
+                            )}
+                        </p>
+                    </div>
+                )
+            })()}
 
             {/* Ciclo — pill segmentado centrado (kit Reactivar) */}
             <div className="mb-4 flex justify-center">

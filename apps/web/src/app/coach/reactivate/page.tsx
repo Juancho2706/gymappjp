@@ -19,6 +19,8 @@ export default async function ReactivatePage() {
                 currentTier={currentTier}
                 activeClientCount={activeClientCount}
                 subscriptionStatus={subscriptionStatus}
+                currentPeriodEnd={coach?.current_period_end ?? null}
+                paidAccessEndedAt={coach?.paid_access_ended_at ?? null}
                 recentlyCancelledAddons={recentlyCancelledAddons}
                 couponsEnabled={couponsEnabled}
             />

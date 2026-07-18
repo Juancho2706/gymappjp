@@ -24,6 +24,7 @@ import { ScaleDots, EffortHelp, RPE_HELP, RIR_HELP } from './EffortScale'
 import { typedKeypadFields, type TypedKeypadMode } from '@eva/workout-engine'
 import type { OptimisticLogPayload } from '@eva/workout-engine'
 import { cn } from '@/lib/utils'
+import { humanizeStudentWriteError } from '@/lib/student-access'
 import { springs } from '@/lib/animation-presets'
 
 const initialState: LogState = {}
@@ -737,7 +738,7 @@ function StrengthLogSetForm({
 
                 {state.error && (
                     <div className="mt-2 flex items-center gap-2 px-1">
-                        <p className="flex-1 text-xs text-red-400">{state.error}</p>
+                        <p className="flex-1 text-xs text-red-400">{humanizeStudentWriteError(state.error)}</p>
                         <button
                             type="button"
                             onClick={() => formRef.current?.requestSubmit()}
@@ -1097,7 +1098,7 @@ function TypedLogSetRow({
                 </div>
                 {state.error && (
                     <div className="col-span-full flex items-center gap-2 px-2 mt-1">
-                        <p className="flex-1 text-xs text-red-400">{state.error}</p>
+                        <p className="flex-1 text-xs text-red-400">{humanizeStudentWriteError(state.error)}</p>
                         <button
                             type="button"
                             onClick={() => formRef.current?.requestSubmit()}

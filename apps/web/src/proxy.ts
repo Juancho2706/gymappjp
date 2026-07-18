@@ -5,6 +5,11 @@ import { NextResponse, type NextRequest } from 'next/server'
 import type { Database, Tables } from '@/lib/database.types'
 import type { EnterpriseStaffRole, WorkspaceSummary } from '@/domain/auth/types'
 import { resolveCoachSubscriptionRedirect } from '@/lib/coach-subscription-gate'
+import {
+    STUDENT_ACCESS_STATE_HEADER,
+    STUDENT_ACCESS_GRACE_UNTIL_HEADER,
+} from '@/lib/student-access'
+import { isStudentAccessGateEnabled, resolveStudentAccessForCoach } from '@/lib/student-access.server'
 import { resolvePostLoginRedirect } from '@/lib/auth/post-login-redirect.server'
 import { listUserWorkspaces, pickPreferredWorkspace } from '@/services/auth/workspace.service'
 import { findWorkspacePreference } from '@/infrastructure/db/workspace.repository'
@@ -940,6 +945,65 @@ export async function proxy(request: NextRequest) {
             // `client.use_coach_brand_colors` se ignora (no se migra, solo se deja de leer). El header
             // se mantiene fijo en 'true' para los lectores existentes.
             requestHeaders.set('x-client-use-brand-colors', 'true')
+
+            // Gate de suscripcion del COACH (politica CEO 2026-07-18). Un alumno accede si su coach
+            // tiene acceso efectivo O esta dentro de la gracia (7 dias desde el fin del periodo
+            // pagado, ancla coalesce(paid_access_ended_at, current_period_end)). Post-gracia →
+            // SOLO-LECTURA REAL: las superficies de lectura (plan/historial/rachas) se siguen
+            // sirviendo con header 'readonly' (banner honesto en el layout); el resto del arbol
+            // redirige a /suspended?reason=coach (variante honesta de B3). En gracia → header
+            // para que el layout muestre el banner discreto de B3. Kill-switch Edge Config
+            // STUDENT_ACCESS_GATE (default ausente = ACTIVO; false = apagado).
+            //
+            // Lectura APARTE de las columnas de sub del coach (NO se suman al SELECT de branding): ese
+            // SELECT corre TAMBIEN como `anon` en la pagina de login pre-auth, y anon SOLO tiene GRANT de
+            // las columnas de branding (migracion 20260617033845). Sumar subscription_status/current_period_end
+            // ahi romperia la marca del login de TODOS los coaches (42501 → fallback minimal). Aca ya estamos
+            // POST-AUTH: el rol `authenticated` conserva SELECT de las 45 columnas, asi que este read va bien.
+            //
+            // NOTA: esto es SOLO la capa UI — la RLS/RPC de la base es la barrera REAL de datos (RN habla
+            // PostgREST directo y no pasa por aca). Fail-OPEN: managed org/team resuelve `ok` por
+            // hasEffectiveAccess; un fallo de lectura tambien degrada a `ok` (nunca bloquea por esta capa).
+            const studentGateEnabled = await isStudentAccessGateEnabled()
+            if (studentGateEnabled) {
+                const access = await resolveStudentAccessForCoach(supabase, coach.id, { gateEnabled: true })
+                if (access.state === 'readonly') {
+                    // Allowlist de LECTURA (fix r2 'ux'): sin ella el CTA "Ver mi historial" de
+                    // /suspended re-entraba a este mismo redirect → loop, y el copy "puedes revisar
+                    // tu plan y tu historial" mentia. Se permiten: dashboard (plan + rachas),
+                    // detalle del plan (/workout/[planId] — sus escrituras rebotan en la action con
+                    // COACH_ACCOUNT_PAUSED y copy honesto), historial, perfil y change-password
+                    // (para no pelear con el forced-flow de mas abajo). Todo lo demas (check-in,
+                    // nutricion, bodycomp, movimiento, ...) cae a /suspended?reason=coach.
+                    const isReadSurface =
+                        pathname.includes('/suspended') ||
+                        pathname.includes('/dashboard') ||
+                        pathname.includes('/workout-history') ||
+                        pathname.includes('/workout/') ||
+                        pathname.includes('/perfil') ||
+                        pathname.includes('/change-password')
+                    if (!isReadSurface) {
+                        const redirectUrl = request.nextUrl.clone()
+                        redirectUrl.pathname = `/c/${coachSlug}/suspended`
+                        redirectUrl.searchParams.set('reason', 'coach')
+                        const redirect = NextResponse.redirect(redirectUrl)
+                        supabaseResponse.cookies.getAll().forEach(cookie => {
+                            redirect.cookies.set(cookie.name, cookie.value)
+                        })
+                        return redirect
+                    }
+                    // Superficie de lectura servida en modo readonly → banner honesto persistente
+                    // en el layout (espejo del StudentAccessBanner 'blocked' de RN). En /suspended
+                    // no se manda: la pantalla ya ES el estado honesto (banner seria redundante).
+                    if (!pathname.includes('/suspended')) {
+                        requestHeaders.set(STUDENT_ACCESS_STATE_HEADER, 'readonly')
+                    }
+                }
+                if (access.state === 'grace') {
+                    requestHeaders.set(STUDENT_ACCESS_STATE_HEADER, 'grace')
+                    if (access.graceEndsAt) requestHeaders.set(STUDENT_ACCESS_GRACE_UNTIL_HEADER, access.graceEndsAt)
+                }
+            }
 
             const response = buildClientRouteResponse()
 

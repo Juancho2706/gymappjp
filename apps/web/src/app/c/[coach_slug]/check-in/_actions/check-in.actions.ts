@@ -5,12 +5,16 @@ import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import { revalidatePath } from 'next/cache'
 import { CheckInSchema } from '@eva/schemas'
 import { compressImageToWebp } from '@/lib/storage/image-compress'
+import { STUDENT_ACCESS_COPY } from '@/lib/student-access'
+import { resolveStudentAccessForClient } from '@/lib/student-access.server'
 
 export type CheckinState = {
     error?: string
     success?: boolean
     /** El check-in se guardó, pero alguna foto no pudo subirse (best-effort). */
     warning?: string
+    /** `coach_paused` = cuenta del coach en pausa (post-gracia, solo-lectura) → no se registró. */
+    code?: 'coach_paused'
 }
 
 // Techo generoso pre-compresión (una HEIC/JPEG de cámara puede venir de 3-8MB si la conversión
@@ -46,6 +50,10 @@ export async function createCheckinUploadUrlsAction(
         data: { user },
     } = await supabase.auth.getUser()
     if (!user) return { error: 'No autenticado.' }
+
+    // Gate de suscripcion del coach: post-gracia no se firman URLs de subida (no hay check-in que crear).
+    const access = await resolveStudentAccessForClient(supabase, user.id)
+    if (access.state === 'readonly') return { error: STUDENT_ACCESS_COPY.pausedWriteError }
 
     const adminDb = createServiceRoleClient()
     const tickets: CheckinUploadTicket[] = []
@@ -153,6 +161,12 @@ export async function submitCheckinAction(
         data: { user },
     } = await supabase.auth.getUser()
     if (!user) return { error: 'No autenticado.' }
+
+    // Gate de suscripcion del coach: post-gracia (readonly) el alumno no registra check-ins.
+    const access = await resolveStudentAccessForClient(supabase, user.id)
+    if (access.state === 'readonly') {
+        return { error: STUDENT_ACCESS_COPY.pausedWriteError, code: 'coach_paused' }
+    }
 
     const adminDb = createServiceRoleClient()
 

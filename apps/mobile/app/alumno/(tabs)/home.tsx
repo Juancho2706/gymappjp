@@ -28,6 +28,7 @@ import { WeightWidget } from '../../../components/alumno/home/WeightWidget'
 import { PersonalRecordsCard } from '../../../components/alumno/home/PersonalRecordsCard'
 import { RecentWorkouts } from '../../../components/alumno/home/RecentWorkouts'
 import { OrgAnnouncementBanner } from '../../../components/alumno/home/OrgAnnouncementBanner'
+import { StudentAccessBanner } from '../../../components/alumno/home/StudentAccessBanner'
 import { HabitsCard } from '../../../components/alumno/home/HabitsCard'
 import { NutritionDailySummary } from '../../../components/alumno/home/NutritionDailySummary'
 import { NutritionDailySummaryV2 } from '../../../components/alumno/home/NutritionDailySummaryV2'
@@ -60,7 +61,7 @@ function startOfWeekMonday(d: Date): Date {
 export default function AlumnoHomeScreen() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
-  const { nutritionEnabled, ready: entitlementsReady } = useEntitlements()
+  const { nutritionEnabled, ready: entitlementsReady, studentAccess } = useEntitlements()
   // Rollout técnico de Nutrición V2 (surface mobileStudent) resuelto por el servidor y espejado
   // en el flag local; fail-closed hasta que entitlements estén listos. Mismo patrón que la
   // pantalla /alumno/nutrition-v2.
@@ -369,6 +370,10 @@ export default function AlumnoHomeScreen() {
         <DashboardHeader greeting={greeting} dateLabel={formatLongDate()} brandName={data?.coachName} welcomeMessage={data?.coachWelcome} />
 
         <View style={styles.content}>
+        {/* §0 Acceso por suscripcion del coach (politica CEO 2026-07-18): gracia => banner discreto;
+            post-gracia => aviso honesto de solo-lectura. 'active' no monta nada (espejo web /c). */}
+        <StudentAccessBanner access={studentAccess} />
+
         {/* §1 Anuncios de la org */}
         <OrgAnnouncementBanner announcements={data?.announcements ?? []} />
 

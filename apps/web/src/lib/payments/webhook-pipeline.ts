@@ -264,6 +264,8 @@ export async function runWebhookPipeline(
             const recurringUpdate: Record<string, unknown> = {
                 subscription_status: 'active',
                 payment_provider: provider.name,
+                // Cobro recurrente OK → limpiar el ancla de la gracia de ALUMNOS (coach vuelve a acceso efectivo).
+                paid_access_ended_at: null,
             }
             if (result.currentPeriodEnd) recurringUpdate.current_period_end = result.currentPeriodEnd
             const { error: recErr } = await admin.from('coaches').update(recurringUpdate).eq('id', coach.id)
@@ -980,7 +982,10 @@ export async function runWebhookPipeline(
                 await revertActiveCouponForCoach(admin, coach.id)
                 const { error: blockErr } = await admin
                     .from('coaches')
-                    .update({ subscription_status: 'expired', current_period_end: null, subscription_mp_id: null })
+                    // ANCLA de la gracia de ALUMNOS: capturar el period_end vigente ANTES de nulearlo
+                    // (la gracia de 7 días de los alumnos ancla en coalesce(paid_access_ended_at,
+                    // current_period_end); la reactivación la limpia).
+                    .update({ subscription_status: 'expired', paid_access_ended_at: coach.current_period_end ?? new Date().toISOString(), current_period_end: null, subscription_mp_id: null })
                     .eq('id', coach.id)
                 if (blockErr) {
                     console.error('[payments.webhook] failed to block coach on refund/chargeback', {
@@ -1095,6 +1100,10 @@ export async function runWebhookPipeline(
     }
 
     const isPaidLike = statusForUpdate === 'active' || statusForUpdate === 'trialing'
+    // Reactivación / renovación paga → limpiar el ancla de la gracia de ALUMNOS (si el coach vuelve a
+    // tener acceso efectivo, los alumnos vuelven a normal sin ventana de gracia residual). Si más
+    // abajo el terminal decide 'expire', ese bloque la re-setea (allí statusForUpdate no es paid-like).
+    if (isPaidLike) coachUpdate.paid_access_ended_at = null
     // El tier/ciclo/max_clients vienen del external_reference (`result.subscriptionTier`), NO del
     // checkoutId. El PRIMER `payment` aprobado de una suscripción de MP llega SIN `order.id`
     // (checkoutId null) → antes este bloque se saltaba y el coach quedaba en 'free' pese a haber
@@ -1160,6 +1169,9 @@ export async function runWebhookPipeline(
         coachUpdate.subscription_status = 'expired'
         // Intentionally NOT setting subscription_tier, billing_cycle, or max_clients —
         // the reactivate page uses the preserved tier to anchor the coach to their old plan.
+        // ANCLA de la gracia de ALUMNOS: capturar el period_end vigente ANTES de nulearlo, para que
+        // la gracia de 7 días de los alumnos ancle aunque este terminal deje current_period_end null.
+        coachUpdate.paid_access_ended_at = coach.current_period_end ?? new Date().toISOString()
         coachUpdate.current_period_end = null
         coachUpdate.subscription_mp_id = null
     } else if (terminalDecision === 'ignore-free') {

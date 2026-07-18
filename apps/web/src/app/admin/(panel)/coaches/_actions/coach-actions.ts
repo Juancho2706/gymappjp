@@ -224,12 +224,15 @@ export async function expireCoachAction(coachId: string) {
 
     const { data: coach } = await adminClient
         .from('coaches')
-        .select('subscription_mp_id, subscription_provider, subscription_provider_external_id')
+        .select('subscription_mp_id, subscription_provider, subscription_provider_external_id, current_period_end')
         .eq('id', coachId)
         .maybeSingle()
 
     const { error } = await adminClient.from('coaches')
-        .update({ subscription_status: 'expired' })
+        // ANCLA de la gracia de ALUMNOS (política CEO 2026-07-18): setear el period_end vigente al
+        // momento del corte, para que la gracia de 7 días de los alumnos ancle de forma determinista
+        // aunque otro flujo NULLee current_period_end después. La reactivación admin la limpia.
+        .update({ subscription_status: 'expired', paid_access_ended_at: coach?.current_period_end ?? new Date().toISOString() })
         .eq('id', coachId)
     if (error) return { error: error.message }
 
@@ -261,7 +264,8 @@ export async function reactivateCoachAdminAction(coachId: string, extendDays = 3
 
     const newEnd = new Date(Date.now() + extendDays * 24 * 60 * 60 * 1000).toISOString()
     const { error } = await adminClient.from('coaches')
-        .update({ subscription_status: 'active', current_period_end: newEnd })
+        // Reactivación admin → limpiar el ancla de la gracia de ALUMNOS (coach vuelve a acceso efectivo).
+        .update({ subscription_status: 'active', current_period_end: newEnd, paid_access_ended_at: null })
         .eq('id', coachId)
     if (error) return { error: error.message }
 

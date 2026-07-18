@@ -28,6 +28,7 @@ import {
     type CheckinState,
 } from './_actions/check-in.actions'
 import { formatRelativeDate } from '@/lib/date-utils'
+import { humanizeStudentWriteError } from '@/lib/student-access'
 import { springs } from '@/lib/animation-presets'
 import { useBasePath } from '@/components/client/BasePathProvider'
 import { clearAppBadge } from '@/lib/client/app-badge'
@@ -111,7 +112,8 @@ export function CheckInForm({ coachSlug, coachPrimaryColor, lastCheckIn }: Props
             }
         }
         if (state.error) {
-            toast.error(state.error, { id: 'client-checkin-err' })
+            // COACH_ACCOUNT_PAUSED (gate de suscripcion del coach) => copy humano, nunca el codigo crudo.
+            toast.error(humanizeStudentWriteError(state.error), { id: 'client-checkin-err' })
         }
     }, [state.success, state.error, state.warning, reducedMotion])
 
@@ -679,7 +681,7 @@ export function CheckInForm({ coachSlug, coachPrimaryColor, lastCheckIn }: Props
                                 <WifiOff className="mt-px h-[17px] w-[17px] shrink-0" />
                                 <div className="flex-1">
                                     <div className="text-[13px] font-bold">No pudimos enviar tu check-in</div>
-                                    <div className="mt-0.5 text-xs leading-relaxed">{state.error}</div>
+                                    <div className="mt-0.5 text-xs leading-relaxed">{humanizeStudentWriteError(state.error)}</div>
                                 </div>
                             </div>
                         )}

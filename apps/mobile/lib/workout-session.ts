@@ -30,6 +30,9 @@ import {
 } from '@eva/workout-engine'
 import { supabase } from './supabase'
 import { getClientProfile } from './client'
+import { useEntitlements } from './entitlements'
+import type { StudentAccessState } from './entitlements-core'
+import { isCoachAccountPausedError, STUDENT_ACCESS_COPY } from './student-access-copy'
 import { cachePlan, enqueueLog, getCachedPlan, getPendingLogCount } from './offline-cache'
 import { checkOnline } from './use-online'
 import {
@@ -265,6 +268,13 @@ export function useWorkoutSession(planId: string): WorkoutSessionState {
   const [isOnline, setIsOnline] = useState(true)
   const [elapsedSec, setElapsedSec] = useState(0)
   const [restoredDraft, setRestoredDraft] = useState<SessionDraft | null>(null)
+
+  // Estado de acceso del alumno por suscripcion del coach (politica CEO 2026-07-18), ya resuelto
+  // por /api/mobile/config via useEntitlements. Se espeja en un ref para leerlo dentro de logSet
+  // sin stale-closure ni re-crear el callback. 'blocked' => post-gracia solo-lectura.
+  const { studentAccess } = useEntitlements()
+  const studentAccessStateRef = useRef(studentAccess.state)
+  studentAccessStateRef.current = studentAccess.state
 
   // Refs para el snapshot (evitan re-suscribir efectos por cada cambio de estado).
   const startedAtRef = useRef<number>(Date.now())
@@ -691,6 +701,22 @@ export function useWorkoutSession(planId: string): WorkoutSessionState {
 
       if (!cid) return { isPR: false, error: null }
 
+      // Cortocircuito post-gracia (fix r2 'ux'): con studentAccess.state === 'blocked' NO se pega al
+      // server ni se encola. La escritura directa PostgREST rebota en la RLS con el 42501 CRUDO
+      // ("violates row-level security policy"), que NO contiene 'COACH_ACCOUNT_PAUSED' =>
+      // isCoachAccountPausedError daba false, se mostraba "Reintenta" (enganoso) y el log quedaba
+      // encolado con auto-reintento perpetuo. Aca: la fila queda `_pending` (sin check verde
+      // mentiroso, sobrevive en el snapshot local) y el chip muestra el copy honesto de pausa.
+      // La web no sufre esto porque sus actions resuelven el codigo ANTES de llegar a la RLS.
+      if (studentAccessStateRef.current === 'blocked') {
+        logsRef.current = logsRef.current.map((l) =>
+          l.block_id === payload.blockId && l.set_number === payload.setNumber ? { ...l, _pending: true } : l,
+        )
+        setSessionLogs(logsRef.current)
+        persistSnapshot()
+        return { isPR: false, error: STUDENT_ACCESS_COPY.pausedWriteError }
+      }
+
       // 2) Persistencia server (select-then-update/insert acotado al día — no duplica).
       const logData: Record<string, unknown> = {
         block_id: payload.blockId,
@@ -812,7 +838,16 @@ export function useWorkoutSession(planId: string): WorkoutSessionState {
         persistSnapshot()
         // Sólo un fallo REAL (con conexión: RLS/4xx) surface el error+Reintentar por serie; offline ⇒
         // pending ámbar + banner global + auto-reintento al reconectar (mirror web offline→pending vs error→red).
-        syncError = online ? 'No se pudo guardar la serie. Reintenta.' : null
+        // COACH_ACCOUNT_PAUSED (gate de suscripción del coach) ⇒ copy humano honesto, no "Reintenta".
+        // El OR con el ref cubre la carrera estado-viejo: si la config revalidó a 'blocked' mientras
+        // esta escritura viajaba (el ref muta entre awaits — el cast deshace el narrowing del
+        // cortocircuito de arriba), el rebote RLS crudo (42501 sin código) también mapea al copy honesto.
+        syncError = online
+          ? isCoachAccountPausedError(error) ||
+            (studentAccessStateRef.current as StudentAccessState) === 'blocked'
+            ? STUDENT_ACCESS_COPY.pausedWriteError
+            : 'No se pudo guardar la serie. Reintenta.'
+          : null
       } else {
         isOnlineRef.current = true
         setIsOnline(true)

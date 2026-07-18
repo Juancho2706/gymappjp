@@ -16,7 +16,12 @@ export const getReactivatePageData = cache(async () => {
     const [coachResult, clientCountResult, addonsResult] = await Promise.all([
         supabase
             .from('coaches')
-            .select('subscription_tier, subscription_status, max_clients, subscription_mp_id')
+            // Ancla de la gracia de ALUMNOS (politica CEO 2026-07-18) para el banner "Tus N
+            // alumnos perderan acceso el {fecha}". paid_access_ended_at (migracion B-datos) gana
+            // sobre current_period_end: los flujos de expiracion (cron/webhook/espejo manual)
+            // pueden NULLear current_period_end, y sin esta columna el banner degrada a copy
+            // generico sin fecha.
+            .select('subscription_tier, subscription_status, current_period_end, paid_access_ended_at, max_clients, subscription_mp_id')
             .eq('id', user.id)
             .maybeSingle(),
         supabase
