@@ -24,7 +24,10 @@ interface CoachLoginFormProps {
 const initialState: LoginState = {}
 
 export function CoachLoginForm({ urlError, showCaptcha, turnstileSiteKey }: CoachLoginFormProps) {
-    const [state, formAction] = useActionState(loginAction, initialState)
+    // isPending: el submit va por handleSubmit + startTransition(formAction), sin
+    // `<form action>`, asi que useFormStatus dentro del boton nunca se entera del
+    // envio; el pending real vive en esta transicion (React 19, 3er valor).
+    const [state, formAction, isPending] = useActionState(loginAction, initialState)
 
     const {
         register,
@@ -95,6 +98,7 @@ export function CoachLoginForm({ urlError, showCaptcha, turnstileSiteKey }: Coac
                 <AuthSubmitButton
                     label="Entrar como coach"
                     pendingLabel="Iniciando sesión..."
+                    pending={isPending}
                     variant="coach"
                     size="lg"
                     trailingIcon={<ArrowRight className="h-4 w-4" />}

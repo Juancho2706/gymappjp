@@ -19,6 +19,7 @@ import { NutritionPlanDraftSchema, type NutritionPlanDraft } from '@eva/nutritio
 import {
   dayTotalsByVariant,
   formatPortions,
+  macrosForTargets,
   type ExchangeGroup,
   type ExchangeMacroTotals,
 } from '@eva/nutrition-engine'
@@ -141,6 +142,53 @@ export function derivePortionTotals(
     .map((key) => ({ targets: slotPortionTargets(map, key) }))
     .filter((meal) => meal.targets.length > 0)
   return dayTotalsByVariant(meals, [], groups)[0].totals
+}
+
+/**
+ * Macros derivados de las porciones de UNA franja (Σ porciones × ref del grupo,
+ * expansión `composed_of` incluida vía `macrosForTargets` — misma matemática del
+ * alumno). Devuelve `null` cuando la franja no tiene porciones O el catálogo de
+ * grupos aún no cargó: el subtotal de la franja muestra solo los items fijos
+ * (jamás NaN). Fix QA F1-2: el subtotal de franja ignoraba las porciones.
+ */
+export function slotPortionTotals(
+  map: PortionsBySlot,
+  slotKey: string,
+  groups: ExchangeGroup[] | null,
+): ExchangeMacroTotals | null {
+  if (groups == null) return null
+  const targets = slotPortionTargets(map, slotKey).filter((t) => t.portions > 0)
+  if (targets.length === 0) return null
+  return macrosForTargets(targets, groups)
+}
+
+/** Forma mínima compartida con `ItemMacros` del builder (sin acoplarse a _lib). */
+export interface SubtotalMacros {
+  calories: number
+  proteinG: number
+  carbsG: number
+  fatsG: number
+}
+
+/**
+ * Subtotal combinado de la franja: items fijos + derivado de porciones. Sin
+ * porciones (o catálogo sin cargar) devuelve EXACTAMENTE el objeto de items
+ * (misma referencia: franja sin porciones se ve idéntica a antes). Redondeo a
+ * 1 decimal, espejo de `addMacros` del builder.
+ */
+export function combineSubtotals<T extends SubtotalMacros>(
+  items: T,
+  portionTotals: ExchangeMacroTotals | null,
+): T {
+  if (portionTotals == null) return items
+  const round1 = (n: number) => Math.round(n * 10) / 10
+  return {
+    ...items,
+    calories: round1(items.calories + portionTotals.calories),
+    proteinG: round1(items.proteinG + portionTotals.proteinG),
+    carbsG: round1(items.carbsG + portionTotals.carbsG),
+    fatsG: round1(items.fatsG + portionTotals.fatsG),
+  }
 }
 
 /**

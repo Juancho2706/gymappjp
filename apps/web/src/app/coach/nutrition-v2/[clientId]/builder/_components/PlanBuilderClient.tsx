@@ -51,7 +51,8 @@ import { PublishConflictDialog } from './PublishConflictDialog'
 import { PortionsSection, usePortionsBuilder, type PortionsController } from './PortionsSection'
 import { PortionsDeriveCard } from './PortionsDeriveCard'
 import { PortionsReviewSection } from './PortionsReviewChips'
-import { attachPortionsAndValidate } from './portions-state'
+import { attachPortionsAndValidate, combineSubtotals, slotPortionTotals } from './portions-state'
+import { PORTIONS_COPY } from '@/lib/nutrition-portions-copy'
 import { foodCategoryIconUrlFromName, resolveFoodImageUrl } from './food-card-presentation'
 import { foodCategoryIconUrl } from '@/lib/food-image'
 import { FoodThumb } from './FoodImage'
@@ -426,41 +427,46 @@ function SlotEditor({
   errors: Record<string, string>
   portions: PortionsController
 }) {
-  const subtotal = slotSubtotal(slot)
+  // Fix QA F1-2: el subtotal de franja combina items fijos + derivado de porciones
+  // (Σ porciones × ref del grupo, catálogo VIVO del picker). Catálogo sin cargar o
+  // franja sin porciones ⇒ solo items, idéntico a antes (sin NaN jamás).
+  const itemsSubtotal = slotSubtotal(slot)
+  const portionTotals = slotPortionTotals(portions.bySlot, slot.key, portions.groups)
+  const subtotal = combineSubtotals(itemsSubtotal, portionTotals)
   return (
     <NutritionCard>
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex-1">
-          <label className={labelClass} htmlFor={`slot-name-${slot.key}`}>Nombre de la franja</label>
-          <input
-            id={`slot-name-${slot.key}`}
-            className={inputClass}
-            placeholder="Desayuno, Almuerzo..."
-            value={slot.name}
-            onChange={(e) => dispatch({ type: 'UPDATE_SLOT', slotKey: slot.key, patch: { name: e.target.value } })}
-          />
-          {errors['slot.' + slot.key + '.name'] ? (
-            <p className="mt-1 text-xs text-rose-600 dark:text-rose-300">{errors['slot.' + slot.key + '.name']}</p>
-          ) : null}
-        </div>
-        <div className="w-28">
-          <label className={labelClass} htmlFor={`slot-time-${slot.key}`}>Hora</label>
-          <input
-            id={`slot-time-${slot.key}`}
-            className={inputClass}
-            type="time"
-            value={slot.startTime}
-            onChange={(e) => dispatch({ type: 'UPDATE_SLOT', slotKey: slot.key, patch: { startTime: e.target.value } })}
-          />
-        </div>
+      {/* Fix QA F1-2: grid con filas label/control — los dos labels comparten la fila 1
+          (bottom-aligned) y los controles la fila 2, así HORA queda alineada con NOMBRE
+          aunque el label largo envuelva a dos líneas en 360 px. */}
+      <div className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-end gap-x-2">
+        <label className={labelClass} htmlFor={`slot-name-${slot.key}`}>Nombre de la franja</label>
+        <label className={labelClass} htmlFor={`slot-time-${slot.key}`}>Hora</label>
+        <span aria-hidden="true" />
+        <input
+          id={`slot-name-${slot.key}`}
+          className={inputClass}
+          placeholder="Desayuno, Almuerzo..."
+          value={slot.name}
+          onChange={(e) => dispatch({ type: 'UPDATE_SLOT', slotKey: slot.key, patch: { name: e.target.value } })}
+        />
+        <input
+          id={`slot-time-${slot.key}`}
+          className={inputClass + ' w-28'}
+          type="time"
+          value={slot.startTime}
+          onChange={(e) => dispatch({ type: 'UPDATE_SLOT', slotKey: slot.key, patch: { startTime: e.target.value } })}
+        />
         <button
           type="button"
           aria-label={`Quitar franja ${slot.name || 'sin nombre'}`}
           onClick={() => dispatch({ type: 'REMOVE_SLOT', slotKey: slot.key })}
-          className={iconButtonClass + ' mt-6'}
+          className={iconButtonClass + ' inline-flex h-11 w-11 items-center justify-center self-center'}
         >
           <Trash2 className="h-4 w-4" />
         </button>
+        {errors['slot.' + slot.key + '.name'] ? (
+          <p className="col-span-full mt-1 text-xs text-rose-600 dark:text-rose-300">{errors['slot.' + slot.key + '.name']}</p>
+        ) : null}
       </div>
 
       <div className="mt-3 space-y-2">
@@ -502,6 +508,13 @@ function SlotEditor({
           carbsG={subtotal.carbsG}
           fatsG={subtotal.fatsG}
         />
+        {portionTotals ? (
+          // Redondeo entero + prefijo ~: valor referencial (coherente con el banner
+          // de macros referenciales del paso Revisión).
+          <p className="w-full text-xs text-muted">
+            {PORTIONS_COPY.builder.subtotalPortionsNote(String(Math.round(portionTotals.calories)))}
+          </p>
+        ) : null}
       </div>
     </NutritionCard>
   )
