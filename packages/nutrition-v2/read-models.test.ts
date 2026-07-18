@@ -249,6 +249,25 @@ describe('describeLegacyHistoryDay', () => {
   })
 })
 
+describe('nutrition V2 portions — ids no-RFC del seed (incidente 2026-07-18)', () => {
+  it('acepta exchangeGroupId determinista del seed V1 (0000e8c0-..., nibble de version 0)', () => {
+    const target = NutritionSlotExchangeTargetReadSchema.safeParse({
+      id: '55555555-5555-4555-8555-555555555555',
+      exchangeGroupId: '0000e8c0-0000-0000-0000-000000000001',
+      groupCode: 'C',
+      groupName: 'Cereales',
+      color: null,
+      portions: 2,
+      notes: null,
+      orderIndex: 0,
+      ref: { calories: 70, proteinG: 2, carbsG: 15, fatsG: 0 },
+      composedOf: null,
+      macrosConfirmed: true,
+    })
+    expect(target.success).toBe(true)
+  })
+})
+
 describe('nutrition V2 portions — cache compatibility (criterio 8 / Q12)', () => {
   const emptyTargets = {
     calories: null,
