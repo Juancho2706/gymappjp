@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { differenceInDays } from 'date-fns'
 import {
@@ -11,9 +11,23 @@ import {
     Dumbbell,
     MessageCircle,
     Download,
+    Archive,
+    AlertTriangle,
     X,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+    AlertDialogTrigger,
+} from '@/components/ui/alert-dialog'
+import { bulkArchiveClientsAction } from './_actions/clients.actions'
 import type { DirectoryPulseRow } from '@/services/dashboard.service'
 
 /**
@@ -167,6 +181,8 @@ export function DesktopRosterTable({
     const [dir, setDir] = useState<1 | -1>(1)
     const [sel, setSel] = useState<Record<string, boolean>>({})
     const [activeId, setActiveId] = useState<string | null>(null)
+    const [archiveError, setArchiveError] = useState<string>()
+    const [isArchiving, startArchive] = useTransition()
 
     const loginUrl = coachSlug && appUrl ? `${appUrl}/c/${coachSlug}/login` : ''
 
@@ -273,6 +289,19 @@ export function DesktopRosterTable({
         a.click()
         a.remove()
         URL.revokeObjectURL(url)
+    }
+
+    const handleArchive = () => {
+        setArchiveError(undefined)
+        startArchive(async () => {
+            const result = await bulkArchiveClientsAction(selIds)
+            if (result.error) {
+                setArchiveError(result.error)
+                return
+            }
+            setSel({})
+            router.refresh()
+        })
     }
 
     // Full-bleed (.dt-tbl-root = position:absolute; inset:0): sin borde/rounding, llena la
@@ -471,6 +500,41 @@ export function DesktopRosterTable({
                         >
                             <Download className="h-[15px] w-[15px]" /> Exportar CSV
                         </button>
+                        <AlertDialog>
+                            <AlertDialogTrigger>
+                                <span className="eva-press inline-flex h-[34px] items-center gap-1.5 rounded-control bg-[var(--danger-500)] px-[14px] text-[13px] font-bold text-white transition-colors hover:bg-[var(--danger-600)]">
+                                    <Archive className="h-[15px] w-[15px]" /> Archivar
+                                </span>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent className="bg-surface-card border border-subtle text-body rounded-card">
+                                <AlertDialogHeader>
+                                    <div className="mb-1 flex h-11 w-11 items-center justify-center rounded-control bg-[var(--danger-100)] text-[var(--danger-600)]">
+                                        <AlertTriangle className="h-[22px] w-[22px]" />
+                                    </div>
+                                    <AlertDialogTitle className="font-display font-extrabold normal-case tracking-[-0.01em] text-strong">
+                                        Archivar {selIds.length} alumnos
+                                    </AlertDialogTitle>
+                                    <AlertDialogDescription className="text-muted">
+                                        Dejarán de tener acceso a su app hasta que los desarchives. Sus datos y su historial se conservan.
+                                    </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                {archiveError && (
+                                    <p className="text-sm text-[var(--danger-600)] px-1">{archiveError}</p>
+                                )}
+                                <AlertDialogFooter className="gap-3">
+                                    <AlertDialogCancel className="rounded-control">
+                                        Cancelar
+                                    </AlertDialogCancel>
+                                    <AlertDialogAction
+                                        onClick={handleArchive}
+                                        disabled={isArchiving}
+                                        className="bg-[var(--danger-500)] hover:bg-[var(--danger-600)] text-white rounded-control disabled:opacity-60"
+                                    >
+                                        {isArchiving ? 'Archivando...' : 'Archivar'}
+                                    </AlertDialogAction>
+                                </AlertDialogFooter>
+                            </AlertDialogContent>
+                        </AlertDialog>
                     </div>
                     <button
                         type="button"

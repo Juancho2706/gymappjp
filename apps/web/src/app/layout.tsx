@@ -13,15 +13,12 @@ import { LanguageProvider } from '@/lib/i18n/LanguageContext'
 import { PwaRegister } from '@/components/PwaRegister'
 import { ScrollRestoration } from '@/components/ScrollRestoration'
 import { InstallPrompt } from '@/components/InstallPrompt'
-import { BRAND_OG_IMAGE, BRAND_OG_IMAGE_HEIGHT, BRAND_OG_IMAGE_WIDTH } from '@/lib/brand-assets'
 import { resolveMetadataBase } from '@/lib/site-url'
 import { PostHogProvider } from '@/lib/posthog/provider'
 import { CookieConsent } from '@/components/CookieConsent'
 import { ThemeScriptSuppressor } from '@/components/ThemeScriptSuppressor'
 
 const metadataBase = resolveMetadataBase()
-/** Crawlers (WhatsApp, X) suelen exigir URL absoluta y sin caracteres problemáticos en la ruta. */
-const openGraphImageAbsoluteUrl = new URL(BRAND_OG_IMAGE, metadataBase).href
 
 const inter = Inter({
   variable: '--font-inter',
@@ -103,15 +100,9 @@ export const metadata: Metadata = {
       ? metadataBase.href.slice(0, -1)
       : metadataBase.href,
     siteName: 'EVA',
-    images: [
-      {
-        url: openGraphImageAbsoluteUrl,
-        width: BRAND_OG_IMAGE_WIDTH,
-        height: BRAND_OG_IMAGE_HEIGHT,
-        alt: 'EVA',
-        type: 'image/png',
-      },
-    ],
+    // SIN `images` aquí a propósito: la og:image viene de app/opengraph-image.tsx
+    // (tarjeta 1200×630, SEO R1). Si este config declara `images`, el merge de
+    // Next IGNORA la imagen file-based en este segmento — no re-agregar.
     locale: 'es_CL',
     type: 'website',
   },
@@ -119,7 +110,8 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: 'EVA | Escala tu Negocio de Fitness',
     description: 'Rutinas, nutrición y app propia. Todo lo que necesitas para profesionalizar tu servicio de coaching.',
-    images: [openGraphImageAbsoluteUrl],
+    // SIN `images`: el post-proceso de metadata de Next hereda la og:image
+    // (app/opengraph-image.tsx) hacia twitter:image cuando falta.
   },
   metadataBase,
   manifest: '/api/manifest/default',

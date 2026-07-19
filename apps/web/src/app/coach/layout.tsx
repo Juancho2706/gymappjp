@@ -5,9 +5,10 @@ import { CoachMainWrapper } from '@/components/coach/CoachMainWrapper'
 import { RosterViewProvider } from '@/components/coach/RosterViewContext'
 import { CoachSuccessAnimationLazy } from '@/components/coach/CoachSuccessAnimationLazy'
 import { NewsFeedProvider } from '@/components/coach/NewsFeedProvider'
-import { getCoach } from '@/lib/coach/get-coach'
+import { getCoach, getActiveStandaloneClientCount } from '@/lib/coach/get-coach'
 import { isValidInviteCode } from '@/lib/coach/invite-code'
 import { PwaRegister } from '@/components/PwaRegister'
+import { OverLimitBanner } from './_components/OverLimitBanner'
 import { PublicCodeRequiredModal } from './_components/PublicCodeRequiredModal'
 import { ensureCoachPublicCode } from './_data/public-code.queries'
 import { getUnreadNewsCount, getPublishedNewsItems } from '@/lib/news/queries'
@@ -15,7 +16,7 @@ import type { Metadata } from 'next'
 import { BRAND_PRIMARY_COLOR, SYSTEM_PRIMARY_COLOR } from '@/lib/brand-assets'
 import { generateBrandPalette } from '@/lib/color-utils'
 import { resolveBrandTheme, deriveSportTokens, resolvePresetBranding } from '@eva/brand-kit'
-import { isBrandingAllowed, type SubscriptionTier } from '@eva/tiers'
+import { isBrandingAllowed, getTierMaxClients, TIER_LABELS, type SubscriptionTier } from '@eva/tiers'
 import { resolveBrandFontStack } from '@/lib/brand-fonts'
 import { resolveLoaderVariant } from '@/lib/brand-loaders'
 import { getCoachEnterpriseContext, getCoachTeamContext } from './_data/layout.queries'
@@ -38,6 +39,13 @@ export const metadata: Metadata = {
 
 // Dashboard autenticado: el layout lee cookies (sesion) para TODO /coach ⇒ render dinamico.
 export const dynamic = 'force-dynamic'
+
+/** Parse del tier crudo de DB a uno de los 6 valores del CHECK (incluye legacy). NO es venta. */
+function normalizeCoachTier(raw: string | null | undefined): SubscriptionTier {
+    const v = String(raw ?? 'starter').toLowerCase()
+    if (v === 'free' || v === 'starter' || v === 'pro' || v === 'elite' || v === 'growth' || v === 'scale') return v
+    return 'starter'
+}
 
 /**
  * Consola: "cleaning up async info that was not on the parent Suspense boundary" con stack
@@ -68,6 +76,8 @@ export default async function CoachLayout({
     ])
     const activeEnterpriseCoach = activeWorkspace?.type === 'enterprise_coach' ? activeWorkspace : null
     const activeTeamWorkspace = activeWorkspace?.type === 'coach_team' ? activeWorkspace : null
+    // El cupo del plan solo aplica al contexto STANDALONE (enterprise/team pagan centralizado).
+    const isStandalone = !activeEnterpriseCoach && !activeTeamWorkspace
     // Módulos toggleables del CONTEXTO activo (team ⇒ del pool; standalone ⇒ propios;
     // enterprise ⇒ ninguno en v1). El nav los espeja; el gate real es assertModule.
     const resolveEnabledModules = async (): Promise<EnabledModules> => {
@@ -91,12 +101,20 @@ export default async function CoachLayout({
         }
     }
 
-    const [enterpriseContext, teamContext, enabledModules, disabledDomains] = await Promise.all([
+    const [enterpriseContext, teamContext, enabledModules, disabledDomains, activeStandaloneCount] = await Promise.all([
         getCoachEnterpriseContext(coach, activeEnterpriseCoach?.orgId ?? null),
         getCoachTeamContext(activeTeamWorkspace?.teamId ?? null),
         resolveEnabledModules(),
         resolveDisabledDomains(),
+        isStandalone ? getActiveStandaloneClientCount(coach.id) : Promise.resolve<number | null>(null),
     ])
+    // Sobre-límite: alumnos activos > cupo efectivo (override manual `max_clients` o el del tier).
+    const overLimitTier = normalizeCoachTier(coach.subscription_tier)
+    const overLimitMax = coach.max_clients ?? getTierMaxClients(overLimitTier)
+    const overLimit =
+        activeStandaloneCount != null && activeStandaloneCount > overLimitMax
+            ? { activeCount: activeStandaloneCount, maxClients: overLimitMax, tierLabel: TIER_LABELS[overLimitTier] }
+            : null
     const currentWorkspaceLabel =
         activeWorkspace?.label ??
         enterpriseContext?.orgName ??
@@ -278,6 +296,13 @@ export default async function CoachLayout({
                             workspaces={workspaces}
                             currentWorkspaceLabel={currentWorkspaceLabel}
                         />
+                        {overLimit && (
+                            <OverLimitBanner
+                                activeCount={overLimit.activeCount}
+                                maxClients={overLimit.maxClients}
+                                tierLabel={overLimit.tierLabel}
+                            />
+                        )}
                         <CoachMainWrapper>
                             {/* Fondo limpio (surface-app claro/oscuro) — sin glow ambient
                                 brand-tinted; el diseño CD no tiene tonalidad de color en el fondo. */}

@@ -69,6 +69,17 @@ export default async function SuspendedPage({ params, searchParams }: Props) {
     // WhatsApp personal del coach (coachData.whatsapp ya viene null en contexto team).
     const brandName = coachData?.brand_name || (isTeam ? 'tu equipo' : 'tu Coach')
 
+    // Variante `?reason=archived`: el coach archivó al alumno (no lo pausó manualmente). Copy
+    // distinto para que quede claro que el historial se conserva; resto de la pantalla igual.
+    const bodyCopy =
+        reason === 'archived'
+            ? 'Tu coach archivó tu espacio por ahora. Tus datos y todo tu historial siguen guardados — si tu coach reactiva tu cupo, vuelves a entrar como siempre.'
+            : (
+                <>
+                    {isTeam ? 'Tu equipo' : 'Tu coach'} pausó temporalmente tu acceso. Contacta a <strong className="text-text-strong">{brandName}</strong> para reactivar tu cuenta.
+                </>
+            )
+
     return (
         <div className="min-h-dvh bg-surface-app flex flex-col items-center justify-center p-6 pt-safe text-center">
             <div className="w-20 h-20 bg-[var(--warning-100)] text-[var(--warning-700)] rounded-card flex items-center justify-center mb-6">
@@ -78,7 +89,7 @@ export default async function SuspendedPage({ params, searchParams }: Props) {
                 Acceso pausado
             </h1>
             <p className="text-text-muted max-w-sm leading-relaxed">
-                {isTeam ? 'Tu equipo' : 'Tu coach'} pausó temporalmente tu acceso. Contacta a <strong className="text-text-strong">{brandName}</strong> para reactivar tu cuenta.
+                {bodyCopy}
             </p>
             <p className="text-text-subtle text-sm mt-1.5 mb-8 max-w-sm leading-relaxed">
                 Todos tus progresos y datos están a salvo.

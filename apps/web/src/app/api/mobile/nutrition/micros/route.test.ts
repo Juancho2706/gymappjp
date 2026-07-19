@@ -3,13 +3,20 @@ import { NextRequest } from 'next/server'
 
 // ── Mocks ────────────────────────────────────────────────────────────────────────
 const verifyMobileBearer = vi.fn()
-vi.mock('@/lib/mobile-auth', () => ({
+vi.mock('@/lib/mobile-auth', async (importOriginal) => ({
+    ...(await importOriginal<typeof import('@/lib/mobile-auth')>()),
     verifyMobileBearer: (...a: unknown[]) => verifyMobileBearer(...a),
 }))
 
-// Fake admin: enruta por tabla para `resolveClientNutritionContext`.
+// Fake admin: enruta por tabla para el gate de bloqueo (`clients.is_archived/is_active`) y
+// `resolveClientNutritionContext`.
 let planRow: { id: string; coach_id: string | null } | null = { id: 'plan-1', coach_id: 'coach-1' }
-let clientRow: { team_id: string | null; org_id: string | null } | null = { team_id: null, org_id: null }
+let clientRow: {
+    team_id: string | null
+    org_id: string | null
+    is_archived: boolean | null
+    is_active: boolean | null
+} | null = { team_id: null, org_id: null, is_archived: false, is_active: true }
 const fakeAdmin = {
     from: vi.fn((table: string) => {
         const maybeSingle = vi.fn(async () => ({
@@ -60,7 +67,7 @@ const TARGETS = { sodium: { ceiling: 2000 }, fiber: { floor: 25 }, sugar: { ceil
 beforeEach(() => {
     vi.clearAllMocks()
     planRow = { id: 'plan-1', coach_id: 'coach-1' }
-    clientRow = { team_id: null, org_id: null }
+    clientRow = { team_id: null, org_id: null, is_archived: false, is_active: true }
     verifyMobileBearer.mockResolvedValue({ ok: true, userId: 'client-1', via: 'jose' })
     resolveNutritionDomainEnabled.mockResolvedValue(true)
     getPlanDayMicros.mockResolvedValue(MICROS)
@@ -77,6 +84,14 @@ describe('GET /api/mobile/nutrition/micros', () => {
         verifyMobileBearer.mockResolvedValue({ ok: false, status: 401 })
         const res = await GET(req())
         expect(res.status).toBe(401)
+    })
+
+    it('403 CLIENT_BLOCKED cuando el alumno esta archivado (sin fuga de micros)', async () => {
+        clientRow = { team_id: null, org_id: null, is_archived: true, is_active: true }
+        const res = await GET(req())
+        expect(res.status).toBe(403)
+        expect((await res.json()).code).toBe('CLIENT_BLOCKED')
+        expect(getPlanDayMicros).not.toHaveBeenCalled()
     })
 
     it('400 date con formato invalido', async () => {

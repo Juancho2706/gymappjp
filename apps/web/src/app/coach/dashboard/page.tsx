@@ -2,7 +2,7 @@ import { Suspense } from 'react'
 import { redirect } from 'next/navigation'
 import type { Metadata } from 'next'
 import { DashboardContent } from './_components/DashboardContent'
-import { getCoach } from '@/lib/coach/get-coach'
+import { getCoach, getActiveStandaloneClientCount } from '@/lib/coach/get-coach'
 import { BrandCoachLoadingShell } from '../_components/BrandCoachLoadingShell'
 import type { SubscriptionTier } from '@/lib/constants'
 import type { Json } from '@/lib/database.types'
@@ -26,6 +26,11 @@ export default async function CoachDashboardPage() {
 
     const subscriptionTier = normalizeCoachSubscriptionTier(coach.subscription_tier)
 
+    // Conteo activo real (mismo servicio que el cap gate) solo para el banner del plan gratuito;
+    // React.cache lo deduplica con el layout /coach. Los otros tiers no muestran ese banner.
+    const activeClientCount =
+        subscriptionTier === 'free' ? await getActiveStandaloneClientCount(coach.id) : null
+
     return (
         <Suspense fallback={<BrandCoachLoadingShell />}>
             <DashboardContent
@@ -37,6 +42,7 @@ export default async function CoachDashboardPage() {
                 subscriptionTier={subscriptionTier}
                 hasCoachLogo={Boolean(coach.logo_url?.trim())}
                 coachLogoUrl={coach.logo_url}
+                activeClientCount={activeClientCount}
             />
         </Suspense>
     )

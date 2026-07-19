@@ -1,26 +1,32 @@
 import { test, expect, type Page } from '@playwright/test'
+import { assertAllowedE2eEmail } from '../e2e-accounts'
 
 /**
  * E2E del modelo TEAM (pool) — reproduce el smoke test manual del 2026-06-09 que encontró
  * 5 bugs (subscription gating, consent loop, next/image, workspace switcher, cruce de datos).
- * Corre contra un dev server apuntando a la Supabase con los datos de prueba (team movida-test).
+ * Corre contra un dev server apuntando a la Supabase con el fixture PROPIO (team e2e-pool-movida,
+ * seed scripts/e2e/seed-pool-fixture.mjs). Reemplaza al workspace del CEO (Jose Fit/josefit).
  *
- * Credenciales por env (NO commitear passwords):
- *   E2E_POOL_COACH_EMAIL / E2E_POOL_COACH_PASSWORD   -> coach miembro del pool (Jose Fit)
- *   E2E_POOL_ALUMNO_EMAIL / E2E_POOL_ALUMNO_PASSWORD -> alumna del pool con consent (Carolina)
+ * Credenciales por env (NO commitear passwords; default al fixture propio):
+ *   E2E_POOL_COACH_EMAIL / E2E_POOL_COACH_PASSWORD   -> owner del pool (e2e-pool-owner)
+ *   E2E_POOL_ALUMNO_EMAIL / E2E_POOL_ALUMNO_PASSWORD -> alumno del pool con consent (E2E Alumno Uno)
  * Sin credenciales -> specs se saltan (no rompen CI local sin secretos).
  *
  * Ejecutar: npx playwright test tests/team/team-flows.spec.ts --workers=1
  */
 
-const TEAM_SLUG = 'movida-test'
-const TEAM_NAME = 'Movida (test)'
-const POOL_STUDENTS = ['Carolina', 'Diana']
+const TEAM_SLUG = process.env.E2E_TEAM_SLUG ?? 'e2e-pool-movida'
+const TEAM_NAME = 'E2E Movida (test)'
+const POOL_STUDENTS = ['E2E Alumno Uno', 'E2E Alumno Dos']
 
-const COACH_EMAIL = process.env.E2E_POOL_COACH_EMAIL ?? ''
-const COACH_PASSWORD = process.env.E2E_POOL_COACH_PASSWORD ?? ''
-const ALUMNO_EMAIL = process.env.E2E_POOL_ALUMNO_EMAIL ?? ''
-const ALUMNO_PASSWORD = process.env.E2E_POOL_ALUMNO_PASSWORD ?? ''
+const COACH_EMAIL = process.env.E2E_POOL_COACH_EMAIL ?? 'e2e-pool-owner@evatest.cl'
+const COACH_PASSWORD = process.env.E2E_POOL_COACH_PASSWORD ?? process.env.E2E_PERSONAS_PASSWORD ?? ''
+const ALUMNO_EMAIL = process.env.E2E_POOL_ALUMNO_EMAIL ?? 'e2e-pool-uno@evatest.cl'
+const ALUMNO_PASSWORD = process.env.E2E_POOL_ALUMNO_PASSWORD ?? process.env.E2E_PERSONAS_PASSWORD ?? ''
+
+// Guard fail-closed: el camino POOL jamas apunta al workspace del CEO (josefit).
+assertAllowedE2eEmail(COACH_EMAIL, 'team-flows · E2E_POOL_COACH_EMAIL')
+assertAllowedE2eEmail(ALUMNO_EMAIL, 'team-flows · E2E_POOL_ALUMNO_EMAIL')
 
 const hasCoachCreds = !!(COACH_EMAIL && COACH_PASSWORD)
 const hasAlumnoCreds = !!(ALUMNO_EMAIL && ALUMNO_PASSWORD)
@@ -114,7 +120,7 @@ test.describe('Coach del pool — contextos separados', () => {
 
     test('contexto STANDALONE: el pool NO se cruza (bug del smoke: se mezclaban)', async ({ page }) => {
         await loginCoach(page)
-        await switchWorkspace(page, /Jose Fit|Mi negocio/)
+        await switchWorkspace(page, /E2E Pool Owner|Mi negocio/)
 
         await page.goto('/coach/clients')
         // NUNCA networkidle con RSC streaming (no asienta). Anclar a contenido renderizado:

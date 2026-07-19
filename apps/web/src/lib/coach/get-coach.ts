@@ -2,11 +2,13 @@ import { cache } from 'react'
 import { createClient } from '@/lib/supabase/server'
 import type { Tables } from '@/lib/database.types'
 import { findCoachById } from '@/infrastructure/db'
+import { countActiveStandaloneClients } from '@/services/billing/capacity.service'
 
 export type CoachSession = Pick<
     Tables<'coaches'>,
     | 'id'
     | 'active_org_id'
+    | 'max_clients'
     | 'full_name'
     | 'brand_name'
     | 'subscription_status'
@@ -49,5 +51,21 @@ export const getCoach = cache(async (): Promise<CoachSession | null> => {
         return null
     }
 
-    return (await findCoachById(supabase, userId)) as CoachSession | null
+    // findCoachById (repository) no incluye max_clients; se lee en paralelo para el gate de
+    // sobre-límite del plan standalone (el override manual del cupo prima sobre el del tier).
+    const [row, capRes] = await Promise.all([
+        findCoachById(supabase, userId),
+        supabase.from('coaches').select('max_clients').eq('id', userId).maybeSingle(),
+    ])
+    if (!row) return null
+    return { ...row, max_clients: capRes.data?.max_clients ?? null } as CoachSession
+})
+
+/**
+ * Conteo de alumnos activos standalone del coach, memoizado por request (React.cache) para
+ * deduplicar entre el layout /coach (banner global de sobre-límite) y el dashboard.
+ */
+export const getActiveStandaloneClientCount = cache(async (coachId: string): Promise<number> => {
+    const supabase = await createClient()
+    return countActiveStandaloneClients(supabase, coachId)
 })
