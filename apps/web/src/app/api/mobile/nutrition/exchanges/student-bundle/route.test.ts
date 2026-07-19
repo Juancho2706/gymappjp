@@ -5,18 +5,25 @@ import type { StudentExchangeBundle } from '@/services/nutrition-exchanges/nutri
 
 // ── Mocks ────────────────────────────────────────────────────────────────────────
 const verifyMobileBearer = vi.fn()
-vi.mock('@/lib/mobile-auth', () => ({
+vi.mock('@/lib/mobile-auth', async (importOriginal) => ({
+    ...(await importOriginal<typeof import('@/lib/mobile-auth')>()),
     verifyMobileBearer: (...a: unknown[]) => verifyMobileBearer(...a),
 }))
 
 // Fake admin: enruta por tabla. `nutrition_plans` sirve tanto a resolveClientNutritionContext
-// (id, coach_id) como a la lectura de plan_mode del route (fila mergeada).
+// (id, coach_id) como a la lectura de plan_mode del route (fila mergeada). `clients` sirve al gate
+// de bloqueo (is_archived/is_active) y al scope (team_id/org_id).
 let planRow: { id: string; coach_id: string | null; plan_mode: string | null } | null = {
     id: 'plan-1',
     coach_id: 'coach-1',
     plan_mode: 'exchanges',
 }
-let clientRow: { team_id: string | null; org_id: string | null } | null = { team_id: null, org_id: null }
+let clientRow: {
+    team_id: string | null
+    org_id: string | null
+    is_archived: boolean | null
+    is_active: boolean | null
+} | null = { team_id: null, org_id: null, is_archived: false, is_active: true }
 const fakeAdmin = {
     from: vi.fn((table: string) => {
         const maybeSingle = vi.fn(async () => ({
@@ -89,7 +96,7 @@ const EMPTY_BUNDLE: StudentExchangeBundle = {
 beforeEach(() => {
     vi.clearAllMocks()
     planRow = { id: 'plan-1', coach_id: 'coach-1', plan_mode: 'exchanges' }
-    clientRow = { team_id: null, org_id: null }
+    clientRow = { team_id: null, org_id: null, is_archived: false, is_active: true }
     verifyMobileBearer.mockResolvedValue({ ok: true, userId: 'client-1', via: 'jose' })
     getStudentExchangeBundle.mockResolvedValue(ACTIVE_BUNDLE)
 })
@@ -105,6 +112,14 @@ describe('GET /api/mobile/nutrition/exchanges/student-bundle', () => {
         verifyMobileBearer.mockResolvedValue({ ok: false, status: 401 })
         const res = await GET(req())
         expect(res.status).toBe(401)
+    })
+
+    it('403 CLIENT_BLOCKED cuando el alumno esta archivado (sin fuga de intercambios)', async () => {
+        clientRow = { team_id: null, org_id: null, is_archived: true, is_active: true }
+        const res = await GET(req())
+        expect(res.status).toBe(403)
+        expect((await res.json()).code).toBe('CLIENT_BLOCKED')
+        expect(getStudentExchangeBundle).not.toHaveBeenCalled()
     })
 
     it('hasPlan:false cuando el alumno no tiene plan activo', async () => {

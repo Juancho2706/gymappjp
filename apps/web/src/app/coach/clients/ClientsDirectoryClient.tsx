@@ -1,9 +1,13 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import { SearchX, UserPlus } from 'lucide-react'
+import { Archive, SearchX, UserPlus, X } from 'lucide-react'
+import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
+import { Sheet, SheetContent } from '@/components/ui/sheet'
+import { Button } from '@/components/ui/button'
+import { bulkArchiveClientsAction } from './_actions/clients.actions'
 import { DirectoryActionBar } from './DirectoryActionBar'
 import { DesktopRosterTable } from './DesktopRosterTable'
 import { ClientsDirectoryEmpty } from './ClientsDirectoryEmpty'
@@ -127,10 +131,56 @@ export function ClientsDirectoryClient({
     const [editingClient, setEditingClient] = useState<{ id: string; name: string } | null>(null)
     const [actionsClient, setActionsClient] = useState<any | null>(null)
     const [createOpen, setCreateOpen] = useState(false)
+    // Selección múltiple (solo móvil): modo + set de ids de alumnos NO archivados.
+    const [selectMode, setSelectMode] = useState(false)
+    const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+    const [confirmBulkOpen, setConfirmBulkOpen] = useState(false)
+    const [bulkError, setBulkError] = useState<string>()
+    const [isBulkArchiving, startBulkArchive] = useTransition()
 
     useEffect(() => {
         setVisibleCount(48)
     }, [search, riskFilter, statusFilter, programFilter, sortKey, sortDir, view])
+
+    const toggleSelectMode = () => {
+        setSelectMode((on) => {
+            const next = !on
+            if (!next) setSelectedIds(new Set())
+            return next
+        })
+    }
+
+    const toggleSelect = (id: string) => {
+        setSelectedIds((prev) => {
+            const next = new Set(prev)
+            if (next.has(id)) next.delete(id)
+            else next.add(id)
+            return next
+        })
+    }
+
+    const clearSelection = () => {
+        setSelectedIds(new Set())
+        setSelectMode(false)
+    }
+
+    const handleBulkArchive = () => {
+        setBulkError(undefined)
+        const ids = Array.from(selectedIds)
+        startBulkArchive(async () => {
+            const result = await bulkArchiveClientsAction(ids)
+            if (result.error) {
+                setBulkError(result.error)
+                return
+            }
+            const n = result.archived ?? ids.length
+            setConfirmBulkOpen(false)
+            setSelectedIds(new Set())
+            setSelectMode(false)
+            toast.success(`${n} ${n === 1 ? 'alumno archivado' : 'alumnos archivados'}.`)
+            router.refresh()
+        })
+    }
 
     const handleSortFromBar = (k: DirectorySortKey) => {
         setSortKey(k)
@@ -261,6 +311,8 @@ export function ClientsDirectoryClient({
                 onRiskFilterChange={onRiskFilterChange}
                 archivedCount={archivedCount}
                 resultCount={sortedClients.length}
+                selectMode={selectMode}
+                onToggleSelectMode={toggleSelectMode}
             />
 
             {sortedClients.length === 0 ?
@@ -292,6 +344,9 @@ export function ClientsDirectoryClient({
                         onHeaderSort={handleHeaderSort}
                         onOpen={(id) => router.push(`/coach/clients/${id}`)}
                         onActions={setActionsClient}
+                        selectMode={selectMode}
+                        selectedIds={selectedIds}
+                        onToggleSelect={toggleSelect}
                     />
                     {loadMoreButton}
                 </div>
@@ -304,23 +359,107 @@ export function ClientsDirectoryClient({
                             client={client}
                             pulse={pulseByClientId[client.id]}
                             onActions={() => setActionsClient(client)}
+                            selectMode={selectMode}
+                            selected={selectedIds.has(client.id)}
+                            onToggleSelect={() => toggleSelect(client.id)}
                         />
                     ))}
                     {loadMoreButton}
                 </div>
             }
 
-            {/* Nuevo alumno — acción primaria en la zona del pulgar (FAB pill, diseño L391-396) */}
-            <button
-                type="button"
-                onClick={() => setCreateOpen(true)}
-                className="eva-press fixed right-5 z-40 inline-flex h-[50px] items-center gap-2 rounded-pill bg-[var(--cta-fill)] px-5 font-ui text-[15px] font-bold text-[var(--text-on-sport)] shadow-[var(--shadow-lg)] md:hidden"
-                style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 96px)' }}
-            >
-                <UserPlus className="h-[19px] w-[19px]" />
-                Nuevo alumno
-            </button>
+            {/* Nuevo alumno — acción primaria en la zona del pulgar (FAB pill, diseño L391-396).
+                Oculto en modo selección para no chocar con la barra flotante inferior. */}
+            {!selectMode && (
+                <button
+                    type="button"
+                    onClick={() => setCreateOpen(true)}
+                    className="eva-press fixed right-5 z-40 inline-flex h-[50px] items-center gap-2 rounded-pill bg-[var(--cta-fill)] px-5 font-ui text-[15px] font-bold text-[var(--text-on-sport)] shadow-[var(--shadow-lg)] md:hidden"
+                    style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 96px)' }}
+                >
+                    <UserPlus className="h-[19px] w-[19px]" />
+                    Nuevo alumno
+                </button>
+            )}
             <CreateClientModal open={createOpen} onClose={() => setCreateOpen(false)} />
+
+            {/* Barra flotante de selección múltiple (solo móvil) */}
+            {selectedIds.size > 0 && (
+                <div className="fixed inset-x-0 bottom-0 z-50 bg-[var(--ink-950)] pb-safe text-white shadow-[0_-6px_20px_rgba(0,0,0,0.18)] md:hidden">
+                    <div className="flex items-center gap-3 px-4 py-3">
+                        <span className="text-[14px] font-bold">
+                            {selectedIds.size} seleccionado{selectedIds.size > 1 ? 's' : ''}
+                        </span>
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setBulkError(undefined)
+                                setConfirmBulkOpen(true)
+                            }}
+                            className="eva-press ml-auto inline-flex h-11 items-center gap-1.5 rounded-control bg-[var(--danger-500)] px-4 text-[13.5px] font-bold text-white transition-colors hover:bg-[var(--danger-600)]"
+                        >
+                            <Archive className="h-[17px] w-[17px]" /> Archivar
+                        </button>
+                        <button
+                            type="button"
+                            onClick={clearSelection}
+                            aria-label="Limpiar selección"
+                            className="eva-press inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-control bg-white/[0.12] text-white transition-colors hover:bg-white/20"
+                        >
+                            <X className="h-[17px] w-[17px]" />
+                        </button>
+                    </div>
+                </div>
+            )}
+
+            {/* Confirmación de archivado masivo */}
+            <Sheet
+                open={confirmBulkOpen}
+                onOpenChange={(o) => {
+                    if (!o && !isBulkArchiving) setConfirmBulkOpen(false)
+                }}
+            >
+                <SheetContent
+                    side="bottom"
+                    showCloseButton
+                    aria-label="Archivar alumnos seleccionados"
+                    className="rounded-t-sheet border-subtle bg-surface-card text-body shadow-lg"
+                >
+                    <div className="px-6 pb-6 pt-2">
+                        <div className="mb-[13px] flex h-12 w-12 items-center justify-center rounded-[var(--radius-md)] bg-[var(--warning-100)] text-[var(--warning-700)]">
+                            <Archive className="h-[23px] w-[23px]" />
+                        </div>
+                        <div className="mb-1.5 font-display text-[19px] font-extrabold text-strong">
+                            Archivar {selectedIds.size} alumnos
+                        </div>
+                        <div className="mb-5 text-[13.5px] leading-normal text-muted">
+                            Dejarán de tener acceso a su app hasta que los desarchives. Sus datos y su historial se conservan.
+                        </div>
+                        {bulkError && (
+                            <p className="mb-3 text-sm font-semibold text-[var(--danger-600)]">{bulkError}</p>
+                        )}
+                        <div className="flex gap-2.5">
+                            <Button
+                                variant="ghost"
+                                size="lg"
+                                onClick={() => setConfirmBulkOpen(false)}
+                                disabled={isBulkArchiving}
+                            >
+                                Cancelar
+                            </Button>
+                            <Button
+                                variant="danger"
+                                size="lg"
+                                className="flex-1"
+                                onClick={handleBulkArchive}
+                                disabled={isBulkArchiving}
+                            >
+                                {isBulkArchiving ? 'Archivando…' : 'Archivar'}
+                            </Button>
+                        </div>
+                    </div>
+                </SheetContent>
+            </Sheet>
             </div>
             </div>
 

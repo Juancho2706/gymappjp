@@ -37,6 +37,8 @@ interface Props {
     hasCoachLogo: boolean
     /** Logo de marca del coach — usado como tile del avatar del header móvil (fallback iniciales). */
     coachLogoUrl?: string | null
+    /** Alumnos activos standalone reales (is_archived=false) para el banner del plan gratuito. */
+    activeClientCount?: number | null
     workspaces: WorkspaceSummary[]
 }
 
@@ -50,6 +52,7 @@ export function DashboardShell({
     subscriptionTier,
     hasCoachLogo,
     coachLogoUrl,
+    activeClientCount,
     workspaces,
 }: Props) {
     const [statsSheetOpen, setStatsSheetOpen] = useState(false)
@@ -96,7 +99,7 @@ export function DashboardShell({
                         activeClientCount={data.kpi.totalClients}
                     />
                     {subscriptionTier === 'free' && (
-                        <FreeTierBanner totalClients={data.kpi.totalClients} />
+                        <FreeTierBanner activeClients={activeClientCount ?? data.kpi.totalClients} />
                     )}
                     {subscriptionTier === 'elite' && data.kpi.totalClients >= 80 && (
                         <TeamsBridgeBanner totalClients={data.kpi.totalClients} />
@@ -243,30 +246,39 @@ function HeaderBrandTile({ logoUrl, name }: { logoUrl?: string | null; name: str
     return <Avatar name={name} size="md" ring="sport" />
 }
 
-function FreeTierBanner({ totalClients }: { totalClients: number }) {
+function FreeTierBanner({ activeClients }: { activeClients: number }) {
     const max = TIER_CONFIG.free.maxClients
-    const used = Math.min(totalClients, max)
-    const pct = Math.round((used / max) * 100)
-    const full = used >= max
+    // `activeClients` = alumnos activos reales (excluye archivados); la barra se topa en 100%.
+    const pct = Math.round((Math.min(activeClients, max) / max) * 100)
+    const over = activeClients > max
+    const full = activeClients >= max
 
     return (
         <div
             className={cn(
                 'mt-3 flex items-center justify-between gap-4 rounded-card border px-4 py-3',
-                full
-                    ? 'border-[var(--warning-500)]/30 bg-[var(--warning-100)]'
-                    : 'border-border-subtle bg-surface-card'
+                over
+                    ? 'border-[var(--danger-500)]/30 bg-[var(--danger-100)]'
+                    : full
+                      ? 'border-[var(--warning-500)]/30 bg-[var(--warning-100)]'
+                      : 'border-border-subtle bg-surface-card'
             )}
         >
             <div className="min-w-0 flex-1">
                 <p className="text-xs font-bold text-[var(--text-strong)]">
-                    {used}/{max} alumnos · Plan gratuito
+                    {over
+                        ? `${activeClients}/${max} alumnos · ${activeClients - max} sobre el límite`
+                        : `${activeClients}/${max} alumnos · Plan gratuito`}
                 </p>
                 <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-pill bg-[var(--track)]">
                     <div
                         className={cn(
                             'h-full rounded-pill transition-all',
-                            full ? 'bg-[var(--warning-500)]' : 'bg-[var(--success-500)]'
+                            over
+                                ? 'bg-[var(--danger-500)]'
+                                : full
+                                  ? 'bg-[var(--warning-500)]'
+                                  : 'bg-[var(--success-500)]'
                         )}
                         style={{ width: `${pct}%` }}
                     />

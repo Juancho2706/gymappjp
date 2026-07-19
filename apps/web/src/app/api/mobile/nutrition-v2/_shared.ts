@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
-import { verifyMobileBearer } from '@/lib/mobile-auth'
+import { verifyMobileBearer, isBlockedClientRow } from '@/lib/mobile-auth'
 import { resolveNutritionV2RolloutDecision } from '@/services/nutrition-v2-rollout.service'
 import type { NutritionV2Surface } from '@eva/nutrition-v2'
 
@@ -70,7 +70,7 @@ export async function gateNutritionV2Api(
     admin.from('coaches').select('id').eq('id', userId).maybeSingle(),
     admin
       .from('clients')
-      .select('id, coach_id, team_id, org_id')
+      .select('id, coach_id, team_id, org_id, is_archived, is_active')
       .eq('id', userId)
       .maybeSingle(),
   ])
@@ -81,6 +81,8 @@ export async function gateNutritionV2Api(
     coach_id: string | null
     team_id: string | null
     org_id: string | null
+    is_archived: boolean | null
+    is_active: boolean | null
   } | null
 
   const studentSurface = options.surface === 'mobileStudent' || options.surface === 'webStudent'
@@ -90,6 +92,15 @@ export async function gateNutritionV2Api(
     return {
       ok: false,
       response: jsonNoStore({ error: 'Workspace not allowed', code: 'WORKSPACE_NOT_ALLOWED' }, 403),
+    }
+  }
+
+  // Superficie ALUMNO: un alumno archivado/pausado queda SIN acceso a datos (el coach sí puede
+  // seguir viendo los datos de sus archivados, por eso el chequeo es sólo en el camino de alumno).
+  if (studentSurface && isBlockedClientRow(client)) {
+    return {
+      ok: false,
+      response: jsonNoStore({ error: 'No autorizado', code: 'CLIENT_BLOCKED' }, 403),
     }
   }
 

@@ -15,7 +15,8 @@ vi.mock('@/lib/supabase/admin-client', () => ({
 }))
 
 const verifyMobileBearer = vi.fn()
-vi.mock('@/lib/mobile-auth', () => ({
+vi.mock('@/lib/mobile-auth', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/mobile-auth')>()),
   verifyMobileBearer: (...a: unknown[]) => verifyMobileBearer(...a),
 }))
 
@@ -60,7 +61,10 @@ beforeEach(() => {
   adminGetUser.mockResolvedValue({ data: { user: { id: CLIENT_ID } }, error: null })
   adminMaybeSingle.mockImplementation((table: string) =>
     table === 'clients'
-      ? { data: { id: CLIENT_ID, coach_id: 'coach-1', team_id: null, org_id: null }, error: null }
+      ? {
+          data: { id: CLIENT_ID, coach_id: 'coach-1', team_id: null, org_id: null, is_archived: false, is_active: true },
+          error: null,
+        }
       : { data: null, error: null },
   )
   resolveNutritionV2RolloutDecision.mockResolvedValue({ enabled: true, reason: 'test' })

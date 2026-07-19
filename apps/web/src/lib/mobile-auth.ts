@@ -68,6 +68,22 @@ async function verifyViaGetUser(token: string): Promise<MobileAuthResult> {
     }
 }
 
+/**
+ * ¿La fila de `clients` corresponde a un alumno BLOQUEADO para la superficie ALUMNO de la API
+ * mobile? Un alumno archivado (`is_archived`) o pausado (`is_active === false`) NO debe recibir
+ * datos: los endpoints de alumno leen con service-role (bypasean RLS), así que este chequeo es la
+ * capa que corta el acceso. Fila ausente => bloqueado (fail-closed: superficie exclusiva de alumno;
+ * un uid sin fila de `clients` no tiene por qué recibir datos). Estricto (`=== true`/`=== false`):
+ * `null`/`undefined` (estado desconocido) NO bloquea, sólo el estado explícito. El COACH sigue
+ * viendo datos de alumnos archivados: NO usar esto en su camino.
+ */
+export function isBlockedClientRow(
+    row: { is_archived?: boolean | null; is_active?: boolean | null } | null | undefined,
+): boolean {
+    if (!row) return true
+    return row.is_archived === true || row.is_active === false
+}
+
 export async function verifyMobileBearer(token: string): Promise<MobileAuthResult> {
     if (!token) return UNAUTHORIZED
     const url = supabaseUrl()

@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import type { Tables } from '@/lib/database.types'
 import { revalidatePath } from 'next/cache'
+import { z } from 'zod'
 import { CreateClientSchema, UpdateClientDataSchema } from '@eva/schemas'
 import { getTierMaxClients, type SubscriptionTier } from '@/lib/constants'
 import { sendTransactionalEmail } from '@/lib/email/send-email'
@@ -559,6 +560,66 @@ export async function unarchiveClientAction(clientId: string): Promise<{ error?:
 
     revalidatePath('/coach/clients')
     return {}
+}
+
+const BulkArchiveClientsSchema = z.array(z.guid()).min(1).max(200)
+
+export async function bulkArchiveClientsAction(clientIds: string[]): Promise<{ archived?: number; error?: string }> {
+    const parsed = BulkArchiveClientsSchema.safeParse(clientIds)
+    if (!parsed.success) return { error: 'Selección de alumnos inválida.' }
+
+    const supabase = await createClient()
+    const { data: { user: coachUser } } = await supabase.auth.getUser()
+    if (!coachUser) return { error: 'No autenticado.' }
+    const scope = await getCoachClientScope(supabase, coachUser.id)
+    if (!scope.ok) return { error: scope.error }
+
+    let archiveQuery = supabase
+        .from('clients')
+        .update({ is_archived: true })
+        .in('id', parsed.data)
+        .eq('coach_id', coachUser.id)
+    archiveQuery = applyClientScope(archiveQuery, scope.orgId)
+    const { data: archived, error } = await archiveQuery.select('id, full_name, email')
+
+    if (error) return { error: error.message }
+
+    const rows = archived ?? []
+    const withEmail = rows.filter((r) => r.email)
+
+    if (withEmail.length > 0) {
+        const { data: coach } = await supabase
+            .from('coaches')
+            .select('full_name, brand_name, slug, invite_code, subscription_tier, primary_color, logo_url')
+            .eq('id', coachUser.id)
+            .maybeSingle()
+
+        const appUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://eva-app.cl'
+        const emailBrand = resolveStudentEmailBranding({
+            isStandalone: !scope.orgId && !scope.activeTeamId,
+            tier: coach?.subscription_tier,
+            logoUrl: coach?.logo_url,
+            primaryColor: coach?.primary_color,
+        })
+        const coachPublicUrl = buildCoachStudentUrl(appUrl, coach)
+        void Promise.allSettled(
+            withEmail.map((r) => {
+                const { subject, html } = buildClientArchivedEmail({
+                    clientName: r.full_name,
+                    coachBrandName: coach?.brand_name ?? coach?.full_name ?? 'EVA',
+                    coachName: coach?.full_name ?? 'Tu entrenador',
+                    coachEmail: coachUser.email ?? null,
+                    coachPublicUrl,
+                    logoUrl: emailBrand.logoUrl,
+                    primaryColor: emailBrand.primaryColor,
+                })
+                return sendTransactionalEmail({ to: r.email!, subject, html })
+            })
+        )
+    }
+
+    revalidatePath('/coach/clients')
+    return { archived: rows.length }
 }
 
 export async function toggleClientStatusAction(clientId: string, isActive: boolean): Promise<{ error?: string }> {
