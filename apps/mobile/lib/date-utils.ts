@@ -111,8 +111,19 @@ export function getSantiagoUtcBoundsForDay(isoDate: string): { startIso: string;
   // chocando con el índice único `workout_logs_one_set_per_day` (23505). Con `Date.UTC` + `formatToParts`
   // de TZ fija el resultado es idéntico corriera donde corriera (verificado bit a bit contra la impl vieja
   // en runtime UTC, y correcto además en device Santiago para invierno UTC-4 y verano DST UTC-3).
-  const midnightUtcMs = new Date(`${isoDate}T00:00:00Z`).getTime()
-  const offsetMs = santiagoUtcOffsetMs(new Date(`${isoDate}T12:00:00Z`).getTime())
+  //
+  // Guarda de entrada (Sentry EVA-MOBILE-1 "RangeError: Date value out of bounds"): un `isoDate`
+  // invalido/undefined (p.ej. un `queued_at` corrupto en la cola offline que `getSantiagoIsoYmdForUtcInstant`
+  // convierte en "NaN-NaN-NaN", o una fecha mal formada rio arriba) hacia que `midnightUtcMs`/`offsetMs`
+  // fueran NaN y el `new Date(NaN).toISOString()` de abajo lanzara — un throw que en el flush de la cola
+  // (fire-and-forget) cae como `onunhandledrejection`. Se normaliza a la parte `YYYY-MM-DD` (identico para
+  // todo caller valido actual, que ya pasa date-only) y si el dia no es parseable se cae a HOY en Santiago:
+  // nunca se lanza, y la ventana devuelta siempre es un dia real.
+  const ymd = /^\d{4}-\d{2}-\d{2}/.exec(String(isoDate ?? ''))?.[0]
+  const safeDate =
+    ymd && !Number.isNaN(new Date(`${ymd}T00:00:00Z`).getTime()) ? ymd : getTodayInSantiago().iso
+  const midnightUtcMs = new Date(`${safeDate}T00:00:00Z`).getTime()
+  const offsetMs = santiagoUtcOffsetMs(new Date(`${safeDate}T12:00:00Z`).getTime())
   const startMs = midnightUtcMs - offsetMs
   return {
     startIso: new Date(startMs).toISOString(),

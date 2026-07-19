@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useState } from 'react'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
-import { SafeAreaView } from 'react-native-safe-area-context'
-import { useRouter } from 'expo-router'
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
+import { useFocusEffect, useRouter } from 'expo-router'
 import {
   AlertTriangle,
   ArrowDownRight,
@@ -14,16 +14,17 @@ import {
   Zap,
 } from 'lucide-react-native'
 import { MOVEMENT_PATTERNS_V1, type MovementPatternSlug, type PriorityBand } from '@eva/calc'
-import { useTheme } from '../../context/ThemeContext'
-import { useEntitlements } from '../../lib/entitlements'
-import { getClientProfile } from '../../lib/client'
-import { supabase } from '../../lib/supabase'
-import { Card } from '../../components/Card'
-import { Badge } from '../../components/Badge'
-import { ModuleOffNotice } from '../../components/ModuleOffNotice'
-import { AppBackground } from '../../components/AppBackground'
-import { EvaLoaderScreen } from '../../components/EvaLoader'
-import { FONT } from '../../lib/typography'
+import { useTheme } from '../../../context/ThemeContext'
+import { useEntitlements } from '../../../lib/entitlements'
+import { getClientProfile } from '../../../lib/client'
+import { supabase } from '../../../lib/supabase'
+import { Card } from '../../../components/Card'
+import { Badge } from '../../../components/Badge'
+import { ModuleOffNotice } from '../../../components/ModuleOffNotice'
+import { AppBackground } from '../../../components/AppBackground'
+import { EvaLoaderScreen } from '../../../components/EvaLoader'
+import { ALUMNO_TABBAR_CLEARANCE } from '../../../components/alumno/AlumnoMobileChrome'
+import { FONT } from '../../../lib/typography'
 
 /**
  * Vista MOVIMIENTO del ALUMNO (read-only) — E6-08. Port RN de la web
@@ -116,6 +117,7 @@ type LoadState =
 
 export default function StudentMovementScreen() {
   const { theme } = useTheme()
+  const insets = useSafeAreaInsets()
   const router = useRouter()
   const { ready, hasModule } = useEntitlements()
 
@@ -126,7 +128,11 @@ export default function StudentMovementScreen() {
 
   // Cargar el perfil (para org_id) y — solo si el modulo esta ON y NO es enterprise —
   // las evaluaciones finales. Sin modulo: CERO fetch de datos del alumno.
-  useEffect(() => {
+  // 2R-1: al vivir dentro de (tabs) la pantalla queda montada tras la primera
+  // visita; useFocusEffect refresca en cada entrada (== el remount por push que
+  // tenia como ruta stack == el server render fresco del web por navegacion).
+  // El refetch es silencioso: el estado 'ready' anterior se mantiene en pantalla.
+  useFocusEffect(useCallback(() => {
     let alive = true
     if (!ready) return
     ;(async () => {
@@ -165,7 +171,7 @@ export default function StudentMovementScreen() {
     return () => {
       alive = false
     }
-  }, [ready, moduleOn])
+  }, [ready, moduleOn]))
 
   // ── Entitlements aun sin resolver: loader. ──
   if (!ready) {
@@ -204,7 +210,7 @@ export default function StudentMovementScreen() {
       ) : (
         <ScrollView
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.scroll}
+          contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + ALUMNO_TABBAR_CLEARANCE }]}
           testID="movement-scroll"
         >
           {state.kind === 'perm_error' ? (
@@ -539,7 +545,10 @@ function Disclaimer({ style }: { style?: object }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  scroll: { paddingHorizontal: 20, paddingBottom: 40, gap: 20 },
+  // paddingBottom vive en el contentContainer inline: insets.bottom +
+  // ALUMNO_TABBAR_CLEARANCE reserva el espacio de la capsula flotante (== el
+  // padding-bottom --mobile-content-bottom-offset del <main> web, layout.tsx:360).
+  scroll: { paddingHorizontal: 20, gap: 20 },
   offWrap: { flex: 1 },
   // Header
   header: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 8, gap: 10 },

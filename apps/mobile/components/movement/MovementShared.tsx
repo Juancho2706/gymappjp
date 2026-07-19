@@ -21,7 +21,7 @@ import { Badge } from '../Badge'
  * del dict web assessment.*), semaforo por banda, header con tile de marca, PriorityBadge, tarjeta
  * de reporte (hero + 7 patrones + notas) y evolucion (barras del compuesto + comparativa por
  * patron). Reutilizadas por el hub (`/coach/movement`) y el detalle (`/coach/movement/[clientId]`).
- * Espeja 1:1 la vista del alumno (app/alumno/movement.tsx) y los componentes web
+ * Espeja 1:1 la vista del alumno (app/alumno/(tabs)/movement.tsx) y los componentes web
  * AssessmentReportCard/EvolutionCharts/PriorityBadge — scoring/orden de patrones desde @eva/calc
  * (fuente unica, sin drift).
  */

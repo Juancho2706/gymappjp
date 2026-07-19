@@ -158,6 +158,20 @@ comidas del Home; propagación de `brand_font_key` donde web usa `--brand-font`;
 residuos visuales comprobados de Secciones 1–2; y smoke de sheets desde frío
 (migrar a `nativeModal` sólo los que reproduzcan el fallo).
 
+Unidad 2R-3 (tipografía white-label) aplicada a nivel código: `lib/brand-fonts.ts`
+resuelve `brand_font_key` (gate Pro+ `isBrandingAllowed` + `resolvePresetBranding` +
+catálogo cerrado de 12 keys de `@eva/schemas`, espejo de `c/[coach_slug]/layout.tsx:146-195`
+y `globals.css:807-811`) y `app/_layout.tsx` registra los 4 slots display
+(`Archivo_600SemiBold`..`Archivo_900Black`) apuntando al asset de la fuente de marca —
+cobertura total de `font-display*` y `TYPE.*` sin tocar callsites. Default EVA intacto
+(Archivo real). 9 paquetes `@expo-google-fonts` nuevos (plus-jakarta-sans, manrope,
+poppins, sora, space-grotesk, outfit, figtree, dm-sans@0.4, lexend) ⇒ los TTF llegan
+con BUILD NATIVA, no OTA. Clamps documentados: space-grotesk 800/900→700;
+plus-jakarta/manrope/sora 900→800 (ejes reales de Google Fonts; web los sintetiza en
+browser). Semántica de refresco = cold start (espejo del full reload web); la primera
+sesión tras vincular coach muestra Archivo hasta reiniciar (adaptación documentada en
+`lib/brand-fonts.ts`). Pendiente de la unidad: QA device light/dark × EVA/marca con fuente.
+
 Ola 4A rehace la auditoría formal de `c/[coach_slug]/nutrition/**`. Hallazgo de
 entrada confirmado: `MacroRingSummary` web es card inverse, kcal/proteína ember,
 carbos sport white-label y grasas aqua; RN actual es card normal, kcal success y

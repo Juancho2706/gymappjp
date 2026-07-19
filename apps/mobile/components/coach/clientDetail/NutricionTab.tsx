@@ -789,10 +789,11 @@ const styles = StyleSheet.create({
   prefsFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginTop: 2 },
 })
 
-// ── Composicion V2 (paralelo del tab web de Tanda 8) ─────────────────────────
-// Con el flag `nutritionV2Coach` ON Y un fetch V2 del alumno resuelto, se muestra el resumen V2
-// (plan vigente + consumo de hoy vs metas + CTA a la ficha completa). Sin flag o ante CUALQUIER
-// fallo del fetch, se cae al tab V1 EXACTAMENTE igual (fail-open, cero regresion).
+// ── Composicion V2 (espejo del swap server-side web) ─────────────────────────
+// Web ficha (clients/[clientId]/ClientProfileDashboard.tsx:487-527): con view model V2 resuelto
+// se monta `NutritionTabV2`; con null se monta `NutritionTabB5` (V1) sin cambio alguno. Aqui:
+// flag/canary `nutritionV2Coach` ON Y fetch del read model resuelto ⇒ NutritionV2Summary
+// (espejo 1:1 de NutritionTabV2.tsx); sin flag o ante CUALQUIER fallo ⇒ tab V1 (fail-open).
 export function NutricionTab(props: Parameters<typeof NutricionTabV1>[0]) {
   const gate = useCoachNutritionV2Detail(props.clientId)
   if (gate.active && gate.detail) {
@@ -801,7 +802,6 @@ export function NutricionTab(props: Parameters<typeof NutricionTabV1>[0]) {
         detail={gate.detail}
         clientId={props.clientId}
         offline={gate.offline}
-        onEditNutrition={props.onEditNutrition}
       />
     )
   }

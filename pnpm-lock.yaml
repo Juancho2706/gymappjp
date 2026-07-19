@@ -321,6 +321,12 @@ importers:
       '@expo-google-fonts/archivo':
         specifier: ^0.2.3
         version: 0.2.3
+      '@expo-google-fonts/dm-sans':
+        specifier: ^0.4.2
+        version: 0.4.2
+      '@expo-google-fonts/figtree':
+        specifier: ^0.2.3
+        version: 0.2.3
       '@expo-google-fonts/hanken-grotesk':
         specifier: ^0.2.3
         version: 0.2.3
@@ -330,7 +336,28 @@ importers:
       '@expo-google-fonts/jetbrains-mono':
         specifier: ^0.2.3
         version: 0.2.3
+      '@expo-google-fonts/lexend':
+        specifier: ^0.2.3
+        version: 0.2.3
+      '@expo-google-fonts/manrope':
+        specifier: ^0.2.3
+        version: 0.2.3
       '@expo-google-fonts/montserrat':
+        specifier: ^0.2.3
+        version: 0.2.3
+      '@expo-google-fonts/outfit':
+        specifier: ^0.2.3
+        version: 0.2.3
+      '@expo-google-fonts/plus-jakarta-sans':
+        specifier: ^0.2.3
+        version: 0.2.3
+      '@expo-google-fonts/poppins':
+        specifier: ^0.2.3
+        version: 0.2.3
+      '@expo-google-fonts/sora':
+        specifier: ^0.2.3
+        version: 0.2.3
+      '@expo-google-fonts/space-grotesk':
         specifier: ^0.2.3
         version: 0.2.3
       '@gorhom/bottom-sheet':
@@ -1714,6 +1741,12 @@ packages:
   '@expo-google-fonts/archivo@0.2.3':
     resolution: {integrity: sha512-WD3Ad+oMOqCCBwJDPJcmFWyhqT2tF1aPOtKPT0xZejYMExcHCiqbog1om/mAupR1A+7q2f5qt1lEBecDiG+ClA==}
 
+  '@expo-google-fonts/dm-sans@0.4.2':
+    resolution: {integrity: sha512-e/fLH5aCJzkEenz7axvEn8N7IJAKhUwNjIxS75h9j+Ip1M9S7d22M19gJN3A7QW4egVkBJRyQh1hQFhngQn9yA==}
+
+  '@expo-google-fonts/figtree@0.2.3':
+    resolution: {integrity: sha512-QUj2F553gAt/n2FA569Ga2Au8p5lcfblaoKCbGU73rK3xsevvHbZUIFDADQteqZaDkP554ykXeDTySmc1Qy6sw==}
+
   '@expo-google-fonts/hanken-grotesk@0.2.3':
     resolution: {integrity: sha512-pEaoCp/F8EYJdXf8GvaCOSpTTQQ5SM+8DSuIz9DBLSF7fG3ZF3gwMDS6U2jJAuFo6G35N4WoNj7iX2dI9rNofQ==}
 
@@ -1723,8 +1756,29 @@ packages:
   '@expo-google-fonts/jetbrains-mono@0.2.3':
     resolution: {integrity: sha512-TlAlQzlDYT/cwg3kjME54P/iOl5dxv+EZ0iYSMZ6+3Jhw0oImBI/BVPVKLP+KT+sAs8ze1FvGTYXrtfiYolxtw==}
 
+  '@expo-google-fonts/lexend@0.2.3':
+    resolution: {integrity: sha512-GtEv1oYYAZ0+bdVbvmR640dsOuQAPAZFDgBL2p8zGDnz0oGcNxQVxwml8k8We6BnRLyJmM43WshgxZvQ4i6TeA==}
+
+  '@expo-google-fonts/manrope@0.2.3':
+    resolution: {integrity: sha512-2M9hzi5ku97ZbheGMyzqIdiIEmve0/ihBk9nVWRy2lVIchWqR2k2yIQPS7jKC/Az/e43tW3POLNeU6gQJQL9hw==}
+
   '@expo-google-fonts/montserrat@0.2.3':
     resolution: {integrity: sha512-9imhwIs6j5uyTkTxoNplC5T8ERES1W98ZgF7kf7OaypnbcoLoIW0wKH6oudecZyiEqoSktC7epkRpj+UEUvzWg==}
+
+  '@expo-google-fonts/outfit@0.2.3':
+    resolution: {integrity: sha512-uLW3n6WwtrF33IBDyuHKPgBNcJKe3O8+YXS1f7SLYdb5jEgXP2udNzzhmiw7OYvIAjfS+XDOw0uTELSB36VzOQ==}
+
+  '@expo-google-fonts/plus-jakarta-sans@0.2.3':
+    resolution: {integrity: sha512-7vukKMax5xrMlrf0DCzOpqqCQwxYaUXH4BmVxbal5Xrys1LIQmaqoiPftd7RtTSRbwPEhU/GYqIGrkuCAydRrQ==}
+
+  '@expo-google-fonts/poppins@0.2.3':
+    resolution: {integrity: sha512-PXkur1ZY/puy1PwVFYPJx8qiI3dtBzC2ig1bo53swCt7/sI7krCGYRO6hLBNp15M0kcNh2J4cCR9ZQyFxsving==}
+
+  '@expo-google-fonts/sora@0.2.3':
+    resolution: {integrity: sha512-ly41fWFI6eDWokUJPkqdKKW1McX9O/1NiaP41O8tT1CbMEStGCOQs6FUiMG4qdDG5sxVKA8vElaekelCwBKhAQ==}
+
+  '@expo-google-fonts/space-grotesk@0.2.3':
+    resolution: {integrity: sha512-UYEMIrzegR02pauH7gVMI7j6cUroTtJug6dH/aQFjMNz0UwZe6GUcrEtJDmsUHJjEZdxbYgHhaiIwswWVo0CMA==}
 
   '@expo/cli@54.0.24':
     resolution: {integrity: sha512-5xse1bEgnVUBhOrtttc6xTNJVvjyTRavpzuF0/0nuj+312vfSbk7EiRbG+xJ2pW/iZxnhLPJkFCrPYG0nmheAQ==}
@@ -10024,13 +10078,31 @@ snapshots:
 
   '@expo-google-fonts/archivo@0.2.3': {}
 
+  '@expo-google-fonts/dm-sans@0.4.2': {}
+
+  '@expo-google-fonts/figtree@0.2.3': {}
+
   '@expo-google-fonts/hanken-grotesk@0.2.3': {}
 
   '@expo-google-fonts/inter@0.2.3': {}
 
   '@expo-google-fonts/jetbrains-mono@0.2.3': {}
 
+  '@expo-google-fonts/lexend@0.2.3': {}
+
+  '@expo-google-fonts/manrope@0.2.3': {}
+
   '@expo-google-fonts/montserrat@0.2.3': {}
+
+  '@expo-google-fonts/outfit@0.2.3': {}
+
+  '@expo-google-fonts/plus-jakarta-sans@0.2.3': {}
+
+  '@expo-google-fonts/poppins@0.2.3': {}
+
+  '@expo-google-fonts/sora@0.2.3': {}
+
+  '@expo-google-fonts/space-grotesk@0.2.3': {}
 
   '@expo/cli@54.0.24(expo-router@6.0.23)(expo@54.0.34)(react-native@0.81.5(@babel/core@7.29.7)(@react-native/metro-config@0.85.3(@babel/core@7.29.7))(@types/react@19.1.17)(react@19.1.0))(typescript@5.9.3)':
     dependencies:

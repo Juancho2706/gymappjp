@@ -84,6 +84,16 @@ export default function AlumnoTabsLayout() {
         <Tabs.Screen name="perfil" options={{ title: 'Perfil' }} />
         {/* Workout se accede desde hero card del Home, no como tab directo */}
         <Tabs.Screen name="workout" options={{ href: null }} />
+        {/* 2R-1: rutas de módulo (Perfil → Movimiento/Composición) como rutas
+            OCULTAS dentro de tabs (href:null, mismo patrón que coach/team y
+            coach/reactivate): así la cápsula sigue visible y "Más" queda activo
+            dentro de ellas, igual que la web, donde /movimiento y /bodycomp viven
+            bajo el layout con ClientNav siempre montado (c/[coach_slug]/layout.tsx:345,360)
+            y moreRoutes las mantiene resaltadas (ClientNav.tsx:128-139). Los deep
+            links /alumno/movement y /alumno/bodycomp no cambian: el grupo (tabs)
+            no participa de la URL. */}
+        <Tabs.Screen name="movement" options={{ href: null }} />
+        <Tabs.Screen name="bodycomp" options={{ href: null }} />
       </Tabs>
     </View>
   )
