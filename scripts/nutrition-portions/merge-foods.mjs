@@ -422,7 +422,10 @@ function backupDdlSql(stampStr) {
   ].join('\n')
 }
 
-async function applyEq(query, filterObj) {
+// SINCRONA a proposito: los query builders de supabase-js son thenables — devolverlos
+// desde una funcion async los AWAITEA y EJECUTA la query a medio armar (bug real
+// 2026-07-19: 'q.eq is not a function' porque q ya era la respuesta, no el builder).
+function applyEq(query, filterObj) {
   let q = query
   for (const [k, v] of Object.entries(filterObj)) q = q.eq(k, v)
   return q
@@ -440,7 +443,7 @@ async function runApply(db, url, key) {
   const deletedDuplicates = []
   for (const op of remap.deleteOps) {
     let q = db.from(op.table).select('*')
-    q = await applyEq(q, op.pk)
+    q = applyEq(q, op.pk)
     const { data, error } = await q.maybeSingle()
     if (error) throw new Error(`backup select ${op.table} ${JSON.stringify(op.pk)}: ${error.message}`)
     if (data) deletedDuplicates.push({ table: op.table, column: op.column, pkCols: pkByTable.get(op.table), row: data })
@@ -479,7 +482,7 @@ async function runApply(db, url, key) {
   // 1) Deletes de conflicto (liberan el espacio de la unica).
   for (const op of remap.deleteOps) {
     let q = db.from(op.table).delete()
-    q = await applyEq(q, op.pk)
+    q = applyEq(q, op.pk)
     const { error } = await q
     if (error) errors.push({ stage: 'conflict-delete', op, error: error.message })
     else conflictDeleted += 1
@@ -488,7 +491,7 @@ async function runApply(db, url, key) {
   // 2) Updates de remapeo (con degradacion a DELETE si aparece 23505 en vivo).
   for (const op of remap.updateOps) {
     let q = db.from(op.table).update({ [op.column]: op.to })
-    q = await applyEq(q, op.keyCols)
+    q = applyEq(q, op.keyCols)
     q = q.eq(op.column, op.from)
     const { error } = await q
     if (!error) {
@@ -499,11 +502,11 @@ async function runApply(db, url, key) {
       // Conflicto no predicho: borrar la fila duplicada. Se respalda su fila completa aparte.
       const pk = { ...op.keyCols, [op.column]: op.from }
       let sel = db.from(op.table).select('*')
-      sel = await applyEq(sel, pk)
+      sel = applyEq(sel, pk)
       const { data: full } = await sel.maybeSingle()
       if (full) fallbackDeletes.push({ table: op.table, column: op.column, pkCols: pkByTable.get(op.table), row: full })
       let del = db.from(op.table).delete()
-      del = await applyEq(del, pk)
+      del = applyEq(del, pk)
       const { error: delErr } = await del
       if (delErr) errors.push({ stage: 'fallback-delete', op, error: delErr.message })
       else conflictDeleted += 1
