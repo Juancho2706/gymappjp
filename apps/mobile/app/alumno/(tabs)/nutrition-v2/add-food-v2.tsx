@@ -13,35 +13,38 @@ import {
   SyncOfflineState,
   CelebrationOverlay,
   type CelebrationInstance,
-} from '../../../components/nutrition-v2'
+} from '../../../../components/nutrition-v2'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { ALUMNO_TABBAR_CLEARANCE } from '../../../../components/alumno/AlumnoMobileChrome'
+import { useAlumnoScrollHandler } from '../../../../lib/alumno-chrome-scroll'
 import { sortFoodsByFavoriteFirst, type FoodCatalogItem } from '@eva/nutrition-v2'
-import { isEnabled } from '../../../lib/flags'
-import { useEntitlements } from '../../../lib/entitlements'
-import { supabase } from '../../../lib/supabase'
-import { searchFoodCatalogV2 } from '../../../lib/nutrition-v2-catalog.api'
+import { isEnabled } from '../../../../lib/flags'
+import { useEntitlements } from '../../../../lib/entitlements'
+import { supabase } from '../../../../lib/supabase'
+import { searchFoodCatalogV2 } from '../../../../lib/nutrition-v2-catalog.api'
 import {
   getClientFoodFavorites,
   listFavoriteFoodsV2,
   toggleClientFoodFavorite,
-} from '../../../lib/nutrition-swaps'
+} from '../../../../lib/nutrition-swaps'
 import {
   CATALOG_ODBL_GENERIC_LINE,
   catalogHasOpenFoodFactsSource,
   foodCategoryEmoji,
   foodMediaThumbnailUrl,
   foodOdblAttributionLine,
-} from '../../../lib/nutrition-v2-food-media'
+} from '../../../../lib/nutrition-v2-food-media'
 import {
   buildRecordIntakeMutation,
   computeIntakeTotals,
-} from '../../../lib/nutrition-v2-intake'
+} from '../../../../lib/nutrition-v2-intake'
 import {
   getStableDeviceId,
   newNutritionV2OperationId,
   submitRecordIntake,
-} from '../../../lib/nutrition-v2-intake-runner'
-import { decideMealLoggedCelebration, type CelebrationDecision } from '../../../lib/nutrition-v2-celebrations'
-import { claimMealLoggedCelebration } from '../../../lib/nutrition-v2-celebrations.storage'
+} from '../../../../lib/nutrition-v2-intake-runner'
+import { decideMealLoggedCelebration, type CelebrationDecision } from '../../../../lib/nutrition-v2-celebrations'
+import { claimMealLoggedCelebration } from '../../../../lib/nutrition-v2-celebrations.storage'
 
 const SEARCH_DEBOUNCE_MS = 300
 
@@ -60,6 +63,10 @@ function unitsFor(food: FoodCatalogItem): readonly string[] {
 
 export default function NutritionV2AddFoodScreen() {
   const router = useRouter()
+  // 4A-01: pantalla bajo (tabs) con la cápsula visible — el scroll reserva el
+  // clearance de la cápsula y alimenta su minimizado (patrón de las demás tabs).
+  const insets = useSafeAreaInsets()
+  const onScrollChrome = useAlumnoScrollHandler()
   const entitlements = useEntitlements()
   const params = useLocalSearchParams<{ slot?: string; slotName?: string }>()
   const slotCode = typeof params.slot === 'string' && params.slot ? params.slot : null
@@ -307,7 +314,10 @@ export default function NutritionV2AddFoodScreen() {
     <View className="flex-1 bg-surface-app">
     <ScrollView
       className="flex-1 bg-surface-app"
-      contentContainerClassName="gap-5 px-4 pb-12 pt-5"
+      contentContainerClassName="gap-5 px-4 pt-5"
+      contentContainerStyle={{ paddingBottom: insets.bottom + ALUMNO_TABBAR_CLEARANCE }}
+      onScroll={onScrollChrome}
+      scrollEventThrottle={16}
       keyboardShouldPersistTaps="handled"
     >
       <View className="flex-row items-center gap-3">

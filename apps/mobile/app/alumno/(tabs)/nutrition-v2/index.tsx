@@ -19,8 +19,12 @@ import {
   SyncOfflineState,
   CelebrationOverlay,
   type CelebrationInstance,
-} from '../../../components/nutrition-v2'
-import { Sheet as ActionSheet } from '../../../components/Sheet'
+} from '../../../../components/nutrition-v2'
+import { Sheet as ActionSheet } from '../../../../components/Sheet'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { ALUMNO_TABBAR_CLEARANCE } from '../../../../components/alumno/AlumnoMobileChrome'
+import { useAlumnoScrollHandler } from '../../../../lib/alumno-chrome-scroll'
+import { NutritionDomainOff } from '../../../../components/alumno/nutrition'
 import {
   PortionDayCoverageRow,
   PortionEquivalencesSheet,
@@ -28,12 +32,12 @@ import {
   PortionSnackbar,
   coverageViewFor,
   usePortionMarks,
-} from '../../../components/alumno/nutrition-v2'
+} from '../../../../components/alumno/nutrition-v2'
 import type {
   PendingPortionMark,
   PendingPortionVoid,
   PortionCoverageView,
-} from '../../../lib/nutrition-v2-portions'
+} from '../../../../lib/nutrition-v2-portions'
 import {
   NUTRITION_STRATEGIES,
   type NutritionSlotExchangeTargetRead,
@@ -54,20 +58,20 @@ import {
   type NutritionPlanReadModel,
   type NutritionTodayReadModel,
 } from '@eva/nutrition-v2'
-import { supabase } from '../../../lib/supabase'
-import { formatNutritionShortDate } from '../../../lib/date-utils'
-import { foodCategoryEmojiFromName } from '../../../lib/nutrition-v2-food-media'
-import { isEnabled } from '../../../lib/flags'
-import { useEntitlements } from '../../../lib/entitlements'
-import { getNutritionHistoryV2, getNutritionPlanV2, getNutritionTodayV2 } from '../../../lib/nutrition-v2.api'
+import { supabase } from '../../../../lib/supabase'
+import { formatNutritionShortDate } from '../../../../lib/date-utils'
+import { foodCategoryEmojiFromName } from '../../../../lib/nutrition-v2-food-media'
+import { isEnabled } from '../../../../lib/flags'
+import { useEntitlements } from '../../../../lib/entitlements'
+import { getNutritionHistoryV2, getNutritionPlanV2, getNutritionTodayV2 } from '../../../../lib/nutrition-v2.api'
 import {
   readNutritionV2Cache,
   writeNutritionV2Cache,
-} from '../../../lib/nutrition-v2-cache'
+} from '../../../../lib/nutrition-v2-cache'
 import {
   flushNutritionV2MutationQueue,
   getNutritionV2QueueStatus,
-} from '../../../lib/nutrition-v2-offline'
+} from '../../../../lib/nutrition-v2-offline'
 import {
   buildAteAsPrescribedMutation,
   buildEditIntakeCorrection,
@@ -75,34 +79,34 @@ import {
   computeIntakeTotals,
   optimisticIntakeRow,
   type NutritionIntakeTotals,
-} from '../../../lib/nutrition-v2-intake'
+} from '../../../../lib/nutrition-v2-intake'
 import {
   getStableDeviceId,
   newNutritionV2OperationId,
   submitCorrectIntake,
   submitRecordIntake,
-} from '../../../lib/nutrition-v2-intake-runner'
-import { useEvaMotion } from '../../../lib/motion'
+} from '../../../../lib/nutrition-v2-intake-runner'
+import { useEvaMotion } from '../../../../lib/motion'
 import {
   decideDayCloseCelebration,
   decideEnergyGoalCelebration,
   decideMealLoggedCelebration,
   isNutritionDayComplete,
   type CelebrationDecision,
-} from '../../../lib/nutrition-v2-celebrations'
+} from '../../../../lib/nutrition-v2-celebrations'
 import {
   claimDayCloseCelebration,
   claimEnergyGoalCelebration,
   claimMealLoggedCelebration,
-} from '../../../lib/nutrition-v2-celebrations.storage'
-import { useTheme } from '../../../context/ThemeContext'
+} from '../../../../lib/nutrition-v2-celebrations.storage'
+import { useTheme } from '../../../../context/ThemeContext'
 import {
   canLoadMoreHistory,
   historyDayHasDetail,
   historyDayIsLegacy,
   mergeHistoryPages,
   nextHistoryCursor,
-} from '../../../lib/nutrition-v2-history'
+} from '../../../../lib/nutrition-v2-history'
 
 const TZ = 'America/Santiago'
 
@@ -130,6 +134,11 @@ const EMPTY_PORTION_VOIDS: PendingPortionVoid[] = []
 
 function TodayTab() {
   const router = useRouter()
+  // 4A-01: bajo la cápsula de (tabs) el scroll reserva clearance en el
+  // contentContainer (patrón del layout, ver (tabs)/_layout.tsx) y alimenta el
+  // minimizado de la cápsula, igual que las demás tabs del alumno.
+  const insets = useSafeAreaInsets()
+  const onScrollChrome = useAlumnoScrollHandler()
   const entitlements = useEntitlements()
   const [userId, setUserId] = useState<string | null>(null)
   const [clientName, setClientName] = useState<string | null>(null)
@@ -704,7 +713,10 @@ function TodayTab() {
     <>
       <ScrollView
         className="flex-1 bg-surface-app"
-        contentContainerClassName="gap-5 px-4 pb-12 pt-5"
+        contentContainerClassName="gap-5 px-4 pt-5"
+        contentContainerStyle={{ paddingBottom: insets.bottom + ALUMNO_TABBAR_CLEARANCE }}
+        onScroll={onScrollChrome}
+        scrollEventThrottle={16}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -1131,7 +1143,20 @@ export default function StudentNutritionV2Screen() {
   const { reduced, duration } = useEvaMotion()
   const [tab, setTab] = useState<NutritionV2Tab>('today')
 
-  if (!entitlements.ready) {
+  // 4A-01: gate del flag, espejo EXACTO de la ruta web /nutrition-v2
+  // (nutrition-v2/page.tsx:48-56): con `nutritionV2Student` OFF la web hace
+  // `redirect(`${base}/nutrition`)`; aquí replaza al tab `nutricion` (V1) al ganar
+  // foco. Sin loop posible: el gate del tab solo redirige V1→V2 con el MISMO flag ON.
+  const fallbackToV1 = entitlements.ready && !isEnabled('nutritionV2Student')
+  useFocusEffect(
+    useCallback(() => {
+      if (fallbackToV1) router.replace('/alumno/nutricion')
+    }, [fallbackToV1, router]),
+  )
+
+  if (!entitlements.ready || !enabled) {
+    // Pre-hidratación de entitlements o transición del replace a V1: skeleton
+    // neutro (la web no pinta contenido en ninguno de los dos casos).
     return (
       <View className="flex-1 bg-surface-app px-4 pt-6">
         <NutritionSkeleton variant="today" />
@@ -1139,23 +1164,21 @@ export default function StudentNutritionV2Screen() {
     )
   }
 
-  if (!enabled) {
+  // 4A-01: master switch del dominio también en la RUTA, no solo en el nav
+  // (espejo de la intención web: redirect V1 + `showNutrition` del ClientNav
+  // aseguran que dominio OFF jamás muestra nutrición, ClientNav.tsx:44-46,120;
+  // el shell V1 RN hace lo mismo en nutricion.tsx). Un deep-link (widget del
+  // Inicio, notificación) con dominio apagado ve el aviso — NUNCA el plan.
+  if (!entitlements.nutritionEnabled) {
     return (
-      <View className="flex-1 bg-surface-app px-4 pt-6">
-        <NutritionStatePanel
-          icon="permission"
-          title="Nutrición todavía no está disponible para ti"
-          description="Tu coach todavía no activó esta vista para ti."
-          action={
-            <NutritionMotionButton
-              accessibilityLabel="Volver a nutrición actual"
-              onPress={() => router.replace('/alumno/(tabs)/nutricion')}
-              tone="neutral"
-            >
-              Volver a Nutrición
-            </NutritionMotionButton>
-          }
-        />
+      <View className="flex-1 bg-surface-app">
+        <View className="gap-4 px-4 pb-3 pt-5">
+          <NutritionHeader
+            title="Nutrición"
+            description="Prescripción, consumo real e historial en una sola experiencia."
+          />
+        </View>
+        <NutritionDomainOff />
       </View>
     )
   }
@@ -1163,8 +1186,12 @@ export default function StudentNutritionV2Screen() {
   return (
     <View className="flex-1 bg-surface-app">
       <View className="gap-4 px-4 pb-3 pt-5">
+        {/* Header 1:1 web (nutrition-v2/page.tsx:62-65): título "Nutrición" +
+            descripción, SIN eyebrow. Adaptación documentada: la web muestra
+            flecha de volver (`backHref={base}/dashboard`, NutritionV2Kit.tsx:122-150)
+            porque /nutrition-v2 es una página; aquí la superficie ES el tab
+            Nutrición y los tabs RN no tienen back — la flecha se omite. */}
         <NutritionHeader
-          eyebrow="Vista previa"
           title="Nutrición"
           description="Prescripción, consumo real e historial en una sola experiencia."
         />
@@ -1228,6 +1255,9 @@ function NutritionTabBar({ value, onChange }: { value: NutritionV2Tab; onChange:
 // ---------------------------------------------------------------------------
 
 function PlanTab() {
+  // 4A-01: clearance de la cápsula + minimizado por scroll (ver TodayTab).
+  const insets = useSafeAreaInsets()
+  const onScrollChrome = useAlumnoScrollHandler()
   const [userId, setUserId] = useState<string | null>(null)
   const [plan, setPlan] = useState<NutritionPlanReadModel | null>(null)
   const [loading, setLoading] = useState(true)
@@ -1321,7 +1351,14 @@ function PlanTab() {
 
   if (!plan?.plan) {
     return (
-      <ScrollView className="flex-1" contentContainerClassName="px-4 pb-12 pt-2" refreshControl={refreshControl}>
+      <ScrollView
+        className="flex-1"
+        contentContainerClassName="px-4 pt-2"
+        contentContainerStyle={{ paddingBottom: insets.bottom + ALUMNO_TABBAR_CLEARANCE }}
+        onScroll={onScrollChrome}
+        scrollEventThrottle={16}
+        refreshControl={refreshControl}
+      >
         <NutritionStatePanel
           icon={offline ? 'offline' : 'empty'}
           tone={offline ? 'warning' : 'neutral'}
@@ -1340,7 +1377,14 @@ function PlanTab() {
   const defaultVariant = plan.dayVariants.find((variant) => variant.isDefault) ?? plan.dayVariants[0] ?? null
 
   return (
-    <ScrollView className="flex-1" contentContainerClassName="gap-4 px-4 pb-12 pt-2" refreshControl={refreshControl}>
+    <ScrollView
+      className="flex-1"
+      contentContainerClassName="gap-4 px-4 pt-2"
+      contentContainerStyle={{ paddingBottom: insets.bottom + ALUMNO_TABBAR_CLEARANCE }}
+      onScroll={onScrollChrome}
+      scrollEventThrottle={16}
+      refreshControl={refreshControl}
+    >
       {offline ? (
         <View className="items-end">
           <SyncOfflineState state="offline" />
@@ -1484,6 +1528,9 @@ function PlanVariantCard({ variant }: { variant: PlanVariant }) {
 // ---------------------------------------------------------------------------
 
 function HistoryTab() {
+  // 4A-01: clearance de la cápsula + minimizado por scroll (ver TodayTab).
+  const insets = useSafeAreaInsets()
+  const onScrollChrome = useAlumnoScrollHandler()
   const [userId, setUserId] = useState<string | null>(null)
   const [page, setPage] = useState<NutritionHistoryPageReadModel | null>(null)
   const [items, setItems] = useState<NutritionHistoryDay[]>([])
@@ -1654,7 +1701,9 @@ function HistoryTab() {
         setRefreshing(true)
         void loadFirst(true)
       }}
-      contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 48 }}
+      contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: insets.bottom + ALUMNO_TABBAR_CLEARANCE }}
+      onScroll={onScrollChrome}
+      scrollEventThrottle={16}
       ItemSeparatorComponent={() => <View className="h-3" />}
       ListEmptyComponent={
         <NutritionStatePanel

@@ -94,6 +94,19 @@ export default function AlumnoTabsLayout() {
             no participa de la URL. */}
         <Tabs.Screen name="movement" options={{ href: null }} />
         <Tabs.Screen name="bodycomp" options={{ href: null }} />
+        {/* 4A-01: superficie Nutrición V2 DENTRO de (tabs) como rutas ocultas
+            (href:null). En web /nutrition-v2 y /nutrition-v2/scanner viven bajo el
+            layout c/[coach_slug] con la cápsula ClientNav siempre montada y el ítem
+            "Nutrición" activo (nutrition-v2/page.tsx:62-100, scanner/page.tsx:49-66);
+            aquí lo mismo: la cápsula persiste y AlumnoMobileChrome pliega
+            `nutrition-v2/*` al tile "Nutrición". El tab visible sigue siendo
+            `nutricion`, que con el flag `nutritionV2Student` ON redirige a
+            /alumno/nutrition-v2 (espejo del redirect V1→V2 de la web,
+            nutrition/page.tsx:67-81); los deep links /alumno/nutrition-v2* no
+            cambian porque el grupo (tabs) no participa de la URL. */}
+        <Tabs.Screen name="nutrition-v2/index" options={{ href: null }} />
+        <Tabs.Screen name="nutrition-v2/add-food-v2" options={{ href: null }} />
+        <Tabs.Screen name="nutrition-v2/scanner" options={{ href: null }} />
       </Tabs>
     </View>
   )

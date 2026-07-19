@@ -11,33 +11,41 @@ import {
   NutritionStatePanel,
   CelebrationOverlay,
   type CelebrationInstance,
-} from '../../../components/nutrition-v2'
+} from '../../../../components/nutrition-v2'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { ALUMNO_TABBAR_CLEARANCE } from '../../../../components/alumno/AlumnoMobileChrome'
+import { useAlumnoScrollHandler } from '../../../../lib/alumno-chrome-scroll'
 import type { FoodBarcodeLookupReadModel } from '@eva/nutrition-v2'
-import { isEnabled } from '../../../lib/flags'
-import { useEntitlements } from '../../../lib/entitlements'
-import { supabase } from '../../../lib/supabase'
+import { isEnabled } from '../../../../lib/flags'
+import { useEntitlements } from '../../../../lib/entitlements'
+import { supabase } from '../../../../lib/supabase'
 import {
   foodMediaPublicUrl,
   lookupFoodByGtinV2,
   reportMissingFoodGtinV2,
-} from '../../../lib/nutrition-v2-catalog.api'
+} from '../../../../lib/nutrition-v2-catalog.api'
 import {
   foodCategoryEmoji,
   foodOdblAttributionLine,
-} from '../../../lib/nutrition-v2-food-media'
+} from '../../../../lib/nutrition-v2-food-media'
 import * as Haptics from 'expo-haptics'
-import { buildRecordIntakeMutation } from '../../../lib/nutrition-v2-intake'
+import { buildRecordIntakeMutation } from '../../../../lib/nutrition-v2-intake'
 import {
   getStableDeviceId,
   newNutritionV2OperationId,
   submitRecordIntake,
-} from '../../../lib/nutrition-v2-intake-runner'
-import { decideScannerHitCelebration, type CelebrationDecision } from '../../../lib/nutrition-v2-celebrations'
-import { claimScannerHitCelebration } from '../../../lib/nutrition-v2-celebrations.storage'
+} from '../../../../lib/nutrition-v2-intake-runner'
+import { decideScannerHitCelebration, type CelebrationDecision } from '../../../../lib/nutrition-v2-celebrations'
+import { claimScannerHitCelebration } from '../../../../lib/nutrition-v2-celebrations.storage'
 
 const BARCODE_TYPES = ['ean13', 'ean8', 'upc_a', 'upc_e'] as const
 
 export default function NutritionV2ScannerScreen() {
+  // 4A-01: la pantalla vive bajo (tabs) con la cápsula visible (espejo web:
+  // scanner/page.tsx:49-66 bajo el layout con ClientNav montado) — el scroll
+  // reserva el clearance de la cápsula y alimenta su minimizado.
+  const insets = useSafeAreaInsets()
+  const onScrollChrome = useAlumnoScrollHandler()
   const entitlements = useEntitlements()
   const [permission, requestPermission] = useCameraPermissions()
   const [userId, setUserId] = useState<string | null>(null)
@@ -217,7 +225,10 @@ export default function NutritionV2ScannerScreen() {
     <View className="flex-1 bg-surface-app">
     <ScrollView
       className="flex-1 bg-surface-app"
-      contentContainerClassName="gap-5 px-4 pb-12 pt-5"
+      contentContainerClassName="gap-5 px-4 pt-5"
+      contentContainerStyle={{ paddingBottom: insets.bottom + ALUMNO_TABBAR_CLEARANCE }}
+      onScroll={onScrollChrome}
+      scrollEventThrottle={16}
       keyboardShouldPersistTaps="handled"
     >
       <NutritionHeader

@@ -47,3 +47,31 @@ bajo `(tabs)` como rutas ocultas (patrón 2R-1 de movement/bodycomp).
 - Deep link `evafit://alumno/nutrition-v2` (y push del widget) → misma pantalla, cápsula visible.
 - Dominio OFF (coach apaga nutrición): tile oculto Y pantalla V2 inaccesible/estado apagado.
 - `pnpm exec tsc --noEmit` en `apps/mobile` verde.
+
+## Veredicto (2026-07-19) — APLICADA a nivel código; pendiente QA device
+
+Las 4 afirmaciones cerradas:
+
+1. **Gate del tab** ✅ — `(tabs)/nutricion.tsx` ahora exporta `AlumnoNutricionTab`:
+   `ready && isEnabled('nutritionV2Student')` ⇒ `router.replace('/alumno/nutrition-v2')`
+   en `useFocusEffect` (espejo del redirect V1→V2 de `nutrition/page.tsx:66-81`, antes
+   del fan-out de datos V1); flag OFF ⇒ `AlumnoNutricionV1Screen` intacta (rollback).
+   Loader neutro (AppBackground + EvaLoaderScreen) mientras entitlements hidratan.
+2. **Chrome** ✅ — `git mv` de las tres pantallas a `app/alumno/(tabs)/nutrition-v2/`
+   registradas `href:null` en `(tabs)/_layout.tsx:107-109`. `AlumnoMobileChrome`
+   pliega `nutrition-v2/*` al tile "Nutrición" (`NUTRICION_V2_ROUTES` + alias de
+   `activeName`); tap del tile desde scanner/registrar navega al hub, desde el hub
+   no-op. Deep links `/alumno/nutrition-v2*` intactos (el grupo no participa de la
+   URL); callers verificados por grep (home.tsx:485-486, add-food-v2→scanner,
+   index→add-food-v2 — cero cambios necesarios). Los 5 scrolls reservan
+   `insets.bottom + ALUMNO_TABBAR_CLEARANCE` y alimentan `useAlumnoScrollHandler`.
+3. **Dominio OFF en la ruta** ✅ — `index.tsx` (StudentNutritionV2Screen): con
+   `entitlements.nutritionEnabled === false` renderiza header V2 + `NutritionDomainOff`
+   (mismo componente/copy que el shell V1) — nunca el plan. Además, flag OFF en la
+   ruta ⇒ replace a `/alumno/nutricion` (espejo de `nutrition-v2/page.tsx:56`).
+4. **Header** ✅ — eyebrow "Vista previa" eliminado; título "Nutrición" + descripción
+   verbatim (`nutrition-v2/page.tsx:62-65`). Adaptación documentada en el código:
+   sin flecha de volver porque la superficie ES el tab (los tabs RN no tienen back).
+
+Gate: `pnpm exec tsc --noEmit` mobile verde. Pendiente: QA visual device
+(flag on/off, deep link del widget, dominio OFF) — arrastra al checkpoint 4A.

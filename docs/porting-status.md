@@ -234,6 +234,36 @@ del check-in, fallback 'Atleta', SectionTitle 11px/uiExtra/barra 12/sport-500,
 letterSpacing 1 del eyebrow, tints /25 /20 /40 y gap 20 del PR sheet.
 Gate corrido: `tsc --noEmit` mobile limpio. Pendiente de la unidad: QA visual device.
 
+Unidad 4A-01 (ruteo del tab Nutrición + chrome V2, P0) aplicada a nivel código
+(2026-07-19, spec `docs/rn-port/specs/seccion-4a/u01-ruteo-chrome.md`):
+
+- **Gate del tab** — `(tabs)/nutricion.tsx` exporta ahora `AlumnoNutricionTab`:
+  con `nutritionV2Student` ON (Edge Config vía /api/mobile/config, fail-closed en
+  bundle) replaza a `/alumno/nutrition-v2` al ganar foco (espejo del redirect
+  V1→V2 web `nutrition/page.tsx:66-81`); con flag OFF renderiza la V1 intacta
+  (rollback = Edge Config mode=off). El replace vive en `useFocusEffect` para que
+  la escena en background jamás re-dispare navegación.
+- **Superficie V2 dentro de (tabs)** — `git mv app/alumno/nutrition-v2/*` →
+  `app/alumno/(tabs)/nutrition-v2/{index,add-food-v2,scanner}.tsx` como rutas
+  `href:null` (patrón 2R-1 movement/bodycomp). Deep links `/alumno/nutrition-v2*`
+  intactos (el grupo no participa de la URL); callers de Home sin cambios.
+  `AlumnoMobileChrome` pliega `nutrition-v2/*` al tile "Nutrición" (pill + tinte,
+  espejo ClientNav activo por prefijo) y el tap del tile desde scanner/registrar
+  vuelve al hub; desde el hub es no-op (evita remontar por el gate).
+- **Ruta V2 gateada** — `index.tsx`: flag OFF ⇒ replace a `/alumno/nutricion`
+  (espejo `nutrition-v2/page.tsx:56`); dominio Nutrición OFF ⇒ header +
+  `NutritionDomainOff` (mismo estado que V1, jamás el plan, cierre del delta P1
+  de deep-links con dominio apagado).
+- **Header 1:1** — eyebrow "Vista previa" ELIMINADO; título "Nutrición" +
+  descripción verbatim web. Adaptación documentada: sin flecha de volver (la
+  superficie es el tab; los tabs RN no tienen back).
+- **Chrome fitting** — los 5 scrolls de la superficie (Hoy/Plan/Historial/
+  scanner/registrar) reservan `insets.bottom + ALUMNO_TABBAR_CLEARANCE` y
+  alimentan `useAlumnoScrollHandler` (minimizado de cápsula como el resto de tabs).
+
+Gate corrido: `pnpm exec tsc --noEmit` mobile limpio. Pendiente de la unidad: QA
+visual en device (flag on/off, deep link del widget, dominio OFF).
+
 Ola 4A rehace la auditoría formal de `c/[coach_slug]/nutrition/**`. Hallazgo de
 entrada confirmado: `MacroRingSummary` web es card inverse, kcal/proteína ember,
 carbos sport white-label y grasas aqua; RN actual es card normal, kcal success y

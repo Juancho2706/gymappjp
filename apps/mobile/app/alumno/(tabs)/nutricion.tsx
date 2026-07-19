@@ -9,7 +9,9 @@ import {
   Text,
   View,
 } from 'react-native'
+import { useFocusEffect, useRouter } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { isEnabled } from '../../../lib/flags'
 import { supabase } from '../../../lib/supabase'
 import { getClientProfile } from '../../../lib/client'
 import { useOnline } from '../../../lib/use-online'
@@ -104,7 +106,45 @@ import {
  * toggles de comida se preserva intacta (offline-cache → offline-queue
  * idempotente). Los hábitos NO viven aquí (ruling D4: viven en el dashboard).
  */
-export default function AlumnoNutricionScreen() {
+
+/**
+ * 4A-01 — Gate del tab Nutrición (espejo EXACTO del gate web de deprecación por
+ * etapas, `apps/web/src/app/c/[coach_slug]/nutrition/page.tsx:66-81`): con el flag
+ * `nutritionV2Student` ON (Edge Config vía /api/mobile/config → remote flags,
+ * fail-closed en el bundle, lib/flags.ts:18) la página V1 web hace
+ * `redirect(`${base}/nutrition-v2`)` ANTES de su fan-out de datos; aquí el tab
+ * replaza a /alumno/nutrition-v2 (ruta oculta bajo (tabs), cápsula intacta) al
+ * ganar foco. Con flag OFF esta pantalla sigue siendo V1 intacta (rollback =
+ * Edge Config mode=off, mismo interruptor que la web). El replace vive en
+ * useFocusEffect —no un <Redirect> en render— para que la escena en background
+ * del navigator de tabs jamás re-dispare navegación al revalidar entitlements.
+ */
+export default function AlumnoNutricionTab() {
+  const router = useRouter()
+  const { ready } = useEntitlements()
+  const v2 = ready && isEnabled('nutritionV2Student')
+
+  useFocusEffect(
+    useCallback(() => {
+      if (v2) router.replace('/alumno/nutrition-v2')
+    }, [v2, router]),
+  )
+
+  // Pre-decisión (entitlements aún no hidratados) o transición al replace: loader
+  // neutro sin header V1, para no pintar la superficie vieja antes de decidir.
+  if (!ready || v2) {
+    return (
+      <View style={styles.container} className="bg-surface-app">
+        <AppBackground />
+        <EvaLoaderScreen subtitle="Cargando nutrición…" />
+      </View>
+    )
+  }
+
+  return <AlumnoNutricionV1Screen />
+}
+
+function AlumnoNutricionV1Screen() {
   const { theme } = useTheme()
   const insets = useSafeAreaInsets()
   const onScrollChrome = useAlumnoScrollHandler()

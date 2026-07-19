@@ -126,6 +126,13 @@ const PRIMARY_TABS: TabDef[] = [
 // igual que el web.
 const MORE_ROUTES = ['perfil', 'history', 'movement', 'bodycomp']
 
+// 4A-01: rutas de la superficie Nutrición V2 (hub + registrar + scanner), ocultas
+// dentro de (tabs) con href:null. En web viven bajo el layout c/[coach_slug] con
+// la cápsula siempre montada y el ítem "Nutrición" activo (el nav marca activo por
+// prefijo de ruta, ClientNav.tsx:120; nutrition-v2/page.tsx:62-100,
+// scanner/page.tsx:49-66). Aquí se pliegan al tile `nutricion` para pill + tinte.
+const NUTRICION_V2_ROUTES = ['nutrition-v2/index', 'nutrition-v2/add-food-v2', 'nutrition-v2/scanner']
+
 export function AlumnoMobileChrome({
   state,
   navigation,
@@ -144,7 +151,10 @@ export function AlumnoMobileChrome({
   const router = useRouter()
   const [moreOpen, setMoreOpen] = useState(false)
 
-  const activeName = state.routes[state.index]?.name
+  const rawActiveName = state.routes[state.index]?.name
+  // 4A-01: dentro de la superficie V2 (`nutrition-v2/*`) el tile "Nutrición" queda
+  // encendido, igual que el ítem del ClientNav web dentro de /nutrition-v2*.
+  const activeName = NUTRICION_V2_ROUTES.includes(rawActiveName ?? '') ? 'nutricion' : rawActiveName
 
   // Primary tiles present in the capsule (Nutrición hidden if the coach turned
   // the domain off for this alumno — fail-open default true).
@@ -168,15 +178,16 @@ export function AlumnoMobileChrome({
     activeIdx.value = activeIndex
   }, [activeIndex, activeIdx])
 
-  // Reveal the capsule whenever the active tab changes.
+  // Reveal the capsule whenever the active route changes (ruta REAL: dentro de la
+  // superficie V2 el alias del tile no cambia, pero hub→scanner sí debe revelar).
   useEffect(() => {
     resetChromeScroll()
-  }, [activeName])
+  }, [rawActiveName])
 
   // Close the Más sheet on navigation (route change).
   useEffect(() => {
     setMoreOpen(false)
-  }, [activeName])
+  }, [rawActiveName])
 
   const capsuleInsetStyle = useAnimatedStyle(() => {
     const inset = withSpring(mini.value ? INSET_MIN : INSET_OPEN, NAV_SPRING)
@@ -196,6 +207,14 @@ export function AlumnoMobileChrome({
 
   function go(name: string) {
     setMoreOpen(false)
+    // 4A-01: tap en "Nutrición" estando dentro de la superficie V2 — desde una ruta
+    // secundaria (scanner / registrar) vuelve al hub (espejo web: el nav lleva a
+    // /nutrition → redirect → /nutrition-v2); desde el hub es no-op (convención de
+    // tab activo; evita rebotar por el gate de `nutricion` y remontar la pantalla).
+    if (name === 'nutricion' && rawActiveName && NUTRICION_V2_ROUTES.includes(rawActiveName)) {
+      if (rawActiveName !== 'nutrition-v2/index') navigation.navigate('nutrition-v2/index')
+      return
+    }
     const route = state.routes.find((r) => r.name === name)
     if (!route) return
     const event = navigation.emit({ type: 'tabPress', target: route.key, canPreventDefault: true })
