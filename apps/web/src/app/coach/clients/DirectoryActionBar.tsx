@@ -6,6 +6,7 @@ import {
     SlidersHorizontal,
     ArrowUpDown,
     LayoutGrid,
+    ListChecks,
     Table2,
     Check,
     X,
@@ -125,6 +126,8 @@ interface DirectoryActionBarProps {
     onRiskFilterChange: (v: DirectoryRiskFilter) => void
     archivedCount?: number
     resultCount: number
+    selectMode: boolean
+    onToggleSelectMode: () => void
 }
 
 export function DirectoryActionBar({
@@ -143,6 +146,8 @@ export function DirectoryActionBar({
     onRiskFilterChange,
     archivedCount = 0,
     resultCount,
+    selectMode,
+    onToggleSelectMode,
 }: DirectoryActionBarProps) {
     const [filtersOpen, setFiltersOpen] = useState(false)
     const [sortOpen, setSortOpen] = useState(false)
@@ -235,6 +240,13 @@ export function DirectoryActionBar({
                     onClick={() => onViewChange(view === 'cards' ? 'table' : 'cards')}
                 >
                     {view === 'cards' ? <Table2 className="h-4 w-4" /> : <LayoutGrid className="h-4 w-4" />}
+                </BarButton>
+                <BarButton
+                    active={selectMode}
+                    label={selectMode ? 'Salir de selección' : 'Seleccionar alumnos'}
+                    onClick={onToggleSelectMode}
+                >
+                    <ListChecks className="h-4 w-4" />
                 </BarButton>
             </div>
 

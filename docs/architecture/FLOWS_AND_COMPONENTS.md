@@ -166,6 +166,10 @@ Input del topbar (`hidden md:flex`, desktop-only) convertido de cascara a combob
 | Agregador | `services/search/coach-search.service.ts` | `searchCoachWorkspace(supabase, { coachId, scope, query, limitPerGroup=5 })` → `Promise.all` de 4 sub-busquedas con columnas minimas + `LIMIT`; reusa `buildExerciseSearchOr` (ejercicios) y `searchCoachRecipes` (recetas); `href` canonico por grupo. Tests con mock: scope 3-vias, cap, no-fuga cross-workspace, short-circuit |
 | Destinos (href) | — | alumno → `/coach/clients/{id}`; programa → `/coach/workout-programs/builder?programId={id}` (plantilla) o `/coach/builder/{clientId}?programId={id}` (asignado); ejercicio → `/coach/exercises?q={name}` (el catalogo pre-carga el filtro via `useSearchParams`); receta → `/coach/nutrition-plans?tab=recipes` (el hub abre la pestana via `useSearchParams`) |
 
+## Flujo: sobre-limite de alumnos y archivado
+
+Cuando el coach supera el limite de alumnos de su tier, `OverLimitBanner` se muestra en el layout de `/coach/*` (`app/coach/layout.tsx`) como aviso persistente, sin bloquear la navegacion. Para volver a estar dentro del limite, el coach archiva alumnos en bloque desde el directorio (`app/coach/clients/_actions/clients.actions.ts` → `bulkArchiveClientsAction`): barra de acciones bulk en desktop y modo seleccion en mobile. Un alumno archivado (`is_archived = true`) pierde acceso de inmediato en web, API y DB (RLS); el proxy lo redirige a `/c/[coach_slug]/suspended?reason=archived`, pantalla con copy propio (historial conservado) distinto de la pausa manual (`reason=paused`).
+
 ## Como mantener este mapa
 
 Actualizar este archivo cuando:

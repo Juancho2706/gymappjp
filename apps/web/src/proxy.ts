@@ -1012,6 +1012,7 @@ export async function proxy(request: NextRequest) {
             if (isBlocked && !pathname.includes('/suspended')) {
                 const redirectUrl = request.nextUrl.clone()
                 redirectUrl.pathname = `/c/${coachSlug}/suspended`
+                redirectUrl.searchParams.set('reason', client.is_archived === true ? 'archived' : 'paused')
                 return NextResponse.redirect(redirectUrl)
             }
 

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient as createSupabaseClient, type SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/lib/database.types'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
-import { verifyMobileBearer } from '@/lib/mobile-auth'
+import { verifyMobileBearer, isBlockedClientRow } from '@/lib/mobile-auth'
 
 /**
  * Helpers compartidos de los endpoints mobile de nutricion ALUMNO (micros + recap).
@@ -49,7 +49,19 @@ export async function authNutritionClient(
             response: NextResponse.json({ error: 'Unauthorized', code: 'INVALID_TOKEN' }, { status: 401 }),
         }
     }
-    return { ok: true, clientId: auth.userId, admin: createServiceRoleClient() }
+    const admin = createServiceRoleClient()
+    const { data: clientRow } = await admin
+        .from('clients')
+        .select('is_archived, is_active')
+        .eq('id', auth.userId)
+        .maybeSingle()
+    if (isBlockedClientRow(clientRow)) {
+        return {
+            ok: false,
+            response: NextResponse.json({ error: 'No autorizado', code: 'CLIENT_BLOCKED' }, { status: 403 }),
+        }
+    }
+    return { ok: true, clientId: auth.userId, admin }
 }
 
 export type ClientNutritionContext = {
@@ -154,9 +166,12 @@ export async function gateAlumno(
 
     // Endpoint SOLO del alumno: confirmar que el uid mapea a un `client` (evita filas huérfanas
     // de un coach/otro rol; la RLS igual vaciaría, pero devolvemos un error claro).
-    const { data: clientRow } = await admin.from('clients').select('id').eq('id', userId).maybeSingle()
+    const { data: clientRow } = await admin.from('clients').select('id, is_archived, is_active').eq('id', userId).maybeSingle()
     if (!clientRow) {
         return { ok: false, response: NextResponse.json({ error: 'No autorizado', code: 'NOT_A_CLIENT' }, { status: 403 }) }
+    }
+    if (isBlockedClientRow(clientRow)) {
+        return { ok: false, response: NextResponse.json({ error: 'No autorizado', code: 'CLIENT_BLOCKED' }, { status: 403 }) }
     }
 
     return { ok: true, clientId: userId, userClient: makeUserClient(token), admin }

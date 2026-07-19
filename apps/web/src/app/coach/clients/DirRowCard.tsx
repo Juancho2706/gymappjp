@@ -63,9 +63,19 @@ interface DirRowCardProps {
     client: any
     pulse: DirectoryPulseRow | null | undefined
     onActions: () => void
+    selectMode?: boolean
+    selected?: boolean
+    onToggleSelect?: () => void
 }
 
-export function DirRowCard({ client, pulse, onActions }: DirRowCardProps) {
+export function DirRowCard({
+    client,
+    pulse,
+    onActions,
+    selectMode = false,
+    selected = false,
+    onToggleSelect,
+}: DirRowCardProps) {
     const router = useRouter()
     const score = pulse?.attentionScore ?? 0
     const adherence = pulse?.percentage ?? 0
@@ -84,17 +94,48 @@ export function DirRowCard({ client, pulse, onActions }: DirRowCardProps) {
     const st = statusMeta(client)
 
     const profileHref = `/coach/clients/${client.id}`
+    const archived = client.is_archived === true
+    const selectable = selectMode && !archived
 
     return (
         <div
-            role="button"
+            role={selectable ? 'checkbox' : 'button'}
+            aria-checked={selectable ? selected : undefined}
+            aria-label={selectable ? `Seleccionar ${client.full_name}` : undefined}
             tabIndex={0}
-            onClick={() => router.push(profileHref)}
-            onKeyDown={(e) => {
-                if (e.key === 'Enter') router.push(profileHref)
+            onClick={() => {
+                if (selectable) onToggleSelect?.()
+                else router.push(profileHref)
             }}
-            className="flex cursor-pointer items-center gap-3 rounded-card border border-subtle bg-surface-card p-3.5 shadow-[var(--shadow-xs)] transition-colors hover:bg-surface-sunken"
+            onKeyDown={(e) => {
+                if (selectable) {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault()
+                        onToggleSelect?.()
+                    }
+                } else if (e.key === 'Enter') {
+                    router.push(profileHref)
+                }
+            }}
+            className={cn(
+                'flex cursor-pointer items-center gap-3 rounded-card border p-3.5 shadow-[var(--shadow-xs)] transition-colors',
+                selected
+                    ? 'border-sport-500 bg-sport-100'
+                    : 'border-subtle bg-surface-card hover:bg-surface-sunken'
+            )}
         >
+            {selectable && (
+                <span
+                    className={cn(
+                        'flex h-6 w-6 shrink-0 items-center justify-center rounded-[7px] border-[1.5px] transition-colors',
+                        selected
+                            ? 'border-sport-500 bg-sport-500 text-white'
+                            : 'border-default bg-surface-card text-transparent'
+                    )}
+                >
+                    <Check className="h-4 w-4" />
+                </span>
+            )}
             <div className="relative h-[50px] w-[50px] shrink-0">
                 <CircularProgressbar
                     value={adherence}
@@ -156,17 +197,19 @@ export function DirRowCard({ client, pulse, onActions }: DirRowCardProps) {
                 </div>
             </div>
 
-            <IconButton
-                size="sm"
-                variant="ghost"
-                aria-label={`Acciones de ${client.full_name}`}
-                icon={<MoreVertical />}
-                onClick={(e) => {
-                    e.stopPropagation()
-                    onActions()
-                }}
-                onKeyDown={(e) => e.stopPropagation()}
-            />
+            {!selectMode && (
+                <IconButton
+                    size="sm"
+                    variant="ghost"
+                    aria-label={`Acciones de ${client.full_name}`}
+                    icon={<MoreVertical />}
+                    onClick={(e) => {
+                        e.stopPropagation()
+                        onActions()
+                    }}
+                    onKeyDown={(e) => e.stopPropagation()}
+                />
+            )}
         </div>
     )
 }

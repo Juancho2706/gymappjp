@@ -1,7 +1,7 @@
 'use client'
 
 import { differenceInDays } from 'date-fns'
-import { Apple, ChevronDown, ChevronUp, MoreVertical } from 'lucide-react'
+import { Apple, Check, ChevronDown, ChevronUp, MoreVertical } from 'lucide-react'
 import type { DirectoryPulseRow } from '@/services/dashboard.service'
 import type { DirectorySortKey } from './directory-types'
 import { cn } from '@/lib/utils'
@@ -73,6 +73,9 @@ interface DirTableMobileProps {
     onHeaderSort: (key: DirectorySortKey) => void
     onOpen: (clientId: string) => void
     onActions: (client: any) => void
+    selectMode?: boolean
+    selectedIds?: Set<string>
+    onToggleSelect?: (clientId: string) => void
 }
 
 export function DirTableMobile({
@@ -83,13 +86,19 @@ export function DirTableMobile({
     onHeaderSort,
     onOpen,
     onActions,
+    selectMode = false,
+    selectedIds,
+    onToggleSelect,
 }: DirTableMobileProps) {
-    const cellCls = (c: ColDef, body: boolean) =>
+    const cellCls = (c: ColDef, body: boolean, selected = false) =>
         cn(
             'flex shrink-0 items-center',
             c.align === 'center' ? 'justify-center' : 'justify-start',
             c.sticky &&
-                cn('sticky left-0 z-[2] border-r border-subtle', body ? 'bg-surface-card' : 'bg-surface-sunken')
+                cn(
+                    'sticky left-0 z-[2] border-r border-subtle',
+                    body ? (selected ? 'bg-sport-100' : 'bg-surface-card') : 'bg-surface-sunken'
+                )
         )
 
     return (
@@ -135,22 +144,46 @@ export function DirTableMobile({
                         const daysSince = last ? differenceInDays(new Date(), new Date(last)) : null
                         const dW = p?.weightDelta7d
                         const programName = client.workout_programs?.find((x: any) => x.is_active)?.name
+                        const archived = client.is_archived === true
+                        const selectable = selectMode && !archived
+                        const selected = !!selectedIds?.has(client.id)
                         return (
                             <div
                                 key={client.id}
-                                role="button"
+                                role={selectable ? 'checkbox' : 'button'}
+                                aria-checked={selectable ? selected : undefined}
+                                aria-label={selectable ? `Seleccionar ${client.full_name}` : undefined}
                                 tabIndex={0}
-                                onClick={() => onOpen(client.id)}
+                                onClick={() => (selectable ? onToggleSelect?.(client.id) : onOpen(client.id))}
                                 onKeyDown={(e) => {
-                                    if (e.key === 'Enter') onOpen(client.id)
+                                    if (e.key !== 'Enter' && e.key !== ' ') return
+                                    if (selectable) {
+                                        e.preventDefault()
+                                        onToggleSelect?.(client.id)
+                                    } else if (e.key === 'Enter') {
+                                        onOpen(client.id)
+                                    }
                                 }}
                                 className={cn(
-                                    'flex h-[52px] cursor-pointer items-stretch bg-surface-card',
+                                    'flex h-[52px] cursor-pointer items-stretch',
+                                    selected ? 'bg-sport-100' : 'bg-surface-card',
                                     i < clients.length - 1 && 'border-b border-subtle'
                                 )}
                             >
-                                <div style={{ width: COLS[0].w }} className={cn(cellCls(COLS[0], true), 'px-2.5')}>
+                                <div style={{ width: COLS[0].w }} className={cn(cellCls(COLS[0], true, selected), 'px-2.5')}>
                                     <div className="flex min-w-0 items-center gap-2">
+                                        {selectable && (
+                                            <span
+                                                className={cn(
+                                                    'flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-[6px] border-[1.5px] transition-colors',
+                                                    selected
+                                                        ? 'border-sport-500 bg-sport-500 text-white'
+                                                        : 'border-default text-transparent'
+                                                )}
+                                            >
+                                                <Check className="h-[14px] w-[14px]" />
+                                            </span>
+                                        )}
                                         <span className="flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-full bg-[var(--ink-900)] font-display text-[13px] font-extrabold text-sport-400">
                                             {client.full_name?.[0] ?? '?'}
                                         </span>
@@ -262,19 +295,21 @@ export function DirTableMobile({
                                         {p?.planDaysRemaining != null ? p.planDaysRemaining : '—'}
                                     </span>
                                 </div>
-                                <div style={{ width: COLS[8].w }} className={cn(cellCls(COLS[8], true), 'px-2.5')}>
-                                    <button
-                                        type="button"
-                                        aria-label={`Acciones de ${client.full_name}`}
-                                        onClick={(e) => {
-                                            e.stopPropagation()
-                                            onActions(client)
-                                        }}
-                                        onKeyDown={(e) => e.stopPropagation()}
-                                        className="inline-flex h-[30px] w-[30px] items-center justify-center rounded-[var(--radius-xs)] text-subtle"
-                                    >
-                                        <MoreVertical className="h-4 w-4" />
-                                    </button>
+                                <div style={{ width: COLS[8].w }} className={cn(cellCls(COLS[8], true, selected), 'px-2.5')}>
+                                    {!selectMode && (
+                                        <button
+                                            type="button"
+                                            aria-label={`Acciones de ${client.full_name}`}
+                                            onClick={(e) => {
+                                                e.stopPropagation()
+                                                onActions(client)
+                                            }}
+                                            onKeyDown={(e) => e.stopPropagation()}
+                                            className="inline-flex h-[30px] w-[30px] items-center justify-center rounded-[var(--radius-xs)] text-subtle"
+                                        >
+                                            <MoreVertical className="h-4 w-4" />
+                                        </button>
+                                    )}
                                 </div>
                             </div>
                         )
