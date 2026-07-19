@@ -1,20 +1,21 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
-import { SafeAreaView } from 'react-native-safe-area-context'
-import { useRouter } from 'expo-router'
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
+import { useFocusEffect, useRouter } from 'expo-router'
 import { ArrowDown, ArrowLeft, ArrowUp, Gauge, Info, Scale } from 'lucide-react-native'
 import type { BiaMetrics } from '@eva/bodycomp'
-import { useTheme } from '../../context/ThemeContext'
-import { useEntitlements } from '../../lib/entitlements'
-import { getClientProfile } from '../../lib/client'
-import { supabase } from '../../lib/supabase'
-import { Card } from '../../components/Card'
-import { Badge } from '../../components/Badge'
-import { ModuleOffNotice } from '../../components/ModuleOffNotice'
-import { AppBackground } from '../../components/AppBackground'
-import { EvaLoaderScreen } from '../../components/EvaLoader'
-import { AreaTrend, type AreaPoint } from '../../components/coach/charts/AreaTrend'
-import { FONT } from '../../lib/typography'
+import { useTheme } from '../../../context/ThemeContext'
+import { useEntitlements } from '../../../lib/entitlements'
+import { getClientProfile } from '../../../lib/client'
+import { supabase } from '../../../lib/supabase'
+import { Card } from '../../../components/Card'
+import { Badge } from '../../../components/Badge'
+import { ModuleOffNotice } from '../../../components/ModuleOffNotice'
+import { AppBackground } from '../../../components/AppBackground'
+import { EvaLoaderScreen } from '../../../components/EvaLoader'
+import { AreaTrend, type AreaPoint } from '../../../components/coach/charts/AreaTrend'
+import { ALUMNO_TABBAR_CLEARANCE } from '../../../components/alumno/AlumnoMobileChrome'
+import { FONT } from '../../../lib/typography'
 
 /**
  * Vista COMPOSICION CORPORAL del ALUMNO (read-only) — E6-09. Port RN de la web
@@ -153,6 +154,7 @@ type LoadState =
 
 export default function StudentBodyCompScreen() {
   const { theme } = useTheme()
+  const insets = useSafeAreaInsets()
   const router = useRouter()
   const { ready, hasModule } = useEntitlements()
 
@@ -161,7 +163,11 @@ export default function StudentBodyCompScreen() {
 
   const moduleOn = hasModule(MODULE_KEY)
 
-  useEffect(() => {
+  // 2R-1: al vivir dentro de (tabs) la pantalla queda montada tras la primera
+  // visita; useFocusEffect refresca en cada entrada (== el remount por push que
+  // tenia como ruta stack == el server render fresco del web por navegacion).
+  // El refetch es silencioso: el estado 'ready' anterior se mantiene en pantalla.
+  useFocusEffect(useCallback(() => {
     let alive = true
     if (!ready) return
     ;(async () => {
@@ -196,7 +202,7 @@ export default function StudentBodyCompScreen() {
     return () => {
       alive = false
     }
-  }, [ready, moduleOn])
+  }, [ready, moduleOn]))
 
   // ── Entitlements aun sin resolver: loader. ──
   if (!ready) {
@@ -232,7 +238,10 @@ export default function StudentBodyCompScreen() {
       {loading ? (
         <EvaLoaderScreen subtitle="Cargando tus mediciones…" />
       ) : state.kind === 'perm_error' ? (
-        <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+        <ScrollView
+          contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + ALUMNO_TABBAR_CLEARANCE }]}
+          showsVerticalScrollIndicator={false}
+        >
           <Card variant="sunken" padding="lg" style={styles.emptyCard} testID="bodycomp-perm-error">
             <View style={[styles.emptyIcon, { backgroundColor: theme.muted }]}>
               <Gauge size={26} color={theme.mutedForeground} strokeWidth={1.75} />
@@ -253,6 +262,7 @@ export default function StudentBodyCompScreen() {
 // ── Cuerpo con datos (switcher de metodo + resumen + tendencia + disclaimer). ──
 function Content({ bia, isak }: { bia: BcmRow[]; isak: BcmRow[] }) {
   const { theme } = useTheme()
+  const insets = useSafeAreaInsets()
   const hasBia = bia.length > 0
   const hasIsak = isak.length > 0
   const hasBoth = hasBia && hasIsak
@@ -262,7 +272,10 @@ function Content({ bia, isak }: { bia: BcmRow[]; isak: BcmRow[] }) {
 
   if (!hasBia && !hasIsak) {
     return (
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + ALUMNO_TABBAR_CLEARANCE }]}
+        showsVerticalScrollIndicator={false}
+      >
         <Card variant="sunken" padding="lg" style={styles.emptyCard} testID="bodycomp-empty">
           <View style={[styles.emptyIcon, { backgroundColor: theme.muted }]}>
             <Gauge size={26} color={theme.mutedForeground} strokeWidth={1.75} />
@@ -280,7 +293,7 @@ function Content({ bia, isak }: { bia: BcmRow[]; isak: BcmRow[] }) {
 
   return (
     <ScrollView
-      contentContainerStyle={styles.scroll}
+      contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + ALUMNO_TABBAR_CLEARANCE }]}
       showsVerticalScrollIndicator={false}
       testID="bodycomp-scroll"
     >
@@ -630,7 +643,10 @@ function Disclaimer({ style }: { style?: object }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  scroll: { paddingHorizontal: 20, paddingBottom: 40, gap: 16 },
+  // paddingBottom vive en el contentContainer inline: insets.bottom +
+  // ALUMNO_TABBAR_CLEARANCE reserva el espacio de la capsula flotante (== el
+  // padding-bottom --mobile-content-bottom-offset del <main> web, layout.tsx:360).
+  scroll: { paddingHorizontal: 20, gap: 16 },
   offWrap: { flex: 1 },
   // Header
   header: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 8, gap: 10 },

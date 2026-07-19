@@ -108,15 +108,14 @@ const PRIMARY_TABS: TabDef[] = [
 ]
 
 // Routes reached from the "Más" sheet — keep the Más tab lit while inside them
-// (mirror of web `moreRoutes`, ClientNav.tsx:128-129: history + perfil + los
+// (mirror of web `moreRoutes`, ClientNav.tsx:128-139: history + perfil + los
 // items de módulo movimiento/bodycomp). `workout` is immersive and hides the
 // chrome. Los slugs son los NOMBRES DE RUTA RN (== filename), no los del web:
 // las pantallas viven en `movement.tsx`/`bodycomp.tsx` (el web usa `/movimiento`).
-// Hoy viven como hermanas de `(tabs)`, así que al entrar la cápsula desaparece
-// (el Tabs navigator se desmonta); estos slugs sólo empiezan a matchear cuando
-// esas pantallas se nesten como `href:null` DENTRO de `(tabs)` con estos MISMOS
-// nombres (`movement`/`bodycomp`) — cambio de shell en _layout.tsx + mover los
-// archivos, otra unidad (ver cambiosShell).
+// 2R-1: movement/bodycomp ya viven DENTRO de `(tabs)` como rutas `href:null`
+// (ver app/alumno/(tabs)/_layout.tsx), así que al entrar la cápsula persiste y
+// estos slugs matchean el route activo del navigator → "Más" queda encendido,
+// igual que el web.
 const MORE_ROUTES = ['perfil', 'history', 'movement', 'bodycomp']
 
 export function AlumnoMobileChrome({

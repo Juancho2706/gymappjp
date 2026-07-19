@@ -11,6 +11,7 @@ import {
   NutritionStatePanel,
   NutritionCard,
   PlanVersionBadge,
+  PortionDayCoverageCard,
   StrategyBadge,
 } from '../../../components/nutrition-v2'
 import {
@@ -330,6 +331,11 @@ export default function CoachNutritionV2ClientScreen() {
             ]}
           />
 
+          {/* Fila "Porciones" read-only bajo los macros del día (SPEC UX-b; web
+              coach/nutrition-v2/[clientId]/page.tsx:260-263). Misma fuente que el alumno
+              (read-model), cero cálculo nuevo; sin targets de porciones no renderiza nada. */}
+          <PortionDayCoverageCard coverage={detail.today.dayCoverage} />
+
           <NutritionCard>
             <Text className="font-display text-lg font-semibold text-text-strong">Plan vigente</Text>
             <Text className="mt-1 text-sm text-text-muted">{detail.plan.plan?.name}</Text>
@@ -345,6 +351,20 @@ export default function CoachNutritionV2ClientScreen() {
                 {QUICK_EDIT_COPY.enter}
               </NutritionMotionButton>
             </View>
+          </NutritionCard>
+
+          {/* Card "Hoy" (web page.tsx:273-281; copy verbatim del web, incluida la
+              ortografía "segun/dia" sin tilde del original). */}
+          <NutritionCard>
+            <Text className="font-display text-lg font-semibold text-text-strong">Hoy</Text>
+            <Text className="mt-1 text-sm text-text-muted">
+              {detail.today.consumed.entryCount} registro
+              {detail.today.consumed.entryCount === 1 ? '' : 's'} · {detail.today.mealSlots.length}{' '}
+              franjas
+            </Text>
+            <Text className="mt-3 text-sm text-text-body">
+              {detail.today.remaining.calories ?? 0} kcal restantes segun el snapshot del dia.
+            </Text>
           </NutritionCard>
         </>
       )}

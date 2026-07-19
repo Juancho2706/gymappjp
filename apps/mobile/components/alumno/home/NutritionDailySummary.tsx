@@ -1,11 +1,15 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Text, TouchableOpacity, View } from 'react-native'
+import { ActivityIndicator, Text, TouchableOpacity, View } from 'react-native'
 import { useFocusEffect } from 'expo-router'
 import { AlertTriangle, Apple, Check, Flame } from 'lucide-react-native'
 import { useTheme } from '../../../context/ThemeContext'
 import { FONT } from '../../../lib/typography'
 import { supabase } from '../../../lib/supabase'
+import { checkOnline } from '../../../lib/use-online'
+import { enqueueNutritionToggle } from '../../../lib/offline-cache'
+import { toggleMealCompletion } from '../../../lib/nutrition.queries'
 import { getTodayInSantiago, nutritionMealApplies } from '../../../lib/date-utils'
+import { toast } from '../../Toast'
 import {
   applyMealFoodSwaps,
   calculateConsumedMacrosWithCompletionFallback,
@@ -65,6 +69,7 @@ function applySwapsToMeal(meal: MealWithFoodItems, swapByMealFood: ReadonlyMap<s
   return applyMealFoodSwaps(meal, swapFoodsByOriginal)
 }
 interface Loaded {
+  planId: string
   planName: string
   consumedCal: number
   targetCal: number
@@ -72,6 +77,7 @@ interface Loaded {
   meals: MealRow[]
   completed: Set<string>
   hasLog: boolean
+  logId: string | null
 }
 
 /**
@@ -82,17 +88,27 @@ interface Loaded {
  * web: aplica intercambios de alimento (nutrition_meal_food_swaps) y porciones
  * parciales (consumed_quantity) antes de contar (web :79-134).
  *
- * DESVIACION DOCUMENTADA (regla 2/10): las filas de comida son read-only y navegan
- * al plan. El web (MealCompletionRow.tsx:40-124) las hace toggle interactivo
- * (useOptimistic + toggleMealCompletion + cola offline). En RN ese toggle vive en
- * la pantalla de Nutrición (/alumno/nutricion): el alumno sigue pudiendo completar
- * la comida, solo que no desde este widget-resumen. Decision de jefe (spec §7);
- * portar la mutacion aca exigiria server-action/endpoint inexistente en RN (regla 8).
+ * Toggle inline de comidas (2R-2, paridad MealCompletionRow.tsx:40-124): tap en la fila
+ * marca/desmarca con actualizacion optimista, spinner de pending (web Loader2 :108-109 +
+ * opacity-60 :99) y copy web verbatim en los toasts. Usa el MISMO camino de datos que la
+ * pantalla de Nutricion RN (nutrition.queries.ts toggleMealCompletion + cola offline
+ * enqueueNutritionToggle, dedup meal:fecha); al confirmar el server se refetchea el widget
+ * completo (espejo del router.refresh() web :67 que actualiza kcal/macros).
+ *
+ * ADAPTACIONES NATIVAS DOCUMENTADAS:
+ * - Offline/fallo transitorio: web revierte el check al cerrar la transicion (useOptimistic
+ *   sin refresh) y la cola lo repone al sincronizar; en RN el check queda optimista mientras
+ *   el toggle espera en cola — mismo patron del sibling nutricion.tsx:343-394, evita que el
+ *   widget y la tab Nutricion muestren estados opuestos con la misma cola.
+ * - Single-flight `toggling` (patron nutricion.tsx:328): mientras un toggle esta en vuelo
+ *   las demas filas ignoran taps; web permite transiciones concurrentes por fila.
+ * - Sin trackNutritionEvent: apps/mobile no tiene product-analytics.
  */
 export function NutritionDailySummary({ clientId, onSeeAll, reloadSignal = 0 }: { clientId: string; onSeeAll: () => void; reloadSignal?: number }) {
   const { theme } = useTheme()
   const [data, setData] = useState<Loaded | null>(null)
   const [noPlan, setNoPlan] = useState(false)
+  const [toggling, setToggling] = useState<string | null>(null)
 
   // Reset SOLO al cambiar de alumno: evita dejar render stale del alumno anterior
   // mientras llega el fetch nuevo (clientId es estable en una sesion normal, asi que
@@ -182,6 +198,7 @@ export function NutritionDailySummary({ clientId, onSeeAll, reloadSignal = 0 }: 
     // `if (noPlan)` (l.194) precede a `if (!data)` y congela "Sin plan" pese al setData.
     setNoPlan(false)
     setData({
+      planId: plan.id,
       planName: plan.name,
       consumedCal: Math.round(consumed.calories),
       targetCal: goals.calories,
@@ -193,7 +210,63 @@ export function NutritionDailySummary({ clientId, onSeeAll, reloadSignal = 0 }: 
       meals: mealsForDay.map((m: any) => ({ id: m.id, name: m.name })),
       completed,
       hasLog: !!logData,
+      logId: (logData as any)?.id ?? null,
     })
+  }
+
+  /** Flip local del check de una comida (base del optimista y del revert en fallo). */
+  function setMealCompleted(mealId: string, completedNow: boolean) {
+    setData((prev) => {
+      if (!prev) return prev
+      const next = new Set(prev.completed)
+      if (completedNow) next.add(mealId)
+      else next.delete(mealId)
+      return { ...prev, completed: next }
+    })
+  }
+
+  /**
+   * Toggle inline (web MealCompletionRow.tsx:40-90): optimista → mutacion → refetch
+   * (router.refresh web) | revert + toast error (4xx) | cola offline + toast señal.
+   */
+  async function handleToggle(mealId: string) {
+    if (!data || toggling) return
+    const wasCompleted = data.completed.has(mealId)
+    const next = !wasCompleted
+    // Fecha calculada AL MOMENTO del tap, no al load (web MealCompletionRow.tsx:42).
+    const targetDate = getTodayInSantiago().iso
+    const { planId, logId } = data
+    setToggling(mealId)
+    setMealCompleted(mealId, next)
+    try {
+      if (!(await checkOnline())) {
+        await enqueueNutritionToggle({ clientId, planId, mealId, completed: next, logId: logId ?? undefined, date: targetDate })
+        toast.info('Sin conexión — se sincronizará al volver la señal')
+        return
+      }
+      const { success, logId: newLogId } = await toggleMealCompletion(clientId, planId, mealId, next, logId, targetDate)
+      if (!success) {
+        // supabase-js no lanza en corte de red: distingue offline real (→ cola, como el
+        // isLikelyOfflineError web :69-83) de un rechazo del server (→ revert + toast :55-57).
+        if (!(await checkOnline())) {
+          await enqueueNutritionToggle({ clientId, planId, mealId, completed: next, logId: logId ?? undefined, date: targetDate })
+          toast.info('Sin conexión — se sincronizará al volver la señal')
+          return
+        }
+        setMealCompleted(mealId, wasCompleted)
+        toast.error('No se pudo registrar la comida')
+        return
+      }
+      if (newLogId && !logId) setData((prev) => (prev ? { ...prev, logId: newLogId, hasLog: true } : prev))
+      // Espejo del router.refresh() web (:64-67): refresca kcal/macros/base del optimista.
+      await load(() => false)
+    } catch (e) {
+      console.error(e)
+      setMealCompleted(mealId, wasCompleted)
+      toast.error('Error al registrar comida')
+    } finally {
+      setToggling(null)
+    }
   }
 
   if (noPlan) {
@@ -243,18 +316,32 @@ export function NutritionDailySummary({ clientId, onSeeAll, reloadSignal = 0 }: 
         {data.macros.map((m) => <MacroBar key={m.label} {...m} />)}
       </View>
 
+      {/* Filas-toggle (web MealCompletionRow.tsx:92-124): boton con borde sutil + bg card,
+          check 32px (success al completar), spinner mientras pende y opacity-60 en pending. */}
       <View style={{ gap: 8 }}>
         {data.meals.map((meal) => {
           const done = data.completed.has(meal.id)
+          const pending = toggling === meal.id
           return (
-            <TouchableOpacity key={meal.id} onPress={onSeeAll} activeOpacity={0.7} style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            <TouchableOpacity
+              key={meal.id}
+              onPress={() => handleToggle(meal.id)}
+              disabled={pending}
+              activeOpacity={0.7}
+              className="rounded-control border border-subtle bg-surface-card"
+              style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 12, paddingVertical: 8, opacity: pending ? 0.6 : 1 }}
+            >
               <View
-                className={done ? undefined : 'bg-surface-sunken'}
-                style={{ width: 32, height: 32, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: done ? SUCCESS_500 : undefined, borderWidth: done ? 0 : 1.5, borderColor: theme.border }}
+                className={done ? undefined : 'bg-surface-sunken border-strong'}
+                style={{ width: 32, height: 32, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: done ? SUCCESS_500 : undefined, borderWidth: done ? 0 : 1.5 }}
               >
-                {done ? <Check size={16} color="#fff" strokeWidth={3} /> : null}
+                {pending ? (
+                  <ActivityIndicator size="small" color={done ? '#fff' : theme.mutedForeground} />
+                ) : done ? (
+                  <Check size={16} color="#fff" strokeWidth={3} />
+                ) : null}
               </View>
-              <Text className={done ? 'text-subtle' : 'text-strong'} numberOfLines={1} style={{ flex: 1, fontFamily: FONT.uiSemibold, fontSize: 13.5, textDecorationLine: done ? 'line-through' : 'none' }}>{meal.name}</Text>
+              <Text className={done ? 'text-subtle' : 'text-strong'} numberOfLines={1} style={{ flex: 1, fontFamily: FONT.uiSemibold, fontSize: 14, textDecorationLine: done ? 'line-through' : 'none' }}>{meal.name}</Text>
             </TouchableOpacity>
           )
         })}
