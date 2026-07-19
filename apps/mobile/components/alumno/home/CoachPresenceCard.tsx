@@ -2,7 +2,6 @@ import { Text, View } from 'react-native'
 import { MotiView } from 'moti'
 import { FONT } from '../../../lib/typography'
 import { Avatar } from '../../Avatar'
-import { Badge } from '../../Badge'
 import { Card } from '../../Card'
 
 /**
@@ -22,7 +21,14 @@ export function CoachPresenceCard({ brandName, note }: { brandName: string | nul
             <Text className="text-strong" numberOfLines={1} style={{ flexShrink: 1, minWidth: 0, fontFamily: FONT.uiExtra, fontSize: 13.5 }}>
               {displayName}
             </Text>
-            <Badge tone="ember" variant="soft" size="sm">Tu coach</Badge>
+            {/* Pill local con metricas exactas del span web (CoachPresenceCard.tsx:38
+                `rounded-pill bg-ember-100 px-1.5 py-px text-[10px] font-bold text-ember-700`);
+                el Badge DS sm (h20/px8/fs11) quedaba mas grande que el web. */}
+            <View className="rounded-pill bg-ember-100 dark:bg-ember-100/20" style={{ flexShrink: 0, paddingHorizontal: 6, paddingVertical: 1 }}>
+              <Text className="text-ember-700" numberOfLines={1} style={{ fontFamily: FONT.uiBold, fontSize: 10 }}>
+                Tu coach
+              </Text>
+            </View>
           </View>
           <Text className="text-muted font-sans" numberOfLines={2} style={{ fontSize: 12, lineHeight: 16, marginTop: 2 }}>
             {noteText}

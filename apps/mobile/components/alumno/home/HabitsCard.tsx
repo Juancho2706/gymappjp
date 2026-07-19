@@ -16,6 +16,10 @@ import { Card } from '../../Card'
 cssInterop(Droplets, { className: { target: 'style', nativeStyleToProp: { color: true } } })
 cssInterop(Footprints, { className: { target: 'style', nativeStyleToProp: { color: true } } })
 
+// Placeholder del input Pasos = `placeholder:text-subtle` web (HabitsCard.tsx:171);
+// valores del token --text-subtle por esquema (globals.css:448/641).
+const TEXT_SUBTLE = { light: '#646F7D', dark: '#86919E' } as const
+
 const WATER_OPTIONS = [250, 500, 750, 1000, 1500, 2000, 2500, 3000]
 const WATER_TARGET = 3000
 const SLEEP_OPTIONS = [6, 6.5, 7, 7.5, 8, 8.5, 9]
@@ -85,7 +89,7 @@ export function HabitsCard({ clientId, logDate, isToday, initialData }: { client
       <View>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-            <Droplets size={15} className="text-aqua-700" strokeWidth={2.25} />
+            <Droplets size={15} className="text-aqua-700" strokeWidth={2} />
             <Text className="text-strong" style={{ fontFamily: FONT.uiBold, fontSize: 13 }}>Agua</Text>
           </View>
           <Text className="text-muted" style={{ fontFamily: FONT.uiBold, fontSize: 12.5, fontVariant: ['tabular-nums'] }}>
@@ -122,7 +126,7 @@ export function HabitsCard({ clientId, logDate, isToday, initialData }: { client
       {/* Pasos */}
       <View>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 }}>
-          <Footprints size={15} className="text-sport-600" strokeWidth={2.25} />
+          <Footprints size={15} className="text-sport-600" strokeWidth={2} />
           <Text className="text-strong" style={{ fontFamily: FONT.uiBold, fontSize: 13 }}>Pasos</Text>
         </View>
         <TextInput
@@ -134,7 +138,7 @@ export function HabitsCard({ clientId, logDate, isToday, initialData }: { client
           keyboardType="number-pad"
           editable={!disabled}
           placeholder="Ej: 8000"
-          placeholderTextColor={theme.mutedForeground}
+          placeholderTextColor={TEXT_SUBTLE[theme.scheme]}
           className="rounded-control bg-surface-sunken text-strong"
           style={{ height: 42, borderWidth: 1.5, borderColor: theme.border, paddingHorizontal: 12, fontFamily: FONT.monoBold, fontSize: 14, color: theme.foreground, opacity: disabled ? 0.5 : 1 }}
         />
@@ -143,7 +147,7 @@ export function HabitsCard({ clientId, logDate, isToday, initialData }: { client
       {/* Sueño */}
       <View>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 }}>
-          <Moon size={14} color={theme.mutedForeground} strokeWidth={2.25} />
+          <Moon size={14} color={theme.mutedForeground} strokeWidth={2} />
           <Text className="text-strong" style={{ fontFamily: FONT.uiBold, fontSize: 13 }}>Sueño <Text className="text-subtle" style={{ fontFamily: FONT.uiSemibold }}>· horas</Text></Text>
         </View>
         <View style={{ flexDirection: 'row', gap: 6 }}>
@@ -180,7 +184,7 @@ export function HabitsCard({ clientId, logDate, isToday, initialData }: { client
               className={t.on ? 'bg-sport-500' : 'border-strong'}
               style={{ width: 22, height: 22, borderRadius: 6, alignItems: 'center', justifyContent: 'center', borderWidth: t.on ? 0 : 2 }}
             >
-              {t.on ? <Check size={13} color="#fff" strokeWidth={3} /> : null}
+              {t.on ? <Check size={13} color="#fff" strokeWidth={2} /> : null}
             </View>
             <Text className={t.on ? 'text-strong' : 'text-muted'} style={{ fontFamily: FONT.uiBold, fontSize: 12.5 }}>{t.label}</Text>
           </TouchableOpacity>

@@ -59,7 +59,7 @@ Una pasada adicional con **lente de lógica** (no de paridad pixel) sobre unidad
 
 - **Card de registro de set (KG/Reps + RPE/RIR)** — 6 rondas. Residuos P2: borde SAVED del chip a 30% vs 25% web (`SetRow.tsx:206,124`); readout RPE/RIR sin `tabular-nums` (`TypedKeypad.tsx:650-655`); ayuda inline RPE/RIR renderiza a 13px (TYPE.caption) con `text-[11px]` muerto por precedencia de style inline — mismo bug ya arreglado en el toggle de nota (`SetRow.tsx:182,662,676`, `TypedKeypad.tsx:706`); series PRÓXIMAS no muestran dots RPE/RIR inline (adaptación idiomática: una fila expandida + chips tocables); íconos chip/submit 1-2px por debajo del web. Todos visuales/idiomáticos.
 - **Teclado numérico custom (NumericKeypad)** — 6 rondas. Residuos P2, todos compromisos de design-system o split de arquitectura documentados: eyebrow RPE/RIR +16% (DS no tiene 9,5px, piso '3xs'=11px); CTAs a 14px vs 15px web (DS no tiene 15px); "Nota rápida" AÑADIDA en la fase effort del KeypadHost (el modal tapa la fila donde web muestra la nota — adición, no eliminación); la ruta primaria SetRow→TypedKeypad capta el esfuerzo en la fila (EffortScale inline) en vez de una fase dentro del teclado. Funcionalidad preservada.
-- **Pantalla de sesión activa (orquestador)** — 6 rondas. Contenía los **P1 #1 y #2** de arriba (✅ resueltos, ver "P1 resueltos"). Residuos P2: banner offline no reactivo a NetInfo (sólo se togglea dentro de `logSet`; `useOnline` existe pero no se cablea); sin refetch al recuperar foco/foreground (falta `useFocusEffect` + `AppState 'active'`; `router.refresh` es no-portable, reconocido en SPEC §12).
+- **Pantalla de sesión activa (orquestador)** — 6 rondas. Contenía los **P1 #1 y #2** de arriba (✅ resueltos, ver "P1 resueltos"). Residuos P2 — **✅ los 2 RESUELTOS (verificado unidad 2R-4, 2026-07-19: los fixes ya estaban en código desde el commit `8725b033`; el doc había quedado desactualizado, mismo patrón que los P1 #1/#2)**: (1) banner offline ahora es reactivo — listener `NetInfo.addEventListener` en `apps/mobile/lib/workout-session.ts:597-605` (espejo de los listeners `window online/offline` web `WorkoutExecutionClient.tsx:1145-1154`), consumido por `ExecutorV2.tsx:194,1115` (`<OfflineBanner visible={!isOnline}>`); (2) refetch al recuperar foco/foreground — `maybeRefreshForFreshness` (`workout-session.ts:612-631`) con `useFocusEffect` + `AppState 'active'`, silencioso y sólo con conexión + actividad previa (equivalente idiomático del `router.refresh` web, adaptación reconocida en SPEC §12). `LegacyExecutor.tsx:142` conserva su `isOnline` local no-reactivo a propósito: es el fallback fail-safe tras el flag `executorV2` (ON por default en la rama, `lib/flags.ts:12`) y se mantiene "monolítico intacto" por diseño.
 
 **Prioridad 2**
 
@@ -70,7 +70,7 @@ Una pasada adicional con **lente de lógica** (no de paridad pixel) sobre unidad
 
 **Prioridad 3**
 
-- **Timers tipados (hold/intervalos/cronómetro)** — 6 rondas. Residuos P2: hold/interval cues silenciados por `isRestTimerMuted()` (RN gatea; web los reproduce independientes del mute — verificar si es mejora deliberada); botones util sin feedback de press (falta `active:scale-[0.97]`); wake-lock usa `accessibilityState.selected` vs `aria-pressed` (debería ser `togglebutton`/`checked`); animación de cierre RN sí corre (MotiView exit) vs web que hace pop instantáneo — divergencia favorable y documentada.
+- **Timers tipados (hold/intervalos/cronómetro)** — 6 rondas. Residuos P2 — **✅ los 3 accionables RESUELTOS (verificado unidad 2R-4, 2026-07-19: los fixes ya estaban en código desde el commit `5421738c`; el doc había quedado desactualizado)**: (1) hold/interval cues ya NO se gatean por `isRestTimerMuted()` — verificado contra web: `HoldTimer.tsx:33` e `IntervalTimer.tsx:44` web llaman `playTimerSound(readRestTimerSound(), readRestTimerVolume())` SIN leer mute (`readRestTimerMuted` se consume sólo en `RestTimer.tsx:14,61`), o sea el gate RN era divergencia, no mejora deliberada; RN alineado con `playTimerCue('done'|'phase'|'finish', { force: true })` (`HoldTimer.tsx:70`, `IntervalTimer.tsx:89`; contrato documentado en `timers/sound.ts:13-18,99-106`); (2) botones util con feedback de press — `utilBtnPressed: { transform: [{ scale: 0.97 }] }` en `HoldTimer.tsx:281`, `IntervalTimer.tsx:331` y `StopwatchTimer.tsx:219`, espejo del `active:scale-[0.97]` del primitivo web `Button` (`components/ui/button.tsx:14`) que llevan todos los util del web (`Stopwatch.tsx:74-110`, `HoldTimer.tsx:107-134`, `IntervalTimer.tsx:146-188`); (3) wake-lock a11y — `accessibilityRole="togglebutton"` + `accessibilityState={{ checked: wakeLockOn }}` en `IntervalTimer.tsx:225-226` (espejo del `aria-pressed={wakeLockOn}` web `IntervalTimer.tsx:153`; el wake-lock con toggle sólo existe en el timer de intervalos). Queda documentada como divergencia favorable la animación de cierre RN (MotiView exit vs pop instantáneo web — bug latente del web, ver comentario `IntervalTimer.tsx:178-187` RN).
 - **Modo stepper (paso a paso)** — 6 rondas. Residuos P2, ambos límites de plataforma RN (sin API de `aria-roledescription` de texto libre): pierde "carrusel de ejercicios" y "ejercicio"; impacto SR menor porque el cambio de paso ya se anuncia vía `announceForAccessibility`.
 - **Modal de técnica / video** — 6 rondas. Residuo P2: botón "Entendido" a 14px vs 16px heredado del web (usar `textStyle('base')`).
 - **Historial de entrenos (periférica)** — 6 rondas. Bug **sistémico** detectado: borde del botón "Ver últimos 6 meses" (y del Card, Input, etc.) resolvía blanco OPACO en dark porque `border-default` sin modificador de alpha compilaba `<alpha-value>=1`; web es blanco@13%. **✅ FIX APLICADO (mini-ola 2026-07-11), por la vía web (alpha horneado en el token, no theme imperativo):** (1) `tailwind.config.js` `borderColor.{subtle,default,strong}` → `var(--color-border-*)` SIN `ch()`/`<alpha-value>` (`inverse` queda `ch()`, se usa con `border-inverse/10..50`); (2) `global.css` LIGHT (~107-110): subtle/default/strong → `#E6E9ED`/`#CDD3DB`/`#A8B1BD` (ink-100/200/300 sólidos); (3) `global.css` DARK (~208-210): `rgba(255,255,255,0.07|0.13|0.22)`, espejo 1:1 de web `globals.css:600-602`; (4) `lib/theme.ts` `LIGHT_SCHEME_VARS` (~389-391): mismos 3 tokens a hex (`ForceLightTheme`). Normalizados los usos con modificador `/[x]` a clase bare: `TechniqueSheet.tsx:58,116` (`border-subtle/50`→`border-subtle`, +comentarios :55,:113) y `ExchangeTargetsEditor.tsx:108` (`border-subtle/60`→`border-subtle`); sin usos `/[x]` restantes en `.tsx` de subtle/default/strong. Nota: `border-subtle` y `border-strong` tenían el mismo defecto y se corrigieron junto con `border-default`.
@@ -171,6 +171,68 @@ plus-jakarta/manrope/sora 900→800 (ejes reales de Google Fonts; web los sintet
 browser). Semántica de refresco = cold start (espejo del full reload web); la primera
 sesión tras vincular coach muestra Archivo hasta reiniciar (adaptación documentada en
 `lib/brand-fonts.ts`). Pendiente de la unidad: QA device light/dark × EVA/marca con fuente.
+
+Unidad 2R-4 (residuos P2 del ejecutor: sesión activa + timers tipados) cerrada por
+verificación 2026-07-19: los 5 residuos listados (banner offline reactivo, refetch
+foco/foreground, cues hold/interval sin gate de mute, press feedback scale 0.97,
+wake-lock togglebutton/checked) ya estaban resueltos en código desde los commits
+`8725b033` (sesión) y `5421738c` (timers) — el doc había quedado desactualizado.
+Evidencia web citada en las entradas de cada unidad (Resultado Sección 1). Sin
+cambios de código nuevos; pendiente sólo el QA visual device que arrastra la sección.
+
+Unidad 2R-5 (residuos P2 Sección 2 del alumno) aplicada a nivel código, con
+comparación elemento-por-elemento contra el web responsive por cada residuo listado:
+
+- **chrome-tabbar** — filas del sheet "Más" reescritas 1:1 (`AlumnoMobileChrome.tsx`):
+  Mi perfil con reposo `bg-surface-sunken` + estado activo primary 10%/20% + título
+  14 bold/subtítulo 12 (web `ClientNav.tsx:429-451,112-115`); Historial glyph 20
+  inline sin chip, 14 semibold, tinte activo (web `:459-477`); Cerrar sesión
+  `cta-danger` @80% 14px (web `:488-496`, literal citado `globals.css:472`).
+  Minimizado anima gap 3→0 / padding 6→5 a 220ms (web `:259-260`) y press scale
+  0.96 gateado por reduced-motion (web `globals.css:167-185`). El fill 18% del
+  glyph activo sigue como adaptación documentada (pill = affordance).
+- **home-shell-header** — stagger palabra-por-palabra del saludo + fade del dateLabel
+  con spring snappy 400/30, re-disparo `key={dateLabel}` y rama reduced estática
+  (web `ClientGreeting.tsx:14-43`, `animation-presets.ts:3-18`); adaptación RN:
+  palabras en row con overflow hidden (sin ellipsis por palabra). RefreshControl con
+  `tintColor/colors = theme.primary` (web `DashboardPullToRefresh.tsx:60`).
+- **hero-section** — `InfoTooltip` junto a "Hoy entrenas" con copy verbatim
+  `es.json:416` (web `WorkoutHeroCard.tsx:62-65`; primitivo RN `InfoTooltip` ya
+  existente); Check de bloque full a stroke 2 (web `:114`); Moon 28/stroke 2 (web
+  `RestDayCard.tsx:29`).
+- **streak-checkin-banners** — fill de la barra con degradado 90° ember-500→ember-400
+  (web `StreakRibbon.tsx:92`; `EMBER_400` añadido a `types.ts` citando
+  `globals.css:405`).
+- **coach-org-banners** — pill "Tu coach" local con métricas exactas del span web
+  (`CoachPresenceCard.tsx:38`: px 6 / py 1 / 10px bold); se retiró el Badge DS sm
+  (h20/px8/fs11) que quedaba más grande.
+- **active-program** — Calendar del header vía `className="text-sport-500"` (cssInterop)
+  + stroke 2 (web `ActiveProgramSection.tsx:90`), antes `theme.primary` clampeado.
+- **weight-widget / sparklines** — primitivo `Sparkline` gana props opt-in
+  `strokeWidth/gradientOpacity/curve='monotone'/endDot` (defaults intactos para
+  consumidores legacy); WeightWidget y PRDetailSheet pasan los valores web
+  (`WeightSparkline.tsx:31-57`: monotone, stroke 2, gradiente 0.25→0, dot r4 ring
+  surface-card 2.5). TrendArrow muestra el '+' también en down, verbatim
+  `TrendArrow.tsx:35` (deltaKg llega en abs).
+- **personal-records** — slot `titleIcon` NUEVO en `Sheet.tsx` (aditivo, default
+  sin cambio) + Trophy 18 sport-500 en el título (web `PRDetailSheet.tsx:130-133`).
+- **recent-habits** — `HabitsCard`: placeholder del input Pasos a `text-subtle`
+  (web `:171`; valores `globals.css:448/641`) y strokes de Droplets/Footprints/Moon/
+  Check a 2 (default lucide web).
+- **perfil-share-cards** — card mensual agrega `ShareCardDate` (línea de fecha del
+  canvas web `workout-pr-card-canvas.ts:934-938`), igualando a las otras 2 cards.
+- **check-in-flow** — errores de foto INLINE por lado (estado `photoErrors`): borde
+  danger sólido + mensaje bajo el slot con copys verbatim web (`CheckInForm.tsx:
+  185-221,568-581,621-623`); los Alert de permisos y el chooser cámara/galería se
+  conservan (adaptación nativa sin equivalente web). El accent del stepper/slider
+  se queda en el theme clampeado (web usa `coachPrimaryColor` crudo): decisión de
+  contrato white-label RN (sport = rampa de marca con clamp, cero crudos nuevos),
+  documentada como adaptación, NO fix.
+
+Verificados sin tocar (ya en paridad): numeral energía 900 + tabular-nums + gap 12
+del check-in, fallback 'Atleta', SectionTitle 11px/uiExtra/barra 12/sport-500,
+letterSpacing 1 del eyebrow, tints /25 /20 /40 y gap 20 del PR sheet.
+Gate corrido: `tsc --noEmit` mobile limpio. Pendiente de la unidad: QA visual device.
 
 Ola 4A rehace la auditoría formal de `c/[coach_slug]/nutrition/**`. Hallazgo de
 entrada confirmado: `MacroRingSummary` web es card inverse, kcal/proteína ember,

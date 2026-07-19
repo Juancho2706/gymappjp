@@ -102,6 +102,7 @@ export interface PendingDay {
 
 // ── Acentos DS FIJOS (rampas constantes, nunca white-label; sport sigue la marca
 //    en runtime via theme.primary / clases NativeWind). Mirror token-contract. ──
+export const EMBER_400 = '#FF8C66' // fill claro de la barra de racha (web --ember-400, globals.css:405)
 export const EMBER_500 = '#FF6A3D' // accent-nutrition / racha
 export const EMBER_600 = '#E8511E'
 export const EMBER_700 = '#C2410C'

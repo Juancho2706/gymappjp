@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { BlurView } from 'expo-blur'
 import { cssInterop } from 'nativewind'
 import Animated, {
+  Easing,
   useAnimatedStyle,
   useSharedValue,
   withSpring,
@@ -15,6 +16,7 @@ import { useRouter } from 'expo-router'
 import {
   Apple,
   CheckCircle,
+  ChevronRight,
   Dumbbell,
   History,
   Home,
@@ -28,11 +30,17 @@ import { useEntitlements } from '../../lib/entitlements'
 import { signOutAndCleanup } from '../../lib/auth-actions'
 import { resetChromeScroll, useChromeMinimized } from '../../lib/alumno-chrome-scroll'
 import { FONT } from '../../lib/typography'
-import { SPRING } from '../../lib/motion'
+import { SPRING, useEvaMotion } from '../../lib/motion'
 import { shadow } from '../../lib/shadows'
 import { Sheet } from '../Sheet'
-import { ListRow } from '../ListRow'
 import { NavIconRN, type NavConceptRN } from '../NavIconRN'
+
+// Token DS `--cta-danger` (#D31E45, globals.css:472; MISMO valor en claro y oscuro).
+// Web pinta "Cerrar sesión" con `text-destructive/80` (= cta-danger @80%,
+// ClientNav.tsx:492); el icono hereda el mismo color. Literal citado (rampa fija DS,
+// no white-label) porque NavIconRN toma `color` imperativo.
+const CTA_DANGER = '#D31E45'
+const CTA_DANGER_80 = CTA_DANGER + 'CC'
 
 /**
  * AlumnoMobileChrome — floating navigation capsule for the alumno tree (E1-01).
@@ -293,42 +301,65 @@ export function AlumnoMobileChrome({
           fuera de pantalla. El `<Modal>` nativo no depende de ese alto medido — abre siempre al primer tap.
           Ver docs de la prop `nativeModal` en Sheet.tsx. `snapPoints={['48%']}` pasa a ser el tope de max-height. */}
       <Sheet open={moreOpen} onClose={() => setMoreOpen(false)} title="Más" nativeModal snapPoints={['48%']}>
-        <ListRow
+        {/* Fila "Mi perfil" — espejo web ClientNav.tsx:429-451: min-h 52, reposo
+            `bg-surface-sunken`, activo = tinte primary 10% bg / 20% border (activeBgStyle
+            :112-115) + titulo 14 bold text-strong, subtitulo 12 muted, chip 36 primary
+            12% con glyph 18 primary, ChevronRight 18 muted. */}
+        <Pressable
           testID="mas-perfil"
+          accessibilityRole="button"
           accessibilityLabel="Mi perfil"
-          leading={
-            <View className="h-9 w-9 items-center justify-center rounded-control bg-primary/[0.12]">
-              <NavIconRN concept="perfil" size={18} color={theme.primary} />
-            </View>
-          }
-          title="Mi perfil"
-          subtitle="Racha, módulos, cuenta y más"
-          showChevron
           onPress={() => go('perfil')}
-        />
-        <ListRow
-          testID="mas-historial"
-          accessibilityLabel="Historial"
-          leading={
-            <View className="h-9 w-9 items-center justify-center rounded-control bg-surface-sunken">
-              <NavIconRN concept="historial" size={18} color={theme.mutedForeground} />
-            </View>
-          }
-          title="Historial"
-          showChevron
-          onPress={() => go('history')}
-        />
+          className={`flex-row items-center rounded-control border ${
+            activeName === 'perfil' ? 'border-primary/[0.20] bg-primary/[0.10]' : 'border-transparent bg-surface-sunken'
+          }`}
+          style={{ minHeight: 52, gap: 12, paddingHorizontal: 12, paddingVertical: 10 }}
+        >
+          <View className="h-9 w-9 items-center justify-center rounded-control bg-primary/[0.12]">
+            <NavIconRN concept="perfil" size={18} color={theme.primary} />
+          </View>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text className="text-strong" style={{ fontFamily: FONT.uiBold, fontSize: 14 }}>Mi perfil</Text>
+            <Text className="text-muted" style={{ fontFamily: FONT.ui, fontSize: 12 }}>Racha, módulos, cuenta y más</Text>
+          </View>
+          <ChevronRight className="text-muted" size={18} strokeWidth={2} />
+        </Pressable>
 
+        {/* Fila "Historial" — espejo web ClientNav.tsx:459-477: glyph 20 INLINE (sin chip),
+            label 14 semibold; inactivo text-muted, activo text-strong + tinte primary. */}
+        <Pressable
+          testID="mas-historial"
+          accessibilityRole="button"
+          accessibilityLabel="Historial"
+          onPress={() => go('history')}
+          className={`flex-row items-center rounded-control border ${
+            activeName === 'history' ? 'border-primary/[0.20] bg-primary/[0.10]' : 'border-transparent'
+          }`}
+          style={{ minHeight: 44, gap: 12, paddingHorizontal: 12, paddingVertical: 10 }}
+        >
+          <NavIconRN concept="historial" size={20} color={activeName === 'history' ? theme.primary : theme.mutedForeground} />
+          <Text
+            numberOfLines={1}
+            className={activeName === 'history' ? 'text-strong' : 'text-muted'}
+            style={{ fontFamily: FONT.uiSemibold, fontSize: 14 }}
+          >
+            Historial
+          </Text>
+        </Pressable>
+
+        {/* "Cerrar sesión" — web ClientNav.tsx:488-496: `text-destructive/80` (cta-danger
+            @80%, MISMO hue en ambos esquemas) 14 semibold, glyph 20 heredando el color. */}
         <View className="mt-space-2 border-t border-subtle pt-space-3">
           <Pressable
             testID="mas-cerrar-sesion"
             accessibilityRole="button"
             accessibilityLabel="Cerrar sesión"
             onPress={handleSignOut}
-            className="flex-row items-center gap-3 rounded-control px-space-4 py-space-3"
+            className="flex-row items-center rounded-control"
+            style={{ minHeight: 44, gap: 12, paddingHorizontal: 12, paddingVertical: 10 }}
           >
-            <NavIconRN concept="cerrar-sesion" size={20} color={theme.destructive} />
-            <Text className="font-sans-semibold text-[15px] text-danger-600">Cerrar sesión</Text>
+            <NavIconRN concept="cerrar-sesion" size={20} color={CTA_DANGER_80} />
+            <Text numberOfLines={1} style={{ fontFamily: FONT.uiSemibold, fontSize: 14, color: CTA_DANGER_80 }}>Cerrar sesión</Text>
           </Pressable>
         </View>
       </Sheet>
@@ -357,20 +388,42 @@ function TabTile({
   mini: SharedValue<number>
   onPress: () => void
 }) {
+  const motion = useEvaMotion()
+  // var(--dur-base) = 220ms + var(--ease-out) del web (ClientNav.tsx:292).
+  const EASE_OUT = Easing.bezier(0.22, 1, 0.36, 1)
   const labelStyle = useAnimatedStyle(() => ({
-    opacity: withTiming(mini.value ? 0 : 1, { duration: 200 }),
-    maxHeight: withTiming(mini.value ? 0 : 14, { duration: 200 }),
+    opacity: withTiming(mini.value ? 0 : 1, { duration: 220, easing: EASE_OUT }),
+    maxHeight: withTiming(mini.value ? 0 : 14, { duration: 220, easing: EASE_OUT }),
+  }))
+  // Estado minimizado del tile: web anima gap 3→0 y padding vertical 6→5
+  // (ClientNav.tsx:259-260, transition var(--dur-base)); antes RN los dejaba
+  // estaticos → capsula minimizada ~4px mas alta que la web.
+  const tileAnim = useAnimatedStyle(() => ({
+    gap: withTiming(mini.value ? 0 : 3, { duration: 220, easing: EASE_OUT }),
+    paddingVertical: withTiming(mini.value ? 5 : 6, { duration: 220, easing: EASE_OUT }),
+  }))
+  // Press feedback scale(0.96) 130ms ease-out (web `.eva-tabbar-press:active`,
+  // globals.css:167-173), anulado bajo reduced-motion (globals.css:178-185).
+  const pressed = useSharedValue(0)
+  const pressStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: motion.reduced ? 1 : withTiming(pressed.value ? 0.96 : 1, { duration: 130, easing: EASE_OUT }) }],
   }))
 
   return (
-    <Pressable
+    <AnimatedPressable
       testID={testID}
       accessibilityRole="button"
       accessibilityLabel={label}
       accessibilityState={active ? { selected: true } : {}}
       onPress={onPress}
+      onPressIn={() => {
+        pressed.value = 1
+      }}
+      onPressOut={() => {
+        pressed.value = 0
+      }}
       hitSlop={{ top: 10, bottom: 10, left: 6, right: 6 }}
-      style={styles.tile}
+      style={[styles.tile, tileAnim, pressStyle]}
     >
       <View style={{ transform: [{ translateY: active ? -1 : 0 }] }}>
         {concept ? (
@@ -392,9 +445,12 @@ function TabTile({
           {label}
         </Text>
       </Animated.View>
-    </Pressable>
+    </AnimatedPressable>
   )
 }
+
+// Pressable animable (scale de press + metricas del estado minimizado).
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable)
 
 const styles = StyleSheet.create({
   capsuleAnchor: {
@@ -422,8 +478,8 @@ const styles = StyleSheet.create({
     minHeight: 44,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 3,
-    paddingVertical: 6,
+    // gap/paddingVertical los anima `tileAnim` (minimizado 3→0 / 6→5, web
+    // ClientNav.tsx:259-260).
     // Above the absolutely-positioned sliding pill so taps always hit the tile.
     zIndex: 1,
   },

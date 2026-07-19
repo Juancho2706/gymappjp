@@ -8,7 +8,7 @@ import { useTheme } from '../../../context/ThemeContext'
 import { useEvaMotion } from '../../../lib/motion'
 import { FONT } from '../../../lib/typography'
 import { AnimatedNumber } from '../../AnimatedNumber'
-import { EMBER_500 } from './types'
+import { EMBER_400, EMBER_500 } from './types'
 
 // className→color del glyph Flame: deja que el token dark-aware `text-ember-700`
 // (que FLIPEA en dark, igual que el web `text-ember-700`) coloree el trazo. Sin
@@ -115,8 +115,17 @@ export function StreakRibbon({ streak }: { streak: number }) {
             from={{ width: '0%' }}
             animate={{ width: `${pct}%` }}
             transition={{ type: 'timing', duration: motion.reduced ? 0 : 1000, easing: Easing.bezier(0.16, 1, 0.3, 1) }}
-            style={{ height: 6, borderRadius: 999, backgroundColor: EMBER_500 }}
-          />
+            style={{ height: 6, borderRadius: 999, overflow: 'hidden' }}
+          >
+            {/* Fill degradado 90° ember-500 → ember-400 (web StreakRibbon.tsx:92
+                `bg-[linear-gradient(90deg,var(--ember-500),var(--ember-400))]`). */}
+            <LinearGradient
+              colors={[EMBER_500, EMBER_400]}
+              start={{ x: 0, y: 0.5 }}
+              end={{ x: 1, y: 0.5 }}
+              style={StyleSheet.absoluteFill}
+            />
+          </MotiView>
         </View>
       </View>
     </MotiView>

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Text, TouchableOpacity, View, useWindowDimensions } from 'react-native'
-import { ArrowUpRight, Share2, TrendingUp } from 'lucide-react-native'
+import { ArrowUpRight, Share2, TrendingUp, Trophy } from 'lucide-react-native'
+import { cssInterop } from 'nativewind'
 import { useTheme } from '../../../context/ThemeContext'
 import { FONT } from '../../../lib/typography'
 import { getSantiagoIsoYmdForUtcInstant } from '../../../lib/date-utils'
@@ -16,6 +17,10 @@ import {
   ShareCardPreview,
   ShareCardTitle,
 } from '../../ShareCard'
+
+// className→color del glyph Trophy del titulo (web PRDetailSheet.tsx:131
+// `text-sport-500`, rampa de marca) — patron cssInterop del repo para lucide.
+cssInterop(Trophy, { className: { target: 'style', nativeStyleToProp: { color: true } } })
 
 /** "12 de junio de 2026" — fecha larga es-CL, dia calendario Santiago. */
 function fmtLong(iso: string): string {
@@ -122,7 +127,14 @@ export function PRDetailSheet({
 
   return (
     <>
-    <Sheet open={open} onClose={onClose} title={exerciseName} snapPoints={['55%', '88%']}>
+    <Sheet
+      open={open}
+      onClose={onClose}
+      title={exerciseName}
+      // Trophy 18 sport-500 inline con el titulo (web PRDetailSheet.tsx:130-133).
+      titleIcon={<Trophy size={18} className="text-sport-500" strokeWidth={2} />}
+      snapPoints={['55%', '88%']}
+    >
       {/* Un solo hijo con gap 20 espeja el `gap-5` del body web (Sheet.tsx aplica gap 14 entre
           hijos del scroll — no configurable — asi que agrupamos y controlamos el gap aqui). */}
       <View style={{ gap: 20 }}>
@@ -148,9 +160,10 @@ export function PRDetailSheet({
               <TrendingUp size={12} color={theme.mutedForeground} strokeWidth={2.5} />
               <Text className="text-muted" style={{ fontFamily: FONT.uiBold, fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.6 }}>Progresión</Text>
             </View>
-            {/* mt-3 + h-[72px] del contenedor web (WeightSparkline.tsx:48). */}
+            {/* mt-3 + h-[72px] del contenedor web (WeightSparkline.tsx:48); curva monotone
+                strokeWidth 2, gradiente 0.25→0 y dot final r=4 ring surface-card (:31-57). */}
             <View style={{ marginTop: 12 }}>
-              <Sparkline values={spark} width={Math.max(0, width - 80)} height={72} color={theme.primary} />
+              <Sparkline values={spark} width={Math.max(0, width - 80)} height={72} color={theme.primary} strokeWidth={2} gradientOpacity={0.25} curve="monotone" endDot />
             </View>
           </View>
         ) : null}

@@ -143,6 +143,12 @@ export interface SheetProps extends OverlayCommonProps {
    * Android back, swipe-down on the handle. Default false.
    */
   nativeModal?: boolean
+  /**
+   * Leading icon node inline with the title — mirrors web `SheetTitle` compuesto
+   * `flex items-center gap-2` con glyph (p.ej. Trophy 18 sport-500 en
+   * PRDetailSheet.tsx:130-133 web). Solo se pinta si hay `title`. Default none.
+   */
+  titleIcon?: ReactNode
 }
 
 /** Title style at a given scale size — uppercase, display-extrabold, tracking-tighter (fixed). */
@@ -169,6 +175,7 @@ export function Sheet({
   titleSize = 'lg',
   bodyPadBottomOffset = 24,
   nativeModal = false,
+  titleIcon,
   children,
 }: SheetProps) {
   const { resolvedScheme } = useTheme()
@@ -226,9 +233,19 @@ export function Sheet({
     title || description ? (
       <View className="px-space-6 pt-space-4 pb-space-3">
         {title ? (
-          <Text style={titleStyleFor(titleSize)} className="text-strong pr-space-9" numberOfLines={2}>
-            {title}
-          </Text>
+          titleIcon ? (
+            // Titulo con glyph inline (web SheetTitle `flex items-center gap-2`).
+            <View className="pr-space-9" style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              {titleIcon}
+              <Text style={[titleStyleFor(titleSize), { flexShrink: 1 }]} className="text-strong" numberOfLines={2}>
+                {title}
+              </Text>
+            </View>
+          ) : (
+            <Text style={titleStyleFor(titleSize)} className="text-strong pr-space-9" numberOfLines={2}>
+              {title}
+            </Text>
+          )
         ) : null}
         {description ? (
           <Text style={TYPE.caption} className="text-muted mt-space-2">

@@ -8,6 +8,7 @@ import { hexToChannels } from '../../../lib/theme'
 import { FONT, textStyle } from '../../../lib/typography'
 import { Button } from '../../Button'
 import { Card } from '../../Card'
+import { InfoTooltip } from '../../InfoTooltip'
 import { ProgressRing } from '../../ProgressRing'
 import type { HeroBlock, Plan } from './types'
 import { DAY_SHORT, SUCCESS_500 } from './types'
@@ -94,9 +95,14 @@ function WorkoutHero({
       <Card variant="inverse" padding="lg" style={SHADOWS[theme.scheme].lg}>
         <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
           <View style={{ flex: 1, minWidth: 0 }}>
-            <Text className="text-sport-400" style={{ fontFamily: FONT.uiBold, fontSize: 11, textTransform: 'uppercase', letterSpacing: 1 }}>
-              Hoy entrenas
-            </Text>
+            {/* Eyebrow + InfoTooltip (web WorkoutHeroCard.tsx:62-65 `flex items-center gap-2`
+                + `<InfoTooltip content={t('section.workoutHero')} />`; copy es.json:416). */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <Text className="text-sport-400" style={{ fontFamily: FONT.uiBold, fontSize: 11, textTransform: 'uppercase', letterSpacing: 1 }}>
+                Hoy entrenas
+              </Text>
+              <InfoTooltip content="Tu entrenamiento asignado para hoy. Toca la tarjeta para comenzar y registrar tus series una por una." />
+            </View>
             <Text className="text-on-dark" numberOfLines={1} style={[textStyle('2xl', FONT.displayBlack, { lh: 'tight', ls: 'tight' }), { marginTop: 6, fontSize: 23 }]}>
               {plan.title}
             </Text>
@@ -195,7 +201,8 @@ function HeroBlockRow({ block, logged, first }: { block: HeroBlock; logged: numb
         <Text className={full ? 'text-sport-500' : 'text-on-dark-muted'} style={{ fontFamily: FONT.uiBold, fontSize: 11.5, fontVariant: ['tabular-nums'] }}>
           {logged}/{block.sets}
         </Text>
-        {full ? <Check size={14} color={theme.primary} strokeWidth={2.6} /> : null}
+        {/* Web Check h-3.5 (14) con stroke lucide default 2 (WorkoutHeroCard.tsx:114). */}
+        {full ? <Check size={14} color={theme.primary} strokeWidth={2} /> : null}
       </View>
     </View>
   )
@@ -219,7 +226,8 @@ function RestDayCard({ nextPlan, nutritionEnabled, onRest }: { nextPlan: Plan | 
           className="bg-aqua-100 dark:bg-aqua-100/[0.18]"
           style={{ marginBottom: 12, width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center' }}
         >
-          <Moon size={26} color={theme.aqua700} strokeWidth={2.25} />
+          {/* Web Moon h-7 w-7 (28) stroke default 2 (RestDayCard.tsx:29). */}
+          <Moon size={28} color={theme.aqua700} strokeWidth={2} />
         </MotiView>
         <Text className="text-strong" style={[textStyle('xl', FONT.displayBlack, { lh: 'snug', ls: 'tight' }), { textAlign: 'center' }]}>Día de descanso</Text>
         <Text className="text-muted font-sans" style={{ textAlign: 'center', fontSize: 13.5, lineHeight: 20, marginTop: 6, maxWidth: 280 }}>

@@ -8,6 +8,7 @@ import { getOnboardingStatus } from '../../../lib/alumno-onboarding'
 import { getDailyHabits } from '../../../lib/habits.queries'
 import { getActiveOrgAnnouncements } from '../../../lib/org-announcements'
 import { useEntitlements } from '../../../lib/entitlements'
+import { useTheme } from '../../../context/ThemeContext'
 import { useAlumnoScrollHandler } from '../../../lib/alumno-chrome-scroll'
 import { formatLongDate, getSantiagoIsoYmdForUtcInstant, getTodayInSantiago, formatRelativeDate, timeGreeting } from '../../../lib/date-utils'
 import { AppBackground } from '../../../components/AppBackground'
@@ -62,6 +63,7 @@ export default function AlumnoHomeScreen() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
   const { nutritionEnabled, ready: entitlementsReady, studentAccess } = useEntitlements()
+  const { theme } = useTheme()
   // Rollout técnico de Nutrición V2 (surface mobileStudent) resuelto por el servidor y espejado
   // en el flag local; fail-closed hasta que entitlements estén listos. Mismo patrón que la
   // pantalla /alumno/nutrition-v2.
@@ -364,7 +366,11 @@ export default function AlumnoHomeScreen() {
         showsVerticalScrollIndicator={false}
         onScroll={onScrollChrome}
         scrollEventThrottle={16}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        refreshControl={
+          // Spinner del pull-to-refresh en color de marca (web DashboardPullToRefresh.tsx:60
+          // `Loader2 text-[color:var(--theme-primary)]`): tintColor iOS + colors Android.
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.primary} colors={[theme.primary]} />
+        }
       >
         {/* §2 Header — scrollea con el contenido (paridad con web md, NO sticky) */}
         <DashboardHeader greeting={greeting} dateLabel={formatLongDate()} brandName={data?.coachName} welcomeMessage={data?.coachWelcome} />

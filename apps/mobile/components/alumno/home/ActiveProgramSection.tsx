@@ -1,5 +1,6 @@
 import { ScrollView, Text, TouchableOpacity, View } from 'react-native'
 import { ArrowRight, Calendar, CheckCircle2, ChevronRight, Play, RotateCcw } from 'lucide-react-native'
+import { cssInterop } from 'nativewind'
 import { deriveSportTokens } from '@eva/brand-kit'
 import { useTheme } from '../../../context/ThemeContext'
 import { FONT } from '../../../lib/typography'
@@ -17,6 +18,12 @@ import type { PendingDay, PlanDayView, Program } from './types'
 const EMBER_700_ICON = { light: '#C23E14', dark: '#FFB79E' } as const
 const INK_300 = { light: '#A8B1BD', dark: '#414C5A' } as const
 const ON_EMBER = '#0B0E13'
+
+// className→color del glyph Calendar: el header web lo pinta `text-sport-500`
+// (ActiveProgramSection.tsx:90, rampa de marca verbatim SIN contrast-clamp) — con
+// cssInterop la clase brand-aware colorea el trazo (mismo patron que Flame en
+// StreakRibbon). Sin registro, lucide-react-native ignora className.
+cssInterop(Calendar, { className: { target: 'style', nativeStyleToProp: { color: true } } })
 
 /**
  * §8 ActiveProgramSection (web `program/ActiveProgramSection.tsx`): nombre del
@@ -81,7 +88,8 @@ export function ActiveProgramSection({
     <Card padding="md" style={{ gap: 16 }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 1, minWidth: 0 }}>
-          <Calendar size={16} color={theme.primary} strokeWidth={2.25} />
+          {/* Web h-4 w-4 (16) text-sport-500 stroke default 2 (ActiveProgramSection.tsx:90). */}
+          <Calendar size={16} className="text-sport-500" strokeWidth={2} />
           <Text className="text-strong" numberOfLines={1} style={{ flexShrink: 1, minWidth: 0, fontFamily: FONT.displayBold, fontSize: 16 }}>{program.name}</Text>
         </View>
         <Badge tone="sport" variant="soft">Semana {currentWeek} de {totalWeeks}{weekVariant ? ` · Sem ${weekVariant}` : ''}</Badge>
