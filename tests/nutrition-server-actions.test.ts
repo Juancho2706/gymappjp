@@ -111,7 +111,7 @@ describe('upsertDailyHabits', () => {
   const validInput = {
     clientId: UUID_V4,
     logDate: '2026-07-15',
-    coachSlug: 'josefit',
+    coachSlug: 'e2e-aurora-strength',
     waterMl: 1500,
     steps: 8000,
     sleepHours: 7,
@@ -144,7 +144,7 @@ describe('upsertDailyHabits', () => {
     const res = await upsertDailyHabits(validInput)
     expect(res.success).toBe(true)
     expect(sb._calls.upsert).toHaveLength(1)
-    expect(revalidatePathMock).toHaveBeenCalledWith('/c/josefit/nutrition')
+    expect(revalidatePathMock).toHaveBeenCalledWith('/c/e2e-aurora-strength/nutrition')
   })
 })
 

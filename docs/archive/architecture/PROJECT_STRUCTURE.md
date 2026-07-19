@@ -1,3 +1,5 @@
+> ARCHIVADO 2026-07-18: describe rama activa `v2/enterprise` y flujo Supabase local; el repo opera hoy desde `master` contra Supabase remota/prod — reemplazado por `docs/architecture/FLOWS_AND_COMPONENTS.md`.
+
 # Project Structure
 
 Ultima modificacion: 2026-05-21 18:25 -04:00

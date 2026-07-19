@@ -62,6 +62,24 @@ export default async function ClientNutritionPage({ params }: Props) {
 
   const { iso: today } = getTodayInSantiago()
   const clientScope = await getClientScope(user.id)
+
+  // Deprecación por etapas (decisión CEO 2026-07-17): con V2 activo para este alumno,
+  // V1 deja de mostrarse — la experiencia canónica vive en /nutrition-v2. El gate se
+  // resuelve ANTES del fan-out de datos V1: con V2 ON, redirigir aquí evita pagar ~13
+  // queries que se descartaban (perf del tap "Nutrición" del menú, QA CEO 2026-07-18).
+  // Con el flag apagado (fail-closed) esta página sigue siendo V1 intacta.
+  const nutritionV2StudentEnabled = await isNutritionV2Enabled({
+    surface: 'webStudent',
+    userId: user.id,
+    clientId: user.id,
+    coachId: clientScope.coachId,
+    teamId: clientScope.teamId,
+    orgId: clientScope.orgId,
+  })
+  if (nutritionV2StudentEnabled) {
+    redirect(`${base}/nutrition-v2`)
+  }
+
   const prefsInput = {
     domain: 'nutrition' as const,
     coachId: String(plan.coach_id ?? ''),
@@ -87,7 +105,6 @@ export default async function ClientNutritionPage({ params }: Props) {
     domainEnabled,
     sectionFlags,
     weeklyRecap,
-    nutritionV2StudentEnabled,
   ] = await Promise.all([
     getNutritionLogForDate(user.id, String(plan.id), today),
     getNutritionAdherence30d(user.id, String(plan.id)),
@@ -115,22 +132,7 @@ export default async function ClientNutritionPage({ params }: Props) {
     }),
     resolveFeaturePrefs(prefsInput),
     getNutritionWeeklyRecap(user.id),
-    isNutritionV2Enabled({
-      surface: 'webStudent',
-      userId: user.id,
-      clientId: user.id,
-      coachId: clientScope.coachId,
-      teamId: clientScope.teamId,
-      orgId: clientScope.orgId,
-    }),
   ])
-
-  // Deprecación por etapas (decisión CEO 2026-07-17): con V2 activo para este
-  // alumno, V1 deja de mostrarse — la experiencia canónica vive en /nutrition-v2.
-  // Con el flag apagado (fail-closed) esta página sigue siendo V1 intacta.
-  if (nutritionV2StudentEnabled) {
-    redirect(`${base}/nutrition-v2`)
-  }
 
   if (!domainEnabled) {
     return <NutritionDomainOff coachSlug={coach_slug} />

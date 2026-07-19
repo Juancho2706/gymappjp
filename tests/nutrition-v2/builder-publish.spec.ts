@@ -10,15 +10,16 @@ import {
 
 /**
  * MUTACIÓN EN PRODUCCIÓN (mínima, auto-contenida, identificable):
- *   Publica UN plan de Nutrición V2 sobre la alumna QA designada (Camila) con nombre
- *   prefijado "E2E-<timestamp>". No toca a ningún otro alumno ni coach.
+ *   Publica UN plan de Nutrición V2 sobre el alumno de prueba E2E designado (E2E Solo Alumno,
+ *   clientId fijo del fixture) con nombre prefijado "E2E-<timestamp>". SOLO cuentas propias —
+ *   nunca un alumno del workspace del CEO. No toca a ningún otro alumno ni coach.
  *
  * El plan queda VIGENTE a propósito: es la precondición que leen los specs ficha-coach y
  * alumno-hoy. Cada corrida crea una nueva versión que supersede la anterior (no acumula
  * planes activos, solo versiones). Limpieza: archivar el plan desde la ficha del alumno
  * (botón "Archivar plan"). Ver tests/nutrition-v2/README.md → "Limpieza en producción".
  *
- * Entorno: Preview de Vercel (PLAYWRIGHT_BASE_URL) con el canary activo para josefit.
+ * Entorno: Preview de Vercel (PLAYWRIGHT_BASE_URL) con Nutrición V2 activo para el coach E2E.
  */
 test.describe('Nutrición V2 · Builder publica un plan (canary)', () => {
   test.beforeEach(requireCanaryCoach)

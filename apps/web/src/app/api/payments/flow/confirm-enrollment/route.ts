@@ -197,7 +197,7 @@ export async function POST(request: Request) {
             new Date(coach.current_period_end).getTime() > Date.now()
         ) {
             return NextResponse.json(
-                { code: 'ACTIVE_MP_SUBSCRIPTION', error: 'Ya tenes una suscripcion activa.' },
+                { code: 'ACTIVE_MP_SUBSCRIPTION', error: 'Ya tienes una suscripción activa.' },
                 { status: 409 }
             )
         }

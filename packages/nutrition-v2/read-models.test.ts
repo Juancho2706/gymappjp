@@ -5,6 +5,8 @@ import {
   FoodCatalogSearchReadModelSchema,
   NutritionExchangeGroupReadSchema,
   NutritionHistoryDaySchema,
+  NutritionIntakeReadItemSchema,
+  NutritionPlanReadModelSchema,
   NutritionSlotExchangeTargetReadSchema,
   NutritionTodayReadModelSchema,
   computePortionCoverage,
@@ -247,6 +249,25 @@ describe('describeLegacyHistoryDay', () => {
   })
 })
 
+describe('nutrition V2 portions — ids no-RFC del seed (incidente 2026-07-18)', () => {
+  it('acepta exchangeGroupId determinista del seed V1 (0000e8c0-..., nibble de version 0)', () => {
+    const target = NutritionSlotExchangeTargetReadSchema.safeParse({
+      id: '55555555-5555-4555-8555-555555555555',
+      exchangeGroupId: '0000e8c0-0000-0000-0000-000000000001',
+      groupCode: 'C',
+      groupName: 'Cereales',
+      color: null,
+      portions: 2,
+      notes: null,
+      orderIndex: 0,
+      ref: { calories: 70, proteinG: 2, carbsG: 15, fatsG: 0 },
+      composedOf: null,
+      macrosConfirmed: true,
+    })
+    expect(target.success).toBe(true)
+  })
+})
+
 describe('nutrition V2 portions — cache compatibility (criterio 8 / Q12)', () => {
   const emptyTargets = {
     calories: null,
@@ -463,6 +484,294 @@ describe('nutrition V2 portions — coverage split (SPEC R5; solo cadenas activa
       derivadas: 1.5,
       coverage: 2.5,
     })
+  })
+})
+
+describe('nutrition V2 portions — Today read-model fields (T2.0: dayCoverage + exchangeFoods + intake porciones)', () => {
+  const emptyTargets = {
+    calories: null,
+    proteinG: null,
+    carbsG: null,
+    fatsG: null,
+    fiberG: null,
+    sodiumMg: null,
+    waterMl: null,
+  }
+  const permissions = {
+    canRegisterFreely: true,
+    canAdjustPrescribedQuantity: true,
+    quantityAdjustmentPercent: null,
+    canSubstitute: false,
+    canMoveMealSlot: false,
+    canSkipOptionalItems: true,
+  }
+  const foodSnapshot = {
+    name: 'Arroz integral',
+    brand: null,
+    calories: 130,
+    proteinG: 2.6,
+    carbsG: 28,
+    fatsG: 0.3,
+    fiberG: 1.8,
+    servingSize: 100,
+    servingUnit: 'g',
+  }
+
+  it('parses a Today payload WITH dayCoverage, exchangeFoods and an intake carrying exchange fields', () => {
+    const parsed = NutritionTodayReadModelSchema.parse({
+      schemaVersion: 1,
+      generatedAt: '2026-07-18T18:00:00-04:00',
+      localDate: '2026-07-18',
+      timezone: 'America/Santiago',
+      snapshotId: '99999999-9999-4999-8999-999999999999',
+      plan: null,
+      targets: emptyTargets,
+      consumed: { calories: 130, proteinG: 2.6, carbsG: 28, fatsG: 0.3, fiberG: 1.8, entryCount: 1 },
+      remaining: emptyTargets,
+      permissions,
+      mealSlots: [
+        {
+          id: '33333333-3333-4333-8333-333333333333',
+          code: 'lunch',
+          name: 'Almuerzo',
+          startTime: null,
+          endTime: null,
+          mode: 'anchor',
+          required: false,
+          instructions: null,
+          targets: {},
+          prescriptionItems: [],
+          intakeItems: [
+            {
+              id: '88888888-8888-4888-8888-888888888888',
+              foodId: null,
+              customName: 'Cereales',
+              quantity: 1,
+              unit: 'porción',
+              mealSlot: 'lunch',
+              source: 'prescription',
+              captureMethod: 'prescription',
+              occurredAt: '2026-07-18T13:05:00-04:00',
+              status: 'active',
+              revision: 1,
+              correctsEntryId: null,
+              prescriptionItemId: null,
+              snapshot: { ...foodSnapshot, name: 'Cereales', calories: 70, proteinG: 2, carbsG: 15, fatsG: 0 },
+              totals: { calories: 70, proteinG: 2, carbsG: 15, fatsG: 0, fiberG: 0 },
+              // Intake sintético de marcar-porción: campos de porciones poblados.
+              exchangeGroupCode: 'C',
+              exchangePortions: 1,
+            },
+          ],
+          exchangeTargets: [
+            {
+              id: '44444444-4444-4444-8444-444444444444',
+              exchangeGroupId: '55555555-5555-4555-8555-555555555555',
+              groupCode: 'C',
+              groupName: 'Cereales',
+              color: null,
+              portions: 2,
+              notes: null,
+              orderIndex: 0,
+              ref: { calories: 70, proteinG: 2, carbsG: 15, fatsG: 0 },
+              composedOf: null,
+              macrosConfirmed: true,
+              marcadas: 1,
+              derivadas: 0.5,
+              coverage: 1.5,
+            },
+          ],
+        },
+      ],
+      unassignedIntake: [],
+      dayCoverage: [
+        {
+          groupCode: 'C',
+          groupName: 'Cereales',
+          color: null,
+          prescribed: 2,
+          marcadas: 1,
+          derivadas: 0.5,
+          coverage: 1.5,
+        },
+      ],
+      exchangeFoods: [
+        {
+          foodId: '77777777-7777-4777-8777-777777777777',
+          exchangeGroupId: '55555555-5555-4555-8555-555555555555',
+          groupCode: 'C',
+          name: 'Arroz integral',
+          brand: null,
+          portionLabel: '3/4 taza',
+          portionGrams: 50,
+        },
+      ],
+      syncToken: 'v:2026-07-18',
+    })
+
+    expect(parsed.dayCoverage?.[0]).toEqual({
+      groupCode: 'C',
+      groupName: 'Cereales',
+      color: null,
+      prescribed: 2,
+      marcadas: 1,
+      derivadas: 0.5,
+      coverage: 1.5,
+    })
+    expect(parsed.exchangeFoods?.[0].portionGrams).toBe(50)
+    expect(parsed.exchangeFoods?.[0].portionLabel).toBe('3/4 taza')
+    expect(parsed.mealSlots[0].intakeItems[0].exchangeGroupCode).toBe('C')
+    expect(parsed.mealSlots[0].intakeItems[0].exchangePortions).toBe(1)
+    expect(parsed.mealSlots[0].exchangeTargets?.[0].coverage).toBe(1.5)
+  })
+
+  it('parses an intake item that OMITS the exchange fields (real food / cache anterior)', () => {
+    const parsed = NutritionIntakeReadItemSchema.parse({
+      id: '88888888-8888-4888-8888-888888888888',
+      foodId: '77777777-7777-4777-8777-777777777777',
+      customName: null,
+      quantity: 120,
+      unit: 'g',
+      mealSlot: 'lunch',
+      source: 'offplan',
+      captureMethod: 'search',
+      occurredAt: '2026-07-18T13:05:00-04:00',
+      status: 'active',
+      revision: 1,
+      correctsEntryId: null,
+      prescriptionItemId: null,
+      snapshot: foodSnapshot,
+      totals: { calories: 156, proteinG: 3.1, carbsG: 33.6, fatsG: 0.4, fiberG: 2.2 },
+    })
+    expect(parsed.exchangeGroupCode).toBeUndefined()
+    expect(parsed.exchangePortions).toBeUndefined()
+  })
+
+  it('keeps exchangeGroupCode/exchangePortions null on a real food intake (RPC emits null when N/A)', () => {
+    const parsed = NutritionIntakeReadItemSchema.parse({
+      id: '88888888-8888-4888-8888-888888888888',
+      foodId: '77777777-7777-4777-8777-777777777777',
+      customName: null,
+      quantity: 120,
+      unit: 'g',
+      mealSlot: 'lunch',
+      source: 'offplan',
+      captureMethod: 'search',
+      occurredAt: '2026-07-18T13:05:00-04:00',
+      status: 'active',
+      revision: 1,
+      correctsEntryId: null,
+      prescriptionItemId: null,
+      snapshot: foodSnapshot,
+      totals: { calories: 156, proteinG: 3.1, carbsG: 33.6, fatsG: 0.4, fiberG: 2.2 },
+      exchangeGroupCode: null,
+      exchangePortions: null,
+    })
+    expect(parsed.exchangeGroupCode).toBeNull()
+    expect(parsed.exchangePortions).toBeNull()
+  })
+})
+
+describe('nutrition V2 portions — Plan read-model exchangeTargets (T2.0: quick-edit hydration + ficha coach)', () => {
+  const emptyTargets = {
+    calories: null,
+    proteinG: null,
+    carbsG: null,
+    fatsG: null,
+    fiberG: null,
+    sodiumMg: null,
+    waterMl: null,
+  }
+  const permissions = {
+    canRegisterFreely: true,
+    canAdjustPrescribedQuantity: true,
+    quantityAdjustmentPercent: null,
+    canSubstitute: false,
+    canMoveMealSlot: false,
+    canSkipOptionalItems: true,
+  }
+  const baseSlot = {
+    id: '33333333-3333-4333-8333-333333333333',
+    code: 'lunch',
+    name: 'Almuerzo',
+    startTime: null,
+    endTime: null,
+    mode: 'anchor' as const,
+    required: false,
+    instructions: null,
+    targets: {},
+    prescriptionItems: [],
+  }
+  const basePlan = (mealSlots: unknown[]) => ({
+    schemaVersion: 1 as const,
+    generatedAt: '2026-07-18T18:00:00-04:00',
+    asOfDate: '2026-07-18',
+    timezone: 'America/Santiago',
+    plan: {
+      id: '99999999-9999-4999-8999-999999999999',
+      name: 'Plan porciones',
+      strategy: 'hybrid' as const,
+      versionId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      versionNumber: 1,
+      status: 'published' as const,
+      effectiveFrom: '2026-07-01',
+      effectiveTo: null,
+    },
+    visibleNotes: null,
+    protocolNotes: null,
+    permissions,
+    dayVariants: [
+      {
+        id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+        key: 'default',
+        label: 'Base',
+        dayOfWeek: null,
+        isDefault: true,
+        targets: emptyTargets,
+        mealSlots,
+      },
+    ],
+    syncToken: 'v:2026-07-18',
+  })
+
+  it('parses a Plan payload from BEFORE portions (slot without exchangeTargets — Q1 byte-identico)', () => {
+    const parsed = NutritionPlanReadModelSchema.parse(basePlan([baseSlot]))
+    expect(parsed.dayVariants[0].mealSlots[0].exchangeTargets).toBeUndefined()
+    expect(parsed.plan?.strategy).toBe('hybrid')
+  })
+
+  it('parses a Plan payload WITH slot exchangeTargets and no coverage (plan read is not the Today)', () => {
+    const parsed = NutritionPlanReadModelSchema.parse(
+      basePlan([
+        {
+          ...baseSlot,
+          exchangeTargets: [
+            {
+              id: '44444444-4444-4444-8444-444444444444',
+              exchangeGroupId: '55555555-5555-4555-8555-555555555555',
+              groupCode: 'C',
+              groupName: 'Cereales',
+              color: null,
+              portions: 2,
+              notes: 'Preferir integrales',
+              orderIndex: 0,
+              ref: { calories: 70, proteinG: 2, carbsG: 15, fatsG: 0 },
+              composedOf: null,
+              macrosConfirmed: true,
+            },
+          ],
+        },
+      ]),
+    )
+    const target = parsed.dayVariants[0].mealSlots[0].exchangeTargets?.[0]
+    expect(target?.groupCode).toBe('C')
+    expect(target?.portions).toBe(2)
+    expect(target?.orderIndex).toBe(0)
+    expect(target?.notes).toBe('Preferir integrales')
+    // El plan read NO trae cobertura: marcadas/derivadas/coverage quedan ausentes.
+    expect(target?.marcadas).toBeUndefined()
+    expect(target?.derivadas).toBeUndefined()
+    expect(target?.coverage).toBeUndefined()
   })
 })
 

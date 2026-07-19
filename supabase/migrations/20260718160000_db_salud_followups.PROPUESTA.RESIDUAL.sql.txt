@@ -1,0 +1,100 @@
+-- =============================================================================
+-- PROPUESTA RESIDUAL (NO APLICAR TAL CUAL) — Follow-ups de salud DB 2026-07-18
+-- Extension .PROPUESTA.sql.txt a proposito: NO la levanta ninguna herramienta.
+-- Origen: docs/audits/db-salud-2026-07-18.md
+--
+-- >>> YA SE EXTRAJO LO APLICABLE <<<
+-- El bloque P1 (indices de cobertura FK del write-path) se verifico contra el
+-- esquema vivo el 2026-07-19 y se movio a la migracion real:
+--     supabase/migrations/20260719100000_fk_write_path_indexes.sql
+-- La verificacion corrigio 5 nombres que la propuesta original habia INFERIDO mal:
+--   - nutrition_intake_entries.corrected_by      -> corrected_by_entry_id
+--   - nutrition_plans_v2.current_version         -> current_published_version_id
+--   - nutrition_slot_exchange_targets_v2.slot_version   -> FK COMPUESTA {meal_slot_id,version_id}
+--   - nutrition_prescription_items_v2.slot_version      -> FK COMPUESTA {meal_slot_id,version_id}
+--   - nutrition_meal_slots_v2.variant_version           -> FK COMPUESTA {day_variant_id,version_id}
+--   - tabla nutrition_v2_conversion_links_v2     -> nutrition_v2_conversion_links (sin sufijo)
+-- Las 3 FKs COMPUESTAS quedaron FUERA de la migracion: estan cubiertas por el
+-- prefijo (leading column) de sus indices UNIQUE/orden existentes (§A3 del informe).
+--
+-- Lo que sigue en este archivo NO esta listo para aplicar (requiere trabajo manual
+-- o esta agendado): DROP de _bak (C1), reescritura de policies initplan (P3), e
+-- indices opcionales de import de baja frecuencia.
+-- =============================================================================
+
+
+-- -----------------------------------------------------------------------------
+-- C1  (CRITICO / SEGURIDAD)  Borrar respaldos publicos sin RLS.
+--     Resuelve: 2x rls_disabled_in_public (ERROR) + 3x no_primary_key +
+--     ruido de unused_index + 1x rls_enabled_no_policy.
+--
+--     >>> NO VA EN NINGUNA MIGRACION AHORA <<<
+--     La limpieza de tablas _bak esta AGENDADA para ~22-jul (ver MEMORY).
+--     Es destructivo. Se deja comentado con checklist previo:
+--       [ ] Operacion de catalogo/foods cerrada (dedup ya aplicada en prod).
+--       [ ] SELECT count(*) de cada _bak revisado; no se necesita revertir,
+--           o existe respaldo logico (pg_dump de la tabla) guardado aparte.
+--       [ ] grep en el repo: ninguna migracion/RPC/vista referencia estas tablas.
+-- -----------------------------------------------------------------------------
+-- DROP TABLE IF EXISTS public._bak_foods_global_20260715;
+-- DROP TABLE IF EXISTS public._bak_foods_dedup_20260717;
+-- DROP TABLE IF EXISTS public._bak_workout_logs_dups_20260707;
+
+
+-- -----------------------------------------------------------------------------
+-- P1  Indices de cobertura FK del write-path  ->  YA EXTRAIDO / VERIFICADO.
+--     Ver supabase/migrations/20260719100000_fk_write_path_indexes.sql
+--     Este bloque queda aca solo como rastro historico; no reaplicar.
+-- -----------------------------------------------------------------------------
+-- (movido — 8 indices verificados en la migracion real)
+
+
+-- -----------------------------------------------------------------------------
+-- P1-opcional  Import de catalogo (baja frecuencia, tablas HOY con 0 filas).
+--     NO se incluyo en la migracion del write-path: no es write-path del alumno
+--     y no hay filas. Dejar como opcional; crear solo si el advisor molesta.
+--     Columnas y tablas VERIFICADAS 2026-07-19:
+--       food_catalog_import_rows.resolved_food_id  -> foods.id
+--       food_catalog_missing_codes.resolved_food_id -> foods.id
+-- -----------------------------------------------------------------------------
+-- CREATE INDEX IF NOT EXISTS ix_food_catalog_import_rows_resolved_food_id
+--   ON public.food_catalog_import_rows (resolved_food_id);
+-- CREATE INDEX IF NOT EXISTS ix_food_catalog_missing_codes_resolved_food_id
+--   ON public.food_catalog_missing_codes (resolved_food_id);
+
+
+-- -----------------------------------------------------------------------------
+-- P3  auth_rls_initplan: envolver auth.<fn>()/current_setting() en (select ...)
+--     para que se evalue UNA vez por query en vez de por fila.
+--     NO reescribir a ciegas: el USING/WITH CHECK de cada policy tiene logica
+--     de scope propia. Primero traer las definiciones vivas:
+--
+--        select schemaname, tablename, policyname, cmd, qual, with_check
+--        from pg_policies
+--        where schemaname='public'
+--          and tablename in (
+--            'nutrition_plans_v2','nutrition_plan_versions_v2',
+--            'nutrition_plan_private_notes_v2','nutrition_v2_conversion_links');
+--
+--     Luego, por cada policy, recrear identica cambiando SOLO
+--        auth.uid()            ->  (select auth.uid())
+--        current_setting(...)  ->  (select current_setting(...))
+--     Policies afectadas (6):
+--        nutrition_plans_v2 : nutrition_plans_v2_select, nutrition_plans_v2_insert
+--        nutrition_plan_versions_v2 : nutrition_plan_versions_v2_insert
+--        nutrition_plan_private_notes_v2 : _insert, _update
+--        nutrition_v2_conversion_links : nutrition_v2_conversion_links_select
+--
+--     TODO: pegar aca los DROP POLICY / CREATE POLICY reales una vez leidos.
+-- -----------------------------------------------------------------------------
+
+
+-- -----------------------------------------------------------------------------
+-- NO INCLUIDO A PROPOSITO:
+--  * unused_index de tablas veteranas (P2): requiere idx_scan historico y
+--    descartar UNIQUE/soporte-FK. Bisturi manual, no barrido.
+--  * extension_in_public (pg_trgm / unaccent): mover de esquema puede romper
+--    search_path de la busqueda de catalogo. Aceptar/diferir.
+--  * multiple_permissive_policies / security_definer / FK compuesta de
+--    porciones: patrones deliberados del repo. NO tocar (ver informe §2).
+-- -----------------------------------------------------------------------------

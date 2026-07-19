@@ -62,6 +62,39 @@ export interface QeItem {
   isCustom: boolean
 }
 
+/**
+ * Target de porciones editable de la franja (capa opcional SPEC R1/R2). Conserva el
+ * snapshot de identidad del grupo (codigo/nombre/color) para pintar la fila SIN pegarle
+ * al catalogo vivo; `portions` es texto editable (stepper 0,5 / tap-to-edit).
+ */
+export interface QePortionTarget {
+  key: string
+  /** Id de la fila del target en la version base (null = alta nueva de la UI). */
+  id: string | null
+  exchangeGroupId: string
+  groupCode: string
+  groupName: string
+  color: string | null
+  macrosConfirmed: boolean
+  /** Porciones como texto ("2", "1.5"); multiplos de 0,5, minimo 0,5, maximo 99. */
+  portions: string
+  notes: string | null
+}
+
+/**
+ * Grupo elegible para agregar porciones en el quick-edit. F1: sale de los targets que el
+ * plan YA tiene (snapshots congelados del read model) — el quick-edit no tiene canal
+ * server-side de catalogo de grupos; el alta de grupos NUEVOS al plan vive en el builder.
+ */
+export interface QePortionGroup {
+  exchangeGroupId: string
+  groupCode: string
+  groupName: string
+  color: string | null
+  ref: { calories: number; proteinG: number; carbsG: number; fatsG: number }
+  macrosConfirmed: boolean
+}
+
 export interface QeSlot {
   key: string
   id: string | null
@@ -75,6 +108,8 @@ export interface QeSlot {
   instructions: string | null
   targets: Partial<NutritionMacroTargets>
   items: QeItem[]
+  /** Porciones a eleccion de la franja (capa opcional; [] = franja sin porciones). */
+  portionTargets: QePortionTarget[]
 }
 
 export interface QeTargetsText {
@@ -150,6 +185,22 @@ function hydrateItem(item: ReadItem): QeItem {
   }
 }
 
+type ReadExchangeTarget = NonNullable<ReadSlot['exchangeTargets']>[number]
+
+function hydratePortionTarget(target: ReadExchangeTarget): QePortionTarget {
+  return {
+    key: target.id,
+    id: target.id,
+    exchangeGroupId: target.exchangeGroupId,
+    groupCode: target.groupCode,
+    groupName: target.groupName,
+    color: target.color,
+    macrosConfirmed: target.macrosConfirmed,
+    portions: String(target.portions),
+    notes: target.notes,
+  }
+}
+
 function hydrateSlot(slot: ReadSlot): QeSlot {
   return {
     key: slot.id,
@@ -163,7 +214,33 @@ function hydrateSlot(slot: ReadSlot): QeSlot {
     instructions: slot.instructions,
     targets: slot.targets,
     items: slot.prescriptionItems.map(hydrateItem),
+    portionTargets: (slot.exchangeTargets ?? []).map(hydratePortionTarget),
   }
+}
+
+/**
+ * Grupos elegibles para el picker de porciones del quick-edit: los que el plan YA usa
+ * (dict reconstruible desde los snapshots congelados de los targets), unicos por id y
+ * ordenados por codigo. Puro y sin catalogo vivo (hallazgo F3).
+ */
+export function collectPortionGroups(planModel: NutritionPlanReadModel): QePortionGroup[] {
+  const byId = new Map<string, QePortionGroup>()
+  for (const variant of planModel.dayVariants) {
+    for (const slot of variant.mealSlots) {
+      for (const target of slot.exchangeTargets ?? []) {
+        if (byId.has(target.exchangeGroupId)) continue
+        byId.set(target.exchangeGroupId, {
+          exchangeGroupId: target.exchangeGroupId,
+          groupCode: target.groupCode,
+          groupName: target.groupName,
+          color: target.color,
+          ref: target.ref,
+          macrosConfirmed: target.macrosConfirmed,
+        })
+      }
+    }
+  }
+  return [...byId.values()].sort((a, b) => a.groupCode.localeCompare(b.groupCode))
 }
 
 function targetText(value: number | null): string {
@@ -219,6 +296,11 @@ export type QuickEditAction =
   | { type: 'ADD_SLOT'; variantKey: string; key: string; name: string; startTime: string }
   | { type: 'SET_TARGET'; variantKey: string; field: keyof QeTargetsText; value: string }
   | { type: 'STEP_TARGET'; variantKey: string; field: keyof QeTargetsText; direction: 1 | -1 }
+  | { type: 'SET_PORTION_TARGET'; variantKey: string; slotKey: string; targetKey: string; value: string }
+  | { type: 'STEP_PORTION_TARGET'; variantKey: string; slotKey: string; targetKey: string; direction: 1 | -1 }
+  | { type: 'REMOVE_PORTION_TARGET'; variantKey: string; slotKey: string; targetKey: string }
+  | { type: 'RESTORE_PORTION_TARGET'; variantKey: string; slotKey: string; index: number; target: QePortionTarget }
+  | { type: 'ADD_PORTION_TARGET'; variantKey: string; slotKey: string; key: string; group: QePortionGroup }
   | { type: 'RESET'; state: QuickEditState }
 
 /** Paso del stepper de cantidad: 5 para g/ml, 0.5 para unidad/porcion (NN/g, nunca slider). */
@@ -249,6 +331,38 @@ export function stepTargetText(current: string, step: number, direction: 1 | -1)
   const base = Number.isFinite(n) && n >= 0 ? n : 0
   const next = Math.max(0, round1(base + direction * step))
   return String(next)
+}
+
+// ── Porciones: paso 0,5 / minimo 0,5 / maximo 99 (SPEC R2, CHECK de la tabla) ──
+
+export const PORTION_STEP = 0.5
+export const PORTION_MIN = 0.5
+export const PORTION_MAX = 99
+
+/** Numero desde el texto de porciones (acepta coma decimal es-CL); null si no parsea. */
+export function parsePortionsValue(value: string): number | null {
+  const trimmed = value.trim().replace(',', '.')
+  if (trimmed === '') return null
+  const n = Number(trimmed)
+  return Number.isFinite(n) ? n : null
+}
+
+/** ¿Valor valido segun el contrato? (multiplos de 0,5 entre 0,5 y 99). */
+export function isValidPortionsText(value: string): boolean {
+  const n = parsePortionsValue(value)
+  return n !== null && n >= PORTION_MIN && n <= PORTION_MAX && Number.isInteger(n * 2)
+}
+
+/**
+ * Paso del stepper de porciones: ±0,5 con snap a medios; nunca baja de 0,5 (la baja del
+ * grupo es el boton eliminar, no el stepper) ni sube de 99.
+ */
+export function stepPortionsText(current: string, direction: 1 | -1): string {
+  const n = parsePortionsValue(current)
+  const base = n !== null && n > 0 ? n : 0
+  const next = Math.round((base + direction * PORTION_STEP) * 2) / 2
+  if (next < PORTION_MIN) return current
+  return String(Math.min(next, PORTION_MAX))
 }
 
 function mapVariant(state: QuickEditState, variantKey: string, fn: (v: QeVariant) => QeVariant): QuickEditState {
@@ -325,6 +439,34 @@ export function createCustomItem(key: string): QeItem {
     macroBase: null,
     isCustom: true,
   }
+}
+
+/** Alta de porciones desde el picker: arranca en 1 porcion (ajustable con el stepper). */
+export function createPortionTarget(key: string, group: QePortionGroup): QePortionTarget {
+  return {
+    key,
+    id: null,
+    exchangeGroupId: group.exchangeGroupId,
+    groupCode: group.groupCode,
+    groupName: group.groupName,
+    color: group.color,
+    macrosConfirmed: group.macrosConfirmed,
+    portions: '1',
+    notes: null,
+  }
+}
+
+function mapPortionTarget(
+  state: QuickEditState,
+  variantKey: string,
+  slotKey: string,
+  targetKey: string,
+  fn: (target: QePortionTarget) => QePortionTarget,
+): QuickEditState {
+  return mapSlot(state, variantKey, slotKey, (slot) => ({
+    ...slot,
+    portionTargets: slot.portionTargets.map((target) => (target.key === targetKey ? fn(target) : target)),
+  }))
 }
 
 function normalizeBuilderUnit(servingUnit: string | null | undefined): string {
@@ -416,9 +558,38 @@ export function quickEditReducer(state: QuickEditState, action: QuickEditAction)
             instructions: null,
             targets: {},
             items: [],
+            portionTargets: [],
           },
         ],
       }))
+    case 'SET_PORTION_TARGET':
+      return mapPortionTarget(state, action.variantKey, action.slotKey, action.targetKey, (target) => ({
+        ...target,
+        portions: action.value,
+      }))
+    case 'STEP_PORTION_TARGET':
+      return mapPortionTarget(state, action.variantKey, action.slotKey, action.targetKey, (target) => ({
+        ...target,
+        portions: stepPortionsText(target.portions, action.direction),
+      }))
+    case 'REMOVE_PORTION_TARGET':
+      return mapSlot(state, action.variantKey, action.slotKey, (slot) => ({
+        ...slot,
+        portionTargets: slot.portionTargets.filter((target) => target.key !== action.targetKey),
+      }))
+    case 'RESTORE_PORTION_TARGET':
+      return mapSlot(state, action.variantKey, action.slotKey, (slot) => ({
+        ...slot,
+        portionTargets: insertAt(slot.portionTargets, action.index, action.target),
+      }))
+    case 'ADD_PORTION_TARGET':
+      return mapSlot(state, action.variantKey, action.slotKey, (slot) =>
+        // Guard de unicidad (CHECK unique(meal_slot_id, exchange_group_id)): un grupo ya
+        // presente en la franja no se duplica (el picker lo deshabilita, esto es cinturon).
+        slot.portionTargets.some((target) => target.exchangeGroupId === action.group.exchangeGroupId)
+          ? slot
+          : { ...slot, portionTargets: [...slot.portionTargets, createPortionTarget(action.key, action.group)] },
+      )
     case 'SET_TARGET':
       return mapVariant(state, action.variantKey, (variant) => ({
         ...variant,
@@ -519,6 +690,11 @@ export function validateQuickEdit(state: QuickEditState): QuickEditValidation {
           errors[`item.${item.key}.name`] = 'Escribe un nombre para el alimento.'
         }
       }
+      for (const target of slot.portionTargets) {
+        if (!isValidPortionsText(target.portions)) {
+          errors[`portion.${target.key}.portions`] = 'Las porciones van de 0,5 en 0,5 (mínimo 0,5).'
+        }
+      }
     }
   }
   return { ok: Object.keys(errors).length === 0, errors }
@@ -556,6 +732,20 @@ function projectItem(item: QeItem, orderIndex: number): DraftItem {
   }
 }
 
+type DraftExchangeTarget = NonNullable<DraftSlot['exchangeTargets']>[number]
+
+function projectPortionTarget(target: QePortionTarget, orderIndex: number): DraftExchangeTarget {
+  return {
+    ...(target.id ? { id: target.id } : {}),
+    exchangeGroupId: target.exchangeGroupId,
+    // Texto invalido proyecta 0: la validacion local bloquea el publish antes de que el
+    // server vea un draft con porciones fuera del contrato (mismo patron que quantity).
+    portions: parsePortionsValue(target.portions) ?? 0,
+    notes: target.notes,
+    orderIndex,
+  }
+}
+
 function projectSlot(slot: QeSlot, orderIndex: number): DraftSlot {
   return {
     ...(slot.id ? { id: slot.id } : {}),
@@ -569,6 +759,11 @@ function projectSlot(slot: QeSlot, orderIndex: number): DraftSlot {
     instructions: slot.instructions,
     orderIndex,
     items: slot.items.map(projectItem),
+    // Capa opcional: una franja sin porciones proyecta un slot IDENTICO al de antes (sin
+    // la clave), y baseline/current pasan por esta MISMA proyeccion (cero falsos cambios).
+    ...(slot.portionTargets.length > 0
+      ? { exchangeTargets: slot.portionTargets.map(projectPortionTarget) }
+      : {}),
   }
 }
 

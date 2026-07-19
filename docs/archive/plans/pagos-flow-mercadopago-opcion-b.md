@@ -1,3 +1,5 @@
+> ARCHIVADO 2026-07-18: diseño previo a una implementación que ya está LIVE en prod (dual-gateway Flow+MP, PRs #115-118) — reemplazado por `project_flow_multigateway_build.md` (memoria) y el código en producción.
+
 # Informe: Pagos multi-gateway — Flow + MercadoPago (Opción B)
 
 > Fecha: 2026-06-30 · Autor: research + diseño (Claude) · Estado: **informe / pre-spec** (no implementado)

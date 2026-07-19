@@ -5,6 +5,7 @@ export const metadata: Metadata = {
     title: 'Recuperar contraseña',
     description:
         'Solicita un enlace seguro para restablecer tu contraseña de EVA y recuperar el acceso a tu cuenta.',
+    robots: { index: false, follow: true },
 }
 
 export default function ForgotPasswordLayout({ children }: { children: ReactNode }) {

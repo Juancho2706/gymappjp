@@ -49,6 +49,12 @@ export const NutritionIntakeReadItemSchema = z.object({
   prescriptionItemId: NullableUuidSchema,
   snapshot: NutritionFoodSnapshotSchema,
   totals: NutritionTotalsSchema.omit({ entryCount: true }),
+  // Porciones (SPEC R4, aditivo): pobladas SOLO en intakes sintéticos de marcar-porción
+  // emitidos tras la migración de porciones. `.optional().nullable()`: caches y cuerpos
+  // de RPC previos siguen parseando (criterio 8). La UI las usa para identificar el
+  // último intake sintético de un grupo/franja (deshacer) sin heurísticas por nombre.
+  exchangeGroupCode: z.string().nullable().optional(),
+  exchangePortions: z.number().finite().positive().nullable().optional(),
 })
 
 export const NutritionPrescriptionItemReadSchema = z.object({
@@ -134,7 +140,11 @@ export const NutritionExchangeGroupReadSchema = z.object({
  */
 export const NutritionSlotExchangeTargetReadSchema = z.object({
   id: z.string().uuid(),
-  exchangeGroupId: z.string().uuid(),
+  // z.guid(), NO z.uuid(): los 9 grupos system de exchange_groups tienen ids
+  // deterministas no-RFC del seed V1 (0000e8c0-...-0001, nibble de version 0) y
+  // z.uuid() de Zod 4 los rechaza — rompia el parse del Today de TODO plan con
+  // porciones (incidente prod 2026-07-18; gotcha conocido del repo: seeds -> guid).
+  exchangeGroupId: z.guid(),
   groupCode: z.string(),
   groupName: z.string(),
   color: z.string().nullable(),
@@ -147,6 +157,42 @@ export const NutritionSlotExchangeTargetReadSchema = z.object({
   marcadas: z.number().finite().nonnegative().optional(),
   derivadas: z.number().finite().nonnegative().optional(),
   coverage: z.number().finite().nonnegative().optional(),
+})
+
+/**
+ * Alimento de equivalencia por grupo (SPEC UX-b / hallazgo F3): la lista "1 porción
+ * equivale a" viaja DENTRO del read-model del Today (security-definer) — el sheet
+ * nunca consulta `exchange_groups` ni `foods` desde el cliente. Solo trae foods del
+ * catálogo con `exchange_group_id` + `exchange_portion_grams` poblados (pipeline R8);
+ * catálogo sin clasificar ⇒ lista vacía y el sheet muestra su estado vacío.
+ */
+export const NutritionExchangeFoodReadSchema = z.object({
+  foodId: z.string().uuid(),
+  // z.guid() por los ids no-RFC del seed de exchange_groups (ver arriba).
+  exchangeGroupId: z.guid(),
+  groupCode: z.string(),
+  name: z.string(),
+  brand: z.string().nullable(),
+  /** Etiqueta casera de la porción (`foods.exchange_portion_label`), p.ej. "1 taza". */
+  portionLabel: z.string().nullable(),
+  /** Gramos de UNA porción del grupo (`foods.exchange_portion_grams`). */
+  portionGrams: z.number().finite().positive().nullable(),
+})
+
+/**
+ * Cobertura del DÍA por grupo (SPEC R5 `cobertura_dia`): suma todas las franjas MÁS
+ * los intakes sin franja asignada (que aportan al resumen del día, nunca a un chip de
+ * franja). `prescribed` = Σ portions de los targets del día; puede ser 0 si el grupo
+ * solo aparece por cobertura derivada de un alimento no prescrito.
+ */
+export const NutritionDayCoverageReadSchema = z.object({
+  groupCode: z.string(),
+  groupName: z.string(),
+  color: z.string().nullable(),
+  prescribed: z.number().finite().nonnegative(),
+  marcadas: z.number().finite().nonnegative(),
+  derivadas: z.number().finite().nonnegative(),
+  coverage: z.number().finite().nonnegative(),
 })
 
 export const NutritionMealSlotReadSchema = z.object({
@@ -193,6 +239,11 @@ export const NutritionTodayReadModelSchema = z.object({
   // presente si el plan tiene porciones. Alimenta el sheet de equivalencias y la
   // expansión de compuestos SIN pegarle a `exchange_groups` (hallazgo F3).
   exchangeGroups: z.array(NutritionExchangeGroupReadSchema).optional(),
+  // Porciones (aditivo, opcional): cobertura del día por grupo (fila "Porciones de
+  // hoy" — SPEC R5 `cobertura_dia`) + alimentos de equivalencia por grupo (sheet —
+  // hallazgo F3). Solo presentes si el plan tiene targets de porciones.
+  dayCoverage: z.array(NutritionDayCoverageReadSchema).optional(),
+  exchangeFoods: z.array(NutritionExchangeFoodReadSchema).optional(),
   syncToken: z.string(),
 })
 
@@ -323,6 +374,8 @@ export type NutritionExchangeRef = z.infer<typeof NutritionExchangeRefSchema>
 export type NutritionExchangeComposedPart = z.infer<typeof NutritionExchangeComposedPartSchema>
 export type NutritionExchangeGroupRead = z.infer<typeof NutritionExchangeGroupReadSchema>
 export type NutritionSlotExchangeTargetRead = z.infer<typeof NutritionSlotExchangeTargetReadSchema>
+export type NutritionExchangeFoodRead = z.infer<typeof NutritionExchangeFoodReadSchema>
+export type NutritionDayCoverageRead = z.infer<typeof NutritionDayCoverageReadSchema>
 export type NutritionTotals = z.infer<typeof NutritionTotalsSchema>
 export type NutritionIntakeReadItem = z.infer<typeof NutritionIntakeReadItemSchema>
 export type NutritionMealSlotRead = z.infer<typeof NutritionMealSlotReadSchema>
@@ -470,9 +523,9 @@ export interface PortionCoverageCell {
   coverage: number
 }
 
-/** Clave estable `{slotCode} {groupCode}` del mapa de cobertura por franja. */
+/** Clave estable `{slotCode}\u0000{groupCode}` del mapa de cobertura por franja. */
 export function portionCoverageKey(slotCode: string, groupCode: string): string {
-  return `${slotCode} ${groupCode}`
+  return `${slotCode}\u0000${groupCode}`
 }
 
 function roundCoverage(value: number): number {

@@ -10,6 +10,12 @@ interface AuthSubmitButtonProps
     extends Omit<React.ComponentProps<'button'>, 'type' | 'disabled'> {
     label: string
     pendingLabel?: string
+    /**
+     * Override del estado pending para forms que NO envian via `<form action>`
+     * (p. ej. react-hook-form + startTransition(formAction), donde useFormStatus
+     * nunca se activa). Si se omite, se usa useFormStatus() como siempre.
+     */
+    pending?: boolean
     variant?: AuthVariant
     /** DS Button sizes: md = 48px/16px, lg = 56px/17px (CTA primario del funnel de auth) */
     size?: 'md' | 'lg'
@@ -20,6 +26,7 @@ interface AuthSubmitButtonProps
 export function AuthSubmitButton({
     label,
     pendingLabel,
+    pending: pendingProp,
     variant = 'coach',
     size = 'md',
     leadingIcon,
@@ -27,7 +34,8 @@ export function AuthSubmitButton({
     className,
     ...props
 }: AuthSubmitButtonProps) {
-    const { pending } = useFormStatus()
+    const { pending: formPending } = useFormStatus()
+    const pending = pendingProp ?? formPending
     const isEnterprise = variant === 'enterprise'
 
     return (

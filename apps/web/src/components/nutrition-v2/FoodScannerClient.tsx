@@ -1,12 +1,15 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Flashlight, FlashlightOff, ScanBarcode } from 'lucide-react'
+import Link from 'next/link'
+import { AlertTriangle, CheckCircle2, Flashlight, FlashlightOff, ScanBarcode } from 'lucide-react'
 import {
   FoodBarcodeLookupReadModelSchema,
   type FoodBarcodeLookupReadModel,
+  type FoodCatalogItem,
 } from '@eva/nutrition-v2'
 import { createClient } from '@/lib/supabase/client'
+import { humanizeStudentWriteError } from '@/lib/student-access'
 import {
   FoodThumbnail,
   MacroChipRow,
@@ -15,6 +18,15 @@ import {
   NutritionStatePanel,
 } from '@/components/nutrition-v2'
 import { missingFoodReportKey } from '@/components/nutrition-v2/missing-food-report-key'
+import {
+  buildScannedFoodIntakePayload,
+  type ScannerRegistrationContext,
+} from '@/components/nutrition-v2/scanned-food-intake.logic'
+// MISMO camino de registro que el dialogo de busqueda del Today (P0 QA: la card del scan
+// no tenia forma de registrar): TodayModal + newIdempotencyKey + recordIntakeAction.
+import { TodayModal } from '@/app/c/[coach_slug]/nutrition-v2/_components/TodayModal'
+import { newIdempotencyKey } from '@/app/c/[coach_slug]/nutrition-v2/_components/nutrition-today.logic'
+import { recordIntakeAction } from '@/app/c/[coach_slug]/nutrition-v2/_actions/intake.actions'
 
 type DetectedBarcode = { rawValue: string; format?: string }
 type BarcodeDetectorInstance = {
@@ -30,7 +42,14 @@ declare global {
 
 const FORMATS = ['ean_13', 'ean_8', 'upc_a', 'upc_e']
 
-export function FoodScannerClient({ clientId }: { clientId: string }) {
+export function FoodScannerClient({
+  clientId,
+  registration,
+}: {
+  clientId: string
+  /** Contexto de registro (dia/franjas/plan). Sin el, el scanner queda solo-consulta. */
+  registration?: ScannerRegistrationContext | null
+}) {
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const streamRef = useRef<MediaStream | null>(null)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -44,6 +63,9 @@ export function FoodScannerClient({ clientId }: { clientId: string }) {
   const [torchSupported, setTorchSupported] = useState(false)
   const [torch, setTorch] = useState(false)
   const [reported, setReported] = useState(false)
+  // Registro del alimento escaneado (P0 QA): dialogo de cantidad/franja + estado registrado.
+  const [registerOpen, setRegisterOpen] = useState(false)
+  const [registered, setRegistered] = useState(false)
   const supabase = useMemo(() => createClient(), [])
 
   const stopCamera = useCallback(() => {
@@ -64,6 +86,7 @@ export function FoodScannerClient({ clientId }: { clientId: string }) {
     if (!gtin || loading) return
     setLoading(true)
     setReported(false)
+    setRegistered(false)
     try {
       const { data, error } = await (supabase as unknown as {
         rpc: (name: string, args: Record<string, unknown>) => Promise<{ data: unknown; error: { message: string } | null }>
@@ -113,6 +136,7 @@ export function FoodScannerClient({ clientId }: { clientId: string }) {
     setCameraError(null)
     setResult(null)
     setReported(false)
+    setRegistered(false)
 
     const Detector = window.BarcodeDetector
     setNativeDetector(Boolean(Detector))
@@ -296,16 +320,207 @@ export function FoodScannerClient({ clientId }: { clientId: string }) {
           mediaUrl={mediaUrl}
           reported={reported}
           loading={loading}
+          registered={registered}
+          registeredHref={registered ? registration?.revalidatePath ?? null : null}
+          onRegister={registration ? () => setRegisterOpen(true) : null}
           onReport={reportMissing}
           onReset={() => {
             setResult(null)
             setReported(false)
+            setRegistered(false)
             setCameraError(null)
             lastCodeRef.current = null
           }}
         />
       ) : null}
+
+      {/* Dialogo de registro del alimento escaneado: mismo camino que el registro por busqueda. */}
+      {registerOpen &&
+      registration &&
+      result &&
+      (result.status === 'found' || result.status === 'pending_verification') ? (
+        <RegisterScannedFoodDialog
+          clientId={clientId}
+          food={result.food}
+          mediaUrl={mediaUrl}
+          pendingVerification={result.status === 'pending_verification'}
+          registration={registration}
+          onClose={() => setRegisterOpen(false)}
+          onRegistered={() => {
+            setRegisterOpen(false)
+            setRegistered(true)
+          }}
+        />
+      ) : null}
     </div>
+  )
+}
+
+/**
+ * Cantidad + unidad + franja para el alimento escaneado, precargado con la porcion del
+ * catalogo. Reusa el MISMO camino del dialogo de busqueda del Today: payload de catalogo
+ * (con captureMethod 'barcode') -> recordIntakeAction -> record_nutrition_intake_v2.
+ * "Pendiente de verificación" NO bloquea (self-report con snapshot); el badge se mantiene.
+ */
+function RegisterScannedFoodDialog({
+  clientId,
+  food,
+  mediaUrl,
+  pendingVerification,
+  registration,
+  onClose,
+  onRegistered,
+}: {
+  clientId: string
+  food: FoodCatalogItem
+  mediaUrl: string | null
+  pendingVerification: boolean
+  registration: ScannerRegistrationContext
+  onClose: () => void
+  onRegistered: () => void
+}) {
+  const [quantity, setQuantity] = useState(String(food.servingSize))
+  const [unit, setUnit] = useState(food.servingUnit)
+  const [mealSlot, setMealSlot] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  // Mismas opciones de unidad que el dialogo de busqueda (RegisterFoodDialog del Today).
+  const unitOptions = useMemo(
+    () => Array.from(new Set([food.servingUnit, 'g', 'ml', 'porción', 'unidad'])),
+    [food.servingUnit],
+  )
+  const quantityNumber = Number(quantity)
+  const canSubmit =
+    Number.isFinite(quantityNumber) && quantityNumber > 0 && unit.trim().length > 0 && !submitting
+
+  const submit = async () => {
+    if (!canSubmit) return
+    setSubmitting(true)
+    setError(null)
+    try {
+      const res = await recordIntakeAction({
+        payload: buildScannedFoodIntakePayload({
+          context: {
+            clientId,
+            date: registration.localDate,
+            timezone: registration.timezone,
+            planVersionId: registration.planVersionId,
+            snapshotId: registration.snapshotId,
+          },
+          food,
+          quantity: quantityNumber,
+          unit: unit.trim(),
+          mealSlotCode: mealSlot === '' ? null : mealSlot,
+          idempotencyKey: newIdempotencyKey('intake'),
+        }),
+        revalidatePath: registration.revalidatePath,
+      })
+      if (!res.ok) {
+        // Copy humano (COACH_ACCOUNT_PAUSED etc.), mismo patron que el Today del alumno.
+        setError(humanizeStudentWriteError(res.error, 'No se pudo registrar el alimento.'))
+        return
+      }
+      onRegistered()
+    } catch {
+      setError('No pudimos guardar tu registro. Revisa tu conexión e inténtalo de nuevo.')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <TodayModal
+      title="Registrar alimento"
+      description="Elige cuánto comiste y en qué franja."
+      open
+      onClose={onClose}
+      footer={
+        <div className="flex justify-end gap-2">
+          <NutritionMotionButton tone="neutral" onClick={onClose}>
+            Cancelar
+          </NutritionMotionButton>
+          <NutritionMotionButton disabled={!canSubmit} pending={submitting} onClick={() => void submit()}>
+            Registrar
+          </NutritionMotionButton>
+        </div>
+      }
+    >
+      <div className="space-y-4">
+        {error ? (
+          <div
+            aria-live="assertive"
+            className="flex items-start gap-2 rounded-card border border-rose-300/60 bg-rose-50 p-3 text-sm text-rose-800 dark:border-rose-700/50 dark:bg-rose-950/30 dark:text-rose-300"
+            role="alert"
+          >
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+            <span>{error}</span>
+          </div>
+        ) : null}
+        <div className="flex items-start gap-3 rounded-card border border-border-subtle bg-surface-sunken p-3">
+          <FoodThumbnail alt={food.name} src={mediaUrl} size="md" />
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-semibold text-strong">{food.name}</p>
+            <p className="mt-0.5 truncate text-xs text-muted">{food.brand ?? 'Sin marca'}</p>
+            <span className="mt-1.5 block">
+              <MacroChipRow
+                calories={food.calories}
+                proteinG={food.proteinG}
+                carbsG={food.carbsG}
+                fatsG={food.fatsG}
+                per={`por ${food.servingSize} ${food.servingUnit}`}
+                size="sm"
+              />
+            </span>
+            {pendingVerification ? (
+              <span className="mt-1.5 inline-flex rounded-pill border border-amber-300 bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-800 dark:border-amber-700/60 dark:bg-amber-950/40 dark:text-amber-300">
+                Pendiente de verificación
+              </span>
+            ) : null}
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <label className="block">
+            <span className="mb-1 block text-xs font-semibold text-muted">Cantidad</span>
+            <input
+              inputMode="decimal"
+              value={quantity}
+              onChange={(event) => setQuantity(event.target.value.replace(/[^0-9.]/g, ''))}
+              className="min-h-12 w-full rounded-control border border-border-default bg-surface-app px-3 text-base text-strong outline-none focus:ring-2 focus:ring-ring"
+            />
+          </label>
+          <label className="block">
+            <span className="mb-1 block text-xs font-semibold text-muted">Unidad</span>
+            <select
+              value={unit}
+              onChange={(event) => setUnit(event.target.value)}
+              className="min-h-12 w-full rounded-control border border-border-default bg-surface-app px-3 text-base text-strong outline-none focus:ring-2 focus:ring-ring"
+            >
+              {unitOptions.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+        <label className="block">
+          <span className="mb-1 block text-xs font-semibold text-muted">Franja (opcional)</span>
+          <select
+            value={mealSlot}
+            onChange={(event) => setMealSlot(event.target.value)}
+            className="min-h-12 w-full rounded-control border border-border-default bg-surface-app px-3 text-base text-strong outline-none focus:ring-2 focus:ring-ring"
+          >
+            <option value="">Sin franja</option>
+            {registration.slotOptions.map((option) => (
+              <option key={option.code} value={option.code}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+    </TodayModal>
   )
 }
 
@@ -314,6 +529,9 @@ function ScannerResult({
   mediaUrl,
   reported,
   loading,
+  registered,
+  registeredHref,
+  onRegister,
   onReport,
   onReset,
 }: {
@@ -321,6 +539,12 @@ function ScannerResult({
   mediaUrl: string | null
   reported: boolean
   loading: boolean
+  /** True cuando el alimento ya quedo registrado en el dia del alumno. */
+  registered: boolean
+  /** Href de vuelta al Today tras registrar (null si no hay contexto de registro). */
+  registeredHref: string | null
+  /** Abre el dialogo de registro; null cuando el scanner no tiene contexto de registro. */
+  onRegister: (() => void) | null
   onReport: () => Promise<void>
   onReset: () => void
 }) {
@@ -385,10 +609,28 @@ function ScannerResult({
           </p>
         </div>
       </div>
-      <div className="mt-4">
+      {/* CTA primario "Registrar" (P0 QA: la card moria en "Probar otro"). "Pendiente de
+          verificación" NO bloquea el registro: es curacion del catalogo, no un permiso. */}
+      <div className="mt-4 flex flex-wrap items-center gap-2">
+        {registered ? (
+          <span className="inline-flex min-h-11 items-center gap-1.5 text-sm font-semibold text-emerald-700 dark:text-emerald-300">
+            <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
+            Registrado en tu día
+          </span>
+        ) : onRegister ? (
+          <NutritionMotionButton onClick={onRegister}>Registrar</NutritionMotionButton>
+        ) : null}
         <NutritionMotionButton tone="neutral" onClick={onReset}>
           Probar otro
         </NutritionMotionButton>
+        {registered && registeredHref ? (
+          <Link
+            href={registeredHref}
+            className="inline-flex min-h-11 items-center rounded-control border border-border-default bg-surface-card px-4 text-sm font-semibold text-strong transition-colors hover:bg-surface-sunken"
+          >
+            Ver mi día
+          </Link>
+        ) : null}
       </div>
     </NutritionCard>
   )

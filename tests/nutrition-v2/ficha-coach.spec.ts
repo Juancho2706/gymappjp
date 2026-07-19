@@ -11,10 +11,10 @@ import {
  * MUTACIONES EN PRODUCCIÓN: ninguna. Spec de SOLO LECTURA.
  *
  * Verifica que la ficha del alumno en el Centro V2 muestra el plan vigente (sección
- * "Plan vigente" + badge de versión/estrategia). Precondición: la alumna QA tiene un plan
- * V2 publicado (lo crea builder-publish). Si no hay plan vigente, hace skip en vez de fallar.
+ * "Plan vigente" + badge de versión/estrategia). Precondición: el alumno de prueba E2E tiene un
+ * plan V2 publicado (lo crea builder-publish). Si no hay plan vigente, hace skip en vez de fallar.
  *
- * Entorno: Preview de Vercel (PLAYWRIGHT_BASE_URL) con el canary activo para josefit.
+ * Entorno: Preview de Vercel (PLAYWRIGHT_BASE_URL) con Nutrición V2 activo para el coach E2E.
  */
 test.describe('Nutrición V2 · Ficha del coach — plan vigente (canary)', () => {
   test.beforeEach(requireCanaryCoach)

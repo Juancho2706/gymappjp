@@ -184,6 +184,51 @@
     }
 }
 
+/* Feedback instantaneo de navegacion pendiente del nav (NavPendingFeedback):
+   barra indeterminada de 2px arriba (tinte primary via --nav-progress-color,
+   white-label en /c) + atenuar el <main> actual mientras el server stremea la
+   ruta. Se pinta en el frame del tap; el loading.tsx del segmento lo reemplaza
+   al commit de la navegacion (el nav desmonta el componente). */
+.eva-nav-progress {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    z-index: 120;
+    pointer-events: none;
+    overflow: hidden;
+    background: color-mix(in srgb, var(--nav-progress-color, var(--theme-primary, var(--sport-500))) 22%, transparent);
+}
+.eva-nav-progress::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    width: 40%;
+    border-radius: 2px;
+    background: var(--nav-progress-color, var(--theme-primary, var(--sport-500)));
+    animation: eva-nav-progress-slide 1s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+@keyframes eva-nav-progress-slide {
+    0% {
+        transform: translateX(-100%);
+    }
+    100% {
+        transform: translateX(350%);
+    }
+}
+html[data-nav-pending] main {
+    opacity: 0.55;
+    transition: opacity 0.15s ease;
+}
+@media (prefers-reduced-motion: reduce) {
+    .eva-nav-progress::after {
+        animation: none;
+        width: 100%;
+        opacity: 0.5;
+    }
+}
+
 /* ============================================================
    LIGHT MODE (Default / Base)
    ============================================================ */

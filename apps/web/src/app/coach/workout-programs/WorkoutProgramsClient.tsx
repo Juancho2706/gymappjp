@@ -686,10 +686,10 @@ export function WorkoutProgramsClient({
     return (
         <div
             className={cn(
-                'min-w-0 max-w-full rounded-t-2xl pb-8',
-                /* Móvil: sin -mx; padding simétrico + safe area (iPhone/Android) */
-                'max-md:pl-[max(1rem,env(safe-area-inset-left,0px))] max-md:pr-[max(1rem,env(safe-area-inset-right,0px))]'
-                /* Desktop: sin full-bleed propio — el shell (CoachMainWrapper) ya da la
+                'min-w-0 max-w-full rounded-t-2xl pb-8'
+                /* Móvil: SIN padding propio — CoachMainWrapper ya da el gutter px-5 (patrón
+                   Alumnos); sumar pl/pr acá apachurraba la sección vs. /coach/clients.
+                   Desktop: sin full-bleed propio — el shell (CoachMainWrapper) ya da la
                    columna centrada --dt-read-wide (1240) + --dt-page-x (32) = .dt-dash-inner. */
             )}
         >

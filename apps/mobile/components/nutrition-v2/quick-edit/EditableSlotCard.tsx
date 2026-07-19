@@ -10,6 +10,11 @@ import {
   type QuickEditSlot,
 } from '../../../lib/nutrition-v2-quick-edit'
 import { EditableItemRow } from './EditableItemRow'
+import { EditablePortionsSection } from './EditablePortionsSection'
+import {
+  type QuickEditPortionGroup,
+  type QuickEditPortionTarget,
+} from './portions-state'
 import { QUICK_EDIT_COPY } from './microcopy'
 
 /**
@@ -24,6 +29,8 @@ export function EditableSlotCard({
   foodsById,
   errors,
   disabled = false,
+  portionTargets,
+  portionGroups,
   onSlotPatch,
   onRemoveSlot,
   onSearchFood,
@@ -33,12 +40,19 @@ export function EditableSlotCard({
   onItemName,
   onSwapItem,
   onRemoveItem,
+  onPortionStep,
+  onPortionNotes,
+  onPortionRemove,
+  onPortionAdd,
 }: {
   slot: QuickEditSlot
   index: number
   foodsById: ReadonlyMap<string, BuilderFood>
   errors: Record<string, string>
   disabled?: boolean
+  /** Capa opcional de porciones (T1.4); [] + [] = seccion invisible (SPEC UX-c). */
+  portionTargets: QuickEditPortionTarget[]
+  portionGroups: QuickEditPortionGroup[]
   onSlotPatch: (patch: { name?: string; startTime?: string }) => void
   onRemoveSlot: () => void
   onSearchFood: () => void
@@ -48,6 +62,10 @@ export function EditableSlotCard({
   onItemName: (itemKey: string, value: string) => void
   onSwapItem: (itemKey: string) => void
   onRemoveItem: (itemKey: string) => void
+  onPortionStep: (targetKey: string, direction: 1 | -1) => void
+  onPortionNotes: (targetKey: string, value: string) => void
+  onPortionRemove: (target: QuickEditPortionTarget, index: number) => void
+  onPortionAdd: (group: QuickEditPortionGroup) => void
 }) {
   const { theme } = useTheme()
   const subtotal: ItemMacros = quickEditSlotSubtotal(slot, foodsById)
@@ -142,6 +160,18 @@ export function EditableSlotCard({
           <Text className="text-sm font-semibold text-text-strong">Libre</Text>
         </Pressable>
       </View>
+
+      {/* Seccion "Porciones a eleccion" (SPEC UX-a): hermana de los items, bajo
+          "+ Agregar alimento". Se pinta sola solo si el plan usa porciones. */}
+      <EditablePortionsSection
+        targets={portionTargets}
+        groups={portionGroups}
+        disabled={disabled}
+        onStep={onPortionStep}
+        onSetNotes={onPortionNotes}
+        onRemove={onPortionRemove}
+        onAdd={onPortionAdd}
+      />
 
       {slot.items.length > 0 ? (
         <View className="mt-3 border-t border-border-subtle pt-2">

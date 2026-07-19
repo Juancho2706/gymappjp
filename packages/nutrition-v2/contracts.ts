@@ -89,7 +89,10 @@ export const NutritionPrescriptionItemSchema = z
  */
 export const NutritionExchangeTargetSchema = z.object({
   id: z.string().uuid().optional(),
-  exchangeGroupId: z.string().uuid(),
+  // z.guid(), NO z.uuid(): los grupos system del seed V1 llevan ids deterministas
+  // no-RFC (0000e8c0-...) que z.uuid() de Zod 4 rechaza — bloqueaba publicar
+  // porciones desde el builder y el parse del read-model (incidente 2026-07-18).
+  exchangeGroupId: z.guid(),
   portions: z
     .number()
     .positive()
@@ -179,6 +182,17 @@ export const NutritionIntakeMutationSchema = z
       fiberG: z.number().nonnegative().nullable().default(null),
       servingSize: z.number().positive().nullable().default(null),
       servingUnit: z.string().trim().max(32).nullable().default(null),
+      // Porciones (SPEC R4, transporte B1): viajan DENTRO del snapshot hasta el RPC,
+      // que las extrae a columnas. `.optional()` (sin default): un re-parse del
+      // mutation (route mobile / cola offline) NUNCA debe stripearlas ni inventarlas
+      // — ausentes quedan ausentes y un intake normal no gana llaves nuevas.
+      exchangeGroupCode: z.string().trim().min(1).max(32).optional(),
+      exchangePortions: z
+        .number()
+        .positive()
+        .max(99)
+        .refine((v) => v * 2 === Math.floor(v * 2), 'exchangePortions debe ir en pasos de 0,5')
+        .optional(),
     }),
   })
   .superRefine((value, ctx) => {

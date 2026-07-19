@@ -39,6 +39,11 @@ import {
   mealSlotOptions,
   newIdempotencyKey,
 } from './nutrition-today.logic'
+import { usePortionMarks, type PortionMarksApi } from './PortionMarks'
+import { PortionCoverageRow } from './PortionCoverageRow'
+import { PortionSlotSection } from './PortionSlotSection'
+import { PortionEquivalencesSheet } from './PortionEquivalencesSheet'
+import { slotsWithPrescribedContent } from './portion-marks.logic'
 import {
   correctIntakeAction,
   recordIntakeAction,
@@ -59,7 +64,8 @@ import {
 
 type DialogState =
   | { kind: 'none' }
-  | { kind: 'register' }
+  // `initialMealSlot`: preselección de franja al llegar desde el sheet de equivalencias.
+  | { kind: 'register'; initialMealSlot?: string | null }
   | { kind: 'edit'; entry: NutritionIntakeReadItem }
   | { kind: 'void'; entry: NutritionIntakeReadItem }
 
@@ -86,6 +92,14 @@ export function TodayExperience({
   const ctx = useMemo(() => contextFromToday(today, clientId), [today, clientId])
   const entries = useMemo(() => consumedEntries(today), [today])
   const slotOptions = useMemo(() => mealSlotOptions(today), [today])
+
+  // Capa de porciones (SPEC UX-b): invisible si el plan no tiene targets (Q1) — el
+  // hook no agrega UI ni estado visible sin `dayCoverage`/`exchangeTargets`.
+  const portionsApi = usePortionMarks({ today, clientId })
+  const [portionSheet, setPortionSheet] = useState<{ slotCode: string; groupCode: string } | null>(null)
+  const portionSheetSlot = portionSheet
+    ? today.mealSlots.find((slot) => slot.code === portionSheet.slotCode) ?? null
+    : null
 
   function runMutation(
     id: string,
@@ -196,6 +210,9 @@ export function TodayExperience({
         }}
       />
 
+      {/* Fila secundaria compacta de porciones — el héroe único son los anillos. */}
+      <PortionCoverageRow items={portionsApi.dayCoverage} />
+
       {error ? (
         <div
           aria-live="assertive"
@@ -235,6 +252,8 @@ export function TodayExperience({
         today={today}
         busyId={busyId}
         isPending={isPending}
+        portionsApi={portionsApi}
+        onOpenPortionSheet={(slotCode, groupCode) => setPortionSheet({ slotCode, groupCode })}
         onEat={(slot, item) => {
           const id = `eat:${item.id}`
           runMutation(id, () =>
@@ -308,6 +327,8 @@ export function TodayExperience({
           clientId={clientId}
           slotOptions={slotOptions}
           error={error}
+          initialMealSlot={dialog.initialMealSlot ?? null}
+          portionDupWarning={portionsApi.dupWarningFor}
           onClose={closeDialog}
           onSubmit={(food, quantity, unit, mealSlotCode) => {
             runMutation(
@@ -381,6 +402,19 @@ export function TodayExperience({
           }}
         />
       ) : null}
+
+      {/* Sheet de equivalencias (botón [Equivalencias] o long-press del chip). */}
+      <PortionEquivalencesSheet
+        api={portionsApi}
+        exchangeFoods={today.exchangeFoods}
+        initialGroupCode={portionSheet?.groupCode ?? null}
+        onClose={() => setPortionSheet(null)}
+        onRegister={(slotCode) => {
+          setPortionSheet(null)
+          openDialog({ kind: 'register', initialMealSlot: slotCode })
+        }}
+        slot={portionSheetSlot}
+      />
     </div>
   )
 }
@@ -528,17 +562,23 @@ function PrescribedSection({
   today,
   busyId,
   isPending,
+  portionsApi,
+  onOpenPortionSheet,
   onEat,
 }: {
   today: NutritionTodayReadModel
   busyId: string | null
   isPending: boolean
+  portionsApi: PortionMarksApi
+  onOpenPortionSheet: (slotCode: string, groupCode: string) => void
   onEat: (
     slot: NutritionTodayReadModel['mealSlots'][number],
     item: NutritionTodayReadModel['mealSlots'][number]['prescriptionItems'][number],
   ) => void
 }) {
-  const slotsWithPrescription = today.mealSlots.filter((slot) => slot.prescriptionItems.length > 0)
+  // Franjas con items fijos O con targets de porciones (Q2: una franja
+  // solo-porciones también aparece). Plan sin porciones ⇒ filtro idéntico al previo.
+  const slotsWithPrescription = slotsWithPrescribedContent(today)
   if (slotsWithPrescription.length === 0) return null
 
   return (
@@ -586,6 +626,13 @@ function PrescribedSection({
               )
             })}
           </div>
+          {/* Porciones de la franja (SPEC UX-b): sección hermana de los items. */}
+          <PortionSlotSection
+            api={portionsApi}
+            exchangeFoods={today.exchangeFoods}
+            onOpenSheet={onOpenPortionSheet}
+            slot={slot}
+          />
         </NutritionCard>
       ))}
     </section>
@@ -599,6 +646,8 @@ function RegisterFoodDialog({
   clientId,
   slotOptions,
   error,
+  initialMealSlot = null,
+  portionDupWarning,
   onClose,
   onSubmit,
   submitting,
@@ -606,6 +655,10 @@ function RegisterFoodDialog({
   clientId: string
   slotOptions: Array<{ code: string; label: string }>
   error: string | null
+  /** Franja preseleccionada (llegada desde el sheet de equivalencias de porciones). */
+  initialMealSlot?: string | null
+  /** Aviso anti-duplicado de porciones (SPEC R5.b): null si no aplica. */
+  portionDupWarning?: (foodId: string, mealSlotCode: string | null) => string | null
   onClose: () => void
   onSubmit: (food: FoodCatalogItem, quantity: number, unit: string, mealSlotCode: string | null) => void
   submitting: boolean
@@ -617,7 +670,7 @@ function RegisterFoodDialog({
   const [selected, setSelected] = useState<FoodCatalogItem | null>(null)
   const [quantity, setQuantity] = useState('')
   const [unit, setUnit] = useState('')
-  const [mealSlot, setMealSlot] = useState<string>('')
+  const [mealSlot, setMealSlot] = useState<string>(initialMealSlot ?? '')
   // Favoritos: ids para la estrella + orden, y foods hidratados para el acceso rápido.
   const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set())
   const [favoriteFoods, setFavoriteFoods] = useState<FoodCatalogItem[]>([])
@@ -711,6 +764,13 @@ function RegisterFoodDialog({
   const canSubmit =
     selected !== null && Number.isFinite(quantityNumber) && quantityNumber > 0 && unit.trim().length > 0
 
+  // Aviso anti-duplicado (no bloqueante): el alimento elegido pertenece a un grupo con
+  // porciones YA marcadas en la franja seleccionada ⇒ inline, sin frenar el registro.
+  const dupWarningMessage =
+    selected && portionDupWarning
+      ? portionDupWarning(selected.id, mealSlot === '' ? null : mealSlot)
+      : null
+
   return (
     <TodayModal
       title="Registrar alimento"
@@ -803,6 +863,14 @@ function RegisterFoodDialog({
               ))}
             </select>
           </label>
+          {dupWarningMessage ? (
+            <p
+              aria-live="polite"
+              className="rounded-control border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-700/60 dark:bg-amber-950/40 dark:text-amber-300"
+            >
+              {dupWarningMessage}
+            </p>
+          ) : null}
         </div>
       ) : (
         <div className="space-y-3">
