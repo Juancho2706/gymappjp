@@ -62,3 +62,40 @@ Referencias web: `apps/web/src/components/nutrition-v2/NutritionV2Kit.tsx`, `Nut
 Storybook manual (pantalla de prueba o capturas por componente) light/dark, marca EVA + marca de alto
 contraste: StatePanel con y sin ilustración, botón por tono, FoodRow con foto/fallback/nota,
 MacroChipRow sm/md contra la web a zoom 1:1.
+
+## Veredicto (2026-07-19 — aplicada a nivel código, tsc mobile limpio)
+
+1. **Ilustraciones — CERRADO.** Nuevo `components/nutrition-v2/state-illustration.tsx`: espejo del
+   módulo puro web (mapeo estado→ilustración) + requires estáticos de los 8 webp del CEO copiados
+   1x/@2x a `apps/mobile/assets/illustrations/` (212 KB; el resolver RN elige densidad, espejo del
+   srcSet). API de 1 línea `<StateIllustration name=... />` y prop `illustration` en
+   `NutritionStatePanel` (círculo 144pt `hexToRgba(theme.primary, 0.10)`, arte 96pt, decorativa
+   oculta a lectores). Wire-up en call-sites = 4A-02/03/04/11 (este kit solo expone la API).
+   Re-export agregado al barrel `components/nutrition-v2/index.ts` (1 línea).
+2. **Botón relleno — CERRADO.** `buttonToneClasses`/`buttonToneTextClasses` espejo de
+   `NutritionV2Motion.tsx:24-32`; nutrition = `bg-primary` + `text-white` (como web). Adaptación
+   escrita: los fills de estado usan la convención solid del DS RN (`*-500` fijo + glifo
+   `on-warning`/`on-success`; Badge.tsx:56-63) en vez de los raw emerald-600/amber-500/rose-600/
+   sky-600 del web — el paso -600 RN flipea a tinte claro en dark y rompería el fill; contrato
+   white-label prohíbe valores crudos nuevos. `disabled:opacity-55` y shadow sm portados.
+3. **FoodRow — CERRADO (decisión default de la ola: iconos portados).** 10 webp de
+   `apps/web/public/food-icons/` → `assets/food-icons/` (31 KB, Fluent Emoji MIT); fallback del
+   thumbnail = icono de categoría a proporción web (24/44) sobre tinte `bg-primary/10`; categoría
+   explícita (`fallbackCategory`) o derivada del nombre (web `NutritionFoodRow.tsx:102`); las filas
+   ya nunca caen a emoji (`fallbackEmoji` deprecado sin romper call-sites). Prop `note` agregada
+   (web :127). Nota: los call-sites que hoy pasan `foodCategoryEmoji(food.category)` quedan con
+   categoría derivada del nombre hasta que su unidad pase `fallbackCategory` (misma precisión que
+   las filas del alumno web).
+4. **MacroChipRow — CERRADO.** Paddings sm `px-1.5 py-0.5` / md `px-2 py-0.5` 1:1 y `tabular-nums`
+   vía `fontVariant` en las cifras.
+5. **Sombra del kit — DECISIÓN TOMADA.** `shadow-sm` web = token de elevación DS RN
+   `shadow('sm', theme.scheme)` (`lib/shadows.ts`), aplicado donde el web lo tiene: NutritionCard
+   (web :503), MealSlotCard (:266), NutritionToolbar (:173), BuilderInspector (:455) y
+   NutritionMotionButton (Motion :57).
+6. **Header compacto — CERRADO.** Variante de una fila [flecha][eyebrow overline + título 22
+   black + descripción][acciones] (web :122-150). Adaptación escrita: `backHref` (Link) → callback
+   `onBack` (navegación imperativa del stack RN); la consumen 4A-01/09.
+
+Pendiente (no bloqueante): comprobación objetiva visual (storybook manual light/dark) en QA device.
+Peso total agregado al bundle: ~243 KB en 26 webp (máximo individual 25,6 KB — bajo el umbral de
+200 KB, sin compresión necesaria).

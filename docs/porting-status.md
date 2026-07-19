@@ -264,6 +264,126 @@ Unidad 4A-01 (ruteo del tab Nutrición + chrome V2, P0) aplicada a nivel código
 Gate corrido: `pnpm exec tsc --noEmit` mobile limpio. Pendiente de la unidad: QA
 visual en device (flag on/off, deep link del widget, dominio OFF).
 
+Unidad 4A-10 (registro libre / buscador, P1 alto) aplicada a nivel código
+(2026-07-19, spec `docs/rn-port/specs/seccion-4a/u10-registro-buscador.md`):
+
+- **Selector de franja** — chips "Sin franja" + todas las franjas del día
+  (espejo `RegisterFoodDialog` web :851-865 + `mealSlotOptions`), preselección
+  por param `slot`; el toggle "Asignar a {slot}" fue eliminado. La pantalla carga
+  el read-model del Hoy cache-first (franjas + estado de porciones).
+- **Unidades web completas** (`servingUnit`/g/ml/porción/unidad, defaults web) y
+  **dup-warning de porciones** portado (caja warning, copy
+  `PORTIONS_COPY.student.dupWarning`; sin delta optimista en sesión — adaptación
+  escrita en `lib/nutrition-v2-add-food.logic.ts`, lógica pura hermana nueva).
+- **Copys igualados** (placeholder, sin-resultados, hint 2 caracteres), fila de
+  resultado y panel del elegido 1:1 con la web (meta marca·categoría, macros
+  "/ 100 g|ml" y "por {servingSize} {servingUnit}"; preview de totales RN-extra
+  RETIRADO), error de guardado inline humanizado, aviso en fallo del toggle de
+  favoritos. Live-search y celebración meal-logged conservados por decisión del
+  owner (DECISIONES-OWNER.md #3 y #2).
+
+Gate corrido: `pnpm exec tsc --noEmit` mobile limpio. Pendiente de la unidad: QA
+visual en device (flujo de la comprobación objetiva de la spec).
+
+Unidad 4A-02 (estructura del Hoy V2, P1 alto) aplicada a nivel código (2026-07-19,
+spec `docs/rn-port/specs/seccion-4a/u02-hoy-estructura.md`, veredicto punto por
+punto ahí):
+
+- **Orden vertical 1:1 web** (`TodayExperience.tsx:183-418` + `page.tsx:142-187`):
+  lag banner → badges (+chip "Día registrado" con `snapshotId`, canvas esmeralda →
+  tono success del kit) → AuraHero → porciones → error banner → fila de CTAs
+  Registrar/Escanear/Compartir con íconos lucide (componente local `TodayCta`) →
+  "Tu plan de hoy" → "Consumido hoy".
+- **"Tu plan de hoy"**: solo franjas con prescripción o targets (copia RN de
+  `slotsWithPrescribedContent`, `portion-marks.logic.ts:357-363`); cards sin
+  badges/subtotal/sub-encabezados/CTA por franja; hora en mono; nota del ítem y
+  "· opcional"; "Lo comí" tone success con pending por ítem y estado "Registrado".
+- **"Consumido hoy" agregada**: card única con TODOS los registros por hora asc +
+  filas optimistas de la cola; icon-buttons lápiz/papelera (abren el sheet nativo;
+  diálogos dedicados = 4A-06); `UnassignedCard` y consumido-por-franja eliminados;
+  empty state web verbatim.
+- **Lag banner + sin-plan**: `TodayTab` resuelve el plan vigente en paralelo
+  (`getNutritionPlanV2`, cache 'plan' compartida con PlanTab, espejo
+  `page.tsx:147-177`); sin plan publicado la vista completa es el panel sin-plan
+  con copys web (ilustración = TODO 4A-07).
+- **Errores humanizados**: banner inline danger con `humanizeStudentWriteError`
+  reemplaza los tres `Alert.alert` crudos del TodayTab.
+- Extras RN retirados con evidencia: subtítulo del Hoy, chip de sync en synced
+  (queda solo offline/pending — adaptación de la cola offline), panel "Sin
+  franjas para hoy", "+ Registrar en {franja}", pie "Registro del día · fecha".
+
+Gate corrido: `pnpm exec tsc --noEmit` mobile limpio. Pendiente de la unidad:
+screenshot comparativo RN vs web (<760px) del checklist de la spec (QA device).
+
+Unidad 4A-07 (kit V2: ilustraciones de estado, botones rellenos, FoodRow, P1)
+aplicada a nivel código (2026-07-19, spec
+`docs/rn-port/specs/seccion-4a/u07-kit-ilustraciones.md`, veredicto ahí):
+
+- **Ilustraciones del CEO empaquetadas** — nuevo
+  `components/nutrition-v2/state-illustration.tsx` (espejo del módulo web puro +
+  requires estáticos) con los 8 webp 1x/@2x del web copiados a
+  `assets/illustrations/` (212 KB) y API de 1 línea `<StateIllustration name/>`;
+  `NutritionStatePanel` acepta `illustration` (círculo 144pt tintado
+  `hexToRgba(theme.primary, 0.10)`, arte 96pt, decorativa). Wire-up de call-sites
+  = unidades dueñas (4A-02/03/04/11).
+- **CTA primario relleno** — `NutritionMotionButton` con mapa de tonos propio
+  espejo de `NutritionV2Motion.tsx:24-32` (nutrition = fill primary + text-white);
+  fills de estado en la convención solid del DS RN (*-500 fijo + glifo
+  on-warning/on-success; -600 flipea en dark y rompería el fill), opacity-55 y
+  shadow sm como web.
+- **FoodRow 1:1** — fallback = icono estático de categoría (10 webp de
+  `apps/web/public/food-icons/` → `assets/food-icons/`, 31 KB) sobre tinte
+  `bg-primary/10`; categoría explícita o derivada del nombre (heurística
+  compartida); emoji legado deprecado; prop `note` bajo los macros.
+- **MacroChipRow** — paddings sm/md 1:1 y `tabular-nums` (fontVariant).
+- **Sombra del kit (decisión única)** — `shadow-sm` web = token DS RN
+  `shadow('sm', theme.scheme)` en NutritionCard, MealSlotCard, Toolbar,
+  BuilderInspector y MotionButton.
+- **NutritionHeader compacta** — variante con flecha (web :122-150) vía `onBack`
+  (adaptación nativa: Link backHref → callback del stack); la usan 4A-01/09.
+
+Gate corrido: `npx tsc --noEmit` mobile limpio. Peso agregado al bundle:
+~243 KB (26 webp; el mayor pesa 25,6 KB — sin necesidad de compresión).
+Pendiente de la unidad: storybook manual light/dark (comprobación objetiva de la
+spec) en QA device.
+
+Unidad 4A-11 (scanner de código de barras, P1 alto) aplicada a nivel código
+(2026-07-19, spec `docs/rn-port/specs/seccion-4a/u11-scanner.md`, veredicto punto
+por punto ahí):
+
+- **Registro del escaneado con cantidad/unidad/franja** — CTA primario "Registrar"
+  en la card found/pending abre `RegisterScannedFoodSheet` (espejo del
+  `RegisterScannedFoodDialog` web, `FoodScannerClient.tsx:365-525`): cantidad
+  default `servingSize`, unidades `[servingUnit,'g','ml','porción','unidad']`,
+  franja opcional del día, badge ámbar "Pendiente de verificación" que NO bloquea;
+  payload calcado de `buildScannedFoodIntakePayload` (source 'offplan', snapshot
+  del food por porción, captureMethod 'barcode', planVersionId+snapshotId del Hoy)
+  con la idempotency-key estable RN (clientId+deviceId+operationId) y la cola
+  offline existente (`submitRecordIntake`). Tras registrar: "Registrado en tu día"
+  + "Ver mi día" (navega al hub). Contexto de registro = read-model del Hoy
+  (espejo `scanner/page.tsx:38-47`; red con fallback a la caché del Hoy); sin
+  contexto el scanner queda solo-consulta como la web.
+- **Idempotencia del reporte de faltante** — clave estable por contenido
+  alumno+gtin+día local (`missingFoodReportKey`, copia 1:1 del canon web testeado
+  `missing-food-report-key.ts`) reemplaza el `Date.now()` que reproducía el bug
+  corregido en la web. Lógica pura hermana nueva:
+  `lib/nutrition-v2-scanner.logic.ts`.
+- **Errores visibles** — fallo del lookup ("No se pudo consultar el catálogo
+  local…") y del reporte ("No se pudo guardar el reporte del producto.") en el
+  panel warning del scanner (espejo `cameraError` web); error de guardado inline
+  humanizado (`humanizeStudentWriteError`) dentro del sheet.
+- **Copys/estados** — header web verbatim + acción "Nutrición" con flecha de
+  vuelta; CTAs "Probar otro"; not-found con copy web y botones en fila;
+  ilustraciones `error-amable`/`catalogo-vacio` cableadas al kit de 4A-07.
+- Adaptaciones escritas: sheet nativo (`Sheet nativeModal`, gorhom 5.2.14 vs
+  reanimated 4), selects web → pills RN, cámara expo-camera con pausa (ya
+  documentada), atribución ODbL conservada; celebración scanner-hit queda en
+  4A-12.
+
+Gate corrido: `npx tsc --noEmit` mobile — archivos de la unidad limpios.
+Pendiente de la unidad: QA device de la comprobación objetiva (registro con
+franja + reporte con 2 taps = 1 fila).
+
 Ola 4A rehace la auditoría formal de `c/[coach_slug]/nutrition/**`. Hallazgo de
 entrada confirmado: `MacroRingSummary` web es card inverse, kcal/proteína ember,
 carbos sport white-label y grasas aqua; RN actual es card normal, kcal success y

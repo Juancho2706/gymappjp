@@ -78,3 +78,39 @@ adaptación nativa ESCRITA (patrón ya usado por el repo), siempre que contenido
 Flujo completo en ambos lados: buscar ("po"), elegir, cambiar unidad a "porción", elegir franja,
 provocar dup-warning con porciones marcadas, registrar, verificar aparición en "Consumido hoy".
 Copys y estados idénticos según lista.
+
+## Veredicto (2026-07-19)
+
+**APLICADA a nivel código.** `add-food-v2.tsx` reescrito + lógica pura hermana
+`apps/mobile/lib/nutrition-v2-add-food.logic.ts` (espejo de `mealSlotOptions`,
+`unitOptionsFor`, `foodGroupCodeMap`, `portionsCountLabelEs`, `dupPortionInfo`).
+Cierre por delta:
+
+1. Selector de franja: chips "Sin franja" + TODAS las franjas del día
+   (read-model cache-first + fetch en la pantalla), preselección por param
+   `slot` (espejo `initialMealSlot`). El toggle "Asignar a {slot}" se eliminó.
+2. Unidades: `[servingUnit,'g','ml','porción','unidad']` únicas (web :758-761);
+   defaults web (cantidad=servingSize, unidad=servingUnit); labels "Cantidad"/
+   "Unidad". "un" eliminado.
+3. Dup-warning portado: caja warning `accessibilityLiveRegion=polite` con
+   `PORTIONS_COPY.student.dupWarning`. Adaptación escrita: sin delta optimista de
+   marcas en sesión (pantalla pusheada; `target.marcadas` del read-model fresco ya
+   trae las confirmadas) — documentada en la lógica hermana.
+4. Copys buscador igualados (placeholder "Ej: pechuga de pollo", "Sin resultados
+   en el catálogo local.", hint "Escribe al menos 2 caracteres."); live-search se
+   queda (DECISIONES-OWNER.md #3); estado "Buscando…" documentado como parte de
+   esa adaptación.
+5. Favoritos: fallo del toggle ahora AVISA con Alert (copys 1:1 de
+   `favorites.actions.ts:88,98,113`); estrella amber-400 literal documentado.
+6. Fila de resultado: réplica del `CatalogPickRow` web (thumb, meta
+   "{marca} · {categoría}", MacroChipRow `/ 100 g|ml`); FoodRow del kit fuera.
+7. Panel elegido: card sunken neutra con thumb + meta + macros base
+   "por {servingSize} {servingUnit}"; preview de totales RN-extra RETIRADO;
+   botones "Cambiar alimento" / "Registrar".
+8. Error de guardado: inline humanizado estilo DialogError (rose→danger) sin
+   perder el formulario.
+9. Celebración meal-logged + auto-back CONSERVADA (DECISIONES-OWNER.md #2).
+10. Atribución ODbL conservada (adaptación legal).
+
+Gate corrido: `pnpm exec tsc --noEmit` mobile limpio. Pendiente fuera de la
+unidad: QA visual en device (comprobación objetiva de arriba) por el orquestador/CEO.

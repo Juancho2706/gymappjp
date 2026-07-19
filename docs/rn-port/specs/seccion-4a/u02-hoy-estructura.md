@@ -111,3 +111,56 @@ Screenshot RN vs web móvil (<760px) del Hoy con: plan con 2 franjas + 1 registr
 consumido + 1 corregido. Checklist: orden vertical (badges→hero→porciones→CTAs→plan→consumido),
 chip "Día registrado", banner lag, copys exactos ("Lo comí", "Registrado", "Consumido hoy",
 "Todavía no registras alimentos"), acciones lápiz/papelera, cero badges por franja, cero botón por franja.
+
+## Veredicto (2026-07-19) — APLICADA a nivel código; pendiente QA device
+
+Los 10 puntos cerrados en `app/alumno/(tabs)/nutrition-v2/index.tsx` (solo bloques TodayTab):
+
+1. **Chip "Día registrado"** ✅ — render con `model.snapshotId`, canvas esmeralda web →
+   tono success del kit RN (`border-success-500/30 bg-success-500/10 text-success-700`) +
+   `CheckCircle2` (web `TodayExperience.tsx:194-199`).
+2. **Subtítulo RN-extra eliminado** ✅ — fuera "Tu consumo real frente al snapshot del día.".
+   `SyncOfflineState` se conserva SOLO offline o con `pending > 0` (nunca en synced) como
+   **adaptación documentada de la cola offline nativa**: la web no tiene cola de mutaciones
+   local, RN sí, y ocultar el estado dejaría escrituras encoladas invisibles. Cero chip en
+   estado normal ⇒ paridad visual con la web en el caso feliz.
+3. **Banner de lag** ✅ — `TodayTab` ahora resuelve today + plan vigente EN PARALELO
+   (`getNutritionPlanV2`, cache-first kind 'plan' compartida con PlanTab; espejo de
+   `page.tsx:147-151`). `today.plan === null || today.plan.id !== plan.plan.id` ⇒ banner
+   Info sunken con los DOS copys verbatim (`page.tsx:164-177`).
+4. **Estado sin plan** ✅ — `livePlan.plan === null` ⇒ la vista COMPLETA es el panel con
+   copys web exactos (`page.tsx:153-162`); ilustración `sin-plan` queda como TODO(4A-07).
+   Adaptación offline: con plan vigente aún desconocido (sin red ni cache) se muestra la
+   vista normal — la web nunca renderiza sin resolver esa señal.
+5. **Fila de CTAs** ✅ — Registrar alimento (Plus, tono nutrition) + Escanear (ScanBarcode,
+   neutral → `/alumno/nutrition-v2/scanner`) + Compartir (Share2, neutral), entre error
+   banner y "Tu plan de hoy" (`TodayExperience.tsx:228-248`). Componente local `TodayCta`
+   (motion de presión + háptica del kit) porque `NutritionMotionButton` RN no admite ícono
+   en children. Botones apilados del final ELIMINADOS.
+6. **"Tu plan de hoy"** ✅ — heading presente; SOLO franjas de `slotsWithPrescribedContent`
+   (copia RN del filtro `portion-marks.logic.ts:357-363`); card sin badge de estado, sin
+   subtotal, sin sub-encabezados, sin consumido por franja, sin CTA por franja; hora en
+   `font-mono text-xs`; nota del ítem visible (bajo la fila — el FoodRow del kit RN aún no
+   recibe `note`); "Lo comí" `tone="success"` con pending por ítem (`eatingId`) y estado
+   "Registrado" (check success) vía `prescriptionItemId` en los registros del día
+   (`nutrition-today.logic.ts:62-64`). `· opcional` agregado al quantityLabel. Residuo del
+   kit: el botón RN no admite `min-h-10 px-3 text-xs` (web :617) — tamaño estándar del kit.
+7. **"Consumido hoy" agregada** ✅ — sección única bajo el plan: heading Utensils primary,
+   UNA NutritionCard con TODOS los registros activos por `occurredAt` asc + filas
+   optimistas de la cola al final; empty state con copys web exactos; icon-buttons
+   lápiz/papelera con `hitSlop` (papelera en tinte danger). `UnassignedCard` ELIMINADA.
+   Residuo: ambos icon-buttons abren el `EntryActionSheet` nativo (editar + retirar en un
+   solo sheet) — la separación en diálogos dedicados es de 4A-06.
+8. **Error de mutación** ✅ — banner inline danger entre coverage y CTAs (portado, opción
+   preferida del spec) con `humanizeStudentWriteError` (espejo RN en
+   `lib/student-access-copy.ts`) y fallback web 'No se pudo completar la acción.';
+   `Alert.alert` eliminado del TodayTab; limpieza del error al iniciar cada mutación.
+9. **Optimismo/cola offline** — sin cambios; adaptación ya sancionada (labels
+   Guardando/Sin sincronizar del kit ahora visibles en "Consumido hoy").
+10. **Pie "Registro del día · fecha"** ✅ — eliminado.
+
+Extra retirado con evidencia: panel "Sin franjas para hoy" (la web no renderiza nada si
+`slotsWithPrescription` está vacío, `TodayExperience.tsx:582`).
+
+Gate corrido: `pnpm exec tsc --noEmit` mobile limpio. Pendiente de la unidad: screenshot
+comparativo RN vs web <760px del checklist de comprobación objetiva (QA device).

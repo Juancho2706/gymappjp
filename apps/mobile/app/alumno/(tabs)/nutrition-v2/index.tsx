@@ -1,10 +1,22 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Alert, AppState, Pressable, RefreshControl, ScrollView, Share, Text, TextInput, View } from 'react-native'
+import { AppState, Pressable, RefreshControl, ScrollView, Share, Text, TextInput, View } from 'react-native'
 import { useFocusEffect, useRouter } from 'expo-router'
 import * as Haptics from 'expo-haptics'
 import { FlashList } from '@shopify/flash-list'
 import { MotiView } from 'moti'
-import { History, ListChecks, Utensils } from 'lucide-react-native'
+import {
+  AlertTriangle,
+  CheckCircle2,
+  History,
+  Info,
+  ListChecks,
+  Pencil,
+  Plus,
+  ScanBarcode,
+  Share2,
+  Trash2,
+  Utensils,
+} from 'lucide-react-native'
 import {
   AuraHero,
   FoodRow,
@@ -39,6 +51,7 @@ import type {
   PortionCoverageView,
 } from '../../../../lib/nutrition-v2-portions'
 import {
+  NUTRITION_MOTION,
   NUTRITION_STRATEGIES,
   type NutritionSlotExchangeTargetRead,
   NutritionHistoryPageReadModelSchema,
@@ -59,6 +72,7 @@ import {
   type NutritionTodayReadModel,
 } from '@eva/nutrition-v2'
 import { supabase } from '../../../../lib/supabase'
+import { humanizeStudentWriteError } from '../../../../lib/student-access-copy'
 import { formatNutritionShortDate } from '../../../../lib/date-utils'
 import { foodCategoryEmojiFromName } from '../../../../lib/nutrition-v2-food-media'
 import { isEnabled } from '../../../../lib/flags'
@@ -128,7 +142,6 @@ interface OptimisticOverlay {
 const EMPTY_OVERLAY: OptimisticOverlay = { addedBySlot: {}, addedUnassigned: [], hiddenIds: [] }
 // Constantes de referencia ESTABLE para props de cards memoizadas (hallazgo M3):
 // `?? []` inline crearía un array nuevo por render y rompería React.memo.
-const EMPTY_ROWS: NutritionFoodRowModel[] = []
 const EMPTY_PORTION_MARKS: PendingPortionMark[] = []
 const EMPTY_PORTION_VOIDS: PendingPortionVoid[] = []
 
@@ -140,14 +153,24 @@ function TodayTab() {
   const insets = useSafeAreaInsets()
   const onScrollChrome = useAlumnoScrollHandler()
   const entitlements = useEntitlements()
+  const { theme } = useTheme()
   const [userId, setUserId] = useState<string | null>(null)
   const [clientName, setClientName] = useState<string | null>(null)
   const [deviceId, setDeviceId] = useState<string | null>(null)
   const [model, setModel] = useState<NutritionTodayReadModel | null>(null)
+  // 4A-02: plan VIGENTE en vivo, misma señal doble que la web (page.tsx:147-151 resuelve
+  // today + plan en paralelo): decide el empty-state sin plan (page.tsx:153-162) y el
+  // banner de lag del registro del día (page.tsx:164-177). null = aún desconocido.
+  const [livePlan, setLivePlan] = useState<NutritionPlanReadModel | null>(null)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [offline, setOffline] = useState(false)
   const [pending, setPending] = useState(0)
+  // 4A-02: banner inline de error de mutación (web TodayExperience.tsx:216-225), copy
+  // humanizado con humanizeStudentWriteError — nunca el código técnico crudo.
+  const [mutationError, setMutationError] = useState<string | null>(null)
+  // 4A-02: pending por ítem del botón "Lo comí" (web busyId `eat:{item.id}`, TodayExperience.tsx:618).
+  const [eatingId, setEatingId] = useState<string | null>(null)
   const [overlay, setOverlay] = useState<OptimisticOverlay>(EMPTY_OVERLAY)
   const [actionEntry, setActionEntry] = useState<NutritionIntakeReadItem | null>(null)
   const [celebration, setCelebration] = useState<CelebrationInstance | null>(null)
@@ -200,30 +223,50 @@ function TodayTab() {
     controllerRef.current = controller
 
     if (!force) {
-      const cached = await readNutritionV2Cache({
-        userId,
-        clientId: userId,
-        kind: 'today',
-        scopeKey: date,
-        schema: NutritionTodayReadModelSchema,
-        allowStale: true,
-      })
+      const [cached, cachedPlan] = await Promise.all([
+        readNutritionV2Cache({
+          userId,
+          clientId: userId,
+          kind: 'today',
+          scopeKey: date,
+          schema: NutritionTodayReadModelSchema,
+          allowStale: true,
+        }),
+        readNutritionV2Cache({
+          userId,
+          clientId: userId,
+          kind: 'plan',
+          scopeKey: date,
+          schema: NutritionPlanReadModelSchema,
+          allowStale: true,
+        }),
+      ])
       if (mountedRef.current && cached) {
         setModel(cached.payload)
         setOffline(cached.stale)
         setLoading(false)
       }
+      if (mountedRef.current && cachedPlan) setLivePlan(cachedPlan.payload)
     }
 
     try {
       const fetchStartedAt = Date.now()
-      const fresh = await getNutritionTodayV2({ date, signal: controller.signal })
+      // 4A-02: today + plan vigente EN PARALELO como la web (page.tsx:147-151). Si el plan
+      // falla (red), se conserva el último conocido — el Hoy no se cae por esa señal.
+      const [fresh, freshPlan] = await Promise.all([
+        getNutritionTodayV2({ date, signal: controller.signal }),
+        getNutritionPlanV2({ date, signal: controller.signal }).catch(() => null),
+      ])
       if (!mountedRef.current) return
       setModel(fresh)
+      if (freshPlan) setLivePlan(freshPlan)
       setOffline(false)
       setOverlay(EMPTY_OVERLAY)
       portionsReconcile.current(fetchStartedAt)
       await writeNutritionV2Cache({ userId, clientId: userId, kind: 'today', scopeKey: date, payload: fresh })
+      if (freshPlan) {
+        await writeNutritionV2Cache({ userId, clientId: userId, kind: 'plan', scopeKey: date, payload: freshPlan })
+      }
       if (!mountedRef.current) return
       const flushed = await flushNutritionV2MutationQueue(userId)
       if (mountedRef.current) setPending(flushed.pending)
@@ -301,6 +344,18 @@ function TodayTab() {
   }, [])
   const hiddenSet = useMemo(() => new Set(overlay.hiddenIds), [overlay.hiddenIds])
 
+  // 4A-02: ids de ítems prescritos YA consumidos hoy — estado "Registrado" del botón
+  // (web isPrescriptionConsumed, nutrition-today.logic.ts:62-64, sobre TODOS los registros
+  // del día). useMemo por `model` para no romper el React.memo de las cards (hallazgo M3).
+  const consumedPrescriptionIds = useMemo(() => {
+    const ids = new Set<string>()
+    if (!model) return ids
+    for (const entry of [...model.mealSlots.flatMap((slot) => slot.intakeItems), ...model.unassignedIntake]) {
+      if (entry.prescriptionItemId) ids.add(entry.prescriptionItemId)
+    }
+    return ids
+  }, [model])
+
   const addRow = useCallback((slotCode: string | null, row: NutritionFoodRowModel) => {
     setOverlay((prev) =>
       slotCode
@@ -336,6 +391,9 @@ function TodayTab() {
   const onAtePrescribed = useCallback(
     async (slot: NutritionMealSlotRead, item: NutritionMealSlotRead['prescriptionItems'][number]) => {
       if (!userId || !deviceId) return
+      // Web limpia el error al iniciar cada mutación (runMutation, TodayExperience.tsx:109).
+      setMutationError(null)
+      setEatingId(item.id)
       void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
       const operationId = newNutritionV2OperationId()
       const tempId = `opt-${operationId}`
@@ -372,10 +430,12 @@ function TodayTab() {
         })
       } catch {
         removeRow(slot.code, tempId)
+        setEatingId((cur) => (cur === item.id ? null : cur))
         return
       }
       const outcome = await submitRecordIntake(userId, payload)
       if (!mountedRef.current) return
+      setEatingId((cur) => (cur === item.id ? null : cur))
       if (outcome.status === 'recorded') {
         void (async () => {
           const claimed = await claimMealLoggedCelebration(userId, date)
@@ -389,7 +449,8 @@ function TodayTab() {
         await refreshPending()
       } else {
         removeRow(slot.code, tempId)
-        Alert.alert('No se pudo registrar', outcome.error.message)
+        // Banner inline con copy humanizado (web TodayExperience.tsx:119,216-225).
+        setMutationError(humanizeStudentWriteError(outcome.error.message, 'No se pudo completar la acción.'))
       }
     },
     [addRow, date, deviceId, fireCelebration, load, markRowOffline, model, refreshPending, removeRow, userId],
@@ -399,6 +460,7 @@ function TodayTab() {
     async (entry: NutritionIntakeReadItem) => {
       if (!userId || !deviceId) return
       setActionEntry(null)
+      setMutationError(null)
       void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
       setHidden(entry.id, true)
       const payload = buildVoidIntakeCorrection({
@@ -421,7 +483,7 @@ function TodayTab() {
         await refreshPending()
       } else {
         setHidden(entry.id, false)
-        Alert.alert('No se pudo retirar', outcome.error.message)
+        setMutationError(humanizeStudentWriteError(outcome.error.message, 'No se pudo completar la acción.'))
       }
     },
     [date, deviceId, load, model, refreshPending, setHidden, userId],
@@ -431,6 +493,7 @@ function TodayTab() {
     async (entry: NutritionIntakeReadItem, quantity: number, unit: string) => {
       if (!userId || !deviceId) return
       setActionEntry(null)
+      setMutationError(null)
       void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
       const operationId = newNutritionV2OperationId()
       const tempId = `opt-${operationId}`
@@ -483,7 +546,7 @@ function TodayTab() {
       } else {
         setHidden(entry.id, false)
         removeRow(entry.mealSlot, tempId)
-        Alert.alert('No se pudo editar', outcome.error.message)
+        setMutationError(humanizeStudentWriteError(outcome.error.message, 'No se pudo completar la acción.'))
       }
     },
     [addRow, date, deviceId, load, markRowOffline, model, refreshPending, removeRow, setHidden, userId],
@@ -644,6 +707,38 @@ function TodayTab() {
     )
   }
 
+  // 4A-02: sin plan vigente publicado, la vista Hoy COMPLETA se reemplaza por el panel
+  // sin-plan con los copys exactos de la web (page.tsx:153-162). Con `livePlan` aún
+  // desconocido (offline sin cache del plan) se muestra la vista normal — adaptación
+  // offline-first documentada: la web nunca renderiza sin resolver el plan.
+  if (livePlan && !livePlan.plan) {
+    return (
+      <ScrollView
+        className="flex-1 bg-surface-app"
+        contentContainerClassName="px-4 pt-5"
+        contentContainerStyle={{ paddingBottom: insets.bottom + ALUMNO_TABBAR_CLEARANCE }}
+        onScroll={onScrollChrome}
+        scrollEventThrottle={16}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => {
+              setRefreshing(true)
+              void load(true)
+            }}
+          />
+        }
+      >
+        {/* TODO(4A-07): conectar la ilustración `sin-plan` cuando el kit de estados aterrice. */}
+        <NutritionStatePanel
+          icon="empty"
+          title="Tu plan todavía no está publicado"
+          description="Cuando tu coach publique la primera versión, aparecerán aquí tus objetivos, comidas y registros."
+        />
+      </ScrollView>
+    )
+  }
+
   const extra = { calories: 0, proteinG: 0, carbsG: 0, fatsG: 0 }
   for (const rows of Object.values(overlay.addedBySlot)) {
     for (const row of rows) {
@@ -678,9 +773,32 @@ function TodayTab() {
     fatsG: Math.max(model.consumed.fatsG + extra.fatsG, 0),
   }
 
-  const unassignedRows: NutritionFoodRowModel[] = [
-    ...model.unassignedIntake.filter((e) => !hiddenSet.has(e.id)).map(intakeToRow),
-    ...overlay.addedUnassigned,
+  // 4A-02: banner de lag del plan (web page.tsx:164-177): el registro del día todavía
+  // apunta al plan anterior (o no existe) mientras ya hay un plan nuevo publicado.
+  const showTodayPlanLag = livePlan?.plan != null && (model.plan === null || model.plan.id !== livePlan.plan.id)
+  const lagMessage =
+    model.plan === null
+      ? 'Tu nuevo plan ya está publicado. Las metas y comidas de hoy se activan mañana; hoy puedes registrar lo que comas.'
+      : 'Tu nuevo plan ya está publicado. Hoy todavía ves las metas del plan anterior; desde mañana se aplican las del nuevo.'
+
+  // 4A-02: copia RN de slotsWithPrescribedContent (web portion-marks.logic.ts:357-363):
+  // solo franjas con items fijos O con targets de porciones aparecen en "Tu plan de hoy".
+  const slotsWithPrescription = model.mealSlots.filter(
+    (slot) => slot.prescriptionItems.length > 0 || (slot.exchangeTargets?.length ?? 0) > 0,
+  )
+
+  // 4A-02: "Consumido hoy" agregado (web TodayExperience.tsx:274-323): TODOS los registros
+  // activos del día (franjas + sin franja) ordenados por hora (consumedEntries,
+  // nutrition-today.logic.ts:55-59) + las filas optimistas de la cola offline nativa al final.
+  const consumedRows: Array<{ row: NutritionFoodRowModel; entry: NutritionIntakeReadItem | null }> = [
+    ...[...model.mealSlots.flatMap((slot) => slot.intakeItems), ...model.unassignedIntake]
+      .filter((entry) => !hiddenSet.has(entry.id))
+      .sort((a, b) => a.occurredAt.localeCompare(b.occurredAt))
+      .map((entry) => ({ row: intakeToRow(entry), entry })),
+    ...Object.values(overlay.addedBySlot)
+      .flat()
+      .map((row) => ({ row, entry: null })),
+    ...overlay.addedUnassigned.map((row) => ({ row, entry: null })),
   ]
 
   // Sheet de equivalencias: datos derivados de la franja abierta (solo cuando está
@@ -727,22 +845,41 @@ function TodayTab() {
           />
         }
       >
-        <View className="flex-row items-center justify-between gap-3">
-          <Text className="min-w-0 flex-1 text-sm text-text-muted">Tu consumo real frente al snapshot del día.</Text>
+        {showTodayPlanLag ? (
+          // Banner de lag del plan (web page.tsx:172-177): Info muted sobre superficie hundida.
+          <View className="flex-row items-start gap-2 rounded-control border border-border-subtle bg-surface-sunken px-4 py-3">
+            <Info color={theme.textSecondary} size={16} style={{ marginTop: 2 }} />
+            <Text className="min-w-0 flex-1 text-sm leading-5 text-text-body">{lagMessage}</Text>
+          </View>
+        ) : null}
+
+        {offline || pending > 0 ? (
+          // Adaptación nativa documentada (cola offline; sin contraparte web): el chip de
+          // sincronización SOLO aparece offline o con mutaciones pendientes, nunca en synced.
           <SyncOfflineState
-            state={offline ? 'offline' : pending > 0 ? 'pending' : 'synced'}
+            state={offline ? 'offline' : 'pending'}
             label={pending > 0 ? `${pending} pendiente${pending === 1 ? '' : 's'}` : undefined}
           />
-        </View>
+        ) : null}
 
-        {model.plan ? (
-          <View className="flex-row flex-wrap gap-2">
-            <StrategyBadge strategy={model.plan.strategy} />
-            <PlanVersionBadge
-              version={model.plan.versionNumber}
-              status={model.plan.status}
-              effectiveLabel={`desde ${formatNutritionShortDate(model.plan.effectiveFrom)}`}
-            />
+        {model.plan || model.snapshotId ? (
+          // Fila de badges + chip "Día registrado" (web TodayExperience.tsx:185-200).
+          <View className="flex-row flex-wrap items-center gap-2">
+            {model.plan ? <StrategyBadge strategy={model.plan.strategy} /> : null}
+            {model.plan ? (
+              <PlanVersionBadge
+                version={model.plan.versionNumber}
+                status={model.plan.status}
+                effectiveLabel={`desde ${formatNutritionShortDate(model.plan.effectiveFrom)}`}
+              />
+            ) : null}
+            {model.snapshotId ? (
+              // Chip esmeralda del canvas web → tono success del kit RN (contrato white-label).
+              <View className="flex-row items-center gap-1.5 rounded-pill border border-success-500/30 bg-success-500/10 px-2.5 py-1">
+                <CheckCircle2 color={theme.success} size={14} />
+                <Text className="text-xs font-semibold text-success-700">Día registrado</Text>
+              </View>
+            ) : null}
           </View>
         ) : null}
 
@@ -764,56 +901,102 @@ function TodayTab() {
           />
         ) : null}
 
-        {model.mealSlots.length > 0 ? (
-          model.mealSlots.map((slot) => (
-            <TodaySlotCard
-              key={slot.id}
-              slot={slot}
-              addedRows={overlay.addedBySlot[slot.code] ?? EMPTY_ROWS}
-              hiddenSet={hiddenSet}
-              onAte={onAtePrescribed}
-              onRegisterSlot={onRegister}
-              onEntryAction={setActionEntry}
-              portionPending={portions.pendingBySlot[slot.code] ?? EMPTY_PORTION_MARKS}
-              portionVoids={portions.voidsBySlot[slot.code] ?? EMPTY_PORTION_VOIDS}
-              onMarkPortion={portions.mark}
-              onOpenEquivalences={onOpenEquivalences}
+        {mutationError ? (
+          // Banner de error de mutación (web TodayExperience.tsx:216-225): entre coverage y CTAs.
+          <View
+            accessibilityLiveRegion="assertive"
+            accessibilityRole="alert"
+            className="flex-row items-start gap-2 rounded-card border border-danger-500/30 bg-danger-500/10 p-3"
+          >
+            <AlertTriangle color={theme.destructive} size={16} style={{ marginTop: 2 }} />
+            <Text className="min-w-0 flex-1 text-sm leading-5 text-danger-700">{mutationError}</Text>
+          </View>
+        ) : null}
+
+        {/* Fila de CTAs (web TodayExperience.tsx:228-248): Registrar + Escanear + Compartir. */}
+        <View className="flex-row flex-wrap gap-2">
+          <TodayCta Icon={Plus} label="Registrar alimento" tone="nutrition" onPress={() => onRegister()} />
+          <TodayCta
+            Icon={ScanBarcode}
+            label="Escanear"
+            tone="neutral"
+            onPress={() => router.push('/alumno/nutrition-v2/scanner')}
+          />
+          <TodayCta Icon={Share2} label="Compartir" tone="neutral" onPress={() => void onShareDay()} />
+        </View>
+
+        {slotsWithPrescription.length > 0 ? (
+          // "Tu plan de hoy" (web TodayExperience.tsx:561-640): sin sección si no hay franjas
+          // con prescripción (PrescribedSection retorna null, TodayExperience.tsx:582).
+          <View accessibilityLabel="Tu plan de hoy" className="gap-3">
+            <Text className="font-display text-lg font-semibold text-text-strong">Tu plan de hoy</Text>
+            {slotsWithPrescription.map((slot) => (
+              <TodaySlotCard
+                key={slot.id}
+                slot={slot}
+                consumedPrescriptionIds={consumedPrescriptionIds}
+                eatingId={eatingId}
+                onAte={onAtePrescribed}
+                portionPending={portions.pendingBySlot[slot.code] ?? EMPTY_PORTION_MARKS}
+                portionVoids={portions.voidsBySlot[slot.code] ?? EMPTY_PORTION_VOIDS}
+                onMarkPortion={portions.mark}
+                onOpenEquivalences={onOpenEquivalences}
+              />
+            ))}
+          </View>
+        ) : null}
+
+        {/* "Consumido hoy" agregado (web TodayExperience.tsx:274-323). */}
+        <View accessibilityLabel="Consumido hoy" className="gap-3">
+          <View className="flex-row items-center gap-2">
+            <Utensils color={theme.primary} size={16} />
+            <Text className="font-display text-lg font-semibold text-text-strong">Consumido hoy</Text>
+          </View>
+          {consumedRows.length === 0 ? (
+            <NutritionStatePanel
+              icon="empty"
+              title="Todavía no registras alimentos"
+              description="Marca lo que comiste del plan o agrega un alimento libre para llenar tu presupuesto del día."
             />
-          ))
-        ) : (
-          <NutritionStatePanel
-            icon="empty"
-            title="Sin franjas para hoy"
-            description="Tu plan puede ser flexible o aún sin estructura diaria. Registra lo que comes cuando quieras."
-          />
-        )}
-
-        {unassignedRows.length > 0 ? (
-          <UnassignedCard
-            entries={model.unassignedIntake.filter((e) => !hiddenSet.has(e.id))}
-            addedRows={overlay.addedUnassigned}
-            onEntryAction={setActionEntry}
-          />
-        ) : null}
-
-        <NutritionMotionButton accessibilityLabel="Registrar un alimento libre" onPress={() => onRegister()}>
-          + Registrar alimento
-        </NutritionMotionButton>
-
-        <NutritionMotionButton accessibilityLabel="Compartir mi día" tone="neutral" onPress={() => void onShareDay()}>
-          Compartir mi día
-        </NutritionMotionButton>
-
-        {!model.plan ? (
-          <NutritionStatePanel
-            title="Aún no hay comidas prescritas para hoy"
-            description="Puedes registrar lo que comas libremente. Si tu coach acaba de publicar un plan nuevo, las comidas prescritas aparecen a partir de mañana."
-          />
-        ) : null}
-
-        <Text className="text-center text-xs text-text-muted">
-          Registro del día · {formatNutritionShortDate(model.localDate, { relative: true })}
-        </Text>
+          ) : (
+            <NutritionCard>
+              {consumedRows.map(({ row, entry }, index) => (
+                <View key={row.id} className={index > 0 ? 'border-t border-border-subtle' : undefined}>
+                  <FoodRow
+                    food={row}
+                    fallbackEmoji={foodCategoryEmojiFromName(row.name)}
+                    actions={
+                      entry ? (
+                        // Icon-buttons lápiz/papelera (web TodayExperience.tsx:300-316,531-559);
+                        // ambos abren el sheet nativo de edición/retiro (diálogos: 4A-06).
+                        <View className="flex-row items-center gap-1">
+                          <Pressable
+                            accessibilityRole="button"
+                            accessibilityLabel="Editar cantidad"
+                            hitSlop={8}
+                            onPress={() => setActionEntry(entry)}
+                            className="h-10 w-10 items-center justify-center rounded-control"
+                          >
+                            <Pencil color={theme.textSecondary} size={16} />
+                          </Pressable>
+                          <Pressable
+                            accessibilityRole="button"
+                            accessibilityLabel="Retirar registro"
+                            hitSlop={8}
+                            onPress={() => setActionEntry(entry)}
+                            className="h-10 w-10 items-center justify-center rounded-control"
+                          >
+                            <Trash2 color={theme.destructive} size={16} />
+                          </Pressable>
+                        </View>
+                      ) : undefined
+                    }
+                  />
+                </View>
+              ))}
+            </NutritionCard>
+          )}
+        </View>
       </ScrollView>
 
       <EntryActionSheet
@@ -851,26 +1034,75 @@ function intakeToRow(entry: NutritionIntakeReadItem): NutritionFoodRowModel {
   }
 }
 
-// Memoizada (hallazgo M3): marcar una porción solo cambia `portionPending`/`portionVoids`
-// de SU franja (buckets con referencia estable), así las demás cards no re-renderizan.
+// 4A-02: CTA de la fila principal del Hoy (web TodayExperience.tsx:228-248): primario
+// "Registrar alimento" en tono nutrition del kit + secundarios neutros "Escanear"/"Compartir"
+// (web: border-border-default bg-surface-card text-strong). El NutritionMotionButton del kit
+// RN renderiza children dentro de <Text> y no admite ícono, así que la fila se arma local
+// con la misma motion de presión (NUTRITION_MOTION.press) y háptica del kit.
+function TodayCta({
+  Icon,
+  label,
+  tone,
+  onPress,
+}: {
+  Icon: typeof Plus
+  label: string
+  tone: 'nutrition' | 'neutral'
+  onPress: () => void
+}) {
+  const { theme } = useTheme()
+  const { reduced, duration } = useEvaMotion()
+  const [pressed, setPressed] = useState(false)
+  return (
+    <Pressable
+      accessibilityLabel={label}
+      accessibilityRole="button"
+      onPress={() => {
+        void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+        onPress()
+      }}
+      onPressIn={() => setPressed(true)}
+      onPressOut={() => setPressed(false)}
+    >
+      <MotiView
+        animate={{ scale: reduced ? 1 : pressed ? NUTRITION_MOTION.press.scale : 1 }}
+        transition={{ type: 'timing', duration: duration('fast') }}
+      >
+        <View
+          className={`min-h-11 flex-row items-center justify-center gap-2 rounded-control border px-4 ${
+            tone === 'nutrition' ? 'border-primary/30 bg-primary/10' : 'border-border-default bg-surface-card'
+          }`}
+        >
+          <Icon color={tone === 'nutrition' ? theme.primary : theme.foreground} size={16} />
+          <Text className={`text-sm font-semibold ${tone === 'nutrition' ? 'text-primary' : 'text-text-strong'}`}>
+            {label}
+          </Text>
+        </View>
+      </MotiView>
+    </Pressable>
+  )
+}
+
+// 4A-02: card de franja de "Tu plan de hoy" 1:1 con la web (TodayExperience.tsx:561-640):
+// header nombre (text-base font-display) + hora en mono, filas prescritas con nota y
+// "Lo comí" (tone success, pending por ítem) o check "Registrado", y la capa de porciones.
+// SIN badge de estado, SIN subtotal, SIN sub-encabezados ni consumido por franja, SIN CTA
+// por franja (eran del MealSlotCard del kit, que el Hoy web no usa). Memoizada (hallazgo
+// M3): marcar una porción solo cambia `portionPending`/`portionVoids` de SU franja.
 const TodaySlotCard = memo(function TodaySlotCard({
   slot,
-  addedRows,
-  hiddenSet,
+  consumedPrescriptionIds,
+  eatingId,
   onAte,
-  onRegisterSlot,
-  onEntryAction,
   portionPending,
   portionVoids,
   onMarkPortion,
   onOpenEquivalences,
 }: {
   slot: NutritionMealSlotRead
-  addedRows: NutritionFoodRowModel[]
-  hiddenSet: Set<string>
+  consumedPrescriptionIds: Set<string>
+  eatingId: string | null
   onAte: (slot: NutritionMealSlotRead, item: NutritionMealSlotRead['prescriptionItems'][number]) => void
-  onRegisterSlot: (slot: NutritionMealSlotRead) => void
-  onEntryAction: (entry: NutritionIntakeReadItem) => void
   portionPending: PendingPortionMark[]
   portionVoids: PendingPortionVoid[]
   onMarkPortion: (
@@ -881,60 +1113,60 @@ const TodaySlotCard = memo(function TodaySlotCard({
   ) => void
   onOpenEquivalences: (slotCode: string, groupCode: string) => void
 }) {
-  const activeEntries = slot.intakeItems.filter((e) => !hiddenSet.has(e.id))
-  const entriesById = new Map(activeEntries.map((e) => [e.id, e]))
-  const consumedRows: NutritionFoodRowModel[] = [...activeEntries.map(intakeToRow), ...addedRows]
-  const subtotal = consumedRows.reduce((sum, row) => sum + (row.calories ?? 0), 0)
-  const badge = consumedRows.length > 0
-    ? { label: 'Consumido', tone: 'text-success-700' }
-    : slot.prescriptionItems.length > 0
-      ? { label: 'Esperado', tone: 'text-primary' }
-      : { label: 'Sin registros', tone: 'text-text-muted' }
-
+  const { theme } = useTheme()
   return (
     <NutritionCard>
-      <View className="flex-row flex-wrap items-start justify-between gap-2">
-        <View className="min-w-0 flex-1">
-          <View className="flex-row flex-wrap items-center gap-2">
-            <Text className="font-display text-lg font-semibold text-text-strong">{slot.name}</Text>
-            <Text className={`text-[10px] font-semibold uppercase tracking-wide ${badge.tone}`}>{badge.label}</Text>
-          </View>
-          {slot.startTime ? <Text className="mt-1 text-xs text-text-muted">{slot.startTime}</Text> : null}
-        </View>
-        {consumedRows.length > 0 ? (
-          <Text className="font-mono text-sm font-semibold text-text-strong">{formatNutritionCalories(subtotal)}</Text>
-        ) : null}
+      <View className="flex-row flex-wrap items-center justify-between gap-2">
+        <Text className="font-display text-base font-semibold text-text-strong">{slot.name}</Text>
+        {slot.startTime ? <Text className="font-mono text-xs text-text-muted">{slot.startTime}</Text> : null}
       </View>
 
       {slot.prescriptionItems.length > 0 ? (
         <View className="mt-3">
-          <Text className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-text-subtle">Prescrito</Text>
-          {slot.prescriptionItems.map((item, index) => (
-            <View key={item.id} className={index > 0 ? 'border-t border-border-subtle' : undefined}>
-              <FoodRow
-                food={{
-                  id: item.id,
-                  name: item.name ?? 'Alimento prescrito',
-                  detail: item.brand,
-                  quantityLabel: `${item.quantity} ${item.unit}`,
-                  calories: item.macros.calories,
-                  proteinG: item.macros.proteinG,
-                  carbsG: item.macros.carbsG,
-                  fatsG: item.macros.fatsG,
-                }}
-                fallbackEmoji={foodCategoryEmojiFromName(item.name)}
-                actions={
-                  <NutritionMotionButton
-                    accessibilityLabel={`Comí ${item.name ?? 'lo prescrito'}`}
-                    tone="nutrition"
-                    onPress={() => onAte(slot, item)}
-                  >
-                    Comí
-                  </NutritionMotionButton>
-                }
-              />
-            </View>
-          ))}
+          {slot.prescriptionItems.map((item, index) => {
+            const consumed = consumedPrescriptionIds.has(item.id)
+            return (
+              <View key={item.id} className={index > 0 ? 'border-t border-border-subtle' : undefined}>
+                <FoodRow
+                  food={{
+                    id: item.id,
+                    name: item.name ?? 'Alimento prescrito',
+                    detail: item.brand,
+                    quantityLabel: `${item.quantity} ${item.unit}${item.optional ? ' · opcional' : ''}`,
+                    calories: item.macros.calories,
+                    proteinG: item.macros.proteinG,
+                    carbsG: item.macros.carbsG,
+                    fatsG: item.macros.fatsG,
+                  }}
+                  fallbackEmoji={foodCategoryEmojiFromName(item.name)}
+                  actions={
+                    consumed ? (
+                      // Estado "Registrado" (web TodayExperience.tsx:608-611): check esmeralda
+                      // del canvas web → tono success del kit RN (contrato white-label).
+                      <View className="flex-row items-center gap-1">
+                        <CheckCircle2 color={theme.success} size={16} />
+                        <Text className="text-xs font-semibold text-success-700">Registrado</Text>
+                      </View>
+                    ) : (
+                      <NutritionMotionButton
+                        accessibilityLabel={`Lo comí: ${item.name ?? 'alimento prescrito'}`}
+                        tone="success"
+                        pending={eatingId === item.id}
+                        onPress={() => onAte(slot, item)}
+                      >
+                        Lo comí
+                      </NutritionMotionButton>
+                    )
+                  }
+                />
+                {item.notes ? (
+                  // Nota del ítem (web NutritionFoodRow.tsx:127) — el FoodRow del kit RN aún
+                  // no recibe `note`; se pinta bajo la fila hasta que el kit lo incorpore.
+                  <Text className="-mt-1 pb-3 text-[11px] leading-4 text-text-subtle">{item.notes}</Text>
+                ) : null}
+              </View>
+            )
+          })}
         </View>
       ) : null}
 
@@ -948,91 +1180,9 @@ const TodaySlotCard = memo(function TodaySlotCard({
           onOpenEquivalences={onOpenEquivalences}
         />
       ) : null}
-
-      {consumedRows.length > 0 ? (
-        <View className="mt-3">
-          <Text className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-text-subtle">Consumido</Text>
-          {consumedRows.map((row, index) => {
-            const entry = entriesById.get(row.id)
-            return (
-              <View key={row.id} className={index > 0 ? 'border-t border-border-subtle' : undefined}>
-                <FoodRow
-                  food={row}
-                  fallbackEmoji={foodCategoryEmojiFromName(row.name)}
-                  actions={
-                    entry ? (
-                      <Pressable
-                        accessibilityRole="button"
-                        accessibilityLabel={`Opciones de ${row.name}`}
-                        hitSlop={8}
-                        onPress={() => onEntryAction(entry)}
-                        className="min-h-11 items-center justify-center rounded-control border border-border-subtle px-3"
-                      >
-                        <Text className="text-xs font-semibold text-text-body">Editar</Text>
-                      </Pressable>
-                    ) : undefined
-                  }
-                />
-              </View>
-            )
-          })}
-        </View>
-      ) : null}
-
-      <View className="mt-3">
-        <NutritionMotionButton
-          accessibilityLabel={`Registrar en ${slot.name}`}
-          tone="neutral"
-          onPress={() => onRegisterSlot(slot)}
-        >
-          + Registrar en {slot.name}
-        </NutritionMotionButton>
-      </View>
     </NutritionCard>
   )
 })
-
-function UnassignedCard({
-  entries,
-  addedRows,
-  onEntryAction,
-}: {
-  entries: NutritionIntakeReadItem[]
-  addedRows: NutritionFoodRowModel[]
-  onEntryAction: (entry: NutritionIntakeReadItem) => void
-}) {
-  const entriesById = new Map(entries.map((e) => [e.id, e]))
-  const rows: NutritionFoodRowModel[] = [...entries.map(intakeToRow), ...addedRows]
-  return (
-    <NutritionCard>
-      <Text className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-text-subtle">Sin franja</Text>
-      {rows.map((row, index) => {
-        const entry = entriesById.get(row.id)
-        return (
-          <View key={row.id} className={index > 0 ? 'border-t border-border-subtle' : undefined}>
-            <FoodRow
-              food={row}
-              fallbackEmoji={foodCategoryEmojiFromName(row.name)}
-              actions={
-                entry ? (
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel={`Opciones de ${row.name}`}
-                    hitSlop={8}
-                    onPress={() => onEntryAction(entry)}
-                    className="min-h-11 items-center justify-center rounded-control border border-border-subtle px-3"
-                  >
-                    <Text className="text-xs font-semibold text-text-body">Editar</Text>
-                  </Pressable>
-                ) : undefined
-              }
-            />
-          </View>
-        )
-      })}
-    </NutritionCard>
-  )
-}
 
 function EntryActionSheet({
   entry,

@@ -5,6 +5,7 @@ import { Image } from 'expo-image'
 import { MotiView } from 'moti'
 import {
   AlertTriangle,
+  ArrowLeft,
   Check,
   ChevronRight,
   Clock3,
@@ -22,6 +23,7 @@ import {
   NUTRITION_MACROS,
   NUTRITION_MOTION,
   NUTRITION_STRATEGIES,
+  foodCategoryFromName,
   formatNutritionAmount,
   formatNutritionCalories,
   nutritionProgressPercent,
@@ -39,7 +41,9 @@ import {
 } from '@eva/nutrition-v2'
 import { useTheme } from '../../context/ThemeContext'
 import { useEvaMotion } from '../../lib/motion'
+import { shadow } from '../../lib/shadows'
 import { MacroChipRow } from './MacroChipRow'
+import { StateIllustration, type NutritionIllustration } from './state-illustration'
 
 function cx(...values: Array<string | false | null | undefined>): string {
   return values.filter(Boolean).join(' ')
@@ -63,6 +67,58 @@ const toneTextClasses: Record<NutritionTone, string> = {
   warning: 'text-warning-700',
   danger: 'text-danger-700',
   info: 'text-info-600',
+}
+
+// Botones RELLENOS — espejo del web `NutritionV2Motion.tsx:24-32`, donde el CTA es
+// color-sobre-fill (nutrition = `bg-primary/100 text-white`), NO el chip fantasma de
+// las cards. Los fills de estado usan la convención "solid" del DS RN (Badge.tsx:56-63:
+// solid = *-500 fijo en ambos esquemas) como mapa sancionado de los raw
+// emerald-600/amber-500/rose-600/sky-600 del web (contrato white-label: cero valores
+// crudos nuevos; el paso -600 RN flipea a tinte claro en dark y rompería el fill).
+// Texto de contraste: nutrition/danger/info = `text-white` (web: text-white),
+// warning/success = glifo ink de los tokens `on-warning`/`on-success` (web usa
+// slate-950/white raw; el DS RN define el glifo AA sobre sus fills saturados).
+const buttonToneClasses: Record<NutritionTone, string> = {
+  neutral: 'border-border-default bg-surface-card',
+  brand: 'border-sport-500 bg-sport-500',
+  nutrition: 'border-primary bg-primary',
+  success: 'border-success-500 bg-success-500',
+  warning: 'border-warning-500 bg-warning-500',
+  danger: 'border-danger-500 bg-danger-500',
+  info: 'border-info-500 bg-info-500',
+}
+
+const buttonToneTextClasses: Record<NutritionTone, string> = {
+  neutral: 'text-text-strong',
+  brand: 'text-on-sport',
+  nutrition: 'text-white',
+  success: 'text-on-success',
+  warning: 'text-on-warning',
+  danger: 'text-white',
+  info: 'text-white',
+}
+
+// Iconos estáticos por categoría de alimento — los MISMOS webp del build web
+// (`apps/web/public/food-icons/`, Fluent Emoji (c) Microsoft, MIT) empaquetados en
+// `assets/food-icons/`. Require estático por asset (Metro exige literales).
+const FOOD_CATEGORY_ICONS: Record<string, ReturnType<typeof require>> = {
+  proteina: require('../../assets/food-icons/proteina.webp'),
+  carbohidrato: require('../../assets/food-icons/carbohidrato.webp'),
+  grasa: require('../../assets/food-icons/grasa.webp'),
+  lacteo: require('../../assets/food-icons/lacteo.webp'),
+  fruta: require('../../assets/food-icons/fruta.webp'),
+  verdura: require('../../assets/food-icons/verdura.webp'),
+  legumbre: require('../../assets/food-icons/legumbre.webp'),
+  bebida: require('../../assets/food-icons/bebida.webp'),
+  snack: require('../../assets/food-icons/snack.webp'),
+  otro: require('../../assets/food-icons/otro.webp'),
+}
+
+/** Icono de categoría; cae a `otro` si es desconocida/null (web `foodCategoryIconUrl`). */
+function foodCategoryIconSource(category: string | null | undefined): ReturnType<typeof require> {
+  return category && category in FOOD_CATEGORY_ICONS
+    ? FOOD_CATEGORY_ICONS[category]
+    : FOOD_CATEGORY_ICONS.otro
 }
 
 const macroBarClasses: Record<NutritionMacroKey, string> = {
@@ -108,12 +164,60 @@ export function NutritionHeader({
   title,
   description,
   actions,
+  onBack,
 }: {
   eyebrow?: string
   title: string
   description?: string
   actions?: ReactNode
+  /**
+   * Variante compacta con flecha de volver (web NutritionV2Kit.tsx:122-150).
+   * Adaptación nativa por escrito: el web navega con `backHref` (Link); en RN la
+   * navegación es imperativa (router del stack), así que la flecha recibe un callback.
+   */
+  onBack?: () => void
 }) {
+  const { theme } = useTheme()
+  if (onBack) {
+    // Compacta (móvil): una sola fila [flecha][eyebrow+título] [CTA]. El eyebrow va
+    // como overline sobre el título para dejar el borde derecho libre a UNA acción
+    // primaria (espejo del comentario web:123-126).
+    return (
+      <View className="flex-row items-center gap-1.5">
+        <Pressable
+          accessibilityLabel="Volver"
+          accessibilityRole="button"
+          className="-ml-2 h-10 w-10 shrink-0 items-center justify-center rounded-full active:bg-surface-card"
+          onPress={onBack}
+        >
+          <ArrowLeft color={theme.foreground} size={20} />
+        </Pressable>
+        <View className="min-w-0 flex-1">
+          {eyebrow ? (
+            <Text
+              className="font-mono text-[10px] font-semibold uppercase leading-4 tracking-[1.6px] text-primary"
+              numberOfLines={1}
+            >
+              {eyebrow}
+            </Text>
+          ) : null}
+          <Text
+            accessibilityRole="header"
+            className="font-display-black text-[22px] leading-7 tracking-[-0.44px] text-text-strong"
+            numberOfLines={1}
+          >
+            {title}
+          </Text>
+          {description ? (
+            <Text className="mt-0.5 text-[12.5px] leading-4 text-text-muted" numberOfLines={1}>
+              {description}
+            </Text>
+          ) : null}
+        </View>
+        {actions ? <View className="shrink-0 flex-row items-center gap-2">{actions}</View> : null}
+      </View>
+    )
+  }
   return (
     <View className="gap-3">
       <View className="flex-row items-start justify-between gap-3">
@@ -135,6 +239,7 @@ export function NutritionHeader({
 }
 
 export function NutritionToolbar({ children }: { children: ReactNode }) {
+  const { theme } = useTheme()
   return (
     <ScrollView
       horizontal
@@ -142,6 +247,9 @@ export function NutritionToolbar({ children }: { children: ReactNode }) {
       showsHorizontalScrollIndicator={false}
       contentContainerClassName="items-center gap-2 p-2"
       className="min-h-14 rounded-card border border-border-subtle bg-surface-card"
+      // Decisión única del kit: `shadow-sm` web (NutritionV2Kit.tsx:173) = token DS
+      // RN `shadow('sm', scheme)` de lib/shadows.ts (misma escala en Card/Slot/botón).
+      style={shadow('sm', theme.scheme)}
     >
       {children}
     </ScrollView>
@@ -312,6 +420,7 @@ export function MealTimeline({
 }
 
 export function MealSlotCard({ slot, actions }: { slot: NutritionMealSlotModel; actions?: ReactNode }) {
+  const { theme } = useTheme()
   const state = {
     empty: { label: 'Sin registros', tone: 'neutral' as const },
     prescribed: { label: 'Esperado', tone: 'nutrition' as const },
@@ -323,7 +432,8 @@ export function MealSlotCard({ slot, actions }: { slot: NutritionMealSlotModel; 
   }[slot.state]
 
   return (
-    <View className="rounded-card border border-border-subtle bg-surface-card p-4">
+    // Web MealSlotCard (NutritionV2Kit.tsx:266): `shadow-sm` → token DS RN shadow('sm').
+    <View className="rounded-card border border-border-subtle bg-surface-card p-4" style={shadow('sm', theme.scheme)}>
       <View className="flex-row flex-wrap items-start justify-between gap-3">
         <View className="min-w-0 flex-1">
           <View className="flex-row flex-wrap items-center gap-2">
@@ -366,16 +476,48 @@ export function FoodThumbnail({
   alt,
   size = 'md',
   fallbackEmoji,
+  fallbackCategory,
 }: {
   src?: string | null
   alt: string
   size?: 'sm' | 'md' | 'lg'
-  /** Emoji local (placeholder por categoria) que reemplaza al icono lucide cuando no hay foto. */
+  /**
+   * @deprecated Legado (adaptación pre-4A-07). El fallback 1:1 con web es el icono
+   * estático de categoría (`fallbackCategory`); el emoji solo se usa si no llega categoría.
+   */
   fallbackEmoji?: string | null
+  /**
+   * Categoría del catálogo para el icono estático de fallback (web
+   * `NutritionFoodRow.tsx:70-81` + `foodCategoryIconUrl`): tinte `bg-primary/10`
+   * sobre sunken + webp de categoría empaquetado. `null` cae al icono `otro`;
+   * `undefined` = sin categoría conocida (rutas legadas emoji/lucide).
+   */
+  fallbackCategory?: string | null
 }) {
   const { theme } = useTheme()
   const dimension = { sm: 36, md: 48, lg: 64 }[size]
   if (!src) {
+    if (fallbackCategory !== undefined) {
+      // Web dibuja el icono a 24px dentro de un thumb de 44px (h-11/h-6): misma
+      // proporción aplicada a los tamaños RN (36/48/64 → 20/26/35).
+      const iconSize = Math.round((dimension * 24) / 44)
+      return (
+        <View
+          accessibilityLabel={`Sin imagen para ${alt}`}
+          accessibilityRole="image"
+          className="shrink-0 items-center justify-center overflow-hidden rounded-control border border-border-subtle bg-surface-sunken"
+          style={{ width: dimension, height: dimension }}
+        >
+          <View className="absolute inset-0 items-center justify-center bg-primary/10">
+            <Image
+              contentFit="contain"
+              source={foodCategoryIconSource(fallbackCategory)}
+              style={{ width: iconSize, height: iconSize }}
+            />
+          </View>
+        </View>
+      )
+    }
     return (
       <View
         accessibilityLabel={`Sin imagen para ${alt}`}
@@ -408,12 +550,25 @@ export function FoodRow({
   food,
   actions,
   fallbackEmoji,
+  fallbackCategory,
+  note,
   nameLines = 1,
 }: {
   food: NutritionFoodRowModel
   actions?: ReactNode
-  /** Emoji local (placeholder por categoria) reenviado al thumbnail cuando el alimento no trae foto. */
+  /**
+   * @deprecated Legado: la fila ya NUNCA cae a emoji — el fallback 1:1 con web es el
+   * icono estático de categoría (explícita vía `fallbackCategory` o derivada del nombre).
+   */
   fallbackEmoji?: string | null
+  /**
+   * Categoría del catálogo para el icono de fallback. Si no llega, se deriva del
+   * nombre con la heurística compartida web/RN (web `NutritionFoodRow.tsx:102`:
+   * `foodCategoryIconUrl(category) : foodCategoryIconUrlFromName(name)`).
+   */
+  fallbackCategory?: string | null
+  /** Nota corta bajo los macros (guía del plan; web `NutritionFoodRow.tsx:127`). */
+  note?: string | null
   nameLines?: 1 | 2
 }) {
   const statusLabel = {
@@ -423,10 +578,11 @@ export function FoodRow({
     offline: 'Sin sincronizar',
     error: 'Error',
   }[food.status ?? 'default']
+  const category = fallbackCategory !== undefined ? fallbackCategory : foodCategoryFromName(food.name)
 
   return (
     <View className="min-h-16 flex-row items-center gap-3 py-3">
-      <FoodThumbnail alt={food.name} src={food.thumbnailUrl} fallbackEmoji={fallbackEmoji} />
+      <FoodThumbnail alt={food.name} src={food.thumbnailUrl} fallbackCategory={category} />
       <View className="min-w-0 flex-1">
         <View className="flex-row flex-wrap items-center gap-2">
           <Text className="min-w-0 shrink font-semibold text-text-strong" numberOfLines={nameLines}>
@@ -447,6 +603,9 @@ export function FoodRow({
             size="sm"
           />
         </View>
+        {note ? (
+          <Text className="mt-1 text-[11px] leading-4 text-text-subtle">{note}</Text>
+        ) : null}
       </View>
       {actions ? <View className="shrink-0">{actions}</View> : null}
     </View>
@@ -490,12 +649,19 @@ export function NutritionStatePanel({
   description,
   icon = 'empty',
   tone = 'neutral',
+  illustration,
   action,
 }: {
   title: string
   description: string
   icon?: 'empty' | 'error' | 'permission' | 'offline' | 'info'
   tone?: NutritionTone
+  /**
+   * Ilustración del CEO para el estado vacío/error (web NutritionV2Kit.tsx:360-391):
+   * reemplaza el glifo lucide por el arte empaquetado (webp local, sin red).
+   * Aditivo: sin esta prop, el panel se comporta exactamente como antes.
+   */
+  illustration?: NutritionIllustration
   action?: ReactNode
 }) {
   const { theme } = useTheme()
@@ -518,9 +684,16 @@ export function NutritionStatePanel({
 
   return (
     <View className={cx('min-h-48 items-center justify-center rounded-card border p-6', toneClasses[tone])}>
-      <View className="mb-4 h-11 w-11 items-center justify-center rounded-full bg-surface-sunken">
-        <Icon color={color} size={21} />
-      </View>
+      {illustration ? (
+        // Web: círculo tintado `mb-5` (NutritionV2Kit.tsx:375-391); glifo lucide `mb-4`.
+        <View className="mb-5">
+          <StateIllustration name={illustration} />
+        </View>
+      ) : (
+        <View className="mb-4 h-11 w-11 items-center justify-center rounded-full bg-surface-sunken">
+          <Icon color={color} size={21} />
+        </View>
+      )}
       <Text className={cx('text-center font-display text-lg font-semibold', toneTextClasses[tone])}>{title}</Text>
       <Text className="mt-2 max-w-md text-center text-sm leading-5 text-text-muted">{description}</Text>
       {action ? <View className="mt-5">{action}</View> : null}
@@ -580,7 +753,14 @@ export function NutritionMotionButton({
   const { reduced, duration } = useEvaMotion()
   const [pressed, setPressed] = useState(false)
   const Icon = pending ? LoaderCircle : success ? Check : null
-  const iconColor = tone === 'warning' ? '#0B0E13' : tone === 'neutral' ? theme.foreground : '#FFFFFF'
+  // Glifo sobre el fill: warning/success = ink fijo (canales de --color-text-on-warning/
+  // -on-success, global.css:99-100); neutral = texto fuerte; resto = blanco (web text-white).
+  const iconColor =
+    tone === 'warning' || tone === 'success'
+      ? '#0B0E13'
+      : tone === 'neutral'
+        ? theme.foreground
+        : '#FFFFFF'
 
   return (
     <Pressable
@@ -604,12 +784,15 @@ export function NutritionMotionButton({
         <View
           className={cx(
             'min-h-11 flex-row items-center justify-center gap-2 rounded-control border px-4',
-            toneClasses[tone],
-            disabled && 'opacity-50',
+            buttonToneClasses[tone],
+            // Web `disabled:opacity-55` (NutritionV2Motion.tsx:57).
+            disabled && 'opacity-55',
           )}
+          // Web: `shadow-sm` en el botón (NutritionV2Motion.tsx:57) → token DS RN.
+          style={shadow('sm', theme.scheme)}
         >
           {Icon ? <Icon color={iconColor} size={16} /> : null}
-          <Text className={cx('text-sm font-semibold', tone === 'warning' ? 'text-ink-950' : toneTextClasses[tone])}>{children}</Text>
+          <Text className={cx('text-sm font-semibold', buttonToneTextClasses[tone])}>{children}</Text>
         </View>
       </MotiView>
     </Pressable>
@@ -781,8 +964,10 @@ export function BuilderStepList({ steps }: { steps: NutritionBuilderStepModel[] 
 }
 
 export function BuilderInspector({ title = 'Inspector', children, footer }: { title?: string; children: ReactNode; footer?: ReactNode }) {
+  const { theme } = useTheme()
   return (
-    <View className="rounded-card border border-border-subtle bg-surface-card">
+    // Web BuilderInspector (NutritionV2Kit.tsx:455): `shadow-sm` → token DS RN shadow('sm').
+    <View className="rounded-card border border-border-subtle bg-surface-card" style={shadow('sm', theme.scheme)}>
       <View className="border-b border-border-subtle px-4 py-3">
         <Text className="font-display text-base font-semibold text-text-strong">{title}</Text>
       </View>
