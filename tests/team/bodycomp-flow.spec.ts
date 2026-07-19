@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test'
+import { assertAllowedE2eEmail, assertAllowedE2eClientId } from '../e2e-accounts'
 
 /**
  * E2E del modulo COMPOSICION CORPORAL (body_composition) — superficie del coach dentro de la
@@ -9,17 +10,22 @@ import { test, expect, type Page } from '@playwright/test'
  *   - captura una medicion ISAK -> aparece en "Antropometria" con el % grasa etiquetado "Preliminar"
  *   - los metodos NO se mezclan (cada pestana su propia serie)
  *
- * Credenciales + target por env (NO commitear secretos). Sin ellas, el bloque se SALTA
- * (no rompe CI local). Corre SOLO en el gate autorizado, build prod, --workers=1.
- *   E2E_POOL_COACH_EMAIL / E2E_POOL_COACH_PASSWORD  -> coach miembro del pool
- *   E2E_BODYCOMP_CLIENT_ID                          -> id de un alumno del pool con consent de salud
+ * Credenciales + target por env (NO commitear secretos; default al fixture PROPIO
+ * scripts/e2e/seed-pool-fixture.mjs). Sin ellas, el bloque se SALTA (no rompe CI local).
+ * Corre SOLO en el gate autorizado, build prod, --workers=1.
+ *   E2E_POOL_COACH_EMAIL / E2E_POOL_COACH_PASSWORD  -> owner del pool (e2e-pool-owner)
+ *   E2E_BODYCOMP_CLIENT_ID                          -> alumno del pool con consent de salud (E2E Alumno Uno)
  *
  * Ejecutar: npx playwright test tests/team/bodycomp-flow.spec.ts --workers=1
  */
 
-const COACH_EMAIL = process.env.E2E_POOL_COACH_EMAIL ?? ''
-const COACH_PASSWORD = process.env.E2E_POOL_COACH_PASSWORD ?? ''
-const CLIENT_ID = process.env.E2E_BODYCOMP_CLIENT_ID ?? ''
+const COACH_EMAIL = process.env.E2E_POOL_COACH_EMAIL ?? 'e2e-pool-owner@evatest.cl'
+const COACH_PASSWORD = process.env.E2E_POOL_COACH_PASSWORD ?? process.env.E2E_PERSONAS_PASSWORD ?? ''
+const CLIENT_ID = process.env.E2E_BODYCOMP_CLIENT_ID ?? 'e2e0a004-0000-4000-8000-000000000004'
+
+// Guard fail-closed: el camino POOL jamas apunta al workspace del CEO (josefit).
+assertAllowedE2eEmail(COACH_EMAIL, 'bodycomp · E2E_POOL_COACH_EMAIL')
+assertAllowedE2eClientId(CLIENT_ID, 'bodycomp · E2E_BODYCOMP_CLIENT_ID')
 
 const hasCreds = !!(COACH_EMAIL && COACH_PASSWORD && CLIENT_ID)
 

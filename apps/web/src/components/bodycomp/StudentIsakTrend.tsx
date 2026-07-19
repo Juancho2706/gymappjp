@@ -1,21 +1,22 @@
 'use client'
 
 import { useMemo, useState } from 'react'
+import dynamic from 'next/dynamic'
 import { useReducedMotion } from 'framer-motion'
-import {
-    Area,
-    AreaChart,
-    CartesianGrid,
-    ResponsiveContainer,
-    Tooltip,
-    XAxis,
-    YAxis,
-} from 'recharts'
 import { Card } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
 import { useTranslation } from '@/lib/i18n/LanguageContext'
 import type { BodyCompositionRow } from '@/infrastructure/db/body-composition.repository'
 import { readIsakMetrics, type IsakMetricsView } from '@/lib/bodycomp/view-helpers'
+
+/** recharts diferido: sale del First Load de `/c/bodycomp`, se carga on-view dentro del `h-56`. */
+const BodyCompTrendChart = dynamic(
+    () => import('./BodyCompTrendChart').then((m) => ({ default: m.BodyCompTrendChart })),
+    {
+        ssr: false,
+        loading: () => <div className="h-full w-full animate-pulse rounded-card bg-surface-sunken/40" aria-hidden />,
+    }
+)
 
 type SeriesKey = 'bodyFat' | 'muscle' | 'adipose'
 
@@ -89,39 +90,13 @@ export function StudentIsakTrend({ rows }: { rows: BodyCompositionRow[] }) {
             </div>
 
             <div className="h-56 w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={chartData} margin={{ top: 8, right: 8, bottom: 0, left: -16 }}>
-                        <defs>
-                            <linearGradient id="isakTrendFill" x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="0%" stopColor="var(--theme-primary)" stopOpacity={0.35} />
-                                <stop offset="100%" stopColor="var(--theme-primary)" stopOpacity={0.02} />
-                            </linearGradient>
-                        </defs>
-                        <CartesianGrid strokeDasharray="3 3" className="stroke-border/40" />
-                        <XAxis dataKey="date" tick={{ fontSize: 11 }} stroke="currentColor" opacity={0.5} />
-                        <YAxis tick={{ fontSize: 11 }} stroke="currentColor" opacity={0.5} width={42} />
-                        <Tooltip
-                            contentStyle={{
-                                borderRadius: 14,
-                                border: '1px solid var(--border-subtle)',
-                                background: 'var(--surface-card)',
-                                color: 'var(--text-body)',
-                                fontSize: 12,
-                            }}
-                            formatter={(value) => [series.fmt(Number(value)), t(series.labelKey)]}
-                        />
-                        <Area
-                            type="monotone"
-                            dataKey="value"
-                            stroke="var(--theme-primary)"
-                            strokeWidth={2.5}
-                            fill="url(#isakTrendFill)"
-                            dot={{ r: 3 }}
-                            activeDot={{ r: 5 }}
-                            isAnimationActive={!reduce}
-                        />
-                    </AreaChart>
-                </ResponsiveContainer>
+                <BodyCompTrendChart
+                    chartData={chartData}
+                    reduce={reduce}
+                    fmt={series.fmt}
+                    label={t(series.labelKey)}
+                    fillId="isakTrendFill"
+                />
             </div>
         </Card>
     )

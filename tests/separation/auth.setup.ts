@@ -113,7 +113,7 @@ setup('persona 7: team coach (pool member)', async ({ page }) => {
     await saveState(page, PERSONAS.teamCoach.storageState)
 })
 
-setup('pool coach multi-contexto (Jose Fit, E2E_POOL_COACH_*)', async ({ page }) => {
+setup('pool coach multi-contexto (fixture e2e-pool-owner, E2E_POOL_COACH_*)', async ({ page }) => {
     setup.skip(!hasPoolCoachCreds, 'E2E_POOL_COACH_* no seteados')
     setup.skip(hasFreshState(POOL_COACH.storageState), 'sesion fresca reusada (anti-saturacion auth)')
     await loginCoach(page, POOL_COACH.email, POOL_COACH.password)

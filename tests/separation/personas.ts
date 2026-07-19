@@ -5,7 +5,9 @@ import path from 'path'
  * coach_standalone / enterprise_coach / coach_team.
  *
  * Todas las cuentas @evatest.cl comparten UNA password: env E2E_PERSONAS_PASSWORD.
- * El pool coach multi-contexto (Jose Fit) usa sus propias env E2E_POOL_COACH_*.
+ * El pool coach multi-contexto es el fixture PROPIO e2e-pool-owner@evatest.cl (seed
+ * scripts/e2e/seed-pool-fixture.mjs) — reemplaza al workspace del CEO (Jose Fit/josefit).
+ * Overrideable por env E2E_POOL_COACH_*; el password cae al de personas.
  * Sin credenciales -> los setups/specs se saltan (no rompen CI sin secretos).
  */
 
@@ -86,13 +88,14 @@ export const PERSONAS = {
 } as const satisfies Record<string, Persona>
 
 /**
- * Coach multi-contexto pre-existente (Jose Fit: standalone + team movida-test).
- * Cambia de contexto via /workspace/select (click en el texto del workspace),
- * NUNCA via storageState distinto — la sesión es la misma.
+ * Coach multi-contexto del fixture PROPIO (e2e-pool-owner: standalone activo + owner del team
+ * e2e-pool-movida => 2 workspaces). Cambia de contexto via /workspace/select (click en el texto
+ * del workspace), NUNCA via storageState distinto — la sesión es la misma.
+ * Defaults al fixture; overrideable por env. Password cae al de personas (cuentas @evatest.cl).
  */
 export const POOL_COACH: Persona = {
-    email: process.env.E2E_POOL_COACH_EMAIL ?? '',
-    password: process.env.E2E_POOL_COACH_PASSWORD ?? '',
+    email: process.env.E2E_POOL_COACH_EMAIL ?? 'e2e-pool-owner@evatest.cl',
+    password: process.env.E2E_POOL_COACH_PASSWORD ?? PERSONAS_PASSWORD,
     storageState: authFile('pool-coach'),
 }
 

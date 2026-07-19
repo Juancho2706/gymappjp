@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test'
+import { assertAllowedE2eEmail } from '../e2e-accounts'
 
 /**
  * E2E del modulo movement_assessment (Screening de Movimiento de Ingreso).
@@ -14,20 +15,24 @@ import { test, expect, type Page } from '@playwright/test'
  * NO SE CORRE por tanda — SOLO en el gate final autorizado (regla 2026-06-10), contra
  * build prod + Supabase con el seed de prueba (team movida-test, modulo ON).
  *
- * Credenciales por env (cuentas e2e permanentes — NUNCA borrarlas):
- *   E2E_POOL_COACH_EMAIL / E2E_POOL_COACH_PASSWORD   -> coach miembro del pool
- *   E2E_POOL_ALUMNO_EMAIL / E2E_POOL_ALUMNO_PASSWORD -> alumno del pool con consent activo
+ * Credenciales por env (fixture PROPIO scripts/e2e/seed-pool-fixture.mjs; default al fixture):
+ *   E2E_POOL_COACH_EMAIL / E2E_POOL_COACH_PASSWORD   -> owner del pool (e2e-pool-owner)
+ *   E2E_POOL_ALUMNO_EMAIL / E2E_POOL_ALUMNO_PASSWORD -> alumno del pool con consent activo (E2E Alumno Uno)
  * Sin credenciales -> specs se saltan (no rompen CI local sin secretos).
  *
  * Ejecutar (gate): npx playwright test tests/e2e/movement-assessment.spec.ts --workers=1
  */
 
-const TEAM_SLUG = process.env.E2E_TEAM_SLUG ?? 'movida-test'
+const TEAM_SLUG = process.env.E2E_TEAM_SLUG ?? 'e2e-pool-movida'
 
-const COACH_EMAIL = process.env.E2E_POOL_COACH_EMAIL ?? ''
-const COACH_PASSWORD = process.env.E2E_POOL_COACH_PASSWORD ?? ''
-const ALUMNO_EMAIL = process.env.E2E_POOL_ALUMNO_EMAIL ?? ''
-const ALUMNO_PASSWORD = process.env.E2E_POOL_ALUMNO_PASSWORD ?? ''
+const COACH_EMAIL = process.env.E2E_POOL_COACH_EMAIL ?? 'e2e-pool-owner@evatest.cl'
+const COACH_PASSWORD = process.env.E2E_POOL_COACH_PASSWORD ?? process.env.E2E_PERSONAS_PASSWORD ?? ''
+const ALUMNO_EMAIL = process.env.E2E_POOL_ALUMNO_EMAIL ?? 'e2e-pool-uno@evatest.cl'
+const ALUMNO_PASSWORD = process.env.E2E_POOL_ALUMNO_PASSWORD ?? process.env.E2E_PERSONAS_PASSWORD ?? ''
+
+// Guard fail-closed: el camino POOL jamas apunta al workspace del CEO (josefit).
+assertAllowedE2eEmail(COACH_EMAIL, 'movement · E2E_POOL_COACH_EMAIL')
+assertAllowedE2eEmail(ALUMNO_EMAIL, 'movement · E2E_POOL_ALUMNO_EMAIL')
 
 const hasCoachCreds = !!(COACH_EMAIL && COACH_PASSWORD)
 const hasAlumnoCreds = !!(ALUMNO_EMAIL && ALUMNO_PASSWORD)

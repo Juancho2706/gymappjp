@@ -21,6 +21,10 @@ export const ALLOWED_E2E_SLUGS = new Set<string>([
   'e2e-performance-lab', // persona 3/4 — org enterprise (shell /e + panel /org)
   'e2e-pool-vortex', //     persona 6/7 — team pool (shell /t)
   'e2e-flux-conditioning', // persona 9 — coach standalone con módulos (shell /c)
+  // Fixture pool multi-contexto PROPIO (reemplaza a Jose Fit como POOL_COACH).
+  'e2e-pool-owner', //   coach standalone + owner del team (slug standalone del owner)
+  'e2e-pool-member', //  coach miembro del team (slug del member)
+  'e2e-pool-movida', //  team pool propio (slug /t/[team_slug])
 ])
 
 /** Dominio de correo de TODAS las cuentas de prueba propias. */
@@ -38,6 +42,11 @@ export const ALLOWED_E2E_EMAILS = new Set<string>([
   'e2e-pool-alumno@evatest.cl',
   'e2e-modules-coach@evatest.cl',
   'addon-test-coach@evatest.cl',
+  // Fixture pool multi-contexto PROPIO (POOL_COACH nuevo, reemplaza a Jose Fit / josefit).
+  'e2e-pool-owner@evatest.cl', //  coach multi-contexto (standalone + owner del team)
+  'e2e-pool-member@evatest.cl', // coach miembro del team
+  'e2e-pool-uno@evatest.cl', //    alumno de pool (default E2E_POOL_ALUMNO_* + E2E_BODYCOMP_CLIENT_ID)
+  'e2e-pool-dos@evatest.cl', //    alumno de pool
 ])
 
 /** clientIds (UUID) de los alumnos de prueba permanentes (STUDENT_IDS de personas.ts). */
@@ -45,6 +54,9 @@ export const ALLOWED_E2E_CLIENT_IDS = new Set<string>([
   '01c36cde-a95d-42a7-b165-ba08a8599d22', // E2E Solo Alumno (standalone)
   '103dc9a3-e79e-40f3-bd50-82480bb88d80', // E2E Org Alumno (enterprise)
   'f646ac2a-2884-40bf-a615-9e2d06a29e7c', // E2E Pool Alumno (team)
+  // Fixture pool PROPIO (ids v4 FIJOS del seed scripts/e2e/seed-pool-fixture.mjs).
+  'e2e0a004-0000-4000-8000-000000000004', // E2E Alumno Uno (default E2E_BODYCOMP_CLIENT_ID)
+  'e2e0a005-0000-4000-8000-000000000005', // E2E Alumno Dos
 ])
 
 /**
