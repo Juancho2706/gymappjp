@@ -628,7 +628,7 @@ async function validateAlumnoWorkspace(coachId: string | null): Promise<string |
 
   const { data: client } = await supabase
     .from('clients')
-    .select('id, coach_id, org_id, is_active')
+    .select('id, coach_id, org_id, is_active, is_archived')
     .eq('id', user.id)
     .maybeSingle()
 
@@ -655,7 +655,7 @@ async function validateAlumnoWorkspace(coachId: string | null): Promise<string |
     return 'No tienes acceso a esta plataforma.'
   }
 
-  if (client.is_active === false) {
+  if (client.is_active === false || client.is_archived === true) {
     await supabase.auth.signOut()
     return 'Tu cuenta ha sido pausada. Contacta a tu coach para más información.'
   }

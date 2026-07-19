@@ -10,6 +10,9 @@ import { AlumnoMobileChrome } from '../../../components/alumno/AlumnoMobileChrom
 export default function AlumnoTabsLayout() {
   const router = useRouter()
   const appState = useRef(AppState.currentState)
+  // Guarda anti-carrera: una sola navegación al gate de suspensión (el chequeo al
+  // montar y el de AppState pueden coincidir; el flag evita dos router.replace).
+  const redirecting = useRef(false)
 
   // Ola 0: gate de acceso a nivel navegación (cubre TODAS las tabs, no solo Home).
   // Alumno pausado/archivado → /alumno/suspended. Cambio de clave forzado → /change-password.
@@ -18,8 +21,10 @@ export default function AlumnoTabsLayout() {
     getClientProfile()
       .then((c) => {
         if (!mounted || !c) return
-        if (c.blocked) router.replace('/alumno/suspended')
-        else if (c.forcePasswordChange && !sessionFlags.pwChanged) router.replace('/change-password')
+        if (c.blocked) {
+          redirecting.current = true
+          router.replace('/alumno/suspended')
+        } else if (c.forcePasswordChange && !sessionFlags.pwChanged) router.replace('/change-password')
       })
       .catch(() => {})
     return () => { mounted = false }
@@ -34,6 +39,16 @@ export default function AlumnoTabsLayout() {
         ])
         if (pendingNutrition > 0) flushNutritionQueue(supabase)
         if (pendingWorkout > 0) flushLogQueue(supabase)
+
+        // Re-evaluar el gate al volver del background — el alumno pudo ser
+        // pausado/archivado mientras la app estaba suspendida.
+        if (!redirecting.current) {
+          const c = await getClientProfile().catch(() => null)
+          if (c?.blocked && !redirecting.current) {
+            redirecting.current = true
+            router.replace('/alumno/suspended')
+          }
+        }
       }
       appState.current = nextState
     })
