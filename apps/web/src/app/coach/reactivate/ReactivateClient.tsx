@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Image from 'next/image'
-import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { AlertTriangle, ArrowRight, Check, CheckCircle2, Users } from 'lucide-react'
 import {
@@ -26,6 +25,7 @@ import {
 import type { ModuleKey } from '@/services/entitlements.service'
 import { formatStudentAccessDate, resolveStudentGraceEndsAt } from '@/lib/student-access'
 import { ReactivateCouponCard } from './_components/ReactivateCouponCard'
+import { ReactivateArchivePanel, type ReactivateArchiveClient } from './_components/ReactivateArchivePanel'
 
 // Solo se ofertan tiers a la venta (free/starter/pro/elite). growth/scale quedan fuera (LEGACY).
 const tierOptions = SALE_TIERS.map((key) => [key, TIER_CONFIG[key]] as const)
@@ -37,6 +37,8 @@ const cycleOptions = Object.entries(BILLING_CYCLE_CONFIG) as [
 interface ReactivateClientProps {
     currentTier: SubscriptionTier
     activeClientCount: number
+    /** Alumnos standalone activos (archivables) — panel de salida del deadlock de cupo. */
+    activeClients?: ReactivateArchiveClient[]
     subscriptionStatus: string | null
     /** Ancla de la gracia de ALUMNOS (period_end vigente al corte) para el banner de presion. */
     currentPeriodEnd?: string | null
@@ -52,7 +54,7 @@ interface ReactivateClientProps {
     couponsEnabled?: boolean
 }
 
-export function ReactivateClient({ currentTier, activeClientCount, subscriptionStatus, currentPeriodEnd = null, paidAccessEndedAt = null, couponsEnabled = false }: ReactivateClientProps) {
+export function ReactivateClient({ currentTier, activeClientCount, activeClients = [], subscriptionStatus, currentPeriodEnd = null, paidAccessEndedAt = null, couponsEnabled = false }: ReactivateClientProps) {
     const searchParams = useSearchParams()
 
     // Pre-select the minimum viable tier for the coach's current client count,
@@ -230,7 +232,16 @@ export function ReactivateClient({ currentTier, activeClientCount, subscriptionS
         void handleCheckout()
     }, [fromSuccessfulCheckout, handleCheckout, paymentStatus, searchParams])
 
-    const canActivateFree = activeClientCount <= getTierMaxClients('free') &&
+    const freeLimit = getTierMaxClients('free')
+    const canActivateFree = activeClientCount <= freeLimit &&
+        (subscriptionStatus === 'pending_payment' || subscriptionStatus === 'expired')
+
+    // Salida del deadlock de cupo: coach bloqueado + sobre-cupo puede archiving hasta ≤3 y volver
+    // a Free sin pagar. Solo cuando el path gratuito es viable (estados sin gracia) y hay alumnos
+    // archivables. El gate de dinero real lo re-valida `/api/payments/activate-free` server-side.
+    const canGoFreeByArchiving =
+        activeClientCount > freeLimit &&
+        activeClients.length > 0 &&
         (subscriptionStatus === 'pending_payment' || subscriptionStatus === 'expired')
 
     return (
@@ -415,11 +426,19 @@ export function ReactivateClient({ currentTier, activeClientCount, subscriptionS
                         <p className="font-semibold text-strong">Plan insuficiente</p>
                         <p className="mt-0.5 text-[var(--danger-600)]">
                             Debes archivar {activeClientCount - getTierMaxClients(tier)} alumno{activeClientCount - getTierMaxClients(tier) !== 1 ? 's' : ''} antes de continuar con Plan {selectedTier.label}.{' '}
-                            <Link href="/coach/clients" className="underline font-medium">Ir a mis alumnos →</Link>
+                            <a href="#reactivate-archive" className="underline font-medium">Archivar alumnos aquí →</a>
                         </p>
                     </div>
                 </div>
             ) : null}
+
+            {canGoFreeByArchiving && (
+                <ReactivateArchivePanel
+                    clients={activeClients}
+                    activeClientCount={activeClientCount}
+                    freeLimit={freeLimit}
+                />
+            )}
 
             <section className="mb-4 rounded-card border border-subtle bg-surface-card p-4">
                 <p className="text-sm text-muted">
