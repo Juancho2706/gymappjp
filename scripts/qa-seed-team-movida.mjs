@@ -68,7 +68,10 @@ const env = Object.fromEntries(
 const sb = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, {
   auth: { persistSession: false },
 })
-const PASSWORD = env.E2E_PERSONAS_PASSWORD || 'Evatest-Gate-2026'
+const PASSWORD = env.E2E_PERSONAS_PASSWORD
+if (!PASSWORD || PASSWORD.length < 8) {
+  throw new Error('Falta E2E_PERSONAS_PASSWORD (mínimo 8 caracteres) en .env.local.')
+}
 
 const DAY = 86_400_000
 const NOW = Date.now()
