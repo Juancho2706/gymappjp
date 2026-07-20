@@ -14,8 +14,8 @@ Esta es la única vista global de qué está en producción, qué está en integ
 | Referencia | Estado al revisar |
 |---|---|
 | Rama de trabajo | `rnmobiledenuevo` |
-| Corte base de esta limpieza | `34b09d8f` |
-| Producción web sincronizada | `origin/master` en `649bfd3a` |
+| Corte integrado revisado | `4a53845f` |
+| Producción web sincronizada | `origin/master` en `f886eef2` |
 | Relación | `rnmobiledenuevo` contiene ese corte de `origin/master` |
 
 Este bloque es un snapshot, no reemplaza `git fetch`, `git status` ni los checks remotos antes de integrar.
