@@ -16,6 +16,7 @@ import {
     isBillingCycleAllowedForTier,
     isSaleTier,
     SALE_TIERS,
+    SUBSCRIPTION_BLOCKED_STATUSES,
     TIER_CONFIG,
     TIER_STUDENT_RANGE_LABEL,
     type BillingCycle,
@@ -233,16 +234,17 @@ export function ReactivateClient({ currentTier, activeClientCount, activeClients
     }, [fromSuccessfulCheckout, handleCheckout, paymentStatus, searchParams])
 
     const freeLimit = getTierMaxClients('free')
-    const canActivateFree = activeClientCount <= freeLimit &&
-        (subscriptionStatus === 'pending_payment' || subscriptionStatus === 'expired')
+    // Cualquier estado bloqueado que canda el panel (expired/pending_payment/past_due/paused pasada
+    // la gracia) sufre el mismo deadlock de cupo. El gate de dinero real lo re-valida el endpoint.
+    const isBlockedStatus = (SUBSCRIPTION_BLOCKED_STATUSES as readonly string[]).includes(subscriptionStatus ?? '')
+    const canActivateFree = activeClientCount <= freeLimit && isBlockedStatus
 
-    // Salida del deadlock de cupo: coach bloqueado + sobre-cupo puede archiving hasta ≤3 y volver
-    // a Free sin pagar. Solo cuando el path gratuito es viable (estados sin gracia) y hay alumnos
-    // archivables. El gate de dinero real lo re-valida `/api/payments/activate-free` server-side.
+    // Salida del deadlock de cupo: coach bloqueado + sobre-cupo puede archivar hasta ≤3 y volver
+    // a Free sin pagar (solo si hay alumnos archivables). El flip real lo cierra activate-free.
     const canGoFreeByArchiving =
         activeClientCount > freeLimit &&
         activeClients.length > 0 &&
-        (subscriptionStatus === 'pending_payment' || subscriptionStatus === 'expired')
+        isBlockedStatus
 
     return (
         <main className="mx-auto w-full max-w-2xl px-5 pb-12 pt-6">

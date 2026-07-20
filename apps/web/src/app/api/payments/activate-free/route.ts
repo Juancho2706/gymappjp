@@ -3,7 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import type { Json, TablesInsert } from '@/lib/database.types'
 import { getPaymentsProviderForCoach } from '@/lib/payments/provider'
-import { getTierMaxClients } from '@/lib/constants'
+import { getTierMaxClients, SUBSCRIPTION_BLOCKED_STATUSES } from '@/lib/constants'
 import type { SubscriptionTier } from '@/lib/constants'
 import { resolvePreferredWorkspace } from '@/services/auth/workspace.service'
 import { canViewBilling } from '@/services/auth/workspace-permissions.service'
@@ -43,10 +43,12 @@ export async function POST() {
             return NextResponse.json({ error: 'Coach no encontrado' }, { status: 404 })
         }
 
-        const allowedStatuses = ['pending_payment', 'expired']
-        if (!allowedStatuses.includes(coach.subscription_status ?? '')) {
+        // Cualquier estado bloqueado que canda el panel (expired/pending_payment/past_due/paused
+        // pasada la gracia): el coach ya cayó en /coach/reactivate y su única salida sin pagar es
+        // volver a Free. El límite ≤3 lo revalida el count de abajo (money-safety real).
+        if (!(SUBSCRIPTION_BLOCKED_STATUSES as readonly string[]).includes(coach.subscription_status ?? '')) {
             return NextResponse.json(
-                { error: 'Esta acción solo está disponible para planes pendientes o expirados.' },
+                { error: 'Esta acción solo está disponible para suscripciones bloqueadas.' },
                 { status: 403 }
             )
         }
