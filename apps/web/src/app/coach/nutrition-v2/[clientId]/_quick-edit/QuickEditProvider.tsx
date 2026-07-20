@@ -41,6 +41,21 @@ import {
   type QuickEditState,
 } from './quick-edit-state'
 import { QE_COPY, formatIsoDateDdMmYyyy } from './microcopy'
+import {
+  clearNutritionDraft,
+  quickEditDraftKey,
+  readNutritionDraft,
+  sweepStaleNutritionDrafts,
+  writeNutritionDraft,
+} from '@/lib/nutrition-coach-draft-store'
+
+/** Payload del respaldo local del quick-edit (localStorage): identifica plan + version base. */
+interface QuickEditDraftPayload {
+  clientId: string
+  planId: string
+  baseVersionId: string
+  state: QuickEditState
+}
 
 export function genQuickEditKey(): string {
   if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) return crypto.randomUUID()
@@ -80,6 +95,10 @@ interface QuickEditContextValue {
   discardChanges: () => void
   requestExit: () => void
   reloadAfterStale: () => void
+  /** Hay un respaldo local de una sesion anterior (mismo plan y version) que se puede restaurar. */
+  pendingRestore: boolean
+  restoreDraft: () => void
+  dismissRestore: () => void
 }
 
 const QuickEditContext = createContext<QuickEditContextValue | null>(null)
@@ -119,17 +138,27 @@ export function QuickEditProvider({
     throw new Error('QuickEditProvider requiere un plan vigente en el read model')
   }
 
+  // Identidad del respaldo local: una sesion de quick-edit por alumno; el payload lleva el
+  // plan y la version base para descartar borradores calculados contra una base obsoleta.
+  const draftKey = quickEditDraftKey(clientId)
+  const planId = planModel.plan?.id ?? null
+  const planVersionId = planModel.plan?.versionId ?? null
+
   const [state, rawDispatch] = useReducer(quickEditReducer, initialState)
   const [showErrors, setShowErrors] = useState(false)
   const [publishError, setPublishError] = useState<string | null>(null)
   const [upgradeRequired, setUpgradeRequired] = useState(false)
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [staleOpen, setStaleOpen] = useState(false)
+  // Arbol de una sesion anterior recuperado del respaldo local; alimenta el banner "Restaurar".
+  const [pendingRestore, setPendingRestore] = useState<QuickEditState | null>(null)
   const [isPending, startTransition] = useTransition()
   // Clave de idempotencia por "intencion de publicar": se fija al abrir el confirm sheet y
   // se REUSA en todos los reintentos de esa intencion (§2.5). Editar despues de un fallo
   // arranca una intencion nueva (clave nueva) para que el retry no resucite un draft viejo.
   const idempotencyKeyRef = useRef<string | null>(null)
+  // Guard para no escribir el respaldo local en la hidratacion inicial (evita un borrador vacio).
+  const isFirstRender = useRef(true)
 
   // Baseline y draft actual pasan por la MISMA proyeccion → cero ediciones = cero cambios,
   // sin depender de detalles de normalizacion del paquete.
@@ -163,6 +192,50 @@ export function QuickEditProvider({
     window.addEventListener('beforeunload', handler)
     return () => window.removeEventListener('beforeunload', handler)
   }, [dirty])
+
+  // Al montar el modo edicion: barre borradores vencidos y evalua si hay un respaldo local
+  // restaurable para ESTE plan y version base. Si el borrador es de otra version (alguien
+  // publico entremedio via otra pestana / RN / el builder) se descarta: restaurar contra una
+  // base obsoleta seria peor que nada (mismo espiritu que el STALE_BASE del servidor).
+  useEffect(() => {
+    const now = Date.now()
+    sweepStaleNutritionDrafts(now)
+    const record = readNutritionDraft<QuickEditDraftPayload>(draftKey, now)
+    if (!record) return
+    const { payload } = record
+    if (
+      payload.planId === planId &&
+      payload.baseVersionId === planVersionId &&
+      Array.isArray(payload.state?.variants)
+    ) {
+      setPendingRestore(payload.state)
+    } else {
+      clearNutritionDraft(draftKey)
+    }
+  }, [draftKey, planId, planVersionId])
+
+  // Autosave debounced del arbol editable: escribe el respaldo local solo si hay cambios reales;
+  // si el coach vuelve al baseline (0 cambios) borra el borrador (ya no aporta). El guard de
+  // primer render evita crear un borrador vacio al hidratar.
+  useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false
+      return
+    }
+    if (!planId || !planVersionId) return
+    const timer = setTimeout(() => {
+      if (changeCount > 0) {
+        writeNutritionDraft<QuickEditDraftPayload>(
+          draftKey,
+          { clientId, planId, baseVersionId: planVersionId, state },
+          Date.now(),
+        )
+      } else {
+        clearNutritionDraft(draftKey)
+      }
+    }, 1500)
+    return () => clearTimeout(timer)
+  }, [state, changeCount, draftKey, clientId, planId, planVersionId])
 
   const futureDateLabel = useMemo(() => {
     const effectiveFrom = planModel.plan?.effectiveFrom ?? null
@@ -216,6 +289,7 @@ export function QuickEditProvider({
       }
       if (res.ok) {
         idempotencyKeyRef.current = null
+        clearNutritionDraft(draftKey)
         setConfirmOpen(false)
         toast.success(QE_COPY.success(clientName))
         router.refresh()
@@ -238,7 +312,7 @@ export function QuickEditProvider({
       }
       setPublishError(QE_COPY.publishFailed)
     })
-  }, [clientId, clientName, currentDraft, onExit, planModel.plan, router])
+  }, [clientId, clientName, currentDraft, draftKey, onExit, planModel.plan, router])
 
   const publishNow = useCallback(() => {
     if (isPending) return
@@ -255,19 +329,24 @@ export function QuickEditProvider({
     runPublish()
   }, [isPending, openConfirm, runPublish])
 
+  // Al salir, el respaldo local solo se borra si el coach descarto ediciones PROPIAS (dirty
+  // confirmado) o si no queda un respaldo anterior sin restaurar: salir limpio con el banner
+  // "Restaurar" todavia pendiente NO debe destruir ese respaldo en silencio.
   const discardChanges = useCallback(() => {
     if (isPending) return
     if (dirty && !window.confirm(QE_COPY.discardConfirm(changeCount))) return
     idempotencyKeyRef.current = null
+    if (dirty || pendingRestore === null) clearNutritionDraft(draftKey)
     onExit()
-  }, [isPending, dirty, changeCount, onExit])
+  }, [isPending, dirty, changeCount, draftKey, pendingRestore, onExit])
 
   const requestExit = useCallback(() => {
     if (isPending) return
     if (dirty && !window.confirm(QE_COPY.leaveGuard)) return
     idempotencyKeyRef.current = null
+    if (dirty || pendingRestore === null) clearNutritionDraft(draftKey)
     onExit()
-  }, [isPending, dirty, onExit])
+  }, [isPending, dirty, draftKey, pendingRestore, onExit])
 
   const reloadAfterStale = useCallback(() => {
     idempotencyKeyRef.current = null
@@ -275,6 +354,19 @@ export function QuickEditProvider({
     router.refresh()
     onExit()
   }, [onExit, router])
+
+  // Aplica el respaldo local (reemplazo total del arbol) y baja el banner.
+  const restoreDraft = useCallback(() => {
+    if (!pendingRestore) return
+    dispatch({ type: 'RESTORE_DRAFT', state: pendingRestore })
+    setPendingRestore(null)
+  }, [pendingRestore, dispatch])
+
+  // Descarta el respaldo local ofrecido y baja el banner sin tocar el estado actual.
+  const dismissRestore = useCallback(() => {
+    clearNutritionDraft(draftKey)
+    setPendingRestore(null)
+  }, [draftKey])
 
   const value: QuickEditContextValue = {
     state,
@@ -302,6 +394,9 @@ export function QuickEditProvider({
     discardChanges,
     requestExit,
     reloadAfterStale,
+    pendingRestore: pendingRestore !== null,
+    restoreDraft,
+    dismissRestore,
   }
 
   return <QuickEditContext.Provider value={value}>{children}</QuickEditContext.Provider>

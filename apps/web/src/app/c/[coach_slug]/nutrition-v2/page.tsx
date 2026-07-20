@@ -30,8 +30,12 @@ import {
 import { isNutritionV2Enabled } from '@/services/nutrition-v2-rollout.service'
 import { TodayExperience } from './_components/TodayExperience'
 import { NutritionFoodRow } from './_components/NutritionFoodRow'
+import { resolveFoodImageUrl } from './_components/food-result-image'
 
 export const metadata = { title: 'Nutrición' }
+
+/** Base pública de Storage para resolver la ilustración del producto (server-side, NEXT_PUBLIC). */
+const SUPABASE_BASE = process.env.NEXT_PUBLIC_SUPABASE_URL ?? null
 
 interface Props {
   params: Promise<{ coach_slug: string }>
@@ -377,6 +381,8 @@ function PlanSlotBlock({ slot }: { slot: PlanSlot }) {
               proteinG={item.macros.proteinG}
               carbsG={item.macros.carbsG}
               fatsG={item.macros.fatsG}
+              imageUrl={resolveFoodImageUrl(item.media ?? null, SUPABASE_BASE)}
+              category={item.category ?? undefined}
               note={describeItemGuidance(item)}
             />
           ))}

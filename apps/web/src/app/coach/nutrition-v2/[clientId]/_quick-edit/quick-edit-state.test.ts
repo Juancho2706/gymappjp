@@ -439,3 +439,32 @@ describe('quick-edit-state — porciones', () => {
     expect(groups[1].macrosConfirmed).toBe(false)
   })
 })
+
+// ── RESTORE_DRAFT: respaldo local restaurable (banner de sesion anterior) ────────────────
+
+describe('quick-edit-state — RESTORE_DRAFT', () => {
+  it('restaura el arbol completo de un borrador guardado (reemplazo total del estado)', () => {
+    const { state, baseline } = hydrate()
+    // Simula el arbol guardado en localStorage: una edicion (cantidad 80 -> 120).
+    const saved = quickEditReducer(state, {
+      type: 'SET_ITEM_QUANTITY',
+      variantKey: VARIANT_ID,
+      slotKey: SLOT_ID,
+      itemKey: ITEM_ID,
+      value: '120',
+    })
+    // Partiendo del estado limpio recien hidratado, restaurar reemplaza el arbol entero.
+    const restored = quickEditReducer(state, { type: 'RESTORE_DRAFT', state: saved })
+    expect(restored).toBe(saved)
+    expect(restored.variants[0].slots[0].items[0].quantity).toBe('120')
+    expect(countDraftChanges(baseline, currentDraftOf(restored))).toBe(1)
+  })
+
+  it('un payload invalido (sin variants array) no restaura ni rompe: conserva el estado actual', () => {
+    const { state } = hydrate()
+    const badVariants = { variants: null } as unknown as QuickEditState
+    expect(quickEditReducer(state, { type: 'RESTORE_DRAFT', state: badVariants })).toBe(state)
+    const emptyPayload = {} as unknown as QuickEditState
+    expect(quickEditReducer(state, { type: 'RESTORE_DRAFT', state: emptyPayload })).toBe(state)
+  })
+})

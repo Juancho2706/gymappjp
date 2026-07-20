@@ -4,6 +4,10 @@ import {
   NutritionStudentPermissionsSchema,
   NutritionStrategySchema,
 } from './contracts'
+// `./catalog` es un módulo hoja (solo importa `zod`) → sin ciclo ESM al reusar
+// `FoodMediaReadSchema` acá. Misma forma exacta que `FoodCatalogItem.media`, para que
+// la fila del alumno resuelva la ilustración real con el mismo helper que el coach.
+import { FoodMediaReadSchema } from './catalog'
 
 export const NUTRITION_READ_MODEL_SCHEMA_VERSION = 1 as const
 
@@ -49,6 +53,16 @@ export const NutritionIntakeReadItemSchema = z.object({
   prescriptionItemId: NullableUuidSchema,
   snapshot: NutritionFoodSnapshotSchema,
   totals: NutritionTotalsSchema.omit({ entryCount: true }),
+  // Icono del alimento (aditivo). Van A NIVEL DE ITEM, NO dentro del `snapshot`
+  // congelado (que se conserva byte-idéntico): se resuelven en LECTURA desde `food_id`
+  // vía `food_media`/catálogo, así una corrección o un re-congelado no los toca. Con
+  // `media` la fila del alumno pinta la ilustración real del producto (paridad total
+  // con la card del coach); sin ella cae al icono de `category`, y sin ninguno al icono
+  // derivado del nombre. `.nullable().optional()`: la migración que los puebla puede
+  // desplegarse antes o después del web y una cache/RPC previo sin el campo sigue
+  // parseando (mismo criterio de tolerancia que las porciones).
+  media: FoodMediaReadSchema.nullable().optional(),
+  category: z.string().nullable().optional(),
   // Porciones (SPEC R4, aditivo): pobladas SOLO en intakes sintéticos de marcar-porción
   // emitidos tras la migración de porciones. `.optional().nullable()`: caches y cuerpos
   // de RPC previos siguen parseando (criterio 8). La UI las usa para identificar el
@@ -77,6 +91,11 @@ export const NutritionPrescriptionItemReadSchema = z.object({
     fatsG: NullableNumberSchema,
     fiberG: NullableNumberSchema,
   }),
+  // Icono del alimento (aditivo) — mismo contrato/razón que en el item de intake:
+  // resueltos en lectura desde `food_id`, no congelados. `.nullable().optional()` para
+  // que el deploy web salga antes o después de la migración SQL sin romper el parse.
+  media: FoodMediaReadSchema.nullable().optional(),
+  category: z.string().nullable().optional(),
 })
 
 // ---------------------------------------------------------------------------

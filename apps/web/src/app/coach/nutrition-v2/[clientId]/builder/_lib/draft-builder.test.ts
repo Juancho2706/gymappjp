@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { NutritionPlanDraftSchema } from '@eva/nutrition-v2'
 import { calculateFoodItemMacros } from '@eva/nutrition-engine'
 import {
+  BUILDER_STEP_COUNT,
   CoachFoodInputSchema,
   assembleDraft,
   assembleAndValidateDraft,
@@ -330,6 +331,52 @@ describe('builderReducer', () => {
     const item = state.slots[0].items[0]
     expect(item.customName).toBe('Avena')
     expect(itemMacros(item).calories).toBe(380)
+  })
+})
+
+// Respaldo local de borradores (W3b): RESTORE reemplaza el arbol completo desde un
+// borrador persistido, con clamp defensivo del step y rechazo de payloads corruptos.
+describe('builderReducer — RESTORE', () => {
+  it('reemplaza el estado completo por el payload restaurado', () => {
+    const current = createEmptyBuilderState('2026-07-20')
+    const restored = structuredState()
+    const next = builderReducer(current, { type: 'RESTORE', state: restored })
+    expect(next).toEqual(restored)
+    // No conserva nada del estado previo (era vacio: strategy null, sin nombre).
+    expect(next.strategy).toBe('structured')
+    expect(next.planName).toBe('Plan estructurado')
+    expect(next.slots).toHaveLength(1)
+  })
+
+  it('clampa un step por encima del rango a BUILDER_STEP_COUNT - 1', () => {
+    const current = createEmptyBuilderState('2026-07-20')
+    const next = builderReducer(current, { type: 'RESTORE', state: { ...structuredState(), step: 99 } })
+    expect(next.step).toBe(BUILDER_STEP_COUNT - 1)
+  })
+
+  it('clampa un step negativo a 0', () => {
+    const current = createEmptyBuilderState('2026-07-20')
+    const next = builderReducer(current, { type: 'RESTORE', state: { ...structuredState(), step: -5 } })
+    expect(next.step).toBe(0)
+  })
+
+  it('un step no finito cae a 0', () => {
+    const current = createEmptyBuilderState('2026-07-20')
+    const next = builderReducer(current, { type: 'RESTORE', state: { ...structuredState(), step: Number.NaN } })
+    expect(next.step).toBe(0)
+  })
+
+  it('ignora un payload corrupto (slots no es array) y conserva el estado actual por referencia', () => {
+    const current = createEmptyBuilderState('2026-07-20')
+    const corrupt = { ...structuredState(), slots: null } as unknown as BuilderState
+    const next = builderReducer(current, { type: 'RESTORE', state: corrupt })
+    expect(next).toBe(current)
+  })
+
+  it('ignora un payload null y conserva el estado actual', () => {
+    const current = createEmptyBuilderState('2026-07-20')
+    const next = builderReducer(current, { type: 'RESTORE', state: null as unknown as BuilderState })
+    expect(next).toBe(current)
   })
 })
 
