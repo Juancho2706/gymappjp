@@ -19,7 +19,7 @@ const OPTIONS: { key: ExchangeViewMode; label: string }[] = [
  * ExchangeModeToggle (E4-07) — control segmentado local "Porciones | Gramos" para el
  * alumno en un plan por intercambios. Es SOLO estado de vista (read-only): el modo real
  * del plan lo fija el coach; aca solo elige si ve los chips de intercambio o el detalle en
- * gramos. Rampa ember (token-contract de nutricion). Presentacional puro.
+ * gramos. Rampa ember (TOKENS.md). Presentacional puro.
  */
 export function ExchangeModeToggle({ value, onChange }: Props) {
   const { theme } = useTheme()

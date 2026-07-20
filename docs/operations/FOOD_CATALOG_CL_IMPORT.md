@@ -1,31 +1,47 @@
-# Operación — catálogo chileno de alimentos
-
-Este procedimiento mantiene búsquedas y escaneo dentro de Supabase. Web, PWA y React Native no consultan proveedores externos durante el uso normal.
-
-**Estado al 15 de julio de 2026:** esquema aplicado, importador disponible, sin lote piloto importado.
-
-**Calibración USDA (Fase 1 — ejecutada 2026-07-15):** los 316 alimentos globales se calibraron contra USDA FoodData Central (CC0; SR Legacy + Foundation). Resultado en prod: 137 filas con macros reemplazados (`catalog_source='usda'`, `source_ref=fdc_id`, `verification_status='eva_verified'`), 97 enriquecidas solo con micros (fibra/sodio/azúcar/grasa saturada donde faltaban), 18 excluidas por tener marca o match "separable lean only" (la etiqueta del producto manda sobre el genérico USDA) y 24 matches de confianza media con desvío >40% pendientes de revisión manual. Motivo del reemplazo masivo: muchas filas guardaban macros POR PORCIÓN cuando el motor (`calculateFoodItemMacros`) interpreta SIEMPRE por 100 g/ml (ej.: Almendras 45→579 kcal/100 g). Backup completo previo en la tabla `_bak_foods_global_20260715` (borrar ~2026-07-29 si no hay reclamos). **Ola USDA 2 (ejecutada 2026-07-15):** +270 genéricos nuevos traducidos al español chileno (284 candidatos curados, 14 descartados por duplicado) con macros+micros+porciones caseras de USDA FDC, `catalog_key='usda:<fdc_id>'`, `eva_verified`. Catálogo global: 586 alimentos.
-
-**Semilla Open Food Facts Chile (STAGED, pendiente de OK):** 6.442 productos CL del dump oficial → gate de calidad (GTIN GS1 válido, macros completos, coherencia calórica 4/4/9, sin data-quality errors) → 4.312 únicos con barcode, listos en lotes SQL locales (`ins-off-*.sql`, ON CONFLICT DO NOTHING, `catalog_source='open_food_facts'`, `unverified`, `country_code='CL'`, SIN imágenes OFF por licencia CC-BY-SA). Obligación ODbL al aplicar: atribución visible "Datos de productos: Open Food Facts" + subset identificable por `catalog_source`.
-
-Estrategia completa de datos (USDA + capa chilena propia + semilla Open Food Facts CL + crowdsourcing): ver plan en `docs/product/nutrition-v2/` y el análisis de licencias (ODbL/CC0/NC-ND) de la sección 0 de `VALIDATION_RISKS_AND_KNOWN_BLOCKERS_2026.md`.
-
+---
+status: active
+owner: engineering
+last_verified: 2026-07-20
+canonical: true
 ---
 
-## 1. Infraestructura aplicada
+# Catálogo chileno de alimentos — operación
 
-Migraciones:
+El catálogo se sirve desde Supabase. Web, PWA y React Native no consultan proveedores externos durante el uso normal.
 
-```txt
-supabase/migrations/20260714073000_nutrition_catalog_cl_and_intake_v2.sql
-supabase/migrations/20260714151500_food_catalog_missing_codes_curation.sql
-supabase/migrations/20260714220000_food_catalog_v2_schema.sql
-supabase/migrations/20260714220500_food_catalog_v2_rpc.sql
+## Estado verificado
+
+Estado productivo registrado el 20 de julio de 2026:
+
+- 4.898 alimentos totales;
+- 532 genéricos después de deduplicación;
+- 4.312 productos chilenos con GTIN provenientes de Open Food Facts;
+- 580 ilustraciones EVA en `food-media/eva-icons/` y sus filas `food_media`;
+- 2.586 de 4.778 alimentos clasificables tienen grupo de porciones asignado;
+- Nutrición V2 consume búsqueda, GTIN, media y atribución desde read models locales.
+
+La importación masiva ya ocurrió. No volver a ejecutar la semilla Open Food Facts ni las calibraciones USDA como si fueran tareas pendientes.
+
+Trabajo operativo restante:
+
+- revisar y fusionar duplicados con referencias activas;
+- clasificar la cola de baja confianza;
+- retirar assets redundantes después del merge;
+- eliminar respaldos temporales únicamente tras validar que no hubo regresiones.
+
+Las aprobaciones humanas correspondientes están en [MANUAL_TASKS.md](MANUAL_TASKS.md).
+
+## Componentes vigentes
+
+Script:
+
+```text
+scripts/import-food-catalog-cl.mjs
 ```
 
-Tablas operativas:
+Tablas:
 
-```txt
+```text
 foods
 food_media
 food_catalog_import_batches
@@ -33,327 +49,143 @@ food_catalog_import_rows
 food_catalog_missing_codes
 ```
 
-Buckets:
+Storage:
 
-```txt
-food-media
-food-submissions
+```text
+food-media        público; solo assets curados
+food-submissions  privado; aportes todavía no promovidos
 ```
 
-No volver a aplicar migraciones desde este runbook. Confirmar primero el historial de Supabase y el estado del esquema.
+RPC principales:
 
----
+```text
+search_food_catalog_v2
+lookup_food_by_gtin_v2
+report_food_catalog_missing_code_v2
+```
 
-## 2. Formato de entrada
+No aplicar migraciones desde este runbook. El historial versionado de `supabase/migrations/` es la fuente de verdad del esquema.
 
-El importador acepta:
+## Formato de entrada
 
-- JSON con un array;
-- JSONL/NDJSON, una fila por línea.
+El importador acepta un array JSON o JSONL. Usar [food-catalog-cl.example.json](food-catalog-cl.example.json) como forma mínima y validarlo contra el script antes de cada lote.
 
-Campos mínimos:
+Campos obligatorios:
 
 - `name`;
-- `serving_size`;
-- `serving_unit`;
-- `calories`;
-- `protein_g`;
-- `carbs_g`;
-- `fats_g`.
+- `serving_size` y `serving_unit`;
+- `calories`, `protein_g`, `carbs_g` y `fats_g`.
 
-Recomendados para producto chileno:
+Campos recomendados:
 
-- `barcode` con GTIN válido;
-- `brand`;
-- `country_code: "CL"`;
-- `category`;
-- `search_aliases` con nombres locales;
-- `fiber_g`;
-- `sodium_mg`;
-- `sugar_g`;
-- `saturated_fat_g`;
-- `package_quantity`;
-- `package_unit`;
-- `source_ref`;
-- `verification_status`.
-
-Media opcional:
-
-```json
-{
-  "kind": "product_photo",
-  "object_path": "cl/marca/producto-v1.webp",
-  "version": 1,
-  "width": 640,
-  "height": 640,
-  "mime_type": "image/webp",
-  "license": "supplier_authorized",
-  "attribution": "Proveedor o fuente autorizada",
-  "is_primary": true
-}
-```
-
-Usar `docs/operations/food-catalog-cl.example.json` como base, pero revisar que represente el schema actual antes de importar.
-
----
-
-## 3. Reglas de datos
-
-### GTIN
-
-Se aceptan longitudes:
-
-- 8;
-- 12;
-- 13;
-- 14.
-
-El checksum GS1 debe ser válido. El importador no inventa ceros ni transforma UPC a EAN.
-
-### Nutrición
-
-Definir claramente si los valores representan:
-
-- 100 g/ml;
-- una porción;
-- otra base explícita.
-
-No mezclar bases dentro de un lote sin metadata clara.
-
-### Verificación
-
-Estados permitidos:
-
-```txt
-unverified
-community
-coach_verified
-eva_verified
-rejected
-```
-
-Un import inicial no debe marcar automáticamente todo como `eva_verified`.
-
-### Search
-
-- `name_search` es columna generada;
-- el importador no debe escribirla;
-- usar `name`, `brand` y `search_aliases`;
-- incluir términos chilenos cuando corresponda.
-
-### Licencias
-
-- no subir imágenes sin permiso;
-- guardar licencia, procedencia y atribución;
-- archivos fuente restringidos deben mantenerse fuera del repo;
-- no guardar base64/blobs dentro del JSON.
-
----
-
-## 4. Modos del importador
-
-Script:
-
-```txt
-scripts/import-food-catalog-cl.mjs
-```
-
-Comando base:
-
-```bash
-pnpm catalog:import:cl -- --file=./catalogo-cl.json
-```
-
-### Dry-run
-
-```bash
-pnpm catalog:import:cl -- --file=./catalogo-cl.json --dry-run
-```
-
-Valida sin credenciales ni escrituras:
-
-- estructura;
-- serving/macros;
-- country code;
-- GTIN/checksum;
-- verification status;
-- catalog key;
-- duplicados dentro del archivo;
-- muestra de rechazos.
-
-Puede terminar con código distinto de cero cuando hay filas rechazadas. Eso no significa que haya escrito datos.
-
-### Stage-only — comportamiento predeterminado
-
-Sin `--dry-run` ni `--apply`, el importador:
-
-1. requiere credenciales server-side;
-2. crea un batch;
-3. guarda filas normalizadas en staging;
-4. clasifica accepted/rejected/duplicate;
-5. marca el batch ready;
-6. no publica alimentos.
-
-Este es el modo recomendado para un lote remoto nuevo.
-
-### Stage-and-apply
-
-```bash
-pnpm catalog:import:cl -- --file=./catalogo-cl.json --apply
-```
-
-Publica filas aceptadas después de crear staging.
-
-No usar `--apply` hasta que:
-
-- dry-run esté revisado;
-- procedencia/licencias estén aprobadas;
-- duplicados/rechazos estén entendidos;
-- se haya probado primero un lote pequeño.
-
-### Import remoto
-
-El script bloquea destinos remotos salvo confirmación explícita:
-
-```bash
---allow-remote
-```
-
-Este flag no reemplaza revisión humana ni aprobación.
-
----
-
-## 5. Credenciales
-
-El importador usa credenciales server-side del entorno local/seguro.
+- `barcode`, `brand`, `country_code` y `category`;
+- `search_aliases` con vocabulario chileno;
+- fibra, sodio, azúcar y grasa saturada;
+- cantidad/unidad del envase;
+- `catalog_source`, `source_ref` y `verification_status`.
 
 Reglas:
 
-- nunca usar service role en Expo;
-- nunca exponerla como variable pública en Vercel;
-- nunca versionarla;
-- no pegarla en issues, logs o documentación;
-- rotarla si se filtra.
+- Macros y calorías deben usar la base que espera el motor: 100 g/ml. `serving_size` describe la porción mostrada; no convertir silenciosamente datos por porción en datos por 100 g.
+- GTIN debe tener 8, 12, 13 o 14 dígitos y checksum GS1 válido.
+- Un lote nuevo empieza como `unverified`; no elevarlo automáticamente a `eva_verified`.
+- `catalog_key` debe ser estable. El modo apply hace upsert por esa clave y puede modificar una fila existente.
+- No escribir `name_search`; es generada por la base.
+- No subir imágenes ni datasets sin licencia y atribución compatibles.
+- Archivos fuente grandes/restringidos, dumps y blobs no se versionan.
 
----
+Fuentes permitidas por el script:
 
-## 6. Flujo piloto recomendado
-
-1. Preparar 20–50 productos.
-2. Revisar procedencia y base nutricional.
-3. Ejecutar dry-run.
-4. Corregir rechazos.
-5. Ejecutar stage-only.
-6. Revisar batch y rows.
-7. Verificar duplicados contra `foods`.
-8. Aprobar manualmente.
-9. Aplicar el lote.
-10. Probar búsqueda y GTIN.
-11. Probar scanner PWA/RN.
-12. Medir payload, query y egress.
-13. Ampliar por nuevos lotes.
-
-No comenzar con miles de productos.
-
----
-
-## 7. Imágenes
-
-### `food-media`
-
-- público;
-- solo assets curados;
-- usar paths versionados;
-- WebP preferido cuando aplique;
-- thumbnail para listas;
-- imagen mediana para detalle;
-- originales fuera de cargas normales;
-- metadata en `food_media`.
-
-### `food-submissions`
-
-- privado;
-- material enviado por usuario;
-- carpeta inicial por userId;
-- no se muestra públicamente;
-- requiere moderación antes de promover a `food-media`.
-
-Pendiente de implementar completamente:
-
-- compresión en cliente;
-- validación MIME/dimensiones;
-- checksum;
-- moderación;
-- promoción de asset aprobado.
-
----
-
-## 8. Validación posterior a importación
-
-### Datos
-
-- filas esperadas;
-- no duplicados de barcode/catalog key;
-- macros correctos;
-- serving correcto;
-- country code CL;
-- aliases útiles;
-- verification status.
-
-### Funcional
-
-- `search_food_catalog_v2`;
-- `lookup_food_by_gtin_v2`;
-- barcode conocido;
-- barcode desconocido;
-- paginación;
-- imagen/fallback;
-- reporte idempotente.
-
-### Seguridad
-
-- anon no ejecuta mutaciones;
-- alumno solo reporta para sí;
-- submissions privadas;
-- media pública solo curada;
-- service role no expuesta.
-
-### Rendimiento
-
-- EXPLAIN del search;
-- p50/p95;
-- payload;
-- tamaño thumbnail;
-- egress;
-- tiempo scanner → resultado.
-
----
-
-## 9. Rollback operativo
-
-Ante un lote defectuoso:
-
-- detener nuevos applies;
-- no borrar historial/intake;
-- marcar productos rechazados o retirar visibilidad mediante flujo auditado;
-- conservar batch/rows para diagnóstico;
-- corregir archivo fuente;
-- crear un lote nuevo;
-- no editar silenciosamente la evidencia del lote anterior.
-
-Para cambios de esquema, usar una nueva migración aditiva. No revertir DDL productivo manualmente desde el importador.
-
----
-
-## 10. Estado actual
-
-```txt
-foods: 344
-foods con barcode: 0
-foods Chile: 0
-food_media: 0
-import batches: 0
-missing codes abiertos: 0
+```text
+import, eva, coach, team, open_food_facts, usda, other
 ```
 
-El siguiente paso operativo no es activar el scanner para todos; es preparar, revisar e importar el lote piloto.
+Estados permitidos:
+
+```text
+unverified, community, coach_verified, eva_verified, rejected
+```
+
+## Flujo seguro para un lote nuevo
+
+### 1. Dry-run local
+
+No necesita credenciales ni escribe datos:
+
+```bash
+pnpm catalog:import:cl -- --file=./catalogo-cl.json --dry-run --source=import
+```
+
+Revisar total, aceptados, duplicados y todos los rechazos. Un exit code `2` indica filas rechazadas, no una escritura parcial.
+
+### 2. Stage-only
+
+Con credenciales server-side del entorno objetivo:
+
+```bash
+pnpm catalog:import:cl -- --file=./catalogo-cl.json --source=import
+```
+
+Crea batch y filas de staging; no publica alimentos. En un destino remoto también exige `--allow-remote`.
+
+### 3. Revisión
+
+Antes de publicar:
+
+1. verificar checksum y procedencia del archivo;
+2. revisar accepted/rejected/duplicate en el batch;
+3. comparar GTIN y `catalog_key` contra `foods`;
+4. inspeccionar macros por 100 g/ml y serving;
+5. aprobar licencia, atribución y media;
+6. tomar snapshot y registrar conteos antes.
+
+### 4. Apply explícito
+
+```bash
+pnpm catalog:import:cl -- --file=./catalogo-cl.json --source=import --apply
+```
+
+Para producción se requieren ambos flags:
+
+```bash
+pnpm catalog:import:cl -- --file=./catalogo-cl.json --source=import --apply --allow-remote
+```
+
+`--allow-remote` solo elimina la guarda técnica. No constituye aprobación.
+
+## Validación posterior
+
+Registrar batch ID y conteos, luego comprobar:
+
+- total aplicado coincide con lo aprobado;
+- `catalog_key` y barcode no presentan duplicados inesperados;
+- search encuentra nombre, marca y aliases;
+- lookup devuelve conocido y trata desconocido sin error;
+- macros y porciones calculan valores plausibles;
+- paginación no repite ni omite filas;
+- media muestra fallback y atribución correctos;
+- anon no muta; alumno solo reporta dentro de su scope;
+- p50/p95, payload y egress no regresan.
+
+Probar al menos web y un build móvil contra el mismo entorno.
+
+## Media y licencias
+
+- Open Food Facts requiere atribución ODbL visible para los items correspondientes.
+- USDA FoodData Central usado por el catálogo es CC0; conservar `source_ref`.
+- `food-media` contiene solo imágenes curadas y optimizadas; WebP preferido.
+- `food-submissions` permanece privado hasta moderación y promoción explícita.
+- No copiar imágenes remotas por conveniencia si su licencia no permite redistribución.
+
+## Incidente o lote defectuoso
+
+1. Detener nuevos applies.
+2. Guardar batch ID, checksum, hora, conteos y muestra técnica del defecto.
+3. No borrar `food_catalog_import_batches` ni `food_catalog_import_rows`.
+4. No editar la evidencia del lote para hacerlo parecer correcto.
+5. Identificar referencias activas antes de ocultar, fusionar o borrar un alimento.
+6. Preparar reparación idempotente con dry-run y conteos antes/después.
+7. Para esquema/RLS, crear una migración aditiva; no ejecutar DDL improvisado desde el importador.
+8. Repetir validación funcional y de aislamiento.
+
+Una importación aplicada no se revierte volviendo a ejecutar el archivo anterior: el upsert por `catalog_key` no restaura referencias, media ni historial.

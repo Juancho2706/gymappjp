@@ -1,174 +1,76 @@
-# Plan de olas 1:1 — PWA responsive → React Native
+---
+status: active
+owner: Juan Manuel Villegas
+last_verified: "2026-07-20 @ 34b09d8f"
+canonical: false
+role: execution-policy
+source_of_truth: specs/rn-mobile-parity-redesign/PLAN.md
+---
 
-> Plan canónico de ejecución desde 2026-07-12. Complementa `README.md` (método)
-> y `docs/porting-status.md` (estado vivo). La fuente de verdad visual y funcional
-> es siempre `apps/web` en su variante responsive/móvil.
+# Política de olas de paridad 1:1
 
-## 1. Filtro de entrada: qué se arregla
+Reglas estables para dividir y cerrar el port. El orden vivo está en [`TASKS.md`](../../specs/rn-mobile-parity-redesign/TASKS.md) y el estado efectivo en [`MOBILE_PARITY.md`](../status/MOBILE_PARITY.md).
 
-Una tarea entra en una ola **solo** cuando cumple las cuatro condiciones:
+## Entrada de una tarea
 
-1. Existe evidencia web concreta (`archivo:líneas`) del elemento, estado o gesto.
-2. RN difiere de forma observable: layout, copy, color, tipografía, estado,
-   interacción, navegación, datos mostrados, carga, error, claro u oscuro.
-3. La diferencia no es una adaptación nativa obligatoria que preserve lo que el
-   usuario ve y puede hacer.
-4. La spec define una comprobación objetiva web↔RN para cerrar el hallazgo.
+Una diferencia entra a una ola cuando:
 
-Por tanto, **sí entran** aunque antes se hayan rotulado P2:
+1. existe evidencia actual en web responsive;
+2. RN difiere de forma observable o funcional;
+3. no es una adaptación nativa inevitable que preserve el resultado;
+4. la spec define una comprobación objetiva.
 
-- diferencias de píxeles, espaciado, radio, sombra, gradiente, iconografía,
-  tipografía o animación que existan en el web;
-- usos incorrectos de white-label, tokens semánticos o superficies;
-- estados o acciones presentes en web y ausentes en RN;
-- divergencias light/dark, loading/empty/error/disabled/offline;
-- diferencias de copy, contenido, orden o jerarquía.
+También entran diferencias P2 de layout, copy, tipografía, color, animación, estados y branding. No entran refactors sin efecto observable, ideas de producto ausentes en web ni migraciones preventivas.
 
-**No entran**:
+Si web parece contener un bug, se documenta y se decide si el arreglo debe aterrizar en ambas superficies. No se replica silenciosamente ni se “mejora” solo RN.
 
-- cronómetro/notificación/lockscreen con librería nativa si el flujo visible del
-  web ya está preservado;
-- háptica, Media Session, hover, wake-lock u otra capacidad exclusiva de una
-  plataforma;
-- refactors, performance o arquitectura sin diferencia observable de paridad;
-- diseños nuevos, “mejoras” creativas o cambios de producto no presentes en web;
-- migraciones masivas preventivas. Ejemplo: un sheet @gorhom sólo se migra a
-  `nativeModal` si QA reproduce que no abre al primer toque o queda fuera de
-  pantalla; la incompatibilidad teórica sola no autoriza el cambio.
+## Tamaño y aislamiento
 
-Si web contiene un probable bug, web sigue mandando hasta que el owner decida
-corregir el producto en ambas superficies. La excepción debe quedar escrita.
+- Ola recomendada: 3–5 unidades y 10–15 superficies como máximo.
+- Un solo owner por archivo durante la ola.
+- Unidades que editan el mismo monolito corren secuencialmente.
+- Primitivas compartidas tienen una unidad dueña y regresión explícita de consumidores.
+- Dependencias nativas se agrupan; no se agregan a mitad de una ola sin recalcular el build gate.
 
-## 2. Definition of Done por unidad
+## Gates
 
-Una unidad se cierra solamente con:
+Por unidad:
 
-1. inventario completo de su superficie responsive;
-2. spec con citas web para cada afirmación visual/funcional;
-3. implementación RN contra la spec;
-4. verificador distinto comparando elemento por elemento;
-5. lente de lógica/estado/foco/offline;
-6. cero P0/P1 y **cero P2 accionable de paridad**;
-7. residuos limitados a adaptaciones nativas justificadas por escrito;
-8. gates verdes: `pnpm exec tsc --noEmit` en `apps/mobile`, tokens `86/86` y
-   `pnpm exec expo export --platform android`;
-9. QA device light/dark y marca EVA + una marca de alto contraste;
-10. `docs/porting-status.md` actualizado en el mismo commit.
+- spec y revisión adversarial;
+- lente de lógica/estado;
+- typecheck y pruebas afectadas;
+- cero diferencias accionables.
 
-“Cero P2 accionable” reemplaza la regla antigua de cerrar con deltas visuales
-pendientes. Si se puede reproducir desde el web con los tokens existentes, se
-arregla. Si el DS carece de un valor exacto, se documenta primero y se resuelve
-en la miniunidad de primitivos/tokens, sin introducir valores crudos en pantalla.
+Por ola:
 
-## 3. Orden de ejecución
+- paridad de tokens;
+- export Android;
+- build de cada plataforma afectada;
+- matriz device light/dark × EVA/custom brand;
+- smoke de flujos modificados;
+- actualización de tareas y estado canónico.
 
-### Ola 3 — Dashboard del coach (activa)
+Un artefacto construido no equivale a QA aprobado.
 
-Terminar las 14 unidades existentes de `specs/seccion-3/` y su verificación
-adversarial. No abandonar ni mezclar este checkpoint con el árbol del alumno.
+## Datos y Supabase
 
-Incluye exclusivamente diferencias del dashboard, chrome, directorio y ficha
-del coach demostradas por sus specs. El doble-FAB continúa bloqueado por decisión
-del CEO: no se implementa hasta recibir respuesta.
+Las unidades de UI no deben crear cambios de DB por conveniencia. Si una unidad necesita schema, GRANT o RLS:
 
-### Ola 2R — Cierre absoluto del alumno ya portado
+1. confirmar primero el estado real de Supabase Pro/Branching;
+2. con Branching disponible: `create_branch` → migración aditiva e idempotente → seed sintético y pruebas RLS con rol real → advisors sin críticos → snapshot de prod → `merge_branch` → `db pull` y tipos → `delete_branch` el mismo día;
+3. sin Branching disponible: protocolo aditivo-en-LIVE con snapshot, prueba sintética, advisors y verificación posterior;
+4. nunca `db push` ciego, DDL destructiva ni pruebas con `service_role` para demostrar RLS.
 
-Se ejecuta inmediatamente después del checkpoint de Ola 3. Reabre Secciones 1 y
-2 únicamente para eliminar diferencias web↔RN observables.
+Toda mutación de módulos pagos mantiene el gate server-side; la UI nunca sustituye `assertModule` o RLS.
 
-Unidades obligatorias:
+## Checkpoint y rollback
 
-1. **Chrome de Movimiento/Bodycomp:** moverlas bajo `(tabs)` como rutas ocultas,
-   preservar deep links y mantener la cápsula con “Más” activo como en web.
-2. **Widget nutricional de Inicio:** completar/descompletar comidas inline con
-   actualización optimista y cola offline, igual que web.
-3. **Tipografía white-label:** propagar el `brand_font_key` permitido a la
-   tipografía display de RN donde el layout `/c` web usa `--brand-font`.
-4. **Residuos visuales de Sección 1:** bordes, tipografía, `tabular-nums`, grids,
-   iconos, timer, resumen, sustitución y demás P2 listados en
-   `docs/porting-status.md`; arreglar sólo los que el comparador confirme.
-5. **Residuos visuales de Sección 2:** chrome, saludo, hero, streak, badges,
-   sparklines, PR, hábitos, perfil y check-in; misma regla de evidencia.
-6. **Sheets del alumno:** smoke desde arranque en frío. Migrar caller por caller
-   sólo los que fallen al primer toque; no hacer migración preventiva global.
+- Rama de entrega: `rnmobiledenuevo`; producción: `master` mediante merge revisado.
+- Un checkpoint coherente por ola, sin pantallas parcialmente expuestas.
+- OTA solo para cambios compatibles con el runtime instalado.
+- Cambios nativos requieren binario nuevo.
+- Rollback preferido: revert del checkpoint o artefacto anterior; las migraciones deben ser forward-only.
 
-### Ola 4A — Nutrición completa del alumno
+## Evidencia
 
-Alcance web: `apps/web/src/app/c/[coach_slug]/nutrition/**`.
-
-Debe inventariarse desde cero como sección formal; los barridos E8 anteriores no
-sustituyen specs elemento por elemento. Unidades mínimas:
-
-1. shell/header, selector de día y estados de dominio OFF/read-only;
-2. hero `MacroRingSummary`;
-3. cards de comida, ingredientes, porciones y completado;
-4. intercambios/equivalencias;
-5. fuera de plan;
-6. adherencia, recap semanal y racha;
-7. plato, micros y objetivos;
-8. notas coach↔alumno;
-9. recetas, compras y exportación;
-10. estados loading/empty/error/offline y refresco por foco.
-
-Hallazgo de entrada ya confirmado para `MacroRingSummary`:
-
-- web usa card `surface-inverse`/`border-inverse` y texto `on-dark`;
-- kcal usa `ember-500`, proteína `ember-500`, carbohidratos `sport-500`
-  white-label y grasas `aqua-500`;
-- RN actual usa card normal, kcal success y carbos azul fijo. Debe portarse la
-  composición web completa, no sólo recolorear barras.
-
-### Ola 4B — Nutrición del coach y catálogos asociados
-
-Alcance: `coach/nutrition-*`, `foods`, `recipes`, `meal-groups` y las superficies
-de ficha no cerradas por Ola 3. Separarla de 4A evita mezclar dos usuarios y hace
-posible QA de una sección completa.
-
-### Ola 5 — Builder y programas del coach
-
-Alcance: `coach/builder`, `program-builder`, `workout-programs`, `templates`.
-Inventario responsive antes de usar componentes desktop como referencia. DnD se
-puede adaptar al gesto nativo, pero contenido, estados y resultado deben coincidir.
-
-### Ola 6 — Resto inventariado por dominio
-
-No usar una sola ola “Resto”. Dividir después del inventario en lotes de 10–15
-unidades con archivos RN disjuntos:
-
-- alumno: ejercicios/detalle, movimiento, bodycomp, auth, onboarding, suspendido,
-  cambio de contraseña y rutas periféricas;
-- coach: ejercicios, ajustes/branding, suscripción, herramientas y soporte;
-- shells compartidos: login, loaders, errores, empty states y primitives que
-  afecten superficies anteriores.
-
-Una ruta sólo se omite si no existe contraparte responsive o si la diferencia es
-una capacidad exclusivamente nativa ya cubierta por el filtro de §1.
-
-### Ola 7 — Certificación transversal
-
-1. Re-inventario automático de rutas web↔RN para detectar omisiones.
-2. Barrido de `ola0-hallazgos.json`: cada discrepancia debe estar arreglada,
-   descartada con evidencia actual o marcada como adaptación nativa.
-3. Búsqueda de colores/espaciados/tipografías crudos; comparar cada caso con el
-   token web antes de cambiarlo.
-4. Matriz light/dark × marca EVA/marca custom × tamaños de dispositivo.
-5. QA de frío, foreground, offline y sesión restaurada.
-6. Gates, build release y checklist visual humano pantalla por pantalla.
-
-## 4. Contrato white-label para todas las olas
-
-- `sport-100…700` es la rampa de marca y **sí** cambia por coach.
-- `ember`, `success`, `danger`, `warning`, `aqua`, neutros y superficies no se
-  recolorean por marca salvo que el web cite explícitamente `sport`/`theme-primary`.
-- `accent-nutrition` es `ember`; `accent-training` es `sport`.
-- No decidir por el nombre `primary`: verificar el token exacto usado por web.
-- La fuente de marca se aplica sólo donde el web consume `--brand-font` y siempre
-  mediante el catálogo permitido, nunca desde una cadena arbitraria.
-- Cero valores crudos nuevos. Un literal existente sólo se conserva si representa
-  exactamente un canvas/token fijo del web y queda documentado.
-
-## 5. Regla de documentación y commits
-
-Cada tanda actualiza `docs/porting-status.md`, corre los tres gates, hace commit
-descriptivo y push únicamente a `rnmobiledenuevo`. No se toca `master`. Los
-resultados visuales de device se registran con build/commit/tema/dispositivo.
+La spec de cada unidad conserva evidencia útil. Capturas finales pueden vivir en `docs/audits/rn-parity-qa/` mientras formen parte de una certificación activa. Prompts, logs de agentes y reportes redundantes no forman parte del producto documental.

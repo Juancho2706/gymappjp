@@ -13,7 +13,7 @@ import { useTheme } from '../context/ThemeContext'
 import { ProgressBar } from './ProgressBar'
 import { MACRO_COLORS } from './MacroRingSummary'
 
-// Acento de dominio nutrición (ember-500, fijo — token-contract).
+// Acento de dominio nutrición (ember-500, fijo — TOKENS.md).
 const EMBER = '#FF6A3D'
 
 interface Props {

@@ -12,7 +12,7 @@ import { FONT, textStyle } from '../lib/typography'
  * INTENCIONAL: NO usa ThemeProvider (puede vivir fuera de su contexto) → NO usa
  * clases NativeWind (sin scheme fiable las CSS vars / `dark:` no resuelven acá).
  * Paleta oscura FIJA. El re-skin DS se aplica igual via los helpers de
- * typography + hex literales que espejan el token-contract (ink-950 surface,
+ * typography + hex literales que espejan TOKENS.md (ink-950 surface,
  * text-on-dark, danger-500 status, sport-500 CTA) para no depender del runtime.
  */
 const SURFACE = '#0B0E13' // DS --color-surface-inverse (ink-950, rgb 11 14 19)

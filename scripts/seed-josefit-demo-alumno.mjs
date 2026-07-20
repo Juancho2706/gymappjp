@@ -15,7 +15,7 @@
  * Uso (bash):
  *   JOSEFIT_SEED_CONFIRM=yes node scripts/seed-josefit-demo-alumno.mjs --allow-remote
  *
- * Password del alumno: env JOSEFIT_ALUMNO_PASSWORD o el default de abajo.
+ * Password del alumno: env JOSEFIT_ALUMNO_PASSWORD o E2E_PERSONAS_PASSWORD.
  *
  * IDEMPOTENTE: crea solo lo que falta. Cuenta @evatest.cl => permanente, excluida de purges.
  * Shapes verificados contra apps/web/src/lib/database.types.ts y los repos de bodycomp/movement.
@@ -34,7 +34,10 @@ config({ path: resolve(__dirname, '../.env.local'), override: false })
 const COACH_ID = '503412d0-77cc-4c7e-b1c2-dec81fb00ce6' // josefit (juanmvr2706), standalone
 const ALUMNO_EMAIL = 'josefit-alumno-demo@evatest.cl'
 const ALUMNO_NAME = 'Demo Alumno Josefit'
-const ALUMNO_PASSWORD = process.env.JOSEFIT_ALUMNO_PASSWORD || 'EvaDemo2026!'
+const ALUMNO_PASSWORD = process.env.JOSEFIT_ALUMNO_PASSWORD || process.env.E2E_PERSONAS_PASSWORD
+if (!ALUMNO_PASSWORD || ALUMNO_PASSWORD.length < 8) {
+    throw new Error('Falta JOSEFIT_ALUMNO_PASSWORD o E2E_PERSONAS_PASSWORD (mínimo 8 caracteres).')
+}
 
 const PROGRAM_NAME = 'DEMO Hipertrofia 3 dias'
 const NUTRITION_PLAN_NAME = 'DEMO Plan Recomposicion'

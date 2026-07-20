@@ -6,7 +6,7 @@ import type { FoodItemForMacros } from '../lib/nutrition-utils'
 import { FONT } from '../lib/typography'
 import { MACRO_COLORS } from './MacroRingSummary'
 
-// Acento de dominio nutrición (ember-500, fijo — token-contract).
+// Acento de dominio nutrición (ember-500, fijo — TOKENS.md).
 const EMBER = '#FF6A3D'
 const EMBER_700 = '#C2410C'
 // Corazón de favorito (rosa fijo, espejo de la web `fill-rose-400`).

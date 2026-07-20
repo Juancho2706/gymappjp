@@ -7,7 +7,7 @@ import Animated, { Easing, useAnimatedProps, useSharedValue, withTiming } from '
 import { useTheme } from '../context/ThemeContext'
 import { ProgressBar } from './ProgressBar'
 
-// Paleta de macros canónica EVA DS (token-contract): energía=success · proteína=ember ·
+// Paleta de macros canónica EVA DS (TOKENS.md): energía=success · proteína=ember ·
 // carbos=sport-ref · grasas=aqua. Colores de dominio FIJOS (no white-label).
 export const MACRO_COLORS = { kcal: '#1FB877', protein: '#FF6A3D', carbs: '#126BE1', fats: '#18ABD4' } as const
 

@@ -10,7 +10,7 @@ import { ComplianceRing } from '../../components'
 // no datos en vivo). Recibe color/nombre/logo/loaderText por params para reflejar
 // los cambios actuales del formulario de Mi Marca. Light/dark togglable.
 
-// DS surface tokens (token-contract.md §2/§3) so the mock previews the alumno app
+// DS surface tokens (TOKENS.md §2/§3) so the mock previews the alumno app
 // on the real EVA light/dark surfaces; the coach's brand color rides on `accent`.
 const LIGHT = { bg: '#FBFCFD', card: '#FFFFFF', fg: '#0B0E13', muted: '#5A6573', border: '#E6E9ED' }
 const DARK = { bg: '#0A0D12', card: '#161B22', fg: '#F4F6F8', muted: '#8A95A3', border: 'rgba(255,255,255,0.07)' }

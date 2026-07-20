@@ -1,52 +1,100 @@
-# EVA Docs Index
+---
+status: active
+owner: platform
+last_verified: 2026-07-20
+canonical: true
+---
 
-Ultima modificacion: 2026-06-24
+# EVA documentation
 
-## Lectura rapida
+Leer primero [CURRENT.md](status/CURRENT.md). Este es el único índice manual del proyecto.
 
-| Documento | Uso |
+## Fuentes canónicas
+
+| Tema | Documento |
 |---|---|
-| `APP_OVERVIEW.md` | Vision funcional de EVA: actores, zonas, rutas y modulos. |
-| `architecture/PROJECT_STRUCTURE.md` | Estructura del repo, capas, reglas y ownership. |
-| `architecture/FLOWS_AND_COMPONENTS.md` | Flujos principales y que rutas/componentes/actions toca cada uno. |
-| `testing/TEST_STATUS.md` | Registro consolidado de pruebas validas y pendientes. |
-| `operations/RUNBOOK.md` | Runbook de incidentes y operacion en prod. |
-| `operations/MANUAL_TASKS.md` | Tareas manuales (dashboards, env vars, pagos). |
+| Estado y siguiente trabajo | [status/CURRENT.md](status/CURRENT.md) |
+| Producto, actores y capacidades | [product/PRODUCT_OVERVIEW.md](product/PRODUCT_OVERVIEW.md) |
+| Estructura y dependencias | [architecture/PROJECT_STRUCTURE.md](architecture/PROJECT_STRUCTURE.md) |
+| Flujos, permisos y componentes | [architecture/FLOWS_AND_COMPONENTS.md](architecture/FLOWS_AND_COMPONENTS.md) |
+| Tokens de diseño web/native | [architecture/design-system/TOKENS.md](architecture/design-system/TOKENS.md) |
+| Paridad web ↔ React Native | [status/MOBILE_PARITY.md](status/MOBILE_PARITY.md) |
+| Pruebas y gates | [testing/TEST_STATUS.md](testing/TEST_STATUS.md) |
+| Personas E2E | [testing/E2E_PERSONAS.md](testing/E2E_PERSONAS.md) |
+| Acciones manuales pendientes | [operations/MANUAL_TASKS.md](operations/MANUAL_TASKS.md) |
+| Incidentes y operación | [operations/RUNBOOK.md](operations/RUNBOOK.md) |
 
-> Flujo DB actual: remoto/prod via branching de Supabase (ver `CLAUDE.md`). El flujo `local-only` quedo **OBSOLETO** — sus runbooks se archivaron en `archive/ops-local-only/`.
+## Runbooks especializados
 
-## Planes y specs
+- [Nutrition V2 rollout](operations/NUTRITION_V2_ROLLOUT_RUNBOOK.md)
+- [Importación del catálogo chileno](operations/FOOD_CATALOG_CL_IMPORT.md)
+- [Releases OTA móvil](operations/MOBILE_RELEASES_OTA.md)
+- [Checklist DB de paridad RN](operations/RN-PARITY-DB-CHECKLIST.md)
+- [Notas seguras para revisión de stores](operations/APP_REVIEW_NOTES.md)
 
-Las features nuevas se especifican en `specs/<feature>/{SPEC,PLAN,TASKS}.md` (SDD). Al shippear, el spec se mueve a `archive/specs/`. Los planes estrategicos y de Movida ya ejecutados/cancelados estan en `archive/`.
+## Evidencia e historia
 
-| Documento | Estado |
-|---|---|
-| `specs/<feature>/` | Specs vivos SOLO de features en diseño/curso (hoy: `enterprise-alumno-separation`). |
-| `plans/` | Planes de producto/estrategia (enterprise reference, dashboard revenue MVP, etc.). |
-| `audits/` | Auditorias point-in-time (paridad RN-web, nutricion, etc.). PDFs exportados y chunks crudos van gitignorados; se versionan solo resumenes curados. |
+- [Política de auditorías](audits/README.md)
+- [Política de archivo](archive/README.md)
 
-## Archivo historico
+Estas carpetas aportan contexto puntual o trazabilidad; nunca reemplazan estado, runbooks ni specs activas.
 
-`archive/` contiene handoffs, logs de sesiones y material ya shippeado/cancelado. No usar como fuente primaria si contradice documentos canonicos o el codigo:
+## Legal
 
-- `archive/estrategia/` — planes estrategicos ya ejecutados (teams-first, addons, archivado enterprise).
-- `archive/movida/` — esfuerzo Movida (deal cancelado 2026-06-16); historial completo.
-- `archive/nutrition-overhaul-2026-06/` — auditoria + diseño del overhaul de nutricion/menus (shippeado 2026-06).
-- `archive/nuevabibliadelaapp/` — biblia extendida (es) historica; NO canonica (usar codigo + `architecture/`).
-- `archive/ops-local-only/` — runbooks del flujo local-only obsoleto (GO_LIVE, MERGE_TO_LIVE, LOCAL_WORKFLOW, etc.).
-- `archive/specs/` — specs de features ya en produccion (exercise-creator, client-excel-import, coach-change-card, discount-codes, whitelabel-v2, coach-settings-restructure, addons-billing, identity-workspace-access, enterprise-subdomain, movida-areas/entrenamiento/intercambios/screening).
+- [Términos de servicio](legal/tos.md)
+- [Política de privacidad](legal/privacy-policy.md)
+- [Contrato Enterprise](legal/enterprise-contract-template.md)
 
-## Docs privados ignorados
+Los textos legales requieren revisión humana antes de cambios productivos.
 
-Estos existen localmente y estan ignorados por Git:
+## Specs activas
 
-- `docs/ANALISIS_PRECIOS.md`
-- `docs/BRANDING-IMAGENES-IA.md`
-- `docs/COACH_ONBOARDING_PREMIUM_PLAN.md`
-- `docs/WHITE-LABEL-ROADMAP.md`
-- `AGENTS.md`
-- `CLAUDE.md`
+Una feature nueva usa:
 
-> `nuevabibliadelaapp/` ya NO existe en la raiz: se archivo en `archive/nuevabibliadelaapp/`. `CLAUDE.md` / `AGENTS.md` aun la citan como "extended docs" — referencia stale (follow-up local, no committable porque ambos van gitignorados).
+```text
+specs/<feature>/
+├── SPEC.md
+├── PLAN.md
+└── TASKS.md
+```
 
-Regla: si algo privado se vuelve necesario para el repo publico, crear un resumen limpio en `docs/` sin secretos ni notas personales.
+`specs/` contiene únicamente trabajo real en diseño o ejecución. Al terminar o cancelar una feature, se extrae cualquier decisión duradera y el material deja el árbol activo. Git conserva el historial; no mantener un segundo backlog en documentación.
+
+## Reglas de ciclo de vida
+
+Todo documento canónico comienza con:
+
+```yaml
+---
+status: active
+owner: <equipo responsable>
+last_verified: YYYY-MM-DD
+canonical: true
+---
+```
+
+- Un solo documento `canonical: true` por tema.
+- `status: active` exige mantenimiento en el mismo cambio que altera su verdad.
+- `canonical: false` identifica referencia o evidencia puntual; no gobierna decisiones.
+- `archive/`, auditorías, planes cerrados y reportes point-in-time son históricos.
+- Handoffs, prompts, session logs, `_exec`, portlogs y fixlogs no pertenecen a documentación activa.
+- No guardar credenciales, secretos, datos personales, PDFs privados ni exports generados.
+- No declarar “completo” sin evidencia en testing/paridad.
+
+## Validación
+
+```bash
+pnpm docs:check
+```
+
+El check documental debe impedir enlaces internos rotos, secretos obvios y handoffs activos. No reemplaza la revisión de contenido contra código, configuración y estado remoto.
+
+## Prioridad ante contradicciones
+
+1. Seguridad y RLS ejecutable.
+2. Código, migraciones y configuración del entorno.
+3. Documento canónico de este índice.
+4. Spec activa.
+5. Evidencia/auditoría histórica.
+
+Si dos fuentes difieren, corregir o retirar la menos confiable; no agregar una tercera explicación.

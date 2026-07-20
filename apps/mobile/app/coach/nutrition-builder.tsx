@@ -66,7 +66,7 @@ import {
 import { exportNutritionExchangePdf } from '../../lib/nutrition-exchange-pdf'
 import { resolveNutritionExportBrand } from '../../lib/nutrition-day-export'
 
-// Acento de dominio nutrición / intercambios: ember-500 (token-contract). Se
+// Acento de dominio nutrición / intercambios: ember-500 (TOKENS.md). Se
 // consume como color literal SOLO para el glyph lucide (surfaces/text usan las
 // utilities className bg-ember-*/text-ember-* que sí flipean en dark). Fuente
 // única = GLOWS.ember del módulo DS de elevación (ningún hex se escribe acá).

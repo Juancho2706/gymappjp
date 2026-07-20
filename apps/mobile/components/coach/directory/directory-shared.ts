@@ -6,7 +6,7 @@ import type { DirectoryClient, DirectorySortKey, StatusFilter } from '../../../l
  * Shared tokens/helpers for the coach directory (espejo web `ClientsDirectoryClient`
  * + `DirRowCard`). Extraídos de la pantalla para mantener `clientes.tsx` < 600L.
  *
- * Los literales de estado son la excepción documentada del token-contract §1
+ * Los literales de estado son la excepción documentada de TOKENS.md §1
  * (NO brand — colores fijos seguros para SVG/iconos que la rampa de marca NO pisa).
  */
 

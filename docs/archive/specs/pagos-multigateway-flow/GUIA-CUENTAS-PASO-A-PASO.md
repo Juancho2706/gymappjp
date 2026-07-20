@@ -68,7 +68,7 @@ Esto confirma lo más importante: que al pagar con Flow el cliente ve la página
 1. Abrí una terminal (PowerShell).
 2. Pegá esto (reemplazando por tus claves de sandbox del paso B1):
    ```powershell
-   $env:FLOW_API_KEY="tu_apiKey_sandbox"; $env:FLOW_SECRET_KEY="tu_secretKey_sandbox"; node "C:\Users\juanm\AppData\Local\Temp\claude\D--Proyectos-Antigravity-gymappjp\89917fe2-90ac-407d-ab5d-6b7839f4f648\scratchpad\flow-sandbox-webpay-test.mjs"
+   $env:FLOW_API_KEY="tu_apiKey_sandbox"; $env:FLOW_SECRET_KEY="tu_secretKey_sandbox"; node "<local-temp-path>"
    ```
 3. El script te imprime una **URL**. Abrila en el navegador.
 4. **Mirá:** ¿aparece una pantalla de Flow para elegir medio (con el logo Webpay)? Al elegir Webpay, ¿te lleva a la página real de Transbank/Webpay? Sacá screenshot de las dos.

@@ -1,56 +1,126 @@
-# TEST_STATUS — Estado de las suites
+---
+status: active
+owner: engineering
+last_verified: 2026-07-20
+canonical: true
+---
 
-> Doc canónico referenciado en `CLAUDE.md`. Última actualización: 2026-07-12 (paridad RN — ficha coach Análisis/Programa).
->
-> Regla 2026-06-10 (memoria `feedback-test-each-batch`): por tanda solo `pnpm typecheck` + `pnpm test` (vitest local). Playwright/SQL contra Supabase y sandbox MP (tocan red/MP) se corren **únicamente en el GATE autorizado**, con OK explícito del usuario. Las suites nuevas se ESCRIBEN en sus fases y quedan pendientes de gate.
+# Verificación y estado de pruebas
 
-## Paridad RN — ficha coach Análisis/Programa (2026-07-12)
+Fuente canónica de cómo se valida el repositorio y cuáles son los gates pendientes. No mantiene un inventario manual de cada archivo de prueba; Vitest, Playwright y Git son ese inventario.
 
-- TypeScript `apps/mobile` y `apps/web`: verde.
-- Tokens DS: 86/86.
-- Vitest focalizado final: 15 archivos, 115 tests verdes. Incluye analytics
-  standalone/team/enterprise, reconcile compartido web/RN, persistencia y
-  rollback del builder, drafts/workspaces, ciclos 14, schemas, catálogo y el
-  bridge idempotente de correo post-asignación.
-- Scans: `git diff --check`, colores crudos del scope, límite 31 legado y árbol
-  del alumno: verdes.
-- Expo export Android: verde.
-- Auditoría adversarial R8: Análisis, Programa, asignación y cross-workspace sin
-  P0/P1/P2 RN accionables; el último gap de correo web→RN quedó cerrado.
-- Migración de constraints 14d: escrita; pendiente de Supabase branch gate.
-- Smoke device light/dark × EVA/custom: pendiente.
+## Gates que bloquean PR
 
-## Paridad RN — ficha coach Resumen/Progreso (2026-07-12)
+El job `quality` de `.github/workflows/ci.yml` corre en pull requests hacia `main`, `master` o `rnmobiledenuevo`, y en pushes a `main`/`master`:
 
-- TypeScript `apps/mobile` y `apps/web`: verde.
-- Tokens DS: 86/86.
-- Vitest focalizado: 11 archivos, 120 tests verdes. Incluye analytics de
-  perfil, timeline nutricional/plan A-B, workspace/entitlements, autorización
-  enterprise y body composition.
-- Expo export Android: verde.
-- Auditoría adversarial R7: Overview, Progreso y cross-security sin
-  P0/P1/P2 accionables.
-- Smoke device light/dark × EVA/custom: pendiente.
+1. `pnpm docs:check` (sin dependencias instaladas);
+2. `pnpm install --frozen-lockfile --ignore-scripts`;
+3. `pnpm lint`;
+4. `pnpm typecheck` para web;
+5. `pnpm check:tokens` para paridad del design system;
+6. `pnpm exec vitest run`.
 
-## Vitest (unit — se corren por tanda)
+`pnpm audit --audit-level=high --prod` también corre, pero permanece informativo (`continue-on-error`) para evitar que una indisponibilidad/advisory externo bloquee código sin revisión.
 
-| Suite | Estado | Cubre |
+## Gates manuales de CI
+
+Los jobs `e2e` y `nutrition-smoke` solo corren mediante `workflow_dispatch`.
+
+Motivo: usan Supabase real, secrets y datos preparados; todavía no son deterministas para cada PR. No se consideran “verdes” porque el job haya sido omitido.
+
+`e2e` ejecuta:
+
+- aislamiento RLS enterprise;
+- suite Playwright general;
+- artefacto `playwright-report-e2e`.
+
+`nutrition-smoke` valida el entorno y ejecuta el smoke de alumno, solo si están presentes las credenciales E2E requeridas. Produce `playwright-report-nutrition-smoke`.
+
+## Seguridad de fixtures
+
+- Se rotó y verificó la contraseña de 27 cuentas Auth sintéticas el 20 de julio de 2026; se ejecutó cierre global de sesión en las 27.
+- Los seeds remotos vigentes exigen contraseñas por entorno; el one-off inseguro de cuentas demo fue retirado.
+- Los valores anteriores pueden seguir visibles en el historial Git, pero ya no autentican. No se reescribió el historial para no forzar clones/ramas abiertas.
+- Supabase invalida refresh tokens con el cierre global; un access token ya emitido puede vivir hasta su `exp`: [Auth sign-out](https://supabase.com/docs/guides/auth/signout).
+
+## Builds móviles
+
+`.github/workflows/mobile-build.yml` es manual y separado del CI de PR.
+
+Estado confirmado al 20 de julio de 2026:
+
+| Gate | Estado | Evidencia |
 |---|---|---|
-| `apps/web/src/services/billing/addons.service.test.ts` | ✅ verde | cálculo compuesto por ciclo + redondeos; `getAddonProrationClp` (mitades, día del corte, mínimo 1 día); `isAddonBillable`; bifurcación de `activateAddonForCoach` (mensual INSERT+PUT / trim-anual one-shot); reversión D5; `materializeAddonFromOneShot` idempotente; máquina de estados de baja (reglas 3-4); `canPurchaseAddon` (D8); **`syncAdminGrants` write-through del override CEO (otorga/retira/idempotente; no toca self_service)** |
-| `apps/web/src/services/billing/addon-webhook.service.test.ts` | ✅ verde | hooks del webhook con provider mockeado (materialización, set-once `first_charged_at`, snapshots, evento `updated`, terminal) |
-| `apps/web/src/app/admin/(panel)/coaches/_actions/coach-actions.test.ts` | ✅ verde | `buildCoachUpdateData` ya NO emite `enabled_modules` (write-through D2); override solo de módulos deja `updateData` vacío |
-| `apps/web/src/app/admin/(panel)/_actions/module-form.test.ts` | ✅ verde | `readModules` (mapa por checkbox) |
+| Android `previewv2` | verde | build reportado por el dueño |
+| iOS `previewv2` | pendiente de reintento | fallo previo de selección de credenciales; configuración corregida en `c6743ef3` |
+| Expo Doctor | verde | 18/18 checks después del arreglo de perfil |
+| Config EAS Android | verde | sigue `internal` + APK para `previewv2` |
+| Config EAS iOS | verde estático | `local` + `store` + Release + imagen Xcode 26; falta build real |
+| Smoke device Android/iOS | pendiente | seguimiento en [MOBILE_PARITY.md](../status/MOBILE_PARITY.md) |
 
-## Suites del GATE (escritas, se EJECUTAN solo en el gate autorizado)
+No marcar iOS ni paridad como completos hasta tener artefacto y smoke en dispositivo.
 
-| Suite | Tipo | Estado | Nota |
-|---|---|---|---|
-| `tests/billing/coach-addons-rls.sql` | SQL (RLS + trigger) | escrita, **pendiente de gate** | SELECT propio OK / ajeno invisible; INSERT/UPDATE/DELETE como `authenticated` denegados; service-role full; trigger prende/apaga `enabled_modules`; coalesce `'{}'`; admin_grant coexiste con paga; índice único parcial; `billing_snapshots` (SELECT propio, escritura denegada, unique por `provider_payment_id`). Correr como `authenticated`+claims, nunca service_role para los casos negativos |
-| `tests/billing/addons-flow.spec.ts` | Playwright (mock MP) | **pendiente (F5)** | alta con checkbox, total en vivo, modal trim/anual + redirect mock, baja con fecha efectiva, historial, estado "Comprometido", aviso amable en módulo OFF, paso de add-ons en signup, reactivate pre-marca ex-add-ons, admin-grant "Cortesía EVA". Usa la 9na persona e2e dedicada con módulos ON — **no tocar las 8 personas de la matriz de separación** |
-| `specs/addons-billing/SANDBOX-CHECKLIST.md` | Sandbox MP (token TEST) | escrita, **pendiente de gate** | 9 ítems: PUT de monto (cuándo aplica / email), payload de cobro recurrente, alta mensual, supersede, baja, compromiso mínimo, PUT sobre paused/cancelled, evento `updated`, alta trim/anual one-shot |
+## Comandos locales
 
-## Orden del gate (con OK del usuario)
+Instalación reproducible:
 
-branch efímero + migración `20260612150000_coach_addons_selfservice_billing.sql` + suite SQL + advisors → merge + regen `database.types.ts` → vitest completo → Playwright `tests/billing/` → sandbox MP (9 ítems) → smoke manual de la matriz QA con cuenta de prueba standalone (`juanmvr` — memoria `project-test-accounts`).
+```bash
+pnpm install --frozen-lockfile
+```
 
-> **Lanzamiento (post-gate):** prender `SELF_SERVICE_ADDONS_ENABLED` SOLO con sandbox checklist verde + hardening RLS del plan 03 confirmado en prod. Sin eso se estaría vendiendo algo tomable gratis por API (doc fuente §2.2).
+Gates normales:
+
+```bash
+pnpm docs:check
+pnpm lint
+pnpm typecheck
+pnpm check:tokens
+pnpm exec vitest run
+```
+
+TypeScript móvil no forma parte todavía del script raíz `typecheck`; ejecutarlo cuando cambia RN:
+
+```bash
+pnpm exec tsc --noEmit -p apps/mobile/tsconfig.json
+```
+
+Playwright conectado al entorno configurado:
+
+```bash
+pnpm e2e:check-env
+pnpm test:e2e
+```
+
+No correr E2E remoto contra producción sin confirmar personas de prueba, entorno y alcance de writes.
+
+## Matriz por tipo de cambio
+
+| Cambio | Verificación mínima adicional |
+|---|---|
+| Markdown/estructura documental | `pnpm docs:check` |
+| Web TS/TSX | lint, typecheck, Vitest focalizado y completo antes de merge |
+| Mobile TS/TSX | TypeScript móvil, Vitest de lógica compartida, Expo Doctor/export y smoke device |
+| Tokens/UI compartida | `check:tokens`, light/dark, EVA/custom y viewport móvil |
+| RLS/migración | branch Supabase, SQL positivo/negativo con roles reales, advisors, types regenerados |
+| Auth/pagos/webhooks | unit tests, idempotencia, entorno sandbox y reconcile posterior |
+| Nutrición/intake/offline | unit/read models, aislamiento, reintentos y smoke web+device |
+| Release | quality, E2E manual de riesgo, build firmado y smoke del artefacto exacto |
+
+## Cómo registrar un gate
+
+Actualizar este archivo solo con el resultado consolidado:
+
+- fecha;
+- SHA o run;
+- entorno/plataforma;
+- comando o workflow;
+- resultado y bloqueador pendiente.
+
+No pegar logs extensos, screenshots, payloads, credenciales ni listas de cientos de suites. Los artefactos viven en GitHub Actions; los defectos accionables viven en issues/specs activos.
+
+## Pendientes actuales
+
+- [ ] Repetir iOS `previewv2` con `c6743ef3` o un descendiente.
+- [ ] Completar smoke Android/iOS de la paridad activa.
+- [ ] Ejecutar E2E manual antes del siguiente release con cambios de auth/RLS/pagos/nutrición.
+- [ ] Hacer deterministas los jobs Playwright antes de volverlos obligatorios en cada PR.

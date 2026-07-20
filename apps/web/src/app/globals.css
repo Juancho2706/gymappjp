@@ -12,7 +12,7 @@
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
-  /* EVA DS (token-contract Fase 0): rol UI/body = Hanken Grotesk (ya cargada como
+  /* EVA DS (TOKENS.md): rol UI/body = Hanken Grotesk (ya cargada como
      --font-brand-hanken en layout.tsx). Habilita la utilidad `font-ui`. */
   --font-ui: var(--font-brand-hanken), var(--font-inter), system-ui, -apple-system, sans-serif;
   /* white-label v2: si el coach eligió fuente, --brand-font (lo setea el layout /c) gana; si no,

@@ -108,7 +108,7 @@ export const STUDENT_NAMES = {
     pool: 'E2E Pool Alumno',
 } as const
 
-/** UUIDs estables de los alumnos seed en prod (cuentas permanentes; ver docs/e2e-personas.md).
+/** UUIDs estables de los alumnos seed en prod (cuentas permanentes; ver docs/testing/E2E_PERSONAS.md).
  *  Overrideables por env para otros entornos. */
 export const STUDENT_IDS = {
     solo: process.env.E2E_SOLO_ALUMNO_ID ?? '01c36cde-a95d-42a7-b165-ba08a8599d22',

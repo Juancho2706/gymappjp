@@ -19,6 +19,8 @@ jobs:
         with:
           node-version: lts/*
           cache: pnpm
+      # No dependencies required: catches stale/broken docs and literal credentials early.
+      - run: pnpm run docs:check
       # --ignore-scripts blocks postinstall supply chain attacks (pnpm v10+ protection)
       - run: pnpm install --frozen-lockfile --ignore-scripts
       # Blocking gate: the 5 react-compiler errors were cleared (Fase 2.4), so lint is green

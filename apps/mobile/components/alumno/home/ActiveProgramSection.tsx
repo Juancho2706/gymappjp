@@ -10,7 +10,7 @@ import { DAY_SHORT } from './types'
 import type { PendingDay, PlanDayView, Program } from './types'
 
 // Rampas DS FIJAS (nunca white-label) resueltas por esquema para props de color
-// de iconos lucide (className no las expresa). Valores verbatim del token-contract:
+// de iconos lucide (className no las expresa). Valores verbatim de TOKENS.md:
 // ember-700 (light globals.css/LIGHT_SCHEME_VARS #C23E14, dark #FFB79E) y ink-300
 // (light #A8B1BD, dark #414C5A). `text-on-ember` = ink-950 #0B0E13, constante en
 // ambos modos (icono casi negro sobre el fondo ember-500).
