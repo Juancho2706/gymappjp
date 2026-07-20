@@ -6,7 +6,7 @@ type CardVariant = "default" | "inverse" | "sport" | "outline" | "sunken"
 type CardPadding = "none" | "sm" | "md" | "lg"
 
 /**
- * EVA DS surface tokens per Card variant (token-contract Fase 0).
+ * EVA DS surface tokens per Card variant (TOKENS.md).
  * Light/dark flip automatically via the semantic vars redefined under `.dark`.
  * Clean utilities (`bg-surface-card`, `bg-sport-500`, `shadow-sm/md`) are used
  * where they exist; `[var(--token)]` references the same DS aliases otherwise.

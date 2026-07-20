@@ -9,7 +9,7 @@ import type { Json, MealWithFoodItems } from '../../../lib/nutrition-utils'
  * `apps/web/src/app/c/[coach_slug]/nutrition/_components/*`).
  */
 
-// ── Acentos de dominio nutrición (rampa ember FIJA, token-contract — NUNCA
+// ── Acentos de dominio nutrición (rampa ember FIJA, TOKENS.md — NUNCA
 //    white-label; la marca del coach sigue via theme.primary / clases NativeWind). ──
 export const EMBER_500 = '#FF6A3D'
 export const EMBER_600 = '#E8511E'

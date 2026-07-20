@@ -18,7 +18,7 @@ import { MACRO_COLORS } from './MacroRingSummary'
 import { sumMealMacros } from '../lib/nutrition-utils'
 import type { FoodItemForMacros, MealWithFoodItems } from '../lib/nutrition-utils'
 
-// Rampa ember (nutrición) — fija, token-contract.
+// Rampa ember (nutrición) — fija, TOKENS.md.
 const EMBER_500 = '#FF6A3D'
 const EMBER_700 = '#C2410C'
 

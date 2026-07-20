@@ -1,190 +1,69 @@
-# Port 1:1 — PWA/responsive (apps/web) → React Native (apps/mobile)
-
-> Documento maestro del esfuerzo de paridad. Escrito al cierre de la Sección 1
-> (11-jul-2026). Complementa a `docs/porting-status.md` (estado vivo y residuos
-> por unidad) y `docs/rn-port/ola0-hallazgos.json` (corpus de auditoría).
-> **Branch de trabajo: `rnmobiledenuevo`** (absorbió a `claude/new-branch-rnmobile-x6qxw6` el 2026-07-11; aquella rama fue eliminada).
-
+---
+status: active
+owner: Juan Manuel Villegas
+last_verified: "2026-07-20 @ 34b09d8f"
+canonical: false
+role: methodology
+source_of_truth: docs/status/MOBILE_PARITY.md
 ---
 
-## 1. La visión
+# Método del port Web/PWA → React Native
 
-La app React Native (`apps/mobile`, Expo Router + NativeWind) debe ser un
-**espejo 1:1 de la PWA/responsive web** (`apps/web`, Next.js): misma jerarquía
-visual, mismos tokens de diseño, misma tipografía, mismos estados (vacío /
-carga / error / claro / oscuro), mismos flujos y el mismo comportamiento de
-cada elemento interactivo — con las únicas divergencias siendo **adaptaciones
-idiomáticas de plataforma** (Pressable vs hover, BottomSheet vs Dialog,
-háptica) que preserven lo que el usuario ve y puede hacer.
+Este directorio define **cómo** se trabaja la paridad. No mantiene el estado ni una cronología.
 
-**Regla de oro: el web manda.** `apps/web` es la fuente de verdad. Ninguna
-pantalla RN se escribe "de memoria" ni desde descripciones: se escribe contra
-una spec extraída del código web real, con citas `archivo:línea`.
+- Estado actual y punto de reanudación: [`docs/status/MOBILE_PARITY.md`](../status/MOBILE_PARITY.md)
+- Plan de ejecución: [`specs/rn-mobile-parity-redesign/PLAN.md`](../../specs/rn-mobile-parity-redesign/PLAN.md)
+- Backlog vivo: [`specs/rn-mobile-parity-redesign/TASKS.md`](../../specs/rn-mobile-parity-redesign/TASKS.md)
+- Specs de la ola activa: [`specs/seccion-4a/`](./specs/seccion-4a/)
+- Snapshot de reconocimiento inicial, no backlog: [`artifacts/ola0-hallazgos-20260710.json`](./artifacts/ola0-hallazgos-20260710.json)
 
-Por qué así: el intento original de port falló en detalles (ej. la card de
-sets del workout perdió las barras RIR/RPE) porque se portó desde resúmenes
-funcionales, no desde el código. La lección estructural: **sin evidencia
-obligatoria y sin verificación adversarial, los detalles se pierden en
-silencio.**
+## Principio rector
 
-## 2. La metodología (olas por sección)
+La superficie responsive de `apps/web` es la referencia visual y funcional. React Native debe preservar jerarquía, contenido, estados, validaciones y resultado de cada interacción. Las diferencias idiomáticas de plataforma son válidas únicamente cuando mantienen esa experiencia o aportan una capacidad nativa aprobada y documentada.
 
-Cada sección de la app se porta con este pipeline; es replicable tal cual
-para las secciones restantes:
+No se implementa desde recuerdos, handoffs ni capturas aisladas. Cada unidad se verifica contra código actual y contra un commit conocido.
 
-```
-a) INVENTARIO   — agentes mapean pantallas/rutas/modales/flujos de la sección
-                  en apps/web (y localizan las contrapartes RN existentes).
-b) SPEC         — 1 agente por unidad lee el código web LÍNEA POR LÍNEA y
-                  produce una spec donde CADA afirmación cita archivo:líneas:
-                  layout, tokens, tipografía, claro/oscuro, cada handler
-                  (¿modal? ¿navega? ¿toast?), estados, validaciones, datos.
-c) PORT         — 1 agente por unidad implementa CONTRA LA SPEC (no contra su
-                  imaginación), leyendo el RN existente y modificándolo (no
-                  duplicando), verificando consumidores antes de cambiar APIs.
-d) VERIFICACIÓN — agentes DISTINTOS comparan spec vs RN elemento por elemento
-   ADVERSARIAL    y reportan toda diferencia con evidencia de ambos lados.
-                  Cada hallazgo dispara una ronda de fix. Se repite hasta
-                  converger o hasta el tope de rondas (6).
-e) CALIDAD      — `npx tsc --noEmit` (apps/mobile) + `node
-                  scripts/check-token-parity.mjs` deben pasar.
-f) CHECKPOINT   — commit descriptivo + push SIEMPRE antes de la siguiente
-                  sección; docs/porting-status.md actualizado.
-```
+## Pipeline por unidad
 
-### Reglas duras del pipeline
+1. **Inventario:** rutas, componentes, modales, datos, estados y acciones de la superficie web.
+2. **Spec:** evidencia por símbolo/ruta y criterios objetivos de cierre.
+3. **Implementación:** modificar la contraparte RN existente; compartir contratos y lógica de dominio cuando corresponda.
+4. **Verificación adversarial:** una revisión independiente compara spec, web y RN.
+5. **Lente de lógica:** revisar carreras, foco/foreground, offline, dobles envíos, permisos y errores inalcanzables.
+6. **Gates:** typecheck, pruebas afectadas, paridad de tokens y export/build correspondiente.
+7. **QA device:** light/dark, EVA/marca personalizada y ambos sistemas operativos cuando aplique.
+8. **Checkpoint:** código, spec de unidad, tareas y estado canónico se actualizan juntos.
 
-- Prohibido especificar o portar de memoria: sin cita de código, no cuenta.
-- Prohibido eliminar funcionalidad RN existente sin anotarlo.
-- Usar tokens del theme; no introducir valores hardcodeados nuevos.
-- No tocar `apps/mobile/global.css` ni `tailwind.config.js` desde agentes de
-  pantalla (el token layer se gobierna aparte; gate `pnpm check:tokens`).
+## Definition of Done
 
-### Tiering de modelos (lección de costos)
+Una unidad solo queda certificada cuando cumple todo:
 
-- **Fable**: SOLO orquesta — diseña olas, lee resúmenes, decide, checkpointea.
-  Nunca trabajo O(n) sobre pantallas/componentes.
-- **Opus**: el músculo — specs, ports, verificación adversarial.
-- **Sonnet** (opcional): fases mecánicas — docs de estado, gates, extracción.
+- cero diferencias P0/P1/P2 accionables contra web responsive;
+- divergencias nativas justificadas y aprobadas por escrito;
+- estados loading, empty, error, offline, disabled y permisos cubiertos;
+- `pnpm exec tsc --noEmit` en `apps/mobile` verde;
+- pruebas del dominio tocado verdes;
+- `pnpm check:tokens` o gate equivalente verde;
+- export Android verde y build nativo cuando el cambio lo requiera;
+- QA real en dispositivo registrado.
 
-### Lecciones aprendidas (para no repetir)
+Si falta device QA, el estado correcto es **cerrado estático; no certificado**.
 
-1. **Criterio de convergencia histórico**: Secciones 1–2 usaron "cero P0/P1"
-   y dejaron P2 documentados para evitar auditorías infinitas. Para el cierre
-   1:1, `PLAN-OLAS-1A1.md` reemplaza ese criterio por **cero P2 accionable de
-   paridad**: se corrige toda diferencia observable y sólo se aceptan
-   adaptaciones nativas justificadas.
-2. **Orden de la cola**: en pipelines grandes, las auditorías saturan la
-   concurrencia y los fixes quedan atrás. Secciones acotadas (10-15 unidades)
-   convergen; olas de 120+ componentes no.
-3. **El caché de resume** (`resumeFromRunId`) reutiliza resultados solo si
-   prompt+opciones son idénticos: cambiar el modelo a mitad de ola re-ejecuta
-   todo. Decidir el tier ANTES de lanzar.
-4. **QA visual humano es insustituible**: los agentes leen código, no píxeles.
-   Cada sección cerrada debe validarse con una build real en dispositivo
-   (los 3 P0 del dashboard los encontró el usuario, no la flota).
-5. **La verificación adversarial de paridad no caza bugs de lógica/estado**:
-   comparar spec vs RN elemento por elemento encuentra deltas visuales, pero
-   se le escapan races, guardas ausentes y early-returns muertos — una pasada
-   externa con **lente de lógica** (no de paridad) fue la que cazó los 3 bugs
-   de estado de la Sección 1 (ver `porting-status.md` §Bugs de lógica). Cada
-   sección debe incluir además ese lente. Y al cierre de cada sección,
-   **re-verificar los claims del doc contra HEAD antes de commitear**: los
-   P1 #1/#2 de la Sección 1 quedaron declarados abiertos en el doc estando ya
-   arreglados en código (el fix precedía al commit del doc por ~25 min).
+## Reglas de implementación
 
-## 3. Lo hecho (cronología)
+- Usar tokens del theme; no introducir colores o spacing crudos sin contrato.
+- Preservar white-label, dark mode y safe areas.
+- No eliminar funcionalidad RN sin registrarla como delta o decisión.
+- No cambiar primitivas compartidas preventivamente: demostrar el delta y revisar consumidores.
+- Lógica reutilizable y contratos viven en `packages/`; UI específica permanece en su app.
+- Mantener write-paths idempotentes, validación de servidor y RLS/entitlements reales; un gate visual no es seguridad.
+- No abrir más de una unidad que edite el mismo archivo monolítico.
 
-### Ola 0 — Fundación (10-jul, cortada a propósito tras capturar su valor)
+## Política documental
 
-- ✅ **Tokens no-color** auditados y corregidos web→RN: radios (escala entera
-  desalineada: `lg` 12→20 etc.), tipografía, sombras, motion. Pusheado
-  (`c193a68a`); gate de 86 tokens de color intacto.
-- ✅ **Mapa de 132 componentes compartidos** web→RN (41 alta / 82 media / 9 baja).
-- ✅ **1,293 discrepancias documentadas con evidencia** en
-  `docs/rn-port/ola0-hallazgos.json` — SIN aplicar (ver §4).
-
-### Sección 1 — Ejecutor de workout del alumno (10/11-jul, cerrada con residuos)
-
-156 agentes Opus, 11 unidades (card de sets KG/reps + escalas RPE/RIR, teclado
-numérico, orquestador de sesión, superseries, timers, resumen/finalizar,
-sustitución, stepper, video, historial), cada una con spec-con-evidencia +
-port + hasta 6 rondas de verificación adversarial.
-
-- El flujo del ejecutor quedó **usable y fiel en lo visible**; los residuos
-  P2 son deltas sub-pixel, compromisos de design-system o adaptaciones
-  idiomáticas sancionadas (detalle por unidad en `docs/porting-status.md`).
-- **3 P1 funcionales — ✅ RESUELTOS** (verificado 2026-07-11): el badge
-  "Semana A/B" sin gate por `ab_mode` y el historial previo/detección de PR
-  con el anti-patrón que web ya corrigió ya estaban arreglados en código
-  desde el commit `8725b033` (el doc había quedado desactualizado, no el
-  código); `expo-audio` resultó un falso gap de entorno local — el paquete
-  está resuelto en `pnpm-lock.yaml` (1.0.16) e instalado, y el audio funciona
-  en build CI fresco. Detalle en `porting-status.md` §P1 resueltos.
-- **Bug sistémico de fundación — ✅ RESUELTO** (mini-ola 2026-07-11):
-  `border-default` (y `border-subtle`/`border-strong`, mismo defecto) sin
-  alpha compilaban a color opaco en dark (web: blanco@13%). Fix aplicado por
-  la vía web (alpha horneado en el token, no theme imperativo):
-  `tailwind.config.js` + `global.css` claro/oscuro + `lib/theme.ts`. Detalle
-  en `porting-status.md` §Historial de entrenos.
-- **3 bugs de lógica/estado encontrados por verificación adversarial externa
-  con lente de lógica** (no de paridad pixel), arreglados en la misma
-  mini-ola: race del auto-avance del modo Pasos en `ExecutorV2.tsx`;
-  doble-commit por el botón "Listo" del keypad sin guarda; `syncError`/
-  "Reintentar" inalcanzable en series tipadas (estos dos últimos en
-  `SetRow.tsx`). Detalle en `porting-status.md` §Bugs de lógica.
-- Gates al cierre: `tsc --noEmit` limpio; paridad de tokens 86/86 OK.
-
-### CI / infraestructura (10-jul)
-
-- Cherry-pick `bfe42530` (PR #119): profile production emite **AAB** + submit
-  automático a Google Play internal + gitignore del service account.
-- Fix `mobile-build.yml`: el step de inyección de `EXPO_PUBLIC_SUPABASE_*`
-  ahora cubre también el profile **production** (antes solo `prodpreview`,
-  lo que producía AABs que crasheaban al abrir con `supabaseUrl is required`).
-
-## 4. Lo que falta (explícito, por sección)
-
-> El orden y criterio de entrada vigente están en
-> [`PLAN-OLAS-1A1.md`](./PLAN-OLAS-1A1.md). Desde 2026-07-12 no se cierra una
-> unidad con P2 accionables: entra todo delta observable contra el responsive y
-> se excluyen mejoras nativas/refactors sin efecto de paridad.
-
-| # | Sección | Alcance web (fuente de verdad) | Entrada ya pagada |
-|---|---------|-------------------------------|-------------------|
-| 2R | **Cierre absoluto del alumno portado** | Secciones 1–2 + chrome periférico | Cápsula movement/bodycomp, toggle de comidas inline, fuente white-label, P2 visuales comprobados y sheets que fallen en device |
-| 3 | **Dashboard del coach** (activa) | `coach/dashboard`, nav, directorio `coach/clients`, ficha de cliente | 14 specs/briefs existentes; terminar checkpoint antes de 2R |
-| 4A | **Nutrición del alumno** | `c/[coach_slug]/nutrition*` | Requiere specs formales; `MacroRingSummary` tiene divergencia estructural/color confirmada |
-| 4B | **Nutrición del coach** | `coach/nutrition-*`, `foods`, `recipes`, `meal-groups` | Hallazgos de NutritionTabB5 y catálogos |
-| 5 | **Builder del coach** | `coach/builder`, `program-builder`, `workout-programs`, `templates` | Hallazgos de BlockEditSheet, ExerciseBlock |
-| 6 | **Resto por dominio** (inventariar) | bodycomp, movement, exercises, settings, onboarding, auth, tools, support… | Dividir en lotes de 10–15 unidades, no una ola monolítica |
-| 7 | **Certificación transversal** | todas las rutas web↔RN | rutas, Ola 0, tokens/crudos, light/dark, marca EVA/custom y QA release |
-
-### Deuda transversal (no pertenece a una sección)
-
-> Los 3 P1 de la Sección 1 (badge A/B, historial/PR, expo-audio) y el bug
-> sistémico de `border-default` en dark **ya están resueltos** (verificado
-> 2026-07-11 — ver §3 arriba y `porting-status.md`). La deuda restante de la
-> Sección 1 es sólo la de los ítems 1 y 3 de abajo.
-
-1. **1,293 discrepancias de la Ola 0 sin aplicar** — se consumen por sección
-   (grep por componente en `ola0-hallazgos.json` al tocar cada pantalla); las
-   de primitivas compartidas (Button/Card/Sheet/Dialog…) se aplican dentro de
-   la primera unidad que demuestre el delta y luego se regresionan en todos sus
-   consumidores; no se hace un refactor global preventivo.
-2. **91 componentes media/baja sin auditar** de la Ola 0 — los cubren las
-   secciones al llegar a sus pantallas.
-3. **Residuos P2 de las Secciones 1–2 + verificación en device** — entran en
-   Ola 2R si son diferencias observables contra web. Sólo se excluyen
-   adaptaciones nativas obligatorias o límites reales documentados.
-4. **QA visual humano por sección** — build por Google Play internal tras
-   cada cierre de sección; lo que el usuario vea se registra como P0 de la
-   sección siguiente (así se hizo con el dashboard).
-
-## 5. Cómo retomar
-
-1. Leer `docs/porting-status.md` (estado vivo, "Dónde retomar").
-2. Seguir el orden de `PLAN-OLAS-1A1.md` con el pipeline de §2. El criterio de
-   convergencia es cero P0/P1 **y cero P2 accionable de paridad**.
-3. Checkpoint + push al cierre; actualizar `porting-status.md`; build + QA
-   visual humano; los hallazgos del QA entran como P0 de la ola siguiente.
+- Este README cambia solo si cambia el método.
+- `MOBILE_PARITY.md` contiene únicamente el estado resumido.
+- `TASKS.md` contiene únicamente trabajo vivo y gates pendientes.
+- Cada spec de unidad contiene evidencia y decisiones de esa unidad.
+- Handoffs, prompts, portlogs y reportes intermedios no son documentación activa.
+- Git conserva la historia; `archive/` se reserva para evidencia con valor legal, operativo o de decisión.

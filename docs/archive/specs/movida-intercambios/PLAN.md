@@ -410,7 +410,7 @@ alumno afectada.
 - **GATE FINAL (con autorización explícita del usuario, regla 2026-06-10):** 1 corrida
   `--workers=1` contra build prod de `tests/separation/nutrition-exchanges.spec.ts` +
   `tests/team/exchanges-isolation.sql` + suites existentes de separación. Personas e2e
-  permanentes (`docs/e2e-personas.md`). E2E verifica: matriz módulo ON/OFF, PDF con marca del
+  permanentes (`docs/testing/E2E_PERSONAS.md`). E2E verifica: matriz módulo ON/OFF, PDF con marca del
   team (NO EVA), alumno equivalencias offline, aislamiento entre teams.
 
 Esfuerzo total estimado: MVP visual (F0-F5 compacto) 2-3 días intensos; completo 2-3 semanas

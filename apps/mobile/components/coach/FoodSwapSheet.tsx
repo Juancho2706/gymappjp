@@ -7,7 +7,7 @@ import { MACRO_COLORS } from '../MacroRingSummary'
 import { swapMacros, type DraftFoodItem, type SwapOption } from '../../lib/nutrition-builder'
 import { swapOptionAllowedUnits, swapOptionIsLiquid } from '../../lib/nutrition-utils'
 
-// Acento de dominio nutrición / intercambios (ember-500, fijo — token-contract).
+// Acento de dominio nutrición / intercambios (ember-500, fijo — TOKENS.md).
 const EMBER = '#FF6A3D'
 
 interface Props {

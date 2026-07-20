@@ -6,7 +6,7 @@ import { SHADOWS } from '../lib/shadows'
 /**
  * EVA Card — base surface container (RN port of the DS `Card`).
  *
- * Design variants (token-contract / Card.prompt.md):
+ * Design variants (TOKENS.md / Card.prompt.md):
  *  - `default`  white surface + soft shadow
  *  - `inverse`  ink hero / stat surface
  *  - `sport`    energy panel (brand sport-500 fill)

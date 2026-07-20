@@ -11,7 +11,7 @@ import { hexToChannels } from '../../../lib/theme'
 import { shadow } from '../../../lib/shadows'
 
 // Neutrales de superficie inversa (fijos en light+dark porque la Card del hero es
-// siempre una superficie ink oscura — mirror del token-contract §2/§3, mismo
+// siempre una superficie ink oscura — mirror de TOKENS.md §2/§3, mismo
 // patron que StatCard/InfoTooltip). El acento de MARCA (theme.primary) SI viene
 // del branding white-label.
 const ON_DARK = '#F4F6F8' // ink-50

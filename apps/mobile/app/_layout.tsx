@@ -10,7 +10,7 @@ import * as Linking from 'expo-linking'
 import * as Notifications from 'expo-notifications'
 import * as SplashScreen from 'expo-splash-screen'
 import { useFonts } from 'expo-font'
-// EVA Design System families (token-contract.md D3): Archivo (display),
+// EVA Design System families (TOKENS.md §4): Archivo (display),
 // Hanken Grotesk (UI/body), JetBrains Mono (metrics/timers).
 // 2R-3: los slots display 600-900 se registran vía brandDisplayFontMap (lib/brand-fonts.ts)
 // — Archivo real por default, o la fuente white-label del coach (espejo de --brand-font web).

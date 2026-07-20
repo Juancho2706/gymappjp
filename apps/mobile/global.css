@@ -4,7 +4,7 @@
 
 /* ============================================================
    EVA Design System tokens (rgb channels for rgb(var(--x)/<alpha>)).
-   Mirrors apps/web globals.css + specs/redesign-eva-ds/token-contract.md.
+   Mirrors apps/web globals.css + docs/architecture/design-system/TOKENS.md.
    Channels are space-separated "r g b" so NativeWind opacity modifiers
    work (bg-sport-500/40, border-border-subtle/[0.07], ...).
 

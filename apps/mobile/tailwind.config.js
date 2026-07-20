@@ -1,6 +1,6 @@
 /** @type {import('tailwindcss').Config} */
 // Tokens mirror the web design system (apps/web globals.css + lib/theme.ts) and
-// specs/redesign-eva-ds/token-contract.md. Colors use rgb-channel CSS vars so
+// docs/architecture/design-system/TOKENS.md. Colors use rgb-channel CSS vars so
 // Tailwind opacity modifiers work (e.g. bg-sport-500/40, border-border-subtle/[0.07]).
 // Dynamic brand override is injected at runtime via NativeWind `vars()` in
 // ThemeContext (fed by @eva/brand-kit).

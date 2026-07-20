@@ -7,7 +7,7 @@ import { HapticPressable } from './HapticPressable'
 /**
  * EVA SegmentedControl (RN port) — iOS-style single-select segmented tabs.
  *
- * Design (token-contract / SegmentedControl.prompt.md):
+ * Design (TOKENS.md / SegmentedControl.prompt.md):
  *  - Track: `surface-sunken` fill, radius `--radius-md` (14), inset padding 3, no border.
  *  - Active segment lifts onto a `surface-card` pill (radius 11 = md − 3) with a
  *    cool-tinted `shadow-sm`; label = `text-strong` @700.

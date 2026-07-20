@@ -1,331 +1,185 @@
-# EVA — Runbook de Incidentes
-
-> Firmaste SLA 99% mensual con clientes enterprise (~7.3h downtime/mes permitido).
-> Este documento es la respuesta al "¿qué hago a las 2am cuando algo está roto?"
-
+---
+status: active
+owner: engineering
+last_verified: 2026-07-20
+canonical: true
 ---
 
-## Diagnóstico inicial (siempre primero)
+# EVA — runbook de incidentes
 
-1. **UptimeRobot** → revisar qué monitor disparó la alerta
-2. **Supabase Status** → https://status.supabase.com
-3. **Vercel Status** → https://www.vercel-status.com
-4. **Sentry** → sentry.io → proyecto `eva-web` → últimos errores
-5. **PostHog** → ver si hay drop en eventos activos
+Procedimiento operativo vigente para web, mobile, Supabase y pagos. No es backlog ni historial de decisiones.
 
----
+## Clasificación
 
-## P0 — Producción completamente caída (usuarios no pueden acceder)
-
-**Síntoma:** UptimeRobot alerta `eva-app.cl` o `enterprise.eva-app.cl` down. Responde != 200.
-
-### Paso 1: Identificar la causa
-
-```
-¿Supabase Status muestra incidente? → Sí → Esperar. No hay rollback posible.
-¿Vercel Status muestra incidente?   → Sí → Esperar.
-¿Ambos OK?                          → El problema es código propio → Paso 2
-```
-
-### Paso 2: Rollback inmediato (si es código)
-
-```
-Vercel Dashboard → Deployments → deployment anterior → ⋯ → "Promote to Production"
-→ Rollback en < 2 minutos sin tocar código
-```
-
-### Paso 3: Notificar clientes enterprise (< 15 min desde alerta)
-
-Mensaje WhatsApp para el grupo de cada org:
-```
-Hola [Nombre], estamos al tanto de un problema técnico en EVA ahora mismo.
-Nuestro equipo ya está trabajando en ello.
-ETA estimado: [X minutos / en proceso de diagnóstico].
-Les avisamos cuando esté resuelto.
-```
-
-### Paso 4: Investigar causa raíz
-
-```bash
-# Ver logs de la última hora en Vercel
-vercel logs eva-app.cl --since 1h
-
-# Sentry → proyecto eva-web → Issues → Last 1h → ordenar por frequency
-
-# Supabase Dashboard → Logs → API / Auth / DB
-```
-
-### Paso 5: Post-mortem (dentro de 24h del incidente)
-
-Documentar en el grupo WhatsApp del cliente:
-- Qué pasó
-- Cuánto tiempo duró
-- Qué se hizo para resolverlo
-- Qué se hace para que no vuelva a pasar
-
----
-
-## P1 — Feature rota (acceso funciona, pero X falla)
-
-**Síntoma:** Org admin reporta que no puede invitar coaches / CSV import falla / asignación no guarda.
-
-### Protocolo
-
-1. **Reproducir en staging** — nunca debuggear en producción directa
-2. **Sentry** → buscar el error por mensaje o URL del endpoint
-3. **Supabase Dashboard → Logs → API** → filtrar por la tabla o función relevante
-4. Si es migración mal aplicada → ver rollback SQL en `supabase/migrations/XXXX_name.rollback.sql`
-5. Fix en `v2/enterprise` → PR → CI verde → merge → deploy automático Vercel
-
-**Comunicación (< 2h en horario hábil):**
-```
-"Identificamos el problema con [feature]. Fix en proceso, ETA [X horas].
-Mientras tanto: [workaround si existe]."
-```
-
----
-
-## P2 — Performance degradada (lento pero funciona)
-
-**Síntoma:** `/coach/clients` tarda >3s. Pool de clientes no carga.
-
-1. **Vercel Analytics** → Web Vitals → identificar ruta lenta
-2. **Supabase Dashboard → Performance** → slow queries
-3. `EXPLAIN ANALYZE` en Studio local replicando la query
-4. Candidatos usuales: RLS subquery sin índice, `SELECT *` en query grande, missing trgm index
-
----
-
-## Comunicación SLA
-
-| Severidad | Tiempo máximo para notificar | Canal |
+| Nivel | Ejemplos | Objetivo inicial |
 |---|---|---|
-| P0 (todo caído) | 15 minutos | WhatsApp grupos enterprise |
-| P1 (feature rota) | 2 horas en horario hábil | WhatsApp + email si no responden |
-| P2 (lento) | 24 horas | Proactivo si dura >30 min |
+| P0 | producción caída, fuga de datos, cobro incorrecto masivo, auth inaccesible | contener y comunicar de inmediato |
+| P1 | flujo crítico roto para un grupo, pérdida/duplicación acotada, build de release bloqueado | mitigar y asignar dueño |
+| P2 | degradación con alternativa disponible | diagnosticar y programar corrección |
 
-**Horario hábil:** Lunes a Viernes 9am-7pm, Sábado 9am-2pm (Santiago, CLT)
+Pagos y acceso tienen prioridad operativa. No esperar a conocer la causa raíz para contener un P0.
 
----
+## Diagnóstico inicial
 
-## Comandos útiles de emergencia
+Registrar antes de cambiar estado:
 
-```bash
-# Ver deployments recientes (para rollback)
-vercel ls --app eva-app
+- hora UTC y zona del reporte;
+- superficie: web, PWA, Android, iOS, API, cron o proveedor;
+- entorno, URL/ruta y SHA desplegado;
+- workspace técnico afectado;
+- pasos y resultado esperado/real;
+- request ID, error ID o enlace al run, sin tokens ni datos sensibles;
+- alcance estimado y si existe alternativa.
 
-# Promover deployment específico
-vercel promote <deployment-url>
+Revisar en este orden:
 
-# Ver env vars actuales en Vercel (sin revelar values)
-vercel env ls
+1. Vercel: deployment activo, Runtime Logs, funciones y crons.
+2. Sentry: errores nuevos por release, ruta y plataforma.
+3. Supabase: estado del servicio, Auth, API y Postgres logs/advisors.
+4. Proveedor afectado: MercadoPago, Flow, Resend, Edge Config o EAS/GitHub Actions.
+5. Últimos cambios en código, configuración, migraciones y feature flags.
 
-# Verificar DB staging accesible
-npx supabase db ping --db-url $STAGING_DB_URL
+No pegar secrets, JWT, service-role keys ni payloads personales en Slack, issues o Markdown.
 
-# Aplicar migración manual de emergencia (SOLO si es necesario)
-npx supabase db push --db-url $PROD_DB_URL
+## Contención
 
-# Ver crons recientes
-# Vercel Dashboard → Cron Jobs → últimas ejecuciones
-```
+### Código o deployment
 
----
+1. Promover desde Vercel el último deployment conocido como sano.
+2. Confirmar landing, login, dashboard coach y una ruta de alumno.
+3. Si existe kill-switch/flag específico, apagar solo la superficie afectada.
+4. Mantener el deployment defectuoso disponible para inspección; no borrar evidencia.
 
-## Escalación
+### Datos o migración
 
-Si no puedes resolver en 30 minutos:
-- **Supabase**: Soporte en supabase.com/dashboard → Support → New ticket (plan free tiene soporte comunitario; si el issue es crítico → Twitter/X @Supabase es más rápido)
-- **Vercel**: vercel.com/support (Pro plan tiene soporte)
-- **MercadoPago**: developers.mercadopago.com → soporte — para issues de webhooks o pagos
+1. Detener writers afectados mediante el flag o deployment anterior.
+2. Tomar snapshot y conteos de alcance.
+3. No ejecutar rollback DDL destructivo ni restaurar toda la base sin análisis.
+4. Preparar una migración forward-only o reparación idempotente.
+5. Probar en branch Supabase/entorno aislado, RLS y advisors antes de producción.
 
----
+### Nutrición V2
 
-## Checklist post-incidente
+Usar [NUTRITION_V2_ROLLOUT_RUNBOOK.md](NUTRITION_V2_ROLLOUT_RUNBOOK.md). `mode=off` es la primera contención; no eliminar planes ni intake.
 
-- [ ] Causa raíz identificada
-- [ ] Fix deployado y verificado
-- [ ] Clientes enterprise notificados que está resuelto
-- [ ] Post-mortem breve enviado al cliente si fue P0
-- [ ] Cambio preventivo identificado (índice, alerta, test)
-- [ ] Nuevo test E2E o alerta agregada para detectar este problema en el futuro
+### Catálogo
 
----
+Usar [FOOD_CATALOG_CL_IMPORT.md](FOOD_CATALOG_CL_IMPORT.md). Detener applies y conservar batches/rows.
 
-## Crons activos (vercel.json post-F1 — 2026-06-12)
+## Verificación tras mitigar
 
-> Todos los guards son **fail-closed** desde F7: si falta `CRON_SECRET` o el header no coincide, el endpoint retorna 401 y no ejecuta nada.
+- error rate vuelve a baseline;
+- el flujo afectado pasa con una cuenta técnica;
+- no aparecen nuevos eventos duplicados;
+- scopes standalone/team/org siguen aislados;
+- crons y webhooks no quedaron pausados;
+- mobile recibe configuración remota correcta al volver a foreground;
+- soporte conoce impacto, alternativa y siguiente actualización.
 
-| Endpoint | Schedule (UTC) | Qué hace |
-|---|---|---|
-| `/api/cron/nutrition-cycles` | Diario 11:00 | Avanza los ciclos de planes nutricionales activos (genera el siguiente día del ciclo). |
-| `/api/cron/nutrition-reminder` | Diario 00:00 | Envía recordatorio push/email a alumnos que no registraron su comida del día anterior. |
-| `/api/cron/trial-expiry` | Diario 12:00 | Verifica coaches en período de prueba y los marca como expirados si corresponde. Solo afecta coaches standalone (no `team_managed` ni `org_managed`). |
-| `/api/cron/purge-data` | Domingos 03:00 | Purga datos de cuentas borradas/expiradas según política de retención; registra en `purge_audit`. |
-| `/api/cron/audit-checksum` | Domingos 02:00 | Calcula y almacena checksum de tablas de auditoría para detectar manipulación (`audit_log_checksums`). |
-| `/api/cron/mp-reconcile` | Viernes 10:00 | Reconcilia suscripciones de MercadoPago contra el estado local (detecta cancelaciones silenciosas, retries fallidos). |
-| `/api/cron/flow-reconcile` | Diario 11:00 | Backstop ALERT-ONLY de Flow: divergencias de estado/período + sync acotado del compuesto (audit `coach.flow_*`). |
-| `/api/cron/paid-expiry` | Diario 12:30 | Backstop **provider-verified**: expira suscripciones PAGAS (`payment_provider` mp/flow) con período vencido cuyo evento terminal se perdió (webhook out-of-band). Ver detalle abajo. |
+## Crons activos
 
-### `paid-expiry` — backstop de suscripciones pagas con webhook terminal perdido
+`vercel.json` es la fuente ejecutable. Estado verificado el 20 de julio de 2026:
 
-**Problema que cubre.** Un evento terminal del gateway que EVA nunca recibió por webhook (ej. la migración de cuenta MP del 2026-07-05 canceló preapprovals POR API en la cuenta vieja = cancelación out-of-band, sin notificación) deja al coach con `subscription_status='active'` congelado y `current_period_end` vencido. El gate `hasEffectiveAccess` con status `'active'` NUNCA mira la fecha → Pro gratis indefinido (fuga de revenue silenciosa; caso real joaquinamr7, 16-jul). Ni `trial-expiry` (solo `'trialing'`) ni `mp/flow-reconcile` (alert-only) lo bajan.
+| Endpoint | Horario UTC | Función |
+|---|---:|---|
+| `/api/cron/nutrition-cycles` | `0 11 * * *` | ciclos nutricionales |
+| `/api/cron/nutrition-reminder` | `0 0 * * *` | recordatorios de nutrición |
+| `/api/cron/trial-expiry` | `0 12 * * *` | expiración de trials |
+| `/api/cron/purge-data` | `0 3 * * 0` | purga semanal |
+| `/api/cron/audit-checksum` | `0 2 * * 0` | integridad semanal de auditoría |
+| `/api/cron/mp-reconcile` | `0 10 * * *` | reconciliación MercadoPago y expiración de add-ons |
+| `/api/cron/flow-reconcile` | `0 11 * * *` | reconciliación Flow y sincronización acotada de monto |
+| `/api/cron/mirror-exercise-thumbnails` | `0 4 * * *` | mirror de thumbnails |
+| `/api/cron/paid-expiry` | `30 12 * * *` | backstop provider-verified de suscripciones vencidas |
 
-**Decisión provider-verified (no negociable).** NUNCA expira solo por la fecha — eso cortaría a un coach que el gateway AÚN puede cobrar (dunning). Antes de expirar verifica el estado REAL en el gateway (`fetchCheckoutSnapshot`: MP preapproval / Flow subscription) y decide con la función pura `resolvePaidExpiryDecision`:
-1. Remota MUERTA (MP `cancelled` / Flow status 4 `cancelada` / rechazada, o 404 not-found) → **EXPIRE**.
-2. DB `canceled` sin id de suscripción → **EXPIRE** (cancelación ya procesada, nada que verificar).
-3. Remota VIVA (`authorized`/`active`/`pending`/`paused`) → **ALERT-ONLY** (nulear el id rompería el matching del webhook de recuperación del dunning = cobro real perdido).
-4. Error transitorio de red/5xx, o `'active'` sin id verificable → **ALERT-ONLY** (fail-safe).
+Handlers sin schedule automático:
 
-**Acción EXPIRE** (espejo del terminal del webhook): `subscription_status='expired'`, `current_period_end=null`, nulea SOLO el id del provider correspondiente (`subscription_mp_id` o `subscription_provider_external_id`); PRESERVA `subscription_tier`/`max_clients`/`billing_cycle` (la página de reactivación pre-selecciona el plan). Cancela add-ons vivos (`cancelAllForCoach` → trigger D1 apaga módulos) y revierte el cupón vivo (`revertActiveCouponForCoach`) — reusa los MISMOS helpers que el webhook. Audit: `coach.paid_expired_auto`; alertas: `coach.paid_expiry_alert`; resumen de corrida: `cron.paid_expiry_ran` + email a `ADMIN_EMAILS` (expirados / alertados con razón / errores).
+- `/api/cron/weekly-snapshot`;
+- `/api/cron/weekly-report-email`;
+- `/api/cron/org-health-alert`;
+- `/api/cron/payment-reminder`.
 
-**Excluye a propósito:** `payment_provider` admin/beta/internal (comps y cortesías manuales) y statuses org_managed/team_managed/expired/pending_payment. Gracia de 24h en la query (no corta en el borde de una renovación cuyo webhook está en vuelo). Schedule 12:30 UTC, escalonado tras trial-expiry (12:00), mp-reconcile (10:00) y flow-reconcile (11:00).
+Para ejecutar un handler manual, usar un entorno seguro y el Bearer `CRON_SECRET`. No incluir el valor en el comando pegado a documentación o tickets.
 
-### Crons retirados del schedule en F1 (handlers vivos — sin disparo automático)
+Ante un cron fallido:
 
-| Endpoint | Por qué se retiró | Cómo desarchivar |
-|---|---|---|
-| `/api/cron/org-health-alert` | Enterprise archivado comercialmente 2026-06; el alert era exclusivo de orgs enterprise. | Volver a agregar en `vercel.json` `crons[]` con `"schedule": "0 13 * * *"` y hacer redeploy. |
-| `/api/cron/payment-reminder` | Enterprise archivado; el reminder era para invoices manuales de orgs. | Volver a agregar con `"schedule": "0 9 1,6,11 * *"` y hacer redeploy. |
+1. revisar la última ejecución y logs completos;
+2. determinar si es idempotente antes de reintentar;
+3. comprobar writes parciales por event/batch ID;
+4. corregir la causa o aislar el elemento defectuoso;
+5. reintentar una vez y verificar conteos.
 
-**Block 4 — Digest de alumnos inactivos (enterprise):** apagado en F1. Es un bloque de código inline dentro del handler de `org-health-alert` (`org-health-alert/route.ts:168-271`) que corría con el schedule diario de ese cron. Al retirar `org-health-alert` de `vercel.json` se apagó junto con el resto del handler. Para reactivar: re-agregar el schedule de `org-health-alert` (fila de arriba) y redeployar — vuelve solo, no requiere tocar otro endpoint.
+## Pagos — reglas comunes
 
-### Triggers manuales (sin schedule — invocar vía `curl` autenticado con `CRON_SECRET`)
+- La DB representa el estado comercial que consume EVA; el proveedor debe reconciliarse contra ella.
+- Un webhook puede repetirse: toda reparación conserva idempotencia y eventos previos.
+- No editar montos o estados para “hacerlos coincidir” sin revisar el cobro real.
+- Toda corrección manual deja evidencia en `subscription_events` o `admin_audit_logs`.
+- No cancelar una suscripción solo porque el proveedor está temporalmente inaccesible.
 
-| Endpoint | Cuándo usarlo |
-|---|---|
-| `/api/cron/weekly-snapshot` | Snapshot semanal de métricas clave (coaches activos, alumnos, logs). Útil antes de migraciones de riesgo. |
-| `/api/cron/weekly-report-email` | Envía el reporte semanal de actividad a los coaches que lo tienen habilitado. Útil para re-envío manual si falló. |
+### Divergencia MercadoPago
 
-```bash
-# Invocar un cron manualmente (reemplazar <endpoint> y <secret>)
-# Los handlers de cron exponen GET (verbo por defecto de curl); los triggers manuales
-# (weekly-snapshot, weekly-report-email) aceptan además POST.
-curl https://eva-app.cl/<endpoint> \
-  -H "Authorization: Bearer <CRON_SECRET>"
-```
+1. Identificar coach, ciclo, tier y add-ons facturables.
+2. Calcular el monto compuesto esperado con el mismo servicio del runtime.
+3. Comparar con el preapproval vigente.
+4. Si DB es correcta y el provider quedó atrás, actualizar mediante el provider adapter/servicio soportado.
+5. Registrar antes/después y confirmar que el próximo `mp-reconcile` queda limpio.
 
----
+Si un PUT de alta de add-on falló, comprobar si la reversión DB también falló. Si la fila quedó viva con monto antiguo, reparar el proveedor; no borrar la fila para ocultar la divergencia.
 
-## Guarda del subdominio enterprise (archivado 2026-06-12)
+### Flow: refund o chargeback
 
-### Estado actual
+Un refund hecho en el panel no garantiza que la suscripción deje de cobrar.
 
-`enterprise.eva-app.cl` está activo pero sin contenido útil. El proxy de Next.js (`apps/web/src/proxy.ts`) tiene un condicional que redirige **solo `/org/*`** del dominio principal a `/login` en prod (`proxy.ts:145-147`). El panel `/org/[slug]/*` queda **inaccesible en prod a propósito** — decisión intencional de archivado comercial.
+1. Cancelar primero la suscripción Flow o confirmar que ya es terminal.
+2. Ejecutar el refund con su referencia.
+3. Actualizar en EVA el estado correspondiente mediante el camino administrativo seguro.
+4. Registrar `subscriptionId`, invoice/refund ID y decisión sin datos de tarjeta.
+5. Confirmar al día siguiente que `flow-reconcile` no informa divergencia.
 
-**Alcance del guard (importante):** el condicional NO bloquea `/e` ni `/enterprise`. El flujo del alumno enterprise `/e/[org_slug]/*` sigue vivo **a propósito** (es un DoD del plan 01 — no se afecta). La landing `/enterprise` se sigue sirviendo hasta que se active el redirect 308 `/enterprise` → `/pricing` (F6 del plan 01, secuenciado post-deploy del plan 02); mientras tanto solo lleva `noindex` + meta description sin precio.
+### Flow: webhook perdido o período no avanzado
 
-**Paso manual pendiente (config Vercel):** agregar un redirect 308 en el dashboard de Vercel para el dominio `enterprise.eva-app.cl` → `https://eva-app.cl`. Esto hace que cualquier visita directa al subdominio aterrice en la landing principal.
+1. Verificar invoice y pago directamente en Flow.
+2. Reenviar la notificación si el proveedor lo permite o aplicar una reparación service-role con esa invoice como evidencia.
+3. Respetar la clave idempotente del evento; no crear un segundo cobro/snapshot.
+4. Confirmar `current_period_end` y el siguiente reconcile.
 
-### Cómo revertir el archivado
+### Add-on con kill-switch prolongado
 
-1. **Quitar el redirect 308** en Vercel (Dashboard → Domains → `enterprise.eva-app.cl` → eliminar redirect).
-2. **Revertir el condicional del proxy** en `apps/web/src/proxy.ts` (buscar el bloque con comentario `// ARCHIVADO 2026-06: subdominio enterprise redirige al home` en `:143` y remover la guarda `/org/*` → `/login` de `:145-147`).
-3. Hacer redeploy.
+`EVA_DISABLED_MODULES` apaga la funcionalidad, no el cobro.
 
-> El motor enterprise (tablas `organizations`, `organization_members`, RLS, JWT hook, `org.service`) sigue intacto en la DB y en el código — no se borró nada. Reactivar es reversible sin migración.
+1. Si el corte supera la ventana operativa, decidir compensación o cortesía.
+2. Ajustar el monto mediante el flujo soportado cuando corresponda.
+3. Registrar la compensación y su fecha de término.
+4. Verificar que reactivar el módulo no duplique el cargo.
 
----
+### Cuenta legacy `growth`/`scale`
 
-## Coach grandfathered (growth/scale) pide cambio de ciclo o reactivación (plan 04)
+Esos tiers están fuera de venta pero siguen soportados en runtime para suscriptores existentes.
 
-> Contexto: desde el plan 04 (`docs/plans/estrategia/04-PLAN-consolidacion-planes-ciclos.md`) los tiers `growth` y `scale` salieron de TODA superficie de venta, pero los suscriptores existentes (grandfathered) **conservan su plan, precio y límite de alumnos** mientras no cambien nada. El union type, `TIER_CONFIG` y el CHECK de DB conservan las 6 entradas: el grandfathered sigue viendo "Growth"/"Scale" correcto en su página de suscripción y el webhook de renovación sigue resolviendo su tier+ciclo sin romper.
+- No eliminarlos del union, configuración ni constraints mientras queden cuentas.
+- Un cambio excepcional se realiza desde administración y requiere revisar también el preapproval/plan del proveedor.
+- Para reactivación normal, migrar a una oferta vigente; conservar legacy solo con decisión explícita del dueño.
 
-**Lo que el grandfathered YA NO puede hacer self-service:** cambiar de ciclo (mensual↔trimestral↔anual) ni reactivarse EN su tier muerto. El checkout (`create-preference`) solo acepta sale tiers (`starter`/`pro`/`elite`) → un intento self-service en growth/scale responde 400. La reactivación pública (`/coach/reactivate`) ancla al plan elite (o muestra el puente a Teams si su cartera supera el techo). **Esto es intencional, no un bug.**
+## Incidente de seguridad
 
-### Caso A — pide cambiar de ciclo manteniéndose en su tier legacy
+1. Revocar/rotar el secreto afectado en el proveedor.
+2. Revocar sesiones o tokens derivados.
+3. Revisar logs de uso desde la primera exposición posible.
+4. Eliminar el secreto del HEAD y artefactos públicos.
+5. Evaluar reescritura de historial como una operación separada y coordinada.
+6. Documentar impacto y medidas sin reproducir el valor filtrado.
 
-El CEO/admin lo cambia desde `/admin/coaches` (la palanca de soporte):
+## Post-incidente
 
-1. Abrir el coach en el panel admin → `CoachEditSheet`.
-2. El Select de tier **conserva el union completo** (incluye growth/scale/free) → mantener su tier legacy.
-3. Cambiar el Select de ciclo al deseado. **Importante:** el valor válido es `annual` (no `yearly`) — el fix del plan 04 alineó los selects al CHECK de DB; si ves un error de constraint al guardar el ciclo anual, confirmá que el deploy con el fix `yearly`→`annual` ya está en prod.
-4. Guardar. El cambio escribe directo `coaches.subscription_tier`/`billing_cycle`/`max_clients` (no pasa por MercadoPago — el monto del preapproval en MP queda como está; si el coach quiere recobrar al nuevo monto/ciclo hay que recrear el preapproval, decisión caso a caso con el dueño).
+Cerrar solo cuando exista:
 
-### Caso B — pide reactivarse (estaba cancelado) en growth/scale
+- línea de tiempo UTC;
+- alcance confirmado;
+- causa raíz y factor contribuyente;
+- mitigación aplicada y evidencia de recuperación;
+- prueba o guardrail que previene recurrencia;
+- dueño y fecha para acciones restantes;
+- actualización de [CURRENT.md](../status/CURRENT.md) si cambia el estado del proyecto.
 
-No hay flujo self-service para resucitar un tier muerto. Opciones:
-
-1. **Mantenerlo legacy (excepción):** el admin re-activa el coach en su tier legacy desde `CoachEditSheet` (status → `active`, tier legacy, ciclo `annual`/`quarterly`/`monthly`). Solo si el dueño aprueba conservar el precio viejo.
-2. **Migrarlo a la oferta vigente (preferido):** ofrecerle elite ($44.990, techo 100 alumnos) o, si su cartera supera 100, EVA Teams (mailto `contacto@eva-app.cl`). El coach se reactiva self-service en elite por el flujo público normal.
-
-### Observabilidad — cuántos grandfathered quedan
-
-`/admin/finanzas` muestra una card **"Legacy (grandfather)"** alimentada por el RPC `get_legacy_tier_counts()`: conteo de filas growth/scale por status y ciclo. Sirve para saber cuándo el grandfather se extingue solo (los placeholders `team_managed`/`org_managed` aparecen ahí pero se distinguen por status — no son suscriptores reales). Cuando los reales lleguen a 0, se puede planear matar el union legacy.
-
-> **Nunca** "limpiar" growth/scale del union type, de `TIER_CONFIG` ni del CHECK de DB para resolver uno de estos casos: rompería el webhook de pago de cualquier grandfathered en vuelo y los placeholders `scale` de las cuentas team/org-managed. Los tiers salen de la VENTA, no del runtime.
-
----
-
-## Add-ons self-service — incidentes de cobro (plan estrategia 05)
-
-> Contexto: el coach standalone tiene **un solo preapproval MercadoPago** cuyo monto = base del tier + add-ons facturables (`getCompositeAmountClp`). La fuente de verdad es la DB (`coach_addons`); el monto en MP es opaco y la reconciliación **solo alerta** divergencias (nunca auto-corrige). Detalle de diseño: `docs/plans/estrategia/05-PLAN-billing-addons-selfservice.md` §F3.
-
-### Divergencia de monto (DB ≠ MP)
-
-**Síntoma:** el reconcile diario (`/api/cron/mp-reconcile`) alerta por email que `auto_recurring.transaction_amount` de un preapproval ≠ `getCompositeAmountClp` esperado, o lo reporta un evento de webhook `updated` (confirmación del PUT que no cuadra).
-
-1. Identificar el coach y recalcular el monto esperado: base del tier por ciclo + Σ `getAddonCycleAmountClp` de los add-ons facturables vivos (`status='active'` o `cancel_pending` sin `first_charged_at`).
-2. La DB MANDA. Si el monto en MP quedó viejo (PUT caído, ver abajo), corregir con un PUT manual: script service-role que llame `provider.updateCheckoutAmount(subscriptionMpId, montoEsperado)`. NO tocar `coach_addons` para "cuadrar" con MP — sería invertir la fuente de verdad.
-3. Registrar la corrección en `subscription_events` (patrón `addon:<uuid>:<acción>`).
-
-### PUT de monto caído (alta/baja in-app)
-
-**Síntoma:** alta o baja in-app de un add-on devolvió error, o el reconcile detecta un add-on facturable cuyo monto no se reflejó en MP.
-
-- **Alta mensual (D5):** el orden es DB-primero → PUT-después con reversión inmediata. Si el PUT falla, la fila recién insertada se borra en el mismo request (el trigger D1 apaga el módulo) y se relanza el error → el coach ve el fallo y reintenta. Si la reversión TAMBIÉN falló (fila viva + monto MP viejo), el reconcile diario lo detecta como divergencia de monto → PUT manual (arriba).
-- **Alta trim/anual:** la fila se materializa recién en el webhook del one-shot aprobado; si el PUT de ese webhook falla, el reconcile lo detecta como drift → PUT manual.
-- **Baja regla 4:** si el PUT que baja el monto falló, el próximo cobro cobraría de más. Reconcile lo detecta → PUT manual con el monto SIN el add-on de baja.
-
-### Dunning — preapproval `paused` prolongado (política explícita)
-
-**Síntoma:** el reconcile alerta que un preapproval lleva en `status='paused'` (dunning de MP por cobros fallidos) **más de N días (default 14)**.
-
-1. Un preapproval pausado NO cobra → los add-ons no se pueden seguir cobrando.
-2. Pasar los add-ons del coach a `cancel_pending` **SIN PUT** (el preapproval pausado ya no cobra; el PUT no aplica). Dejar registro en `subscription_events`.
-3. Si el preapproval vuelve a `authorized` antes del corte, **revertir manualmente** (volver los add-ons a `active`) según el caso — no hay auto-revert.
-4. Ejecución semiautomática: la detección es del reconcile (F3.5.e), la ejecución la decide el operador.
-
-### Kill-switch de operador prolongado vs cobro (exposición SERNAC)
-
-**Síntoma:** el reconcile alerta que un add-on FACTURABLE lleva su `module_key` en `EVA_DISABLED_MODULES` (kill-switch de operador) **más de N días (default 3)**.
-
-- Cobrar un servicio que el operador apagó es exposición SERNAC directa (servicio no provisto). El kill-switch NO pausa el cobro por sí mismo.
-- **Acción del CEO:** kill prolongado → compensar al coach. Opciones: pausar el add-on (bajar su monto del preapproval con un PUT manual mientras dure el incidente) o convertirlo en cortesía (`source='admin_grant'`, price 0, vía el override del CEO en `/admin/coaches`). Registrar la compensación.
-- El kill-switch sigue siendo palanca de incidentes (no bloquea compra): la compensación es operativa, no automática. Ver también `docs/operations/MANUAL_TASKS.md`.
-
-## Pagos Flow (Webpay) — incidentes y procedimientos
-
-> Dual-gateway desde `feat/pagos-flow-mercadopago`. Flow detras de `NEXT_PUBLIC_FLOW_ENABLED` (build-time; flip = redeploy). La DB manda; Flow se reconcilia. Webhook: `/api/payments/flow/webhook?token=FLOW_WEBHOOK_TOKEN` (fail-closed en prod). Backstop diario: cron `flow-reconcile` (ALERT-ONLY, audit `coach.flow_*`).
-
-### REFUND / CHARGEBACK de una sub Flow (procedimiento MANUAL — T3.7)
-
-⚠️ Los refunds hechos desde el PANEL de Flow **no emiten webhook** y **no cancelan la suscripcion**: si solo devolves la plata, la sub sigue VIVA y re-cobra la tarjeta el proximo ciclo. Orden OBLIGATORIO:
-
-1. **Cancelar la suscripcion en el panel de Flow PRIMERO** (o via API `subscription/cancel` con `at_period_end=0`). El `subscriptionId` esta en `coaches.subscription_provider_external_id`.
-2. Devolver el cobro (panel Flow → el pago → reembolsar, o `refund/create`).
-3. En EVA (service-role): marcar al coach segun la politica (`subscription_status='expired'` + cancelar add-ons si corresponde — espejo de la rama FIX-7 de MP) y dejar fila de auditoria en `admin_audit_logs` (`action: coach.flow_refund_manual`).
-4. Verificar al dia siguiente que `flow-reconcile` NO alerte `coach.flow_status_divergence` para ese coach.
-
-**Backstop automatico:** si alguien refundea sin cancelar, `flow-reconcile` alerta `flow_status_divergence` (coach no-activo en DB con sub activa en Flow, o viceversa) dentro de 24h → aplicar los pasos 1 y 3.
-
-### Webhook Flow caido / notificacion perdida
-
-Sintoma: `coach.flow_period_not_advanced` en el audit (el coach pago pero su periodo no avanzo). Accion: verificar el cobro en el panel de Flow (invoice pagada) → re-disparar la notificacion posteando el token al webhook, o ajustar `current_period_end` por service-role con la invoice como evidencia (snapshot idempotente por `(provider,'invoice:<id>')`, no duplica).
-
-### Drift de monto (`coach.flow_amount_drift`)
-
-El monto vive HORNEADO en el `provider_plan_id` (`eva_<tier>_<cycle>_<monto>`). Drift esperado y benigno: ventana de una baja de add-on regla-4 (el changePlan-down corre DIFERIDO al corte via cron). Drift persistente = revisar: el fix es `updateCheckoutAmount` del FlowProvider (changePlan al compuesto de `getCompositeAmountClp`).
-
-### Alta Flow falla con "email is not valid" (code 501)
-
-Flow valida la ENTREGABILIDAD real del buzon del pagador. El endpoint ya mapea a 400 `GATEWAY_EMAIL_REJECTED`. Accion con un coach real: que corrija su email de cuenta o use Mercado Pago.
-
-### Coach atascado en "pago en proceso" (Flow pending)
-
-La 1ra invoice del sandbox/Flow puede generarse asincrona → coach queda `pending_payment` y el webhook de la invoice pagada lo activa. Si no llega en horas: panel Flow → estado de la invoice → si pagada, re-disparar webhook o activar por service-role (ver "webhook caido").
-
-### Codigos de error de intento de pago (referencia)
-
-`-1` tarjeta invalida · `-2` conexion · `-3` excede monto max · `-4` expiracion invalida · `-5` autenticacion · `-6` rechazo general · `-7` bloqueada · `-8` vencida · `-9` no soportada · `-10` problema trx · `-11` limite de reintentos · `999` desconocido. Aparecen en `payment/getStatusExtended.lastError` y `invoice.chargeAttemps[]` (otro keyspace: codigos tipo 1605 = nivel gateway).
-
+La narración detallada vive en el incidente/ticket. Este runbook cambia únicamente si cambió el procedimiento reutilizable.

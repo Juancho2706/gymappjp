@@ -1,5 +1,5 @@
 /**
- * Canonical macro color tokens — EVA redesign DS ramps (token-contract Fase 0).
+ * Canonical macro color tokens — EVA redesign DS ramps (TOKENS.md).
  * Shared by coach + alumno nutrition surfaces so color never collides with the
  * success/adherence green (`--color-macro-goal`). The design's macro palette is
  * the data-viz triad: protein → ember (nutrition accent), carbs → sport (brand

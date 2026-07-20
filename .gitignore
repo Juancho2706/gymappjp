@@ -1,52 +1,38 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
-
-# ── Docs internos / AI instructions (no van al repo público) ──
+# Local agent instructions and private material
 AGENTS.md
 CLAUDE.md
 private/
 nuevabibliadelaapp/
+
+# Local-only product/design references
+docs/design-source/
+claude-design-export/
+nuevoexportCLAUDESING/
 docs/ANALISIS_PRECIOS.md
 docs/BRANDING-IMAGENES-IA.md
 docs/COACH_ONBOARDING_PREMIUM_PLAN.md
 docs/WHITE-LABEL-ROADMAP.md
+docs/anidocs/
 
-# ── Snapshot del Design System (referencia local del rediseño; re-pulleable vía claude_design MCP) ──
-docs/design-source/
-claude-design-export/
-nuevoexportCLAUDESING/
-
-# ── AI tool configs ──
+# AI/editor configuration
 .claude/
+.cursor/
+.mcp.json
+.playwright-mcp/
 
-# ── Script outputs ──
-build-output.txt
-scripts/output/
-
-# ── Seguridad / secretos (nunca subir al remoto) ──
-# Variables de entorno (local, staging, producción)
+# Secrets and deployment metadata
 .env*
 !.env.example
-
-# Claves y certificados
 *.pem
 *.key
 *.p12
 *.pfx
-
-# Patrones habituales de credenciales (Google Cloud, Firebase admin, etc.)
 *credentials*.json
 *serviceAccount*.json
 *-firebase-adminsdk-*.json
+.vercel/
 
-# Herramientas con tokens o rutas locales
-.mcp.json
-.cursor/
-.claude/settings.local.json
-
-# Deploy (puede incluir metadata sensible)
-.vercel
-
-# dependencies
+# Dependencies and package-manager state
 node_modules/
 /.pnp
 .pnp.*
@@ -56,93 +42,60 @@ node_modules/
 !.yarn/releases
 !.yarn/versions
 
-# testing
-/coverage
-
-# next.js
+# Build output
 /.next/
 /apps/*/.next/
 /out/
 /apps/*/out/
-
-# production
-/build
-/apps/*/build
-
-# misc
-.DS_Store
-
-# debug
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-.pnpm-debug.log*
-*.log
-
-# typescript
+/build/
+/apps/*/build/
 *.tsbuildinfo
 next-env.d.ts
 
-# Playwright
+# Tests, coverage and logs
+/coverage/
 /test-results/
 test-results*/
 /playwright-report/
 /blob-report/
 /playwright/.cache/
 /playwright/.auth/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
 
-# Supabase local
+# Local Supabase state and database exports
 supabase/.branches/
 supabase/.temp/
-
-# DB dumps / backups (nunca subir — contienen schema/datos de prod)
 prod-schema.sql
 prod-data.sql
 *.dump.sql
 backup-*.sql
 
-# Untracked script outputs / personal notes
-LINKEDIN-EVA-PLAN.md
+# Generated/script output
+build-output.txt
+scripts/output/
 scripts/WELCOME-NEWS-ITEM.md
 scripts/seed-welcome-news.sql
 apps/web/public/MISSING_GROUPS_INSTRUCTIONS.md
-Plan de Alimentación Mati Romero.pdf
-PORCIONES DE INTERCAMBIO.pdf
-Template_Workout__Martín_Villarroel_.pdf
-docs/plans/movida/negociacion/01-DOC-FUNCIONALIDADES-LUNES.md
-docs/plans/movida/negociacion/02-PROPUESTA-ECONOMICA.md
-docs/plans/movida/negociacion/03-MOU-TERM-SHEET.md
-docs/plans/movida/negociacion/04-GUION-REUNION.md
-# Material de deals/negociación: nunca va al repositorio público, aunque se mueva.
+tmp/
+
+# Private deals and negotiation material must never enter the public repository
 docs/**/movida/
 docs/**/negociacion/
-# Internal pricing/valuation docs — never commit (confidential business material)
-docs/plans/movida/negociacion/*.pdf
-# Browser HAR captures — carry PII (real emails) and bloat the repo
-public/*.har
-*.har
-docs/plans/movida/00-DIRECTOR.md
-docs/anidocs/Acta_Reunion_Movida_EVA_Completa.pdf
-docs/anidocs/martin Guerra.xlsx
-docs/anidocs/transcripcion whatsapp 09 de junio.pdf
-docs/plans/movida/00-DIRECTOR.md
-docs/plans/movida/00-DIRECTOR.md
-docs/plans/movida/00-DIRECTOR.md
-docs/plans/movida/00-DIRECTOR.md
-docs/anidocs/PROPUESTA MOVIDA-EVA.pdf
-.playwright-mcp/
-docs/socio/EVA-modulos-explicados.pdf
-docs/socio/EVA-modulos-explicados.md
 
-# ── Local binaries & generated artifacts (glob — reemplaza la lista de nombres sueltos de arriba) ──
-# Screenshots / capturas scratch en la raiz (real-*.png, eva-landing-*.png, b7-*.png, etc.)
+# Binary evidence and captures stay local
 /*.png
-# PDFs de cliente/deal soltados en la raiz (plan Mati Romero, templates de workout, etc.)
 /*.pdf
-# Entregables de auditoria generados: PDFs exportados + dirs de chunks markdown crudos (se versionan solo resumenes curados)
+*.har
 docs/audits/**/*.pdf
 docs/audits/**/*.png
 docs/audits/menus/
-# Inputs crudos de partner/deal (anidocs) — binarios grandes, deal Movida cancelado
-docs/anidocs/
-tmp/
+
+# Personal notes
+LINKEDIN-EVA-PLAN.md
+
+# OS metadata
+.DS_Store

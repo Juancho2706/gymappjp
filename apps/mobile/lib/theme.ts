@@ -22,7 +22,7 @@ import { FONT } from './typography'
  *
  * The objects below are frozen (Object.freeze) so no consumer can mutate them,
  * and every literal is derived from the SINGLE `DS` palette source (no hex is
- * written twice). Values mirror EVA DS (token-contract.md / web globals.css).
+ * written twice). Values mirror EVA DS (TOKENS.md / web globals.css).
  * Shadows/glows live in `./shadows`; type faces in `./typography`.
  */
 
@@ -107,7 +107,7 @@ export interface Theme {
 /**
  * Single palette source for the imperative shim. Every literal hex below is
  * written ONCE here and referenced by both themes — no duplication. Names/values
- * mirror the DS tokens (token-contract.md / web globals.css).
+ * mirror the DS tokens (TOKENS.md / web globals.css).
  */
 const DS = {
   sport500: '#2680FF', // brand (applyCoachBranding overrides at runtime)

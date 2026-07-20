@@ -10,7 +10,7 @@ import { SHADOWS } from '../lib/shadows'
  * EVA Button — primary action control (RN port of the DS `Button`).
  *
  * Design variants (docs/design-source/components/core/Button.{prompt.md,jsx}
- * + token-contract.md):
+ * + TOKENS.md):
  *  - `primary`   solid ink action (ink-950 light / cta-fill dark) — the default
  *  - `sport`     high-energy CTA: brand `--cta-fill` fill + blue glow (one per screen)
  *  - `secondary` outlined surface card (border-default)

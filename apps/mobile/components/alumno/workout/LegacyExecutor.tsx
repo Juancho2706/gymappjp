@@ -51,7 +51,7 @@ const SUCCESS = '#1FB877' // success-500 (reads on dark)
 const SUCCESS_TINT = 'rgba(31,184,119,0.16)'
 const SUCCESS_BORDER = 'rgba(31,184,119,0.40)'
 
-// DS font families (token-contract D3): Archivo display · Hanken UI · JetBrains mono.
+// DS font families (TOKENS.md §4): Archivo display · Hanken UI · JetBrains mono.
 const FONT_DISPLAY_SM = 'Archivo_800ExtraBold'
 const FONT_BOLD = 'HankenGrotesk_700Bold'
 const FONT_MONO = 'JetBrainsMono_700Bold'

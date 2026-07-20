@@ -1,11 +1,11 @@
-# App review — Apple / Google
-
 ---
 status: active
 owner: release
-last_verified: 2026-07-20@4a1249f0
-canonical: reviewer-copy template; credentials never live in Git
+last_verified: 2026-07-20
+canonical: true
 ---
+
+# App review — Apple / Google
 
 ## Product summary
 

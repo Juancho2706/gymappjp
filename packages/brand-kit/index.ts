@@ -188,7 +188,7 @@ export function isThemeReadable(input: BrandThemeInput): boolean {
 }
 
 // ============================================================================
-// D2 — White-label SPORT ramp (redesign 2026, token-contract §7)
+// D2 — White-label SPORT ramp (redesign 2026, TOKENS.md §7)
 // ----------------------------------------------------------------------------
 // El diseño nuevo recolorea TODO el white-label sobreescribiendo la rampa
 // `--sport-100..700` (7 pasos) derivada del ÚNICO color de marca del coach.
@@ -196,7 +196,7 @@ export function isThemeReadable(input: BrandThemeInput): boolean {
 // rampa con el MISMO stack OKLCH + clamp WCAG que ya usa resolveBrandTheme, así
 // web y RN renderizan idéntico.
 //
-// Pareo de texto del diseño (token-contract §2/§7):
+// Pareo de texto del diseño (TOKENS.md §2/§7):
 //   - 500 = marca exacta. Los fills 500/600/700 cargan TEXTO BLANCO
 //     (`--text-on-sport`). `cta-fill` (~600) es white-safe (≥4.5:1 con blanco)
 //     para botones sólidos.

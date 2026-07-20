@@ -44,7 +44,7 @@ type ResolvedVariant = "soft" | "solid" | "outline" | "ghost" | "link"
 
 // Static, literal class strings so Tailwind's JIT can see them. soft/outline foregrounds
 // mirror the design reference (-700/-600 tints that lighten under .dark). Solid bg/fg are
-// token-contract-correct for contrast: sport uses the dark-safe --cta-fill (its -600 lightens
+// TOKENS.md-compliant for contrast: sport uses the dark-safe --cta-fill (its -600 lightens
 // in dark), and light tones (ember/success/warning/aqua) get ink text via --text-on-*.
 const TONE_CLASSES: Record<BadgeTone, Record<"soft" | "solid" | "outline", string>> = {
   neutral: {

@@ -1,111 +1,91 @@
-# Checklist DB — write-paths nuevos de mobile (RN parity)
-
-Checklist vivo. Aplica a **todo PR de `apps/mobile` que agregue un write-path nuevo**
-(insert/update/delete desde el cliente vía `authenticated`, o desde `anon` en flujos
-pre-auth como login/branding). Basado en el patrón confirmado en
-`specs/rn-mobile-parity-redesign/research/e0-db-audit.md` (auditoría E0-B1, 2026-07-08:
-cero deltas hoy — este checklist es para lo que se agregue de ahora en adelante) y en el
-gotcha de "Column-level grants" de `CLAUDE.md`.
-
-No mergear un write-path nuevo de mobile sin marcar todos los ítems aplicables.
-
+---
+status: active
+owner: database-security
+last_verified: 2026-07-20 @ 34b09d8f
+canonical: true
 ---
 
-## 1. Identificar el patrón de la tabla
+# Checklist DB para nuevos write-paths de React Native
 
-- [ ] ¿La tabla tiene GRANT de **tabla completa** para `authenticated` (INSERT/UPDATE/DELETE
-      sin restricción de columna), o tiene el patrón **REVOKE-tabla + GRANT-columnas**
-      (allowlist)?
-  ```sql
-  -- ¿UPDATE de tabla completa revocado?
-  SELECT grantee, privilege_type FROM information_schema.role_table_grants
-  WHERE table_schema='public' AND table_name='<tabla>' AND grantee='authenticated';
-  ```
-  - Si aparece `UPDATE` en `role_table_grants` → tabla completa, cualquier columna nueva
-    ya es escribible, **no requiere GRANT extra** (ver ejemplo `workout_logs` en el audit).
-  - Si **no** aparece `UPDATE` (solo SELECT/INSERT/DELETE/...) → la tabla usa allowlist de
-    columnas (patrón `coaches`, `teams`, `clients`) y **toda columna nueva que el alumno/coach
-    deba escribir desde mobile exige un `GRANT UPDATE(col)` explícito en la MISMA migración
-    que la crea**.
+Aplicar a todo cambio en `apps/mobile` que agregue o amplíe `insert`, `update`, `upsert`, `delete`, RPC o upload. El cliente móvil usa el JWT del usuario contra Supabase; nunca contiene `service_role`.
 
-## 2. Si es allowlist: agregar el GRANT en la misma migración
+No mergear hasta completar los puntos aplicables contra el esquema real del entorno objetivo. Los SQL locales describen intención, pero `information_schema` y `pg_policies` describen el estado efectivo.
 
-- [ ] La migración que crea la columna incluye:
-  ```sql
-  GRANT UPDATE (nueva_columna) ON public.<tabla> TO authenticated;
-  ```
-- [ ] **NO** usar `REVOKE UPDATE(col)` esperando que anule un grant de tabla — es no-op.
-      El patrón correcto es `REVOKE UPDATE ON tabla FROM authenticated` (una vez, a nivel
-      tabla) + `GRANT UPDATE (col1, col2, ...) ON tabla TO authenticated` (allowlist).
-- [ ] Verificar post-aplicación contra `information_schema.column_privileges` (no contra
-      el `.sql` — puede haber grants agregados por migraciones posteriores que el archivo
-      original no refleja; el audit E0-B1 encontró este caso real en
-      `body_composition_measurements`):
-  ```sql
-  SELECT column_name, privilege_type FROM information_schema.column_privileges
-  WHERE table_schema='public' AND table_name='<tabla>'
-    AND grantee='authenticated' AND privilege_type='UPDATE'
-  ORDER BY column_name;
-  ```
+## 1. Delimitar el write-path
 
-## 3. RLS de la tabla
+- [ ] Registrar tabla/bucket, operación, columnas, rol real y scope: standalone, enterprise o team.
+- [ ] Confirmar si escribe PostgREST como `authenticated`, una RPC `SECURITY DEFINER` o una API server-side protegida.
+- [ ] Para cambios de ownership, scoping, billing o entitlements, usar una operación server-side/RPC con autorización explícita; no ampliar permisos del cliente.
 
-- [ ] Existe policy `FOR UPDATE` (o `FOR ALL`) que cubra el actor mobile real:
-      `client_id = auth.uid()` (alumno) / `coach_id = auth.uid()` (coach) / membership vía
-      `client_memberships` (pool). Sin la policy correcta, el GRANT de columna es necesario
-      pero no suficiente (PostgREST igual devuelve 0 filas afectadas o 403).
-  ```sql
-  SELECT policyname, cmd, roles::text, qual, with_check FROM pg_policies
-  WHERE schemaname='public' AND tablename='<tabla>';
-  ```
-- [ ] Si la tabla tiene lectura para `anon` (branding/login pre-auth), confirmar que las
-      columnas nuevas sensibles (tokens, PII, billing) **NO** quedaron incluidas en el
-      GRANT SELECT a `anon` por accidente (copy-paste de una migración de branding previa).
+## 2. Revisar grants efectivos
 
-## 4. Columnas de scoping / compra-only — nunca las toques desde mobile
+```sql
+SELECT privilege_type
+FROM information_schema.role_table_grants
+WHERE table_schema = 'public'
+  AND table_name = '<tabla>'
+  AND grantee = 'authenticated';
 
-- [ ] Si la columna nueva es de scoping (`org_id`, `team_id`, `coach_id` en `clients`) o de
-      billing/entitlements (`enabled_modules`, `subscription_*`, `max_clients` en
-      `coaches`/`teams`) → **service-role only**, no agregar GRANT a `authenticated` bajo
-      ninguna circunstancia. Estas ya están explícitamente reservadas
-      (`20260611120000_modules_compra_only_grants.sql`,
-      `20260611120001_clients_scoping_grants.sql`).
+SELECT column_name, privilege_type
+FROM information_schema.column_privileges
+WHERE table_schema = 'public'
+  AND table_name = '<tabla>'
+  AND grantee = 'authenticated'
+ORDER BY privilege_type, column_name;
+```
 
-## 5. Suite de regresión
+- [ ] Si existe `UPDATE` a nivel tabla, una columna nueva hereda el permiso; RLS todavía debe limitar filas.
+- [ ] Si `UPDATE` está revocado a nivel tabla, agregar la columna user-editable al allowlist en la misma migración:
 
-- [ ] Correr `tests/separation/module-grants.sql` (chequea drift contra
-      `information_schema.column_privileges`) antes de mergear cualquier migración que
-      toque grants de `coaches`/`teams`/`clients`.
-- [ ] Si la tabla nueva/columna nueva introduce un patrón de scoping equivalente
-      (multi-tenant), considerar agregar un caso a esa suite en el mismo PR.
+```sql
+GRANT UPDATE (nueva_columna) ON public.<tabla> TO authenticated;
+```
 
-## 6. Storage (si el write-path sube archivos, ej. fotos de check-in/perfil)
+- [ ] No usar `REVOKE UPDATE(columna)` para compensar un grant de tabla: no lo anula. El patrón válido es `REVOKE UPDATE ON ...` y luego `GRANT UPDATE(columna, ...)`.
+- [ ] Mantener fuera de allowlists los campos de scoping (`id`, `org_id`, `team_id`, `coach_id`) y los de billing/entitlements, salvo una decisión de seguridad documentada.
 
-- [ ] Policies de `storage.objects` scoped a `(storage.foldername(name))[1] = auth.uid()::text`
-      (o equivalente coach/team), **no** SELECT público amplio salvo que sea intencional
-      (ver gotcha `checkins` bucket, tightened en `20260608120200`).
-- [ ] Confirmar policy con:
-  ```sql
-  SELECT policyname, cmd, roles::text, qual, with_check FROM pg_policies
-  WHERE schemaname='storage' AND tablename='objects' AND policyname ILIKE '%<bucket>%';
-  ```
+Los allowlists actuales de `coaches`, `teams` y `clients` nacen en:
 
-## 7. Verificación final (contra PROD real, no contra el `.sql`)
+- `supabase/migrations/20260612140000_modules_compra_only_grants.sql`;
+- `supabase/migrations/20260612140001_clients_scoping_grants.sql`;
+- migraciones posteriores de branding que agregan columnas explícitas.
 
-- [ ] `information_schema.column_privileges` muestra el GRANT esperado.
-- [ ] `pg_policies` muestra la policy esperada.
-- [ ] Prueba manual desde mobile (o Playwright/RLS test) como `authenticated` con claims
-      reales — nunca validar con `service_role` (eso siempre pasa, no prueba nada).
-- [ ] Actualizar `specs/rn-mobile-parity-redesign/research/e0-db-audit.md` (o el doc de
-      auditoría vigente de la etapa) si el hallazgo cambia el estado "cero deltas".
+## 3. Revisar RLS
 
----
+```sql
+SELECT policyname, cmd, roles::text, qual, with_check
+FROM pg_policies
+WHERE schemaname = 'public'
+  AND tablename = '<tabla>'
+ORDER BY policyname;
+```
 
-## Referencias
+- [ ] La policy cubre el actor y scope reales, no solo al owner standalone.
+- [ ] En `UPDATE`, `USING` limita las filas existentes y `WITH CHECK` impide mover la fila a otro tenant.
+- [ ] En team/enterprise, reutilizar helpers `SECURITY DEFINER` vigentes; no consultar recursivamente la misma tabla de membresía desde su policy.
+- [ ] `anon` no obtiene PII, tokens, datos clínicos ni billing por un grant copiado de un flujo público de branding.
+- [ ] Probar al menos: actor permitido, usuario ajeno, otro team/org y rol sin capacidad de gestión.
 
-- Auditoría base (E0-B1): `specs/rn-mobile-parity-redesign/research/e0-db-audit.md`
-- Gotcha de grants por columna: `CLAUDE.md` §Database → "Column-level grants gotcha"
-- Suite de regresión: `tests/separation/module-grants.sql`
-- Migraciones ejemplo del patrón: `supabase/migrations/20260611120000_modules_compra_only_grants.sql`,
-  `supabase/migrations/20260611120001_clients_scoping_grants.sql`,
-  `supabase/migrations/20260612140001_clients_scoping_grants.sql`
+## 4. Storage
+
+- [ ] El object path contiene el scope esperado por la policy; para fotos del alumno, normalmente comienza con su UID.
+- [ ] Buckets sensibles permanecen privados y se leen mediante URL firmada. `checkins` usa este patrón en mobile.
+- [ ] Un bucket público solo se acepta para assets deliberadamente públicos y con MIME/tamaño restringidos.
+- [ ] Verificar `storage.objects` con un usuario real permitido y otro ajeno.
+
+## 5. Migración y despliegue
+
+- [ ] Crear migración timestamped, aditiva, idempotente y forward-only en `supabase/migrations/`.
+- [ ] No ejecutar `db push` directo a producción.
+- [ ] Si Supabase Branching está disponible: branch efímero → `apply_migration` → seed sintético/tests RLS → advisors → merge → pull/types → borrar branch el mismo día.
+- [ ] Si Branching no está disponible: seguir el procedimiento aditivo-en-live de [RUNBOOK.md](./RUNBOOK.md), con snapshot y validación previa; nunca improvisar DDL destructivo.
+- [ ] Regenerar los tipos DB compartidos cuando cambie el esquema y revisar consumidores web + mobile.
+
+## 6. Gate final
+
+- [ ] Ejecutar `tests/separation/module-grants.sql` si toca `coaches`, `teams`, `clients` o sus allowlists.
+- [ ] Agregar un test SQL de RLS para el nuevo tenant/rol cuando el caso no esté cubierto.
+- [ ] Validar con sesión `authenticated`; `service_role` omite RLS y no demuestra seguridad.
+- [ ] Correr `pnpm --filter @eva/mobile exec tsc --noEmit` y las pruebas unitarias/E2E afectadas.
+- [ ] Revisar advisors de seguridad y rendimiento; cero hallazgos críticos nuevos.
+- [ ] Confirmar manualmente desde la app que la mutación persiste, que el error se muestra sin perder datos y que el modo offline no duplica escrituras.

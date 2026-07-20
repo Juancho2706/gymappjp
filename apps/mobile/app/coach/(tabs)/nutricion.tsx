@@ -66,7 +66,7 @@ import {
 import { canUseNutrition, type SubscriptionTier } from '../../../lib/coach-tiers'
 import { getApiBaseUrl } from '../../../lib/api'
 
-// Acentos de dominio FIJOS del token-contract (§1 — NO white-label, seguros para SVG).
+// Acentos de dominio FIJOS de TOKENS.md (§1 — NO white-label, seguros para SVG).
 const EMBER = '#FF6A3D' // ember-500 — planes personalizados / dominio nutrición
 const AQUA = '#18ABD4' // aqua-500 — recovery / paso 3 guía
 const WARNING = '#F5A524' // warning-500 — sin plan

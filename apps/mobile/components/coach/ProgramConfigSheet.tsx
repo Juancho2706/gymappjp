@@ -9,7 +9,7 @@ import { Switch } from '../Switch'
 import type { DurationType, ProgramStructureType } from '../../lib/plan-builder/types'
 
 export type Phase = { name: string; weeks: number; color: string }
-// EVA DS macrocycle palette (token-contract): sport · violet · success · warning · ember · aqua
+// EVA DS macrocycle palette (TOKENS.md): sport · violet · success · warning · ember · aqua
 export const PHASE_COLORS = ['#2680FF', '#7C5CE6', '#1FB877', '#F5A524', '#FF6A3D', '#18ABD4']
 const WARNING_500 = '#F5A524' // --color-warning-500 (nota informativa de fases)
 

@@ -104,7 +104,7 @@ describe('resolveBrandTheme — color2 / accent2 (white-label v2)', () => {
 })
 
 // ────────────────────────────────────────────────────────────────────────────
-// D2 — White-label SPORT ramp (--sport-100..700) — token-contract §7
+// D2 — White-label SPORT ramp (--sport-100..700) — TOKENS.md §7
 // ────────────────────────────────────────────────────────────────────────────
 describe('deriveSportRamp / deriveSportTokens (D2 white-label sport ramp)', () => {
     // design `--surface-app`: light = paper, dark = #0A0D12

@@ -17,7 +17,7 @@
  *   nombre/slug/id). NUNCA borra ni sobreescribe data existente.
  * - Si el auth user ya existe, solo sincroniza el password al valor del env
  *   (cuentas @evatest.cl exclusivas de E2E).
- * - Inventario completo: docs/e2e-personas.md
+ * - Inventario operativo: docs/testing/E2E_PERSONAS.md
  *
  * Shapes de columnas verificados contra apps/web/src/lib/database.types.ts (Insert)
  * y migrations 20260608210000_client_identity_split.sql / 20260609050855_team_foundation.sql.
