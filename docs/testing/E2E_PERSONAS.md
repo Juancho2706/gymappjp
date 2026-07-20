@@ -38,7 +38,8 @@ El fixture multi-contexto usado para probar el selector de workspace es independ
 ## Credenciales y sesiones
 
 - `E2E_PERSONAS_PASSWORD` es la contraseña compartida; nunca se versiona.
-- Sin esa variable, los setups/specs de separación se omiten en vez de fallar por ausencia de secretos.
+- `JOSEFIT_ALUMNO_PASSWORD` puede sobrescribir la clave del demo Josefit; si falta, ese seed usa `E2E_PERSONAS_PASSWORD`.
+- Sin `E2E_PERSONAS_PASSWORD`, los setups/specs de separación se omiten en vez de fallar por ausencia de secretos.
 - `playwright/.auth/` contiene sesiones generadas y está ignorado por Git.
 - Los emails y UUIDs estables viven en `tests/separation/personas.ts`; no duplicarlos en documentación.
 - No usar estas cuentas para revisión de stores, demos públicas ni operaciones manuales fuera de E2E.
