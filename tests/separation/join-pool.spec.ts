@@ -11,6 +11,7 @@ import { SLUGS, BRANDS } from './personas'
  */
 const TEAM_INVITE_CODE = process.env.E2E_TEAM_INVITE_CODE ?? '9WVEG'
 const JOIN_EMAIL = 'e2e-pool-join@evatest.cl'
+const JOIN_PASSWORD = process.env.E2E_PERSONAS_PASSWORD ?? ''
 
 test.describe('A.bis2 — /join con código de team', () => {
     test('la página de join muestra la marca del TEAM y el login /t', async ({ page }) => {
@@ -30,6 +31,7 @@ test.describe('A.bis2 — /join con código de team', () => {
     })
 
     test('registro con código de team crea (o reconoce) al alumno del pool', async ({ page }) => {
+        test.skip(!JOIN_PASSWORD, 'E2E_PERSONAS_PASSWORD no seteado')
         // rateLimitInviteAccept es fail-CLOSED: sin Upstash (dev local) el action SIEMPRE
         // devuelve "Demasiados intentos". Solo corre donde el rate limit es real (preview/CI).
         test.skip(!process.env.UPSTASH_REDIS_REST_URL, 'sin UPSTASH el join está fail-closed en local')
@@ -39,7 +41,7 @@ test.describe('A.bis2 — /join con código de team', () => {
 
         await page.getByPlaceholder('Juan Pérez').fill('E2E Pool Join')
         await page.getByPlaceholder('juan@email.com').fill(JOIN_EMAIL)
-        await page.getByPlaceholder('Mínimo 8 caracteres').fill(process.env.E2E_PERSONAS_PASSWORD ?? 'EvaE2E.2026!')
+        await page.getByPlaceholder('Mínimo 8 caracteres').fill(JOIN_PASSWORD)
         await page.getByRole('button', { name: /crear cuenta/i }).click()
 
         // Primera corrida: redirect al login del TEAM (?registered=1).

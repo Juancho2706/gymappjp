@@ -58,7 +58,10 @@ const env = Object.fromEntries(
 const sb = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, {
   auth: { persistSession: false },
 })
-const CLIENT_PASSWORD = env.E2E_PERSONAS_PASSWORD || 'Evatest-Gate-2026'
+const CLIENT_PASSWORD = env.E2E_PERSONAS_PASSWORD
+if (!CLIENT_PASSWORD || CLIENT_PASSWORD.length < 8) {
+  throw new Error('Falta E2E_PERSONAS_PASSWORD (mínimo 8 caracteres) en .env.local.')
+}
 
 // clients.id is a FK to auth.users(id) — every client needs an auth user.
 async function getOrCreateAuthUser(email) {
