@@ -1,10 +1,10 @@
 'use client'
 
-import { useMemo, useReducer, useRef, useState, useTransition } from 'react'
+import { useEffect, useMemo, useReducer, useRef, useState, useTransition } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
-import { AlertTriangle, Check, ChevronLeft, ChevronRight, Info, Loader2, Plus, Search, Trash2 } from 'lucide-react'
+import { AlertTriangle, Check, ChevronLeft, ChevronRight, History, Info, Loader2, Plus, Search, Trash2, X } from 'lucide-react'
 import { BuilderStepList, MacroBudget, NutritionCard, StrategyBadge } from '@/components/nutrition-v2'
 // Import por ruta directa (no via el barrel index.ts): desacopla del orden de edicion de otros
 // modulos y respeta el contrato del componente MacroChipRow.
@@ -51,7 +51,16 @@ import { PublishConflictDialog } from './PublishConflictDialog'
 import { PortionsSection, usePortionsBuilder, type PortionsController } from './PortionsSection'
 import { PortionsDeriveCard } from './PortionsDeriveCard'
 import { PortionsReviewSection } from './PortionsReviewChips'
-import { attachPortionsAndValidate, combineSubtotals, slotPortionTotals } from './portions-state'
+import { attachPortionsAndValidate, combineSubtotals, slotPortionTotals, type PortionsBySlot } from './portions-state'
+// Respaldo LOCAL del wizard (W3b): store puro versionado en localStorage. El coach retoma un
+// plan a medio construir si cerró la PWA / mató la pestaña. La key incluye clientId + planId.
+import {
+  builderDraftKey,
+  clearNutritionDraft,
+  readNutritionDraft,
+  sweepStaleNutritionDrafts,
+  writeNutritionDraft,
+} from '@/lib/nutrition-coach-draft-store'
 import { PORTIONS_COPY } from '@/lib/nutrition-portions-copy'
 import { foodCategoryIconUrlFromName, resolveFoodImageUrl } from './food-card-presentation'
 import { foodCategoryIconUrl } from '@/lib/food-image'
@@ -218,8 +227,10 @@ function FoodSearch({ clientId, onPick }: { clientId: string; onPick: (food: Bui
 
 function PortionMacros({ item }: { item: BuilderItem }) {
   const m = itemMacros(item)
+  // Apilado debajo del nombre (dentro del contenedor flex-1), en su propia fila:
+  // las macros ocupan el ancho completo y no compiten horizontalmente con el nombre.
   return (
-    <div className="shrink-0">
+    <div className="mt-1">
       <MacroChipRow
         size="sm"
         calories={m.calories}
@@ -371,13 +382,13 @@ function ItemRow({
               onChange={(e) => dispatch({ type: 'UPDATE_ITEM', slotKey, itemKey: item.key, patch: { customName: e.target.value } })}
             />
           )}
+          <PortionMacros item={item} />
         </div>
-        <PortionMacros item={item} />
         <button
           type="button"
           aria-label={`Quitar ${displayName || 'alimento'}`}
           onClick={() => dispatch({ type: 'REMOVE_ITEM', slotKey, itemKey: item.key })}
-          className={iconButtonClass}
+          className={iconButtonClass + ' shrink-0'}
         >
           <Trash2 className="h-4 w-4" />
         </button>
@@ -916,6 +927,27 @@ const STEP_META = [
   { id: 'revision', label: 'Revisar y publicar' },
 ]
 
+// Respaldo local (W3b): DOS piezas de estado independientes viajan juntas — el árbol del
+// reducer (BuilderState) y el mapa hermano de porciones (PortionsBySlot). Sin portionsBySlot
+// un plan structured/hybrid restauraría incompleto (las porciones a elección se perderían).
+interface BuilderDraftPayload {
+  clientId: string
+  planId: string | null
+  state: BuilderState
+  portionsBySlot: PortionsBySlot
+}
+
+// ¿El borrador tiene contenido que valga la pena respaldar? Evita escribir (y avisar al salir)
+// por un wizard recién abierto o vaciado. Espeja el guard "dirty" del quick-edit.
+function builderHasSignificantContent(state: BuilderState): boolean {
+  if (state.strategy !== null) return true
+  if (state.planName.trim() !== '') return true
+  if (state.slots.length > 0) return true
+  return (['calories', 'proteinG', 'carbsG', 'fatsG'] as const).some((f) => state.targets[f].trim() !== '')
+}
+
+const LEAVE_GUARD_COPY = 'Tienes un borrador sin publicar. ¿Salir y descartarlo?'
+
 export function PlanBuilderClient({
   clientId,
   existingPlan,
@@ -953,6 +985,59 @@ export function PlanBuilderClient({
   const replaceArchivedRef = useRef(false)
   const replaceKeyRef = useRef<string | null>(null)
 
+  // Respaldo local del wizard (W3b): key estable por alumno+plan, banner de restauración y
+  // el payload leído al montar (guardado en un ref para no re-renderizar hasta tocar Restaurar).
+  const draftKey = useMemo(() => builderDraftKey(clientId, existingPlan?.id ?? null), [clientId, existingPlan?.id])
+  const [showDraftBanner, setShowDraftBanner] = useState(false)
+  const draftPayloadRef = useRef<BuilderDraftPayload | null>(null)
+  const isFirstRender = useRef(true)
+
+  // Al montar: barre borradores vencidos (higiene global) y, si hay uno vigente para ESTE
+  // alumno/plan, ofrece restaurarlo. Best-effort (SSR / modo privado degradan a "sin borrador").
+  useEffect(() => {
+    sweepStaleNutritionDrafts(Date.now())
+    const record = readNutritionDraft<BuilderDraftPayload>(draftKey, Date.now())
+    if (record != null && record.payload.clientId === clientId) {
+      draftPayloadRef.current = record.payload
+      setShowDraftBanner(true)
+    }
+  }, [draftKey, clientId])
+
+  // Autosave con debounce (~2s) sobre el árbol del wizard + las porciones. Salta el primer
+  // render (la hidratación inicial no es un cambio del coach). Si el borrador deja de tener
+  // contenido significativo (el coach vació todo) limpia la key en vez de guardar vacío.
+  useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false
+      return
+    }
+    const timer = setTimeout(() => {
+      if (builderHasSignificantContent(state)) {
+        writeNutritionDraft<BuilderDraftPayload>(
+          draftKey,
+          { clientId, planId: existingPlan?.id ?? null, state, portionsBySlot: portions.bySlot },
+          Date.now(),
+        )
+      } else {
+        clearNutritionDraft(draftKey)
+      }
+    }, 2000)
+    return () => clearTimeout(timer)
+  }, [state, portions.bySlot, draftKey, clientId, existingPlan?.id])
+
+  // Guard de salida del navegador (cerrar pestaña / recargar) con un borrador sin publicar.
+  // Espeja el leaveGuard del quick-edit: solo el aviso nativo; el respaldo real lo hace el
+  // autosave de arriba.
+  useEffect(() => {
+    if (!builderHasSignificantContent(state)) return
+    const handler = (event: BeforeUnloadEvent) => {
+      event.preventDefault()
+      event.returnValue = LEAVE_GUARD_COPY
+    }
+    window.addEventListener('beforeunload', handler)
+    return () => window.removeEventListener('beforeunload', handler)
+  }, [state])
+
   const validation = useMemo(() => validateStep(state, state.step), [state])
 
   const steps = STEP_META.map((meta, index) => {
@@ -978,7 +1063,32 @@ export function PlanBuilderClient({
     dispatch({ type: 'PREV_STEP' })
   }
 
-  const goToPublished = () => router.push('/coach/nutrition-v2/' + clientId + '?published=1')
+  // Punto común de éxito de las DOS ramas de publicación (normal / "Archivar y reemplazar"):
+  // limpia el respaldo local antes de navegar — el plan ya está en el servidor.
+  const goToPublished = () => {
+    clearNutritionDraft(draftKey)
+    router.push('/coach/nutrition-v2/' + clientId + '?published=1')
+  }
+
+  // Restaurar borrador: reemplaza el árbol del reducer Y el mapa de porciones (dos piezas).
+  function handleRestoreDraft() {
+    const payload = draftPayloadRef.current
+    if (payload != null) {
+      dispatch({ type: 'RESTORE', state: payload.state })
+      portions.restoreBySlot(payload.portionsBySlot ?? {})
+      // El catálogo de grupos (portions.groups) NO se persiste: si el plan restaurado usa
+      // franjas (structured/hybrid) lo precargamos para que las filas de porciones muestren
+      // nombre/color en vez del fallback (mismo camino que el flujo normal del picker).
+      if (strategyUsesSlots(payload.state.strategy)) portions.ensureGroupsLoaded()
+    }
+    setShowDraftBanner(false)
+  }
+
+  function handleDiscardDraft() {
+    clearNutritionDraft(draftKey)
+    draftPayloadRef.current = null
+    setShowDraftBanner(false)
+  }
 
   // Clave de idempotencia FRESCA por cada intento real: cambia el destino (misma version vs
   // plan nuevo) y evita reutilizar la clave de un intento fallido (riesgo de versiones draft
@@ -1138,6 +1248,29 @@ export function PlanBuilderClient({
 
   return (
     <>
+    {/* Respaldo local (W3b): banner de restauración al tope del wizard. Molde tomado de
+        WeeklyPlanBuilder (builder de entrenamiento), adaptado a los tokens de este archivo. */}
+    {showDraftBanner ? (
+      <div className="mb-4 rounded-card border border-primary/25 bg-primary/10 p-3">
+        <div className="flex flex-col items-stretch justify-center gap-2 sm:flex-row sm:items-center sm:gap-3">
+          <History aria-hidden="true" className="hidden h-4 w-4 shrink-0 text-primary sm:block" />
+          <p className="flex-1 text-xs font-semibold text-primary">Tienes un borrador sin guardar de esta sesión.</p>
+          <div className="flex items-center justify-end gap-2">
+            <button type="button" onClick={handleRestoreDraft} className={primaryButtonClass + ' min-h-9 px-3 text-xs'}>
+              Restaurar
+            </button>
+            <button
+              type="button"
+              onClick={handleDiscardDraft}
+              aria-label="Descartar borrador"
+              className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-control text-primary/70 transition-colors hover:bg-primary/10 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <X aria-hidden="true" className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+      </div>
+    ) : null}
     <div className="grid gap-5 lg:grid-cols-[240px_minmax(0,1fr)]">
       <div className="space-y-3 lg:sticky lg:top-6 lg:self-start">
         <MobileBuilderStepper steps={steps} />

@@ -35,12 +35,18 @@ export function QuickEditEntry({
   const [editing, setEditing] = useState(false)
 
   // Overlay abierto → sin scroll del body (la ficha queda debajo, intacta).
+  // Además marca el <body> con `eva-quickedit-open` para ocultar por CSS la cápsula flotante
+  // del nav del coach mientras se edita (mismo bug de apilamiento ya resuelto en el alumno con
+  // `eva-v2-sheet-open`; ver globals.css y TodayModal.tsx). Acá solo puede haber UNA instancia de
+  // quick-edit por página, así que basta un add/remove simple sin contador de referencias.
   useEffect(() => {
     if (!editing) return
     const previous = document.body.style.overflow
     document.body.style.overflow = 'hidden'
+    document.body.classList.add('eva-quickedit-open')
     return () => {
       document.body.style.overflow = previous
+      document.body.classList.remove('eva-quickedit-open')
     }
   }, [editing])
 

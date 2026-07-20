@@ -8,19 +8,17 @@ import { foodCategoryIconUrl, foodCategoryIconUrlFromName } from '@/lib/food-ima
  * nivel visual que las cards del coach. Fuente única de las filas de "Tu plan de
  * hoy", "Consumido hoy" (tab Hoy) y del tab "Plan".
  *
- * Miniatura: foto real del producto (`imageUrl`, cuando el read model traiga `media`)
- * con respaldo GARANTIZADO al icono estático de categoría. Como los read models del
- * alumno hoy solo traen el `name` (sin `media`/`category`), el respaldo se deriva del
- * nombre (`foodCategoryIconUrlFromName`) — el mismo camino sancionado que usa el
- * builder del coach para los items dentro de una franja. Una fila NUNCA queda sin
- * imagen y NO consume Image Transformations (iconos estáticos del build).
+ * Miniatura, en orden de prioridad: (1) la ILUSTRACIÓN real del producto vía `imageUrl`
+ * (el caller lo resuelve desde el `media` que ahora traen los read models del día/plan)
+ * — paridad total con la card del coach; (2) el icono estático de la `category` del
+ * catálogo cuando llega sin media; (3) el icono derivado del NOMBRE
+ * (`foodCategoryIconUrlFromName`) como último respaldo — el mismo camino sancionado que
+ * usa el builder del coach. `media`/`category` son opcionales en el read model
+ * (aditivos): si un item aún no los trae, la fila degrada con elegancia a (2)/(3), así
+ * que NUNCA queda sin imagen y NO consume Image Transformations (iconos del build).
  *
  * Solo presentación: sin estado, sin hooks, sin Supabase → válida tanto en Server
  * Components (tab Plan) como dentro de client components (tab Hoy).
- *
- * Pendiente (requiere SQL): enriquecer `NutritionIntakeReadItem` /
- * `NutritionPrescriptionItemRead` con `media` + `category` (o un RPC batch por ids)
- * para pintar la foto real del producto en vez del icono de categoría.
  */
 export interface NutritionFoodRowProps {
   name: string

@@ -46,6 +46,10 @@ export const QE_COPY = {
   offline: 'Sin conexión. Tus cambios siguen aquí; reintenta cuando vuelvas a tener señal.',
   /** edit.leaveGuard */
   leaveGuard: 'Tienes cambios sin publicar. ¿Salir y descartarlos?',
+  /** edit.restoreBanner — respaldo local: hay un borrador de una sesion anterior sin publicar. */
+  restoreBanner: 'Tienes cambios sin publicar de una sesión anterior.',
+  restoreCta: 'Restaurar',
+  restoreDismiss: 'Descartar borrador',
   /** edit.readonlyHint */
   readonlyHint: 'Para cambiar la estrategia o las notas, usa Rehacer con el asistente.',
   /** Error red/servidor en la barra: el draft NO se pierde; reintento reusa la misma clave. */

@@ -27,7 +27,7 @@ import { humanizeStudentWriteError } from '@/lib/student-access'
 import { AuraHero } from './AuraHero'
 import { TodayModal } from './TodayModal'
 import { NutritionFoodRow } from './NutritionFoodRow'
-import { foodResultImage } from './food-result-image'
+import { foodResultImage, resolveFoodImageUrl } from './food-result-image'
 import {
   buildCatalogIntakePayload,
   buildCorrectionPayload,
@@ -295,6 +295,8 @@ export function TodayExperience({
                   proteinG={entry.totals.proteinG}
                   carbsG={entry.totals.carbsG}
                   fatsG={entry.totals.fatsG}
+                  imageUrl={resolveFoodImageUrl(entry.media ?? null, SUPABASE_BASE)}
+                  category={entry.category ?? undefined}
                   statusLabel={entry.status === 'corrected' ? 'Corregido' : null}
                   actions={
                     <div className="flex items-center gap-1">
@@ -603,6 +605,8 @@ function PrescribedSection({
                   proteinG={item.macros.proteinG}
                   carbsG={item.macros.carbsG}
                   fatsG={item.macros.fatsG}
+                  imageUrl={resolveFoodImageUrl(item.media ?? null, SUPABASE_BASE)}
+                  category={item.category ?? undefined}
                   note={item.notes}
                   actions={
                     consumed ? (
