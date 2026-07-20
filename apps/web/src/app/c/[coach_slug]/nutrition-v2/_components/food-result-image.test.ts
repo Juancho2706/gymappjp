@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { FoodCatalogItem, FoodMediaRead } from '@eva/nutrition-v2'
 import { foodResultImage, resolveFoodImageUrl } from './food-result-image'
+import { foodCategoryIconUrl, foodCategoryIconUrlFromName } from '@/lib/food-image'
 
 const BASE = 'https://proj.supabase.co'
 
@@ -63,5 +64,40 @@ describe('foodResultImage', () => {
     const image = foodResultImage({ name: 'X', category: null, media: null }, BASE)
     expect(image.imageUrl).toBeNull()
     expect(image.iconUrl).toBe('/food-icons/otro.webp')
+  })
+})
+
+// Fila del alumno (plan / consumo del dia): la miniatura la resuelven el caller
+// (`imageUrl = resolveFoodImageUrl(item.media ?? null, base)`) y `NutritionFoodRow`
+// (`iconUrl = category ? foodCategoryIconUrl(category) : foodCategoryIconUrlFromName(name)`).
+// `media` y `category` son aditivos/opcionales en el read model del dia/plan: los tests
+// cubren las tres ramas tolerando que aun no lleguen (deploy web antes o despues de la
+// migracion SQL). `rowThumb` es el ESPEJO exacto de esas dos lineas de produccion.
+describe('miniatura de la fila del alumno desde el read model del dia/plan', () => {
+  const rowThumb = (item: { name: string; media?: FoodMediaRead | null; category?: string | null }) => ({
+    imageUrl: resolveFoodImageUrl(item.media ?? null, BASE),
+    iconUrl: item.category ? foodCategoryIconUrl(item.category) : foodCategoryIconUrlFromName(item.name),
+  })
+
+  it('item CON media: pinta la ilustracion real del producto (paridad con el coach)', () => {
+    const thumb = rowThumb({ name: 'Pepino pelado crudo', media: MEDIA, category: 'verdura' })
+    expect(thumb.imageUrl).toBe(
+      'https://proj.supabase.co/storage/v1/object/public/food-media/off/3/012/345%20678/front.jpg?v=4',
+    )
+  })
+
+  it('item SIN media pero CON category: cae al icono de esa categoria (no al del nombre)', () => {
+    // Pepino con category='verdura' ya NO cae a "otro": la categoria del catalogo manda.
+    const thumb = rowThumb({ name: 'Pepino pelado crudo', media: null, category: 'verdura' })
+    expect(thumb.imageUrl).toBeNull()
+    expect(thumb.iconUrl).toBe('/food-icons/verdura.webp')
+  })
+
+  it('item SIN media ni category: respaldo derivado del nombre (comportamiento actual)', () => {
+    // "pollo" ⇒ proteina; un nombre sin keyword ("Pepino…") ⇒ "otro" (el generico reportado).
+    expect(rowThumb({ name: 'Cubitos de pollo' }).iconUrl).toBe('/food-icons/proteina.webp')
+    const generic = rowThumb({ name: 'Pepino pelado crudo' })
+    expect(generic.imageUrl).toBeNull()
+    expect(generic.iconUrl).toBe('/food-icons/otro.webp')
   })
 })

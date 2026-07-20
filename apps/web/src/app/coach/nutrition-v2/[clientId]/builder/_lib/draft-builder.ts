@@ -144,6 +144,7 @@ export type BuilderAction =
   | { type: 'ADD_ITEM'; slotKey: string; key: string; food: BuilderFood | null }
   | { type: 'REMOVE_ITEM'; slotKey: string; itemKey: string }
   | { type: 'UPDATE_ITEM'; slotKey: string; itemKey: string; patch: Partial<Omit<BuilderItem, 'key'>> }
+  | { type: 'RESTORE'; state: BuilderState }
 
 function clampStep(step: number): number {
   return Math.max(0, Math.min(BUILDER_STEP_COUNT - 1, step))
@@ -204,6 +205,16 @@ export function builderReducer(state: BuilderState, action: BuilderAction): Buil
         ...slot,
         items: slot.items.map((item) => (item.key === action.itemKey ? { ...item, ...action.patch } : item)),
       }))
+    case 'RESTORE': {
+      // Reemplazo TOTAL del arbol desde un borrador restaurado (localStorage). Validacion
+      // minima defensiva: un payload corrupto (sin `slots` array) se ignora — jamas rompe el
+      // wizard. El `step` se re-clampa a [0, BUILDER_STEP_COUNT-1] por si el JSON persistido
+      // trae un indice fuera de rango o no finito (cae a 0).
+      const next = action.state
+      if (next == null || typeof next !== 'object' || !Array.isArray(next.slots)) return state
+      const step = Number.isFinite(next.step) ? clampStep(next.step) : 0
+      return { ...next, step }
+    }
     default:
       return state
   }

@@ -385,7 +385,7 @@ export function CoachSidebar({ coachName, coachBrand, subscriptionStatus, enterp
             {!isBuilder && (
                 <nav
                     aria-label="Navegación principal"
-                    className="flex md:hidden"
+                    className="coach-nav-mobile flex md:hidden"
                     style={{
                         position: 'fixed',
                         left: tabbarMinimized ? 72 : 14,

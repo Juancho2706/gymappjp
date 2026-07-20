@@ -302,6 +302,7 @@ export type QuickEditAction =
   | { type: 'RESTORE_PORTION_TARGET'; variantKey: string; slotKey: string; index: number; target: QePortionTarget }
   | { type: 'ADD_PORTION_TARGET'; variantKey: string; slotKey: string; key: string; group: QePortionGroup }
   | { type: 'RESET'; state: QuickEditState }
+  | { type: 'RESTORE_DRAFT'; state: QuickEditState }
 
 /** Paso del stepper de cantidad: 5 para g/ml, 0.5 para unidad/porcion (NN/g, nunca slider). */
 export function quantityStep(unit: string): number {
@@ -605,6 +606,12 @@ export function quickEditReducer(state: QuickEditState, action: QuickEditAction)
       }))
     case 'RESET':
       return action.state
+    case 'RESTORE_DRAFT':
+      // Restaura un borrador local (localStorage) reemplazando el arbol completo. Validacion
+      // defensiva minima: si el payload guardado esta corrupto o es de un shape viejo (variants
+      // ausente o no-array), se ignora y se conserva el estado actual — mejor no restaurar que
+      // romper la pantalla.
+      return Array.isArray(action.state?.variants) ? action.state : state
     default:
       return state
   }

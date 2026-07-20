@@ -56,6 +56,12 @@ export interface PortionsController {
   step: (slotKey: string, exchangeGroupId: string, direction: 1 | -1) => void
   /** Commit de edición libre del stepper (acepta "1,5"); entradas inválidas se ignoran. */
   commitValue: (slotKey: string, exchangeGroupId: string, raw: string) => void
+  /**
+   * Reemplaza el mapa COMPLETO de porciones (restauración de un borrador local). El
+   * catálogo de grupos (`groups`) NO se restaura por acá: el caller llama a
+   * `ensureGroupsLoaded()` si la estrategia usa franjas.
+   */
+  restoreBySlot: (map: PortionsBySlot) => void
 }
 
 export function usePortionsBuilder(clientId: string): PortionsController {
@@ -115,6 +121,12 @@ export function usePortionsBuilder(clientId: string): PortionsController {
         }
       })
     }, []),
+    // Reemplazo total del mapa desde un borrador restaurado. Defensivo: un payload no-objeto
+    // (JSON corrupto) cae a mapa vacío en vez de romper.
+    restoreBySlot: useCallback(
+      (map: PortionsBySlot) => setBySlot(map != null && typeof map === 'object' ? map : {}),
+      [],
+    ),
   }
 }
 

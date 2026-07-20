@@ -1107,6 +1107,15 @@ body.eva-v2-sheet-open nav.client-nav-mobile {
   display: none !important;
 }
 
+/* Quick-edit de Nutrición V2 (coach) — regla hermana de la del alumno. El overlay de quick-edit
+   marca <body class="eva-quickedit-open"> (QuickEditEntry.tsx) mientras se edita. La cápsula
+   flotante del nav del coach (nav.coach-nav-mobile, fixed z-50, hermana del <main>) pintaba sobre
+   la PublishBar del overlay ("Publicar cambios"), mismo bug de apilamiento ya resuelto en el
+   alumno; la ocultamos en lugar de pelear el z-index. */
+body.eva-quickedit-open nav.coach-nav-mobile {
+  display: none !important;
+}
+
 /* Perfil alumno — exportar / imprimir informe */
 @media print {
   .coach-layout-container > aside {

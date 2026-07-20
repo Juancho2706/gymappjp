@@ -9,7 +9,7 @@
  */
 
 import { useState } from 'react'
-import { Info, LockKeyhole, Plus, X } from 'lucide-react'
+import { History, Info, LockKeyhole, Plus, X } from 'lucide-react'
 import { StrategyBadge } from '@/components/nutrition-v2'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { useQuickEdit, genQuickEditKey } from './QuickEditProvider'
@@ -21,8 +21,19 @@ import { StaleBaseDialog } from './StaleBaseDialog'
 import { QE_COPY } from './microcopy'
 
 export function QuickEditPlanView() {
-  const { state, clientName, strategy, visibleNotes, protocolNotes, permissions, isPending, requestExit } =
-    useQuickEdit()
+  const {
+    state,
+    clientName,
+    strategy,
+    visibleNotes,
+    protocolNotes,
+    permissions,
+    isPending,
+    requestExit,
+    pendingRestore,
+    restoreDraft,
+    dismissRestore,
+  } = useQuickEdit()
   const usesSlots = strategy === 'structured' || strategy === 'hybrid'
 
   return (
@@ -59,6 +70,33 @@ export function QuickEditPlanView() {
       </header>
 
       <div className={'mx-auto w-full max-w-3xl space-y-4 px-3 py-4 ' + (isPending ? 'pointer-events-none opacity-70' : '')}>
+        {/* Respaldo local: hay un borrador de una sesion anterior (mismo plan/version) sin publicar. */}
+        {pendingRestore ? (
+          <div className="animate-in slide-in-from-top-1 rounded-card border border-primary/25 bg-primary/10 p-3">
+            <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center sm:gap-3">
+              <History aria-hidden="true" className="hidden h-4 w-4 shrink-0 text-primary sm:block" />
+              <p className="flex-1 text-xs font-semibold leading-5 text-primary">{QE_COPY.restoreBanner}</p>
+              <div className="flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={restoreDraft}
+                  className="inline-flex h-8 items-center justify-center rounded-control bg-primary/100 px-3 text-xs font-bold text-white transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  {QE_COPY.restoreCta}
+                </button>
+                <button
+                  type="button"
+                  onClick={dismissRestore}
+                  aria-label={QE_COPY.restoreDismiss}
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-control text-primary/70 transition-colors hover:bg-primary/10 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
         {state.variants.map((variant) => (
           <section key={variant.key} className="space-y-4">
             {state.variants.length > 1 ? (

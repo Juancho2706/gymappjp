@@ -2,7 +2,7 @@
 
 > Fuente única de verdad del estado actual. Reemplaza a los handoffs/roadmaps congelados
 > (archivados en `docs/archive/nutrition-v2/`). Verificado contra código y prod, no contra docs.
-> Última actualización: **2026-07-18** (porciones F1 construido Y operado en prod + PR #131 QA).
+> Última actualización: **2026-07-20** (ronda 2 QA CEO: publish bar, drafts locales, fila builder, media/category en read models del alumno).
 
 ## Estado en una línea
 
@@ -56,6 +56,20 @@ siguientes) y la **paridad visual RN** (olas 2R-7) queda como el próximo gran b
   intake desde el scanner de código de barras, subtotal de franja del alumno incluye
   porciones marcadas, tab "Curación" del catálogo contenido (overflow), loader del login.
   Ya mergeado a `master`.
+- **Ronda 2 de QA del CEO (2026-07-20)**: 4 fixes de editor/consistencia — (1) la cápsula
+  del nav del coach ya no tapa la barra "Publicar cambios" del quick-edit
+  (`body.eva-quickedit-open` + `nav.coach-nav-mobile`, espejo del fix del alumno);
+  (2) **respaldo local automático** de quick-edit y builder de 4 pasos
+  (`src/lib/nutrition-coach-draft-store.ts`: localStorage versionado `v:1`, TTL 7d,
+  banner Restaurar/Descartar; key SIEMPRE con `clientId`); (3) fila de alimento del
+  paso 3 del builder con nombre completo y macros debajo (patrón `EditableItemRow`);
+  (4) **media/category en los read models del alumno**: migración
+  `20260720120000_nutrition_v2_item_media_read_models.sql` (aplicada en prod, validada
+  con equivalencia sobre 180 slots/638 items congelados) agrega `media` + `category`
+  resueltos por `food_id` en LECTURA a los items prescritos/consumidos de
+  `get_nutrition_today_v2` / `get_nutrition_plan_read_v2` / `intake_item_json`; Zod
+  (`packages/nutrition-v2/read-models.ts`) los declara `.nullable().optional()` y la
+  fila del alumno (`NutritionFoodRow`) pinta la ilustración real con paridad coach.
 
 ## Qué FALTA
 
