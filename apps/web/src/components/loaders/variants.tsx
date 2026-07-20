@@ -40,14 +40,14 @@ function Caption({ subtitle }: { subtitle?: string }) {
 }
 
 /* ── 01 · progreso ── */
-function ProgresoLoader({ brandName, iconSrc, subtitle, size }: LoaderVariantProps) {
+function ProgresoLoader({ brandName, iconSrc, iconSrcDark, subtitle, size }: LoaderVariantProps) {
     return (
         <div className={styles.wrap}>
             <div className={styles.ringBox}>
                 <svg viewBox="0 0 120 120" className={cn(styles.absSvg, styles.spinSlow)} aria-hidden>
                     <circle cx="60" cy="60" r="54" fill="none" stroke="rgba(var(--ld-rgb), 0.18)" strokeWidth="1.5" strokeDasharray="2 7" strokeLinecap="round" />
                 </svg>
-                <Icon iconSrc={iconSrc} />
+                <Icon iconSrc={iconSrc} iconSrcDark={iconSrcDark} />
             </div>
             <div className="flex flex-col items-center gap-3">
                 <Wordmark brandName={brandName} size={size} />
@@ -59,7 +59,7 @@ function ProgresoLoader({ brandName, iconSrc, subtitle, size }: LoaderVariantPro
 }
 
 /* ── 02 · anillo ── */
-function AnilloLoader({ brandName, iconSrc, subtitle, size }: LoaderVariantProps) {
+function AnilloLoader({ brandName, iconSrc, iconSrcDark, subtitle, size }: LoaderVariantProps) {
     return (
         <div className={styles.wrap}>
             <div className={styles.ringBox}>
@@ -67,7 +67,7 @@ function AnilloLoader({ brandName, iconSrc, subtitle, size }: LoaderVariantProps
                     <circle cx="60" cy="60" r="50" fill="none" stroke="rgba(var(--ld-rgb), 0.12)" strokeWidth="5" />
                     <circle className={styles.dash} cx="60" cy="60" r="50" fill="none" stroke="var(--ld-brand)" strokeWidth="5" strokeLinecap="round" strokeDasharray="314" />
                 </svg>
-                <Icon iconSrc={iconSrc} />
+                <Icon iconSrc={iconSrc} iconSrcDark={iconSrcDark} />
             </div>
             <Wordmark brandName={brandName} size={size} />
             <Caption subtitle={subtitle} />
@@ -76,14 +76,14 @@ function AnilloLoader({ brandName, iconSrc, subtitle, size }: LoaderVariantProps
 }
 
 /* ── 03 · radar ── */
-function RadarLoader({ brandName, iconSrc, subtitle, size }: LoaderVariantProps) {
+function RadarLoader({ brandName, iconSrc, iconSrcDark, subtitle, size }: LoaderVariantProps) {
     return (
         <div className={styles.wrap}>
             <div className={styles.ringBox}>
                 <span className={styles.ping} />
                 <span className={cn(styles.ping, styles.ping2)} />
                 <span className={cn(styles.ping, styles.ping3)} />
-                <span className={styles.radarCore}><Icon iconSrc={iconSrc} px={28} /></span>
+                <span className={styles.radarCore}><Icon iconSrc={iconSrc} iconSrcDark={iconSrcDark} px={28} /></span>
             </div>
             <Wordmark brandName={brandName} size={size} />
             <Caption subtitle={subtitle} />
@@ -92,12 +92,12 @@ function RadarLoader({ brandName, iconSrc, subtitle, size }: LoaderVariantProps)
 }
 
 /* ── 04 · cometa ── */
-function CometaLoader({ brandName, iconSrc, subtitle, size }: LoaderVariantProps) {
+function CometaLoader({ brandName, iconSrc, iconSrcDark, subtitle, size }: LoaderVariantProps) {
     return (
         <div className={styles.wrap}>
             <div className={styles.ringBox}>
                 <div className={styles.conic} />
-                <Icon iconSrc={iconSrc} />
+                <Icon iconSrc={iconSrc} iconSrcDark={iconSrcDark} />
             </div>
             <Wordmark brandName={brandName} size={size} />
             <Caption subtitle={subtitle} />
@@ -121,7 +121,7 @@ function RitmoLoader({ brandName, subtitle, size }: LoaderVariantProps) {
 }
 
 /* ── 06 · orbitas ── */
-function OrbitasLoader({ brandName, iconSrc, subtitle, size }: LoaderVariantProps) {
+function OrbitasLoader({ brandName, iconSrc, iconSrcDark, subtitle, size }: LoaderVariantProps) {
     return (
         <div className={styles.wrap}>
             <div className={styles.ringBox}>
@@ -131,7 +131,7 @@ function OrbitasLoader({ brandName, iconSrc, subtitle, size }: LoaderVariantProp
                 <svg viewBox="0 0 120 120" className={cn(styles.absSvg, styles.arcB)} aria-hidden>
                     <circle cx="60" cy="60" r="40" fill="none" stroke="rgba(var(--ld-rgb), 0.45)" strokeWidth="3.5" strokeLinecap="round" strokeDasharray="63 188" />
                 </svg>
-                <Icon iconSrc={iconSrc} px={40} />
+                <Icon iconSrc={iconSrc} iconSrcDark={iconSrcDark} px={40} />
             </div>
             <Wordmark brandName={brandName} size={size} />
             <Caption subtitle={subtitle} />
