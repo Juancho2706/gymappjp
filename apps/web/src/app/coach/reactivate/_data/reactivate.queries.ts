@@ -11,9 +11,9 @@ export const getReactivatePageData = cache(async () => {
     // getClaims(): verificación local del JWT (ES256), sin /user. El proxy ya validó/refrescó la sesión.
     const { data: __cl } = await supabase.auth.getClaims()
     const user = __cl?.claims?.sub ? { id: __cl.claims.sub as string } : null
-    if (!user) return { user: null, coach: null, activeClientCount: 0, recentlyCancelledAddons: [] as ModuleKey[] }
+    if (!user) return { user: null, coach: null, activeClientCount: 0, activeClients: [] as { id: string; full_name: string }[], recentlyCancelledAddons: [] as ModuleKey[] }
 
-    const [coachResult, clientCountResult, addonsResult] = await Promise.all([
+    const [coachResult, clientCountResult, activeClientsResult, addonsResult] = await Promise.all([
         supabase
             .from('coaches')
             // Ancla de la gracia de ALUMNOS (politica CEO 2026-07-18) para el banner "Tus N
@@ -24,11 +24,27 @@ export const getReactivatePageData = cache(async () => {
             .select('subscription_tier, subscription_status, current_period_end, paid_access_ended_at, max_clients, subscription_mp_id')
             .eq('id', user.id)
             .maybeSingle(),
+        // Cupo STANDALONE (`org_id IS NULL`): mismo scoping que la lista archivable, el archivado
+        // (`archiveClientsForFreeAction`) y el gate de dinero (`/api/payments/activate-free`). Sin
+        // el filtro, este count sería un superset y en data drifteada (coach standalone bloqueado
+        // con alumnos de org bajo su coach_id) sobre-contaría → escondería el path Free / dejaría
+        // al coach varado tras archivar. Todos los conteos del flujo deben compartir el filtro.
         supabase
             .from('clients')
             .select('id', { count: 'exact', head: true })
             .eq('coach_id', user.id)
+            .is('org_id', null)
             .eq('is_archived', false),
+        // Alumnos STANDALONE activos (archivables) para el panel de salida del deadlock de cupo:
+        // el coach bloqueado + sobre-cupo archiva desde aquí para bajar a Free. Mismo filtro que
+        // el archivado (`org_id IS NULL`); tolerante a fallos → lista vacía = sin panel.
+        supabase
+            .from('clients')
+            .select('id, full_name')
+            .eq('coach_id', user.id)
+            .is('org_id', null)
+            .eq('is_archived', false)
+            .order('full_name', { ascending: true }),
         // SELECT propio (RLS) — el client user-scoped solo ve las filas del coach.
         // tolerante a fallos: si la lectura falla, la reactivación sigue sin pre-marcado.
         listAll(supabase, user.id).catch(() => []),
@@ -60,6 +76,7 @@ export const getReactivatePageData = cache(async () => {
         user,
         coach: coachResult.data,
         activeClientCount: clientCountResult.count ?? 0,
+        activeClients: activeClientsResult.data ?? [],
         recentlyCancelledAddons,
     }
 })
