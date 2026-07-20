@@ -1,4 +1,4 @@
-const { withGradleProperties } = require('@expo/config-plugins')
+const { withGradleProperties } = require('expo/config-plugins')
 
 const JVMARGS_KEY = 'org.gradle.jvmargs'
 const KOTLIN_DAEMON_JVMARGS_KEY = 'kotlin.daemon.jvmargs'
