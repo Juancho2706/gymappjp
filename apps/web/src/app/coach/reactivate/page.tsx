@@ -5,7 +5,7 @@ import type { SubscriptionTier } from '@/lib/constants'
 import { getReactivatePageData } from './_data/reactivate.queries'
 
 export default async function ReactivatePage() {
-    const { user, coach, activeClientCount, recentlyCancelledAddons } = await getReactivatePageData()
+    const { user, coach, activeClientCount, activeClients, recentlyCancelledAddons } = await getReactivatePageData()
     if (!user) redirect('/login')
 
     const currentTier = (coach?.subscription_tier ?? 'starter') as SubscriptionTier
@@ -18,6 +18,7 @@ export default async function ReactivatePage() {
             <ReactivateClient
                 currentTier={currentTier}
                 activeClientCount={activeClientCount}
+                activeClients={activeClients}
                 subscriptionStatus={subscriptionStatus}
                 currentPeriodEnd={coach?.current_period_end ?? null}
                 paidAccessEndedAt={coach?.paid_access_ended_at ?? null}
