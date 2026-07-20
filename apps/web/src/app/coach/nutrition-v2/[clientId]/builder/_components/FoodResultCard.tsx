@@ -55,7 +55,16 @@ function packageLabel(item: FoodCatalogItem): string | null {
   return `Envase ${qty} ${unit}`
 }
 
-export function FoodResultCard({ item, onPick }: { item: FoodCatalogItem; onPick: () => void }) {
+export function FoodResultCard({
+  item,
+  onPick,
+  showBadge = true,
+}: {
+  item: FoodCatalogItem
+  onPick: () => void
+  /** Oculta la capsula de verificacion/catalogo para dar todo el ancho al nombre (sheet movil). */
+  showBadge?: boolean
+}) {
   const image = foodCardImage(item, SUPABASE_BASE)
   const badge = foodBadge(item)
   const pkg = packageLabel(item)
@@ -76,15 +85,17 @@ export function FoodResultCard({ item, onPick }: { item: FoodCatalogItem; onPick
       <span className="flex min-w-0 flex-1 flex-col gap-1.5 p-0 sm:p-3">
         <span className="flex items-start justify-between gap-2">
           <span className="line-clamp-2 min-w-0 text-sm font-semibold leading-snug text-strong">{item.name}</span>
-          <span
-            className={
-              'inline-flex shrink-0 items-center gap-1 rounded-pill border px-1.5 py-0.5 text-[10px] font-semibold ' +
-              badge.className
-            }
-          >
-            <BadgeIcon status={item.verificationStatus} />
-            {badge.label}
-          </span>
+          {showBadge ? (
+            <span
+              className={
+                'inline-flex shrink-0 items-center gap-1 rounded-pill border px-1.5 py-0.5 text-[10px] font-semibold ' +
+                badge.className
+              }
+            >
+              <BadgeIcon status={item.verificationStatus} />
+              {badge.label}
+            </span>
+          ) : null}
         </span>
 
         {item.brand ? <span className="truncate text-xs font-medium text-body">{item.brand}</span> : null}

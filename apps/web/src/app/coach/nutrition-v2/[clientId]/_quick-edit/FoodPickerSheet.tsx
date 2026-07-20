@@ -172,10 +172,10 @@ export function FoodPickerSheet({
 
           {items.length > 0 ? (
             <div className="mt-3 space-y-3 pb-[max(env(safe-area-inset-bottom,0px),0.75rem)]">
-              <ul className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
+              <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
                 {items.map((item) => (
                   <li key={item.id} className="min-w-0">
-                    <FoodResultCard item={item} onPick={() => pick(item)} />
+                    <FoodResultCard item={item} onPick={() => pick(item)} showBadge={false} />
                   </li>
                 ))}
               </ul>

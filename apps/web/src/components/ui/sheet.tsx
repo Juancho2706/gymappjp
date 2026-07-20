@@ -70,7 +70,16 @@ function SheetContent({
             render={
               <Button
                 variant="ghost"
-                className="absolute right-4 top-[max(0.75rem,calc(env(safe-area-inset-top,0px)+0.25rem))] z-20 h-8 w-8 rounded-full border border-border bg-muted/70 text-foreground hover:bg-muted dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/10 dark:hover:text-white"
+                className={cn(
+                  "absolute right-4 z-20 h-8 w-8 rounded-full border border-border bg-muted/70 text-foreground hover:bg-muted dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/10 dark:hover:text-white",
+                  // Los bottom sheets se anclan abajo: el notch (safe-area-inset-top) NO les
+                  // aplica. Sumarlo empujaba la X hacia adentro del contenido (encima del
+                  // boton Buscar / la primera tarjeta en el sheet de nutricion). Solo los
+                  // sheets que tocan el borde superior necesitan despejar el notch.
+                  side === "bottom"
+                    ? "top-3"
+                    : "top-[max(0.75rem,calc(env(safe-area-inset-top,0px)+0.25rem))]",
+                )}
                 size="icon-sm"
               />
             }

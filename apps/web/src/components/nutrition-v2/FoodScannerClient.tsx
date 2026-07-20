@@ -9,6 +9,9 @@ import {
   type FoodCatalogItem,
 } from '@eva/nutrition-v2'
 import { createClient } from '@/lib/supabase/client'
+// Solo el tipo (se borra en runtime → no arrastra zxing-wasm al bundle estatico; el motor
+// se carga con dynamic import mas abajo).
+import type { ReadInputBarcodeFormat } from 'zxing-wasm/reader'
 import { humanizeStudentWriteError } from '@/lib/student-access'
 import {
   FoodThumbnail,
@@ -41,6 +44,29 @@ declare global {
 }
 
 const FORMATS = ['ean_13', 'ean_8', 'upc_a', 'upc_e']
+const ZXING_FORMATS: ReadInputBarcodeFormat[] = ['EAN13', 'EAN8', 'UPCA', 'UPCE']
+
+// Respaldo para navegadores SIN BarcodeDetector nativo (Safari/iOS = TODO iPhone: WebKit no
+// implementa la API). zxing-wasm se carga bajo demanda (dynamic import; no entra al bundle de
+// Chrome/Android) y su .wasm se sirve del MISMO origen (/zxing/zxing_reader.wasm): la CSP de
+// prod solo permite connect-src 'self', y 'unsafe-eval' ya habilita la instanciacion de WASM.
+// Al actualizar zxing-wasm hay que recopiar el .wasm a public/zxing/ (debe calzar con el JS).
+type ZxingReader = typeof import('zxing-wasm/reader')
+let zxingReaderPromise: Promise<ZxingReader> | null = null
+function loadZxingReader(): Promise<ZxingReader> {
+  if (!zxingReaderPromise) {
+    zxingReaderPromise = import('zxing-wasm/reader').then((mod) => {
+      mod.prepareZXingModule({
+        overrides: {
+          locateFile: (path: string, prefix: string) =>
+            path.endsWith('.wasm') ? '/zxing/zxing_reader.wasm' : prefix + path,
+        },
+      })
+      return mod
+    })
+  }
+  return zxingReaderPromise
+}
 
 export function FoodScannerClient({
   clientId,
@@ -54,6 +80,8 @@ export function FoodScannerClient({
   const streamRef = useRef<MediaStream | null>(null)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const lastCodeRef = useRef<{ value: string; at: number } | null>(null)
+  // Canvas fuera de pantalla para capturar el frame del video cuando decodifica zxing-wasm.
+  const wasmCanvasRef = useRef<HTMLCanvasElement | null>(null)
   const [manualCode, setManualCode] = useState('')
   const [result, setResult] = useState<FoodBarcodeLookupReadModel | null>(null)
   const [loading, setLoading] = useState(false)
@@ -106,14 +134,39 @@ export function FoodScannerClient({
     }
   }, [loading, stopCamera, supabase])
 
-  const scheduleDetection = useCallback((detector: BarcodeDetectorInstance) => {
+  // Decodifica un frame con zxing-wasm (respaldo iOS): dibuja el video en un canvas y lee la
+  // ImageData. tryHarder mejora la deteccion con desenfoque/angulo a costa de algo de CPU.
+  const detectWithZxing = useCallback(async (video: HTMLVideoElement): Promise<string | null> => {
+    if (!video.videoWidth || !video.videoHeight) return null
+    let canvas = wasmCanvasRef.current
+    if (!canvas) {
+      canvas = document.createElement('canvas')
+      wasmCanvasRef.current = canvas
+    }
+    canvas.width = video.videoWidth
+    canvas.height = video.videoHeight
+    const ctx = canvas.getContext('2d', { willReadFrequently: true })
+    if (!ctx) return null
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
+    const { readBarcodes } = await loadZxingReader()
+    const results = await readBarcodes(imageData, {
+      formats: ZXING_FORMATS,
+      tryHarder: true,
+      maxNumberOfSymbols: 1,
+    })
+    return results[0]?.text?.replace(/\D/g, '') || null
+  }, [])
+
+  // Loop de deteccion agnostico del motor: recibe un `detect` (nativo o wasm) que devuelve el
+  // GTIN normalizado o null. Dedup 2s para no relanzar el lookup del mismo codigo en rafaga.
+  const scheduleDetection = useCallback((detect: (video: HTMLVideoElement) => Promise<string | null>) => {
     const run = async () => {
       const video = videoRef.current
       if (!video || !streamRef.current) return
       try {
         if (video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
-          const codes = await detector.detect(video)
-          const value = codes[0]?.rawValue?.replace(/\D/g, '')
+          const value = await detect(video)
           if (value) {
             const previous = lastCodeRef.current
             const now = Date.now()
@@ -138,16 +191,13 @@ export function FoodScannerClient({
     setReported(false)
     setRegistered(false)
 
-    const Detector = window.BarcodeDetector
-    setNativeDetector(Boolean(Detector))
-    if (!Detector) {
-      setCameraError('Este navegador no incluye lector nativo. Usa el código manual.')
-      return
-    }
     if (!navigator.mediaDevices?.getUserMedia) {
       setCameraError('La cámara no está disponible en este navegador. Usa el código manual.')
       return
     }
+    // Sin BarcodeDetector nativo (iOS/Safari) NO abortamos: caemos al lector zxing-wasm.
+    const Detector = window.BarcodeDetector
+    setNativeDetector(Boolean(Detector))
 
     stopCamera()
     try {
@@ -171,8 +221,19 @@ export function FoodScannerClient({
       const capabilities = track?.getCapabilities?.() as MediaTrackCapabilities & { torch?: boolean }
       setTorchSupported(capabilities?.torch === true)
       setScanning(true)
-      const detector = new Detector({ formats: FORMATS })
-      scheduleDetection(detector)
+      let detect: (video: HTMLVideoElement) => Promise<string | null>
+      if (Detector) {
+        const detector = new Detector({ formats: FORMATS })
+        detect = async (source) => {
+          const codes = await detector.detect(source)
+          return codes[0]?.rawValue?.replace(/\D/g, '') || null
+        }
+      } else {
+        // Precarga el WASM (~1.1 MB) para que el primer frame no espere el fetch.
+        void loadZxingReader()
+        detect = detectWithZxing
+      }
+      scheduleDetection(detect)
     } catch (error) {
       setCameraError(
         error instanceof DOMException && error.name === 'NotAllowedError'
@@ -181,7 +242,7 @@ export function FoodScannerClient({
       )
       stopCamera()
     }
-  }, [scheduleDetection, stopCamera])
+  }, [detectWithZxing, scheduleDetection, stopCamera])
 
   const toggleTorch = useCallback(async () => {
     const track = streamRef.current?.getVideoTracks()[0]
@@ -250,9 +311,7 @@ export function FoodScannerClient({
         {!scanning ? (
           <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center text-white">
             <ScanBarcode className="h-14 w-14" />
-            <p className="mt-3 text-sm font-semibold">
-              {nativeDetector === false ? 'Usa el código manual' : 'Activa la cámara para escanear'}
-            </p>
+            <p className="mt-3 text-sm font-semibold">Activa la cámara para escanear</p>
           </div>
         ) : null}
         {torchSupported && scanning ? (
@@ -280,6 +339,13 @@ export function FoodScannerClient({
           </NutritionMotionButton>
         ) : null}
       </div>
+
+      {scanning && nativeDetector === false ? (
+        <p className="-mt-2 text-xs text-muted">
+          Usando lector compatible (este navegador no trae el nativo). Apunta al código de barras;
+          puede tardar un segundo.
+        </p>
+      ) : null}
 
       <NutritionCard>
         <label htmlFor="manual-gtin" className="font-display text-base font-semibold text-strong">
