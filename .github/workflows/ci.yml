@@ -11,11 +11,11 @@ jobs:
   quality:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       # version comes from the root package.json "packageManager" field (pnpm@11.5.0);
       # passing `version:` here too triggers ERR_PNPM_BAD_PM_VERSION.
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: lts/*
           cache: pnpm
@@ -42,11 +42,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       # version comes from the root package.json "packageManager" field (pnpm@11.5.0);
       # passing `version:` here too triggers ERR_PNPM_BAD_PM_VERSION.
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: lts/*
           cache: pnpm
@@ -69,7 +69,7 @@ jobs:
           E2E_CLIENT_EMAIL: ${{ secrets.E2E_CLIENT_EMAIL }}
           E2E_CLIENT_PASSWORD: ${{ secrets.E2E_CLIENT_PASSWORD }}
           E2E_WORKOUT_PLAN_ID: ${{ secrets.E2E_WORKOUT_PLAN_ID }}
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: playwright-report-e2e
@@ -91,11 +91,11 @@ jobs:
       E2E_CLIENT_EMAIL: ${{ secrets.E2E_CLIENT_EMAIL }}
       E2E_CLIENT_PASSWORD: ${{ secrets.E2E_CLIENT_PASSWORD }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       # version comes from the root package.json "packageManager" field (pnpm@11.5.0);
       # passing `version:` here too triggers ERR_PNPM_BAD_PM_VERSION.
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: lts/*
           cache: pnpm
@@ -113,7 +113,7 @@ jobs:
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: playwright-report-nutrition-smoke
