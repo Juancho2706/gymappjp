@@ -26,7 +26,7 @@ interface StatCardProps extends ViewProps {
 // Fixed accents (ink-400 / ember-500 / aqua-500 are constant; sport follows brand).
 const INK_400 = '#818C9A'
 const EMBER_500 = '#FF6A3D'
-// Inverse surface (token-contract: light = ink-950, dark = surface-inverse navy).
+// Inverse surface (TOKENS.md: light = ink-950, dark = surface-inverse navy).
 const SURFACE_INVERSE_LIGHT = '#0B0E13'
 const SURFACE_INVERSE_DARK = '#16273C'
 const TEXT_ON_DARK = '#F4F6F8' // ink-50

@@ -18,7 +18,7 @@ import { BRANDS, PERSONAS, SLUGS, STUDENT_IDS, STUDENT_NAMES } from './personas'
  *      offline (queue existente) + PDF de pauta (AC5; su descarga NO genera bitácora).
  *   D. Standalone con módulo ON ⇒ misma feature con SU marca; free ⇒ EVA (AC4).
  *
- * PRECONDICIÓN de seed del gate (documentar en docs/e2e-personas.md):
+ * PRECONDICIÓN de seed del gate (documentar en docs/testing/E2E_PERSONAS.md):
  *   - `teams.enabled_modules.nutrition_exchanges = true` para E2E Pool Vortex.
  *   - `coaches.enabled_modules.nutrition_exchanges = true` para e2e-solo-coach.
  *   - El alumno del pool tiene un plan activo en modo exchanges con ≥1 comida con targets.

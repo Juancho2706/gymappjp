@@ -10,7 +10,7 @@ import * as Linking from 'expo-linking'
 import * as Notifications from 'expo-notifications'
 import * as SplashScreen from 'expo-splash-screen'
 import { useFonts } from 'expo-font'
-// EVA Design System families (token-contract.md D3): Archivo (display),
+// EVA Design System families (TOKENS.md §4): Archivo (display),
 // Hanken Grotesk (UI/body), JetBrains Mono (metrics/timers).
 import {
   Archivo_400Regular,

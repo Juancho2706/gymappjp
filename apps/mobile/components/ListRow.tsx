@@ -43,7 +43,7 @@ export interface ListRowProps {
 }
 
 // ink-300 is a constant ramp value, but its alias flips in dark mode
-// (token-contract §3). lucide-react-native needs a literal color string.
+// (TOKENS.md §3). lucide-react-native needs a literal color string.
 const INK_300_LIGHT = '#A8B1BD'
 const INK_300_DARK = '#414C5A'
 

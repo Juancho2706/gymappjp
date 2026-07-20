@@ -6,7 +6,7 @@
  * The EVA design-system token layer is mirrored by hand across two files:
  *   - apps/web/src/app/globals.css   (hex / rgba(), the materialized contract; "web manda")
  *   - apps/mobile/global.css         (space-separated "r g b" channels for NativeWind)
- * The single source of truth is specs/redesign-eva-ds/token-contract.md; web globals.css
+ * The single source of truth is docs/architecture/design-system/TOKENS.md; web globals.css
  * is that contract materialized, so this script treats web as authoritative and asserts
  * that mobile mirrors it exactly for every governed token, in BOTH light and dark scopes.
  *
@@ -197,7 +197,7 @@ function main() {
     }
     console.error(
       `\n${mismatches.length} mismatch(es). Fix apps/mobile/global.css to mirror ` +
-      `apps/web/src/app/globals.css (web is the source of truth per token-contract.md).\n`,
+      `apps/web/src/app/globals.css (web is the source of truth per TOKENS.md).\n`,
     )
     process.exit(1)
   }

@@ -1,3 +1,10 @@
+---
+status: review-required
+owner: legal
+last_verified: 2026-07-20
+canonical: true
+---
+
 # Contrato de Servicios Enterprise — EVA
 
 > **TEMPLATE — completar campos marcados con [MAYÚSCULAS] antes de enviar al cliente**  
@@ -5,7 +12,7 @@
 
 > ⚠️ **NOTA INTERNA (no publicar):** Redactado bajo Juan Villegas como persona natural / freelancer.  
 > Actualizar razón social, RUT empresa y representante legal al constituir la sociedad.  
-> Ver `../MANUAL_TASKS.md` → MT-19.
+> Seguimiento: [LEGAL-01](../operations/MANUAL_TASKS.md#legal-01--revisar-identidad-y-textos-legales-antes-de-publicar).
 
 ---
 

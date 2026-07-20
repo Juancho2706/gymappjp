@@ -1,101 +1,96 @@
+---
+status: active
+owner: platform
+last_verified: 2026-07-20
+canonical: true
+---
+
 # EVA Fitness Platform
 
-**SaaS white-label B2B2C para coaches fitness, personal trainers y gimnasios.**
+EVA es una plataforma SaaS B2B2C para coaches, equipos de coaches y organizaciones fitness. Reúne gestión de alumnos, entrenamiento, nutrición, progreso y marca en web/PWA y en una app nativa Expo/React Native.
 
-Cada coach opera su propia app móvil (PWA) con su marca, colores y logo — sin escribir código. Sus alumnos la instalan como app nativa. El coach gestiona programas, nutrición y seguimiento desde un dashboard analytics.
+Producción web: [www.eva-app.cl](https://www.eva-app.cl) · Contacto: `contacto@eva-app.cl`
 
-> **Web:** [eva-app.cl](https://eva-app.cl) · **Empresas:** [enterprise.eva-app.cl](https://enterprise.eva-app.cl) · **Contacto:** `contacto@eva-app.cl`
+## Superficies
 
----
+| Superficie | Usuarios | Entrada principal |
+|---|---|---|
+| Web pública | Visitantes y registro | `/`, `/pricing`, `/enterprise` |
+| Dashboard web | Coaches standalone y coaches de Teams | `/coach/*` |
+| Alumno web/PWA | Alumno standalone, Team o Enterprise | `/c/[coach_slug]/*`, `/t/[team_slug]/*`, `/e/[org_slug]/*` |
+| Enterprise web | Owner y staff de una organización | `/org/[slug]/*` |
+| Operación interna | Administradores EVA | `/admin/*` |
+| App nativa | Coaches y alumnos | `apps/mobile` (Expo Router) |
 
-## Core loop
+La app nativa es un binario EVA único. Logo, colores y experiencia se resuelven en runtime según el workspace activo; no se genera un binario diferente por coach.
 
-1. **Crear** — El coach diseña programas de entrenamiento con constructor visual drag-and-drop (bloques, series, descansos, variantes A/B).
-2. **Asignar** — Asigna programas y planes de nutrición a cada alumno desde directorio centralizado.
-3. **Ejecutar** — El alumno abre la app en su teléfono, ve la rutina del día, registra series con pesos/reps/RIR y recibe feedback visual en tiempo real.
-4. **Seguir** — El coach monitorea adherencia, PRs, peso corporal, fotos de check-in y actividad reciente.
+## Monorepo
 
----
+```text
+apps/
+├── web/       # Next.js App Router, Server Actions y API móvil
+└── mobile/    # Expo 54, React Native y Expo Router
 
-## Módulos
+packages/      # Dominio y contratos puros compartidos web + mobile
+supabase/      # Migraciones, configuración y pruebas SQL/RLS
+tests/         # Playwright y pruebas de integración
+scripts/       # Operación, auditorías e importadores controlados
+docs/          # Memoria canónica y runbooks
+specs/         # Solo trabajo activo bajo SDD
+```
 
-| Módulo | Qué hace |
-|--------|----------|
-| **Entrenamiento** | Constructor de planes, biblioteca de 230+ ejercicios animados, ejecución con timer, PRs automáticos, variante A/B por semana |
-| **Nutrición** | Planes por objetivo, biblioteca de alimentos (incluye marcas chilenas), log diario de macros, adherencia 30 días |
-| **Check-in** | Wizard de fotos front/lateral, seguimiento de peso, gráficos de progreso |
-| **Directorio de alumnos** | War Room con attention score, perfil completo (overview, analítica, nutrición, progreso, plan, facturación) |
-| **Mi Marca (white-label)** | Logo, color primario, tipografía, loader customizable, favicon dinámico, QR de instalación |
-| **Pagos / Suscripciones** | 4 tiers (Starter / Pro / Elite / Scale) en CLP vía MercadoPago — upgrade mid-cycle, grace period |
-| **Empresas** | Capa enterprise para gyms/academias con múltiples coaches, pool de clientes compartido, panel admin de org |
+El mapa completo está en [PROJECT_STRUCTURE.md](docs/architecture/PROJECT_STRUCTURE.md). Los flujos están en [FLOWS_AND_COMPONENTS.md](docs/architecture/FLOWS_AND_COMPONENTS.md).
 
----
+## Inicio local
 
-## ¿Para quién?
+Requisitos: Node.js compatible con Next.js 16, `pnpm@11.5.0` y variables locales basadas en `.env.example` y `apps/mobile/.env.example`.
 
-### Coach (pagador)
-Personal trainer independiente, coach online o dueño de box/CrossFit en Chile y LATAM. Típicamente 10–50 alumnos. Cansado de WhatsApp + planillas de cálculo. Quiere profesionalización, marca propia y escalabilidad sin complejidad técnica.
+```bash
+pnpm install --frozen-lockfile
+pnpm dev
+```
 
-### Alumno (usuario final)
-Cliente del coach. No paga EVA directamente; accede por relación con su entrenador. Quiere claridad, guía paso a paso y motivación inmediata (confetti en PRs, rachas, gráficos).
+App móvil:
 
-### Gimnasios y franquicias (enterprise)
-Boxes con múltiples coaches que necesitan cuenta owner + sub-coaches + métricas consolidadas. Tier separado con billing manual y panel admin propio en `/org/[slug]`.
+```bash
+pnpm --filter @eva/mobile start
+```
 
----
+No versionar `.env*`, credenciales, artefactos de build ni datos reales de usuarios.
 
-## Identidad visual
+## Verificación
 
-**EVA** es software premium, técnico y limpio. Sensación de control, datos y profesionalidad — arquitecto / científico / SaaS de alto nivel. No "gym bro".
+```bash
+pnpm lint
+pnpm typecheck
+pnpm test
+pnpm check:tokens
+pnpm --filter @eva/mobile exec tsc --noEmit
+pnpm test:e2e
+```
 
-### Colores
+Los E2E requieren su entorno y personas de prueba. El estado y los gates vigentes viven en [TEST_STATUS.md](docs/testing/TEST_STATUS.md).
 
-| Rol | Hex | Uso |
-|-----|-----|-----|
-| Primary | `#007AFF` | Botones, links, focos — azul iOS eléctrico |
-| Cian acento | `#00E5FF` | Gráficos, partículas, degradados |
-| Violeta | `#5856D6` | Degradados de titular junto al azul |
-| Marca EVA | `#10B981` | Landing pública, éxito, marca propia |
-| Rojo error | `#FF3B30` | Alertas puntuales |
+## Reglas de arquitectura
 
-### Tipografía
+- Web: `app/_data` → `services` → `infrastructure/db` → Supabase. Las Server Actions validan y delegan; no concentran lógica de negocio.
+- Compartido: lógica, schemas y contratos reutilizables viven en `packages/*`, sin dependencias de Next.js ni React Native.
+- Mobile: acceso directo solo con sesión de usuario y RLS; operaciones privilegiadas o con secretos pasan por `apps/web/src/app/api/mobile`.
+- Toda lectura/escritura debe respetar el workspace activo: standalone, Team o Enterprise nunca se mezclan.
+- Feature nueva: `specs/<feature>/{SPEC,PLAN,TASKS}.md` antes del código. Al cerrar, el spec deja el árbol activo.
+- Cambios de base de datos: migraciones aditivas, forward-only y con validación RLS. Nunca aplicar cambios destructivos directamente a producción.
 
-- **UI:** Sans geométrica limpia (Inter)
-- **Titulares / "EVA":** Sans condensada bold (Montserrat ExtraBold)
-- **"EVA":** Siempre mayúsculas, sans bold, moderna, sin serif
+## Despliegue
 
-### Lenguaje visual
+- Web: Vercel, desde `master`.
+- Mobile: EAS Build/Submit, desde perfiles de `apps/mobile/eas.json`.
+- Datos/Auth/Storage: Supabase.
+- Pagos standalone: MercadoPago; Flow/Webpay existe detrás de configuración de lanzamiento.
 
-CTAs en píldora con glow azul suave. Barra de navegación flotante con glassmorphism. Tarjetas blancas sobre gris claro (light) o gris muy oscuro elevado (dark). Hero con orbs/blobs difuminados — sensación tech / espacial suave.
+No ejecutar deploys, submits ni migraciones productivas como parte de una verificación local.
 
----
+## Documentación
 
-## Flujos clave
+Empezar en [docs/README.md](docs/README.md). El estado operativo actual está en [CURRENT.md](docs/status/CURRENT.md).
 
-| Flujo | Ruta |
-|-------|------|
-| Coach crea programa | `/coach/builder/[clientId]` |
-| Alumno entrena | `/c/[slug]/workout/[planId]` |
-| Coach personaliza marca | `/coach/settings/brand` |
-| Coach gestiona suscripción | `/coach/subscription` |
-| Admin de gym / academia | `/org/[slug]` |
-| Panel CEO interno | `/admin/dashboard` |
-
----
-
-## Datos del producto
-
-| Campo | Valor |
-|-------|-------|
-| Tagline | Escala tu negocio de personal training: rutinas, nutrición, alumnos, app propia |
-| Mercado | Fitness B2B, SaaS white-label |
-| Región focal | Chile / LATAM |
-| Moneda | CLP (peso chileno) |
-| Email plataforma | `contacto@eva-app.cl` |
-| Privacidad / ARCO | `privacidad@eva-app.cl` |
-
----
-
-## Licencia
-
-MIT
+La documentación describe intención y estado verificado; código, migraciones y configuración siguen siendo la evidencia ejecutable. Si divergen, corregir el documento en el mismo cambio.

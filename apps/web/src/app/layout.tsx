@@ -32,7 +32,7 @@ const montserrat = Montserrat({
   display: 'swap',
 })
 
-// EVA Design System (token-contract Fase 0) — roles display + mono.
+// EVA Design System (TOKENS.md) — roles display + mono.
 // Archivo = display/headings (variable 400-900, tracking apretado para números grandes).
 // preload por defecto (es la fuente de display de la cara EVA → candidato LCP del hero).
 // El override per-coach (`--brand-font`) sigue ganando sobre Archivo en `--font-display`.

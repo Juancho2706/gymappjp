@@ -30,7 +30,7 @@ import {
  */
 
 // Mirror del token web `--color-macro-protein` (light / dark). Acento de la
-// burbuja del coach — token-contract, NO white-label.
+// burbuja del coach — TOKENS.md, NO white-label.
 const COACH_ACCENT = { light: '#5E9FD6', dark: '#7FB3E0' } as const
 
 const ROLE_LABEL: Record<'client' | 'coach', string> = {

@@ -1,6 +1,13 @@
-# Token Contract — Fase 0 (fuente única de verdad)
+---
+status: active
+owner: design-system
+last_verified: 2026-07-20@34b09d8f
+canonical: true
+---
 
-Contrato canónico que TODOS los agentes de Fase 0 (web, mobile, brand-kit, fuentes) deben respetar para garantizar coherencia y paridad RN≡web. Valores verbatim del diseño `d76cae7a` (`tokens/*.css`). Los componentes referencian SOLO aliases semánticos.
+# Tokens de diseño — contrato canónico
+
+Contrato normativo que web, React Native, `brand-kit` y las fuentes deben respetar para garantizar coherencia y paridad RN≡web. Se originó en la Fase 0 del rediseño, con valores verbatim del diseño `d76cae7a` (`tokens/*.css`), y sigue activo. Los componentes referencian solo aliases semánticos.
 
 ---
 
