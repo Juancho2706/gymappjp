@@ -1,5 +1,8 @@
 version: 2
+
 updates:
+  # El lockfile raiz cubre todo el workspace pnpm, incluido apps/mobile.
+  # Los version updates se mantienen manuales; las alertas y security updates siguen activas.
   - package-ecosystem: npm
     directory: /
     schedule:
@@ -7,54 +10,12 @@ updates:
       day: monday
       time: "06:00"
       timezone: America/Santiago
-    open-pull-requests-limit: 5
-    target-branch: master
-    labels:
-      - dependencies
-      - root
+    open-pull-requests-limit: 0
     groups:
-      types:
+      security:
+        applies-to: security-updates
         patterns:
-          - "@types/*"
-      eslint:
-        patterns:
-          - "eslint*"
-          - "@typescript-eslint/*"
-      next:
-        patterns:
-          - "next"
-          - "@next/*"
-      supabase:
-        patterns:
-          - "@supabase/*"
-      testing:
-        patterns:
-          - "vitest"
-          - "@vitest/*"
-          - "@playwright/*"
-          - "playwright"
-    ignore:
-      - dependency-name: "react"
-      - dependency-name: "react-dom"
-
-  - package-ecosystem: npm
-    directory: /apps/mobile
-    schedule:
-      interval: weekly
-      day: monday
-      time: "06:00"
-      timezone: America/Santiago
-    open-pull-requests-limit: 3
-    target-branch: master
-    labels:
-      - dependencies
-      - mobile
-    ignore:
-      - dependency-name: "expo"
-      - dependency-name: "react"
-      - dependency-name: "react-native"
-      - dependency-name: "expo-router"
-      - dependency-name: "expo-*"
+          - "*"
 
   - package-ecosystem: github-actions
     directory: /
@@ -63,8 +24,9 @@ updates:
       day: monday
       time: "06:00"
       timezone: America/Santiago
-    open-pull-requests-limit: 3
-    target-branch: master
-    labels:
-      - dependencies
-      - github-actions
+    open-pull-requests-limit: 0
+    groups:
+      security:
+        applies-to: security-updates
+        patterns:
+          - "*"
