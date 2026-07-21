@@ -99,7 +99,6 @@ interface BaseVersionRow {
   strategy: 'structured' | 'flexible' | 'hybrid'
   effective_from: string | null
   visible_notes: string | null
-  private_notes: string | null
   protocol_notes: string | null
 }
 
@@ -131,10 +130,14 @@ export async function quickEditPublishAction(input: unknown): Promise<QuickEditP
 
   // (2) Anti-confusion de ids: la version base debe pertenecer al plan del draft, y el plan al
   // alumno. Un id ajeno cae en 404 logico (VALIDATION) y nunca llega al RPC.
+  // OJO: NO seleccionar `private_notes`. Esa columna esta DEPRECADA en la tabla de versiones
+  // (20260714191500_nutrition_v2_private_notes) y `authenticated` NO tiene grant de SELECT sobre
+  // ella (las notas privadas viven en nutrition_plan_private_notes_v2). Pedirla hacia el 42501
+  // "permission denied for table nutrition_plan_versions_v2" -> UNKNOWN -> "No se pudo publicar".
   const baseRes = await db
     .from('nutrition_plan_versions_v2')
     .select<BaseVersionRow>(
-      'id, plan_id, strategy, effective_from, visible_notes, private_notes, protocol_notes',
+      'id, plan_id, strategy, effective_from, visible_notes, protocol_notes',
     )
     .eq('id', baseVersionId)
     .maybeSingle()
@@ -159,12 +162,14 @@ export async function quickEditPublishAction(input: unknown): Promise<QuickEditP
   const baseVariantCount = variantsRes.data?.length ?? 0
 
   // (3) Carry-over de notas server-side: F1 NUNCA edita notas. Se escriben SIEMPRE las de la
-  // version base (ignora lo que venga del cliente) -> cero perdida de private_notes (que el read
-  // model no expone) y cero ambiguedad de forja.
+  // version base (ignora lo que venga del cliente) -> cero ambiguedad de forja. `privateNotes`
+  // queda null: la columna same-row esta deprecada y no es legible por `authenticated`; las
+  // notas privadas viven en nutrition_plan_private_notes_v2 (independientes de la version), asi
+  // que republicar NO las toca ni las pierde.
   const draftFinal: NutritionPlanDraft = {
     ...draft,
     visibleNotes: base.visible_notes,
-    privateNotes: base.private_notes,
+    privateNotes: null,
     protocolNotes: base.protocol_notes,
   }
 
@@ -174,7 +179,9 @@ export async function quickEditPublishAction(input: unknown): Promise<QuickEditP
   const baseFeatures = new Set<NutritionProFeature>()
   if (base.strategy === 'hybrid') baseFeatures.add('hybrid_strategy')
   if (baseVariantCount > 1) baseFeatures.add('multi_variant')
-  if (hasText(base.private_notes)) baseFeatures.add('private_notes')
+  // `private_notes` no se detecta desde la version row (columna deprecada e ilegible). El
+  // quick-edit F1 nunca fija privateNotes (draftFinal.privateNotes = null), por lo que el draft
+  // jamas requiere la feature 'private_notes' -> no hay nada que grandfatherear aqui.
   if (hasText(base.protocol_notes)) baseFeatures.add('protocol_notes')
 
   const newFeature = requiredNutritionProFeature(draftFinal)

@@ -1007,7 +1007,6 @@ interface BaseVersionNotesRow {
   id: string
   plan_id: string
   visible_notes: string | null
-  private_notes: string | null
   protocol_notes: string | null
 }
 
@@ -1015,8 +1014,11 @@ interface BaseVersionNotesRow {
  * Publica el quick-edit desde el movil (espejo del quickEditPublishAction web, §2.3):
  *  1. Lee las notas de la version base (RLS coach) y valida que pertenece al plan del
  *     draft (anti-confusion de ids; fail-closed si no es legible).
- *  2. Carry-over: pisa visible/private/protocol con los valores de la base — cero
- *     perdida de private_notes (el read model no las expone) y cero forja.
+ *  2. Carry-over: pisa visible/protocol con los valores de la base — cero forja. NO se
+ *     lee ni copia `private_notes`: la columna same-row esta deprecada e ilegible por
+ *     `authenticated` (grant SELECT revocado; notas privadas viven en
+ *     nutrition_plan_private_notes_v2), asi que privateNotes queda null y republicar no
+ *     las toca. Pedirla producia 42501 "permission denied for table ..." y el publish fallaba.
  *  3. Valida el draft con NutritionPlanDraftSchema.
  *  4. Delta-gate Pro: solo gatea features NUEVAS (contenido grandfathered pasa).
  *  5. Persiste y publica con p_expected_current_version_id = version base (CAS).
@@ -1047,7 +1049,7 @@ export async function publishQuickEditRN(input: {
   // 1. Version base: notas + pertenencia al plan (fail-closed).
   const baseRes = await db
     .from('nutrition_plan_versions_v2')
-    .select('id, plan_id, visible_notes, private_notes, protocol_notes')
+    .select('id, plan_id, visible_notes, protocol_notes')
     .eq('id', baseline.baseVersionId)
     .maybeSingle()
   if (baseRes.error) {
@@ -1070,7 +1072,7 @@ export async function publishQuickEditRN(input: {
     ? injectExchangeTargetsIntoDraft(baseDraft, state, portions.state)
     : baseDraft
   rawDraft.visibleNotes = baseRow.visible_notes
-  rawDraft.privateNotes = baseRow.private_notes
+  rawDraft.privateNotes = null
   rawDraft.protocolNotes = baseRow.protocol_notes
   const parsed = NutritionPlanDraftSchema.safeParse(rawDraft)
   if (!parsed.success) {
@@ -1088,7 +1090,9 @@ export async function publishQuickEditRN(input: {
     const baseFeatures = new Set<NutritionProFeature>()
     if (baseline.strategy === 'hybrid') baseFeatures.add('hybrid_strategy')
     if (draft.dayVariants.length > 1) baseFeatures.add('multi_variant') // F1 no crea variantes
-    if (hasContent(baseRow.private_notes)) baseFeatures.add('private_notes')
+    // `private_notes` no se detecta desde la version row (columna deprecada e ilegible). El
+    // quick-edit F1 nunca fija privateNotes (rawDraft.privateNotes = null) -> el draft jamas
+    // requiere la feature 'private_notes', asi que no hay nada que grandfatherear aqui.
     if (hasContent(baseRow.protocol_notes)) baseFeatures.add('protocol_notes')
     if (!baseFeatures.has(newFeature)) {
       return {
