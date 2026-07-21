@@ -1380,9 +1380,23 @@ export interface NutritionZoneCData {
   proEnabled: boolean
 }
 
+const NIL_UUID = '00000000-0000-0000-0000-000000000000'
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+/**
+ * Degrada un id inválido (undefined / 'null' / '' / basura) al UUID nil — un uuid VÁLIDO que no
+ * matchea ninguna fila. Evita mandar 'null'/'' a un filtro uuid de PostgREST, que responde
+ * `invalid input syntax for type uuid` (ruido de logs prod, hallazgo 2026-07-21) sin degradar el
+ * happy path: un id real pasa tal cual; un id roto no consulta datos ajenos (nil no matchea).
+ */
+function safeUuid(v: string | null | undefined): string {
+  return v && UUID_RE.test(v) ? v : NIL_UUID
+}
+
 export async function getCoachNutritionZoneC(clientId: string, logDate: string): Promise<NutritionZoneCData> {
   const { data: userData } = await supabase.auth.getUser()
-  const coachId = userData.user?.id ?? ''
+  const coachId = safeUuid(userData.user?.id)
+  // clientId puede llegar 'null'/'' por un param de navegación sin validar → degradar al nil uuid.
+  const cid = safeUuid(clientId)
 
   // Flag Edge Config (FEATURE_PREFS_ENABLED) + kill-switch de operador — server-only, vía el
   // endpoint mobile. Fail-OPEN: cualquier fallo => prefs ignoradas = mostrar todo lo entitled.
@@ -1395,11 +1409,11 @@ export async function getCoachNutritionZoneC(clientId: string, logDate: string):
   } catch { /* fail-open */ }
 
   const [notesRes, commentsRes, targetsRes, overrideRes, clientRes] = await Promise.all([
-    supabase.from('nutrition_private_notes').select('id, body, created_at, updated_at').eq('client_id', clientId).order('updated_at', { ascending: false }),
-    supabase.from('nutrition_meal_comments').select('id, author_role, body, created_at').eq('client_id', clientId).eq('log_date', logDate).order('created_at', { ascending: true }),
-    supabase.from('nutrient_targets').select('id, client_id, nutrient_key, intent, floor_value, target_value, ceiling_value').eq('coach_id', coachId).or(`client_id.eq.${clientId},client_id.is.null`).order('nutrient_key', { ascending: true }),
-    supabase.from('client_feature_prefs').select('sections').eq('client_id', clientId).eq('domain', 'nutrition').maybeSingle(),
-    supabase.from('clients').select('team_id, org_id').eq('id', clientId).maybeSingle(),
+    supabase.from('nutrition_private_notes').select('id, body, created_at, updated_at').eq('client_id', cid).order('updated_at', { ascending: false }),
+    supabase.from('nutrition_meal_comments').select('id, author_role, body, created_at').eq('client_id', cid).eq('log_date', logDate).order('created_at', { ascending: true }),
+    supabase.from('nutrient_targets').select('id, client_id, nutrient_key, intent, floor_value, target_value, ceiling_value').eq('coach_id', coachId).or(`client_id.eq.${cid},client_id.is.null`).order('nutrient_key', { ascending: true }),
+    supabase.from('client_feature_prefs').select('sections').eq('client_id', cid).eq('domain', 'nutrition').maybeSingle(),
+    supabase.from('clients').select('team_id, org_id').eq('id', cid).maybeSingle(),
   ])
 
   const teamId = (clientRes.data as any)?.team_id ?? null

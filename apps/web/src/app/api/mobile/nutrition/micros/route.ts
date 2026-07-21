@@ -73,7 +73,10 @@ export async function GET(request: NextRequest) {
         resolveFeaturePrefs(
             {
                 domain: 'nutrition',
-                coachId: ctx.coachId ?? '',
+                // Cliente sin coach directo (org/enterprise): nil uuid (válido, no matchea) en vez
+                // de '' — evita `invalid input syntax for type uuid: ""` en coach_feature_prefs; el
+                // resolver cae al scope team/org igual.
+                coachId: ctx.coachId ?? '00000000-0000-0000-0000-000000000000',
                 clientId,
                 planId: ctx.planId,
                 clientTeamId: ctx.teamId,
