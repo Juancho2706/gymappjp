@@ -229,19 +229,21 @@ describe('quickEditPublishAction — delta-gate Pro (grandfathering)', () => {
 })
 
 describe('quickEditPublishAction — carry-over de notas', () => {
-  it('escribe SIEMPRE las notas de la version base (ignora el cliente)', async () => {
+  it('carry-over de visible/protocol desde la base; private_notes NUNCA (columna deprecada) y forja ignorada', async () => {
     authOk(makeDb({
-      baseVersion: baseVersionRow({ private_notes: 'nota clinica', protocol_notes: 'protocolo' }),
+      baseVersion: baseVersionRow({ protocol_notes: 'protocolo' }),
       plan: { id: PLAN, client_id: CLIENT },
       variants: [{ id: 'v1' }],
       versionNumber: 4,
     }))
     vi.mocked(hasModule).mockResolvedValue(false)
-    // El cliente manda privateNotes forjadas; el server las PISA con las de la base (grandfathered).
+    // El cliente manda privateNotes forjadas; el server las descarta. La columna same-row
+    // private_notes esta deprecada e ilegible por `authenticated`, asi que NO se lee ni se
+    // copia: el draft final siempre lleva privateNotes = null.
     await quickEditPublishAction(input({ draft: draft({ privateNotes: 'FORJADA' }) }))
     expect(persistAndPublishDraft).toHaveBeenCalledTimes(1)
     const call = vi.mocked(persistAndPublishDraft).mock.calls[0][0]
-    expect(call.draft.privateNotes).toBe('nota clinica')
+    expect(call.draft.privateNotes).toBeNull()
     expect(call.draft.protocolNotes).toBe('protocolo')
     expect(call.draft.visibleNotes).toBe('Toma agua')
     expect(call.expectedCurrentVersionId).toBe(BASE_VERSION)
