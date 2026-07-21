@@ -13,10 +13,12 @@ import {
   bulkMarkSlotState,
   consumedPrescriptionItemIds,
   firstNameFromFullName,
+  formatNutritionCalories,
   sortFoodsByFavoriteFirst,
   type BulkMarkSlotState,
   type FoodCatalogItem,
   type NutritionIntakeReadItem,
+  type NutritionItemSubstitutionRead,
   type NutritionTodayReadModel,
 } from '@eva/nutrition-v2'
 import {
@@ -44,6 +46,7 @@ import {
   contextFromToday,
   mealSlotOptions,
   newIdempotencyKey,
+  resolveItemDisplayNote,
 } from './nutrition-today.logic'
 import { usePortionMarks, type PortionMarksApi } from './PortionMarks'
 import { PortionCoverageRow } from './PortionCoverageRow'
@@ -83,6 +86,7 @@ export function TodayExperience({
   revalidatePath,
   scanHref,
   clientName,
+  substitutionsByItem = {},
 }: {
   today: NutritionTodayReadModel
   clientId: string
@@ -90,6 +94,11 @@ export function TodayExperience({
   scanHref: string
   /** Nombre completo del alumno para el saludo del héroe (opcional; sin él, saludo sin nombre). */
   clientName?: string | null
+  /**
+   * Reemplazos autorizados por el coach (F-02), agrupados por `prescriptionItemId`. El server los
+   * lee RLS-scoped de la versión vigente; aquí solo se muestran bajo el item. Vacío ⇒ sin reemplazos.
+   */
+  substitutionsByItem?: Record<string, NutritionItemSubstitutionRead[]>
 }) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
@@ -321,6 +330,7 @@ export function TodayExperience({
         busyId={busyId}
         isPending={isPending}
         portionsApi={portionsApi}
+        substitutionsByItem={substitutionsByItem}
         onOpenPortionSheet={(slotCode, groupCode) => setPortionSheet({ slotCode, groupCode })}
         onBulkEat={handleBulkEat}
         onEat={(slot, item) => {
@@ -634,6 +644,7 @@ function PrescribedSection({
   busyId,
   isPending,
   portionsApi,
+  substitutionsByItem,
   onOpenPortionSheet,
   onBulkEat,
   onEat,
@@ -642,6 +653,7 @@ function PrescribedSection({
   busyId: string | null
   isPending: boolean
   portionsApi: PortionMarksApi
+  substitutionsByItem: Record<string, NutritionItemSubstitutionRead[]>
   onOpenPortionSheet: (slotCode: string, groupCode: string) => void
   onBulkEat: (slot: NutritionTodayReadModel['mealSlots'][number], state: BulkMarkSlotState) => void
   onEat: (
@@ -675,39 +687,44 @@ function PrescribedSection({
             <div className="mt-3 divide-y divide-border-subtle">
               {slot.prescriptionItems.map((item) => {
                 const consumed = consumedIds.has(item.id)
+                // Reemplazos estructurados (F-02) del item: cuando existen, la fila estructurada
+                // reemplaza al texto legado "Alternativas: …" congelado en `notes` (resolveItemDisplayNote).
+                const substitutions = substitutionsByItem[item.id] ?? []
                 return (
-                  <NutritionFoodRow
-                    key={item.id}
-                    name={item.name ?? 'Alimento prescrito'}
-                    detail={item.brand}
-                    quantityLabel={`${item.quantity} ${item.unit}${item.optional ? ' · opcional' : ''}`}
-                    calories={item.macros.calories}
-                    proteinG={item.macros.proteinG}
-                    carbsG={item.macros.carbsG}
-                    fatsG={item.macros.fatsG}
-                    imageUrl={resolveFoodImageUrl(item.media ?? null, SUPABASE_BASE)}
-                    category={item.category ?? undefined}
-                    note={item.notes}
-                    actions={
-                      consumed ? (
-                        <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700 dark:text-emerald-300">
-                          <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
-                          Registrado
-                        </span>
-                      ) : (
-                        <NutritionMotionButton
-                          type="button"
-                          data-testid="nutrition-v2-lo-comi"
-                          tone="success"
-                          className="min-h-10 px-3 text-xs"
-                          pending={isPending && busyId === `eat:${item.id}`}
-                          onClick={() => onEat(slot, item)}
-                        >
-                          Lo comí
-                        </NutritionMotionButton>
-                      )
-                    }
-                  />
+                  <div key={item.id}>
+                    <NutritionFoodRow
+                      name={item.name ?? 'Alimento prescrito'}
+                      detail={item.brand}
+                      quantityLabel={`${item.quantity} ${item.unit}${item.optional ? ' · opcional' : ''}`}
+                      calories={item.macros.calories}
+                      proteinG={item.macros.proteinG}
+                      carbsG={item.macros.carbsG}
+                      fatsG={item.macros.fatsG}
+                      imageUrl={resolveFoodImageUrl(item.media ?? null, SUPABASE_BASE)}
+                      category={item.category ?? undefined}
+                      note={resolveItemDisplayNote(item.notes, substitutions.length > 0)}
+                      actions={
+                        consumed ? (
+                          <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700 dark:text-emerald-300">
+                            <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
+                            Registrado
+                          </span>
+                        ) : (
+                          <NutritionMotionButton
+                            type="button"
+                            data-testid="nutrition-v2-lo-comi"
+                            tone="success"
+                            className="min-h-10 px-3 text-xs"
+                            pending={isPending && busyId === `eat:${item.id}`}
+                            onClick={() => onEat(slot, item)}
+                          >
+                            Lo comí
+                          </NutritionMotionButton>
+                        )
+                      }
+                    />
+                    <ItemSubstitutions items={substitutions} />
+                  </div>
                 )
               })}
             </div>
@@ -728,6 +745,33 @@ function PrescribedSection({
         )
       })}
     </section>
+  )
+}
+
+/**
+ * Reemplazos autorizados por el coach (F-02) bajo un item prescrito. Diseño sobrio del DS: etiqueta
+ * muted + chips inline con la kcal de referencia cuando el snapshot la trae. Lista accesible
+ * (light/dark). Sin reemplazos ⇒ no renderiza nada. Alineado bajo el texto del item (la miniatura
+ * ocupa h-11 + gap-3 ≈ pl-14) para colgar de forma natural de su fila.
+ */
+function ItemSubstitutions({ items }: { items: NutritionItemSubstitutionRead[] }) {
+  if (items.length === 0) return null
+  return (
+    <div className="pb-3 pl-14">
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-subtle">Puedes reemplazar por</p>
+      <ul aria-label="Reemplazos autorizados por tu coach" className="mt-1 flex flex-wrap gap-1.5">
+        {items.map((sub) => (
+          <li key={sub.id}>
+            <span className="inline-flex items-center gap-1 rounded-pill border border-border-subtle bg-surface-sunken px-2.5 py-1 text-xs font-medium text-body">
+              <span>{sub.name}</span>
+              {sub.macros.calories != null ? (
+                <span className="tabular-nums text-muted">· {formatNutritionCalories(sub.macros.calories)}</span>
+              ) : null}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
   )
 }
 

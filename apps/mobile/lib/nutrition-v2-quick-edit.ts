@@ -32,8 +32,11 @@
 
 import { z } from 'zod'
 import {
+  NUTRITION_ITEM_SUBSTITUTION_SELECT,
   NutritionPlanDraftSchema,
   buildNutritionIdempotencyKey,
+  mapNutritionItemSubstitutionRow,
+  type NutritionItemSubstitution,
   type NutritionMacroTargets,
   type NutritionPlanDraft,
   type NutritionPlanReadModel,
@@ -44,10 +47,13 @@ import {
 import {
   NUTRITION_PRO_FEATURE_LABEL,
   buildItemInsertRow,
+  buildItemSubstitutionInsertRow,
   buildSlotInsertRow,
   buildVariantInsertRow,
+  collectSubstitutionFoodIds,
   computeItemMacros,
   mapWriteError,
+  newNutritionItemId,
   publishFail,
   requiredNutritionProFeature,
   strategyUsesSlots,
@@ -768,6 +774,81 @@ export function quickEditStateToDraft(input: {
 }
 
 // ---------------------------------------------------------------------------
+// Reemplazos autorizados (F-02): CARRY-OVER obligatorio. El read-model NO trae los reemplazos
+// (misma clase del bug private_notes): al republicar desde el quick-edit se perderian. Por eso al
+// abrir la edicion se fetchean por lectura RLS-directa de la version base y, al publicar, se
+// re-inyectan en el draft (que los re-congela e inserta). Los reemplazos NO son editables en el
+// quick-edit F1 (van fuera del QuickEditState para no ensuciar el diff): son carry-over puro.
+// ---------------------------------------------------------------------------
+
+/**
+ * Fetch best-effort de los reemplazos de la version base, agrupados por `prescriptionItemId` y
+ * convertidos a la forma de draft (`NutritionItemSubstitution`). Lectura directa RLS-scoped
+ * (`can_read_version`) con `NUTRITION_ITEM_SUBSTITUTION_SELECT` + `mapNutritionItemSubstitutionRow`
+ * del paquete. Un error/plan sin reemplazos => mapa vacio (jamas bloquea la edicion).
+ */
+export async function loadQuickEditSubstitutions(
+  db: NutritionV2WriteClient,
+  versionId: string,
+): Promise<Map<string, NutritionItemSubstitution[]>> {
+  const byItem = new Map<string, NutritionItemSubstitution[]>()
+  try {
+    const res = await db
+      .from('nutrition_item_substitutions_v2')
+      .select(NUTRITION_ITEM_SUBSTITUTION_SELECT)
+      .eq('version_id', versionId)
+      .order('order_index', { ascending: true })
+    if (res.error || !res.data) return byItem
+    const rows = res.data as Parameters<typeof mapNutritionItemSubstitutionRow>[0][]
+    for (const row of rows) {
+      const mapped = mapNutritionItemSubstitutionRow(row)
+      const bucket = byItem.get(mapped.prescriptionItemId) ?? []
+      bucket.push({
+        // Sin `id`: la republicacion crea filas NUEVAS (la DB genera el id); reusar el id de la
+        // version base violaria el PK. `customName` solo si es reemplazo libre (sin food/recipe).
+        foodId: mapped.foodId,
+        recipeId: mapped.recipeId,
+        customName: mapped.foodId || mapped.recipeId ? null : mapped.name,
+        quantity: mapped.quantity,
+        unit: mapped.unit,
+        orderIndex: bucket.length,
+      })
+      byItem.set(mapped.prescriptionItemId, bucket)
+    }
+  } catch {
+    // best-effort: sin carry-over el publish no pierde datos que no pudo leer, pero tampoco
+    // reintroduce reemplazos ilegibles — el fail-closed lo cubre el propio scope RLS.
+  }
+  return byItem
+}
+
+/**
+ * Cuelga los reemplazos carry-over en los items del draft cuyo `id` (de la version base) tiene
+ * entrada en el mapa. Items agregados en esta edicion (sin id) y swapeados que perdieron su
+ * identidad no reciben reemplazos. Sin entradas => draft byte-identico (no toca `substitutions`).
+ */
+export function injectSubstitutionsIntoDraft(
+  draft: NutritionPlanDraft,
+  subsByItemId: ReadonlyMap<string, NutritionItemSubstitution[]>,
+): NutritionPlanDraft {
+  if (subsByItemId.size === 0) return draft
+  return {
+    ...draft,
+    dayVariants: draft.dayVariants.map((variant) => ({
+      ...variant,
+      mealSlots: variant.mealSlots.map((slot) => ({
+        ...slot,
+        items: slot.items.map((item) => {
+          const subs = item.id ? subsByItemId.get(item.id) : undefined
+          if (!subs || subs.length === 0) return item
+          return { ...item, substitutions: subs }
+        }),
+      })),
+    })),
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Capa de porciones — tipos + inyeccion en el draft + filas de insert con snapshot
 // congelado. CONSOLIDADO (follow-up PR #129/#131) desde el espejo
 // `components/nutrition-v2/quick-edit/portions-publish.ts` (eliminado): la persistencia
@@ -1040,11 +1121,25 @@ export async function publishQuickEditRN(input: {
     state: QuickEditPortionsState
     groupsById: ReadonlyMap<string, QuickEditPortionGroup>
   }
+  /** Reemplazos autorizados (F-02) de la version base, por prescriptionItemId. Carry-over: se
+   *  re-inyectan en el draft para que republicar NO los pierda (omitir = sin reemplazos). */
+  carryOverSubstitutions?: ReadonlyMap<string, NutritionItemSubstitution[]>
   idempotencyKey: string
   todayIso: string
   hasNutritionPro: boolean
 }): Promise<QuickEditPublishResult> {
-  const { db, userId, clientId, baseline, state, portions, idempotencyKey, todayIso, hasNutritionPro } = input
+  const {
+    db,
+    userId,
+    clientId,
+    baseline,
+    state,
+    portions,
+    carryOverSubstitutions,
+    idempotencyKey,
+    todayIso,
+    hasNutritionPro,
+  } = input
 
   // 1. Version base: notas + pertenencia al plan (fail-closed).
   const baseRes = await db
@@ -1065,12 +1160,16 @@ export async function publishQuickEditRN(input: {
     }
   }
 
-  // 2-3. Draft (+ porciones si vienen) + carry-over de notas + validacion canonica.
+  // 2-3. Draft (+ porciones si vienen, + reemplazos carry-over) + carry-over de notas + Zod.
   const effectiveFrom = quickEditEffectiveFrom(todayIso, baseline.effectiveFrom)
   const baseDraft = quickEditStateToDraft({ state, baseline, clientId, effectiveFrom })
-  const rawDraft = portions
+  const withTargets = portions
     ? injectExchangeTargetsIntoDraft(baseDraft, state, portions.state)
     : baseDraft
+  // Reemplazos F-02 (campo disjunto de exchangeTargets): se cuelgan al final; sin mapa = no-op.
+  const rawDraft = carryOverSubstitutions
+    ? injectSubstitutionsIntoDraft(withTargets, carryOverSubstitutions)
+    : withTargets
   rawDraft.visibleNotes = baseRow.visible_notes
   rawDraft.privateNotes = null
   rawDraft.protocolNotes = baseRow.protocol_notes
@@ -1208,7 +1307,8 @@ async function persistAndPublishQuickEdit(input: {
   }
   const versionId = versionIns.data.id
 
-  // Foods para snapshots (mismo camino que el builder).
+  // Foods para snapshots (mismo camino que el builder): items MAS los referenciados por los
+  // reemplazos autorizados carry-over (F-02), en un solo set para congelar todo en una pasada.
   const foodIds: string[] = []
   for (const variant of draft.dayVariants) {
     for (const slot of variant.mealSlots) {
@@ -1216,6 +1316,9 @@ async function persistAndPublishQuickEdit(input: {
         if (item.foodId && !foodIds.includes(item.foodId)) foodIds.push(item.foodId)
       }
     }
+  }
+  for (const id of collectSubstitutionFoodIds(draft)) {
+    if (!foodIds.includes(id)) foodIds.push(id)
   }
   const foodMap = new Map<string, BuilderFood>()
   for (const id of foodIds) {
@@ -1251,17 +1354,41 @@ async function persistAndPublishQuickEdit(input: {
       const mealSlotId = slotIns.data.id
 
       if (slot.items.length > 0) {
-        const itemRows = slot.items.map((item, index) =>
+        // Id explicito por item (F-02): necesario para colgar los reemplazos carry-over
+        // referenciandolo antes del insert (sin RETURNING). Espejo del builder/web.
+        const itemsWithIds = slot.items.map((item) => ({ item, id: newNutritionItemId() }))
+        const itemRows = itemsWithIds.map(({ item, id }, index) =>
           buildItemInsertRow({
             versionId,
             mealSlotId,
             orderIndex: index,
             item,
             food: item.foodId ? foodMap.get(item.foodId) ?? null : null,
+            id,
           }),
         )
         const itemsIns = await db.from('nutrition_prescription_items_v2').insert(itemRows)
         if (itemsIns.error) return mapWriteError(itemsIns.error, 'items')
+
+        // Reemplazos autorizados carry-over (F-02), re-congelados por item. Un item sin
+        // reemplazos no toca la tabla nueva (byte-identico a un republish sin reemplazos).
+        const substitutionRows = itemsWithIds.flatMap(({ item, id }) =>
+          (item.substitutions ?? []).map((sub, subIndex) =>
+            buildItemSubstitutionInsertRow({
+              versionId,
+              prescriptionItemId: id,
+              orderIndex: subIndex,
+              sub,
+              food: sub.foodId ? foodMap.get(sub.foodId) ?? null : null,
+            }),
+          ),
+        )
+        if (substitutionRows.length > 0) {
+          const subsIns = await db
+            .from('nutrition_item_substitutions_v2')
+            .insert(substitutionRows as unknown as Record<string, unknown>[])
+          if (subsIns.error) return mapWriteError(subsIns.error, 'reemplazos')
+        }
       }
 
       // Targets de porciones de la franja, congelados desde el dict del plan (jamas

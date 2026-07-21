@@ -4,6 +4,7 @@ import { calculateFoodItemMacros } from '@eva/nutrition-engine'
 import {
   BUILDER_STEP_COUNT,
   CoachFoodInputSchema,
+  MAX_ITEM_SUBSTITUTIONS,
   assembleDraft,
   assembleAndValidateDraft,
   buildItemInsertRow,
@@ -243,6 +244,35 @@ describe('assembleDraft', () => {
     bad.slots[0].items[0].quantity = '0'
     expect(() => assembleAndValidateDraft(bad, { clientId: CLIENT_ID })).toThrow()
   })
+
+  // F-02: los reemplazos autorizados del builder (solo catalogo) viajan al draft como
+  // foodId + quantity/unit null ("misma porcion"), con orderIndex por posicion. El server
+  // congela el snapshot al persistir. Un item sin reemplazos queda byte-identico a hoy.
+  it('mapea los reemplazos autorizados del item al draft (foodId + quantity/unit null + orderIndex)', () => {
+    const subA: BuilderFood = { ...FOOD, id: '44444444-4444-4444-8444-444444444444', name: 'Pavo molido' }
+    const subB: BuilderFood = { ...FOOD, id: '55555555-5555-4555-8555-555555555555', name: 'Merluza' }
+    const state = structuredState()
+    state.slots[0].items = [
+      foodItem({ substitutions: [{ key: 's1', food: subA }, { key: 's2', food: subB }] }),
+    ]
+    const draft = assembleAndValidateDraft(state, { clientId: CLIENT_ID })
+    const item = draft.dayVariants[0].mealSlots[0].items[0]
+    expect(item.substitutions).toHaveLength(2)
+    expect(item.substitutions?.[0]).toMatchObject({
+      foodId: subA.id,
+      recipeId: null,
+      customName: null,
+      quantity: null,
+      unit: null,
+      orderIndex: 0,
+    })
+    expect(item.substitutions?.[1]).toMatchObject({ foodId: subB.id, orderIndex: 1 })
+  })
+
+  it('item sin reemplazos NO agrega la clave substitutions (capa opcional, byte-identico)', () => {
+    const draft = assembleAndValidateDraft(structuredState(), { clientId: CLIENT_ID })
+    expect(draft.dayVariants[0].mealSlots[0].items[0]).not.toHaveProperty('substitutions')
+  })
 })
 
 describe('validateStep', () => {
@@ -331,6 +361,50 @@ describe('builderReducer', () => {
     const item = state.slots[0].items[0]
     expect(item.customName).toBe('Avena')
     expect(itemMacros(item).calories).toBe(380)
+  })
+
+  // F-02: reemplazos autorizados por item (append / dedupe / tope / remove).
+  it('ADD_ITEM_SUBSTITUTION agrega, deduplica por foodId y respeta el tope', () => {
+    let state = builderReducer(createEmptyBuilderState('2026-07-20'), {
+      type: 'SET_STRATEGY',
+      strategy: 'structured',
+      firstSlotKey: 'slotK',
+    })
+    const slotKey = state.slots[0].key
+    state = builderReducer(state, { type: 'ADD_ITEM', slotKey, key: 'itemK', food: FOOD })
+
+    const subA: BuilderFood = { ...FOOD, id: '44444444-4444-4444-8444-444444444444', name: 'Pavo' }
+    state = builderReducer(state, { type: 'ADD_ITEM_SUBSTITUTION', slotKey, itemKey: 'itemK', key: 'sa', food: subA })
+    expect(state.slots[0].items[0].substitutions).toHaveLength(1)
+
+    // Mismo foodId => no duplica.
+    state = builderReducer(state, { type: 'ADD_ITEM_SUBSTITUTION', slotKey, itemKey: 'itemK', key: 'sa2', food: subA })
+    expect(state.slots[0].items[0].substitutions).toHaveLength(1)
+
+    // No permite ofrecer el propio alimento prescrito (FOOD) como reemplazo.
+    state = builderReducer(state, { type: 'ADD_ITEM_SUBSTITUTION', slotKey, itemKey: 'itemK', key: 'sSelf', food: FOOD })
+    expect(state.slots[0].items[0].substitutions).toHaveLength(1)
+
+    // Llena hasta el tope y confirma que no lo supera.
+    for (let i = 0; i < MAX_ITEM_SUBSTITUTIONS + 3; i += 1) {
+      const f: BuilderFood = { ...FOOD, id: `f-${i}-8888-4888-8888-888888888888`, name: `Alt ${i}` }
+      state = builderReducer(state, { type: 'ADD_ITEM_SUBSTITUTION', slotKey, itemKey: 'itemK', key: `k${i}`, food: f })
+    }
+    expect(state.slots[0].items[0].substitutions).toHaveLength(MAX_ITEM_SUBSTITUTIONS)
+  })
+
+  it('REMOVE_ITEM_SUBSTITUTION quita por key', () => {
+    let state = builderReducer(createEmptyBuilderState('2026-07-20'), {
+      type: 'SET_STRATEGY',
+      strategy: 'structured',
+      firstSlotKey: 'slotK',
+    })
+    const slotKey = state.slots[0].key
+    state = builderReducer(state, { type: 'ADD_ITEM', slotKey, key: 'itemK', food: FOOD })
+    const subA: BuilderFood = { ...FOOD, id: '44444444-4444-4444-8444-444444444444', name: 'Pavo' }
+    state = builderReducer(state, { type: 'ADD_ITEM_SUBSTITUTION', slotKey, itemKey: 'itemK', key: 'sa', food: subA })
+    state = builderReducer(state, { type: 'REMOVE_ITEM_SUBSTITUTION', slotKey, itemKey: 'itemK', subKey: 'sa' })
+    expect(state.slots[0].items[0].substitutions).toHaveLength(0)
   })
 })
 

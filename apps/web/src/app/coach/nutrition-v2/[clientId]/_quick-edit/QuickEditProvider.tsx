@@ -26,12 +26,14 @@ import {
   buildNutritionIdempotencyKey,
   countDraftChanges,
   readModelToDraft,
+  type NutritionItemSubstitutionRead,
   type NutritionPlanReadModel,
   type NutritionStrategy,
 } from '@eva/nutrition-v2'
 import { quickEditPublishAction } from '../../_actions/quick-edit.actions'
 import {
   applyQuickEditToDraft,
+  buildSubstitutionMap,
   collectPortionGroups,
   quickEditReducer,
   readModelToEditState,
@@ -113,6 +115,7 @@ export function QuickEditProvider({
   clientId,
   clientName,
   planModel,
+  itemSubstitutions,
   today,
   onExit,
   children,
@@ -120,6 +123,12 @@ export function QuickEditProvider({
   clientId: string
   clientName: string
   planModel: NutritionPlanReadModel
+  /**
+   * Reemplazos autorizados de la version base (F-02), fetcheados server-side (RLS-scoped). Se
+   * inyectan en la hidratacion por prescriptionItemId para que republicar NO los borre. El
+   * read-model no los transporta; sin esto, publicar un quick-edit los perderia.
+   */
+  itemSubstitutions: NutritionItemSubstitutionRead[]
   today: string
   /** Cierra el modo edicion (vuelve a la ficha normal). */
   onExit: () => void
@@ -129,7 +138,11 @@ export function QuickEditProvider({
 
   // Hidratacion una sola vez por montaje del modo edicion (el Entry desmonta al salir,
   // asi que reabrir re-hidrata desde el read model fresco tras router.refresh()).
-  const initialState = useMemo(() => readModelToEditState(planModel), [planModel])
+  const substitutionsByItemId = useMemo(() => buildSubstitutionMap(itemSubstitutions), [itemSubstitutions])
+  const initialState = useMemo(
+    () => readModelToEditState(planModel, substitutionsByItemId),
+    [planModel, substitutionsByItemId],
+  )
   // El server pisa effectiveFrom (max(hoy, base)) y las notas (carry-over §2.3).
   const baseDraft = useMemo(() => readModelToDraft(planModel, clientId), [planModel, clientId])
   const portionGroups = useMemo(() => collectPortionGroups(planModel), [planModel])
