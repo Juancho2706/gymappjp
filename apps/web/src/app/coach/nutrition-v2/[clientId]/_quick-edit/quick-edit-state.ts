@@ -12,6 +12,8 @@
  */
 
 import type {
+  NutritionItemSubstitution,
+  NutritionItemSubstitutionRead,
   NutritionMacroTargets,
   NutritionPlanDraft,
   NutritionPlanReadModel,
@@ -27,6 +29,21 @@ export const ZERO_ITEM_MACROS: ItemMacros = { calories: 0, proteinG: 0, carbsG: 
 // ---------------------------------------------------------------------------
 // Tipos del arbol editable
 // ---------------------------------------------------------------------------
+
+/**
+ * Reemplazo autorizado del coach, ya proyectable al draft (F-02). CARRY-OVER read-only: F1 no
+ * edita reemplazos en quick-edit; solo los preserva para que republicar NO los borre (el
+ * read-model no los transporta — misma clase del bug de private_notes). `orderIndex` se
+ * re-deriva por posicion al proyectar. Sin display info: quick-edit no pinta la capa de
+ * reemplazos, solo la conserva y reenvia al server, que vuelve a congelar el snapshot.
+ */
+export interface QeItemSubstitution {
+  foodId: string | null
+  recipeId: string | null
+  customName: string | null
+  quantity: number | null
+  unit: string | null
+}
 
 export interface QeItem {
   /** Key estable de UI (id del read model para items hidratados; generada para nuevos). */
@@ -60,6 +77,12 @@ export interface QeItem {
   macroBase: { quantity: number; macros: ItemMacros } | null
   /** Alimento libre (sin foodId/recipeId): el nombre es editable y las macros no aplican. */
   isCustom: boolean
+  /**
+   * Reemplazos autorizados del coach (F-02) heredados de la version base. CARRY-OVER
+   * read-only: quick-edit no los edita, pero deben viajar en la proyeccion del draft o
+   * republicar los borraria. Vacio = item sin capa de reemplazos.
+   */
+  substitutions: QeItemSubstitution[]
 }
 
 /**
@@ -151,7 +174,37 @@ type ReadVariant = NutritionPlanReadModel['dayVariants'][number]
 type ReadSlot = ReadVariant['mealSlots'][number]
 type ReadItem = ReadSlot['prescriptionItems'][number]
 
-function hydrateItem(item: ReadItem): QeItem {
+/** Mapa de reemplazos por item prescrito (para inyectar en la hidratacion). */
+export type SubstitutionsByItemId = Record<string, QeItemSubstitution[]>
+
+/** Read-model del reemplazo (snapshot congelado) -> forma proyectable al draft. */
+function readSubstitutionToQe(read: NutritionItemSubstitutionRead): QeItemSubstitution {
+  const isCustom = read.foodId === null && read.recipeId === null
+  return {
+    foodId: read.foodId,
+    recipeId: read.recipeId,
+    // El server re-deriva nombre/macros del catalogo para foodId/recipeId; el nombre libre
+    // solo se conserva para reemplazos custom (sin foodId ni recipeId).
+    customName: isCustom ? read.name : null,
+    quantity: read.quantity,
+    unit: read.unit,
+  }
+}
+
+/**
+ * Agrupa los reemplazos leidos directo de la tabla RLS-scoped por `prescriptionItemId`
+ * conservando el orden de llegada (el fetch ordena por order_index). Puro: alimenta la
+ * inyeccion del carry-over en `readModelToEditState`.
+ */
+export function buildSubstitutionMap(reads: readonly NutritionItemSubstitutionRead[]): SubstitutionsByItemId {
+  const map: SubstitutionsByItemId = {}
+  for (const read of reads) {
+    ;(map[read.prescriptionItemId] ??= []).push(readSubstitutionToQe(read))
+  }
+  return map
+}
+
+function hydrateItem(item: ReadItem, subsByItemId: SubstitutionsByItemId): QeItem {
   const isCustom = item.foodId === null && item.recipeId === null
   return {
     key: item.id,
@@ -182,6 +235,9 @@ function hydrateItem(item: ReadItem): QeItem {
           }
         : null,
     isCustom,
+    // Carry-over F-02: los reemplazos de la version base viajan en el estado editable para que
+    // republicar NO los borre. Si no hay fetch (mapa vacio) el item queda como antes.
+    substitutions: subsByItemId[item.id] ?? [],
   }
 }
 
@@ -201,7 +257,7 @@ function hydratePortionTarget(target: ReadExchangeTarget): QePortionTarget {
   }
 }
 
-function hydrateSlot(slot: ReadSlot): QeSlot {
+function hydrateSlot(slot: ReadSlot, subsByItemId: SubstitutionsByItemId): QeSlot {
   return {
     key: slot.id,
     id: slot.id,
@@ -213,7 +269,7 @@ function hydrateSlot(slot: ReadSlot): QeSlot {
     required: slot.required,
     instructions: slot.instructions,
     targets: slot.targets,
-    items: slot.prescriptionItems.map(hydrateItem),
+    items: slot.prescriptionItems.map((item) => hydrateItem(item, subsByItemId)),
     portionTargets: (slot.exchangeTargets ?? []).map(hydratePortionTarget),
   }
 }
@@ -247,7 +303,7 @@ function targetText(value: number | null): string {
   return value === null ? '' : String(value)
 }
 
-function hydrateVariant(variant: ReadVariant): QeVariant {
+function hydrateVariant(variant: ReadVariant, subsByItemId: SubstitutionsByItemId): QeVariant {
   return {
     key: variant.id,
     id: variant.id,
@@ -266,14 +322,22 @@ function hydrateVariant(variant: ReadVariant): QeVariant {
       sodiumMg: variant.targets.sodiumMg,
       waterMl: variant.targets.waterMl,
     },
-    slots: variant.mealSlots.map(hydrateSlot),
+    slots: variant.mealSlots.map((slot) => hydrateSlot(slot, subsByItemId)),
   }
 }
 
-/** Arbol editable hidratado desde el read model de la ficha (null si no hay plan vigente). */
-export function readModelToEditState(planModel: NutritionPlanReadModel): QuickEditState | null {
+/**
+ * Arbol editable hidratado desde el read model de la ficha (null si no hay plan vigente).
+ * `subsByItemId` inyecta los reemplazos autorizados de la version base (carry-over F-02):
+ * el read-model no los transporta, asi que se fetchean aparte (RLS-scoped) y se pasan aca.
+ * Ausente = plan sin capa de reemplazos (comportamiento previo, byte-identico).
+ */
+export function readModelToEditState(
+  planModel: NutritionPlanReadModel,
+  subsByItemId: SubstitutionsByItemId = {},
+): QuickEditState | null {
   if (planModel.plan === null) return null
-  return { variants: planModel.dayVariants.map(hydrateVariant) }
+  return { variants: planModel.dayVariants.map((variant) => hydrateVariant(variant, subsByItemId)) }
 }
 
 // ---------------------------------------------------------------------------
@@ -418,6 +482,8 @@ export function createCatalogItem(key: string, food: BuilderFood): QeItem {
     food,
     macroBase: null,
     isCustom: false,
+    // Item nuevo del quick-edit: sin reemplazos (F1 no los edita aca).
+    substitutions: [],
   }
 }
 
@@ -439,6 +505,7 @@ export function createCustomItem(key: string): QeItem {
     food: null,
     macroBase: null,
     isCustom: true,
+    substitutions: [],
   }
 }
 
@@ -723,6 +790,11 @@ type DraftSlot = DraftVariant['mealSlots'][number]
 type DraftItem = DraftSlot['items'][number]
 
 function projectItem(item: QeItem, orderIndex: number): DraftItem {
+  // Carry-over F-02: reemplazos base heredados. Capa OPCIONAL (espeja exchangeTargets): un
+  // item sin reemplazos proyecta un draft IDENTICO al de antes (sin la clave), asi baseline y
+  // current (misma proyeccion) no acusan un cambio falso. `?? []` tolera un respaldo local
+  // viejo (localStorage pre-deploy) cuyos items no traen el campo. `orderIndex` por posicion.
+  const substitutions = item.substitutions ?? []
   return {
     ...(item.id ? { id: item.id } : {}),
     foodId: item.foodId,
@@ -736,6 +808,18 @@ function projectItem(item: QeItem, orderIndex: number): DraftItem {
     substitutionGroupId: item.substitutionGroupId,
     notes: item.notes,
     orderIndex,
+    ...(substitutions.length > 0
+      ? {
+          substitutions: substitutions.map((sub, subIndex): NutritionItemSubstitution => ({
+            foodId: sub.foodId,
+            recipeId: sub.recipeId,
+            customName: sub.customName,
+            quantity: sub.quantity,
+            unit: sub.unit,
+            orderIndex: subIndex,
+          })),
+        }
+      : {}),
   }
 }
 

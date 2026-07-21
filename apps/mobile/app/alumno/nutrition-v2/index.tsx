@@ -4,7 +4,7 @@ import { useFocusEffect, useRouter } from 'expo-router'
 import * as Haptics from 'expo-haptics'
 import { FlashList } from '@shopify/flash-list'
 import { MotiView } from 'moti'
-import { Check, History, ListChecks, Utensils } from 'lucide-react-native'
+import { Check, History, ListChecks, Repeat2, Utensils } from 'lucide-react-native'
 import {
   AuraHero,
   FoodRow,
@@ -38,6 +38,7 @@ import type {
 import {
   BULK_MARK_COMPLETE_LABEL,
   type BulkMarkSlotState,
+  NUTRITION_ITEM_SUBSTITUTION_SELECT,
   NUTRITION_STRATEGIES,
   type NutritionSlotExchangeTargetRead,
   NutritionHistoryPageReadModelSchema,
@@ -52,7 +53,9 @@ import {
   firstNameFromFullName,
   formatNutritionAmount,
   formatNutritionCalories,
+  mapNutritionItemSubstitutionRow,
   type NutritionFoodRowModel,
+  type NutritionItemSubstitutionRead,
   type NutritionHistoryDay,
   type NutritionHistoryPageReadModel,
   type NutritionIntakeReadItem,
@@ -133,6 +136,8 @@ const EMPTY_OVERLAY: OptimisticOverlay = { addedBySlot: {}, addedUnassigned: [],
 const EMPTY_ROWS: NutritionFoodRowModel[] = []
 const EMPTY_PORTION_MARKS: PendingPortionMark[] = []
 const EMPTY_PORTION_VOIDS: PendingPortionVoid[] = []
+// Referencia estable para el lookup de reemplazos por item (F-02): `?? []` inline rompería memo.
+const EMPTY_SUBSTITUTIONS: NutritionItemSubstitutionRead[] = []
 
 function TodayTab() {
   const router = useRouter()
@@ -146,6 +151,12 @@ function TodayTab() {
   const [offline, setOffline] = useState(false)
   const [pending, setPending] = useState(0)
   const [overlay, setOverlay] = useState<OptimisticOverlay>(EMPTY_OVERLAY)
+  // Reemplazos autorizados por el coach (F-02), agrupados por prescriptionItemId. Se leen con UN
+  // select RLS-scoped a la version publicada del Today (fuera del hot-path del read-model) y se
+  // muestran bajo cada item prescrito. Sin plan/version o sin reemplazos => mapa vacío.
+  const [substitutionsByItemId, setSubstitutionsByItemId] = useState<
+    ReadonlyMap<string, NutritionItemSubstitutionRead[]>
+  >(() => new Map())
   const [actionEntry, setActionEntry] = useState<NutritionIntakeReadItem | null>(null)
   const [celebration, setCelebration] = useState<CelebrationInstance | null>(null)
   // Bulk-mark de franja ("Comí toda esta comida"): franja en curso + snackbar propio (reusa el
@@ -272,6 +283,41 @@ function TodayTab() {
     })
     return () => subscription.remove()
   }, [enabled, load, userId])
+
+  // Reemplazos autorizados (F-02): UN select directo RLS-scoped por versión publicada del plan del
+  // Today, agrupado por item. Best-effort: cualquier error o falta de versión deja el mapa vacío
+  // (la UI simplemente no muestra la línea de reemplazos). No toca el hot-path del read-model.
+  const planVersionId = model?.plan?.versionId ?? null
+  useEffect(() => {
+    if (!planVersionId || !enabled) {
+      setSubstitutionsByItemId((prev) => (prev.size === 0 ? prev : new Map()))
+      return
+    }
+    let active = true
+    void (async () => {
+      const { data, error } = await supabase
+        .from('nutrition_item_substitutions_v2')
+        .select(NUTRITION_ITEM_SUBSTITUTION_SELECT)
+        .eq('version_id', planVersionId)
+        .order('order_index', { ascending: true })
+      if (!active || !mountedRef.current) return
+      if (error || !data) {
+        setSubstitutionsByItemId((prev) => (prev.size === 0 ? prev : new Map()))
+        return
+      }
+      const grouped = new Map<string, NutritionItemSubstitutionRead[]>()
+      for (const row of data as Parameters<typeof mapNutritionItemSubstitutionRow>[0][]) {
+        const mapped = mapNutritionItemSubstitutionRow(row)
+        const bucket = grouped.get(mapped.prescriptionItemId) ?? []
+        bucket.push(mapped)
+        grouped.set(mapped.prescriptionItemId, bucket)
+      }
+      setSubstitutionsByItemId(grouped)
+    })()
+    return () => {
+      active = false
+    }
+  }, [planVersionId, enabled])
 
   const refreshPending = useCallback(async () => {
     if (!userId) return
@@ -953,6 +999,7 @@ function TodayTab() {
               slot={slot}
               today={model}
               consumedIds={consumedIds}
+              substitutionsByItemId={substitutionsByItemId}
               addedRows={overlay.addedBySlot[slot.code] ?? EMPTY_ROWS}
               hiddenSet={hiddenSet}
               onAte={onAtePrescribed}
@@ -1086,6 +1133,7 @@ const TodaySlotCard = memo(function TodaySlotCard({
   slot,
   today,
   consumedIds,
+  substitutionsByItemId,
   addedRows,
   hiddenSet,
   onAte,
@@ -1101,6 +1149,7 @@ const TodaySlotCard = memo(function TodaySlotCard({
   slot: NutritionMealSlotRead
   today: NutritionTodayReadModel
   consumedIds: Set<string>
+  substitutionsByItemId: ReadonlyMap<string, NutritionItemSubstitutionRead[]>
   addedRows: NutritionFoodRowModel[]
   hiddenSet: Set<string>
   onAte: (slot: NutritionMealSlotRead, item: NutritionMealSlotRead['prescriptionItems'][number]) => void
@@ -1153,32 +1202,36 @@ const TodaySlotCard = memo(function TodaySlotCard({
       {slot.prescriptionItems.length > 0 ? (
         <View className="mt-3">
           <Text className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-text-subtle">Prescrito</Text>
-          {slot.prescriptionItems.map((item, index) => (
-            <View key={item.id} className={index > 0 ? 'border-t border-border-subtle' : undefined}>
-              <FoodRow
-                food={{
-                  id: item.id,
-                  name: item.name ?? 'Alimento prescrito',
-                  detail: item.brand,
-                  quantityLabel: `${item.quantity} ${item.unit}`,
-                  calories: item.macros.calories,
-                  proteinG: item.macros.proteinG,
-                  carbsG: item.macros.carbsG,
-                  fatsG: item.macros.fatsG,
-                }}
-                fallbackEmoji={foodCategoryEmojiFromName(item.name)}
-                actions={
-                  <NutritionMotionButton
-                    accessibilityLabel={`Comí ${item.name ?? 'lo prescrito'}`}
-                    tone="nutrition"
-                    onPress={() => onAte(slot, item)}
-                  >
-                    Comí
-                  </NutritionMotionButton>
-                }
-              />
-            </View>
-          ))}
+          {slot.prescriptionItems.map((item, index) => {
+            const subs = substitutionsByItemId.get(item.id) ?? EMPTY_SUBSTITUTIONS
+            return (
+              <View key={item.id} className={index > 0 ? 'border-t border-border-subtle' : undefined}>
+                <FoodRow
+                  food={{
+                    id: item.id,
+                    name: item.name ?? 'Alimento prescrito',
+                    detail: item.brand,
+                    quantityLabel: `${item.quantity} ${item.unit}`,
+                    calories: item.macros.calories,
+                    proteinG: item.macros.proteinG,
+                    carbsG: item.macros.carbsG,
+                    fatsG: item.macros.fatsG,
+                  }}
+                  fallbackEmoji={foodCategoryEmojiFromName(item.name)}
+                  actions={
+                    <NutritionMotionButton
+                      accessibilityLabel={`Comí ${item.name ?? 'lo prescrito'}`}
+                      tone="nutrition"
+                      onPress={() => onAte(slot, item)}
+                    >
+                      Comí
+                    </NutritionMotionButton>
+                  }
+                />
+                {subs.length > 0 ? <ItemSubstitutionsHint substitutions={subs} /> : null}
+              </View>
+            )
+          })}
         </View>
       ) : null}
 
@@ -1269,6 +1322,37 @@ function MealProgressMeter({ consumed, total }: { consumed: number; total: numbe
       )}
       <Text className={`font-mono text-[11px] font-semibold ${complete ? 'text-success-700' : 'text-text-muted'}`}>
         {complete ? 'Completa' : `${consumed}/${total}`}
+      </Text>
+    </View>
+  )
+}
+
+/**
+ * Reemplazos autorizados por el coach (F-02): bajo un item prescrito, "Puedes reemplazar por: X, Y"
+ * con la kcal de referencia congelada cuando existe (macros del snapshot). Solo lectura — el
+ * registro interactivo del swap es un fast-follow (SPEC). Sobrio: chip embebido con tokens de
+ * superficie/borde y texto muted; accesible como un único bloque de texto legible.
+ */
+function ItemSubstitutionsHint({ substitutions }: { substitutions: NutritionItemSubstitutionRead[] }) {
+  const { theme } = useTheme()
+  const label = substitutions
+    .map((sub) => {
+      const kcal = sub.macros.calories
+      return kcal != null && kcal > 0 ? `${sub.name} · ${formatNutritionCalories(kcal)}` : sub.name
+    })
+    .join(', ')
+  return (
+    <View
+      accessibilityRole="text"
+      accessibilityLabel={`Puedes reemplazar por: ${label}`}
+      className="mb-2 ml-1 flex-row items-start gap-1.5 rounded-control border border-border-subtle bg-surface-sunken px-2.5 py-1.5"
+    >
+      <View className="mt-px">
+        <Repeat2 color={theme.textSecondary} size={13} />
+      </View>
+      <Text className="min-w-0 flex-1 text-[11px] leading-4 text-text-muted">
+        <Text className="font-semibold text-text-subtle">Puedes reemplazar por: </Text>
+        {label}
       </Text>
     </View>
   )

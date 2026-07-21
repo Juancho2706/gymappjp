@@ -3,10 +3,12 @@ import {
   NutritionPlanDraftSchema,
   countDraftChanges,
   readModelToDraft,
+  type NutritionItemSubstitutionRead,
   type NutritionPlanReadModel,
 } from '@eva/nutrition-v2'
 import {
   applyQuickEditToDraft,
+  buildSubstitutionMap,
   collectPortionGroups,
   createCatalogItem,
   normalizeTimeHHMM,
@@ -466,5 +468,106 @@ describe('quick-edit-state — RESTORE_DRAFT', () => {
     expect(quickEditReducer(state, { type: 'RESTORE_DRAFT', state: badVariants })).toBe(state)
     const emptyPayload = {} as unknown as QuickEditState
     expect(quickEditReducer(state, { type: 'RESTORE_DRAFT', state: emptyPayload })).toBe(state)
+  })
+})
+
+// ── Carry-over de reemplazos autorizados (F-02): el read-model NO los transporta, se fetchean
+// aparte y se inyectan en la hidratacion. Deben viajar en la proyeccion del draft (o republicar
+// los borraria) SIN inflar el contador de cambios (baseline y current pasan por la misma
+// proyeccion). Esta es la clase del bug de private_notes. ────────────────────────────────────
+
+const SUB_FOOD_ID = 'a1a1a1a1-a1a1-4a1a-8a1a-a1a1a1a1a1a1'
+
+const NULL_MACROS = { calories: null, proteinG: null, carbsG: null, fatsG: null, fiberG: null }
+
+const SUB_READS: NutritionItemSubstitutionRead[] = [
+  {
+    id: 'd1d1d1d1-d1d1-4d1d-8d1d-d1d1d1d1d1d1',
+    prescriptionItemId: ITEM_ID,
+    foodId: SUB_FOOD_ID,
+    recipeId: null,
+    name: 'Pavo molido',
+    brand: 'Marca',
+    quantity: null,
+    unit: null,
+    macros: { calories: 200, proteinG: 27, carbsG: 0, fatsG: 10, fiberG: 0 },
+  },
+  {
+    id: 'd2d2d2d2-d2d2-4d2d-8d2d-d2d2d2d2d2d2',
+    prescriptionItemId: ITEM_ID,
+    foodId: null,
+    recipeId: null,
+    name: 'Merluza al horno',
+    brand: null,
+    quantity: 120,
+    unit: 'g',
+    macros: NULL_MACROS,
+  },
+]
+
+function hydrateWithSubs() {
+  const planModel = makePlanModel()
+  const state = readModelToEditState(planModel, buildSubstitutionMap(SUB_READS))
+  const baseDraft = readModelToDraft(planModel, CLIENT_ID)
+  if (!state || !baseDraft) throw new Error('fixture sin plan')
+  return {
+    state,
+    baseDraft,
+    baseline: applyQuickEditToDraft(baseDraft, state),
+    currentOf: (s: QuickEditState) => applyQuickEditToDraft(baseDraft, s),
+  }
+}
+
+describe('quick-edit-state — carry-over de reemplazos (F-02)', () => {
+  it('projectItem incluye las substitutions carry-over en el draft (food + libre), y pasa el schema', () => {
+    const { baseline } = hydrateWithSubs()
+    const item = baseline.dayVariants[0].mealSlots[0].items[0]
+    expect(item.substitutions).toHaveLength(2)
+    // Reemplazo de catalogo: foodId conservado, sin nombre libre.
+    expect(item.substitutions?.[0]).toMatchObject({
+      foodId: SUB_FOOD_ID,
+      recipeId: null,
+      customName: null,
+      quantity: null,
+      unit: null,
+      orderIndex: 0,
+    })
+    // Reemplazo libre: conserva el nombre + cantidad/unidad, orderIndex por posicion.
+    expect(item.substitutions?.[1]).toMatchObject({
+      foodId: null,
+      customName: 'Merluza al horno',
+      quantity: 120,
+      unit: 'g',
+      orderIndex: 1,
+    })
+    expect(() => NutritionPlanDraftSchema.parse(baseline)).not.toThrow()
+  })
+
+  it('hidratar y proyectar sin editar = 0 cambios (los reemplazos NO cuentan un cambio falso)', () => {
+    const { state, baseline, currentOf } = hydrateWithSubs()
+    expect(countDraftChanges(baseline, currentOf(state))).toBe(0)
+  })
+
+  it('editar la cantidad de un item con reemplazos cuenta 1 y preserva las substitutions', () => {
+    const { state, baseline, currentOf } = hydrateWithSubs()
+    const edited = quickEditReducer(state, {
+      type: 'SET_ITEM_QUANTITY',
+      variantKey: VARIANT_ID,
+      slotKey: SLOT_ID,
+      itemKey: ITEM_ID,
+      value: '90',
+    })
+    const current = currentOf(edited)
+    expect(countDraftChanges(baseline, current)).toBe(1)
+    expect(current.dayVariants[0].mealSlots[0].items[0].substitutions).toHaveLength(2)
+  })
+
+  it('sin fetch de reemplazos: el item NO trae la clave substitutions (byte-identico a hoy)', () => {
+    const planModel = makePlanModel()
+    const state = readModelToEditState(planModel)
+    const baseDraft = readModelToDraft(planModel, CLIENT_ID)
+    if (!state || !baseDraft) throw new Error('fixture sin plan')
+    const draft = applyQuickEditToDraft(baseDraft, state)
+    expect(draft.dayVariants[0].mealSlots[0].items[0]).not.toHaveProperty('substitutions')
   })
 })

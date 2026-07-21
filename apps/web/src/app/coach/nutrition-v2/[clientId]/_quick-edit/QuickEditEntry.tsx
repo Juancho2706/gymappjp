@@ -10,7 +10,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { MoreVertical, Pencil, Wand2 } from 'lucide-react'
-import type { NutritionPlanReadModel } from '@eva/nutrition-v2'
+import type { NutritionItemSubstitutionRead, NutritionPlanReadModel } from '@eva/nutrition-v2'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -25,11 +25,14 @@ export function QuickEditEntry({
   clientId,
   clientName,
   planModel,
+  itemSubstitutions,
   today,
 }: {
   clientId: string
   clientName: string
   planModel: NutritionPlanReadModel
+  /** Reemplazos autorizados de la version base (F-02), fetcheados server-side para el carry-over. */
+  itemSubstitutions: NutritionItemSubstitutionRead[]
   today: string
 }) {
   const [editing, setEditing] = useState(false)
@@ -86,6 +89,7 @@ export function QuickEditEntry({
           clientId={clientId}
           clientName={clientName}
           planModel={planModel}
+          itemSubstitutions={itemSubstitutions}
           today={today}
           onExit={() => setEditing(false)}
         >

@@ -11,7 +11,7 @@ import {
 } from 'react-native'
 import NetInfo from '@react-native-community/netinfo'
 import { ArrowLeft, Info } from 'lucide-react-native'
-import type { FoodCatalogItem, NutritionPlanReadModel } from '@eva/nutrition-v2'
+import type { FoodCatalogItem, NutritionItemSubstitution, NutritionPlanReadModel } from '@eva/nutrition-v2'
 import { NutritionCard } from '../NutritionCard'
 import { NutritionHeader, NutritionStatePanel, StrategyBadge } from '../NutritionV2Kit'
 import { useTheme } from '../../../context/ThemeContext'
@@ -28,6 +28,7 @@ import {
   collectQuickEditFoodIds,
   countQuickEditChanges,
   loadQuickEditFoods,
+  loadQuickEditSubstitutions,
   planModelToQuickEditState,
   publishQuickEditRN,
   quickEditReducer,
@@ -122,6 +123,12 @@ export function QuickEditMode({
   const portionGroups = frozen.portions.groups
 
   const [foodsById, setFoodsById] = useState<ReadonlyMap<string, BuilderFood>>(new Map())
+  // Reemplazos autorizados (F-02) de la version base, por prescriptionItemId. Carry-over PURO:
+  // el read-model no los trae; se fetchean al entrar y se re-inyectan al publicar para que
+  // republicar NO los pierda (misma clase del bug private_notes). No son editables en F1.
+  // TODO(F-02 P3): editor coach RN — afordancia por item para agregar/quitar reemplazos (reusar
+  // FoodSearchSheet, max 8, solo structured/hybrid). Hoy solo se preservan y se muestran al alumno.
+  const [carryOverSubs, setCarryOverSubs] = useState<ReadonlyMap<string, NutritionItemSubstitution[]>>(new Map())
   const [showErrors, setShowErrors] = useState(false)
   const [publishing, setPublishing] = useState(false)
   const [publishError, setPublishError] = useState<string | null>(null)
@@ -157,6 +164,21 @@ export function QuickEditMode({
       active = false
     }
   }, [initialState])
+
+  // Carry-over de reemplazos autorizados (F-02): fetch UNA vez de la version base congelada.
+  useEffect(() => {
+    if (!baseline) return
+    let active = true
+    void loadQuickEditSubstitutions(
+      supabase as unknown as NutritionV2WriteClient,
+      baseline.baseVersionId,
+    ).then((map) => {
+      if (active && mountedRef.current) setCarryOverSubs(map)
+    })
+    return () => {
+      active = false
+    }
+  }, [baseline])
 
   const portionGroupsById = useMemo(
     () => new Map(portionGroups.map((group) => [group.exchangeGroupId, group])),
@@ -336,6 +358,7 @@ export function QuickEditMode({
       baseline,
       state,
       portions: { state: portionsState, groupsById: portionGroupsById },
+      carryOverSubstitutions: carryOverSubs,
       idempotencyKey: intentKeyRef.current,
       todayIso,
       hasNutritionPro,
@@ -359,7 +382,7 @@ export function QuickEditMode({
       return
     }
     setPublishError(res.message)
-  }, [baseline, userId, clientId, state, portionsState, portionGroupsById, todayIso, hasNutritionPro, onPublished])
+  }, [baseline, userId, clientId, state, portionsState, portionGroupsById, carryOverSubs, todayIso, hasNutritionPro, onPublished])
 
   const handlePublishRequest = useCallback(() => {
     if (count === 0 || publishing) return
