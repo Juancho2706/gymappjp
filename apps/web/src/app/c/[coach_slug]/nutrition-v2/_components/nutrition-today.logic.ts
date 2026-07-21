@@ -278,3 +278,52 @@ export function buildVoidPayload(input: {
     correctionReason: input.reason.trim() || 'Registro retirado por el alumno',
   }
 }
+
+// ── Bulk-mark de franja ("Comí toda esta comida") ────────────────────────────────
+// Reusa 1:1 el camino del "Lo comí" individual (mismo buildPrescribedIntakePayload por item,
+// key fresca por item) para que el snapshot congelado y los totales sean idénticos. El
+// "qué es elegible" lo decide el helper puro compartido (bulkMarkSlotState).
+
+/** Payloads de registro para N items prescritos de una franja (uno por item, key propia). */
+export function buildBulkPrescribedPayloads(input: {
+  context: Context
+  slot: NutritionMealSlotRead
+  items: PrescriptionItemRead[]
+}): NutritionIntakeMutation[] {
+  return input.items.map((item) =>
+    buildPrescribedIntakePayload({
+      context: input.context,
+      slot: input.slot,
+      item,
+      idempotencyKey: newIdempotencyKey('intake'),
+    }),
+  )
+}
+
+/**
+ * Payloads de "deshacer" para los registros recién creados por el bulk: una corrección de
+ * contribución CERO por cada id creado (mismo mecanismo que "Retirar registro"), reusando el
+ * payload original enviado (mismo alimento/cantidad/franja) para no depender del read-model
+ * refrescado. Empareja por índice payloads[i] ↔ createdIds[i].
+ */
+export function buildBulkUndoPayloads(
+  payloads: NutritionIntakeMutation[],
+  createdIds: string[],
+): NutritionIntakeCorrection[] {
+  const n = Math.min(payloads.length, createdIds.length)
+  const out: NutritionIntakeCorrection[] = []
+  for (let i = 0; i < n; i += 1) {
+    const p = payloads[i]
+    out.push({
+      ...p,
+      source: 'manual',
+      captureMethod: 'manual',
+      note: 'Registro retirado',
+      idempotencyKey: newIdempotencyKey('void'),
+      snapshot: { ...p.snapshot, calories: 0, proteinG: 0, carbsG: 0, fatsG: 0, fiberG: 0 },
+      correctsEntryId: createdIds[i],
+      correctionReason: 'Deshacer registro de la comida',
+    })
+  }
+  return out
+}

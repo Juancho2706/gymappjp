@@ -6,6 +6,7 @@ export * from './aura'
 // Metro from bundling dead conversion logic into the RN app. The driver imports it via
 // the '@eva/nutrition-v2/conversion' subpath export (see package.json).
 export * from './read-models'
+export * from './bulk-mark'
 export * from './quick-edit'
 export * from './catalog'
 export * from './rollout'
