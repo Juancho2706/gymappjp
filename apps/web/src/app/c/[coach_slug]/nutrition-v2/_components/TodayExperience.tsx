@@ -7,9 +7,14 @@ import Image from 'next/image'
 import { toast } from 'sonner'
 import { AlertTriangle, CheckCircle2, Pencil, Plus, ScanBarcode, Share2, Star, Trash2, Utensils } from 'lucide-react'
 import {
+  BULK_MARK_COMPLETE_LABEL,
   buildNutritionDayShareText,
+  bulkMarkCtaLabel,
+  bulkMarkSlotState,
+  consumedPrescriptionItemIds,
   firstNameFromFullName,
   sortFoodsByFavoriteFirst,
+  type BulkMarkSlotState,
   type FoodCatalogItem,
   type NutritionIntakeReadItem,
   type NutritionTodayReadModel,
@@ -29,13 +34,14 @@ import { TodayModal } from './TodayModal'
 import { NutritionFoodRow } from './NutritionFoodRow'
 import { foodResultImage, resolveFoodImageUrl } from './food-result-image'
 import {
+  buildBulkPrescribedPayloads,
+  buildBulkUndoPayloads,
   buildCatalogIntakePayload,
   buildCorrectionPayload,
   buildPrescribedIntakePayload,
   buildVoidPayload,
   consumedEntries,
   contextFromToday,
-  isPrescriptionConsumed,
   mealSlotOptions,
   newIdempotencyKey,
 } from './nutrition-today.logic'
@@ -47,8 +53,10 @@ import { slotsWithPrescribedContent } from './portion-marks.logic'
 import {
   correctIntakeAction,
   recordIntakeAction,
+  recordSlotIntakeBatchAction,
   searchFoodCatalogAction,
   voidIntakeAction,
+  voidSlotIntakeBatchAction,
 } from '../_actions/intake.actions'
 import {
   getFavoriteFoodIdsAction,
@@ -127,6 +135,66 @@ export function TodayExperience({
         setError('No pudimos guardar tu registro. Revisa tu conexión e inténtalo de nuevo.')
       } finally {
         setBusyId(null)
+      }
+    })
+  }
+
+  // Bulk-mark de una franja: registra los elegibles (el helper puro decide cuáles = requeridos no
+  // consumidos), 1 request y 1 cargo de rate-limit. Éxito → toast con "Deshacer" (anula los N ids
+  // creados por el camino de void). Estado parcial → aviso honesto de cuántos quedaron.
+  function handleBulkEat(
+    slot: NutritionTodayReadModel['mealSlots'][number],
+    state: BulkMarkSlotState,
+  ) {
+    if (state.eligible.length === 0) return
+    const id = `bulk:${slot.id}`
+    const payloads = buildBulkPrescribedPayloads({ context: ctx, slot, items: state.eligible })
+    setError(null)
+    setBusyId(id)
+    startTransition(async () => {
+      try {
+        const res = await recordSlotIntakeBatchAction({ payloads, revalidatePath })
+        if (!res.ok) {
+          setError(humanizeStudentWriteError(res.error, 'No se pudo registrar la comida.'))
+          return
+        }
+        router.refresh()
+        if (res.failed > 0) {
+          toast.warning(
+            `Registré ${res.ids.length} de ${payloads.length} en ${slot.name}. Quedaron ${res.failed} sin registrar.`,
+          )
+          return
+        }
+        toast.success(`Registraste tu ${slot.name} 🎉`, {
+          duration: 6000,
+          action: { label: 'Deshacer', onClick: () => handleBulkUndo(slot.name, payloads, res.ids) },
+        })
+      } catch {
+        setError('No pudimos registrar tu comida. Revisa tu conexión e inténtalo de nuevo.')
+      } finally {
+        setBusyId(null)
+      }
+    })
+  }
+
+  function handleBulkUndo(
+    slotName: string,
+    payloads: ReturnType<typeof buildBulkPrescribedPayloads>,
+    createdIds: string[],
+  ) {
+    const undo = buildBulkUndoPayloads(payloads, createdIds)
+    if (undo.length === 0) return
+    startTransition(async () => {
+      try {
+        const res = await voidSlotIntakeBatchAction({ payloads: undo, revalidatePath })
+        if (res.ok) {
+          router.refresh()
+          toast.success(`Deshice el registro de ${slotName}.`)
+        } else {
+          toast.error('No se pudo deshacer. Retira los registros uno por uno en "Consumido hoy".')
+        }
+      } catch {
+        toast.error('No se pudo deshacer. Intenta de nuevo.')
       }
     })
   }
@@ -254,6 +322,7 @@ export function TodayExperience({
         isPending={isPending}
         portionsApi={portionsApi}
         onOpenPortionSheet={(slotCode, groupCode) => setPortionSheet({ slotCode, groupCode })}
+        onBulkEat={handleBulkEat}
         onEat={(slot, item) => {
           const id = `eat:${item.id}`
           runMutation(id, () =>
@@ -566,6 +635,7 @@ function PrescribedSection({
   isPending,
   portionsApi,
   onOpenPortionSheet,
+  onBulkEat,
   onEat,
 }: {
   today: NutritionTodayReadModel
@@ -573,6 +643,7 @@ function PrescribedSection({
   isPending: boolean
   portionsApi: PortionMarksApi
   onOpenPortionSheet: (slotCode: string, groupCode: string) => void
+  onBulkEat: (slot: NutritionTodayReadModel['mealSlots'][number], state: BulkMarkSlotState) => void
   onEat: (
     slot: NutritionTodayReadModel['mealSlots'][number],
     item: NutritionTodayReadModel['mealSlots'][number]['prescriptionItems'][number],
@@ -582,64 +653,159 @@ function PrescribedSection({
   // solo-porciones también aparece). Plan sin porciones ⇒ filtro idéntico al previo.
   const slotsWithPrescription = slotsWithPrescribedContent(today)
   if (slotsWithPrescription.length === 0) return null
+  // Set de items prescritos ya consumidos: una sola verdad para las filas Y el estado del bulk.
+  const consumedIds = consumedPrescriptionItemIds(today)
 
   return (
     <section aria-label="Tu plan de hoy" className="space-y-3">
       <h2 className="font-display text-lg font-semibold text-strong">Tu plan de hoy</h2>
-      {slotsWithPrescription.map((slot) => (
-        <NutritionCard key={slot.id}>
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <h3 className="font-display text-base font-semibold text-strong">{slot.name}</h3>
-            {slot.startTime ? <span className="font-mono text-xs text-muted">{slot.startTime}</span> : null}
-          </div>
-          <div className="mt-3 divide-y divide-border-subtle">
-            {slot.prescriptionItems.map((item) => {
-              const consumed = isPrescriptionConsumed(today, item.id)
-              return (
-                <NutritionFoodRow
-                  key={item.id}
-                  name={item.name ?? 'Alimento prescrito'}
-                  detail={item.brand}
-                  quantityLabel={`${item.quantity} ${item.unit}${item.optional ? ' · opcional' : ''}`}
-                  calories={item.macros.calories}
-                  proteinG={item.macros.proteinG}
-                  carbsG={item.macros.carbsG}
-                  fatsG={item.macros.fatsG}
-                  imageUrl={resolveFoodImageUrl(item.media ?? null, SUPABASE_BASE)}
-                  category={item.category ?? undefined}
-                  note={item.notes}
-                  actions={
-                    consumed ? (
-                      <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700 dark:text-emerald-300">
-                        <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
-                        Registrado
-                      </span>
-                    ) : (
-                      <NutritionMotionButton
-                        data-testid="nutrition-v2-lo-comi"
-                        tone="success"
-                        className="min-h-10 px-3 text-xs"
-                        pending={isPending && busyId === `eat:${item.id}`}
-                        onClick={() => onEat(slot, item)}
-                      >
-                        Lo comí
-                      </NutritionMotionButton>
-                    )
-                  }
-                />
-              )
-            })}
-          </div>
-          {/* Porciones de la franja (SPEC UX-b): sección hermana de los items. */}
-          <PortionSlotSection
-            api={portionsApi}
-            exchangeFoods={today.exchangeFoods}
-            onOpenSheet={onOpenPortionSheet}
-            slot={slot}
-          />
-        </NutritionCard>
-      ))}
+      {slotsWithPrescription.map((slot) => {
+        const bulk = bulkMarkSlotState(today, slot, consumedIds)
+        return (
+          <NutritionCard key={slot.id}>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-baseline gap-2">
+                <h3 className="font-display text-base font-semibold text-strong">{slot.name}</h3>
+                {slot.startTime ? <span className="font-mono text-xs text-muted">{slot.startTime}</span> : null}
+              </div>
+              {bulk.requiredTotal > 0 ? (
+                <MealProgressMeter consumed={bulk.requiredConsumed} total={bulk.requiredTotal} />
+              ) : null}
+            </div>
+            <div className="mt-3 divide-y divide-border-subtle">
+              {slot.prescriptionItems.map((item) => {
+                const consumed = consumedIds.has(item.id)
+                return (
+                  <NutritionFoodRow
+                    key={item.id}
+                    name={item.name ?? 'Alimento prescrito'}
+                    detail={item.brand}
+                    quantityLabel={`${item.quantity} ${item.unit}${item.optional ? ' · opcional' : ''}`}
+                    calories={item.macros.calories}
+                    proteinG={item.macros.proteinG}
+                    carbsG={item.macros.carbsG}
+                    fatsG={item.macros.fatsG}
+                    imageUrl={resolveFoodImageUrl(item.media ?? null, SUPABASE_BASE)}
+                    category={item.category ?? undefined}
+                    note={item.notes}
+                    actions={
+                      consumed ? (
+                        <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700 dark:text-emerald-300">
+                          <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
+                          Registrado
+                        </span>
+                      ) : (
+                        <NutritionMotionButton
+                          type="button"
+                          data-testid="nutrition-v2-lo-comi"
+                          tone="success"
+                          className="min-h-10 px-3 text-xs"
+                          pending={isPending && busyId === `eat:${item.id}`}
+                          onClick={() => onEat(slot, item)}
+                        >
+                          Lo comí
+                        </NutritionMotionButton>
+                      )
+                    }
+                  />
+                )
+              })}
+            </div>
+            {/* Registro en bloque de la franja ("Comí toda esta comida") — thumb-zone bajo los items. */}
+            <BulkMarkControl
+              state={bulk}
+              pending={isPending && busyId === `bulk:${slot.id}`}
+              onEat={() => onBulkEat(slot, bulk)}
+            />
+            {/* Porciones de la franja (SPEC UX-b): sección hermana de los items. */}
+            <PortionSlotSection
+              api={portionsApi}
+              exchangeFoods={today.exchangeFoods}
+              onOpenSheet={onOpenPortionSheet}
+              slot={slot}
+            />
+          </NutritionCard>
+        )
+      })}
     </section>
+  )
+}
+
+/**
+ * Medidor compacto de progreso de la franja: barra + "consumidos/total" de items requeridos.
+ * Al completar, muta a un chip esmeralda "Completa". La barra anima el ancho (respeta
+ * reduced-motion). Solo lectura — la acción vive en el control de abajo.
+ */
+function MealProgressMeter({ consumed, total }: { consumed: number; total: number }) {
+  const pct = total > 0 ? Math.min(100, Math.round((consumed / total) * 100)) : 0
+  const complete = total > 0 && consumed >= total
+  return (
+    <span
+      aria-label={`${consumed} de ${total} registrados`}
+      className={`inline-flex items-center gap-2 rounded-pill border px-2.5 py-1 text-xs font-semibold ${
+        complete
+          ? 'border-emerald-300/70 bg-emerald-50 text-emerald-800 dark:border-emerald-700/50 dark:bg-emerald-950/30 dark:text-emerald-300'
+          : 'border-border-default bg-surface-sunken text-muted'
+      }`}
+    >
+      {complete ? (
+        <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />
+      ) : (
+        <span
+          aria-hidden="true"
+          className="relative block h-1.5 w-12 overflow-hidden rounded-full bg-border-default"
+        >
+          <span
+            className="absolute inset-y-0 left-0 rounded-full bg-emerald-500 transition-[width] duration-500 ease-out motion-reduce:transition-none"
+            style={{ width: `${pct}%` }}
+          />
+        </span>
+      )}
+      <span className="tabular-nums">{complete ? 'Completa' : `${consumed}/${total}`}</span>
+    </span>
+  )
+}
+
+/**
+ * Control de registro en bloque de una franja. Estados (del helper puro):
+ *  - none-required → nada (la franja no tiene items requeridos).
+ *  - complete      → banner esmeralda "Comida completa" (sin acción).
+ *  - all-open      → CTA "Comí toda esta comida · N kcal".
+ *  - partial       → CTA "Comer lo que falta (N) · M kcal".
+ */
+function BulkMarkControl({
+  state,
+  pending,
+  onEat,
+}: {
+  state: BulkMarkSlotState
+  pending: boolean
+  onEat: () => void
+}) {
+  if (state.status === 'none-required') return null
+  if (state.status === 'complete') {
+    return (
+      <div className="mt-3 flex items-center justify-center gap-2 rounded-control border border-emerald-300/60 bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-800 dark:border-emerald-700/50 dark:bg-emerald-950/30 dark:text-emerald-300">
+        <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
+        {BULK_MARK_COMPLETE_LABEL}
+      </div>
+    )
+  }
+  return (
+    <NutritionMotionButton
+      type="button"
+      data-testid="nutrition-v2-bulk-eat"
+      tone="success"
+      className="mt-3 w-full"
+      pending={pending}
+      onClick={onEat}
+    >
+      <Utensils className="h-4 w-4" aria-hidden="true" />
+      <span>{bulkMarkCtaLabel(state)}</span>
+      {state.eligibleKcal > 0 ? (
+        <span className="font-normal opacity-85">· {Math.round(state.eligibleKcal)} kcal</span>
+      ) : null}
+    </NutritionMotionButton>
   )
 }
 
