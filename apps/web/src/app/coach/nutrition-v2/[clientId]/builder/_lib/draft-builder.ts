@@ -12,6 +12,7 @@ import {
   type NutritionPlanDraft,
   type NutritionStrategy,
   type NutritionExchangeTarget,
+  type NutritionItemSubstitution,
 } from '@eva/nutrition-v2'
 import { calculateFoodItemMacros, type FoodMacrosRow } from '@eva/nutrition-engine'
 
@@ -19,6 +20,7 @@ export type DraftDayVariant = NutritionPlanDraft['dayVariants'][number]
 export type DraftMealSlot = DraftDayVariant['mealSlots'][number]
 export type DraftPrescriptionItem = DraftMealSlot['items'][number]
 export type DraftExchangeTarget = NutritionExchangeTarget
+export type DraftItemSubstitution = NutritionItemSubstitution
 
 export const BUILDER_UNITS = ['g', 'ml', 'un'] as const
 export type BuilderUnit = (typeof BUILDER_UNITS)[number]
@@ -571,10 +573,14 @@ export function buildItemInsertRow(input: {
   orderIndex: number
   item: DraftPrescriptionItem
   food: BuilderFood | null
+  /** Id explícito del item (F-02): permite colgar reemplazos referenciándolo antes del insert.
+   *  Omitido = la DB genera el id (comportamiento previo, byte-idéntico). */
+  id?: string
 }) {
-  const { versionId, mealSlotId, orderIndex, item, food } = input
+  const { versionId, mealSlotId, orderIndex, item, food, id } = input
   const macros = food ? computeItemMacros(food, item.quantity, item.unit) : null
   return {
+    ...(id ? { id } : {}),
     version_id: versionId,
     meal_slot_id: mealSlotId,
     food_id: item.foodId,
@@ -596,6 +602,76 @@ export function buildItemInsertRow(input: {
     snapshot_fats_g: macros ? macros.fatsG : null,
     snapshot_fiber_g: macros ? macros.fiberG : null,
   }
+}
+
+// -- Reemplazos autorizados por el coach (F-02): FREEZE del snapshot al persistir --
+//
+// Espeja `buildItemInsertRow`: el alimento de reemplazo se resuelve server-side (foods) y sus
+// macros de referencia se CONGELAN (decisión CEO). Cantidad de referencia = `quantity` del
+// reemplazo, o el `servingSize` del alimento si es null ("misma porción que el prescrito"). Item
+// libre (sin foodId) => snapshot solo con el nombre, macros null.
+
+export type ItemSubstitutionInsertRow = {
+  version_id: string
+  prescription_item_id: string
+  food_id: string | null
+  recipe_id: string | null
+  custom_name: string | null
+  quantity: number | null
+  unit: string | null
+  order_index: number
+  snapshot_name: string | null
+  snapshot_brand: string | null
+  snapshot_calories: number | null
+  snapshot_protein_g: number | null
+  snapshot_carbs_g: number | null
+  snapshot_fats_g: number | null
+  snapshot_fiber_g: number | null
+}
+
+export function buildItemSubstitutionInsertRow(input: {
+  versionId: string
+  prescriptionItemId: string
+  orderIndex: number
+  sub: DraftItemSubstitution
+  food: BuilderFood | null
+}): ItemSubstitutionInsertRow {
+  const { versionId, prescriptionItemId, orderIndex, sub, food } = input
+  const refQty = sub.quantity ?? (food ? food.servingSize : null)
+  const refUnit = sub.unit ?? (food ? food.servingUnit : 'g')
+  const macros = food && refQty && refQty > 0 ? computeItemMacros(food, refQty, refUnit) : null
+  return {
+    version_id: versionId,
+    prescription_item_id: prescriptionItemId,
+    food_id: sub.foodId,
+    recipe_id: sub.recipeId,
+    custom_name: sub.customName,
+    quantity: sub.quantity,
+    unit: sub.unit,
+    order_index: orderIndex,
+    snapshot_name: food ? food.name : sub.customName,
+    snapshot_brand: food ? food.brand : null,
+    snapshot_calories: macros ? macros.calories : null,
+    snapshot_protein_g: macros ? macros.proteinG : null,
+    snapshot_carbs_g: macros ? macros.carbsG : null,
+    snapshot_fats_g: macros ? macros.fatsG : null,
+    snapshot_fiber_g: macros ? macros.fiberG : null,
+  }
+}
+
+/** Ids de alimentos referenciados por los reemplazos de todos los items del draft (dedupe). */
+export function collectSubstitutionFoodIds(draft: NutritionPlanDraft): string[] {
+  const ids = new Set<string>()
+  for (const variant of draft.dayVariants) {
+    for (const slot of variant.mealSlots) {
+      for (const item of slot.items) {
+        for (const sub of item.substitutions ?? []) {
+          if (sub.foodId) ids.add(sub.foodId)
+        }
+      }
+    }
+  }
+  return [...ids]
 }
 
 // -- Porciones (intercambios): FREEZE del snapshot al persistir el draft (T0.3) --

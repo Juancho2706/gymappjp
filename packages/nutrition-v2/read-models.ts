@@ -71,6 +71,71 @@ export const NutritionIntakeReadItemSchema = z.object({
   exchangePortions: z.number().finite().positive().nullable().optional(),
 })
 
+/**
+ * Reemplazo autorizado por el coach, tal como lo lee el cliente (F-02). Se obtiene por lectura
+ * directa RLS-scoped de `nutrition_item_substitutions_v2` (can_read_version) y se mergea por
+ * `prescriptionItemId` en la fila del item. Macros congeladas (snapshot_*). Tolerante: un plan sin
+ * reemplazos nunca produce estas filas.
+ */
+export const NutritionItemSubstitutionReadSchema = z.object({
+  id: z.string().uuid(),
+  prescriptionItemId: z.string().uuid(),
+  foodId: NullableUuidSchema,
+  recipeId: NullableUuidSchema,
+  name: z.string(),
+  brand: z.string().nullable(),
+  quantity: NullableNumberSchema,
+  unit: z.string().nullable(),
+  macros: z.object({
+    calories: NullableNumberSchema,
+    proteinG: NullableNumberSchema,
+    carbsG: NullableNumberSchema,
+    fatsG: NullableNumberSchema,
+    fiberG: NullableNumberSchema,
+  }),
+})
+
+export type NutritionItemSubstitutionRead = z.infer<typeof NutritionItemSubstitutionReadSchema>
+
+/** Fila cruda de la tabla (snake_case) para mapear el select directo RLS-scoped. */
+export function mapNutritionItemSubstitutionRow(row: {
+  id: string
+  prescription_item_id: string
+  food_id: string | null
+  recipe_id: string | null
+  snapshot_name: string | null
+  custom_name: string | null
+  snapshot_brand: string | null
+  quantity: number | null
+  unit: string | null
+  snapshot_calories: number | null
+  snapshot_protein_g: number | null
+  snapshot_carbs_g: number | null
+  snapshot_fats_g: number | null
+  snapshot_fiber_g: number | null
+}): NutritionItemSubstitutionRead {
+  return {
+    id: row.id,
+    prescriptionItemId: row.prescription_item_id,
+    foodId: row.food_id,
+    recipeId: row.recipe_id,
+    name: row.snapshot_name ?? row.custom_name ?? 'Reemplazo',
+    brand: row.snapshot_brand,
+    quantity: row.quantity,
+    unit: row.unit,
+    macros: {
+      calories: row.snapshot_calories,
+      proteinG: row.snapshot_protein_g,
+      carbsG: row.snapshot_carbs_g,
+      fatsG: row.snapshot_fats_g,
+      fiberG: row.snapshot_fiber_g,
+    },
+  }
+}
+
+export const NUTRITION_ITEM_SUBSTITUTION_SELECT =
+  'id, prescription_item_id, food_id, recipe_id, snapshot_name, custom_name, snapshot_brand, quantity, unit, snapshot_calories, snapshot_protein_g, snapshot_carbs_g, snapshot_fats_g, snapshot_fiber_g'
+
 export const NutritionPrescriptionItemReadSchema = z.object({
   id: z.string().uuid(),
   foodId: NullableUuidSchema,
