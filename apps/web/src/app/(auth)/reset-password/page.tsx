@@ -8,6 +8,7 @@ import { Lock, Loader2, Check } from 'lucide-react'
 import { resetPasswordAction, type ResetPasswordState } from './_actions/reset-password.actions'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { PasswordVisibilityToggle } from '@/components/auth/PasswordVisibilityToggle'
 import { cn } from '@/lib/utils'
 import { EvaRouteLoader } from '@/components/ui/EvaRouteLoader'
 
@@ -45,6 +46,8 @@ function ResetPasswordForm() {
     const [state, formAction] = useActionState(resetPasswordAction, initialState)
     const [password, setPassword] = useState('')
     const [confirmPassword, setConfirmPassword] = useState('')
+    const [showPassword, setShowPassword] = useState(false)
+    const [showConfirm, setShowConfirm] = useState(false)
     const searchParams = useSearchParams()
     const coachSlug = searchParams.get('coach_slug')
     const teamSlug = searchParams.get('team_slug')
@@ -78,13 +81,18 @@ function ResetPasswordForm() {
                         <Input
                             id="password"
                             name="password"
-                            type="password"
+                            type={showPassword ? 'text' : 'password'}
                             placeholder="Mínimo 8 caracteres"
                             required
                             minLength={8}
+                            autoComplete="new-password"
                             value={password}
                             onChange={(event) => setPassword(event.target.value)}
-                            className="pl-10"
+                            className="pl-10 pr-12"
+                        />
+                        <PasswordVisibilityToggle
+                            visible={showPassword}
+                            onToggle={() => setShowPassword((v) => !v)}
                         />
                     </div>
                     {password.length > 0 && (() => {
@@ -127,12 +135,17 @@ function ResetPasswordForm() {
                         <Input
                             id="confirm_password"
                             name="confirm_password"
-                            type="password"
+                            type={showConfirm ? 'text' : 'password'}
                             placeholder="Vuelve a escribirla"
                             required
+                            autoComplete="new-password"
                             value={confirmPassword}
                             onChange={(event) => setConfirmPassword(event.target.value)}
-                            className="pl-10"
+                            className="pl-10 pr-12"
+                        />
+                        <PasswordVisibilityToggle
+                            visible={showConfirm}
+                            onToggle={() => setShowConfirm((v) => !v)}
                         />
                     </div>
                     {confirmPassword.length > 0 && password !== confirmPassword && (

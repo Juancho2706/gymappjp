@@ -1,6 +1,6 @@
 'use client'
 
-import { useActionState, useEffect } from 'react'
+import { useActionState, useEffect, useState } from 'react'
 import { useFormStatus } from 'react-dom'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
@@ -8,6 +8,7 @@ import { Mail, Lock, Loader2 } from 'lucide-react'
 import { teamClientLoginAction, type TeamLoginState } from './_actions/login.actions'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { PasswordVisibilityToggle } from '@/components/auth/PasswordVisibilityToggle'
 import { cn } from '@/lib/utils'
 
 const initialState: TeamLoginState = {}
@@ -42,6 +43,7 @@ function SubmitButton({ primaryColor }: { primaryColor: string }) {
 
 export default function TeamLoginForm({ teamSlug, primaryColor, brandName, logoUrl }: Props) {
     const [state, formAction] = useActionState(teamClientLoginAction, initialState)
+    const [showPassword, setShowPassword] = useState(false)
     const router = useRouter()
 
     useEffect(() => {
@@ -109,15 +111,20 @@ export default function TeamLoginForm({ teamSlug, primaryColor, brandName, logoU
                         <Input
                             id="team-password"
                             name="password"
-                            type="password"
+                            type={showPassword ? 'text' : 'password'}
                             placeholder="••••••••"
                             autoComplete="current-password"
                             required
                             className={cn(
-                                'pl-10 h-12 bg-secondary border-border hover:border-accent text-foreground rounded-xl',
+                                'pl-10 pr-12 h-12 bg-secondary border-border hover:border-accent text-foreground rounded-xl',
                                 'placeholder:text-muted-foreground transition-colors duration-200',
                                 'focus:border-[var(--theme-primary)] focus:ring-[var(--theme-primary)]/30'
                             )}
+                        />
+                        <PasswordVisibilityToggle
+                            visible={showPassword}
+                            onToggle={() => setShowPassword((v) => !v)}
+                            className="text-muted-foreground hover:text-foreground"
                         />
                     </div>
                 </div>
