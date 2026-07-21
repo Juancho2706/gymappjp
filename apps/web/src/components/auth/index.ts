@@ -1,6 +1,7 @@
 export { AuthFormField } from './AuthFormField'
 export type { AuthVariant } from './AuthFormField'
 export { PasswordInput } from './PasswordInput'
+export { PasswordVisibilityToggle } from './PasswordVisibilityToggle'
 export { AuthErrorAlert } from './AuthErrorAlert'
 export { AuthSubmitButton } from './AuthSubmitButton'
 export { TrustStrip } from './TrustStrip'
