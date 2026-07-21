@@ -1,4 +1,13 @@
+---
+status: reference
+owner: Juan Manuel Villegas
+last_verified: "2026-07-20"
+canonical: false
+---
+
 # Matriz de preservación de funciones — Rediseño EVA (AC5)
+
+> Movida desde `docs/archive/specs/redesign-eva-ds/` (2026-07-20): sigue viva como referencia de la paridad RN en curso (features órfanas + deuda de paridad mobile). El resto del paquete SDD del rediseño queda archivado.
 
 > **Propósito (AC5 · feature-preservation).** Garantizar que **ninguna función de cara al usuario** que existe hoy en la app (web `apps/web` + mobile `apps/mobile`) se pierda en el rediseño basado en el design-system de `docs/design-source`. Una función que **se movió** de lugar es válida — se registra su nuevo hogar. Una función **sin hogar** en ningún lado del diseño nuevo es **ORFANA** y se marca para decisión.
 

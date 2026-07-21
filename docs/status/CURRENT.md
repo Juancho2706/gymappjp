@@ -1,7 +1,7 @@
 ---
 status: active
 owner: product-engineering
-last_verified: 2026-07-20
+last_verified: 2026-07-21
 canonical: true
 ---
 
@@ -14,9 +14,9 @@ Esta es la única vista global de qué está en producción, qué está en integ
 | Referencia | Estado al revisar |
 |---|---|
 | Rama de trabajo | `rnmobiledenuevo` |
-| Corte integrado revisado | `4a53845f` |
-| Producción web sincronizada | `origin/master` en `f886eef2` |
-| Relación | `rnmobiledenuevo` contiene ese corte de `origin/master` |
+| Corte de `master` integrado | `origin/master` en `029c8791` |
+| Base RN anterior a esta sincronización | `7a0ec0cb` |
+| Relación | `rnmobiledenuevo` contiene el corte productivo y conserva la paridad móvil aún no promovida |
 
 Este bloque es un snapshot, no reemplaza `git fetch`, `git status` ni los checks remotos antes de integrar.
 

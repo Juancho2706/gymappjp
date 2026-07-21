@@ -38,6 +38,13 @@ const forbiddenReferences = [
   'nuevabibliadelaapp/',
 ]
 
+const forbiddenTrackedPaths = [
+  'supabase/.temp/',
+  'scripts/seed-catalina-full-qa.json',
+  'scripts/seed-josefit-design-qa.json',
+  'scripts/qa-seed-team-movida.json',
+]
+
 const errors = []
 
 function fail(file, message) {
@@ -189,6 +196,7 @@ function validateLiteralCredentials(file, content) {
   const patterns = [
     /^\s*(?:[-*]\s*)?(?:password|contraseña|passcode)\s*(?:[:=]|[—–-])\s*(\S.*)$/gim,
     /["'](?:password|contraseña|passcode)["']\s*:\s*["'`]([^"'`\r\n]+)["'`]/gim,
+    /\b(?:const|let|var)\s+\w*(?:password|passcode|secret|token|api[_-]?key|anon[_-]?key|service[_-]?role[_-]?key)\w*\s*=\s*["'`]([^"'`\r\n]+)["'`]/gim,
     /^\s*\|\s*(?:password|contraseña|passcode)\s*\|\s*([^|\r\n]+)\|/gim,
   ]
   for (const pattern of patterns) {
@@ -201,7 +209,34 @@ function validateLiteralCredentials(file, content) {
   }
 }
 
+function validateEnvironmentCredentialFallbacks(file) {
+  const fullPath = path.join(repoRoot, file)
+  if (!fs.existsSync(fullPath) || !fs.statSync(fullPath).isFile()) return
+
+  const buffer = fs.readFileSync(fullPath)
+  if (buffer.length > 5_000_000 || buffer.includes(0)) return
+
+  const content = buffer.toString('utf8')
+  const pattern = /(?:process\.env|\benv)\.([A-Z0-9_]*(?:PASSWORD|PASSCODE|SECRET|TOKEN|KEY)[A-Z0-9_]*)\s*(?:\|\||\?\?)\s*(['"])([^'"\r\n]*)\2/g
+
+  for (const match of content.matchAll(pattern)) {
+    const [, variable, , fallback] = match
+    if (!fallback) continue
+
+    // USDA/api.data.gov documenta DEMO_KEY como sentinel público de baja cuota.
+    if (variable === 'USDA_API_KEY' && fallback === 'DEMO_KEY') continue
+
+    const line = content.slice(0, match.index).split(/\r?\n/).length
+    fail(file, `fallback literal para ${variable} en línea ${line}`)
+  }
+}
+
 const repositoryFiles = listRepositoryFiles()
+for (const forbidden of forbiddenTrackedPaths) {
+  if (repositoryFiles.some((file) => file === forbidden || file.startsWith(forbidden))) {
+    fail(forbidden, 'artefacto generado no debe estar versionado')
+  }
+}
 const markdownFiles = repositoryFiles.filter(
   (file) => file.toLowerCase().endsWith('.md') && fs.existsSync(path.join(repoRoot, file)),
 )
@@ -225,6 +260,7 @@ for (const file of activeMarkdown) {
 }
 
 for (const file of markdownFiles) validateLiteralCredentials(file, read(file))
+for (const file of repositoryFiles) validateEnvironmentCredentialFallbacks(file)
 
 if (errors.length > 0) {
   console.error(`docs:check encontró ${errors.length} problema(s):`)

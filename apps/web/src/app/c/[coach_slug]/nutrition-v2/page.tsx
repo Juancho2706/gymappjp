@@ -12,14 +12,18 @@ import {
   StrategyBadge,
 } from '@/components/nutrition-v2'
 import {
+  NUTRITION_ITEM_SUBSTITUTION_SELECT,
   NUTRITION_STRATEGIES,
   describeLegacyHistoryDay,
   formatNutritionAmount,
   formatNutritionCalories,
+  mapNutritionItemSubstitutionRow,
+  type NutritionItemSubstitutionRead,
   type NutritionPlanReadModel,
 } from '@eva/nutrition-v2'
 import { formatNutritionShortDate, getTodayInSantiago } from '@/lib/date-utils'
 import { getClientBasePath } from '@/lib/client/base-path'
+import { createClient } from '@/lib/supabase/server'
 import { getClientNutritionUser } from '../nutrition/_data/nutrition-auth.queries'
 import { getClientDisplayName, getClientScope } from '../nutrition/_data/client-scope.queries'
 import {
@@ -30,6 +34,7 @@ import {
 import { isNutritionV2Enabled } from '@/services/nutrition-v2-rollout.service'
 import { TodayExperience } from './_components/TodayExperience'
 import { NutritionFoodRow } from './_components/NutritionFoodRow'
+import { groupSubstitutionsByPrescriptionItem } from './_components/nutrition-today.logic'
 import { resolveFoodImageUrl } from './_components/food-result-image'
 
 export const metadata = { title: 'Nutrición' }
@@ -143,6 +148,58 @@ function ViewLink({
   )
 }
 
+/**
+ * Cliente acotado (cast, cero `any` fuera de esta forma) para leer la tabla nueva
+ * `nutrition_item_substitutions_v2` por lectura directa RLS-scoped. La tabla aun no esta en
+ * `database.types.ts` — la crea la migracion aditiva `20260721150000_nutrition_item_substitutions_v2.sql`
+ * (protocolo aditivo-en-LIVE). Regenerar `database.types.ts` y retirar este cast cuando este LIVE.
+ * Mismo patron acotado que `getNutritionConversionLinkForWeb` en el read service.
+ */
+type SubstitutionReadClient = {
+  from: (table: string) => {
+    select: (columns: string) => {
+      eq: (
+        column: string,
+        value: string,
+      ) => Promise<{
+        data: Array<Parameters<typeof mapNutritionItemSubstitutionRow>[0]> | null
+        error: { message: string; code?: string } | null
+      }>
+    }
+  }
+}
+
+/**
+ * Reemplazos autorizados por el coach (F-02) de la version vigente, agrupados por item prescrito.
+ * Lectura directa RLS-scoped: `nutrition_item_substitutions_v2_select` (can_read_version) cubre al
+ * propio alumno sobre versiones published/superseded. Sin plan/version ⇒ mapa vacio. No-bloqueante
+ * por diseno: cualquier fallo de lectura degrada a mapa vacio — la fila de reemplazos es
+ * informativa y jamas debe tumbar el Today.
+ */
+async function fetchSubstitutionsByItem(
+  versionId: string | null,
+): Promise<Record<string, NutritionItemSubstitutionRead[]>> {
+  if (!versionId) return {}
+  const client = await createClient()
+  const { data, error } = await (client as unknown as SubstitutionReadClient)
+    .from('nutrition_item_substitutions_v2')
+    .select(NUTRITION_ITEM_SUBSTITUTION_SELECT)
+    .eq('version_id', versionId)
+
+  if (error || !data) {
+    if (error) {
+      console.error('nutrition_v2_web_read', {
+        rpc: 'nutrition_item_substitutions_v2.select',
+        ok: false,
+        errorCode: error.code ?? 'READ_ERROR',
+      })
+    }
+    return {}
+  }
+
+  return groupSubstitutionsByPrescriptionItem(data.map(mapNutritionItemSubstitutionRow))
+}
+
 async function TodayView({ clientId, date, base }: { clientId: string; date: string; base: string }) {
   // El empty-state depende SOLO del plan vigente en vivo (misma senal que el tab "Plan" y que la
   // ficha del coach). El registro del dia (`today.plan`) puede seguir apuntando al plan anterior o
@@ -153,6 +210,10 @@ async function TodayView({ clientId, date, base }: { clientId: string; date: str
     getNutritionPlanV2ForWeb({ clientId, date }),
     getClientDisplayName(clientId),
   ])
+
+  // Reemplazos estructurados de la version que el alumno VE hoy (`today.plan`, no `plan.plan`): los
+  // items mostrados son de esa version, asi los reemplazos empatan durante el lag de publicacion.
+  const substitutionsByItem = await fetchSubstitutionsByItem(today.plan?.versionId ?? null)
 
   if (!plan.plan) {
     return (
@@ -183,6 +244,7 @@ async function TodayView({ clientId, date, base }: { clientId: string; date: str
         today={today}
         clientId={clientId}
         clientName={clientName}
+        substitutionsByItem={substitutionsByItem}
         revalidatePath={`${base}/nutrition-v2`}
         scanHref={`${base}/nutrition-v2/scanner`}
       />

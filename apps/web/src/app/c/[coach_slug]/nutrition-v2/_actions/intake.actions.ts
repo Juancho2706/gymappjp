@@ -58,6 +58,17 @@ const VoidActionInputSchema = z.object({
   revalidatePath: RevalidatePathSchema,
 })
 
+// Bulk-mark de franja ("Comí toda esta comida"): un solo auth/rate-limit + N RPC server-side.
+// Cap 24 = techo holgado de items por comida. Cada payload trae su propia idempotency key.
+const BatchRecordInputSchema = z.object({
+  payloads: z.array(NutritionIntakeMutationSchema).min(1).max(24),
+  revalidatePath: RevalidatePathSchema,
+})
+const BatchVoidInputSchema = z.object({
+  payloads: z.array(NutritionIntakeCorrectionSchema).min(1).max(24),
+  revalidatePath: RevalidatePathSchema,
+})
+
 const CloseDayActionInputSchema = z.object({
   clientId: z.string().uuid(),
   localDate: z.string().date(),
@@ -81,6 +92,8 @@ const SearchActionInputSchema = z.object({
 
 type ActionFailure = { ok: false; code: string; error: string; fields?: Array<{ path: string; message: string }> }
 type MutationSuccess = { ok: true; id: string }
+/** Resultado del bulk: ids creados/anulados + cuántos fallaron (estado parcial permitido). */
+type BatchMutationResult = { ok: true; ids: string[]; failed: number } | ActionFailure
 
 function fail(code: string, error: string, fields?: ActionFailure['fields']): ActionFailure {
   return { ok: false, code, error, ...(fields ? { fields } : {}) }
@@ -263,6 +276,89 @@ export async function voidIntakeAction(input: unknown): Promise<MutationSuccess 
   })
   if (result.ok) revalidatePath(parsed.data.revalidatePath)
   return result
+}
+
+/**
+ * Bulk-mark: registra en bloque los items prescritos de una franja ("Comí toda esta comida").
+ * UN solo authorizeStudentWrite (1 cargo de rate-limit) y luego N RPC idempotentes server-side.
+ * Estado parcial permitido (self-report): devuelve los ids creados + cuántos fallaron. Si NINGUNO
+ * entró, propaga el error tipado real (rate-limit / scope / pausa del coach).
+ */
+export async function recordSlotIntakeBatchAction(input: unknown): Promise<BatchMutationResult> {
+  const parsed = BatchRecordInputSchema.safeParse(input)
+  if (!parsed.success) return fail('INVALID_PAYLOAD', 'Datos de registro inválidos.', zodFields(parsed.error))
+  const { payloads, revalidatePath: rp } = parsed.data
+
+  const clientId = payloads[0].clientId
+  if (payloads.some((p) => p.clientId !== clientId)) {
+    return fail('CLIENT_SCOPE_MISMATCH', 'El registro no pertenece a tu cuenta.')
+  }
+  const auth = await authorizeStudentWrite(clientId)
+  if (!auth.ok) return auth
+
+  const ids: string[] = []
+  let failed = 0
+  let firstError: ActionFailure | null = null
+  for (const payload of payloads) {
+    const res = await runMutation(auth.supabase, 'record_nutrition_intake_v2', commonRpcArgs(payload))
+    if (res.ok) ids.push(res.id)
+    else {
+      failed += 1
+      if (!firstError) firstError = res
+    }
+  }
+  if (ids.length === 0) {
+    return firstError ?? fail('BATCH_FAILED', 'No se pudo registrar la comida. Intenta nuevamente.')
+  }
+  revalidatePath(rp)
+  return { ok: true, ids, failed }
+}
+
+/**
+ * Deshacer un bulk-mark: anula en bloque (corrección contribución-cero) los registros creados.
+ * Idempotente: un registro ya anulado (doble-deshacer -> only_active 22023) cuenta como hecho.
+ */
+export async function voidSlotIntakeBatchAction(input: unknown): Promise<BatchMutationResult> {
+  const parsed = BatchVoidInputSchema.safeParse(input)
+  if (!parsed.success) return fail('INVALID_PAYLOAD', 'Datos de retiro inválidos.', zodFields(parsed.error))
+  const { payloads, revalidatePath: rp } = parsed.data
+
+  const clientId = payloads[0].clientId
+  if (payloads.some((p) => p.clientId !== clientId)) {
+    return fail('CLIENT_SCOPE_MISMATCH', 'El registro no pertenece a tu cuenta.')
+  }
+  const auth = await authorizeStudentWrite(clientId)
+  if (!auth.ok) return auth
+
+  const ids: string[] = []
+  let failed = 0
+  let firstError: ActionFailure | null = null
+  for (const payload of payloads) {
+    const { data, error } = await auth.supabase.rpc('correct_nutrition_intake_v2', {
+      p_corrects_entry_id: payload.correctsEntryId,
+      p_correction_reason: payload.correctionReason,
+      ...commonRpcArgs(payload),
+    })
+    if (!error) {
+      const id = z.string().uuid().safeParse(data)
+      if (id.success) {
+        ids.push(id.data)
+        continue
+      }
+    }
+    // El registro ya estaba anulado (reintento / doble-deshacer): el objetivo ya se cumplió.
+    if (error?.message?.includes('nutrition_v2_only_active_entries_can_correct')) {
+      ids.push(payload.correctsEntryId)
+      continue
+    }
+    failed += 1
+    if (!firstError) firstError = error ? mapRpcError(error) : fail('INVALID_RESPONSE', 'Respuesta inesperada.')
+  }
+  if (ids.length === 0) {
+    return firstError ?? fail('BATCH_FAILED', 'No se pudo deshacer. Intenta nuevamente.')
+  }
+  revalidatePath(rp)
+  return { ok: true, ids, failed }
 }
 
 /**

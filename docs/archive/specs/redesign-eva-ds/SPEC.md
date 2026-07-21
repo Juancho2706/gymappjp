@@ -9,7 +9,7 @@
 
 ## 1. Qué y por qué
 
-Reimplementar **toda la UI de EVA** (web Next.js + mobile React Native) con el nuevo **EVA Design System** que vive en el proyecto Claude Design `d76cae7a-af93-4f35-8dc2-d96b5603e794` ("EVA Design System MASTER OPT new alumno dash"). El diseño es la nueva fuente de verdad visual: tokens, 13 componentes, 2 UI kits (`eva-app` mobile/responsive · `eva-desktop`), light/dark, white-label.
+Reimplementar **toda la UI de EVA** (web Next.js + mobile React Native) con el nuevo **EVA Design System** que vive en el proyecto Claude Design `<claude-design-project-id>` ("EVA Design System MASTER OPT new alumno dash"). El diseño es la nueva fuente de verdad visual: tokens, 13 componentes, 2 UI kits (`eva-app` mobile/responsive · `eva-desktop`), light/dark, white-label.
 
 **Objetivo:** la app se ve y se siente como el diseño nuevo, en los dos frentes, **sin perder ninguna función actual**. Se implementa el diseño **tal cual está** (incluida la reorganización de IA que el diseño ya hizo). Las mejoras vienen DESPUÉS de que todo el diseño esté implementado.
 

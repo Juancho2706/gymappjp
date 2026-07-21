@@ -42,6 +42,33 @@ export const NutritionStudentPermissionsSchema = z.object({
   canSkipOptionalItems: z.boolean().default(true),
 })
 
+/**
+ * Reemplazo autorizado por el coach para un item prescrito (F-02). Alimento del catálogo
+ * (foodId), receta (recipeId, forward-compat) o nombre libre (customName). `quantity`/`unit`
+ * null = "misma porción que el prescrito". Los `snapshot_*` se congelan server-side al persistir
+ * el draft (macros congeladas, decisión CEO), NO viven en este contrato de entrada. Solo aplica a
+ * structured/hybrid (flexible no tiene items) — el gate es natural + de UI.
+ */
+export const NutritionItemSubstitutionSchema = z
+  .object({
+    id: z.string().uuid().optional(),
+    foodId: z.string().uuid().nullable().default(null),
+    recipeId: z.string().uuid().nullable().default(null),
+    customName: z.string().trim().min(1).max(180).nullable().default(null),
+    quantity: z.number().positive().nullable().default(null),
+    unit: z.string().trim().min(1).max(32).nullable().default(null),
+    orderIndex: z.number().int().nonnegative().default(0),
+  })
+  .superRefine((value, ctx) => {
+    if (!value.foodId && !value.recipeId && !value.customName) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['foodId'],
+        message: 'Cada reemplazo necesita un alimento o un nombre.',
+      })
+    }
+  })
+
 export const NutritionPrescriptionItemSchema = z
   .object({
     id: z.string().uuid().optional(),
@@ -54,6 +81,10 @@ export const NutritionPrescriptionItemSchema = z
     maximumQuantity: z.number().positive().nullable().default(null),
     optional: z.boolean().default(false),
     substitutionGroupId: z.string().uuid().nullable().default(null),
+    // Reemplazos autorizados por el coach (F-02). Capa OPCIONAL (espeja exchangeTargets): un item
+    // sin reemplazos queda idéntico a hoy (ausente). Máx 8 por item (límite legado V1). Downstream
+    // resuelve con `?? []`.
+    substitutions: z.array(NutritionItemSubstitutionSchema).max(8).optional(),
     notes: z.string().trim().max(1000).nullable().default(null),
     orderIndex: z.number().int().nonnegative().default(0),
   })
@@ -239,6 +270,7 @@ export const NutritionLegacyHistoryItemSchema = z.object({
 })
 
 export type NutritionExchangeTarget = z.infer<typeof NutritionExchangeTargetSchema>
+export type NutritionItemSubstitution = z.infer<typeof NutritionItemSubstitutionSchema>
 export type NutritionStrategy = z.infer<typeof NutritionStrategySchema>
 export type NutritionPlanStatus = z.infer<typeof NutritionPlanStatusSchema>
 export type NutritionEntryStatus = z.infer<typeof NutritionEntryStatusSchema>

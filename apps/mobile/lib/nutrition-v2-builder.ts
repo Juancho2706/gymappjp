@@ -21,6 +21,7 @@ import {
   NutritionPlanDraftSchema,
   buildNutritionIdempotencyKey,
   type FoodCatalogItem,
+  type NutritionItemSubstitution,
   type NutritionPlanDraft,
   type NutritionStrategy,
 } from '@eva/nutrition-v2'
@@ -559,10 +560,14 @@ export function buildItemInsertRow(input: {
   orderIndex: number
   item: DraftPrescriptionItem
   food: BuilderFood | null
+  /** Id explicito del item (F-02): permite colgar reemplazos referenciandolo antes del insert.
+   *  Omitido = la DB genera el id (comportamiento previo, byte-identico). Espejo de la web. */
+  id?: string
 }) {
-  const { versionId, mealSlotId, orderIndex, item, food } = input
+  const { versionId, mealSlotId, orderIndex, item, food, id } = input
   const macros = food ? computeItemMacros(food, item.quantity, item.unit) : null
   return {
+    ...(id ? { id } : {}),
     version_id: versionId,
     meal_slot_id: mealSlotId,
     food_id: item.foodId,
@@ -584,6 +589,100 @@ export function buildItemInsertRow(input: {
     snapshot_fats_g: macros ? macros.fatsG : null,
     snapshot_fiber_g: macros ? macros.fiberG : null,
   }
+}
+
+// ---------------------------------------------------------------------------
+// Reemplazos autorizados por el coach (F-02): FREEZE del snapshot al persistir.
+// Espejo 1:1 de apps/web/.../builder/_lib/draft-builder.ts (buildItemSubstitutionInsertRow /
+// collectSubstitutionFoodIds / ItemSubstitutionInsertRow). El alimento de reemplazo se resuelve
+// server-side (foods) y sus macros de referencia se CONGELAN (decision CEO). Cantidad de referencia
+// = `quantity` del reemplazo, o el `servingSize` del alimento si es null ("misma porcion que el
+// prescrito"). Item libre (sin foodId) => snapshot solo con el nombre, macros null.
+// ---------------------------------------------------------------------------
+
+export type ItemSubstitutionInsertRow = {
+  version_id: string
+  prescription_item_id: string
+  food_id: string | null
+  recipe_id: string | null
+  custom_name: string | null
+  quantity: number | null
+  unit: string | null
+  order_index: number
+  snapshot_name: string | null
+  snapshot_brand: string | null
+  snapshot_calories: number | null
+  snapshot_protein_g: number | null
+  snapshot_carbs_g: number | null
+  snapshot_fats_g: number | null
+  snapshot_fiber_g: number | null
+}
+
+export function buildItemSubstitutionInsertRow(input: {
+  versionId: string
+  prescriptionItemId: string
+  orderIndex: number
+  sub: NutritionItemSubstitution
+  food: BuilderFood | null
+}): ItemSubstitutionInsertRow {
+  const { versionId, prescriptionItemId, orderIndex, sub, food } = input
+  const refQty = sub.quantity ?? (food ? food.servingSize : null)
+  const refUnit = sub.unit ?? (food ? food.servingUnit : 'g')
+  const macros = food && refQty && refQty > 0 ? computeItemMacros(food, refQty, refUnit) : null
+  return {
+    version_id: versionId,
+    prescription_item_id: prescriptionItemId,
+    food_id: sub.foodId,
+    recipe_id: sub.recipeId,
+    custom_name: sub.customName,
+    quantity: sub.quantity,
+    unit: sub.unit,
+    order_index: orderIndex,
+    snapshot_name: food ? food.name : sub.customName,
+    snapshot_brand: food ? food.brand : null,
+    snapshot_calories: macros ? macros.calories : null,
+    snapshot_protein_g: macros ? macros.proteinG : null,
+    snapshot_carbs_g: macros ? macros.carbsG : null,
+    snapshot_fats_g: macros ? macros.fatsG : null,
+    snapshot_fiber_g: macros ? macros.fiberG : null,
+  }
+}
+
+/** Ids de alimentos referenciados por los reemplazos de todos los items del draft (dedupe). */
+export function collectSubstitutionFoodIds(draft: NutritionPlanDraft): string[] {
+  const ids = new Set<string>()
+  for (const variant of draft.dayVariants) {
+    for (const slot of variant.mealSlots) {
+      for (const item of slot.items) {
+        for (const sub of item.substitutions ?? []) {
+          if (sub.foodId) ids.add(sub.foodId)
+        }
+      }
+    }
+  }
+  return [...ids]
+}
+
+/**
+ * UUID v4 para ids explicitos de item (F-02): necesitamos el id ANTES del insert para colgar los
+ * reemplazos referenciandolo (la persistencia RN no usa RETURNING). Prefiere `crypto.randomUUID`
+ * (Node en tests, Hermes si esta polyfilleado) y cae a un generador puro Math.random en formato
+ * RFC 4122 valido — basta para un PK generado por el cliente. Modulo PURO: sin importar expo.
+ */
+export function newNutritionItemId(): string {
+  const c = (globalThis as { crypto?: { randomUUID?: () => string } }).crypto
+  if (c?.randomUUID) {
+    try {
+      return c.randomUUID()
+    } catch {
+      // cae al fallback
+    }
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (ch) => {
+    const r = (Math.random() * 16) | 0
+    const v = ch === 'x' ? r : (r & 0x3) | 0x8
+    return v.toString(16)
+  })
 }
 
 // ---------------------------------------------------------------------------
@@ -878,7 +977,9 @@ export async function persistAndPublishDraft(input: {
   }
   const versionId = versionIns.data.id
 
-  const foodIds = collectFoodIds(draft)
+  // Foods de los items MAS los referenciados por los reemplazos autorizados (F-02): un solo set
+  // para resolver/congelar todo en una pasada (espejo de la web plan-persistence.ts).
+  const foodIds = [...new Set([...collectFoodIds(draft), ...collectSubstitutionFoodIds(draft)])]
   const foodMap = new Map<string, BuilderFood>()
   for (const id of foodIds) {
     const foodRes = await db
@@ -913,17 +1014,41 @@ export async function persistAndPublishDraft(input: {
       const mealSlotId = slotIns.data.id
 
       if (slot.items.length > 0) {
-        const itemRows = slot.items.map((item, index) =>
+        // Id explicito por item (F-02): lo generamos aqui para poder colgar los reemplazos
+        // referenciandolo, sin un round-trip extra de RETURNING (espejo de la web).
+        const itemsWithIds = slot.items.map((item) => ({ item, id: newNutritionItemId() }))
+        const itemRows = itemsWithIds.map(({ item, id }, index) =>
           buildItemInsertRow({
             versionId,
             mealSlotId,
             orderIndex: index,
             item,
             food: item.foodId ? foodMap.get(item.foodId) ?? null : null,
+            id,
           }),
         )
         const itemsIns = await db.from('nutrition_prescription_items_v2').insert(itemRows)
         if (itemsIns.error) return mapWriteError(itemsIns.error, 'items')
+
+        // Reemplazos autorizados del coach (F-02), congelados por item. Solo structured/hybrid
+        // tienen items. Un item sin reemplazos no toca la tabla nueva (byte-identico a hoy).
+        const substitutionRows = itemsWithIds.flatMap(({ item, id }) =>
+          (item.substitutions ?? []).map((sub, subIndex) =>
+            buildItemSubstitutionInsertRow({
+              versionId,
+              prescriptionItemId: id,
+              orderIndex: subIndex,
+              sub,
+              food: sub.foodId ? foodMap.get(sub.foodId) ?? null : null,
+            }),
+          ),
+        )
+        if (substitutionRows.length > 0) {
+          const subsIns = await db
+            .from('nutrition_item_substitutions_v2')
+            .insert(substitutionRows as unknown as Record<string, unknown>[])
+          if (subsIns.error) return mapWriteError(subsIns.error, 'reemplazos')
+        }
       }
     }
   }

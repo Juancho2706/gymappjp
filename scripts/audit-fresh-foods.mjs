@@ -32,6 +32,8 @@ mkdirSync(OUTPUT_DIR, { recursive: true })
 
 // ─── Configuración ─────────────────────────────────────────────────────────────
 
+// `DEMO_KEY` es la clave pública de exploración documentada por USDA/api.data.gov;
+// para auditorías reales usar USDA_API_KEY por sus límites mucho mayores.
 const USDA_API_KEY = process.env.USDA_API_KEY || 'DEMO_KEY'
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY

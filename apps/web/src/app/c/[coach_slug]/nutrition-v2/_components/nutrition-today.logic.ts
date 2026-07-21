@@ -4,6 +4,7 @@ import type {
   NutritionIntakeCorrection,
   NutritionIntakeMutation,
   NutritionIntakeReadItem,
+  NutritionItemSubstitutionRead,
   NutritionMealSlotRead,
   NutritionTodayReadModel,
 } from '@eva/nutrition-v2'
@@ -277,4 +278,94 @@ export function buildVoidPayload(input: {
     correctsEntryId: entry.id,
     correctionReason: input.reason.trim() || 'Registro retirado por el alumno',
   }
+}
+
+// ── Bulk-mark de franja ("Comí toda esta comida") ────────────────────────────────
+// Reusa 1:1 el camino del "Lo comí" individual (mismo buildPrescribedIntakePayload por item,
+// key fresca por item) para que el snapshot congelado y los totales sean idénticos. El
+// "qué es elegible" lo decide el helper puro compartido (bulkMarkSlotState).
+
+/** Payloads de registro para N items prescritos de una franja (uno por item, key propia). */
+export function buildBulkPrescribedPayloads(input: {
+  context: Context
+  slot: NutritionMealSlotRead
+  items: PrescriptionItemRead[]
+}): NutritionIntakeMutation[] {
+  return input.items.map((item) =>
+    buildPrescribedIntakePayload({
+      context: input.context,
+      slot: input.slot,
+      item,
+      idempotencyKey: newIdempotencyKey('intake'),
+    }),
+  )
+}
+
+/**
+ * Payloads de "deshacer" para los registros recién creados por el bulk: una corrección de
+ * contribución CERO por cada id creado (mismo mecanismo que "Retirar registro"), reusando el
+ * payload original enviado (mismo alimento/cantidad/franja) para no depender del read-model
+ * refrescado. Empareja por índice payloads[i] ↔ createdIds[i].
+ */
+export function buildBulkUndoPayloads(
+  payloads: NutritionIntakeMutation[],
+  createdIds: string[],
+): NutritionIntakeCorrection[] {
+  const n = Math.min(payloads.length, createdIds.length)
+  const out: NutritionIntakeCorrection[] = []
+  for (let i = 0; i < n; i += 1) {
+    const p = payloads[i]
+    out.push({
+      ...p,
+      source: 'manual',
+      captureMethod: 'manual',
+      note: 'Registro retirado',
+      idempotencyKey: newIdempotencyKey('void'),
+      snapshot: { ...p.snapshot, calories: 0, proteinG: 0, carbsG: 0, fatsG: 0, fiberG: 0 },
+      correctsEntryId: createdIds[i],
+      correctionReason: 'Deshacer registro de la comida',
+    })
+  }
+  return out
+}
+
+// ── Reemplazos autorizados por el coach (F-02) ───────────────────────────────────
+// Los reemplazos estructurados llegan como filas ya mapeadas (mapNutritionItemSubstitutionRow),
+// leídas RLS-scoped de nutrition_item_substitutions_v2 por la versión vigente. Estas dos funciones
+// puras deciden CÓMO se muestran bajo cada item: el agrupado por item y el reemplazo del texto
+// legado "Alternativas: …" cuando ya hay estructura.
+
+/** Prefijo del texto legado "Alternativas: …" que la conversión V1→V2 congeló en `notes`. */
+const LEGACY_ALTERNATIVES_NOTE_PREFIX = 'Alternativas:'
+
+/**
+ * Agrupa los reemplazos autorizados por `prescriptionItemId`, preservando el orden de llegada
+ * (el select ya viene ordenado por `order_index`). Un plan sin reemplazos ⇒ `{}`; nunca lanza.
+ */
+export function groupSubstitutionsByPrescriptionItem(
+  rows: readonly NutritionItemSubstitutionRead[],
+): Record<string, NutritionItemSubstitutionRead[]> {
+  const map: Record<string, NutritionItemSubstitutionRead[]> = {}
+  for (const row of rows) {
+    const key = row.prescriptionItemId
+    if (!map[key]) map[key] = []
+    map[key].push(row)
+  }
+  return map
+}
+
+/**
+ * Nota a mostrar bajo un item prescrito. Cuando el item YA tiene reemplazos estructurados (F-02),
+ * la fila estructurada reemplaza al texto legado "Alternativas: …" congelado en `notes` (evita el
+ * doble render). Cualquier otra nota del coach se conserva tal cual; sin estructura, cae al `notes`
+ * legado completo (fallback, no rompe planes viejos).
+ */
+export function resolveItemDisplayNote(
+  notes: string | null | undefined,
+  hasStructuredSubstitutions: boolean,
+): string | null {
+  const trimmed = notes?.trim() ?? ''
+  if (trimmed.length === 0) return null
+  if (hasStructuredSubstitutions && trimmed.startsWith(LEGACY_ALTERNATIVES_NOTE_PREFIX)) return null
+  return notes ?? null
 }

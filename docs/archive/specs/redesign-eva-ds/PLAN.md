@@ -79,6 +79,6 @@ Ambos se construyen desde `ui_kits/eva-app/`. No hay `@eva/ui` cross-platform (D
 
 ## 9. Provenance del diseño
 
-- Proyecto: `d76cae7a-af93-4f35-8dc2-d96b5603e794` ("EVA Design System MASTER OPT new alumno dash").
+- Proyecto: `<claude-design-project-id>` ("EVA Design System MASTER OPT new alumno dash").
 - Snapshot verbatim en `docs/design-source/` (no es código de prod; referencia de implementación).
 - Re-pull posible en cualquier momento vía DesignSync `get_file` por `projectId` (main-loop o fork).

@@ -6,6 +6,7 @@ import { FlashList } from '@shopify/flash-list'
 import { MotiView } from 'moti'
 import {
   AlertTriangle,
+  Check,
   CheckCircle2,
   History,
   Info,
@@ -42,6 +43,7 @@ import {
   PortionEquivalencesSheet,
   PortionSlotSection,
   PortionSnackbar,
+  type PortionSnackbarState,
   coverageViewFor,
   usePortionMarks,
 } from '../../../../components/alumno/nutrition-v2'
@@ -52,18 +54,26 @@ import type {
 } from '../../../../lib/nutrition-v2-portions'
 import {
   NUTRITION_MOTION,
+  BULK_MARK_COMPLETE_LABEL,
+  type BulkMarkSlotState,
+  NUTRITION_ITEM_SUBSTITUTION_SELECT,
   NUTRITION_STRATEGIES,
   type NutritionSlotExchangeTargetRead,
   NutritionHistoryPageReadModelSchema,
   NutritionPlanReadModelSchema,
   NutritionTodayReadModelSchema,
   buildNutritionDayShareText,
+  bulkMarkCtaLabel,
+  bulkMarkSlotState,
+  consumedPrescriptionItemIds,
   describeLegacyHistoryDay,
   energyGoalReached,
   firstNameFromFullName,
   formatNutritionAmount,
   formatNutritionCalories,
+  mapNutritionItemSubstitutionRow,
   type NutritionFoodRowModel,
+  type NutritionItemSubstitutionRead,
   type NutritionHistoryDay,
   type NutritionHistoryPageReadModel,
   type NutritionIntakeReadItem,
@@ -144,6 +154,8 @@ const EMPTY_OVERLAY: OptimisticOverlay = { addedBySlot: {}, addedUnassigned: [],
 // `?? []` inline crearía un array nuevo por render y rompería React.memo.
 const EMPTY_PORTION_MARKS: PendingPortionMark[] = []
 const EMPTY_PORTION_VOIDS: PendingPortionVoid[] = []
+// Referencia estable para el lookup de reemplazos por item (F-02): `?? []` inline rompería memo.
+const EMPTY_SUBSTITUTIONS: NutritionItemSubstitutionRead[] = []
 
 function TodayTab() {
   const router = useRouter()
@@ -172,8 +184,20 @@ function TodayTab() {
   // 4A-02: pending por ítem del botón "Lo comí" (web busyId `eat:{item.id}`, TodayExperience.tsx:618).
   const [eatingId, setEatingId] = useState<string | null>(null)
   const [overlay, setOverlay] = useState<OptimisticOverlay>(EMPTY_OVERLAY)
+  // Reemplazos autorizados por el coach (F-02), agrupados por prescriptionItemId. Se leen con UN
+  // select RLS-scoped a la version publicada del Today (fuera del hot-path del read-model) y se
+  // muestran bajo cada item prescrito. Sin plan/version o sin reemplazos => mapa vacío.
+  const [substitutionsByItemId, setSubstitutionsByItemId] = useState<
+    ReadonlyMap<string, NutritionItemSubstitutionRead[]>
+  >(() => new Map())
   const [actionEntry, setActionEntry] = useState<NutritionIntakeReadItem | null>(null)
   const [celebration, setCelebration] = useState<CelebrationInstance | null>(null)
+  // Bulk-mark de franja ("Comí toda esta comida"): franja en curso + snackbar propio (reusa el
+  // componente PortionSnackbar) para el "Deshacer" transitorio, sin pisar el snackbar de porciones.
+  const [bulkBusySlot, setBulkBusySlot] = useState<string | null>(null)
+  const [bulkSnackbar, setBulkSnackbar] = useState<PortionSnackbarState | null>(null)
+  const bulkSnackbarNonce = useRef(0)
+  const bulkSnackbarTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   // Porciones: sheet de equivalencias abierto + puente hacia la reconciliación del
   // delta optimista (el hook se declara DESPUÉS de `load`, así que va por ref).
   const [equivOpen, setEquivOpen] = useState<{ slotCode: string; groupCode: string } | null>(null)
@@ -313,6 +337,42 @@ function TodayTab() {
     return () => subscription.remove()
   }, [enabled, load, userId])
 
+  // Reemplazos autorizados (F-02): UN select directo RLS-scoped por versión publicada del plan del
+  // Today, agrupado por item. Best-effort: cualquier error o falta de versión deja el mapa vacío
+  // (la UI simplemente no muestra la línea de reemplazos). No toca el hot-path del read-model.
+  const planVersionId = model?.plan?.versionId ?? null
+  useEffect(() => {
+    if (!planVersionId || !enabled) {
+      setSubstitutionsByItemId((prev) => (prev.size === 0 ? prev : new Map()))
+      return
+    }
+    setSubstitutionsByItemId((prev) => (prev.size === 0 ? prev : new Map()))
+    let active = true
+    void (async () => {
+      const { data, error } = await supabase
+        .from('nutrition_item_substitutions_v2')
+        .select(NUTRITION_ITEM_SUBSTITUTION_SELECT)
+        .eq('version_id', planVersionId)
+        .order('order_index', { ascending: true })
+      if (!active || !mountedRef.current) return
+      if (error || !data) {
+        setSubstitutionsByItemId((prev) => (prev.size === 0 ? prev : new Map()))
+        return
+      }
+      const grouped = new Map<string, NutritionItemSubstitutionRead[]>()
+      for (const row of data as Parameters<typeof mapNutritionItemSubstitutionRow>[0][]) {
+        const mapped = mapNutritionItemSubstitutionRow(row)
+        const bucket = grouped.get(mapped.prescriptionItemId) ?? []
+        bucket.push(mapped)
+        grouped.set(mapped.prescriptionItemId, bucket)
+      }
+      setSubstitutionsByItemId(grouped)
+    })()
+    return () => {
+      active = false
+    }
+  }, [planVersionId, enabled])
+
   const refreshPending = useCallback(async () => {
     if (!userId) return
     const q = await getNutritionV2QueueStatus(userId)
@@ -343,18 +403,13 @@ function TodayTab() {
     setEquivOpen({ slotCode, groupCode })
   }, [])
   const hiddenSet = useMemo(() => new Set(overlay.hiddenIds), [overlay.hiddenIds])
-
-  // 4A-02: ids de ítems prescritos YA consumidos hoy — estado "Registrado" del botón
-  // (web isPrescriptionConsumed, nutrition-today.logic.ts:62-64, sobre TODOS los registros
-  // del día). useMemo por `model` para no romper el React.memo de las cards (hallazgo M3).
-  const consumedPrescriptionIds = useMemo(() => {
-    const ids = new Set<string>()
-    if (!model) return ids
-    for (const entry of [...model.mealSlots.flatMap((slot) => slot.intakeItems), ...model.unassignedIntake]) {
-      if (entry.prescriptionItemId) ids.add(entry.prescriptionItemId)
-    }
-    return ids
-  }, [model])
+  // Set de items prescritos ya consumidos (misma verdad que la web): alimenta el medidor de
+  // progreso por franja y el estado del control de registro en bloque. Deriva del snapshot del
+  // servidor (`model`), no del overlay optimista, así se estabiliza tras cada `load(true)`.
+  const consumedIds = useMemo(
+    () => (model ? consumedPrescriptionItemIds(model) : new Set<string>()),
+    [model],
+  )
 
   const addRow = useCallback((slotCode: string | null, row: NutritionFoodRowModel) => {
     setOverlay((prev) =>
@@ -487,6 +542,181 @@ function TodayTab() {
       }
     },
     [date, deviceId, load, model, refreshPending, setHidden, userId],
+  )
+
+  // ── Snackbar del bulk-mark (mismo componente que porciones, estado propio) ──
+  const dismissBulkSnackbar = useCallback(() => {
+    if (bulkSnackbarTimer.current) clearTimeout(bulkSnackbarTimer.current)
+    setBulkSnackbar(null)
+  }, [])
+
+  const showBulkSnackbar = useCallback((next: Omit<PortionSnackbarState, 'nonce'>) => {
+    bulkSnackbarNonce.current += 1
+    setBulkSnackbar({ ...next, nonce: bulkSnackbarNonce.current })
+    if (bulkSnackbarTimer.current) clearTimeout(bulkSnackbarTimer.current)
+    bulkSnackbarTimer.current = setTimeout(() => {
+      if (mountedRef.current) setBulkSnackbar(null)
+    }, 6000)
+  }, [])
+
+  useEffect(
+    () => () => {
+      if (bulkSnackbarTimer.current) clearTimeout(bulkSnackbarTimer.current)
+    },
+    [],
+  )
+
+  // Deshacer una tanda: anula (corrección de aporte CERO) cada registro creado por el bulk, vía el
+  // MISMO runner de void del "Retirar" individual. Recibe entries sintetizados con el id REAL
+  // devuelto por el servidor (correctsEntryId), así no depende del refetch para poder deshacer.
+  const onBulkUndo = useCallback(
+    async (slotName: string, entries: NutritionIntakeReadItem[]) => {
+      if (!userId || !deviceId || entries.length === 0) return
+      dismissBulkSnackbar()
+      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
+      let undone = 0
+      let queued = 0
+      for (const entry of entries) {
+        setHidden(entry.id, true)
+        const payload = buildVoidIntakeCorrection({
+          clientId: userId,
+          deviceId,
+          operationId: newNutritionV2OperationId(),
+          localDate: date,
+          occurredAt: new Date().toISOString(),
+          timezone: TZ,
+          entry,
+          planVersionId: model?.plan?.versionId ?? null,
+          daySnapshotId: model?.snapshotId ?? null,
+        })
+        const outcome = await submitCorrectIntake(userId, payload)
+        if (!mountedRef.current) return
+        if (outcome.status === 'recorded') undone += 1
+        else if (outcome.status === 'queued') queued += 1
+        else {
+          setHidden(entry.id, false)
+        }
+      }
+      if (!mountedRef.current) return
+      if (undone > 0) void load(true)
+      if (queued > 0) await refreshPending()
+      if (undone === 0 && queued === 0) {
+        showBulkSnackbar({
+          message: 'No se pudo deshacer. Retira los registros uno por uno en la comida.',
+          tone: 'danger',
+        })
+      } else {
+        showBulkSnackbar({ message: `Deshice el registro de ${slotName}.` })
+      }
+    },
+    [date, deviceId, dismissBulkSnackbar, load, model, refreshPending, setHidden, showBulkSnackbar, userId],
+  )
+
+  // Registro en bloque de una franja ("Comí toda esta comida"). Por cada item ELEGIBLE (el helper
+  // puro decide cuáles = requeridos aún no consumidos) arma la MISMA mutation que el "Comí"
+  // individual (`buildAteAsPrescribedMutation`, key propia por item) y la envía por
+  // `submitRecordIntake`, heredando online + cola offline + idempotencia + optimismo sin superficie
+  // nueva. UNA sola celebración por tanda; el "Deshacer" anula solo los registros recién creados.
+  const onBulkAte = useCallback(
+    async (slot: NutritionMealSlotRead, eligible: NutritionMealSlotRead['prescriptionItems'][number][]) => {
+      if (!userId || !deviceId || eligible.length === 0) return
+      setMutationError(null)
+      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+      setBulkBusySlot(slot.code)
+
+      let recorded = 0
+      let queued = 0
+      const undoEntries: NutritionIntakeReadItem[] = []
+      const nowIso = new Date().toISOString()
+
+      for (const item of eligible) {
+        const operationId = newNutritionV2OperationId()
+        const tempId = `opt-${operationId}`
+        const totals: NutritionIntakeTotals = computeIntakeTotals(item.quantity, item.unit, {
+          calories: item.macros.calories,
+          proteinG: item.macros.proteinG,
+          carbsG: item.macros.carbsG,
+          fatsG: item.macros.fatsG,
+          fiberG: item.macros.fiberG,
+          servingSize: null,
+        })
+        addRow(slot.code, optimisticIntakeRow({
+          id: tempId,
+          name: item.name ?? 'Alimento prescrito',
+          brand: item.brand,
+          quantity: item.quantity,
+          unit: item.unit,
+          status: 'pending',
+          totals,
+        }))
+        let payload
+        try {
+          payload = buildAteAsPrescribedMutation({
+            clientId: userId,
+            deviceId,
+            operationId,
+            localDate: date,
+            occurredAt: nowIso,
+            timezone: TZ,
+            slotCode: slot.code,
+            planVersionId: model?.plan?.versionId ?? null,
+            daySnapshotId: model?.snapshotId ?? null,
+            item,
+          })
+        } catch {
+          removeRow(slot.code, tempId)
+          continue
+        }
+        const outcome = await submitRecordIntake(userId, payload)
+        if (!mountedRef.current) return
+        if (outcome.status === 'recorded') {
+          recorded += 1
+          undoEntries.push(synthPrescribedIntakeEntry(item, slot.code, outcome.id, nowIso))
+        } else if (outcome.status === 'queued') {
+          queued += 1
+          markRowOffline(slot.code, tempId)
+        } else {
+          removeRow(slot.code, tempId)
+        }
+      }
+
+      if (!mountedRef.current) return
+      // Celebración UNA sola vez por tanda, solo si algo quedó realmente registrado (no encolado).
+      if (recorded > 0) {
+        void (async () => {
+          const claimed = await claimMealLoggedCelebration(userId, date)
+          const decision = decideMealLoggedCelebration(!claimed)
+          if (decision && mountedRef.current) fireCelebration(decision)
+        })()
+        await load(true)
+      }
+      if (queued > 0) {
+        void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning)
+        await refreshPending()
+      }
+      setBulkBusySlot(null)
+
+      // Feedback + "Deshacer" transitorio.
+      if (recorded === 0 && queued === 0) {
+        showBulkSnackbar({ message: `No se pudo registrar tu ${slot.name}.`, tone: 'danger' })
+        return
+      }
+      if (recorded === 0 && queued > 0) {
+        showBulkSnackbar({
+          message: `Guardé tu ${slot.name} sin conexión.`,
+          detail: 'Se registrará cuando vuelvas a tener internet.',
+        })
+        return
+      }
+      const leftover = eligible.length - recorded - queued
+      showBulkSnackbar({
+        message: `Registraste tu ${slot.name}`,
+        detail: leftover > 0 ? `Registré ${recorded} de ${eligible.length}. Quedaron ${leftover}.` : null,
+        actionLabel: undoEntries.length > 0 ? 'Deshacer' : null,
+        onAction: undoEntries.length > 0 ? () => void onBulkUndo(slot.name, undoEntries) : null,
+      })
+    },
+    [addRow, date, deviceId, fireCelebration, load, markRowOffline, model, onBulkUndo, refreshPending, removeRow, showBulkSnackbar, userId],
   )
 
   const onEditEntry = useCallback(
@@ -934,9 +1164,13 @@ function TodayTab() {
               <TodaySlotCard
                 key={slot.id}
                 slot={slot}
-                consumedPrescriptionIds={consumedPrescriptionIds}
+                today={model}
+                consumedIds={consumedIds}
+                substitutionsByItemId={substitutionsByItemId}
                 eatingId={eatingId}
                 onAte={onAtePrescribed}
+                onBulkAte={onBulkAte}
+                bulkBusy={bulkBusySlot === slot.code}
                 portionPending={portions.pendingBySlot[slot.code] ?? EMPTY_PORTION_MARKS}
                 portionVoids={portions.voidsBySlot[slot.code] ?? EMPTY_PORTION_VOIDS}
                 onMarkPortion={portions.mark}
@@ -1015,6 +1249,7 @@ function TodayTab() {
         onRegister={onSheetRegister}
       />
       <PortionSnackbar state={portions.snackbar} onDismiss={portions.dismissSnackbar} />
+      <PortionSnackbar state={bulkSnackbar} onDismiss={dismissBulkSnackbar} />
       <CelebrationOverlay celebration={celebration} onDone={() => setCelebration(null)} />
     </>
   )
@@ -1083,26 +1318,73 @@ function TodayCta({
   )
 }
 
-// 4A-02: card de franja de "Tu plan de hoy" 1:1 con la web (TodayExperience.tsx:561-640):
-// header nombre (text-base font-display) + hora en mono, filas prescritas con nota y
-// "Lo comí" (tone success, pending por ítem) o check "Registrado", y la capa de porciones.
-// SIN badge de estado, SIN subtotal, SIN sub-encabezados ni consumido por franja, SIN CTA
-// por franja (eran del MealSlotCard del kit, que el Hoy web no usa). Memoizada (hallazgo
-// M3): marcar una porción solo cambia `portionPending`/`portionVoids` de SU franja.
+/**
+ * Entry SINTÉTICO de un item prescrito recién registrado por el bulk. Solo alimenta a
+ * `buildVoidIntakeCorrection` en el "Deshacer": lleva el id REAL devuelto por el servidor
+ * (correctsEntryId) y los mismos campos congelados que usó `buildAteAsPrescribedMutation`, así el
+ * void referencia el registro correcto sin depender del read-model refrescado. Los `totals` en 0
+ * son irrelevantes (la corrección de void no los lee).
+ */
+function synthPrescribedIntakeEntry(
+  item: NutritionMealSlotRead['prescriptionItems'][number],
+  slotCode: string,
+  id: string,
+  occurredAt: string,
+): NutritionIntakeReadItem {
+  return {
+    id,
+    foodId: item.foodId,
+    customName: item.foodId ? null : item.name ?? 'Alimento prescrito',
+    quantity: item.quantity,
+    unit: item.unit,
+    mealSlot: slotCode,
+    source: 'prescription',
+    captureMethod: 'prescription',
+    occurredAt,
+    status: 'active',
+    revision: 1,
+    correctsEntryId: null,
+    prescriptionItemId: item.id,
+    snapshot: {
+      name: item.name ?? 'Alimento prescrito',
+      brand: item.brand,
+      calories: item.macros.calories,
+      proteinG: item.macros.proteinG,
+      carbsG: item.macros.carbsG,
+      fatsG: item.macros.fatsG,
+      fiberG: item.macros.fiberG,
+      servingSize: null,
+      servingUnit: item.unit,
+    },
+    totals: { calories: 0, proteinG: 0, carbsG: 0, fatsG: 0, fiberG: 0 },
+  }
+}
+
+// 4A-02: card de franja de "Tu plan de hoy" 1:1 con la web. Conserva la jerarquía compacta
+// del rediseño y suma progreso, bulk-mark y reemplazos estructurados. Memoizada: marcar una
+// porción solo cambia `portionPending`/`portionVoids` de SU franja.
 const TodaySlotCard = memo(function TodaySlotCard({
   slot,
-  consumedPrescriptionIds,
+  today,
+  consumedIds,
+  substitutionsByItemId,
   eatingId,
   onAte,
+  onBulkAte,
+  bulkBusy,
   portionPending,
   portionVoids,
   onMarkPortion,
   onOpenEquivalences,
 }: {
   slot: NutritionMealSlotRead
-  consumedPrescriptionIds: Set<string>
+  today: NutritionTodayReadModel
+  consumedIds: Set<string>
+  substitutionsByItemId: ReadonlyMap<string, NutritionItemSubstitutionRead[]>
   eatingId: string | null
   onAte: (slot: NutritionMealSlotRead, item: NutritionMealSlotRead['prescriptionItems'][number]) => void
+  onBulkAte: (slot: NutritionMealSlotRead, eligible: NutritionMealSlotRead['prescriptionItems'][number][]) => void
+  bulkBusy: boolean
   portionPending: PendingPortionMark[]
   portionVoids: PendingPortionVoid[]
   onMarkPortion: (
@@ -1114,6 +1396,7 @@ const TodaySlotCard = memo(function TodaySlotCard({
   onOpenEquivalences: (slotCode: string, groupCode: string) => void
 }) {
   const { theme } = useTheme()
+  const bulk = bulkMarkSlotState(today, slot, consumedIds)
   return (
     <NutritionCard>
       <View className="flex-row flex-wrap items-center justify-between gap-2">
@@ -1121,10 +1404,19 @@ const TodaySlotCard = memo(function TodaySlotCard({
         {slot.startTime ? <Text className="font-mono text-xs text-text-muted">{slot.startTime}</Text> : null}
       </View>
 
+      {bulk.requiredTotal > 0 ? (
+        <View className="mt-2">
+          <MealProgressMeter consumed={bulk.requiredConsumed} total={bulk.requiredTotal} />
+        </View>
+      ) : null}
+
       {slot.prescriptionItems.length > 0 ? (
         <View className="mt-3">
           {slot.prescriptionItems.map((item, index) => {
-            const consumed = consumedPrescriptionIds.has(item.id)
+            const subs = substitutionsByItemId.get(item.id) ?? EMPTY_SUBSTITUTIONS
+            const consumed = consumedIds.has(item.id)
+            const rawNote = item.notes?.trim() || null
+            const displayNote = subs.length > 0 && rawNote?.startsWith('Alternativas:') ? null : rawNote
             return (
               <View key={item.id} className={index > 0 ? 'border-t border-border-subtle' : undefined}>
                 <FoodRow
@@ -1139,6 +1431,7 @@ const TodaySlotCard = memo(function TodaySlotCard({
                     fatsG: item.macros.fatsG,
                   }}
                   fallbackEmoji={foodCategoryEmojiFromName(item.name)}
+                  note={displayNote}
                   actions={
                     consumed ? (
                       // Estado "Registrado" (web TodayExperience.tsx:608-611): check esmeralda
@@ -1159,16 +1452,15 @@ const TodaySlotCard = memo(function TodaySlotCard({
                     )
                   }
                 />
-                {item.notes ? (
-                  // Nota del ítem (web NutritionFoodRow.tsx:127) — el FoodRow del kit RN aún
-                  // no recibe `note`; se pinta bajo la fila hasta que el kit lo incorpore.
-                  <Text className="-mt-1 pb-3 text-[11px] leading-4 text-text-subtle">{item.notes}</Text>
-                ) : null}
+                <ItemSubstitutionsHint substitutions={subs} />
               </View>
             )
           })}
         </View>
       ) : null}
+
+      {/* Registro en bloque de la franja ("Comí toda esta comida") — thumb-zone bajo los items. */}
+      <BulkMarkControl state={bulk} pending={bulkBusy} onEat={() => onBulkAte(slot, bulk.eligible)} />
 
       {(slot.exchangeTargets?.length ?? 0) > 0 ? (
         <PortionSlotSection
@@ -1183,6 +1475,109 @@ const TodaySlotCard = memo(function TodaySlotCard({
     </NutritionCard>
   )
 })
+
+/**
+ * Medidor compacto de progreso de la franja (espeja el web): barra + "consumidos/total" de items
+ * REQUERIDOS. Al completar muta a un chip con check y "Completa". Solo lectura — la acción vive en
+ * el control de registro en bloque de abajo. La barra anima el ancho (respeta reduced-motion).
+ */
+function MealProgressMeter({ consumed, total }: { consumed: number; total: number }) {
+  const { theme } = useTheme()
+  const { duration } = useEvaMotion()
+  const pct = total > 0 ? Math.min(100, Math.round((consumed / total) * 100)) : 0
+  const complete = total > 0 && consumed >= total
+  return (
+    <View
+      accessibilityLabel={`${consumed} de ${total} registrados`}
+      className={`self-start flex-row items-center gap-2 rounded-pill border px-2.5 py-1 ${
+        complete ? 'border-success-500/30 bg-success-500/10' : 'border-border-subtle bg-surface-sunken'
+      }`}
+    >
+      {complete ? (
+        <Check color={theme.success} size={13} />
+      ) : (
+        <View className="h-1.5 w-12 overflow-hidden rounded-pill bg-border-subtle">
+          <MotiView
+            animate={{ width: `${pct}%` }}
+            className="h-full rounded-pill bg-success-500"
+            transition={{ type: 'timing', duration: duration('base') }}
+          />
+        </View>
+      )}
+      <Text className={`font-mono text-[11px] font-semibold ${complete ? 'text-success-700' : 'text-text-muted'}`}>
+        {complete ? 'Completa' : `${consumed}/${total}`}
+      </Text>
+    </View>
+  )
+}
+
+/**
+ * Reemplazos autorizados por el coach (F-02), alineados con la fila web: título + pills
+ * individuales con kcal congelada. Solo lectura; el registro interactivo es un fast-follow.
+ */
+function ItemSubstitutionsHint({ substitutions }: { substitutions: NutritionItemSubstitutionRead[] }) {
+  if (substitutions.length === 0) return null
+  return (
+    <View className="pb-3 pl-14">
+      <Text className="text-[11px] font-semibold uppercase tracking-wide text-text-subtle">Puedes reemplazar por</Text>
+      <View accessibilityLabel="Reemplazos autorizados por tu coach" className="mt-1 flex-row flex-wrap gap-1.5">
+        {substitutions.map((sub) => (
+          <View
+            key={sub.id}
+            className="flex-row items-center gap-1 rounded-pill border border-border-subtle bg-surface-sunken px-2.5 py-1"
+          >
+            <Text className="text-xs font-medium text-text-body">{sub.name}</Text>
+            {sub.macros.calories != null ? (
+              <Text className="font-mono text-xs text-text-muted">· {formatNutritionCalories(sub.macros.calories)}</Text>
+            ) : null}
+          </View>
+        ))}
+      </View>
+    </View>
+  )
+}
+
+/**
+ * Control de registro en bloque de una franja. Estados (del helper puro compartido):
+ *  - none-required → nada (la franja no tiene items requeridos; p. ej. solo-porciones).
+ *  - complete      → banner "Comida completa" (sin acción).
+ *  - all-open      → CTA "Comí toda esta comida · N kcal".
+ *  - partial       → CTA "Comer lo que falta (N) · M kcal".
+ */
+function BulkMarkControl({
+  state,
+  pending,
+  onEat,
+}: {
+  state: BulkMarkSlotState
+  pending: boolean
+  onEat: () => void
+}) {
+  const { theme } = useTheme()
+  if (state.status === 'none-required') return null
+  if (state.status === 'complete') {
+    return (
+      <View className="mt-3 flex-row items-center justify-center gap-2 rounded-control border border-success-500/30 bg-success-500/10 px-4 py-2.5">
+        <Check color={theme.success} size={16} />
+        <Text className="text-sm font-semibold text-success-700">{BULK_MARK_COMPLETE_LABEL}</Text>
+      </View>
+    )
+  }
+  const label = bulkMarkCtaLabel(state) ?? 'Registrar comida'
+  const kcal = state.eligibleKcal > 0 ? ` · ${Math.round(state.eligibleKcal)} kcal` : ''
+  return (
+    <View className="mt-3">
+      <NutritionMotionButton
+        accessibilityLabel={`${label}${kcal}`}
+        tone="success"
+        pending={pending}
+        onPress={onEat}
+      >
+        {`${label}${kcal}`}
+      </NutritionMotionButton>
+    </View>
+  )
+}
 
 function EntryActionSheet({
   entry,
