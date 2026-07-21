@@ -105,6 +105,9 @@
         "ascAppId": "6770426633",
         "appleTeamId": "5GKWMMZ46Q"
       }
+    },
+    "previewv2": {
+      "extends": "prodpreview"
     }
   }
 }
