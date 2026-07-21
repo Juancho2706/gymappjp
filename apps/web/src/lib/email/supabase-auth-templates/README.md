@@ -23,7 +23,7 @@ está verificado en Resend, así que se puede enviar desde cualquier buzón `@ev
 | Host             | `smtp.resend.com`                                 |
 | Port             | `465` (SSL) — o `587` si prefieres STARTTLS       |
 | Username         | `resend`                                          |
-| Password         | una **API key de Resend** (`re_...`)              |
+| Password         | `<pega aquí tu API key de Resend>`                |
 | Sender email     | `no-reply@eva-app.cl` (recomendado)               |
 | Sender name      | `EVA`                                             |
 
