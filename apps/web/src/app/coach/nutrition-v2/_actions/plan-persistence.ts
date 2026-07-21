@@ -17,9 +17,11 @@ import type { WorkspaceSummary } from '@/domain/auth/types'
 import {
   buildExchangeTargetInsertRow,
   buildItemInsertRow,
+  buildItemSubstitutionInsertRow,
   buildSlotInsertRow,
   buildVariantInsertRow,
   collectExchangeGroupIds,
+  collectSubstitutionFoodIds,
   ExchangeGroupSnapshotError,
   type BuilderExchangeGroup,
   type BuilderFood,
@@ -497,7 +499,9 @@ export async function persistAndPublishDraft(input: {
   }
   const versionId = versionIns.data.id
 
-  const foodIds = collectFoodIds(draft)
+  // Foods de los items MÁS los referenciados por los reemplazos autorizados (F-02): un solo
+  // set para resolver/congelar todo en una pasada.
+  const foodIds = [...new Set([...collectFoodIds(draft), ...collectSubstitutionFoodIds(draft)])]
   const foodMap = new Map<string, BuilderFood>()
   for (const id of foodIds) {
     const foodRes = await db
@@ -541,17 +545,39 @@ export async function persistAndPublishDraft(input: {
       const mealSlotId = slotIns.data.id
 
       if (slot.items.length > 0) {
-        const itemRows = slot.items.map((item, index) =>
+        // Id explícito por item (F-02): lo generamos aquí para poder colgar los reemplazos
+        // referenciándolo, sin un round-trip extra de RETURNING.
+        const itemsWithIds = slot.items.map((item) => ({ item, id: crypto.randomUUID() }))
+        const itemRows = itemsWithIds.map(({ item, id }, index) =>
           buildItemInsertRow({
             versionId,
             mealSlotId,
             orderIndex: index,
             item,
             food: item.foodId ? foodMap.get(item.foodId) ?? null : null,
+            id,
           }),
         )
         const itemsIns = await db.from('nutrition_prescription_items_v2').insert(itemRows)
         if (itemsIns.error) return mapWriteError(itemsIns.error, 'items')
+
+        // Reemplazos autorizados del coach (F-02), congelados por item. Solo structured/hybrid
+        // tienen items (flexible nunca llega aquí). Un item sin reemplazos no toca la tabla nueva.
+        const substitutionRows = itemsWithIds.flatMap(({ item, id }) =>
+          (item.substitutions ?? []).map((sub, subIndex) =>
+            buildItemSubstitutionInsertRow({
+              versionId,
+              prescriptionItemId: id,
+              orderIndex: subIndex,
+              sub,
+              food: sub.foodId ? foodMap.get(sub.foodId) ?? null : null,
+            }),
+          ),
+        )
+        if (substitutionRows.length > 0) {
+          const subsIns = await db.from('nutrition_item_substitutions_v2').insert(substitutionRows)
+          if (subsIns.error) return mapWriteError(subsIns.error, 'reemplazos')
+        }
       }
 
       // Targets de porciones de la franja, congelados en la MISMA pasada de escritura del
