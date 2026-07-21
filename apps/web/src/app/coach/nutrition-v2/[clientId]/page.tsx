@@ -32,6 +32,7 @@ import { AssignPlanToClientsDialog, type AssignRosterEntry } from '../_component
 import { ArchivePlanButton } from '../_components/ArchivePlanButton'
 import { ConvertedPlanBanner } from '../_components/ConvertedPlanBanner'
 import { canAssignSourcePlan } from '../_lib/assign-plan'
+import { fetchItemSubstitutionsForVersion } from '../_data/item-substitutions.data'
 import { QuickEditEntry } from './_quick-edit/QuickEditEntry'
 import { PortionDayCoverageCard } from './PortionDayCoverageCard'
 
@@ -131,6 +132,13 @@ export default async function CoachNutritionV2ClientPage({ params, searchParams 
     : null
   const convertedAtLabel = conversionLink ? formatDateDdMmYyyySantiago(conversionLink.convertedAt) : null
 
+  // Carry-over F-02: reemplazos autorizados congelados de la version vigente. El read-model
+  // hot-path no los transporta; se leen aparte (RLS-scoped) y se inyectan en el quick-edit para
+  // que republicar NO los borre. Solo con plan vigente (el entry solo se monta ahi); fail-soft a [].
+  const itemSubstitutions = hasPlan
+    ? await fetchItemSubstitutionsForVersion(detail.plan.plan?.versionId)
+    : []
+
   return (
     // Header movil compacto: flecha (vuelve al Centro) + eyebrow/nombre + UNA CTA primaria.
     // "Asignar a otros alumnos" se demueve a accion secundaria junto a los badges del plan.
@@ -147,6 +155,7 @@ export default async function CoachNutritionV2ClientPage({ params, searchParams 
             clientId={clientId}
             clientName={detail.client.fullName}
             planModel={detail.plan}
+            itemSubstitutions={itemSubstitutions}
             today={today}
           />
         ) : (

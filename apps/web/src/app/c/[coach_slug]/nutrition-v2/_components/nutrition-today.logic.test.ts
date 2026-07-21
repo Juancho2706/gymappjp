@@ -5,6 +5,7 @@ import {
   NutritionIntakeSourceSchema,
   type FoodCatalogItem,
   type NutritionIntakeReadItem,
+  type NutritionItemSubstitutionRead,
   type NutritionMealSlotRead,
 } from '@eva/nutrition-v2'
 import {
@@ -12,6 +13,8 @@ import {
   buildCorrectionPayload,
   buildPrescribedIntakePayload,
   buildVoidPayload,
+  groupSubstitutionsByPrescriptionItem,
+  resolveItemDisplayNote,
 } from './nutrition-today.logic'
 
 const CTX = {
@@ -223,5 +226,61 @@ describe('buildCorrectionPayload', () => {
     expect(parsed.snapshot.carbsG).toBe(0)
     expect(parsed.snapshot.fatsG).toBe(0)
     expect(parsed.snapshot.fiberG).toBe(0)
+  })
+})
+
+// ── Reemplazos autorizados por el coach (F-02) ───────────────────────────────────
+
+function sub(overrides: Partial<NutritionItemSubstitutionRead> & { id: string; prescriptionItemId: string }): NutritionItemSubstitutionRead {
+  return {
+    foodId: null,
+    recipeId: null,
+    name: 'Reemplazo',
+    brand: null,
+    quantity: null,
+    unit: null,
+    macros: { calories: null, proteinG: null, carbsG: null, fatsG: null, fiberG: null },
+    ...overrides,
+  }
+}
+
+describe('groupSubstitutionsByPrescriptionItem', () => {
+  const ITEM_A = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+  const ITEM_B = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
+
+  it('agrupa por prescriptionItemId preservando el orden de llegada', () => {
+    const rows = [
+      sub({ id: 's1', prescriptionItemId: ITEM_A, name: 'Pavo' }),
+      sub({ id: 's2', prescriptionItemId: ITEM_B, name: 'Tofu' }),
+      sub({ id: 's3', prescriptionItemId: ITEM_A, name: 'Atún' }),
+    ]
+    const grouped = groupSubstitutionsByPrescriptionItem(rows)
+    expect(Object.keys(grouped).sort()).toEqual([ITEM_A, ITEM_B].sort())
+    expect(grouped[ITEM_A].map((r) => r.name)).toEqual(['Pavo', 'Atún'])
+    expect(grouped[ITEM_B].map((r) => r.name)).toEqual(['Tofu'])
+  })
+
+  it('un plan sin reemplazos produce un mapa vacio', () => {
+    expect(groupSubstitutionsByPrescriptionItem([])).toEqual({})
+  })
+})
+
+describe('resolveItemDisplayNote', () => {
+  it('oculta el texto legado "Alternativas: …" cuando hay reemplazos estructurados', () => {
+    expect(resolveItemDisplayNote('Alternativas: Pavo, Atún', true)).toBeNull()
+  })
+
+  it('conserva el texto legado "Alternativas: …" cuando NO hay estructura (fallback)', () => {
+    expect(resolveItemDisplayNote('Alternativas: Pavo, Atún', false)).toBe('Alternativas: Pavo, Atún')
+  })
+
+  it('conserva una nota del coach que no es "Alternativas" aunque haya estructura', () => {
+    expect(resolveItemDisplayNote('Cocinar a la plancha', true)).toBe('Cocinar a la plancha')
+  })
+
+  it('normaliza notas vacias o nulas a null', () => {
+    expect(resolveItemDisplayNote(null, true)).toBeNull()
+    expect(resolveItemDisplayNote(undefined, false)).toBeNull()
+    expect(resolveItemDisplayNote('   ', false)).toBeNull()
   })
 })
