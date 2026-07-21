@@ -1,6 +1,6 @@
 'use client'
 
-import { useActionState, useEffect } from 'react'
+import { useActionState, useEffect, useState } from 'react'
 import { useFormStatus } from 'react-dom'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
@@ -8,6 +8,7 @@ import { Mail, Lock, Loader2, ArrowRight } from 'lucide-react'
 import { clientLoginAction, type ClientLoginState } from './_actions/login.actions'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { PasswordVisibilityToggle } from '@/components/auth/PasswordVisibilityToggle'
 import { cn } from '@/lib/utils'
 
 const initialState: ClientLoginState = {}
@@ -52,6 +53,7 @@ function SubmitButton({ primaryColor, brandName }: { primaryColor: string; brand
 
 export default function ClientLoginForm({ coachSlug, primaryColor, brandName, logoUrl, idPrefix = '' }: Props) {
     const [state, formAction] = useActionState(clientLoginAction, initialState)
+    const [showPassword, setShowPassword] = useState(false)
     const router = useRouter()
     const emailId = `${idPrefix}client-email`
     const passwordId = `${idPrefix}client-password`
@@ -115,14 +117,18 @@ export default function ClientLoginForm({ coachSlug, primaryColor, brandName, lo
                         <Input
                             id={passwordId}
                             name="password"
-                            type="password"
+                            type={showPassword ? 'text' : 'password'}
                             placeholder="••••••••"
                             autoComplete="current-password"
                             required
                             className={cn(
-                                'pl-10 border-border-default',
+                                'pl-10 pr-12 border-border-default',
                                 'focus-visible:border-[var(--theme-primary)] focus-visible:shadow-[0_0_0_3px_color-mix(in_oklab,var(--theme-primary)_30%,transparent)]'
                             )}
+                        />
+                        <PasswordVisibilityToggle
+                            visible={showPassword}
+                            onToggle={() => setShowPassword((v) => !v)}
                         />
                     </div>
                 </div>

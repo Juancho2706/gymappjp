@@ -6,6 +6,7 @@ import { Lock, Loader2, ShieldCheck, Check, Circle } from 'lucide-react'
 import { changePasswordAction, type ChangePasswordState } from '../login/_actions/login.actions'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { PasswordVisibilityToggle } from '@/components/auth/PasswordVisibilityToggle'
 
 const initialState: ChangePasswordState = {}
 
@@ -40,6 +41,8 @@ export default function ChangePasswordPage({ params }: Props) {
 
     const [password, setPassword] = useState('')
     const [confirm, setConfirm] = useState('')
+    const [showPassword, setShowPassword] = useState(false)
+    const [showConfirm, setShowConfirm] = useState(false)
 
     // Reglas reactivas (espejo del kit flow.jsx › AccesoEstados state 'contrasena').
     // El gate del botón usa SOLO las que el server valida (>= 8 chars + coinciden); "1 número" y
@@ -81,13 +84,18 @@ export default function ChangePasswordPage({ params }: Props) {
                                 <Input
                                     id="password"
                                     name="password"
-                                    type="password"
+                                    type={showPassword ? 'text' : 'password'}
                                     placeholder="Mínimo 8 caracteres"
                                     required
                                     minLength={8}
+                                    autoComplete="new-password"
                                     value={password}
                                     onChange={(e) => setPassword(e.target.value)}
-                                    className="pl-10 border-border-default focus-visible:border-[var(--theme-primary)] focus-visible:shadow-[0_0_0_3px_color-mix(in_oklab,var(--theme-primary)_30%,transparent)]"
+                                    className="pl-10 pr-12 border-border-default focus-visible:border-[var(--theme-primary)] focus-visible:shadow-[0_0_0_3px_color-mix(in_oklab,var(--theme-primary)_30%,transparent)]"
+                                />
+                                <PasswordVisibilityToggle
+                                    visible={showPassword}
+                                    onToggle={() => setShowPassword((v) => !v)}
                                 />
                             </div>
                         </div>
@@ -101,12 +109,17 @@ export default function ChangePasswordPage({ params }: Props) {
                                 <Input
                                     id="confirm_password"
                                     name="confirm_password"
-                                    type="password"
+                                    type={showConfirm ? 'text' : 'password'}
                                     placeholder="Repite tu contraseña"
                                     required
+                                    autoComplete="new-password"
                                     value={confirm}
                                     onChange={(e) => setConfirm(e.target.value)}
-                                    className="pl-10 border-border-default focus-visible:border-[var(--theme-primary)] focus-visible:shadow-[0_0_0_3px_color-mix(in_oklab,var(--theme-primary)_30%,transparent)]"
+                                    className="pl-10 pr-12 border-border-default focus-visible:border-[var(--theme-primary)] focus-visible:shadow-[0_0_0_3px_color-mix(in_oklab,var(--theme-primary)_30%,transparent)]"
+                                />
+                                <PasswordVisibilityToggle
+                                    visible={showConfirm}
+                                    onToggle={() => setShowConfirm((v) => !v)}
                                 />
                             </div>
                         </div>
