@@ -1,7 +1,7 @@
 ---
 status: active
 owner: Juan Manuel Villegas
-last_verified: "2026-07-20 @ 3867e8ad"
+last_verified: "2026-07-21 @ f5301858"
 canonical: implementation-plan
 source_of_truth: docs/status/MOBILE_PARITY.md
 ---
@@ -43,7 +43,7 @@ Al terminar: barrido 4A completo contra web actual, corrección de residuos y ci
 3. `pnpm exec tsc --noEmit` desde `apps/mobile`.
 4. Pruebas afectadas del dominio.
 5. Paridad de tokens `86/86` mediante el script vigente.
-6. `expo export` Android.
+6. `expo export` Android e iOS.
 7. Build nativo si cambian dependencias/configuración nativa.
 8. `TASKS.md` y `MOBILE_PARITY.md` actualizados en el mismo checkpoint.
 
@@ -89,8 +89,9 @@ Aplicar el protocolo aditivo-en-LIVE: snapshot, cambio mínimo, datos sintético
 
 - Trabajo: `rnmobiledenuevo`.
 - Producción: `master` mediante merge revisado.
-- Android `previewv2`: build OK reportado; falta QA device.
-- iOS `previewv2`: rebuild pendiente después de `c6743ef3`.
+- Android `previewv2`: build y upload OK en el run `29766013009` sobre `c6743ef3`; artefacto expirado y QA device pendiente.
+- iOS `previewv2`: build y upload IPA OK en el run `29765692202` sobre `c6743ef3`; el submit TestFlight falló y el artefacto expiró.
+- `bc9ac09f` exportó localmente Android/iOS; `f5301858` añadió `submit.previewv2`. Falta generar y retener binarios del candidato actual, completar submit y hacer QA física.
 - Cambios JS-only compatibles pueden usar OTA; cambios nativos requieren binario.
 - No promover a stores una ola parcialmente visible.
 

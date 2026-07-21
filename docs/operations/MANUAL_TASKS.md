@@ -1,7 +1,7 @@
 ---
 status: active
 owner: product-owner
-last_verified: 2026-07-20
+last_verified: "2026-07-21 @ f5301858"
 canonical: true
 ---
 
@@ -18,9 +18,9 @@ Reglas:
 
 ## P1 — Cierre del build y QA móvil
 
-### MOB-01 — Repetir build iOS `previewv2`
+### MOB-01 — Generar IPA actual y completar TestFlight
 
-El intento anterior falló antes de Xcode porque EAS buscó credenciales remotas. El perfil quedó corregido en `c6743ef3`: iOS usa credenciales locales y distribución App Store.
+El [run 29765692202](https://github.com/Juancho2706/gymappjp/actions/runs/29765692202) compiló y subió una IPA de `c6743ef3`, pero el paso de submit a TestFlight falló y el artefacto ya expiró. `f5301858` añadió el perfil `submit.previewv2`; falta validarlo con un binario del candidato actual.
 
 GitHub Actions → **Mobile Build (Local — no EAS credits)**:
 
@@ -29,12 +29,13 @@ branch: rnmobiledenuevo
 app: mobile
 platform: ios
 profile: previewv2
-submit_ios: false
+submit_ios: true
 ```
 
-- [ ] Ejecutar el workflow.
-- [ ] Descargar/retener el artefacto si termina correctamente.
-- [ ] Si falla, conservar el enlace del run y los logs completos; no copiar secretos al issue.
+- [ ] Esperar los checks verdes del commit candidato y ejecutar el workflow.
+- [ ] Descargar/retener la IPA el mismo día; la retención efectiva del repositorio es actualmente de un día.
+- [ ] Verificar que el paso de submit termine verde y que el build aparezca/procese en App Store Connect.
+- [ ] Si falla, conservar el enlace del run y los logs completos; no atribuir una causa sin evidencia ni copiar secretos al issue.
 - [ ] Registrar el resultado en [TEST_STATUS.md](../testing/TEST_STATUS.md) y [MOBILE_PARITY.md](../status/MOBILE_PARITY.md).
 
 ### MOB-02 — Certificar paridad en dispositivos reales
@@ -42,7 +43,7 @@ submit_ios: false
 Código estático y tests no sustituyen esta prueba.
 
 - [ ] Android: smoke de alumno y coach, light/dark y marca EVA/custom.
-- [ ] iOS: mismo smoke cuando MOB-01 quede verde.
+- [ ] iOS: mismo smoke con la IPA actual cuando MOB-01 quede verde.
 - [ ] Validar navegación, safe areas, teclado, cámara/scanner, offline/reintentos y cambio de workspace.
 - [ ] Registrar cada defecto con plataforma, build, pantalla, pasos, resultado esperado/real y captura.
 - [ ] Actualizar únicamente el resultado consolidado en [MOBILE_PARITY.md](../status/MOBILE_PARITY.md).

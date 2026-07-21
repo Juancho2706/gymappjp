@@ -1,7 +1,7 @@
 ---
 status: active
 owner: Juan Manuel Villegas
-last_verified: "2026-07-20 @ 34b09d8f"
+last_verified: "2026-07-21 @ f5301858"
 canonical: true
 source_of_truth: apps/web responsive + apps/mobile
 ---
@@ -28,7 +28,7 @@ La paridad global **no está certificada todavía**.
 
 ## Ola activa: 4A
 
-Fuente funcional/visual: `apps/web/src/app/c/[coach_slug]/nutrition/**` en viewport móvil. Specs vigentes: [`docs/rn-port/specs/seccion-4a/`](../rn-port/specs/seccion-4a/).
+Fuente funcional/visual: `apps/web/src/app/c/[coach_slug]/nutrition-v2/**` y `apps/web/src/components/nutrition-v2/**` en viewport móvil. Specs vigentes: [`docs/rn-port/specs/seccion-4a/`](../rn-port/specs/seccion-4a/).
 
 | Unidad | Alcance | Código | QA device |
 |---|---|---:|---:|
@@ -59,10 +59,10 @@ Aplicadas: **01, 02, 07, 10 y 11**. Pendientes: **03, 04, 05, 06, 08, 09 y 12**.
 
 | Plataforma | Profile | Resultado conocido | Qué significa |
 |---|---|---|---|
-| Android | `previewv2` | **OK**, reportado por el usuario el 2026-07-20 | El artefacto construye; QA funcional/visual sigue pendiente |
-| iOS | `previewv2` | Rebuild pendiente | El fallo anterior ocurrió antes de Xcode por credenciales/distribution de EAS; `c6743ef3` cambió iOS a credenciales locales + distribución store. Falta verificar con una nueva ejecución |
+| Android | `previewv2` | Build y upload OK en el [run 29766013009](https://github.com/Juancho2706/gymappjp/actions/runs/29766013009) sobre `c6743ef3`; artefacto expirado | Valida ese corte, no el candidato actual ni el QA funcional/visual |
+| iOS | `previewv2` | Build y upload de IPA OK en el [run 29765692202](https://github.com/Juancho2706/gymappjp/actions/runs/29765692202) sobre `c6743ef3`; falló el submit a TestFlight y el artefacto expiró | La compilación nativa quedó probada en ese corte; distribución y QA siguen pendientes |
 
-No marcar iOS verde hasta que GitHub Actions termine correctamente. Un build verde tampoco cierra el QA en dispositivo.
+La sincronización `bc9ac09f` pasó `expo export` local para Android e iOS. El perfil de submit `previewv2` quedó alineado en `f5301858`, pero aún requiere una ejecución real. Ninguna de esas verificaciones sustituye un build firmado retenido ni el QA en dispositivo.
 
 ## Siguiente horizonte
 

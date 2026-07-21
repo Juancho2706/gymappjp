@@ -1,7 +1,7 @@
 ---
 status: active
 owner: product-engineering
-last_verified: 2026-07-21
+last_verified: "2026-07-21 @ f5301858"
 canonical: true
 ---
 
@@ -16,6 +16,8 @@ Esta es la única vista global de qué está en producción, qué está en integ
 | Rama de trabajo | `rnmobiledenuevo` |
 | Corte de `master` integrado | `origin/master` en `029c8791` |
 | Base RN anterior a esta sincronización | `7a0ec0cb` |
+| Merge de sincronización | `bc9ac09f` (`7a0ec0cb` + `029c8791`) |
+| Ajuste de submit móvil | `f5301858` añade `submit.previewv2` |
 | Relación | `rnmobiledenuevo` contiene el corte productivo y conserva la paridad móvil aún no promovida |
 
 Este bloque es un snapshot, no reemplaza `git fetch`, `git status` ni los checks remotos antes de integrar.
@@ -34,20 +36,20 @@ Este bloque es un snapshot, no reemplaza `git fetch`, `git status` ni los checks
 
 ## Prioridad actual
 
-1. Obtener build iOS verde con el perfil `previewv2` corregido y registrar el resultado real.
-2. Completar QA en dispositivos Android/iOS de los recorridos críticos.
-3. Cerrar las unidades pendientes de paridad móvil según `MOBILE_PARITY.md`.
-4. Ejecutar los gates web/mobile completos sobre el commit candidato.
+1. Cerrar Wave C (`4A-06`, `4A-08`, `4A-09`) y después el resto de 4A según `MOBILE_PARITY.md`.
+2. Ejecutar los gates web/mobile completos sobre cada checkpoint candidato.
+3. Generar y retener artefactos Android/iOS del candidato final; completar el submit a TestFlight.
+4. Completar QA en dispositivos Android/iOS de los recorridos críticos.
 5. Integrar `rnmobiledenuevo` a `master` solo con evidencia verde y sin migraciones o artefactos locales pendientes.
 
 ## Gates que siguen abiertos
 
-- Rebuild iOS posterior al ajuste `c6743ef3`.
+- Build firmado Android/iOS del candidato actual y submit iOS verificado con `submit.previewv2`.
 - Certificación física de cámara, gestos, teclado, safe areas, offline y notificaciones en ambos sistemas.
 - Cierre verificable de la paridad móvil restante; código presente no equivale a QA aprobada.
 - Confirmación del rollout/configuración de Nutrition V2 en el entorno objetivo antes de una promoción.
 
-Android tuvo un build reportado como correcto por el owner. El resultado debe quedar en la evidencia de paridad/pruebas, no convertirse en una suposición permanente de este documento.
+El corte `c6743ef3` compiló y subió artefactos Android en el [run 29766013009](https://github.com/Juancho2706/gymappjp/actions/runs/29766013009) e iOS en el [run 29765692202](https://github.com/Juancho2706/gymappjp/actions/runs/29765692202); el segundo falló después, durante el submit a TestFlight. Ambos artefactos expiraron y no representan el candidato integrado en `bc9ac09f` ni certifican QA física.
 
 ## Nutrition V2: criterio actual
 
