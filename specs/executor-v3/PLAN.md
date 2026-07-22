@@ -53,15 +53,23 @@ Todo lo que exige binario nuevo, junto para UNA build. Unidades: activar `expo-a
 Unidades: BLE 0x180D con `react-native-ble-plx` (dev build, permisos iOS/Android) + sheet "Conectar sensor" + BPM vivo en cardio con `hrToZone` (zona en vivo) + persistencia `actual_avg_hr` automática; PWA Web Bluetooth (solo Chrome/Edge Android; iOS PWA oculta el módulo); pasos: HealthKit + Health Connect leen pasos diarios → auto-llenar widget de hábitos (con opt-in del alumno y edición manual conservada); distancia/calorías al resumen post-sesión.
 **Gate extra**: build EAS + QA device con cinta/reloj real del CEO. **Rollback**: módulo sensor oculto por flag; hábitos vuelven a manual.
 
-### Ola 7 (diferida, decisión aparte) — Nativo II
-Live Activity + Dynamic Island descanso (ActivityKit propio) / Android 16 Live Updates; companions watchOS + Wear OS para BPM en vivo de Apple/Galaxy Watch. No se planifica en detalle aquí.
+### Ola 7A — Descanso en lockscreen premium (build EAS #3)
+La jugada estrella que la PWA no puede igualar. **iOS**: Live Activity + Dynamic Island para el rest timer — módulo ActivityKit PROPIO (expo-live-activity fue deprecada jun-2026): config plugin Expo + Widget Extension como target adicional del proyecto iOS (vía `@bacons/apple-targets` o target manual), `Text(timerInterval:)` cuenta nativo con la app suspendida, botones −15s/Saltar/+15s vía App Intents que despiertan la app, iOS 16.2+, payload <4KB, inicio local al arrancar el descanso (sin push necesario). **Android**: upgrade del cronómetro de Ola 5 a Live Updates de Android 16 (`ProgressStyle` + promoted ongoing, API 36+) con fallback limpio al chronometer de notify-kit en APIs menores.
+**Prerequisitos duros**: acceso a la cuenta Apple Developer (targets nuevos = provisioning profiles nuevos; aprovechar para cerrar también el pendiente de Associated Domains) + device iOS con Dynamic Island para QA ideal.
+**Riesgo**: revisión de App Store del extension target; mantenimiento de módulo nativo propio. **Rollback**: el Live Activity es aditivo — sin él, notificación normal (Ola 5) sigue funcionando.
+
+### Ola 7B — Companions de reloj (BPM en vivo Apple/Galaxy Watch)
+Cierra el único hueco que BLE no cubre (protocolos cerrados). **Secuencia recomendada: watchOS primero** (cohorte mayor en Chile), Wear OS después como sub-fase. **watchOS**: app companion SwiftUI embebida en el binario iOS — `HKWorkoutSession` + `HKLiveWorkoutBuilder` (HR latido-a-latido, calorías, distancia) + WatchConnectivity al teléfono (módulo: `expo-watch-connectivity` v0.1.0 está verde → probablemente módulo propio delgado); sesión espejo iniciable desde el iPhone (iOS 17+); el BPM entra al MISMO pipeline `hrToZone`/`actual_avg_hr` de la Ola 6 (cero cambio de datos). **Wear OS**: app Kotlin con Health Services en el reloj + Data Layer API al teléfono; mismo contrato de datos.
+**Prerequisitos duros**: Apple Watch y Galaxy Watch físicos para QA (¿los tienen tú o el socio? — si no, comprar/prestar antes de arrancar 7B); cuenta Apple con capacidad HealthKit en ambos targets; Play Console para el módulo Wear.
+**Riesgo**: el mayor esfuerzo del proyecto (Swift/Kotlin reales, dos plataformas de reloj, review doble); estimarlo por sub-fase al llegar. **Rollback**: sin companion, el usuario de Apple/Galaxy Watch usa cinta BLE (Ola 6) o registra manual — la UI ya degrada honesta.
 
 ## Secuencia y dependencias
 
 ```
-Ola 0 ──► Ola 2 ──► Ola 3 ──► Ola 4 ──► Ola 5 (build) ──► Ola 6 (build)
+Ola 0 ──► Ola 2 ──► Ola 3 ──► Ola 4 ──► Ola 5 (build) ──► Ola 6 (build) ──► Ola 7A (build) ──► Ola 7B (watchOS → Wear OS)
    └────► Ola 1 (independiente; puede correr en paralelo con Ola 2)
 ```
+Nota 7A/7B: 7A depende de Ola 5 (el rest timer nativo ya encendido); 7B depende de Ola 6 (pipeline de BPM/zona ya construido — el companion solo es otra FUENTE del mismo dato). Los prerequisitos externos (cuenta Apple, relojes físicos) se gestionan durante las olas 2-4 para no bloquear.
 Dentro de cada ola, `TASKS.md` marca [P]/[S]. Tras cada wave de workers: pasada de juicio (diff vs pedido) → correcciones al mismo worker → gates de la ola → commit por unidad lógica en esta rama → PR #162 acumula; merge a `rnmobiledenuevo` por ola completa (o al cierre, decisión CEO).
 
 ## QA y gates por ola

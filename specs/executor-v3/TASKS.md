@@ -71,6 +71,20 @@
 - [ ] **E6.3 [P] Pasos agregadores** — HealthKit + Health Connect (permisos, opt-in alumno): pasos diarios → auto-llenar `daily_habits.steps` (editable manual siempre); distancia/calorías al resumen post-sesión cardio.
 - **Gate Ola 6**: build EAS + QA device CEO con cinta/reloj real; validar privacidad/permisos (copys claros, revocable).
 
+## Ola 7A — Lockscreen premium (build EAS #3)
+
+- [ ] **E7.1 [S] Módulo ActivityKit propio** — Expo config plugin + Widget Extension target iOS (`@bacons/apple-targets` o target manual); API JS: `startRestActivity(endsAt, exercise)`, `updateActivity`, `endActivity`; `Text(timerInterval:)` nativo; provisioning del extension (aprovechar y cerrar Associated Domains pendiente).
+- [ ] **E7.2 [S tras E7.1] Live Activity + Dynamic Island del descanso** — layouts lockscreen + isla (compacta/expandida); botones −15s/Saltar/+15s vía App Intents → deep link a la sesión; arranque local al iniciar descanso, cierre al terminar; iOS 16.2+ con degradación a notificación (Ola 5).
+- [ ] **E7.3 [P] Android Live Updates** — upgrade del cronómetro notify-kit a `ProgressStyle`/promoted ongoing (API 36+), fallback chronometer intacto en APIs menores.
+- **Gate Ola 7A**: build EAS + QA device CEO (iPhone con Dynamic Island ideal + Android 16); revisión App Store del extension.
+
+## Ola 7B — Companions de reloj (watchOS primero, luego Wear OS)
+
+- [ ] **E7.4 [S] Prerequisitos** — acceso cuenta Apple Developer (targets watch + HealthKit capability), Apple Watch y Galaxy Watch físicos para QA, Play Console módulo Wear. Gestionar DURANTE olas 2-4; 7B no arranca sin esto.
+- [ ] **E7.5 [S] Companion watchOS** — app SwiftUI embebida en el binario iOS: `HKWorkoutSession` + `HKLiveWorkoutBuilder` (HR/calorías/distancia en vivo) + WatchConnectivity al teléfono (módulo propio delgado; `expo-watch-connectivity` v0.1.0 solo como referencia); sesión espejo iniciable desde iPhone (iOS 17+); el stream entra al MISMO pipeline `hrToZone`/`actual_avg_hr` de Ola 6; UI reloj mínima (fase, BPM, zona, tiempo).
+- [ ] **E7.6 [S tras E7.5] Companion Wear OS** — app Kotlin: Health Services (ExerciseClient) en reloj + Data Layer API al teléfono; mismo contrato de datos que E7.5; UI espejo de la watchOS.
+- **Gate Ola 7B**: build EAS + QA con relojes físicos (sesión completa de cardio con BPM en vivo desde cada reloj); review App Store + Play.
+
 ## Cierre (post-olas)
 - [ ] **EC.1** Encendido gradual de flags (RN remote + Edge Config) → QA CEO → default ON.
 - [ ] **EC.2** Actualizar docs canónicos (`CURRENT.md`, `MOBILE_PARITY.md`) al mergear a `rnmobiledenuevo`; retiro de `LegacyExecutor` y evaluación de retiro de ExecutorV2 = decisión CEO separada.
