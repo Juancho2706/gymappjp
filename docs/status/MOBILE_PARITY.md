@@ -1,7 +1,7 @@
 ---
 status: active
 owner: Juan Manuel Villegas
-last_verified: "2026-07-21 @ 7c6684fa"
+last_verified: "2026-07-21 @ bce2eb3b"
 canonical: true
 source_of_truth: apps/web responsive + apps/mobile
 ---
@@ -23,6 +23,7 @@ La paridad global **no está certificada todavía**.
 | Sección 3 — coach (14 unidades) | Cerrado | Pendiente | Cerrado estático; no certificado |
 | Ola 2R — residuos del alumno | Cerrado | Pendiente | Cerrado estático; no certificado |
 | Ola 4A — nutrición del alumno | **12/12 aplicadas** | Pendiente | Cerrada estática; no certificada |
+| Ola 4B — nutrición del coach y catálogos | **3/16 aplicadas** | Pendiente | **Activa** |
 
 “Cerrado estático” significa que código, spec y verificaciones automatizadas disponibles convergieron. No significa que el comportamiento visual, gestos, teclado, cámara, safe areas u offline estén aprobados en hardware real.
 
@@ -47,11 +48,24 @@ Fuente funcional/visual: `apps/web/src/app/c/[coach_slug]/nutrition-v2/**` y `ap
 
 Aplicadas: **las 12** (wave C en `73f6aa82`; wave D en `3efa1a75`; wave E en `7c6684fa`). Código de la ola completo; falta QA device.
 
+## Ola activa: 4B
+
+Fuente funcional/visual: superficie V2 VIVA del coach (`apps/web/src/app/coach/nutrition-v2/**` +
+catálogos vivos). Specs vigentes: [`docs/rn-port/specs/seccion-4b/`](../rn-port/specs/seccion-4b/)
+(INVENTARIO, RANKING con las 16 unidades y 6 waves, DECISIONES-OWNER: **V1 al olvido**, recetas
+fuera, RN-extras estricto).
+
+| Estado | Unidades |
+|---|---|
+| Aplicadas (wave 4B.1, `bce2eb3b`) | 4B-01 macros meal-groups (P0 datos), 4B-02 scope org foods, 4B-03 quick-edit notas+permisos |
+| Siguiente | Wave 4B.2: **4B-04 SWAP** tab→hub V2 (solo); después wave 4B.3 (HUB ∥ Catálogo V2 ∥ Detalle-acciones ∥ Builder-F02 ∥ Meal-groups-editor) |
+| Resto | 4B-05…4B-15 según `RANKING.md`; 4B-16 (deuda nutrition-pro) fuera de la rama (toca web+packages) |
+
 ### Dónde retomar
 
-1. Completar matriz device de 4A y regresión dirigida de Secciones 1–3/2R (requiere build nativa).
-2. Abrir la ola 4B (nutrición del coach y catálogos) confirmando alcance contra código.
-3. Residuo diferido de nutrición coach: editor de reemplazos F-02 en el builder móvil (TODO en `QuickEditMode.tsx`).
+1. Wave 4B.2: `4B-04` SWAP del tab coach al hub V2 (archivo compartido con HUB → solo en su wave).
+2. Después las waves 4B.3–4B.6 según `RANKING.md` (colisiones de archivo ya mapeadas).
+3. Completar matriz device de 4A y regresión dirigida de Secciones 1–3/2R (requiere build nativa).
 
 ## Builds móviles
 
@@ -64,12 +78,11 @@ La sincronización `bc9ac09f` pasó `expo export` local para Android e iOS. El p
 
 ## Siguiente horizonte
 
-Después de cerrar y certificar 4A:
+Después de cerrar y certificar 4A y 4B:
 
-1. 4B — nutrición del coach y catálogos.
-2. 5 — builder y programas del coach.
-3. 6 — dominios restantes, inventariados en lotes pequeños.
-4. 7 — certificación transversal de rutas, estados, branding, accesibilidad y ambos sistemas operativos.
+1. 5 — builder y programas del coach.
+2. 6 — dominios restantes, inventariados en lotes pequeños.
+3. 7 — certificación transversal de rutas, estados, branding, accesibilidad y ambos sistemas operativos.
 
 El alcance exacto se confirma contra código antes de abrir cada ola; no se reactiva automáticamente un checklist histórico.
 
