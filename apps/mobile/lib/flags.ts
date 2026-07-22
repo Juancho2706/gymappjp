@@ -13,14 +13,13 @@ export const FLAGS = {
 
   /**
    * Ejecutor de rutina v3 (E2.1) — shell de PRESENTACION V3 sobre el mismo motor headless que V2.
-   * Default OFF (fail-safe): mientras nadie lo encienda, el switch cae a executorV2/Legacy.
-   * Remoteable SIN release igual que executorV2: `/api/mobile/config` puede devolver
-   * `flags.executorV3: true` (lo aplica `setRemoteFlags(config.flags)` en entitlements.ts; `toFlags`
-   * conserva cualquier key boolean). Habilitar el override remoto exige que el endpoint server
-   * (apps/web/api → Edge Config) incluya la key `executorV3` en su payload de `flags`; ESE cambio NO
-   * vive en mobile — hasta entonces manda este default local `false`.
+   * Default ON (decisión CEO 2026-07-22): esta rama ES la del rediseño; las builds de QA salen
+   * con V3 encendido. El KILL-SWITCH sigue vivo sin release: `/api/mobile/config` puede devolver
+   * `flags.executorV3: false` (lo aplica `setRemoteFlags(config.flags)` en entitlements.ts) y el
+   * switch cae a executorV2 al instante. La rama, no el flag, es el aislamiento pre-merge; el flag
+   * es el rollback post-build.
    */
-  executorV3: false,
+  executorV3: true,
 
   /**
    * Nutrición V2 jamás se habilita por el bundle. Solo Edge Config puede abrir
