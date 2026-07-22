@@ -21,6 +21,7 @@ import { formatWeightEsCl } from '@eva/workout-engine'
 import { readDraft, saveDraft, clearDraft, type DraftFields } from './workout-draft-store'
 import { useWorkoutKeypad } from './WorkoutKeypadProvider'
 import { ScaleDots, EffortHelp, RPE_HELP, RIR_HELP } from './EffortScale'
+import { DualWheelPicker } from './v3/DualWheelPicker'
 import { typedKeypadFields, type TypedKeypadMode } from '@eva/workout-engine'
 import type { OptimisticLogPayload } from '@eva/workout-engine'
 import { cn } from '@/lib/utils'
@@ -132,6 +133,12 @@ interface Props {
      * 'pending' = encolado sin conexión (se sincroniza luego). El motor identidad no cambia.
      */
     onResult?: (blockId: string, setNumber: number, result: SetSyncResult) => void
+    /**
+     * Ejecutor V3 (E2.5/escala): sólo lo pasa `ExerciseStepV3` (modo V3). Habilita la captura DUAL
+     * (long-press en kg/reps → rueda `DualWheelPicker`, tap = teclado como siempre) y baja el tope de
+     * RIR a 0 (RIR 0 = al fallo). Ausente/false ⇒ fila V2 byte-idéntica (anti-regresión).
+     */
+    v3?: boolean
 }
 
 /** Estado de sincronización de una serie de cara al usuario (contrato a). */
@@ -176,6 +183,7 @@ function StrengthLogSetForm({
     substitution,
     onLogged,
     onResult,
+    v3 = false,
 }: Props) {
     const params = useParams<{ coach_slug: string; planId: string }>()
     // Teclado numérico custom (Fase L · workstream B). Gate por puntero grueso: en desktop el input
@@ -184,6 +192,11 @@ function StrengthLogSetForm({
     const coarse = useCoarsePointer()
     const keypad = useWorkoutKeypad()
     const useKeypad = coarse && keypad != null
+    // Captura DUAL (E2.5): en V3 + puntero grueso, mantener presionado kg/reps abre la rueda; tap =
+    // teclado. En desktop (puntero fino) la rueda NO se activa (long-press es patrón táctil).
+    const useWheel = v3 && coarse
+    // Escala de RIR: en V3 baja a 0 (RIR 0 = al fallo). En V2 queda en 1 (comportamiento histórico).
+    const rirMin = v3 ? 0 : 1
     // Día objetivo (Ola 1): si el ejecutor se abrió con `?fecha=…` (editar un día pasado), viaja en
     // cada submit como `target_date` → la action edita esa fecha en modo solo-UPDATE. null = HOY.
     const targetDate = useTargetDate()
@@ -212,7 +225,7 @@ function StrengthLogSetForm({
             setQueuedInit(q)
             setChipValues({ w: q.weightKg, r: q.repsDone })
             setRpe(q.rpe ?? null)
-            setRir(q.rir != null && q.rir >= 1 && q.rir <= 10 ? q.rir : null)
+            setRir(q.rir != null && q.rir >= rirMin && q.rir <= 10 ? q.rir : null)
             setNote(q.note ?? '')
             setSyncStatus('pending')
             return
@@ -232,7 +245,7 @@ function StrengthLogSetForm({
         }
         if (draft.rir != null && draft.rir !== '') {
             const n = Number(draft.rir)
-            if (Number.isFinite(n) && n >= 1 && n <= 10) setRir(n)
+            if (Number.isFinite(n) && n >= rirMin && n <= 10) setRir(n)
         }
         if (draft.note != null && draft.note !== '') setNote(draft.note)
         keypad?.refreshDisplay()
@@ -266,16 +279,29 @@ function StrengthLogSetForm({
     // Esfuerzo por serie: RPE y RIR, ambos escala 1-10 (dots), ambos opcionales (decisión CEO).
     // El name/payload no cambia — se inyectan en el submit igual que antes.
     const [rpe, setRpe] = useState<number | null>(existingLog?.rpe ?? null)
-    // RIR = reps en reserva. Clampa un legacy fuera del rango de entrada 1-10 (p.ej. rir=0 viejo)
-    // a "sin valor" para no mandar un valor que el Zod (min 1) rechazaría al editar una serie vieja.
+    // RIR = reps en reserva. Clampa a "sin valor" lo que caiga fuera del rango de entrada [rirMin..10]
+    // (en V2, rirMin=1 → un rir=0 legacy no viaja; en V3, rirMin=0 → el 0 "al fallo" SÍ viaja).
     const [rir, setRir] = useState<number | null>(
-        existingLog?.rir != null && existingLog.rir >= 1 && existingLog.rir <= 10 ? existingLog.rir : null,
+        existingLog?.rir != null && existingLog.rir >= rirMin && existingLog.rir <= 10 ? existingLog.rir : null,
     )
     // Nota rápida por serie (quick-win E2-6). Source of truth = state; viaja por un mirror oculto.
     const [note, setNote] = useState(existingLog?.note ?? '')
     const [noteOpen, setNoteOpen] = useState(false)
     // Respaldo de valores para el chip recap mientras el prop existingLog se propaga (o pendiente de cola).
     const [chipValues, setChipValues] = useState<{ w: number | null; r: number | null } | null>(null)
+    // Captura DUAL (E2.5): estado de la rueda long-press. `wheelInit` congela los valores anteriores
+    // (leídos de los inputs al abrir) para centrar la rueda.
+    const [wheelOpen, setWheelOpen] = useState(false)
+    const [wheelInit, setWheelInit] = useState<{ w: number | null; r: number | null }>({ w: null, r: null })
+    // Gesto del long-press: distingue tap (→ teclado) de mantener presionado (→ rueda), con cancel
+    // por movimiento >10px. Ref (no state) para no re-renderizar durante el gesto.
+    const pressRef = useRef<{ timer: ReturnType<typeof setTimeout> | null; x: number; y: number; moved: boolean; fired: boolean }>({
+        timer: null,
+        x: 0,
+        y: 0,
+        moved: false,
+        fired: false,
+    })
 
     // Prefill "= última vez" (quick-win E2-3): escribe en los inputs uncontrolled al cambiar el nonce.
     useEffect(() => {
@@ -419,11 +445,91 @@ function StrengthLogSetForm({
             effort: {
                 rpe,
                 rir,
+                rirMin,
                 onRpeChange: setRpe,
                 onRirChange: setRir,
             },
             requestSubmit: () => formRef.current?.requestSubmit(),
         })
+    }
+
+    // ── Captura DUAL (E2.5): rueda por long-press sobre kg/reps (sólo V3 + puntero grueso) ──────────
+    /** Lee un input es-CL (coma decimal) como número, o null. */
+    const readInputNum = (el: HTMLInputElement | null): number | null => {
+        const raw = el?.value?.trim().replace(',', '.')
+        if (!raw) return null
+        const n = Number(raw)
+        return Number.isFinite(n) ? n : null
+    }
+    const openWheel = () => {
+        setWheelInit({ w: readInputNum(weightRef.current), r: readInputNum(repsRef.current) })
+        triggerHaptic(12)
+        setWheelOpen(true)
+    }
+    /** "Listo" de la rueda: escribe AMBOS valores en los inputs por el MISMO camino que el autollenado
+     *  "Anterior" (mutación de ref + evento `input` nativo → drafts intactos; refresca el mirror del keypad). */
+    const applyWheel = (weightKg: number, reps: number) => {
+        if (weightRef.current) {
+            weightRef.current.value = useKeypad ? formatWeightEsCl(weightKg) : String(weightKg)
+            weightRef.current.dispatchEvent(new Event('input', { bubbles: true }))
+        }
+        if (repsRef.current) {
+            repsRef.current.value = String(reps)
+            repsRef.current.dispatchEvent(new Event('input', { bubbles: true }))
+        }
+        keypad?.refreshDisplay()
+        setWheelOpen(false)
+    }
+    // Handlers del gesto en el input. Con `useWheel`, `pointerdown` PREVIENE el foco nativo para que el
+    // teclado NO se abra al iniciar el long-press; el tap corto abre el teclado manualmente en `pointerup`.
+    const onFieldPointerDown = (e: React.PointerEvent<HTMLInputElement>) => {
+        if (!useWheel) return
+        e.preventDefault()
+        const p = pressRef.current
+        if (p.timer) clearTimeout(p.timer)
+        p.moved = false
+        p.fired = false
+        p.x = e.clientX
+        p.y = e.clientY
+        p.timer = setTimeout(() => {
+            p.fired = true
+            p.timer = null
+            openWheel()
+        }, 400)
+    }
+    const onFieldPointerMove = (e: React.PointerEvent<HTMLInputElement>) => {
+        if (!useWheel) return
+        const p = pressRef.current
+        if (p.timer && (Math.abs(e.clientX - p.x) > 10 || Math.abs(e.clientY - p.y) > 10)) {
+            clearTimeout(p.timer)
+            p.timer = null
+            p.moved = true
+        }
+    }
+    const onFieldPointerUp = (field: 'weight' | 'reps') => {
+        if (!useWheel) return
+        const p = pressRef.current
+        if (p.timer) {
+            clearTimeout(p.timer)
+            p.timer = null
+        }
+        if (p.fired) {
+            p.fired = false
+            return
+        }
+        if (p.moved) {
+            p.moved = false
+            return
+        }
+        // Tap corto → teclado custom (el foco nativo se previno arriba, así que lo abrimos a mano).
+        openKeypadFor(field)
+    }
+    const onFieldPointerCancel = () => {
+        const p = pressRef.current
+        if (p.timer) {
+            clearTimeout(p.timer)
+            p.timer = null
+        }
     }
 
     const handleSubmit = (formData: FormData) => {
@@ -648,7 +754,14 @@ function StrengthLogSetForm({
                                 inputMode={useKeypad ? 'none' : 'decimal'}
                                 defaultValue={weightDefaultValue}
                                 placeholder="-"
-                                onFocus={useKeypad ? () => openKeypadFor('weight') : undefined}
+                                // V3 (rueda): el gesto lo maneja pointerup (tap→teclado) y previene el foco;
+                                // sin rueda, el foco abre el teclado como siempre.
+                                onFocus={useWheel ? undefined : useKeypad ? () => openKeypadFor('weight') : undefined}
+                                onPointerDown={useWheel ? onFieldPointerDown : undefined}
+                                onPointerMove={useWheel ? onFieldPointerMove : undefined}
+                                onPointerUp={useWheel ? () => onFieldPointerUp('weight') : undefined}
+                                onPointerCancel={useWheel ? onFieldPointerCancel : undefined}
+                                onPointerLeave={useWheel ? onFieldPointerCancel : undefined}
                                 // Enter NO cierra la serie (implicit submit) — pasa el foco a reps. Submit solo por "Listo".
                                 onKeyDown={(e) => {
                                     if (e.key === 'Enter') {
@@ -670,7 +783,12 @@ function StrengthLogSetForm({
                                 inputMode={useKeypad ? 'none' : 'numeric'}
                                 defaultValue={repsDefaultValue}
                                 placeholder="-"
-                                onFocus={useKeypad ? () => openKeypadFor('reps') : undefined}
+                                onFocus={useWheel ? undefined : useKeypad ? () => openKeypadFor('reps') : undefined}
+                                onPointerDown={useWheel ? onFieldPointerDown : undefined}
+                                onPointerMove={useWheel ? onFieldPointerMove : undefined}
+                                onPointerUp={useWheel ? () => onFieldPointerUp('reps') : undefined}
+                                onPointerCancel={useWheel ? onFieldPointerCancel : undefined}
+                                onPointerLeave={useWheel ? onFieldPointerCancel : undefined}
                                 // Enter cierra el teclado (blur) sin submitear — deja meter RPE/RIR antes de "Listo".
                                 onKeyDown={(e) => {
                                     if (e.key === 'Enter') {
@@ -698,7 +816,7 @@ function StrengthLogSetForm({
                             Reps en reserva · RIR
                             <EffortHelp label="RIR" text={RIR_HELP} />
                         </span>
-                        <ScaleDots name="RIR" value={rir} onChange={setRir} reducedMotion={reducedMotion} compact={!isActive} />
+                        <ScaleDots name="RIR" value={rir} onChange={setRir} reducedMotion={reducedMotion} compact={!isActive} min={rirMin} />
                     </div>
                 </div>
 
@@ -758,6 +876,19 @@ function StrengthLogSetForm({
                     </div>
                 )}
             </form>
+
+            {/* Captura DUAL (E2.5): rueda long-press. Sólo produce valores y los entrega por `applyWheel`
+                (autollenado → inputs); el guardado/draft/cola no se tocan. Sólo montada en V3 táctil. */}
+            {useWheel && (
+                <DualWheelPicker
+                    open={wheelOpen}
+                    onOpenChange={setWheelOpen}
+                    initialWeight={wheelInit.w}
+                    initialReps={wheelInit.r}
+                    onDone={applyWheel}
+                    reducedMotion={reducedMotion}
+                />
+            )}
         </motion.div>
     )
 }

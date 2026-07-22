@@ -27,13 +27,13 @@
 
 ## Ola 2 — Ejecutor V3 core loop (flag `executorV3` OFF por default)
 
-- [ ] **E2.1 [P] Flags + shell V3** — RN `flags.ts` `executorV3` remoteable + switch en `[planId].tsx` (V3|V2 fail-safe); web key Edge Config + override local; shell dark-only con `--exec-brand` (coach/eva según `executor_theme`), header progreso (%, ejercicio X de Y, series, volumen, cronómetro), tuerca placeholder.
-- [ ] **E2.2 [P] Entrada + Inicio** — splash <1,5s skippable (gradiente marca, avatar coach, día con overshoot; reduced-motion = fade) + pantalla inicio (resumen plan, primeros ejercicios, "la última vez", nota coach, racha placeholder, CTA Empezar). RN Reanimated; web CSS/WAAPI.
-- [ ] **E2.3 [S] Pantalla fuerza V3 RN** — stepper-first (engine `workout-stepper`), media siempre visible (`expo-image` gif / WebView video hasta Ola 5) con chips Instrucciones/Nota colapsables ~1,2s + modales sheet; "Anterior" 1-tap; prellenado sobrecarga; RPE/RIR pills opcionales (RPE 1-10, RIR 0-10); montada SOBRE `useWorkoutSession` intacto (draft/cola/reconciliación).
-- [ ] **E2.4 [S] Pantalla fuerza V3 web** — espejo responsive (320→desktop; ≥768px dos columnas media+captura), sobre `WorkoutExecutionClient` data-layer sin tocar el motor (extraer render, no estado).
-- [ ] **E2.5 [S] Captura dual (teclado + rueda)** — teclado custom preservado/agrandado; long-press en valor → rueda doble kg|reps centrada en anterior (RN: `@quidone/react-native-wheel-picker` o custom Reanimated, tick háptico; web: scroll-snap custom); hint primera vez persistido; lockfile en el mismo commit si entra dependencia.
-- [ ] **E2.6 [P] Vista lista "Ver todo"** — web+RN: mapa completo del plan con estado por ejercicio, salto por tap, FAB volver; stepper sigue default.
-- **Gate Ola 2**: gates estándar + QA visual flag ON en preview/dev device (checklist mockup core) + verificación offline (modo avión: serie→cola→reconciliación).
+- [x] **E2.1 [P] Flags + shell V3** — RN `flags.ts` `executorV3` remoteable + switch en `[planId].tsx` (V3|V2 fail-safe); web key Edge Config + override local; shell dark-only con `--exec-brand` (coach/eva según `executor_theme`), header progreso (%, ejercicio X de Y, series, volumen, cronómetro), tuerca placeholder.
+- [x] **E2.2 [P] Entrada + Inicio** — splash <1,5s skippable (gradiente marca, avatar coach, día con overshoot; reduced-motion = fade) + pantalla inicio (resumen plan, primeros ejercicios, "la última vez", nota coach, racha placeholder, CTA Empezar). RN Reanimated; web CSS/WAAPI.
+- [x] **E2.3 [S] Pantalla fuerza V3 RN** — stepper-first (engine `workout-stepper`), media siempre visible (`expo-image` gif / WebView video hasta Ola 5) con chips Instrucciones/Nota colapsables ~1,2s + modales sheet; "Anterior" 1-tap; prellenado sobrecarga; RPE/RIR pills opcionales (RPE 1-10, RIR 0-10); montada SOBRE `useWorkoutSession` intacto (draft/cola/reconciliación).
+- [x] **E2.4 [S] Pantalla fuerza V3 web** — espejo responsive (320→desktop; ≥768px dos columnas media+captura), sobre `WorkoutExecutionClient` data-layer sin tocar el motor (extraer render, no estado).
+- [x] **E2.5 [S] Captura dual (teclado + rueda)** — teclado custom preservado/agrandado; long-press en valor → rueda doble kg|reps centrada en anterior (RN: `@quidone/react-native-wheel-picker` o custom Reanimated, tick háptico; web: scroll-snap custom); hint primera vez persistido; lockfile en el mismo commit si entra dependencia.
+- [x] **E2.6 [P] Vista lista "Ver todo"** — web+RN: mapa completo del plan con estado por ejercicio, salto por tap, FAB volver; stepper sigue default.
+- **Gate Ola 2**: ✅ CERRADA 2026-07-22 — lint 0 err, tsc web+mobile, tokens, boundaries, docs, suite 3575 tests (incl. 14 wheel-range). QA visual flag ON en preview/device + modo avión = pendiente CEO.
 
 ## Ola 3 — Descanso, tipos y superseries
 

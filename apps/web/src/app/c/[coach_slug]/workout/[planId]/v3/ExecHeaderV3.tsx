@@ -1,6 +1,6 @@
 'use client'
 
-import { ArrowLeft, Settings } from 'lucide-react'
+import { ArrowLeft, Settings, List } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 export type ExecDotState = 'done' | 'now' | 'todo'
@@ -17,6 +17,10 @@ interface ExecHeaderV3Props {
     volumeLabel?: string | null
     onExit: () => void
     onSettings: () => void
+    /** Salta a la vista lista "Ver todo" (E2.6). */
+    onViewAll?: () => void
+    /** Muestra el botón "Ver todo" (sólo en modo stepper; en la lista el FAB hace el regreso). */
+    showViewAll?: boolean
 }
 
 /**
@@ -37,6 +41,8 @@ export function ExecHeaderV3({
     volumeLabel,
     onExit,
     onSettings,
+    onViewAll,
+    showViewAll = false,
 }: ExecHeaderV3Props) {
     return (
         <div className="exec-v3-header sticky top-0 z-20 pt-safe backdrop-blur">
@@ -67,6 +73,18 @@ export function ExecHeaderV3({
                             />
                         ))}
                     </div>
+
+                    {showViewAll && onViewAll && (
+                        <button
+                            type="button"
+                            onClick={onViewAll}
+                            aria-label="Ver todos los ejercicios"
+                            className="flex h-9 shrink-0 items-center gap-1 rounded-[11px] border border-white/10 bg-white/[0.06] px-2.5 text-[11px] font-bold text-on-dark-muted transition-colors hover:text-on-dark"
+                        >
+                            <List className="h-[15px] w-[15px]" />
+                            Ver todo
+                        </button>
+                    )}
 
                     <button
                         type="button"

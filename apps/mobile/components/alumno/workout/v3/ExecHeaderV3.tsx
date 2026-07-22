@@ -1,6 +1,6 @@
 import { Pressable, Text, View } from 'react-native'
 import { MotiView } from 'moti'
-import { Settings } from 'lucide-react-native'
+import { List, Settings } from 'lucide-react-native'
 import { FONT, TYPE } from '../../../../lib/typography'
 import { hexToRgba } from '../../../../lib/theme'
 import type { ExecTheme } from './exec-theme'
@@ -25,6 +25,7 @@ export function ExecHeaderV3({
   elapsedLabel,
   exec,
   reducedMotion = false,
+  onOpenList,
   onOpenSettings,
 }: {
   /** Un estado por ejercicio (block), en orden de render. */
@@ -34,6 +35,8 @@ export function ExecHeaderV3({
   elapsedLabel: string
   exec: ExecTheme
   reducedMotion?: boolean
+  /** Abre la vista lista "Ver todo" (E2.6) — capa de navegacion sobre el stepper. */
+  onOpenList: () => void
   onOpenSettings: () => void
 }) {
   const s = exec.surface
@@ -53,6 +56,17 @@ export function ExecHeaderV3({
             ))
           )}
         </View>
+        <Pressable
+          testID="btn-exec-v3-list"
+          onPress={onOpenList}
+          hitSlop={8}
+          className="h-9 w-9 items-center justify-center rounded-[11px]"
+          style={{ backgroundColor: s.surface, borderWidth: 1.5, borderColor: s.borderStrong }}
+          accessibilityRole="button"
+          accessibilityLabel="Ver todos los ejercicios"
+        >
+          <List size={19} color={s.textMuted} />
+        </Pressable>
         <Pressable
           testID="btn-exec-v3-settings"
           onPress={onOpenSettings}

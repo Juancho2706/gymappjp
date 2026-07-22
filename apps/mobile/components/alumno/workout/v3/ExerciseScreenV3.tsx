@@ -3,7 +3,7 @@ import { Pressable, Text, View } from 'react-native'
 import { AnimatePresence, MotiView } from 'moti'
 import { LinearTransition } from 'react-native-reanimated'
 import { Image } from 'expo-image'
-import { ArrowRightLeft, Dumbbell, History, ListChecks, MessageSquareText, Play, TrendingUp, Undo2 } from 'lucide-react-native'
+import { ArrowRightLeft, Dumbbell, Hand, History, ListChecks, MessageSquareText, Play, TrendingUp, Undo2, X } from 'lucide-react-native'
 import {
   formatWeightEsCl,
   type OptimisticLogPayload,
@@ -11,6 +11,7 @@ import {
 } from '@eva/workout-engine'
 import { FONT, textStyle } from '../../../../lib/typography'
 import { hexToRgba } from '../../../../lib/theme'
+import { haptics } from '../../../../lib/haptics'
 import { extractYoutubeVideoId } from '../../../../lib/youtube'
 import { EXERCISE_TYPE_META, exerciseTypeColor } from '../../../../lib/exercise-type-meta'
 import type { EffectiveTarget } from '../../../../lib/workout/progression'
@@ -19,6 +20,8 @@ import { VideoPlayer } from '../../../VideoPlayer'
 import { Sheet } from '../../../Sheet'
 import { SetRow, ActiveSetRow } from '../SetRow'
 import { bestPrevOf, overloadChipLabel } from '../workout-ui'
+import { DualWheelPicker } from './DualWheelPicker'
+import { dismissWheelHint, useWheelHintDismissed } from './wheel-hint'
 import type { ExecTheme } from './exec-theme'
 
 // Reflow del layout (paridad SingleExerciseCard CARD_LAYOUT): anima el cambio de tamaño al
@@ -99,6 +102,10 @@ export function ExerciseScreenV3({
   const s = exec.surface
   const [autofill, setAutofill] = useState<{ weight: number | null; reps: number | null; nonce: number } | null>(null)
   const [noteOpen, setNoteOpen] = useState(false)
+  // Rueda dual (E2.5) — se abre por long-press sobre kg/reps de la serie activa; entrega ambos valores
+  // por el MISMO autofill de la fila "Anterior". El hint "una vez" se apaga al usarla o cerrarlo.
+  const [wheelOpen, setWheelOpen] = useState(false)
+  const hintDismissed = useWheelHintDismissed()
 
   const typeColor = exerciseTypeColor('strength', exec.accent)
   const typeLabel = EXERCISE_TYPE_META.strength.label
@@ -115,6 +122,29 @@ export function ExerciseScreenV3({
   const suggestedWeightKg = eff?.weightKg ?? block.target_weight_kg
   const overloadLabel = overloadChipLabel(block, eff, currentWeek)
   const bestPrev = bestPrevOf(prevList)
+
+  // Anclas de la rueda: centro en el valor ANTERIOR de la serie (mejor set previo) o, si no hay,
+  // en el OBJETIVO (peso sugerido / reps prescritas). `block.reps` puede ser "8-10" ⇒ toma el primer
+  // entero. La rueda redondea internamente al grid del paso.
+  const wheelAnchors = useMemo(() => {
+    const repsParsed = parseInt(String(block.reps), 10)
+    return {
+      kg: bestPrev?.weight_kg ?? suggestedWeightKg ?? 0,
+      reps: bestPrev?.reps_done ?? (Number.isFinite(repsParsed) ? repsParsed : 0),
+    }
+  }, [bestPrev, suggestedWeightKg, block.reps])
+
+  const openWheel = () => {
+    if (firstUnlogged == null) return
+    haptics.tap()
+    setWheelOpen(true)
+  }
+  const handleWheelDone = (weightKg: number, reps: number) => {
+    if (firstUnlogged != null) setAutofill({ weight: weightKg, reps, nonce: Date.now() })
+    if (!hintDismissed) dismissWheelHint()
+    setWheelOpen(false)
+  }
+  const showWheelHint = !hintDismissed && firstUnlogged != null
 
   const hasTechnique = !!(exercise.gif_url || exercise.video_url)
   const hasInstructions = (exercise.instructions?.length ?? 0) > 0
@@ -159,6 +189,10 @@ export function ExerciseScreenV3({
           }}
           onDraftChange={(values, fieldIndex) => onDraftChange(block.id, setNumber, values, fieldIndex)}
           onCommit={onCommitSet}
+          // Rueda dual (E2.5): SOLO la serie activa la abre por long-press (el autofill alimenta esa fila).
+          onLongPressValue={isActiveSet ? openWheel : undefined}
+          // RIR con 0 habilitado (decision CEO 8) en TODA fila de fuerza V3 (activa y recesivas).
+          allowZeroRir
         />
       )
     }
@@ -305,6 +339,29 @@ export function ExerciseScreenV3({
         </Pressable>
       )}
 
+      {/* Hint "una sola vez" de la captura dual (E2.5): pill sobre la fila de captura. Se apaga al usar
+          la rueda (handleWheelDone) o al cerrar la pill. Persistido en AsyncStorage (eva:wheel-hint-v1). */}
+      {showWheelHint && (
+        <View
+          style={{ flexDirection: 'row', alignItems: 'center', gap: 8, borderRadius: 12, borderWidth: 1.5, paddingLeft: 12, paddingRight: 6, paddingVertical: 8, backgroundColor: hexToRgba(exec.accent, 0.1), borderColor: hexToRgba(exec.accent, 0.3) }}
+        >
+          <Hand size={14} color={exec.accent} />
+          <Text style={{ flex: 1, fontFamily: FONT.uiSemibold, fontSize: 12, color: s.text }} numberOfLines={2}>
+            Tap = teclado · Mantén presionado = rueda
+          </Text>
+          <Pressable
+            testID="btn-dismiss-wheel-hint-v3"
+            onPress={() => dismissWheelHint()}
+            hitSlop={8}
+            style={{ height: 28, width: 28, alignItems: 'center', justifyContent: 'center', borderRadius: 999 }}
+            accessibilityRole="button"
+            accessibilityLabel="Entendido, ocultar la ayuda"
+          >
+            <X size={15} color={s.textMuted} />
+          </Pressable>
+        </View>
+      )}
+
       {/* Series REUSADAS (ActiveSetRow / SetRow) — CTA de completar + RPE/RIR viven aquí. */}
       <View style={{ gap: 6 }}>{setRows}</View>
 
@@ -318,6 +375,19 @@ export function ExerciseScreenV3({
           </View>
         </Sheet>
       )}
+
+      {/* Rueda dual kg | reps (E2.5) — produce (peso, reps) y los entrega por el autofill de la serie
+          activa. El guardado sigue siendo el CTA normal de la fila (motor intocable). */}
+      <DualWheelPicker
+        open={wheelOpen}
+        onClose={() => setWheelOpen(false)}
+        setNumber={firstUnlogged ?? 1}
+        kgAnchor={wheelAnchors.kg}
+        repsAnchor={wheelAnchors.reps}
+        exec={exec}
+        reducedMotion={reducedMotion}
+        onDone={handleWheelDone}
+      />
     </MotiView>
   )
 }

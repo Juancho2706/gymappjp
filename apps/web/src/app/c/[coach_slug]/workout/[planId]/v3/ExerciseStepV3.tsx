@@ -16,6 +16,7 @@ import {
     RUT_TYPE_META,
 } from '../WorkoutExecutionClient'
 import { resolveExecMedia } from './exec-media'
+import { WheelHint } from './WheelHint'
 
 /** Mejor sesión previa (para "Anterior" + autollenado). */
 type PrevSet = { weight_kg: number | null; reps_done: number | null; date: string }
@@ -234,6 +235,9 @@ export function ExerciseStepV3({
                 </button>
             )}
 
+            {/* Pista de la captura dual (E2.5): "Tap = teclado · Mantén presionado = rueda" — 1 sola vez. */}
+            <WheelHint />
+
             {/* LogSetForm REUSADO tal cual — superficie de captura/resiliencia (inputs/keypad/RPE-RIR/recap) */}
             <div className="exec-v3-setlist space-y-1.5">
                 {Array.from({ length: block.sets }).map((_, i) => {
@@ -263,6 +267,7 @@ export function ExerciseStepV3({
                                     : undefined
                             }
                             substitution={substitution ?? null}
+                            v3
                             onLogged={handleLogged}
                             onResult={handleResult}
                         />

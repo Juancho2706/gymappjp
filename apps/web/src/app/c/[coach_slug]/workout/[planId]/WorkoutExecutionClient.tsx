@@ -29,6 +29,7 @@ import { StepperExecution, type StepperStepView } from './StepperExecution'
 import { ExecHeaderV3, type ExecDotState } from './v3/ExecHeaderV3'
 import { applyExecThemeVars, readExecutorTheme } from './v3/exec-theme'
 import { ExerciseStepV3 } from './v3/ExerciseStepV3'
+import { ExecListMapV3, type ExecListMapItem } from './v3/ExecListMapV3'
 import { SessionIntro } from './v3/SessionIntro'
 import { SessionStart, type SessionStartExercise } from './v3/SessionStart'
 import { STEPPER_MODE_KEY } from './rest-timer-preferences'
@@ -1425,6 +1426,15 @@ export function WorkoutExecutionClient({
         localStorage.setItem(STEPPER_MODE_KEY, String(on))
         if (on) setCurrentStepIndex(firstIncompleteStepIndex(steps, sessionLogs))
     }
+    // "Ver todo" (E2.6): la vista lista V3 se alcanza desde el header; el FAB / tap en el mapa vuelve al
+    // stepper. `returnToStepper(i)` conserva el paso (i) en vez de saltar al primer incompleto.
+    const returnToStepper = (index?: number) => {
+        if (index != null) setCurrentStepIndex(index)
+        if (!stepperEnabled) {
+            setStepperEnabled(true)
+            localStorage.setItem(STEPPER_MODE_KEY, 'true')
+        }
+    }
     const openTechnique = (exercise: ExerciseType | null) => {
         if (!exercise) return
         setSelectedExercise(exercise)
@@ -1883,6 +1893,32 @@ export function WorkoutExecutionClient({
         muted: step.muted,
         complete: isStepComplete(step, sessionLogs),
     }))
+    // Mapa "Ver todo" del ejecutor V3 (E2.6): una fila por paso (bloque o superserie) con su progreso
+    // de series y el AHORA (paso del bloque activo). Tap = volver al stepper EN ese paso.
+    const activeStepIdx = activeBlockId != null
+        ? stepIndexOfBlock(steps, activeBlockId)
+        : firstIncompleteStepIndex(steps, sessionLogs)
+    const execListMapItems: ExecListMapItem[] = steps.map((step, i) => {
+        const totalSets = step.blocks.reduce((acc, b) => acc + b.sets, 0)
+        const doneSets = step.blocks.reduce((acc, b) => {
+            let done = 0
+            for (let s = 1; s <= b.sets; s += 1) {
+                if (sessionLogs.some((l) => l.block_id === b.id && l.set_number === s)) done += 1
+            }
+            return acc + done
+        }, 0)
+        return {
+            key: step.key,
+            stepIndex: i,
+            title: stepTitle(step),
+            sectionTitle: step.sectionTitle,
+            doneSets,
+            totalSets,
+            complete: isStepComplete(step, sessionLogs),
+            isCurrent: i === activeStepIdx,
+        }
+    })
+
     // Pinta el card del paso `index` reusando `renderGroup` (siempre completo — sin colapsar).
     const renderStepNode = (index: number) => {
         const step = steps[index]
@@ -1967,6 +2003,8 @@ export function WorkoutExecutionClient({
                         volumeLabel={sessionVolumeLabel}
                         onExit={() => router.push(`${base}/dashboard`)}
                         onSettings={() => setShowExecV3Settings(true)}
+                        onViewAll={() => setStepperMode(false)}
+                        showViewAll={stepperEnabled}
                     />
                 )}
 
@@ -2155,6 +2193,12 @@ export function WorkoutExecutionClient({
                     />
                 ) : (
                 <div className="px-4 py-6 md:px-8 max-w-5xl mx-auto pb-32">
+                    {/* Mapa "Ver todo" (E2.6): sólo en V3, encima de la lista existente (no duplica renderGroup). */}
+                    {execV3Active && (
+                        <div className="mb-5">
+                            <ExecListMapV3 items={execListMapItems} onJump={returnToStepper} />
+                        </div>
+                    )}
                     <div className="space-y-6">
                         {sectioned.map((section) => (
                             <section key={section.sectionKey} className="space-y-3">
@@ -2185,6 +2229,18 @@ export function WorkoutExecutionClient({
                         ))}
                     </div>
                 </div>
+                )}
+
+                {/* FAB "Volver al ejercicio" (E2.6): sólo en la vista lista V3 — regresa al stepper. */}
+                {execV3Active && !stepperEnabled && (
+                    <button
+                        type="button"
+                        onClick={() => returnToStepper()}
+                        className="exec-v3-fab"
+                    >
+                        <GalleryHorizontal className="h-4 w-4" aria-hidden />
+                        Volver al ejercicio
+                    </button>
                 )}
 
                 <div className="exec-finish-bar fixed bottom-0 left-0 right-0 z-40 border-t border-white/10 bg-[var(--ink-950)]/90 px-4 pt-4 pb-[calc(1rem+env(safe-area-inset-bottom,0px))] backdrop-blur-xl">

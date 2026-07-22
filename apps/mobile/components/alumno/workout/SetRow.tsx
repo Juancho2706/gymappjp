@@ -443,6 +443,7 @@ function FieldBox({
   value,
   active,
   onPress,
+  onLongPress,
   testID,
   compact = false,
 }: {
@@ -450,6 +451,13 @@ function FieldBox({
   value: string
   active: boolean
   onPress: () => void
+  /**
+   * Mantener presionado (~400ms) sobre la caja — captura por RUEDA del ejecutor V3 (E2.5). Aditivo y
+   * opcional: solo V3 lo pasa; sin la prop el Pressable no registra long-press y la fila se comporta
+   * IGUAL que en V2 (el `delayLongPress` queda inerte sin handler). El tap corto abre el teclado como
+   * siempre.
+   */
+  onLongPress?: () => void
   testID: string
   compact?: boolean
 }) {
@@ -457,9 +465,12 @@ function FieldBox({
     <Pressable
       testID={testID}
       onPress={onPress}
+      onLongPress={onLongPress}
+      delayLongPress={onLongPress ? 400 : undefined}
       className="flex-1"
       accessibilityRole="button"
       accessibilityLabel={`${label}: ${value || 'sin valor'}, toca para editar`}
+      accessibilityHint={onLongPress ? 'Manten presionado para abrir la rueda de valores' : undefined}
     >
       {/* Label de la caja (Kg/Reps/campos tipados) con KEYPAD_EYEBROW_STYLE (11px / 0.04em) — mirror del
           `text-[9.5px] ... tracking-[0.08em]` web (`LogSetForm.tsx:632/654`). `TYPE.eyebrow` (12px / 0.12em)
@@ -523,6 +534,8 @@ export function ActiveSetRow({
   isEditing = false,
   onDraftChange,
   onCommit,
+  onLongPressValue,
+  allowZeroRir = false,
 }: {
   blockId: string
   setNumber: number
@@ -563,6 +576,18 @@ export function ActiveSetRow({
   autofill?: { weight: number | null; reps: number | null; nonce: number } | null
   onDraftChange: (values: Record<string, string>, fieldIndex: number) => void
   onCommit: (payload: OptimisticLogPayload) => void
+  /**
+   * Mantener presionado (~400ms) sobre una caja de valor (kg/reps de FUERZA) — abre la rueda dual del
+   * ejecutor V3 (E2.5). ADITIVO: solo V3 lo pasa; el tap corto sigue abriendo el teclado. `key` indica
+   * la caja tocada (hoy la rueda es doble kg|reps, pero se propaga por si el caller la enfoca). Sin la
+   * prop la fila es byte-identica a V2 (las cajas no registran long-press). No aplica a tipadas.
+   */
+  onLongPressValue?: (key: 'weight' | 'reps') => void
+  /**
+   * Habilita el 0 en la escala de RIR (0-10, "al fallo") — decision CEO 8 del ejecutor V3. ADITIVO: solo
+   * V3 lo pasa (true); sin la prop el RIR arranca en 1 (V2 intacto). RPE queda SIEMPRE 1-10.
+   */
+  allowZeroRir?: boolean
 }) {
   const fields: RowField[] = useMemo(() => {
     if (typedMode) {
@@ -692,6 +717,7 @@ export function ActiveSetRow({
               value={values.weight ?? ''}
               active={openKey === 'weight'}
               onPress={() => openField('weight')}
+              onLongPress={onLongPressValue ? () => onLongPressValue('weight') : undefined}
               testID={`set-field-${setNumber}-weight`}
               compact={!isActive}
             />
@@ -708,6 +734,7 @@ export function ActiveSetRow({
               value={values.reps ?? ''}
               active={openKey === 'reps'}
               onPress={() => openField('reps')}
+              onLongPress={onLongPressValue ? () => onLongPressValue('reps') : undefined}
               testID={`set-field-${setNumber}-reps`}
               compact={!isActive}
             />
@@ -747,7 +774,7 @@ export function ActiveSetRow({
                 {RIR_HELP}
               </Text>
             )}
-            <EffortScale kind="rir" value={int(values.rir)} onSelect={(v) => patch({ rir: String(v) })} compact={!isActive} />
+            <EffortScale kind="rir" value={int(values.rir)} onSelect={(v) => patch({ rir: String(v) })} compact={!isActive} allowZero={allowZeroRir} />
           </View>
         </View>
       )}

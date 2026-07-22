@@ -57,6 +57,7 @@ import { resolveExecTheme } from './exec-theme'
 import { SessionIntro } from './SessionIntro'
 import { SessionStart, type StartChip, type StartExercisePreview } from './SessionStart'
 import { ExerciseScreenV3 } from './ExerciseScreenV3'
+import { ExerciseListV3, type ExerciseListItem } from './ExerciseListV3'
 
 const EMBER_200 = '#FFD6C7'
 const ON_DARK_MUTED = '#939DAB'
@@ -129,6 +130,7 @@ function ExecutorV3Inner({ planId, recoverDate, editDate }: { planId: string; re
   const [summaryOpen, setSummaryOpen] = useState(false)
   const [finishedElapsed, setFinishedElapsed] = useState<number | null>(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [listOpen, setListOpen] = useState(false) // Vista "Ver todo" (E2.6) — capa sobre el stepper.
   const [recentSet, setRecentSet] = useState<{ blockId: string; setNumber: number; pr: boolean } | null>(null)
   const recentSetTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [syncErrors, setSyncErrors] = useState<Record<string, string>>({})
@@ -733,6 +735,53 @@ function ExecutorV3Inner({ planId, recoverDate, editDate }: { planId: string; re
     [steps, renderGroup],
   )
 
+  // Modelo de la vista lista "Ver todo" (E2.6): una fila por paso, con series hechas/total, tipo y
+  // seccion. El salto (onJumpTo) reposiciona el stepper — misma navegacion que el rail.
+  const listItems = useMemo<ExerciseListItem[]>(
+    () =>
+      steps.map((st, i) => {
+        let done = 0
+        let total = 0
+        for (const b of st.blocks) {
+          total += b.sets
+          const logged = new Set(
+            sessionLogs
+              .filter((l) => l.block_id === b.id && l.set_number >= 1 && l.set_number <= b.sets)
+              .map((l) => l.set_number),
+          )
+          done += logged.size
+        }
+        let title: string
+        let typeLabel: string
+        let typeColor: string
+        if (st.kind === 'superset') {
+          const names = st.blocks.map((b) => resolveExercise(b)?.name).filter(Boolean) as string[]
+          title = names.length ? names.join(' + ') : 'Superserie'
+          typeLabel = 'Superserie'
+          typeColor = exec.accent
+        } else {
+          const ex = resolveExercise(st.blocks[0])
+          title = ex?.name ?? 'Ejercicio'
+          const t = ex ? effectiveExerciseType(st.blocks[0], ex) : 'strength'
+          typeLabel = EXERCISE_TYPE_META[t].label
+          typeColor = exerciseTypeColor(t, exec.accent)
+        }
+        return {
+          key: st.key,
+          index: i,
+          sectionTitle: st.sectionTitle,
+          muted: st.muted,
+          title,
+          typeLabel,
+          typeColor,
+          doneSets: done,
+          totalSets: total,
+          complete: total > 0 && done >= total,
+        }
+      }),
+    [steps, sessionLogs, exec.accent],
+  )
+
   // Hidratacion: aterriza en el primer paso incompleto una sola vez cuando cargan los pasos.
   useEffect(() => {
     if (loading || steps.length === 0 || didHydrateStepPosRef.current) return
@@ -828,6 +877,7 @@ function ExecutorV3Inner({ planId, recoverDate, editDate }: { planId: string; re
         elapsedLabel={fmtElapsed(elapsedSec)}
         exec={exec}
         reducedMotion={motion.reduced}
+        onOpenList={() => setListOpen(true)}
         onOpenSettings={() => setSettingsOpen(true)}
       />
 
@@ -890,6 +940,18 @@ function ExecutorV3Inner({ planId, recoverDate, editDate }: { planId: string; re
       />
 
       <TechniqueSheet exercise={techniqueExercise} onClose={() => setTechniqueExercise(null)} />
+
+      {/* Vista lista "Ver todo" (E2.6) — capa de navegacion sobre el stepper (que sigue montado debajo).
+          Saltar a un paso reposiciona el stepper y cierra la capa (misma navegacion que el rail). */}
+      <ExerciseListV3
+        open={listOpen}
+        onClose={() => setListOpen(false)}
+        items={listItems}
+        currentIndex={stepIndex}
+        onJumpTo={(i) => { setStepIndex(i); setListOpen(false) }}
+        exec={exec}
+        reducedMotion={motion.reduced}
+      />
 
       {/* Ajustes del ejecutor V3 — placeholder de esta wave (el panel real llega despues). */}
       <Sheet open={settingsOpen} onClose={() => setSettingsOpen(false)} title="Ajustes" nativeModal snapPoints={['35%']}>
