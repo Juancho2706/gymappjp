@@ -689,7 +689,7 @@ function BiometricsEditDialog({
             <Button
                 variant="secondary"
                 size="lg"
-                className="w-full"
+                className="flex-1"
                 disabled={isPending}
                 onClick={() => handleOpenChange(false)}
             >
@@ -698,7 +698,7 @@ function BiometricsEditDialog({
             <Button
                 variant="sport"
                 size="lg"
-                className="w-full"
+                className="flex-1"
                 onClick={handleSave}
                 disabled={isPending}
             >
@@ -736,7 +736,7 @@ function BiometricsEditDialog({
                         showCloseButton={false}
                         className="max-h-[min(88dvh,88svh)] gap-0 rounded-t-sheet border-subtle bg-surface-card p-0 text-body"
                     >
-                        <div className="flex max-h-[min(88dvh,88svh)] flex-col overflow-y-auto overscroll-contain px-[max(1.25rem,env(safe-area-inset-left))] pb-[max(1.5rem,env(safe-area-inset-bottom))] pr-[max(1.25rem,env(safe-area-inset-right))] pt-3">
+                        <div className="flex max-h-[min(88dvh,88svh)] flex-col overflow-x-hidden overflow-y-auto overscroll-contain px-[max(1.25rem,env(safe-area-inset-left))] pb-[max(1.5rem,env(safe-area-inset-bottom))] pr-[max(1.25rem,env(safe-area-inset-right))] pt-3">
                             <div className="mx-auto mb-3 h-1 w-9 shrink-0 rounded-full bg-[var(--border-strong)]" aria-hidden="true" />
                             <SheetHeader className="border-0 bg-transparent p-0 pb-3">
                                 <SheetTitle className="font-display text-lg font-extrabold normal-case tracking-[-0.02em] text-strong">
