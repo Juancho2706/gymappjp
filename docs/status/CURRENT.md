@@ -1,7 +1,7 @@
 ---
 status: active
 owner: product-engineering
-last_verified: "2026-07-21 @ bce2eb3b"
+last_verified: "2026-07-21 @ 8f8161cb"
 canonical: true
 ---
 
@@ -36,7 +36,7 @@ Este bloque es un snapshot, no reemplaza `git fetch`, `git status` ni los checks
 
 ## Prioridad actual
 
-1. Ola 4B activa (wave 4B.1 aplicada, 3/16; decisión owner: **nutrición V1 al olvido**, V2 único destino). Sigue wave 4B.2 (SWAP tab coach→hub V2) según `MOBILE_PARITY.md`; 4A cerrada estática pendiente de device.
+1. Ola 4B activa (9/16 aplicadas: waves 4B.1–4B.3; decisión owner: **nutrición V1 al olvido**, V2 único destino). Sigue wave 4B.4 según `MOBILE_PARITY.md`; 4A cerrada estática pendiente de device.
 2. Ejecutar los gates web/mobile completos sobre cada checkpoint candidato.
 3. Generar y retener artefactos Android/iOS del candidato final; completar el submit a TestFlight.
 4. Completar QA en dispositivos Android/iOS de los recorridos críticos.
