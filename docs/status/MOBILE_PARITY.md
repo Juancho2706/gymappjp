@@ -1,7 +1,7 @@
 ---
 status: active
 owner: Juan Manuel Villegas
-last_verified: "2026-07-21 @ 3efa1a75"
+last_verified: "2026-07-21 @ 7c6684fa"
 canonical: true
 source_of_truth: apps/web responsive + apps/mobile
 ---
@@ -22,7 +22,7 @@ La paridad global **no está certificada todavía**.
 | Sección 2 — dashboard del alumno | Cerrado | Pendiente | Cerrado estático; no certificado |
 | Sección 3 — coach (14 unidades) | Cerrado | Pendiente | Cerrado estático; no certificado |
 | Ola 2R — residuos del alumno | Cerrado | Pendiente | Cerrado estático; no certificado |
-| Ola 4A — nutrición del alumno | **10/12 aplicadas** | Pendiente | **Activa** |
+| Ola 4A — nutrición del alumno | **12/12 aplicadas** | Pendiente | Cerrada estática; no certificada |
 
 “Cerrado estático” significa que código, spec y verificaciones automatizadas disponibles convergieron. No significa que el comportamiento visual, gestos, teclado, cámara, safe areas u offline estén aprobados en hardware real.
 
@@ -35,8 +35,8 @@ Fuente funcional/visual: `apps/web/src/app/c/[coach_slug]/nutrition-v2/**` y `ap
 | 4A-01 | Ruteo y chrome | Aplicado | Pendiente |
 | 4A-02 | Vista Hoy: estructura | Aplicado | Pendiente |
 | 4A-03 | Vista Plan | Aplicado | Pendiente |
-| 4A-04 | Historial | Pendiente | Pendiente |
-| 4A-05 | Shell y tab bar | Pendiente | Pendiente |
+| 4A-04 | Historial | Aplicado | Pendiente |
+| 4A-05 | Shell y tab bar | Aplicado | Pendiente |
 | 4A-06 | Editar y retirar registros | Aplicado | Pendiente |
 | 4A-07 | Kit e ilustraciones | Aplicado | Pendiente |
 | 4A-08 | AuraHero y colores white-label | Aplicado | Pendiente |
@@ -45,13 +45,13 @@ Fuente funcional/visual: `apps/web/src/app/c/[coach_slug]/nutrition-v2/**` y `ap
 | 4A-11 | Scanner | Aplicado | Pendiente |
 | 4A-12 | Celebraciones y residuos | Aplicado | Pendiente |
 
-Aplicadas: **01, 02, 03, 06, 07, 08, 09, 10, 11 y 12** (wave C en `73f6aa82`; wave D en este cambio). Pendientes: **04 y 05**.
+Aplicadas: **las 12** (wave C en `73f6aa82`; wave D en `3efa1a75`; wave E en `7c6684fa`). Código de la ola completo; falta QA device.
 
 ### Dónde retomar
 
-1. Wave E: `4A-04`; después `4A-05` (ambas comparten `index.tsx`).
-2. Ejecutar gates estáticos y export después de cada wave.
-3. Completar matriz device de 4A y regresión dirigida de Secciones 1–3/2R.
+1. Completar matriz device de 4A y regresión dirigida de Secciones 1–3/2R (requiere build nativa).
+2. Abrir la ola 4B (nutrición del coach y catálogos) confirmando alcance contra código.
+3. Residuo diferido de nutrición coach: editor de reemplazos F-02 en el builder móvil (TODO en `QuickEditMode.tsx`).
 
 ## Builds móviles
 

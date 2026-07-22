@@ -1,7 +1,7 @@
 ---
 status: active
 owner: product-engineering
-last_verified: "2026-07-21 @ 3efa1a75"
+last_verified: "2026-07-21 @ 7c6684fa"
 canonical: true
 ---
 
@@ -36,7 +36,7 @@ Este bloque es un snapshot, no reemplaza `git fetch`, `git status` ni los checks
 
 ## Prioridad actual
 
-1. Cerrar Wave E (`4A-04`, después `4A-05`) y certificar 4A según `MOBILE_PARITY.md` (waves C y D ya aplicadas).
+1. Ola 4A cerrada estática (12/12): certificarla en device y abrir la ola 4B (nutrición coach) según `MOBILE_PARITY.md`.
 2. Ejecutar los gates web/mobile completos sobre cada checkpoint candidato.
 3. Generar y retener artefactos Android/iOS del candidato final; completar el submit a TestFlight.
 4. Completar QA en dispositivos Android/iOS de los recorridos críticos.
