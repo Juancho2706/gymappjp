@@ -157,6 +157,13 @@ interface Props {
      * cambia el motor de logging; sólo pre-rellena para confirmar. Sin él, la fila no cambia.
      */
     typedPrefill?: { repsDone?: number | null; nonce: number }
+    /**
+     * Auto-prellenado de FC promedio (E6.2 · Ola 6 · cardio): el BPM en vivo por Web Bluetooth de
+     * `CardioStepV3` sugiere el promedio del stream. Al cambiar `nonce`, se escribe `bpm` en el input
+     * uncontrolled `actual_avg_hr` SOLO SI está vacío (nunca pisa lo que el alumno ya editó). Mismo patrón
+     * uncontrolled que `typedPrefill`/`prefill`; NO cambia el motor de logging. Solo el flujo cardio lo pasa.
+     */
+    suggestedAvgHr?: { bpm: number; nonce: number }
 }
 
 /** Estado de sincronización de una serie de cara al usuario (contrato a). */
@@ -980,6 +987,7 @@ function TypedLogSetRow({
     supersetRest,
     sideMode,
     typedPrefill,
+    suggestedAvgHr,
     onLogged,
     onResult,
 }: Props & { mode: Exclude<LogSetMode, 'strength'> }) {
@@ -1032,6 +1040,17 @@ function TypedLogSetRow({
         if (passesRef.current) passesRef.current.value = String(typedPrefill.repsDone)
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [prefillNonce])
+
+    // Auto-prellenado de FC promedio (E6.2 · cardio BLE): el promedio del stream en vivo alimenta el input
+    // `actual_avg_hr` de la fila activa SOLO SI está vacío — jamás pisa un valor que el alumno ya escribió,
+    // y sigue siendo editable. Uncontrolled = sin re-render; mismo patrón que el prefill roller de arriba.
+    const suggestedHrNonce = suggestedAvgHr?.nonce
+    useEffect(() => {
+        if (suggestedHrNonce == null || suggestedAvgHr?.bpm == null) return
+        const input = hrRef.current
+        if (input && input.value.trim() === '') input.value = String(suggestedAvgHr.bpm)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [suggestedHrNonce])
 
     // Abre el teclado custom en el campo tocado (solo pointer coarse). El objetivo tipado viaja en el
     // header (DB-5); "Listo" reusa `requestSubmit()`. Reglas decimales por campo vienen de typedKeypadFields.

@@ -1,12 +1,20 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native'
-import { Check, Droplets, Footprints, Moon } from 'lucide-react-native'
+import { Check, Droplets, Footprints, HeartPulse, Moon, Smartphone } from 'lucide-react-native'
 import { MotiView } from 'moti'
 import { Easing } from 'react-native-reanimated'
 import { cssInterop } from 'nativewind'
 import { useTheme } from '../../../context/ThemeContext'
 import { FONT } from '../../../lib/typography'
 import { getDailyHabits, upsertDailyHabits, type HabitsData } from '../../../lib/habits.queries'
+import {
+  isHealthAvailable,
+  nearestSleepOption,
+  readLastNightSleepHours,
+  readTodaySteps,
+  requestHealthPermissions,
+} from '../../../lib/health-aggregators'
+import { getHealthOptIn, setHealthOptIn } from '../../../lib/health-prefs'
 import { toast } from '../../Toast'
 import { Card } from '../../Card'
 
@@ -15,6 +23,7 @@ import { Card } from '../../Card'
 // dark-aware en runtime, sin hardcodear hex.
 cssInterop(Droplets, { className: { target: 'style', nativeStyleToProp: { color: true } } })
 cssInterop(Footprints, { className: { target: 'style', nativeStyleToProp: { color: true } } })
+cssInterop(Smartphone, { className: { target: 'style', nativeStyleToProp: { color: true } } })
 
 // Placeholder del input Pasos = `placeholder:text-subtle` web (HabitsCard.tsx:171);
 // valores del token --text-subtle por esquema (globals.css:448/641).
@@ -43,6 +52,69 @@ export function HabitsCard({ clientId, logDate, isToday, initialData }: { client
   // Espejo del isPending web (useTransition): deshabilita TODOS los controles
   // mientras se persiste, evitando upserts concurrentes (Ola0 P2 #11).
   const [saving, setSaving] = useState(false)
+
+  // ── Salud del alumno via agregadores (E6.3) ────────────────────────────────────────────────────
+  // Opt-in device-local (revocable): al conectar, autocompleta pasos/sueño desde HealthKit/Health
+  // Connect SOLO cuando el campo está vacío (JAMÁS pisa lo que el alumno escribió). Se guarda por el
+  // flujo manual existente. Todo el módulo degrada honesto: sin agregador nativo (Expo Go) no aparece.
+  const healthAvailable = isHealthAvailable()
+  const [healthOptIn, setHealthOptInState] = useState(false)
+  const [connectingHealth, setConnectingHealth] = useState(false)
+  const [fromPhone, setFromPhone] = useState<{ steps: boolean; sleep: boolean }>({ steps: false, sleep: false })
+  const autofillDone = useRef(false)
+  const stepsRef = useRef(steps)
+  stepsRef.current = steps
+  const sleepRef = useRef(sleepHours)
+  sleepRef.current = sleepHours
+
+  useEffect(() => {
+    void getHealthOptIn().then(setHealthOptInState)
+  }, [])
+
+  // Autocompletado (una vez por montaje) cuando hay opt-in: pasos de hoy + sueño de anoche.
+  useEffect(() => {
+    if (!healthAvailable || !healthOptIn || !isToday || autofillDone.current) return
+    autofillDone.current = true
+    let alive = true
+    void (async () => {
+      const [phoneSteps, phoneSleep] = await Promise.all([readTodaySteps(), readLastNightSleepHours()])
+      if (!alive) return
+      if (phoneSteps != null && phoneSteps > 0 && stepsRef.current.trim() === '') {
+        setSteps(String(phoneSteps))
+        setFromPhone((p) => ({ ...p, steps: true }))
+        void save({ steps: phoneSteps })
+      }
+      const chip = nearestSleepOption(phoneSleep, SLEEP_OPTIONS)
+      if (chip != null && sleepRef.current == null) {
+        setSleepHours(chip)
+        setFromPhone((p) => ({ ...p, sleep: true }))
+        void save({ sleep_hours: chip })
+      }
+    })()
+    return () => {
+      alive = false
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [healthAvailable, healthOptIn, isToday])
+
+  async function connectHealth() {
+    setConnectingHealth(true)
+    const granted = await requestHealthPermissions()
+    setConnectingHealth(false)
+    if (!granted) {
+      toast.error('No se pudo conectar con Salud')
+      return
+    }
+    await setHealthOptIn(true)
+    autofillDone.current = false
+    setHealthOptInState(true)
+  }
+
+  async function disconnectHealth() {
+    await setHealthOptIn(false)
+    setHealthOptInState(false)
+    setFromPhone({ steps: false, sleep: false })
+  }
 
   // Refetch/sync al montar y al cambiar cliente/fecha o cuando el shell recarga
   // `habitsToday` (pull-to-refresh) → re-sincroniza TODO el estado desde el servidor
@@ -85,6 +157,43 @@ export function HabitsCard({ clientId, logDate, isToday, initialData }: { client
 
   return (
     <Card padding={16} style={{ gap: 16 }}>
+      {/* Conectar salud (E6.3): opt-in una vez → autocompleta pasos/sueño; revocable. Solo si hay
+          agregador nativo (HealthKit / Health Connect). Oculto en Expo Go / web. */}
+      {healthAvailable && isToday ? (
+        healthOptIn ? (
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <Smartphone size={14} color={theme.primary} strokeWidth={2} />
+            <Text className="text-muted" style={{ flex: 1, fontFamily: FONT.uiSemibold, fontSize: 12 }}>
+              Conectado a Salud · pasos y sueño se autocompletan
+            </Text>
+            <TouchableOpacity onPress={disconnectHealth} activeOpacity={0.7} accessibilityRole="button">
+              <Text className="text-subtle" style={{ fontFamily: FONT.uiBold, fontSize: 12 }}>Desconectar</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <TouchableOpacity
+            testID="btn-connect-health"
+            onPress={connectHealth}
+            disabled={connectingHealth}
+            activeOpacity={0.75}
+            accessibilityRole="button"
+            accessibilityLabel="Conectar salud para autocompletar pasos y sueño"
+            className="rounded-control border-subtle"
+            style={{ flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1.5, paddingHorizontal: 12, paddingVertical: 10, opacity: connectingHealth ? 0.6 : 1 }}
+          >
+            <HeartPulse size={16} color={theme.primary} strokeWidth={2} />
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text className="text-strong" style={{ fontFamily: FONT.uiBold, fontSize: 13 }}>
+                {connectingHealth ? 'Conectando…' : 'Conectar salud'}
+              </Text>
+              <Text className="text-subtle" style={{ fontFamily: FONT.uiSemibold, fontSize: 11, marginTop: 1 }}>
+                Autocompleta pasos y sueño desde tu teléfono
+              </Text>
+            </View>
+          </TouchableOpacity>
+        )
+      ) : null}
+
       {/* Agua */}
       <View>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
@@ -128,6 +237,7 @@ export function HabitsCard({ clientId, logDate, isToday, initialData }: { client
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 }}>
           <Footprints size={15} className="text-sport-600" strokeWidth={2} />
           <Text className="text-strong" style={{ fontFamily: FONT.uiBold, fontSize: 13 }}>Pasos</Text>
+          {fromPhone.steps ? <PhoneBadge /> : null}
         </View>
         <TextInput
           testID="habits-steps-input"
@@ -149,6 +259,7 @@ export function HabitsCard({ clientId, logDate, isToday, initialData }: { client
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 }}>
           <Moon size={14} color={theme.mutedForeground} strokeWidth={2} />
           <Text className="text-strong" style={{ fontFamily: FONT.uiBold, fontSize: 13 }}>Sueño <Text className="text-subtle" style={{ fontFamily: FONT.uiSemibold }}>· horas</Text></Text>
+          {fromPhone.sleep ? <PhoneBadge /> : null}
         </View>
         <View style={{ flexDirection: 'row', gap: 6 }}>
           {SLEEP_OPTIONS.map((v) => {
@@ -193,5 +304,15 @@ export function HabitsCard({ clientId, logDate, isToday, initialData }: { client
 
       {!isToday ? <Text className="text-subtle" style={{ textAlign: 'center', fontSize: 10, fontFamily: FONT.ui }}>Solo se puede editar el día de hoy</Text> : null}
     </Card>
+  )
+}
+
+/** Badge "de tu teléfono": marca un valor pre-llenado por el agregador de salud (editable). */
+function PhoneBadge() {
+  return (
+    <View className="rounded-pill border-subtle bg-surface-sunken" style={{ flexDirection: 'row', alignItems: 'center', gap: 3, borderWidth: 1, paddingHorizontal: 6, paddingVertical: 1.5 }}>
+      <Smartphone size={9} className="text-subtle" strokeWidth={2.2} />
+      <Text className="text-subtle" style={{ fontFamily: FONT.uiBold, fontSize: 9 }}>de tu teléfono</Text>
+    </View>
   )
 }

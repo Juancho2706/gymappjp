@@ -21,7 +21,7 @@ import {
 import { useTheme } from '../../../../context/ThemeContext'
 import { useEvaMotion } from '../../../../lib/motion'
 import { useEntitlements } from '../../../../lib/entitlements'
-import { useClientCardioZones } from '../../../../lib/cardio-zones'
+import { useClientCardioResolved, hrToZoneProfileFromResolved } from '../../../../lib/cardio-zones'
 import { haptics } from '../../../../lib/haptics'
 import { supabase } from '../../../../lib/supabase'
 import { getTodayInSantiago, formatRelativeDate, getSantiagoIsoYmdForUtcInstant, getSantiagoUtcBoundsForDay } from '../../../../lib/date-utils'
@@ -188,7 +188,12 @@ function ExecutorV3Inner({ planId, recoverDate, editDate }: { planId: string; re
 
   const { hasModule } = useEntitlements()
   const planHasHrZone = useMemo(() => blocks.some((b) => b.hr_zone != null), [blocks])
-  const hrZones = useClientCardioZones(hasModule('cardio') && planHasHrZone)
+  // Lectura money-safe de la fila propia (gateada por módulo cardio + zona prescrita), ahora
+  // conservando la FCmax/FC-reposo para clasificar el BPM EN VIVO del sensor BLE con `hrToZone`
+  // (E6.1). Sin zona prescrita el chip muestra el bpm sin zona (degradación honesta).
+  const clientZones = useClientCardioResolved(hasModule('cardio') && planHasHrZone)
+  const hrZones = useMemo(() => clientZones?.zones ?? null, [clientZones])
+  const hrProfile = useMemo(() => hrToZoneProfileFromResolved(clientZones), [clientZones])
 
   const effByBlock = useMemo(() => {
     const map = new Map<string, EffectiveTarget | null>()
@@ -882,6 +887,7 @@ function ExecutorV3Inner({ planId, recoverDate, editDate }: { planId: string; re
             reducedMotion={motion.reduced}
             exec={exec}
             hrZones={hrZones}
+            hrProfile={hrProfile}
             onOpenTechnique={() => setTechniqueExercise(exercise)}
             onOpenSet={(setNumber) => openSet(block.id, setNumber)}
             onCommitSet={handleCommit}
@@ -924,7 +930,7 @@ function ExecutorV3Inner({ planId, recoverDate, editDate }: { planId: string; re
         />
       )
     },
-    [supersetMembersByBlock, sessionLogs, effByBlock, currentWeek, activeBlockId, previousHistory, openDetails, getSubstitution, openSet, hrZones, restoredDraft, motion.reduced, exec, execSettings.showRpeRir, handleCommit, handleRpeUpdate, saveActiveDraft, recentSet, syncErrors, retryCommit],
+    [supersetMembersByBlock, sessionLogs, effByBlock, currentWeek, activeBlockId, previousHistory, openDetails, getSubstitution, openSet, hrZones, hrProfile, restoredDraft, motion.reduced, exec, execSettings.showRpeRir, handleCommit, handleRpeUpdate, saveActiveDraft, recentSet, syncErrors, retryCommit],
   )
 
   // ── Modelo de pasos (engine) + vistas del rail + auto-avance ──

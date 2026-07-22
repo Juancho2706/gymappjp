@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react'
-import { Text, View } from 'react-native'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { Text, TouchableOpacity, View } from 'react-native'
 import { MotiView } from 'moti'
 import { HeartPulse, Pause, Play, Watch } from 'lucide-react-native'
 import {
@@ -11,9 +11,12 @@ import {
   type OptimisticLogPayload,
   type ReconciledSessionLog,
 } from '@eva/workout-engine'
+import { hrToZone, type HrToZoneProfile } from '@eva/cardio'
 import { FONT } from '../../../../lib/typography'
 import { hexToRgba } from '../../../../lib/theme'
 import { timerHaptics } from '../../../../lib/haptics'
+import { isBleAvailable, useBleHr } from '../../../../lib/ble-hr'
+import { ConnectSensorSheet } from './ConnectSensorSheet'
 import type { SessionBlock, SessionDraft, SessionExercise } from '../../../../lib/workout-session'
 import { ActiveSetRow, SetRow } from '../SetRow'
 import { JuicyButton } from './JuicyButton'
@@ -54,6 +57,7 @@ export function CardioScreenV3({
   reducedMotion = false,
   exec,
   hrZones,
+  hrProfile,
   onOpenTechnique,
   onOpenSet,
   onCommitSet,
@@ -70,6 +74,8 @@ export function CardioScreenV3({
   reducedMotion?: boolean
   exec: ExecTheme
   hrZones?: import('@eva/cardio').HrZoneRange[] | null
+  /** Perfil FC del alumno (FCmax + FC reposo) para clasificar el BPM en vivo del sensor BLE (E6.1). */
+  hrProfile?: HrToZoneProfile | null
   onOpenTechnique: () => void
   onOpenSet: (setNumber: number) => void
   onCommitSet: (payload: OptimisticLogPayload) => void
@@ -86,6 +92,33 @@ export function CardioScreenV3({
   const objectiveLine = formatTypedObjective(block, 'cardio')
   const distanceObjective = cardioDistanceObjective(block)
 
+  // ── BLE Heart Rate en vivo (E6.1) ─────────────────────────────────────────────────────────────
+  // El sensor solo ALIMENTA la UI (chip BPM + zona en vivo) y auto-rellena `actual_avg_hr` al cerrar
+  // el bloque; el motor de guardado (flujo tipado) queda intacto. Todo el módulo degrada honesto:
+  // sin backend BLE nativo (Expo Go) el botón "Conectar sensor" NO aparece.
+  const bleSupported = isBleAvailable()
+  const ble = useBleHr()
+  const [sensorSheetOpen, setSensorSheetOpen] = useState(false)
+  const streaming = ble.state.status === 'streaming'
+  const liveBpm = streaming ? ble.state.bpm : null
+  const liveZone = liveBpm != null && hrProfile ? hrToZone(liveBpm, hrProfile) : null
+
+  // Congela el promedio de la sesión de stream para auto-rellenar `actual_avg_hr` una vez, al cerrar
+  // el bloque (transición streaming → detenido). El athlete captura el esfuerzo DESPUÉS de detener,
+  // así el prellenado no pisa nada ya escrito y sigue siendo editable antes de confirmar.
+  const lastAvgRef = useRef<number | null>(null)
+  useEffect(() => {
+    if (ble.state.avgHr != null) lastAvgRef.current = ble.state.avgHr
+  }, [ble.state.avgHr])
+  const [seededAvg, setSeededAvg] = useState<number | null>(null)
+  const prevStreamingRef = useRef(false)
+  useEffect(() => {
+    if (prevStreamingRef.current && !streaming && lastAvgRef.current != null) {
+      setSeededAvg(lastAvgRef.current)
+    }
+    prevStreamingRef.current = streaming
+  }, [streaming])
+
   const loggedSetNumbers = useMemo(
     () => new Set(blockLogs.filter((l) => l.set_number >= 1 && l.set_number <= block.sets).map((l) => l.set_number)),
     [blockLogs, block.sets],
@@ -94,6 +127,18 @@ export function CardioScreenV3({
   for (let i = 1; i <= block.sets; i += 1) {
     if (!loggedSetNumbers.has(i)) { firstUnlogged = i; break }
   }
+
+  // Semilla del keypad tipado: draft restaurado + (si aplica) el promedio del sensor en `actual_avg_hr`.
+  // Solo se inyecta la FC del sensor si el campo aún está vacío — JAMÁS pisa lo que el alumno escribió.
+  const captureSeed = useMemo(() => {
+    const base =
+      restoredDraft && restoredDraft.blockId === block.id && restoredDraft.setNumber === firstUnlogged
+        ? restoredDraft.values
+        : null
+    if (seededAvg == null) return base
+    if (base?.actual_avg_hr && base.actual_avg_hr.trim() !== '') return base
+    return { ...(base ?? {}), actual_avg_hr: String(seededAvg) }
+  }, [restoredDraft, block.id, firstUnlogged, seededAvg])
 
   const loggedRows = Array.from({ length: block.sets }).map((_, i) => {
     const setNumber = i + 1
@@ -171,6 +216,52 @@ export function CardioScreenV3({
         </View>
       )}
 
+      {/* Sensor BLE (E6.1): chip BPM VIVO con zona en vivo mientras hay stream; botón discreto si no.
+          Todo el bloque solo aparece cuando hay backend BLE nativo (oculto en Expo Go). */}
+      {bleSupported && (
+        <View style={{ alignItems: 'center' }}>
+          {liveBpm != null ? (
+            <TouchableOpacity
+              testID="chip-bpm-vivo"
+              activeOpacity={0.85}
+              onPress={() => setSensorSheetOpen(true)}
+              accessibilityRole="button"
+              accessibilityLabel={`Frecuencia cardiaca en vivo: ${liveBpm} pulsaciones por minuto`}
+              style={{ flexDirection: 'row', alignItems: 'center', gap: 10, borderRadius: 999, borderWidth: 2, paddingHorizontal: 16, paddingVertical: 8, backgroundColor: hexToRgba('#f87171', 0.14), borderColor: hexToRgba('#f87171', 0.4) }}
+            >
+              <MotiView
+                from={{ scale: 1, opacity: 0.9 }}
+                animate={{ scale: reducedMotion ? 1 : 1.35, opacity: reducedMotion ? 0.9 : 0.5 }}
+                transition={{ type: 'timing', duration: 700, loop: !reducedMotion, repeatReverse: true }}
+                style={{ width: 11, height: 11, borderRadius: 6, backgroundColor: '#f87171' }}
+              />
+              <Text style={{ fontFamily: FONT.displayBlack, fontSize: 22, color: '#f87171', fontVariant: ['tabular-nums'] }}>
+                {liveBpm}
+                <Text style={{ fontFamily: FONT.uiBold, fontSize: 12, color: hexToRgba(s.text, 0.7) }}> bpm</Text>
+              </Text>
+              {liveZone ? (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginLeft: 2, paddingLeft: 10, borderLeftWidth: 1.5, borderLeftColor: hexToRgba(s.text, 0.15) }}>
+                  <View style={{ width: 9, height: 9, borderRadius: 5, backgroundColor: zoneRingColor(liveZone.zone, exec.accent) }} />
+                  <Text style={{ fontFamily: FONT.displayBlack, fontSize: 14, color: zoneRingColor(liveZone.zone, exec.accent) }}>Z{liveZone.zone}</Text>
+                </View>
+              ) : null}
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity
+              testID="btn-connect-sensor"
+              activeOpacity={0.75}
+              onPress={() => setSensorSheetOpen(true)}
+              accessibilityRole="button"
+              accessibilityLabel="Conectar sensor de pulso"
+              style={{ flexDirection: 'row', alignItems: 'center', gap: 7, borderRadius: 999, borderWidth: 1.5, paddingHorizontal: 14, paddingVertical: 7, borderColor: s.border, backgroundColor: s.surfaceRaised }}
+            >
+              <HeartPulse size={13} color={s.textMuted} />
+              <Text style={{ fontFamily: FONT.uiBold, fontSize: 12, color: s.textMuted }}>Conectar sensor de pulso</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      )}
+
       {objectiveLine ? (
         <Text style={{ fontFamily: FONT.monoSemibold, fontSize: 13, color: hexToRgba(s.text, 0.82), textAlign: 'center', fontVariant: ['tabular-nums'] }}>
           {objectiveLine}
@@ -183,17 +274,21 @@ export function CardioScreenV3({
           <Text style={{ fontFamily: FONT.uiBold, fontSize: 11, letterSpacing: 0.5, textTransform: 'uppercase', color: s.textMuted }}>
             Registra tu esfuerzo{block.sets > 1 ? ` · serie ${firstUnlogged} de ${block.sets}` : ''}
           </Text>
+          {seededAvg != null ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <HeartPulse size={12} color="#f87171" />
+              <Text style={{ fontFamily: FONT.uiSemibold, fontSize: 11, color: s.textMuted }}>
+                FC promedio del sensor: <Text style={{ fontFamily: FONT.uiBold, color: hexToRgba(s.text, 0.8) }}>{seededAvg} bpm</Text> · editable
+              </Text>
+            </View>
+          ) : null}
           <ActiveSetRow
-            key={`${block.id}-${firstUnlogged}`}
+            key={`${block.id}-${firstUnlogged}-${seededAvg != null ? 'hr' : 'x'}`}
             blockId={block.id}
             setNumber={firstUnlogged}
             typedMode="cardio"
             suggestedWeight={null}
-            seedValues={
-              restoredDraft && restoredDraft.blockId === block.id && restoredDraft.setNumber === firstUnlogged
-                ? restoredDraft.values
-                : null
-            }
+            seedValues={captureSeed}
             header={{ exerciseName: exercise.name, objectiveLine }}
             onDraftChange={(values, fieldIndex) => onDraftChange(block.id, firstUnlogged as number, values, fieldIndex)}
             onCommit={onCommitSet}
@@ -202,6 +297,16 @@ export function CardioScreenV3({
       )}
 
       {loggedRows.some(Boolean) && <View style={{ gap: 6 }}>{loggedRows}</View>}
+
+      {bleSupported && (
+        <ConnectSensorSheet
+          open={sensorSheetOpen}
+          onClose={() => setSensorSheetOpen(false)}
+          ble={ble}
+          exec={exec}
+          reducedMotion={reducedMotion}
+        />
+      )}
     </View>
   )
 }

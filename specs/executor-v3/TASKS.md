@@ -56,26 +56,26 @@
 
 ## Ola 5 — Nativo I (build EAS #1)
 
-- [ ] **E5.1 [P] expo-audio + catálogo** — instalar (lockfile mismo commit), activar timbres bundleados de `sound.ts`, volumen, respetar tuerca.
-- [ ] **E5.2 [P] Tono del sistema Android** — módulo ringtone (RingtoneManager TYPE_ALARM) + canal notif `USAGE_ALARM` (un canal por sonido); opción "Del sistema" SOLO Android.
-- [ ] **E5.3 [P] Cronómetro lockscreen Android** — encender `rest-live-notification` (notify-kit ya codificado NO-OP).
-- [ ] **E5.4 [P] expo-video** — media del ejercicio nativa (reemplaza WebView), autoplay muted loop, degradación webp por cuota.
-- [ ] **E5.5 [P] Media Session RN** — paridad con web (controles lockscreen del timer).
-- [ ] **E5.6 [S] Haptics semánticos** — paleta por evento (serie/aviso/fin descanso/cambio lado/pasada/PR/fase intervalo) sobre `lib/haptics.ts`; Low Power Mode nunca es canal único.
+- [x] **E5.1 [P] expo-audio + catálogo** — instalar (lockfile mismo commit), activar timbres bundleados de `sound.ts`, volumen, respetar tuerca.
+- [x] **E5.2 [P] Tono del sistema Android** — módulo ringtone (RingtoneManager TYPE_ALARM) + canal notif `USAGE_ALARM` (un canal por sonido); opción "Del sistema" SOLO Android.
+- [x] **E5.3 [P] Cronómetro lockscreen Android** — encender `rest-live-notification` (notify-kit ya codificado NO-OP).
+- [x] **E5.4 [P] expo-video** — media del ejercicio nativa (reemplaza WebView), autoplay muted loop, degradación webp por cuota.
+- [~] **E5.5 [P] Media Session RN (DIFERIDA — sin camino Expo-puro para timers; comentario en useRestTimerEngine)** — paridad con web (controles lockscreen del timer).
+- [x] **E5.6 [S] Haptics semánticos** — paleta por evento (serie/aviso/fin descanso/cambio lado/pasada/PR/fase intervalo) sobre `lib/haptics.ts`; Low Power Mode nunca es canal único.
 - **Gate Ola 5**: build EAS Android+iOS + **QA device CEO** (sonidos, lockscreen, video, haptics) antes de encender nada por default.
 
 ## Ola 6 — Wearables capa 1 + pasos (build EAS #2)
 
-- [ ] **E6.1 [S] BLE Heart Rate** — `react-native-ble-plx` + permisos; servicio 0x180D scan/connect/stream; sheet "Conectar sensor" (mockup v3.2); BPM vivo en cardio + `hrToZone` zona en vivo; `actual_avg_hr` auto al cerrar bloque; reconexión y estado honesto (sin sensor → módulo oculto).
-- [ ] **E6.2 [P] PWA Web Bluetooth** — solo Chrome/Edge Android (feature-detect); iOS PWA oculta; misma UI de sheet.
-- [ ] **E6.3 [P] Salud del alumno vía agregadores (la estrella de la ola)** — HealthKit (iOS) + Health Connect (Android), opt-in del alumno con permisos granulares: **pasos** diarios → auto-llenar `daily_habits.steps`; **sueño** → `daily_habits.sleep_hours`; **distancia/calorías/BPM promedio** de la actividad → resumen post-sesión de cardio y ficha. Editable manual siempre. Cubre lo que el alumno ya usa SIN app de reloj: Apple Watch, Galaxy Watch, bandas Xiaomi/Amazfit, Fitbit y cualquier dispositivo que sincronice al centro de salud del teléfono (datos agregados, no en vivo).
-- **Gate Ola 6**: build EAS + QA device CEO con cinta/reloj real; validar privacidad/permisos (copys claros, revocable).
+- [x] **E6.1 [S] BLE Heart Rate** — `react-native-ble-plx` + permisos; servicio 0x180D scan/connect/stream; sheet "Conectar sensor" (mockup v3.2); BPM vivo en cardio + `hrToZone` zona en vivo; `actual_avg_hr` auto al cerrar bloque; reconexión y estado honesto (sin sensor → módulo oculto).
+- [x] **E6.2 [P] PWA Web Bluetooth** — solo Chrome/Edge Android (feature-detect); iOS PWA oculta; misma UI de sheet.
+- [x] **E6.3 [P] Salud del alumno vía agregadores (la estrella de la ola)** — HealthKit (iOS) + Health Connect (Android), opt-in del alumno con permisos granulares: **pasos** diarios → auto-llenar `daily_habits.steps`; **sueño** → `daily_habits.sleep_hours`; **distancia/calorías/BPM promedio** de la actividad → resumen post-sesión de cardio y ficha. Editable manual siempre. Cubre lo que el alumno ya usa SIN app de reloj: Apple Watch, Galaxy Watch, bandas Xiaomi/Amazfit, Fitbit y cualquier dispositivo que sincronice al centro de salud del teléfono (datos agregados, no en vivo).
+- **Gate Ola 6**: código ✅ 2026-07-22 (deps ble-plx 3.5.1 / health 1.19.0 / health-connect 3.5.3, lockfile coherente) — build EAS + QA con sensor real PENDIENTE.
 
 ## Ola 7A — Lockscreen premium (build EAS #3)
 
 - [ ] **E7.1 [S] Módulo ActivityKit propio** — Expo config plugin + Widget Extension target iOS (`@bacons/apple-targets` o target manual); API JS: `startRestActivity(endsAt, exercise)`, `updateActivity`, `endActivity`; `Text(timerInterval:)` nativo; provisioning del extension (aprovechar y cerrar Associated Domains pendiente).
 - [ ] **E7.2 [S tras E7.1] Live Activity + Dynamic Island del descanso** — layouts lockscreen + isla (compacta/expandida); botones −15s/Saltar/+15s vía App Intents → deep link a la sesión; arranque local al iniciar descanso, cierre al terminar; iOS 16.2+ con degradación a notificación (Ola 5).
-- [ ] **E7.3 [P] Android Live Updates** — upgrade del cronómetro notify-kit a `ProgressStyle`/promoted ongoing (API 36+), fallback chronometer intacto en APIs menores.
+- [~] **E7.3 [P] Android Live Updates (DIFERIDA — notify-kit 10.4.8 sin ProgressStyle API 36; chronometer actual como fallback vigente)** — upgrade del cronómetro notify-kit a `ProgressStyle`/promoted ongoing (API 36+), fallback chronometer intacto en APIs menores.
 - **Gate Ola 7A**: build EAS + QA device CEO (iPhone con Dynamic Island ideal + Android 16); revisión App Store del extension.
 
 ## Ola 7B — Companions de reloj (DIFERIDA — decisión CEO 2026-07-22: no se quiere app en el smartwatch por ahora; único camino futuro para BPM EN VIVO de Apple/Galaxy Watch)

@@ -1,7 +1,8 @@
 'use client'
 
+import { useState } from 'react'
 import Image from 'next/image'
-import { HeartPulse, Pause, Play, RotateCcw, SkipForward, Timer } from 'lucide-react'
+import { Bluetooth, HeartPulse, Pause, Play, RotateCcw, SkipForward, Timer } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import {
     buildIntervalPhases,
@@ -20,6 +21,9 @@ import type { ClientCardioView } from '../_data/workout-execution.queries'
 import { resolveExecMedia } from './exec-media'
 import { useExecCountdown, formatCountdown } from './useExecCountdown'
 import { useIntervalRunner } from './useIntervalRunner'
+import { useWebBleHr } from './use-web-ble-hr'
+import { SensorSheetV3 } from './SensorSheetV3'
+import { zoneFromRanges } from './web-ble-hr'
 
 interface CardioStepV3Props {
     block: BlockType
@@ -73,6 +77,16 @@ export function CardioStepV3(props: CardioStepV3Props) {
     const zoneRange =
         zone != null && cardio?.enabled ? cardio.zones?.find((z) => z.zone === zone) ?? null : null
 
+    // BPM en vivo por Web Bluetooth (Ola 6, capa opcional): SOLO en Chrome/Edge Android (feature-detect
+    // estricto en el hook). Si el navegador no lo soporta, `hr.supported` es false y NO se muestra NADA de
+    // sensor — la FC sigue siendo manual (fallback de siempre). El BPM vivo solo ALIMENTA la UI: el chip de
+    // zona y el auto-prellenado de `actual_avg_hr` (editable) por el flujo tipado existente.
+    const hr = useWebBleHr()
+    const [sensorOpen, setSensorOpen] = useState(false)
+    const liveZones = cardio?.enabled ? cardio.zones : null
+    const liveBpm = hr.status === 'connected' ? hr.bpm : null
+    const liveZone = liveBpm != null ? zoneFromRanges(liveBpm, liveZones) : null
+
     return (
         <div className="exec-v3-step space-y-3">
             {/* Identidad: nombre + chip + mini media del catálogo */}
@@ -104,16 +118,48 @@ export function CardioStepV3(props: CardioStepV3Props) {
                 <ContinuousFace block={block} zone={zone} zoneRange={zoneRange} />
             )}
 
-            {/* Fuente FC honesta: hoy la FC es MANUAL (el BPM en vivo por BLE llega en una ola posterior). */}
-            <div className="exec-v3-cardio-source">
-                <HeartPulse className="h-4 w-4 shrink-0" aria-hidden />
-                <span>
-                    FC <b>manual</b> — compárala con tu reloj o app y regístrala abajo.
-                </span>
-            </div>
+            {/* Fuente FC honesta. Con sensor BLE conectado la FC llega EN VIVO y auto-rellena la fila
+                (editable); sin soporte o sin conexión, sigue siendo MANUAL (fallback de siempre). El
+                bloque de sensor solo aparece si el navegador soporta Web Bluetooth (Chrome/Edge Android). */}
+            {liveBpm != null ? (
+                <button
+                    type="button"
+                    onClick={() => setSensorOpen(true)}
+                    className="exec-v3-hrlive"
+                    style={liveZone ? ({ '--zc': `var(--zone-z${liveZone.zone})` } as React.CSSProperties) : undefined}
+                    aria-label="Sensor de pulso conectado — ver detalle"
+                >
+                    <span className="exec-v3-hrlive-pulse" aria-hidden>
+                        <HeartPulse className="h-4 w-4" />
+                    </span>
+                    <span className="exec-v3-hrlive-num tabular-nums">{liveBpm}</span>
+                    <span className="exec-v3-hrlive-lbl">
+                        {liveZone ? `Z${liveZone.zone} · bpm en vivo` : 'bpm en vivo'}
+                    </span>
+                    {hr.contactLost && <span className="exec-v3-hrlive-warn">sin contacto</span>}
+                </button>
+            ) : (
+                <div className="exec-v3-cardio-source">
+                    <HeartPulse className="h-4 w-4 shrink-0" aria-hidden />
+                    <span>
+                        FC <b>manual</b> — compárala con tu reloj o app y regístrala abajo.
+                    </span>
+                    {hr.supported && (
+                        <button type="button" onClick={() => setSensorOpen(true)} className="exec-v3-hrconnect">
+                            <Bluetooth className="h-4 w-4" aria-hidden /> Conectar sensor
+                        </button>
+                    )}
+                </div>
+            )}
 
-            {/* Registro tipado REUSADO — captura min / metros / FC de siempre. */}
-            <CaptureRows {...props} />
+            {/* Registro tipado REUSADO — captura min / metros / FC de siempre. El promedio del stream BLE
+                auto-rellena `actual_avg_hr` de la fila activa (editable) por el flujo tipado existente. */}
+            <CaptureRows {...props} suggestedAvgHr={liveBpm != null ? hr.avgBpm : null} />
+
+            {/* Sheet "Conectar sensor" — solo se renderiza si hay soporte (sin promesas falsas en iOS/desktop). */}
+            {hr.supported && (
+                <SensorSheetV3 open={sensorOpen} onClose={() => setSensorOpen(false)} hr={hr} zones={liveZones} />
+            )}
 
             {/* Pie: rondas */}
             {block.sets > 1 && (
@@ -333,12 +379,14 @@ function CaptureRows({
     substitution,
     handleLogged,
     handleResult,
-}: CardioStepV3Props) {
+    suggestedAvgHr,
+}: CardioStepV3Props & { suggestedAvgHr?: number | null }) {
     return (
         <div className="exec-v3-setlist space-y-1.5">
             {Array.from({ length: block.sets }).map((_, i) => {
                 const setNumber = i + 1
                 const log = blockLogs.find((entry) => entry.set_number === setNumber)
+                const isActive = setNumber === firstUnlogged
                 return (
                     <LogSetForm
                         key={`${block.id}-${setNumber}`}
@@ -353,7 +401,7 @@ function CaptureRows({
                         autoTimerEnabled={autoTimerEnabled}
                         mode="cardio"
                         typedObjective={formatTypedObjective(block, 'cardio')}
-                        isActive={setNumber === firstUnlogged}
+                        isActive={isActive}
                         reopenNonce={
                             reopenSignal?.blockId === block.id && reopenSignal?.setNumber === setNumber
                                 ? reopenSignal.nonce
@@ -361,6 +409,11 @@ function CaptureRows({
                         }
                         substitution={substitution ?? null}
                         v3
+                        // Auto-prellenado del promedio BLE SOLO en la fila activa (nonce = bpm ⇒ cambia con el
+                        // promedio); LogSetForm solo lo escribe si el campo FC está vacío (no pisa ediciones).
+                        suggestedAvgHr={
+                            isActive && suggestedAvgHr != null ? { bpm: suggestedAvgHr, nonce: suggestedAvgHr } : undefined
+                        }
                         onLogged={handleLogged}
                         onResult={handleResult}
                     />

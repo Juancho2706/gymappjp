@@ -3485,6 +3485,282 @@ body > * {
   color: #fff;
 }
 
+/* ============ Ejecutor V3 — sensor de pulso BLE en vivo (E6.2 · Ola 6) ============
+   Web Bluetooth SOLO en Chrome/Edge Android; el feature-detect del hook decide si estos elementos se
+   montan siquiera. El BPM en vivo alimenta la UI; sin sensor no se muestra nada (jamás pulso inventado). */
+
+/* CTA "Conectar sensor" dentro de la fila de fuente FC manual. */
+[data-exec-v3] .exec-v3-hrconnect {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  flex-shrink: 0;
+  min-height: 32px;
+  padding: 5px 11px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+  color: color-mix(in srgb, var(--exec-brand) 85%, #fff);
+  background: color-mix(in srgb, var(--exec-brand) 14%, #16161d);
+  border: 1.5px solid color-mix(in srgb, var(--exec-brand) 34%, transparent);
+}
+
+/* Chip de BPM en vivo (reemplaza la fuente manual cuando hay sensor conectado). Color por zona (--zc). */
+[data-exec-v3] .exec-v3-hrlive {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 13px;
+  border-radius: 12px;
+  text-align: left;
+  background: color-mix(in srgb, var(--zc, var(--exec-brand)) 12%, #15151c);
+  border: 1.5px solid color-mix(in srgb, var(--zc, var(--exec-brand)) 38%, transparent);
+}
+[data-exec-v3] .exec-v3-hrlive-pulse {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--zc, var(--exec-brand));
+}
+[data-exec-v3] .exec-v3-hrlive-num {
+  font-size: 22px;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+  color: #f4f4f7;
+}
+[data-exec-v3] .exec-v3-hrlive-lbl {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--zc, var(--exec-brand));
+}
+[data-exec-v3] .exec-v3-hrlive-warn {
+  margin-left: auto;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #f4b060;
+  background: color-mix(in srgb, #f4b060 16%, #16161d);
+  border: 1.5px solid color-mix(in srgb, #f4b060 40%, transparent);
+  border-radius: 999px;
+  padding: 3px 8px;
+}
+
+/* Sheet de sensor: hereda .exec-v3-settings (posición/animación); solo ajusta contenido. */
+[data-exec-v3] .exec-v3-sensor {
+  text-align: center;
+}
+
+/* Radar: anillos que laten desde el corazón mientras busca/conecta. */
+[data-exec-v3] .exec-v3-radar {
+  position: relative;
+  height: 96px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 6px 0 12px;
+}
+[data-exec-v3] .exec-v3-radar-wave {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 44px;
+  height: 44px;
+  margin: -22px 0 0 -22px;
+  border-radius: 50%;
+  border: 2px solid color-mix(in srgb, var(--zone-z5) 60%, transparent);
+  opacity: 0;
+}
+[data-exec-v3] .exec-v3-radar-core {
+  position: relative;
+  z-index: 2;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--zone-z5);
+  background: color-mix(in srgb, var(--zone-z5) 18%, #16161d);
+  border: 1.5px solid color-mix(in srgb, var(--zone-z5) 40%, transparent);
+}
+@media (prefers-reduced-motion: no-preference) {
+  [data-exec-v3] .exec-v3-radar.is-live .exec-v3-radar-core {
+    animation: exec-v3-beat 1s ease-in-out infinite;
+  }
+  [data-exec-v3] .exec-v3-radar.is-live .exec-v3-radar-wave {
+    animation: exec-v3-radar 2.4s ease-out infinite;
+  }
+  [data-exec-v3] .exec-v3-radar.is-live .exec-v3-radar-wave:nth-child(2) {
+    animation-delay: 0.8s;
+  }
+  [data-exec-v3] .exec-v3-radar.is-live .exec-v3-radar-wave:nth-child(3) {
+    animation-delay: 1.6s;
+  }
+}
+@keyframes exec-v3-beat {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  30% {
+    transform: scale(1.14);
+  }
+}
+@keyframes exec-v3-radar {
+  0% {
+    transform: scale(0.3);
+    opacity: 0.9;
+  }
+  80%,
+  100% {
+    transform: scale(3.1);
+    opacity: 0;
+  }
+}
+
+/* Tarjeta del sensor conectado (mockup a3e-dev.on). */
+[data-exec-v3] .exec-v3-dev {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 13px;
+  border-radius: 15px;
+  margin-bottom: 10px;
+  text-align: left;
+  background: #16161d;
+  border: 1.5px solid #2a2a34;
+}
+[data-exec-v3] .exec-v3-dev.is-on {
+  border-color: color-mix(in srgb, var(--exec-brand) 55%, transparent);
+  background: color-mix(in srgb, var(--exec-brand) 8%, #16161d);
+}
+[data-exec-v3] .exec-v3-dev-ico {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  border-radius: 11px;
+  color: var(--zone-z5);
+  background: color-mix(in srgb, var(--exec-brand) 16%, #16161d);
+  border: 1.5px solid color-mix(in srgb, var(--exec-brand) 40%, transparent);
+}
+[data-exec-v3] .exec-v3-dev-mid {
+  flex: 1;
+  min-width: 0;
+}
+[data-exec-v3] .exec-v3-dev-name {
+  display: block;
+  font-size: 15px;
+  font-weight: 800;
+  color: #eaeaf0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+[data-exec-v3] .exec-v3-dev-sub {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 3px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #8f8f9c;
+}
+[data-exec-v3] .exec-v3-ble {
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--exec-brand) 16%, #16161d);
+  color: color-mix(in srgb, var(--exec-brand) 85%, #fff);
+  border: 1.5px solid color-mix(in srgb, var(--exec-brand) 45%, transparent);
+}
+[data-exec-v3] .exec-v3-dev-bpm {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  flex-shrink: 0;
+  line-height: 1;
+}
+[data-exec-v3] .exec-v3-dev-bpm b {
+  font-size: 26px;
+  font-weight: 900;
+  letter-spacing: -0.03em;
+  color: var(--zc, var(--zone-z5));
+}
+[data-exec-v3] .exec-v3-dev-bpmlbl {
+  margin-top: 3px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  color: #8f8f9c;
+}
+[data-exec-v3] .exec-v3-dev-bpm-wait {
+  justify-content: center;
+}
+
+[data-exec-v3] .exec-v3-sensor-status {
+  font-size: 13px;
+  font-weight: 700;
+  color: #a7a7b2;
+  margin: 2px 0 12px;
+}
+[data-exec-v3] .exec-v3-sensor-err {
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.4;
+  color: #f4a0a0;
+  background: color-mix(in srgb, #f87171 12%, #16161d);
+  border: 1.5px solid color-mix(in srgb, #f87171 34%, transparent);
+  border-radius: 12px;
+  padding: 9px 12px;
+  margin: 0 0 12px;
+}
+[data-exec-v3] .exec-v3-sensor-cta {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 54px;
+  font-size: 16px;
+}
+[data-exec-v3] .exec-v3-sensor-cta:disabled {
+  opacity: 0.6;
+}
+[data-exec-v3] .exec-v3-sensor-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 12px;
+  font-size: 11px;
+  line-height: 1.45;
+  font-weight: 700;
+  color: #9a9aa6;
+  text-align: left;
+}
+[data-exec-v3] .exec-v3-sensor-note b {
+  color: #cfcfd8;
+  font-weight: 800;
+}
+[data-exec-v3] .exec-v3-sensor-disconnect {
+  width: 100%;
+  min-height: 46px;
+  margin-top: 4px;
+  font-size: 14px;
+  font-weight: 800;
+  color: #c4c4cf;
+  background: #1c1c24;
+  border: 1.5px solid #2f2f3a;
+  border-radius: 14px;
+}
+
 /* ---- Zona objetivo (color por --zc, fijo por zona) ---- */
 [data-exec-v3] .exec-v3-zone {
   display: inline-flex;
