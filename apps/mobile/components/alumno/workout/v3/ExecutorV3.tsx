@@ -34,7 +34,7 @@ import {
   type SessionBlock,
   type SessionExercise,
 } from '../../../../lib/workout-session'
-import { toast } from '../../../Toast'
+import { toast, setToastDark } from '../../../Toast'
 import { flushLogQueue, getPendingLogCount } from '../../../../lib/offline-cache'
 import { OfflineBanner } from '../../../OfflineBanner'
 import { EvaLoaderScreen } from '../../../EvaLoader'
@@ -46,7 +46,7 @@ import { SessionCompleteV3 } from './SessionCompleteV3'
 import { RecoveryBanner } from '../RecoveryBanner'
 import { WorkoutTimerProvider, useWorkoutTimers } from '../timers/TimerProvider'
 import { isRestAutoTimerEnabled, parseRestTime, type RestInterstitialRenderer } from '../timers'
-import { SubstituteExerciseSheet } from '../SubstituteExerciseSheet'
+import { SubstituteSheetV3 } from './SubstituteSheetV3'
 import { SUBSTITUTION_REASON } from '../../../../lib/workout/substitution'
 import { bestPrevOf, fmtElapsed, fmtVolume } from '../workout-ui'
 import { EXERCISE_TYPE_META, exerciseTypeColor } from '../../../../lib/exercise-type-meta'
@@ -728,7 +728,7 @@ function ExecutorV3Inner({ planId, recoverDate, editDate }: { planId: string; re
       for (const ps of list) lastVolKg += (ps.weight_kg ?? 0) * (ps.reps_done ?? 0)
     }
 
-    return { eyebrow, dayTitle, chips, summaryLine, preview, moreCount, lastVolumeLabel: fmtVolume(lastVolKg) }
+    return { eyebrow, dayTitle, chips, summaryLine, preview, moreCount, estimatedMin: minutes, lastVolumeLabel: fmtVolume(lastVolKg) }
   }, [planTitle, programName, programStructure, dayOfWeek, currentWeek, phaseName, activeWeekVariant, blocks, previousHistory, exec.accent])
 
   // ── Contexto de la pantalla Final V3 (E4.3) — titulo celebratorio corto + subtitulo de contexto. ──
@@ -1080,6 +1080,13 @@ function ExecutorV3Inner({ planId, recoverDate, editDate }: { planId: string; re
     return () => setRestInterstitial(null)
   }, [setRestInterstitial, renderRestInterstitial])
 
+  // Toasts OSCUROS mientras el ejecutor V3 (dark-only) está montado (informe 15, MAYOR): sin esto los
+  // toasts del `<Toaster>` global salían claros sobre el shell oscuro en dispositivos en tema claro.
+  useEffect(() => {
+    setToastDark(true)
+    return () => setToastDark(false)
+  }, [])
+
   // Hidratacion: aterriza en el primer paso incompleto una sola vez cuando cargan los pasos.
   useEffect(() => {
     if (loading || steps.length === 0 || didHydrateStepPosRef.current) return
@@ -1156,6 +1163,7 @@ function ExecutorV3Inner({ planId, recoverDate, editDate }: { planId: string; re
         exercises={startData.preview}
         moreCount={startData.moreCount}
         lastVolumeLabel={startData.lastVolumeLabel}
+        estimatedMin={startData.estimatedMin}
         coachNote={null}
         coachName={coachName}
         hasPartialSession={sessionLogs.length > 0}
@@ -1180,11 +1188,7 @@ function ExecutorV3Inner({ planId, recoverDate, editDate }: { planId: string; re
         onOpenSettings={() => setSettingsOpen(true)}
       />
 
-      <OfflineBanner
-        visible={!isOnline}
-        prominent
-        message="Sin conexión — los datos se guardarán al reconectar."
-      />
+      <OfflineBanner visible={!isOnline} variant="calm" />
 
       <RecoveryBanner recoverDate={recoverDate} editDate={editDate} />
 
@@ -1203,7 +1207,7 @@ function ExecutorV3Inner({ planId, recoverDate, editDate }: { planId: string; re
       {!loading && (
         <View
           className="absolute bottom-0 left-0 right-0 px-4 pt-4"
-          style={{ borderTopWidth: 1, borderTopColor: exec.surface.borderSubtle, backgroundColor: exec.surface.appBg, paddingBottom: 16 + insets.bottom }}
+          style={{ borderTopWidth: 1.5, borderTopColor: exec.surface.borderStrong, backgroundColor: exec.surface.surface, paddingBottom: 16 + insets.bottom }}
         >
           <View className="w-full flex-row items-center justify-between gap-3 self-center" style={{ maxWidth: 1024 }}>
             <Pressable
@@ -1216,16 +1220,26 @@ function ExecutorV3Inner({ planId, recoverDate, editDate }: { planId: string; re
               <Timer size={14} color={EMBER_200} />
               <Text className="font-sans-bold text-xs text-ember-200">Descanso (90)</Text>
             </Pressable>
+            {/* Botón juicy-ghost (informe 15, MAYOR): borde 2px #2f2f3a en reposo → se vuelve juicy de
+                MARCA al presionar (confirmar). Reemplaza el fill plano de marca del V2. */}
             <Pressable
               testID="btn-finish-workout-v3"
               onPress={handleFinish}
-              className="h-12 flex-row items-center gap-2 rounded-control px-5 active:opacity-90"
-              style={{ backgroundColor: exec.accent }}
+              className="h-12 flex-row items-center gap-2 rounded-control px-5"
+              style={({ pressed }) => ({
+                borderWidth: 2,
+                borderColor: pressed ? exec.accent : exec.surface.borderStrong,
+                backgroundColor: pressed ? exec.accent : exec.surface.surface,
+              })}
               accessibilityRole="button"
               accessibilityLabel="Finalizar entrenamiento"
             >
-              <CheckCircle2 size={16} color={exec.accentText} />
-              <Text className="font-sans-bold" style={{ color: exec.accentText }}>Finalizar entrenamiento</Text>
+              {({ pressed }) => (
+                <>
+                  <CheckCircle2 size={16} color={pressed ? exec.accentText : exec.surface.text} />
+                  <Text className="font-sans-bold" style={{ color: pressed ? exec.accentText : exec.surface.text }}>Finalizar entrenamiento</Text>
+                </>
+              )}
             </Pressable>
           </View>
         </View>
@@ -1240,9 +1254,11 @@ function ExecutorV3Inner({ planId, recoverDate, editDate }: { planId: string; re
         onClose={() => setKeypadTarget(null)}
         onCommit={handleCommit}
         onDraftChange={handleDraftChange}
+        accent={exec.accent}
+        accentText={exec.accentText}
       />
 
-      <TechniqueSheet exercise={techniqueExercise} onClose={() => setTechniqueExercise(null)} />
+      <TechniqueSheet exercise={techniqueExercise} onClose={() => setTechniqueExercise(null)} v3 accent={exec.accent} />
 
       {/* Vista lista "Ver todo" (E2.6) — capa de navegacion sobre el stepper (que sigue montado debajo).
           Saltar a un paso reposiciona el stepper y cierra la capa (misma navegacion que el rail). */}
@@ -1259,12 +1275,14 @@ function ExecutorV3Inner({ planId, recoverDate, editDate }: { planId: string; re
       {/* Tuerca del ejecutor V3 (E3.7) — ajustes del entrenamiento device-scoped. */}
       <ExecSettingsSheet open={settingsOpen} onClose={() => setSettingsOpen(false)} exec={exec} />
 
-      <SubstituteExerciseSheet
+      <SubstituteSheetV3
         open={substituteBlockId != null}
         onOpenChange={(o) => { if (!o) setSubstituteBlockId(null) }}
         blockId={substituteBlockId}
         prescribedName={substituteBlock ? resolveExercise(substituteBlock)?.name ?? 'Ejercicio' : 'Ejercicio'}
         muscleGroup={substituteBlock ? resolveExercise(substituteBlock)?.muscle_group ?? '' : ''}
+        exec={exec}
+        reducedMotion={!!motion.reduced}
         onConfirm={(opt) => {
           if (!substituteBlockId || !substituteBlock) return
           setSubstitutionByBlock((p) => ({

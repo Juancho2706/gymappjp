@@ -19,7 +19,7 @@ import { useCountdown } from './timing'
 import { formatClock, holdSeedValues, mobilitySides, sideLabel } from './typed-screen-model'
 import type { ExecTheme } from './exec-theme'
 
-const MEDIA_HEIGHT = 168
+const MEDIA_HEIGHT = 150
 
 /**
  * Pantalla "Movilidad" del ejecutor V3 (E3.2) — traducción del `.a3b-mob` (concepto-a-v3-tipos): tono
@@ -146,7 +146,7 @@ export function MobilityScreenV3({
     <View style={{ gap: 14, alignItems: 'center' }}>
       {/* Nombre + chip Movilidad + "Serie N de M" */}
       <View style={{ alignItems: 'center', gap: 8 }}>
-        <Text style={{ fontFamily: FONT.displayBlack, fontSize: 26, letterSpacing: -0.5, lineHeight: 30, color: s.text, textAlign: 'center' }}>
+        <Text style={{ fontFamily: FONT.displayBlack, fontSize: 26, letterSpacing: -0.5, lineHeight: 30, color: '#eef4f6', textAlign: 'center' }}>
           {exercise.name}
         </Text>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
@@ -165,8 +165,15 @@ export function MobilityScreenV3({
       </View>
 
       {/* Media serena */}
-      <View style={{ width: '100%', height: MEDIA_HEIGHT, borderRadius: 22, overflow: 'hidden', borderWidth: 2, borderColor: hexToRgba(accent, 0.22), backgroundColor: s.surfaceRaised }}>
+      <View style={{ width: '100%', height: MEDIA_HEIGHT, borderRadius: 22, overflow: 'hidden', borderWidth: 2, borderColor: '#2a333a', backgroundColor: s.surfaceRaised }}>
         <TypedMediaV3 exercise={exercise} exec={exec} accent={accent} IconFallback={Move} onOpenTechnique={onOpenTechnique} />
+        <View
+          pointerEvents="none"
+          style={{ position: 'absolute', top: 10, left: 12, zIndex: 3, flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'rgba(0,0,0,0.4)', paddingHorizontal: 9, paddingVertical: 3, borderRadius: 999 }}
+        >
+          <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: accent }} />
+          <Text style={{ fontFamily: FONT.uiBold, fontSize: 11, letterSpacing: 0.4, color: '#cfcfd8', textTransform: 'uppercase' }}>Mantén</Text>
+        </View>
       </View>
 
       {objectiveLine ? (
@@ -203,25 +210,25 @@ export function MobilityScreenV3({
 
           <ProgressRing
             size={214}
-            strokeWidth={14}
+            strokeWidth={23}
             fill={countdown.remaining / (holdSec || 1)}
             color={accent}
             trackColor="#262c31"
             reducedMotion={reducedMotion}
           >
             <View style={{ alignItems: 'center', justifyContent: 'center' }}>
-              <Text style={{ fontFamily: FONT.displayBlack, fontSize: 56, letterSpacing: -2, lineHeight: 58, color: s.text, fontVariant: ['tabular-nums'] }}>
+              <Text style={{ fontFamily: FONT.displayBlack, fontSize: 60, letterSpacing: -2, lineHeight: 62, color: '#eef4f6', fontVariant: ['tabular-nums'] }}>
                 {formatClock(countdown.remaining)}
               </Text>
-              <Text style={{ fontFamily: FONT.uiBold, fontSize: 11, letterSpacing: 2, color: hexToRgba(accent, 0.9), textTransform: 'uppercase', marginTop: 6 }}>
+              <Text style={{ fontFamily: FONT.uiBold, fontSize: 11, letterSpacing: 2, color: '#8fa3ab', textTransform: 'uppercase', marginTop: 8 }}>
                 Sostén
               </Text>
             </View>
           </ProgressRing>
 
           {perSide && sideIdx + 1 < sides.length ? (
-            <Text style={{ fontFamily: FONT.uiBold, fontSize: 12, color: s.textDim }}>
-              luego: <Text style={{ color: s.textMuted }}>{sideLabel(sides[sideIdx + 1])}</Text>
+            <Text style={{ fontFamily: FONT.uiBold, fontSize: 12, color: '#6f7c82' }}>
+              luego: <Text style={{ color: '#9fb2b9' }}>{sideLabel(sides[sideIdx + 1])}</Text>
             </Text>
           ) : null}
 

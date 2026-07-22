@@ -28,8 +28,12 @@ interface SessionStartProps {
     miniList: SessionStartExercise[]
     /** Cuántos ejercicios quedan fuera de la mini-lista. */
     moreCount: number
-    /** "La última vez" (volumen). null ⇒ se omite la pieza. */
+    /** "La última vez" (volumen). null ⇒ se omite la tarjeta de volumen (la de Duración se mantiene). */
     lastVolumeLabel: string | null
+    /** Nota del coach del día (mockup .a3a-note). null ⇒ el globo no se muestra. */
+    coachNote?: string | null
+    /** Nombre a mostrar en la nota del coach. */
+    coachName?: string | null
     /** ¿Hay series ya registradas hoy? Muestra "Saltar al ejercicio". */
     hasProgress: boolean
     /** EMPEZAR → aterriza en el primer ejercicio incompleto. */
@@ -65,6 +69,8 @@ export function SessionStart({
     miniList,
     moreCount,
     lastVolumeLabel,
+    coachNote = null,
+    coachName = null,
     hasProgress,
     onStart,
     onSkip,
@@ -79,7 +85,7 @@ export function SessionStart({
             exit={{ opacity: 0 }}
             transition={{ duration: reducedMotion ? 0 : 0.2 }}
         >
-            <div className="mx-auto flex min-h-full w-full max-w-md flex-col px-5 pb-8 pt-[calc(env(safe-area-inset-top,0px)+28px)]">
+            <div className="mx-auto flex min-h-full w-full max-w-md flex-col px-5 pb-[calc(env(safe-area-inset-bottom,0px)+2rem)] pt-[calc(env(safe-area-inset-top,0px)+28px)]">
                 <span className="exec-v3-eyb">{eyebrow}</span>
                 <h1 className="mt-3 font-display text-[34px] font-black leading-none tracking-[-0.03em] text-on-dark">
                     {dayTitle}
@@ -98,7 +104,7 @@ export function SessionStart({
                     </div>
                 )}
 
-                <div className="mt-3 font-mono text-[13px] font-bold tabular-nums text-on-dark/80">
+                <div className="mt-3 text-[13px] font-extrabold tabular-nums text-[#cfcfd8]">
                     <b className="text-[color:var(--exec-brand)]">
                         {exercisesCount} {exercisesCount === 1 ? 'ejercicio' : 'ejercicios'}
                     </b>{' '}
@@ -120,21 +126,42 @@ export function SessionStart({
                     </div>
                 )}
 
-                {lastVolumeLabel && (
-                    <div className="exec-v3-ctx mt-3">
-                        <div className="exec-v3-ctx-k">La última vez</div>
-                        <div className="exec-v3-ctx-v tabular-nums">{lastVolumeLabel}</div>
+                {/* Fila de contexto: "La última vez" (volumen, si hay historial) + "Duración" (estimada). */}
+                <div className="exec-v3-ctxrow mt-3">
+                    {lastVolumeLabel && (
+                        <div className="exec-v3-ctx">
+                            <div className="exec-v3-ctx-k">La última vez</div>
+                            <div className="exec-v3-ctx-v tabular-nums">{lastVolumeLabel}</div>
+                        </div>
+                    )}
+                    <div className="exec-v3-ctx">
+                        <div className="exec-v3-ctx-k">Duración</div>
+                        <div className="exec-v3-ctx-v tabular-nums">~{estimatedMin} min</div>
+                    </div>
+                </div>
+
+                {/* Nota del coach del día (globo con flechita) — sólo si llega el dato. */}
+                {coachNote && (
+                    <div className="exec-v3-note mt-3.5">
+                        <div className="exec-v3-note-who">
+                            <span className="exec-v3-note-av" aria-hidden />
+                            <span className="exec-v3-note-nm">{coachName || 'Tu coach'}</span>
+                        </div>
+                        <div className="exec-v3-note-msg">{coachNote}</div>
                     </div>
                 )}
 
-                {streak && streak.planned > 0 && <WeeklyStreakDots streak={streak} className="mt-4" />}
+                {/* Empuje al fondo: racha + CTA anclados abajo como bloque (mockup .a3a-streak margin-top:auto). */}
+                <div className="min-h-4 flex-1" />
 
-                <div className="mt-auto pt-6">
+                {streak && streak.planned > 0 && <WeeklyStreakDots streak={streak} className="mb-3.5" />}
+
+                <div className="pt-2">
                     <motion.button
                         type="button"
                         onClick={onStart}
                         className="exec-v3-juicy exec-v3-startcta"
-                        animate={reducedMotion ? undefined : { scale: [1, 1.02, 1] }}
+                        animate={reducedMotion ? undefined : { scale: [1, 1.035, 1] }}
                         transition={reducedMotion ? undefined : { duration: 2.4, repeat: Infinity, ease: 'easeInOut' }}
                     >
                         <span className="exec-v3-play" aria-hidden /> EMPEZAR

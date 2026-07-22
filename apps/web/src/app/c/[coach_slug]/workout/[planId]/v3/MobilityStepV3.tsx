@@ -86,6 +86,10 @@ export function MobilityStepV3({
 
             {/* Media calmada */}
             <div className="exec-v3-media exec-v3-media-calm">
+                <span className="exec-v3-medialbl" aria-hidden>
+                    <span className="exec-v3-live" />
+                    Mantén
+                </span>
                 {media.kind === 'video' && (
                     <video src={media.src} autoPlay loop muted playsInline className="h-full w-full object-contain" />
                 )}
@@ -122,14 +126,14 @@ export function MobilityStepV3({
                         }
                     >
                         <svg className="exec-v3-hold-svg" viewBox="0 0 208 208" aria-hidden>
-                            <circle cx="104" cy="104" r="92" className="exec-v3-hold-track" fill="none" strokeWidth="12" />
+                            <circle cx="104" cy="104" r="92" className="exec-v3-hold-track" fill="none" strokeWidth="23" />
                             <circle
                                 cx="104"
                                 cy="104"
                                 r="92"
                                 className="exec-v3-hold-fill"
                                 fill="none"
-                                strokeWidth="12"
+                                strokeWidth="23"
                                 strokeLinecap="round"
                                 strokeDasharray={DASH}
                                 strokeDashoffset={dashoffset}
@@ -162,6 +166,20 @@ export function MobilityStepV3({
                                 <>último lado — <b>registra los dos holds</b></>
                             )}
                         </p>
+                    )}
+
+                    {/* CTA juicy "Listo este lado" (como RN): avance eyes-free del lado; en el último, pausa. */}
+                    {firstUnlogged != null && (
+                        <button
+                            type="button"
+                            onClick={() => {
+                                if (perSide && side === 'left') setSide('right')
+                                else if (countdown.isActive) countdown.toggle()
+                            }}
+                            className="exec-v3-juicy exec-v3-mob-cta"
+                        >
+                            {perSide && side === 'left' ? 'Listo este lado' : 'Listo'}
+                        </button>
                     )}
                 </div>
             )}

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Modal, Pressable, ScrollView, Text, View } from 'react-native'
+import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import Svg, { Defs, RadialGradient, Rect, Stop } from 'react-native-svg'
 import { MotiView } from 'moti'
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context'
 import { Confetti } from 'react-native-fast-confetti'
@@ -189,10 +190,41 @@ export function SessionCompleteV3({
 
   const brand = exec.accent
 
+  // "Series" es un TILE de la grilla (contrato: 3.er stat, no una fila full-width). Numero en BLANCO
+  // (solo el PR va dorado). Se reutiliza como 2.o tile cuando no hay volumen/distancia, o como 3.er
+  // tile (fila 2) cuando si los hay.
+  const seriesTile = (
+    <StatTile label="Series" exec={exec}>
+      <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 4 }}>
+        <NumberTicker
+          value={completedSets}
+          format={(n) => String(Math.round(n))}
+          play={showStats}
+          reduced={reducedMotion}
+          style={{ fontFamily: FONT.monoBold, fontSize: 24, color: s.text, fontVariant: ['tabular-nums'] }}
+          testID="final-series"
+        />
+        <Text style={{ fontFamily: FONT.monoBold, fontSize: 16, color: s.textDim }}>/ {plannedSets}</Text>
+      </View>
+    </StatTile>
+  )
+
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onDone} statusBarTranslucent>
       <SafeAreaProvider>
-        <SafeAreaView edges={['top', 'bottom']} style={{ flex: 1, backgroundColor: s.appBg }}>
+        <SafeAreaView edges={['top', 'bottom']} style={{ flex: 1, backgroundColor: s.appBgDeep }}>
+          {/* Degradado radial calido del contrato (.a2-screen: #1c1c24 → #16161d → #121218). Antes era
+              un plano #16161d; ahora reproduce el mismo clima que el resto del ejecutor V3. */}
+          <Svg style={StyleSheet.absoluteFill} pointerEvents="none">
+            <Defs>
+              <RadialGradient id="execFinalBg" cx="50%" cy="-8%" r="120%">
+                <Stop offset="0%" stopColor="#1c1c24" />
+                <Stop offset="42%" stopColor="#16161d" />
+                <Stop offset="100%" stopColor="#121218" />
+              </RadialGradient>
+            </Defs>
+            <Rect x="0" y="0" width="100%" height="100%" fill="url(#execFinalBg)" />
+          </Svg>
           {/* Confeti sutil de cierre (react-native-fast-confetti, ya usado por el resumen legacy). Ligeramente
               mas denso si hubo PRs. reduced-motion ⇒ sin confeti. */}
           {visible && !reducedMotion ? (
@@ -205,10 +237,8 @@ export function SessionCompleteV3({
           >
             {/* Fase 1 — clima: titulo celebratorio + subtitulo. Entra siempre (fade). */}
             <FadeIn play={visible} reduced={reducedMotion} y={14} duration={380} style={{ alignItems: 'center', gap: 6 }}>
-              <View style={{ width: 64, height: 64, borderRadius: 32, alignItems: 'center', justifyContent: 'center', backgroundColor: hexToRgba(gold, 0.16), borderWidth: 2, borderColor: hexToRgba(gold, 0.5), marginBottom: 6 }}>
-                <Medal size={30} color={gold} strokeWidth={2.4} />
-              </View>
-              <Text style={{ fontFamily: FONT.displayBlack, fontSize: 30, letterSpacing: -0.8, color: s.text, textAlign: 'center' }}>
+              {/* Sin medalla-heroe: el contrato (concepto-a-v2 "Final") solo tiene confeti + titulo. */}
+              <Text style={{ fontFamily: FONT.displayBlack, fontSize: 28, letterSpacing: -0.6, color: s.text, textAlign: 'center' }}>
                 ¡{completionLabel} completo!
               </Text>
               {contextLine ? (
@@ -216,46 +246,41 @@ export function SessionCompleteV3({
               ) : null}
             </FadeIn>
 
-            {/* Fase 2 — stats con tickers (stagger). Se revela al pasar a 'stats'. */}
+            {/* Fase 2 — stats con tickers (stagger). Grilla 2 columnas del contrato: Duración + secundario
+                (Volumen/Distancia) arriba, Series como tile abajo. Números en BLANCO (solo el PR es dorado). */}
             <FadeIn play={showStats} reduced={reducedMotion} y={12} delay={0} duration={340}>
-              <View style={{ flexDirection: 'row', gap: 8 }}>
-                <StatTile label="Duración" exec={exec}>
-                  <NumberTicker
-                    value={durationSec ?? 0}
-                    format={(n) => formatClockDuration(Math.round(n))}
-                    play={showStats}
-                    reduced={reducedMotion}
-                    style={{ fontFamily: FONT.monoBold, fontSize: 26, color: brand, fontVariant: ['tabular-nums'] }}
-                    testID="final-duration"
-                  />
-                </StatTile>
-                <StatTile label={hasVolume ? 'Volumen' : hasDistance ? 'Distancia' : 'Series'} exec={exec}>
-                  {hasVolume ? (
-                    <TickerWithUnit value={totalVolume} unit="kg" format={formatThousandsEsCl} play={showStats} reduced={reducedMotion} brand={brand} muted={s.textMuted} testID="final-volume" />
-                  ) : hasDistance ? (
-                    <Text style={{ fontFamily: FONT.monoBold, fontSize: 26, color: brand, fontVariant: ['tabular-nums'] }} numberOfLines={1}>
-                      {compactDistance(session.totalCardioDistanceM, 'm')}
-                    </Text>
+              <View style={{ gap: 8 }}>
+                <View style={{ flexDirection: 'row', gap: 8 }}>
+                  <StatTile label="Duración" exec={exec}>
+                    <NumberTicker
+                      value={durationSec ?? 0}
+                      format={(n) => formatClockDuration(Math.round(n))}
+                      play={showStats}
+                      reduced={reducedMotion}
+                      style={{ fontFamily: FONT.monoBold, fontSize: 26, color: s.text, fontVariant: ['tabular-nums'] }}
+                      testID="final-duration"
+                    />
+                  </StatTile>
+                  {hasVolume || hasDistance ? (
+                    <StatTile label={hasVolume ? 'Volumen' : 'Distancia'} exec={exec}>
+                      {hasVolume ? (
+                        <TickerWithUnit value={totalVolume} unit="kg" format={formatThousandsEsCl} play={showStats} reduced={reducedMotion} brand={s.text} muted={s.textMuted} testID="final-volume" />
+                      ) : (
+                        <Text style={{ fontFamily: FONT.monoBold, fontSize: 26, color: s.text, fontVariant: ['tabular-nums'] }} numberOfLines={1}>
+                          {compactDistance(session.totalCardioDistanceM, 'm')}
+                        </Text>
+                      )}
+                    </StatTile>
                   ) : (
-                    <NumberTicker value={completedSets} format={(n) => String(Math.round(n))} play={showStats} reduced={reducedMotion} style={{ fontFamily: FONT.monoBold, fontSize: 26, color: brand, fontVariant: ['tabular-nums'] }} />
+                    seriesTile
                   )}
-                </StatTile>
-              </View>
-            </FadeIn>
-
-            {/* Series N / M — fila completa. */}
-            <FadeIn play={showStats} reduced={reducedMotion} y={12} delay={80} duration={340}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, borderRadius: 14, borderWidth: 1.5, borderColor: s.border, backgroundColor: s.surfaceSunken, paddingVertical: 12 }}>
-                <NumberTicker
-                  value={completedSets}
-                  format={(n) => String(Math.round(n))}
-                  play={showStats}
-                  reduced={reducedMotion}
-                  style={{ fontFamily: FONT.monoBold, fontSize: 20, color: s.text, fontVariant: ['tabular-nums'] }}
-                  testID="final-series"
-                />
-                <Text style={{ fontFamily: FONT.monoBold, fontSize: 20, color: s.textDim }}>/ {plannedSets}</Text>
-                <Text style={{ fontFamily: FONT.uiBold, fontSize: 12, color: s.textMuted, marginLeft: 4 }}>series</Text>
+                </View>
+                {hasVolume || hasDistance ? (
+                  <View style={{ flexDirection: 'row', gap: 8 }}>
+                    {seriesTile}
+                    <View style={{ flex: 1 }} />
+                  </View>
+                ) : null}
               </View>
             </FadeIn>
 
@@ -308,11 +333,11 @@ export function SessionCompleteV3({
             {/* Mapa muscular frente/espalda con intensidades + leyenda (MuscleMapSvg reusado). */}
             {hasMuscleMap ? (
               <FadeIn play={showStats} reduced={reducedMotion} y={12} delay={220} duration={360}>
-                <View style={{ borderRadius: 18, borderWidth: 1.5, borderColor: s.border, backgroundColor: s.surfaceSunken, paddingHorizontal: 12, paddingTop: 12, paddingBottom: 6 }}>
+                <View style={{ borderRadius: 16, borderWidth: 1.5, borderColor: s.borderSubtle, backgroundColor: s.surfaceSunken, paddingHorizontal: 12, paddingTop: 12, paddingBottom: 6 }}>
                   <Text style={{ fontFamily: FONT.uiExtra, fontSize: 11, letterSpacing: 1.4, textTransform: 'uppercase', color: s.textMuted, marginBottom: 8 }}>
                     Trabajado hoy
                   </Text>
-                  <MuscleMapSvg groups={session.muscleWork} reducedMotion={reducedMotion} />
+                  <MuscleMapSvg groups={session.muscleWork} reducedMotion={reducedMotion} legendVariant="tiers" />
                 </View>
               </FadeIn>
             ) : null}
@@ -320,7 +345,7 @@ export function SessionCompleteV3({
             {/* Racha semanal (E4.4) — dots Lun→Dom + copy neutro. Se auto-oculta si no hay senal. */}
             {weeklyStreak ? (
               <FadeIn play={showStats} reduced={reducedMotion} y={12} delay={280} duration={340}>
-                <WeekStreakDots streak={weeklyStreak} exec={exec} />
+                <WeekStreakDots streak={weeklyStreak} exec={exec} compact />
               </FadeIn>
             ) : null}
 
@@ -339,19 +364,28 @@ export function SessionCompleteV3({
               label="Compartir logro"
               onPress={() => setShareOpen(true)}
               exec={exec}
-              height={52}
-              fontSize={16}
+              height={60}
+              fontSize={17}
               reducedMotion={reducedMotion}
               icon={<Share2 size={17} color={exec.accentText} />}
             />
+            {/* Secundario con chrome real (.a2-finalsec): 52px, radio 15, #1c1c24 + borde 2px #2f2f3a. */}
             <Pressable
               testID="final-done"
               onPress={onDone}
               accessibilityRole="button"
               accessibilityLabel="Volver al inicio"
-              style={{ alignItems: 'center', justifyContent: 'center', paddingVertical: 12 }}
+              style={({ pressed }) => ({
+                height: 52,
+                borderRadius: 15,
+                backgroundColor: pressed ? '#22222c' : '#1c1c24',
+                borderWidth: 2,
+                borderColor: '#2f2f3a',
+                alignItems: 'center',
+                justifyContent: 'center',
+              })}
             >
-              <Text style={{ fontFamily: FONT.uiExtra, fontSize: 14, letterSpacing: 0.3, color: s.textMuted }}>Volver al inicio</Text>
+              <Text style={{ fontFamily: FONT.uiExtra, fontSize: 15, letterSpacing: 0.3, color: '#e8e8ee' }}>Volver al inicio</Text>
             </Pressable>
           </View>
         </SafeAreaView>
@@ -408,9 +442,10 @@ export function SessionCompleteV3({
 function StatTile({ label, exec, children }: { label: string; exec: ExecTheme; children: React.ReactNode }) {
   const s = exec.surface
   return (
-    <View style={{ flex: 1, borderRadius: 14, borderWidth: 1.5, borderColor: s.border, backgroundColor: s.surfaceSunken, paddingHorizontal: 14, paddingVertical: 16, alignItems: 'center' }}>
+    <View style={{ flex: 1, borderRadius: 16, borderWidth: 1.5, borderColor: s.border, backgroundColor: s.surface, paddingHorizontal: 14, paddingVertical: 16, alignItems: 'flex-start' }}>
       {children}
-      <Text style={{ fontFamily: FONT.uiSemibold, fontSize: 11, color: s.textMuted, marginTop: 8 }}>{label}</Text>
+      {/* Label del contrato (.a2-stat .sl): 10px, peso 800, MAYUSCULAS, tracking .08em, #7f7f8c. */}
+      <Text style={{ fontFamily: FONT.uiExtra, fontSize: 10, letterSpacing: 0.8, textTransform: 'uppercase', color: '#7f7f8c', marginTop: 8 }}>{label}</Text>
     </View>
   )
 }

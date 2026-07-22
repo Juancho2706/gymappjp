@@ -37,6 +37,7 @@ import { ExecListMapV3, type ExecListMapItem } from './v3/ExecListMapV3'
 import { SessionIntro } from './v3/SessionIntro'
 import { SessionStart, type SessionStartExercise } from './v3/SessionStart'
 import { SessionCompleteV3 } from './v3/SessionCompleteV3'
+import { TechniqueSheetV3 } from './v3/TechniqueSheetV3'
 import { computeWeeklyStreak, type WeekStatusDaySource } from './v3/weekly-streak'
 import { ExecSettingsSheet } from './v3/ExecSettingsSheet'
 import { RestInterstitialDataProvider, type InterstitialNext, type InterstitialRound } from './v3/RestInterstitialV3'
@@ -44,6 +45,7 @@ import { resolveExecMedia } from './v3/exec-media'
 import { useExecSettings } from './v3/exec-settings'
 import { STEPPER_MODE_KEY } from './rest-timer-preferences'
 import { SubstituteExerciseSheet } from './_components/SubstituteExerciseSheet'
+import { SubstituteSheetV3 } from './v3/SubstituteSheetV3'
 import { SUBSTITUTION_REASON } from '@/services/workout/exercise-substitution'
 import type { SubstituteCandidate } from './_data/substitution.queries'
 import { logSetAction, revalidateWorkoutViewAction } from './_actions/workout-log.actions'
@@ -1353,6 +1355,17 @@ export function WorkoutExecutionClient({
         return m
     }, [sectioned])
 
+    // Toasts oscuros en V3 (informe 15, MAYOR): el `<Toaster>` sonner vive en el layout (portal a body,
+    // tema `light`) → sus toasts salían CLAROS sobre el shell oscuro. Marcamos el body mientras el
+    // ejecutor V3 está montado; globals.css re-tiñe `[data-sonner-toaster]` a superficie oscura sólo
+    // bajo esa marca (scoped, sin tocar el resto de la app). Se limpia al desmontar.
+    useEffect(() => {
+        if (typeof document === 'undefined') return
+        if (!execV3Active) return
+        document.body.dataset.execV3Toast = 'true'
+        return () => { delete document.body.dataset.execV3Toast }
+    }, [execV3Active])
+
     // Lectura post-montaje del toggle (hidratación-safe, patrón `omni_autotimer`): si estaba activo,
     // arranca en el primer paso incompleto (no en el 0).
     // Ola 2 (E2.1): resuelve también el flag V3 (server prop + override localStorage `eva:executor-v3`)
@@ -1877,6 +1890,8 @@ export function WorkoutExecutionClient({
                                 substitution={sub ? { exerciseId: sub.id, exerciseName: sub.name, reason: SUBSTITUTION_REASON } : null}
                                 autoTimerEnabled={autoTimerEnabled}
                                 openTechnique={openTechnique}
+                                canSubstitute={effType === 'strength' && doneCount === 0}
+                                onOpenSubstitute={() => setSubstituteSheetBlockId(block.id)}
                                 handleLogged={handleLogged}
                                 handleResult={handleResult}
                             />
@@ -2067,6 +2082,11 @@ export function WorkoutExecutionClient({
             .filter(Boolean)
             .join(' · ') || null
 
+    // Etiqueta corta del día para el título del cierre V3 ("¡Día 3 completo!", mockup concepto-a-v2
+    // "Final"): sólo si el plan pertenece a un programa y trae `day_of_week` (índice de rotación real).
+    // Sin programa/día → null ⇒ SessionCompleteV3 cae a `plan.title` (comportamiento previo, seguro).
+    const execV3CompletionLabel = program && plan.day_of_week ? `Día ${plan.day_of_week}` : null
+
     // Ejecutor V3 (E2.2): view-model de la pantalla de Inicio, mapeado de lo que YA viaja al client
     // (plan/logs/lastSession). Toda pieza sin dato se omite. Sólo se calcula en modo V3.
     const execV3StartVM = (() => {
@@ -2105,6 +2125,13 @@ export function WorkoutExecutionClient({
             miniList,
             moreCount: Math.max(0, totalExercises - miniList.length),
             lastVolumeLabel: fmtVolume(lastVolKg),
+            // Nota del coach del día (mockup .a3a-note): globo cableado CONDICIONAL — se pinta sólo si
+            // llega texto. Hoy no hay campo de nota a nivel plan/día en el payload (`workout_plans` sólo
+            // trae id/title/assigned_date/day_of_week/week_variant/program_id/coach_id; `workout_blocks.notes`
+            // es POR-EJERCICIO y ya se muestra en el chip "Nota del coach" del ejercicio). Fuente futura:
+            // una columna de nota de sesión (p. ej. workout_plans.coach_note) — requiere cambio DB, fuera de scope.
+            coachNote: null as string | null,
+            coachName: coachSlug?.trim()?.replace(/^./, (c) => c.toUpperCase()) || null,
             hasProgress: completedSetCount > 0,
         }
     })()
@@ -2128,7 +2155,12 @@ export function WorkoutExecutionClient({
                 ref={execRootRef}
                 data-exec-v3={execV3Active ? '' : undefined}
                 data-exec-hide-effort={execV3Active && !execShowEffort ? '' : undefined}
-                className="is-workout-page min-h-dvh bg-[var(--ink-950)] text-on-dark"
+                className={cn(
+                    'is-workout-page min-h-dvh text-on-dark',
+                    // V3 pinta el fondo cálido vía [data-exec-v3] + capa ::before; el bg-ink-950 sólo compite.
+                    // V2 conserva su fondo byte-identico.
+                    !execV3Active && 'bg-[var(--ink-950)]',
+                )}
             >
                 {execV3Active && (
                     <ExecHeaderV3
@@ -2283,12 +2315,26 @@ export function WorkoutExecutionClient({
                     </div>
                 </motion.div>
 
-                {isOffline && (
+                {isOffline && (execV3Active ? (
+                    /* V3: píldora oscura CALMADA (mockup concepto-a-v32-estados a3d-offline) — nada se bloquea.
+                       Reemplaza la barra ámbar de alarma del ejecutor viejo (que se conserva sólo para V2). */
+                    <div className="sticky top-[var(--workout-header-h,80px)] z-10 flex justify-center px-4 py-2 pointer-events-none">
+                        <div
+                            className="pointer-events-auto flex items-center gap-2.5 rounded-full border-[1.5px] px-3.5 py-2"
+                            style={{ background: '#1b1b23', borderColor: '#2f2f3a' }}
+                        >
+                            <span className="h-2 w-2 shrink-0 rounded-full bg-amber-400" aria-hidden />
+                            <p className="text-[12.5px] font-semibold" style={{ color: '#c1c1cc' }}>
+                                Sin señal — <b className="font-extrabold" style={{ color: '#e8e8ee' }}>guardando en tu teléfono</b>
+                            </p>
+                        </div>
+                    </div>
+                ) : (
                     <div className="sticky top-[var(--workout-header-h,80px)] z-10 flex items-center gap-2.5 bg-amber-500/90 backdrop-blur-sm px-4 py-2.5 text-amber-950 dark:bg-amber-600/90 dark:text-amber-50">
                         <WifiOff className="w-4 h-4 shrink-0" />
                         <p className="text-xs font-semibold">Sin conexión — los datos se guardarán al reconectar.</p>
                     </div>
-                )}
+                ))}
 
                 {/* Editando un día PASADO (Ola 1): cada serie edita esa fecha en modo solo-UPDATE. */}
                 {targetDate && (
@@ -2382,12 +2428,27 @@ export function WorkoutExecutionClient({
                     </button>
                 )}
 
-                <div className="exec-finish-bar fixed bottom-0 left-0 right-0 z-40 border-t border-white/10 bg-[var(--ink-950)]/90 px-4 pt-4 pb-[calc(1rem+env(safe-area-inset-bottom,0px))] backdrop-blur-xl">
-                    <div className="max-w-5xl mx-auto flex items-center justify-between gap-3">
+                {/* Barra "Finalizar" — V3 re-piel (informe 15, MAYOR): superficie #1a1a22 + divisor 1.5px
+                    #2f2f3a y botón juicy-ghost (borde 2px #2f2f3a) que se vuelve juicy de MARCA al
+                    confirmar (active). V2 conserva su barra byte-idéntica. */}
+                <div
+                    className={cn(
+                        'exec-finish-bar fixed bottom-0 left-0 right-0 z-40 px-4 pt-4 pb-[calc(1rem+env(safe-area-inset-bottom,0px))] backdrop-blur-xl',
+                        execV3Active
+                            ? 'border-t-[1.5px] border-[#2f2f3a] bg-[#1a1a22]'
+                            : 'border-t border-white/10 bg-[var(--ink-950)]/90',
+                    )}
+                >
+                    <div className="max-w-3xl mx-auto flex items-center justify-between gap-3">
                         <ManualTimerButton defaultTime={'90'} />
                         <button
                             onClick={handleFinish}
-                            className="h-12 px-5 flex items-center gap-2 rounded-control bg-[var(--sport-500)] text-white font-bold transition-transform active:scale-[0.99]"
+                            className={cn(
+                                'h-12 px-5 flex items-center gap-2 rounded-control font-bold transition-colors active:scale-[0.99]',
+                                execV3Active
+                                    ? 'border-2 border-[#2f2f3a] bg-[#1a1a22] text-on-dark active:border-[color:var(--exec-brand)] active:bg-[color:var(--exec-brand)] active:text-[color:var(--exec-brand-ink)]'
+                                    : 'bg-[var(--sport-500)] text-white',
+                            )}
                         >
                             <CheckCircle2 className="w-4 h-4" />
                             Finalizar entrenamiento
@@ -2432,6 +2493,7 @@ export function WorkoutExecutionClient({
                 {showCompleted && execV3Active && (
                     <SessionCompleteV3
                         planTitle={plan.title}
+                        completionLabel={execV3CompletionLabel}
                         contextLine={execV3ContextLine}
                         logs={sessionLogs}
                         blocks={plan.workout_blocks}
@@ -2464,7 +2526,15 @@ export function WorkoutExecutionClient({
                     document.body
                 ) : null}
 
-                {/* Technique Modal */}
+                {/* Modal de Técnica — en V3 se abre como sheet OSCURA in-context (informe 15, BLOCKER);
+                    el Dialog claro legacy queda SÓLO para el ejecutor V2. */}
+                {execV3Active && (
+                    <TechniqueSheetV3
+                        exercise={showTechnique ? selectedExercise : null}
+                        onClose={() => setShowTechnique(false)}
+                    />
+                )}
+                {!execV3Active && (
                 <Dialog open={showTechnique} onOpenChange={setShowTechnique}>
                     <DialogContent 
                         showCloseButton={false}
@@ -2577,13 +2647,17 @@ export function WorkoutExecutionClient({
                         </div>
                     </DialogContent>
                 </Dialog>
+                )}
 
-                {/* Bottom-sheet de sustitución de máquina ocupada (Fase L · workstream C). */}
+                {/* Bottom-sheet de sustitución de máquina ocupada (Fase L · workstream C). En V3 usa el
+                    sheet "Máquina ocupada" re-pieleado (`SubstituteSheetV3`, mismo contrato/handler); el
+                    legacy queda SÓLO para el ejecutor V2. */}
                 {(() => {
                     const openBlock = substituteSheetBlockId ? blocks.find((b) => b.id === substituteSheetBlockId) : null
                     const openEx = openBlock ? getExercise(openBlock) : null
+                    const SubSheet = execV3Active ? SubstituteSheetV3 : SubstituteExerciseSheet
                     return (
-                        <SubstituteExerciseSheet
+                        <SubSheet
                             open={substituteSheetBlockId != null}
                             onOpenChange={(o) => { if (!o) setSubstituteSheetBlockId(null) }}
                             blockId={substituteSheetBlockId}

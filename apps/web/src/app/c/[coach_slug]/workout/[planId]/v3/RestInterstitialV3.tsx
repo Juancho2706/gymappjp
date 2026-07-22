@@ -3,9 +3,9 @@
 import { createContext, useContext, useEffect, useRef, useState } from 'react'
 import Image from 'next/image'
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion'
-import { Check, ChevronDown, Dumbbell, Minus, Plus, SkipForward } from 'lucide-react'
+import { Check, CheckCheck, ChevronDown, Dumbbell, SkipForward } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { ExecListMapV3, type ExecListMapItem } from './ExecListMapV3'
+import { type ExecListMapItem } from './ExecListMapV3'
 import { applyExecThemeVars, readExecutorTheme } from './exec-theme'
 import { useCelebrations } from './use-celebrations'
 import type { ExecMedia } from './exec-media'
@@ -14,7 +14,7 @@ import type { ExecMedia } from './exec-media'
  * Ejecutor V3 (E3.1) — presentación del descanso a pantalla completa. Traducción del mockup
  * `concepto-a-v3-core` (pantalla Descanso): micro-celebración "+1 serie", countdown gigante con anillo,
  * −15s / Saltar / +15s, tarjeta SIGUIENTE con mini-media estática, mensaje del coach del bloque
- * siguiente y peek inferior "Plan completo" (reusa ExecListMapV3) arrastrable.
+ * siguiente y peek inferior "Plan completo" con filas de estado (done/now/todo, mockup a3a-srow) arrastrable.
  *
  * INTOCABLE: NO corre un timer propio. Es una PRESENTACIÓN del MISMO descanso: el `RestTimer` (fuente
  * única del conteo endTime-based, alarma, beeps, WakeLock, MediaSession y notificaciones) le pasa el
@@ -97,14 +97,17 @@ interface RestInterstitialV3Props {
 
 const RING_R = 92
 const RING_C = 2 * Math.PI * RING_R
-// Confetti CSS de la micro-celebración (posiciones fijas, decorativo — off en reduced-motion).
+// Confetti CSS de la micro-celebración (8 piezas, colores de zona del mockup + marca; decorativo,
+// off en reduced-motion). Los hexes de zona son adornos, no re-tinción de --zone-*.
 const CONFETTI = [
-  { x: -46, y: -20, c: 'var(--exec-brand)', d: 0 },
-  { x: 44, y: -24, c: 'var(--exec-celebration)', d: 0.3 },
-  { x: -54, y: 12, c: 'var(--exec-recovery)', d: 0.6 },
-  { x: 56, y: 8, c: 'var(--exec-brand)', d: 0.15 },
-  { x: -20, y: -34, c: '#f472b6', d: 0.45 },
-  { x: 22, y: -32, c: 'var(--exec-celebration)', d: 0.75 },
+  { x: -46, y: -30, c: 'var(--exec-brand)', d: 0 },
+  { x: 44, y: -34, c: '#facc15', d: 0.3 },
+  { x: -54, y: 10, c: '#38bdf8', d: 0.6 },
+  { x: 56, y: 6, c: '#fb923c', d: 0.15 },
+  { x: -20, y: -46, c: '#f472b6', d: 0.45 },
+  { x: 22, y: -44, c: 'var(--exec-brand)', d: 0.75 },
+  { x: -38, y: 34, c: '#facc15', d: 0.55 },
+  { x: 40, y: 32, c: '#38bdf8', d: 0.9 },
 ]
 
 export function RestInterstitialV3({
@@ -193,7 +196,7 @@ export function RestInterstitialV3({
             <div className="exec-v3-rest-top">
               <div className={cn('exec-v3-roundban', !reducedMotion && 'is-pulse')}>
                 <span className="exec-v3-dblcheck" aria-hidden>
-                  <Check className="h-4 w-4" strokeWidth={3.5} />
+                  <CheckCheck className="h-4 w-4" strokeWidth={3} />
                 </span>
                 Ronda {round.justClosed} lista
               </div>
@@ -246,14 +249,14 @@ export function RestInterstitialV3({
           {/* Countdown gigante + anillo (fracción del RestTimer, NO un timer nuevo). */}
           <div className="exec-v3-ringwrap">
             <svg className="exec-v3-ring-svg" viewBox="0 0 208 208" aria-hidden>
-              <circle cx="104" cy="104" r={RING_R} className="exec-v3-ring-track" fill="none" strokeWidth="14" />
+              <circle cx="104" cy="104" r={RING_R} className="exec-v3-ring-track" fill="none" strokeWidth="24" />
               <circle
                 cx="104"
                 cy="104"
                 r={RING_R}
                 className="exec-v3-ring-fill"
                 fill="none"
-                strokeWidth="14"
+                strokeWidth="24"
                 strokeLinecap="round"
                 strokeDasharray={RING_C}
                 strokeDashoffset={dashoffset}
@@ -265,7 +268,7 @@ export function RestInterstitialV3({
                 {done ? '¡Listo!' : formatTime(timeLeft)}
               </div>
               <div className="exec-v3-restlbl" aria-live="polite">
-                {done ? 'A entrenar' : round ? 'Descanso de grupo' : isActive ? (warmup ? 'Aproximación' : 'Descanso') : 'En pausa'}
+                {done ? '¡A entrenar!' : round ? 'Descanso de grupo' : isActive ? (warmup ? 'Aproximación' : 'Descanso') : 'En pausa'}
               </div>
             </div>
           </div>
@@ -281,7 +284,7 @@ export function RestInterstitialV3({
               className="exec-v3-rb tabular-nums"
               aria-label="Restar 15 segundos"
             >
-              <Minus className="h-4 w-4" aria-hidden /> 15s
+              −15s
             </button>
             <button type="button" onClick={onSkip} className="exec-v3-rb is-skip" aria-label="Saltar el descanso">
               <SkipForward className="h-4 w-4" aria-hidden /> Saltar
@@ -292,7 +295,7 @@ export function RestInterstitialV3({
               className="exec-v3-rb tabular-nums"
               aria-label="Sumar 15 segundos"
             >
-              <Plus className="h-4 w-4" aria-hidden /> 15s
+              +15s
             </button>
           </div>
 
@@ -371,11 +374,36 @@ export function RestInterstitialV3({
                   </span>
                 </span>
               </button>
-              {sheetOpen && (
-                <div className="exec-v3-restsheet-body">
-                  <ExecListMapV3 items={items} onJump={handleJump} />
-                </div>
-              )}
+              {/* Filas "estado de un vistazo" (mockup a3a-srow): SIEMPRE renderizadas para que el peek
+                  colapsado asome 1-2 filas reales del plan (el resto se recorta con desvanecido). NO usa
+                  ExecListMapV3 (ese mapa numerado queda para la vista "Ver todo" del stepper). */}
+              <div className="exec-v3-restsheet-body">
+                {items.map((item) => {
+                  const state = item.complete ? 'done' : item.isCurrent ? 'now' : 'todo'
+                  return (
+                    <button
+                      key={item.key}
+                      type="button"
+                      onClick={() => handleJump(item.stepIndex)}
+                      className={cn('exec-v3-srow', item.isCurrent && 'is-now')}
+                      aria-current={item.isCurrent ? 'true' : undefined}
+                    >
+                      <span className={cn('exec-v3-sstate', state)} aria-hidden>
+                        {state === 'done' && <Check className="h-3 w-3" strokeWidth={3.5} />}
+                        {state === 'now' && <span className="exec-v3-sstate-dot" />}
+                      </span>
+                      <span className="exec-v3-snm">{item.title}</span>
+                      <span className={cn('exec-v3-ssub tabular-nums', state)}>
+                        {state === 'done'
+                          ? `✓ ${item.doneSets}/${item.totalSets}`
+                          : state === 'now'
+                            ? 'ahora'
+                            : 'pendiente'}
+                      </span>
+                    </button>
+                  )
+                })}
+              </div>
             </motion.div>
           </>
         )}

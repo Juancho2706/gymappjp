@@ -1421,12 +1421,33 @@ body > * {
   --exec-celebration: #ff6a3d;
   /* Dorado PROPIO del PR (E4.2): no la marca del coach ni el acento de zona — token de récord. */
   --exec-pr: #f5c451;
-  background:
-    radial-gradient(120% 80% at 50% -8%, #1c1c24 0%, #16161d 42%, #121218 100%) fixed;
+  /* Tinta sobre el color de marca (white-label): el mockup usa #072100 porque su marca es verde;
+     acá derivamos la tinta de la MARCA real del coach para que el check/el label del botón "Saltar"
+     luzcan sobre cualquier acento. */
+  --exec-brand-ink: color-mix(in srgb, var(--exec-brand) 30%, #000);
+  /* Tinta sobre el color de marca (texto oscuro legible sobre --exec-brand). La usan otras unidades
+     para copy/íconos sobre superficies teñidas de marca (juicy CTA, badges). Derivada de la MARCA,
+     nunca del verde placeholder del mockup — white-label safe. */
+  --exec-brand-ink: color-mix(in srgb, var(--exec-brand) 30%, #000);
+  /* Base sólida de respaldo; el gradiente cálido va en la capa fija [data-exec-v3]::before (abajo).
+     Se evita background-attachment:fixed (roto/janky en iOS Safari y PWA standalone). */
+  background: #121218;
+}
+/* Capa fija del fondo cálido del mockup (concepto-a-v3-core .a3a-screen): pintada al viewport,
+   detrás del contenido (z-index:-1 → sobre el #121218 del root, bajo los hijos). Reemplaza el
+   antiguo `... fixed` que iOS renderiza mal. */
+[data-exec-v3]::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: radial-gradient(120% 80% at 50% -8%, #1c1c24 0%, #16161d 42%, #121218 100%);
 }
 [data-exec-v3] .exec-v3-header {
-  background: color-mix(in srgb, #16161d 92%, transparent);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  /* Sticky sobre el gradiente cálido: fondo semitransparente para legibilidad al hacer scroll, SIN
+     divisor inferior (el mockup no dibuja barra: el header fluye sobre el screen). */
+  background: color-mix(in srgb, #16161d 82%, transparent);
 }
 /* Dots de progreso por ejercicio — base / completado / actual (mockup a3a-dot). */
 .exec-v3-dot {
@@ -1461,15 +1482,30 @@ body > * {
   --sport-300: color-mix(in srgb, var(--exec-brand) 68%, #fff);
 }
 
+/* ---- Toasts OSCUROS en el ejecutor V3 (informe 15, MAYOR): el <Toaster> sonner vive en el layout
+   (portal a <body>, tema `light`) → sus toasts salían CLAROS/coloreados (richColors) sobre el shell
+   oscuro. Mientras el ejecutor V3 está montado marca el body (`data-exec-v3-toast`, seteado por
+   WorkoutExecutionClient); acá forzamos la superficie oscura del toast (base y variantes richColors,
+   que reescriben --normal-bg por tipo → override directo con !important). Los iconos conservan su hue
+   semántico. Scoped al flag: fuera del ejecutor V3 el toaster queda intacto. ---- */
+body[data-exec-v3-toast] [data-sonner-toast][data-styled='true'] {
+  background: #1d1d26 !important;
+  border-color: #33333f !important;
+  color: #eaeaf0 !important;
+}
+body[data-exec-v3-toast] [data-sonner-toast][data-styled='true'] [data-description] {
+  color: #b0b0bd !important;
+}
+
 /* ---- Botón juicy (E2.2/E2.4): sombra inferior dura ~5px del acento oscurecido; se hunde al presionar. ---- */
 [data-exec-v3] .exec-v3-juicy {
   border: 2px solid color-mix(in srgb, var(--exec-brand) 55%, #000);
   background: var(--exec-brand);
-  color: #fff;
+  /* Tinta oscura sobre el relleno de marca (mockup .a3a-juicy #072100), derivada de --exec-brand. */
+  color: var(--exec-brand-ink);
   font-weight: 900;
   letter-spacing: -0.01em;
   border-radius: 16px;
-  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.18);
   box-shadow: 0 5px 0 0 color-mix(in srgb, var(--exec-brand) 55%, #000);
   transition: transform 0.12s ease, box-shadow 0.12s ease;
 }
@@ -1577,7 +1613,13 @@ body > * {
   color: #6f6f7c;
   padding: 4px 0 6px;
 }
+[data-exec-v3] .exec-v3-ctxrow {
+  display: flex;
+  gap: 10px;
+}
 [data-exec-v3] .exec-v3-ctx {
+  flex: 1;
+  min-width: 0;
   background: #17171f;
   border: 1.5px solid #2a2a34;
   border-radius: 14px;
@@ -1597,10 +1639,55 @@ body > * {
   letter-spacing: -0.01em;
   color: #f4f4f6;
 }
+/* Nota del coach del día (mockup .a3a-note) — globo teñido de marca con cola/flechita hacia el CTA. */
+[data-exec-v3] .exec-v3-note {
+  position: relative;
+  background: color-mix(in srgb, var(--exec-brand) 12%, #16161d);
+  border: 1.5px solid color-mix(in srgb, var(--exec-brand) 26%, transparent);
+  border-radius: 14px;
+  padding: 12px 14px;
+}
+[data-exec-v3] .exec-v3-note::after {
+  content: '';
+  position: absolute;
+  left: 26px;
+  bottom: -8px;
+  width: 14px;
+  height: 14px;
+  background: color-mix(in srgb, var(--exec-brand) 12%, #16161d);
+  border-right: 1.5px solid color-mix(in srgb, var(--exec-brand) 26%, transparent);
+  border-bottom: 1.5px solid color-mix(in srgb, var(--exec-brand) 26%, transparent);
+  transform: rotate(45deg);
+}
+[data-exec-v3] .exec-v3-note-who {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 6px;
+}
+[data-exec-v3] .exec-v3-note-av {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: linear-gradient(135deg, var(--exec-brand), color-mix(in srgb, var(--exec-brand) 40%, #000));
+}
+[data-exec-v3] .exec-v3-note-nm {
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--exec-brand);
+  letter-spacing: 0.02em;
+}
+[data-exec-v3] .exec-v3-note-msg {
+  font-size: 14px;
+  font-weight: 700;
+  color: #eaeaf0;
+  line-height: 1.35;
+}
 [data-exec-v3] .exec-v3-startcta {
   width: 100%;
-  min-height: 60px;
-  height: 64px;
+  min-height: 62px;
+  height: 66px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1613,7 +1700,7 @@ body > * {
   height: 0;
   border-style: solid;
   border-width: 9px 0 9px 15px;
-  border-color: transparent transparent transparent #fff;
+  border-color: transparent transparent transparent var(--exec-brand-ink);
 }
 
 /* ---- Fuerza (E2.4) ---- */
@@ -1634,6 +1721,26 @@ body > * {
   display: flex;
   align-items: center;
   justify-content: center;
+}
+/* Shimmer diagonal sobre la card de media (mockup a3a-media::after). Barrido de brillo 3.2s. */
+[data-exec-v3] .exec-v3-media::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background: linear-gradient(105deg, transparent 20%, rgba(255, 255, 255, 0.07) 45%, transparent 68%);
+  background-size: 220% 100%;
+}
+@media (prefers-reduced-motion: no-preference) {
+  [data-exec-v3] .exec-v3-media::after {
+    animation: exec-v3-media-shimmer 3.2s linear infinite;
+  }
+}
+@keyframes exec-v3-media-shimmer {
+  to {
+    background-position: -220% 0;
+  }
 }
 [data-exec-v3] .exec-v3-media-empty {
   color: #3f3f4a;
@@ -1678,20 +1785,31 @@ body > * {
   gap: 6px;
   font-size: 11px;
   font-weight: 800;
+  letter-spacing: 0.01em;
+  /* padding baja 11→8 al colapsar (mockup mchippad). blur bajado a 2px: barato sobre video en loop. */
   padding: 6px 11px;
   border-radius: 999px;
   min-height: 30px;
   background: rgba(8, 8, 12, 0.6);
-  -webkit-backdrop-filter: blur(4px);
-  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(2px);
+  backdrop-filter: blur(2px);
   border: 1.5px solid rgba(255, 255, 255, 0.16);
   color: #eaeaf0;
+  transition: padding-left 0.5s cubic-bezier(0.4, 0, 0.2, 1), padding-right 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+[data-exec-v3] .exec-v3-mchip svg {
+  color: #cfcfd8;
 }
 [data-exec-v3] .exec-v3-mlabel {
   display: inline-block;
   overflow: hidden;
   white-space: nowrap;
-  max-width: 120px;
+  max-width: 110px;
+  opacity: 1;
+  margin-left: 0;
+  will-change: max-width;
+  transition: max-width 0.5s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.35s ease,
+    margin-left 0.5s cubic-bezier(0.4, 0, 0.2, 1);
 }
 [data-exec-v3] .exec-v3-badge {
   position: absolute;
@@ -1701,18 +1819,47 @@ body > * {
   height: 10px;
   border-radius: 50%;
   background: var(--exec-brand);
-  box-shadow: 0 0 0 2px #16161d;
+  box-shadow: 0 0 0 2px #16161d, 0 0 0 4px color-mix(in srgb, var(--exec-brand) 45%, transparent);
 }
-/* Chips glass: entran extendidos y colapsan a solo-icono (~1,2 s), una sola vez; remontan al
-   cambiar de serie (key en el contenedor). Reduced-motion → quedan extendidos. */
 @media (prefers-reduced-motion: no-preference) {
-  [data-exec-v3] .exec-v3-mchip .exec-v3-mlabel {
-    animation: exec-v3-mlabel-collapse 1.6s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  [data-exec-v3] .exec-v3-badge {
+    animation: exec-v3-badge-pulse 1.8s ease-in-out infinite;
   }
 }
-@keyframes exec-v3-mlabel-collapse {
-  0%, 55% { max-width: 120px; opacity: 1; margin-left: 0; }
-  100% { max-width: 0; opacity: 0; margin-left: -6px; }
+@keyframes exec-v3-badge-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 2px #16161d, 0 0 0 3px color-mix(in srgb, var(--exec-brand) 55%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 0 2px #16161d, 0 0 0 7px color-mix(in srgb, var(--exec-brand) 0%, transparent);
+  }
+}
+/* Chips glass: entran EXTENDIDOS al montar (estado React garantiza el primer frame extendido) y
+   colapsan a solo-icono ~1,2 s despues via data-collapsed (transicion sobre max-width/padding, NO
+   keyframe front-loaded → sin el jank de "salen contraidos"). One-shot por EJERCICIO (el contenedor
+   ya no remonta por serie). Reduced-motion → quedan extendidos. */
+[data-exec-v3] .exec-v3-mchip[data-collapsed='true'] {
+  padding-left: 8px;
+  padding-right: 8px;
+}
+[data-exec-v3] .exec-v3-mchip[data-collapsed='true'] .exec-v3-mlabel {
+  max-width: 0;
+  opacity: 0;
+  margin-left: -6px;
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-exec-v3] .exec-v3-mlabel {
+    transition: none;
+  }
+  [data-exec-v3] .exec-v3-mchip[data-collapsed='true'] {
+    padding-left: 11px;
+    padding-right: 11px;
+  }
+  [data-exec-v3] .exec-v3-mchip[data-collapsed='true'] .exec-v3-mlabel {
+    max-width: 110px;
+    opacity: 1;
+    margin-left: 0;
+  }
 }
 [data-exec-v3] .exec-v3-rx {
   font-size: 13px;
@@ -1784,8 +1931,8 @@ body > * {
   align-items: center;
 }
 [data-exec-v3] .exec-v3-sq {
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
   border-radius: 8px;
   background: #26262f;
   border: 2px solid #34343f;
@@ -1812,6 +1959,239 @@ body > * {
 [data-exec-v3] .exec-v3-setlist button[type='submit']:not(.rounded-full):active {
   transform: translateY(5px);
   box-shadow: 0 0 0 0 color-mix(in srgb, var(--exec-brand) 55%, #000);
+}
+
+/* ============ CAPTURA HERO DE FUERZA V3 (mockup a3a: tiles + esfuerzo + CTA) ============ */
+/* Un slot por serie: sólo la ACTIVA (hero) se ve inline; las anteriores (chips) sólo al abrir el
+   lápiz (data-showprev); las futuras siempre ocultas. Los instances quedan SIEMPRE montados
+   (reconciliación de cola/optimismo intacta) — sólo cambia su visibilidad. */
+[data-exec-v3] .exec-v3-herowrap .exec-v3-slot.is-future {
+  display: none;
+}
+[data-exec-v3] .exec-v3-herowrap:not([data-showprev]) .exec-v3-slot.is-prev {
+  display: none;
+}
+
+/* Deshabilita el robo del gesto como scroll en los valores táctiles (fix informe 14 causa A). */
+[data-exec-v3] .exec-v3-touchnone {
+  touch-action: none;
+}
+
+/* Tiles de valor grandes (peso / reps) */
+[data-exec-v3] .exec-v3-cur {
+  display: flex;
+  gap: 10px;
+}
+[data-exec-v3] .exec-v3-val {
+  flex: 1;
+  display: block;
+  text-align: center;
+  padding: 10px 8px 9px;
+  border-radius: 16px;
+  background: #1c1c24;
+  border: 2px solid #2f2f3a;
+  transition: border-color 0.12s ease;
+}
+[data-exec-v3] .exec-v3-val:focus-within {
+  border-color: color-mix(in srgb, var(--exec-brand) 60%, transparent);
+}
+[data-exec-v3] .exec-v3-valinput {
+  display: block;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  text-align: center;
+  color: #f4f4f6;
+  font-size: 30px;
+  font-weight: 900;
+  letter-spacing: -0.03em;
+  line-height: 1;
+  padding: 0;
+  font-variant-numeric: tabular-nums;
+  outline: none;
+  -moz-appearance: textfield;
+}
+[data-exec-v3] .exec-v3-valinput::-webkit-outer-spin-button,
+[data-exec-v3] .exec-v3-valinput::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+[data-exec-v3] .exec-v3-valinput::placeholder {
+  color: #4a4a56;
+}
+[data-exec-v3] .exec-v3-valu {
+  display: block;
+  font-size: 11px;
+  font-weight: 800;
+  color: #8f8f9c;
+  letter-spacing: 0.08em;
+  margin-top: 4px;
+}
+
+/* Panel de esfuerzo compacto (RPE / RIR opcional) — pills toggle + escala de ticks única */
+[data-exec-v3] .exec-v3-effpanel {
+  background: #15151c;
+  border: 1.5px solid #24242e;
+  border-radius: 14px;
+  padding: 9px 11px 10px;
+}
+[data-exec-v3] .exec-v3-efftop {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 9px;
+}
+[data-exec-v3] .exec-v3-efflbl {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #7f7f8c;
+}
+[data-exec-v3] .exec-v3-effopt {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #6a6a76;
+  background: #202029;
+  padding: 2px 7px;
+  border-radius: 999px;
+}
+[data-exec-v3] .exec-v3-effpills {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+[data-exec-v3] .exec-v3-epill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 800;
+  padding: 4px 9px;
+  border-radius: 999px;
+  background: #1c1c24;
+  border: 1.5px solid #33333f;
+  color: #9a9aa6;
+}
+[data-exec-v3] .exec-v3-epill .k {
+  letter-spacing: 0.04em;
+}
+[data-exec-v3] .exec-v3-epill .em {
+  color: #5f5f6b;
+}
+[data-exec-v3] .exec-v3-epill.on {
+  background: color-mix(in srgb, var(--exec-brand) 16%, #16161d);
+  border-color: color-mix(in srgb, var(--exec-brand) 40%, transparent);
+  color: color-mix(in srgb, var(--exec-brand) 85%, #fff);
+}
+[data-exec-v3] .exec-v3-epill.on .v {
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+}
+[data-exec-v3] .exec-v3-scale {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+[data-exec-v3] .exec-v3-tick {
+  flex: 1;
+  height: 7px;
+  border-radius: 3px;
+  background: #26262f;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  transition: height 0.12s ease, background-color 0.12s ease;
+}
+[data-exec-v3] .exec-v3-tick.sel {
+  background: var(--exec-brand);
+  height: 11px;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--exec-brand) 22%, transparent);
+}
+@media (prefers-reduced-motion: no-preference) {
+  [data-exec-v3] .exec-v3-tick.sel {
+    animation: exec-v3-tick-pulse 2.2s ease-in-out infinite;
+  }
+}
+@keyframes exec-v3-tick-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--exec-brand) 22%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 0 6px color-mix(in srgb, var(--exec-brand) 8%, transparent);
+  }
+}
+[data-exec-v3] .exec-v3-scaleends {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 5px;
+}
+[data-exec-v3] .exec-v3-scaleends span {
+  font-size: 9px;
+  font-weight: 800;
+  color: #6a6a76;
+  font-variant-numeric: tabular-nums;
+}
+
+/* CTA principal juicy full-width "Aplastar serie" */
+[data-exec-v3] .exec-v3-cta {
+  width: 100%;
+  height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  font-size: 18px;
+}
+@media (prefers-reduced-motion: no-preference) {
+  [data-exec-v3] .exec-v3-cta:not(:active) {
+    animation: exec-v3-cta-breathe 2.6s ease-in-out infinite;
+  }
+}
+@keyframes exec-v3-cta-breathe {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.035);
+  }
+}
+[data-exec-v3] .exec-v3-cta-ck {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--exec-brand-ink) 22%, transparent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--exec-brand-ink);
+}
+
+/* Herramientas del pie: teclado (foco al valor activo) + lápiz (editar series anteriores) */
+[data-exec-v3] .exec-v3-tools {
+  display: flex;
+  gap: 8px;
+}
+[data-exec-v3] .exec-v3-tool {
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  background: #1c1c24;
+  border: 2px solid #2f2f3a;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #b7b7c2;
+  transition: border-color 0.12s ease, color 0.12s ease;
+}
+[data-exec-v3] .exec-v3-tool:active {
+  transform: scale(0.96);
+}
+[data-exec-v3] .exec-v3-tool[data-on] {
+  border-color: color-mix(in srgb, var(--exec-brand) 45%, transparent);
+  color: color-mix(in srgb, var(--exec-brand) 85%, #fff);
 }
 
 /* ---- Superserie V3 (E3.5): paso del stepper por rondas ---- */
@@ -1882,8 +2262,8 @@ body > * {
 }
 [data-exec-v3] .exec-v3-exmini {
   position: relative;
-  width: 56px;
-  height: 56px;
+  width: 60px;
+  height: 60px;
   flex-shrink: 0;
   border-radius: 13px;
   overflow: hidden;
@@ -1976,11 +2356,19 @@ body > * {
   width: 30px;
   height: 30px;
   border-radius: 999px;
-  color: #8f8f9c;
-  background: rgba(255, 255, 255, 0.05);
+  color: #cfcfd8;
+  background: rgba(8, 8, 12, 0.6);
+  border: 1.5px solid rgba(255, 255, 255, 0.16);
 }
 [data-exec-v3] .exec-v3-extech:active {
   transform: scale(0.94);
+}
+/* Estado "Hecho" del miembro colapsado — ícono Check en color de marca (paridad RN). */
+[data-exec-v3] .exec-v3-exdone {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--exec-brand, var(--sport-500));
 }
 [data-exec-v3] .exec-v3-ss-link {
   display: flex;
@@ -2065,14 +2453,169 @@ body > * {
   color: color-mix(in srgb, var(--exec-brand) 80%, #fff);
 }
 
+/* ---- Superserie QA1: miembro ACTIVO como ejercicio solo + aviso "Sigue sin detenerte" ---- */
+/* Cabecera del activo: badge de letra + pastilla "Ahora"; luego el nombre grande y el chip tipo·músculo,
+   igual que el ejercicio solo (requerimiento CEO 2026-07-22). */
+[data-exec-v3] .exec-v3-ss-activetop {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+[data-exec-v3] .exec-v3-excard.is-active .exec-v3-exname {
+  margin-top: 8px;
+}
+[data-exec-v3] .exec-v3-ss-activechips {
+  margin-top: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+/* Cuerpo expandible del activo (media + rx + Anterior + captura): entra animando la altura con la curva
+   estándar. La tarjeta se remonta al cambiar de miembro (key=block.id) → la animación se reproduce sola.
+   Reduced-motion la desactiva. */
+[data-exec-v3] .exec-v3-ss-body {
+  display: grid;
+  grid-template-rows: 1fr;
+  margin-top: 12px;
+  animation: exec-v3-ss-expand 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+[data-exec-v3] .exec-v3-ss-body-in {
+  overflow: hidden;
+  min-height: 0;
+}
+@keyframes exec-v3-ss-expand {
+  from {
+    grid-template-rows: 0fr;
+  }
+  to {
+    grid-template-rows: 1fr;
+  }
+}
+/* Aviso efímero: fondo transparente oscuro, texto de marca grande con glow, no interactivo. */
+[data-exec-v3] .exec-v3-ss-cue {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 24px;
+  text-align: center;
+  pointer-events: none;
+  background: rgba(8, 8, 12, 0.72);
+  animation: exec-v3-ss-cue-in 0.24s cubic-bezier(0.4, 0, 0.2, 1);
+}
+[data-exec-v3] .exec-v3-ss-cue-t {
+  font-size: clamp(28px, 9vw, 32px);
+  font-weight: 900;
+  letter-spacing: -0.02em;
+  line-height: 1.05;
+  color: var(--exec-brand, var(--sport-500));
+  text-shadow: 0 0 24px color-mix(in srgb, var(--exec-brand) 55%, transparent);
+}
+[data-exec-v3] .exec-v3-ss-cue-n {
+  font-size: 15px;
+  font-weight: 800;
+  color: #e8e8ee;
+}
+@keyframes exec-v3-ss-cue-in {
+  from {
+    opacity: 0;
+    transform: scale(0.94);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+/* Animaciones del mockup ausentes en web (D1/D2): flecha "Sin descanso" deslizante + latido del dot activo. */
+@media (prefers-reduced-motion: no-preference) {
+  [data-exec-v3] .exec-v3-ss-arrow::after {
+    animation: exec-v3-ss-arrow 1.6s ease-in-out infinite;
+  }
+  [data-exec-v3] .exec-v3-ss-arrow::before {
+    animation: exec-v3-ss-arrowline 1.6s ease-in-out infinite;
+  }
+  [data-exec-v3] .exec-v3-rounddots .exec-v3-rd.is-now {
+    animation: exec-v3-ss-beat 1.4s ease-in-out infinite;
+  }
+}
+@keyframes exec-v3-ss-arrow {
+  0%,
+  100% {
+    transform: translateY(-50%) rotate(45deg) translate(0, 0);
+    opacity: 0.8;
+  }
+  50% {
+    transform: translateY(-50%) rotate(45deg) translate(3px, -3px);
+    opacity: 1;
+  }
+}
+@keyframes exec-v3-ss-arrowline {
+  0%,
+  100% {
+    transform: translateY(-50%) scaleX(1);
+  }
+  50% {
+    transform: translateY(-50%) scaleX(1.15);
+  }
+}
+@keyframes exec-v3-ss-beat {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  30% {
+    transform: scale(1.3);
+  }
+  45% {
+    transform: scale(1);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-exec-v3] .exec-v3-ss-body {
+    animation: none;
+  }
+  [data-exec-v3] .exec-v3-ss-cue {
+    animation: exec-v3-ss-cue-fade 0.2s ease;
+  }
+}
+@keyframes exec-v3-ss-cue-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
 /* ---- Entrada / splash (E2.2) ---- */
 [data-exec-v3] .exec-v3-splash {
+  overflow: hidden;
+  /* Fórmula del mockup (concepto-a-v3-core .a3a-splash): núcleo de marca al 52% sobre una base
+     oscura DERIVADA DE MARCA (el #0c2a00 del mockup es verde-marca ~18% sobre negro; acá se deriva
+     de --exec-brand para ser white-label safe). Base = color-mix(marca 18%, #05070a). */
   background: radial-gradient(
     120% 90% at 50% 22%,
-    color-mix(in srgb, var(--exec-brand) 46%, #0a0a0f) 0%,
-    color-mix(in srgb, var(--exec-brand) 20%, #0c0c11) 44%,
+    color-mix(in srgb, var(--exec-brand) 52%, color-mix(in srgb, var(--exec-brand) 18%, #05070a)) 0%,
+    color-mix(in srgb, var(--exec-brand) 22%, #0c0c11) 44%,
     #0a0a0f 100%
   );
+}
+/* Segundo resplandor superior de marca cayendo del borde (mockup .a3a-splash::after). */
+[data-exec-v3] .exec-v3-splash::after {
+  content: '';
+  position: absolute;
+  inset: -40% -10% auto -10%;
+  height: 70%;
+  background: radial-gradient(
+    60% 60% at 50% 0%,
+    color-mix(in srgb, var(--exec-brand) 30%, transparent),
+    transparent 70%
+  );
+  pointer-events: none;
 }
 [data-exec-v3] .exec-v3-splash-coach {
   position: relative;
@@ -2105,7 +2648,8 @@ body > * {
   inset: 11px;
   border-radius: 50%;
   background: linear-gradient(135deg, var(--exec-brand), color-mix(in srgb, var(--exec-brand) 48%, #000));
-  color: #fff;
+  /* Inicial en tinta on-brand (mockup .a3a-splashav #062100), no blanco — white-label safe. */
+  color: var(--exec-brand-ink);
   font-size: 42px;
   font-weight: 900;
   letter-spacing: -0.03em;
@@ -2130,7 +2674,7 @@ body > * {
   font-weight: 800;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: color-mix(in srgb, var(--exec-brand) 30%, #ffffff);
+  color: color-mix(in srgb, var(--exec-brand) 34%, #ffffff);
 }
 [data-exec-v3] .exec-v3-splash-dots {
   display: inline-flex;
@@ -2178,6 +2722,92 @@ body > * {
    El diálogo portalea a <body> (fuera de [data-exec-v3]); por eso estas reglas NO llevan scope y el
    color de marca llega por `--exec-brand` inline (fallback `--sport-500`). Dos columnas scroll-snap
    con cápsula central. Sin dependencias. */
+
+/* Backdrop plano (mockup): SIN backdrop-filter blur — es de lo más caro en GPU móvil y produce el
+   hitch de apertura (informe 14 · causa B). Sólo un velo oscuro con fade. */
+.exec-wheel-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  background: rgba(6, 6, 10, 0.62);
+  opacity: 1;
+  transition: opacity 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.exec-wheel-backdrop[data-starting-style],
+.exec-wheel-backdrop[data-ending-style] {
+  opacity: 0;
+}
+/* Bottom sheet anclado abajo (mockup `.a3c-sheet`): ~66% de alto con tope para landscape, radios
+   24/24/34/34, borde superior y sombra elevada. Sube desde abajo. Superficie elevada #1d1d26. */
+.exec-wheel-sheet {
+  --exec-brand-ink: color-mix(in srgb, var(--exec-brand, var(--sport-500)) 30%, #000);
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 71;
+  display: flex;
+  flex-direction: column;
+  height: 66dvh;
+  max-height: 96dvh;
+  padding: 8px 18px calc(18px + env(safe-area-inset-bottom, 0px));
+  background: #1d1d26;
+  border-top: 2px solid #33333f;
+  border-radius: 24px 24px 34px 34px;
+  box-shadow: 0 -22px 50px -18px rgba(0, 0, 0, 0.8);
+  overflow-y: auto;
+  transform: translateY(0);
+  transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.exec-wheel-sheet[data-starting-style],
+.exec-wheel-sheet[data-ending-style] {
+  transform: translateY(100%);
+}
+.exec-wheel-handle {
+  width: 40px;
+  height: 5px;
+  margin: 0 auto 12px;
+  border-radius: 999px;
+  background: #45454f;
+  flex-shrink: 0;
+}
+.exec-wheel-sheethd {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.exec-wheel-title {
+  font-size: 20px;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+  color: #f4f4f6;
+}
+.exec-wheel-subtitle {
+  font-size: 12px;
+  font-weight: 800;
+  color: #8f8f9c;
+  font-variant-numeric: tabular-nums;
+}
+.exec-wheel-note {
+  text-align: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: #8f8f9c;
+  margin: 10px 0 14px;
+}
+.exec-wheel-note b {
+  color: color-mix(in srgb, var(--exec-brand, var(--sport-500)) 80%, #fff);
+  font-weight: 800;
+}
+@media (prefers-reduced-motion: reduce) {
+  .exec-wheel-backdrop,
+  .exec-wheel-sheet {
+    transition: none;
+  }
+}
+
 .exec-wheel-head {
   display: flex;
   gap: 10px;
@@ -2189,39 +2819,29 @@ body > * {
   font-size: 10px;
   font-weight: 800;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: #8f8f9c;
+  letter-spacing: 0.14em;
+  color: #7f7f8c;
 }
 .exec-wheel-wrap {
   position: relative;
   display: flex;
   gap: 10px;
   margin-top: 4px;
-  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 24%, #000 76%, transparent);
-  mask-image: linear-gradient(to bottom, transparent, #000 24%, #000 76%, transparent);
+  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 26%, #000 74%, transparent);
+  mask-image: linear-gradient(to bottom, transparent, #000 26%, #000 74%, transparent);
 }
+/* Cápsula central: pill de borde COMPLETO 2px + halo (mockup `.a3c-wv.sel`), no sólo hairlines. */
 .exec-wheel-cap {
   position: absolute;
   top: 50%;
   left: -4px;
   right: -4px;
-  border-top: 1.5px solid color-mix(in srgb, var(--exec-brand, var(--sport-500)) 60%, transparent);
-  border-bottom: 1.5px solid color-mix(in srgb, var(--exec-brand, var(--sport-500)) 60%, transparent);
-  background: color-mix(in srgb, var(--exec-brand, var(--sport-500)) 10%, transparent);
-  border-radius: 11px;
+  border: 2px solid color-mix(in srgb, var(--exec-brand, var(--sport-500)) 55%, transparent);
+  background: color-mix(in srgb, var(--exec-brand, var(--sport-500)) 16%, #16161d);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--exec-brand, var(--sport-500)) 12%, transparent);
+  border-radius: 13px;
   pointer-events: none;
   z-index: 1;
-}
-.exec-wheel-x {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  z-index: 2;
-  font-size: 17px;
-  font-weight: 700;
-  color: #8f8f9c;
-  pointer-events: none;
 }
 .exec-wheel-col {
   position: relative;
@@ -2248,23 +2868,83 @@ body > * {
   scroll-snap-align: center;
   font-family: var(--font-mono, ui-monospace, monospace);
   font-variant-numeric: tabular-nums;
-  font-size: 18px;
-  font-weight: 700;
-  color: #6d6d78;
-  transition: color 0.12s ease, font-size 0.12s ease;
+  position: relative;
+  z-index: 2;
+  font-size: 22px;
+  font-weight: 800;
+  color: #b7b7c2;
+  transition:
+    color 0.12s cubic-bezier(0.4, 0, 0.2, 1),
+    font-size 0.12s cubic-bezier(0.4, 0, 0.2, 1),
+    opacity 0.12s cubic-bezier(0.4, 0, 0.2, 1),
+    transform 0.12s cubic-bezier(0.4, 0, 0.2, 1);
 }
-.exec-wheel-item[data-selected] {
+/* Profundidad de rueda iOS: los vecinos escalan/atenúan por distancia al centro (data-dist 1 y 2). */
+.exec-wheel-item[data-dist='1'] {
+  opacity: 0.5;
+  transform: scale(0.9);
+  color: #9a9aa6;
+}
+.exec-wheel-item[data-dist='2'] {
+  opacity: 0.24;
+  transform: scale(0.78);
+  color: #8f8f9c;
+}
+/* Tope central: crece a 27px/900 y blanco, sobre la cápsula. */
+.exec-wheel-item[data-dist='0'] {
   color: #fff;
-  font-size: 23px;
+  font-size: 27px;
   font-weight: 900;
+  letter-spacing: -0.02em;
 }
 .exec-wheel-done {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  width: 100%;
+  height: 58px;
+  margin-top: auto;
+  border-radius: 16px;
+  font-size: 18px;
+  font-weight: 900;
+  letter-spacing: -0.01em;
+  color: var(--exec-brand-ink);
   background: var(--exec-brand, var(--sport-500));
   border: 2px solid color-mix(in srgb, var(--exec-brand, var(--sport-500)) 55%, #000);
-  transition: transform 0.12s ease;
+  box-shadow: 0 5px 0 0 color-mix(in srgb, var(--exec-brand, var(--sport-500)) 55%, #000);
+  transition:
+    transform 0.12s cubic-bezier(0.4, 0, 0.2, 1),
+    box-shadow 0.12s cubic-bezier(0.4, 0, 0.2, 1);
 }
 .exec-wheel-done:active {
-  transform: scale(0.98);
+  transform: translateY(5px);
+  box-shadow: 0 0 0 0 color-mix(in srgb, var(--exec-brand, var(--sport-500)) 55%, #000);
+}
+/* Check en círculo semitransparente (mockup `.a3c-listo .ck`). */
+.exec-wheel-done-ck {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--exec-brand-ink) 22%, transparent);
+}
+.exec-wheel-done-ck::before {
+  content: '';
+  display: block;
+  width: 6px;
+  height: 11px;
+  border: solid var(--exec-brand-ink);
+  border-width: 0 2.5px 2.5px 0;
+  transform: rotate(45deg) translate(-1px, -1px);
+}
+@media (prefers-reduced-motion: reduce) {
+  .exec-wheel-item,
+  .exec-wheel-done {
+    transition: none;
+  }
 }
 
 /* ---- Pista de captura dual (E2.5) — pill de una sola vez ---- */
@@ -2339,8 +3019,57 @@ body > * {
   background: #20202a;
 }
 [data-exec-v3] .exec-v3-map-row.is-now {
-  border-color: color-mix(in srgb, var(--exec-brand) 55%, transparent);
-  background: color-mix(in srgb, var(--exec-brand) 12%, #16161d);
+  /* Mockup `.a3a-srow.is-now`: sólo tiñe el fondo (marca 10%), SIN borde extra. */
+  border-color: transparent;
+  background: color-mix(in srgb, var(--exec-brand) 10%, transparent);
+}
+/* Icono de estado (mockup `.a3a-sstate`): hecho = marca + check; ahora = aro de marca + punto;
+   pendiente = cuadro gris hundido. */
+[data-exec-v3] .exec-v3-map-state {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  border-radius: 6px;
+  background: #26262f;
+  box-shadow: inset 0 0 0 2px #3a3a45;
+}
+[data-exec-v3] .exec-v3-map-row.is-done .exec-v3-map-state {
+  background: var(--exec-brand);
+  box-shadow: none;
+}
+[data-exec-v3] .exec-v3-map-row.is-done .exec-v3-map-state::before {
+  content: '';
+  width: 5px;
+  height: 9px;
+  border: solid var(--exec-brand-ink);
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg) translateY(-1px);
+}
+[data-exec-v3] .exec-v3-map-row.is-now .exec-v3-map-state {
+  background: color-mix(in srgb, var(--exec-brand) 25%, transparent);
+  box-shadow: inset 0 0 0 2px var(--exec-brand);
+}
+[data-exec-v3] .exec-v3-map-row.is-now .exec-v3-map-state::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--exec-brand);
+}
+/* Palabra de estado (mockup `.ssub`): color por estado. */
+[data-exec-v3] .exec-v3-map-word {
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 800;
+  color: #7f7f8c;
+}
+[data-exec-v3] .exec-v3-map-row.is-done .exec-v3-map-word,
+[data-exec-v3] .exec-v3-map-row.is-now .exec-v3-map-word {
+  color: var(--exec-brand);
 }
 [data-exec-v3] .exec-v3-map-idx {
   display: flex;
@@ -2367,12 +3096,17 @@ body > * {
   gap: 3px;
 }
 [data-exec-v3] .exec-v3-map-name {
+  flex: 1;
+  min-width: 0;
   font-size: 13px;
-  font-weight: 700;
-  color: #e8e8ee;
+  font-weight: 800;
+  color: #d4d4dc;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+[data-exec-v3] .exec-v3-map-row.is-now .exec-v3-map-name {
+  color: #fff;
 }
 [data-exec-v3] .exec-v3-map-dots {
   display: flex;
@@ -2458,6 +3192,19 @@ body > * {
   margin: 0 auto;
   padding: max(env(safe-area-inset-top, 0px), 20px) 20px 120px;
   text-align: center;
+  /* Pantallas cortas (iPhone SE, landscape): el bloque no cabe centrado → permitir scroll (delta 12-3). */
+  overflow-y: auto;
+}
+/* Viewport corto: dejar de centrar (evita recortes arriba/abajo) y comprimir anillo + gaps. */
+@media (max-height: 700px) {
+  [data-exec-v3] .exec-v3-rest-inner {
+    justify-content: flex-start;
+    gap: 10px;
+  }
+  [data-exec-v3] .exec-v3-ringwrap {
+    width: 168px;
+    height: 168px;
+  }
 }
 @media (min-width: 768px) {
   [data-exec-v3].exec-v3-rest {
@@ -2529,7 +3276,17 @@ body > * {
   height: 22px;
   border-radius: 50%;
   background: var(--exec-brand);
-  color: #072100;
+  color: var(--exec-brand-ink);
+}
+@media (prefers-reduced-motion: no-preference) {
+  /* Pop en loop del badge de la celly (mockup a3a-celly .b, concept-a3a-pop 3.6s). */
+  [data-exec-v3] .exec-v3-celly-b {
+    animation: exec-v3-badgepop 3.6s ease-in-out infinite;
+  }
+}
+@keyframes exec-v3-badgepop {
+  0%, 80%, 100% { transform: scale(1); }
+  40% { transform: scale(1.18); }
 }
 [data-exec-v3] .exec-v3-confetti {
   position: absolute;
@@ -2815,7 +3572,7 @@ body > * {
   transform: scale(0.97);
 }
 [data-exec-v3] .exec-v3-rb.is-skip {
-  color: #072100;
+  color: var(--exec-brand-ink);
   background: var(--exec-brand, var(--sport-500));
   border-color: color-mix(in srgb, var(--exec-brand) 55%, #000);
   box-shadow: 0 5px 0 0 color-mix(in srgb, var(--exec-brand) 55%, #000);
@@ -2848,6 +3605,23 @@ body > * {
   overflow: hidden;
   border: 1.5px solid #34343f;
   background: linear-gradient(160deg, #23232c, #17171f);
+}
+/* Sheen sutil sobre la mini-media (mockup a3a-nextmini::after, shimmer 3.2s). */
+[data-exec-v3] .exec-v3-nextmini::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(105deg, transparent 30%, rgba(255, 255, 255, 0.08) 50%, transparent 70%);
+  background-size: 220% 100%;
+}
+@media (prefers-reduced-motion: no-preference) {
+  [data-exec-v3] .exec-v3-nextmini::after {
+    animation: exec-v3-shimmer 3.2s linear infinite;
+  }
+}
+@keyframes exec-v3-shimmer {
+  to { background-position: -220% 0; }
 }
 [data-exec-v3] .exec-v3-nextmini-empty {
   position: absolute;
@@ -3061,7 +3835,98 @@ body > * {
 }
 [data-exec-v3] .exec-v3-restsheet-body {
   margin-top: 10px;
+}
+/* Peek "mirador" (delta 04-2/04-3): colapsado asoma ~1-2 filas reales del plan tras el encabezado;
+   el resto se recorta con un desvanecido que invita a arrastrar. Abierto: scroll de todo el plan. */
+[data-exec-v3] .exec-v3-restsheet:not(.is-open) .exec-v3-restsheet-body {
+  max-height: 66px;
+  overflow: hidden;
+  -webkit-mask: linear-gradient(#000 55%, transparent);
+  mask: linear-gradient(#000 55%, transparent);
+}
+[data-exec-v3] .exec-v3-restsheet.is-open .exec-v3-restsheet-body {
+  max-height: 60dvh;
   overflow-y: auto;
+}
+/* Filas "estado de un vistazo" del peek (mockup a3a-srow): cuadro done/now/todo + subtítulo textual.
+   NO reusa ExecListMapV3 (ese mapa numerado queda para la vista "Ver todo" del stepper). */
+[data-exec-v3] .exec-v3-srow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 4px;
+  border-top: 1.5px solid #26262f;
+  background: transparent;
+  text-align: left;
+  color: #d4d4dc;
+}
+[data-exec-v3] .exec-v3-srow.is-now {
+  background: color-mix(in srgb, var(--exec-brand) 10%, transparent);
+  border-radius: 12px;
+  margin: 0 -6px;
+  padding-left: 10px;
+  padding-right: 10px;
+}
+[data-exec-v3] .exec-v3-sstate {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  border-radius: 6px;
+}
+[data-exec-v3] .exec-v3-sstate.done {
+  background: var(--exec-brand);
+  color: var(--exec-brand-ink);
+}
+[data-exec-v3] .exec-v3-sstate.now {
+  background: color-mix(in srgb, var(--exec-brand) 25%, transparent);
+  box-shadow: inset 0 0 0 2px var(--exec-brand);
+}
+[data-exec-v3] .exec-v3-sstate-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--exec-brand);
+}
+[data-exec-v3] .exec-v3-sstate.todo {
+  background: #26262f;
+  box-shadow: inset 0 0 0 2px #3a3a45;
+}
+[data-exec-v3] .exec-v3-snm {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+[data-exec-v3] .exec-v3-srow.is-now .exec-v3-snm {
+  color: #fff;
+}
+[data-exec-v3] .exec-v3-ssub {
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 800;
+}
+[data-exec-v3] .exec-v3-ssub.done,
+[data-exec-v3] .exec-v3-ssub.now {
+  color: var(--exec-brand);
+}
+[data-exec-v3] .exec-v3-ssub.todo {
+  color: #7f7f8c;
+}
+@media (prefers-reduced-motion: no-preference) {
+  [data-exec-v3] .exec-v3-sstate-dot {
+    animation: exec-v3-nowpulse 1.6s ease-in-out infinite;
+  }
+}
+@keyframes exec-v3-nowpulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(0.7); }
 }
 
 /* ============ Ejecutor V3 — sheet de la tuerca (E3.7) ============ */
@@ -3219,9 +4084,54 @@ body > * {
   font-weight: 900;
   color: var(--exec-brand, var(--sport-500));
 }
+/* Slider de volumen con knob "juicy" del mockup (`.a3b-slider`): track 8px #2a2a34, relleno de marca
+   hasta --exec-vol (fijado inline desde el valor) y perilla 22px blanca con aro de marca + sombra. */
 [data-exec-v3] .exec-v3-range {
   width: 100%;
-  accent-color: var(--exec-brand, var(--sport-500));
+  height: 22px;
+  margin: 0;
+  background: transparent;
+  -webkit-appearance: none;
+  appearance: none;
+  cursor: pointer;
+}
+[data-exec-v3] .exec-v3-range::-webkit-slider-runnable-track {
+  height: 8px;
+  border-radius: 999px;
+  background: linear-gradient(
+    to right,
+    var(--exec-brand, var(--sport-500)) 0 var(--exec-vol, 0%),
+    #2a2a34 var(--exec-vol, 0%) 100%
+  );
+}
+[data-exec-v3] .exec-v3-range::-moz-range-track {
+  height: 8px;
+  border-radius: 999px;
+  background: #2a2a34;
+}
+[data-exec-v3] .exec-v3-range::-moz-range-progress {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--exec-brand, var(--sport-500));
+}
+[data-exec-v3] .exec-v3-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 22px;
+  height: 22px;
+  margin-top: -7px;
+  border-radius: 50%;
+  background: #fff;
+  border: 4px solid var(--exec-brand, var(--sport-500));
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+}
+[data-exec-v3] .exec-v3-range::-moz-range-thumb {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #fff;
+  border: 4px solid var(--exec-brand, var(--sport-500));
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
 }
 [data-exec-v3] .exec-v3-range:disabled {
   opacity: 0.45;
@@ -3248,11 +4158,54 @@ body > * {
   border-color: #2a333a;
 }
 
+/* Título de las pantallas serenas (movilidad/roller) = blanco frío del mockup (a3b .calm-t). */
+[data-exec-v3] .exec-v3-calm .exec-v3-exname {
+  color: #eef4f6;
+}
+
+/* Etiqueta live sobre la media serena ("Mantén" / "En loop") — píldora oscura + dot latiente. */
+[data-exec-v3] .exec-v3-medialbl {
+  position: absolute;
+  top: 10px;
+  left: 12px;
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: #cfcfd8;
+  background: rgba(0, 0, 0, 0.4);
+  padding: 3px 9px;
+  border-radius: 999px;
+}
+[data-exec-v3] .exec-v3-live {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--exec-brand);
+}
+@media (prefers-reduced-motion: no-preference) {
+  [data-exec-v3] .exec-v3-live {
+    animation: exec-v3-livepulse 1.6s ease-in-out infinite;
+  }
+}
+@keyframes exec-v3-livepulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
 [data-exec-v3] .exec-v3-mobset {
   font-size: 12px;
   font-weight: 800;
   color: #8fa3ab;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.06em;
 }
 
 /* ---- Anillo de HOLD / countdown (movilidad + cardio) ---- */
@@ -3270,7 +4223,7 @@ body > * {
   transform: rotate(-90deg);
 }
 [data-exec-v3] .exec-v3-hold-track {
-  stroke: #262c31;
+  stroke: #26262f;
 }
 [data-exec-v3] .exec-v3-hold-fill {
   stroke: var(--exec-brand);
@@ -3289,11 +4242,17 @@ body > * {
   gap: 2px;
 }
 [data-exec-v3] .exec-v3-holdnum {
-  font-size: 52px;
+  font-size: 60px;
   font-weight: 900;
   letter-spacing: -0.04em;
   line-height: 1;
   color: #eef4f6;
+}
+/* Breathe suave del número del anillo de cardio (D14) — off en reduced-motion. */
+@media (prefers-reduced-motion: no-preference) {
+  [data-exec-v3] .exec-v3-holdnum:not(.is-done) {
+    animation: exec-v3-breathe 2.8s ease-in-out infinite;
+  }
 }
 [data-exec-v3] .exec-v3-holdnum.is-done {
   font-size: 34px;
@@ -3302,10 +4261,10 @@ body > * {
 [data-exec-v3] .exec-v3-holdlbl {
   font-size: 11px;
   font-weight: 800;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.16em;
   text-transform: uppercase;
-  color: #8f8f9c;
-  margin-top: 6px;
+  color: #8fa3ab;
+  margin-top: 8px;
 }
 [data-exec-v3] .exec-v3-hold-icon {
   position: absolute;
@@ -3326,18 +4285,18 @@ body > * {
   display: inline-flex;
   align-items: center;
   gap: 10px;
-  padding: 8px 18px;
+  padding: 10px 20px;
   border-radius: 999px;
   background: color-mix(in srgb, var(--exec-brand) 15%, #16161d);
   border: 2px solid color-mix(in srgb, var(--exec-brand) 36%, transparent);
-  font-size: 17px;
+  font-size: 19px;
   font-weight: 900;
   letter-spacing: -0.01em;
   color: color-mix(in srgb, var(--exec-brand) 90%, #fff);
 }
 [data-exec-v3] .exec-v3-sidedot {
-  width: 13px;
-  height: 13px;
+  width: 14px;
+  height: 14px;
   border-radius: 50%;
   background: var(--exec-brand);
   box-shadow: 0 0 0 4px color-mix(in srgb, var(--exec-brand) 22%, transparent);
@@ -3350,6 +4309,16 @@ body > * {
 [data-exec-v3] .exec-v3-then b {
   color: #9fb2b9;
 }
+/* CTA juicy "Listo este lado" (mockup a3b .a3b-mob-cta) — full-width, acento recovery. */
+[data-exec-v3] .exec-v3-mob-cta {
+  width: 100%;
+  height: 60px;
+  font-size: 17px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+}
 
 /* ---- Roller: objetivo + contador gigante ---- */
 [data-exec-v3] .exec-v3-rollgoal {
@@ -3361,56 +4330,89 @@ body > * {
 [data-exec-v3] .exec-v3-rollgoal b {
   color: #fff;
 }
+/* Contador VERTICAL (mockup a3b .a3b-counter): número gigante → "de N" → "Pasadas". */
 [data-exec-v3] .exec-v3-counter {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 18px;
-}
-[data-exec-v3] .exec-v3-counter-mid {
   display: flex;
   flex-direction: column;
   align-items: center;
-  min-width: 132px;
+  gap: 2px;
 }
 [data-exec-v3] .exec-v3-bignumber {
-  font-size: 88px;
+  font-size: 116px;
   font-weight: 900;
   letter-spacing: -0.05em;
   line-height: 0.9;
   color: #fff;
 }
+/* Micro-rebote del número al sumar (paridad con el spring RN); off en reduced-motion. */
+@media (prefers-reduced-motion: no-preference) {
+  [data-exec-v3] .exec-v3-bignumber {
+    animation: exec-v3-tickpop 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+}
+@keyframes exec-v3-tickpop {
+  0% {
+    transform: scale(1);
+  }
+  34% {
+    transform: scale(1.12);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+[data-exec-v3] .exec-v3-goalof {
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: #8f8f9c;
+}
 [data-exec-v3] .exec-v3-counter-lbl {
   font-size: 11px;
   font-weight: 800;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.16em;
   text-transform: uppercase;
   color: #7f7f8c;
-  margin-top: 6px;
+  margin-top: 2px;
 }
-[data-exec-v3] .exec-v3-cbtn {
-  width: 60px;
-  height: 60px;
-  flex-shrink: 0;
-  border-radius: 20px;
+/* Botón HÉROE "+1 pasada" (mockup a3b .a3b-plusbtn): juicy gigante full-width. */
+[data-exec-v3] .exec-v3-plusbtn {
+  width: 100%;
+  height: 92px;
+  border-radius: 22px;
+  font-size: 24px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #1c1c24;
-  border: 2px solid #2f2f3a;
-  color: #e8e8ee;
-  transition: transform 0.1s ease, background-color 0.12s ease;
+  gap: 14px;
 }
-[data-exec-v3] .exec-v3-cbtn:active {
-  transform: scale(0.94);
+[data-exec-v3] .exec-v3-plusbadge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: color-mix(in srgb, var(--exec-brand-ink) 20%, transparent);
+  color: var(--exec-brand-ink);
 }
-[data-exec-v3] .exec-v3-cbtn:disabled {
+/* "−1" discreto para corregir (el héroe es el +1). */
+[data-exec-v3] .exec-v3-minusghost {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 auto;
+  min-height: 36px;
+  padding: 4px 14px;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  color: #8f8f9c;
+  transition: color 0.12s ease;
+}
+[data-exec-v3] .exec-v3-minusghost:disabled {
   opacity: 0.4;
-}
-[data-exec-v3] .exec-v3-cbtn.is-plus {
-  background: color-mix(in srgb, var(--exec-brand) 20%, #16161d);
-  border-color: color-mix(in srgb, var(--exec-brand) 50%, transparent);
-  color: color-mix(in srgb, var(--exec-brand) 90%, #fff);
 }
 
 /* ---- Chip de cronómetro opcional ---- */
@@ -3485,6 +4487,85 @@ body > * {
   color: #fff;
 }
 
+/* ---- Cardio: grilla de chips de métricas (D1) — look .a3a-cchip del mockup. SOLO chips con dato
+   derivable HOY (distancia/duración objetivo, intervalo N de M, trabajo/recupera); BPM en vivo vive
+   en su fila honesta dedicada (.exec-v3-hrlive). Chips sin dato NO se renderizan (no se inventa nada). */
+[data-exec-v3] .exec-v3-cchips {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  width: 100%;
+}
+[data-exec-v3] .exec-v3-cchip {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  text-align: left;
+  background: #1a1a22;
+  border: 1.5px solid #2a2a34;
+  border-radius: 14px;
+  padding: 9px 11px;
+}
+[data-exec-v3] .exec-v3-cchip.is-wide {
+  grid-column: 1 / -1;
+}
+[data-exec-v3] .exec-v3-cchip .exec-v3-ci {
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: color-mix(in srgb, var(--exec-brand) 78%, #cfcfd8);
+}
+[data-exec-v3] .exec-v3-cchip .exec-v3-cm {
+  min-width: 0;
+}
+[data-exec-v3] .exec-v3-cchip .exec-v3-cv {
+  font-size: 15px;
+  font-weight: 900;
+  letter-spacing: -0.01em;
+  line-height: 1.05;
+  color: #eef4f6;
+}
+[data-exec-v3] .exec-v3-cchip .exec-v3-cl {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #7f7f8c;
+  margin-top: 2px;
+}
+
+/* Chip de identidad en variante ámbar (z4) para cardio por intervalos (D5). El ámbar es TOKEN de zona
+   FIJO — jamás re-teñido por marca. */
+[data-exec-v3] .exec-v3-chip.is-amber {
+  background: color-mix(in srgb, var(--zone-z4) 16%, #16161d);
+  color: color-mix(in srgb, var(--zone-z4) 88%, #fff);
+  border-color: color-mix(in srgb, var(--zone-z4) 40%, transparent);
+}
+
+/* Botón juicy "Pausar/Reanudar" del cardio (D2) — full-width, alto 58, hereda la identidad juicy
+   (sombra dura inferior + hundido al presionar). Breathe suave 2.6s como el mockup. */
+[data-exec-v3] .exec-v3-pausebtn {
+  width: 100%;
+  min-height: 58px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  font-size: 16px;
+}
+[data-exec-v3] .exec-v3-pauseicon {
+  display: inline-flex;
+  align-items: center;
+}
+@media (prefers-reduced-motion: no-preference) {
+  [data-exec-v3] .exec-v3-pausebtn {
+    animation: exec-v3-breathe 2.6s ease-in-out infinite;
+  }
+}
+
 /* ============ Ejecutor V3 — sensor de pulso BLE en vivo (E6.2 · Ola 6) ============
    Web Bluetooth SOLO en Chrome/Edge Android; el feature-detect del hook decide si estos elementos se
    montan siquiera. El BPM en vivo alimenta la UI; sin sensor no se muestra nada (jamás pulso inventado). */
@@ -3523,6 +4604,12 @@ body > * {
   align-items: center;
   justify-content: center;
   color: var(--zc, var(--exec-brand));
+}
+/* El corazón del chip de BPM en vivo late (D17) — off en reduced-motion. */
+@media (prefers-reduced-motion: no-preference) {
+  [data-exec-v3] .exec-v3-hrlive-pulse {
+    animation: exec-v3-beat 1s ease-in-out infinite;
+  }
 }
 [data-exec-v3] .exec-v3-hrlive-num {
   font-size: 22px;
@@ -3600,15 +4687,8 @@ body > * {
     animation-delay: 1.6s;
   }
 }
-@keyframes exec-v3-beat {
-  0%,
-  100% {
-    transform: scale(1);
-  }
-  30% {
-    transform: scale(1.14);
-  }
-}
+/* (keyframe exec-v3-beat duplicado — escala 1.14 — eliminado en D15; queda el único de escala 1.3
+   definido más arriba, usado por dots de progreso, corazón del radar y BPM en vivo). */
 @keyframes exec-v3-radar {
   0% {
     transform: scale(0.3);
@@ -3761,16 +4841,188 @@ body > * {
   border-radius: 14px;
 }
 
+/* ---- Sustitución "Máquina ocupada" V3 (Unidad B2) — sheet re-piel del mockup concepto-a-v32-estados ----
+   Hereda posición/animación/padding/handle de .exec-v3-settings; sólo cambia superficie + radio y añade
+   las tarjetas de alternativa (radio + check de marca), el CTA juicy y la nota. */
+[data-exec-v3] .exec-v3-subst {
+  background: #1d1d26;
+  border-radius: 22px 22px 0 0;
+}
+@media (min-width: 768px) {
+  [data-exec-v3] .exec-v3-subst {
+    border-radius: 22px;
+  }
+}
+[data-exec-v3] .exec-v3-subst-hd {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin: 0 2px 4px;
+  font-size: 20px;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+  color: #f4f4f7;
+}
+[data-exec-v3] .exec-v3-subst-q {
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  border-radius: 9px;
+  background: color-mix(in srgb, #f5b04a 18%, #16161d);
+  border: 1.5px solid color-mix(in srgb, #f5b04a 40%, transparent);
+  color: #f5b04a;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  font-weight: 900;
+}
+[data-exec-v3] .exec-v3-subst-sub {
+  margin: 0 2px 16px;
+  font-size: 13.5px;
+  font-weight: 700;
+  letter-spacing: 0.005em;
+  color: #a8a8b3;
+}
+[data-exec-v3] .exec-v3-subst-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+  overflow-y: auto;
+}
+[data-exec-v3] .exec-v3-subst-alt {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 13px;
+  text-align: left;
+  color: inherit;
+  background: #17171f;
+  border: 2px solid #2a2a34;
+  border-radius: 16px;
+  transition: border-color 0.18s cubic-bezier(0.4, 0, 0.2, 1),
+    background-color 0.18s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+}
+[data-exec-v3] .exec-v3-subst-alt.is-sel {
+  border-color: var(--exec-brand);
+  background: color-mix(in srgb, var(--exec-brand) 10%, #17171f);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--exec-brand) 16%, transparent);
+}
+[data-exec-v3] .exec-v3-subst-media {
+  position: relative;
+  width: 52px;
+  height: 52px;
+  flex-shrink: 0;
+  overflow: hidden;
+  border-radius: 13px;
+  background: linear-gradient(160deg, #23232c, #17171f);
+  border: 1.5px solid #34343f;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #6f6f7c;
+}
+[data-exec-v3] .exec-v3-subst-alt.is-sel .exec-v3-subst-media {
+  border-color: color-mix(in srgb, var(--exec-brand) 45%, #000);
+}
+[data-exec-v3] .exec-v3-subst-info {
+  flex: 1;
+  min-width: 0;
+}
+[data-exec-v3] .exec-v3-subst-info .an {
+  font-size: 15px;
+  font-weight: 900;
+  letter-spacing: -0.01em;
+  color: #eef0f2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+[data-exec-v3] .exec-v3-subst-alt.is-sel .exec-v3-subst-info .an {
+  color: #fff;
+}
+[data-exec-v3] .exec-v3-subst-info .ad {
+  margin-top: 3px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #93939f;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+[data-exec-v3] .exec-v3-subst-check {
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: #202029;
+  border: 2px solid #34343f;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: transparent;
+}
+[data-exec-v3] .exec-v3-subst-alt.is-sel .exec-v3-subst-check {
+  background: var(--exec-brand);
+  border-color: color-mix(in srgb, var(--exec-brand) 55%, #000);
+  color: var(--exec-brand-ink);
+}
+[data-exec-v3] .exec-v3-subst-cta {
+  height: 60px;
+  width: 100%;
+  margin: 16px 0 8px;
+  font-size: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+[data-exec-v3] .exec-v3-subst-cta:disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+[data-exec-v3] .exec-v3-subst-note {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #8f8f9c;
+  text-align: center;
+}
+[data-exec-v3] .exec-v3-subst-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 40px 0;
+  font-size: 14px;
+  color: #8f8f9c;
+  text-align: center;
+}
+[data-exec-v3] .exec-v3-subst-skel {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 13px;
+  background: #17171f;
+  border: 2px solid #2a2a34;
+  border-radius: 16px;
+}
+
 /* ---- Zona objetivo (color por --zc, fijo por zona) ---- */
 [data-exec-v3] .exec-v3-zone {
   display: inline-flex;
   align-items: center;
   gap: 9px;
-  padding: 9px 16px;
+  padding: 10px 18px;
   border-radius: 999px;
   background: color-mix(in srgb, var(--zc, var(--exec-brand)) 16%, #16161d);
   border: 2px solid color-mix(in srgb, var(--zc, var(--exec-brand)) 40%, transparent);
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 900;
 }
 [data-exec-v3] .exec-v3-zonedot {
@@ -3863,9 +5115,13 @@ body > * {
   }
 }
 
-/* Latido sutil del punto de zona (decorativo — off en reduced-motion). */
+/* Pulso sereno del punto de zona (encoge + se desvanece, como el mockup — D15). Off en reduced-motion. */
 @media (prefers-reduced-motion: no-preference) {
   [data-exec-v3] .exec-v3-zonedot {
-    animation: exec-v3-beat 1.8s ease-in-out infinite;
+    animation: exec-v3-cardiopulse 1.8s ease-in-out infinite;
   }
+}
+@keyframes exec-v3-cardiopulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(0.7); }
 }

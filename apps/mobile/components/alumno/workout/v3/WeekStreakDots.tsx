@@ -39,7 +39,7 @@ export function WeekStreakDots({
       <Text style={{ fontFamily: FONT.displayBlack, fontSize: 13, color: s.text, fontVariant: ['tabular-nums'] }}>
         {streak.copy}
       </Text>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7, marginLeft: 'auto' }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginLeft: 'auto' }}>
         {streak.dots.map((d) => (
           <Dot key={d.iso} state={d.state} exec={exec} />
         ))}
@@ -65,22 +65,29 @@ export function WeekStreakDots({
   )
 }
 
+/**
+ * Dot del contrato (.a2-sd, concepto-a-v2): 16px, borde 2px. El `done` (on) rellena de acento con
+ * borde y un halo de 3px del acento al 20% (aproximado en RN con un anillo exterior, ya que RN no
+ * tiene box-shadow con spread crisp). Off (pending/rest) = #26262f con borde #33333f, sin culpa.
+ */
 function Dot({ state, exec }: { state: WeekDotState; exec: ExecTheme }) {
   const accent = exec.accent
-  const track = exec.surface.dotTrack
   if (state === 'done') {
-    return <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: accent }} />
+    return (
+      <View
+        style={{ width: 22, height: 22, borderRadius: 11, alignItems: 'center', justifyContent: 'center', backgroundColor: hexToRgba(accent, 0.2) }}
+      >
+        <View style={{ width: 16, height: 16, borderRadius: 8, backgroundColor: accent, borderWidth: 2, borderColor: hexToRgba(accent, 0.55) }} />
+      </View>
+    )
   }
   if (state === 'today') {
     return (
       <View
-        style={{ width: 10, height: 10, borderRadius: 5, borderWidth: 2, borderColor: accent, backgroundColor: hexToRgba(accent, 0.18) }}
+        style={{ width: 16, height: 16, borderRadius: 8, borderWidth: 2, borderColor: hexToRgba(accent, 0.7), backgroundColor: '#26262f' }}
       />
     )
   }
-  if (state === 'pending') {
-    return <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: track }} />
-  }
-  // rest — punto tenue mas pequeno (descanso).
-  return <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: hexToRgba(exec.surface.textDim, 0.5) }} />
+  // pending / rest — apagado del mockup, sin culpa.
+  return <View style={{ width: 16, height: 16, borderRadius: 8, borderWidth: 2, borderColor: '#33333f', backgroundColor: '#26262f' }} />
 }

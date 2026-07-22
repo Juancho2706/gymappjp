@@ -1,11 +1,9 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { Dispatch, SetStateAction } from 'react'
-import Image from 'next/image'
-import { AlignLeft, MessageSquare, Play, Dumbbell, TrendingUp, History } from 'lucide-react'
+import { Keyboard, Pencil, Repeat } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { LogSetForm, type SetSyncResult } from '../LogSetForm'
 import type { OptimisticLogPayload } from '@eva/workout-engine'
 import type { ExerciseType as WorkoutKind } from '@/domain/workout/types'
@@ -15,7 +13,7 @@ import {
     type WorkoutSessionLog,
     RUT_TYPE_META,
 } from '../WorkoutExecutionClient'
-import { resolveExecMedia } from './exec-media'
+import { ExecMediaCard } from './ExecMediaCard'
 import { WheelHint } from './WheelHint'
 
 /** Mejor sesión previa (para "Anterior" + autollenado). */
@@ -54,6 +52,10 @@ interface ExerciseStepV3Props {
     autoTimerEnabled: boolean
     /** Abre el modal de técnica existente (chip "Instrucciones" y placeholder YouTube). */
     openTechnique: (exercise: ExerciseType | null) => void
+    /** ¿Se puede sustituir el ejercicio (máquina ocupada)? Fuerza sin series aún (informe 09, BLOCKER). */
+    canSubstitute?: boolean
+    /** Abre el sheet "Máquina ocupada" para este bloque (mismo handler del padre; sólo si `canSubstitute`). */
+    onOpenSubstitute?: () => void
     /** Log optimista + guía/scroll (handler del padre — superficie de resiliencia intocada). */
     handleLogged: (payload: OptimisticLogPayload) => void
     /** Reconciliación del optimismo (resultado REAL del server). */
@@ -77,7 +79,6 @@ export function ExerciseStepV3({
     exercise,
     effType,
     suggestedWeightKg,
-    overloadLabel,
     bestPrev,
     firstUnlogged,
     doneCount,
@@ -89,18 +90,28 @@ export function ExerciseStepV3({
     substitution,
     autoTimerEnabled,
     openTechnique,
+    canSubstitute,
+    onOpenSubstitute,
     handleLogged,
     handleResult,
 }: ExerciseStepV3Props) {
-    const [noteOpen, setNoteOpen] = useState(false)
-    const media = resolveExecMedia(exercise)
+    // Pie: el lápiz revela las series anteriores (chips) para corregirlas; el teclado enfoca el valor activo.
+    const [showPrev, setShowPrev] = useState(false)
+    const heroWrapRef = useRef<HTMLDivElement>(null)
     const note = block.notes?.trim() || null
-    const hasInstructions = (exercise.instructions?.length ?? 0) > 0 || media.kind !== 'none'
-    const beatIt =
-        bestPrev?.weight_kg != null &&
-        bestPrev.weight_kg > 0 &&
-        suggestedWeightKg != null &&
-        suggestedWeightKg >= bestPrev.weight_kg
+
+    // Deshacer (reopenSignal): la serie a corregir vive tras el lápiz — al reabrirla, mostramos el panel.
+    useEffect(() => {
+        if (reopenSignal?.blockId === block.id) setShowPrev(true)
+    }, [reopenSignal, block.id])
+
+    // Teclado del pie: enfoca el valor de peso de la serie activa (el foco abre el keypad tras el fix 14).
+    const focusActiveValue = () => {
+        const input = heroWrapRef.current?.querySelector<HTMLInputElement>(
+            '.exec-v3-slot.is-active input[name="weight_kg"]',
+        )
+        input?.focus()
+    }
 
     const autofillActive = () => {
         if (firstUnlogged == null || !bestPrev) return
@@ -127,85 +138,20 @@ export function ExerciseStepV3({
                 </div>
             </div>
 
-            {/* Media SIEMPRE visible + chips glass colapsables */}
-            <div className="exec-v3-media">
-                <div className="exec-v3-mediachips" key={firstUnlogged ?? 'done'}>
-                    {hasInstructions && (
-                        <button
-                            type="button"
-                            className="exec-v3-mchip"
-                            onClick={() => openTechnique(exercise)}
-                            aria-label={`Instrucciones de ${exercise.name}`}
-                        >
-                            <AlignLeft className="h-3.5 w-3.5" aria-hidden />
-                            <span className="exec-v3-mlabel">Instrucciones</span>
-                        </button>
-                    )}
-                    {note && (
-                        <button
-                            type="button"
-                            className="exec-v3-mchip"
-                            onClick={() => setNoteOpen(true)}
-                            aria-label="Nota del coach"
-                        >
-                            <MessageSquare className="h-3.5 w-3.5" aria-hidden />
-                            <span className="exec-v3-mlabel">Nota del coach</span>
-                            <span className="exec-v3-badge" aria-hidden />
-                        </button>
-                    )}
-                </div>
+            {/* Media SIEMPRE visible + chips glass colapsables (componente compartido con la superserie) */}
+            <ExecMediaCard exercise={exercise} note={note} openTechnique={openTechnique} />
 
-                {media.kind === 'video' && (
-                    <video
-                        src={media.src}
-                        autoPlay
-                        loop
-                        muted
-                        playsInline
-                        className="h-full w-full object-contain"
-                    />
+            {/* Prescripción compacta (mockup a3a-rx: "4 × 8 · 60 kg · RIR 2 · desc 90s", sin extras) */}
+            <div className="exec-v3-rx tabular-nums">
+                {block.sets} × {block.reps}
+                {block.target_weight_kg != null && (
+                    <>
+                        {' · '}
+                        <b>{suggestedWeightKg ?? block.target_weight_kg} kg</b>
+                    </>
                 )}
-                {media.kind === 'image' && (
-                    <Image src={media.src} alt={exercise.name} fill unoptimized className="object-contain" />
-                )}
-                {media.kind === 'youtube' && (
-                    <button
-                        type="button"
-                        onClick={() => openTechnique(exercise)}
-                        className="exec-v3-media-yt"
-                        aria-label={`Ver video de ${exercise.name}`}
-                    >
-                        <span className="exec-v3-media-play">
-                            <Play className="h-6 w-6 fill-current" aria-hidden />
-                        </span>
-                        <span className="text-[11px] font-bold uppercase tracking-wider">Ver video</span>
-                    </button>
-                )}
-                {media.kind === 'none' && (
-                    <div className="exec-v3-media-empty" aria-hidden>
-                        <Dumbbell className="h-9 w-9" />
-                    </div>
-                )}
-            </div>
-
-            {/* Prescripción compacta + chip de sobrecarga */}
-            <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1.5">
-                <div className="exec-v3-rx tabular-nums">
-                    {block.sets} × {block.reps}
-                    {block.target_weight_kg != null && (
-                        <>
-                            {' · '}
-                            <b>{suggestedWeightKg ?? block.target_weight_kg} kg</b>
-                        </>
-                    )}
-                    {block.rir && <> · RIR {block.rir}</>}
-                    {block.rest_time && <> · desc {block.rest_time}</>}
-                </div>
-                {overloadLabel && (
-                    <span className="exec-v3-overload">
-                        <TrendingUp className="h-3 w-3" aria-hidden /> {overloadLabel}
-                    </span>
-                )}
+                {block.rir && <> · RIR {block.rir}</>}
+                {block.rest_time && <> · desc {block.rest_time}</>}
             </div>
 
             {/* "Anterior" 1-tap → autollena la serie activa (mecanismo existente del padre) */}
@@ -221,16 +167,10 @@ export function ExerciseStepV3({
                             : undefined
                     }
                 >
-                    <History className="h-3.5 w-3.5 shrink-0 text-on-dark-muted" aria-hidden />
                     <span className="exec-v3-prev-l">Anterior</span>
                     <span className="exec-v3-prev-r tabular-nums">
                         {bestPrev.weight_kg ? `${bestPrev.weight_kg} kg` : '-'} × {bestPrev.reps_done || '-'}
                     </span>
-                    {beatIt && (
-                        <span className="ml-1 inline-flex items-center gap-1 text-[11px] font-bold text-[color:var(--exec-brand)]">
-                            <TrendingUp className="h-3 w-3" aria-hidden /> Supera tu marca
-                        </span>
-                    )}
                     {firstUnlogged != null && <span className="exec-v3-prev-tap">1 tap ↻</span>}
                 </button>
             )}
@@ -238,44 +178,55 @@ export function ExerciseStepV3({
             {/* Pista de la captura dual (E2.5): "Tap = teclado · Mantén presionado = rueda" — 1 sola vez. */}
             <WheelHint />
 
-            {/* LogSetForm REUSADO tal cual — superficie de captura/resiliencia (inputs/keypad/RPE-RIR/recap) */}
-            <div className="exec-v3-setlist space-y-1.5">
+            {/* Captura HERO (informe 03): sólo la serie ACTIVA se ve como el mockup (tiles + esfuerzo + CTA).
+                Las anteriores (chips) sólo con el lápiz (data-showprev); las futuras quedan ocultas. TODOS
+                los LogSetForm siguen montados y estables (reconciliación de cola/optimismo intacta) — sólo
+                cambia su visibilidad por CSS. */}
+            <div
+                ref={heroWrapRef}
+                className="exec-v3-herowrap exec-v3-setlist space-y-1.5"
+                data-showprev={showPrev ? '' : undefined}
+            >
                 {Array.from({ length: block.sets }).map((_, i) => {
                     const setNumber = i + 1
                     const log = blockLogs.find((entry) => entry.set_number === setNumber)
+                    const slot =
+                        setNumber === firstUnlogged ? 'is-active' : log ? 'is-prev' : 'is-future'
                     return (
-                        <LogSetForm
-                            key={`${block.id}-${setNumber}`}
-                            blockId={block.id}
-                            setNumber={setNumber}
-                            restTimeStr={block.rest_time}
-                            warmupRestTimeStr={block.warmup_rest_time}
-                            totalSets={block.sets}
-                            nextUpLabel={exercise.name}
-                            existingLog={log}
-                            suggestedWeightKg={suggestedWeightKg}
-                            prThresholdKg={exerciseMaxes[exercise.id] ?? null}
-                            targetReps={block.reps}
-                            lastSet={bestPrev ? { weightKg: bestPrev.weight_kg, reps: bestPrev.reps_done } : null}
-                            autoTimerEnabled={autoTimerEnabled}
-                            mode={effType}
-                            isActive={setNumber === firstUnlogged}
-                            prefill={fillEntry?.setNumber === setNumber ? fillEntry : undefined}
-                            reopenNonce={
-                                reopenSignal?.blockId === block.id && reopenSignal?.setNumber === setNumber
-                                    ? reopenSignal.nonce
-                                    : undefined
-                            }
-                            substitution={substitution ?? null}
-                            v3
-                            onLogged={handleLogged}
-                            onResult={handleResult}
-                        />
+                        <div key={`${block.id}-${setNumber}`} className={cn('exec-v3-slot', slot)}>
+                            <LogSetForm
+                                blockId={block.id}
+                                setNumber={setNumber}
+                                restTimeStr={block.rest_time}
+                                warmupRestTimeStr={block.warmup_rest_time}
+                                totalSets={block.sets}
+                                nextUpLabel={exercise.name}
+                                existingLog={log}
+                                suggestedWeightKg={suggestedWeightKg}
+                                prThresholdKg={exerciseMaxes[exercise.id] ?? null}
+                                targetReps={block.reps}
+                                lastSet={bestPrev ? { weightKg: bestPrev.weight_kg, reps: bestPrev.reps_done } : null}
+                                autoTimerEnabled={autoTimerEnabled}
+                                mode={effType}
+                                isActive={setNumber === firstUnlogged}
+                                prefill={fillEntry?.setNumber === setNumber ? fillEntry : undefined}
+                                reopenNonce={
+                                    reopenSignal?.blockId === block.id && reopenSignal?.setNumber === setNumber
+                                        ? reopenSignal.nonce
+                                        : undefined
+                                }
+                                substitution={substitution ?? null}
+                                v3
+                                heroV3
+                                onLogged={handleLogged}
+                                onResult={handleResult}
+                            />
+                        </div>
                     )
                 })}
             </div>
 
-            {/* Pie: cuadritos de serie (resumen del mockup) */}
+            {/* Pie: cuadraditos de serie (izq) + herramientas teclado/lápiz (der) — mockup a3a-foot */}
             <div className="exec-v3-foot">
                 <div className="exec-v3-sets">
                     {Array.from({ length: block.sets }).map((_, i) => (
@@ -285,24 +236,37 @@ export function ExerciseStepV3({
                         {doneCount}/{block.sets}
                     </span>
                 </div>
-            </div>
-
-            {/* Nota del coach — sheet local (block.notes) */}
-            <Dialog open={noteOpen} onOpenChange={setNoteOpen}>
-                <DialogContent className="max-w-sm rounded-sheet border-border bg-card p-6">
-                    <DialogHeader>
-                        <DialogTitle className="font-display text-lg font-bold">Nota del coach</DialogTitle>
-                    </DialogHeader>
-                    <p className="mt-2 whitespace-pre-line text-sm leading-relaxed text-foreground/90">{note}</p>
+                <div className="exec-v3-tools">
+                    {canSubstitute && onOpenSubstitute && (
+                        <button
+                            type="button"
+                            className="exec-v3-tool"
+                            onClick={onOpenSubstitute}
+                            aria-label="Cambiar ejercicio (máquina ocupada)"
+                        >
+                            <Repeat className="h-[16px] w-[16px]" aria-hidden />
+                        </button>
+                    )}
                     <button
                         type="button"
-                        onClick={() => setNoteOpen(false)}
-                        className="mt-6 w-full rounded-control bg-secondary py-3 font-bold text-secondary-foreground"
+                        className="exec-v3-tool"
+                        onClick={focusActiveValue}
+                        aria-label="Abrir teclado para la serie activa"
                     >
-                        Entendido
+                        <Keyboard className="h-[18px] w-[18px]" aria-hidden />
                     </button>
-                </DialogContent>
-            </Dialog>
+                    <button
+                        type="button"
+                        className="exec-v3-tool"
+                        data-on={showPrev ? '' : undefined}
+                        onClick={() => setShowPrev((v) => !v)}
+                        aria-pressed={showPrev}
+                        aria-label="Editar series anteriores"
+                    >
+                        <Pencil className="h-[15px] w-[15px]" aria-hidden />
+                    </button>
+                </div>
+            </div>
         </div>
     )
 }

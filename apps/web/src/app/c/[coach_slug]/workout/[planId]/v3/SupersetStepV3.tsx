@@ -1,7 +1,8 @@
 'use client'
 
+import { useEffect, useRef, useState } from 'react'
 import Image from 'next/image'
-import { Info, Dumbbell } from 'lucide-react'
+import { Info, Dumbbell, Check } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import {
     buildRoundOrder,
@@ -22,8 +23,11 @@ import {
     type WorkoutSessionLog,
     type SupersetInfo,
     type SessionSubstitution,
+    RUT_TYPE_META,
 } from '../WorkoutExecutionClient'
 import { resolveExecMedia } from './exec-media'
+import { ExecMediaCard } from './ExecMediaCard'
+import { WheelHint } from './WheelHint'
 
 /** Mejor sesión previa por ejercicio (fila "Anterior" + autollenado del keypad). */
 type PrevSet = { weight_kg: number | null; reps_done: number | null; date: string }
@@ -49,17 +53,20 @@ interface SupersetStepV3Props {
 const SUBSTITUTION_REASON = 'Máquina ocupada'
 
 /**
- * Ejecutor V3 (E3.5) — presentación de la SUPERSERIE como paso del stepper. Traducción del mockup
- * `concepto-a-v3-tipos` (pantalla Superserie): título "Superserie {letra}" + chip "Ronda N de M" con
- * dots de ronda; los miembros apilados con el ACTIVO destacado (borde de marca + "Ahora") y su
- * `LogSetForm` REUSADO como fila de captura, y los demás colapsados a una tarjeta atenuada con su
- * estado. Pill "Sin descanso — sigue con {siguiente}" cuando queda miembro en la ronda, y nota
- * "Descanso {n}s al cerrar la ronda".
+ * Ejecutor V3 (E3.5 + QA1) — presentación de la SUPERSERIE como paso del stepper. Traducción del mockup
+ * `concepto-a-v3-tipos` (pantalla Superserie) con el rediseño del CEO (2026-07-22): el miembro ACTIVO se
+ * muestra IGUAL que un ejercicio solo (media grande 150px + chips glass + prescripción + fila "Anterior"
+ * + captura HERO `heroV3`, sólo la serie de la ronda actual), y los NO activos quedan colapsados a una
+ * tarjeta compacta (mini-media 60px + badge de letra + estado hecho/pendiente). Al completar la serie del
+ * miembro activo cuando queda otro en la MISMA ronda, la nueva tarjeta activa se EXPANDE (animación de
+ * altura, curva estándar) y sale un aviso efímero "¡Sigue sin detenerte!" (auto-dismiss ~1,4 s, no
+ * interactivo). El aviso NO aparece al cerrar la ronda (ahí manda el descanso).
  *
- * El ORDEN intercalado (A1 → B1 → A2 → B2…) y el cierre de ronda se derivan del engine
- * `superset-rounds` (buildRoundOrder / firstIncompleteInRounds / isRoundComplete) — no se duplica
- * lógica. El descanso de grupo lo dispara el MISMO `supersetRest` del LogSetForm al cerrar la ronda;
- * este componente sólo re-estiliza contenedores bajo `[data-exec-v3]`, sin tocar guardado/cola.
+ * El ORDEN intercalado (A1 → B1 → A2 → B2…) y el cierre de ronda se derivan del engine `superset-rounds`
+ * (buildRoundOrder / firstIncompleteInRounds / isRoundComplete) — no se duplica lógica. El descanso de
+ * grupo lo dispara el MISMO `supersetRest` del LogSetForm al cerrar la ronda; este componente sólo
+ * re-estiliza contenedores bajo `[data-exec-v3]`, sin tocar guardado/cola. `handleActiveLogged` sólo
+ * envuelve `onLogged` para disparar el aviso (payload byte-idéntico).
  */
 export function SupersetStepV3({
     info,
@@ -78,6 +85,18 @@ export function SupersetStepV3({
     getExercise,
 }: SupersetStepV3Props) {
     const { members, letterByBlock, groupLetter, groupRestSeconds, maxSets } = info
+
+    // Aviso "¡Sigue sin detenerte!" (overlay efímero) + prefill "= última vez" del miembro activo. Ambos
+    // son estado LOCAL de UI: no rozan el motor de guardado/cola.
+    const [cue, setCue] = useState<{ name: string; nonce: number } | null>(null)
+    const [fill, setFill] = useState<{ weight: number | null; reps: number | null; nonce: number } | null>(null)
+    const cueNonceRef = useRef(0)
+
+    useEffect(() => {
+        if (!cue) return
+        const t = setTimeout(() => setCue(null), 1400)
+        return () => clearTimeout(t)
+    }, [cue])
 
     // VM por miembro (misma derivación de progresión/última-sesión que la card de lista, sin bifurcar
     // el motor). La sobrecarga sólo aplica a strength; el resto usa el objetivo tipado.
@@ -118,9 +137,8 @@ export function SupersetStepV3({
         })
         .filter((m): m is NonNullable<typeof m> => m != null)
 
-    if (memberVMs.length < 2) return null
-
-    // Orden/estado de ronda — SOLO consumo del engine (sin duplicar el intercalado ni el cierre).
+    // Orden/estado de ronda — SOLO consumo del engine (sin duplicar el intercalado ni el cierre). Se
+    // deriva ANTES del guard <2 (sin efectos) para que los hooks queden siempre sobre el early-return.
     const roundBlocks: RoundMemberBlock[] = members.map((m) => ({ id: m.id, sets: m.sets }))
     const roundLogs: RoundLogLike[] = sessionLogs.map((l) => ({ block_id: l.block_id, set_number: l.set_number }))
     const order = buildRoundOrder(roundBlocks)
@@ -129,12 +147,20 @@ export function SupersetStepV3({
     const currentRound = activePos?.set ?? maxSets
     const activeBlockId = activePos?.blockId ?? null
 
-    // Miembro que sigue DENTRO de la ronda (para el pill "Sin descanso — sigue con {letra}"): la
-    // posición inmediatamente posterior en el orden intercalado, sólo si cae en la MISMA ronda.
+    // Miembro que sigue DENTRO de la ronda (para el pill "Sin descanso" y el aviso): la posición
+    // inmediatamente posterior en el orden intercalado, sólo si cae en la MISMA ronda.
     const activeIdx = order.findIndex((p) => p.blockId === activeBlockId && p.set === currentRound)
     const nextPos = activeIdx >= 0 ? order[activeIdx + 1] : undefined
     const nextInRound = nextPos && nextPos.set === currentRound ? nextPos : null
     const nextLetter = nextInRound ? letterByBlock.get(nextInRound.blockId) ?? null : null
+
+    // El prefill "= última vez" es POR miembro activo: al cambiar de miembro se descarta para no arrastrar
+    // el autollenado al siguiente ejercicio.
+    useEffect(() => {
+        setFill(null)
+    }, [activeBlockId])
+
+    if (memberVMs.length < 2) return null
 
     // Estado de un miembro relativo a la ronda actual.
     const memberState = (block: BlockType): 'active' | 'next' | 'done' => {
@@ -145,6 +171,16 @@ export function SupersetStepV3({
     }
 
     const firstName = memberVMs[0]?.exercise.name
+
+    // Envoltura de `onLogged`: al confirmar la serie del miembro activo, si queda otro en la MISMA ronda
+    // dispara el aviso "¡Sigue sin detenerte!" con el nombre del siguiente. Payload intacto → motor sin tocar.
+    const handleActiveLogged = (payload: OptimisticLogPayload) => {
+        if (nextInRound) {
+            const nextVM = memberVMs.find((v) => v.block.id === nextInRound.blockId)
+            if (nextVM) setCue({ name: nextVM.exercise.name, nonce: ++cueNonceRef.current })
+        }
+        onLogged(payload)
+    }
 
     return (
         <div className="exec-v3-step exec-v3-ss space-y-3">
@@ -163,20 +199,115 @@ export function SupersetStepV3({
                 </span>
             </div>
 
-            {/* Miembros apilados: el ACTIVO con su LogSetForm; los demás colapsados con estado. */}
+            {/* Miembros apilados: el ACTIVO como ejercicio solo; los demás colapsados con estado. */}
             <div className="space-y-2.5">
                 {memberVMs.map((m) => {
                     const state = memberState(m.block)
-                    const media = resolveExecMedia(m.exercise)
                     const sub = substitutionByBlock[m.block.id]
                     const isNext = nextInRound?.blockId === m.block.id
+                    const hasTech = !!(m.exercise.gif_url || m.exercise.video_url)
+
+                    // MIEMBRO ACTIVO — presentación de ejercicio solo (media 150px + rx + Anterior + hero).
+                    if (state === 'active') {
+                        return (
+                            <div
+                                key={m.block.id}
+                                ref={(el) => registerRowRef(m.block.id, currentRound, el)}
+                                className="exec-v3-excard is-active"
+                            >
+                                <div className="exec-v3-ss-activetop">
+                                    <span className="exec-v3-exletter" aria-hidden>{m.letter}</span>
+                                    <span className="exec-v3-exstate is-now">Ahora</span>
+                                </div>
+                                <h3 className="exec-v3-exname">{m.exercise.name}</h3>
+                                <div className="exec-v3-ss-activechips">
+                                    <span className="exec-v3-chip">
+                                        {RUT_TYPE_META[m.effType].label} · {m.exercise.muscle_group}
+                                    </span>
+                                </div>
+
+                                {/* Cuerpo expandible: entra con animación de altura (curva estándar). */}
+                                <div className="exec-v3-ss-body">
+                                    <div className="exec-v3-ss-body-in space-y-3">
+                                        <ExecMediaCard
+                                            exercise={m.exercise}
+                                            note={m.block.notes?.trim() || null}
+                                            openTechnique={openTechnique}
+                                        />
+
+                                        <div className="exec-v3-rx tabular-nums">{m.rxLabel}</div>
+
+                                        {m.bestPrev && (
+                                            <button
+                                                type="button"
+                                                onClick={() =>
+                                                    setFill({
+                                                        weight: m.bestPrev!.weight_kg,
+                                                        reps: m.bestPrev!.reps_done,
+                                                        nonce: Date.now(),
+                                                    })
+                                                }
+                                                className="exec-v3-prev"
+                                                aria-label={
+                                                    m.bestPrev.weight_kg
+                                                        ? `Autollenar la serie activa con ${m.bestPrev.weight_kg} kg por ${m.bestPrev.reps_done ?? '-'} reps`
+                                                        : undefined
+                                                }
+                                            >
+                                                <span className="exec-v3-prev-l">Anterior</span>
+                                                <span className="exec-v3-prev-r tabular-nums">
+                                                    {m.bestPrev.weight_kg ? `${m.bestPrev.weight_kg} kg` : '-'} × {m.bestPrev.reps_done || '-'}
+                                                </span>
+                                                <span className="exec-v3-prev-tap">1 tap ↻</span>
+                                            </button>
+                                        )}
+
+                                        <WheelHint />
+
+                                        <div className="exec-v3-setlist">
+                                            <LogSetForm
+                                                key={`${m.block.id}-${currentRound}`}
+                                                blockId={m.block.id}
+                                                setNumber={currentRound}
+                                                restTimeStr={m.block.rest_time}
+                                                warmupRestTimeStr={m.block.warmup_rest_time}
+                                                totalSets={m.block.sets}
+                                                nextUpLabel={firstName}
+                                                existingLog={sessionLogs.find((l) => l.block_id === m.block.id && l.set_number === currentRound)}
+                                                suggestedWeightKg={m.suggestedWeightKg}
+                                                prThresholdKg={exerciseMaxes[m.exercise.id] ?? null}
+                                                targetReps={m.block.reps}
+                                                lastSet={m.bestPrev ? { weightKg: m.bestPrev.weight_kg, reps: m.bestPrev.reps_done } : null}
+                                                autoTimerEnabled={autoTimerEnabled}
+                                                mode={m.effType}
+                                                isActive
+                                                prefill={fill ?? undefined}
+                                                typedObjective={m.effType !== 'strength' ? formatTypedObjective(m.block, m.effType) : undefined}
+                                                substitution={sub ? { exerciseId: sub.id, exerciseName: sub.name, reason: SUBSTITUTION_REASON } : null}
+                                                supersetRest={{
+                                                    groupRestSeconds,
+                                                    closesRound: () => isRoundComplete(roundBlocks, currentRound, roundLogs, m.block.id),
+                                                }}
+                                                v3
+                                                heroV3
+                                                onLogged={handleActiveLogged}
+                                                onResult={onResult}
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )
+                    }
+
+                    // MIEMBROS NO ACTIVOS — tarjeta compacta (mini-media 60px + estado).
+                    const media = resolveExecMedia(m.exercise)
                     return (
                         <div
                             key={m.block.id}
                             ref={(el) => registerRowRef(m.block.id, currentRound, el)}
                             className={cn(
                                 'exec-v3-excard',
-                                state === 'active' && 'is-active',
                                 state === 'next' && 'is-next',
                                 state === 'done' && 'is-done',
                             )}
@@ -201,10 +332,13 @@ export function SupersetStepV3({
                                     <span className="exec-v3-exrx tabular-nums">{m.rxLabel}</span>
                                 </span>
                                 <span className="exec-v3-exhead-end">
-                                    {state === 'active' && <span className="exec-v3-exstate is-now">Ahora</span>}
                                     {state === 'next' && isNext && <span className="exec-v3-exstate is-after">Sigue</span>}
-                                    {state === 'done' && <span className="exec-v3-exstate is-done">Hecho</span>}
-                                    {(m.exercise.gif_url || m.exercise.video_url) && (
+                                    {state === 'done' && (
+                                        <span className="exec-v3-exdone" aria-label="Hecho">
+                                            <Check className="h-4 w-4" aria-hidden strokeWidth={3} />
+                                        </span>
+                                    )}
+                                    {hasTech && (
                                         <button
                                             type="button"
                                             onClick={() => openTechnique(m.exercise)}
@@ -216,38 +350,6 @@ export function SupersetStepV3({
                                     )}
                                 </span>
                             </div>
-
-                            {/* Fila de captura del miembro ACTIVO — LogSetForm REUSADO (motor intacto). */}
-                            {state === 'active' && (
-                                <div className="exec-v3-setlist mt-2.5">
-                                    <LogSetForm
-                                        key={`${m.block.id}-${currentRound}`}
-                                        blockId={m.block.id}
-                                        setNumber={currentRound}
-                                        restTimeStr={m.block.rest_time}
-                                        warmupRestTimeStr={m.block.warmup_rest_time}
-                                        totalSets={m.block.sets}
-                                        nextUpLabel={firstName}
-                                        existingLog={sessionLogs.find((l) => l.block_id === m.block.id && l.set_number === currentRound)}
-                                        suggestedWeightKg={m.suggestedWeightKg}
-                                        prThresholdKg={exerciseMaxes[m.exercise.id] ?? null}
-                                        targetReps={m.block.reps}
-                                        lastSet={m.bestPrev ? { weightKg: m.bestPrev.weight_kg, reps: m.bestPrev.reps_done } : null}
-                                        autoTimerEnabled={autoTimerEnabled}
-                                        mode={m.effType}
-                                        isActive
-                                        typedObjective={m.effType !== 'strength' ? formatTypedObjective(m.block, m.effType) : undefined}
-                                        substitution={sub ? { exerciseId: sub.id, exerciseName: sub.name, reason: SUBSTITUTION_REASON } : null}
-                                        supersetRest={{
-                                            groupRestSeconds,
-                                            closesRound: () => isRoundComplete(roundBlocks, currentRound, roundLogs, m.block.id),
-                                        }}
-                                        v3
-                                        onLogged={onLogged}
-                                        onResult={onResult}
-                                    />
-                                </div>
-                            )}
                         </div>
                     )
                 })}
@@ -271,6 +373,15 @@ export function SupersetStepV3({
 
             {groupComplete && (
                 <div className="exec-v3-ss-done">Superserie completa · {maxSets} ronda{maxSets === 1 ? '' : 's'}</div>
+            )}
+
+            {/* Aviso efímero "¡Sigue sin detenerte!" — sólo entre miembros de la MISMA ronda (sin descanso).
+                Fondo transparente oscuro, no interactivo, auto-dismiss ~1,4 s. */}
+            {cue && (
+                <div className="exec-v3-ss-cue" role="status" aria-live="polite">
+                    <span className="exec-v3-ss-cue-t">¡Sigue sin detenerte!</span>
+                    <span className="exec-v3-ss-cue-n">{cue.name}</span>
+                </div>
             )}
         </div>
     )

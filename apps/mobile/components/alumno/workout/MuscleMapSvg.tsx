@@ -100,9 +100,14 @@ export interface MuscleMapSvgProps {
   groups: { group: string; vol: number }[]
   /** Salta el fade escalonado de entrada (accesibilidad; espejo del web). */
   reducedMotion?: boolean | null
+  /**
+   * Formato de la leyenda. `'ramp'` (default) = rampa "Menos → Más" (V2, intacto). `'tiers'` = 3
+   * niveles discretos "Fuerte / Medio / Leve" (mockup concepto-a-v2 `.a2-legend`, Final V3). Aditivo.
+   */
+  legendVariant?: 'ramp' | 'tiers'
 }
 
-export function MuscleMapSvg({ groups, reducedMotion }: MuscleMapSvgProps) {
+export function MuscleMapSvg({ groups, reducedMotion, legendVariant = 'ramp' }: MuscleMapSvgProps) {
   const { theme, resolvedScheme } = useTheme()
   const brand = theme.primary
   // Neutro theme-aware: en tema CLARO del sitio el web pinta la silueta base en slate translúcido
@@ -205,26 +210,38 @@ export function MuscleMapSvg({ groups, reducedMotion }: MuscleMapSvgProps) {
         </SvgText>
       </Svg>
 
-      {/* Leyenda de niveles (menos → más). El último lleva anillo = nivel máximo (stroke). */}
-      <View style={{ marginTop: 4, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-        <Text style={{ fontFamily: FONT.ui, fontSize: 10, letterSpacing: 1, color: LEGEND_FILL, textTransform: 'uppercase' }}>Menos</Text>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-          {([1, 2, 3, 4] as const).map((lvl) => (
-            <View
-              key={lvl}
-              style={{
-                height: 12,
-                width: 16,
-                borderRadius: 3,
-                backgroundColor: withAlpha(brand, TIER_ALPHA[lvl]),
-                borderWidth: lvl === 4 ? 1.5 : 0,
-                borderColor: withAlpha(brand, 1),
-              }}
-            />
+      {/* Leyenda. `tiers` (Final V3) = 3 niveles con rótulo Fuerte/Medio/Leve (mockup .a2-legend);
+          `ramp` (default, V2) = rampa "Menos → Más" con anillo en el nivel máximo. */}
+      {legendVariant === 'tiers' ? (
+        <View style={{ marginTop: 4, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
+          {([['Fuerte', 1], ['Medio', 0.52], ['Leve', 0.26]] as const).map(([label, alpha]) => (
+            <View key={label} style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+              <View style={{ height: 10, width: 10, borderRadius: 3, backgroundColor: withAlpha(brand, alpha) }} />
+              <Text style={{ fontFamily: FONT.ui, fontSize: 10, letterSpacing: 0.8, color: LEGEND_FILL, textTransform: 'uppercase' }}>{label}</Text>
+            </View>
           ))}
         </View>
-        <Text style={{ fontFamily: FONT.ui, fontSize: 10, letterSpacing: 1, color: LEGEND_FILL, textTransform: 'uppercase' }}>Más</Text>
-      </View>
+      ) : (
+        <View style={{ marginTop: 4, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+          <Text style={{ fontFamily: FONT.ui, fontSize: 10, letterSpacing: 1, color: LEGEND_FILL, textTransform: 'uppercase' }}>Menos</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+            {([1, 2, 3, 4] as const).map((lvl) => (
+              <View
+                key={lvl}
+                style={{
+                  height: 12,
+                  width: 16,
+                  borderRadius: 3,
+                  backgroundColor: withAlpha(brand, TIER_ALPHA[lvl]),
+                  borderWidth: lvl === 4 ? 1.5 : 0,
+                  borderColor: withAlpha(brand, 1),
+                }}
+              />
+            ))}
+          </View>
+          <Text style={{ fontFamily: FONT.ui, fontSize: 10, letterSpacing: 1, color: LEGEND_FILL, textTransform: 'uppercase' }}>Más</Text>
+        </View>
+      )}
     </View>
   )
 }

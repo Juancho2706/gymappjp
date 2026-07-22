@@ -2,18 +2,19 @@ import { useEffect, useMemo } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 import { MotiView } from 'moti'
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated'
-import { Medal } from 'lucide-react-native'
-import { formatWeightEsCl } from '@eva/workout-engine'
+import { ArrowUp, Medal } from 'lucide-react-native'
+import { formatWeightEsCl, type PrBest, type PrKind } from '@eva/workout-engine'
 import { FONT } from '../../../../lib/typography'
 import { hexToRgba } from '../../../../lib/theme'
 import type { ExecTheme } from './exec-theme'
 
 /**
- * PR en vivo (E4.2) — toast dorado inline + micro-confeti, traducción RN de la pantalla "PR en vivo" del
- * mockup concepto-a-v3-momentos. SIN modal, `pointerEvents="none"`: se monta SOBRE el ejecutor (que sigue
- * vivo debajo) y auto-desaparece (~1,5s, lo gobierna `useCelebrations`). El borde dorado de la fila y el
- * chip "Anterior" tachado viven en las pantallas de fuerza (reusan `recentSet`); este overlay aporta el
- * banner "¡PR! {kg} kg — tu mejor marca" con medalla y una ÚNICA oleada de confeti dorado.
+ * PR en vivo (E4.2) — banner-card dorado inline + micro-confeti, traducción RN de la pantalla "PR en vivo"
+ * del mockup concepto-a-v3-momentos (`.a3e-prbanner` + `.a3e-prev`), espejo fiel del web `PrCelebration`.
+ * SIN modal, `pointerEvents="none"`: se monta SOBRE el ejecutor (que sigue vivo debajo) y auto-desaparece
+ * (~1,5s, lo gobierna `useCelebrations`). El borde dorado de la fila también vive en las pantallas de
+ * fuerza (reusa `recentSet`); este overlay aporta la TARJETA rectangular "¡PR! Nuevo récord / {kg} kg —
+ * tu mejor marca" (medalla dorada) + el chip "Anterior {prev} kg · Superado" tachado con flecha arriba.
  *
  * Confeti: partículas propias Reanimated (sin dependencia nueva — `react-native-fast-confetti` NO está
  * instalado). Pocas (9), una sola oleada, sin loop. reduced-motion ⇒ sin partículas, solo el banner en fade.
@@ -85,12 +86,18 @@ function ConfettiParticle({ seed }: { seed: ParticleSeed }) {
 export function PrCelebration({
   exec,
   weightKg,
+  prevBest,
+  kind,
   reducedMotion,
   nonce,
 }: {
   exec: ExecTheme
   /** Peso de la serie récord (kg). */
   weightKg: number
+  /** Mejor marca histórica superada (chip "Anterior" tachado). */
+  prevBest: PrBest
+  /** Eje del récord — matiza el rótulo (peso vs 1RM). */
+  kind: PrKind
   reducedMotion: boolean
   /** Cambia por cada PR — el host remonta el componente para reiniciar el confeti. */
   nonce: number
@@ -120,7 +127,7 @@ export function PrCelebration({
         </View>
       )}
 
-      {/* Banner "¡PR!" con medalla — entra con rebote (reduced-motion ⇒ fade). */}
+      {/* Tarjeta "¡PR!" (banner rect + chip Anterior) — entra con rebote (reduced-motion ⇒ fade). */}
       <MotiView
         from={reducedMotion ? { opacity: 0 } : { opacity: 0, translateY: -14, scale: 0.9 }}
         animate={{ opacity: 1, translateY: 0, scale: 1 }}
@@ -130,21 +137,31 @@ export function PrCelebration({
             ? { type: 'timing', duration: 160 }
             : { type: 'spring', damping: 13, stiffness: 220, mass: 0.7 }
         }
-        style={[
-          styles.banner,
-          { backgroundColor: hexToRgba(gold, 0.16), borderColor: hexToRgba(gold, 0.5) },
-        ]}
+        style={styles.card}
       >
-        <View style={[styles.medal, { backgroundColor: gold }]}>
-          <Medal size={16} color="#3a2a06" strokeWidth={2.6} />
+        <View style={[styles.banner, { backgroundColor: hexToRgba(gold, 0.18), borderColor: hexToRgba(gold, 0.55) }]}>
+          <View style={[styles.medal, { backgroundColor: gold }]}>
+            <Medal size={17} color="#3a2a06" strokeWidth={2.6} />
+          </View>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text style={[styles.kicker, { color: gold }]} numberOfLines={1}>
+              ¡PR! {kind === 'e1rm' ? 'Mejor 1RM' : 'Nuevo récord'}
+            </Text>
+            <Text style={styles.value} numberOfLines={1}>
+              {formatWeightEsCl(weightKg)} kg <Text style={styles.valueSmall}>— tu mejor marca</Text>
+            </Text>
+          </View>
         </View>
-        <View style={{ minWidth: 0 }}>
-          <Text style={[styles.title, { color: gold }]} numberOfLines={1}>
-            ¡PR! {formatWeightEsCl(weightKg)} kg
+
+        {/* Chip "Anterior 60 kg · Superado" (tachado con flecha arriba). */}
+        <View style={styles.prev}>
+          <Text style={styles.prevLbl}>Anterior</Text>
+          <Text style={[styles.prevVal, { textDecorationColor: hexToRgba(gold, 0.7) }]}>
+            {formatWeightEsCl(prevBest.weightKg)} kg
           </Text>
-          <Text style={[styles.sub, { color: hexToRgba('#ffffff', 0.75) }]} numberOfLines={1}>
-            tu mejor marca
-          </Text>
+          <View style={{ flex: 1 }} />
+          <ArrowUp size={14} color={gold} strokeWidth={3} />
+          <Text style={[styles.prevSup, { color: gold }]}>Superado</Text>
         </View>
       </MotiView>
     </MotiView>
@@ -154,29 +171,47 @@ export function PrCelebration({
 const styles = StyleSheet.create({
   wrap: { alignItems: 'center', justifyContent: 'flex-start' },
   emitter: { position: 'absolute', top: 22, left: '50%', width: 0, height: 0 },
+  // Contenedor de la tarjeta (banner + chip anterior), ancho acotado como el card del mockup.
+  card: { width: 300, maxWidth: '90%', gap: 8 },
   banner: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    borderRadius: 999,
+    gap: 11,
+    borderRadius: 15,
     borderWidth: 2,
-    paddingLeft: 8,
-    paddingRight: 18,
-    paddingVertical: 7,
-    // Halo dorado sutil bajo el pill.
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+    // Halo dorado sutil bajo la tarjeta.
     shadowColor: '#f5c451',
     shadowOpacity: 0.5,
-    shadowRadius: 14,
-    shadowOffset: { width: 0, height: 4 },
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 6 },
     elevation: 8,
   },
   medal: {
-    height: 30,
-    width: 30,
+    height: 34,
+    width: 34,
     borderRadius: 999,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  title: { fontFamily: FONT.displayBlack, fontSize: 16, letterSpacing: -0.2, fontVariant: ['tabular-nums'] },
-  sub: { fontFamily: FONT.uiBold, fontSize: 11, letterSpacing: 0.3, textTransform: 'uppercase', marginTop: 1 },
+  kicker: { fontFamily: FONT.uiExtra, fontSize: 10, letterSpacing: 1.6, textTransform: 'uppercase' },
+  value: { fontFamily: FONT.displayBlack, fontSize: 16, letterSpacing: -0.3, color: '#fff8e6', marginTop: 1, fontVariant: ['tabular-nums'] },
+  valueSmall: { fontFamily: FONT.uiBold, fontSize: 12, color: '#d9c489' },
+  // Chip "Anterior · Superado" (dashed dorado apagado).
+  prev: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 14,
+    borderWidth: 2,
+    borderStyle: 'dashed',
+    borderColor: '#34343f',
+    backgroundColor: '#1b1b23',
+  },
+  prevLbl: { fontFamily: FONT.uiSemibold, fontSize: 12, color: '#8f8f9c' },
+  prevVal: { fontFamily: FONT.uiBold, fontSize: 14, color: '#7f7f8c', textDecorationLine: 'line-through', fontVariant: ['tabular-nums'] },
+  prevSup: { fontFamily: FONT.uiExtra, fontSize: 11, letterSpacing: 0.5, textTransform: 'uppercase' },
 })

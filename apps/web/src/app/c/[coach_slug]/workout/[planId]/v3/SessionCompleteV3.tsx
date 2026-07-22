@@ -29,7 +29,9 @@ import type { WeeklyStreak } from './weekly-streak'
  * V2 (`WorkoutSummaryOverlay`) queda intacto: esta es una superficie nueva, no un reemplazo.
  */
 
-const GOLD = '#F4B740'
+// Oro de RÉCORD PERSONAL: token propio del PR (#f5c451), NO la marca del coach. Coherente con el
+// PR-en-vivo (`--exec-pr`) y con RN (`exec.pr`). No re-teñir por white-label.
+const GOLD = 'var(--exec-pr)'
 
 /** "12 jun" — fecha corta es-CL, día calendario Santiago (para "superaste tus X kg del …"). */
 function fmtShortDate(iso: string): string {
@@ -42,6 +44,10 @@ const fireConfetti = (opts: confetti.Options) => import('canvas-confetti').then(
 
 export interface SessionCompleteV3Props {
     planTitle: string
+    /** Etiqueta corta del día para el título ("Día 3"). Aditiva: si no viaja, cae a `planTitle`
+     *  (comportamiento V2 idéntico). Cablearla desde el host queda diferido (WorkoutExecutionClient
+     *  es motor de resiliencia, fuera de esta wave). */
+    completionLabel?: string | null
     /** Subtítulo contextual ya resuelto ("Semana 2 · Fase Fuerza"). null ⇒ se omite. */
     contextLine?: string | null
     logs: SummaryLogLike[]
@@ -62,6 +68,7 @@ export interface SessionCompleteV3Props {
 
 export function SessionCompleteV3({
     planTitle,
+    completionLabel = null,
     contextLine = null,
     logs,
     blocks,
@@ -130,23 +137,23 @@ export function SessionCompleteV3({
     const seriesLabel = plannedSets != null && plannedSets > 0 ? `${completedSets} / ${plannedSets}` : String(completedSets)
 
     return (
-        <div className="exec-v3-final fixed inset-0 z-[9999] overflow-y-auto bg-[var(--ink-950)] text-on-dark pb-[calc(env(safe-area-inset-bottom,0px)+24px)] pt-[calc(env(safe-area-inset-top,0px)+28px)]">
+        <div className="exec-v3-final fixed inset-0 z-[9999] overflow-y-auto bg-transparent text-on-dark pb-[calc(env(safe-area-inset-bottom,0px)+24px)] pt-[calc(env(safe-area-inset-top,0px)+28px)]">
             <div className="mx-auto flex min-h-full w-full max-w-md flex-col items-center px-5 text-center">
                 {/* ── Fase 1: clima celebratorio ── */}
                 <motion.h1
                     initial={reducedMotion ? false : { opacity: 0, y: 12, scale: 0.96 }}
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     transition={reducedMotion ? { duration: 0 } : { duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
-                    className="mt-1 font-display text-[30px] font-black leading-[1.05] tracking-[-0.03em] text-on-dark"
+                    className="mt-1 font-display text-[28px] font-black leading-[1.05] tracking-[-0.02em] text-on-dark"
                 >
-                    ¡{planTitle} completo!
+                    ¡{completionLabel ?? planTitle} completo!
                 </motion.h1>
                 {contextLine && (
                     <motion.p
                         initial={reducedMotion ? false : { opacity: 0 }}
                         animate={{ opacity: 1 }}
                         transition={reducedMotion ? { duration: 0 } : { delay: 0.12, duration: 0.3 }}
-                        className="mt-1.5 text-[13px] font-bold text-on-dark-muted"
+                        className="mt-1.5 text-[13px] font-bold text-[#a8a8b3]"
                     >
                         {contextLine}
                     </motion.p>
@@ -163,7 +170,7 @@ export function SessionCompleteV3({
                     <div className="grid grid-cols-2 gap-2.5">
                         <StatTile label="Duración" delay={stagger(0)} show={statsVisible} reducedMotion={reducedMotion}>
                             <Ticker
-                                className="eva-metric text-[24px] leading-none text-on-dark"
+                                className="font-display font-black tracking-[-0.03em] text-[24px] leading-none text-on-dark"
                                 value={durationSec ?? 0}
                                 active={statsVisible}
                                 reducedMotion={reducedMotion}
@@ -174,7 +181,7 @@ export function SessionCompleteV3({
                         {showVolumeStat && (
                             <StatTile label="Volumen" delay={stagger(1)} show={statsVisible} reducedMotion={reducedMotion}>
                                 <Ticker
-                                    className="eva-metric text-[24px] leading-none text-on-dark"
+                                    className="font-display font-black tracking-[-0.03em] text-[24px] leading-none text-on-dark"
                                     value={Math.round(totalVolume)}
                                     active={statsVisible}
                                     reducedMotion={reducedMotion}
@@ -184,14 +191,14 @@ export function SessionCompleteV3({
                         )}
                         {showDistanceStat && (
                             <StatTile label="Distancia" delay={stagger(1)} show={statsVisible} reducedMotion={reducedMotion}>
-                                <span className="eva-metric text-[24px] leading-none text-on-dark">
+                                <span className="font-display font-black tracking-[-0.03em] text-[24px] leading-none text-on-dark">
                                     {compactDistance(session.totalCardioDistanceM, 'm')}
                                 </span>
                             </StatTile>
                         )}
                         {!showVolumeStat && !showDistanceStat && (
                             <StatTile label={heroSecondary.label} delay={stagger(1)} show={statsVisible} reducedMotion={reducedMotion}>
-                                <span className="eva-metric text-[24px] leading-none text-on-dark">
+                                <span className="font-display font-black tracking-[-0.03em] text-[24px] leading-none text-on-dark">
                                     {heroSecondary.value}
                                     {heroSecondary.unit ? <span className="ml-0.5 text-[13px] text-on-dark-muted">{heroSecondary.unit}</span> : null}
                                 </span>
@@ -199,7 +206,7 @@ export function SessionCompleteV3({
                         )}
 
                         <StatTile label="Series" delay={stagger(2)} show={statsVisible} reducedMotion={reducedMotion}>
-                            <span className="eva-metric text-[24px] leading-none tabular-nums text-on-dark">{seriesLabel}</span>
+                            <span className="font-display font-black tracking-[-0.03em] text-[24px] leading-none tabular-nums text-on-dark">{seriesLabel}</span>
                         </StatTile>
                     </div>
 
@@ -220,10 +227,10 @@ export function SessionCompleteV3({
                             initial={reducedMotion ? false : { opacity: 0, y: 10 }}
                             animate={statsVisible ? { opacity: 1, y: 0 } : { opacity: 0, y: 10 }}
                             transition={stagger(3 + i)}
-                            className="mt-2.5 flex w-full items-center gap-3 rounded-card border p-3 text-left transition-transform active:scale-[0.99]"
+                            className="mt-2.5 flex w-full items-center gap-3 rounded-[16px] border-[1.5px] p-3 text-left transition-transform active:scale-[0.99]"
                             style={{
                                 borderColor: `color-mix(in srgb, ${GOLD} 45%, transparent)`,
-                                background: `linear-gradient(135deg, color-mix(in srgb, ${GOLD} 20%, var(--ink-900)), var(--ink-900))`,
+                                background: `linear-gradient(135deg, color-mix(in srgb, ${GOLD} 20%, #16161d), #17171f)`,
                             }}
                         >
                             <span
@@ -235,7 +242,7 @@ export function SessionCompleteV3({
                                 }}
                             />
                             <div className="min-w-0 flex-1">
-                                <p className="eva-metric text-[20px] leading-none" style={{ color: GOLD }}>
+                                <p className="font-display font-black tracking-[-0.03em] text-[20px] leading-none" style={{ color: GOLD }}>
                                     {pr.newWeightKg} kg
                                 </p>
                                 <p className="mt-1 truncate text-[11px] font-bold" style={{ color: `color-mix(in srgb, ${GOLD} 75%, #fff)` }}>
@@ -260,12 +267,12 @@ export function SessionCompleteV3({
                             initial={reducedMotion ? false : { opacity: 0, y: 10 }}
                             animate={statsVisible ? { opacity: 1, y: 0 } : { opacity: 0, y: 10 }}
                             transition={stagger(3 + detectedPRs.length)}
-                            className="mt-3 rounded-card border border-[var(--border-inverse)] bg-white/[0.03] px-3 pb-2 pt-3"
+                            className="mt-3 rounded-[16px] border-[1.5px] border-[#24242e] bg-[#15151c] px-3 pb-2 pt-3"
                         >
-                            <p className="mb-1 text-left text-[10px] font-extrabold uppercase tracking-widest text-on-dark-muted">
+                            <p className="mb-1 text-left text-[10px] font-extrabold uppercase tracking-[0.1em] text-[#7f7f8c]">
                                 Trabajado hoy
                             </p>
-                            <MuscleMapSvg groups={session.muscleWork} reducedMotion={reducedMotion} />
+                            <MuscleMapSvg groups={session.muscleWork} reducedMotion={reducedMotion} legendVariant="tiers" />
                         </motion.div>
                     )}
 
@@ -306,7 +313,7 @@ export function SessionCompleteV3({
 
                 {/* CTAs — "Volver al inicio" SIEMPRE visible tras la fase 1 (skippable). */}
                 <div className="mt-auto w-full pt-6" style={{ opacity: statsVisible ? 1 : 0, pointerEvents: statsVisible ? 'auto' : 'none', transition: 'opacity .2s' }}>
-                    <button type="button" onClick={handleShare} className="exec-v3-juicy flex h-[52px] w-full items-center justify-center gap-2 text-[15px]">
+                    <button type="button" onClick={handleShare} className="exec-v3-juicy flex h-[60px] w-full items-center justify-center gap-2 text-[17px]">
                         {shared ? (
                             <><Check className="h-5 w-5" /> Copiado</>
                         ) : (
@@ -316,7 +323,7 @@ export function SessionCompleteV3({
                     <button
                         type="button"
                         onClick={onDone}
-                        className="mt-2.5 flex h-[50px] w-full items-center justify-center rounded-control border-2 border-[var(--border-inverse)] bg-white/[0.04] text-[15px] font-extrabold text-on-dark transition-colors hover:bg-white/[0.08]"
+                        className="mt-2.5 flex h-[52px] w-full items-center justify-center rounded-[15px] border-2 border-[#2f2f3a] bg-[#1c1c24] text-[15px] font-extrabold text-[#e8e8ee] transition-colors hover:bg-[#22222c]"
                     >
                         Volver al inicio
                     </button>
@@ -347,10 +354,10 @@ function StatTile({
             initial={reducedMotion ? false : { opacity: 0, y: 10 }}
             animate={show ? { opacity: 1, y: 0 } : { opacity: 0, y: 10 }}
             transition={delay}
-            className="rounded-card border border-[var(--border-inverse)] bg-[var(--ink-900)] px-3 py-3 text-left"
+            className="rounded-[16px] border-[1.5px] border-[#2a2a34] bg-[#1a1a22] px-3 py-3 text-left"
         >
             {children}
-            <p className="mt-1.5 text-[10px] font-extrabold uppercase tracking-widest text-on-dark-muted">{label}</p>
+            <p className="mt-1.5 text-[10px] font-extrabold uppercase tracking-[0.08em] text-[#7f7f8c]">{label}</p>
         </motion.div>
     )
 }

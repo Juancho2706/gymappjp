@@ -1,7 +1,7 @@
 import { Pressable, Text, View } from 'react-native'
 import { MotiView } from 'moti'
 import { List, Settings } from 'lucide-react-native'
-import { FONT, TYPE } from '../../../../lib/typography'
+import { FONT } from '../../../../lib/typography'
 import { hexToRgba } from '../../../../lib/theme'
 import type { ExecTheme } from './exec-theme'
 
@@ -10,9 +10,9 @@ export type ExecDotState = 'done' | 'now' | 'todo'
 
 /**
  * Header del Ejecutor V3 (E2.1) — traduccion RN del header "Fuerza" del mockup concepto-a-v3-core:
- *  · fila superior: dots de progreso por ejercicio (hecho=lleno, actual=late, futuro=track) + boton
- *    tuerca a la derecha.
- *  · fila inferior: "Ejercicio X de Y" + cronometro de sesion.
+ * UNA sola fila = [dots de progreso] "Ejercicio X de Y" [Ver todo] [tuerca]. Sin fila meta
+ * (cronometro/series): esa info vive en el peek de descanso y el resumen final. Sin divisor inferior
+ * (el header fluye sobre el fondo, como el mockup). Chips solidos calidos (surface + borde marcado).
  *
  * Dark-only: los colores salen de `exec.surface` (fijos) y de `exec.accent` (dinamico por
  * executor_theme). El dot activo "late" con una animacion sutil de Reanimated (via moti `loop`); con
@@ -22,7 +22,6 @@ export function ExecHeaderV3({
   dots,
   currentExerciseNum,
   totalExercises,
-  elapsedLabel,
   exec,
   reducedMotion = false,
   onOpenList,
@@ -32,21 +31,20 @@ export function ExecHeaderV3({
   dots: ExecDotState[]
   currentExerciseNum: number
   totalExercises: number
-  elapsedLabel: string
+  /** Cronometro de sesion — ya NO se pinta en el header (vive en el peek/resumen). Opcional por
+   *  compatibilidad con el call-site. */
+  elapsedLabel?: string
   exec: ExecTheme
   reducedMotion?: boolean
-  /** Abre la vista lista "Ver todo" (E2.6) — capa de navegacion sobre el stepper. */
+  /** Abre la vista lista "Plan completo" (E2.6) — capa de navegacion sobre el stepper. */
   onOpenList: () => void
   onOpenSettings: () => void
 }) {
   const s = exec.surface
   return (
-    <View
-      className="px-4 pb-3 pt-2"
-      style={{ borderBottomWidth: 1, borderBottomColor: s.borderSubtle, backgroundColor: s.appBg }}
-    >
-      {/* Fila 1 — dots + tuerca */}
-      <View className="flex-row items-center gap-3">
+    <View className="px-4 pb-2.5 pt-2" style={{ backgroundColor: s.appBg }}>
+      {/* Fila unica — dots + contador + Ver todo + tuerca */}
+      <View className="flex-row items-center" style={{ gap: 10 }}>
         <View className="flex-1 flex-row items-center" style={{ gap: 7 }}>
           {dots.length === 0 ? (
             <View className="h-[9px] flex-1 rounded-full" style={{ backgroundColor: s.dotTrack }} />
@@ -56,6 +54,10 @@ export function ExecHeaderV3({
             ))
           )}
         </View>
+        <Text style={{ fontFamily: FONT.uiExtra, fontSize: 12 }} numberOfLines={1}>
+          <Text style={{ color: s.text, fontFamily: FONT.uiExtra }}>Ejercicio {currentExerciseNum}</Text>
+          <Text style={{ color: s.textMuted, fontFamily: FONT.uiExtra }}> de {totalExercises}</Text>
+        </Text>
         <Pressable
           testID="btn-exec-v3-list"
           onPress={onOpenList}
@@ -78,15 +80,6 @@ export function ExecHeaderV3({
         >
           <Settings size={19} color={s.textMuted} />
         </Pressable>
-      </View>
-
-      {/* Fila 2 — contador + cronometro */}
-      <View className="mt-2.5 flex-row items-center justify-between gap-2">
-        <Text style={{ fontFamily: FONT.uiExtra, fontSize: 12 }} numberOfLines={1}>
-          <Text style={{ color: s.text, fontFamily: FONT.uiExtra }}>Ejercicio {currentExerciseNum}</Text>
-          <Text style={{ color: s.textMuted, fontFamily: FONT.uiExtra }}> de {totalExercises}</Text>
-        </Text>
-        <Text style={[TYPE.mono, { color: s.textMuted, fontSize: 12 }]}>{elapsedLabel}</Text>
       </View>
     </View>
   )

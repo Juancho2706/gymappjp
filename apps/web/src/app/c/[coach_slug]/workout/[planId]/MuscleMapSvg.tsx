@@ -64,9 +64,15 @@ export interface MuscleMapSvgProps {
      */
     groups: { group: string; vol: number }[]
     reducedMotion?: boolean | null
+    /**
+     * Formato de la leyenda. `'ramp'` (default) = rampa continua "Menos → Más" (comportamiento V2,
+     * intacto). `'tiers'` = 3 niveles discretos con rótulo "Fuerte / Medio / Leve" (mockup
+     * concepto-a-v2 `.a2-legend`, usado por el Final V3). Aditivo: default preserva el V2.
+     */
+    legendVariant?: 'ramp' | 'tiers'
 }
 
-export function MuscleMapSvg({ groups, reducedMotion }: MuscleMapSvgProps) {
+export function MuscleMapSvg({ groups, reducedMotion, legendVariant = 'ramp' }: MuscleMapSvgProps) {
     const intensity = useMemo(() => muscleGroupsToRegionIntensity(groups), [groups])
 
     const workedRegions = useMemo(
@@ -182,24 +188,40 @@ export function MuscleMapSvg({ groups, reducedMotion }: MuscleMapSvgProps) {
                 </g>
             </svg>
 
-            {/* Leyenda de niveles (menos → mas). El ultimo lleva anillo = nivel maximo (stroke). */}
-            <div className="mt-1 flex items-center justify-center gap-2 text-[10px] text-on-dark-muted">
-                <span className="uppercase tracking-widest">Menos</span>
-                <div className="flex items-center gap-1" aria-hidden="true">
-                    {([1, 2, 3, 4] as const).map((lvl) => (
-                        <span
-                            key={lvl}
-                            className="h-3 w-4 rounded-[3px]"
-                            style={{
-                                backgroundColor: `rgba(var(--theme-primary-rgb), ${TIER_ALPHA[lvl]})`,
-                                boxShadow:
-                                    lvl === 4 ? 'inset 0 0 0 1.5px rgba(var(--theme-primary-rgb), 1)' : 'none',
-                            }}
-                        />
+            {/* Leyenda. `tiers` (Final V3) = 3 niveles con rótulo Fuerte/Medio/Leve (mockup .a2-legend);
+                `ramp` (default, V2) = rampa continua "Menos → Más" con anillo en el nivel máximo. */}
+            {legendVariant === 'tiers' ? (
+                <div className="mt-1 flex items-center justify-center gap-3 text-[10px] text-on-dark-muted">
+                    {([['Fuerte', 1], ['Medio', 0.52], ['Leve', 0.26]] as const).map(([label, alpha]) => (
+                        <span key={label} className="flex items-center gap-1.5">
+                            <span
+                                className="h-2.5 w-2.5 rounded-[3px]"
+                                aria-hidden="true"
+                                style={{ backgroundColor: `rgba(var(--theme-primary-rgb), ${alpha})` }}
+                            />
+                            <span className="uppercase tracking-wider">{label}</span>
+                        </span>
                     ))}
                 </div>
-                <span className="uppercase tracking-widest">Más</span>
-            </div>
+            ) : (
+                <div className="mt-1 flex items-center justify-center gap-2 text-[10px] text-on-dark-muted">
+                    <span className="uppercase tracking-widest">Menos</span>
+                    <div className="flex items-center gap-1" aria-hidden="true">
+                        {([1, 2, 3, 4] as const).map((lvl) => (
+                            <span
+                                key={lvl}
+                                className="h-3 w-4 rounded-[3px]"
+                                style={{
+                                    backgroundColor: `rgba(var(--theme-primary-rgb), ${TIER_ALPHA[lvl]})`,
+                                    boxShadow:
+                                        lvl === 4 ? 'inset 0 0 0 1.5px rgba(var(--theme-primary-rgb), 1)' : 'none',
+                                }}
+                            />
+                        ))}
+                    </div>
+                    <span className="uppercase tracking-widest">Más</span>
+                </div>
+            )}
         </div>
     )
 }

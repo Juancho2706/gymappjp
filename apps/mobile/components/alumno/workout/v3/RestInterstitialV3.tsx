@@ -1,7 +1,8 @@
-import { useCallback, useEffect } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import Svg, { Circle, G } from 'react-native-svg'
+import { LinearGradient } from 'expo-linear-gradient'
 import { MotiView } from 'moti'
 import Animated, {
   Easing,
@@ -77,10 +78,47 @@ const RING_R = 92
 const RING_C = 2 * Math.PI * RING_R
 const AnimatedCircle = Animated.createAnimatedComponent(Circle)
 
-// Alto del peek visible cuando esta colapsado (handle + encabezado).
-const PEEK_VISIBLE = 66
+// Alto del peek visible cuando esta colapsado (handle + encabezado + 1-2 filas reales del plan → "mirador").
+const PEEK_VISIBLE = 128
 // Alto total del sheet del plan.
 const SHEET_HEIGHT = 340
+
+// Hexes dedicados del sheet del descanso (mockup concepto-a-v3-core, seccion 4): NO colapsar a tokens
+// (que quedan mas oscuros/claros que el contrato). Solo esta pantalla los usa.
+const REST_HEX = {
+  sheetBg: '#1d1d26',
+  sheetBorder: '#33333f',
+  handle: '#45454f',
+  ringTrack: '#26262f',
+  rowDivider: '#26262f',
+  todoBg: '#26262f',
+  todoBorder: '#3a3a45',
+  todoSub: '#7f7f8c',
+}
+
+// Confetti one-shot de la micro-celebracion (8 piezas, colores de zona del mockup + marca). Los hexes de
+// zona son adornos decorativos, no re-tincion de las zonas FC. `brand` → exec.accent en runtime.
+const REST_CONFETTI: { x: number; y: number; c: string; d: number }[] = [
+  { x: -46, y: -30, c: 'brand', d: 0 },
+  { x: 44, y: -34, c: '#facc15', d: 60 },
+  { x: -54, y: 10, c: '#38bdf8', d: 120 },
+  { x: 56, y: 6, c: '#fb923c', d: 30 },
+  { x: -20, y: -46, c: '#f472b6', d: 90 },
+  { x: 22, y: -44, c: 'brand', d: 150 },
+  { x: -38, y: 34, c: '#facc15', d: 110 },
+  { x: 40, y: 32, c: '#38bdf8', d: 180 },
+]
+
+/** Mezcla un hex hacia negro (espeja color-mix(accent 55%, #000) del juicy "Saltar" del mockup). */
+function mixToBlack(hex: string, keep: number): string {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim())
+  if (!m) return hex
+  const int = parseInt(m[1], 16)
+  const r = Math.round(((int >> 16) & 0xff) * keep)
+  const g = Math.round(((int >> 8) & 0xff) * keep)
+  const b = Math.round((int & 0xff) * keep)
+  return `#${((1 << 24) | (r << 16) | (g << 8) | b).toString(16).slice(1)}`
+}
 
 function formatTime(seconds: number): string {
   const m = Math.floor(seconds / 60)
@@ -185,9 +223,16 @@ export function RestInterstitialV3({
       transition={reducedMotion ? { type: 'timing', duration: 0 } : { type: 'timing', duration: 260, easing: Easing.out(Easing.cubic) }}
       pointerEvents="auto"
     >
+      {/* Fondo calido del mockup (radial-gradient aproximado con degradado vertical de 3 paradas). */}
+      <LinearGradient
+        colors={['#1c1c24', '#16161d', '#121218']}
+        locations={[0, 0.42, 1]}
+        style={StyleSheet.absoluteFill}
+        pointerEvents="none"
+      />
       <View style={{ flex: 1, paddingTop: insets.top + 8, paddingHorizontal: 18 }}>
-        {/* Barra superior: minimizar. */}
-        <View style={{ flexDirection: 'row', justifyContent: 'flex-end' }}>
+        {/* Barra superior: minimizar (arriba-izquierda, en paridad con la web). */}
+        <View style={{ flexDirection: 'row', justifyContent: 'flex-start' }}>
           <Pressable
             testID="rest-interstitial-minimize"
             onPress={handleMinimize}
@@ -253,11 +298,31 @@ export function RestInterstitialV3({
                   {isPr ? 'Récord personal' : 'Serie cerrada'}
                 </Text>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, borderRadius: 999, borderWidth: 2, paddingHorizontal: 16, paddingVertical: 8, backgroundColor: hexToRgba(tint, 0.14), borderColor: hexToRgba(tint, 0.34) }}>
-                  <View style={{ height: 22, width: 22, borderRadius: 999, alignItems: 'center', justifyContent: 'center', backgroundColor: tint }}>
+                  <MotiView
+                    from={{ scale: 1 }}
+                    animate={{ scale: reducedMotion ? 1 : 1.12 }}
+                    transition={reducedMotion ? { type: 'timing', duration: 0 } : { type: 'timing', duration: 1800, loop: true, repeatReverse: true, delay: 400 }}
+                    style={{ height: 22, width: 22, borderRadius: 999, alignItems: 'center', justifyContent: 'center', backgroundColor: tint }}
+                  >
                     {isPr ? <Medal size={13} color="#3a2a06" strokeWidth={2.8} /> : <Check size={13} color={exec.accentText} strokeWidth={3} />}
-                  </View>
+                  </MotiView>
                   <Text style={{ fontFamily: FONT.uiBold, fontSize: 13, color: s.text }}>{isPr ? '+1 serie · ¡PR!' : '+1 serie · vas volando'}</Text>
                 </View>
+                {/* Confetti one-shot alrededor del chip (paridad con la web). Off en reduced-motion. */}
+                {!reducedMotion && (
+                  <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+                    {REST_CONFETTI.map((p, i) => (
+                      <MotiView
+                        key={i}
+                        pointerEvents="none"
+                        style={{ position: 'absolute', top: '50%', left: '50%', width: 7, height: 7, borderRadius: 2, backgroundColor: p.c === 'brand' ? tint : p.c }}
+                        from={{ opacity: 0, translateX: 0, translateY: 0, scale: 0.4 }}
+                        animate={{ opacity: [0, 1, 0], scale: [0.4, 1, 0.6], translateX: [0, p.x, p.x], translateY: [0, p.y, p.y + 24] }}
+                        transition={{ type: 'timing', duration: 1500, delay: p.d }}
+                      />
+                    ))}
+                  </View>
+                )}
               </MotiView>
             )
           })()}
@@ -266,14 +331,14 @@ export function RestInterstitialV3({
           <View style={{ width: RING_SIZE, height: RING_SIZE, alignItems: 'center', justifyContent: 'center' }}>
             <Svg width={RING_SIZE} height={RING_SIZE} viewBox="0 0 208 208" style={StyleSheet.absoluteFill}>
               <G rotation={-90} origin="104, 104">
-                <Circle cx={104} cy={104} r={RING_R} strokeWidth={14} fill="none" stroke={s.border} />
+                <Circle cx={104} cy={104} r={RING_R} strokeWidth={24} fill="none" stroke={REST_HEX.ringTrack} />
                 <AnimatedCircle
                   cx={104}
                   cy={104}
                   r={RING_R}
-                  strokeWidth={14}
+                  strokeWidth={24}
                   fill="none"
-                  stroke={done ? exec.celebration : exec.accent}
+                  stroke={exec.accent}
                   strokeLinecap="round"
                   strokeDasharray={RING_C}
                   animatedProps={ringProps}
@@ -281,12 +346,18 @@ export function RestInterstitialV3({
               </G>
             </Svg>
             <View style={{ alignItems: 'center' }} pointerEvents="none">
-              <Text
-                accessibilityRole="timer"
-                style={{ fontFamily: FONT.displayBlack, fontSize: 56, lineHeight: 58, letterSpacing: -2, color: s.text, fontVariant: ['tabular-nums', 'lining-nums'] }}
+              <MotiView
+                from={{ scale: 1 }}
+                animate={{ scale: reducedMotion || done ? 1 : 1.03 }}
+                transition={reducedMotion ? { type: 'timing', duration: 0 } : { type: 'timing', duration: 1300, loop: true, repeatReverse: true }}
               >
-                {formatTime(timeLeft)}
-              </Text>
+                <Text
+                  accessibilityRole="timer"
+                  style={{ fontFamily: FONT.displayBlack, fontSize: 56, lineHeight: 58, letterSpacing: -2, color: done ? exec.accent : s.text, fontVariant: ['tabular-nums', 'lining-nums'] }}
+                >
+                  {done ? '¡Listo!' : formatTime(timeLeft)}
+                </Text>
+              </MotiView>
               <Text style={{ fontFamily: FONT.uiBold, fontSize: 11, letterSpacing: 1.6, textTransform: 'uppercase', color: s.textMuted, marginTop: 4 }}>
                 {done ? '¡A entrenar!' : 'Descanso'}
               </Text>
@@ -342,9 +413,9 @@ export function RestInterstitialV3({
             right: 0,
             bottom: 0,
             height: SHEET_HEIGHT,
-            backgroundColor: s.surface,
+            backgroundColor: REST_HEX.sheetBg,
             borderTopWidth: 2,
-            borderTopColor: s.borderStrong,
+            borderTopColor: REST_HEX.sheetBorder,
             borderTopLeftRadius: 22,
             borderTopRightRadius: 22,
             paddingHorizontal: 16,
@@ -362,7 +433,7 @@ export function RestInterstitialV3({
             accessibilityRole="button"
             accessibilityLabel="Ver el plan completo"
           >
-            <View style={{ width: 40, height: 5, borderRadius: 999, backgroundColor: s.borderStrong, alignSelf: 'center', marginBottom: 10 }} />
+            <View style={{ width: 40, height: 5, borderRadius: 999, backgroundColor: REST_HEX.handle, alignSelf: 'center', marginBottom: 10 }} />
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
               <Text style={{ fontFamily: FONT.displayBold, fontSize: 15, letterSpacing: -0.2, color: s.text }}>Plan completo</Text>
               <Text style={{ fontFamily: FONT.monoBold, fontSize: 12, color: s.textMuted, fontVariant: ['tabular-nums'] }}>
@@ -379,7 +450,7 @@ export function RestInterstitialV3({
             return (
               <View
                 key={item.key}
-                style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 9, borderTopWidth: 1.5, borderTopColor: s.borderSubtle, ...(isNow ? { backgroundColor: hexToRgba(exec.accent, 0.1), borderRadius: 12, marginHorizontal: -6, paddingHorizontal: 10 } : null) }}
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 9, borderTopWidth: 1.5, borderTopColor: REST_HEX.rowDivider, ...(isNow ? { backgroundColor: hexToRgba(exec.accent, 0.1), borderRadius: 12, marginHorizontal: -6, paddingHorizontal: 10 } : null) }}
               >
                 <PlanStateSquare state={state} exec={exec} />
                 <Text style={{ flex: 1, fontFamily: FONT.uiBold, fontSize: 13, color: isNow ? s.text : hexToRgba(s.text, 0.85) }} numberOfLines={1}>
@@ -390,7 +461,7 @@ export function RestInterstitialV3({
                     fontFamily: FONT.uiBold,
                     fontSize: 11,
                     fontVariant: ['tabular-nums'],
-                    color: state === 'todo' ? s.textDim : exec.accent,
+                    color: state === 'todo' ? REST_HEX.todoSub : exec.accent,
                   }}
                 >
                   {state === 'done' ? `✓ ${item.doneSets}/${item.totalSets}` : state === 'now' ? 'ahora' : 'pendiente'}
@@ -422,13 +493,50 @@ function RestButton({
   accessibilityLabel?: string
 }) {
   const s = exec.surface
+  const [pressed, setPressed] = useState(false)
+
+  // "Saltar" juicy (mockup a3a-rb.skip): cara de acento + barra dura de 5px del acento oscurecido
+  // (color-mix(accent 55%, #000)) que la cara tapa al hundirse. Los -15s/+15s quedan planos.
+  if (primary) {
+    const dark = mixToBlack(exec.accent, 0.55)
+    return (
+      <View style={{ flex: 1, height: 54 }}>
+        <View pointerEvents="none" style={{ position: 'absolute', left: 0, right: 0, top: 5, height: 54, borderRadius: 15, backgroundColor: dark }} />
+        <MotiView animate={{ translateY: pressed ? 5 : 0 }} transition={{ type: 'timing', duration: 90 }}>
+          <Pressable
+            testID={testID}
+            onPress={onPress}
+            onPressIn={() => setPressed(true)}
+            onPressOut={() => setPressed(false)}
+            accessibilityRole="button"
+            accessibilityLabel={accessibilityLabel ?? label}
+            style={{
+              height: 54,
+              borderRadius: 15,
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 6,
+              borderWidth: 2,
+              borderColor: dark,
+              backgroundColor: exec.accent,
+            }}
+          >
+            {icon}
+            <Text style={{ fontFamily: FONT.uiExtra, fontSize: 15, color: exec.accentText, fontVariant: ['tabular-nums'] }}>{label}</Text>
+          </Pressable>
+        </MotiView>
+      </View>
+    )
+  }
+
   return (
     <Pressable
       testID={testID}
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel ?? label}
-      style={({ pressed }) => ({
+      style={({ pressed: p }) => ({
         flex: 1,
         height: 54,
         borderRadius: 15,
@@ -437,13 +545,13 @@ function RestButton({
         justifyContent: 'center',
         gap: 6,
         borderWidth: 2,
-        backgroundColor: primary ? exec.accent : s.surfaceRaised,
-        borderColor: primary ? hexToRgba(exec.accent, 0.6) : s.borderStrong,
-        transform: [{ scale: pressed ? 0.96 : 1 }],
+        backgroundColor: s.surfaceRaised,
+        borderColor: s.borderStrong,
+        transform: [{ scale: p ? 0.96 : 1 }],
       })}
     >
       {icon}
-      <Text style={{ fontFamily: FONT.uiExtra, fontSize: 15, color: primary ? exec.accentText : s.text, fontVariant: ['tabular-nums'] }}>{label}</Text>
+      <Text style={{ fontFamily: FONT.uiExtra, fontSize: 15, color: s.text, fontVariant: ['tabular-nums'] }}>{label}</Text>
     </Pressable>
   )
 }
@@ -508,5 +616,5 @@ function PlanStateSquare({ state, exec }: { state: 'done' | 'now' | 'todo'; exec
       </View>
     )
   }
-  return <View style={{ width: 20, height: 20, borderRadius: 6, backgroundColor: s.surfaceRaised, borderWidth: 2, borderColor: s.borderStrong }} />
+  return <View style={{ width: 20, height: 20, borderRadius: 6, backgroundColor: REST_HEX.todoBg, borderWidth: 2, borderColor: REST_HEX.todoBorder }} />
 }

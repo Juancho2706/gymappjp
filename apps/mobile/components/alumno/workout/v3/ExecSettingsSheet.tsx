@@ -187,19 +187,16 @@ export function ExecSettingsSheet({
           </View>
         ) : null}
 
-        {/* Volumen — slider funcional (0..100%). */}
-        <SettingRow
-          exec={exec}
-          name="Volumen"
-          control={
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, width: 150 }}>
-              <ExecVolumeSlider value={volume} onChange={pickVolume} exec={exec} />
-              <Text style={{ fontFamily: FONT.uiBold, fontSize: 12, color: s.textMuted, width: 34, textAlign: 'right' }}>
-                {Math.round(volume * 100)}%
-              </Text>
-            </View>
-          }
-        />
+        {/* Volumen — slider full-width (mockup `.a3b-setrow.slider`): nombre + % arriba, barra a lo ancho abajo. */}
+        <View style={{ paddingVertical: 12, borderTopWidth: 1.5, borderTopColor: s.borderSubtle, gap: 9 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+            <Text style={{ fontFamily: FONT.uiBold, fontSize: 14, letterSpacing: -0.1, color: s.text }}>Volumen</Text>
+            <Text style={{ fontFamily: FONT.uiExtra, fontSize: 13, color: exec.accent, fontVariant: ['tabular-nums'] }}>
+              {Math.round(volume * 100)}%
+            </Text>
+          </View>
+          <ExecVolumeSlider value={volume} onChange={pickVolume} exec={exec} />
+        </View>
 
         {/* Vibración — funcional (pref del cronómetro). */}
         <SettingRow
@@ -498,7 +495,7 @@ function Toggle({
         borderWidth: 2,
         justifyContent: 'center',
         paddingHorizontal: 3,
-        backgroundColor: value ? exec.accent : s.surfaceRaised,
+        backgroundColor: value ? exec.accent : s.border,
         borderColor: value ? hexToRgba(exec.accent, 0.6) : s.borderStrong,
         opacity: disabled ? 0.5 : 1,
       }}
@@ -508,7 +505,8 @@ function Toggle({
           width: 18,
           height: 18,
           borderRadius: 999,
-          backgroundColor: value ? exec.accentText : s.textMuted,
+          // Reposo: neutro claro del mockup (`#c9c9d2`); activo: tinta legible sobre el acento.
+          backgroundColor: value ? exec.accentText : '#c9c9d2',
           alignSelf: value ? 'flex-end' : 'flex-start',
         }}
       />

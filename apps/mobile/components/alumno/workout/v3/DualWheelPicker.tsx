@@ -36,10 +36,13 @@ import type { ExecTheme } from './exec-theme'
  * El ancla se redondea al grid del paso para que la rueda muestre multiplos limpios.
  */
 
-// Alto de cada item (≥44px, target minimo) y cuantos se ven (impar → hay un centro real).
-const ITEM_HEIGHT = 44
+// Alto de cada item (mockup a3c = 46px) y cuantos se ven (impar → hay un centro real).
+const ITEM_HEIGHT = 46
 const VISIBLE = 5
 const PAD_V = ITEM_HEIGHT * Math.floor(VISIBLE / 2)
+
+// Escala del tope central: fontSize base 22 × 1.227 ≈ 27px (mockup `.a3c-wv.sel` = 27px/900).
+const CENTER_SCALE = 27 / 22
 
 // Rango/paso por eje (decision CEO 8).
 const KG_STEP = 2.5
@@ -88,8 +91,9 @@ function WheelItem({
     if (reducedMotion) return { opacity: 1, transform: [{ scale: 1 }] }
     const pos = index * ITEM_HEIGHT
     const dist = Math.abs(pos - scrollY.value)
-    const opacity = interpolate(dist, [0, ITEM_HEIGHT, ITEM_HEIGHT * 2], [1, 0.45, 0.18], Extrapolation.CLAMP)
-    const scale = interpolate(dist, [0, ITEM_HEIGHT, ITEM_HEIGHT * 2], [1, 0.84, 0.7], Extrapolation.CLAMP)
+    // Mockup a3c: centro opacidad 1 (y crece a 27px vía CENTER_SCALE); vecino f1 .5/.9; f2 .24/.78.
+    const opacity = interpolate(dist, [0, ITEM_HEIGHT, ITEM_HEIGHT * 2], [1, 0.5, 0.24], Extrapolation.CLAMP)
+    const scale = interpolate(dist, [0, ITEM_HEIGHT, ITEM_HEIGHT * 2], [CENTER_SCALE, 0.9, 0.78], Extrapolation.CLAMP)
     return { opacity, transform: [{ scale }] }
   })
   return (
@@ -156,14 +160,16 @@ function WheelColumn({
       >
         {caption}
       </Text>
-      <View style={{ height: ITEM_HEIGHT * VISIBLE, position: 'relative', overflow: 'hidden', borderRadius: 16, backgroundColor: s.surfaceSunken }}>
-        {/* Capsula del centro + hairlines arriba/abajo (borde del acento). */}
+      {/* Columna TRANSPARENTE sobre el sheet (mockup): sin caja hundida por columna; solo la capsula
+          central tiene fondo. */}
+      <View style={{ height: ITEM_HEIGHT * VISIBLE, position: 'relative', overflow: 'hidden' }}>
+        {/* Capsula del centro (borde COMPLETO del acento al 55%) + hairlines blancas arriba/abajo. */}
         <View
           pointerEvents="none"
-          style={{ position: 'absolute', top: PAD_V, left: 6, right: 6, height: ITEM_HEIGHT, borderRadius: 12, borderWidth: 2, borderColor: hexToRgba(exec.accent, 0.9), backgroundColor: hexToRgba(exec.accent, 0.08) }}
+          style={{ position: 'absolute', top: PAD_V, left: 6, right: 6, height: ITEM_HEIGHT, borderRadius: 13, borderWidth: 2, borderColor: hexToRgba(exec.accent, 0.55), backgroundColor: hexToRgba(exec.accent, 0.08) }}
         />
-        <View pointerEvents="none" style={{ position: 'absolute', top: PAD_V, left: 0, right: 0, height: 1, backgroundColor: hexToRgba(exec.accent, 0.28) }} />
-        <View pointerEvents="none" style={{ position: 'absolute', top: PAD_V + ITEM_HEIGHT, left: 0, right: 0, height: 1, backgroundColor: hexToRgba(exec.accent, 0.28) }} />
+        <View pointerEvents="none" style={{ position: 'absolute', top: PAD_V, left: 0, right: 0, height: 1, backgroundColor: 'rgba(255,255,255,0.14)' }} />
+        <View pointerEvents="none" style={{ position: 'absolute', top: PAD_V + ITEM_HEIGHT, left: 0, right: 0, height: 1, backgroundColor: 'rgba(255,255,255,0.14)' }} />
         <Animated.ScrollView
           testID={testID}
           accessibilityLabel={accessibilityLabel}
@@ -200,6 +206,8 @@ export function DualWheelPicker({
   exec,
   reducedMotion = false,
   onDone,
+  exerciseName,
+  totalSets,
 }: {
   open: boolean
   onClose: () => void
@@ -209,6 +217,9 @@ export function DualWheelPicker({
   exec: ExecTheme
   reducedMotion?: boolean
   onDone: (weightKg: number, reps: number) => void
+  /** Aditivos (mockup a3c): subtitulo "{ejercicio} · N de M" bajo el titulo "Serie N". */
+  exerciseName?: string
+  totalSets?: number
 }) {
   const kg = useMemo(() => buildWheelValues(kgAnchor, KG_STEP, KG_SPREAD), [kgAnchor])
   const reps = useMemo(() => buildWheelValues(repsAnchor, REPS_STEP, REPS_SPREAD), [repsAnchor])
@@ -234,7 +245,7 @@ export function DualWheelPicker({
       nativeModal
       forceDark
       scrollable={false}
-      snapPoints={['54%']}
+      snapPoints={['66%']}
       title={`Serie ${setNumber}`}
       accessibilityLabel={`Rueda de valores para la serie ${setNumber}`}
       footer={
@@ -249,8 +260,11 @@ export function DualWheelPicker({
         />
       }
     >
-      <Text style={{ fontFamily: FONT.ui, fontSize: 12, color: s.textMuted, textAlign: 'center', marginBottom: 4 }}>
-        Desliza para ajustar el peso y las repeticiones
+      {/* Subtitulo del mockup a3c: "{ejercicio} · N de M" (fallback a la guia de deslizar si no hay datos). */}
+      <Text style={{ fontFamily: FONT.uiBold, fontSize: 12, color: s.textMuted, textAlign: 'center', marginBottom: 4 }}>
+        {exerciseName && totalSets != null
+          ? `${exerciseName} · ${setNumber} de ${totalSets}`
+          : 'Desliza para ajustar el peso y las repeticiones'}
       </Text>
       {/* Columnas re-montadas por ancla (key) para que al reabrir en otra serie recentren el scroll. */}
       <View style={{ flexDirection: 'row', gap: 12 }}>
@@ -279,6 +293,10 @@ export function DualWheelPicker({
           accessibilityLabel="Rueda de repeticiones"
         />
       </View>
+      {/* Nota inferior del mockup a3c: centrado + tick haptico (con "tick haptico" en acento). */}
+      <Text style={{ fontFamily: FONT.ui, fontSize: 11, color: s.textMuted, textAlign: 'center', marginTop: 10 }}>
+        Centrada en tu valor anterior · <Text style={{ fontFamily: FONT.uiBold, color: hexToRgba(exec.accent, 1) }}>tick háptico</Text> por paso
+      </Text>
     </Sheet>
   )
 }

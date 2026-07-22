@@ -14,8 +14,12 @@ import {
   int,
 } from '@eva/workout-engine'
 import { FONT, TYPE, textStyle } from '../../../lib/typography'
+import { hexToRgba } from '../../../lib/theme'
 import { haptics } from '../../../lib/haptics'
 import { fmtTypedLoggedLine } from './workout-ui'
+import { JuicyButton } from './v3/JuicyButton'
+import { EffortTicksV3 } from './v3/EffortTicksV3'
+import type { ExecTheme } from './v3/exec-theme'
 // RPE_HELP/RIR_HELP se importan (fuente única mobile) en vez de re-declararlos: evita el drift que la
 // Ola 0 flagueó (#1). Son mirror literal —con tildes— de la web (`EffortScale.tsx:17-20`).
 import { TypedKeypad, EffortScale, KEYPAD_EYEBROW_STYLE, RPE_HELP, RIR_HELP } from './TypedKeypad'
@@ -562,6 +566,10 @@ export function ActiveSetRow({
   onLongPressValue,
   allowZeroRir = false,
   showEffort = true,
+  heroMode = false,
+  exec,
+  repsHint,
+  openKeypadNonce,
 }: {
   blockId: string
   setNumber: number
@@ -628,6 +636,21 @@ export function ActiveSetRow({
    * tipadas (cardio/movilidad), que no tienen RPE/RIR inline.
    */
   showEffort?: boolean
+  /**
+   * Captura HERO del ejecutor V3 (E-QA1, mockup `.a3a` FUERZA): en vez de las cajas Kg×Reps + escalas
+   * apiladas + botón "Listo", la fila activa se pinta como el contrato — dos TILES de valor grandes
+   * (30/900, tap=teclado, mantener=rueda), panel de esfuerzo compacto (pills RPE/RIR + escala de ticks)
+   * y un CTA full-width "Aplastar serie". ADITIVO: sin la prop (default false) la fila es byte-idéntica a
+   * V2. La lógica de guardado/draft/cola/keypad NO cambia: el hero sólo recompone el render y reusa los
+   * MISMOS `openField`/`onLongPressValue`/`patch`/`handleConfirm`. Sólo fuerza (no aplica a tipadas).
+   */
+  heroMode?: boolean
+  /** Tema del ejecutor (acento/superficies) — requerido por `heroMode` para tiles/CTA/esfuerzo. */
+  exec?: ExecTheme
+  /** Reps objetivo (prescripción) para el placeholder tenue del tile REPS cuando aún no se capturó. */
+  repsHint?: string | null
+  /** Nonce que, al cambiar, abre el teclado en el tile de peso (botón teclado del pie del hero). */
+  openKeypadNonce?: number
 }) {
   const fields: RowField[] = useMemo(() => {
     if (typedMode) {
@@ -715,7 +738,173 @@ export function ActiveSetRow({
     commitTimer.current = setTimeout(() => setCommitting(false), 1200)
   }
 
+  // Botón "teclado" del pie del hero (E-QA1): al cambiar el nonce abre el teclado en el tile de peso
+  // (o el primer campo). Reusa `openField` — sin efecto sobre draft/commit.
+  const lastKbNonce = useRef<number | null>(null)
+  useEffect(() => {
+    if (openKeypadNonce == null || openKeypadNonce === lastKbNonce.current) return
+    lastKbNonce.current = openKeypadNonce
+    openField(fields[0]?.key ?? 'weight')
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openKeypadNonce])
+
   const currentField = openKey ? fields.find((f) => f.key === openKey) ?? null : null
+
+  // Teclado numérico (Modal) — MISMO nodo para la fila V2 y el hero V3. Extraído a variable para no
+  // duplicarlo entre ramas de render (la lógica de entrada/commit es idéntica).
+  const keypadModal = openKey && currentField ? (
+    <Modal transparent visible animationType="none" onRequestClose={() => setOpenKey(null)}>
+      <View className="flex-1">
+        <MotiView
+          from={{ opacity: motion.reduced ? 1 : 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ type: 'timing', duration: motion.reduced ? 0 : 150 }}
+          className="flex-1"
+        >
+          <Pressable
+            className="flex-1 bg-black/25"
+            onPress={() => setOpenKey(null)}
+            accessibilityRole="button"
+            accessibilityLabel="Cerrar teclado"
+          />
+        </MotiView>
+        <TypedKeypad
+          mode={currentField.mode}
+          unit={currentField.unit}
+          value={values[openKey] ?? ''}
+          onChange={(v) => patch({ [openKey]: v }, idxOf(openKey))}
+          onNext={goNext}
+          onDone={() => {
+            setOpenKey(null)
+            handleConfirm(false)
+          }}
+          onClose={() => setOpenKey(null)}
+          tabs={
+            fields.length > 1
+              ? {
+                  fields: fields.map((f) => ({ key: f.key, label: f.label })),
+                  activeKey: openKey,
+                  onSwitch: (key) => {
+                    haptics.tap()
+                    setOpenKey(key)
+                  },
+                }
+              : undefined
+          }
+          header={header ?? undefined}
+        />
+      </View>
+    </Modal>
+  ) : null
+
+  // ── Rama HERO V3 (fuerza activa) ──────────────────────────────────────────────
+  // Recompone la captura como el mockup `.a3a`: tiles de valor + esfuerzo compacto + CTA "Aplastar serie".
+  // Reusa el MISMO estado/handlers (values, openField, onLongPressValue, patch, handleConfirm, keypadModal).
+  if (heroMode && !typedMode && exec) {
+    const s = exec.surface
+    const repsShown = values.reps ?? ''
+    return (
+      <View testID={`active-set-row-${setNumber}`} style={{ gap: 10 }}>
+        {/* Tiles de valor (peso / reps) — 30/900, tap=teclado, mantener=rueda */}
+        <View style={{ flexDirection: 'row', gap: 10 }}>
+          <ValueTile
+            label="Kg"
+            unit="KG"
+            value={values.weight ?? ''}
+            editing={openKey === 'weight'}
+            exec={exec}
+            onPress={() => openField('weight')}
+            onLongPress={onLongPressValue ? () => onLongPressValue('weight') : undefined}
+            testID={`set-tile-${setNumber}-weight`}
+          />
+          <ValueTile
+            label="Reps"
+            unit="REPS"
+            value={repsShown}
+            hint={repsShown ? undefined : repsHint ?? undefined}
+            editing={openKey === 'reps'}
+            exec={exec}
+            onPress={() => openField('reps')}
+            onLongPress={onLongPressValue ? () => onLongPressValue('reps') : undefined}
+            testID={`set-tile-${setNumber}-reps`}
+          />
+        </View>
+
+        {/* Esfuerzo compacto (pills RPE/RIR + escala de ticks) — OPCIONAL, gateado por la tuerca */}
+        {showEffort && (
+          <EffortTicksV3
+            exec={exec}
+            rpe={int(values.rpe)}
+            rir={int(values.rir)}
+            onSelectRpe={(v) => patch({ rpe: String(v) })}
+            onSelectRir={(v) => patch({ rir: String(v) })}
+            allowZeroRir={allowZeroRir}
+            reducedMotion={motion.reduced}
+          />
+        )}
+
+        {/* CTA juicy full-width "Aplastar serie" con círculo-check en tinta on-brand */}
+        <JuicyButton
+          testID={`confirm-set-${setNumber}`}
+          label="Aplastar serie"
+          onPress={() => handleConfirm()}
+          exec={exec}
+          height={60}
+          fontSize={18}
+          breathing
+          reducedMotion={motion.reduced}
+          disabled={committing}
+          icon={
+            <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: 'rgba(0,0,0,0.22)', alignItems: 'center', justifyContent: 'center' }}>
+              <Check size={13} color={exec.accentText} strokeWidth={3} />
+            </View>
+          }
+          accessibilityLabel={committing ? 'Guardando serie...' : `Aplastar la serie ${setNumber}`}
+        />
+
+        {/* Nota rápida por serie (motor: viaja en values.note → buildStrengthPayload). Compacta bajo el CTA. */}
+        <View>
+          <Pressable
+            testID={`note-toggle-${setNumber}`}
+            onPress={() => setNoteOpen((o) => !o)}
+            accessibilityRole="button"
+            accessibilityState={{ expanded: noteOpen }}
+            accessibilityLabel={noteTrimmed ? 'Editar la nota de la serie' : 'Agregar una nota a la serie'}
+            className="min-h-[36px] flex-row items-center gap-1.5 self-start rounded-control px-2 active:opacity-70"
+          >
+            <StickyNote size={14} color={noteTrimmed ? WARNING_500 : ON_DARK_MUTED} />
+            <Text style={textStyle('3xs', FONT.uiSemibold)} className={noteTrimmed ? 'text-warning-500' : 'text-on-dark-muted'}>
+              {noteTrimmed ? 'Nota añadida' : 'Agregar nota'}
+            </Text>
+          </Pressable>
+          <AnimatePresence>
+            {noteOpen && (
+              <MotiView
+                from={motion.reduced ? { opacity: 1, translateY: 0 } : { opacity: 0, translateY: -4 }}
+                animate={{ opacity: 1, translateY: 0 }}
+                exit={motion.reduced ? { opacity: 0, translateY: 0 } : { opacity: 0, translateY: -4 }}
+                transition={{ type: 'timing', duration: motion.reduced ? 0 : 200 }}
+              >
+                <TextInput
+                  testID={`note-input-${setNumber}`}
+                  value={values.note ?? ''}
+                  onChangeText={(t) => patch({ note: t })}
+                  maxLength={300}
+                  placeholder="Ej: sentí molestia en el hombro"
+                  placeholderTextColor={ON_DARK_MUTED}
+                  accessibilityLabel="Nota de la serie para tu coach"
+                  style={textStyle('xs', FONT.ui)}
+                  className="mt-1.5 rounded-control border border-inverse/10 bg-white/[0.06] px-3 py-2 text-on-dark"
+                />
+              </MotiView>
+            )}
+          </AnimatePresence>
+        </View>
+
+        {keypadModal}
+      </View>
+    )
+  }
 
   return (
     <View
@@ -960,64 +1149,72 @@ export function ActiveSetRow({
         </View>
       )}
 
-      {/* Teclado numerico: mecanismo de entrada de la caja tocada (tap abre / Siguiente / Listo) */}
-      {openKey && currentField && (
-        <Modal transparent visible animationType="none" onRequestClose={() => setOpenKey(null)}>
-          <View className="flex-1">
-            {/* Scrim: tap-fuera cierra (no guarda). `bg-black/25` con fade 0→1 en 150ms — mirror EXACTO
-                del scrim web (`NumericKeypadSheet.tsx:169-178`). Antes: `rgba(0,0,0,0.5)` hardcodeado (2× más
-                oscuro, viola "usa tokens") y sin fade. Reduce-motion ⇒ sin fade (mirror web `:174-177`),
-                igual que `KeypadHost.tsx:211-218`. */}
-            <MotiView
-              from={{ opacity: motion.reduced ? 1 : 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ type: 'timing', duration: motion.reduced ? 0 : 150 }}
-              className="flex-1"
-            >
-              <Pressable
-                className="flex-1 bg-black/25"
-                onPress={() => setOpenKey(null)}
-                accessibilityRole="button"
-                accessibilityLabel="Cerrar teclado"
-              />
-            </MotiView>
-            <TypedKeypad
-              mode={currentField.mode}
-              unit={currentField.unit}
-              value={values[openKey] ?? ''}
-              onChange={(v) => patch({ [openKey]: v }, idxOf(openKey))}
-              onNext={goNext}
-              // "Listo" del keypad pasa por handleConfirm (misma guarda `committing` que el botón
-              // etiquetado, `:585-591`): un doble-tap antes de que el Modal desmonte encolaba la serie DOS
-              // veces al llamar commit() directo. handleConfirm ignora el 2º tap y añade haptic/spinner.
-              onDone={() => {
-                setOpenKey(null)
-                handleConfirm(false)
-              }}
-              // Botón X del panel (mirror web `NumericKeypadSheet.tsx:193-200`, que SIEMPRE muestra la X):
-              // cierra SIN guardar, igual que el scrim tap-fuera. Añade la affordance explícita de cierre.
-              onClose={() => setOpenKey(null)}
-              // Pestañas de campo (mirror `role="tablist"` web `NumericKeypadSheet.tsx:287-308`): dejan
-              // SALTAR peso↔reps sin cerrar+reabrir. Las cajas de la fila SON las pestañas; tocar una
-              // re-abre el keypad en ese campo.
-              tabs={
-                fields.length > 1
-                  ? {
-                      fields: fields.map((f) => ({ key: f.key, label: f.label })),
-                      activeKey: openKey,
-                      onSwitch: (key) => {
-                        haptics.tap()
-                        setOpenKey(key)
-                      },
-                    }
-                  : undefined
-              }
-              // Header de objetivo (DB-5): el scrim atenúa el objetivo de la card, el teclado lo repite.
-              header={header ?? undefined}
-            />
-          </View>
-        </Modal>
-      )}
+      {/* Teclado numérico: mecanismo de entrada de la caja tocada (tap abre / Siguiente / Listo). Nodo
+          compartido con el hero V3 (extraído a `keypadModal` arriba). */}
+      {keypadModal}
     </View>
+  )
+}
+
+/**
+ * Tile de valor grande del hero V3 (mockup `.a3a-val`): número 30/900 + unidad KG/REPS debajo. Tap abre el
+ * teclado; mantener presionado abre la rueda (E2.5). Borde de marca en estado "editando". Presentacional:
+ * el commit/draft sigue en el estado de `ActiveSetRow`.
+ */
+function ValueTile({
+  label,
+  unit,
+  value,
+  hint,
+  editing,
+  exec,
+  onPress,
+  onLongPress,
+  testID,
+}: {
+  label: string
+  unit: string
+  value: string
+  hint?: string
+  editing: boolean
+  exec: ExecTheme
+  onPress: () => void
+  onLongPress?: () => void
+  testID: string
+}) {
+  const s = exec.surface
+  const shown = value || hint || '–'
+  const dim = !value
+  return (
+    <Pressable
+      testID={testID}
+      onPress={onPress}
+      onLongPress={onLongPress}
+      delayLongPress={onLongPress ? 400 : undefined}
+      accessibilityRole="button"
+      accessibilityLabel={`${label}: ${value || 'sin valor'}, toca para editar`}
+      accessibilityHint={onLongPress ? 'Mantén presionado para abrir la rueda de valores' : undefined}
+      style={{
+        flex: 1,
+        alignItems: 'center',
+        paddingTop: 10,
+        paddingHorizontal: 8,
+        paddingBottom: 9,
+        borderRadius: 16,
+        borderWidth: 2,
+        backgroundColor: s.surfaceRaised,
+        borderColor: editing ? exec.accent : s.borderStrong,
+      }}
+    >
+      <Text
+        style={{ fontFamily: FONT.displayBlack, fontSize: 30, letterSpacing: -0.9, lineHeight: 30, color: dim ? hexToRgba(s.text, 0.35) : s.text, fontVariant: ['tabular-nums'] }}
+        numberOfLines={1}
+      >
+        {shown}
+      </Text>
+      <Text style={{ fontFamily: FONT.uiExtra, fontSize: 11, letterSpacing: 0.9, color: s.textMuted, marginTop: 4 }}>
+        {unit}
+      </Text>
+    </Pressable>
   )
 }

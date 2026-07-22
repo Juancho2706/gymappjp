@@ -30,8 +30,10 @@ import { useExecSettings } from './exec-settings'
 interface ExecSettingsSheetProps {
   open: boolean
   onClose: () => void
-  autoTimerEnabled: boolean
-  onToggleAutoTimer: () => void
+  /** Auto-cronómetro: se conserva por compatibilidad con el call-site del motor. Su control YA no vive
+   *  en esta tuerca (no está en el mockup ni en RN) — el toggle real está en la pista de descanso. */
+  autoTimerEnabled?: boolean
+  onToggleAutoTimer?: () => void
 }
 
 const TONE_OPTIONS: { value: TimerSound; label: string }[] = [
@@ -67,8 +69,6 @@ function Toggle({
 export function ExecSettingsSheet({
   open,
   onClose,
-  autoTimerEnabled,
-  onToggleAutoTimer,
 }: ExecSettingsSheetProps) {
   const reducedMotion = useReducedMotion()
   const { sound, volume, setSoundPersist, setVolumePersist } = useRestTimerPreferences()
@@ -129,17 +129,9 @@ export function ExecSettingsSheet({
             </div>
 
             <div className="exec-v3-setrows">
-              {/* Cronómetro automático — evita regresión: la tuerca legacy queda oculta en V3. */}
+              {/* Sonido del cronómetro (mute REAL del RestTimer). Primera fila (mockup: sin "Cronómetro
+                  automático" — ese toggle vive en la pista de descanso, no en la tuerca). */}
               <div className="exec-v3-setrow is-first">
-                <div className="exec-v3-setmain">
-                  <div className="exec-v3-setname">Cronómetro automático</div>
-                  <div className="exec-v3-setsub">El descanso empieza solo al guardar cada serie</div>
-                </div>
-                <Toggle checked={autoTimerEnabled} onChange={onToggleAutoTimer} label="Cronómetro automático" />
-              </div>
-
-              {/* Sonido del cronómetro (mute REAL del RestTimer). */}
-              <div className="exec-v3-setrow">
                 <div className="exec-v3-setmain">
                   <div className="exec-v3-setname">Sonido del cronómetro</div>
                   <div className="exec-v3-setsub">Suena al terminar el descanso</div>
@@ -184,6 +176,7 @@ export function ExecSettingsSheet({
                   onChange={(e) => changeVolume(parseFloat(e.target.value))}
                   aria-label="Volumen del cronómetro"
                   className="exec-v3-range"
+                  style={{ ['--exec-vol' as string]: `${Math.round(volume * 100)}%` }}
                 />
               </div>
 

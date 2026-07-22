@@ -53,6 +53,9 @@ export function RollerStepV3({
     // cambiar de serie activa. Cada cambio empuja un prefill tipado a la fila (reps_done, uncontrolled).
     const [passes, setPasses] = useState<number>(activeLog?.reps_done ?? 0)
     const [prefillNonce, setPrefillNonce] = useState(0)
+    // Nonce del micro-rebote del número: sólo sube al SUMAR (el pop del mockup salta al añadir pasada).
+    const [pop, setPop] = useState(0)
+    const perSide = block.side_mode === 'per_side'
 
     useEffect(() => {
         setPasses(activeLog?.reps_done ?? 0)
@@ -66,6 +69,7 @@ export function RollerStepV3({
             return next
         })
         setPrefillNonce((n) => n + 1)
+        if (delta > 0) setPop((n) => n + 1)
     }
 
     return (
@@ -81,6 +85,10 @@ export function RollerStepV3({
 
             {/* Media */}
             <div className="exec-v3-media exec-v3-media-calm">
+                <span className="exec-v3-medialbl" aria-hidden>
+                    <span className="exec-v3-live" />
+                    En loop
+                </span>
                 {media.kind === 'video' && (
                     <video src={media.src} autoPlay loop muted playsInline className="h-full w-full object-contain" />
                 )}
@@ -97,35 +105,43 @@ export function RollerStepV3({
             {goalPasses != null && (
                 <p className="exec-v3-rollgoal tabular-nums">
                     Objetivo: <b>{goalPasses} pasadas</b>
+                    {perSide ? ' por lado' : ''}
                 </p>
             )}
 
-            {/* Contador gigante + −1 / +1 (protagonista táctil) */}
+            {/* Contador VERTICAL (mockup): número gigante → "de N" → "Pasadas". */}
             <div className="exec-v3-counter">
+                <div key={pop} className="exec-v3-bignumber tabular-nums" aria-live="polite">
+                    {passes}
+                </div>
+                {goalPasses != null && <div className="exec-v3-goalof tabular-nums">de {goalPasses}</div>}
+                <div className="exec-v3-counter-lbl">Pasadas</div>
+            </div>
+
+            {/* Botón HÉROE "+1 pasada" (juicy gigante full-width) — la acción de la pantalla. */}
+            <button
+                type="button"
+                onClick={() => bump(1)}
+                className="exec-v3-juicy exec-v3-plusbtn"
+                aria-label="Sumar una pasada"
+            >
+                <span className="exec-v3-plusbadge" aria-hidden>
+                    <Plus className="h-5 w-5" strokeWidth={3} />
+                </span>
+                +1 pasada
+            </button>
+
+            {/* "−1" discreto para corregir. */}
+            <div className="flex justify-center">
                 <button
                     type="button"
                     onClick={() => bump(-1)}
                     disabled={passes <= 0}
-                    className="exec-v3-cbtn"
+                    className="exec-v3-minusghost"
                     aria-label="Restar una pasada"
                 >
-                    <Minus className="h-6 w-6" aria-hidden />
-                </button>
-                <div className="exec-v3-counter-mid">
-                    <div className="exec-v3-bignumber tabular-nums" aria-live="polite">
-                        {passes}
-                    </div>
-                    <div className="exec-v3-counter-lbl">
-                        {goalPasses != null ? <span className="tabular-nums">de {goalPasses} · </span> : null}Pasadas
-                    </div>
-                </div>
-                <button
-                    type="button"
-                    onClick={() => bump(1)}
-                    className="exec-v3-cbtn is-plus"
-                    aria-label="Sumar una pasada"
-                >
-                    <Plus className="h-6 w-6" aria-hidden />
+                    <Minus className="h-4 w-4" aria-hidden />
+                    −1
                 </button>
             </div>
 

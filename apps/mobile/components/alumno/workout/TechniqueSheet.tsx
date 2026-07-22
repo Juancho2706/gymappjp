@@ -5,8 +5,13 @@ import { X } from 'lucide-react-native'
 import { Sheet } from '../../Sheet'
 import { VideoPlayer } from '../../VideoPlayer'
 import { FONT, textStyle } from '../../../lib/typography'
+import { hexToRgba } from '../../../lib/theme'
 import { extractYoutubeVideoId } from '../../../lib/youtube'
 import type { SessionExercise } from '../../../lib/workout-session'
+
+// Letterbox OSCURO del medio en modo V3 (informe 15, BLOCKER): el ejecutor V3 es dark-only, el medio
+// no debe abrir en blanco sobre el shell oscuro. #050507 = piso casi-negro del mockup a3a-splash.
+const V3_LETTERBOX = '#050507'
 
 /**
  * Estilo del nombre del ejercicio reubicado bajo el medio (§4): idéntico al que el Sheet aplica a su
@@ -48,12 +53,20 @@ const techniqueTitleStyle = {
  * (video_url no-YouTube/no-mp4, :2067) NO lleva padding, así que ese caso pasa `padded={false}`.
  * El bleed lateral (fuera del padding del scroll) lo aplica el envoltorio en `TechniqueSheet`.
  */
-function MediaImage({ uri, padded = false, height }: { uri: string; padded?: boolean; height: number }) {
+function MediaImage({ uri, padded = false, height, v3 = false }: { uri: string; padded?: boolean; height: number; v3?: boolean }) {
   // gif (padded): letterbox `bg-surface-sunken` = web `bg-muted` (WorkoutExecutionClient.tsx:2030) — en paridad.
   // imagen-fallback (no padded): letterbox BLANCO + hairline inferior = web `bg-white border-b border-border/50`
   // (:2062, con `--border` = `--border-subtle`, globals.css:235). El blanco forzado en ambos temas se espeja con
   // `bg-white` (--color-white, global.css:39) y el hairline con `border-subtle` (el token ya trae el alpha horneado
   // por modo; el modificador /50 dejó de aplicar al pasar el token a var() — ver tailwind.config.js borderColor).
+  // V3 (informe 15): ambos letterboxes van a OSCURO (#050507) — el ejecutor V3 es dark-only.
+  if (v3) {
+    return (
+      <View className="overflow-hidden" style={{ width: '100%', height, backgroundColor: V3_LETTERBOX, padding: padded ? 20 : 0 }}>
+        <Image source={{ uri }} style={{ flex: 1 }} contentFit="contain" />
+      </View>
+    )
+  }
   return (
     <View
       className={`overflow-hidden ${padded ? 'bg-surface-sunken p-space-5' : 'border-b border-subtle bg-white'}`}
@@ -65,7 +78,7 @@ function MediaImage({ uri, padded = false, height }: { uri: string; padded?: boo
 }
 
 /** Decide el medio a renderizar espejando el orden de prioridad de la web (§3). */
-function TechniqueMedia({ exercise }: { exercise: SessionExercise }) {
+function TechniqueMedia({ exercise, v3 = false }: { exercise: SessionExercise; v3?: boolean }) {
   const { width } = useWindowDimensions()
   // Altura FIJA del medio = web `h-48 md:h-64` (Tailwind 4px grid: 48·4=192 / 64·4=256px). Los CUATRO
   // contenedores del medio del modal web usan esta altura fija INDEPENDIENTE del ancho, con el medio
@@ -96,7 +109,7 @@ function TechniqueMedia({ exercise }: { exercise: SessionExercise }) {
 
   // 2) gif — inset 16px como el web (`object-contain p-4`, :2035).
   if (exercise.gif_url) {
-    return <MediaImage uri={exercise.gif_url} padded height={mediaHeight} />
+    return <MediaImage uri={exercise.gif_url} padded height={mediaHeight} v3={v3} />
   }
 
   // 3) video_url no-YouTube: mp4/mov/webm/Storage → video directo; resto → imagen.
@@ -113,14 +126,15 @@ function TechniqueMedia({ exercise }: { exercise: SessionExercise }) {
     // blanco en vez del #000 por defecto; el `#fff` = --color-white (global.css:39), patrón hex-que-coincide-
     // con-canal-DS documentado. El `border-b border-subtle` (hairline con alpha horneado en el token) va en el envoltorio.
     if (isMp4) {
+      // V3 (informe 15): letterbox OSCURO (#050507) sin hairline claro; V2 conserva el blanco byte-idéntico.
       return (
-        <View className="border-b border-subtle bg-white">
+        <View className={v3 ? 'overflow-hidden' : 'border-b border-subtle bg-white'} style={v3 ? { backgroundColor: V3_LETTERBOX } : undefined}>
           {/* Altura FIJA = web `h-48 md:h-64` (:2048), no el 16:9 derivado del ancho. */}
-          <VideoPlayer url={videoUrl} autoPlay frameless letterbox="#ffffff" style={{ height: mediaHeight }} title={exercise.name} />
+          <VideoPlayer url={videoUrl} autoPlay frameless letterbox={v3 ? V3_LETTERBOX : '#ffffff'} style={{ height: mediaHeight }} title={exercise.name} />
         </View>
       )
     }
-    return <MediaImage uri={videoUrl} height={mediaHeight} />
+    return <MediaImage uri={videoUrl} height={mediaHeight} v3={v3} />
   }
 
   // 4) sin medio.
@@ -130,9 +144,15 @@ function TechniqueMedia({ exercise }: { exercise: SessionExercise }) {
 export function TechniqueSheet({
   exercise,
   onClose,
+  v3 = false,
+  accent,
 }: {
   exercise: SessionExercise | null
   onClose: () => void
+  /** Modo ejecutor V3 (informe 15, BLOCKER): superficie/medio OSCUROS (dark-only), no el sheet claro. */
+  v3?: boolean
+  /** Acento de MARCA para el badge numérico en V3 (cae a sport-500 si no viaja). */
+  accent?: string
 }) {
   const open = !!exercise
   const steps = exercise?.instructions ?? null
@@ -141,6 +161,7 @@ export function TechniqueSheet({
     <Sheet
       open={open}
       onClose={onClose}
+      forceDark={v3}
       // Sin título en la cabecera del Sheet: la web muestra el nombre del ejercicio DEBAJO del medio,
       // no encima (medio :2007-2075 → DialogHeader con el nombre :2076-2084). Lo renderizamos como
       // primer contenido del cuerpo (bajo el medio) para espejar ese orden. showCloseButton={false}
@@ -167,7 +188,7 @@ export function TechniqueSheet({
           del modal web (DialogContent `p-0`, WorkoutExecutionClient.tsx:2005). */}
       {exercise ? (
         <View className="-mx-space-6">
-          <TechniqueMedia exercise={exercise} />
+          <TechniqueMedia exercise={exercise} v3={v3} />
         </View>
       ) : null}
 
@@ -180,7 +201,7 @@ export function TechniqueSheet({
           medio→nombre del web (p-6 top del cuerpo scrolleable, WorkoutExecutionClient.tsx:2076). Sin
           `numberOfLines`: el DialogTitle web NO clampa, el nombre envuelve completo (:2079). */}
       <View className="mt-space-3 flex-row items-start justify-between gap-space-4">
-        <Text style={techniqueTitleStyle} className="flex-1 text-body">
+        <Text style={techniqueTitleStyle} className={`flex-1 ${v3 ? 'text-on-dark' : 'text-body'}`}>
           {exercise?.name ?? 'Técnica'}
         </Text>
         <TouchableOpacity
@@ -191,7 +212,7 @@ export function TechniqueSheet({
           hitSlop={8}
           className="-mr-space-3 -mt-space-3 rounded-pill p-space-3"
         >
-          <X className="text-muted" size={20} strokeWidth={2} />
+          <X className={v3 ? 'text-on-dark-muted' : 'text-muted'} size={20} strokeWidth={2} />
         </TouchableOpacity>
       </View>
 
@@ -203,21 +224,25 @@ export function TechniqueSheet({
                   size 'xs' (13px) = web span `text-xs` (globals.css:455 `--text-xs: 13px`,
                   WorkoutExecutionClient.tsx:2090). mt-0.5 (2px) iguala el `mt-0.5` del span web (:2090)
                   para el mismo alineado vertical. */}
-              <View className="mt-0.5 h-6 w-6 items-center justify-center rounded-full bg-sport-500/15">
-                <Text style={textStyle('xs', FONT.uiBold)} className="text-sport-500">
+              {/* V3 (informe 15): el badge adopta la MARCA (accent @15% + número accent), no azul Sport fijo. */}
+              <View
+                className={v3 ? 'mt-0.5 h-6 w-6 items-center justify-center rounded-full' : 'mt-0.5 h-6 w-6 items-center justify-center rounded-full bg-sport-500/15'}
+                style={v3 && accent ? { backgroundColor: hexToRgba(accent, 0.15) } : undefined}
+              >
+                <Text style={[textStyle('xs', FONT.uiBold), v3 && accent ? { color: accent } : undefined]} className={v3 ? undefined : 'text-sport-500'}>
                   {i + 1}
                 </Text>
               </View>
               {/* 14px = web `text-sm` + `leading-relaxed` (WorkoutExecutionClient.tsx:2088,2098);
                   color text-muted = web text-muted-foreground. Un solo tamaño (sin mezclar TYPE.body/text-[13px]). */}
-              <Text style={textStyle('sm', FONT.ui, { lh: 'relaxed' })} className="flex-1 text-muted">
+              <Text style={textStyle('sm', FONT.ui, { lh: 'relaxed' })} className={`flex-1 ${v3 ? 'text-on-dark-muted' : 'text-muted'}`}>
                 {step.replace(/^Step:\d+\s*/i, '')}
               </Text>
             </View>
           ))}
         </View>
       ) : (
-        <Text style={textStyle('sm', FONT.ui)} className="text-muted">
+        <Text style={textStyle('sm', FONT.ui)} className={v3 ? 'text-on-dark-muted' : 'text-muted'}>
           {/* Sin text-center: el web lo alinea a la izquierda (WorkoutExecutionClient.tsx:2103,
               <p> sin text-align). */}
           No hay instrucciones detalladas disponibles para este ejercicio.
@@ -234,13 +259,13 @@ export function TechniqueSheet({
         activeOpacity={0.85}
         accessibilityRole="button"
         accessibilityLabel="Entendido"
-        className="mt-space-3 w-full items-center justify-center rounded-control bg-surface-sunken py-3"
+        className={`mt-space-3 w-full items-center justify-center rounded-control py-3 ${v3 ? 'border border-inverse/10 bg-white/[0.06]' : 'bg-surface-sunken'}`}
       >
         {/* 16px bold: el <button> web no fija tamaño de texto → por el preflight de Tailwind
             (button { font-size: 100% }) hereda el 1rem/16px del body (WorkoutExecutionClient.tsx:2107,
             sin utilidad text-*), 2px por encima de los pasos (text-sm/14px) para conservar la
             jerarquía del CTA primario. `md` = 16px del DS (typography.ts:53), equivalente a --text-base. */}
-        <Text style={textStyle('md', FONT.uiBold)} className="text-body">
+        <Text style={textStyle('md', FONT.uiBold)} className={v3 ? 'text-on-dark' : 'text-body'}>
           Entendido
         </Text>
       </TouchableOpacity>

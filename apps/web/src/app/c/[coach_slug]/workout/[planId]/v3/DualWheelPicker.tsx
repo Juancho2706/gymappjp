@@ -1,13 +1,20 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Check } from 'lucide-react'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { Dialog as DialogPrimitive } from '@base-ui/react/dialog'
 import { formatWeightEsCl } from '@eva/workout-engine'
 import { buildWheelRange, nearestWheelIndex, WHEEL_KG_SPEC, WHEEL_REPS_SPEC } from './wheel-range'
 
-/** Vibración de un paso — SOLO si el navegador la soporta (Android Chrome; iOS Safari es no-op). */
+/**
+ * Vibración de un paso — SOLO si el navegador la soporta (Android Chrome; iOS Safari es no-op).
+ * Throttle a 35ms (igual que el espejo RN): en un flick rápido se cruzan ~10-20 topes; sin throttle
+ * eso serían 10-20 `vibrate` por giro (jank). Ver informe 14 · causa C.
+ */
+let lastTickAt = 0
 function wheelTick() {
+    const now = Date.now()
+    if (now - lastTickAt < 35) return
+    lastTickAt = now
     try {
         if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') navigator.vibrate(8)
     } catch {
@@ -19,6 +26,10 @@ function wheelTick() {
 const ITEM_H = 46
 const VISIBLE = 5
 
+/** Formateadores estables (módulo) — no recrean la lista memoizada de topes por render. */
+const fmtKg = (n: number) => formatWeightEsCl(n)
+const fmtReps = (n: number) => String(n)
+
 interface DualWheelPickerProps {
     open: boolean
     onOpenChange: (open: boolean) => void
@@ -29,14 +40,22 @@ interface DualWheelPickerProps {
     /** "Listo" entrega ambos valores; el caller los escribe en los inputs (camino del autollenado). */
     onDone: (weightKg: number, reps: number) => void
     reducedMotion: boolean | null
+    /** Aditivos (mockup a3c): título "Serie N" + subtítulo "{ejercicio} · N de M". Sin ellos → título genérico. */
+    setNumber?: number
+    exerciseName?: string
+    totalSets?: number
 }
 
 /**
  * Rueda de captura dual (E2.5) — decisión CEO 8: mantener presionado el valor abre esta rueda doble
  * kg|reps estilo iOS, centrada en el valor anterior, rango corto, tick háptico. 100% CUSTOM (sin
- * dependencias): dos columnas con CSS scroll-snap, cápsula central con borde `--exec-brand`. NO toca
- * el guardado — sólo PRODUCE dos valores y los entrega por `onDone`, que el `LogSetForm` escribe en
- * los inputs por el MISMO camino que el autollenado "Anterior" (evento `input` nativo → drafts intactos).
+ * dependencias): dos columnas con scroll-snap sobre un BOTTOM SHEET (mockup `.a3c-sheet`), cápsula
+ * central con borde `--exec-brand`. NO toca el guardado — sólo PRODUCE dos valores y los entrega por
+ * `onDone`, que el `LogSetForm` escribe en los inputs por el MISMO camino que el autollenado "Anterior".
+ *
+ * Presentación (informe 10 + 14): sheet anclado abajo (no Dialog centrado), backdrop plano SIN
+ * `backdrop-filter` (perf móvil), índice vivo en ref + resaltado directo del DOM al girar (sin
+ * re-render del árbol por cada tope), items memoizados, acento resuelto en efecto (no en render).
  */
 export function DualWheelPicker({
     open,
@@ -45,32 +64,53 @@ export function DualWheelPicker({
     initialReps,
     onDone,
     reducedMotion,
+    setNumber,
+    exerciseName,
+    totalSets,
 }: DualWheelPickerProps) {
     const kgRange = useMemo(() => buildWheelRange({ center: initialWeight, ...WHEEL_KG_SPEC }), [initialWeight])
     const repsRange = useMemo(() => buildWheelRange({ center: initialReps, ...WHEEL_REPS_SPEC }), [initialReps])
-    const [kgIdx, setKgIdx] = useState(() => nearestWheelIndex(kgRange, initialWeight))
-    const [repsIdx, setRepsIdx] = useState(() => nearestWheelIndex(repsRange, initialReps))
 
-    // Reposiciona en el anterior cada vez que se abre (los inputs pudieron cambiar entre aperturas).
+    const kgStart = useMemo(() => nearestWheelIndex(kgRange, initialWeight), [kgRange, initialWeight])
+    const repsStart = useMemo(() => nearestWheelIndex(repsRange, initialReps), [repsRange, initialReps])
+
+    // Índice vivo por columna en refs: NO dispara re-render del padre al girar (informe 14 · causa C).
+    // Las columnas se remontan por `key` al abrir para recentrar el scroll en el valor anterior.
+    const kgIdxRef = useRef(kgStart)
+    const repsIdxRef = useRef(repsStart)
+    const setKgIdx = useCallback((i: number) => {
+        kgIdxRef.current = i
+    }, [])
+    const setRepsIdx = useCallback((i: number) => {
+        repsIdxRef.current = i
+    }, [])
     useEffect(() => {
         if (!open) return
-        setKgIdx(nearestWheelIndex(kgRange, initialWeight))
-        setRepsIdx(nearestWheelIndex(repsRange, initialReps))
-    }, [open, kgRange, repsRange, initialWeight, initialReps])
+        kgIdxRef.current = kgStart
+        repsIdxRef.current = repsStart
+    }, [open, kgStart, repsStart])
 
-    // Acento del ejecutor (coach/EVA): el diálogo portalea a <body> (fuera de [data-exec-v3]), así que
-    // copiamos `--exec-brand` resuelto del árbol del ejecutor a la raíz del diálogo (fallback sport-500).
-    const accent = useMemo(() => {
-        if (!open || typeof document === 'undefined') return undefined
+    // Acento del ejecutor (coach/EVA): el sheet portalea a <body> (fuera de [data-exec-v3]), así que
+    // copiamos `--exec-brand` resuelto del árbol del ejecutor. Se lee en EFECTO (no en render) para no
+    // forzar un style-flush en el commit (informe 14 · causa D). Fallback sport-500 vía CSS.
+    const [accent, setAccent] = useState<string>()
+    useEffect(() => {
+        if (!open || typeof document === 'undefined') return
         const root = document.querySelector('[data-exec-v3]')
-        if (!root) return undefined
+        if (!root) return
         const v = getComputedStyle(root).getPropertyValue('--exec-brand').trim()
-        return v || undefined
+        if (v) setAccent(v)
     }, [open])
 
+    const title = setNumber != null ? `Serie ${setNumber}` : 'Ajustar peso y reps'
+    const subtitle =
+        exerciseName && setNumber != null && totalSets != null
+            ? `${exerciseName} · ${setNumber} de ${totalSets}`
+            : exerciseName || null
+
     const confirm = () => {
-        const w = kgRange[kgIdx]
-        const r = repsRange[repsIdx]
+        const w = kgRange[kgIdxRef.current]
+        const r = repsRange[repsIdxRef.current]
         if (w == null || r == null) {
             onOpenChange(false)
             return
@@ -79,88 +119,96 @@ export function DualWheelPicker({
     }
 
     return (
-        <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent
-                className="exec-wheel-dialog max-w-xs rounded-sheet border-[var(--border-inverse)] bg-[var(--ink-950)] p-5"
-                style={accent ? ({ ['--exec-brand' as string]: accent } as React.CSSProperties) : undefined}
-            >
-                <DialogHeader>
-                    <DialogTitle className="text-center font-display text-base font-bold text-on-dark">
-                        Ajustar peso y reps
-                    </DialogTitle>
-                </DialogHeader>
-
-                <div className="exec-wheel-head" aria-hidden>
-                    <span className="exec-wheel-lbl">Kg</span>
-                    <span className="exec-wheel-lbl">Reps</span>
-                </div>
-                <div className="exec-wheel-wrap" style={{ height: ITEM_H * VISIBLE }}>
-                    <div className="exec-wheel-cap" aria-hidden style={{ height: ITEM_H, marginTop: -(ITEM_H / 2) }} />
-                    <div className="exec-wheel-x" aria-hidden>
-                        ×
-                    </div>
-                    <WheelColumn
-                        label="Kg"
-                        range={kgRange}
-                        index={kgIdx}
-                        onIndex={setKgIdx}
-                        format={(n) => formatWeightEsCl(n)}
-                        reducedMotion={reducedMotion}
-                    />
-                    <WheelColumn
-                        label="Reps"
-                        range={repsRange}
-                        index={repsIdx}
-                        onIndex={setRepsIdx}
-                        format={(n) => String(n)}
-                        reducedMotion={reducedMotion}
-                    />
-                </div>
-
-                <button
-                    type="button"
-                    onClick={confirm}
-                    className="exec-wheel-done mt-4 flex h-14 w-full items-center justify-center gap-2 rounded-control text-[15px] font-bold text-white"
+        <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
+            <DialogPrimitive.Portal>
+                <DialogPrimitive.Backdrop className="exec-wheel-backdrop" />
+                <DialogPrimitive.Popup
+                    className="exec-wheel-sheet"
+                    style={accent ? ({ ['--exec-brand' as string]: accent } as React.CSSProperties) : undefined}
                 >
-                    <Check className="h-5 w-5" /> Listo
-                </button>
-            </DialogContent>
-        </Dialog>
+                    <div className="exec-wheel-handle" aria-hidden />
+                    <div className="exec-wheel-sheethd">
+                        <DialogPrimitive.Title className="exec-wheel-title">{title}</DialogPrimitive.Title>
+                        {subtitle && <span className="exec-wheel-subtitle">{subtitle}</span>}
+                    </div>
+
+                    <div className="exec-wheel-head" aria-hidden>
+                        <span className="exec-wheel-lbl">Kg</span>
+                        <span className="exec-wheel-lbl">Reps</span>
+                    </div>
+                    <div className="exec-wheel-wrap" style={{ height: ITEM_H * VISIBLE }}>
+                        <div className="exec-wheel-cap" aria-hidden style={{ height: ITEM_H, marginTop: -(ITEM_H / 2) }} />
+                        <WheelColumn
+                            key={`kg-${open}-${initialWeight}`}
+                            label="Kg"
+                            range={kgRange}
+                            initialIndex={kgStart}
+                            onIndex={setKgIdx}
+                            format={fmtKg}
+                            reducedMotion={reducedMotion}
+                        />
+                        <WheelColumn
+                            key={`reps-${open}-${initialReps}`}
+                            label="Reps"
+                            range={repsRange}
+                            initialIndex={repsStart}
+                            onIndex={setRepsIdx}
+                            format={fmtReps}
+                            reducedMotion={reducedMotion}
+                        />
+                    </div>
+
+                    <div className="exec-wheel-note">
+                        Centrada en tu valor anterior · <b>tick háptico</b> por paso
+                    </div>
+
+                    <button type="button" onClick={confirm} className="exec-wheel-done">
+                        <span className="exec-wheel-done-ck" aria-hidden /> Listo
+                    </button>
+                </DialogPrimitive.Popup>
+            </DialogPrimitive.Portal>
+        </DialogPrimitive.Root>
     )
 }
 
 interface WheelColumnProps {
     label: string
     range: number[]
-    index: number
+    initialIndex: number
     onIndex: (i: number) => void
     format: (n: number) => string
     reducedMotion: boolean | null
 }
 
 /**
- * Columna de la rueda: scroll-snap vertical con cápsula central. Al soltar el scroll, el tope
- * snapeado se marca (índice = round(scrollTop / alto)); un tick háptico por cada paso cruzado.
- * Tap en un tope lo lleva al centro. reduced-motion ⇒ `scroll-behavior: auto`.
+ * Columna de la rueda: scroll-snap vertical con cápsula central fija. El resaltado (tope central 27px +
+ * profundidad graduada de vecinos) se pinta por MANIPULACIÓN DIRECTA del DOM en el scroll (atributo
+ * `data-dist` por item) — SIN setState ni re-render del árbol (informe 14 · causa C). Los items se
+ * renderizan UNA vez (memoizados); la columna está envuelta en `memo` para que el padre no la reconcilie.
  */
-function WheelColumn({ label, range, index, onIndex, format, reducedMotion }: WheelColumnProps) {
+const WheelColumn = memo(function WheelColumn({ label, range, initialIndex, onIndex, format, reducedMotion }: WheelColumnProps) {
     const scrollRef = useRef<HTMLDivElement>(null)
-    const lastIdxRef = useRef(index)
+    const itemsRef = useRef<(HTMLButtonElement | null)[]>([])
+    const lastIdxRef = useRef(initialIndex)
     const rafRef = useRef<number | null>(null)
     const settleRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-    // Posiciona el scroll en el índice inicial al montar / cambiar el índice desde fuera (reapertura).
-    useEffect(() => {
+    // Pinta la profundidad de la rueda (data-dist 0/1/2 por distancia al centro) SIN re-render.
+    const paint = useCallback(() => {
         const el = scrollRef.current
         if (!el) return
-        const top = index * ITEM_H
-        if (Math.round(el.scrollTop / ITEM_H) !== index) {
-            el.scrollTo({ top, behavior: 'auto' })
+        const center = el.scrollTop / ITEM_H
+        const items = itemsRef.current
+        for (let i = 0; i < items.length; i++) {
+            const b = items[i]
+            if (!b) continue
+            const d = Math.min(2, Math.round(Math.abs(i - center)))
+            const next = String(d)
+            if (b.getAttribute('data-dist') !== next) b.setAttribute('data-dist', next)
         }
-        lastIdxRef.current = index
-    }, [index, range.length])
+    }, [])
 
-    const commitFromScroll = useCallback(() => {
+    const commit = useCallback(() => {
         const el = scrollRef.current
         if (!el) return
         const raw = Math.round(el.scrollTop / ITEM_H)
@@ -169,20 +217,41 @@ function WheelColumn({ label, range, index, onIndex, format, reducedMotion }: Wh
             lastIdxRef.current = clamped
             wheelTick()
             onIndex(clamped)
+            const items = itemsRef.current
+            for (let i = 0; i < items.length; i++) {
+                items[i]?.setAttribute('aria-selected', i === clamped ? 'true' : 'false')
+            }
         }
     }, [range.length, onIndex])
 
     const onScroll = useCallback(() => {
-        // Marca en vivo el tope bajo la cápsula (rAF para no saturar) + fallback de fin de scroll.
+        // Marca en vivo bajo la cápsula (rAF para no saturar) + fallback de fin de scroll.
         if (rafRef.current == null) {
             rafRef.current = requestAnimationFrame(() => {
                 rafRef.current = null
-                commitFromScroll()
+                paint()
+                commit()
             })
         }
         if (settleRef.current) clearTimeout(settleRef.current)
-        settleRef.current = setTimeout(commitFromScroll, 90)
-    }, [commitFromScroll])
+        settleRef.current = setTimeout(() => {
+            paint()
+            commit()
+        }, 90)
+    }, [paint, commit])
+
+    // Posiciona el scroll en el índice inicial al MONTAR (la columna se remonta por `key` al reabrir).
+    useLayoutEffect(() => {
+        const el = scrollRef.current
+        if (!el) return
+        el.scrollTop = initialIndex * ITEM_H
+        lastIdxRef.current = initialIndex
+        paint()
+        const items = itemsRef.current
+        for (let i = 0; i < items.length; i++) {
+            items[i]?.setAttribute('aria-selected', i === initialIndex ? 'true' : 'false')
+        }
+    }, [initialIndex, paint])
 
     useEffect(
         () => () => {
@@ -190,6 +259,30 @@ function WheelColumn({ label, range, index, onIndex, format, reducedMotion }: Wh
             if (settleRef.current) clearTimeout(settleRef.current)
         },
         [],
+    )
+
+    // Items renderizados UNA vez — nunca se reconcilian durante el giro (closures/estilos estables).
+    const items = useMemo(
+        () =>
+            range.map((value, i) => (
+                <button
+                    key={value}
+                    ref={(node) => {
+                        itemsRef.current[i] = node
+                    }}
+                    type="button"
+                    role="option"
+                    aria-selected={i === initialIndex}
+                    className="exec-wheel-item"
+                    style={{ height: ITEM_H }}
+                    onClick={() => {
+                        scrollRef.current?.scrollTo({ top: i * ITEM_H, behavior: reducedMotion ? 'auto' : 'smooth' })
+                    }}
+                >
+                    {format(value)}
+                </button>
+            )),
+        [range, format, reducedMotion, initialIndex],
     )
 
     return (
@@ -205,31 +298,9 @@ function WheelColumn({ label, range, index, onIndex, format, reducedMotion }: Wh
             >
                 {/* Relleno superior/inferior de 2 topes para que el primero/último pueda centrarse. */}
                 <div style={{ height: ITEM_H * 2 }} aria-hidden />
-                {range.map((value, i) => {
-                    const selected = i === index
-                    return (
-                        <button
-                            key={value}
-                            type="button"
-                            role="option"
-                            aria-selected={selected}
-                            onClick={() => {
-                                scrollRef.current?.scrollTo({
-                                    top: i * ITEM_H,
-                                    behavior: reducedMotion ? 'auto' : 'smooth',
-                                })
-                                onIndex(i)
-                            }}
-                            className="exec-wheel-item"
-                            style={{ height: ITEM_H }}
-                            data-selected={selected ? '' : undefined}
-                        >
-                            {format(value)}
-                        </button>
-                    )
-                })}
+                {items}
                 <div style={{ height: ITEM_H * 2 }} aria-hidden />
             </div>
         </div>
     )
-}
+})

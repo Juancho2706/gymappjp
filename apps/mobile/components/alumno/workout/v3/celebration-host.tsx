@@ -37,6 +37,8 @@ export function CelebrationHost({
             key={prCelebration.nonce}
             exec={exec}
             weightKg={prCelebration.weightKg}
+            prevBest={prCelebration.prevBest}
+            kind={prCelebration.kind}
             reducedMotion={reducedMotion}
             nonce={prCelebration.nonce}
           />

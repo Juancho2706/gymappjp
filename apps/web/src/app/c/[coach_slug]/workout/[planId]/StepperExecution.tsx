@@ -87,7 +87,7 @@ export function StepperExecution({ steps, currentIndex, onIndexChange, renderSte
         <section
             aria-roledescription="carrusel de ejercicios"
             aria-label="Ejercicios de la rutina"
-            className="mx-auto w-full max-w-3xl px-4 py-4 pb-32"
+            className="mx-auto w-full max-w-3xl px-4 py-4 pb-[calc(env(safe-area-inset-bottom,0px)+8rem)]"
         >
             {/* Chrome superior: prev/next SIEMPRE presentes + eyebrow de sección + "Ejercicio X de Y". */}
             <div className="mb-3 flex items-center gap-2">

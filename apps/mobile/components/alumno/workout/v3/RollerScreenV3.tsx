@@ -114,7 +114,7 @@ export function RollerScreenV3({
     <View style={{ gap: 12, alignItems: 'center' }}>
       {/* Nombre + chip Roller + músculo */}
       <View style={{ alignItems: 'center', gap: 8 }}>
-        <Text style={{ fontFamily: FONT.displayBlack, fontSize: 26, letterSpacing: -0.5, lineHeight: 30, color: s.text, textAlign: 'center' }}>
+        <Text style={{ fontFamily: FONT.displayBlack, fontSize: 26, letterSpacing: -0.5, lineHeight: 30, color: '#eef4f6', textAlign: 'center' }}>
           {exercise.name}
         </Text>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
@@ -131,8 +131,15 @@ export function RollerScreenV3({
       </View>
 
       {/* Media */}
-      <View style={{ width: '100%', height: MEDIA_HEIGHT, borderRadius: 22, overflow: 'hidden', borderWidth: 2, borderColor: hexToRgba(accent, 0.22), backgroundColor: s.surfaceRaised }}>
+      <View style={{ width: '100%', height: MEDIA_HEIGHT, borderRadius: 22, overflow: 'hidden', borderWidth: 2, borderColor: '#2a333a', backgroundColor: s.surfaceRaised }}>
         <TypedMediaV3 exercise={exercise} exec={exec} accent={accent} IconFallback={GitCommit} onOpenTechnique={onOpenTechnique} />
+        <View
+          pointerEvents="none"
+          style={{ position: 'absolute', top: 10, left: 12, zIndex: 3, flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'rgba(0,0,0,0.4)', paddingHorizontal: 9, paddingVertical: 3, borderRadius: 999 }}
+        >
+          <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: accent }} />
+          <Text style={{ fontFamily: FONT.uiBold, fontSize: 11, letterSpacing: 0.4, color: '#cfcfd8', textTransform: 'uppercase' }}>En loop</Text>
+        </View>
       </View>
 
       {firstUnlogged == null ? (
@@ -152,7 +159,7 @@ export function RollerScreenV3({
               animate={{ scale: 1 }}
               transition={reducedMotion ? { type: 'timing', duration: 0 } : { type: 'spring', stiffness: 420, damping: 16 }}
             >
-              <Text style={{ fontFamily: FONT.displayBlack, fontSize: 104, letterSpacing: -5, lineHeight: 104, color: s.text, fontVariant: ['tabular-nums'] }}>
+              <Text style={{ fontFamily: FONT.displayBlack, fontSize: 116, letterSpacing: -5, lineHeight: 116, color: '#eef4f6', fontVariant: ['tabular-nums'] }}>
                 {count}
               </Text>
             </MotiView>
@@ -207,18 +214,15 @@ export function RollerScreenV3({
                 <Text style={{ fontFamily: FONT.uiBold, fontSize: 9, letterSpacing: 0.8, color: s.textDim, textTransform: 'uppercase' }}>Opcional</Text>
               )}
             </Pressable>
-            <View style={{ flex: 1 }}>
-              <JuicyButton
-                testID="btn-roller-complete-v3"
-                label="Completar"
-                onPress={confirm}
-                exec={exec}
-                height={54}
-                fontSize={16}
-                reducedMotion={reducedMotion}
-                accessibilityLabel={`Completar la serie ${firstUnlogged} del roller`}
-              />
-            </View>
+            <Pressable
+              testID="btn-roller-complete-v3"
+              onPress={confirm}
+              style={{ flex: 1, height: 54, borderRadius: 15, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#2f2f3a', backgroundColor: '#1c1c24' }}
+              accessibilityRole="button"
+              accessibilityLabel={`Completar la serie ${firstUnlogged} del roller`}
+            >
+              <Text style={{ fontFamily: FONT.uiExtra, fontSize: 16, letterSpacing: 0.3, color: '#e8e8ee' }}>Completar</Text>
+            </Pressable>
           </View>
 
           {loggedRows.some(Boolean) && <View style={{ width: '100%', gap: 6 }}>{loggedRows}</View>}
