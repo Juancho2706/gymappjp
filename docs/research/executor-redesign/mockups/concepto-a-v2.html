@@ -1,0 +1,1008 @@
+<section class="concept" id="concept-a2" data-name="Impulso v2">
+  <style>
+    #concept-a2 {
+      --brand-a2: var(--brand, #58cc02);
+      --z1: #38bdf8; --z2: #4ade80; --z3: #facc15; --z4: #fb923c; --z5: #f87171;
+      --gold: #f5c451;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      color: #f4f4f6;
+      padding: 40px 28px 56px;
+      background: #0c0c11;
+      -webkit-font-smoothing: antialiased;
+    }
+    #concept-a2 *,
+    #concept-a2 *::before,
+    #concept-a2 *::after { box-sizing: border-box; }
+
+    #concept-a2 .a2-head { max-width: 1320px; margin: 0 auto 40px; }
+    #concept-a2 .a2-eyebrow {
+      display: inline-block;
+      font-size: 12px; font-weight: 800; letter-spacing: .18em; text-transform: uppercase;
+      color: #0c0c11; background: var(--brand-a2);
+      padding: 5px 12px; border-radius: 999px; margin-bottom: 16px;
+    }
+    #concept-a2 .a2-title {
+      font-size: clamp(38px, 6vw, 64px); font-weight: 900; letter-spacing: -.03em;
+      line-height: .98; margin: 0 0 12px;
+      background: linear-gradient(120deg, #ffffff 30%, var(--brand-a2) 130%);
+      -webkit-background-clip: text; background-clip: text; color: transparent;
+    }
+    #concept-a2 .a2-sub { font-size: 17px; line-height: 1.5; color: #a8a8b3; max-width: 700px; margin: 0; }
+
+    #concept-a2 .a2-row {
+      display: flex; flex-wrap: wrap; gap: 44px 44px; justify-content: center;
+      max-width: 2100px; margin: 0 auto;
+    }
+    #concept-a2 .a2-col { width: 375px; }
+    #concept-a2 .a2-label {
+      display: flex; align-items: center; gap: 9px;
+      font-size: 15px; font-weight: 800; letter-spacing: -.01em; margin: 0 0 14px 6px;
+    }
+    #concept-a2 .a2-label span {
+      width: 9px; height: 9px; border-radius: 50%; background: var(--brand-a2);
+      box-shadow: 0 0 0 4px color-mix(in srgb, var(--brand-a2) 22%, transparent);
+    }
+    #concept-a2 .a2-label em {
+      font-style: normal; font-size: 10px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase;
+      color: #0c0c11; background: var(--brand-a2); padding: 2px 7px; border-radius: 999px; margin-left: 2px;
+    }
+
+    /* ---- phone shell ---- */
+    #concept-a2 .a2-phone {
+      width: 375px; height: 760px; border-radius: 44px;
+      background: #050507;
+      padding: 11px;
+      box-shadow: 0 0 0 2px #26262e, 0 30px 60px -22px rgba(0,0,0,.85), inset 0 1px 0 rgba(255,255,255,.05);
+      position: relative;
+    }
+    #concept-a2 .a2-screen {
+      position: relative; width: 100%; height: 100%; border-radius: 34px; overflow: hidden;
+      background: radial-gradient(120% 80% at 50% -8%, #1c1c24 0%, #16161d 42%, #121218 100%);
+      display: flex; flex-direction: column;
+    }
+    #concept-a2 .a2-notch {
+      position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
+      width: 118px; height: 26px; background: #050507; border-radius: 999px; z-index: 40;
+    }
+    #concept-a2 .a2-body { flex: 1; display: flex; flex-direction: column; padding: 40px 18px 18px; min-height: 0; }
+
+    /* ---- shared bits ---- */
+    #concept-a2 .a2-chip {
+      display: inline-flex; align-items: center; gap: 6px;
+      font-size: 12px; font-weight: 700; padding: 5px 11px; border-radius: 999px;
+      background: color-mix(in srgb, var(--brand-a2) 16%, #16161d);
+      color: color-mix(in srgb, var(--brand-a2) 82%, #ffffff);
+      border: 1.5px solid color-mix(in srgb, var(--brand-a2) 34%, transparent);
+    }
+    #concept-a2 .a2-chip.plain {
+      background: #1c1c24; color: #b7b7c2; border-color: #33333f;
+    }
+    #concept-a2 .a2-tnum { font-variant-numeric: tabular-nums; }
+
+    /* juicy button base */
+    #concept-a2 .a2-juicy {
+      border: 2px solid color-mix(in srgb, var(--brand-a2) 55%, #000);
+      background: var(--brand-a2);
+      color: #072100; font-weight: 900; letter-spacing: -.01em;
+      border-radius: 16px;
+      box-shadow: 0 5px 0 0 color-mix(in srgb, var(--brand-a2) 55%, #000);
+      transition: transform .12s ease, box-shadow .12s ease;
+      cursor: default;
+    }
+    #concept-a2 .a2-juicy:active {
+      transform: translateY(5px); box-shadow: 0 0 0 0 color-mix(in srgb, var(--brand-a2) 55%, #000);
+    }
+
+    /* ===== SESSION PROGRESS (dots) ===== */
+    #concept-a2 .a2-progress { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+    #concept-a2 .a2-dots { display: flex; gap: 7px; flex: 1; }
+    #concept-a2 .a2-dot { flex: 1; height: 9px; border-radius: 999px; background: #2a2a34; }
+    #concept-a2 .a2-dot.done { background: color-mix(in srgb, var(--brand-a2) 60%, #16161d); }
+    #concept-a2 .a2-dot.now {
+      background: var(--brand-a2);
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand-a2) 25%, transparent);
+    }
+    #concept-a2 .a2-count { font-size: 12px; font-weight: 800; color: #8f8f9c; white-space: nowrap; }
+
+    /* ===== INICIO SCREEN ===== */
+    #concept-a2 .a2-start { gap: 0; }
+    #concept-a2 .a2-eyb {
+      display: inline-block; align-self: flex-start;
+      font-size: 11px; font-weight: 800; letter-spacing: .16em; text-transform: uppercase;
+      color: var(--brand-a2); background: color-mix(in srgb, var(--brand-a2) 12%, #16161d);
+      border: 1.5px solid color-mix(in srgb, var(--brand-a2) 30%, transparent);
+      padding: 5px 12px; border-radius: 999px; margin-bottom: 12px;
+    }
+    #concept-a2 .a2-bigday { font-size: 34px; font-weight: 900; letter-spacing: -.03em; line-height: 1; margin: 0 0 12px; }
+    #concept-a2 .a2-startchips { display: flex; flex-wrap: wrap; gap: 7px; margin-bottom: 12px; }
+    #concept-a2 .a2-summary {
+      font-size: 13px; font-weight: 800; color: #cfcfd8; letter-spacing: .01em; margin-bottom: 16px;
+    }
+    #concept-a2 .a2-summary b { color: var(--brand-a2); }
+    #concept-a2 .a2-plan {
+      background: #1a1a22; border: 2px solid #2a2a34; border-radius: 18px; padding: 6px 6px; margin-bottom: 14px;
+    }
+    #concept-a2 .a2-prow { display: flex; align-items: center; gap: 11px; padding: 9px 10px; }
+    #concept-a2 .a2-prow + .a2-prow { border-top: 1.5px solid #24242e; }
+    #concept-a2 .a2-pidx {
+      width: 24px; height: 24px; flex-shrink: 0; border-radius: 8px; font-size: 12px; font-weight: 900;
+      display: flex; align-items: center; justify-content: center;
+      background: #24242e; color: #8f8f9c;
+    }
+    #concept-a2 .a2-pname { flex: 1; font-size: 14px; font-weight: 800; color: #e8e8ee; }
+    #concept-a2 .a2-ptag {
+      font-size: 10px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase;
+      padding: 3px 8px; border-radius: 999px;
+      background: color-mix(in srgb, var(--brand-a2) 14%, #16161d); color: color-mix(in srgb, var(--brand-a2) 80%, #fff);
+    }
+    #concept-a2 .a2-ptag.cardio { background: color-mix(in srgb, var(--z2) 15%, #16161d); color: var(--z2); }
+    #concept-a2 .a2-pmore { text-align: center; font-size: 11px; font-weight: 800; color: #6f6f7c; padding: 4px 0 6px; }
+    #concept-a2 .a2-ctxrow { display: flex; gap: 10px; margin-bottom: 12px; }
+    #concept-a2 .a2-ctx {
+      flex: 1; background: #17171f; border: 1.5px solid #2a2a34; border-radius: 14px; padding: 10px 12px;
+    }
+    #concept-a2 .a2-ctx .k { font-size: 10px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: #7f7f8c; margin-bottom: 4px; }
+    #concept-a2 .a2-ctx .v { font-size: 15px; font-weight: 900; letter-spacing: -.01em; }
+    #concept-a2 .a2-ctx .v small { font-size: 11px; font-weight: 700; color: #9a9aa6; }
+    #concept-a2 .a2-note {
+      position: relative; background: color-mix(in srgb, var(--brand-a2) 12%, #16161d);
+      border: 1.5px solid color-mix(in srgb, var(--brand-a2) 26%, transparent);
+      border-radius: 14px; padding: 12px 14px; margin-bottom: 14px;
+    }
+    #concept-a2 .a2-note::after {
+      content: ""; position: absolute; left: 26px; bottom: -8px; width: 14px; height: 14px;
+      background: color-mix(in srgb, var(--brand-a2) 12%, #16161d);
+      border-right: 1.5px solid color-mix(in srgb, var(--brand-a2) 26%, transparent);
+      border-bottom: 1.5px solid color-mix(in srgb, var(--brand-a2) 26%, transparent);
+      transform: rotate(45deg);
+    }
+    #concept-a2 .a2-note .who { display: flex; align-items: center; gap: 7px; margin-bottom: 6px; }
+    #concept-a2 .a2-note .av {
+      width: 22px; height: 22px; border-radius: 50%; flex-shrink: 0;
+      background: linear-gradient(135deg, var(--brand-a2), color-mix(in srgb, var(--brand-a2) 40%, #000));
+    }
+    #concept-a2 .a2-note .nm { font-size: 11px; font-weight: 800; color: var(--brand-a2); letter-spacing: .02em; }
+    #concept-a2 .a2-note .msg { font-size: 14px; font-weight: 700; color: #eaeaf0; line-height: 1.35; }
+    #concept-a2 .a2-streak { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; margin-top: auto; }
+    #concept-a2 .a2-streaklbl { font-size: 11px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: #8f8f9c; }
+    #concept-a2 .a2-sdots { display: flex; gap: 8px; margin-left: auto; }
+    #concept-a2 .a2-sd {
+      width: 16px; height: 16px; border-radius: 50%; background: #26262f; border: 2px solid #33333f;
+    }
+    #concept-a2 .a2-sd.on {
+      background: var(--brand-a2); border-color: color-mix(in srgb, var(--brand-a2) 55%, #000);
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand-a2) 20%, transparent);
+    }
+    #concept-a2 .a2-startcta {
+      height: 66px; width: 100%; font-size: 20px; letter-spacing: .04em;
+      display: flex; align-items: center; justify-content: center; gap: 12px;
+    }
+    #concept-a2 .a2-play {
+      width: 0; height: 0; border-style: solid;
+      border-width: 9px 0 9px 15px; border-color: transparent transparent transparent #072100;
+    }
+
+    /* ===== exercise heading (FUERZA) ===== */
+    #concept-a2 .a2-exname { font-size: 26px; font-weight: 900; letter-spacing: -.02em; margin: 2px 0 8px; }
+    #concept-a2 .a2-chiprow { display: flex; gap: 8px; margin-bottom: 12px; }
+
+    /* ===== MEDIA card w/ animated silhouette ===== */
+    #concept-a2 .a2-media {
+      position: relative; height: 150px; border-radius: 22px; overflow: hidden;
+      border: 2px solid #2f2f3a;
+      background: linear-gradient(160deg, #202029, #17171f);
+      margin-bottom: 12px; display: flex; align-items: flex-end; justify-content: center;
+    }
+    #concept-a2 .a2-media::after {
+      content: ""; position: absolute; inset: 0;
+      background: linear-gradient(105deg, transparent 20%, rgba(255,255,255,.07) 45%, transparent 68%);
+      background-size: 220% 100%;
+    }
+    #concept-a2 .a2-fig { position: absolute; bottom: 26px; left: 50%; transform: translateX(-50%); width: 150px; height: 90px; }
+    #concept-a2 .a2-bench { position: absolute; bottom: 0; left: 27px; width: 96px; height: 12px; border-radius: 6px; background: #3b3b48; }
+    #concept-a2 .a2-benchleg { position: absolute; bottom: -18px; width: 8px; height: 18px; background: #33333f; border-radius: 3px; }
+    #concept-a2 .a2-torso { position: absolute; bottom: 12px; left: 40px; width: 70px; height: 20px; border-radius: 12px; background: color-mix(in srgb, var(--brand-a2) 40%, #2a2a34); }
+    #concept-a2 .a2-headc { position: absolute; bottom: 12px; left: 26px; width: 20px; height: 20px; border-radius: 50%; background: color-mix(in srgb, var(--brand-a2) 40%, #2a2a34); }
+    #concept-a2 .a2-bar {
+      position: absolute; left: 50%; transform: translateX(-50%);
+      width: 108px; height: 7px; border-radius: 4px;
+      background: var(--brand-a2); bottom: 54px;
+      box-shadow: 0 0 12px color-mix(in srgb, var(--brand-a2) 60%, transparent);
+    }
+    #concept-a2 .a2-bar::before, #concept-a2 .a2-bar::after {
+      content: ""; position: absolute; top: -6px; width: 16px; height: 19px; border-radius: 4px; background: color-mix(in srgb, var(--brand-a2) 75%, #000);
+    }
+    #concept-a2 .a2-bar::before { left: -6px; } #concept-a2 .a2-bar::after { right: -6px; }
+    #concept-a2 .a2-arm { position: absolute; bottom: 28px; width: 7px; height: 30px; border-radius: 4px; background: color-mix(in srgb, var(--brand-a2) 40%, #2a2a34); }
+    #concept-a2 .a2-arm.l { left: 52px; } #concept-a2 .a2-arm.r { right: 52px; }
+    #concept-a2 .a2-medialbl {
+      position: absolute; top: 10px; left: 12px; font-size: 11px; font-weight: 800;
+      letter-spacing: .04em; color: #cfcfd8; background: rgba(0,0,0,.4); padding: 3px 9px; border-radius: 999px;
+      display: flex; align-items: center; gap: 6px; z-index: 3;
+    }
+    #concept-a2 .a2-live { width: 6px; height: 6px; border-radius: 50%; background: var(--brand-a2); }
+
+    /* ===== prescription ===== */
+    #concept-a2 .a2-rx { font-size: 13px; font-weight: 700; color: #c4c4cf; text-align: center; margin-bottom: 10px; letter-spacing: .01em; }
+    #concept-a2 .a2-rx b { color: #fff; }
+
+    #concept-a2 .a2-prev {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 11px 15px; border-radius: 14px; margin-bottom: 10px;
+      background: #1b1b23; border: 2px dashed #34343f;
+    }
+    #concept-a2 .a2-prev .l { font-size: 12px; color: #8f8f9c; font-weight: 700; }
+    #concept-a2 .a2-prev .r { font-size: 14px; font-weight: 800; color: #e8e8ee; }
+    #concept-a2 .a2-prev .tap { font-size: 11px; font-weight: 800; color: var(--brand-a2); }
+
+    #concept-a2 .a2-cur { display: flex; gap: 10px; margin-bottom: 10px; }
+    #concept-a2 .a2-val {
+      flex: 1; text-align: center; padding: 10px 8px 9px; border-radius: 16px;
+      background: #1c1c24; border: 2px solid #2f2f3a;
+    }
+    #concept-a2 .a2-val .n { font-size: 30px; font-weight: 900; letter-spacing: -.03em; line-height: 1; }
+    #concept-a2 .a2-val .u { font-size: 11px; font-weight: 800; color: #8f8f9c; letter-spacing: .08em; margin-top: 4px; }
+
+    /* ===== OPTIONAL EFFORT (RPE / RIR) — secondary ===== */
+    #concept-a2 .a2-effort {
+      background: #15151c; border: 1.5px solid #24242e; border-radius: 14px;
+      padding: 9px 11px 10px; margin-bottom: 12px;
+    }
+    #concept-a2 .a2-efftop { display: flex; align-items: center; gap: 8px; margin-bottom: 9px; }
+    #concept-a2 .a2-efflbl { font-size: 10px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: #7f7f8c; }
+    #concept-a2 .a2-effopt { font-size: 9px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: #6a6a76; background: #202029; padding: 2px 7px; border-radius: 999px; }
+    #concept-a2 .a2-effpills { display: flex; gap: 8px; margin-left: auto; }
+    #concept-a2 .a2-epill {
+      display: inline-flex; align-items: center; gap: 6px;
+      font-size: 11px; font-weight: 800; padding: 4px 9px; border-radius: 999px;
+      background: #1c1c24; border: 1.5px solid #33333f; color: #9a9aa6;
+    }
+    #concept-a2 .a2-epill .k { letter-spacing: .04em; }
+    #concept-a2 .a2-epill .em { color: #5f5f6b; }
+    #concept-a2 .a2-epill.on {
+      background: color-mix(in srgb, var(--brand-a2) 16%, #16161d);
+      border-color: color-mix(in srgb, var(--brand-a2) 40%, transparent);
+      color: color-mix(in srgb, var(--brand-a2) 85%, #fff);
+    }
+    #concept-a2 .a2-epill.on .v { color: #fff; font-variant-numeric: tabular-nums; }
+    #concept-a2 .a2-scale { display: flex; align-items: center; gap: 3px; }
+    #concept-a2 .a2-tick {
+      flex: 1; height: 7px; border-radius: 3px; background: #26262f;
+      position: relative;
+    }
+    #concept-a2 .a2-tick.sel {
+      background: var(--brand-a2); height: 11px;
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand-a2) 22%, transparent);
+    }
+    #concept-a2 .a2-scaleends { display: flex; justify-content: space-between; margin-top: 5px; }
+    #concept-a2 .a2-scaleends span { font-size: 9px; font-weight: 800; color: #6a6a76; font-variant-numeric: tabular-nums; }
+
+    /* main complete button */
+    #concept-a2 .a2-cta {
+      height: 60px; width: 100%; font-size: 18px; display: flex; align-items: center; justify-content: center; gap: 9px;
+      margin-bottom: 10px;
+    }
+    #concept-a2 .a2-cta .ck {
+      width: 22px; height: 22px; border-radius: 50%; background: rgba(7,33,0,.22);
+      display: flex; align-items: center; justify-content: center;
+    }
+    #concept-a2 .a2-ck::before {
+      content: ""; display: block; width: 6px; height: 11px; border: solid #072100; border-width: 0 2.5px 2.5px 0;
+      transform: rotate(45deg) translate(-1px,-1px);
+    }
+
+    #concept-a2 .a2-foot { display: flex; align-items: center; justify-content: space-between; }
+    #concept-a2 .a2-sets { display: flex; gap: 6px; align-items: center; }
+    #concept-a2 .a2-sq { width: 24px; height: 24px; border-radius: 8px; background: #26262f; border: 2px solid #34343f; }
+    #concept-a2 .a2-sq.on { background: var(--brand-a2); border-color: color-mix(in srgb, var(--brand-a2) 55%, #000); }
+    #concept-a2 .a2-setlbl { font-size: 12px; font-weight: 800; color: #8f8f9c; margin-left: 4px; }
+    #concept-a2 .a2-tools { display: flex; gap: 8px; }
+    #concept-a2 .a2-tool {
+      width: 38px; height: 38px; border-radius: 12px; background: #1c1c24; border: 2px solid #2f2f3a;
+      display: flex; align-items: center; justify-content: center; color: #b7b7c2;
+      position: relative;
+    }
+    #concept-a2 .a2-tool.kb::before {
+      content: ""; width: 18px; height: 12px; border: 2px solid #b7b7c2; border-radius: 3px;
+    }
+    #concept-a2 .a2-tool.pen::before {
+      content: ""; width: 13px; height: 3px; background: #b7b7c2; border-radius: 2px;
+      transform: rotate(-45deg); box-shadow: 0 -4px 0 -1px #b7b7c2;
+    }
+
+    /* ============ REST SCREEN ============ */
+    #concept-a2 .a2-rest { align-items: center; text-align: center; gap: 12px; position: relative; }
+    #concept-a2 .a2-restcel { font-size: 12px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: var(--brand-a2); margin-bottom: 4px; }
+    #concept-a2 .a2-celly {
+      position: relative; display: inline-flex; align-items: center; gap: 8px;
+      background: color-mix(in srgb, var(--brand-a2) 14%, #16161d);
+      border: 2px solid color-mix(in srgb, var(--brand-a2) 34%, transparent);
+      padding: 8px 16px; border-radius: 999px; font-size: 13px; font-weight: 800;
+    }
+    #concept-a2 .a2-celly .b {
+      width: 22px; height: 22px; border-radius: 50%; background: var(--brand-a2); position: relative;
+    }
+    #concept-a2 .a2-celly .b::before {
+      content: ""; position: absolute; top: 5px; left: 8px; width: 5px; height: 9px;
+      border: solid #072100; border-width: 0 2.5px 2.5px 0; transform: rotate(45deg);
+    }
+    #concept-a2 .a2-confetti { position: absolute; inset: -14px -20px; pointer-events: none; overflow: visible; }
+    #concept-a2 .a2-conf { position: absolute; top: 50%; left: 50%; width: 7px; height: 7px; border-radius: 2px; opacity: 0; }
+
+    #concept-a2 .a2-ringwrap { position: relative; width: 208px; height: 208px; margin: 2px 0; }
+    #concept-a2 .a2-ring {
+      width: 100%; height: 100%; border-radius: 50%;
+      background: conic-gradient(var(--brand-a2) 0deg 224deg, #26262f 224deg 360deg);
+      -webkit-mask: radial-gradient(closest-side, transparent 76%, #000 77%);
+      mask: radial-gradient(closest-side, transparent 76%, #000 77%);
+    }
+    #concept-a2 .a2-ringtxt { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+    #concept-a2 .a2-bignum { font-size: 56px; font-weight: 900; letter-spacing: -.04em; line-height: 1; }
+    #concept-a2 .a2-restlbl { font-size: 11px; font-weight: 800; color: #8f8f9c; letter-spacing: .16em; text-transform: uppercase; margin-top: 6px; }
+
+    #concept-a2 .a2-restbtns { display: flex; gap: 10px; width: 100%; }
+    #concept-a2 .a2-rb {
+      flex: 1; height: 54px; border-radius: 15px; font-size: 15px; font-weight: 800;
+      background: #1c1c24; border: 2px solid #2f2f3a; color: #e8e8ee;
+      display: flex; align-items: center; justify-content: center;
+    }
+    #concept-a2 .a2-rb.skip { background: var(--brand-a2); border-color: color-mix(in srgb, var(--brand-a2) 55%, #000); color: #072100; box-shadow: 0 5px 0 0 color-mix(in srgb, var(--brand-a2) 55%, #000); }
+
+    #concept-a2 .a2-next {
+      width: 100%; display: flex; gap: 12px; align-items: center; text-align: left;
+      background: #1a1a22; border: 2px solid #2f2f3a; border-radius: 18px; padding: 11px;
+    }
+    #concept-a2 .a2-nextmini {
+      width: 58px; height: 58px; border-radius: 12px; flex-shrink: 0; position: relative; overflow: hidden;
+      background: linear-gradient(160deg, #23232c, #17171f); border: 1.5px solid #34343f;
+    }
+    #concept-a2 .a2-nextmini::after {
+      content: ""; position: absolute; inset: 0;
+      background: linear-gradient(105deg, transparent 30%, rgba(255,255,255,.08) 50%, transparent 70%);
+      background-size: 220% 100%;
+    }
+    #concept-a2 .a2-minidot { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); width: 28px; height: 6px; border-radius: 3px; background: color-mix(in srgb, var(--brand-a2) 70%, #000); }
+    #concept-a2 .a2-nextinfo .k { font-size: 10px; font-weight: 800; letter-spacing: .12em; color: var(--brand-a2); text-transform: uppercase; }
+    #concept-a2 .a2-nextinfo .t { font-size: 16px; font-weight: 900; letter-spacing: -.01em; margin: 3px 0; }
+    #concept-a2 .a2-nextinfo .d { font-size: 12px; font-weight: 700; color: #a8a8b3; }
+
+    /* peeking bottom-sheet — Plan completo */
+    #concept-a2 .a2-sheet {
+      position: absolute; left: 0; right: 0; bottom: 0;
+      background: #1d1d26; border-top: 2px solid #33333f;
+      border-radius: 22px 22px 0 0; padding: 8px 16px 0;
+      box-shadow: 0 -18px 40px -18px rgba(0,0,0,.75);
+      transform: translateY(58px); z-index: 20;
+    }
+    #concept-a2 .a2-handle { width: 40px; height: 5px; border-radius: 999px; background: #45454f; margin: 0 auto 10px; }
+    #concept-a2 .a2-sheethd { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+    #concept-a2 .a2-sheethd .t { font-size: 14px; font-weight: 900; letter-spacing: -.01em; }
+    #concept-a2 .a2-sheethd .c { font-size: 11px; font-weight: 800; color: #8f8f9c; }
+    #concept-a2 .a2-srow { display: flex; align-items: center; gap: 10px; padding: 9px 4px; border-top: 1.5px solid #26262f; }
+    #concept-a2 .a2-sstate { width: 20px; height: 20px; border-radius: 6px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
+    #concept-a2 .a2-sstate.done { background: var(--brand-a2); position: relative; }
+    #concept-a2 .a2-sstate.done::before {
+      content: ""; width: 5px; height: 9px; border: solid #072100; border-width: 0 2px 2px 0; transform: rotate(45deg) translateY(-1px);
+    }
+    #concept-a2 .a2-sstate.now { background: color-mix(in srgb, var(--brand-a2) 25%, transparent); box-shadow: inset 0 0 0 2px var(--brand-a2); }
+    #concept-a2 .a2-sstate.now::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--brand-a2); }
+    #concept-a2 .a2-sstate.todo { background: #26262f; box-shadow: inset 0 0 0 2px #3a3a45; }
+    #concept-a2 .a2-srow .snm { flex: 1; font-size: 13px; font-weight: 800; color: #d4d4dc; }
+    #concept-a2 .a2-srow.is-now { background: color-mix(in srgb, var(--brand-a2) 10%, transparent); border-radius: 12px; margin: 0 -6px; padding-left: 10px; padding-right: 10px; }
+    #concept-a2 .a2-srow.is-now .snm { color: #fff; }
+    #concept-a2 .a2-srow .ssub { font-size: 11px; font-weight: 800; }
+    #concept-a2 .a2-srow .ssub.done { color: var(--brand-a2); }
+    #concept-a2 .a2-srow .ssub.now { color: var(--brand-a2); }
+    #concept-a2 .a2-srow .ssub.todo { color: #7f7f8c; }
+
+    /* ============ CARDIO SCREEN ============ */
+    #concept-a2 .a2-cardio { align-items: center; text-align: center; gap: 12px; }
+    #concept-a2 .a2-cardring { position: relative; width: 236px; height: 236px; margin-top: 6px; }
+    #concept-a2 .a2-cardring .ring2 {
+      width: 100%; height: 100%; border-radius: 50%;
+      background: conic-gradient(var(--brand-a2) 0deg 148deg, #26262f 148deg 360deg);
+      -webkit-mask: radial-gradient(closest-side, transparent 78%, #000 79%);
+      mask: radial-gradient(closest-side, transparent 78%, #000 79%);
+    }
+    #concept-a2 .a2-cardtxt { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+    #concept-a2 .a2-cardnum { font-size: 62px; font-weight: 900; letter-spacing: -.04em; line-height: 1; }
+    #concept-a2 .a2-cardsub { font-size: 11px; font-weight: 800; letter-spacing: .16em; text-transform: uppercase; color: #8f8f9c; margin-top: 6px; }
+
+    #concept-a2 .a2-zone {
+      display: inline-flex; align-items: center; gap: 9px; padding: 10px 18px; border-radius: 999px;
+      background: color-mix(in srgb, var(--z2) 16%, #16161d); border: 2px solid color-mix(in srgb, var(--z2) 40%, transparent);
+      font-size: 16px; font-weight: 900;
+    }
+    #concept-a2 .a2-zone .zd { width: 12px; height: 12px; border-radius: 50%; background: var(--z2); box-shadow: 0 0 0 4px color-mix(in srgb, var(--z2) 25%, transparent); }
+    #concept-a2 .a2-zone .zt { color: var(--z2); }
+    #concept-a2 .a2-zone .zk { color: #cbd5c9; font-weight: 700; font-size: 13px; }
+
+    #concept-a2 .a2-cchips { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; width: 100%; }
+    #concept-a2 .a2-cchip {
+      display: flex; align-items: center; gap: 9px; text-align: left;
+      background: #1a1a22; border: 1.5px solid #2a2a34; border-radius: 14px; padding: 9px 11px;
+    }
+    #concept-a2 .a2-cchip .ci { width: 22px; height: 22px; flex-shrink: 0; position: relative; display: flex; align-items: center; justify-content: center; }
+    #concept-a2 .a2-cchip .cm { min-width: 0; }
+    #concept-a2 .a2-cchip .cv { font-size: 15px; font-weight: 900; letter-spacing: -.01em; line-height: 1.05; }
+    #concept-a2 .a2-cchip .cl { font-size: 9px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: #7f7f8c; margin-top: 2px; }
+    #concept-a2 .a2-heart { width: 13px; height: 13px; border-radius: 50%; background: var(--z5); box-shadow: 0 0 0 4px color-mix(in srgb, var(--z5) 22%, transparent); }
+    #concept-a2 .a2-distbar { height: 4px; border-radius: 3px; background: #2a2a34; margin-top: 5px; overflow: hidden; }
+    #concept-a2 .a2-distbar > i { display: block; height: 100%; width: 62%; background: var(--brand-a2); border-radius: 3px; }
+    #concept-a2 .a2-icdot { width: 14px; height: 14px; border-radius: 50%; box-shadow: inset 0 0 0 2px var(--brand-a2); }
+    #concept-a2 .a2-icshoe { width: 16px; height: 9px; border-radius: 0 8px 3px 8px; background: color-mix(in srgb, var(--brand-a2) 60%, #2a2a34); }
+    #concept-a2 .a2-icbars { display: flex; align-items: flex-end; gap: 2px; height: 14px; }
+    #concept-a2 .a2-icbars > i { width: 3px; background: color-mix(in srgb, var(--brand-a2) 60%, #2a2a34); border-radius: 1px; }
+    #concept-a2 .a2-icbars > i:nth-child(1) { height: 5px; } #concept-a2 .a2-icbars > i:nth-child(2) { height: 9px; } #concept-a2 .a2-icbars > i:nth-child(3) { height: 14px; }
+
+    #concept-a2 .a2-source {
+      display: flex; align-items: center; gap: 8px; width: 100%;
+      font-size: 11px; font-weight: 700; color: #8f8f9c;
+      background: #15151c; border: 1.5px solid #24242e; border-radius: 12px; padding: 8px 11px;
+    }
+    #concept-a2 .a2-source b { color: #cfcfd8; font-weight: 800; }
+    #concept-a2 .a2-watch {
+      width: 18px; height: 20px; flex-shrink: 0; position: relative;
+      border: 2px solid #b7b7c2; border-radius: 5px;
+    }
+    #concept-a2 .a2-watch::before, #concept-a2 .a2-watch::after {
+      content: ""; position: absolute; left: 3px; right: 3px; height: 4px; background: #b7b7c2; border-radius: 2px;
+    }
+    #concept-a2 .a2-watch::before { top: -6px; } #concept-a2 .a2-watch::after { bottom: -6px; }
+    #concept-a2 .a2-watchhand {
+      position: absolute; top: 50%; left: 50%; width: 2px; height: 5px; background: var(--brand-a2);
+      transform-origin: bottom center; transform: translate(-50%,-100%) rotate(60deg);
+    }
+    #concept-a2 .a2-pause {
+      width: 100%; height: 58px; border-radius: 16px; font-size: 16px; font-weight: 900;
+      display: flex; align-items: center; justify-content: center; gap: 10px;
+    }
+    #concept-a2 .a2-pauseicon { display: inline-flex; gap: 4px; }
+    #concept-a2 .a2-pauseicon i { width: 5px; height: 16px; background: #072100; border-radius: 2px; }
+
+    /* ============ FINAL / RESUMEN SCREEN ============ */
+    #concept-a2 .a2-final { align-items: center; text-align: center; gap: 0; position: relative; }
+    #concept-a2 .a2-finalconf { position: absolute; top: 20px; left: 0; right: 0; height: 60px; pointer-events: none; }
+    #concept-a2 .a2-finaltitle { font-size: 28px; font-weight: 900; letter-spacing: -.02em; margin: 6px 0 4px; }
+    #concept-a2 .a2-finalsub { font-size: 13px; font-weight: 700; color: #a8a8b3; margin-bottom: 16px; }
+    #concept-a2 .a2-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; width: 100%; margin-bottom: 16px; }
+    #concept-a2 .a2-stat {
+      background: #1a1a22; border: 1.5px solid #2a2a34; border-radius: 16px; padding: 12px 10px; text-align: left;
+    }
+    #concept-a2 .a2-stat .sv { font-size: 24px; font-weight: 900; letter-spacing: -.03em; line-height: 1; }
+    #concept-a2 .a2-stat .sl { font-size: 10px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: #7f7f8c; margin-top: 6px; }
+    #concept-a2 .a2-stat.pr {
+      grid-column: 1 / -1;
+      background: linear-gradient(135deg, color-mix(in srgb, var(--gold) 20%, #16161d), #17171f);
+      border-color: color-mix(in srgb, var(--gold) 45%, transparent);
+      display: flex; align-items: center; gap: 12px;
+    }
+    #concept-a2 .a2-stat.pr .medal {
+      width: 34px; height: 34px; border-radius: 50%; flex-shrink: 0;
+      background: radial-gradient(circle at 40% 35%, #ffe9a8, var(--gold) 60%, #c99326);
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--gold) 22%, transparent);
+    }
+    #concept-a2 .a2-stat.pr .sv { color: var(--gold); font-size: 20px; }
+    #concept-a2 .a2-stat.pr .sl { color: color-mix(in srgb, var(--gold) 75%, #fff); }
+
+    #concept-a2 .a2-muscle {
+      width: 100%; background: #15151c; border: 1.5px solid #24242e; border-radius: 16px;
+      padding: 12px 12px 10px; margin-bottom: 14px;
+    }
+    #concept-a2 .a2-musclehd { font-size: 10px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: #7f7f8c; margin-bottom: 6px; text-align: left; }
+    #concept-a2 .a2-bodies { display: flex; justify-content: center; gap: 22px; }
+    #concept-a2 .a2-bodyfig { text-align: center; }
+    #concept-a2 .a2-bodyfig svg { display: block; width: 74px; height: 132px; }
+    #concept-a2 .a2-bodyfig .cap { font-size: 9px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: #7f7f8c; margin-top: 4px; }
+    #concept-a2 .a2-mm-base { fill: #2c2c37; }
+    #concept-a2 .a2-mm-strong { fill: var(--brand-a2); }
+    #concept-a2 .a2-mm-med { fill: color-mix(in srgb, var(--brand-a2) 52%, transparent); }
+    #concept-a2 .a2-mm-soft { fill: color-mix(in srgb, var(--brand-a2) 26%, transparent); }
+    #concept-a2 .a2-legend { display: flex; justify-content: center; gap: 14px; margin-top: 8px; }
+    #concept-a2 .a2-legend span { display: inline-flex; align-items: center; gap: 5px; font-size: 10px; font-weight: 800; color: #9a9aa6; }
+    #concept-a2 .a2-legend i { width: 10px; height: 10px; border-radius: 3px; }
+    #concept-a2 .a2-legend .l3 { background: var(--brand-a2); }
+    #concept-a2 .a2-legend .l2 { background: color-mix(in srgb, var(--brand-a2) 52%, transparent); }
+    #concept-a2 .a2-legend .l1 { background: color-mix(in srgb, var(--brand-a2) 26%, transparent); }
+
+    #concept-a2 .a2-finalcta { height: 60px; width: 100%; font-size: 17px; display: flex; align-items: center; justify-content: center; gap: 9px; margin-bottom: 10px; }
+    #concept-a2 .a2-share { width: 16px; height: 16px; position: relative; }
+    #concept-a2 .a2-share::before {
+      content: ""; position: absolute; inset: 0;
+      background:
+        radial-gradient(circle at 4px 4px, #072100 3px, transparent 3.5px),
+        radial-gradient(circle at 12px 3px, #072100 3px, transparent 3.5px),
+        radial-gradient(circle at 12px 13px, #072100 3px, transparent 3.5px);
+    }
+    #concept-a2 .a2-share::after {
+      content: ""; position: absolute; top: 5px; left: 5px; width: 8px; height: 6px;
+      border-top: 2px solid #072100; border-bottom: 2px solid #072100; transform: skewY(20deg);
+    }
+    #concept-a2 .a2-finalsec {
+      height: 52px; width: 100%; border-radius: 15px; font-size: 15px; font-weight: 800;
+      background: #1c1c24; border: 2px solid #2f2f3a; color: #e8e8ee;
+      display: flex; align-items: center; justify-content: center;
+    }
+
+    /* ===== bullets ===== */
+    #concept-a2 .a2-bullets { list-style: none; padding: 0; margin: 18px 4px 0; }
+    #concept-a2 .a2-bullets li {
+      position: relative; padding-left: 22px; margin-bottom: 10px; font-size: 13.5px; line-height: 1.45; color: #b7b7c2;
+    }
+    #concept-a2 .a2-bullets li::before {
+      content: ""; position: absolute; left: 0; top: 6px; width: 12px; height: 12px; border-radius: 4px;
+      background: var(--brand-a2); box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand-a2) 20%, transparent);
+    }
+    #concept-a2 .a2-bullets b { color: #eeeef2; font-weight: 800; }
+
+    /* ===== motion signature ===== */
+    #concept-a2 .a2-motion {
+      max-width: 1320px; margin: 48px auto 0; padding: 24px 26px;
+      border-radius: 20px; background: #14141b; border: 1.5px solid #26262f;
+    }
+    #concept-a2 .a2-motion h4 {
+      font-size: 12px; font-weight: 900; letter-spacing: .16em; text-transform: uppercase;
+      color: var(--brand-a2); margin: 0 0 14px;
+    }
+    #concept-a2 .a2-motion ul { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px 26px; }
+    #concept-a2 .a2-motion li { font-size: 13.5px; line-height: 1.5; color: #b7b7c2; }
+    #concept-a2 .a2-motion li b { color: #eeeef2; font-weight: 800; }
+
+    /* ============ ANIMATIONS ============ */
+    @media (prefers-reduced-motion: no-preference) {
+      #concept-a2 .a2-media::after { animation: concept-a2-shimmer 3.2s linear infinite; }
+      #concept-a2 .a2-nextmini::after { animation: concept-a2-shimmer 3.2s linear infinite; }
+      #concept-a2 .a2-bar { animation: concept-a2-press 2.4s ease-in-out infinite; }
+      #concept-a2 .a2-arm { animation: concept-a2-press 2.4s ease-in-out infinite; }
+      #concept-a2 .a2-live { animation: concept-a2-pulse 1.6s ease-in-out infinite; }
+      #concept-a2 .a2-dot.now { animation: concept-a2-beat 1.4s ease-in-out infinite; }
+      #concept-a2 .a2-cta { animation: concept-a2-breathe 2.6s ease-in-out infinite; }
+      #concept-a2 .a2-startcta { animation: concept-a2-breathe 2.4s ease-in-out infinite; }
+      #concept-a2 .a2-bignum { animation: concept-a2-breathe 2.6s ease-in-out infinite; }
+      #concept-a2 .a2-cardnum { animation: concept-a2-breathe 2.8s ease-in-out infinite; }
+      #concept-a2 .a2-heart { animation: concept-a2-beat 1s ease-in-out infinite; }
+      #concept-a2 .a2-zone .zd { animation: concept-a2-pulse 1.8s ease-in-out infinite; }
+      #concept-a2 .a2-cchip .a2-heart { animation: concept-a2-beat 1s ease-in-out infinite; }
+      #concept-a2 .a2-celly .b { animation: concept-a2-pop 3.6s ease-in-out infinite; }
+      #concept-a2 .a2-tick.sel { animation: concept-a2-pulsebrand 2.2s ease-in-out infinite; }
+      #concept-a2 .a2-sstate.now::before { animation: concept-a2-pulse 1.6s ease-in-out infinite; }
+      #concept-a2 .a2-sheet { animation: concept-a2-peek 4.2s ease-in-out infinite; }
+      #concept-a2 .a2-stat .sv { animation: concept-a2-breathe 3s ease-in-out infinite; }
+      #concept-a2 .a2-stat.pr .medal { animation: concept-a2-pop 3.2s ease-in-out infinite; }
+      #concept-a2 .a2-mm-strong { animation: concept-a2-glow 2.6s ease-in-out infinite; }
+      #concept-a2 .a2-conf { animation: concept-a2-confetti 7s ease-in-out infinite; }
+      #concept-a2 .a2-conf:nth-child(1) { --cx: -46px; --cy: -30px; background: var(--brand-a2); animation-delay: 0s; }
+      #concept-a2 .a2-conf:nth-child(2) { --cx: 44px; --cy: -34px; background: var(--z3); animation-delay: .3s; }
+      #concept-a2 .a2-conf:nth-child(3) { --cx: -54px; --cy: 10px; background: var(--z1); animation-delay: .6s; }
+      #concept-a2 .a2-conf:nth-child(4) { --cx: 56px; --cy: 6px; background: var(--z4); animation-delay: .15s; }
+      #concept-a2 .a2-conf:nth-child(5) { --cx: -20px; --cy: -46px; background: #f472b6; animation-delay: .45s; }
+      #concept-a2 .a2-conf:nth-child(6) { --cx: 22px; --cy: -44px; background: var(--brand-a2); animation-delay: .75s; }
+      #concept-a2 .a2-conf:nth-child(7) { --cx: -38px; --cy: 34px; background: var(--z3); animation-delay: .55s; }
+      #concept-a2 .a2-conf:nth-child(8) { --cx: 40px; --cy: 32px; background: var(--z1); animation-delay: .9s; }
+      #concept-a2 .a2-finalconf .a2-conf:nth-child(odd) { animation-duration: 5.5s; }
+      #concept-a2 .a2-finalconf .a2-conf:nth-child(even) { animation-duration: 6.2s; }
+    }
+    @keyframes concept-a2-shimmer { to { background-position: -220% 0; } }
+    @keyframes concept-a2-press { 0%,100% { transform: translateX(-50%) translateY(0); } 45% { transform: translateX(-50%) translateY(16px); } }
+    @keyframes concept-a2-pulse { 0%,100% { opacity: 1; transform: scale(1); } 50% { opacity: .4; transform: scale(.7); } }
+    @keyframes concept-a2-pulsebrand { 0%,100% { box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand-a2) 22%, transparent); } 50% { box-shadow: 0 0 0 6px color-mix(in srgb, var(--brand-a2) 8%, transparent); } }
+    @keyframes concept-a2-beat { 0%,100% { transform: scale(1); } 30% { transform: scale(1.3); } 45% { transform: scale(1); } }
+    @keyframes concept-a2-breathe { 0%,100% { transform: scale(1); } 50% { transform: scale(1.035); } }
+    @keyframes concept-a2-pop { 0%,80%,100% { transform: scale(1); } 40% { transform: scale(1.18); } }
+    @keyframes concept-a2-peek { 0%,100% { transform: translateY(58px); } 50% { transform: translateY(50px); } }
+    @keyframes concept-a2-glow { 0%,100% { opacity: 1; } 50% { opacity: .78; } }
+    @keyframes concept-a2-confetti {
+      0%, 4% { opacity: 0; transform: translate(-50%,-50%) scale(.3); }
+      8% { opacity: 1; }
+      22% { opacity: 1; transform: translate(calc(-50% + var(--cx)), calc(-50% + var(--cy))) scale(1) rotate(180deg); }
+      34%, 100% { opacity: 0; transform: translate(calc(-50% + var(--cx)), calc(-50% + var(--cy) + 24px)) scale(.6) rotate(320deg); }
+    }
+  </style>
+
+  <div class="a2-head">
+    <span class="a2-eyebrow">Impulso — v2</span>
+    <h2 class="a2-title">Impulso — v2</h2>
+    <p class="a2-sub">El mismo ADN de juego bien disenado, ahora con el arco completo de la sesion: llegas con contexto, registras el esfuerzo solo si quieres, descansas viendo el plan entero, y cierras con un resumen que celebra tu cuerpo trabajado.</p>
+  </div>
+
+  <div class="a2-row">
+
+    <!-- ============ 1 · INICIO ============ -->
+    <div class="a2-col">
+      <p class="a2-label"><span></span>Inicio <em>nueva</em></p>
+      <div class="a2-phone">
+        <div class="a2-screen">
+          <div class="a2-notch"></div>
+          <div class="a2-body a2-start">
+            <span class="a2-eyb">Hoy · Martes 21</span>
+            <div class="a2-bigday">Dia 3 · Empuje</div>
+            <div class="a2-startchips">
+              <span class="a2-chip">Semana 2</span>
+              <span class="a2-chip">Fase Fuerza</span>
+              <span class="a2-chip plain">Variante A</span>
+            </div>
+            <div class="a2-summary a2-tnum"><b>8 ejercicios</b> · 24 series · ~55 min</div>
+
+            <div class="a2-plan">
+              <div class="a2-prow"><div class="a2-pidx">1</div><div class="a2-pname">Press banca</div><span class="a2-ptag">Fuerza</span></div>
+              <div class="a2-prow"><div class="a2-pidx">2</div><div class="a2-pname">Press inclinado</div><span class="a2-ptag">Fuerza</span></div>
+              <div class="a2-prow"><div class="a2-pidx">3</div><div class="a2-pname">Cinta · Z2</div><span class="a2-ptag cardio">Cardio</span></div>
+              <div class="a2-prow"><div class="a2-pidx">4</div><div class="a2-pname">Fondos</div><span class="a2-ptag">Fuerza</span></div>
+              <div class="a2-pmore a2-tnum">+ 4 ejercicios mas</div>
+            </div>
+
+            <div class="a2-ctxrow">
+              <div class="a2-ctx">
+                <div class="k">La ultima vez</div>
+                <div class="v a2-tnum">4.320 kg</div>
+              </div>
+              <div class="a2-ctx">
+                <div class="k">Duracion</div>
+                <div class="v a2-tnum">52 min</div>
+              </div>
+            </div>
+
+            <div class="a2-note">
+              <div class="who"><span class="av"></span><span class="nm">Coach Andrea</span></div>
+              <div class="msg">Hoy subimos el press. Confio en ti.</div>
+            </div>
+
+            <div class="a2-streak">
+              <span class="a2-streaklbl">Racha semanal</span>
+              <span class="a2-count a2-tnum">3 de 4</span>
+              <span class="a2-sdots">
+                <span class="a2-sd on"></span><span class="a2-sd on"></span><span class="a2-sd on"></span><span class="a2-sd"></span>
+              </span>
+            </div>
+
+            <div class="a2-juicy a2-startcta"><span class="a2-play"></span> EMPEZAR</div>
+          </div>
+        </div>
+      </div>
+      <ul class="a2-bullets">
+        <li><b>Contexto antes del esfuerzo</b>: llegas sabiendo que toca, cuanto dura y como te fue la ultima vez.</li>
+        <li><b>La nota del coach recibe</b>: burbuja con voz humana justo antes del boton, no una notificacion perdida.</li>
+        <li><b>Un solo destino</b>: EMPEZAR gigante que respira; la pantalla entera empuja hacia arrancar.</li>
+      </ul>
+    </div>
+
+    <!-- ============ 2 · FUERZA ============ -->
+    <div class="a2-col">
+      <p class="a2-label"><span></span>Fuerza <em>+ esfuerzo</em></p>
+      <div class="a2-phone">
+        <div class="a2-screen">
+          <div class="a2-notch"></div>
+          <div class="a2-body">
+            <div class="a2-progress">
+              <div class="a2-dots">
+                <div class="a2-dot done"></div><div class="a2-dot done"></div>
+                <div class="a2-dot now"></div><div class="a2-dot"></div>
+                <div class="a2-dot"></div><div class="a2-dot"></div>
+                <div class="a2-dot"></div><div class="a2-dot"></div>
+              </div>
+              <div class="a2-count a2-tnum">Ejercicio 3 de 8</div>
+            </div>
+
+            <div class="a2-exname">Press banca</div>
+            <div class="a2-chiprow">
+              <span class="a2-chip">Fuerza · Pecho</span>
+            </div>
+
+            <div class="a2-media">
+              <div class="a2-medialbl"><span class="a2-live"></span>En loop</div>
+              <div class="a2-fig">
+                <div class="a2-bench"></div>
+                <div class="a2-benchleg" style="left:33px;"></div>
+                <div class="a2-benchleg" style="right:33px;"></div>
+                <div class="a2-headc"></div>
+                <div class="a2-torso"></div>
+                <div class="a2-arm l"></div>
+                <div class="a2-arm r"></div>
+                <div class="a2-bar"></div>
+              </div>
+            </div>
+
+            <div class="a2-rx a2-tnum">4 x 8 · <b>60 kg</b> · RIR 2 · desc 90s</div>
+
+            <div class="a2-prev">
+              <div class="l">Anterior</div>
+              <div class="r a2-tnum">60 kg × 8</div>
+              <div class="tap">1 tap ↻</div>
+            </div>
+
+            <div class="a2-cur">
+              <div class="a2-val"><div class="n a2-tnum">60</div><div class="u">KG</div></div>
+              <div class="a2-val"><div class="n a2-tnum">8</div><div class="u">REPS</div></div>
+            </div>
+
+            <div class="a2-effort">
+              <div class="a2-efftop">
+                <span class="a2-efflbl">Esfuerzo</span>
+                <span class="a2-effopt">Opcional</span>
+                <span class="a2-effpills">
+                  <span class="a2-epill"><span class="k">RPE</span><span class="em">—</span></span>
+                  <span class="a2-epill on"><span class="k">RIR</span><span class="v a2-tnum">2</span></span>
+                </span>
+              </div>
+              <div class="a2-scale">
+                <span class="a2-tick"></span><span class="a2-tick"></span><span class="a2-tick sel"></span>
+                <span class="a2-tick"></span><span class="a2-tick"></span><span class="a2-tick"></span>
+                <span class="a2-tick"></span><span class="a2-tick"></span><span class="a2-tick"></span>
+                <span class="a2-tick"></span><span class="a2-tick"></span>
+              </div>
+              <div class="a2-scaleends"><span>0</span><span>10</span></div>
+            </div>
+
+            <div class="a2-juicy a2-cta"><span class="ck"><span class="a2-ck"></span></span> Aplastar serie</div>
+
+            <div class="a2-foot">
+              <div class="a2-sets">
+                <div class="a2-sq on"></div><div class="a2-sq on"></div>
+                <div class="a2-sq"></div><div class="a2-sq"></div>
+                <div class="a2-setlbl a2-tnum">2/4</div>
+              </div>
+              <div class="a2-tools">
+                <div class="a2-tool kb"></div>
+                <div class="a2-tool pen"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <ul class="a2-bullets">
+        <li><b>Esfuerzo sin friccion</b>: RPE y RIR viven en una fila secundaria; vacias muestran "—", nunca bloquean.</li>
+        <li><b>Escala 0-10 que asoma</b>: al tocar RIR se abre una regla compacta con el 2 encendido; se registra en un tap.</li>
+        <li><b>El CTA manda</b>: el boton juicy sigue siendo el heroe visual aunque el registro de esfuerzo exista.</li>
+      </ul>
+    </div>
+
+    <!-- ============ 3 · DESCANSO ============ -->
+    <div class="a2-col">
+      <p class="a2-label"><span></span>Descanso <em>+ plan</em></p>
+      <div class="a2-phone">
+        <div class="a2-screen">
+          <div class="a2-notch"></div>
+          <div class="a2-body a2-rest">
+            <div>
+              <div class="a2-restcel">Serie cerrada</div>
+              <div class="a2-celly">
+                <div class="a2-confetti">
+                  <span class="a2-conf"></span><span class="a2-conf"></span>
+                  <span class="a2-conf"></span><span class="a2-conf"></span>
+                  <span class="a2-conf"></span><span class="a2-conf"></span>
+                  <span class="a2-conf"></span><span class="a2-conf"></span>
+                </div>
+                <span class="b"></span> +1 serie · vas volando
+              </div>
+            </div>
+
+            <div class="a2-ringwrap">
+              <div class="a2-ring"></div>
+              <div class="a2-ringtxt">
+                <div class="a2-bignum a2-tnum">01:07</div>
+                <div class="a2-restlbl">Descanso</div>
+              </div>
+            </div>
+
+            <div class="a2-restbtns">
+              <div class="a2-rb a2-tnum">-15s</div>
+              <div class="a2-rb skip">Saltar</div>
+              <div class="a2-rb a2-tnum">+15s</div>
+            </div>
+
+            <div class="a2-next">
+              <div class="a2-nextmini"><div class="a2-minidot"></div></div>
+              <div class="a2-nextinfo">
+                <div class="k">Siguiente</div>
+                <div class="t">Press inclinado</div>
+                <div class="d a2-tnum">3 x 10 · 40 kg</div>
+              </div>
+            </div>
+
+            <!-- peeking bottom-sheet -->
+            <div class="a2-sheet">
+              <div class="a2-handle"></div>
+              <div class="a2-sheethd">
+                <div class="t">Plan completo</div>
+                <div class="c a2-tnum">2 / 8</div>
+              </div>
+              <div class="a2-srow">
+                <span class="a2-sstate done"></span>
+                <span class="snm">Press banca</span>
+                <span class="ssub done a2-tnum">✓ 4/4</span>
+              </div>
+              <div class="a2-srow is-now">
+                <span class="a2-sstate now"></span>
+                <span class="snm">Press inclinado</span>
+                <span class="ssub now">ahora</span>
+              </div>
+              <div class="a2-srow">
+                <span class="a2-sstate todo"></span>
+                <span class="snm">Fondos</span>
+                <span class="ssub todo">pendiente</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <ul class="a2-bullets">
+        <li><b>El descanso es un mirador</b>: un sheet asoma desde abajo; lo arrastras y ves toda la sesion sin salir.</li>
+        <li><b>Estados de un vistazo</b>: hecho con check, "ahora" resaltado, pendiente en gris; sabes exactamente donde vas.</li>
+        <li><b>Micro-celebracion viva</b>: "+1 serie" con confetti CSS y el numero del anillo respirando.</li>
+      </ul>
+    </div>
+
+    <!-- ============ 4 · CARDIO ============ -->
+    <div class="a2-col">
+      <p class="a2-label"><span></span>Cardio <em>pro</em></p>
+      <div class="a2-phone">
+        <div class="a2-screen">
+          <div class="a2-notch"></div>
+          <div class="a2-body a2-cardio">
+            <div class="a2-cardring">
+              <div class="ring2"></div>
+              <div class="a2-cardtxt">
+                <div class="a2-cardnum a2-tnum">12:24</div>
+                <div class="a2-cardsub">Restante</div>
+              </div>
+            </div>
+
+            <div class="a2-zone">
+              <span class="zd"></span>
+              <span class="zt">Z2</span>
+              <span class="zk">Manten el ritmo</span>
+            </div>
+
+            <div class="a2-cchips">
+              <div class="a2-cchip">
+                <span class="ci"><span class="a2-heart"></span></span>
+                <span class="cm"><span class="cv a2-tnum">142</span><span class="cl">BPM</span></span>
+              </div>
+              <div class="a2-cchip">
+                <span class="ci"><span class="a2-icbars"><i></i><i></i><i></i></span></span>
+                <span class="cm"><span class="cv a2-tnum">3 de 6</span><span class="cl">Intervalo</span></span>
+              </div>
+              <div class="a2-cchip">
+                <span class="ci"><span class="a2-icdot"></span></span>
+                <span class="cm">
+                  <span class="cv a2-tnum">1,24 / 2,00 km</span>
+                  <span class="a2-distbar"><i></i></span>
+                </span>
+              </div>
+              <div class="a2-cchip">
+                <span class="ci"><span class="a2-icshoe"></span></span>
+                <span class="cm"><span class="cv a2-tnum">5'52"/km</span><span class="cl">Ritmo</span></span>
+              </div>
+            </div>
+
+            <div class="a2-source">
+              <span class="a2-watch"><span class="a2-watchhand"></span></span>
+              <span>Reloj conectado · <b>Apple Watch</b> o <b>Galaxy Watch</b></span>
+            </div>
+
+            <div class="a2-juicy a2-pause"><span class="a2-pauseicon"><i></i><i></i></span> Pausar</div>
+          </div>
+        </div>
+      </div>
+      <ul class="a2-bullets">
+        <li><b>Tiempo restante como heroe</b> con anillo de countdown y zona en verde semantico fijo: legible a un metro.</li>
+        <li><b>Chips de metricas pro</b>: BPM latiendo, distancia con mini-barra, ritmo e intervalo, sin saturar.</li>
+        <li><b>Fuente honesta y multi-OS</b>: HealthKit y Health Connect; el dato viene de Apple Watch o Galaxy Watch.</li>
+      </ul>
+    </div>
+
+    <!-- ============ 5 · FINAL ============ -->
+    <div class="a2-col">
+      <p class="a2-label"><span></span>Final <em>nueva</em></p>
+      <div class="a2-phone">
+        <div class="a2-screen">
+          <div class="a2-notch"></div>
+          <div class="a2-body a2-final">
+            <div class="a2-finalconf">
+              <div class="a2-confetti">
+                <span class="a2-conf"></span><span class="a2-conf"></span>
+                <span class="a2-conf"></span><span class="a2-conf"></span>
+                <span class="a2-conf"></span><span class="a2-conf"></span>
+                <span class="a2-conf"></span><span class="a2-conf"></span>
+              </div>
+            </div>
+
+            <div class="a2-finaltitle">¡Dia 3 completo!</div>
+            <div class="a2-finalsub">Empuje · Semana 2 · Fase Fuerza</div>
+
+            <div class="a2-stats">
+              <div class="a2-stat"><div class="sv a2-tnum">52:18</div><div class="sl">Duracion</div></div>
+              <div class="a2-stat"><div class="sv a2-tnum">4.860 kg</div><div class="sl">Volumen</div></div>
+              <div class="a2-stat"><div class="sv a2-tnum">24 / 24</div><div class="sl">Series</div></div>
+              <div class="a2-stat pr">
+                <span class="medal"></span>
+                <div>
+                  <div class="sv a2-tnum">62,5 kg</div>
+                  <div class="sl">PR · Press banca</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="a2-muscle">
+              <div class="a2-musclehd">Trabajado hoy</div>
+              <div class="a2-bodies">
+                <div class="a2-bodyfig">
+                  <svg viewBox="0 0 80 148" aria-hidden="true">
+                    <!-- base body front -->
+                    <circle class="a2-mm-base" cx="40" cy="13" r="10"/>
+                    <rect class="a2-mm-base" x="36" y="22" width="8" height="7" rx="3"/>
+                    <path class="a2-mm-base" d="M20 33 Q40 27 60 33 L56 60 Q54 84 50 100 L30 100 Q26 84 24 60 Z"/>
+                    <rect class="a2-mm-base" x="12" y="34" width="10" height="46" rx="5"/>
+                    <rect class="a2-mm-base" x="58" y="34" width="10" height="46" rx="5"/>
+                    <rect class="a2-mm-base" x="29" y="98" width="10" height="46" rx="5"/>
+                    <rect class="a2-mm-base" x="41" y="98" width="10" height="46" rx="5"/>
+                    <!-- shoulders medium -->
+                    <ellipse class="a2-mm-med" cx="22" cy="37" rx="7" ry="6"/>
+                    <ellipse class="a2-mm-med" cx="58" cy="37" rx="7" ry="6"/>
+                    <!-- chest strong -->
+                    <ellipse class="a2-mm-strong" cx="33" cy="50" rx="8" ry="7"/>
+                    <ellipse class="a2-mm-strong" cx="47" cy="50" rx="8" ry="7"/>
+                  </svg>
+                  <div class="cap">Frente</div>
+                </div>
+                <div class="a2-bodyfig">
+                  <svg viewBox="0 0 80 148" aria-hidden="true">
+                    <!-- base body back -->
+                    <circle class="a2-mm-base" cx="40" cy="13" r="10"/>
+                    <rect class="a2-mm-base" x="36" y="22" width="8" height="7" rx="3"/>
+                    <path class="a2-mm-base" d="M20 33 Q40 27 60 33 L56 60 Q54 84 50 100 L30 100 Q26 84 24 60 Z"/>
+                    <rect class="a2-mm-base" x="12" y="34" width="10" height="46" rx="5"/>
+                    <rect class="a2-mm-base" x="58" y="34" width="10" height="46" rx="5"/>
+                    <rect class="a2-mm-base" x="29" y="98" width="10" height="46" rx="5"/>
+                    <rect class="a2-mm-base" x="41" y="98" width="10" height="46" rx="5"/>
+                    <!-- rear delts medium -->
+                    <ellipse class="a2-mm-med" cx="24" cy="37" rx="6" ry="6"/>
+                    <ellipse class="a2-mm-med" cx="56" cy="37" rx="6" ry="6"/>
+                    <!-- triceps medium -->
+                    <ellipse class="a2-mm-med" cx="17" cy="50" rx="4.5" ry="9"/>
+                    <ellipse class="a2-mm-med" cx="63" cy="50" rx="4.5" ry="9"/>
+                    <!-- upper back soft -->
+                    <ellipse class="a2-mm-soft" cx="40" cy="48" rx="12" ry="10"/>
+                  </svg>
+                  <div class="cap">Espalda</div>
+                </div>
+              </div>
+              <div class="a2-legend">
+                <span><i class="l3"></i>Fuerte</span>
+                <span><i class="l2"></i>Medio</span>
+                <span><i class="l1"></i>Leve</span>
+              </div>
+            </div>
+
+            <div class="a2-streak">
+              <span class="a2-streaklbl">Racha semanal</span>
+              <span class="a2-count a2-tnum">3 de 4</span>
+              <span class="a2-sdots">
+                <span class="a2-sd on"></span><span class="a2-sd on"></span><span class="a2-sd on"></span><span class="a2-sd"></span>
+              </span>
+            </div>
+
+            <div class="a2-juicy a2-finalcta"><span class="a2-share"></span> Compartir logro</div>
+            <div class="a2-finalsec">Volver al inicio</div>
+          </div>
+        </div>
+      </div>
+      <ul class="a2-bullets">
+        <li><b>Cierre que celebra</b>: confetti sutil, titulo con nombre del dia y numeros grandes tipo ticker.</li>
+        <li><b>El PR brilla</b>: record del dia en dorado con medalla, separado del resto para que se sienta ganado.</li>
+        <li><b>Mapa muscular con glow</b>: dos siluetas frente/espalda muestran que trabajaste y con que intensidad.</li>
+      </ul>
+    </div>
+
+  </div>
+
+  <div class="a2-motion">
+    <h4>Firma de motion — Impulso v2</h4>
+    <ul>
+      <li><b>Arco completo</b>: la energia sube en Inicio (CTA que respira), se sostiene en la ejecucion y estalla contenida en Final (confetti + ticker de stats).</li>
+      <li><b>Sheet como mirador</b>: el bottom-sheet de Descanso late 8px arriba y abajo a 4.2s, invitando a arrastrarlo sin robar foco al anillo.</li>
+      <li><b>Esfuerzo discreto</b>: la escala 0-10 del RIR pulsa su marca seleccionada a 2.2s; presente pero jamas compite con el boton juicy.</li>
+      <li><b>Glow muscular</b>: las zonas fuertes del mapa laten en opacidad a 2.6s; springs con rebote en checks, PR y medalla, ritmo 200-450ms y haptica por hito.</li>
+    </ul>
+  </div>
+</section>

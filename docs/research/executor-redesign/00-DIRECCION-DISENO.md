@@ -46,12 +46,16 @@ La evidencia respalda esta dirección: la competencia percibida es el predictor 
 El modo "un ejercicio a la vez" pasa a ser el **default** (hoy existe como toggle opt-in). Card fullscreen por ejercicio: progreso de sesión arriba, media del ejercicio al centro **siempre visible** (loop muted, autoplay; degrada a webp estático por cuota), prescripción + "Anterior" tappable, botón de completar grande (≥56px). La vista lista queda como secundaria ("ver todo") — misma fuente `renderGroup`, cero bifurcación de lógica.
 
 ### El descanso ES el interstitial
-No agregamos pantallas: el rest timer (que ya arranca auto al cerrar serie) se convierte en el interstitial fullscreen: countdown gigante + micro-celebración de la serie recién cerrada + tarjeta "SIGUIENTE" con su media + mensaje del coach. Al llegar a cero: haptic + sonido + transición al siguiente ejercicio. Ritmo: cero segundos añadidos al entrenamiento.
+No agregamos pantallas: el rest timer (que ya arranca auto al cerrar serie) se convierte en el interstitial fullscreen: countdown gigante + micro-celebración de la serie recién cerrada + tarjeta "SIGUIENTE" con su media + mensaje del coach + **bottom-sheet peek "Plan completo"** (decisión CEO: el alumno puede arrastrar y ver todo el plan con estados ✓/ahora/pendiente por curiosidad, sin salir del descanso). Al llegar a cero: haptic + sonido + transición al siguiente ejercicio. Ritmo: cero segundos añadidos al entrenamiento.
+
+### Apertura y cierre de sesión (pantallas propias)
+- **Inicio:** pantalla pre-entrenamiento energizante — día/fase/variante, resumen (ejercicios, series, duración estimada), primeros ejercicios, contexto "la última vez" (volumen/duración), nota del coach, racha semanal, CTA "Empezar".
+- **Final:** ritual de cierre en 2 fases — clima celebratorio, luego stats con tickers (duración, volumen, series, PR destacado) + **mapa muscular** frente/espalda con zonas trabajadas por intensidad (evolución del `MuscleMapSvg` actual) + racha semanal + share-card.
 
 ### Modos de captura
 - **Rápido (default):** 1 tap sobre "Anterior" o el valor sugerido por sobrecarga progresiva.
 - **Ajuste:** teclado numérico custom (superficie más tocada de la app — se preserva y se agranda).
-- **Detalle (opt-in):** RPE **o** RIR (uno, elegido por el coach en el plan; no ambos), nota. La "sopa" actual de 5 inputs por serie se reduce a 2 visibles + 1 opcional.
+- **Detalle (opt-in):** RPE y RIR visibles como pills opcionales (escala **0-10** ambos, decisión CEO 2026-07-21) — el alumno ve que puede llenarlos, pero jamás bloquean el CTA ni el flujo. Nota opcional. OJO dato: el schema actual valida `rpe`/`rir` en 1-10 (`schemas/workout.ts:261-265`); permitir 0 es un cambio aditivo de validación (RIR 0 = al fallo, RPE 0 = sin esfuerzo).
 
 ## 5. Experiencia por tipo (la uniqueness pedida)
 
@@ -59,7 +63,7 @@ No agregamos pantallas: el rest timer (que ya arranca auto al cerrar serie) se c
 Lo descrito arriba es el caso fuerza. Extras: chip de sobrecarga con prellenado (ya existe), PR inline (pulso dorado + haptic al superar máximo histórico — detección pura nueva en engine), plate calculator como backlog (diferenciador de Strong, `r2`). Supersets mantienen rondas intercaladas A1→B1 con el descanso solo al cerrar ronda; el interstitial entre miembros de ronda es un micro-slide ("Sigue con B1"), no el fullscreen.
 
 ### Cardio (`cardio`)
-Diseñado para NO mirar la pantalla (`r3`): metrica protagonista única gigante (tiempo o distancia restante) con anillo/barra de countdown animada (SVG dash-offset / conic-gradient — barras se leen en 300ms vs 1780ms un gauge radial), color de progreso por zona FIJA. Jerarquía: N1 restante / N2 zona objetivo + estado ("Z2 — mantiene") / N3 chips (intervalo 3 de 6, BPM). Audio/haptic cues por fase de intervalo (la máquina de fases `buildIntervalPhases` ya existe). BPM en vivo **solo si hay Watch conectado**; sin Watch, el módulo se oculta (patrón "omitir, no inventar"). Work por distancia sin duración no es cronometrable (guard `isTimeableInterval`) → cae a stopwatch + registro manual.
+Diseñado para NO mirar la pantalla (`r3`): metrica protagonista única gigante (tiempo o distancia restante) con anillo/barra de countdown animada (SVG dash-offset / conic-gradient — barras se leen en 300ms vs 1780ms un gauge radial), color de progreso por zona FIJA. Jerarquía: N1 restante / N2 zona objetivo + estado ("Z2 — mantiene") / N3 chips (intervalo 3 de 6, BPM, **distancia recorrida vs objetivo**, ritmo — capacidades del módulo cardio pro). Audio/haptic cues por fase de intervalo (la máquina de fases `buildIntervalPhases` ya existe). BPM en vivo **solo si hay wearable conectado** — y wearable significa AMBAS plataformas (decisión CEO 2026-07-21): Apple Watch vía HealthKit **y** Galaxy Watch/bandas vía Health Connect; jamás diseñar solo-iOS. Sin wearable, el módulo se oculta (patrón "omitir, no inventar"). Work por distancia sin duración no es cronometrable (guard `isTimeableInterval`) → cae a stopwatch + registro manual.
 
 ### Movilidad (`mobility`)
 Tono distinto: calmo, tipo Gentler Streak (`r5`). Con `side_mode: per_side` el HoldTimer **secuencia los lados**: "Pierna izquierda 30s" → haptic + voz/beep de cambio → "Pierna derecha 30s". Eyes-free por diseño (el alumno está estirando, no mirando). Registro por lado = la única decisión de datos grande pendiente (§8).
@@ -111,7 +115,7 @@ Mínimo y táctil: media del ejercicio + **contador de pasadas gigante** (tap = 
 | **F1 — core loop nuevo** | Stepper-first + media al centro + 1-tap "Anterior" + captura simplificada + celebración micro/media + eventos del engine | Solo código |
 | **F2 — vibra** | Interstitial-descanso fullscreen + celebración épica (Rive/confetti) + PR detection + share-card nueva + rachas semanales | F1 |
 | **F3 — descanso nativo iOS** | Live Activity + Dynamic Island para rest timer (módulo ActivityKit **propio** — expo-live-activity fue deprecada jun-2026; App Intents para −15s/saltar/+15s) + Android 16 Live Updates | Build nativa nueva |
-| **F4 — Watch (opcional, caro)** | BPM/distancia en vivo: companion watchOS + `HKWorkoutSession` espejo + WatchConnectivity (`expo-watch-connectivity` v0.1.0, verde). Alternativa barata previa: leer HR histórico post-sesión con react-native-health | Build nativa + app watch |
+| **F4 — Wearables (opcional, caro)** | BPM/distancia en vivo AMBAS plataformas: iOS companion watchOS + `HKWorkoutSession` espejo + WatchConnectivity (`expo-watch-connectivity` v0.1.0, verde); Android vía Health Connect (`react-native-health-connect` v3.5.3, madura) + Wear OS. Alternativa barata previa: lectura histórica post-sesión en ambas | Build nativa + apps watch |
 
 PWA por fase: F1-F2 heredan casi todo (springs CSS, confetti canvas, View Transitions); F3 degrada a SW notification + wake lock; F4 no aplica (omitir módulo).
 
@@ -127,12 +131,12 @@ PWA por fase: F1-F2 heredan casi todo (springs CSS, confetti canvas, View Transi
 
 ## 11. Decisiones pendientes (CEO)
 
-1. **RPE o RIR** como escala default por plan (¿elige el coach?) — hoy van ambas y es ruido.
+1. ~~RPE o RIR~~ **RESUELTA (CEO 2026-07-21):** ambos visibles como opcionales, escala 0-10, sin bloquear el flujo. Pendiente técnico: ampliar validación Zod de 1-10 → 0-10 (aditivo).
 2. **Holds por lado v1:** ¿metadata jsonb ahora (recomendado) o se difiere el registro por lado?
 3. **Sonido:** ¿OFF por defecto con onboarding para activarlo, u ON?
 4. **Rachas semanales:** ¿entran en F2 o se difieren?
-5. **Concepto visual:** A "Impulso" (juicy Duolingo) / B "Neón Focus" (premium glanceable) / C "Arcade Momentum" (game feel) — ver `mockups/` y el artifact.
-6. **Alcance Watch:** ¿F4 completa (companion app) o solo lectura histórica post-sesión?
+5. ~~Concepto visual~~ **RESUELTA (CEO 2026-07-21):** gana **A "Impulso"** (C descartado). Iteración v2 en `mockups/concepto-a-v2.html` con: pantallas inicio/final + mapa muscular, RPE/RIR opcionales 0-10, peek "plan completo" en descanso, cardio con distancia/ritmo y wearable dual iOS+Android.
+6. **Alcance wearables:** ¿F4 completa (companion watchOS + Wear OS/Health Connect) o primero lectura histórica post-sesión? Nota: paridad Android es requisito, no nice-to-have.
 
 ## 12. Índice de la investigación
 
