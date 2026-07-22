@@ -29,8 +29,20 @@ import { showRestLiveCountdown, stopRestLiveCountdown } from './rest-live-notifi
  * `restTimerVibration` (la tuerca V3). Default ON = feel identico a Ola 2. El audio del tick/alarma sigue
  * gateado por `restTimerMuted` (self-gate en `playTimerCue`).
  *
- * Contrato de background/lock-screen: identico al de `RestTimerBar` original (ver sus comentarios). La
- * omision del control multimedia de pantalla de bloqueo se mantiene (no hay modulo nativo de now-playing).
+ * Contrato de background/lock-screen: identico al de `RestTimerBar` original (ver sus comentarios). En
+ * Android el cronometro vivo del lockscreen SI existe (E5.3, `rest-live-notification.ts` via notify-kit
+ * chronometer — enciende con un build EAS que enlace la lib).
+ *
+ * MEDIA SESSION / controles multimedia de lockscreen (E5.5) — DIFERIDO. Evaluacion: NO hay camino limpio
+ * con Expo puro para exponer controles de pantalla de bloqueo (play/pausa/±) de un TEMPORIZADOR:
+ *   · `expo-audio` reproduce efectos pero NO expone MediaSession (Android) ni MPNowPlayingInfoCenter /
+ *     MPRemoteCommandCenter (iOS) para un cronometro; su superficie es solo playback.
+ *   · `expo-video` tiene `showNowPlayingNotification`, pero atado a la reproduccion de un video real, no a
+ *     una cuenta regresiva — no aplica a un rest timer.
+ *   · iOS especialmente exige un modulo nativo custom (MPNowPlayingInfoCenter + remote commands) que Expo
+ *     no envuelve. Implementarlo a ciegas sin build de device seria adivinar.
+ * Por eso el Android-only chronometer (E5.3) es la maxima cobertura de lockscreen sin modulo nativo; los
+ * controles multimedia reales (iOS + botones de accion) quedan DIFERIDOS hasta un modulo nativo dedicado.
  */
 export interface RestTimerEngine {
   /** Segundos restantes (recomputados desde endTime). */

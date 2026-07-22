@@ -22,6 +22,8 @@ export {
   setRestAutoTimerEnabled,
   isRestTimerVibrationEnabled,
   setRestTimerVibration,
+  isRestTimerSystemToneEnabled,
+  setRestTimerSystemTone,
   subscribeRestTimerPrefs,
   type TimerSound,
 } from './rest-timer-preferences'
