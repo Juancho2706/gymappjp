@@ -85,6 +85,7 @@ import { supabase } from '../../../../lib/supabase'
 import { humanizeStudentWriteError } from '../../../../lib/student-access-copy'
 import { formatNutritionShortDate } from '../../../../lib/date-utils'
 import { foodMediaThumbnailUrl } from '../../../../lib/nutrition-v2-food-media'
+import { describeItemGuidance } from '../../../../lib/nutrition-v2-plan'
 import { isEnabled } from '../../../../lib/flags'
 import { useEntitlements } from '../../../../lib/entitlements'
 import { getNutritionHistoryV2, getNutritionPlanV2, getNutritionTodayV2 } from '../../../../lib/nutrition-v2.api'
@@ -130,7 +131,6 @@ import {
 import { useTheme } from '../../../../context/ThemeContext'
 import {
   canLoadMoreHistory,
-  historyDayHasDetail,
   historyDayIsLegacy,
   mergeHistoryPages,
   nextHistoryCursor,
@@ -1894,7 +1894,6 @@ function EntryCorrectionSheet({
 
 type NutritionV2Tab = 'today' | 'plan' | 'history'
 type PlanVariant = NutritionPlanReadModel['dayVariants'][number]
-type DayDetailState = { loading: boolean; model: NutritionTodayReadModel | null; offline: boolean }
 
 export default function StudentNutritionV2Screen() {
   const router = useRouter()
@@ -1993,7 +1992,11 @@ function NutritionTabBar({ value, onChange }: { value: NutritionV2Tab; onChange:
   return (
     <View
       accessibilityRole="tablist"
-      className="flex-row gap-1 rounded-control border border-border-subtle bg-surface-card p-1"
+      // 4A-05: toolbar espejo del web (`NutritionToolbar`, NutritionV2Kit.tsx:169-180) —
+      // rounded-card + p-2 + gap-2 + min-h-12; `shadow-sm` web = decisión única del kit
+      // (`shadow('sm', scheme)`, ver NutritionCard). Pills conservan min-h-11 (44pt táctil).
+      className="min-h-12 flex-row flex-wrap items-center gap-2 rounded-card border border-border-subtle bg-surface-card p-2"
+      style={shadow('sm', theme.scheme)}
     >
       {NUTRITION_V2_TABS.map(({ key, label, Icon }) => {
         const active = key === value
@@ -2009,7 +2012,7 @@ function NutritionTabBar({ value, onChange }: { value: NutritionV2Tab; onChange:
                 onChange(key)
               }
             }}
-            className={`min-h-11 flex-1 flex-row items-center justify-center gap-1.5 rounded-control ${active ? 'bg-primary' : ''}`}
+            className={`min-h-11 flex-1 flex-row items-center justify-center gap-2 rounded-control ${active ? 'bg-primary' : ''}`}
           >
             <Icon color={active ? '#FFFFFF' : theme.textSecondary} size={16} />
             <Text className={`text-sm font-semibold ${active ? 'text-white' : 'text-text-muted'}`}>{label}</Text>
@@ -2167,30 +2170,27 @@ function PlanTab() {
           <StrategyBadge strategy={summary.strategy} />
           <PlanVersionBadge version={summary.versionNumber} status={summary.status} />
         </View>
-        <Text className="mt-3 font-display text-2xl font-bold text-text-strong">{summary.name}</Text>
+        <Text className="mt-4 font-display text-2xl font-bold text-text-strong">{summary.name}</Text>
         <Text className="mt-1 text-xs text-text-muted">
           Vigente desde {formatNutritionShortDate(summary.effectiveFrom)}
           {summary.effectiveTo ? ` hasta ${formatNutritionShortDate(summary.effectiveTo)}` : ' · versión actual'}
         </Text>
-        <Text className="mt-2 text-xs leading-4 text-text-subtle">{NUTRITION_STRATEGIES[summary.strategy].description}</Text>
+        <Text className="mt-2 text-sm leading-6 text-text-body">{NUTRITION_STRATEGIES[summary.strategy].description}</Text>
+        {plan.visibleNotes ? (
+          <View className="mt-4 rounded-control border border-border-subtle bg-surface-sunken p-3">
+            <Text className="text-[11px] font-semibold uppercase tracking-wide text-text-subtle">Notas de tu coach</Text>
+            <Text className="mt-1 text-sm leading-6 text-text-body">{plan.visibleNotes}</Text>
+          </View>
+        ) : null}
       </NutritionCard>
 
       {defaultVariant ? <PlanObjectives targets={defaultVariant.targets} /> : null}
 
       <PlanRulesCard permissions={plan.permissions} />
 
-      {plan.visibleNotes ? (
-        <NutritionCard tone="info">
-          <Text className="text-[11px] font-semibold uppercase tracking-wide text-text-subtle">Protocolo</Text>
-          <Text className="mt-1 text-sm leading-5 text-text-body">{plan.visibleNotes}</Text>
-        </NutritionCard>
-      ) : null}
-
       {plan.dayVariants.map((variant) => (
-        <PlanVariantCard key={variant.id} variant={variant} />
+        <PlanVariantCard key={variant.id} variant={variant} showTargets={plan.dayVariants.length > 1} />
       ))}
-
-      <Text className="text-center text-xs text-text-muted">Actualizado {formatNutritionShortDate(plan.asOfDate, { relative: true })}</Text>
     </ScrollView>
   )
 }
@@ -2205,11 +2205,13 @@ function PlanObjectives({ targets }: { targets: PlanVariant['targets'] }) {
   if (rows.length === 0) return null
   return (
     <NutritionCard>
-      <Text className="text-[11px] font-semibold uppercase tracking-wide text-text-subtle">Objetivos diarios</Text>
+      <Text className="text-[11px] font-semibold uppercase tracking-wide text-text-subtle">Metas diarias</Text>
       <View className="mt-3 flex-row flex-wrap gap-y-3">
         {rows.map((row) => (
           <View key={row.label} className="min-w-[30%] flex-1 pr-2">
-            <Text className="font-display text-lg font-bold text-text-strong">{row.value}</Text>
+            <Text className="font-display text-lg font-bold text-text-strong" style={{ fontVariant: ['tabular-nums'] }}>
+              {row.value}
+            </Text>
             <Text className="text-xs text-text-muted">{row.label}</Text>
           </View>
         ))}
@@ -2245,7 +2247,7 @@ function PlanRulesCard({ permissions }: { permissions: NutritionPlanReadModel['p
   )
 }
 
-function PlanVariantCard({ variant }: { variant: PlanVariant }) {
+function PlanVariantCard({ variant, showTargets }: { variant: PlanVariant; showTargets: boolean }) {
   return (
     <NutritionCard>
       <View className="flex-row flex-wrap items-center justify-between gap-2">
@@ -2256,42 +2258,96 @@ function PlanVariantCard({ variant }: { variant: PlanVariant }) {
           </View>
         ) : null}
       </View>
-      <Text className="mt-1 text-xs text-text-muted">
+      <Text className="mt-1 text-sm text-text-muted" style={{ fontVariant: ['tabular-nums'] }}>
         {variant.mealSlots.length} franja{variant.mealSlots.length === 1 ? '' : 's'}
         {variant.targets.calories != null ? ` · ${formatNutritionCalories(variant.targets.calories)}` : ''}
       </Text>
-      {variant.mealSlots.map((slot) => (
-        <View key={slot.id} className="mt-3">
-          <View className="flex-row items-center justify-between gap-2">
-            <Text className="text-sm font-semibold text-text-strong">{slot.name}</Text>
-            {slot.startTime ? <Text className="text-xs text-text-muted">{slot.startTime}</Text> : null}
-          </View>
-          {slot.instructions ? <Text className="mt-0.5 text-xs leading-4 text-text-subtle">{slot.instructions}</Text> : null}
-          {slot.prescriptionItems.length > 0 ? (
-            slot.prescriptionItems.map((item, index) => (
-              <View key={item.id} className={index > 0 ? 'border-t border-border-subtle' : undefined}>
-                <FoodRow
-                  food={{
-                    id: item.id,
-                    name: item.name ?? 'Alimento prescrito',
-                    detail: item.brand,
-                    thumbnailUrl: foodMediaThumbnailUrl(item.media),
-                    quantityLabel: `${item.quantity} ${item.unit}${item.optional ? ' · opcional' : ''}`,
-                    calories: item.macros.calories,
-                    proteinG: item.macros.proteinG,
-                    carbsG: item.macros.carbsG,
-                    fatsG: item.macros.fatsG,
-                  }}
-                  fallbackCategory={item.category}
-                />
-              </View>
-            ))
-          ) : (
-            <Text className="py-2 text-xs text-text-muted">Franja flexible sin alimentos prescritos.</Text>
-          )}
+      {showTargets ? (
+        <View className="mt-2">
+          <MacroChipRow
+            calories={variant.targets.calories}
+            proteinG={variant.targets.proteinG}
+            carbsG={variant.targets.carbsG}
+            fatsG={variant.targets.fatsG}
+            size="sm"
+          />
         </View>
-      ))}
+      ) : null}
+      <View className="mt-2 gap-4">
+        {variant.mealSlots.length === 0 ? (
+          <Text className="text-sm text-text-muted">
+            Plan sin franjas fijas: sigue tus metas diarias y registra lo que comas.
+          </Text>
+        ) : (
+          variant.mealSlots.map((slot) => <PlanSlotBlock key={slot.id} slot={slot} />)
+        )}
+      </View>
     </NutritionCard>
+  )
+}
+
+/** Una franja del plan: encabezado (hora), indicaciones, alimentos prescritos y subtotal. */
+function PlanSlotBlock({ slot }: { slot: PlanVariant['mealSlots'][number] }) {
+  const timeLabel = slot.startTime ? (slot.endTime ? `${slot.startTime}–${slot.endTime}` : slot.startTime) : null
+  const subtotal = slot.prescriptionItems.reduce((sum, item) => sum + (item.macros.calories ?? 0), 0)
+  const hasItems = slot.prescriptionItems.length > 0
+  const targetChips =
+    slot.targets.calories != null ||
+    slot.targets.proteinG != null ||
+    slot.targets.carbsG != null ||
+    slot.targets.fatsG != null
+
+  return (
+    <View className="rounded-control border border-border-subtle bg-surface-sunken/40 p-3">
+      <View className="flex-row items-center justify-between gap-2">
+        <View className="flex-row flex-wrap items-center gap-2">
+          <Text className="font-display text-base font-semibold text-text-strong">{slot.name}</Text>
+          {timeLabel ? <Text className="font-mono text-xs text-text-muted">{timeLabel}</Text> : null}
+        </View>
+        {hasItems && subtotal > 0 ? (
+          <Text className="font-mono text-xs font-semibold text-text-strong">{formatNutritionCalories(subtotal)}</Text>
+        ) : null}
+      </View>
+      {slot.instructions ? <Text className="mt-1 text-xs leading-5 text-text-subtle">{slot.instructions}</Text> : null}
+      {hasItems ? (
+        <View className="mt-2">
+          {slot.prescriptionItems.map((item, index) => (
+            <View key={item.id} className={index > 0 ? 'border-t border-border-subtle' : undefined}>
+              <FoodRow
+                food={{
+                  id: item.id,
+                  name: item.name ?? 'Alimento prescrito',
+                  detail: item.brand,
+                  thumbnailUrl: foodMediaThumbnailUrl(item.media),
+                  quantityLabel: `${item.quantity} ${item.unit}${item.optional ? ' · opcional' : ''}`,
+                  calories: item.macros.calories,
+                  proteinG: item.macros.proteinG,
+                  carbsG: item.macros.carbsG,
+                  fatsG: item.macros.fatsG,
+                }}
+                fallbackCategory={item.category}
+                note={describeItemGuidance(item)}
+              />
+            </View>
+          ))}
+        </View>
+      ) : targetChips ? (
+        <View className="mt-2">
+          <Text className="text-[11px] font-semibold uppercase tracking-wide text-text-subtle">Objetivo de la franja</Text>
+          <View className="mt-1">
+            <MacroChipRow
+              calories={slot.targets.calories}
+              proteinG={slot.targets.proteinG}
+              carbsG={slot.targets.carbsG}
+              fatsG={slot.targets.fatsG}
+              size="sm"
+            />
+          </View>
+        </View>
+      ) : (
+        <Text className="mt-2 text-xs text-text-muted">Franja flexible sin alimentos prescritos.</Text>
+      )}
+    </View>
   )
 }
 
@@ -2310,13 +2366,10 @@ function HistoryTab() {
   const [refreshing, setRefreshing] = useState(false)
   const [loadingMore, setLoadingMore] = useState(false)
   const [offline, setOffline] = useState(false)
-  const [expanded, setExpanded] = useState<string | null>(null)
-  const [details, setDetails] = useState<Record<string, DayDetailState>>({})
 
   const mountedRef = useRef(true)
   const controllerRef = useRef<AbortController | null>(null)
   const moreControllerRef = useRef<AbortController | null>(null)
-  const detailControllerRef = useRef<AbortController | null>(null)
 
   useEffect(() => {
     mountedRef.current = true
@@ -2324,7 +2377,6 @@ function HistoryTab() {
       mountedRef.current = false
       controllerRef.current?.abort()
       moreControllerRef.current?.abort()
-      detailControllerRef.current?.abort()
     }
   }, [])
 
@@ -2404,52 +2456,6 @@ function HistoryTab() {
     }
   }, [loadingMore, page])
 
-  const toggleDay = useCallback(
-    async (day: NutritionHistoryDay) => {
-      const localDate = day.localDate
-      if (expanded === localDate) {
-        setExpanded(null)
-        return
-      }
-      void Haptics.selectionAsync()
-      setExpanded(localDate)
-      if (!historyDayHasDetail(day) || details[localDate]?.model || details[localDate]?.loading) return
-      if (!userId) return
-      setDetails((prev) => ({ ...prev, [localDate]: { loading: true, model: null, offline: false } }))
-      detailControllerRef.current?.abort()
-      const controller = new AbortController()
-      detailControllerRef.current = controller
-      const scopeKey = `history-day:${localDate}`
-
-      const cached = await readNutritionV2Cache({
-        userId,
-        clientId: userId,
-        kind: 'today',
-        scopeKey,
-        schema: NutritionTodayReadModelSchema,
-        allowStale: true,
-      })
-      if (mountedRef.current && cached) {
-        setDetails((prev) => ({ ...prev, [localDate]: { loading: true, model: cached.payload, offline: cached.stale } }))
-      }
-
-      try {
-        const model = await getNutritionTodayV2({ date: localDate, signal: controller.signal })
-        if (!mountedRef.current) return
-        setDetails((prev) => ({ ...prev, [localDate]: { loading: false, model, offline: false } }))
-        await writeNutritionV2Cache({ userId, clientId: userId, kind: 'today', scopeKey, payload: model })
-      } catch (error) {
-        if (error instanceof Error && error.name === 'AbortError') return
-        if (!mountedRef.current) return
-        setDetails((prev) => ({
-          ...prev,
-          [localDate]: { loading: false, model: prev[localDate]?.model ?? null, offline: true },
-        }))
-      }
-    },
-    [details, expanded, userId],
-  )
-
   useEffect(() => {
     if (userId) void loadFirst()
   }, [loadFirst, userId])
@@ -2495,208 +2501,62 @@ function HistoryTab() {
           <View className="items-center py-5">
             <Text className="text-sm text-text-muted">Cargando días anteriores…</Text>
           </View>
-        ) : !canLoadMoreHistory(page) && items.length > 0 ? (
-          <View className="items-center py-5">
-            <Text className="text-xs text-text-subtle">No hay más días.</Text>
-          </View>
         ) : null
       }
-      renderItem={({ item }) => (
-        <HistoryDayCard
-          day={item}
-          expanded={expanded === item.localDate}
-          detail={details[item.localDate] ?? null}
-          onToggle={() => void toggleDay(item)}
-        />
-      )}
+      renderItem={({ item }) => <HistoryDayCard day={item} />}
     />
   )
 }
 
-function HistoryDayCard({
-  day,
-  expanded,
-  detail,
-  onToggle,
-}: {
-  day: NutritionHistoryDay
-  expanded: boolean
-  detail: DayDetailState | null
-  onToggle: () => void
-}) {
-  const hasDetail = historyDayHasDetail(day)
+function HistoryDayCard({ day }: { day: NutritionHistoryDay }) {
+  // 4A-04: card plana no-interactiva, paridad estricta con el web (HistoryView).
+  // El detalle expandible RN-extra se retiró por decisión del owner (fila 1).
   const legacy = historyDayIsLegacy(day)
   const legacyInfo = describeLegacyHistoryDay(day)
   const showLegacyMacros = legacyInfo.legacyOnly && legacyInfo.hasMacros && legacyInfo.consumed != null
-  const legacyHasContent = showLegacyMacros || legacyInfo.completionCount > 0 || legacyInfo.mealsLabel != null
-  const accessibilitySummary = legacyInfo.legacyOnly
-    ? showLegacyMacros && legacyInfo.consumed
-      ? `Historial anterior, ${formatNutritionCalories(legacyInfo.consumed.calories)}.`
-      : legacyInfo.completionCount > 0
-        ? `Historial anterior, ${legacyInfo.completionsLabel}.`
-        : 'Registrado en el sistema anterior.'
-    : `${day.activeEntryCount} registros, ${formatNutritionCalories(day.consumed.calories)} consumidas.`
   return (
     <NutritionCard>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityState={{ expanded, disabled: !hasDetail }}
-        accessibilityLabel={`Día ${formatNutritionShortDate(day.localDate, { relative: true })}. ${accessibilitySummary}`}
-        disabled={!hasDetail}
-        onPress={onToggle}
-      >
-        <View className="flex-row items-start justify-between gap-3">
-          <View className="min-w-0 flex-1">
-            <View className="flex-row flex-wrap items-center gap-2">
-              <Text className="font-display text-lg font-semibold text-text-strong">
-                {formatNutritionShortDate(day.localDate, { relative: true })}
-              </Text>
-              {day.strategy ? <StrategyBadge compact strategy={day.strategy} /> : null}
-              {legacy ? (
-                <View className="rounded-pill border border-warning-500/40 bg-warning-500/10 px-2 py-0.5">
-                  <Text className="text-[10px] font-semibold text-warning-700">Historial anterior</Text>
-                </View>
-              ) : null}
+      <View className="flex-row items-start justify-between gap-3">
+        <View className="min-w-0 flex-1">
+          <Text className="font-display text-lg font-semibold text-text-strong">
+            {formatNutritionShortDate(day.localDate, { relative: true })}
+          </Text>
+          {showLegacyMacros && legacyInfo.consumed ? (
+            <View className="mt-1">
+              <MacroChipRow
+                calories={legacyInfo.consumed.calories}
+                proteinG={legacyInfo.consumed.proteinG}
+                carbsG={legacyInfo.consumed.carbsG}
+                fatsG={legacyInfo.consumed.fatsG}
+                size="sm"
+              />
             </View>
-            {showLegacyMacros && legacyInfo.consumed ? (
-              <View className="mt-1">
-                <MacroChipRow
-                  calories={legacyInfo.consumed.calories}
-                  proteinG={legacyInfo.consumed.proteinG}
-                  carbsG={legacyInfo.consumed.carbsG}
-                  fatsG={legacyInfo.consumed.fatsG}
-                  size="sm"
-                />
-              </View>
-            ) : (
-              <Text className="mt-1 text-xs text-text-muted">
-                {legacyInfo.legacyOnly
-                  ? legacyInfo.completionCount > 0
-                    ? legacyInfo.completionsLabel
-                    : 'Registrado en el sistema anterior'
-                  : `${day.activeEntryCount} registro${day.activeEntryCount === 1 ? '' : 's'}${
-                      day.correctionCount > 0
-                        ? ` · ${day.correctionCount} corrección${day.correctionCount === 1 ? '' : 'es'}`
-                        : ''
-                    }${day.lastRecordedAt ? ` · último ${formatClock(day.lastRecordedAt)}` : ''}`}
-              </Text>
-            )}
-            {legacy && !legacyInfo.legacyOnly && legacyInfo.secondaryLabel ? (
-              <Text className="mt-1 text-[11px] text-text-subtle">{legacyInfo.secondaryLabel}</Text>
-            ) : null}
-            {legacy && legacyInfo.mealsLabel ? (
-              <Text numberOfLines={2} className="mt-1 text-[11px] text-text-subtle">
-                {legacyInfo.mealsLabel}
-              </Text>
-            ) : null}
-          </View>
-          {!legacyInfo.legacyOnly ? (
-            <View className="items-end">
-              <Text className="font-mono text-sm font-semibold text-text-strong">{formatNutritionCalories(day.consumed.calories)}</Text>
-              <Text className="text-[10px] text-text-subtle">de {formatNutritionCalories(day.targets.calories ?? 0)}</Text>
-            </View>
+          ) : (
+            <Text className="mt-1 text-sm text-text-muted" style={{ fontVariant: ['tabular-nums'] }}>
+              {legacyInfo.legacyOnly
+                ? legacyInfo.completionCount > 0
+                  ? legacyInfo.completionsLabel
+                  : 'Registrado en el sistema anterior'
+                : `${day.activeEntryCount} registro${day.activeEntryCount === 1 ? '' : 's'} · ${day.consumed.calories} kcal`}
+            </Text>
+          )}
+          {legacy && !legacyInfo.legacyOnly && legacyInfo.secondaryLabel ? (
+            <Text className="mt-1 text-xs text-text-subtle" style={{ fontVariant: ['tabular-nums'] }}>
+              {legacyInfo.secondaryLabel}
+            </Text>
+          ) : null}
+          {legacy && legacyInfo.mealsLabel ? (
+            <Text numberOfLines={2} className="mt-1 text-xs text-text-subtle">
+              {legacyInfo.mealsLabel}
+            </Text>
           ) : null}
         </View>
-
-        {!legacyInfo.legacyOnly ? (
-          <View className="mt-3 flex-row flex-wrap gap-x-4 gap-y-1">
-            <HistoryMacro label="P" consumed={day.consumed.proteinG} target={day.targets.proteinG} />
-            <HistoryMacro label="C" consumed={day.consumed.carbsG} target={day.targets.carbsG} />
-            <HistoryMacro label="G" consumed={day.consumed.fatsG} target={day.targets.fatsG} />
+        {legacy ? (
+          <View className="shrink-0 rounded-pill border border-warning-500/30 bg-warning-500/10 px-2 py-1">
+            <Text className="text-[11px] font-semibold text-warning-700">Historial anterior</Text>
           </View>
         ) : null}
-
-        {hasDetail ? (
-          <Text className="mt-2 text-xs font-semibold text-primary">{expanded ? 'Ocultar detalle' : 'Ver detalle'}</Text>
-        ) : legacy && !legacyHasContent ? (
-          <Text className="mt-2 text-xs text-text-subtle">Este día proviene del historial anterior y no tiene detalle por alimento.</Text>
-        ) : null}
-      </Pressable>
-
-      {expanded && hasDetail ? (
-        <View className="mt-3 border-t border-border-subtle pt-3">
-          {detail?.loading && !detail.model ? (
-            <Text className="py-2 text-sm text-text-muted">Cargando detalle del día…</Text>
-          ) : detail?.model ? (
-            <HistoryDayDetail model={detail.model} offline={detail.offline} />
-          ) : (
-            <Text className="py-2 text-sm text-warning-700">No pudimos cargar el detalle. Reintenta abriendo el día.</Text>
-          )}
-        </View>
-      ) : null}
+      </View>
     </NutritionCard>
   )
-}
-
-function HistoryMacro({ label, consumed, target }: { label: string; consumed: number; target: number | null }) {
-  return (
-    <Text className="font-mono text-xs text-text-muted">
-      <Text className="font-semibold text-text-body">{label}</Text> {Math.round(consumed)}
-      {target != null ? `/${Math.round(target)}` : ''} g
-    </Text>
-  )
-}
-
-function HistoryDayDetail({ model, offline }: { model: NutritionTodayReadModel; offline: boolean }) {
-  const slotsWithIntake = model.mealSlots
-    .map((slot) => ({ slot, entries: slot.intakeItems.filter((entry) => entry.status !== 'voided') }))
-    .filter((group) => group.entries.length > 0)
-  const unassigned = model.unassignedIntake.filter((entry) => entry.status !== 'voided')
-
-  if (slotsWithIntake.length === 0 && unassigned.length === 0) {
-    return <Text className="py-2 text-sm text-text-muted">Sin registros de alimentos este día.</Text>
-  }
-
-  return (
-    <View className="gap-3">
-      {offline ? (
-        <View className="items-start">
-          <SyncOfflineState state="offline" label="Detalle guardado" />
-        </View>
-      ) : null}
-      {slotsWithIntake.map(({ slot, entries }) => (
-        <View key={slot.id}>
-          <Text className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-text-subtle">{slot.name}</Text>
-          {entries.map((entry, index) => (
-            <View key={entry.id} className={index > 0 ? 'border-t border-border-subtle' : undefined}>
-              <FoodRow food={historyEntryToRow(entry)} fallbackCategory={entry.category} />
-            </View>
-          ))}
-        </View>
-      ))}
-      {unassigned.length > 0 ? (
-        <View>
-          <Text className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-text-subtle">Sin franja</Text>
-          {unassigned.map((entry, index) => (
-            <View key={entry.id} className={index > 0 ? 'border-t border-border-subtle' : undefined}>
-              <FoodRow food={historyEntryToRow(entry)} fallbackCategory={entry.category} />
-            </View>
-          ))}
-        </View>
-      ) : null}
-    </View>
-  )
-}
-
-function historyEntryToRow(entry: NutritionIntakeReadItem): NutritionFoodRowModel {
-  return {
-    id: entry.id,
-    name: entry.snapshot.name,
-    detail: entry.snapshot.brand,
-    thumbnailUrl: foodMediaThumbnailUrl(entry.media),
-    quantityLabel: `${entry.quantity} ${entry.unit}`,
-    calories: entry.totals.calories,
-    proteinG: entry.totals.proteinG,
-    carbsG: entry.totals.carbsG,
-    fatsG: entry.totals.fatsG,
-    status: entry.status === 'corrected' ? 'corrected' : 'default',
-  }
-}
-
-function formatClock(iso: string): string {
-  try {
-    return new Intl.DateTimeFormat('es-CL', { timeZone: TZ, hour: '2-digit', minute: '2-digit' }).format(new Date(iso))
-  } catch {
-    return ''
-  }
 }

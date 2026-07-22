@@ -3,6 +3,7 @@ import type { NutritionClientDetailReadModel } from '@eva/nutrition-v2'
 import {
   buildNutritionTabV2ViewModel,
   formatLocalDateEsCl,
+  resolveCoachNutritionTabMode,
 } from '../apps/mobile/lib/coach-nutrition-v2-tab-logic'
 
 type PlanOverride = {
@@ -111,5 +112,20 @@ describe('buildNutritionTabV2ViewModel', () => {
   it('formatLocalDateEsCl formatea sin desfase de zona y es defensivo ante basura', () => {
     expect(formatLocalDateEsCl('2026-07-15')).toMatch(/15/)
     expect(formatLocalDateEsCl('no-es-fecha')).toBe('no-es-fecha')
+  })
+})
+
+describe('resolveCoachNutritionTabMode (4B-04 swap)', () => {
+  it('entitlements no listos → "loading" (nunca decide/flashea V1, sin importar el flag)', () => {
+    expect(resolveCoachNutritionTabMode({ entitlementsReady: false, nutritionV2CoachEnabled: false })).toBe('loading')
+    expect(resolveCoachNutritionTabMode({ entitlementsReady: false, nutritionV2CoachEnabled: true })).toBe('loading')
+  })
+
+  it('listos + flag ON → "v2" (abre el Centro V2, espejo del swap web)', () => {
+    expect(resolveCoachNutritionTabMode({ entitlementsReady: true, nutritionV2CoachEnabled: true })).toBe('v2')
+  })
+
+  it('listos + flag OFF → "v1" (rollback: shell V1 intacto, fail-closed por default del bundle)', () => {
+    expect(resolveCoachNutritionTabMode({ entitlementsReady: true, nutritionV2CoachEnabled: false })).toBe('v1')
   })
 })

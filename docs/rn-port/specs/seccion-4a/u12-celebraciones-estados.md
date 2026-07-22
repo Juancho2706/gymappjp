@@ -33,3 +33,16 @@ Archivos RN: `apps/mobile/components/nutrition-v2/CelebrationOverlay.tsx`,
 Con la decisión tomada: cruzar la meta de energía dispara exactamente UNA celebración por día con la
 ilustración/pill; registrar una comida, cerrar el día o escanear NO dispara nada (o lo que el owner
 haya autorizado por escrito).
+
+## Cierre (2026-07-21)
+
+Ejecutada la decisión del owner (`DECISIONES-OWNER.md` fila 2): **CONSERVAR** las tres celebraciones
+RN-extra (meal-logged, day-close, scanner-hit) como divergencia aprobada; **nada retirado**.
+`CelebrationDecision` pasó a unión discriminada por `kind` (`badge` | `energy-goal`).
+
+Paridad de meta de energía **cerrada**: la celebración deja de reusar el badge `dia-cerrado` y estrena
+presentación propia espejo del web (`AuraHero.tsx`) — card con ilustración `dia-completado` (círculo
+tintado al primario 12%) + pill con copy exacto "¡Meta de energía cumplida!", partículas tintadas SOLO
+al primario, overlay 3000ms / 4000ms con reduce, 1×/día persistente (storage ya existente) y sin
+partículas bajo reduce-motion. El `backdrop-blur` del web se **omite** como adaptación nativa (sin
+BlurView). Las tres celebraciones nativas conservan háptica + animación de badge intactas.

@@ -1,7 +1,7 @@
 ---
 status: active
 owner: Juan Manuel Villegas
-last_verified: "2026-07-21 @ f5301858"
+last_verified: "2026-07-22 @ 6338f4a4"
 canonical: true
 source_of_truth: apps/web responsive + apps/mobile
 ---
@@ -22,11 +22,12 @@ La paridad global **no está certificada todavía**.
 | Sección 2 — dashboard del alumno | Cerrado | Pendiente | Cerrado estático; no certificado |
 | Sección 3 — coach (14 unidades) | Cerrado | Pendiente | Cerrado estático; no certificado |
 | Ola 2R — residuos del alumno | Cerrado | Pendiente | Cerrado estático; no certificado |
-| Ola 4A — nutrición del alumno | **5/12 aplicadas** | Pendiente | **Activa** |
+| Ola 4A — nutrición del alumno | **12/12 aplicadas** | Pendiente | Cerrada estática; no certificada |
+| Ola 4B — nutrición del coach y catálogos | **Cerrada: 15/15 unidades de rama** | Pendiente | Cerrada estática; no certificada |
 
 “Cerrado estático” significa que código, spec y verificaciones automatizadas disponibles convergieron. No significa que el comportamiento visual, gestos, teclado, cámara, safe areas u offline estén aprobados en hardware real.
 
-## Ola activa: 4A
+## Ola 4A (cerrada estática)
 
 Fuente funcional/visual: `apps/web/src/app/c/[coach_slug]/nutrition-v2/**` y `apps/web/src/components/nutrition-v2/**` en viewport móvil. Specs vigentes: [`docs/rn-port/specs/seccion-4a/`](../rn-port/specs/seccion-4a/).
 
@@ -34,26 +35,41 @@ Fuente funcional/visual: `apps/web/src/app/c/[coach_slug]/nutrition-v2/**` y `ap
 |---|---|---:|---:|
 | 4A-01 | Ruteo y chrome | Aplicado | Pendiente |
 | 4A-02 | Vista Hoy: estructura | Aplicado | Pendiente |
-| 4A-03 | Vista Plan | Pendiente | Pendiente |
-| 4A-04 | Historial | Pendiente | Pendiente |
-| 4A-05 | Shell y tab bar | Pendiente | Pendiente |
-| 4A-06 | Editar y retirar registros | Pendiente | Pendiente |
+| 4A-03 | Vista Plan | Aplicado | Pendiente |
+| 4A-04 | Historial | Aplicado | Pendiente |
+| 4A-05 | Shell y tab bar | Aplicado | Pendiente |
+| 4A-06 | Editar y retirar registros | Aplicado | Pendiente |
 | 4A-07 | Kit e ilustraciones | Aplicado | Pendiente |
-| 4A-08 | AuraHero y colores white-label | Pendiente | Pendiente |
-| 4A-09 | Porciones | Pendiente | Pendiente |
+| 4A-08 | AuraHero y colores white-label | Aplicado | Pendiente |
+| 4A-09 | Porciones | Aplicado | Pendiente |
 | 4A-10 | Registro y buscador | Aplicado | Pendiente |
 | 4A-11 | Scanner | Aplicado | Pendiente |
-| 4A-12 | Celebraciones y residuos | Pendiente | Pendiente |
+| 4A-12 | Celebraciones y residuos | Aplicado | Pendiente |
 
-Aplicadas: **01, 02, 07, 10 y 11**. Pendientes: **03, 04, 05, 06, 08, 09 y 12**.
+Aplicadas: **las 12** (wave C en `73f6aa82`; wave D en `3efa1a75`; wave E en `7c6684fa`). Código de la ola completo; falta QA device.
+
+## Ola 4B (cerrada estática)
+
+Fuente funcional/visual: superficie V2 VIVA del coach (`apps/web/src/app/coach/nutrition-v2/**` +
+catálogos vivos). Specs vigentes: [`docs/rn-port/specs/seccion-4b/`](../rn-port/specs/seccion-4b/)
+(INVENTARIO, RANKING con las 16 unidades y 6 waves, DECISIONES-OWNER: **V1 al olvido**, recetas
+fuera, RN-extras estricto).
+
+| Estado | Unidades |
+|---|---|
+| Aplicadas (wave 4B.1, `bce2eb3b`) | 4B-01 macros meal-groups (P0 datos), 4B-02 scope org foods, 4B-03 quick-edit notas+permisos |
+| Aplicada (wave 4B.2, `76d8ea2f`) | 4B-04 SWAP tab coach→Centro V2 (inline, cápsula intacta; V1 = rollback tras flag) |
+| Aplicadas (wave 4B.3, `8f8161cb`) | 4B-05 HUB, 4B-06 Catálogo V2 + ficha, 4B-08 Detalle asignar/archivar, 4B-10 Builder F-02 reemplazos (cierra TODO F-02 P3), 4B-15 MG editor |
+| Aplicadas (wave 4B.4, `2cdc0c79`) | 4B-07 Curación, 4B-17 Tablist hub (Alumnos/Alimentos/Curación cableado), 4B-09 Detalle copy+banner convertido, 4B-11 Builder porciones (write-path nuevo), 4B-14 Quick-edit drafts |
+| Aplicada (wave 4B.5, `a9b8958e`) | 4B-12 Builder permisos del alumno + guardar-en-catálogo + archivar-y-reemplazar (idempotencia estable) |
+| Aplicada (wave 4B.6, `6338f4a4`) | 4B-13 Builder drafts (autosave + Restaurar + guard warn-only; cierra la ola) |
+| Fuera de rama | 4B-16 deuda transversal nutrition-pro (toca web+packages; abrir en rama de web) |
 
 ### Dónde retomar
 
-1. Wave C: `4A-06`, `4A-08` y `4A-09` en archivos disjuntos.
-2. Wave D: `4A-03` y `4A-12`.
-3. Wave E: `4A-04`; después `4A-05` si ambas siguen compartiendo `index.tsx`.
-4. Ejecutar gates estáticos y export después de cada wave.
-5. Completar matriz device de 4A y regresión dirigida de Secciones 1–3/2R.
+1. Abrir la ola 5 (builder y programas de entrenamiento del coach) con inventario contra código. **Coordinación**: el visor/ejecutor de workout del alumno está siendo trabajado en paralelo en otra sesión — excluirlo o sincronizar antes de abrir unidades que lo toquen.
+2. Completar matriz device de 4A/4B y regresión dirigida de Secciones 1–3/2R (requiere build nativa).
+3. Deuda 4B-16 (consolidar nutrition-pro puro en `@eva/nutrition-v2`) en rama de web.
 
 ## Builds móviles
 
@@ -66,12 +82,11 @@ La sincronización `bc9ac09f` pasó `expo export` local para Android e iOS. El p
 
 ## Siguiente horizonte
 
-Después de cerrar y certificar 4A:
+Después de cerrar y certificar 4A y 4B:
 
-1. 4B — nutrición del coach y catálogos.
-2. 5 — builder y programas del coach.
-3. 6 — dominios restantes, inventariados en lotes pequeños.
-4. 7 — certificación transversal de rutas, estados, branding, accesibilidad y ambos sistemas operativos.
+1. 5 — builder y programas del coach.
+2. 6 — dominios restantes, inventariados en lotes pequeños.
+3. 7 — certificación transversal de rutas, estados, branding, accesibilidad y ambos sistemas operativos.
 
 El alcance exacto se confirma contra código antes de abrir cada ola; no se reactiva automáticamente un checklist histórico.
 

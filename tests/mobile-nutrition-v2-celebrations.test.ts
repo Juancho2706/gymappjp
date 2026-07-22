@@ -3,6 +3,7 @@ import {
   celebrationAnimationPlan,
   dayClosedDailyKey,
   decideDayCloseCelebration,
+  decideEnergyGoalCelebration,
   decideMealLoggedCelebration,
   decideScannerHitCelebration,
   isNutritionDayComplete,
@@ -12,13 +13,13 @@ import {
 
 describe('nutrición v2 · celebraciones (decisión pura, no tóxica)', () => {
   it('registro: micro-pop SOLO la primera vez del día, luego silencio', () => {
-    expect(decideMealLoggedCelebration(false)).toEqual({ badge: 'primer-registro', variant: 'micro' })
+    expect(decideMealLoggedCelebration(false)).toEqual({ kind: 'badge', badge: 'primer-registro', variant: 'micro' })
     // Ya se celebró hoy → nada (no spamear cada registro, cero culpa).
     expect(decideMealLoggedCelebration(true)).toBeNull()
   })
 
   it('cierre del día: celebración completa solo si el día está completo y no se celebró aún', () => {
-    expect(decideDayCloseCelebration(true, false)).toEqual({ badge: 'dia-cerrado', variant: 'full' })
+    expect(decideDayCloseCelebration(true, false)).toEqual({ kind: 'badge', badge: 'dia-cerrado', variant: 'full' })
     // Día incompleto → nunca celebra (jamás "te falta / perdiste").
     expect(decideDayCloseCelebration(false, false)).toBeNull()
     // Ya celebrado hoy → no repite.
@@ -26,8 +27,17 @@ describe('nutrición v2 · celebraciones (decisión pura, no tóxica)', () => {
   })
 
   it('scanner: pop corto SOLO la primera vez absoluta', () => {
-    expect(decideScannerHitCelebration(false)).toEqual({ badge: 'primer-escaneo', variant: 'micro' })
+    expect(decideScannerHitCelebration(false)).toEqual({ kind: 'badge', badge: 'primer-escaneo', variant: 'micro' })
     expect(decideScannerHitCelebration(true)).toBeNull()
+  })
+
+  it('meta de energía: presentación propia (kind energy-goal), SOLO al cruzar la meta 1×/día', () => {
+    // No alcanzada → silencio (jamás "te falta" ni déficit).
+    expect(decideEnergyGoalCelebration(false, false)).toBeNull()
+    // Ya celebrada hoy → no repite (paridad 1×/fecha con el web).
+    expect(decideEnergyGoalCelebration(true, true)).toBeNull()
+    // Alcanzada y sin celebrar → celebración de meta de energía (no el badge dia-cerrado).
+    expect(decideEnergyGoalCelebration(true, false)).toEqual({ kind: 'energy-goal', variant: 'full' })
   })
 })
 
@@ -120,5 +130,29 @@ describe('nutrición v2 · celebrationAnimationPlan (reduced-motion => estática
     expect(micro.particleCount).toBeGreaterThanOrEqual(8)
     expect(micro.particleCount).toBeLessThanOrEqual(12)
     expect(micro.entrance).toBe('spring')
+  })
+
+  it('kind badge por defecto: sin cambios respecto de la firma previa', () => {
+    // El tercer parámetro `kind` es opcional y por defecto 'badge' → plan intacto.
+    expect(celebrationAnimationPlan('full', false)).toEqual(celebrationAnimationPlan('full', false, 'badge'))
+    expect(celebrationAnimationPlan('micro', true)).toEqual(celebrationAnimationPlan('micro', true, 'badge'))
+  })
+
+  it('meta de energía: overlay 3000ms con confeti (12) tintado y spring; paridad web', () => {
+    const plan = celebrationAnimationPlan('full', false, 'energy-goal')
+    expect(plan.confetti).toBe(true)
+    expect(plan.particleCount).toBe(12)
+    expect(plan.entrance).toBe('spring')
+    expect(plan.visibleMs).toBe(3000)
+    expect(plan.haptic).toBe(true)
+  })
+
+  it('meta de energía con reduce-motion: 4000ms, SIN partículas, fade y háptico', () => {
+    const plan = celebrationAnimationPlan('full', true, 'energy-goal')
+    expect(plan.confetti).toBe(false)
+    expect(plan.particleCount).toBe(0)
+    expect(plan.entrance).toBe('fade')
+    expect(plan.visibleMs).toBe(4000)
+    expect(plan.haptic).toBe(true)
   })
 })

@@ -3,18 +3,20 @@ import { Alert, FlatList, ScrollView, StyleSheet, Text, TextInput, TouchableOpac
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useFocusEffect, useRouter } from 'expo-router'
 import { BottomSheetModal } from '@gorhom/bottom-sheet'
-import { ChevronLeft, Layers, PencilLine, Plus, Search, Trash2 } from 'lucide-react-native'
+import { ChevronLeft, Info, Layers, PencilLine, Plus, Search, Trash2 } from 'lucide-react-native'
 import { useTheme } from '../../context/ThemeContext'
 import { Badge, Button, Dialog, EmptyState, Input } from '../../components'
 import { EvaLoaderScreen } from '../../components/EvaLoader'
 import { AppBackground } from '../../components/AppBackground'
 import { FoodSearchSheet } from '../../components/coach/FoodSearchSheet'
+import { toast } from '../../components/Toast'
 import { FONT } from '../../lib/typography'
 import { SHADOWS, type Scheme } from '../../lib/shadows'
 import type { FoodRow } from '../../lib/nutrition-builder'
 import {
   deleteMealGroup,
   listMealGroups,
+  mealGroupItemMacros,
   mealGroupTotals,
   saveMealGroup,
   type MealGroupItem,
@@ -38,17 +40,35 @@ function unitsForItem(item: MealGroupItem): string[] {
   return base.includes(item.unit) ? base : [item.unit, ...base.filter((u) => u !== item.unit)]
 }
 
-function itemMacros(item: MealGroupItem) {
-  const q = Number(item.quantity) || 0
-  const u = (item.unit || 'g').toLowerCase()
-  const factor = u === 'g' || u === 'ml' ? q / 100 : q
-  const f = item.food
-  return {
-    calories: Math.round((Number(f?.calories) || 0) * factor),
-    protein: Math.round((Number(f?.protein_g) || 0) * factor),
-    carbs: Math.round((Number(f?.carbs_g) || 0) * factor),
-    fats: Math.round((Number(f?.fats_g) || 0) * factor),
-  }
+type CanonUnit = 'g' | 'ml' | 'un'
+
+// Normaliza la unidad cruda del alimento a la canónica g|ml|un — 1:1 con
+// `MealGroupModal.tsx:35-43` (mapea `u`→`un`, y deriva de is_liquid/serving_unit).
+function normalizeUnit(raw: unknown, food?: FoodRow | null): CanonUnit {
+  const value = String(raw ?? '').toLowerCase()
+  if (value === 'u' || value === 'un') return 'un'
+  if (value === 'ml') return 'ml'
+  if (value === 'g') return 'g'
+  if (food?.is_liquid || String(food?.serving_unit ?? '').toLowerCase() === 'ml') return 'ml'
+  if (String(food?.serving_unit ?? '').toLowerCase() === 'un') return 'un'
+  return 'g'
+}
+
+// Cantidad por defecto según la unidad — 1:1 con `MealGroupModal.tsx:50-54`:
+// `un` → 1; g/ml → serving_size finito > 0, si no 100.
+function defaultQuantity(unit: CanonUnit, food?: FoodRow | null): number {
+  if (unit === 'un') return 1
+  const servingSize = Number(food?.serving_size)
+  return Number.isFinite(servingSize) && servingSize > 0 ? servingSize : 100
+}
+
+// Deja solo dígitos y UN separador decimal, normalizando `,`→`.` (patrón del repo,
+// `add-food-v2.tsx:573-575`), para admitir cantidades fraccionarias como la web.
+function sanitizeDecimal(raw: string): string {
+  let s = raw.replace(/,/g, '.').replace(/[^0-9.]/g, '')
+  const dot = s.indexOf('.')
+  if (dot >= 0) s = s.slice(0, dot + 1) + s.slice(dot + 1).replace(/\./g, '')
+  return s
 }
 
 export default function CoachMealGroupsScreen() {
@@ -65,6 +85,9 @@ export default function CoachMealGroupsScreen() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [name, setName] = useState('')
   const [items, setItems] = useState<MealGroupItem[]>([])
+  // Texto crudo del input de cantidad EN EDICIÓN (solo un input recibe foco a la vez
+  // en móvil): conserva la entrada parcial "0." sin colapsarla al parsear a Number.
+  const [qtyDraft, setQtyDraft] = useState<{ index: number; text: string } | null>(null)
   const [saving, setSaving] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<MealGroupRow | null>(null)
   const [deleting, setDeleting] = useState(false)
@@ -105,30 +128,42 @@ export default function CoachMealGroupsScreen() {
   }
 
   function addFood(food: FoodRow) {
+    // Normaliza unidad + cantidad inicial como la web (`handleAddFood`,
+    // MealGroupModal.tsx:105-117): un alimento `serving_unit='un', serving_size=60`
+    // entra como 1 un, no como 60 un.
+    const unit = normalizeUnit(food.serving_unit, food)
     setItems((prev) => [
       ...prev,
       {
         food_id: food.id,
-        quantity: food.serving_size || 100,
-        unit: food.serving_unit || 'g',
+        quantity: defaultQuantity(unit, food),
+        unit,
         food,
       },
     ])
   }
   function removeItem(index: number) {
+    setQtyDraft(null)
     setItems((prev) => prev.filter((_, i) => i !== index))
   }
   function updateQty(index: number, qty: number) {
     setItems((prev) => prev.map((it, i) => (i === index ? { ...it, quantity: qty } : it)))
   }
+  function onQtyChange(index: number, raw: string) {
+    const text = sanitizeDecimal(raw)
+    setQtyDraft({ index, text })
+    updateQty(index, Number(text) || 0)
+  }
   function updateUnit(index: number, unit: string) {
+    setQtyDraft(null)
     setItems((prev) =>
       prev.map((it, i) => {
         if (i !== index) return it
-        // Al pasar a unidades default 1; a g/ml default 100 (paridad web MealGroupModal).
-        let quantity = it.quantity
-        if (unit === 'un' && it.quantity === 100) quantity = 1
-        else if ((unit === 'g' || unit === 'ml') && it.quantity === 1) quantity = 100
+        // Swap por `defaultQuantity` (MealGroupModal.tsx:129-140): solo reemplaza la
+        // cantidad si era la default de la unidad anterior; así respeta `serving_size`.
+        const prevDefault = defaultQuantity(it.unit as CanonUnit, it.food)
+        const shouldReplace = it.quantity === prevDefault
+        const quantity = shouldReplace ? defaultQuantity(unit as CanonUnit, it.food) : it.quantity
         return { ...it, unit, quantity }
       })
     )
@@ -137,6 +172,11 @@ export default function CoachMealGroupsScreen() {
   async function handleSave() {
     if (!name.trim()) { Alert.alert('Falta el nombre', 'Indicá un nombre para el grupo.'); return }
     if (!items.length) { Alert.alert('Sin alimentos', 'Agrega al menos un alimento.'); return }
+    // Cantidad > 0 (paridad web MealGroupModal.tsx:151-154) — evita persistir ceros.
+    if (items.some((it) => !Number.isFinite(it.quantity) || it.quantity <= 0)) {
+      Alert.alert('Cantidad inválida', 'Todas las cantidades deben ser mayores a cero.')
+      return
+    }
     setSaving(true)
     const res = await saveMealGroup({
       id: editingId ?? undefined,
@@ -150,6 +190,7 @@ export default function CoachMealGroupsScreen() {
       const next = exists ? prev.map((g) => (g.id === res.group!.id ? res.group! : g)) : [...prev, res.group!]
       return [...next].sort((a, b) => a.name.localeCompare(b.name))
     })
+    toast.success('Grupo guardado correctamente')
     cancelEdit()
   }
 
@@ -161,6 +202,7 @@ export default function CoachMealGroupsScreen() {
     setDeleting(false)
     if (!r.ok) { Alert.alert('Error', r.error ?? 'No se pudo eliminar.'); return }
     setGroups((prev) => prev.filter((g) => g.id !== group.id))
+    toast.success('Grupo eliminado correctamente')
     setDeleteTarget(null)
   }
 
@@ -184,7 +226,7 @@ export default function CoachMealGroupsScreen() {
             {mode === 'edit' ? (editingId ? 'Editar grupo' : 'Nuevo grupo') : 'Grupos de comidas'}
           </Text>
           <Text style={[styles.hSub, { color: theme.mutedForeground, fontFamily: FONT.ui }]} numberOfLines={1}>
-            Conjuntos de alimentos reutilizables
+            Combos de alimentos reutilizables
           </Text>
         </View>
       </View>
@@ -216,7 +258,7 @@ export default function CoachMealGroupsScreen() {
             </View>
           ) : (
             items.map((item, index) => {
-              const m = itemMacros(item)
+              const m = mealGroupItemMacros(item)
               return (
                 <View key={`${item.food_id}-${index}`} style={[styles.itemCard, { borderColor: theme.border, backgroundColor: theme.card, borderRadius: theme.radius.lg }]}>
                   <View style={styles.itemTop}>
@@ -225,8 +267,13 @@ export default function CoachMealGroupsScreen() {
                         {item.food?.name ?? 'Alimento'}
                       </Text>
                       <Text style={[styles.itemMacro, { color: theme.mutedForeground, fontFamily: FONT.mono }]}>
-                        {m.calories} kcal · P{m.protein} C{m.carbs} G{m.fats}
+                        {`${Math.round(m.calories)} kcal · P ${Math.round(m.protein)}g · C ${Math.round(m.carbs)}g · G ${Math.round(m.fats)}g`}
                       </Text>
+                      {item.unit === 'un' ? (
+                        <Text style={[styles.itemHint, { color: theme.mutedForeground, fontFamily: FONT.uiMedium }]}>
+                          {`1 un ≈ ${Number(item.food?.serving_size) || 100} g`}
+                        </Text>
+                      ) : null}
                     </View>
                     <TouchableOpacity testID={`meal-groups-remove-${index}`} onPress={() => removeItem(index)} hitSlop={8} style={styles.removeBtn}>
                       <Trash2 size={16} color={theme.destructive} />
@@ -248,9 +295,11 @@ export default function CoachMealGroupsScreen() {
                     </View>
                     <TextInput
                       testID={`meal-groups-qty-${index}`}
-                      value={item.quantity ? String(item.quantity) : ''}
-                      onChangeText={(t) => updateQty(index, Number(t.replace(/[^0-9]/g, '')) || 0)}
-                      keyboardType="number-pad"
+                      value={qtyDraft?.index === index ? qtyDraft.text : (item.quantity ? String(item.quantity) : '')}
+                      onChangeText={(t) => onQtyChange(index, t)}
+                      onBlur={() => setQtyDraft((d) => (d && d.index === index ? null : d))}
+                      keyboardType="decimal-pad"
+                      inputMode="decimal"
                       placeholderTextColor={theme.mutedForeground}
                       style={[styles.qtyInput, { borderColor: theme.border, backgroundColor: theme.secondary, color: theme.foreground, fontFamily: FONT.monoBold }]}
                     />
@@ -264,7 +313,7 @@ export default function CoachMealGroupsScreen() {
             <View style={[styles.totalsRow, { borderTopColor: theme.border }]}>
               <Text style={{ fontSize: 12, color: theme.mutedForeground, fontFamily: FONT.uiSemibold }}>Total estimado</Text>
               <Text style={{ fontSize: 13, color: theme.foreground, fontFamily: FONT.monoBold }}>
-                ~{Math.round(editorTotals.calories)} kcal · P{Math.round(editorTotals.protein)} C{Math.round(editorTotals.carbs)} G{Math.round(editorTotals.fats)}
+                {`~${Math.round(editorTotals.calories)} kcal · P ${Math.round(editorTotals.protein)}g · C ${Math.round(editorTotals.carbs)}g · G ${Math.round(editorTotals.fats)}g`}
               </Text>
             </View>
           ) : null}
@@ -276,6 +325,14 @@ export default function CoachMealGroupsScreen() {
         </ScrollView>
       ) : (
         <View style={{ flex: 1 }}>
+          {/* Banner explicativo — 1:1 con la web (page.tsx:35-40). */}
+          <View style={[styles.infoBanner, { backgroundColor: theme.secondary, borderRadius: theme.radius.lg }]}>
+            <Info size={15} color={theme.mutedForeground} style={{ marginTop: 2 }} />
+            <Text style={[styles.infoText, { color: theme.mutedForeground, fontFamily: FONT.ui }]}>
+              Un grupo agrupa varios alimentos para insertarlos de una en cualquier comida del plan.
+            </Text>
+          </View>
+
           <View style={styles.listHead}>
             <Input leftIcon={Search} placeholder="Buscar grupo…" value={query} onChangeText={setQuery} clearButtonMode="while-editing" autoCapitalize="none" autoCorrect={false} containerStyle={{ flex: 1 }} />
             <TouchableOpacity testID="meal-groups-new" onPress={openCreate} activeOpacity={0.9} style={[styles.newBtn, { backgroundColor: theme.primary }]}>
@@ -296,7 +353,6 @@ export default function CoachMealGroupsScreen() {
                   icon={Layers}
                   title={query ? 'Sin resultados' : 'Sin grupos todavía'}
                   subtitle={query ? `Ningún grupo coincide con «${query.trim()}».` : 'Crea tu primer grupo de alimentos para usarlo en tus planes.'}
-                  action={!query ? <Button label="Nuevo grupo" leftIcon={Plus} variant="sport" onPress={openCreate} style={{ marginTop: 8 }} /> : undefined}
                 />
               </View>
             }
@@ -375,6 +431,8 @@ const styles = StyleSheet.create({
   hTitle: { fontSize: 22, letterSpacing: -0.5 },
   hSub: { fontSize: 12.5, marginTop: 2 },
 
+  infoBanner: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginHorizontal: 16, marginBottom: 10, paddingHorizontal: 14, paddingVertical: 10 },
+  infoText: { flex: 1, fontSize: 12, lineHeight: 17 },
   listHead: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, paddingBottom: 10 },
   newBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, height: 44, paddingHorizontal: 14, borderRadius: 14 },
   listBody: { paddingHorizontal: 16, paddingBottom: 120, paddingTop: 4 },
@@ -397,6 +455,7 @@ const styles = StyleSheet.create({
   itemTop: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
   itemName: { fontSize: 14 },
   itemMacro: { fontSize: 11.5, marginTop: 3 },
+  itemHint: { fontSize: 10.5, marginTop: 4 },
   removeBtn: { padding: 4 },
   itemControls: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   unitWrap: { flexDirection: 'row', borderWidth: 1, borderRadius: 10, padding: 3, gap: 3 },

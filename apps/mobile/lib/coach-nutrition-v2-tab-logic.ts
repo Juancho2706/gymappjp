@@ -113,6 +113,34 @@ export function formatLocalDateEsCl(localDate: string): string {
 }
 
 /**
+ * 4B-04 — Decisión de swap del tab GLOBAL "Nutrición" del coach (NO confundir con el
+ * view model per-alumno de arriba). Espejo del swap web
+ * `nutrition-plans/_lib/nutrition-v2-swap.ts:19-31` + `page.tsx:38-40` y del gate del
+ * tab del alumno 4A-01 (`alumno/(tabs)/nutricion.tsx`): con entitlements listos y el
+ * flag `nutritionV2Coach` ON el tab abre el Centro V2; OFF → shell V1 (rollback puro,
+ * decisión owner 1). Mientras los entitlements no estén hidratados NO se decide todavía
+ * (`'loading'`) para NUNCA flashear V1 antes de resolver el swap. PURA (sin
+ * react-native / supabase) y por eso testeable de forma aislada.
+ *
+ * Fail-closed: el flag default del bundle es `false` (`lib/flags.ts:19`); solo el Edge
+ * Config remoto lo abre. Esta decisión usa el MISMO flag que el hub V2
+ * (`nutrition-v2/index.tsx:81`) y no lo debilita: el hub conserva su propio gate más
+ * estricto (entitlements + scope de workspace), así que `'v2'` aquí solo elige QUÉ
+ * superficie montar, no autoriza datos.
+ */
+export type CoachNutritionTabMode = 'loading' | 'v1' | 'v2'
+
+export function resolveCoachNutritionTabMode(input: {
+  /** `useEntitlements().ready` — config remota (flags incluidos) ya hidratada. */
+  entitlementsReady: boolean
+  /** `isEnabled('nutritionV2Coach')` — mismo flag que el hub V2, fail-closed. */
+  nutritionV2CoachEnabled: boolean
+}): CoachNutritionTabMode {
+  if (!input.entitlementsReady) return 'loading'
+  return input.nutritionV2CoachEnabled ? 'v2' : 'v1'
+}
+
+/**
  * PURA: read model del detalle V2 + flags → props del tab. Espejo 1:1 de
  * `buildNutritionTabV2ViewModel` web (nutritionTabV2.logic.ts:115-185).
  */

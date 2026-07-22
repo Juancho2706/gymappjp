@@ -276,6 +276,7 @@ export type QuickEditAction =
   | { type: 'ADD_SLOT'; variantKey: string; key: string }
   | { type: 'REMOVE_SLOT'; variantKey: string; slotKey: string }
   | { type: 'RESTORE_SLOT'; variantKey: string; index: number; slot: QuickEditSlot }
+  | { type: 'RESTORE_DRAFT'; state: QuickEditState }
 
 function mapVariant(
   state: QuickEditState,
@@ -428,6 +429,12 @@ export function quickEditReducer(state: QuickEditState, action: QuickEditAction)
         ...variant,
         slots: insertAt(variant.slots, action.index, action.slot),
       }))
+    case 'RESTORE_DRAFT':
+      // Rehidrata el arbol COMPLETO desde un respaldo local (AsyncStorage) — a diferencia de
+      // RESTORE_ITEM/RESTORE_SLOT (undo puntual), reemplaza todo el estado. Guarda defensiva:
+      // si el payload esta corrupto o es de un shape viejo (variants ausente o no-array) se
+      // conserva el estado actual — mejor no restaurar que romper la pantalla.
+      return Array.isArray(action.state?.variants) ? action.state : state
     default:
       return state
   }
