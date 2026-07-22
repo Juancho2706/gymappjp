@@ -26,6 +26,8 @@ import {
     isTimeableInterval,
 } from '@eva/workout-engine'
 import { StepperExecution, type StepperStepView } from './StepperExecution'
+import { ExecHeaderV3, type ExecDotState } from './v3/ExecHeaderV3'
+import { applyExecThemeVars, readExecutorTheme } from './v3/exec-theme'
 import { STEPPER_MODE_KEY } from './rest-timer-preferences'
 import { SubstituteExerciseSheet } from './_components/SubstituteExerciseSheet'
 import { SUBSTITUTION_REASON } from '@/services/workout/exercise-substitution'
@@ -218,6 +220,13 @@ interface Props {
      * guardado sigue siendo el flujo normal de HOY y la atribución la resuelve `deriveWeekWorkoutStatus`.
      */
     recoverDate?: string | null
+    /**
+     * Ejecutor V3 (E2.1): flag `executor_v3` resuelto server-side (Edge Config, default OFF). ON ⇒
+     * chrome V3 (header nuevo con dots + tuerca, shell dark-only) montado SOBRE el mismo estado/motor
+     * (cero cambios a cola/drafts/reconciliación). El override localStorage `eva:executor-v3` (on/off)
+     * se aplica en cliente tras montar, pisando este valor.
+     */
+    executorV3?: boolean
 }
 
 function ManualTimerButton({ defaultTime }: { defaultTime: string | null }) {
@@ -992,6 +1001,7 @@ export function WorkoutExecutionClient({
     cardio,
     targetDate = null,
     recoverDate = null,
+    executorV3 = false,
 }: Props) {
     const router = useRouter()
     const base = useBasePath(`/c/${coachSlug}`)
@@ -1025,6 +1035,12 @@ export function WorkoutExecutionClient({
     const [stepperEnabled, setStepperEnabled] = useState(false)
     const [currentStepIndex, setCurrentStepIndex] = useState(0)
     const [showTimerSettings, setShowTimerSettings] = useState(false)
+    // Ejecutor V3 (E2.1): resuelto tras montar = flag server (prop) pisado por override localStorage
+    // `eva:executor-v3` (on/off). SSR renderiza el flag server-side; el override es hidratación-safe.
+    const [execV3Active, setExecV3Active] = useState(false)
+    const [showExecV3Settings, setShowExecV3Settings] = useState(false)
+    // Wrapper del ejecutor: exec-theme.ts setea aquí --exec-brand/--exec-recovery/--exec-celebration.
+    const execRootRef = useRef<HTMLDivElement | null>(null)
     const [showCompleted, setShowCompleted] = useState(false)
     const [selectedExercise, setSelectedExercise] = useState<ExerciseType | null>(null)
     const [sessionLogs, setSessionLogs] = useState(logs)
@@ -1298,8 +1314,25 @@ export function WorkoutExecutionClient({
 
     // Lectura post-montaje del toggle (hidratación-safe, patrón `omni_autotimer`): si estaba activo,
     // arranca en el primer paso incompleto (no en el 0).
+    // Ola 2 (E2.1): resuelve también el flag V3 (server prop + override localStorage `eva:executor-v3`)
+    // y, en V3, el modo paso-a-paso pasa a ser el DEFAULT — respetando si el alumno ya eligió Lista
+    // (STEPPER_MODE_KEY === 'false'). El acento del shell V3 se setea vía exec-theme.ts.
     useEffect(() => {
-        if (localStorage.getItem(STEPPER_MODE_KEY) === 'true') {
+        let v3 = executorV3
+        try {
+            const ov = localStorage.getItem('eva:executor-v3')
+            if (ov === 'on') v3 = true
+            else if (ov === 'off') v3 = false
+        } catch { /* localStorage no disponible: usa el flag server */ }
+        setExecV3Active(v3)
+        if (v3) applyExecThemeVars(execRootRef.current, readExecutorTheme(execRootRef.current))
+
+        const stepperPref = (() => {
+            try { return localStorage.getItem(STEPPER_MODE_KEY) } catch { return null }
+        })()
+        // Legacy: opt-in explícito. V3: default stepper salvo que el alumno haya elegido Lista.
+        const startStepper = stepperPref === 'true' || (v3 && stepperPref !== 'false')
+        if (startStepper) {
             setStepperEnabled(true)
             setCurrentStepIndex(firstIncompleteStepIndex(steps, logs))
         }
@@ -1352,6 +1385,10 @@ export function WorkoutExecutionClient({
     // el primer bloque incompleto del plan sólo recibe un borde sport sutil + elevación (marcador
     // discreto, opacidad PLENA); los completados colapsan a recap. Todas las cards se ven plenas.
     const activeBlockId = currentExerciseIdx === -1 ? null : blocks[currentExerciseIdx].id
+    // Dots del header V3 (E2.1): un dot por ejercicio del plan — completado / actual / pendiente.
+    const execDots: ExecDotState[] = blocks.map((b) =>
+        isBlockComplete(b, sessionLogs) ? 'done' : b.id === activeBlockId ? 'now' : 'todo',
+    )
 
     const isBlockCompleted = (block: BlockType) => isBlockComplete(block, sessionLogs)
 
@@ -1815,12 +1852,33 @@ export function WorkoutExecutionClient({
         <TargetDateProvider value={targetDate}>
         <WorkoutTimerProvider>
           <WorkoutKeypadProvider>
-            <div className="is-workout-page min-h-dvh bg-[var(--ink-950)] text-on-dark">
+            <div
+                ref={execRootRef}
+                data-exec-v3={execV3Active ? '' : undefined}
+                className="is-workout-page min-h-dvh bg-[var(--ink-950)] text-on-dark"
+            >
+                {execV3Active && (
+                    <ExecHeaderV3
+                        dots={execDots}
+                        exerciseNum={currentExerciseNum}
+                        totalExercises={totalExercises}
+                        completedSets={completedSetCount}
+                        requiredSets={requiredSets}
+                        elapsedLabel={fmtElapsed(sessionElapsed)}
+                        volumeLabel={sessionVolumeLabel}
+                        onExit={() => router.push(`${base}/dashboard`)}
+                        onSettings={() => setShowExecV3Settings(true)}
+                    />
+                )}
+                {/* Header sticky legacy — OCULTO en modo V3 (no se borra): el V3 monta su propio chrome. */}
                 <motion.div
                     initial={{ y: -20, opacity: 0 }}
                     animate={{ y: 0, opacity: 1 }}
                     transition={{ duration: 0.25 }}
-                    className="sticky top-0 z-20 bg-[var(--ink-950)]/95 pt-safe backdrop-blur border-b border-white/10"
+                    className={cn(
+                        'sticky top-0 z-20 bg-[var(--ink-950)]/95 pt-safe backdrop-blur border-b border-white/10',
+                        execV3Active && 'hidden',
+                    )}
                 >
                     <div className="px-4 py-3 md:px-8 max-w-5xl mx-auto w-full">
                         <div className="flex items-center justify-between mb-3 gap-2">
@@ -2030,6 +2088,26 @@ export function WorkoutExecutionClient({
                         <button
                             type="button"
                             onClick={() => setShowTimerSettings(false)}
+                            className="w-full mt-6 py-3 rounded-control bg-secondary text-secondary-foreground font-bold"
+                        >
+                            Cerrar
+                        </button>
+                    </DialogContent>
+                </Dialog>
+
+                {/* Ajustes V3 (E2.1) — placeholder de la tuerca del header V3. El panel real (descanso,
+                    alarma, unidades, etc.) llega en una ola posterior; hoy sólo confirma el gesto. */}
+                <Dialog open={showExecV3Settings} onOpenChange={setShowExecV3Settings}>
+                    <DialogContent className="max-w-sm rounded-sheet p-6 bg-card border-border">
+                        <DialogHeader>
+                            <DialogTitle className="font-display text-xl font-bold">Ajustes</DialogTitle>
+                        </DialogHeader>
+                        <p className="mt-2 text-sm text-muted-foreground">
+                            Próximamente. Aquí vas a poder ajustar tu entrenamiento sin salir de la sesión.
+                        </p>
+                        <button
+                            type="button"
+                            onClick={() => setShowExecV3Settings(false)}
                             className="w-full mt-6 py-3 rounded-control bg-secondary text-secondary-foreground font-bold"
                         >
                             Cerrar

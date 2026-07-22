@@ -5,6 +5,7 @@ import { getWorkoutExecutionData } from './_data/workout-execution.queries'
 import { validateTargetDate } from './_data/target-date'
 import { getClientBasePath } from '@/lib/client/base-path'
 import { getTodayInSantiago } from '@/lib/date-utils'
+import { isExecutorV3Enabled } from '@/services/executor-v3-rollout.service'
 
 export const metadata: Metadata = { title: 'Rutina | EVA' }
 
@@ -29,6 +30,10 @@ export default async function WorkoutExecutionPage({ params, searchParams }: Pro
     const recuperarCheck = typeof recuperar === 'string' ? validateTargetDate(recuperar, todayIso) : null
     const recuperarDate = recuperarCheck?.ok ? recuperarCheck.iso : null
 
+    // Flag ejecutor V3 (E2.1): Edge Config `executor_v3` (fail-safe OFF). El override de dev/QA
+    // por localStorage (`eva:executor-v3`) lo aplica el cliente tras montar, pisando este default.
+    const executorV3 = await isExecutorV3Enabled()
+
     const data = await getWorkoutExecutionData(planId, targetDate ?? undefined)
     const { user, plan } = data
 
@@ -51,6 +56,7 @@ export default async function WorkoutExecutionPage({ params, searchParams }: Pro
             cardio={data.cardio}
             targetDate={targetDate}
             recoverDate={recuperarDate}
+            executorV3={executorV3}
         />
     )
 }

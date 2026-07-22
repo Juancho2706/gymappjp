@@ -1409,3 +1409,43 @@ body > * {
 /* Embed: el mock usa 12px horizontales porque la screen reusada trae su propio
    padding; los componentes reales del app no lo traen → usamos --dt-page-x. */
 .dt-set-embed { max-width: var(--dt-read-narrow); margin: 0 auto; padding: 20px var(--dt-page-x) 40px; }
+
+/* ============ Ejecutor V3 — shell dark-only (E2.1) ============ */
+/* Activado por el flag `executor_v3` (Edge Config + override localStorage). El wrapper del
+   ejecutor recibe [data-exec-v3]; el acento --exec-brand lo resuelve exec-theme.ts en runtime
+   (coach → white-label / eva → Sport). Fallback aquí por si el helper aún no corrió. Dark-only:
+   fondo cálido del mockup concepto-a-v3-core, independiente del tema claro/oscuro del sistema. */
+[data-exec-v3] {
+  --exec-brand: var(--theme-primary, var(--sport-500));
+  --exec-recovery: #18abd4;
+  --exec-celebration: #ff6a3d;
+  background:
+    radial-gradient(120% 80% at 50% -8%, #1c1c24 0%, #16161d 42%, #121218 100%) fixed;
+}
+[data-exec-v3] .exec-v3-header {
+  background: color-mix(in srgb, #16161d 92%, transparent);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+/* Dots de progreso por ejercicio — base / completado / actual (mockup a3a-dot). */
+.exec-v3-dot {
+  flex: 1;
+  height: 9px;
+  min-width: 6px;
+  border-radius: 999px;
+  background: #2a2a34;
+}
+.exec-v3-dot.is-done {
+  background: color-mix(in srgb, var(--exec-brand, var(--sport-500)) 60%, #16161d);
+}
+.exec-v3-dot.is-now {
+  background: var(--exec-brand, var(--sport-500));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--exec-brand, var(--sport-500)) 25%, transparent);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .exec-v3-dot.is-now { animation: exec-v3-beat 1.4s ease-in-out infinite; }
+}
+@keyframes exec-v3-beat {
+  0%, 100% { transform: scale(1); }
+  30% { transform: scale(1.3); }
+  45% { transform: scale(1); }
+}
