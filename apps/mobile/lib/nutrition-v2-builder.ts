@@ -126,6 +126,18 @@ export function strategyUsesSlots(strategy: NutritionStrategy | null): boolean {
   return strategy === 'structured' || strategy === 'hybrid'
 }
 
+/**
+ * ¿El borrador tiene contenido que valga la pena respaldar? Evita el autosave (y el aviso de
+ * salida) por un wizard recién abierto o vaciado. PURA y testeable; espejo 1:1 de la web
+ * PlanBuilderClient.tsx:1033-1038 (allí vive inline). La consumen el autosave y el guard de salida.
+ */
+export function builderHasSignificantContent(state: BuilderState): boolean {
+  if (state.strategy !== null) return true
+  if (state.planName.trim() !== '') return true
+  if (state.slots.length > 0) return true
+  return (['calories', 'proteinG', 'carbsG', 'fatsG'] as const).some((f) => state.targets[f].trim() !== '')
+}
+
 export function defaultPermissionsFor(strategy: NutritionStrategy | null): BuilderPermissions {
   const strict = strategy === 'structured'
   return {
@@ -185,6 +197,7 @@ export type BuilderAction =
   | { type: 'UPDATE_ITEM'; slotKey: string; itemKey: string; patch: Partial<Omit<BuilderItem, 'key'>> }
   | { type: 'ADD_ITEM_SUBSTITUTION'; slotKey: string; itemKey: string; key: string; food: BuilderFood }
   | { type: 'REMOVE_ITEM_SUBSTITUTION'; slotKey: string; itemKey: string; subKey: string }
+  | { type: 'RESTORE'; state: BuilderState }
 
 function clampStep(step: number): number {
   return Math.max(0, Math.min(BUILDER_STEP_COUNT - 1, step))
@@ -268,6 +281,16 @@ export function builderReducer(state: BuilderState, action: BuilderAction): Buil
             : item,
         ),
       }))
+    case 'RESTORE': {
+      // Reemplazo TOTAL del arbol desde un borrador restaurado (AsyncStorage). Validacion minima
+      // defensiva: un payload corrupto (sin `slots` array) se ignora — jamas rompe el wizard. El
+      // `step` se re-clampa a [0, BUILDER_STEP_COUNT-1] por si el JSON persistido trae un indice
+      // fuera de rango o no finito (cae a 0). Espejo 1:1 de la web draft-builder.ts:252-261.
+      const next = action.state
+      if (next == null || typeof next !== 'object' || !Array.isArray(next.slots)) return state
+      const step = Number.isFinite(next.step) ? clampStep(next.step) : 0
+      return { ...next, step }
+    }
     default:
       return state
   }

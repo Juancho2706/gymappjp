@@ -8,6 +8,7 @@ import {
   buildPublishIdempotencyKey,
   buildSlotInsertRow,
   buildVariantInsertRow,
+  builderHasSignificantContent,
   builderReducer,
   canProceedToPublishAfterArchive,
   computeItemMacros,
@@ -462,5 +463,91 @@ describe('publishDraftRN (gate Pro cliente)', () => {
     const res = await publishDraftRN({ db: client, userId: 'coach-1', draft: { nope: true }, idempotencyKey: 'publish:key:abcdef', effectiveFrom: '2026-07-20', hasNutritionPro: true })
     expect(res.ok).toBe(false)
     if (!res.ok) expect(res.code).toBe('INVALID_PAYLOAD')
+  })
+})
+
+describe('reducer / RESTORE (respaldo local del builder, 4B-13)', () => {
+  it('un payload valido reemplaza el arbol completo y re-clampa el step', () => {
+    // Estado inicial distinto (vacio) para probar que RESTORE reemplaza TODO, no fusiona.
+    const restored = builderReducer(createEmptyBuilderState('2026-07-20'), {
+      type: 'RESTORE',
+      state: structuredState(),
+    })
+    expect(restored.strategy).toBe('structured')
+    expect(restored.planName).toBe('Plan estructurado')
+    expect(restored.slots).toHaveLength(1)
+    expect(restored.slots[0].items[0].food?.id).toBe(FOOD_ID)
+    expect(restored.step).toBe(3)
+  })
+
+  it('round-trip por AsyncStorage (JSON) del payload { state, portionsBySlot }: arbol Y porciones intactos', () => {
+    // Simula el sobre persistido por writeNutritionDraft: el payload viaja como JSON y vuelve.
+    const portionsBySlot = { 'slot-a': [{ exchangeGroupId: 'grp-1', portions: 2 }] }
+    const payload = { clientId: CLIENT_ID, planId: PLAN_ID, state: structuredState(), portionsBySlot }
+    const roundTripped = JSON.parse(JSON.stringify(payload)) as typeof payload
+    // El reducer rehidrata el arbol...
+    const restored = builderReducer(createEmptyBuilderState('2026-07-20'), { type: 'RESTORE', state: roundTripped.state })
+    expect(restored).toEqual(structuredState())
+    // ...y el mapa hermano de porciones (que restoreBySlot mete via setBySlot) sobrevive identico.
+    expect(roundTripped.portionsBySlot).toEqual(portionsBySlot)
+  })
+
+  it('un payload sin `slots` array (corrupto) se ignora: devuelve el state intacto', () => {
+    const current = structuredState()
+    const restored = builderReducer(current, {
+      type: 'RESTORE',
+      state: { ...createEmptyBuilderState('2026-07-20'), slots: undefined as unknown as BuilderState['slots'] },
+    })
+    expect(restored).toBe(current)
+  })
+
+  it('step no finito en el payload => 0', () => {
+    const restored = builderReducer(createEmptyBuilderState('2026-07-20'), {
+      type: 'RESTORE',
+      state: { ...structuredState(), step: Number.NaN },
+    })
+    expect(restored.step).toBe(0)
+  })
+
+  it('step fuera de rango en el payload => re-clampado al maximo (3)', () => {
+    const restored = builderReducer(createEmptyBuilderState('2026-07-20'), {
+      type: 'RESTORE',
+      state: { ...structuredState(), step: 99 },
+    })
+    expect(restored.step).toBe(3)
+  })
+})
+
+describe('builderHasSignificantContent (guard de autosave + salida, 4B-13)', () => {
+  it('un wizard recien abierto (vacio) => false', () => {
+    expect(builderHasSignificantContent(createEmptyBuilderState('2026-07-20'))).toBe(false)
+  })
+
+  it('con estrategia elegida => true', () => {
+    const state = { ...createEmptyBuilderState('2026-07-20'), strategy: 'flexible' as const }
+    expect(builderHasSignificantContent(state)).toBe(true)
+  })
+
+  it('con nombre de plan (aunque sea solo espacios significativos) => true', () => {
+    const state = { ...createEmptyBuilderState('2026-07-20'), planName: 'Mi plan' }
+    expect(builderHasSignificantContent(state)).toBe(true)
+  })
+
+  it('nombre de plan solo con espacios en blanco => false', () => {
+    const state = { ...createEmptyBuilderState('2026-07-20'), planName: '   ' }
+    expect(builderHasSignificantContent(state)).toBe(false)
+  })
+
+  it('con al menos una franja => true', () => {
+    const state = { ...createEmptyBuilderState('2026-07-20'), slots: [{ key: 's1', name: '', startTime: '', items: [] }] }
+    expect(builderHasSignificantContent(state)).toBe(true)
+  })
+
+  it('con al menos una meta con valor => true', () => {
+    const state = {
+      ...createEmptyBuilderState('2026-07-20'),
+      targets: { calories: '2000', proteinG: '', carbsG: '', fatsG: '' },
+    }
+    expect(builderHasSignificantContent(state)).toBe(true)
   })
 })

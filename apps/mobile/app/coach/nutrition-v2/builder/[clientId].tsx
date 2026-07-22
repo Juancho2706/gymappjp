@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import {
   ActivityIndicator,
+  Alert,
+  BackHandler,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -12,7 +14,7 @@ import {
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router'
-import { AlertTriangle, CalendarClock, Check, ChevronLeft, ChevronRight, Lock, Minus, Plus, RefreshCw, Repeat, Search, Sparkles, Trash2, X } from 'lucide-react-native'
+import { AlertTriangle, CalendarClock, Check, ChevronLeft, ChevronRight, History, Lock, Minus, Plus, RefreshCw, Repeat, Search, Sparkles, Trash2, X } from 'lucide-react-native'
 import {
   BuilderStepList,
   FoodThumbnail,
@@ -63,6 +65,13 @@ import { useEntitlements, useNutritionV2CoachFlagForClient } from '../../../../l
 import { useWorkspace } from '../../../../lib/workspace'
 import { archiveNutritionPlan, getNutritionClientDetailV2, nutritionV2CoachScope } from '../../../../lib/nutrition-v2.api'
 import { searchFoodCatalogV2 } from '../../../../lib/nutrition-v2-catalog.api'
+import {
+  builderDraftKey,
+  clearNutritionDraft,
+  readNutritionDraft,
+  sweepStaleNutritionDrafts,
+  writeNutritionDraft,
+} from '../../../../lib/nutrition-coach-draft-store'
 import { supabase } from '../../../../lib/supabase'
 import {
   BUILDER_UNITS,
@@ -71,6 +80,7 @@ import {
   NUTRITION_PRO_MODULE_KEY,
   assembleAndValidateDraft,
   buildPublishIdempotencyKey,
+  builderHasSignificantContent,
   builderReducer,
   canProceedToPublishAfterArchive,
   createCoachFoodV2,
@@ -149,6 +159,23 @@ function first(value: string | string[] | undefined): string | undefined {
 // ficha/href de otras unidades). Espejo del `existingPlan` server-provisto del web.
 type ExistingPlan = { id: string; effectiveFrom: string; versionNumber: number; name: string }
 
+// Respaldo local del wizard (4B-13): DOS piezas de estado independientes viajan juntas — el arbol
+// del reducer (BuilderState) y el mapa hermano de porciones (PortionsBySlot). Sin `portionsBySlot`
+// un plan structured/hybrid restauraria incompleto (las porciones a eleccion se perderian). Espejo
+// del web PlanBuilderClient.tsx:1024-1029.
+interface BuilderDraftPayload {
+  clientId: string
+  planId: string | null
+  state: BuilderState
+  portionsBySlot: PortionsBySlot
+}
+
+// Copy LITERAL del aviso de salida (web PlanBuilderClient.tsx:1040). Warn-only: "Salir" deja la
+// pantalla pero NO borra el borrador (el autosave ya lo persistio; solo publish OK / X del banner
+// lo borran). El texto dice "descartarlo?" por fidelidad, pero el borrador siempre sobrevive (igual
+// que el `beforeunload` web, que tampoco toca localStorage).
+const LEAVE_GUARD_COPY = 'Tienes un borrador sin publicar. ¿Salir y descartarlo?'
+
 // Fieldset "Permisos del alumno" (sub-delta a): orden y copys LITERALES del web
 // (PlanBuilderClient.tsx:773-776). El estado ya fluye de punta a punta (SET_PERMISSION +
 // assembleDraft); esto solo lo puebla con la eleccion del coach en vez del default.
@@ -179,6 +206,8 @@ interface PortionsController {
   addGroup: (slotKey: string, exchangeGroupId: string) => void
   removeGroup: (slotKey: string, exchangeGroupId: string) => void
   step: (slotKey: string, exchangeGroupId: string, direction: 1 | -1) => void
+  /** Rehidrata el mapa completo de porciones desde un borrador restaurado (4B-13). */
+  restoreBySlot: (map: PortionsBySlot) => void
 }
 
 function usePortionsBuilder(): PortionsController {
@@ -230,8 +259,11 @@ function usePortionsBuilder(): PortionsController {
       setBySlot((prev) => stepPortionValue(prev, slotKey, id, direction)),
     [],
   )
+  // Restauracion (4B-13): reemplaza el mapa entero de porciones de una. Par obligado del `RESTORE`
+  // del reducer — persistir solo `state` perderia silenciosamente las porciones a eleccion.
+  const restoreBySlot = useCallback((map: PortionsBySlot) => setBySlot(map), [])
 
-  return { bySlot, groups, groupsLoading, groupsError, ensureGroupsLoaded, retryGroups, addGroup, removeGroup, step }
+  return { bySlot, groups, groupsLoading, groupsError, ensureGroupsLoaded, retryGroups, addGroup, removeGroup, step, restoreBySlot }
 }
 
 export default function CoachNutritionV2BuilderScreen() {
@@ -270,6 +302,15 @@ export default function CoachNutritionV2BuilderScreen() {
   // Plan vigente del alumno (sub-delta c): null hasta resolver la lectura local. `canReplace`
   // se deriva de su presencia, espejo del web (PlanBuilderClient.tsx:1439).
   const [existingPlan, setExistingPlan] = useState<ExistingPlan | null>(null)
+  // Respaldo local (4B-13): el fetch de `existingPlan` es ASINCRONO en RN (arranca null y se setea
+  // en el .then/.catch), asi que la key del borrador `…:<id>` mutaria a mitad de sesion. Este flag
+  // (seteado en AMBAS ramas del fetch) fija la key ANTES de leer/escribir: nada de read+banner ni
+  // autosave hasta que resuelva. Sin homologo web (alli `existingPlan` es server-provisto sincrono).
+  const [existingPlanResolved, setExistingPlanResolved] = useState(false)
+  const [showDraftBanner, setShowDraftBanner] = useState(false)
+  const draftPayloadRef = useRef<BuilderDraftPayload | null>(null)
+  const isFirstRenderRef = useRef(true)
+  const { theme } = useTheme()
   const operationId = useRef(genKey('op'))
   // Reemplazo "archivar->publicar" reanudable (sub-delta c): clave de idempotencia ESTABLE por
   // operacion (fijada una sola vez) + guard "archivado una sola vez", para que un reintento tras
@@ -308,14 +349,71 @@ export default function CoachNutritionV2BuilderScreen() {
         setExistingPlan(
           p ? { id: p.id, effectiveFrom: p.effectiveFrom, versionNumber: p.versionNumber, name: p.name } : null,
         )
+        setExistingPlanResolved(true)
       })
       .catch(() => {
-        if (active) setExistingPlan(null)
+        if (!active) return
+        setExistingPlan(null)
+        setExistingPlanResolved(true)
       })
     return () => {
       active = false
     }
   }, [clientId, scope, today])
+
+  // Respaldo local — higiene (4B-13): barre borradores vencidos de AMBOS prefijos (TTL 7d). No
+  // depende de la key, asi que corre al montar sin esperar a `existingPlanResolved`. Best-effort.
+  useEffect(() => {
+    void sweepStaleNutritionDrafts(Date.now())
+  }, [])
+
+  // Respaldo local — key estable por alumno+plan (4B-13). Se recalcula cuando resuelve `existingPlan`;
+  // hasta entonces vale `…:new`, pero read/write estan gateados por `existingPlanResolved` para no
+  // tocar la key inestable.
+  const draftKey = useMemo(() => builderDraftKey(clientId, existingPlan?.id ?? null), [clientId, existingPlan?.id])
+
+  // Lectura del respaldo: SOLO tras resolver `existingPlan` (la key ya es estable). Si hay un borrador
+  // vigente para ESTE alumno lo guarda en el ref (sin re-render hasta tocar Restaurar) y ofrece el
+  // banner. AsyncStorage es async: `active`/`mountedRef` evitan tocar estado tras el desmonte (sin flash).
+  useEffect(() => {
+    if (!existingPlanResolved) return
+    let active = true
+    void (async () => {
+      const record = await readNutritionDraft<BuilderDraftPayload>(draftKey, Date.now())
+      if (!active || !mountedRef.current) return
+      if (record != null && record.payload.clientId === clientId) {
+        draftPayloadRef.current = record.payload
+        setShowDraftBanner(true)
+      }
+    })()
+    return () => {
+      active = false
+    }
+  }, [existingPlanResolved, draftKey, clientId])
+
+  // Autosave debounced (2000 ms — distinto de los 1500 ms del quick-edit) del arbol del wizard + las
+  // porciones. Salta el primer render (la hidratacion inicial no es un cambio del coach) y solo corre
+  // con la key estable (`existingPlanResolved`). Si el borrador deja de tener contenido significativo
+  // (el coach vacio todo) limpia la key en vez de guardar vacio. AsyncStorage async: `void` sin bloquear.
+  useEffect(() => {
+    if (isFirstRenderRef.current) {
+      isFirstRenderRef.current = false
+      return
+    }
+    if (!existingPlanResolved) return
+    const timer = setTimeout(() => {
+      if (builderHasSignificantContent(state)) {
+        void writeNutritionDraft<BuilderDraftPayload>(
+          draftKey,
+          { clientId, planId: existingPlan?.id ?? null, state, portionsBySlot: portions.bySlot },
+          Date.now(),
+        )
+      } else {
+        void clearNutritionDraft(draftKey)
+      }
+    }, 2000)
+    return () => clearTimeout(timer)
+  }, [state, portions.bySlot, draftKey, existingPlanResolved, clientId, existingPlan?.id])
 
   const validation = useMemo(() => validateStep(state, state.step), [state])
 
@@ -352,6 +450,35 @@ export default function CoachNutritionV2BuilderScreen() {
     },
     [hasNutritionPro],
   )
+
+  // Punto comun de exito de las DOS ramas de publicacion (normal / "Archivar y reemplazar"): limpia
+  // el respaldo local antes de navegar — el plan ya esta en el servidor. Best-effort sin await (la
+  // pantalla se desmonta al navegar). Espejo del web goToPublished (PlanBuilderClient.tsx:1159-1162).
+  const goToPublished = useCallback(() => {
+    void clearNutritionDraft(draftKey)
+    router.replace(`/coach/nutrition-v2/${clientId}?published=1`)
+  }, [draftKey, clientId, router])
+
+  // Restaurar borrador: rehidrata el arbol del reducer Y el mapa de porciones (dos piezas). El
+  // catalogo de grupos NO se persiste; si el plan usa franjas lo precargamos para que las filas de
+  // porciones muestren nombre/color en vez del fallback. Espejo del web handleRestoreDraft.
+  const handleRestoreDraft = useCallback(() => {
+    const payload = draftPayloadRef.current
+    if (payload != null) {
+      dispatch({ type: 'RESTORE', state: payload.state })
+      portions.restoreBySlot(payload.portionsBySlot ?? {})
+      if (strategyUsesSlots(payload.state.strategy)) portions.ensureGroupsLoaded()
+    }
+    setShowDraftBanner(false)
+  }, [portions])
+
+  // X del banner: borra la key y baja el banner. Junto con `goToPublished` (publish OK) son los DOS
+  // unicos borrados; el guard de salida NO borra (el borrador debe sobrevivir para la proxima sesion).
+  const handleDiscardDraft = useCallback(() => {
+    void clearNutritionDraft(draftKey)
+    draftPayloadRef.current = null
+    setShowDraftBanner(false)
+  }, [draftKey])
 
   const handlePublish = useCallback(
     async (effectiveFromOverride?: string) => {
@@ -398,7 +525,7 @@ export default function CoachNutritionV2BuilderScreen() {
       if (!mountedRef.current) return
       setPublishing(false)
       if (res.ok) {
-        router.replace(`/coach/nutrition-v2/${clientId}?published=1`)
+        goToPublished()
         return
       }
       if (res.code === 'UPGRADE_REQUIRED') {
@@ -413,7 +540,7 @@ export default function CoachNutritionV2BuilderScreen() {
       }
       setPublishError(res.error)
     },
-    [userId, clientId, planId, state, today, hasNutritionPro, router, portions.bySlot, portions.groups, existingPlan],
+    [userId, clientId, planId, state, today, hasNutritionPro, portions.bySlot, portions.groups, existingPlan, goToPublished],
   )
 
   // "Empezar manana": mueve la vigencia al dia siguiente al del plan vigente (garantiza que el RPC
@@ -485,13 +612,13 @@ export default function CoachNutritionV2BuilderScreen() {
     if (!mountedRef.current) return
     setPublishing(false)
     if (res.ok) {
-      router.replace(`/coach/nutrition-v2/${clientId}?published=1`)
+      goToPublished()
       return
     }
     setConflictError(
       'Archivamos el plan anterior, pero no pudimos publicar el nuevo, así que el alumno quedó sin plan vigente. Vuelve a tocar "Archivar el actual y reemplazar" para reintentar solo la publicación (no se archivará de nuevo).',
     )
-  }, [userId, clientId, existingPlan, state, today, hasNutritionPro, router, portions.bySlot, portions.groups])
+  }, [userId, clientId, existingPlan, state, today, hasNutritionPro, portions.bySlot, portions.groups, goToPublished])
 
   // "Cancelar" la card de conflicto: la cierra y arranca limpia la proxima decision (nuevo archivado
   // + nueva clave). Espejo del web handleConflictOpenChange al cerrar el modal.
@@ -567,6 +694,22 @@ export default function CoachNutritionV2BuilderScreen() {
     [searchTarget],
   )
 
+  // Guard de salida por back de hardware (Android) — espejo WARN-ONLY del beforeunload web. Solo con
+  // contenido significativo muestra el aviso; "Salir" deja la pantalla pero NO borra el borrador (el
+  // autosave ya lo persistio y el banner lo ofrecera al volver, igual que web). Sin contenido, deja
+  // pasar el back nativo. Solo publish OK y la X del banner borran el borrador.
+  useEffect(() => {
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (!builderHasSignificantContent(state)) return false
+      Alert.alert(LEAVE_GUARD_COPY, undefined, [
+        { text: 'Seguir editando', style: 'cancel' },
+        { text: 'Salir', style: 'destructive', onPress: () => router.back() },
+      ])
+      return true
+    })
+    return () => sub.remove()
+  }, [state, router])
+
   if (!entitlements.ready || !workspaceReady) {
     return (
       <SafeAreaView edges={['top']} className="flex-1 bg-surface-app">
@@ -610,6 +753,34 @@ export default function CoachNutritionV2BuilderScreen() {
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"
         >
+          {/* Respaldo local (4B-13): borrador sin publicar de una sesion anterior para ESTE
+              alumno/plan. Espejo del banner web PlanBuilderClient.tsx:1344-1364 — tokens EVA DS
+              (primary), icono History, Restaurar (rehidrata arbol + porciones) + X (descarta). */}
+          {showDraftBanner ? (
+            <View className="flex-row items-center gap-3 rounded-card border border-primary/25 bg-primary/10 p-3">
+              <History color={theme.primary} size={16} />
+              <Text className="min-w-0 flex-1 text-xs font-semibold leading-5 text-primary">
+                Tienes un borrador sin guardar de esta sesión.
+              </Text>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Restaurar"
+                onPress={handleRestoreDraft}
+                className="min-h-11 items-center justify-center rounded-control bg-primary px-3"
+              >
+                <Text className="text-xs font-bold text-white">Restaurar</Text>
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Descartar borrador"
+                onPress={handleDiscardDraft}
+                className="h-11 w-11 items-center justify-center rounded-control"
+              >
+                <X color={theme.primary} size={16} />
+              </Pressable>
+            </View>
+          ) : null}
+
           <NutritionHeader
             eyebrow={planId ? 'Nueva version' : 'Nuevo plan'}
             title={clientName || 'Constructor de nutrición'}

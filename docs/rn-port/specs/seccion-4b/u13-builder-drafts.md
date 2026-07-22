@@ -283,3 +283,40 @@ elimina. La key del borrador de "plan nuevo" vs "nueva versión del plan X" no s
 `planId`/`new`). Captura web móvil (banner Restaurar del builder) vs RN: comparar copy, disposición y
 comportamiento. Gates: `pnpm --filter @eva/mobile exec tsc --noEmit`, `pnpm exec eslint`, `pnpm check:tokens`, y
 los tests nuevos del reducer + `builderHasSignificantContent`.
+
+## Cierre (2026-07-22)
+
+Portado 1:1 el respaldo local del builder RN sobre la primitiva de 4B-14 (store INTOCADO). Entregado:
+
+- **`apps/mobile/lib/nutrition-v2-builder.ts`**: acción `| { type: 'RESTORE'; state: BuilderState }` en
+  `BuilderAction` + `case 'RESTORE'` en `builderReducer` con la guarda defensiva verbatim del web
+  (`Array.isArray(next.slots)` + re-clamp de `step` vía `clampStep`, `NaN`→0). Función pura
+  `builderHasSignificantContent(state)` (espejo de `PlanBuilderClient.tsx:1033-1038`), exportada y testeada.
+- **`apps/mobile/app/coach/nutrition-v2/builder/[clientId].tsx`**:
+  - `usePortionsBuilder`: nuevo `restoreBySlot(map)` (`setBySlot(map)`) en la interfaz `PortionsController` y el
+    `return` — par obligado del `RESTORE` para no perder las porciones a elección.
+  - **Trampa async neutralizada**: flag `existingPlanResolved` (seteado en el `.then` Y el `.catch` del fetch de
+    `existingPlan`); `draftKey = useMemo(builderDraftKey(clientId, existingPlan?.id ?? null))`; el efecto de lectura
+    (read+banner) y el autosave están GATEADOS por `existingPlanResolved` → la key nunca muta `…:new`→`…:<id>` a
+    mitad de sesión. El `sweep` de higiene corre al montar sin gate (no depende de la key).
+  - Autosave debounced **2000 ms** (no 1500) con guard de primer render; escribe el payload
+    `{ clientId, planId, state, portionsBySlot }` si hay contenido significativo, si no `clearNutritionDraft`.
+  - Guard de salida `BackHandler`+`Alert` **warn-only** con `LEAVE_GUARD_COPY` verbatim (`:1040`); "Salir" hace
+    `router.back()` y **NO** borra el borrador (sobrevive para el banner de la próxima sesión).
+  - `handleRestoreDraft` (dispatch `RESTORE` + `portions.restoreBySlot` + `ensureGroupsLoaded` si usa franjas) /
+    `handleDiscardDraft` (clear + baja banner + limpia ref).
+  - `goToPublished` (clear + `router.replace`) inyectado en **AMBAS** ramas de éxito (`handlePublish` y
+    `handleReplaceToday`).
+  - Banner Restaurar al tope del `ScrollView` con tokens EVA DS (`bg-primary/10`, `border-primary/25`,
+    `text-primary`), iconos `History`/`X` coloreados con `theme.primary` (white-label), X con target 44px y
+    `accessibilityLabel="Descartar borrador"`.
+- **Tests** (`tests/mobile-nutrition-v2-builder.test.ts`): 11 nuevos — `RESTORE` (reemplazo total + re-clamp,
+  round-trip JSON del payload con `portionsBySlot`, payload sin `slots` array → `state` intacto, step no-finito→0,
+  step fuera de rango→3) y `builderHasSignificantContent` (vacío→false, strategy/planName/slots/meta→true,
+  planName solo-espacios→false).
+
+Store `nutrition-coach-draft-store.ts` INTOCADO (propiedad de 4B-14). Ningún RN-extra nuevo.
+
+**Gates (verdes):** `tsc --noEmit` 0 errores; `vitest run` builder + draft-store = 55/55; `eslint` de los 3
+archivos = 3 problemas baseline (`ChevronLeft`/`ChevronRight` unused + `useMemo(todayInSantiago)`), **0 nuevos**;
+`check:tokens` OK (86 tokens). Pendiente NO-código: build nativa + device QA del CEO (autosave/restore/back real).
