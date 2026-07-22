@@ -1,7 +1,7 @@
 ---
 status: active
 owner: Juan Manuel Villegas
-last_verified: "2026-07-21 @ bce2eb3b"
+last_verified: "2026-07-21 @ 76d8ea2f"
 canonical: true
 source_of_truth: apps/web responsive + apps/mobile
 ---
@@ -58,14 +58,16 @@ fuera, RN-extras estricto).
 | Estado | Unidades |
 |---|---|
 | Aplicadas (wave 4B.1, `bce2eb3b`) | 4B-01 macros meal-groups (P0 datos), 4B-02 scope org foods, 4B-03 quick-edit notas+permisos |
-| Siguiente | Wave 4B.2: **4B-04 SWAP** tab→hub V2 (solo); después wave 4B.3 (HUB ∥ Catálogo V2 ∥ Detalle-acciones ∥ Builder-F02 ∥ Meal-groups-editor) |
-| Resto | 4B-05…4B-15 según `RANKING.md`; 4B-16 (deuda nutrition-pro) fuera de la rama (toca web+packages) |
+| Aplicada (wave 4B.2, `76d8ea2f`) | 4B-04 SWAP tab coach→Centro V2 (inline, cápsula intacta; V1 = rollback tras flag) |
+| Siguiente | Wave 4B.3: 4B-05 HUB ∥ 4B-06 Catálogo V2 ∥ 4B-08 Detalle-acciones ∥ 4B-10 Builder-F02 ∥ 4B-15 MG-editor (archivos disjuntos) |
+| Resto | 4B-07, 4B-09, 4B-11…4B-15 según `RANKING.md`; 4B-16 (deuda nutrition-pro) fuera de la rama (toca web+packages) |
 
 ### Dónde retomar
 
-1. Wave 4B.2: `4B-04` SWAP del tab coach al hub V2 (archivo compartido con HUB → solo en su wave).
-2. Después las waves 4B.3–4B.6 según `RANKING.md` (colisiones de archivo ya mapeadas).
-3. Completar matriz device de 4A y regresión dirigida de Secciones 1–3/2R (requiere build nativa).
+1. Wave 4B.3: `4B-05` HUB ∥ `4B-06` Catálogo V2 ∥ `4B-08` Detalle-acciones ∥ `4B-10` Builder-F02 ∥ `4B-15` MG-editor.
+2. Después las waves 4B.4–4B.6 según `RANKING.md` (colisiones de archivo ya mapeadas).
+3. Pendientes de 4B-05 anotados por 4B-04: clearance de cápsula y safe-area top del hub V2 inline.
+4. Completar matriz device de 4A y regresión dirigida de Secciones 1–3/2R (requiere build nativa).
 
 ## Builds móviles
 
