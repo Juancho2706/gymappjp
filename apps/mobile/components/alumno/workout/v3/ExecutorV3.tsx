@@ -38,7 +38,6 @@ import { flushLogQueue, getPendingLogCount } from '../../../../lib/offline-cache
 import { OfflineBanner } from '../../../OfflineBanner'
 import { EvaLoaderScreen } from '../../../EvaLoader'
 import { SingleExerciseCard } from '../SingleExerciseCard'
-import { SupersetGroupCard } from '../SupersetGroupCard'
 import { StepperExecution, type StepperStepView } from '../StepperExecution'
 import { KeypadHost, type KeypadTarget } from '../KeypadHost'
 import { TechniqueSheet } from '../TechniqueSheet'
@@ -55,11 +54,13 @@ import { resolveExecTheme } from './exec-theme'
 import { SessionIntro } from './SessionIntro'
 import { SessionStart, type StartChip, type StartExercisePreview } from './SessionStart'
 import { ExerciseScreenV3 } from './ExerciseScreenV3'
+import { SupersetScreenV3, type SupersetMemberSub } from './SupersetScreenV3'
+import { supersetGroupLetter } from './superset-screen-model'
 import { MobilityScreenV3 } from './MobilityScreenV3'
 import { RollerScreenV3 } from './RollerScreenV3'
 import { CardioScreenV3 } from './CardioScreenV3'
 import { ExerciseListV3, type ExerciseListItem } from './ExerciseListV3'
-import { RestInterstitialV3, type RestInterstitialData } from './RestInterstitialV3'
+import { RestInterstitialV3, type RestInterstitialData, type RestRoundContext } from './RestInterstitialV3'
 import { ExecSettingsSheet } from './ExecSettingsSheet'
 import { useExecSettings } from './exec-settings'
 
@@ -156,6 +157,10 @@ function ExecutorV3Inner({ planId, recoverDate, editDate }: { planId: string; re
   // Micro-celebracion del interstitial V3 (E3.1): true cuando el descanso siguio a CERRAR una serie
   // (via handleCommit), false para un descanso manual. El renderer lo lee al montar el overlay.
   const restCelebrateRef = useRef(false)
+  // Contexto de "ronda cerrada" (E3.5): se setea en handleCommit cuando el descanso que arranca proviene
+  // de CERRAR una ronda de superserie (banner "Ronda N lista" + dots + siguiente ronda en el interstitial).
+  // null para cualquier otro descanso (manual, bloque suelto, intra-ronda no dispara descanso).
+  const restRoundContextRef = useRef<RestRoundContext | null>(null)
   // Fase de presentacion V3: arranca en el splash (una vez por apertura) → Inicio → sesion.
   const [phase, setPhase] = useState<ExecPhase>('intro')
 
@@ -328,6 +333,8 @@ function ExecutorV3Inner({ planId, recoverDate, editDate }: { planId: string; re
       haptics.setDone()
       // El descanso que arranque tras este commit muestra la micro-celebracion "+1 serie" (E3.1).
       restCelebrateRef.current = true
+      // Por defecto NO es un cierre de ronda; el branch de superserie lo setea si corresponde (E3.5).
+      restRoundContextRef.current = null
       const projected = [
         ...sessionLogs.filter((l) => !(l.block_id === payload.blockId && l.set_number === payload.setNumber)),
         { block_id: payload.blockId, set_number: payload.setNumber },
@@ -369,7 +376,33 @@ function ExecutorV3Inner({ planId, recoverDate, editDate }: { planId: string; re
           } else if (roundClosed) {
             const groupRest = members.reduce((mx, m) => Math.max(mx, parseRestTime(m.rest_time)), 0)
             const label = resolveExercise(members[0])?.name
-            if (groupRest > 0) timers.startRest(groupRest, { autoStart: true, label })
+            if (groupRest > 0) {
+              // Contexto de "ronda cerrada" (E3.5): el interstitial muestra banner + dots + siguiente
+              // ronda. Se deriva del engine (round = la ronda recién cerrada; total = maxSets del grupo).
+              const totalRounds = members.reduce((mx, m) => Math.max(mx, m.sets), 0)
+              const nextRound = round + 1
+              let next: RestRoundContext['next'] = null
+              if (nextRound <= totalRounds) {
+                const firstMember = members.find((m) => m.sets >= nextRound)
+                if (firstMember) {
+                  const prescribed = resolveExercise(firstMember)
+                  const sub = getSubstitution(firstMember)
+                  const nm = sub?.name ?? prescribed?.name ?? 'Ejercicio'
+                  const eff = effByBlock.get(firstMember.id) ?? null
+                  const w = eff?.weightKg ?? firstMember.target_weight_kg
+                  const prescription = `${firstMember.sets} × ${firstMember.reps}${w != null ? ` · ${formatWeightEsCl(w)} kg` : ''}`
+                  const idx = members.findIndex((m) => m.id === firstMember.id)
+                  const exercise: SessionExercise | null = prescribed
+                    ? (sub
+                        ? { ...prescribed, id: sub.exerciseId ?? prescribed.id, name: sub.name, gif_url: sub.gif_url, video_url: sub.video_url, video_start_time: sub.video_start_time, video_end_time: sub.video_end_time, instructions: sub.instructions }
+                        : prescribed)
+                    : null
+                  next = { name: nm, prescription, exercise, tag: `${SUPERSET_MEMBER_LETTERS[idx] ?? ''}${nextRound}` }
+                }
+              }
+              restRoundContextRef.current = { roundNumber: round, totalRounds, next }
+              timers.startRest(groupRest, { autoStart: true, label })
+            }
           } else {
             timers.cancelRest()
           }
@@ -400,7 +433,7 @@ function ExecutorV3Inner({ planId, recoverDate, editDate }: { planId: string; re
         }
       }
     },
-    [blocks, getSubstitution, logSet, timers, sessionLogs, supersetMembersByBlock, signalCommitted],
+    [blocks, getSubstitution, logSet, timers, sessionLogs, supersetMembersByBlock, signalCommitted, effByBlock],
   )
 
   const retryCommit = useCallback(
@@ -588,39 +621,38 @@ function ExecutorV3Inner({ planId, recoverDate, editDate }: { planId: string; re
   // Render de un grupo (bloque suelto o superserie). En el stepper NO se colapsa a recap (siempre card
   // completa para editar) — allowCollapse implicito = false, igual que ExecutorV2 en modo Pasos.
   const renderGroup = useCallback(
-    (group: { key: string; type: 'single' | 'superset'; blocks: SessionBlock[] }) => {
+    (group: { key: string; type: 'single' | 'superset'; blocks: SessionBlock[]; groupLetter?: string }) => {
       if (group.type === 'superset') {
         const members = supersetMembersByBlock.get(group.blocks[0].id) ?? group.blocks
-        const groupActive = activeBlockId != null && members.some((m) => m.id === activeBlockId)
+        // E3.5: pantalla "Superserie" V3 (tarjetas apiladas foco-en-activo + captura reusada + contexto de
+        // ronda en el descanso de grupo). Sustituye a la card de rondas intercaladas dentro del stepper.
         return (
-          <View
+          <SupersetScreenV3
             key={group.key}
-            style={
-              groupActive && !motion.reduced
-                ? { shadowColor: exec.accent, shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.35, shadowRadius: 16, elevation: 8 }
-                : undefined
-            }
-          >
-            <SupersetGroupCard
-              members={members}
-              sessionLogs={sessionLogs}
-              effByBlock={effByBlock}
-              previousHistory={previousHistory}
-              currentWeek={currentWeek}
-              restoredDraft={restoredDraft}
-              hrZones={hrZones}
-              reducedMotion={motion.reduced}
-              onOpenTechnique={(b) => setTechniqueExercise(resolveExercise(b))}
-              onOpenSet={openSet}
-              onCommitSet={handleCommit}
-              onRpeUpdate={handleRpeUpdate}
-              onDraftChange={saveActiveDraft}
-              recentSet={recentSet}
-              syncErrors={syncErrors}
-              onRetrySet={retryCommit}
-              registerSetRowRef={() => {}}
-            />
-          </View>
+            groupLetter={group.groupLetter ?? 'A'}
+            members={members}
+            sessionLogs={sessionLogs}
+            effByBlock={effByBlock}
+            previousHistory={previousHistory}
+            restoredDraft={restoredDraft}
+            reducedMotion={motion.reduced}
+            exec={exec}
+            showEffort={execSettings.showRpeRir}
+            getMemberSub={(b): SupersetMemberSub | null => {
+              const sub = getSubstitution(b)
+              return sub ? { exerciseId: sub.exerciseId, name: sub.name, prescribedName: sub.prescribedName, gif_url: sub.gif_url, video_url: sub.video_url, video_start_time: sub.video_start_time, video_end_time: sub.video_end_time, instructions: sub.instructions } : null
+            }}
+            onOpenTechnique={(ex) => setTechniqueExercise(ex)}
+            onOpenSet={openSet}
+            onCommitSet={handleCommit}
+            onRpeUpdate={handleRpeUpdate}
+            onDraftChange={saveActiveDraft}
+            onOpenSubstitute={(blockId) => setSubstituteBlockId(blockId)}
+            onUndoSubstitution={(blockId) => setSubstitutionByBlock((p) => { const n = { ...p }; delete n[blockId]; return n })}
+            recentSet={recentSet}
+            syncErrors={syncErrors}
+            onRetrySet={retryCommit}
+          />
         )
       }
       const block = group.blocks[0]
@@ -813,7 +845,14 @@ function ExecutorV3Inner({ planId, recoverDate, editDate }: { planId: string; re
     (index: number) => {
       const st = steps[index]
       if (!st) return null
-      return renderGroup({ key: st.key, type: st.kind, blocks: st.blocks })
+      // Letra del grupo superserie (A, B…) por su orden entre superseries del plan, para el título del paso.
+      let groupLetter: string | undefined
+      if (st.kind === 'superset') {
+        let ord = 0
+        for (let i = 0; i < index; i += 1) if (steps[i]?.kind === 'superset') ord += 1
+        groupLetter = supersetGroupLetter(ord)
+      }
+      return renderGroup({ key: st.key, type: st.kind, blocks: st.blocks, groupLetter })
     },
     [steps, renderGroup],
   )
@@ -894,6 +933,7 @@ function ExecutorV3Inner({ planId, recoverDate, editDate }: { planId: string; re
     planItems: listItems,
     currentIndex: restNextData?.index ?? stepIndex,
     celebrate: restCelebrateRef.current,
+    roundContext: restRoundContextRef.current,
     exec,
     reducedMotion: motion.reduced,
   }
@@ -1039,7 +1079,7 @@ function ExecutorV3Inner({ planId, recoverDate, editDate }: { planId: string; re
           <View className="w-full flex-row items-center justify-between gap-3 self-center" style={{ maxWidth: 1024 }}>
             <Pressable
               testID="btn-manual-rest-v3"
-              onPress={() => { restCelebrateRef.current = false; timers.startRest(90, { autoStart: true }) }}
+              onPress={() => { restCelebrateRef.current = false; restRoundContextRef.current = null; timers.startRest(90, { autoStart: true }) }}
               className="h-11 flex-row items-center gap-1.5 rounded-control border border-ember-500/25 bg-ember-500/15 px-3 active:opacity-90"
               accessibilityRole="button"
               accessibilityLabel="Iniciar descanso de 90 segundos"

@@ -32,11 +32,12 @@ import { ExerciseStepV3 } from './v3/ExerciseStepV3'
 import { MobilityStepV3 } from './v3/MobilityStepV3'
 import { RollerStepV3 } from './v3/RollerStepV3'
 import { CardioStepV3 } from './v3/CardioStepV3'
+import { SupersetStepV3 } from './v3/SupersetStepV3'
 import { ExecListMapV3, type ExecListMapItem } from './v3/ExecListMapV3'
 import { SessionIntro } from './v3/SessionIntro'
 import { SessionStart, type SessionStartExercise } from './v3/SessionStart'
 import { ExecSettingsSheet } from './v3/ExecSettingsSheet'
-import { RestInterstitialDataProvider, type InterstitialNext } from './v3/RestInterstitialV3'
+import { RestInterstitialDataProvider, type InterstitialNext, type InterstitialRound } from './v3/RestInterstitialV3'
 import { resolveExecMedia } from './v3/exec-media'
 import { useExecSettings } from './v3/exec-settings'
 import { STEPPER_MODE_KEY } from './rest-timer-preferences'
@@ -512,10 +513,12 @@ const SUPERSET_MEMBER_LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
 type SessionLog = { block_id: string; set_number: number }
 
 /** Info compartida de una superserie (una instancia por grupo, referenciada por cada miembro). */
-interface SupersetInfo {
+export interface SupersetInfo {
     members: BlockType[]
     /** Letra visible por bloque (A, B, C… por posición dentro del grupo). */
     letterByBlock: Map<string, string>
+    /** Letra del GRUPO (A, B, C… por orden de aparición entre superseries del plan) — título V3. */
+    groupLetter: string
     /** Descanso completo del grupo = max de rest_seconds de los miembros. */
     groupRestSeconds: number
     /** Rondas = max de series entre los miembros. */
@@ -1313,6 +1316,7 @@ export function WorkoutExecutionClient({
     // Una sola fuente para el card (leyenda + rondas) y para el auto-scroll/guía de `handleLogged`.
     const supersetInfo = useMemo(() => {
         const map = new Map<string, SupersetInfo>()
+        let groupIdx = 0
         for (const section of sectioned) {
             for (const group of section.groups) {
                 if (group.type !== 'superset') continue
@@ -1321,7 +1325,9 @@ export function WorkoutExecutionClient({
                 members.forEach((m, i) => letterByBlock.set(m.id, SUPERSET_MEMBER_LETTERS[i] ?? '?'))
                 const groupRestSeconds = members.reduce((mx, m) => Math.max(mx, parseRestTime(m.rest_time)), 0)
                 const maxSets = members.reduce((mx, m) => Math.max(mx, m.sets), 0)
-                const info: SupersetInfo = { members, letterByBlock, groupRestSeconds, maxSets }
+                const groupLetter = SUPERSET_MEMBER_LETTERS[groupIdx] ?? '?'
+                groupIdx += 1
+                const info: SupersetInfo = { members, letterByBlock, groupLetter, groupRestSeconds, maxSets }
                 for (const m of members) map.set(m.id, info)
             }
         }
@@ -1706,6 +1712,31 @@ export function WorkoutExecutionClient({
                     />
                 )
             }
+            // Ejecutor V3 (E3.5): en el stepper (allowCollapse=false), la superserie se presenta con
+            // SupersetStepV3 (título + dots de ronda, miembro activo destacado con LogSetForm reusado y
+            // el resto colapsado). La lista y V2 siguen con SupersetGroupCard. El orden de rondas y el
+            // descanso de grupo se derivan del engine `superset-rounds` (motor de guardado intacto).
+            if (execV3Active && !allowCollapse) {
+                return (
+                    <SupersetStepV3
+                        key={group.key}
+                        info={info}
+                        sessionLogs={sessionLogs}
+                        currentWeek={currentWeek}
+                        weeksToRepeat={program?.weeks_to_repeat}
+                        previousHistory={previousHistory}
+                        lastSessionByBlock={lastSessionByBlock}
+                        exerciseMaxes={exerciseMaxes}
+                        autoTimerEnabled={autoTimerEnabled}
+                        substitutionByBlock={substitutionByBlock}
+                        onLogged={handleLogged}
+                        onResult={handleResult}
+                        openTechnique={openTechnique}
+                        registerRowRef={registerRowRef}
+                        getExercise={getExercise}
+                    />
+                )
+            }
             return (
                 <motion.div
                     key={group.key}
@@ -1976,6 +2007,32 @@ export function WorkoutExecutionClient({
         }
     })()
 
+    // Ejecutor V3 (E3.5): contexto de CIERRE DE RONDA para el interstitial. El descanso de grupo de una
+    // superserie sólo se dispara al cerrar la ronda (los descansos intra-ronda no montan interstitial),
+    // así que si el bloque activo es miembro de una superserie con una ronda recién cerrada Y aún queda
+    // ronda por delante, el interstitial pinta "Ronda N lista" + dots + "Siguiente ronda". Derivado del
+    // engine `superset-rounds` (isRoundComplete); el bloque activo YA apunta al 1er miembro de la ronda
+    // siguiente, así que `execInterstitialNext` cae sobre el ejercicio correcto. El cierre de la ÚLTIMA
+    // ronda mueve el activo fuera de la superserie ⇒ interstitial normal (no hay "siguiente ronda").
+    const execInterstitialRound: InterstitialRound | null = (() => {
+        if (!execV3Active || activeBlockId == null) return null
+        const info = supersetInfo.get(activeBlockId)
+        if (!info) return null
+        const { members, maxSets, letterByBlock } = info
+        let justClosed = 0
+        for (let r = 1; r <= maxSets; r += 1) {
+            if (isRoundComplete(members, r, sessionLogs)) justClosed = r
+            else break
+        }
+        if (justClosed === 0 || justClosed >= maxSets) return null
+        const letter = letterByBlock.get(activeBlockId) ?? null
+        return {
+            justClosed,
+            total: maxSets,
+            nextTag: letter ? `${letter}${justClosed + 1}` : null,
+        }
+    })()
+
     // Pinta el card del paso `index` reusando `renderGroup` (siempre completo — sin colapsar).
     const renderStepNode = (index: number) => {
         const step = steps[index]
@@ -2043,7 +2100,7 @@ export function WorkoutExecutionClient({
     return (
         <TargetDateProvider value={targetDate}>
         <RestInterstitialDataProvider
-            value={{ items: execListMapItems, onJump: returnToStepper, next: execInterstitialNext }}
+            value={{ items: execListMapItems, onJump: returnToStepper, next: execInterstitialNext, round: execInterstitialRound }}
         >
         <WorkoutTimerProvider v3={execV3Active}>
           <WorkoutKeypadProvider>

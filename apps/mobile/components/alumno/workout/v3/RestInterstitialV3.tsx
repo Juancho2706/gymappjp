@@ -14,7 +14,7 @@ import Animated, {
 } from 'react-native-reanimated'
 import { Gesture, GestureDetector } from 'react-native-gesture-handler'
 import { Image } from 'expo-image'
-import { Check, ChevronDown, Dumbbell, MessageSquareText, SkipForward } from 'lucide-react-native'
+import { Check, CheckCheck, ChevronDown, Dumbbell, MessageSquareText, SkipForward } from 'lucide-react-native'
 import { FONT } from '../../../../lib/typography'
 import { hexToRgba } from '../../../../lib/theme'
 import { haptics } from '../../../../lib/haptics'
@@ -22,6 +22,7 @@ import type { RestTimerEngine, RestInterstitialHostControls } from '../timers'
 import type { SessionExercise } from '../../../../lib/workout-session'
 import type { ExecTheme } from './exec-theme'
 import type { ExerciseListItem } from './ExerciseListV3'
+import { closedRoundDots } from './superset-screen-model'
 
 /**
  * Interstitial de descanso V3 (E3.1) — traduccion RN de la pantalla "Descanso + plan" del mockup
@@ -39,6 +40,19 @@ import type { ExerciseListItem } from './ExerciseListV3'
  * transicion corta (el stepper ya quedo en el paso correcto por el auto-avance existente).
  */
 
+/**
+ * Contexto de "ronda cerrada" (E3.5) — presente SOLO cuando el descanso proviene de CERRAR una ronda de
+ * superserie (descanso de grupo). Deriva del engine en el orquestador: NO recalcula rondas acá.
+ */
+export interface RestRoundContext {
+  /** Ronda recién cerrada (1-based). */
+  roundNumber: number
+  /** Total de rondas del grupo. */
+  totalRounds: number
+  /** Primer ejercicio de la ronda siguiente (tarjeta "Siguiente ronda"), o null si fue la última ronda. */
+  next: { name: string; prescription: string; exercise: SessionExercise | null; tag: string } | null
+}
+
 export interface RestInterstitialData {
   /** Ejercicio/serie que retoma al terminar el descanso (para la tarjeta SIGUIENTE + mini-media). */
   next: { name: string; prescription: string; exercise: SessionExercise | null } | null
@@ -50,6 +64,8 @@ export interface RestInterstitialData {
   currentIndex: number
   /** Mostrar la micro-celebracion "+1 serie" (solo si el descanso siguio a cerrar una serie). */
   celebrate: boolean
+  /** Contexto de ronda cerrada (E3.5): reemplaza la micro-celebracion por el banner de ronda. */
+  roundContext?: RestRoundContext | null
   exec: ExecTheme
   reducedMotion: boolean
 }
@@ -149,8 +165,14 @@ export function RestInterstitialV3({
     host.minimize()
   }, [host])
 
-  const next = data.next
+  // Contexto de "ronda cerrada" (E3.5): si el descanso viene de cerrar una ronda de superserie, el banner
+  // + dots + tarjeta "Siguiente ronda" reemplazan la micro-celebracion "+1 serie". La tarjeta SIGUIENTE usa
+  // el primer ejercicio de la ronda siguiente (rc.next); si fue la ultima ronda cae al `next` generico.
+  const rc = data.roundContext ?? null
+  const next = rc?.next ?? data.next
   const nextMedia = next?.exercise ?? null
+  const nextEyebrow = rc?.next ? 'Siguiente ronda' : 'Siguiente'
+  const nextTag = rc?.next?.tag ?? null
 
   return (
     <MotiView
@@ -180,8 +202,41 @@ export function RestInterstitialV3({
           contentContainerStyle={{ alignItems: 'center', paddingBottom: PEEK_VISIBLE + 24, gap: 14 }}
           showsVerticalScrollIndicator={false}
         >
-          {/* Micro-celebracion "+1 serie". */}
-          {data.celebrate && !done && (
+          {/* Banner "Ronda N lista" (E3.5) — check doble + pulso de marca; reduced-motion ⇒ fade. Va en
+              lugar de la micro-celebracion "+1 serie" cuando el descanso cierra una ronda de superserie. */}
+          {rc && !done && (
+            <MotiView
+              from={reducedMotion ? { opacity: 0 } : { opacity: 0, scale: 0.85, translateY: -6 }}
+              animate={{ opacity: 1, scale: 1, translateY: 0 }}
+              transition={reducedMotion ? { type: 'timing', duration: 180 } : { type: 'spring', damping: 12, stiffness: 220, mass: 0.7 }}
+              style={{ alignItems: 'center', gap: 12 }}
+            >
+              <MotiView
+                from={{ scale: 1 }}
+                animate={{ scale: reducedMotion ? 1 : 1.04 }}
+                transition={reducedMotion ? { type: 'timing', duration: 0 } : { type: 'timing', duration: 1100, loop: true, repeatReverse: true }}
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 10, borderRadius: 999, borderWidth: 2, paddingHorizontal: 18, paddingVertical: 10, backgroundColor: hexToRgba(exec.accent, 0.15), borderColor: hexToRgba(exec.accent, 0.4) }}
+              >
+                <CheckCheck size={20} color={exec.accent} strokeWidth={3} />
+                <Text style={{ fontFamily: FONT.displayBlack, fontSize: 15, color: hexToRgba(exec.accent, 0.95) }}>
+                  Ronda {rc.roundNumber} lista
+                </Text>
+              </MotiView>
+              {/* Dots de ronda: previas llenas, la recien cerrada late, futuras vacias. */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 9 }}>
+                <Text style={{ fontFamily: FONT.uiBold, fontSize: 11, letterSpacing: 1, textTransform: 'uppercase', color: s.textMuted }}>Ronda</Text>
+                {closedRoundDots(rc.roundNumber, rc.totalRounds).map((state, i) => (
+                  <ClosedRoundDot key={i} state={state} accent={exec.accent} track={s.surfaceRaised} border={s.borderStrong} reducedMotion={reducedMotion} />
+                ))}
+                <Text style={{ fontFamily: FONT.monoBold, fontSize: 12, color: s.textMuted, fontVariant: ['tabular-nums'] }}>
+                  {rc.roundNumber} / {rc.totalRounds}
+                </Text>
+              </View>
+            </MotiView>
+          )}
+
+          {/* Micro-celebracion "+1 serie" (solo cuando NO es cierre de ronda). */}
+          {data.celebrate && !rc && !done && (
             <MotiView
               from={reducedMotion ? { opacity: 0 } : { opacity: 0, scale: 0.8, translateY: -6 }}
               animate={{ opacity: 1, scale: 1, translateY: 0 }}
@@ -249,10 +304,15 @@ export function RestInterstitialV3({
                 )}
               </View>
               <View style={{ flex: 1, minWidth: 0 }}>
-                <Text style={{ fontFamily: FONT.uiExtra, fontSize: 10, letterSpacing: 1, textTransform: 'uppercase', color: exec.accent }}>Siguiente</Text>
+                <Text style={{ fontFamily: FONT.uiExtra, fontSize: 10, letterSpacing: 1, textTransform: 'uppercase', color: exec.accent }}>{nextEyebrow}</Text>
                 <Text style={{ fontFamily: FONT.displayBold, fontSize: 16, letterSpacing: -0.2, color: s.text, marginTop: 3 }} numberOfLines={1}>{next.name}</Text>
                 <Text style={{ fontFamily: FONT.monoSemibold, fontSize: 12, color: s.textMuted, marginTop: 2, fontVariant: ['tabular-nums'] }} numberOfLines={1}>{next.prescription}</Text>
               </View>
+              {nextTag && (
+                <View style={{ alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999, backgroundColor: hexToRgba(exec.accent, 0.16) }}>
+                  <Text style={{ fontFamily: FONT.displayBlack, fontSize: 10, letterSpacing: 0.4, color: hexToRgba(exec.accent, 0.9) }}>{nextTag}</Text>
+                </View>
+              )}
             </View>
           )}
 
@@ -378,6 +438,50 @@ function RestButton({
       {icon}
       <Text style={{ fontFamily: FONT.uiExtra, fontSize: 15, color: primary ? exec.accentText : s.text, fontVariant: ['tabular-nums'] }}>{label}</Text>
     </Pressable>
+  )
+}
+
+/**
+ * Dot de ronda del banner "ronda cerrada" (E3.5): `done` = lleno, `fill` = la recién cerrada (late con
+ * anillo), `todo` = vacío. reduced-motion ⇒ el `fill` queda fijo (sin latido).
+ */
+function ClosedRoundDot({
+  state,
+  accent,
+  track,
+  border,
+  reducedMotion,
+}: {
+  state: 'done' | 'fill' | 'todo'
+  accent: string
+  track: string
+  border: string
+  reducedMotion: boolean
+}) {
+  const filled = state === 'done' || state === 'fill'
+  const beats = state === 'fill' && !reducedMotion
+  return (
+    <View style={{ width: 16, height: 16, alignItems: 'center', justifyContent: 'center' }}>
+      {state === 'fill' && (
+        <MotiView
+          pointerEvents="none"
+          style={{ position: 'absolute', width: 16, height: 16, borderRadius: 999, backgroundColor: hexToRgba(accent, 0.22) }}
+          from={{ opacity: beats ? 0.6 : 0.4, scale: 1 }}
+          animate={{ opacity: beats ? 0.15 : 0.4, scale: beats ? 1.7 : 1 }}
+          transition={beats ? { type: 'timing', duration: 1200, loop: true, repeatReverse: true } : { type: 'timing', duration: 0 }}
+        />
+      )}
+      <View
+        style={{
+          width: 16,
+          height: 16,
+          borderRadius: 999,
+          backgroundColor: filled ? accent : track,
+          borderWidth: 2,
+          borderColor: filled ? hexToRgba(accent, 0.55) : border,
+        }}
+      />
+    </View>
   )
 }
 

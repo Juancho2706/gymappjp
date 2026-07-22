@@ -33,6 +33,20 @@ export interface InterstitialNext {
   coachMessage: string | null
 }
 
+/**
+ * Contexto de CIERRE DE RONDA (E3.5): cuando el descanso de grupo de una superserie viene de cerrar
+ * una ronda, el interstitial muestra el banner "Ronda N lista" + dots de ronda + reetiqueta la tarjeta
+ * como "Siguiente ronda". Se deriva del engine `superset-rounds` arriba (no lo calcula el interstitial).
+ */
+export interface InterstitialRound {
+  /** Ronda recién cerrada (banner "Ronda N lista" + dots llenos). */
+  justClosed: number
+  /** Total de rondas del grupo (M). */
+  total: number
+  /** Etiqueta del miembro de la próxima ronda (ej. "A3"); null ⇒ sin chip. */
+  nextTag: string | null
+}
+
 export interface RestInterstitialData {
   /** Filas del plan para el peek "Plan completo" (reusa el mapa del ejecutor). */
   items: ExecListMapItem[]
@@ -40,6 +54,8 @@ export interface RestInterstitialData {
   onJump: (stepIndex: number) => void
   /** Ejercicio que sigue tras el descanso (null ⇒ oculta la tarjeta). */
   next: InterstitialNext | null
+  /** Contexto de ronda cuando el descanso viene de cerrar una ronda de superserie (null ⇒ descanso normal). */
+  round?: InterstitialRound | null
 }
 
 const RestInterstitialDataContext = createContext<RestInterstitialData | null>(null)
@@ -131,6 +147,8 @@ export function RestInterstitialV3({
   const next = data?.next ?? (nextLabel ? { name: nextLabel, rxLabel: null, media: { kind: 'none' as const }, coachMessage: null } : null)
   const items = data?.items ?? []
   const doneCount = items.filter((i) => i.complete).length
+  // Cierre de ronda (E3.5): sólo cuando el descanso de grupo viene de cerrar una ronda de superserie.
+  const round = data?.round ?? null
 
   const handleJump = (stepIndex: number) => {
     data?.onJump(stepIndex)
@@ -164,34 +182,61 @@ export function RestInterstitialV3({
         </button>
 
         <div className="exec-v3-rest-inner">
-          {/* Micro-celebración "+1 serie" (respeta la pref; confetti off en reduced-motion). */}
-          <div className="exec-v3-rest-top">
-            <p className="exec-v3-restcel">{warmup ? 'Aproximación' : 'Serie cerrada'}</p>
-            <div className={cn('exec-v3-celly', celebrate && 'is-cel')}>
-              {celebrate && !reducedMotion && (
-                <span className="exec-v3-confetti" aria-hidden>
-                  {CONFETTI.map((c, i) => (
-                    <span
-                      key={i}
-                      className="exec-v3-conf"
-                      style={
-                        {
-                          '--cx': `${c.x}px`,
-                          '--cy': `${c.y}px`,
-                          '--cd': `${c.d}s`,
-                          background: c.c,
-                        } as React.CSSProperties
-                      }
-                    />
-                  ))}
+          {/* Cierre de ronda (E3.5): banner "Ronda N lista" + dots de ronda; si no, la micro-celebración
+              "+1 serie" (respeta la pref; confetti off en reduced-motion). */}
+          {round ? (
+            <div className="exec-v3-rest-top">
+              <div className={cn('exec-v3-roundban', !reducedMotion && 'is-pulse')}>
+                <span className="exec-v3-dblcheck" aria-hidden>
+                  <Check className="h-4 w-4" strokeWidth={3.5} />
                 </span>
-              )}
-              <span className="exec-v3-celly-b" aria-hidden>
-                <Check className="h-3 w-3" strokeWidth={3.5} />
-              </span>
-              +1 serie · vas volando
+                Ronda {round.justClosed} lista
+              </div>
+              <div className="exec-v3-rdots" aria-label={`Ronda ${round.justClosed} de ${round.total}`}>
+                <span className="exec-v3-rdotlbl" aria-hidden>Ronda</span>
+                {Array.from({ length: round.total }).map((_, i) => {
+                  const r = i + 1
+                  const state = r < round.justClosed ? 'done' : r === round.justClosed ? 'fill' : ''
+                  return (
+                    <span
+                      key={r}
+                      aria-hidden
+                      className={cn('exec-v3-rd', state === 'done' && 'is-done', state === 'fill' && 'is-fill', state === 'fill' && !reducedMotion && 'is-beat')}
+                    />
+                  )
+                })}
+                <span className="exec-v3-count tabular-nums" aria-hidden>{round.justClosed} / {round.total}</span>
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="exec-v3-rest-top">
+              <p className="exec-v3-restcel">{warmup ? 'Aproximación' : 'Serie cerrada'}</p>
+              <div className={cn('exec-v3-celly', celebrate && 'is-cel')}>
+                {celebrate && !reducedMotion && (
+                  <span className="exec-v3-confetti" aria-hidden>
+                    {CONFETTI.map((c, i) => (
+                      <span
+                        key={i}
+                        className="exec-v3-conf"
+                        style={
+                          {
+                            '--cx': `${c.x}px`,
+                            '--cy': `${c.y}px`,
+                            '--cd': `${c.d}s`,
+                            background: c.c,
+                          } as React.CSSProperties
+                        }
+                      />
+                    ))}
+                  </span>
+                )}
+                <span className="exec-v3-celly-b" aria-hidden>
+                  <Check className="h-3 w-3" strokeWidth={3.5} />
+                </span>
+                +1 serie · vas volando
+              </div>
+            </div>
+          )}
 
           {/* Countdown gigante + anillo (fracción del RestTimer, NO un timer nuevo). */}
           <div className="exec-v3-ringwrap">
@@ -215,10 +260,13 @@ export function RestInterstitialV3({
                 {done ? '¡Listo!' : formatTime(timeLeft)}
               </div>
               <div className="exec-v3-restlbl" aria-live="polite">
-                {done ? 'A entrenar' : isActive ? (warmup ? 'Aproximación' : 'Descanso') : 'En pausa'}
+                {done ? 'A entrenar' : round ? 'Descanso de grupo' : isActive ? (warmup ? 'Aproximación' : 'Descanso') : 'En pausa'}
               </div>
             </div>
           </div>
+
+          {/* Descanso de grupo (E3.5): sólo aparece al cerrar la ronda completa. */}
+          {round && <div className="exec-v3-grouptag">Solo al cerrar la ronda completa</div>}
 
           {/* −15s / Saltar / +15s — controles existentes del RestTimer (targets ≥44px). */}
           <div className="exec-v3-restbtns">
@@ -261,10 +309,11 @@ export function RestInterstitialV3({
                   )}
                 </div>
                 <div className="exec-v3-nextinfo">
-                  <div className="exec-v3-nextk">Siguiente</div>
+                  <div className="exec-v3-nextk">{round ? 'Siguiente ronda' : 'Siguiente'}</div>
                   <div className="exec-v3-nextt">{next.name}</div>
                   {next.rxLabel && <div className="exec-v3-nextd tabular-nums">{next.rxLabel}</div>}
                 </div>
+                {round?.nextTag && <span className="exec-v3-nexttag">{round.nextTag}</span>}
               </div>
               {next.coachMessage && (
                 <p className="exec-v3-nextcoach">
