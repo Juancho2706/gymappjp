@@ -5,10 +5,18 @@ import { supabase } from '../../../lib/supabase'
 import { flushLogQueue, flushNutritionQueue, getPendingLogCount, getPendingNutritionCount } from '../../../lib/offline-cache'
 import { getClientProfile } from '../../../lib/client'
 import { sessionFlags } from '../../../lib/session-flags'
+import { useEntitlements } from '../../../lib/entitlements'
 import { AlumnoMobileChrome } from '../../../components/alumno/AlumnoMobileChrome'
+import { StudentAccessBlocked } from '../../../components/alumno/StudentAccessBlocked'
 
 export default function AlumnoTabsLayout() {
   const router = useRouter()
+  // Gate de BLOQUEO TOTAL post-gracia (executor-v3 decision 9): cuando el acceso del alumno resuelve
+  // a 'blocked' (post-gracia), se monta la pantalla de bloqueo EN LUGAR de las tabs — ni dashboard,
+  // ni plan, ni historial (reemplaza el hibrido banner+solo-lectura). Fail-OPEN: el default es
+  // 'active' hasta resolver (el guard duro vive en DB/RLS), asi que no hay flash de bloqueo en frio.
+  // El estado 'grace' NO entra aca: conserva el banner discreto del home.
+  const { studentAccess } = useEntitlements()
   const appState = useRef(AppState.currentState)
   // Guarda anti-carrera: una sola navegación al gate de suspensión (el chequeo al
   // montar y el de AppState pueden coincidir; el flag evita dos router.replace).
@@ -64,6 +72,17 @@ export default function AlumnoTabsLayout() {
   // `insets.bottom + ALUMNO_TABBAR_CLEARANCE` en el contentContainer de su scroll
   // (ver ALUMNO_TABBAR_CLEARANCE). El branding activo lo resuelve la chrome via
   // tokens NativeWind.
+
+  // Bloqueo total post-gracia: se monta ANTES que las tabs (ningun screen del alumno se monta).
+  // Va despues de los hooks de arriba para no romper el orden de hooks entre renders.
+  if (studentAccess.state === 'blocked') {
+    return (
+      <View className="flex-1 bg-surface-app">
+        <StudentAccessBlocked />
+      </View>
+    )
+  }
+
   return (
     <View className="flex-1 bg-surface-app">
       <Tabs

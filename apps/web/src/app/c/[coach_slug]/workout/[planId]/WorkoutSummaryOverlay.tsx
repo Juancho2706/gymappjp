@@ -1,16 +1,13 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import { motion, useReducedMotion } from 'framer-motion'
 import { Trophy, Share2, Check, ArrowRight, HeartPulse, Move, GitCommit } from 'lucide-react'
-import { epleyOneRM } from '@/app/coach/clients/[clientId]/profileTrainingAnalytics'
 import { getSantiagoIsoYmdForUtcInstant } from '@/lib/date-utils'
 import { springs, fadeSlideUp, staggerContainer } from '@/lib/animation-presets'
 import { compactDistance } from '@/lib/workout-exercise-type'
 import { MuscleMapSvg } from './MuscleMapSvg'
-import { muscleGroupsToRegionIntensity, MUSCLE_REGIONS } from './muscle-map'
 import {
-    summarizeSessionByKind,
     formatSessionDuration,
     formatClockDuration,
     type SummaryBlock,
@@ -18,6 +15,7 @@ import {
     type CardioItem,
     type MobilityItem,
 } from './session-summary'
+import { useSessionSummary } from './v3/use-session-summary'
 import { PRShareCardModal } from './PRShareCardModal'
 import type { WorkoutPRCardData } from '@/lib/workout-pr-card-canvas'
 
@@ -149,72 +147,21 @@ export function WorkoutSummaryOverlay({
 }: WorkoutSummaryOverlayProps) {
     const reducedMotion = useReducedMotion()
 
-    // Derivación por-tipo en una sola pasada (fuerza + cardio + movilidad/roller). El bug CEO era
-    // que sólo se contaba fuerza: movilidad/roller no encendían el mapa y cardio/movilidad no
-    // aparecían en el resumen. Lógica pura y testeada → `summarizeSessionByKind`.
-    const session = useMemo(
-        () => summarizeSessionByKind(blocks, logs, substitutedBlockIds),
-        [blocks, logs, substitutedBlockIds],
-    )
-    const exerciseBreakdown = session.strength
-
-    const detectedPRs = useMemo(() => {
-        return exerciseBreakdown
-            .filter((ex) => {
-                const historicMax = exerciseMaxes[ex.exerciseId]
-                return historicMax != null && ex.maxWeight > historicMax
-            })
-            .map((ex) => {
-                const setAtMax = ex.sets.reduce((best, cur) => {
-                    const cw = cur.weight_kg ?? 0
-                    const bw = best.weight_kg ?? 0
-                    return cw > bw ? cur : best
-                }, ex.sets[0])
-                const repsAtMax = setAtMax?.reps_done ?? 1
-                const prevKg = exerciseMaxes[ex.exerciseId]!
-                const pct =
-                    prevKg > 0 ? Math.round(((ex.maxWeight - prevKg) / prevKg) * 1000) / 10 : 100
-                return {
-                    exerciseName: ex.name,
-                    newWeightKg: ex.maxWeight,
-                    prevWeightKg: prevKg,
-                    prevAchievedAt: exerciseMaxDates[ex.exerciseId] ?? null,
-                    pct,
-                    estimated1RM: Math.round(epleyOneRM(ex.maxWeight, Math.max(1, repsAtMax)) * 10) / 10,
-                }
-            })
-    }, [exerciseBreakdown, exerciseMaxes, exerciseMaxDates])
-
-    // Barras "Músculos trabajados" en kg → sólo volumen de FUERZA (kg es honesto ahí).
-    const muscleGroupVolume = useMemo(() => {
-        const maxV = session.strengthMuscleVolume[0]?.vol ?? 1
-        return session.strengthMuscleVolume.map(({ group, vol }) => ({
-            group,
-            vol,
-            pct: Math.round((vol / maxV) * 100),
-        }))
-    }, [session.strengthMuscleVolume])
-
-    // El mapa muscular usa el trabajo COMBINADO (fuerza + movilidad/roller; cardio excluido) para
-    // que las zonas de movilidad/roller también se enciendan. ¿Alguna región encendida?
-    const hasMuscleMap = useMemo(() => {
-        const intensity = muscleGroupsToRegionIntensity(session.muscleWork)
-        return MUSCLE_REGIONS.some((r) => intensity[r] > 0)
-    }, [session.muscleWork])
-
-    const hasNonStrength = session.cardio.length > 0 || session.mobility.length > 0
-
-    const completedSets = logs.length
-    const totalReps = logs.reduce((acc, l) => acc + (l.reps_done || 0), 0)
-    const totalVolume = logs.reduce((acc, l) => acc + (l.weight_kg || 0) * (l.reps_done || 0), 0)
-
-    // Hero adaptativo: si no hubo fuerza (sesión cardio/movilidad), el 2º stat no puede ser "0 kg".
-    const heroSecondary =
-        totalVolume > 0
-            ? { value: String(Math.round(totalVolume)), unit: 'kg', label: 'Volumen total' }
-            : session.totalCardioDistanceM > 0
-                ? { value: compactDistance(session.totalCardioDistanceM, 'm'), unit: undefined, label: 'Distancia' }
-                : { value: String(completedSets), unit: undefined, label: completedSets === 1 ? 'Serie' : 'Series' }
+    // Derivación por-tipo COMPARTIDA con la Final V3 (`useSessionSummary`): fuerza + cardio +
+    // movilidad/roller, PRs (con guard anti-récord-falso de bloques sustituidos), volumen por
+    // músculo, mapa muscular y hero adaptativo. Una sola verdad de negocio; aquí es la piel V2.
+    const {
+        session,
+        exerciseBreakdown,
+        detectedPRs,
+        muscleGroupVolume,
+        hasMuscleMap,
+        hasNonStrength,
+        completedSets,
+        totalReps,
+        totalVolume,
+        heroSecondary,
+    } = useSessionSummary({ logs, blocks, exerciseMaxes, exerciseMaxDates, substitutedBlockIds })
 
     const [shared, setShared] = useState(false)
     const [prCard, setPrCard] = useState<WorkoutPRCardData | null>(null)

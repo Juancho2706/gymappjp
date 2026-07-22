@@ -75,7 +75,19 @@ export function parseRestTime(restStr: string | null): number {
     return isNaN(val) ? 0 : val
 }
 
-export function WorkoutTimerProvider({ children }: { children: React.ReactNode }) {
+export function WorkoutTimerProvider({
+    children,
+    v3 = false,
+}: {
+    children: React.ReactNode
+    /**
+     * Ejecutor V3 (E3.1): en modo V3 el descanso se presenta como interstitial a pantalla completa
+     * (misma instancia/estado del RestTimer). Los descansos intra-ronda de superserie NO llegan aquí:
+     * `LogSetForm` corta el descanso (`cancelRest`) entre ejercicios de la misma ronda y sólo dispara
+     * `startRest` al cerrar la ronda, así que todo descanso montado es un descanso real → interstitial OK.
+     */
+    v3?: boolean
+}) {
     const [active, setActive] = useState<ActiveTimer | null>(null)
     const activeRef = useRef<ActiveTimer | null>(null)
     // Patrón "latest ref": activeRef solo se lee en replaceWith (callback de evento), nunca en render.
@@ -127,7 +139,13 @@ export function WorkoutTimerProvider({ children }: { children: React.ReactNode }
         <WorkoutContext.Provider value={{ startRest, startHold, startInterval, startStopwatch, cancelRest }}>
             {children}
             {active?.kind === 'rest' && (
-                <RestTimer initialSeconds={active.seconds} nextLabel={active.label} warmup={active.warmup} onClose={close} />
+                <RestTimer
+                    initialSeconds={active.seconds}
+                    nextLabel={active.label}
+                    warmup={active.warmup}
+                    variant={v3 ? 'v3' : 'compact'}
+                    onClose={close}
+                />
             )}
             {active?.kind === 'hold' && (
                 <HoldTimer initialSeconds={active.seconds} label={active.label} onClose={close} />

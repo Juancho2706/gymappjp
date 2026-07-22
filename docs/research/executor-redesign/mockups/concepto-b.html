@@ -1,0 +1,567 @@
+<section class="concept" id="concept-b" data-name="Neon Focus">
+  <style>
+    #concept-b {
+      --b-brand: var(--brand, #7c6cff);
+      --b-bg: #0a0a12;
+      --b-screen: #0a0a12;
+      --b-ink: #f4f4fb;
+      --b-mute: rgba(244, 244, 251, 0.55);
+      --b-faint: rgba(244, 244, 251, 0.34);
+      --b-hair: rgba(255, 255, 255, 0.08);
+      --b-hair2: rgba(255, 255, 255, 0.12);
+      --b-glass: rgba(255, 255, 255, 0.05);
+      --b-z2: #4ade80;
+      --b-z2-dim: rgba(74, 222, 128, 0.22);
+      --b-gold: #f5c451;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      color: var(--b-ink);
+      background: radial-gradient(140% 120% at 15% -10%, #14121f 0%, #0a0a12 55%, #07070d 100%);
+      padding: 48px 28px 56px;
+      box-sizing: border-box;
+    }
+    #concept-b *,
+    #concept-b *::before,
+    #concept-b *::after { box-sizing: border-box; }
+
+    /* ---------- Header ---------- */
+    #concept-b .b-head { max-width: 1180px; margin: 0 auto 40px; }
+    #concept-b .b-eyebrow {
+      font-size: 11px; letter-spacing: 0.22em; text-transform: uppercase;
+      color: var(--b-brand); font-weight: 600; margin: 0 0 14px;
+    }
+    #concept-b .b-title {
+      margin: 0; font-size: clamp(34px, 5vw, 58px); font-weight: 200;
+      letter-spacing: -0.02em; line-height: 1;
+    }
+    #concept-b .b-title strong { font-weight: 500; }
+    #concept-b .b-sub {
+      margin: 16px 0 0; max-width: 620px; font-size: 15px; line-height: 1.55;
+      color: var(--b-mute); font-weight: 300;
+    }
+
+    /* ---------- Phone row ---------- */
+    #concept-b .b-row {
+      display: flex; flex-wrap: wrap; gap: 40px 34px;
+      justify-content: center; max-width: 1320px; margin: 0 auto;
+    }
+    #concept-b .b-col { width: 375px; }
+    #concept-b .b-tag {
+      display: flex; align-items: center; gap: 9px;
+      font-size: 11px; letter-spacing: 0.2em; text-transform: uppercase;
+      color: var(--b-faint); font-weight: 600; margin: 0 0 14px; padding-left: 4px;
+    }
+    #concept-b .b-tag::before {
+      content: ""; width: 7px; height: 7px; border-radius: 50%;
+      background: var(--b-brand); box-shadow: 0 0 12px 1px var(--b-brand);
+    }
+
+    /* ---------- Phone frame ---------- */
+    #concept-b .b-phone {
+      position: relative; width: 375px; height: 760px;
+      border-radius: 44px; padding: 11px;
+      background: linear-gradient(160deg, #1c1c26, #050509);
+      box-shadow:
+        0 40px 80px -30px rgba(0, 0, 0, 0.85),
+        0 0 0 1px rgba(255, 255, 255, 0.04),
+        inset 0 1px 1px rgba(255, 255, 255, 0.08);
+    }
+    #concept-b .b-glow {
+      position: absolute; inset: -2px; border-radius: 46px; z-index: 0;
+      background: radial-gradient(60% 40% at 50% 0%, color-mix(in srgb, var(--b-brand) 30%, transparent), transparent 70%);
+      opacity: 0.5; pointer-events: none;
+    }
+    #concept-b .b-screen {
+      position: relative; z-index: 1; height: 100%; border-radius: 34px;
+      overflow: hidden; background: var(--b-screen);
+      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+    }
+    /* Aurora blobs */
+    #concept-b .b-aurora { position: absolute; inset: 0; overflow: hidden; z-index: 0; }
+    #concept-b .b-aurora span {
+      position: absolute; border-radius: 50%; filter: blur(48px); opacity: 0.5;
+    }
+    #concept-b .b-aurora .a1 {
+      width: 320px; height: 320px; top: -70px; left: -90px;
+      background: radial-gradient(circle, color-mix(in srgb, var(--b-brand) 62%, transparent), transparent 70%);
+    }
+    #concept-b .b-aurora .a2 {
+      width: 300px; height: 300px; bottom: -60px; right: -80px;
+      background: radial-gradient(circle, color-mix(in srgb, var(--b-brand) 40%, transparent), transparent 70%);
+    }
+    #concept-b .b-aurora .a3 {
+      width: 240px; height: 240px; top: 40%; left: 30%;
+      background: radial-gradient(circle, rgba(60, 90, 200, 0.4), transparent 70%);
+    }
+    #concept-b .b-inner {
+      position: relative; z-index: 1; height: 100%;
+      display: flex; flex-direction: column;
+      padding: 54px 22px 26px;
+    }
+    /* notch */
+    #concept-b .b-screen::before {
+      content: ""; position: absolute; z-index: 3; top: 14px; left: 50%;
+      transform: translateX(-50%); width: 112px; height: 30px;
+      background: #04040a; border-radius: 16px;
+    }
+    #concept-b .b-status {
+      position: absolute; z-index: 3; top: 20px; left: 24px; right: 24px;
+      display: flex; justify-content: space-between; align-items: center;
+      font-size: 12px; font-weight: 500; color: var(--b-mute);
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* ---------- Shared bits ---------- */
+    #concept-b .b-label {
+      font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase;
+      color: var(--b-faint); font-weight: 600;
+    }
+    #concept-b .b-hair { height: 1px; background: var(--b-hair); border: 0; margin: 0; }
+    #concept-b [class*="b-num"] { font-variant-numeric: tabular-nums; }
+
+    /* ===== FUERZA ===== */
+    #concept-b .b-f-top { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+    #concept-b .b-f-top .b-label { flex: 0 0 auto; }
+    #concept-b .b-dots { display: flex; gap: 6px; flex: 1; margin-left: 6px; }
+    #concept-b .b-dots i {
+      flex: 1; height: 3px; border-radius: 2px; background: var(--b-hair2);
+    }
+    #concept-b .b-dots i.on { background: var(--b-brand); box-shadow: 0 0 8px var(--b-brand); }
+    #concept-b .b-dots i.cur { background: var(--b-brand); opacity: 0.55; }
+    #concept-b .b-f-name {
+      margin: 14px 0 8px; font-size: 27px; font-weight: 300; letter-spacing: -0.01em;
+    }
+    #concept-b .b-chip {
+      display: inline-flex; align-items: center; gap: 6px; padding: 5px 11px;
+      border-radius: 999px; font-size: 11px; font-weight: 500;
+      border: 1px solid var(--b-hair2); color: var(--b-mute);
+      letter-spacing: 0.03em;
+    }
+    #concept-b .b-chip::before {
+      content: ""; width: 5px; height: 5px; border-radius: 50%; background: var(--b-brand);
+    }
+    /* media panel */
+    #concept-b .b-media {
+      position: relative; margin: 16px 0 14px; height: 168px; border-radius: 20px;
+      overflow: hidden; background: linear-gradient(160deg, #12121c, #0b0b14);
+      border: 1px solid var(--b-hair);
+      display: flex; align-items: center; justify-content: center;
+    }
+    #concept-b .b-media::after {
+      content: ""; position: absolute; inset: 0;
+      background: linear-gradient(115deg, transparent 30%, rgba(255,255,255,0.10) 48%, transparent 66%);
+      transform: translateX(-120%);
+    }
+    #concept-b .b-silhouette {
+      width: 108px; height: 108px; opacity: 0.5;
+      stroke: var(--b-brand); stroke-width: 2.2; fill: none;
+      filter: drop-shadow(0 0 10px color-mix(in srgb, var(--b-brand) 55%, transparent));
+    }
+    #concept-b .b-media-tag {
+      position: absolute; bottom: 10px; left: 12px; z-index: 2;
+      font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase;
+      color: var(--b-faint); background: rgba(0,0,0,0.35);
+      padding: 3px 8px; border-radius: 8px; backdrop-filter: blur(4px);
+    }
+    #concept-b .b-presc {
+      display: flex; justify-content: space-between; font-size: 13px;
+      color: var(--b-mute); font-weight: 400; padding: 0 2px 12px;
+      letter-spacing: 0.01em; font-variant-numeric: tabular-nums;
+    }
+    #concept-b .b-presc b { color: var(--b-ink); font-weight: 500; }
+    #concept-b .b-prev {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 12px 14px; border-radius: 14px; margin-bottom: 14px;
+      background: var(--b-glass); border: 1px solid var(--b-hair);
+    }
+    #concept-b .b-prev .l { font-size: 12px; color: var(--b-faint); }
+    #concept-b .b-prev .v { font-size: 14px; font-weight: 500; font-variant-numeric: tabular-nums; }
+    #concept-b .b-prev .fill {
+      font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+      color: var(--b-brand); border: 1px solid color-mix(in srgb, var(--b-brand) 45%, transparent);
+      padding: 3px 8px; border-radius: 8px;
+    }
+    /* current set inputs */
+    #concept-b .b-set { display: flex; gap: 10px; margin-bottom: 6px; }
+    #concept-b .b-set .cell {
+      flex: 1; text-align: center; padding: 12px 8px 10px; border-radius: 16px;
+      background: var(--b-glass); border: 1px solid var(--b-hair2);
+    }
+    #concept-b .b-set .cell .n { font-size: 40px; font-weight: 200; line-height: 1; letter-spacing: -0.02em; }
+    #concept-b .b-set .cell .u { font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--b-faint); margin-top: 6px; }
+    #concept-b .b-setrow {
+      display: flex; align-items: center; justify-content: space-between;
+      margin: 10px 2px; font-size: 12px; color: var(--b-faint);
+    }
+    #concept-b .b-seriesdots { display: flex; gap: 5px; }
+    #concept-b .b-seriesdots i { width: 8px; height: 8px; border-radius: 50%; background: var(--b-hair2); }
+    #concept-b .b-seriesdots i.done { background: var(--b-brand); box-shadow: 0 0 7px var(--b-brand); }
+    #concept-b .b-mini { display: flex; gap: 8px; }
+    #concept-b .b-mini span {
+      width: 34px; height: 30px; border-radius: 9px; display: flex; align-items: center; justify-content: center;
+      border: 1px solid var(--b-hair2); color: var(--b-mute); font-size: 14px;
+    }
+    #concept-b .b-cta {
+      margin-top: auto; height: 60px; border-radius: 18px; border: 0;
+      font-size: 16px; font-weight: 600; letter-spacing: 0.02em; color: #0a0a12;
+      background: linear-gradient(100deg, var(--b-brand), color-mix(in srgb, var(--b-brand) 65%, #fff 8%));
+      box-shadow: 0 0 26px -4px var(--b-brand), inset 0 1px 0 rgba(255,255,255,0.4);
+      display: flex; align-items: center; justify-content: center; gap: 10px;
+    }
+
+    /* ===== DESCANSO ===== */
+    #concept-b .b-rest { align-items: center; text-align: center; padding-top: 60px; }
+    #concept-b .b-rest-lbl { margin-bottom: 6px; }
+    #concept-b .b-celebrate {
+      display: inline-flex; align-items: center; gap: 8px; margin-bottom: 10px;
+      padding: 6px 12px; border-radius: 999px; font-size: 12px; font-weight: 600;
+      color: var(--b-gold); border: 1px solid color-mix(in srgb, var(--b-gold) 40%, transparent);
+      background: color-mix(in srgb, var(--b-gold) 10%, transparent);
+    }
+    #concept-b .b-celebrate .ck {
+      width: 16px; height: 16px; border-radius: 50%;
+      background: var(--b-gold); color: #0a0a12; font-size: 11px; font-weight: 800;
+      display: flex; align-items: center; justify-content: center;
+    }
+    #concept-b .b-ring {
+      position: relative; width: 236px; height: 236px; margin: 4px auto 6px;
+    }
+    #concept-b .b-ring svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+    #concept-b .b-ring .track { fill: none; stroke: var(--b-hair2); stroke-width: 2.5; }
+    #concept-b .b-ring .prog {
+      fill: none; stroke: var(--b-brand); stroke-width: 3; stroke-linecap: round;
+      stroke-dasharray: 703; stroke-dashoffset: 190;
+      filter: drop-shadow(0 0 6px var(--b-brand));
+    }
+    #concept-b .b-ring-num {
+      position: absolute; inset: 0; display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+    }
+    #concept-b .b-ring-num .t { font-size: 74px; font-weight: 200; letter-spacing: -0.03em; line-height: 1; }
+    #concept-b .b-ring-num .s { font-size: 11px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--b-faint); margin-top: 10px; }
+    #concept-b .b-rest-ctrls { display: flex; gap: 10px; width: 100%; margin: 20px 0 16px; }
+    #concept-b .b-rest-ctrls button {
+      flex: 1; height: 56px; border-radius: 16px; font-size: 14px; font-weight: 600;
+      background: var(--b-glass); border: 1px solid var(--b-hair2); color: var(--b-ink);
+      font-variant-numeric: tabular-nums;
+    }
+    #concept-b .b-rest-ctrls .skip {
+      color: var(--b-brand); border-color: color-mix(in srgb, var(--b-brand) 45%, transparent);
+      background: color-mix(in srgb, var(--b-brand) 12%, transparent);
+    }
+    #concept-b .b-next {
+      width: 100%; margin-top: auto; padding: 14px; border-radius: 18px;
+      background: var(--b-glass); border: 1px solid var(--b-hair);
+      backdrop-filter: blur(8px);
+      display: flex; align-items: center; gap: 14px; text-align: left;
+    }
+    #concept-b .b-next .thumb {
+      width: 52px; height: 52px; border-radius: 12px; flex: 0 0 auto;
+      background: linear-gradient(150deg, #17172440, #0d0d16); border: 1px solid var(--b-hair2);
+      position: relative; overflow: hidden;
+    }
+    #concept-b .b-next .thumb::after {
+      content: ""; position: absolute; inset: 0;
+      background: linear-gradient(115deg, transparent 35%, rgba(255,255,255,0.12) 50%, transparent 65%);
+      transform: translateX(-120%);
+    }
+    #concept-b .b-next .nx-lbl { font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--b-brand); margin-bottom: 4px; }
+    #concept-b .b-next .nx-name { font-size: 15px; font-weight: 500; }
+    #concept-b .b-next .nx-presc { font-size: 12px; color: var(--b-mute); margin-top: 3px; font-variant-numeric: tabular-nums; }
+    #concept-b .b-coach {
+      margin: 16px 0 4px; font-size: 14px; font-style: italic; font-weight: 300;
+      color: var(--b-mute); letter-spacing: 0.01em;
+    }
+
+    /* ===== CARDIO ===== */
+    #concept-b .b-cardio { text-align: center; }
+    #concept-b .b-cardio .b-top-row {
+      display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;
+    }
+    #concept-b .b-interval { font-size: 12px; color: var(--b-mute); font-variant-numeric: tabular-nums; }
+    #concept-b .b-interval b { color: var(--b-ink); font-weight: 600; }
+    #concept-b .b-c-ring {
+      position: relative; width: 258px; height: 258px; margin: 26px auto 8px;
+    }
+    #concept-b .b-c-ring svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+    #concept-b .b-c-ring .track { fill: none; stroke: var(--b-hair2); stroke-width: 2.5; }
+    #concept-b .b-c-ring .prog {
+      fill: none; stroke: var(--b-z2); stroke-width: 3.5; stroke-linecap: round;
+      stroke-dasharray: 770; stroke-dashoffset: 300;
+      filter: drop-shadow(0 0 7px var(--b-z2));
+    }
+    #concept-b .b-c-num { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+    #concept-b .b-c-num .t { font-size: 78px; font-weight: 200; letter-spacing: -0.03em; line-height: 0.95; }
+    #concept-b .b-c-num .s { font-size: 10px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--b-faint); margin-top: 10px; }
+    #concept-b .b-zone {
+      margin: 18px auto 0; display: inline-flex; align-items: center; gap: 10px;
+      padding: 10px 18px; border-radius: 999px;
+      background: var(--b-z2-dim); border: 1px solid color-mix(in srgb, var(--b-z2) 45%, transparent);
+    }
+    #concept-b .b-zone .zn { font-size: 20px; font-weight: 600; color: var(--b-z2); letter-spacing: 0.02em; }
+    #concept-b .b-zone .zt { font-size: 13px; color: color-mix(in srgb, var(--b-z2) 80%, #fff); font-weight: 400; }
+    #concept-b .b-c-chips { display: flex; justify-content: center; gap: 10px; margin: 16px 0 0; }
+    #concept-b .b-bpm {
+      display: inline-flex; align-items: center; gap: 9px; padding: 9px 15px; border-radius: 14px;
+      background: var(--b-glass); border: 1px solid var(--b-hair2);
+    }
+    #concept-b .b-bpm .dot { width: 9px; height: 9px; border-radius: 50%; background: #f87171; box-shadow: 0 0 8px #f87171; }
+    #concept-b .b-bpm .val { font-size: 22px; font-weight: 500; font-variant-numeric: tabular-nums; }
+    #concept-b .b-bpm .src { font-size: 10px; color: var(--b-faint); }
+    #concept-b .b-pause {
+      margin-top: auto; height: 60px; border-radius: 18px; border: 1px solid var(--b-hair2);
+      background: var(--b-glass); color: var(--b-ink); font-size: 16px; font-weight: 600;
+      display: flex; align-items: center; justify-content: center; gap: 10px;
+    }
+    #concept-b .b-pause .bar { display: inline-flex; gap: 4px; }
+    #concept-b .b-pause .bar i { width: 4px; height: 15px; border-radius: 2px; background: var(--b-brand); }
+
+    /* ---------- Bullets ---------- */
+    #concept-b .b-bullets { list-style: none; margin: 18px 0 0; padding: 0; }
+    #concept-b .b-bullets li {
+      position: relative; padding-left: 20px; margin-bottom: 10px;
+      font-size: 13px; line-height: 1.45; color: var(--b-mute); font-weight: 300;
+    }
+    #concept-b .b-bullets li::before {
+      content: ""; position: absolute; left: 2px; top: 7px; width: 6px; height: 6px;
+      border-radius: 50%; background: var(--b-brand); box-shadow: 0 0 7px var(--b-brand);
+    }
+    #concept-b .b-bullets li b { color: var(--b-ink); font-weight: 500; }
+
+    /* ---------- Motion signature ---------- */
+    #concept-b .b-motion {
+      max-width: 1180px; margin: 56px auto 0; padding: 28px 30px;
+      border-radius: 22px; border: 1px solid var(--b-hair);
+      background: linear-gradient(150deg, rgba(124,108,255,0.06), rgba(255,255,255,0.02));
+    }
+    #concept-b .b-motion h3 {
+      margin: 0 0 16px; font-size: 12px; letter-spacing: 0.2em; text-transform: uppercase;
+      color: var(--b-brand); font-weight: 600;
+    }
+    #concept-b .b-motion-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 20px; }
+    #concept-b .b-motion-grid div { font-size: 13px; line-height: 1.5; color: var(--b-mute); font-weight: 300; }
+    #concept-b .b-motion-grid b { display: block; color: var(--b-ink); font-weight: 500; margin-bottom: 3px; font-size: 12px; letter-spacing: 0.04em; }
+
+    /* ---------- Animations ---------- */
+    @media (prefers-reduced-motion: no-preference) {
+      #concept-b .b-aurora .a1 { animation: concept-b-drift1 15s ease-in-out infinite alternate; }
+      #concept-b .b-aurora .a2 { animation: concept-b-drift2 18s ease-in-out infinite alternate; }
+      #concept-b .b-aurora .a3 { animation: concept-b-drift3 13s ease-in-out infinite alternate; }
+      #concept-b .b-media::after { animation: concept-b-shimmer 3.4s ease-in-out infinite; }
+      #concept-b .b-next .thumb::after { animation: concept-b-shimmer 3.8s ease-in-out infinite 0.4s; }
+      #concept-b .b-cta { animation: concept-b-breathe 3s ease-in-out infinite; }
+      #concept-b .b-ring-num .t { animation: concept-b-pulse 3.2s ease-in-out infinite; }
+      #concept-b .b-c-num .t { animation: concept-b-pulse 3.4s ease-in-out infinite; }
+      #concept-b .b-ring .prog { animation: concept-b-ring 6s ease-in-out infinite alternate; }
+      #concept-b .b-c-ring .prog { animation: concept-b-cring 8s linear infinite alternate; }
+      #concept-b .b-bpm .dot { animation: concept-b-beat 1.1s ease-in-out infinite; }
+      #concept-b .b-celebrate { animation: concept-b-gold 0.6s ease-out 0.3s both; }
+      #concept-b .b-silhouette { animation: concept-b-float 4s ease-in-out infinite; }
+      #concept-b .b-dots i.cur { animation: concept-b-blink 1.6s ease-in-out infinite; }
+    }
+    @keyframes concept-b-drift1 { from { transform: translate(0,0) scale(1); } to { transform: translate(40px, 30px) scale(1.15); } }
+    @keyframes concept-b-drift2 { from { transform: translate(0,0) scale(1); } to { transform: translate(-34px, -26px) scale(1.1); } }
+    @keyframes concept-b-drift3 { from { transform: translate(0,0) scale(1); opacity: 0.3; } to { transform: translate(20px, -30px) scale(1.2); opacity: 0.55; } }
+    @keyframes concept-b-shimmer { 0% { transform: translateX(-120%); } 55%, 100% { transform: translateX(120%); } }
+    @keyframes concept-b-breathe {
+      0%, 100% { box-shadow: 0 0 22px -6px var(--b-brand), inset 0 1px 0 rgba(255,255,255,0.4); }
+      50% { box-shadow: 0 0 34px 0px var(--b-brand), inset 0 1px 0 rgba(255,255,255,0.4); }
+    }
+    @keyframes concept-b-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.82; } }
+    @keyframes concept-b-ring { from { stroke-dashoffset: 210; } to { stroke-dashoffset: 150; } }
+    @keyframes concept-b-cring { from { stroke-dashoffset: 320; } to { stroke-dashoffset: 250; } }
+    @keyframes concept-b-beat { 0%, 100% { transform: scale(1); opacity: 1; } 40% { transform: scale(1.5); opacity: 0.7; } }
+    @keyframes concept-b-gold {
+      0% { transform: scale(0.9); opacity: 0; box-shadow: 0 0 0 0 rgba(245,196,81,0.5); }
+      60% { transform: scale(1.04); opacity: 1; box-shadow: 0 0 22px 2px rgba(245,196,81,0.35); }
+      100% { transform: scale(1); opacity: 1; box-shadow: 0 0 0 0 rgba(245,196,81,0); }
+    }
+    @keyframes concept-b-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-7px); } }
+    @keyframes concept-b-blink { 0%, 100% { opacity: 0.55; } 50% { opacity: 0.25; } }
+
+    @media (max-width: 480px) {
+      #concept-b { padding: 32px 12px; }
+      #concept-b .b-col, #concept-b .b-phone { width: 100%; max-width: 375px; }
+    }
+  </style>
+
+  <!-- Header -->
+  <div class="b-head">
+    <p class="b-eyebrow">Concepto B</p>
+    <h1 class="b-title">Neon <strong>Focus</strong></h1>
+    <p class="b-sub">Cero ruido durante el esfuerzo. El dato protagonista se lee a un metro de distancia; la energia viene de la atmosfera (aurora + glow), nunca de la fanfarria.</p>
+  </div>
+
+  <div class="b-row">
+
+    <!-- ============ FUERZA ============ -->
+    <div class="b-col">
+      <p class="b-tag">Fuerza</p>
+      <div class="b-phone">
+        <div class="b-glow"></div>
+        <div class="b-screen">
+          <div class="b-aurora"><span class="a1"></span><span class="a2"></span><span class="a3"></span></div>
+          <div class="b-status"><span>9:41</span><span>&#9679;&#9679;&#9679; &#9662;</span></div>
+          <div class="b-inner">
+            <div class="b-f-top">
+              <span class="b-label">Ejercicio 3 / 8</span>
+              <div class="b-dots">
+                <i class="on"></i><i class="on"></i><i class="cur"></i><i></i><i></i><i></i><i></i><i></i>
+              </div>
+            </div>
+            <h2 class="b-f-name">Press banca</h2>
+            <span class="b-chip">Fuerza &middot; Pecho</span>
+
+            <div class="b-media">
+              <svg class="b-silhouette" viewBox="0 0 100 100" aria-hidden="true">
+                <circle cx="50" cy="22" r="9"/>
+                <path d="M50 31 L50 60 M50 40 L26 34 M50 40 L74 34 M50 60 L38 88 M50 60 L62 88"/>
+                <path d="M20 36 L26 34 M80 36 L74 34" stroke-linecap="round"/>
+              </svg>
+              <span class="b-media-tag">Demo en loop</span>
+            </div>
+
+            <div class="b-presc">
+              <span><b>4 &times; 8</b> series</span>
+              <span><b>60 kg</b></span>
+              <span>RIR <b>2</b></span>
+              <span>desc <b>90s</b></span>
+            </div>
+
+            <div class="b-prev">
+              <span class="l">Anterior</span>
+              <span class="v">60 kg &times; 8</span>
+              <span class="fill">1 tap &middot; usar</span>
+            </div>
+
+            <div class="b-set">
+              <div class="cell"><div class="n">60</div><div class="u">kg</div></div>
+              <div class="cell"><div class="n">8</div><div class="u">reps</div></div>
+            </div>
+            <div class="b-setrow">
+              <div class="b-seriesdots"><i class="done"></i><i class="done"></i><i></i><i></i></div>
+              <span>Serie 2 / 4</span>
+              <div class="b-mini"><span>&#8801;</span><span>&#9998;</span></div>
+            </div>
+
+            <button class="b-cta">Completar serie &#10003;</button>
+          </div>
+        </div>
+      </div>
+      <ul class="b-bullets">
+        <li><b>Media siempre visible</b> al centro con shimmer diagonal: sabes la tecnica sin tocar nada.</li>
+        <li><b>Anterior en 1 tap</b> auto-rellena kg y reps; el CTA respira con glow para guiar el pulgar.</li>
+        <li>Teclado y nota quedan discretos; el foco es la serie actual en numeros de 40px.</li>
+      </ul>
+    </div>
+
+    <!-- ============ DESCANSO ============ -->
+    <div class="b-col">
+      <p class="b-tag">Descanso</p>
+      <div class="b-phone">
+        <div class="b-glow"></div>
+        <div class="b-screen">
+          <div class="b-aurora"><span class="a1"></span><span class="a2"></span><span class="a3"></span></div>
+          <div class="b-status"><span>9:42</span><span>&#9679;&#9679;&#9679; &#9662;</span></div>
+          <div class="b-inner b-rest">
+            <div class="b-celebrate"><span class="ck">&#10003;</span> +1 serie cerrada</div>
+            <p class="b-label b-rest-lbl">Descanso</p>
+
+            <div class="b-ring">
+              <svg viewBox="0 0 236 236" aria-hidden="true">
+                <circle class="track" cx="118" cy="118" r="112"/>
+                <circle class="prog" cx="118" cy="118" r="112"/>
+              </svg>
+              <div class="b-ring-num">
+                <div class="t">01:07</div>
+                <div class="s">restante</div>
+              </div>
+            </div>
+
+            <div class="b-rest-ctrls">
+              <button>&minus;15s</button>
+              <button class="skip">Saltar</button>
+              <button>+15s</button>
+            </div>
+
+            <p class="b-coach">&ldquo;Vamos, ultima ronda del bloque.&rdquo;</p>
+
+            <div class="b-next">
+              <div class="thumb"></div>
+              <div>
+                <div class="nx-lbl">Siguiente</div>
+                <div class="nx-name">Sentadilla bulgara</div>
+                <div class="nx-presc">3 &times; 10 &middot; 40 kg</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <ul class="b-bullets">
+        <li><b>El descanso ES la transicion:</b> fullscreen, el 01:07 domina y el anillo hairline avanza solo.</li>
+        <li><b>Siguiente en glass</b> con su media en miniatura: llegas mentalmente preparado al proximo ejercicio.</li>
+        <li>Micro-celebracion dorada y sobria de la serie recien cerrada, sin confetti.</li>
+      </ul>
+    </div>
+
+    <!-- ============ CARDIO ============ -->
+    <div class="b-col">
+      <p class="b-tag">Cardio</p>
+      <div class="b-phone">
+        <div class="b-glow"></div>
+        <div class="b-screen">
+          <div class="b-aurora"><span class="a1"></span><span class="a2"></span><span class="a3"></span></div>
+          <div class="b-status"><span>9:44</span><span>&#9679;&#9679;&#9679; &#9662;</span></div>
+          <div class="b-inner b-cardio">
+            <div class="b-top-row">
+              <span class="b-label">En vivo &middot; Indoor</span>
+              <span class="b-interval">Intervalo <b>3</b> / 6</span>
+            </div>
+
+            <div class="b-c-ring">
+              <svg viewBox="0 0 258 258" aria-hidden="true">
+                <circle class="track" cx="129" cy="129" r="122"/>
+                <circle class="prog" cx="129" cy="129" r="122"/>
+              </svg>
+              <div class="b-c-num">
+                <div class="t">12:24</div>
+                <div class="s">tiempo restante</div>
+              </div>
+            </div>
+
+            <div class="b-zone">
+              <span class="zn">Z2</span>
+              <span class="zt">mantiene</span>
+            </div>
+
+            <div class="b-c-chips">
+              <div class="b-bpm">
+                <span class="dot"></span>
+                <span class="val">142</span>
+                <span class="src">BPM &middot; Apple Watch</span>
+              </div>
+            </div>
+
+            <button class="b-pause"><span class="bar"><i></i><i></i></span> Pausar</button>
+          </div>
+        </div>
+      </div>
+      <ul class="b-bullets">
+        <li><b>Jerarquia glanceable:</b> tiempo gigante N1, zona con color fijo N2, BPM N3. Legible a un metro.</li>
+        <li>La <b>aurora vira al verde de la zona</b> activa (Z2): el ambiente confirma el esfuerzo sin leer.</li>
+        <li>BPM con puntito latiendo y fuente &ldquo;Apple Watch&rdquo; discreta; un solo boton: pausar.</li>
+      </ul>
+    </div>
+
+  </div>
+
+  <!-- Motion signature -->
+  <div class="b-motion">
+    <h3>Firma de motion</h3>
+    <div class="b-motion-grid">
+      <div><b>Springs suaves</b>Transiciones de pantalla con spring stiffness ~180 / damping ~22; nada rebota de mas, todo se asienta.</div>
+      <div><b>Duraciones 200-450ms</b>Micro-interacciones (tap, auto-fill, chips) a 200ms ease-out; entradas de pantalla 380-450ms.</div>
+      <div><b>Atmosfera lenta</b>Aurora a la deriva 12-18s, numeros que respiran 3s, shimmer del media 3.4s: vida sin distraer.</div>
+      <div><b>Haptica</b>Serie completada = impact medium + flash de glow; PR = notification success + destello dorado 600ms; countdown final = 3 ticks ligeros.</div>
+    </div>
+  </div>
+</section>

@@ -152,3 +152,52 @@ export function hrRangeForZone(zone: HrZone, profile: CardioProfile, today: Date
     if (!resolved) return null
     return resolved.zones.find((range) => range.zone === zone) ?? null
 }
+
+/**
+ * Perfil minimo para clasificar un bpm EN VIVO: FCmax ya resuelta + FC reposo opcional.
+ * A diferencia de `CardioProfile`, la FCmax ya viene calculada (override manual o Tanaka aguas
+ * arriba) — este helper no deriva edad, solo clasifica. Campos snake_case = columnas
+ * `max_hr_override` / `resting_hr` (M4 del PLAN) tal cual llegan del perfil.
+ */
+export interface HrToZoneProfile {
+    /** FCmax efectiva del alumno (bpm). Sin ella no hay clasificacion. */
+    max_hr?: number | null
+    /** FC en reposo medida (bpm); si es valida y < FCmax habilita Karvonen. */
+    resting_hr?: number | null
+}
+
+/** Zona en que cae un bpm medido, con su rango y el % de FCmax. */
+export interface HrZoneClassification {
+    /** Zona 1-5 en que cae el bpm (clampeada: bajo Z1 → 1, sobre Z5 → 5). */
+    zone: HrZone
+    /** Rango [min, max] bpm de la zona resultante. */
+    rangeBpm: [min: number, max: number]
+    /** Fraccion bpm/FCmax (2 decimales); puede superar 1 si el bpm excede la FCmax. */
+    pctOfMax: number
+}
+
+/**
+ * Clasifica un bpm medido (sensor BLE / reloj, Ola 6) en la zona del alumno. Usa los MISMOS cortes
+ * que la prescripcion (`HR_ZONE_BOUNDS` via `hrZonesKarvonen`/`hrZonesFromMax`): Karvonen si hay FC
+ * reposo valida y menor a la FCmax, si no %FCmax. La zona se asigna al tramo mas alto cuyo minimo
+ * el bpm alcanza (un bpm en el borde pertenece a la zona superior) y se clampea a [1, 5].
+ * `null` si el bpm o la FCmax no son utilizables — la UI muestra el bpm crudo sin zona.
+ */
+export function hrToZone(bpm: number, profile: HrToZoneProfile): HrZoneClassification | null {
+    if (!isPositiveFinite(bpm) || !isPositiveFinite(profile.max_hr)) return null
+    const maxHr = profile.max_hr
+    const useKarvonen = isPositiveFinite(profile.resting_hr) && profile.resting_hr < maxHr
+    const zones = useKarvonen ? hrZonesKarvonen(maxHr, profile.resting_hr as number) : hrZonesFromMax(maxHr)
+
+    // Tramo mas alto cuyo minimo alcanza el bpm; bajo Z1 queda en Z1 (clamp inferior).
+    let selected = zones[0]
+    for (const range of zones) {
+        if (bpm >= range.minBpm) selected = range
+    }
+
+    return {
+        zone: selected.zone,
+        rangeBpm: [selected.minBpm, selected.maxBpm],
+        pctOfMax: Math.round((bpm / maxHr) * 100) / 100,
+    }
+}

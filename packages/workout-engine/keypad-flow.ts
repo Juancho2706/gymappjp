@@ -10,15 +10,18 @@
  * MOVILIDAD/HOLD abriera el teclado de kg×reps (el bug del hallazgo 5). Ahora ambos consumen esto.
  * Espeja el `mode={effType}` de la web (`LogSetForm`) reusando la MISMA `typedKeypadFields` del
  * engine → cero drift web/mobile. El tipo efectivo = `block.exercise_type_override ?? exercise.exercise_type ?? 'strength'`.
+ *
+ * Subido a `@eva/workout-engine` en E0.3 (specs/executor-v3) para eliminar el espejo manual web/mobile:
+ * antes vivía en `apps/mobile/.../keypad-flow.ts`. 100% puro → import relativo de los módulos hermanos.
  */
+import { effectiveExerciseType } from './workout-exercise-type'
 import {
-  effectiveExerciseType,
   typedKeypadFields,
   formatTypedObjective,
   type TypedKeypadFieldDef,
   type TypedKeypadMode,
   type TypedObjectiveInput,
-} from '@eva/workout-engine'
+} from './typed-keypad'
 
 /** Objetivo del teclado: qué serie de qué bloque se está registrando + el estado inicial. */
 export interface KeypadTarget {

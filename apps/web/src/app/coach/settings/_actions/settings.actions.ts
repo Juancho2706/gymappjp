@@ -56,6 +56,8 @@ export async function updateBrandSettingsAction(
         welcome_modal_enabled: formData.get('welcome_modal_enabled') === 'on',
         welcome_modal_content: (formData.get('welcome_modal_content') as string | null)?.trim() ?? '',
         welcome_modal_type: (formData.get('welcome_modal_type') as string | null) ?? 'text',
+        // Ejecutor V3 (E0.7) — tema del ejecutor del alumno (coach|eva). Preferencia, no branding gateado.
+        executor_theme: (formData.get('executor_theme') as string | null) ?? 'coach',
     }
 
     const parsed = BrandSettingsSchema.safeParse(raw)
@@ -114,6 +116,9 @@ export async function updateBrandSettingsAction(
         welcome_modal_type: parsed.data.welcome_modal_type,
         welcome_modal_version: welcomeModalVersion,
         welcome_modal_updated_at: modalChanged ? new Date().toISOString() : undefined,
+        // Ejecutor V3 (E0.7) — preferencia (no branding visual): se persiste SIEMPRE, igual que
+        // identidad/comunicación (fuera del gate Pro+). La columna trae GRANT UPDATE authenticated.
+        executor_theme: parsed.data.executor_theme,
         updated_at: new Date().toISOString(),
     }
     if (brandingAllowed) {

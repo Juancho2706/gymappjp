@@ -35,7 +35,7 @@ export type WeekProgramRow = {
 export type WeekDayStatus =
     /** No hay plan para ese día = descanso (nunca pendiente). */
     | 'rest'
-    /** Hay log del plan en ese mismo día calendario Santiago. */
+    /** El plan de ese día tiene un log en CUALQUIER día de esta semana (atribución al plan). */
     | 'done'
     /** Es HOY y aún sin completar (lo gestiona el hero). */
     | 'today'
@@ -51,6 +51,16 @@ export type WeekDay = {
     title: string | null
     status: WeekDayStatus
     isToday: boolean
+    /**
+     * Si el día quedó `done` por una sesión hecha en OTRO día de esta semana (recuperación),
+     * fecha ISO `YYYY-MM-DD` de esa sesión. `null` cuando se hizo en su propia fecha (o no está hecho).
+     */
+    doneOnDate: string | null
+    /**
+     * Nombre completo del día de `doneOnDate` (p. ej. "Jueves"), para el copy "Hecho el jueves".
+     * `null` en los mismos casos que `doneOnDate`. Campo aditivo: la UI del label llega en E1.6.
+     */
+    doneOnLabel: string | null
 }
 
 export type PendingWorkout = {
@@ -80,13 +90,22 @@ function pad(n: number): string {
 /**
  * Deriva el estado de cada día de la semana ACTUAL del alumno y la cola de días PENDIENTES
  * (días pasados de esta semana con plan y sin registro). Función PURA — misma resolución de
- * `dayPlan` / variante A-B / completado que `MomentumCard` y `computeWorkoutScore30d`, para que
- * las tres superficies (tira semanal, adherencia y esta cola) coincidan al día.
+ * `dayPlan` / variante A-B que `MomentumCard` y `computeWorkoutScore30d`.
  *
- * Decisión de producto (CEO 2026-07-04): el log cuenta el DÍA REAL en que se hizo (cero re-mapeo,
- * cero cambios al motor de adherencia/racha). Esto es sólo DESCUBRIBILIDAD + estado visual: expone
- * el pendiente y deja recuperarlo hoy vía su `/workout/[planId]` (la ejecución no tiene candado de
- * fecha). Sin programa activo → semana vacía y cero pendientes (nada cambia).
+ * Atribución al PLAN (fix del gap real, CEO decisión 10, 2026-07-22): un día X queda `done` si SU
+ * plan (`dayPlan.id`) tiene un log en CUALQUIER día de esta semana Santiago — no sólo en su propia
+ * fecha calendario. Así, recuperar el martes un jueves marca el martes (`doneOnDate`/`doneOnLabel` =
+ * "Hecho el jueves") y limpia el pendiente. Reglas de la atribución greedy por plan:
+ *   1) cada día completado en SU MISMA fecha consume su propio log primero (done "en fecha", sin
+ *      `doneOn` ajeno);
+ *   2) los logs sobrantes cierran el día PENDIENTE MÁS ANTIGUO del mismo plan (recuperación);
+ *      un mismo log jamás marca dos días → plan repetido en 2+ días necesita 1 log por día.
+ * Los días FUTUROS nunca son elegibles (jamás `done`). Sólo cuentan logs cuyo día real Santiago cae
+ * dentro de estos 7 días (el caller trae más historial del necesario).
+ *
+ * OJO: esto NO toca `computeWorkoutScore30d`/momentum ni la racha — ésos cuentan la fecha real by
+ * design. Es sólo DESCUBRIBILIDAD + estado visual del dashboard; la ejecución no tiene candado de
+ * fecha (`/workout/[planId]`). Sin programa activo → semana vacía y cero pendientes (nada cambia).
  *
  * Un día de DESCANSO (sin plan) NUNCA es pendiente. HOY nunca es pendiente (es trabajo del hero).
  */
@@ -120,7 +139,16 @@ export function deriveWeekWorkoutStatus(input: {
     const curr = userLocalDate
     const firstDay = curr.getDate() - curr.getDay() + (curr.getDay() === 0 ? -6 : 1)
 
-    const days: WeekDay[] = []
+    type DaySlot = {
+        dateIso: string
+        dayOfWeek: number
+        dayPlan: WeekPlanRow | null
+        isToday: boolean
+        isFuture: boolean
+    }
+
+    // Paso 1: resolver el plan de cada día de la semana (Lun→Dom) — resolución idéntica a la previa.
+    const slots: DaySlot[] = []
     for (let i = 0; i < 7; i++) {
         const d = new Date(curr)
         d.setDate(firstDay + i)
@@ -137,33 +165,88 @@ export function deriveWeekWorkoutStatus(input: {
             ) ?? null
         const dayPlan = assignedPlan ?? programPlan
 
-        const isToday = dStr === todayIso
-        const isFuture = dStr > todayIso
-        const isCompleted =
-            !!dayPlan &&
-            !isFuture &&
-            logs.some(
-                (l) =>
-                    l.workout_blocks?.plan_id === dayPlan.id &&
-                    getSantiagoIsoYmdForUtcInstant(l.logged_at) === dStr
-            )
-
-        let status: WeekDayStatus
-        if (!dayPlan) status = 'rest'
-        else if (isCompleted) status = 'done'
-        else if (isToday) status = 'today'
-        else if (isFuture) status = 'upcoming'
-        else status = 'pending'
-
-        days.push({
+        slots.push({
             dateIso: dStr,
             dayOfWeek: dDow,
-            planId: dayPlan?.id ?? null,
-            title: dayPlan?.title ?? null,
-            status,
-            isToday,
+            dayPlan,
+            isToday: dStr === todayIso,
+            isFuture: dStr > todayIso,
         })
     }
+
+    // Paso 2: logs de ESTA semana por plan, con su día real Santiago (asc). Sólo los que caen en los
+    // 7 días de la semana cuentan para la atribución (el caller trae más historial del necesario).
+    const weekDateSet = new Set(slots.map((s) => s.dateIso))
+    const weekLogsByPlan = new Map<string, string[]>()
+    for (const l of logs) {
+        const planId = l.workout_blocks?.plan_id
+        if (!planId) continue
+        const ymd = getSantiagoIsoYmdForUtcInstant(l.logged_at)
+        if (!weekDateSet.has(ymd)) continue
+        const arr = weekLogsByPlan.get(planId)
+        if (arr) arr.push(ymd)
+        else weekLogsByPlan.set(planId, [ymd])
+    }
+    for (const arr of weekLogsByPlan.values()) arr.sort()
+
+    // Paso 3: atribución greedy por plan. `doneOnByDate` mapea el día cerrado → fecha real del log que
+    // lo cerró (`null` = hecho en su propia fecha). Los días futuros nunca son elegibles.
+    const doneOnByDate = new Map<string, string | null>()
+    const slotsByPlan = new Map<string, DaySlot[]>()
+    for (const s of slots) {
+        if (s.isFuture || !s.dayPlan) continue
+        const arr = slotsByPlan.get(s.dayPlan.id)
+        if (arr) arr.push(s)
+        else slotsByPlan.set(s.dayPlan.id, [s])
+    }
+    for (const [planId, planSlots] of slotsByPlan) {
+        const remaining = [...(weekLogsByPlan.get(planId) ?? [])] // fechas ymd asc
+        if (remaining.length === 0) continue
+
+        // Fase 1: match exacto en la propia fecha (completado en su día) — consume su log primero.
+        for (const s of planSlots) {
+            const idx = remaining.indexOf(s.dateIso)
+            if (idx !== -1) {
+                remaining.splice(idx, 1)
+                doneOnByDate.set(s.dateIso, null)
+            }
+        }
+        // Fase 2: logs sobrantes → día pendiente más antiguo del plan sin cerrar (recuperación).
+        let li = 0
+        for (const s of planSlots) {
+            if (li >= remaining.length) break
+            if (doneOnByDate.has(s.dateIso)) continue
+            doneOnByDate.set(s.dateIso, remaining[li])
+            li++
+        }
+    }
+
+    const dowByDate = new Map(slots.map((s) => [s.dateIso, s.dayOfWeek]))
+
+    const days: WeekDay[] = slots.map((s) => {
+        const isDone = !!s.dayPlan && doneOnByDate.has(s.dateIso)
+        const doneOnDate = isDone ? (doneOnByDate.get(s.dateIso) ?? null) : null
+
+        let status: WeekDayStatus
+        if (!s.dayPlan) status = 'rest'
+        else if (isDone) status = 'done'
+        else if (s.isToday) status = 'today'
+        else if (s.isFuture) status = 'upcoming'
+        else status = 'pending'
+
+        const doneOnLabel = doneOnDate ? DAY_NAMES_FULL[(dowByDate.get(doneOnDate) ?? 1) - 1] : null
+
+        return {
+            dateIso: s.dateIso,
+            dayOfWeek: s.dayOfWeek,
+            planId: s.dayPlan?.id ?? null,
+            title: s.dayPlan?.title ?? null,
+            status,
+            isToday: s.isToday,
+            doneOnDate,
+            doneOnLabel,
+        }
+    })
 
     const pending: PendingWorkout[] = days
         .filter((d): d is WeekDay & { planId: string; title: string } => d.status === 'pending' && !!d.planId)

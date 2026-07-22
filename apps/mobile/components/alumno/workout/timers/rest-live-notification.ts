@@ -29,10 +29,20 @@
  * enlazando. Sin ninguno de los dos (builds actuales), TODO acá es NO-OP seguro (patrón de
  * `sound.ts`/`VideoPlayer.tsx`: sin import estático, no rompe tsc ni crashea).
  *
- * ⚠️ REQUIERE UN BUILD EAS NUEVO: es una dependencia NATIVA. Hasta que un build la incluya,
- * el cronómetro vivo simplemente no aparece (el resto del descanso funciona igual). Ver
- * `cambiosShell` de la unidad: falta `pnpm install` (regenerar lockfile raíz) + plugin en
- * app.json + build EAS.
+ * ⚠️ REQUIERE UN BUILD EAS NUEVO: es una dependencia NATIVA. `react-native-notify-kit` YA está en
+ * `package.json` (^10.4.0 → 10.4.8 en el lockfile raíz) y su plugin en `app.json`; sólo falta que un
+ * build EAS enlace el módulo nativo para que el cronómetro vivo aparezca (el resto del descanso funciona
+ * igual sin él). Hasta ese build, el `require` guardado deja todo en NO-OP seguro.
+ *
+ * ── 7A · ANDROID 16 LIVE UPDATES / ProgressStyle (evaluación) — DIFERIDO ─────────
+ * Android 16 (API 36) agrega `Notification.ProgressStyle` + Live Updates (notificaciones promovidas
+ * ongoing con barra de progreso segmentada, ideal para un temporizador). `react-native-notify-kit@10.4.8`
+ * (instalado) expone `chronometer` (lo que usamos abajo) pero NO expone `ProgressStyle`/Live Updates: su
+ * `AndroidNotification` no tiene campos de progreso promovido (verificado en sus tipos, sin `progressStyle`
+ * ni `liveUpdate`). Implementarlo exigiría una versión futura de la lib que mapee la API 36 (o un módulo
+ * nativo custom). Se DIFIERE: el `chronometer` actual ya da la cuenta regresiva viva en el lockscreen con
+ * fallback correcto a APIs menores; el upgrade a ProgressStyle espera a que notify-kit lo soporte. No se
+ * instala nada nuevo para esto (fuera del alcance de esta unidad).
  */
 import { Platform } from 'react-native'
 import { isRestTimerMuted } from './rest-timer-preferences'

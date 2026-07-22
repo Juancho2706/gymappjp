@@ -55,6 +55,8 @@ interface Props {
   /** Valores del paso de esfuerzo (mirror del `LogSetForm`). */
   effortRpe: number | null
   effortRir: number | null
+  /** Tope inferior de la escala de RIR (E2.5): 0 en V3, 1 en V2. Default 1. */
+  effortRirMin?: number
   /** Paso configurable de los chips de incremento (kg). */
   step: number
   /** ¿Está abierto el selector de paso? */
@@ -112,6 +114,7 @@ export function NumericKeypadSheet({
   hasEffort,
   effortRpe,
   effortRir,
+  effortRirMin = 1,
   step,
   stepMenuOpen,
   reducedMotion: reducedMotionProp,
@@ -256,7 +259,7 @@ export function NumericKeypadSheet({
                   Reps en reserva · RIR
                   <EffortHelp label="RIR" text={RIR_HELP} />
                 </span>
-                <ScaleDots name="RIR" value={effortRir} onChange={onEffortRirChange} reducedMotion={reducedMotion} />
+                <ScaleDots name="RIR" value={effortRir} onChange={onEffortRirChange} reducedMotion={reducedMotion} min={effortRirMin} />
               </div>
             </div>
 

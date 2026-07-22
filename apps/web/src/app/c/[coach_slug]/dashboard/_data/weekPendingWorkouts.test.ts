@@ -11,6 +11,8 @@ const PLAN_TUE_B = '33333333-3333-3333-3333-333333333333'
 const PLAN_WED = '44444444-4444-4444-4444-444444444444'
 const PLAN_THU_B = '55555555-5555-5555-5555-555555555555'
 const PLAN_FRI = '66666666-6666-6666-6666-666666666666'
+const PLAN_SUN = '77777777-7777-7777-7777-777777777777'
+const PLAN_REP = '88888888-8888-8888-8888-888888888888'
 const PROG = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'
 
 function plan(overrides: Partial<WeekPlanRow> & { id: string }): WeekPlanRow {
@@ -95,7 +97,7 @@ describe('deriveWeekWorkoutStatus', () => {
         expect(p.title).toBe('Tirón')
     })
 
-    it('atribución por día real (Opción S): recuperar el martes HOY no cierra el pendiente del martes', () => {
+    it('atribución al plan (fix del gap): recuperar el martes HOY cierra el día del martes con "Hecho el miércoles"', () => {
         const r = deriveWeekWorkoutStatus({
             userLocalDate: TODAY_DATE,
             todayIso: TODAY_ISO,
@@ -108,8 +110,148 @@ describe('deriveWeekWorkoutStatus', () => {
             ],
         })
         const tue = r.days.find((d) => d.dayOfWeek === 2)
-        expect(tue?.status).toBe('pending') // sigue pendiente: el log cuenta el día real (miércoles)
-        expect(r.pending.map((p) => p.planId)).toContain(PLAN_TUE_A)
+        expect(tue?.status).toBe('done') // ya no queda pendiente: su plan tiene log esta semana
+        expect(tue?.doneOnDate).toBe('2026-07-08')
+        expect(tue?.doneOnLabel).toBe('Miércoles')
+        expect(r.pending.map((p) => p.planId)).not.toContain(PLAN_TUE_A)
+        expect(r.pending).toHaveLength(0) // Lun done en fecha, Mar recuperado → cola limpia
+    })
+
+    // (a) plan del martes con log del jueves → martes done "hecho el jueves"; jueves intacto.
+    it('recuperación en otro día: plan del martes hecho el jueves → martes done "Jueves", jueves intacto', () => {
+        const r = deriveWeekWorkoutStatus({
+            userLocalDate: new Date(2026, 6, 10), // viernes 2026-07-10
+            todayIso: '2026-07-10',
+            program: AB_PROGRAM,
+            activePlans: AB_PLANS,
+            logs: [log(PLAN_TUE_A, '2026-07-09T15:00:00.000Z')], // día real Santiago = jueves 07-09
+        })
+        const tue = r.days.find((d) => d.dayOfWeek === 2)
+        expect(tue?.status).toBe('done')
+        expect(tue?.doneOnDate).toBe('2026-07-09')
+        expect(tue?.doneOnLabel).toBe('Jueves')
+        // el jueves sigue rigiéndose por SU propio plan (variante B en semana A → descanso): sin tocar.
+        const thu = r.days.find((d) => d.dayOfWeek === 4)
+        expect(thu?.status).toBe('rest')
+        expect(thu?.doneOnDate).toBeNull()
+        expect(r.pending.map((p) => p.planId)).not.toContain(PLAN_TUE_A)
+    })
+
+    // (b) plan repetido lunes+viernes: 1 sesión marca SOLO lunes; 2 sesiones marcan ambos.
+    describe('plan repetido en 2+ días — asignación greedy 1 log ↔ 1 día', () => {
+        // Mismo plan (id) asignado por fecha a lunes y viernes; hoy = sábado (ambos días son pasado).
+        const SAT_DATE = new Date(2026, 6, 11) // sábado 2026-07-11
+        const SAT_ISO = '2026-07-11'
+        const REP_PLANS: WeekPlanRow[] = [
+            plan({ id: PLAN_REP, program_id: null, day_of_week: null, week_variant: null, assigned_date: '2026-07-06' }),
+            plan({ id: PLAN_REP, program_id: null, day_of_week: null, week_variant: null, assigned_date: '2026-07-10' }),
+        ]
+        const REP_PROGRAM = { id: PROG, ab_mode: false, start_date: '2026-07-06', weeks_to_repeat: 1 }
+
+        it('1 sola sesión (miércoles) marca SOLO el lunes (día pendiente más antiguo); viernes queda pendiente', () => {
+            const r = deriveWeekWorkoutStatus({
+                userLocalDate: SAT_DATE,
+                todayIso: SAT_ISO,
+                program: REP_PROGRAM,
+                activePlans: REP_PLANS,
+                logs: [log(PLAN_REP, '2026-07-08T15:00:00.000Z')], // día real = miércoles
+            })
+            const mon = r.days.find((d) => d.dayOfWeek === 1)
+            const fri = r.days.find((d) => d.dayOfWeek === 5)
+            expect(mon?.status).toBe('done')
+            expect(mon?.doneOnDate).toBe('2026-07-08')
+            expect(mon?.doneOnLabel).toBe('Miércoles')
+            expect(fri?.status).toBe('pending')
+            expect(r.pending.map((p) => p.dayOfWeek)).toEqual([5])
+        })
+
+        it('2 sesiones (miércoles + jueves) marcan AMBOS días', () => {
+            const r = deriveWeekWorkoutStatus({
+                userLocalDate: SAT_DATE,
+                todayIso: SAT_ISO,
+                program: REP_PROGRAM,
+                activePlans: REP_PLANS,
+                logs: [
+                    log(PLAN_REP, '2026-07-08T15:00:00.000Z'), // miércoles
+                    log(PLAN_REP, '2026-07-09T15:00:00.000Z'), // jueves
+                ],
+            })
+            const mon = r.days.find((d) => d.dayOfWeek === 1)
+            const fri = r.days.find((d) => d.dayOfWeek === 5)
+            expect(mon?.status).toBe('done')
+            expect(fri?.status).toBe('done')
+            expect(r.pending).toHaveLength(0)
+        })
+    })
+
+    // (c) semana límite TZ Santiago: log lunes 00:xx y domingo 23:xx caen DENTRO de la semana.
+    describe('límites de semana en America/Santiago (DST-safe)', () => {
+        const SUN_DATE = new Date(2026, 6, 12) // domingo 2026-07-12 (fin de semana)
+        const SUN_ISO = '2026-07-12'
+        const EDGE_PLANS: WeekPlanRow[] = [
+            plan({ id: PLAN_MON, day_of_week: 1, week_variant: null, title: 'Día lunes' }),
+            plan({ id: PLAN_SUN, day_of_week: 7, week_variant: null, title: 'Día domingo' }),
+        ]
+        const EDGE_PROGRAM = { id: PROG, ab_mode: false, start_date: '2026-07-06', weeks_to_repeat: 1 }
+
+        it('logs en los bordes (lunes 00:30 y domingo 23:30 Santiago) atribuyen dentro de la semana', () => {
+            const r = deriveWeekWorkoutStatus({
+                userLocalDate: SUN_DATE,
+                todayIso: SUN_ISO,
+                program: EDGE_PROGRAM,
+                activePlans: EDGE_PLANS,
+                logs: [
+                    log(PLAN_MON, '2026-07-06T04:30:00.000Z'), // Santiago lunes 07-06 00:30
+                    log(PLAN_SUN, '2026-07-13T03:30:00.000Z'), // Santiago domingo 07-12 23:30
+                ],
+            })
+            expect(r.days.find((d) => d.dayOfWeek === 1)?.status).toBe('done')
+            expect(r.days.find((d) => d.dayOfWeek === 7)?.status).toBe('done')
+            expect(r.pending).toHaveLength(0)
+        })
+
+        it('log de la semana ANTERIOR (domingo 23:30 previo) NO atribuye: el lunes sigue pendiente', () => {
+            const r = deriveWeekWorkoutStatus({
+                userLocalDate: SUN_DATE,
+                todayIso: SUN_ISO,
+                program: EDGE_PROGRAM,
+                activePlans: EDGE_PLANS,
+                logs: [log(PLAN_MON, '2026-07-06T03:30:00.000Z')], // Santiago domingo 07-05 23:30 (fuera)
+            })
+            const mon = r.days.find((d) => d.dayOfWeek === 1)
+            expect(mon?.status).toBe('pending')
+            expect(mon?.doneOnDate).toBeNull()
+            expect(r.pending.map((p) => p.dayOfWeek)).toContain(1)
+        })
+    })
+
+    // (d) regresión: día hecho EN su fecha sigue done SIN doneOn ajeno.
+    it('regresión: día completado en su propia fecha queda done sin doneOnDate/doneOnLabel', () => {
+        const r = deriveWeekWorkoutStatus({
+            userLocalDate: TODAY_DATE,
+            todayIso: TODAY_ISO,
+            program: AB_PROGRAM,
+            activePlans: AB_PLANS,
+            logs: [log(PLAN_MON, '2026-07-06T15:00:00.000Z')], // lunes completado el mismo lunes
+        })
+        const mon = r.days.find((d) => d.dayOfWeek === 1)
+        expect(mon?.status).toBe('done')
+        expect(mon?.doneOnDate).toBeNull()
+        expect(mon?.doneOnLabel).toBeNull()
+    })
+
+    // (e) día futuro jamás done, ni siquiera con un log de ese plan esta semana.
+    it('día futuro nunca es done aunque exista un log de su plan esta semana', () => {
+        const r = deriveWeekWorkoutStatus({
+            userLocalDate: TODAY_DATE, // miércoles 07-08
+            todayIso: TODAY_ISO,
+            program: AB_PROGRAM,
+            activePlans: AB_PLANS,
+            logs: [log(PLAN_FRI, '2026-07-08T15:00:00.000Z')], // log hoy del plan del viernes (futuro)
+        })
+        const fri = r.days.find((d) => d.dayOfWeek === 5)
+        expect(fri?.status).toBe('upcoming')
+        expect(fri?.doneOnDate).toBeNull()
     })
 
     it('múltiples pendientes ordenados del más antiguo al más nuevo', () => {

@@ -258,11 +258,11 @@ export const WorkoutLogSetSchema = z.object({
     set_number: z.coerce.number().int().min(1),
     weight_kg: z.coerce.number().min(0).optional(),
     reps_done: z.coerce.number().int().min(0).optional(),
-    // Escala 1-10 para AMBOS (decisión CEO): el alumno registra RPE y RIR por serie en 1-10.
-    // La DB acepta rpe 1-10 y rir 0-10; la ENTRADA se acota a 1-10 (el cliente clampa un legacy
-    // rir=0 a "sin valor" antes de enviar, así no se rechaza al editar una serie vieja).
+    // Escalas executor-v3 (corrección CEO 2026-07-22): RPE 1-10 (un RPE 0 no significa nada en una
+    // serie real); RIR 0-10 (RIR 0 = al fallo, sin reps en reserva).
+    // DB alineada: `workout_logs_rpe_check` 1-10 (migración 20260722123000); `workout_logs_rir_check` 0-10.
     rpe: z.coerce.number().min(1).max(10).optional(),
-    rir: z.coerce.number().int().min(1).max(10).optional(),
+    rir: z.coerce.number().int().min(0).max(10).optional(),
     // Nota rápida por serie (quick-win E2-6). Texto libre corto — NUNCA pasar por el
     // normalizador de decimales (comas→puntos) del action; se lee crudo aparte.
     note: z.string().trim().max(300, 'La nota no puede superar 300 caracteres').optional(),
@@ -279,6 +279,18 @@ export const WorkoutLogSetSchema = z.object({
     substituted_exercise_id: z.guid().optional(),
     substituted_exercise_name: z.string().trim().max(120).optional(),
     substitution_reason: z.string().trim().max(40).optional(),
+    // ── Holds de movilidad POR LADO (E0.5 · executor-v3) — espejo de workout_logs.metadata jsonb ──
+    // Shape libre {left_sec, right_sec} (segundos por lado, enteros 0-86400). Opcional/permisivo, SIN
+    // CHECKs por tipo (misma política que el resto del payload): un log SIN metadata valida idéntico
+    // al de hoy. Convive con `actual_hold_sec` (que en modo per_side lleva la SUMA L+R). La UI que
+    // captura por lado llega en Ola 3; esto es solo la capa de datos. z.guid() no aplica (jsonb libre).
+    metadata: z
+        .object({
+            left_sec: z.coerce.number().int().min(0).max(86400).nullable().optional(),
+            right_sec: z.coerce.number().int().min(0).max(86400).nullable().optional(),
+        })
+        .nullable()
+        .optional(),
 })
 export type WorkoutLogSetInput = z.infer<typeof WorkoutLogSetSchema>
 

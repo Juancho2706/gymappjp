@@ -8,6 +8,10 @@ import {
   type OptimisticLogPayload,
   type ReconciledSessionLog,
   type TypedKeypadMode,
+  // Mapeo PURO valores->payload (subido al engine en E0.3): compartido con el `KeypadHost`.
+  buildStrengthPayload,
+  buildTypedPayload,
+  int,
 } from '@eva/workout-engine'
 import { FONT, TYPE, textStyle } from '../../../lib/typography'
 import { haptics } from '../../../lib/haptics'
@@ -15,7 +19,6 @@ import { fmtTypedLoggedLine } from './workout-ui'
 // RPE_HELP/RIR_HELP se importan (fuente única mobile) en vez de re-declararlos: evita el drift que la
 // Ola 0 flagueó (#1). Son mirror literal —con tildes— de la web (`EffortScale.tsx:17-20`).
 import { TypedKeypad, EffortScale, KEYPAD_EYEBROW_STYLE, RPE_HELP, RIR_HELP } from './TypedKeypad'
-import { buildStrengthPayload, buildTypedPayload, int } from './set-log-payload'
 import { useEvaMotion } from '../../../lib/motion'
 
 const SPORT_400 = '#5C9DFF'
@@ -119,14 +122,22 @@ export function SetRow({
   onRpeUpdate,
   settle = false,
   pr = false,
+  prColor = WARNING_500,
+  prIntense = false,
   syncError = null,
   onRetry,
+  showEffort = true,
 }: {
   setNumber: number
   log?: ReconciledSessionLog
   isActive: boolean
   typedMode?: TypedKeypadMode | null
   onPress: () => void
+  /**
+   * Mostrar las pills de esfuerzo RPE/RIR de la serie logueada (E3.7 — tuerca V3). Default true =
+   * comportamiento previo. En false (V3 con "Mostrar RPE/RIR" apagado) el chip omite RPE/RIR.
+   */
+  showEffort?: boolean
   /**
    * La serie se acaba de cerrar en ESTA sesión (señal one-shot del padre, mirror web `settleRef`,
    * `LogSetForm.tsx:510`): el check de guardado entra con un settle elástico. Las series ya cargadas
@@ -138,6 +149,17 @@ export function SetRow({
    * `LogSetForm.tsx:511`): pulso dorado sobre el chip. Sólo con `settle` real (no en logs cargados).
    */
   pr?: boolean
+  /**
+   * Color del pulso de PR. Default `WARNING_500` (ámbar, comportamiento V2 previo sin token). El
+   * ejecutor V3 (E4.2) pasa su token PROPIO de PR `exec.pr` (#f5c451) para que el récord se vea dorado.
+   */
+  prColor?: string
+  /**
+   * Pulso de PR INTENSO del ejecutor V3 (E4.2): borde dorado que late ~1,5s (3 pulsos, sin loop) en vez
+   * del destello único de 320ms de V2. Default false = destello corto (paridad web). reduced-motion ⇒ un
+   * solo latido suave.
+   */
+  prIntense?: boolean
   /**
    * Registro de RPE POST-log en series tipadas (cardio/movilidad/roller) — mirror de
    * `TypedLogSetRow` web (`LogSetForm.tsx:1112-1136`): al loguear una serie tipada se despliega la
@@ -298,9 +320,13 @@ export function SetRow({
         <MotiView
           pointerEvents="none"
           from={{ opacity: 0 }}
-          animate={{ opacity: [0, 0.8, 0] }}
-          transition={{ type: 'timing', duration: 320 }}
-          className="absolute inset-0 rounded-control border-2 border-warning-500"
+          // V3 (prIntense): borde dorado que late ~1,5s (3 pulsos, sin loop); reduced-motion ⇒ un latido.
+          // V2 (default): destello único de 320ms (paridad web `prGlow`). Color desde `prColor` (token PR
+          // dorado en V3, ámbar warning-500 en V2) vía style, no className (el hex es dinámico).
+          animate={{ opacity: prIntense ? (motion.reduced ? [0, 1, 0] : [0, 1, 0.2, 1, 0.2, 1, 0]) : [0, 0.8, 0] }}
+          transition={{ type: 'timing', duration: prIntense ? (motion.reduced ? 800 : 1500) : 320 }}
+          className="absolute inset-0 rounded-control border-2"
+          style={{ borderColor: prColor }}
         />
       ) : null}
       <View
@@ -340,11 +366,12 @@ export function SetRow({
               {log?.reps_done ?? '–'}
             </Text>
             {/* RPE/RIR: mono 500 (semibold web) a 11px vía CHIP_EFFORT_STYLE (web
-                `font-mono text-[11px] font-semibold`, LogSetForm.tsx:548,551). */}
-            {log?.rpe != null && (
+                `font-mono text-[11px] font-semibold`, LogSetForm.tsx:548,551). La tuerca V3 (E3.7)
+                puede ocultarlas con `showEffort={false}`. */}
+            {showEffort && log?.rpe != null && (
               <Text style={CHIP_EFFORT_STYLE} className="text-on-dark-muted">RPE {log.rpe}</Text>
             )}
-            {log?.rir != null && (
+            {showEffort && log?.rir != null && (
               <Text style={CHIP_EFFORT_STYLE} className="text-on-dark-muted">RIR {log.rir}</Text>
             )}
             {/* Ícono nota (paridad web A.3, `LogSetForm.tsx:553-555`): señala que la serie lleva nota
@@ -440,6 +467,7 @@ function FieldBox({
   value,
   active,
   onPress,
+  onLongPress,
   testID,
   compact = false,
 }: {
@@ -447,6 +475,13 @@ function FieldBox({
   value: string
   active: boolean
   onPress: () => void
+  /**
+   * Mantener presionado (~400ms) sobre la caja — captura por RUEDA del ejecutor V3 (E2.5). Aditivo y
+   * opcional: solo V3 lo pasa; sin la prop el Pressable no registra long-press y la fila se comporta
+   * IGUAL que en V2 (el `delayLongPress` queda inerte sin handler). El tap corto abre el teclado como
+   * siempre.
+   */
+  onLongPress?: () => void
   testID: string
   compact?: boolean
 }) {
@@ -454,9 +489,12 @@ function FieldBox({
     <Pressable
       testID={testID}
       onPress={onPress}
+      onLongPress={onLongPress}
+      delayLongPress={onLongPress ? 400 : undefined}
       className="flex-1"
       accessibilityRole="button"
       accessibilityLabel={`${label}: ${value || 'sin valor'}, toca para editar`}
+      accessibilityHint={onLongPress ? 'Manten presionado para abrir la rueda de valores' : undefined}
     >
       {/* Label de la caja (Kg/Reps/campos tipados) con KEYPAD_EYEBROW_STYLE (11px / 0.04em) — mirror del
           `text-[9.5px] ... tracking-[0.08em]` web (`LogSetForm.tsx:632/654`). `TYPE.eyebrow` (12px / 0.12em)
@@ -512,6 +550,7 @@ export function ActiveSetRow({
   blockId,
   setNumber,
   typedMode,
+  sideMode = null,
   suggestedWeight,
   seedValues,
   autofill,
@@ -520,10 +559,21 @@ export function ActiveSetRow({
   isEditing = false,
   onDraftChange,
   onCommit,
+  onLongPressValue,
+  allowZeroRir = false,
+  showEffort = true,
 }: {
   blockId: string
   setNumber: number
   typedMode: TypedKeypadMode | null
+  /**
+   * Modo de lado del bloque (E3.2 · executor-v3). Solo relevante en movilidad `per_side`: hace que la
+   * fila declare DOS campos de hold (`hold_left_sec`/`hold_right_sec`) vía `typedKeypadFields(mode,
+   * sideMode)` y arme el payload con `buildTypedPayload(..., sideMode)` → `metadata {left,right}` + suma
+   * en `actual_hold_sec`. ADITIVO: sin la prop (default null) el comportamiento es byte-idéntico al
+   * previo (un solo campo). El engine ya soporta ambos ejes; acá solo se CONSUME.
+   */
+  sideMode?: string | null
   /** Peso sugerido (sobrecarga) — pre-llena la caja KG en strength. */
   suggestedWeight: number | null
   /**
@@ -560,10 +610,28 @@ export function ActiveSetRow({
   autofill?: { weight: number | null; reps: number | null; nonce: number } | null
   onDraftChange: (values: Record<string, string>, fieldIndex: number) => void
   onCommit: (payload: OptimisticLogPayload) => void
+  /**
+   * Mantener presionado (~400ms) sobre una caja de valor (kg/reps de FUERZA) — abre la rueda dual del
+   * ejecutor V3 (E2.5). ADITIVO: solo V3 lo pasa; el tap corto sigue abriendo el teclado. `key` indica
+   * la caja tocada (hoy la rueda es doble kg|reps, pero se propaga por si el caller la enfoca). Sin la
+   * prop la fila es byte-identica a V2 (las cajas no registran long-press). No aplica a tipadas.
+   */
+  onLongPressValue?: (key: 'weight' | 'reps') => void
+  /**
+   * Habilita el 0 en la escala de RIR (0-10, "al fallo") — decision CEO 8 del ejecutor V3. ADITIVO: solo
+   * V3 lo pasa (true); sin la prop el RIR arranca en 1 (V2 intacto). RPE queda SIEMPRE 1-10.
+   */
+  allowZeroRir?: boolean
+  /**
+   * Mostrar la escala de esfuerzo RPE/RIR (E3.7 — tuerca V3). Default true = comportamiento previo. En
+   * false (V3 con "Mostrar RPE/RIR" apagado) la fila activa omite la captura de esfuerzo. No aplica a
+   * tipadas (cardio/movilidad), que no tienen RPE/RIR inline.
+   */
+  showEffort?: boolean
 }) {
   const fields: RowField[] = useMemo(() => {
     if (typedMode) {
-      return typedKeypadFields(typedMode).map((f) => ({
+      return typedKeypadFields(typedMode, sideMode).map((f) => ({
         key: f.key,
         label: f.label,
         unit: f.unit,
@@ -574,7 +642,7 @@ export function ActiveSetRow({
       { key: 'weight', label: 'Kg', unit: 'kg', mode: 'weight' },
       { key: 'reps', label: 'Reps', unit: 'reps', mode: 'reps' },
     ]
-  }, [typedMode])
+  }, [typedMode, sideMode])
 
   const motion = useEvaMotion()
 
@@ -625,7 +693,7 @@ export function ActiveSetRow({
 
   const commit = () => {
     const payload = typedMode
-      ? buildTypedPayload(typedMode, valuesRef.current, blockId, setNumber)
+      ? buildTypedPayload(typedMode, valuesRef.current, blockId, setNumber, sideMode)
       : buildStrengthPayload(valuesRef.current, blockId, setNumber)
     onCommit(payload)
   }
@@ -689,6 +757,7 @@ export function ActiveSetRow({
               value={values.weight ?? ''}
               active={openKey === 'weight'}
               onPress={() => openField('weight')}
+              onLongPress={onLongPressValue ? () => onLongPressValue('weight') : undefined}
               testID={`set-field-${setNumber}-weight`}
               compact={!isActive}
             />
@@ -705,6 +774,7 @@ export function ActiveSetRow({
               value={values.reps ?? ''}
               active={openKey === 'reps'}
               onPress={() => openField('reps')}
+              onLongPress={onLongPressValue ? () => onLongPressValue('reps') : undefined}
               testID={`set-field-${setNumber}-reps`}
               compact={!isActive}
             />
@@ -712,8 +782,9 @@ export function ActiveSetRow({
         )}
       </View>
 
-      {/* Esfuerzo RPE + RIR con dots inline (strength) — mirror de ScaleDots web */}
-      {!typedMode && (
+      {/* Esfuerzo RPE + RIR con dots inline (strength) — mirror de ScaleDots web. La tuerca V3 (E3.7)
+          puede ocultarlo con `showEffort={false}`. */}
+      {!typedMode && showEffort && (
         <View className="gap-2.5">
           <View>
             <View className="mb-1 flex-row items-center gap-1">
@@ -744,7 +815,7 @@ export function ActiveSetRow({
                 {RIR_HELP}
               </Text>
             )}
-            <EffortScale kind="rir" value={int(values.rir)} onSelect={(v) => patch({ rir: String(v) })} compact={!isActive} />
+            <EffortScale kind="rir" value={int(values.rir)} onSelect={(v) => patch({ rir: String(v) })} compact={!isActive} allowZero={allowZeroRir} />
           </View>
         </View>
       )}

@@ -279,24 +279,49 @@ export default function AlumnoHomeScreen() {
     // Estado por dia del programa + cola de pendientes (E1-19). Filtra por la variante
     // A/B efectiva (web ActiveProgramSection.tsx:49): en un programa A/B sólo se muestran
     // los días de la semana activa.
+    // Mapa fecha→dbDay de la semana (para el label "Hecho el {dia}" de doneOnDate).
+    const dbDayByDate = new Map<string, number>()
+    for (let i = 0; i < 7; i++) dbDayByDate.set(weekDates[i], jsDayToDbDay(new Date(monday.getTime() + i * MS_DAY).getDay()))
+
     const programPlans = plans.filter((p) => p.day_of_week != null && workoutPlanMatchesVariant(p, activeVariant, abMode))
+    // ATRIBUCION GREEDY POR PLAN — espejo EXACTO del fix web weekPendingWorkouts.ts (Paso 2+3,
+    // atribucion greedy, CEO decision 10 2026-07-22): un dia X queda 'done' si SU plan tiene un log
+    // en CUALQUIER dia de esta semana Santiago, no solo en su propia fecha. Recuperar el martes un
+    // jueves marca el martes (doneOnDate/doneOnLabel = "Hecho el jueves") y limpia el pendiente.
+    //   Fase 1: el log en la PROPIA fecha del dia cierra "en fecha" (doneOnDate=null), consume su log.
+    //   Fase 2: los logs sobrantes cierran el dia PENDIENTE mas antiguo del plan (recuperacion).
+    // En el modelo plan-centrico del movil cada plan es UN slot (su day_of_week), asi que las dos
+    // fases del web colapsan por plan: si hay log en su propia fecha → done en fecha; si no y hay
+    // algun log de la semana → done recuperado con el mas antiguo. Los dias FUTUROS nunca son
+    // elegibles. NO toca momentum/racha (cuentan la fecha real by design) — solo descubribilidad +
+    // estado visual. FUENTE: el movil solo tiene `workoutPlanDays` (Set `planId|ymd`, granularidad
+    // (plan,dia); dos logs del mismo plan el mismo dia colapsan a uno) — fiel para "que dias hay sesion".
     const planDays: PlanDayView[] = programPlans.map((plan) => {
       const dow = plan.day_of_week as number
       const idx = ((dow - 1) % 7 + 7) % 7
       const dIso = weekDates[idx]
       const isToday = dIso === todayIso
       const isFuture = dIso > todayIso
-      // done SOLO si hay log de ESTE plan en ese mismo dia calendario Santiago
-      // (paridad web weekPendingWorkouts.ts:142-156, isCompleted = !isFuture &&
-      // plan_id===dayPlan.id && santiago(logged_at)===dStr). Antes marcaba done por
-      // CUALQUIER entreno del dia (workoutDates.has(dIso)) → falso positivo entre planes.
-      const done = !isFuture && workoutPlanDays.has(`${plan.id}|${dIso}`)
+      // Fechas (asc, Lun→Dom) de esta semana con log de ESTE plan.
+      const weekLogDates = isFuture ? [] : weekDates.filter((di) => workoutPlanDays.has(`${plan.id}|${di}`))
+      let done = false
+      let doneOnDate: string | null = null
+      if (!isFuture && weekLogDates.length > 0) {
+        if (weekLogDates.includes(dIso)) {
+          done = true // Fase 1: hecho en su propia fecha.
+          doneOnDate = null
+        } else {
+          done = true // Fase 2: recuperado — el log mas antiguo de la semana cierra este dia.
+          doneOnDate = weekLogDates[0]
+        }
+      }
       const status = done ? 'done' : isToday ? 'today' : isFuture ? 'upcoming' : 'pending'
-      return { plan, status, isToday }
+      const doneOnLabel = doneOnDate ? DAY_FULL[dbDayByDate.get(doneOnDate) ?? 1] : null
+      return { plan, status, isToday, dateIso: dIso, doneOnDate, doneOnLabel }
     })
     const pending: PendingDay[] = planDays
       .filter((d) => d.status === 'pending')
-      .map((d) => ({ planId: d.plan.id, dayOfWeek: d.plan.day_of_week as number, dayLabel: DAY_FULL[d.plan.day_of_week as number] }))
+      .map((d) => ({ planId: d.plan.id, dayOfWeek: d.plan.day_of_week as number, dayLabel: DAY_FULL[d.plan.day_of_week as number], dateIso: d.dateIso }))
       .sort((a, b) => a.dayOfWeek - b.dayOfWeek)
     const todayPlanId = planDays.find((d) => d.isToday)?.plan.id ?? todayPlan?.id ?? null
 
@@ -437,6 +462,13 @@ export default function AlumnoHomeScreen() {
             todayPlanId={derived.todayPlanId}
             weekVariant={derived.weekVariant}
             onStart={(id) => router.push(`/alumno/workout/${id}`)}
+            // Recuperar un dia pendiente: se entrena HOY y el log cae hoy (semantica correcta de
+            // recuperacion, ver E1.1); el param `recuperar` solo pinta el banner informativo ambar.
+            // El camino "editar fecha pasada" (param `fecha`) queda cableado en [planId].tsx + banner
+            // neutro pero SIN entrada de UI aun: el sheet deshabilita "Revisar y editar" porque el
+            // guardado RN todavia escribe HOY (el solo-UPDATE por target_date es un server action web,
+            // E1.5). El editor de fecha pasada RN llega en ola posterior y reactivara ese onReview.
+            onRecover={(id, fecha) => router.push({ pathname: '/alumno/workout/[planId]', params: { planId: id, recuperar: fecha } })}
           />
         </View>
 

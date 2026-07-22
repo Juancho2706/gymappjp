@@ -21,6 +21,23 @@ describe('typedKeypadFields', () => {
         expect(f.map((x) => x.key)).toEqual(['actual_duration_sec', 'reps_done'])
         expect(f.every((x) => !x.allowDecimal)).toBe(true)
     })
+
+    // ── Hold POR LADO (E0.5): sideMode='per_side' en movilidad → dos campos enteros ──
+    it('mobility per_side → dos campos hold izq./der., enteros', () => {
+        const f = typedKeypadFields('mobility', 'per_side')
+        expect(f.map((x) => x.key)).toEqual(['hold_left_sec', 'hold_right_sec'])
+        expect(f.every((x) => !x.allowDecimal)).toBe(true)
+    })
+
+    it('paridad: sideMode ausente/bilateral/otro modo → un solo hold, byte-idéntico', () => {
+        const bilateral = [{ key: 'actual_hold_sec', label: 'Hold', unit: 'seg', allowDecimal: false }]
+        expect(typedKeypadFields('mobility')).toEqual(bilateral)
+        expect(typedKeypadFields('mobility', 'bilateral')).toEqual(bilateral)
+        expect(typedKeypadFields('mobility', null)).toEqual(bilateral)
+        // per_side NO afecta cardio ni roller
+        expect(typedKeypadFields('cardio', 'per_side').map((x) => x.key)).toEqual(['cardio_min', 'actual_distance_m', 'actual_avg_hr'])
+        expect(typedKeypadFields('roller', 'per_side').map((x) => x.key)).toEqual(['actual_duration_sec', 'reps_done'])
+    })
 })
 
 describe('formatTypedObjective', () => {
