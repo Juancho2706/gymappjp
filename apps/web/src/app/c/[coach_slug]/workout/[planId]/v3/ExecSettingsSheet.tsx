@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion'
-import { X } from 'lucide-react'
+import { Flag, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { playTimerSound, type TimerSound } from '@/lib/audioUtils'
 import {
@@ -34,6 +34,10 @@ interface ExecSettingsSheetProps {
    *  en esta tuerca (no está en el mockup ni en RN) — el toggle real está en la pista de descanso. */
   autoTimerEnabled?: boolean
   onToggleAutoTimer?: () => void
+  /** Finalizar entrenamiento — decisión CEO (2026-07-22): la barra fija "Finalizar" NO existe en V3, su
+   *  acción se movió acá. Al presionar la fila se cierra el sheet y se dispara el MISMO handler de la
+   *  barra (`handleFinish`: flush + resumen/confirmación). Aditiva: si no se pasa, la fila no se pinta. */
+  onFinish?: () => void
 }
 
 const TONE_OPTIONS: { value: TimerSound; label: string }[] = [
@@ -69,6 +73,7 @@ function Toggle({
 export function ExecSettingsSheet({
   open,
   onClose,
+  onFinish,
 }: ExecSettingsSheetProps) {
   const reducedMotion = useReducedMotion()
   const { sound, volume, setSoundPersist, setVolumePersist } = useRestTimerPreferences()
@@ -216,6 +221,41 @@ export function ExecSettingsSheet({
                 <Toggle checked={showEffort} onChange={setShowEffort} label="Mostrar RPE/RIR en fuerza" />
               </div>
             </div>
+
+            {/* Finalizar entrenamiento (decisión CEO 2026-07-22) — sección separada al final del sheet.
+                Reemplaza la barra fija retirada en V3: cierra el sheet y dispara el MISMO handler de la
+                barra (`onFinish` = handleFinish); si hay series sin sincronizar sigue mostrando su aviso. */}
+            {onFinish && (
+              <div style={{ marginTop: 18, paddingTop: 16, borderTop: '1.5px solid #24242e' }}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onClose()
+                    onFinish()
+                  }}
+                  className="active:scale-[0.99]"
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 12,
+                    width: '100%',
+                    padding: '14px 16px',
+                    borderRadius: 14,
+                    border: '2px solid #2f2f3a',
+                    background: '#1c1c24',
+                    color: '#e8e8ee',
+                    fontSize: 14,
+                    fontWeight: 800,
+                    textAlign: 'left',
+                    cursor: 'pointer',
+                    transition: 'transform 0.12s ease',
+                  }}
+                >
+                  <Flag size={19} strokeWidth={2.4} style={{ flexShrink: 0 }} aria-hidden />
+                  Finalizar entrenamiento
+                </button>
+              </div>
+            )}
           </motion.div>
         </>
       )}

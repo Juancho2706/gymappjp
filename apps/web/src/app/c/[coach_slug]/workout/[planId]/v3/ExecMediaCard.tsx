@@ -3,9 +3,9 @@
 import { useEffect, useState } from 'react'
 import Image from 'next/image'
 import { AlignLeft, MessageSquare, Play, Dumbbell } from 'lucide-react'
-import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import type { ExerciseType } from '../WorkoutExecutionClient'
 import { resolveExecMedia } from './exec-media'
+import { CoachNoteSheet } from './CoachNoteV3'
 
 interface ExecMediaCardProps {
     /** Ejercicio cuya media se muestra (gif/video/youtube/none, misma precedencia que el modal). */
@@ -28,7 +28,6 @@ interface ExecMediaCardProps {
  */
 export function ExecMediaCard({ exercise, note, openTechnique }: ExecMediaCardProps) {
     const [noteOpen, setNoteOpen] = useState(false)
-    const reducedMotion = useReducedMotion()
     // Chips glass: entran EXTENDIDOS (estado inicial false → colapsan tras el timer). One-shot por
     // EJERCICIO (dep exercise.id) — no re-expande por serie. Reduced-motion → quedan extendidos (CSS).
     const [chipsCollapsed, setChipsCollapsed] = useState(false)
@@ -110,45 +109,9 @@ export function ExecMediaCard({ exercise, note, openTechnique }: ExecMediaCardPr
             </div>
 
             {/* Nota del coach — sheet OSCURA in-context (informe 15, BLOCKER): reemplaza el Dialog claro
-                (bg-card/text-foreground) que salía blanco sobre el shell oscuro. Se monta dentro de
-                [data-exec-v3] (acento resuelto), sin portal; reusa el chrome de sheet V3. */}
-            <AnimatePresence>
-                {noteOpen && note && (
-                    <>
-                        <motion.button
-                            type="button"
-                            aria-label="Cerrar nota del coach"
-                            onClick={() => setNoteOpen(false)}
-                            className="exec-v3-sheet-scrim"
-                            initial={reducedMotion ? false : { opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            exit={reducedMotion ? undefined : { opacity: 0 }}
-                        />
-                        <motion.div
-                            className="exec-v3-settings"
-                            role="dialog"
-                            aria-modal="true"
-                            aria-label="Nota del coach"
-                            style={{ background: '#1d1d26' }}
-                            initial={reducedMotion ? { opacity: 0 } : { y: '100%' }}
-                            animate={reducedMotion ? { opacity: 1 } : { y: 0 }}
-                            exit={reducedMotion ? { opacity: 0 } : { y: '100%' }}
-                            transition={reducedMotion ? { duration: 0 } : { type: 'spring', stiffness: 380, damping: 38 }}
-                        >
-                            <span className="exec-v3-handle" aria-hidden />
-                            <h2 className="font-display text-lg font-bold text-on-dark">Nota del coach</h2>
-                            <p className="mt-2 whitespace-pre-line text-sm leading-relaxed text-on-dark-muted">{note}</p>
-                            <button
-                                type="button"
-                                onClick={() => setNoteOpen(false)}
-                                className="mt-6 w-full rounded-control border border-[var(--border-inverse)] bg-white/[0.06] py-3 font-bold text-on-dark transition-colors hover:bg-white/[0.10]"
-                            >
-                                Entendido
-                            </button>
-                        </motion.div>
-                    </>
-                )}
-            </AnimatePresence>
+                (bg-card/text-foreground) que salía blanco sobre el shell oscuro. Compartida con las
+                pantallas tipadas (cardio/roller/movilidad) vía `CoachNoteSheet`; sin portal. */}
+            <CoachNoteSheet open={noteOpen} note={note} onClose={() => setNoteOpen(false)} />
         </>
     )
 }

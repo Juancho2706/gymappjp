@@ -7,10 +7,11 @@ import {
   type OptimisticLogPayload,
   type ReconciledSessionLog,
 } from '@eva/workout-engine'
-import { FONT } from '../../../../lib/typography'
+import { FONT, textStyle } from '../../../../lib/typography'
 import { hexToRgba } from '../../../../lib/theme'
 import { haptics } from '../../../../lib/haptics'
 import type { SessionBlock, SessionExercise } from '../../../../lib/workout-session'
+import { Sheet } from '../../../Sheet'
 import { SetRow } from '../SetRow'
 import { JuicyButton } from './JuicyButton'
 import { TypedMediaV3 } from './TypedMediaV3'
@@ -57,6 +58,9 @@ export function RollerScreenV3({
   const accent = exec.recovery
   const target = rollerPassesTarget(block)
   const goal = rollerGoalLabel(block)
+  // Nota del coach (todos los tipos): pill de acento recovery + sheet interna (patrón de movilidad).
+  const [noteOpen, setNoteOpen] = useState(false)
+  const coachNote = block.notes?.trim() ? block.notes.trim() : null
 
   const loggedSetNumbers = useMemo(
     () => new Set(blockLogs.filter((l) => l.set_number >= 1 && l.set_number <= block.sets).map((l) => l.set_number)),
@@ -141,6 +145,20 @@ export function RollerScreenV3({
           <Text style={{ fontFamily: FONT.uiBold, fontSize: 11, letterSpacing: 0.4, color: '#cfcfd8', textTransform: 'uppercase' }}>En loop</Text>
         </View>
       </View>
+
+      {/* Nota del coach (todos los tipos) — pill de acento recovery + sheet interna. */}
+      {coachNote && (
+        <Pressable
+          testID="btn-roller-note-v3"
+          onPress={() => setNoteOpen(true)}
+          hitSlop={6}
+          style={{ flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 32, paddingHorizontal: 12, borderRadius: 999, borderWidth: 1.5, borderColor: hexToRgba(accent, 0.3), backgroundColor: hexToRgba(accent, 0.1) }}
+          accessibilityRole="button"
+          accessibilityLabel="Ver la nota del coach"
+        >
+          <Text style={{ fontFamily: FONT.uiBold, fontSize: 12, color: accent }}>Nota del coach</Text>
+        </Pressable>
+      )}
 
       {firstUnlogged == null ? (
         <View style={{ width: '100%', gap: 6 }}>{loggedRows}</View>
@@ -227,6 +245,14 @@ export function RollerScreenV3({
 
           {loggedRows.some(Boolean) && <View style={{ width: '100%', gap: 6 }}>{loggedRows}</View>}
         </>
+      )}
+
+      {coachNote && (
+        <Sheet open={noteOpen} onClose={() => setNoteOpen(false)} title="Nota del coach" nativeModal snapPoints={['35%']}>
+          <View style={{ paddingVertical: 8 }}>
+            <Text style={textStyle('md', FONT.ui, { lh: 'relaxed' })} className="text-body">{coachNote}</Text>
+          </View>
+        </Sheet>
       )}
     </View>
   )

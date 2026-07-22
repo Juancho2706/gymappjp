@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Alert, Pressable, Text, View } from 'react-native'
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
+import { SafeAreaView } from 'react-native-safe-area-context'
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake'
 import { useRouter } from 'expo-router'
-import { CheckCircle2, Dumbbell, Timer } from 'lucide-react-native'
+import { Dumbbell } from 'lucide-react-native'
 import {
   buildRoundOrder,
   buildStepModel,
@@ -74,7 +74,6 @@ import {
   type WeeklyStreak,
 } from './weekly-streak'
 
-const EMBER_200 = '#FFD6C7'
 const ON_DARK_MUTED = '#939DAB'
 // Letras de miembro por posicion (A, B, C…) para la senal "Sigue con {label}" de las superseries.
 const SUPERSET_MEMBER_LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
@@ -135,7 +134,6 @@ function ExecutorV3Inner({ planId, recoverDate, editDate }: { planId: string; re
     return undefined
   }, [execSettings.keepAwake])
   const router = useRouter()
-  const insets = useSafeAreaInsets()
   const { theme, branding } = useTheme()
   const motion = useEvaMotion()
   const timers = useWorkoutTimers()
@@ -1200,50 +1198,13 @@ function ExecutorV3Inner({ planId, recoverDate, editDate }: { planId: string; re
           currentIndex={stepIndex}
           onIndexChange={setStepIndex}
           renderStep={renderStep}
+          bottomClearance={80}
         />
       ) : null}
 
-      {/* Barra inferior fija: descanso manual (90s) + Finalizar (acento del ejecutor). */}
-      {!loading && (
-        <View
-          className="absolute bottom-0 left-0 right-0 px-4 pt-4"
-          style={{ borderTopWidth: 1.5, borderTopColor: exec.surface.borderStrong, backgroundColor: exec.surface.surface, paddingBottom: 16 + insets.bottom }}
-        >
-          <View className="w-full flex-row items-center justify-between gap-3 self-center" style={{ maxWidth: 1024 }}>
-            <Pressable
-              testID="btn-manual-rest-v3"
-              onPress={() => { restCelebrateRef.current = false; restRoundContextRef.current = null; restPrRef.current = false; timers.startRest(90, { autoStart: true }) }}
-              className="h-11 flex-row items-center gap-1.5 rounded-control border border-ember-500/25 bg-ember-500/15 px-3 active:opacity-90"
-              accessibilityRole="button"
-              accessibilityLabel="Iniciar descanso de 90 segundos"
-            >
-              <Timer size={14} color={EMBER_200} />
-              <Text className="font-sans-bold text-xs text-ember-200">Descanso (90)</Text>
-            </Pressable>
-            {/* Botón juicy-ghost (informe 15, MAYOR): borde 2px #2f2f3a en reposo → se vuelve juicy de
-                MARCA al presionar (confirmar). Reemplaza el fill plano de marca del V2. */}
-            <Pressable
-              testID="btn-finish-workout-v3"
-              onPress={handleFinish}
-              className="h-12 flex-row items-center gap-2 rounded-control px-5"
-              style={({ pressed }) => ({
-                borderWidth: 2,
-                borderColor: pressed ? exec.accent : exec.surface.borderStrong,
-                backgroundColor: pressed ? exec.accent : exec.surface.surface,
-              })}
-              accessibilityRole="button"
-              accessibilityLabel="Finalizar entrenamiento"
-            >
-              {({ pressed }) => (
-                <>
-                  <CheckCircle2 size={16} color={pressed ? exec.accentText : exec.surface.text} />
-                  <Text className="font-sans-bold" style={{ color: pressed ? exec.accentText : exec.surface.text }}>Finalizar entrenamiento</Text>
-                </>
-              )}
-            </Pressable>
-          </View>
-        </View>
-      )}
+      {/* Barra inferior fija RETIRADA en V3 (decisión CEO 2026-07-22): no existe en el mockup. La acción
+          "Finalizar entrenamiento" se movió a la tuerca de ajustes (ExecSettingsSheet, prop onFinish →
+          mismo handleFinish). El descanso manual queda cubierto por el auto-cronómetro (ON por default). */}
 
       {/* Host de celebraciones (E4.1) — overlay no interactivo (box-none): PR en vivo (toast+confeti)
           sobre el stepper, sin cortar el flujo. topOffset libra el header (dots + cronómetro). */}
@@ -1273,7 +1234,7 @@ function ExecutorV3Inner({ planId, recoverDate, editDate }: { planId: string; re
       />
 
       {/* Tuerca del ejecutor V3 (E3.7) — ajustes del entrenamiento device-scoped. */}
-      <ExecSettingsSheet open={settingsOpen} onClose={() => setSettingsOpen(false)} exec={exec} />
+      <ExecSettingsSheet open={settingsOpen} onClose={() => setSettingsOpen(false)} exec={exec} onFinish={handleFinish} />
 
       <SubstituteSheetV3
         open={substituteBlockId != null}

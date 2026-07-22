@@ -10,6 +10,7 @@ import { triggerHaptic } from '@/lib/client/haptics'
 import { formatTypedObjective, type OptimisticLogPayload } from '@eva/workout-engine'
 import type { BlockType, ExerciseType, WorkoutSessionLog } from '../WorkoutExecutionClient'
 import { resolveExecMedia } from './exec-media'
+import { CoachNoteChip } from './CoachNoteV3'
 
 interface RollerStepV3Props {
     block: BlockType
@@ -44,6 +45,7 @@ export function RollerStepV3({
     handleResult,
 }: RollerStepV3Props) {
     const media = resolveExecMedia(exercise)
+    const coachNote = block.notes?.trim() || null
     const { startStopwatch } = useWorkoutTimer()
     const activeSet = firstUnlogged ?? block.sets
     const activeLog = blockLogs.find((l) => l.set_number === activeSet)
@@ -101,6 +103,13 @@ export function RollerStepV3({
                     </div>
                 )}
             </div>
+
+            {/* Nota del coach (todos los tipos) — chip de acento (recovery aqua en calm) + sheet compartida */}
+            {coachNote && (
+                <div className="flex justify-center">
+                    <CoachNoteChip note={coachNote} />
+                </div>
+            )}
 
             {goalPasses != null && (
                 <p className="exec-v3-rollgoal tabular-nums">

@@ -2375,6 +2375,7 @@ export function WorkoutExecutionClient({
                         onIndexChange={setCurrentStepIndex}
                         renderStep={renderStepNode}
                         reducedMotion={reducedMotion}
+                        compactBottom={execV3Active}
                     />
                 ) : (
                 <div className="px-4 py-6 md:px-8 max-w-5xl mx-auto pb-32">
@@ -2428,33 +2429,24 @@ export function WorkoutExecutionClient({
                     </button>
                 )}
 
-                {/* Barra "Finalizar" — V3 re-piel (informe 15, MAYOR): superficie #1a1a22 + divisor 1.5px
-                    #2f2f3a y botón juicy-ghost (borde 2px #2f2f3a) que se vuelve juicy de MARCA al
-                    confirmar (active). V2 conserva su barra byte-idéntica. */}
-                <div
-                    className={cn(
-                        'exec-finish-bar fixed bottom-0 left-0 right-0 z-40 px-4 pt-4 pb-[calc(1rem+env(safe-area-inset-bottom,0px))] backdrop-blur-xl',
-                        execV3Active
-                            ? 'border-t-[1.5px] border-[#2f2f3a] bg-[#1a1a22]'
-                            : 'border-t border-white/10 bg-[var(--ink-950)]/90',
-                    )}
-                >
-                    <div className="max-w-3xl mx-auto flex items-center justify-between gap-3">
-                        <ManualTimerButton defaultTime={'90'} />
-                        <button
-                            onClick={handleFinish}
-                            className={cn(
-                                'h-12 px-5 flex items-center gap-2 rounded-control font-bold transition-colors active:scale-[0.99]',
-                                execV3Active
-                                    ? 'border-2 border-[#2f2f3a] bg-[#1a1a22] text-on-dark active:border-[color:var(--exec-brand)] active:bg-[color:var(--exec-brand)] active:text-[color:var(--exec-brand-ink)]'
-                                    : 'bg-[var(--sport-500)] text-white',
-                            )}
-                        >
-                            <CheckCircle2 className="w-4 h-4" />
-                            Finalizar entrenamiento
-                        </button>
+                {/* Barra "Finalizar" — SÓLO V2/legacy. Decisión CEO (2026-07-22): en modo V3 esta barra
+                    fija NO existe (no está en el mockup). Su acción "Finalizar entrenamiento" se movió a
+                    la tuerca de ajustes (ExecSettingsSheet, prop onFinish → mismo handleFinish). V2
+                    conserva su barra byte-idéntica (superficie + botón sport intactos). */}
+                {!execV3Active && (
+                    <div className="exec-finish-bar fixed bottom-0 left-0 right-0 z-40 px-4 pt-4 pb-[calc(1rem+env(safe-area-inset-bottom,0px))] backdrop-blur-xl border-t border-white/10 bg-[var(--ink-950)]/90">
+                        <div className="max-w-3xl mx-auto flex items-center justify-between gap-3">
+                            <ManualTimerButton defaultTime={'90'} />
+                            <button
+                                onClick={handleFinish}
+                                className="h-12 px-5 flex items-center gap-2 rounded-control font-bold transition-colors active:scale-[0.99] bg-[var(--sport-500)] text-white"
+                            >
+                                <CheckCircle2 className="w-4 h-4" />
+                                Finalizar entrenamiento
+                            </button>
+                        </div>
                     </div>
-                </div>
+                )}
 
                 {/* Descanso, alarma y auto-timer (tuerca header / footer) */}
                 <Dialog open={showTimerSettings} onOpenChange={setShowTimerSettings}>
@@ -2485,6 +2477,7 @@ export function WorkoutExecutionClient({
                         onClose={() => setShowExecV3Settings(false)}
                         autoTimerEnabled={autoTimerEnabled}
                         onToggleAutoTimer={toggleAutoTimer}
+                        onFinish={handleFinish}
                     />
                 )}
 

@@ -19,6 +19,7 @@ import type { OptimisticLogPayload } from '@eva/workout-engine'
 import type { BlockType, ExerciseType, WorkoutSessionLog } from '../WorkoutExecutionClient'
 import type { ClientCardioView } from '../_data/workout-execution.queries'
 import { resolveExecMedia } from './exec-media'
+import { CoachNoteChip } from './CoachNoteV3'
 import { useExecCountdown, formatCountdown } from './useExecCountdown'
 import { useIntervalRunner } from './useIntervalRunner'
 import { useWebBleHr } from './use-web-ble-hr'
@@ -70,6 +71,7 @@ const DASH = 2 * Math.PI * 92
 export function CardioStepV3(props: CardioStepV3Props) {
     const { block, exercise, cardio } = props
     const media = resolveExecMedia(exercise)
+    const coachNote = block.notes?.trim() || null
     const intervalConfig = block.interval_config ?? null
     const isInterval = !!intervalConfig && isTimeableInterval(intervalConfig)
 
@@ -111,6 +113,9 @@ export function CardioStepV3(props: CardioStepV3Props) {
                     )}
                 </div>
             </div>
+
+            {/* Nota del coach (todos los tipos) — chip de acento bajo la identidad + sheet oscura compartida */}
+            <CoachNoteChip note={coachNote} />
 
             {isInterval && intervalConfig ? (
                 <IntervalFace phases={buildIntervalPhases(intervalConfig, block.sets)} zone={zone} zoneRange={zoneRange} />

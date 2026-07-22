@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Text, TouchableOpacity, View } from 'react-native'
+import { Pressable, Text, TouchableOpacity, View } from 'react-native'
 import { MotiView } from 'moti'
 import { HeartPulse, Pause, Play, Repeat, Ruler, Timer, Watch, Zap } from 'lucide-react-native'
 import {
@@ -12,10 +12,11 @@ import {
   type ReconciledSessionLog,
 } from '@eva/workout-engine'
 import { hrToZone, type HrToZoneProfile } from '@eva/cardio'
-import { FONT } from '../../../../lib/typography'
+import { FONT, textStyle } from '../../../../lib/typography'
 import { hexToRgba } from '../../../../lib/theme'
 import { timerHaptics } from '../../../../lib/haptics'
 import { isBleAvailable, useBleHr } from '../../../../lib/ble-hr'
+import { Sheet } from '../../../Sheet'
 import { ConnectSensorSheet } from './ConnectSensorSheet'
 import type { SessionBlock, SessionDraft, SessionExercise } from '../../../../lib/workout-session'
 import { ActiveSetRow, SetRow } from '../SetRow'
@@ -104,6 +105,9 @@ export function CardioScreenV3({
   const bpmRange = zoneBpmRange(block.hr_zone, hrZones)
   const objectiveLine = formatTypedObjective(block, 'cardio')
   const distanceObjective = cardioDistanceObjective(block)
+  // Nota del coach (todos los tipos): pill de acento + sheet interna (patrón autocontenido de movilidad).
+  const [noteOpen, setNoteOpen] = useState(false)
+  const coachNote = block.notes?.trim() ? block.notes.trim() : null
 
   // ── BLE Heart Rate en vivo (E6.1) ─────────────────────────────────────────────────────────────
   // El sensor solo ALIMENTA la UI (chip BPM + zona en vivo) y auto-rellena `actual_avg_hr` al cerrar
@@ -194,6 +198,20 @@ export function CardioScreenV3({
           <TypedMediaV3 exercise={exercise} exec={exec} accent={chipColor} IconFallback={HeartPulse} onOpenTechnique={onOpenTechnique} />
         </View>
       </View>
+
+      {/* Nota del coach (todos los tipos) — pill de acento bajo la identidad + sheet interna. */}
+      {coachNote && (
+        <Pressable
+          testID="btn-cardio-note-v3"
+          onPress={() => setNoteOpen(true)}
+          hitSlop={6}
+          style={{ alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 32, paddingHorizontal: 12, borderRadius: 999, borderWidth: 1.5, borderColor: hexToRgba(exec.accent, 0.3), backgroundColor: hexToRgba(exec.accent, 0.1) }}
+          accessibilityRole="button"
+          accessibilityLabel="Ver la nota del coach"
+        >
+          <Text style={{ fontFamily: FONT.uiBold, fontSize: 12, color: exec.accent }}>Nota del coach</Text>
+        </Pressable>
+      )}
 
       {/* HERO por modo */}
       {mode === 'interval' ? (
@@ -332,6 +350,14 @@ export function CardioScreenV3({
           exec={exec}
           reducedMotion={reducedMotion}
         />
+      )}
+
+      {coachNote && (
+        <Sheet open={noteOpen} onClose={() => setNoteOpen(false)} title="Nota del coach" nativeModal snapPoints={['35%']}>
+          <View style={{ paddingVertical: 8 }}>
+            <Text style={textStyle('md', FONT.ui, { lh: 'relaxed' })} className="text-body">{coachNote}</Text>
+          </View>
+        </Sheet>
       )}
     </View>
   )

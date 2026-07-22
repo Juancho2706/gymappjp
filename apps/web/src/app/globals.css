@@ -1861,6 +1861,28 @@ body[data-exec-v3-toast] [data-sonner-toast][data-styled='true'] [data-descripti
     margin-left: 0;
   }
 }
+/* Chip "Nota del coach" AUTOCONTENIDO (cardio/roller/movilidad): pill de ACENTO — NO glass sobre media
+   como .exec-v3-mchip. Reusa .exec-v3-badge (aquí posicionado por su `position: relative`). En
+   .exec-v3-calm el acento --exec-brand ya resuelve al recovery aqua → el chip adopta el tono de cada
+   pantalla sin lógica extra. */
+[data-exec-v3] .exec-v3-notechip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  padding: 7px 13px;
+  min-height: 32px;
+  border-radius: 999px;
+  color: color-mix(in srgb, var(--exec-brand) 88%, #fff);
+  background: color-mix(in srgb, var(--exec-brand) 12%, #16161d);
+  border: 1.5px solid color-mix(in srgb, var(--exec-brand) 32%, transparent);
+}
+[data-exec-v3] .exec-v3-notechip svg {
+  color: var(--exec-brand);
+}
 [data-exec-v3] .exec-v3-rx {
   font-size: 13px;
   font-weight: 700;

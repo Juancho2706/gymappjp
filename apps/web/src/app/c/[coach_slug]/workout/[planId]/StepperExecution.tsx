@@ -29,6 +29,9 @@ interface Props {
     /** Renderiza el card del paso `index` (mismo `SingleExerciseCard`/`SupersetGroupCard` de la lista). */
     renderStep: (index: number) => ReactNode
     reducedMotion: boolean | null
+    /** V3 retiró la barra fija "Finalizar" (decisión CEO 2026-07-22) → sin ella, el respiro inferior de
+     *  8rem deja un hueco fantasma; en V3 se compacta a 5rem. V2 (con barra) conserva 8rem (default). */
+    compactBottom?: boolean
 }
 
 // Umbrales de swipe (copiados de `DayNavigator` — patrón canónico del repo, sin librería nueva).
@@ -48,7 +51,7 @@ const SLIDE = 48
  * divergencia). El `RestTimer`/`WorkoutTimerProvider`/header/barra "Finalizar" quedan FUERA del pager
  * (no se desmontan al cambiar de paso, DA-6).
  */
-export function StepperExecution({ steps, currentIndex, onIndexChange, renderStep, reducedMotion }: Props) {
+export function StepperExecution({ steps, currentIndex, onIndexChange, renderStep, reducedMotion, compactBottom = false }: Props) {
     const total = steps.length
     const idx = Math.max(0, Math.min(currentIndex, total - 1))
     const active = steps[idx]
@@ -87,7 +90,12 @@ export function StepperExecution({ steps, currentIndex, onIndexChange, renderSte
         <section
             aria-roledescription="carrusel de ejercicios"
             aria-label="Ejercicios de la rutina"
-            className="mx-auto w-full max-w-3xl px-4 py-4 pb-[calc(env(safe-area-inset-bottom,0px)+8rem)]"
+            className={cn(
+                'mx-auto w-full max-w-3xl px-4 py-4',
+                compactBottom
+                    ? 'pb-[calc(env(safe-area-inset-bottom,0px)+5rem)]'
+                    : 'pb-[calc(env(safe-area-inset-bottom,0px)+8rem)]',
+            )}
         >
             {/* Chrome superior: prev/next SIEMPRE presentes + eyebrow de sección + "Ejercicio X de Y". */}
             <div className="mb-3 flex items-center gap-2">

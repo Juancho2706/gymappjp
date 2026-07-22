@@ -8,6 +8,7 @@ import { LogSetForm, type SetSyncResult } from '../LogSetForm'
 import { formatTypedObjective, type OptimisticLogPayload } from '@eva/workout-engine'
 import type { BlockType, ExerciseType, WorkoutSessionLog } from '../WorkoutExecutionClient'
 import { resolveExecMedia } from './exec-media'
+import { CoachNoteChip } from './CoachNoteV3'
 import { useExecCountdown, formatCountdown } from './useExecCountdown'
 
 interface MobilityStepV3Props {
@@ -48,6 +49,7 @@ export function MobilityStepV3({
     handleResult,
 }: MobilityStepV3Props) {
     const media = resolveExecMedia(exercise)
+    const coachNote = block.notes?.trim() || null
     const perSide = block.side_mode === 'per_side'
     const holdSeconds = block.duration_sec ?? 0
     const activeSet = firstUnlogged ?? block.sets
@@ -102,6 +104,13 @@ export function MobilityStepV3({
                     </div>
                 )}
             </div>
+
+            {/* Nota del coach (todos los tipos) — chip de acento (recovery aqua en calm) + sheet compartida */}
+            {coachNote && (
+                <div className="flex justify-center">
+                    <CoachNoteChip note={coachNote} />
+                </div>
+            )}
 
             {/* Anillo de HOLD (guía). Sólo si el coach prescribió duración. */}
             {holdSeconds > 0 && (
