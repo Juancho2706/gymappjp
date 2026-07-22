@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { NutritionPlanDraftSchema } from '@eva/nutrition-v2'
 import {
+  MAX_ITEM_SUBSTITUTIONS,
   assembleAndValidateDraft,
   assembleDraft,
   buildItemInsertRow,
@@ -29,6 +30,7 @@ const CLIENT_ID = '11111111-1111-4111-8111-111111111111'
 const PLAN_ID = '22222222-2222-4222-8222-222222222222'
 const FOOD_ID = '33333333-3333-4333-8333-333333333333'
 const PUBLISHED_ID = '44444444-4444-4444-8444-444444444444'
+const SUB_FOOD_ID = '55555555-5555-4555-8555-555555555555'
 
 const FOOD: BuilderFood = {
   id: FOOD_ID,
@@ -45,6 +47,10 @@ const FOOD: BuilderFood = {
 
 function foodItem(overrides: Partial<BuilderItem> = {}): BuilderItem {
   return { ...createEmptyItem('i1'), food: FOOD, customName: null, quantity: '200', unit: 'g', ...overrides }
+}
+
+function subFood(id: string, name: string): BuilderFood {
+  return { ...FOOD, id, name }
 }
 
 function structuredState(): BuilderState {
@@ -76,6 +82,71 @@ describe('reducer / paridad con web', () => {
     state = builderReducer(state, { type: 'ADD_ITEM', slotKey, key: 'itemK', food: FOOD })
     expect(state.slots[0].items[0].quantity).toBe('50')
     expect(state.slots[0].items[0].unit).toBe('g')
+  })
+})
+
+describe('reducer / reemplazos autorizados F-02 (cinturon triple + remocion)', () => {
+  const SLOT = 'slot-a'
+  const ITEM = 'i1'
+
+  function addSub(state: BuilderState, food: BuilderFood, key: string): BuilderState {
+    return builderReducer(state, { type: 'ADD_ITEM_SUBSTITUTION', slotKey: SLOT, itemKey: ITEM, key, food })
+  }
+
+  it('agrega reemplazos del catalogo hasta el tope y rechaza el excedente', () => {
+    let state = structuredState()
+    for (let i = 0; i < MAX_ITEM_SUBSTITUTIONS; i++) {
+      state = addSub(state, subFood('sub-' + i, 'Sub ' + i), 'k' + i)
+    }
+    expect(state.slots[0].items[0].substitutions).toHaveLength(MAX_ITEM_SUBSTITUTIONS)
+    const overflow = addSub(state, subFood('sub-extra', 'Extra'), 'kX')
+    expect(overflow.slots[0].items[0].substitutions).toHaveLength(MAX_ITEM_SUBSTITUTIONS)
+  })
+
+  it('rechaza duplicar el mismo alimento como reemplazo (por food.id)', () => {
+    let state = addSub(structuredState(), subFood('sub-x', 'X'), 'k1')
+    state = addSub(state, subFood('sub-x', 'X otra vez'), 'k2')
+    expect(state.slots[0].items[0].substitutions).toHaveLength(1)
+  })
+
+  it('rechaza el propio alimento prescrito como reemplazo', () => {
+    const state = addSub(structuredState(), subFood(FOOD_ID, 'Prescrito'), 'k1')
+    expect(state.slots[0].items[0].substitutions).toHaveLength(0)
+  })
+
+  it('remueve un reemplazo por subKey', () => {
+    let state = addSub(structuredState(), subFood('sub-a', 'A'), 'k1')
+    state = addSub(state, subFood('sub-b', 'B'), 'k2')
+    state = builderReducer(state, { type: 'REMOVE_ITEM_SUBSTITUTION', slotKey: SLOT, itemKey: ITEM, subKey: 'k1' })
+    expect(state.slots[0].items[0].substitutions.map((s) => s.key)).toEqual(['k2'])
+  })
+})
+
+describe('assembleDraft / reemplazos F-02 (spread condicional)', () => {
+  it('omite la clave substitutions cuando no hay reemplazos (byte-identico a hoy)', () => {
+    const draft = assembleDraft(structuredState(), { clientId: CLIENT_ID })
+    expect('substitutions' in draft.dayVariants[0].mealSlots[0].items[0]).toBe(false)
+  })
+
+  it('emite substitutions mapeada al contrato solo con >=1 y valida contra el schema', () => {
+    const withSub = builderReducer(structuredState(), {
+      type: 'ADD_ITEM_SUBSTITUTION',
+      slotKey: 'slot-a',
+      itemKey: 'i1',
+      key: 'k1',
+      food: subFood(SUB_FOOD_ID, 'Pavo'),
+    })
+    const subs = assembleDraft(withSub, { clientId: CLIENT_ID }).dayVariants[0].mealSlots[0].items[0].substitutions
+    expect(subs).toHaveLength(1)
+    expect(subs?.[0]).toEqual({
+      foodId: SUB_FOOD_ID,
+      recipeId: null,
+      customName: null,
+      quantity: null,
+      unit: null,
+      orderIndex: 0,
+    })
+    expect(() => assembleAndValidateDraft(withSub, { clientId: CLIENT_ID })).not.toThrow()
   })
 })
 

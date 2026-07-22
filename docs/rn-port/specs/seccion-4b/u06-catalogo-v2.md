@@ -185,3 +185,60 @@ error de red → `error-amable` "No se pudo buscar". El pie ODbL con el copy ver
 resultado. Captura web móvil (tab Alimentos del Centro V2) vs RN: comparar fila, ficha, estados y pie.
 Gates: `pnpm --filter @eva/mobile exec tsc --noEmit`, lint, `check:tokens`, y el test del helper `food-detail`
 RN (fuente/verificación/barcode).
+
+## Cierre (2026-07-21)
+
+Entregado 1:1 con la referencia web, sin tocar `index.tsx` (frontera con 4B-05: la pantalla es
+alcanzable por ruta directa; el cableado del tablist lo decide el juez en 4B.4).
+
+- **`apps/mobile/app/coach/nutrition-v2/foods.tsx` (nuevo).** Pantalla propia con `SafeAreaView`
+  (`edges top/bottom`, `bg-surface-app`) + `NutritionHeader onBack` + buscador (input DS con lupa,
+  spinner inline y botón "X" limpiar, placeholder verbatim `"Buscar alimento por nombre o marca…"`,
+  `accessibilityLabel="Buscar alimento en el catalogo"`). Debounce **400 ms**, **MIN 2** con limpieza de
+  lista bajo el umbral, `AbortController` + `signal` para descartar respuestas viejas (más guarda
+  `latestQuery` en el `loadMore`). Lista con `FlashList`: fila = `FoodThumbnail` (`src =
+  foodMediaThumbnailUrl(item.media)` + `fallbackCategory = item.category`, **no** `fallbackEmoji`),
+  badge de verificación inline, meta `marca · envase · fuente` y `MacroChipRow size="sm" per="por 100 g|ml"`.
+  Paginación por cursor con "Cargar mas"/"Cargando…" (visible `hasMore && !loading`, deshabilitado
+  mientras carga; concatena `[...prev, ...res.items]`). Tres estados con ilustración (invite
+  `catalogo-vacio` "Busca en el catalogo", vacío `sin-resultados` "Sin resultados", error `error-amable`
+  `tone="danger"` "No se pudo buscar" con el mensaje de la acción) — copys verbatim. Pie ODbL con el copy
+  EXACTO e incondicional de web + enlace "Ver Open Food Facts" (`Linking.openURL`), visible con ≥1
+  resultado (no condicionado a OFF). Toca una fila → abre la ficha con el `FoodCatalogItem` ya cargado
+  (sin segundo fetch).
+- **`apps/mobile/components/coach/FoodDetailSheet.tsx` (nuevo).** Ficha read-only sobre el `Sheet` DS
+  (`nativeModal` por el bug cold-start de @gorhom bajo reanimated 4 documentado en `Sheet.tsx`). Seis
+  secciones en orden: header foto ampliable (`expo-image` `contentFit="contain"` + `PhotoLightbox`, con
+  fallback al icono de categoría vía `FoodThumbnail fallbackCategory` cuando no hay foto o falla la carga),
+  badge de verificación, `Por {basis}` + `MacroChipRow size="md"` (`basis = "100 ml"` si `servingUnit ===
+  'ml'`, si no `"100 g"`), micros `Detalle (por {basis})` (solo `Fibra`/`Azúcares`/`Grasa saturada`
+  presentes + `Sodio` a 0 decimales, `tabular-nums`), porción casera/envase (la **porción casera queda
+  oculta**: `householdLabel`/`householdGrams` viajan null en el read model — paridad exacta), código de
+  barras (`item.gtin` + `formatBarcode`, `tabular-nums`), y fuente (`getFoodSourceAttribution().label` +
+  `attributionLine`; enlace externo si hay `href` (OFF/USDA), texto plano si no).
+- **`apps/mobile/lib/food-detail.ts` (nuevo, puro).** Port 1:1 de `getFoodSourceAttribution`,
+  `getFoodVerificationLabel`, `formatBarcode` y las constantes `OPEN_FOOD_FACTS_URL` / `USDA_FDC_URL` /
+  `OPEN_FOOD_FACTS_GENERIC_ATTRIBUTION`, copys verbatim de `apps/web/src/lib/food-detail.ts:62-175`. **Solo
+  helpers puros**: sin resolución de imagen web (la foto usa `foodMediaThumbnailUrl` existente) y sin el
+  tipo `FoodDetailData` (la ficha RN consume el `FoodCatalogItem` directo).
+- **`tests/mobile-food-detail.test.ts` (nuevo).** 11 casos: cada `source`/`verification_status` con su
+  copy exacto (incluye el fallback "Otra fuente"/"Sin verificar" y null/undefined que nunca lanzan),
+  agrupado de `formatBarcode` (EAN-8/13, descarte de no-dígitos, guion en vacío) y el copy verbatim del pie
+  ODbL.
+
+**Decisiones y notas:**
+- **`pageSize: 20` explícito.** El contrato RN (`nutrition-v2-catalog.api.ts:38`) tiene default 25; se pasa
+  20 para igualar el ritmo de cursor de web (`PAGE_SIZE = 20`). **Verificado en el endpoint**
+  `apps/web/src/app/api/mobile/nutrition-v2/catalog/route.ts:52-75`: lee `pageSize` de la query (default
+  25), lo clamps a `[1,50]` y lo reenvía como `p_page_size` al RPC — el `pageSize` enviado se respeta.
+- **Badge de verificación:** los raw `emerald/sky/rose` del web se mapean a los tokens semánticos del DS RN
+  (`success/info/danger` + neutral sunken), mismo criterio que `NutritionV2Kit.tsx` — white-label safe, sin
+  valores crudos nuevos.
+- **Gate:** ninguna lógica de autorización en cliente (paridad con 4B-04); el servidor niega la búsqueda en
+  cada llamada. La pantalla no se auto-gatea.
+- **Adaptación nativa menor:** el `PhotoLightbox` RN no expone footer, así que el crédito "Ver original" del
+  lightbox web se omite (la línea de fuente per-item de la ficha ya cubre la atribución OFF). El campo
+  `imageSourceUrl`/"Ver original" no aplica.
+- **Gates verdes:** `tsc --noEmit` (0 errores), `eslint` de los 4 archivos (0 errores/0 warnings tras usar
+  `alt` en `expo-image`, convención del repo), `vitest run tests/mobile-food-detail.test.ts` (11/11) y
+  `check:tokens` (parity OK). `index.tsx` intacto.

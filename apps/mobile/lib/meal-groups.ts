@@ -114,7 +114,9 @@ export async function saveMealGroup(
       input.items.map((it) => ({
         saved_meal_id: groupId!,
         food_id: it.food_id,
-        quantity: Math.round(it.quantity) || 0,
+        // Persiste la cantidad CRUDA (permite fracciones como la web,
+        // MealGroupModal.tsx:163); antes hacía `Math.round`, perdiendo decimales.
+        quantity: Number(it.quantity) || 0,
         unit: it.unit || 'g',
       }))
     )

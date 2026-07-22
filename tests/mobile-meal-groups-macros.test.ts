@@ -13,7 +13,46 @@ import { calculateFoodItemMacros } from '@eva/nutrition-engine'
 import type { MealGroupItem } from '../apps/mobile/lib/meal-groups'
 import type { FoodRow } from '../apps/mobile/lib/nutrition-builder'
 
-vi.mock('../apps/mobile/lib/supabase', () => ({ supabase: {} }))
+// Mock chainable de PostgREST: captura el payload insertado en `saved_meal_items`
+// para verificar que `saveMealGroup` persiste la cantidad SIN redondear (4B-15).
+const H = vi.hoisted(() => {
+  const capture: { items: any[] | null } = { items: null }
+  const makeBuilder = (table: string) => {
+    let inserted = false
+    const builder: any = {
+      update() { return builder },
+      delete() { return builder },
+      insert(v: any) {
+        inserted = true
+        if (table === 'saved_meal_items') capture.items = v
+        return builder
+      },
+      select() { return builder },
+      eq() { return builder },
+      is() { return builder },
+      not() { return builder },
+      order() { return builder },
+      single() {
+        if (table === 'saved_meals' && inserted) return Promise.resolve({ data: { id: 'g1' }, error: null })
+        return Promise.resolve({
+          data: { id: 'g1', name: 'Grupo', org_id: null, items: capture.items ?? [] },
+          error: null,
+        })
+      },
+      then(onF: any, onR?: any) {
+        return Promise.resolve({ error: null, data: null }).then(onF, onR)
+      },
+    }
+    return builder
+  }
+  const supabase = {
+    auth: { getUser: () => Promise.resolve({ data: { user: { id: 'coach1' } } }) },
+    from: (table: string) => makeBuilder(table),
+  }
+  return { supabase, capture }
+})
+
+vi.mock('../apps/mobile/lib/supabase', () => ({ supabase: H.supabase }))
 vi.mock('../apps/mobile/lib/org', () => ({
   getCoachOrgContext: () => Promise.resolve({ orgId: null }),
 }))
@@ -21,7 +60,7 @@ vi.mock('../apps/mobile/lib/nutrition-builder', () => ({
   foodToDraftItem: () => ({}),
 }))
 
-const { mealGroupItemMacros, mealGroupTotals } = await import('../apps/mobile/lib/meal-groups')
+const { mealGroupItemMacros, mealGroupTotals, saveMealGroup } = await import('../apps/mobile/lib/meal-groups')
 
 const EGG: FoodRow = {
   id: 'egg',
@@ -100,5 +139,20 @@ describe('mealGroupTotals', () => {
 
   it('grupo vacío = todo 0', () => {
     expect(mealGroupTotals([])).toEqual({ calories: 0, protein: 0, carbs: 0, fats: 0 })
+  })
+})
+
+describe('saveMealGroup (cantidad decimal)', () => {
+  it('persiste la cantidad cruda 0.5 sin redondear (paridad web)', async () => {
+    H.capture.items = null
+    const res = await saveMealGroup({
+      name: 'Test decimal',
+      items: [{ food_id: 'egg', quantity: 0.5, unit: 'un' }],
+    })
+    expect(res.ok).toBe(true)
+    expect(H.capture.items).not.toBeNull()
+    expect(H.capture.items![0].quantity).toBe(0.5)
+    // NO el 1 (o 0) que dejaba el `Math.round` previo.
+    expect(H.capture.items![0].quantity).not.toBe(1)
   })
 })

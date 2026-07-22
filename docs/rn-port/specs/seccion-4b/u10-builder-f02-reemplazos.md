@@ -172,3 +172,58 @@ Publicar y verificar en `nutrition_item_substitutions_v2` (o en la vista del alu
 congelados. Un ítem sin reemplazos publica exactamente como hoy (sin filas nuevas). Capturas web móvil
 (`SubstitutionsField`) vs RN: overline "Reemplazos autorizados", contador, chips, hint y mensaje de tope
 idénticos en copy. El quick-edit no ofrece editor de reemplazos (igual que la web).
+
+## Cierre (2026-07-21)
+
+Implementado 1:1 con la web. Cambios:
+
+`apps/mobile/lib/nutrition-v2-builder.ts`
+- Nuevo `interface BuilderItemSubstitution { key; food: BuilderFood }` (espejo web `draft-builder.ts:52-55`).
+- `BuilderItem.substitutions: BuilderItemSubstitution[]` + default `substitutions: []` en `createEmptyItem`.
+- `export const MAX_ITEM_SUBSTITUTIONS = 8` (usada en reducer y UI; nada hardcodeado — el `.max(8)`
+  del contrato sigue siendo la barrera final en `assembleAndValidateDraft`).
+- Dos acciones nuevas en `BuilderAction` + sus `case` en `builderReducer`: `ADD_ITEM_SUBSTITUTION`
+  con el cinturón triple idéntico al web (tope / dup por `food.id` / propio prescrito) y
+  `REMOVE_ITEM_SUBSTITUTION` (filtra por `subKey`). Se preservó el `default: return state` RN.
+- `assembleDraft`: el map de items pasó de objeto directo a bloque con `const substitutions = item.substitutions ?? []`
+  y el spread condicional `...(substitutions.length > 0 ? { substitutions: … } : {})` mapeando a
+  `NutritionItemSubstitution` (`foodId: sub.food.id, recipeId/customName/quantity/unit: null, orderIndex`).
+  Esto ACTIVA el write-path que ya existía inerte (`collectSubstitutionFoodIds` + inserción a
+  `nutrition_item_substitutions_v2` en `persistAndPublishDraft`). Un ítem sin reemplazos omite la clave
+  → byte-idéntico a hoy.
+
+`apps/mobile/app/coach/nutrition-v2/builder/[clientId].tsx`
+- Import de `Repeat` (lucide-react-native) y de `MAX_ITEM_SUBSTITUTIONS`.
+- Target del `FoodSearchModal` generalizado: `searchSlotKey: string | null` → `searchTarget: SearchTarget | null`
+  con `SearchTarget = { mode: 'item'; slotKey } | { mode: 'substitution'; slotKey; itemKey }`. El flujo
+  ADD_ITEM se preservó exacto (`mode: 'item'`). `handleSelectFood` bifurca: `'item'` → `ADD_ITEM`,
+  `'substitution'` → `ADD_ITEM_SUBSTITUTION` con `key: genKey('sub')` y `mapFoodCatalogItemToBuilderFood`.
+  Un solo modal reusado (patrón sancionado del quick-edit RN). `onSearch` re-tipado a `(target: SearchTarget)`
+  y threadeado por `ConstructionStep → SlotEditor → ItemEditor`.
+- Nuevo componente `SubstitutionsField` montado al final de `ItemEditor` (tras el `MacroChipRow`):
+  overline `Repeat` + "Reemplazos autorizados", contador `N/8` (`font-mono tabular-nums`, solo con ≥1),
+  chips removibles (`rounded-pill border-border-subtle bg-surface-sunken`, nombre `numberOfLines={1}`, X
+  con target táctil ≥44px y `accessibilityLabel="Quitar reemplazo {name}"`), hint contextual con
+  `prescribedName`, mensaje de tope "Alcanzaste el maximo de 8 reemplazos." (usando la constante) que oculta
+  el botón, y botón secundario `Plus` + "Reemplazo" que abre el buscador. Copys literales al web. Hereda el
+  gate structured/hybrid porque `ItemEditor` solo se monta desde `SlotEditor` (early-return "Plan flexible");
+  no se agregaron guardas redundantes.
+
+`tests/mobile-nutrition-v2-builder.test.ts`
+- +6 tests (23 pasan): cinturón triple (tope 8 / dup por `food.id` / propio prescrito), remoción por
+  `subKey`, y `assembleDraft` emite `substitutions` mapeada al contrato solo con ≥1 (clave ausente con 0,
+  byte-idéntico) validando contra el schema.
+
+Decisiones del juez respetadas:
+- **`QuickEditMode.tsx` INTOCADO.** El quick-edit web trata los reemplazos como carry-over read-only
+  (no tiene editor); el RN ya está a esa paridad. El `TODO(F-02 P3)` de `QuickEditMode.tsx:129-130` queda
+  como está — un editor de reemplazos en quick-edit sería un RN-extra sin contraparte web (decisión owner 4).
+  El editor F-02 vive solo en el builder, que es donde aterrizó esta unidad.
+- `MAX_ITEM_SUBSTITUTIONS` exportada y usada en reducer + UI; el `.max(8)` del contrato es la barrera final.
+- Discriminado `item|substitution` sin romper ADD_ITEM; test del reducer + `assembleDraft` spreadea substitutions.
+- Solo alimentos del catálogo como reemplazos (el buscador nunca ofrece libres), espejo web.
+
+Gates: `pnpm --filter @eva/mobile exec tsc --noEmit` sin errores en mis archivos (el único error del módulo,
+`app/coach/meal-groups.tsx:273`, es de otra unidad paralela, no mía). `pnpm vitest run` del archivo → 23/23.
+`pnpm exec eslint` de mis 3 archivos → 0 problemas nuevos (el 1 error + 3 warnings preexistentes en
+`[clientId].tsx`, líneas 15 y 127, ya estaban en el commit base; verificado con `git stash`).

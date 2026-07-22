@@ -285,3 +285,53 @@ Gates: `pnpm check:tokens`, `pnpm --filter @eva/mobile exec tsc --noEmit`, vites
   unidad de deuda (como 4B-16).
 - **R4 (tildes en labels):** el web omite tildes en varios labels de filtro/orden; RN los escribe
   bien (regla español latam). No "corregir hacia web" quitando tildes; mantener RN correcto.
+
+## Cierre (2026-07-21)
+
+Implementado en `apps/mobile/lib/nutrition-v2-hub.ts`, `apps/mobile/app/coach/nutrition-v2/index.tsx`,
+`apps/mobile/components/coach/CoachMobileChrome.tsx` (solo export de la constante) y el test
+`tests/mobile-nutrition-v2-parity-helpers.test.ts`. Resoluciones del juez aplicadas al pie de la letra.
+
+- **1. Eyebrow "Canary privado":** RETIRADO. `NutritionHeader` sin `eyebrow`.
+- **2. Descripción del header:** ahora `"Planes, consumo reciente y alumnos por atender."` (verbatim web).
+- **3. Back/flecha (R1):** NO se cableó `onBack` en el montaje inline (tab root). `NutritionHeader`
+  se usa en su variante ancha sin flecha; adaptación nativa anotada.
+- **4. CTA global "Nuevo plan":** botón compacto 44px `bg-primary` con icono `Plus` (aria-label
+  "Nuevo plan") junto al chip offline en `actions`. Abre `NewPlanPickerSheet` (Sheet `nativeModal`)
+  con título/descripción verbatim, input "Buscar alumno…", lista (nombre + pill `nutritionPlanCtaLabel`
+  con `FilePlus2` + `ChevronRight`), empty "Sin coincidencias." y estado sin-roster
+  "No hay alumnos en tu espacio para crear un plan.". El roster COMPLETO se carga perezosamente al
+  abrir paginando `getNutritionCoachHubV2` (8×50, espejo web); offline cae a la página visible.
+- **5. Href del builder (R2):** `nutritionV2BuilderHref` corregido a segmento
+  `/coach/nutrition-v2/builder/${encodeURIComponent(clientId)}` (verificado: existe
+  `builder/[clientId].tsx`, no `builder/index.tsx`). Test actualizado. Lo usan el CTA por-fila y el picker.
+- **6. Búsqueda del roster:** input en el `ListHeaderComponent` (icono `Search`, `min-h-11`,
+  `maxLength 120`, `autoCapitalize="none"`, `autoCorrect={false}`, placeholder "Buscar en esta página…"),
+  filtro tolerante a acentos vía `applyNutritionRosterFilters`; nota "Hay más alumnos en otras
+  páginas…" cuando `page.hasMore` y 0 coincidencias.
+- **7. Orden del roster (R3):** `NUTRITION_SORT_OPTIONS` + `applyNutritionRosterFilters` (search+
+  attention+sort estable) en la lib con test; selector `HubSortSheet` (Sheet `nativeModal`, pills
+  espejo del `SortSheet` V1) con las 4 opciones y labels acentuados.
+- **8. Helpers espejo (R3):** `normalizeText`, `NutritionSortKey`, `NUTRITION_SORT_OPTIONS`,
+  `applyNutritionRosterFilters`, `isNutritionRosterFiltered`, `filterNutritionPickerEntries` y los
+  mapas de la tarjeta de atención agregados a `lib/nutrition-v2-hub.ts` con vitest. Deuda de
+  promoción a `@eva/nutrition-v2` anotada (esta rama NO toca `packages/*`).
+- **9. Tarjeta de atención:** la línea suelta se reemplazó por `CoachAttentionCard` con
+  título/descripción/tono por motivo (`nutritionAttentionCardTitle/Description/Tone`, `no_plan`→warning
+  resto→info, `actionLabel:'Revisar'` → abre la ficha).
+- **10. `PlanVersionBadge`:** presente cuando `versionNumber && planStatus === 'published'`.
+- **11. Copys:** fallback "Sin plan publicado"; métrica "Activos hoy". Chip "Sin plan V2"
+  conservado (documentado, R4/decisión previa).
+- **12/13.** Card tappable RN + stats como tiles: conservados como adaptación nativa (sin cambio
+  estructural obligatorio).
+- **14. Estados:** "Sin coincidencias" con acción "Limpiar filtros" (+ nota de otras páginas) para
+  filtro sin resultados; el chip offline queda junto al CTA en `actions`.
+- **15. Clearance:** `COACH_TABBAR_CLEARANCE = 120` exportado desde `CoachMobileChrome.tsx` (fuente
+  única = valor vigente de los tabs coach); el FlashList reserva `paddingBottom: insets.bottom +
+  COACH_TABBAR_CLEARANCE`, la paginación queda accionable sobre la cápsula.
+- **16. Safe-area top:** `paddingTop: insets.top` (+24 en skeleton/gate/loading) en las 4 ramas de
+  render inline.
+
+Gates: `pnpm --filter @eva/mobile exec tsc --noEmit` (0 errores), `pnpm vitest run
+tests/mobile-nutrition-v2-parity-helpers.test.ts` (31 passed), `pnpm exec eslint` de los 4 archivos
+propios (0 errores). Pendiente heredado global: build nativa + device QA por el CEO.

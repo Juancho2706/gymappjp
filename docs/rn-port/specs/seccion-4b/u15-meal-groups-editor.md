@@ -250,3 +250,41 @@ Con un alimento de `serving_size = 60`, `serving_unit = 'un'`, macros conocidos
    sin botón.
 8. **Éxito:** guardar y borrar disparan el `toast.success` con los copys web; los
    errores siguen por `Alert.alert`.
+
+## Cierre (2026-07-21)
+
+Cerrados los 9 deltas + el riesgo bloqueante, según las resoluciones del juez.
+
+- **#1 Banner Info:** fila `infoBanner` (row / flex-start / gap 10 / mh 16 / pv 10,
+  ph 14 / `borderRadius: theme.radius.lg` / `bg: theme.secondary`) con `Info` (size 15,
+  `mutedForeground`, `marginTop:2`) + `Text` (fontSize 12, lineHeight 17, `FONT.ui`),
+  copy exacto. Solo en modo lista, entre header y `listHead`.
+- **#2 Subtítulo:** "Combos de alimentos reutilizables".
+- **#3 Hint `1 un ≈ Xg`:** `Text` `itemHint` (fontSize 10.5, marginTop 4, `FONT.uiMedium`
+  — **existe** en `lib/typography`, no hizo falta el fallback a `FONT.ui`), condicional
+  `item.unit === 'un'`, bajo la línea de macros.
+- **#4 Cantidad decimal:** `keyboardType="decimal-pad"` + `inputMode="decimal"`;
+  `sanitizeDecimal` (dígitos + 1 separador, `,`→`.`); estado `qtyDraft {index,text}`
+  conserva la entrada parcial ("0.") mientras el input tiene foco y se limpia en
+  `onBlur`/`updateUnit`/`removeItem`. **Riesgo bloqueante resuelto opción (a):**
+  `lib/meal-groups.ts` ahora persiste `Number(it.quantity) || 0` (sin `Math.round`),
+  crudo como la web.
+- **#5/#6 Swap + alta normalizados:** portados `normalizeUnit` (1:1 `MealGroupModal:35-43`)
+  y `defaultQuantity` (`:50-54`); `addFood` normaliza unidad+cantidad; `updateUnit` usa
+  `previousDefault`/`shouldReplaceQuantity` (`:129-140`), respetando `serving_size`.
+- **#7 Validación `quantity > 0`:** `Alert.alert('Cantidad inválida', …)` tras la guarda
+  de ítems no vacíos.
+- **#8 Formato editor:** fila de ítem y total a `… kcal · P …g · C …g · G …g`.
+- **#9 Éxito:** `toast.success` (singleton `components/Toast`) al guardar y borrar;
+  errores siguen por `Alert.alert`.
+- **#10 RN-extra retirado:** quitado el `action` "Nuevo grupo" del `EmptyState`.
+
+**Gates:** `tsc --noEmit` 0 errores · `vitest run tests/mobile-meal-groups-macros.test.ts`
+8/8 (nuevo caso: 0.5 persiste como 0.5, no 1) · `eslint` de los 3 archivos 0 errores.
+
+**Concern fuera de alcance (no en los deltas listados):** `openEdit` no normaliza las
+unidades legacy `'u'` al abrir un grupo existente (la web sí lo hace en el constructor
+del modal, `MealGroupModal:82`). Un ítem guardado con `'u'` no mostraría el hint ni
+entraría en la comparación `defaultQuantity` hasta el primer swap. Comportamiento
+preexistente; los macros ya normalizan `'u'→'un'` en `lib`. No se tocó por no figurar en
+las resoluciones del juez.

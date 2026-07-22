@@ -227,3 +227,54 @@ Referencia web: `apps/web/src/app/coach/nutrition-v2/[clientId]/page.tsx` +
    devuelven `SCOPE_DENIED` (42501 de RLS), probando que la barrera es server-side y la UI solo
    espeja.
 5. **Offline:** en modo avión, confirmar assign o archive muestra el copy offline y NO escribe.
+
+## Cierre (2026-07-21)
+
+Implementado. Archivos tocados (solo los de PROPIEDAD):
+
+- **`apps/mobile/lib/nutrition-v2-assign-archive.ts`** (NUEVO, módulo puro RN-free): espejo 1:1 de
+  la web `_lib/assign-plan.ts` + `_lib/archive-plan.ts` — `canAssignSourcePlan`,
+  `validateAssignTargets`/`MAX_ASSIGN_TARGETS`, `assignmentKeyForClient` (deviceId `rn-assign`),
+  `buildDraftForTarget` (copia nombre/estrategia/tz/permisos/metas/franjas/items/`visibleNotes`;
+  nulifica `privateNotes`/`protocolNotes`/`substitutionGroupId`), `aggregateAssignResults`,
+  `ArchivePlanInputSchema` (uuid), `classifyArchiveWrite`. **+ adaptador `planReadModelToAssignSource`**
+  del read-model del detalle (RN ya tiene el `detail` en pantalla, no re-consulta). Header declara el
+  espejo y la deuda de consolidación en `@eva/nutrition-v2` DIFERIDA por el owner (resolución del juez).
+- **`tests/mobile/nutrition-v2-assign-archive.test.ts`** (NUEVO, 23 casos): elegibilidad, validación
+  de destinos, idempotencia estable, construcción del draft (qué copia / qué nulifica; item libre vs
+  con foodId), el adaptador del read-model, agregado del reporte parcial, `ArchivePlanInputSchema` y
+  `classifyArchiveWrite`. Vive en `tests/mobile/**` (glob del runner del repo; `apps/mobile/**` no
+  está en el `include` de vitest, patrón de todos los tests puros RN).
+- **`apps/mobile/lib/nutrition-v2.api.ts`**: acciones de escritura RLS-scoped vía el cliente supabase
+  de la sesión (`supabase as unknown as NutritionV2WriteClient`, mismo patrón del builder, delta 0):
+  `assignNutritionPlanToClients` (valida → gate Pro una vez fail-closed → loop
+  `resolveActiveClientPlanIdRN`/`buildDraftForTarget`/`NutritionPlanDraftSchema.safeParse`/
+  `persistAndPublishDraft` con idempotencia por (operación, destino) → `AssignSummary` parcial) y
+  `archiveNutritionPlan` (UPDATE `lifecycle_status='archived'`+`archived_at`+`updated_by` con WHERE
+  `id`+`client_id`+`lifecycle_status='active'` y `.select('id')`, idempotente, clasificado). Se portó
+  `resolveActiveClientPlanIdRN` (query `nutrition_plans_v2` activo más reciente) — obligatorio por la
+  resolución del juez para hacer append-versión en vez de plan duplicado.
+- **`apps/mobile/app/coach/nutrition-v2/[clientId].tsx`**: disparador secundario "Asignar a otros
+  alumnos" (`UserPlus`, `ml-auto` en la fila de badges, gateado por `canAssignSourcePlan`, nunca en el
+  header); `AssignPlanModal` (Modal full-screen patrón `FoodSearchModal` — resolución del juez; roster
+  paginado keyset 8×50 sin la fuente + badge "Ya tiene plan", buscador acento-insensible, "Vigente
+  desde" `LabeledInput`-like texto YYYY-MM-DD + hint, confirmar con label dinámico + anti-doble-submit,
+  reporte parcial por alumno con "Asignar a otros"/"Listo"); zona inferior "Archivar plan vigente"
+  discreta tras el historial; `ArchivePlanConfirmSheet` (Sheet nativeModal patrón `PublishConfirmSheet`
+  — resolución del juez, copy no tóxico, bloqueo durante la escritura, `reloadNonce` al OK degrada a
+  "Sin plan vigente"). Guard offline `NetInfo.fetch()` fail-closed en ambos flujos (delta 11).
+
+Decisiones tomadas frente a la spec:
+
+- **Anti-stale por `sourcePlanVersion` (web delta 5) omitido**: en RN la `source` es el read-model del
+  detalle YA en pantalla (no hay re-fetch server-side como el web), así que la guarda de versión sería
+  un no-op. La barrera real (RLS + `effective_date_must_follow_current_version` → `EFFECTIVE_DATE`
+  humanizado por destino) sigue viva por alumno. Documentado en el header de la acción.
+- **Validación de fecha cliente**: como RN usa texto (no `<input type=date>`), se valida el formato
+  `AAAA-MM-DD` antes de escribir; el orden temporal lo sigue imponiendo la RPC por destino.
+- **Consolidación en `@eva/nutrition-v2` DIFERIDA** (no tocar `packages/*`): módulo espejo RN + test
+  1:1, con la deuda declarada en el header (análogo a 4B-16 / resolución del juez).
+
+Gates (corridos en el worktree): `pnpm --filter @eva/mobile exec tsc --noEmit` → 0 errores;
+`vitest run tests/mobile/nutrition-v2-assign-archive.test.ts` → 23/23; `eslint` sobre los 4 archivos
+→ 0 errores. Pendiente CEO: build nativa + QA en device (assign multi-destino, archivar, offline).

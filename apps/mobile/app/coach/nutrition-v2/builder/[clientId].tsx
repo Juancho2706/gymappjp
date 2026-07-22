@@ -12,7 +12,7 @@ import {
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router'
-import { Check, ChevronLeft, ChevronRight, Lock, Plus, Search, Trash2, X } from 'lucide-react-native'
+import { Check, ChevronLeft, ChevronRight, Lock, Plus, Repeat, Search, Trash2, X } from 'lucide-react-native'
 import {
   BuilderStepList,
   FoodThumbnail,
@@ -41,6 +41,7 @@ import { searchFoodCatalogV2 } from '../../../../lib/nutrition-v2-catalog.api'
 import { supabase } from '../../../../lib/supabase'
 import {
   BUILDER_UNITS,
+  MAX_ITEM_SUBSTITUTIONS,
   NUTRITION_PRO_MODULE_KEY,
   assembleAndValidateDraft,
   buildPublishIdempotencyKey,
@@ -75,6 +76,13 @@ function genKey(prefix: string): string {
   keySeq += 1
   return prefix + '-' + Date.now().toString(36) + '-' + keySeq
 }
+
+// Target del buscador de catalogo (un solo modal reusado). 'item' = agregar alimento a una
+// franja (flujo original); 'substitution' = agregar un reemplazo autorizado a un item (F-02).
+// Espejo del patron ya sancionado en el quick-edit RN (SearchTarget mode 'add' | 'swap').
+type SearchTarget =
+  | { mode: 'item'; slotKey: string }
+  | { mode: 'substitution'; slotKey: string; itemKey: string }
 
 function todayInSantiago(): string {
   return new Intl.DateTimeFormat('en-CA', {
@@ -133,7 +141,7 @@ export default function CoachNutritionV2BuilderScreen() {
   const [publishError, setPublishError] = useState<string | null>(null)
   const [dateConflict, setDateConflict] = useState(false)
   const [upsell, setUpsell] = useState<string | null>(null)
-  const [searchSlotKey, setSearchSlotKey] = useState<string | null>(null)
+  const [searchTarget, setSearchTarget] = useState<SearchTarget | null>(null)
   const operationId = useRef(genKey('op'))
   const mountedRef = useRef(true)
 
@@ -247,16 +255,22 @@ export default function CoachNutritionV2BuilderScreen() {
 
   const handleSelectFood = useCallback(
     (food: FoodCatalogItem) => {
-      if (!searchSlotKey) return
-      dispatch({
-        type: 'ADD_ITEM',
-        slotKey: searchSlotKey,
-        key: genKey('item'),
-        food: mapFoodCatalogItemToBuilderFood(food),
-      })
-      setSearchSlotKey(null)
+      if (!searchTarget) return
+      const builderFood = mapFoodCatalogItemToBuilderFood(food)
+      if (searchTarget.mode === 'item') {
+        dispatch({ type: 'ADD_ITEM', slotKey: searchTarget.slotKey, key: genKey('item'), food: builderFood })
+      } else {
+        dispatch({
+          type: 'ADD_ITEM_SUBSTITUTION',
+          slotKey: searchTarget.slotKey,
+          itemKey: searchTarget.itemKey,
+          key: genKey('sub'),
+          food: builderFood,
+        })
+      }
+      setSearchTarget(null)
     },
-    [searchSlotKey],
+    [searchTarget],
   )
 
   if (!entitlements.ready || !workspaceReady) {
@@ -323,7 +337,7 @@ export default function CoachNutritionV2BuilderScreen() {
               state={state}
               dispatch={dispatch}
               errors={errors}
-              onSearch={(slotKey) => setSearchSlotKey(slotKey)}
+              onSearch={(target) => setSearchTarget(target)}
             />
           ) : null}
           {state.step === 3 ? (
@@ -364,8 +378,8 @@ export default function CoachNutritionV2BuilderScreen() {
       </KeyboardAvoidingView>
 
       <FoodSearchModal
-        visible={searchSlotKey !== null}
-        onClose={() => setSearchSlotKey(null)}
+        visible={searchTarget !== null}
+        onClose={() => setSearchTarget(null)}
         onSelect={handleSelectFood}
       />
       <UpsellSheet reason={upsell} onClose={() => setUpsell(null)} />
@@ -571,11 +585,13 @@ function ItemEditor({
   item,
   dispatch,
   errors,
+  onSearch,
 }: {
   slotKey: string
   item: BuilderItem
   dispatch: BuilderDispatch
   errors: Record<string, string>
+  onSearch: (target: SearchTarget) => void
 }) {
   const { theme } = useTheme()
   const macros = itemMacros(item)
@@ -662,6 +678,92 @@ function ItemEditor({
       <View className="mt-2">
         <MacroChipRow size="sm" calories={macros.calories} proteinG={macros.proteinG} carbsG={macros.carbsG} fatsG={macros.fatsG} />
       </View>
+
+      <SubstitutionsField slotKey={slotKey} item={item} dispatch={dispatch} onSearch={onSearch} />
+    </View>
+  )
+}
+
+// Reemplazos autorizados por el coach (F-02): afordancia compacta bajo cada item prescrito.
+// "Reemplazo" abre el MISMO buscador de catalogo del builder (FoodSearchModal) y agrega el
+// alimento elegido como chip removible (tope MAX_ITEM_SUBSTITUTIONS). Solo se monta dentro
+// de ItemEditor, que a su vez solo existe en structured/hybrid (SlotEditor -> ConstructionStep).
+// El alumno vera estas opciones; el server congela el snapshot de cada reemplazo al publicar.
+// Espejo del SubstitutionsField de la web (PlanBuilderClient.tsx).
+function SubstitutionsField({
+  slotKey,
+  item,
+  dispatch,
+  onSearch,
+}: {
+  slotKey: string
+  item: BuilderItem
+  dispatch: BuilderDispatch
+  onSearch: (target: SearchTarget) => void
+}) {
+  const { theme } = useTheme()
+  const subs = item.substitutions ?? []
+  const atCap = subs.length >= MAX_ITEM_SUBSTITUTIONS
+  const prescribedName = item.food ? item.food.name : (item.customName?.trim() || 'este alimento')
+
+  return (
+    <View className="mt-2 border-t border-border-subtle pt-2">
+      <View className="flex-row flex-wrap items-center gap-1.5">
+        <View className="flex-row items-center gap-1">
+          <Repeat color={theme.mutedForeground} size={14} />
+          <Text className="text-[11px] font-semibold uppercase tracking-wide text-text-muted">Reemplazos autorizados</Text>
+        </View>
+        {subs.length > 0 ? (
+          <Text className="font-mono text-[11px] tabular-nums text-text-subtle">
+            {subs.length}/{MAX_ITEM_SUBSTITUTIONS}
+          </Text>
+        ) : null}
+      </View>
+
+      {subs.length > 0 ? (
+        <View className="mt-1.5 flex-row flex-wrap gap-1.5">
+          {subs.map((sub) => (
+            <View
+              key={sub.key}
+              className="max-w-full flex-row items-center gap-1 rounded-pill border border-border-subtle bg-surface-sunken py-0.5 pl-2.5 pr-1"
+            >
+              <Text className="min-w-0 shrink text-xs text-text-body" numberOfLines={1}>
+                {sub.food.name}
+              </Text>
+              <Pressable
+                accessibilityLabel={`Quitar reemplazo ${sub.food.name}`}
+                accessibilityRole="button"
+                className="min-h-11 min-w-11 items-center justify-center rounded-full"
+                onPress={() =>
+                  dispatch({ type: 'REMOVE_ITEM_SUBSTITUTION', slotKey, itemKey: item.key, subKey: sub.key })
+                }
+              >
+                <X color={theme.mutedForeground} size={13} />
+              </Pressable>
+            </View>
+          ))}
+        </View>
+      ) : (
+        <Text className="mt-1 text-[11px] leading-snug text-text-subtle">
+          Alimentos que el alumno puede usar en lugar de {prescribedName}.
+        </Text>
+      )}
+
+      {atCap ? (
+        <Text className="mt-1.5 text-[11px] text-text-subtle">
+          Alcanzaste el maximo de {MAX_ITEM_SUBSTITUTIONS} reemplazos.
+        </Text>
+      ) : (
+        <Pressable
+          accessibilityLabel="Agregar reemplazo autorizado"
+          accessibilityRole="button"
+          className="mt-1.5 min-h-11 flex-row items-center justify-center gap-1.5 self-start rounded-control border border-border-default bg-surface-card px-3"
+          onPress={() => onSearch({ mode: 'substitution', slotKey, itemKey: item.key })}
+        >
+          <Plus color={theme.foreground} size={14} />
+          <Text className="text-xs font-semibold text-text-strong">Reemplazo</Text>
+        </Pressable>
+      )}
     </View>
   )
 }
@@ -677,7 +779,7 @@ function SlotEditor({
   index: number
   dispatch: BuilderDispatch
   errors: Record<string, string>
-  onSearch: (slotKey: string) => void
+  onSearch: (target: SearchTarget) => void
 }) {
   const { theme } = useTheme()
   const subtotal = slotSubtotal(slot)
@@ -721,7 +823,7 @@ function SlotEditor({
 
       <View className="mt-3 gap-2">
         {slot.items.map((item) => (
-          <ItemEditor key={item.key} slotKey={slot.key} item={item} dispatch={dispatch} errors={errors} />
+          <ItemEditor key={item.key} slotKey={slot.key} item={item} dispatch={dispatch} errors={errors} onSearch={onSearch} />
         ))}
       </View>
 
@@ -730,7 +832,7 @@ function SlotEditor({
           accessibilityLabel="Buscar alimento del catálogo"
           accessibilityRole="button"
           className="min-h-11 flex-1 flex-row items-center justify-center gap-1.5 rounded-control border border-primary/30 bg-primary/10 px-3"
-          onPress={() => onSearch(slot.key)}
+          onPress={() => onSearch({ mode: 'item', slotKey: slot.key })}
         >
           <Search color={theme.primary} size={15} />
           <Text className="text-sm font-semibold text-primary">Buscar alimento</Text>
@@ -765,7 +867,7 @@ function ConstructionStep({
   state: BuilderState
   dispatch: BuilderDispatch
   errors: Record<string, string>
-  onSearch: (slotKey: string) => void
+  onSearch: (target: SearchTarget) => void
 }) {
   if (!strategyUsesSlots(state.strategy)) {
     return (

@@ -53,6 +53,18 @@ export interface BuilderFood {
   media: { bucket: string; objectPath: string; version: number } | null
 }
 
+/**
+ * Reemplazo autorizado por el coach dentro del builder (F-02). La afordancia agrega SOLO
+ * alimentos del catalogo (buscador), asi que el reemplazo siempre lleva un `food`. `key` es
+ * la key estable de UI (chip removible). `assembleDraft` lo mapea al draft con foodId +
+ * quantity/unit null ("misma porcion que el prescrito"); el server congela el snapshot.
+ * Espejo 1:1 de la web draft-builder.ts.
+ */
+export interface BuilderItemSubstitution {
+  key: string
+  food: BuilderFood
+}
+
 export interface BuilderItem {
   key: string
   food: BuilderFood | null
@@ -65,7 +77,13 @@ export interface BuilderItem {
   customProteinG: string
   customCarbsG: string
   customFatsG: string
+  /** Reemplazos autorizados por el coach (F-02). Vacio = item sin capa de reemplazos. */
+  substitutions: BuilderItemSubstitution[]
 }
+
+/** Tope de reemplazos por item (limite legado V1 = 8). El contrato lo refuerza con
+ *  NutritionItemSubstitutionSchema array `.max(8)`. No hardcodear el 8 en reducer/UI. */
+export const MAX_ITEM_SUBSTITUTIONS = 8
 
 export interface BuilderSlot {
   key: string
@@ -137,6 +155,7 @@ export function createEmptyItem(key: string): BuilderItem {
     customProteinG: '',
     customCarbsG: '',
     customFatsG: '',
+    substitutions: [],
   }
 }
 
@@ -159,6 +178,8 @@ export type BuilderAction =
   | { type: 'ADD_ITEM'; slotKey: string; key: string; food: BuilderFood | null }
   | { type: 'REMOVE_ITEM'; slotKey: string; itemKey: string }
   | { type: 'UPDATE_ITEM'; slotKey: string; itemKey: string; patch: Partial<Omit<BuilderItem, 'key'>> }
+  | { type: 'ADD_ITEM_SUBSTITUTION'; slotKey: string; itemKey: string; key: string; food: BuilderFood }
+  | { type: 'REMOVE_ITEM_SUBSTITUTION'; slotKey: string; itemKey: string; subKey: string }
 
 function clampStep(step: number): number {
   return Math.max(0, Math.min(BUILDER_STEP_COUNT - 1, step))
@@ -218,6 +239,29 @@ export function builderReducer(state: BuilderState, action: BuilderAction): Buil
       return mapSlot(state, action.slotKey, (slot) => ({
         ...slot,
         items: slot.items.map((item) => (item.key === action.itemKey ? { ...item, ...action.patch } : item)),
+      }))
+    case 'ADD_ITEM_SUBSTITUTION':
+      return mapSlot(state, action.slotKey, (slot) => ({
+        ...slot,
+        items: slot.items.map((item) => {
+          if (item.key !== action.itemKey) return item
+          const subs = item.substitutions ?? []
+          // Cinturon: no pasar del tope, no duplicar el mismo alimento como reemplazo, ni
+          // ofrecer como reemplazo el propio alimento prescrito (la UI ya lo evita).
+          if (subs.length >= MAX_ITEM_SUBSTITUTIONS) return item
+          if (subs.some((sub) => sub.food.id === action.food.id)) return item
+          if (item.food && item.food.id === action.food.id) return item
+          return { ...item, substitutions: [...subs, { key: action.key, food: action.food }] }
+        }),
+      }))
+    case 'REMOVE_ITEM_SUBSTITUTION':
+      return mapSlot(state, action.slotKey, (slot) => ({
+        ...slot,
+        items: slot.items.map((item) =>
+          item.key === action.itemKey
+            ? { ...item, substitutions: (item.substitutions ?? []).filter((sub) => sub.key !== action.subKey) }
+            : item,
+        ),
       }))
     default:
       return state
@@ -461,19 +505,39 @@ export function assembleDraft(state: BuilderState, options: AssembleOptions): Nu
         targets: {},
         instructions: null,
         orderIndex: slotIndex,
-        items: slot.items.map((item, itemIndex): DraftPrescriptionItem => ({
-          foodId: item.food ? item.food.id : null,
-          recipeId: null,
-          customName: item.food ? null : ((item.customName ?? '').trim() || null),
-          quantity: Number(item.quantity) || 0,
-          unit: item.unit,
-          minimumQuantity: null,
-          maximumQuantity: null,
-          optional: item.optional,
-          substitutionGroupId: null,
-          notes: item.notes && item.notes.trim() !== '' ? item.notes.trim() : null,
-          orderIndex: itemIndex,
-        })),
+        items: slot.items.map((item, itemIndex): DraftPrescriptionItem => {
+          // Reemplazos autorizados (F-02): catalogo -> foodId; quantity/unit null = "misma
+          // porcion que el prescrito". Capa opcional: sin reemplazos el item queda identico
+          // a hoy (sin la clave), y el server congela el snapshot de cada uno al persistir.
+          const substitutions = item.substitutions ?? []
+          return {
+            foodId: item.food ? item.food.id : null,
+            recipeId: null,
+            customName: item.food ? null : ((item.customName ?? '').trim() || null),
+            quantity: Number(item.quantity) || 0,
+            unit: item.unit,
+            minimumQuantity: null,
+            maximumQuantity: null,
+            optional: item.optional,
+            substitutionGroupId: null,
+            notes: item.notes && item.notes.trim() !== '' ? item.notes.trim() : null,
+            orderIndex: itemIndex,
+            ...(substitutions.length > 0
+              ? {
+                  substitutions: substitutions.map(
+                    (sub, subIndex): NutritionItemSubstitution => ({
+                      foodId: sub.food.id,
+                      recipeId: null,
+                      customName: null,
+                      quantity: null,
+                      unit: null,
+                      orderIndex: subIndex,
+                    }),
+                  ),
+                }
+              : {}),
+          }
+        }),
       }))
     : []
 
