@@ -10,7 +10,7 @@ import {
   View,
 } from 'react-native'
 import NetInfo from '@react-native-community/netinfo'
-import { ArrowLeft, Info } from 'lucide-react-native'
+import { ArrowLeft, Info, LockKeyhole } from 'lucide-react-native'
 import type { FoodCatalogItem, NutritionItemSubstitution, NutritionPlanReadModel } from '@eva/nutrition-v2'
 import { NutritionCard } from '../NutritionCard'
 import { NutritionHeader, NutritionStatePanel, StrategyBadge } from '../NutritionV2Kit'
@@ -556,10 +556,48 @@ export function QuickEditMode({
             </View>
           ))}
 
+          {/* Fuera de alcance en modo edicion (F1): notas y permisos read-only con hint.
+              Espejo de QuickEditPlanView.tsx:123-159 — visibleNotes, protocolNotes, 3 pills
+              de permisos y hint, en ese orden y jerarquia. Datos ya presentes en el read-model. */}
           <NutritionCard>
-            <View className="flex-row items-start gap-2">
-              <Info color={theme.primary} size={16} />
-              <Text className="min-w-0 flex-1 text-sm leading-5 text-text-muted">
+            <View className="flex-row items-center gap-2">
+              <LockKeyhole color={theme.textSecondary} size={16} />
+              <Text className="font-display text-base font-semibold text-text-strong">
+                {QUICK_EDIT_COPY.notesPermissionsTitle}
+              </Text>
+            </View>
+            <Text className="mt-2 text-sm leading-6 text-text-body">
+              {planModel.visibleNotes || QUICK_EDIT_COPY.notesEmpty}
+            </Text>
+            {planModel.protocolNotes ? (
+              <Text className="mt-2 text-xs leading-5 text-text-muted">{planModel.protocolNotes}</Text>
+            ) : null}
+            <View className="mt-3 flex-row flex-wrap gap-1.5">
+              {(
+                [
+                  [planModel.permissions.canRegisterFreely, QUICK_EDIT_COPY.permRegisterFreely],
+                  [planModel.permissions.canAdjustPrescribedQuantity, QUICK_EDIT_COPY.permAdjustQuantity],
+                  [planModel.permissions.canSubstitute, QUICK_EDIT_COPY.permSubstitute],
+                ] as const
+              ).map(([enabled, label]) => (
+                <View
+                  key={label}
+                  className={
+                    'rounded-pill border px-2 py-0.5 ' +
+                    (enabled ? 'border-primary/30 bg-primary/10' : 'border-border-subtle bg-surface-sunken')
+                  }
+                >
+                  <Text
+                    className={'text-[11px] font-semibold ' + (enabled ? 'text-primary' : 'text-text-muted')}
+                  >
+                    {label}
+                  </Text>
+                </View>
+              ))}
+            </View>
+            <View className="mt-3 flex-row items-start gap-1.5">
+              <Info color={theme.textSecondary} size={14} />
+              <Text className="min-w-0 flex-1 text-xs leading-5 text-text-muted">
                 {QUICK_EDIT_COPY.readonlyHint}
               </Text>
             </View>

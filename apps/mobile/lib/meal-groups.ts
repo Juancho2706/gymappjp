@@ -1,3 +1,4 @@
+import { calculateFoodItemMacros } from '@eva/nutrition-engine'
 import { supabase } from './supabase'
 import { getCoachOrgContext } from './org'
 import { foodToDraftItem, type DraftFoodItem, type FoodRow } from './nutrition-builder'
@@ -159,7 +160,40 @@ export async function saveMealAsGroup(
   return saveMealGroup({ name, items })
 }
 
-/** Totales de macros de un grupo (misma fórmula que la web MealGroupModal: g/ml → q/100; un → q). */
+/**
+ * Macros de UN ítem del grupo vía el motor compartido `@eva/nutrition-engine`
+ * (mismo consumo que la web `MealGroupLibraryClient`/`MealGroupModal`). Devuelve
+ * valores a 1 decimal (el redondeo del motor); la UI aplica su propio `Math.round`
+ * al mostrar, igual que la web. Para `un` el factor usa `serving_size` del alimento
+ * — NO la cantidad cruda —, corrigiendo el bug de datos visibles inflados.
+ */
+export function mealGroupItemMacros(item: MealGroupItem): {
+  calories: number
+  protein: number
+  carbs: number
+  fats: number
+} {
+  const f = item.food
+  const m = calculateFoodItemMacros({
+    quantity: Number(item.quantity) || 0,
+    // Filas legacy usan `u`; el motor trata toda unidad no g/ml como count, pero
+    // normalizamos a `un` para que el contrato visible sea el mismo que la web.
+    unit: item.unit === 'u' ? 'un' : (item.unit ?? 'g'),
+    foods: {
+      id: f?.id,
+      name: f?.name ?? '',
+      calories: Number(f?.calories) || 0,
+      protein_g: Number(f?.protein_g) || 0,
+      carbs_g: Number(f?.carbs_g) || 0,
+      fats_g: Number(f?.fats_g) || 0,
+      serving_size: Number(f?.serving_size) || 100,
+      serving_unit: f?.serving_unit ?? null,
+    },
+  })
+  return { calories: m.calories, protein: m.protein, carbs: m.carbs, fats: m.fats }
+}
+
+/** Totales de macros de un grupo (suma de los macros por ítem del motor, 1:1 web `calculateTotals`). */
 export function mealGroupTotals(items: MealGroupItem[]): {
   calories: number
   protein: number
@@ -168,16 +202,12 @@ export function mealGroupTotals(items: MealGroupItem[]): {
 } {
   return items.reduce(
     (acc, item) => {
-      const q = Number(item.quantity) || 0
-      const u = (item.unit || 'g').toLowerCase()
-      const factor = u === 'g' || u === 'ml' ? q / 100 : q
-      const f = item.food
-      return {
-        calories: acc.calories + (Number(f?.calories) || 0) * factor,
-        protein: acc.protein + (Number(f?.protein_g) || 0) * factor,
-        carbs: acc.carbs + (Number(f?.carbs_g) || 0) * factor,
-        fats: acc.fats + (Number(f?.fats_g) || 0) * factor,
-      }
+      const m = mealGroupItemMacros(item)
+      acc.calories += m.calories
+      acc.protein += m.protein
+      acc.carbs += m.carbs
+      acc.fats += m.fats
+      return acc
     },
     { calories: 0, protein: 0, carbs: 0, fats: 0 }
   )

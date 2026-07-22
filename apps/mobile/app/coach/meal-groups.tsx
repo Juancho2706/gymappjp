@@ -15,6 +15,7 @@ import type { FoodRow } from '../../lib/nutrition-builder'
 import {
   deleteMealGroup,
   listMealGroups,
+  mealGroupItemMacros,
   mealGroupTotals,
   saveMealGroup,
   type MealGroupItem,
@@ -36,19 +37,6 @@ function unitsForItem(item: MealGroupItem): string[] {
   const liquid = !!item.food?.is_liquid || item.food?.serving_unit === 'ml'
   const base = liquid ? ['ml', 'un'] : ['g', 'un']
   return base.includes(item.unit) ? base : [item.unit, ...base.filter((u) => u !== item.unit)]
-}
-
-function itemMacros(item: MealGroupItem) {
-  const q = Number(item.quantity) || 0
-  const u = (item.unit || 'g').toLowerCase()
-  const factor = u === 'g' || u === 'ml' ? q / 100 : q
-  const f = item.food
-  return {
-    calories: Math.round((Number(f?.calories) || 0) * factor),
-    protein: Math.round((Number(f?.protein_g) || 0) * factor),
-    carbs: Math.round((Number(f?.carbs_g) || 0) * factor),
-    fats: Math.round((Number(f?.fats_g) || 0) * factor),
-  }
 }
 
 export default function CoachMealGroupsScreen() {
@@ -216,7 +204,7 @@ export default function CoachMealGroupsScreen() {
             </View>
           ) : (
             items.map((item, index) => {
-              const m = itemMacros(item)
+              const m = mealGroupItemMacros(item)
               return (
                 <View key={`${item.food_id}-${index}`} style={[styles.itemCard, { borderColor: theme.border, backgroundColor: theme.card, borderRadius: theme.radius.lg }]}>
                   <View style={styles.itemTop}>
@@ -225,7 +213,7 @@ export default function CoachMealGroupsScreen() {
                         {item.food?.name ?? 'Alimento'}
                       </Text>
                       <Text style={[styles.itemMacro, { color: theme.mutedForeground, fontFamily: FONT.mono }]}>
-                        {m.calories} kcal · P{m.protein} C{m.carbs} G{m.fats}
+                        {Math.round(m.calories)} kcal · P{Math.round(m.protein)} C{Math.round(m.carbs)} G{Math.round(m.fats)}
                       </Text>
                     </View>
                     <TouchableOpacity testID={`meal-groups-remove-${index}`} onPress={() => removeItem(index)} hitSlop={8} style={styles.removeBtn}>
