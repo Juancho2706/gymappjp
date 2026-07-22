@@ -64,3 +64,20 @@ Referencia web: `apps/web/src/app/c/[coach_slug]/nutrition-v2/page.tsx:418-497`.
 Cuenta con historial mixto (días V2 + legados): captura web vs RN; verificar que la card de día
 muestra SOLO fecha + resumen + badge legado (sin macros, sin kcal derecha, sin estrategia, sin
 detalle), y el copy "N registros · X kcal".
+
+## Cierre (2026-07-21)
+
+- Decisión owner fila 1 ejecutada: se retiraron el detalle expandible (estados/`toggleDay`/
+  `detailControllerRef`, `HistoryDayDetail`, `historyEntryToRow`), la fila de macros P/C/G
+  (`HistoryMacro`), la columna kcal/target a la derecha, el `StrategyBadge` compact por día y
+  `formatClock`. La card quedó `View` plana no-interactiva, idéntica al web (`HistoryView`).
+- Copy del resumen no-legado alineado 1:1 al web: `N registro(s) · day.consumed.calories kcal`
+  (kcal cruda, sin `formatNutritionCalories`, sin "último HH:MM"); estilo `text-sm` + `tabular-nums`.
+  Ramas legadas (`completionsLabel` / "Registrado en el sistema anterior") heredan el mismo estilo.
+- Badge "Historial anterior" mapeado al canvas warning del kit RN (`toneClasses.warning` =
+  `border-warning-500/30 bg-warning-500/10` + `text-warning-700`), tamaño `text-[11px] px-2 py-1`
+  como el pill ámbar del web; movido a la derecha de la fila `justify-between` (sibling, no inline).
+- Scroll infinito conservado por decisión owner fila 4 (adaptación nativa); del footer sobrevive
+  SOLO el indicador "Cargando días anteriores…" mientras `loadingMore` — se retiró "No hay más días.".
+- La a11y compuesta (`accessibilityLabel`/`accessibilitySummary` del `Pressable`) se retiró junto con
+  el `Pressable`: al ser card plana, la fecha y el resumen se anuncian solos, como en web.
