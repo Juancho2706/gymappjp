@@ -1,7 +1,14 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Pressable, Text, View } from 'react-native'
-import { AnimatePresence, MotiView } from 'moti'
-import { LinearTransition } from 'react-native-reanimated'
+import { Pressable, Text, useWindowDimensions, View } from 'react-native'
+import { MotiView } from 'moti'
+import Animated, {
+  Easing,
+  LinearTransition,
+  useAnimatedStyle,
+  useSharedValue,
+  withSequence,
+  withTiming,
+} from 'react-native-reanimated'
 import { Image } from 'expo-image'
 import { ArrowRightLeft, Check, Clock, Dumbbell, Pencil, Undo2 } from 'lucide-react-native'
 import {
@@ -124,7 +131,8 @@ export function SupersetScreenV3({
 
   useEffect(() => {
     if (!cue) return
-    const t = setTimeout(() => setCue(null), 1400)
+    // 1650ms > timeline de la barra (~1,6s): ya salió de pantalla cuando se desmonta.
+    const t = setTimeout(() => setCue(null), 1650)
     return () => clearTimeout(t)
   }, [cue?.nonce])
 
@@ -232,10 +240,13 @@ export function SupersetScreenV3({
         .filter(Boolean)
     : []
 
-  // Envoltura de `onCommitSet`: al confirmar la serie del miembro activo, si queda otro en la MISMA ronda
-  // dispara el aviso "¡Sigue sin detenerte!" con el nombre del siguiente. Payload intacto → motor sin tocar.
+  // Envoltura de `onCommitSet`: dispara el aviso "¡Sigue sin detenerte!" SOLO cuando lo que se confirma es
+  // LA serie de la ronda actual del miembro activo (QA3: editar una serie pasada — tarjeta hecha / keypad —
+  // reusa el mismo motor y NO debe avisar). Si queda otro miembro en la MISMA ronda, muestra su nombre.
+  // Payload intacto → motor sin tocar.
   const handleCommit = (payload: OptimisticLogPayload) => {
-    if (nextMemberId != null) {
+    const esSerieActiva = payload.blockId === activeBlockId && payload.setNumber === round
+    if (esSerieActiva && nextMemberId != null) {
       const nextVM = memberVMs.find((m) => m.block.id === nextMemberId)
       if (nextVM) setCue({ name: nextVM.exercise.name, nonce: Date.now() })
     }
@@ -537,41 +548,11 @@ export function SupersetScreenV3({
         </View>
       )}
 
-      {/* Aviso efímero "¡Sigue sin detenerte!" — sólo entre miembros de la MISMA ronda (sin descanso).
-          Fondo transparente oscuro, no interactivo, auto-dismiss ~1,4 s. */}
-      <AnimatePresence>
-        {cue && (
-          <MotiView
-            key={cue.nonce}
-            pointerEvents="none"
-            from={{ opacity: 0, scale: reducedMotion ? 1 : 0.94 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: reducedMotion ? 1 : 0.98 }}
-            transition={{ type: 'timing', duration: reducedMotion ? 160 : 240 }}
-            style={{
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              zIndex: 50,
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 10,
-              paddingHorizontal: 24,
-              backgroundColor: 'rgba(5,5,9,0.88)',
-            }}
-          >
-            {/* Tinta de marca con sombra oscura fuerte (RN no tiene text-stroke) para leer sobre la media. */}
-            <Text style={{ fontFamily: FONT.displayBlack, fontSize: 30, letterSpacing: -0.6, textAlign: 'center', color: exec.accent, textShadowColor: 'rgba(0,0,0,0.9)', textShadowRadius: 12, textShadowOffset: { width: 0, height: 2 } }}>
-              ¡Sigue sin detenerte!
-            </Text>
-            <Text style={{ fontFamily: FONT.uiExtra, fontSize: 15, textAlign: 'center', color: '#ffffff', textShadowColor: 'rgba(0,0,0,0.9)', textShadowRadius: 6, textShadowOffset: { width: 0, height: 1 } }} numberOfLines={2}>
-              {cue.name}
-            </Text>
-          </MotiView>
-        )}
-      </AnimatePresence>
+      {/* Aviso efímero "¡Sigue sin detenerte!" (QA3, diseño CEO): sin scrim de pantalla completa — una BARRA
+          NEGRA horizontal a media pantalla que ENTRA desde la derecha, sostiene y SALE entera a la izquierda.
+          Letras en color de marca con glow (sin contorno duro) + micro-parallax. No interactivo. `key` por
+          nonce reinicia la animación si se encadena otro aviso; el padre lo desmonta a los 1650ms. */}
+      {cue && <CueBar key={cue.nonce} name={cue.name} exec={exec} reducedMotion={reducedMotion} />}
 
       {/* Sheet oscuro "Editar {nombre}" (QA2 #3): monta las filas CLÁSICAS del motor (SetRow) del miembro ya
           hecho para corregir sus series registradas — mismo motor de edición del lápiz del ejercicio solo,
@@ -595,6 +576,97 @@ export function SupersetScreenV3({
         </View>
       </Sheet>
     </MotiView>
+  )
+}
+
+/**
+ * Aviso "¡Sigue sin detenerte!" (QA3, diseño CEO) — barra negra horizontal a media pantalla: ENTRA desde la
+ * derecha (translateX ancho→0 al ~13% del timeline), SOSTIENE hasta ~74% y SALE entera a la izquierda;
+ * timeline único de ~1,6s con curva cubic-bezier(.4,0,.2,1). Las letras (marca + glow, sin contorno duro)
+ * entran con micro-parallax (un pelo después) y se apagan antes de la salida. reduced-motion ⇒ fade puro sin
+ * desplazamiento. No interactivo (pointerEvents none). El padre lo monta/desmonta y lo keyea por nonce.
+ */
+function CueBar({ name, exec, reducedMotion }: { name: string; exec: ExecTheme; reducedMotion: boolean }) {
+  const { width } = useWindowDimensions()
+  const barX = useSharedValue(reducedMotion ? 0 : width)
+  const barOpacity = useSharedValue(reducedMotion ? 0 : 1)
+  const txtX = useSharedValue(reducedMotion ? 0 : 46)
+  const txtOpacity = useSharedValue(0)
+
+  useEffect(() => {
+    const EASE = Easing.bezier(0.4, 0, 0.2, 1)
+    if (reducedMotion) {
+      barOpacity.value = withSequence(
+        withTiming(1, { duration: 192 }),
+        withTiming(1, { duration: 1088 }),
+        withTiming(0, { duration: 320 }),
+      )
+      txtOpacity.value = withSequence(
+        withTiming(1, { duration: 192 }),
+        withTiming(1, { duration: 1088 }),
+        withTiming(0, { duration: 320 }),
+      )
+      return
+    }
+    // Barra: entra (13% ≈ 208ms) → sostiene (61% ≈ 976ms) → sale entera a la izquierda (26% ≈ 416ms).
+    barX.value = withSequence(
+      withTiming(0, { duration: 208, easing: EASE }),
+      withTiming(0, { duration: 976, easing: EASE }),
+      withTiming(-width * 1.12, { duration: 416, easing: EASE }),
+    )
+    // Letras: micro-parallax (entran un pelo después, se apagan antes de la salida de la barra).
+    txtX.value = withSequence(
+      withTiming(0, { duration: 272, easing: EASE }),
+      withTiming(0, { duration: 880, easing: EASE }),
+      withTiming(-36, { duration: 448, easing: EASE }),
+    )
+    txtOpacity.value = withSequence(
+      withTiming(1, { duration: 272, easing: EASE }),
+      withTiming(1, { duration: 880, easing: EASE }),
+      withTiming(0, { duration: 448, easing: EASE }),
+    )
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const barStyle = useAnimatedStyle(() => ({ transform: [{ translateX: barX.value }], opacity: barOpacity.value }))
+  const txtStyle = useAnimatedStyle(() => ({ transform: [{ translateX: txtX.value }], opacity: txtOpacity.value }))
+
+  return (
+    <View pointerEvents="none" style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 50, justifyContent: 'center', overflow: 'hidden' }}>
+      <Animated.View
+        style={[
+          {
+            paddingVertical: 20,
+            paddingHorizontal: 24,
+            alignItems: 'center',
+            gap: 5,
+            backgroundColor: '#050509',
+            borderTopWidth: 1,
+            borderBottomWidth: 1,
+            borderColor: 'rgba(255,255,255,0.06)',
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 0 },
+            shadowOpacity: 0.55,
+            shadowRadius: 24,
+            elevation: 12,
+          },
+          barStyle,
+        ]}
+      >
+        {/* Tinta de marca + glow (text-shadow del color de marca, sin contorno oscuro). */}
+        <Animated.Text
+          style={[
+            { fontFamily: FONT.displayBlack, fontSize: 30, letterSpacing: -0.6, textAlign: 'center', color: exec.accent, textShadowColor: hexToRgba(exec.accent, 0.55), textShadowRadius: 22, textShadowOffset: { width: 0, height: 0 } },
+            txtStyle,
+          ]}
+        >
+          ¡Sigue sin detenerte!
+        </Animated.Text>
+        <Animated.Text style={[{ fontFamily: FONT.uiExtra, fontSize: 15, textAlign: 'center', color: '#ffffff' }, txtStyle]} numberOfLines={2}>
+          {name}
+        </Animated.Text>
+      </Animated.View>
+    </View>
   )
 }
 

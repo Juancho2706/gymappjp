@@ -100,7 +100,8 @@ export function SupersetStepV3({
 
     useEffect(() => {
         if (!cue) return
-        const t = setTimeout(() => setCue(null), 1400)
+        // 1650ms > animación CSS de 1600ms (la barra ya salió de pantalla cuando se desmonta).
+        const t = setTimeout(() => setCue(null), 1650)
         return () => clearTimeout(t)
     }, [cue])
 
@@ -185,10 +186,12 @@ export function SupersetStepV3({
               .sort((a, b) => a.set_number - b.set_number)
         : []
 
-    // Envoltura de `onLogged`: al confirmar la serie del miembro activo, si queda otro en la MISMA ronda
-    // dispara el aviso "¡Sigue sin detenerte!" con el nombre del siguiente. Payload intacto → motor sin tocar.
+    // Envoltura de `onLogged`: dispara el aviso "¡Sigue sin detenerte!" SOLO cuando lo que se confirma
+    // es LA serie de la ronda actual del miembro activo (QA3: editar una serie pasada — lápiz o tarjeta
+    // hecha — reusa el mismo motor y NO debe avisar). Payload intacto → motor sin tocar.
     const handleActiveLogged = (payload: OptimisticLogPayload) => {
-        if (nextInRound) {
+        const esSerieActiva = payload.blockId === activeBlockId && payload.setNumber === currentRound
+        if (esSerieActiva && nextInRound) {
             const nextVM = memberVMs.find((v) => v.block.id === nextInRound.blockId)
             if (nextVM) setCue({ name: nextVM.exercise.name, nonce: ++cueNonceRef.current })
         }
@@ -405,12 +408,16 @@ export function SupersetStepV3({
                 <div className="exec-v3-ss-done">Superserie completa · {maxSets} ronda{maxSets === 1 ? '' : 's'}</div>
             )}
 
-            {/* Aviso efímero "¡Sigue sin detenerte!" — sólo entre miembros de la MISMA ronda (sin descanso).
-                Fondo transparente oscuro, no interactivo, auto-dismiss ~1,4 s. */}
+            {/* Aviso efímero "¡Sigue sin detenerte!" (QA3, diseño CEO): SIN scrim de pantalla completa —
+                una barra negra horizontal a media pantalla que entra desde la DERECHA, muestra las letras
+                (marca + glow, sin contorno) y sale entera hacia la IZQUIERDA. No interactivo. El `key`
+                por nonce reinicia la animación si se encadena otro aviso. */}
             {cue && (
-                <div className="exec-v3-ss-cue" role="status" aria-live="polite">
-                    <span className="exec-v3-ss-cue-t">¡Sigue sin detenerte!</span>
-                    <span className="exec-v3-ss-cue-n">{cue.name}</span>
+                <div key={cue.nonce} className="exec-v3-ss-cue" role="status" aria-live="polite">
+                    <div className="exec-v3-ss-cuebar">
+                        <span className="exec-v3-ss-cue-t">¡Sigue sin detenerte!</span>
+                        <span className="exec-v3-ss-cue-n">{cue.name}</span>
+                    </div>
                 </div>
             )}
 

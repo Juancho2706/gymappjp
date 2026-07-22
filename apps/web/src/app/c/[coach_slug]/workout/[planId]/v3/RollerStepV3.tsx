@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import Image from 'next/image'
 import { GitCommit, Minus, Plus, Timer } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { LogSetForm, type SetSyncResult } from '../LogSetForm'
@@ -9,7 +8,7 @@ import { useWorkoutTimer } from '../WorkoutTimerProvider'
 import { triggerHaptic } from '@/lib/client/haptics'
 import { formatTypedObjective, type OptimisticLogPayload } from '@eva/workout-engine'
 import type { BlockType, ExerciseType, WorkoutSessionLog } from '../WorkoutExecutionClient'
-import { resolveExecMedia } from './exec-media'
+import { ExecTypedMedia } from './ExecTypedMedia'
 import { CoachNoteChip } from './CoachNoteV3'
 
 interface RollerStepV3Props {
@@ -21,6 +20,7 @@ interface RollerStepV3Props {
     autoTimerEnabled: boolean
     reopenSignal: { blockId: string; setNumber: number; nonce: number } | null
     substitution?: { exerciseId: string; exerciseName: string; reason: string } | null
+    openTechnique: (exercise: ExerciseType | null) => void
     handleLogged: (payload: OptimisticLogPayload) => void
     handleResult: (blockId: string, setNumber: number, result: SetSyncResult) => void
 }
@@ -41,10 +41,10 @@ export function RollerStepV3({
     autoTimerEnabled,
     reopenSignal,
     substitution,
+    openTechnique,
     handleLogged,
     handleResult,
 }: RollerStepV3Props) {
-    const media = resolveExecMedia(exercise)
     const coachNote = block.notes?.trim() || null
     const { startStopwatch } = useWorkoutTimer()
     const activeSet = firstUnlogged ?? block.sets
@@ -85,24 +85,14 @@ export function RollerStepV3({
                 </div>
             </div>
 
-            {/* Media */}
-            <div className="exec-v3-media exec-v3-media-calm">
-                <span className="exec-v3-medialbl" aria-hidden>
-                    <span className="exec-v3-live" />
-                    En loop
-                </span>
-                {media.kind === 'video' && (
-                    <video src={media.src} autoPlay loop muted playsInline className="h-full w-full object-contain" />
-                )}
-                {media.kind === 'image' && (
-                    <Image src={media.src} alt={exercise.name} fill unoptimized className="object-contain" />
-                )}
-                {(media.kind === 'none' || media.kind === 'youtube') && (
-                    <div className="exec-v3-media-empty" aria-hidden>
-                        <GitCommit className="h-9 w-9" />
-                    </div>
-                )}
-            </div>
+            {/* Media — mismo tratamiento que fuerza (precedencia + chip "Instrucciones" + audio en video). */}
+            <ExecTypedMedia
+                exercise={exercise}
+                openTechnique={openTechnique}
+                className="exec-v3-media-calm"
+                fallbackIcon={<GitCommit className="h-9 w-9" />}
+                liveLabel="En loop"
+            />
 
             {/* Nota del coach (todos los tipos) — chip de acento (recovery aqua en calm) + sheet compartida */}
             {coachNote && (

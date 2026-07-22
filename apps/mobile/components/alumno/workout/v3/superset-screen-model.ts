@@ -50,7 +50,7 @@ export function roundDotStates(members: RoundMemberBlock[], logs: RoundLogLike[]
 /**
  * Id del SIGUIENTE miembro incompleto DENTRO de la ronda activa (el que aún queda por registrar tras el
  * activo). Null si el activo es el último de la ronda (cerrar su serie cierra la ronda) o si el grupo
- * está completo. Alimenta la pill "Sin descanso — sigue con {letra}".
+ * está completo. Alimenta el aviso deslizante "¡Sigue sin detenerte!" con el nombre del siguiente miembro.
  */
 export function nextMemberIdInRound(members: RoundMemberBlock[], logs: RoundLogLike[]): string | null {
   const pos = firstIncompleteInRounds(members, logs)

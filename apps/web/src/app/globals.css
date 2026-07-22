@@ -1778,6 +1778,34 @@ body[data-exec-v3-toast] [data-sonner-toast][data-styled='true'] [data-descripti
   gap: 7px;
   z-index: 4;
 }
+/* Chips alineados a la derecha (pantallas tipadas: la etiqueta live "Mantén"/"En loop" va a la izquierda). */
+[data-exec-v3] .exec-v3-mediachips.is-end {
+  justify-content: flex-end;
+}
+/* Botón de audio glass (sólo con kind 'video'): esquina inferior-derecha de la media, mismo lenguaje que
+   los chips. Alterna el mute del <video> (default: sin sonido). */
+[data-exec-v3] .exec-v3-maudio {
+  position: absolute;
+  bottom: 10px;
+  right: 10px;
+  z-index: 4;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  background: rgba(8, 8, 12, 0.6);
+  -webkit-backdrop-filter: blur(2px);
+  backdrop-filter: blur(2px);
+  border: 1.5px solid rgba(255, 255, 255, 0.16);
+  color: #eaeaf0;
+  transition: color 0.12s ease, border-color 0.12s ease, transform 0.12s ease;
+}
+[data-exec-v3] .exec-v3-maudio:active {
+  transform: translateY(1px);
+  border-color: rgba(255, 255, 255, 0.28);
+}
 [data-exec-v3] .exec-v3-mchip {
   position: relative;
   display: inline-flex;
@@ -2627,20 +2655,38 @@ body[data-exec-v3-toast] [data-sonner-toast][data-styled='true'] [data-descripti
 }
 /* Aviso efímero: fondo oscuro casi opaco (QA2 #1 — legibilidad sobre la media), texto de marca grande con
    CONTORNO oscuro + glow de marca, no interactivo. */
+/* QA3 (diseño CEO): sin scrim de pantalla completa — barra negra horizontal a media pantalla que entra
+   desde la derecha, sostiene las letras (marca + glow, SIN contorno) y sale entera a la izquierda.
+   Un solo timeline de 1.6s (el componente se desmonta a los 1650ms). */
 [data-exec-v3] .exec-v3-ss-cue {
   position: fixed;
-  inset: 0;
+  left: 0;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
   z-index: 50;
+  overflow: hidden;
+  pointer-events: none;
+}
+[data-exec-v3] .exec-v3-ss-cuebar {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: 10px;
-  padding: 24px;
+  gap: 5px;
+  padding: 20px 24px;
   text-align: center;
-  pointer-events: none;
-  background: rgba(5, 5, 9, 0.88);
-  animation: exec-v3-ss-cue-in 0.24s cubic-bezier(0.4, 0, 0.2, 1);
+  background: #050509;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  box-shadow:
+    0 18px 48px rgba(0, 0, 0, 0.55),
+    0 -18px 48px rgba(0, 0, 0, 0.55);
+  animation: exec-v3-ss-cuebar 1.6s cubic-bezier(0.4, 0, 0.2, 1) both;
+  will-change: transform;
+}
+/* Micro-parallax: las letras entran un pelo después que la barra y se apagan antes de la salida. */
+[data-exec-v3] .exec-v3-ss-cuebar > span {
+  animation: exec-v3-ss-cuetxt 1.6s cubic-bezier(0.4, 0, 0.2, 1) both;
 }
 [data-exec-v3] .exec-v3-ss-cue-t {
   font-size: clamp(28px, 9vw, 32px);
@@ -2648,26 +2694,38 @@ body[data-exec-v3-toast] [data-sonner-toast][data-styled='true'] [data-descripti
   letter-spacing: -0.02em;
   line-height: 1.05;
   color: var(--exec-brand, var(--sport-500));
-  /* Contorno oscuro para que la tinta de marca lea sobre cualquier media, + el glow de marca existente. */
-  -webkit-text-stroke: 1px rgba(0, 0, 0, 0.9);
-  text-shadow:
-    0 2px 6px rgba(0, 0, 0, 0.9),
-    0 0 24px color-mix(in srgb, var(--exec-brand) 55%, transparent);
+  text-shadow: 0 0 24px color-mix(in srgb, var(--exec-brand) 55%, transparent);
 }
 [data-exec-v3] .exec-v3-ss-cue-n {
   font-size: 15px;
   font-weight: 800;
   color: #ffffff;
-  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.9);
 }
-@keyframes exec-v3-ss-cue-in {
-  from {
-    opacity: 0;
-    transform: scale(0.94);
+@keyframes exec-v3-ss-cuebar {
+  0% {
+    transform: translateX(110%);
   }
-  to {
+  13%,
+  74% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-112%);
+  }
+}
+@keyframes exec-v3-ss-cuetxt {
+  0% {
+    opacity: 0;
+    transform: translateX(46px);
+  }
+  17%,
+  72% {
     opacity: 1;
-    transform: scale(1);
+    transform: translateX(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(-36px);
   }
 }
 /* Animación del mockup ausente en web: latido del dot de ronda activo. */
@@ -2692,17 +2750,62 @@ body[data-exec-v3-toast] [data-sonner-toast][data-styled='true'] [data-descripti
   [data-exec-v3] .exec-v3-ss-body {
     animation: none;
   }
-  [data-exec-v3] .exec-v3-ss-cue {
-    animation: exec-v3-ss-cue-fade 0.2s ease;
+  [data-exec-v3] .exec-v3-ss-cuebar,
+  [data-exec-v3] .exec-v3-ss-cuebar > span {
+    animation: exec-v3-ss-cue-fade 1.6s ease both;
   }
 }
 @keyframes exec-v3-ss-cue-fade {
-  from {
+  0% {
     opacity: 0;
   }
-  to {
+  12%,
+  80% {
     opacity: 1;
   }
+  100% {
+    opacity: 0;
+  }
+}
+
+/* QA3: el splash viene en el HTML del server; si esta apertura ya lo pasó (reload mid-entreno), el
+   script inline marca <html data-exec-v3-entered> ANTES del primer paint y este cover no se ve. */
+html[data-exec-v3-entered] [data-exec-v3] .exec-v3-splash {
+  display: none;
+}
+
+/* ---- Barra "Finalizar" V3 (QA3): fija, delgada, botón fantasma — no compite con el CTA del paso. ---- */
+[data-exec-v3] .exec-v3-finishbar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 30;
+  padding: 10px 16px calc(10px + env(safe-area-inset-bottom, 0px));
+  background: rgba(18, 18, 24, 0.96);
+  border-top: 1.5px solid #24242e;
+}
+[data-exec-v3] .exec-v3-finishbtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  max-width: 48rem;
+  margin: 0 auto;
+  height: 48px;
+  border-radius: 14px;
+  border: 2px solid #2f2f3a;
+  background: #1a1a22;
+  color: #b7b7c2;
+  font-size: 14px;
+  font-weight: 800;
+  transition: transform 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+}
+[data-exec-v3] .exec-v3-finishbtn:active {
+  transform: translateY(1px);
+  color: #e8e8ee;
+  border-color: #3a3a45;
 }
 
 /* ---- Entrada / splash (E2.2) ---- */
@@ -4119,7 +4222,9 @@ body[data-exec-v3-toast] [data-sonner-toast][data-styled='true'] [data-descripti
   right: 0;
   bottom: 0;
   z-index: 61;
-  max-height: 88dvh;
+  /* svh, NO dvh (QA3): en Chrome Android el dvh cambia cuando la barra de URL se colapsa/expande al
+     scrollear → el sheet "respiraba" solo (crecía y se achicaba). svh es estable. */
+  max-height: 88svh;
   display: flex;
   flex-direction: column;
   border-radius: 24px 24px 0 0;

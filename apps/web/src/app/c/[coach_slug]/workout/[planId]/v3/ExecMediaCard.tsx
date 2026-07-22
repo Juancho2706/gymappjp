@@ -1,8 +1,8 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Image from 'next/image'
-import { AlignLeft, MessageSquare, Play, Dumbbell } from 'lucide-react'
+import { AlignLeft, MessageSquare, Play, Dumbbell, Volume2, VolumeX } from 'lucide-react'
 import type { ExerciseType } from '../WorkoutExecutionClient'
 import { resolveExecMedia } from './exec-media'
 import { CoachNoteSheet } from './CoachNoteV3'
@@ -31,6 +31,9 @@ export function ExecMediaCard({ exercise, note, openTechnique }: ExecMediaCardPr
     // Chips glass: entran EXTENDIDOS (estado inicial false → colapsan tras el timer). One-shot por
     // EJERCICIO (dep exercise.id) — no re-expande por serie. Reduced-motion → quedan extendidos (CSS).
     const [chipsCollapsed, setChipsCollapsed] = useState(false)
+    // Audio del ARCHIVO de video (kind 'video'): default SIN sonido; el botón glass alterna mute.
+    const [muted, setMuted] = useState(true)
+    const videoRef = useRef<HTMLVideoElement | null>(null)
     const media = resolveExecMedia(exercise)
     const hasInstructions = (exercise.instructions?.length ?? 0) > 0 || media.kind !== 'none'
 
@@ -43,6 +46,11 @@ export function ExecMediaCard({ exercise, note, openTechnique }: ExecMediaCardPr
         const t = setTimeout(() => setChipsCollapsed(true), 1500)
         return () => clearTimeout(t)
     }, [exercise.id])
+
+    // React no actualiza de forma fiable el atributo `muted` del <video>; la propiedad va por ref.
+    useEffect(() => {
+        if (videoRef.current) videoRef.current.muted = muted
+    }, [muted, media.kind])
 
     return (
         <>
@@ -76,14 +84,26 @@ export function ExecMediaCard({ exercise, note, openTechnique }: ExecMediaCardPr
                 </div>
 
                 {media.kind === 'video' && (
-                    <video
-                        src={media.src}
-                        autoPlay
-                        loop
-                        muted
-                        playsInline
-                        className="h-full w-full object-contain"
-                    />
+                    <>
+                        <video
+                            ref={videoRef}
+                            src={media.src}
+                            autoPlay
+                            loop
+                            muted
+                            playsInline
+                            className="h-full w-full object-contain"
+                        />
+                        <button
+                            type="button"
+                            onClick={() => setMuted((m) => !m)}
+                            className="exec-v3-maudio"
+                            aria-label={muted ? 'Activar el sonido del video' : 'Silenciar el video'}
+                            aria-pressed={!muted}
+                        >
+                            {muted ? <VolumeX className="h-3.5 w-3.5" aria-hidden /> : <Volume2 className="h-3.5 w-3.5" aria-hidden />}
+                        </button>
+                    </>
                 )}
                 {media.kind === 'image' && (
                     <Image src={media.src} alt={exercise.name} fill unoptimized className="object-contain" />

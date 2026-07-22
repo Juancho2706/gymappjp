@@ -1,7 +1,6 @@
 'use client'
 
 import { useState } from 'react'
-import Image from 'next/image'
 import { Bluetooth, HeartPulse, Pause, Play, Repeat, RotateCcw, Ruler, SkipForward, Timer, Zap } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import {
@@ -18,7 +17,7 @@ import { useWorkoutTimer } from '../WorkoutTimerProvider'
 import type { OptimisticLogPayload } from '@eva/workout-engine'
 import type { BlockType, ExerciseType, WorkoutSessionLog } from '../WorkoutExecutionClient'
 import type { ClientCardioView } from '../_data/workout-execution.queries'
-import { resolveExecMedia } from './exec-media'
+import { ExecTypedMedia } from './ExecTypedMedia'
 import { CoachNoteChip } from './CoachNoteV3'
 import { useExecCountdown, formatCountdown } from './useExecCountdown'
 import { useIntervalRunner } from './useIntervalRunner'
@@ -36,6 +35,7 @@ interface CardioStepV3Props {
     autoTimerEnabled: boolean
     reopenSignal: { blockId: string; setNumber: number; nonce: number } | null
     substitution?: { exerciseId: string; exerciseName: string; reason: string } | null
+    openTechnique: (exercise: ExerciseType | null) => void
     handleLogged: (payload: OptimisticLogPayload) => void
     handleResult: (blockId: string, setNumber: number, result: SetSyncResult) => void
 }
@@ -69,8 +69,7 @@ const DASH = 2 * Math.PI * 92
  * una capa opcional de Ola 6, jamás requisito). La FC se captura MANUAL en las filas tipadas reusadas.
  */
 export function CardioStepV3(props: CardioStepV3Props) {
-    const { block, exercise, cardio } = props
-    const media = resolveExecMedia(exercise)
+    const { block, exercise, cardio, openTechnique } = props
     const coachNote = block.notes?.trim() || null
     const intervalConfig = block.interval_config ?? null
     const isInterval = !!intervalConfig && isTimeableInterval(intervalConfig)
@@ -91,7 +90,7 @@ export function CardioStepV3(props: CardioStepV3Props) {
 
     return (
         <div className="exec-v3-step space-y-3">
-            {/* Identidad: nombre + chip + mini media del catálogo */}
+            {/* Identidad: nombre + chip */}
             <div className="exec-v3-cardio-id">
                 <div className="min-w-0">
                     <h2 className="exec-v3-exname">{exercise.name}</h2>
@@ -101,18 +100,14 @@ export function CardioStepV3(props: CardioStepV3Props) {
                         </span>
                     </div>
                 </div>
-                <div className="exec-v3-cardio-mini" aria-hidden>
-                    {media.kind === 'video' && (
-                        <video src={media.src} autoPlay loop muted playsInline className="h-full w-full object-cover" />
-                    )}
-                    {media.kind === 'image' && <Image src={media.src} alt="" fill unoptimized className="object-cover" />}
-                    {(media.kind === 'none' || media.kind === 'youtube') && (
-                        <span className="exec-v3-cardio-mini-empty">
-                            <HeartPulse className="h-6 w-6" />
-                        </span>
-                    )}
-                </div>
             </div>
+
+            {/* Media del catálogo — mismo tratamiento que fuerza (precedencia + chip "Instrucciones" + audio en video). */}
+            <ExecTypedMedia
+                exercise={exercise}
+                openTechnique={openTechnique}
+                fallbackIcon={<HeartPulse className="h-9 w-9" />}
+            />
 
             {/* Nota del coach (todos los tipos) — chip de acento bajo la identidad + sheet oscura compartida */}
             <CoachNoteChip note={coachNote} />

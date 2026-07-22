@@ -4,7 +4,7 @@ import { AnimatePresence, MotiView } from 'moti'
 import { Easing } from 'react-native-reanimated'
 import { Image } from 'expo-image'
 import { LinearGradient } from 'expo-linear-gradient'
-import { AlignLeft, Dumbbell, MessageSquare, Play } from 'lucide-react-native'
+import { AlignLeft, Dumbbell, MessageSquare, Play, Volume2, VolumeX } from 'lucide-react-native'
 import { FONT, textStyle } from '../../../../lib/typography'
 import { hexToRgba } from '../../../../lib/theme'
 import { extractYoutubeVideoId } from '../../../../lib/youtube'
@@ -45,6 +45,8 @@ export function ExecMediaV3({
 }) {
   const s = exec.surface
   const [noteOpen, setNoteOpen] = useState(false)
+  // Audio del ARCHIVO de video (kind 'video'): default SIN sonido; el botón glass alterna el mute.
+  const [muted, setMuted] = useState(true)
 
   const hasTechnique = !!(exercise.gif_url || exercise.video_url)
   const hasInstructions = (exercise.instructions?.length ?? 0) > 0
@@ -52,16 +54,7 @@ export function ExecMediaV3({
 
   // Colapso de los chips glass: extendidos al ENTRAR el ejercicio (one-shot por `exercise.id`), se
   // contraen a solo-icono ~1,5s después. reduced-motion ⇒ quedan siempre extendidos.
-  const [chipsExpanded, setChipsExpanded] = useState(true)
-  useEffect(() => {
-    if (reducedMotion) {
-      setChipsExpanded(true)
-      return
-    }
-    setChipsExpanded(true)
-    const t = setTimeout(() => setChipsExpanded(false), CHIP_COLLAPSE_MS)
-    return () => clearTimeout(t)
-  }, [exercise.id, reducedMotion])
+  const chipsExpanded = useChipCollapse(exercise.id, reducedMotion)
 
   return (
     <>
@@ -74,7 +67,13 @@ export function ExecMediaV3({
           end={{ x: 0.85, y: 1 }}
           style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
         />
-        <ExecMediaInnerV3 exercise={exercise} exec={exec} onOpenTechnique={onOpenTechnique} />
+        <ExecMediaInnerV3
+          exercise={exercise}
+          exec={exec}
+          onOpenTechnique={onOpenTechnique}
+          muted={muted}
+          onToggleMuted={() => setMuted((m) => !m)}
+        />
         {!reducedMotion && (
           <MotiView
             pointerEvents="none"
@@ -137,7 +136,58 @@ export function ExecMediaV3({
  * a solo-icono: el label se monta/desmonta con AnimatePresence (fade + slide) y el pill re-fluye a su
  * ancho de icono. reduced-motion ⇒ el label queda montado siempre. `badgeColor` pinta el puntito de aviso.
  */
-function GlassChip({
+/**
+ * Colapso one-shot de los chips glass: extendidos al ENTRAR el ejercicio (por `exerciseId`), se contraen
+ * a solo-icono ~1,5s después. reduced-motion ⇒ quedan siempre extendidos. Compartido por el bloque de
+ * media de fuerza/superserie (`ExecMediaV3`) y el de las pantallas tipadas (`TypedMediaV3`).
+ */
+export function useChipCollapse(exerciseId: string, reducedMotion: boolean): boolean {
+  const [expanded, setExpanded] = useState(true)
+  useEffect(() => {
+    if (reducedMotion) {
+      setExpanded(true)
+      return
+    }
+    setExpanded(true)
+    const t = setTimeout(() => setExpanded(false), CHIP_COLLAPSE_MS)
+    return () => clearTimeout(t)
+  }, [exerciseId, reducedMotion])
+  return expanded
+}
+
+/**
+ * Botón de audio glass (sólo con kind 'video'): esquina inferior-derecha de la media, mismo lenguaje que
+ * los chips. Alterna el mute del `<video>` (default: sin sonido). Compartido por `ExecMediaV3`/`TypedMediaV3`.
+ */
+export function AudioGlassButton({ muted, onToggle }: { muted: boolean; onToggle: () => void }) {
+  return (
+    <Pressable
+      testID="btn-media-audio-v3"
+      onPress={onToggle}
+      hitSlop={8}
+      accessibilityRole="button"
+      accessibilityState={{ selected: !muted }}
+      accessibilityLabel={muted ? 'Activar el sonido del video' : 'Silenciar el video'}
+      style={{
+        position: 'absolute',
+        bottom: 10,
+        right: 10,
+        width: 30,
+        height: 30,
+        borderRadius: 999,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: 'rgba(8,8,12,0.6)',
+        borderWidth: 1.5,
+        borderColor: 'rgba(255,255,255,0.16)',
+      }}
+    >
+      {muted ? <VolumeX size={14} color="#eaeaf0" /> : <Volume2 size={14} color="#eaeaf0" />}
+    </Pressable>
+  )
+}
+
+export function GlassChip({
   icon,
   label,
   expanded,
@@ -223,10 +273,16 @@ function ExecMediaInnerV3({
   exercise,
   exec,
   onOpenTechnique,
+  muted = true,
+  onToggleMuted,
 }: {
   exercise: SessionExercise
   exec: ExecTheme
   onOpenTechnique: () => void
+  /** Silencio del <video> directo (kind 'video'). Default true. */
+  muted?: boolean
+  /** Alterna el mute del <video> directo (renderiza el botón glass sólo si se pasa). */
+  onToggleMuted?: () => void
 }) {
   const s = exec.surface
   const videoUrl = exercise.video_url
@@ -243,7 +299,13 @@ function ExecMediaInnerV3({
       u.includes('.mp4') || u.includes('.mov') || u.includes('.webm') ||
       (u.includes('supabase.co/storage') && !u.includes('.gif') && !u.includes('.jpg') && !u.includes('.png'))
     if (isMp4) {
-      return <VideoPlayer url={videoUrl} autoPlay frameless letterbox={s.surfaceRaised} style={{ flex: 1 }} title={exercise.name} />
+      // Archivo de video (kind 'video'): reproduce en loop mudo por default + botón de audio glass.
+      return (
+        <View style={{ flex: 1 }}>
+          <VideoPlayer url={videoUrl} autoPlay muted={muted} frameless letterbox={s.surfaceRaised} style={{ flex: 1 }} title={exercise.name} />
+          {onToggleMuted && <AudioGlassButton muted={muted} onToggle={onToggleMuted} />}
+        </View>
+      )
     }
     return <Image source={{ uri: videoUrl }} alt={exercise.name} style={{ flex: 1, width: '100%' }} contentFit="contain" />
   }

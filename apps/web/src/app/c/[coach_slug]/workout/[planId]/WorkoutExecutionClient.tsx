@@ -6,7 +6,7 @@ import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { toast } from 'sonner'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { ArrowLeft, Info, Dumbbell, Timer, TrendingUp, History, Quote, X, Settings, CheckCircle2, WifiOff, ChevronDown, List, GalleryHorizontal, Pencil, CalendarSync } from 'lucide-react'
+import { ArrowLeft, Flag, Info, Dumbbell, Timer, TrendingUp, History, Quote, X, Settings, CheckCircle2, WifiOff, ChevronDown, List, GalleryHorizontal, Pencil, CalendarSync } from 'lucide-react'
 import { computeEffectiveTarget } from '@/lib/workout/progression'
 import { LogSetForm, type SetSyncResult } from './LogSetForm'
 import { SingleExerciseCard } from './SingleExerciseCard'
@@ -1071,7 +1071,11 @@ export function WorkoutExecutionClient({
     const [showTimerSettings, setShowTimerSettings] = useState(false)
     // Ejecutor V3 (E2.1): resuelto tras montar = flag server (prop) pisado por override localStorage
     // `eva:executor-v3` (on/off). SSR renderiza el flag server-side; el override es hidratación-safe.
-    const [execV3Active, setExecV3Active] = useState(false)
+    // QA3: arranca con el flag del SERVER (deterministico SSR=cliente). Antes arrancaba false y el
+    // layout-effect lo prendia post-hidratacion → el HTML del server pintaba el shell legacy/Inicio
+    // segundos antes de hidratar y el splash aparecia tarde y cortado. El override localStorage
+    // (dev) se re-commitea en el layout-effect.
+    const [execV3Active, setExecV3Active] = useState(executorV3)
     const [showExecV3Settings, setShowExecV3Settings] = useState(false)
     // Ejecutor V3 (E3.7): prefs de la tuerca (device-scoped). `showEffort` gobierna si la sesión pinta
     // la sección RPE/RIR; el resto lo consumen el RestTimer (háptico/WakeLock) y el interstitial.
@@ -1079,7 +1083,11 @@ export function WorkoutExecutionClient({
     // Ejecutor V3 (E2.2): fase de apertura del shell V3 — Entrada (splash) → Inicio → sesión. Sólo
     // vive en modo V3; se resuelve tras montar contra sessionStorage (una vez por apertura, plan+día).
     // Default 'session' = SSR-safe (el motor va montado desde el inicio; los overlays son fixed encima).
-    const [execV3Phase, setExecV3Phase] = useState<'intro' | 'start' | 'session'>('session')
+    // QA3: el splash viene en el HTML del SERVER (fase inicial 'intro' cuando V3). El caso "ya entrado
+    // en esta sesion" (reload mid-entreno) lo resuelve ANTES del primer paint un <script> inline que
+    // marca <html data-exec-v3-entered> leyendo sessionStorage (patron no-flash); el layout-effect
+    // despues fija la fase real y limpia la marca.
+    const [execV3Phase, setExecV3Phase] = useState<'intro' | 'start' | 'session'>(executorV3 ? 'intro' : 'session')
     // Wrapper del ejecutor: exec-theme.ts setea aquí --exec-brand/--exec-recovery/--exec-celebration.
     const execRootRef = useRef<HTMLDivElement | null>(null)
     const [showCompleted, setShowCompleted] = useState(false)
@@ -1396,6 +1404,8 @@ export function WorkoutExecutionClient({
             try { entered = sessionStorage.getItem(execV3EnteredKey) === '1' } catch { /* SSR / private */ }
             setExecV3Phase(entered ? 'session' : 'intro')
         }
+        // La marca del script inline ya cumplio (evito el flash del splash SSR en reload mid-entreno).
+        document.documentElement.removeAttribute('data-exec-v3-entered')
 
         const stepperPref = (() => {
             try { return localStorage.getItem(STEPPER_MODE_KEY) } catch { return null }
@@ -1620,7 +1630,9 @@ export function WorkoutExecutionClient({
             const round = payload.setNumber
             const roundClosed = isRoundComplete(info.members, round, nextLogs)
             if (nextPos) {
-                if (!roundClosed) {
+                // QA3: en V3 el aviso es la barra "¡Sigue sin detenerte!" del paso — el toast duplicado
+                // "(i) Sin descanso" queda SOLO para V2/legacy.
+                if (!roundClosed && !execV3Active) {
                     const label = `${info.letterByBlock.get(nextPos.blockId) ?? ''}${nextPos.set}`
                     toast.info(`Sin descanso — sigue con ${label}`)
                 }
@@ -1946,6 +1958,7 @@ export function WorkoutExecutionClient({
                         autoTimerEnabled,
                         reopenSignal,
                         substitution: sub ? { exerciseId: sub.id, exerciseName: sub.name, reason: SUBSTITUTION_REASON } : null,
+                        openTechnique,
                         handleLogged,
                         handleResult,
                     }
@@ -2216,6 +2229,15 @@ export function WorkoutExecutionClient({
 
                 {/* Ejecutor V3 (E2.2): Entrada (splash) → Inicio, overlays fixed SOBRE el motor ya montado
                     (nunca se desmonta el ejecutor → cola/drafts/clock siguen vivos). */}
+                {/* Script inline pre-hidratacion: si esta apertura YA paso el splash (reload), oculta el
+                    cover SSR antes del primer paint (CSS via html[data-exec-v3-entered]). */}
+                {execV3Active && execV3Phase === 'intro' && (
+                    <script
+                        dangerouslySetInnerHTML={{
+                            __html: `try{if(sessionStorage.getItem(${JSON.stringify(execV3EnteredKey)})==='1')document.documentElement.setAttribute('data-exec-v3-entered','1')}catch(e){}`,
+                        }}
+                    />
+                )}
                 {execV3Active && (
                     <AnimatePresence>
                         {execV3Phase === 'intro' && (
@@ -2411,7 +2433,6 @@ export function WorkoutExecutionClient({
                         onIndexChange={setCurrentStepIndex}
                         renderStep={renderStepNode}
                         reducedMotion={reducedMotion}
-                        compactBottom={execV3Active}
                     />
                 ) : (
                 <div className="px-4 py-6 md:px-8 max-w-5xl mx-auto pb-32">
@@ -2466,10 +2487,19 @@ export function WorkoutExecutionClient({
                     </button>
                 )}
 
-                {/* Barra "Finalizar" — SÓLO V2/legacy. Decisión CEO (2026-07-22): en modo V3 esta barra
-                    fija NO existe (no está en el mockup). Su acción "Finalizar entrenamiento" se movió a
-                    la tuerca de ajustes (ExecSettingsSheet, prop onFinish → mismo handleFinish). V2
-                    conserva su barra byte-idéntica (superficie + botón sport intactos). */}
+                {/* Barra "Finalizar" V3 (QA3, decisión CEO: botón a la vista y que funcione): barra fija
+                    delgada con botón fantasma V3 — no compite con el CTA principal del paso. El mismo
+                    handleFinish de siempre; la fila de la tuerca se conserva como acceso secundario. */}
+                {execV3Active && execV3Phase === 'session' && (
+                    <div className="exec-v3-finishbar">
+                        <button type="button" onClick={handleFinish} className="exec-v3-finishbtn">
+                            <Flag className="h-[18px] w-[18px]" aria-hidden />
+                            Finalizar entrenamiento
+                        </button>
+                    </div>
+                )}
+
+                {/* Barra "Finalizar" — V2/legacy byte-idéntica (superficie + botón sport intactos). */}
                 {!execV3Active && (
                     <div className="exec-finish-bar fixed bottom-0 left-0 right-0 z-40 px-4 pt-4 pb-[calc(1rem+env(safe-area-inset-bottom,0px))] backdrop-blur-xl border-t border-white/10 bg-[var(--ink-950)]/90">
                         <div className="max-w-3xl mx-auto flex items-center justify-between gap-3">

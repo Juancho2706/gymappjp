@@ -1,14 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Alert, Pressable, Text, View } from 'react-native'
-import { SafeAreaView } from 'react-native-safe-area-context'
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake'
 import { useRouter } from 'expo-router'
-import { Dumbbell } from 'lucide-react-native'
+import { Dumbbell, Flag } from 'lucide-react-native'
 import {
-  buildRoundOrder,
   buildStepModel,
   effectiveExerciseType,
-  findNextIncompleteInRounds,
   firstIncompleteInRounds,
   firstIncompleteStepIndex,
   formatWeightEsCl,
@@ -21,6 +19,7 @@ import {
 } from '@eva/workout-engine'
 import { useTheme } from '../../../../context/ThemeContext'
 import { useEvaMotion } from '../../../../lib/motion'
+import { FONT } from '../../../../lib/typography'
 import { useEntitlements } from '../../../../lib/entitlements'
 import { useClientCardioResolved, hrToZoneProfileFromResolved } from '../../../../lib/cardio-zones'
 import { haptics } from '../../../../lib/haptics'
@@ -135,6 +134,7 @@ function ExecutorV3Inner({ planId, recoverDate, editDate }: { planId: string; re
     return undefined
   }, [execSettings.keepAwake])
   const router = useRouter()
+  const insets = useSafeAreaInsets()
   const { theme, branding } = useTheme()
   const motion = useEvaMotion()
   const timers = useWorkoutTimers()
@@ -439,11 +439,6 @@ function ExecutorV3Inner({ planId, recoverDate, editDate }: { planId: string; re
       if (members && members.length >= 2) {
         const roundBlocks = members.map((m) => ({ id: m.id, sets: m.sets }))
         const round = payload.setNumber
-        const order = buildRoundOrder(roundBlocks)
-        const nextPos = findNextIncompleteInRounds(order, projected, {
-          blockId: payload.blockId,
-          setNumber: payload.setNumber,
-        })
         const roundClosed = isRoundComplete(roundBlocks, round, projected)
         if (!wasLogged) {
           if (!isRestAutoTimerEnabled()) {
@@ -482,11 +477,8 @@ function ExecutorV3Inner({ planId, recoverDate, editDate }: { planId: string; re
             timers.cancelRest()
           }
         }
-        if (nextPos && !roundClosed) {
-          const idx = members.findIndex((m) => m.id === nextPos.blockId)
-          const label = `${SUPERSET_MEMBER_LETTERS[idx] ?? ''}${nextPos.set}`
-          toast.info(`Sin descanso — sigue con ${label}`)
-        }
+        // El aviso "Sigue sin detenerte" entre miembros de la ronda lo pinta la barra deslizante de
+        // SupersetScreenV3 (QA3); ya no se usa un toast "Sin descanso — sigue con {label}" (decisión CEO).
         return
       }
 
@@ -1225,13 +1217,60 @@ function ExecutorV3Inner({ planId, recoverDate, editDate }: { planId: string; re
           currentIndex={stepIndex}
           onIndexChange={setStepIndex}
           renderStep={renderStep}
-          bottomClearance={80}
+          bottomClearance={128}
         />
       ) : null}
 
-      {/* Barra inferior fija RETIRADA en V3 (decisión CEO 2026-07-22): no existe en el mockup. La acción
-          "Finalizar entrenamiento" se movió a la tuerca de ajustes (ExecSettingsSheet, prop onFinish →
-          mismo handleFinish). El descanso manual queda cubierto por el auto-cronómetro (ON por default). */}
+      {/* Barra "Finalizar entrenamiento" V3 (QA3, decisión CEO 2026-07-22: de vuelta A LA VISTA): fija abajo,
+          delgada, botón fantasma full-width — no compite con el CTA del paso. Mismo `handleFinish` (la tuerca
+          de ajustes conserva "Finalizar" como acceso secundario). Sólo en la fase de sesión. */}
+      {!loading && steps.length > 0 && (
+        <View
+          style={{
+            position: 'absolute',
+            left: 0,
+            right: 0,
+            bottom: 0,
+            paddingHorizontal: 16,
+            paddingTop: 10,
+            paddingBottom: 10 + insets.bottom,
+            backgroundColor: 'rgba(18,18,24,0.96)',
+            borderTopWidth: 1.5,
+            borderTopColor: exec.surface.borderSubtle,
+          }}
+        >
+          <Pressable
+            testID="btn-finish-workout-v3"
+            onPress={handleFinish}
+            accessibilityRole="button"
+            accessibilityLabel="Finalizar entrenamiento"
+            style={({ pressed }) => ({
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 8,
+              alignSelf: 'center',
+              width: '100%',
+              maxWidth: 768,
+              height: 48,
+              borderRadius: 14,
+              borderWidth: 2,
+              borderColor: pressed ? '#3a3a45' : exec.surface.borderStrong,
+              backgroundColor: exec.surface.surface,
+              transform: pressed ? [{ translateY: 1 }] : undefined,
+            })}
+          >
+            {({ pressed }) => (
+              <>
+                <Flag size={18} color={pressed ? '#e8e8ee' : '#b7b7c2'} />
+                <Text style={{ fontFamily: FONT.uiExtra, fontSize: 14, color: pressed ? '#e8e8ee' : '#b7b7c2' }}>
+                  Finalizar entrenamiento
+                </Text>
+              </>
+            )}
+          </Pressable>
+        </View>
+      )}
 
       {/* Host de celebraciones (E4.1) — overlay no interactivo (box-none): PR en vivo (toast+confeti)
           sobre el stepper, sin cortar el flujo. topOffset libra el header (dots + cronómetro). */}

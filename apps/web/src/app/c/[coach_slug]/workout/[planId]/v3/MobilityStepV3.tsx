@@ -1,13 +1,12 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import Image from 'next/image'
 import { Move, Pause, Play, RotateCcw } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { LogSetForm, type SetSyncResult } from '../LogSetForm'
 import { formatTypedObjective, type OptimisticLogPayload } from '@eva/workout-engine'
 import type { BlockType, ExerciseType, WorkoutSessionLog } from '../WorkoutExecutionClient'
-import { resolveExecMedia } from './exec-media'
+import { ExecTypedMedia } from './ExecTypedMedia'
 import { CoachNoteChip } from './CoachNoteV3'
 import { useExecCountdown, formatCountdown } from './useExecCountdown'
 
@@ -20,6 +19,7 @@ interface MobilityStepV3Props {
     autoTimerEnabled: boolean
     reopenSignal: { blockId: string; setNumber: number; nonce: number } | null
     substitution?: { exerciseId: string; exerciseName: string; reason: string } | null
+    openTechnique: (exercise: ExerciseType | null) => void
     handleLogged: (payload: OptimisticLogPayload) => void
     handleResult: (blockId: string, setNumber: number, result: SetSyncResult) => void
 }
@@ -45,10 +45,10 @@ export function MobilityStepV3({
     autoTimerEnabled,
     reopenSignal,
     substitution,
+    openTechnique,
     handleLogged,
     handleResult,
 }: MobilityStepV3Props) {
-    const media = resolveExecMedia(exercise)
     const coachNote = block.notes?.trim() || null
     const perSide = block.side_mode === 'per_side'
     const holdSeconds = block.duration_sec ?? 0
@@ -86,24 +86,14 @@ export function MobilityStepV3({
                 </div>
             </div>
 
-            {/* Media calmada */}
-            <div className="exec-v3-media exec-v3-media-calm">
-                <span className="exec-v3-medialbl" aria-hidden>
-                    <span className="exec-v3-live" />
-                    Mantén
-                </span>
-                {media.kind === 'video' && (
-                    <video src={media.src} autoPlay loop muted playsInline className="h-full w-full object-contain" />
-                )}
-                {media.kind === 'image' && (
-                    <Image src={media.src} alt={exercise.name} fill unoptimized className="object-contain" />
-                )}
-                {(media.kind === 'none' || media.kind === 'youtube') && (
-                    <div className="exec-v3-media-empty" aria-hidden>
-                        <Move className="h-9 w-9" />
-                    </div>
-                )}
-            </div>
+            {/* Media calmada — mismo tratamiento que fuerza (precedencia + chip "Instrucciones" + audio en video). */}
+            <ExecTypedMedia
+                exercise={exercise}
+                openTechnique={openTechnique}
+                className="exec-v3-media-calm"
+                fallbackIcon={<Move className="h-9 w-9" />}
+                liveLabel="Mantén"
+            />
 
             {/* Nota del coach (todos los tipos) — chip de acento (recovery aqua en calm) + sheet compartida */}
             {coachNote && (

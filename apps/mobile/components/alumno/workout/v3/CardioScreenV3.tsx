@@ -181,22 +181,22 @@ export function CardioScreenV3({
 
   return (
     <View style={{ gap: 12 }}>
-      {/* IDENTIDAD: nombre + chip + mini-media */}
-      <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
-        <View style={{ flex: 1, minWidth: 0, gap: 8, paddingTop: 2 }}>
-          <Text style={{ fontFamily: FONT.displayBlack, fontSize: 26, letterSpacing: -0.5, lineHeight: 28, color: s.text }} numberOfLines={2}>
-            {exercise.name}
+      {/* IDENTIDAD: nombre + chip */}
+      <View style={{ gap: 8 }}>
+        <Text style={{ fontFamily: FONT.displayBlack, fontSize: 26, letterSpacing: -0.5, lineHeight: 28, color: s.text }} numberOfLines={2}>
+          {exercise.name}
+        </Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', gap: 6, borderRadius: 999, borderWidth: 1.5, paddingHorizontal: 11, paddingVertical: 5, backgroundColor: hexToRgba(chipColor, 0.14), borderColor: hexToRgba(chipColor, 0.32) }}>
+          <HeartPulse size={13} color={chipColor} />
+          <Text style={{ fontFamily: FONT.uiBold, fontSize: 12, color: hexToRgba(chipColor, 0.95) }} numberOfLines={1}>
+            Cardio · {cardioDetailLabel(block)}
           </Text>
-          <View style={{ flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', gap: 6, borderRadius: 999, borderWidth: 1.5, paddingHorizontal: 11, paddingVertical: 5, backgroundColor: hexToRgba(chipColor, 0.14), borderColor: hexToRgba(chipColor, 0.32) }}>
-            <HeartPulse size={13} color={chipColor} />
-            <Text style={{ fontFamily: FONT.uiBold, fontSize: 12, color: hexToRgba(chipColor, 0.95) }} numberOfLines={1}>
-              Cardio · {cardioDetailLabel(block)}
-            </Text>
-          </View>
         </View>
-        <View style={{ width: 84, height: 84, borderRadius: 18, overflow: 'hidden', borderWidth: 2, borderColor: s.borderStrong, backgroundColor: s.surfaceRaised }}>
-          <TypedMediaV3 exercise={exercise} exec={exec} accent={chipColor} IconFallback={HeartPulse} onOpenTechnique={onOpenTechnique} />
-        </View>
+      </View>
+
+      {/* Media del catálogo — mismo tratamiento que fuerza (precedencia + chip "Instrucciones" + audio en video). */}
+      <View style={{ width: '100%', height: 150, borderRadius: 22, overflow: 'hidden', borderWidth: 2, borderColor: s.borderStrong, backgroundColor: s.surfaceRaised }}>
+        <TypedMediaV3 exercise={exercise} exec={exec} accent={chipColor} IconFallback={HeartPulse} onOpenTechnique={onOpenTechnique} reducedMotion={reducedMotion} />
       </View>
 
       {/* Nota del coach (todos los tipos) — pill de acento bajo la identidad + sheet interna. */}

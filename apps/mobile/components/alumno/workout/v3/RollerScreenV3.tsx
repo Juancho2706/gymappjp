@@ -136,7 +136,7 @@ export function RollerScreenV3({
 
       {/* Media */}
       <View style={{ width: '100%', height: MEDIA_HEIGHT, borderRadius: 22, overflow: 'hidden', borderWidth: 2, borderColor: '#2a333a', backgroundColor: s.surfaceRaised }}>
-        <TypedMediaV3 exercise={exercise} exec={exec} accent={accent} IconFallback={GitCommit} onOpenTechnique={onOpenTechnique} />
+        <TypedMediaV3 exercise={exercise} exec={exec} accent={accent} IconFallback={GitCommit} onOpenTechnique={onOpenTechnique} reducedMotion={reducedMotion} />
         <View
           pointerEvents="none"
           style={{ position: 'absolute', top: 10, left: 12, zIndex: 3, flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'rgba(0,0,0,0.4)', paddingHorizontal: 9, paddingVertical: 3, borderRadius: 999 }}

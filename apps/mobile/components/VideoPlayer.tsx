@@ -264,6 +264,12 @@ function DirectVideo({
     p.play()
   })
 
+  // Mute controlable en vivo (toggle de audio del ejecutor V3): el setup del player sólo corre al montar,
+  // así que sincronizamos la propiedad cuando cambia `muted`.
+  useEffect(() => {
+    player.muted = muted
+  }, [player, muted])
+
   // Recorte del coach: al cruzar `end`, volver a `start` (loop del tramo).
   useEffect(() => {
     if (end == null) return
