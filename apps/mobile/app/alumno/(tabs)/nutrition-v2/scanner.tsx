@@ -23,6 +23,7 @@ import {
 import { Sheet } from '../../../../components/Sheet'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { ALUMNO_TABBAR_CLEARANCE } from '../../../../components/alumno/AlumnoMobileChrome'
+import { NutritionDomainOff } from '../../../../components/alumno/nutrition'
 import { useAlumnoScrollHandler } from '../../../../lib/alumno-chrome-scroll'
 import {
   NutritionTodayReadModelSchema,
@@ -104,7 +105,8 @@ export default function NutritionV2ScannerScreen() {
     setCelebration({ ...decision, nonce: celebrationNonce.current })
   }, [])
   const lastScanRef = useRef<{ code: string; at: number } | null>(null)
-  const enabled = entitlements.ready && isEnabled('nutritionV2Student')
+  const rolloutEnabled = entitlements.ready && isEnabled('nutritionV2Student')
+  const enabled = rolloutEnabled && entitlements.nutritionEnabled
   const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL ?? ''
 
   useEffect(() => {
@@ -216,9 +218,23 @@ export default function NutritionV2ScannerScreen() {
     return <View className="flex-1 bg-surface-app" />
   }
 
-  if (!enabled) {
+  if (!entitlements.nutritionEnabled) {
     return (
-      <View className="flex-1 bg-surface-app px-4 pt-6">
+      <View
+        className="flex-1 bg-surface-app px-4"
+        style={{ paddingTop: insets.top + 24 }}
+      >
+        <NutritionDomainOff />
+      </View>
+    )
+  }
+
+  if (!rolloutEnabled) {
+    return (
+      <View
+        className="flex-1 bg-surface-app px-4"
+        style={{ paddingTop: insets.top + 24 }}
+      >
         <NutritionStatePanel
           icon="permission"
           title="El lector todavía no está disponible"
@@ -230,7 +246,10 @@ export default function NutritionV2ScannerScreen() {
 
   if (!permission?.granted) {
     return (
-      <View className="flex-1 bg-surface-app px-4 pt-6">
+      <View
+        className="flex-1 bg-surface-app px-4"
+        style={{ paddingTop: insets.top + 24 }}
+      >
         <NutritionStatePanel
           icon="permission"
           title="Permite el uso de la cámara"
@@ -254,8 +273,11 @@ export default function NutritionV2ScannerScreen() {
     <View className="flex-1 bg-surface-app">
     <ScrollView
       className="flex-1 bg-surface-app"
-      contentContainerClassName="gap-5 px-4 pt-5"
-      contentContainerStyle={{ paddingBottom: insets.bottom + ALUMNO_TABBAR_CLEARANCE }}
+      contentContainerClassName="gap-5 px-4"
+      contentContainerStyle={{
+        paddingTop: insets.top + 20,
+        paddingBottom: insets.bottom + ALUMNO_TABBAR_CLEARANCE,
+      }}
       onScroll={onScrollChrome}
       scrollEventThrottle={16}
       keyboardShouldPersistTaps="handled"

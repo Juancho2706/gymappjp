@@ -49,7 +49,21 @@ type DeadLetter = NutritionV2QueuedMutation & {
   terminalCode: string
 }
 
-let flushPromise: Promise<NutritionV2FlushResult> | null = null
+// AsyncStorage no ofrece compare-and-swap. Toda operación read-modify-write pasa
+// por esta cola corta para que dos enqueues simultáneos no se pisen. El replay de
+// red ocurre FUERA del lock y aplica luego un merge por identidad, preservando las
+// mutaciones agregadas mientras la red estaba en vuelo.
+let storageMutationTail: Promise<void> = Promise.resolve()
+const flushPromises = new Map<string, Promise<NutritionV2FlushResult>>()
+
+function withStorageMutation<T>(operation: () => Promise<T>): Promise<T> {
+  const run = storageMutationTail.then(operation, operation)
+  storageMutationTail = run.then(
+    () => undefined,
+    () => undefined,
+  )
+  return run
+}
 
 function parseQueue(raw: string | null): NutritionV2QueuedMutation[] {
   if (!raw) return []
@@ -82,12 +96,13 @@ async function writeQueue(queue: NutritionV2QueuedMutation[]): Promise<void> {
   await AsyncStorage.setItem(QUEUE_KEY, JSON.stringify(queue.slice(-MAX_QUEUE_ITEMS)))
 }
 
-async function appendDeadLetter(item: DeadLetter): Promise<void> {
+async function appendDeadLetters(itemsToAppend: ReadonlyArray<DeadLetter>): Promise<void> {
+  if (itemsToAppend.length === 0) return
   try {
     const existingRaw = await AsyncStorage.getItem(DEAD_LETTER_KEY)
     const existing = existingRaw ? JSON.parse(existingRaw) : []
     const items = Array.isArray(existing) ? existing : []
-    items.push(item)
+    items.push(...itemsToAppend)
     await AsyncStorage.setItem(
       DEAD_LETTER_KEY,
       JSON.stringify(items.slice(-MAX_DEAD_LETTERS)),
@@ -117,30 +132,32 @@ export async function enqueueNutritionV2Mutation(input:
   | { action: 'record'; userId: string; payload: NutritionIntakeMutation }
   | { action: 'correct'; userId: string; payload: NutritionIntakeCorrection }
 ): Promise<{ queued: true; deduplicated: boolean }> {
-  const queue = await readQueue()
-  const idempotencyKey = input.payload.idempotencyKey
-  const existing = queue.some(
-    (item) => item.userId === input.userId && item.idempotencyKey === idempotencyKey,
-  )
-  if (existing) return { queued: true, deduplicated: true }
+  return withStorageMutation(async () => {
+    const queue = await readQueue()
+    const idempotencyKey = input.payload.idempotencyKey
+    const existing = queue.some(
+      (item) => item.userId === input.userId && item.idempotencyKey === idempotencyKey,
+    )
+    if (existing) return { queued: true, deduplicated: true }
 
-  const now = Date.now()
-  const item: NutritionV2QueuedMutation = {
-    queueVersion: 1,
-    action: input.action,
-    userId: input.userId,
-    clientId: input.payload.clientId,
-    idempotencyKey,
-    payload: input.payload,
-    queuedAt: now,
-    attempts: 0,
-    nextAttemptAt: now,
-    lastErrorCode: null,
-  } as NutritionV2QueuedMutation
+    const now = Date.now()
+    const item: NutritionV2QueuedMutation = {
+      queueVersion: 1,
+      action: input.action,
+      userId: input.userId,
+      clientId: input.payload.clientId,
+      idempotencyKey,
+      payload: input.payload,
+      queuedAt: now,
+      attempts: 0,
+      nextAttemptAt: now,
+      lastErrorCode: null,
+    } as NutritionV2QueuedMutation
 
-  queue.push(item)
-  await writeQueue(queue)
-  return { queued: true, deduplicated: false }
+    queue.push(item)
+    await writeQueue(queue)
+    return { queued: true, deduplicated: false }
+  })
 }
 
 export interface NutritionV2FlushResult {
@@ -154,7 +171,7 @@ export interface NutritionV2FlushResult {
 async function performFlush(userId: string): Promise<NutritionV2FlushResult> {
   const network = await NetInfo.fetch().catch(() => null)
   const online = network?.isConnected === true && network.isInternetReachable !== false
-  const queue = await readQueue()
+  const queue = await withStorageMutation(readQueue)
 
   if (!online) {
     return {
@@ -167,7 +184,8 @@ async function performFlush(userId: string): Promise<NutritionV2FlushResult> {
   }
 
   const now = Date.now()
-  const remaining: NutritionV2QueuedMutation[] = []
+  const replacements = new Map<string, NutritionV2QueuedMutation | null>()
+  const deadLetters: DeadLetter[] = []
   let sent = 0
   let terminal = 0
   let skippedOtherUser = 0
@@ -175,11 +193,9 @@ async function performFlush(userId: string): Promise<NutritionV2FlushResult> {
   for (const item of queue) {
     if (item.userId !== userId) {
       skippedOtherUser += 1
-      remaining.push(item)
       continue
     }
     if (item.nextAttemptAt > now) {
-      remaining.push(item)
       continue
     }
 
@@ -190,21 +206,23 @@ async function performFlush(userId: string): Promise<NutritionV2FlushResult> {
         await correctNutritionIntakeV2(item.payload)
       }
       sent += 1
+      replacements.set(queueItemIdentity(item), null)
     } catch (error) {
       const attempts = item.attempts + 1
       const code = errorCode(error)
       if (!isRetryable(error) || attempts >= MAX_ATTEMPTS) {
         terminal += 1
-        await appendDeadLetter({
+        deadLetters.push({
           ...item,
           attempts,
           lastErrorCode: code,
           failedAt: Date.now(),
           terminalCode: code,
         })
+        replacements.set(queueItemIdentity(item), null)
         continue
       }
-      remaining.push({
+      replacements.set(queueItemIdentity(item), {
         ...item,
         attempts,
         lastErrorCode: code,
@@ -213,10 +231,25 @@ async function performFlush(userId: string): Promise<NutritionV2FlushResult> {
     }
   }
 
-  await writeQueue(remaining)
+  const committedQueue = await withStorageMutation(async () => {
+    await appendDeadLetters(deadLetters)
+    const current = await readQueue()
+    const merged: NutritionV2QueuedMutation[] = []
+    for (const item of current) {
+      const identity = queueItemIdentity(item)
+      if (!replacements.has(identity)) {
+        merged.push(item)
+        continue
+      }
+      const replacement = replacements.get(identity)
+      if (replacement) merged.push(replacement)
+    }
+    await writeQueue(merged)
+    return merged.slice(-MAX_QUEUE_ITEMS)
+  })
   return {
     sent,
-    pending: remaining.filter((item) => item.userId === userId).length,
+    pending: committedQueue.filter((item) => item.userId === userId).length,
     terminal,
     skippedOtherUser,
     offline: false,
@@ -224,27 +257,44 @@ async function performFlush(userId: string): Promise<NutritionV2FlushResult> {
 }
 
 export function flushNutritionV2MutationQueue(userId: string): Promise<NutritionV2FlushResult> {
-  if (flushPromise) return flushPromise
-  flushPromise = performFlush(userId).finally(() => {
-    flushPromise = null
+  const existing = flushPromises.get(userId)
+  if (existing) return existing
+  const promise = performFlush(userId).finally(() => {
+    if (flushPromises.get(userId) === promise) flushPromises.delete(userId)
   })
-  return flushPromise
+  flushPromises.set(userId, promise)
+  return promise
 }
 
 export async function getNutritionV2QueueStatus(userId: string): Promise<{
   pending: number
   oldestQueuedAt: number | null
 }> {
-  const items = (await readQueue()).filter((item) => item.userId === userId)
+  const items = (await withStorageMutation(readQueue)).filter((item) => item.userId === userId)
   return {
     pending: items.length,
     oldestQueuedAt: items.length > 0 ? Math.min(...items.map((item) => item.queuedAt)) : null,
   }
 }
 
+/**
+ * Snapshot user-scoped de mutaciones pendientes. Consumidores de UI lo usan para
+ * reconstruir overlays optimistas tras remount; nunca expone items de otro usuario.
+ */
+export async function getNutritionV2QueuedMutations(
+  userId: string,
+): Promise<NutritionV2QueuedMutation[]> {
+  const queue = await withStorageMutation(readQueue)
+  return queue.filter((item) => item.userId === userId)
+}
+
 export async function clearNutritionV2QueueForUser(userId: string): Promise<void> {
-  const queue = await readQueue()
-  await writeQueue(queue.filter((item) => item.userId !== userId)).catch(() => {})
+  const activeFlush = flushPromises.get(userId)
+  if (activeFlush) await activeFlush.catch(() => {})
+  await withStorageMutation(async () => {
+    const queue = await readQueue()
+    await writeQueue(queue.filter((item) => item.userId !== userId)).catch(() => {})
+  })
 }
 
 /**
@@ -253,7 +303,7 @@ export async function clearNutritionV2QueueForUser(userId: string): Promise<void
  * `queued` cuya key ya no está en la cola fue flusheada (el servidor ya la cuenta).
  */
 export async function getNutritionV2QueuedKeys(userId: string): Promise<string[]> {
-  const queue = await readQueue()
+  const queue = await withStorageMutation(readQueue)
   return queue.filter((item) => item.userId === userId).map((item) => item.idempotencyKey)
 }
 
@@ -270,12 +320,19 @@ export async function removeNutritionV2QueuedMutation(
   userId: string,
   idempotencyKey: string,
 ): Promise<boolean> {
-  if (flushPromise) await flushPromise.catch(() => {})
-  const queue = await readQueue()
-  const next = queue.filter(
-    (item) => !(item.userId === userId && item.idempotencyKey === idempotencyKey),
-  )
-  if (next.length === queue.length) return false
-  await writeQueue(next)
-  return true
+  const activeFlush = flushPromises.get(userId)
+  if (activeFlush) await activeFlush.catch(() => {})
+  return withStorageMutation(async () => {
+    const queue = await readQueue()
+    const next = queue.filter(
+      (item) => !(item.userId === userId && item.idempotencyKey === idempotencyKey),
+    )
+    if (next.length === queue.length) return false
+    await writeQueue(next)
+    return true
+  })
+}
+
+function queueItemIdentity(item: NutritionV2QueuedMutation): string {
+  return JSON.stringify([item.userId, item.idempotencyKey, item.queuedAt])
 }

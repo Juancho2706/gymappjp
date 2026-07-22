@@ -330,6 +330,13 @@ export default function MiMarcaScreen() {
         primaryColor: effectivePrimary,
         displayName: brandName,
         inviteCode: settings.inviteCode ?? '',
+        subscriptionTier: tier,
+        themePresetKey,
+        brandSecondaryColor: secondaryColor || null,
+        accentLight: accentLight || null,
+        accentDark: accentDark || null,
+        neutralTint,
+        brandFontKey: fontKey || null,
       }
       setBranding(next)
       saveStoredBranding(next).catch(() => {})

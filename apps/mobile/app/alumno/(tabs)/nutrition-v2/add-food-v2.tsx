@@ -15,6 +15,7 @@ import {
 } from '../../../../components/nutrition-v2'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { ALUMNO_TABBAR_CLEARANCE } from '../../../../components/alumno/AlumnoMobileChrome'
+import { NutritionDomainOff } from '../../../../components/alumno/nutrition'
 import { useAlumnoScrollHandler } from '../../../../lib/alumno-chrome-scroll'
 import {
   NutritionTodayReadModelSchema,
@@ -111,7 +112,7 @@ export default function NutritionV2AddFoodScreen() {
   }, [])
 
   const date = useMemo(todayInSantiago, [])
-  const enabled = entitlements.ready && isEnabled('nutritionV2Student')
+  const rolloutEnabled = entitlements.ready && isEnabled('nutritionV2Student')
 
   const mountedRef = useRef(true)
   const searchControllerRef = useRef<AbortController | null>(null)
@@ -350,7 +351,7 @@ export default function NutritionV2AddFoodScreen() {
       }
       // Error humanizado DENTRO de la superficie sin perder el formulario
       // (web DialogError, TodayExperience.tsx:427-439,801).
-      setSaveError(outcome.error.message)
+      setSaveError(humanizeStudentWriteError(outcome.error.message, 'No se pudo registrar. Intenta nuevamente.'))
     } catch (error) {
       if (mountedRef.current) {
         setSaveError(
@@ -369,9 +370,23 @@ export default function NutritionV2AddFoodScreen() {
     return <View className="flex-1 bg-surface-app" />
   }
 
-  if (!enabled) {
+  if (!entitlements.nutritionEnabled) {
     return (
-      <View className="flex-1 bg-surface-app px-4 pt-6">
+      <View
+        className="flex-1 bg-surface-app px-4"
+        style={{ paddingTop: insets.top + 24 }}
+      >
+        <NutritionDomainOff />
+      </View>
+    )
+  }
+
+  if (!rolloutEnabled) {
+    return (
+      <View
+        className="flex-1 bg-surface-app px-4"
+        style={{ paddingTop: insets.top + 24 }}
+      >
         <NutritionStatePanel
           icon="permission"
           title="El registro todavía no está disponible"
@@ -394,8 +409,11 @@ export default function NutritionV2AddFoodScreen() {
     <View className="flex-1 bg-surface-app">
     <ScrollView
       className="flex-1 bg-surface-app"
-      contentContainerClassName="gap-5 px-4 pt-5"
-      contentContainerStyle={{ paddingBottom: insets.bottom + ALUMNO_TABBAR_CLEARANCE }}
+      contentContainerClassName="gap-5 px-4"
+      contentContainerStyle={{
+        paddingTop: insets.top + 20,
+        paddingBottom: insets.bottom + ALUMNO_TABBAR_CLEARANCE,
+      }}
       onScroll={onScrollChrome}
       scrollEventThrottle={16}
       keyboardShouldPersistTaps="handled"

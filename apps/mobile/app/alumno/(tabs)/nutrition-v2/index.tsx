@@ -84,7 +84,7 @@ import {
 import { supabase } from '../../../../lib/supabase'
 import { humanizeStudentWriteError } from '../../../../lib/student-access-copy'
 import { formatNutritionShortDate } from '../../../../lib/date-utils'
-import { foodCategoryEmojiFromName } from '../../../../lib/nutrition-v2-food-media'
+import { foodMediaThumbnailUrl } from '../../../../lib/nutrition-v2-food-media'
 import { isEnabled } from '../../../../lib/flags'
 import { useEntitlements } from '../../../../lib/entitlements'
 import { getNutritionHistoryV2, getNutritionPlanV2, getNutritionTodayV2 } from '../../../../lib/nutrition-v2.api'
@@ -95,6 +95,8 @@ import {
 import {
   flushNutritionV2MutationQueue,
   getNutritionV2QueueStatus,
+  getNutritionV2QueuedMutations,
+  type NutritionV2QueuedMutation,
 } from '../../../../lib/nutrition-v2-offline'
 import {
   buildAteAsPrescribedMutation,
@@ -102,6 +104,7 @@ import {
   buildVoidIntakeCorrection,
   computeIntakeTotals,
   optimisticIntakeRow,
+  type OptimisticNutritionFoodRowModel,
   type NutritionIntakeTotals,
 } from '../../../../lib/nutrition-v2-intake'
 import {
@@ -111,6 +114,7 @@ import {
   submitRecordIntake,
 } from '../../../../lib/nutrition-v2-intake-runner'
 import { useEvaMotion } from '../../../../lib/motion'
+import { shadow } from '../../../../lib/shadows'
 import {
   decideDayCloseCelebration,
   decideEnergyGoalCelebration,
@@ -144,9 +148,14 @@ function todayInSantiago(): string {
 }
 
 interface OptimisticOverlay {
-  addedBySlot: Record<string, NutritionFoodRowModel[]>
-  addedUnassigned: NutritionFoodRowModel[]
+  addedBySlot: Record<string, OptimisticNutritionFoodRowModel[]>
+  addedUnassigned: OptimisticNutritionFoodRowModel[]
   hiddenIds: string[]
+}
+
+type EntryCorrectionAction = {
+  kind: 'edit' | 'void'
+  entry: NutritionIntakeReadItem
 }
 
 const EMPTY_OVERLAY: OptimisticOverlay = { addedBySlot: {}, addedUnassigned: [], hiddenIds: [] }
@@ -156,6 +165,54 @@ const EMPTY_PORTION_MARKS: PendingPortionMark[] = []
 const EMPTY_PORTION_VOIDS: PendingPortionVoid[] = []
 // Referencia estable para el lookup de reemplazos por item (F-02): `?? []` inline rompería memo.
 const EMPTY_SUBSTITUTIONS: NutritionItemSubstitutionRead[] = []
+
+/**
+ * Reconstruye la representación optimista de records/correcciones normales desde
+ * la cola autoritativa. Las marcas sintéticas de porciones tienen su propio lente
+ * (`usePortionMarks`) y se excluyen para no mostrarlas como alimentos consumidos.
+ */
+function queuedIntakeOverlay(
+  queued: ReadonlyArray<NutritionV2QueuedMutation>,
+  localDate: string,
+): OptimisticOverlay {
+  const records: NutritionV2QueuedMutation[] = []
+  const corrections = new Map<string, NutritionV2QueuedMutation>()
+
+  for (const item of queued) {
+    if (item.payload.localDate !== localDate) continue
+    if (item.action === 'correct') corrections.set(item.payload.correctsEntryId, item)
+    else if (!item.payload.snapshot.exchangeGroupCode) records.push(item)
+  }
+
+  const overlay: OptimisticOverlay = { addedBySlot: {}, addedUnassigned: [], hiddenIds: [] }
+  const append = (item: NutritionV2QueuedMutation) => {
+    const payload = item.payload
+    const totals = computeIntakeTotals(payload.quantity, payload.unit, payload.snapshot)
+    const row = optimisticIntakeRow({
+      id: `queued-${item.idempotencyKey}`,
+      name: payload.snapshot.name,
+      brand: payload.snapshot.brand,
+      quantity: payload.quantity,
+      unit: payload.unit,
+      status: 'offline',
+      totals,
+    })
+    if (payload.mealSlot) {
+      overlay.addedBySlot[payload.mealSlot] = [...(overlay.addedBySlot[payload.mealSlot] ?? []), row]
+    } else {
+      overlay.addedUnassigned.push(row)
+    }
+  }
+
+  records.forEach(append)
+  for (const [correctsEntryId, item] of corrections) {
+    overlay.hiddenIds.push(correctsEntryId)
+    // El void conserva auditoría con una corrección de aporte cero, pero no se
+    // representa como una fila consumida. Una edición sí muestra su reemplazo.
+    if (item.payload.note !== 'Registro retirado' && !item.payload.snapshot.exchangeGroupCode) append(item)
+  }
+  return overlay
+}
 
 function TodayTab() {
   const router = useRouter()
@@ -190,7 +247,9 @@ function TodayTab() {
   const [substitutionsByItemId, setSubstitutionsByItemId] = useState<
     ReadonlyMap<string, NutritionItemSubstitutionRead[]>
   >(() => new Map())
-  const [actionEntry, setActionEntry] = useState<NutritionIntakeReadItem | null>(null)
+  const [entryAction, setEntryAction] = useState<EntryCorrectionAction | null>(null)
+  const [entryActionPending, setEntryActionPending] = useState(false)
+  const [entryActionError, setEntryActionError] = useState<string | null>(null)
   const [celebration, setCelebration] = useState<CelebrationInstance | null>(null)
   // Bulk-mark de franja ("Comí toda esta comida"): franja en curso + snackbar propio (reusa el
   // componente PortionSnackbar) para el "Deshacer" transitorio, sin pisar el snackbar de porciones.
@@ -294,6 +353,13 @@ function TodayTab() {
       if (!mountedRef.current) return
       const flushed = await flushNutritionV2MutationQueue(userId)
       if (mountedRef.current) setPending(flushed.pending)
+      if (flushed.terminal > 0 && mountedRef.current) {
+        setMutationError(
+          flushed.terminal === 1
+            ? 'Una acción pendiente no pudo sincronizarse. Revisa tus registros e intenta de nuevo.'
+            : `${flushed.terminal} acciones pendientes no pudieron sincronizarse. Revisa tus registros e intenta de nuevo.`,
+        )
+      }
       if (flushed.sent > 0 && mountedRef.current) {
         // Server truth changed after replay: refetch once so consumed reflects flushed writes.
         const replayStartedAt = Date.now()
@@ -336,6 +402,21 @@ function TodayTab() {
     })
     return () => subscription.remove()
   }, [enabled, load, userId])
+
+  // Una edición/retiro/alta aceptada offline debe sobrevivir remount, focus y
+  // reinicio. La cola es la única fuente persistida; no duplicamos estado local.
+  useEffect(() => {
+    if (!userId || !enabled) return
+    let active = true
+    void getNutritionV2QueuedMutations(userId)
+      .then((queued) => {
+        if (active && mountedRef.current) setOverlay(queuedIntakeOverlay(queued, date))
+      })
+      .catch(() => {})
+    return () => {
+      active = false
+    }
+  }, [date, enabled, model, pending, userId])
 
   // Reemplazos autorizados (F-02): UN select directo RLS-scoped por versión publicada del plan del
   // Today, agrupado por item. Best-effort: cualquier error o falta de versión deja el mapa vacío
@@ -411,7 +492,7 @@ function TodayTab() {
     [model],
   )
 
-  const addRow = useCallback((slotCode: string | null, row: NutritionFoodRowModel) => {
+  const addRow = useCallback((slotCode: string | null, row: OptimisticNutritionFoodRowModel) => {
     setOverlay((prev) =>
       slotCode
         ? { ...prev, addedBySlot: { ...prev.addedBySlot, [slotCode]: [...(prev.addedBySlot[slotCode] ?? []), row] } }
@@ -428,7 +509,7 @@ function TodayTab() {
   }, [])
 
   const markRowOffline = useCallback((slotCode: string | null, id: string) => {
-    const patch = (rows: NutritionFoodRowModel[]) => rows.map((r) => (r.id === id ? { ...r, status: 'offline' as const } : r))
+    const patch = (rows: OptimisticNutritionFoodRowModel[]) => rows.map((r) => (r.id === id ? { ...r, status: 'offline' as const } : r))
     setOverlay((prev) =>
       slotCode
         ? { ...prev, addedBySlot: { ...prev.addedBySlot, [slotCode]: patch(prev.addedBySlot[slotCode] ?? []) } }
@@ -512,33 +593,51 @@ function TodayTab() {
   )
 
   const onVoidEntry = useCallback(
-    async (entry: NutritionIntakeReadItem) => {
-      if (!userId || !deviceId) return
-      setActionEntry(null)
+    async (entry: NutritionIntakeReadItem, reason: string) => {
+      if (!userId || !deviceId) {
+        setEntryActionError('No pudimos preparar la corrección. Recarga e intenta de nuevo.')
+        return
+      }
+      setEntryActionPending(true)
+      setEntryActionError(null)
       setMutationError(null)
       void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
-      setHidden(entry.id, true)
-      const payload = buildVoidIntakeCorrection({
-        clientId: userId,
-        deviceId,
-        operationId: newNutritionV2OperationId(),
-        localDate: date,
-        occurredAt: new Date().toISOString(),
-        timezone: TZ,
-        entry,
-        planVersionId: model?.plan?.versionId ?? null,
-        daySnapshotId: model?.snapshotId ?? null,
-      })
-      const outcome = await submitCorrectIntake(userId, payload)
-      if (!mountedRef.current) return
-      if (outcome.status === 'recorded') {
-        void load(true)
-      } else if (outcome.status === 'queued') {
-        void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning)
-        await refreshPending()
-      } else {
+      try {
+        const payload = buildVoidIntakeCorrection({
+          clientId: userId,
+          deviceId,
+          operationId: newNutritionV2OperationId(),
+          localDate: date,
+          timezone: TZ,
+          entry,
+          planVersionId: model?.plan?.versionId ?? null,
+          daySnapshotId: model?.snapshotId ?? null,
+          reason,
+        })
+        setHidden(entry.id, true)
+        const outcome = await submitCorrectIntake(userId, payload)
+        if (!mountedRef.current) return
+        if (outcome.status === 'recorded') {
+          setEntryAction(null)
+          setEntryActionPending(false)
+          void load(true)
+        } else if (outcome.status === 'queued') {
+          setEntryAction(null)
+          setEntryActionPending(false)
+          void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning)
+          await refreshPending()
+        } else {
+          setHidden(entry.id, false)
+          setEntryActionPending(false)
+          setEntryActionError(humanizeStudentWriteError(outcome.error.message, 'No se pudo retirar el registro.'))
+        }
+      } catch (error) {
         setHidden(entry.id, false)
-        setMutationError(humanizeStudentWriteError(outcome.error.message, 'No se pudo completar la acción.'))
+        if (!mountedRef.current) return
+        setEntryActionPending(false)
+        setEntryActionError(
+          humanizeStudentWriteError(error instanceof Error ? error.message : '', 'No se pudo retirar el registro.'),
+        )
       }
     },
     [date, deviceId, load, model, refreshPending, setHidden, userId],
@@ -583,11 +682,11 @@ function TodayTab() {
           deviceId,
           operationId: newNutritionV2OperationId(),
           localDate: date,
-          occurredAt: new Date().toISOString(),
           timezone: TZ,
           entry,
           planVersionId: model?.plan?.versionId ?? null,
           daySnapshotId: model?.snapshotId ?? null,
+          reason: 'Deshacer registro de la comida',
         })
         const outcome = await submitCorrectIntake(userId, payload)
         if (!mountedRef.current) return
@@ -720,14 +819,18 @@ function TodayTab() {
   )
 
   const onEditEntry = useCallback(
-    async (entry: NutritionIntakeReadItem, quantity: number, unit: string) => {
-      if (!userId || !deviceId) return
-      setActionEntry(null)
+    async (entry: NutritionIntakeReadItem, quantity: number, reason: string) => {
+      if (!userId || !deviceId) {
+        setEntryActionError('No pudimos preparar la corrección. Recarga e intenta de nuevo.')
+        return
+      }
+      setEntryActionPending(true)
+      setEntryActionError(null)
       setMutationError(null)
       void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
       const operationId = newNutritionV2OperationId()
       const tempId = `opt-${operationId}`
-      const totals = computeIntakeTotals(quantity, unit, {
+      const totals = computeIntakeTotals(quantity, entry.unit, {
         calories: entry.snapshot.calories,
         proteinG: entry.snapshot.proteinG,
         carbsG: entry.snapshot.carbsG,
@@ -735,48 +838,55 @@ function TodayTab() {
         fiberG: entry.snapshot.fiberG,
         servingSize: entry.snapshot.servingSize,
       })
-      setHidden(entry.id, true)
-      addRow(entry.mealSlot, optimisticIntakeRow({
-        id: tempId,
-        name: entry.snapshot.name,
-        brand: entry.snapshot.brand,
-        quantity,
-        unit,
-        status: 'pending',
-        totals,
-      }))
-      let payload
       try {
-        payload = buildEditIntakeCorrection({
+        const payload = buildEditIntakeCorrection({
           clientId: userId,
           deviceId,
           operationId,
           localDate: date,
-          occurredAt: new Date().toISOString(),
           timezone: TZ,
           entry,
           quantity,
-          unit,
           planVersionId: model?.plan?.versionId ?? null,
           daySnapshotId: model?.snapshotId ?? null,
+          reason,
         })
-      } catch {
+        setHidden(entry.id, true)
+        addRow(entry.mealSlot, optimisticIntakeRow({
+          id: tempId,
+          name: entry.snapshot.name,
+          brand: entry.snapshot.brand,
+          quantity,
+          unit: entry.unit,
+          status: 'pending',
+          totals,
+        }))
+        const outcome = await submitCorrectIntake(userId, payload)
+        if (!mountedRef.current) return
+        if (outcome.status === 'recorded') {
+          setEntryAction(null)
+          setEntryActionPending(false)
+          void load(true)
+        } else if (outcome.status === 'queued') {
+          markRowOffline(entry.mealSlot, tempId)
+          setEntryAction(null)
+          setEntryActionPending(false)
+          void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning)
+          await refreshPending()
+        } else {
+          setHidden(entry.id, false)
+          removeRow(entry.mealSlot, tempId)
+          setEntryActionPending(false)
+          setEntryActionError(humanizeStudentWriteError(outcome.error.message, 'No se pudo guardar la corrección.'))
+        }
+      } catch (error) {
         setHidden(entry.id, false)
         removeRow(entry.mealSlot, tempId)
-        return
-      }
-      const outcome = await submitCorrectIntake(userId, payload)
-      if (!mountedRef.current) return
-      if (outcome.status === 'recorded') {
-        void load(true)
-      } else if (outcome.status === 'queued') {
-        markRowOffline(entry.mealSlot, tempId)
-        void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning)
-        await refreshPending()
-      } else {
-        setHidden(entry.id, false)
-        removeRow(entry.mealSlot, tempId)
-        setMutationError(humanizeStudentWriteError(outcome.error.message, 'No se pudo completar la acción.'))
+        if (!mountedRef.current) return
+        setEntryActionPending(false)
+        setEntryActionError(
+          humanizeStudentWriteError(error instanceof Error ? error.message : '', 'No se pudo guardar la corrección.'),
+        )
       }
     },
     [addRow, date, deviceId, load, markRowOffline, model, refreshPending, removeRow, setHidden, userId],
@@ -792,43 +902,81 @@ function TodayTab() {
     [router],
   )
 
-  // Compartir: arma un TEXTO resumen del día (mismo helper puro que la web → microcopy 1:1) y lo
-  // comparte con el Share nativo. Toma la instantánea del servidor (`model`) para que macros e
-  // ítems sean coherentes entre sí; solo datos del propio alumno, sin datos privados del coach.
-  const onShareDay = useCallback(async () => {
-    if (!model) return
-    // Mismo conjunto y orden que "Consumido hoy" de la web (`consumedEntries`): por hora asc.
-    const items = [...model.mealSlots.flatMap((slot) => slot.intakeItems), ...model.unassignedIntake]
-      .slice()
+  // Compartir usa la MISMA vista efectiva que el render: verdad del servidor menos
+  // registros ocultos por correcciones + filas optimistas en vuelo/cola. Así Aura,
+  // "Consumido hoy" y el texto compartido no divergen mientras falta sincronizar.
+  const shareSnapshot = useMemo(() => {
+    if (!model) return null
+    const hidden = new Set(overlay.hiddenIds)
+    const serverEntries = [...model.mealSlots.flatMap((slot) => slot.intakeItems), ...model.unassignedIntake]
+      .filter((entry) => entry.status === 'active' && !hidden.has(entry.id))
       .sort((a, b) => a.occurredAt.localeCompare(b.occurredAt))
-      .map((entry) => ({
-        name: entry.snapshot.name,
-        quantity: entry.quantity,
-        unit: entry.unit,
-      }))
+    const optimisticRows = [...Object.values(overlay.addedBySlot).flat(), ...overlay.addedUnassigned]
+    const consumed = {
+      calories: model.consumed.calories,
+      proteinG: model.consumed.proteinG,
+      carbsG: model.consumed.carbsG,
+      fatsG: model.consumed.fatsG,
+    }
+    const subtractHidden = (entries: NutritionIntakeReadItem[]) => {
+      for (const entry of entries) {
+        if (!hidden.has(entry.id)) continue
+        consumed.calories -= entry.totals.calories
+        consumed.proteinG -= entry.totals.proteinG
+        consumed.carbsG -= entry.totals.carbsG
+        consumed.fatsG -= entry.totals.fatsG
+      }
+    }
+    model.mealSlots.forEach((slot) => subtractHidden(slot.intakeItems))
+    subtractHidden(model.unassignedIntake)
+    for (const row of optimisticRows) {
+      consumed.calories += row.calories ?? 0
+      consumed.proteinG += row.proteinG ?? 0
+      consumed.carbsG += row.carbsG ?? 0
+      consumed.fatsG += row.fatsG ?? 0
+    }
+    return {
+      consumed: {
+        calories: Math.max(consumed.calories, 0),
+        proteinG: Math.max(consumed.proteinG, 0),
+        carbsG: Math.max(consumed.carbsG, 0),
+        fatsG: Math.max(consumed.fatsG, 0),
+      },
+      items: [
+        ...serverEntries.map((entry) => ({
+          name: entry.snapshot.name,
+          quantity: entry.quantity,
+          unit: entry.unit,
+        })),
+        ...optimisticRows.map((row) => ({
+          name: row.name,
+          quantity: row.shareQuantity,
+          unit: row.shareUnit,
+        })),
+      ],
+    }
+  }, [model, overlay])
+
+  const onShareDay = useCallback(async () => {
+    if (!model || !shareSnapshot) return
     const text = buildNutritionDayShareText({
       localDate: model.localDate,
       planName: model.plan?.name ?? null,
-      consumed: {
-        calories: model.consumed.calories,
-        proteinG: model.consumed.proteinG,
-        carbsG: model.consumed.carbsG,
-        fatsG: model.consumed.fatsG,
-      },
+      consumed: shareSnapshot.consumed,
       targets: {
         calories: model.targets.calories,
         proteinG: model.targets.proteinG,
         carbsG: model.targets.carbsG,
         fatsG: model.targets.fatsG,
       },
-      items,
+      items: shareSnapshot.items,
     })
     try {
       await Share.share({ message: text })
     } catch {
       // El usuario canceló el diálogo de compartir o el share nativo falló: sin acción.
     }
-  }, [model])
+  }, [model, shareSnapshot])
 
   const dayComplete = useMemo(() => {
     if (!model) return false
@@ -959,9 +1107,9 @@ function TodayTab() {
           />
         }
       >
-        {/* TODO(4A-07): conectar la ilustración `sin-plan` cuando el kit de estados aterrice. */}
         <NutritionStatePanel
           icon="empty"
+          illustration="sin-plan"
           title="Tu plan todavía no está publicado"
           description="Cuando tu coach publique la primera versión, aparecerán aquí tus objetivos, comidas y registros."
         />
@@ -1198,17 +1346,20 @@ function TodayTab() {
                 <View key={row.id} className={index > 0 ? 'border-t border-border-subtle' : undefined}>
                   <FoodRow
                     food={row}
-                    fallbackEmoji={foodCategoryEmojiFromName(row.name)}
+                    fallbackCategory={entry?.category}
                     actions={
                       entry ? (
-                        // Icon-buttons lápiz/papelera (web TodayExperience.tsx:300-316,531-559);
-                        // ambos abren el sheet nativo de edición/retiro (diálogos: 4A-06).
+                        // Icon-buttons lápiz/papelera: cada uno abre su corrección dedicada,
+                        // igual que EditQuantityDialog/VoidEntryDialog en web (4A-06).
                         <View className="flex-row items-center gap-1">
                           <Pressable
                             accessibilityRole="button"
                             accessibilityLabel="Editar cantidad"
                             hitSlop={8}
-                            onPress={() => setActionEntry(entry)}
+                            onPress={() => {
+                              setEntryActionError(null)
+                              setEntryAction({ kind: 'edit', entry })
+                            }}
                             className="h-10 w-10 items-center justify-center rounded-control"
                           >
                             <Pencil color={theme.textSecondary} size={16} />
@@ -1217,7 +1368,10 @@ function TodayTab() {
                             accessibilityRole="button"
                             accessibilityLabel="Retirar registro"
                             hitSlop={8}
-                            onPress={() => setActionEntry(entry)}
+                            onPress={() => {
+                              setEntryActionError(null)
+                              setEntryAction({ kind: 'void', entry })
+                            }}
                             className="h-10 w-10 items-center justify-center rounded-control"
                           >
                             <Trash2 color={theme.destructive} size={16} />
@@ -1233,9 +1387,15 @@ function TodayTab() {
         </View>
       </ScrollView>
 
-      <EntryActionSheet
-        entry={actionEntry}
-        onClose={() => setActionEntry(null)}
+      <EntryCorrectionSheet
+        action={entryAction}
+        error={entryActionError}
+        pending={entryActionPending}
+        onClose={() => {
+          if (entryActionPending) return
+          setEntryAction(null)
+          setEntryActionError(null)
+        }}
         onEdit={onEditEntry}
         onVoid={onVoidEntry}
       />
@@ -1260,6 +1420,7 @@ function intakeToRow(entry: NutritionIntakeReadItem): NutritionFoodRowModel {
     id: entry.id,
     name: entry.snapshot.name,
     detail: entry.snapshot.brand,
+    thumbnailUrl: foodMediaThumbnailUrl(entry.media),
     quantityLabel: `${entry.quantity} ${entry.unit}`,
     calories: entry.totals.calories,
     proteinG: entry.totals.proteinG,
@@ -1270,7 +1431,7 @@ function intakeToRow(entry: NutritionIntakeReadItem): NutritionFoodRowModel {
 }
 
 // 4A-02: CTA de la fila principal del Hoy (web TodayExperience.tsx:228-248): primario
-// "Registrar alimento" en tono nutrition del kit + secundarios neutros "Escanear"/"Compartir"
+// "Registrar alimento" sólido en tono nutrition + secundarios neutros "Escanear"/"Compartir"
 // (web: border-border-default bg-surface-card text-strong). El NutritionMotionButton del kit
 // RN renderiza children dentro de <Text> y no admite ícono, así que la fila se arma local
 // con la misma motion de presión (NUTRITION_MOTION.press) y háptica del kit.
@@ -1305,11 +1466,16 @@ function TodayCta({
       >
         <View
           className={`min-h-11 flex-row items-center justify-center gap-2 rounded-control border px-4 ${
-            tone === 'nutrition' ? 'border-primary/30 bg-primary/10' : 'border-border-default bg-surface-card'
+            tone === 'nutrition' ? 'border-primary bg-primary' : 'border-border-default bg-surface-card'
           }`}
+          style={shadow('sm', theme.scheme)}
         >
-          <Icon color={tone === 'nutrition' ? theme.primary : theme.foreground} size={16} />
-          <Text className={`text-sm font-semibold ${tone === 'nutrition' ? 'text-primary' : 'text-text-strong'}`}>
+          <Icon
+            className={tone === 'nutrition' ? 'text-white' : undefined}
+            color={tone === 'nutrition' ? undefined : theme.foreground}
+            size={16}
+          />
+          <Text className={`text-sm font-semibold ${tone === 'nutrition' ? 'text-white' : 'text-text-strong'}`}>
             {label}
           </Text>
         </View>
@@ -1424,13 +1590,14 @@ const TodaySlotCard = memo(function TodaySlotCard({
                     id: item.id,
                     name: item.name ?? 'Alimento prescrito',
                     detail: item.brand,
+                    thumbnailUrl: foodMediaThumbnailUrl(item.media),
                     quantityLabel: `${item.quantity} ${item.unit}${item.optional ? ' · opcional' : ''}`,
                     calories: item.macros.calories,
                     proteinG: item.macros.proteinG,
                     carbsG: item.macros.carbsG,
                     fatsG: item.macros.fatsG,
                   }}
-                  fallbackEmoji={foodCategoryEmojiFromName(item.name)}
+                  fallbackCategory={item.category}
                   note={displayNote}
                   actions={
                     consumed ? (
@@ -1579,92 +1746,140 @@ function BulkMarkControl({
   )
 }
 
-function EntryActionSheet({
-  entry,
+function EntryCorrectionSheet({
+  action,
+  error,
+  pending,
   onClose,
   onEdit,
   onVoid,
 }: {
-  entry: NutritionIntakeReadItem | null
+  action: EntryCorrectionAction | null
+  error: string | null
+  pending: boolean
   onClose: () => void
-  onEdit: (entry: NutritionIntakeReadItem, quantity: number, unit: string) => void
-  onVoid: (entry: NutritionIntakeReadItem) => void
+  onEdit: (entry: NutritionIntakeReadItem, quantity: number, reason: string) => void
+  onVoid: (entry: NutritionIntakeReadItem, reason: string) => void
 }) {
+  const { theme } = useTheme()
   const [quantity, setQuantity] = useState('')
-  const [unit, setUnit] = useState('g')
+  const [reason, setReason] = useState('')
+  const entry = action?.entry ?? null
 
   useEffect(() => {
-    if (entry) {
-      setQuantity(String(entry.quantity))
-      setUnit(entry.unit)
-    }
-  }, [entry])
+    setQuantity(entry ? String(entry.quantity) : '')
+    setReason('')
+  }, [action, entry])
 
   const parsed = Number(quantity.replace(',', '.'))
-  const valid = Number.isFinite(parsed) && parsed > 0
-  const units = entry?.snapshot.servingUnit === 'ml' ? ['ml', 'un'] : ['g', 'un']
+  const validQuantity = Number.isFinite(parsed) && parsed > 0
+  const validReason = reason.trim().length >= 3 && reason.trim().length <= 1000
+  const canSubmit = validReason && (action?.kind === 'void' || validQuantity)
+  const title = action?.kind === 'edit' ? 'Editar cantidad' : 'Retirar registro'
+  const description = entry
+    ? action?.kind === 'edit'
+      ? `${entry.snapshot.name} · registrado como ${entry.quantity} ${entry.unit}`
+      : `${entry.snapshot.name} · ${entry.quantity} ${entry.unit}`
+    : undefined
+  const footer = action && entry ? (
+    <View className="flex-row gap-2">
+      <View className="flex-1">
+        <NutritionMotionButton
+          accessibilityLabel="Cancelar corrección"
+          disabled={pending}
+          tone="neutral"
+          onPress={onClose}
+        >
+          Cancelar
+        </NutritionMotionButton>
+      </View>
+      <View className="flex-1">
+        <NutritionMotionButton
+          accessibilityLabel={action.kind === 'edit' ? 'Guardar corrección' : 'Confirmar retiro del registro'}
+          disabled={!canSubmit}
+          pending={pending}
+          tone={action.kind === 'void' ? 'danger' : 'nutrition'}
+          onPress={() => {
+            if (!canSubmit) return
+            if (action.kind === 'edit') onEdit(entry, parsed, reason.trim())
+            else onVoid(entry, reason.trim())
+          }}
+        >
+          {action.kind === 'edit' ? 'Guardar corrección' : 'Retirar registro'}
+        </NutritionMotionButton>
+      </View>
+    </View>
+  ) : undefined
 
   return (
     <ActionSheet
-      open={entry != null}
+      open={action != null}
       onClose={onClose}
       nativeModal
-      title={entry?.snapshot.name ?? 'Registro'}
-      snapPoints={['55%']}
-      accessibilityLabel="Opciones del registro consumido"
+      title={title}
+      description={description}
+      footer={footer}
+      showCloseButton={!pending}
+      snapPoints={[action?.kind === 'edit' ? '72%' : '62%']}
+      accessibilityLabel={action?.kind === 'edit' ? 'Editar cantidad consumida' : 'Retirar registro consumido'}
     >
-      {entry ? (
+      {action && entry ? (
         <View className="gap-4">
-          <Text className="text-sm leading-5 text-text-muted">
-            Ajusta la cantidad o retira este registro. La corrección conserva el historial original.
-          </Text>
-          <View className="flex-row items-center gap-2">
-            <TextInput
-              accessibilityLabel="Nueva cantidad"
-              className="min-h-12 w-28 rounded-control border border-border-default bg-surface-app px-3 text-lg text-text-strong"
-              inputMode="decimal"
-              keyboardType="decimal-pad"
-              onChangeText={setQuantity}
-              selectTextOnFocus
-              value={quantity}
-            />
-            <View className="flex-1 flex-row gap-2">
-              {units.map((value) => {
-                const active = unit === value
-                return (
-                  <Pressable
-                    key={value}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected: active }}
-                    accessibilityLabel={`Unidad ${value}`}
-                    onPress={() => {
-                      void Haptics.selectionAsync()
-                      setUnit(value)
-                    }}
-                    className={`min-h-12 flex-1 items-center justify-center rounded-control border ${active ? 'border-primary bg-primary/10' : 'border-border-default bg-surface-app'}`}
-                  >
-                    <Text className={`text-sm font-semibold ${active ? 'text-primary' : 'text-text-muted'}`}>{value}</Text>
-                  </Pressable>
-                )
-              })}
+          {error ? (
+            <View
+              accessibilityRole="alert"
+              className="flex-row items-start gap-2 rounded-control border border-danger-500/30 bg-danger-500/10 px-3 py-2.5"
+            >
+              <AlertTriangle color={theme.destructive} size={16} />
+              <Text accessibilityLiveRegion="polite" className="flex-1 text-sm leading-5 text-danger-700">
+                {error}
+              </Text>
             </View>
+          ) : null}
+
+          {action.kind === 'edit' ? (
+            <View>
+              <Text className="mb-1 text-xs font-semibold text-text-muted">Nueva cantidad ({entry.unit})</Text>
+              <TextInput
+                accessibilityLabel={`Nueva cantidad en ${entry.unit}`}
+                accessibilityHint="Ingresa un número mayor que cero"
+                className="min-h-12 w-full rounded-control border border-border-default bg-surface-app px-3 text-base text-text-strong"
+                editable={!pending}
+                inputMode="decimal"
+                keyboardType="decimal-pad"
+                onChangeText={(value) => setQuantity(value.replace(/[^0-9.,]/g, ''))}
+                selectTextOnFocus
+                value={quantity}
+              />
+            </View>
+          ) : (
+            <Text className="text-sm leading-5 text-text-body">
+              El registro dejará de contar en tu día, pero se conserva en el historial para tu coach.
+            </Text>
+          )}
+
+          <View>
+            <Text className="mb-1 text-xs font-semibold text-text-muted">
+              {action.kind === 'edit' ? 'Motivo del cambio' : 'Motivo'}
+            </Text>
+            <TextInput
+              accessibilityLabel={action.kind === 'edit' ? 'Motivo del cambio' : 'Motivo del retiro'}
+              accessibilityHint="Escribe al menos tres caracteres"
+              className="min-h-12 w-full rounded-control border border-border-default bg-surface-app px-3 text-base text-text-strong"
+              editable={!pending}
+              maxLength={1000}
+              onChangeText={setReason}
+              placeholder={action.kind === 'edit' ? 'Ej: comí un poco menos' : 'Ej: lo registré por error'}
+              placeholderTextColor={theme.mutedForeground}
+              returnKeyType="done"
+              value={reason}
+            />
+            <Text className="mt-1 text-[11px] leading-4 text-text-subtle">
+              {action.kind === 'edit'
+                ? 'Mínimo 3 caracteres. Se conserva el registro original.'
+                : 'Mínimo 3 caracteres.'}
+            </Text>
           </View>
-          <NutritionMotionButton
-            accessibilityLabel="Guardar cambios del registro"
-            disabled={!valid}
-            onPress={() => {
-              if (valid) onEdit(entry, parsed, unit)
-            }}
-          >
-            Guardar cambios
-          </NutritionMotionButton>
-          <NutritionMotionButton
-            accessibilityLabel="Retirar este registro"
-            tone="danger"
-            onPress={() => onVoid(entry)}
-          >
-            Retirar registro
-          </NutritionMotionButton>
         </View>
       ) : null}
     </ActionSheet>
@@ -1683,6 +1898,7 @@ type DayDetailState = { loading: boolean; model: NutritionTodayReadModel | null;
 
 export default function StudentNutritionV2Screen() {
   const router = useRouter()
+  const insets = useSafeAreaInsets()
   const entitlements = useEntitlements()
   const enabled = entitlements.ready && isEnabled('nutritionV2Student')
   const { reduced, duration } = useEvaMotion()
@@ -1703,7 +1919,10 @@ export default function StudentNutritionV2Screen() {
     // Pre-hidratación de entitlements o transición del replace a V1: skeleton
     // neutro (la web no pinta contenido en ninguno de los dos casos).
     return (
-      <View className="flex-1 bg-surface-app px-4 pt-6">
+      <View
+        className="flex-1 bg-surface-app px-4"
+        style={{ paddingTop: insets.top + 24 }}
+      >
         <NutritionSkeleton variant="today" />
       </View>
     )
@@ -1717,7 +1936,10 @@ export default function StudentNutritionV2Screen() {
   if (!entitlements.nutritionEnabled) {
     return (
       <View className="flex-1 bg-surface-app">
-        <View className="gap-4 px-4 pb-3 pt-5">
+        <View
+          className="gap-4 px-4 pb-3"
+          style={{ paddingTop: insets.top + 20 }}
+        >
           <NutritionHeader
             title="Nutrición"
             description="Prescripción, consumo real e historial en una sola experiencia."
@@ -1730,7 +1952,10 @@ export default function StudentNutritionV2Screen() {
 
   return (
     <View className="flex-1 bg-surface-app">
-      <View className="gap-4 px-4 pb-3 pt-5">
+      <View
+        className="gap-4 px-4 pb-3"
+        style={{ paddingTop: insets.top + 20 }}
+      >
         {/* Header 1:1 web (nutrition-v2/page.tsx:62-65): título "Nutrición" +
             descripción, SIN eyebrow. Adaptación documentada: la web muestra
             flecha de volver (`backHref={base}/dashboard`, NutritionV2Kit.tsx:122-150)
@@ -1906,6 +2131,7 @@ function PlanTab() {
       >
         <NutritionStatePanel
           icon={offline ? 'offline' : 'empty'}
+          illustration={offline ? undefined : 'sin-plan'}
           tone={offline ? 'warning' : 'neutral'}
           title={offline ? 'Sin conexión' : 'No hay un plan vigente'}
           description={
@@ -2049,13 +2275,14 @@ function PlanVariantCard({ variant }: { variant: PlanVariant }) {
                     id: item.id,
                     name: item.name ?? 'Alimento prescrito',
                     detail: item.brand,
+                    thumbnailUrl: foodMediaThumbnailUrl(item.media),
                     quantityLabel: `${item.quantity} ${item.unit}${item.optional ? ' · opcional' : ''}`,
                     calories: item.macros.calories,
                     proteinG: item.macros.proteinG,
                     carbsG: item.macros.carbsG,
                     fatsG: item.macros.fatsG,
                   }}
-                  fallbackEmoji={foodCategoryEmojiFromName(item.name)}
+                  fallbackCategory={item.category}
                 />
               </View>
             ))
@@ -2253,6 +2480,7 @@ function HistoryTab() {
       ListEmptyComponent={
         <NutritionStatePanel
           icon={offline ? 'offline' : 'empty'}
+          illustration={offline ? undefined : 'historial-vacio'}
           tone={offline ? 'warning' : 'neutral'}
           title={offline ? 'Sin conexión' : 'Todavía no hay historial'}
           description={
@@ -2431,7 +2659,7 @@ function HistoryDayDetail({ model, offline }: { model: NutritionTodayReadModel; 
           <Text className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-text-subtle">{slot.name}</Text>
           {entries.map((entry, index) => (
             <View key={entry.id} className={index > 0 ? 'border-t border-border-subtle' : undefined}>
-              <FoodRow food={historyEntryToRow(entry)} fallbackEmoji={foodCategoryEmojiFromName(entry.snapshot.name)} />
+              <FoodRow food={historyEntryToRow(entry)} fallbackCategory={entry.category} />
             </View>
           ))}
         </View>
@@ -2441,7 +2669,7 @@ function HistoryDayDetail({ model, offline }: { model: NutritionTodayReadModel; 
           <Text className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-text-subtle">Sin franja</Text>
           {unassigned.map((entry, index) => (
             <View key={entry.id} className={index > 0 ? 'border-t border-border-subtle' : undefined}>
-              <FoodRow food={historyEntryToRow(entry)} fallbackEmoji={foodCategoryEmojiFromName(entry.snapshot.name)} />
+              <FoodRow food={historyEntryToRow(entry)} fallbackCategory={entry.category} />
             </View>
           ))}
         </View>
@@ -2455,6 +2683,7 @@ function historyEntryToRow(entry: NutritionIntakeReadItem): NutritionFoodRowMode
     id: entry.id,
     name: entry.snapshot.name,
     detail: entry.snapshot.brand,
+    thumbnailUrl: foodMediaThumbnailUrl(entry.media),
     quantityLabel: `${entry.quantity} ${entry.unit}`,
     calories: entry.totals.calories,
     proteinG: entry.totals.proteinG,

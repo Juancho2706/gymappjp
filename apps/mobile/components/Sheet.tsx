@@ -312,6 +312,7 @@ export function Sheet({
           >
             <View
               accessibilityLabel={accessibilityLabel}
+              accessibilityViewIsModal
               className={`rounded-t-sheet border-t ${forceDark ? 'border-inverse bg-ink-950' : 'border-subtle bg-surface-card'}`}
               style={[shadow('lg', resolvedScheme), { maxHeight: maxDynamicContentSize }]}
             >
@@ -326,6 +327,8 @@ export function Sheet({
                   // would exceed the parent maxHeight cap (RN flex items default to flexShrink 0).
                   style={{ flexGrow: 0, flexShrink: 1 }}
                   contentContainerStyle={contentContainerStyle}
+                  keyboardDismissMode="interactive"
+                  keyboardShouldPersistTaps="handled"
                   showsVerticalScrollIndicator={false}
                   stickyHeaderIndices={stickyHeaderIndices}
                 >
@@ -379,6 +382,8 @@ export function Sheet({
           <BottomSheetScrollView
             style={{ flex: 1 }}
             contentContainerStyle={contentContainerStyle}
+            keyboardDismissMode="interactive"
+            keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
             stickyHeaderIndices={stickyHeaderIndices}
           >

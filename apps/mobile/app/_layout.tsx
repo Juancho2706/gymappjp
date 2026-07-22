@@ -36,7 +36,7 @@ import { supabase } from '../lib/supabase'
 import { registerSessionCacheJanitor } from '../lib/auth-actions'
 import { brandDisplayFontMap } from '../lib/brand-fonts'
 import { loadStoredBranding, type CoachBranding } from '../lib/branding'
-import { ThemeProvider } from '../context/ThemeContext'
+import { ThemeProvider, useTheme } from '../context/ThemeContext'
 import { configurePushHandler, setupAndroidChannel, syncPushToken } from '../lib/push'
 import { LaunchSplash } from '../components/shared/LaunchSplash'
 import { Toaster } from '../components/Toast'
@@ -72,6 +72,11 @@ function ReportingErrorBoundary(props: ErrorBoundaryProps) {
 export { ReportingErrorBoundary as ErrorBoundary }
 
 configurePushHandler()
+
+function ThemedStatusBar() {
+  const { resolvedScheme } = useTheme()
+  return <StatusBar style={resolvedScheme === 'dark' ? 'light' : 'dark'} />
+}
 
 function RootLayoutNav() {
   const [session, setSession] = useState<Session | null | undefined>(undefined)
@@ -254,7 +259,7 @@ function RootLayoutWithFonts({ branding }: { branding: CoachBranding | null }) {
             View— quedan dentro del contexto y los sheets resuelven tokens/marca. */}
         <ThemeProvider>
           <BottomSheetModalProvider>
-            <StatusBar style="light" />
+            <ThemedStatusBar />
             {/* P0 focus-hop: el navegador va en un View PLANO. Antes lo envolvía un
                 MotiView que animaba opacity — vista animada persistente sobre
                 react-native-screens bajo Fabric, un anti-patrón que amplifica el

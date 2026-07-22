@@ -1,8 +1,18 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import { useColorScheme, View } from 'react-native'
+import { StatusBar } from 'expo-status-bar'
 import { colorScheme as nwColorScheme, vars } from 'nativewind'
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { applyCoachBranding, brandVars, darkTheme, lightTheme, LIGHT_SCHEME_VARS, type Theme } from '../lib/theme'
+import {
+  applyEffectiveCoachBranding,
+  darkTheme,
+  effectiveBrandVars,
+  lightTheme,
+  LIGHT_SCHEME_VARS,
+  resolveEffectiveCoachBrandTheme,
+  resolveEffectiveCoachBrandPresentation,
+  type Theme,
+} from '../lib/theme'
 import { type CoachBranding, loadStoredBranding } from '../lib/branding'
 
 type ThemeMode = 'light' | 'dark' | 'system'
@@ -43,16 +53,17 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
   // `useColorScheme()` is reactive, so 'system' tracks OS changes live.
   const resolvedScheme: 'light' | 'dark' = (mode === 'system' ? colorScheme : mode) === 'dark' ? 'dark' : 'light'
-  const primaryColor = branding?.primaryColor
+  const effectiveBranding = useMemo(() => resolveEffectiveCoachBrandPresentation(branding), [branding])
+  const effectiveBrand = useMemo(() => resolveEffectiveCoachBrandTheme(effectiveBranding), [effectiveBranding])
   // Memoizados: sin esto, `theme`/`themeVars`/`value` se recreaban como objetos
   // nuevos en CADA render → el Provider propagaba una identidad nueva a TODOS los
   // consumidores (useTheme) en cada tecla/estado, amplificando el loop de re-render
-  // del P0 focus-hop. Deps = [resolvedScheme, primaryColor] preservan la
-  // reactividad de system/dark (E0-D7) y del white-label.
+  // del P0 focus-hop. El branding efectivo ya incorpora tier, preset y overrides
+  // por modo; su identidad solo cambia cuando cambia el payload almacenado.
   const theme = useMemo(() => {
     const base = resolvedScheme === 'dark' ? darkTheme : lightTheme
-    return applyCoachBranding(base, primaryColor)
-  }, [resolvedScheme, primaryColor])
+    return applyEffectiveCoachBranding(base, effectiveBrand)
+  }, [resolvedScheme, effectiveBrand])
 
   // Keep NativeWind's class-based dark mode in sync with our resolved scheme.
   useEffect(() => {
@@ -61,8 +72,8 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
   // Live brand accent for Tailwind classes (bg-primary, text-accent…).
   const themeVars = useMemo(
-    () => ({ ...vars(brandVars(primaryColor, resolvedScheme)) }),
-    [primaryColor, resolvedScheme],
+    () => ({ ...vars(effectiveBrandVars(effectiveBrand, resolvedScheme)) }),
+    [effectiveBrand, resolvedScheme],
   )
 
   const setThemeMode = useCallback((next: ThemeMode) => {
@@ -75,8 +86,8 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   }, [resolvedScheme, setThemeMode])
 
   const value = useMemo<ThemeContextValue>(
-    () => ({ theme, branding, setBranding, mode, resolvedScheme, toggleTheme, setThemeMode }),
-    [theme, branding, mode, resolvedScheme, toggleTheme, setThemeMode],
+    () => ({ theme, branding: effectiveBranding, setBranding, mode, resolvedScheme, toggleTheme, setThemeMode }),
+    [theme, effectiveBranding, mode, resolvedScheme, toggleTheme, setThemeMode],
   )
 
   return (
@@ -115,12 +126,15 @@ export function useTheme(): ThemeContextValue {
  */
 export function ForceLightTheme({ children }: { children: React.ReactNode }) {
   const parent = useTheme()
-  const primaryColor = parent.branding?.primaryColor
+  const effectiveBrand = useMemo(
+    () => resolveEffectiveCoachBrandTheme(parent.branding),
+    [parent.branding],
+  )
 
-  const theme = useMemo(() => applyCoachBranding(lightTheme, primaryColor), [primaryColor])
+  const theme = useMemo(() => applyEffectiveCoachBranding(lightTheme, effectiveBrand), [effectiveBrand])
   const themeVars = useMemo(
-    () => ({ ...vars({ ...LIGHT_SCHEME_VARS, ...brandVars(primaryColor, 'light') }) }),
-    [primaryColor],
+    () => ({ ...vars({ ...LIGHT_SCHEME_VARS, ...effectiveBrandVars(effectiveBrand, 'light') }) }),
+    [effectiveBrand],
   )
   const value = useMemo<ThemeContextValue>(
     () => ({ ...parent, theme, mode: 'light', resolvedScheme: 'light' }),
@@ -129,7 +143,10 @@ export function ForceLightTheme({ children }: { children: React.ReactNode }) {
 
   return (
     <ThemeContext.Provider value={value}>
-      <View style={[{ flex: 1 }, themeVars]}>{children}</View>
+      <View style={[{ flex: 1 }, themeVars]}>
+        <StatusBar style="dark" />
+        {children}
+      </View>
     </ThemeContext.Provider>
   )
 }

@@ -25,6 +25,11 @@ vi.mock('@/services/nutrition-v2-rollout.service', () => ({
   resolveNutritionV2RolloutDecision: (...a: unknown[]) => resolveNutritionV2RolloutDecision(...a),
 }))
 
+const resolveNutritionDomainEnabled = vi.fn()
+vi.mock('@/services/feature-prefs.service', () => ({
+  resolveNutritionDomainEnabled: (...a: unknown[]) => resolveNutritionDomainEnabled(...a),
+}))
+
 const userRpc = vi.fn()
 vi.mock('@supabase/supabase-js', () => ({
   createClient: vi.fn(() => ({ rpc: userRpc })),
@@ -68,9 +73,19 @@ beforeEach(() => {
       : { data: null, error: null },
   )
   resolveNutritionV2RolloutDecision.mockResolvedValue({ enabled: true, reason: 'test' })
+  resolveNutritionDomainEnabled.mockResolvedValue(true)
 })
 
 describe('POST /api/mobile/nutrition-v2/intake · rate limit', () => {
+  it('404 cuando el master switch de nutrición del alumno está apagado', async () => {
+    resolveNutritionDomainEnabled.mockResolvedValue(false)
+    const res = await POST(req())
+    expect(res.status).toBe(404)
+    expect((await res.json()).code).toBe('NUTRITION_DOMAIN_DISABLED')
+    expect(rateLimitNutritionIntake).not.toHaveBeenCalled()
+    expect(userRpc).not.toHaveBeenCalled()
+  })
+
   it('429 cuando el limitador de registro niega, sin tocar la RPC ni leer el body', async () => {
     intakeAllowed = false
     const res = await POST(req())

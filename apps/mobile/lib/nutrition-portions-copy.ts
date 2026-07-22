@@ -53,6 +53,7 @@ export const PORTIONS_COPY = {
     extraCancelAria: 'Cancelar porción extra',
     extraBadge: (n: string) => `+${n}`,
     equivalences: 'Equivalencias',
+    equivalencesHint: 'Mantén presionado para ver equivalencias.',
     sheetTitle: (grupo: string) => `Equivalencias de ${grupo}`,
     sheetSubtitle: '1 porción equivale a:',
     sheetMark: 'Marcar 1 porción',
@@ -72,7 +73,8 @@ export const PORTIONS_COPY = {
     dupWarning: (n: string, grupo: string) =>
       `Ya marcaste ${n} de ${grupo} en esta comida. Si ahora registras ese alimento, deshaz la porción marcada para no contarla dos veces.`,
     offline: 'Sin conexión. Tus porciones se guardarán cuando vuelva la señal.',
-    markFailed: 'No se pudo marcar la porción. Reintentar',
+    markFailed: 'No se pudo marcar la porción.',
+    retry: 'Reintentar',
   },
   coach: {
     dayCoverage: 'Porciones',
