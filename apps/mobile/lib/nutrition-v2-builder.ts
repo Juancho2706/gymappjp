@@ -1262,3 +1262,99 @@ export async function publishDraftRN(input: {
     portionGroups: input.portionGroups,
   })
 }
+
+// ---------------------------------------------------------------------------
+// Alimento coach-scoped desde "alimento libre con macros" del builder (sub-delta b).
+// Espejo 1:1 de la web createCoachFoodAction (builder.actions.ts:137-190): valida con
+// CoachFoodInputSchema, inserta en `foods` con macros POR 100 (serving_size = 100),
+// catalog_source='coach' y verification_status='coach_verified'; coach_id = userId lo exige
+// la RLS `foods_insert_own` (org_id NULL). Devuelve el alimento como BuilderFood para que el
+// item pase a referenciar su id (deja de ser libre). La RLS es la barrera real: un 42501 aca
+// == SCOPE_DENIED via mapWriteError. Sin revalidatePath (no aplica en RN).
+// ---------------------------------------------------------------------------
+
+export async function createCoachFoodV2(input: {
+  db: NutritionV2WriteClient
+  userId: string
+  input: CoachFoodInput
+}): Promise<{ ok: true; food: BuilderFood } | PublishFailure> {
+  const parsed = CoachFoodInputSchema.safeParse(input.input)
+  if (!parsed.success) {
+    return publishFail('INVALID_PAYLOAD', 'El alimento tiene datos invalidos.', zodFields(parsed.error))
+  }
+  const { name, brand, unit, calories, proteinG, carbsG, fatsG } = parsed.data
+
+  const ins = await input.db
+    .from('foods')
+    .insert({
+      name,
+      brand,
+      coach_id: input.userId,
+      org_id: null,
+      calories,
+      protein_g: proteinG,
+      carbs_g: carbsG,
+      fats_g: fatsG,
+      serving_size: 100,
+      serving_unit: unit,
+      is_liquid: unit === 'ml',
+      category: 'otro',
+      country_code: 'CL',
+      catalog_source: 'coach',
+      verification_status: 'coach_verified',
+    })
+    .select('id')
+    .single()
+  if (ins.error || !ins.data) return mapWriteError(ins.error ?? { message: 'no food' }, 'alimento')
+
+  const food: BuilderFood = {
+    id: ins.data.id,
+    name,
+    brand,
+    calories,
+    proteinG,
+    carbsG,
+    fatsG,
+    fiberG: null,
+    servingSize: 100,
+    servingUnit: unit,
+    category: 'otro',
+    media: null,
+  }
+  return { ok: true, food }
+}
+
+// ---------------------------------------------------------------------------
+// Conflicto de "fecha de vigencia" al publicar (sub-delta c) — helpers PUROS.
+// Espejo de apps/web/.../builder/_lib/publish-conflict.ts. El plan vigente de un alumno solo
+// puede ser reemplazado por una version cuya fecha sea POSTERIOR a la actual (barrera real =
+// RPC publish_nutrition_plan_v2). Estos helpers espejan la regla del lado cliente para abrir el
+// modal SIN gastar un round-trip fallido; el RPC sigue siendo la red de seguridad (fail-closed).
+// ---------------------------------------------------------------------------
+
+/**
+ * True cuando la fecha elegida choca con la de la version vigente: es igual o anterior, y por
+ * tanto el RPC la rechazaria. Fechas ISO YYYY-MM-DD comparan lexicograficamente = por dia. Si
+ * falta cualquiera de las dos, no bloquea (deja que el servidor decida). Identica a la web.
+ */
+export function effectiveDateConflicts(
+  chosen: string | null | undefined,
+  current: string | null | undefined,
+): boolean {
+  if (!chosen || !current) return false
+  return chosen <= current
+}
+
+/**
+ * "Archivar y reemplazar" archiva el plan vigente y DESPUES publica el nuevo. Decide si, tras
+ * intentar el archivado, se puede avanzar a publicar. El archivado es idempotente: el UPDATE exige
+ * `lifecycle_status='active'`, asi que archivar un plan ya archivado (reintento/otra pestana/web)
+ * afecta 0 filas y `archiveNutritionPlan` devuelve `PLAN_NOT_FOUND`; ese caso ya cumple el objetivo
+ * (el plan viejo dejo de regir), asi que se puede continuar. Cualquier OTRO fallo bloquea el flujo.
+ *
+ * NOTA de divergencia con la web: el `ArchiveWriteOutcome` de RN usa `code: 'OK'` en el exito (no
+ * `ok: true` como el ActionResult web), asi que aceptamos ambas formas por robustez.
+ */
+export function canProceedToPublishAfterArchive(result: { ok?: boolean; code?: string }): boolean {
+  return result.ok === true || result.code === 'OK' || result.code === 'PLAN_NOT_FOUND'
+}

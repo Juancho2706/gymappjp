@@ -295,3 +295,60 @@ web ya existen allí. Cualquier afordancia RN adicional que aparezca al codifica
   plan sin conflicto publica exactamente como hoy. Capturas web móvil (fieldset de permisos, `FreeFoodFields`,
   `PublishConflictDialog`) vs RN: copys idénticos. F-02 y porciones siguen operando sin cambios.
 - Gates: `pnpm --filter @eva/mobile exec tsc --noEmit`, `pnpm exec eslint`, `pnpm check:tokens`, tests nuevos.
+
+---
+
+## Cierre (2026-07-22)
+
+Las tres sub-deltas aterrizaron 1:1 con el web. Archivos tocados: `apps/mobile/app/coach/nutrition-v2/builder/[clientId].tsx`,
+`apps/mobile/lib/nutrition-v2-builder.ts`, `tests/mobile-nutrition-v2-builder.test.ts`.
+
+**(a) Editor de permisos del alumno.** Nueva sección "Permisos del alumno" en `TargetsStep` (dentro de una `NutritionCard`,
+tras "Metas diarias" y antes de "Vigente desde"), con overline `text-xs font-semibold uppercase tracking-wide text-text-muted`
+y 3 filas en el orden y con los copys LITERALES del web (`canRegisterFreely`/`canAdjustPrescribedQuantity`/`canSubstitute`).
+Cada fila = componente `PermissionRow` (`Pressable` ≥44px, `accessibilityRole="checkbox"` + `accessibilityState={{ checked }}` +
+`accessibilityLabel`) que despacha `SET_PERMISSION` con el valor negado. Afordancia de casilla nativa (`h-5 w-5 rounded-control
+border`) con `Check` visible SOLO al estar activo, tintada con `theme.primary` + `Check color={theme.primaryForeground}` (nunca
+un hex — white-label). Reusé el patrón de checkbox ya sancionado (AssignClientsSheet / modal de asignar 4B-08), como pidió el
+juez. CERO cambios en reducer/`assembleDraft` (ya cableados). Efecto colateral positivo: al usarse `<Check>` desaparece uno de los
+warnings eslint sancionados (`Check` unused) → el archivo baja de 4 a 3 problemas preexistentes.
+
+**(b) "Guardar en mi catálogo" + aviso de mismatch.** Nueva `createCoachFoodV2({ db, userId, input })` en la lib, espejo 1:1 de
+`createCoachFoodAction`: valida con `CoachFoodInputSchema`, inserta en `foods` con EXACTAMENTE las mismas columnas (`coach_id:
+userId`, `org_id: null`, `serving_size: 100`, `catalog_source: 'coach'`, `verification_status: 'coach_verified'`, `is_liquid:
+unit==='ml'`), arma el `BuilderFood` de retorno y mapea errores vía `mapWriteError` (42501 → SCOPE_DENIED). Sin `revalidatePath`.
+En `ItemEditor`, el bloque custom pinta ahora: el aviso `macroEnergyMismatch(customMacrosOf(item))` con icono `AlertTriangle`
+(tono `text-warning-700`, copy literal al web, advertencia no bloqueo) + botón "Guardar en mi catálogo" (`Plus`/`ActivityIndicator`,
+estados `saving`/`saveError`) que llama un callback `onSaveCustomFood` creado en la pantalla (que tiene `clientId`/`userId`/
+`supabase`) y threadeado por `ConstructionStep → SlotEditor → ItemEditor` (patrón de `onSearch`; el componente profundo no toca la
+red). Al OK despacha el MISMO `UPDATE_ITEM` (food + limpiar customName/custom*). Validación local: nombre vacío → "Completa el
+nombre y macros validas (no negativas) antes de guardar." Botón solo en el bloque `isCustom`, igual que el web.
+
+**(c) "Archivar el actual y reemplazar".** Se lee el plan vigente LOCAL con `getNutritionClientDetailV2` (de `detail.plan.plan`),
+guardándolo en `existingPlan: { id; effectiveFrom; versionNumber; name } | null` — **decisión del juez** para no propagar por nav
+params (tocaría la ficha/href de otras unidades); documentada como en la spec. `canReplace = existingPlan != null`. Nuevos helpers
+puros en la lib: `effectiveDateConflicts` (idéntico al web) y `canProceedToPublishAfterArchive` (adaptado: el `ArchiveWriteOutcome`
+RN usa `code: 'OK'`, no `ok: true`; acepto ambas formas). `handlePublish` gana el pre-chequeo sin round-trip
+(`effectiveDateConflicts` + `existingPlan`) que abre la card directo; el RPC sigue siendo la red de seguridad (`EFFECTIVE_DATE`).
+`handleReplaceToday` replica la secuencia web literal: valida el draft NUEVO (planId null) ANTES de archivar; clave de idempotencia
+ESTABLE por operación (`replaceKeyRef`, fijada una sola vez); PASO 1 archivar (`archiveNutritionPlan`, gateado por
+`replaceArchivedRef` para saltarlo en reintentos; si `!OK && !canProceed` corta); PASO 2 publicar como plan nuevo con la misma
+fecha; copys honestos literales al fallar. Orden archivar-primero con el comentario portado. `handleCancelConflict` resetea ambos
+refs (nueva operación limpia). La card inline de `ReviewStep` se extendió a DOS opciones (`ConflictOptionButton` con `CalendarClock`
+/`RefreshCw` en `theme.primary`; la 2ª solo si `canReplace`) + "Procesando…" + error inline + "Cancelar", con los copys de
+`PublishConflictDialog`. **Idempotencia verificada por diseño:** un reintento tras archivar reusa la key estable (mismo plan/versión,
+sin duplicar) y salta el archivado (`replaceArchivedRef`) — sin re-archivar.
+
+**F-02 (4B-10) y porciones (4B-11) intocados:** el `git diff` no toca `SubstitutionsField`/`BuilderItem.substitutions` ni
+`PortionsSection`/`PortionsDeriveCard`/`PortionsReviewSection`/`BuilderPortionsSection` (grep verificado, vacío).
+
+**Tests (nuevos, 7):** `createCoachFoodV2` (INSERT correcto + `BuilderFood`; `ml`→`is_liquid`; nombre vacío→INVALID_PAYLOAD sin
+tocar BD; 42501→SCOPE_DENIED); `effectiveDateConflicts` (igual/anterior/posterior/faltante); `canProceedToPublishAfterArchive`
+(OK/PLAN_NOT_FOUND/ok:true/otros); `SET_PERMISSION` (conmuta + `assembleDraft` emite la elección del coach).
+
+**Gates (todos desde el worktree):** `pnpm --filter @eva/mobile exec tsc --noEmit` → 0 errores; `pnpm vitest run
+tests/mobile-nutrition-v2-builder.test.ts` → 30/30 verdes; `pnpm exec eslint [clientId].tsx` → 3 problemas (baseline HEAD = 4;
+0 nuevos; se eliminó el warning `Check` unused); `pnpm exec eslint` lib + test → 0 problemas; `pnpm check:tokens` → OK.
+
+**Pendiente CEO:** build nativa + QA en device (fieldset de permisos vs web responsive; `FreeFoodFields`; card de conflicto con
+las 2 opciones y el reintento seguro tras archivar).

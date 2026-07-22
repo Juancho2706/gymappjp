@@ -12,7 +12,7 @@ import {
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router'
-import { Check, ChevronLeft, ChevronRight, Lock, Minus, Plus, Repeat, Search, Sparkles, Trash2, X } from 'lucide-react-native'
+import { AlertTriangle, CalendarClock, Check, ChevronLeft, ChevronRight, Lock, Minus, Plus, RefreshCw, Repeat, Search, Sparkles, Trash2, X } from 'lucide-react-native'
 import {
   BuilderStepList,
   FoodThumbnail,
@@ -61,25 +61,32 @@ import {
 } from '../../../../lib/nutrition-v2-builder-portions'
 import { useEntitlements, useNutritionV2CoachFlagForClient } from '../../../../lib/entitlements'
 import { useWorkspace } from '../../../../lib/workspace'
-import { nutritionV2CoachScope } from '../../../../lib/nutrition-v2.api'
+import { archiveNutritionPlan, getNutritionClientDetailV2, nutritionV2CoachScope } from '../../../../lib/nutrition-v2.api'
 import { searchFoodCatalogV2 } from '../../../../lib/nutrition-v2-catalog.api'
 import { supabase } from '../../../../lib/supabase'
 import {
   BUILDER_UNITS,
+  CoachFoodInputSchema,
   MAX_ITEM_SUBSTITUTIONS,
   NUTRITION_PRO_MODULE_KEY,
   assembleAndValidateDraft,
   buildPublishIdempotencyKey,
   builderReducer,
+  canProceedToPublishAfterArchive,
+  createCoachFoodV2,
   createEmptyBuilderState,
+  customMacrosOf,
   dayTotals,
+  effectiveDateConflicts,
   itemMacros,
+  macroEnergyMismatch,
   mapFoodCatalogItemToBuilderFood,
   publishDraftRN,
   slotSubtotal,
   strategyUsesSlots,
   validateStep,
   type BuilderItem,
+  type BuilderPermissions,
   type BuilderSlot,
   type BuilderState,
   type BuilderUnit,
@@ -136,6 +143,20 @@ function nextDayIso(iso: string): string {
 function first(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : value
 }
+
+// Plan vigente del alumno (sub-delta c): habilita la rama "Archivar y reemplazar". Se lee LOCAL
+// con getNutritionClientDetailV2 (no llega por nav params — decision del juez, evita tocar la
+// ficha/href de otras unidades). Espejo del `existingPlan` server-provisto del web.
+type ExistingPlan = { id: string; effectiveFrom: string; versionNumber: number; name: string }
+
+// Fieldset "Permisos del alumno" (sub-delta a): orden y copys LITERALES del web
+// (PlanBuilderClient.tsx:773-776). El estado ya fluye de punta a punta (SET_PERMISSION +
+// assembleDraft); esto solo lo puebla con la eleccion del coach en vez del default.
+const PERMISSION_FIELDS: Array<[keyof BuilderPermissions, string]> = [
+  ['canRegisterFreely', 'Puede registrar alimentos libremente'],
+  ['canAdjustPrescribedQuantity', 'Puede ajustar la cantidad prescrita'],
+  ['canSubstitute', 'Puede sustituir alimentos'],
+]
 
 // ---------------------------------------------------------------------------
 // Controlador de porciones a elección (4B-11) — espejo RN de `usePortionsBuilder` web.
@@ -243,9 +264,18 @@ export default function CoachNutritionV2BuilderScreen() {
   const [publishing, setPublishing] = useState(false)
   const [publishError, setPublishError] = useState<string | null>(null)
   const [dateConflict, setDateConflict] = useState(false)
+  const [conflictError, setConflictError] = useState<string | null>(null)
   const [upsell, setUpsell] = useState<string | null>(null)
   const [searchTarget, setSearchTarget] = useState<SearchTarget | null>(null)
+  // Plan vigente del alumno (sub-delta c): null hasta resolver la lectura local. `canReplace`
+  // se deriva de su presencia, espejo del web (PlanBuilderClient.tsx:1439).
+  const [existingPlan, setExistingPlan] = useState<ExistingPlan | null>(null)
   const operationId = useRef(genKey('op'))
+  // Reemplazo "archivar->publicar" reanudable (sub-delta c): clave de idempotencia ESTABLE por
+  // operacion (fijada una sola vez) + guard "archivado una sola vez", para que un reintento tras
+  // archivar reintente SOLO la publicacion sin duplicar el plan ni re-archivar. Espejo del web.
+  const replaceKeyRef = useRef<string | null>(null)
+  const replaceArchivedRef = useRef(false)
   const mountedRef = useRef(true)
 
   useEffect(() => {
@@ -264,6 +294,28 @@ export default function CoachNutritionV2BuilderScreen() {
       active = false
     }
   }, [])
+
+  // Plan vigente del alumno (sub-delta c): lectura LOCAL coach-scoped (RLS) para habilitar la rama
+  // "Archivar y reemplazar" y el pre-chequeo de fecha. No-bloqueante: si falla, degrada a null
+  // (sin segunda opcion, igual que un alumno sin plan) — el RPC sigue siendo la barrera real.
+  useEffect(() => {
+    if (!clientId || !scope) return
+    let active = true
+    void getNutritionClientDetailV2({ clientId, scope, date: today })
+      .then((detail) => {
+        if (!active) return
+        const p = detail.plan.plan
+        setExistingPlan(
+          p ? { id: p.id, effectiveFrom: p.effectiveFrom, versionNumber: p.versionNumber, name: p.name } : null,
+        )
+      })
+      .catch(() => {
+        if (active) setExistingPlan(null)
+      })
+    return () => {
+      active = false
+    }
+  }, [clientId, scope, today])
 
   const validation = useMemo(() => validateStep(state, state.step), [state])
 
@@ -304,7 +356,22 @@ export default function CoachNutritionV2BuilderScreen() {
   const handlePublish = useCallback(
     async (effectiveFromOverride?: string) => {
       if (!userId || !clientId) return
+      const chosenFrom = effectiveFromOverride ?? state.effectiveFrom ?? today
+      // Pre-chequeo sin round-trip: si la fecha elegida choca con el plan que ya rige, abrimos la
+      // card de decision directo. Solo en el submit normal — "Empezar manana" ya trae fecha avanzada
+      // y no debe re-disparar el pre-chequeo. El RPC sigue siendo la barrera real (ver abajo).
+      if (
+        effectiveFromOverride === undefined &&
+        existingPlan &&
+        effectiveDateConflicts(chosenFrom, existingPlan.effectiveFrom)
+      ) {
+        setPublishError(null)
+        setConflictError(null)
+        setDateConflict(true)
+        return
+      }
       setPublishError(null)
+      setConflictError(null)
       setDateConflict(false)
       let draft
       try {
@@ -323,7 +390,7 @@ export default function CoachNutritionV2BuilderScreen() {
         userId,
         draft,
         idempotencyKey,
-        effectiveFrom: effectiveFromOverride ?? state.effectiveFrom ?? today,
+        effectiveFrom: chosenFrom,
         hasNutritionPro,
         // Catálogo para congelar el snapshot de las porciones (4B-11); sin porciones es inocuo.
         portionGroups: portions.groups ?? undefined,
@@ -338,25 +405,147 @@ export default function CoachNutritionV2BuilderScreen() {
         setUpsell(res.error)
         return
       }
-      // Choque de fecha con el plan vigente: en vez del error criptico, ofrecemos "Empezar manana".
+      // Red de seguridad: si el pre-chequeo no disparo (plan vigente aun sin cargar, o carrera con
+      // otra pestana/web) el RPC igual rechaza la fecha => abre la misma card en vez del error crudo.
       if (res.code === 'EFFECTIVE_DATE') {
         setDateConflict(true)
         return
       }
       setPublishError(res.error)
     },
-    [userId, clientId, planId, state, today, hasNutritionPro, router, portions.bySlot, portions.groups],
+    [userId, clientId, planId, state, today, hasNutritionPro, router, portions.bySlot, portions.groups, existingPlan],
   )
 
-  // "Empezar manana": mueve la vigencia al dia siguiente y reintenta la publicacion. El plan
-  // vigente del alumno no esta disponible en esta pantalla, asi que avanzamos desde la fecha
-  // elegida (por defecto hoy) — suficiente para el caso reproducible (plan vigente desde hoy).
+  // "Empezar manana": mueve la vigencia al dia siguiente al del plan vigente (garantiza que el RPC
+  // la acepte) y republica. Con `existingPlan` disponible (sub-delta c) avanzamos desde su fecha,
+  // cayendo a la elegida/hoy si aun no cargo. Reusa `nextDayIso` (inline).
   const handleStartTomorrow = useCallback(() => {
-    const nextFrom = nextDayIso(state.effectiveFrom || today)
+    const base = existingPlan?.effectiveFrom || state.effectiveFrom || today
+    const nextFrom = nextDayIso(base)
     dispatch({ type: 'SET_EFFECTIVE_FROM', value: nextFrom })
     setDateConflict(false)
     void handlePublish(nextFrom)
-  }, [state.effectiveFrom, today, handlePublish])
+  }, [existingPlan, state.effectiveFrom, today, handlePublish])
+
+  // "Archivar el actual y reemplazar" (sub-delta c): archiva el plan vigente y publica el draft como
+  // PLAN NUEVO (planId null) con la MISMA fecha. Orden archivar-primero + key estable + guard
+  // archivado-una-vez para reintento seguro. Espejo 1:1 del web handleReplaceToday.
+  const handleReplaceToday = useCallback(async () => {
+    if (!userId || !clientId || !existingPlan) return
+    setConflictError(null)
+    // Validamos el draft del plan NUEVO (planId null) ANTES de archivar nada: si esta incompleto, no
+    // tocamos el plan vigente del alumno.
+    let draft
+    try {
+      draft = assembleAndValidateDraft(state, { clientId, planId: null, portionsBySlot: portions.bySlot })
+    } catch {
+      setConflictError('El plan tiene datos incompletos. Revisa los pasos marcados y vuelve a intentar.')
+      return
+    }
+    // Clave de idempotencia ESTABLE por operacion de reemplazo (se fija una sola vez y se reusa en los
+    // reintentos): re-publicar con la misma clave devuelve el mismo plan/version, nunca un duplicado.
+    if (!replaceKeyRef.current) {
+      replaceKeyRef.current = buildPublishIdempotencyKey({ clientId, operationId: genKey('replace') })
+    }
+    const idempotencyKey = replaceKeyRef.current
+    const effectiveFrom = state.effectiveFrom || today
+    setPublishing(true)
+    // PASO 1 — archivar el plan vigente PRIMERO (no invertir el orden). El RPC re-deriva el snapshot
+    // del dia recorriendo TODOS los planes activos y desempata por (effective_from desc, version_number
+    // desc); como el reemplazo usa la MISMA fecha (hoy), publicar primero dejaria dos activos empatados
+    // y el viejo (mayor version) podria ganar y congelar el snapshot equivocado. Archivar primero lo
+    // saca de la seleccion. Idempotente: gateado por replaceArchivedRef, se salta en reintentos.
+    if (!replaceArchivedRef.current) {
+      const archived = await archiveNutritionPlan({
+        db: supabase as unknown as NutritionV2WriteClient,
+        userId,
+        clientId,
+        planId: existingPlan.id,
+      })
+      if (archived.code !== 'OK' && !canProceedToPublishAfterArchive(archived)) {
+        if (!mountedRef.current) return
+        setPublishing(false)
+        setConflictError(archived.error)
+        return
+      }
+      replaceArchivedRef.current = true
+    }
+    // PASO 2 — publicar el draft como plan NUEVO con la key estable + la fecha elegida (hoy). Si falla,
+    // el alumno quedo momentaneamente sin plan vigente: ofrecemos reintentar SOLO la publicacion (sin
+    // re-archivar, gracias a replaceArchivedRef) con un mensaje honesto.
+    const res = await publishDraftRN({
+      db: supabase as unknown as NutritionV2WriteClient,
+      userId,
+      draft,
+      idempotencyKey,
+      effectiveFrom,
+      hasNutritionPro,
+      portionGroups: portions.groups ?? undefined,
+    })
+    if (!mountedRef.current) return
+    setPublishing(false)
+    if (res.ok) {
+      router.replace(`/coach/nutrition-v2/${clientId}?published=1`)
+      return
+    }
+    setConflictError(
+      'Archivamos el plan anterior, pero no pudimos publicar el nuevo, así que el alumno quedó sin plan vigente. Vuelve a tocar "Archivar el actual y reemplazar" para reintentar solo la publicación (no se archivará de nuevo).',
+    )
+  }, [userId, clientId, existingPlan, state, today, hasNutritionPro, router, portions.bySlot, portions.groups])
+
+  // "Cancelar" la card de conflicto: la cierra y arranca limpia la proxima decision (nuevo archivado
+  // + nueva clave). Espejo del web handleConflictOpenChange al cerrar el modal.
+  const handleCancelConflict = useCallback(() => {
+    setDateConflict(false)
+    setConflictError(null)
+    replaceArchivedRef.current = false
+    replaceKeyRef.current = null
+  }, [])
+
+  // "Guardar en mi catálogo" (sub-delta b): crea el alimento coach-scoped desde el "alimento libre"
+  // y, al OK, despacha UPDATE_ITEM para que el item pase a referenciarlo (deja de ser libre). El
+  // componente profundo (ItemEditor) no toca la red: recibe este callback (patron de onSearch).
+  const handleSaveCustomFood = useCallback(
+    async (item: BuilderItem, slotKey: string): Promise<{ ok: boolean; error?: string }> => {
+      if (!userId || !clientId) return { ok: false, error: 'Sesión no disponible. Reintenta.' }
+      const unit = item.unit === 'ml' ? 'ml' : 'g'
+      const macros = customMacrosOf(item)
+      const parsed = CoachFoodInputSchema.safeParse({
+        clientId,
+        name: (item.customName ?? '').trim(),
+        brand: null,
+        unit,
+        calories: macros.calories,
+        proteinG: macros.proteinG,
+        carbsG: macros.carbsG,
+        fatsG: macros.fatsG,
+      })
+      if (!parsed.success) {
+        return { ok: false, error: 'Completa el nombre y macros validas (no negativas) antes de guardar.' }
+      }
+      const res = await createCoachFoodV2({
+        db: supabase as unknown as NutritionV2WriteClient,
+        userId,
+        input: parsed.data,
+      })
+      if (!res.ok) return { ok: false, error: res.error }
+      dispatch({
+        type: 'UPDATE_ITEM',
+        slotKey,
+        itemKey: item.key,
+        patch: {
+          food: res.food,
+          customName: null,
+          customCalories: '',
+          customProteinG: '',
+          customCarbsG: '',
+          customFatsG: '',
+        },
+      })
+      return { ok: true }
+    },
+    [userId, clientId],
+  )
 
   const handleSelectFood = useCallback(
     (food: FoodCatalogItem) => {
@@ -445,6 +634,7 @@ export default function CoachNutritionV2BuilderScreen() {
               dispatch={dispatch}
               errors={errors}
               onSearch={(target) => setSearchTarget(target)}
+              onSaveCustomFood={handleSaveCustomFood}
               portions={portions}
             />
           ) : null}
@@ -453,8 +643,13 @@ export default function CoachNutritionV2BuilderScreen() {
               state={state}
               publishError={publishError}
               dateConflict={dateConflict}
+              conflictError={conflictError}
+              canReplace={existingPlan !== null}
+              existingPlanName={existingPlan?.name ?? null}
               publishing={publishing}
               onStartTomorrow={handleStartTomorrow}
+              onReplaceToday={() => void handleReplaceToday()}
+              onCancelConflict={handleCancelConflict}
               portions={portions}
             />
           ) : null}
@@ -659,6 +854,20 @@ function TargetsStep({
         </View>
       </NutritionCard>
 
+      <NutritionCard>
+        <Text className="text-xs font-semibold uppercase tracking-wide text-text-muted">Permisos del alumno</Text>
+        <View className="mt-2 gap-1">
+          {PERMISSION_FIELDS.map(([field, label]) => (
+            <PermissionRow
+              key={field}
+              label={label}
+              checked={state.permissions[field]}
+              onToggle={() => dispatch({ type: 'SET_PERMISSION', field, value: !state.permissions[field] })}
+            />
+          ))}
+        </View>
+      </NutritionCard>
+
       <LabeledInput
         label="Vigente desde"
         value={state.effectiveFrom}
@@ -667,6 +876,34 @@ function TargetsStep({
         hint="Formato AAAA-MM-DD. Debe ser posterior a la versión vigente."
       />
     </View>
+  )
+}
+
+// Fila-checkbox de permiso (sub-delta a): afordancia de casilla nativa (RN no tiene
+// <input type=checkbox>). Casilla cuadrada con `Check` visible SOLO al estar activo, tintada con
+// `theme.primary` (nunca un hex — white-label). La UI NO autoriza: los permisos son metadatos del
+// plan; el enforcement real vive en el read-model del alumno y en el RPC. Patron de checkbox ya
+// sancionado (AssignClientsSheet / modal de asignar 4B-08): Pressable + accessibilityRole="checkbox".
+function PermissionRow({ label, checked, onToggle }: { label: string; checked: boolean; onToggle: () => void }) {
+  const { theme } = useTheme()
+  return (
+    <Pressable
+      accessibilityRole="checkbox"
+      accessibilityState={{ checked }}
+      accessibilityLabel={label}
+      onPress={onToggle}
+      className="min-h-11 flex-row items-center gap-2.5 rounded-control px-1"
+    >
+      <View
+        className={`h-5 w-5 items-center justify-center rounded-control border ${
+          checked ? 'border-transparent' : 'border-border-default bg-surface-card'
+        }`}
+        style={checked ? { backgroundColor: theme.primary } : undefined}
+      >
+        {checked ? <Check color={theme.primaryForeground} size={14} /> : null}
+      </View>
+      <Text className="flex-1 text-sm text-text-body">{label}</Text>
+    </Pressable>
   )
 }
 
@@ -1049,18 +1286,33 @@ function ItemEditor({
   dispatch,
   errors,
   onSearch,
+  onSaveCustomFood,
 }: {
   slotKey: string
   item: BuilderItem
   dispatch: BuilderDispatch
   errors: Record<string, string>
   onSearch: (target: SearchTarget) => void
+  onSaveCustomFood: (item: BuilderItem, slotKey: string) => Promise<{ ok: boolean; error?: string }>
 }) {
   const { theme } = useTheme()
   const macros = itemMacros(item)
   const isCustom = item.food === null
   const patch = (p: Partial<Omit<BuilderItem, 'key'>>) =>
     dispatch({ type: 'UPDATE_ITEM', slotKey, itemKey: item.key, patch: p })
+  // "Guardar en mi catálogo" (sub-delta b): estado local del alta + aviso de mismatch de energia
+  // (macroEnergyMismatch, umbral 40% Atwater). Solo aplica al bloque custom (isCustom).
+  const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
+  const showMismatch = isCustom && macroEnergyMismatch(customMacrosOf(item))
+
+  async function handleSaveCustom() {
+    setSaveError(null)
+    setSaving(true)
+    const res = await onSaveCustomFood(item, slotKey)
+    setSaving(false)
+    if (!res.ok) setSaveError(res.error ?? 'No se pudo guardar el alimento.')
+  }
 
   return (
     <View className="rounded-control border border-border-subtle bg-surface-sunken p-3">
@@ -1114,28 +1366,55 @@ function ItemEditor({
       <ErrorText message={errors['item.' + item.key + '.quantity'] ?? errors['item.' + item.key + '.food']} />
 
       {isCustom ? (
-        <View className="mt-2 flex-row gap-2">
-          {(
-            [
-              ['customCalories', 'kcal/100'],
-              ['customProteinG', 'P/100'],
-              ['customCarbsG', 'C/100'],
-              ['customFatsG', 'G/100'],
-            ] as const
-          ).map(([field, label]) => (
-            <View className="flex-1" key={field}>
-              <Text className="mb-1 text-[10px] font-medium text-text-muted">{label}</Text>
-              <TextInput
-                value={item[field]}
-                onChangeText={(value) => patch({ [field]: value } as Partial<Omit<BuilderItem, 'key'>>)}
-                placeholder="0"
-                placeholderTextColor={theme.mutedForeground}
-                keyboardType="number-pad"
-                className="min-h-10 rounded-control border border-border-default bg-surface-card px-2 py-1.5 text-sm text-text-strong"
-              />
+        <>
+          <View className="mt-2 flex-row gap-2">
+            {(
+              [
+                ['customCalories', 'kcal/100'],
+                ['customProteinG', 'P/100'],
+                ['customCarbsG', 'C/100'],
+                ['customFatsG', 'G/100'],
+              ] as const
+            ).map(([field, label]) => (
+              <View className="flex-1" key={field}>
+                <Text className="mb-1 text-[10px] font-medium text-text-muted">{label}</Text>
+                <TextInput
+                  value={item[field]}
+                  onChangeText={(value) => patch({ [field]: value } as Partial<Omit<BuilderItem, 'key'>>)}
+                  placeholder="0"
+                  placeholderTextColor={theme.mutedForeground}
+                  keyboardType="number-pad"
+                  className="min-h-10 rounded-control border border-border-default bg-surface-card px-2 py-1.5 text-sm text-text-strong"
+                />
+              </View>
+            ))}
+          </View>
+          {showMismatch ? (
+            <View className="mt-2 flex-row items-start gap-1.5">
+              <AlertTriangle color={theme.warning} size={14} style={{ marginTop: 1 }} />
+              <Text className="flex-1 text-[11px] leading-snug text-warning-700">
+                Las kcal no cuadran con las macros (4P + 4C + 9G). Puedes guardar igual, pero revisa los valores.
+              </Text>
             </View>
-          ))}
-        </View>
+          ) : null}
+          <View className="mt-2 flex-row flex-wrap items-center gap-2">
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Guardar en mi catálogo"
+              disabled={saving}
+              onPress={() => void handleSaveCustom()}
+              className={`min-h-11 flex-row items-center gap-1.5 rounded-control border border-border-default bg-surface-card px-3 ${saving ? 'opacity-60' : ''}`}
+            >
+              {saving ? (
+                <ActivityIndicator color={theme.foreground} size="small" />
+              ) : (
+                <Plus color={theme.foreground} size={14} />
+              )}
+              <Text className="text-xs font-semibold text-text-strong">Guardar en mi catálogo</Text>
+            </Pressable>
+            {saveError ? <Text className="text-[11px] text-danger-600">{saveError}</Text> : null}
+          </View>
+        </>
       ) : null}
 
       <View className="mt-2">
@@ -1237,6 +1516,7 @@ function SlotEditor({
   dispatch,
   errors,
   onSearch,
+  onSaveCustomFood,
   portions,
 }: {
   slot: BuilderSlot
@@ -1244,6 +1524,7 @@ function SlotEditor({
   dispatch: BuilderDispatch
   errors: Record<string, string>
   onSearch: (target: SearchTarget) => void
+  onSaveCustomFood: (item: BuilderItem, slotKey: string) => Promise<{ ok: boolean; error?: string }>
   portions: PortionsController
 }) {
   const { theme } = useTheme()
@@ -1292,7 +1573,15 @@ function SlotEditor({
 
       <View className="mt-3 gap-2">
         {slot.items.map((item) => (
-          <ItemEditor key={item.key} slotKey={slot.key} item={item} dispatch={dispatch} errors={errors} onSearch={onSearch} />
+          <ItemEditor
+            key={item.key}
+            slotKey={slot.key}
+            item={item}
+            dispatch={dispatch}
+            errors={errors}
+            onSearch={onSearch}
+            onSaveCustomFood={onSaveCustomFood}
+          />
         ))}
       </View>
 
@@ -1339,12 +1628,14 @@ function ConstructionStep({
   dispatch,
   errors,
   onSearch,
+  onSaveCustomFood,
   portions,
 }: {
   state: BuilderState
   dispatch: BuilderDispatch
   errors: Record<string, string>
   onSearch: (target: SearchTarget) => void
+  onSaveCustomFood: (item: BuilderItem, slotKey: string) => Promise<{ ok: boolean; error?: string }>
   portions: PortionsController
 }) {
   if (!strategyUsesSlots(state.strategy)) {
@@ -1368,7 +1659,16 @@ function ConstructionStep({
     <View className="gap-3">
       <ErrorText message={errors.slots} />
       {state.slots.map((slot, index) => (
-        <SlotEditor key={slot.key} slot={slot} index={index} dispatch={dispatch} errors={errors} onSearch={onSearch} portions={portions} />
+        <SlotEditor
+          key={slot.key}
+          slot={slot}
+          index={index}
+          dispatch={dispatch}
+          errors={errors}
+          onSearch={onSearch}
+          onSaveCustomFood={onSaveCustomFood}
+          portions={portions}
+        />
       ))}
       <Pressable
         accessibilityLabel="Agregar franja"
@@ -1393,21 +1693,69 @@ function ConstructionStep({
 // Paso 3 — Revisión y publicar
 // ---------------------------------------------------------------------------
 
+// Boton-opcion de la card de conflicto de fecha (sub-delta c): adaptacion nativa del Dialog web
+// (PublishConflictDialog) — Pressable ≥44px con icono en `theme.primary` (white-label), titulo +
+// hint. `disabled` durante la operacion. NO es un modal nuevo: vive dentro de la card inline.
+function ConflictOptionButton({
+  icon: Icon,
+  title,
+  hint,
+  disabled,
+  onPress,
+}: {
+  icon: React.ComponentType<{ color?: string; size?: number }>
+  title: string
+  hint: string
+  disabled: boolean
+  onPress: () => void
+}) {
+  const { theme } = useTheme()
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={title}
+      accessibilityState={{ disabled }}
+      disabled={disabled}
+      onPress={onPress}
+      className={`min-h-11 flex-row items-start gap-3 rounded-control border border-border-default bg-surface-card px-3 py-3 ${disabled ? 'opacity-50' : 'active:bg-surface-sunken'}`}
+    >
+      <View className="mt-0.5">
+        <Icon color={theme.primary} size={20} />
+      </View>
+      <View className="min-w-0 flex-1">
+        <Text className="text-sm font-semibold text-text-strong">{title}</Text>
+        <Text className="mt-0.5 text-xs leading-snug text-text-muted">{hint}</Text>
+      </View>
+    </Pressable>
+  )
+}
+
 function ReviewStep({
   state,
   publishError,
   dateConflict,
+  conflictError,
+  canReplace,
+  existingPlanName,
   publishing,
   onStartTomorrow,
+  onReplaceToday,
+  onCancelConflict,
   portions,
 }: {
   state: BuilderState
   publishError: string | null
   dateConflict: boolean
+  conflictError: string | null
+  canReplace: boolean
+  existingPlanName: string | null
   publishing: boolean
   onStartTomorrow: () => void
+  onReplaceToday: () => void
+  onCancelConflict: () => void
   portions: PortionsController
 }) {
+  const { theme } = useTheme()
   const strategy = state.strategy ?? 'flexible'
   const totals = dayTotals(state)
   const usesSlots = strategyUsesSlots(state.strategy)
@@ -1475,17 +1823,54 @@ function ReviewStep({
           <View className="gap-1">
             <Text className="font-display text-base font-semibold text-text-strong">Ya hay un plan vigente desde hoy</Text>
             <Text className="text-sm leading-5 text-text-muted">
-              Para no pisar el plan actual, empieza el nuevo mañana. El de hoy sigue activo hasta entonces.
+              {existingPlanName
+                ? `${existingPlanName} empieza a regir hoy. Elige cómo seguir con el plan nuevo.`
+                : 'El plan actual empieza a regir hoy. Elige cómo seguir con el plan nuevo.'}
             </Text>
           </View>
-          <NutritionMotionButton
-            accessibilityLabel="Empezar el plan nuevo mañana"
-            pending={publishing}
-            disabled={publishing}
-            onPress={onStartTomorrow}
-          >
-            Empezar mañana
-          </NutritionMotionButton>
+
+          <View className="gap-2.5">
+            <ConflictOptionButton
+              icon={CalendarClock}
+              title="Empezar mañana"
+              hint="El plan nuevo entra en vigencia mañana; el de hoy sigue activo hasta entonces."
+              disabled={publishing}
+              onPress={onStartTomorrow}
+            />
+            {canReplace ? (
+              <ConflictOptionButton
+                icon={RefreshCw}
+                title="Archivar el actual y reemplazar"
+                hint="El plan de hoy se archiva ahora y este pasa a regir desde hoy. El historial del alumno se conserva."
+                disabled={publishing}
+                onPress={onReplaceToday}
+              />
+            ) : null}
+          </View>
+
+          {publishing ? (
+            <View className="flex-row items-center gap-2" accessibilityRole="text">
+              <ActivityIndicator color={theme.mutedForeground} size="small" />
+              <Text className="text-xs text-text-muted">Procesando…</Text>
+            </View>
+          ) : null}
+
+          {conflictError ? (
+            <View className="rounded-control border border-danger-500/30 bg-danger-500/10 p-3">
+              <Text className="text-sm font-medium text-danger-600">{conflictError}</Text>
+            </View>
+          ) : null}
+
+          <View className="flex-row justify-end">
+            <NutritionMotionButton
+              accessibilityLabel="Cancelar"
+              tone="neutral"
+              disabled={publishing}
+              onPress={onCancelConflict}
+            >
+              Cancelar
+            </NutritionMotionButton>
+          </View>
         </View>
       ) : null}
 

@@ -9,9 +9,12 @@ import {
   buildSlotInsertRow,
   buildVariantInsertRow,
   builderReducer,
+  canProceedToPublishAfterArchive,
   computeItemMacros,
+  createCoachFoodV2,
   createEmptyBuilderState,
   createEmptyItem,
+  effectiveDateConflicts,
   itemMacros,
   mapFoodCatalogItemToBuilderFood,
   mapWriteError,
@@ -82,6 +85,18 @@ describe('reducer / paridad con web', () => {
     state = builderReducer(state, { type: 'ADD_ITEM', slotKey, key: 'itemK', food: FOOD })
     expect(state.slots[0].items[0].quantity).toBe('50')
     expect(state.slots[0].items[0].unit).toBe('g')
+  })
+
+  it('SET_PERMISSION conmuta un permiso; assembleDraft emite la eleccion del coach (sub-delta a)', () => {
+    let state = builderReducer(createEmptyBuilderState('2026-07-20'), { type: 'SET_STRATEGY', strategy: 'structured', firstSlotKey: 'k1' })
+    // Default structured: registrar OFF, sustituir OFF.
+    expect(state.permissions.canRegisterFreely).toBe(false)
+    expect(state.permissions.canSubstitute).toBe(false)
+    state = builderReducer(state, { type: 'SET_PERMISSION', field: 'canSubstitute', value: true })
+    expect(state.permissions.canSubstitute).toBe(true)
+    const draft = assembleDraft(state, { clientId: CLIENT_ID })
+    expect(draft.permissions.canSubstitute).toBe(true)
+    expect(draft.permissions.canRegisterFreely).toBe(false)
   })
 })
 
@@ -315,6 +330,110 @@ describe('persistAndPublishDraft (orden de escritura)', () => {
     expect(res).toEqual({ ok: true, versionId: 'ver-existing', planId: 'plan-existing' })
     expect(inserts).toHaveLength(0)
     expect(rpcCalls).toHaveLength(0)
+  })
+})
+
+describe('createCoachFoodV2 (alimento coach-scoped, sub-delta b)', () => {
+  it('inserta en foods con macros por 100 + coach_id y devuelve el BuilderFood', async () => {
+    const { client, inserts } = makeClient()
+    const res = await createCoachFoodV2({
+      db: client,
+      userId: 'coach-1',
+      input: { clientId: CLIENT_ID, name: 'Salsa casera', brand: null, unit: 'g', calories: 120, proteinG: 3, carbsG: 10, fatsG: 8 },
+    })
+    expect(res.ok).toBe(true)
+    if (res.ok) {
+      expect(res.food.id).toBe('foods-1')
+      expect(res.food.servingSize).toBe(100)
+      expect(res.food.servingUnit).toBe('g')
+      expect(res.food.calories).toBe(120)
+      expect(res.food.fiberG).toBeNull()
+      expect(res.food.category).toBe('otro')
+    }
+    expect(inserts).toHaveLength(1)
+    expect(inserts[0].table).toBe('foods')
+    const row = inserts[0].rows as Record<string, unknown>
+    expect(row.coach_id).toBe('coach-1')
+    expect(row.org_id).toBeNull()
+    expect(row.serving_size).toBe(100)
+    expect(row.serving_unit).toBe('g')
+    expect(row.catalog_source).toBe('coach')
+    expect(row.verification_status).toBe('coach_verified')
+    expect(row.is_liquid).toBe(false)
+    expect(row.protein_g).toBe(3)
+    expect(row.carbs_g).toBe(10)
+    expect(row.fats_g).toBe(8)
+  })
+
+  it('unit ml => is_liquid true + serving_unit ml', async () => {
+    const { client, inserts } = makeClient()
+    const res = await createCoachFoodV2({
+      db: client,
+      userId: 'coach-1',
+      input: { clientId: CLIENT_ID, name: 'Bebida', brand: null, unit: 'ml', calories: 40, proteinG: 0, carbsG: 10, fatsG: 0 },
+    })
+    expect(res.ok).toBe(true)
+    const row = inserts[0].rows as Record<string, unknown>
+    expect(row.is_liquid).toBe(true)
+    expect(row.serving_unit).toBe('ml')
+  })
+
+  it('input invalido (nombre vacio) => INVALID_PAYLOAD sin tocar la BD', async () => {
+    const { client, inserts } = makeClient()
+    const res = await createCoachFoodV2({
+      db: client,
+      userId: 'coach-1',
+      input: { clientId: CLIENT_ID, name: '', brand: null, unit: 'g', calories: 100, proteinG: 5, carbsG: 5, fatsG: 5 },
+    })
+    expect(res.ok).toBe(false)
+    if (!res.ok) expect(res.code).toBe('INVALID_PAYLOAD')
+    expect(inserts).toHaveLength(0)
+  })
+
+  it('error 42501 en el insert => SCOPE_DENIED (la RLS es la barrera real)', async () => {
+    const failClient = {
+      from() {
+        return {
+          insert() {
+            return {
+              select() {
+                return { async single() { return { data: null, error: { message: 'denied', code: '42501' } } } }
+              },
+            }
+          },
+        }
+      },
+    } as unknown as NutritionV2WriteClient
+    const res = await createCoachFoodV2({
+      db: failClient,
+      userId: 'coach-1',
+      input: { clientId: CLIENT_ID, name: 'Salsa', brand: null, unit: 'g', calories: 100, proteinG: 5, carbsG: 5, fatsG: 5 },
+    })
+    expect(res.ok).toBe(false)
+    if (!res.ok) expect(res.code).toBe('SCOPE_DENIED')
+  })
+})
+
+describe('effectiveDateConflicts (sub-delta c)', () => {
+  it('igual o anterior choca; posterior no; faltante no bloquea', () => {
+    expect(effectiveDateConflicts('2026-07-20', '2026-07-20')).toBe(true)
+    expect(effectiveDateConflicts('2026-07-19', '2026-07-20')).toBe(true)
+    expect(effectiveDateConflicts('2026-07-21', '2026-07-20')).toBe(false)
+    expect(effectiveDateConflicts(null, '2026-07-20')).toBe(false)
+    expect(effectiveDateConflicts('2026-07-20', null)).toBe(false)
+    expect(effectiveDateConflicts(undefined, undefined)).toBe(false)
+  })
+})
+
+describe('canProceedToPublishAfterArchive (sub-delta c)', () => {
+  it('OK y PLAN_NOT_FOUND avanzan; otros fallos bloquean', () => {
+    // Forma RN del ArchiveWriteOutcome (code: 'OK') + PLAN_NOT_FOUND idempotente.
+    expect(canProceedToPublishAfterArchive({ code: 'OK' })).toBe(true)
+    expect(canProceedToPublishAfterArchive({ code: 'PLAN_NOT_FOUND' })).toBe(true)
+    // Forma web (ok: true) por robustez.
+    expect(canProceedToPublishAfterArchive({ ok: true })).toBe(true)
+    expect(canProceedToPublishAfterArchive({ code: 'SCOPE_DENIED' })).toBe(false)
+    expect(canProceedToPublishAfterArchive({ code: 'WRITE_FAILED' })).toBe(false)
   })
 })
 
