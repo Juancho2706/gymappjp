@@ -227,6 +227,17 @@ describe('workout-offline-queue', () => {
             expect(fd.has('note')).toBe(false)
         })
 
+        // E1.6: la fecha de edición viaja EN el item — el flush global de reconexión no conoce el
+        // contexto de página; sin esto, una edición de día pasado encolada offline insertaría en HOY.
+        it('serializa target_date cuando el item es una edición de día pasado (y la omite si no)', () => {
+            const conFecha = workoutLogToFormData(make({ targetDate: '2026-07-21' }))
+            expect(conFecha.get('target_date')).toBe('2026-07-21')
+            const sinFecha = workoutLogToFormData(make({}))
+            expect(sinFecha.has('target_date')).toBe(false)
+            const nula = workoutLogToFormData(make({ targetDate: null }))
+            expect(nula.has('target_date')).toBe(false)
+        })
+
         it('serializes the polymorphic (cardio/mobility) mirror keys', () => {
             const fd = workoutLogToFormData(make({ actualDurationSec: 600, actualDistanceM: 1200, actualHoldSec: 45, actualAvgHr: 150 }))
             expect(fd.get('actual_duration_sec')).toBe('600')

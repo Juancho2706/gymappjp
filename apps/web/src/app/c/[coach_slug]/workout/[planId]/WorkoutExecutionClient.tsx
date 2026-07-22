@@ -6,7 +6,7 @@ import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { toast } from 'sonner'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { ArrowLeft, Info, Dumbbell, Timer, TrendingUp, History, Quote, X, Settings, CheckCircle2, WifiOff, ChevronDown, List, GalleryHorizontal } from 'lucide-react'
+import { ArrowLeft, Info, Dumbbell, Timer, TrendingUp, History, Quote, X, Settings, CheckCircle2, WifiOff, ChevronDown, List, GalleryHorizontal, Pencil, CalendarSync } from 'lucide-react'
 import { computeEffectiveTarget } from '@/lib/workout/progression'
 import { LogSetForm, type SetSyncResult } from './LogSetForm'
 import { SingleExerciseCard } from './SingleExerciseCard'
@@ -70,6 +70,8 @@ import { formatPace } from '@eva/cardio'
 import { extractYoutubeVideoId } from '@/lib/youtube'
 import { ExerciseVideo } from '@/components/exercise/ExerciseVideo'
 import type { ClientCardioView } from './_data/workout-execution.queries'
+import { TargetDateProvider } from './target-date-context'
+import { weekdayNameFromIso } from '@/lib/workout/executor-recovery'
 
 export interface ExerciseType {
     id: string
@@ -204,6 +206,18 @@ interface Props {
     areas?: WorkoutArea[]
     /** Módulo cardio: zonas personalizadas del alumno (chips "Z4 · 150–168 bpm"); OFF ⇒ solo "Z4" */
     cardio?: ClientCardioView
+    /**
+     * Día objetivo (Ola 1, decisión CEO 10): ISO `YYYY-MM-DD` ya VALIDADO en el server cuando el
+     * ejecutor se abrió con `?fecha=…` para editar un día pasado. `null` = sesión de HOY normal. Viaja
+     * a cada `LogSetForm` por contexto → `target_date` en el submit (modo solo-UPDATE) + banner "Editando".
+     */
+    targetDate?: string | null
+    /**
+     * Día a recuperar (Ola 1, decisión CEO 9): ISO `YYYY-MM-DD` ya validado cuando se abrió con
+     * `?recuperar=…` desde un pendiente de la semana. SOLO visual (banner ámbar "Recuperando"); el
+     * guardado sigue siendo el flujo normal de HOY y la atribución la resuelve `deriveWeekWorkoutStatus`.
+     */
+    recoverDate?: string | null
 }
 
 function ManualTimerButton({ defaultTime }: { defaultTime: string | null }) {
@@ -976,6 +990,8 @@ export function WorkoutExecutionClient({
     lastSessionByBlock = {},
     areas = [],
     cardio,
+    targetDate = null,
+    recoverDate = null,
 }: Props) {
     const router = useRouter()
     const base = useBasePath(`/c/${coachSlug}`)
@@ -1514,7 +1530,13 @@ export function WorkoutExecutionClient({
             let stillPending = pending.length
             try {
                 const res = await flushWorkoutQueue(
-                    (item) => logSetAction({}, workoutLogToFormData(item)),
+                    (item) => {
+                        const fd = workoutLogToFormData(item)
+                        // Editando un día pasado: el flush de la cola también debe editar ESA fecha
+                        // (modo solo-UPDATE), no insertar un log de HOY. Sin `targetDate` no-op.
+                        if (targetDate) fd.set('target_date', targetDate)
+                        return logSetAction({}, fd)
+                    },
                     { planId: plan.id },
                 )
                 stillPending = res.remainingInScope
@@ -1784,7 +1806,13 @@ export function WorkoutExecutionClient({
         return renderGroup(ctx.group, { allowCollapse: false })
     }
 
+    // Banners de Ola 1 (mockup v3.3): "Editando" (día pasado, `?fecha=`) y "Recuperando" (pendiente de
+    // la semana, `?recuperar=`). Sólo uno suele estar activo; el nombre del día sale de la fecha validada.
+    const editWeekday = targetDate ? weekdayNameFromIso(targetDate) : ''
+    const recoverWeekday = recoverDate ? weekdayNameFromIso(recoverDate) : ''
+
     return (
+        <TargetDateProvider value={targetDate}>
         <WorkoutTimerProvider>
           <WorkoutKeypadProvider>
             <div className="is-workout-page min-h-dvh bg-[var(--ink-950)] text-on-dark">
@@ -1899,6 +1927,36 @@ export function WorkoutExecutionClient({
                     <div className="sticky top-[var(--workout-header-h,80px)] z-10 flex items-center gap-2.5 bg-amber-500/90 backdrop-blur-sm px-4 py-2.5 text-amber-950 dark:bg-amber-600/90 dark:text-amber-50">
                         <WifiOff className="w-4 h-4 shrink-0" />
                         <p className="text-xs font-semibold">Sin conexión — los datos se guardarán al reconectar.</p>
+                    </div>
+                )}
+
+                {/* Editando un día PASADO (Ola 1): cada serie edita esa fecha en modo solo-UPDATE. */}
+                {targetDate && (
+                    <div className="flex items-center gap-2.5 border-b border-white/10 bg-white/[0.05] px-4 py-2.5 backdrop-blur-sm">
+                        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-control bg-[var(--sport-500)]/15 text-[var(--sport-300)]">
+                            <Pencil className="h-3.5 w-3.5" />
+                        </span>
+                        <p className="text-xs font-semibold text-on-dark">
+                            Editando registros del{' '}
+                            <span className="font-bold text-on-dark">{editWeekday.toLowerCase()}</span>
+                        </p>
+                    </div>
+                )}
+
+                {/* Recuperando un pendiente de la semana (Ola 1): SOLO visual; el guardado es de HOY. */}
+                {recoverDate && (
+                    <div className="flex items-center gap-2.5 border-b border-amber-400/25 bg-amber-500/[0.14] px-4 py-2.5 backdrop-blur-sm dark:bg-amber-500/[0.12]">
+                        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-control bg-amber-400/20 text-amber-300">
+                            <CalendarSync className="h-4 w-4" />
+                        </span>
+                        <div className="min-w-0">
+                            <p className="text-[13px] font-black leading-tight text-amber-200">
+                                Recuperando: {recoverWeekday}
+                            </p>
+                            <p className="mt-0.5 text-[11px] font-semibold leading-tight text-amber-100/80">
+                                Al terminar, tu {recoverWeekday.toLowerCase()} queda listo en esta semana
+                            </p>
+                        </div>
                     </div>
                 )}
 
@@ -2131,5 +2189,6 @@ export function WorkoutExecutionClient({
             </div>
           </WorkoutKeypadProvider>
         </WorkoutTimerProvider>
+        </TargetDateProvider>
     )
 }

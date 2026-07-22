@@ -134,6 +134,9 @@ export function workoutLogToFormData(item: WorkoutOfflineLog): FormData {
     if (item.substitutedExerciseId != null && item.substitutedExerciseId !== '') fd.set('substituted_exercise_id', item.substitutedExerciseId)
     if (item.substitutedExerciseName != null && item.substitutedExerciseName !== '') fd.set('substituted_exercise_name', item.substitutedExerciseName)
     if (item.substitutionReason != null && item.substitutionReason !== '') fd.set('substitution_reason', item.substitutionReason)
+    // Edición de día pasado (E1.6): la fecha viaja EN el item → el flush global de reconexión edita
+    // esa fecha en modo solo-UPDATE en vez de insertar en HOY (pérdida de atribución silenciosa).
+    if (item.targetDate != null && item.targetDate !== '') fd.set('target_date', item.targetDate)
     return fd
 }
 

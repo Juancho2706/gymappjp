@@ -37,6 +37,7 @@ import {
 import { toast } from '../../Toast'
 import { flushLogQueue, getPendingLogCount } from '../../../lib/offline-cache'
 import { OfflineBanner } from '../../OfflineBanner'
+import { RecoveryBanner } from './RecoveryBanner'
 import { EvaLoaderScreen } from '../../EvaLoader'
 import { SessionHeader, type WorkoutViewMode } from './SessionHeader'
 import { SingleExerciseCard } from './SingleExerciseCard'
@@ -112,15 +113,15 @@ type ActiveSub = {
  * una arquitectura de componentes DS sobre @eva/workout-engine. Modo Lista (paridad web md); el modo
  * Paso a paso, los tipos cardio/mobility/roller y el resumen rico llegan en la Wave B (seams marcados).
  */
-export default function ExecutorV2({ planId }: { planId: string }) {
+export default function ExecutorV2({ planId, recoverDate, editDate }: { planId: string; recoverDate?: string; editDate?: string }) {
   return (
     <WorkoutTimerProvider>
-      <ExecutorV2Inner planId={planId} />
+      <ExecutorV2Inner planId={planId} recoverDate={recoverDate} editDate={editDate} />
     </WorkoutTimerProvider>
   )
 }
 
-function ExecutorV2Inner({ planId }: { planId: string }) {
+function ExecutorV2Inner({ planId, recoverDate, editDate }: { planId: string; recoverDate?: string; editDate?: string }) {
   useKeepAwake() // Wake-lock de TODA la sesión.
   const router = useRouter()
   const insets = useSafeAreaInsets()
@@ -1116,6 +1117,10 @@ function ExecutorV2Inner({ planId }: { planId: string }) {
         prominent
         message="Sin conexión — los datos se guardarán al reconectar."
       />
+
+      {/* Banner informativo de recuperar/editar (E1.7): abierto desde el dashboard con param
+          `recuperar` (ambar) o `fecha` (neutro). NO cambia el guardado (escribe el log de hoy). */}
+      <RecoveryBanner recoverDate={recoverDate} editDate={editDate} />
 
       {loading ? (
         <EvaLoaderScreen subtitle="Cargando rutina…" />

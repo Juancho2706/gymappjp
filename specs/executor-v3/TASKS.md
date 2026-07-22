@@ -15,15 +15,15 @@
 
 ## Ola 1 — Fuera del ejecutor (independiente; puede correr en paralelo con Ola 2)
 
-- [ ] **E1.1 [P] Fix atribución semanal web** — `weekPendingWorkouts.ts`: `done` si el plan del día tiene logs cualquier día de la semana actual; greedy al pendiente más antiguo si plan repetido; celda "Hecho el {día}"; unit tests de la semana tipo (recuperado jueves, plan duplicado, semana límite lun/dom TZ Santiago).
-- [ ] **E1.2 [S] Espejo RN atribución** — `apps/mobile/app/alumno/(tabs)/home.tsx` réplica exacta + UI day-card "Hecho el jueves".
-- [ ] **E1.3 [P] Gate bloqueo total web** — `proxy.ts` allowlist → solo `/suspended` (+logout/assets); `suspended/page.tsx` reason=coach rediseñada (mockup v3.3: avatar coach, pausa, CTA contacto, cerrar sesión; claro/oscuro); sin CTAs de lectura; copys en `student-access.ts`. QA manual 3 estados en preview.
-- [ ] **E1.4 [P] Gate bloqueo total RN** — pantalla `StudentAccessBlocked` fullscreen montada desde el layout alumno cuando `state==='readonly'`; mismo copy/resolver espejado; claro/oscuro.
-- [ ] **E1.5 [P] target_date plumbing** — `workout-execution.queries.ts` (`targetDate?` → ventana Santiago de esa fecha) + `workout-log.actions.ts` (`targetDate` modo solo-UPDATE, error tipado si no existe fila); tests: UPDATE ok, INSERT rechazado, hoy sin target intacto.
-- [ ] **E1.6 [S tras E1.5] Sheet doble intención web** — al tap de day-card hecha (dashboard): mismo día → resumen + "Editar registros" (ejecutor con logs de hoy); otro día → sheet "Revisar y editar" (ejecutor readonly-edit con `target_date`) / "Repetir hoy"; claro/oscuro; responsive.
-- [ ] **E1.7 [S] Sheet doble intención RN** — espejo en `home.tsx`/day-cards; sheet nativo (patrón sheets existentes).
-- [ ] **E1.8 [P] Banner "Recuperando" (ejecutor actual)** — banner ámbar mínimo en V2/web actual cuando se abre un pendiente de la semana (param desde dashboard); se rediseña en Ola 2/3.
-- **Gate Ola 1**: gates estándar + QA preview de gate y sheets (viewports + dark) + smoke RN dev.
+- [x] **E1.1 [P] Fix atribución semanal web** — `weekPendingWorkouts.ts`: `done` si el plan del día tiene logs cualquier día de la semana actual; greedy al pendiente más antiguo si plan repetido; celda "Hecho el {día}"; unit tests de la semana tipo (recuperado jueves, plan duplicado, semana límite lun/dom TZ Santiago).
+- [x] **E1.2 [S] Espejo RN atribución** — `apps/mobile/app/alumno/(tabs)/home.tsx` réplica exacta + UI day-card "Hecho el jueves".
+- [x] **E1.3 [P] Gate bloqueo total web** — `proxy.ts` allowlist → solo `/suspended` (+logout/assets); `suspended/page.tsx` reason=coach rediseñada (mockup v3.3: avatar coach, pausa, CTA contacto, cerrar sesión; claro/oscuro); sin CTAs de lectura; copys en `student-access.ts`. QA manual 3 estados en preview.
+- [x] **E1.4 [P] Gate bloqueo total RN** — pantalla `StudentAccessBlocked` fullscreen montada desde el layout alumno cuando `state==='readonly'`; mismo copy/resolver espejado; claro/oscuro.
+- [x] **E1.5 [P] target_date plumbing** — `workout-execution.queries.ts` (`targetDate?` → ventana Santiago de esa fecha) + `workout-log.actions.ts` (`targetDate` modo solo-UPDATE, error tipado si no existe fila); tests: UPDATE ok, INSERT rechazado, hoy sin target intacto.
+- [x] **E1.6 [S tras E1.5] Sheet doble intención web** — al tap de day-card hecha (dashboard): mismo día → resumen + "Editar registros" (ejecutor con logs de hoy); otro día → sheet "Revisar y editar" (ejecutor readonly-edit con `target_date`) / "Repetir hoy"; claro/oscuro; responsive.
+- [x] **E1.7 [S] Sheet doble intención RN** — espejo en `home.tsx`/day-cards; sheet nativo (patrón sheets existentes).
+- [x] **E1.8 [P] Banner "Recuperando" (ejecutor actual)** — banner ámbar mínimo en V2/web actual cuando se abre un pendiente de la semana (param desde dashboard); se rediseña en Ola 2/3.
+- **Gate Ola 1**: ✅ CERRADA 2026-07-22 (código+tests; QA preview/device pendiente CEO). Fix extra: target_date viaja en el item de la cola offline (flush de reconexión edita la fecha correcta).
 
 ## Ola 2 — Ejecutor V3 core loop (flag `executorV3` OFF por default)
 

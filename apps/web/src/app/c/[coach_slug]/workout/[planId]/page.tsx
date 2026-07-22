@@ -2,18 +2,34 @@ import { redirect } from 'next/navigation'
 import type { Metadata } from 'next'
 import { WorkoutExecutionClient } from './WorkoutExecutionClient'
 import { getWorkoutExecutionData } from './_data/workout-execution.queries'
+import { validateTargetDate } from './_data/target-date'
 import { getClientBasePath } from '@/lib/client/base-path'
+import { getTodayInSantiago } from '@/lib/date-utils'
 
 export const metadata: Metadata = { title: 'Rutina | EVA' }
 
 interface Props {
     params: Promise<{ coach_slug: string; planId: string }>
+    // Ola 1 (decisiones CEO 9-10): `fecha` = editar registros de un día PASADO (modo solo-UPDATE);
+    // `recuperar` = SOLO banner "Recuperando" (guardado normal de HOY). Ambas se validan server-side.
+    searchParams: Promise<{ fecha?: string; recuperar?: string; desde?: string }>
 }
 
-export default async function WorkoutExecutionPage({ params }: Props) {
+export default async function WorkoutExecutionPage({ params, searchParams }: Props) {
     const { coach_slug, planId } = await params
+    const { fecha, recuperar } = await searchParams
     const base = await getClientBasePath(coach_slug)
-    const data = await getWorkoutExecutionData(planId)
+
+    // Validación server-side de `fecha`: sólo un día pasado/hoy válido activa el modo edición; cualquier
+    // otra cosa (formato malo, futuro) se ignora y el ejecutor abre en modo HOY normal.
+    const { iso: todayIso } = getTodayInSantiago()
+    const fechaCheck = typeof fecha === 'string' ? validateTargetDate(fecha, todayIso) : null
+    const targetDate = fechaCheck?.ok ? fechaCheck.iso : null
+    // `recuperar` es sólo visual: se valida con la misma regla (pasado/hoy) pero jamás toca la query.
+    const recuperarCheck = typeof recuperar === 'string' ? validateTargetDate(recuperar, todayIso) : null
+    const recuperarDate = recuperarCheck?.ok ? recuperarCheck.iso : null
+
+    const data = await getWorkoutExecutionData(planId, targetDate ?? undefined)
     const { user, plan } = data
 
     if (!user) redirect(`${base}/login`)
@@ -33,6 +49,8 @@ export default async function WorkoutExecutionPage({ params }: Props) {
             lastSessionByBlock={data.lastSessionByBlock}
             areas={data.areas}
             cardio={data.cardio}
+            targetDate={targetDate}
+            recoverDate={recuperarDate}
         />
     )
 }

@@ -26,6 +26,7 @@ import type { OptimisticLogPayload } from '@eva/workout-engine'
 import { cn } from '@/lib/utils'
 import { humanizeStudentWriteError } from '@/lib/student-access'
 import { springs } from '@/lib/animation-presets'
+import { useTargetDate } from './target-date-context'
 
 const initialState: LogState = {}
 
@@ -183,6 +184,9 @@ function StrengthLogSetForm({
     const coarse = useCoarsePointer()
     const keypad = useWorkoutKeypad()
     const useKeypad = coarse && keypad != null
+    // Día objetivo (Ola 1): si el ejecutor se abrió con `?fecha=…` (editar un día pasado), viaja en
+    // cada submit como `target_date` → la action edita esa fecha en modo solo-UPDATE. null = HOY.
+    const targetDate = useTargetDate()
     const [state, formAction] = useActionState(logSetAction, initialState)
     // Item encolado (sin sincronizar) de ESTA serie tras un reload. Se hidrata en un EFECTO
     // post-montaje (no en el initializer) para evitar mismatch de hidratación: el server no ve
@@ -456,6 +460,9 @@ function StrengthLogSetForm({
             substitutedExerciseId: substitution?.exerciseId ?? null,
             substitutedExerciseName: substitution?.exerciseName ?? null,
             substitutionReason: substitution?.reason ?? null,
+            // Edición de día pasado (E1.6): la fecha viaja EN el item — el flush global de reconexión
+            // no conoce el contexto de página; sin esto, la edición encolada se escribiría en HOY.
+            targetDate: targetDate ?? null,
         })
         settleRef.current = true
         prRef.current = prThresholdKg != null && w != null && w > 0 && w >= prThresholdKg
@@ -606,6 +613,8 @@ function StrengthLogSetForm({
             >
                 <input type="hidden" name="block_id" value={blockId} />
                 <input type="hidden" name="set_number" value={setNumber} />
+                {/* Día objetivo (Ola 1): sólo montado al editar un día pasado → la action edita esa fecha. */}
+                {targetDate && <input type="hidden" name="target_date" value={targetDate} />}
                 {/* Nota (quick-win E2-6): mirror oculto — SIEMPRE montado → viaja en cada submit sin duplicar name. */}
                 <input type="hidden" name="note" value={note} />
                 {/* Sustitución de máquina ocupada (Fase L · C): sólo montados si el bloque está sustituido. */}
@@ -785,6 +794,8 @@ function TypedLogSetRow({
     const coarse = useCoarsePointer()
     const keypad = useWorkoutKeypad()
     const useKeypad = coarse && keypad != null
+    // Día objetivo (Ola 1): igual que en fuerza, viaja como `target_date` al editar un día pasado.
+    const targetDate = useTargetDate()
     const [state, formAction] = useActionState(logSetAction, initialState)
     const [optimisticLogged, addOptimisticLogged] = useOptimistic(
         !!existingLog || state.success,
@@ -902,6 +913,8 @@ function TypedLogSetRow({
             planId: params.planId,
             coachSlug: params.coach_slug,
             timestamp: Date.now(),
+            // Edición de día pasado (E1.6): misma razón que en fuerza — la fecha viaja EN el item.
+            targetDate: targetDate ?? null,
         })
 
         if (typeof navigator !== 'undefined' && !navigator.onLine) {
@@ -1020,6 +1033,8 @@ function TypedLogSetRow({
             >
                 <input type="hidden" name="block_id" value={blockId} />
                 <input type="hidden" name="set_number" value={setNumber} />
+                {/* Día objetivo (Ola 1): sólo montado al editar un día pasado → la action edita esa fecha. */}
+                {targetDate && <input type="hidden" name="target_date" value={targetDate} />}
                 {rpeLocal != null && <input type="hidden" name="rpe" value={rpeLocal} />}
 
                 <div className={cn('w-4 md:w-5 text-center text-xs md:text-sm font-bold font-mono tabular-nums', isLogged ? 'text-[var(--sport-300)]' : 'text-on-dark-muted')}>

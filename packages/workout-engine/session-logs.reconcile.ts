@@ -46,6 +46,12 @@ export type WorkoutOfflineLog = {
     // Opcional/aditivo: los items legacy encolados (sin la key) siguen parseando; el flush lo reenvía
     // intacto a `workout_logs.metadata`.
     metadata?: WorkoutLogSideMetadata | null
+    // ── Edición de día pasado (E1.5/E1.6) — fecha objetivo yyyy-mm-dd Santiago ──
+    // Opcional/aditivo: solo presente cuando la serie se editó con `?fecha=` (modo solo-UPDATE).
+    // Sin ella, el flush escribe HOY como siempre. CRÍTICO que viaje EN el item: el flush global de
+    // reconexión (OfflineWorkoutQueueSync) no conoce el contexto de página — si la fecha no viaja
+    // acá, una edición de día pasado encolada offline se re-sincronizaría como log de HOY.
+    targetDate?: string | null
 }
 
 /**
