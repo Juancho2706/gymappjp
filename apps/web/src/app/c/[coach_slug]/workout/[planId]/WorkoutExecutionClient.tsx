@@ -32,6 +32,10 @@ import { ExerciseStepV3 } from './v3/ExerciseStepV3'
 import { ExecListMapV3, type ExecListMapItem } from './v3/ExecListMapV3'
 import { SessionIntro } from './v3/SessionIntro'
 import { SessionStart, type SessionStartExercise } from './v3/SessionStart'
+import { ExecSettingsSheet } from './v3/ExecSettingsSheet'
+import { RestInterstitialDataProvider, type InterstitialNext } from './v3/RestInterstitialV3'
+import { resolveExecMedia } from './v3/exec-media'
+import { useExecSettings } from './v3/exec-settings'
 import { STEPPER_MODE_KEY } from './rest-timer-preferences'
 import { SubstituteExerciseSheet } from './_components/SubstituteExerciseSheet'
 import { SUBSTITUTION_REASON } from '@/services/workout/exercise-substitution'
@@ -1048,6 +1052,9 @@ export function WorkoutExecutionClient({
     // `eva:executor-v3` (on/off). SSR renderiza el flag server-side; el override es hidratación-safe.
     const [execV3Active, setExecV3Active] = useState(false)
     const [showExecV3Settings, setShowExecV3Settings] = useState(false)
+    // Ejecutor V3 (E3.7): prefs de la tuerca (device-scoped). `showEffort` gobierna si la sesión pinta
+    // la sección RPE/RIR; el resto lo consumen el RestTimer (háptico/WakeLock) y el interstitial.
+    const { showEffort: execShowEffort } = useExecSettings()
     // Ejecutor V3 (E2.2): fase de apertura del shell V3 — Entrada (splash) → Inicio → sesión. Sólo
     // vive en modo V3; se resuelve tras montar contra sessionStorage (una vez por apertura, plan+día).
     // Default 'session' = SSR-safe (el motor va montado desde el inicio; los overlays son fixed encima).
@@ -1919,6 +1926,26 @@ export function WorkoutExecutionClient({
         }
     })
 
+    // Ejecutor V3 (E3.1): VM del ejercicio "SIGUIENTE" del interstitial de descanso. Deriva del bloque
+    // activo (lo que el alumno está trabajando durante el descanso): nombre, prescripción compacta,
+    // media pasiva (misma resolución que la card) y nota del coach del bloque. Sólo en modo V3.
+    const execInterstitialNext: InterstitialNext | null = (() => {
+        if (!execV3Active) return null
+        const block = activeBlockId != null ? blocks.find((b) => b.id === activeBlockId) : blocks[0]
+        if (!block) return null
+        const exercise = getExercise(block)
+        if (!exercise) return null
+        const rxParts: string[] = [`${block.sets} × ${block.reps}`]
+        if (block.target_weight_kg != null) rxParts.push(`${block.target_weight_kg} kg`)
+        if (block.rir) rxParts.push(`RIR ${block.rir}`)
+        return {
+            name: exercise.name,
+            rxLabel: rxParts.join(' · '),
+            media: resolveExecMedia(exercise),
+            coachMessage: block.notes?.trim() || null,
+        }
+    })()
+
     // Pinta el card del paso `index` reusando `renderGroup` (siempre completo — sin colapsar).
     const renderStepNode = (index: number) => {
         const step = steps[index]
@@ -1985,11 +2012,15 @@ export function WorkoutExecutionClient({
 
     return (
         <TargetDateProvider value={targetDate}>
-        <WorkoutTimerProvider>
+        <RestInterstitialDataProvider
+            value={{ items: execListMapItems, onJump: returnToStepper, next: execInterstitialNext }}
+        >
+        <WorkoutTimerProvider v3={execV3Active}>
           <WorkoutKeypadProvider>
             <div
                 ref={execRootRef}
                 data-exec-v3={execV3Active ? '' : undefined}
+                data-exec-hide-effort={execV3Active && !execShowEffort ? '' : undefined}
                 className="is-workout-page min-h-dvh bg-[var(--ink-950)] text-on-dark"
             >
                 {execV3Active && (
@@ -2276,25 +2307,17 @@ export function WorkoutExecutionClient({
                     </DialogContent>
                 </Dialog>
 
-                {/* Ajustes V3 (E2.1) — placeholder de la tuerca del header V3. El panel real (descanso,
-                    alarma, unidades, etc.) llega en una ola posterior; hoy sólo confirma el gesto. */}
-                <Dialog open={showExecV3Settings} onOpenChange={setShowExecV3Settings}>
-                    <DialogContent className="max-w-sm rounded-sheet p-6 bg-card border-border">
-                        <DialogHeader>
-                            <DialogTitle className="font-display text-xl font-bold">Ajustes</DialogTitle>
-                        </DialogHeader>
-                        <p className="mt-2 text-sm text-muted-foreground">
-                            Próximamente. Aquí vas a poder ajustar tu entrenamiento sin salir de la sesión.
-                        </p>
-                        <button
-                            type="button"
-                            onClick={() => setShowExecV3Settings(false)}
-                            className="w-full mt-6 py-3 rounded-control bg-secondary text-secondary-foreground font-bold"
-                        >
-                            Cerrar
-                        </button>
-                    </DialogContent>
-                </Dialog>
+                {/* Ajustes V3 (E3.7) — tuerca del header V3: sheet con el cronómetro (sonido/tono/volumen
+                    REALES), vibración, celebraciones (OFF por diseño), pantalla encendida y RPE/RIR.
+                    Se monta DENTRO de [data-exec-v3] (acento resuelto), sin portal. */}
+                {execV3Active && (
+                    <ExecSettingsSheet
+                        open={showExecV3Settings}
+                        onClose={() => setShowExecV3Settings(false)}
+                        autoTimerEnabled={autoTimerEnabled}
+                        onToggleAutoTimer={toggleAutoTimer}
+                    />
+                )}
 
                 {/* Workout Completed Overlay */}
                 {showCompleted ? createPortal(
@@ -2448,6 +2471,7 @@ export function WorkoutExecutionClient({
             </div>
           </WorkoutKeypadProvider>
         </WorkoutTimerProvider>
+        </RestInterstitialDataProvider>
         </TargetDateProvider>
     )
 }

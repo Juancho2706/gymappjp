@@ -124,12 +124,18 @@ export function SetRow({
   pr = false,
   syncError = null,
   onRetry,
+  showEffort = true,
 }: {
   setNumber: number
   log?: ReconciledSessionLog
   isActive: boolean
   typedMode?: TypedKeypadMode | null
   onPress: () => void
+  /**
+   * Mostrar las pills de esfuerzo RPE/RIR de la serie logueada (E3.7 — tuerca V3). Default true =
+   * comportamiento previo. En false (V3 con "Mostrar RPE/RIR" apagado) el chip omite RPE/RIR.
+   */
+  showEffort?: boolean
   /**
    * La serie se acaba de cerrar en ESTA sesión (señal one-shot del padre, mirror web `settleRef`,
    * `LogSetForm.tsx:510`): el check de guardado entra con un settle elástico. Las series ya cargadas
@@ -343,11 +349,12 @@ export function SetRow({
               {log?.reps_done ?? '–'}
             </Text>
             {/* RPE/RIR: mono 500 (semibold web) a 11px vía CHIP_EFFORT_STYLE (web
-                `font-mono text-[11px] font-semibold`, LogSetForm.tsx:548,551). */}
-            {log?.rpe != null && (
+                `font-mono text-[11px] font-semibold`, LogSetForm.tsx:548,551). La tuerca V3 (E3.7)
+                puede ocultarlas con `showEffort={false}`. */}
+            {showEffort && log?.rpe != null && (
               <Text style={CHIP_EFFORT_STYLE} className="text-on-dark-muted">RPE {log.rpe}</Text>
             )}
-            {log?.rir != null && (
+            {showEffort && log?.rir != null && (
               <Text style={CHIP_EFFORT_STYLE} className="text-on-dark-muted">RIR {log.rir}</Text>
             )}
             {/* Ícono nota (paridad web A.3, `LogSetForm.tsx:553-555`): señala que la serie lleva nota
@@ -536,6 +543,7 @@ export function ActiveSetRow({
   onCommit,
   onLongPressValue,
   allowZeroRir = false,
+  showEffort = true,
 }: {
   blockId: string
   setNumber: number
@@ -588,6 +596,12 @@ export function ActiveSetRow({
    * V3 lo pasa (true); sin la prop el RIR arranca en 1 (V2 intacto). RPE queda SIEMPRE 1-10.
    */
   allowZeroRir?: boolean
+  /**
+   * Mostrar la escala de esfuerzo RPE/RIR (E3.7 — tuerca V3). Default true = comportamiento previo. En
+   * false (V3 con "Mostrar RPE/RIR" apagado) la fila activa omite la captura de esfuerzo. No aplica a
+   * tipadas (cardio/movilidad), que no tienen RPE/RIR inline.
+   */
+  showEffort?: boolean
 }) {
   const fields: RowField[] = useMemo(() => {
     if (typedMode) {
@@ -742,8 +756,9 @@ export function ActiveSetRow({
         )}
       </View>
 
-      {/* Esfuerzo RPE + RIR con dots inline (strength) — mirror de ScaleDots web */}
-      {!typedMode && (
+      {/* Esfuerzo RPE + RIR con dots inline (strength) — mirror de ScaleDots web. La tuerca V3 (E3.7)
+          puede ocultarlo con `showEffort={false}`. */}
+      {!typedMode && showEffort && (
         <View className="gap-2.5">
           <View>
             <View className="mb-1 flex-row items-center gap-1">

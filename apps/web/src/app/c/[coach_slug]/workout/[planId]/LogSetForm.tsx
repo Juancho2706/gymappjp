@@ -802,8 +802,9 @@ function StrengthLogSetForm({
                     </div>
                 </div>
 
-                {/* Esfuerzo por serie: RPE y RIR en escala 1-10 (dots), ambos opcionales */}
-                <div className="mt-3 space-y-2.5">
+                {/* Esfuerzo por serie: RPE y RIR en escala 1-10 (dots), ambos opcionales.
+                    E3.7: la tuerca V3 puede ocultar esta sección (clase gateada por [data-exec-hide-effort]). */}
+                <div className={cn('mt-3 space-y-2.5', v3 && 'exec-v3-effort')}>
                     <div>
                         <span className="mb-1 flex items-center gap-1 text-[9.5px] font-bold uppercase tracking-[0.08em] text-on-dark-muted">
                             Esfuerzo · RPE

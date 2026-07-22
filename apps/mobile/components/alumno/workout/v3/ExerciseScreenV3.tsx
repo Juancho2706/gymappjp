@@ -64,6 +64,7 @@ export function ExerciseScreenV3({
   restoredDraft,
   reducedMotion = false,
   exec,
+  showEffort = true,
   substitution,
   canSubstitute,
   onOpenTechnique,
@@ -86,6 +87,8 @@ export function ExerciseScreenV3({
   restoredDraft: SessionDraft | null
   reducedMotion?: boolean
   exec: ExecTheme
+  /** Mostrar las pills/escala de esfuerzo RPE/RIR (E3.7 — la tuerca). Default true. */
+  showEffort?: boolean
   substitution: { name: string; prescribedName: string } | null
   canSubstitute: boolean
   onOpenTechnique: () => void
@@ -193,6 +196,8 @@ export function ExerciseScreenV3({
           onLongPressValue={isActiveSet ? openWheel : undefined}
           // RIR con 0 habilitado (decision CEO 8) en TODA fila de fuerza V3 (activa y recesivas).
           allowZeroRir
+          // Tuerca V3 (E3.7): oculta la escala de esfuerzo RPE/RIR cuando el alumno lo desactiva.
+          showEffort={showEffort}
         />
       )
     }
@@ -210,6 +215,7 @@ export function ExerciseScreenV3({
         pr={isRecent && !!recentSet?.pr}
         syncError={syncErrors?.[`${block.id}:${setNumber}`] ?? null}
         onRetry={() => onRetrySet?.(block.id, setNumber)}
+        showEffort={showEffort}
       />
     )
   })

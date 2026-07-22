@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Alert, Pressable, Text, View } from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
-import { useKeepAwake } from 'expo-keep-awake'
+import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake'
 import { useRouter } from 'expo-router'
 import { CheckCircle2, Dumbbell, Timer } from 'lucide-react-native'
 import {
@@ -37,8 +37,6 @@ import { toast } from '../../../Toast'
 import { flushLogQueue, getPendingLogCount } from '../../../../lib/offline-cache'
 import { OfflineBanner } from '../../../OfflineBanner'
 import { EvaLoaderScreen } from '../../../EvaLoader'
-import { Sheet } from '../../../Sheet'
-import { FONT } from '../../../../lib/typography'
 import { SingleExerciseCard } from '../SingleExerciseCard'
 import { SupersetGroupCard } from '../SupersetGroupCard'
 import { StepperExecution, type StepperStepView } from '../StepperExecution'
@@ -47,7 +45,7 @@ import { TechniqueSheet } from '../TechniqueSheet'
 import { WorkoutSummaryOverlay } from '../WorkoutSummaryOverlay'
 import { RecoveryBanner } from '../RecoveryBanner'
 import { WorkoutTimerProvider, useWorkoutTimers } from '../timers/TimerProvider'
-import { isRestAutoTimerEnabled, parseRestTime } from '../timers'
+import { isRestAutoTimerEnabled, parseRestTime, type RestInterstitialRenderer } from '../timers'
 import { SubstituteExerciseSheet } from '../SubstituteExerciseSheet'
 import { SUBSTITUTION_REASON } from '../../../../lib/workout/substitution'
 import { bestPrevOf, fmtElapsed, fmtVolume } from '../workout-ui'
@@ -58,6 +56,9 @@ import { SessionIntro } from './SessionIntro'
 import { SessionStart, type StartChip, type StartExercisePreview } from './SessionStart'
 import { ExerciseScreenV3 } from './ExerciseScreenV3'
 import { ExerciseListV3, type ExerciseListItem } from './ExerciseListV3'
+import { RestInterstitialV3, type RestInterstitialData } from './RestInterstitialV3'
+import { ExecSettingsSheet } from './ExecSettingsSheet'
+import { useExecSettings } from './exec-settings'
 
 const EMBER_200 = '#FFD6C7'
 const ON_DARK_MUTED = '#939DAB'
@@ -107,7 +108,18 @@ export default function ExecutorV3({ planId, recoverDate, editDate }: { planId: 
 }
 
 function ExecutorV3Inner({ planId, recoverDate, editDate }: { planId: string; recoverDate?: string; editDate?: string }) {
-  useKeepAwake() // Wake-lock de TODA la sesion.
+  const execSettings = useExecSettings()
+  // Wake-lock de la sesion — condicional a la preferencia "Mantener pantalla encendida" (E3.7). Por
+  // default ON (comportamiento previo). Best-effort: nunca lanza en plataformas sin soporte.
+  useEffect(() => {
+    const TAG = 'executor-v3'
+    if (execSettings.keepAwake) {
+      void activateKeepAwakeAsync(TAG).catch(() => {})
+      return () => { void deactivateKeepAwake(TAG).catch(() => {}) }
+    }
+    void deactivateKeepAwake(TAG).catch(() => {})
+    return undefined
+  }, [execSettings.keepAwake])
   const router = useRouter()
   const insets = useSafeAreaInsets()
   const { theme, branding } = useTheme()
@@ -138,6 +150,9 @@ function ExecutorV3Inner({ planId, recoverDate, editDate }: { planId: string; re
   const [stepIndex, setStepIndex] = useState(0)
   const autoAdvancedRef = useRef<Set<string>>(new Set())
   const didHydrateStepPosRef = useRef(false)
+  // Micro-celebracion del interstitial V3 (E3.1): true cuando el descanso siguio a CERRAR una serie
+  // (via handleCommit), false para un descanso manual. El renderer lo lee al montar el overlay.
+  const restCelebrateRef = useRef(false)
   // Fase de presentacion V3: arranca en el splash (una vez por apertura) → Inicio → sesion.
   const [phase, setPhase] = useState<ExecPhase>('intro')
 
@@ -308,6 +323,8 @@ function ExecutorV3Inner({ planId, recoverDate, editDate }: { planId: string; re
       const sub = block ? getSubstitution(block) : null
       setKeypadTarget(null)
       haptics.setDone()
+      // El descanso que arranque tras este commit muestra la micro-celebracion "+1 serie" (E3.1).
+      restCelebrateRef.current = true
       const projected = [
         ...sessionLogs.filter((l) => !(l.block_id === payload.blockId && l.set_number === payload.setNumber)),
         { block_id: payload.blockId, set_number: payload.setNumber },
@@ -642,6 +659,7 @@ function ExecutorV3Inner({ planId, recoverDate, editDate }: { planId: string; re
             restoredDraft={restoredDraft}
             reducedMotion={motion.reduced}
             exec={exec}
+            showEffort={execSettings.showRpeRir}
             substitution={sub ? { name: sub.name, prescribedName: sub.prescribedName } : null}
             canSubstitute={doneCount === 0}
             onOpenTechnique={() => setTechniqueExercise(exercise)}
@@ -688,7 +706,7 @@ function ExecutorV3Inner({ planId, recoverDate, editDate }: { planId: string; re
         />
       )
     },
-    [supersetMembersByBlock, sessionLogs, effByBlock, currentWeek, activeBlockId, previousHistory, openDetails, getSubstitution, openSet, hrZones, restoredDraft, motion.reduced, exec, handleCommit, handleRpeUpdate, saveActiveDraft, recentSet, syncErrors, retryCommit],
+    [supersetMembersByBlock, sessionLogs, effByBlock, currentWeek, activeBlockId, previousHistory, openDetails, getSubstitution, openSet, hrZones, restoredDraft, motion.reduced, exec, execSettings.showRpeRir, handleCommit, handleRpeUpdate, saveActiveDraft, recentSet, syncErrors, retryCommit],
   )
 
   // ── Modelo de pasos (engine) + vistas del rail + auto-avance ──
@@ -781,6 +799,53 @@ function ExecutorV3Inner({ planId, recoverDate, editDate }: { planId: string; re
       }),
     [steps, sessionLogs, exec.accent],
   )
+
+  // ── Interstitial de descanso V3 (E3.1) ──
+  // "Qué retoma" al terminar el descanso: el primer paso incompleto (mismo destino que el auto-avance).
+  // Alimenta la tarjeta SIGUIENTE (nombre + prescripcion + mini-media) y la nota del coach del overlay.
+  const restNextData = useMemo(() => {
+    if (steps.length === 0) return null
+    const idx = firstIncompleteStepIndex(steps, sessionLogs)
+    const st = steps[Math.min(idx, steps.length - 1)]
+    if (!st) return null
+    const b = st.blocks[0]
+    const ex = resolveExercise(b)
+    const name =
+      st.kind === 'superset'
+        ? (st.blocks.map((bb) => resolveExercise(bb)?.name).filter(Boolean).join(' + ') || 'Superserie')
+        : (ex?.name ?? 'Ejercicio')
+    const eff = effByBlock.get(b.id) ?? null
+    const w = eff?.weightKg ?? b.target_weight_kg
+    const prescription = `${b.sets} × ${b.reps}${w != null ? ` · ${formatWeightEsCl(w)} kg` : ''}`
+    const coachNote = b.notes?.trim() ? b.notes.trim() : null
+    return { index: idx, next: { name, prescription, exercise: ex }, coachNote }
+  }, [steps, sessionLogs, effByBlock])
+
+  // Snapshot que lee el renderer (identidad estable) — se actualiza en cada render con datos frescos.
+  const interstitialDataRef = useRef<RestInterstitialData | null>(null)
+  interstitialDataRef.current = {
+    next: restNextData?.next ?? null,
+    coachNote: restNextData?.coachNote ?? null,
+    planItems: listItems,
+    currentIndex: restNextData?.index ?? stepIndex,
+    celebrate: restCelebrateRef.current,
+    exec,
+    reducedMotion: motion.reduced,
+  }
+
+  const renderRestInterstitial = useCallback<RestInterstitialRenderer>((engine, host) => {
+    const d = interstitialDataRef.current
+    if (!d) return null
+    return <RestInterstitialV3 engine={engine} host={host} data={d} />
+  }, [])
+
+  // Registra la presentacion V3 del descanso en el provider (solo mientras este ejecutor esta montado).
+  // `setRestInterstitial` es estable (useCallback en el provider) → registra una sola vez.
+  const setRestInterstitial = timers.setRestInterstitial
+  useEffect(() => {
+    setRestInterstitial(renderRestInterstitial)
+    return () => setRestInterstitial(null)
+  }, [setRestInterstitial, renderRestInterstitial])
 
   // Hidratacion: aterriza en el primer paso incompleto una sola vez cuando cargan los pasos.
   useEffect(() => {
@@ -909,7 +974,7 @@ function ExecutorV3Inner({ planId, recoverDate, editDate }: { planId: string; re
           <View className="w-full flex-row items-center justify-between gap-3 self-center" style={{ maxWidth: 1024 }}>
             <Pressable
               testID="btn-manual-rest-v3"
-              onPress={() => timers.startRest(90, { autoStart: true })}
+              onPress={() => { restCelebrateRef.current = false; timers.startRest(90, { autoStart: true }) }}
               className="h-11 flex-row items-center gap-1.5 rounded-control border border-ember-500/25 bg-ember-500/15 px-3 active:opacity-90"
               accessibilityRole="button"
               accessibilityLabel="Iniciar descanso de 90 segundos"
@@ -953,15 +1018,8 @@ function ExecutorV3Inner({ planId, recoverDate, editDate }: { planId: string; re
         reducedMotion={motion.reduced}
       />
 
-      {/* Ajustes del ejecutor V3 — placeholder de esta wave (el panel real llega despues). */}
-      <Sheet open={settingsOpen} onClose={() => setSettingsOpen(false)} title="Ajustes" nativeModal snapPoints={['35%']}>
-        <View className="items-center px-4 py-8">
-          <Text style={{ fontFamily: FONT.uiBold, fontSize: 16 }} className="text-strong">Ajustes — próximamente</Text>
-          <Text style={{ fontFamily: FONT.ui, fontSize: 13, marginTop: 8, textAlign: 'center' }} className="text-muted">
-            Los ajustes del ejecutor llegan en una próxima versión.
-          </Text>
-        </View>
-      </Sheet>
+      {/* Tuerca del ejecutor V3 (E3.7) — ajustes del entrenamiento device-scoped. */}
+      <ExecSettingsSheet open={settingsOpen} onClose={() => setSettingsOpen(false)} exec={exec} />
 
       <SubstituteExerciseSheet
         open={substituteBlockId != null}

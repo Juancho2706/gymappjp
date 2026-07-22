@@ -21,6 +21,8 @@ export type TimerSound = 'digital' | 'bell' | 'classic' | 'boxing'
 const MUTED_KEY = 'restTimerMuted'
 const SOUND_KEY = 'restTimerSound'
 const VOLUME_KEY = 'restTimerVolume'
+/** Vibracion del cronometro (device-scoped). La tuerca V3 (E3.7) la controla; el motor la consume. */
+const VIBRATION_KEY = 'restTimerVibration'
 /** Auto-iniciar el descanso al guardar la serie (device-scoped, opt-in). */
 export const OMNI_AUTOTIMER_KEY = 'omni_autotimer'
 
@@ -32,10 +34,12 @@ interface PrefsCache {
   volume: number
   /** Auto-iniciar el descanso al guardar la serie. Default ON (espejo web). */
   autoTimer: boolean
+  /** Vibracion del cronometro (alarma final + tick 3-2-1). Default ON. */
+  vibration: boolean
 }
 
-// Default = web (sonido ON, cronómetro automático ON). El cache se sobreescribe tras hidratar.
-const cache: PrefsCache = { muted: false, sound: 'digital', volume: 1, autoTimer: true }
+// Default = web (sonido ON, cronómetro automático ON, vibracion ON). El cache se sobreescribe tras hidratar.
+const cache: PrefsCache = { muted: false, sound: 'digital', volume: 1, autoTimer: true, vibration: true }
 let hydrated = false
 
 type Listener = () => void
@@ -60,11 +64,12 @@ export async function hydrateRestTimerPrefs(): Promise<void> {
   if (hydrated) return
   hydrated = true
   try {
-    const [muted, sound, volume, autoTimer] = await Promise.all([
+    const [muted, sound, volume, autoTimer, vibration] = await Promise.all([
       AsyncStorage.getItem(MUTED_KEY),
       AsyncStorage.getItem(SOUND_KEY),
       AsyncStorage.getItem(VOLUME_KEY),
       AsyncStorage.getItem(OMNI_AUTOTIMER_KEY),
+      AsyncStorage.getItem(VIBRATION_KEY),
     ])
     if (muted != null) cache.muted = muted === '1'
     if (sound != null && VALID_SOUNDS.includes(sound as TimerSound)) cache.sound = sound as TimerSound
@@ -74,6 +79,8 @@ export async function hydrateRestTimerPrefs(): Promise<void> {
     }
     // Web persiste String(bool); default ON → solo 'false' explícito lo apaga.
     if (autoTimer != null) cache.autoTimer = autoTimer !== 'false'
+    // Vibracion default ON → solo '0' explícito la apaga.
+    if (vibration != null) cache.vibration = vibration !== '0'
     emit()
   } catch {
     // Sin persistencia → defaults web. Nunca lanza.
@@ -110,6 +117,17 @@ export function setRestTimerVolume(volume: number): void {
   cache.volume = v
   emit()
   void AsyncStorage.setItem(VOLUME_KEY, String(v)).catch(() => {})
+}
+
+/** Vibracion del cronometro (alarma final + tick 3-2-1). Default ON. La tuerca V3 la controla. */
+export function isRestTimerVibrationEnabled(): boolean {
+  return cache.vibration
+}
+
+export function setRestTimerVibration(enabled: boolean): void {
+  cache.vibration = enabled
+  emit()
+  void AsyncStorage.setItem(VIBRATION_KEY, enabled ? '1' : '0').catch(() => {})
 }
 
 /** Auto-iniciar el descanso al guardar la serie (device-scoped, default ON). */
