@@ -6,6 +6,7 @@ import { WorkoutLogSetSchema } from '@eva/schemas'
 import { getTodayInSantiago, getSantiagoUtcBoundsForDay } from '@/lib/date-utils'
 import { STUDENT_ACCESS_COPY } from '@/lib/student-access'
 import { resolveStudentAccessForClient } from '@/lib/student-access.server'
+import { validateTargetDate } from '../_data/target-date'
 
 export type LogState = {
     error?: string
@@ -15,8 +16,11 @@ export type LogState = {
      * `invalid_block` = el block_id no existe (huérfano de reseed / FK 23503) → descartar, no reintentar.
      * `coach_paused` = la cuenta del coach está en pausa (post-gracia, solo-lectura) → el flush NO debe
      * reintentar en loop; el registro no entrará hasta que el coach reactive.
+     * `past_set_not_found` = edición de un día pasado (`target_date`) donde NO existe la fila de esa
+     * serie → jamás se inserta (imposible farmear adherencia retroactiva); el llamador informa "no hay
+     * registro que editar", nunca reintenta.
      */
-    code?: 'invalid_block' | 'unauthenticated' | 'validation' | 'db' | 'coach_paused'
+    code?: 'invalid_block' | 'unauthenticated' | 'validation' | 'db' | 'coach_paused' | 'past_set_not_found'
 }
 
 export async function logSetAction(
@@ -43,6 +47,11 @@ export async function logSetAction(
     const substituted_exercise_id = rawText('substituted_exercise_id')
     const substituted_exercise_name = rawText('substituted_exercise_name')
     const substitution_reason = rawText('substitution_reason')
+
+    // Edición de día pasado (Ola 1, decisión CEO 10): `target_date` opcional `yyyy-mm-dd`. Su sola
+    // presencia conmuta el flujo a modo SOLO-UPDATE (nunca inserta). Ausente = comportamiento actual
+    // byte-idéntico (upsert de HOY). Se valida server-side más abajo, tras autenticar.
+    const targetDate = rawText('target_date')
 
     const raw = {
         block_id: formData.get('block_id') as string,
@@ -90,7 +99,18 @@ export async function logSetAction(
     // R3 (auditoria 2026-06-11): todas las operaciones son sobre workout_logs propios del alumno
     // (client_manage_logs) → cliente user-scoped. RLS ademas acota el DELETE de duplicados.
     const { iso: todayStr } = getTodayInSantiago()
-    const { startIso: startTs, endIso: endTs } = getSantiagoUtcBoundsForDay(todayStr)
+    // Ventana del día a escribir. Sin `target_date` = HOY (upsert clásico). Con `target_date` se valida
+    // estricto (formato + pasado u hoy; el futuro se rechaza) y define la ventana de esa fecha; la sola
+    // presencia de un `target_date` VÁLIDO activa el modo solo-UPDATE de abajo.
+    let windowDateStr = todayStr
+    let pastEditMode = false
+    if (targetDate !== undefined) {
+        const validated = validateTargetDate(targetDate, todayStr)
+        if (!validated.ok) return { error: 'Fecha inválida.', code: 'validation' }
+        windowDateStr = validated.iso
+        pastEditMode = true
+    }
+    const { startIso: startTs, endIso: endTs } = getSantiagoUtcBoundsForDay(windowDateStr)
 
     const { data: existingRows } = await supabase
         .from('workout_logs')
@@ -134,6 +154,11 @@ export async function logSetAction(
             const duplicateIds = existingRows.slice(1).map(r => r.id)
             await supabase.from('workout_logs').delete().in('id', duplicateIds)
         }
+    } else if (pastEditMode) {
+        // Modo solo-UPDATE: editar un día pasado JAMÁS inserta. Si no existe la fila de esa serie en
+        // la ventana `target_date`, devolvemos un error tipado (imposible pre-cargar adherencia de un
+        // día en el que el alumno no registró). El llamador (E1.6) lo muestra como "no hay registro".
+        return { error: 'No existe un registro de esa serie para editar en esa fecha.', code: 'past_set_not_found' }
     } else {
         const { error: insertError } = await supabase.from('workout_logs').insert({
             block_id: parsed.data.block_id,

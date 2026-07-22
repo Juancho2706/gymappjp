@@ -7,13 +7,15 @@
  *    de la GRACIA: STUDENT_ACCESS_GRACE_DAYS dias desde que TERMINO el periodo pagado
  *    (coalesce(paid_access_ended_at, current_period_end)), NO desde el deploy.
  *  - Durante la gracia: alumno 100% funcional + banner discreto (sin countdown agresivo).
- *  - Post-gracia: SOLO-LECTURA (ve plan/historial/rachas; no registra). NUNCA 404, NUNCA borrar datos.
+ *  - Post-gracia: BLOQUEO TOTAL (decision CEO #9, ejecutor V3). El alumno NO ve nada del arbol `/c`
+ *    (ni dashboard, ni plan, ni historial): el proxy redirige todo a la pantalla de bloqueo calma
+ *    /suspended?reason=coach ("habla con tu coach"). NUNCA 404, NUNCA borrar datos.
  *
  * Contrato de headers (los setea el branch `/c` del proxy — capa B1; esta capa solo CONSUME):
- *  - `x-student-access-state`: 'grace' cuando el alumno esta en la ventana de gracia; 'readonly'
- *    cuando post-gracia el proxy sirve una superficie de LECTURA permitida (dashboard / detalle del
- *    plan / historial / perfil — el resto redirige a /suspended?reason=coach). Ausente u otro
- *    valor => sin banner (fail-quiet: la UI nunca inventa un estado que el proxy no afirmo).
+ *  - `x-student-access-state`: 'grace' cuando el alumno esta en la ventana de gracia (banner
+ *    discreto + acceso normal). Post-gracia ya NO se emite header de lectura: el estado del resolver
+ *    'readonly' significa BLOQUEO TOTAL y el proxy redirige todo el arbol `/c` a /suspended?reason=coach
+ *    (no hay superficie servida donde pintar banner). Ausente u otro valor => sin banner (fail-quiet).
  *  - `x-student-access-grace-until`: ISO del fin de la gracia (informativo; el banner del alumno NO
  *    muestra countdown por decision CEO — la presion vive en el dashboard del COACH).
  * Kill-switch STUDENT_ACCESS_GATE (Edge Config): lo evalua el proxy/actions; apagado => no llegan
@@ -40,10 +42,11 @@ export const STUDENT_ACCESS_GRACE_UNTIL_HEADER = 'x-student-access-grace-until'
 export const STUDENT_ACCESS_COPY = {
     /** Banner discreto del alumno durante la gracia (layout /c). */
     graceBanner: 'Tu coach está poniendo al día su cuenta. Tu acceso sigue funcionando con normalidad.',
-    /** Pantalla /suspended?reason=coach — honesta y calmada, sin culpar al alumno. */
-    pausedTitle: 'La cuenta de tu coach está en pausa',
-    pausedBody: 'Tu progreso está guardado y podrás retomarlo apenas se reactive.',
-    pausedHint: 'Mientras tanto puedes revisar tu plan y tu historial de entrenamientos.',
+    /** Pantalla de bloqueo total post-gracia (web /suspended?reason=coach; RN StudentAccessBlocked).
+     *  Bloqueo TOTAL (decision CEO #9): calma, sin culpar al alumno, un solo camino = escribir al coach. */
+    pausedTitle: 'Tu cuenta está en pausa',
+    pausedBody: 'El plan de tu coach está inactivo. Escríbele para reactivar tu acceso.',
+    pausedHint: 'Tu progreso está guardado y te espera cuando tu coach reactive su cuenta.',
     /** Error humano cuando un guardado rebota por COACH_ACCOUNT_PAUSED. */
     pausedWriteError:
         'La cuenta de tu coach está en pausa, así que por ahora no se pueden guardar registros nuevos. Tu plan y tu historial siguen disponibles.',
@@ -93,7 +96,7 @@ export interface CoachAccessColumns {
  *  - `ok`      → coach con acceso efectivo (managed org/team/enterprise, free vigente, activo, o la
  *               gracia de dunning PROPIA del coach vigente por `current_period_end`).
  *  - `grace`   → coach sin acceso efectivo pero dentro de los 7 dias desde el fin del periodo pagado.
- *  - `readonly`→ post-gracia, o sin ancla conocida → solo lectura (jamas 404).
+ *  - `readonly`→ post-gracia, o sin ancla conocida → bloqueo total (proxy redirige a /suspended; jamas 404).
  */
 export function resolveStudentAccessState(
     coach: CoachAccessColumns,

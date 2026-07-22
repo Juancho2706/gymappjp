@@ -968,25 +968,18 @@ export async function proxy(request: NextRequest) {
             // NOTA: esto es SOLO la capa UI — la RLS/RPC de la base es la barrera REAL de datos (RN habla
             // PostgREST directo y no pasa por aca). Fail-OPEN: managed org/team resuelve `ok` por
             // hasEffectiveAccess; un fallo de lectura tambien degrada a `ok` (nunca bloquea por esta capa).
+            let studentBlocked = false
             const studentGateEnabled = await isStudentAccessGateEnabled()
             if (studentGateEnabled) {
                 const access = await resolveStudentAccessForCoach(supabase, coach.id, { gateEnabled: true })
                 if (access.state === 'readonly') {
-                    // Allowlist de LECTURA (fix r2 'ux'): sin ella el CTA "Ver mi historial" de
-                    // /suspended re-entraba a este mismo redirect → loop, y el copy "puedes revisar
-                    // tu plan y tu historial" mentia. Se permiten: dashboard (plan + rachas),
-                    // detalle del plan (/workout/[planId] — sus escrituras rebotan en la action con
-                    // COACH_ACCOUNT_PAUSED y copy honesto), historial, perfil y change-password
-                    // (para no pelear con el forced-flow de mas abajo). Todo lo demas (check-in,
-                    // nutricion, bodycomp, movimiento, ...) cae a /suspended?reason=coach.
-                    const isReadSurface =
-                        pathname.includes('/suspended') ||
-                        pathname.includes('/dashboard') ||
-                        pathname.includes('/workout-history') ||
-                        pathname.includes('/workout/') ||
-                        pathname.includes('/perfil') ||
-                        pathname.includes('/change-password')
-                    if (!isReadSurface) {
+                    // Bloqueo TOTAL post-gracia (decision CEO #9, ejecutor V3): pasada la gracia el
+                    // alumno NO ve nada — ni dashboard, ni plan, ni historial. La UNICA superficie
+                    // visible es /suspended (variante reason=coach = pantalla calma "habla con tu
+                    // coach"). Todo el resto del arbol /c redirige alli. Reemplaza el hibrido
+                    // solo-lectura anterior. El logout (/auth/signout) y los assets (_next) viven
+                    // FUERA de /c, asi que pasan sin necesidad de allowlist aca.
+                    if (!pathname.includes('/suspended')) {
                         const redirectUrl = request.nextUrl.clone()
                         redirectUrl.pathname = `/c/${coachSlug}/suspended`
                         redirectUrl.searchParams.set('reason', 'coach')
@@ -996,12 +989,10 @@ export async function proxy(request: NextRequest) {
                         })
                         return redirect
                     }
-                    // Superficie de lectura servida en modo readonly → banner honesto persistente
-                    // en el layout (espejo del StudentAccessBanner 'blocked' de RN). En /suspended
-                    // no se manda: la pantalla ya ES el estado honesto (banner seria redundante).
-                    if (!pathname.includes('/suspended')) {
-                        requestHeaders.set(STUDENT_ACCESS_STATE_HEADER, 'readonly')
-                    }
+                    // Ya estamos en /suspended (la pantalla de bloqueo): marcamos al alumno como
+                    // bloqueado para que el forced-password flow de mas abajo NO intente sacarlo de
+                    // aca (seria un loop /suspended ↔ /change-password). El bloqueo total manda.
+                    studentBlocked = true
                 }
                 if (access.state === 'grace') {
                     requestHeaders.set(STUDENT_ACCESS_STATE_HEADER, 'grace')
@@ -1020,8 +1011,9 @@ export async function proxy(request: NextRequest) {
                 return NextResponse.redirect(redirectUrl)
             }
 
-            // Force password change flow
-            if (!isBlocked && client.force_password_change && !pathname.includes('/change-password')) {
+            // Force password change flow. `studentBlocked` (bloqueo total post-gracia) lo suprime:
+            // el alumno bloqueado solo puede ver /suspended, sacarlo a /change-password loopearia.
+            if (!isBlocked && !studentBlocked && client.force_password_change && !pathname.includes('/change-password')) {
                 const redirectUrl = request.nextUrl.clone()
                 redirectUrl.pathname = `/c/${coachSlug}/change-password`
                 return NextResponse.redirect(redirectUrl)

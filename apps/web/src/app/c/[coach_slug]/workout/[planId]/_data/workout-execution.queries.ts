@@ -7,6 +7,7 @@ import { classicSlugForAreaId } from '@eva/workout-engine'
 import type { IntervalConfig, WorkoutArea } from '@/domain/workout/types'
 import type { HrZoneRange } from '@eva/cardio'
 import { getClientZonesForContext } from '@/services/cardio-zones.service'
+import { validateTargetDate } from './target-date'
 
 export interface ExerciseType {
     id: string
@@ -85,7 +86,7 @@ export interface ProgramType {
     weeks_to_repeat: number
 }
 
-export const getWorkoutExecutionData = cache(async (planId: string) => {
+export const getWorkoutExecutionData = cache(async (planId: string, targetDate?: string) => {
     const supabase = await createClient()
     // getClaims(): verificación local del JWT (ES256), sin /user. El proxy ya validó/refrescó la sesión.
     const { data: __cl } = await supabase.auth.getClaims()
@@ -141,10 +142,20 @@ export const getWorkoutExecutionData = cache(async (planId: string) => {
     // de sobrecarga progresiva (peso objetivo efectivo del día). null si falta start_date.
     const currentWeek = programWeekIndex1Based(program)
 
-    // Límites del día de HOY en Santiago — reusados por: logs de hoy, historial previo ("sesión
-    // anterior"), última sesión (doble progresión) y máximos históricos (PRs).
+    // Ventana efectiva del día editable (Ola 1, edición de día pasado). Sin `targetDate` = HOY
+    // Santiago (comportamiento previo). Con `targetDate` válido (formato estricto, pasado u hoy) =
+    // esa fecha; un `targetDate` inválido/futuro se IGNORA aquí (la query es solo-lectura; la barrera
+    // contra farmear adherencia vive en la action de escritura). Estos límites se reusan por: logs
+    // del día, historial previo ("sesión anterior"), última sesión (doble progresión) y máximos
+    // históricos (PRs). El historial "previo" queda SIEMPRE en `< windowStartUtc` → editar un día
+    // pasado nunca lo autocompara consigo mismo.
     const { iso: todayStr } = getTodayInSantiago()
-    const { startIso: todayStartUtc, endIso: todayEndUtc } = getSantiagoUtcBoundsForDay(todayStr)
+    let windowDateStr = todayStr
+    if (targetDate !== undefined) {
+        const validated = validateTargetDate(targetDate, todayStr)
+        if (validated.ok) windowDateStr = validated.iso
+    }
+    const { startIso: windowStartUtc, endIso: windowEndUtc } = getSantiagoUtcBoundsForDay(windowDateStr)
 
     const blockIds = plan.workout_blocks.map(b => b.id)
     let logs: Array<{
@@ -170,8 +181,8 @@ export const getWorkoutExecutionData = cache(async (planId: string) => {
             .from('workout_logs')
             .select('block_id, set_number, weight_kg, reps_done, rpe, rir, note, actual_duration_sec, actual_distance_m, actual_hold_sec, actual_avg_hr, substituted_exercise_id, substituted_exercise_name, substitution_reason')
             .in('block_id', blockIds)
-            .gte('logged_at', todayStartUtc)
-            .lt('logged_at', todayEndUtc)
+            .gte('logged_at', windowStartUtc)
+            .lt('logged_at', windowEndUtc)
 
         logs = (rawLogs || []) as typeof logs
     }
@@ -195,7 +206,7 @@ export const getWorkoutExecutionData = cache(async (planId: string) => {
             // plan). Antes excluía los bloques del plan actual (.not block_id in) → en programas
             // semanales reusados la "sesión anterior" NUNCA aparecía (todo su historial vive en
             // esos mismos bloques). Ahora se filtra por fecha, no por bloque.
-            .lt('logged_at', todayStartUtc)
+            .lt('logged_at', windowStartUtc)
             .order('logged_at', { ascending: false })
             .limit(500)
 
@@ -225,7 +236,7 @@ export const getWorkoutExecutionData = cache(async (planId: string) => {
             .from('workout_logs')
             .select('block_id, set_number, weight_kg, reps_done, logged_at')
             .in('block_id', blockIds)
-            .lt('logged_at', todayStartUtc)
+            .lt('logged_at', windowStartUtc)
             .order('logged_at', { ascending: false })
             .limit(800)
         // priorLogs viene desc por fecha → la 1ª aparición de cada bloque marca su día más reciente.
@@ -294,7 +305,7 @@ export const getWorkoutExecutionData = cache(async (planId: string) => {
         // P1-3: match por el snapshot exercise_id del log → el máx histórico sobrevive al borrado
         // del bloque (block_id NULL). Equivalente hoy (trigger + backfill pueblan exercise_id).
         .in('exercise_id', exerciseIds)
-        .lt('logged_at', todayStartUtc)
+        .lt('logged_at', windowStartUtc)
         .limit(5000)
 
     maxData?.forEach((log: { weight_kg: number | null; exercise_id: string | null; logged_at?: string }) => {
