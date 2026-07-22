@@ -2,6 +2,8 @@
 
 import { motion } from 'framer-motion'
 import { cn } from '@/lib/utils'
+import { WeeklyStreakDots } from './WeeklyStreakDots'
+import type { WeeklyStreak } from './weekly-streak'
 
 /** Item de la mini-lista del plan (Inicio). `tone` colorea el tag por tipo efectivo. */
 export interface SessionStartExercise {
@@ -34,6 +36,8 @@ interface SessionStartProps {
     onStart: () => void
     /** "Saltar al ejercicio" → mismo destino, atajo cuando ya hay progreso. */
     onSkip: () => void
+    /** Racha semanal (E4.4). null ⇒ no se muestra (sin dato / sin plan). */
+    streak?: WeeklyStreak | null
     reducedMotion: boolean | null
 }
 
@@ -64,6 +68,7 @@ export function SessionStart({
     hasProgress,
     onStart,
     onSkip,
+    streak = null,
     reducedMotion,
 }: SessionStartProps) {
     return (
@@ -121,6 +126,8 @@ export function SessionStart({
                         <div className="exec-v3-ctx-v tabular-nums">{lastVolumeLabel}</div>
                     </div>
                 )}
+
+                {streak && streak.planned > 0 && <WeeklyStreakDots streak={streak} className="mt-4" />}
 
                 <div className="mt-auto pt-6">
                     <motion.button

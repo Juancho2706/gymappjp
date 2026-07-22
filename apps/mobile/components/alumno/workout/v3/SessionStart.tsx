@@ -4,7 +4,9 @@ import { Play } from 'lucide-react-native'
 import { FONT } from '../../../../lib/typography'
 import { hexToRgba } from '../../../../lib/theme'
 import { JuicyButton } from './JuicyButton'
+import { WeekStreakDots } from './WeekStreakDots'
 import type { ExecTheme } from './exec-theme'
+import type { WeeklyStreak } from './weekly-streak'
 
 /** Chip de un ejercicio de la mini-lista + su tipo. */
 export interface StartExercisePreview {
@@ -44,6 +46,7 @@ export function SessionStart({
   coachNote,
   coachName,
   hasPartialSession,
+  weeklyStreak = null,
   reducedMotion = false,
   onStart,
   onSkipToExercise,
@@ -59,6 +62,8 @@ export function SessionStart({
   coachNote: string | null
   coachName: string
   hasPartialSession: boolean
+  /** Racha semanal (E4.4); null = no derivable (offline) → se oculta. */
+  weeklyStreak?: WeeklyStreak | null
   reducedMotion?: boolean
   onStart: () => void
   onSkipToExercise: () => void
@@ -205,6 +210,13 @@ export function SessionStart({
 
         {/* Empuje al fondo: CTA + saltar. */}
         <View style={{ flex: 1, minHeight: 16 }} />
+
+        {/* Racha semanal (E4.4) — dots Lun→Dom sobre el CTA. Se auto-oculta sin senal honesta. */}
+        {weeklyStreak ? (
+          <View style={{ marginBottom: 14 }}>
+            <WeekStreakDots streak={weeklyStreak} exec={exec} compact />
+          </View>
+        ) : null}
 
         {hasPartialSession && (
           <Text

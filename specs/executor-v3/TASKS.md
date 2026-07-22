@@ -48,11 +48,11 @@
 
 ## Ola 4 — Celebración y cierre
 
-- [ ] **E4.1 [P] Sistema de celebración** — wiring eventos engine → tiers (`celebration.ts`); micro (check+haptic+tick), media (ejercicio/ronda), épica (solo fin/PR real); confetti RN fast-confetti / web canvas-confetti; reduced-motion variantes; todo skippable.
-- [ ] **E4.2 [P] PR en vivo** — `detectPR` al cerrar serie → dorado inline (borde+toast+micro-confetti), sin modal; histórico desde queries existentes.
-- [ ] **E4.3 [S] Pantalla final** — coreografía 2 fases (clima → stats con tickers), mapa muscular (evolución `MuscleMapSvg`/`session-summary`), PR destacados, racha semanal, share-card reencuadrada (canvas actual re-estilizado), volver al inicio.
-- [ ] **E4.4 [P] Racha semanal** — cálculo (sesiones de la semana vs días con plan; reusa atribución E1.1) + UI en inicio/final/day-strip dashboard; sin rachas diarias ni guilt-copy.
-- **Gate Ola 4**: gates estándar + sesión completa end-to-end (entrada→final) en device + preview; revisión de dosificación (1 épica máx/sesión).
+- [x] **E4.1 [P] Sistema de celebración** — wiring eventos engine → tiers (`celebration.ts`); micro (check+haptic+tick), media (ejercicio/ronda), épica (solo fin/PR real); confetti RN fast-confetti / web canvas-confetti; reduced-motion variantes; todo skippable.
+- [x] **E4.2 [P] PR en vivo** — `detectPR` al cerrar serie → dorado inline (borde+toast+micro-confetti), sin modal; histórico desde queries existentes.
+- [x] **E4.3 [S] Pantalla final** — coreografía 2 fases (clima → stats con tickers), mapa muscular (evolución `MuscleMapSvg`/`session-summary`), PR destacados, racha semanal, share-card reencuadrada (canvas actual re-estilizado), volver al inicio.
+- [x] **E4.4 [P] Racha semanal** — cálculo (sesiones de la semana vs días con plan; reusa atribución E1.1) + UI en inicio/final/day-strip dashboard; sin rachas diarias ni guilt-copy.
+- **Gate Ola 4**: ✅ CERRADA 2026-07-22 — suite completa verde, tsc ambos, tokens. Sesión end-to-end en device/preview = pendiente CEO.
 
 ## Ola 5 — Nativo I (build EAS #1)
 

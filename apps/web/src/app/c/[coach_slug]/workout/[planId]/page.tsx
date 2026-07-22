@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation'
 import type { Metadata } from 'next'
 import { WorkoutExecutionClient } from './WorkoutExecutionClient'
 import { getWorkoutExecutionData } from './_data/workout-execution.queries'
+import { getExecutorWeekStatusDays } from './_data/week-status.queries'
 import { validateTargetDate } from './_data/target-date'
 import { getClientBasePath } from '@/lib/client/base-path'
 import { getTodayInSantiago } from '@/lib/date-utils'
@@ -40,6 +41,11 @@ export default async function WorkoutExecutionPage({ params, searchParams }: Pro
     if (!user) redirect(`${base}/login`)
     if (!plan) redirect(`${base}/dashboard`)
 
+    // Racha semanal (E4.4): estado de la semana actual para Inicio + Final V3. Sólo se consulta cuando
+    // el flag V3 viene ON del server (evita 3 lecturas extra en V2 y mientras V3 esté OFF). Si un
+    // override QA enciende V3 en cliente con el server en OFF, la racha no viaja y no se muestra.
+    const weekStatusDays = executorV3 ? await getExecutorWeekStatusDays(user.id) : null
+
     return (
         <WorkoutExecutionClient
             plan={plan}
@@ -57,6 +63,7 @@ export default async function WorkoutExecutionPage({ params, searchParams }: Pro
             targetDate={targetDate}
             recoverDate={recuperarDate}
             executorV3={executorV3}
+            weekStatusDays={weekStatusDays}
         />
     )
 }

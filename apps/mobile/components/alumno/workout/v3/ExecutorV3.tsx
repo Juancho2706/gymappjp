@@ -24,7 +24,7 @@ import { useEntitlements } from '../../../../lib/entitlements'
 import { useClientCardioZones } from '../../../../lib/cardio-zones'
 import { haptics } from '../../../../lib/haptics'
 import { supabase } from '../../../../lib/supabase'
-import { getTodayInSantiago, formatRelativeDate } from '../../../../lib/date-utils'
+import { getTodayInSantiago, formatRelativeDate, getSantiagoIsoYmdForUtcInstant, getSantiagoUtcBoundsForDay } from '../../../../lib/date-utils'
 import { computeCheckInReminder } from '../../../../lib/checkin-thresholds'
 import { computeEffectiveTarget, type EffectiveTarget } from '../../../../lib/workout/progression'
 import {
@@ -42,7 +42,7 @@ import { SingleExerciseCard } from '../SingleExerciseCard'
 import { StepperExecution, type StepperStepView } from '../StepperExecution'
 import { KeypadHost, type KeypadTarget } from '../KeypadHost'
 import { TechniqueSheet } from '../TechniqueSheet'
-import { WorkoutSummaryOverlay } from '../WorkoutSummaryOverlay'
+import { SessionCompleteV3 } from './SessionCompleteV3'
 import { RecoveryBanner } from '../RecoveryBanner'
 import { WorkoutTimerProvider, useWorkoutTimers } from '../timers/TimerProvider'
 import { isRestAutoTimerEnabled, parseRestTime, type RestInterstitialRenderer } from '../timers'
@@ -67,6 +67,12 @@ import { useExecSettings } from './exec-settings'
 import { useCelebrations } from './use-celebrations'
 import { CelebrationHost } from './celebration-host'
 import { computeLivePr } from './pr-live'
+import {
+  deriveWeeklyStreak,
+  plannedDatesForWeek,
+  weekDatesMondayToSunday,
+  type WeeklyStreak,
+} from './weekly-streak'
 
 const EMBER_200 = '#FFD6C7'
 const ON_DARK_MUTED = '#939DAB'
@@ -175,7 +181,7 @@ function ExecutorV3Inner({ planId, recoverDate, editDate }: { planId: string; re
   useEffect(() => () => { if (recentSetTimer.current) clearTimeout(recentSetTimer.current) }, [])
 
   const {
-    loading, planTitle, programName, phaseName, activeWeekVariant, currentWeek, weeksToRepeat, programStructure, cycleLength,
+    loading, planTitle, programName, phaseName, activeWeekVariant, currentWeek, weeksToRepeat, programStructure,
     dayOfWeek, clientId, blocks, sections, supersetMembersByBlock, sessionLogs, previousHistory, lastSessionByBlock,
     exerciseMaxes, elapsedSec, isOnline, restoredDraft, saveDraft, logSet, finishSession,
   } = session
@@ -236,11 +242,6 @@ function ExecutorV3Inner({ planId, recoverDate, editDate }: { planId: string; re
     () => blocks.map((b, i) => (isBlockComplete(b) ? 'done' : i === currentExerciseIdx ? 'now' : 'todo')),
     [blocks, isBlockComplete, currentExerciseIdx],
   )
-
-  const baseSub =
-    programStructure === 'cycle' ? `Día ${dayOfWeek || 1} de ${cycleLength || '?'}` : 'Programa semanal'
-  const subline = phaseName ? `${phaseName} · ${baseSub}` : baseSub
-  const nextHint = phaseName || programName ? subline : null
 
   // ── Abrir teclado para una serie (copia de ExecutorV2: sin cambios al motor). ──
   const openSet = useCallback(
@@ -627,6 +628,56 @@ function ExecutorV3Inner({ planId, recoverDate, editDate }: { planId: string; re
   )
   const checkInLastRelative = checkInReminder?.lastDay ? formatRelativeDate(checkInReminder.lastDay, todayIso) : null
 
+  // ── Racha semanal (E4.4) ── Lectura acotada a la semana (best-effort, gateada por clientId) que espeja
+  // la atribucion del dashboard (home.tsx momentumDays). FUENTE: `workout_plans` del alumno (dias con plan
+  // via day_of_week/assigned_date) + `workout_logs` de esta semana (fechas reales, huso Santiago). El motor
+  // NO viaja con el calendario semanal — sin esta lectura la racha seria inventada. Si falla (offline) queda
+  // null y la UI la oculta (jamas data falsa). No toca el motor de guardado.
+  const [weeklyStreak, setWeeklyStreak] = useState<WeeklyStreak | null>(null)
+  useEffect(() => {
+    if (!clientId) return
+    let active = true
+    const today = getTodayInSantiago().iso
+    const weekDates = weekDatesMondayToSunday(today)
+    const { startIso } = getSantiagoUtcBoundsForDay(weekDates[0])
+    const { endIso } = getSantiagoUtcBoundsForDay(weekDates[6])
+    void (async () => {
+      try {
+        const [{ data: programRow }, { data: logRows }] = await Promise.all([
+          // Espejo EXACTO de la lectura del dashboard (home.tsx): el programa ACTIVO del alumno con sus
+          // planes (day_of_week / assigned_date). Los planes fuera del programa activo no cuentan — misma
+          // regla que las day-cards, consistencia con la racha del dashboard.
+          supabase
+            .from('workout_programs')
+            .select('workout_plans ( day_of_week, assigned_date )')
+            .eq('client_id', clientId)
+            .eq('is_active', true)
+            .maybeSingle(),
+          supabase
+            .from('workout_logs')
+            .select('logged_at')
+            .eq('client_id', clientId)
+            .gte('logged_at', startIso)
+            .lt('logged_at', endIso),
+        ])
+        if (!active) return
+        const rawPlans = ((programRow as { workout_plans?: Array<{ day_of_week: number | null; assigned_date: string | null }> } | null)?.workout_plans) ?? []
+        const plans = rawPlans.map((p) => ({ day_of_week: p.day_of_week ?? null, assigned_date: p.assigned_date ?? null }))
+        const plannedDates = plannedDatesForWeek(plans, weekDates)
+        const doneDates = new Set<string>()
+        for (const r of (logRows as Array<{ logged_at: string }> | null) ?? []) {
+          doneDates.add(getSantiagoIsoYmdForUtcInstant(r.logged_at))
+        }
+        setWeeklyStreak(deriveWeeklyStreak({ weekDates, plannedDates, doneDates, todayIso: today }))
+      } catch {
+        if (active) setWeeklyStreak(null)
+      }
+    })()
+    return () => { active = false }
+    // Se relee al ABRIR la Final (`summaryOpen`) para reflejar la sesion recien cerrada de HOY; en el Inicio
+    // basta la lectura de montaje. No se re-consulta por cada serie (seria una query por set).
+  }, [clientId, summaryOpen])
+
   const substituteBlock = substituteBlockId ? blocks.find((b) => b.id === substituteBlockId) : null
 
   // ── Datos del Inicio V3 (E2.2) — derivados ya formateados para SessionStart/SessionIntro. ──
@@ -674,6 +725,19 @@ function ExecutorV3Inner({ planId, recoverDate, editDate }: { planId: string; re
 
     return { eyebrow, dayTitle, chips, summaryLine, preview, moreCount, lastVolumeLabel: fmtVolume(lastVolKg) }
   }, [planTitle, programName, programStructure, dayOfWeek, currentWeek, phaseName, activeWeekVariant, blocks, previousHistory, exec.accent])
+
+  // ── Contexto de la pantalla Final V3 (E4.3) — titulo celebratorio corto + subtitulo de contexto. ──
+  const finalContext = useMemo(() => {
+    const baseTitle = planTitle || programName || 'Tu sesión'
+    const useDayLabel = programStructure === 'cycle' && dayOfWeek != null
+    const completionLabel = useDayLabel ? `Día ${dayOfWeek}` : baseTitle
+    const parts: string[] = []
+    if (useDayLabel) parts.push(baseTitle)
+    if (currentWeek != null) parts.push(`Semana ${currentWeek}`)
+    if (phaseName) parts.push(phaseName)
+    if (activeWeekVariant) parts.push(`Variante ${activeWeekVariant}`)
+    return { completionLabel, contextLine: parts.length ? parts.join(' · ') : null }
+  }, [planTitle, programName, programStructure, dayOfWeek, currentWeek, phaseName, activeWeekVariant])
 
   // Render de un grupo (bloque suelto o superserie). En el stepper NO se colapsa a recap (siempre card
   // completa para editar) — allowCollapse implicito = false, igual que ExecutorV2 en modo Pasos.
@@ -1089,6 +1153,7 @@ function ExecutorV3Inner({ planId, recoverDate, editDate }: { planId: string; re
         coachNote={null}
         coachName={coachName}
         hasPartialSession={sessionLogs.length > 0}
+        weeklyStreak={weeklyStreak}
         reducedMotion={motion.reduced}
         onStart={() => setPhase('session')}
         onSkipToExercise={() => setPhase('session')}
@@ -1214,17 +1279,20 @@ function ExecutorV3Inner({ planId, recoverDate, editDate }: { planId: string; re
         }}
       />
 
-      <WorkoutSummaryOverlay
+      <SessionCompleteV3
         visible={summaryOpen}
+        exec={exec}
+        reducedMotion={!!motion.reduced}
+        completionLabel={finalContext.completionLabel}
         planTitle={planTitle}
+        contextLine={finalContext.contextLine}
         blocks={summaryBlocks}
         logs={sessionLogs}
         exerciseMaxes={exerciseMaxes}
         exerciseMaxDates={exerciseMaxDates}
         durationSec={finishedElapsed ?? elapsedSec}
-        programName={programName}
-        nextHint={nextHint}
         substitutedBlockIds={substitutedBlockIds}
+        weeklyStreak={weeklyStreak}
         checkInReminder={checkInReminder}
         checkInLastRelative={checkInLastRelative}
         onCheckIn={() => router.replace('/alumno/check-in')}

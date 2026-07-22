@@ -36,6 +36,8 @@ import { SupersetStepV3 } from './v3/SupersetStepV3'
 import { ExecListMapV3, type ExecListMapItem } from './v3/ExecListMapV3'
 import { SessionIntro } from './v3/SessionIntro'
 import { SessionStart, type SessionStartExercise } from './v3/SessionStart'
+import { SessionCompleteV3 } from './v3/SessionCompleteV3'
+import { computeWeeklyStreak, type WeekStatusDaySource } from './v3/weekly-streak'
 import { ExecSettingsSheet } from './v3/ExecSettingsSheet'
 import { RestInterstitialDataProvider, type InterstitialNext, type InterstitialRound } from './v3/RestInterstitialV3'
 import { resolveExecMedia } from './v3/exec-media'
@@ -241,6 +243,13 @@ interface Props {
      * se aplica en cliente tras montar, pisando este valor.
      */
     executorV3?: boolean
+    /**
+     * Ejecutor V3 (E4.4): estado de la semana actual (Lun→Dom) para la RACHA SEMANAL de Inicio y
+     * Final V3. Resuelto server-side sólo con el flag V3 ON (`getExecutorWeekStatusDays`). `null` =
+     * dato ausente (sin programa activo, o V3 encendido sólo por override cliente) ⇒ no se muestra la
+     * racha (jamás dato falso).
+     */
+    weekStatusDays?: WeekStatusDaySource[] | null
 }
 
 function ManualTimerButton({ defaultTime }: { defaultTime: string | null }) {
@@ -1018,6 +1027,7 @@ export function WorkoutExecutionClient({
     targetDate = null,
     recoverDate = null,
     executorV3 = false,
+    weekStatusDays = null,
 }: Props) {
     const router = useRouter()
     const base = useBasePath(`/c/${coachSlug}`)
@@ -2047,6 +2057,16 @@ export function WorkoutExecutionClient({
     const editWeekday = targetDate ? weekdayNameFromIso(targetDate) : ''
     const recoverWeekday = recoverDate ? weekdayNameFromIso(recoverDate) : ''
 
+    // Ejecutor V3 (E4.4): racha semanal derivada del estado de la semana (server-side, flag V3 ON).
+    // Compartida por Inicio (SessionStart) y Final V3. `null` ⇒ la pieza no se muestra (dato ausente).
+    const weeklyStreak = weekStatusDays && weekStatusDays.length > 0 ? computeWeeklyStreak(weekStatusDays) : null
+
+    // Subtítulo contextual del cierre V3 ("Semana 2 · Fase Fuerza · Variante A") — mismos chips que Inicio.
+    const execV3ContextLine =
+        [currentWeek != null ? `Semana ${currentWeek}` : null, phaseName, activeWeekVariant ? `Variante ${activeWeekVariant}` : null]
+            .filter(Boolean)
+            .join(' · ') || null
+
     // Ejecutor V3 (E2.2): view-model de la pantalla de Inicio, mapeado de lo que YA viaja al client
     // (plan/logs/lastSession). Toda pieza sin dato se omite. Sólo se calcula en modo V3.
     const execV3StartVM = (() => {
@@ -2145,6 +2165,7 @@ export function WorkoutExecutionClient({
                                 {...execV3StartVM}
                                 onStart={enterExecV3Session}
                                 onSkip={enterExecV3Session}
+                                streak={weeklyStreak}
                                 reducedMotion={reducedMotion}
                             />
                         )}
@@ -2406,8 +2427,26 @@ export function WorkoutExecutionClient({
                     />
                 )}
 
-                {/* Workout Completed Overlay */}
-                {showCompleted ? createPortal(
+                {/* Workout Completed Overlay — Final V3 (E4.3, dentro del root para heredar --exec-brand)
+                    en modo V3; el resumen V2 (portal a body) queda intacto para el ejecutor legacy. */}
+                {showCompleted && execV3Active && (
+                    <SessionCompleteV3
+                        planTitle={plan.title}
+                        contextLine={execV3ContextLine}
+                        logs={sessionLogs}
+                        blocks={plan.workout_blocks}
+                        exerciseMaxes={exerciseMaxes}
+                        exerciseMaxDates={exerciseMaxDates}
+                        durationSec={finishedElapsed ?? sessionElapsed}
+                        plannedSets={requiredSets}
+                        streak={weeklyStreak}
+                        programName={program?.name ?? null}
+                        nextHint={nextHint}
+                        substitutedBlockIds={Object.keys(substitutionByBlock)}
+                        onDone={() => router.push(`${base}/dashboard`)}
+                    />
+                )}
+                {showCompleted && !execV3Active ? createPortal(
                     <WorkoutSummaryOverlay
                         planTitle={plan.title}
                         logs={sessionLogs}
