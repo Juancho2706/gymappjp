@@ -50,14 +50,27 @@ import { WorkoutTimerProvider, useWorkoutTimers } from '../timers/TimerProvider'
 import { isRestAutoTimerEnabled, parseRestTime } from '../timers'
 import { SubstituteExerciseSheet } from '../SubstituteExerciseSheet'
 import { SUBSTITUTION_REASON } from '../../../../lib/workout/substitution'
-import { bestPrevOf, fmtElapsed } from '../workout-ui'
+import { bestPrevOf, fmtElapsed, fmtVolume } from '../workout-ui'
+import { EXERCISE_TYPE_META, exerciseTypeColor } from '../../../../lib/exercise-type-meta'
 import { ExecHeaderV3, type ExecDotState } from './ExecHeaderV3'
 import { resolveExecTheme } from './exec-theme'
+import { SessionIntro } from './SessionIntro'
+import { SessionStart, type StartChip, type StartExercisePreview } from './SessionStart'
+import { ExerciseScreenV3 } from './ExerciseScreenV3'
 
 const EMBER_200 = '#FFD6C7'
 const ON_DARK_MUTED = '#939DAB'
 // Letras de miembro por posicion (A, B, C…) para la senal "Sigue con {label}" de las superseries.
 const SUPERSET_MEMBER_LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+// Nombres de dia (es, con tilde) indexados por getTodayInSantiago().dayOfWeek (1=Lunes..7=Domingo) —
+// para el eyebrow "Hoy · {dia} {n}" del Inicio V3 sin depender de Intl (Hermes limitado).
+const WEEKDAY_ES = ['', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo']
+// Estimacion de duracion del Inicio V3: trabajo por serie strength ≈ 40s (tipado usa su duration_sec).
+const WORK_SEC_PER_SET = 40
+// Cuantos ejercicios lista el Inicio antes del "+ N mas".
+const START_PREVIEW_COUNT = 4
+// Fases de presentacion del ejecutor V3: splash (una vez por apertura) → Inicio → sesion (stepper).
+type ExecPhase = 'intro' | 'start' | 'session'
 
 // Media/tecnica del sustituto (paridad ExecutorV2): el modal de tecnica y la CTA dependen de que el
 // gif/video/instrucciones viajen aqui.
@@ -123,11 +136,13 @@ function ExecutorV3Inner({ planId, recoverDate, editDate }: { planId: string; re
   const [stepIndex, setStepIndex] = useState(0)
   const autoAdvancedRef = useRef<Set<string>>(new Set())
   const didHydrateStepPosRef = useRef(false)
+  // Fase de presentacion V3: arranca en el splash (una vez por apertura) → Inicio → sesion.
+  const [phase, setPhase] = useState<ExecPhase>('intro')
 
   useEffect(() => () => { if (recentSetTimer.current) clearTimeout(recentSetTimer.current) }, [])
 
   const {
-    loading, planTitle, programName, phaseName, currentWeek, weeksToRepeat, programStructure, cycleLength,
+    loading, planTitle, programName, phaseName, activeWeekVariant, currentWeek, weeksToRepeat, programStructure, cycleLength,
     dayOfWeek, clientId, blocks, sections, supersetMembersByBlock, sessionLogs, previousHistory, lastSessionByBlock,
     exerciseMaxes, elapsedSec, isOnline, restoredDraft, saveDraft, logSet, finishSession,
   } = session
@@ -502,6 +517,52 @@ function ExecutorV3Inner({ planId, recoverDate, editDate }: { planId: string; re
 
   const substituteBlock = substituteBlockId ? blocks.find((b) => b.id === substituteBlockId) : null
 
+  // ── Datos del Inicio V3 (E2.2) — derivados ya formateados para SessionStart/SessionIntro. ──
+  const coachName = branding?.displayName?.trim() || 'Tu coach'
+  const coachInitial = (coachName[0] ?? 'E').toUpperCase()
+  const coachLogoUrl = branding?.logoUrl ?? null
+  const startData = useMemo(() => {
+    const today = getTodayInSantiago()
+    const dayNum = parseInt(today.iso.split('-')[2] ?? '', 10)
+    const weekday = WEEKDAY_ES[today.dayOfWeek] ?? ''
+    const eyebrow = `Hoy · ${weekday}${Number.isFinite(dayNum) ? ` ${dayNum}` : ''}`
+
+    const baseTitle = planTitle || programName || 'Tu sesión'
+    const dayTitle = programStructure === 'cycle' && dayOfWeek ? `Día ${dayOfWeek} · ${baseTitle}` : baseTitle
+
+    const chips: StartChip[] = []
+    if (currentWeek != null) chips.push({ label: `Semana ${currentWeek}` })
+    if (phaseName) chips.push({ label: phaseName })
+    if (activeWeekVariant) chips.push({ label: `Variante ${activeWeekVariant}`, plain: true })
+
+    const totalSets = blocks.reduce((n, b) => n + (b.sets || 0), 0)
+    // Estimacion de duracion: por bloque, series × (trabajo + descanso). Trabajo strength ≈ 40s
+    // (WORK_SEC_PER_SET); un bloque tipado usa su `duration_sec` si existe. Descanso = parseRestTime.
+    // Total = round(Σ / 60), piso 1 min.
+    const totalSec = blocks.reduce((acc, b) => {
+      const work = b.duration_sec && b.duration_sec > 0 ? b.duration_sec : WORK_SEC_PER_SET
+      return acc + (b.sets || 0) * (work + parseRestTime(b.rest_time))
+    }, 0)
+    const minutes = Math.max(1, Math.round(totalSec / 60))
+    const summaryLine = `${blocks.length} ejercicio${blocks.length === 1 ? '' : 's'} · ${totalSets} serie${totalSets === 1 ? '' : 's'} · ~${minutes} min`
+
+    const preview: StartExercisePreview[] = blocks.slice(0, START_PREVIEW_COUNT).map((b) => {
+      const ex = resolveExercise(b)
+      const t = ex ? effectiveExerciseType(b, ex) : 'strength'
+      return { name: ex?.name ?? 'Ejercicio', typeLabel: EXERCISE_TYPE_META[t].label, typeColor: exerciseTypeColor(t, exec.accent) }
+    })
+    const moreCount = Math.max(0, blocks.length - START_PREVIEW_COUNT)
+
+    // "La ultima vez": volumen = Σ(peso × reps) del historial previo (previousHistory ya viene acotado
+    // a los ejercicios del plan y al dia mas reciente por ejercicio). fmtVolume ⇒ null si 0.
+    let lastVolKg = 0
+    for (const list of Object.values(previousHistory)) {
+      for (const ps of list) lastVolKg += (ps.weight_kg ?? 0) * (ps.reps_done ?? 0)
+    }
+
+    return { eyebrow, dayTitle, chips, summaryLine, preview, moreCount, lastVolumeLabel: fmtVolume(lastVolKg) }
+  }, [planTitle, programName, programStructure, dayOfWeek, currentWeek, phaseName, activeWeekVariant, blocks, previousHistory, exec.accent])
+
   // Render de un grupo (bloque suelto o superserie). En el stepper NO se colapsa a recap (siempre card
   // completa para editar) — allowCollapse implicito = false, igual que ExecutorV2 en modo Pasos.
   const renderGroup = useCallback(
@@ -563,6 +624,37 @@ function ExecutorV3Inner({ planId, recoverDate, editDate }: { planId: string; re
       const complete = doneCount >= block.sets
       const focus: 'active' | 'upcoming' | 'done' = complete ? 'done' : block.id === activeBlockId ? 'active' : 'upcoming'
       const prevList: PrevSet[] = sub ? [] : previousHistory[exercise.id] ?? []
+      // E2.3: la pantalla "Fuerza" V3 reemplaza el cuerpo del paso para bloques strength (media siempre
+      // visible + chips glass + prescripcion compacta + "Anterior" 1-tap). Los demas tipos siguen con
+      // SingleExerciseCard hasta la Ola 3. Las SetRow se REUSAN dentro (motor intocable).
+      if (isStrengthBlock) {
+        return (
+          <ExerciseScreenV3
+            key={block.id}
+            block={block}
+            exercise={exercise}
+            eff={effByBlock.get(block.id) ?? null}
+            currentWeek={currentWeek}
+            blockLogs={blockLogs}
+            prevList={prevList}
+            restoredDraft={restoredDraft}
+            reducedMotion={motion.reduced}
+            exec={exec}
+            substitution={sub ? { name: sub.name, prescribedName: sub.prescribedName } : null}
+            canSubstitute={doneCount === 0}
+            onOpenTechnique={() => setTechniqueExercise(exercise)}
+            onOpenSet={(setNumber) => openSet(block.id, setNumber)}
+            onCommitSet={handleCommit}
+            onRpeUpdate={handleRpeUpdate}
+            onDraftChange={saveActiveDraft}
+            onOpenSubstitute={() => setSubstituteBlockId(block.id)}
+            onUndoSubstitution={() => setSubstitutionByBlock((p) => { const n = { ...p }; delete n[block.id]; return n })}
+            recentSet={recentSet}
+            syncErrors={syncErrors}
+            onRetrySet={retryCommit}
+          />
+        )
+      }
       return (
         <SingleExerciseCard
           key={block.id}
@@ -594,7 +686,7 @@ function ExecutorV3Inner({ planId, recoverDate, editDate }: { planId: string; re
         />
       )
     },
-    [supersetMembersByBlock, sessionLogs, effByBlock, currentWeek, activeBlockId, previousHistory, openDetails, getSubstitution, openSet, hrZones, restoredDraft, motion.reduced, exec.accent, handleCommit, handleRpeUpdate, saveActiveDraft, recentSet, syncErrors, retryCommit],
+    [supersetMembersByBlock, sessionLogs, effByBlock, currentWeek, activeBlockId, previousHistory, openDetails, getSubstitution, openSet, hrZones, restoredDraft, motion.reduced, exec, handleCommit, handleRpeUpdate, saveActiveDraft, recentSet, syncErrors, retryCommit],
   )
 
   // ── Modelo de pasos (engine) + vistas del rail + auto-avance ──
@@ -686,6 +778,44 @@ function ExecutorV3Inner({ planId, recoverDate, editDate }: { planId: string; re
           <Text className="font-sans-bold" style={{ color: exec.accentText }}>Volver al Dashboard</Text>
         </Pressable>
       </SafeAreaView>
+    )
+  }
+
+  // ── Fase Entrada (E2.2): splash <1,5s, una vez por apertura. Full-bleed (sin safe area, es un splash). ──
+  if (phase === 'intro') {
+    return (
+      <View className="flex-1" style={{ backgroundColor: exec.surface.appBg }}>
+        <SessionIntro
+          exec={exec}
+          coachInitial={coachInitial}
+          coachLogoUrl={coachLogoUrl}
+          dayTitle={startData.dayTitle}
+          reducedMotion={motion.reduced}
+          onDone={() => setPhase('start')}
+        />
+      </View>
+    )
+  }
+
+  // ── Fase Inicio (E2.2): contexto + CTA EMPEZAR. "Saltar al ejercicio" si ya hay series hoy. ──
+  if (phase === 'start') {
+    return (
+      <SessionStart
+        exec={exec}
+        eyebrow={startData.eyebrow}
+        dayTitle={startData.dayTitle}
+        chips={startData.chips}
+        summaryLine={startData.summaryLine}
+        exercises={startData.preview}
+        moreCount={startData.moreCount}
+        lastVolumeLabel={startData.lastVolumeLabel}
+        coachNote={null}
+        coachName={coachName}
+        hasPartialSession={sessionLogs.length > 0}
+        reducedMotion={motion.reduced}
+        onStart={() => setPhase('session')}
+        onSkipToExercise={() => setPhase('session')}
+      />
     )
   }
 

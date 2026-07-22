@@ -1449,3 +1449,474 @@ body > * {
   30% { transform: scale(1.3); }
   45% { transform: scale(1); }
 }
+
+/* ---- Acento por exec-theme: el subtree V3 adopta la marca resuelta (--exec-brand) en toda la rampa
+   sport que el motor reusado ya referencia (LogSetForm, barras, chips). Coach → white-label;
+   EVA → Sport. Scoped al flag, reversible. ---- */
+[data-exec-v3] {
+  --sport-500: var(--exec-brand);
+  --sport-400: color-mix(in srgb, var(--exec-brand) 82%, #fff);
+  --sport-300: color-mix(in srgb, var(--exec-brand) 68%, #fff);
+}
+
+/* ---- Botón juicy (E2.2/E2.4): sombra inferior dura ~5px del acento oscurecido; se hunde al presionar. ---- */
+[data-exec-v3] .exec-v3-juicy {
+  border: 2px solid color-mix(in srgb, var(--exec-brand) 55%, #000);
+  background: var(--exec-brand);
+  color: #fff;
+  font-weight: 900;
+  letter-spacing: -0.01em;
+  border-radius: 16px;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.18);
+  box-shadow: 0 5px 0 0 color-mix(in srgb, var(--exec-brand) 55%, #000);
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+[data-exec-v3] .exec-v3-juicy:active {
+  transform: translateY(5px);
+  box-shadow: 0 0 0 0 color-mix(in srgb, var(--exec-brand) 55%, #000);
+}
+
+/* ---- Inicio (E2.2) ---- */
+[data-exec-v3] .exec-v3-start {
+  background: radial-gradient(120% 80% at 50% -8%, #1c1c24 0%, #16161d 42%, #121218 100%);
+  color: #f4f4f6;
+}
+[data-exec-v3] .exec-v3-eyb {
+  width: max-content;
+  align-self: flex-start;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--exec-brand);
+  background: color-mix(in srgb, var(--exec-brand) 12%, #16161d);
+  border: 1.5px solid color-mix(in srgb, var(--exec-brand) 30%, transparent);
+  padding: 5px 12px;
+  border-radius: 999px;
+}
+[data-exec-v3] .exec-v3-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 5px 11px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--exec-brand) 16%, #16161d);
+  color: color-mix(in srgb, var(--exec-brand) 82%, #fff);
+  border: 1.5px solid color-mix(in srgb, var(--exec-brand) 34%, transparent);
+}
+[data-exec-v3] .exec-v3-chip.is-plain {
+  background: #1c1c24;
+  color: #b7b7c2;
+  border-color: #33333f;
+}
+[data-exec-v3] .exec-v3-plan {
+  background: #1a1a22;
+  border: 2px solid #2a2a34;
+  border-radius: 18px;
+  padding: 6px;
+}
+[data-exec-v3] .exec-v3-prow {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 9px 10px;
+}
+[data-exec-v3] .exec-v3-prow + .exec-v3-prow {
+  border-top: 1.5px solid #24242e;
+}
+[data-exec-v3] .exec-v3-pidx {
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 900;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #24242e;
+  color: #8f8f9c;
+}
+[data-exec-v3] .exec-v3-pname {
+  flex: 1;
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 800;
+  color: #e8e8ee;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+[data-exec-v3] .exec-v3-ptag {
+  flex-shrink: 0;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--exec-brand) 14%, #16161d);
+  color: color-mix(in srgb, var(--exec-brand) 80%, #fff);
+}
+[data-exec-v3] .exec-v3-ptag.is-cardio {
+  background: color-mix(in srgb, #4ade80 15%, #16161d);
+  color: #4ade80;
+}
+[data-exec-v3] .exec-v3-ptag.is-other {
+  background: #24242e;
+  color: #b7b7c2;
+}
+[data-exec-v3] .exec-v3-pmore {
+  text-align: center;
+  font-size: 11px;
+  font-weight: 800;
+  color: #6f6f7c;
+  padding: 4px 0 6px;
+}
+[data-exec-v3] .exec-v3-ctx {
+  background: #17171f;
+  border: 1.5px solid #2a2a34;
+  border-radius: 14px;
+  padding: 10px 12px;
+}
+[data-exec-v3] .exec-v3-ctx-k {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #7f7f8c;
+  margin-bottom: 4px;
+}
+[data-exec-v3] .exec-v3-ctx-v {
+  font-size: 15px;
+  font-weight: 900;
+  letter-spacing: -0.01em;
+  color: #f4f4f6;
+}
+[data-exec-v3] .exec-v3-startcta {
+  width: 100%;
+  min-height: 60px;
+  height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  font-size: 20px;
+  letter-spacing: 0.04em;
+}
+[data-exec-v3] .exec-v3-play {
+  width: 0;
+  height: 0;
+  border-style: solid;
+  border-width: 9px 0 9px 15px;
+  border-color: transparent transparent transparent #fff;
+}
+
+/* ---- Fuerza (E2.4) ---- */
+[data-exec-v3] .exec-v3-exname {
+  font-size: 26px;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+  line-height: 1.05;
+  color: #f4f4f6;
+}
+[data-exec-v3] .exec-v3-media {
+  position: relative;
+  height: 150px;
+  border-radius: 22px;
+  overflow: hidden;
+  border: 2px solid #2f2f3a;
+  background: linear-gradient(160deg, #202029, #17171f);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+[data-exec-v3] .exec-v3-media-empty {
+  color: #3f3f4a;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+[data-exec-v3] .exec-v3-media-yt {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: #eaeaf0;
+}
+[data-exec-v3] .exec-v3-media-play {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--exec-brand);
+  color: #fff;
+  box-shadow: 0 6px 18px -6px color-mix(in srgb, var(--exec-brand) 70%, transparent);
+}
+[data-exec-v3] .exec-v3-mediachips {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  right: 10px;
+  display: flex;
+  gap: 7px;
+  z-index: 4;
+}
+[data-exec-v3] .exec-v3-mchip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 800;
+  padding: 6px 11px;
+  border-radius: 999px;
+  min-height: 30px;
+  background: rgba(8, 8, 12, 0.6);
+  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
+  border: 1.5px solid rgba(255, 255, 255, 0.16);
+  color: #eaeaf0;
+}
+[data-exec-v3] .exec-v3-mlabel {
+  display: inline-block;
+  overflow: hidden;
+  white-space: nowrap;
+  max-width: 120px;
+}
+[data-exec-v3] .exec-v3-badge {
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--exec-brand);
+  box-shadow: 0 0 0 2px #16161d;
+}
+/* Chips glass: entran extendidos y colapsan a solo-icono (~1,2 s), una sola vez; remontan al
+   cambiar de serie (key en el contenedor). Reduced-motion → quedan extendidos. */
+@media (prefers-reduced-motion: no-preference) {
+  [data-exec-v3] .exec-v3-mchip .exec-v3-mlabel {
+    animation: exec-v3-mlabel-collapse 1.6s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  }
+}
+@keyframes exec-v3-mlabel-collapse {
+  0%, 55% { max-width: 120px; opacity: 1; margin-left: 0; }
+  100% { max-width: 0; opacity: 0; margin-left: -6px; }
+}
+[data-exec-v3] .exec-v3-rx {
+  font-size: 13px;
+  font-weight: 700;
+  color: #c4c4cf;
+  text-align: center;
+  letter-spacing: 0.01em;
+}
+[data-exec-v3] .exec-v3-rx b {
+  color: #fff;
+}
+[data-exec-v3] .exec-v3-overload {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 800;
+  padding: 3px 9px;
+  border-radius: 999px;
+  border: 1.5px solid color-mix(in srgb, var(--exec-brand) 34%, transparent);
+  background: color-mix(in srgb, var(--exec-brand) 12%, #16161d);
+  color: color-mix(in srgb, var(--exec-brand) 82%, #fff);
+}
+[data-exec-v3] .exec-v3-prev {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 11px 15px;
+  border-radius: 14px;
+  background: #1b1b23;
+  border: 2px dashed #34343f;
+  transition: background-color 0.12s ease, transform 0.1s ease;
+}
+[data-exec-v3] .exec-v3-prev:enabled:hover {
+  background: #20202a;
+}
+[data-exec-v3] .exec-v3-prev:enabled:active {
+  transform: scale(0.99);
+}
+[data-exec-v3] .exec-v3-prev:disabled {
+  cursor: default;
+}
+[data-exec-v3] .exec-v3-prev-l {
+  font-size: 12px;
+  color: #8f8f9c;
+  font-weight: 700;
+}
+[data-exec-v3] .exec-v3-prev-r {
+  font-size: 14px;
+  font-weight: 800;
+  color: #e8e8ee;
+}
+[data-exec-v3] .exec-v3-prev-tap {
+  margin-left: auto;
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--exec-brand);
+}
+[data-exec-v3] .exec-v3-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 2px;
+}
+[data-exec-v3] .exec-v3-sets {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+[data-exec-v3] .exec-v3-sq {
+  width: 22px;
+  height: 22px;
+  border-radius: 8px;
+  background: #26262f;
+  border: 2px solid #34343f;
+}
+[data-exec-v3] .exec-v3-sq.is-on {
+  background: var(--exec-brand);
+  border-color: color-mix(in srgb, var(--exec-brand) 55%, #000);
+}
+[data-exec-v3] .exec-v3-setlbl {
+  font-size: 12px;
+  font-weight: 800;
+  color: #8f8f9c;
+  margin-left: 4px;
+}
+/* CTA de la serie: el submit ETIQUETADO ("Listo"/"Guardar") del LogSetForm reusado se vuelve juicy
+   (NO el botón redondo de series no activas). Cero cambios a su lógica; sólo presentación. */
+[data-exec-v3] .exec-v3-setlist button[type='submit']:not(.rounded-full) {
+  min-height: 56px;
+  border-radius: 15px;
+  border: 2px solid color-mix(in srgb, var(--exec-brand) 55%, #000);
+  box-shadow: 0 5px 0 0 color-mix(in srgb, var(--exec-brand) 55%, #000);
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+[data-exec-v3] .exec-v3-setlist button[type='submit']:not(.rounded-full):active {
+  transform: translateY(5px);
+  box-shadow: 0 0 0 0 color-mix(in srgb, var(--exec-brand) 55%, #000);
+}
+
+/* ---- Entrada / splash (E2.2) ---- */
+[data-exec-v3] .exec-v3-splash {
+  background: radial-gradient(
+    120% 90% at 50% 22%,
+    color-mix(in srgb, var(--exec-brand) 46%, #0a0a0f) 0%,
+    color-mix(in srgb, var(--exec-brand) 20%, #0c0c11) 44%,
+    #0a0a0f 100%
+  );
+}
+[data-exec-v3] .exec-v3-splash-coach {
+  position: relative;
+  width: 116px;
+  height: 116px;
+}
+[data-exec-v3] .exec-v3-splash-halo {
+  position: absolute;
+  inset: 8px;
+  border-radius: 50%;
+  box-shadow: 0 0 0 0 color-mix(in srgb, var(--exec-brand) 40%, transparent);
+}
+[data-exec-v3] .exec-v3-splash-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: conic-gradient(
+    from 0deg,
+    var(--exec-brand),
+    color-mix(in srgb, var(--exec-brand) 22%, transparent) 130deg,
+    var(--exec-brand) 300deg,
+    var(--exec-brand) 360deg
+  );
+  -webkit-mask: radial-gradient(closest-side, transparent 78%, #000 79%);
+  mask: radial-gradient(closest-side, transparent 78%, #000 79%);
+  opacity: 0.9;
+}
+[data-exec-v3] .exec-v3-splash-av {
+  position: absolute;
+  inset: 11px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--exec-brand), color-mix(in srgb, var(--exec-brand) 48%, #000));
+  color: #fff;
+  font-size: 42px;
+  font-weight: 900;
+  letter-spacing: -0.03em;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.28), inset 0 -8px 16px rgba(0, 0, 0, 0.25);
+}
+[data-exec-v3] .exec-v3-splash-day {
+  font-size: 30px;
+  font-weight: 900;
+  letter-spacing: -0.03em;
+  color: #fff;
+  text-align: center;
+  text-shadow: 0 2px 18px rgba(0, 0, 0, 0.35);
+}
+[data-exec-v3] .exec-v3-splash-prep {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--exec-brand) 30%, #ffffff);
+}
+[data-exec-v3] .exec-v3-splash-dots {
+  display: inline-flex;
+  gap: 6px;
+}
+[data-exec-v3] .exec-v3-splash-dots i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.55;
+}
+[data-exec-v3] .exec-v3-splash-skip {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 30px;
+  text-align: center;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.58);
+}
+@media (prefers-reduced-motion: no-preference) {
+  [data-exec-v3] .exec-v3-splash-halo { animation: exec-v3-halo 2.2s ease-out infinite; }
+  [data-exec-v3] .exec-v3-splash-ring { animation: exec-v3-spin 6s linear infinite; }
+  [data-exec-v3] .exec-v3-splash-dots i { animation: exec-v3-prepdot 1.2s ease-in-out infinite; }
+  [data-exec-v3] .exec-v3-splash-dots i:nth-child(2) { animation-delay: 0.16s; }
+  [data-exec-v3] .exec-v3-splash-dots i:nth-child(3) { animation-delay: 0.32s; }
+}
+@keyframes exec-v3-halo {
+  0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--exec-brand) 42%, transparent); }
+  70%, 100% { box-shadow: 0 0 0 30px color-mix(in srgb, var(--exec-brand) 0%, transparent); }
+}
+@keyframes exec-v3-spin {
+  to { transform: rotate(360deg); }
+}
+@keyframes exec-v3-prepdot {
+  0%, 100% { transform: translateY(0); opacity: 0.5; }
+  50% { transform: translateY(-5px); opacity: 1; }
+}

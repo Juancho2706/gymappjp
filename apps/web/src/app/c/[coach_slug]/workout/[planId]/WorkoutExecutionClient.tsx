@@ -28,6 +28,9 @@ import {
 import { StepperExecution, type StepperStepView } from './StepperExecution'
 import { ExecHeaderV3, type ExecDotState } from './v3/ExecHeaderV3'
 import { applyExecThemeVars, readExecutorTheme } from './v3/exec-theme'
+import { ExerciseStepV3 } from './v3/ExerciseStepV3'
+import { SessionIntro } from './v3/SessionIntro'
+import { SessionStart, type SessionStartExercise } from './v3/SessionStart'
 import { STEPPER_MODE_KEY } from './rest-timer-preferences'
 import { SubstituteExerciseSheet } from './_components/SubstituteExerciseSheet'
 import { SUBSTITUTION_REASON } from '@/services/workout/exercise-substitution'
@@ -1014,6 +1017,11 @@ export function WorkoutExecutionClient({
     const markWorkoutTouched = useCallback(() => {
         try { sessionStorage.setItem(workoutTouchedKey, '1') } catch { /* private mode / SSR */ }
     }, [workoutTouchedKey])
+    // Ejecutor V3 (E2.2): gate de Entrada+Inicio por apertura, keyeado por plan+día objetivo.
+    const execV3EnteredKey = `eva:exec-v3-entered:${plan.id}:${targetDate ?? plan.assigned_date ?? plan.day_of_week ?? 'hoy'}`
+    const markExecV3Entered = useCallback(() => {
+        try { sessionStorage.setItem(execV3EnteredKey, '1') } catch { /* private mode / SSR */ }
+    }, [execV3EnteredKey])
     const blockRefs = useRef<Map<string, HTMLDivElement>>(new Map())
     // Superserie (F2): refs por fila de serie (block:set) para el auto-scroll intercalado.
     const setRowRefs = useRef<Map<string, HTMLDivElement>>(new Map())
@@ -1039,6 +1047,10 @@ export function WorkoutExecutionClient({
     // `eva:executor-v3` (on/off). SSR renderiza el flag server-side; el override es hidratación-safe.
     const [execV3Active, setExecV3Active] = useState(false)
     const [showExecV3Settings, setShowExecV3Settings] = useState(false)
+    // Ejecutor V3 (E2.2): fase de apertura del shell V3 — Entrada (splash) → Inicio → sesión. Sólo
+    // vive en modo V3; se resuelve tras montar contra sessionStorage (una vez por apertura, plan+día).
+    // Default 'session' = SSR-safe (el motor va montado desde el inicio; los overlays son fixed encima).
+    const [execV3Phase, setExecV3Phase] = useState<'intro' | 'start' | 'session'>('session')
     // Wrapper del ejecutor: exec-theme.ts setea aquí --exec-brand/--exec-recovery/--exec-celebration.
     const execRootRef = useRef<HTMLDivElement | null>(null)
     const [showCompleted, setShowCompleted] = useState(false)
@@ -1325,7 +1337,15 @@ export function WorkoutExecutionClient({
             else if (ov === 'off') v3 = false
         } catch { /* localStorage no disponible: usa el flag server */ }
         setExecV3Active(v3)
-        if (v3) applyExecThemeVars(execRootRef.current, readExecutorTheme(execRootRef.current))
+        if (v3) {
+            applyExecThemeVars(execRootRef.current, readExecutorTheme(execRootRef.current))
+            // Entrada + Inicio una vez por apertura (sessionStorage por plan+día). Ya entrado → directo
+            // a la sesión (reload mid-entreno no re-fuerza el splash). El día = fecha objetivo si edita
+            // un día pasado, si no la fecha asignada del plan.
+            let entered = false
+            try { entered = sessionStorage.getItem(execV3EnteredKey) === '1' } catch { /* SSR / private */ }
+            setExecV3Phase(entered ? 'session' : 'intro')
+        }
 
         const stepperPref = (() => {
             try { return localStorage.getItem(STEPPER_MODE_KEY) } catch { return null }
@@ -1770,6 +1790,35 @@ export function WorkoutExecutionClient({
                             </Fragment>
                         )
                     }
+                    // Ejecutor V3 (E2.4): en el stepper (allowCollapse=false), los pasos STRENGTH se
+                    // presentan con ExerciseStepV3 (media siempre visible + chips glass + "Anterior"
+                    // 1-tap) REUSANDO el mismo LogSetForm/handlers. La lista y las superseries siguen con
+                    // SingleExerciseCard (Ola 3). Los valores derivados ya están calculados arriba.
+                    if (execV3Active && !allowCollapse && effType === 'strength') {
+                        return (
+                            <ExerciseStepV3
+                                key={block.id}
+                                block={block}
+                                exercise={exercise}
+                                effType={effType}
+                                suggestedWeightKg={suggestedWeightKg}
+                                overloadLabel={overloadLabel}
+                                bestPrev={bestPrev}
+                                firstUnlogged={firstUnlogged}
+                                doneCount={doneCount}
+                                blockLogs={blockLogs}
+                                exerciseMaxes={exerciseMaxes}
+                                fillEntry={fillByBlock[block.id]}
+                                setFillByBlock={setFillByBlock}
+                                reopenSignal={reopenSignal}
+                                substitution={sub ? { exerciseId: sub.id, exerciseName: sub.name, reason: SUBSTITUTION_REASON } : null}
+                                autoTimerEnabled={autoTimerEnabled}
+                                openTechnique={openTechnique}
+                                handleLogged={handleLogged}
+                                handleResult={handleResult}
+                            />
+                        )
+                    }
                     return (
                         <Fragment key={block.id}>
                         <SingleExerciseCard
@@ -1848,6 +1897,56 @@ export function WorkoutExecutionClient({
     const editWeekday = targetDate ? weekdayNameFromIso(targetDate) : ''
     const recoverWeekday = recoverDate ? weekdayNameFromIso(recoverDate) : ''
 
+    // Ejecutor V3 (E2.2): view-model de la pantalla de Inicio, mapeado de lo que YA viaja al client
+    // (plan/logs/lastSession). Toda pieza sin dato se omite. Sólo se calcula en modo V3.
+    const execV3StartVM = (() => {
+        if (!execV3Active) return null
+        const startIso = targetDate ?? getTodayInSantiago().iso
+        const weekday = weekdayNameFromIso(startIso)
+        const dayNum = Number(startIso.slice(8, 10)) || null
+        const eyebrow = `${targetDate ? '' : 'Hoy · '}${weekday}${dayNum ? ` ${dayNum}` : ''}`.trim()
+
+        const chips: string[] = []
+        if (currentWeek != null) chips.push(`Semana ${currentWeek}`)
+        if (phaseName) chips.push(phaseName)
+        if (activeWeekVariant) chips.push(`Variante ${activeWeekVariant}`)
+
+        const miniList: SessionStartExercise[] = blocks.slice(0, 4).map((b) => {
+            const ex = getExercise(b)
+            const t = effectiveExerciseType(b, ex)
+            const tone: SessionStartExercise['tone'] = t === 'strength' ? 'strength' : t === 'cardio' ? 'cardio' : 'other'
+            return { name: ex?.name ?? 'Ejercicio', tag: RUT_TYPE_META[t].label, tone }
+        })
+
+        let lastVolKg = 0
+        for (const b of blocks) {
+            const ls = lastSessionByBlock[b.id]
+            if (ls) for (const s of ls.sets) lastVolKg += (s.weight_kg ?? 0) * (s.reps_done ?? 0)
+        }
+
+        return {
+            eyebrow,
+            dayTitle: plan.title,
+            chips,
+            plainLast: activeWeekVariant != null,
+            exercisesCount: totalExercises,
+            setsCount: requiredSets,
+            estimatedMin: Math.max(5, Math.round((requiredSets * 2.5) / 5) * 5),
+            miniList,
+            moreCount: Math.max(0, totalExercises - miniList.length),
+            lastVolumeLabel: fmtVolume(lastVolKg),
+            hasProgress: completedSetCount > 0,
+        }
+    })()
+    // Al arrancar/saltar: gate marcado + aterriza en el primer paso incompleto (el stepper ya lo hace
+    // al montar, pero lo re-sincronizamos por si el usuario tardó en el Inicio).
+    const enterExecV3Session = () => {
+        markExecV3Entered()
+        if (stepperEnabled) setCurrentStepIndex(firstIncompleteStepIndex(steps, sessionLogs))
+        setExecV3Phase('session')
+    }
+    const coachInitial = coachSlug?.trim()?.[0]?.toUpperCase() || null
+
     return (
         <TargetDateProvider value={targetDate}>
         <WorkoutTimerProvider>
@@ -1870,6 +1969,32 @@ export function WorkoutExecutionClient({
                         onSettings={() => setShowExecV3Settings(true)}
                     />
                 )}
+
+                {/* Ejecutor V3 (E2.2): Entrada (splash) → Inicio, overlays fixed SOBRE el motor ya montado
+                    (nunca se desmonta el ejecutor → cola/drafts/clock siguen vivos). */}
+                {execV3Active && (
+                    <AnimatePresence>
+                        {execV3Phase === 'intro' && (
+                            <SessionIntro
+                                key="exec-v3-intro"
+                                coachInitial={coachInitial}
+                                dayTitle={plan.title}
+                                onDone={() => setExecV3Phase('start')}
+                                reducedMotion={reducedMotion}
+                            />
+                        )}
+                        {execV3Phase === 'start' && execV3StartVM && (
+                            <SessionStart
+                                key="exec-v3-start"
+                                {...execV3StartVM}
+                                onStart={enterExecV3Session}
+                                onSkip={enterExecV3Session}
+                                reducedMotion={reducedMotion}
+                            />
+                        )}
+                    </AnimatePresence>
+                )}
+
                 {/* Header sticky legacy — OCULTO en modo V3 (no se borra): el V3 monta su propio chrome. */}
                 <motion.div
                     initial={{ y: -20, opacity: 0 }}
