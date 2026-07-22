@@ -570,6 +570,8 @@ export function ActiveSetRow({
   exec,
   repsHint,
   openKeypadNonce,
+  effortExpanded,
+  onEffortExpandedChange,
 }: {
   blockId: string
   setNumber: number
@@ -651,6 +653,13 @@ export function ActiveSetRow({
   repsHint?: string | null
   /** Nonce que, al cambiar, abre el teclado en el tile de peso (botón teclado del pie del hero). */
   openKeypadNonce?: number
+  /**
+   * Panel de esfuerzo COLAPSABLE (QA2 hallazgo 3): estado expandido/colapsado, levantado a
+   * `ExerciseScreenV3` (por-ejercicio) para persistir entre series y colapsar al cambiar de ejercicio.
+   * Sólo lo consume el `heroMode` (EffortTicksV3). Sin la prop, EffortTicksV3 usa estado local.
+   */
+  effortExpanded?: boolean
+  onEffortExpandedChange?: (v: boolean) => void
 }) {
   const fields: RowField[] = useMemo(() => {
     if (typedMode) {
@@ -840,6 +849,8 @@ export function ActiveSetRow({
             onSelectRir={(v) => patch({ rir: String(v) })}
             allowZeroRir={allowZeroRir}
             reducedMotion={motion.reduced}
+            expanded={effortExpanded}
+            onToggleExpanded={onEffortExpandedChange}
           />
         )}
 

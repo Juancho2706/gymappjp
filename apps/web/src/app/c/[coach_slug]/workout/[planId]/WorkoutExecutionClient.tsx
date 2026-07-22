@@ -1,7 +1,7 @@
 'use client'
 
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { createPortal } from 'react-dom'
+import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { createPortal, flushSync } from 'react-dom'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { toast } from 'sonner'
 import Link from 'next/link'
@@ -14,6 +14,7 @@ import {
     formatTypedObjective,
     buildStepModel,
     firstIncompleteStepIndex,
+    firstIncompleteInRounds,
     isStepComplete,
     stepIndexOfBlock,
     reconcileSessionLogs,
@@ -1371,7 +1372,14 @@ export function WorkoutExecutionClient({
     // Ola 2 (E2.1): resuelve también el flag V3 (server prop + override localStorage `eva:executor-v3`)
     // y, en V3, el modo paso-a-paso pasa a ser el DEFAULT — respetando si el alumno ya eligió Lista
     // (STEPPER_MODE_KEY === 'false'). El acento del shell V3 se setea vía exec-theme.ts.
-    useEffect(() => {
+    // QA2 (splash fuera de secuencia): esta resolución corre en useLAYOUTeffect, no useEffect. El SSR
+    // pinta el shell sin V3 (execV3Active=false); con useEffect (post-paint) el navegador alcanzaba a
+    // pintar el Inicio/sesión y RECIÉN después montaba el splash → "aparece luego de la segunda pantalla
+    // y se corta". useLayoutEffect commitea execV3Active+phase='intro' SINCRÓNICAMENTE tras la
+    // hidratación y ANTES del primer paint del navegador → el splash (z-70) cubre desde el primer paint,
+    // nunca detrás del Inicio. Hidratación-safe: el render inicial (SSR y primer render cliente) sigue
+    // usando los defaults (false/'session'), así que no hay mismatch; el layout-effect sólo re-commitea.
+    useLayoutEffect(() => {
         let v3 = executorV3
         try {
             const ov = localStorage.getItem('eva:executor-v3')
@@ -1439,17 +1447,34 @@ export function WorkoutExecutionClient({
     // Volumen de sesión en vivo (quick-win E2-5): Σ peso × reps de los logs locales (cero queries).
     const sessionVolumeKg = sessionLogs.reduce((acc, l) => acc + (l.weight_kg ?? 0) * (l.reps_done ?? 0), 0)
     const sessionVolumeLabel = fmtVolume(sessionVolumeKg)
-    // "Ejercicio X de Y" — X = primer bloque incompleto (o el total si ya terminó todo).
+    // Conteo del header V3 unificado a EJERCICIOS INDIVIDUALES (QA2-C): cada miembro de una superserie
+    // cuenta como un ejercicio (M = total de bloques). Nada de contar "pasos".
     const totalExercises = blocks.length
     const currentExerciseIdx = blocks.findIndex((b) => !isBlockComplete(b, sessionLogs))
-    const currentExerciseNum = currentExerciseIdx === -1 ? totalExercises : currentExerciseIdx + 1
     // Marcador de progreso (decisión CEO: SIN atenuar — el alumno elige cuál hacer cuando quiera):
     // el primer bloque incompleto del plan sólo recibe un borde sport sutil + elevación (marcador
     // discreto, opacidad PLENA); los completados colapsan a recap. Todas las cards se ven plenas.
     const activeBlockId = currentExerciseIdx === -1 ? null : blocks[currentExerciseIdx].id
-    // Dots del header V3 (E2.1): un dot por ejercicio del plan — completado / actual / pendiente.
+    // "Ejercicio activo" a nivel INDIVIDUAL para header/dots/lista (QA2-C). En una superserie el motor
+    // intercala rondas (A1→B1→A2…), así que el miembro activo NO es el 1er bloque incompleto del grupo
+    // sino el que devuelve `firstIncompleteInRounds`. Fuera de superserie coincide con `activeBlockId`.
+    const headerActiveBlockId = (() => {
+        if (activeBlockId == null) return null
+        const info = supersetInfo.get(activeBlockId)
+        if (!info) return activeBlockId
+        const pos = firstIncompleteInRounds(
+            info.members.map((m) => ({ id: m.id, sets: m.sets })),
+            sessionLogs.map((l) => ({ block_id: l.block_id, set_number: l.set_number })),
+        )
+        return pos?.blockId ?? activeBlockId
+    })()
+    // N = posición (1-based) del ejercicio activo entre TODOS los bloques; en superserie, el miembro activo.
+    const currentBlockIdx = headerActiveBlockId != null ? blocks.findIndex((b) => b.id === headerActiveBlockId) : -1
+    const currentExerciseNum = currentBlockIdx === -1 ? totalExercises : currentBlockIdx + 1
+    // Dots del header V3: un dot por ejercicio individual — completado (todas sus series/rondas) / activo /
+    // pendiente. El `.now` sigue al miembro activo de la superserie, no al bloque suelto del grupo.
     const execDots: ExecDotState[] = blocks.map((b) =>
-        isBlockComplete(b, sessionLogs) ? 'done' : b.id === activeBlockId ? 'now' : 'todo',
+        isBlockComplete(b, sessionLogs) ? 'done' : b.id === headerActiveBlockId ? 'now' : 'todo',
     )
 
     const isBlockCompleted = (block: BlockType) => isBlockComplete(block, sessionLogs)
@@ -1569,7 +1594,18 @@ export function WorkoutExecutionClient({
         }
         // Estado (puro) — dedup por block+set, PRESERVANDO los ejes tipados (actual_*) del payload
         // para que la fila de hold/cardio no se re-renderice vacía al confirmar (bug forense hold).
-        setSessionLogs((prev) => applyOptimisticSessionLog(prev, payload))
+        // QA2 (carrera al saltar descanso): este `onLogged` se invoca DENTRO de la form-action del hijo,
+        // que React 19 corre como TRANSICIÓN. Un `setState` normal en esa transición queda a prioridad
+        // baja y no commitea hasta que la server action (`formAction`) resuelve → con red lenta, si el
+        // alumno salta el descanso antes de la confirmación, `firstUnlogged` NO avanza y la serie 2 no
+        // aparece (parece que "espera a que se guarde la serie 1"). El colapso del hijo sí es inmediato
+        // (usa `useOptimistic`), creando la asimetría. `flushSync` fuerza el commit del optimismo del
+        // padre AQUÍ, antes de que `formAction` arranque el async → el hero avanza YA, independiente del
+        // server. NO toca payload/cola/reconciliación: sólo adelanta el commit de un estado que igual se
+        // iba a setear. La reconciliación posterior del server (handleResult) queda intacta.
+        flushSync(() => {
+            setSessionLogs((prev) => applyOptimisticSessionLog(prev, payload))
+        })
 
         // Guía/scroll (efectos) — calculados fuera del updater para no duplicarse en StrictMode.
         const prev = sessionLogs
@@ -1986,30 +2022,30 @@ export function WorkoutExecutionClient({
         muted: step.muted,
         complete: isStepComplete(step, sessionLogs),
     }))
-    // Mapa "Ver todo" del ejecutor V3 (E2.6): una fila por paso (bloque o superserie) con su progreso
-    // de series y el AHORA (paso del bloque activo). Tap = volver al stepper EN ese paso.
-    const activeStepIdx = activeBlockId != null
-        ? stepIndexOfBlock(steps, activeBlockId)
-        : firstIncompleteStepIndex(steps, sessionLogs)
-    const execListMapItems: ExecListMapItem[] = steps.map((step, i) => {
-        const totalSets = step.blocks.reduce((acc, b) => acc + b.sets, 0)
-        const doneSets = step.blocks.reduce((acc, b) => {
-            let done = 0
-            for (let s = 1; s <= b.sets; s += 1) {
-                if (sessionLogs.some((l) => l.block_id === b.id && l.set_number === s)) done += 1
-            }
-            return acc + done
-        }, 0)
-        return {
-            key: step.key,
-            stepIndex: i,
-            title: stepTitle(step),
-            sectionTitle: step.sectionTitle,
-            doneSets,
-            totalSets,
-            complete: isStepComplete(step, sessionLogs),
-            isCurrent: i === activeStepIdx,
+    // Mapa "Plan completo" del ejecutor V3 (QA2-C): SÓLO LECTURA, una fila por EJERCICIO INDIVIDUAL. Los
+    // miembros de una superserie aparecen como filas propias (con su letra) agrupadas bajo "Superserie X".
+    // El conteo (M) coincide con el del header. Sin navegación: es un índice de estado, no un stepper.
+    const blockDoneSets = (b: BlockType) => {
+        let done = 0
+        for (let s = 1; s <= b.sets; s += 1) {
+            if (sessionLogs.some((l) => l.block_id === b.id && l.set_number === s)) done += 1
         }
+        return done
+    }
+    const execListMapItems: ExecListMapItem[] = steps.flatMap((step) => {
+        const isSS = step.kind === 'superset'
+        const info = isSS ? supersetInfo.get(step.blocks[0].id) ?? null : null
+        const members = [...step.blocks].sort((a, b) => a.order_index - b.order_index)
+        return members.map((b, mi) => ({
+            key: b.id,
+            title: getExercise(b)?.name ?? 'Ejercicio',
+            letter: isSS ? info?.letterByBlock.get(b.id) ?? null : null,
+            groupTitle: isSS && mi === 0 ? `Superserie ${info?.groupLetter ?? ''}`.trim() : null,
+            doneSets: blockDoneSets(b),
+            totalSets: b.sets,
+            complete: isBlockComplete(b, sessionLogs),
+            isCurrent: b.id === headerActiveBlockId,
+        }))
     })
 
     // Ejecutor V3 (E3.1): VM del ejercicio "SIGUIENTE" del interstitial de descanso. Deriva del bloque
@@ -2147,7 +2183,7 @@ export function WorkoutExecutionClient({
     return (
         <TargetDateProvider value={targetDate}>
         <RestInterstitialDataProvider
-            value={{ items: execListMapItems, onJump: returnToStepper, next: execInterstitialNext, round: execInterstitialRound }}
+            value={{ items: execListMapItems, next: execInterstitialNext, round: execInterstitialRound }}
         >
         <WorkoutTimerProvider v3={execV3Active}>
           <WorkoutKeypadProvider>
@@ -2379,14 +2415,15 @@ export function WorkoutExecutionClient({
                     />
                 ) : (
                 <div className="px-4 py-6 md:px-8 max-w-5xl mx-auto pb-32">
-                    {/* Mapa "Ver todo" (E2.6): sólo en V3, encima de la lista existente (no duplica renderGroup). */}
+                    {/* Mapa "Ver todo" (E2.6 + QA2): en V3 la vista es SOLO LECTURA — únicamente el mapa,
+                       sin la lista interactiva legado (registrar series sólo desde el paso a paso). */}
                     {execV3Active && (
                         <div className="mb-5">
-                            <ExecListMapV3 items={execListMapItems} onJump={returnToStepper} />
+                            <ExecListMapV3 items={execListMapItems} />
                         </div>
                     )}
                     <div className="space-y-6">
-                        {sectioned.map((section) => (
+                        {!execV3Active && sectioned.map((section) => (
                             <section key={section.sectionKey} className="space-y-3">
                                 <div className="space-y-1.5">
                                     <div className="flex items-center gap-3">

@@ -59,10 +59,8 @@ export interface RestInterstitialData {
   next: { name: string; prescription: string; exercise: SessionExercise | null } | null
   /** Nota del coach del bloque siguiente (si la hay). */
   coachNote: string | null
-  /** Filas del plan (reusa la derivacion de `ExerciseListV3`) para el peek. */
+  /** Filas del plan (reusa la derivacion de `ExerciseListV3`) para el peek — SOLO LECTURA. */
   planItems: ExerciseListItem[]
-  /** Indice del paso actual (para resaltar "ahora" en el peek). */
-  currentIndex: number
   /** Mostrar la micro-celebracion "+1 serie" (solo si el descanso siguio a cerrar una serie). */
   celebrate: boolean
   /** La serie recién cerrada fue un PR (E4.2): la micro-celebración pasa a "+1 serie · ¡PR!" en dorado. */
@@ -445,27 +443,47 @@ export function RestInterstitialV3({
 
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingTop: 6, paddingBottom: 8 }}>
           {data.planItems.map((item) => {
-            const isNow = item.index === data.currentIndex
+            const isNow = item.isCurrent
             const state: 'done' | 'now' | 'todo' = item.complete ? 'done' : isNow ? 'now' : 'todo'
+            const word =
+              state === 'done'
+                ? `✓ ${item.doneSets}/${item.totalSets}`
+                : state === 'now'
+                  ? 'ahora'
+                  : item.doneSets > 0
+                    ? `${item.doneSets}/${item.totalSets}`
+                    : 'pendiente'
             return (
-              <View
-                key={item.key}
-                style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 9, borderTopWidth: 1.5, borderTopColor: REST_HEX.rowDivider, ...(isNow ? { backgroundColor: hexToRgba(exec.accent, 0.1), borderRadius: 12, marginHorizontal: -6, paddingHorizontal: 10 } : null) }}
-              >
-                <PlanStateSquare state={state} exec={exec} />
-                <Text style={{ flex: 1, fontFamily: FONT.uiBold, fontSize: 13, color: isNow ? s.text : hexToRgba(s.text, 0.85) }} numberOfLines={1}>
-                  {item.title}
-                </Text>
-                <Text
-                  style={{
-                    fontFamily: FONT.uiBold,
-                    fontSize: 11,
-                    fontVariant: ['tabular-nums'],
-                    color: state === 'todo' ? REST_HEX.todoSub : exec.accent,
-                  }}
+              <View key={item.key}>
+                {item.groupTitle ? (
+                  <Text style={{ fontFamily: FONT.uiBold, fontSize: 10, letterSpacing: 0.8, textTransform: 'uppercase', color: hexToRgba(s.text, 0.5), marginTop: 8, marginBottom: 2 }}>
+                    {item.groupTitle}
+                  </Text>
+                ) : null}
+                {/* Fila SOLO LECTURA (QA2-C): sin onPress — es un indice de estado, no un stepper. */}
+                <View
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 9, borderTopWidth: item.groupTitle ? 0 : 1.5, borderTopColor: REST_HEX.rowDivider, ...(isNow ? { backgroundColor: hexToRgba(exec.accent, 0.1), borderRadius: 12, marginHorizontal: -6, paddingHorizontal: 10 } : null) }}
                 >
-                  {state === 'done' ? `✓ ${item.doneSets}/${item.totalSets}` : state === 'now' ? 'ahora' : 'pendiente'}
-                </Text>
+                  <PlanStateSquare state={state} exec={exec} />
+                  {item.letter ? (
+                    <View style={{ width: 18, height: 18, borderRadius: 5, alignItems: 'center', justifyContent: 'center', backgroundColor: '#26262f', borderWidth: 1.5, borderColor: isNow ? hexToRgba(exec.accent, 0.55) : '#3a3a45' }}>
+                      <Text style={{ fontFamily: FONT.uiExtra, fontSize: 10, color: isNow ? exec.accent : '#9a9aa6' }}>{item.letter}</Text>
+                    </View>
+                  ) : null}
+                  <Text style={{ flex: 1, fontFamily: FONT.uiBold, fontSize: 13, color: isNow ? s.text : hexToRgba(s.text, 0.85) }} numberOfLines={1}>
+                    {item.title}
+                  </Text>
+                  <Text
+                    style={{
+                      fontFamily: FONT.uiBold,
+                      fontSize: 11,
+                      fontVariant: ['tabular-nums'],
+                      color: state === 'todo' ? REST_HEX.todoSub : exec.accent,
+                    }}
+                  >
+                    {word}
+                  </Text>
+                </View>
               </View>
             )
           })}

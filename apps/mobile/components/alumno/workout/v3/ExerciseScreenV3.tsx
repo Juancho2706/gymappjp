@@ -157,6 +157,10 @@ export function ExerciseScreenV3({
   // lápiz (abre el sheet oscuro con las filas clásicas del motor para corregir series ya guardadas).
   const [kbNonce, setKbNonce] = useState(0)
   const [editPrevOpen, setEditPrevOpen] = useState(false)
+  // Panel de esfuerzo (QA2 hallazgo 3): colapsado por default; el estado vive AQUÍ (por-ejercicio) para
+  // persistir entre series. `ExecutorV3` monta este componente con `key={block.id}` → al cambiar de
+  // ejercicio se remonta y vuelve a colapsado, como pide el contrato.
+  const [effortExpanded, setEffortExpanded] = useState(false)
   const doneCount = loggedSetNumbers.size
 
   // HERO de la serie activa (primera sin registrar). Reusa `ActiveSetRow` con `heroMode` — su lógica de
@@ -191,6 +195,8 @@ export function ExerciseScreenV3({
         onLongPressValue={openWheel}
         allowZeroRir
         showEffort={showEffort}
+        effortExpanded={effortExpanded}
+        onEffortExpandedChange={setEffortExpanded}
       />
     )
   })() : null

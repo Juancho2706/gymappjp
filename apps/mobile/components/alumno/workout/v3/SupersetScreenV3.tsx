@@ -3,7 +3,7 @@ import { Pressable, Text, View } from 'react-native'
 import { AnimatePresence, MotiView } from 'moti'
 import { LinearTransition } from 'react-native-reanimated'
 import { Image } from 'expo-image'
-import { ArrowRightLeft, Check, Clock, Dumbbell, Undo2 } from 'lucide-react-native'
+import { ArrowRightLeft, Check, Clock, Dumbbell, Pencil, Undo2 } from 'lucide-react-native'
 import {
   effectiveExerciseType,
   firstIncompleteInRounds,
@@ -25,6 +25,7 @@ import {
   type SessionExercise,
 } from '../../../../lib/workout-session'
 import type { EffectiveTarget } from '../../../../lib/workout/progression'
+import { Sheet } from '../../../Sheet'
 import { SetRow, ActiveSetRow } from '../SetRow'
 import { bestPrevOf } from '../workout-ui'
 import { ExecMediaV3 } from './ExecMediaV3'
@@ -117,6 +118,9 @@ export function SupersetScreenV3({
   // son estado LOCAL de UI: no rozan el motor de guardado/cola.
   const [cue, setCue] = useState<{ name: string; nonce: number } | null>(null)
   const [autofill, setAutofill] = useState<{ weight: number | null; reps: number | null; nonce: number } | null>(null)
+  // Miembro YA HECHO cuya edición está abierta (QA2 #3): tap en su tarjeta colapsada abre el sheet oscuro
+  // "Editar {nombre}" con las filas clásicas del motor (SetRow). Estado LOCAL de UI: no roza guardado/cola.
+  const [editBlockId, setEditBlockId] = useState<string | null>(null)
 
   useEffect(() => {
     if (!cue) return
@@ -196,6 +200,37 @@ export function SupersetScreenV3({
 
   // Miembros de la ronda ACTIVA (los que tienen serie en esa ronda), en orden.
   const roundMembers = memberVMs.filter((m) => m.block.sets >= round)
+
+  // Miembro cuya edición está abierta (sheet QA2 #3) + sus filas YA registradas (motor clásico, SetRow).
+  const editVM = editBlockId ? memberVMs.find((m) => m.block.id === editBlockId) : null
+  const editRows = editVM
+    ? Array.from({ length: editVM.block.sets })
+        .map((_, i) => {
+          const setNumber = i + 1
+          const log = editVM.blockLogs.find((l) => l.set_number === setNumber)
+          if (!log) return null
+          const isRecent = recentSet?.blockId === editVM.block.id && recentSet?.setNumber === setNumber
+          return (
+            <SetRow
+              key={setNumber}
+              setNumber={setNumber}
+              log={log}
+              isActive={false}
+              typedMode={editVM.typedMode}
+              onPress={() => onOpenSet(editVM.block.id, setNumber)}
+              onRpeUpdate={onRpeUpdate}
+              settle={isRecent}
+              pr={isRecent && !!recentSet?.pr}
+              prColor={exec.pr}
+              prIntense
+              syncError={syncErrors?.[`${editVM.block.id}:${setNumber}`] ?? null}
+              onRetry={() => onRetrySet?.(editVM.block.id, setNumber)}
+              showEffort={showEffort}
+            />
+          )
+        })
+        .filter(Boolean)
+    : []
 
   // Envoltura de `onCommitSet`: al confirmar la serie del miembro activo, si queda otro en la MISMA ronda
   // dispara el aviso "¡Sigue sin detenerte!" con el nombre del siguiente. Payload intacto → motor sin tocar.
@@ -407,10 +442,10 @@ export function SupersetScreenV3({
               style={{ gap: 8, borderRadius: 18, padding: 12, borderWidth: 2, backgroundColor: '#17171f', borderColor: s.border, opacity: isDoneInRound ? 0.9 : 0.62 }}
             >
               <Pressable
-                onPress={isDoneInRound ? () => onOpenSet(m.block.id, round) : undefined}
+                onPress={isDoneInRound ? () => setEditBlockId(m.block.id) : undefined}
                 disabled={!isDoneInRound}
                 accessibilityRole={isDoneInRound ? 'button' : undefined}
-                accessibilityLabel={isDoneInRound ? `Editar la serie de ${m.exercise.name}` : undefined}
+                accessibilityLabel={isDoneInRound ? `Editar ${m.exercise.name}` : undefined}
                 style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}
               >
                 {/* Mini-media estática del miembro. */}
@@ -441,7 +476,11 @@ export function SupersetScreenV3({
                       {m.exercise.name}
                     </Text>
                     {isDoneInRound ? (
-                      <Check size={18} color={exec.accent} strokeWidth={3} />
+                      // Lápiz chico + check: afordancia de edición (QA2 #3) para que se descubra.
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                        <Pencil size={15} color={hexToRgba(s.textMuted, 0.9)} />
+                        <Check size={18} color={exec.accent} strokeWidth={3} />
+                      </View>
                     ) : (
                       <StatePill kind={isNext ? 'after' : 'todo'} exec={exec} />
                     )}
@@ -474,29 +513,6 @@ export function SupersetScreenV3({
           )
         })}
       </View>
-
-      {/* Pill "Sin descanso — sigue con {letra}" mientras la ronda esté abierta. */}
-      {nextMemberId != null && (
-        <View
-          style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 10,
-            borderRadius: 999,
-            paddingHorizontal: 14,
-            paddingVertical: 9,
-            backgroundColor: hexToRgba(exec.accent, 0.12),
-            borderWidth: 1.5,
-            borderColor: hexToRgba(exec.accent, 0.3),
-          }}
-        >
-          <Text style={{ fontFamily: FONT.uiBold, fontSize: 13, color: hexToRgba(exec.accent, 0.95) }}>
-            Sin descanso — sigue con {memberVMs.find((m) => m.block.id === nextMemberId)?.letter ?? ''}
-          </Text>
-          <SlideArrow accent={exec.accent} reducedMotion={reducedMotion} />
-        </View>
-      )}
 
       {/* Nota de descanso de grupo (sólo al cerrar la ronda). */}
       {groupRestSec > 0 && active != null && (
@@ -543,18 +559,41 @@ export function SupersetScreenV3({
               justifyContent: 'center',
               gap: 10,
               paddingHorizontal: 24,
-              backgroundColor: 'rgba(8,8,12,0.72)',
+              backgroundColor: 'rgba(5,5,9,0.88)',
             }}
           >
-            <Text style={{ fontFamily: FONT.displayBlack, fontSize: 30, letterSpacing: -0.6, textAlign: 'center', color: exec.accent, textShadowColor: hexToRgba(exec.accent, 0.55), textShadowRadius: 24, textShadowOffset: { width: 0, height: 0 } }}>
+            {/* Tinta de marca con sombra oscura fuerte (RN no tiene text-stroke) para leer sobre la media. */}
+            <Text style={{ fontFamily: FONT.displayBlack, fontSize: 30, letterSpacing: -0.6, textAlign: 'center', color: exec.accent, textShadowColor: 'rgba(0,0,0,0.9)', textShadowRadius: 12, textShadowOffset: { width: 0, height: 2 } }}>
               ¡Sigue sin detenerte!
             </Text>
-            <Text style={{ fontFamily: FONT.uiExtra, fontSize: 15, textAlign: 'center', color: '#e8e8ee' }} numberOfLines={2}>
+            <Text style={{ fontFamily: FONT.uiExtra, fontSize: 15, textAlign: 'center', color: '#ffffff', textShadowColor: 'rgba(0,0,0,0.9)', textShadowRadius: 6, textShadowOffset: { width: 0, height: 1 } }} numberOfLines={2}>
               {cue.name}
             </Text>
           </MotiView>
         )}
       </AnimatePresence>
+
+      {/* Sheet oscuro "Editar {nombre}" (QA2 #3): monta las filas CLÁSICAS del motor (SetRow) del miembro ya
+          hecho para corregir sus series registradas — mismo motor de edición del lápiz del ejercicio solo,
+          sólo envuelto en el sheet V3. La edición real la resuelve `onOpenSet` (orquestador), intacto. */}
+      <Sheet
+        open={editBlockId != null}
+        onClose={() => setEditBlockId(null)}
+        title={editVM ? `Editar ${editVM.exercise.name}` : 'Editar'}
+        nativeModal
+        forceDark
+        snapPoints={['60%']}
+      >
+        <View style={{ gap: 6, paddingVertical: 4 }}>
+          {editRows.length > 0 ? (
+            editRows
+          ) : (
+            <Text style={{ fontFamily: FONT.ui, fontSize: 13, color: s.textMuted, textAlign: 'center', paddingVertical: 12 }}>
+              Todavía no registras ninguna serie de este ejercicio.
+            </Text>
+          )}
+        </View>
+      </Sheet>
     </MotiView>
   )
 }
@@ -641,21 +680,5 @@ function StatePill({ kind, exec }: { kind: 'now' | 'after' | 'todo'; exec: ExecT
     <View style={{ paddingHorizontal: 7, paddingVertical: 2, borderRadius: 999, backgroundColor: s.surfaceRaised, borderWidth: 1.5, borderColor: s.borderSubtle }}>
       <Text style={{ fontFamily: FONT.uiBold, fontSize: 9, letterSpacing: 1, color: s.textDim }}>PENDIENTE</Text>
     </View>
-  )
-}
-
-/** Flecha ">" que se desliza (paridad mockup a3b-arrow, 1.6s). reduced-motion ⇒ estática. */
-function SlideArrow({ accent, reducedMotion }: { accent: string; reducedMotion: boolean }) {
-  return (
-    <MotiView
-      from={{ translateX: 0 }}
-      animate={{ translateX: reducedMotion ? 0 : 3 }}
-      transition={reducedMotion ? { type: 'timing', duration: 0 } : { type: 'timing', duration: 800, loop: true, repeatReverse: true }}
-    >
-      <View style={{ width: 18, height: 12, justifyContent: 'center' }}>
-        <View style={{ position: 'absolute', left: 0, top: '50%', width: 12, height: 2.5, borderRadius: 2, backgroundColor: accent, transform: [{ translateY: -1.25 }] }} />
-        <View style={{ position: 'absolute', right: 1, top: '50%', width: 8, height: 8, borderTopWidth: 2.5, borderRightWidth: 2.5, borderColor: accent, transform: [{ translateY: -4 }, { rotate: '45deg' }] }} />
-      </View>
-    </MotiView>
   )
 }

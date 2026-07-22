@@ -2157,6 +2157,140 @@ body[data-exec-v3-toast] [data-sonner-toast][data-styled='true'] [data-descripti
   font-variant-numeric: tabular-nums;
 }
 
+/* Panel de esfuerzo COLAPSABLE (QA2 hallazgo 3): fila-header clickeable + (?) + chevron; la escala se
+   revela debajo. Colapsado ⇒ sin margen inferior en el header (no deja hueco). */
+[data-exec-v3] .exec-v3-effpanel:not(.is-open) .exec-v3-efftop {
+  margin-bottom: 0;
+}
+[data-exec-v3] .exec-v3-effhead {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 0;
+  background: none;
+  border: 0;
+  cursor: pointer;
+  min-height: 28px;
+}
+[data-exec-v3] .exec-v3-effchev {
+  width: 14px;
+  height: 14px;
+  color: #7f7f8c;
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+[data-exec-v3] .exec-v3-effpanel.is-open .exec-v3-effchev {
+  transform: rotate(180deg);
+}
+[data-exec-v3] .exec-v3-effhelp {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  margin: -2px 0;
+  border: 0;
+  background: none;
+  color: #7f7f8c;
+  cursor: pointer;
+  border-radius: 999px;
+  transition: color 0.15s ease, background-color 0.15s ease;
+}
+[data-exec-v3] .exec-v3-effhelp:hover {
+  color: #c1c1cc;
+  background: rgba(255, 255, 255, 0.05);
+}
+[data-exec-v3] .exec-v3-effhelp svg {
+  width: 18px;
+  height: 18px;
+}
+[data-exec-v3] .exec-v3-effbody {
+  overflow: hidden;
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-exec-v3] .exec-v3-effchev {
+    transition: none;
+  }
+}
+
+/* Mini-sheet (?) — explicación RPE/RIR (QA2 hallazgo 3). Overlay oscuro V3, sheet inferior. */
+[data-exec-v3] .exec-v3-effhelp-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  background: rgba(6, 6, 10, 0.66);
+  padding: 0 12px calc(env(safe-area-inset-bottom, 0px) + 16px);
+}
+[data-exec-v3] .exec-v3-effhelp-sheet {
+  width: 100%;
+  max-width: 440px;
+  background: #16161d;
+  border: 1.5px solid #2a2a34;
+  border-radius: 20px;
+  padding: 16px 16px 18px;
+  box-shadow: 0 -12px 40px -18px rgba(0, 0, 0, 0.8);
+}
+[data-exec-v3] .exec-v3-effhelp-hd {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+[data-exec-v3] .exec-v3-effhelp-t {
+  font-size: 15px;
+  font-weight: 900;
+  letter-spacing: -0.01em;
+  color: #f4f4f6;
+}
+[data-exec-v3] .exec-v3-effhelp-x {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: 0;
+  background: #202029;
+  color: #9a9aa6;
+  border-radius: 999px;
+  cursor: pointer;
+}
+[data-exec-v3] .exec-v3-effhelp-x svg {
+  width: 16px;
+  height: 16px;
+}
+[data-exec-v3] .exec-v3-effhelp-row {
+  display: flex;
+  gap: 10px;
+  padding: 10px 0;
+}
+[data-exec-v3] .exec-v3-effhelp-row + .exec-v3-effhelp-row {
+  border-top: 1px solid #24242e;
+}
+[data-exec-v3] .exec-v3-effhelp-k {
+  flex-shrink: 0;
+  align-self: flex-start;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  color: color-mix(in srgb, var(--exec-brand) 85%, #fff);
+  background: color-mix(in srgb, var(--exec-brand) 16%, #16161d);
+  border: 1.5px solid color-mix(in srgb, var(--exec-brand) 40%, transparent);
+  padding: 4px 9px;
+  border-radius: 999px;
+}
+[data-exec-v3] .exec-v3-effhelp-p {
+  flex: 1;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #c1c1cc;
+}
+[data-exec-v3] .exec-v3-effhelp-p b {
+  color: #e8e8ee;
+  font-weight: 800;
+}
+
 /* CTA principal juicy full-width "Aplastar serie" */
 [data-exec-v3] .exec-v3-cta {
   width: 100%;
@@ -2392,46 +2526,24 @@ body[data-exec-v3-toast] [data-sonner-toast][data-styled='true'] [data-descripti
   justify-content: center;
   color: var(--exec-brand, var(--sport-500));
 }
-[data-exec-v3] .exec-v3-ss-link {
-  display: flex;
+/* Miembro HECHO = editable (QA2 #3): la tarjeta colapsada es tappable y muestra un lápiz chico junto al
+   check para que la edición se descubra. */
+[data-exec-v3] .exec-v3-excard-edit {
+  cursor: pointer;
+}
+[data-exec-v3] .exec-v3-excard-edit:active {
+  transform: scale(0.99);
+}
+[data-exec-v3] .exec-v3-exedit {
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 10px;
+  width: 26px;
+  height: 26px;
   border-radius: 999px;
-  padding: 9px 14px;
-  font-size: 13px;
-  font-weight: 800;
-  color: color-mix(in srgb, var(--exec-brand) 88%, #fff);
-  background: color-mix(in srgb, var(--exec-brand) 12%, #16161d);
-  border: 1.5px solid color-mix(in srgb, var(--exec-brand) 30%, transparent);
-}
-[data-exec-v3] .exec-v3-ss-arrow {
-  position: relative;
-  width: 20px;
-  height: 12px;
-  flex-shrink: 0;
-}
-[data-exec-v3] .exec-v3-ss-arrow::before {
-  content: "";
-  position: absolute;
-  top: 50%;
-  left: 0;
-  width: 13px;
-  height: 2.5px;
-  border-radius: 2px;
-  background: var(--exec-brand, var(--sport-500));
-  transform: translateY(-50%);
-}
-[data-exec-v3] .exec-v3-ss-arrow::after {
-  content: "";
-  position: absolute;
-  top: 50%;
-  right: 1px;
-  width: 8px;
-  height: 8px;
-  border-top: 2.5px solid var(--exec-brand, var(--sport-500));
-  border-right: 2.5px solid var(--exec-brand, var(--sport-500));
-  transform: translateY(-50%) rotate(45deg);
+  color: #b7b7c2;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1.5px solid rgba(255, 255, 255, 0.14);
 }
 [data-exec-v3] .exec-v3-ss-restnote {
   display: flex;
@@ -2513,7 +2625,8 @@ body[data-exec-v3-toast] [data-sonner-toast][data-styled='true'] [data-descripti
     grid-template-rows: 1fr;
   }
 }
-/* Aviso efímero: fondo transparente oscuro, texto de marca grande con glow, no interactivo. */
+/* Aviso efímero: fondo oscuro casi opaco (QA2 #1 — legibilidad sobre la media), texto de marca grande con
+   CONTORNO oscuro + glow de marca, no interactivo. */
 [data-exec-v3] .exec-v3-ss-cue {
   position: fixed;
   inset: 0;
@@ -2526,7 +2639,7 @@ body[data-exec-v3-toast] [data-sonner-toast][data-styled='true'] [data-descripti
   padding: 24px;
   text-align: center;
   pointer-events: none;
-  background: rgba(8, 8, 12, 0.72);
+  background: rgba(5, 5, 9, 0.88);
   animation: exec-v3-ss-cue-in 0.24s cubic-bezier(0.4, 0, 0.2, 1);
 }
 [data-exec-v3] .exec-v3-ss-cue-t {
@@ -2535,12 +2648,17 @@ body[data-exec-v3-toast] [data-sonner-toast][data-styled='true'] [data-descripti
   letter-spacing: -0.02em;
   line-height: 1.05;
   color: var(--exec-brand, var(--sport-500));
-  text-shadow: 0 0 24px color-mix(in srgb, var(--exec-brand) 55%, transparent);
+  /* Contorno oscuro para que la tinta de marca lea sobre cualquier media, + el glow de marca existente. */
+  -webkit-text-stroke: 1px rgba(0, 0, 0, 0.9);
+  text-shadow:
+    0 2px 6px rgba(0, 0, 0, 0.9),
+    0 0 24px color-mix(in srgb, var(--exec-brand) 55%, transparent);
 }
 [data-exec-v3] .exec-v3-ss-cue-n {
   font-size: 15px;
   font-weight: 800;
-  color: #e8e8ee;
+  color: #ffffff;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.9);
 }
 @keyframes exec-v3-ss-cue-in {
   from {
@@ -2552,36 +2670,10 @@ body[data-exec-v3-toast] [data-sonner-toast][data-styled='true'] [data-descripti
     transform: scale(1);
   }
 }
-/* Animaciones del mockup ausentes en web (D1/D2): flecha "Sin descanso" deslizante + latido del dot activo. */
+/* Animación del mockup ausente en web: latido del dot de ronda activo. */
 @media (prefers-reduced-motion: no-preference) {
-  [data-exec-v3] .exec-v3-ss-arrow::after {
-    animation: exec-v3-ss-arrow 1.6s ease-in-out infinite;
-  }
-  [data-exec-v3] .exec-v3-ss-arrow::before {
-    animation: exec-v3-ss-arrowline 1.6s ease-in-out infinite;
-  }
   [data-exec-v3] .exec-v3-rounddots .exec-v3-rd.is-now {
     animation: exec-v3-ss-beat 1.4s ease-in-out infinite;
-  }
-}
-@keyframes exec-v3-ss-arrow {
-  0%,
-  100% {
-    transform: translateY(-50%) rotate(45deg) translate(0, 0);
-    opacity: 0.8;
-  }
-  50% {
-    transform: translateY(-50%) rotate(45deg) translate(3px, -3px);
-    opacity: 1;
-  }
-}
-@keyframes exec-v3-ss-arrowline {
-  0%,
-  100% {
-    transform: translateY(-50%) scaleX(1);
-  }
-  50% {
-    transform: translateY(-50%) scaleX(1.15);
   }
 }
 @keyframes exec-v3-ss-beat {
@@ -3037,8 +3129,40 @@ body[data-exec-v3-toast] [data-sonner-toast][data-styled='true'] [data-descripti
   text-align: left;
   transition: background-color 0.12s ease, border-color 0.12s ease;
 }
-[data-exec-v3] .exec-v3-map-row:hover {
-  background: #20202a;
+/* Encabezado de grupo "Superserie X" dentro del mapa (QA2-C). */
+[data-exec-v3] .exec-v3-map-group {
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #7f7f8c;
+  margin: 8px 2px 3px;
+}
+[data-exec-v3] li:first-child > .exec-v3-map-group {
+  margin-top: 2px;
+}
+/* Badge de letra del miembro de superserie (mapa "Plan completo"). */
+[data-exec-v3] .exec-v3-map-letter {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  border-radius: 6px;
+  background: #26262f;
+  border: 1.5px solid #3a3a45;
+  font-size: 11px;
+  font-weight: 900;
+  color: #9a9aa6;
+}
+[data-exec-v3] .exec-v3-map-row.is-now .exec-v3-map-letter {
+  border-color: color-mix(in srgb, var(--exec-brand) 55%, transparent);
+  color: color-mix(in srgb, var(--exec-brand) 85%, #fff);
+}
+/* Fila de miembro de superserie: ligera sangría bajo el encabezado del grupo. */
+[data-exec-v3] .exec-v3-map-row-member {
+  margin-left: 10px;
 }
 [data-exec-v3] .exec-v3-map-row.is-now {
   /* Mockup `.a3a-srow.is-now`: sólo tiñe el fondo (marca 10%), SIN borde extra. */
@@ -3889,6 +4013,36 @@ body[data-exec-v3-toast] [data-sonner-toast][data-styled='true'] [data-descripti
   margin: 0 -6px;
   padding-left: 10px;
   padding-right: 10px;
+}
+/* Encabezado de grupo "Superserie X" en el peek de descanso (QA2-C). */
+[data-exec-v3] .exec-v3-sgroup {
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #7f7f8c;
+  margin: 8px 2px 2px;
+  padding-top: 7px;
+  border-top: 1.5px solid #26262f;
+}
+/* Badge de letra del miembro de superserie en el peek. */
+[data-exec-v3] .exec-v3-sletter {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  border-radius: 5px;
+  background: #26262f;
+  border: 1.5px solid #3a3a45;
+  font-size: 10px;
+  font-weight: 900;
+  color: #9a9aa6;
+}
+/* La fila que sigue a un encabezado de grupo no repite el borde superior. */
+[data-exec-v3] .exec-v3-sgroup + .exec-v3-srow {
+  border-top: 0;
 }
 [data-exec-v3] .exec-v3-sstate {
   display: flex;

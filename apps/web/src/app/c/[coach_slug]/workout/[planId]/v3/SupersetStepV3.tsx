@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, useState } from 'react'
 import Image from 'next/image'
-import { Info, Dumbbell, Check } from 'lucide-react'
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
+import { Info, Dumbbell, Check, Pencil, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import {
     buildRoundOrder,
@@ -91,6 +92,11 @@ export function SupersetStepV3({
     const [cue, setCue] = useState<{ name: string; nonce: number } | null>(null)
     const [fill, setFill] = useState<{ weight: number | null; reps: number | null; nonce: number } | null>(null)
     const cueNonceRef = useRef(0)
+    // Edición de un miembro YA HECHO de la ronda (QA2 #3): tap en su tarjeta colapsada abre un sheet oscuro
+    // "Editar {nombre}" que monta las filas clásicas del motor (LogSetForm) para ese bloque — mismo patrón
+    // que el lápiz del ejercicio solo. Estado LOCAL de UI: no roza el guardado/cola.
+    const [editBlockId, setEditBlockId] = useState<string | null>(null)
+    const reducedMotion = useReducedMotion()
 
     useEffect(() => {
         if (!cue) return
@@ -147,12 +153,11 @@ export function SupersetStepV3({
     const currentRound = activePos?.set ?? maxSets
     const activeBlockId = activePos?.blockId ?? null
 
-    // Miembro que sigue DENTRO de la ronda (para el pill "Sin descanso" y el aviso): la posición
+    // Miembro que sigue DENTRO de la ronda (para el aviso "¡Sigue sin detenerte!"): la posición
     // inmediatamente posterior en el orden intercalado, sólo si cae en la MISMA ronda.
     const activeIdx = order.findIndex((p) => p.blockId === activeBlockId && p.set === currentRound)
     const nextPos = activeIdx >= 0 ? order[activeIdx + 1] : undefined
     const nextInRound = nextPos && nextPos.set === currentRound ? nextPos : null
-    const nextLetter = nextInRound ? letterByBlock.get(nextInRound.blockId) ?? null : null
 
     // El prefill "= última vez" es POR miembro activo: al cambiar de miembro se descarta para no arrastrar
     // el autollenado al siguiente ejercicio.
@@ -171,6 +176,14 @@ export function SupersetStepV3({
     }
 
     const firstName = memberVMs[0]?.exercise.name
+
+    // Miembro que se está editando (sheet QA2 #3) + sus series YA registradas (filas clásicas del motor).
+    const editVM = editBlockId ? memberVMs.find((v) => v.block.id === editBlockId) : null
+    const editLogs = editVM
+        ? sessionLogs
+              .filter((l) => l.block_id === editVM.block.id && l.set_number >= 1 && l.set_number <= editVM.block.sets)
+              .sort((a, b) => a.set_number - b.set_number)
+        : []
 
     // Envoltura de `onLogged`: al confirmar la serie del miembro activo, si queda otro en la MISMA ronda
     // dispara el aviso "¡Sigue sin detenerte!" con el nombre del siguiente. Payload intacto → motor sin tocar.
@@ -300,8 +313,10 @@ export function SupersetStepV3({
                         )
                     }
 
-                    // MIEMBROS NO ACTIVOS — tarjeta compacta (mini-media 60px + estado).
+                    // MIEMBROS NO ACTIVOS — tarjeta compacta (mini-media 60px + estado). Los HECHOS abren
+                    // el sheet de edición al tocarlos (QA2 #3); los pendientes no son interactivos.
                     const media = resolveExecMedia(m.exercise)
+                    const editable = state === 'done'
                     return (
                         <div
                             key={m.block.id}
@@ -310,7 +325,22 @@ export function SupersetStepV3({
                                 'exec-v3-excard',
                                 state === 'next' && 'is-next',
                                 state === 'done' && 'is-done',
+                                editable && 'exec-v3-excard-edit',
                             )}
+                            role={editable ? 'button' : undefined}
+                            tabIndex={editable ? 0 : undefined}
+                            onClick={editable ? () => setEditBlockId(m.block.id) : undefined}
+                            onKeyDown={
+                                editable
+                                    ? (e) => {
+                                          if (e.key === 'Enter' || e.key === ' ') {
+                                              e.preventDefault()
+                                              setEditBlockId(m.block.id)
+                                          }
+                                      }
+                                    : undefined
+                            }
+                            aria-label={editable ? `Editar ${m.exercise.name}` : undefined}
                         >
                             <div className="exec-v3-exhead">
                                 <span className="exec-v3-exmini">
@@ -334,14 +364,22 @@ export function SupersetStepV3({
                                 <span className="exec-v3-exhead-end">
                                     {state === 'next' && isNext && <span className="exec-v3-exstate is-after">Sigue</span>}
                                     {state === 'done' && (
-                                        <span className="exec-v3-exdone" aria-label="Hecho">
-                                            <Check className="h-4 w-4" aria-hidden strokeWidth={3} />
-                                        </span>
+                                        <>
+                                            <span className="exec-v3-exedit" aria-hidden>
+                                                <Pencil className="h-3.5 w-3.5" strokeWidth={2.4} />
+                                            </span>
+                                            <span className="exec-v3-exdone" aria-label="Hecho">
+                                                <Check className="h-4 w-4" aria-hidden strokeWidth={3} />
+                                            </span>
+                                        </>
                                     )}
                                     {hasTech && (
                                         <button
                                             type="button"
-                                            onClick={() => openTechnique(m.exercise)}
+                                            onClick={(e) => {
+                                                e.stopPropagation()
+                                                openTechnique(m.exercise)
+                                            }}
                                             className="exec-v3-extech"
                                             aria-label={`Ver técnica de ${m.exercise.name}`}
                                         >
@@ -354,14 +392,6 @@ export function SupersetStepV3({
                     )
                 })}
             </div>
-
-            {/* Pill "Sin descanso — sigue con {letra}" (sólo si queda miembro en la ronda). */}
-            {!groupComplete && nextLetter && (
-                <div className="exec-v3-ss-link">
-                    Sin descanso — sigue con {nextLetter}
-                    <span className="exec-v3-ss-arrow" aria-hidden />
-                </div>
-            )}
 
             {/* Nota: el descanso completo llega al cerrar la ronda (no entre miembros). */}
             {!groupComplete && groupRestSeconds > 0 && (
@@ -383,6 +413,98 @@ export function SupersetStepV3({
                     <span className="exec-v3-ss-cue-n">{cue.name}</span>
                 </div>
             )}
+
+            {/* Sheet oscuro "Editar {nombre}" (QA2 #3): monta las filas CLÁSICAS del motor (LogSetForm) del
+                miembro ya hecho para corregir sus series registradas — mismo motor de edición del lápiz del
+                ejercicio solo, sólo envuelto en el sheet V3. `onLogged` plano (NO dispara el aviso). */}
+            <AnimatePresence>
+                {editVM && (
+                    <>
+                        <motion.button
+                            type="button"
+                            aria-label="Cerrar edición"
+                            onClick={() => setEditBlockId(null)}
+                            className="exec-v3-sheet-scrim"
+                            initial={reducedMotion ? false : { opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={reducedMotion ? undefined : { opacity: 0 }}
+                        />
+                        <motion.div
+                            className="exec-v3-settings"
+                            role="dialog"
+                            aria-modal="true"
+                            aria-label={`Editar ${editVM.exercise.name}`}
+                            initial={reducedMotion ? { opacity: 0 } : { y: '100%' }}
+                            animate={reducedMotion ? { opacity: 1 } : { y: 0 }}
+                            exit={reducedMotion ? { opacity: 0 } : { y: '100%' }}
+                            transition={reducedMotion ? { duration: 0 } : { type: 'spring', stiffness: 380, damping: 38 }}
+                        >
+                            <div className="pt-1">
+                                <span className="exec-v3-handle" aria-hidden />
+                            </div>
+                            <div className="exec-v3-settings-hd">
+                                <span className="exec-v3-settings-t">Editar {editVM.exercise.name}</span>
+                                <button
+                                    type="button"
+                                    onClick={() => setEditBlockId(null)}
+                                    aria-label="Cerrar"
+                                    className="-mr-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-on-dark-muted transition-colors hover:bg-white/[0.06] hover:text-on-dark"
+                                >
+                                    <X className="h-5 w-5" />
+                                </button>
+                            </div>
+                            <div className="exec-v3-setlist space-y-1.5 overflow-y-auto pb-[calc(8px+env(safe-area-inset-bottom,0px))]">
+                                {editLogs.length > 0 ? (
+                                    editLogs.map((log) => (
+                                        <LogSetForm
+                                            key={`${editVM.block.id}-edit-${log.set_number}`}
+                                            blockId={editVM.block.id}
+                                            setNumber={log.set_number}
+                                            restTimeStr={editVM.block.rest_time}
+                                            warmupRestTimeStr={editVM.block.warmup_rest_time}
+                                            totalSets={editVM.block.sets}
+                                            nextUpLabel={editVM.exercise.name}
+                                            existingLog={log}
+                                            suggestedWeightKg={editVM.suggestedWeightKg}
+                                            prThresholdKg={exerciseMaxes[editVM.exercise.id] ?? null}
+                                            targetReps={editVM.block.reps}
+                                            lastSet={
+                                                editVM.bestPrev
+                                                    ? { weightKg: editVM.bestPrev.weight_kg, reps: editVM.bestPrev.reps_done }
+                                                    : null
+                                            }
+                                            autoTimerEnabled={autoTimerEnabled}
+                                            mode={editVM.effType}
+                                            typedObjective={
+                                                editVM.effType !== 'strength'
+                                                    ? formatTypedObjective(editVM.block, editVM.effType)
+                                                    : undefined
+                                            }
+                                            substitution={
+                                                substitutionByBlock[editVM.block.id]
+                                                    ? {
+                                                          exerciseId: substitutionByBlock[editVM.block.id]!.id,
+                                                          exerciseName: substitutionByBlock[editVM.block.id]!.name,
+                                                          reason: SUBSTITUTION_REASON,
+                                                      }
+                                                    : null
+                                            }
+                                            v3
+                                            heroV3
+                                            onLogged={onLogged}
+                                            onResult={onResult}
+                                        />
+                                    ))
+                                ) : (
+                                    <p className="py-3 text-center text-sm text-on-dark-muted">
+                                        Todavía no registras ninguna serie de este ejercicio.
+                                    </p>
+                                )}
+                            </div>
+                        </motion.div>
+                    </>
+                )}
+            </AnimatePresence>
         </div>
     )
 }

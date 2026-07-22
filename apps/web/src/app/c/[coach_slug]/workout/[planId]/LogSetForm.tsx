@@ -2,7 +2,7 @@
 
 import { useActionState, useEffect, useRef, useOptimistic, useState, startTransition, type RefObject } from 'react'
 import { useParams } from 'next/navigation'
-import { Check, Loader2, StickyNote, CloudOff } from 'lucide-react'
+import { Check, Loader2, StickyNote, CloudOff, ChevronDown, HelpCircle, X } from 'lucide-react'
 import { useFormStatus } from 'react-dom'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { toast } from 'sonner'
@@ -154,6 +154,14 @@ interface Props {
      */
     heroV3?: boolean
     /**
+     * Ejecutor V3 · panel de esfuerzo COLAPSABLE (QA2 hallazgo 3): estado expandido/colapsado del panel
+     * RPE/RIR del hero, LEVANTADO al `ExerciseStepV3` (por-ejercicio) para que persista entre series del
+     * MISMO ejercicio y se colapse al cambiar de ejercicio. Aditivo: sin la prop, el hero usa estado
+     * local (colapsado por default). NO toca el guardado de rpe/rir — sólo si el panel se ve expandido.
+     */
+    effortExpanded?: boolean
+    onEffortExpandedChange?: (v: boolean) => void
+    /**
      * Movilidad POR LADO (E3.2 · executor-v3): `side_mode` del bloque. Cuando es `'per_side'` la fila de
      * movilidad captura DOS holds (`hold_left_sec` / `hold_right_sec`) que el engine (`typedLogValues`)
      * mapea a `metadata {left_sec, right_sec}` + suma en `actual_hold_sec`. Cualquier otro valor (o
@@ -219,6 +227,8 @@ function StrengthLogSetForm({
     onResult,
     v3 = false,
     heroV3 = false,
+    effortExpanded,
+    onEffortExpandedChange,
 }: Props) {
     const params = useParams<{ coach_slug: string; planId: string }>()
     // Teclado numérico custom (Fase L · workstream B). Gate por puntero grueso: en desktop el input
@@ -331,6 +341,16 @@ function StrengthLogSetForm({
     const [effortMetric, setEffortMetric] = useState<'rpe' | 'rir'>(
         rir != null ? 'rir' : rpe != null ? 'rpe' : 'rir',
     )
+    // Panel de esfuerzo COLAPSABLE (QA2 hallazgo 3). Colapsado por default. El estado real lo levanta
+    // `ExerciseStepV3` (por-ejercicio, persiste entre series y se colapsa al cambiar de ejercicio); si no
+    // llega la prop controlada, cae a este estado local. `effHelpOpen` = mini-sheet (?) RPE/RIR.
+    const [localEffortExpanded, setLocalEffortExpanded] = useState(false)
+    const [effHelpOpen, setEffHelpOpen] = useState(false)
+    const effExpanded = effortExpanded ?? localEffortExpanded
+    const setEffExpanded = (val: boolean) => {
+        if (onEffortExpandedChange) onEffortExpandedChange(val)
+        else setLocalEffortExpanded(val)
+    }
     // Nota rápida por serie (quick-win E2-6). Source of truth = state; viaja por un mirror oculto.
     const [note, setNote] = useState(existingLog?.note ?? '')
     const [noteOpen, setNoteOpen] = useState(false)
@@ -880,48 +900,81 @@ function StrengthLogSetForm({
                         </label>
                     </div>
 
-                    {/* Panel de esfuerzo compacto y OPCIONAL: pills RPE/RIR + escala de ticks única. */}
-                    <div className="exec-v3-effort exec-v3-effpanel">
+                    {/* Panel de esfuerzo compacto y OPCIONAL — COLAPSADO por default (QA2 hallazgo 3): fila
+                        "Esfuerzo · Opcional" + (?) + chevron + (si hay valores) pills; tap expande la escala
+                        con animación chica (height/opacity). Mantiene `exec-v3-effort` para el gear-hide E3.7. */}
+                    <div className={cn('exec-v3-effort exec-v3-effpanel', effExpanded && 'is-open')}>
                         <div className="exec-v3-efftop">
-                            <span className="exec-v3-efflbl">Esfuerzo</span>
-                            <span className="exec-v3-effopt">Opcional</span>
-                            <span className="exec-v3-effpills">
-                                <button
-                                    type="button"
-                                    onClick={() => setEffortMetric('rpe')}
-                                    className={cn('exec-v3-epill', effortMetric === 'rpe' && 'on')}
-                                    aria-pressed={effortMetric === 'rpe'}
+                            <button
+                                type="button"
+                                className="exec-v3-effhead"
+                                onClick={() => setEffExpanded(!effExpanded)}
+                                aria-expanded={effExpanded}
+                                aria-label={effExpanded ? 'Colapsar esfuerzo' : 'Registrar esfuerzo (RPE / RIR, opcional)'}
+                            >
+                                <span className="exec-v3-efflbl">Esfuerzo</span>
+                                <span className="exec-v3-effopt">Opcional</span>
+                                <ChevronDown className="exec-v3-effchev" aria-hidden />
+                            </button>
+                            <button
+                                type="button"
+                                className="exec-v3-effhelp"
+                                onClick={() => setEffHelpOpen(true)}
+                                aria-label="¿Qué son RPE y RIR?"
+                            >
+                                <HelpCircle aria-hidden />
+                            </button>
+                            {(effExpanded || rpe != null || rir != null) && (
+                                <span className="exec-v3-effpills">
+                                    <button
+                                        type="button"
+                                        onClick={() => { setEffortMetric('rpe'); if (!effExpanded) setEffExpanded(true) }}
+                                        className={cn('exec-v3-epill', effExpanded && effortMetric === 'rpe' && 'on')}
+                                        aria-pressed={effortMetric === 'rpe'}
+                                    >
+                                        <span className="k">RPE</span>
+                                        <span className={rpe != null ? 'v' : 'em'}>{rpe != null ? rpe : '—'}</span>
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => { setEffortMetric('rir'); if (!effExpanded) setEffExpanded(true) }}
+                                        className={cn('exec-v3-epill', effExpanded && effortMetric === 'rir' && 'on')}
+                                        aria-pressed={effortMetric === 'rir'}
+                                    >
+                                        <span className="k">RIR</span>
+                                        <span className={rir != null ? 'v' : 'em'}>{rir != null ? rir : '—'}</span>
+                                    </button>
+                                </span>
+                            )}
+                        </div>
+                        <AnimatePresence initial={false}>
+                            {effExpanded && (
+                                <motion.div
+                                    initial={reducedMotion ? false : { height: 0, opacity: 0 }}
+                                    animate={{ height: 'auto', opacity: 1 }}
+                                    exit={reducedMotion ? undefined : { height: 0, opacity: 0 }}
+                                    transition={reducedMotion ? { duration: 0 } : { duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
+                                    className="exec-v3-effbody"
                                 >
-                                    <span className="k">RPE</span>
-                                    <span className={rpe != null ? 'v' : 'em'}>{rpe != null ? rpe : '—'}</span>
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => setEffortMetric('rir')}
-                                    className={cn('exec-v3-epill', effortMetric === 'rir' && 'on')}
-                                    aria-pressed={effortMetric === 'rir'}
-                                >
-                                    <span className="k">RIR</span>
-                                    <span className={rir != null ? 'v' : 'em'}>{rir != null ? rir : '—'}</span>
-                                </button>
-                            </span>
-                        </div>
-                        <div className="exec-v3-scale" role="group" aria-label={`Escala ${effortMetric.toUpperCase()}`}>
-                            {ticks.map((n) => (
-                                <button
-                                    key={n}
-                                    type="button"
-                                    onClick={() => setEffort(n)}
-                                    className={cn('exec-v3-tick', effortValue === n && 'sel')}
-                                    aria-label={`${effortMetric.toUpperCase()} ${n}`}
-                                    aria-pressed={effortValue === n}
-                                />
-                            ))}
-                        </div>
-                        <div className="exec-v3-scaleends">
-                            <span>{scaleMin}</span>
-                            <span>{scaleMax}</span>
-                        </div>
+                                    <div className="exec-v3-scale" role="group" aria-label={`Escala ${effortMetric.toUpperCase()}`}>
+                                        {ticks.map((n) => (
+                                            <button
+                                                key={n}
+                                                type="button"
+                                                onClick={() => setEffort(n)}
+                                                className={cn('exec-v3-tick', effortValue === n && 'sel')}
+                                                aria-label={`${effortMetric.toUpperCase()} ${n}`}
+                                                aria-pressed={effortValue === n}
+                                            />
+                                        ))}
+                                    </div>
+                                    <div className="exec-v3-scaleends">
+                                        <span>{scaleMin}</span>
+                                        <span>{scaleMax}</span>
+                                    </div>
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
                     </div>
 
                     {/* CTA principal juicy full-width */}
@@ -993,6 +1046,58 @@ function StrengthLogSetForm({
                         totalSets={totalSets}
                     />
                 )}
+
+                {/* Mini-sheet (?) — explica RPE y RIR (QA2 hallazgo 3). Overlay oscuro V3, cierra con tap fuera. */}
+                <AnimatePresence>
+                    {effHelpOpen && (
+                        <motion.div
+                            className="exec-v3-effhelp-scrim"
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            transition={{ duration: reducedMotion ? 0 : 0.18 }}
+                            onClick={() => setEffHelpOpen(false)}
+                            role="button"
+                            aria-label="Cerrar ayuda de esfuerzo"
+                        >
+                            <motion.div
+                                className="exec-v3-effhelp-sheet"
+                                initial={reducedMotion ? { opacity: 0 } : { opacity: 0, y: 24 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={reducedMotion ? { opacity: 0 } : { opacity: 0, y: 24 }}
+                                transition={reducedMotion ? { duration: 0 } : { duration: 0.22, ease: [0.4, 0, 0.2, 1] }}
+                                onClick={(e) => e.stopPropagation()}
+                                role="dialog"
+                                aria-modal="true"
+                                aria-label="Qué son RPE y RIR"
+                            >
+                                <div className="exec-v3-effhelp-hd">
+                                    <span className="exec-v3-effhelp-t">Esfuerzo</span>
+                                    <button
+                                        type="button"
+                                        className="exec-v3-effhelp-x"
+                                        onClick={() => setEffHelpOpen(false)}
+                                        aria-label="Cerrar"
+                                    >
+                                        <X aria-hidden />
+                                    </button>
+                                </div>
+                                <div className="exec-v3-effhelp-row">
+                                    <span className="exec-v3-effhelp-k">RPE</span>
+                                    <p className="exec-v3-effhelp-p">
+                                        <b>Esfuerzo percibido:</b> qué tan dura se sintió la serie, del 1 al 10 (10 = no podías más).
+                                    </p>
+                                </div>
+                                <div className="exec-v3-effhelp-row">
+                                    <span className="exec-v3-effhelp-k">RIR</span>
+                                    <p className="exec-v3-effhelp-p">
+                                        <b>Reps en reserva:</b> cuántas repeticiones te quedaban en el tanque (0 = llegaste al fallo).
+                                    </p>
+                                </div>
+                            </motion.div>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
             </div>
         )
     }

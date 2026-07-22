@@ -48,10 +48,8 @@ export interface InterstitialRound {
 }
 
 export interface RestInterstitialData {
-  /** Filas del plan para el peek "Plan completo" (reusa el mapa del ejecutor). */
+  /** Filas del plan para el peek "Plan completo" (reusa el mapa del ejecutor, SÓLO LECTURA). */
   items: ExecListMapItem[]
-  /** Salta al stepper en ese paso (misma navegación que el mapa "Ver todo"). */
-  onJump: (stepIndex: number) => void
   /** Ejercicio que sigue tras el descanso (null ⇒ oculta la tarjeta). */
   next: InterstitialNext | null
   /** Contexto de ronda cuando el descanso viene de cerrar una ronda de superserie (null ⇒ descanso normal). */
@@ -157,11 +155,6 @@ export function RestInterstitialV3({
   const doneCount = items.filter((i) => i.complete).length
   // Cierre de ronda (E3.5): sólo cuando el descanso de grupo viene de cerrar una ronda de superserie.
   const round = data?.round ?? null
-
-  const handleJump = (stepIndex: number) => {
-    data?.onJump(stepIndex)
-    onMinimize()
-  }
 
   const transition = reducedMotion ? { duration: 0 } : { type: 'spring' as const, stiffness: 420, damping: 34 }
 
@@ -375,32 +368,42 @@ export function RestInterstitialV3({
                 </span>
               </button>
               {/* Filas "estado de un vistazo" (mockup a3a-srow): SIEMPRE renderizadas para que el peek
-                  colapsado asome 1-2 filas reales del plan (el resto se recorta con desvanecido). NO usa
-                  ExecListMapV3 (ese mapa numerado queda para la vista "Ver todo" del stepper). */}
+                  colapsado asome 1-2 filas reales del plan (el resto se recorta con desvanecido). SÓLO
+                  LECTURA (QA2-C): una fila por ejercicio individual — los miembros de superserie llevan
+                  su letra bajo el encabezado "Superserie X". Sin navegación: es un índice para ver. */}
               <div className="exec-v3-restsheet-body">
                 {items.map((item) => {
                   const state = item.complete ? 'done' : item.isCurrent ? 'now' : 'todo'
                   return (
-                    <button
-                      key={item.key}
-                      type="button"
-                      onClick={() => handleJump(item.stepIndex)}
-                      className={cn('exec-v3-srow', item.isCurrent && 'is-now')}
-                      aria-current={item.isCurrent ? 'true' : undefined}
-                    >
-                      <span className={cn('exec-v3-sstate', state)} aria-hidden>
-                        {state === 'done' && <Check className="h-3 w-3" strokeWidth={3.5} />}
-                        {state === 'now' && <span className="exec-v3-sstate-dot" />}
-                      </span>
-                      <span className="exec-v3-snm">{item.title}</span>
-                      <span className={cn('exec-v3-ssub tabular-nums', state)}>
-                        {state === 'done'
-                          ? `✓ ${item.doneSets}/${item.totalSets}`
-                          : state === 'now'
-                            ? 'ahora'
-                            : 'pendiente'}
-                      </span>
-                    </button>
+                    <div key={item.key}>
+                      {item.groupTitle && (
+                        <p className="exec-v3-sgroup">{item.groupTitle}</p>
+                      )}
+                      <div
+                        className={cn('exec-v3-srow', item.isCurrent && 'is-now')}
+                        aria-current={item.isCurrent ? 'true' : undefined}
+                      >
+                        <span className={cn('exec-v3-sstate', state)} aria-hidden>
+                          {state === 'done' && <Check className="h-3 w-3" strokeWidth={3.5} />}
+                          {state === 'now' && <span className="exec-v3-sstate-dot" />}
+                        </span>
+                        {item.letter && (
+                          <span className="exec-v3-sletter" aria-hidden>
+                            {item.letter}
+                          </span>
+                        )}
+                        <span className="exec-v3-snm">{item.title}</span>
+                        <span className={cn('exec-v3-ssub tabular-nums', state)}>
+                          {state === 'done'
+                            ? `✓ ${item.doneSets}/${item.totalSets}`
+                            : state === 'now'
+                              ? 'ahora'
+                              : item.doneSets > 0
+                                ? `${item.doneSets}/${item.totalSets}`
+                                : 'pendiente'}
+                        </span>
+                      </div>
+                    </div>
                   )
                 })}
               </div>

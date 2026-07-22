@@ -9,6 +9,7 @@ import {
   buildStepModel,
   effectiveExerciseType,
   findNextIncompleteInRounds,
+  firstIncompleteInRounds,
   firstIncompleteStepIndex,
   formatWeightEsCl,
   isRoundComplete,
@@ -56,7 +57,7 @@ import { SessionIntro } from './SessionIntro'
 import { SessionStart, type StartChip, type StartExercisePreview } from './SessionStart'
 import { ExerciseScreenV3 } from './ExerciseScreenV3'
 import { SupersetScreenV3, type SupersetMemberSub } from './SupersetScreenV3'
-import { supersetGroupLetter } from './superset-screen-model'
+import { supersetGroupLetter, memberLetter } from './superset-screen-model'
 import { MobilityScreenV3 } from './MobilityScreenV3'
 import { RollerScreenV3 } from './RollerScreenV3'
 import { CardioScreenV3 } from './CardioScreenV3'
@@ -237,13 +238,29 @@ function ExecutorV3Inner({ planId, recoverDate, editDate }: { planId: string; re
     [sessionLogs],
   )
   const currentExerciseIdx = blocks.findIndex((b) => !isBlockComplete(b))
-  const currentExerciseNum = currentExerciseIdx === -1 ? blocks.length : currentExerciseIdx + 1
   const activeBlockId = currentExerciseIdx === -1 ? null : blocks[currentExerciseIdx]?.id ?? null
 
-  // Dots de progreso por ejercicio (block): hecho / actual / futuro.
+  // "Ejercicio activo" a nivel INDIVIDUAL para header/dots/lista (QA2-C). En una superserie el motor
+  // intercala rondas (A1→B1→A2…), asi que el miembro activo NO es el 1er bloque incompleto del grupo
+  // sino el que devuelve `firstIncompleteInRounds`. Fuera de superserie coincide con `activeBlockId`.
+  const headerActiveBlockId = useMemo(() => {
+    if (activeBlockId == null) return null
+    const members = supersetMembersByBlock.get(activeBlockId)
+    if (!members || members.length < 2) return activeBlockId
+    const pos = firstIncompleteInRounds(
+      members.map((m) => ({ id: m.id, sets: m.sets })),
+      sessionLogs.map((l) => ({ block_id: l.block_id, set_number: l.set_number })),
+    )
+    return pos?.blockId ?? activeBlockId
+  }, [activeBlockId, supersetMembersByBlock, sessionLogs])
+  // N = posicion (1-based) del ejercicio activo entre TODOS los bloques; en superserie, el miembro activo.
+  const currentBlockIdx = headerActiveBlockId != null ? blocks.findIndex((b) => b.id === headerActiveBlockId) : -1
+  const currentExerciseNum = currentBlockIdx === -1 ? blocks.length : currentBlockIdx + 1
+
+  // Dots de progreso por ejercicio individual: hecho (todas sus series/rondas) / activo / pendiente.
   const dots = useMemo<ExecDotState[]>(
-    () => blocks.map((b, i) => (isBlockComplete(b) ? 'done' : i === currentExerciseIdx ? 'now' : 'todo')),
-    [blocks, isBlockComplete, currentExerciseIdx],
+    () => blocks.map((b) => (isBlockComplete(b) ? 'done' : b.id === headerActiveBlockId ? 'now' : 'todo')),
+    [blocks, isBlockComplete, headerActiveBlockId],
   )
 
   // ── Abrir teclado para una serie (copia de ExecutorV2: sin cambios al motor). ──
@@ -982,52 +999,63 @@ function ExecutorV3Inner({ planId, recoverDate, editDate }: { planId: string; re
     [steps, renderGroup],
   )
 
-  // Modelo de la vista lista "Ver todo" (E2.6): una fila por paso, con series hechas/total, tipo y
-  // seccion. El salto (onJumpTo) reposiciona el stepper — misma navegacion que el rail.
-  const listItems = useMemo<ExerciseListItem[]>(
-    () =>
-      steps.map((st, i) => {
-        let done = 0
-        let total = 0
-        for (const b of st.blocks) {
-          total += b.sets
-          const logged = new Set(
-            sessionLogs
-              .filter((l) => l.block_id === b.id && l.set_number >= 1 && l.set_number <= b.sets)
-              .map((l) => l.set_number),
-          )
-          done += logged.size
-        }
-        let title: string
-        let typeLabel: string
-        let typeColor: string
-        if (st.kind === 'superset') {
-          const names = st.blocks.map((b) => resolveExercise(b)?.name).filter(Boolean) as string[]
-          title = names.length ? names.join(' + ') : 'Superserie'
-          typeLabel = 'Superserie'
-          typeColor = exec.accent
-        } else {
-          const ex = resolveExercise(st.blocks[0])
-          title = ex?.name ?? 'Ejercicio'
-          const t = ex ? effectiveExerciseType(st.blocks[0], ex) : 'strength'
-          typeLabel = EXERCISE_TYPE_META[t].label
-          typeColor = exerciseTypeColor(t, exec.accent)
-        }
-        return {
-          key: st.key,
-          index: i,
+  // Modelo del "Plan completo" (E2.6 · QA2-C): SOLO LECTURA, una fila por EJERCICIO INDIVIDUAL. Los
+  // miembros de una superserie son filas propias (con su letra) agrupadas bajo "Superserie X". El conteo
+  // (M) coincide con el del header. Sin navegacion: es un indice de estado, no un stepper.
+  const listItems = useMemo<ExerciseListItem[]>(() => {
+    const out: ExerciseListItem[] = []
+    let ssOrd = 0
+    const doneSetsOf = (b: SessionBlock) =>
+      new Set(
+        sessionLogs
+          .filter((l) => l.block_id === b.id && l.set_number >= 1 && l.set_number <= b.sets)
+          .map((l) => l.set_number),
+      ).size
+    for (const st of steps) {
+      if (st.kind === 'superset') {
+        const groupLetter = supersetGroupLetter(ssOrd)
+        ssOrd += 1
+        st.blocks.forEach((b, mi) => {
+          const ex = resolveExercise(b)
+          const done = doneSetsOf(b)
+          out.push({
+            key: b.id,
+            sectionTitle: st.sectionTitle,
+            muted: st.muted,
+            title: ex?.name ?? 'Ejercicio',
+            typeLabel: 'Superserie',
+            typeColor: exec.accent,
+            letter: memberLetter(mi),
+            groupTitle: mi === 0 ? `Superserie ${groupLetter}` : null,
+            doneSets: done,
+            totalSets: b.sets,
+            complete: b.sets > 0 && done >= b.sets,
+            isCurrent: b.id === headerActiveBlockId,
+          })
+        })
+      } else {
+        const b = st.blocks[0]
+        const ex = resolveExercise(b)
+        const t = ex ? effectiveExerciseType(b, ex) : 'strength'
+        const done = doneSetsOf(b)
+        out.push({
+          key: b.id,
           sectionTitle: st.sectionTitle,
           muted: st.muted,
-          title,
-          typeLabel,
-          typeColor,
+          title: ex?.name ?? 'Ejercicio',
+          typeLabel: EXERCISE_TYPE_META[t].label,
+          typeColor: exerciseTypeColor(t, exec.accent),
+          letter: null,
+          groupTitle: null,
           doneSets: done,
-          totalSets: total,
-          complete: total > 0 && done >= total,
-        }
-      }),
-    [steps, sessionLogs, exec.accent],
-  )
+          totalSets: b.sets,
+          complete: b.sets > 0 && done >= b.sets,
+          isCurrent: b.id === headerActiveBlockId,
+        })
+      }
+    }
+    return out
+  }, [steps, sessionLogs, exec.accent, headerActiveBlockId])
 
   // ── Interstitial de descanso V3 (E3.1) ──
   // "Qué retoma" al terminar el descanso: el primer paso incompleto (mismo destino que el auto-avance).
@@ -1056,7 +1084,6 @@ function ExecutorV3Inner({ planId, recoverDate, editDate }: { planId: string; re
     next: restNextData?.next ?? null,
     coachNote: restNextData?.coachNote ?? null,
     planItems: listItems,
-    currentIndex: restNextData?.index ?? stepIndex,
     celebrate: restCelebrateRef.current,
     celebratePr: restPrRef.current,
     roundContext: restRoundContextRef.current,
@@ -1227,8 +1254,6 @@ function ExecutorV3Inner({ planId, recoverDate, editDate }: { planId: string; re
         open={listOpen}
         onClose={() => setListOpen(false)}
         items={listItems}
-        currentIndex={stepIndex}
-        onJumpTo={(i) => { setStepIndex(i); setListOpen(false) }}
         exec={exec}
         reducedMotion={motion.reduced}
       />

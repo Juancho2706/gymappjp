@@ -97,6 +97,10 @@ export function ExerciseStepV3({
 }: ExerciseStepV3Props) {
     // Pie: el lápiz revela las series anteriores (chips) para corregirlas; el teclado enfoca el valor activo.
     const [showPrev, setShowPrev] = useState(false)
+    // Panel de esfuerzo (QA2 hallazgo 3): colapsado por default; el estado vive AQUÍ (por-ejercicio) para
+    // persistir entre series del mismo ejercicio. Este componente se remonta por `key={block.id}` desde el
+    // padre → al cambiar de ejercicio el estado vuelve a colapsado, como pide el contrato.
+    const [effortExpanded, setEffortExpanded] = useState(false)
     const heroWrapRef = useRef<HTMLDivElement>(null)
     const note = block.notes?.trim() || null
 
@@ -218,6 +222,8 @@ export function ExerciseStepV3({
                                 substitution={substitution ?? null}
                                 v3
                                 heroV3
+                                effortExpanded={effortExpanded}
+                                onEffortExpandedChange={setEffortExpanded}
                                 onLogged={handleLogged}
                                 onResult={handleResult}
                             />
