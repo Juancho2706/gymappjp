@@ -1,7 +1,7 @@
 ---
 status: active
 owner: Juan Manuel Villegas
-last_verified: "2026-07-21 @ f5301858"
+last_verified: "2026-07-21 @ 3efa1a75"
 canonical: true
 source_of_truth: apps/web responsive + apps/mobile
 ---
@@ -22,7 +22,7 @@ La paridad global **no está certificada todavía**.
 | Sección 2 — dashboard del alumno | Cerrado | Pendiente | Cerrado estático; no certificado |
 | Sección 3 — coach (14 unidades) | Cerrado | Pendiente | Cerrado estático; no certificado |
 | Ola 2R — residuos del alumno | Cerrado | Pendiente | Cerrado estático; no certificado |
-| Ola 4A — nutrición del alumno | **5/12 aplicadas** | Pendiente | **Activa** |
+| Ola 4A — nutrición del alumno | **10/12 aplicadas** | Pendiente | **Activa** |
 
 “Cerrado estático” significa que código, spec y verificaciones automatizadas disponibles convergieron. No significa que el comportamiento visual, gestos, teclado, cámara, safe areas u offline estén aprobados en hardware real.
 
@@ -34,26 +34,24 @@ Fuente funcional/visual: `apps/web/src/app/c/[coach_slug]/nutrition-v2/**` y `ap
 |---|---|---:|---:|
 | 4A-01 | Ruteo y chrome | Aplicado | Pendiente |
 | 4A-02 | Vista Hoy: estructura | Aplicado | Pendiente |
-| 4A-03 | Vista Plan | Pendiente | Pendiente |
+| 4A-03 | Vista Plan | Aplicado | Pendiente |
 | 4A-04 | Historial | Pendiente | Pendiente |
 | 4A-05 | Shell y tab bar | Pendiente | Pendiente |
-| 4A-06 | Editar y retirar registros | Pendiente | Pendiente |
+| 4A-06 | Editar y retirar registros | Aplicado | Pendiente |
 | 4A-07 | Kit e ilustraciones | Aplicado | Pendiente |
-| 4A-08 | AuraHero y colores white-label | Pendiente | Pendiente |
-| 4A-09 | Porciones | Pendiente | Pendiente |
+| 4A-08 | AuraHero y colores white-label | Aplicado | Pendiente |
+| 4A-09 | Porciones | Aplicado | Pendiente |
 | 4A-10 | Registro y buscador | Aplicado | Pendiente |
 | 4A-11 | Scanner | Aplicado | Pendiente |
-| 4A-12 | Celebraciones y residuos | Pendiente | Pendiente |
+| 4A-12 | Celebraciones y residuos | Aplicado | Pendiente |
 
-Aplicadas: **01, 02, 07, 10 y 11**. Pendientes: **03, 04, 05, 06, 08, 09 y 12**.
+Aplicadas: **01, 02, 03, 06, 07, 08, 09, 10, 11 y 12** (wave C en `73f6aa82`; wave D en este cambio). Pendientes: **04 y 05**.
 
 ### Dónde retomar
 
-1. Wave C: `4A-06`, `4A-08` y `4A-09` en archivos disjuntos.
-2. Wave D: `4A-03` y `4A-12`.
-3. Wave E: `4A-04`; después `4A-05` si ambas siguen compartiendo `index.tsx`.
-4. Ejecutar gates estáticos y export después de cada wave.
-5. Completar matriz device de 4A y regresión dirigida de Secciones 1–3/2R.
+1. Wave E: `4A-04`; después `4A-05` (ambas comparten `index.tsx`).
+2. Ejecutar gates estáticos y export después de cada wave.
+3. Completar matriz device de 4A y regresión dirigida de Secciones 1–3/2R.
 
 ## Builds móviles
 
