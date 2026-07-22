@@ -1,7 +1,7 @@
 ---
 status: active
 owner: Juan Manuel Villegas
-last_verified: "2026-07-22 @ a9b8958e"
+last_verified: "2026-07-22 @ 6338f4a4"
 canonical: true
 source_of_truth: apps/web responsive + apps/mobile
 ---
@@ -23,7 +23,7 @@ La paridad global **no está certificada todavía**.
 | Sección 3 — coach (14 unidades) | Cerrado | Pendiente | Cerrado estático; no certificado |
 | Ola 2R — residuos del alumno | Cerrado | Pendiente | Cerrado estático; no certificado |
 | Ola 4A — nutrición del alumno | **12/12 aplicadas** | Pendiente | Cerrada estática; no certificada |
-| Ola 4B — nutrición del coach y catálogos | **15/16 aplicadas** | Pendiente | **Activa** |
+| Ola 4B — nutrición del coach y catálogos | **Cerrada: 15/15 unidades de rama** | Pendiente | Cerrada estática; no certificada |
 
 “Cerrado estático” significa que código, spec y verificaciones automatizadas disponibles convergieron. No significa que el comportamiento visual, gestos, teclado, cámara, safe areas u offline estén aprobados en hardware real.
 
@@ -48,7 +48,7 @@ Fuente funcional/visual: `apps/web/src/app/c/[coach_slug]/nutrition-v2/**` y `ap
 
 Aplicadas: **las 12** (wave C en `73f6aa82`; wave D en `3efa1a75`; wave E en `7c6684fa`). Código de la ola completo; falta QA device.
 
-## Ola activa: 4B
+## Ola 4B (cerrada estática)
 
 Fuente funcional/visual: superficie V2 VIVA del coach (`apps/web/src/app/coach/nutrition-v2/**` +
 catálogos vivos). Specs vigentes: [`docs/rn-port/specs/seccion-4b/`](../rn-port/specs/seccion-4b/)
@@ -62,13 +62,14 @@ fuera, RN-extras estricto).
 | Aplicadas (wave 4B.3, `8f8161cb`) | 4B-05 HUB, 4B-06 Catálogo V2 + ficha, 4B-08 Detalle asignar/archivar, 4B-10 Builder F-02 reemplazos (cierra TODO F-02 P3), 4B-15 MG editor |
 | Aplicadas (wave 4B.4, `2cdc0c79`) | 4B-07 Curación, 4B-17 Tablist hub (Alumnos/Alimentos/Curación cableado), 4B-09 Detalle copy+banner convertido, 4B-11 Builder porciones (write-path nuevo), 4B-14 Quick-edit drafts |
 | Aplicada (wave 4B.5, `a9b8958e`) | 4B-12 Builder permisos del alumno + guardar-en-catálogo + archivar-y-reemplazar (idempotencia estable) |
-| Siguiente | Wave 4B.6: 4B-13 Builder drafts (última unidad de la ola; reusa `nutrition-coach-draft-store`) |
-| Resto | 4B-16 (deuda nutrition-pro) fuera de la rama (toca web+packages) |
+| Aplicada (wave 4B.6, `6338f4a4`) | 4B-13 Builder drafts (autosave + Restaurar + guard warn-only; cierra la ola) |
+| Fuera de rama | 4B-16 deuda transversal nutrition-pro (toca web+packages; abrir en rama de web) |
 
 ### Dónde retomar
 
-1. Wave 4B.6: `4B-13` Builder drafts (reusa `nutrition-coach-draft-store` nacido en 4B-14).
+1. Abrir la ola 5 (builder y programas de entrenamiento del coach) con inventario contra código. **Coordinación**: el visor/ejecutor de workout del alumno está siendo trabajado en paralelo en otra sesión — excluirlo o sincronizar antes de abrir unidades que lo toquen.
 2. Completar matriz device de 4A/4B y regresión dirigida de Secciones 1–3/2R (requiere build nativa).
+3. Deuda 4B-16 (consolidar nutrition-pro puro en `@eva/nutrition-v2`) en rama de web.
 
 ## Builds móviles
 
