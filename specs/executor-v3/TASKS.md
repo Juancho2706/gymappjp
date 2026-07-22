@@ -68,7 +68,7 @@
 
 - [ ] **E6.1 [S] BLE Heart Rate** — `react-native-ble-plx` + permisos; servicio 0x180D scan/connect/stream; sheet "Conectar sensor" (mockup v3.2); BPM vivo en cardio + `hrToZone` zona en vivo; `actual_avg_hr` auto al cerrar bloque; reconexión y estado honesto (sin sensor → módulo oculto).
 - [ ] **E6.2 [P] PWA Web Bluetooth** — solo Chrome/Edge Android (feature-detect); iOS PWA oculta; misma UI de sheet.
-- [ ] **E6.3 [P] Pasos agregadores** — HealthKit + Health Connect (permisos, opt-in alumno): pasos diarios → auto-llenar `daily_habits.steps` (editable manual siempre); distancia/calorías al resumen post-sesión cardio.
+- [ ] **E6.3 [P] Salud del alumno vía agregadores (la estrella de la ola)** — HealthKit (iOS) + Health Connect (Android), opt-in del alumno con permisos granulares: **pasos** diarios → auto-llenar `daily_habits.steps`; **sueño** → `daily_habits.sleep_hours`; **distancia/calorías/BPM promedio** de la actividad → resumen post-sesión de cardio y ficha. Editable manual siempre. Cubre lo que el alumno ya usa SIN app de reloj: Apple Watch, Galaxy Watch, bandas Xiaomi/Amazfit, Fitbit y cualquier dispositivo que sincronice al centro de salud del teléfono (datos agregados, no en vivo).
 - **Gate Ola 6**: build EAS + QA device CEO con cinta/reloj real; validar privacidad/permisos (copys claros, revocable).
 
 ## Ola 7A — Lockscreen premium (build EAS #3)
@@ -78,7 +78,7 @@
 - [ ] **E7.3 [P] Android Live Updates** — upgrade del cronómetro notify-kit a `ProgressStyle`/promoted ongoing (API 36+), fallback chronometer intacto en APIs menores.
 - **Gate Ola 7A**: build EAS + QA device CEO (iPhone con Dynamic Island ideal + Android 16); revisión App Store del extension.
 
-## Ola 7B — Companions de reloj (watchOS primero, luego Wear OS)
+## Ola 7B — Companions de reloj (DIFERIDA — decisión CEO 2026-07-22: no se quiere app en el smartwatch por ahora; único camino futuro para BPM EN VIVO de Apple/Galaxy Watch)
 
 - [ ] **E7.4 [S] Prerequisitos** — acceso cuenta Apple Developer (targets watch + HealthKit capability), Apple Watch y Galaxy Watch físicos para QA, Play Console módulo Wear. Gestionar DURANTE olas 2-4; 7B no arranca sin esto.
 - [ ] **E7.5 [S] Companion watchOS** — app SwiftUI embebida en el binario iOS: `HKWorkoutSession` + `HKLiveWorkoutBuilder` (HR/calorías/distancia en vivo) + WatchConnectivity al teléfono (módulo propio delgado; `expo-watch-connectivity` v0.1.0 solo como referencia); sesión espejo iniciable desde iPhone (iOS 17+); el stream entra al MISMO pipeline `hrToZone`/`actual_avg_hr` de Ola 6; UI reloj mínima (fase, BPM, zona, tiempo).

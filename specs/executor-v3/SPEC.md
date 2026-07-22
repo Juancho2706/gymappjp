@@ -23,7 +23,7 @@
 | 2 | RPE/RIR | Ambos visibles como pills opcionales, escala **0-10**, solo fuerza, jamás bloquean. Validación actual 1-10 → 0-10 (aditivo). |
 | 3 | Sonido | Global OFF; solo cronómetro de descanso suena. Tono del sistema (Android, RingtoneManager) o catálogo EVA (iOS no expone tonos). Ajustes en tuerca dentro del workout. |
 | 4 | Rachas | Semanales contra el plan, nunca diarias. |
-| 5 | Wearables | "Todos los posibles" por capas: BLE 0x180D primero (~80%), companions watchOS/Wear OS incluidos como Ola 7B (decisión CEO 2026-07-22), agregadores para pasos/historial. |
+| 5 | Wearables | Lo que el CEO necesita (2026-07-22): leer los sensores/datos de los dispositivos del alumno SIN app de reloj — agregadores HealthKit/Health Connect para pasos, sueño, distancia, calorías y BPM promedio (Ola 6, estrella) + BLE 0x180D para BPM en vivo de cintas/relojes que transmiten (Ola 6). Companions de reloj (7B) DIFERIDOS: solo serían necesarios para BPM en vivo de Apple/Galaxy Watch. |
 | 6 | White-label ejecutor | Toggle del coach: "mis colores" / "colores EVA". Zonas FC SIEMPRE colores fijos semánticos. |
 | 7 | Holds por lado | Sí: `metadata jsonb` `{left_sec, right_sec}` cuando `side_mode='per_side'`; junto al keypad nuevo. |
 | 8 | Captura kg/reps | Dual: tap = teclado custom; long-press = rueda doble kg\|reps (iOS y Android), centrada en el valor anterior, tick háptico, hint la primera vez. |

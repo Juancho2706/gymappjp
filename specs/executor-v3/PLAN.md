@@ -58,7 +58,8 @@ La jugada estrella que la PWA no puede igualar. **iOS**: Live Activity + Dynamic
 **Prerequisitos duros**: acceso a la cuenta Apple Developer (targets nuevos = provisioning profiles nuevos; aprovechar para cerrar también el pendiente de Associated Domains) + device iOS con Dynamic Island para QA ideal.
 **Riesgo**: revisión de App Store del extension target; mantenimiento de módulo nativo propio. **Rollback**: el Live Activity es aditivo — sin él, notificación normal (Ola 5) sigue funcionando.
 
-### Ola 7B — Companions de reloj (BPM en vivo Apple/Galaxy Watch)
+### Ola 7B — Companions de reloj (DIFERIDA, decisión CEO 2026-07-22)
+El CEO no quiere apps dentro del smartwatch por ahora. Se documenta porque es el ÚNICO camino técnico futuro para BPM en vivo desde Apple Watch / Galaxy Watch (protocolos cerrados, no transmiten BLE abierto). Todo lo demás del reloj (pasos, sueño, distancia, calorías, BPM promedio) llega SIN app de reloj vía agregadores en Ola 6.
 Cierra el único hueco que BLE no cubre (protocolos cerrados). **Secuencia recomendada: watchOS primero** (cohorte mayor en Chile), Wear OS después como sub-fase. **watchOS**: app companion SwiftUI embebida en el binario iOS — `HKWorkoutSession` + `HKLiveWorkoutBuilder` (HR latido-a-latido, calorías, distancia) + WatchConnectivity al teléfono (módulo: `expo-watch-connectivity` v0.1.0 está verde → probablemente módulo propio delgado); sesión espejo iniciable desde el iPhone (iOS 17+); el BPM entra al MISMO pipeline `hrToZone`/`actual_avg_hr` de la Ola 6 (cero cambio de datos). **Wear OS**: app Kotlin con Health Services en el reloj + Data Layer API al teléfono; mismo contrato de datos.
 **Prerequisitos duros**: Apple Watch y Galaxy Watch físicos para QA (¿los tienen tú o el socio? — si no, comprar/prestar antes de arrancar 7B); cuenta Apple con capacidad HealthKit en ambos targets; Play Console para el módulo Wear.
 **Riesgo**: el mayor esfuerzo del proyecto (Swift/Kotlin reales, dos plataformas de reloj, review doble); estimarlo por sub-fase al llegar. **Rollback**: sin companion, el usuario de Apple/Galaxy Watch usa cinta BLE (Ola 6) o registra manual — la UI ya degrada honesta.
@@ -66,10 +67,11 @@ Cierra el único hueco que BLE no cubre (protocolos cerrados). **Secuencia recom
 ## Secuencia y dependencias
 
 ```
-Ola 0 ──► Ola 2 ──► Ola 3 ──► Ola 4 ──► Ola 5 (build) ──► Ola 6 (build) ──► Ola 7A (build) ──► Ola 7B (watchOS → Wear OS)
+Ola 0 ──► Ola 2 ──► Ola 3 ──► Ola 4 ──► Ola 5 (build) ──► Ola 6 (build) ──► Ola 7A (build, teléfono no reloj)
    └────► Ola 1 (independiente; puede correr en paralelo con Ola 2)
+Ola 7B (companions de reloj): DIFERIDA — decisión futura del CEO.
 ```
-Nota 7A/7B: 7A depende de Ola 5 (el rest timer nativo ya encendido); 7B depende de Ola 6 (pipeline de BPM/zona ya construido — el companion solo es otra FUENTE del mismo dato). Los prerequisitos externos (cuenta Apple, relojes físicos) se gestionan durante las olas 2-4 para no bloquear.
+Nota: 7A depende de Ola 5 (rest timer nativo encendido) y NO involucra relojes — es lockscreen/Dynamic Island del TELÉFONO. 7B queda diferida; si algún día se activa, depende de Ola 6 (el companion solo es otra fuente del mismo pipeline BPM/zona) y de prerequisitos externos (cuenta Apple, relojes físicos de QA).
 Dentro de cada ola, `TASKS.md` marca [P]/[S]. Tras cada wave de workers: pasada de juicio (diff vs pedido) → correcciones al mismo worker → gates de la ola → commit por unidad lógica en esta rama → PR #162 acumula; merge a `rnmobiledenuevo` por ola completa (o al cierre, decisión CEO).
 
 ## QA y gates por ola
