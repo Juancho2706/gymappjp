@@ -36,7 +36,7 @@ La evidencia respalda esta dirección: la competencia percibida es el predictor 
 3. **Celebración escalonada que se gana.** Micro (serie: check elástico + haptic + tick), media (ejercicio/bloque: floreo + interstitial), épica (sesión/PR real: fullscreen + confetti + share-card). Nunca épica gratis; el usuario avanzado puede saltarla siempre (`f3`, `f6`, `r1`).
 4. **Feedback multimodal sincronizado.** Visual + haptic + sonido en <10ms del evento; sonido siempre muteable y OFF por defecto en gimnasio; haptics con semántica (success ≠ aviso ≠ fin descanso) (`f2`).
 5. **Motion con física, no con duraciones.** Springs (spatial con rebote leve, effect sin rebote), 100-450ms, entrada ease-out. `prefers-reduced-motion` / Reduce Motion = línea roja: variantes fade que preservan significado (`f1`, `f5`).
-6. **White-label sin mascota.** La vibra viene de motion + color del coach (tokens) + tipografía cinética + haptics + copy. Excepción semántica: zonas FC con colores universales FIJOS (Z1 azul → Z5 rojo), nunca re-teñidas (`r3`, `r5`).
+6. **White-label sin mascota, con tema EVA propio.** La vibra viene de motion + color + tipografía cinética + haptics + copy. Decisión CEO 2026-07-21: existe un **tema EVA default** multicolor (Sport `#2680FF` acciones/fuerza, Aqua `#18ABD4` recovery/movilidad/roller, Ember `#FF6A3D` celebración) y en el menú white-label el coach elige "mis colores" o "colores EVA". Excepción semántica: zonas FC con colores universales FIJOS (Z1 azul → Z5 rojo), nunca re-teñidas (`r3`, `r5`).
 7. **Offline intransable.** Anotar, avanzar y celebrar sin señal; reconciliar al volver. Toda key nueva de log toca las 5 superficies del payload a la vez o no se agrega (`a3` §4).
 8. **RN la mejor, PWA honesta.** Lo nativo (Live Activities, Watch, haptics AHAP) es el techo RN; la PWA degrada con gracia (SW notification + wake lock + vibration donde exista) y **omite** lo que no puede (jamás un BPM falso) (`r4`, `r6`).
 
@@ -133,10 +133,12 @@ PWA por fase: F1-F2 heredan casi todo (springs CSS, confetti canvas, View Transi
 
 1. ~~RPE o RIR~~ **RESUELTA (CEO 2026-07-21):** ambos visibles como opcionales, escala 0-10, sin bloquear el flujo. Pendiente técnico: ampliar validación Zod de 1-10 → 0-10 (aditivo).
 2. **Holds por lado v1:** ¿metadata jsonb ahora (recomendado) o se difiere el registro por lado?
-3. **Sonido:** ¿OFF por defecto con onboarding para activarlo, u ON?
-4. **Rachas semanales:** ¿entran en F2 o se difieren?
+3. ~~Sonido~~ **RESUELTA (CEO 2026-07-21):** todo OFF salvo el cronómetro de descanso, que suena con el tono del sistema del usuario (viable en Android vía RingtoneManager; en iOS según hallazgos de `f7` — probablemente catálogo propio) o uno del catálogo EVA. Ajustes (on/off, tono, volumen, vibración) viven en un botón de **tuerca** dentro del workout.
+4. ~~Rachas semanales~~ **RESUELTA (CEO 2026-07-21):** sí, entran (semanales contra el plan, nunca diarias).
 5. ~~Concepto visual~~ **RESUELTA (CEO 2026-07-21):** gana **A "Impulso"** (C descartado). Iteración v2 en `mockups/concepto-a-v2.html` con: pantallas inicio/final + mapa muscular, RPE/RIR opcionales 0-10, peek "plan completo" en descanso, cardio con distancia/ritmo y wearable dual iOS+Android.
-6. **Alcance wearables:** ¿F4 completa (companion watchOS + Wear OS/Health Connect) o primero lectura histórica post-sesión? Nota: paridad Android es requisito, no nice-to-have.
+6. ~~Alcance wearables~~ **RESUELTA (CEO 2026-07-21): "todos los posibles".** Estrategia por capas en `referentes/r7-universo-wearables-hr.md`: BLE GATT Heart Rate estándar (una integración cubre cintas Polar/Garmin/Wahoo/Coospo y relojes en modo broadcast) + HealthKit/Apple Watch + Health Connect/Wear OS + lo que cada SDK propietario permita; documentar honesto lo que NO expone HR en vivo a terceros.
+7. **Wheel picker iOS para kg/reps:** evaluación en `fundamentos/f7-sonido-sistema-y-wheel-picker.md`; opinión del equipo de diseño registrada ahí y en el pitch.
+8. **NUEVO — toggle "colores EVA" en el menú white-label:** el creador de marca del coach suma la opción de usar el tema EVA multicolor en vez de sus colores (feature del builder white-label, planificar junto al ejecutor).
 
 ## 12. Índice de la investigación
 

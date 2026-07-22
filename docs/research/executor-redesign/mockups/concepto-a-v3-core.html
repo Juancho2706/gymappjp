@@ -1,0 +1,989 @@
+<section class="concept" id="concept-a3a" data-name="Impulso v3 — flujo">
+  <style>
+    #concept-a3a {
+      --brand-a3a: var(--brand, #58cc02);
+      --z1: #38bdf8; --z2: #4ade80; --z3: #facc15; --z4: #fb923c; --z5: #f87171;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      color: #f4f4f6;
+      padding: 40px 28px 56px;
+      background: #0c0c11;
+      -webkit-font-smoothing: antialiased;
+    }
+    #concept-a3a *,
+    #concept-a3a *::before,
+    #concept-a3a *::after { box-sizing: border-box; }
+
+    #concept-a3a .a3a-head { max-width: 1320px; margin: 0 auto 40px; }
+    #concept-a3a .a3a-eyebrow {
+      display: inline-block;
+      font-size: 12px; font-weight: 800; letter-spacing: .18em; text-transform: uppercase;
+      color: #0c0c11; background: var(--brand-a3a);
+      padding: 5px 12px; border-radius: 999px; margin-bottom: 16px;
+    }
+    #concept-a3a .a3a-title {
+      font-size: clamp(32px, 5vw, 52px); font-weight: 900; letter-spacing: -.03em;
+      line-height: 1; margin: 0 0 12px;
+      background: linear-gradient(120deg, #ffffff 30%, var(--brand-a3a) 130%);
+      -webkit-background-clip: text; background-clip: text; color: transparent;
+    }
+    #concept-a3a .a3a-sub { font-size: 16px; line-height: 1.5; color: #a8a8b3; max-width: 760px; margin: 0; }
+
+    #concept-a3a .a3a-row {
+      display: flex; flex-wrap: wrap; gap: 44px 44px; justify-content: center;
+      max-width: 2100px; margin: 0 auto;
+    }
+    #concept-a3a .a3a-col { width: 375px; }
+    #concept-a3a .a3a-label {
+      display: flex; align-items: center; gap: 9px;
+      font-size: 15px; font-weight: 800; letter-spacing: -.01em; margin: 0 0 14px 6px;
+    }
+    #concept-a3a .a3a-label span {
+      width: 9px; height: 9px; border-radius: 50%; background: var(--brand-a3a);
+      box-shadow: 0 0 0 4px color-mix(in srgb, var(--brand-a3a) 22%, transparent);
+    }
+    #concept-a3a .a3a-label em {
+      font-style: normal; font-size: 10px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase;
+      color: #0c0c11; background: var(--brand-a3a); padding: 2px 7px; border-radius: 999px; margin-left: 2px;
+    }
+
+    /* ---- phone shell ---- */
+    #concept-a3a .a3a-phone {
+      width: 375px; height: 760px; border-radius: 44px;
+      background: #050507;
+      padding: 11px;
+      box-shadow: 0 0 0 2px #26262e, 0 30px 60px -22px rgba(0,0,0,.85), inset 0 1px 0 rgba(255,255,255,.05);
+      position: relative;
+    }
+    #concept-a3a .a3a-screen {
+      position: relative; width: 100%; height: 100%; border-radius: 34px; overflow: hidden;
+      background: radial-gradient(120% 80% at 50% -8%, #1c1c24 0%, #16161d 42%, #121218 100%);
+      display: flex; flex-direction: column;
+    }
+    #concept-a3a .a3a-notch {
+      position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
+      width: 118px; height: 26px; background: #050507; border-radius: 999px; z-index: 40;
+    }
+    #concept-a3a .a3a-body { flex: 1; display: flex; flex-direction: column; padding: 40px 18px 18px; min-height: 0; }
+
+    /* ---- shared bits ---- */
+    #concept-a3a .a3a-chip {
+      display: inline-flex; align-items: center; gap: 6px;
+      font-size: 12px; font-weight: 700; padding: 5px 11px; border-radius: 999px;
+      background: color-mix(in srgb, var(--brand-a3a) 16%, #16161d);
+      color: color-mix(in srgb, var(--brand-a3a) 82%, #ffffff);
+      border: 1.5px solid color-mix(in srgb, var(--brand-a3a) 34%, transparent);
+    }
+    #concept-a3a .a3a-chip.plain {
+      background: #1c1c24; color: #b7b7c2; border-color: #33333f;
+    }
+    #concept-a3a .a3a-tnum { font-variant-numeric: tabular-nums; }
+
+    /* juicy button base */
+    #concept-a3a .a3a-juicy {
+      border: 2px solid color-mix(in srgb, var(--brand-a3a) 55%, #000);
+      background: var(--brand-a3a);
+      color: #072100; font-weight: 900; letter-spacing: -.01em;
+      border-radius: 16px;
+      box-shadow: 0 5px 0 0 color-mix(in srgb, var(--brand-a3a) 55%, #000);
+      transition: transform .12s ease, box-shadow .12s ease;
+      cursor: default;
+    }
+    #concept-a3a .a3a-juicy:active {
+      transform: translateY(5px); box-shadow: 0 0 0 0 color-mix(in srgb, var(--brand-a3a) 55%, #000);
+    }
+
+    /* gear / settings button (Fuerza + Cardio header) */
+    #concept-a3a .a3a-gear {
+      width: 36px; height: 36px; flex-shrink: 0; border-radius: 11px;
+      background: #1a1a22; border: 1.5px solid #2f2f3a; color: #b7b7c2;
+      display: flex; align-items: center; justify-content: center;
+    }
+    #concept-a3a .a3a-gear svg { display: block; width: 19px; height: 19px; }
+
+    /* ===== SESSION PROGRESS (dots) ===== */
+    #concept-a3a .a3a-progress { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+    #concept-a3a .a3a-dots { display: flex; gap: 7px; flex: 1; }
+    #concept-a3a .a3a-dot { flex: 1; height: 9px; border-radius: 999px; background: #2a2a34; }
+    #concept-a3a .a3a-dot.done { background: color-mix(in srgb, var(--brand-a3a) 60%, #16161d); }
+    #concept-a3a .a3a-dot.now {
+      background: var(--brand-a3a);
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand-a3a) 25%, transparent);
+    }
+    #concept-a3a .a3a-count { font-size: 12px; font-weight: 800; color: #8f8f9c; white-space: nowrap; }
+
+    /* ===== ENTRADA / SPLASH SCREEN ===== */
+    #concept-a3a .a3a-splash {
+      position: relative; padding: 0; overflow: hidden;
+      align-items: center; justify-content: center; gap: 24px;
+      background:
+        radial-gradient(120% 90% at 50% 22%,
+          color-mix(in srgb, var(--brand-a3a) 52%, #0c2a00) 0%,
+          color-mix(in srgb, var(--brand-a3a) 22%, #0c0c11) 44%,
+          #0a0a0f 100%);
+    }
+    #concept-a3a .a3a-splash::after {
+      content: ""; position: absolute; inset: -40% -10% auto -10%; height: 70%;
+      background: radial-gradient(60% 60% at 50% 0%, color-mix(in srgb, var(--brand-a3a) 30%, transparent), transparent 70%);
+      pointer-events: none;
+    }
+    #concept-a3a .a3a-splashcoach { position: relative; width: 116px; height: 116px; }
+    #concept-a3a .a3a-splashhalo {
+      position: absolute; inset: 8px; border-radius: 50%;
+      box-shadow: 0 0 0 0 color-mix(in srgb, var(--brand-a3a) 40%, transparent);
+    }
+    #concept-a3a .a3a-splashring {
+      position: absolute; inset: 0; border-radius: 50%;
+      background: conic-gradient(from 0deg,
+        var(--brand-a3a),
+        color-mix(in srgb, var(--brand-a3a) 22%, transparent) 130deg,
+        var(--brand-a3a) 300deg, var(--brand-a3a) 360deg);
+      -webkit-mask: radial-gradient(closest-side, transparent 78%, #000 79%);
+      mask: radial-gradient(closest-side, transparent 78%, #000 79%);
+      opacity: .9;
+    }
+    #concept-a3a .a3a-splashav {
+      position: absolute; inset: 11px; border-radius: 50%;
+      background: linear-gradient(135deg, var(--brand-a3a), color-mix(in srgb, var(--brand-a3a) 48%, #000));
+      color: #062100; font-size: 42px; font-weight: 900; letter-spacing: -.03em;
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: inset 0 2px 0 rgba(255,255,255,.28), inset 0 -8px 16px rgba(0,0,0,.25);
+    }
+    #concept-a3a .a3a-splashday {
+      font-size: 30px; font-weight: 900; letter-spacing: -.03em; color: #ffffff;
+      text-align: center; text-shadow: 0 2px 18px rgba(0,0,0,.35);
+    }
+    #concept-a3a .a3a-prep {
+      display: inline-flex; align-items: center; gap: 9px;
+      font-size: 12px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase;
+      color: color-mix(in srgb, var(--brand-a3a) 34%, #ffffff);
+    }
+    #concept-a3a .a3a-prepdots { display: inline-flex; gap: 6px; }
+    #concept-a3a .a3a-prepdots i {
+      width: 7px; height: 7px; border-radius: 50%; background: currentColor; opacity: .55;
+    }
+    #concept-a3a .a3a-splashskip {
+      position: absolute; left: 0; right: 0; bottom: 30px; text-align: center;
+      font-size: 11px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase;
+      color: color-mix(in srgb, #ffffff 58%, transparent);
+    }
+
+    /* ===== INICIO SCREEN ===== */
+    #concept-a3a .a3a-start { gap: 0; }
+    #concept-a3a .a3a-eyb {
+      display: inline-block; align-self: flex-start;
+      font-size: 11px; font-weight: 800; letter-spacing: .16em; text-transform: uppercase;
+      color: var(--brand-a3a); background: color-mix(in srgb, var(--brand-a3a) 12%, #16161d);
+      border: 1.5px solid color-mix(in srgb, var(--brand-a3a) 30%, transparent);
+      padding: 5px 12px; border-radius: 999px; margin-bottom: 12px;
+    }
+    #concept-a3a .a3a-bigday { font-size: 34px; font-weight: 900; letter-spacing: -.03em; line-height: 1; margin: 0 0 12px; }
+    #concept-a3a .a3a-startchips { display: flex; flex-wrap: wrap; gap: 7px; margin-bottom: 12px; }
+    #concept-a3a .a3a-summary {
+      font-size: 13px; font-weight: 800; color: #cfcfd8; letter-spacing: .01em; margin-bottom: 16px;
+    }
+    #concept-a3a .a3a-summary b { color: var(--brand-a3a); }
+    #concept-a3a .a3a-plan {
+      background: #1a1a22; border: 2px solid #2a2a34; border-radius: 18px; padding: 6px 6px; margin-bottom: 14px;
+    }
+    #concept-a3a .a3a-prow { display: flex; align-items: center; gap: 11px; padding: 9px 10px; }
+    #concept-a3a .a3a-prow + .a3a-prow { border-top: 1.5px solid #24242e; }
+    #concept-a3a .a3a-pidx {
+      width: 24px; height: 24px; flex-shrink: 0; border-radius: 8px; font-size: 12px; font-weight: 900;
+      display: flex; align-items: center; justify-content: center;
+      background: #24242e; color: #8f8f9c;
+    }
+    #concept-a3a .a3a-pname { flex: 1; font-size: 14px; font-weight: 800; color: #e8e8ee; }
+    #concept-a3a .a3a-ptag {
+      font-size: 10px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase;
+      padding: 3px 8px; border-radius: 999px;
+      background: color-mix(in srgb, var(--brand-a3a) 14%, #16161d); color: color-mix(in srgb, var(--brand-a3a) 80%, #fff);
+    }
+    #concept-a3a .a3a-ptag.cardio { background: color-mix(in srgb, var(--z2) 15%, #16161d); color: var(--z2); }
+    #concept-a3a .a3a-pmore { text-align: center; font-size: 11px; font-weight: 800; color: #6f6f7c; padding: 4px 0 6px; }
+    #concept-a3a .a3a-ctxrow { display: flex; gap: 10px; margin-bottom: 12px; }
+    #concept-a3a .a3a-ctx {
+      flex: 1; background: #17171f; border: 1.5px solid #2a2a34; border-radius: 14px; padding: 10px 12px;
+    }
+    #concept-a3a .a3a-ctx .k { font-size: 10px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: #7f7f8c; margin-bottom: 4px; }
+    #concept-a3a .a3a-ctx .v { font-size: 15px; font-weight: 900; letter-spacing: -.01em; }
+    #concept-a3a .a3a-ctx .v small { font-size: 11px; font-weight: 700; color: #9a9aa6; }
+    #concept-a3a .a3a-note {
+      position: relative; background: color-mix(in srgb, var(--brand-a3a) 12%, #16161d);
+      border: 1.5px solid color-mix(in srgb, var(--brand-a3a) 26%, transparent);
+      border-radius: 14px; padding: 12px 14px; margin-bottom: 14px;
+    }
+    #concept-a3a .a3a-note::after {
+      content: ""; position: absolute; left: 26px; bottom: -8px; width: 14px; height: 14px;
+      background: color-mix(in srgb, var(--brand-a3a) 12%, #16161d);
+      border-right: 1.5px solid color-mix(in srgb, var(--brand-a3a) 26%, transparent);
+      border-bottom: 1.5px solid color-mix(in srgb, var(--brand-a3a) 26%, transparent);
+      transform: rotate(45deg);
+    }
+    #concept-a3a .a3a-note .who { display: flex; align-items: center; gap: 7px; margin-bottom: 6px; }
+    #concept-a3a .a3a-note .av {
+      width: 22px; height: 22px; border-radius: 50%; flex-shrink: 0;
+      background: linear-gradient(135deg, var(--brand-a3a), color-mix(in srgb, var(--brand-a3a) 40%, #000));
+    }
+    #concept-a3a .a3a-note .nm { font-size: 11px; font-weight: 800; color: var(--brand-a3a); letter-spacing: .02em; }
+    #concept-a3a .a3a-note .msg { font-size: 14px; font-weight: 700; color: #eaeaf0; line-height: 1.35; }
+    #concept-a3a .a3a-streak { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; margin-top: auto; }
+    #concept-a3a .a3a-streaklbl { font-size: 11px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: #8f8f9c; }
+    #concept-a3a .a3a-sdots { display: flex; gap: 8px; margin-left: auto; }
+    #concept-a3a .a3a-sd {
+      width: 16px; height: 16px; border-radius: 50%; background: #26262f; border: 2px solid #33333f;
+    }
+    #concept-a3a .a3a-sd.on {
+      background: var(--brand-a3a); border-color: color-mix(in srgb, var(--brand-a3a) 55%, #000);
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand-a3a) 20%, transparent);
+    }
+    #concept-a3a .a3a-startcta {
+      height: 66px; width: 100%; font-size: 20px; letter-spacing: .04em;
+      display: flex; align-items: center; justify-content: center; gap: 12px;
+    }
+    #concept-a3a .a3a-play {
+      width: 0; height: 0; border-style: solid;
+      border-width: 9px 0 9px 15px; border-color: transparent transparent transparent #072100;
+    }
+
+    /* ===== exercise heading (FUERZA) ===== */
+    #concept-a3a .a3a-exname { font-size: 26px; font-weight: 900; letter-spacing: -.02em; margin: 2px 0 8px; }
+    #concept-a3a .a3a-chiprow { display: flex; gap: 8px; margin-bottom: 12px; }
+
+    /* ===== MEDIA card w/ animated silhouette ===== */
+    #concept-a3a .a3a-media {
+      position: relative; height: 150px; border-radius: 22px; overflow: hidden;
+      border: 2px solid #2f2f3a;
+      background: linear-gradient(160deg, #202029, #17171f);
+      margin-bottom: 12px; display: flex; align-items: flex-end; justify-content: center;
+    }
+    #concept-a3a .a3a-media::after {
+      content: ""; position: absolute; inset: 0;
+      background: linear-gradient(105deg, transparent 20%, rgba(255,255,255,.07) 45%, transparent 68%);
+      background-size: 220% 100%;
+    }
+    #concept-a3a .a3a-fig { position: absolute; bottom: 26px; left: 50%; transform: translateX(-50%); width: 150px; height: 90px; }
+    #concept-a3a .a3a-bench { position: absolute; bottom: 0; left: 27px; width: 96px; height: 12px; border-radius: 6px; background: #3b3b48; }
+    #concept-a3a .a3a-benchleg { position: absolute; bottom: -18px; width: 8px; height: 18px; background: #33333f; border-radius: 3px; }
+    #concept-a3a .a3a-torso { position: absolute; bottom: 12px; left: 40px; width: 70px; height: 20px; border-radius: 12px; background: color-mix(in srgb, var(--brand-a3a) 40%, #2a2a34); }
+    #concept-a3a .a3a-headc { position: absolute; bottom: 12px; left: 26px; width: 20px; height: 20px; border-radius: 50%; background: color-mix(in srgb, var(--brand-a3a) 40%, #2a2a34); }
+    #concept-a3a .a3a-bar {
+      position: absolute; left: 50%; transform: translateX(-50%);
+      width: 108px; height: 7px; border-radius: 4px;
+      background: var(--brand-a3a); bottom: 54px;
+      box-shadow: 0 0 12px color-mix(in srgb, var(--brand-a3a) 60%, transparent);
+    }
+    #concept-a3a .a3a-bar::before, #concept-a3a .a3a-bar::after {
+      content: ""; position: absolute; top: -6px; width: 16px; height: 19px; border-radius: 4px; background: color-mix(in srgb, var(--brand-a3a) 75%, #000);
+    }
+    #concept-a3a .a3a-bar::before { left: -6px; } #concept-a3a .a3a-bar::after { right: -6px; }
+    #concept-a3a .a3a-arm { position: absolute; bottom: 28px; width: 7px; height: 30px; border-radius: 4px; background: color-mix(in srgb, var(--brand-a3a) 40%, #2a2a34); }
+    #concept-a3a .a3a-arm.l { left: 52px; } #concept-a3a .a3a-arm.r { right: 52px; }
+
+    /* media action chips (Instrucciones / Nota del coach) */
+    #concept-a3a .a3a-mediachips {
+      position: absolute; top: 10px; left: 10px; right: 10px;
+      display: flex; gap: 7px; z-index: 4;
+    }
+    #concept-a3a .a3a-mchip {
+      position: relative; display: inline-flex; align-items: center; gap: 6px;
+      font-size: 11px; font-weight: 800; letter-spacing: .01em;
+      padding: 6px 11px; border-radius: 999px; min-height: 30px;
+      background: rgba(8,8,12,.6); -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px);
+      border: 1.5px solid rgba(255,255,255,.16); color: #eaeaf0;
+    }
+    #concept-a3a .a3a-mchip svg { display: block; width: 14px; height: 14px; color: #cfcfd8; }
+    #concept-a3a .a3a-badge {
+      position: absolute; top: -3px; right: -3px; width: 10px; height: 10px; border-radius: 50%;
+      background: var(--brand-a3a);
+      box-shadow: 0 0 0 2px #16161d, 0 0 0 4px color-mix(in srgb, var(--brand-a3a) 45%, transparent);
+    }
+
+    /* ===== prescription ===== */
+    #concept-a3a .a3a-rx { font-size: 13px; font-weight: 700; color: #c4c4cf; text-align: center; margin-bottom: 10px; letter-spacing: .01em; }
+    #concept-a3a .a3a-rx b { color: #fff; }
+
+    #concept-a3a .a3a-prev {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 11px 15px; border-radius: 14px; margin-bottom: 10px;
+      background: #1b1b23; border: 2px dashed #34343f;
+    }
+    #concept-a3a .a3a-prev .l { font-size: 12px; color: #8f8f9c; font-weight: 700; }
+    #concept-a3a .a3a-prev .r { font-size: 14px; font-weight: 800; color: #e8e8ee; }
+    #concept-a3a .a3a-prev .tap { font-size: 11px; font-weight: 800; color: var(--brand-a3a); }
+
+    #concept-a3a .a3a-cur { display: flex; gap: 10px; margin-bottom: 10px; }
+    #concept-a3a .a3a-val {
+      flex: 1; text-align: center; padding: 10px 8px 9px; border-radius: 16px;
+      background: #1c1c24; border: 2px solid #2f2f3a;
+    }
+    #concept-a3a .a3a-val .n { font-size: 30px; font-weight: 900; letter-spacing: -.03em; line-height: 1; }
+    #concept-a3a .a3a-val .u { font-size: 11px; font-weight: 800; color: #8f8f9c; letter-spacing: .08em; margin-top: 4px; }
+
+    /* ===== OPTIONAL EFFORT (RPE / RIR) — secondary ===== */
+    #concept-a3a .a3a-effort {
+      background: #15151c; border: 1.5px solid #24242e; border-radius: 14px;
+      padding: 9px 11px 10px; margin-bottom: 12px;
+    }
+    #concept-a3a .a3a-efftop { display: flex; align-items: center; gap: 8px; margin-bottom: 9px; }
+    #concept-a3a .a3a-efflbl { font-size: 10px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: #7f7f8c; }
+    #concept-a3a .a3a-effopt { font-size: 9px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: #6a6a76; background: #202029; padding: 2px 7px; border-radius: 999px; }
+    #concept-a3a .a3a-effpills { display: flex; gap: 8px; margin-left: auto; }
+    #concept-a3a .a3a-epill {
+      display: inline-flex; align-items: center; gap: 6px;
+      font-size: 11px; font-weight: 800; padding: 4px 9px; border-radius: 999px;
+      background: #1c1c24; border: 1.5px solid #33333f; color: #9a9aa6;
+    }
+    #concept-a3a .a3a-epill .k { letter-spacing: .04em; }
+    #concept-a3a .a3a-epill .em { color: #5f5f6b; }
+    #concept-a3a .a3a-epill.on {
+      background: color-mix(in srgb, var(--brand-a3a) 16%, #16161d);
+      border-color: color-mix(in srgb, var(--brand-a3a) 40%, transparent);
+      color: color-mix(in srgb, var(--brand-a3a) 85%, #fff);
+    }
+    #concept-a3a .a3a-epill.on .v { color: #fff; font-variant-numeric: tabular-nums; }
+    #concept-a3a .a3a-scale { display: flex; align-items: center; gap: 3px; }
+    #concept-a3a .a3a-tick {
+      flex: 1; height: 7px; border-radius: 3px; background: #26262f;
+      position: relative;
+    }
+    #concept-a3a .a3a-tick.sel {
+      background: var(--brand-a3a); height: 11px;
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand-a3a) 22%, transparent);
+    }
+    #concept-a3a .a3a-scaleends { display: flex; justify-content: space-between; margin-top: 5px; }
+    #concept-a3a .a3a-scaleends span { font-size: 9px; font-weight: 800; color: #6a6a76; font-variant-numeric: tabular-nums; }
+
+    /* main complete button */
+    #concept-a3a .a3a-cta {
+      height: 60px; width: 100%; font-size: 18px; display: flex; align-items: center; justify-content: center; gap: 9px;
+      margin-bottom: 10px;
+    }
+    #concept-a3a .a3a-cta .ck {
+      width: 22px; height: 22px; border-radius: 50%; background: rgba(7,33,0,.22);
+      display: flex; align-items: center; justify-content: center;
+    }
+    #concept-a3a .a3a-ck::before {
+      content: ""; display: block; width: 6px; height: 11px; border: solid #072100; border-width: 0 2.5px 2.5px 0;
+      transform: rotate(45deg) translate(-1px,-1px);
+    }
+
+    #concept-a3a .a3a-foot { display: flex; align-items: center; justify-content: space-between; }
+    #concept-a3a .a3a-sets { display: flex; gap: 6px; align-items: center; }
+    #concept-a3a .a3a-sq { width: 24px; height: 24px; border-radius: 8px; background: #26262f; border: 2px solid #34343f; }
+    #concept-a3a .a3a-sq.on { background: var(--brand-a3a); border-color: color-mix(in srgb, var(--brand-a3a) 55%, #000); }
+    #concept-a3a .a3a-setlbl { font-size: 12px; font-weight: 800; color: #8f8f9c; margin-left: 4px; }
+    #concept-a3a .a3a-tools { display: flex; gap: 8px; }
+    #concept-a3a .a3a-tool {
+      width: 38px; height: 38px; border-radius: 12px; background: #1c1c24; border: 2px solid #2f2f3a;
+      display: flex; align-items: center; justify-content: center; color: #b7b7c2;
+      position: relative;
+    }
+    #concept-a3a .a3a-tool.kb::before {
+      content: ""; width: 18px; height: 12px; border: 2px solid #b7b7c2; border-radius: 3px;
+    }
+    #concept-a3a .a3a-tool.pen::before {
+      content: ""; width: 13px; height: 3px; background: #b7b7c2; border-radius: 2px;
+      transform: rotate(-45deg); box-shadow: 0 -4px 0 -1px #b7b7c2;
+    }
+
+    /* ============ REST SCREEN ============ */
+    #concept-a3a .a3a-rest { align-items: center; text-align: center; gap: 12px; position: relative; }
+    #concept-a3a .a3a-restcel { font-size: 12px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: var(--brand-a3a); margin-bottom: 4px; }
+    #concept-a3a .a3a-celly {
+      position: relative; display: inline-flex; align-items: center; gap: 8px;
+      background: color-mix(in srgb, var(--brand-a3a) 14%, #16161d);
+      border: 2px solid color-mix(in srgb, var(--brand-a3a) 34%, transparent);
+      padding: 8px 16px; border-radius: 999px; font-size: 13px; font-weight: 800;
+    }
+    #concept-a3a .a3a-celly .b {
+      width: 22px; height: 22px; border-radius: 50%; background: var(--brand-a3a); position: relative;
+    }
+    #concept-a3a .a3a-celly .b::before {
+      content: ""; position: absolute; top: 5px; left: 8px; width: 5px; height: 9px;
+      border: solid #072100; border-width: 0 2.5px 2.5px 0; transform: rotate(45deg);
+    }
+    #concept-a3a .a3a-confetti { position: absolute; inset: -14px -20px; pointer-events: none; overflow: visible; }
+    #concept-a3a .a3a-conf { position: absolute; top: 50%; left: 50%; width: 7px; height: 7px; border-radius: 2px; opacity: 0; }
+
+    #concept-a3a .a3a-ringwrap { position: relative; width: 208px; height: 208px; margin: 2px 0; }
+    #concept-a3a .a3a-ring {
+      width: 100%; height: 100%; border-radius: 50%;
+      background: conic-gradient(var(--brand-a3a) 0deg 224deg, #26262f 224deg 360deg);
+      -webkit-mask: radial-gradient(closest-side, transparent 76%, #000 77%);
+      mask: radial-gradient(closest-side, transparent 76%, #000 77%);
+    }
+    #concept-a3a .a3a-ringtxt { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+    #concept-a3a .a3a-bignum { font-size: 56px; font-weight: 900; letter-spacing: -.04em; line-height: 1; }
+    #concept-a3a .a3a-restlbl { font-size: 11px; font-weight: 800; color: #8f8f9c; letter-spacing: .16em; text-transform: uppercase; margin-top: 6px; }
+
+    #concept-a3a .a3a-restbtns { display: flex; gap: 10px; width: 100%; }
+    #concept-a3a .a3a-rb {
+      flex: 1; height: 54px; border-radius: 15px; font-size: 15px; font-weight: 800;
+      background: #1c1c24; border: 2px solid #2f2f3a; color: #e8e8ee;
+      display: flex; align-items: center; justify-content: center;
+    }
+    #concept-a3a .a3a-rb.skip { background: var(--brand-a3a); border-color: color-mix(in srgb, var(--brand-a3a) 55%, #000); color: #072100; box-shadow: 0 5px 0 0 color-mix(in srgb, var(--brand-a3a) 55%, #000); }
+
+    #concept-a3a .a3a-next {
+      width: 100%; display: flex; gap: 12px; align-items: center; text-align: left;
+      background: #1a1a22; border: 2px solid #2f2f3a; border-radius: 18px; padding: 11px;
+    }
+    #concept-a3a .a3a-nextmini {
+      width: 58px; height: 58px; border-radius: 12px; flex-shrink: 0; position: relative; overflow: hidden;
+      background: linear-gradient(160deg, #23232c, #17171f); border: 1.5px solid #34343f;
+    }
+    #concept-a3a .a3a-nextmini::after {
+      content: ""; position: absolute; inset: 0;
+      background: linear-gradient(105deg, transparent 30%, rgba(255,255,255,.08) 50%, transparent 70%);
+      background-size: 220% 100%;
+    }
+    #concept-a3a .a3a-minidot { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); width: 28px; height: 6px; border-radius: 3px; background: color-mix(in srgb, var(--brand-a3a) 70%, #000); }
+    #concept-a3a .a3a-nextinfo .k { font-size: 10px; font-weight: 800; letter-spacing: .12em; color: var(--brand-a3a); text-transform: uppercase; }
+    #concept-a3a .a3a-nextinfo .t { font-size: 16px; font-weight: 900; letter-spacing: -.01em; margin: 3px 0; }
+    #concept-a3a .a3a-nextinfo .d { font-size: 12px; font-weight: 700; color: #a8a8b3; }
+
+    /* peeking bottom-sheet — Plan completo */
+    #concept-a3a .a3a-sheet {
+      position: absolute; left: 0; right: 0; bottom: 0;
+      background: #1d1d26; border-top: 2px solid #33333f;
+      border-radius: 22px 22px 0 0; padding: 8px 16px 0;
+      box-shadow: 0 -18px 40px -18px rgba(0,0,0,.75);
+      transform: translateY(58px); z-index: 20;
+    }
+    #concept-a3a .a3a-handle { width: 40px; height: 5px; border-radius: 999px; background: #45454f; margin: 0 auto 10px; }
+    #concept-a3a .a3a-sheethd { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+    #concept-a3a .a3a-sheethd .t { font-size: 14px; font-weight: 900; letter-spacing: -.01em; }
+    #concept-a3a .a3a-sheethd .c { font-size: 11px; font-weight: 800; color: #8f8f9c; }
+    #concept-a3a .a3a-srow { display: flex; align-items: center; gap: 10px; padding: 9px 4px; border-top: 1.5px solid #26262f; }
+    #concept-a3a .a3a-sstate { width: 20px; height: 20px; border-radius: 6px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
+    #concept-a3a .a3a-sstate.done { background: var(--brand-a3a); position: relative; }
+    #concept-a3a .a3a-sstate.done::before {
+      content: ""; width: 5px; height: 9px; border: solid #072100; border-width: 0 2px 2px 0; transform: rotate(45deg) translateY(-1px);
+    }
+    #concept-a3a .a3a-sstate.now { background: color-mix(in srgb, var(--brand-a3a) 25%, transparent); box-shadow: inset 0 0 0 2px var(--brand-a3a); }
+    #concept-a3a .a3a-sstate.now::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--brand-a3a); }
+    #concept-a3a .a3a-sstate.todo { background: #26262f; box-shadow: inset 0 0 0 2px #3a3a45; }
+    #concept-a3a .a3a-srow .snm { flex: 1; font-size: 13px; font-weight: 800; color: #d4d4dc; }
+    #concept-a3a .a3a-srow.is-now { background: color-mix(in srgb, var(--brand-a3a) 10%, transparent); border-radius: 12px; margin: 0 -6px; padding-left: 10px; padding-right: 10px; }
+    #concept-a3a .a3a-srow.is-now .snm { color: #fff; }
+    #concept-a3a .a3a-srow .ssub { font-size: 11px; font-weight: 800; }
+    #concept-a3a .a3a-srow .ssub.done { color: var(--brand-a3a); }
+    #concept-a3a .a3a-srow .ssub.now { color: var(--brand-a3a); }
+    #concept-a3a .a3a-srow .ssub.todo { color: #7f7f8c; }
+
+    /* ============ CARDIO SCREEN ============ */
+    #concept-a3a .a3a-cardio { align-items: center; text-align: center; gap: 12px; }
+    #concept-a3a .a3a-cardhead { width: 100%; display: flex; justify-content: flex-end; margin-top: -6px; margin-bottom: -2px; }
+    #concept-a3a .a3a-cardring { position: relative; width: 236px; height: 236px; margin-top: 2px; }
+    #concept-a3a .a3a-cardring .ring2 {
+      width: 100%; height: 100%; border-radius: 50%;
+      background: conic-gradient(var(--brand-a3a) 0deg 148deg, #26262f 148deg 360deg);
+      -webkit-mask: radial-gradient(closest-side, transparent 78%, #000 79%);
+      mask: radial-gradient(closest-side, transparent 78%, #000 79%);
+    }
+    #concept-a3a .a3a-cardtxt { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+    #concept-a3a .a3a-cardnum { font-size: 62px; font-weight: 900; letter-spacing: -.04em; line-height: 1; }
+    #concept-a3a .a3a-cardsub { font-size: 11px; font-weight: 800; letter-spacing: .16em; text-transform: uppercase; color: #8f8f9c; margin-top: 6px; }
+
+    #concept-a3a .a3a-zone {
+      display: inline-flex; align-items: center; gap: 9px; padding: 10px 18px; border-radius: 999px;
+      background: color-mix(in srgb, var(--z2) 16%, #16161d); border: 2px solid color-mix(in srgb, var(--z2) 40%, transparent);
+      font-size: 16px; font-weight: 900;
+    }
+    #concept-a3a .a3a-zone .zd { width: 12px; height: 12px; border-radius: 50%; background: var(--z2); box-shadow: 0 0 0 4px color-mix(in srgb, var(--z2) 25%, transparent); }
+    #concept-a3a .a3a-zone .zt { color: var(--z2); }
+    #concept-a3a .a3a-zone .zk { color: #cbd5c9; font-weight: 700; font-size: 13px; }
+
+    #concept-a3a .a3a-cchips { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; width: 100%; }
+    #concept-a3a .a3a-cchip {
+      display: flex; align-items: center; gap: 9px; text-align: left;
+      background: #1a1a22; border: 1.5px solid #2a2a34; border-radius: 14px; padding: 9px 11px;
+    }
+    #concept-a3a .a3a-cchip .ci { width: 22px; height: 22px; flex-shrink: 0; position: relative; display: flex; align-items: center; justify-content: center; }
+    #concept-a3a .a3a-cchip .cm { min-width: 0; }
+    #concept-a3a .a3a-cchip .cv { font-size: 15px; font-weight: 900; letter-spacing: -.01em; line-height: 1.05; }
+    #concept-a3a .a3a-cchip .cl { font-size: 9px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: #7f7f8c; margin-top: 2px; }
+    #concept-a3a .a3a-heart { width: 13px; height: 13px; border-radius: 50%; background: var(--z5); box-shadow: 0 0 0 4px color-mix(in srgb, var(--z5) 22%, transparent); }
+    #concept-a3a .a3a-distbar { height: 4px; border-radius: 3px; background: #2a2a34; margin-top: 5px; overflow: hidden; }
+    #concept-a3a .a3a-distbar > i { display: block; height: 100%; width: 62%; background: var(--brand-a3a); border-radius: 3px; }
+    #concept-a3a .a3a-icdot { width: 14px; height: 14px; border-radius: 50%; box-shadow: inset 0 0 0 2px var(--brand-a3a); }
+    #concept-a3a .a3a-icshoe { width: 16px; height: 9px; border-radius: 0 8px 3px 8px; background: color-mix(in srgb, var(--brand-a3a) 60%, #2a2a34); }
+    #concept-a3a .a3a-icbars { display: flex; align-items: flex-end; gap: 2px; height: 14px; }
+    #concept-a3a .a3a-icbars > i { width: 3px; background: color-mix(in srgb, var(--brand-a3a) 60%, #2a2a34); border-radius: 1px; }
+    #concept-a3a .a3a-icbars > i:nth-child(1) { height: 5px; } #concept-a3a .a3a-icbars > i:nth-child(2) { height: 9px; } #concept-a3a .a3a-icbars > i:nth-child(3) { height: 14px; }
+
+    #concept-a3a .a3a-source {
+      display: flex; align-items: center; gap: 8px; width: 100%;
+      font-size: 11px; font-weight: 700; color: #8f8f9c;
+      background: #15151c; border: 1.5px solid #24242e; border-radius: 12px; padding: 8px 11px;
+    }
+    #concept-a3a .a3a-source b { color: #cfcfd8; font-weight: 800; }
+    #concept-a3a .a3a-watch {
+      width: 18px; height: 20px; flex-shrink: 0; position: relative;
+      border: 2px solid #b7b7c2; border-radius: 5px;
+    }
+    #concept-a3a .a3a-watch::before, #concept-a3a .a3a-watch::after {
+      content: ""; position: absolute; left: 3px; right: 3px; height: 4px; background: #b7b7c2; border-radius: 2px;
+    }
+    #concept-a3a .a3a-watch::before { top: -6px; } #concept-a3a .a3a-watch::after { bottom: -6px; }
+    #concept-a3a .a3a-watchhand {
+      position: absolute; top: 50%; left: 50%; width: 2px; height: 5px; background: var(--brand-a3a);
+      transform-origin: bottom center; transform: translate(-50%,-100%) rotate(60deg);
+    }
+    #concept-a3a .a3a-pause {
+      width: 100%; height: 58px; border-radius: 16px; font-size: 16px; font-weight: 900;
+      display: flex; align-items: center; justify-content: center; gap: 10px;
+    }
+    #concept-a3a .a3a-pauseicon { display: inline-flex; gap: 4px; }
+    #concept-a3a .a3a-pauseicon i { width: 5px; height: 16px; background: #072100; border-radius: 2px; }
+
+    /* ===== bullets ===== */
+    #concept-a3a .a3a-bullets { list-style: none; padding: 0; margin: 18px 4px 0; }
+    #concept-a3a .a3a-bullets li {
+      position: relative; padding-left: 22px; margin-bottom: 10px; font-size: 13.5px; line-height: 1.45; color: #b7b7c2;
+    }
+    #concept-a3a .a3a-bullets li::before {
+      content: ""; position: absolute; left: 0; top: 6px; width: 12px; height: 12px; border-radius: 4px;
+      background: var(--brand-a3a); box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand-a3a) 20%, transparent);
+    }
+    #concept-a3a .a3a-bullets b { color: #eeeef2; font-weight: 800; }
+
+    /* ============ ANIMATIONS ============ */
+    @media (prefers-reduced-motion: no-preference) {
+      #concept-a3a .a3a-media::after { animation: concept-a3a-shimmer 3.2s linear infinite; }
+      #concept-a3a .a3a-nextmini::after { animation: concept-a3a-shimmer 3.2s linear infinite; }
+      #concept-a3a .a3a-bar { animation: concept-a3a-press 2.4s ease-in-out infinite; }
+      #concept-a3a .a3a-arm { animation: concept-a3a-press 2.4s ease-in-out infinite; }
+      #concept-a3a .a3a-dot.now { animation: concept-a3a-beat 1.4s ease-in-out infinite; }
+      #concept-a3a .a3a-cta { animation: concept-a3a-breathe 2.6s ease-in-out infinite; }
+      #concept-a3a .a3a-startcta { animation: concept-a3a-breathe 2.4s ease-in-out infinite; }
+      #concept-a3a .a3a-bignum { animation: concept-a3a-breathe 2.6s ease-in-out infinite; }
+      #concept-a3a .a3a-cardnum { animation: concept-a3a-breathe 2.8s ease-in-out infinite; }
+      #concept-a3a .a3a-heart { animation: concept-a3a-beat 1s ease-in-out infinite; }
+      #concept-a3a .a3a-zone .zd { animation: concept-a3a-pulse 1.8s ease-in-out infinite; }
+      #concept-a3a .a3a-celly .b { animation: concept-a3a-pop 3.6s ease-in-out infinite; }
+      #concept-a3a .a3a-tick.sel { animation: concept-a3a-pulsebrand 2.2s ease-in-out infinite; }
+      #concept-a3a .a3a-sstate.now::before { animation: concept-a3a-pulse 1.6s ease-in-out infinite; }
+      #concept-a3a .a3a-sheet { animation: concept-a3a-peek 4.2s ease-in-out infinite; }
+      #concept-a3a .a3a-badge { animation: concept-a3a-badge 1.8s ease-in-out infinite; }
+
+      /* entrada / splash loop */
+      #concept-a3a .a3a-splashcoach { animation: concept-a3a-splash-coach 5s ease-in-out infinite; }
+      #concept-a3a .a3a-splashday { animation: concept-a3a-splash-day 5s ease-in-out infinite; }
+      #concept-a3a .a3a-prep { animation: concept-a3a-splash-prep 5s ease-in-out infinite; }
+      #concept-a3a .a3a-splashskip { animation: concept-a3a-splash-prep 5s ease-in-out infinite; }
+      #concept-a3a .a3a-splashhalo { animation: concept-a3a-halo 2.2s ease-out infinite; }
+      #concept-a3a .a3a-splashring { animation: concept-a3a-spin 6s linear infinite; }
+      #concept-a3a .a3a-prepdots i { animation: concept-a3a-prepdot 1.2s ease-in-out infinite; }
+      #concept-a3a .a3a-prepdots i:nth-child(2) { animation-delay: .16s; }
+      #concept-a3a .a3a-prepdots i:nth-child(3) { animation-delay: .32s; }
+
+      #concept-a3a .a3a-conf { animation: concept-a3a-confetti 7s ease-in-out infinite; }
+      #concept-a3a .a3a-conf:nth-child(1) { --cx: -46px; --cy: -30px; background: var(--brand-a3a); animation-delay: 0s; }
+      #concept-a3a .a3a-conf:nth-child(2) { --cx: 44px; --cy: -34px; background: var(--z3); animation-delay: .3s; }
+      #concept-a3a .a3a-conf:nth-child(3) { --cx: -54px; --cy: 10px; background: var(--z1); animation-delay: .6s; }
+      #concept-a3a .a3a-conf:nth-child(4) { --cx: 56px; --cy: 6px; background: var(--z4); animation-delay: .15s; }
+      #concept-a3a .a3a-conf:nth-child(5) { --cx: -20px; --cy: -46px; background: #f472b6; animation-delay: .45s; }
+      #concept-a3a .a3a-conf:nth-child(6) { --cx: 22px; --cy: -44px; background: var(--brand-a3a); animation-delay: .75s; }
+      #concept-a3a .a3a-conf:nth-child(7) { --cx: -38px; --cy: 34px; background: var(--z3); animation-delay: .55s; }
+      #concept-a3a .a3a-conf:nth-child(8) { --cx: 40px; --cy: 32px; background: var(--z1); animation-delay: .9s; }
+    }
+    @keyframes concept-a3a-shimmer { to { background-position: -220% 0; } }
+    @keyframes concept-a3a-press { 0%,100% { transform: translateX(-50%) translateY(0); } 45% { transform: translateX(-50%) translateY(16px); } }
+    @keyframes concept-a3a-pulse { 0%,100% { opacity: 1; transform: scale(1); } 50% { opacity: .4; transform: scale(.7); } }
+    @keyframes concept-a3a-pulsebrand { 0%,100% { box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand-a3a) 22%, transparent); } 50% { box-shadow: 0 0 0 6px color-mix(in srgb, var(--brand-a3a) 8%, transparent); } }
+    @keyframes concept-a3a-beat { 0%,100% { transform: scale(1); } 30% { transform: scale(1.3); } 45% { transform: scale(1); } }
+    @keyframes concept-a3a-breathe { 0%,100% { transform: scale(1); } 50% { transform: scale(1.035); } }
+    @keyframes concept-a3a-pop { 0%,80%,100% { transform: scale(1); } 40% { transform: scale(1.18); } }
+    @keyframes concept-a3a-peek { 0%,100% { transform: translateY(58px); } 50% { transform: translateY(50px); } }
+    @keyframes concept-a3a-badge {
+      0%,100% { box-shadow: 0 0 0 2px #16161d, 0 0 0 3px color-mix(in srgb, var(--brand-a3a) 55%, transparent); }
+      50% { box-shadow: 0 0 0 2px #16161d, 0 0 0 7px color-mix(in srgb, var(--brand-a3a) 0%, transparent); }
+    }
+    @keyframes concept-a3a-spin { to { transform: rotate(360deg); } }
+    @keyframes concept-a3a-halo {
+      0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--brand-a3a) 42%, transparent); }
+      70%,100% { box-shadow: 0 0 0 30px color-mix(in srgb, var(--brand-a3a) 0%, transparent); }
+    }
+    @keyframes concept-a3a-prepdot {
+      0%,100% { transform: translateY(0); opacity: .5; }
+      50% { transform: translateY(-5px); opacity: 1; }
+    }
+    @keyframes concept-a3a-splash-coach {
+      0% { opacity: 0; transform: scale(.3); }
+      8% { opacity: 1; transform: scale(1.14); }
+      14% { transform: scale(.97); }
+      18%, 74% { opacity: 1; transform: scale(1); }
+      86%, 100% { opacity: 0; transform: scale(.86); }
+    }
+    @keyframes concept-a3a-splash-day {
+      0%, 10% { opacity: 0; transform: translateY(26px); }
+      20% { opacity: 1; transform: translateY(-5px); }
+      25%, 74% { opacity: 1; transform: translateY(0); }
+      84%, 100% { opacity: 0; transform: translateY(-10px); }
+    }
+    @keyframes concept-a3a-splash-prep {
+      0%, 24% { opacity: 0; transform: translateY(10px); }
+      34%, 72% { opacity: 1; transform: translateY(0); }
+      82%, 100% { opacity: 0; transform: translateY(0); }
+    }
+    @keyframes concept-a3a-confetti {
+      0%, 4% { opacity: 0; transform: translate(-50%,-50%) scale(.3); }
+      8% { opacity: 1; }
+      22% { opacity: 1; transform: translate(calc(-50% + var(--cx)), calc(-50% + var(--cy))) scale(1) rotate(180deg); }
+      34%, 100% { opacity: 0; transform: translate(calc(-50% + var(--cx)), calc(-50% + var(--cy) + 24px)) scale(.6) rotate(320deg); }
+    }
+  </style>
+
+  <div class="a3a-head">
+    <span class="a3a-eyebrow">Impulso · v3</span>
+    <h2 class="a3a-title">Impulso v3 — Flujo principal</h2>
+    <p class="a3a-sub">El mismo ADN juicy, con una entrada con vida antes del inicio y la ejecucion pulida con instrucciones, nota del coach y ajustes al alcance del pulgar.</p>
+  </div>
+
+  <div class="a3a-row">
+
+    <!-- ============ 1 · ENTRADA ============ -->
+    <div class="a3a-col">
+      <p class="a3a-label"><span></span>Entrada <em>nueva</em></p>
+      <div class="a3a-phone">
+        <div class="a3a-screen">
+          <div class="a3a-notch"></div>
+          <div class="a3a-body a3a-splash">
+            <div class="a3a-splashcoach">
+              <div class="a3a-splashhalo"></div>
+              <div class="a3a-splashring"></div>
+              <div class="a3a-splashav">A</div>
+            </div>
+            <div class="a3a-splashday">Dia 3 · Empuje</div>
+            <div class="a3a-prep">
+              Preparando tu sesion
+              <span class="a3a-prepdots"><i></i><i></i><i></i></span>
+            </div>
+            <span class="a3a-splashskip">Toca para saltar</span>
+          </div>
+        </div>
+      </div>
+      <ul class="a3a-bullets">
+        <li><b>Menos de 1,5 s reales</b>: aqui corre en loop para mostrarla; en la app dura un parpadeo y se salta con un tap.</li>
+        <li><b>Entrada con vida</b>: el circulo del coach entra con un spring y un halo que late; el nombre del dia sube con overshoot.</li>
+        <li><b>Handoff calido</b>: "Preparando tu sesion" con tres puntos y, al cerrar, aterrizas directo en Inicio con contexto.</li>
+      </ul>
+    </div>
+
+    <!-- ============ 2 · INICIO ============ -->
+    <div class="a3a-col">
+      <p class="a3a-label"><span></span>Inicio</p>
+      <div class="a3a-phone">
+        <div class="a3a-screen">
+          <div class="a3a-notch"></div>
+          <div class="a3a-body a3a-start">
+            <span class="a3a-eyb">Hoy · Martes 21</span>
+            <div class="a3a-bigday">Dia 3 · Empuje</div>
+            <div class="a3a-startchips">
+              <span class="a3a-chip">Semana 2</span>
+              <span class="a3a-chip">Fase Fuerza</span>
+              <span class="a3a-chip plain">Variante A</span>
+            </div>
+            <div class="a3a-summary a3a-tnum"><b>8 ejercicios</b> · 24 series · ~55 min</div>
+
+            <div class="a3a-plan">
+              <div class="a3a-prow"><div class="a3a-pidx">1</div><div class="a3a-pname">Press banca</div><span class="a3a-ptag">Fuerza</span></div>
+              <div class="a3a-prow"><div class="a3a-pidx">2</div><div class="a3a-pname">Press inclinado</div><span class="a3a-ptag">Fuerza</span></div>
+              <div class="a3a-prow"><div class="a3a-pidx">3</div><div class="a3a-pname">Cinta · Z2</div><span class="a3a-ptag cardio">Cardio</span></div>
+              <div class="a3a-prow"><div class="a3a-pidx">4</div><div class="a3a-pname">Fondos</div><span class="a3a-ptag">Fuerza</span></div>
+              <div class="a3a-pmore a3a-tnum">+ 4 ejercicios mas</div>
+            </div>
+
+            <div class="a3a-ctxrow">
+              <div class="a3a-ctx">
+                <div class="k">La ultima vez</div>
+                <div class="v a3a-tnum">4.320 kg</div>
+              </div>
+              <div class="a3a-ctx">
+                <div class="k">Duracion</div>
+                <div class="v a3a-tnum">52 min</div>
+              </div>
+            </div>
+
+            <div class="a3a-note">
+              <div class="who"><span class="av"></span><span class="nm">Coach Andrea</span></div>
+              <div class="msg">Hoy subimos el press. Confio en ti.</div>
+            </div>
+
+            <div class="a3a-streak">
+              <span class="a3a-streaklbl">Racha semanal</span>
+              <span class="a3a-count a3a-tnum">3 de 4</span>
+              <span class="a3a-sdots">
+                <span class="a3a-sd on"></span><span class="a3a-sd on"></span><span class="a3a-sd on"></span><span class="a3a-sd"></span>
+              </span>
+            </div>
+
+            <div class="a3a-juicy a3a-startcta"><span class="a3a-play"></span> EMPEZAR</div>
+          </div>
+        </div>
+      </div>
+      <ul class="a3a-bullets">
+        <li><b>Contexto antes del esfuerzo</b>: llegas sabiendo que toca, cuanto dura y como te fue la ultima vez.</li>
+        <li><b>La nota del coach recibe</b>: burbuja con voz humana justo antes del boton, no una notificacion perdida.</li>
+        <li><b>Un solo destino</b>: EMPEZAR gigante que respira; la pantalla entera empuja hacia arrancar.</li>
+      </ul>
+    </div>
+
+    <!-- ============ 3 · FUERZA ============ -->
+    <div class="a3a-col">
+      <p class="a3a-label"><span></span>Fuerza <em>+ ayudas</em></p>
+      <div class="a3a-phone">
+        <div class="a3a-screen">
+          <div class="a3a-notch"></div>
+          <div class="a3a-body">
+            <div class="a3a-progress">
+              <div class="a3a-dots">
+                <div class="a3a-dot done"></div><div class="a3a-dot done"></div>
+                <div class="a3a-dot now"></div><div class="a3a-dot"></div>
+                <div class="a3a-dot"></div><div class="a3a-dot"></div>
+                <div class="a3a-dot"></div><div class="a3a-dot"></div>
+              </div>
+              <div class="a3a-count a3a-tnum">Ejercicio 3 de 8</div>
+              <div class="a3a-gear" role="button" aria-label="Ajustes del entrenamiento">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <circle cx="12" cy="12" r="3.2"/>
+                  <path d="M19.4 13a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+                </svg>
+              </div>
+            </div>
+
+            <div class="a3a-exname">Press banca</div>
+            <div class="a3a-chiprow">
+              <span class="a3a-chip">Fuerza · Pecho</span>
+            </div>
+
+            <div class="a3a-media">
+              <div class="a3a-mediachips">
+                <span class="a3a-mchip" role="button">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <line x1="9" y1="6" x2="20" y2="6"/><line x1="9" y1="12" x2="20" y2="12"/><line x1="9" y1="18" x2="20" y2="18"/>
+                    <circle cx="4.5" cy="6" r="1.2"/><circle cx="4.5" cy="12" r="1.2"/><circle cx="4.5" cy="18" r="1.2"/>
+                  </svg>
+                  Instrucciones
+                </span>
+                <span class="a3a-mchip" role="button">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.4 8.4 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8z"/>
+                  </svg>
+                  Nota del coach
+                  <span class="a3a-badge"></span>
+                </span>
+              </div>
+              <div class="a3a-fig">
+                <div class="a3a-bench"></div>
+                <div class="a3a-benchleg" style="left:33px;"></div>
+                <div class="a3a-benchleg" style="right:33px;"></div>
+                <div class="a3a-headc"></div>
+                <div class="a3a-torso"></div>
+                <div class="a3a-arm l"></div>
+                <div class="a3a-arm r"></div>
+                <div class="a3a-bar"></div>
+              </div>
+            </div>
+
+            <div class="a3a-rx a3a-tnum">4 x 8 · <b>60 kg</b> · RIR 2 · desc 90s</div>
+
+            <div class="a3a-prev">
+              <div class="l">Anterior</div>
+              <div class="r a3a-tnum">60 kg × 8</div>
+              <div class="tap">1 tap ↻</div>
+            </div>
+
+            <div class="a3a-cur">
+              <div class="a3a-val"><div class="n a3a-tnum">60</div><div class="u">KG</div></div>
+              <div class="a3a-val"><div class="n a3a-tnum">8</div><div class="u">REPS</div></div>
+            </div>
+
+            <div class="a3a-effort">
+              <div class="a3a-efftop">
+                <span class="a3a-efflbl">Esfuerzo</span>
+                <span class="a3a-effopt">Opcional</span>
+                <span class="a3a-effpills">
+                  <span class="a3a-epill"><span class="k">RPE</span><span class="em">—</span></span>
+                  <span class="a3a-epill on"><span class="k">RIR</span><span class="v a3a-tnum">2</span></span>
+                </span>
+              </div>
+              <div class="a3a-scale">
+                <span class="a3a-tick"></span><span class="a3a-tick"></span><span class="a3a-tick sel"></span>
+                <span class="a3a-tick"></span><span class="a3a-tick"></span><span class="a3a-tick"></span>
+                <span class="a3a-tick"></span><span class="a3a-tick"></span><span class="a3a-tick"></span>
+                <span class="a3a-tick"></span><span class="a3a-tick"></span>
+              </div>
+              <div class="a3a-scaleends"><span>0</span><span>10</span></div>
+            </div>
+
+            <div class="a3a-juicy a3a-cta"><span class="ck"><span class="a3a-ck"></span></span> Aplastar serie</div>
+
+            <div class="a3a-foot">
+              <div class="a3a-sets">
+                <div class="a3a-sq on"></div><div class="a3a-sq on"></div>
+                <div class="a3a-sq"></div><div class="a3a-sq"></div>
+                <div class="a3a-setlbl a3a-tnum">2/4</div>
+              </div>
+              <div class="a3a-tools">
+                <div class="a3a-tool kb"></div>
+                <div class="a3a-tool pen"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <ul class="a3a-bullets">
+        <li><b>Instrucciones a un toque</b>: el chip sobre la media abre un sheet con la tecnica paso a paso, sin salir del ejercicio.</li>
+        <li><b>Nota del coach con aviso</b>: el chip lleva un puntito de marca cuando hay mensaje; se abre en el mismo sheet.</li>
+        <li><b>Ajustes en la tuerca</b>: arriba a la derecha controlas sonido y pantalla; el RIR opcional y el CTA juicy siguen mandando.</li>
+      </ul>
+    </div>
+
+    <!-- ============ 4 · DESCANSO ============ -->
+    <div class="a3a-col">
+      <p class="a3a-label"><span></span>Descanso <em>+ plan</em></p>
+      <div class="a3a-phone">
+        <div class="a3a-screen">
+          <div class="a3a-notch"></div>
+          <div class="a3a-body a3a-rest">
+            <div>
+              <div class="a3a-restcel">Serie cerrada</div>
+              <div class="a3a-celly">
+                <div class="a3a-confetti">
+                  <span class="a3a-conf"></span><span class="a3a-conf"></span>
+                  <span class="a3a-conf"></span><span class="a3a-conf"></span>
+                  <span class="a3a-conf"></span><span class="a3a-conf"></span>
+                  <span class="a3a-conf"></span><span class="a3a-conf"></span>
+                </div>
+                <span class="b"></span> +1 serie · vas volando
+              </div>
+            </div>
+
+            <div class="a3a-ringwrap">
+              <div class="a3a-ring"></div>
+              <div class="a3a-ringtxt">
+                <div class="a3a-bignum a3a-tnum">01:07</div>
+                <div class="a3a-restlbl">Descanso</div>
+              </div>
+            </div>
+
+            <div class="a3a-restbtns">
+              <div class="a3a-rb a3a-tnum">-15s</div>
+              <div class="a3a-rb skip">Saltar</div>
+              <div class="a3a-rb a3a-tnum">+15s</div>
+            </div>
+
+            <div class="a3a-next">
+              <div class="a3a-nextmini"><div class="a3a-minidot"></div></div>
+              <div class="a3a-nextinfo">
+                <div class="k">Siguiente</div>
+                <div class="t">Press inclinado</div>
+                <div class="d a3a-tnum">3 x 10 · 40 kg</div>
+              </div>
+            </div>
+
+            <!-- peeking bottom-sheet -->
+            <div class="a3a-sheet">
+              <div class="a3a-handle"></div>
+              <div class="a3a-sheethd">
+                <div class="t">Plan completo</div>
+                <div class="c a3a-tnum">2 / 8</div>
+              </div>
+              <div class="a3a-srow">
+                <span class="a3a-sstate done"></span>
+                <span class="snm">Press banca</span>
+                <span class="ssub done a3a-tnum">✓ 4/4</span>
+              </div>
+              <div class="a3a-srow is-now">
+                <span class="a3a-sstate now"></span>
+                <span class="snm">Press inclinado</span>
+                <span class="ssub now">ahora</span>
+              </div>
+              <div class="a3a-srow">
+                <span class="a3a-sstate todo"></span>
+                <span class="snm">Fondos</span>
+                <span class="ssub todo">pendiente</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <ul class="a3a-bullets">
+        <li><b>El descanso es un mirador</b>: un sheet asoma desde abajo; lo arrastras y ves toda la sesion sin salir.</li>
+        <li><b>Estados de un vistazo</b>: hecho con check, "ahora" resaltado, pendiente en gris; sabes exactamente donde vas.</li>
+        <li><b>Micro-celebracion viva</b>: "+1 serie" con confetti CSS y el numero del anillo respirando.</li>
+      </ul>
+    </div>
+
+    <!-- ============ 5 · CARDIO ============ -->
+    <div class="a3a-col">
+      <p class="a3a-label"><span></span>Cardio <em>pro</em></p>
+      <div class="a3a-phone">
+        <div class="a3a-screen">
+          <div class="a3a-notch"></div>
+          <div class="a3a-body a3a-cardio">
+            <div class="a3a-cardhead">
+              <div class="a3a-gear" role="button" aria-label="Ajustes del entrenamiento">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <circle cx="12" cy="12" r="3.2"/>
+                  <path d="M19.4 13a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+                </svg>
+              </div>
+            </div>
+
+            <div class="a3a-cardring">
+              <div class="ring2"></div>
+              <div class="a3a-cardtxt">
+                <div class="a3a-cardnum a3a-tnum">12:24</div>
+                <div class="a3a-cardsub">Restante</div>
+              </div>
+            </div>
+
+            <div class="a3a-zone">
+              <span class="zd"></span>
+              <span class="zt">Z2</span>
+              <span class="zk">Manten el ritmo</span>
+            </div>
+
+            <div class="a3a-cchips">
+              <div class="a3a-cchip">
+                <span class="ci"><span class="a3a-heart"></span></span>
+                <span class="cm"><span class="cv a3a-tnum">142</span><span class="cl">BPM</span></span>
+              </div>
+              <div class="a3a-cchip">
+                <span class="ci"><span class="a3a-icbars"><i></i><i></i><i></i></span></span>
+                <span class="cm"><span class="cv a3a-tnum">3 de 6</span><span class="cl">Intervalo</span></span>
+              </div>
+              <div class="a3a-cchip">
+                <span class="ci"><span class="a3a-icdot"></span></span>
+                <span class="cm">
+                  <span class="cv a3a-tnum">1,24 / 2,00 km</span>
+                  <span class="a3a-distbar"><i></i></span>
+                </span>
+              </div>
+              <div class="a3a-cchip">
+                <span class="ci"><span class="a3a-icshoe"></span></span>
+                <span class="cm"><span class="cv a3a-tnum">5'52"/km</span><span class="cl">Ritmo</span></span>
+              </div>
+            </div>
+
+            <div class="a3a-source">
+              <span class="a3a-watch"><span class="a3a-watchhand"></span></span>
+              <span>Reloj conectado · <b>Apple Watch</b> o <b>Galaxy Watch</b></span>
+            </div>
+
+            <div class="a3a-juicy a3a-pause"><span class="a3a-pauseicon"><i></i><i></i></span> Pausar</div>
+          </div>
+        </div>
+      </div>
+      <ul class="a3a-bullets">
+        <li><b>Tiempo restante como heroe</b> con anillo de countdown y zona en verde semantico fijo: legible a un metro.</li>
+        <li><b>Chips de metricas pro</b>: BPM latiendo, distancia con mini-barra, ritmo e intervalo, sin saturar.</li>
+        <li><b>Fuente honesta y multi-OS</b>: HealthKit y Health Connect; el dato viene de Apple Watch o Galaxy Watch.</li>
+      </ul>
+    </div>
+
+  </div>
+</section>
