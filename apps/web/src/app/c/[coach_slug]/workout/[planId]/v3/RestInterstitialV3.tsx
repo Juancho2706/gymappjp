@@ -7,7 +7,7 @@ import { Check, ChevronDown, Dumbbell, Minus, Plus, SkipForward } from 'lucide-r
 import { cn } from '@/lib/utils'
 import { ExecListMapV3, type ExecListMapItem } from './ExecListMapV3'
 import { applyExecThemeVars, readExecutorTheme } from './exec-theme'
-import { readExecCelebrations } from './exec-settings'
+import { useCelebrations } from './use-celebrations'
 import type { ExecMedia } from './exec-media'
 
 /**
@@ -123,8 +123,9 @@ export function RestInterstitialV3({
   const reducedMotion = useReducedMotion()
   const rootRef = useRef<HTMLDivElement>(null)
   const [sheetOpen, setSheetOpen] = useState(false)
-  // Micro-celebración "+1 serie": sólo si el alumno la dejó ON (default OFF · decisión CEO 3). Se lee
-  // una vez al montar (no reactiva: es un pulso de apertura).
+  // Consolidación de celebraciones (E4.1): el tier/visual (micro "+1 serie" / media "ronda lista") lo
+  // resuelve el orquestador único, no una regla local. El confetti es un pulso de apertura (mount-only).
+  const { plan } = useCelebrations()
   const [celebrate, setCelebrate] = useState(false)
 
   useEffect(() => {
@@ -134,11 +135,15 @@ export function RestInterstitialV3({
   }, [])
 
   useEffect(() => {
-    if (readExecCelebrations()) {
+    // Visual SIEMPRE (contrato Wave 4): confetti salvo reduced-motion (→ fade, sin partículas). El háptico
+    // de la serie ya lo dispara el submit (`buildRest`); aquí sólo decidimos lo visual para no doblar buzz.
+    const p = plan(data?.round ? 'ronda_cerrada' : 'serie_cerrada')
+    if (p.visual === 'confetti') {
       setCelebrate(true)
       const t = setTimeout(() => setCelebrate(false), 2200)
       return () => clearTimeout(t)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const frac = Math.max(0, Math.min(1, timeLeft / (total || 1)))

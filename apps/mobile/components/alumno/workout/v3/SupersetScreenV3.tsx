@@ -365,6 +365,8 @@ export function SupersetScreenV3({
                   onRpeUpdate={onRpeUpdate}
                   settle={isRecent}
                   pr={isRecent && !!recentSet?.pr}
+                  prColor={exec.pr}
+                  prIntense
                   syncError={syncErrors?.[`${m.block.id}:${round}`] ?? null}
                   onRetry={() => onRetrySet?.(m.block.id, round)}
                   showEffort={showEffort}

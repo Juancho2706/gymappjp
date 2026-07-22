@@ -16,6 +16,7 @@ import {
   typedTargetFor,
   type OptimisticLogPayload,
   type SummaryBlock,
+  type WorkoutCelebrationEvent,
 } from '@eva/workout-engine'
 import { useTheme } from '../../../../context/ThemeContext'
 import { useEvaMotion } from '../../../../lib/motion'
@@ -63,6 +64,9 @@ import { ExerciseListV3, type ExerciseListItem } from './ExerciseListV3'
 import { RestInterstitialV3, type RestInterstitialData, type RestRoundContext } from './RestInterstitialV3'
 import { ExecSettingsSheet } from './ExecSettingsSheet'
 import { useExecSettings } from './exec-settings'
+import { useCelebrations } from './use-celebrations'
+import { CelebrationHost } from './celebration-host'
+import { computeLivePr } from './pr-live'
 
 const EMBER_200 = '#FFD6C7'
 const ON_DARK_MUTED = '#939DAB'
@@ -131,6 +135,8 @@ function ExecutorV3Inner({ planId, recoverDate, editDate }: { planId: string; re
   const timers = useWorkoutTimers()
   const session = useWorkoutSession(planId)
   const finishingRef = useRef(false)
+  // Orquestador de celebraciones (E4.1): punto único que dosifica haptics por tier y gobierna el PR en vivo.
+  const cel = useCelebrations()
 
   // Tema del ejecutor (dark-only): acento por executor_theme del coach; superficies fijas.
   const exec = useMemo(
@@ -161,6 +167,8 @@ function ExecutorV3Inner({ planId, recoverDate, editDate }: { planId: string; re
   // de CERRAR una ronda de superserie (banner "Ronda N lista" + dots + siguiente ronda en el interstitial).
   // null para cualquier otro descanso (manual, bloque suelto, intra-ronda no dispara descanso).
   const restRoundContextRef = useRef<RestRoundContext | null>(null)
+  // PR en vivo (E4.2): true cuando la serie recién cerrada fue récord → el interstitial muestra "+1 serie · ¡PR!".
+  const restPrRef = useRef(false)
   // Fase de presentacion V3: arranca en el splash (una vez por apertura) → Inicio → sesion.
   const [phase, setPhase] = useState<ExecPhase>('intro')
 
@@ -319,8 +327,9 @@ function ExecutorV3Inner({ planId, recoverDate, editDate }: { planId: string; re
   const signalCommitted = useCallback((blockId: string, setNumber: number, isPR: boolean) => {
     if (recentSetTimer.current) clearTimeout(recentSetTimer.current)
     setRecentSet({ blockId, setNumber, pr: isPR })
-    recentSetTimer.current = setTimeout(() => setRecentSet(null), 800)
-    if (isPR) void haptics.pr()
+    // Ventana del pulso dorado + fila "Anterior" tachada. En PR se alarga a ~1,5s (contrato mockup) para
+    // acompañar al toast/confeti del host; sin PR, corto (settle del check). El haptic lo dispara el host.
+    recentSetTimer.current = setTimeout(() => setRecentSet(null), isPR ? 1500 : 800)
   }, [])
 
   // ── Commit de una serie (copia de ExecutorV2 sin el auto-scroll de la lista: en stepper el avance lo
@@ -330,7 +339,6 @@ function ExecutorV3Inner({ planId, recoverDate, editDate }: { planId: string; re
       const block = blocks.find((b) => b.id === payload.blockId)
       const sub = block ? getSubstitution(block) : null
       setKeypadTarget(null)
-      haptics.setDone()
       // El descanso que arranque tras este commit muestra la micro-celebracion "+1 serie" (E3.1).
       restCelebrateRef.current = true
       // Por defecto NO es un cierre de ronda; el branch de superserie lo setea si corresponde (E3.5).
@@ -340,7 +348,53 @@ function ExecutorV3Inner({ planId, recoverDate, editDate }: { planId: string; re
         { block_id: payload.blockId, set_number: payload.setNumber },
       ]
       const wasLogged = sessionLogs.some((l) => l.block_id === payload.blockId && l.set_number === payload.setNumber)
-      const { isPR, error } = await logSet(
+
+      // ── Celebración (E4.1/E4.2) — decidida ANTES de persistir (todo es puro; no depende del server). El
+      // motor de guardado sigue intacto: solo se DECIDE tier + PR con los datos que ya fluyen. ──
+      const prescribedEx = block ? resolveExercise(block) : null
+      const exId = prescribedEx?.id ?? null
+      // PR en vivo: detectPR (vía el adaptador de borde) contra el histórico + máximo all-time ya cargados.
+      const pr = exId
+        ? computeLivePr({
+            weightKg: payload.weightKg,
+            repsDone: payload.repsDone,
+            substituted: !!sub,
+            history: previousHistory[exId] ?? [],
+            allTimeMaxKg: exerciseMaxes[exId],
+          })
+        : null
+      // PR real = récord del motor sobre una serie NUEVA (una edición no re-celebra).
+      const isPrLive = !!pr?.isPR && !wasLogged
+      restPrRef.current = isPrLive
+      // Evento base (cuando NO es PR): cierre de ronda/ejercicio ⇒ media; serie suelta ⇒ micro.
+      let baseEvent: WorkoutCelebrationEvent = 'serie_cerrada'
+      const membersForTier = supersetMembersByBlock.get(payload.blockId)
+      if (membersForTier && membersForTier.length >= 2) {
+        const roundBlocks = membersForTier.map((m) => ({ id: m.id, sets: m.sets }))
+        if (isRoundComplete(roundBlocks, payload.setNumber, projected)) baseEvent = 'ronda_cerrada'
+      } else if (block) {
+        const doneInBlock = new Set(
+          projected
+            .filter((l) => l.block_id === payload.blockId && l.set_number >= 1 && l.set_number <= block.sets)
+            .map((l) => l.set_number),
+        )
+        if (doneInBlock.size >= block.sets) baseEvent = 'ejercicio_completado'
+      }
+      // Un solo haptic por commit (dosificación del host): PR épica > cierre media > serie micro.
+      if (isPrLive && exId && pr?.prevBest && pr.kind) {
+        cel.celebratePr({
+          blockId: payload.blockId,
+          setNumber: payload.setNumber,
+          exerciseId: exId,
+          kind: pr.kind,
+          weightKg: payload.weightKg ?? 0,
+          prevBest: pr.prevBest,
+        })
+      } else {
+        cel.celebrate(baseEvent)
+      }
+
+      const { error } = await logSet(
         payload,
         sub ? { substitution: { exerciseId: sub.exerciseId, name: sub.name, reason: sub.reason } } : undefined,
       )
@@ -357,7 +411,7 @@ function ExecutorV3Inner({ planId, recoverDate, editDate }: { planId: string; re
           return next
         })
       }
-      signalCommitted(payload.blockId, payload.setNumber, isPR)
+      signalCommitted(payload.blockId, payload.setNumber, isPrLive && !error)
 
       // Superserie: descanso SOLO al cerrar la ronda (paridad ExecutorV2/web).
       const members = supersetMembersByBlock.get(payload.blockId)
@@ -433,7 +487,7 @@ function ExecutorV3Inner({ planId, recoverDate, editDate }: { planId: string; re
         }
       }
     },
-    [blocks, getSubstitution, logSet, timers, sessionLogs, supersetMembersByBlock, signalCommitted, effByBlock],
+    [blocks, getSubstitution, logSet, timers, sessionLogs, supersetMembersByBlock, signalCommitted, effByBlock, cel, previousHistory, exerciseMaxes],
   )
 
   const retryCommit = useCallback(
@@ -474,8 +528,11 @@ function ExecutorV3Inner({ planId, recoverDate, editDate }: { planId: string; re
   const finalizeSession = useCallback(async () => {
     setFinishedElapsed(elapsedSec)
     await finishSession()
+    // Épica de FIN DE SESIÓN (E4.1): emite el evento por el host (hoy = haptic épico; el overlay final
+    // de coreografía llega en Wave 2/E4.3). El hook ya deja el evento cableado para esa pantalla.
+    cel.celebrate('sesion_completada')
     setSummaryOpen(true)
-  }, [elapsedSec, finishSession])
+  }, [elapsedSec, finishSession, cel])
 
   const handleFinish = useCallback(async () => {
     if (finishingRef.current) return
@@ -933,6 +990,7 @@ function ExecutorV3Inner({ planId, recoverDate, editDate }: { planId: string; re
     planItems: listItems,
     currentIndex: restNextData?.index ?? stepIndex,
     celebrate: restCelebrateRef.current,
+    celebratePr: restPrRef.current,
     roundContext: restRoundContextRef.current,
     exec,
     reducedMotion: motion.reduced,
@@ -1079,7 +1137,7 @@ function ExecutorV3Inner({ planId, recoverDate, editDate }: { planId: string; re
           <View className="w-full flex-row items-center justify-between gap-3 self-center" style={{ maxWidth: 1024 }}>
             <Pressable
               testID="btn-manual-rest-v3"
-              onPress={() => { restCelebrateRef.current = false; restRoundContextRef.current = null; timers.startRest(90, { autoStart: true }) }}
+              onPress={() => { restCelebrateRef.current = false; restRoundContextRef.current = null; restPrRef.current = false; timers.startRest(90, { autoStart: true }) }}
               className="h-11 flex-row items-center gap-1.5 rounded-control border border-ember-500/25 bg-ember-500/15 px-3 active:opacity-90"
               accessibilityRole="button"
               accessibilityLabel="Iniciar descanso de 90 segundos"
@@ -1101,6 +1159,10 @@ function ExecutorV3Inner({ planId, recoverDate, editDate }: { planId: string; re
           </View>
         </View>
       )}
+
+      {/* Host de celebraciones (E4.1) — overlay no interactivo (box-none): PR en vivo (toast+confeti)
+          sobre el stepper, sin cortar el flujo. topOffset libra el header (dots + cronómetro). */}
+      <CelebrationHost prCelebration={cel.prCelebration} exec={exec} reducedMotion={motion.reduced} topOffset={64} />
 
       <KeypadHost
         target={keypadTarget}

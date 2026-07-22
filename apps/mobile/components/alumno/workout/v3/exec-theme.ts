@@ -24,6 +24,14 @@ export const EVA_EXEC_RECOVERY = '#18ABD4' // Aqua — recovery (movilidad/rolle
 export const EVA_EXEC_CELEBRATION = '#FF6A3D' // Ember — celebracion, Ola 4
 
 /**
+ * Dorado de RÉCORD PERSONAL (E4.2) — token PROPIO del PR, INDEPENDIENTE de la marca del coach, del
+ * acento del ejecutor y de las zonas FC. Es siempre este oro (`#f5c451` del mockup concepto-a-v3-momentos,
+ * pantalla "PR en vivo"): un PR se ve igual para todos los alumnos, no se re-tiñe por white-label. Se usa
+ * en el borde pulsante de la serie, el toast "¡PR!" y el micro-confeti dorado.
+ */
+export const EXEC_PR_GOLD = '#f5c451'
+
+/**
  * Superficies dark-only del ejecutor. Literales fijos (no tokens NativeWind) para que la piel no
  * flipee con el tema del sistema. Valores calibrados al mockup concepto-a-v3-core.html.
  */
@@ -81,6 +89,8 @@ export interface ExecTheme {
   recovery: string
   /** Celebracion (ember). En modo coach cae al acento (monocromatico). */
   celebration: string
+  /** Dorado de récord personal (E4.2) — FIJO `#f5c451` en ambos modos: el PR no se re-tiñe por marca. */
+  pr: string
   /** Zonas FC fijas Z1..Z5. */
   zones: typeof ZONE_COLORS
   /** Superficies dark-only. */
@@ -106,6 +116,7 @@ export function resolveExecTheme(
       accentText: '#FFFFFF',
       recovery: EVA_EXEC_RECOVERY,
       celebration: EVA_EXEC_CELEBRATION,
+      pr: EXEC_PR_GOLD,
       zones: ZONE_COLORS,
       surface: EXEC_SURFACE,
     }
@@ -120,6 +131,8 @@ export function resolveExecTheme(
     accentText: coachAccentText || '#FFFFFF',
     recovery: accent,
     celebration: accent,
+    // El PR es SIEMPRE oro, aun en modo coach monocromatico: es un premio universal, no un acento de marca.
+    pr: EXEC_PR_GOLD,
     zones: ZONE_COLORS,
     surface: EXEC_SURFACE,
   }

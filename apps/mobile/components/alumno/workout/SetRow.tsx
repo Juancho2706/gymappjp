@@ -122,6 +122,8 @@ export function SetRow({
   onRpeUpdate,
   settle = false,
   pr = false,
+  prColor = WARNING_500,
+  prIntense = false,
   syncError = null,
   onRetry,
   showEffort = true,
@@ -147,6 +149,17 @@ export function SetRow({
    * `LogSetForm.tsx:511`): pulso dorado sobre el chip. Sólo con `settle` real (no en logs cargados).
    */
   pr?: boolean
+  /**
+   * Color del pulso de PR. Default `WARNING_500` (ámbar, comportamiento V2 previo sin token). El
+   * ejecutor V3 (E4.2) pasa su token PROPIO de PR `exec.pr` (#f5c451) para que el récord se vea dorado.
+   */
+  prColor?: string
+  /**
+   * Pulso de PR INTENSO del ejecutor V3 (E4.2): borde dorado que late ~1,5s (3 pulsos, sin loop) en vez
+   * del destello único de 320ms de V2. Default false = destello corto (paridad web). reduced-motion ⇒ un
+   * solo latido suave.
+   */
+  prIntense?: boolean
   /**
    * Registro de RPE POST-log en series tipadas (cardio/movilidad/roller) — mirror de
    * `TypedLogSetRow` web (`LogSetForm.tsx:1112-1136`): al loguear una serie tipada se despliega la
@@ -307,9 +320,13 @@ export function SetRow({
         <MotiView
           pointerEvents="none"
           from={{ opacity: 0 }}
-          animate={{ opacity: [0, 0.8, 0] }}
-          transition={{ type: 'timing', duration: 320 }}
-          className="absolute inset-0 rounded-control border-2 border-warning-500"
+          // V3 (prIntense): borde dorado que late ~1,5s (3 pulsos, sin loop); reduced-motion ⇒ un latido.
+          // V2 (default): destello único de 320ms (paridad web `prGlow`). Color desde `prColor` (token PR
+          // dorado en V3, ámbar warning-500 en V2) vía style, no className (el hex es dinámico).
+          animate={{ opacity: prIntense ? (motion.reduced ? [0, 1, 0] : [0, 1, 0.2, 1, 0.2, 1, 0]) : [0, 0.8, 0] }}
+          transition={{ type: 'timing', duration: prIntense ? (motion.reduced ? 800 : 1500) : 320 }}
+          className="absolute inset-0 rounded-control border-2"
+          style={{ borderColor: prColor }}
         />
       ) : null}
       <View

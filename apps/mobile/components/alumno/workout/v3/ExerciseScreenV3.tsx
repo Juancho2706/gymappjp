@@ -3,7 +3,7 @@ import { Pressable, Text, View } from 'react-native'
 import { AnimatePresence, MotiView } from 'moti'
 import { LinearTransition } from 'react-native-reanimated'
 import { Image } from 'expo-image'
-import { ArrowRightLeft, Dumbbell, Hand, History, ListChecks, MessageSquareText, Play, TrendingUp, Undo2, X } from 'lucide-react-native'
+import { ArrowRightLeft, ArrowUp, Dumbbell, Hand, History, ListChecks, MessageSquareText, Play, TrendingUp, Undo2, X } from 'lucide-react-native'
 import {
   formatWeightEsCl,
   type OptimisticLogPayload,
@@ -126,6 +126,13 @@ export function ExerciseScreenV3({
   const overloadLabel = overloadChipLabel(block, eff, currentWeek)
   const bestPrev = bestPrevOf(prevList)
 
+  // PR en vivo (E4.2): cuando la serie recién cerrada de ESTE bloque fue récord, la fila "Anterior" tacha
+  // la marca previa y muestra una flecha arriba dorada con el peso que la superó (mockup "PR en vivo").
+  const prRecent = recentSet?.blockId === block.id && !!recentSet?.pr
+  const prNewWeightKg = prRecent
+    ? blockLogs.find((l) => l.set_number === recentSet?.setNumber)?.weight_kg ?? null
+    : null
+
   // Anclas de la rueda: centro en el valor ANTERIOR de la serie (mejor set previo) o, si no hay,
   // en el OBJETIVO (peso sugerido / reps prescritas). `block.reps` puede ser "8-10" ⇒ toma el primer
   // entero. La rueda redondea internamente al grid del paso.
@@ -213,6 +220,8 @@ export function ExerciseScreenV3({
         onRpeUpdate={onRpeUpdate}
         settle={isRecent}
         pr={isRecent && !!recentSet?.pr}
+        prColor={exec.pr}
+        prIntense
         syncError={syncErrors?.[`${block.id}:${setNumber}`] ?? null}
         onRetry={() => onRetrySet?.(block.id, setNumber)}
         showEffort={showEffort}
@@ -333,15 +342,34 @@ export function ExerciseScreenV3({
           accessibilityLabel={firstUnlogged != null && bestPrev.weight_kg ? `Usar la última vez: ${bestPrev.weight_kg} kg por ${bestPrev.reps_done ?? '-'} reps` : undefined}
         >
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            <History size={14} color={s.textMuted} />
-            <Text style={{ fontFamily: FONT.uiSemibold, fontSize: 12, color: s.textMuted }}>Anterior</Text>
+            <History size={14} color={prRecent ? exec.pr : s.textMuted} />
+            <Text style={{ fontFamily: FONT.uiSemibold, fontSize: 12, color: prRecent ? exec.pr : s.textMuted }}>Anterior</Text>
           </View>
-          <Text style={{ fontFamily: FONT.monoBold, fontSize: 14, color: s.text, fontVariant: ['tabular-nums'] }}>
+          {/* Marca previa: tachada cuando la serie recién cerrada la superó (PR en vivo). */}
+          <Text
+            style={{
+              fontFamily: FONT.monoBold,
+              fontSize: 14,
+              color: prRecent ? s.textMuted : s.text,
+              fontVariant: ['tabular-nums'],
+              textDecorationLine: prRecent ? 'line-through' : 'none',
+            }}
+          >
             {bestPrev.weight_kg ? `${bestPrev.weight_kg} kg` : '-'} × {bestPrev.reps_done || '-'}
           </Text>
-          {firstUnlogged != null && (
+          {prRecent ? (
+            // Flecha arriba dorada + peso que superó la marca (mockup "PR en vivo").
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+              <ArrowUp size={14} color={exec.pr} strokeWidth={3} />
+              {prNewWeightKg != null && (
+                <Text style={{ fontFamily: FONT.monoBold, fontSize: 14, color: exec.pr, fontVariant: ['tabular-nums'] }}>
+                  {prNewWeightKg} kg
+                </Text>
+              )}
+            </View>
+          ) : firstUnlogged != null ? (
             <Text style={{ fontFamily: FONT.uiExtra, fontSize: 11, color: exec.accent }}>1 tap ↻</Text>
-          )}
+          ) : null}
         </Pressable>
       )}
 

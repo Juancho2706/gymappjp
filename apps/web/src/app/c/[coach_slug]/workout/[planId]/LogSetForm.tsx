@@ -17,11 +17,14 @@ import {
 } from '@/lib/workout-offline-queue'
 import { triggerHaptic } from '@/lib/client/haptics'
 import { useCoarsePointer } from '@/lib/client/useCoarsePointer'
-import { formatWeightEsCl } from '@eva/workout-engine'
+import { formatWeightEsCl, type PrKind } from '@eva/workout-engine'
 import { readDraft, saveDraft, clearDraft, type DraftFields } from './workout-draft-store'
 import { useWorkoutKeypad } from './WorkoutKeypadProvider'
 import { ScaleDots, EffortHelp, RPE_HELP, RIR_HELP } from './EffortScale'
 import { DualWheelPicker } from './v3/DualWheelPicker'
+import { PrCelebration } from './v3/PrCelebration'
+import { classifyThresholdPr } from './v3/pr-adapter'
+import { useCelebrations } from './v3/use-celebrations'
 import { typedKeypadFields, typedLogValues, type TypedKeypadMode } from '@eva/workout-engine'
 import type { OptimisticLogPayload } from '@eva/workout-engine'
 import { cn } from '@/lib/utils'
@@ -279,6 +282,8 @@ function StrengthLogSetForm({
 
     const isLogged = optimisticLogged || syncStatus === 'pending'
     const { startRest, cancelRest } = useWorkoutTimer()
+    // Orquestador de celebraciones (E4.1): sólo se usa en V3 para disparar el háptico/publicar el PR.
+    const { celebrate } = useCelebrations()
     const reducedMotion = useReducedMotion()
     const weightRef = useRef<HTMLInputElement>(null)
     const repsRef = useRef<HTMLInputElement>(null)
@@ -289,6 +294,11 @@ function StrengthLogSetForm({
     // existentes (carga de página) quedan en false ⇒ sin animación fantasma.
     const settleRef = useRef(false)
     const prRef = useRef(false)
+    // PR EN VIVO V3 (E4.2): datos de la celebración dorada de la serie recién cerrada (kg, mejor marca
+    // anterior, eje weight/e1rm del engine). Sólo se puebla al alcanzar el umbral en modo V3.
+    const prV3Ref = useRef<{ kg: number; prevKg: number; kind: PrKind } | null>(null)
+    // Gatillo visible de la celebración (banner + confetti + pulso dorado). Se auto-descarta ~1,5 s.
+    const [prCelebrateOn, setPrCelebrateOn] = useState(false)
     // Reapertura de una serie cerrada (tap en el chip recap → fila editable).
     const [editing, setEditing] = useState(false)
     // Esfuerzo por serie: RPE y RIR, ambos escala 1-10 (dots), ambos opcionales (decisión CEO).
@@ -407,6 +417,13 @@ function StrengthLogSetForm({
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [state])
+
+    // PR en vivo V3 (E4.2): la celebración dorada dura ~1,5 s y se va sola (no corta el flujo, no es modal).
+    useEffect(() => {
+        if (!prCelebrateOn) return
+        const t = setTimeout(() => setPrCelebrateOn(false), 1600)
+        return () => clearTimeout(t)
+    }, [prCelebrateOn])
 
     const noteTrimmed = note.trim() || null
     const showNoteControls = isActive || editing
@@ -586,7 +603,18 @@ function StrengthLogSetForm({
             targetDate: targetDate ?? null,
         })
         settleRef.current = true
-        prRef.current = prThresholdKg != null && w != null && w > 0 && w >= prThresholdKg
+        // Umbral de PR EXISTENTE (semántica V2, intacta): alcanzar/superar el máximo histórico de peso.
+        const hitPr = prThresholdKg != null && w != null && w > 0 && w >= prThresholdKg
+        prRef.current = hitPr
+        // PR en vivo V3 (E4.2): el disparo es el umbral de arriba; el EJE (weight/e1rm) lo clasifica el
+        // engine (`detectPR` vía adaptador de borde). Presentación dorada + háptico (pref) por el
+        // orquestador; V2 conserva su pulso ámbar tal cual (no entra a esta rama).
+        if (v3 && hitPr && w != null && prThresholdKg != null) {
+            const eje = classifyThresholdPr(w, r, prThresholdKg)
+            prV3Ref.current = { kg: w, prevKg: prThresholdKg, kind: eje.kind ?? 'weight' }
+            setPrCelebrateOn(true)
+            celebrate('pr_detectado', { isRealPR: true })
+        }
         setChipValues({ w, r })
         // BUG 2: la serie ya está en la cola (la verdad) → el borrador cumplió su función, se limpia.
         clearDraft(params.planId, blockId, setNumber)
@@ -636,9 +664,12 @@ function StrengthLogSetForm({
         const dispR = existingLog?.reps_done ?? chipValues?.r ?? null
         // Se celebra sólo la serie recién cerrada en esta sesión (refs en false para logs cargados).
         const isPending = syncStatus === 'pending'
-        const celebrate = !isPending && settleRef.current && !reducedMotion
-        const prGlow = !isPending && prRef.current && !reducedMotion
-        return (
+        const settleAnim = !isPending && settleRef.current && !reducedMotion
+        // Pulso ámbar LEGACY: sólo V2 (V3 usa la celebración dorada de PR en su lugar). Intacto.
+        const prGlowV2 = !v3 && !isPending && prRef.current && !reducedMotion
+        // PR en vivo V3 (E4.2): borde dorado pulsante + banner + confetti (una oleada). Se auto-descarta.
+        const showPrCel = v3 && !isPending && prCelebrateOn && prV3Ref.current != null
+        const chip = (
             <motion.button
                 layout={!reducedMotion}
                 transition={reducedMotion ? { duration: 0 } : springs.smooth}
@@ -656,7 +687,7 @@ function StrengthLogSetForm({
                         : `Serie ${setNumber} registrada — toca para editar`
                 }
             >
-                {prGlow && (
+                {prGlowV2 && (
                     <motion.span
                         aria-hidden
                         className="pointer-events-none absolute inset-0 rounded-control ring-2 ring-amber-400"
@@ -665,6 +696,7 @@ function StrengthLogSetForm({
                         transition={{ duration: 0.32, times: [0, 0.4, 1] }}
                     />
                 )}
+                {showPrCel && <span aria-hidden className="exec-pr-ring" />}
                 <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--sport-500)]/20 text-[11px] font-black tabular-nums text-[var(--sport-300)]">
                     {setNumber}
                 </span>
@@ -690,15 +722,29 @@ function StrengthLogSetForm({
                 ) : (
                     <motion.span
                         className="ml-auto shrink-0 text-[var(--sport-400)]"
-                        initial={celebrate ? { scale: 0, rotate: -25 } : false}
+                        initial={settleAnim ? { scale: 0, rotate: -25 } : false}
                         animate={{ scale: 1, rotate: 0 }}
-                        transition={celebrate ? springs.elastic : { duration: 0 }}
+                        transition={settleAnim ? springs.elastic : { duration: 0 }}
                     >
                         <Check className="h-4 w-4" />
                     </motion.span>
                 )}
             </motion.button>
         )
+        // PR en vivo V3: banner dorado + confetti ARRIBA del chip, inline (no modal, no corta el flujo).
+        if (showPrCel && prV3Ref.current) {
+            return (
+                <div className="exec-pr-wrap">
+                    <PrCelebration
+                        kg={prV3Ref.current.kg}
+                        prevKg={prV3Ref.current.prevKg}
+                        kind={prV3Ref.current.kind}
+                    />
+                    {chip}
+                </div>
+            )
+        }
+        return chip
     }
 
     // ── Fila de captura (activa = protagonista por TAMAÑO; próxima = compacta, sin atenuar) ──

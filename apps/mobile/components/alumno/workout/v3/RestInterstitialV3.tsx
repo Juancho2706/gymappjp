@@ -14,7 +14,7 @@ import Animated, {
 } from 'react-native-reanimated'
 import { Gesture, GestureDetector } from 'react-native-gesture-handler'
 import { Image } from 'expo-image'
-import { Check, CheckCheck, ChevronDown, Dumbbell, MessageSquareText, SkipForward } from 'lucide-react-native'
+import { Check, CheckCheck, ChevronDown, Dumbbell, Medal, MessageSquareText, SkipForward } from 'lucide-react-native'
 import { FONT } from '../../../../lib/typography'
 import { hexToRgba } from '../../../../lib/theme'
 import { haptics } from '../../../../lib/haptics'
@@ -64,6 +64,8 @@ export interface RestInterstitialData {
   currentIndex: number
   /** Mostrar la micro-celebracion "+1 serie" (solo si el descanso siguio a cerrar una serie). */
   celebrate: boolean
+  /** La serie recién cerrada fue un PR (E4.2): la micro-celebración pasa a "+1 serie · ¡PR!" en dorado. */
+  celebratePr?: boolean
   /** Contexto de ronda cerrada (E3.5): reemplaza la micro-celebracion por el banner de ronda. */
   roundContext?: RestRoundContext | null
   exec: ExecTheme
@@ -235,25 +237,30 @@ export function RestInterstitialV3({
             </MotiView>
           )}
 
-          {/* Micro-celebracion "+1 serie" (solo cuando NO es cierre de ronda). */}
-          {data.celebrate && !rc && !done && (
-            <MotiView
-              from={reducedMotion ? { opacity: 0 } : { opacity: 0, scale: 0.8, translateY: -6 }}
-              animate={{ opacity: 1, scale: 1, translateY: 0 }}
-              transition={reducedMotion ? { type: 'timing', duration: 160 } : { type: 'spring', damping: 12, stiffness: 220, mass: 0.7 }}
-              style={{ alignItems: 'center', gap: 6 }}
-            >
-              <Text style={{ fontFamily: FONT.uiExtra, fontSize: 11, letterSpacing: 1, textTransform: 'uppercase', color: exec.accent }}>
-                Serie cerrada
-              </Text>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, borderRadius: 999, borderWidth: 2, paddingHorizontal: 16, paddingVertical: 8, backgroundColor: hexToRgba(exec.accent, 0.14), borderColor: hexToRgba(exec.accent, 0.34) }}>
-                <View style={{ height: 22, width: 22, borderRadius: 999, alignItems: 'center', justifyContent: 'center', backgroundColor: exec.accent }}>
-                  <Check size={13} color={exec.accentText} strokeWidth={3} />
+          {/* Micro-celebracion "+1 serie" (solo cuando NO es cierre de ronda). Si la serie fue PR (E4.2), el
+              chip se tiñe de ORO y menciona el récord: "+1 serie · ¡PR!" con medalla. */}
+          {data.celebrate && !rc && !done && (() => {
+            const isPr = !!data.celebratePr
+            const tint = isPr ? exec.pr : exec.accent
+            return (
+              <MotiView
+                from={reducedMotion ? { opacity: 0 } : { opacity: 0, scale: 0.8, translateY: -6 }}
+                animate={{ opacity: 1, scale: 1, translateY: 0 }}
+                transition={reducedMotion ? { type: 'timing', duration: 160 } : { type: 'spring', damping: 12, stiffness: 220, mass: 0.7 }}
+                style={{ alignItems: 'center', gap: 6 }}
+              >
+                <Text style={{ fontFamily: FONT.uiExtra, fontSize: 11, letterSpacing: 1, textTransform: 'uppercase', color: tint }}>
+                  {isPr ? 'Récord personal' : 'Serie cerrada'}
+                </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, borderRadius: 999, borderWidth: 2, paddingHorizontal: 16, paddingVertical: 8, backgroundColor: hexToRgba(tint, 0.14), borderColor: hexToRgba(tint, 0.34) }}>
+                  <View style={{ height: 22, width: 22, borderRadius: 999, alignItems: 'center', justifyContent: 'center', backgroundColor: tint }}>
+                    {isPr ? <Medal size={13} color="#3a2a06" strokeWidth={2.8} /> : <Check size={13} color={exec.accentText} strokeWidth={3} />}
+                  </View>
+                  <Text style={{ fontFamily: FONT.uiBold, fontSize: 13, color: s.text }}>{isPr ? '+1 serie · ¡PR!' : '+1 serie · vas volando'}</Text>
                 </View>
-                <Text style={{ fontFamily: FONT.uiBold, fontSize: 13, color: s.text }}>+1 serie · vas volando</Text>
-              </View>
-            </MotiView>
-          )}
+              </MotiView>
+            )
+          })()}
 
           {/* Countdown gigante + anillo. */}
           <View style={{ width: RING_SIZE, height: RING_SIZE, alignItems: 'center', justifyContent: 'center' }}>
