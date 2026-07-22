@@ -8,6 +8,10 @@ import {
   type OptimisticLogPayload,
   type ReconciledSessionLog,
   type TypedKeypadMode,
+  // Mapeo PURO valores->payload (subido al engine en E0.3): compartido con el `KeypadHost`.
+  buildStrengthPayload,
+  buildTypedPayload,
+  int,
 } from '@eva/workout-engine'
 import { FONT, TYPE, textStyle } from '../../../lib/typography'
 import { haptics } from '../../../lib/haptics'
@@ -15,7 +19,6 @@ import { fmtTypedLoggedLine } from './workout-ui'
 // RPE_HELP/RIR_HELP se importan (fuente única mobile) en vez de re-declararlos: evita el drift que la
 // Ola 0 flagueó (#1). Son mirror literal —con tildes— de la web (`EffortScale.tsx:17-20`).
 import { TypedKeypad, EffortScale, KEYPAD_EYEBROW_STYLE, RPE_HELP, RIR_HELP } from './TypedKeypad'
-import { buildStrengthPayload, buildTypedPayload, int } from './set-log-payload'
 import { useEvaMotion } from '../../../lib/motion'
 
 const SPORT_400 = '#5C9DFF'

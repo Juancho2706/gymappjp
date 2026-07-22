@@ -1,5 +1,5 @@
 /**
- * Construcción PURA del `OptimisticLogPayload` de una serie desde los valores tipeados (mobile).
+ * Construcción PURA del `OptimisticLogPayload` de una serie desde los valores tipeados.
  *
  * Fuente ÚNICA del mapeo valores->payload, compartida por el `KeypadHost` (teclado multi-paso, edición
  * de series ya logueadas / próximas) y la `ActiveSetRow` (fila de registro expandida a paridad web).
@@ -8,8 +8,12 @@
  *
  * Sin React/RN: `num`/`int` normalizan la coma es-CL (igual que el keypad web) y el commit tipado
  * mapea las keys visibles (`cardio_min`/`actual_*`/`reps_done`) a las columnas del log.
+ *
+ * Subido a `@eva/workout-engine` en E0.3 (specs/executor-v3): antes vivía en
+ * `apps/mobile/.../set-log-payload.ts`. 100% puro → import relativo del tipo hermano.
  */
-import type { OptimisticLogPayload, TypedKeypadMode } from '@eva/workout-engine'
+import type { OptimisticLogPayload } from './session-logs.optimistic'
+import type { TypedKeypadMode } from './typed-keypad'
 
 /** Parsea un string es-CL (coma decimal) a número, o null si vacío/NaN. */
 export function num(v: string | undefined): number | null {
