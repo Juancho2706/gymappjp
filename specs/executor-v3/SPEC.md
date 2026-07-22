@@ -20,7 +20,7 @@
 | # | Decisión | Detalle |
 |---|---|---|
 | 1 | Concepto visual | A "Impulso" (juicy, ADN Duolingo sin mascota). Ejecutor **dark-only**. |
-| 2 | RPE/RIR | Ambos visibles como pills opcionales, escala **0-10**, solo fuerza, jamás bloquean. Validación actual 1-10 → 0-10 (aditivo). |
+| 2 | RPE/RIR | Ambos visibles como pills opcionales, solo fuerza, jamás bloquean. Escalas (corrección CEO 2026-07-22): **RPE 1-10, RIR 0-10** (RIR 0 = al fallo). Zod+DB alineados (E0.4). |
 | 3 | Sonido | Global OFF; solo cronómetro de descanso suena. Tono del sistema (Android, RingtoneManager) o catálogo EVA (iOS no expone tonos). Ajustes en tuerca dentro del workout. |
 | 4 | Rachas | Semanales contra el plan, nunca diarias. |
 | 5 | Wearables | Lo que el CEO necesita (2026-07-22): leer los sensores/datos de los dispositivos del alumno SIN app de reloj — agregadores HealthKit/Health Connect para pasos, sueño, distancia, calorías y BPM promedio (Ola 6, estrella) + BLE 0x180D para BPM en vivo de cintas/relojes que transmiten (Ola 6). Companions de reloj (7B) DIFERIDOS: solo serían necesarios para BPM en vivo de Apple/Galaxy Watch. |

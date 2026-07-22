@@ -258,10 +258,10 @@ export const WorkoutLogSetSchema = z.object({
     set_number: z.coerce.number().int().min(1),
     weight_kg: z.coerce.number().min(0).optional(),
     reps_done: z.coerce.number().int().min(0).optional(),
-    // Escala 0-10 para AMBOS (decisión CEO executor-v3): el alumno registra RPE y RIR por serie en 0-10.
-    // RIR 0 = al fallo (sin reps en reserva); RPE 0 = sin esfuerzo. La ENTRADA acepta el 0 completo.
-    // DB alineada: `workout_logs_rpe_check` relajado a 0-10 (migración 20260722121500); rir ya era 0-10.
-    rpe: z.coerce.number().min(0).max(10).optional(),
+    // Escalas executor-v3 (corrección CEO 2026-07-22): RPE 1-10 (un RPE 0 no significa nada en una
+    // serie real); RIR 0-10 (RIR 0 = al fallo, sin reps en reserva).
+    // DB alineada: `workout_logs_rpe_check` 1-10 (migración 20260722123000); `workout_logs_rir_check` 0-10.
+    rpe: z.coerce.number().min(1).max(10).optional(),
     rir: z.coerce.number().int().min(0).max(10).optional(),
     // Nota rápida por serie (quick-win E2-6). Texto libre corto — NUNCA pasar por el
     // normalizador de decimales (comas→puntos) del action; se lee crudo aparte.

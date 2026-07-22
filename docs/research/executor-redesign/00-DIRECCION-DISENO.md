@@ -68,7 +68,7 @@ Auditoría del pitch contra el código real: el ejecutor actual ya maneja estado
 ### Modos de captura
 - **Rápido (default):** 1 tap sobre "Anterior" o el valor sugerido por sobrecarga progresiva.
 - **Ajuste:** teclado numérico custom (superficie más tocada de la app — se preserva y se agranda). **Patrón dual (decisión CEO 2026-07-21):** tap sobre el valor = teclado custom; **mantener presionado** = rueda estilo iOS de doble columna (kg | reps a la vez), en iOS Y Android, centrada en el valor anterior con rango corto y tick háptico por paso. Condiciones de diseño: hint visible la primera vez (gesto oculto), umbral de long-press ~400ms, y para saltos grandes siempre el teclado (evidencia `f7`: rueda no sirve como método primario en rangos 0-300 kg).
-- **Detalle (opt-in):** RPE y RIR visibles como pills opcionales (escala **0-10** ambos, decisión CEO 2026-07-21) — el alumno ve que puede llenarlos, pero jamás bloquean el CTA ni el flujo. Nota opcional. OJO dato: el schema actual valida `rpe`/`rir` en 1-10 (`schemas/workout.ts:261-265`); permitir 0 es un cambio aditivo de validación (RIR 0 = al fallo, RPE 0 = sin esfuerzo).
+- **Detalle (opt-in):** RPE y RIR visibles como pills opcionales (**RPE 1-10, RIR 0-10** — corrección CEO 2026-07-22: RIR 0 = al fallo; un RPE 0 no significa nada) — el alumno ve que puede llenarlos, pero jamás bloquean el CTA ni el flujo. Nota opcional. Dato: Zod y CHECKs de DB ya alineados (migración 20260722123000).
 
 ## 5. Experiencia por tipo (la uniqueness pedida)
 
@@ -144,11 +144,11 @@ PWA por fase: F1-F2 heredan casi todo (springs CSS, confetti canvas, View Transi
 
 ## 11. Decisiones pendientes (CEO)
 
-1. ~~RPE o RIR~~ **RESUELTA (CEO 2026-07-21):** ambos visibles como opcionales, escala 0-10, sin bloquear el flujo. Pendiente técnico: ampliar validación Zod de 1-10 → 0-10 (aditivo).
+1. ~~RPE o RIR~~ **RESUELTA (CEO 2026-07-21):** ambos visibles como opcionales, sin bloquear el flujo. Escalas finales (corrección CEO 2026-07-22): RPE 1-10, RIR 0-10. Zod y DB alineados (E0.4 hecha).
 2. **Holds por lado v1:** ¿metadata jsonb ahora (recomendado) o se difiere el registro por lado?
 3. ~~Sonido~~ **RESUELTA (CEO 2026-07-21):** todo OFF salvo el cronómetro de descanso, que suena con el tono del sistema del usuario (viable en Android vía RingtoneManager; en iOS según hallazgos de `f7` — probablemente catálogo propio) o uno del catálogo EVA. Ajustes (on/off, tono, volumen, vibración) viven en un botón de **tuerca** dentro del workout.
 4. ~~Rachas semanales~~ **RESUELTA (CEO 2026-07-21):** sí, entran (semanales contra el plan, nunca diarias).
-5. ~~Concepto visual~~ **RESUELTA (CEO 2026-07-21):** gana **A "Impulso"** (C descartado). Iteración v2 en `mockups/concepto-a-v2.html` con: pantallas inicio/final + mapa muscular, RPE/RIR opcionales 0-10, peek "plan completo" en descanso, cardio con distancia/ritmo y wearable dual iOS+Android.
+5. ~~Concepto visual~~ **RESUELTA (CEO 2026-07-21):** gana **A "Impulso"** (C descartado). Iteración v2 en `mockups/concepto-a-v2.html` con: pantallas inicio/final + mapa muscular, RPE/RIR opcionales (RPE 1-10, RIR 0-10), peek "plan completo" en descanso, cardio con distancia/ritmo y wearable dual iOS+Android.
 6. ~~Alcance wearables~~ **RESUELTA (CEO 2026-07-21): "todos los posibles".** Estrategia por capas en `referentes/r7-universo-wearables-hr.md`: BLE GATT Heart Rate estándar (una integración cubre cintas Polar/Garmin/Wahoo/Coospo y relojes en modo broadcast) + HealthKit/Apple Watch + Health Connect/Wear OS + lo que cada SDK propietario permita; documentar honesto lo que NO expone HR en vivo a terceros.
 7. ~~Wheel picker~~ **RESUELTA (CEO 2026-07-21):** patrón dual — tap = teclado custom, mantener presionado = rueda doble kg|reps (iOS y Android), centrada en el valor anterior. Ver §4 Modos de captura.
 8. **NUEVO — toggle "colores EVA" en el menú white-label:** el creador de marca del coach suma la opción de usar el tema EVA multicolor en vez de sus colores (feature del builder white-label, planificar junto al ejecutor).

@@ -12,7 +12,7 @@
 **Motor.** Todo lo puro nuevo entra a `@eva/workout-engine` con unit tests: `cardio-progress.ts` (objetivo+avance → % y restante), `hr-zone.ts` (`hrToZone(bpm, perfil)`), `pr-detect.ts` (`detectPR(log, histórico)`, excluye sustituidos), `celebration.ts` (evento semántico → tier micro/media/épica), y la subida de `keypad-flow.ts` + `set-log-payload.ts` desde `apps/mobile` (la web deja de espejar el mapeo a mano en `LogSetForm.tsx`). Motion tokens (duraciones, springs, tiers) en módulo compartido consumible por ambas UIs.
 
 **Datos (todo aditivo).**
-- `rpe`/`rir`: Zod 1-10 → **0-10** (`WorkoutLogSetSchema`); sin cambio DB (columnas sin CHECK).
+- `rpe`/`rir` (corrección CEO 2026-07-22): RPE queda 1-10; RIR pasa a **0-10** en Zod (el CHECK de DB de rir ya era 0-10; el de rpe se mantiene 1-10).
 - Holds por lado: exponer `metadata` (jsonb ya existente y reservado para esto) en el schema como record opcional `{left_sec?, right_sec?}`; tocar las 5 superficies del payload de una vez; keypad de movilidad pide 1 o 2 valores según `side_mode`. Verificar column-level grant de `metadata` antes de escribir.
 - `target_date` (edición de fechas pasadas): `getWorkoutExecutionData(planId, targetDate?)` carga logs de esa ventana Santiago; `logSetAction` con `targetDate` opcional en **modo solo-UPDATE** (si no existe la fila, error tipado; jamás INSERT en fechas pasadas → imposible farmear adherencia retroactiva; respaldado por el índice único `workout_logs_one_set_per_day`).
 - `coaches.executor_theme text default 'coach'` + column-level grant UPDATE para el coach; migración aditiva LIVE con protocolo AGENTS.md; expuesta en branding web (layouts) y en el payload de branding/config de RN.
@@ -26,7 +26,7 @@
 ## Las olas
 
 ### Ola 0 — Cimientos (engine + datos + white-label) — sin UI de alumno
-Motor y datos listos antes de cualquier pantalla. Unidades: motion-tokens + eventos/tiers; funciones puras (cardio-progress, hr-zone, pr-detect) con tests; subida de keypad-flow/set-log-payload al package (refactor consumo mobile + web); Zod 0-10; metadata sides en 5 superficies; migración `executor_theme` + grant + toggle en creador de marca (web) + propagación branding web/RN. Gate: typecheck+tests+boundaries+tokens; migración validada con tx-rollback + advisors.
+Motor y datos listos antes de cualquier pantalla. Unidades: motion-tokens + eventos/tiers; funciones puras (cardio-progress, hr-zone, pr-detect) con tests; subida de keypad-flow/set-log-payload al package (refactor consumo mobile + web); Zod RIR 0-10 (RPE queda 1-10); metadata sides en 5 superficies; migración `executor_theme` + grant + toggle en creador de marca (web) + propagación branding web/RN. Gate: typecheck+tests+boundaries+tokens; migración validada con tx-rollback + advisors.
 **Riesgo**: la subida de keypad-flow toca el ejecutor actual (V2/web) — cubrir con tests de paridad de payload antes/después. **Rollback**: revert de PR; flag no aplica (sin UI).
 
 ### Ola 1 — Producto inmediato fuera del ejecutor (gate + atribución + día hecho)
@@ -34,7 +34,7 @@ Valor directo sin esperar el rediseño; todo con tema claro/oscuro. Unidades: fi
 **Riesgo**: proxy es superficie sensible (login alumno) — QA manual de las 3 rutas (ok/grace/blocked) en preview antes de prod. **Rollback**: revert por unidad; gate tiene kill-switch.
 
 ### Ola 2 — Ejecutor V3 core loop (fuerza) — RN referencia, web espejo
-Detrás de flag `executorV3`/Edge Config. Unidades: shell V3 (theming exec-brand + zonas fijas, header progreso, tuerca placeholder, dark-only); pantalla entrada animada + inicio; pantalla fuerza (stepper-first, media siempre visible con chips Instrucciones/Nota colapsables ~1.2s, "Anterior" 1-tap, prellenado sobrecarga, RPE/RIR pills 0-10, modales instrucciones/nota); captura dual (teclado custom preservado/agrandado + rueda long-press kg|reps — RN `@quidone/react-native-wheel-picker` o custom Reanimated, web scroll-snap custom — con hint primera vez); vista lista "ver todo"; integración intacta con draft/cola/reconciliación (cero cambios al motor de resiliencia). Web responsive: 320px→desktop (≥768px dos columnas).
+Detrás de flag `executorV3`/Edge Config. Unidades: shell V3 (theming exec-brand + zonas fijas, header progreso, tuerca placeholder, dark-only); pantalla entrada animada + inicio; pantalla fuerza (stepper-first, media siempre visible con chips Instrucciones/Nota colapsables ~1.2s, "Anterior" 1-tap, prellenado sobrecarga, RPE/RIR pills (RPE 1-10, RIR 0-10), modales instrucciones/nota); captura dual (teclado custom preservado/agrandado + rueda long-press kg|reps — RN `@quidone/react-native-wheel-picker` o custom Reanimated, web scroll-snap custom — con hint primera vez); vista lista "ver todo"; integración intacta con draft/cola/reconciliación (cero cambios al motor de resiliencia). Web responsive: 320px→desktop (≥768px dos columnas).
 **Riesgo**: el más grande de UI; mitigación = V2 intacto como fallback + flag off por default hasta QA. **Rollback**: flag off.
 
 ### Ola 3 — Descanso, tipos únicos y superseries

@@ -343,23 +343,23 @@ describe('WorkoutLogSetSchema — espejo polimórfico (AC4)', () => {
         expect(WorkoutLogSetSchema.safeParse({ ...baseLog, actual_avg_hr: 300 }).success).toBe(false)
     })
 
-    // Escala 0-10 para AMBOS (decisión CEO executor-v3): RIR 0 = al fallo, RPE 0 = sin esfuerzo.
-    it('acepta RPE y RIR en el borde 0 y 10', () => {
-        expect(WorkoutLogSetSchema.safeParse({ ...baseLog, rpe: '0', rir: '0' }).success).toBe(true)
+    // Escalas executor-v3 (corrección CEO 2026-07-22): RPE 1-10; RIR 0-10 (0 = al fallo).
+    it('acepta los bordes válidos: RPE 1 y 10, RIR 0 y 10', () => {
+        expect(WorkoutLogSetSchema.safeParse({ ...baseLog, rpe: '1', rir: '0' }).success).toBe(true)
         expect(WorkoutLogSetSchema.safeParse({ ...baseLog, rpe: '10', rir: '10' }).success).toBe(true)
     })
 
-    it('coacciona el 0 a número (no lo descarta como falsy)', () => {
-        const result = WorkoutLogSetSchema.safeParse({ ...baseLog, rpe: '0', rir: '0' })
+    it('rechaza RPE 0 pero acepta RIR 0 (coaccionado a número, no descartado como falsy)', () => {
+        expect(WorkoutLogSetSchema.safeParse({ ...baseLog, rpe: '0' }).success).toBe(false)
+        const result = WorkoutLogSetSchema.safeParse({ ...baseLog, rir: '0' })
         expect(result.success).toBe(true)
         if (result.success) {
-            expect(result.data.rpe).toBe(0)
             expect(result.data.rir).toBe(0)
         }
     })
 
-    it('rechaza RPE/RIR fuera de 0-10 (-1 y 11)', () => {
-        expect(WorkoutLogSetSchema.safeParse({ ...baseLog, rpe: '-1' }).success).toBe(false)
+    it('rechaza RPE/RIR fuera de rango (RPE 0 y 11, RIR -1 y 11)', () => {
+        expect(WorkoutLogSetSchema.safeParse({ ...baseLog, rpe: '0' }).success).toBe(false)
         expect(WorkoutLogSetSchema.safeParse({ ...baseLog, rir: '-1' }).success).toBe(false)
         expect(WorkoutLogSetSchema.safeParse({ ...baseLog, rpe: '11' }).success).toBe(false)
         expect(WorkoutLogSetSchema.safeParse({ ...baseLog, rir: '11' }).success).toBe(false)
