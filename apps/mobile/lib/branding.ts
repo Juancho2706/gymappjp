@@ -42,6 +42,11 @@ export interface CoachBranding {
   loaderText?: string | null
   loaderIconMode?: 'eva' | 'coach' | 'none' | string | null
   loaderTextColor?: string | null
+  /**
+   * Ejecutor V3 (E0.7) — tema del ejecutor del alumno (`executor_theme`): 'coach' usa los
+   * colores del coach, 'eva' usa la paleta EVA. Lo consume la Ola 2; hoy solo se transporta.
+   */
+  executorTheme?: 'coach' | 'eva' | string | null
 }
 
 const BRANDING_KEY = 'eva_coach_branding'
@@ -66,7 +71,7 @@ export function normalizeCoachIdentifier(input: string): string {
 // query del login web). El select rich pide todo el payload white-label del login; el min es el
 // fallback DB-compat para DBs viejas que no tengan las columnas v2 (todas con GRANT anon).
 const BRANDING_COLS_RICH =
-  'id, slug, primary_color, brand_name, invite_code, logo_url, logo_url_dark, welcome_message, subscription_tier, login_layout_key, brand_secondary_color, accent_light, accent_dark, neutral_tint, brand_font_key, theme_preset_key, loader_variant, loader_config, use_custom_loader, loader_text, loader_icon_mode, loader_text_color'
+  'id, slug, primary_color, brand_name, invite_code, logo_url, logo_url_dark, welcome_message, subscription_tier, login_layout_key, brand_secondary_color, accent_light, accent_dark, neutral_tint, brand_font_key, theme_preset_key, loader_variant, loader_config, use_custom_loader, loader_text, loader_icon_mode, loader_text_color, executor_theme'
 const BRANDING_COLS_MIN = 'id, slug, primary_color, brand_name, invite_code'
 
 export async function fetchBrandingByCoachIdentifier(identifierInput: string): Promise<CoachBranding | null> {
@@ -115,6 +120,7 @@ export async function fetchBrandingByCoachIdentifier(identifierInput: string): P
     loaderText: data.loader_text ?? null,
     loaderIconMode: data.loader_icon_mode ?? null,
     loaderTextColor: data.loader_text_color ?? null,
+    executorTheme: data.executor_theme ?? 'coach',
   }
 
   await AsyncStorage.setItem(BRANDING_KEY, JSON.stringify(branding))

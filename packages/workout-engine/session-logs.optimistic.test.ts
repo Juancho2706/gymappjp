@@ -40,6 +40,19 @@ describe('buildOptimisticSessionLog', () => {
         expect(log.actual_distance_m).toBeNull()
         expect(log.actual_avg_hr).toBeNull()
     })
+
+    it('preserva metadata {left_sec, right_sec} de un hold POR LADO (bug forense E0.5)', () => {
+        // Un optimismo sobre una serie per_side NO debe perder los segundos por lado: sin esto la fila
+        // tipada per_side los perdería al confirmar (mismo bug que actual_hold_sec bilateral).
+        const log = buildOptimisticSessionLog(payload({ actualHoldSec: 55, metadata: { left_sec: 30, right_sec: 25 } }))
+        expect(log.metadata).toEqual({ left_sec: 30, right_sec: 25 })
+        expect(log.actual_hold_sec).toBe(55)
+    })
+
+    it('serie sin metadata → metadata null, no undefined', () => {
+        const log = buildOptimisticSessionLog(payload({ weightKg: 80, repsDone: 6 }))
+        expect(log.metadata).toBeNull()
+    })
 })
 
 describe('applyOptimisticSessionLog', () => {

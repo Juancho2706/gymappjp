@@ -405,6 +405,35 @@ describe('WorkoutLogSetSchema — espejo polimórfico (AC4)', () => {
     it('rechaza un substituted_exercise_id que no es uuid', () => {
         expect(WorkoutLogSetSchema.safeParse({ ...baseLog, substituted_exercise_id: 'no-es-uuid' }).success).toBe(false)
     })
+
+    // ── Hold POR LADO (E0.5) — metadata jsonb {left_sec, right_sec} ──
+    it('log SIN metadata pasa idéntico y no gana la key', () => {
+        const result = WorkoutLogSetSchema.safeParse({ ...baseLog, weight_kg: '60', reps_done: '10' })
+        expect(result.success).toBe(true)
+        if (result.success) {
+            expect(result.data.metadata).toBeUndefined()
+        }
+    })
+
+    it('acepta metadata {left_sec, right_sec} con coerción de strings', () => {
+        const result = WorkoutLogSetSchema.safeParse({ ...baseLog, metadata: { left_sec: '30', right_sec: '25' } })
+        expect(result.success).toBe(true)
+        if (result.success) {
+            expect(result.data.metadata).toEqual({ left_sec: 30, right_sec: 25 })
+        }
+    })
+
+    it('acepta metadata parcial (un solo lado), null y objeto vacío', () => {
+        expect(WorkoutLogSetSchema.safeParse({ ...baseLog, metadata: { left_sec: 40 } }).success).toBe(true)
+        expect(WorkoutLogSetSchema.safeParse({ ...baseLog, metadata: { left_sec: null, right_sec: null } }).success).toBe(true)
+        expect(WorkoutLogSetSchema.safeParse({ ...baseLog, metadata: null }).success).toBe(true)
+        expect(WorkoutLogSetSchema.safeParse({ ...baseLog, metadata: {} }).success).toBe(true)
+    })
+
+    it('rechaza segundos por lado fuera de rango (negativo o > 86400)', () => {
+        expect(WorkoutLogSetSchema.safeParse({ ...baseLog, metadata: { left_sec: -1 } }).success).toBe(false)
+        expect(WorkoutLogSetSchema.safeParse({ ...baseLog, metadata: { right_sec: 86401 } }).success).toBe(false)
+    })
 })
 
 describe('CardioProfileUpdateSchema (AC9)', () => {

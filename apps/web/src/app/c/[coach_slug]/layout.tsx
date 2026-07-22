@@ -185,6 +185,11 @@ export default async function ClientBrandLayout({ children, params }: Props) {
     const isOrphan = headersList.get('x-workspace-orphan') === 'true'
     const orphanOrgName = headersList.get('x-orphan-org-name') ?? ''
     const coachId = headersList.get('x-coach-id') ?? ''
+    // Ejecutor V3 (E0.7) — preferencia de tema del ejecutor del alumno. Se EXPONE en el árbol /c
+    // (data-executor-theme) para que la Ola 2 lo lea; hoy nada lo consume visualmente. No gateado
+    // por tier (es una preferencia, no branding). Fail-safe: valor desconocido/ausente => 'coach'.
+    const executorThemeRaw = headersList.get('x-coach-executor-theme')
+    const executorTheme = executorThemeRaw === 'eva' ? 'eva' : 'coach'
     const loaderText = headersList.get('x-coach-loader-text') ?? ''
     const useCustomLoader = headersList.get('x-coach-use-custom-loader') === 'true'
     const loaderTextColor = headersList.get('x-coach-loader-text-color') ?? undefined
@@ -337,6 +342,7 @@ export default async function ClientBrandLayout({ children, params }: Props) {
                 data-logo-url={logoUrl}
                 data-logo-dark={logoUrlDark || undefined}
                 data-loader-variant={loaderVariant}
+                data-executor-theme={executorTheme}
             >
                 <NetworkProvider brandName={brandName} logoUrl={logoUrl} logoUrlDark={logoUrlDark || undefined} primaryColor={primaryColor}>
                   <BasePathProvider value={basePath}>

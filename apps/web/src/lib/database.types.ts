@@ -1061,6 +1061,7 @@ export type Database = {
           created_at: string
           current_period_end: string | null
           enabled_modules: Json
+          executor_theme: string
           full_name: string
           paid_access_ended_at?: string | null
           health_data_consent_at: string | null
@@ -1124,6 +1125,7 @@ export type Database = {
           created_at?: string
           current_period_end?: string | null
           enabled_modules?: Json
+          executor_theme?: string
           paid_access_ended_at?: string | null
           full_name: string
           health_data_consent_at?: string | null
@@ -1187,6 +1189,7 @@ export type Database = {
           created_at?: string
           current_period_end?: string | null
           enabled_modules?: Json
+          executor_theme?: string
           paid_access_ended_at?: string | null
           full_name?: string
           health_data_consent_at?: string | null

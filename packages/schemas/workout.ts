@@ -279,6 +279,18 @@ export const WorkoutLogSetSchema = z.object({
     substituted_exercise_id: z.guid().optional(),
     substituted_exercise_name: z.string().trim().max(120).optional(),
     substitution_reason: z.string().trim().max(40).optional(),
+    // ── Holds de movilidad POR LADO (E0.5 · executor-v3) — espejo de workout_logs.metadata jsonb ──
+    // Shape libre {left_sec, right_sec} (segundos por lado, enteros 0-86400). Opcional/permisivo, SIN
+    // CHECKs por tipo (misma política que el resto del payload): un log SIN metadata valida idéntico
+    // al de hoy. Convive con `actual_hold_sec` (que en modo per_side lleva la SUMA L+R). La UI que
+    // captura por lado llega en Ola 3; esto es solo la capa de datos. z.guid() no aplica (jsonb libre).
+    metadata: z
+        .object({
+            left_sec: z.coerce.number().int().min(0).max(86400).nullable().optional(),
+            right_sec: z.coerce.number().int().min(0).max(86400).nullable().optional(),
+        })
+        .nullable()
+        .optional(),
 })
 export type WorkoutLogSetInput = z.infer<typeof WorkoutLogSetSchema>
 

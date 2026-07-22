@@ -432,6 +432,15 @@ html[data-nav-pending] main {
   --info-500:    #2680FF;
   --info-100:    #E8F1FF;
 
+  /* ---- Zonas de frecuencia cardiaca (ejecutor V3) ---- */
+  /* Z1..Z5 FIJAS: nunca se re-tiñen por la marca del coach ni flipean en dark.
+     No van al bloque .dark a propósito (mismo valor en claro/oscuro). */
+  --zone-z1: #38bdf8;
+  --zone-z2: #4ade80;
+  --zone-z3: #facc15;
+  --zone-z4: #fb923c;
+  --zone-z5: #f87171;
+
   /* ============ Semantic aliases (light) ============ */
   /* Surfaces */
   --surface-app:      var(--paper);

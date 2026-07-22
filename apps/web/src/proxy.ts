@@ -205,7 +205,7 @@ export async function proxy(request: NextRequest) {
         ? (() => {
               const base = supabase
                   .from('coaches')
-                  .select('id, brand_name, primary_color, logo_url, slug, loader_text, use_custom_loader, loader_text_color, loader_icon_mode, subscription_tier, brand_secondary_color, accent_light, accent_dark, neutral_tint, logo_url_dark, brand_font_key, loader_variant, theme_preset_key, login_layout_key, loader_config')
+                  .select('id, brand_name, primary_color, logo_url, slug, loader_text, use_custom_loader, loader_text_color, loader_icon_mode, subscription_tier, brand_secondary_color, accent_light, accent_dark, neutral_tint, logo_url_dark, brand_font_key, loader_variant, theme_preset_key, login_layout_key, loader_config, executor_theme')
               if (INVITE_CODE_RE.test(cRouteSlug)) return base.eq('invite_code', cRouteSlug).maybeSingle()
               if (SLUG_RE.test(cRouteSlug)) return base.eq('slug', cRouteSlug).maybeSingle()
               return null
@@ -744,7 +744,7 @@ export async function proxy(request: NextRequest) {
             coachData = minData as typeof coachData
         }
 
-        const coach = coachData as Pick<Coach, 'id' | 'brand_name' | 'primary_color' | 'logo_url' | 'slug' | 'loader_text' | 'use_custom_loader' | 'loader_text_color' | 'loader_icon_mode' | 'subscription_tier' | 'brand_secondary_color' | 'accent_light' | 'accent_dark' | 'neutral_tint' | 'logo_url_dark' | 'brand_font_key' | 'loader_variant' | 'theme_preset_key' | 'loader_config'> | null
+        const coach = coachData as Pick<Coach, 'id' | 'brand_name' | 'primary_color' | 'logo_url' | 'slug' | 'loader_text' | 'use_custom_loader' | 'loader_text_color' | 'loader_icon_mode' | 'subscription_tier' | 'brand_secondary_color' | 'accent_light' | 'accent_dark' | 'neutral_tint' | 'logo_url_dark' | 'brand_font_key' | 'loader_variant' | 'theme_preset_key' | 'loader_config' | 'executor_theme'> | null
 
         if (!coach) {
             // No error + no fila → coach genuinamente inexistente → 404
@@ -766,6 +766,10 @@ export async function proxy(request: NextRequest) {
             h.set('x-coach-slug', coach.slug)
             h.set('x-coach-brand-name', coach.brand_name || 'EVA')
             h.set('x-coach-subscription-tier', tier)
+            // Ejecutor V3 (E0.7) — preferencia de tema del ejecutor del alumno: NO es branding visual
+            // gateado, solo indica qué paleta usa el ejecutor ('coach' = colores del coach, 'eva' =
+            // paleta EVA multicolor). Se expone SIEMPRE (paid o free); la Ola 2 lo consume, hoy nadie lo lee.
+            h.set('x-coach-executor-theme', coach.executor_theme || 'coach')
             if (brandingAllowed) {
                 h.set('x-coach-primary-color', resolvedColor)
                 h.set('x-coach-logo-url', coach.logo_url?.trim() || BRAND_APP_ICON)

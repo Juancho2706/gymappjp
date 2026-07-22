@@ -115,6 +115,26 @@ describe('reconcileSessionLogs', () => {
         })
     })
 
+    it('round-trip: preserva metadata {left_sec, right_sec} de una serie de hold POR LADO encolada (E0.5)', () => {
+        const out = reconcileSessionLogs([], [queued('b1', 1, { metadata: { left_sec: 30, right_sec: 25 } })])
+        expect(out).toHaveLength(1)
+        expect(out[0].metadata).toEqual({ left_sec: 30, right_sec: 25 })
+        expect(out[0]._pending).toBe(true)
+    })
+
+    it('item de cola legacy (sin metadata) reconcilia a metadata null, no undefined', () => {
+        const out = reconcileSessionLogs([], [queued('b1', 1)])
+        expect(out[0].metadata).toBeNull()
+    })
+
+    it('reload: un log del SERVER con metadata por lado conserva {left_sec, right_sec}', () => {
+        const server = [serverLog('b1', 1, { weight_kg: null, reps_done: null, actual_hold_sec: 55, metadata: { left_sec: 30, right_sec: 25 } })]
+        const out = reconcileSessionLogs(server, [])
+        expect(out[0].metadata).toEqual({ left_sec: 30, right_sec: 25 })
+        expect(out[0].actual_hold_sec).toBe(55)
+        expect(out[0]._pending).toBe(false)
+    })
+
     it('no muta las entradas del server (copia con _pending, no referencia)', () => {
         const original = serverLog('b1', 1)
         const out = reconcileSessionLogs([original], [])

@@ -239,6 +239,22 @@ export const darkTheme: Theme = freezeTheme({
   fontDisplay: FONT.display,
 })
 
+/**
+ * Zonas de frecuencia cardiaca del ejecutor (Z1..Z5). FIJAS: nunca se re-tiñen por la
+ * marca del coach ni flipean en dark — mismo contrato que `--zone-z1..z5` de web
+ * (globals.css, solo en :root). Espejo 1:1 de esos valores. Uso: props de color
+ * imperativas (SVG stroke, lucide `color`) o tokens de ejecutor (Ola 2).
+ */
+export const ZONE_COLORS = {
+  z1: '#38bdf8',
+  z2: '#4ade80',
+  z3: '#facc15',
+  z4: '#fb923c',
+  z5: '#f87171',
+} as const
+
+export type ZoneKey = keyof typeof ZONE_COLORS
+
 const DEFAULT_BRAND = '#007AFF'
 
 /**
