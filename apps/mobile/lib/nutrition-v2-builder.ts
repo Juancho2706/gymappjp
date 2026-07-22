@@ -25,7 +25,12 @@ import {
   type NutritionPlanDraft,
   type NutritionStrategy,
 } from '@eva/nutrition-v2'
-import { calculateFoodItemMacros, type FoodMacrosRow } from '@eva/nutrition-engine'
+import { calculateFoodItemMacros, type ExchangeGroup, type FoodMacrosRow } from '@eva/nutrition-engine'
+import { buildFrozenPortionGroups, type PortionsBySlot } from './nutrition-v2-builder-portions'
+// Reuso de la persistencia congelada del quick-edit (afirmación 8 de la spec 4B-11): NO se
+// duplica `buildPortionTargetInsertRows`. La lib del quick-edit vive en `lib/` (no en
+// `components/quick-edit/**`, territorio vetado), y ya exporta estas piezas.
+import { buildPortionTargetInsertRows } from './nutrition-v2-quick-edit'
 
 // ---------------------------------------------------------------------------
 // Estado del wizard (PORTADO 1:1 desde la web draft-builder.ts)
@@ -488,6 +493,13 @@ export interface AssembleOptions {
   clientId: string
   planId?: string | null
   timezone?: string
+  /**
+   * Capa opcional de porciones a elección (4B-11): mapa `slot.key -> targets`. Solo se
+   * cuelga en franjas structured/hybrid; una franja sin porciones (o su ausencia) deja el
+   * slot byte-idéntico a hoy (sin la clave `exchangeTargets`). El caller la pasa desde el
+   * controlador de porciones del wizard.
+   */
+  portionsBySlot?: PortionsBySlot
 }
 
 export function assembleDraft(state: BuilderState, options: AssembleOptions): NutritionPlanDraft {
@@ -495,7 +507,11 @@ export function assembleDraft(state: BuilderState, options: AssembleOptions): Nu
   const usesSlots = strategyUsesSlots(strategy)
 
   const mealSlots: DraftMealSlot[] = usesSlots
-    ? state.slots.map((slot, slotIndex) => ({
+    ? state.slots.map((slot, slotIndex) => {
+        // Porciones a elección de la franja (4B-11): filtra > 0 y mapea al contrato del draft.
+        // Sin porciones => sin la clave (byte-idéntico a hoy); el server/insert congela el snapshot.
+        const portionTargets = (options.portionsBySlot?.[slot.key] ?? []).filter((t) => t.portions > 0)
+        return {
         code: 'slot-' + (slotIndex + 1),
         name: slot.name.trim(),
         startTime: slot.startTime.trim() === '' ? null : slot.startTime.trim(),
@@ -505,6 +521,16 @@ export function assembleDraft(state: BuilderState, options: AssembleOptions): Nu
         targets: {},
         instructions: null,
         orderIndex: slotIndex,
+        ...(portionTargets.length > 0
+          ? {
+              exchangeTargets: portionTargets.map((t, orderIndex) => ({
+                exchangeGroupId: t.exchangeGroupId,
+                portions: t.portions,
+                notes: null,
+                orderIndex,
+              })),
+            }
+          : {}),
         items: slot.items.map((item, itemIndex): DraftPrescriptionItem => {
           // Reemplazos autorizados (F-02): catalogo -> foodId; quantity/unit null = "misma
           // porcion que el prescrito". Capa opcional: sin reemplazos el item queda identico
@@ -538,7 +564,8 @@ export function assembleDraft(state: BuilderState, options: AssembleOptions): Nu
               : {}),
           }
         }),
-      }))
+        }
+      })
     : []
 
   const variant: DraftDayVariant = {
@@ -953,8 +980,18 @@ export async function persistAndPublishDraft(input: {
   draft: NutritionPlanDraft
   idempotencyKey: string
   effectiveFrom: string
+  /**
+   * Catálogo de grupos de intercambio para CONGELAR el snapshot de las porciones a elección
+   * (4B-11). Opcional: un draft sin porciones no lo necesita y publica byte-idéntico a hoy.
+   * Si el draft trae `exchangeTargets` pero un grupo no resuelve contra este catálogo, el
+   * publish corta con `EXCHANGE_GROUP_UNRESOLVED` (jamás una fila con snapshot NULL).
+   */
+  portionGroups?: ExchangeGroup[]
 }): Promise<PublishResult> {
-  const { db, userId, draft, idempotencyKey, effectiveFrom } = input
+  const { db, userId, draft, idempotencyKey, effectiveFrom, portionGroups } = input
+  // Dict congelado del catálogo (por valor): alimenta el mismo `buildPortionTargetInsertRows`
+  // del quick-edit. Vacío si no se pasó catálogo (un draft sin porciones nunca lo consulta).
+  const frozenPortionGroups = buildFrozenPortionGroups(portionGroups ?? [])
 
   const existing = await db
     .from('nutrition_plan_versions_v2')
@@ -1114,6 +1151,30 @@ export async function persistAndPublishDraft(input: {
           if (subsIns.error) return mapWriteError(subsIns.error, 'reemplazos')
         }
       }
+
+      // Porciones a elección (4B-11): inserta las filas de la franja con snapshot congelado.
+      // Gateado por `slot.exchangeTargets?.length`: una franja sin porciones no toca la tabla
+      // (byte-idéntico a hoy). Reusa `buildPortionTargetInsertRows` del quick-edit; si un grupo
+      // no resuelve contra el catálogo congelado, corta en voz alta (jamás snapshot NULL).
+      const exchangeTargets = slot.exchangeTargets ?? []
+      if (exchangeTargets.length > 0) {
+        const targetRows = buildPortionTargetInsertRows({
+          versionId,
+          mealSlotId,
+          targets: exchangeTargets,
+          groupsById: frozenPortionGroups,
+        })
+        if (targetRows == null) {
+          return publishFail(
+            'EXCHANGE_GROUP_UNRESOLVED',
+            'No se pudieron congelar los grupos de porciones del plan. Recarga el catálogo e intenta de nuevo.',
+          )
+        }
+        const targetsIns = await db
+          .from('nutrition_slot_exchange_targets_v2')
+          .insert(targetRows as unknown as Record<string, unknown>[])
+        if (targetsIns.error) return mapWriteError(targetsIns.error, 'porciones')
+      }
     }
   }
 
@@ -1169,6 +1230,8 @@ export async function publishDraftRN(input: {
   idempotencyKey: string
   effectiveFrom: string
   hasNutritionPro: boolean
+  /** Catálogo de grupos para congelar las porciones a elección (4B-11); ver persistAndPublishDraft. */
+  portionGroups?: ExchangeGroup[]
 }): Promise<PublishResult> {
   const parsed = PublishInputSchema.safeParse({
     draft: input.draft,
@@ -1196,5 +1259,6 @@ export async function publishDraftRN(input: {
     draft,
     idempotencyKey,
     effectiveFrom,
+    portionGroups: input.portionGroups,
   })
 }

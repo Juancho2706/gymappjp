@@ -4,11 +4,13 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import { FlashList } from '@shopify/flash-list'
 import {
+  Apple,
   ArrowUpDown,
   ChevronLeft,
   ChevronRight,
   FilePlus2,
   Plus,
+  ScanLine,
   Search,
   Users,
   X,
@@ -63,6 +65,11 @@ import {
   type NutritionSortKey,
 } from '../../../lib/nutrition-v2-hub'
 import { useTheme } from '../../../context/ThemeContext'
+// Cuerpos embebibles de las otras dos superficies del hub, montados bajo el tablist (4B-17).
+// `foods.tsx` expone la variante `embedded` sobre su default; `curation.tsx` (4B-07) expone el
+// cuerpo embebible como export nombrado `CurationQueueScreen` — se usa el export REAL entregado.
+import CoachNutritionCatalogScreen from './foods'
+import { CurationQueueScreen } from './curation'
 
 const PAGE_SIZE = 25
 const COACH_TIMEZONE = 'America/Santiago'
@@ -73,6 +80,15 @@ const PICKER_MAX_PAGES = 8
 
 type HubCursor = { updatedAt: string; clientId: string }
 type PickerEntry = { clientId: string; clientName: string; planStatus: string | null }
+
+// Tablist del hub — espejo de web `NutritionHubTabs.tsx:10-14`: orden fijo, copys verbatim,
+// default "Alumnos". Estado local (no `?tab=`), se resetea al remontar (igual que web).
+type HubTabKey = 'roster' | 'foods' | 'curation'
+const HUB_TABS: Array<{ key: HubTabKey; label: string; icon: typeof Users }> = [
+  { key: 'roster', label: 'Alumnos', icon: Users },
+  { key: 'foods', label: 'Alimentos', icon: Apple },
+  { key: 'curation', label: 'Curación', icon: ScanLine },
+]
 
 export default function CoachNutritionV2Screen() {
   const router = useRouter()
@@ -86,6 +102,8 @@ export default function CoachNutritionV2Screen() {
     orgId: workspaceOrgId,
   } = useWorkspace()
   const [userId, setUserId] = useState<string | null>(null)
+  // Tab activa del hub (estado local efímero; espejo de web `useState('roster')`).
+  const [activeTab, setActiveTab] = useState<HubTabKey>('roster')
   const [page, setPage] = useState<NutritionCoachHubPageReadModel | null>(null)
   const [items, setItems] = useState<NutritionCoachHubItem[]>([])
   const [pageIndex, setPageIndex] = useState(0)
@@ -313,6 +331,37 @@ export default function CoachNutritionV2Screen() {
 
   return (
     <View className="flex-1 bg-surface-app" style={{ paddingTop: insets.top }}>
+      {/* Shell persistente arriba del tablist (paridad web `page.tsx:86-104`): header con CTA
+          "Nuevo plan" + estado de sync, visible en las 3 tabs; debajo el tablist DS. */}
+      <View className="gap-4 px-4 pb-3 pt-5">
+        <NutritionHeader
+          title="Centro de Nutrición"
+          description="Planes, consumo reciente y alumnos por atender."
+          actions={
+            <View className="flex-row items-center gap-2">
+              <SyncOfflineState state={offline ? 'offline' : 'synced'} />
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Nuevo plan"
+                onPress={openPicker}
+                className="h-11 w-11 items-center justify-center rounded-control bg-primary"
+              >
+                <Plus color="#FFFFFF" size={20} />
+              </Pressable>
+            </View>
+          }
+        />
+        <HubTablist active={activeTab} onSelect={setActiveTab} inactiveColor={theme.textSecondary} />
+      </View>
+
+      {/* Cuerpo de la tab activa. Conmutación INLINE (sin `router.push`) para conservar la
+          cápsula del coach y espejar que las 3 son secciones de UNA superficie. */}
+      <View className="flex-1">
+        {activeTab === 'foods' ? (
+          <CoachNutritionCatalogScreen embedded />
+        ) : activeTab === 'curation' ? (
+          <CurationQueueScreen embedded />
+        ) : (
       <FlashList
         data={visibleItems}
         keyExtractor={(item) => item.clientId}
@@ -326,24 +375,7 @@ export default function CoachNutritionV2Screen() {
           paddingBottom: insets.bottom + COACH_TABBAR_CLEARANCE,
         }}
         ListHeaderComponent={
-          <View className="gap-4 pb-5 pt-5">
-            <NutritionHeader
-              title="Centro de Nutrición"
-              description="Planes, consumo reciente y alumnos por atender."
-              actions={
-                <View className="flex-row items-center gap-2">
-                  <SyncOfflineState state={offline ? 'offline' : 'synced'} />
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel="Nuevo plan"
-                    onPress={openPicker}
-                    className="h-11 w-11 items-center justify-center rounded-control bg-primary"
-                  >
-                    <Plus color="#FFFFFF" size={20} />
-                  </Pressable>
-                </View>
-              }
-            />
+          <View className="gap-4 pb-5 pt-2">
             <View className="flex-row gap-3">
               <Metric label="Con plan" value={metrics.withPlan} />
               <Metric label="Sin plan" value={metrics.withoutPlan} />
@@ -516,6 +548,8 @@ export default function CoachNutritionV2Screen() {
           </NutritionCard>
         )}
       />
+        )}
+      </View>
 
       <HubSortSheet
         open={sortOpen}
@@ -543,6 +577,52 @@ function Metric({ label, value }: { label: string; value: number }) {
     <View className="min-w-0 flex-1 rounded-card border border-border-subtle bg-surface-card p-4">
       <Text className="font-display text-2xl font-bold text-text-strong">{value}</Text>
       <Text className="mt-1 text-xs text-text-muted">{label}</Text>
+    </View>
+  )
+}
+
+// Tablist DS del hub (espejo de web `NutritionHubTabs.tsx:28-54`): fila segmentada 3-en-1 con
+// los mismos tokens (`bg-surface-card`/`border-border-default`; activo `bg-primary` + texto
+// blanco, inactivo `text-text-muted`). Sin `hover`/breakpoint (no aplican en RN): icono+label
+// siempre visibles. Estado local en el padre; conmutar NO toca la URL. White-label safe (solo
+// el blanco del texto activo es crudo, igual que web `text-white`).
+function HubTablist({
+  active,
+  onSelect,
+  inactiveColor,
+}: {
+  active: HubTabKey
+  onSelect: (key: HubTabKey) => void
+  inactiveColor: string
+}) {
+  return (
+    <View
+      accessibilityRole="tablist"
+      accessibilityLabel="Secciones del centro de nutrición"
+      className="flex-row gap-1 rounded-control border border-border-default bg-surface-card p-1"
+    >
+      {HUB_TABS.map((tab) => {
+        const on = active === tab.key
+        const Icon = tab.icon
+        return (
+          <Pressable
+            key={tab.key}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: on }}
+            accessibilityLabel={tab.label}
+            onPress={() => onSelect(tab.key)}
+            className={`min-h-11 min-w-0 flex-1 flex-row items-center justify-center gap-1.5 rounded-[10px] px-2 ${on ? 'bg-primary' : ''}`}
+          >
+            <Icon size={16} color={on ? '#FFFFFF' : inactiveColor} />
+            <Text
+              className={`shrink text-sm font-semibold ${on ? 'text-white' : 'text-text-muted'}`}
+              numberOfLines={1}
+            >
+              {tab.label}
+            </Text>
+          </Pressable>
+        )
+      })}
     </View>
   )
 }

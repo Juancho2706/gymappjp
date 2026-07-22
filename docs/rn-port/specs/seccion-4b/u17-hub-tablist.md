@@ -153,3 +153,59 @@ tocar "Curación" muestra la cola de scans (4B-07); "Alumnos" vuelve al roster c
 móvil (tab bar del Centro V2): mismas 3 etiquetas, mismo orden, mismo default, misma jerarquía
 header→tablist→cuerpo. Gates: `pnpm --filter @eva/mobile exec tsc --noEmit`, lint, `check:tokens`;
 verificar el orden de merge (curación antes que el wiring) para que el import estático resuelva.
+
+## Cierre (2026-07-22)
+
+Cableado del tablist entregado. Cambios en mis dos archivos de propiedad:
+
+- **`index.tsx`** (dueño exclusivo de la wave):
+  - Estado local `activeTab` (`useState<HubTabKey>('roster')`; sin `?tab=` ni
+    `useLocalSearchParams`, decisión 4 / afirmación 2). `HubTabKey` + `HUB_TABS` a nivel de
+    módulo, orden y copys **verbatim** del web (`Alumnos`/`Users`, `Alimentos`/`Apple`,
+    `Curación`/`ScanLine`), default "Alumnos".
+  - **Shell persistente** elevado: `NutritionHeader` (título/desc + CTA "Nuevo plan"
+    `openPicker` + `SyncOfflineState`) + nuevo `HubTablist` en un contenedor `px-4 pt-5 pb-3`
+    arriba del cuerpo. El header se **movió** verbatim desde el `ListHeaderComponent` del
+    `FlashList` (ya no se duplica); el CTA queda visible en las 3 tabs (paridad web
+    `page.tsx:86-104`).
+  - Cuerpo conmutado **INLINE** dentro de un `<View className="flex-1">` con ternario
+    (`foods` → `<CoachNutritionCatalogScreen embedded />`; `curation` →
+    `<CurationQueueScreen embedded />`; default → el `FlashList` del roster intacto). Sin
+    `router.push` → cápsula del coach conservada (afirmación 3).
+  - **Roster preservado INTACTO** (auto-revisión del riesgo mayor): métricas, texto de total,
+    búsqueda, chips de attention, orden, `ListEmptyComponent`, `PaginationBar` y ambos sheets
+    globales (`HubSortSheet`, `NewPlanPickerSheet`) sin tocar salvo: (a) quitar el
+    `NutritionHeader` del `ListHeaderComponent` (elevado al shell) y (b) `pt-5`→`pt-2` en el
+    wrapper de ese header de lista para no duplicar el padding superior. Todo el estado del
+    roster (`items`/`page`/`pageIndex`/`filters`) vive en el componente padre → persiste al
+    cambiar de tab; el `useEffect` de `loadFirst` no depende de `activeTab`, así que conmutar
+    NO refetchea (solo se remonta el `FlashList`, igual que web que renderiza el roster sólo
+    cuando activo, `NutritionHubTabs.tsx:57-59`).
+  - `HubTablist`: fila segmentada 3-en-1 con tokens del DS (`bg-surface-card` /
+    `border-border-default`; activo `bg-primary` + texto/ícono blanco, inactivo
+    `text-text-muted` + ícono `theme.textSecondary`). `accessibilityRole="tablist"` en el
+    contenedor + `"tab"` con `accessibilityState={{ selected }}` por segmento. Único crudo = el
+    blanco del texto/ícono activo (igual que web `text-white` y el CTA "Nuevo plan" ya
+    existente). Sin `hover`/breakpoint `sm:` (no aplican en RN): icono+label siempre visibles.
+
+- **`foods.tsx`** (sólo variante embedded; default export INTACTO para deep-links):
+  - Prop `embedded = false`. Cuando `true`: se omite `SafeAreaView` (se envuelve en un `View
+    flex-1`) y el `NutritionHeader onBack` (el shell del hub aporta chrome); además el
+    `paddingBottom` del `FlashList` pasa a `insets.bottom + COACH_TABBAR_CLEARANCE` para librar
+    la tab-bar/cápsula del coach (sólo en embedded; el standalone conserva su `40` bajo
+    `SafeAreaView edges`). Buscador+lista+ficha sin cambios. La ruta standalone
+    (`export default`) no altera su comportamiento.
+
+**Frontera 4B-07 (curación) — export REAL verificado:** `curation.tsx` expone el cuerpo
+embebible como **export nombrado** `CurationQueueScreen({ embedded })` (línea 55), con default
+`CurationRoute`. Coincide con la **opción A** del contrato (§Frontera). Import usado:
+`import { CurationQueueScreen } from './curation'`. `embedded=true` en curación omite su
+`SafeAreaView`/`onBack` (líneas 260-266). Su `FlashList` embebido mantiene `paddingBottom: 40`
+fijo (propiedad de 4B-07, no lo toco); si el juez quiere clearance de tab-bar allí también, es
+un ajuste dentro de `curation.tsx`, fuera de mi propiedad.
+
+**Gates ejecutados (verdes):** `pnpm --filter @eva/mobile exec tsc --noEmit` (0 errores, módulo
+completo) · `pnpm exec eslint` sobre mis 2 archivos (0 problemas) · `pnpm check:tokens` (86
+tokens OK). Sin tests vitest dedicados (componentes de pantalla RN; grep sin coincidencias). Sin
+dependencias nuevas. No toqué `packages/*`, `apps/web/*`, workout del alumno, ni
+`(tabs)/nutricion.tsx` (sigue montando `<CoachNutritionV2Screen />` inline).

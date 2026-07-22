@@ -10,7 +10,7 @@ import {
   View,
 } from 'react-native'
 import NetInfo from '@react-native-community/netinfo'
-import { ArrowLeft, Info, LockKeyhole } from 'lucide-react-native'
+import { ArrowLeft, History, Info, LockKeyhole, X } from 'lucide-react-native'
 import type { FoodCatalogItem, NutritionItemSubstitution, NutritionPlanReadModel } from '@eva/nutrition-v2'
 import { NutritionCard } from '../NutritionCard'
 import { NutritionHeader, NutritionStatePanel, StrategyBadge } from '../NutritionV2Kit'
@@ -41,8 +41,16 @@ import {
   hydrateQuickEditPortions,
   portionsReducer,
   type QuickEditPortionGroup,
+  type QuickEditPortionsState,
   type QuickEditPortionTarget,
 } from './portions-state'
+import {
+  clearNutritionDraft,
+  quickEditDraftKey,
+  readNutritionDraft,
+  sweepStaleNutritionDrafts,
+  writeNutritionDraft,
+} from '../../../lib/nutrition-coach-draft-store'
 import { EditableSlotCard } from './EditableSlotCard'
 import { TargetsEditorCard } from './TargetsEditorCard'
 import { FoodSearchSheet, type FoodSearchMode } from './FoodSearchSheet'
@@ -73,11 +81,26 @@ interface UndoEntry {
 }
 
 /**
+ * Payload del respaldo local del quick-edit (AsyncStorage): identifica plan + version base y
+ * persiste los DOS reducers de RN (el arbol principal `state` Y las porciones `portions`, que en
+ * RN viven en un reducer SEPARADO — web las pliega dentro de `state`). Persistir solo `state`
+ * perderia en silencio los cambios de porciones (regresion respecto a web).
+ */
+interface QuickEditDraftPayload {
+  clientId: string
+  planId: string
+  baseVersionId: string
+  state: QuickEditState
+  portions: QuickEditPortionsState
+}
+
+/**
  * Modo edicion in-place del plan vigente — espejo RN del quick-edit web (qe-design
  * §1.3): editar = tocar el plan donde se ve; draft local (dirty) + UN boton "Publicar
- * cambios". El draft y su baseline viven en un reducer local (sobrevive re-renders;
- * respaldo persistente = F2). Publicar exige red; en fallo el draft NO se pierde y el
- * reintento reusa la MISMA idempotency key.
+ * cambios". El draft y su baseline viven en dos reducers locales (sobreviven re-renders) y
+ * ademas se respaldan en AsyncStorage (autosave debounced) para ofrecer "Restaurar" tras
+ * matar la app (F2). Publicar exige red; en fallo el draft NO se pierde y el reintento reusa
+ * la MISMA idempotency key.
  */
 export function QuickEditMode({
   clientId,
@@ -137,8 +160,16 @@ export function QuickEditMode({
   const [upsell, setUpsell] = useState<string | null>(null)
   const [searchTarget, setSearchTarget] = useState<SearchTarget | null>(null)
   const [undo, setUndo] = useState<UndoEntry | null>(null)
+  // Respaldo local (F2) de una sesion anterior recuperado de AsyncStorage; alimenta el banner
+  // "Restaurar". Guarda el payload completo (state + portions) hasta que el coach decida.
+  const [pendingRestore, setPendingRestore] = useState<QuickEditDraftPayload | null>(null)
 
   const undoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // Guard para no escribir el respaldo local en la hidratacion inicial (evita un borrador vacio).
+  const isFirstRenderRef = useRef(true)
+  // Key del respaldo local: una sesion de quick-edit por alumno; el clientId va SIEMPRE en la
+  // key (gotcha PR #148) para no cruzar borradores entre alumnos.
+  const draftKey = quickEditDraftKey(clientId)
   // Idempotency key por INTENCION de publicar: fresca al abrir el confirm, reutilizada
   // en todos los reintentos de esa intencion (qe-design §2.5).
   const intentKeyRef = useRef<string | null>(null)
@@ -199,16 +230,98 @@ export function QuickEditMode({
   const validation = useMemo(() => validateQuickEditState(state), [state])
   const errors = showErrors ? validation.errors : {}
 
+  // Al montar el modo edicion: barre borradores vencidos (TTL 7d, ambos prefijos) y evalua si hay
+  // un respaldo local restaurable para ESTE plan y version base. Si el borrador es de otra version
+  // (alguien publico entremedio via otra sesion / web / builder) se descarta: restaurar contra una
+  // base obsoleta seria peor que nada — mismo espiritu que el guard STALE_BASE del publish.
+  // AsyncStorage es async: `mountedRef`/`active` evitan tocar estado tras el desmonte (sin flash).
+  useEffect(() => {
+    if (!baseline) return
+    let active = true
+    const now = Date.now()
+    void (async () => {
+      await sweepStaleNutritionDrafts(now)
+      const record = await readNutritionDraft<QuickEditDraftPayload>(draftKey, now)
+      if (!active || !mountedRef.current) return
+      if (!record) return
+      const { payload } = record
+      if (
+        payload.planId === baseline.planId &&
+        payload.baseVersionId === baseline.baseVersionId &&
+        Array.isArray(payload.state?.variants)
+      ) {
+        setPendingRestore(payload)
+      } else {
+        void clearNutritionDraft(draftKey)
+      }
+    })()
+    return () => {
+      active = false
+    }
+  }, [baseline, draftKey])
+
+  // Autosave debounced del arbol editable + porciones: escribe el respaldo local solo si hay
+  // cambios reales; si el coach vuelve al baseline (0 cambios) borra el borrador (ya no aporta).
+  // El guard de primer render evita crear un borrador vacio al hidratar. 1500 ms como en web.
+  useEffect(() => {
+    if (isFirstRenderRef.current) {
+      isFirstRenderRef.current = false
+      return
+    }
+    if (!baseline) return
+    const timer = setTimeout(() => {
+      if (count > 0) {
+        void writeNutritionDraft<QuickEditDraftPayload>(
+          draftKey,
+          {
+            clientId,
+            planId: baseline.planId,
+            baseVersionId: baseline.baseVersionId,
+            state,
+            portions: portionsState,
+          },
+          Date.now(),
+        )
+      } else {
+        void clearNutritionDraft(draftKey)
+      }
+    }, 1500)
+    return () => clearTimeout(timer)
+  }, [state, portionsState, count, baseline, draftKey, clientId])
+
+  // Aplica el respaldo local rehidratando los DOS reducers (arbol principal + porciones) y baja el
+  // banner. Persistir/restaurar solo `state` perderia los cambios de porciones (regresion vs web).
+  const restoreDraft = useCallback(() => {
+    if (!pendingRestore) return
+    dispatch({ type: 'RESTORE_DRAFT', state: pendingRestore.state })
+    dispatchPortions({ type: 'RESTORE_PORTIONS', state: pendingRestore.portions })
+    setPendingRestore(null)
+  }, [pendingRestore])
+
+  // Descarta el respaldo local ofrecido y baja el banner sin tocar el estado actual.
+  const dismissRestore = useCallback(() => {
+    void clearNutritionDraft(draftKey)
+    setPendingRestore(null)
+  }, [draftKey])
+
+  // Al salir, el respaldo local solo se borra si el coach descarto ediciones PROPIAS (count > 0) o
+  // si no queda un respaldo anterior sin restaurar: salir limpio con el banner "Restaurar" todavia
+  // pendiente NO debe destruir ese respaldo en silencio (mismo guard que web). Best-effort sin await.
+  const doExit = useCallback(() => {
+    if (count > 0 || pendingRestore === null) void clearNutritionDraft(draftKey)
+    onExit()
+  }, [count, pendingRestore, draftKey, onExit])
+
   const requestExit = useCallback(() => {
     if (count > 0) {
       Alert.alert(QUICK_EDIT_COPY.leaveGuardTitle, QUICK_EDIT_COPY.leaveGuard, [
         { text: QUICK_EDIT_COPY.keepEditing, style: 'cancel' },
-        { text: 'Salir', style: 'destructive', onPress: onExit },
+        { text: 'Salir', style: 'destructive', onPress: doExit },
       ])
       return
     }
-    onExit()
-  }, [count, onExit])
+    doExit()
+  }, [count, doExit])
 
   // Guard de salida por back de hardware (Android) — espejo del beforeunload web.
   useEffect(() => {
@@ -368,6 +481,8 @@ export function QuickEditMode({
     setConfirmOpen(false)
     if (res.ok) {
       intentKeyRef.current = null
+      // Publicado: el respaldo local ya no aporta (best-effort, sin bloquear la salida).
+      void clearNutritionDraft(draftKey)
       onPublished()
       return
     }
@@ -382,7 +497,7 @@ export function QuickEditMode({
       return
     }
     setPublishError(res.message)
-  }, [baseline, userId, clientId, state, portionsState, portionGroupsById, carryOverSubs, todayIso, hasNutritionPro, onPublished])
+  }, [baseline, userId, clientId, state, portionsState, portionGroupsById, carryOverSubs, todayIso, hasNutritionPro, onPublished, draftKey])
 
   const handlePublishRequest = useCallback(() => {
     if (count === 0 || publishing) return
@@ -408,14 +523,14 @@ export function QuickEditMode({
 
   const handleDiscard = useCallback(() => {
     if (count === 0) {
-      onExit()
+      doExit()
       return
     }
     Alert.alert(QUICK_EDIT_COPY.discardTitle, discardConfirmBody(count), [
       { text: QUICK_EDIT_COPY.keepEditing, style: 'cancel' },
-      { text: QUICK_EDIT_COPY.discard, style: 'destructive', onPress: onExit },
+      { text: QUICK_EDIT_COPY.discard, style: 'destructive', onPress: doExit },
     ])
-  }, [count, onExit])
+  }, [count, doExit])
 
   if (!baseline) {
     return (
@@ -473,6 +588,35 @@ export function QuickEditMode({
               <Text className="min-w-0 flex-1 text-sm leading-5 text-text-body">
                 {QUICK_EDIT_COPY.flexibleHint}
               </Text>
+            </View>
+          ) : null}
+
+          {/* Respaldo local (F2): hay un borrador de una sesion anterior (mismo plan/version) sin
+              publicar. Espejo del banner web QuickEditPlanView.tsx:73-98 — tokens EVA DS (primary),
+              icono History, Restaurar (rehidrata ambos reducers) + X (descarta el borrador). */}
+          {pendingRestore ? (
+            <View className="flex-row items-center gap-3 rounded-card border border-primary/25 bg-primary/10 p-3">
+              <History color={theme.primary} size={16} />
+              <Text className="min-w-0 flex-1 text-xs font-semibold leading-5 text-primary">
+                {QUICK_EDIT_COPY.restoreBanner}
+              </Text>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={QUICK_EDIT_COPY.restoreCta}
+                onPress={restoreDraft}
+                className="h-8 items-center justify-center rounded-control bg-primary px-3"
+              >
+                <Text className="text-xs font-bold text-white">{QUICK_EDIT_COPY.restoreCta}</Text>
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={QUICK_EDIT_COPY.restoreDismiss}
+                onPress={dismissRestore}
+                hitSlop={8}
+                className="h-8 w-8 items-center justify-center rounded-control"
+              >
+                <X color={theme.primary} size={16} />
+              </Pressable>
             </View>
           ) : null}
 

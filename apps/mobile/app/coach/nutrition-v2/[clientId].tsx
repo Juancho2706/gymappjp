@@ -3,12 +3,14 @@ import { ActivityIndicator, Modal, Pressable, ScrollView, Text, TextInput, View 
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import NetInfo from '@react-native-community/netinfo'
+import AsyncStorage from '@react-native-async-storage/async-storage'
 import {
   AlertTriangle,
   Archive,
   ArrowLeft,
   Check,
   CheckCircle2,
+  History,
   Info,
   LockKeyhole,
   Search,
@@ -45,6 +47,7 @@ import {
   assignNutritionPlanToClients,
   getNutritionClientDetailV2,
   getNutritionCoachHubV2,
+  getNutritionConversionLinkV2,
   nutritionV2CoachScope,
   nutritionV2CoachScopeCacheKey,
 } from '../../../lib/nutrition-v2.api'
@@ -86,6 +89,35 @@ function todayInSantiago(): string {
     month: '2-digit',
     day: '2-digit',
   }).format(new Date())
+}
+
+// Prefijo de la clave de descarte del banner "plan convertido", por planId. Espejo del web
+// (`ConvertedPlanBanner.tsx:6`, `eva:nutrition-v2-converted-plan-banner-dismissed:{planId}`) para
+// que el descarte sea consistente en concepto (en RN persiste en AsyncStorage, no en localStorage).
+const CONVERTED_BANNER_DISMISS_PREFIX = 'eva:nutrition-v2-converted-plan-banner-dismissed:'
+
+/**
+ * Formatea un timestamp ISO (`nutrition_v2_conversion_links.converted_at`) a `dd-mm-yyyy` en
+ * America/Santiago. Espejo verbatim de la salida del web `formatDateDdMmYyyySantiago`
+ * (`apps/web/src/lib/date-utils.ts:197`): deriva los componentes con `Intl.DateTimeFormat`
+ * (DST-safe, mismo patrón que `todayInSantiago`), nunca con la TZ del host. Timestamp inválido →
+ * cadena vacía (el llamador oculta el banner). Nota: el nombre web dice "DdMmYyyy" y la salida usa
+ * separador "-"; se conserva la salida verbatim del web para paridad visual 1:1.
+ */
+function formatConvertedAtSantiago(isoTimestamp: string): string {
+  const instant = new Date(isoTimestamp)
+  if (Number.isNaN(instant.getTime())) return ''
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'America/Santiago',
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+    })
+      .formatToParts(instant)
+      .map((part) => [part.type, part.value]),
+  )
+  return `${parts.day}-${parts.month}-${parts.year}`
 }
 
 // Copy offline compartido con el quick-edit (delta 11): assign/archive fallan-cerrado sin red.
@@ -151,6 +183,10 @@ export default function CoachNutritionV2ClientScreen() {
   // Diálogos de acciones del coach (4B-08): asignar el plan a otros alumnos + archivar el vigente.
   const [assignOpen, setAssignOpen] = useState(false)
   const [archiveOpen, setArchiveOpen] = useState(false)
+  // Banner "plan convertido" V1->V2 (D-08): etiqueta de fecha del link de conversión del plan
+  // vigente. El link NO viaja en el read-model/API RN (igual que en web); se lee aparte RLS-scoped.
+  // null = sin link (o fail-soft) => sin banner, paridad con el `null` del web.
+  const [convertedAtLabel, setConvertedAtLabel] = useState<string | null>(null)
   const date = useMemo(todayInSantiago, [])
   // Fail-closed: only fetch once the workspace resolved AND collapses to a valid coach scope.
   const scope = useMemo(
@@ -241,6 +277,30 @@ export default function CoachNutritionV2ClientScreen() {
     return hasNutritionPro ? detail.recentDays : filterHistoryDaysToBaseWindow(detail.recentDays, date)
   }, [date, detail, hasNutritionPro])
   const showHistoryUpsell = shouldShowNutritionProHistoryBanner({ hasNutritionPro })
+
+  // Banner "plan convertido" (D-08): solo se consulta cuando hay plan vigente; si no existe link
+  // (o la lectura degrada), queda null y no se renderiza nada (paridad con el fail-soft del web).
+  // Read directo RLS-scoped fuera del hot-path (la data no llega en el read-model), tras hidratar
+  // el detalle. Se re-consulta si cambia el id del plan vigente (p.ej. tras publicar/archivar).
+  const activePlanId = detail?.plan.plan?.id ?? null
+  useEffect(() => {
+    if (!activePlanId) {
+      setConvertedAtLabel(null)
+      return
+    }
+    let active = true
+    void (async () => {
+      const link = await getNutritionConversionLinkV2({
+        db: supabase as unknown as NutritionV2WriteClient,
+        v2PlanId: activePlanId,
+      })
+      if (!active) return
+      setConvertedAtLabel(link ? formatConvertedAtSantiago(link.convertedAt) : null)
+    })()
+    return () => {
+      active = false
+    }
+  }, [activePlanId])
 
   if (!entitlements.ready || !workspaceReady || loading) {
     return (
@@ -356,6 +416,12 @@ export default function CoachNutritionV2ClientScreen() {
         </View>
       </View>
 
+      {/* Banner "plan convertido" V1->V2 (D-08): solo con plan vigente y link presente. Descartable
+          por planId (AsyncStorage). Espejo del web (banner primero, luego la fila de badges). */}
+      {detail.plan.plan && convertedAtLabel ? (
+        <ConvertedPlanBanner planId={detail.plan.plan.id} convertedAtLabel={convertedAtLabel} />
+      ) : null}
+
       {detail.plan.plan ? (
         <View className="flex-row flex-wrap items-center gap-2">
           <StrategyBadge strategy={(detail.today.plan ?? detail.plan.plan).strategy} />
@@ -389,6 +455,7 @@ export default function CoachNutritionV2ClientScreen() {
 
       {!detail.plan.plan ? (
         <NutritionStatePanel
+          illustration="sin-plan"
           title="Sin plan vigente"
           description="Crea y publica un plan para revisar objetivos y adherencia."
           action={
@@ -513,7 +580,9 @@ export default function CoachNutritionV2ClientScreen() {
         <Text className="mt-2 text-sm leading-5 text-text-body">
           {detail.privateNote?.note || 'Sin nota privada para la versión vigente.'}
         </Text>
-        <Text className="mt-2 text-xs text-text-muted">El alumno no recibe este contenido.</Text>
+        {/* D-07: palabra alineada a web ("informacion", no "contenido"), conservando la ortografía
+            correcta del proyecto (tildes). El typo web "informacion" queda como deuda RN-out. */}
+        <Text className="mt-2 text-xs text-text-muted">El alumno no recibe esta información.</Text>
       </NutritionCard>
 
       <NutritionCard>
@@ -647,6 +716,74 @@ export default function CoachNutritionV2ClientScreen() {
         />
       ) : null}
     </ScrollView>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Banner "plan convertido" V1->V2 (D-08 / SPEC AC8). Espejo RN del web ConvertedPlanBanner: aviso
+// discreto e informativo (Fase 1 sin botón "regenerar"; el re-sync es por CLI). Descartable
+// client-side, persistido por planId en AsyncStorage (equivalente RN del localStorage web; misma
+// convención de key). Progressive-enhancement: arranca oculto y se resuelve en el efecto para no
+// parpadear un aviso ya descartado. Tokens del DS, theme-aware — mismo tratamiento que el aviso
+// "hoy" de esta ficha. Copy verbatim del web.
+// ---------------------------------------------------------------------------
+
+function ConvertedPlanBanner({
+  planId,
+  convertedAtLabel,
+}: {
+  planId: string
+  convertedAtLabel: string
+}) {
+  const { theme } = useTheme()
+  const dismissKey = `${CONVERTED_BANNER_DISMISS_PREFIX}${planId}`
+  const [visible, setVisible] = useState(false)
+
+  useEffect(() => {
+    let active = true
+    void (async () => {
+      try {
+        const dismissed = await AsyncStorage.getItem(dismissKey)
+        if (active && dismissed !== '1') setVisible(true)
+      } catch {
+        if (active) setVisible(true)
+      }
+    })()
+    return () => {
+      active = false
+    }
+  }, [dismissKey])
+
+  const dismiss = useCallback(() => {
+    setVisible(false)
+    void AsyncStorage.setItem(dismissKey, '1').catch(() => {
+      /* almacenamiento no disponible: descarte solo en memoria */
+    })
+  }, [dismissKey])
+
+  if (!visible) return null
+
+  return (
+    <View
+      accessibilityRole="summary"
+      className="flex-row items-start gap-2 rounded-control border border-border-subtle bg-surface-sunken px-4 py-3"
+    >
+      <History color={theme.mutedForeground} size={16} />
+      <Text className="flex-1 text-sm leading-5 text-text-body">
+        Plan convertido del sistema anterior el{' '}
+        <Text className="font-semibold text-text-strong">{convertedAtLabel}</Text> — revísalo cuando
+        quieras.
+      </Text>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Descartar aviso"
+        onPress={dismiss}
+        hitSlop={8}
+        className="-mr-1 -mt-1 h-7 w-7 items-center justify-center rounded-control"
+      >
+        <X color={theme.mutedForeground} size={16} />
+      </Pressable>
+    </View>
   )
 }
 

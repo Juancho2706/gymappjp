@@ -146,6 +146,52 @@ export async function getNutritionClientDetailV2(input: {
   return NutritionClientDetailReadModelSchema.parse(raw)
 }
 
+// Interfaz mínima para leer `nutrition_v2_conversion_links` (espejo 1:1 del cast web
+// `ConversionLinkClient`, `apps/web/src/services/nutrition-v2-read.service.ts:154-168`). La tabla
+// aún NO está en `database.types.ts` — la crea la migración aditiva `20260717120000`, aplicada pero
+// con los types sin regenerar; casteamos el cliente RLS de la sesión a esta forma acotada (cero
+// `any` fuera de aquí). Retirar el cast cuando se regenere `database.types.ts` y el dominio V2 entre
+// a los tipos generados.
+type ConversionLinkClient = {
+  from: (table: string) => {
+    select: (columns: string) => {
+      eq: (
+        column: string,
+        value: string,
+      ) => {
+        maybeSingle: () => Promise<{
+          data: { converted_at: string } | null
+          error: { message: string; code?: string } | null
+        }>
+      }
+    }
+  }
+}
+
+/**
+ * Link de trazabilidad V1->V2 del plan vigente para el banner "plan convertido" de la ficha coach
+ * (D-08 / SPEC AC8). Espejo RN de `getNutritionConversionLinkForWeb`
+ * (`nutrition-v2-read.service.ts:180-201`): lee DIRECTO con el cliente RLS de la sesión (mismo
+ * camino autoritativo que las escrituras 4B-08); la RLS de `nutrition_v2_conversion_links` ya scopea
+ * la fila al coach dueño (`coach_id = auth.uid()`) y el filtro por `v2_plan_id` acota a lo sumo un
+ * link (1 plan V1 -> 1 plan V2). No-bloqueante por diseño: si la tabla no existe (migración sin
+ * regen de types) o el read falla, degrada a `null` (sin banner) — el aviso es informativo, nunca
+ * crítico para ver la ficha. Sin telemetría cliente en RN (el web loguea server-side).
+ */
+export async function getNutritionConversionLinkV2(input: {
+  db: NutritionV2WriteClient
+  v2PlanId: string
+}): Promise<{ convertedAt: string } | null> {
+  const client = input.db as unknown as ConversionLinkClient
+  const { data, error } = await client
+    .from('nutrition_v2_conversion_links')
+    .select('converted_at')
+    .eq('v2_plan_id', input.v2PlanId)
+    .maybeSingle()
+  if (error) return null
+  return data ? { convertedAt: data.converted_at } : null
+}
+
 type NutritionMutationResponse =
   | { ok: true; id: string; action: 'record' }
   | { ok: true; id: string; action: 'correct' }

@@ -245,3 +245,48 @@ red → `error-amable` "No se pudo cargar la cola"; un coach ajeno al código re
 (RLS). Captura web móvil (tab Curación del Centro V2) vs RN: comparar banner, fila, hoja, ambos modos
 y estados. Gates: `pnpm --filter @eva/mobile exec tsc --noEmit`, lint, `check:tokens`, y el test de
 `nutrition-v2-curation.api` (`formatRelativeDate`: Hoy/Ayer/Hace N dias).
+
+## Cierre (2026-07-22)
+
+Entregado 1:1 con la referencia web. Archivos nuevos (propiedad de esta unidad):
+
+- **`apps/mobile/lib/nutrition-v2-curation.api.ts`** (nuevo): `listMissingFoodCodesV2`,
+  `resolveMissingFoodCodeV2`, `createCoachFoodForCurationV2` + `formatRelativeDate` puro. Persistencia
+  DIRECTA por supabase-js (PostgREST) con el cliente inyectado (`db`), espejo 1:1 de
+  `curation.actions.ts`: mismo `.select().is().order().range(from, from+20)` con `hasMore/nextOffset`;
+  `.update({resolved_food_id, resolved_at}).eq().is('resolved_at', null)`; y el create NO atómico
+  COMPLETO — idempotencia best-effort (ILIKE con `%`/`_` escapados + match por nombre normalizado
+  antes de insertar), insert con los MISMOS campos (`serving_size:100`, `serving_unit:unit`,
+  `is_liquid: unit==='ml'`, `category:'otro'`, `country_code:'CL'`, `catalog_source:'coach'`,
+  `verification_status:'coach_verified'`, `coach_id:userId`, `org_id:null`), y compensación best-effort
+  (borra el food SOLO si lo creamos en esta llamada). `42501 → SCOPE_DENIED` en cada op. Guardas de
+  bounds espejo del Zod web (name 1..180, brand ≤180 nullable, unit g|ml, calorias 0..2000, macros
+  0..500).
+- **`apps/mobile/app/coach/nutrition-v2/curation.tsx`** (nuevo): pantalla con banner "Codigos por
+  revisar" (tono `warning` del DS), `FlashList` paginado por offset ("Ver mas codigos"/"Cargando…"),
+  tres estados (loading spinner card, error `error-amable` "No se pudo cargar la cola", vacío
+  `catalogo-vacio` "Sin codigos por revisar") + gate cliente de superficie fail-closed (igual que el
+  hub). Hoja de resolución sobre `Sheet` (`nativeModal` bottom) con segmented "Buscar existente" /
+  "Crear nuevo", pie verbatim, y feedback inline (no toast) conservando "{barcode} vinculado con
+  {nombre}". Picker reusa `searchFoodCatalogV2({surface:'coach'})` con debounce 400 ms / MIN 2,
+  placeholder "Buscar el producto exacto…", `AbortController` + guard `latestQuery`, `MacroChipRow`
+  `per = / {servingSize} {servingUnit}`. Form "Crear nuevo" con `keyboardType="decimal-pad"` +
+  segmented g|ml. Tokens EVA DS, `useTheme`; blanco activo vía `theme.primaryForeground`/`text-white`
+  (sancionado, white-label safe).
+- **CONTRATO 4B-17:** además del default export de la ruta (`CurationRoute`), se exporta el cuerpo
+  embebible **`export function CurationQueueScreen({ embedded }: { embedded?: boolean })`** — firma
+  EXACTA del contrato §Frontera de u17. `embedded=true` omite `SafeAreaView` + `NutritionHeader onBack`
+  (el hub aporta el chrome); la ruta standalone se conserva para deep-links.
+- **`tests/mobile-nutrition-v2-curation.test.ts`** (nuevo): 20 casos — `formatRelativeDate`
+  (Hoy/Ayer/Hace N dias/futuro/invalida), list (map snake→camel, hasMore/nextOffset con 21 filas,
+  42501→SCOPE_DENIED, otros→CURATION_READ_FAILED), resolve (escribe resolved_food_id, INVALID_PAYLOAD,
+  SCOPE_DENIED) y create (campos coach-scoped, is_liquid ml, **idempotencia** reusa por nombre,
+  **compensación** borra el food recién creado si el link falla y NO borra si reusó preexistente,
+  42501 insert, bounds/nombre vacío → INVALID_PAYLOAD) con un mock del cliente supabase-js.
+
+`index.tsx` **intacto** (frontera con 4B-05/4B-17; el cableado de la tab lo hace 4B-17). NO se creó
+endpoint REST ni RPC (camino directo supabase-js sancionado).
+
+Gates propios verdes: `tsc --noEmit` (0 errores), `vitest` (20/20), `eslint` (0), `check:tokens` OK.
+Nota: en el worktree coexisten cambios de coders paralelos (`builder/[clientId].tsx`, `QuickEditMode`,
+etc.); NO los toqué. El `tsc` del módulo corrió limpio sobre el árbol completo al momento del cierre.

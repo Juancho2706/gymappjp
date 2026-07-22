@@ -188,3 +188,62 @@ owner; sin él, no se renderiza (paridad con el fail-soft `null` de web). Compar
 (ficha del Centro V2) vs RN: empty-state con ilustración, nota profesional, upsell e historial.
 Gates: `pnpm --filter @eva/mobile exec tsc --noEmit`, lint, `check:tokens`,
 `check:nutrition-v2-boundaries`.
+
+## Cierre (2026-07-22)
+
+Implementado en `apps/mobile/app/coach/nutrition-v2/[clientId].tsx` y `apps/mobile/lib/nutrition-v2.api.ts`
+(solo la lectura del conversion link). `lib/nutrition-v2-pro.ts` quedó **intacto** (deuda 4B-16). Las
+acciones 4B-08 (asignar/archivar) no se tocaron.
+
+**Accionables portados:**
+- **D-07 (copy):** la 2ª línea de la card "Nota profesional" ahora dice
+  "El alumno no recibe esta **información**." — palabra alineada a web (`informacion`, no `contenido`)
+  conservando la tilde correcta del proyecto. El typo web `informacion`/`version` queda como deuda
+  RN-out (no se copió el typo). (`[clientId].tsx` card "Nota profesional".)
+- **D-09 (ilustración):** el `NutritionStatePanel` del empty-state "Sin plan vigente" recibe
+  `illustration="sin-plan"` (asset ya en RN, miembro válido de `NutritionIllustration`) → 1:1 con web.
+- **D-08 (banner "plan convertido", INCLUIDO por el juez):** portado el read RLS-scoped espejo de
+  `getNutritionConversionLinkForWeb` como `getNutritionConversionLinkV2` en `nutrition-v2.api.ts`,
+  con el **MISMO cast manual** que la web (`ConversionLinkClient`, ver
+  `apps/web/src/services/nutrition-v2-read.service.ts:154-168`) porque la tabla
+  `nutrition_v2_conversion_links` (migración `20260717120000`) aún no está en `database.types.ts`;
+  el cast se documenta con un TODO de retiro al regen de types. La lectura es directa con el cliente
+  RLS de la sesión (`supabase as unknown as NutritionV2WriteClient`, mismo camino autoritativo que
+  4B-08), fail-soft a `null` (sin banner) si la tabla no existe o el read falla — paridad con el web.
+  Se lee en un `useEffect` fuera del hot-path, keyed por `activePlanId` (re-consulta tras
+  publicar/archivar). El banner `ConvertedPlanBanner` (componente local) es descartable por planId
+  vía **AsyncStorage** (equivalente RN del `localStorage` web; misma convención de key
+  `eva:nutrition-v2-converted-plan-banner-dismissed:{planId}`), progressive-enhancement (arranca
+  oculto), icono `History`, copy **verbatim** del web, tokens del DS theme-aware. Se renderiza antes
+  de la fila de badges (mismo orden que web).
+  - **Fecha:** `formatConvertedAtSantiago` (función pura local) replica **verbatim la salida** del web
+    `formatDateDdMmYyyySantiago` → `dd-mm-yyyy` en America/Santiago, DST-safe vía `Intl.DateTimeFormat`.
+    Decisión: el "DD/MM/YYYY" del juez/spec describe el **orden** día/mes/año; se implementó como
+    `dd-mm-yyyy` (separador "-") para paridad visual 1:1 con el web (la spec ancla explícitamente
+    "equivalente a `formatDateDdMmYyyySantiago`", cuya salida usa "-"). No se creó test unitario: RN
+    no está en el `include` del `vitest.config.ts` raíz (no se colectaría) y la lógica es un espejo
+    directo de la función web ya cubierta.
+
+**Sancionados (documentados, SIN cambio de código):**
+- **D-01** — Jerarquía de la CTA de edición: RN no tiene el slot `actions` del header; "Editar plan"
+  vive contextual en la card "Plan vigente" (primario) y "Rehacer con el asistente" al fondo del
+  scroll con `tone="neutral"` (secundario). Copy y prioridad a paridad. Adaptación nativa legítima.
+- **D-02** — Nota profesional aside→card: el orden relativo (nota ANTES del historial) ya coincide con
+  web; la conversión aside→card en columna única es adaptación nativa (RN sin rail lateral).
+- **D-05** — Historial lista (RN) vs grid (web) + kcal-mono-a-la-derecha: **SANCIONADO el patrón
+  nativo** por resolución del juez; NO se recompuso la línea. Header RN "Últimos días" (tildes
+  correctas; el web es el typo). El RN-extra benigno "Sin registros en la ventana disponible." se
+  conserva (decisión owner 4 / INVENTARIO §4).
+- **D-06** — Upsell Pro: la ruta RN `/coach/modules` es el equivalente nativo consistente (comprar el
+  addon `nutrition_exchanges`); NO se cambia a `/coach/subscription`. El copy con tildes
+  (`NUTRITION_PRO_HISTORY_BANNER_LABEL`) es deuda de consolidación 4B-16 → `lib/nutrition-v2-pro.ts`
+  **NO se tocó**.
+
+**Gates (verdes):** `pnpm --filter @eva/mobile exec tsc --noEmit` (0 errores),
+`pnpm exec eslint` sobre los 2 archivos propios (0 errores), `pnpm check:nutrition-v2-boundaries`
+(161 archivos OK), `pnpm check:tokens` (86 tokens OK).
+
+**Nota worktree compartido:** el `git diff` del worktree incluye archivos AJENOS de coders paralelos
+(`quick-edit/QuickEditMode.tsx`, `quick-edit/microcopy.ts`, `quick-edit/portions-state.ts`,
+`lib/nutrition-v2-builder.ts`, `lib/nutrition-v2-quick-edit.ts`) — NO son míos, no se tocaron. Mis
+únicos archivos: `[clientId].tsx` y `nutrition-v2.api.ts`.

@@ -281,3 +281,71 @@ Un plan sin porciones (o flexible) publica exactamente como hoy — sin filas nu
 byte-idéntico. F-02 (reemplazos) sigue funcionando sin cambios. Capturas web móvil (SlotEditor +
 DeriveCard + ReviewSection) vs RN: sección, card y chips idénticos en copy. Gates:
 `pnpm --filter @eva/mobile exec tsc --noEmit`, lint, `check:tokens`, y el test del reducer/derivación.
+
+## Cierre (2026-07-22)
+
+Implementado 1:1 con la spec. Entregables:
+
+1. **`apps/mobile/lib/nutrition-v2-builder-portions.ts` (NUEVO, puro)** — port de
+   `portions-state.ts:28-228`: `PortionTargetDraft`/`PortionsBySlot` (SIN notes),
+   `PORTIONS_STEP/MIN/MAX`, `snapPortions`, `formatPortionsEs`, `esDecimal`,
+   `slotPortionTargets`, `addPortionGroup`/`removePortionGroup`/`setPortionValue`/`stepPortionValue`,
+   `hasAnyPortions`, `sortGroupsForPicker`, `derivePortionTotals`/`slotPortionTotals`/`combineSubtotals`
+   (sobre `@eva/nutrition-engine`). **SIN** `parsePortionsInput`/`commitValue`/`attachPortionsAndValidate`
+   (afirmación 7: stepper de botones; la inyección al draft vive en `assembleDraft`, no en una función
+   aparte). **Añadido `buildFrozenPortionGroups(groups): Map<id, QuickEditPortionGroup>`** — puente que
+   congela el snapshot por valor DESDE el catálogo `ExchangeGroup[]` (ENRIQUECE `composed_of` resolviendo
+   cada base por código, system-priority; OMITE el grupo si una base no resuelve → el publish corta con
+   `EXCHANGE_GROUP_UNRESOLVED`, jamás snapshot NULL). Import de SOLO tipos desde
+   `./nutrition-v2-quick-edit` (se borra en runtime).
+
+2. **`apps/mobile/lib/nutrition-v2-builder.ts`** — `AssembleOptions.portionsBySlot?` nuevo;
+   `assembleDraft` cuelga `exchangeTargets` condicional por slot (franja sin porciones = sin la clave =
+   byte-idéntico). `persistAndPublishDraft` recibe `portionGroups?` y, tras items/reemplazos F-02, inserta
+   `nutrition_slot_exchange_targets_v2` gateado por `slot.exchangeTargets?.length` **reusando
+   `buildPortionTargetInsertRows` del quick-edit** (no duplicado; import de `./nutrition-v2-quick-edit`) con
+   el dict de `buildFrozenPortionGroups`. `publishDraftRN` threadea `portionGroups`. Un draft sin porciones
+   no toca la tabla.
+
+3. **`apps/mobile/app/coach/nutrition-v2/builder/[clientId].tsx`** — hook `usePortionsBuilder`
+   (bySlot + catálogo completo con carga perezosa/error/reintento vía `fetchCoachExchangeGroups`,
+   coach-scoped por RLS, sin server action), instanciado en la pantalla y threadeado a `TargetsStep`,
+   `ConstructionStep`→`SlotEditor` y `ReviewStep`. Sección "Porciones a elección" en `SlotEditor`
+   (patrón del quick-edit **re-implementado sin notes** — `GroupDot`/`PortionsStepper`/picker no están
+   exportados — con picker del catálogo COMPLETO); subtotal de franja combinado + nota
+   `subtotalPortionsNote`; `Total del día` combinado; card "Usar como objetivos" en `TargetsStep`
+   (`SET_TARGET` ×4, editables); chips read-only + banner referencial en `ReviewStep`. Copys literales de
+   `PORTIONS_COPY.builder`. `handlePublish` pasa `portionsBySlot` + `portionGroups`.
+
+4. **`tests/mobile-nutrition-v2-builder-portions.test.ts` (NUEVO)** — 17 tests: snap/paso-rango,
+   operaciones (add 1×1, no-op duplicado, remove, step ±0,5 con clamp, set), `hasAnyPortions`/
+   `sortGroupsForPicker`, derivación (`slotPortionTotals` suma + null; `combineSubtotals` suma + misma
+   referencia; `derivePortionTotals` expande LEG), `assembleDraft` (exchangeTargets solo con ≥1; ausente
+   con 0/franja fantasma → byte-idéntico; valida contra el schema), `buildFrozenPortionGroups`
+   (simple/compuesto/omisión de base huérfana), y `persistAndPublishDraft` (inserta con snapshot congelado;
+   sin porciones no toca la tabla; grupo no resuelto → `EXCHANGE_GROUP_UNRESOLVED`).
+
+### Divergencias sancionadas
+- **Stepper de botones ±0,5** (afirmación 7, M4): no se porta el input de texto libre del web;
+  `parsePortionsInput`/`commitValue` quedan fuera de alcance (con clamp el valor es siempre múltiplo válido).
+- **Ciclo de import builder ↔ quick-edit**: `nutrition-v2-builder.ts` importa `buildPortionTargetInsertRows`
+  de `nutrition-v2-quick-edit.ts` (ya importa de vuelta desde builder). Es un ciclo de funciones invocadas
+  en runtime (no en init) → ESM lo resuelve; sancionado por la afirmación 8 ("reusar el export existente").
+  Los AMBOS archivos viven en `lib/`, no en `components/quick-edit/**` (territorio vetado).
+
+### F-02 (4B-10) intocado
+`git log -1` del archivo = `8f8161cb` (F-02 reemplazos builder). El diff de `builder/[clientId].tsx` no
+añade ni quita ninguna línea de `SubstitutionsField`/`substitutions` (verificado con grep); la sección de
+porciones es estado y UI HERMANOS, disjuntos de los reemplazos item-level.
+
+### Gates (worktree)
+- `pnpm --filter @eva/mobile exec tsc --noEmit` → **0 errores**.
+- `pnpm vitest run` de los tests nuevo + builder existente → **46/46**; quick-edit/portions relacionados → **45/45**.
+- `pnpm exec eslint` de mis archivos → **0 problemas nuevos** (los 4 preexistentes de `builder/[clientId].tsx`
+  —`Check`/`ChevronLeft`/`ChevronRight` sin usar + `useMemo(todayInSantiago)`— están sancionados).
+- `pnpm check:tokens` → **OK** (86 tokens).
+
+### Pendiente (fuera de alcance, declarado)
+- BUILD nativa + QA en device (CEO): verificar el picker (Sheet nativeModal), el stepper y la publicación
+  de `nutrition_slot_exchange_targets_v2` con datos reales.
+- Editor de reemplazos del coach en el builder móvil (F-02 P3) sigue diferido (unidad aparte).

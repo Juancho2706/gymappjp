@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ActivityIndicator, Linking, Pressable, Text, TextInput, View } from 'react-native'
-import { SafeAreaView } from 'react-native-safe-area-context'
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import { FlashList } from '@shopify/flash-list'
 import { Search, X } from 'lucide-react-native'
@@ -19,6 +19,7 @@ import {
   type FoodVerificationTone,
 } from '../../../lib/food-detail'
 import { FoodDetailSheet } from '../../../components/coach/FoodDetailSheet'
+import { COACH_TABBAR_CLEARANCE } from '../../../components/coach/CoachMobileChrome'
 
 /**
  * Catálogo V2 del coach (RN, read-only) — port de
@@ -30,8 +31,10 @@ import { FoodDetailSheet } from '../../../components/coach/FoodDetailSheet'
  * gate lo aplica el servidor en cada búsqueda (`/api/mobile/nutrition-v2/catalog`
  * re-verifica flag + scope); la UI nunca autoriza.
  *
- * Pantalla propia (no tab): el cableado del tablist del hub (4B-05) lo resuelve el juez
- * al integrar; hoy es alcanzable por ruta directa.
+ * Doble uso: ruta standalone (deep-links, con su propio `SafeAreaView` + `NutritionHeader
+ * onBack`) y cuerpo embebible bajo el tablist del hub (4B-17). Con `embedded`, el shell del
+ * hub aporta safe-area y chrome, así que omitimos ambos y sumamos el clearance de la tab-bar
+ * del coach al pie de la lista; el buscador+lista+ficha quedan intactos en ambos modos.
  */
 
 const MIN_QUERY = 2
@@ -55,9 +58,10 @@ function fmt0(value: number): string {
   return String(Math.round(value))
 }
 
-export default function CoachNutritionCatalogScreen() {
+export default function CoachNutritionCatalogScreen({ embedded = false }: { embedded?: boolean }) {
   const router = useRouter()
   const { theme } = useTheme()
+  const insets = useSafeAreaInsets()
 
   const [query, setQuery] = useState('')
   const [debounced, setDebounced] = useState('')
@@ -228,10 +232,10 @@ export default function CoachNutritionCatalogScreen() {
     )
   }
 
-  return (
-    <SafeAreaView edges={['top', 'bottom']} className="flex-1 bg-surface-app">
+  const body = (
+    <>
       <View className="gap-4 px-4 pt-4">
-        <NutritionHeader title="Alimentos" onBack={() => router.back()} />
+        {embedded ? null : <NutritionHeader title="Alimentos" onBack={() => router.back()} />}
         <View className="flex-row items-center gap-2 rounded-control border border-border-default bg-surface-card px-3">
           <Search color={theme.mutedForeground} size={16} />
           <TextInput
@@ -266,7 +270,11 @@ export default function CoachNutritionCatalogScreen() {
           keyExtractor={(item) => item.id}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"
-          contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 4, paddingBottom: 40 }}
+          contentContainerStyle={{
+            paddingHorizontal: 16,
+            paddingTop: 4,
+            paddingBottom: embedded ? insets.bottom + COACH_TABBAR_CLEARANCE : 40,
+          }}
           ItemSeparatorComponent={() => <View className="h-2" />}
           ListEmptyComponent={renderEmpty()}
           ListFooterComponent={renderFooter()}
@@ -327,6 +335,15 @@ export default function CoachNutritionCatalogScreen() {
       </View>
 
       <FoodDetailSheet open={detailOpen} onClose={() => setDetailOpen(false)} item={detailItem} />
+    </>
+  )
+
+  // Embebido bajo el tablist del hub: sin SafeAreaView propio (el shell lo aporta).
+  if (embedded) return <View className="flex-1">{body}</View>
+
+  return (
+    <SafeAreaView edges={['top', 'bottom']} className="flex-1 bg-surface-app">
+      {body}
     </SafeAreaView>
   )
 }

@@ -189,3 +189,46 @@ salida (Alert al back de hardware con cambios) sigue funcionando igual. Captura 
 quick-edit) vs RN: comparar copy, disposición y comportamiento. Gates: `pnpm --filter @eva/mobile exec tsc
 --noEmit`, lint, `check:tokens`, y el test del store `nutrition-coach-draft-store` RN (read/write/clear/sweep,
 TTL, tope de tamaño, keys con clientId).
+
+## Cierre (2026-07-22)
+
+Entregado 1:1 con la spec. Archivos:
+
+- **NUEVO** `apps/mobile/lib/nutrition-coach-draft-store.ts`: port async del store web. Ambos prefijos
+  (`eva:nutrition-qe-draft:` / `eva:nutrition-builder-draft:`) y ambas keys (`quickEditDraftKey(clientId)`,
+  `builderDraftKey(clientId, planId)` con `?? 'new'`) presentes para que 4B-13 reuse la primitiva sin re-crearla.
+  Envelope `{ v: 1, savedAt, payload }`, `read`/`write`/`clear`/`sweep` `Promise`-based best-effort try/catch,
+  `NUTRITION_DRAFT_MAX_AGE_MS = 7d`, tope `450_000` chars. `sweep` con `getAllKeys` + filtro por prefijo (equivalente
+  RN del recorrido `localStorage.length` de web). Key SIEMPRE con `clientId` (gotcha PR #148).
+- **NUEVO** `tests/mobile-nutrition-coach-draft-store.test.ts` (14 casos, verdes): keys con clientId + prefijos
+  disjuntos, round-trip del envelope con **AMBOS reducers** (`state` Y `portions` — la trampa), null ante
+  ausencia/basura/`v!==1`/payload no-objeto, TTL 7d (límite vencido + dentro), tope de tamaño (no escribe),
+  clear, sweep (barre qe+builder vencidos/basura, conserva vivos, ignora keys ajenas), degradación best-effort
+  cuando AsyncStorage lanza. Mismo patrón de `vi.doMock` por path resuelto que `mobile-nutrition-v2-cache.test.ts`.
+- `apps/mobile/lib/nutrition-v2-quick-edit.ts`: acción `RESTORE_DRAFT` en `QuickEditAction` + `quickEditReducer`
+  con guarda `Array.isArray(action.state?.variants) ? action.state : state` (verbatim de web).
+- `apps/mobile/components/nutrition-v2/quick-edit/portions-state.ts`: acción `RESTORE_PORTIONS` (aditiva) que
+  reemplaza toda la capa de porciones con guarda defensiva (`typeof state.bySlot === 'object'`). Es el par
+  obligado del `RESTORE_DRAFT` porque en RN las porciones viven en un reducer SEPARADO (afirmación 4 / trampa).
+- `apps/mobile/components/nutrition-v2/quick-edit/microcopy.ts`: `restoreBanner`/`restoreCta`/`restoreDismiss`
+  verbatim de web (aditivo).
+- `apps/mobile/components/nutrition-v2/quick-edit/QuickEditMode.tsx`: (a) efecto de montar →
+  `sweep` + `read` + validación `planId`/`baseVersionId` contra `baseline` → `pendingRestore` (con `active`+
+  `mountedRef` para el timing async, sin flash); (b) autosave debounced 1500 ms con guard de primer render,
+  escribe payload `{ clientId, planId, baseVersionId, state, portions }` si `count>0` else `clear`; (c) banner
+  Restaurar al tope del contenido (antes de las variantes) con tokens EVA DS (`bg-primary/10`,
+  `border-primary/25`, `text-primary`, `bg-primary`, `text-white`) e íconos `History`/`X`; (d) `restoreDraft`
+  (rehidrata AMBOS reducers) / `dismissRestore` (clear + baja banner); (e) `clear` en publish OK y `doExit` con
+  guard `count>0 || pendingRestore===null` cableado a `requestExit` y `handleDiscard`. Guard de salida
+  (`Alert`+`BackHandler`) INTACTO (afirmación 9).
+
+Gates verdes: `tsc --noEmit` (exit 0, módulo mobile completo), `eslint` (0 sobre mis 6 archivos), `vitest`
+(14/14), `check:tokens` (86 tokens OK).
+
+**Nota de frontera para el juez:** la PROPIEDAD literal del encargo enumera QuickEditMode.tsx, nutrition-v2-quick-edit.ts,
+el store nuevo y el test; NO lista `portions-state.ts` ni `microcopy.ts`. Los edité igual porque la RESOLUCIÓN DEL
+JUEZ (trampa vinculante: rehidratar AMBOS reducers) es IMPOSIBLE sin una acción de restore en `portions-state.ts`,
+y el banner exige los 3 copys. Ambos edits son ESTRICTAMENTE ADITIVOS (nueva acción + case, 3 claves nuevas), sin
+tocar nada preexistente, para no pisar trabajo paralelo. Otros archivos del worktree (`[clientId].tsx`,
+`builder/[clientId].tsx`, `nutrition-v2-builder.ts`, `nutrition-v2.api.ts`, `nutrition-v2-builder-portions.ts`,
+`nutrition-v2-curation.api.ts`, `u09-detalle-copy.md`) están modificados por coders paralelos — no los toqué.

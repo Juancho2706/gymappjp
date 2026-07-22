@@ -12,7 +12,7 @@ import {
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router'
-import { Check, ChevronLeft, ChevronRight, Lock, Plus, Repeat, Search, Trash2, X } from 'lucide-react-native'
+import { Check, ChevronLeft, ChevronRight, Lock, Minus, Plus, Repeat, Search, Sparkles, Trash2, X } from 'lucide-react-native'
 import {
   BuilderStepList,
   FoodThumbnail,
@@ -32,8 +32,33 @@ import {
   type FoodCatalogItem,
   type NutritionStrategy,
 } from '@eva/nutrition-v2'
+import {
+  exchangeGroupColor,
+  hasUnconfirmedMacros,
+  portionsSummaryLabel,
+  type ExchangeGroup,
+} from '@eva/nutrition-engine'
+import { Sheet } from '../../../../components/Sheet'
 import { useTheme } from '../../../../context/ThemeContext'
 import { isEnabled } from '../../../../lib/flags'
+import { fetchCoachExchangeGroups } from '../../../../lib/nutrition-exchanges.coach'
+import { PORTIONS_COPY } from '../../../../lib/nutrition-portions-copy'
+import {
+  PORTIONS_MAX,
+  PORTIONS_MIN,
+  addPortionGroup,
+  combineSubtotals,
+  derivePortionTotals,
+  esDecimal,
+  formatPortionsEs,
+  hasAnyPortions,
+  removePortionGroup,
+  slotPortionTargets,
+  slotPortionTotals,
+  sortGroupsForPicker,
+  stepPortionValue,
+  type PortionsBySlot,
+} from '../../../../lib/nutrition-v2-builder-portions'
 import { useEntitlements, useNutritionV2CoachFlagForClient } from '../../../../lib/entitlements'
 import { useWorkspace } from '../../../../lib/workspace'
 import { nutritionV2CoachScope } from '../../../../lib/nutrition-v2.api'
@@ -112,6 +137,82 @@ function first(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : value
 }
 
+// ---------------------------------------------------------------------------
+// Controlador de porciones a elección (4B-11) — espejo RN de `usePortionsBuilder` web.
+// Estado hermano del reducer del wizard: el mapa slot→targets + el catálogo COMPLETO del
+// coach (system + propios) con carga perezosa/error/reintento. Se instancia una vez en la
+// pantalla y baja por props a Objetivos (card de derivar), Construcción (sección por franja)
+// y Revisión (chips). Sin `commitValue` (stepper de botones, afirmación 7) ni server action:
+// la lectura es coach-scoped por RLS (`fetchCoachExchangeGroups`).
+// ---------------------------------------------------------------------------
+
+interface PortionsController {
+  bySlot: PortionsBySlot
+  groups: ExchangeGroup[] | null
+  groupsLoading: boolean
+  groupsError: string | null
+  /** Carga el catálogo si aún no está (el picker la dispara al abrirse). */
+  ensureGroupsLoaded: () => void
+  /** Reintento explícito tras un error de carga. */
+  retryGroups: () => void
+  addGroup: (slotKey: string, exchangeGroupId: string) => void
+  removeGroup: (slotKey: string, exchangeGroupId: string) => void
+  step: (slotKey: string, exchangeGroupId: string, direction: 1 | -1) => void
+}
+
+function usePortionsBuilder(): PortionsController {
+  const [bySlot, setBySlot] = useState<PortionsBySlot>({})
+  const [groups, setGroups] = useState<ExchangeGroup[] | null>(null)
+  const [groupsLoading, setGroupsLoading] = useState(false)
+  const [groupsError, setGroupsError] = useState<string | null>(null)
+  const loadingRef = useRef(false)
+  const mountedRef = useRef(true)
+
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+    }
+  }, [])
+
+  const load = useCallback(async () => {
+    if (loadingRef.current) return
+    loadingRef.current = true
+    setGroupsLoading(true)
+    setGroupsError(null)
+    try {
+      const res = await fetchCoachExchangeGroups()
+      if (mountedRef.current) setGroups(sortGroupsForPicker(res))
+    } catch {
+      if (mountedRef.current) setGroupsError(PORTIONS_COPY.builder.pickerError)
+    } finally {
+      loadingRef.current = false
+      if (mountedRef.current) setGroupsLoading(false)
+    }
+  }, [])
+
+  const ensureGroupsLoaded = useCallback(() => {
+    if (groups == null && !loadingRef.current) void load()
+  }, [groups, load])
+
+  const retryGroups = useCallback(() => void load(), [load])
+  const addGroup = useCallback(
+    (slotKey: string, id: string) => setBySlot((prev) => addPortionGroup(prev, slotKey, id)),
+    [],
+  )
+  const removeGroup = useCallback(
+    (slotKey: string, id: string) => setBySlot((prev) => removePortionGroup(prev, slotKey, id)),
+    [],
+  )
+  const step = useCallback(
+    (slotKey: string, id: string, direction: 1 | -1) =>
+      setBySlot((prev) => stepPortionValue(prev, slotKey, id, direction)),
+    [],
+  )
+
+  return { bySlot, groups, groupsLoading, groupsError, ensureGroupsLoaded, retryGroups, addGroup, removeGroup, step }
+}
+
 export default function CoachNutritionV2BuilderScreen() {
   const router = useRouter()
   const params = useLocalSearchParams<{ clientId: string; planId?: string; versionNumber?: string; clientName?: string }>()
@@ -136,6 +237,8 @@ export default function CoachNutritionV2BuilderScreen() {
   const hasNutritionPro = entitlements.hasModule(NUTRITION_PRO_MODULE_KEY)
 
   const [state, dispatch] = useReducer(builderReducer, today, createEmptyBuilderState)
+  // Controlador de porciones a elección (4B-11): estado hermano del wizard, threadeado por el árbol.
+  const portions = usePortionsBuilder()
   const [showErrors, setShowErrors] = useState(false)
   const [publishing, setPublishing] = useState(false)
   const [publishError, setPublishError] = useState<string | null>(null)
@@ -205,7 +308,7 @@ export default function CoachNutritionV2BuilderScreen() {
       setDateConflict(false)
       let draft
       try {
-        draft = assembleAndValidateDraft(state, { clientId, planId })
+        draft = assembleAndValidateDraft(state, { clientId, planId, portionsBySlot: portions.bySlot })
       } catch {
         setShowErrors(true)
         setPublishError('El plan tiene datos incompletos. Revisa los pasos marcados y vuelve a intentar.')
@@ -222,6 +325,8 @@ export default function CoachNutritionV2BuilderScreen() {
         idempotencyKey,
         effectiveFrom: effectiveFromOverride ?? state.effectiveFrom ?? today,
         hasNutritionPro,
+        // Catálogo para congelar el snapshot de las porciones (4B-11); sin porciones es inocuo.
+        portionGroups: portions.groups ?? undefined,
       })
       if (!mountedRef.current) return
       setPublishing(false)
@@ -240,7 +345,7 @@ export default function CoachNutritionV2BuilderScreen() {
       }
       setPublishError(res.error)
     },
-    [userId, clientId, planId, state, today, hasNutritionPro, router],
+    [userId, clientId, planId, state, today, hasNutritionPro, router, portions.bySlot, portions.groups],
   )
 
   // "Empezar manana": mueve la vigencia al dia siguiente y reintenta la publicacion. El plan
@@ -331,13 +436,16 @@ export default function CoachNutritionV2BuilderScreen() {
           {state.step === 0 ? (
             <StrategyStep state={state} onPick={handlePickStrategy} hasNutritionPro={hasNutritionPro} error={errors.strategy} />
           ) : null}
-          {state.step === 1 ? <TargetsStep state={state} dispatch={dispatch} errors={errors} /> : null}
+          {state.step === 1 ? (
+            <TargetsStep state={state} dispatch={dispatch} errors={errors} portions={portions} />
+          ) : null}
           {state.step === 2 ? (
             <ConstructionStep
               state={state}
               dispatch={dispatch}
               errors={errors}
               onSearch={(target) => setSearchTarget(target)}
+              portions={portions}
             />
           ) : null}
           {state.step === 3 ? (
@@ -347,6 +455,7 @@ export default function CoachNutritionV2BuilderScreen() {
               dateConflict={dateConflict}
               publishing={publishing}
               onStartTomorrow={handleStartTomorrow}
+              portions={portions}
             />
           ) : null}
         </ScrollView>
@@ -485,13 +594,16 @@ function TargetsStep({
   state,
   dispatch,
   errors,
+  portions,
 }: {
   state: BuilderState
   dispatch: React.Dispatch<import('../../../../lib/nutrition-v2-builder').BuilderAction>
   errors: Record<string, string>
+  portions: PortionsController
 }) {
   return (
     <View className="gap-4">
+      <PortionsDeriveCard state={state} portions={portions} dispatch={dispatch} />
       <LabeledInput
         label="Nombre del plan"
         value={state.planName}
@@ -554,6 +666,357 @@ function TargetsStep({
         placeholder="YYYY-MM-DD"
         hint="Formato AAAA-MM-DD. Debe ser posterior a la versión vigente."
       />
+    </View>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Porciones a elección (4B-11) — sección por franja, card de derivar, chips de revisión.
+// Patrón visual del quick-edit (EditablePortionsSection) adaptado: SIN notes (el
+// PortionTargetDraft del builder no las tiene) y con el picker del CATÁLOGO COMPLETO
+// (loading/error/reintento) en vez del dict del plan. El circulito usa `exchangeGroupColor`
+// SOLO como identidad (letra blanca; nunca colorea texto sobre superficie — white-label safe).
+// ---------------------------------------------------------------------------
+
+/** Circulito de identidad del grupo: color del catálogo SOLO aquí, letra blanca. */
+function PortionsGroupDot({ code, color, sortOrder }: { code: string; color: string | null; sortOrder: number }) {
+  return (
+    <View
+      accessible={false}
+      className="h-5 w-5 items-center justify-center rounded-full"
+      style={{ backgroundColor: exchangeGroupColor({ color, sortOrder }) }}
+    >
+      <Text className="text-[10px] font-bold leading-none text-white">{code.slice(0, 3)}</Text>
+    </View>
+  )
+}
+
+/**
+ * Stepper de porciones SOLO botones (paso 0,5; mínimo 0,5; máximo 99). El valor es un Text
+ * — sin TextInput no hay teclado numérico posible (adaptación nativa sancionada, afirmación 7).
+ * Con clamp por construcción el valor siempre es un múltiplo válido; no se porta el input
+ * libre del web (`parsePortionsInput`/`commitValue`).
+ */
+function PortionsStepper({
+  groupName,
+  portions,
+  onStep,
+}: {
+  groupName: string
+  portions: number
+  onStep: (direction: 1 | -1) => void
+}) {
+  const { theme } = useTheme()
+  const canDecrement = portions > PORTIONS_MIN
+  const canIncrement = portions < PORTIONS_MAX
+  return (
+    <View className="flex-row items-center gap-1">
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={PORTIONS_COPY.builder.stepDownAria(groupName)}
+        disabled={!canDecrement}
+        onPress={() => onStep(-1)}
+        className={`h-11 w-11 items-center justify-center rounded-control border border-border-default bg-surface-card ${canDecrement ? '' : 'opacity-40'}`}
+      >
+        <Minus color={theme.foreground} size={16} />
+      </Pressable>
+      <Text
+        accessibilityLabel={`Porciones de ${groupName}: ${formatPortionsEs(portions)}`}
+        className="w-12 text-center text-base font-semibold text-text-strong"
+        style={{ fontVariant: ['tabular-nums'] }}
+      >
+        {formatPortionsEs(portions)}
+      </Text>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={PORTIONS_COPY.builder.stepUpAria(groupName)}
+        disabled={!canIncrement}
+        onPress={() => onStep(1)}
+        className={`h-11 w-11 items-center justify-center rounded-control border border-border-default bg-surface-card ${canIncrement ? '' : 'opacity-40'}`}
+      >
+        <Plus color={theme.foreground} size={16} />
+      </Pressable>
+    </View>
+  )
+}
+
+/**
+ * Bottom sheet de altas (nativeModal, gorhom vetado bajo reanimated 4): el CATÁLOGO COMPLETO
+ * del coach con estados loading/error/reintento (afirmación 5/6). Los grupos ya presentes en
+ * la franja quedan deshabilitados (UNIQUE franja+grupo).
+ */
+function PortionsGroupPickerSheet({
+  open,
+  onClose,
+  controller,
+  usedGroupIds,
+  onPick,
+}: {
+  open: boolean
+  onClose: () => void
+  controller: PortionsController
+  usedGroupIds: ReadonlySet<string>
+  onPick: (exchangeGroupId: string) => void
+}) {
+  const { theme } = useTheme()
+  const groups = controller.groups
+  return (
+    <Sheet
+      open={open}
+      onClose={onClose}
+      nativeModal
+      snapPoints={['70%']}
+      title={PORTIONS_COPY.builder.addGroup}
+      accessibilityLabel={PORTIONS_COPY.builder.addGroup}
+    >
+      {groups == null && controller.groupsLoading ? (
+        <View className="items-center gap-2 py-8">
+          <ActivityIndicator color={theme.primary} />
+          <Text className="text-sm text-text-muted">{PORTIONS_COPY.builder.pickerLoading}</Text>
+        </View>
+      ) : groups == null && controller.groupsError ? (
+        <View className="items-center gap-3 py-8">
+          <Text className="text-center text-sm text-text-muted">{controller.groupsError}</Text>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={PORTIONS_COPY.builder.pickerRetry}
+            onPress={() => controller.retryGroups()}
+            className="min-h-11 flex-row items-center justify-center rounded-control border border-primary/30 bg-primary/10 px-4"
+          >
+            <Text className="text-sm font-semibold text-primary">{PORTIONS_COPY.builder.pickerRetry}</Text>
+          </Pressable>
+        </View>
+      ) : (
+        <View className="gap-1 pb-2">
+          {(groups ?? []).map((group) => {
+            const used = usedGroupIds.has(group.id)
+            return (
+              <Pressable
+                key={group.id}
+                accessibilityRole="button"
+                accessibilityLabel={
+                  used ? `${group.name}: ${PORTIONS_COPY.builder.groupUsed}` : `Agregar ${group.name}`
+                }
+                disabled={used}
+                onPress={() => onPick(group.id)}
+                className={`min-h-12 flex-row items-center gap-3 rounded-control px-2 py-2 ${used ? 'opacity-50' : 'active:bg-surface-sunken'}`}
+              >
+                <PortionsGroupDot code={group.code} color={group.color} sortOrder={group.sortOrder} />
+                <View className="min-w-0 flex-1">
+                  <View className="flex-row items-center gap-1.5">
+                    <Text className="shrink text-sm font-semibold text-text-strong" numberOfLines={1}>
+                      {group.name}
+                    </Text>
+                    {!group.macrosConfirmed ? (
+                      <View className="shrink-0 rounded-pill border border-warning-500/30 bg-warning-500/10 px-1.5 py-px">
+                        <Text className="text-[10px] font-semibold text-warning-700">
+                          {PORTIONS_COPY.builder.referentialBadge}
+                        </Text>
+                      </View>
+                    ) : null}
+                  </View>
+                  <Text className="text-xs text-text-muted" numberOfLines={1}>
+                    {used
+                      ? PORTIONS_COPY.builder.groupUsed
+                      : `1 porción ≈ ${Math.round(group.refCalories)} kcal · ${Math.round(group.refCarbsG)} C · ${Math.round(group.refProteinG)} P`}
+                  </Text>
+                </View>
+              </Pressable>
+            )
+          })}
+        </View>
+      )}
+    </Sheet>
+  )
+}
+
+/** Sección "Porciones a elección" de una franja (dentro de SlotEditor, bajo el buscador). */
+function BuilderPortionsSection({
+  slotKey,
+  controller,
+}: {
+  slotKey: string
+  controller: PortionsController
+}) {
+  const { theme } = useTheme()
+  const [pickerOpen, setPickerOpen] = useState(false)
+  const targets = slotPortionTargets(controller.bySlot, slotKey)
+  const groupById = useMemo(
+    () => new Map((controller.groups ?? []).map((g) => [g.id, g])),
+    [controller.groups],
+  )
+  const usedGroupIds = useMemo(() => new Set(targets.map((t) => t.exchangeGroupId)), [targets])
+
+  const openPicker = () => {
+    controller.ensureGroupsLoaded()
+    setPickerOpen(true)
+  }
+
+  return (
+    <View className="mt-3 border-t border-border-subtle pt-3">
+      <Text className="text-sm font-medium text-text-strong">{PORTIONS_COPY.builder.sectionTitle}</Text>
+      <Text className="mt-0.5 text-xs text-text-muted">{PORTIONS_COPY.builder.sectionHint}</Text>
+
+      {targets.length > 0 ? (
+        <View className="mt-2 gap-2">
+          {targets.map((target) => {
+            const group = groupById.get(target.exchangeGroupId)
+            // El builder siempre agrega grupos desde el picker (catálogo cargado); el fallback
+            // cubre re-renders raros sin romper la fila.
+            const name = group?.name ?? 'Grupo'
+            return (
+              <View key={target.exchangeGroupId} className="flex-row items-center gap-2">
+                <View className="min-w-0 flex-1 flex-row items-center gap-2">
+                  {group ? (
+                    <PortionsGroupDot code={group.code} color={group.color} sortOrder={group.sortOrder} />
+                  ) : (
+                    <View accessible={false} className="h-5 w-5 rounded-full bg-border-subtle" />
+                  )}
+                  <Text className="min-w-0 flex-1 text-sm font-medium text-text-strong" numberOfLines={1}>
+                    {name}
+                  </Text>
+                </View>
+                {/* Stepper de ancho fijo: el nombre trunca, el stepper nunca se comprime. */}
+                <PortionsStepper
+                  groupName={name}
+                  portions={target.portions}
+                  onStep={(direction) => controller.step(slotKey, target.exchangeGroupId, direction)}
+                />
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`Quitar ${name}`}
+                  onPress={() => controller.removeGroup(slotKey, target.exchangeGroupId)}
+                  hitSlop={6}
+                  className="h-11 w-8 items-center justify-center rounded-control"
+                >
+                  <Trash2 color={theme.destructive} size={16} />
+                </Pressable>
+              </View>
+            )
+          })}
+        </View>
+      ) : null}
+
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={PORTIONS_COPY.builder.addGroup}
+        onPress={openPicker}
+        className="mt-2 min-h-11 flex-row items-center gap-1.5 self-start rounded-control px-2 active:bg-primary/10"
+      >
+        <Plus color={theme.primary} size={16} />
+        <Text className="text-sm font-semibold text-primary">{PORTIONS_COPY.builder.addGroup}</Text>
+      </Pressable>
+
+      <PortionsGroupPickerSheet
+        open={pickerOpen}
+        onClose={() => setPickerOpen(false)}
+        controller={controller}
+        usedGroupIds={usedGroupIds}
+        onPick={(id) => {
+          setPickerOpen(false)
+          controller.addGroup(slotKey, id)
+        }}
+      />
+    </View>
+  )
+}
+
+/**
+ * Card "Usar como objetivos" (paso Objetivos): si el plan tiene porciones y el catálogo
+ * cargó, muestra los totales derivados y precarga las 4 metas con un tap (nunca sobrescribe
+ * sin acción; las metas quedan editables). Espejo de `PortionsDeriveCard` web.
+ */
+function PortionsDeriveCard({
+  state,
+  portions,
+  dispatch,
+}: {
+  state: BuilderState
+  portions: PortionsController
+  dispatch: BuilderDispatch
+}) {
+  const { theme } = useTheme()
+  const liveKeys = state.slots.map((s) => s.key)
+  if (portions.groups == null || !hasAnyPortions(portions.bySlot, liveKeys)) return null
+  const totals = derivePortionTotals(liveKeys, portions.bySlot, portions.groups)
+  const kcal = String(Math.round(totals.calories))
+  const p = String(Math.round(totals.proteinG))
+  const c = String(Math.round(totals.carbsG))
+  const g = String(Math.round(totals.fatsG))
+  return (
+    <View className="gap-3 rounded-card border border-primary/20 bg-primary/10 p-4">
+      <View className="flex-row items-start gap-2">
+        <Sparkles color={theme.primary} size={18} />
+        <Text className="flex-1 text-sm leading-5 text-text-body">
+          {PORTIONS_COPY.builder.deriveCard(kcal, p, c, g)}
+        </Text>
+      </View>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={PORTIONS_COPY.builder.deriveCta}
+        onPress={() => {
+          dispatch({ type: 'SET_TARGET', field: 'calories', value: kcal })
+          dispatch({ type: 'SET_TARGET', field: 'proteinG', value: p })
+          dispatch({ type: 'SET_TARGET', field: 'carbsG', value: c })
+          dispatch({ type: 'SET_TARGET', field: 'fatsG', value: g })
+        }}
+        className="min-h-11 flex-row items-center justify-center gap-1.5 self-start rounded-control border border-primary/30 bg-surface-card px-4"
+      >
+        <Text className="text-sm font-semibold text-primary">{PORTIONS_COPY.builder.deriveCta}</Text>
+      </Pressable>
+    </View>
+  )
+}
+
+/**
+ * Chips read-only + banner referencial en Revisión (solo structured/hybrid con porciones).
+ * `portionsSummaryLabel` ("2C · 1,5V") con coma decimal es-CL; el banner aparece si algún
+ * grupo usado tiene `macros_confirmed=false`. No duplica totales. Espejo de `PortionsReviewSection` web.
+ */
+function PortionsReviewSection({
+  state,
+  portions,
+}: {
+  state: BuilderState
+  portions: PortionsController
+}) {
+  const usesSlots = strategyUsesSlots(state.strategy)
+  const liveKeys = state.slots.map((s) => s.key)
+  const groups = portions.groups
+  if (!usesSlots || groups == null || !hasAnyPortions(portions.bySlot, liveKeys)) return null
+  const rows = state.slots
+    .map((slot, index) => ({
+      slot,
+      index,
+      targets: slotPortionTargets(portions.bySlot, slot.key).filter((t) => t.portions > 0),
+    }))
+    .filter((r) => r.targets.length > 0)
+  const anyUnconfirmed = rows.some((r) => hasUnconfirmedMacros(r.targets, groups))
+  return (
+    <View className="gap-2 rounded-card border border-border-subtle bg-surface-card p-4">
+      <Text className="text-[11px] font-semibold uppercase tracking-wide text-text-muted">
+        {PORTIONS_COPY.builder.sectionTitle}
+      </Text>
+      {anyUnconfirmed ? (
+        <View className="rounded-control border border-warning-500/30 bg-warning-500/10 p-2.5">
+          <Text className="text-xs text-warning-700">{PORTIONS_COPY.builder.unconfirmedBanner}</Text>
+        </View>
+      ) : null}
+      <View className="gap-1.5">
+        {rows.map(({ slot, index, targets }) => (
+          <View key={slot.key} className="flex-row items-center gap-2">
+            <Text className="min-w-0 flex-1 text-xs text-text-body" numberOfLines={1}>
+              {slot.name || `Franja ${index + 1}`}
+            </Text>
+            <Text
+              className="font-mono text-xs text-text-strong"
+              style={{ fontVariant: ['tabular-nums'] }}
+            >
+              {esDecimal(portionsSummaryLabel(targets, groups))}
+            </Text>
+          </View>
+        ))}
+      </View>
     </View>
   )
 }
@@ -774,15 +1237,21 @@ function SlotEditor({
   dispatch,
   errors,
   onSearch,
+  portions,
 }: {
   slot: BuilderSlot
   index: number
   dispatch: BuilderDispatch
   errors: Record<string, string>
   onSearch: (target: SearchTarget) => void
+  portions: PortionsController
 }) {
   const { theme } = useTheme()
-  const subtotal = slotSubtotal(slot)
+  // Subtotal combinado (items fijos + derivado de porciones, 4B-11). Sin porciones (o catálogo
+  // sin cargar) `slotPortionTotals` devuelve null y `combineSubtotals` deja el objeto de items intacto.
+  const portionTotals = slotPortionTotals(portions.bySlot, slot.key, portions.groups)
+  const subtotal = combineSubtotals(slotSubtotal(slot), portionTotals)
+  const showSubtotal = slot.items.length > 0 || portionTotals != null
   return (
     <NutritionCard>
       <View className="flex-row items-start justify-between gap-2">
@@ -848,10 +1317,17 @@ function SlotEditor({
         </Pressable>
       </View>
 
-      {slot.items.length > 0 ? (
+      <BuilderPortionsSection slotKey={slot.key} controller={portions} />
+
+      {showSubtotal ? (
         <View className="mt-3 border-t border-border-subtle pt-2">
           <Text className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-text-muted">Subtotal franja</Text>
           <MacroChipRow size="sm" calories={subtotal.calories} proteinG={subtotal.proteinG} carbsG={subtotal.carbsG} fatsG={subtotal.fatsG} />
+          {portionTotals != null ? (
+            <Text className="mt-1 text-[11px] text-text-muted">
+              {PORTIONS_COPY.builder.subtotalPortionsNote(String(Math.round(portionTotals.calories)))}
+            </Text>
+          ) : null}
         </View>
       ) : null}
     </NutritionCard>
@@ -863,11 +1339,13 @@ function ConstructionStep({
   dispatch,
   errors,
   onSearch,
+  portions,
 }: {
   state: BuilderState
   dispatch: BuilderDispatch
   errors: Record<string, string>
   onSearch: (target: SearchTarget) => void
+  portions: PortionsController
 }) {
   if (!strategyUsesSlots(state.strategy)) {
     return (
@@ -881,12 +1359,16 @@ function ConstructionStep({
     )
   }
 
-  const totals = dayTotals(state)
+  // Total del día combinado (items + porciones a elección, 4B-11). Sin catálogo cargado el
+  // derivado es null y `combineSubtotals` devuelve los totales de items intactos (jamás NaN).
+  const liveKeys = state.slots.map((s) => s.key)
+  const portionDay = portions.groups ? derivePortionTotals(liveKeys, portions.bySlot, portions.groups) : null
+  const totals = combineSubtotals(dayTotals(state), portionDay)
   return (
     <View className="gap-3">
       <ErrorText message={errors.slots} />
       {state.slots.map((slot, index) => (
-        <SlotEditor key={slot.key} slot={slot} index={index} dispatch={dispatch} errors={errors} onSearch={onSearch} />
+        <SlotEditor key={slot.key} slot={slot} index={index} dispatch={dispatch} errors={errors} onSearch={onSearch} portions={portions} />
       ))}
       <Pressable
         accessibilityLabel="Agregar franja"
@@ -917,12 +1399,14 @@ function ReviewStep({
   dateConflict,
   publishing,
   onStartTomorrow,
+  portions,
 }: {
   state: BuilderState
   publishError: string | null
   dateConflict: boolean
   publishing: boolean
   onStartTomorrow: () => void
+  portions: PortionsController
 }) {
   const strategy = state.strategy ?? 'flexible'
   const totals = dayTotals(state)
@@ -983,6 +1467,8 @@ function ReviewStep({
           )}
         </View>
       </StudentPreview>
+
+      <PortionsReviewSection state={state} portions={portions} />
 
       {dateConflict ? (
         <View className="gap-3 rounded-card border border-border-default bg-surface-card p-4">
