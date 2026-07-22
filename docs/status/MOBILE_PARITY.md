@@ -1,7 +1,7 @@
 ---
 status: active
 owner: Juan Manuel Villegas
-last_verified: "2026-07-21 @ 8f8161cb"
+last_verified: "2026-07-22 @ 2cdc0c79"
 canonical: true
 source_of_truth: apps/web responsive + apps/mobile
 ---
@@ -23,7 +23,7 @@ La paridad global **no está certificada todavía**.
 | Sección 3 — coach (14 unidades) | Cerrado | Pendiente | Cerrado estático; no certificado |
 | Ola 2R — residuos del alumno | Cerrado | Pendiente | Cerrado estático; no certificado |
 | Ola 4A — nutrición del alumno | **12/12 aplicadas** | Pendiente | Cerrada estática; no certificada |
-| Ola 4B — nutrición del coach y catálogos | **9/16 aplicadas** | Pendiente | **Activa** |
+| Ola 4B — nutrición del coach y catálogos | **14/16 aplicadas** | Pendiente | **Activa** |
 
 “Cerrado estático” significa que código, spec y verificaciones automatizadas disponibles convergieron. No significa que el comportamiento visual, gestos, teclado, cámara, safe areas u offline estén aprobados en hardware real.
 
@@ -59,14 +59,15 @@ fuera, RN-extras estricto).
 |---|---|
 | Aplicadas (wave 4B.1, `bce2eb3b`) | 4B-01 macros meal-groups (P0 datos), 4B-02 scope org foods, 4B-03 quick-edit notas+permisos |
 | Aplicada (wave 4B.2, `76d8ea2f`) | 4B-04 SWAP tab coach→Centro V2 (inline, cápsula intacta; V1 = rollback tras flag) |
-| Aplicadas (wave 4B.3, `8f8161cb`) | 4B-05 HUB, 4B-06 Catálogo V2 + ficha (sin tablist aún), 4B-08 Detalle asignar/archivar, 4B-10 Builder F-02 reemplazos (cierra TODO F-02 P3), 4B-15 MG editor |
-| Siguiente | Wave 4B.4: 4B-07 Curación ∥ 4B-09 Detalle-copy ∥ 4B-11 Builder-porciones ∥ 4B-14 Quick-edit drafts + cablear tablist Alimentos/Curación en el hub |
-| Resto | 4B-12, 4B-13 según `RANKING.md`; 4B-16 (deuda nutrition-pro) fuera de la rama (toca web+packages) |
+| Aplicadas (wave 4B.3, `8f8161cb`) | 4B-05 HUB, 4B-06 Catálogo V2 + ficha, 4B-08 Detalle asignar/archivar, 4B-10 Builder F-02 reemplazos (cierra TODO F-02 P3), 4B-15 MG editor |
+| Aplicadas (wave 4B.4, `2cdc0c79`) | 4B-07 Curación, 4B-17 Tablist hub (Alumnos/Alimentos/Curación cableado), 4B-09 Detalle copy+banner convertido, 4B-11 Builder porciones (write-path nuevo), 4B-14 Quick-edit drafts |
+| Siguiente | Wave 4B.5: 4B-12 Builder permisos+guardar-catálogo+archivar-y-reemplazar; después wave 4B.6: 4B-13 Builder drafts (secuenciales, mismo archivo) |
+| Resto | 4B-16 (deuda nutrition-pro) fuera de la rama (toca web+packages) |
 
 ### Dónde retomar
 
-1. Wave 4B.4: `4B-07` Curación ∥ `4B-09` Detalle-copy ∥ `4B-11` Builder-porciones ∥ `4B-14` Quick-edit drafts; incluye cablear el tablist Alumnos/Alimentos/Curación del hub (índice libre tras 4B-05).
-2. Waves 4B.5–4B.6 según `RANKING.md` (4B-12 permisos+catálogo+reemplazar, 4B-13 builder drafts).
+1. Wave 4B.5: `4B-12` Builder permisos + guardar-en-catálogo + archivar-y-reemplazar.
+2. Wave 4B.6: `4B-13` Builder drafts (reusa `nutrition-coach-draft-store` nacido en 4B-14).
 3. Completar matriz device de 4A/4B y regresión dirigida de Secciones 1–3/2R (requiere build nativa).
 
 ## Builds móviles
