@@ -48,6 +48,20 @@ export async function logSetAction(
     const substituted_exercise_name = rawText('substituted_exercise_name')
     const substitution_reason = rawText('substitution_reason')
 
+    // Hold POR LADO (E3.2 · executor-v3): la fila per_side de movilidad envía `metadata` como JSON
+    // ({left_sec, right_sec}). Sólo llega en ese flujo; una serie normal no manda la key → undefined
+    // (byte-idéntico al comportamiento previo). Se parsea permisivo: un JSON inválido se ignora (no
+    // rompe el guardado — el `actual_hold_sec` sumado ya viaja aparte y es la fuente del hold total).
+    const metadataRaw = formData.get('metadata')
+    let metadata: unknown
+    if (metadataRaw !== null && String(metadataRaw).trim() !== '') {
+        try {
+            metadata = JSON.parse(String(metadataRaw))
+        } catch {
+            metadata = undefined
+        }
+    }
+
     // Edición de día pasado (Ola 1, decisión CEO 10): `target_date` opcional `yyyy-mm-dd`. Su sola
     // presencia conmuta el flujo a modo SOLO-UPDATE (nunca inserta). Ausente = comportamiento actual
     // byte-idéntico (upsert de HOY). Se valida server-side más abajo, tras autenticar.
@@ -72,6 +86,9 @@ export async function logSetAction(
         substituted_exercise_id,
         substituted_exercise_name,
         substitution_reason,
+        // Hold POR LADO (E3.2): {left_sec, right_sec} → workout_logs.metadata jsonb. El schema valida
+        // el shape (enteros 0-86400, opcionales); undefined ⇒ el log no toca metadata.
+        metadata,
     }
 
     const parsed = WorkoutLogSetSchema.safeParse(raw)
@@ -140,6 +157,8 @@ export async function logSetAction(
         substituted_exercise_id: parsed.data.substituted_exercise_id ?? null,
         substituted_exercise_name: parsed.data.substituted_exercise_name ?? null,
         substitution_reason: parsed.data.substitution_reason ?? null,
+        // Hold POR LADO (E3.2): jsonb {left_sec, right_sec}; null en todo log que no sea per_side.
+        metadata: parsed.data.metadata ?? null,
     }
 
     if (existingRows && existingRows.length > 0) {

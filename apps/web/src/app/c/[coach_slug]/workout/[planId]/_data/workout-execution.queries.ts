@@ -174,12 +174,15 @@ export const getWorkoutExecutionData = cache(async (planId: string, targetDate?:
         substituted_exercise_id: string | null
         substituted_exercise_name: string | null
         substitution_reason: string | null
+        // Hold POR LADO (E0.5/E3.2): metadata jsonb {left_sec, right_sec} — rehidrata la fila per_side
+        // (dos campos) tras reload; el resto de tipos lo ignora (null). Select aditivo trivial.
+        metadata: { left_sec?: number | null; right_sec?: number | null } | null
     }> = []
 
     if (blockIds.length > 0) {
         const { data: rawLogs } = await supabase
             .from('workout_logs')
-            .select('block_id, set_number, weight_kg, reps_done, rpe, rir, note, actual_duration_sec, actual_distance_m, actual_hold_sec, actual_avg_hr, substituted_exercise_id, substituted_exercise_name, substitution_reason')
+            .select('block_id, set_number, weight_kg, reps_done, rpe, rir, note, actual_duration_sec, actual_distance_m, actual_hold_sec, actual_avg_hr, substituted_exercise_id, substituted_exercise_name, substitution_reason, metadata')
             .in('block_id', blockIds)
             .gte('logged_at', windowStartUtc)
             .lt('logged_at', windowEndUtc)

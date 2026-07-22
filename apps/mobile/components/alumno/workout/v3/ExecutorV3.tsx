@@ -55,6 +55,9 @@ import { resolveExecTheme } from './exec-theme'
 import { SessionIntro } from './SessionIntro'
 import { SessionStart, type StartChip, type StartExercisePreview } from './SessionStart'
 import { ExerciseScreenV3 } from './ExerciseScreenV3'
+import { MobilityScreenV3 } from './MobilityScreenV3'
+import { RollerScreenV3 } from './RollerScreenV3'
+import { CardioScreenV3 } from './CardioScreenV3'
 import { ExerciseListV3, type ExerciseListItem } from './ExerciseListV3'
 import { RestInterstitialV3, type RestInterstitialData } from './RestInterstitialV3'
 import { ExecSettingsSheet } from './ExecSettingsSheet'
@@ -669,6 +672,68 @@ function ExecutorV3Inner({ planId, recoverDate, editDate }: { planId: string; re
             onDraftChange={saveActiveDraft}
             onOpenSubstitute={() => setSubstituteBlockId(block.id)}
             onUndoSubstitution={() => setSubstitutionByBlock((p) => { const n = { ...p }; delete n[block.id]; return n })}
+            recentSet={recentSet}
+            syncErrors={syncErrors}
+            onRetrySet={retryCommit}
+          />
+        )
+      }
+      // E3.2/E3.3/E3.4: los tipos NO-strength enrutan a sus pantallas V3 dedicadas (hero por tipo +
+      // captura tipada existente). El resto (p.ej. un tipo futuro no cubierto) cae a SingleExerciseCard.
+      if (effType === 'mobility') {
+        return (
+          <MobilityScreenV3
+            key={block.id}
+            block={block}
+            exercise={exercise}
+            blockLogs={blockLogs}
+            restoredDraft={restoredDraft}
+            reducedMotion={motion.reduced}
+            exec={exec}
+            onOpenTechnique={() => setTechniqueExercise(exercise)}
+            onOpenSet={(setNumber) => openSet(block.id, setNumber)}
+            onCommitSet={handleCommit}
+            onDraftChange={saveActiveDraft}
+            recentSet={recentSet}
+            syncErrors={syncErrors}
+            onRetrySet={retryCommit}
+          />
+        )
+      }
+      if (effType === 'roller') {
+        return (
+          <RollerScreenV3
+            key={block.id}
+            block={block}
+            exercise={exercise}
+            blockLogs={blockLogs}
+            reducedMotion={motion.reduced}
+            exec={exec}
+            onOpenTechnique={() => setTechniqueExercise(exercise)}
+            onOpenSet={(setNumber) => openSet(block.id, setNumber)}
+            onCommitSet={handleCommit}
+            recentSet={recentSet}
+            syncErrors={syncErrors}
+            onRetrySet={retryCommit}
+          />
+        )
+      }
+      if (effType === 'cardio') {
+        return (
+          <CardioScreenV3
+            key={block.id}
+            block={block}
+            exercise={exercise}
+            blockLogs={blockLogs}
+            restoredDraft={restoredDraft}
+            reducedMotion={motion.reduced}
+            exec={exec}
+            hrZones={hrZones}
+            onOpenTechnique={() => setTechniqueExercise(exercise)}
+            onOpenSet={(setNumber) => openSet(block.id, setNumber)}
+            onCommitSet={handleCommit}
+            onRpeUpdate={handleRpeUpdate}
+            onDraftChange={saveActiveDraft}
             recentSet={recentSet}
             syncErrors={syncErrors}
             onRetrySet={retryCommit}

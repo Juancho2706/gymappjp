@@ -29,6 +29,9 @@ import { StepperExecution, type StepperStepView } from './StepperExecution'
 import { ExecHeaderV3, type ExecDotState } from './v3/ExecHeaderV3'
 import { applyExecThemeVars, readExecutorTheme } from './v3/exec-theme'
 import { ExerciseStepV3 } from './v3/ExerciseStepV3'
+import { MobilityStepV3 } from './v3/MobilityStepV3'
+import { RollerStepV3 } from './v3/RollerStepV3'
+import { CardioStepV3 } from './v3/CardioStepV3'
 import { ExecListMapV3, type ExecListMapItem } from './v3/ExecListMapV3'
 import { SessionIntro } from './v3/SessionIntro'
 import { SessionStart, type SessionStartExercise } from './v3/SessionStart'
@@ -199,6 +202,8 @@ interface Props {
         substituted_exercise_id?: string | null
         substituted_exercise_name?: string | null
         substitution_reason?: string | null
+        // Hold POR LADO (E0.5/E3.2): {left_sec, right_sec} — rehidrata los dos campos de la fila per_side.
+        metadata?: { left_sec?: number | null; right_sec?: number | null } | null
         // Reconciliación (informe forense 2026-07-04): serie en cola offline sin confirmar por server.
         _pending?: boolean
     }>
@@ -1835,6 +1840,31 @@ export function WorkoutExecutionClient({
                                 handleResult={handleResult}
                             />
                         )
+                    }
+                    // Ejecutor V3 (Ola 3): en el stepper, cada tipo tipado tiene su pantalla dedicada.
+                    // Movilidad (per_side con HoldTimer + captura por lado), roller (contador gigante) y
+                    // cardio (identidad + countdown por zona + fases de intervalo). Superseries y modo
+                    // lista siguen con SingleExerciseCard (Wave 3). Capa de guardado/cola sin tocar.
+                    const typedCommon = {
+                        block,
+                        exercise,
+                        firstUnlogged,
+                        doneCount,
+                        blockLogs,
+                        autoTimerEnabled,
+                        reopenSignal,
+                        substitution: sub ? { exerciseId: sub.id, exerciseName: sub.name, reason: SUBSTITUTION_REASON } : null,
+                        handleLogged,
+                        handleResult,
+                    }
+                    if (execV3Active && !allowCollapse && effType === 'mobility') {
+                        return <MobilityStepV3 key={block.id} {...typedCommon} />
+                    }
+                    if (execV3Active && !allowCollapse && effType === 'roller') {
+                        return <RollerStepV3 key={block.id} {...typedCommon} />
+                    }
+                    if (execV3Active && !allowCollapse && effType === 'cardio') {
+                        return <CardioStepV3 key={block.id} {...typedCommon} cardio={cardio} />
                     }
                     return (
                         <Fragment key={block.id}>

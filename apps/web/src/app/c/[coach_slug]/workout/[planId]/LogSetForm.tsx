@@ -22,7 +22,7 @@ import { readDraft, saveDraft, clearDraft, type DraftFields } from './workout-dr
 import { useWorkoutKeypad } from './WorkoutKeypadProvider'
 import { ScaleDots, EffortHelp, RPE_HELP, RIR_HELP } from './EffortScale'
 import { DualWheelPicker } from './v3/DualWheelPicker'
-import { typedKeypadFields, type TypedKeypadMode } from '@eva/workout-engine'
+import { typedKeypadFields, typedLogValues, type TypedKeypadMode } from '@eva/workout-engine'
 import type { OptimisticLogPayload } from '@eva/workout-engine'
 import { cn } from '@/lib/utils'
 import { humanizeStudentWriteError } from '@/lib/student-access'
@@ -70,6 +70,8 @@ interface Props {
         actual_distance_m?: number | null
         actual_hold_sec?: number | null
         actual_avg_hr?: number | null
+        /** Hold POR LADO (E0.5/E3.2): {left_sec, right_sec} — siembra los dos campos de la fila per_side. */
+        metadata?: { left_sec?: number | null; right_sec?: number | null } | null
         /**
          * Reconciliación (informe forense 2026-07-04): la serie está en `sessionLogs` porque la reconció
          * el padre desde la COLA offline, pero el server AÚN no la confirmó. `true` ⇒ se muestra como
@@ -139,6 +141,19 @@ interface Props {
      * RIR a 0 (RIR 0 = al fallo). Ausente/false ⇒ fila V2 byte-idéntica (anti-regresión).
      */
     v3?: boolean
+    /**
+     * Movilidad POR LADO (E3.2 · executor-v3): `side_mode` del bloque. Cuando es `'per_side'` la fila de
+     * movilidad captura DOS holds (`hold_left_sec` / `hold_right_sec`) que el engine (`typedLogValues`)
+     * mapea a `metadata {left_sec, right_sec}` + suma en `actual_hold_sec`. Cualquier otro valor (o
+     * ausente) ⇒ un solo campo `actual_hold_sec`, byte-idéntico al comportamiento previo.
+     */
+    sideMode?: string | null
+    /**
+     * Prefill tipado (E3.3 · roller): al cambiar `nonce`, escribe `reps_done` (pasadas) en el input
+     * uncontrolled de la fila tipada activa — lo alimenta el contador gigante de `RollerStepV3`. NO
+     * cambia el motor de logging; sólo pre-rellena para confirmar. Sin él, la fila no cambia.
+     */
+    typedPrefill?: { repsDone?: number | null; nonce: number }
 }
 
 /** Estado de sincronización de una serie de cara al usuario (contrato a). */
@@ -917,9 +932,13 @@ function TypedLogSetRow({
     isActive = false,
     typedObjective,
     supersetRest,
+    sideMode,
+    typedPrefill,
     onLogged,
     onResult,
 }: Props & { mode: Exclude<LogSetMode, 'strength'> }) {
+    // Movilidad POR LADO (E3.2): sólo cuenta en modo movilidad. Cualquier otro modo lo ignora.
+    const perSide = mode === 'mobility' && sideMode === 'per_side'
     const params = useParams<{ coach_slug: string; planId: string }>()
     // Teclado numérico custom por campo (gate por puntero grueso, como fuerza). En desktop los inputs
     // quedan EXACTAMENTE como hoy (type=number). El keypad muta `ref.value` → submit/offline intacto.
@@ -941,6 +960,8 @@ function TypedLogSetRow({
     const distanceRef = useRef<HTMLInputElement>(null)
     const hrRef = useRef<HTMLInputElement>(null)
     const holdRef = useRef<HTMLInputElement>(null)
+    const holdLeftRef = useRef<HTMLInputElement>(null)
+    const holdRightRef = useRef<HTMLInputElement>(null)
     const durationRef = useRef<HTMLInputElement>(null)
     const passesRef = useRef<HTMLInputElement>(null)
     const refByKey: Record<string, RefObject<HTMLInputElement | null>> = {
@@ -948,17 +969,30 @@ function TypedLogSetRow({
         actual_distance_m: distanceRef,
         actual_avg_hr: hrRef,
         actual_hold_sec: holdRef,
+        hold_left_sec: holdLeftRef,
+        hold_right_sec: holdRightRef,
         actual_duration_sec: durationRef,
         reps_done: passesRef,
     }
     const [rpeLocal, setRpeLocal] = useState<number | null>(existingLog?.rpe ?? null)
     const reducedMotion = useReducedMotion()
 
+    // Prefill tipado (E3.3 · roller): el contador gigante de `RollerStepV3` escribe las pasadas en el
+    // input uncontrolled de la fila activa al cambiar `nonce`. Uncontrolled = no re-render; mismo patrón
+    // que el prefill "= última vez" de fuerza. Sólo el flujo roller lo pasa.
+    const prefillNonce = typedPrefill?.nonce
+    useEffect(() => {
+        if (prefillNonce == null || typedPrefill?.repsDone == null) return
+        if (passesRef.current) passesRef.current.value = String(typedPrefill.repsDone)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [prefillNonce])
+
     // Abre el teclado custom en el campo tocado (solo pointer coarse). El objetivo tipado viaja en el
     // header (DB-5); "Listo" reusa `requestSubmit()`. Reglas decimales por campo vienen de typedKeypadFields.
     const openKeypadFor = (key: string) => {
         if (!useKeypad || !keypad) return
-        const fieldDefs = typedKeypadFields(mode as TypedKeypadMode)
+        // Movilidad per_side (E3.2): dos campos hold (izq/der); el resto de modos, campos de siempre.
+        const fieldDefs = typedKeypadFields(mode as TypedKeypadMode, sideMode)
         // Normaliza a coma es-CL los decimales que hayan montado como number (punto) antes del gate coarse.
         for (const f of fieldDefs) {
             if (!f.allowDecimal) continue
@@ -997,7 +1031,37 @@ function TypedLogSetRow({
             formData.delete('cardio_min')
             if (min != null && min > 0) formData.set('actual_duration_sec', String(Math.round(min * 60)))
         }
-        // movilidad usa actual_hold_sec directo; roller usa actual_duration_sec + reps_done
+        // Movilidad per_side (E3.2): dos campos hold (izq/der) → el engine los suma en `actual_hold_sec`
+        // y arma `metadata {left_sec, right_sec}`. Se reusa la MISMA fuente pura que el keypad/RN
+        // (`typedLogValues`) para cero drift. Los inputs por lado no son columnas → se eliminan del payload.
+        if (perSide) {
+            const { actualHoldSec, metadata } = typedLogValues(
+                'mobility',
+                {
+                    hold_left_sec: String(formData.get('hold_left_sec') ?? ''),
+                    hold_right_sec: String(formData.get('hold_right_sec') ?? ''),
+                },
+                'per_side',
+            )
+            formData.delete('hold_left_sec')
+            formData.delete('hold_right_sec')
+            if (actualHoldSec != null) formData.set('actual_hold_sec', String(actualHoldSec))
+            else formData.delete('actual_hold_sec')
+            if (metadata != null) formData.set('metadata', JSON.stringify(metadata))
+            else formData.delete('metadata')
+        }
+        // movilidad bilateral usa actual_hold_sec directo; roller usa actual_duration_sec + reps_done
+    }
+
+    /** Lee la `metadata` per_side (JSON puesto por `normalizeFormData`) o null. */
+    const collectMetadata = (formData: FormData): { left_sec?: number | null; right_sec?: number | null } | null => {
+        const raw = formData.get('metadata')
+        if (raw == null || String(raw).trim() === '') return null
+        try {
+            return JSON.parse(String(raw))
+        } catch {
+            return null
+        }
     }
 
     const collectValues = (formData: FormData) => ({
@@ -1007,6 +1071,7 @@ function TypedLogSetRow({
         actualAvgHr: parseNum(formData.get('actual_avg_hr')),
         repsDone: parseNum(formData.get('reps_done')),
         rpe: parseNum(formData.get('rpe')),
+        metadata: collectMetadata(formData),
     })
 
     // Reconciliación del guardado (contrato a + e): éxito → sale de la cola; error → respaldo en cola
@@ -1042,6 +1107,8 @@ function TypedLogSetRow({
             actualDistanceM: values.actualDistanceM,
             actualHoldSec: values.actualHoldSec,
             actualAvgHr: values.actualAvgHr,
+            // Hold POR LADO (E3.2): {left_sec, right_sec} viaja EN el item → el flush lo reenvía intacto.
+            metadata: values.metadata,
             planId: params.planId,
             coachSlug: params.coach_slug,
             timestamp: Date.now(),
@@ -1091,6 +1158,8 @@ function TypedLogSetRow({
             actualDistanceM: values.actualDistanceM,
             actualHoldSec: values.actualHoldSec,
             actualAvgHr: values.actualAvgHr,
+            // Hold POR LADO (E3.2): el optimismo preserva los segundos por lado (fila per_side).
+            metadata: values.metadata,
         })
         formAction(formData)
     }
@@ -1113,6 +1182,7 @@ function TypedLogSetRow({
             actualDistanceM: rpeValues.actualDistanceM,
             actualHoldSec: rpeValues.actualHoldSec,
             actualAvgHr: rpeValues.actualAvgHr,
+            metadata: rpeValues.metadata,
         })
         startTransition(() => {
             formAction(fd)
@@ -1137,7 +1207,10 @@ function TypedLogSetRow({
             ? 'grid-cols-[auto_3.5rem_3.5rem_3rem_auto] md:grid-cols-[auto_1fr_1fr_1fr_auto]'
             : mode === 'roller'
                 ? 'grid-cols-[auto_3.5rem_3.5rem_auto] md:grid-cols-[auto_1fr_1fr_auto]'
-                : 'grid-cols-[auto_5rem_auto] md:grid-cols-[auto_1fr_auto]'
+                : perSide
+                    // Movilidad per_side (E3.2): hold izquierdo | hold derecho | submit.
+                    ? 'grid-cols-[auto_3.5rem_3.5rem_auto] md:grid-cols-[auto_1fr_1fr_auto]'
+                    : 'grid-cols-[auto_5rem_auto] md:grid-cols-[auto_1fr_auto]'
 
     // Mismos tokens que la fila strength (sport-500 focus, on-dark, font-mono) — re-skin EVA DS.
     const typedInputClass = cn(
@@ -1157,7 +1230,7 @@ function TypedLogSetRow({
             )}
         >
             <form
-                key={existingLog ? `tlog-${existingLog.actual_duration_sec}-${existingLog.actual_hold_sec}-${existingLog.reps_done}` : 'new'}
+                key={existingLog ? `tlog-${existingLog.actual_duration_sec}-${existingLog.actual_hold_sec}-${existingLog.metadata?.left_sec ?? ''}-${existingLog.metadata?.right_sec ?? ''}-${existingLog.reps_done}` : 'new'}
                 ref={formRef}
                 action={handleSubmit}
                 onKeyDown={handleFormKeyDown}
@@ -1205,7 +1278,7 @@ function TypedLogSetRow({
                     </>
                 )}
 
-                {mode === 'mobility' && (
+                {mode === 'mobility' && !perSide && (
                     <input
                         ref={holdRef}
                         name="actual_hold_sec"
@@ -1215,6 +1288,31 @@ function TypedLogSetRow({
                         aria-label="Segundos de hold"
                         className={typedInputClass}
                     />
+                )}
+
+                {mode === 'mobility' && perSide && (
+                    <>
+                        {/* Hold POR LADO (E3.2): dos segundos independientes; el engine los suma en
+                            `actual_hold_sec` y guarda el desglose en `metadata`. Siembra desde el log. */}
+                        <input
+                            ref={holdLeftRef}
+                            name="hold_left_sec"
+                            {...fieldProps('hold_left_sec', 'numeric', { min: '0' })}
+                            defaultValue={inputDefault(existingLog?.metadata?.left_sec ?? null)}
+                            placeholder="izq"
+                            aria-label="Segundos de hold — lado izquierdo"
+                            className={typedInputClass}
+                        />
+                        <input
+                            ref={holdRightRef}
+                            name="hold_right_sec"
+                            {...fieldProps('hold_right_sec', 'numeric', { min: '0' })}
+                            defaultValue={inputDefault(existingLog?.metadata?.right_sec ?? null)}
+                            placeholder="der"
+                            aria-label="Segundos de hold — lado derecho"
+                            className={typedInputClass}
+                        />
+                    </>
                 )}
 
                 {mode === 'roller' && (

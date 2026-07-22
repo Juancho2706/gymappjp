@@ -134,6 +134,9 @@ export function workoutLogToFormData(item: WorkoutOfflineLog): FormData {
     if (item.substitutedExerciseId != null && item.substitutedExerciseId !== '') fd.set('substituted_exercise_id', item.substitutedExerciseId)
     if (item.substitutedExerciseName != null && item.substitutedExerciseName !== '') fd.set('substituted_exercise_name', item.substitutedExerciseName)
     if (item.substitutionReason != null && item.substitutionReason !== '') fd.set('substitution_reason', item.substitutionReason)
+    // Hold POR LADO (E3.2): {left_sec, right_sec} serializado a JSON → el action lo parsea de vuelta y
+    // escribe workout_logs.metadata. Sólo presente en la fila per_side de movilidad; el resto no la trae.
+    if (item.metadata != null) fd.set('metadata', JSON.stringify(item.metadata))
     // Edición de día pasado (E1.6): la fecha viaja EN el item → el flush global de reconexión edita
     // esa fecha en modo solo-UPDATE en vez de insertar en HOY (pérdida de atribución silenciosa).
     if (item.targetDate != null && item.targetDate !== '') fd.set('target_date', item.targetDate)

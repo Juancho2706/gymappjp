@@ -533,6 +533,7 @@ export function ActiveSetRow({
   blockId,
   setNumber,
   typedMode,
+  sideMode = null,
   suggestedWeight,
   seedValues,
   autofill,
@@ -548,6 +549,14 @@ export function ActiveSetRow({
   blockId: string
   setNumber: number
   typedMode: TypedKeypadMode | null
+  /**
+   * Modo de lado del bloque (E3.2 · executor-v3). Solo relevante en movilidad `per_side`: hace que la
+   * fila declare DOS campos de hold (`hold_left_sec`/`hold_right_sec`) vía `typedKeypadFields(mode,
+   * sideMode)` y arme el payload con `buildTypedPayload(..., sideMode)` → `metadata {left,right}` + suma
+   * en `actual_hold_sec`. ADITIVO: sin la prop (default null) el comportamiento es byte-idéntico al
+   * previo (un solo campo). El engine ya soporta ambos ejes; acá solo se CONSUME.
+   */
+  sideMode?: string | null
   /** Peso sugerido (sobrecarga) — pre-llena la caja KG en strength. */
   suggestedWeight: number | null
   /**
@@ -605,7 +614,7 @@ export function ActiveSetRow({
 }) {
   const fields: RowField[] = useMemo(() => {
     if (typedMode) {
-      return typedKeypadFields(typedMode).map((f) => ({
+      return typedKeypadFields(typedMode, sideMode).map((f) => ({
         key: f.key,
         label: f.label,
         unit: f.unit,
@@ -616,7 +625,7 @@ export function ActiveSetRow({
       { key: 'weight', label: 'Kg', unit: 'kg', mode: 'weight' },
       { key: 'reps', label: 'Reps', unit: 'reps', mode: 'reps' },
     ]
-  }, [typedMode])
+  }, [typedMode, sideMode])
 
   const motion = useEvaMotion()
 
@@ -667,7 +676,7 @@ export function ActiveSetRow({
 
   const commit = () => {
     const payload = typedMode
-      ? buildTypedPayload(typedMode, valuesRef.current, blockId, setNumber)
+      ? buildTypedPayload(typedMode, valuesRef.current, blockId, setNumber, sideMode)
       : buildStrengthPayload(valuesRef.current, blockId, setNumber)
     onCommit(payload)
   }

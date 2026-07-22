@@ -2713,3 +2713,365 @@ body > * {
 [data-exec-hide-effort] .exec-v3-effort {
   display: none;
 }
+
+/* ============================================================================
+   Ejecutor V3 — tipos tipados (E3.2 movilidad · E3.3 roller · E3.4 cardio)
+   ============================================================================ */
+
+/* Tono sereno de movilidad/roller: el subtree adopta el acento recovery (aqua FIJO en ambos temas,
+   decisión Ola 0) — re-tiñe chips, submit juicy, anillo y dots reusados sin tocar su markup. */
+[data-exec-v3] .exec-v3-calm {
+  --exec-brand: var(--exec-recovery, #18abd4);
+}
+
+/* Media calmada (fondo más frío que la de fuerza). */
+[data-exec-v3] .exec-v3-media-calm {
+  background: linear-gradient(160deg, #1c242a, #161b20);
+  border-color: #2a333a;
+}
+
+[data-exec-v3] .exec-v3-mobset {
+  font-size: 12px;
+  font-weight: 800;
+  color: #8fa3ab;
+  letter-spacing: 0.04em;
+}
+
+/* ---- Anillo de HOLD / countdown (movilidad + cardio) ---- */
+[data-exec-v3] .exec-v3-holdwrap {
+  position: relative;
+  width: 214px;
+  height: 214px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+[data-exec-v3] .exec-v3-hold-svg {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+[data-exec-v3] .exec-v3-hold-track {
+  stroke: #262c31;
+}
+[data-exec-v3] .exec-v3-hold-fill {
+  stroke: var(--exec-brand);
+  transition: stroke-dashoffset 0.5s linear;
+}
+[data-exec-v3] .exec-v3-cardio-fill {
+  transition: stroke-dashoffset 0.5s linear;
+}
+[data-exec-v3] .exec-v3-holdtxt {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+}
+[data-exec-v3] .exec-v3-holdnum {
+  font-size: 52px;
+  font-weight: 900;
+  letter-spacing: -0.04em;
+  line-height: 1;
+  color: #eef4f6;
+}
+[data-exec-v3] .exec-v3-holdnum.is-done {
+  font-size: 34px;
+  color: var(--exec-brand);
+}
+[data-exec-v3] .exec-v3-holdlbl {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #8f8f9c;
+  margin-top: 6px;
+}
+[data-exec-v3] .exec-v3-hold-icon {
+  position: absolute;
+  bottom: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  color: #8f8f9c;
+}
+[data-exec-v3] .exec-v3-phaselbl {
+  font-size: 14px;
+  font-weight: 900;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+
+/* ---- Movilidad: pastilla de lado + "luego" ---- */
+[data-exec-v3] .exec-v3-sidepill {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 18px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--exec-brand) 15%, #16161d);
+  border: 2px solid color-mix(in srgb, var(--exec-brand) 36%, transparent);
+  font-size: 17px;
+  font-weight: 900;
+  letter-spacing: -0.01em;
+  color: color-mix(in srgb, var(--exec-brand) 90%, #fff);
+}
+[data-exec-v3] .exec-v3-sidedot {
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: var(--exec-brand);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--exec-brand) 22%, transparent);
+}
+[data-exec-v3] .exec-v3-then {
+  font-size: 12px;
+  font-weight: 800;
+  color: #6f7c82;
+}
+[data-exec-v3] .exec-v3-then b {
+  color: #9fb2b9;
+}
+
+/* ---- Roller: objetivo + contador gigante ---- */
+[data-exec-v3] .exec-v3-rollgoal {
+  text-align: center;
+  font-size: 13px;
+  font-weight: 800;
+  color: #c4c4cf;
+}
+[data-exec-v3] .exec-v3-rollgoal b {
+  color: #fff;
+}
+[data-exec-v3] .exec-v3-counter {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+}
+[data-exec-v3] .exec-v3-counter-mid {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 132px;
+}
+[data-exec-v3] .exec-v3-bignumber {
+  font-size: 88px;
+  font-weight: 900;
+  letter-spacing: -0.05em;
+  line-height: 0.9;
+  color: #fff;
+}
+[data-exec-v3] .exec-v3-counter-lbl {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #7f7f8c;
+  margin-top: 6px;
+}
+[data-exec-v3] .exec-v3-cbtn {
+  width: 60px;
+  height: 60px;
+  flex-shrink: 0;
+  border-radius: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #1c1c24;
+  border: 2px solid #2f2f3a;
+  color: #e8e8ee;
+  transition: transform 0.1s ease, background-color 0.12s ease;
+}
+[data-exec-v3] .exec-v3-cbtn:active {
+  transform: scale(0.94);
+}
+[data-exec-v3] .exec-v3-cbtn:disabled {
+  opacity: 0.4;
+}
+[data-exec-v3] .exec-v3-cbtn.is-plus {
+  background: color-mix(in srgb, var(--exec-brand) 20%, #16161d);
+  border-color: color-mix(in srgb, var(--exec-brand) 50%, transparent);
+  color: color-mix(in srgb, var(--exec-brand) 90%, #fff);
+}
+
+/* ---- Chip de cronómetro opcional ---- */
+[data-exec-v3] .exec-v3-timerchip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  font-size: 13px;
+  font-weight: 800;
+  color: #b7b7c2;
+  background: #1c1c24;
+  border: 1.5px solid #2f2f3a;
+  border-radius: 12px;
+  padding: 8px 14px;
+}
+[data-exec-v3] .exec-v3-opt {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #6a6a76;
+}
+
+/* ---- Cardio: identidad + mini media + fuente FC ---- */
+[data-exec-v3] .exec-v3-cardio-id {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+[data-exec-v3] .exec-v3-cardio-mini {
+  position: relative;
+  width: 84px;
+  height: 84px;
+  flex-shrink: 0;
+  border-radius: 18px;
+  overflow: hidden;
+  border: 2px solid #2f2f3a;
+  background: linear-gradient(160deg, #202029, #17171f);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+[data-exec-v3] .exec-v3-cardio-mini-empty {
+  color: #4a4a55;
+}
+[data-exec-v3] .exec-v3-cardio-source {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  font-size: 11px;
+  font-weight: 700;
+  color: #8f8f9c;
+  background: #15151c;
+  border: 1.5px solid #24242e;
+  border-radius: 12px;
+  padding: 8px 11px;
+}
+[data-exec-v3] .exec-v3-cardio-source b {
+  color: #cfcfd8;
+  font-weight: 800;
+}
+[data-exec-v3] .exec-v3-cardio-goal {
+  font-size: 15px;
+  font-weight: 800;
+  color: #c4c4cf;
+  text-align: center;
+}
+[data-exec-v3] .exec-v3-cardio-goal b {
+  color: #fff;
+}
+
+/* ---- Zona objetivo (color por --zc, fijo por zona) ---- */
+[data-exec-v3] .exec-v3-zone {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 16px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--zc, var(--exec-brand)) 16%, #16161d);
+  border: 2px solid color-mix(in srgb, var(--zc, var(--exec-brand)) 40%, transparent);
+  font-size: 15px;
+  font-weight: 900;
+}
+[data-exec-v3] .exec-v3-zonedot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--zc, var(--exec-brand));
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--zc, var(--exec-brand)) 25%, transparent);
+}
+[data-exec-v3] .exec-v3-zonet {
+  color: var(--zc, var(--exec-brand));
+}
+[data-exec-v3] .exec-v3-zonek {
+  color: #cbd5c9;
+  font-weight: 700;
+  font-size: 13px;
+}
+
+/* ---- Cardio intervalos: fase siguiente + barra segmentada + saltar ---- */
+[data-exec-v3] .exec-v3-nextphase {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 14px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--np, var(--exec-brand)) 12%, #16161d);
+  border: 1.5px solid color-mix(in srgb, var(--np, var(--exec-brand)) 30%, transparent);
+  font-size: 13px;
+  font-weight: 800;
+  color: color-mix(in srgb, var(--np, var(--exec-brand)) 82%, #fff);
+}
+[data-exec-v3] .exec-v3-nextphase-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--np, var(--exec-brand));
+}
+[data-exec-v3] .exec-v3-nextphase b {
+  color: #eef4f2;
+}
+[data-exec-v3] .exec-v3-segwrap {
+  width: 100%;
+}
+[data-exec-v3] .exec-v3-segs {
+  display: flex;
+  gap: 5px;
+  margin-bottom: 7px;
+}
+[data-exec-v3] .exec-v3-seg {
+  flex: 1;
+  height: 10px;
+  border-radius: 4px;
+  background: #26262f;
+}
+[data-exec-v3] .exec-v3-seg.is-fill {
+  background: var(--zone-z4);
+}
+[data-exec-v3] .exec-v3-seg.is-cur {
+  background: var(--zone-z4);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--zone-z4) 22%, transparent);
+}
+[data-exec-v3] .exec-v3-seglbl {
+  font-size: 12px;
+  font-weight: 800;
+  color: #9a9aa6;
+  text-align: center;
+}
+[data-exec-v3] .exec-v3-seglbl b {
+  color: var(--zone-z4);
+}
+[data-exec-v3] .exec-v3-skipphase {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 44px;
+  padding: 6px 12px;
+  border-radius: 12px;
+  background: #1c1c24;
+  border: 1.5px solid #2f2f3a;
+  color: #b7b7c2;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+/* Cuenta serena (reduced-motion): sin transición del anillo — el número salta por segundo, sin animar. */
+@media (prefers-reduced-motion: reduce) {
+  [data-exec-v3] .exec-v3-hold-fill,
+  [data-exec-v3] .exec-v3-cardio-fill {
+    transition: none;
+  }
+}
+
+/* Latido sutil del punto de zona (decorativo — off en reduced-motion). */
+@media (prefers-reduced-motion: no-preference) {
+  [data-exec-v3] .exec-v3-zonedot {
+    animation: exec-v3-beat 1.8s ease-in-out infinite;
+  }
+}

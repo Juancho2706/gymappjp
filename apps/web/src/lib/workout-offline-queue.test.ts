@@ -245,6 +245,16 @@ describe('workout-offline-queue', () => {
             expect(fd.get('actual_hold_sec')).toBe('45')
             expect(fd.get('actual_avg_hr')).toBe('150')
         })
+
+        // E3.2: el hold POR LADO {left_sec,right_sec} viaja como JSON → el action lo parsea y escribe
+        // workout_logs.metadata. Sólo la fila per_side de movilidad lo trae; el resto no gana la key.
+        it('serializes per_side hold metadata as JSON (and omits it when absent/null)', () => {
+            const perSide = workoutLogToFormData(make({ actualHoldSec: 55, metadata: { left_sec: 30, right_sec: 25 } }))
+            expect(perSide.get('metadata')).toBe('{"left_sec":30,"right_sec":25}')
+            expect(perSide.get('actual_hold_sec')).toBe('55')
+            expect(workoutLogToFormData(make({})).has('metadata')).toBe(false)
+            expect(workoutLogToFormData(make({ metadata: null })).has('metadata')).toBe(false)
+        })
     })
 
     describe('flushWorkoutQueue', () => {
