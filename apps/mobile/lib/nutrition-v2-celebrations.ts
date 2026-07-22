@@ -1,7 +1,7 @@
 /**
  * Nutrición V2 · celebraciones NO tóxicas (Tanda 10 MVP).
  *
- * LÓGICA PURA y testeable: decide QUÉ badge mostrar y SI corresponde celebrar.
+ * LÓGICA PURA y testeable: decide QUÉ celebración mostrar y SI corresponde.
  * Sin imports de React/RN/AsyncStorage (los claims persistentes viven en el
  * sibling `nutrition-v2-celebrations.storage.ts`, que sí toca AsyncStorage).
  *
@@ -12,6 +12,17 @@
  *    UI no muestra nada. Nunca "perdiste tu racha" ni contadores punitivos.
  *  - Anti-spam: micro-pops de registro solo la PRIMERA vez del día; el pop de
  *    escaneo, solo la PRIMERA vez absoluta. El resto del día/uso: silencio.
+ *
+ * Divergencias y paridad (decisión del owner 2026-07-19 — `DECISIONES-OWNER.md`
+ * fila 2 de la ola 4A):
+ *  - Las TRES celebraciones sin contraparte web (meal-logged, day-close,
+ *    scanner-hit → `kind: 'badge'`) se CONSERVAN como divergencia aprobada:
+ *    valor nativo legítimo (háptica + animación). No se replican a web.
+ *  - La celebración de meta de energía (`kind: 'energy-goal'`) SÍ es paridad con
+ *    el hero web `AuraHero.tsx` (confeti tintado al primario + overlay con
+ *    ilustración `dia-completado` + pill; 1×/día; sin partículas con reduce-motion).
+ *    Por eso deja de reusar el badge `dia-cerrado` y tiene presentación propia,
+ *    espejo del overlay web (ver `CelebrationOverlay.tsx`).
  */
 
 /** Los tres badges que la celebración MVP puede mostrar. Espejo de los assets
@@ -25,10 +36,16 @@ export type CelebrationMoment = 'meal-logged' | 'day-closed' | 'scanner-hit' | '
  * `micro` = micro-pop breve (registro / escaneo): badge con spring corto. */
 export type CelebrationVariant = 'full' | 'micro'
 
-export interface CelebrationDecision {
-  badge: CelebrationBadge
-  variant: CelebrationVariant
-}
+/**
+ * Decisión de celebración discriminada por `kind`:
+ *  - `badge`: las tres celebraciones nativas RN-extra (divergencia aprobada),
+ *    con su webp y variante de animación.
+ *  - `energy-goal`: paridad con el overlay web de meta de energía (presentación
+ *    propia — ilustración + pill; ver `CelebrationOverlay.tsx`). Siempre `full`.
+ */
+export type CelebrationDecision =
+  | { kind: 'badge'; badge: CelebrationBadge; variant: CelebrationVariant }
+  | { kind: 'energy-goal'; variant: 'full' }
 
 // ---------------------------------------------------------------------------
 // Decisiones puras. Reciben el estado "¿ya se celebró?" (leído del storage por
@@ -41,7 +58,7 @@ export interface CelebrationDecision {
  */
 export function decideMealLoggedCelebration(alreadyCelebratedToday: boolean): CelebrationDecision | null {
   if (alreadyCelebratedToday) return null
-  return { badge: 'primer-registro', variant: 'micro' }
+  return { kind: 'badge', badge: 'primer-registro', variant: 'micro' }
 }
 
 /**
@@ -54,7 +71,7 @@ export function decideDayCloseCelebration(
   alreadyCelebratedToday: boolean,
 ): CelebrationDecision | null {
   if (!dayComplete || alreadyCelebratedToday) return null
-  return { badge: 'dia-cerrado', variant: 'full' }
+  return { kind: 'badge', badge: 'dia-cerrado', variant: 'full' }
 }
 
 /**
@@ -63,21 +80,25 @@ export function decideDayCloseCelebration(
  */
 export function decideScannerHitCelebration(alreadyCelebratedEver: boolean): CelebrationDecision | null {
   if (alreadyCelebratedEver) return null
-  return { badge: 'primer-escaneo', variant: 'micro' }
+  return { kind: 'badge', badge: 'primer-escaneo', variant: 'micro' }
 }
 
 /**
- * Cruce de la meta de energía del día → celebración completa `dia-cerrado`
- * (confeti + spring largo), SOLO si se alcanzó la meta y no se celebró ya hoy.
+ * Cruce de la meta de energía del día → celebración de meta de energía
+ * (`kind: 'energy-goal'`), SOLO si se alcanzó la meta y no se celebró ya hoy.
  * Se celebra el HÁBITO de llegar a tu objetivo, nunca "quemar" ni un déficit.
  * Sin meta el caller nunca marca `reached` (ver `energyGoalReached`) → silencio.
+ *
+ * A diferencia de las demás, esta es PARIDAD con el hero web (`AuraHero.tsx`):
+ * presentación propia (ilustración `dia-completado` + pill), no el badge
+ * `dia-cerrado`. El overlay resuelve esa presentación por `kind`.
  */
 export function decideEnergyGoalCelebration(
   reached: boolean,
   alreadyCelebratedToday: boolean,
 ): CelebrationDecision | null {
   if (!reached || alreadyCelebratedToday) return null
-  return { badge: 'dia-cerrado', variant: 'full' }
+  return { kind: 'energy-goal', variant: 'full' }
 }
 
 // ---------------------------------------------------------------------------
@@ -154,7 +175,32 @@ export interface CelebrationAnimationPlan {
 export function celebrationAnimationPlan(
   variant: CelebrationVariant,
   reduced: boolean,
+  kind: CelebrationDecision['kind'] = 'badge',
 ): CelebrationAnimationPlan {
+  if (kind === 'energy-goal') {
+    // Paridad con el overlay web de meta de energía (`AuraHero.tsx` ~100-103):
+    // visible 3000ms, 4000ms con reduce; confeti tintado al primario salvo
+    // reduce-motion (sin partículas). Duración larga (slower) para el pop.
+    if (reduced) {
+      return {
+        confetti: false,
+        particleCount: 0,
+        entrance: 'fade',
+        durationToken: 'base',
+        visibleMs: 4000,
+        haptic: true,
+      }
+    }
+    return {
+      confetti: true,
+      particleCount: 12,
+      entrance: 'spring',
+      durationToken: 'slower',
+      visibleMs: 3000,
+      haptic: true,
+    }
+  }
+  // kind 'badge': comportamiento INTACTO (las tres celebraciones nativas).
   if (reduced) {
     // Variante ESTÁTICA: solo fade del badge, sin partículas ni movimiento.
     return {

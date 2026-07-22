@@ -85,6 +85,7 @@ import { supabase } from '../../../../lib/supabase'
 import { humanizeStudentWriteError } from '../../../../lib/student-access-copy'
 import { formatNutritionShortDate } from '../../../../lib/date-utils'
 import { foodMediaThumbnailUrl } from '../../../../lib/nutrition-v2-food-media'
+import { describeItemGuidance } from '../../../../lib/nutrition-v2-plan'
 import { isEnabled } from '../../../../lib/flags'
 import { useEntitlements } from '../../../../lib/entitlements'
 import { getNutritionHistoryV2, getNutritionPlanV2, getNutritionTodayV2 } from '../../../../lib/nutrition-v2.api'
@@ -2167,30 +2168,27 @@ function PlanTab() {
           <StrategyBadge strategy={summary.strategy} />
           <PlanVersionBadge version={summary.versionNumber} status={summary.status} />
         </View>
-        <Text className="mt-3 font-display text-2xl font-bold text-text-strong">{summary.name}</Text>
+        <Text className="mt-4 font-display text-2xl font-bold text-text-strong">{summary.name}</Text>
         <Text className="mt-1 text-xs text-text-muted">
           Vigente desde {formatNutritionShortDate(summary.effectiveFrom)}
           {summary.effectiveTo ? ` hasta ${formatNutritionShortDate(summary.effectiveTo)}` : ' · versión actual'}
         </Text>
-        <Text className="mt-2 text-xs leading-4 text-text-subtle">{NUTRITION_STRATEGIES[summary.strategy].description}</Text>
+        <Text className="mt-2 text-sm leading-6 text-text-body">{NUTRITION_STRATEGIES[summary.strategy].description}</Text>
+        {plan.visibleNotes ? (
+          <View className="mt-4 rounded-control border border-border-subtle bg-surface-sunken p-3">
+            <Text className="text-[11px] font-semibold uppercase tracking-wide text-text-subtle">Notas de tu coach</Text>
+            <Text className="mt-1 text-sm leading-6 text-text-body">{plan.visibleNotes}</Text>
+          </View>
+        ) : null}
       </NutritionCard>
 
       {defaultVariant ? <PlanObjectives targets={defaultVariant.targets} /> : null}
 
       <PlanRulesCard permissions={plan.permissions} />
 
-      {plan.visibleNotes ? (
-        <NutritionCard tone="info">
-          <Text className="text-[11px] font-semibold uppercase tracking-wide text-text-subtle">Protocolo</Text>
-          <Text className="mt-1 text-sm leading-5 text-text-body">{plan.visibleNotes}</Text>
-        </NutritionCard>
-      ) : null}
-
       {plan.dayVariants.map((variant) => (
-        <PlanVariantCard key={variant.id} variant={variant} />
+        <PlanVariantCard key={variant.id} variant={variant} showTargets={plan.dayVariants.length > 1} />
       ))}
-
-      <Text className="text-center text-xs text-text-muted">Actualizado {formatNutritionShortDate(plan.asOfDate, { relative: true })}</Text>
     </ScrollView>
   )
 }
@@ -2205,11 +2203,13 @@ function PlanObjectives({ targets }: { targets: PlanVariant['targets'] }) {
   if (rows.length === 0) return null
   return (
     <NutritionCard>
-      <Text className="text-[11px] font-semibold uppercase tracking-wide text-text-subtle">Objetivos diarios</Text>
+      <Text className="text-[11px] font-semibold uppercase tracking-wide text-text-subtle">Metas diarias</Text>
       <View className="mt-3 flex-row flex-wrap gap-y-3">
         {rows.map((row) => (
           <View key={row.label} className="min-w-[30%] flex-1 pr-2">
-            <Text className="font-display text-lg font-bold text-text-strong">{row.value}</Text>
+            <Text className="font-display text-lg font-bold text-text-strong" style={{ fontVariant: ['tabular-nums'] }}>
+              {row.value}
+            </Text>
             <Text className="text-xs text-text-muted">{row.label}</Text>
           </View>
         ))}
@@ -2245,7 +2245,7 @@ function PlanRulesCard({ permissions }: { permissions: NutritionPlanReadModel['p
   )
 }
 
-function PlanVariantCard({ variant }: { variant: PlanVariant }) {
+function PlanVariantCard({ variant, showTargets }: { variant: PlanVariant; showTargets: boolean }) {
   return (
     <NutritionCard>
       <View className="flex-row flex-wrap items-center justify-between gap-2">
@@ -2256,42 +2256,96 @@ function PlanVariantCard({ variant }: { variant: PlanVariant }) {
           </View>
         ) : null}
       </View>
-      <Text className="mt-1 text-xs text-text-muted">
+      <Text className="mt-1 text-sm text-text-muted" style={{ fontVariant: ['tabular-nums'] }}>
         {variant.mealSlots.length} franja{variant.mealSlots.length === 1 ? '' : 's'}
         {variant.targets.calories != null ? ` · ${formatNutritionCalories(variant.targets.calories)}` : ''}
       </Text>
-      {variant.mealSlots.map((slot) => (
-        <View key={slot.id} className="mt-3">
-          <View className="flex-row items-center justify-between gap-2">
-            <Text className="text-sm font-semibold text-text-strong">{slot.name}</Text>
-            {slot.startTime ? <Text className="text-xs text-text-muted">{slot.startTime}</Text> : null}
-          </View>
-          {slot.instructions ? <Text className="mt-0.5 text-xs leading-4 text-text-subtle">{slot.instructions}</Text> : null}
-          {slot.prescriptionItems.length > 0 ? (
-            slot.prescriptionItems.map((item, index) => (
-              <View key={item.id} className={index > 0 ? 'border-t border-border-subtle' : undefined}>
-                <FoodRow
-                  food={{
-                    id: item.id,
-                    name: item.name ?? 'Alimento prescrito',
-                    detail: item.brand,
-                    thumbnailUrl: foodMediaThumbnailUrl(item.media),
-                    quantityLabel: `${item.quantity} ${item.unit}${item.optional ? ' · opcional' : ''}`,
-                    calories: item.macros.calories,
-                    proteinG: item.macros.proteinG,
-                    carbsG: item.macros.carbsG,
-                    fatsG: item.macros.fatsG,
-                  }}
-                  fallbackCategory={item.category}
-                />
-              </View>
-            ))
-          ) : (
-            <Text className="py-2 text-xs text-text-muted">Franja flexible sin alimentos prescritos.</Text>
-          )}
+      {showTargets ? (
+        <View className="mt-2">
+          <MacroChipRow
+            calories={variant.targets.calories}
+            proteinG={variant.targets.proteinG}
+            carbsG={variant.targets.carbsG}
+            fatsG={variant.targets.fatsG}
+            size="sm"
+          />
         </View>
-      ))}
+      ) : null}
+      <View className="mt-2 gap-4">
+        {variant.mealSlots.length === 0 ? (
+          <Text className="text-sm text-text-muted">
+            Plan sin franjas fijas: sigue tus metas diarias y registra lo que comas.
+          </Text>
+        ) : (
+          variant.mealSlots.map((slot) => <PlanSlotBlock key={slot.id} slot={slot} />)
+        )}
+      </View>
     </NutritionCard>
+  )
+}
+
+/** Una franja del plan: encabezado (hora), indicaciones, alimentos prescritos y subtotal. */
+function PlanSlotBlock({ slot }: { slot: PlanVariant['mealSlots'][number] }) {
+  const timeLabel = slot.startTime ? (slot.endTime ? `${slot.startTime}–${slot.endTime}` : slot.startTime) : null
+  const subtotal = slot.prescriptionItems.reduce((sum, item) => sum + (item.macros.calories ?? 0), 0)
+  const hasItems = slot.prescriptionItems.length > 0
+  const targetChips =
+    slot.targets.calories != null ||
+    slot.targets.proteinG != null ||
+    slot.targets.carbsG != null ||
+    slot.targets.fatsG != null
+
+  return (
+    <View className="rounded-control border border-border-subtle bg-surface-sunken/40 p-3">
+      <View className="flex-row items-center justify-between gap-2">
+        <View className="flex-row flex-wrap items-center gap-2">
+          <Text className="font-display text-base font-semibold text-text-strong">{slot.name}</Text>
+          {timeLabel ? <Text className="font-mono text-xs text-text-muted">{timeLabel}</Text> : null}
+        </View>
+        {hasItems && subtotal > 0 ? (
+          <Text className="font-mono text-xs font-semibold text-text-strong">{formatNutritionCalories(subtotal)}</Text>
+        ) : null}
+      </View>
+      {slot.instructions ? <Text className="mt-1 text-xs leading-5 text-text-subtle">{slot.instructions}</Text> : null}
+      {hasItems ? (
+        <View className="mt-2">
+          {slot.prescriptionItems.map((item, index) => (
+            <View key={item.id} className={index > 0 ? 'border-t border-border-subtle' : undefined}>
+              <FoodRow
+                food={{
+                  id: item.id,
+                  name: item.name ?? 'Alimento prescrito',
+                  detail: item.brand,
+                  thumbnailUrl: foodMediaThumbnailUrl(item.media),
+                  quantityLabel: `${item.quantity} ${item.unit}${item.optional ? ' · opcional' : ''}`,
+                  calories: item.macros.calories,
+                  proteinG: item.macros.proteinG,
+                  carbsG: item.macros.carbsG,
+                  fatsG: item.macros.fatsG,
+                }}
+                fallbackCategory={item.category}
+                note={describeItemGuidance(item)}
+              />
+            </View>
+          ))}
+        </View>
+      ) : targetChips ? (
+        <View className="mt-2">
+          <Text className="text-[11px] font-semibold uppercase tracking-wide text-text-subtle">Objetivo de la franja</Text>
+          <View className="mt-1">
+            <MacroChipRow
+              calories={slot.targets.calories}
+              proteinG={slot.targets.proteinG}
+              carbsG={slot.targets.carbsG}
+              fatsG={slot.targets.fatsG}
+              size="sm"
+            />
+          </View>
+        </View>
+      ) : (
+        <Text className="mt-2 text-xs text-text-muted">Franja flexible sin alimentos prescritos.</Text>
+      )}
+    </View>
   )
 }
 

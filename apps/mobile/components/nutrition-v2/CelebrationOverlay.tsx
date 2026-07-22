@@ -1,17 +1,23 @@
 /**
  * CelebrationOverlay — overlay breve y NO bloqueante para las celebraciones de
- * hábito de Nutrición V2 (Tanda 10 MVP).
+ * Nutrición V2 (Tanda 10 MVP).
  *
- * - Badge (require local `.webp`) entrando con spring scale + burst de confeti
- *   liviano (8-12 Views animadas, implementación propia, sin librerías nuevas).
+ * Dos presentaciones, discriminadas por `kind` (ver `nutrition-v2-celebrations.ts`):
+ * - `badge`: las tres celebraciones nativas RN-extra (divergencia aprobada por el
+ *   owner 2026-07-19). Badge (require local `.webp`) entrando con spring scale +
+ *   burst de confeti liviano (8-12 Views animadas, implementación propia).
+ * - `energy-goal`: PARIDAD con el overlay web de meta de energía (`AuraHero.tsx`):
+ *   card con ilustración `dia-completado` + pill "¡Meta de energía cumplida!" y
+ *   confeti tintado SOLO al primario (12 partículas; 3000ms / 4000ms con reduce).
+ *
  * - Háptico suave acoplado al pop.
- * - Auto-dismiss (~1.2-1.8s) con cola de fade; `pointerEvents="box-none"` en el
- *   contenedor y `none` en el contenido → NUNCA bloquea el input de la pantalla.
- * - Reduced-motion (useEvaMotion): SOLO fade del badge, sin partículas ni scale.
+ * - Auto-dismiss con cola de fade; `pointerEvents="box-none"` en el contenedor y
+ *   `none` en el contenido → NUNCA bloquea el input de la pantalla.
+ * - Reduced-motion (useEvaMotion): SOLO fade, sin partículas ni scale.
  *   Toda la política vive en `celebrationAnimationPlan` (puro/testeable).
  */
 import { useEffect, useMemo, useState } from 'react'
-import { StyleSheet, View } from 'react-native'
+import { StyleSheet, Text, View } from 'react-native'
 import { MotiView } from 'moti'
 import { Image } from 'expo-image'
 import {
@@ -21,12 +27,15 @@ import {
 } from '../../lib/nutrition-v2-celebrations'
 import { DURATION, EASE, useEvaMotion } from '../../lib/motion'
 import { useTheme } from '../../context/ThemeContext'
+import { hexToRgba } from '../../lib/theme'
 import { haptics } from '../../lib/haptics'
+import { nutritionIllustrationSource } from './state-illustration'
 
-/** Instancia a mostrar. `nonce` fuerza re-mount aunque el badge se repita. */
-export interface CelebrationInstance extends CelebrationDecision {
-  nonce: number
-}
+/** Instancia a mostrar. `nonce` fuerza re-mount aunque la celebración se repita.
+ * Es intersección (no `extends`): `CelebrationDecision` es una unión y una
+ * interface no puede extender uniones; los spreads de los call-sites siguen
+ * compilando igual (`{ ...decision, nonce }`). */
+export type CelebrationInstance = CelebrationDecision & { nonce: number }
 
 const BADGE_SOURCES: Record<CelebrationBadge, ReturnType<typeof require>> = {
   'primer-registro': require('../../assets/badges/primer-registro.webp'),
@@ -35,6 +44,8 @@ const BADGE_SOURCES: Record<CelebrationBadge, ReturnType<typeof require>> = {
 }
 
 const BADGE_SIZE = 132
+/** Escenario más ancho para la card de meta de energía (deja aire al confeti). */
+const ENERGY_STAGE = 240
 const FADE_TAIL_MS = 220
 
 interface ParticleSpec {
@@ -99,16 +110,21 @@ function CelebrationLayer({
 }) {
   const { reduced } = useEvaMotion()
   const { theme } = useTheme()
+  const isEnergy = celebration.kind === 'energy-goal'
   const plan = useMemo(
-    () => celebrationAnimationPlan(celebration.variant, reduced),
-    [celebration.variant, reduced],
+    () => celebrationAnimationPlan(celebration.variant, reduced, celebration.kind),
+    [celebration.variant, reduced, celebration.kind],
   )
   const [phase, setPhase] = useState<'in' | 'out'>('in')
 
-  const particles = useMemo(
-    () => (plan.confetti ? buildParticles(plan.particleCount, [theme.primary, theme.success, theme.warning]) : []),
-    [plan.confetti, plan.particleCount, theme.primary, theme.success, theme.warning],
-  )
+  // Paridad web: la meta de energía tinta el confeti SOLO al primario
+  // (`AuraHero.tsx:83-94`); los badges nativos usan la paleta mixta.
+  const stageSize = isEnergy ? ENERGY_STAGE : BADGE_SIZE
+  const particles = useMemo(() => {
+    if (!plan.confetti) return []
+    const palette = isEnergy ? [theme.primary] : [theme.primary, theme.success, theme.warning]
+    return buildParticles(plan.particleCount, palette)
+  }, [plan.confetti, plan.particleCount, isEnergy, theme.primary, theme.success, theme.warning])
 
   // Háptico suave acoplado al frame del pop (se mantiene bajo reduced-motion).
   useEffect(() => {
@@ -138,10 +154,15 @@ function CelebrationLayer({
       animate={{ opacity: phase === 'out' ? 0 : 1 }}
       transition={{ type: 'timing', duration: reduced ? 120 : 200, easing: EASE.out }}
     >
-      <View pointerEvents="none" style={styles.center}>
-        <View style={styles.stage}>
+      <View
+        pointerEvents="none"
+        accessibilityElementsHidden
+        importantForAccessibility="no-hide-descendants"
+        style={styles.center}
+      >
+        <View style={{ width: stageSize, height: stageSize, alignItems: 'center', justifyContent: 'center' }}>
           {particles.map((spec) => (
-            <Particle key={spec.id} spec={spec} anchor={BADGE_SIZE / 2} />
+            <Particle key={spec.id} spec={spec} anchor={stageSize / 2} />
           ))}
           <MotiView
             from={plan.entrance === 'spring' ? { scale: 0.3, opacity: 0 } : { opacity: 0 }}
@@ -152,12 +173,34 @@ function CelebrationLayer({
                 : { type: 'timing', duration: DURATION.base, easing: EASE.out }
             }
           >
-            <Image
-              source={BADGE_SOURCES[celebration.badge]}
-              style={{ width: BADGE_SIZE, height: BADGE_SIZE }}
-              contentFit="contain"
-              accessibilityIgnoresInvertColors
-            />
+            {celebration.kind === 'energy-goal' ? (
+              // Espejo del overlay web (`AuraHero.tsx:221-238`): card + círculo
+              // tintado al primario 12% con la ilustración `dia-completado` + pill.
+              // El `backdrop-blur` del web se omite (adaptación nativa; sin BlurView).
+              <View className="items-center rounded-sheet bg-surface-card/85 px-6 py-5 shadow-lg">
+                <View
+                  className="items-center justify-center rounded-full"
+                  style={{ width: 96, height: 96, backgroundColor: hexToRgba(theme.primary, 0.12) }}
+                >
+                  <Image
+                    source={nutritionIllustrationSource('dia-completado')}
+                    style={{ width: 80, height: 80 }}
+                    contentFit="contain"
+                    accessibilityIgnoresInvertColors
+                  />
+                </View>
+                <View className="mt-3 rounded-pill border border-primary/30 bg-primary/10 px-3 py-1">
+                  <Text className="text-sm font-semibold text-primary">¡Meta de energía cumplida!</Text>
+                </View>
+              </View>
+            ) : (
+              <Image
+                source={BADGE_SOURCES[celebration.badge]}
+                style={{ width: BADGE_SIZE, height: BADGE_SIZE }}
+                contentFit="contain"
+                accessibilityIgnoresInvertColors
+              />
+            )}
           </MotiView>
         </View>
       </View>
@@ -182,5 +225,4 @@ export function CelebrationOverlay({
 
 const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  stage: { width: BADGE_SIZE, height: BADGE_SIZE, alignItems: 'center', justifyContent: 'center' },
 })
