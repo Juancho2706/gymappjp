@@ -343,17 +343,35 @@ describe('WorkoutLogSetSchema — espejo polimórfico (AC4)', () => {
         expect(WorkoutLogSetSchema.safeParse({ ...baseLog, actual_avg_hr: 300 }).success).toBe(false)
     })
 
-    // Escala 1-10 para AMBOS (decisión CEO, pisa RPE 6-10 / RIR 0-5 anteriores).
-    it('acepta RPE y RIR en el borde 1 y 10', () => {
-        expect(WorkoutLogSetSchema.safeParse({ ...baseLog, rpe: '1', rir: '1' }).success).toBe(true)
+    // Escala 0-10 para AMBOS (decisión CEO executor-v3): RIR 0 = al fallo, RPE 0 = sin esfuerzo.
+    it('acepta RPE y RIR en el borde 0 y 10', () => {
+        expect(WorkoutLogSetSchema.safeParse({ ...baseLog, rpe: '0', rir: '0' }).success).toBe(true)
         expect(WorkoutLogSetSchema.safeParse({ ...baseLog, rpe: '10', rir: '10' }).success).toBe(true)
     })
 
-    it('rechaza RPE/RIR fuera de 1-10 (0 y 11)', () => {
-        expect(WorkoutLogSetSchema.safeParse({ ...baseLog, rpe: '0' }).success).toBe(false)
-        expect(WorkoutLogSetSchema.safeParse({ ...baseLog, rir: '0' }).success).toBe(false)
+    it('coacciona el 0 a número (no lo descarta como falsy)', () => {
+        const result = WorkoutLogSetSchema.safeParse({ ...baseLog, rpe: '0', rir: '0' })
+        expect(result.success).toBe(true)
+        if (result.success) {
+            expect(result.data.rpe).toBe(0)
+            expect(result.data.rir).toBe(0)
+        }
+    })
+
+    it('rechaza RPE/RIR fuera de 0-10 (-1 y 11)', () => {
+        expect(WorkoutLogSetSchema.safeParse({ ...baseLog, rpe: '-1' }).success).toBe(false)
+        expect(WorkoutLogSetSchema.safeParse({ ...baseLog, rir: '-1' }).success).toBe(false)
         expect(WorkoutLogSetSchema.safeParse({ ...baseLog, rpe: '11' }).success).toBe(false)
         expect(WorkoutLogSetSchema.safeParse({ ...baseLog, rir: '11' }).success).toBe(false)
+    })
+
+    it('acepta RPE/RIR ausentes (undefined es válido — el esfuerzo es opcional)', () => {
+        const result = WorkoutLogSetSchema.safeParse({ ...baseLog, weight_kg: '60', reps_done: '10' })
+        expect(result.success).toBe(true)
+        if (result.success) {
+            expect(result.data.rpe).toBeUndefined()
+            expect(result.data.rir).toBeUndefined()
+        }
     })
 
     // Sustitución de máquina ocupada (Fase L · workstream C) — 3 campos opcionales/aditivos.
