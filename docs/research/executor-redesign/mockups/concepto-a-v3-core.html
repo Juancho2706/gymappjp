@@ -297,6 +297,22 @@
       background: var(--brand-a3a);
       box-shadow: 0 0 0 2px #16161d, 0 0 0 4px color-mix(in srgb, var(--brand-a3a) 45%, transparent);
     }
+    /* chips: extendidos al entrar la serie, colapsan a solo-icono ~1.2s despues (demo en loop de 8s) */
+    #concept-a3a .a3a-mlabel { display: inline-block; overflow: hidden; white-space: nowrap; max-width: 110px; }
+    @media (prefers-reduced-motion: no-preference) {
+      #concept-a3a .a3a-mlabel { animation: concept-a3a-mlabel 8s cubic-bezier(.4,0,.2,1) infinite; }
+      #concept-a3a .a3a-mchip { animation: concept-a3a-mchippad 8s cubic-bezier(.4,0,.2,1) infinite; }
+    }
+    @keyframes concept-a3a-mlabel {
+      0%, 15% { max-width: 110px; opacity: 1; margin-left: 0; }
+      24%, 88% { max-width: 0; opacity: 0; margin-left: -6px; }
+      96%, 100% { max-width: 110px; opacity: 1; margin-left: 0; }
+    }
+    @keyframes concept-a3a-mchippad {
+      0%, 15% { padding-left: 11px; padding-right: 11px; }
+      24%, 88% { padding-left: 8px; padding-right: 8px; }
+      96%, 100% { padding-left: 11px; padding-right: 11px; }
+    }
 
     /* ===== prescription ===== */
     #concept-a3a .a3a-rx { font-size: 13px; font-weight: 700; color: #c4c4cf; text-align: center; margin-bottom: 10px; letter-spacing: .01em; }
@@ -765,13 +781,13 @@
                     <line x1="9" y1="6" x2="20" y2="6"/><line x1="9" y1="12" x2="20" y2="12"/><line x1="9" y1="18" x2="20" y2="18"/>
                     <circle cx="4.5" cy="6" r="1.2"/><circle cx="4.5" cy="12" r="1.2"/><circle cx="4.5" cy="18" r="1.2"/>
                   </svg>
-                  Instrucciones
+                  <span class="a3a-mlabel">Instrucciones</span>
                 </span>
                 <span class="a3a-mchip" role="button">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                     <path d="M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.4 8.4 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8z"/>
                   </svg>
-                  Nota del coach
+                  <span class="a3a-mlabel">Nota del coach</span>
                   <span class="a3a-badge"></span>
                 </span>
               </div>
@@ -837,6 +853,7 @@
       <ul class="a3a-bullets">
         <li><b>Instrucciones a un toque</b>: el chip sobre la media abre un sheet con la tecnica paso a paso, sin salir del ejercicio.</li>
         <li><b>Nota del coach con aviso</b>: el chip lleva un puntito de marca cuando hay mensaje; se abre en el mismo sheet.</li>
+        <li><b>Chips que no estorban</b>: al entrar cada serie aparecen extendidos y ~1s despues se contraen a solo-icono con animacion fluida, despejando la media.</li>
         <li><b>Ajustes en la tuerca</b>: arriba a la derecha controlas sonido y pantalla; el RIR opcional y el CTA juicy siguen mandando.</li>
       </ul>
     </div>
