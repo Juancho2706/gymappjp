@@ -14,6 +14,7 @@ import {
     doneAttributionLabel,
 } from '@/lib/workout/executor-recovery'
 import { WorkoutDoneSheet } from './WorkoutDoneSheet'
+import { useWorkoutLaunch } from '../launch/WorkoutLaunchMorph'
 import type { WeekDayStatus } from '../../_data/weekPendingWorkouts'
 
 const DAYS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
@@ -56,6 +57,8 @@ export function WorkoutPlanCards({
     const base = useBasePath(`/c/${coachSlug}`)
     // Sheet de doble intención: se abre al tocar un día hecho en OTRO día de la semana.
     const [sheetItem, setSheetItem] = useState<WorkoutPlanCardItem | null>(null)
+    // QA6: morph de lanzamiento desde el rect de la card (mismo destino de navegación).
+    const { launch, morph } = useWorkoutLaunch()
 
     return (
         <>
@@ -143,6 +146,11 @@ export function WorkoutPlanCards({
                         <Link
                             key={p.id}
                             href={href}
+                            onClick={(e) => {
+                                // QA6: el MISMO morph que el CTA, disparado desde el rect de la card.
+                                e.preventDefault()
+                                launch(e.currentTarget, href)
+                            }}
                             aria-label={
                                 pending
                                     ? `${p.title} · pendiente, recuperar`
@@ -168,6 +176,7 @@ export function WorkoutPlanCards({
                     repeatHref={buildWorkoutRepeatHref(base, sheetItem.id)}
                 />
             ) : null}
+            {morph}
         </>
     )
 }

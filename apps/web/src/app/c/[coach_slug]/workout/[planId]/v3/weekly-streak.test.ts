@@ -83,4 +83,41 @@ describe('computeWeeklyStreak', () => {
         expect(s.label).toBe('3 de 3')
         expect(s.days.every((d) => d.state === 'done')).toBe(true)
     })
+
+    // QA6 (decisión CEO 2026-07-22): la racha cuenta DÍAS ASIGNADOS COMPLETADOS. Un día sin nada
+    // asignado (descanso implícito → status 'rest') es NEUTRO: no cuenta al denominador ni corta la
+    // cadena. Caso reportado: coach programa Lun y Mié, martes NADA; el alumno entrena Lun y Mié.
+    it('CASO CEO: Lun asignado+hecho, Mar SIN asignar, Mié asignado+hecho ⇒ "2 de 2" y martes neutro sin corte', () => {
+        const ceo: WeekStatusDaySource[] = [
+            { dayOfWeek: 1, status: 'done', isToday: false }, // Lun asignado + hecho
+            { dayOfWeek: 2, status: 'rest', isToday: false }, // Mar SIN asignación (descanso implícito)
+            { dayOfWeek: 3, status: 'done', isToday: true },  // Mié asignado + hecho (hoy)
+            { dayOfWeek: 4, status: 'rest', isToday: false },
+            { dayOfWeek: 5, status: 'rest', isToday: false },
+            { dayOfWeek: 6, status: 'rest', isToday: false },
+            { dayOfWeek: 7, status: 'rest', isToday: false },
+        ]
+        const s = computeWeeklyStreak(ceo)
+        // Y = días ASIGNADOS (Lun + Mié) = 2, jamás 7 ni 3: el martes sin plan NO cuenta.
+        expect(s.planned).toBe(2)
+        expect(s.done).toBe(2)
+        expect(s.label).toBe('2 de 2')
+        // El martes es NEUTRO ('rest'), nunca un dot de asignado-sin-hacer ('todo').
+        expect(s.days.find((d) => d.dayOfWeek === 2)!.state).toBe('rest')
+        // La cadena Lun→Mié SALTA el martes sin romperse: ambos días asignados quedan 'done'.
+        expect(s.days.find((d) => d.dayOfWeek === 1)!.state).toBe('done')
+        expect(s.days.find((d) => d.dayOfWeek === 3)!.state).toBe('done')
+    })
+
+    it('distingue día SIN asignación (rest) de día ASIGNADO sin hacer (todo) — para pintarlos distinto', () => {
+        const mix: WeekStatusDaySource[] = [
+            { dayOfWeek: 1, status: 'pending', isToday: false }, // asignado, no hecho → 'todo' (dot bordeado)
+            { dayOfWeek: 2, status: 'rest', isToday: false },    // sin asignar → 'rest' (dot neutro)
+        ]
+        const s = computeWeeklyStreak(mix)
+        expect(s.days.find((d) => d.dayOfWeek === 1)!.state).toBe('todo')
+        expect(s.days.find((d) => d.dayOfWeek === 2)!.state).toBe('rest')
+        // Sólo el día asignado cuenta al denominador (el neutro no).
+        expect(s.planned).toBe(1)
+    })
 })

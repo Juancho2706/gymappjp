@@ -5,21 +5,28 @@ import type { WeeklyStreak, WeeklyStreakDotState } from './weekly-streak'
 
 /**
  * Ejecutor V3 (E4.4) — presentación de la RACHA SEMANAL: etiqueta + "N de M" + 7 puntos Lun→Dom.
- * Sin guilt: un día pendiente (pasado o futuro) se ve igual (`todo`), nunca como falta. El punto
- * `done` usa el acento del ejecutor (`--exec-brand`); `today` va en anillo; descanso/todo, tenues.
- * Compartida por la pantalla de Inicio (SessionStart) y la Final V3.
+ * Sin guilt: un día ASIGNADO sin hacer (pasado o futuro) se ve igual (`todo`), nunca como falta.
+ *
+ * QA6 (decisión CEO 2026-07-22): la racha cuenta DÍAS ASIGNADOS COMPLETADOS. Un día SIN asignación
+ * (`rest` — sin plan ni descanso explícito; ambos persisten igual: sin fila de `workout_plan` para ese
+ * día) es NEUTRO: no cuenta al denominador (ya lo excluye `computeWeeklyStreak`) NI corta la cadena, y
+ * se pinta DISTINTO — punto pequeño y tenue SIN borde de "fallo" — para que la fila Lun→Dom lea a los
+ * días entrenados como una cadena que SALTA los neutros, en vez de un `todo` bordeado que parecía un
+ * eslabón roto. `done` usa el acento (`--exec-brand`); `today` va en anillo; `todo` (asignado sin hacer)
+ * conserva el punto del track con borde tenue. Compartida por Inicio (SessionStart) y Final V3.
  */
 
 const DOT_TITLE: Record<WeeklyStreakDotState, string> = {
     done: 'Completado',
     today: 'Hoy',
-    rest: 'Descanso',
+    rest: 'Sin asignación',
     todo: 'Pendiente',
 }
 
 /**
  * Estilo inline por estado (self-contained). Estilo del mockup `.a2-sd` (concepto-a-v2): dot 16px,
  * borde 2px; el `on` (done) rellena de marca con borde oscurecido + glow 3px de la marca al 20%.
+ * `rest` rompe con el mockup a propósito (QA6): día SIN asignación = punto ~7px, tenue, SIN borde.
  */
 function dotStyle(state: WeeklyStreakDotState, isToday: boolean): React.CSSProperties {
     if (state === 'done') {
@@ -32,7 +39,12 @@ function dotStyle(state: WeeklyStreakDotState, isToday: boolean): React.CSSPrope
     if (state === 'today' || isToday) {
         return { background: '#26262f', border: '2px solid color-mix(in srgb, var(--exec-brand) 70%, transparent)' }
     }
-    // rest / todo: apagado del mockup, sin culpa.
+    if (state === 'rest') {
+        // Día SIN asignación (o descanso explícito): NEUTRO — punto pequeño y tenue, sin borde de
+        // "fallo". Recede visualmente para que la cadena de días asignados salte el hueco sin romperse.
+        return { background: '#33333f', border: 'none', transform: 'scale(0.45)', opacity: 0.7 }
+    }
+    // todo: día ASIGNADO sin hacer (pasado o futuro), sin culpa — punto del track con borde tenue.
     return { background: '#26262f', border: '2px solid #33333f' }
 }
 

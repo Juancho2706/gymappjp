@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   ActivityIndicator,
   FlatList,
@@ -7,7 +7,6 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native'
-import { useRouter } from 'expo-router'
 import { AlertTriangle, Check, ChevronRight, Dumbbell, Play, RefreshCw } from 'lucide-react-native'
 import { MotiView } from 'moti'
 import { supabase } from '../../../lib/supabase'
@@ -20,6 +19,7 @@ import { ProgressRing } from '../../../components/ProgressRing'
 import { EvaLoaderScreen } from '../../../components/EvaLoader'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { AppBackground } from '../../../components/AppBackground'
+import { measureMorphOrigin, useSessionMorph, type MorphOrigin } from '../../../components/alumno/workout/v3/session-morph'
 
 const DAY_NAMES = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
 const TODAY_DOW = new Date().getDay()
@@ -49,7 +49,7 @@ interface TodayProgress {
 
 export default function WorkoutScreen() {
   const { theme } = useTheme()
-  const router = useRouter()
+  const { startMorph } = useSessionMorph()
   const [plans, setPlans] = useState<Plan[]>([])
   const [todayProgress, setTodayProgress] = useState<TodayProgress | null>(null)
   const [loading, setLoading] = useState(true)
@@ -160,7 +160,7 @@ export default function WorkoutScreen() {
           variant={isToday ? 'highlighted' : 'default'}
           interactive
           padding={18}
-          onPress={() => router.push(`/alumno/workout/${item.id}`)}
+          onPress={() => startMorph({ planId: item.id })}
           style={styles.card}
         >
           <View
@@ -277,7 +277,7 @@ export default function WorkoutScreen() {
             todayProgress ? (
               <TodayHero
                 progress={todayProgress}
-                onStart={() => router.push(`/alumno/workout/${todayProgress.planId}`)}
+                onStart={(origin) => startMorph({ planId: todayProgress.planId, origin })}
               />
             ) : null
           }
@@ -288,8 +288,9 @@ export default function WorkoutScreen() {
 }
 
 /** Hero de HOY — espejo web §4.5: ProgressRing (series/objetivo) + CTA Empezar/Continuar/Ver registro. */
-function TodayHero({ progress, onStart }: { progress: TodayProgress; onStart: () => void }) {
+function TodayHero({ progress, onStart }: { progress: TodayProgress; onStart: (origin?: MorphOrigin | null) => void }) {
   const { theme } = useTheme()
+  const ctaRef = useRef<View>(null)
   const { logged, target } = progress
   const done = target > 0 && logged >= target
   const inProgress = logged > 0 && !done
@@ -336,8 +337,16 @@ function TodayHero({ progress, onStart }: { progress: TodayProgress; onStart: ()
             }
           />
         </View>
-        <View style={{ marginTop: 14 }}>
-          <Button testID="workout-hero-cta" label={ctaLabel} variant="sport" size="lg" leftIcon={Play} full onPress={onStart} />
+        <View style={{ marginTop: 14 }} ref={ctaRef} collapsable={false}>
+          <Button
+            testID="workout-hero-cta"
+            label={ctaLabel}
+            variant="sport"
+            size="lg"
+            leftIcon={Play}
+            full
+            onPress={() => measureMorphOrigin(ctaRef.current, 16, (origin) => onStart(origin))}
+          />
         </View>
       </Card>
     </MotiView>

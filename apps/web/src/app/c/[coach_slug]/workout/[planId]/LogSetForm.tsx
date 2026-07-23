@@ -1661,7 +1661,7 @@ function TypedLogSetRow({
                 ref={formRef}
                 action={handleSubmit}
                 onKeyDown={handleFormKeyDown}
-                className={`grid ${gridCols} gap-2 items-center px-1.5 md:px-2 py-1.5`}
+                className={`grid ${gridCols} gap-2 ${perSide ? 'items-end' : 'items-center'} px-1.5 md:px-2 py-1.5`}
             >
                 <input type="hidden" name="block_id" value={blockId} />
                 <input type="hidden" name="set_number" value={setNumber} />
@@ -1720,25 +1720,35 @@ function TypedLogSetRow({
                 {mode === 'mobility' && perSide && (
                     <>
                         {/* Hold POR LADO (E3.2): dos segundos independientes; el engine los suma en
-                            `actual_hold_sec` y guarda el desglose en `metadata`. Siembra desde el log. */}
-                        <input
-                            ref={holdLeftRef}
-                            name="hold_left_sec"
-                            {...fieldProps('hold_left_sec', 'numeric', { min: '0' })}
-                            defaultValue={inputDefault(existingLog?.metadata?.left_sec ?? null)}
-                            placeholder="izq"
-                            aria-label="Segundos de hold — lado izquierdo"
-                            className={typedInputClass}
-                        />
-                        <input
-                            ref={holdRightRef}
-                            name="hold_right_sec"
-                            {...fieldProps('hold_right_sec', 'numeric', { min: '0' })}
-                            defaultValue={inputDefault(existingLog?.metadata?.right_sec ?? null)}
-                            placeholder="der"
-                            aria-label="Segundos de hold — lado derecho"
-                            className={typedInputClass}
-                        />
+                            `actual_hold_sec` y guarda el desglose en `metadata`. Siembra desde el log.
+                            QA6 (hallazgo CEO): con ambos valores cargados ("60 | 60") el placeholder
+                            desaparece y no había señal de cuál lado es cuál → etiqueta CHICA sobre cada
+                            input (`exec-v3-sidelbl`: 10px/800 uppercase atenuado). Presentación pura: el
+                            motor (name/metadata) NO cambia. */}
+                        <label className="flex flex-col items-stretch gap-1">
+                            <span className="text-center text-[10px] font-extrabold uppercase leading-none tracking-[0.06em] text-[#7f7f8c]">Izq</span>
+                            <input
+                                ref={holdLeftRef}
+                                name="hold_left_sec"
+                                {...fieldProps('hold_left_sec', 'numeric', { min: '0' })}
+                                defaultValue={inputDefault(existingLog?.metadata?.left_sec ?? null)}
+                                placeholder="seg"
+                                aria-label="Segundos de hold — lado izquierdo"
+                                className={typedInputClass}
+                            />
+                        </label>
+                        <label className="flex flex-col items-stretch gap-1">
+                            <span className="text-center text-[10px] font-extrabold uppercase leading-none tracking-[0.06em] text-[#7f7f8c]">Der</span>
+                            <input
+                                ref={holdRightRef}
+                                name="hold_right_sec"
+                                {...fieldProps('hold_right_sec', 'numeric', { min: '0' })}
+                                defaultValue={inputDefault(existingLog?.metadata?.right_sec ?? null)}
+                                placeholder="seg"
+                                aria-label="Segundos de hold — lado derecho"
+                                className={typedInputClass}
+                            />
+                        </label>
                     </>
                 )}
 

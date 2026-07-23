@@ -1,3 +1,4 @@
+import { useRef } from 'react'
 import { Text, View } from 'react-native'
 import { ArrowRight, Check, Dumbbell, Moon, Play } from 'lucide-react-native'
 import { MotiView } from 'moti'
@@ -8,6 +9,7 @@ import { hexToChannels } from '../../../lib/theme'
 import { FONT, textStyle } from '../../../lib/typography'
 import { Button } from '../../Button'
 import { Card } from '../../Card'
+import { measureMorphOrigin, type MorphOrigin } from '../workout/v3/session-morph'
 import { InfoTooltip } from '../../InfoTooltip'
 import { ProgressRing } from '../../ProgressRing'
 import type { HeroBlock, Plan } from './types'
@@ -53,7 +55,7 @@ export function HeroSection({
   hasProgram: boolean
   coachName: string | null
   nutritionEnabled: boolean
-  onStart: (planId: string) => void
+  onStart: (planId: string, origin?: MorphOrigin | null) => void
   onRest: () => void
   onNoPlan: () => void
 }) {
@@ -77,9 +79,10 @@ function WorkoutHero({
   plan: Plan
   loggedByBlock: Map<string, number>
   isAlreadyLogged: boolean
-  onStart: (planId: string) => void
+  onStart: (planId: string, origin?: MorphOrigin | null) => void
 }) {
   const { theme } = useTheme()
+  const ctaRef = useRef<View>(null)
   const show = plan.blocks.slice(0, 4)
   const more = plan.blocks.length - show.length
   const totalTarget = plan.blocks.reduce((s, b) => s + (b.sets || 0), 0)
@@ -140,7 +143,20 @@ function WorkoutHero({
           <View style={{ height: 16 }} />
         )}
 
-        <Button testID="home-hero-start" label={cta} variant="sport" size="lg" leftIcon={Play} full onPress={() => onStart(plan.id)} />
+        {/* Ref-wrapper medible: al tocar el CTA se mide su rect real en ventana para que el morph
+            "Impulso" nazca EXACTO del botón (QA6). `collapsable={false}` evita que Android colapse el
+            View y measureInWindow devuelva 0. Si la medición falla, el morph cae al origen sintético. */}
+        <View ref={ctaRef} collapsable={false}>
+          <Button
+            testID="home-hero-start"
+            label={cta}
+            variant="sport"
+            size="lg"
+            leftIcon={Play}
+            full
+            onPress={() => measureMorphOrigin(ctaRef.current, 16, (origin) => onStart(plan.id, origin))}
+          />
+        </View>
 
         {isAlreadyLogged ? (
           <View

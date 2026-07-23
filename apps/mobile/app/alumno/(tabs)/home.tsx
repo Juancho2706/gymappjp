@@ -22,6 +22,7 @@ import { CheckInBanner } from '../../../components/alumno/home/CheckInBanner'
 import { computeCheckInReminder } from '../../../lib/checkin-thresholds'
 import { programWeekIndex1Based, weekIndexToVariantLetter, effectiveWeekVariantFromPlans, workoutPlanMatchesVariant } from '../../../lib/program-week-variant'
 import { HeroSection } from '../../../components/alumno/home/HeroSection'
+import { useSessionMorph } from '../../../components/alumno/workout/v3/session-morph'
 import { CoachPresenceCard } from '../../../components/alumno/home/CoachPresenceCard'
 import { MomentumCard, type MomentumDay } from '../../../components/alumno/home/MomentumCard'
 import { ActiveProgramSection } from '../../../components/alumno/home/ActiveProgramSection'
@@ -61,6 +62,7 @@ function startOfWeekMonday(d: Date): Date {
  */
 export default function AlumnoHomeScreen() {
   const router = useRouter()
+  const { startMorph } = useSessionMorph()
   const insets = useSafeAreaInsets()
   const { nutritionEnabled, ready: entitlementsReady, studentAccess } = useEntitlements()
   const { theme } = useTheme()
@@ -425,7 +427,7 @@ export default function AlumnoHomeScreen() {
           hasProgram={!!data?.program}
           coachName={data?.coachName ?? null}
           nutritionEnabled={nutritionEnabled}
-          onStart={(id) => router.push(`/alumno/workout/${id}`)}
+          onStart={(id, origin) => startMorph({ planId: id, origin })}
           onRest={() => router.push('/alumno/nutricion')}
           onNoPlan={() => router.push('/alumno/check-in')}
         />
@@ -461,7 +463,7 @@ export default function AlumnoHomeScreen() {
             pending={derived.pending}
             todayPlanId={derived.todayPlanId}
             weekVariant={derived.weekVariant}
-            onStart={(id) => router.push(`/alumno/workout/${id}`)}
+            onStart={(id) => startMorph({ planId: id })}
             // Recuperar un dia pendiente: se entrena HOY y el log cae hoy (semantica correcta de
             // recuperacion, ver E1.1); el param `recuperar` solo pinta el banner informativo ambar.
             // El camino "editar fecha pasada" (param `fecha`) queda cableado en [planId].tsx + banner

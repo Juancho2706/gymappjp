@@ -8,6 +8,7 @@ import { ProgressRing } from '@/components/ui/progress-ring'
 import { InfoTooltip } from '@/components/ui/info-tooltip'
 import { useTranslation } from '@/lib/i18n/LanguageContext'
 import { useBasePath } from '@/components/client/BasePathProvider'
+import { useWorkoutLaunch } from '../launch/WorkoutLaunchMorph'
 import { cn } from '@/lib/utils'
 
 export interface HeroBlock {
@@ -40,6 +41,8 @@ export function WorkoutHeroCard({
 }: WorkoutHeroCardProps) {
     const { t } = useTranslation()
     const base = useBasePath(`/c/${coachSlug}`)
+    const { launch, morph } = useWorkoutLaunch()
+    const workoutHref = `${base}/workout/${planId}`
 
     const show = blocks.slice(0, 4)
     const more = blocks.length - show.length
@@ -123,13 +126,20 @@ export function WorkoutHeroCard({
 
             <div className="flex gap-2.5">
                 <Link
-                    href={`${base}/workout/${planId}`}
+                    href={workoutHref}
+                    onClick={(e) => {
+                        // QA6: intercepta el click para el morph de lanzamiento; navega al MISMO destino.
+                        // Sin JS (o si preventDefault no corre) el Link navega normal — sin regresiones.
+                        e.preventDefault()
+                        launch(e.currentTarget, workoutHref)
+                    }}
                     className={cn(buttonVariants({ variant: 'sport', size: 'lg' }), 'flex-1')}
                 >
                     <Play className="h-5 w-5" />
                     {isAlreadyLogged ? 'Ver registro' : liveLogged > 0 ? 'Continuar' : 'Empezar entrenamiento'}
                 </Link>
             </div>
+            {morph}
         </Card>
     )
 }
