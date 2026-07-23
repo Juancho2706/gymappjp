@@ -1210,6 +1210,7 @@ export function WorkoutExecutionClient({
     // navigation") → el service worker no puede resolverla y sirve su página "Sin conexión",
     // expulsando al alumno del entreno que justo estaba protegido por la cola offline. Con red de
     // vuelta, el evento 'online' (OfflineWorkoutQueueSync) flushea y refresca — no se pierde frescura.
+    const entryRefreshedRef = useRef(false)
     useEffect(() => {
         if (logs.length > 0) markWorkoutTouched()
         const readTouched = () => {
@@ -1218,14 +1219,25 @@ export function WorkoutExecutionClient({
         const hasPriorData = () =>
             logs.length > 0 || readWorkoutOfflineQueueForPlan(plan.id).length > 0 || readTouched()
         const online = () => typeof navigator === 'undefined' || navigator.onLine
-        if (online() && hasPriorData()) router.refresh()
+        // QA "se recarga a media animación": vía morph, el ejecutor monta DURANTE la ceremonia del
+        // Despegue (overlay esperando el tap). Un `router.refresh()` ahí, con red lenta, puede caer a
+        // navegación dura del browser y saltar el loader a media animación. Se DIFIERE: no refresca
+        // mientras la Entrada/Inicio está encima (fase != 'session'); refresca al entrar a la sesión
+        // (este efecto re-corre porque `execV3Phase` está en sus deps). Sin morph, refresca al montar.
+        const ceremonyBlocking = execV3Active && execV3ViaMorph && execV3Phase !== 'session'
+        // El refresh de entrada corre UNA sola vez (el efecto re-corre por cada cambio de fase).
+        if (online() && hasPriorData() && !ceremonyBlocking && !entryRefreshedRef.current) {
+            entryRefreshedRef.current = true
+            router.refresh()
+        }
         const onVisible = () => {
-            if (document.visibilityState === 'visible' && online() && hasPriorData()) router.refresh()
+            if (document.visibilityState === 'visible' && online() && hasPriorData() && !ceremonyBlocking) router.refresh()
         }
         document.addEventListener('visibilitychange', onVisible)
         return () => document.removeEventListener('visibilitychange', onVisible)
+    // Re-corre al entrar a la sesión (fase 'session') para lanzar el refresh diferido del morph.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [])
+    }, [execV3Phase, execV3ViaMorph])
 
     // Wake lock de TODA la sesión (bug E2-1) — antes el lock solo cubría el descanso.
     useScreenWakeLock()
@@ -2233,6 +2245,11 @@ export function WorkoutExecutionClient({
         setExecV3Phase('session')
     }
     const coachInitial = coachSlug?.trim()?.[0]?.toUpperCase() || null
+    // QA "se ve el stepper por debajo de Inicio": el header + el pager (motor) se renderizan SIEMPRE
+    // (deben quedar montados para drafts/cola/reloj), pero mientras la Entrada/Inicio está encima NO
+    // deben verse ni permitir scroll del fondo. Se ocultan (invisible, conservan montaje) y el root
+    // bloquea el scroll hasta que el alumno entra a la sesión (fase 'session').
+    const execBaseHidden = execV3Active && execV3Phase !== 'session'
 
     return (
         <TargetDateProvider value={targetDate}>
@@ -2250,9 +2267,12 @@ export function WorkoutExecutionClient({
                     // V3 pinta el fondo cálido vía [data-exec-v3] + capa ::before; el bg-ink-950 sólo compite.
                     // V2 conserva su fondo byte-identico.
                     !execV3Active && 'bg-[var(--ink-950)]',
+                    // Entrada/Inicio encima → sin scroll del fondo (evita revelar el stepper por debajo).
+                    execBaseHidden && 'max-h-dvh overflow-hidden',
                 )}
             >
                 {execV3Active && (
+                  <div className={cn(execBaseHidden && 'invisible')}>
                     <ExecHeaderV3
                         dots={execDots}
                         exerciseNum={currentExerciseNum}
@@ -2266,6 +2286,7 @@ export function WorkoutExecutionClient({
                         onViewAll={() => setStepperMode(false)}
                         showViewAll={stepperEnabled}
                     />
+                  </div>
                 )}
 
                 {/* Ejecutor V3 (E2.2): Entrada (splash) → Inicio, overlays fixed SOBRE el motor ya montado
@@ -2485,6 +2506,7 @@ export function WorkoutExecutionClient({
                     </div>
                 )}
 
+                <div className={cn(execBaseHidden && 'invisible')}>
                 {stepperEnabled ? (
                     /* Modo "paso a paso" — un ejercicio/superserie a la vez (Fase L · workstream A).
                        El RestTimer/WorkoutTimerProvider/header/barra "Finalizar" quedan FUERA del pager. */
@@ -2535,6 +2557,7 @@ export function WorkoutExecutionClient({
                     </div>
                 </div>
                 )}
+                </div>
 
                 {/* FAB "Volver al ejercicio" (E2.6): sólo en la vista lista V3 — regresa al stepper. */}
                 {execV3Active && !stepperEnabled && (
