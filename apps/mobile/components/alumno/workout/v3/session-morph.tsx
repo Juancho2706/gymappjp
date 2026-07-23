@@ -278,6 +278,31 @@ export function measureMorphOrigin(
   }
 }
 
+/** Ventana que el trigger real permanece OCULTO tras lanzar el Despegue: cubre el morph + wipe + nav
+ *  (~1,3s) con margen, para que NO se vea la caja del botón/card detrás del clon que colapsa. */
+const TRIGGER_HIDE_MS = 1500
+
+/**
+ * Hook para los triggers (CTA "Empezar entrenamiento" / day-cards): al lanzar el Despegue, el componente
+ * real clickeado debe quedar INVISIBLE POR COMPLETO (no sólo su texto/icono — la CAJA de color también,
+ * si no al colapsar el clon a burbuja se ven los bordes del botón/card detrás; bug QA del CEO). Espejo
+ * del `visibility:hidden` del web. Durante 0–~1,2s la ruta aún no navegó y el fondo de marca todavía no
+ * hizo el wipe, así que el dashboard (y el trigger) se ven tras el Modal transparente → hay que ocultarlo.
+ * Devuelve `hidden` (aplicar a la opacidad del View medible del trigger) y `hide()` (llamar al tocar).
+ */
+export function useTriggerMorphHide(): { hidden: boolean; hide: () => void } {
+  const [hidden, setHidden] = useState(false)
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const hide = useCallback(() => {
+    setHidden(true)
+    if (timerRef.current) clearTimeout(timerRef.current)
+    // Restaura tras la ventana: para entonces la ruta ya navegó y el ejecutor cubre el dashboard.
+    timerRef.current = setTimeout(() => setHidden(false), TRIGGER_HIDE_MS)
+  }, [])
+  useEffect(() => () => { if (timerRef.current) clearTimeout(timerRef.current) }, [])
+  return { hidden, hide }
+}
+
 // ── color-mix(in srgb, A p%, B) = A*p + B*(1-p) — mezcla RN sobre el acento (tonos oscuros de marca). ──
 function toChannels(hex: string): [number, number, number] {
   const h = hex.replace('#', '')

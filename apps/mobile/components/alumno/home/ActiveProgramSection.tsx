@@ -9,7 +9,7 @@ import { Badge } from '../../Badge'
 import { Card } from '../../Card'
 import { Sheet } from '../../Sheet'
 import { ProgramPhaseBar } from './ProgramPhaseBar'
-import { measureMorphOrigin, type MorphOrigin } from '../workout/v3/session-morph'
+import { measureMorphOrigin, useTriggerMorphHide, type MorphOrigin } from '../workout/v3/session-morph'
 import { DAY_FULL, DAY_SHORT } from './types'
 import type { PendingDay, PlanDayView, Program } from './types'
 
@@ -267,10 +267,15 @@ function DayCard({ view, onPress }: { view: PlanDayView; onPress: (origin: Morph
   // Ref medible: al tocar la tarjeta se mide su rect real en ventana para que el Despegue nazca EXACTO
   // de la day-card clickeada (mismo patrón que el CTA del hero). Si la medición falla → origen sintético.
   const ref = useRef<View>(null)
+  // Ocultar la card real durante el Despegue (el clon la reemplaza) — SÓLO cuando de verdad morfea:
+  // los estados que abren el sheet (done de otro día) o recuperan (pending) NO lanzan el morph.
+  const { hidden: cardHidden, hide: hideCard } = useTriggerMorphHide()
   const { plan, status, isToday, doneOnLabel } = view
   const dow = plan.day_of_week ?? 1
   const done = status === 'done'
   const pending = status === 'pending'
+  // handleDayPress morfea (onStart) salvo done-de-otro-día (sheet) o pending (recuperar) → mismo criterio.
+  const willMorph = !(done && !isToday) && !pending
   // "Hecho el jueves" solo cuando el dia se cerro por una sesion de OTRO dia (recuperacion):
   // label discreto que espeja el copy web (doneOnLabel). Done en su propia fecha → "Día N".
   const doneElsewhere = done && !!doneOnLabel
@@ -295,10 +300,13 @@ function DayCard({ view, onPress }: { view: PlanDayView; onPress: (origin: Morph
   return (
     // Wrapper medible (patrón del hero): `collapsable={false}` evita que Android colapse el View y
     // measureInWindow devuelva 0. El wrapper se ciñe al TouchableOpacity (width 96) → su rect == la card.
-    <View ref={ref} collapsable={false}>
+    <View ref={ref} collapsable={false} style={{ opacity: cardHidden ? 0 : 1 }}>
       <TouchableOpacity
         testID={`program-day-${plan.id}`}
-        onPress={() => measureMorphOrigin(ref.current, theme.radius.control, (origin) => onPress(origin))}
+        onPress={() => {
+          if (willMorph) hideCard()
+          measureMorphOrigin(ref.current, theme.radius.control, (origin) => onPress(origin))
+        }}
         activeOpacity={0.8}
         accessibilityRole="button"
         accessibilityLabel={a11yLabel}

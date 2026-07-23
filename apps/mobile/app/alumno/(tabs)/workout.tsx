@@ -19,7 +19,7 @@ import { ProgressRing } from '../../../components/ProgressRing'
 import { EvaLoaderScreen } from '../../../components/EvaLoader'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { AppBackground } from '../../../components/AppBackground'
-import { measureMorphOrigin, useSessionMorph, type MorphOrigin } from '../../../components/alumno/workout/v3/session-morph'
+import { measureMorphOrigin, useSessionMorph, useTriggerMorphHide, type MorphOrigin } from '../../../components/alumno/workout/v3/session-morph'
 
 const DAY_NAMES = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
 const TODAY_DOW = new Date().getDay()
@@ -241,6 +241,8 @@ export default function WorkoutScreen() {
 function PlanCard({ item, index, onStart }: { item: Plan; index: number; onStart: (origin: MorphOrigin | null) => void }) {
   const { theme } = useTheme()
   const ref = useRef<View>(null)
+  // Ocultar la card real durante el Despegue (el clon la reemplaza); si no, se ve su caja detrás del morph.
+  const { hidden, hide } = useTriggerMorphHide()
   const isToday = item.day_of_week === TODAY_DOW
   return (
     <MotiView
@@ -248,12 +250,15 @@ function PlanCard({ item, index, onStart }: { item: Plan; index: number; onStart
       animate={{ opacity: 1, translateY: 0 }}
       transition={{ type: 'timing', duration: 350, delay: Math.min(index * 60, 400) }}
     >
-      <View ref={ref} collapsable={false}>
+      <View ref={ref} collapsable={false} style={{ opacity: hidden ? 0 : 1 }}>
         <Card
           variant={isToday ? 'highlighted' : 'default'}
           interactive
           padding={18}
-          onPress={() => measureMorphOrigin(ref.current, theme.radius.card, (origin) => onStart(origin))}
+          onPress={() => {
+            hide()
+            measureMorphOrigin(ref.current, theme.radius.card, (origin) => onStart(origin))
+          }}
           style={styles.card}
         >
           <View
@@ -302,6 +307,8 @@ function PlanCard({ item, index, onStart }: { item: Plan; index: number; onStart
 function TodayHero({ progress, onStart }: { progress: TodayProgress; onStart: (origin?: MorphOrigin | null) => void }) {
   const { theme } = useTheme()
   const ctaRef = useRef<View>(null)
+  // Ocultar el CTA real durante el Despegue (el clon lo reemplaza); si no, se ve la caja del botón detrás.
+  const { hidden: ctaHidden, hide: hideCta } = useTriggerMorphHide()
   const { logged, target } = progress
   const done = target > 0 && logged >= target
   const inProgress = logged > 0 && !done
@@ -348,7 +355,7 @@ function TodayHero({ progress, onStart }: { progress: TodayProgress; onStart: (o
             }
           />
         </View>
-        <View style={{ marginTop: 14 }} ref={ctaRef} collapsable={false}>
+        <View style={{ marginTop: 14, opacity: ctaHidden ? 0 : 1 }} ref={ctaRef} collapsable={false}>
           <Button
             testID="workout-hero-cta"
             label={ctaLabel}
@@ -356,7 +363,10 @@ function TodayHero({ progress, onStart }: { progress: TodayProgress; onStart: (o
             size="lg"
             leftIcon={Play}
             full
-            onPress={() => measureMorphOrigin(ctaRef.current, 16, (origin) => onStart(origin))}
+            onPress={() => {
+              hideCta()
+              measureMorphOrigin(ctaRef.current, 16, (origin) => onStart(origin))
+            }}
           />
         </View>
       </Card>

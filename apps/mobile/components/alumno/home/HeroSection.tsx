@@ -9,7 +9,7 @@ import { hexToChannels } from '../../../lib/theme'
 import { FONT, textStyle } from '../../../lib/typography'
 import { Button } from '../../Button'
 import { Card } from '../../Card'
-import { measureMorphOrigin, type MorphOrigin } from '../workout/v3/session-morph'
+import { measureMorphOrigin, useTriggerMorphHide, type MorphOrigin } from '../workout/v3/session-morph'
 import { InfoTooltip } from '../../InfoTooltip'
 import { ProgressRing } from '../../ProgressRing'
 import type { HeroBlock, Plan } from './types'
@@ -83,6 +83,9 @@ function WorkoutHero({
 }) {
   const { theme } = useTheme()
   const ctaRef = useRef<View>(null)
+  // Al lanzar el Despegue el CTA real debe quedar INVISIBLE (el clon flotante lo reemplaza); si no, se
+  // ve la caja del botón detrás del morph. Se restaura tras la ventana (ya navegado).
+  const { hidden: ctaHidden, hide: hideCta } = useTriggerMorphHide()
   const show = plan.blocks.slice(0, 4)
   const more = plan.blocks.length - show.length
   const totalTarget = plan.blocks.reduce((s, b) => s + (b.sets || 0), 0)
@@ -146,7 +149,7 @@ function WorkoutHero({
         {/* Ref-wrapper medible: al tocar el CTA se mide su rect real en ventana para que el morph
             "Impulso" nazca EXACTO del botón (QA6). `collapsable={false}` evita que Android colapse el
             View y measureInWindow devuelva 0. Si la medición falla, el morph cae al origen sintético. */}
-        <View ref={ctaRef} collapsable={false}>
+        <View ref={ctaRef} collapsable={false} style={{ opacity: ctaHidden ? 0 : 1 }}>
           <Button
             testID="home-hero-start"
             label={cta}
@@ -154,7 +157,10 @@ function WorkoutHero({
             size="lg"
             leftIcon={Play}
             full
-            onPress={() => measureMorphOrigin(ctaRef.current, 16, (origin) => onStart(plan.id, origin))}
+            onPress={() => {
+              hideCta()
+              measureMorphOrigin(ctaRef.current, 16, (origin) => onStart(plan.id, origin))
+            }}
           />
         </View>
 
