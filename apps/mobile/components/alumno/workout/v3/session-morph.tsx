@@ -1,8 +1,9 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { Dimensions, Modal, Pressable, StyleSheet, Text, View } from 'react-native'
-import { useRouter } from 'expo-router'
+import { usePathname, useRouter } from 'expo-router'
 import { Image } from 'expo-image'
 import { LinearGradient } from 'expo-linear-gradient'
+import Svg, { Path } from 'react-native-svg'
 import { Play } from 'lucide-react-native'
 import Animated, {
   Easing,
@@ -166,10 +167,18 @@ function syntheticOrigin(): MorphOrigin {
 
 export function SessionMorphProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter()
+  const pathname = usePathname()
   const { theme, branding } = useTheme()
   const reducedMotion = useReducedMotion()
   const [active, setActive] = useState<ActiveMorph | null>(null)
   const busyRef = useRef(false)
+  // Ruta desde la que se lanzó el Despegue + si ya navegamos fuera → para detectar el "atrás" del
+  // teléfono (volver al dashboard) y no dejar el overlay pegado. `pathnameRef` evita meter pathname en
+  // las deps de startMorph (que debe ser estable).
+  const pathnameRef = useRef(pathname)
+  pathnameRef.current = pathname
+  const startPathRef = useRef<string | null>(null)
+  const leftRouteRef = useRef(false)
 
   const exec = useMemo(
     () => resolveExecTheme(branding?.executorTheme, theme.primary, theme.primaryForeground),
@@ -186,6 +195,9 @@ export function SessionMorphProvider({ children }: { children: React.ReactNode }
     // Marca via-morph + resetea la señal de "listo" ANTES de montar el ejecutor (se consume al montar).
     resetMorphScene()
     markMorphLaunch()
+    // Ancla la ruta de lanzamiento para detectar el "atrás" (volver a ella tras haber navegado).
+    startPathRef.current = pathnameRef.current
+    leftRouteRef.current = false
     // El morph NACE del componente clickeado: usa el rect real medido; si el caller no midió, cae al
     // origen sintético centrado-bajo.
     setActive({ nonce: Date.now(), planId, origin: origin ?? syntheticOrigin(), params })
@@ -211,6 +223,18 @@ export function SessionMorphProvider({ children }: { children: React.ReactNode }
     setActive(null)
     busyRef.current = false
   }, [])
+
+  // Back del teléfono / gesto: si tras lanzar el Despegue navegamos fuera (a la ruta del ejecutor) y
+  // luego VOLVEMOS a la ruta de lanzamiento (el alumno tocó "atrás"), el overlay debe irse — no quedar
+  // pegado sobre el dashboard. Espejo del web (pathname regresó al startPath estando ya fuera → clearAll).
+  useEffect(() => {
+    if (!active) return
+    if (pathname !== startPathRef.current) {
+      leftRouteRef.current = true
+      return
+    }
+    if (leftRouteRef.current) handleDone()
+  }, [pathname, active, handleDone])
 
   const value = useMemo(() => ({ startMorph }), [startMorph])
 
@@ -318,6 +342,65 @@ function mixHex(a: string, pct: number, b: string): string {
   return `#${toHex2(ar * p + br * (1 - p))}${toHex2(ag * p + bg * (1 - p))}${toHex2(ab * p + bb * (1 - p))}`
 }
 
+// ── Cresta de AGUA sobre el borde del wipe (espejo del `.exec-dsp-wave` web). ──
+// El borde superior de la pintura de marca que sube no es un corte recto: se le monta una cresta
+// ondulada (SVG) que deriva en X para dar sensación de agua. La cresta es hija del fondo → sube con el
+// wipe; cuando el wipe completa (bgTY=0) queda arriba fuera de pantalla (recortada por overflow:hidden).
+const WAVE_TILE = 160 // periodo de la ola (px) — al derivar un tile completo, el loop es sin costura
+const WAVE_H = 30
+const WAVE_W = SCREEN_W + WAVE_TILE * 2 // ancho extra a cada lado para cubrir la deriva ±160
+/** Path de la cresta: dos jorobas por tile (mismos control-points que el mask SVG del web), relleno
+ *  hacia abajo hasta y=WAVE_H, repetido a lo ancho. */
+function buildWavePath(): string {
+  let d = 'M 0 15'
+  for (let x = 0; x <= WAVE_W; x += WAVE_TILE) {
+    d += ` C ${x + 28} 4 ${x + 52} 4 ${x + 80} 14 C ${x + 108} 24 ${x + 132} 24 ${x + 160} 13`
+  }
+  d += ` L ${WAVE_W + WAVE_TILE} ${WAVE_H} L 0 ${WAVE_H} Z`
+  return d
+}
+const WAVE_PATH = buildWavePath()
+
+/** Una capa de cresta de ola: SVG relleno de color de marca, anclada en el borde del fondo (topOffset,
+ *  con solape hacia el relleno) que DERIVA en X (translateX en loop) para simular agua. */
+function WaveCrest({
+  color,
+  opacity,
+  durationMs,
+  reverse,
+  topOffset,
+}: {
+  color: string
+  opacity: number
+  durationMs: number
+  reverse: boolean
+  topOffset: number
+}) {
+  const x = useSharedValue(0)
+  useEffect(() => {
+    // Deriva de UN tile (160px) en loop lineal: como el patrón se repite cada 160px, el salto al reiniciar
+    // es invisible (posición 160 == posición 0 desplazada un periodo). Con un pequeño delay: un loop de
+    // delay cero puede arrancar antes de que el nodo del Modal se adjunte y quedar descartado (ola quieta);
+    // el delay lo empuja tras el attach y es invisible (la cresta recién se ve al subir el wipe ~600ms).
+    x.value = withDelay(
+      120,
+      withRepeat(withTiming(reverse ? -WAVE_TILE : WAVE_TILE, { duration: durationMs, easing: Easing.linear }), -1),
+    )
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+  const style = useAnimatedStyle(() => ({ transform: [{ translateX: x.value }] }))
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={[{ position: 'absolute', top: topOffset, left: -WAVE_TILE, width: WAVE_W, height: WAVE_H, opacity }, style]}
+    >
+      <Svg width={WAVE_W} height={WAVE_H}>
+        <Path d={WAVE_PATH} fill={color} />
+      </Svg>
+    </Animated.View>
+  )
+}
+
 /** Estela de luz que cae (exec-dsp-line): translateY -140%→260% del alto propio, opacidad .7→0. */
 function FallLine({
   leftPct,
@@ -386,6 +469,7 @@ function DespegueOverlay({
   const bgTop = mixHex(b, 44, '#050a1c')
   const bgMid = mixHex(b, 20, '#050a18')
   const bgBottom = '#04060d'
+  const waveFoam = mixHex(b, 30, '#0a1330') // 2a cresta más clara (espuma), desfasada
   const trailColor = mixHex(b, 55, '#ffffff')
   const lineColor = mixHex(b, 40, '#ffffff')
   const logoGradA = mixHex(b, 88, '#7aa0ff')
@@ -572,7 +656,15 @@ function DespegueOverlay({
   const hintStyle = useAnimatedStyle(() => ({ opacity: hint.value }))
 
   return (
-    <Modal transparent statusBarTranslucent animationType="none" visible onRequestClose={() => {}}>
+    <Modal
+      transparent
+      statusBarTranslucent
+      animationType="none"
+      visible
+      // Back de hardware (Android) sobre el Modal: desmonta el overlay para que NO quede pegado sobre el
+      // dashboard/ejecutor. Escape-hatch — funciona aun durante la ceremonia (los taps sí se bloquean).
+      onRequestClose={() => doneRef.current()}
+    >
       <Animated.View style={[StyleSheet.absoluteFill, styles.root, rootStyle]}>
         {/* Fondo de marca que sube (wipe) + estelas de luz. */}
         <Animated.View style={[StyleSheet.absoluteFill, bgStyle]} pointerEvents="none">
@@ -586,6 +678,12 @@ function DespegueOverlay({
           />
           {!reducedMotion && (
             <>
+              {/* Cresta de AGUA en el borde superior del fondo (sube con el wipe): la pintura no corta
+                  recta, ondula como agua. Dos capas al mismo alto (espuma más clara detrás + cresta de
+                  marca al frente) derivando en X a distinta velocidad/sentido: la espuma asoma por donde
+                  su fase queda más alta que la cresta de marca = sensación de agua con profundidad. */}
+              <WaveCrest color={waveFoam} opacity={0.7} durationMs={2100} reverse topOffset={-26} />
+              <WaveCrest color={bgTop} opacity={1} durationMs={3200} reverse={false} topOffset={-26} />
               <FallLine leftPct={22} height={120} durationMs={700} delayMs={950} color={lineColor} />
               <FallLine leftPct={58} height={180} durationMs={800} delayMs={1050} color={lineColor} />
               <FallLine leftPct={80} height={90} durationMs={650} delayMs={1150} color={lineColor} />
