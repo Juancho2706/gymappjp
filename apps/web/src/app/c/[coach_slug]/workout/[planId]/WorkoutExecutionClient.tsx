@@ -1219,12 +1219,16 @@ export function WorkoutExecutionClient({
         const hasPriorData = () =>
             logs.length > 0 || readWorkoutOfflineQueueForPlan(plan.id).length > 0 || readTouched()
         const online = () => typeof navigator === 'undefined' || navigator.onLine
-        // QA "se recarga a media animación": vía morph, el ejecutor monta DURANTE la ceremonia del
-        // Despegue (overlay esperando el tap). Un `router.refresh()` ahí, con red lenta, puede caer a
-        // navegación dura del browser y saltar el loader a media animación. Se DIFIERE: no refresca
-        // mientras la Entrada/Inicio está encima (fase != 'session'); refresca al entrar a la sesión
-        // (este efecto re-corre porque `execV3Phase` está en sus deps). Sin morph, refresca al montar.
-        const ceremonyBlocking = execV3Active && execV3ViaMorph && execV3Phase !== 'session'
+        // QA "se recarga a media animación" (red lenta): el ejecutor monta DURANTE la ceremonia del
+        // Despegue (overlay del layout /c esperando el tap). Un `router.refresh()` ahí, con red lenta,
+        // cae a NAVEGACIÓN DURA del browser → recarga toda la página → el overlay del provider se
+        // remonta y muere a media animación. Se DIFIERE para CUALQUIER entrada V3 hasta que el alumno
+        // entre a la sesión (fase 'session'); ahí es cuando el stepper necesita los logs frescos igual.
+        // Gate por `execV3Phase` (NO por el flag de morph): evita la carrera en que el efecto del 1er
+        // render leía `execV3ViaMorph` aún en false (lo setea un layout-effect) y refrescaba igual — el
+        // `execV3Phase` inicial ('intro' en V3) ya bloquea desde el 1er render. Re-entrada (sesión ya
+        // 'entered') resuelve a 'session' → refresca en el acto (Fix A de frescura intacto). V2 igual.
+        const ceremonyBlocking = execV3Active && execV3Phase !== 'session'
         // El refresh de entrada corre UNA sola vez (el efecto re-corre por cada cambio de fase).
         if (online() && hasPriorData() && !ceremonyBlocking && !entryRefreshedRef.current) {
             entryRefreshedRef.current = true
@@ -1235,9 +1239,9 @@ export function WorkoutExecutionClient({
         }
         document.addEventListener('visibilitychange', onVisible)
         return () => document.removeEventListener('visibilitychange', onVisible)
-    // Re-corre al entrar a la sesión (fase 'session') para lanzar el refresh diferido del morph.
+    // Re-corre al entrar a la sesión (fase 'session') para lanzar el refresh diferido.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [execV3Phase, execV3ViaMorph])
+    }, [execV3Phase])
 
     // Wake lock de TODA la sesión (bug E2-1) — antes el lock solo cubría el descanso.
     useScreenWakeLock()
