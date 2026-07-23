@@ -68,6 +68,11 @@ export function WorkoutLaunchProvider({ children }: { children: React.ReactNode 
     const [state, setState] = useState<MorphState | null>(null)
     const [animDone, setAnimDone] = useState(false)
     const [routeReady, setRouteReady] = useState(false)
+    // QA "se recarga la pagina": `routeReady` (cambio de pathname) NO garantiza que el ejecutor ya pinto
+    // la pantalla de Inicio — puede seguir en el cover de ruta (loading.tsx) o con SessionStart aun
+    // transparente, dejando ver el stepper base al despedir el overlay. `execReady` es la senal REAL del
+    // WEC: la pantalla de Inicio (SessionStart) ya esta montada y pintada. Se despide sobre eso, no antes.
+    const [execReady, setExecReady] = useState(false)
     const [forceReady, setForceReady] = useState(false)
     const [leaving, setLeaving] = useState(false)
     const activeRef = useRef(false)
@@ -84,6 +89,7 @@ export function WorkoutLaunchProvider({ children }: { children: React.ReactNode 
         setState(null)
         setAnimDone(false)
         setRouteReady(false)
+        setExecReady(false)
         setForceReady(false)
         setLeaving(false)
     }, [clearTimers])
@@ -107,11 +113,14 @@ export function WorkoutLaunchProvider({ children }: { children: React.ReactNode 
             setState({ href, startedAt: performance.now(), startPath: pathname, rect, label, logoUrl: brand.logoUrl, initial: brand.initial })
             setAnimDone(false)
             setRouteReady(false)
+            setExecReady(false)
             setForceReady(false)
             setLeaving(false)
 
             try {
                 sessionStorage.setItem('eva:exec-v3-morph', '1')
+                // Reset de la senal de Inicio-listo del WEC (la del lanzamiento anterior no debe contar).
+                sessionStorage.removeItem('eva:exec-v3-ready')
                 if (brand.logoUrl) sessionStorage.setItem('eva:exec-v3-morph-logo', brand.logoUrl)
                 else sessionStorage.removeItem('eva:exec-v3-morph-logo')
             } catch { /* private mode */ }
@@ -137,7 +146,21 @@ export function WorkoutLaunchProvider({ children }: { children: React.ReactNode 
         if (routeReady) clearAll()
     }, [pathname, state, routeReady, clearAll])
 
-    const ready = !!state && animDone && (routeReady || forceReady)
+    // El WEC avisa (evento `eva:exec-v3-ready` + flag en sessionStorage) cuando la pantalla de Inicio
+    // (SessionStart) ya esta montada y pintada. El provider persiste en el layout /c → este listener ya
+    // esta enganchado ANTES de que el ejecutor monte, asi que no hay carrera. El flag cubre el caso raro
+    // de que el evento se emita durante un remonte del provider.
+    useEffect(() => {
+        const onExecReady = () => setExecReady(true)
+        window.addEventListener('eva:exec-v3-ready', onExecReady)
+        try { if (sessionStorage.getItem('eva:exec-v3-ready') === '1') setExecReady(true) } catch { /* private */ }
+        return () => window.removeEventListener('eva:exec-v3-ready', onExecReady)
+    }, [state])
+
+    // `ready` (habilita el tap y despide el overlay) exige que el Inicio del ejecutor ya este pintado
+    // (`execReady`), no solo que la ruta commiteo (`routeReady`). `forceReady` (fallback ~4,6s) sigue
+    // siendo la valvula para no atrapar al alumno si la senal nunca llega.
+    const ready = !!state && animDone && (routeReady || forceReady) && (execReady || forceReady)
 
     const dismiss = useCallback(() => {
         if (!ready || leaving) return

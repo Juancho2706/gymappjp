@@ -43,6 +43,13 @@ interface SessionStartProps {
     /** Racha semanal (E4.4). null ⇒ no se muestra (sin dato / sin plan). */
     streak?: WeeklyStreak | null
     reducedMotion: boolean | null
+    /**
+     * ¿Llegamos por el morph de lanzamiento (Despegue)? → Inicio aparece INSTANTANEO (opacidad plena
+     * desde el primer paint), sin el fade-in de 0,2s. La entrada visual la hizo el overlay del Despegue
+     * (z superior); si Inicio arrancara transparente, al despedirse el overlay se veria el stepper base
+     * por detras (el motor va montado) = el FLASH que reporto el QA. Sin morph conserva su fade normal.
+     */
+    viaMorph?: boolean
 }
 
 const TAG_TONE: Record<SessionStartExercise['tone'], string> = {
@@ -76,11 +83,14 @@ export function SessionStart({
 
     streak = null,
     reducedMotion,
+    viaMorph = false,
 }: SessionStartProps) {
     return (
         <motion.div
             className="exec-v3-start fixed inset-0 z-[65] overflow-y-auto"
-            initial={{ opacity: 0 }}
+            // Via morph: opaco desde el primer paint (initial=false ⇒ sin animacion de entrada) para que
+            // cubra el stepper base al instante. Sin morph: fade-in normal de 0,2s.
+            initial={viaMorph ? false : { opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: reducedMotion ? 0 : 0.2 }}

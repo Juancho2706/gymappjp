@@ -1435,6 +1435,28 @@ export function WorkoutExecutionClient({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [])
 
+    // Despegue (handoff con el overlay de lanzamiento del layout /c): cuando llegamos por el MORPH y la
+    // pantalla de Inicio (SessionStart, fase 'start') ya esta MONTADA y PINTADA, avisamos al overlay que
+    // es seguro despedirse. Sin esto, el overlay se iba al cambiar el pathname (routeReady) y revelaba el
+    // stepper base (el motor va montado detras) o el cover de ruta → el FLASH "Ejercicio 1 de 5" + la
+    // sensacion de "se recarga la pagina". Doble rAF = garantiza al menos un paint de SessionStart antes
+    // de la senal. Flag en sessionStorage + evento (el provider persiste, escucha ambos).
+    useEffect(() => {
+        if (!execV3Active || !execV3ViaMorph || execV3Phase !== 'start') return
+        let raf1 = 0
+        let raf2 = 0
+        raf1 = requestAnimationFrame(() => {
+            raf2 = requestAnimationFrame(() => {
+                try { sessionStorage.setItem('eva:exec-v3-ready', '1') } catch { /* private */ }
+                try { window.dispatchEvent(new Event('eva:exec-v3-ready')) } catch { /* SSR */ }
+            })
+        })
+        return () => {
+            cancelAnimationFrame(raf1)
+            cancelAnimationFrame(raf2)
+        }
+    }, [execV3Active, execV3ViaMorph, execV3Phase])
+
     const registerRowRef = useCallback((blockId: string, setNumber: number, el: HTMLDivElement | null) => {
         const key = `${blockId}:${setNumber}`
         if (el) setRowRefs.current.set(key, el)
@@ -2277,6 +2299,7 @@ export function WorkoutExecutionClient({
                                 onSkip={enterExecV3Session}
                                 streak={weeklyStreak}
                                 reducedMotion={reducedMotion}
+                                viaMorph={execV3ViaMorph}
                             />
                         )}
                     </AnimatePresence>
