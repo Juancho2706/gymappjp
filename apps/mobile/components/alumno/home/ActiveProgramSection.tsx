@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { ScrollView, Text, TouchableOpacity, View } from 'react-native'
 import { ArrowRight, Calendar, CheckCircle2, ChevronRight, Pencil, Play, RotateCcw } from 'lucide-react-native'
 import { cssInterop } from 'nativewind'
@@ -9,6 +9,7 @@ import { Badge } from '../../Badge'
 import { Card } from '../../Card'
 import { Sheet } from '../../Sheet'
 import { ProgramPhaseBar } from './ProgramPhaseBar'
+import { measureMorphOrigin, type MorphOrigin } from '../workout/v3/session-morph'
 import { DAY_FULL, DAY_SHORT } from './types'
 import type { PendingDay, PlanDayView, Program } from './types'
 
@@ -59,8 +60,9 @@ export function ActiveProgramSection({
   // sin sufijo. El shell la computa (resolveEffectiveWeekVariant). Espejo del sufijo
   // web `{abMode ? ` · Sem ${activeVariant}` : ''}` (ActiveProgramSection.tsx:95).
   weekVariant?: 'A' | 'B' | null
-  /** Entreno normal / repetir hoy (sin params). */
-  onStart: (planId: string) => void
+  /** Entreno normal / repetir hoy (sin params). `origin` = rect del day-card para que el Despegue
+   *  nazca de la tarjeta clickeada (null ⇒ el morph cae a su origen sintético). */
+  onStart: (planId: string, origin?: MorphOrigin | null) => void
   /** Recuperar un dia pendiente → ejecutor con param `recuperar` (banner ambar). */
   onRecover: (planId: string, dateIso: string) => void
 }) {
@@ -73,10 +75,10 @@ export function ActiveProgramSection({
   //  · done && !isToday → sheet "Ya hiciste este entrenamiento" (revisar/repetir).
   //  · pending          → recuperar (param `recuperar`, banner ambar, se entrena hoy).
   //  · resto (today/upcoming/done-hoy) → navegacion directa (comportamiento editable actual).
-  function handleDayPress(view: PlanDayView) {
+  function handleDayPress(view: PlanDayView, origin: MorphOrigin | null) {
     if (view.status === 'done' && !view.isToday) { setSheetView(view); return }
     if (view.status === 'pending') { onRecover(view.plan.id, view.dateIso); return }
-    onStart(view.plan.id)
+    onStart(view.plan.id, origin)
   }
 
   // Sin programa activo — web `ActiveProgramSection.tsx:26-34` hace early return de
@@ -148,7 +150,7 @@ export function ActiveProgramSection({
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingRight: 2 }}>
         {planDays.map((d) => (
-          <DayCard key={d.plan.id} view={d} onPress={() => handleDayPress(d)} />
+          <DayCard key={d.plan.id} view={d} onPress={(origin) => handleDayPress(d, origin)} />
         ))}
       </ScrollView>
 
@@ -260,8 +262,11 @@ function DoubleIntentSheet({
   )
 }
 
-function DayCard({ view, onPress }: { view: PlanDayView; onPress: () => void }) {
+function DayCard({ view, onPress }: { view: PlanDayView; onPress: (origin: MorphOrigin | null) => void }) {
   const { theme, resolvedScheme } = useTheme()
+  // Ref medible: al tocar la tarjeta se mide su rect real en ventana para que el Despegue nazca EXACTO
+  // de la day-card clickeada (mismo patrón que el CTA del hero). Si la medición falla → origen sintético.
+  const ref = useRef<View>(null)
   const { plan, status, isToday, doneOnLabel } = view
   const dow = plan.day_of_week ?? 1
   const done = status === 'done'
@@ -288,33 +293,37 @@ function DayCard({ view, onPress }: { view: PlanDayView; onPress: () => void }) 
         : plan.title
 
   return (
-    <TouchableOpacity
-      testID={`program-day-${plan.id}`}
-      onPress={onPress}
-      activeOpacity={0.8}
-      accessibilityRole="button"
-      accessibilityLabel={a11yLabel}
-      className={`rounded-control border ${cardClass}`}
-      style={{ width: 96, padding: 12 }}
-    >
-      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-        <Text className={labelClass} style={{ fontFamily: FONT.uiExtra, fontSize: 10.5, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-          {DAY_SHORT[dow]}
+    // Wrapper medible (patrón del hero): `collapsable={false}` evita que Android colapse el View y
+    // measureInWindow devuelva 0. El wrapper se ciñe al TouchableOpacity (width 96) → su rect == la card.
+    <View ref={ref} collapsable={false}>
+      <TouchableOpacity
+        testID={`program-day-${plan.id}`}
+        onPress={() => measureMorphOrigin(ref.current, theme.radius.control, (origin) => onPress(origin))}
+        activeOpacity={0.8}
+        accessibilityRole="button"
+        accessibilityLabel={a11yLabel}
+        className={`rounded-control border ${cardClass}`}
+        style={{ width: 96, padding: 12 }}
+      >
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+          <Text className={labelClass} style={{ fontFamily: FONT.uiExtra, fontSize: 10.5, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+            {DAY_SHORT[dow]}
+          </Text>
+          {done ? (
+            <CheckCircle2 size={14} color={theme.success} strokeWidth={2.4} />
+          ) : isToday ? (
+            <Play size={12} color={playColor} strokeWidth={2.6} />
+          ) : pending ? (
+            <View className="bg-ember-500" style={{ width: 8, height: 8, borderRadius: 4 }} />
+          ) : (
+            <ChevronRight size={13} color={INK_300[resolvedScheme]} />
+          )}
+        </View>
+        <Text className="text-strong" numberOfLines={2} style={{ marginTop: 6, fontFamily: FONT.uiBold, fontSize: 13, lineHeight: 16 }}>{plan.title}</Text>
+        <Text className={pieClass} numberOfLines={1} style={{ marginTop: 2, fontSize: 10.5, fontFamily: pending ? FONT.uiBold : FONT.ui }}>
+          {pending ? 'Pendiente' : doneElsewhere ? `Hecho el ${doneOnLabel!.toLowerCase()}` : `Día ${dow}`}
         </Text>
-        {done ? (
-          <CheckCircle2 size={14} color={theme.success} strokeWidth={2.4} />
-        ) : isToday ? (
-          <Play size={12} color={playColor} strokeWidth={2.6} />
-        ) : pending ? (
-          <View className="bg-ember-500" style={{ width: 8, height: 8, borderRadius: 4 }} />
-        ) : (
-          <ChevronRight size={13} color={INK_300[resolvedScheme]} />
-        )}
-      </View>
-      <Text className="text-strong" numberOfLines={2} style={{ marginTop: 6, fontFamily: FONT.uiBold, fontSize: 13, lineHeight: 16 }}>{plan.title}</Text>
-      <Text className={pieClass} numberOfLines={1} style={{ marginTop: 2, fontSize: 10.5, fontFamily: pending ? FONT.uiBold : FONT.ui }}>
-        {pending ? 'Pendiente' : doneElsewhere ? `Hecho el ${doneOnLabel!.toLowerCase()}` : `Día ${dow}`}
-      </Text>
-    </TouchableOpacity>
+      </TouchableOpacity>
+    </View>
   )
 }

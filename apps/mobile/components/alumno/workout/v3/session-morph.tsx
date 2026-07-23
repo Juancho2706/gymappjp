@@ -55,11 +55,14 @@ const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window')
 /** Animación "arribada" (logo aterrizado + PREPARANDO visible). Tras esto se habilita el tap. */
 const ANIM_DONE_MS = 2700
 /** Reduced-motion: sin vuelo, la escena asienta rápido. */
-const ANIM_DONE_REDUCED_MS = 700
+const ANIM_DONE_REDUCED_MS = 500
 /** Fallback: si el ejecutor nunca avisa "listo", habilitar el tap igual (no atrapar al alumno). */
-const READY_FALLBACK_MS = 4500
-/** router.push en paralelo (la ruta carga DETRÁS del Despegue). */
-const NAV_AT_MS = 120
+const READY_FALLBACK_MS = 4600
+/** Navegar cuando el wipe de marca YA cubrió todo (delay .6s + dur .6s ≈ 1.2s): así el swap de ruta
+ *  (dashboard → ejecutor) queda oculto tras el azul opaco y no se ve el flash del contenido detrás. */
+const NAV_AT_MS = 1300
+/** Reduced-motion: sin wipe, navega antes (nada tapa el swap, pero el overlay opaco ya cubre). */
+const NAV_AT_REDUCED_MS = 60
 /** Fade de entrada del hint + fade de salida al tap. */
 const HINT_FADE_MS = 350
 const EXIT_MS = 320
@@ -71,9 +74,9 @@ const BEZIER_WIPE = Easing.bezier(0.76, 0, 0.19, 1) // exec-dsp-wipe
 const EASE = Easing.bezier(0.25, 0.1, 0.25, 1) // CSS `ease`
 const EASE_OUT = Easing.out(Easing.ease) // CSS `ease-out`
 
-// Píldora: 303px con tope calc(100% - 72px), altura 52, radio 14 → burbuja 52 (radio 50% = 26).
-const PILL_W = Math.min(303, SCREEN_W - 72)
-const PILL_TOP = SCREEN_H * 0.64 // web `top: 64%`
+// Burbuja objetivo del morph: 52px, radio 50% = 26.
+const BUBBLE = 52
+const BUBBLE_RADIUS = 26
 
 // Breakpoints fraccionales de exec-dsp-morph (0/32/48/60/100%). Cada segmento eleva con su propio bezier
 // (CSS aplica la timing-function ENTRE cada par de keyframes) → withSequence de 4 timings que aterrizan
@@ -148,7 +151,17 @@ function subscribeMorphScene(fn: () => void): () => void {
 interface ActiveMorph {
   nonce: number
   planId: string
+  /** Rect del trigger clickeado (real medido, o sintético si el caller no midió). */
+  origin: MorphOrigin
   params?: Record<string, string>
+}
+
+/** Origen sintético (fallback digno): un rect tipo píldora centrado-bajo, donde suelen vivir los CTA.
+ *  Sólo se usa si un caller no midió el rect real (measureMorphOrigin devolvió null). */
+function syntheticOrigin(): MorphOrigin {
+  const width = Math.min(260, SCREEN_W - 48)
+  const height = 52
+  return { x: SCREEN_W / 2 - width / 2, y: SCREEN_H * 0.62, width, height, radius: 16 }
 }
 
 export function SessionMorphProvider({ children }: { children: React.ReactNode }) {
@@ -166,14 +179,16 @@ export function SessionMorphProvider({ children }: { children: React.ReactNode }
   const coachLogoUrl = branding?.logoUrl ?? null
   const coachInitial = ((branding?.displayName?.trim() || 'Tu coach')[0] ?? 'E').toUpperCase()
 
-  const startMorph = useCallback(({ planId, params }: StartMorphArgs) => {
+  const startMorph = useCallback(({ planId, origin, params }: StartMorphArgs) => {
     // Guard anti doble-tap: ignora taps mientras un morph está en vuelo.
     if (busyRef.current) return
     busyRef.current = true
     // Marca via-morph + resetea la señal de "listo" ANTES de montar el ejecutor (se consume al montar).
     resetMorphScene()
     markMorphLaunch()
-    setActive({ nonce: Date.now(), planId, params })
+    // El morph NACE del componente clickeado: usa el rect real medido; si el caller no midió, cae al
+    // origen sintético centrado-bajo.
+    setActive({ nonce: Date.now(), planId, origin: origin ?? syntheticOrigin(), params })
   }, [])
 
   const navigate = useCallback(() => {
@@ -206,6 +221,7 @@ export function SessionMorphProvider({ children }: { children: React.ReactNode }
         <DespegueOverlay
           key={active.nonce}
           exec={exec}
+          origin={active.origin}
           coachLogoUrl={coachLogoUrl}
           coachInitial={coachInitial}
           reducedMotion={reducedMotion}
@@ -317,6 +333,7 @@ function FallLine({
 
 function DespegueOverlay({
   exec,
+  origin,
   coachLogoUrl,
   coachInitial,
   reducedMotion,
@@ -324,6 +341,7 @@ function DespegueOverlay({
   onDone,
 }: {
   exec: ExecTheme
+  origin: MorphOrigin
   coachLogoUrl: string | null
   coachInitial: string
   reducedMotion: boolean
@@ -331,6 +349,14 @@ function DespegueOverlay({
   onDone: () => void
 }) {
   const b = exec.accent
+  // La píldora nace del rect REAL del trigger (measureInWindow): arranca en su tamaño/posición/radio y
+  // COLAPSA hacia su propio centro (cx, cy) → burbuja de 52. Sólo el CTA ancho muestra la etiqueta.
+  const rectW = origin.width
+  const rectH = origin.height
+  const rectRadius = origin.radius ?? 14
+  const cx = origin.x + rectW / 2
+  const cy = origin.y + rectH / 2
+  const wideEnough = rectW >= 150
   // Tonos derivados del acento (mismas mezclas que el web).
   const bgTop = mixHex(b, 44, '#050a1c')
   const bgMid = mixHex(b, 20, '#050a18')
@@ -434,8 +460,9 @@ function DespegueOverlay({
       )
     }
 
-    // Navegación en paralelo (la ruta carga DETRÁS del Despegue; el ejecutor arranca en 'start').
-    timers.push(setTimeout(() => navRef.current(), NAV_AT_MS))
+    // Navegación DESPUÉS de que el wipe de marca cubrió todo (~1,3s): el swap de ruta (dashboard →
+    // ejecutor) queda oculto tras el azul opaco. La ruta carga DETRÁS; el ejecutor arranca en 'start'.
+    timers.push(setTimeout(() => navRef.current(), reducedMotion ? NAV_AT_REDUCED_MS : NAV_AT_MS))
     // La animación SIEMPRE corre completa: a los ANIM_DONE habilitamos el tap (si la escena ya cargó).
     timers.push(setTimeout(() => setAnimDone(true), reducedMotion ? ANIM_DONE_REDUCED_MS : ANIM_DONE_MS))
     // Fallback: habilita el tap pase lo que pase (no atrapar al alumno).
@@ -462,14 +489,19 @@ function DespegueOverlay({
   const rootStyle = useAnimatedStyle(() => ({ opacity: fade.value }))
   const bgStyle = useAnimatedStyle(() => ({ transform: [{ translateY: bgTY.value }] }))
   const pillStyle = useAnimatedStyle(() => {
-    const w = interpolate(morph.value, MORPH_IN, [PILL_W, 52, 52, 52, 52], Extrapolation.CLAMP)
+    // width rect→52, height rect→52, radius rect→26; centrado en (cx,cy) vía translate(-w/2,-h/2) que
+    // NO se escala (traslaciones fuera del scale, igual que el web `translate(-50%,-50%)`); luego la
+    // anticipación (squash) y el despegue (stretch) suman translateY sobre ese centro.
+    const w = interpolate(morph.value, MORPH_IN, [rectW, BUBBLE, BUBBLE, BUBBLE, BUBBLE], Extrapolation.CLAMP)
+    const h = interpolate(morph.value, MORPH_IN, [rectH, BUBBLE, BUBBLE, BUBBLE, BUBBLE], Extrapolation.CLAMP)
+    const ty = interpolate(morph.value, MORPH_IN, [0, 0, 18, -60, -780], Extrapolation.CLAMP)
     return {
       width: w,
-      height: 52,
-      borderRadius: interpolate(morph.value, MORPH_IN, [14, 26, 26, 26, 26], Extrapolation.CLAMP),
+      height: h,
+      borderRadius: interpolate(morph.value, MORPH_IN, [rectRadius, BUBBLE_RADIUS, BUBBLE_RADIUS, BUBBLE_RADIUS, BUBBLE_RADIUS], Extrapolation.CLAMP),
       transform: [
         { translateX: -w / 2 },
-        { translateY: interpolate(morph.value, MORPH_IN, [0, 0, 18, -60, -780], Extrapolation.CLAMP) },
+        { translateY: -h / 2 + ty },
         { scaleX: interpolate(morph.value, MORPH_IN, [1, 1, 1.18, 0.9, 0.82], Extrapolation.CLAMP) },
         { scaleY: interpolate(morph.value, MORPH_IN, [1, 1, 0.78, 1.3, 1.4], Extrapolation.CLAMP) },
       ],
@@ -520,22 +552,25 @@ function DespegueOverlay({
           )}
         </Animated.View>
 
-        {/* Píldora del CTA que morfea y despega (oculta en reduced-motion). */}
+        {/* Píldora = clon del trigger real (posición/tamaño del rect medido); morfea y despega (oculta en
+            reduced-motion). Ancla en el CENTRO del rect (cx, cy); pillStyle centra con translate(-w/2,-h/2). */}
         {!reducedMotion && (
           <Animated.View
             pointerEvents="none"
             style={[
               styles.pill,
-              { top: PILL_TOP, left: SCREEN_W / 2, backgroundColor: b, shadowColor: b },
+              { top: cy, left: cx, backgroundColor: b, shadowColor: b },
               pillStyle,
             ]}
           >
-            <Animated.View style={[styles.pillLabel, labelStyle]}>
-              <Play size={15} color="#ffffff" fill="#ffffff" />
-              <Text style={styles.pillLabelText} numberOfLines={1}>
-                Empezar entrenamiento
-              </Text>
-            </Animated.View>
+            {wideEnough && (
+              <Animated.View style={[styles.pillLabel, labelStyle]}>
+                <Play size={15} color="#ffffff" fill="#ffffff" />
+                <Text style={styles.pillLabelText} numberOfLines={1}>
+                  Empezar entrenamiento
+                </Text>
+              </Animated.View>
+            )}
             {/* Estela: hija de la píldora (top 100%), crece hacia abajo mientras despega. */}
             <Animated.View style={[styles.trail, trailStyle]}>
               <LinearGradient
@@ -588,15 +623,18 @@ function DespegueOverlay({
           <Text style={styles.hintText}>TOCA PARA COMENZAR</Text>
         </Animated.View>
 
-        {/* Capa de tap: sólo activa cuando está listo (animación completa + escena montada). */}
-        {ready && (
-          <Pressable
-            style={StyleSheet.absoluteFill}
-            onPress={dismiss}
-            accessibilityRole="button"
-            accessibilityLabel="Comenzar entrenamiento"
-          />
-        )}
+        {/* Capa de tap SIEMPRE presente (top del stack): CAPTURA todos los toques durante la ceremonia
+            para que NO se pueda skipear clickeando la pantalla ni pasen al botón EMPEZAR de atrás
+            (`dismiss` es no-op hasta `ready`, así sólo bloquea el pass-through). Al estar listo, el tap
+            avanza a Inicio. */}
+        <Pressable
+          style={StyleSheet.absoluteFill}
+          onPress={dismiss}
+          accessibilityRole={ready ? 'button' : undefined}
+          accessibilityLabel={ready ? 'Comenzar entrenamiento' : undefined}
+          accessibilityElementsHidden={!ready}
+          importantForAccessibility={ready ? 'yes' : 'no-hide-descendants'}
+        />
       </Animated.View>
     </Modal>
   )

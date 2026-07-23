@@ -463,7 +463,7 @@ export default function AlumnoHomeScreen() {
             pending={derived.pending}
             todayPlanId={derived.todayPlanId}
             weekVariant={derived.weekVariant}
-            onStart={(id) => startMorph({ planId: id })}
+            onStart={(id, origin) => startMorph({ planId: id, origin })}
             // Recuperar un dia pendiente: se entrena HOY y el log cae hoy (semantica correcta de
             // recuperacion, ver E1.1); el param `recuperar` solo pinta el banner informativo ambar.
             // El camino "editar fecha pasada" (param `fecha`) queda cableado en [planId].tsx + banner

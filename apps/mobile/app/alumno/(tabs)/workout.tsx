@@ -149,59 +149,8 @@ export default function WorkoutScreen() {
   }
 
   function renderPlan({ item, index }: { item: Plan; index: number }) {
-    const isToday = item.day_of_week === TODAY_DOW
-    return (
-      <MotiView
-        from={{ opacity: 0, translateY: 12 }}
-        animate={{ opacity: 1, translateY: 0 }}
-        transition={{ type: 'timing', duration: 350, delay: Math.min(index * 60, 400) }}
-      >
-        <Card
-          variant={isToday ? 'highlighted' : 'default'}
-          interactive
-          padding={18}
-          onPress={() => startMorph({ planId: item.id })}
-          style={styles.card}
-        >
-          <View
-            style={[
-              styles.iconChip,
-              {
-                backgroundColor: isToday ? theme.primary : theme.muted,
-                borderRadius: theme.radius.md,
-              },
-            ]}
-          >
-            <Dumbbell size={20} color={isToday ? theme.primaryForeground : theme.primary} strokeWidth={2} />
-          </View>
-          <View style={styles.cardLeft}>
-            {item.day_of_week != null && (
-              <View style={styles.dowRow}>
-                <Text
-                  style={[
-                    styles.dow,
-                    { color: isToday ? theme.primary : theme.mutedForeground, fontFamily: FONT_BOLD },
-                  ]}
-                >
-                  {DAY_NAMES[item.day_of_week]}
-                </Text>
-                {isToday && <Badge label="HOY" tone="sport" variant="solid" />}
-              </View>
-            )}
-            <Text
-              style={[styles.planTitle, { color: theme.foreground, fontFamily: FONT_SEMI }]}
-              numberOfLines={2}
-            >
-              {item.title}
-            </Text>
-            <Text style={[styles.planSub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
-              {item.blockCount} ejercicio{item.blockCount !== 1 ? 's' : ''}
-            </Text>
-          </View>
-          <ChevronRight size={22} color={isToday ? theme.primary : theme.mutedForeground} />
-        </Card>
-      </MotiView>
-    )
+    // El Despegue nace de la CARD clickeada → cada card mide su rect real (measureMorphOrigin en PlanCard).
+    return <PlanCard item={item} index={index} onStart={(origin) => startMorph({ planId: item.id, origin })} />
   }
 
   return (
@@ -284,6 +233,68 @@ export default function WorkoutScreen() {
         />
       )}
     </SafeAreaView>
+  )
+}
+
+/** Card de un plan de la lista. Mide su rect real al tocarla para que el Despegue NAZCA de la card
+ *  clickeada (mismo patrón que el CTA del hero); si la medición falla, el morph cae al origen sintético. */
+function PlanCard({ item, index, onStart }: { item: Plan; index: number; onStart: (origin: MorphOrigin | null) => void }) {
+  const { theme } = useTheme()
+  const ref = useRef<View>(null)
+  const isToday = item.day_of_week === TODAY_DOW
+  return (
+    <MotiView
+      from={{ opacity: 0, translateY: 12 }}
+      animate={{ opacity: 1, translateY: 0 }}
+      transition={{ type: 'timing', duration: 350, delay: Math.min(index * 60, 400) }}
+    >
+      <View ref={ref} collapsable={false}>
+        <Card
+          variant={isToday ? 'highlighted' : 'default'}
+          interactive
+          padding={18}
+          onPress={() => measureMorphOrigin(ref.current, theme.radius.card, (origin) => onStart(origin))}
+          style={styles.card}
+        >
+          <View
+            style={[
+              styles.iconChip,
+              {
+                backgroundColor: isToday ? theme.primary : theme.muted,
+                borderRadius: theme.radius.md,
+              },
+            ]}
+          >
+            <Dumbbell size={20} color={isToday ? theme.primaryForeground : theme.primary} strokeWidth={2} />
+          </View>
+          <View style={styles.cardLeft}>
+            {item.day_of_week != null && (
+              <View style={styles.dowRow}>
+                <Text
+                  style={[
+                    styles.dow,
+                    { color: isToday ? theme.primary : theme.mutedForeground, fontFamily: FONT_BOLD },
+                  ]}
+                >
+                  {DAY_NAMES[item.day_of_week]}
+                </Text>
+                {isToday && <Badge label="HOY" tone="sport" variant="solid" />}
+              </View>
+            )}
+            <Text
+              style={[styles.planTitle, { color: theme.foreground, fontFamily: FONT_SEMI }]}
+              numberOfLines={2}
+            >
+              {item.title}
+            </Text>
+            <Text style={[styles.planSub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+              {item.blockCount} ejercicio{item.blockCount !== 1 ? 's' : ''}
+            </Text>
+          </View>
+          <ChevronRight size={22} color={isToday ? theme.primary : theme.mutedForeground} />
+        </Card>
+      </View>
+    </MotiView>
   )
 }
 
