@@ -64,7 +64,8 @@ export async function getWorkoutDaySummaries(
   // spec §2 afirma "El orden de días viene de la RPC (no se re-ordena en cliente)". El
   // `.sort()` anterior era redundante con ese ORDER BY; se elimina para alinear ambas
   // superficies al mismo criterio explícito (el del RPC). Consumidores que asumen
-  // newest-first (RecentWorkouts.slice(0,5), perfil computeStreak) siguen correctos.
+  // newest-first (RecentWorkouts.slice(0,5)) siguen correctos. (La racha del perfil ya
+  // NO se deriva de aquí: usa el RPC get_client_current_streak, migración 20260723110000.)
   return rows
     .map((r) => ({ dayKey: r.day.slice(0, 10), sets: Number(r.sets) }))
     .map(({ dayKey, sets }) => ({
