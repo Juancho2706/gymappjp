@@ -128,7 +128,9 @@ export function WorkoutLaunchProvider({ children }: { children: React.ReactNode 
 
     const dismiss = useCallback(() => {
         if (!ready || leaving) return
-        try { sessionStorage.removeItem('eva:exec-v3-morph') } catch { /* private */ }
+        // NO borramos 'eva:exec-v3-morph' aquí: la consume SOLO el ejecutor al montar. Si la ruta
+        // carga lento y aún no la leyó, borrarla acá la dejaba sin marca → mostraba el splash VIEJO
+        // (la "animación que se repetía" del QA). El ejecutor es el único consumidor.
         setLeaving(true)
         timersRef.current.push(window.setTimeout(clearAll, EXIT_MS + 40))
     }, [ready, leaving, clearAll])
@@ -176,16 +178,14 @@ function DespegueOverlay({
     reduced: boolean
     onTap: () => void
 }) {
-    const [mounted, setMounted] = useState(false)
-    const pillRef = useRef<HTMLDivElement>(null)
-    useEffect(() => setMounted(true), [])
-
     // Morph desde el RECT REAL del trigger: colapsa a burbuja centrada en su propio centro, anticipa
-    // (squash) y despega (stretch). Web Animations API — keyframes computados desde el rect.
-    useEffect(() => {
-        if (reduced || !pillRef.current) return
+    // (squash) y despega (stretch). Web Animations API — keyframes computados desde el rect. El callback
+    // ref garantiza que la animacion se dispare cuando la pildora YA existe en el DOM (un useEffect con
+    // el gate `mounted` corria antes de montarla → el clon quedaba congelado y no despegaba).
+    const runPillMorph = useCallback((node: HTMLDivElement | null) => {
+        if (!node || reduced) return
         const base = 'translate(-50%,-50%)'
-        pillRef.current.animate(
+        node.animate(
             [
                 { width: `${rect.width}px`, height: `${rect.height}px`, borderRadius: `${rect.radius}px`, transform: `${base} translateY(0) scale(1,1)`, offset: 0 },
                 { width: '52px', height: '52px', borderRadius: '50%', transform: `${base} translateY(0) scale(1,1)`, offset: 0.32 },
@@ -196,8 +196,6 @@ function DespegueOverlay({
             { duration: 950, easing: 'cubic-bezier(.6,0,.75,.4)', fill: 'forwards' }
         )
     }, [rect, reduced])
-
-    if (!mounted) return null
 
     // Centro del rect (la burbuja colapsa hacia el centro del componente clickeado).
     const cx = rect.left + rect.width / 2
@@ -223,7 +221,7 @@ function DespegueOverlay({
             {/* Píldora = clon del trigger real (posición/tamaño del rect); morfea y despega. */}
             {!reduced && (
                 <div
-                    ref={pillRef}
+                    ref={runPillMorph}
                     className="exec-dsp-pill"
                     aria-hidden
                     style={{ left: cx, top: cy, width: rect.width, height: rect.height, borderRadius: rect.radius, transform: 'translate(-50%,-50%)' }}
