@@ -4,7 +4,6 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState } f
 import { createPortal } from 'react-dom'
 import { usePathname, useRouter } from 'next/navigation'
 import { motion, useReducedMotion } from 'framer-motion'
-import { toast } from 'sonner'
 import { resolveLaunchBrand } from '@/lib/workout/exec-launch-brand'
 
 /**
@@ -83,13 +82,13 @@ export function WorkoutLaunchProvider({ children }: { children: React.ReactNode 
         setState(null)
     }, [clearTimers])
 
-    const revert = useCallback(
-        (msg?: string) => {
-            clearAll()
-            if (msg) toast.error(msg)
-        },
-        [clearAll]
-    )
+    // Aborto SILENCIOSO: la navegación nunca cambió la ruta (RSC abortado / dedupe / edge server) →
+    // retiramos el overlay sin un toast alarmante (el dashboard ya está debajo, el alumno reintenta).
+    // Limpiamos la marca de morph para que un lanzamiento posterior no herede la ceremonia.
+    const abortSilently = useCallback(() => {
+        try { sessionStorage.removeItem('eva:exec-v3-morph') } catch { /* private */ }
+        clearAll()
+    }, [clearAll])
 
     const launch = useCallback(
         (el: HTMLElement, href: string) => {
@@ -121,12 +120,11 @@ export function WorkoutLaunchProvider({ children }: { children: React.ReactNode 
                 else sessionStorage.removeItem('eva:exec-v3-morph-logo')
             } catch { /* private mode */ }
 
-            const NAV_ERROR = 'No pudimos abrir tu sesión. Intenta de nuevo.'
             const go = () => {
                 try {
                     router.push(href)
                 } catch {
-                    revert(NAV_ERROR)
+                    abortSilently()
                 }
             }
 
@@ -142,10 +140,12 @@ export function WorkoutLaunchProvider({ children }: { children: React.ReactNode 
                 )
             }
 
-            // Safety: si la navegación nunca ocurre, revertimos (el overlay ya no muere con el swap).
-            timersRef.current.push(window.setTimeout(() => revert(NAV_ERROR), 8000))
+            // Safety SILENCIOSO: con loading.tsx la ruta commitea (pathname cambia) muy por debajo de
+            // esto; si a los 3,5s NO cambió, el push no prosperó → retiramos el overlay sin error rojo.
+            // El camino feliz cancela este timer al despedirse (clearAll limpia todos los timers).
+            timersRef.current.push(window.setTimeout(abortSilently, 3500))
         },
-        [pathname, reduced, revert, router, state]
+        [abortSilently, pathname, reduced, router, state]
     )
 
     // Despedida: la ruta destino ya montó (pathname cambió) → esperar el resto de la ceremonia mínima
