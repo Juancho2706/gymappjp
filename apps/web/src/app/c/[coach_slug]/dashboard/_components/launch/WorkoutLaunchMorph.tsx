@@ -127,8 +127,15 @@ export function WorkoutLaunchProvider({ children }: { children: React.ReactNode 
     )
 
     useEffect(() => {
-        if (state && !routeReady && pathname !== state.startPath) setRouteReady(true)
-    }, [pathname, state, routeReady])
+        if (!state) return
+        if (pathname !== state.startPath) {
+            if (!routeReady) setRouteReady(true)
+            return
+        }
+        // Volvimos al path de lanzamiento estando ya fuera → el alumno tocó "atrás" del teléfono:
+        // el overlay debe irse (no quedar pegado sobre el dashboard).
+        if (routeReady) clearAll()
+    }, [pathname, state, routeReady, clearAll])
 
     const ready = !!state && animDone && (routeReady || forceReady)
 
@@ -227,6 +234,8 @@ function DespegueOverlay({
         >
             {/* Fondo de marca que sube (wipe) + estelas de luz que caen. */}
             <div className="exec-dsp-bg" aria-hidden>
+                {/* Borde superior como AGUA: cresta ondulada (no un corte recto) que sube con el fondo. */}
+                <span className="exec-dsp-wave" />
                 <span className="exec-dsp-line" style={{ left: '22%', height: 120, animation: 'exec-dsp-line 0.7s ease-in 0.95s both' }} />
                 <span className="exec-dsp-line" style={{ left: '58%', height: 180, animation: 'exec-dsp-line 0.8s ease-in 1.05s both' }} />
                 <span className="exec-dsp-line" style={{ left: '80%', height: 90, animation: 'exec-dsp-line 0.65s ease-in 1.15s both' }} />

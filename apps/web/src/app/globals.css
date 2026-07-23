@@ -3164,6 +3164,38 @@ html[data-exec-v3-entered] [data-exec-v3] .exec-v3-splash {
   width: 2px;
   background: linear-gradient(rgba(255, 255, 255, 0), color-mix(in srgb, var(--b) 40%, #ffffff));
 }
+/* Cresta de AGUA sobre el borde recto del wipe: mismo color que el tope del fondo, recortada por una
+   máscara de ola SVG (repetida en X) que deriva lentamente para dar sensación de agua. Sube junto al
+   fondo (es hija de .exec-dsp-bg). Dos capas a distinta velocidad = profundidad. */
+.exec-dsp-wave,
+.exec-dsp-wave::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 26px;
+  pointer-events: none;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='26' viewBox='0 0 160 26' preserveAspectRatio='none'%3E%3Cpath d='M0,15 C28,4 52,4 80,14 C108,24 132,24 160,13 L160,26 L0,26 Z' fill='%23000'/%3E%3C/svg%3E") repeat-x bottom / 160px 26px;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='26' viewBox='0 0 160 26' preserveAspectRatio='none'%3E%3Cpath d='M0,15 C28,4 52,4 80,14 C108,24 132,24 160,13 L160,26 L0,26 Z' fill='%23000'/%3E%3C/svg%3E") repeat-x bottom / 160px 26px;
+}
+.exec-dsp-wave {
+  top: -23px;
+  background: color-mix(in srgb, var(--b) 44%, #050a1c);
+  animation: exec-dsp-wave 3.2s linear infinite;
+}
+.exec-dsp-wave::before {
+  top: -4px;
+  /* Segunda ola un poco más clara y desfasada (cresta de espuma). */
+  background: color-mix(in srgb, var(--b) 30%, #0a1330);
+  animation: exec-dsp-wave 2.1s linear infinite reverse;
+  opacity: 0.7;
+}
+@keyframes exec-dsp-wave {
+  to {
+    -webkit-mask-position: 160px bottom;
+    mask-position: 160px bottom;
+  }
+}
 /* Píldora que morfea y despega DESDE el rect real del trigger (posición/tamaño los fija el JS con
    la Web Animations API; ver DespegueOverlay). Aquí sólo la piel de marca. */
 .exec-dsp-pill {
