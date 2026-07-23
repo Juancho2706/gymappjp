@@ -399,7 +399,28 @@ function DespegueOverlay({
   // Suscripción a "escena lista" del ejecutor (via-morph).
   useEffect(() => subscribeMorphScene(() => setSceneReady(true)), [])
 
-  // Arranca la coreografía + navegación + habilitación del tap, una vez al montar el Modal.
+  // Lanzamiento de la píldora (morph desde el rect + label fade + estela). Se dispara desde el onLayout
+  // de la píldora (garantiza que el nodo YA está montado y medido en el Modal antes de animar; si se
+  // dispara en el useEffect de montaje el clon queda congelado y no despega). Guard → una sola vez.
+  const pillLaunchedRef = useRef(false)
+  const launchPill = useCallback(() => {
+    if (pillLaunchedRef.current || reducedMotion) return
+    pillLaunchedRef.current = true
+    // exec-dsp-morph 0.95s cubic-bezier(.6,0,.75,.4) — segmentos 0→32→48→60→100% (304/152/114/380ms).
+    morph.value = withSequence(
+      withTiming(0.32, { duration: 304, easing: BEZIER_MORPH }),
+      withTiming(0.48, { duration: 152, easing: BEZIER_MORPH }),
+      withTiming(0.6, { duration: 114, easing: BEZIER_MORPH }),
+      withTiming(1, { duration: 380, easing: BEZIER_MORPH }),
+    )
+    // exec-dsp-labelfade 0.26s ease → opacity 1→0.
+    label.value = withTiming(0, { duration: 260, easing: EASE })
+    // exec-dsp-trail 0.5s ease-out 0.5s.
+    trail.value = withDelay(500, withTiming(1, { duration: 500, easing: EASE_OUT }))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reducedMotion])
+
+  // Arranca el resto de la coreografía + navegación + habilitación del tap, una vez al montar el Modal.
   useEffect(() => {
     const timers: ReturnType<typeof setTimeout>[] = []
     if (reducedMotion) {
@@ -412,17 +433,9 @@ function DespegueOverlay({
       d1.value = 0.7
       d2.value = 0.7
     } else {
-      // exec-dsp-morph 0.95s cubic-bezier(.6,0,.75,.4) — segmentos 0→32→48→60→100% (304/152/114/380ms).
-      morph.value = withSequence(
-        withTiming(0.32, { duration: 304, easing: BEZIER_MORPH }),
-        withTiming(0.48, { duration: 152, easing: BEZIER_MORPH }),
-        withTiming(0.6, { duration: 114, easing: BEZIER_MORPH }),
-        withTiming(1, { duration: 380, easing: BEZIER_MORPH }),
-      )
-      // exec-dsp-labelfade 0.26s ease → opacity 1→0.
-      label.value = withTiming(0, { duration: 260, easing: EASE })
-      // exec-dsp-trail 0.5s ease-out 0.5s.
-      trail.value = withDelay(500, withTiming(1, { duration: 500, easing: EASE_OUT }))
+      // La píldora (morph + label fade + estela) se dispara aparte, en su onLayout (`launchPill`), NO
+      // aquí: si se lanza antes de que el nodo esté montado/medido dentro del Modal, el clon queda
+      // CONGELADO en su rect y no despega (bug QA). Espejo del callback-ref `runPillMorph` del web.
       // exec-dsp-wipe 0.6s cubic-bezier(.76,0,.19,1) 0.6s → translateY 100%→0.
       bgTY.value = withDelay(600, withTiming(0, { duration: 600, easing: BEZIER_WIPE }))
       // exec-dsp-logoland 0.95s cubic-bezier(.5,0,.6,1) 1.1s — segmentos 0→52→62→76→88→100%; el tramo
@@ -439,15 +452,18 @@ function DespegueOverlay({
       )
       // exec-dsp-fadeup 0.5s ease 1.9s → opacity 0→1, translateY 16→0.
       prep.value = withDelay(1900, withTiming(1, { duration: 500, easing: EASE }))
-      // exec-dsp-dot 1.1s ease infinite (0.2↔1), delays 0/.2/.4 → LOOP.
+      // exec-dsp-dot 1.1s ease infinite (0.2↔1), stagger .2s → LOOP. Con un pequeño delay base (120ms):
+      // un withRepeat de delay CERO puede arrancar antes de que el nodo del Modal se adjunte y quedar
+      // descartado (los dots congelados en 0.2); el delay lo empuja tras el attach y es invisible (el
+      // bloque PREPARANDO no aparece hasta 1900ms). El stagger de 200ms se preserva (120/320/520).
       const mkDot = () =>
         withRepeat(
           withSequence(withTiming(1, { duration: 550, easing: EASE }), withTiming(0.2, { duration: 550, easing: EASE })),
           -1,
         )
-      d0.value = mkDot()
-      d1.value = withDelay(200, mkDot())
-      d2.value = withDelay(400, mkDot())
+      d0.value = withDelay(120, mkDot())
+      d1.value = withDelay(320, mkDot())
+      d2.value = withDelay(520, mkDot())
       // exec-dsp-ring 0.55s ease-out 1.62s — scale .5→2.4, opacity .8→0 (invisible hasta el impacto).
       timers.push(
         setTimeout(() => {
@@ -557,6 +573,7 @@ function DespegueOverlay({
         {!reducedMotion && (
           <Animated.View
             pointerEvents="none"
+            onLayout={launchPill}
             style={[
               styles.pill,
               { top: cy, left: cx, backgroundColor: b, shadowColor: b },
@@ -590,21 +607,20 @@ function DespegueOverlay({
               <Animated.View style={[styles.ring, { borderColor: ringColor }, ringStyle]} />
             )}
             <Animated.View style={[styles.logo, { shadowColor: b }, logoStyle]}>
+              {/* Anillo de marca SIEMPRE detrás: el logo "respira" (se ve el borde de marca alrededor),
+                  como el web `.exec-dsp-logo` background + `.exec-dsp-logo-img` padding:20 + contain. */}
+              <LinearGradient
+                colors={[logoGradA, logoGradB]}
+                start={{ x: 0.15, y: 0 }}
+                end={{ x: 0.85, y: 1 }}
+                style={StyleSheet.absoluteFill}
+              />
               {coachLogoUrl ? (
-                <Image source={{ uri: coachLogoUrl }} alt="Logo del coach" style={styles.logoImg} contentFit="cover" />
+                <Image source={{ uri: coachLogoUrl }} alt="Logo del coach" style={styles.logoImg} contentFit="contain" />
+              ) : coachInitial ? (
+                <Text style={styles.logoInitial}>{coachInitial}</Text>
               ) : (
-                <LinearGradient
-                  colors={[logoGradA, logoGradB]}
-                  start={{ x: 0.15, y: 0 }}
-                  end={{ x: 0.85, y: 1 }}
-                  style={styles.logoFill}
-                >
-                  {coachInitial ? (
-                    <Text style={styles.logoInitial}>{coachInitial}</Text>
-                  ) : (
-                    <Play size={38} color="#ffffff" fill="#ffffff" />
-                  )}
-                </LinearGradient>
+                <Play size={36} color="#ffffff" fill="#ffffff" />
               )}
             </Animated.View>
           </View>
@@ -700,8 +716,9 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 18 },
     elevation: 16,
   },
-  logoImg: { width: '100%', height: '100%' },
-  logoFill: { flex: 1, width: '100%', alignItems: 'center', justifyContent: 'center' },
+  // Logo ~72 dentro del círculo de 112 (contain): deja ~20px de anillo de marca alrededor (el logo
+  // "respira", como el padding:20 del web). Centrado por el logo (alignItems/justifyContent: center).
+  logoImg: { width: 72, height: 72 },
   logoInitial: { fontFamily: FONT.displayBlack, fontSize: 44, color: '#ffffff' },
   prep: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   prepText: { fontFamily: FONT.uiExtra, fontSize: 11, letterSpacing: 2.86 },

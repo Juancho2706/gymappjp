@@ -179,16 +179,15 @@ function ExecutorV3Inner({ planId, recoverDate, editDate }: { planId: string; re
   // PR en vivo (E4.2): true cuando la serie recién cerrada fue récord → el interstitial muestra "+1 serie · ¡PR!".
   const restPrRef = useRef(false)
   // Fase de presentacion V3: arranca en el splash (una vez por apertura) → Inicio → sesion. EXCEPCION
-  // via-morph (Despegue): si llegamos por el morph de lanzamiento (marca consumida una sola vez al
-  // montar, espejo del sessionStorage 'eva:exec-v3-morph' del WEC web), SALTAMOS el SessionIntro y
-  // arrancamos DIRECTO en 'start' (Inicio) — el overlay "Despegue" ES el splash y cubre todo hasta el
-  // tap del alumno. `viaMorphRef` se captura en el lazy init (corre una vez) para avisar "escena lista".
-  const viaMorphRef = useRef(false)
-  const [phase, setPhase] = useState<ExecPhase>(() => {
-    const via = consumeMorphLaunch()
-    viaMorphRef.current = via
-    return via ? 'start' : 'intro'
-  })
+  // via-morph (Despegue): si llegamos por el morph de lanzamiento SALTAMOS el SessionIntro y arrancamos
+  // DIRECTO en 'start' (Inicio) — el overlay "Despegue" ES el splash y cubre todo hasta el tap del
+  // alumno. La marca la consume SOLO el ejecutor (el overlay JAMAS la toca en el dismiss); la lee con un
+  // guard `=== null` (NO en el lazy-init de useState, que StrictMode/dev doble-invoca → la 2a lectura
+  // devolveria false y caeria al SessionIntro tras el Despegue = "splash repetido" del QA). El guard
+  // asegura UN solo consumo por instancia; `viaMorphRef.current` alimenta el aviso de "escena lista".
+  const viaMorphRef = useRef<boolean | null>(null)
+  if (viaMorphRef.current === null) viaMorphRef.current = consumeMorphLaunch()
+  const [phase, setPhase] = useState<ExecPhase>(viaMorphRef.current ? 'start' : 'intro')
 
   useEffect(() => () => { if (recentSetTimer.current) clearTimeout(recentSetTimer.current) }, [])
 
