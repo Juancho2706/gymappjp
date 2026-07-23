@@ -15,11 +15,13 @@
  * `SubstituteSheetV3` / `ExecSettingsSheet`. El modal legacy queda intacto para el ejecutor V2.
  */
 
+import { useEffect, useState } from 'react'
 import Image from 'next/image'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
-import { X } from 'lucide-react'
+import { Maximize2, X } from 'lucide-react'
 import { extractYoutubeVideoId } from '@/lib/youtube'
 import { ExerciseVideo } from '@/components/exercise/ExerciseVideo'
+import { resolveExecMedia } from './exec-media'
 import type { ExerciseType } from '../WorkoutExecutionClient'
 
 interface Props {
@@ -76,9 +78,79 @@ function TechniqueMedia({ exercise }: { exercise: ExerciseType }) {
     return null
 }
 
+/**
+ * Lightbox de multimedia a pantalla completa (QA4 · hallazgo CEO): la media del sheet de técnica se
+ * amplía a `fixed inset-0` sobre un fondo oscuro, centrada y grande, con X y tap-al-fondo para cerrar.
+ * Reusa la MISMA precedencia (`resolveExecMedia`) que el resto del ejecutor. z-index por encima del
+ * sheet de técnica (61) para que quede al frente.
+ */
+function TechniqueLightbox({ exercise, onClose }: { exercise: ExerciseType; onClose: () => void }) {
+    const reducedMotion = useReducedMotion()
+    const media = resolveExecMedia(exercise)
+    if (media.kind === 'none') return null
+
+    return (
+        <motion.div
+            className="fixed inset-0 z-[200] flex items-center justify-center bg-black/90 p-4"
+            role="dialog"
+            aria-modal="true"
+            aria-label={`Multimedia de ${exercise.name}`}
+            initial={reducedMotion ? false : { opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={reducedMotion ? undefined : { opacity: 0 }}
+            onClick={onClose}
+        >
+            <button
+                type="button"
+                onClick={onClose}
+                aria-label="Cerrar multimedia"
+                className="absolute right-4 top-[calc(16px+env(safe-area-inset-top,0px))] z-10 flex h-11 w-11 items-center justify-center rounded-full border border-white/20 bg-black/60 text-white transition-colors hover:bg-black/80"
+            >
+                <X className="h-5 w-5" />
+            </button>
+            {/* stopPropagation: el tap sobre la media NO cierra (sólo el fondo). */}
+            <div
+                className="relative flex aspect-video w-[92vw] max-w-3xl items-center justify-center"
+                onClick={(e) => e.stopPropagation()}
+            >
+                {media.kind === 'youtube' && (
+                    <ExerciseVideo
+                        videoId={media.videoId}
+                        start={media.start}
+                        end={media.end}
+                        className="h-full w-full"
+                        title={exercise.name}
+                    />
+                )}
+                {media.kind === 'video' && (
+                    <video
+                        src={media.src}
+                        autoPlay
+                        loop
+                        controls
+                        playsInline
+                        className="max-h-[85vh] max-w-full object-contain"
+                    />
+                )}
+                {media.kind === 'image' && (
+                    <Image src={media.src} alt={exercise.name} fill unoptimized className="object-contain" />
+                )}
+            </div>
+        </motion.div>
+    )
+}
+
 export function TechniqueSheetV3({ exercise, onClose }: Props) {
     const reducedMotion = useReducedMotion()
     const steps = exercise?.instructions ?? null
+    const [lightboxOpen, setLightboxOpen] = useState(false)
+    const hasMedia = exercise ? resolveExecMedia(exercise).kind !== 'none' : false
+
+    // El lightbox no debe quedar abierto al cerrar/cambiar de ejercicio (el estado sobrevive al desmontar
+    // condicional del sheet). Se resetea cuando cambia el ejercicio (incluye null = cerrado).
+    useEffect(() => {
+        setLightboxOpen(false)
+    }, [exercise?.id])
 
     return (
         <AnimatePresence>
@@ -108,7 +180,19 @@ export function TechniqueSheetV3({ exercise, onClose }: Props) {
                             <span className="exec-v3-handle" aria-hidden />
                         </div>
 
-                        <TechniqueMedia exercise={exercise} />
+                        <div className="relative shrink-0">
+                            <TechniqueMedia exercise={exercise} />
+                            {hasMedia && (
+                                <button
+                                    type="button"
+                                    onClick={() => setLightboxOpen(true)}
+                                    aria-label="Ampliar multimedia"
+                                    className="absolute right-3 top-3 z-10 flex h-8 w-8 items-center justify-center rounded-full border border-white/20 bg-black/60 text-white transition-colors hover:bg-black/80"
+                                >
+                                    <Maximize2 className="h-4 w-4" aria-hidden />
+                                </button>
+                            )}
+                        </div>
 
                         <div className="flex-1 overflow-y-auto px-5 pb-[calc(20px+env(safe-area-inset-bottom,0px))] pt-5">
                             <div className="mb-4 flex items-start justify-between gap-4">
@@ -157,6 +241,12 @@ export function TechniqueSheetV3({ exercise, onClose }: Props) {
                             </button>
                         </div>
                     </motion.div>
+
+                    <AnimatePresence>
+                        {lightboxOpen && (
+                            <TechniqueLightbox exercise={exercise} onClose={() => setLightboxOpen(false)} />
+                        )}
+                    </AnimatePresence>
                 </>
             )}
         </AnimatePresence>

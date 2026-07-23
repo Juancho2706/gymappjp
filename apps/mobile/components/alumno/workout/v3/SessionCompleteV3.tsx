@@ -4,7 +4,7 @@ import Svg, { Defs, RadialGradient, Rect, Stop } from 'react-native-svg'
 import { MotiView } from 'moti'
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context'
 import { Confetti } from 'react-native-fast-confetti'
-import { ChevronRight, ClipboardCheck, Medal, Share2 } from 'lucide-react-native'
+import { ChevronRight, ClipboardCheck, GitCommit, HeartPulse, Medal, Move, Share2 } from 'lucide-react-native'
 import {
   compactDistance,
   formatClockDuration,
@@ -13,6 +13,8 @@ import {
   MUSCLE_REGIONS,
   muscleGroupsToRegionIntensity,
   summarizeSessionByKind,
+  type CardioItem,
+  type MobilityItem,
   type SummaryBlock,
   type SummaryLogLike,
 } from '@eva/workout-engine'
@@ -61,6 +63,112 @@ interface DetectedPR {
   estimated1RM: number
 }
 
+/**
+ * Log de serie AL FINAL, ensanchado con la `metadata` jsonb del hold por-lado (`{left_sec, right_sec}`).
+ * `SummaryLogLike` (motor) la estripa; el host ya la manda intacta en `sessionLogs` (mismo objeto que
+ * `logs`), así que sólo la EXPONEMOS al tipo — aditivo (opcional) ⇒ V2 byte-idéntico, sin prop nueva ni
+ * cambio en el montaje. La usa la tarjeta "Lo que hiciste" para partir "45s izq · 43s der" en movilidad
+ * per_side. El motor queda intocable. Espejo 1:1 de la web.
+ */
+type FinalLogLike = SummaryLogLike & {
+  metadata?: { left_sec?: number | null; right_sec?: number | null } | null
+}
+
+type DidType = 'cardio' | 'mobility' | 'roller'
+interface DidRow {
+  key: string
+  type: DidType
+  name: string
+  /** Dato logueado ya formateado (es-CL) — la columna derecha tabular. */
+  data: string
+}
+
+/** Minutos compactos para cardio: "12min" (≥60s) o "45s" (sub-minuto, honesto en vez de "0min"). */
+function fmtDidDuration(sec: number): string {
+  return sec >= 60 ? `${Math.round(sec / 60)}min` : `${Math.round(sec)}s`
+}
+
+/** Distancia es-CL: "2,5 km" (≥1000 m, coma decimal, 1 decimal) o "800 m" (<1000 m). */
+function fmtDidDistance(m: number): string {
+  if (m >= 1000) return `${(Math.round((m / 1000) * 10) / 10).toString().replace('.', ',')} km`
+  return `${Math.round(m)} m`
+}
+
+/** Cardio → "Xmin · Y,Z km" con "· N bpm" si hubo FC media; sólo lo registrado (fallback: rondas). */
+function cardioDidData(c: CardioItem): string {
+  const parts: string[] = []
+  if (c.durationSec != null && c.durationSec > 0) parts.push(fmtDidDuration(c.durationSec))
+  if (c.distanceM != null && c.distanceM > 0) parts.push(fmtDidDistance(c.distanceM))
+  if (c.avgHr != null && c.avgHr > 0) parts.push(`${c.avgHr} bpm`)
+  if (parts.length === 0) parts.push(`${c.rounds} ${c.rounds === 1 ? 'ronda' : 'rondas'}`)
+  return parts.join(' · ')
+}
+
+/**
+ * Movilidad → holds. Si el bloque es per_side (algún log trae `metadata.left_sec/right_sec`), parte por
+ * lado: "45s izq · 43s der" con la SUMA del hold por lado a lo largo de las series (decisión: "lo más
+ * honesto" = tiempo total sostenido por lado; en el caso 1-serie coincide con el valor único). Si no es
+ * per_side: "N×Ms" cuando el hold es uniforme, o "N series · Ts" (total) cuando varía; "N series" si no
+ * se registró hold.
+ */
+function mobilityDidData(blockLogs: FinalLogLike[]): string {
+  const perSide = blockLogs.some((l) => l.metadata && (l.metadata.left_sec != null || l.metadata.right_sec != null))
+  if (perSide) {
+    let left = 0
+    let right = 0
+    let hasL = false
+    let hasR = false
+    for (const l of blockLogs) {
+      if (l.metadata?.left_sec != null) { left += l.metadata.left_sec; hasL = true }
+      if (l.metadata?.right_sec != null) { right += l.metadata.right_sec; hasR = true }
+    }
+    const segs: string[] = []
+    if (hasL) segs.push(`${left}s izq`)
+    if (hasR) segs.push(`${right}s der`)
+    if (segs.length > 0) return segs.join(' · ')
+  }
+  const sets = blockLogs.length
+  const holds = blockLogs.map((l) => l.actual_hold_sec).filter((h): h is number => h != null && h > 0)
+  if (holds.length === 0) return `${sets} ${sets === 1 ? 'serie' : 'series'}`
+  const uniform = holds.length === sets && holds.every((h) => h === holds[0])
+  if (uniform) return `${sets}×${holds[0]}s`
+  return `${sets} ${sets === 1 ? 'serie' : 'series'} · ${holds.reduce((a, h) => a + h, 0)}s`
+}
+
+/** Roller → "N pasadas" (suma de `reps_done`); fallback a series si no se contaron pasadas. */
+function rollerDidData(blockLogs: FinalLogLike[]): string {
+  const passes = blockLogs.reduce((a, l) => a + (l.reps_done ?? 0), 0)
+  if (passes > 0) return `${passes} ${passes === 1 ? 'pasada' : 'pasadas'}`
+  const sets = blockLogs.length
+  return `${sets} ${sets === 1 ? 'serie' : 'series'}`
+}
+
+/**
+ * Filas de "Lo que hiciste" en ORDEN DEL PLAN: recorre cardio + movilidad/roller (fuerza excluida: su
+ * camino es el mapa pintado) y ordena por índice del bloque. Ejercicios sin registro no entran (el motor
+ * ya sólo devuelve bloques con logs). Vacío ⇒ el host cae al mapa gris de fallback.
+ */
+function buildDidRows(
+  cardio: CardioItem[],
+  mobility: MobilityItem[],
+  blocks: SummaryBlock[],
+  logs: FinalLogLike[],
+): DidRow[] {
+  const order = new Map(blocks.map((b, i) => [b.id, i]))
+  const rows: DidRow[] = []
+  for (const c of cardio) rows.push({ key: c.blockId, type: 'cardio', name: c.name, data: cardioDidData(c) })
+  for (const m of mobility) {
+    const blockLogs = logs.filter((l) => l.block_id === m.blockId)
+    rows.push({
+      key: m.blockId,
+      type: m.kind,
+      name: m.name,
+      data: m.kind === 'roller' ? rollerDidData(blockLogs) : mobilityDidData(blockLogs),
+    })
+  }
+  return rows.sort((a, b) => (order.get(a.key) ?? 0) - (order.get(b.key) ?? 0))
+}
+
 export interface SessionCompleteV3Props {
   visible: boolean
   exec: ExecTheme
@@ -71,7 +179,8 @@ export interface SessionCompleteV3Props {
   /** Subtitulo de contexto ("Empuje · Semana 2 · Fase Fuerza"), null si no hay contexto. */
   contextLine: string | null
   blocks: SummaryBlock[]
-  logs: SummaryLogLike[]
+  /** Logs de la sesión. El host manda `sessionLogs` con la `metadata` per_side intacta (ver `FinalLogLike`). */
+  logs: FinalLogLike[]
   exerciseMaxes: Record<string, number>
   exerciseMaxDates?: Record<string, string>
   durationSec?: number
@@ -154,6 +263,13 @@ export function SessionCompleteV3({
     const intensity = muscleGroupsToRegionIntensity(session.muscleWork)
     return MUSCLE_REGIONS.some((r) => intensity[r] > 0)
   }, [session.muscleWork])
+
+  // "Lo que hiciste" (QA4): en días SIN mapa pintado, listamos los ejercicios NO-fuerza registrados
+  // (cardio/movilidad/roller) en orden del plan con su dato logueado — en vez del mapa gris a secas.
+  const didRows = useMemo(
+    () => buildDidRows(session.cardio, session.mobility, blocks, logs),
+    [session.cardio, session.mobility, blocks, logs],
+  )
 
   const completedSets = logs.length
   const plannedSets = useMemo(() => blocks.reduce((n, b) => n + (b.sets || 0), 0), [blocks])
@@ -330,17 +446,53 @@ export function SessionCompleteV3({
               </FadeIn>
             ) : null}
 
-            {/* Mapa muscular frente/espalda con intensidades + leyenda (MuscleMapSvg reusado). */}
-            {hasMuscleMap ? (
-              <FadeIn play={showStats} reduced={reducedMotion} y={12} delay={220} duration={360}>
-                <View style={{ borderRadius: 16, borderWidth: 1.5, borderColor: s.borderSubtle, backgroundColor: s.surfaceSunken, paddingHorizontal: 12, paddingTop: 12, paddingBottom: 6 }}>
-                  <Text style={{ fontFamily: FONT.uiExtra, fontSize: 11, letterSpacing: 1.4, textTransform: 'uppercase', color: s.textMuted, marginBottom: 8 }}>
-                    Trabajado hoy
-                  </Text>
-                  <MuscleMapSvg groups={session.muscleWork} reducedMotion={reducedMotion} legendVariant="tiers" />
-                </View>
-              </FadeIn>
-            ) : null}
+            {/* Mapa muscular / "Lo que hiciste" (QA4). Tres caminos (espejo 1:1 de la web):
+                1) CON fuerza (hasMuscleMap) → mapa PINTADO frente/espalda con leyenda. INTACTO.
+                2) SIN fuerza pero con ejercicios tipados (cardio/movilidad/roller) → "Lo que hiciste": una
+                   fila por ejercicio registrado, en orden del plan, con su dato logueado (el CEO pidió mostrar
+                   los datos ahí en vez del mapa gris a secas).
+                3) SIN ningún log tipado (sesión "vacía") → mapa gris de fallback, como antes. */}
+            <FadeIn play={showStats} reduced={reducedMotion} y={12} delay={220} duration={360}>
+              <View style={{ borderRadius: 16, borderWidth: 1.5, borderColor: s.borderSubtle, backgroundColor: s.surfaceSunken, paddingHorizontal: 12, paddingTop: 12, paddingBottom: 6 }}>
+                {hasMuscleMap ? (
+                  <>
+                    <Text style={{ fontFamily: FONT.uiExtra, fontSize: 11, letterSpacing: 1.4, textTransform: 'uppercase', color: s.textMuted, marginBottom: 8 }}>
+                      Trabajado hoy
+                    </Text>
+                    <View>
+                      <MuscleMapSvg groups={session.muscleWork} reducedMotion={reducedMotion} legendVariant="tiers" showLegend />
+                    </View>
+                  </>
+                ) : didRows.length > 0 ? (
+                  <View style={{ paddingBottom: 4 }}>
+                    {/* Eyebrow del contrato (10px/800/.1em/#7f7f8c), igual que los labels de las StatTiles. */}
+                    <Text style={{ fontFamily: FONT.uiExtra, fontSize: 10, letterSpacing: 1.0, textTransform: 'uppercase', color: '#7f7f8c', marginBottom: 6 }}>
+                      Lo que hiciste
+                    </Text>
+                    {didRows.map((row) => (
+                      <View key={row.key} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 6 }}>
+                        <DidIcon type={row.type} />
+                        <Text numberOfLines={1} style={{ flex: 1, minWidth: 0, fontFamily: FONT.uiExtra, fontSize: 13, color: '#d4d4dc' }}>
+                          {row.name}
+                        </Text>
+                        <Text style={{ fontFamily: FONT.uiExtra, fontSize: 13, color: '#ffffff', fontVariant: ['tabular-nums'] }}>
+                          {row.data}
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
+                ) : (
+                  <>
+                    <Text style={{ fontFamily: FONT.uiExtra, fontSize: 11, letterSpacing: 1.4, textTransform: 'uppercase', color: s.textMuted, marginBottom: 8 }}>
+                      Sin trabajo de fuerza hoy
+                    </Text>
+                    <View style={{ opacity: 0.55 }}>
+                      <MuscleMapSvg groups={session.muscleWork} reducedMotion={reducedMotion} legendVariant="tiers" showLegend={false} />
+                    </View>
+                  </>
+                )}
+              </View>
+            </FadeIn>
 
             {/* Racha semanal (E4.4) — dots Lun→Dom + copy neutro. Se auto-oculta si no hay senal. */}
             {weeklyStreak ? (
@@ -448,6 +600,14 @@ function StatTile({ label, exec, children }: { label: string; exec: ExecTheme; c
       <Text style={{ fontFamily: FONT.uiExtra, fontSize: 10, letterSpacing: 0.8, textTransform: 'uppercase', color: '#7f7f8c', marginTop: 8 }}>{label}</Text>
     </View>
   )
+}
+
+/** Icono por tipo (16px, gris neutro #8f8f9c) — mismos glifos que el resumen V2 (cardio/movilidad/roller). */
+function DidIcon({ type }: { type: DidType }) {
+  const color = '#8f8f9c'
+  if (type === 'cardio') return <HeartPulse size={16} color={color} />
+  if (type === 'roller') return <GitCommit size={16} color={color} />
+  return <Move size={16} color={color} />
 }
 
 /** Ticker + unidad en una fila baseline (para "4.860 kg"). */

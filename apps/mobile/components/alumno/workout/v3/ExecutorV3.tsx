@@ -34,7 +34,7 @@ import {
   type SessionBlock,
   type SessionExercise,
 } from '../../../../lib/workout-session'
-import { toast, setToastDark } from '../../../Toast'
+import { setToastDark } from '../../../Toast'
 import { flushLogQueue, getPendingLogCount } from '../../../../lib/offline-cache'
 import { OfflineBanner } from '../../../OfflineBanner'
 import { EvaLoaderScreen } from '../../../EvaLoader'
@@ -158,6 +158,9 @@ function ExecutorV3Inner({ planId, recoverDate, editDate }: { planId: string; re
   const [finishedElapsed, setFinishedElapsed] = useState<number | null>(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [listOpen, setListOpen] = useState(false) // Vista "Ver todo" (E2.6) — capa sobre el stepper.
+  // QA4: el banner contextual ("Recuperando…" / "Editando registros…") se puede descartar con una X
+  // (estado LOCAL por sesión; solo visual — no cambia la semántica de guardado ni los params de navegación).
+  const [bannerDismissed, setBannerDismissed] = useState(false)
   const [recentSet, setRecentSet] = useState<{ blockId: string; setNumber: number; pr: boolean } | null>(null)
   const recentSetTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [syncErrors, setSyncErrors] = useState<Record<string, string>>({})
@@ -484,9 +487,9 @@ function ExecutorV3Inner({ planId, recoverDate, editDate }: { planId: string; re
 
       // Bloque suelto.
       const ex = block ? resolveExercise(block) : null
-      if (!error && block && ex && effectiveExerciseType(block, ex) === 'strength') {
-        toast.success('Serie registrada')
-      }
+      // QA4: en V3 se ELIMINA la snackbar "Serie registrada" (el alumno corrige después con el lápiz o
+      // desde la tarjeta ya hecha, "Deshacer" de cada card). V2 la conserva (ExecutorV2.tsx). El resto del
+      // flujo (descanso/scroll) NO cambia.
       if (!wasLogged) {
         const useWarmup = !!block?.warmup_rest_time && payload.setNumber === 1 && (block?.sets ?? 0) >= 3
         const restStr = useWarmup ? block!.warmup_rest_time! : block?.rest_time
@@ -1207,7 +1210,9 @@ function ExecutorV3Inner({ planId, recoverDate, editDate }: { planId: string; re
 
       <OfflineBanner visible={!isOnline} variant="calm" />
 
-      <RecoveryBanner recoverDate={recoverDate} editDate={editDate} />
+      {!bannerDismissed && (
+        <RecoveryBanner recoverDate={recoverDate} editDate={editDate} onDismiss={() => setBannerDismissed(true)} />
+      )}
 
       {loading ? (
         <EvaLoaderScreen subtitle="Cargando rutina…" />

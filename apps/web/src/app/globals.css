@@ -4547,12 +4547,18 @@ html[data-exec-v3-entered] [data-exec-v3] .exec-v3-splash {
   color: #8fa3ab;
   margin-top: 8px;
 }
+/* Affordance de tap DENTRO del anillo (QA4): integrado a la columna central, justo bajo el número —
+   ya no un glifo suelto y minúsculo pegado abajo. 18px, gris claro visible (#b7b7c2). */
 [data-exec-v3] .exec-v3-hold-icon {
-  position: absolute;
-  bottom: 14px;
-  left: 50%;
-  transform: translateX(-50%);
-  color: #8f8f9c;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 6px;
+  color: #b7b7c2;
+}
+[data-exec-v3] .exec-v3-hold-icon svg {
+  width: 18px;
+  height: 18px;
 }
 [data-exec-v3] .exec-v3-phaselbl {
   font-size: 14px;
@@ -4613,6 +4619,7 @@ html[data-exec-v3-entered] [data-exec-v3] .exec-v3-splash {
 }
 /* Contador VERTICAL (mockup a3b .a3b-counter): número gigante → "de N" → "Pasadas". */
 [data-exec-v3] .exec-v3-counter {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -4656,9 +4663,10 @@ html[data-exec-v3-entered] [data-exec-v3] .exec-v3-splash {
   color: #7f7f8c;
   margin-top: 2px;
 }
-/* Botón HÉROE "+1 pasada" (mockup a3b .a3b-plusbtn): juicy gigante full-width. */
+/* Botón HÉROE "+1 pasada" (mockup a3b .a3b-plusbtn): juicy grande, HÉROE de la fila (flex-1, más alto
+   que el −1 rojo). GOTCHA repo: nunca dos w-full en una fila → ambos flex-1. */
 [data-exec-v3] .exec-v3-plusbtn {
-  width: 100%;
+  flex: 1 1 0;
   height: 92px;
   border-radius: 22px;
   font-size: 24px;
@@ -4678,22 +4686,47 @@ html[data-exec-v3-entered] [data-exec-v3] .exec-v3-splash {
   background: color-mix(in srgb, var(--exec-brand-ink) 20%, transparent);
   color: var(--exec-brand-ink);
 }
-/* "−1" discreto para corregir (el héroe es el +1). */
-[data-exec-v3] .exec-v3-minusghost {
-  display: inline-flex;
+/* Fila de dos botones del roller (QA4): +1 héroe (flex-1, 92px) · −1 destructivo rojo (flex-1, 64px).
+   GOTCHA repo: jamás dos w-full en fila → cada uno flex-1; alineados al centro (el +1 es más alto). */
+[data-exec-v3] .exec-v3-rollbtns {
+  display: flex;
   align-items: center;
-  gap: 6px;
-  margin: 0 auto;
-  min-height: 36px;
-  padding: 4px 14px;
-  font-size: 13px;
-  font-weight: 800;
-  letter-spacing: 0.02em;
-  color: #8f8f9c;
-  transition: color 0.12s ease;
+  gap: 12px;
 }
-[data-exec-v3] .exec-v3-minusghost:disabled {
+/* "−1 pasada" DESTRUCTIVO rojo (juicy-ghost): borde 2px rojo 55%, fondo rojo 14%, texto rojo, sombra
+   dura roja inferior; se hunde al presionar (paridad con el juicy). El héroe sigue siendo el +1. */
+[data-exec-v3] .exec-v3-minusred {
+  flex: 1 1 0;
+  height: 64px;
+  border-radius: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  color: var(--zone-z5);
+  background: color-mix(in srgb, var(--zone-z5) 14%, transparent);
+  border: 2px solid color-mix(in srgb, var(--zone-z5) 55%, transparent);
+  box-shadow: 0 4px 0 0 color-mix(in srgb, var(--zone-z5) 45%, #000);
+  transition: transform 0.09s ease, box-shadow 0.09s ease;
+}
+[data-exec-v3] .exec-v3-minusred:active:not(:disabled) {
+  transform: translateY(4px);
+  box-shadow: 0 0 0 0 color-mix(in srgb, var(--zone-z5) 45%, #000);
+}
+[data-exec-v3] .exec-v3-minusred:disabled {
   opacity: 0.4;
+}
+/* Número gigante EDITABLE (QA4): reset de botón para el gesto tap/mantener sin robo de scroll. */
+[data-exec-v3] .exec-v3-bignumber-btn {
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
 /* ---- Chip de cronómetro opcional ---- */

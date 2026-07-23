@@ -105,9 +105,15 @@ export interface MuscleMapSvgProps {
    * niveles discretos "Fuerte / Medio / Leve" (mockup concepto-a-v2 `.a2-legend`, Final V3). Aditivo.
    */
   legendVariant?: 'ramp' | 'tiers'
+  /**
+   * ¿Renderizar la leyenda bajo las siluetas? `true` (default) = V2/V3 intacto. `false` lo usa el Final
+   * V3 para el estado vacío "sin trabajo de fuerza hoy" (siluetas grises sin niveles que rotular).
+   * Aditivo: espejo del prop web.
+   */
+  showLegend?: boolean
 }
 
-export function MuscleMapSvg({ groups, reducedMotion, legendVariant = 'ramp' }: MuscleMapSvgProps) {
+export function MuscleMapSvg({ groups, reducedMotion, legendVariant = 'ramp', showLegend = true }: MuscleMapSvgProps) {
   const { theme, resolvedScheme } = useTheme()
   const brand = theme.primary
   // Neutro theme-aware: en tema CLARO del sitio el web pinta la silueta base en slate translúcido
@@ -211,8 +217,9 @@ export function MuscleMapSvg({ groups, reducedMotion, legendVariant = 'ramp' }: 
       </Svg>
 
       {/* Leyenda. `tiers` (Final V3) = 3 niveles con rótulo Fuerte/Medio/Leve (mockup .a2-legend);
-          `ramp` (default, V2) = rampa "Menos → Más" con anillo en el nivel máximo. */}
-      {legendVariant === 'tiers' ? (
+          `ramp` (default, V2) = rampa "Menos → Más" con anillo en el nivel máximo.
+          `showLegend=false` (estado vacío del Final V3) la omite por completo. */}
+      {showLegend && (legendVariant === 'tiers' ? (
         <View style={{ marginTop: 4, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
           {([['Fuerte', 1], ['Medio', 0.52], ['Leve', 0.26]] as const).map(([label, alpha]) => (
             <View key={label} style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
@@ -241,7 +248,7 @@ export function MuscleMapSvg({ groups, reducedMotion, legendVariant = 'ramp' }: 
           </View>
           <Text style={{ fontFamily: FONT.ui, fontSize: 10, letterSpacing: 1, color: LEGEND_FILL, textTransform: 'uppercase' }}>Más</Text>
         </View>
-      )}
+      ))}
     </View>
   )
 }

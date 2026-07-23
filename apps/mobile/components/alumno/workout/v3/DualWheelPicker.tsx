@@ -30,10 +30,11 @@ import type { ExecTheme } from './exec-theme'
  * MISMO mecanismo de prefill/autofill (nonce) que ya usa la fila "Anterior" — el guardado sigue siendo
  * el CTA normal de la serie.
  *
- * Rango corto centrado en el valor anterior de la serie (o el objetivo si no hay anterior):
- *   · kg   = ancla ± 20 en pasos de 2,5 (clamp ≥ 0).
- *   · reps = ancla ± 10 en pasos de 1  (clamp ≥ 0).
- * El ancla se redondea al grid del paso para que la rueda muestre multiplos limpios.
+ * Rango COMPLETO (decision CEO QA4), abre CENTRADA en el valor anterior de la serie (o el objetivo si
+ * no hay anterior):
+ *   · kg   = 0 a 400 en pasos de 2,5 (161 topes).
+ *   · reps = 0 a 100 en pasos de 1  (101 topes).
+ * El ancla se redondea al grid del paso para fijar el tope inicial bajo la capsula.
  */
 
 // Alto de cada item (mockup a3c = 46px) y cuantos se ven (impar → hay un centro real).
@@ -44,11 +45,11 @@ const PAD_V = ITEM_HEIGHT * Math.floor(VISIBLE / 2)
 // Escala del tope central: fontSize base 22 × 1.227 ≈ 27px (mockup `.a3c-wv.sel` = 27px/900).
 const CENTER_SCALE = 27 / 22
 
-// Rango/paso por eje (decision CEO 8).
+// Rango/paso por eje — COMPLETO (decision CEO QA4).
 const KG_STEP = 2.5
-const KG_SPREAD = 8 // 8 × 2,5 = ±20
+const KG_MAX = 400 // 0..400 en pasos de 2,5 → 161 topes
 const REPS_STEP = 1
-const REPS_SPREAD = 10 // ±10
+const REPS_MAX = 100 // 0..100 en pasos de 1 → 101 topes
 
 // Tick haptico: throttle en ms para no saturar en scroll rapido (el tick por-item ya lo acota).
 const HAPTIC_THROTTLE_MS = 35
@@ -58,15 +59,19 @@ interface WheelValues {
   initialIndex: number
 }
 
-/** Construye el arreglo de valores centrado en `anchor`, redondeado al grid del paso, clamp ≥ 0. */
-function buildWheelValues(anchor: number, step: number, spread: number): WheelValues {
-  const base = Math.max(0, Math.round(anchor / step) * step)
+/**
+ * Construye el arreglo COMPLETO de valores 0..max en pasos de `step` (decision CEO QA4). El `anchor`
+ * (valor anterior) ya NO recorta la lista: solo fija el tope inicial bajo la capsula (redondeado al
+ * grid del paso, clamp a [0, max]).
+ */
+function buildWheelValues(anchor: number, step: number, max: number): WheelValues {
+  const steps = Math.round(max / step)
   const values: number[] = []
-  for (let i = -spread; i <= spread; i += 1) {
-    const v = Math.round((base + i * step) * 100) / 100
-    if (v >= 0) values.push(v)
+  for (let i = 0; i <= steps; i += 1) {
+    values.push(Math.round(i * step * 100) / 100)
   }
-  const initialIndex = Math.max(0, values.indexOf(base))
+  const snapped = Math.min(max, Math.max(0, Math.round(anchor / step) * step))
+  const initialIndex = Math.max(0, Math.min(values.length - 1, Math.round(snapped / step)))
   return { values, initialIndex }
 }
 
@@ -221,8 +226,8 @@ export function DualWheelPicker({
   exerciseName?: string
   totalSets?: number
 }) {
-  const kg = useMemo(() => buildWheelValues(kgAnchor, KG_STEP, KG_SPREAD), [kgAnchor])
-  const reps = useMemo(() => buildWheelValues(repsAnchor, REPS_STEP, REPS_SPREAD), [repsAnchor])
+  const kg = useMemo(() => buildWheelValues(kgAnchor, KG_STEP, KG_MAX), [kgAnchor])
+  const reps = useMemo(() => buildWheelValues(repsAnchor, REPS_STEP, REPS_MAX), [repsAnchor])
 
   // Indice seleccionado por columna (ref: vive fuera del ciclo de render — el scroll lo actualiza en vivo).
   const kgIdx = useRef(kg.initialIndex)
@@ -296,6 +301,99 @@ export function DualWheelPicker({
       {/* Nota inferior del mockup a3c: centrado + tick haptico (con "tick haptico" en acento). */}
       <Text style={{ fontFamily: FONT.ui, fontSize: 11, color: s.textMuted, textAlign: 'center', marginTop: 10 }}>
         Centrada en tu valor anterior · <Text style={{ fontFamily: FONT.uiBold, color: hexToRgba(exec.accent, 1) }}>tick háptico</Text> por paso
+      </Text>
+    </Sheet>
+  )
+}
+
+/**
+ * Rueda de UN valor (QA4 · roller) — MISMA mecánica/estética que la dual (reusa `WheelColumn`, el Sheet
+ * nativo, la cápsula y el tick háptico), con UNA sola columna. NO toca el guardado: sólo produce un
+ * número y lo entrega por `onDone`, que el llamador escribe por su camino de estado/prefill existente.
+ * Componente HERMANO aditivo — la rueda dual queda intacta.
+ */
+export function SingleWheelPicker({
+  open,
+  onClose,
+  value,
+  step = 1,
+  max = 100,
+  label,
+  title,
+  subtitle,
+  exec,
+  reducedMotion = false,
+  onDone,
+  testID = 'single-wheel',
+}: {
+  open: boolean
+  onClose: () => void
+  value: number
+  step?: number
+  max?: number
+  label: string
+  title: string
+  subtitle?: string | null
+  exec: ExecTheme
+  reducedMotion?: boolean
+  onDone: (value: number) => void
+  testID?: string
+}) {
+  const col = useMemo(() => buildWheelValues(value, step, max), [value, step, max])
+  const idx = useRef(col.initialIndex)
+  useEffect(() => {
+    idx.current = col.initialIndex
+  }, [col])
+  const s = exec.surface
+  const handleDone = () => onDone(col.values[idx.current] ?? value)
+
+  return (
+    <Sheet
+      open={open}
+      onClose={onClose}
+      nativeModal
+      forceDark
+      scrollable={false}
+      snapPoints={['58%']}
+      title={title}
+      accessibilityLabel={`Rueda de ${label}`}
+      footer={
+        <JuicyButton
+          testID={`${testID}-done`}
+          label="Listo"
+          onPress={handleDone}
+          exec={exec}
+          reducedMotion={reducedMotion}
+          icon={<Check size={18} color={exec.accentText} strokeWidth={2.6} />}
+          accessibilityLabel={`Listo, usar este valor de ${label}`}
+        />
+      }
+    >
+      {subtitle ? (
+        <Text style={{ fontFamily: FONT.uiBold, fontSize: 12, color: s.textMuted, textAlign: 'center', marginBottom: 4 }}>
+          {subtitle}
+        </Text>
+      ) : null}
+      <View style={{ flexDirection: 'row', justifyContent: 'center' }}>
+        <View style={{ width: '58%' }}>
+          <WheelColumn
+            key={`single-${value}`}
+            testID={`${testID}-col`}
+            caption={label}
+            values={col.values}
+            initialIndex={col.initialIndex}
+            onIndexChange={(i) => {
+              idx.current = i
+            }}
+            reducedMotion={reducedMotion}
+            exec={exec}
+            format={(v) => String(v)}
+            accessibilityLabel={`Rueda de ${label}`}
+          />
+        </View>
+      </View>
+      <Text style={{ fontFamily: FONT.ui, fontSize: 11, color: s.textMuted, textAlign: 'center', marginTop: 10 }}>
+        Centrada en tu valor actual · <Text style={{ fontFamily: FONT.uiBold, color: hexToRgba(exec.accent, 1) }}>tick háptico</Text> por paso
       </Text>
     </Sheet>
   )

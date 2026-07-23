@@ -1,5 +1,5 @@
-import { Text, View } from 'react-native'
-import { Pencil, RotateCcw } from 'lucide-react-native'
+import { Pressable, Text, View } from 'react-native'
+import { Pencil, RotateCcw, X } from 'lucide-react-native'
 import { FONT } from '../../../lib/typography'
 
 /**
@@ -34,9 +34,15 @@ function weekdayEs(ymd: string): string {
 export function RecoveryBanner({
   recoverDate,
   editDate,
+  onDismiss,
 }: {
   recoverDate?: string
   editDate?: string
+  /**
+   * QA4: si se pasa, el banner muestra una X para descartarlo (estado local por sesión, lo posee el
+   * consumidor). Solo el ejecutor V3 la pasa; V2 lo omite → banner byte-idéntico (sin X).
+   */
+  onDismiss?: () => void
 }) {
   if (recoverDate) {
     const dia = weekdayEs(recoverDate)
@@ -49,6 +55,7 @@ export function RecoveryBanner({
             Al terminar, tu {dia.toLowerCase()} queda listo en esta semana
           </Text>
         </View>
+        {onDismiss ? <DismissButton onPress={onDismiss} color={ON_WARNING} /> : null}
       </View>
     )
   }
@@ -64,9 +71,34 @@ export function RecoveryBanner({
             Corrige tus series de ese dia
           </Text>
         </View>
+        {onDismiss ? <DismissButton onPress={onDismiss} color={DISMISS_NEUTRAL} /> : null}
       </View>
     )
   }
 
   return null
+}
+
+// X para descartar el banner (QA4): 16px, tono atenuado; el color se ajusta al fondo (oscuro sobre el
+// ámbar sólido de "Recuperando", gris #8f8f9c sobre la franja neutra de "Editando"). Presionado = leve fade.
+const DISMISS_NEUTRAL = '#8f8f9c'
+function DismissButton({ onPress, color }: { onPress: () => void; color: string }) {
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel="Descartar aviso"
+      hitSlop={10}
+      style={({ pressed }) => ({
+        width: 28,
+        height: 28,
+        borderRadius: 14,
+        alignItems: 'center',
+        justifyContent: 'center',
+        opacity: pressed ? 0.6 : 1,
+      })}
+    >
+      <X size={16} color={color} strokeWidth={2.2} />
+    </Pressable>
+  )
 }

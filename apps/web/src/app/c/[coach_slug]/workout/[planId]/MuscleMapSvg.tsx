@@ -70,9 +70,15 @@ export interface MuscleMapSvgProps {
      * concepto-a-v2 `.a2-legend`, usado por el Final V3). Aditivo: default preserva el V2.
      */
     legendVariant?: 'ramp' | 'tiers'
+    /**
+     * ¿Renderizar la leyenda bajo las siluetas? `true` (default) = comportamiento V2/V3 intacto. `false`
+     * lo usa el Final V3 para el estado vacío "sin trabajo de fuerza hoy" (siluetas grises sin niveles
+     * que rotular → una leyenda de intensidades ausentes solo confunde). Aditivo: default preserva todo.
+     */
+    showLegend?: boolean
 }
 
-export function MuscleMapSvg({ groups, reducedMotion, legendVariant = 'ramp' }: MuscleMapSvgProps) {
+export function MuscleMapSvg({ groups, reducedMotion, legendVariant = 'ramp', showLegend = true }: MuscleMapSvgProps) {
     const intensity = useMemo(() => muscleGroupsToRegionIntensity(groups), [groups])
 
     const workedRegions = useMemo(
@@ -189,8 +195,9 @@ export function MuscleMapSvg({ groups, reducedMotion, legendVariant = 'ramp' }: 
             </svg>
 
             {/* Leyenda. `tiers` (Final V3) = 3 niveles con rótulo Fuerte/Medio/Leve (mockup .a2-legend);
-                `ramp` (default, V2) = rampa continua "Menos → Más" con anillo en el nivel máximo. */}
-            {legendVariant === 'tiers' ? (
+                `ramp` (default, V2) = rampa continua "Menos → Más" con anillo en el nivel máximo.
+                `showLegend=false` (estado vacío del Final V3) la omite por completo. */}
+            {showLegend && (legendVariant === 'tiers' ? (
                 <div className="mt-1 flex items-center justify-center gap-3 text-[10px] text-on-dark-muted">
                     {([['Fuerte', 1], ['Medio', 0.52], ['Leve', 0.26]] as const).map(([label, alpha]) => (
                         <span key={label} className="flex items-center gap-1.5">
@@ -221,7 +228,7 @@ export function MuscleMapSvg({ groups, reducedMotion, legendVariant = 'ramp' }: 
                     </div>
                     <span className="uppercase tracking-widest">Más</span>
                 </div>
-            )}
+            ))}
         </div>
     )
 }

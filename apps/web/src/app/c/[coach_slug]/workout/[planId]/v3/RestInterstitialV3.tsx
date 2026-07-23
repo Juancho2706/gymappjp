@@ -91,6 +91,11 @@ interface RestInterstitialV3Props {
   onSkip: () => void
   /** Minimizar → barra compacta del RestTimer (misma instancia, sin reiniciar). */
   onMinimize: () => void
+  /**
+   * QA4: al llegar a 0 el RestTimer marca `leaving` para que el interstitial se retire con salida suave
+   * (AnimatePresence) antes de descartar el descanso — así la píldora nunca queda pegada al siguiente paso.
+   */
+  leaving?: boolean
 }
 
 const RING_R = 92
@@ -119,6 +124,7 @@ export function RestInterstitialV3({
   onAdjust,
   onSkip,
   onMinimize,
+  leaving = false,
 }: RestInterstitialV3Props) {
   const data = useContext(RestInterstitialDataContext)
   const reducedMotion = useReducedMotion()
@@ -160,7 +166,9 @@ export function RestInterstitialV3({
 
   return (
     <AnimatePresence>
+      {!leaving && (
       <motion.div
+        key="rest-interstitial"
         ref={rootRef}
         data-exec-v3=""
         data-exec-interstitial=""
@@ -411,6 +419,7 @@ export function RestInterstitialV3({
           </>
         )}
       </motion.div>
+      )}
     </AnimatePresence>
   )
 }

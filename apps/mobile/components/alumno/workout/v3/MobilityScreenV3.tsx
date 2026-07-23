@@ -164,16 +164,10 @@ export function MobilityScreenV3({
         </View>
       </View>
 
-      {/* Media serena */}
+      {/* Media serena — chips "Instrucciones" + "Nota del coach" DENTRO de la media (overlay superior-
+          izquierdo). Sin pill "Mantén" superpuesta (QA4). */}
       <View style={{ width: '100%', height: MEDIA_HEIGHT, borderRadius: 22, overflow: 'hidden', borderWidth: 2, borderColor: '#2a333a', backgroundColor: s.surfaceRaised }}>
-        <TypedMediaV3 exercise={exercise} exec={exec} accent={accent} IconFallback={Move} onOpenTechnique={onOpenTechnique} reducedMotion={reducedMotion} />
-        <View
-          pointerEvents="none"
-          style={{ position: 'absolute', top: 10, left: 12, zIndex: 3, flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'rgba(0,0,0,0.4)', paddingHorizontal: 9, paddingVertical: 3, borderRadius: 999 }}
-        >
-          <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: accent }} />
-          <Text style={{ fontFamily: FONT.uiBold, fontSize: 11, letterSpacing: 0.4, color: '#cfcfd8', textTransform: 'uppercase' }}>Mantén</Text>
-        </View>
+        <TypedMediaV3 exercise={exercise} exec={exec} accent={accent} coachNote={coachNote} IconFallback={Move} onOpenTechnique={onOpenTechnique} onOpenNote={() => setNoteOpen(true)} reducedMotion={reducedMotion} />
       </View>
 
       {objectiveLine ? (
@@ -181,19 +175,6 @@ export function MobilityScreenV3({
           {objectiveLine}
         </Text>
       ) : null}
-
-      {coachNote && (
-        <Pressable
-          testID="btn-mobility-note-v3"
-          onPress={() => setNoteOpen(true)}
-          hitSlop={6}
-          style={{ flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 32, paddingHorizontal: 12, borderRadius: 999, borderWidth: 1.5, borderColor: hexToRgba(accent, 0.3), backgroundColor: hexToRgba(accent, 0.1) }}
-          accessibilityRole="button"
-          accessibilityLabel="Ver la nota del coach"
-        >
-          <Text style={{ fontFamily: FONT.uiBold, fontSize: 12, color: accent }}>Nota del coach</Text>
-        </Pressable>
-      )}
 
       {firstUnlogged == null ? (
         // Todas las series completas: solo los chips (editables).
@@ -217,11 +198,10 @@ export function MobilityScreenV3({
             reducedMotion={reducedMotion}
           >
             <View style={{ alignItems: 'center', justifyContent: 'center' }}>
+              {/* Sólo el número en el centro (QA4 · decisión CEO): "Sostén" se removió; el estado (lado) va
+                  en la pastilla de arriba y el texto guía "luego: …" de abajo. */}
               <Text style={{ fontFamily: FONT.displayBlack, fontSize: 60, letterSpacing: -2, lineHeight: 62, color: '#eef4f6', fontVariant: ['tabular-nums'] }}>
                 {formatClock(countdown.remaining)}
-              </Text>
-              <Text style={{ fontFamily: FONT.uiBold, fontSize: 11, letterSpacing: 2, color: '#8fa3ab', textTransform: 'uppercase', marginTop: 8 }}>
-                Sostén
               </Text>
             </View>
           </ProgressRing>

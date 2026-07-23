@@ -18,7 +18,6 @@ import type { OptimisticLogPayload } from '@eva/workout-engine'
 import type { BlockType, ExerciseType, WorkoutSessionLog } from '../WorkoutExecutionClient'
 import type { ClientCardioView } from '../_data/workout-execution.queries'
 import { ExecTypedMedia } from './ExecTypedMedia'
-import { CoachNoteChip } from './CoachNoteV3'
 import { useExecCountdown, formatCountdown } from './useExecCountdown'
 import { useIntervalRunner } from './useIntervalRunner'
 import { useWebBleHr } from './use-web-ble-hr'
@@ -102,15 +101,14 @@ export function CardioStepV3(props: CardioStepV3Props) {
                 </div>
             </div>
 
-            {/* Media del catálogo — mismo tratamiento que fuerza (precedencia + chip "Instrucciones" + audio en video). */}
+            {/* Media del catálogo — mismo tratamiento que fuerza: chips "Instrucciones" + "Nota del coach"
+                DENTRO de la media (overlay superior-izquierdo), precedencia + audio en video (QA4). */}
             <ExecTypedMedia
                 exercise={exercise}
+                note={coachNote}
                 openTechnique={openTechnique}
                 fallbackIcon={<HeartPulse className="h-9 w-9" />}
             />
-
-            {/* Nota del coach (todos los tipos) — chip de acento bajo la identidad + sheet oscura compartida */}
-            <CoachNoteChip note={coachNote} />
 
             {isInterval && intervalConfig ? (
                 <IntervalFace phases={buildIntervalPhases(intervalConfig, block.sets)} zone={zone} zoneRange={zoneRange} />
@@ -311,11 +309,12 @@ function ContinuousFace({
                     <div className={cn('exec-v3-holdnum tabular-nums', countdown.done && 'is-done')}>
                         {countdown.done ? '¡Listo!' : formatCountdown(countdown.timeLeft)}
                     </div>
+                    {/* Affordance de tap DENTRO del anillo (QA4): Play/Pause 18px justo bajo el número. */}
+                    <span className="exec-v3-hold-icon" aria-hidden>
+                        {countdown.done ? <RotateCcw className="h-[18px] w-[18px]" /> : countdown.isActive ? <Pause className="h-[18px] w-[18px]" /> : <Play className="h-[18px] w-[18px]" />}
+                    </span>
                     <div className="exec-v3-holdlbl">{countdown.done ? 'Registra abajo' : 'Restante'}</div>
                 </div>
-                <span className="exec-v3-hold-icon" aria-hidden>
-                    {countdown.done ? <RotateCcw className="h-4 w-4" /> : countdown.isActive ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
-                </span>
             </button>
             <ZoneChip zone={zone} zoneRange={zoneRange} />
             {!countdown.done && <CardioPauseButton active={countdown.isActive} onToggle={countdown.toggle} />}
@@ -392,11 +391,12 @@ function IntervalFace({
                     <div className={cn('exec-v3-holdnum tabular-nums', finished && 'is-done')}>
                         {finished ? '¡Listo!' : formatCountdown(timeLeft)}
                     </div>
+                    {/* Affordance de tap DENTRO del anillo (QA4): Play/Pause 18px justo bajo el número. */}
+                    <span className="exec-v3-hold-icon" aria-hidden>
+                        {finished ? <RotateCcw className="h-[18px] w-[18px]" /> : isActive ? <Pause className="h-[18px] w-[18px]" /> : <Play className="h-[18px] w-[18px]" />}
+                    </span>
                     <div className="exec-v3-holdlbl">{finished ? 'Registra abajo' : 'Restante en fase'}</div>
                 </div>
-                <span className="exec-v3-hold-icon" aria-hidden>
-                    {finished ? <RotateCcw className="h-4 w-4" /> : isActive ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
-                </span>
             </button>
 
             {!finished && nextPhase && (

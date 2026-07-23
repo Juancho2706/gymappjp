@@ -4,7 +4,7 @@ import { AnimatePresence, MotiView } from 'moti'
 import { Easing } from 'react-native-reanimated'
 import { Image } from 'expo-image'
 import { LinearGradient } from 'expo-linear-gradient'
-import { AlignLeft, Dumbbell, MessageSquare, Play, Volume2, VolumeX } from 'lucide-react-native'
+import { AlignLeft, Dumbbell, MessageSquare, Volume2, VolumeX } from 'lucide-react-native'
 import { FONT, textStyle } from '../../../../lib/typography'
 import { hexToRgba } from '../../../../lib/theme'
 import { extractYoutubeVideoId } from '../../../../lib/youtube'
@@ -310,21 +310,29 @@ function ExecMediaInnerV3({
     return <Image source={{ uri: videoUrl }} alt={exercise.name} style={{ flex: 1, width: '100%' }} contentFit="contain" />
   }
 
+  // YouTube (QA4 · decisión CEO): AUTOREPRODUCIDO inline MUTED al entrar al ejercicio (reusa el
+  // `VideoPlayer` de la técnica: mismo iframe youtube-nocookie autoplay/mute/loop del recorte). Sin botón
+  // de audio: alternar el mute recargaría el WebView (reinicio) — el toggle de audio en YouTube queda
+  // sólo en web (postMessage a la IFrame API). El chip "Instrucciones" abre la técnica completa.
+  if (isYouTube && ytId && videoUrl) {
+    return (
+      <VideoPlayer
+        url={videoUrl}
+        start={exercise.video_start_time}
+        end={exercise.video_end_time}
+        autoPlay
+        muted
+        frameless
+        letterbox={s.surfaceRaised}
+        style={{ flex: 1 }}
+        title={exercise.name}
+      />
+    )
+  }
+
   return (
-    <Pressable
-      onPress={isYouTube && ytId ? onOpenTechnique : undefined}
-      disabled={!(isYouTube && ytId)}
-      style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 10 }}
-      accessibilityRole={isYouTube && ytId ? 'button' : undefined}
-      accessibilityLabel={isYouTube && ytId ? `Ver técnica de ${exercise.name}` : undefined}
-    >
+    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
       <Dumbbell size={40} color={hexToRgba(exec.accent, 0.4)} strokeWidth={1.6} />
-      {isYouTube && ytId && (
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6, backgroundColor: 'rgba(8,8,12,0.6)', borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.16)' }}>
-          <Play size={12} color="#eaeaf0" fill="#eaeaf0" />
-          <Text style={{ fontFamily: FONT.uiExtra, fontSize: 11, color: '#eaeaf0' }}>Ver técnica</Text>
-        </View>
-      )}
-    </Pressable>
+    </View>
   )
 }

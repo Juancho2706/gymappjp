@@ -1,6 +1,7 @@
-import { Text, TouchableOpacity, useWindowDimensions, View } from 'react-native'
+import { useEffect, useState } from 'react'
+import { Modal, Pressable, Text, TouchableOpacity, useWindowDimensions, View } from 'react-native'
 import { Image } from 'expo-image'
-import { X } from 'lucide-react-native'
+import { Maximize2, X } from 'lucide-react-native'
 // Importar Sheet registra su cssInterop(X) (className→color), así la X de abajo colorea con text-*.
 import { Sheet } from '../../Sheet'
 import { VideoPlayer } from '../../VideoPlayer'
@@ -141,6 +142,58 @@ function TechniqueMedia({ exercise, v3 = false }: { exercise: SessionExercise; v
   return null
 }
 
+/**
+ * Media a PANTALLA COMPLETA para el lightbox (QA4 · hallazgo CEO): misma precedencia que `TechniqueMedia`,
+ * pero dimensionada al ancho de la ventana y centrada. gif/imagen `contain`, video/YouTube via `VideoPlayer`.
+ */
+function LightboxMedia({ exercise }: { exercise: SessionExercise }) {
+  const { width, height } = useWindowDimensions()
+  const boxW = Math.round(width * 0.94)
+  const boxH = Math.round(Math.min(height * 0.7, (boxW * 9) / 16))
+  const videoUrl = exercise.video_url
+  const isYouTube = !!videoUrl && (videoUrl.includes('youtube.com') || videoUrl.includes('youtu.be'))
+  const ytId = videoUrl ? extractYoutubeVideoId(videoUrl) : null
+
+  if (isYouTube && ytId && videoUrl) {
+    return (
+      <VideoPlayer
+        url={videoUrl}
+        start={exercise.video_start_time}
+        end={exercise.video_end_time}
+        autoPlay
+        frameless
+        letterbox={V3_LETTERBOX}
+        style={{ width: boxW, height: boxH }}
+        title={exercise.name}
+      />
+    )
+  }
+  if (exercise.gif_url) {
+    return (
+      <View style={{ width: boxW, height: boxH, backgroundColor: V3_LETTERBOX }}>
+        <Image source={{ uri: exercise.gif_url }} style={{ flex: 1 }} contentFit="contain" />
+      </View>
+    )
+  }
+  if (videoUrl) {
+    const u = videoUrl.toLowerCase()
+    const isMp4 =
+      u.includes('.mp4') ||
+      u.includes('.mov') ||
+      u.includes('.webm') ||
+      (u.includes('supabase.co/storage') && !u.includes('.gif') && !u.includes('.jpg') && !u.includes('.png'))
+    if (isMp4) {
+      return <VideoPlayer url={videoUrl} autoPlay frameless letterbox={V3_LETTERBOX} style={{ width: boxW, height: boxH }} title={exercise.name} />
+    }
+    return (
+      <View style={{ width: boxW, height: boxH, backgroundColor: V3_LETTERBOX }}>
+        <Image source={{ uri: videoUrl }} style={{ flex: 1 }} contentFit="contain" />
+      </View>
+    )
+  }
+  return null
+}
+
 export function TechniqueSheet({
   exercise,
   onClose,
@@ -156,8 +209,16 @@ export function TechniqueSheet({
 }) {
   const open = !!exercise
   const steps = exercise?.instructions ?? null
+  const hasMedia = !!(exercise?.gif_url || exercise?.video_url)
+  const [lightboxOpen, setLightboxOpen] = useState(false)
+
+  // El lightbox no debe sobrevivir al cierre/cambio de ejercicio (el estado persiste entre aperturas).
+  useEffect(() => {
+    setLightboxOpen(false)
+  }, [exercise?.id])
 
   return (
+    <>
     <Sheet
       open={open}
       onClose={onClose}
@@ -189,6 +250,30 @@ export function TechniqueSheet({
       {exercise ? (
         <View className="-mx-space-6">
           <TechniqueMedia exercise={exercise} v3={v3} />
+          {/* Ampliar multimedia (QA4) — botón glass esquina superior-derecha → lightbox a pantalla completa. */}
+          {hasMedia && (
+            <TouchableOpacity
+              onPress={() => setLightboxOpen(true)}
+              accessibilityRole="button"
+              accessibilityLabel="Ampliar multimedia"
+              hitSlop={8}
+              style={{
+                position: 'absolute',
+                top: 12,
+                right: 12,
+                width: 34,
+                height: 34,
+                borderRadius: 999,
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor: 'rgba(8,8,12,0.6)',
+                borderWidth: 1.5,
+                borderColor: 'rgba(255,255,255,0.2)',
+              }}
+            >
+              <Maximize2 size={16} color="#eaeaf0" />
+            </TouchableOpacity>
+          )}
         </View>
       ) : null}
 
@@ -270,5 +355,41 @@ export function TechniqueSheet({
         </Text>
       </TouchableOpacity>
     </Sheet>
+
+    {/* Lightbox de multimedia a pantalla completa (QA4 · hallazgo CEO): fondo oscuro, media centrada
+        grande, X y tap-al-fondo para cerrar. Modal RN independiente del Sheet. */}
+    <Modal visible={lightboxOpen} transparent animationType="fade" onRequestClose={() => setLightboxOpen(false)}>
+      <Pressable
+        onPress={() => setLightboxOpen(false)}
+        accessibilityRole="button"
+        accessibilityLabel="Cerrar multimedia"
+        style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.92)', alignItems: 'center', justifyContent: 'center', padding: 16 }}
+      >
+        {/* Absorbe el tap sobre la media para que NO cierre (sólo el fondo cierra). */}
+        <Pressable onPress={() => {}}>{exercise ? <LightboxMedia exercise={exercise} /> : null}</Pressable>
+        <TouchableOpacity
+          onPress={() => setLightboxOpen(false)}
+          accessibilityRole="button"
+          accessibilityLabel="Cerrar"
+          hitSlop={8}
+          style={{
+            position: 'absolute',
+            top: 44,
+            right: 20,
+            width: 44,
+            height: 44,
+            borderRadius: 999,
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: 'rgba(8,8,12,0.6)',
+            borderWidth: 1.5,
+            borderColor: 'rgba(255,255,255,0.2)',
+          }}
+        >
+          <X size={22} color="#fff" />
+        </TouchableOpacity>
+      </Pressable>
+    </Modal>
+    </>
   )
 }

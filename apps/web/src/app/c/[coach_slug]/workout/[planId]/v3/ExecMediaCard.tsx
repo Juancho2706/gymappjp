@@ -2,10 +2,11 @@
 
 import { useEffect, useRef, useState } from 'react'
 import Image from 'next/image'
-import { AlignLeft, MessageSquare, Play, Dumbbell, Volume2, VolumeX } from 'lucide-react'
+import { AlignLeft, MessageSquare, Dumbbell, Volume2, VolumeX } from 'lucide-react'
 import type { ExerciseType } from '../WorkoutExecutionClient'
 import { resolveExecMedia } from './exec-media'
 import { CoachNoteSheet } from './CoachNoteV3'
+import { ExecYoutubeInline } from './ExecYoutubeInline'
 
 interface ExecMediaCardProps {
     /** Ejercicio cuya media se muestra (gif/video/youtube/none, misma precedencia que el modal). */
@@ -109,17 +110,13 @@ export function ExecMediaCard({ exercise, note, openTechnique }: ExecMediaCardPr
                     <Image src={media.src} alt={exercise.name} fill unoptimized className="object-contain" />
                 )}
                 {media.kind === 'youtube' && (
-                    <button
-                        type="button"
-                        onClick={() => openTechnique(exercise)}
-                        className="exec-v3-media-yt"
-                        aria-label={`Ver video de ${exercise.name}`}
-                    >
-                        <span className="exec-v3-media-play">
-                            <Play className="h-6 w-6 fill-current" aria-hidden />
-                        </span>
-                        <span className="text-[11px] font-bold uppercase tracking-wider">Ver video</span>
-                    </button>
+                    <ExecYoutubeInline
+                        videoId={media.videoId}
+                        start={media.start}
+                        end={media.end}
+                        exerciseName={exercise.name}
+                        openTechnique={() => openTechnique(exercise)}
+                    />
                 )}
                 {media.kind === 'none' && (
                     <div className="exec-v3-media-empty" aria-hidden>

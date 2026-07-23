@@ -181,6 +181,14 @@ interface Props {
      * uncontrolled que `typedPrefill`/`prefill`; NO cambia el motor de logging. Solo el flujo cardio lo pasa.
      */
     suggestedAvgHr?: { bpm: number; nonce: number }
+    /**
+     * Auto-llenado del HOLD cronometrado (QA4 · movilidad): al detener/completar el anillo de hold, el
+     * `MobilityStepV3` vuelca los segundos sostenidos en el input de la fila activa al cambiar `nonce`.
+     * Uncontrolled (mutación de ref, sin re-render) — mismo patrón que `typedPrefill`/`suggestedAvgHr`;
+     * NO cambia el motor de logging. En per_side usa `leftSec`/`rightSec` (dos inputs); bilateral usa
+     * `holdSec`. Sólo el flujo movilidad V3 lo pasa; sin él la fila no cambia.
+     */
+    holdPrefill?: { holdSec?: number | null; leftSec?: number | null; rightSec?: number | null; nonce: number }
 }
 
 /** Estado de sincronización de una serie de cara al usuario (contrato a). */
@@ -1325,6 +1333,8 @@ function TypedLogSetRow({
     sideMode,
     typedPrefill,
     suggestedAvgHr,
+    holdPrefill,
+    v3 = false,
     onLogged,
     onResult,
 }: Props & { mode: Exclude<LogSetMode, 'strength'> }) {
@@ -1388,6 +1398,21 @@ function TypedLogSetRow({
         if (input && input.value.trim() === '') input.value = String(suggestedAvgHr.bpm)
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [suggestedHrNonce])
+
+    // Auto-llenado del HOLD cronometrado (QA4 · movilidad): el anillo vuelca los segundos sostenidos en el
+    // input del lado correspondiente al cambiar `nonce`. Uncontrolled (mutación de ref) = sin re-render;
+    // mismo patrón que el prefill roller/HR. El alumno sólo revisa y confirma (o corrige). NO toca submit.
+    const holdPrefillNonce = holdPrefill?.nonce
+    useEffect(() => {
+        if (holdPrefillNonce == null) return
+        if (perSide) {
+            if (holdPrefill?.leftSec != null && holdLeftRef.current) holdLeftRef.current.value = String(Math.round(holdPrefill.leftSec))
+            if (holdPrefill?.rightSec != null && holdRightRef.current) holdRightRef.current.value = String(Math.round(holdPrefill.rightSec))
+        } else if (holdPrefill?.holdSec != null && holdRef.current) {
+            holdRef.current.value = String(Math.round(holdPrefill.holdSec))
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [holdPrefillNonce])
 
     // Abre el teclado custom en el campo tocado (solo pointer coarse). El objetivo tipado viaja en el
     // header (DB-5); "Listo" reusa `requestSubmit()`. Reglas decimales por campo vienen de typedKeypadFields.
@@ -1758,7 +1783,9 @@ function TypedLogSetRow({
             </form>
 
             <AnimatePresence initial={false}>
-                {isLogged && (
+                {/* QA4 · decisión CEO: cardio/movilidad/roller NO llevan RPE ni RIR. En V3 se oculta la
+                    escala post-registro (fuerza intacta; V2 tipado conserva su RPE por `!v3`). */}
+                {isLogged && !v3 && (
                     <motion.div
                         initial={reducedMotion ? false : { height: 0, opacity: 0 }}
                         animate={{ height: 'auto', opacity: 1 }}

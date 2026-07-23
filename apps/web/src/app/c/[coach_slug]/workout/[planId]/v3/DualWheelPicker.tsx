@@ -48,7 +48,7 @@ interface DualWheelPickerProps {
 
 /**
  * Rueda de captura dual (E2.5) — decisión CEO 8: mantener presionado el valor abre esta rueda doble
- * kg|reps estilo iOS, centrada en el valor anterior, rango corto, tick háptico. 100% CUSTOM (sin
+ * kg|reps estilo iOS, centrada en el valor anterior, rango completo, tick háptico. 100% CUSTOM (sin
  * dependencias): dos columnas con scroll-snap sobre un BOTTOM SHEET (mockup `.a3c-sheet`), cápsula
  * central con borde `--exec-brand`. NO toca el guardado — sólo PRODUCE dos valores y los entrega por
  * `onDone`, que el `LogSetForm` escribe en los inputs por el MISMO camino que el autollenado "Anterior".
@@ -68,8 +68,10 @@ export function DualWheelPicker({
     exerciseName,
     totalSets,
 }: DualWheelPickerProps) {
-    const kgRange = useMemo(() => buildWheelRange({ center: initialWeight, ...WHEEL_KG_SPEC }), [initialWeight])
-    const repsRange = useMemo(() => buildWheelRange({ center: initialReps, ...WHEEL_REPS_SPEC }), [initialReps])
+    // Rango COMPLETO y fijo (kg 0-400 · reps 0-100, decisión CEO QA4): no depende del anterior, así que
+    // se construye una sola vez. El anterior sólo fija la posición inicial (kgStart/repsStart).
+    const kgRange = useMemo(() => buildWheelRange(WHEEL_KG_SPEC), [])
+    const repsRange = useMemo(() => buildWheelRange(WHEEL_REPS_SPEC), [])
 
     const kgStart = useMemo(() => nearestWheelIndex(kgRange, initialWeight), [kgRange, initialWeight])
     const repsStart = useMemo(() => nearestWheelIndex(repsRange, initialReps), [repsRange, initialReps])
@@ -304,3 +306,96 @@ const WheelColumn = memo(function WheelColumn({ label, range, initialIndex, onIn
         </div>
     )
 })
+
+interface SingleWheelPickerProps {
+    open: boolean
+    onOpenChange: (open: boolean) => void
+    /** Valor actual alrededor del cual se centra la rueda. */
+    value: number | null
+    /** Especificación del rango COMPLETO (contrato QA4) — para pasadas: step 1, 0 a 100. */
+    spec: { step: number; max: number; min?: number }
+    label: string
+    title: string
+    subtitle?: string | null
+    /** "Listo" entrega el valor elegido; el caller lo escribe por el camino de prefill existente. */
+    onDone: (value: number) => void
+    reducedMotion: boolean | null
+}
+
+/**
+ * Rueda de captura de UN valor (QA4 · roller) — MISMA mecánica y estética que la dual (`WheelColumn`
+ * reutilizada, bottom sheet, cápsula central, tick háptico), con UNA sola columna. NO toca el guardado:
+ * sólo produce un número y lo entrega por `onDone`, que el llamador escribe por el mismo camino de
+ * prefill/autollenado existente. La rueda dual queda intacta (este es un componente hermano aditivo).
+ */
+export function SingleWheelPicker({ open, onOpenChange, value, spec, label, title, subtitle, onDone, reducedMotion }: SingleWheelPickerProps) {
+    const range = useMemo(
+        () => buildWheelRange({ step: spec.step, min: spec.min ?? 0, max: spec.max }),
+        [spec.step, spec.min, spec.max],
+    )
+    const start = useMemo(() => nearestWheelIndex(range, value), [range, value])
+    const idxRef = useRef(start)
+    const setIdx = useCallback((i: number) => {
+        idxRef.current = i
+    }, [])
+    useEffect(() => {
+        if (open) idxRef.current = start
+    }, [open, start])
+
+    const [accent, setAccent] = useState<string>()
+    useEffect(() => {
+        if (!open || typeof document === 'undefined') return
+        const root = document.querySelector('[data-exec-v3]')
+        if (!root) return
+        const v = getComputedStyle(root).getPropertyValue('--exec-brand').trim()
+        if (v) setAccent(v)
+    }, [open])
+
+    const confirm = () => {
+        const picked = range[idxRef.current]
+        if (picked == null) {
+            onOpenChange(false)
+            return
+        }
+        onDone(picked)
+    }
+
+    return (
+        <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
+            <DialogPrimitive.Portal>
+                <DialogPrimitive.Backdrop className="exec-wheel-backdrop" />
+                <DialogPrimitive.Popup
+                    className="exec-wheel-sheet"
+                    style={accent ? ({ ['--exec-brand' as string]: accent } as React.CSSProperties) : undefined}
+                >
+                    <div className="exec-wheel-handle" aria-hidden />
+                    <div className="exec-wheel-sheethd">
+                        <DialogPrimitive.Title className="exec-wheel-title">{title}</DialogPrimitive.Title>
+                        {subtitle && <span className="exec-wheel-subtitle">{subtitle}</span>}
+                    </div>
+                    <div className="exec-wheel-head" aria-hidden>
+                        <span className="exec-wheel-lbl">{label}</span>
+                    </div>
+                    <div className="exec-wheel-wrap" style={{ height: ITEM_H * VISIBLE }}>
+                        <div className="exec-wheel-cap" aria-hidden style={{ height: ITEM_H, marginTop: -(ITEM_H / 2) }} />
+                        <WheelColumn
+                            key={`single-${open}-${value}`}
+                            label={label}
+                            range={range}
+                            initialIndex={start}
+                            onIndex={setIdx}
+                            format={fmtReps}
+                            reducedMotion={reducedMotion}
+                        />
+                    </div>
+                    <div className="exec-wheel-note">
+                        Centrada en tu valor actual · <b>tick háptico</b> por paso
+                    </div>
+                    <button type="button" onClick={confirm} className="exec-wheel-done">
+                        <span className="exec-wheel-done-ck" aria-hidden /> Listo
+                    </button>
+                </DialogPrimitive.Popup>
+            </DialogPrimitive.Portal>
+        </DialogPrimitive.Root>
+    )
+}

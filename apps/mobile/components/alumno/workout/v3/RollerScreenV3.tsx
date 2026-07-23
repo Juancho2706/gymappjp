@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Pressable, Text, View } from 'react-native'
+import { Modal, Pressable, Text, View } from 'react-native'
 import { MotiView } from 'moti'
-import { GitCommit, Minus, Timer } from 'lucide-react-native'
+import { GitCommit, Minus, Plus, Timer, X } from 'lucide-react-native'
+import AsyncStorage from '@react-native-async-storage/async-storage'
 import {
   buildTypedPayload,
   type OptimisticLogPayload,
@@ -13,11 +14,15 @@ import { haptics } from '../../../../lib/haptics'
 import type { SessionBlock, SessionExercise } from '../../../../lib/workout-session'
 import { Sheet } from '../../../Sheet'
 import { SetRow } from '../SetRow'
+import { TypedKeypad } from '../TypedKeypad'
 import { JuicyButton } from './JuicyButton'
+import { SingleWheelPicker } from './DualWheelPicker'
 import { TypedMediaV3 } from './TypedMediaV3'
 import { useStopwatch } from './timing'
 import { formatClock, rollerGoalLabel, rollerPassesTarget } from './typed-screen-model'
 import type { ExecTheme } from './exec-theme'
+
+const ROLLER_HINT_KEY = 'eva:roller-hint-v1'
 
 const MEDIA_HEIGHT = 150
 
@@ -85,6 +90,33 @@ export function RollerScreenV3({
   const inc = () => { setCount((c) => c + 1); setBump((b) => b + 1); haptics.tap() }
   const dec = () => { setCount((c) => Math.max(0, c - 1)); haptics.tap() }
 
+  // Edición directa del número (QA4 · como los tiles de fuerza): tap = teclado, mantener = rueda. Reusa el
+  // TypedKeypad (Modal) y la rueda del ejecutor en modo de UN valor. NO cambia el commit (buildTypedPayload).
+  const [kpOpen, setKpOpen] = useState(false)
+  const [kpValue, setKpValue] = useState('')
+  const [wheelOpen, setWheelOpen] = useState(false)
+  const openNumberKeypad = () => { setKpValue(count > 0 ? String(count) : ''); setKpOpen(true) }
+  const commitKeypad = () => {
+    const n = Math.max(0, Math.round(Number(kpValue.replace(',', '.')) || 0))
+    setCount(n); setBump((b) => b + 1); setKpOpen(false)
+  }
+  const applyWheel = (v: number) => { setCount(Math.max(0, Math.round(v))); setBump((b) => b + 1); setWheelOpen(false) }
+
+  // Avisito descartable la primera vez (carril propio del roller en AsyncStorage; se persiste al mostrarse).
+  const [hintShow, setHintShow] = useState(false)
+  useEffect(() => {
+    let alive = true
+    AsyncStorage.getItem(ROLLER_HINT_KEY)
+      .then((raw) => {
+        if (alive && raw == null) {
+          setHintShow(true)
+          AsyncStorage.setItem(ROLLER_HINT_KEY, '1').catch(() => {})
+        }
+      })
+      .catch(() => {})
+    return () => { alive = false }
+  }, [])
+
   const confirm = () => {
     if (firstUnlogged == null) return
     const values: Record<string, string> = { reps_done: String(count) }
@@ -134,31 +166,11 @@ export function RollerScreenV3({
         </View>
       </View>
 
-      {/* Media */}
+      {/* Media — chips "Instrucciones" + "Nota del coach" DENTRO de la media (overlay superior-izquierdo).
+          Sin pill "En loop" superpuesta (QA4). */}
       <View style={{ width: '100%', height: MEDIA_HEIGHT, borderRadius: 22, overflow: 'hidden', borderWidth: 2, borderColor: '#2a333a', backgroundColor: s.surfaceRaised }}>
-        <TypedMediaV3 exercise={exercise} exec={exec} accent={accent} IconFallback={GitCommit} onOpenTechnique={onOpenTechnique} reducedMotion={reducedMotion} />
-        <View
-          pointerEvents="none"
-          style={{ position: 'absolute', top: 10, left: 12, zIndex: 3, flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'rgba(0,0,0,0.4)', paddingHorizontal: 9, paddingVertical: 3, borderRadius: 999 }}
-        >
-          <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: accent }} />
-          <Text style={{ fontFamily: FONT.uiBold, fontSize: 11, letterSpacing: 0.4, color: '#cfcfd8', textTransform: 'uppercase' }}>En loop</Text>
-        </View>
+        <TypedMediaV3 exercise={exercise} exec={exec} accent={accent} coachNote={coachNote} IconFallback={GitCommit} onOpenTechnique={onOpenTechnique} onOpenNote={() => setNoteOpen(true)} reducedMotion={reducedMotion} />
       </View>
-
-      {/* Nota del coach (todos los tipos) — pill de acento recovery + sheet interna. */}
-      {coachNote && (
-        <Pressable
-          testID="btn-roller-note-v3"
-          onPress={() => setNoteOpen(true)}
-          hitSlop={6}
-          style={{ flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 32, paddingHorizontal: 12, borderRadius: 999, borderWidth: 1.5, borderColor: hexToRgba(accent, 0.3), backgroundColor: hexToRgba(accent, 0.1) }}
-          accessibilityRole="button"
-          accessibilityLabel="Ver la nota del coach"
-        >
-          <Text style={{ fontFamily: FONT.uiBold, fontSize: 12, color: accent }}>Nota del coach</Text>
-        </Pressable>
-      )}
 
       {firstUnlogged == null ? (
         <View style={{ width: '100%', gap: 6 }}>{loggedRows}</View>
@@ -169,7 +181,7 @@ export function RollerScreenV3({
             {block.sets > 1 ? <Text style={{ color: s.textMuted }}>{'  ·  '}Serie {firstUnlogged} de {block.sets}</Text> : null}
           </Text>
 
-          {/* Contador gigante */}
+          {/* Contador gigante EDITABLE (QA4): tap = teclado · mantener = rueda + avisito descartable. */}
           <View style={{ alignItems: 'center', gap: 2 }}>
             <MotiView
               key={bump}
@@ -177,33 +189,44 @@ export function RollerScreenV3({
               animate={{ scale: 1 }}
               transition={reducedMotion ? { type: 'timing', duration: 0 } : { type: 'spring', stiffness: 420, damping: 16 }}
             >
-              <Text style={{ fontFamily: FONT.displayBlack, fontSize: 116, letterSpacing: -5, lineHeight: 116, color: '#eef4f6', fontVariant: ['tabular-nums'] }}>
-                {count}
-              </Text>
+              <Pressable
+                testID="btn-roller-number-v3"
+                onPress={openNumberKeypad}
+                onLongPress={() => { haptics.tap(); setWheelOpen(true) }}
+                delayLongPress={400}
+                accessibilityRole="button"
+                accessibilityLabel={`${count} pasadas, toca para escribir`}
+                accessibilityHint="Mantén presionado para abrir la rueda de valores"
+              >
+                <Text style={{ fontFamily: FONT.displayBlack, fontSize: 116, letterSpacing: -5, lineHeight: 116, color: '#eef4f6', fontVariant: ['tabular-nums'] }}>
+                  {count}
+                </Text>
+              </Pressable>
             </MotiView>
             {target != null && (
               <Text style={{ fontFamily: FONT.uiBold, fontSize: 14, color: s.textMuted, fontVariant: ['tabular-nums'] }}>de {target}</Text>
             )}
             <Text style={{ fontFamily: FONT.uiBold, fontSize: 11, letterSpacing: 2, color: s.textDim, textTransform: 'uppercase', marginTop: 2 }}>Pasadas</Text>
+            {hintShow && (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 6, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999, borderWidth: 1, borderColor: s.border, backgroundColor: s.surface }}>
+                <Text style={{ fontFamily: FONT.uiSemibold, fontSize: 11, color: s.textMuted }}>
+                  Tocá el número para escribirlo · mantené para la rueda
+                </Text>
+                <Pressable onPress={() => setHintShow(false)} hitSlop={8} accessibilityRole="button" accessibilityLabel="Entendido, ocultar aviso">
+                  <X size={13} color={s.textMuted} />
+                </Pressable>
+              </View>
+            )}
           </View>
 
-          {/* +1 gigante + -1 discreto */}
-          <View style={{ width: '100%', flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-            <Pressable
-              testID="btn-roller-dec-v3"
-              onPress={dec}
-              disabled={count === 0}
-              hitSlop={8}
-              style={{ width: 56, height: 56, borderRadius: 16, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: s.borderStrong, backgroundColor: s.surface, opacity: count === 0 ? 0.4 : 1 }}
-              accessibilityRole="button"
-              accessibilityLabel="Restar una pasada"
-            >
-              <Minus size={22} color={s.textMuted} />
-            </Pressable>
+          {/* Fila de DOS botones (GOTCHA repo: jamás dos w-full en fila → cada uno flex-1): +1 héroe
+              (juicy, más alto) + −1 destructivo rojo (ghost) para corregir. */}
+          <View style={{ width: '100%', flexDirection: 'row', alignItems: 'center', gap: 12 }}>
             <View style={{ flex: 1 }}>
               <JuicyButton
                 testID="btn-roller-inc-v3"
                 label="+1 pasada"
+                icon={<Plus size={20} color="#08222b" strokeWidth={3} />}
                 onPress={inc}
                 exec={{ ...exec, accent, accentText: '#08222b' }}
                 height={72}
@@ -212,6 +235,34 @@ export function RollerScreenV3({
                 reducedMotion={reducedMotion}
                 accessibilityLabel="Sumar una pasada"
               />
+            </View>
+            {/* −1 destructivo rojo (juicy-ghost): borde 2px rojo 55%, fondo rojo 14%, texto rojo, sombra
+                dura roja inferior; se hunde al presionar. El héroe sigue siendo el +1 (más alto). */}
+            <View style={{ flex: 1, height: 64 }}>
+              <View pointerEvents="none" style={{ position: 'absolute', left: 0, right: 0, top: 4, height: 60, borderRadius: 16, backgroundColor: '#7a2222' }} />
+              <Pressable
+                testID="btn-roller-dec-v3"
+                onPress={dec}
+                disabled={count === 0}
+                style={({ pressed }) => ({
+                  height: 60,
+                  borderRadius: 16,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 8,
+                  borderWidth: 2,
+                  borderColor: hexToRgba('#f87171', 0.55),
+                  backgroundColor: hexToRgba('#f87171', 0.14),
+                  opacity: count === 0 ? 0.4 : 1,
+                  transform: [{ translateY: pressed && count > 0 ? 4 : 0 }],
+                })}
+                accessibilityRole="button"
+                accessibilityLabel="Restar una pasada"
+              >
+                <Minus size={20} color="#f87171" strokeWidth={3} />
+                <Text style={{ fontFamily: FONT.uiExtra, fontSize: 16, letterSpacing: 0.3, color: '#f87171' }}>−1 pasada</Text>
+              </Pressable>
             </View>
           </View>
 
@@ -244,6 +295,43 @@ export function RollerScreenV3({
           </View>
 
           {loggedRows.some(Boolean) && <View style={{ width: '100%', gap: 6 }}>{loggedRows}</View>}
+
+          {/* Teclado numérico (Modal) del número — un solo campo "Pasadas" (entero). Reusa TypedKeypad. */}
+          <Modal transparent visible={kpOpen} animationType="fade" onRequestClose={() => setKpOpen(false)}>
+            <View style={{ flex: 1 }}>
+              <Pressable
+                style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.35)' }}
+                onPress={() => setKpOpen(false)}
+                accessibilityRole="button"
+                accessibilityLabel="Cerrar teclado"
+              />
+              <TypedKeypad
+                mode="integer"
+                unit="pasadas"
+                value={kpValue}
+                onChange={setKpValue}
+                onNext={commitKeypad}
+                onDone={commitKeypad}
+                onClose={() => setKpOpen(false)}
+                header={{ exerciseName: exercise.name, objectiveLine: goal }}
+              />
+            </View>
+          </Modal>
+
+          {/* Rueda de pasadas (mantener el número) — rueda del ejecutor en modo de UN valor. */}
+          <SingleWheelPicker
+            open={wheelOpen}
+            onClose={() => setWheelOpen(false)}
+            value={count}
+            step={1}
+            max={100}
+            label="Pasadas"
+            title="Pasadas"
+            subtitle={target != null ? `Objetivo: ${target}${block.side_mode === 'per_side' ? ' por lado' : ''}` : exercise.name}
+            exec={{ ...exec, accent, accentText: '#08222b' }}
+            reducedMotion={reducedMotion}
+            onDone={applyWheel}
+          />
         </>
       )}
 

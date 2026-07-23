@@ -71,7 +71,6 @@ export function CardioScreenV3({
   onOpenTechnique,
   onOpenSet,
   onCommitSet,
-  onRpeUpdate,
   onDraftChange,
   recentSet,
   syncErrors,
@@ -170,7 +169,6 @@ export function CardioScreenV3({
         isActive={false}
         typedMode="cardio"
         onPress={() => onOpenSet(setNumber)}
-        onRpeUpdate={onRpeUpdate}
         settle={isRecent}
         pr={isRecent && !!recentSet?.pr}
         syncError={syncErrors?.[`${block.id}:${setNumber}`] ?? null}
@@ -194,24 +192,11 @@ export function CardioScreenV3({
         </View>
       </View>
 
-      {/* Media del catálogo — mismo tratamiento que fuerza (precedencia + chip "Instrucciones" + audio en video). */}
+      {/* Media del catálogo — chips "Instrucciones" + "Nota del coach" DENTRO de la media (overlay
+          superior-izquierdo), precedencia + audio en video (QA4). */}
       <View style={{ width: '100%', height: 150, borderRadius: 22, overflow: 'hidden', borderWidth: 2, borderColor: s.borderStrong, backgroundColor: s.surfaceRaised }}>
-        <TypedMediaV3 exercise={exercise} exec={exec} accent={chipColor} IconFallback={HeartPulse} onOpenTechnique={onOpenTechnique} reducedMotion={reducedMotion} />
+        <TypedMediaV3 exercise={exercise} exec={exec} accent={chipColor} coachNote={coachNote} IconFallback={HeartPulse} onOpenTechnique={onOpenTechnique} onOpenNote={() => setNoteOpen(true)} reducedMotion={reducedMotion} />
       </View>
-
-      {/* Nota del coach (todos los tipos) — pill de acento bajo la identidad + sheet interna. */}
-      {coachNote && (
-        <Pressable
-          testID="btn-cardio-note-v3"
-          onPress={() => setNoteOpen(true)}
-          hitSlop={6}
-          style={{ alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 32, paddingHorizontal: 12, borderRadius: 999, borderWidth: 1.5, borderColor: hexToRgba(exec.accent, 0.3), backgroundColor: hexToRgba(exec.accent, 0.1) }}
-          accessibilityRole="button"
-          accessibilityLabel="Ver la nota del coach"
-        >
-          <Text style={{ fontFamily: FONT.uiBold, fontSize: 12, color: exec.accent }}>Nota del coach</Text>
-        </Pressable>
-      )}
 
       {/* HERO por modo */}
       {mode === 'interval' ? (

@@ -34,11 +34,16 @@ export function WorkoutDoneSheet({
             <SheetContent
                 side="bottom"
                 showCloseButton={false}
-                className="max-h-[85dvh] gap-0 rounded-t-sheet p-0 sm:max-w-md"
+                // Movil (<md): bottom sheet byte-identico. Desktop (md+): MODAL CENTRADO. Base UI ancla
+                // el side=bottom con selectores atributo (mayor especificidad), asi que los overrides md+
+                // van con `!` (important). Centrado robusto sin transform: inset-0 + margin auto + alto
+                // intrinseco (evita chocar con la translate-y de entrada del sheet).
+                className="max-h-[85dvh] gap-0 rounded-t-sheet p-0 md:inset-0! md:m-auto! md:h-max! md:w-full! md:max-w-md! md:rounded-2xl! md:border!"
                 aria-label="Ya hiciste este entrenamiento"
             >
                 <div className="flex flex-col gap-1 px-5 pb-2 pt-4">
-                    <div className="mx-auto mb-3 h-1.5 w-10 shrink-0 rounded-full bg-border dark:bg-white/15" aria-hidden />
+                    {/* Asa de arrastre: solo en el bottom sheet movil; en el modal desktop no aplica. */}
+                    <div className="mx-auto mb-3 h-1.5 w-10 shrink-0 rounded-full bg-border md:hidden dark:bg-white/15" aria-hidden />
                     <h2 className="font-display text-xl font-black tracking-tight text-strong">
                         Ya hiciste este entrenamiento
                     </h2>

@@ -1113,6 +1113,11 @@ export function WorkoutExecutionClient({
     const [fillByBlock, setFillByBlock] = useState<Record<string, { weight: number | null; reps: number | null; nonce: number; setNumber: number }>>({})
     // Deshacer (quick-win E2-4): reabre la última serie logueada para corregir (no existe DELETE del log).
     const [reopenSignal, setReopenSignal] = useState<{ blockId: string; setNumber: number; nonce: number } | null>(null)
+    // QA4: los banners contextuales ("Editando registros del…" / "Recuperando…") se pueden descartar con
+    // una X. Estado LOCAL por sesión (solo visual): descartar NO cambia la semántica de guardado — `targetDate`
+    // sigue guardando en esa fecha (modo solo-UPDATE) y `recoverDate` sigue siendo el pendiente de la semana.
+    const [editBannerDismissed, setEditBannerDismissed] = useState(false)
+    const [recoverBannerDismissed, setRecoverBannerDismissed] = useState(false)
     // Modelo de foco (M1): los ejercicios/superseries COMPLETADOS colapsan a un recap delgado; el
     // usuario puede reexpandir cualquiera (para editar una serie) con un tap. Clave = block.id (bloque
     // suelto) o group.key (superserie).
@@ -1653,8 +1658,11 @@ export function WorkoutExecutionClient({
         if (!block) return
         // Deshacer (quick-win E2-4): sin DELETE del log → "Deshacer" reabre la serie para corregir
         // (usa el path de edición existente del chip). Solo en fuerza (las variantes tipadas no colapsan a chip).
+        // QA4: en V3 la snackbar "Serie registrada — Deshacer" se ELIMINA (el alumno corrige después con el
+        // lápiz o desde la tarjeta ya hecha); V2/legacy la conserva byte-idéntica. La lógica de `reopenSignal`
+        // NO se toca (la usan otros caminos de edición): sólo desaparece la snackbar en modo V3.
         const ex = getExercise(block)
-        if (ex && effectiveExerciseType(block, ex) === 'strength') {
+        if (!execV3Active && ex && effectiveExerciseType(block, ex) === 'strength') {
             toast('Serie registrada', {
                 duration: 5000,
                 action: {
@@ -2394,26 +2402,36 @@ export function WorkoutExecutionClient({
                     </div>
                 ))}
 
-                {/* Editando un día PASADO (Ola 1): cada serie edita esa fecha en modo solo-UPDATE. */}
-                {targetDate && (
+                {/* Editando un día PASADO (Ola 1): cada serie edita esa fecha en modo solo-UPDATE.
+                    QA4: descartable con la X (estado local por sesión; el guardado en esa fecha NO cambia). */}
+                {targetDate && !editBannerDismissed && (
                     <div className="flex items-center gap-2.5 border-b border-white/10 bg-white/[0.05] px-4 py-2.5 backdrop-blur-sm">
                         <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-control bg-[var(--sport-500)]/15 text-[var(--sport-300)]">
                             <Pencil className="h-3.5 w-3.5" />
                         </span>
-                        <p className="text-xs font-semibold text-on-dark">
+                        <p className="min-w-0 flex-1 text-xs font-semibold text-on-dark">
                             Editando registros del{' '}
                             <span className="font-bold text-on-dark">{editWeekday.toLowerCase()}</span>
                         </p>
+                        <button
+                            type="button"
+                            onClick={() => setEditBannerDismissed(true)}
+                            className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[#8f8f9c] transition-colors hover:text-on-dark hover:bg-white/10 active:scale-95"
+                            aria-label="Descartar aviso"
+                        >
+                            <X className="h-4 w-4" />
+                        </button>
                     </div>
                 )}
 
-                {/* Recuperando un pendiente de la semana (Ola 1): SOLO visual; el guardado es de HOY. */}
-                {recoverDate && (
+                {/* Recuperando un pendiente de la semana (Ola 1): SOLO visual; el guardado es de HOY.
+                    QA4: descartable con la X (estado local por sesión; sigue siendo un pendiente de la semana). */}
+                {recoverDate && !recoverBannerDismissed && (
                     <div className="flex items-center gap-2.5 border-b border-amber-400/25 bg-amber-500/[0.14] px-4 py-2.5 backdrop-blur-sm dark:bg-amber-500/[0.12]">
                         <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-control bg-amber-400/20 text-amber-300">
                             <CalendarSync className="h-4 w-4" />
                         </span>
-                        <div className="min-w-0">
+                        <div className="min-w-0 flex-1">
                             <p className="text-[13px] font-black leading-tight text-amber-200">
                                 Recuperando: {recoverWeekday}
                             </p>
@@ -2421,6 +2439,14 @@ export function WorkoutExecutionClient({
                                 Al terminar, tu {recoverWeekday.toLowerCase()} queda listo en esta semana
                             </p>
                         </div>
+                        <button
+                            type="button"
+                            onClick={() => setRecoverBannerDismissed(true)}
+                            className="flex h-6 w-6 shrink-0 items-center justify-center self-start rounded-full text-[#8f8f9c] transition-colors hover:text-amber-100 hover:bg-white/10 active:scale-95"
+                            aria-label="Descartar aviso"
+                        >
+                            <X className="h-4 w-4" />
+                        </button>
                     </div>
                 )}
 
