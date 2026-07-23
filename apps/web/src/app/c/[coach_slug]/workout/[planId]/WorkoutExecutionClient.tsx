@@ -1088,6 +1088,8 @@ export function WorkoutExecutionClient({
     // marca <html data-exec-v3-entered> leyendo sessionStorage (patron no-flash); el layout-effect
     // despues fija la fase real y limpia la marca.
     const [execV3Phase, setExecV3Phase] = useState<'intro' | 'start' | 'session'>(executorV3 ? 'intro' : 'session')
+    // QA8: ¿esta apertura llegó por el morph de lanzamiento? (splash asentado, ceremonia completa).
+    const [execV3ViaMorph, setExecV3ViaMorph] = useState(false)
     // Wrapper del ejecutor: exec-theme.ts setea aquí --exec-brand/--exec-recovery/--exec-celebration.
     const execRootRef = useRef<HTMLDivElement | null>(null)
     const [showCompleted, setShowCompleted] = useState(false)
@@ -1406,8 +1408,16 @@ export function WorkoutExecutionClient({
             // a la sesión (reload mid-entreno no re-fuerza el splash). El día = fecha objetivo si edita
             // un día pasado, si no la fecha asignada del plan.
             let entered = false
-            try { entered = sessionStorage.getItem(execV3EnteredKey) === '1' } catch { /* SSR / private */ }
-            setExecV3Phase(entered ? 'session' : 'intro')
+            let viaMorph = false
+            try {
+                entered = sessionStorage.getItem(execV3EnteredKey) === '1'
+                viaMorph = sessionStorage.getItem('eva:exec-v3-morph') === '1'
+                if (viaMorph) sessionStorage.removeItem('eva:exec-v3-morph')
+            } catch { /* SSR / private */ }
+            // QA8: llegar por el MORPH = ceremonia completa SIEMPRE (splash → Inicio), aunque ya se
+            // haya entrado hoy; el splash llega ASENTADO (viaMorph) porque la entrada la hizo el overlay.
+            setExecV3Phase(viaMorph || !entered ? 'intro' : 'session')
+            setExecV3ViaMorph(viaMorph)
         }
         // La marca del script inline ya cumplio (evito el flash del splash SSR en reload mid-entreno).
         document.documentElement.removeAttribute('data-exec-v3-entered')
@@ -2242,7 +2252,7 @@ export function WorkoutExecutionClient({
                 {execV3Active && execV3Phase === 'intro' && (
                     <script
                         dangerouslySetInnerHTML={{
-                            __html: `try{if(sessionStorage.getItem(${JSON.stringify(execV3EnteredKey)})==='1')document.documentElement.setAttribute('data-exec-v3-entered','1')}catch(e){}`,
+                            __html: `try{if(sessionStorage.getItem(${JSON.stringify(execV3EnteredKey)})==='1'&&sessionStorage.getItem('eva:exec-v3-morph')!=='1')document.documentElement.setAttribute('data-exec-v3-entered','1')}catch(e){}`,
                         }}
                     />
                 )}
@@ -2255,6 +2265,7 @@ export function WorkoutExecutionClient({
                                 dayTitle={plan.title}
                                 onDone={() => setExecV3Phase('start')}
                                 reducedMotion={reducedMotion}
+                                viaMorph={execV3ViaMorph}
                             />
                         )}
                         {execV3Phase === 'start' && execV3StartVM && (

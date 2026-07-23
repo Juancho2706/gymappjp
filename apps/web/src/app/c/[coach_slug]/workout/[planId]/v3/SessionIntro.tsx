@@ -13,6 +13,8 @@ interface SessionIntroProps {
     onDone: () => void
     /** Reduced-motion: entrada por fade, sin springs; los loops decorativos los apaga el CSS. */
     reducedMotion: boolean | null
+    /** ¿Llegamos por el morph de lanzamiento? → el avatar llega ASENTADO (su entrada la hizo el overlay). */
+    viaMorph?: boolean
 }
 
 /**
@@ -25,7 +27,7 @@ interface SessionIntroProps {
  * fade y las animaciones decorativas (halo, spin, dots) quedan apagadas por `prefers-reduced-motion`
  * en globals.css. El acento sale de `--exec-brand` (resuelto por exec-theme.ts en el wrapper V3).
  */
-export function SessionIntro({ coachInitial, dayTitle, onDone, reducedMotion }: SessionIntroProps) {
+export function SessionIntro({ coachInitial, dayTitle, onDone, reducedMotion, viaMorph = false }: SessionIntroProps) {
     const doneRef = useRef(false)
     // QA6: si el coach tiene logo propio, el avatar muestra el LOGO (mismo que usa el morph de
     // lanzamiento → handoff invisible); si no, cae a la inicial como hoy. Se resuelve del wrapper /c
@@ -35,17 +37,8 @@ export function SessionIntro({ coachInitial, dayTitle, onDone, reducedMotion }: 
     useEffect(() => {
         setCoachLogoUrl(resolveLaunchBrand(rootRef.current).logoUrl)
     }, [])
-    // QA6 (handoff del morph): si venimos del morph de lanzamiento, el avatar YA hizo su entrada en el
-    // overlay — llegar re-animando desde scale 0.3 seria un pop doble. La marca se consume una vez.
-    const [viaMorph] = useState(() => {
-        try {
-            const v = sessionStorage.getItem('eva:exec-v3-morph') === '1'
-            sessionStorage.removeItem('eva:exec-v3-morph')
-            return v
-        } catch {
-            return false
-        }
-    })
+    // QA8 (handoff del morph): si venimos del morph, el avatar YA hizo su entrada en el overlay —
+    // llegar re-animando desde scale 0.3 sería un pop doble. El flag lo consume y pasa el WEC.
 
     const finish = () => {
         if (doneRef.current) return
