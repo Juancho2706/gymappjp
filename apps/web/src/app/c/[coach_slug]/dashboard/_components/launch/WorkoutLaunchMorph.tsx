@@ -9,30 +9,40 @@ import { resolveLaunchBrand } from '@/lib/workout/exec-launch-brand'
 /**
  * Ejecutor V3 — DESPEGUE (loader de lanzamiento del workout, diseño del CEO "Despegue Final").
  *
- * Puente dashboard→ejecutor: al tocar "Empezar entrenamiento" (o una day-card) la píldora del CTA
- * morfea a burbuja, anticipa (squash) y DESPEGA con stretch + estela; el fondo de marca sube con un
- * wipe cubriendo el dashboard; el logo del coach ATERRIZA con rebote + onda de impacto y queda en
- * "PREPARANDO TU SESIÓN" con los dots en loop. Mientras tanto el App Router carga el ejecutor detrás.
+ * Al tocar "Empezar entrenamiento" (o una day-card) el COMPONENTE REAL clickeado morfea: un clon de
+ * su rect exacto (tamaño/posición/radio) colapsa a burbuja, anticipa (squash) y DESPEGA con stretch +
+ * estela; el fondo de marca sube con wipe cubriendo el dashboard; 3 estelas de luz caen; el logo del
+ * coach ATERRIZA con rebote + onda de impacto y queda en "PREPARANDO TU SESIÓN" con dots en loop.
  *
- * Contrato del CEO: la animación SIEMPRE se completa (aunque el workout cargue antes) y luego ESPERA
- * el TAP del alumno para entrar a la pantalla de Inicio ("Día N · plan + EMPEZAR"). Por eso NO hay
- * auto-dismiss: el overlay se despide sólo al tap, y sólo cuando ya está listo (animación terminada +
- * ruta montada). El provider vive en el layout `/c` (persiste entre rutas) → el overlay sobrevive al
- * swap del router. Toda la coreografía es CSS keyframes (transform/opacity, 60fps); ver globals.css
- * `.exec-dsp*`. White-label: todo deriva de `--theme-primary`.
+ * Contrato del CEO:
+ *  - El morph nace del rect del trigger (no de una píldora fija) — Web Animations API con keyframes
+ *    computados desde `getBoundingClientRect()`.
+ *  - La animación SIEMPRE se completa y luego ESPERA el TAP del alumno para entrar a Inicio.
+ *  - Durante toda la ceremonia se BLOQUEAN los taps (una capa full-screen los captura) para que no se
+ *    pueda skipear clickeando la pantalla; sólo cuando está listo el tap avanza.
+ *  - La navegación ocurre DESPUÉS de que el fondo de marca ya cubrió todo (~1,3s), para que el swap
+ *    de ruta (dashboard → ejecutor) quede oculto tras el azul y no se vea el flash del contenido.
+ *
+ * El provider vive en el layout `/c` (persiste entre rutas) → el overlay sobrevive al swap. Toda la
+ * ceremonia posterior al morph es CSS keyframes (transform/opacity). White-label: deriva de
+ * `--theme-primary`. Via morph el ejecutor salta el splash viejo y va directo a fase 'start'.
  */
 
-/** Animación "arribada" (logo aterrizado + PREPARANDO visible). Tras esto se puede habilitar el tap. */
+/** Navegar cuando el wipe de marca ya cubre todo (delay .6s + dur .6s = 1.2s) → swap oculto. */
+const NAV_AT_MS = 1300
+/** Animación "arribada" (logo aterrizado + PREPARANDO). Tras esto se puede habilitar el tap. */
 const ANIM_DONE_MS = 2700
-/** Fallback: si la ruta nunca commitea, habilitar el tap igual para no dejar al alumno atrapado. */
-const READY_FALLBACK_MS = 4500
-/** Fade de salida al tap (revela la pantalla de Inicio ya montada debajo). */
+/** Fallback: si la ruta nunca commitea, habilitar el tap igual para no atrapar al alumno. */
+const READY_FALLBACK_MS = 4600
+/** Fade de salida al tap (revela Inicio ya montado debajo). */
 const EXIT_MS = 320
 
+interface Rect { top: number; left: number; width: number; height: number; radius: number }
 interface MorphState {
     href: string
     startedAt: number
     startPath: string
+    rect: Rect
     logoUrl: string | null
     initial: string | null
 }
@@ -43,10 +53,7 @@ interface LaunchApi {
 
 const WorkoutLaunchContext = createContext<LaunchApi | null>(null)
 
-/**
- * Hook de los triggers (hero / day-cards / done-sheet). `morph` queda por compatibilidad de firma y
- * es SIEMPRE null: el overlay lo renderiza el provider del layout (sobrevive al swap de ruta).
- */
+/** Hook de los triggers. `morph` queda null (el overlay lo renderiza el provider del layout). */
 export function useWorkoutLaunch(): { launch: (el: HTMLElement, href: string) => void; morph: null } {
     const ctx = useContext(WorkoutLaunchContext)
     return { launch: ctx?.launch ?? (() => {}), morph: null }
@@ -83,50 +90,45 @@ export function WorkoutLaunchProvider({ children }: { children: React.ReactNode 
     const launch = useCallback(
         (el: HTMLElement, href: string) => {
             if (activeRef.current || state) return // guard anti doble-tap
+            const r = el.getBoundingClientRect()
+            const cs = window.getComputedStyle(el)
+            const rect: Rect = { top: r.top, left: r.left, width: r.width, height: r.height, radius: parseFloat(cs.borderTopLeftRadius) || 14 }
             const brand = resolveLaunchBrand(el)
             activeRef.current = true
-            el.setAttribute('data-exec-morphing', '')
-            // El trigger real se oculta durante el vuelo (el clon vive en el overlay). Se restaura al limpiar.
-            window.setTimeout(() => el.removeAttribute('data-exec-morphing'), 700)
+            el.setAttribute('data-exec-morphing', '') // oculta el trigger real durante el vuelo
+            window.setTimeout(() => el.removeAttribute('data-exec-morphing'), 1200)
 
-            setState({ href, startedAt: performance.now(), startPath: pathname, logoUrl: brand.logoUrl, initial: brand.initial })
+            setState({ href, startedAt: performance.now(), startPath: pathname, rect, logoUrl: brand.logoUrl, initial: brand.initial })
             setAnimDone(false)
             setRouteReady(false)
             setForceReady(false)
             setLeaving(false)
 
-            // El ejecutor lee esta marca → salta el splash viejo y va DIRECTO a Inicio (el Despegue ES el
-            // splash), y llega asentado.
             try {
                 sessionStorage.setItem('eva:exec-v3-morph', '1')
                 if (brand.logoUrl) sessionStorage.setItem('eva:exec-v3-morph-logo', brand.logoUrl)
                 else sessionStorage.removeItem('eva:exec-v3-morph-logo')
             } catch { /* private mode */ }
 
-            // Navegación en paralelo (la ruta carga detrás del Despegue).
+            // Navegar DESPUÉS de que el wipe de marca cubrió todo → el swap de ruta queda oculto.
             timersRef.current.push(window.setTimeout(() => {
-                try { router.push(href) } catch { /* si falla, el fallback habilita el tap y el alumno reintenta */ }
-            }, 120))
-            // La animación siempre corre completa: a los ANIM_DONE_MS habilitamos el tap (si además la ruta
-            // ya montó). El fallback lo habilita pase lo que pase, para no atrapar al alumno.
-            timersRef.current.push(window.setTimeout(() => setAnimDone(true), ANIM_DONE_MS))
+                try { router.push(href) } catch { /* fallback habilita el tap y el alumno reintenta */ }
+            }, reduced ? 60 : NAV_AT_MS))
+            timersRef.current.push(window.setTimeout(() => setAnimDone(true), reduced ? 500 : ANIM_DONE_MS))
             timersRef.current.push(window.setTimeout(() => setForceReady(true), READY_FALLBACK_MS))
         },
-        [pathname, router, state]
+        [pathname, reduced, router, state]
     )
 
-    // Ruta montada (pathname cambió respecto al de lanzamiento).
     useEffect(() => {
         if (state && !routeReady && pathname !== state.startPath) setRouteReady(true)
     }, [pathname, state, routeReady])
 
     const ready = !!state && animDone && (routeReady || forceReady)
 
-    // Tap del alumno (sólo cuando está listo): fade de salida → revela Inicio y limpia.
     const dismiss = useCallback(() => {
         if (!ready || leaving) return
         try { sessionStorage.removeItem('eva:exec-v3-morph') } catch { /* private */ }
-        // La marca ya la consumió el ejecutor al montar; removerla aquí es defensivo (nav lenta).
         setLeaving(true)
         timersRef.current.push(window.setTimeout(clearAll, EXIT_MS + 40))
     }, [ready, leaving, clearAll])
@@ -138,6 +140,7 @@ export function WorkoutLaunchProvider({ children }: { children: React.ReactNode 
             {children}
             {state && (
                 <DespegueOverlay
+                    rect={state.rect}
                     logoUrl={state.logoUrl}
                     initial={state.initial}
                     ready={ready}
@@ -157,6 +160,7 @@ const PlayIcon = ({ size = 15 }: { size?: number }) => (
 )
 
 function DespegueOverlay({
+    rect,
     logoUrl,
     initial,
     ready,
@@ -164,6 +168,7 @@ function DespegueOverlay({
     reduced,
     onTap,
 }: {
+    rect: Rect
     logoUrl: string | null
     initial: string | null
     ready: boolean
@@ -172,8 +177,32 @@ function DespegueOverlay({
     onTap: () => void
 }) {
     const [mounted, setMounted] = useState(false)
+    const pillRef = useRef<HTMLDivElement>(null)
     useEffect(() => setMounted(true), [])
+
+    // Morph desde el RECT REAL del trigger: colapsa a burbuja centrada en su propio centro, anticipa
+    // (squash) y despega (stretch). Web Animations API — keyframes computados desde el rect.
+    useEffect(() => {
+        if (reduced || !pillRef.current) return
+        const base = 'translate(-50%,-50%)'
+        pillRef.current.animate(
+            [
+                { width: `${rect.width}px`, height: `${rect.height}px`, borderRadius: `${rect.radius}px`, transform: `${base} translateY(0) scale(1,1)`, offset: 0 },
+                { width: '52px', height: '52px', borderRadius: '50%', transform: `${base} translateY(0) scale(1,1)`, offset: 0.32 },
+                { width: '52px', height: '52px', borderRadius: '50%', transform: `${base} translateY(18px) scale(1.18,0.78)`, offset: 0.48 },
+                { width: '52px', height: '52px', borderRadius: '50%', transform: `${base} translateY(-60px) scale(0.9,1.3)`, offset: 0.6 },
+                { width: '52px', height: '52px', borderRadius: '50%', transform: `${base} translateY(-780px) scale(0.82,1.4)`, offset: 1 },
+            ],
+            { duration: 950, easing: 'cubic-bezier(.6,0,.75,.4)', fill: 'forwards' }
+        )
+    }, [rect, reduced])
+
     if (!mounted) return null
+
+    // Centro del rect (la burbuja colapsa hacia el centro del componente clickeado).
+    const cx = rect.left + rect.width / 2
+    const cy = rect.top + rect.height / 2
+    const wideEnough = rect.width >= 150 // sólo el CTA muestra la etiqueta (en cards se omite)
 
     return createPortal(
         <motion.div
@@ -184,24 +213,31 @@ function DespegueOverlay({
             animate={{ opacity: leaving ? 0 : 1 }}
             transition={{ duration: leaving ? EXIT_MS / 1000 : 0, ease: 'easeOut' }}
         >
-            {/* Fondo de marca que sube (wipe) + estelas de luz. */}
+            {/* Fondo de marca que sube (wipe) + estelas de luz que caen. */}
             <div className="exec-dsp-bg" aria-hidden>
                 <span className="exec-dsp-line" style={{ left: '22%', height: 120, animation: 'exec-dsp-line 0.7s ease-in 0.95s both' }} />
                 <span className="exec-dsp-line" style={{ left: '58%', height: 180, animation: 'exec-dsp-line 0.8s ease-in 1.05s both' }} />
                 <span className="exec-dsp-line" style={{ left: '80%', height: 90, animation: 'exec-dsp-line 0.65s ease-in 1.15s both' }} />
             </div>
 
-            {/* Píldora del CTA que morfea y despega (oculta en reduced-motion). */}
+            {/* Píldora = clon del trigger real (posición/tamaño del rect); morfea y despega. */}
             {!reduced && (
-                <div className="exec-dsp-pill" aria-hidden>
-                    <span className="exec-dsp-pill-label">
-                        <PlayIcon /> Empezar entrenamiento
-                    </span>
+                <div
+                    ref={pillRef}
+                    className="exec-dsp-pill"
+                    aria-hidden
+                    style={{ left: cx, top: cy, width: rect.width, height: rect.height, borderRadius: rect.radius, transform: 'translate(-50%,-50%)' }}
+                >
+                    {wideEnough && (
+                        <span className="exec-dsp-pill-label">
+                            <PlayIcon /> Empezar entrenamiento
+                        </span>
+                    )}
                     <span className="exec-dsp-trail" />
                 </div>
             )}
 
-            {/* Centro: logo del coach que aterriza + "PREPARANDO TU SESIÓN" con dots. */}
+            {/* Centro: logo del coach que aterriza + "PREPARANDO TU SESIÓN" con dots en loop. */}
             <div className="exec-dsp-center">
                 <div className="exec-dsp-logo-wrap">
                     <span className="exec-dsp-ring" aria-hidden />
@@ -223,8 +259,17 @@ function DespegueOverlay({
             </div>
 
             <div className="exec-dsp-hint">TOCA PARA COMENZAR</div>
-            {/* Capa de tap: sólo activa cuando está listo (animación completa + ruta montada). */}
-            {ready && <button type="button" className="exec-dsp-tap" onClick={onTap} aria-label="Comenzar entrenamiento" />}
+            {/* Capa que CAPTURA todos los taps durante la ceremonia (no se puede skipear). Antes de estar
+                listo no hace nada (bloquea el pass-through); al estar listo, avanza a Inicio. */}
+            <button
+                type="button"
+                className="exec-dsp-tap"
+                style={{ cursor: ready ? 'pointer' : 'default' }}
+                onClick={ready ? onTap : undefined}
+                aria-label={ready ? 'Comenzar entrenamiento' : undefined}
+                aria-hidden={!ready}
+                tabIndex={ready ? 0 : -1}
+            />
         </motion.div>,
         document.body
     )

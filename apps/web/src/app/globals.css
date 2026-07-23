@@ -3169,23 +3169,16 @@ html[data-exec-v3-entered] [data-exec-v3] .exec-v3-splash {
   width: 2px;
   background: linear-gradient(rgba(255, 255, 255, 0), color-mix(in srgb, var(--b) 40%, #ffffff));
 }
-/* Píldora que morfea y despega (mismo lenguaje que el CTA real). */
+/* Píldora que morfea y despega DESDE el rect real del trigger (posición/tamaño los fija el JS con
+   la Web Animations API; ver DespegueOverlay). Aquí sólo la piel de marca. */
 .exec-dsp-pill {
-  position: absolute;
-  left: 50%;
-  top: 64%;
-  width: 303px;
-  max-width: calc(100% - 72px);
-  height: 52px;
-  border-radius: 14px;
+  position: fixed;
   background: var(--b);
   display: flex;
   align-items: center;
   justify-content: center;
   box-shadow: 0 0 26px 5px color-mix(in srgb, var(--b) 45%, transparent);
-  transform: translateX(-50%);
   will-change: transform, width, height, border-radius;
-  animation: exec-dsp-morph 0.95s cubic-bezier(0.6, 0, 0.75, 0.4) forwards;
 }
 .exec-dsp-pill-label {
   position: absolute;
@@ -3307,13 +3300,7 @@ html[data-exec-v3-entered] [data-exec-v3] .exec-v3-splash {
   background: transparent;
   cursor: pointer;
 }
-@keyframes exec-dsp-morph {
-  0% { width: 303px; height: 52px; border-radius: 14px; transform: translateX(-50%) translateY(0) scale(1, 1); }
-  32% { width: 52px; height: 52px; border-radius: 50%; transform: translateX(-50%) translateY(0) scale(1, 1); }
-  48% { width: 52px; height: 52px; border-radius: 50%; transform: translateX(-50%) translateY(18px) scale(1.18, 0.78); }
-  60% { width: 52px; height: 52px; border-radius: 50%; transform: translateX(-50%) translateY(-60px) scale(0.9, 1.3); }
-  100% { width: 52px; height: 52px; border-radius: 50%; transform: translateX(-50%) translateY(-780px) scale(0.82, 1.4); }
-}
+/* exec-dsp-morph vive en JS (Web Animations API) — se computa desde el rect real del trigger. */
 @keyframes exec-dsp-labelfade { to { opacity: 0; } }
 @keyframes exec-dsp-trail { 0% { opacity: 0; height: 0; } 30% { opacity: 0.9; } 100% { opacity: 0; height: 120px; } }
 @keyframes exec-dsp-wipe { to { transform: translateY(0); } }
