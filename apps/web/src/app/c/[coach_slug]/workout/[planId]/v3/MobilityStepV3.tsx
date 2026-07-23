@@ -124,6 +124,7 @@ export function MobilityStepV3({
                         </div>
                     )}
 
+                    <div className="exec-v3-ringrow">
                     <button
                         type="button"
                         onClick={countdown.done ? countdown.restart : countdown.toggle}
@@ -173,6 +174,17 @@ export function MobilityStepV3({
                             )}
                         </div>
                     </button>
+                        {/* QA5 h3: reinicia el hold del lado actual a su valor prescrito (mecanismo `restart`
+                            del hook — no toca el motor de guardado). */}
+                        <button
+                            type="button"
+                            onClick={countdown.restart}
+                            className="exec-v3-restart"
+                            aria-label="Reiniciar el contador"
+                        >
+                            <RotateCcw className="h-4 w-4" aria-hidden />
+                        </button>
+                    </div>
 
                     {perSide && (
                         <p className="exec-v3-then">

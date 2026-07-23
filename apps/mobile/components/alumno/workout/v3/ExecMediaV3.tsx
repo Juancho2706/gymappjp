@@ -4,7 +4,7 @@ import { AnimatePresence, MotiView } from 'moti'
 import { Easing } from 'react-native-reanimated'
 import { Image } from 'expo-image'
 import { LinearGradient } from 'expo-linear-gradient'
-import { AlignLeft, Dumbbell, MessageSquare, Volume2, VolumeX } from 'lucide-react-native'
+import { AlignLeft, Dumbbell, MessageSquare, Pause, Play, RotateCcw, Volume2, VolumeX } from 'lucide-react-native'
 import { FONT, textStyle } from '../../../../lib/typography'
 import { hexToRgba } from '../../../../lib/theme'
 import { extractYoutubeVideoId } from '../../../../lib/youtube'
@@ -18,6 +18,33 @@ import type { ExecTheme } from './exec-theme'
 const MEDIA_HEIGHT = 150
 // Colapso de los chips glass a solo-icono tras ENTRAR el ejercicio (~1,5s, one-shot por ejercicio).
 const CHIP_COLLAPSE_MS = 1500
+
+/**
+ * Clasifica el medio del ejercicio con la MISMA precedencia estricta que `resolveExecMedia` (web) y
+ * `TechniqueSheet`: gif → video directo (mp4/webm/mov/Storage) → youtube → imagen → none. Compartido por
+ * `ExecMediaV3` y `TypedMediaV3` para saber cuándo mostrar la fila de controles (sólo video/youtube) y si
+ * la card grande existe (sólo si NO es 'none').
+ */
+export type ExecMediaKind = 'gif' | 'video' | 'youtube' | 'image' | 'none'
+export function execMediaKind(exercise: SessionExercise): ExecMediaKind {
+  const videoUrl = exercise.video_url
+  const isYouTube = !!videoUrl && (videoUrl.includes('youtube.com') || videoUrl.includes('youtu.be'))
+  const ytId = videoUrl ? extractYoutubeVideoId(videoUrl) : null
+  if (exercise.gif_url) return 'gif'
+  if (videoUrl && !isYouTube) {
+    const u = videoUrl.toLowerCase()
+    const isMp4 =
+      u.includes('.mp4') || u.includes('.mov') || u.includes('.webm') ||
+      (u.includes('supabase.co/storage') && !u.includes('.gif') && !u.includes('.jpg') && !u.includes('.png'))
+    return isMp4 ? 'video' : 'image'
+  }
+  if (isYouTube && ytId) return 'youtube'
+  return 'none'
+}
+/** ¿El ejercicio tiene media visible (gif/video/youtube/imagen)? Si es false, kind === 'none'. */
+export function hasExecMedia(exercise: SessionExercise): boolean {
+  return execMediaKind(exercise) !== 'none'
+}
 
 /**
  * Bloque de MEDIA reutilizable del ejecutor V3 (extracción pura de `ExerciseScreenV3`, sin lógica de
@@ -47,6 +74,15 @@ export function ExecMediaV3({
   const [noteOpen, setNoteOpen] = useState(false)
   // Audio del ARCHIVO de video (kind 'video'): default SIN sonido; el botón glass alterna el mute.
   const [muted, setMuted] = useState(true)
+  // Pausa/reanudar + reinicio (controles glass QA5). El nonce de reinicio se incrementa al tocar Reiniciar.
+  const [paused, setPaused] = useState(false)
+  const [restartNonce, setRestartNonce] = useState(0)
+
+  const kind = execMediaKind(exercise)
+  // Controles de video: sólo con media reproducible (video directo o youtube inline). El botón de audio
+  // sólo con video DIRECTO — en youtube el mute se difiere (recargaría el WebView; ver TypedMediaV3).
+  const hasControls = kind === 'video' || kind === 'youtube'
+  const hasAudioBtn = kind === 'video'
 
   const hasTechnique = !!(exercise.gif_url || exercise.video_url)
   const hasInstructions = (exercise.instructions?.length ?? 0) > 0
@@ -72,7 +108,8 @@ export function ExecMediaV3({
           exec={exec}
           onOpenTechnique={onOpenTechnique}
           muted={muted}
-          onToggleMuted={() => setMuted((m) => !m)}
+          paused={paused}
+          restartSignal={restartNonce}
         />
         {!reducedMotion && (
           <MotiView
@@ -115,6 +152,21 @@ export function ExecMediaV3({
             />
           )}
         </View>
+
+        {/* Fila de controles glass de video (QA5): audio (sólo video directo) + pausa/reanudar + reiniciar. */}
+        {hasControls && (
+          <MediaControlsRow
+            hasAudio={hasAudioBtn}
+            muted={muted}
+            onToggleMuted={() => setMuted((m) => !m)}
+            paused={paused}
+            onTogglePause={() => setPaused((p) => !p)}
+            onRestart={() => {
+              setPaused(false)
+              setRestartNonce((n) => n + 1)
+            }}
+          />
+        )}
       </View>
 
       {/* Sheet de nota del coach. */}
@@ -155,23 +207,29 @@ export function useChipCollapse(exerciseId: string, reducedMotion: boolean): boo
   return expanded
 }
 
-/**
- * Botón de audio glass (sólo con kind 'video'): esquina inferior-derecha de la media, mismo lenguaje que
- * los chips. Alterna el mute del `<video>` (default: sin sonido). Compartido por `ExecMediaV3`/`TypedMediaV3`.
- */
-export function AudioGlassButton({ muted, onToggle }: { muted: boolean; onToggle: () => void }) {
+/** Botón glass 30x30 de la fila de controles (audio/pausa/reinicio). Mismo lenguaje que los chips. */
+function GlassCtlButton({
+  onPress,
+  accessibilityLabel,
+  selected,
+  testID,
+  children,
+}: {
+  onPress: () => void
+  accessibilityLabel: string
+  selected?: boolean
+  testID?: string
+  children: ReactNode
+}) {
   return (
     <Pressable
-      testID="btn-media-audio-v3"
-      onPress={onToggle}
+      testID={testID}
+      onPress={onPress}
       hitSlop={8}
       accessibilityRole="button"
-      accessibilityState={{ selected: !muted }}
-      accessibilityLabel={muted ? 'Activar el sonido del video' : 'Silenciar el video'}
+      accessibilityState={selected != null ? { selected } : undefined}
+      accessibilityLabel={accessibilityLabel}
       style={{
-        position: 'absolute',
-        bottom: 10,
-        right: 10,
         width: 30,
         height: 30,
         borderRadius: 999,
@@ -182,8 +240,56 @@ export function AudioGlassButton({ muted, onToggle }: { muted: boolean; onToggle
         borderColor: 'rgba(255,255,255,0.16)',
       }}
     >
-      {muted ? <VolumeX size={14} color="#eaeaf0" /> : <Volume2 size={14} color="#eaeaf0" />}
+      {children}
     </Pressable>
+  )
+}
+
+/**
+ * Fila de controles glass de la media de VIDEO (QA5): audio (mute/unmute — sólo con `hasAudio`, es decir
+ * video DIRECTO), pausa/reanudar y reiniciar. Esquina inferior-derecha, 3 (o 2) botones chicos con gap 6,
+ * mismo lenguaje que los chips. Compartido por `ExecMediaV3` (fuerza) y `TypedMediaV3` (tipadas). En
+ * youtube el audio se difiere (`hasAudio=false`) porque alternar el mute recargaría el WebView.
+ */
+export function MediaControlsRow({
+  hasAudio,
+  muted,
+  onToggleMuted,
+  paused,
+  onTogglePause,
+  onRestart,
+}: {
+  hasAudio: boolean
+  muted: boolean
+  onToggleMuted: () => void
+  paused: boolean
+  onTogglePause: () => void
+  onRestart: () => void
+}) {
+  return (
+    <View style={{ position: 'absolute', bottom: 10, right: 10, flexDirection: 'row', gap: 6 }}>
+      {hasAudio && (
+        <GlassCtlButton
+          testID="btn-media-audio-v3"
+          onPress={onToggleMuted}
+          selected={!muted}
+          accessibilityLabel={muted ? 'Activar el sonido del video' : 'Silenciar el video'}
+        >
+          {muted ? <VolumeX size={14} color="#eaeaf0" /> : <Volume2 size={14} color="#eaeaf0" />}
+        </GlassCtlButton>
+      )}
+      <GlassCtlButton
+        testID="btn-media-pause-v3"
+        onPress={onTogglePause}
+        selected={paused}
+        accessibilityLabel={paused ? 'Reanudar el video' : 'Pausar el video'}
+      >
+        {paused ? <Play size={14} color="#eaeaf0" /> : <Pause size={14} color="#eaeaf0" />}
+      </GlassCtlButton>
+      <GlassCtlButton testID="btn-media-restart-v3" onPress={onRestart} accessibilityLabel="Reiniciar el video">
+        <RotateCcw size={14} color="#eaeaf0" />
+      </GlassCtlButton>
+    </View>
   )
 }
 
@@ -274,15 +380,18 @@ function ExecMediaInnerV3({
   exec,
   onOpenTechnique,
   muted = true,
-  onToggleMuted,
+  paused = false,
+  restartSignal,
 }: {
   exercise: SessionExercise
   exec: ExecTheme
   onOpenTechnique: () => void
   /** Silencio del <video> directo (kind 'video'). Default true. */
   muted?: boolean
-  /** Alterna el mute del <video> directo (renderiza el botón glass sólo si se pasa). */
-  onToggleMuted?: () => void
+  /** Pausa la reproducción (video directo o youtube inline) — controles glass QA5. */
+  paused?: boolean
+  /** Nonce de reinicio (QA5): al cambiar, el video vuelve al inicio. */
+  restartSignal?: number
 }) {
   const s = exec.surface
   const videoUrl = exercise.video_url
@@ -299,11 +408,11 @@ function ExecMediaInnerV3({
       u.includes('.mp4') || u.includes('.mov') || u.includes('.webm') ||
       (u.includes('supabase.co/storage') && !u.includes('.gif') && !u.includes('.jpg') && !u.includes('.png'))
     if (isMp4) {
-      // Archivo de video (kind 'video'): reproduce en loop mudo por default + botón de audio glass.
+      // Archivo de video (kind 'video'): reproduce en loop mudo por default. Los controles glass (audio +
+      // pausa + reinicio) los monta el padre (`ExecMediaV3`) como overlay; acá sólo se propaga el estado.
       return (
         <View style={{ flex: 1 }}>
-          <VideoPlayer url={videoUrl} autoPlay muted={muted} frameless letterbox={s.surfaceRaised} style={{ flex: 1 }} title={exercise.name} />
-          {onToggleMuted && <AudioGlassButton muted={muted} onToggle={onToggleMuted} />}
+          <VideoPlayer url={videoUrl} autoPlay muted={muted} paused={paused} restartSignal={restartSignal} frameless letterbox={s.surfaceRaised} style={{ flex: 1 }} title={exercise.name} />
         </View>
       )
     }
@@ -311,9 +420,10 @@ function ExecMediaInnerV3({
   }
 
   // YouTube (QA4 · decisión CEO): AUTOREPRODUCIDO inline MUTED al entrar al ejercicio (reusa el
-  // `VideoPlayer` de la técnica: mismo iframe youtube-nocookie autoplay/mute/loop del recorte). Sin botón
-  // de audio: alternar el mute recargaría el WebView (reinicio) — el toggle de audio en YouTube queda
-  // sólo en web (postMessage a la IFrame API). El chip "Instrucciones" abre la técnica completa.
+  // `VideoPlayer` de la técnica: mismo iframe youtube-nocookie autoplay/mute/loop del recorte). QA5: la
+  // fila de controles del padre añade PAUSA/REANUDAR y REINICIAR vía la IFrame API por injectJavaScript
+  // (no recarga el WebView). El AUDIO sigue diferido en youtube (alternar el mute sí recargaría). El chip
+  // "Instrucciones" abre la técnica completa.
   if (isYouTube && ytId && videoUrl) {
     return (
       <VideoPlayer
@@ -322,6 +432,8 @@ function ExecMediaInnerV3({
         end={exercise.video_end_time}
         autoPlay
         muted
+        paused={paused}
+        restartSignal={restartSignal}
         frameless
         letterbox={s.surfaceRaised}
         style={{ flex: 1 }}

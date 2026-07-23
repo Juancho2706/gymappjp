@@ -239,8 +239,8 @@ export function RollerStepV3({
                 />
             </div>
 
-            {/* Fila de DOS botones (GOTCHA repo: jamás dos w-full en fila → cada uno flex-1): +1 héroe
-                (juicy, más alto) + −1 destructivo rojo para corregir. */}
+            {/* Fila de DOS botones (GOTCHA repo: jamás dos w-full en fila → cada uno flex-1): "+" juicy
+                marca + "−" destructivo rojo. QA5 h5: icono-only, MISMA altura ambos. */}
             <div className="exec-v3-rollbtns">
                 <button
                     type="button"
@@ -248,10 +248,7 @@ export function RollerStepV3({
                     className="exec-v3-juicy exec-v3-plusbtn"
                     aria-label="Sumar una pasada"
                 >
-                    <span className="exec-v3-plusbadge" aria-hidden>
-                        <Plus className="h-5 w-5" strokeWidth={3} />
-                    </span>
-                    +1 pasada
+                    <Plus className="h-6 w-6" strokeWidth={3} aria-hidden />
                 </button>
                 <button
                     type="button"
@@ -260,8 +257,7 @@ export function RollerStepV3({
                     className="exec-v3-minusred"
                     aria-label="Restar una pasada"
                 >
-                    <Minus className="h-5 w-5" strokeWidth={3} aria-hidden />
-                    −1 pasada
+                    <Minus className="h-6 w-6" strokeWidth={3} aria-hidden />
                 </button>
             </div>
 

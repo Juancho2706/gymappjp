@@ -164,6 +164,8 @@ export interface IntervalRunnerApi {
   toggle: () => void
   /** Salta a la fase siguiente (o termina si es la última). */
   skip: () => void
+  /** Reinicia la secuencia desde la primera fase y vuelve a correr (QA5 h3). */
+  restart: () => void
 }
 
 /**
@@ -232,8 +234,16 @@ export function useIntervalRunner(
 
   const toggle = useCallback(() => setRunning((v) => !v), [])
   const skip = useCallback(() => advance(), [advance])
+  const restart = useCallback(() => {
+    phaseIndexRef.current = 0
+    endRef.current = null
+    setPhaseIndex(0)
+    setRemaining(phases[0]?.durationSec ?? 0)
+    setFinished(phases.length === 0)
+    setRunning(true)
+  }, [phases])
 
   const phase = phases[phaseIndex] ?? null
   const phaseProgress = phase && phase.durationSec > 0 ? (phase.durationSec - remaining) / phase.durationSec : 0
-  return { phaseIndex, phase, remaining, running, finished, phaseProgress, toggle, skip }
+  return { phaseIndex, phase, remaining, running, finished, phaseProgress, toggle, skip, restart }
 }

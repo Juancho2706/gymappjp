@@ -17,7 +17,7 @@ import { SetRow } from '../SetRow'
 import { TypedKeypad } from '../TypedKeypad'
 import { JuicyButton } from './JuicyButton'
 import { SingleWheelPicker } from './DualWheelPicker'
-import { TypedMediaV3 } from './TypedMediaV3'
+import { TypedMediaV3, TypedInstructionsChip, hasExecMedia } from './TypedMediaV3'
 import { useStopwatch } from './timing'
 import { formatClock, rollerGoalLabel, rollerPassesTarget } from './typed-screen-model'
 import type { ExecTheme } from './exec-theme'
@@ -168,9 +168,13 @@ export function RollerScreenV3({
 
       {/* Media — chips "Instrucciones" + "Nota del coach" DENTRO de la media (overlay superior-izquierdo).
           Sin pill "En loop" superpuesta (QA4). */}
-      <View style={{ width: '100%', height: MEDIA_HEIGHT, borderRadius: 22, overflow: 'hidden', borderWidth: 2, borderColor: '#2a333a', backgroundColor: s.surfaceRaised }}>
-        <TypedMediaV3 exercise={exercise} exec={exec} accent={accent} coachNote={coachNote} IconFallback={GitCommit} onOpenTechnique={onOpenTechnique} onOpenNote={() => setNoteOpen(true)} reducedMotion={reducedMotion} />
-      </View>
+      {hasExecMedia(exercise) ? (
+        <View style={{ width: '100%', height: MEDIA_HEIGHT, borderRadius: 22, overflow: 'hidden', borderWidth: 2, borderColor: '#2a333a', backgroundColor: s.surfaceRaised }}>
+          <TypedMediaV3 exercise={exercise} exec={exec} accent={accent} coachNote={coachNote} IconFallback={GitCommit} onOpenTechnique={onOpenTechnique} onOpenNote={() => setNoteOpen(true)} reducedMotion={reducedMotion} />
+        </View>
+      ) : (
+        <TypedInstructionsChip exercise={exercise} accent={accent} coachNote={coachNote} onOpenTechnique={onOpenTechnique} onOpenNote={() => setNoteOpen(true)} reducedMotion={reducedMotion} />
+      )}
 
       {firstUnlogged == null ? (
         <View style={{ width: '100%', gap: 6 }}>{loggedRows}</View>
@@ -219,49 +223,46 @@ export function RollerScreenV3({
             )}
           </View>
 
-          {/* Fila de DOS botones (GOTCHA repo: jamás dos w-full en fila → cada uno flex-1): +1 héroe
-              (juicy, más alto) + −1 destructivo rojo (ghost) para corregir. */}
+          {/* Fila de DOS botones (GOTCHA repo: jamás dos w-full en fila → cada uno flex-1): "+" juicy
+              marca + "−" destructivo rojo. QA5 h5: icono-only, MISMA altura ambos (72px). */}
           <View style={{ width: '100%', flexDirection: 'row', alignItems: 'center', gap: 12 }}>
             <View style={{ flex: 1 }}>
               <JuicyButton
                 testID="btn-roller-inc-v3"
-                label="+1 pasada"
-                icon={<Plus size={20} color="#08222b" strokeWidth={3} />}
+                label=""
+                icon={<Plus size={24} color="#08222b" strokeWidth={3} />}
                 onPress={inc}
                 exec={{ ...exec, accent, accentText: '#08222b' }}
                 height={72}
-                fontSize={22}
                 breathing
                 reducedMotion={reducedMotion}
                 accessibilityLabel="Sumar una pasada"
               />
             </View>
-            {/* −1 destructivo rojo (juicy-ghost): borde 2px rojo 55%, fondo rojo 14%, texto rojo, sombra
-                dura roja inferior; se hunde al presionar. El héroe sigue siendo el +1 (más alto). */}
-            <View style={{ flex: 1, height: 64 }}>
-              <View pointerEvents="none" style={{ position: 'absolute', left: 0, right: 0, top: 4, height: 60, borderRadius: 16, backgroundColor: '#7a2222' }} />
+            {/* "−" destructivo rojo (juicy-ghost): borde 2px rojo 55%, fondo rojo 14%, icono rojo, sombra
+                dura roja inferior; se hunde al presionar. Icono-only, MISMA altura que el "+" (72px). */}
+            <View style={{ flex: 1, height: 77 }}>
+              <View pointerEvents="none" style={{ position: 'absolute', left: 0, right: 0, top: 5, height: 72, borderRadius: 16, backgroundColor: '#7a2222' }} />
               <Pressable
                 testID="btn-roller-dec-v3"
                 onPress={dec}
                 disabled={count === 0}
                 style={({ pressed }) => ({
-                  height: 60,
+                  height: 72,
                   borderRadius: 16,
                   flexDirection: 'row',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  gap: 8,
                   borderWidth: 2,
                   borderColor: hexToRgba('#f87171', 0.55),
                   backgroundColor: hexToRgba('#f87171', 0.14),
                   opacity: count === 0 ? 0.4 : 1,
-                  transform: [{ translateY: pressed && count > 0 ? 4 : 0 }],
+                  transform: [{ translateY: pressed && count > 0 ? 5 : 0 }],
                 })}
                 accessibilityRole="button"
                 accessibilityLabel="Restar una pasada"
               >
-                <Minus size={20} color="#f87171" strokeWidth={3} />
-                <Text style={{ fontFamily: FONT.uiExtra, fontSize: 16, letterSpacing: 0.3, color: '#f87171' }}>−1 pasada</Text>
+                <Minus size={24} color="#f87171" strokeWidth={3} />
               </Pressable>
             </View>
           </View>

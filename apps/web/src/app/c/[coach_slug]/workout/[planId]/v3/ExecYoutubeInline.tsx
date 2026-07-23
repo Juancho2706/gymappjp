@@ -1,7 +1,8 @@
 'use client'
 
 import { useRef, useState } from 'react'
-import { Play, Volume2, VolumeX } from 'lucide-react'
+import { Play } from 'lucide-react'
+import { ExecMediaControls } from './ExecMediaControls'
 
 /**
  * Ejecutor V3 (QA4 · decisión CEO 2026-07-22) — media YouTube AUTOREPRODUCIDA inline.
@@ -32,6 +33,8 @@ export function ExecYoutubeInline({ videoId, start, end, exerciseName, openTechn
     const iframeRef = useRef<HTMLIFrameElement | null>(null)
     // Audio: arranca MUTED (requisito del autoplay del navegador); el botón glass alterna vía postMessage.
     const [muted, setMuted] = useState(true)
+    // Pausa/reanudar del embed (controles glass QA5) — vía comandos de la IFrame API por postMessage.
+    const [paused, setPaused] = useState(false)
     // Si el embed falla (onError), degradamos al placeholder "Ver video" (abre la técnica).
     const [failed, setFailed] = useState(false)
 
@@ -65,16 +68,35 @@ export function ExecYoutubeInline({ videoId, start, end, exerciseName, openTechn
     if (end != null && end > 0) params.push(`end=${Math.floor(end)}`)
     const src = `https://www.youtube-nocookie.com/embed/${videoId}?${params.join('&')}`
 
-    // Alterna el mute enviando el comando de la IFrame API al iframe (no recarga el src → no reinicia).
+    // Envía un comando de la IFrame API al iframe por postMessage (no recarga el src → no reinicia).
+    const command = (func: string, args: unknown[] = []) => {
+        iframeRef.current?.contentWindow?.postMessage(
+            JSON.stringify({ event: 'command', func, args }),
+            '*',
+        )
+    }
+
+    // Alterna el mute (mute/unMute). Reinicia NADA: sólo cambia el audio.
     const toggleMute = () => {
         setMuted((prev) => {
             const next = !prev
-            iframeRef.current?.contentWindow?.postMessage(
-                JSON.stringify({ event: 'command', func: next ? 'mute' : 'unMute', args: [] }),
-                '*',
-            )
+            command(next ? 'mute' : 'unMute')
             return next
         })
+    }
+    // Pausa/reanuda el embed (pauseVideo/playVideo) reflejando el estado en el botón.
+    const togglePause = () => {
+        setPaused((prev) => {
+            const next = !prev
+            command(next ? 'pauseVideo' : 'playVideo')
+            return next
+        })
+    }
+    // Reinicia el embed al segundo 0 y reanuda.
+    const restart = () => {
+        command('seekTo', [0, true])
+        command('playVideo')
+        setPaused(false)
     }
 
     return (
@@ -88,15 +110,13 @@ export function ExecYoutubeInline({ videoId, start, end, exerciseName, openTechn
                 allow="autoplay; encrypted-media; picture-in-picture"
                 onError={() => setFailed(true)}
             />
-            <button
-                type="button"
-                onClick={toggleMute}
-                className="exec-v3-maudio"
-                aria-label={muted ? 'Activar el sonido del video' : 'Silenciar el video'}
-                aria-pressed={!muted}
-            >
-                {muted ? <VolumeX className="h-3.5 w-3.5" aria-hidden /> : <Volume2 className="h-3.5 w-3.5" aria-hidden />}
-            </button>
+            <ExecMediaControls
+                muted={muted}
+                onToggleMute={toggleMute}
+                paused={paused}
+                onTogglePause={togglePause}
+                onRestart={restart}
+            />
         </>
     )
 }

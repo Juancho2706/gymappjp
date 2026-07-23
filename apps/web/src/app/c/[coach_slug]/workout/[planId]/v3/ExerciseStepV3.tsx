@@ -158,8 +158,10 @@ export function ExerciseStepV3({
                 {block.rest_time && <> · desc {block.rest_time}</>}
             </div>
 
-            {/* "Anterior" 1-tap → autollena la serie activa (mecanismo existente del padre) */}
-            {bestPrev && (
+            {/* "Anterior" 1-tap → autollena la serie activa (mecanismo existente del padre). QA5 h4: sólo
+                si la sesión previa registró AL MENOS un dato real (peso o reps); si no, no hay fila fantasma
+                de puros guiones. */}
+            {bestPrev && (bestPrev.weight_kg != null || bestPrev.reps_done != null) && (
                 <button
                     type="button"
                     onClick={autofillActive}

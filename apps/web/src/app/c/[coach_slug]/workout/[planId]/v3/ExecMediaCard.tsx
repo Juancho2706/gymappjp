@@ -2,11 +2,12 @@
 
 import { useEffect, useRef, useState } from 'react'
 import Image from 'next/image'
-import { AlignLeft, MessageSquare, Dumbbell, Volume2, VolumeX } from 'lucide-react'
+import { AlignLeft, MessageSquare, Dumbbell } from 'lucide-react'
 import type { ExerciseType } from '../WorkoutExecutionClient'
 import { resolveExecMedia } from './exec-media'
 import { CoachNoteSheet } from './CoachNoteV3'
 import { ExecYoutubeInline } from './ExecYoutubeInline'
+import { ExecMediaControls } from './ExecMediaControls'
 
 interface ExecMediaCardProps {
     /** Ejercicio cuya media se muestra (gif/video/youtube/none, misma precedencia que el modal). */
@@ -34,7 +35,30 @@ export function ExecMediaCard({ exercise, note, openTechnique }: ExecMediaCardPr
     const [chipsCollapsed, setChipsCollapsed] = useState(false)
     // Audio del ARCHIVO de video (kind 'video'): default SIN sonido; el botón glass alterna mute.
     const [muted, setMuted] = useState(true)
+    // Pausa/reanudar del archivo de video (kind 'video') — controles glass QA5 junto al de audio.
+    const [paused, setPaused] = useState(false)
     const videoRef = useRef<HTMLVideoElement | null>(null)
+
+    // Pausa/reanuda el <video> directo y refleja el estado en el botón (Pause ↔ Play).
+    const togglePause = () => {
+        const v = videoRef.current
+        if (!v) return
+        if (v.paused) {
+            void v.play()
+            setPaused(false)
+        } else {
+            v.pause()
+            setPaused(true)
+        }
+    }
+    // Reinicia el <video> directo al segundo 0 y reanuda.
+    const restartVideo = () => {
+        const v = videoRef.current
+        if (!v) return
+        v.currentTime = 0
+        void v.play()
+        setPaused(false)
+    }
     const media = resolveExecMedia(exercise)
     const hasInstructions = (exercise.instructions?.length ?? 0) > 0 || media.kind !== 'none'
 
@@ -95,15 +119,13 @@ export function ExecMediaCard({ exercise, note, openTechnique }: ExecMediaCardPr
                             playsInline
                             className="h-full w-full object-contain"
                         />
-                        <button
-                            type="button"
-                            onClick={() => setMuted((m) => !m)}
-                            className="exec-v3-maudio"
-                            aria-label={muted ? 'Activar el sonido del video' : 'Silenciar el video'}
-                            aria-pressed={!muted}
-                        >
-                            {muted ? <VolumeX className="h-3.5 w-3.5" aria-hidden /> : <Volume2 className="h-3.5 w-3.5" aria-hidden />}
-                        </button>
+                        <ExecMediaControls
+                            muted={muted}
+                            onToggleMute={() => setMuted((m) => !m)}
+                            paused={paused}
+                            onTogglePause={togglePause}
+                            onRestart={restartVideo}
+                        />
                     </>
                 )}
                 {media.kind === 'image' && (

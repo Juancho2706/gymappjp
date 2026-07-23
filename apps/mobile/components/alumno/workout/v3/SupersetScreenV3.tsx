@@ -382,7 +382,7 @@ export function SupersetScreenV3({
                 </Text>
 
                 {/* Fila "Anterior — toca para usar" (1-tap prefill de la serie activa). */}
-                {m.bestPrev && (
+                {m.bestPrev && (m.bestPrev.weight_kg != null || m.bestPrev.reps_done != null) && (
                   <Pressable
                     testID={`btn-prev-autofill-ss-${m.block.id}`}
                     onPress={() => setAutofill({ weight: m.bestPrev!.weight_kg, reps: m.bestPrev!.reps_done, nonce: Date.now() })}

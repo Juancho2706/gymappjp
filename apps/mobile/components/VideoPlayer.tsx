@@ -1,7 +1,15 @@
-import { useEffect, useMemo, useState, type ComponentType } from 'react'
+import { useEffect, useMemo, useRef, useState, type ComponentType } from 'react'
 import { Linking, StyleSheet, TouchableOpacity, View, type StyleProp, type ViewStyle } from 'react-native'
 import { Image } from 'expo-image'
-import { WebView } from 'react-native-webview'
+import { WebView, type WebViewProps } from 'react-native-webview'
+
+/**
+ * El d.ts que resuelve tsc (lib/WebView.d.ts) tipa WebView como FunctionComponent SIN ref, pero en
+ * runtime es la clase (index.d.ts) y `ref.injectJavaScript` existe. Alias tipado por la capacidad
+ * que usamos + ref habilitado — cero cambio de runtime.
+ */
+type WebViewHandle = { injectJavaScript: (js: string) => void }
+const WebViewWithRef = WebView as unknown as ComponentType<WebViewProps & { ref?: React.Ref<WebViewHandle> }>
 import { Play } from 'lucide-react-native'
 import { useTheme } from '../context/ThemeContext'
 import { GLOWS } from '../lib/shadows'
@@ -53,8 +61,20 @@ type ExpoVideoPlayer = {
   muted: boolean
   currentTime: number
   play: () => void
+  pause: () => void
   addListener: (event: string, cb: (payload: { currentTime?: number }) => void) => { remove: () => void }
 }
+
+// ── Controles de video del ejecutor V3 (QA5) — snippets inyectados al WebView (YouTube o <video> HTML5
+//    directo). Un mismo snippet cubre ambos: intenta la IFrame API de YouTube (`window.player`) y el
+//    elemento `<video id="v">`. No recargan el WebView (sólo mandan comandos), así que pausar/reiniciar
+//    NO reinicia la reproducción. `START` es el segundo de recorte del coach (var global del HTML). ──
+const MEDIA_PAUSE_JS =
+  '(function(){try{if(window.player&&player.pauseVideo)player.pauseVideo();}catch(e){}try{var v=document.getElementById("v");if(v)v.pause();}catch(e){}})();true;'
+const MEDIA_PLAY_JS =
+  '(function(){try{if(window.player&&player.playVideo)player.playVideo();}catch(e){}try{var v=document.getElementById("v");if(v){var p=v.play();if(p&&p.catch)p.catch(function(){});}}catch(e){}})();true;'
+const MEDIA_RESTART_JS =
+  '(function(){var s=(typeof START!=="undefined"?START:0);try{if(window.player&&player.seekTo){player.seekTo(s,true);if(player.playVideo)player.playVideo();}}catch(e){}try{var v=document.getElementById("v");if(v){v.currentTime=s;var p=v.play();if(p&&p.catch)p.catch(function(){});}}catch(e){}})();true;'
 
 let ExpoVideo: ExpoVideoModule | null = null
 try {
@@ -84,6 +104,16 @@ export interface VideoPlayerProps {
   muted?: boolean
   /** Loop. Default true. */
   loop?: boolean
+  /**
+   * Ejecutor V3 (QA5) — pausa/reanuda la reproducción sin recargar. Default false (reproduce). Al pasar
+   * a true se pausa; a false, reanuda. Cubre YouTube (IFrame API), mp4 vía expo-video y el fallback WebView.
+   */
+  paused?: boolean
+  /**
+   * Ejecutor V3 (QA5) — nonce de REINICIO: cada vez que cambia (excepto el primer render), el video vuelve
+   * al inicio (recorte `start` del coach) y reanuda. Los controles del ejecutor incrementan este número.
+   */
+  restartSignal?: number
   /** Estilo del contenedor 16:9 (radios/margen extra). */
   style?: StyleProp<ViewStyle>
   /** Accesibilidad. */
@@ -118,6 +148,8 @@ export function VideoPlayer({
   autoPlay = false,
   muted = true,
   loop = true,
+  paused = false,
+  restartSignal,
   style,
   title,
   frameless = false,
@@ -129,6 +161,25 @@ export function VideoPlayer({
   const ytId = useMemo(() => extractYoutubeVideoId(url), [url])
   const isDirect = !ytId && /^https?:\/\//i.test(url)
   const posterUri = poster ?? (ytId ? youtubeThumb(ytId) : null)
+
+  // Ref del WebView (YouTube o <video> HTML5 directo) para inyectar los comandos de pausa/reinicio (QA5).
+  // expo-video (mp4 con módulo instalado) se controla por props dentro de `DirectVideo`, no por acá.
+  const webRef = useRef<WebViewHandle>(null)
+  // Pausa/reanuda el WebView cuando cambia `paused` (o al arrancar la reproducción).
+  useEffect(() => {
+    if (!started) return
+    webRef.current?.injectJavaScript(paused ? MEDIA_PAUSE_JS : MEDIA_PLAY_JS)
+  }, [paused, started])
+  // Reinicio: ignora el primer disparo (montaje) y reinyecta seek-to-start en los siguientes.
+  const restartMounted = useRef(false)
+  useEffect(() => {
+    if (restartSignal == null) return
+    if (!restartMounted.current) {
+      restartMounted.current = true
+      return
+    }
+    webRef.current?.injectJavaScript(MEDIA_RESTART_JS)
+  }, [restartSignal])
 
   const startAt = start != null && start > 0 ? Math.floor(start) : 0
   const endAt = end != null && end > startAt ? Math.floor(end) : null
@@ -172,7 +223,8 @@ export function VideoPlayer({
       {!started ? (
         poster_
       ) : ytId ? (
-        <WebView
+        <WebViewWithRef
+          ref={webRef}
           testID="video-player-webview"
           accessibilityRole="image"
           accessibilityLabel={title ? `Video de ${title}` : 'Video del ejercicio'}
@@ -194,14 +246,24 @@ export function VideoPlayer({
           setSupportMultipleWindows={false}
         />
       ) : isDirect && ExpoVideo ? (
-        <DirectVideo url={url} start={startAt} end={endAt} muted={muted} loop={loop} letterbox={letterbox} />
+        <DirectVideo
+          url={url}
+          start={startAt}
+          end={endAt}
+          muted={muted}
+          loop={loop}
+          letterbox={letterbox}
+          paused={paused}
+          restartSignal={restartSignal}
+        />
       ) : isDirect ? (
         // expo-video aún no instalado: reproducción INLINE via WebView + HTML5 <video> — el MISMO
         // elemento `<video autoPlay loop muted playsInline object-contain>` que usa la web
         // (WorkoutExecutionClient.tsx:2049-2056), dentro del WebView que ya es dependencia (YouTube).
         // Reemplaza el antiguo `Linking.openURL` (sacaba al usuario fuera de la app) → paridad inline
         // sin depender de un módulo nativo. El recorte [start,end] se loopea igual que en DirectVideo.
-        <WebView
+        <WebViewWithRef
+          ref={webRef}
           testID="video-player-direct-webview"
           accessibilityRole="image"
           accessibilityLabel={title ? `Video de ${title}` : 'Video del ejercicio'}
@@ -247,6 +309,8 @@ function DirectVideo({
   muted,
   loop,
   letterbox,
+  paused = false,
+  restartSignal,
 }: {
   url: string
   start: number
@@ -254,6 +318,8 @@ function DirectVideo({
   muted: boolean
   loop: boolean
   letterbox?: string
+  paused?: boolean
+  restartSignal?: number
 }) {
   // ExpoVideo es no-null por el guard del padre.
   const mod = ExpoVideo as ExpoVideoModule
@@ -269,6 +335,25 @@ function DirectVideo({
   useEffect(() => {
     player.muted = muted
   }, [player, muted])
+
+  // Pausa/reanudar (controles glass QA5): refleja `paused` en el player nativo.
+  useEffect(() => {
+    if (paused) player.pause()
+    else player.play()
+  }, [player, paused])
+
+  // Reinicio (QA5): ignora el primer disparo (montaje) y vuelve al recorte `start` en los siguientes.
+  const restartMounted = useRef(false)
+  useEffect(() => {
+    if (restartSignal == null) return
+    if (!restartMounted.current) {
+      restartMounted.current = true
+      return
+    }
+    player.currentTime = start
+    player.play()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [restartSignal])
 
   // Recorte del coach: al cruzar `end`, volver a `start` (loop del tramo).
   useEffect(() => {

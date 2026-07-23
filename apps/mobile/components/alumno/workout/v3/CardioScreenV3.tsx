@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Pressable, Text, TouchableOpacity, View } from 'react-native'
 import { MotiView } from 'moti'
-import { HeartPulse, Pause, Play, Repeat, Ruler, Timer, Watch, Zap } from 'lucide-react-native'
+import { HeartPulse, Pause, Play, Repeat, RotateCcw, Ruler, Timer, Watch, Zap } from 'lucide-react-native'
 import {
   INTERVAL_PHASE_LABEL,
   buildIntervalPhases,
@@ -22,7 +22,7 @@ import type { SessionBlock, SessionDraft, SessionExercise } from '../../../../li
 import { ActiveSetRow, SetRow } from '../SetRow'
 import { JuicyButton } from './JuicyButton'
 import { ProgressRing } from './ProgressRing'
-import { TypedMediaV3 } from './TypedMediaV3'
+import { TypedMediaV3, TypedInstructionsChip, hasExecMedia } from './TypedMediaV3'
 import { useCountdown, useIntervalRunner, useStopwatch } from './timing'
 import {
   PHASE_COLORS,
@@ -194,9 +194,13 @@ export function CardioScreenV3({
 
       {/* Media del catálogo — chips "Instrucciones" + "Nota del coach" DENTRO de la media (overlay
           superior-izquierdo), precedencia + audio en video (QA4). */}
-      <View style={{ width: '100%', height: 150, borderRadius: 22, overflow: 'hidden', borderWidth: 2, borderColor: s.borderStrong, backgroundColor: s.surfaceRaised }}>
-        <TypedMediaV3 exercise={exercise} exec={exec} accent={chipColor} coachNote={coachNote} IconFallback={HeartPulse} onOpenTechnique={onOpenTechnique} onOpenNote={() => setNoteOpen(true)} reducedMotion={reducedMotion} />
-      </View>
+      {hasExecMedia(exercise) ? (
+        <View style={{ width: '100%', height: 150, borderRadius: 22, overflow: 'hidden', borderWidth: 2, borderColor: s.borderStrong, backgroundColor: s.surfaceRaised }}>
+          <TypedMediaV3 exercise={exercise} exec={exec} accent={chipColor} coachNote={coachNote} IconFallback={HeartPulse} onOpenTechnique={onOpenTechnique} onOpenNote={() => setNoteOpen(true)} reducedMotion={reducedMotion} />
+        </View>
+      ) : (
+        <TypedInstructionsChip exercise={exercise} accent={chipColor} coachNote={coachNote} onOpenTechnique={onOpenTechnique} onOpenNote={() => setNoteOpen(true)} reducedMotion={reducedMotion} />
+      )}
 
       {/* HERO por modo */}
       {mode === 'interval' ? (
@@ -371,20 +375,23 @@ function CountdownHero({
 
   return (
     <View style={{ alignItems: 'center', gap: 12 }}>
-      <ProgressRing size={196} strokeWidth={22} fill={fill} color={zoneColor} trackColor="#26262f" reducedMotion={reducedMotion}>
-        <View style={{ alignItems: 'center' }}>
-          <MotiView
-            from={{ scale: 1 }}
-            animate={{ scale: reducedMotion ? 1 : 1.02 }}
-            transition={{ type: 'timing', duration: 1400, loop: !reducedMotion, repeatReverse: true }}
-          >
-            <Text style={{ fontFamily: FONT.displayBlack, fontSize: 54, letterSpacing: -2, lineHeight: 56, color: s.text, fontVariant: ['tabular-nums'] }}>
-              {formatClock(countdown.remaining)}
-            </Text>
-          </MotiView>
-          <Text style={{ fontFamily: FONT.uiBold, fontSize: 11, letterSpacing: 2, color: s.textMuted, textTransform: 'uppercase', marginTop: 6 }}>Restante</Text>
-        </View>
-      </ProgressRing>
+      <View style={{ width: '100%', alignItems: 'center', justifyContent: 'center' }}>
+        <ProgressRing size={196} strokeWidth={22} fill={fill} color={zoneColor} trackColor="#26262f" reducedMotion={reducedMotion}>
+          <View style={{ alignItems: 'center' }}>
+            <MotiView
+              from={{ scale: 1 }}
+              animate={{ scale: reducedMotion ? 1 : 1.02 }}
+              transition={{ type: 'timing', duration: 1400, loop: !reducedMotion, repeatReverse: true }}
+            >
+              <Text style={{ fontFamily: FONT.displayBlack, fontSize: 54, letterSpacing: -2, lineHeight: 56, color: s.text, fontVariant: ['tabular-nums'] }}>
+                {formatClock(countdown.remaining)}
+              </Text>
+            </MotiView>
+            <Text style={{ fontFamily: FONT.uiBold, fontSize: 11, letterSpacing: 2, color: s.textMuted, textTransform: 'uppercase', marginTop: 6 }}>Restante</Text>
+          </View>
+        </ProgressRing>
+        <RingRestart onPress={() => countdown.restart(durationSec)} />
+      </View>
       <PauseButton running={countdown.running} onToggle={countdown.toggle} exec={exec} reducedMotion={reducedMotion} />
       {/* Chips de métricas: SOLO objetivos derivables de la prescripción (nada inventado). */}
       <CardioChipsRow>
@@ -430,6 +437,8 @@ function IntervalHero({
 
   return (
     <View style={{ alignItems: 'center', gap: 12 }}>
+      {/* QA5 h3: fila relativa que centra el anillo y ancla el chip "Reiniciar" a un costado. */}
+      <View style={{ width: '100%', alignItems: 'center', justifyContent: 'center' }}>
       <ProgressRing
         size={224}
         strokeWidth={22}
@@ -454,7 +463,8 @@ function IntervalHero({
             <Text style={{ fontFamily: FONT.displayBlack, fontSize: 22, color: '#4ade80', textAlign: 'center' }}>¡Intervalos{'\n'}completados!</Text>
           ) : (
             <>
-              <Text style={{ fontFamily: FONT.displayBlack, fontSize: 15, letterSpacing: 3, textTransform: 'uppercase', color: phaseColor }}>
+              {/* QA5 h1: fase acotada dentro del anillo — sin chocar el trazo (≥10px de aire). */}
+              <Text numberOfLines={1} style={{ fontFamily: FONT.displayBlack, fontSize: 12, letterSpacing: 1.4, textTransform: 'uppercase', color: phaseColor, maxWidth: 150, textAlign: 'center' }}>
                 {phase ? INTERVAL_PHASE_LABEL[phase.kind] : ''}
               </Text>
               <MotiView
@@ -466,11 +476,14 @@ function IntervalHero({
                   {formatClock(runner.remaining)}
                 </Text>
               </MotiView>
-              <Text style={{ fontFamily: FONT.uiBold, fontSize: 10, letterSpacing: 1.5, color: s.textMuted, textTransform: 'uppercase', marginTop: 4 }}>Restante en fase</Text>
+              <Text numberOfLines={1} style={{ fontFamily: FONT.uiBold, fontSize: 10, letterSpacing: 1.2, color: s.textMuted, textTransform: 'uppercase', marginTop: 4, maxWidth: 150, textAlign: 'center' }}>Restante en fase</Text>
             </>
           )}
         </View>
       </ProgressRing>
+        {/* Reinicia los intervalos desde la primera fase (mecanismo `restart` del runner). */}
+        <RingRestart onPress={runner.restart} />
+      </View>
 
       {nextPhase && !runner.finished ? (
         <View
@@ -579,6 +592,25 @@ function StopwatchHero({
   )
 }
 
+// ─── Chip lateral "Reiniciar" del anillo (QA5 h3) — glass 32px anclado a un costado del anillo; reinicia
+//     el timer del ejercicio actual a su valor prescrito (mecanismo `restart` — NO toca el guardado). ──
+function RingRestart({ onPress }: { onPress: () => void }) {
+  return (
+    <Pressable
+      testID="btn-cardio-restart-v3"
+      onPress={onPress}
+      hitSlop={8}
+      accessibilityRole="button"
+      accessibilityLabel="Reiniciar el contador"
+      style={{ position: 'absolute', right: 4, top: 0, bottom: 0, justifyContent: 'center' }}
+    >
+      <View style={{ width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: '#2f2f3a', backgroundColor: '#1c1c24' }}>
+        <RotateCcw size={16} color="#b7b7c2" />
+      </View>
+    </Pressable>
+  )
+}
+
 // ─── Grilla de chips de métricas (D1) — look .a3a-cchip. SOLO datos derivables HOY; nada inventado. ──
 function CardioChipsRow({ children }: { children: React.ReactNode }) {
   return <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, width: '100%' }}>{children}</View>
@@ -616,7 +648,7 @@ function MetricChipRN({
         <Text style={{ fontFamily: FONT.displayBlack, fontSize: 15, color: '#eef4f6', fontVariant: ['tabular-nums'] }} numberOfLines={1}>
           {value}
         </Text>
-        <Text style={{ fontFamily: FONT.uiBold, fontSize: 9, letterSpacing: 0.7, textTransform: 'uppercase', color: '#7f7f8c', marginTop: 2 }}>
+        <Text style={{ fontFamily: FONT.uiBold, fontSize: 9, letterSpacing: 0.7, textTransform: 'uppercase', color: '#7f7f8c', marginTop: 4 }}>
           {label}
         </Text>
       </View>

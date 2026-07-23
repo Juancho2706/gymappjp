@@ -299,8 +299,9 @@ export function ExerciseScreenV3({
         )}
       </View>
 
-      {/* Fila "Anterior — toca para usar" (1-tap prefill de la serie activa). */}
-      {bestPrev && (
+      {/* Fila "Anterior — toca para usar" (1-tap prefill de la serie activa). QA5 h4: sólo si la sesión
+          previa registró AL MENOS un dato real (peso o reps); si no, no hay fila fantasma de guiones. */}
+      {bestPrev && (bestPrev.weight_kg != null || bestPrev.reps_done != null) && (
         <Pressable
           testID="btn-prev-autofill-v3"
           disabled={firstUnlogged == null}

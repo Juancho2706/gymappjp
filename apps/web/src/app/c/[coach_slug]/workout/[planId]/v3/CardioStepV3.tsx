@@ -283,6 +283,7 @@ function ContinuousFace({
 
     return (
         <div className="flex flex-col items-center gap-3">
+            <div className="exec-v3-ringrow">
             <button
                 type="button"
                 onClick={countdown.done ? countdown.restart : countdown.toggle}
@@ -316,6 +317,16 @@ function ContinuousFace({
                     <div className="exec-v3-holdlbl">{countdown.done ? 'Registra abajo' : 'Restante'}</div>
                 </div>
             </button>
+                {/* QA5 h3: reinicia el countdown a su duración prescrita (mecanismo `restart` del hook). */}
+                <button
+                    type="button"
+                    onClick={countdown.restart}
+                    className="exec-v3-restart"
+                    aria-label="Reiniciar el contador"
+                >
+                    <RotateCcw className="h-4 w-4" aria-hidden />
+                </button>
+            </div>
             <ZoneChip zone={zone} zoneRange={zoneRange} />
             {!countdown.done && <CardioPauseButton active={countdown.isActive} onToggle={countdown.toggle} />}
             {/* Chips de métricas: SOLO objetivos derivables de la prescripción (nada inventado). */}
@@ -362,6 +373,7 @@ function IntervalFace({
 
     return (
         <div className="flex flex-col items-center gap-2.5">
+            <div className="exec-v3-ringrow">
             <button
                 type="button"
                 onClick={finished ? runner.restart : runner.toggle}
@@ -398,6 +410,16 @@ function IntervalFace({
                     <div className="exec-v3-holdlbl">{finished ? 'Registra abajo' : 'Restante en fase'}</div>
                 </div>
             </button>
+                {/* QA5 h3: reinicia los intervalos desde la primera fase (mecanismo `restart` del runner). */}
+                <button
+                    type="button"
+                    onClick={runner.restart}
+                    className="exec-v3-restart"
+                    aria-label="Reiniciar el contador"
+                >
+                    <RotateCcw className="h-4 w-4" aria-hidden />
+                </button>
+            </div>
 
             {!finished && nextPhase && (
                 <div className="exec-v3-nextphase" style={{ '--np': phaseColor(nextPhase.kind) } as React.CSSProperties}>

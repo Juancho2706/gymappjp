@@ -1806,6 +1806,35 @@ body[data-exec-v3-toast] [data-sonner-toast][data-styled='true'] [data-descripti
   transform: translateY(1px);
   border-color: rgba(255, 255, 255, 0.28);
 }
+/* Fila de controles glass de la media de VIDEO (QA5): audio + pausa/reanudar + reiniciar. Esquina
+   inferior-derecha, 3 botones chicos con gap 6, mismo lenguaje glass que los chips. Sólo con kind
+   video/youtube (gif/imagen no llevan controles). Reemplaza al botón de audio suelto (.exec-v3-maudio). */
+[data-exec-v3] .exec-v3-mediactl {
+  position: absolute;
+  bottom: 10px;
+  right: 10px;
+  z-index: 4;
+  display: flex;
+  gap: 6px;
+}
+[data-exec-v3] .exec-v3-mctlbtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  background: rgba(8, 8, 12, 0.6);
+  -webkit-backdrop-filter: blur(2px);
+  backdrop-filter: blur(2px);
+  border: 1.5px solid rgba(255, 255, 255, 0.16);
+  color: #eaeaf0;
+  transition: color 0.12s ease, border-color 0.12s ease, transform 0.12s ease;
+}
+[data-exec-v3] .exec-v3-mctlbtn:active {
+  transform: translateY(1px);
+  border-color: rgba(255, 255, 255, 0.28);
+}
 [data-exec-v3] .exec-v3-mchip {
   position: relative;
   display: inline-flex;
@@ -4540,12 +4569,16 @@ html[data-exec-v3-entered] [data-exec-v3] .exec-v3-splash {
   color: var(--exec-brand);
 }
 [data-exec-v3] .exec-v3-holdlbl {
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 800;
-  letter-spacing: 0.16em;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
   color: #8fa3ab;
   margin-top: 8px;
+  /* QA5 h1: el label vive DENTRO del anillo — se acota para no tocar jamás el trazo (≥10px de aire). */
+  max-width: 130px;
+  text-align: center;
+  line-height: 1.25;
 }
 /* Affordance de tap DENTRO del anillo (QA4): integrado a la columna central, justo bajo el número —
    ya no un glifo suelto y minúsculo pegado abajo. 18px, gris claro visible (#b7b7c2). */
@@ -4561,10 +4594,43 @@ html[data-exec-v3-entered] [data-exec-v3] .exec-v3-splash {
   height: 18px;
 }
 [data-exec-v3] .exec-v3-phaselbl {
-  font-size: 14px;
+  font-size: 12px;
   font-weight: 900;
-  letter-spacing: 0.2em;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
+  /* QA5 h1: la fase (CALENTAMIENTO/…) queda dentro del anillo sin chocar el trazo. */
+  max-width: 130px;
+  text-align: center;
+  line-height: 1.2;
+}
+
+/* QA5 h3 — chip lateral "Reiniciar" del anillo (movilidad + cardio). Fila relativa que centra el anillo
+   y ancla el botón glass 32px a un costado; reinicia el timer del lado/ejercicio actual a su valor
+   prescrito (mecanismo `restart` del hook — NO toca el motor de guardado). */
+[data-exec-v3] .exec-v3-ringrow {
+  position: relative;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+[data-exec-v3] .exec-v3-restart {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  color: #b7b7c2;
+  background: #1c1c24;
+  border: 1.5px solid #2f2f3a;
+}
+[data-exec-v3] .exec-v3-restart:active {
+  transform: translateY(-50%) scale(0.92);
 }
 
 /* ---- Movilidad: pastilla de lado + "luego" ---- */
@@ -4663,11 +4729,11 @@ html[data-exec-v3-entered] [data-exec-v3] .exec-v3-splash {
   color: #7f7f8c;
   margin-top: 2px;
 }
-/* Botón HÉROE "+1 pasada" (mockup a3b .a3b-plusbtn): juicy grande, HÉROE de la fila (flex-1, más alto
-   que el −1 rojo). GOTCHA repo: nunca dos w-full en una fila → ambos flex-1. */
+/* Botón "+" del roller (QA5 h5): juicy marca, icono-only "+" grande (24px), MISMA altura que el "−"
+   rojo (ambos flex-1, 72px). GOTCHA repo: nunca dos w-full en una fila → ambos flex-1. */
 [data-exec-v3] .exec-v3-plusbtn {
   flex: 1 1 0;
-  height: 92px;
+  height: 72px;
   border-radius: 22px;
   font-size: 24px;
   display: flex;
@@ -4686,19 +4752,19 @@ html[data-exec-v3-entered] [data-exec-v3] .exec-v3-splash {
   background: color-mix(in srgb, var(--exec-brand-ink) 20%, transparent);
   color: var(--exec-brand-ink);
 }
-/* Fila de dos botones del roller (QA4): +1 héroe (flex-1, 92px) · −1 destructivo rojo (flex-1, 64px).
-   GOTCHA repo: jamás dos w-full en fila → cada uno flex-1; alineados al centro (el +1 es más alto). */
+/* Fila de dos botones del roller (QA5 h5): "+" juicy marca · "−" destructivo rojo, MISMA altura (72px)
+   y ambos flex-1. GOTCHA repo: jamás dos w-full en fila → cada uno flex-1. */
 [data-exec-v3] .exec-v3-rollbtns {
   display: flex;
-  align-items: center;
+  align-items: stretch;
   gap: 12px;
 }
-/* "−1 pasada" DESTRUCTIVO rojo (juicy-ghost): borde 2px rojo 55%, fondo rojo 14%, texto rojo, sombra
-   dura roja inferior; se hunde al presionar (paridad con el juicy). El héroe sigue siendo el +1. */
+/* "−" DESTRUCTIVO rojo (juicy-ghost): borde 2px rojo 55%, fondo rojo 14%, icono rojo, sombra dura roja
+   inferior; se hunde al presionar (paridad con el juicy). Icono-only, mismo tamaño que el "+". */
 [data-exec-v3] .exec-v3-minusred {
   flex: 1 1 0;
-  height: 64px;
-  border-radius: 18px;
+  height: 72px;
+  border-radius: 22px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -4834,6 +4900,9 @@ html[data-exec-v3-entered] [data-exec-v3] .exec-v3-splash {
 }
 [data-exec-v3] .exec-v3-cchip .exec-v3-cm {
   min-width: 0;
+  /* QA5 h2: número ARRIBA, palabra ABAJO — sin la columna se pegaban en una línea ("1:30TRABAJO"). */
+  display: flex;
+  flex-direction: column;
 }
 [data-exec-v3] .exec-v3-cchip .exec-v3-cv {
   font-size: 15px;
@@ -4848,7 +4917,7 @@ html[data-exec-v3-entered] [data-exec-v3] .exec-v3-splash {
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: #7f7f8c;
-  margin-top: 2px;
+  margin-top: 3px;
 }
 
 /* Chip de identidad en variante ámbar (z4) para cardio por intervalos (D5). El ámbar es TOKEN de zona

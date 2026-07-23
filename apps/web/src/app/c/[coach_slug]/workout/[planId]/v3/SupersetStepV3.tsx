@@ -253,7 +253,7 @@ export function SupersetStepV3({
 
                                         <div className="exec-v3-rx tabular-nums">{m.rxLabel}</div>
 
-                                        {m.bestPrev && (
+                                        {m.bestPrev && (m.bestPrev.weight_kg != null || m.bestPrev.reps_done != null) && (
                                             <button
                                                 type="button"
                                                 onClick={() =>
