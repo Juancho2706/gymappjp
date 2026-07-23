@@ -43,6 +43,7 @@ interface MorphState {
     startedAt: number
     startPath: string
     rect: Rect
+    label: string
     logoUrl: string | null
     initial: string | null
 }
@@ -94,11 +95,16 @@ export function WorkoutLaunchProvider({ children }: { children: React.ReactNode 
             const cs = window.getComputedStyle(el)
             const rect: Rect = { top: r.top, left: r.left, width: r.width, height: r.height, radius: parseFloat(cs.borderTopLeftRadius) || 14 }
             const brand = resolveLaunchBrand(el)
+            // Texto real del trigger ("Empezar entrenamiento" / "Continuar"): el clon lo usa para que el
+            // swap (ocultar original → mostrar clon) sea invisible en el CTA.
+            const label = (el.textContent || '').replace(/\s+/g, ' ').trim()
             activeRef.current = true
-            el.setAttribute('data-exec-morphing', '') // oculta el trigger real durante el vuelo
-            window.setTimeout(() => el.removeAttribute('data-exec-morphing'), 1200)
+            el.setAttribute('data-exec-morphing', '') // oculta el trigger real COMPLETO durante el vuelo
+            // Restaurar sólo bien después de que el wipe de marca ya cubrió todo (~1,2s) y de navegar
+            // (~1,3s, donde el dashboard se desmonta): así el trigger nunca reaparece a la vista.
+            window.setTimeout(() => el.removeAttribute('data-exec-morphing'), 1500)
 
-            setState({ href, startedAt: performance.now(), startPath: pathname, rect, logoUrl: brand.logoUrl, initial: brand.initial })
+            setState({ href, startedAt: performance.now(), startPath: pathname, rect, label, logoUrl: brand.logoUrl, initial: brand.initial })
             setAnimDone(false)
             setRouteReady(false)
             setForceReady(false)
@@ -143,6 +149,7 @@ export function WorkoutLaunchProvider({ children }: { children: React.ReactNode 
             {state && (
                 <DespegueOverlay
                     rect={state.rect}
+                    label={state.label}
                     logoUrl={state.logoUrl}
                     initial={state.initial}
                     ready={ready}
@@ -163,6 +170,7 @@ const PlayIcon = ({ size = 15 }: { size?: number }) => (
 
 function DespegueOverlay({
     rect,
+    label,
     logoUrl,
     initial,
     ready,
@@ -171,6 +179,7 @@ function DespegueOverlay({
     onTap,
 }: {
     rect: Rect
+    label: string
     logoUrl: string | null
     initial: string | null
     ready: boolean
@@ -185,15 +194,20 @@ function DespegueOverlay({
     const runPillMorph = useCallback((node: HTMLDivElement | null) => {
         if (!node || reduced) return
         const base = 'translate(-50%,-50%)'
+        // El easing va POR KEYFRAME (como CSS `@keyframes` + timing-function): la WAAPI aplica el
+        // `easing` de las OPCIONES al tiempo GLOBAL (deforma los offsets → la burbuja se formaba a
+        // ~700ms en vez de 304ms). Con `easing` por keyframe cada segmento usa la curva y los offsets
+        // caen en su tiempo real: colapsa a burbuja al 32% (304ms), anticipa, despega.
+        const ease = 'cubic-bezier(.6,0,.75,.4)'
         node.animate(
             [
-                { width: `${rect.width}px`, height: `${rect.height}px`, borderRadius: `${rect.radius}px`, transform: `${base} translateY(0) scale(1,1)`, offset: 0 },
-                { width: '52px', height: '52px', borderRadius: '50%', transform: `${base} translateY(0) scale(1,1)`, offset: 0.32 },
-                { width: '52px', height: '52px', borderRadius: '50%', transform: `${base} translateY(18px) scale(1.18,0.78)`, offset: 0.48 },
-                { width: '52px', height: '52px', borderRadius: '50%', transform: `${base} translateY(-60px) scale(0.9,1.3)`, offset: 0.6 },
+                { width: `${rect.width}px`, height: `${rect.height}px`, borderRadius: `${rect.radius}px`, transform: `${base} translateY(0) scale(1,1)`, offset: 0, easing: ease },
+                { width: '52px', height: '52px', borderRadius: '50%', transform: `${base} translateY(0) scale(1,1)`, offset: 0.32, easing: ease },
+                { width: '52px', height: '52px', borderRadius: '50%', transform: `${base} translateY(18px) scale(1.18,0.78)`, offset: 0.48, easing: ease },
+                { width: '52px', height: '52px', borderRadius: '50%', transform: `${base} translateY(-60px) scale(0.9,1.3)`, offset: 0.6, easing: ease },
                 { width: '52px', height: '52px', borderRadius: '50%', transform: `${base} translateY(-780px) scale(0.82,1.4)`, offset: 1 },
             ],
-            { duration: 950, easing: 'cubic-bezier(.6,0,.75,.4)', fill: 'forwards' }
+            { duration: 950, fill: 'forwards' }
         )
     }, [rect, reduced])
 
@@ -228,7 +242,7 @@ function DespegueOverlay({
                 >
                     {wideEnough && (
                         <span className="exec-dsp-pill-label">
-                            <PlayIcon /> Empezar entrenamiento
+                            <PlayIcon /> {label || 'Empezar entrenamiento'}
                         </span>
                     )}
                     <span className="exec-dsp-trail" />

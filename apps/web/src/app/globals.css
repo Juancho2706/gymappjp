@@ -3102,19 +3102,14 @@ html[data-exec-v3-entered] [data-exec-v3] .exec-v3-splash {
     animation: none;
   }
 }
-/* Fade-out del texto del trigger + scale 1.02 (fase 1). Sólo con movimiento permitido: para
-   prefers-reduced-motion el overlay hace crossfade directo y el trigger no se anima. */
-@media (prefers-reduced-motion: no-preference) {
-  [data-exec-morphing] {
-    transition: transform 0.12s ease;
-    transform: scale(1.02);
-  }
-  [data-exec-morphing] > * {
-    /* El texto no solo muere: cae 4px mientras se apaga (peso físico del tap). */
-    transition: opacity 0.12s ease, transform 0.12s ease;
-    opacity: 0;
-    transform: translateY(4px);
-  }
+/* El trigger clickeado (botón/card) se OCULTA POR COMPLETO mientras el clon del overlay morfea y
+   despega en su lugar. Antes sólo se ocultaban sus HIJOS (texto/icono): al colapsar el clon a burbuja
+   se veían los bordes de la CAJA de color del botón detrás → "el componente quedaba pegado" (QA CEO).
+   visibility:hidden borra el elemento entero de la pintura y CONSERVA su layout (sin reflow del
+   dashboard). El clon (mismo rect, color de marca) es lo único visible: parece que el componente
+   mismo se hizo burbuja. */
+[data-exec-morphing] {
+  visibility: hidden !important;
 }
 /* Aro de marca del logo en el morph: UNA respiración al aparecer (mismo lenguaje del halo del splash). */
 .exec-morph-avatar-ring {
