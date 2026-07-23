@@ -71,9 +71,9 @@ export function SessionStart({
     lastVolumeLabel,
     coachNote = null,
     coachName = null,
-    hasProgress,
+
     onStart,
-    onSkip,
+
     streak = null,
     reducedMotion,
 }: SessionStartProps) {
@@ -167,15 +167,7 @@ export function SessionStart({
                         <span className="exec-v3-play" aria-hidden /> EMPEZAR
                     </motion.button>
 
-                    {hasProgress && (
-                        <button
-                            type="button"
-                            onClick={onSkip}
-                            className="mt-3 w-full py-2 text-center text-[13px] font-bold text-on-dark-muted transition-colors hover:text-on-dark"
-                        >
-                            Saltar al ejercicio
-                        </button>
-                    )}
+                    {/* QA7 (decisión CEO): sin atajo "Saltar al ejercicio" — EMPEZAR es la única salida. */}
                 </div>
             </div>
         </motion.div>

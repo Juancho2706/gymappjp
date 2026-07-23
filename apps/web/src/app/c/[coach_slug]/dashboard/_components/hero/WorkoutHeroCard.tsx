@@ -1,5 +1,6 @@
 'use client'
 
+import { useState } from 'react'
 import Link from 'next/link'
 import { Check, Play } from 'lucide-react'
 import { Card } from '@/components/ui/card'
@@ -8,6 +9,8 @@ import { ProgressRing } from '@/components/ui/progress-ring'
 import { InfoTooltip } from '@/components/ui/info-tooltip'
 import { useTranslation } from '@/lib/i18n/LanguageContext'
 import { useBasePath } from '@/components/client/BasePathProvider'
+import { buildWorkoutFromDoneHref, buildWorkoutRepeatHref } from '@/lib/workout/executor-recovery'
+import { WorkoutDoneSheet } from '../program/WorkoutDoneSheet'
 import { useWorkoutLaunch } from '../launch/WorkoutLaunchMorph'
 import { cn } from '@/lib/utils'
 
@@ -43,6 +46,9 @@ export function WorkoutHeroCard({
     const base = useBasePath(`/c/${coachSlug}`)
     const { launch, morph } = useWorkoutLaunch()
     const workoutHref = `${base}/workout/${planId}`
+    // QA7: entreno de HOY ya completado → la "ventanita" de doble intención (Revisar y editar / Repetir
+    // hoy) en vez de ir directo al registro; el morph sale de la opción elegida. Antes se abría directo.
+    const [sheetOpen, setSheetOpen] = useState(false)
 
     const show = blocks.slice(0, 4)
     const more = blocks.length - show.length
@@ -53,12 +59,17 @@ export function WorkoutHeroCard({
     return (
         <Card variant="inverse" padding="lg" className="relative gap-0 shadow-[var(--shadow-lg)]">
             {isAlreadyLogged ? (
-                <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 rounded-card bg-[color-mix(in_srgb,var(--success-500)_22%,var(--surface-inverse))] backdrop-blur-sm">
+                <button
+                    type="button"
+                    onClick={() => setSheetOpen(true)}
+                    aria-label={`${title} · entrenamiento completado, revisar o repetir`}
+                    className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 rounded-card bg-[color-mix(in_srgb,var(--success-500)_22%,var(--surface-inverse))] backdrop-blur-sm"
+                >
                     <span className="flex h-12 w-12 items-center justify-center rounded-full bg-[var(--success-500)] text-white shadow-[0_0_24px_rgba(31,184,119,0.5)]">
                         <Check className="h-7 w-7" />
                     </span>
                     <p className="font-display text-sm font-black text-on-dark">Entrenamiento completado</p>
-                </div>
+                </button>
             ) : null}
             <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0 flex-1">
@@ -131,6 +142,12 @@ export function WorkoutHeroCard({
                         // QA6: intercepta el click para el morph de lanzamiento; navega al MISMO destino.
                         // Sin JS (o si preventDefault no corre) el Link navega normal — sin regresiones.
                         e.preventDefault()
+                        // QA7: si ya está completado, abre la ventanita de doble intención (el CTA queda
+                        // bajo el overlay, pero cubrimos el caso por robustez); si no, morph directo.
+                        if (isAlreadyLogged) {
+                            setSheetOpen(true)
+                            return
+                        }
                         launch(e.currentTarget, workoutHref)
                     }}
                     className={cn(buttonVariants({ variant: 'sport', size: 'lg' }), 'flex-1')}
@@ -139,6 +156,18 @@ export function WorkoutHeroCard({
                     {isAlreadyLogged ? 'Ver registro' : liveLogged > 0 ? 'Continuar' : 'Empezar entrenamiento'}
                 </Link>
             </div>
+            {isAlreadyLogged ? (
+                <WorkoutDoneSheet
+                    open={sheetOpen}
+                    onOpenChange={setSheetOpen}
+                    title={title}
+                    subtitle="Hoy"
+                    // HOY hecho → editar es el flujo normal de hoy (`?desde=hecho`); repetir arranca de cero.
+                    editHref={buildWorkoutFromDoneHref(base, planId)}
+                    repeatHref={buildWorkoutRepeatHref(base, planId)}
+                    onLaunch={launch}
+                />
+            ) : null}
             {morph}
         </Card>
     )

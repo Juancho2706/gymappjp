@@ -47,11 +47,11 @@ export function SessionStart({
   estimatedMin,
   coachNote,
   coachName,
-  hasPartialSession,
+
   weeklyStreak = null,
   reducedMotion = false,
   onStart,
-  onSkipToExercise,
+
 }: {
   exec: ExecTheme
   eyebrow: string
@@ -270,17 +270,7 @@ export function SessionStart({
           </View>
         ) : null}
 
-        {hasPartialSession && (
-          <Text
-            onPress={onSkipToExercise}
-            suppressHighlighting
-            accessibilityRole="button"
-            accessibilityLabel="Saltar al ejercicio en curso"
-            style={{ alignSelf: 'center', fontFamily: FONT.uiExtra, fontSize: 12, letterSpacing: 0.4, color: s.textMuted, paddingVertical: 12, marginBottom: 2 }}
-          >
-            Saltar al ejercicio
-          </Text>
-        )}
+        {/* QA7 (decisión CEO): sin atajo "Saltar al ejercicio" — EMPEZAR es la única salida. */}
 
         <JuicyButton
           testID="btn-start-session-v3"

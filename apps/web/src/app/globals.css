@@ -3087,6 +3087,66 @@ html[data-exec-v3-entered] [data-exec-v3] .exec-v3-splash {
   pointer-events: none;
 }
 
+/* ---- Loader de RUTA del ejecutor (QA7): cover con el look del splash V3 ----
+   Reemplaza el loader genérico (wordmark/variante/compuesto del coach) en `/workout/[planId]`. El App
+   Router desmontaba el overlay del morph al montar el fallback de la ruta → se veían loaders
+   encadenados antes del splash + posibles flashes de tema stale (bug QA CEO). Ahora la ruta pinta el
+   MISMO fondo del splash con la marca ACTUAL: `--exec-brand = var(--theme-primary)` (definida en :root
+   por el layout /c, jamás un default viejo). Fórmula del fondo copiada byte a byte de
+   `.exec-v3-splash` / `::after` / `.exec-v3-splash-av`. z-index 70 = igual que el splash (cubre el nav;
+   la cápsula móvil ya se oculta en /workout/, el sidebar desktop es sticky sin z propio). */
+.exec-route-cover {
+  --exec-brand: var(--theme-primary, #2680ff);
+  --exec-brand-ink: color-mix(in srgb, var(--theme-primary, #2680ff) 30%, #000);
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  overflow: hidden;
+  background: radial-gradient(
+    120% 90% at 50% 22%,
+    color-mix(in srgb, var(--exec-brand) 52%, color-mix(in srgb, var(--exec-brand) 18%, #05070a)) 0%,
+    color-mix(in srgb, var(--exec-brand) 22%, #0c0c11) 44%,
+    #0a0a0f 100%
+  );
+}
+.exec-route-cover::after {
+  content: '';
+  position: absolute;
+  inset: -40% -10% auto -10%;
+  height: 70%;
+  background: radial-gradient(
+    60% 60% at 50% 0%,
+    color-mix(in srgb, var(--exec-brand) 30%, transparent),
+    transparent 70%
+  );
+  pointer-events: none;
+}
+.exec-route-cover-stack {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.exec-route-cover-avatar {
+  position: relative;
+  width: 116px;
+  height: 116px;
+  border-radius: 50%;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, var(--exec-brand), color-mix(in srgb, var(--exec-brand) 48%, #000));
+  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.28), inset 0 -8px 16px rgba(0, 0, 0, 0.25);
+}
+.exec-route-cover-avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+}
+
 /* ---- Rueda de captura dual (E2.5) ----
    El diálogo portalea a <body> (fuera de [data-exec-v3]); por eso estas reglas NO llevan scope y el
    color de marca llega por `--exec-brand` inline (fallback `--sport-500`). Dos columnas scroll-snap

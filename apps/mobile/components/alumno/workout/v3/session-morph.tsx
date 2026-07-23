@@ -22,7 +22,7 @@ import { resolveExecTheme, type ExecTheme } from './exec-theme'
  * Espejo RN del "morph Impulso" (feature QA6, coreografía del jefe) — la transición del tap en
  * "Empezar entrenamiento" / day-card hacia el ejecutor V3. Reproduce la coreografía del contrato:
  *  (2) un clon del rect del trigger, con el color de MARCA del coach, se expande a pantalla completa
- *      (radius→0) en ~480ms con cubic-bezier(.22,1,.36,1);
+ *      (radius→0) en ~620ms con cubic-bezier(.22,1,.36,1);
  *  (3) desde ~300ms el sólido de marca cross-fadea al tono SPLASH (la misma fórmula del SessionIntro:
  *      radial de acento 0.52 sobre appBgSplash) y el logo del coach aparece al centro escalando 0.6→1
  *      hasta un círculo ~116px en la posición del avatar del splash;
@@ -42,16 +42,18 @@ import { resolveExecTheme, type ExecTheme } from './exec-theme'
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window')
 
-// Tiempos de la coreografía (contrato).
-const EXPAND_MS = 480
+// Tiempos de la coreografía (contrato — QA7: velocidad bajada por el jefe, espejo del web).
+const EXPAND_MS = 620
 const CROSSFADE_DELAY = 300
-const CROSSFADE_MS = 300
+const CROSSFADE_MS = 650
+const LOGO_DELAY = 260
+const LOGO_MS = 620
 const PREP_DELAY = 900
 const PREP_MS = 400
-const NAV_AT_MS = 140 // router.push al inicio de la fase 2
-const DISMISS_AT_MS = 820 // el destino ya montó su SessionIntro bajo el Modal → fade-out
+const NAV_AT_MS = 150 // router.push al inicio de la fase 2 (fase texto 150ms en el web)
+const DISMISS_AT_MS = 1000 // el destino ya montó su SessionIntro bajo el Modal → fade-out
 const DISMISS_FADE_MS = 220
-const SAFETY_MS = 2400 // red de seguridad: jamás dejar el overlay pegado
+const SAFETY_MS = 2600 // red de seguridad: jamás dejar el overlay pegado
 
 // Curva del contrato para la expansión del rect.
 const EASE_MORPH = Easing.bezier(0.22, 1, 0.36, 1)
@@ -253,7 +255,7 @@ function SessionMorphOverlay({
     } else {
       expand.value = withTiming(1, { duration: EXPAND_MS, easing: EASE_MORPH })
       splash.value = withDelay(CROSSFADE_DELAY, withTiming(1, { duration: CROSSFADE_MS }))
-      logo.value = withDelay(CROSSFADE_DELAY, withTiming(1, { duration: 420, easing: EASE_MORPH }))
+      logo.value = withDelay(LOGO_DELAY, withTiming(1, { duration: LOGO_MS, easing: EASE_MORPH }))
       prep.value = withDelay(PREP_DELAY, withTiming(1, { duration: PREP_MS }))
     }
 

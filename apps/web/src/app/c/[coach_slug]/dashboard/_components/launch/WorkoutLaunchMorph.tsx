@@ -86,8 +86,14 @@ export function useWorkoutLaunch() {
             setExpanded(false)
 
             // Handoff sin pop: el splash del ejecutor lee esta marca y llega ASENTADO (su avatar no
-            // re-anima desde scale 0.3 — el morph ya hizo esa entrada).
-            try { sessionStorage.setItem('eva:exec-v3-morph', '1') } catch { /* private mode */ }
+            // re-anima desde scale 0.3 — el morph ya hizo esa entrada). Guardamos también el logo para
+            // que el LOADER DE RUTA (`workout/[planId]/loading.tsx`) pinte el mismo círculo mientras el
+            // App Router desmonta este overlay y monta el splash SSR (handoff sin loaders genéricos).
+            try {
+                sessionStorage.setItem('eva:exec-v3-morph', '1')
+                if (brand.logoUrl) sessionStorage.setItem('eva:exec-v3-morph-logo', brand.logoUrl)
+                else sessionStorage.removeItem('eva:exec-v3-morph-logo')
+            } catch { /* private mode */ }
 
             const NAV_ERROR = 'No pudimos abrir tu sesión. Intenta de nuevo.'
             const go = () => {
@@ -107,7 +113,7 @@ export function useWorkoutLaunch() {
                     window.setTimeout(() => {
                         setExpanded(true)
                         go()
-                    }, 120)
+                    }, 150)
                 )
             }
 
@@ -177,7 +183,7 @@ function WorkoutLaunchMorph({
                     }
                     transition={
                         expanded
-                            ? { duration: 0.52, delay: 0.18, times: [0, 0.72, 1], ease: MORPH_EASE }
+                            ? { duration: 0.62, delay: 0.26, times: [0, 0.72, 1], ease: MORPH_EASE }
                             : { duration: 0.2 }
                     }
                 >
@@ -188,7 +194,7 @@ function WorkoutLaunchMorph({
                         aria-hidden
                         initial={{ opacity: 0, scale: 0.92 }}
                         animate={expanded ? { opacity: [0, 0.55, 0], scale: [0.92, 1.22, 1.3] } : { opacity: 0 }}
-                        transition={{ duration: 0.7, delay: 0.32, ease: 'easeOut' }}
+                        transition={{ duration: 0.8, delay: 0.44, ease: 'easeOut' }}
                     />
                 </motion.div>
             )}
@@ -245,14 +251,14 @@ function WorkoutLaunchMorph({
                           }
                         : {}
                 }
-                transition={{ duration: 0.48, ease: MORPH_EASE }}
+                transition={{ duration: 0.62, ease: MORPH_EASE }}
             />
             {/* Fondo splash (fórmula exacta) que cruza sobre el sólido desde ~300 ms + logo al centro. */}
             <motion.div
                 className="exec-morph-splashbg"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: expanded ? 1 : 0 }}
-                transition={{ duration: 0.5, delay: expanded ? 0.22 : 0, ease: 'easeOut' }}
+                transition={{ duration: 0.65, delay: expanded ? 0.3 : 0, ease: 'easeOut' }}
             >
                 {stack}
             </motion.div>

@@ -1661,7 +1661,7 @@ function TypedLogSetRow({
                 ref={formRef}
                 action={handleSubmit}
                 onKeyDown={handleFormKeyDown}
-                className={`grid ${gridCols} gap-2 ${perSide ? 'items-end' : 'items-center'} px-1.5 md:px-2 py-1.5`}
+                className={`grid ${gridCols} gap-2 items-center px-1.5 md:px-2 py-1.5`}
             >
                 <input type="hidden" name="block_id" value={blockId} />
                 <input type="hidden" name="set_number" value={setNumber} />
