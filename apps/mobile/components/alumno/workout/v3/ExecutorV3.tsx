@@ -54,6 +54,7 @@ import { ExecHeaderV3, type ExecDotState } from './ExecHeaderV3'
 import { resolveExecTheme } from './exec-theme'
 import { SessionIntro } from './SessionIntro'
 import { SessionStart, type StartChip, type StartExercisePreview } from './SessionStart'
+import { consumeMorphLaunch, signalMorphSceneReady } from './session-morph'
 import { ExerciseScreenV3 } from './ExerciseScreenV3'
 import { SupersetScreenV3, type SupersetMemberSub } from './SupersetScreenV3'
 import { supersetGroupLetter, memberLetter } from './superset-screen-model'
@@ -177,8 +178,17 @@ function ExecutorV3Inner({ planId, recoverDate, editDate }: { planId: string; re
   const restRoundContextRef = useRef<RestRoundContext | null>(null)
   // PR en vivo (E4.2): true cuando la serie recién cerrada fue récord → el interstitial muestra "+1 serie · ¡PR!".
   const restPrRef = useRef(false)
-  // Fase de presentacion V3: arranca en el splash (una vez por apertura) → Inicio → sesion.
-  const [phase, setPhase] = useState<ExecPhase>('intro')
+  // Fase de presentacion V3: arranca en el splash (una vez por apertura) → Inicio → sesion. EXCEPCION
+  // via-morph (Despegue): si llegamos por el morph de lanzamiento (marca consumida una sola vez al
+  // montar, espejo del sessionStorage 'eva:exec-v3-morph' del WEC web), SALTAMOS el SessionIntro y
+  // arrancamos DIRECTO en 'start' (Inicio) — el overlay "Despegue" ES el splash y cubre todo hasta el
+  // tap del alumno. `viaMorphRef` se captura en el lazy init (corre una vez) para avisar "escena lista".
+  const viaMorphRef = useRef(false)
+  const [phase, setPhase] = useState<ExecPhase>(() => {
+    const via = consumeMorphLaunch()
+    viaMorphRef.current = via
+    return via ? 'start' : 'intro'
+  })
 
   useEffect(() => () => { if (recentSetTimer.current) clearTimeout(recentSetTimer.current) }, [])
 
@@ -187,6 +197,12 @@ function ExecutorV3Inner({ planId, recoverDate, editDate }: { planId: string; re
     dayOfWeek, clientId, blocks, sections, supersetMembersByBlock, sessionLogs, previousHistory, lastSessionByBlock,
     exerciseMaxes, elapsedSec, isOnline, restoredDraft, saveDraft, logSet, finishSession,
   } = session
+
+  // Via-morph (Despegue): avisa al overlay de lanzamiento que la escena de Inicio ya cargó → habilita el
+  // tap "TOCA PARA COMENZAR". Se emite en cuanto `loading` cae a false (o de inmediato si ya venía listo).
+  useEffect(() => {
+    if (viaMorphRef.current && !loading) signalMorphSceneReady()
+  }, [loading])
 
   const { hasModule } = useEntitlements()
   const planHasHrZone = useMemo(() => blocks.some((b) => b.hr_zone != null), [blocks])

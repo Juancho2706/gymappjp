@@ -7,33 +7,29 @@ import { motion, useReducedMotion } from 'framer-motion'
 import { resolveLaunchBrand } from '@/lib/workout/exec-launch-brand'
 
 /**
- * Ejecutor V3 (QA6→QA8) — MORPH DE LANZAMIENTO. Puente visual dashboard→ejecutor: el trigger
- * (CTA "Empezar entrenamiento" o una day-card) se tiñe de MARCA y expande a pantalla completa,
- * cruza al tono del splash V3 y muestra el logo del coach + "PREPARANDO TU SESIÓN" con puntos
- * animados — el overlay ES el loader del workout mientras el App Router carga detrás.
+ * Ejecutor V3 — DESPEGUE (loader de lanzamiento del workout, diseño del CEO "Despegue Final").
  *
- * ARQUITECTURA (QA8, causa raíz del video del CEO): el overlay vivía en el árbol del DASHBOARD y el
- * `router.push` (con prefetch) hacía el swap en ~1 frame → el overlay moría ANTES de expandirse (corte
- * duro a la cover estática). Ahora vive en un PROVIDER montado en el layout `/c` — que PERSISTE entre
- * rutas — así la coreografía corre completa sobre la navegación y se despide sola cuando el destino ya
- * montó y cumplió el tiempo mínimo de la ceremonia.
+ * Puente dashboard→ejecutor: al tocar "Empezar entrenamiento" (o una day-card) la píldora del CTA
+ * morfea a burbuja, anticipa (squash) y DESPEGA con stretch + estela; el fondo de marca sube con un
+ * wipe cubriendo el dashboard; el logo del coach ATERRIZA con rebote + onda de impacto y queda en
+ * "PREPARANDO TU SESIÓN" con los dots en loop. Mientras tanto el App Router carga el ejecutor detrás.
  *
- * Coreografía: (1) tap → texto del trigger cae y se apaga 150ms; (2) clon del rect expande a inset:0
- * (620ms, cubic-bezier(.22,1,.36,1)) + `router.push`; (3) crossfade al tono splash + logo con
- * overshoot y aro que respira una vez; (4) "PREPARANDO TU SESIÓN · · ·" (puntos con rebote) — el
- * loader; (5) con la ruta montada y ≥1.6s de ceremonia → fade de salida 280ms revelando el splash SSR
- * (que llega ASENTADO vía la marca `eva:exec-v3-morph`). reduced-motion: crossfade simple.
+ * Contrato del CEO: la animación SIEMPRE se completa (aunque el workout cargue antes) y luego ESPERA
+ * el TAP del alumno para entrar a la pantalla de Inicio ("Día N · plan + EMPEZAR"). Por eso NO hay
+ * auto-dismiss: el overlay se despide sólo al tap, y sólo cuando ya está listo (animación terminada +
+ * ruta montada). El provider vive en el layout `/c` (persiste entre rutas) → el overlay sobrevive al
+ * swap del router. Toda la coreografía es CSS keyframes (transform/opacity, 60fps); ver globals.css
+ * `.exec-dsp*`. White-label: todo deriva de `--theme-primary`.
  */
 
-const MORPH_EASE = [0.22, 1, 0.36, 1] as const
-/** Tiempo mínimo del overlay (la ceremonia completa) antes de poder despedirse. */
-const MIN_HOLD_MS = 1600
-/** Fade de salida (revela el splash ya montado debajo). */
-const EXIT_MS = 280
+/** Animación "arribada" (logo aterrizado + PREPARANDO visible). Tras esto se puede habilitar el tap. */
+const ANIM_DONE_MS = 2700
+/** Fallback: si la ruta nunca commitea, habilitar el tap igual para no dejar al alumno atrapado. */
+const READY_FALLBACK_MS = 4500
+/** Fade de salida al tap (revela la pantalla de Inicio ya montada debajo). */
+const EXIT_MS = 320
 
 interface MorphState {
-    rect: { top: number; left: number; width: number; height: number }
-    radius: number
     href: string
     startedAt: number
     startPath: string
@@ -56,15 +52,17 @@ export function useWorkoutLaunch(): { launch: (el: HTMLElement, href: string) =>
     return { launch: ctx?.launch ?? (() => {}), morph: null }
 }
 
-/** Provider del morph — montar UNA vez en el layout `/c` envolviendo `{children}`. */
+/** Provider del Despegue — montar UNA vez en el layout `/c` envolviendo `{children}`. */
 export function WorkoutLaunchProvider({ children }: { children: React.ReactNode }) {
     const router = useRouter()
     const pathname = usePathname()
     const reduced = useReducedMotion()
     const [state, setState] = useState<MorphState | null>(null)
-    const [expanded, setExpanded] = useState(false)
+    const [animDone, setAnimDone] = useState(false)
+    const [routeReady, setRouteReady] = useState(false)
+    const [forceReady, setForceReady] = useState(false)
     const [leaving, setLeaving] = useState(false)
-    const activeElRef = useRef<HTMLElement | null>(null)
+    const activeRef = useRef(false)
     const timersRef = useRef<number[]>([])
 
     const clearTimers = useCallback(() => {
@@ -74,235 +72,159 @@ export function WorkoutLaunchProvider({ children }: { children: React.ReactNode 
 
     const clearAll = useCallback(() => {
         clearTimers()
-        const el = activeElRef.current
-        if (el) el.removeAttribute('data-exec-morphing')
-        activeElRef.current = null
-        setExpanded(false)
-        setLeaving(false)
+        activeRef.current = false
         setState(null)
+        setAnimDone(false)
+        setRouteReady(false)
+        setForceReady(false)
+        setLeaving(false)
     }, [clearTimers])
-
-    // Aborto SILENCIOSO: la navegación nunca cambió la ruta (RSC abortado / dedupe / edge server) →
-    // retiramos el overlay sin un toast alarmante (el dashboard ya está debajo, el alumno reintenta).
-    // Limpiamos la marca de morph para que un lanzamiento posterior no herede la ceremonia.
-    const abortSilently = useCallback(() => {
-        try { sessionStorage.removeItem('eva:exec-v3-morph') } catch { /* private */ }
-        clearAll()
-    }, [clearAll])
 
     const launch = useCallback(
         (el: HTMLElement, href: string) => {
-            if (activeElRef.current || state) return // guard anti doble-tap
-            const rect = el.getBoundingClientRect()
-            const cs = window.getComputedStyle(el)
-            const radius = parseFloat(cs.borderTopLeftRadius) || 0
+            if (activeRef.current || state) return // guard anti doble-tap
             const brand = resolveLaunchBrand(el)
-
-            activeElRef.current = el
+            activeRef.current = true
             el.setAttribute('data-exec-morphing', '')
-            setState({
-                rect: { top: rect.top, left: rect.left, width: rect.width, height: rect.height },
-                radius,
-                href,
-                startedAt: performance.now(),
-                startPath: pathname,
-                logoUrl: brand.logoUrl,
-                initial: brand.initial,
-            })
-            setExpanded(false)
+            // El trigger real se oculta durante el vuelo (el clon vive en el overlay). Se restaura al limpiar.
+            window.setTimeout(() => el.removeAttribute('data-exec-morphing'), 700)
+
+            setState({ href, startedAt: performance.now(), startPath: pathname, logoUrl: brand.logoUrl, initial: brand.initial })
+            setAnimDone(false)
+            setRouteReady(false)
+            setForceReady(false)
             setLeaving(false)
 
-            // Handoff: el ejecutor lee esta marca → SIEMPRE ceremonia completa (splash → Inicio) y el
-            // avatar del splash llega ASENTADO (la entrada ya la hizo este overlay).
+            // El ejecutor lee esta marca → salta el splash viejo y va DIRECTO a Inicio (el Despegue ES el
+            // splash), y llega asentado.
             try {
                 sessionStorage.setItem('eva:exec-v3-morph', '1')
                 if (brand.logoUrl) sessionStorage.setItem('eva:exec-v3-morph-logo', brand.logoUrl)
                 else sessionStorage.removeItem('eva:exec-v3-morph-logo')
             } catch { /* private mode */ }
 
-            const go = () => {
-                try {
-                    router.push(href)
-                } catch {
-                    abortSilently()
-                }
-            }
-
-            if (reduced) {
-                go()
-            } else {
-                // Fase 1 (0–150ms): el texto del trigger cae y se apaga (CSS). Fase 2: expansión + push.
-                timersRef.current.push(
-                    window.setTimeout(() => {
-                        setExpanded(true)
-                        go()
-                    }, 150)
-                )
-            }
-
-            // Safety SILENCIOSO: con loading.tsx la ruta commitea (pathname cambia) muy por debajo de
-            // esto; si a los 3,5s NO cambió, el push no prosperó → retiramos el overlay sin error rojo.
-            // El camino feliz cancela este timer al despedirse (clearAll limpia todos los timers).
-            timersRef.current.push(window.setTimeout(abortSilently, 3500))
+            // Navegación en paralelo (la ruta carga detrás del Despegue).
+            timersRef.current.push(window.setTimeout(() => {
+                try { router.push(href) } catch { /* si falla, el fallback habilita el tap y el alumno reintenta */ }
+            }, 120))
+            // La animación siempre corre completa: a los ANIM_DONE_MS habilitamos el tap (si además la ruta
+            // ya montó). El fallback lo habilita pase lo que pase, para no atrapar al alumno.
+            timersRef.current.push(window.setTimeout(() => setAnimDone(true), ANIM_DONE_MS))
+            timersRef.current.push(window.setTimeout(() => setForceReady(true), READY_FALLBACK_MS))
         },
-        [abortSilently, pathname, reduced, router, state]
+        [pathname, router, state]
     )
 
-    // Despedida: la ruta destino ya montó (pathname cambió) → esperar el resto de la ceremonia mínima
-    // y hacer fade de salida. El splash SSR ya está debajo con el MISMO fondo/avatar.
+    // Ruta montada (pathname cambió respecto al de lanzamiento).
     useEffect(() => {
-        if (!state || leaving) return
-        if (pathname === state.startPath) return
-        const elapsed = performance.now() - state.startedAt
-        const wait = Math.max(0, MIN_HOLD_MS - elapsed)
-        const t1 = window.setTimeout(() => setLeaving(true), wait)
-        const t2 = window.setTimeout(() => clearAll(), wait + EXIT_MS + 60)
-        timersRef.current.push(t1, t2)
-        return () => {
-            window.clearTimeout(t1)
-            window.clearTimeout(t2)
-        }
-    }, [pathname, state, leaving, clearAll])
+        if (state && !routeReady && pathname !== state.startPath) setRouteReady(true)
+    }, [pathname, state, routeReady])
+
+    const ready = !!state && animDone && (routeReady || forceReady)
+
+    // Tap del alumno (sólo cuando está listo): fade de salida → revela Inicio y limpia.
+    const dismiss = useCallback(() => {
+        if (!ready || leaving) return
+        try { sessionStorage.removeItem('eva:exec-v3-morph') } catch { /* private */ }
+        // La marca ya la consumió el ejecutor al montar; removerla aquí es defensivo (nav lenta).
+        setLeaving(true)
+        timersRef.current.push(window.setTimeout(clearAll, EXIT_MS + 40))
+    }, [ready, leaving, clearAll])
 
     useEffect(() => () => clearTimers(), [clearTimers])
 
     return (
         <WorkoutLaunchContext.Provider value={{ launch }}>
             {children}
-            {state && <MorphOverlay state={state} expanded={expanded} leaving={leaving} reduced={!!reduced} />}
+            {state && (
+                <DespegueOverlay
+                    logoUrl={state.logoUrl}
+                    initial={state.initial}
+                    ready={ready}
+                    leaving={leaving}
+                    reduced={!!reduced}
+                    onTap={dismiss}
+                />
+            )}
         </WorkoutLaunchContext.Provider>
     )
 }
 
-function MorphOverlay({
-    state,
-    expanded,
+const PlayIcon = ({ size = 15 }: { size?: number }) => (
+    <svg width={size} height={size} viewBox="0 0 16 16" aria-hidden>
+        <path d="M4 2l10 6-10 6z" fill="#ffffff" />
+    </svg>
+)
+
+function DespegueOverlay({
+    logoUrl,
+    initial,
+    ready,
     leaving,
     reduced,
+    onTap,
 }: {
-    state: MorphState
-    expanded: boolean
+    logoUrl: string | null
+    initial: string | null
+    ready: boolean
     leaving: boolean
     reduced: boolean
+    onTap: () => void
 }) {
     const [mounted, setMounted] = useState(false)
-    const [showPrep, setShowPrep] = useState(false)
-
     useEffect(() => setMounted(true), [])
-    useEffect(() => {
-        if (reduced) {
-            setShowPrep(true)
-            return
-        }
-        const t = window.setTimeout(() => setShowPrep(true), 700)
-        return () => window.clearTimeout(t)
-    }, [reduced])
-
     if (!mounted) return null
-
-    // `--exec-brand` = var(--theme-primary) → MISMA fórmula/tono que el splash V3 (white-label safe).
-    const brandVars = {
-        '--exec-brand': 'var(--theme-primary, #2680FF)',
-        '--exec-brand-ink': 'color-mix(in srgb, var(--theme-primary, #2680FF) 30%, #000)',
-    } as React.CSSProperties
-
-    const avatar = state.logoUrl ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={state.logoUrl} alt="" className="exec-morph-avatar-img" />
-    ) : (
-        <span className="exec-morph-avatar-initial">{state.initial || '•'}</span>
-    )
-
-    const stack = (
-        <div className="exec-morph-stack">
-            {reduced ? (
-                <div className="exec-morph-avatar">{avatar}</div>
-            ) : (
-                <motion.div
-                    className="exec-morph-avatar"
-                    initial={{ opacity: 0, scale: 0.6 }}
-                    animate={expanded ? { opacity: 1, scale: [0.6, 1.045, 1] } : { opacity: 0, scale: 0.6 }}
-                    transition={
-                        expanded
-                            ? { duration: 0.62, delay: 0.26, times: [0, 0.72, 1], ease: MORPH_EASE }
-                            : { duration: 0.2 }
-                    }
-                >
-                    {avatar}
-                    {/* Aro de marca: una sola respiración al asentarse el logo. */}
-                    <motion.span
-                        className="exec-morph-avatar-ring"
-                        aria-hidden
-                        initial={{ opacity: 0, scale: 0.92 }}
-                        animate={expanded ? { opacity: [0, 0.55, 0], scale: [0.92, 1.22, 1.3] } : { opacity: 0 }}
-                        transition={{ duration: 0.8, delay: 0.44, ease: 'easeOut' }}
-                    />
-                </motion.div>
-            )}
-            {/* Reserva la altura del título del día del splash → alinea el avatar con el del splash. */}
-            <div className="exec-morph-dayspacer" aria-hidden />
-            <motion.div
-                className="exec-morph-prep"
-                initial={false}
-                animate={{ opacity: showPrep ? 1 : 0 }}
-                transition={{ duration: reduced ? 0 : 0.3 }}
-            >
-                Preparando tu sesión
-                <span className="exec-morph-dots" aria-hidden>
-                    <i /><i /><i />
-                </span>
-            </motion.div>
-        </div>
-    )
 
     return createPortal(
         <motion.div
-            className="exec-morph"
-            style={brandVars}
-            aria-hidden
+            className={`exec-dsp${ready ? ' is-ready' : ''}`}
+            aria-label="Preparando tu sesión"
+            role="status"
             initial={false}
             animate={{ opacity: leaving ? 0 : 1 }}
-            transition={{ duration: reduced ? 0.12 : EXIT_MS / 1000, ease: 'easeOut' }}
+            transition={{ duration: leaving ? EXIT_MS / 1000 : 0, ease: 'easeOut' }}
         >
-            {reduced ? (
-                <motion.div
-                    className="exec-morph-splashbg"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ duration: 0.2 }}
-                >
-                    {stack}
-                </motion.div>
-            ) : (
-                <>
-                    {/* Clon del rect del trigger: sólido de marca que expande a pantalla completa. */}
-                    <motion.div
-                        className="exec-morph-clone"
-                        initial={{
-                            top: state.rect.top,
-                            left: state.rect.left,
-                            width: state.rect.width,
-                            height: state.rect.height,
-                            borderRadius: state.radius,
-                        }}
-                        animate={
-                            expanded
-                                ? { top: 0, left: 0, width: window.innerWidth, height: window.innerHeight, borderRadius: 0 }
-                                : {}
-                        }
-                        transition={{ duration: 0.62, ease: MORPH_EASE }}
-                    />
-                    {/* Fondo splash (fórmula exacta) que cruza sobre el sólido + logo al centro. */}
-                    <motion.div
-                        className="exec-morph-splashbg"
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: expanded ? 1 : 0 }}
-                        transition={{ duration: 0.65, delay: expanded ? 0.3 : 0, ease: 'easeOut' }}
-                    >
-                        {stack}
-                    </motion.div>
-                </>
+            {/* Fondo de marca que sube (wipe) + estelas de luz. */}
+            <div className="exec-dsp-bg" aria-hidden>
+                <span className="exec-dsp-line" style={{ left: '22%', height: 120, animation: 'exec-dsp-line 0.7s ease-in 0.95s both' }} />
+                <span className="exec-dsp-line" style={{ left: '58%', height: 180, animation: 'exec-dsp-line 0.8s ease-in 1.05s both' }} />
+                <span className="exec-dsp-line" style={{ left: '80%', height: 90, animation: 'exec-dsp-line 0.65s ease-in 1.15s both' }} />
+            </div>
+
+            {/* Píldora del CTA que morfea y despega (oculta en reduced-motion). */}
+            {!reduced && (
+                <div className="exec-dsp-pill" aria-hidden>
+                    <span className="exec-dsp-pill-label">
+                        <PlayIcon /> Empezar entrenamiento
+                    </span>
+                    <span className="exec-dsp-trail" />
+                </div>
             )}
+
+            {/* Centro: logo del coach que aterriza + "PREPARANDO TU SESIÓN" con dots. */}
+            <div className="exec-dsp-center">
+                <div className="exec-dsp-logo-wrap">
+                    <span className="exec-dsp-ring" aria-hidden />
+                    <div className="exec-dsp-logo">
+                        {logoUrl ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={logoUrl} alt="" className="exec-dsp-logo-img" />
+                        ) : initial ? (
+                            <span className="exec-dsp-logo-initial">{initial}</span>
+                        ) : (
+                            <PlayIcon size={38} />
+                        )}
+                    </div>
+                </div>
+                <div className="exec-dsp-prep">
+                    <span className="exec-dsp-prep-t">PREPARANDO TU SESIÓN</span>
+                    <span className="exec-dsp-dots" aria-hidden><i /><i /><i /></span>
+                </div>
+            </div>
+
+            <div className="exec-dsp-hint">TOCA PARA COMENZAR</div>
+            {/* Capa de tap: sólo activa cuando está listo (animación completa + ruta montada). */}
+            {ready && <button type="button" className="exec-dsp-tap" onClick={onTap} aria-label="Comenzar entrenamiento" />}
         </motion.div>,
         document.body
     )

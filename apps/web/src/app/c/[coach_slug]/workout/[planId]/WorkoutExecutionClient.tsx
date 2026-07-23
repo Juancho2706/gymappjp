@@ -1414,9 +1414,10 @@ export function WorkoutExecutionClient({
                 viaMorph = sessionStorage.getItem('eva:exec-v3-morph') === '1'
                 if (viaMorph) sessionStorage.removeItem('eva:exec-v3-morph')
             } catch { /* SSR / private */ }
-            // QA8: llegar por el MORPH = ceremonia completa SIEMPRE (splash → Inicio), aunque ya se
-            // haya entrado hoy; el splash llega ASENTADO (viaMorph) porque la entrada la hizo el overlay.
-            setExecV3Phase(viaMorph || !entered ? 'intro' : 'session')
+            // Despegue: llegar por el MORPH salta el splash viejo (SessionIntro) y va DIRECTO a Inicio —
+            // el overlay "Despegue" del layout /c ES el splash y cubre todo hasta el tap del alumno.
+            // Sin morph: entrada normal (splash SessionIntro si no se entró hoy).
+            setExecV3Phase(viaMorph ? 'start' : entered ? 'session' : 'intro')
             setExecV3ViaMorph(viaMorph)
         }
         // La marca del script inline ya cumplio (evito el flash del splash SSR en reload mid-entreno).
