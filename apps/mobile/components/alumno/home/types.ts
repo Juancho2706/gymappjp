@@ -80,7 +80,7 @@ export interface HomeData {
   checkIns: CheckInPoint[]
   habitsToday: HabitsData | null
   welcomeModal: WelcomeModalConfig | null
-  /** §3 Racha — valor del RPC `get_client_current_streak` (MISMA fuente que web). */
+  /** §3 Racha — RPC `get_client_current_streak` (MISMA fuente que web): dias ASIGNADOS hechos; dia sin asignacion = neutro (migracion 20260723110000). */
   streak: number
 }
 

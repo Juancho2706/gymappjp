@@ -140,10 +140,11 @@ export default function AlumnoHomeScreen() {
         // §1 — anuncios de org (solo si el alumno pertenece a una org).
         client.orgId ? getActiveOrgAnnouncements(client.orgId) : Promise.resolve([]),
         // §3 Racha — 1:1 con web: MISMO RPC (`get_client_current_streak`) que el
-        // dashboard web (StreakRibbonSection). Cuenta workout_logs + comidas
-        // completadas, con dia de gracia (racha viva si la ultima actividad fue
-        // hoy U ayer). Evita el drift de derivar local, que exigia entrenar HOY e
-        // ignoraba la nutricion → mostraba "Empieza tu racha hoy" de mas.
+        // dashboard web (StreakRibbonSection). Regla "dias asignados" (CEO 2026-07-22,
+        // migracion 20260723110000): dia asignado hecho = +1; asignado sin entrenar
+        // nada = corta (hoy en curso no corta; recuperar despues no repara); dia libre
+        // recuperando un dia perdido de la MISMA semana = +1; repeticion/sesion libre =
+        // neutro; nutricion FUERA; sin programa activo todo dia entrenado suma.
         supabase.rpc('get_client_current_streak', { p_client_id: client.id }),
       ])
 
