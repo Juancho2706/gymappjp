@@ -470,7 +470,9 @@ export default function AlumnoHomeScreen() {
             // neutro pero SIN entrada de UI aun: el sheet deshabilita "Revisar y editar" porque el
             // guardado RN todavia escribe HOY (el solo-UPDATE por target_date es un server action web,
             // E1.5). El editor de fecha pasada RN llega en ola posterior y reactivara ese onReview.
-            onRecover={(id, fecha) => router.push({ pathname: '/alumno/workout/[planId]', params: { planId: id, recuperar: fecha } })}
+            // Recuperar dispara el MISMO Despegue que el CTA/day-cards (con el param `recuperar`); el
+            // origin (rect del banner/card) lo pasa ActiveProgramSection para que el morph nazca de él.
+            onRecover={(id, fecha, origin) => startMorph({ planId: id, origin, params: { recuperar: fecha } })}
           />
         </View>
 
