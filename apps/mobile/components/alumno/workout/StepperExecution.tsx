@@ -88,11 +88,15 @@ export function StepperExecution({
   currentIndex,
   onIndexChange,
   renderStep,
+  bottomClearance = FINISH_BAR_CLEARANCE,
 }: {
   steps: StepperStepView[]
   currentIndex: number
   onIndexChange: (index: number) => void
   renderStep: (index: number) => ReactNode
+  /** Respiro inferior del scroll. Default 128 (V2, deja libre la barra fija "Finalizar"). V3 retiró la
+   *  barra (decisión CEO 2026-07-22) → pasa un valor menor (80) para no dejar un hueco fantasma. */
+  bottomClearance?: number
 }) {
   const motion = useEvaMotion()
   const insets = useSafeAreaInsets()
@@ -186,7 +190,7 @@ export function StepperExecution({
           chrome/rail/pie — igual que el `drag` del web va SÓLO en el `motion.div` del pager
           (:145-152): un pan sobre el chrome, rail o pie NO navega (paridad estricta). */}
       <ScrollView
-        contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: FINISH_BAR_CLEARANCE + insets.bottom }}
+        contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: bottomClearance + insets.bottom }}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >

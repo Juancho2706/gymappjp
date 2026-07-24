@@ -2,7 +2,7 @@
 
 import { useActionState, useEffect, useRef, useOptimistic, useState, startTransition, type RefObject } from 'react'
 import { useParams } from 'next/navigation'
-import { Check, Loader2, StickyNote, CloudOff } from 'lucide-react'
+import { Check, Loader2, StickyNote, CloudOff, ChevronDown, HelpCircle, X } from 'lucide-react'
 import { useFormStatus } from 'react-dom'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { toast } from 'sonner'
@@ -145,6 +145,23 @@ interface Props {
      */
     v3?: boolean
     /**
+     * Ejecutor V3 · captura HERO (informe 03 · BLOCKER): sólo lo pasa `ExerciseStepV3`. Cuando true y la
+     * fila es la ACTIVA, se renderiza la superficie del mockup a3a — dos tiles de valor grandes (los
+     * mismos `<input>` kg/reps restilizados, sin cambiar refs/handlers), panel de esfuerzo compacto con
+     * pills RPE/RIR + escala de ticks, y un CTA único full-width "Aplastar serie". El motor de guardado
+     * (submit/draft/cola/reconciliación) es EXACTAMENTE el mismo; sólo cambia el RENDER. Ausente/false ⇒
+     * la fila V2/V3-lista byte-idéntica. Requiere `v3` para el gate de rueda/RIR-0.
+     */
+    heroV3?: boolean
+    /**
+     * Ejecutor V3 · panel de esfuerzo COLAPSABLE (QA2 hallazgo 3): estado expandido/colapsado del panel
+     * RPE/RIR del hero, LEVANTADO al `ExerciseStepV3` (por-ejercicio) para que persista entre series del
+     * MISMO ejercicio y se colapse al cambiar de ejercicio. Aditivo: sin la prop, el hero usa estado
+     * local (colapsado por default). NO toca el guardado de rpe/rir — sólo si el panel se ve expandido.
+     */
+    effortExpanded?: boolean
+    onEffortExpandedChange?: (v: boolean) => void
+    /**
      * Movilidad POR LADO (E3.2 · executor-v3): `side_mode` del bloque. Cuando es `'per_side'` la fila de
      * movilidad captura DOS holds (`hold_left_sec` / `hold_right_sec`) que el engine (`typedLogValues`)
      * mapea a `metadata {left_sec, right_sec}` + suma en `actual_hold_sec`. Cualquier otro valor (o
@@ -164,6 +181,14 @@ interface Props {
      * uncontrolled que `typedPrefill`/`prefill`; NO cambia el motor de logging. Solo el flujo cardio lo pasa.
      */
     suggestedAvgHr?: { bpm: number; nonce: number }
+    /**
+     * Auto-llenado del HOLD cronometrado (QA4 · movilidad): al detener/completar el anillo de hold, el
+     * `MobilityStepV3` vuelca los segundos sostenidos en el input de la fila activa al cambiar `nonce`.
+     * Uncontrolled (mutación de ref, sin re-render) — mismo patrón que `typedPrefill`/`suggestedAvgHr`;
+     * NO cambia el motor de logging. En per_side usa `leftSec`/`rightSec` (dos inputs); bilateral usa
+     * `holdSec`. Sólo el flujo movilidad V3 lo pasa; sin él la fila no cambia.
+     */
+    holdPrefill?: { holdSec?: number | null; leftSec?: number | null; rightSec?: number | null; nonce: number }
 }
 
 /** Estado de sincronización de una serie de cara al usuario (contrato a). */
@@ -209,6 +234,9 @@ function StrengthLogSetForm({
     onLogged,
     onResult,
     v3 = false,
+    heroV3 = false,
+    effortExpanded,
+    onEffortExpandedChange,
 }: Props) {
     const params = useParams<{ coach_slug: string; planId: string }>()
     // Teclado numérico custom (Fase L · workstream B). Gate por puntero grueso: en desktop el input
@@ -316,6 +344,21 @@ function StrengthLogSetForm({
     const [rir, setRir] = useState<number | null>(
         existingLog?.rir != null && existingLog.rir >= rirMin && existingLog.rir <= 10 ? existingLog.rir : null,
     )
+    // Captura HERO (informe 03): qué escala de esfuerzo muestra el panel compacto (pills RPE/RIR). Sólo
+    // presentación — ambos siguen siendo opcionales y viajan por setRpe/setRir sin tocar el submit.
+    const [effortMetric, setEffortMetric] = useState<'rpe' | 'rir'>(
+        rir != null ? 'rir' : rpe != null ? 'rpe' : 'rir',
+    )
+    // Panel de esfuerzo COLAPSABLE (QA2 hallazgo 3). Colapsado por default. El estado real lo levanta
+    // `ExerciseStepV3` (por-ejercicio, persiste entre series y se colapsa al cambiar de ejercicio); si no
+    // llega la prop controlada, cae a este estado local. `effHelpOpen` = mini-sheet (?) RPE/RIR.
+    const [localEffortExpanded, setLocalEffortExpanded] = useState(false)
+    const [effHelpOpen, setEffHelpOpen] = useState(false)
+    const effExpanded = effortExpanded ?? localEffortExpanded
+    const setEffExpanded = (val: boolean) => {
+        if (onEffortExpandedChange) onEffortExpandedChange(val)
+        else setLocalEffortExpanded(val)
+    }
     // Nota rápida por serie (quick-win E2-6). Source of truth = state; viaja por un mirror oculto.
     const [note, setNote] = useState(existingLog?.note ?? '')
     const [noteOpen, setNoteOpen] = useState(false)
@@ -519,11 +562,19 @@ function StrengthLogSetForm({
         keypad?.refreshDisplay()
         setWheelOpen(false)
     }
-    // Handlers del gesto en el input. Con `useWheel`, `pointerdown` PREVIENE el foco nativo para que el
-    // teclado NO se abra al iniciar el long-press; el tap corto abre el teclado manualmente en `pointerup`.
+    // Handlers del gesto en el input (fix informe 14 · causa A "no sale"). Camino confiable = `onFocus`
+    // abre el teclado (como cardio/V2); el long-press corre EN PARALELO sin `preventDefault` (así el
+    // navegador no cancela el foco). `setPointerCapture` garantiza que el `pointerup` vuelva al mismo
+    // input aunque el dedo se desplace; el umbral de cancelación sube a 16px (tolerancia real de dedo).
+    // El `<input>` lleva `touch-action:none` (clase) SOLO en modo rueda para que el gesto no se robe
+    // como scroll. Al cumplirse los 400ms se abre la rueda y se cierra el teclado que el foco abrió.
     const onFieldPointerDown = (e: React.PointerEvent<HTMLInputElement>) => {
         if (!useWheel) return
-        e.preventDefault()
+        try {
+            e.currentTarget.setPointerCapture(e.pointerId)
+        } catch {
+            /* no soportado: seguimos sin captura */
+        }
         const p = pressRef.current
         if (p.timer) clearTimeout(p.timer)
         p.moved = false
@@ -533,35 +584,32 @@ function StrengthLogSetForm({
         p.timer = setTimeout(() => {
             p.fired = true
             p.timer = null
+            // Long-press → rueda: cierra el teclado que el foco pudo abrir y quita el foco del input.
+            keypad?.closeKeypad()
+            weightRef.current?.blur()
+            repsRef.current?.blur()
             openWheel()
         }, 400)
     }
     const onFieldPointerMove = (e: React.PointerEvent<HTMLInputElement>) => {
         if (!useWheel) return
         const p = pressRef.current
-        if (p.timer && (Math.abs(e.clientX - p.x) > 10 || Math.abs(e.clientY - p.y) > 10)) {
+        if (p.timer && (Math.abs(e.clientX - p.x) > 16 || Math.abs(e.clientY - p.y) > 16)) {
             clearTimeout(p.timer)
             p.timer = null
             p.moved = true
         }
     }
-    const onFieldPointerUp = (field: 'weight' | 'reps') => {
+    const onFieldPointerUp = () => {
         if (!useWheel) return
         const p = pressRef.current
         if (p.timer) {
             clearTimeout(p.timer)
             p.timer = null
         }
-        if (p.fired) {
-            p.fired = false
-            return
-        }
-        if (p.moved) {
-            p.moved = false
-            return
-        }
-        // Tap corto → teclado custom (el foco nativo se previno arriba, así que lo abrimos a mano).
-        openKeypadFor(field)
+        // Tap corto: el `onFocus` ya abrió el teclado (camino confiable). No reabrimos aquí.
+        p.fired = false
+        p.moved = false
     }
     const onFieldPointerCancel = () => {
         const p = pressRef.current
@@ -758,6 +806,7 @@ function StrengthLogSetForm({
     const inputClass = cn(
         'w-full rounded-control bg-white/[0.06] border text-center font-semibold font-mono transition-colors focus:outline-none focus:ring-1 text-on-dark border-[var(--border-inverse)] focus:border-[var(--sport-500)] focus:ring-[var(--sport-500)]',
         isActive ? 'h-14 text-2xl' : 'h-11 text-base',
+        useWheel && 'exec-v3-touchnone',
     )
 
     // Con teclado custom el input es `type=text` es-CL (coma decimal, `inputMode=none`, readOnly →
@@ -767,6 +816,299 @@ function StrengthLogSetForm({
         ? (weightDefaultNum != null ? formatWeightEsCl(weightDefaultNum) : '')
         : (weightDefaultNum ?? '')
     const repsDefaultValue = existingLog?.reps_done ?? queuedInit?.repsDone ?? ''
+
+    // ── Captura HERO de fuerza (informe 03 · BLOCKER). Reusa los mismos inputs (refs/handlers/gesto),
+    //    estado rpe/rir y `handleSubmit` — el motor NO cambia, sólo el render. Se renderiza para TODA
+    //    serie no colapsada (activa Y futuras): las futuras las oculta el CSS del slot (is-future). Es
+    //    clave que activa y futura compartan branch → al avanzar `firstUnlogged` el `<input>` NO cambia
+    //    de identidad (mismo elemento) y el listener nativo de BORRADOR sigue ligado (sin perder lo
+    //    tipeado). El `ExerciseStepV3` decide qué slot se ve; aquí sólo importa colapsado vs captura. ──
+    if (heroV3 && !collapsed) {
+        const effortValue = effortMetric === 'rpe' ? rpe : rir
+        const scaleMin = effortMetric === 'rpe' ? 1 : rirMin
+        const scaleMax = 10
+        const ticks: number[] = []
+        for (let n = scaleMin; n <= scaleMax; n++) ticks.push(n)
+        const setEffort = (v: number) => (effortMetric === 'rpe' ? setRpe : setRir)(v === effortValue ? null : v)
+        const ctaLabel = isLogged || editing ? 'Guardar' : 'Aplastar serie'
+
+        return (
+            <div className="exec-v3-hero space-y-3">
+                <form
+                    key={existingLog ? `log-${existingLog.weight_kg}-${existingLog.reps_done}` : 'new'}
+                    ref={formRef}
+                    action={handleSubmit}
+                    className="space-y-3"
+                >
+                    <input type="hidden" name="block_id" value={blockId} />
+                    <input type="hidden" name="set_number" value={setNumber} />
+                    {targetDate && <input type="hidden" name="target_date" value={targetDate} />}
+                    <input type="hidden" name="note" value={note} />
+                    {substitution && (
+                        <>
+                            <input type="hidden" name="substituted_exercise_id" value={substitution.exerciseId} />
+                            <input type="hidden" name="substituted_exercise_name" value={substitution.exerciseName} />
+                            <input type="hidden" name="substitution_reason" value={substitution.reason} />
+                        </>
+                    )}
+
+                    {/* Tiles de valor: los MISMOS inputs kg/reps, restilizados como los números grandes. */}
+                    <div className="exec-v3-cur">
+                        <label className="exec-v3-val">
+                            <input
+                                ref={weightRef}
+                                name="weight_kg"
+                                type={useKeypad ? 'text' : 'number'}
+                                {...(useKeypad ? { readOnly: true } : { step: '0.5', min: '0' })}
+                                inputMode={useKeypad ? 'none' : 'decimal'}
+                                defaultValue={weightDefaultValue}
+                                placeholder="-"
+                                aria-label="Peso en kilos"
+                                onFocus={useKeypad ? () => openKeypadFor('weight') : undefined}
+                                onPointerDown={useWheel ? onFieldPointerDown : undefined}
+                                onPointerMove={useWheel ? onFieldPointerMove : undefined}
+                                onPointerUp={useWheel ? onFieldPointerUp : undefined}
+                                onPointerCancel={useWheel ? onFieldPointerCancel : undefined}
+                                onPointerLeave={useWheel ? onFieldPointerCancel : undefined}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                        e.preventDefault()
+                                        repsRef.current?.focus()
+                                    }
+                                }}
+                                className={cn('exec-v3-valinput', useWheel && 'exec-v3-touchnone')}
+                            />
+                            <span className="exec-v3-valu">KG</span>
+                        </label>
+                        <label className="exec-v3-val">
+                            <input
+                                ref={repsRef}
+                                name="reps_done"
+                                type={useKeypad ? 'text' : 'number'}
+                                {...(useKeypad ? { readOnly: true } : { min: '0' })}
+                                inputMode={useKeypad ? 'none' : 'numeric'}
+                                defaultValue={repsDefaultValue}
+                                placeholder="-"
+                                aria-label="Repeticiones"
+                                onFocus={useKeypad ? () => openKeypadFor('reps') : undefined}
+                                onPointerDown={useWheel ? onFieldPointerDown : undefined}
+                                onPointerMove={useWheel ? onFieldPointerMove : undefined}
+                                onPointerUp={useWheel ? onFieldPointerUp : undefined}
+                                onPointerCancel={useWheel ? onFieldPointerCancel : undefined}
+                                onPointerLeave={useWheel ? onFieldPointerCancel : undefined}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                        e.preventDefault()
+                                        e.currentTarget.blur()
+                                    }
+                                }}
+                                className={cn('exec-v3-valinput', useWheel && 'exec-v3-touchnone')}
+                            />
+                            <span className="exec-v3-valu">REPS</span>
+                        </label>
+                    </div>
+
+                    {/* Panel de esfuerzo compacto y OPCIONAL — COLAPSADO por default (QA2 hallazgo 3): fila
+                        "Esfuerzo · Opcional" + (?) + chevron + (si hay valores) pills; tap expande la escala
+                        con animación chica (height/opacity). Mantiene `exec-v3-effort` para el gear-hide E3.7. */}
+                    <div className={cn('exec-v3-effort exec-v3-effpanel', effExpanded && 'is-open')}>
+                        <div className="exec-v3-efftop">
+                            <button
+                                type="button"
+                                className="exec-v3-effhead"
+                                onClick={() => setEffExpanded(!effExpanded)}
+                                aria-expanded={effExpanded}
+                                aria-label={effExpanded ? 'Colapsar esfuerzo' : 'Registrar esfuerzo (RPE / RIR, opcional)'}
+                            >
+                                <span className="exec-v3-efflbl">Esfuerzo</span>
+                                <span className="exec-v3-effopt">Opcional</span>
+                                <ChevronDown className="exec-v3-effchev" aria-hidden />
+                            </button>
+                            <button
+                                type="button"
+                                className="exec-v3-effhelp"
+                                onClick={() => setEffHelpOpen(true)}
+                                aria-label="¿Qué son RPE y RIR?"
+                            >
+                                <HelpCircle aria-hidden />
+                            </button>
+                            {(effExpanded || rpe != null || rir != null) && (
+                                <span className="exec-v3-effpills">
+                                    <button
+                                        type="button"
+                                        onClick={() => { setEffortMetric('rpe'); if (!effExpanded) setEffExpanded(true) }}
+                                        className={cn('exec-v3-epill', effExpanded && effortMetric === 'rpe' && 'on')}
+                                        aria-pressed={effortMetric === 'rpe'}
+                                    >
+                                        <span className="k">RPE</span>
+                                        <span className={rpe != null ? 'v' : 'em'}>{rpe != null ? rpe : '—'}</span>
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => { setEffortMetric('rir'); if (!effExpanded) setEffExpanded(true) }}
+                                        className={cn('exec-v3-epill', effExpanded && effortMetric === 'rir' && 'on')}
+                                        aria-pressed={effortMetric === 'rir'}
+                                    >
+                                        <span className="k">RIR</span>
+                                        <span className={rir != null ? 'v' : 'em'}>{rir != null ? rir : '—'}</span>
+                                    </button>
+                                </span>
+                            )}
+                        </div>
+                        <AnimatePresence initial={false}>
+                            {effExpanded && (
+                                <motion.div
+                                    initial={reducedMotion ? false : { height: 0, opacity: 0 }}
+                                    animate={{ height: 'auto', opacity: 1 }}
+                                    exit={reducedMotion ? undefined : { height: 0, opacity: 0 }}
+                                    transition={reducedMotion ? { duration: 0 } : { duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
+                                    className="exec-v3-effbody"
+                                >
+                                    <div className="exec-v3-scale" role="group" aria-label={`Escala ${effortMetric.toUpperCase()}`}>
+                                        {ticks.map((n) => (
+                                            <button
+                                                key={n}
+                                                type="button"
+                                                onClick={() => setEffort(n)}
+                                                className={cn('exec-v3-tick', effortValue === n && 'sel')}
+                                                aria-label={`${effortMetric.toUpperCase()} ${n}`}
+                                                aria-pressed={effortValue === n}
+                                            />
+                                        ))}
+                                    </div>
+                                    <div className="exec-v3-scaleends">
+                                        <span>{scaleMin}</span>
+                                        <span>{scaleMax}</span>
+                                    </div>
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
+                    </div>
+
+                    {/* CTA principal juicy full-width */}
+                    <SubmitSetButton isLogged={Boolean(isLogged)} label={ctaLabel} hero />
+
+                    {/* Nota rápida (mismo mirror oculto que la fila V2) */}
+                    {showNoteControls && (
+                        <div>
+                            <button
+                                type="button"
+                                onClick={() => setNoteOpen((o) => !o)}
+                                aria-expanded={noteOpen}
+                                className={cn(
+                                    'flex min-h-[36px] items-center gap-1.5 rounded-control px-2 text-[11px] font-semibold transition-colors',
+                                    noteTrimmed ? 'text-amber-300' : 'text-on-dark-muted hover:text-on-dark',
+                                )}
+                            >
+                                <StickyNote className="h-3.5 w-3.5" />
+                                {noteTrimmed ? 'Nota añadida' : 'Agregar nota'}
+                            </button>
+                            <AnimatePresence initial={false}>
+                                {noteOpen && (
+                                    <motion.div
+                                        initial={reducedMotion ? false : { height: 0, opacity: 0 }}
+                                        animate={{ height: 'auto', opacity: 1 }}
+                                        exit={reducedMotion ? undefined : { height: 0, opacity: 0 }}
+                                        transition={reducedMotion ? { duration: 0 } : { duration: 0.2 }}
+                                        className="overflow-hidden"
+                                    >
+                                        <input
+                                            type="text"
+                                            value={note}
+                                            onChange={(e) => setNote(e.target.value)}
+                                            maxLength={300}
+                                            placeholder="Ej: sentí molestia en el hombro"
+                                            aria-label="Nota de la serie para tu coach"
+                                            className="mt-1.5 w-full rounded-control border border-[var(--border-inverse)] bg-white/[0.06] px-3 py-2 text-[13px] text-on-dark placeholder:text-on-dark-muted/60 focus:border-[var(--sport-500)] focus:outline-none focus:ring-1 focus:ring-[var(--sport-500)]"
+                                        />
+                                    </motion.div>
+                                )}
+                            </AnimatePresence>
+                        </div>
+                    )}
+
+                    {state.error && (
+                        <div className="flex items-center gap-2 px-1">
+                            <p className="flex-1 text-xs text-red-400">{humanizeStudentWriteError(state.error)}</p>
+                            <button
+                                type="button"
+                                onClick={() => formRef.current?.requestSubmit()}
+                                className="shrink-0 rounded-control border border-red-500/30 px-2 py-0.5 text-[10px] font-bold text-red-400 transition-colors hover:bg-red-500/10"
+                            >
+                                Reintentar
+                            </button>
+                        </div>
+                    )}
+                </form>
+
+                {useWheel && (
+                    <DualWheelPicker
+                        open={wheelOpen}
+                        onOpenChange={setWheelOpen}
+                        initialWeight={wheelInit.w}
+                        initialReps={wheelInit.r}
+                        onDone={applyWheel}
+                        reducedMotion={reducedMotion}
+                        setNumber={setNumber}
+                        exerciseName={nextUpLabel}
+                        totalSets={totalSets}
+                    />
+                )}
+
+                {/* Mini-sheet (?) — explica RPE y RIR (QA2 hallazgo 3). Overlay oscuro V3, cierra con tap fuera. */}
+                <AnimatePresence>
+                    {effHelpOpen && (
+                        <motion.div
+                            className="exec-v3-effhelp-scrim"
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            transition={{ duration: reducedMotion ? 0 : 0.18 }}
+                            onClick={() => setEffHelpOpen(false)}
+                            role="button"
+                            aria-label="Cerrar ayuda de esfuerzo"
+                        >
+                            <motion.div
+                                className="exec-v3-effhelp-sheet"
+                                initial={reducedMotion ? { opacity: 0 } : { opacity: 0, y: 24 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={reducedMotion ? { opacity: 0 } : { opacity: 0, y: 24 }}
+                                transition={reducedMotion ? { duration: 0 } : { duration: 0.22, ease: [0.4, 0, 0.2, 1] }}
+                                onClick={(e) => e.stopPropagation()}
+                                role="dialog"
+                                aria-modal="true"
+                                aria-label="Qué son RPE y RIR"
+                            >
+                                <div className="exec-v3-effhelp-hd">
+                                    <span className="exec-v3-effhelp-t">Esfuerzo</span>
+                                    <button
+                                        type="button"
+                                        className="exec-v3-effhelp-x"
+                                        onClick={() => setEffHelpOpen(false)}
+                                        aria-label="Cerrar"
+                                    >
+                                        <X aria-hidden />
+                                    </button>
+                                </div>
+                                <div className="exec-v3-effhelp-row">
+                                    <span className="exec-v3-effhelp-k">RPE</span>
+                                    <p className="exec-v3-effhelp-p">
+                                        <b>Esfuerzo percibido:</b> qué tan dura se sintió la serie, del 1 al 10 (10 = no podías más).
+                                    </p>
+                                </div>
+                                <div className="exec-v3-effhelp-row">
+                                    <span className="exec-v3-effhelp-k">RIR</span>
+                                    <p className="exec-v3-effhelp-p">
+                                        <b>Reps en reserva:</b> cuántas repeticiones te quedaban en el tanque (0 = llegaste al fallo).
+                                    </p>
+                                </div>
+                            </motion.div>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
+            </div>
+        )
+    }
 
     return (
         <motion.div
@@ -822,12 +1164,12 @@ function StrengthLogSetForm({
                                 inputMode={useKeypad ? 'none' : 'decimal'}
                                 defaultValue={weightDefaultValue}
                                 placeholder="-"
-                                // V3 (rueda): el gesto lo maneja pointerup (tap→teclado) y previene el foco;
-                                // sin rueda, el foco abre el teclado como siempre.
-                                onFocus={useWheel ? undefined : useKeypad ? () => openKeypadFor('weight') : undefined}
+                                // Fix informe 14: el foco abre el teclado SIEMPRE (camino confiable),
+                                // incluso en modo rueda; el long-press corre en paralelo (pointerdown).
+                                onFocus={useKeypad ? () => openKeypadFor('weight') : undefined}
                                 onPointerDown={useWheel ? onFieldPointerDown : undefined}
                                 onPointerMove={useWheel ? onFieldPointerMove : undefined}
-                                onPointerUp={useWheel ? () => onFieldPointerUp('weight') : undefined}
+                                onPointerUp={useWheel ? onFieldPointerUp : undefined}
                                 onPointerCancel={useWheel ? onFieldPointerCancel : undefined}
                                 onPointerLeave={useWheel ? onFieldPointerCancel : undefined}
                                 // Enter NO cierra la serie (implicit submit) — pasa el foco a reps. Submit solo por "Listo".
@@ -851,10 +1193,10 @@ function StrengthLogSetForm({
                                 inputMode={useKeypad ? 'none' : 'numeric'}
                                 defaultValue={repsDefaultValue}
                                 placeholder="-"
-                                onFocus={useWheel ? undefined : useKeypad ? () => openKeypadFor('reps') : undefined}
+                                onFocus={useKeypad ? () => openKeypadFor('reps') : undefined}
                                 onPointerDown={useWheel ? onFieldPointerDown : undefined}
                                 onPointerMove={useWheel ? onFieldPointerMove : undefined}
-                                onPointerUp={useWheel ? () => onFieldPointerUp('reps') : undefined}
+                                onPointerUp={useWheel ? onFieldPointerUp : undefined}
                                 onPointerCancel={useWheel ? onFieldPointerCancel : undefined}
                                 onPointerLeave={useWheel ? onFieldPointerCancel : undefined}
                                 // Enter cierra el teclado (blur) sin submitear — deja meter RPE/RIR antes de "Listo".
@@ -956,6 +1298,9 @@ function StrengthLogSetForm({
                     initialReps={wheelInit.r}
                     onDone={applyWheel}
                     reducedMotion={reducedMotion}
+                    setNumber={setNumber}
+                    exerciseName={nextUpLabel}
+                    totalSets={totalSets}
                 />
             )}
         </motion.div>
@@ -988,6 +1333,8 @@ function TypedLogSetRow({
     sideMode,
     typedPrefill,
     suggestedAvgHr,
+    holdPrefill,
+    v3 = false,
     onLogged,
     onResult,
 }: Props & { mode: Exclude<LogSetMode, 'strength'> }) {
@@ -1051,6 +1398,21 @@ function TypedLogSetRow({
         if (input && input.value.trim() === '') input.value = String(suggestedAvgHr.bpm)
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [suggestedHrNonce])
+
+    // Auto-llenado del HOLD cronometrado (QA4 · movilidad): el anillo vuelca los segundos sostenidos en el
+    // input del lado correspondiente al cambiar `nonce`. Uncontrolled (mutación de ref) = sin re-render;
+    // mismo patrón que el prefill roller/HR. El alumno sólo revisa y confirma (o corrige). NO toca submit.
+    const holdPrefillNonce = holdPrefill?.nonce
+    useEffect(() => {
+        if (holdPrefillNonce == null) return
+        if (perSide) {
+            if (holdPrefill?.leftSec != null && holdLeftRef.current) holdLeftRef.current.value = String(Math.round(holdPrefill.leftSec))
+            if (holdPrefill?.rightSec != null && holdRightRef.current) holdRightRef.current.value = String(Math.round(holdPrefill.rightSec))
+        } else if (holdPrefill?.holdSec != null && holdRef.current) {
+            holdRef.current.value = String(Math.round(holdPrefill.holdSec))
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [holdPrefillNonce])
 
     // Abre el teclado custom en el campo tocado (solo pointer coarse). El objetivo tipado viaja en el
     // header (DB-5); "Listo" reusa `requestSubmit()`. Reglas decimales por campo vienen de typedKeypadFields.
@@ -1358,25 +1720,35 @@ function TypedLogSetRow({
                 {mode === 'mobility' && perSide && (
                     <>
                         {/* Hold POR LADO (E3.2): dos segundos independientes; el engine los suma en
-                            `actual_hold_sec` y guarda el desglose en `metadata`. Siembra desde el log. */}
-                        <input
-                            ref={holdLeftRef}
-                            name="hold_left_sec"
-                            {...fieldProps('hold_left_sec', 'numeric', { min: '0' })}
-                            defaultValue={inputDefault(existingLog?.metadata?.left_sec ?? null)}
-                            placeholder="izq"
-                            aria-label="Segundos de hold — lado izquierdo"
-                            className={typedInputClass}
-                        />
-                        <input
-                            ref={holdRightRef}
-                            name="hold_right_sec"
-                            {...fieldProps('hold_right_sec', 'numeric', { min: '0' })}
-                            defaultValue={inputDefault(existingLog?.metadata?.right_sec ?? null)}
-                            placeholder="der"
-                            aria-label="Segundos de hold — lado derecho"
-                            className={typedInputClass}
-                        />
+                            `actual_hold_sec` y guarda el desglose en `metadata`. Siembra desde el log.
+                            QA6 (hallazgo CEO): con ambos valores cargados ("60 | 60") el placeholder
+                            desaparece y no había señal de cuál lado es cuál → etiqueta CHICA sobre cada
+                            input (`exec-v3-sidelbl`: 10px/800 uppercase atenuado). Presentación pura: el
+                            motor (name/metadata) NO cambia. */}
+                        <label className="flex flex-col items-stretch gap-1">
+                            <span className="text-center text-[10px] font-extrabold uppercase leading-none tracking-[0.06em] text-[#7f7f8c]">Izq</span>
+                            <input
+                                ref={holdLeftRef}
+                                name="hold_left_sec"
+                                {...fieldProps('hold_left_sec', 'numeric', { min: '0' })}
+                                defaultValue={inputDefault(existingLog?.metadata?.left_sec ?? null)}
+                                placeholder="seg"
+                                aria-label="Segundos de hold — lado izquierdo"
+                                className={typedInputClass}
+                            />
+                        </label>
+                        <label className="flex flex-col items-stretch gap-1">
+                            <span className="text-center text-[10px] font-extrabold uppercase leading-none tracking-[0.06em] text-[#7f7f8c]">Der</span>
+                            <input
+                                ref={holdRightRef}
+                                name="hold_right_sec"
+                                {...fieldProps('hold_right_sec', 'numeric', { min: '0' })}
+                                defaultValue={inputDefault(existingLog?.metadata?.right_sec ?? null)}
+                                placeholder="seg"
+                                aria-label="Segundos de hold — lado derecho"
+                                className={typedInputClass}
+                            />
+                        </label>
                     </>
                 )}
 
@@ -1421,7 +1793,9 @@ function TypedLogSetRow({
             </form>
 
             <AnimatePresence initial={false}>
-                {isLogged && (
+                {/* QA4 · decisión CEO: cardio/movilidad/roller NO llevan RPE ni RIR. En V3 se oculta la
+                    escala post-registro (fuerza intacta; V2 tipado conserva su RPE por `!v3`). */}
+                {isLogged && !v3 && (
                     <motion.div
                         initial={reducedMotion ? false : { height: 0, opacity: 0 }}
                         animate={{ height: 'auto', opacity: 1 }}
@@ -1451,8 +1825,30 @@ function TypedLogSetRow({
     )
 }
 
-function SubmitSetButton({ isLogged, label }: { isLogged: boolean; label?: string }) {
+function SubmitSetButton({ isLogged, label, hero }: { isLogged: boolean; label?: string; hero?: boolean }) {
     const { pending } = useFormStatus()
+    // Variante HERO (informe 03): CTA juicy full-width con círculo-check en tinta on-brand + breathe.
+    if (hero) {
+        return (
+            <button
+                type="submit"
+                className="exec-v3-juicy exec-v3-cta"
+                title={pending ? 'Guardando serie...' : label}
+                aria-label={pending ? 'Guardando serie...' : label}
+            >
+                {pending ? (
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                ) : (
+                    <>
+                        <span className="exec-v3-cta-ck" aria-hidden>
+                            <Check className="h-3.5 w-3.5" strokeWidth={3} />
+                        </span>
+                        {label}
+                    </>
+                )}
+            </button>
+        )
+    }
     // Variante etiquetada ("✓ Listo" / "Guardar") para la serie activa protagonista.
     if (label) {
         return (

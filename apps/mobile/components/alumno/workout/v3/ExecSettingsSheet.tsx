@@ -1,6 +1,6 @@
 import { type ReactNode, useCallback, useEffect, useState } from 'react'
 import { LayoutChangeEvent, Platform, Pressable, Text, View } from 'react-native'
-import { Check, ChevronDown } from 'lucide-react-native'
+import { Check, ChevronDown, Flag } from 'lucide-react-native'
 import { Gesture, GestureDetector } from 'react-native-gesture-handler'
 import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated'
 import { FONT } from '../../../../lib/typography'
@@ -58,10 +58,15 @@ export function ExecSettingsSheet({
   open,
   onClose,
   exec,
+  onFinish,
 }: {
   open: boolean
   onClose: () => void
   exec: ExecTheme
+  /** Finalizar entrenamiento — decisión CEO (2026-07-22): la barra fija "Finalizar" NO existe en V3, su
+   *  acción se movió acá. Al presionar la fila se cierra el sheet y se dispara el MISMO handler de la
+   *  barra (`handleFinish`: flush + Alert de sin-sincronizar + resumen). Aditiva: sin prop, no se pinta. */
+  onFinish?: () => void
 }) {
   const settings = useExecSettings()
 
@@ -187,19 +192,16 @@ export function ExecSettingsSheet({
           </View>
         ) : null}
 
-        {/* Volumen — slider funcional (0..100%). */}
-        <SettingRow
-          exec={exec}
-          name="Volumen"
-          control={
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, width: 150 }}>
-              <ExecVolumeSlider value={volume} onChange={pickVolume} exec={exec} />
-              <Text style={{ fontFamily: FONT.uiBold, fontSize: 12, color: s.textMuted, width: 34, textAlign: 'right' }}>
-                {Math.round(volume * 100)}%
-              </Text>
-            </View>
-          }
-        />
+        {/* Volumen — slider full-width (mockup `.a3b-setrow.slider`): nombre + % arriba, barra a lo ancho abajo. */}
+        <View style={{ paddingVertical: 12, borderTopWidth: 1.5, borderTopColor: s.borderSubtle, gap: 9 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+            <Text style={{ fontFamily: FONT.uiBold, fontSize: 14, letterSpacing: -0.1, color: s.text }}>Volumen</Text>
+            <Text style={{ fontFamily: FONT.uiExtra, fontSize: 13, color: exec.accent, fontVariant: ['tabular-nums'] }}>
+              {Math.round(volume * 100)}%
+            </Text>
+          </View>
+          <ExecVolumeSlider value={volume} onChange={pickVolume} exec={exec} />
+        </View>
 
         {/* Vibración — funcional (pref del cronómetro). */}
         <SettingRow
@@ -265,6 +267,35 @@ export function ExecSettingsSheet({
             />
           }
         />
+
+        {/* Finalizar entrenamiento (decisión CEO 2026-07-22) — sección separada al final del sheet.
+            Reemplaza la barra fija retirada en V3: cierra el sheet y dispara el MISMO handler de la barra
+            (`onFinish` = handleFinish); si hay series sin sincronizar sigue mostrando su Alert. */}
+        {onFinish ? (
+          <View style={{ marginTop: 8, paddingTop: 16, borderTopWidth: 1.5, borderTopColor: s.borderSubtle }}>
+            <Pressable
+              testID="btn-finish-workout-v3"
+              onPress={() => { void haptics.tap(); onClose(); onFinish() }}
+              accessibilityRole="button"
+              accessibilityLabel="Finalizar entrenamiento"
+              style={({ pressed }) => ({
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 12,
+                paddingVertical: 14,
+                paddingHorizontal: 16,
+                borderRadius: 14,
+                borderWidth: 2,
+                borderColor: s.borderStrong,
+                backgroundColor: s.surfaceRaised,
+                opacity: pressed ? 0.92 : 1,
+              })}
+            >
+              <Flag size={19} color={s.text} strokeWidth={2.4} />
+              <Text style={{ fontFamily: FONT.uiExtra, fontSize: 14, color: s.text }}>Finalizar entrenamiento</Text>
+            </Pressable>
+          </View>
+        ) : null}
       </View>
     </Sheet>
   )
@@ -498,7 +529,7 @@ function Toggle({
         borderWidth: 2,
         justifyContent: 'center',
         paddingHorizontal: 3,
-        backgroundColor: value ? exec.accent : s.surfaceRaised,
+        backgroundColor: value ? exec.accent : s.border,
         borderColor: value ? hexToRgba(exec.accent, 0.6) : s.borderStrong,
         opacity: disabled ? 0.5 : 1,
       }}
@@ -508,7 +539,8 @@ function Toggle({
           width: 18,
           height: 18,
           borderRadius: 999,
-          backgroundColor: value ? exec.accentText : s.textMuted,
+          // Reposo: neutro claro del mockup (`#c9c9d2`); activo: tinta legible sobre el acento.
+          backgroundColor: value ? exec.accentText : '#c9c9d2',
           alignSelf: value ? 'flex-end' : 'flex-start',
         }}
       />

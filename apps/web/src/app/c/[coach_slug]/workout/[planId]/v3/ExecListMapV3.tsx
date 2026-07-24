@@ -1,15 +1,15 @@
 'use client'
 
-import { ArrowLeftRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
-/** Fila del mapa "Ver todo": un paso del plan (bloque suelto o superserie) con su progreso. */
+/** Fila del mapa "Plan completo": un EJERCICIO INDIVIDUAL con su estado (QA2-C, sólo lectura). */
 export interface ExecListMapItem {
     key: string
-    /** Índice del paso en el stepper (destino del tap). */
-    stepIndex: number
     title: string
-    sectionTitle: string
+    /** Letra del miembro dentro de la superserie (A/B/C); null en ejercicios sueltos. */
+    letter?: string | null
+    /** Encabezado de grupo "Superserie X" — SÓLO en el primer miembro del grupo; null en el resto. */
+    groupTitle?: string | null
     doneSets: number
     totalSets: number
     complete: boolean
@@ -19,54 +19,61 @@ export interface ExecListMapItem {
 
 interface ExecListMapV3Props {
     items: ExecListMapItem[]
-    /** Salta al stepper en ese paso (usa la navegación de pasos existente). */
-    onJump: (stepIndex: number) => void
 }
 
 /**
- * Mapa "Ver todo" del ejecutor V3 (E2.6): la vista lista gana este resumen tappable por ejercicio con
- * estado (dots hechos/total, AHORA resaltado). Tap en una fila = volver al stepper EN ese paso (misma
- * navegación de pasos). No duplica el render de la lista — es un índice de navegación por encima de
- * ella. Sólo presentación/navegación; el motor vive en las cards de abajo.
+ * Mapa "Plan completo" del ejecutor V3 (E2.6 · QA2-C): índice de estado SÓLO LECTURA por EJERCICIO
+ * INDIVIDUAL con el vocabulario del mockup `concepto-a-v3-core` (`.a3a-srow`) — icono de estado (hecho =
+ * marca + check / ahora = aro de marca con punto / pendiente = cuadro gris) + nombre + palabra de estado
+ * ("✓ 4/4" / "ahora" / "pendiente"). Los miembros de una superserie son filas propias (con su letra A/B/C)
+ * agrupadas bajo un encabezado "Superserie X". El conteo del título (M) coincide con el del header.
+ *
+ * Es un ÍNDICE PARA VER, no un stepper: las filas NO son interactivas (decisión CEO QA2 — "el plan
+ * completo es sólo para ver, no para hacer los ejercicios desde ahí"). Sólo scroll; sin tap ni chevron.
  */
-export function ExecListMapV3({ items, onJump }: ExecListMapV3Props) {
+export function ExecListMapV3({ items }: ExecListMapV3Props) {
     return (
-        <nav aria-label="Mapa del entrenamiento" className="exec-v3-map">
-            <p className="exec-v3-map-title">Ver todo</p>
+        <nav aria-label="Plan completo" className="exec-v3-map">
+            <p className="exec-v3-map-title">Plan completo · {items.length}</p>
             <ol className="exec-v3-map-list">
-                {items.map((item, i) => (
-                    <li key={item.key}>
-                        <button
-                            type="button"
-                            onClick={() => onJump(item.stepIndex)}
-                            aria-label={`Ir al ejercicio ${i + 1}: ${item.title} (${item.doneSets} de ${item.totalSets} series)`}
-                            aria-current={item.isCurrent ? 'true' : undefined}
-                            className={cn(
-                                'exec-v3-map-row',
-                                item.isCurrent && 'is-now',
-                                item.complete && 'is-done',
+                {items.map((item) => {
+                    const state = item.complete ? 'done' : item.isCurrent ? 'now' : 'todo'
+                    const word =
+                        state === 'done'
+                            ? `✓ ${item.doneSets}/${item.totalSets}`
+                            : state === 'now'
+                              ? 'ahora'
+                              : item.doneSets > 0
+                                ? `${item.doneSets}/${item.totalSets}`
+                                : 'pendiente'
+                    return (
+                        <li key={item.key}>
+                            {item.groupTitle && (
+                                <p className="exec-v3-map-group">{item.groupTitle}</p>
                             )}
-                        >
-                            <span className="exec-v3-map-idx tabular-nums">{i + 1}</span>
-                            <span className="exec-v3-map-body">
-                                <span className="exec-v3-map-name">{item.title}</span>
-                                <span className="exec-v3-map-dots" aria-hidden>
-                                    {Array.from({ length: item.totalSets }).map((_, s) => (
-                                        <span
-                                            key={s}
-                                            className={cn('exec-v3-map-dot', s < item.doneSets && 'is-on')}
-                                        />
-                                    ))}
-                                    <span className="exec-v3-map-count tabular-nums">
-                                        {item.doneSets}/{item.totalSets}
+                            <div
+                                aria-current={item.isCurrent ? 'true' : undefined}
+                                className={cn(
+                                    'exec-v3-map-row',
+                                    item.letter && 'exec-v3-map-row-member',
+                                    state === 'now' && 'is-now',
+                                    state === 'done' && 'is-done',
+                                )}
+                            >
+                                <span className="exec-v3-map-state" aria-hidden />
+                                {item.letter && (
+                                    <span className="exec-v3-map-letter" aria-hidden>
+                                        {item.letter}
                                     </span>
+                                )}
+                                <span className="exec-v3-map-name">{item.title}</span>
+                                <span className="exec-v3-map-word tabular-nums" aria-hidden>
+                                    {word}
                                 </span>
-                            </span>
-                            {item.isCurrent && <span className="exec-v3-map-badge">AHORA</span>}
-                            <ArrowLeftRight className="exec-v3-map-go h-3.5 w-3.5" aria-hidden />
-                        </button>
-                    </li>
-                ))}
+                            </div>
+                        </li>
+                    )
+                })}
             </ol>
         </nav>
     )

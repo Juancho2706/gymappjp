@@ -8,6 +8,7 @@ import { sessionFlags } from '../../../lib/session-flags'
 import { useEntitlements } from '../../../lib/entitlements'
 import { AlumnoMobileChrome } from '../../../components/alumno/AlumnoMobileChrome'
 import { StudentAccessBlocked } from '../../../components/alumno/StudentAccessBlocked'
+import { SessionMorphProvider } from '../../../components/alumno/workout/v3/session-morph'
 
 export default function AlumnoTabsLayout() {
   const router = useRouter()
@@ -84,6 +85,7 @@ export default function AlumnoTabsLayout() {
   }
 
   return (
+    <SessionMorphProvider>
     <View className="flex-1 bg-surface-app">
       <Tabs
         tabBar={(props) => <AlumnoMobileChrome {...props} />}
@@ -143,5 +145,6 @@ export default function AlumnoTabsLayout() {
         <Tabs.Screen name="nutrition-v2/scanner" options={{ href: null }} />
       </Tabs>
     </View>
+    </SessionMorphProvider>
   )
 }

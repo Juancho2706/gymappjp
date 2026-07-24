@@ -1,8 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import Image from 'next/image'
-import { Bluetooth, HeartPulse, Pause, Play, RotateCcw, SkipForward, Timer } from 'lucide-react'
+import { Bluetooth, HeartPulse, Pause, Play, Repeat, RotateCcw, Ruler, SkipForward, Timer, Zap } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import {
     buildIntervalPhases,
@@ -18,7 +17,7 @@ import { useWorkoutTimer } from '../WorkoutTimerProvider'
 import type { OptimisticLogPayload } from '@eva/workout-engine'
 import type { BlockType, ExerciseType, WorkoutSessionLog } from '../WorkoutExecutionClient'
 import type { ClientCardioView } from '../_data/workout-execution.queries'
-import { resolveExecMedia } from './exec-media'
+import { ExecTypedMedia } from './ExecTypedMedia'
 import { useExecCountdown, formatCountdown } from './useExecCountdown'
 import { useIntervalRunner } from './useIntervalRunner'
 import { useWebBleHr } from './use-web-ble-hr'
@@ -35,6 +34,7 @@ interface CardioStepV3Props {
     autoTimerEnabled: boolean
     reopenSignal: { blockId: string; setNumber: number; nonce: number } | null
     substitution?: { exerciseId: string; exerciseName: string; reason: string } | null
+    openTechnique: (exercise: ExerciseType | null) => void
     handleLogged: (payload: OptimisticLogPayload) => void
     handleResult: (blockId: string, setNumber: number, result: SetSyncResult) => void
 }
@@ -68,8 +68,8 @@ const DASH = 2 * Math.PI * 92
  * una capa opcional de Ola 6, jamás requisito). La FC se captura MANUAL en las filas tipadas reusadas.
  */
 export function CardioStepV3(props: CardioStepV3Props) {
-    const { block, exercise, cardio } = props
-    const media = resolveExecMedia(exercise)
+    const { block, exercise, cardio, openTechnique } = props
+    const coachNote = block.notes?.trim() || null
     const intervalConfig = block.interval_config ?? null
     const isInterval = !!intervalConfig && isTimeableInterval(intervalConfig)
 
@@ -89,28 +89,26 @@ export function CardioStepV3(props: CardioStepV3Props) {
 
     return (
         <div className="exec-v3-step space-y-3">
-            {/* Identidad: nombre + chip + mini media del catálogo */}
+            {/* Identidad: nombre + chip */}
             <div className="exec-v3-cardio-id">
                 <div className="min-w-0">
                     <h2 className="exec-v3-exname">{exercise.name}</h2>
                     <div className="mt-2 flex flex-wrap gap-2">
-                        <span className="exec-v3-chip">
+                        <span className={cn('exec-v3-chip', isInterval && 'is-amber')}>
                             Cardio{isInterval ? ' · Intervalos' : exercise.muscle_group ? ` · ${exercise.muscle_group}` : ''}
                         </span>
                     </div>
                 </div>
-                <div className="exec-v3-cardio-mini" aria-hidden>
-                    {media.kind === 'video' && (
-                        <video src={media.src} autoPlay loop muted playsInline className="h-full w-full object-cover" />
-                    )}
-                    {media.kind === 'image' && <Image src={media.src} alt="" fill unoptimized className="object-cover" />}
-                    {(media.kind === 'none' || media.kind === 'youtube') && (
-                        <span className="exec-v3-cardio-mini-empty">
-                            <HeartPulse className="h-6 w-6" />
-                        </span>
-                    )}
-                </div>
             </div>
+
+            {/* Media del catálogo — mismo tratamiento que fuerza: chips "Instrucciones" + "Nota del coach"
+                DENTRO de la media (overlay superior-izquierdo), precedencia + audio en video (QA4). */}
+            <ExecTypedMedia
+                exercise={exercise}
+                note={coachNote}
+                openTechnique={openTechnique}
+                fallbackIcon={<HeartPulse className="h-9 w-9" />}
+            />
 
             {isInterval && intervalConfig ? (
                 <IntervalFace phases={buildIntervalPhases(intervalConfig, block.sets)} zone={zone} zoneRange={zoneRange} />
@@ -195,6 +193,50 @@ function ZoneChip({ zone, zoneRange }: { zone: number | null; zoneRange: { minBp
     )
 }
 
+/** Chip de métrica pro (look .a3a-cchip). Solo se renderiza cuando llega con dato real; nunca inventa. */
+function MetricChip({
+    icon,
+    value,
+    label,
+    wide,
+    iconColor,
+}: {
+    icon: React.ReactNode
+    value: string
+    label: string
+    wide?: boolean
+    iconColor?: string
+}) {
+    return (
+        <div className={cn('exec-v3-cchip', wide && 'is-wide')}>
+            <span className="exec-v3-ci" style={iconColor ? { color: iconColor } : undefined} aria-hidden>
+                {icon}
+            </span>
+            <span className="exec-v3-cm">
+                <span className="exec-v3-cv tabular-nums">{value}</span>
+                <span className="exec-v3-cl">{label}</span>
+            </span>
+        </div>
+    )
+}
+
+/** Botón juicy "Pausar/Reanudar" del cardio (D2) — full-width, como en RN. */
+function CardioPauseButton({ active, onToggle }: { active: boolean; onToggle: () => void }) {
+    return (
+        <button
+            type="button"
+            onClick={onToggle}
+            className="exec-v3-juicy exec-v3-pausebtn"
+            aria-label={active ? 'Pausar el temporizador' : 'Reanudar el temporizador'}
+        >
+            <span className="exec-v3-pauseicon" aria-hidden>
+                {active ? <Pause className="h-5 w-5" fill="currentColor" /> : <Play className="h-5 w-5" fill="currentColor" />}
+            </span>
+            {active ? 'Pausar' : 'Reanudar'}
+        </button>
+    )
+}
+
 /** Cardio CONTINUO: countdown (o distancia) en el color de la zona. */
 function ContinuousFace({
     block,
@@ -241,22 +283,23 @@ function ContinuousFace({
 
     return (
         <div className="flex flex-col items-center gap-3">
+            <div className="exec-v3-ringrow">
             <button
                 type="button"
                 onClick={countdown.done ? countdown.restart : countdown.toggle}
                 className="exec-v3-holdwrap"
-                style={{ '--ring-c': ringColor } as React.CSSProperties}
+                style={{ '--ring-c': ringColor, width: 196, height: 196 } as React.CSSProperties}
                 aria-label={countdown.done ? 'Reiniciar' : countdown.isActive ? 'Pausar' : 'Iniciar'}
             >
                 <svg className="exec-v3-hold-svg" viewBox="0 0 208 208" aria-hidden>
-                    <circle cx="104" cy="104" r="92" className="exec-v3-hold-track" fill="none" strokeWidth="12" />
+                    <circle cx="104" cy="104" r="92" className="exec-v3-hold-track" fill="none" strokeWidth="22" />
                     <circle
                         cx="104"
                         cy="104"
                         r="92"
                         className="exec-v3-cardio-fill"
                         fill="none"
-                        strokeWidth="12"
+                        strokeWidth="22"
                         strokeLinecap="round"
                         strokeDasharray={DASH}
                         strokeDashoffset={restoffset}
@@ -267,13 +310,41 @@ function ContinuousFace({
                     <div className={cn('exec-v3-holdnum tabular-nums', countdown.done && 'is-done')}>
                         {countdown.done ? '¡Listo!' : formatCountdown(countdown.timeLeft)}
                     </div>
+                    {/* Affordance de tap DENTRO del anillo (QA4): Play/Pause 18px justo bajo el número. */}
+                    <span className="exec-v3-hold-icon" aria-hidden>
+                        {countdown.done ? <RotateCcw className="h-[18px] w-[18px]" /> : countdown.isActive ? <Pause className="h-[18px] w-[18px]" /> : <Play className="h-[18px] w-[18px]" />}
+                    </span>
                     <div className="exec-v3-holdlbl">{countdown.done ? 'Registra abajo' : 'Restante'}</div>
                 </div>
-                <span className="exec-v3-hold-icon" aria-hidden>
-                    {countdown.done ? <RotateCcw className="h-4 w-4" /> : countdown.isActive ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
-                </span>
             </button>
+                {/* QA5 h3: reinicia el countdown a su duración prescrita (mecanismo `restart` del hook). */}
+                <button
+                    type="button"
+                    onClick={countdown.restart}
+                    className="exec-v3-restart"
+                    aria-label="Reiniciar el contador"
+                >
+                    <RotateCcw className="h-4 w-4" aria-hidden />
+                </button>
+            </div>
             <ZoneChip zone={zone} zoneRange={zoneRange} />
+            {!countdown.done && <CardioPauseButton active={countdown.isActive} onToggle={countdown.toggle} />}
+            {/* Chips de métricas: SOLO objetivos derivables de la prescripción (nada inventado). */}
+            <div className="exec-v3-cchips">
+                <MetricChip
+                    icon={<Timer className="h-4 w-4" />}
+                    value={formatCountdown(durationSec)}
+                    label="Objetivo"
+                    wide={(block.distance_value ?? 0) <= 0}
+                />
+                {(block.distance_value ?? 0) > 0 && (
+                    <MetricChip
+                        icon={<Ruler className="h-4 w-4" />}
+                        value={compactDistance(block.distance_value as number, block.distance_unit)}
+                        label="Distancia"
+                    />
+                )}
+            </div>
         </div>
     )
 }
@@ -296,24 +367,29 @@ function IntervalFace({
     const nextPhase = phases[runner.phaseIndex + 1] ?? null
     const totalIntervals = phases.filter((p) => p.kind === 'work').length || 1
     const currentInterval = phase?.repeat ?? (finished ? totalIntervals : 0)
+    // Duraciones de fase derivadas de la prescripción (chips honestos: trabajo / recupera).
+    const workPhase = phases.find((p) => p.kind === 'work') ?? null
+    const recoveryPhase = phases.find((p) => p.kind === 'recovery') ?? null
 
     return (
         <div className="flex flex-col items-center gap-2.5">
+            <div className="exec-v3-ringrow">
             <button
                 type="button"
                 onClick={finished ? runner.restart : runner.toggle}
                 className="exec-v3-holdwrap"
+                style={{ width: 224, height: 224 } as React.CSSProperties}
                 aria-label={finished ? 'Reiniciar intervalos' : isActive ? 'Pausar' : 'Iniciar intervalos'}
             >
                 <svg className="exec-v3-hold-svg" viewBox="0 0 208 208" aria-hidden>
-                    <circle cx="104" cy="104" r="92" className="exec-v3-hold-track" fill="none" strokeWidth="12" />
+                    <circle cx="104" cy="104" r="92" className="exec-v3-hold-track" fill="none" strokeWidth="22" />
                     <circle
                         cx="104"
                         cy="104"
                         r="92"
                         className="exec-v3-cardio-fill"
                         fill="none"
-                        strokeWidth="12"
+                        strokeWidth="22"
                         strokeLinecap="round"
                         strokeDasharray={DASH}
                         strokeDashoffset={dashoffset}
@@ -327,12 +403,23 @@ function IntervalFace({
                     <div className={cn('exec-v3-holdnum tabular-nums', finished && 'is-done')}>
                         {finished ? '¡Listo!' : formatCountdown(timeLeft)}
                     </div>
+                    {/* Affordance de tap DENTRO del anillo (QA4): Play/Pause 18px justo bajo el número. */}
+                    <span className="exec-v3-hold-icon" aria-hidden>
+                        {finished ? <RotateCcw className="h-[18px] w-[18px]" /> : isActive ? <Pause className="h-[18px] w-[18px]" /> : <Play className="h-[18px] w-[18px]" />}
+                    </span>
                     <div className="exec-v3-holdlbl">{finished ? 'Registra abajo' : 'Restante en fase'}</div>
                 </div>
-                <span className="exec-v3-hold-icon" aria-hidden>
-                    {finished ? <RotateCcw className="h-4 w-4" /> : isActive ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
-                </span>
             </button>
+                {/* QA5 h3: reinicia los intervalos desde la primera fase (mecanismo `restart` del runner). */}
+                <button
+                    type="button"
+                    onClick={runner.restart}
+                    className="exec-v3-restart"
+                    aria-label="Reiniciar el contador"
+                >
+                    <RotateCcw className="h-4 w-4" aria-hidden />
+                </button>
+            </div>
 
             {!finished && nextPhase && (
                 <div className="exec-v3-nextphase" style={{ '--np': phaseColor(nextPhase.kind) } as React.CSSProperties}>
@@ -356,6 +443,30 @@ function IntervalFace({
                 </div>
             </div>
 
+            {/* Chips de fase: duraciones derivadas de la prescripción (trabajo ámbar / recupera verde). */}
+            {(workPhase || recoveryPhase) && (
+                <div className="exec-v3-cchips">
+                    {workPhase && (
+                        <MetricChip
+                            icon={<Zap className="h-4 w-4" />}
+                            iconColor="var(--zone-z4)"
+                            value={formatCountdown(workPhase.durationSec)}
+                            label="Trabajo"
+                            wide={!recoveryPhase}
+                        />
+                    )}
+                    {recoveryPhase && (
+                        <MetricChip
+                            icon={<Repeat className="h-4 w-4" />}
+                            iconColor="var(--zone-z2)"
+                            value={formatCountdown(recoveryPhase.durationSec)}
+                            label="Recupera"
+                            wide={!workPhase}
+                        />
+                    )}
+                </div>
+            )}
+
             <div className="flex items-center gap-2">
                 <ZoneChip zone={zone} zoneRange={zoneRange} />
                 {!finished && (
@@ -364,6 +475,7 @@ function IntervalFace({
                     </button>
                 )}
             </div>
+            {!finished && <CardioPauseButton active={isActive} onToggle={runner.toggle} />}
         </div>
     )
 }

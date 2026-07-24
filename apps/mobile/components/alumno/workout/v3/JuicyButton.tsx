@@ -35,7 +35,7 @@ export function JuicyButton({
   onPress,
   exec,
   icon,
-  height = 56,
+  height = 60,
   fontSize = 17,
   breathing = false,
   reducedMotion = false,
@@ -68,12 +68,14 @@ export function JuicyButton({
       {/* Barra de sombra dura (5px del acento oscurecido) — fija al fondo; la cara la tapa al hundirse. */}
       <View
         pointerEvents="none"
-        style={{ position: 'absolute', left: 0, right: 0, top: DEPTH, height, borderRadius: 15, backgroundColor: dark }}
+        style={{ position: 'absolute', left: 0, right: 0, top: DEPTH, height, borderRadius: 16, backgroundColor: dark }}
       />
       <MotiView
         // Latido del CTA (scale) — envuelve la cara para no interferir con el translate de presión.
+        // Ciclo completo de 2,6s (1300ms ida + 1300ms vuelta con repeatReverse) = paridad con el
+        // `@keyframes exec-v3-breathe 2.6s` de web; pico de escala 1.03 igual que el 50% del keyframe.
         from={{ scale: 1 }}
-        animate={{ scale: beats ? 1.035 : 1 }}
+        animate={{ scale: beats ? 1.03 : 1 }}
         transition={beats ? { type: 'timing', duration: 1300, loop: true, repeatReverse: true } : { type: 'timing', duration: 0 }}
       >
         <MotiView
@@ -91,7 +93,7 @@ export function JuicyButton({
             accessibilityState={{ disabled }}
             style={{
               height,
-              borderRadius: 15,
+              borderRadius: 16,
               borderWidth: 2,
               borderColor: dark,
               backgroundColor: exec.accent,
@@ -105,7 +107,7 @@ export function JuicyButton({
           >
             {icon}
             <Text
-              style={{ fontFamily: FONT.uiExtra, fontSize, letterSpacing: 0.3, color: exec.accentText }}
+              style={{ fontFamily: FONT.uiExtra, fontSize, letterSpacing: 0.8, color: exec.accentText }}
               numberOfLines={1}
             >
               {label}

@@ -13,6 +13,7 @@ import { resolveMetadataBase } from '@/lib/site-url'
 import { ClientNav } from '@/components/client/ClientNav'
 import { getStudentMovementNavEnabled, getStudentBodyCompositionNavEnabled, getStudentNutritionNavEnabled } from './_data/client-root.queries'
 import { BasePathProvider } from '@/components/client/BasePathProvider'
+import { WorkoutLaunchProvider } from './dashboard/_components/launch/WorkoutLaunchMorph'
 import { NetworkProvider } from '@/components/client/OfflineScreen'
 import { OfflineNutritionQueueSync } from '@/app/c/[coach_slug]/_components/OfflineNutritionQueueSync'
 import { OfflineWorkoutQueueSync } from '@/app/c/[coach_slug]/_components/OfflineWorkoutQueueSync'
@@ -346,6 +347,10 @@ export default async function ClientBrandLayout({ children, params }: Props) {
             >
                 <NetworkProvider brandName={brandName} logoUrl={logoUrl} logoUrlDark={logoUrlDark || undefined} primaryColor={primaryColor}>
                   <BasePathProvider value={basePath}>
+                   {/* Morph de lanzamiento del workout (QA8): el provider vive en ESTE layout — persiste
+                       entre dashboard y ejecutor, así el overlay sobrevive al swap del App Router y la
+                       coreografía corre completa como loader único del workout. */}
+                   <WorkoutLaunchProvider>
                     <OfflineNutritionQueueSync />
                     <OfflineWorkoutQueueSync />
                     <ClientNav
@@ -411,6 +416,7 @@ export default async function ClientBrandLayout({ children, params }: Props) {
                             </a>
                         </div>
                     </main>
+                   </WorkoutLaunchProvider>
                   </BasePathProvider>
                 </NetworkProvider>
             </div>

@@ -14,6 +14,7 @@ import {
     doneAttributionLabel,
 } from '@/lib/workout/executor-recovery'
 import { WorkoutDoneSheet } from './WorkoutDoneSheet'
+import { useWorkoutLaunch } from '../launch/WorkoutLaunchMorph'
 import type { WeekDayStatus } from '../../_data/weekPendingWorkouts'
 
 const DAYS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
@@ -56,6 +57,8 @@ export function WorkoutPlanCards({
     const base = useBasePath(`/c/${coachSlug}`)
     // Sheet de doble intención: se abre al tocar un día hecho en OTRO día de la semana.
     const [sheetItem, setSheetItem] = useState<WorkoutPlanCardItem | null>(null)
+    // QA6: morph de lanzamiento desde el rect de la card (mismo destino de navegación).
+    const { launch, morph } = useWorkoutLaunch()
 
     return (
         <>
@@ -66,8 +69,6 @@ export function WorkoutPlanCards({
                     const done = p.status === 'done'
                     const pending = p.status === 'pending'
                     const isToday = p.isToday
-                    // Día hecho en OTRO día de la semana (recuperación) → tap abre el sheet de doble intención.
-                    const doneOtherDay = done && !isToday
                     // Sub-label de la celda: recuperado → "Hecho el jueves"; resto conserva "Día N" / "Pendiente".
                     const subLabel = pending
                         ? 'Pendiente'
@@ -117,9 +118,11 @@ export function WorkoutPlanCards({
                         </>
                     )
 
-                    // Tap: hecho HOY → ejecutor directo con `?desde=hecho` (edita los logs de hoy, el param se
-                    // ignora por ahora); hecho OTRO día → sheet de doble intención; resto → ejecutor normal.
-                    if (doneOtherDay) {
+                    // QA7: TODO día con registros (hecho HOY o en OTRO día de la semana) abre el sheet de
+                    // doble intención ("Ya hiciste este entrenamiento" → Revisar y editar / Repetir hoy).
+                    // El morph NO se dispara aquí: sale de la opción elegida en el sheet (onLaunch). Antes
+                    // el día hecho HOY navegaba directo con `?desde=hecho` y se saltaba la ventanita (bug QA CEO).
+                    if (done) {
                         return (
                             <button
                                 key={p.id}
@@ -133,16 +136,19 @@ export function WorkoutPlanCards({
                         )
                     }
 
-                    // Pendiente de la semana → recuperar (banner ámbar); hecho HOY → `?desde=hecho`; resto → normal.
+                    // Sin registros → morph directo: pendiente de la semana → recuperar (banner ámbar); resto → normal.
                     const href = pending && p.dateIso
                         ? buildWorkoutRecoverHref(base, p.id, p.dateIso)
-                        : isToday && done
-                          ? buildWorkoutFromDoneHref(base, p.id)
-                          : buildWorkoutRepeatHref(base, p.id)
+                        : buildWorkoutRepeatHref(base, p.id)
                     return (
                         <Link
                             key={p.id}
                             href={href}
+                            onClick={(e) => {
+                                // QA6: el MISMO morph que el CTA, disparado desde el rect de la card.
+                                e.preventDefault()
+                                launch(e.currentTarget, href)
+                            }}
                             aria-label={
                                 pending
                                     ? `${p.title} · pendiente, recuperar`
@@ -164,10 +170,16 @@ export function WorkoutPlanCards({
                     onOpenChange={(o) => { if (!o) setSheetItem(null) }}
                     title={sheetItem.title}
                     subtitle={`${weekdayNameFromIso(sheetItem.dateIso)} — Día ${sheetItem.day_of_week ?? 1} · ${fmtShortDate(sheetItem.dateIso)}`}
-                    editHref={buildWorkoutEditHref(base, sheetItem.id, sheetItem.doneOnDate ?? sheetItem.dateIso)}
+                    // HOY hecho → editar es el flujo normal de hoy (`?desde=hecho`, sin modo UPDATE-only de
+                    // día pasado); OTRO día → editar esa fecha con `?fecha=`.
+                    editHref={sheetItem.isToday
+                        ? buildWorkoutFromDoneHref(base, sheetItem.id)
+                        : buildWorkoutEditHref(base, sheetItem.id, sheetItem.doneOnDate ?? sheetItem.dateIso)}
                     repeatHref={buildWorkoutRepeatHref(base, sheetItem.id)}
+                    onLaunch={launch}
                 />
             ) : null}
+            {morph}
         </>
     )
 }

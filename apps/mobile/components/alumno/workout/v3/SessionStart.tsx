@@ -1,5 +1,6 @@
-import { ScrollView, Text, View } from 'react-native'
+import { ScrollView, StyleSheet, Text, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
+import { LinearGradient } from 'expo-linear-gradient'
 import { Play } from 'lucide-react-native'
 import { FONT } from '../../../../lib/typography'
 import { hexToRgba } from '../../../../lib/theme'
@@ -43,13 +44,14 @@ export function SessionStart({
   exercises,
   moreCount,
   lastVolumeLabel,
+  estimatedMin,
   coachNote,
   coachName,
-  hasPartialSession,
+
   weeklyStreak = null,
   reducedMotion = false,
   onStart,
-  onSkipToExercise,
+
 }: {
   exec: ExecTheme
   eyebrow: string
@@ -59,6 +61,8 @@ export function SessionStart({
   exercises: StartExercisePreview[]
   moreCount: number
   lastVolumeLabel: string | null
+  /** Duración estimada de la sesión (min) — tarjeta "Duración" de la fila de contexto. */
+  estimatedMin: number
   coachNote: string | null
   coachName: string
   hasPartialSession: boolean
@@ -71,7 +75,17 @@ export function SessionStart({
   const s = exec.surface
 
   return (
-    <SafeAreaView edges={['top', 'bottom']} style={{ flex: 1, backgroundColor: s.appBg }}>
+    <SafeAreaView edges={['top', 'bottom']} style={{ flex: 1, backgroundColor: s.appBgDeep }}>
+      {/* Fondo cálido del mockup (.a3a-screen radial): más claro arriba-centro, oscureciendo al piso.
+          RN no tiene radial-gradient → aproximación vertical con los tres stops del contrato. */}
+      <LinearGradient
+        pointerEvents="none"
+        colors={[s.surfaceRaised, s.appBg, s.appBgDeep]}
+        locations={[0, 0.42, 1]}
+        start={{ x: 0.5, y: 0 }}
+        end={{ x: 0.5, y: 1 }}
+        style={StyleSheet.absoluteFill}
+      />
       <ScrollView
         contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 20, paddingBottom: 28, flexGrow: 1 }}
         showsVerticalScrollIndicator={false}
@@ -95,7 +109,7 @@ export function SessionStart({
         </View>
 
         {/* Título del día */}
-        <Text style={{ fontFamily: FONT.displayBlack, fontSize: 34, letterSpacing: -1, lineHeight: 36, color: s.text, marginBottom: 12 }}>
+        <Text style={{ fontFamily: FONT.displayBlack, fontSize: 34, letterSpacing: -1, lineHeight: 34, color: s.text, marginBottom: 12 }}>
           {dayTitle}
         </Text>
 
@@ -124,15 +138,23 @@ export function SessionStart({
           </View>
         )}
 
-        {/* Resumen "{N} ejercicios · {M} series · ~{min} min" */}
+        {/* Resumen "{N} ejercicios · {M} series · ~{min} min" — "{N} ejercicios" resaltado en acento. */}
         <Text style={{ fontFamily: FONT.uiExtra, fontSize: 13, letterSpacing: 0.1, color: hexToRgba(s.text, 0.85), marginBottom: 16, fontVariant: ['tabular-nums'] }}>
-          {summaryLine}
+          {(() => {
+            const [head, ...rest] = summaryLine.split(' · ')
+            return (
+              <>
+                <Text style={{ color: exec.accent }}>{head}</Text>
+                {rest.length > 0 ? ` · ${rest.join(' · ')}` : ''}
+              </>
+            )
+          })()}
         </Text>
 
         {/* Mini-lista de los primeros ejercicios + su tipo. */}
         {exercises.length > 0 && (
           <View
-            style={{ backgroundColor: s.surface, borderWidth: 2, borderColor: s.border, borderRadius: 18, paddingHorizontal: 6, paddingVertical: 4, marginBottom: 14 }}
+            style={{ backgroundColor: s.surface, borderWidth: 2, borderColor: s.border, borderRadius: 18, paddingHorizontal: 6, paddingVertical: 6, marginBottom: 14 }}
           >
             {exercises.map((ex, i) => (
               <View
@@ -150,7 +172,7 @@ export function SessionStart({
                 <View style={{ width: 24, height: 24, borderRadius: 8, backgroundColor: s.borderSubtle, alignItems: 'center', justifyContent: 'center' }}>
                   <Text style={{ fontFamily: FONT.displayBlack, fontSize: 12, color: s.textMuted, fontVariant: ['tabular-nums'] }}>{i + 1}</Text>
                 </View>
-                <Text style={{ flex: 1, fontFamily: FONT.uiBold, fontSize: 14, color: s.text }} numberOfLines={1}>
+                <Text style={{ flex: 1, fontFamily: FONT.uiBold, fontSize: 14, color: '#e8e8ee' }} numberOfLines={1}>
                   {ex.name}
                 </Text>
                 <View style={{ borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3, backgroundColor: hexToRgba(ex.typeColor, 0.14) }}>
@@ -168,19 +190,27 @@ export function SessionStart({
           </View>
         )}
 
-        {/* Card "La última vez" (volumen) — sólo si hay historial. */}
-        {lastVolumeLabel && (
-          <View style={{ flexDirection: 'row', gap: 10, marginBottom: 12 }}>
-            <View style={{ flex: 1, backgroundColor: s.surfaceSunken, borderWidth: 1.5, borderColor: s.border, borderRadius: 14, paddingHorizontal: 12, paddingVertical: 10 }}>
-              <Text style={{ fontFamily: FONT.uiExtra, fontSize: 10, letterSpacing: 1, textTransform: 'uppercase', color: s.textMuted, marginBottom: 4 }}>
+        {/* Fila de contexto: "La última vez" (volumen, si hay historial) + "Duración" (estimada). */}
+        <View style={{ flexDirection: 'row', gap: 10, marginBottom: 12 }}>
+          {lastVolumeLabel && (
+            <View style={{ flex: 1, backgroundColor: '#17171f', borderWidth: 1.5, borderColor: s.border, borderRadius: 14, paddingHorizontal: 12, paddingVertical: 10 }}>
+              <Text style={{ fontFamily: FONT.uiExtra, fontSize: 10, letterSpacing: 1, textTransform: 'uppercase', color: '#7f7f8c', marginBottom: 4 }}>
                 La última vez
               </Text>
-              <Text style={{ fontFamily: FONT.displayBlack, fontSize: 18, letterSpacing: -0.2, color: s.text, fontVariant: ['tabular-nums'] }}>
+              <Text style={{ fontFamily: FONT.displayBlack, fontSize: 15, letterSpacing: -0.2, color: s.text, fontVariant: ['tabular-nums'] }}>
                 {lastVolumeLabel}
               </Text>
             </View>
+          )}
+          <View style={{ flex: 1, backgroundColor: '#17171f', borderWidth: 1.5, borderColor: s.border, borderRadius: 14, paddingHorizontal: 12, paddingVertical: 10 }}>
+            <Text style={{ fontFamily: FONT.uiExtra, fontSize: 10, letterSpacing: 1, textTransform: 'uppercase', color: '#7f7f8c', marginBottom: 4 }}>
+              Duración
+            </Text>
+            <Text style={{ fontFamily: FONT.displayBlack, fontSize: 15, letterSpacing: -0.2, color: s.text, fontVariant: ['tabular-nums'] }}>
+              ~{estimatedMin} min
+            </Text>
           </View>
-        )}
+        </View>
 
         {/* Nota del coach del día — sólo si existe. */}
         {coachNote && (
@@ -197,7 +227,12 @@ export function SessionStart({
             }}
           >
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7, marginBottom: 6 }}>
-              <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: exec.accent }} />
+              <LinearGradient
+                colors={[exec.accent, hexToRgba(exec.accent, 0.5)]}
+                start={{ x: 0.1, y: 0 }}
+                end={{ x: 0.9, y: 1 }}
+                style={{ width: 22, height: 22, borderRadius: 11 }}
+              />
               <Text style={{ fontFamily: FONT.uiExtra, fontSize: 11, letterSpacing: 0.3, color: exec.accent }} numberOfLines={1}>
                 {coachName}
               </Text>
@@ -205,6 +240,23 @@ export function SessionStart({
             <Text style={{ fontFamily: FONT.uiBold, fontSize: 14, lineHeight: 19, color: hexToRgba(s.text, 0.94) }}>
               {coachNote}
             </Text>
+            {/* Cola/flechita del globo apuntando al CTA (mockup .a3a-note::after rotada 45°). */}
+            <View
+              pointerEvents="none"
+              style={{
+                position: 'absolute',
+                left: 26,
+                bottom: -7,
+                width: 14,
+                height: 14,
+                backgroundColor: hexToRgba(exec.accent, 0.12),
+                borderRightWidth: 1.5,
+                borderBottomWidth: 1.5,
+                borderRightColor: hexToRgba(exec.accent, 0.26),
+                borderBottomColor: hexToRgba(exec.accent, 0.26),
+                transform: [{ rotate: '45deg' }],
+              }}
+            />
           </View>
         )}
 
@@ -218,24 +270,14 @@ export function SessionStart({
           </View>
         ) : null}
 
-        {hasPartialSession && (
-          <Text
-            onPress={onSkipToExercise}
-            suppressHighlighting
-            accessibilityRole="button"
-            accessibilityLabel="Saltar al ejercicio en curso"
-            style={{ alignSelf: 'center', fontFamily: FONT.uiExtra, fontSize: 12, letterSpacing: 0.4, color: s.textMuted, paddingVertical: 12, marginBottom: 2 }}
-          >
-            Saltar al ejercicio
-          </Text>
-        )}
+        {/* QA7 (decisión CEO): sin atajo "Saltar al ejercicio" — EMPEZAR es la única salida. */}
 
         <JuicyButton
           testID="btn-start-session-v3"
           label="EMPEZAR"
           onPress={onStart}
           exec={exec}
-          height={64}
+          height={66}
           fontSize={20}
           breathing
           reducedMotion={reducedMotion}

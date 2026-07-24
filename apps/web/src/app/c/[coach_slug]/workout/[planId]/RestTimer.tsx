@@ -51,6 +51,9 @@ export function RestTimer({
   // Ejecutor V3 (E3.1): en `variant='v3'` el descanso arranca como interstitial; minimizar cambia sólo
   // la presentación (barra compacta) sin desmontar → el conteo/alarma/WakeLock siguen vivos.
   const [minimized, setMinimized] = useState(false);
+  // Ejecutor V3 (QA4): la píldora del descanso existe SÓLO mientras el alumno descansa. Al llegar a 0
+  // arrancamos la salida suave (`leaving`) y descartamos el descanso; nunca persiste al siguiente paso.
+  const [leaving, setLeaving] = useState(false);
   const reducedMotion = useReducedMotion();
 
   // Háptico gateado por la pref de vibración (E3.7 · tuerca). Default ON (histórico) si nunca se tocó.
@@ -97,8 +100,10 @@ export function RestTimer({
     endTimeRef.current = null;
     lastBeepRef.current = null;
     setIsActive(true);
-    // V3: un descanso nuevo reabre el interstitial (por si el anterior quedó minimizado).
+    // V3: un descanso nuevo reabre el interstitial (por si el anterior quedó minimizado) y cancela
+    // cualquier salida en curso (por si el descanso previo estaba auto-descartándose).
     setMinimized(false);
+    setLeaving(false);
   }, [initialSeconds]);
 
   const stopAlarm = useCallback(() => {
@@ -313,14 +318,24 @@ export function RestTimer({
   const frac = Math.max(0, Math.min(1, timeLeft / (totalSeconds || 1)));
   const dashoffset = RING_C * (1 - frac);
 
-  // V3 (E3.1): al llegar a 0, el interstitial se retira (transición corta / fade en reduced-motion)
-  // colapsando a la barra compacta — la alarma/notificación del RestTimer siguen INTACTAS (misma
-  // instancia montada; sólo cambia la presentación). "Saltar" en cambio cierra el descanso (onClose).
+  // V3 (E3.1 → QA4): la píldora del descanso existe SÓLO mientras el alumno descansa (la minimiza para
+  // mirar otras cosas). Al llegar a 0 mostramos "¡A entrenar!" ~1.5s y AUTO-DESCARTAMOS el descanso
+  // (salida suave), sea el interstitial a pantalla completa o la barra minimizada — así JAMÁS queda
+  // pegada "DESCANSO 0:00" al pasar al siguiente ejercicio. El motor de tiempo/alarma queda INTACTO
+  // (misma instancia); sólo se retira la presentación. "Saltar"/cerrar la ronda → onClose inmediato.
   useEffect(() => {
-    if (variant !== "v3" || !done || minimized) return;
-    const t = setTimeout(() => setMinimized(true), reducedMotion ? 0 : 700);
+    if (variant !== "v3" || !done) return;
+    const t = setTimeout(() => setLeaving(true), reducedMotion ? 700 : 1500);
     return () => clearTimeout(t);
-  }, [variant, done, minimized, reducedMotion]);
+  }, [variant, done, reducedMotion]);
+
+  // Al arrancar la salida, AnimatePresence retira el nodo (fade/slide); tras la animación descartamos
+  // el descanso por completo (onClose → el provider desmonta el RestTimer). Reduced-motion: inmediato.
+  useEffect(() => {
+    if (!leaving) return;
+    const t = setTimeout(() => onClose(), reducedMotion ? 0 : 320);
+    return () => clearTimeout(t);
+  }, [leaving, reducedMotion, onClose]);
 
   const utilityBtn =
     "flex h-9 w-9 items-center justify-center rounded-full text-on-dark-muted transition-colors hover:text-on-dark hover:bg-white/10";
@@ -339,12 +354,14 @@ export function RestTimer({
         onAdjust={adjust}
         onSkip={onClose}
         onMinimize={() => setMinimized(true)}
+        leaving={leaving}
       />
     );
   }
 
   return (
     <AnimatePresence>
+      {!leaving && (
       <motion.div
         // Marca para el gate del auto-scroll (BUG 2 · sub-fix 3): el ejecutor mide el borde superior de
         // este sheet inferior para no disparar un scroll cuando la fila destino ya está a la vista.
@@ -476,6 +493,7 @@ export function RestTimer({
           </div>
         </div>
       </motion.div>
+      )}
     </AnimatePresence>
   );
 }

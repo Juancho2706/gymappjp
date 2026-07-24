@@ -19,6 +19,7 @@ export function WorkoutDoneSheet({
     subtitle,
     editHref,
     repeatHref,
+    onLaunch,
 }: {
     open: boolean
     onOpenChange: (open: boolean) => void
@@ -28,17 +29,36 @@ export function WorkoutDoneSheet({
     subtitle: string
     editHref: string
     repeatHref: string
+    /**
+     * QA7: al elegir una opción se dispara el MORPH de lanzamiento con el destino elegido (mismo puente
+     * visual que un tap directo). Si se omite, los enlaces navegan normal (sin morph). El rect del morph
+     * se toma del botón elegido; leemos la geometría antes de cerrar el sheet.
+     */
+    onLaunch?: (el: HTMLElement, href: string) => void
 }) {
+    const choose = (href: string) => (e: React.MouseEvent<HTMLAnchorElement>) => {
+        if (onLaunch) {
+            e.preventDefault()
+            onLaunch(e.currentTarget, href) // lee el rect AHORA (el elemento aún está montado)
+        }
+        onOpenChange(false)
+    }
+
     return (
         <Sheet open={open} onOpenChange={onOpenChange}>
             <SheetContent
                 side="bottom"
                 showCloseButton={false}
-                className="max-h-[85dvh] gap-0 rounded-t-sheet p-0 sm:max-w-md"
+                // Movil (<md): bottom sheet byte-identico. Desktop (md+): MODAL CENTRADO. Base UI ancla
+                // el side=bottom con selectores atributo (mayor especificidad), asi que los overrides md+
+                // van con `!` (important). Centrado robusto sin transform: inset-0 + margin auto + alto
+                // intrinseco (evita chocar con la translate-y de entrada del sheet).
+                className="max-h-[85dvh] gap-0 rounded-t-sheet p-0 md:inset-0! md:m-auto! md:h-max! md:w-full! md:max-w-md! md:rounded-2xl! md:border!"
                 aria-label="Ya hiciste este entrenamiento"
             >
                 <div className="flex flex-col gap-1 px-5 pb-2 pt-4">
-                    <div className="mx-auto mb-3 h-1.5 w-10 shrink-0 rounded-full bg-border dark:bg-white/15" aria-hidden />
+                    {/* Asa de arrastre: solo en el bottom sheet movil; en el modal desktop no aplica. */}
+                    <div className="mx-auto mb-3 h-1.5 w-10 shrink-0 rounded-full bg-border md:hidden dark:bg-white/15" aria-hidden />
                     <h2 className="font-display text-xl font-black tracking-tight text-strong">
                         Ya hiciste este entrenamiento
                     </h2>
@@ -52,7 +72,7 @@ export function WorkoutDoneSheet({
                     {/* Opción destacada: revisar y editar los registros de ESA fecha. */}
                     <Link
                         href={editHref}
-                        onClick={() => onOpenChange(false)}
+                        onClick={choose(editHref)}
                         className="group flex items-center gap-3.5 rounded-card border-2 border-sport-500/55 bg-sport-100/60 p-4 text-left transition-colors hover:bg-sport-100 dark:bg-sport-500/[0.10] dark:hover:bg-sport-500/[0.16]"
                     >
                         <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-control bg-sport-500/18 text-sport-600 dark:text-sport-300">
@@ -70,7 +90,7 @@ export function WorkoutDoneSheet({
                     {/* Repetir hoy: instancia nueva; las marcas de esa vez quedan como referencia. */}
                     <Link
                         href={repeatHref}
-                        onClick={() => onOpenChange(false)}
+                        onClick={choose(repeatHref)}
                         className="group flex items-center gap-3.5 rounded-card border border-subtle bg-surface-card p-4 text-left transition-colors hover:bg-surface-sunken"
                     >
                         <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-control bg-surface-sunken text-subtle">

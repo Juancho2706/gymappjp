@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
-import { Move } from 'lucide-react-native'
+import { Move, RotateCcw } from 'lucide-react-native'
 import {
   formatTypedObjective,
   type OptimisticLogPayload,
@@ -14,12 +14,12 @@ import { Sheet } from '../../../Sheet'
 import { ActiveSetRow, SetRow } from '../SetRow'
 import { JuicyButton } from './JuicyButton'
 import { ProgressRing } from './ProgressRing'
-import { TypedMediaV3 } from './TypedMediaV3'
+import { TypedMediaV3, TypedInstructionsChip, hasExecMedia } from './TypedMediaV3'
 import { useCountdown } from './timing'
 import { formatClock, holdSeedValues, mobilitySides, sideLabel } from './typed-screen-model'
 import type { ExecTheme } from './exec-theme'
 
-const MEDIA_HEIGHT = 168
+const MEDIA_HEIGHT = 150
 
 /**
  * Pantalla "Movilidad" del ejecutor V3 (E3.2) — traducción del `.a3b-mob` (concepto-a-v3-tipos): tono
@@ -146,7 +146,7 @@ export function MobilityScreenV3({
     <View style={{ gap: 14, alignItems: 'center' }}>
       {/* Nombre + chip Movilidad + "Serie N de M" */}
       <View style={{ alignItems: 'center', gap: 8 }}>
-        <Text style={{ fontFamily: FONT.displayBlack, fontSize: 26, letterSpacing: -0.5, lineHeight: 30, color: s.text, textAlign: 'center' }}>
+        <Text style={{ fontFamily: FONT.displayBlack, fontSize: 26, letterSpacing: -0.5, lineHeight: 30, color: '#eef4f6', textAlign: 'center' }}>
           {exercise.name}
         </Text>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
@@ -164,29 +164,21 @@ export function MobilityScreenV3({
         </View>
       </View>
 
-      {/* Media serena */}
-      <View style={{ width: '100%', height: MEDIA_HEIGHT, borderRadius: 22, overflow: 'hidden', borderWidth: 2, borderColor: hexToRgba(accent, 0.22), backgroundColor: s.surfaceRaised }}>
-        <TypedMediaV3 exercise={exercise} exec={exec} accent={accent} IconFallback={Move} onOpenTechnique={onOpenTechnique} />
-      </View>
+      {/* Media serena — chips "Instrucciones" + "Nota del coach" DENTRO de la media (overlay superior-
+          izquierdo). Sin pill "Mantén" superpuesta (QA4). */}
+      {hasExecMedia(exercise) ? (
+        <View style={{ width: '100%', height: MEDIA_HEIGHT, borderRadius: 22, overflow: 'hidden', borderWidth: 2, borderColor: '#2a333a', backgroundColor: s.surfaceRaised }}>
+          <TypedMediaV3 exercise={exercise} exec={exec} accent={accent} coachNote={coachNote} IconFallback={Move} onOpenTechnique={onOpenTechnique} onOpenNote={() => setNoteOpen(true)} reducedMotion={reducedMotion} />
+        </View>
+      ) : (
+        <TypedInstructionsChip exercise={exercise} accent={accent} coachNote={coachNote} onOpenTechnique={onOpenTechnique} onOpenNote={() => setNoteOpen(true)} reducedMotion={reducedMotion} />
+      )}
 
       {objectiveLine ? (
         <Text style={{ fontFamily: FONT.monoSemibold, fontSize: 13, color: hexToRgba(s.text, 0.82), textAlign: 'center', fontVariant: ['tabular-nums'] }}>
           {objectiveLine}
         </Text>
       ) : null}
-
-      {coachNote && (
-        <Pressable
-          testID="btn-mobility-note-v3"
-          onPress={() => setNoteOpen(true)}
-          hitSlop={6}
-          style={{ flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 32, paddingHorizontal: 12, borderRadius: 999, borderWidth: 1.5, borderColor: hexToRgba(accent, 0.3), backgroundColor: hexToRgba(accent, 0.1) }}
-          accessibilityRole="button"
-          accessibilityLabel="Ver la nota del coach"
-        >
-          <Text style={{ fontFamily: FONT.uiBold, fontSize: 12, color: accent }}>Nota del coach</Text>
-        </Pressable>
-      )}
 
       {firstUnlogged == null ? (
         // Todas las series completas: solo los chips (editables).
@@ -201,27 +193,42 @@ export function MobilityScreenV3({
             </Text>
           </View>
 
-          <ProgressRing
-            size={214}
-            strokeWidth={14}
-            fill={countdown.remaining / (holdSec || 1)}
-            color={accent}
-            trackColor="#262c31"
-            reducedMotion={reducedMotion}
-          >
-            <View style={{ alignItems: 'center', justifyContent: 'center' }}>
-              <Text style={{ fontFamily: FONT.displayBlack, fontSize: 56, letterSpacing: -2, lineHeight: 58, color: s.text, fontVariant: ['tabular-nums'] }}>
-                {formatClock(countdown.remaining)}
-              </Text>
-              <Text style={{ fontFamily: FONT.uiBold, fontSize: 11, letterSpacing: 2, color: hexToRgba(accent, 0.9), textTransform: 'uppercase', marginTop: 6 }}>
-                Sostén
-              </Text>
-            </View>
-          </ProgressRing>
+          {/* QA5 h3: fila relativa que centra el anillo y ancla el chip "Reiniciar" a un costado. */}
+          <View style={{ width: '100%', alignItems: 'center', justifyContent: 'center' }}>
+            <ProgressRing
+              size={214}
+              strokeWidth={23}
+              fill={countdown.remaining / (holdSec || 1)}
+              color={accent}
+              trackColor="#262c31"
+              reducedMotion={reducedMotion}
+            >
+              <View style={{ alignItems: 'center', justifyContent: 'center' }}>
+                {/* Sólo el número en el centro (QA4 · decisión CEO): "Sostén" se removió; el estado (lado) va
+                    en la pastilla de arriba y el texto guía "luego: …" de abajo. */}
+                <Text style={{ fontFamily: FONT.displayBlack, fontSize: 60, letterSpacing: -2, lineHeight: 62, color: '#eef4f6', fontVariant: ['tabular-nums'] }}>
+                  {formatClock(countdown.remaining)}
+                </Text>
+              </View>
+            </ProgressRing>
+            {/* Reinicia el hold del lado actual a su valor prescrito (mecanismo `restart` del hook). */}
+            <Pressable
+              testID="btn-mobility-restart-v3"
+              onPress={() => countdown.restart(holdSec)}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel="Reiniciar el contador"
+              style={{ position: 'absolute', right: 4, top: 0, bottom: 0, justifyContent: 'center' }}
+            >
+              <View style={{ width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: '#2f2f3a', backgroundColor: '#1c1c24' }}>
+                <RotateCcw size={16} color="#b7b7c2" />
+              </View>
+            </Pressable>
+          </View>
 
           {perSide && sideIdx + 1 < sides.length ? (
-            <Text style={{ fontFamily: FONT.uiBold, fontSize: 12, color: s.textDim }}>
-              luego: <Text style={{ color: s.textMuted }}>{sideLabel(sides[sideIdx + 1])}</Text>
+            <Text style={{ fontFamily: FONT.uiBold, fontSize: 12, color: '#6f7c82' }}>
+              luego: <Text style={{ color: '#9fb2b9' }}>{sideLabel(sides[sideIdx + 1])}</Text>
             </Text>
           ) : null}
 

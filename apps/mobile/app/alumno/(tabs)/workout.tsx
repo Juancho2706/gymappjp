@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   ActivityIndicator,
   FlatList,
@@ -7,7 +7,6 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native'
-import { useRouter } from 'expo-router'
 import { AlertTriangle, Check, ChevronRight, Dumbbell, Play, RefreshCw } from 'lucide-react-native'
 import { MotiView } from 'moti'
 import { supabase } from '../../../lib/supabase'
@@ -20,6 +19,7 @@ import { ProgressRing } from '../../../components/ProgressRing'
 import { EvaLoaderScreen } from '../../../components/EvaLoader'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { AppBackground } from '../../../components/AppBackground'
+import { measureMorphOrigin, useSessionMorph, useTriggerMorphHide, type MorphOrigin } from '../../../components/alumno/workout/v3/session-morph'
 
 const DAY_NAMES = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
 const TODAY_DOW = new Date().getDay()
@@ -49,7 +49,7 @@ interface TodayProgress {
 
 export default function WorkoutScreen() {
   const { theme } = useTheme()
-  const router = useRouter()
+  const { startMorph } = useSessionMorph()
   const [plans, setPlans] = useState<Plan[]>([])
   const [todayProgress, setTodayProgress] = useState<TodayProgress | null>(null)
   const [loading, setLoading] = useState(true)
@@ -149,59 +149,9 @@ export default function WorkoutScreen() {
   }
 
   function renderPlan({ item, index }: { item: Plan; index: number }) {
-    const isToday = item.day_of_week === TODAY_DOW
-    return (
-      <MotiView
-        from={{ opacity: 0, translateY: 12 }}
-        animate={{ opacity: 1, translateY: 0 }}
-        transition={{ type: 'timing', duration: 350, delay: Math.min(index * 60, 400) }}
-      >
-        <Card
-          variant={isToday ? 'highlighted' : 'default'}
-          interactive
-          padding={18}
-          onPress={() => router.push(`/alumno/workout/${item.id}`)}
-          style={styles.card}
-        >
-          <View
-            style={[
-              styles.iconChip,
-              {
-                backgroundColor: isToday ? theme.primary : theme.muted,
-                borderRadius: theme.radius.md,
-              },
-            ]}
-          >
-            <Dumbbell size={20} color={isToday ? theme.primaryForeground : theme.primary} strokeWidth={2} />
-          </View>
-          <View style={styles.cardLeft}>
-            {item.day_of_week != null && (
-              <View style={styles.dowRow}>
-                <Text
-                  style={[
-                    styles.dow,
-                    { color: isToday ? theme.primary : theme.mutedForeground, fontFamily: FONT_BOLD },
-                  ]}
-                >
-                  {DAY_NAMES[item.day_of_week]}
-                </Text>
-                {isToday && <Badge label="HOY" tone="sport" variant="solid" />}
-              </View>
-            )}
-            <Text
-              style={[styles.planTitle, { color: theme.foreground, fontFamily: FONT_SEMI }]}
-              numberOfLines={2}
-            >
-              {item.title}
-            </Text>
-            <Text style={[styles.planSub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
-              {item.blockCount} ejercicio{item.blockCount !== 1 ? 's' : ''}
-            </Text>
-          </View>
-          <ChevronRight size={22} color={isToday ? theme.primary : theme.mutedForeground} />
-        </Card>
-      </MotiView>
-    )
+    // El Despegue nace de la CARD clickeada → cada card mide su rect real (measureMorphOrigin en PlanCard).
+    // `label` = texto real del trigger (título del plan) para la píldora del clon.
+    return <PlanCard item={item} index={index} onStart={(origin, label) => startMorph({ planId: item.id, origin, label })} />
   }
 
   return (
@@ -277,7 +227,7 @@ export default function WorkoutScreen() {
             todayProgress ? (
               <TodayHero
                 progress={todayProgress}
-                onStart={() => router.push(`/alumno/workout/${todayProgress.planId}`)}
+                onStart={(origin, label) => startMorph({ planId: todayProgress.planId, origin, label })}
               />
             ) : null
           }
@@ -287,9 +237,79 @@ export default function WorkoutScreen() {
   )
 }
 
-/** Hero de HOY — espejo web §4.5: ProgressRing (series/objetivo) + CTA Empezar/Continuar/Ver registro. */
-function TodayHero({ progress, onStart }: { progress: TodayProgress; onStart: () => void }) {
+/** Card de un plan de la lista. Mide su rect real al tocarla para que el Despegue NAZCA de la card
+ *  clickeada (mismo patrón que el CTA del hero); si la medición falla, el morph cae al origen sintético. */
+function PlanCard({ item, index, onStart }: { item: Plan; index: number; onStart: (origin: MorphOrigin | null, label?: string) => void }) {
   const { theme } = useTheme()
+  const ref = useRef<View>(null)
+  // Ocultar la card real durante el Despegue (el clon la reemplaza); si no, se ve su caja detrás del morph.
+  const { hidden, hide } = useTriggerMorphHide()
+  const isToday = item.day_of_week === TODAY_DOW
+  return (
+    <MotiView
+      from={{ opacity: 0, translateY: 12 }}
+      animate={{ opacity: 1, translateY: 0 }}
+      transition={{ type: 'timing', duration: 350, delay: Math.min(index * 60, 400) }}
+    >
+      <View ref={ref} collapsable={false} style={{ opacity: hidden ? 0 : 1 }}>
+        <Card
+          variant={isToday ? 'highlighted' : 'default'}
+          interactive
+          padding={18}
+          onPress={() => {
+            hide()
+            measureMorphOrigin(ref.current, theme.radius.card, (origin) => onStart(origin, item.title))
+          }}
+          style={styles.card}
+        >
+          <View
+            style={[
+              styles.iconChip,
+              {
+                backgroundColor: isToday ? theme.primary : theme.muted,
+                borderRadius: theme.radius.md,
+              },
+            ]}
+          >
+            <Dumbbell size={20} color={isToday ? theme.primaryForeground : theme.primary} strokeWidth={2} />
+          </View>
+          <View style={styles.cardLeft}>
+            {item.day_of_week != null && (
+              <View style={styles.dowRow}>
+                <Text
+                  style={[
+                    styles.dow,
+                    { color: isToday ? theme.primary : theme.mutedForeground, fontFamily: FONT_BOLD },
+                  ]}
+                >
+                  {DAY_NAMES[item.day_of_week]}
+                </Text>
+                {isToday && <Badge label="HOY" tone="sport" variant="solid" />}
+              </View>
+            )}
+            <Text
+              style={[styles.planTitle, { color: theme.foreground, fontFamily: FONT_SEMI }]}
+              numberOfLines={2}
+            >
+              {item.title}
+            </Text>
+            <Text style={[styles.planSub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+              {item.blockCount} ejercicio{item.blockCount !== 1 ? 's' : ''}
+            </Text>
+          </View>
+          <ChevronRight size={22} color={isToday ? theme.primary : theme.mutedForeground} />
+        </Card>
+      </View>
+    </MotiView>
+  )
+}
+
+/** Hero de HOY — espejo web §4.5: ProgressRing (series/objetivo) + CTA Empezar/Continuar/Ver registro. */
+function TodayHero({ progress, onStart }: { progress: TodayProgress; onStart: (origin?: MorphOrigin | null, label?: string) => void }) {
+  const { theme } = useTheme()
+  const ctaRef = useRef<View>(null)
+  // Ocultar el CTA real durante el Despegue (el clon lo reemplaza); si no, se ve la caja del botón detrás.
+  const { hidden: ctaHidden, hide: hideCta } = useTriggerMorphHide()
   const { logged, target } = progress
   const done = target > 0 && logged >= target
   const inProgress = logged > 0 && !done
@@ -336,8 +356,20 @@ function TodayHero({ progress, onStart }: { progress: TodayProgress; onStart: ()
             }
           />
         </View>
-        <View style={{ marginTop: 14 }}>
-          <Button testID="workout-hero-cta" label={ctaLabel} variant="sport" size="lg" leftIcon={Play} full onPress={onStart} />
+        <View style={{ marginTop: 14, opacity: ctaHidden ? 0 : 1 }} ref={ctaRef} collapsable={false}>
+          <Button
+            testID="workout-hero-cta"
+            label={ctaLabel}
+            variant="sport"
+            size="lg"
+            leftIcon={Play}
+            full
+            onPress={() => {
+              hideCta()
+              // `ctaLabel` = texto real del botón (Empezar/Continuar/Ver registro) → píldora del Despegue.
+              measureMorphOrigin(ctaRef.current, 16, (origin) => onStart(origin, ctaLabel))
+            }}
+          />
         </View>
       </Card>
     </MotiView>

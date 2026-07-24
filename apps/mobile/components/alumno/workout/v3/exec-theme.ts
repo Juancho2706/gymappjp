@@ -38,6 +38,8 @@ export const EXEC_PR_GOLD = '#f5c451'
 export interface ExecSurface {
   /** Fondo base del ejecutor (mockup screen mid-stop ~#16161d). */
   appBg: string
+  /** Piso casi-negro del splash/Entrada (mockup .a3a-splash stop 100% #0a0a0f) — mas oscuro que appBg. */
+  appBgSplash: string
   /** Fondo mas profundo (gradiente inferior del mockup). */
   appBgDeep: string
   /** Card / fila de plan elevada. */
@@ -64,6 +66,7 @@ export interface ExecSurface {
 
 export const EXEC_SURFACE: ExecSurface = Object.freeze({
   appBg: '#16161d',
+  appBgSplash: '#0a0a0f',
   appBgDeep: '#121218',
   surface: '#1a1a22',
   surfaceRaised: '#1c1c24',
@@ -121,15 +124,16 @@ export function resolveExecTheme(
       surface: EXEC_SURFACE,
     }
   }
-  // Modo coach: monocromatico sobre el primario white-label. Recovery/celebration caen al acento
-  // (Ola 3/4 definiran su matiz definitivo; hoy no se renderizan). Fallback al Sport EVA si no hay
-  // primario resuelto todavia (fail-safe identico al DEFAULT_BRAND del shim).
+  // Modo coach: monocromatico sobre el primario white-label. El acento RECOVERY (movilidad/roller) es
+  // aqua FIJO (#18ABD4) en AMBOS temas, igual que web (globals.css .exec-v3-calm) — decision Ola 0: la
+  // recuperacion es un tono universal sereno, no se re-tiñe por marca. Celebration cae al acento (Ola 4
+  // definira su matiz). Fallback al Sport EVA si no hay primario resuelto (fail-safe del shim).
   const accent = coachAccent || EVA_EXEC_ACCENT
   return {
     mode,
     accent,
     accentText: coachAccentText || '#FFFFFF',
-    recovery: accent,
+    recovery: EVA_EXEC_RECOVERY,
     celebration: accent,
     // El PR es SIEMPRE oro, aun en modo coach monocromatico: es un premio universal, no un acento de marca.
     pr: EXEC_PR_GOLD,

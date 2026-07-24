@@ -1,13 +1,12 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import Image from 'next/image'
 import { Move, Pause, Play, RotateCcw } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { LogSetForm, type SetSyncResult } from '../LogSetForm'
 import { formatTypedObjective, type OptimisticLogPayload } from '@eva/workout-engine'
 import type { BlockType, ExerciseType, WorkoutSessionLog } from '../WorkoutExecutionClient'
-import { resolveExecMedia } from './exec-media'
+import { ExecTypedMedia } from './ExecTypedMedia'
 import { useExecCountdown, formatCountdown } from './useExecCountdown'
 
 interface MobilityStepV3Props {
@@ -19,6 +18,7 @@ interface MobilityStepV3Props {
     autoTimerEnabled: boolean
     reopenSignal: { blockId: string; setNumber: number; nonce: number } | null
     substitution?: { exerciseId: string; exerciseName: string; reason: string } | null
+    openTechnique: (exercise: ExerciseType | null) => void
     handleLogged: (payload: OptimisticLogPayload) => void
     handleResult: (blockId: string, setNumber: number, result: SetSyncResult) => void
 }
@@ -44,19 +44,30 @@ export function MobilityStepV3({
     autoTimerEnabled,
     reopenSignal,
     substitution,
+    openTechnique,
     handleLogged,
     handleResult,
 }: MobilityStepV3Props) {
-    const media = resolveExecMedia(exercise)
+    const coachNote = block.notes?.trim() || null
     const perSide = block.side_mode === 'per_side'
     const holdSeconds = block.duration_sec ?? 0
     const activeSet = firstUnlogged ?? block.sets
     // Lado activo (per_side): arranca izquierdo; al terminar el hold del izquierdo, salta al derecho.
     const [side, setSide] = useState<'left' | 'right'>('left')
+    // Segundos sostenidos por lado (QA4): el anillo los vuelca en la fila activa al completar/detener cada
+    // lado. `hpNonce` dispara el prefill uncontrolled de `LogSetForm` (revisar y confirmar; NO toca submit).
+    const [timed, setTimed] = useState<{ left?: number; right?: number; single?: number }>({})
+    const [hpNonce, setHpNonce] = useState(0)
+    // Registra el hold de un lado y empuja el prefill a la fila activa.
+    const recordSide = (key: 'left' | 'right' | 'single', seconds: number) => {
+        setTimed((t) => ({ ...t, [key]: seconds }))
+        setHpNonce((n) => n + 1)
+    }
 
-    // Al pasar a la siguiente serie, el ciclo de lados vuelve a empezar por el izquierdo.
+    // Al pasar a la siguiente serie, el ciclo de lados vuelve a empezar por el izquierdo y se limpia lo medido.
     useEffect(() => {
         setSide('left')
+        setTimed({})
     }, [activeSet])
 
     const countdown = useExecCountdown(holdSeconds, {
@@ -64,9 +75,18 @@ export function MobilityStepV3({
         autoStart: perSide && side === 'right',
         resetKey: `${activeSet}-${side}`,
         onDone: () => {
-            if (perSide && side === 'left') setSide('right')
+            // Completó el hold: vuelca el objetivo íntegro al input del lado y (per_side) avanza al derecho.
+            if (perSide) {
+                if (side === 'left') { recordSide('left', holdSeconds); setSide('right') }
+                else recordSide('right', holdSeconds)
+            } else {
+                recordSide('single', holdSeconds)
+            }
         },
     })
+
+    // Segundos efectivamente sostenidos AHORA (completado ⇒ objetivo; detenido antes ⇒ lo transcurrido).
+    const heldSecondsNow = () => (countdown.done ? holdSeconds : Math.max(0, holdSeconds - countdown.timeLeft) || holdSeconds)
 
     const DASH = 2 * Math.PI * 92
     const dashoffset = DASH * (1 - countdown.frac)
@@ -84,20 +104,15 @@ export function MobilityStepV3({
                 </div>
             </div>
 
-            {/* Media calmada */}
-            <div className="exec-v3-media exec-v3-media-calm">
-                {media.kind === 'video' && (
-                    <video src={media.src} autoPlay loop muted playsInline className="h-full w-full object-contain" />
-                )}
-                {media.kind === 'image' && (
-                    <Image src={media.src} alt={exercise.name} fill unoptimized className="object-contain" />
-                )}
-                {(media.kind === 'none' || media.kind === 'youtube') && (
-                    <div className="exec-v3-media-empty" aria-hidden>
-                        <Move className="h-9 w-9" />
-                    </div>
-                )}
-            </div>
+            {/* Media calmada — mismo tratamiento que fuerza: chips "Instrucciones" + "Nota del coach" DENTRO
+                de la media (overlay superior-izquierdo), precedencia + audio en video (QA4). */}
+            <ExecTypedMedia
+                exercise={exercise}
+                note={coachNote}
+                openTechnique={openTechnique}
+                className="exec-v3-media-calm"
+                fallbackIcon={<Move className="h-9 w-9" />}
+            />
 
             {/* Anillo de HOLD (guía). Sólo si el coach prescribió duración. */}
             {holdSeconds > 0 && (
@@ -109,6 +124,7 @@ export function MobilityStepV3({
                         </div>
                     )}
 
+                    <div className="exec-v3-ringrow">
                     <button
                         type="button"
                         onClick={countdown.done ? countdown.restart : countdown.toggle}
@@ -122,14 +138,14 @@ export function MobilityStepV3({
                         }
                     >
                         <svg className="exec-v3-hold-svg" viewBox="0 0 208 208" aria-hidden>
-                            <circle cx="104" cy="104" r="92" className="exec-v3-hold-track" fill="none" strokeWidth="12" />
+                            <circle cx="104" cy="104" r="92" className="exec-v3-hold-track" fill="none" strokeWidth="23" />
                             <circle
                                 cx="104"
                                 cy="104"
                                 r="92"
                                 className="exec-v3-hold-fill"
                                 fill="none"
-                                strokeWidth="12"
+                                strokeWidth="23"
                                 strokeLinecap="round"
                                 strokeDasharray={DASH}
                                 strokeDashoffset={dashoffset}
@@ -139,20 +155,36 @@ export function MobilityStepV3({
                             <div className={cn('exec-v3-holdnum tabular-nums', countdown.done && 'is-done')}>
                                 {countdown.done ? '¡Listo!' : formatCountdown(countdown.timeLeft)}
                             </div>
-                            <div className="exec-v3-holdlbl">
-                                {countdown.done ? 'Registra abajo' : countdown.isActive ? 'Sostén' : 'Tocar para iniciar'}
-                            </div>
-                        </div>
-                        <span className="exec-v3-hold-icon" aria-hidden>
-                            {countdown.done ? (
-                                <RotateCcw className="h-4 w-4" />
-                            ) : countdown.isActive ? (
-                                <Pause className="h-4 w-4" />
-                            ) : (
-                                <Play className="h-4 w-4" />
+                            {/* Affordance de tap DENTRO del anillo (QA4): Play/Pause 18px justo bajo el número. */}
+                            <span className="exec-v3-hold-icon" aria-hidden>
+                                {countdown.done ? (
+                                    <RotateCcw className="h-[18px] w-[18px]" />
+                                ) : countdown.isActive ? (
+                                    <Pause className="h-[18px] w-[18px]" />
+                                ) : (
+                                    <Play className="h-[18px] w-[18px]" />
+                                )}
+                            </span>
+                            {/* El estado "Sostén" se removió del centro (decisión CEO): el estado vive en el
+                                texto guía de abajo; el centro sólo lleva número + affordance + guía de tap. */}
+                            {!countdown.isActive && (
+                                <div className="exec-v3-holdlbl">
+                                    {countdown.done ? 'Registra abajo' : 'Tocar para iniciar'}
+                                </div>
                             )}
-                        </span>
+                        </div>
                     </button>
+                        {/* QA5 h3: reinicia el hold del lado actual a su valor prescrito (mecanismo `restart`
+                            del hook — no toca el motor de guardado). */}
+                        <button
+                            type="button"
+                            onClick={countdown.restart}
+                            className="exec-v3-restart"
+                            aria-label="Reiniciar el contador"
+                        >
+                            <RotateCcw className="h-4 w-4" aria-hidden />
+                        </button>
+                    </div>
 
                     {perSide && (
                         <p className="exec-v3-then">
@@ -162,6 +194,24 @@ export function MobilityStepV3({
                                 <>último lado — <b>registra los dos holds</b></>
                             )}
                         </p>
+                    )}
+
+                    {/* CTA juicy "Listo este lado" (como RN): avance eyes-free del lado; en el último, pausa. */}
+                    {firstUnlogged != null && (
+                        <button
+                            type="button"
+                            onClick={() => {
+                                // Vuelca lo sostenido en la fila y avanza (per_side izq → der) o pausa (último lado).
+                                if (perSide && side === 'left') { recordSide('left', heldSecondsNow()); setSide('right') }
+                                else {
+                                    recordSide(perSide ? 'right' : 'single', heldSecondsNow())
+                                    if (countdown.isActive) countdown.toggle()
+                                }
+                            }}
+                            className="exec-v3-juicy exec-v3-mob-cta"
+                        >
+                            {perSide && side === 'left' ? 'Listo este lado' : 'Listo'}
+                        </button>
                     )}
                 </div>
             )}
@@ -187,6 +237,11 @@ export function MobilityStepV3({
                             typedObjective={formatTypedObjective(block, 'mobility')}
                             sideMode={block.side_mode}
                             isActive={setNumber === firstUnlogged}
+                            holdPrefill={
+                                setNumber === activeSet
+                                    ? { holdSec: timed.single, leftSec: timed.left, rightSec: timed.right, nonce: hpNonce }
+                                    : undefined
+                            }
                             reopenNonce={
                                 reopenSignal?.blockId === block.id && reopenSignal?.setNumber === setNumber
                                     ? reopenSignal.nonce

@@ -69,11 +69,17 @@ export function KeypadHost({
   onClose,
   onCommit,
   onDraftChange,
+  accent,
+  accentText,
 }: {
   target: KeypadTarget | null
   onClose: () => void
   onCommit: (payload: OptimisticLogPayload) => void
   onDraftChange: (values: Record<string, string>, fieldIndex: number) => void
+  /** Acento de MARCA del ejecutor V3 (informe 15, MAYOR): confirmar/seleccionados adoptan la marca en
+   *  vez del azul Sport fijo. Ausente (ejecutor V2) ⇒ conserva `bg-sport-500` + texto blanco. */
+  accent?: string
+  accentText?: string
 }) {
   const insets = useSafeAreaInsets()
   const { resolvedScheme } = useTheme()
@@ -364,11 +370,11 @@ export function KeypadHost({
                     onPress={commit}
                     accessibilityRole="button"
                     accessibilityLabel={`${doneLabel}, guardar serie`}
-                    className="h-14 flex-row items-center justify-center gap-2 rounded-control bg-sport-500 active:scale-[0.98]"
-                    style={{ flex: 1.4 }}
+                    className={`h-14 flex-row items-center justify-center gap-2 rounded-control active:scale-[0.98] ${accent ? '' : 'bg-sport-500'}`}
+                    style={[{ flex: 1.4 }, accent ? { backgroundColor: accent } : null]}
                   >
-                    <Check size={20} color={WHITE} />
-                    <Text style={KEYPAD_ACTION_STYLE} className="text-white">
+                    <Check size={20} color={accent ? accentText ?? WHITE : WHITE} />
+                    <Text style={[KEYPAD_ACTION_STYLE, accent ? { color: accentText ?? WHITE } : null]} className={accent ? undefined : 'text-white'}>
                       {doneLabel}
                     </Text>
                   </Pressable>
@@ -410,19 +416,20 @@ export function KeypadHost({
                     onPress={goNext}
                     accessibilityRole="button"
                     accessibilityLabel={primaryIsNext ? 'Siguiente' : `${doneLabel}, guardar serie`}
-                    className="h-14 w-full flex-row items-center justify-center gap-2 rounded-control bg-sport-500 active:scale-[0.98]"
+                    className={`h-14 w-full flex-row items-center justify-center gap-2 rounded-control active:scale-[0.98] ${accent ? '' : 'bg-sport-500'}`}
+                    style={accent ? { backgroundColor: accent } : undefined}
                   >
                     {primaryIsNext ? (
                       <>
-                        <Text style={KEYPAD_ACTION_STYLE} className="text-white">
+                        <Text style={[KEYPAD_ACTION_STYLE, accent ? { color: accentText ?? WHITE } : null]} className={accent ? undefined : 'text-white'}>
                           Siguiente
                         </Text>
-                        <ArrowRight size={20} color={WHITE} />
+                        <ArrowRight size={20} color={accent ? accentText ?? WHITE : WHITE} />
                       </>
                     ) : (
                       <>
-                        <Check size={20} color={WHITE} />
-                        <Text style={KEYPAD_ACTION_STYLE} className="text-white">
+                        <Check size={20} color={accent ? accentText ?? WHITE : WHITE} />
+                        <Text style={[KEYPAD_ACTION_STYLE, accent ? { color: accentText ?? WHITE } : null]} className={accent ? undefined : 'text-white'}>
                           {doneLabel}
                         </Text>
                       </>

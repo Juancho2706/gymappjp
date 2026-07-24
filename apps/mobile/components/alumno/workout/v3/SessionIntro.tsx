@@ -1,12 +1,31 @@
 import { useEffect, useRef } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { MotiView } from 'moti'
+import { Easing } from 'react-native-reanimated'
+import Svg, { Circle } from 'react-native-svg'
 import { Image } from 'expo-image'
 import { LinearGradient } from 'expo-linear-gradient'
 import { SPRING_SPATIAL } from '@eva/workout-engine'
 import { FONT } from '../../../../lib/typography'
 import { hexToRgba } from '../../../../lib/theme'
 import type { ExecTheme } from './exec-theme'
+
+/** Mezcla un acento hacia blanco: `accentRatio` de acento + resto blanco. Espeja el
+ *  `color-mix(in srgb, marca 34%, #ffffff)` del mockup (.a3a-prep) para el casi-blanco tibio. */
+function mixAccentWhite(hex: string, accentRatio: number): string {
+  const h = hex.replace('#', '')
+  const full = h.length === 3 ? h.split('').map((c) => c + c).join('') : h
+  const r = parseInt(full.slice(0, 2), 16) || 0
+  const g = parseInt(full.slice(2, 4), 16) || 0
+  const b = parseInt(full.slice(4, 6), 16) || 0
+  const mix = (c: number) => Math.round(c * accentRatio + 255 * (1 - accentRatio))
+  return `rgb(${mix(r)}, ${mix(g)}, ${mix(b)})`
+}
+
+/** Geometría del anillo cónico giratorio (arco de acento que gira 6s alrededor del avatar). */
+const RING_SIZE = 122
+const RING_R = 59
+const RING_C = 2 * Math.PI * RING_R
 
 /**
  * Entrada / splash del ejecutor V3 (E2.2) — traducción RN del `.a3a-splash` del mockup
@@ -64,21 +83,45 @@ export function SessionIntro({
         from={{ opacity: reducedMotion ? 1 : 0 }}
         animate={{ opacity: 1 }}
         transition={{ type: 'timing', duration: reducedMotion ? 0 : 200 }}
-        style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 26, backgroundColor: s.appBg }}
+        style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 24, backgroundColor: s.appBgSplash }}
       >
-        {/* Gradiente del acento (radial fake): wash de acento arriba + degradado a fondo base. */}
+        {/* Gradiente del acento (radial fake): núcleo de acento arriba (~0.52) + degradado al piso casi-negro. */}
         <View pointerEvents="none" style={StyleSheet.absoluteFill}>
           <LinearGradient
-            colors={[hexToRgba(exec.accent, 0.38), hexToRgba(exec.accent, 0.12), s.appBg]}
-            locations={[0, 0.42, 1]}
+            colors={[hexToRgba(exec.accent, 0.52), hexToRgba(exec.accent, 0.12), s.appBgSplash]}
+            locations={[0, 0.44, 1]}
             start={{ x: 0.5, y: -0.05 }}
             end={{ x: 0.5, y: 0.9 }}
             style={StyleSheet.absoluteFill}
           />
         </View>
 
-        {/* Avatar del coach + halo que late + entrada con spring. */}
+        {/* Avatar del coach + anillo cónico giratorio + halo que late + entrada con spring. */}
         <View style={{ width: 120, height: 120, alignItems: 'center', justifyContent: 'center' }}>
+          {/* Anillo cónico giratorio (arco de acento rotando 6s) — mockup .a3a-splashring. */}
+          {!reducedMotion && (
+            <MotiView
+              pointerEvents="none"
+              from={{ rotate: '0deg' }}
+              animate={{ rotate: '360deg' }}
+              transition={{ type: 'timing', duration: 6000, loop: true, repeatReverse: false, easing: Easing.linear }}
+              style={{ position: 'absolute', width: RING_SIZE, height: RING_SIZE }}
+            >
+              <Svg width={RING_SIZE} height={RING_SIZE}>
+                <Circle
+                  cx={RING_SIZE / 2}
+                  cy={RING_SIZE / 2}
+                  r={RING_R}
+                  stroke={exec.accent}
+                  strokeWidth={3}
+                  fill="none"
+                  strokeLinecap="round"
+                  strokeDasharray={`${RING_C * 0.68} ${RING_C * 0.32}`}
+                  opacity={0.9}
+                />
+              </Svg>
+            </MotiView>
+          )}
           {!reducedMotion && (
             <MotiView
               pointerEvents="none"
@@ -103,7 +146,7 @@ export function SessionIntro({
                 end={{ x: 0.9, y: 1 }}
                 style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}
               >
-                <Text style={{ fontFamily: FONT.displayBlack, fontSize: 46, letterSpacing: -1, color: exec.accentText }}>
+                <Text style={{ fontFamily: FONT.displayBlack, fontSize: 42, letterSpacing: -1, color: exec.accentText }}>
                   {coachInitial}
                 </Text>
               </LinearGradient>
@@ -119,7 +162,7 @@ export function SessionIntro({
           style={{ paddingHorizontal: 28 }}
         >
           <Text
-            style={{ fontFamily: FONT.displayBlack, fontSize: 30, letterSpacing: -0.9, color: s.text, textAlign: 'center' }}
+            style={{ fontFamily: FONT.displayBlack, fontSize: 30, letterSpacing: -0.9, color: '#ffffff', textAlign: 'center' }}
             numberOfLines={2}
           >
             {dayTitle}
@@ -134,7 +177,7 @@ export function SessionIntro({
           style={{ flexDirection: 'row', alignItems: 'center', gap: 9 }}
         >
           <Text
-            style={{ fontFamily: FONT.uiExtra, fontSize: 12, letterSpacing: 1.4, textTransform: 'uppercase', color: hexToRgba(exec.accent, 0.85) }}
+            style={{ fontFamily: FONT.uiExtra, fontSize: 12, letterSpacing: 1.4, textTransform: 'uppercase', color: mixAccentWhite(exec.accent, 0.34) }}
           >
             Preparando tu sesión
           </Text>
@@ -145,7 +188,7 @@ export function SessionIntro({
                 from={{ translateY: 0, opacity: 0.55 }}
                 animate={reducedMotion ? { translateY: 0, opacity: 0.55 } : { translateY: -5, opacity: 1 }}
                 transition={reducedMotion ? { type: 'timing', duration: 0 } : { type: 'timing', duration: 600, loop: true, repeatReverse: true, delay: i * 160 }}
-                style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: hexToRgba(exec.accent, 0.85) }}
+                style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: mixAccentWhite(exec.accent, 0.34) }}
               />
             ))}
           </View>
@@ -153,7 +196,7 @@ export function SessionIntro({
 
         {/* Hint de salto (abajo). */}
         <Text
-          style={{ position: 'absolute', bottom: 34, fontFamily: FONT.uiExtra, fontSize: 11, letterSpacing: 1, textTransform: 'uppercase', color: hexToRgba(s.text, 0.55) }}
+          style={{ position: 'absolute', bottom: 30, fontFamily: FONT.uiExtra, fontSize: 11, letterSpacing: 1, textTransform: 'uppercase', color: hexToRgba(s.text, 0.55) }}
         >
           Toca para saltar
         </Text>

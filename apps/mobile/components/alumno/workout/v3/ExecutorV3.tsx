@@ -3,12 +3,11 @@ import { Alert, Pressable, Text, View } from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake'
 import { useRouter } from 'expo-router'
-import { CheckCircle2, Dumbbell, Timer } from 'lucide-react-native'
+import { Dumbbell, Flag } from 'lucide-react-native'
 import {
-  buildRoundOrder,
   buildStepModel,
   effectiveExerciseType,
-  findNextIncompleteInRounds,
+  firstIncompleteInRounds,
   firstIncompleteStepIndex,
   formatWeightEsCl,
   isRoundComplete,
@@ -20,6 +19,7 @@ import {
 } from '@eva/workout-engine'
 import { useTheme } from '../../../../context/ThemeContext'
 import { useEvaMotion } from '../../../../lib/motion'
+import { FONT } from '../../../../lib/typography'
 import { useEntitlements } from '../../../../lib/entitlements'
 import { useClientCardioResolved, hrToZoneProfileFromResolved } from '../../../../lib/cardio-zones'
 import { haptics } from '../../../../lib/haptics'
@@ -34,7 +34,7 @@ import {
   type SessionBlock,
   type SessionExercise,
 } from '../../../../lib/workout-session'
-import { toast } from '../../../Toast'
+import { setToastDark } from '../../../Toast'
 import { flushLogQueue, getPendingLogCount } from '../../../../lib/offline-cache'
 import { OfflineBanner } from '../../../OfflineBanner'
 import { EvaLoaderScreen } from '../../../EvaLoader'
@@ -46,7 +46,7 @@ import { SessionCompleteV3 } from './SessionCompleteV3'
 import { RecoveryBanner } from '../RecoveryBanner'
 import { WorkoutTimerProvider, useWorkoutTimers } from '../timers/TimerProvider'
 import { isRestAutoTimerEnabled, parseRestTime, type RestInterstitialRenderer } from '../timers'
-import { SubstituteExerciseSheet } from '../SubstituteExerciseSheet'
+import { SubstituteSheetV3 } from './SubstituteSheetV3'
 import { SUBSTITUTION_REASON } from '../../../../lib/workout/substitution'
 import { bestPrevOf, fmtElapsed, fmtVolume } from '../workout-ui'
 import { EXERCISE_TYPE_META, exerciseTypeColor } from '../../../../lib/exercise-type-meta'
@@ -54,9 +54,10 @@ import { ExecHeaderV3, type ExecDotState } from './ExecHeaderV3'
 import { resolveExecTheme } from './exec-theme'
 import { SessionIntro } from './SessionIntro'
 import { SessionStart, type StartChip, type StartExercisePreview } from './SessionStart'
+import { consumeMorphLaunch, signalMorphSceneReady } from './session-morph'
 import { ExerciseScreenV3 } from './ExerciseScreenV3'
 import { SupersetScreenV3, type SupersetMemberSub } from './SupersetScreenV3'
-import { supersetGroupLetter } from './superset-screen-model'
+import { supersetGroupLetter, memberLetter } from './superset-screen-model'
 import { MobilityScreenV3 } from './MobilityScreenV3'
 import { RollerScreenV3 } from './RollerScreenV3'
 import { CardioScreenV3 } from './CardioScreenV3'
@@ -69,12 +70,12 @@ import { CelebrationHost } from './celebration-host'
 import { computeLivePr } from './pr-live'
 import {
   deriveWeeklyStreak,
+  greedyDoneDatesForWeek,
   plannedDatesForWeek,
   weekDatesMondayToSunday,
   type WeeklyStreak,
 } from './weekly-streak'
 
-const EMBER_200 = '#FFD6C7'
 const ON_DARK_MUTED = '#939DAB'
 // Letras de miembro por posicion (A, B, C…) para la senal "Sigue con {label}" de las superseries.
 const SUPERSET_MEMBER_LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
@@ -159,6 +160,9 @@ function ExecutorV3Inner({ planId, recoverDate, editDate }: { planId: string; re
   const [finishedElapsed, setFinishedElapsed] = useState<number | null>(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [listOpen, setListOpen] = useState(false) // Vista "Ver todo" (E2.6) — capa sobre el stepper.
+  // QA4: el banner contextual ("Recuperando…" / "Editando registros…") se puede descartar con una X
+  // (estado LOCAL por sesión; solo visual — no cambia la semántica de guardado ni los params de navegación).
+  const [bannerDismissed, setBannerDismissed] = useState(false)
   const [recentSet, setRecentSet] = useState<{ blockId: string; setNumber: number; pr: boolean } | null>(null)
   const recentSetTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [syncErrors, setSyncErrors] = useState<Record<string, string>>({})
@@ -175,8 +179,16 @@ function ExecutorV3Inner({ planId, recoverDate, editDate }: { planId: string; re
   const restRoundContextRef = useRef<RestRoundContext | null>(null)
   // PR en vivo (E4.2): true cuando la serie recién cerrada fue récord → el interstitial muestra "+1 serie · ¡PR!".
   const restPrRef = useRef(false)
-  // Fase de presentacion V3: arranca en el splash (una vez por apertura) → Inicio → sesion.
-  const [phase, setPhase] = useState<ExecPhase>('intro')
+  // Fase de presentacion V3: arranca en el splash (una vez por apertura) → Inicio → sesion. EXCEPCION
+  // via-morph (Despegue): si llegamos por el morph de lanzamiento SALTAMOS el SessionIntro y arrancamos
+  // DIRECTO en 'start' (Inicio) — el overlay "Despegue" ES el splash y cubre todo hasta el tap del
+  // alumno. La marca la consume SOLO el ejecutor (el overlay JAMAS la toca en el dismiss); la lee con un
+  // guard `=== null` (NO en el lazy-init de useState, que StrictMode/dev doble-invoca → la 2a lectura
+  // devolveria false y caeria al SessionIntro tras el Despegue = "splash repetido" del QA). El guard
+  // asegura UN solo consumo por instancia; `viaMorphRef.current` alimenta el aviso de "escena lista".
+  const viaMorphRef = useRef<boolean | null>(null)
+  if (viaMorphRef.current === null) viaMorphRef.current = consumeMorphLaunch()
+  const [phase, setPhase] = useState<ExecPhase>(viaMorphRef.current ? 'start' : 'intro')
 
   useEffect(() => () => { if (recentSetTimer.current) clearTimeout(recentSetTimer.current) }, [])
 
@@ -185,6 +197,12 @@ function ExecutorV3Inner({ planId, recoverDate, editDate }: { planId: string; re
     dayOfWeek, clientId, blocks, sections, supersetMembersByBlock, sessionLogs, previousHistory, lastSessionByBlock,
     exerciseMaxes, elapsedSec, isOnline, restoredDraft, saveDraft, logSet, finishSession,
   } = session
+
+  // Via-morph (Despegue): avisa al overlay de lanzamiento que la escena de Inicio ya cargó → habilita el
+  // tap "TOCA PARA COMENZAR". Se emite en cuanto `loading` cae a false (o de inmediato si ya venía listo).
+  useEffect(() => {
+    if (viaMorphRef.current && !loading) signalMorphSceneReady()
+  }, [loading])
 
   const { hasModule } = useEntitlements()
   const planHasHrZone = useMemo(() => blocks.some((b) => b.hr_zone != null), [blocks])
@@ -239,13 +257,29 @@ function ExecutorV3Inner({ planId, recoverDate, editDate }: { planId: string; re
     [sessionLogs],
   )
   const currentExerciseIdx = blocks.findIndex((b) => !isBlockComplete(b))
-  const currentExerciseNum = currentExerciseIdx === -1 ? blocks.length : currentExerciseIdx + 1
   const activeBlockId = currentExerciseIdx === -1 ? null : blocks[currentExerciseIdx]?.id ?? null
 
-  // Dots de progreso por ejercicio (block): hecho / actual / futuro.
+  // "Ejercicio activo" a nivel INDIVIDUAL para header/dots/lista (QA2-C). En una superserie el motor
+  // intercala rondas (A1→B1→A2…), asi que el miembro activo NO es el 1er bloque incompleto del grupo
+  // sino el que devuelve `firstIncompleteInRounds`. Fuera de superserie coincide con `activeBlockId`.
+  const headerActiveBlockId = useMemo(() => {
+    if (activeBlockId == null) return null
+    const members = supersetMembersByBlock.get(activeBlockId)
+    if (!members || members.length < 2) return activeBlockId
+    const pos = firstIncompleteInRounds(
+      members.map((m) => ({ id: m.id, sets: m.sets })),
+      sessionLogs.map((l) => ({ block_id: l.block_id, set_number: l.set_number })),
+    )
+    return pos?.blockId ?? activeBlockId
+  }, [activeBlockId, supersetMembersByBlock, sessionLogs])
+  // N = posicion (1-based) del ejercicio activo entre TODOS los bloques; en superserie, el miembro activo.
+  const currentBlockIdx = headerActiveBlockId != null ? blocks.findIndex((b) => b.id === headerActiveBlockId) : -1
+  const currentExerciseNum = currentBlockIdx === -1 ? blocks.length : currentBlockIdx + 1
+
+  // Dots de progreso por ejercicio individual: hecho (todas sus series/rondas) / activo / pendiente.
   const dots = useMemo<ExecDotState[]>(
-    () => blocks.map((b, i) => (isBlockComplete(b) ? 'done' : i === currentExerciseIdx ? 'now' : 'todo')),
-    [blocks, isBlockComplete, currentExerciseIdx],
+    () => blocks.map((b) => (isBlockComplete(b) ? 'done' : b.id === headerActiveBlockId ? 'now' : 'todo')),
+    [blocks, isBlockComplete, headerActiveBlockId],
   )
 
   // ── Abrir teclado para una serie (copia de ExecutorV2: sin cambios al motor). ──
@@ -424,11 +458,6 @@ function ExecutorV3Inner({ planId, recoverDate, editDate }: { planId: string; re
       if (members && members.length >= 2) {
         const roundBlocks = members.map((m) => ({ id: m.id, sets: m.sets }))
         const round = payload.setNumber
-        const order = buildRoundOrder(roundBlocks)
-        const nextPos = findNextIncompleteInRounds(order, projected, {
-          blockId: payload.blockId,
-          setNumber: payload.setNumber,
-        })
         const roundClosed = isRoundComplete(roundBlocks, round, projected)
         if (!wasLogged) {
           if (!isRestAutoTimerEnabled()) {
@@ -467,19 +496,16 @@ function ExecutorV3Inner({ planId, recoverDate, editDate }: { planId: string; re
             timers.cancelRest()
           }
         }
-        if (nextPos && !roundClosed) {
-          const idx = members.findIndex((m) => m.id === nextPos.blockId)
-          const label = `${SUPERSET_MEMBER_LETTERS[idx] ?? ''}${nextPos.set}`
-          toast.info(`Sin descanso — sigue con ${label}`)
-        }
+        // El aviso "Sigue sin detenerte" entre miembros de la ronda lo pinta la barra deslizante de
+        // SupersetScreenV3 (QA3); ya no se usa un toast "Sin descanso — sigue con {label}" (decisión CEO).
         return
       }
 
       // Bloque suelto.
       const ex = block ? resolveExercise(block) : null
-      if (!error && block && ex && effectiveExerciseType(block, ex) === 'strength') {
-        toast.success('Serie registrada')
-      }
+      // QA4: en V3 se ELIMINA la snackbar "Serie registrada" (el alumno corrige después con el lápiz o
+      // desde la tarjeta ya hecha, "Deshacer" de cada card). V2 la conserva (ExecutorV2.tsx). El resto del
+      // flujo (descanso/scroll) NO cambia.
       if (!wasLogged) {
         const useWarmup = !!block?.warmup_rest_time && payload.setNumber === 1 && (block?.sets ?? 0) >= 3
         const restStr = useWarmup ? block!.warmup_rest_time! : block?.rest_time
@@ -650,29 +676,40 @@ function ExecutorV3Inner({ planId, recoverDate, editDate }: { planId: string; re
       try {
         const [{ data: programRow }, { data: logRows }] = await Promise.all([
           // Espejo EXACTO de la lectura del dashboard (home.tsx): el programa ACTIVO del alumno con sus
-          // planes (day_of_week / assigned_date). Los planes fuera del programa activo no cuentan — misma
-          // regla que las day-cards, consistencia con la racha del dashboard.
+          // planes (id / day_of_week / assigned_date). Los planes fuera del programa activo no cuentan —
+          // misma regla que las day-cards, consistencia con la racha del dashboard. `id` alimenta la
+          // atribucion greedy por plan (greedyDoneDatesForWeek).
           supabase
             .from('workout_programs')
-            .select('workout_plans ( day_of_week, assigned_date )')
+            .select('workout_plans ( id, day_of_week, assigned_date )')
             .eq('client_id', clientId)
             .eq('is_active', true)
             .maybeSingle(),
+          // Embed `workout_blocks ( plan_id )` = plan dueño del log (mismo embed que el dashboard,
+          // home.tsx / web dashboard.queries.ts): la atribucion greedy necesita a que PLAN pertenece cada
+          // log, no solo su fecha. To-one que llega como objeto en runtime (se normaliza abajo).
           supabase
             .from('workout_logs')
-            .select('logged_at')
+            .select('logged_at, workout_blocks ( plan_id )')
             .eq('client_id', clientId)
             .gte('logged_at', startIso)
             .lt('logged_at', endIso),
         ])
         if (!active) return
-        const rawPlans = ((programRow as { workout_plans?: Array<{ day_of_week: number | null; assigned_date: string | null }> } | null)?.workout_plans) ?? []
-        const plans = rawPlans.map((p) => ({ day_of_week: p.day_of_week ?? null, assigned_date: p.assigned_date ?? null }))
+        const rawPlans = ((programRow as { workout_plans?: Array<{ id: string; day_of_week: number | null; assigned_date: string | null }> } | null)?.workout_plans) ?? []
+        const plans = rawPlans.map((p) => ({ id: p.id, day_of_week: p.day_of_week ?? null, assigned_date: p.assigned_date ?? null }))
         const plannedDates = plannedDatesForWeek(plans, weekDates)
-        const doneDates = new Set<string>()
-        for (const r of (logRows as Array<{ logged_at: string }> | null) ?? []) {
-          doneDates.add(getSantiagoIsoYmdForUtcInstant(r.logged_at))
+        // Logs de la semana con su plan dueño (planId + dia real Santiago) → atribucion GREEDY por plan:
+        // el dia recuperado pinta done igual que las day-cards de la home (decision CEO). Los logs sin
+        // plan (sueltos) no se atribuyen — misma regla que el greedy del dashboard.
+        const rawLogs = (logRows ?? []) as unknown as Array<{ logged_at: string; workout_blocks: { plan_id: string | null } | null }>
+        const weekLogs: Array<{ planId: string; ymd: string }> = []
+        for (const r of rawLogs) {
+          const planId = r.workout_blocks?.plan_id
+          if (!planId) continue
+          weekLogs.push({ planId, ymd: getSantiagoIsoYmdForUtcInstant(r.logged_at) })
         }
+        const doneDates = greedyDoneDatesForWeek(plans, weekLogs, weekDates, today)
         setWeeklyStreak(deriveWeeklyStreak({ weekDates, plannedDates, doneDates, todayIso: today }))
       } catch {
         if (active) setWeeklyStreak(null)
@@ -728,7 +765,7 @@ function ExecutorV3Inner({ planId, recoverDate, editDate }: { planId: string; re
       for (const ps of list) lastVolKg += (ps.weight_kg ?? 0) * (ps.reps_done ?? 0)
     }
 
-    return { eyebrow, dayTitle, chips, summaryLine, preview, moreCount, lastVolumeLabel: fmtVolume(lastVolKg) }
+    return { eyebrow, dayTitle, chips, summaryLine, preview, moreCount, estimatedMin: minutes, lastVolumeLabel: fmtVolume(lastVolKg) }
   }, [planTitle, programName, programStructure, dayOfWeek, currentWeek, phaseName, activeWeekVariant, blocks, previousHistory, exec.accent])
 
   // ── Contexto de la pantalla Final V3 (E4.3) — titulo celebratorio corto + subtitulo de contexto. ──
@@ -984,52 +1021,63 @@ function ExecutorV3Inner({ planId, recoverDate, editDate }: { planId: string; re
     [steps, renderGroup],
   )
 
-  // Modelo de la vista lista "Ver todo" (E2.6): una fila por paso, con series hechas/total, tipo y
-  // seccion. El salto (onJumpTo) reposiciona el stepper — misma navegacion que el rail.
-  const listItems = useMemo<ExerciseListItem[]>(
-    () =>
-      steps.map((st, i) => {
-        let done = 0
-        let total = 0
-        for (const b of st.blocks) {
-          total += b.sets
-          const logged = new Set(
-            sessionLogs
-              .filter((l) => l.block_id === b.id && l.set_number >= 1 && l.set_number <= b.sets)
-              .map((l) => l.set_number),
-          )
-          done += logged.size
-        }
-        let title: string
-        let typeLabel: string
-        let typeColor: string
-        if (st.kind === 'superset') {
-          const names = st.blocks.map((b) => resolveExercise(b)?.name).filter(Boolean) as string[]
-          title = names.length ? names.join(' + ') : 'Superserie'
-          typeLabel = 'Superserie'
-          typeColor = exec.accent
-        } else {
-          const ex = resolveExercise(st.blocks[0])
-          title = ex?.name ?? 'Ejercicio'
-          const t = ex ? effectiveExerciseType(st.blocks[0], ex) : 'strength'
-          typeLabel = EXERCISE_TYPE_META[t].label
-          typeColor = exerciseTypeColor(t, exec.accent)
-        }
-        return {
-          key: st.key,
-          index: i,
+  // Modelo del "Plan completo" (E2.6 · QA2-C): SOLO LECTURA, una fila por EJERCICIO INDIVIDUAL. Los
+  // miembros de una superserie son filas propias (con su letra) agrupadas bajo "Superserie X". El conteo
+  // (M) coincide con el del header. Sin navegacion: es un indice de estado, no un stepper.
+  const listItems = useMemo<ExerciseListItem[]>(() => {
+    const out: ExerciseListItem[] = []
+    let ssOrd = 0
+    const doneSetsOf = (b: SessionBlock) =>
+      new Set(
+        sessionLogs
+          .filter((l) => l.block_id === b.id && l.set_number >= 1 && l.set_number <= b.sets)
+          .map((l) => l.set_number),
+      ).size
+    for (const st of steps) {
+      if (st.kind === 'superset') {
+        const groupLetter = supersetGroupLetter(ssOrd)
+        ssOrd += 1
+        st.blocks.forEach((b, mi) => {
+          const ex = resolveExercise(b)
+          const done = doneSetsOf(b)
+          out.push({
+            key: b.id,
+            sectionTitle: st.sectionTitle,
+            muted: st.muted,
+            title: ex?.name ?? 'Ejercicio',
+            typeLabel: 'Superserie',
+            typeColor: exec.accent,
+            letter: memberLetter(mi),
+            groupTitle: mi === 0 ? `Superserie ${groupLetter}` : null,
+            doneSets: done,
+            totalSets: b.sets,
+            complete: b.sets > 0 && done >= b.sets,
+            isCurrent: b.id === headerActiveBlockId,
+          })
+        })
+      } else {
+        const b = st.blocks[0]
+        const ex = resolveExercise(b)
+        const t = ex ? effectiveExerciseType(b, ex) : 'strength'
+        const done = doneSetsOf(b)
+        out.push({
+          key: b.id,
           sectionTitle: st.sectionTitle,
           muted: st.muted,
-          title,
-          typeLabel,
-          typeColor,
+          title: ex?.name ?? 'Ejercicio',
+          typeLabel: EXERCISE_TYPE_META[t].label,
+          typeColor: exerciseTypeColor(t, exec.accent),
+          letter: null,
+          groupTitle: null,
           doneSets: done,
-          totalSets: total,
-          complete: total > 0 && done >= total,
-        }
-      }),
-    [steps, sessionLogs, exec.accent],
-  )
+          totalSets: b.sets,
+          complete: b.sets > 0 && done >= b.sets,
+          isCurrent: b.id === headerActiveBlockId,
+        })
+      }
+    }
+    return out
+  }, [steps, sessionLogs, exec.accent, headerActiveBlockId])
 
   // ── Interstitial de descanso V3 (E3.1) ──
   // "Qué retoma" al terminar el descanso: el primer paso incompleto (mismo destino que el auto-avance).
@@ -1058,7 +1106,6 @@ function ExecutorV3Inner({ planId, recoverDate, editDate }: { planId: string; re
     next: restNextData?.next ?? null,
     coachNote: restNextData?.coachNote ?? null,
     planItems: listItems,
-    currentIndex: restNextData?.index ?? stepIndex,
     celebrate: restCelebrateRef.current,
     celebratePr: restPrRef.current,
     roundContext: restRoundContextRef.current,
@@ -1079,6 +1126,13 @@ function ExecutorV3Inner({ planId, recoverDate, editDate }: { planId: string; re
     setRestInterstitial(renderRestInterstitial)
     return () => setRestInterstitial(null)
   }, [setRestInterstitial, renderRestInterstitial])
+
+  // Toasts OSCUROS mientras el ejecutor V3 (dark-only) está montado (informe 15, MAYOR): sin esto los
+  // toasts del `<Toaster>` global salían claros sobre el shell oscuro en dispositivos en tema claro.
+  useEffect(() => {
+    setToastDark(true)
+    return () => setToastDark(false)
+  }, [])
 
   // Hidratacion: aterriza en el primer paso incompleto una sola vez cuando cargan los pasos.
   useEffect(() => {
@@ -1156,6 +1210,7 @@ function ExecutorV3Inner({ planId, recoverDate, editDate }: { planId: string; re
         exercises={startData.preview}
         moreCount={startData.moreCount}
         lastVolumeLabel={startData.lastVolumeLabel}
+        estimatedMin={startData.estimatedMin}
         coachNote={null}
         coachName={coachName}
         hasPartialSession={sessionLogs.length > 0}
@@ -1180,13 +1235,11 @@ function ExecutorV3Inner({ planId, recoverDate, editDate }: { planId: string; re
         onOpenSettings={() => setSettingsOpen(true)}
       />
 
-      <OfflineBanner
-        visible={!isOnline}
-        prominent
-        message="Sin conexión — los datos se guardarán al reconectar."
-      />
+      <OfflineBanner visible={!isOnline} variant="calm" />
 
-      <RecoveryBanner recoverDate={recoverDate} editDate={editDate} />
+      {!bannerDismissed && (
+        <RecoveryBanner recoverDate={recoverDate} editDate={editDate} onDismiss={() => setBannerDismissed(true)} />
+      )}
 
       {loading ? (
         <EvaLoaderScreen subtitle="Cargando rutina…" />
@@ -1196,38 +1249,58 @@ function ExecutorV3Inner({ planId, recoverDate, editDate }: { planId: string; re
           currentIndex={stepIndex}
           onIndexChange={setStepIndex}
           renderStep={renderStep}
+          bottomClearance={128}
         />
       ) : null}
 
-      {/* Barra inferior fija: descanso manual (90s) + Finalizar (acento del ejecutor). */}
-      {!loading && (
+      {/* Barra "Finalizar entrenamiento" V3 (QA3, decisión CEO 2026-07-22: de vuelta A LA VISTA): fija abajo,
+          delgada, botón fantasma full-width — no compite con el CTA del paso. Mismo `handleFinish` (la tuerca
+          de ajustes conserva "Finalizar" como acceso secundario). Sólo en la fase de sesión. */}
+      {!loading && steps.length > 0 && (
         <View
-          className="absolute bottom-0 left-0 right-0 px-4 pt-4"
-          style={{ borderTopWidth: 1, borderTopColor: exec.surface.borderSubtle, backgroundColor: exec.surface.appBg, paddingBottom: 16 + insets.bottom }}
+          style={{
+            position: 'absolute',
+            left: 0,
+            right: 0,
+            bottom: 0,
+            paddingHorizontal: 16,
+            paddingTop: 10,
+            paddingBottom: 10 + insets.bottom,
+            backgroundColor: 'rgba(18,18,24,0.96)',
+            borderTopWidth: 1.5,
+            borderTopColor: exec.surface.borderSubtle,
+          }}
         >
-          <View className="w-full flex-row items-center justify-between gap-3 self-center" style={{ maxWidth: 1024 }}>
-            <Pressable
-              testID="btn-manual-rest-v3"
-              onPress={() => { restCelebrateRef.current = false; restRoundContextRef.current = null; restPrRef.current = false; timers.startRest(90, { autoStart: true }) }}
-              className="h-11 flex-row items-center gap-1.5 rounded-control border border-ember-500/25 bg-ember-500/15 px-3 active:opacity-90"
-              accessibilityRole="button"
-              accessibilityLabel="Iniciar descanso de 90 segundos"
-            >
-              <Timer size={14} color={EMBER_200} />
-              <Text className="font-sans-bold text-xs text-ember-200">Descanso (90)</Text>
-            </Pressable>
-            <Pressable
-              testID="btn-finish-workout-v3"
-              onPress={handleFinish}
-              className="h-12 flex-row items-center gap-2 rounded-control px-5 active:opacity-90"
-              style={{ backgroundColor: exec.accent }}
-              accessibilityRole="button"
-              accessibilityLabel="Finalizar entrenamiento"
-            >
-              <CheckCircle2 size={16} color={exec.accentText} />
-              <Text className="font-sans-bold" style={{ color: exec.accentText }}>Finalizar entrenamiento</Text>
-            </Pressable>
-          </View>
+          <Pressable
+            testID="btn-finish-workout-v3"
+            onPress={handleFinish}
+            accessibilityRole="button"
+            accessibilityLabel="Finalizar entrenamiento"
+            style={({ pressed }) => ({
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 8,
+              alignSelf: 'center',
+              width: '100%',
+              maxWidth: 768,
+              height: 48,
+              borderRadius: 14,
+              borderWidth: 2,
+              borderColor: pressed ? '#3a3a45' : exec.surface.borderStrong,
+              backgroundColor: exec.surface.surface,
+              transform: pressed ? [{ translateY: 1 }] : undefined,
+            })}
+          >
+            {({ pressed }) => (
+              <>
+                <Flag size={18} color={pressed ? '#e8e8ee' : '#b7b7c2'} />
+                <Text style={{ fontFamily: FONT.uiExtra, fontSize: 14, color: pressed ? '#e8e8ee' : '#b7b7c2' }}>
+                  Finalizar entrenamiento
+                </Text>
+              </>
+            )}
+          </Pressable>
         </View>
       )}
 
@@ -1240,9 +1313,11 @@ function ExecutorV3Inner({ planId, recoverDate, editDate }: { planId: string; re
         onClose={() => setKeypadTarget(null)}
         onCommit={handleCommit}
         onDraftChange={handleDraftChange}
+        accent={exec.accent}
+        accentText={exec.accentText}
       />
 
-      <TechniqueSheet exercise={techniqueExercise} onClose={() => setTechniqueExercise(null)} />
+      <TechniqueSheet exercise={techniqueExercise} onClose={() => setTechniqueExercise(null)} v3 accent={exec.accent} />
 
       {/* Vista lista "Ver todo" (E2.6) — capa de navegacion sobre el stepper (que sigue montado debajo).
           Saltar a un paso reposiciona el stepper y cierra la capa (misma navegacion que el rail). */}
@@ -1250,21 +1325,21 @@ function ExecutorV3Inner({ planId, recoverDate, editDate }: { planId: string; re
         open={listOpen}
         onClose={() => setListOpen(false)}
         items={listItems}
-        currentIndex={stepIndex}
-        onJumpTo={(i) => { setStepIndex(i); setListOpen(false) }}
         exec={exec}
         reducedMotion={motion.reduced}
       />
 
       {/* Tuerca del ejecutor V3 (E3.7) — ajustes del entrenamiento device-scoped. */}
-      <ExecSettingsSheet open={settingsOpen} onClose={() => setSettingsOpen(false)} exec={exec} />
+      <ExecSettingsSheet open={settingsOpen} onClose={() => setSettingsOpen(false)} exec={exec} onFinish={handleFinish} />
 
-      <SubstituteExerciseSheet
+      <SubstituteSheetV3
         open={substituteBlockId != null}
         onOpenChange={(o) => { if (!o) setSubstituteBlockId(null) }}
         blockId={substituteBlockId}
         prescribedName={substituteBlock ? resolveExercise(substituteBlock)?.name ?? 'Ejercicio' : 'Ejercicio'}
         muscleGroup={substituteBlock ? resolveExercise(substituteBlock)?.muscle_group ?? '' : ''}
+        exec={exec}
+        reducedMotion={!!motion.reduced}
         onConfirm={(opt) => {
           if (!substituteBlockId || !substituteBlock) return
           setSubstitutionByBlock((p) => ({

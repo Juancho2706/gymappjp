@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { ScrollView, Text, TouchableOpacity, View } from 'react-native'
 import { ArrowRight, Calendar, CheckCircle2, ChevronRight, Pencil, Play, RotateCcw } from 'lucide-react-native'
 import { cssInterop } from 'nativewind'
@@ -9,6 +9,7 @@ import { Badge } from '../../Badge'
 import { Card } from '../../Card'
 import { Sheet } from '../../Sheet'
 import { ProgramPhaseBar } from './ProgramPhaseBar'
+import { measureMorphOrigin, useTriggerMorphHide, type MorphOrigin } from '../workout/v3/session-morph'
 import { DAY_FULL, DAY_SHORT } from './types'
 import type { PendingDay, PlanDayView, Program } from './types'
 
@@ -59,24 +60,33 @@ export function ActiveProgramSection({
   // sin sufijo. El shell la computa (resolveEffectiveWeekVariant). Espejo del sufijo
   // web `{abMode ? ` · Sem ${activeVariant}` : ''}` (ActiveProgramSection.tsx:95).
   weekVariant?: 'A' | 'B' | null
-  /** Entreno normal / repetir hoy (sin params). */
-  onStart: (planId: string) => void
-  /** Recuperar un dia pendiente → ejecutor con param `recuperar` (banner ambar). */
-  onRecover: (planId: string, dateIso: string) => void
+  /** Entreno normal / repetir hoy (sin params). `origin` = rect del day-card para que el Despegue
+   *  nazca de la tarjeta clickeada (null ⇒ el morph cae a su origen sintético). `label` = texto real del
+   *  trigger para la píldora del clon (solo se pinta en rects anchos; las day-cards angostas lo ignoran). */
+  onStart: (planId: string, origin?: MorphOrigin | null, label?: string) => void
+  /** Recuperar un dia pendiente → ejecutor con param `recuperar` (banner ambar). `origin` = rect del
+   *  trigger (banner o day-card) para que el Despegue nazca de él, igual que el CTA y las day-cards. */
+  onRecover: (planId: string, dateIso: string, origin?: MorphOrigin | null, label?: string) => void
 }) {
   const { theme, resolvedScheme } = useTheme()
   // Sheet doble intencion (E1.7): el day-card de un dia YA HECHO de OTRO dia lo abre; hoy/pendiente/
   // futuro navegan directo. Guarda la vista tocada para pintar dia/fecha del subtitulo.
   const [sheetView, setSheetView] = useState<PlanDayView | null>(null)
+  // Banner de pendientes: dispara el MISMO Despegue que el CTA/day-cards. Mide su rect y se oculta
+  // durante el morph (el clon lo reemplaza).
+  const bannerRef = useRef<View>(null)
+  const { hidden: bannerHidden, hide: hideBanner } = useTriggerMorphHide()
 
   // Enrutado por estado del day-card:
   //  · done && !isToday → sheet "Ya hiciste este entrenamiento" (revisar/repetir).
-  //  · pending          → recuperar (param `recuperar`, banner ambar, se entrena hoy).
-  //  · resto (today/upcoming/done-hoy) → navegacion directa (comportamiento editable actual).
-  function handleDayPress(view: PlanDayView) {
+  //  · pending          → recuperar (param `recuperar`, banner ambar, se entrena hoy) — vía Despegue.
+  //  · resto (today/upcoming/done-hoy) → Despegue directo.
+  function handleDayPress(view: PlanDayView, origin: MorphOrigin | null) {
     if (view.status === 'done' && !view.isToday) { setSheetView(view); return }
-    if (view.status === 'pending') { onRecover(view.plan.id, view.dateIso); return }
-    onStart(view.plan.id)
+    // Las day-cards son angostas (96px) → el overlay NO pinta la etiqueta (solo rects anchos); se pasa el
+    // título del plan por si la medición cae al origen sintético (ancho), donde sí se veria.
+    if (view.status === 'pending') { onRecover(view.plan.id, view.dateIso, origin, view.plan.title); return }
+    onStart(view.plan.id, origin, view.plan.title)
   }
 
   // Sin programa activo — web `ActiveProgramSection.tsx:26-34` hace early return de
@@ -123,37 +133,47 @@ export function ActiveProgramSection({
       <ProgramPhaseBar phases={program.phases} currentWeek={currentWeek} totalWeeks={totalWeeks} />
 
       {oldestPending ? (
-        <TouchableOpacity
-          testID="program-pending-cta"
-          onPress={() => onRecover(oldestPending.planId, oldestPending.dateIso)}
-          activeOpacity={0.82}
-          accessibilityRole="button"
-          className="rounded-control border border-ember-200 bg-ember-100"
-          style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 14, paddingVertical: 12 }}
-        >
-          <View className="bg-ember-500" style={{ width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' }}>
-            <RotateCcw size={18} color={ON_EMBER} strokeWidth={2.25} />
-          </View>
-          <View style={{ flex: 1, minWidth: 0 }}>
-            <Text className="text-ember-700" style={{ fontFamily: FONT.uiBold, fontSize: 13 }}>
-              {pending.length === 1 ? 'Tenés 1 día pendiente' : `Tenés ${pending.length} días pendientes`} esta semana
-            </Text>
-            <Text className="text-ember-700/80" numberOfLines={1} style={{ fontFamily: FONT.uiSemibold, fontSize: 11.5, marginTop: 2 }}>
-              Recuperar Día {oldestPending.dayOfWeek} · {oldestPending.dayLabel}
-            </Text>
-          </View>
-          <ArrowRight size={16} color={EMBER_700_ICON[resolvedScheme]} />
-        </TouchableOpacity>
+        // Wrapper medible + ocultable: el banner de pendientes dispara el MISMO Despegue que el CTA/cards
+        // (mide su rect, se oculta durante el vuelo del clon).
+        <View ref={bannerRef} collapsable={false} style={{ opacity: bannerHidden ? 0 : 1 }}>
+          <TouchableOpacity
+            testID="program-pending-cta"
+            onPress={() => {
+              hideBanner()
+              // El banner es ancho → la píldora del Despegue SÍ muestra la etiqueta: texto de recuperación.
+              measureMorphOrigin(bannerRef.current, theme.radius.control, (origin) =>
+                onRecover(oldestPending.planId, oldestPending.dateIso, origin, 'Recuperar entrenamiento'),
+              )
+            }}
+            activeOpacity={0.82}
+            accessibilityRole="button"
+            className="rounded-control border border-ember-200 bg-ember-100"
+            style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 14, paddingVertical: 12 }}
+          >
+            <View className="bg-ember-500" style={{ width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' }}>
+              <RotateCcw size={18} color={ON_EMBER} strokeWidth={2.25} />
+            </View>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text className="text-ember-700" style={{ fontFamily: FONT.uiBold, fontSize: 13 }}>
+                {pending.length === 1 ? 'Tenés 1 día pendiente' : `Tenés ${pending.length} días pendientes`} esta semana
+              </Text>
+              <Text className="text-ember-700/80" numberOfLines={1} style={{ fontFamily: FONT.uiSemibold, fontSize: 11.5, marginTop: 2 }}>
+                Recuperar Día {oldestPending.dayOfWeek} · {oldestPending.dayLabel}
+              </Text>
+            </View>
+            <ArrowRight size={16} color={EMBER_700_ICON[resolvedScheme]} />
+          </TouchableOpacity>
+        </View>
       ) : null}
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingRight: 2 }}>
         {planDays.map((d) => (
-          <DayCard key={d.plan.id} view={d} onPress={() => handleDayPress(d)} />
+          <DayCard key={d.plan.id} view={d} onPress={(origin) => handleDayPress(d, origin)} />
         ))}
       </ScrollView>
 
       {todayPlanId ? (
-        <TouchableOpacity onPress={() => onStart(todayPlanId)} activeOpacity={0.7} accessibilityRole="button">
+        <TouchableOpacity onPress={() => onStart(todayPlanId, null, 'Empezar entrenamiento')} activeOpacity={0.7} accessibilityRole="button">
           <Text className="text-sport-600" style={{ textAlign: 'center', fontFamily: FONT.uiBold, fontSize: 11 }}>Ver entreno de hoy →</Text>
         </TouchableOpacity>
       ) : null}
@@ -162,7 +182,7 @@ export function ActiveProgramSection({
     <DoubleIntentSheet
       view={sheetView}
       onClose={() => setSheetView(null)}
-      onRepeat={(id) => { setSheetView(null); onStart(id) }}
+      onRepeat={(id) => { setSheetView(null); onStart(id, null, 'Empezar entrenamiento') }}
     />
     </>
   )
@@ -180,8 +200,12 @@ export function ActiveProgramSection({
  * hoy → duplicaria en vez de corregir, violando el invariante "editar jamas duplica" del mockup. Por eso
  * el unico camino accionable aqui es "Repetir hoy" (semantica honesta); el editar llega en ola posterior
  * (reactivara un `onReview` que navegue con el param `fecha`, ya soportado por [planId].tsx + RecoveryBanner).
+ *
+ * Exportado: lo reusa también el hero de la home cuando el entreno de HOY ya está completado (MOBILE-2 /
+ * paridad web WorkoutHeroCard: el overlay "Entrenamiento completado" abre esta misma ventanita en vez de
+ * dejar un CTA muerto). "Repetir hoy" dispara el Despegue; "Revisar y editar" sigue deshabilitada.
  */
-function DoubleIntentSheet({
+export function DoubleIntentSheet({
   view,
   onClose,
   onRepeat,
@@ -260,12 +284,21 @@ function DoubleIntentSheet({
   )
 }
 
-function DayCard({ view, onPress }: { view: PlanDayView; onPress: () => void }) {
+function DayCard({ view, onPress }: { view: PlanDayView; onPress: (origin: MorphOrigin | null) => void }) {
   const { theme, resolvedScheme } = useTheme()
+  // Ref medible: al tocar la tarjeta se mide su rect real en ventana para que el Despegue nazca EXACTO
+  // de la day-card clickeada (mismo patrón que el CTA del hero). Si la medición falla → origen sintético.
+  const ref = useRef<View>(null)
+  // Ocultar la card real durante el Despegue (el clon la reemplaza) — SÓLO cuando de verdad morfea:
+  // los estados que abren el sheet (done de otro día) o recuperan (pending) NO lanzan el morph.
+  const { hidden: cardHidden, hide: hideCard } = useTriggerMorphHide()
   const { plan, status, isToday, doneOnLabel } = view
   const dow = plan.day_of_week ?? 1
   const done = status === 'done'
   const pending = status === 'pending'
+  // handleDayPress morfea en TODO salvo done-de-otro-día (abre el sheet): hoy/futuro/done-hoy → Despegue
+  // (onStart) y pending → Despegue de recuperación (onRecover). Sólo el sheet no morfea.
+  const willMorph = !(done && !isToday)
   // "Hecho el jueves" solo cuando el dia se cerro por una sesion de OTRO dia (recuperacion):
   // label discreto que espeja el copy web (doneOnLabel). Done en su propia fecha → "Día N".
   const doneElsewhere = done && !!doneOnLabel
@@ -288,33 +321,40 @@ function DayCard({ view, onPress }: { view: PlanDayView; onPress: () => void }) 
         : plan.title
 
   return (
-    <TouchableOpacity
-      testID={`program-day-${plan.id}`}
-      onPress={onPress}
-      activeOpacity={0.8}
-      accessibilityRole="button"
-      accessibilityLabel={a11yLabel}
-      className={`rounded-control border ${cardClass}`}
-      style={{ width: 96, padding: 12 }}
-    >
-      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-        <Text className={labelClass} style={{ fontFamily: FONT.uiExtra, fontSize: 10.5, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-          {DAY_SHORT[dow]}
+    // Wrapper medible (patrón del hero): `collapsable={false}` evita que Android colapse el View y
+    // measureInWindow devuelva 0. El wrapper se ciñe al TouchableOpacity (width 96) → su rect == la card.
+    <View ref={ref} collapsable={false} style={{ opacity: cardHidden ? 0 : 1 }}>
+      <TouchableOpacity
+        testID={`program-day-${plan.id}`}
+        onPress={() => {
+          if (willMorph) hideCard()
+          measureMorphOrigin(ref.current, theme.radius.control, (origin) => onPress(origin))
+        }}
+        activeOpacity={0.8}
+        accessibilityRole="button"
+        accessibilityLabel={a11yLabel}
+        className={`rounded-control border ${cardClass}`}
+        style={{ width: 96, padding: 12 }}
+      >
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+          <Text className={labelClass} style={{ fontFamily: FONT.uiExtra, fontSize: 10.5, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+            {DAY_SHORT[dow]}
+          </Text>
+          {done ? (
+            <CheckCircle2 size={14} color={theme.success} strokeWidth={2.4} />
+          ) : isToday ? (
+            <Play size={12} color={playColor} strokeWidth={2.6} />
+          ) : pending ? (
+            <View className="bg-ember-500" style={{ width: 8, height: 8, borderRadius: 4 }} />
+          ) : (
+            <ChevronRight size={13} color={INK_300[resolvedScheme]} />
+          )}
+        </View>
+        <Text className="text-strong" numberOfLines={2} style={{ marginTop: 6, fontFamily: FONT.uiBold, fontSize: 13, lineHeight: 16 }}>{plan.title}</Text>
+        <Text className={pieClass} numberOfLines={1} style={{ marginTop: 2, fontSize: 10.5, fontFamily: pending ? FONT.uiBold : FONT.ui }}>
+          {pending ? 'Pendiente' : doneElsewhere ? `Hecho el ${doneOnLabel!.toLowerCase()}` : `Día ${dow}`}
         </Text>
-        {done ? (
-          <CheckCircle2 size={14} color={theme.success} strokeWidth={2.4} />
-        ) : isToday ? (
-          <Play size={12} color={playColor} strokeWidth={2.6} />
-        ) : pending ? (
-          <View className="bg-ember-500" style={{ width: 8, height: 8, borderRadius: 4 }} />
-        ) : (
-          <ChevronRight size={13} color={INK_300[resolvedScheme]} />
-        )}
-      </View>
-      <Text className="text-strong" numberOfLines={2} style={{ marginTop: 6, fontFamily: FONT.uiBold, fontSize: 13, lineHeight: 16 }}>{plan.title}</Text>
-      <Text className={pieClass} numberOfLines={1} style={{ marginTop: 2, fontSize: 10.5, fontFamily: pending ? FONT.uiBold : FONT.ui }}>
-        {pending ? 'Pendiente' : doneElsewhere ? `Hecho el ${doneOnLabel!.toLowerCase()}` : `Día ${dow}`}
-      </Text>
-    </TouchableOpacity>
+      </TouchableOpacity>
+    </View>
   )
 }

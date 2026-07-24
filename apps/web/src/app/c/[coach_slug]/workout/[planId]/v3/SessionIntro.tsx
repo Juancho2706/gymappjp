@@ -1,7 +1,8 @@
 'use client'
 
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
+import { resolveLaunchBrand } from '@/lib/workout/exec-launch-brand'
 
 interface SessionIntroProps {
     /** Inicial del coach para el avatar (fallback a "•" si no hay identidad disponible). */
@@ -12,6 +13,8 @@ interface SessionIntroProps {
     onDone: () => void
     /** Reduced-motion: entrada por fade, sin springs; los loops decorativos los apaga el CSS. */
     reducedMotion: boolean | null
+    /** ¿Llegamos por el morph de lanzamiento? → el avatar llega ASENTADO (su entrada la hizo el overlay). */
+    viaMorph?: boolean
 }
 
 /**
@@ -24,8 +27,19 @@ interface SessionIntroProps {
  * fade y las animaciones decorativas (halo, spin, dots) quedan apagadas por `prefers-reduced-motion`
  * en globals.css. El acento sale de `--exec-brand` (resuelto por exec-theme.ts en el wrapper V3).
  */
-export function SessionIntro({ coachInitial, dayTitle, onDone, reducedMotion }: SessionIntroProps) {
+export function SessionIntro({ coachInitial, dayTitle, onDone, reducedMotion, viaMorph = false }: SessionIntroProps) {
     const doneRef = useRef(false)
+    // QA6: si el coach tiene logo propio, el avatar muestra el LOGO (mismo que usa el morph de
+    // lanzamiento → handoff invisible); si no, cae a la inicial como hoy. Se resuelve del wrapper /c
+    // (data-logo-url) en cliente para no tocar el motor (WorkoutExecutionClient).
+    const rootRef = useRef<HTMLDivElement>(null)
+    const [coachLogoUrl, setCoachLogoUrl] = useState<string | null>(null)
+    useEffect(() => {
+        setCoachLogoUrl(resolveLaunchBrand(rootRef.current).logoUrl)
+    }, [])
+    // QA8 (handoff del morph): si venimos del morph, el avatar YA hizo su entrada en el overlay —
+    // llegar re-animando desde scale 0.3 sería un pop doble. El flag lo consume y pasa el WEC.
+
     const finish = () => {
         if (doneRef.current) return
         doneRef.current = true
@@ -43,6 +57,7 @@ export function SessionIntro({ coachInitial, dayTitle, onDone, reducedMotion }: 
 
     return (
         <motion.div
+            ref={rootRef}
             className="exec-v3-splash fixed inset-0 z-[70] flex flex-col items-center justify-center gap-6 px-8 text-center"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -61,13 +76,20 @@ export function SessionIntro({ coachInitial, dayTitle, onDone, reducedMotion }: 
         >
             <motion.div
                 className="exec-v3-splash-coach"
-                initial={reducedMotion ? { opacity: 0 } : { opacity: 0, scale: 0.3 }}
+                initial={viaMorph ? false : reducedMotion ? { opacity: 0 } : { opacity: 0, scale: 0.3 }}
                 animate={{ opacity: 1, scale: 1 }}
                 transition={spring}
             >
                 <span className="exec-v3-splash-halo" aria-hidden />
                 <span className="exec-v3-splash-ring" aria-hidden />
-                <span className="exec-v3-splash-av">{coachInitial || '•'}</span>
+                <span className="exec-v3-splash-av">
+                    {coachLogoUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={coachLogoUrl} alt="" className="exec-v3-splash-av-img" />
+                    ) : (
+                        coachInitial || '•'
+                    )}
+                </span>
             </motion.div>
 
             <motion.div

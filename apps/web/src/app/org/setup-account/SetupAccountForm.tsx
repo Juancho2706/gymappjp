@@ -77,7 +77,7 @@ export function SetupAccountForm() {
                     <span className="text-sm text-muted-foreground leading-snug">
                         Acepto la{' '}
                         <a
-                            href="/legal/privacy"
+                            href="/privacidad"
                             target="_blank"
                             className="text-foreground underline underline-offset-2 hover:text-violet-600"
                         >

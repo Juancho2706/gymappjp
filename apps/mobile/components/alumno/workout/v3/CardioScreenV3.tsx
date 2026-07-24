@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Text, TouchableOpacity, View } from 'react-native'
+import { Pressable, Text, TouchableOpacity, View } from 'react-native'
 import { MotiView } from 'moti'
-import { HeartPulse, Pause, Play, Watch } from 'lucide-react-native'
+import { HeartPulse, Pause, Play, Repeat, RotateCcw, Ruler, Timer, Watch, Zap } from 'lucide-react-native'
 import {
   INTERVAL_PHASE_LABEL,
   buildIntervalPhases,
@@ -12,16 +12,17 @@ import {
   type ReconciledSessionLog,
 } from '@eva/workout-engine'
 import { hrToZone, type HrToZoneProfile } from '@eva/cardio'
-import { FONT } from '../../../../lib/typography'
+import { FONT, textStyle } from '../../../../lib/typography'
 import { hexToRgba } from '../../../../lib/theme'
 import { timerHaptics } from '../../../../lib/haptics'
 import { isBleAvailable, useBleHr } from '../../../../lib/ble-hr'
+import { Sheet } from '../../../Sheet'
 import { ConnectSensorSheet } from './ConnectSensorSheet'
 import type { SessionBlock, SessionDraft, SessionExercise } from '../../../../lib/workout-session'
 import { ActiveSetRow, SetRow } from '../SetRow'
 import { JuicyButton } from './JuicyButton'
 import { ProgressRing } from './ProgressRing'
-import { TypedMediaV3 } from './TypedMediaV3'
+import { TypedMediaV3, TypedInstructionsChip, hasExecMedia } from './TypedMediaV3'
 import { useCountdown, useIntervalRunner, useStopwatch } from './timing'
 import {
   PHASE_COLORS,
@@ -49,6 +50,15 @@ import type { ExecTheme } from './exec-theme'
  * (`hrZones`); si no, solo "Z{n}". FC MANUAL (BLE = Ola 6): sub-chip honesto "Compara con tu reloj".
  * Captura post-esfuerzo por el keypad tipado EXISTENTE (`ActiveSetRow` cardio: min/metros/FC).
  */
+/** Cue corto por zona (es-neutro) — respaldo del chip cuando no viaja el perfil FC (sin rango bpm). */
+const ZONE_CUE: Record<number, string> = {
+  1: 'Suave',
+  2: 'Mantén el ritmo',
+  3: 'Cómodo-duro',
+  4: 'Fuerte',
+  5: 'Máximo',
+}
+
 export function CardioScreenV3({
   block,
   exercise,
@@ -61,7 +71,6 @@ export function CardioScreenV3({
   onOpenTechnique,
   onOpenSet,
   onCommitSet,
-  onRpeUpdate,
   onDraftChange,
   recentSet,
   syncErrors,
@@ -87,10 +96,17 @@ export function CardioScreenV3({
 }) {
   const s = exec.surface
   const mode = cardioTimerMode(block)
+  const isInterval = mode === 'interval'
+  // Chip/mini-media del cardio: continuo = MARCA del coach; intervalos = ámbar z4 (token FIJO). Nunca
+  // un naranja hardcodeado fuera de contrato (D4).
+  const chipColor = isInterval ? PHASE_COLORS.work : exec.accent
   const zoneColor = zoneRingColor(block.hr_zone, exec.accent)
   const bpmRange = zoneBpmRange(block.hr_zone, hrZones)
   const objectiveLine = formatTypedObjective(block, 'cardio')
   const distanceObjective = cardioDistanceObjective(block)
+  // Nota del coach (todos los tipos): pill de acento + sheet interna (patrón autocontenido de movilidad).
+  const [noteOpen, setNoteOpen] = useState(false)
+  const coachNote = block.notes?.trim() ? block.notes.trim() : null
 
   // ── BLE Heart Rate en vivo (E6.1) ─────────────────────────────────────────────────────────────
   // El sensor solo ALIMENTA la UI (chip BPM + zona en vivo) y auto-rellena `actual_avg_hr` al cerrar
@@ -153,7 +169,6 @@ export function CardioScreenV3({
         isActive={false}
         typedMode="cardio"
         onPress={() => onOpenSet(setNumber)}
-        onRpeUpdate={onRpeUpdate}
         settle={isRecent}
         pr={isRecent && !!recentSet?.pr}
         syncError={syncErrors?.[`${block.id}:${setNumber}`] ?? null}
@@ -164,23 +179,28 @@ export function CardioScreenV3({
 
   return (
     <View style={{ gap: 12 }}>
-      {/* IDENTIDAD: nombre + chip + mini-media */}
-      <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
-        <View style={{ flex: 1, minWidth: 0, gap: 8, paddingTop: 2 }}>
-          <Text style={{ fontFamily: FONT.displayBlack, fontSize: 26, letterSpacing: -0.5, lineHeight: 28, color: s.text }} numberOfLines={2}>
-            {exercise.name}
+      {/* IDENTIDAD: nombre + chip */}
+      <View style={{ gap: 8 }}>
+        <Text style={{ fontFamily: FONT.displayBlack, fontSize: 26, letterSpacing: -0.5, lineHeight: 28, color: s.text }} numberOfLines={2}>
+          {exercise.name}
+        </Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', gap: 6, borderRadius: 999, borderWidth: 1.5, paddingHorizontal: 11, paddingVertical: 5, backgroundColor: hexToRgba(chipColor, 0.14), borderColor: hexToRgba(chipColor, 0.32) }}>
+          <HeartPulse size={13} color={chipColor} />
+          <Text style={{ fontFamily: FONT.uiBold, fontSize: 12, color: hexToRgba(chipColor, 0.95) }} numberOfLines={1}>
+            Cardio · {cardioDetailLabel(block)}
           </Text>
-          <View style={{ flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', gap: 6, borderRadius: 999, borderWidth: 1.5, paddingHorizontal: 11, paddingVertical: 5, backgroundColor: hexToRgba('#FF6A3D', 0.14), borderColor: hexToRgba('#FF6A3D', 0.32) }}>
-            <HeartPulse size={13} color="#FF6A3D" />
-            <Text style={{ fontFamily: FONT.uiBold, fontSize: 12, color: hexToRgba('#FF6A3D', 0.95) }} numberOfLines={1}>
-              Cardio · {cardioDetailLabel(block)}
-            </Text>
-          </View>
-        </View>
-        <View style={{ width: 84, height: 84, borderRadius: 18, overflow: 'hidden', borderWidth: 2, borderColor: s.borderStrong, backgroundColor: s.surfaceRaised }}>
-          <TypedMediaV3 exercise={exercise} exec={exec} accent="#FF6A3D" IconFallback={HeartPulse} onOpenTechnique={onOpenTechnique} />
         </View>
       </View>
+
+      {/* Media del catálogo — chips "Instrucciones" + "Nota del coach" DENTRO de la media (overlay
+          superior-izquierdo), precedencia + audio en video (QA4). */}
+      {hasExecMedia(exercise) ? (
+        <View style={{ width: '100%', height: 150, borderRadius: 22, overflow: 'hidden', borderWidth: 2, borderColor: s.borderStrong, backgroundColor: s.surfaceRaised }}>
+          <TypedMediaV3 exercise={exercise} exec={exec} accent={chipColor} coachNote={coachNote} IconFallback={HeartPulse} onOpenTechnique={onOpenTechnique} onOpenNote={() => setNoteOpen(true)} reducedMotion={reducedMotion} />
+        </View>
+      ) : (
+        <TypedInstructionsChip exercise={exercise} accent={chipColor} coachNote={coachNote} onOpenTechnique={onOpenTechnique} onOpenNote={() => setNoteOpen(true)} reducedMotion={reducedMotion} />
+      )}
 
       {/* HERO por modo */}
       {mode === 'interval' ? (
@@ -200,12 +220,25 @@ export function CardioScreenV3({
       {/* Zona objetivo SIEMPRE visible + sub-chip honesto */}
       {block.hr_zone != null && (
         <View style={{ alignItems: 'center', gap: 6 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 9, borderRadius: 999, borderWidth: 2, paddingHorizontal: 16, paddingVertical: 9, backgroundColor: hexToRgba(zoneColor, 0.16), borderColor: hexToRgba(zoneColor, 0.4) }}>
-            <View style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: zoneColor }} />
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 9, borderRadius: 999, borderWidth: 2, paddingHorizontal: 18, paddingVertical: 10, backgroundColor: hexToRgba(zoneColor, 0.16), borderColor: hexToRgba(zoneColor, 0.4) }}>
+            {/* Punto de zona con halo (4px) + pulso sereno (encoge+desvanece), como el mockup (D15). */}
+            <View style={{ width: 20, height: 20, alignItems: 'center', justifyContent: 'center' }}>
+              <View style={{ position: 'absolute', width: 20, height: 20, borderRadius: 10, backgroundColor: hexToRgba(zoneColor, 0.25) }} />
+              <MotiView
+                from={{ opacity: 1, scale: 1 }}
+                animate={{ opacity: reducedMotion ? 1 : 0.4, scale: reducedMotion ? 1 : 0.7 }}
+                transition={{ type: 'timing', duration: 900, loop: !reducedMotion, repeatReverse: true }}
+                style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: zoneColor }}
+              />
+            </View>
             <Text style={{ fontFamily: FONT.displayBlack, fontSize: 16, color: zoneColor }}>Z{block.hr_zone}</Text>
-            {bpmRange && (
+            {bpmRange ? (
               <Text style={{ fontFamily: FONT.uiSemibold, fontSize: 13, color: hexToRgba(s.text, 0.75), fontVariant: ['tabular-nums'] }}>
                 {bpmRange.minBpm}–{bpmRange.maxBpm} bpm
+              </Text>
+            ) : (
+              <Text style={{ fontFamily: FONT.uiSemibold, fontSize: 13, color: '#cbd5c9' }}>
+                {ZONE_CUE[block.hr_zone] ?? ''}
               </Text>
             )}
           </View>
@@ -307,6 +340,14 @@ export function CardioScreenV3({
           reducedMotion={reducedMotion}
         />
       )}
+
+      {coachNote && (
+        <Sheet open={noteOpen} onClose={() => setNoteOpen(false)} title="Nota del coach" nativeModal snapPoints={['35%']}>
+          <View style={{ paddingVertical: 8 }}>
+            <Text style={textStyle('md', FONT.ui, { lh: 'relaxed' })} className="text-body">{coachNote}</Text>
+          </View>
+        </Sheet>
+      )}
     </View>
   )
 }
@@ -330,17 +371,33 @@ function CountdownHero({
   const progress = computeCardioProgress(cardioObjective(block), { elapsed_sec: durationSec - countdown.remaining })
   const fill = progress ? 1 - progress.pct : countdown.remaining / (durationSec || 1)
 
+  const distObj = cardioDistanceObjective(block)
+
   return (
     <View style={{ alignItems: 'center', gap: 12 }}>
-      <ProgressRing size={196} strokeWidth={13} fill={fill} color={zoneColor} trackColor="#26262f" reducedMotion={reducedMotion}>
-        <View style={{ alignItems: 'center' }}>
-          <Text style={{ fontFamily: FONT.displayBlack, fontSize: 52, letterSpacing: -2, lineHeight: 54, color: s.text, fontVariant: ['tabular-nums'] }}>
-            {formatClock(countdown.remaining)}
-          </Text>
-          <Text style={{ fontFamily: FONT.uiBold, fontSize: 11, letterSpacing: 2, color: s.textMuted, textTransform: 'uppercase', marginTop: 6 }}>Restante</Text>
-        </View>
-      </ProgressRing>
+      <View style={{ width: '100%', alignItems: 'center', justifyContent: 'center' }}>
+        <ProgressRing size={196} strokeWidth={22} fill={fill} color={zoneColor} trackColor="#26262f" reducedMotion={reducedMotion}>
+          <View style={{ alignItems: 'center' }}>
+            <MotiView
+              from={{ scale: 1 }}
+              animate={{ scale: reducedMotion ? 1 : 1.02 }}
+              transition={{ type: 'timing', duration: 1400, loop: !reducedMotion, repeatReverse: true }}
+            >
+              <Text style={{ fontFamily: FONT.displayBlack, fontSize: 54, letterSpacing: -2, lineHeight: 56, color: s.text, fontVariant: ['tabular-nums'] }}>
+                {formatClock(countdown.remaining)}
+              </Text>
+            </MotiView>
+            <Text style={{ fontFamily: FONT.uiBold, fontSize: 11, letterSpacing: 2, color: s.textMuted, textTransform: 'uppercase', marginTop: 6 }}>Restante</Text>
+          </View>
+        </ProgressRing>
+        <RingRestart onPress={() => countdown.restart(durationSec)} />
+      </View>
       <PauseButton running={countdown.running} onToggle={countdown.toggle} exec={exec} reducedMotion={reducedMotion} />
+      {/* Chips de métricas: SOLO objetivos derivables de la prescripción (nada inventado). */}
+      <CardioChipsRow>
+        <MetricChipRN icon={<Timer size={16} color={hexToRgba(exec.accent, 0.85)} />} value={formatClock(durationSec)} label="Objetivo" wide={distObj == null} />
+        {distObj ? <MetricChipRN icon={<Ruler size={16} color={hexToRgba(exec.accent, 0.85)} />} value={distObj} label="Distancia" /> : null}
+      </CardioChipsRow>
     </View>
   )
 }
@@ -373,12 +430,18 @@ function IntervalHero({
   const totalIntervals = phases.filter((p) => p.kind === 'work').length
   const currentInterval = phase?.repeat ?? (runner.finished ? totalIntervals : 1)
   const nextPhase = phases[runner.phaseIndex + 1] ?? null
+  const nextPhaseColor = nextPhase ? PHASE_COLORS[nextPhase.kind] : zoneColor
+  // Duraciones de fase derivadas de la prescripción (chips honestos: trabajo / recupera) — D1.
+  const workPhase = phases.find((p) => p.kind === 'work') ?? null
+  const recoveryPhase = phases.find((p) => p.kind === 'recovery') ?? null
 
   return (
     <View style={{ alignItems: 'center', gap: 12 }}>
+      {/* QA5 h3: fila relativa que centra el anillo y ancla el chip "Reiniciar" a un costado. */}
+      <View style={{ width: '100%', alignItems: 'center', justifyContent: 'center' }}>
       <ProgressRing
         size={224}
-        strokeWidth={15}
+        strokeWidth={22}
         fill={phase && phase.durationSec > 0 ? runner.remaining / phase.durationSec : runner.finished ? 0 : 1}
         color={phaseColor}
         trackColor="#26262f"
@@ -400,38 +463,69 @@ function IntervalHero({
             <Text style={{ fontFamily: FONT.displayBlack, fontSize: 22, color: '#4ade80', textAlign: 'center' }}>¡Intervalos{'\n'}completados!</Text>
           ) : (
             <>
-              <Text style={{ fontFamily: FONT.displayBlack, fontSize: 15, letterSpacing: 3, textTransform: 'uppercase', color: phaseColor }}>
+              {/* QA5 h1: fase acotada dentro del anillo — sin chocar el trazo (≥10px de aire). */}
+              <Text numberOfLines={1} style={{ fontFamily: FONT.displayBlack, fontSize: 12, letterSpacing: 1.4, textTransform: 'uppercase', color: phaseColor, maxWidth: 150, textAlign: 'center' }}>
                 {phase ? INTERVAL_PHASE_LABEL[phase.kind] : ''}
               </Text>
-              <Text style={{ fontFamily: FONT.displayBlack, fontSize: 56, letterSpacing: -2, lineHeight: 58, color: s.text, fontVariant: ['tabular-nums'] }}>
-                {formatClock(runner.remaining)}
-              </Text>
-              <Text style={{ fontFamily: FONT.uiBold, fontSize: 10, letterSpacing: 1.5, color: s.textMuted, textTransform: 'uppercase', marginTop: 4 }}>Restante en fase</Text>
+              <MotiView
+                from={{ scale: 1 }}
+                animate={{ scale: reducedMotion ? 1 : 1.02 }}
+                transition={{ type: 'timing', duration: 1400, loop: !reducedMotion, repeatReverse: true }}
+              >
+                <Text style={{ fontFamily: FONT.displayBlack, fontSize: 56, letterSpacing: -2, lineHeight: 58, color: s.text, fontVariant: ['tabular-nums'] }}>
+                  {formatClock(runner.remaining)}
+                </Text>
+              </MotiView>
+              <Text numberOfLines={1} style={{ fontFamily: FONT.uiBold, fontSize: 10, letterSpacing: 1.2, color: s.textMuted, textTransform: 'uppercase', marginTop: 4, maxWidth: 150, textAlign: 'center' }}>Restante en fase</Text>
             </>
           )}
         </View>
       </ProgressRing>
+        {/* Reinicia los intervalos desde la primera fase (mecanismo `restart` del runner). */}
+        <RingRestart onPress={runner.restart} />
+      </View>
 
       {nextPhase && !runner.finished ? (
-        <Text style={{ fontFamily: FONT.uiBold, fontSize: 12, color: s.textDim }}>
-          Luego: <Text style={{ color: s.textMuted }}>{INTERVAL_PHASE_LABEL[nextPhase.kind]}</Text>{' '}
-          <Text style={{ color: s.textMuted, fontVariant: ['tabular-nums'] }}>{formatClock(nextPhase.durationSec)}</Text>
-        </Text>
+        <View
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 8,
+            alignSelf: 'center',
+            paddingHorizontal: 14,
+            paddingVertical: 7,
+            borderRadius: 999,
+            backgroundColor: hexToRgba(nextPhaseColor, 0.12),
+            borderWidth: 1.5,
+            borderColor: hexToRgba(nextPhaseColor, 0.3),
+          }}
+        >
+          <View style={{ width: 9, height: 9, borderRadius: 5, backgroundColor: nextPhaseColor }} />
+          <Text style={{ fontFamily: FONT.uiBold, fontSize: 13, color: hexToRgba(nextPhaseColor, 0.9) }}>
+            Luego: <Text style={{ color: s.text }}>{INTERVAL_PHASE_LABEL[nextPhase.kind]}</Text>{' '}
+            <Text style={{ color: s.text, fontVariant: ['tabular-nums'] }}>{formatClock(nextPhase.durationSec)}</Text>
+          </Text>
+        </View>
       ) : null}
 
       {/* Barra segmentada de intervalos */}
       {totalIntervals > 0 && (
         <View style={{ width: '100%', gap: 7 }}>
-          <View style={{ flexDirection: 'row', gap: 5 }}>
+          <View style={{ flexDirection: 'row', gap: 5, alignItems: 'center' }}>
             {Array.from({ length: totalIntervals }).map((_, i) => {
               const idx = i + 1
               const filled = idx < currentInterval || runner.finished
               const cur = idx === currentInterval && !runner.finished
+              // Segmento actual con halo (3px translucido) como el mockup (D16); el resto sin marco.
               return (
                 <View
                   key={i}
-                  style={{ flex: 1, height: 10, borderRadius: 4, backgroundColor: filled || cur ? PHASE_COLORS.work : '#26262f', opacity: cur ? 1 : filled ? 0.8 : 1 }}
-                />
+                  style={{ flex: 1, padding: cur ? 3 : 0, borderRadius: cur ? 7 : 4, backgroundColor: cur ? hexToRgba(PHASE_COLORS.work, 0.22) : 'transparent' }}
+                >
+                  <View
+                    style={{ height: 10, borderRadius: 4, backgroundColor: filled || cur ? PHASE_COLORS.work : '#26262f', opacity: cur ? 1 : filled ? 0.8 : 1 }}
+                  />
+                </View>
               )
             })}
           </View>
@@ -439,6 +533,18 @@ function IntervalHero({
             Intervalo <Text style={{ color: PHASE_COLORS.work }}>{Math.min(currentInterval, totalIntervals)} de {totalIntervals}</Text>
           </Text>
         </View>
+      )}
+
+      {/* Chips de fase: duraciones derivadas de la prescripción (trabajo ámbar / recupera verde). */}
+      {(workPhase || recoveryPhase) && (
+        <CardioChipsRow>
+          {workPhase ? (
+            <MetricChipRN icon={<Zap size={16} color={PHASE_COLORS.work} />} value={formatClock(workPhase.durationSec)} label="Trabajo" wide={!recoveryPhase} />
+          ) : null}
+          {recoveryPhase ? (
+            <MetricChipRN icon={<Repeat size={16} color={PHASE_COLORS.recovery} />} value={formatClock(recoveryPhase.durationSec)} label="Recupera" wide={!workPhase} />
+          ) : null}
+        </CardioChipsRow>
       )}
 
       {!runner.finished && <PauseButton running={runner.running} onToggle={runner.toggle} exec={exec} reducedMotion={reducedMotion} />}
@@ -462,11 +568,17 @@ function StopwatchHero({
   const stopwatch = useStopwatch(true)
   return (
     <View style={{ alignItems: 'center', gap: 12 }}>
-      <ProgressRing size={196} strokeWidth={13} fill={stopwatch.running ? 1 : 0.001} color={zoneColor} trackColor="#26262f" reducedMotion={reducedMotion}>
+      <ProgressRing size={196} strokeWidth={22} fill={stopwatch.running ? 1 : 0.001} color={zoneColor} trackColor="#26262f" reducedMotion={reducedMotion}>
         <View style={{ alignItems: 'center' }}>
-          <Text style={{ fontFamily: FONT.displayBlack, fontSize: 52, letterSpacing: -2, lineHeight: 54, color: s.text, fontVariant: ['tabular-nums'] }}>
-            {formatClock(stopwatch.elapsed)}
-          </Text>
+          <MotiView
+            from={{ scale: 1 }}
+            animate={{ scale: reducedMotion ? 1 : 1.02 }}
+            transition={{ type: 'timing', duration: 1400, loop: !reducedMotion, repeatReverse: true }}
+          >
+            <Text style={{ fontFamily: FONT.displayBlack, fontSize: 54, letterSpacing: -2, lineHeight: 56, color: s.text, fontVariant: ['tabular-nums'] }}>
+              {formatClock(stopwatch.elapsed)}
+            </Text>
+          </MotiView>
           <Text style={{ fontFamily: FONT.uiBold, fontSize: 11, letterSpacing: 2, color: s.textMuted, textTransform: 'uppercase', marginTop: 6 }}>Transcurrido</Text>
         </View>
       </ProgressRing>
@@ -476,6 +588,70 @@ function StopwatchHero({
         </Text>
       ) : null}
       <PauseButton running={stopwatch.running} onToggle={stopwatch.toggle} exec={exec} reducedMotion={reducedMotion} />
+    </View>
+  )
+}
+
+// ─── Chip lateral "Reiniciar" del anillo (QA5 h3) — glass 32px anclado a un costado del anillo; reinicia
+//     el timer del ejercicio actual a su valor prescrito (mecanismo `restart` — NO toca el guardado). ──
+function RingRestart({ onPress }: { onPress: () => void }) {
+  return (
+    <Pressable
+      testID="btn-cardio-restart-v3"
+      onPress={onPress}
+      hitSlop={8}
+      accessibilityRole="button"
+      accessibilityLabel="Reiniciar el contador"
+      style={{ position: 'absolute', right: 4, top: 0, bottom: 0, justifyContent: 'center' }}
+    >
+      <View style={{ width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: '#2f2f3a', backgroundColor: '#1c1c24' }}>
+        <RotateCcw size={16} color="#b7b7c2" />
+      </View>
+    </Pressable>
+  )
+}
+
+// ─── Grilla de chips de métricas (D1) — look .a3a-cchip. SOLO datos derivables HOY; nada inventado. ──
+function CardioChipsRow({ children }: { children: React.ReactNode }) {
+  return <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, width: '100%' }}>{children}</View>
+}
+
+function MetricChipRN({
+  icon,
+  value,
+  label,
+  wide,
+}: {
+  icon: React.ReactNode
+  value: string
+  label: string
+  wide?: boolean
+}) {
+  return (
+    <View
+      style={{
+        flexGrow: 1,
+        flexBasis: wide ? '100%' : '46%',
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 9,
+        backgroundColor: '#1a1a22',
+        borderWidth: 1.5,
+        borderColor: '#2a2a34',
+        borderRadius: 14,
+        paddingHorizontal: 11,
+        paddingVertical: 9,
+      }}
+    >
+      <View style={{ width: 22, height: 22, alignItems: 'center', justifyContent: 'center' }}>{icon}</View>
+      <View style={{ minWidth: 0, flexShrink: 1 }}>
+        <Text style={{ fontFamily: FONT.displayBlack, fontSize: 15, color: '#eef4f6', fontVariant: ['tabular-nums'] }} numberOfLines={1}>
+          {value}
+        </Text>
+        <Text style={{ fontFamily: FONT.uiBold, fontSize: 9, letterSpacing: 0.7, textTransform: 'uppercase', color: '#7f7f8c', marginTop: 4 }}>
+          {label}
+        </Text>
+      </View>
     </View>
   )
 }

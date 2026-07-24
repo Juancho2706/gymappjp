@@ -132,4 +132,30 @@ describe('deriveWeeklyStreak', () => {
     const r = deriveWeeklyStreak({ weekDates, plannedDates: new Set(), doneDates: new Set(), todayIso: '2026-07-22' })
     expect(r.dots.map((d) => d.label)).toEqual([...WEEK_LETTERS_ES])
   })
+
+  // QA6 (decision CEO 2026-07-22): la racha cuenta DIAS ASIGNADOS COMPLETADOS. Un dia sin nada
+  // asignado (descanso implicito) es NEUTRO ('rest'): no cuenta al denominador ni corta la cadena.
+  // Caso reportado: coach programa Lun y Mie, martes NADA; el alumno entrena Lun y Mie.
+  it('CASO CEO: Lun+Mie asignados y hechos, Mar SIN asignar => "2 de 2" y martes neutro (rest) sin corte', () => {
+    // Coach programo solo Lun (day_of_week 1) y Mie (day_of_week 3). Martes = sin plan.
+    const planned = plannedDatesForWeek(
+      [{ day_of_week: 1, assigned_date: null }, { day_of_week: 3, assigned_date: null }],
+      weekDates,
+    )
+    const r = deriveWeeklyStreak({
+      weekDates,
+      plannedDates: planned,
+      doneDates: new Set(['2026-07-20', '2026-07-22']), // Lun (20) + Mie (22) hechos
+      todayIso: '2026-07-26', // domingo: Lun y Mie quedan en pasado, sin 'today' de por medio
+    })
+    // Martes (21) = sin plan => 'rest' (neutro), NUNCA 'pending'.
+    expect(r.dots[1].state).toBe('rest')
+    // La cadena Lun->Mie SALTA el martes sin romperse: ambos asignados quedan 'done'.
+    expect(r.dots[0].state).toBe('done') // Lun 20
+    expect(r.dots[2].state).toBe('done') // Mie 22
+    // Y = dias ASIGNADOS (Lun + Mie) = 2, jamas 7 ni 3: el martes sin plan NO cuenta ni corta.
+    expect(r.doneCount).toBe(2)
+    expect(r.plannedCount).toBe(2)
+    expect(r.copy).toBe('2 de 2 esta semana')
+  })
 })
