@@ -1,0 +1,694 @@
+<section class="concept" id="concept-c" data-name="Arcade Momentum">
+  <style>
+    #concept-c {
+      --brand-c: var(--brand, #ff5c39);
+      --z1: #38bdf8; --z2: #4ade80; --z3: #facc15; --z4: #fb923c; --z5: #f87171;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      color: #e7ecf5;
+      background:
+        radial-gradient(1200px 600px at 15% -10%, rgba(255,92,57,.12), transparent 60%),
+        radial-gradient(900px 500px at 100% 0%, rgba(59,130,246,.10), transparent 55%),
+        #070a14;
+      padding: 48px 32px 64px;
+      box-sizing: border-box;
+      line-height: 1.4;
+    }
+    #concept-c *, #concept-c *::before, #concept-c *::after { box-sizing: border-box; }
+    #concept-c .cc-num { font-variant-numeric: tabular-nums; }
+
+    /* ---------- Header ---------- */
+    #concept-c .cc-header { max-width: 1240px; margin: 0 auto 40px; }
+    #concept-c .cc-kicker {
+      display: inline-flex; align-items: center; gap: 8px;
+      font-size: 12px; letter-spacing: .18em; text-transform: uppercase;
+      color: var(--brand-c); font-weight: 700;
+      padding: 6px 12px; border-radius: 999px;
+      background: rgba(255,92,57,.10); border: 1px solid rgba(255,92,57,.28);
+    }
+    #concept-c .cc-kicker::before {
+      content: ""; width: 8px; height: 8px; border-radius: 2px;
+      background: var(--brand-c); transform: rotate(45deg);
+      box-shadow: 0 0 12px var(--brand-c);
+    }
+    #concept-c .cc-title {
+      font-size: clamp(34px, 5vw, 56px); font-weight: 800; letter-spacing: -.02em;
+      margin: 16px 0 8px;
+      background: linear-gradient(100deg, #fff 20%, var(--brand-c) 120%);
+      -webkit-background-clip: text; background-clip: text; color: transparent;
+    }
+    #concept-c .cc-sub { font-size: 17px; color: #9aa6bd; max-width: 720px; margin: 0; }
+
+    /* ---------- Phones row ---------- */
+    #concept-c .cc-rack {
+      display: flex; flex-wrap: wrap; gap: 40px 44px; justify-content: center;
+      max-width: 1400px; margin: 0 auto;
+    }
+    #concept-c .cc-slot { width: 375px; max-width: 100%; }
+    #concept-c .cc-tag {
+      display: flex; align-items: center; gap: 10px; margin: 0 4px 14px;
+      font-size: 13px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase;
+      color: #c6d0e2;
+    }
+    #concept-c .cc-tag span {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 26px; height: 26px; border-radius: 8px; font-size: 13px;
+      background: rgba(255,92,57,.14); color: var(--brand-c);
+      border: 1px solid rgba(255,92,57,.3); transform: rotate(-2deg);
+    }
+
+    /* ---------- Phone frame ---------- */
+    #concept-c .cc-phone {
+      width: 375px; height: 760px; border-radius: 44px;
+      background: linear-gradient(160deg, #1b2130, #0a0e18);
+      padding: 12px;
+      box-shadow:
+        0 2px 4px rgba(0,0,0,.6),
+        0 30px 70px rgba(0,0,0,.55),
+        inset 0 0 0 1px rgba(255,255,255,.06);
+      position: relative;
+    }
+    #concept-c .cc-screen {
+      position: relative; width: 100%; height: 100%; border-radius: 34px;
+      background: #0d1220; overflow: hidden;
+      display: flex; flex-direction: column;
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,.05);
+    }
+    #concept-c .cc-notch {
+      position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
+      width: 120px; height: 26px; border-radius: 14px; background: #05070d; z-index: 40;
+    }
+    #concept-c .cc-body {
+      flex: 1; padding: 40px 18px 20px; display: flex; flex-direction: column;
+      min-height: 0;
+    }
+
+    /* ---------- Shared bits ---------- */
+    #concept-c .cc-chip {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 5px 11px; border-radius: 9px; font-size: 12px; font-weight: 700;
+      background: rgba(255,255,255,.06); color: #cdd6e8;
+      border: 1px solid rgba(255,255,255,.08); transform: rotate(-2deg);
+    }
+    #concept-c .cc-chip.brand {
+      background: rgba(255,92,57,.14); color: #ffb59f; border-color: rgba(255,92,57,.32);
+    }
+
+    /* XP session bar (segmented) */
+    #concept-c .cc-xp { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+    #concept-c .cc-xp-track { display: flex; gap: 4px; flex: 1; }
+    #concept-c .cc-seg {
+      flex: 1; height: 8px; border-radius: 4px; background: rgba(255,255,255,.08);
+      overflow: hidden; position: relative;
+    }
+    #concept-c .cc-seg.done::after {
+      content: ""; position: absolute; inset: 0;
+      background: linear-gradient(90deg, var(--brand-c), #ffa07d);
+      box-shadow: 0 0 10px rgba(255,92,57,.6);
+    }
+    #concept-c .cc-seg.active::after {
+      content: ""; position: absolute; inset: 0; width: 55%;
+      background: linear-gradient(90deg, var(--brand-c), #ffa07d);
+    }
+    #concept-c .cc-xp-count {
+      font-size: 12px; font-weight: 800; color: #9aa6bd; white-space: nowrap;
+    }
+    #concept-c .cc-xp-count b { color: #fff; }
+
+    /* Streak + flame */
+    #concept-c .cc-streak {
+      display: inline-flex; align-items: center; gap: 8px; align-self: flex-start;
+      padding: 6px 12px 6px 8px; border-radius: 12px;
+      background: linear-gradient(120deg, rgba(255,92,57,.16), rgba(255,92,57,.04));
+      border: 1px solid rgba(255,92,57,.28); margin-top: 12px;
+    }
+    #concept-c .cc-flame {
+      width: 16px; height: 20px; position: relative;
+    }
+    #concept-c .cc-flame::before, #concept-c .cc-flame::after {
+      content: ""; position: absolute; left: 50%; bottom: 0; transform: translateX(-50%);
+      width: 0; height: 0;
+    }
+    #concept-c .cc-flame::before {
+      border-left: 8px solid transparent; border-right: 8px solid transparent;
+      border-bottom: 20px solid var(--brand-c);
+      filter: drop-shadow(0 0 6px rgba(255,92,57,.7));
+    }
+    #concept-c .cc-flame::after {
+      border-left: 4px solid transparent; border-right: 4px solid transparent;
+      border-bottom: 11px solid #ffd8a8;
+    }
+    #concept-c .cc-streak b { font-size: 14px; font-weight: 800; color: #fff; }
+    #concept-c .cc-streak small { font-size: 11px; color: #ffb59f; font-weight: 600; }
+
+    /* ============ FUERZA ============ */
+    #concept-c .cc-f-name { font-size: 26px; font-weight: 800; letter-spacing: -.01em; margin: 16px 0 8px; }
+    #concept-c .cc-f-media {
+      margin: 6px auto 4px; width: 208px; height: 200px; position: relative;
+      display: flex; align-items: center; justify-content: center;
+    }
+    /* rounded rhombus/hex frame */
+    #concept-c .cc-hex {
+      position: absolute; inset: 0; border-radius: 34px;
+      background:
+        linear-gradient(160deg, rgba(255,92,57,.16), rgba(59,130,246,.10)),
+        #10182a;
+      border: 1px solid rgba(255,92,57,.28);
+      transform: rotate(45deg) scale(.72);
+      box-shadow: 0 0 30px rgba(255,92,57,.18), inset 0 0 40px rgba(0,0,0,.4);
+      overflow: hidden;
+    }
+    #concept-c .cc-hex::after {
+      content: ""; position: absolute; inset: 0;
+      background: linear-gradient(115deg, transparent 30%, rgba(255,255,255,.14) 48%, transparent 62%);
+      transform: translateX(-120%);
+    }
+    /* animated athlete silhouette inside */
+    #concept-c .cc-fig {
+      position: relative; z-index: 2; width: 74px; height: 108px;
+      display: flex; flex-direction: column; align-items: center;
+    }
+    #concept-c .cc-fig .head {
+      width: 22px; height: 22px; border-radius: 50%;
+      background: linear-gradient(var(--brand-c), #ff8a6b);
+      box-shadow: 0 0 14px rgba(255,92,57,.5);
+    }
+    #concept-c .cc-fig .torso {
+      width: 34px; height: 46px; border-radius: 12px; margin-top: 4px;
+      background: linear-gradient(160deg, #ffb59f, var(--brand-c));
+    }
+    #concept-c .cc-fig .bar {
+      position: absolute; top: 30px; width: 92px; height: 7px; border-radius: 4px;
+      background: linear-gradient(90deg, #cfd8ea, #7d8aa6, #cfd8ea);
+      transform-origin: center;
+    }
+    #concept-c .cc-live {
+      position: absolute; top: 8px; right: 8px; z-index: 5;
+      display: inline-flex; align-items: center; gap: 5px;
+      font-size: 9px; font-weight: 800; letter-spacing: .1em; color: #ffb59f;
+      padding: 3px 7px; border-radius: 6px; background: rgba(13,18,32,.7);
+      border: 1px solid rgba(255,92,57,.3);
+    }
+    #concept-c .cc-live i {
+      width: 6px; height: 6px; border-radius: 50%; background: var(--brand-c);
+      box-shadow: 0 0 8px var(--brand-c);
+    }
+    #concept-c .cc-presc {
+      text-align: center; font-size: 13px; font-weight: 700; color: #b7c2d8;
+      letter-spacing: .01em; margin: 8px 0 12px;
+    }
+    #concept-c .cc-presc b { color: #fff; }
+    #concept-c .cc-repeat {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 12px 14px; border-radius: 16px; cursor: pointer;
+      background: linear-gradient(120deg, rgba(255,92,57,.14), rgba(255,92,57,.04));
+      border: 1px solid rgba(255,92,57,.3); margin-bottom: 14px;
+    }
+    #concept-c .cc-repeat .lbl { font-size: 11px; color: #9aa6bd; font-weight: 600; }
+    #concept-c .cc-repeat .val { font-size: 16px; font-weight: 800; color: #fff; }
+    #concept-c .cc-repeat .go {
+      font-size: 11px; font-weight: 800; letter-spacing: .08em; color: var(--brand-c);
+      padding: 7px 12px; border-radius: 10px; border: 1px solid rgba(255,92,57,.4);
+      background: rgba(255,92,57,.10); transform: rotate(-2deg);
+    }
+    #concept-c .cc-inputs { display: flex; gap: 12px; margin-bottom: 6px; }
+    #concept-c .cc-input {
+      flex: 1; text-align: center; padding: 12px 8px; border-radius: 16px;
+      background: #10182a; border: 1px solid rgba(255,255,255,.08);
+    }
+    #concept-c .cc-input .k { font-size: 10px; color: #7f8aa3; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
+    #concept-c .cc-input .v { font-size: 40px; font-weight: 800; color: #fff; line-height: 1; margin-top: 4px; }
+    #concept-c .cc-input .u { font-size: 12px; color: #9aa6bd; }
+    #concept-c .cc-sets { display: flex; gap: 6px; justify-content: center; margin: 12px 0 10px; }
+    #concept-c .cc-dot {
+      width: 26px; height: 8px; border-radius: 4px; background: rgba(255,255,255,.10);
+    }
+    #concept-c .cc-dot.on { background: linear-gradient(90deg, var(--brand-c), #ffa07d); box-shadow: 0 0 8px rgba(255,92,57,.5); }
+    #concept-c .cc-cta {
+      height: 60px; border-radius: 18px; border: none; cursor: pointer;
+      font-size: 17px; font-weight: 800; color: #fff; letter-spacing: .02em;
+      position: relative; background: #10182a; margin-top: auto;
+    }
+    #concept-c .cc-cta::before {
+      content: ""; position: absolute; inset: 0; border-radius: 18px; padding: 2px;
+      background: linear-gradient(120deg, var(--brand-c), #3b82f6, var(--brand-c));
+      background-size: 200% 100%;
+      -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+      -webkit-mask-composite: xor; mask-composite: exclude;
+    }
+    #concept-c .cc-cta .inner {
+      position: relative; z-index: 2; display: flex; align-items: center; justify-content: center; gap: 8px;
+      height: 100%; border-radius: 16px;
+      background: radial-gradient(120% 120% at 50% 0%, rgba(255,92,57,.22), transparent 70%);
+    }
+    #concept-c .cc-mini-row { display: flex; gap: 10px; margin-top: 10px; }
+    #concept-c .cc-mini {
+      flex: 1; height: 42px; border-radius: 12px; display: flex; align-items: center; justify-content: center;
+      gap: 6px; font-size: 12px; font-weight: 700; color: #9aa6bd;
+      background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.08);
+    }
+
+    /* ============ DESCANSO ============ */
+    #concept-c .cc-rest { position: relative; }
+    #concept-c .cc-rest-badge {
+      align-self: center; margin-bottom: 6px;
+    }
+    #concept-c .cc-celebrate {
+      display: flex; align-items: center; gap: 10px; align-self: center;
+      padding: 8px 14px; border-radius: 14px; margin: 4px 0 10px;
+      background: linear-gradient(120deg, rgba(74,222,128,.14), rgba(255,92,57,.06));
+      border: 1px solid rgba(74,222,128,.3);
+    }
+    #concept-c .cc-check {
+      width: 22px; height: 22px; border-radius: 50%; position: relative;
+      background: #4ade80; box-shadow: 0 0 14px rgba(74,222,128,.6);
+    }
+    #concept-c .cc-check::after {
+      content: ""; position: absolute; left: 7px; top: 4px; width: 5px; height: 10px;
+      border: solid #06210f; border-width: 0 2.5px 2.5px 0; transform: rotate(42deg);
+    }
+    #concept-c .cc-celebrate b { font-size: 14px; font-weight: 800; color: #fff; }
+    #concept-c .cc-celebrate .pr {
+      font-size: 11px; font-weight: 800; color: #ffd479; letter-spacing: .06em;
+    }
+    /* countdown: big number + draining column */
+    #concept-c .cc-count-wrap { display: flex; align-items: center; gap: 22px; justify-content: center; margin: 14px 0 4px; }
+    #concept-c .cc-column {
+      width: 26px; height: 200px; border-radius: 14px; overflow: hidden; position: relative;
+      background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.08);
+    }
+    #concept-c .cc-column .fill {
+      position: absolute; left: 0; right: 0; bottom: 0; height: 62%;
+      background: linear-gradient(0deg, var(--brand-c), #ffa07d);
+      box-shadow: 0 0 18px rgba(255,92,57,.5);
+    }
+    #concept-c .cc-count {
+      font-size: 76px; font-weight: 800; letter-spacing: -.03em; color: #fff; line-height: .9;
+    }
+    #concept-c .cc-count small { display: block; font-size: 13px; font-weight: 700; letter-spacing: .18em; color: #7f8aa3; margin-top: 8px; text-align: center; }
+    #concept-c .cc-rest-ctrls { display: flex; gap: 10px; margin: 18px 0 14px; }
+    #concept-c .cc-rc {
+      flex: 1; height: 52px; border-radius: 15px; border: 1px solid rgba(255,255,255,.1);
+      background: rgba(255,255,255,.05); color: #dfe6f2; font-size: 14px; font-weight: 800;
+      display: flex; align-items: center; justify-content: center;
+    }
+    #concept-c .cc-rc.skip { background: rgba(255,92,57,.12); border-color: rgba(255,92,57,.35); color: #ffb59f; }
+    #concept-c .cc-next {
+      display: flex; align-items: center; gap: 12px; padding: 14px; border-radius: 18px;
+      background: linear-gradient(120deg, #121a2c, #0f1524);
+      border: 1px solid rgba(255,255,255,.08); position: relative; overflow: hidden;
+    }
+    #concept-c .cc-next-thumb {
+      width: 58px; height: 58px; border-radius: 14px; flex-shrink: 0; position: relative; overflow: hidden;
+      background: linear-gradient(160deg, rgba(255,92,57,.2), #10182a);
+      border: 1px solid rgba(255,92,57,.25);
+      display: flex; align-items: center; justify-content: center;
+    }
+    #concept-c .cc-next-thumb .mini-fig {
+      width: 18px; height: 30px; border-radius: 8px 8px 4px 4px;
+      background: linear-gradient(160deg, #ffb59f, var(--brand-c));
+    }
+    #concept-c .cc-next-thumb::after {
+      content: ""; position: absolute; inset: 0;
+      background: linear-gradient(115deg, transparent 35%, rgba(255,255,255,.16) 50%, transparent 65%);
+      transform: translateX(-120%);
+    }
+    #concept-c .cc-next .txt .up { font-size: 10px; letter-spacing: .16em; font-weight: 800; color: var(--brand-c); text-transform: uppercase; }
+    #concept-c .cc-next .txt .nm { font-size: 16px; font-weight: 800; color: #fff; margin: 2px 0; }
+    #concept-c .cc-next .txt .pr2 { font-size: 12px; color: #9aa6bd; font-weight: 600; }
+    #concept-c .cc-coach {
+      text-align: center; font-size: 14px; font-weight: 700; color: #c6d0e2;
+      margin-top: auto; padding-top: 16px;
+    }
+    #concept-c .cc-coach b { color: var(--brand-c); }
+    /* flying +1 series token */
+    #concept-c .cc-fly {
+      position: absolute; left: 50%; bottom: 120px; z-index: 30;
+      font-size: 12px; font-weight: 800; color: #06210f; padding: 4px 10px; border-radius: 999px;
+      background: #4ade80; box-shadow: 0 0 14px rgba(74,222,128,.6); opacity: 0;
+    }
+
+    /* ============ CARDIO ============ */
+    #concept-c .cc-cardio-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+    #concept-c .cc-live-pill {
+      display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 800;
+      color: #ff9d84; letter-spacing: .08em; padding: 5px 10px; border-radius: 999px;
+      background: rgba(255,92,57,.1); border: 1px solid rgba(255,92,57,.3);
+    }
+    #concept-c .cc-live-pill i { width: 7px; height: 7px; border-radius: 50%; background: var(--brand-c); box-shadow: 0 0 8px var(--brand-c); }
+    #concept-c .cc-intervals { display: flex; gap: 6px; margin: 10px 0 20px; }
+    #concept-c .cc-iv {
+      flex: 1; height: 12px; border-radius: 6px; background: rgba(255,255,255,.08); position: relative; overflow: hidden;
+    }
+    #concept-c .cc-iv.done { background: linear-gradient(90deg, var(--z2), #7ce8a0); box-shadow: 0 0 8px rgba(74,222,128,.4); }
+    #concept-c .cc-iv.active::after {
+      content: ""; position: absolute; inset: 0; width: 45%;
+      background: linear-gradient(90deg, var(--z2), #7ce8a0);
+    }
+    #concept-c .cc-cardio-time {
+      text-align: center; margin: 8px 0 4px;
+    }
+    #concept-c .cc-cardio-time .big {
+      font-size: 96px; font-weight: 800; letter-spacing: -.04em; line-height: .88; color: #fff;
+    }
+    #concept-c .cc-cardio-time .lbl { font-size: 12px; letter-spacing: .2em; font-weight: 700; color: #7f8aa3; text-transform: uppercase; }
+    #concept-c .cc-cardio-prog {
+      height: 14px; border-radius: 8px; background: rgba(255,255,255,.08); overflow: hidden; margin: 18px 0 22px; position: relative;
+    }
+    #concept-c .cc-cardio-prog .fill {
+      position: absolute; inset: 0; width: 42%;
+      background: linear-gradient(90deg, var(--z2), var(--brand-c));
+      box-shadow: 0 0 12px rgba(255,92,57,.4);
+    }
+    #concept-c .cc-zone {
+      display: flex; align-items: center; justify-content: center; gap: 12px;
+      padding: 16px; border-radius: 18px; margin-bottom: 16px;
+      background: rgba(74,222,128,.08); border: 1px solid rgba(74,222,128,.28);
+    }
+    #concept-c .cc-zone .z {
+      font-size: 30px; font-weight: 800; color: var(--z2);
+    }
+    #concept-c .cc-zone .zt { text-align: left; }
+    #concept-c .cc-zone .zt .a { font-size: 15px; font-weight: 800; color: #fff; }
+    #concept-c .cc-zone .zt .b { font-size: 12px; color: #9aa6bd; font-weight: 600; }
+    #concept-c .cc-bpm {
+      display: flex; align-items: center; gap: 14px; padding: 14px 16px; border-radius: 18px;
+      background: #10182a; border: 1px solid rgba(255,255,255,.08); margin-bottom: 16px;
+    }
+    #concept-c .cc-heart {
+      width: 40px; height: 40px; position: relative; flex-shrink: 0;
+    }
+    #concept-c .cc-heart .ring {
+      position: absolute; inset: 0; border-radius: 50%; border: 2px solid var(--brand-c); opacity: .6;
+    }
+    #concept-c .cc-heart .core {
+      position: absolute; inset: 10px; border-radius: 50%;
+      background: var(--brand-c); box-shadow: 0 0 14px rgba(255,92,57,.6);
+    }
+    #concept-c .cc-bpm .num { font-size: 40px; font-weight: 800; color: #fff; line-height: 1; }
+    #concept-c .cc-bpm .meta { display: flex; flex-direction: column; }
+    #concept-c .cc-bpm .meta .u { font-size: 12px; color: #9aa6bd; font-weight: 700; }
+    #concept-c .cc-bpm .meta .src { font-size: 10px; color: #6b7690; }
+    #concept-c .cc-pause {
+      height: 60px; border-radius: 18px; margin-top: auto; border: 1px solid rgba(255,255,255,.12);
+      background: rgba(255,255,255,.05); color: #fff; font-size: 16px; font-weight: 800;
+      display: flex; align-items: center; justify-content: center; gap: 10px;
+    }
+    #concept-c .cc-pause .ic { display: inline-flex; gap: 4px; }
+    #concept-c .cc-pause .ic i { width: 5px; height: 16px; border-radius: 2px; background: #fff; }
+
+    /* ---------- bullets ---------- */
+    #concept-c .cc-notes { margin: 16px 4px 0; padding: 0; list-style: none; }
+    #concept-c .cc-notes li {
+      position: relative; padding-left: 20px; font-size: 13px; color: #9aa6bd; margin-bottom: 8px; line-height: 1.5;
+    }
+    #concept-c .cc-notes li::before {
+      content: ""; position: absolute; left: 0; top: 6px; width: 8px; height: 8px; border-radius: 2px;
+      background: var(--brand-c); transform: rotate(45deg); box-shadow: 0 0 8px rgba(255,92,57,.5);
+    }
+    #concept-c .cc-notes li b { color: #dfe6f2; font-weight: 700; }
+
+    /* ---------- motion signature ---------- */
+    #concept-c .cc-motion {
+      max-width: 1240px; margin: 56px auto 0; padding: 28px 30px; border-radius: 22px;
+      background: linear-gradient(120deg, rgba(255,92,57,.08), rgba(59,130,246,.05));
+      border: 1px solid rgba(255,255,255,.08);
+    }
+    #concept-c .cc-motion h3 {
+      margin: 0 0 16px; font-size: 13px; letter-spacing: .16em; text-transform: uppercase; color: var(--brand-c); font-weight: 800;
+    }
+    #concept-c .cc-motion ul { margin: 0; padding: 0; list-style: none; display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px 28px; }
+    #concept-c .cc-motion li { font-size: 14px; color: #b7c2d8; position: relative; padding-left: 22px; line-height: 1.5; }
+    #concept-c .cc-motion li::before {
+      content: ""; position: absolute; left: 0; top: 7px; width: 10px; height: 10px; border-radius: 3px;
+      background: linear-gradient(120deg, var(--brand-c), #3b82f6); transform: rotate(45deg);
+    }
+    #concept-c .cc-motion li b { color: #fff; }
+
+    /* ===================== ANIMATIONS ===================== */
+    @media (prefers-reduced-motion: no-preference) {
+      #concept-c .cc-hex::after { animation: concept-c-shimmer 3.4s ease-in-out infinite; }
+      #concept-c .cc-next-thumb::after { animation: concept-c-shimmer 3.8s ease-in-out .4s infinite; }
+      #concept-c .cc-fig .bar { animation: concept-c-lift 2.6s ease-in-out infinite; }
+      #concept-c .cc-fig .torso { animation: concept-c-breathe 2.6s ease-in-out infinite; }
+      #concept-c .cc-live i, #concept-c .cc-live-pill i { animation: concept-c-blink 1.4s ease-in-out infinite; }
+      #concept-c .cc-cta .inner { animation: concept-c-pulse 2.2s ease-in-out infinite; }
+      #concept-c .cc-cta::before { animation: concept-c-slide 3s linear infinite; }
+      #concept-c .cc-column .fill { animation: concept-c-drain 6s ease-in-out infinite; }
+      #concept-c .cc-fly { animation: concept-c-fly 8s ease-in-out infinite; }
+      #concept-c .cc-cardio-prog .fill { animation: concept-c-grow 9s linear infinite; }
+      #concept-c .cc-heart .core { animation: concept-c-beat .83s ease-in-out infinite; }
+      #concept-c .cc-heart .ring { animation: concept-c-ripple .83s ease-out infinite; }
+      #concept-c .cc-count { animation: concept-c-breathe-num 2s ease-in-out infinite; }
+      #concept-c .cc-burst i { animation: concept-c-burst 8s ease-out infinite; }
+      #concept-c .cc-seg.active::after { animation: concept-c-fillseg 5s ease-in-out infinite; }
+    }
+    @keyframes concept-c-shimmer { 0% { transform: translateX(-120%); } 55%,100% { transform: translateX(240%); } }
+    @keyframes concept-c-lift { 0%,100% { transform: translateY(6px); } 50% { transform: translateY(-4px); } }
+    @keyframes concept-c-breathe { 0%,100% { transform: scaleY(1); } 50% { transform: scaleY(.94); } }
+    @keyframes concept-c-breathe-num { 0%,100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.03); opacity: .92; } }
+    @keyframes concept-c-blink { 0%,100% { opacity: 1; } 50% { opacity: .3; } }
+    @keyframes concept-c-pulse { 0%,100% { box-shadow: none; } 50% { box-shadow: inset 0 0 24px rgba(255,92,57,.28); } }
+    @keyframes concept-c-slide { 0% { background-position: 0% 0; } 100% { background-position: 200% 0; } }
+    @keyframes concept-c-drain { 0% { height: 72%; } 50% { height: 18%; } 100% { height: 72%; } }
+    @keyframes concept-c-fillseg { 0% { width: 20%; } 60% { width: 62%; } 100% { width: 62%; } }
+    @keyframes concept-c-grow { 0% { width: 20%; } 100% { width: 92%; } }
+    @keyframes concept-c-beat { 0%,100% { transform: scale(1); } 15% { transform: scale(1.28); } 30% { transform: scale(1); } 45% { transform: scale(1.16); } }
+    @keyframes concept-c-ripple { 0% { transform: scale(.7); opacity: .7; } 100% { transform: scale(1.35); opacity: 0; } }
+    @keyframes concept-c-fly {
+      0%, 6% { opacity: 0; transform: translate(-50%, 0) scale(.8); }
+      12% { opacity: 1; transform: translate(-50%, -10px) scale(1); }
+      30% { opacity: 1; transform: translate(-50%, -20px) scale(1); }
+      48% { opacity: 0; transform: translate(-140px, -560px) scale(.5); }
+      100% { opacity: 0; transform: translate(-140px, -560px) scale(.5); }
+    }
+    @keyframes concept-c-burst {
+      0%, 4% { opacity: 0; transform: translate(0,0) scale(.4) rotate(0deg); }
+      8% { opacity: 1; }
+      22% { opacity: 0; transform: translate(var(--dx), var(--dy)) scale(1) rotate(180deg); }
+      100% { opacity: 0; transform: translate(var(--dx), var(--dy)) scale(1) rotate(180deg); }
+    }
+
+    /* burst particles overlay (fuerza CTA celebration) */
+    #concept-c .cc-burst { position: absolute; left: 50%; bottom: 78px; width: 0; height: 0; z-index: 25; pointer-events: none; }
+    #concept-c .cc-burst i { position: absolute; width: 8px; height: 8px; opacity: 0; }
+    #concept-c .cc-burst i:nth-child(1) { --dx: -60px; --dy: -50px; background: var(--brand-c); }
+    #concept-c .cc-burst i:nth-child(2) { --dx: 55px; --dy: -60px; background: #3b82f6; transform: rotate(45deg); }
+    #concept-c .cc-burst i:nth-child(3) { --dx: -30px; --dy: -80px; background: #facc15; }
+    #concept-c .cc-burst i:nth-child(4) { --dx: 40px; --dy: -30px; background: #4ade80; transform: rotate(45deg); }
+    #concept-c .cc-burst i:nth-child(5) { --dx: 70px; --dy: -20px; background: var(--brand-c); }
+    #concept-c .cc-burst i:nth-child(6) { --dx: -70px; --dy: -14px; background: #ffa07d; transform: rotate(45deg); }
+
+    @media (max-width: 480px) {
+      #concept-c { padding: 28px 12px 40px; }
+      #concept-c .cc-phone { width: 100%; height: auto; aspect-ratio: 375/760; }
+    }
+  </style>
+
+  <!-- ============ HEADER ============ -->
+  <header class="cc-header">
+    <span class="cc-kicker">Concepto C</span>
+    <h1 class="cc-title">Arcade Momentum</h1>
+    <p class="cc-sub">Cada serie alimenta un combo. La energia de la UI sube contigo durante la sesion: la barra de XP se llena, la racha crece y el cierre de serie explota en particulas. Entrenar se siente como construir una racha.</p>
+  </header>
+
+  <!-- ============ PHONE RACK ============ -->
+  <div class="cc-rack">
+
+    <!-- ------------ FUERZA ------------ -->
+    <div class="cc-slot">
+      <div class="cc-tag"><span>1</span>Fuerza</div>
+      <div class="cc-phone">
+        <div class="cc-screen">
+          <div class="cc-notch"></div>
+          <div class="cc-body">
+            <!-- session XP -->
+            <div class="cc-xp">
+              <div class="cc-xp-track">
+                <div class="cc-seg done"></div>
+                <div class="cc-seg done"></div>
+                <div class="cc-seg active"></div>
+                <div class="cc-seg"></div>
+                <div class="cc-seg"></div>
+                <div class="cc-seg"></div>
+                <div class="cc-seg"></div>
+                <div class="cc-seg"></div>
+              </div>
+              <div class="cc-xp-count cc-num"><b>3</b>/8</div>
+            </div>
+            <div class="cc-streak">
+              <span class="cc-flame"></span>
+              <div><b class="cc-num">x3</b> <small>series seguidas</small></div>
+            </div>
+
+            <div class="cc-f-name">Press banca</div>
+            <span class="cc-chip brand">Fuerza &middot; Pecho</span>
+
+            <div class="cc-f-media">
+              <div class="cc-hex"></div>
+              <span class="cc-live"><i></i>DEMO</span>
+              <div class="cc-fig">
+                <div class="bar"></div>
+                <div class="head"></div>
+                <div class="torso"></div>
+              </div>
+            </div>
+
+            <div class="cc-presc cc-num">4 &times; 8 &middot; <b>60 kg</b> &middot; RIR 2 &middot; desc 90s</div>
+
+            <div class="cc-repeat">
+              <div>
+                <div class="lbl">Anterior</div>
+                <div class="val cc-num">60 kg &times; 8</div>
+              </div>
+              <div class="go">REPETIR</div>
+            </div>
+
+            <div class="cc-inputs">
+              <div class="cc-input"><div class="k">Peso</div><div class="v cc-num">60</div><div class="u">kg</div></div>
+              <div class="cc-input"><div class="k">Reps</div><div class="v cc-num">8</div><div class="u">reps</div></div>
+            </div>
+
+            <div class="cc-sets">
+              <div class="cc-dot on"></div>
+              <div class="cc-dot on"></div>
+              <div class="cc-dot"></div>
+              <div class="cc-dot"></div>
+            </div>
+
+            <div class="cc-burst"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+            <button class="cc-cta">
+              <span class="inner">Completar serie 3</span>
+            </button>
+            <div class="cc-mini-row">
+              <div class="cc-mini">Teclado</div>
+              <div class="cc-mini">Nota</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <ul class="cc-notes">
+        <li>Barra de sesion <b>segmentada tipo XP</b>: cada segmento brilla al completarse, el progreso es un premio visible.</li>
+        <li>El <b>combo de racha</b> (x3) con llama geometrica sube la energia; el media en rombo respira en loop.</li>
+        <li>"Anterior" es un <b>boton REPETIR</b> destacado: 1 tap precarga peso y reps.</li>
+      </ul>
+    </div>
+
+    <!-- ------------ DESCANSO ------------ -->
+    <div class="cc-slot">
+      <div class="cc-tag"><span>2</span>Descanso</div>
+      <div class="cc-phone">
+        <div class="cc-screen">
+          <div class="cc-notch"></div>
+          <div class="cc-body cc-rest">
+            <span class="cc-chip brand cc-rest-badge">DESCANSO</span>
+
+            <div class="cc-celebrate">
+              <span class="cc-check"></span>
+              <b>Serie cerrada</b>
+              <span class="pr cc-num">+1 SERIE</span>
+            </div>
+
+            <div class="cc-count-wrap">
+              <div class="cc-column"><div class="fill"></div></div>
+              <div class="cc-count cc-num">01:07<small>RESTANTE</small></div>
+            </div>
+
+            <div class="cc-rest-ctrls">
+              <div class="cc-rc cc-num">&minus;15s</div>
+              <div class="cc-rc skip">Saltar</div>
+              <div class="cc-rc cc-num">+15s</div>
+            </div>
+
+            <div class="cc-next">
+              <div class="cc-next-thumb"><span class="mini-fig"></span></div>
+              <div class="txt">
+                <div class="up">Siguiente</div>
+                <div class="nm">Sentadilla bulgara</div>
+                <div class="pr2 cc-num">3 &times; 10 &middot; 40 kg</div>
+              </div>
+            </div>
+
+            <div class="cc-fly cc-num">+1 serie</div>
+            <div class="cc-coach">"Vamos, <b>ultima ronda</b> del bloque."</div>
+          </div>
+        </div>
+      </div>
+      <ul class="cc-notes">
+        <li>El descanso <b>es</b> la transicion: fullscreen, cuenta gigante y columna que se vacia como energia.</li>
+        <li>La tarjeta <b>SIGUIENTE</b> ya muestra ejercicio, series y su media en miniatura para preparar la cabeza.</li>
+        <li>El <b>"+1 serie"</b> vuela hacia la barra de XP superior: el logro alimenta la sesion.</li>
+      </ul>
+    </div>
+
+    <!-- ------------ CARDIO ------------ -->
+    <div class="cc-slot">
+      <div class="cc-tag"><span>3</span>Cardio</div>
+      <div class="cc-phone">
+        <div class="cc-screen">
+          <div class="cc-notch"></div>
+          <div class="cc-body">
+            <div class="cc-cardio-top">
+              <span class="cc-chip brand">Indoor &middot; Bici</span>
+              <span class="cc-live-pill"><i></i>EN VIVO</span>
+            </div>
+
+            <div class="cc-intervals">
+              <div class="cc-iv done"></div>
+              <div class="cc-iv done"></div>
+              <div class="cc-iv active"></div>
+              <div class="cc-iv"></div>
+              <div class="cc-iv"></div>
+              <div class="cc-iv"></div>
+            </div>
+
+            <div class="cc-cardio-time">
+              <div class="big cc-num">12:24</div>
+              <div class="lbl">Tiempo restante</div>
+            </div>
+
+            <div class="cc-cardio-prog"><div class="fill"></div></div>
+
+            <div class="cc-zone">
+              <div class="z cc-num">Z2</div>
+              <div class="zt">
+                <div class="a">Zona objetivo</div>
+                <div class="b">Mantiene &middot; aerobico</div>
+              </div>
+            </div>
+
+            <div class="cc-bpm">
+              <div class="cc-heart"><span class="ring"></span><span class="core"></span></div>
+              <div class="num cc-num">142</div>
+              <div class="meta">
+                <span class="u">BPM</span>
+                <span class="src">Apple Watch</span>
+              </div>
+            </div>
+
+            <div class="cc-presc cc-num">Intervalo <b>3 de 6</b></div>
+
+            <button class="cc-pause"><span class="ic"><i></i><i></i></span> Pausar</button>
+          </div>
+        </div>
+      </div>
+      <ul class="cc-notes">
+        <li>Tiempo restante <b>gigante</b> como heroe glanceable, con barra segmentada por intervalo (3 de 6).</li>
+        <li>Zona en <b>color semantico fijo</b> (Z2 verde), nunca de marca: legible a un metro.</li>
+        <li>BPM con <b>anillo de pulso</b> que se expande al ritmo (~72bpm); fuente Apple Watch a la vista.</li>
+      </ul>
+    </div>
+
+  </div>
+
+  <!-- ============ MOTION SIGNATURE ============ -->
+  <div class="cc-motion">
+    <h3>Firma de motion</h3>
+    <ul>
+      <li><b>Springs con overshoot</b> (stiffness ~380, damping ~26): la tarjeta SIGUIENTE y el combo entran con un rebote breve, ~320ms.</li>
+      <li><b>Segmentos XP</b> se llenan en 260ms con un flash de brillo al tope; el "+1 serie" vuela hacia la barra en ~420ms ease-out.</li>
+      <li><b>Burst de particulas</b> geometricas al cerrar serie (180ms out, cuadrados y triangulos), acompanado de <b>haptica success</b> (notificationSuccess).</li>
+      <li><b>Numeros que cuentan</b> con steps(), respiran suave; anillo de BPM sincronizado al pulso real. Descanso y skip disparan <b>impact light</b>.</li>
+    </ul>
+  </div>
+
+</section>

@@ -32,6 +32,8 @@ import {
   getNutritionTodayV2ForWeb,
 } from '@/services/nutrition-v2-read.service'
 import { isNutritionV2Enabled } from '@/services/nutrition-v2-rollout.service'
+import { resolveNutritionDomainEnabled } from '@/services/feature-prefs.service'
+import { NutritionDomainOff } from '../nutrition/_components/NutritionDomainOff'
 import { TodayExperience } from './_components/TodayExperience'
 import { NutritionFoodRow } from './_components/NutritionFoodRow'
 import { groupSubstitutionsByPrescriptionItem } from './_components/nutrition-today.logic'
@@ -54,15 +56,24 @@ export default async function StudentNutritionV2Page({ params, searchParams }: P
   if (!user || !hasClientRow) redirect(`${base}/login`)
 
   const scope = await getClientScope(user.id)
-  const enabled = await isNutritionV2Enabled({
-    surface: 'webStudent',
-    userId: user.id,
-    clientId: user.id,
-    coachId: scope.coachId,
-    teamId: scope.teamId,
-    orgId: scope.orgId,
-  })
+  const [enabled, domainEnabled] = await Promise.all([
+    isNutritionV2Enabled({
+      surface: 'webStudent',
+      userId: user.id,
+      clientId: user.id,
+      coachId: scope.coachId,
+      teamId: scope.teamId,
+      orgId: scope.orgId,
+    }),
+    resolveNutritionDomainEnabled({
+      coachId: scope.coachId ?? '',
+      clientId: user.id,
+      clientTeamId: scope.teamId,
+      clientOrgId: scope.orgId,
+    }),
+  ])
   if (!enabled) redirect(`${base}/nutrition`)
+  if (!domainEnabled) return <NutritionDomainOff coachSlug={coach_slug} />
 
   const { iso: today } = getTodayInSantiago()
   const view = query.view === 'plan' || query.view === 'history' ? query.view : 'today'

@@ -1,0 +1,675 @@
+<section class="concept" id="concept-a3f" data-name="Impulso v3.3 — recuperación y bloqueo">
+  <style>
+    #concept-a3f {
+      --brand-a3f: var(--brand, #58cc02);
+      --amber-a3f: #f5b04a;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      color: #f4f4f6;
+      padding: 40px 28px 56px;
+      background: #0c0c11;
+      -webkit-font-smoothing: antialiased;
+    }
+    #concept-a3f *,
+    #concept-a3f *::before,
+    #concept-a3f *::after { box-sizing: border-box; }
+
+    /* ===== header ===== */
+    #concept-a3f .a3f-head { max-width: 1320px; margin: 0 auto 40px; }
+    #concept-a3f .a3f-eyebrow {
+      display: inline-block;
+      font-size: 12px; font-weight: 800; letter-spacing: .18em; text-transform: uppercase;
+      color: #0c0c11; background: var(--brand-a3f);
+      padding: 5px 12px; border-radius: 999px; margin-bottom: 16px;
+    }
+    #concept-a3f .a3f-title {
+      font-size: clamp(28px, 4.4vw, 46px); font-weight: 900; letter-spacing: -.03em;
+      line-height: 1.02; margin: 0 0 12px;
+      background: linear-gradient(120deg, #ffffff 30%, var(--brand-a3f) 130%);
+      -webkit-background-clip: text; background-clip: text; color: transparent;
+    }
+    #concept-a3f .a3f-sub { font-size: 16px; line-height: 1.5; color: #a8a8b3; max-width: 820px; margin: 0; }
+
+    /* ===== layout ===== */
+    #concept-a3f .a3f-row {
+      display: flex; flex-wrap: wrap; gap: 44px 44px; justify-content: center;
+      max-width: 1400px; margin: 0 auto;
+    }
+    #concept-a3f .a3f-col { width: 375px; }
+    #concept-a3f .a3f-label {
+      display: flex; align-items: center; gap: 9px;
+      font-size: 15px; font-weight: 800; letter-spacing: -.01em; margin: 0 0 14px 6px;
+    }
+    #concept-a3f .a3f-label span {
+      width: 9px; height: 9px; border-radius: 50%; background: var(--brand-a3f);
+      box-shadow: 0 0 0 4px color-mix(in srgb, var(--brand-a3f) 22%, transparent);
+    }
+    #concept-a3f .a3f-label em {
+      font-style: normal; font-size: 10px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase;
+      color: #0c0c11; background: var(--brand-a3f); padding: 2px 7px; border-radius: 999px; margin-left: 2px;
+    }
+    #concept-a3f .a3f-label.amber span { background: var(--amber-a3f); box-shadow: 0 0 0 4px color-mix(in srgb, var(--amber-a3f) 22%, transparent); }
+    #concept-a3f .a3f-label.amber em { background: var(--amber-a3f); }
+
+    /* ===== phone shell ===== */
+    #concept-a3f .a3f-phone {
+      width: 375px; height: 760px; border-radius: 44px;
+      background: #050507; padding: 11px;
+      box-shadow: 0 0 0 2px #26262e, 0 30px 60px -22px rgba(0,0,0,.85), inset 0 1px 0 rgba(255,255,255,.05);
+      position: relative;
+    }
+    #concept-a3f .a3f-screen {
+      position: relative; width: 100%; height: 100%; border-radius: 34px; overflow: hidden;
+      background: radial-gradient(120% 80% at 50% -8%, #1c1c24 0%, #16161d 42%, #121218 100%);
+      display: flex; flex-direction: column;
+    }
+    #concept-a3f .a3f-notch {
+      position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
+      width: 118px; height: 26px; background: #050507; border-radius: 999px; z-index: 40;
+    }
+    #concept-a3f .a3f-body { flex: 1; display: flex; flex-direction: column; padding: 40px 18px 18px; min-height: 0; }
+
+    /* ===== shared bits ===== */
+    #concept-a3f .a3f-chip {
+      display: inline-flex; align-items: center; gap: 6px;
+      font-size: 12px; font-weight: 700; padding: 5px 11px; border-radius: 999px;
+      background: color-mix(in srgb, var(--brand-a3f) 16%, #16161d);
+      color: color-mix(in srgb, var(--brand-a3f) 82%, #ffffff);
+      border: 1.5px solid color-mix(in srgb, var(--brand-a3f) 34%, transparent);
+    }
+    #concept-a3f .a3f-chip.plain { background: #1c1c24; color: #b7b7c2; border-color: #33333f; }
+    #concept-a3f .a3f-tnum { font-variant-numeric: tabular-nums; }
+
+    #concept-a3f .a3f-juicy {
+      border: 2px solid color-mix(in srgb, var(--brand-a3f) 55%, #000);
+      background: var(--brand-a3f);
+      color: #072100; font-weight: 900; letter-spacing: -.01em;
+      border-radius: 16px;
+      box-shadow: 0 5px 0 0 color-mix(in srgb, var(--brand-a3f) 55%, #000);
+      transition: transform .12s ease, box-shadow .12s ease; cursor: default;
+    }
+    #concept-a3f .a3f-juicy:active {
+      transform: translateY(5px); box-shadow: 0 0 0 0 color-mix(in srgb, var(--brand-a3f) 55%, #000);
+    }
+    #concept-a3f .a3f-gear {
+      width: 36px; height: 36px; flex-shrink: 0; border-radius: 11px;
+      background: #1a1a22; border: 1.5px solid #2f2f3a; color: #b7b7c2;
+      display: flex; align-items: center; justify-content: center;
+    }
+    #concept-a3f .a3f-gear svg { display: block; width: 19px; height: 19px; }
+
+    /* ===== bullets ===== */
+    #concept-a3f .a3f-bullets { list-style: none; padding: 0; margin: 18px 4px 0; }
+    #concept-a3f .a3f-bullets li {
+      position: relative; padding-left: 22px; margin-bottom: 10px; font-size: 13.5px; line-height: 1.45; color: #b7b7c2;
+    }
+    #concept-a3f .a3f-bullets li::before {
+      content: ""; position: absolute; left: 0; top: 6px; width: 12px; height: 12px; border-radius: 4px;
+      background: var(--brand-a3f); box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand-a3f) 20%, transparent);
+    }
+    #concept-a3f .a3f-bullets.amber li::before { background: var(--amber-a3f); box-shadow: 0 0 0 3px color-mix(in srgb, var(--amber-a3f) 20%, transparent); }
+    #concept-a3f .a3f-bullets b { color: #eeeef2; font-weight: 800; }
+
+    /* ============ SCREEN 1 · BLOQUEO TOTAL ============ */
+    #concept-a3f .a3f-block {
+      position: relative; overflow: hidden;
+      align-items: center; justify-content: center; text-align: center;
+      gap: 20px; padding: 40px 26px 30px;
+      background:
+        radial-gradient(120% 62% at 50% -6%,
+          color-mix(in srgb, var(--brand-a3f) 30%, #0c0c11) 0%,
+          color-mix(in srgb, var(--brand-a3f) 10%, #0c0c11) 40%,
+          #0a0a0f 100%);
+    }
+    #concept-a3f .a3f-block::after {
+      content: ""; position: absolute; inset: -32% -12% auto -12%; height: 56%;
+      background: radial-gradient(60% 60% at 50% 0%, color-mix(in srgb, var(--brand-a3f) 20%, transparent), transparent 70%);
+      pointer-events: none;
+    }
+    #concept-a3f .a3f-coach { position: relative; width: 92px; height: 92px; z-index: 2; }
+    #concept-a3f .a3f-coachring {
+      position: absolute; inset: 0; border-radius: 50%;
+      background: conic-gradient(from 0deg,
+        var(--brand-a3f),
+        color-mix(in srgb, var(--brand-a3f) 24%, transparent) 130deg,
+        var(--brand-a3f) 300deg, var(--brand-a3f) 360deg);
+      -webkit-mask: radial-gradient(closest-side, transparent 80%, #000 81%);
+      mask: radial-gradient(closest-side, transparent 80%, #000 81%);
+      opacity: .92;
+    }
+    #concept-a3f .a3f-coachav {
+      position: absolute; inset: 9px; border-radius: 50%;
+      background: linear-gradient(135deg, var(--brand-a3f), color-mix(in srgb, var(--brand-a3f) 48%, #000));
+      color: #062100; font-size: 34px; font-weight: 900; letter-spacing: -.03em;
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: inset 0 2px 0 rgba(255,255,255,.28), inset 0 -8px 16px rgba(0,0,0,.25);
+    }
+    #concept-a3f .a3f-pausewrap {
+      position: relative; z-index: 2; width: 78px; height: 78px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      background: color-mix(in srgb, var(--brand-a3f) 8%, #191921);
+      border: 1.5px solid color-mix(in srgb, var(--brand-a3f) 22%, #2f2f3a);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.05);
+    }
+    #concept-a3f .a3f-pausebars { display: inline-flex; gap: 8px; }
+    #concept-a3f .a3f-pausebars i { width: 8px; height: 30px; border-radius: 4px; background: #c8c8d2; }
+    #concept-a3f .a3f-blocktitle { position: relative; z-index: 2; font-size: 26px; font-weight: 900; letter-spacing: -.02em; margin: 4px 0 0; }
+    #concept-a3f .a3f-blocktext { position: relative; z-index: 2; font-size: 15px; line-height: 1.5; color: #b7b7c2; max-width: 280px; margin: 0; }
+    #concept-a3f .a3f-blockspace { margin-top: auto; }
+    #concept-a3f .a3f-blockcta {
+      position: relative; z-index: 2; height: 62px; width: 100%; font-size: 18px;
+      display: flex; align-items: center; justify-content: center; gap: 11px; margin-top: 4px;
+    }
+    #concept-a3f .a3f-blockcta svg { display: block; width: 22px; height: 22px; }
+    #concept-a3f .a3f-logout {
+      position: relative; z-index: 2; margin-top: 14px;
+      font-size: 12px; font-weight: 700; letter-spacing: .04em; color: #6f6f7c;
+      border-bottom: 1px solid #33333f; padding-bottom: 2px; cursor: default;
+    }
+
+    /* ============ SCREEN 2 · FUERZA + RECUPERACIÓN ============ */
+    #concept-a3f .a3f-recover {
+      display: flex; align-items: center; gap: 10px;
+      background: color-mix(in srgb, var(--amber-a3f) 15%, #16161d);
+      border: 1.5px solid color-mix(in srgb, var(--amber-a3f) 42%, transparent);
+      border-radius: 14px; padding: 9px 11px; margin-bottom: 12px;
+    }
+    #concept-a3f .a3f-recicon {
+      width: 34px; height: 34px; flex-shrink: 0; border-radius: 10px;
+      background: color-mix(in srgb, var(--amber-a3f) 22%, #16161d);
+      color: var(--amber-a3f); display: flex; align-items: center; justify-content: center;
+    }
+    #concept-a3f .a3f-recicon svg { display: block; width: 20px; height: 20px; }
+    #concept-a3f .a3f-rectext { min-width: 0; }
+    #concept-a3f .a3f-rectitle {
+      font-size: 13px; font-weight: 900; letter-spacing: -.01em;
+      color: color-mix(in srgb, var(--amber-a3f) 55%, #ffffff);
+    }
+    #concept-a3f .a3f-recsub { font-size: 11px; font-weight: 700; color: #a8a3b0; margin-top: 2px; }
+
+    #concept-a3f .a3f-progress { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+    #concept-a3f .a3f-dots { display: flex; gap: 7px; flex: 1; }
+    #concept-a3f .a3f-dot { flex: 1; height: 9px; border-radius: 999px; background: #2a2a34; }
+    #concept-a3f .a3f-dot.done { background: color-mix(in srgb, var(--brand-a3f) 60%, #16161d); }
+    #concept-a3f .a3f-dot.now { background: var(--brand-a3f); box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand-a3f) 25%, transparent); }
+    #concept-a3f .a3f-count { font-size: 12px; font-weight: 800; color: #8f8f9c; white-space: nowrap; }
+
+    #concept-a3f .a3f-exname { font-size: 25px; font-weight: 900; letter-spacing: -.02em; margin: 2px 0 8px; }
+    #concept-a3f .a3f-chiprow { display: flex; gap: 8px; margin-bottom: 11px; }
+
+    #concept-a3f .a3f-media {
+      position: relative; height: 118px; border-radius: 22px; overflow: hidden;
+      border: 2px solid #2f2f3a; background: linear-gradient(160deg, #202029, #17171f);
+      margin-bottom: 11px; display: flex; align-items: flex-end; justify-content: center;
+    }
+    #concept-a3f .a3f-media::after {
+      content: ""; position: absolute; inset: 0;
+      background: linear-gradient(105deg, transparent 20%, rgba(255,255,255,.07) 45%, transparent 68%);
+      background-size: 220% 100%;
+    }
+    #concept-a3f .a3f-fig { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); width: 150px; height: 78px; }
+    #concept-a3f .a3f-bench { position: absolute; bottom: 0; left: 27px; width: 96px; height: 11px; border-radius: 6px; background: #3b3b48; }
+    #concept-a3f .a3f-benchleg { position: absolute; bottom: -16px; width: 8px; height: 16px; background: #33333f; border-radius: 3px; }
+    #concept-a3f .a3f-torso { position: absolute; bottom: 11px; left: 40px; width: 70px; height: 18px; border-radius: 11px; background: color-mix(in srgb, var(--brand-a3f) 40%, #2a2a34); }
+    #concept-a3f .a3f-headc { position: absolute; bottom: 11px; left: 26px; width: 18px; height: 18px; border-radius: 50%; background: color-mix(in srgb, var(--brand-a3f) 40%, #2a2a34); }
+    #concept-a3f .a3f-bar {
+      position: absolute; left: 50%; transform: translateX(-50%);
+      width: 106px; height: 7px; border-radius: 4px; background: var(--brand-a3f); bottom: 46px;
+      box-shadow: 0 0 12px color-mix(in srgb, var(--brand-a3f) 60%, transparent);
+    }
+    #concept-a3f .a3f-bar::before, #concept-a3f .a3f-bar::after {
+      content: ""; position: absolute; top: -6px; width: 15px; height: 18px; border-radius: 4px; background: color-mix(in srgb, var(--brand-a3f) 75%, #000);
+    }
+    #concept-a3f .a3f-bar::before { left: -6px; } #concept-a3f .a3f-bar::after { right: -6px; }
+    #concept-a3f .a3f-arm { position: absolute; bottom: 24px; width: 7px; height: 26px; border-radius: 4px; background: color-mix(in srgb, var(--brand-a3f) 40%, #2a2a34); }
+    #concept-a3f .a3f-arm.l { left: 52px; } #concept-a3f .a3f-arm.r { right: 52px; }
+
+    #concept-a3f .a3f-mediachips { position: absolute; top: 10px; left: 10px; right: 10px; display: flex; gap: 7px; z-index: 4; }
+    #concept-a3f .a3f-mchip {
+      position: relative; display: inline-flex; align-items: center; gap: 6px;
+      font-size: 11px; font-weight: 800; letter-spacing: .01em;
+      padding: 6px 11px; border-radius: 999px; min-height: 30px;
+      background: rgba(8,8,12,.6); -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px);
+      border: 1.5px solid rgba(255,255,255,.16); color: #eaeaf0;
+    }
+    #concept-a3f .a3f-mchip svg { display: block; width: 14px; height: 14px; color: #cfcfd8; }
+    #concept-a3f .a3f-mlabel { display: inline-block; overflow: hidden; white-space: nowrap; max-width: 110px; }
+    #concept-a3f .a3f-badge {
+      position: absolute; top: -3px; right: -3px; width: 10px; height: 10px; border-radius: 50%;
+      background: var(--brand-a3f);
+      box-shadow: 0 0 0 2px #16161d, 0 0 0 4px color-mix(in srgb, var(--brand-a3f) 45%, transparent);
+    }
+
+    #concept-a3f .a3f-rx { font-size: 13px; font-weight: 700; color: #c4c4cf; text-align: center; margin-bottom: 9px; letter-spacing: .01em; }
+    #concept-a3f .a3f-rx b { color: #fff; }
+    #concept-a3f .a3f-prev {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 10px 15px; border-radius: 14px; margin-bottom: 9px;
+      background: #1b1b23; border: 2px dashed #34343f;
+    }
+    #concept-a3f .a3f-prev .l { font-size: 12px; color: #8f8f9c; font-weight: 700; }
+    #concept-a3f .a3f-prev .r { font-size: 14px; font-weight: 800; color: #e8e8ee; }
+    #concept-a3f .a3f-prev .tap { font-size: 11px; font-weight: 800; color: var(--brand-a3f); }
+
+    #concept-a3f .a3f-cur { display: flex; gap: 10px; margin-bottom: 9px; }
+    #concept-a3f .a3f-val { flex: 1; text-align: center; padding: 9px 8px 8px; border-radius: 16px; background: #1c1c24; border: 2px solid #2f2f3a; }
+    #concept-a3f .a3f-val .n { font-size: 28px; font-weight: 900; letter-spacing: -.03em; line-height: 1; }
+    #concept-a3f .a3f-val .u { font-size: 11px; font-weight: 800; color: #8f8f9c; letter-spacing: .08em; margin-top: 4px; }
+
+    #concept-a3f .a3f-effort { background: #15151c; border: 1.5px solid #24242e; border-radius: 14px; padding: 8px 11px 9px; margin-bottom: 11px; }
+    #concept-a3f .a3f-efftop { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+    #concept-a3f .a3f-efflbl { font-size: 10px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: #7f7f8c; }
+    #concept-a3f .a3f-effopt { font-size: 9px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: #6a6a76; background: #202029; padding: 2px 7px; border-radius: 999px; }
+    #concept-a3f .a3f-effpills { display: flex; gap: 8px; margin-left: auto; }
+    #concept-a3f .a3f-epill {
+      display: inline-flex; align-items: center; gap: 6px;
+      font-size: 11px; font-weight: 800; padding: 4px 9px; border-radius: 999px;
+      background: #1c1c24; border: 1.5px solid #33333f; color: #9a9aa6;
+    }
+    #concept-a3f .a3f-epill .em { color: #5f5f6b; }
+    #concept-a3f .a3f-epill.on {
+      background: color-mix(in srgb, var(--brand-a3f) 16%, #16161d);
+      border-color: color-mix(in srgb, var(--brand-a3f) 40%, transparent);
+      color: color-mix(in srgb, var(--brand-a3f) 85%, #fff);
+    }
+    #concept-a3f .a3f-epill.on .v { color: #fff; font-variant-numeric: tabular-nums; }
+    #concept-a3f .a3f-scale { display: flex; align-items: center; gap: 3px; }
+    #concept-a3f .a3f-tick { flex: 1; height: 7px; border-radius: 3px; background: #26262f; position: relative; }
+    #concept-a3f .a3f-tick.sel { background: var(--brand-a3f); height: 11px; box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand-a3f) 22%, transparent); }
+    #concept-a3f .a3f-scaleends { display: flex; justify-content: space-between; margin-top: 5px; }
+    #concept-a3f .a3f-scaleends span { font-size: 9px; font-weight: 800; color: #6a6a76; font-variant-numeric: tabular-nums; }
+
+    #concept-a3f .a3f-cta { height: 58px; width: 100%; font-size: 18px; display: flex; align-items: center; justify-content: center; gap: 9px; margin-bottom: 9px; }
+    #concept-a3f .a3f-cta .ck { width: 22px; height: 22px; border-radius: 50%; background: rgba(7,33,0,.22); display: flex; align-items: center; justify-content: center; }
+    #concept-a3f .a3f-ck::before { content: ""; display: block; width: 6px; height: 11px; border: solid #072100; border-width: 0 2.5px 2.5px 0; transform: rotate(45deg) translate(-1px,-1px); }
+
+    #concept-a3f .a3f-foot { display: flex; align-items: center; justify-content: space-between; }
+    #concept-a3f .a3f-sets { display: flex; gap: 6px; align-items: center; }
+    #concept-a3f .a3f-sq { width: 24px; height: 24px; border-radius: 8px; background: #26262f; border: 2px solid #34343f; }
+    #concept-a3f .a3f-sq.on { background: var(--brand-a3f); border-color: color-mix(in srgb, var(--brand-a3f) 55%, #000); }
+    #concept-a3f .a3f-setlbl { font-size: 12px; font-weight: 800; color: #8f8f9c; margin-left: 4px; }
+    #concept-a3f .a3f-tools { display: flex; gap: 8px; }
+    #concept-a3f .a3f-tool {
+      width: 38px; height: 38px; border-radius: 12px; background: #1c1c24; border: 2px solid #2f2f3a;
+      display: flex; align-items: center; justify-content: center; color: #b7b7c2; position: relative;
+    }
+    #concept-a3f .a3f-tool.kb::before { content: ""; width: 18px; height: 12px; border: 2px solid #b7b7c2; border-radius: 3px; }
+    #concept-a3f .a3f-tool.pen::before { content: ""; width: 13px; height: 3px; background: #b7b7c2; border-radius: 2px; transform: rotate(-45deg); box-shadow: 0 -4px 0 -1px #b7b7c2; }
+
+    /* ============ SCREEN 3 · DÍA YA HECHO (sheet doble intención) ============ */
+    #concept-a3f .a3f-stack { position: relative; padding: 0; }
+    #concept-a3f .a3f-dash {
+      position: absolute; inset: 0; opacity: .35; padding: 44px 18px 18px;
+      display: flex; flex-direction: column; gap: 10px; pointer-events: none;
+    }
+    #concept-a3f .a3f-dashtop { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 2px; }
+    #concept-a3f .a3f-dashday { font-size: 22px; font-weight: 900; letter-spacing: -.02em; }
+    #concept-a3f .a3f-dashstreak { font-size: 11px; font-weight: 800; color: #8f8f9c; }
+    #concept-a3f .a3f-dcard {
+      display: flex; align-items: center; gap: 11px; padding: 12px 13px;
+      background: #1a1a22; border: 1.5px solid #2a2a34; border-radius: 16px;
+    }
+    #concept-a3f .a3f-dcard.now { border-color: color-mix(in srgb, var(--brand-a3f) 42%, transparent); background: color-mix(in srgb, var(--brand-a3f) 8%, #1a1a22); }
+    #concept-a3f .a3f-dstate { width: 26px; height: 26px; border-radius: 8px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
+    #concept-a3f .a3f-dstate.done { background: var(--brand-a3f); position: relative; }
+    #concept-a3f .a3f-dstate.done::before { content: ""; width: 6px; height: 11px; border: solid #072100; border-width: 0 2.5px 2.5px 0; transform: rotate(45deg) translateY(-1px); }
+    #concept-a3f .a3f-dstate.now { background: color-mix(in srgb, var(--brand-a3f) 25%, transparent); box-shadow: inset 0 0 0 2px var(--brand-a3f); }
+    #concept-a3f .a3f-dstate.now::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--brand-a3f); }
+    #concept-a3f .a3f-dstate.todo { background: #26262f; box-shadow: inset 0 0 0 2px #3a3a45; }
+    #concept-a3f .a3f-dcard .dnm { flex: 1; }
+    #concept-a3f .a3f-dcard .dt { font-size: 14px; font-weight: 800; color: #d4d4dc; }
+    #concept-a3f .a3f-dcard .dd { font-size: 11px; font-weight: 700; color: #8f8f9c; margin-top: 2px; }
+    #concept-a3f .a3f-scrim {
+      position: absolute; inset: 0; z-index: 5;
+      background: linear-gradient(180deg, rgba(9,9,13,.55) 0%, rgba(9,9,13,.78) 46%, rgba(9,9,13,.92) 100%);
+    }
+    #concept-a3f .a3f-sheet2 {
+      position: absolute; left: 0; right: 0; bottom: 0; z-index: 10; height: 62%;
+      background: #1d1d26; border-top: 2px solid #33333f; border-radius: 24px 24px 34px 34px;
+      padding: 10px 18px 20px; display: flex; flex-direction: column;
+      box-shadow: 0 -22px 46px -20px rgba(0,0,0,.8);
+    }
+    #concept-a3f .a3f-handle { width: 42px; height: 5px; border-radius: 999px; background: #45454f; margin: 0 auto 14px; flex-shrink: 0; }
+    #concept-a3f .a3f-sheettitle { font-size: 20px; font-weight: 900; letter-spacing: -.02em; margin: 0 0 6px; }
+    #concept-a3f .a3f-sheetsub { font-size: 12.5px; font-weight: 700; color: #a8a8b3; margin: 0 0 16px; }
+    #concept-a3f .a3f-sheetsub b { color: #e8e8ee; font-weight: 800; }
+    #concept-a3f .a3f-opts { display: flex; flex-direction: column; gap: 11px; }
+    #concept-a3f .a3f-opt {
+      display: flex; align-items: center; gap: 13px; text-align: left;
+      background: #17171f; border: 2px solid #2f2f3a; border-radius: 18px; padding: 14px 15px;
+    }
+    #concept-a3f .a3f-opt.hi {
+      background: color-mix(in srgb, var(--brand-a3f) 11%, #17171f);
+      border-color: color-mix(in srgb, var(--brand-a3f) 55%, transparent);
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand-a3f) 14%, transparent);
+    }
+    #concept-a3f .a3f-opticon {
+      width: 46px; height: 46px; flex-shrink: 0; border-radius: 13px;
+      display: flex; align-items: center; justify-content: center;
+      background: #23232c; border: 1.5px solid #34343f; color: #cfcfd8;
+    }
+    #concept-a3f .a3f-opt.hi .a3f-opticon {
+      background: color-mix(in srgb, var(--brand-a3f) 18%, #16161d);
+      border-color: color-mix(in srgb, var(--brand-a3f) 42%, transparent);
+      color: color-mix(in srgb, var(--brand-a3f) 88%, #fff);
+    }
+    #concept-a3f .a3f-opticon svg { display: block; width: 22px; height: 22px; }
+    #concept-a3f .a3f-optbody { flex: 1; min-width: 0; }
+    #concept-a3f .a3f-optlbl { font-size: 16px; font-weight: 900; letter-spacing: -.01em; color: #f2f2f6; }
+    #concept-a3f .a3f-opt.hi .a3f-optlbl { color: #fff; }
+    #concept-a3f .a3f-optsub { font-size: 12px; font-weight: 700; line-height: 1.35; color: #9a9aa6; margin-top: 4px; }
+    #concept-a3f .a3f-optarrow {
+      width: 10px; height: 10px; flex-shrink: 0; border-right: 2.5px solid #6f6f7c; border-top: 2.5px solid #6f6f7c;
+      transform: rotate(45deg); margin-right: 2px;
+    }
+    #concept-a3f .a3f-opt.hi .a3f-optarrow { border-color: color-mix(in srgb, var(--brand-a3f) 78%, #fff); }
+    #concept-a3f .a3f-cancel {
+      margin-top: auto; text-align: center; padding-top: 14px;
+      font-size: 13px; font-weight: 800; letter-spacing: .02em; color: #7f7f8c; cursor: default;
+    }
+
+    /* ============ ANIMATIONS (decorativas) ============ */
+    @media (prefers-reduced-motion: no-preference) {
+      #concept-a3f .a3f-coachring { animation: concept-a3f-spin 7s linear infinite; }
+      #concept-a3f .a3f-pausewrap { animation: concept-a3f-halo 2.8s ease-out infinite; }
+      #concept-a3f .a3f-blockcta { animation: concept-a3f-breathe 2.6s ease-in-out infinite; }
+      #concept-a3f .a3f-media::after { animation: concept-a3f-shimmer 3.2s linear infinite; }
+      #concept-a3f .a3f-bar { animation: concept-a3f-press 2.4s ease-in-out infinite; }
+      #concept-a3f .a3f-arm { animation: concept-a3f-press 2.4s ease-in-out infinite; }
+      #concept-a3f .a3f-dot.now { animation: concept-a3f-beat 1.4s ease-in-out infinite; }
+      #concept-a3f .a3f-cta { animation: concept-a3f-breathe 2.6s ease-in-out infinite; }
+      #concept-a3f .a3f-tick.sel { animation: concept-a3f-pulsebrand 2.2s ease-in-out infinite; }
+      #concept-a3f .a3f-badge { animation: concept-a3f-badge 1.8s ease-in-out infinite; }
+      #concept-a3f .a3f-recicon svg { animation: concept-a3f-nudge 3.4s ease-in-out infinite; transform-origin: 50% 50%; }
+      #concept-a3f .a3f-mlabel { animation: concept-a3f-mlabel 8s cubic-bezier(.4,0,.2,1) infinite; }
+      #concept-a3f .a3f-mchip { animation: concept-a3f-mchippad 8s cubic-bezier(.4,0,.2,1) infinite; }
+      #concept-a3f .a3f-opt.hi { animation: concept-a3f-halohi 2.8s ease-in-out infinite; }
+    }
+    @keyframes concept-a3f-spin { to { transform: rotate(360deg); } }
+    @keyframes concept-a3f-shimmer { to { background-position: -220% 0; } }
+    @keyframes concept-a3f-press { 0%,100% { transform: translateX(-50%) translateY(0); } 45% { transform: translateX(-50%) translateY(14px); } }
+    @keyframes concept-a3f-beat { 0%,100% { transform: scale(1); } 30% { transform: scale(1.3); } 45% { transform: scale(1); } }
+    @keyframes concept-a3f-breathe { 0%,100% { transform: scale(1); } 50% { transform: scale(1.03); } }
+    @keyframes concept-a3f-pulsebrand {
+      0%,100% { box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand-a3f) 22%, transparent); }
+      50% { box-shadow: 0 0 0 6px color-mix(in srgb, var(--brand-a3f) 8%, transparent); }
+    }
+    @keyframes concept-a3f-halo {
+      0% { box-shadow: inset 0 1px 0 rgba(255,255,255,.05), 0 0 0 0 color-mix(in srgb, var(--brand-a3f) 26%, transparent); }
+      70%,100% { box-shadow: inset 0 1px 0 rgba(255,255,255,.05), 0 0 0 18px color-mix(in srgb, var(--brand-a3f) 0%, transparent); }
+    }
+    @keyframes concept-a3f-halohi {
+      0%,100% { box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand-a3f) 14%, transparent); }
+      50% { box-shadow: 0 0 0 5px color-mix(in srgb, var(--brand-a3f) 6%, transparent); }
+    }
+    @keyframes concept-a3f-badge {
+      0%,100% { box-shadow: 0 0 0 2px #16161d, 0 0 0 3px color-mix(in srgb, var(--brand-a3f) 55%, transparent); }
+      50% { box-shadow: 0 0 0 2px #16161d, 0 0 0 7px color-mix(in srgb, var(--brand-a3f) 0%, transparent); }
+    }
+    @keyframes concept-a3f-nudge { 0%,72%,100% { transform: rotate(0deg); } 82% { transform: rotate(-28deg); } 92% { transform: rotate(4deg); } }
+    @keyframes concept-a3f-mlabel {
+      0%, 15% { max-width: 110px; opacity: 1; margin-left: 0; }
+      24%, 88% { max-width: 0; opacity: 0; margin-left: -6px; }
+      96%, 100% { max-width: 110px; opacity: 1; margin-left: 0; }
+    }
+    @keyframes concept-a3f-mchippad {
+      0%, 15% { padding-left: 11px; padding-right: 11px; }
+      24%, 88% { padding-left: 8px; padding-right: 8px; }
+      96%, 100% { padding-left: 11px; padding-right: 11px; }
+    }
+  </style>
+
+  <div class="a3f-head">
+    <span class="a3f-eyebrow">Impulso · v3.3</span>
+    <h2 class="a3f-title">Impulso v3.3 — Recuperación, revisión y bloqueo</h2>
+    <p class="a3f-sub">Tres momentos con cuidado: bloqueo total y calmo tras la gracia, recuperar un día pendiente de la semana y reabrir un entrenamiento ya hecho con doble intención.</p>
+  </div>
+
+  <div class="a3f-row">
+
+    <!-- ============ 1 · BLOQUEO TOTAL ============ -->
+    <div class="a3f-col">
+      <p class="a3f-label"><span></span>Bloqueo total <em>post-gracia</em></p>
+      <div class="a3f-phone">
+        <div class="a3f-screen">
+          <div class="a3f-notch"></div>
+          <div class="a3f-body a3f-block">
+            <div class="a3f-coach">
+              <div class="a3f-coachring"></div>
+              <div class="a3f-coachav">A</div>
+            </div>
+            <div class="a3f-pausewrap">
+              <span class="a3f-pausebars"><i></i><i></i></span>
+            </div>
+            <h3 class="a3f-blocktitle">Tu cuenta está en pausa</h3>
+            <p class="a3f-blocktext">El plan de tu coach está inactivo. Escríbele para reactivar tu acceso.</p>
+
+            <div class="a3f-blockspace"></div>
+            <div class="a3f-juicy a3f-blockcta">
+              <svg viewBox="0 0 24 24" fill="none" stroke="#072100" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.4 8.4 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8z"/>
+              </svg>
+              Escribir a mi coach
+            </div>
+            <span class="a3f-logout">Cerrar sesión</span>
+          </div>
+        </div>
+      </div>
+      <ul class="a3f-bullets">
+        <li><b>Aparece al iniciar sesión</b> pasados los 7 días de gracia: cero acceso a dashboard, plan o historial.</li>
+        <li><b>Un solo camino</b>: hablar con el coach; un botón claro para escribirle y reactivar el acceso.</li>
+        <li><b>Tono cuidado</b>: está en pausa, no bloqueada; nunca culpa al alumno.</li>
+      </ul>
+    </div>
+
+    <!-- ============ 2 · RECUPERANDO UN DÍA ============ -->
+    <div class="a3f-col">
+      <p class="a3f-label amber"><span></span>Recuperando un día <em>semana actual</em></p>
+      <div class="a3f-phone">
+        <div class="a3f-screen">
+          <div class="a3f-notch"></div>
+          <div class="a3f-body">
+
+            <div class="a3f-recover">
+              <span class="a3f-recicon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <rect x="3" y="4.5" width="18" height="16" rx="2.5"/>
+                  <line x1="3" y1="9" x2="21" y2="9"/>
+                  <line x1="8" y1="2.5" x2="8" y2="6"/>
+                  <line x1="16" y1="2.5" x2="16" y2="6"/>
+                  <path d="M8.4 15.4a2.9 2.9 0 1 0 1-2.3"/>
+                  <polyline points="8 11.4 8.9 13.6 11.1 12.8"/>
+                </svg>
+              </span>
+              <div class="a3f-rectext">
+                <div class="a3f-rectitle">Recuperando: Martes — Día 2 · Empuje</div>
+                <div class="a3f-recsub">Al terminar, tu martes queda listo en esta semana</div>
+              </div>
+            </div>
+
+            <div class="a3f-progress">
+              <div class="a3f-dots">
+                <div class="a3f-dot done"></div><div class="a3f-dot done"></div>
+                <div class="a3f-dot now"></div><div class="a3f-dot"></div>
+                <div class="a3f-dot"></div><div class="a3f-dot"></div>
+                <div class="a3f-dot"></div><div class="a3f-dot"></div>
+              </div>
+              <div class="a3f-count a3f-tnum">Ejercicio 3 de 8</div>
+              <div class="a3f-gear" role="button" aria-label="Ajustes del entrenamiento">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <circle cx="12" cy="12" r="3.2"/>
+                  <path d="M19.4 13a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+                </svg>
+              </div>
+            </div>
+
+            <div class="a3f-exname">Press banca</div>
+            <div class="a3f-chiprow"><span class="a3f-chip">Fuerza · Pecho</span></div>
+
+            <div class="a3f-media">
+              <div class="a3f-mediachips">
+                <span class="a3f-mchip" role="button">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <line x1="9" y1="6" x2="20" y2="6"/><line x1="9" y1="12" x2="20" y2="12"/><line x1="9" y1="18" x2="20" y2="18"/>
+                    <circle cx="4.5" cy="6" r="1.2"/><circle cx="4.5" cy="12" r="1.2"/><circle cx="4.5" cy="18" r="1.2"/>
+                  </svg>
+                  <span class="a3f-mlabel">Instrucciones</span>
+                </span>
+                <span class="a3f-mchip" role="button">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.4 8.4 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8z"/>
+                  </svg>
+                  <span class="a3f-mlabel">Nota del coach</span>
+                  <span class="a3f-badge"></span>
+                </span>
+              </div>
+              <div class="a3f-fig">
+                <div class="a3f-bench"></div>
+                <div class="a3f-benchleg" style="left:33px;"></div>
+                <div class="a3f-benchleg" style="right:33px;"></div>
+                <div class="a3f-headc"></div>
+                <div class="a3f-torso"></div>
+                <div class="a3f-arm l"></div>
+                <div class="a3f-arm r"></div>
+                <div class="a3f-bar"></div>
+              </div>
+            </div>
+
+            <div class="a3f-rx a3f-tnum">4 x 8 · <b>60 kg</b> · RIR 2 · desc 90s</div>
+
+            <div class="a3f-prev">
+              <div class="l">Anterior</div>
+              <div class="r a3f-tnum">60 kg × 8</div>
+              <div class="tap">1 tap ↻</div>
+            </div>
+
+            <div class="a3f-cur">
+              <div class="a3f-val"><div class="n a3f-tnum">60</div><div class="u">KG</div></div>
+              <div class="a3f-val"><div class="n a3f-tnum">8</div><div class="u">REPS</div></div>
+            </div>
+
+            <div class="a3f-effort">
+              <div class="a3f-efftop">
+                <span class="a3f-efflbl">Esfuerzo</span>
+                <span class="a3f-effopt">Opcional</span>
+                <span class="a3f-effpills">
+                  <span class="a3f-epill"><span class="k">RPE</span><span class="em">—</span></span>
+                  <span class="a3f-epill on"><span class="k">RIR</span><span class="v a3f-tnum">2</span></span>
+                </span>
+              </div>
+              <div class="a3f-scale">
+                <span class="a3f-tick"></span><span class="a3f-tick"></span><span class="a3f-tick sel"></span>
+                <span class="a3f-tick"></span><span class="a3f-tick"></span><span class="a3f-tick"></span>
+                <span class="a3f-tick"></span><span class="a3f-tick"></span><span class="a3f-tick"></span>
+                <span class="a3f-tick"></span><span class="a3f-tick"></span>
+              </div>
+              <div class="a3f-scaleends"><span>0</span><span>10</span></div>
+            </div>
+
+            <div class="a3f-juicy a3f-cta"><span class="ck"><span class="a3f-ck"></span></span> Aplastar serie</div>
+
+            <div class="a3f-foot">
+              <div class="a3f-sets">
+                <div class="a3f-sq on"></div><div class="a3f-sq on"></div>
+                <div class="a3f-sq"></div><div class="a3f-sq"></div>
+                <div class="a3f-setlbl a3f-tnum">2/4</div>
+              </div>
+              <div class="a3f-tools">
+                <div class="a3f-tool kb"></div>
+                <div class="a3f-tool pen"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <ul class="a3f-bullets amber">
+        <li><b>Los días no hechos de la semana actual</b> se recuperan cualquier día; el banner ámbar deja claro que estás poniéndote al día.</li>
+        <li><b>Al terminar</b>, la semana marca ese día con check (hecho el jueves): la atribución va al día del plan y la racha cuenta igual.</li>
+        <li><b>Desde el dashboard</b>, el botón Recuperar trae siempre el día pendiente más antiguo.</li>
+      </ul>
+    </div>
+
+    <!-- ============ 3 · DÍA YA HECHO ============ -->
+    <div class="a3f-col">
+      <p class="a3f-label"><span></span>Día ya hecho <em>doble intención</em></p>
+      <div class="a3f-phone">
+        <div class="a3f-screen">
+          <div class="a3f-notch"></div>
+          <div class="a3f-body a3f-stack">
+
+            <!-- dashboard atenuado detrás -->
+            <div class="a3f-dash" aria-hidden="true">
+              <div class="a3f-dashtop">
+                <div class="a3f-dashday">Semana 2</div>
+                <div class="a3f-dashstreak a3f-tnum">Racha 3 de 4</div>
+              </div>
+              <div class="a3f-dcard">
+                <span class="a3f-dstate done"></span>
+                <div class="dnm"><div class="dt">Lunes — Día 1 · Pierna</div><div class="dd a3f-tnum">✓ hecho · 5.120 kg</div></div>
+              </div>
+              <div class="a3f-dcard">
+                <span class="a3f-dstate done"></span>
+                <div class="dnm"><div class="dt">Martes — Día 2 · Empuje</div><div class="dd a3f-tnum">✓ hecho · 4.860 kg</div></div>
+              </div>
+              <div class="a3f-dcard now">
+                <span class="a3f-dstate now"></span>
+                <div class="dnm"><div class="dt">Jueves — Día 3 · Tirón</div><div class="dd">Hoy · pendiente</div></div>
+              </div>
+              <div class="a3f-dcard">
+                <span class="a3f-dstate todo"></span>
+                <div class="dnm"><div class="dt">Viernes — Día 4 · Full body</div><div class="dd">Pendiente</div></div>
+              </div>
+            </div>
+
+            <div class="a3f-scrim"></div>
+
+            <!-- bottom-sheet doble intención -->
+            <div class="a3f-sheet2">
+              <div class="a3f-handle"></div>
+              <h3 class="a3f-sheettitle">Ya hiciste este entrenamiento</h3>
+              <p class="a3f-sheetsub a3f-tnum"><b>Martes — Día 2</b> · 4.860 kg · 24 series · 52:18</p>
+
+              <div class="a3f-opts">
+                <div class="a3f-opt hi" role="button">
+                  <span class="a3f-opticon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <path d="M12 20h9"/>
+                      <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"/>
+                    </svg>
+                  </span>
+                  <div class="a3f-optbody">
+                    <div class="a3f-optlbl">Revisar y editar</div>
+                    <div class="a3f-optsub">Abre tus registros de ese día y corrige lo que quieras</div>
+                  </div>
+                  <span class="a3f-optarrow"></span>
+                </div>
+
+                <div class="a3f-opt" role="button">
+                  <span class="a3f-opticon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <polyline points="21 4 21 9.5 15.5 9.5"/>
+                      <path d="M19 9a7.5 7.5 0 1 0 1.6 5"/>
+                    </svg>
+                  </span>
+                  <div class="a3f-optbody">
+                    <div class="a3f-optlbl">Repetir hoy</div>
+                    <div class="a3f-optsub">Empieza de cero; tus marcas de esa vez quedan como referencia</div>
+                  </div>
+                  <span class="a3f-optarrow"></span>
+                </div>
+              </div>
+
+              <span class="a3f-cancel">Cancelar</span>
+            </div>
+
+          </div>
+        </div>
+      </div>
+      <ul class="a3f-bullets">
+        <li><b>Mismo día</b>: entra directo a editar; tus series se cargan en chips editables, tal como ya funciona hoy.</li>
+        <li><b>Otro día</b>: eliges entre corregir lo de esa fecha o repetir como instancia nueva de hoy.</li>
+        <li><b>Editar jamás duplica</b>: corrige los registros originales; repetir crea una sesión aparte con tus marcas como referencia.</li>
+      </ul>
+    </div>
+
+  </div>
+</section>

@@ -13,6 +13,12 @@ import { TYPE } from '../lib/typography'
  */
 const WARNING_500 = '#F5A524' // DS --color-warning-500 (rgb 245 165 36)
 const ON_WARNING = '#0B0E13' // DS --color-text-on-warning (ink oscuro sobre ámbar sólido)
+// Píldora CALMADA del ejecutor V3 (mockup concepto-a-v32-estados a3d-offline): dark-only, sin alarma.
+const CALM_BG = '#1b1b23'
+const CALM_BORDER = '#2f2f3a'
+const CALM_TEXT = '#c1c1cc'
+const CALM_TEXT_STRONG = '#e8e8ee'
+const CALM_DOT = '#FBBF24' // punto ámbar chico (espejo web amber-400)
 
 interface OfflineBannerProps {
   visible: boolean
@@ -23,14 +29,37 @@ interface OfflineBannerProps {
    * Por defecto (false) usa la tarjeta translúcida suave del resto de la app (patrón A, sin regresión).
    */
   prominent?: boolean
+  /**
+   * Variante CALMADA del ejecutor V3 (mockup a3d-offline): píldora oscura #1b1b23, borde 1.5px #2f2f3a,
+   * radio 999, punto ámbar chico y copy "Sin señal — guardando en tu teléfono" (nada se bloquea).
+   * Aditiva; sin ella (default) el banner se comporta igual que antes. Dark-only por diseño.
+   */
+  variant?: 'calm'
 }
 
 export function OfflineBanner({
   visible,
   message = 'Sin conexion. Guardaremos los cambios para sincronizar despues.',
   prominent = false,
+  variant,
 }: OfflineBannerProps) {
   if (!visible) return null
+
+  if (variant === 'calm') {
+    return (
+      <View className="items-center px-4 py-2">
+        <View
+          className="flex-row items-center gap-2.5 self-center rounded-full px-3.5 py-2"
+          style={{ backgroundColor: CALM_BG, borderWidth: 1.5, borderColor: CALM_BORDER }}
+        >
+          <View style={{ width: 8, height: 8, borderRadius: 999, backgroundColor: CALM_DOT }} />
+          <Text style={[TYPE.caption, { color: CALM_TEXT }]}>
+            Sin señal — <Text style={{ color: CALM_TEXT_STRONG, fontWeight: '800' }}>guardando en tu teléfono</Text>
+          </Text>
+        </View>
+      </View>
+    )
+  }
 
   if (prominent) {
     return (

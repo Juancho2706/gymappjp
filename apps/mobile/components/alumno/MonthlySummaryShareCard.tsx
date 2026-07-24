@@ -1,6 +1,7 @@
 import { Text, View } from 'react-native'
 import { BarChart3, Dumbbell, Flame, type LucideIcon } from 'lucide-react-native'
 import {
+  ShareCardDate,
   ShareCardEyebrow,
   ShareCardHero,
   ShareCardPreview,
@@ -99,6 +100,9 @@ export function MonthlySummaryShareCard({
         <StatTile Icon={BarChart3} value={avgStr} label="Prom/sesión" color={accent} />
         <StatTile Icon={Flame} value={String(streak)} label={streak === 1 ? 'Día de racha' : 'Racha'} color={EMBER_500} />
       </View>
+      {/* Linea de fecha del canvas web (workout-pr-card-canvas.ts:934-938 `todayLong()`),
+          presente en las otras 2 share-cards RN via el mismo ShareCardDate. */}
+      <ShareCardDate />
     </ShareCardPreview>
   )
 }

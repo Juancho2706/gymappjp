@@ -9,6 +9,8 @@ import { getClientNutritionUser } from '../../nutrition/_data/nutrition-auth.que
 import { getClientScope } from '../../nutrition/_data/client-scope.queries'
 import { getNutritionTodayV2ForWeb } from '@/services/nutrition-v2-read.service'
 import { isNutritionV2Enabled } from '@/services/nutrition-v2-rollout.service'
+import { resolveNutritionDomainEnabled } from '@/services/feature-prefs.service'
+import { NutritionDomainOff } from '../../nutrition/_components/NutritionDomainOff'
 
 export const metadata = { title: 'Escanear alimento' }
 
@@ -23,15 +25,24 @@ export default async function NutritionV2ScannerPage({ params }: Props) {
   if (!user || !hasClientRow) redirect(`${base}/login`)
 
   const scope = await getClientScope(user.id)
-  const enabled = await isNutritionV2Enabled({
-    surface: 'webStudent',
-    userId: user.id,
-    clientId: user.id,
-    coachId: scope.coachId,
-    teamId: scope.teamId,
-    orgId: scope.orgId,
-  })
+  const [enabled, domainEnabled] = await Promise.all([
+    isNutritionV2Enabled({
+      surface: 'webStudent',
+      userId: user.id,
+      clientId: user.id,
+      coachId: scope.coachId,
+      teamId: scope.teamId,
+      orgId: scope.orgId,
+    }),
+    resolveNutritionDomainEnabled({
+      coachId: scope.coachId ?? '',
+      clientId: user.id,
+      clientTeamId: scope.teamId,
+      clientOrgId: scope.orgId,
+    }),
+  ])
   if (!enabled) redirect(`${base}/nutrition`)
+  if (!domainEnabled) return <NutritionDomainOff coachSlug={coach_slug} />
 
   // Contexto de registro (P0 QA: el scan no dejaba registrar): mismo read model del Today
   // que usa TodayExperience, reducido a lo minimo que el dialogo de cantidad/franja necesita.

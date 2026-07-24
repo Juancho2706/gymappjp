@@ -1,19 +1,22 @@
 'use client'
 
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { createPortal } from 'react-dom'
+import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { createPortal, flushSync } from 'react-dom'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { toast } from 'sonner'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { ArrowLeft, Info, Dumbbell, Timer, TrendingUp, History, Quote, X, Settings, CheckCircle2, WifiOff, ChevronDown, List, GalleryHorizontal } from 'lucide-react'
+import { ArrowLeft, Flag, Info, Dumbbell, Timer, TrendingUp, History, Quote, X, Settings, CheckCircle2, WifiOff, ChevronDown, List, GalleryHorizontal, Pencil, CalendarSync } from 'lucide-react'
 import { computeEffectiveTarget } from '@/lib/workout/progression'
+import { readAndConsumeMorphFlag } from '@/lib/workout/launch-ceremony'
+import { useCaptureStudentWorkoutCompleted } from '@/lib/posthog/events'
 import { LogSetForm, type SetSyncResult } from './LogSetForm'
 import { SingleExerciseCard } from './SingleExerciseCard'
 import {
     formatTypedObjective,
     buildStepModel,
     firstIncompleteStepIndex,
+    firstIncompleteInRounds,
     isStepComplete,
     stepIndexOfBlock,
     reconcileSessionLogs,
@@ -26,8 +29,26 @@ import {
     isTimeableInterval,
 } from '@eva/workout-engine'
 import { StepperExecution, type StepperStepView } from './StepperExecution'
+import { ExecHeaderV3, type ExecDotState } from './v3/ExecHeaderV3'
+import { applyExecThemeVars, readExecutorTheme } from './v3/exec-theme'
+import { ExerciseStepV3 } from './v3/ExerciseStepV3'
+import { MobilityStepV3 } from './v3/MobilityStepV3'
+import { RollerStepV3 } from './v3/RollerStepV3'
+import { CardioStepV3 } from './v3/CardioStepV3'
+import { SupersetStepV3 } from './v3/SupersetStepV3'
+import { ExecListMapV3, type ExecListMapItem } from './v3/ExecListMapV3'
+import { SessionIntro } from './v3/SessionIntro'
+import { SessionStart, type SessionStartExercise } from './v3/SessionStart'
+import { SessionCompleteV3 } from './v3/SessionCompleteV3'
+import { TechniqueSheetV3 } from './v3/TechniqueSheetV3'
+import { computeWeeklyStreak, type WeekStatusDaySource } from './v3/weekly-streak'
+import { ExecSettingsSheet } from './v3/ExecSettingsSheet'
+import { RestInterstitialDataProvider, type InterstitialNext, type InterstitialRound } from './v3/RestInterstitialV3'
+import { resolveExecMedia } from './v3/exec-media'
+import { useExecSettings } from './v3/exec-settings'
 import { STEPPER_MODE_KEY } from './rest-timer-preferences'
 import { SubstituteExerciseSheet } from './_components/SubstituteExerciseSheet'
+import { SubstituteSheetV3 } from './v3/SubstituteSheetV3'
 import { SUBSTITUTION_REASON } from '@/services/workout/exercise-substitution'
 import type { SubstituteCandidate } from './_data/substitution.queries'
 import { logSetAction, revalidateWorkoutViewAction } from './_actions/workout-log.actions'
@@ -70,6 +91,8 @@ import { formatPace } from '@eva/cardio'
 import { extractYoutubeVideoId } from '@/lib/youtube'
 import { ExerciseVideo } from '@/components/exercise/ExerciseVideo'
 import type { ClientCardioView } from './_data/workout-execution.queries'
+import { TargetDateProvider } from './target-date-context'
+import { weekdayNameFromIso } from '@/lib/workout/executor-recovery'
 
 export interface ExerciseType {
     id: string
@@ -187,6 +210,8 @@ interface Props {
         substituted_exercise_id?: string | null
         substituted_exercise_name?: string | null
         substitution_reason?: string | null
+        // Hold POR LADO (E0.5/E3.2): {left_sec, right_sec} — rehidrata los dos campos de la fila per_side.
+        metadata?: { left_sec?: number | null; right_sec?: number | null } | null
         // Reconciliación (informe forense 2026-07-04): serie en cola offline sin confirmar por server.
         _pending?: boolean
     }>
@@ -204,6 +229,32 @@ interface Props {
     areas?: WorkoutArea[]
     /** Módulo cardio: zonas personalizadas del alumno (chips "Z4 · 150–168 bpm"); OFF ⇒ solo "Z4" */
     cardio?: ClientCardioView
+    /**
+     * Día objetivo (Ola 1, decisión CEO 10): ISO `YYYY-MM-DD` ya VALIDADO en el server cuando el
+     * ejecutor se abrió con `?fecha=…` para editar un día pasado. `null` = sesión de HOY normal. Viaja
+     * a cada `LogSetForm` por contexto → `target_date` en el submit (modo solo-UPDATE) + banner "Editando".
+     */
+    targetDate?: string | null
+    /**
+     * Día a recuperar (Ola 1, decisión CEO 9): ISO `YYYY-MM-DD` ya validado cuando se abrió con
+     * `?recuperar=…` desde un pendiente de la semana. SOLO visual (banner ámbar "Recuperando"); el
+     * guardado sigue siendo el flujo normal de HOY y la atribución la resuelve `deriveWeekWorkoutStatus`.
+     */
+    recoverDate?: string | null
+    /**
+     * Ejecutor V3 (E2.1): chrome V3 (header nuevo con dots + tuerca, shell dark-only) montado SOBRE el
+     * mismo estado/motor (cero cambios a cola/drafts/reconciliación). El flag `executor_v3` se eliminó
+     * (decisión CEO 2026-07-23: V3 es el único camino), así que `page.tsx` siempre pasa `true`. La prop
+     * se conserva porque aún gobierna las ramas del shell V2 legacy (pendientes de limpieza futura).
+     */
+    executorV3?: boolean
+    /**
+     * Ejecutor V3 (E4.4): estado de la semana actual (Lun→Dom) para la RACHA SEMANAL de Inicio y
+     * Final V3. Resuelto server-side sólo con el flag V3 ON (`getExecutorWeekStatusDays`). `null` =
+     * dato ausente (sin programa activo, o V3 encendido sólo por override cliente) ⇒ no se muestra la
+     * racha (jamás dato falso).
+     */
+    weekStatusDays?: WeekStatusDaySource[] | null
 }
 
 function ManualTimerButton({ defaultTime }: { defaultTime: string | null }) {
@@ -476,10 +527,12 @@ const SUPERSET_MEMBER_LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
 type SessionLog = { block_id: string; set_number: number }
 
 /** Info compartida de una superserie (una instancia por grupo, referenciada por cada miembro). */
-interface SupersetInfo {
+export interface SupersetInfo {
     members: BlockType[]
     /** Letra visible por bloque (A, B, C… por posición dentro del grupo). */
     letterByBlock: Map<string, string>
+    /** Letra del GRUPO (A, B, C… por orden de aparición entre superseries del plan) — título V3. */
+    groupLetter: string
     /** Descanso completo del grupo = max de rest_seconds de los miembros. */
     groupRestSeconds: number
     /** Rondas = max de series entre los miembros. */
@@ -976,8 +1029,13 @@ export function WorkoutExecutionClient({
     lastSessionByBlock = {},
     areas = [],
     cardio,
+    targetDate = null,
+    recoverDate = null,
+    executorV3 = false,
+    weekStatusDays = null,
 }: Props) {
     const router = useRouter()
+    const captureWorkoutCompleted = useCaptureStudentWorkoutCompleted()
     const base = useBasePath(`/c/${coachSlug}`)
     const reducedMotion = useReducedMotion()
     // Marca "esta sesión tuvo actividad" (informe forense 2026-07-04, Fix A). El snapshot viejo del
@@ -988,6 +1046,11 @@ export function WorkoutExecutionClient({
     const markWorkoutTouched = useCallback(() => {
         try { sessionStorage.setItem(workoutTouchedKey, '1') } catch { /* private mode / SSR */ }
     }, [workoutTouchedKey])
+    // Ejecutor V3 (E2.2): gate de Entrada+Inicio por apertura, keyeado por plan+día objetivo.
+    const execV3EnteredKey = `eva:exec-v3-entered:${plan.id}:${targetDate ?? plan.assigned_date ?? plan.day_of_week ?? 'hoy'}`
+    const markExecV3Entered = useCallback(() => {
+        try { sessionStorage.setItem(execV3EnteredKey, '1') } catch { /* private mode / SSR */ }
+    }, [execV3EnteredKey])
     const blockRefs = useRef<Map<string, HTMLDivElement>>(new Map())
     // Superserie (F2): refs por fila de serie (block:set) para el auto-scroll intercalado.
     const setRowRefs = useRef<Map<string, HTMLDivElement>>(new Map())
@@ -1009,6 +1072,27 @@ export function WorkoutExecutionClient({
     const [stepperEnabled, setStepperEnabled] = useState(false)
     const [currentStepIndex, setCurrentStepIndex] = useState(0)
     const [showTimerSettings, setShowTimerSettings] = useState(false)
+    // Ejecutor V3 (E2.1): arranca con la prop `executorV3` (hoy siempre `true` — el flag `executor_v3`
+    // se eliminó). QA3: arrancar con este valor mantiene SSR=cliente determinístico. Antes arrancaba
+    // false y el layout-effect lo prendia post-hidratacion → el HTML del server pintaba el shell
+    // legacy/Inicio segundos antes de hidratar y el splash aparecia tarde y cortado.
+    const [execV3Active, setExecV3Active] = useState(executorV3)
+    const [showExecV3Settings, setShowExecV3Settings] = useState(false)
+    // Ejecutor V3 (E3.7): prefs de la tuerca (device-scoped). `showEffort` gobierna si la sesión pinta
+    // la sección RPE/RIR; el resto lo consumen el RestTimer (háptico/WakeLock) y el interstitial.
+    const { showEffort: execShowEffort } = useExecSettings()
+    // Ejecutor V3 (E2.2): fase de apertura del shell V3 — Entrada (splash) → Inicio → sesión. Sólo
+    // vive en modo V3; se resuelve tras montar contra sessionStorage (una vez por apertura, plan+día).
+    // Default 'session' = SSR-safe (el motor va montado desde el inicio; los overlays son fixed encima).
+    // QA3: el splash viene en el HTML del SERVER (fase inicial 'intro' cuando V3). El caso "ya entrado
+    // en esta sesion" (reload mid-entreno) lo resuelve ANTES del primer paint un <script> inline que
+    // marca <html data-exec-v3-entered> leyendo sessionStorage (patron no-flash); el layout-effect
+    // despues fija la fase real y limpia la marca.
+    const [execV3Phase, setExecV3Phase] = useState<'intro' | 'start' | 'session'>(executorV3 ? 'intro' : 'session')
+    // QA8: ¿esta apertura llegó por el morph de lanzamiento? (splash asentado, ceremonia completa).
+    const [execV3ViaMorph, setExecV3ViaMorph] = useState(false)
+    // Wrapper del ejecutor: exec-theme.ts setea aquí --exec-brand/--exec-recovery/--exec-celebration.
+    const execRootRef = useRef<HTMLDivElement | null>(null)
     const [showCompleted, setShowCompleted] = useState(false)
     const [selectedExercise, setSelectedExercise] = useState<ExerciseType | null>(null)
     const [sessionLogs, setSessionLogs] = useState(logs)
@@ -1032,6 +1116,11 @@ export function WorkoutExecutionClient({
     const [fillByBlock, setFillByBlock] = useState<Record<string, { weight: number | null; reps: number | null; nonce: number; setNumber: number }>>({})
     // Deshacer (quick-win E2-4): reabre la última serie logueada para corregir (no existe DELETE del log).
     const [reopenSignal, setReopenSignal] = useState<{ blockId: string; setNumber: number; nonce: number } | null>(null)
+    // QA4: los banners contextuales ("Editando registros del…" / "Recuperando…") se pueden descartar con
+    // una X. Estado LOCAL por sesión (solo visual): descartar NO cambia la semántica de guardado — `targetDate`
+    // sigue guardando en esa fecha (modo solo-UPDATE) y `recoverDate` sigue siendo el pendiente de la semana.
+    const [editBannerDismissed, setEditBannerDismissed] = useState(false)
+    const [recoverBannerDismissed, setRecoverBannerDismissed] = useState(false)
     // Modelo de foco (M1): los ejercicios/superseries COMPLETADOS colapsan a un recap delgado; el
     // usuario puede reexpandir cualquiera (para editar una serie) con un tap. Clave = block.id (bloque
     // suelto) o group.key (superserie).
@@ -1122,6 +1211,7 @@ export function WorkoutExecutionClient({
     // navigation") → el service worker no puede resolverla y sirve su página "Sin conexión",
     // expulsando al alumno del entreno que justo estaba protegido por la cola offline. Con red de
     // vuelta, el evento 'online' (OfflineWorkoutQueueSync) flushea y refresca — no se pierde frescura.
+    const entryRefreshedRef = useRef(false)
     useEffect(() => {
         if (logs.length > 0) markWorkoutTouched()
         const readTouched = () => {
@@ -1130,14 +1220,29 @@ export function WorkoutExecutionClient({
         const hasPriorData = () =>
             logs.length > 0 || readWorkoutOfflineQueueForPlan(plan.id).length > 0 || readTouched()
         const online = () => typeof navigator === 'undefined' || navigator.onLine
-        if (online() && hasPriorData()) router.refresh()
+        // QA "se recarga a media animación" (red lenta): el ejecutor monta DURANTE la ceremonia del
+        // Despegue (overlay del layout /c esperando el tap). Un `router.refresh()` ahí, con red lenta,
+        // cae a NAVEGACIÓN DURA del browser → recarga toda la página → el overlay del provider se
+        // remonta y muere a media animación. Se DIFIERE para CUALQUIER entrada V3 hasta que el alumno
+        // entre a la sesión (fase 'session'); ahí es cuando el stepper necesita los logs frescos igual.
+        // Gate por `execV3Phase` (NO por el flag de morph): evita la carrera en que el efecto del 1er
+        // render leía `execV3ViaMorph` aún en false (lo setea un layout-effect) y refrescaba igual — el
+        // `execV3Phase` inicial ('intro' en V3) ya bloquea desde el 1er render. Re-entrada (sesión ya
+        // 'entered') resuelve a 'session' → refresca en el acto (Fix A de frescura intacto). V2 igual.
+        const ceremonyBlocking = execV3Active && execV3Phase !== 'session'
+        // El refresh de entrada corre UNA sola vez (el efecto re-corre por cada cambio de fase).
+        if (online() && hasPriorData() && !ceremonyBlocking && !entryRefreshedRef.current) {
+            entryRefreshedRef.current = true
+            router.refresh()
+        }
         const onVisible = () => {
-            if (document.visibilityState === 'visible' && online() && hasPriorData()) router.refresh()
+            if (document.visibilityState === 'visible' && online() && hasPriorData() && !ceremonyBlocking) router.refresh()
         }
         document.addEventListener('visibilitychange', onVisible)
         return () => document.removeEventListener('visibilitychange', onVisible)
+    // Re-corre al entrar a la sesión (fase 'session') para lanzar el refresh diferido.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [])
+    }, [execV3Phase])
 
     // Wake lock de TODA la sesión (bug E2-1) — antes el lock solo cubría el descanso.
     useScreenWakeLock()
@@ -1256,6 +1361,7 @@ export function WorkoutExecutionClient({
     // Una sola fuente para el card (leyenda + rondas) y para el auto-scroll/guía de `handleLogged`.
     const supersetInfo = useMemo(() => {
         const map = new Map<string, SupersetInfo>()
+        let groupIdx = 0
         for (const section of sectioned) {
             for (const group of section.groups) {
                 if (group.type !== 'superset') continue
@@ -1264,7 +1370,9 @@ export function WorkoutExecutionClient({
                 members.forEach((m, i) => letterByBlock.set(m.id, SUPERSET_MEMBER_LETTERS[i] ?? '?'))
                 const groupRestSeconds = members.reduce((mx, m) => Math.max(mx, parseRestTime(m.rest_time)), 0)
                 const maxSets = members.reduce((mx, m) => Math.max(mx, m.sets), 0)
-                const info: SupersetInfo = { members, letterByBlock, groupRestSeconds, maxSets }
+                const groupLetter = SUPERSET_MEMBER_LETTERS[groupIdx] ?? '?'
+                groupIdx += 1
+                const info: SupersetInfo = { members, letterByBlock, groupLetter, groupRestSeconds, maxSets }
                 for (const m of members) map.set(m.id, info)
             }
         }
@@ -1280,15 +1388,86 @@ export function WorkoutExecutionClient({
         return m
     }, [sectioned])
 
+    // Toasts oscuros en V3 (informe 15, MAYOR): el `<Toaster>` sonner vive en el layout (portal a body,
+    // tema `light`) → sus toasts salían CLAROS sobre el shell oscuro. Marcamos el body mientras el
+    // ejecutor V3 está montado; globals.css re-tiñe `[data-sonner-toaster]` a superficie oscura sólo
+    // bajo esa marca (scoped, sin tocar el resto de la app). Se limpia al desmontar.
+    useEffect(() => {
+        if (typeof document === 'undefined') return
+        if (!execV3Active) return
+        document.body.dataset.execV3Toast = 'true'
+        return () => { delete document.body.dataset.execV3Toast }
+    }, [execV3Active])
+
     // Lectura post-montaje del toggle (hidratación-safe, patrón `omni_autotimer`): si estaba activo,
     // arranca en el primer paso incompleto (no en el 0).
-    useEffect(() => {
-        if (localStorage.getItem(STEPPER_MODE_KEY) === 'true') {
+    // Ola 2 (E2.1): con V3 activo (siempre — el flag `executor_v3` se eliminó), el modo paso-a-paso
+    // pasa a ser el DEFAULT — respetando si el alumno ya eligió Lista (STEPPER_MODE_KEY === 'false').
+    // El acento del shell V3 se setea vía exec-theme.ts.
+    // QA2 (splash fuera de secuencia): esta resolución corre en useLAYOUTeffect, no useEffect. El SSR
+    // pinta el shell sin V3 (execV3Active=false); con useEffect (post-paint) el navegador alcanzaba a
+    // pintar el Inicio/sesión y RECIÉN después montaba el splash → "aparece luego de la segunda pantalla
+    // y se corta". useLayoutEffect commitea execV3Active+phase='intro' SINCRÓNICAMENTE tras la
+    // hidratación y ANTES del primer paint del navegador → el splash (z-70) cubre desde el primer paint,
+    // nunca detrás del Inicio. Hidratación-safe: el render inicial (SSR y primer render cliente) sigue
+    // usando los defaults (false/'session'), así que no hay mismatch; el layout-effect sólo re-commitea.
+    useLayoutEffect(() => {
+        const v3 = executorV3
+        setExecV3Active(v3)
+        if (v3) {
+            applyExecThemeVars(execRootRef.current, readExecutorTheme(execRootRef.current))
+            // Entrada + Inicio una vez por apertura (sessionStorage por plan+día). Ya entrado → directo
+            // a la sesión (reload mid-entreno no re-fuerza el splash). El día = fecha objetivo si edita
+            // un día pasado, si no la fecha asignada del plan.
+            let entered = false
+            // Consumo único de la marca de morph con TTL (misma semántica de "leer + borrar", pero sólo
+            // cuenta si la marca es fresca → una ceremonia abandonada no salta el splash; ver launch-ceremony).
+            const viaMorph = readAndConsumeMorphFlag()
+            try {
+                entered = sessionStorage.getItem(execV3EnteredKey) === '1'
+            } catch { /* SSR / private */ }
+            // Despegue: llegar por el MORPH salta el splash viejo (SessionIntro) y va DIRECTO a Inicio —
+            // el overlay "Despegue" del layout /c ES el splash y cubre todo hasta el tap del alumno.
+            // Sin morph: entrada normal (splash SessionIntro si no se entró hoy).
+            setExecV3Phase(viaMorph ? 'start' : entered ? 'session' : 'intro')
+            setExecV3ViaMorph(viaMorph)
+        }
+        // La marca del script inline ya cumplio (evito el flash del splash SSR en reload mid-entreno).
+        document.documentElement.removeAttribute('data-exec-v3-entered')
+
+        const stepperPref = (() => {
+            try { return localStorage.getItem(STEPPER_MODE_KEY) } catch { return null }
+        })()
+        // Legacy: opt-in explícito. V3: default stepper salvo que el alumno haya elegido Lista.
+        const startStepper = stepperPref === 'true' || (v3 && stepperPref !== 'false')
+        if (startStepper) {
             setStepperEnabled(true)
             setCurrentStepIndex(firstIncompleteStepIndex(steps, logs))
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [])
+
+    // Despegue (handoff con el overlay de lanzamiento del layout /c): cuando llegamos por el MORPH y la
+    // pantalla de Inicio (SessionStart, fase 'start') ya esta MONTADA y PINTADA, avisamos al overlay que
+    // es seguro despedirse. Sin esto, el overlay se iba al cambiar el pathname (routeReady) y revelaba el
+    // stepper base (el motor va montado detras) o el cover de ruta → el FLASH "Ejercicio 1 de 5" + la
+    // sensacion de "se recarga la pagina". Doble rAF = garantiza al menos un paint de SessionStart antes
+    // de la senal. Flag en sessionStorage + evento (el provider persiste, escucha ambos).
+    useEffect(() => {
+        if (!execV3Active || !execV3ViaMorph || execV3Phase !== 'start') return
+        let raf1 = 0
+        let raf2 = 0
+        raf1 = requestAnimationFrame(() => {
+            raf2 = requestAnimationFrame(() => {
+                try { sessionStorage.setItem('eva:exec-v3-ready', '1') } catch { /* private */ }
+                try { window.dispatchEvent(new Event('eva:exec-v3-ready')) } catch { /* SSR */ }
+            })
+        })
+        return () => {
+            cancelAnimationFrame(raf1)
+            cancelAnimationFrame(raf2)
+        }
+    }, [execV3Active, execV3ViaMorph, execV3Phase])
 
     const registerRowRef = useCallback((blockId: string, setNumber: number, el: HTMLDivElement | null) => {
         const key = `${blockId}:${setNumber}`
@@ -1328,14 +1507,35 @@ export function WorkoutExecutionClient({
     // Volumen de sesión en vivo (quick-win E2-5): Σ peso × reps de los logs locales (cero queries).
     const sessionVolumeKg = sessionLogs.reduce((acc, l) => acc + (l.weight_kg ?? 0) * (l.reps_done ?? 0), 0)
     const sessionVolumeLabel = fmtVolume(sessionVolumeKg)
-    // "Ejercicio X de Y" — X = primer bloque incompleto (o el total si ya terminó todo).
+    // Conteo del header V3 unificado a EJERCICIOS INDIVIDUALES (QA2-C): cada miembro de una superserie
+    // cuenta como un ejercicio (M = total de bloques). Nada de contar "pasos".
     const totalExercises = blocks.length
     const currentExerciseIdx = blocks.findIndex((b) => !isBlockComplete(b, sessionLogs))
-    const currentExerciseNum = currentExerciseIdx === -1 ? totalExercises : currentExerciseIdx + 1
     // Marcador de progreso (decisión CEO: SIN atenuar — el alumno elige cuál hacer cuando quiera):
     // el primer bloque incompleto del plan sólo recibe un borde sport sutil + elevación (marcador
     // discreto, opacidad PLENA); los completados colapsan a recap. Todas las cards se ven plenas.
     const activeBlockId = currentExerciseIdx === -1 ? null : blocks[currentExerciseIdx].id
+    // "Ejercicio activo" a nivel INDIVIDUAL para header/dots/lista (QA2-C). En una superserie el motor
+    // intercala rondas (A1→B1→A2…), así que el miembro activo NO es el 1er bloque incompleto del grupo
+    // sino el que devuelve `firstIncompleteInRounds`. Fuera de superserie coincide con `activeBlockId`.
+    const headerActiveBlockId = (() => {
+        if (activeBlockId == null) return null
+        const info = supersetInfo.get(activeBlockId)
+        if (!info) return activeBlockId
+        const pos = firstIncompleteInRounds(
+            info.members.map((m) => ({ id: m.id, sets: m.sets })),
+            sessionLogs.map((l) => ({ block_id: l.block_id, set_number: l.set_number })),
+        )
+        return pos?.blockId ?? activeBlockId
+    })()
+    // N = posición (1-based) del ejercicio activo entre TODOS los bloques; en superserie, el miembro activo.
+    const currentBlockIdx = headerActiveBlockId != null ? blocks.findIndex((b) => b.id === headerActiveBlockId) : -1
+    const currentExerciseNum = currentBlockIdx === -1 ? totalExercises : currentBlockIdx + 1
+    // Dots del header V3: un dot por ejercicio individual — completado (todas sus series/rondas) / activo /
+    // pendiente. El `.now` sigue al miembro activo de la superserie, no al bloque suelto del grupo.
+    const execDots: ExecDotState[] = blocks.map((b) =>
+        isBlockComplete(b, sessionLogs) ? 'done' : b.id === headerActiveBlockId ? 'now' : 'todo',
+    )
 
     const isBlockCompleted = (block: BlockType) => isBlockComplete(block, sessionLogs)
 
@@ -1351,6 +1551,15 @@ export function WorkoutExecutionClient({
         setStepperEnabled(on)
         localStorage.setItem(STEPPER_MODE_KEY, String(on))
         if (on) setCurrentStepIndex(firstIncompleteStepIndex(steps, sessionLogs))
+    }
+    // "Ver todo" (E2.6): la vista lista V3 se alcanza desde el header; el FAB / tap en el mapa vuelve al
+    // stepper. `returnToStepper(i)` conserva el paso (i) en vez de saltar al primer incompleto.
+    const returnToStepper = (index?: number) => {
+        if (index != null) setCurrentStepIndex(index)
+        if (!stepperEnabled) {
+            setStepperEnabled(true)
+            localStorage.setItem(STEPPER_MODE_KEY, 'true')
+        }
     }
     const openTechnique = (exercise: ExerciseType | null) => {
         if (!exercise) return
@@ -1445,7 +1654,18 @@ export function WorkoutExecutionClient({
         }
         // Estado (puro) — dedup por block+set, PRESERVANDO los ejes tipados (actual_*) del payload
         // para que la fila de hold/cardio no se re-renderice vacía al confirmar (bug forense hold).
-        setSessionLogs((prev) => applyOptimisticSessionLog(prev, payload))
+        // QA2 (carrera al saltar descanso): este `onLogged` se invoca DENTRO de la form-action del hijo,
+        // que React 19 corre como TRANSICIÓN. Un `setState` normal en esa transición queda a prioridad
+        // baja y no commitea hasta que la server action (`formAction`) resuelve → con red lenta, si el
+        // alumno salta el descanso antes de la confirmación, `firstUnlogged` NO avanza y la serie 2 no
+        // aparece (parece que "espera a que se guarde la serie 1"). El colapso del hijo sí es inmediato
+        // (usa `useOptimistic`), creando la asimetría. `flushSync` fuerza el commit del optimismo del
+        // padre AQUÍ, antes de que `formAction` arranque el async → el hero avanza YA, independiente del
+        // server. NO toca payload/cola/reconciliación: sólo adelanta el commit de un estado que igual se
+        // iba a setear. La reconciliación posterior del server (handleResult) queda intacta.
+        flushSync(() => {
+            setSessionLogs((prev) => applyOptimisticSessionLog(prev, payload))
+        })
 
         // Guía/scroll (efectos) — calculados fuera del updater para no duplicarse en StrictMode.
         const prev = sessionLogs
@@ -1460,7 +1680,9 @@ export function WorkoutExecutionClient({
             const round = payload.setNumber
             const roundClosed = isRoundComplete(info.members, round, nextLogs)
             if (nextPos) {
-                if (!roundClosed) {
+                // QA3: en V3 el aviso es la barra "¡Sigue sin detenerte!" del paso — el toast duplicado
+                // "(i) Sin descanso" queda SOLO para V2/legacy.
+                if (!roundClosed && !execV3Active) {
                     const label = `${info.letterByBlock.get(nextPos.blockId) ?? ''}${nextPos.set}`
                     toast.info(`Sin descanso — sigue con ${label}`)
                 }
@@ -1481,8 +1703,11 @@ export function WorkoutExecutionClient({
         if (!block) return
         // Deshacer (quick-win E2-4): sin DELETE del log → "Deshacer" reabre la serie para corregir
         // (usa el path de edición existente del chip). Solo en fuerza (las variantes tipadas no colapsan a chip).
+        // QA4: en V3 la snackbar "Serie registrada — Deshacer" se ELIMINA (el alumno corrige después con el
+        // lápiz o desde la tarjeta ya hecha); V2/legacy la conserva byte-idéntica. La lógica de `reopenSignal`
+        // NO se toca (la usan otros caminos de edición): sólo desaparece la snackbar en modo V3.
         const ex = getExercise(block)
-        if (ex && effectiveExerciseType(block, ex) === 'strength') {
+        if (!execV3Active && ex && effectiveExerciseType(block, ex) === 'strength') {
             toast('Serie registrada', {
                 duration: 5000,
                 action: {
@@ -1514,7 +1739,13 @@ export function WorkoutExecutionClient({
             let stillPending = pending.length
             try {
                 const res = await flushWorkoutQueue(
-                    (item) => logSetAction({}, workoutLogToFormData(item)),
+                    (item) => {
+                        const fd = workoutLogToFormData(item)
+                        // Editando un día pasado: el flush de la cola también debe editar ESA fecha
+                        // (modo solo-UPDATE), no insertar un log de HOY. Sin `targetDate` no-op.
+                        if (targetDate) fd.set('target_date', targetDate)
+                        return logSetAction({}, fd)
+                    },
                     { planId: plan.id },
                 )
                 stillPending = res.remainingInScope
@@ -1567,6 +1798,8 @@ export function WorkoutExecutionClient({
         // BUG 2: la sesión terminó → los borradores y el snapshot local ya no aplican.
         clearAllDrafts(plan.id)
         clearSessionSnapshot(plan.id, sessionDayIsoRef.current)
+        // Evento de producto del ALUMNO: sesión completada (tras el éxito; PostHog gated por consentimiento).
+        captureWorkoutCompleted({ plan_id: plan.id })
         setShowCompleted(true)
     }
     // Contexto del programa para el nudge "lo que viene" del resumen (reusa la sub-línea del header;
@@ -1602,6 +1835,31 @@ export function WorkoutExecutionClient({
                         reducedMotion={reducedMotion}
                         celebrate={justCompleted != null && members.some((m) => m.id === justCompleted.id) && !reducedMotion}
                         onExpand={() => toggleExpandDone(group.key)}
+                    />
+                )
+            }
+            // Ejecutor V3 (E3.5): en el stepper (allowCollapse=false), la superserie se presenta con
+            // SupersetStepV3 (título + dots de ronda, miembro activo destacado con LogSetForm reusado y
+            // el resto colapsado). La lista y V2 siguen con SupersetGroupCard. El orden de rondas y el
+            // descanso de grupo se derivan del engine `superset-rounds` (motor de guardado intacto).
+            if (execV3Active && !allowCollapse) {
+                return (
+                    <SupersetStepV3
+                        key={group.key}
+                        info={info}
+                        sessionLogs={sessionLogs}
+                        currentWeek={currentWeek}
+                        weeksToRepeat={program?.weeks_to_repeat}
+                        previousHistory={previousHistory}
+                        lastSessionByBlock={lastSessionByBlock}
+                        exerciseMaxes={exerciseMaxes}
+                        autoTimerEnabled={autoTimerEnabled}
+                        substitutionByBlock={substitutionByBlock}
+                        onLogged={handleLogged}
+                        onResult={handleResult}
+                        openTechnique={openTechnique}
+                        registerRowRef={registerRowRef}
+                        getExercise={getExercise}
                     />
                 )
             }
@@ -1711,6 +1969,63 @@ export function WorkoutExecutionClient({
                             </Fragment>
                         )
                     }
+                    // Ejecutor V3 (E2.4): en el stepper (allowCollapse=false), los pasos STRENGTH se
+                    // presentan con ExerciseStepV3 (media siempre visible + chips glass + "Anterior"
+                    // 1-tap) REUSANDO el mismo LogSetForm/handlers. La lista y las superseries siguen con
+                    // SingleExerciseCard (Ola 3). Los valores derivados ya están calculados arriba.
+                    if (execV3Active && !allowCollapse && effType === 'strength') {
+                        return (
+                            <ExerciseStepV3
+                                key={block.id}
+                                block={block}
+                                exercise={exercise}
+                                effType={effType}
+                                suggestedWeightKg={suggestedWeightKg}
+                                overloadLabel={overloadLabel}
+                                bestPrev={bestPrev}
+                                firstUnlogged={firstUnlogged}
+                                doneCount={doneCount}
+                                blockLogs={blockLogs}
+                                exerciseMaxes={exerciseMaxes}
+                                fillEntry={fillByBlock[block.id]}
+                                setFillByBlock={setFillByBlock}
+                                reopenSignal={reopenSignal}
+                                substitution={sub ? { exerciseId: sub.id, exerciseName: sub.name, reason: SUBSTITUTION_REASON } : null}
+                                autoTimerEnabled={autoTimerEnabled}
+                                openTechnique={openTechnique}
+                                canSubstitute={effType === 'strength' && doneCount === 0}
+                                onOpenSubstitute={() => setSubstituteSheetBlockId(block.id)}
+                                handleLogged={handleLogged}
+                                handleResult={handleResult}
+                            />
+                        )
+                    }
+                    // Ejecutor V3 (Ola 3): en el stepper, cada tipo tipado tiene su pantalla dedicada.
+                    // Movilidad (per_side con HoldTimer + captura por lado), roller (contador gigante) y
+                    // cardio (identidad + countdown por zona + fases de intervalo). Superseries y modo
+                    // lista siguen con SingleExerciseCard (Wave 3). Capa de guardado/cola sin tocar.
+                    const typedCommon = {
+                        block,
+                        exercise,
+                        firstUnlogged,
+                        doneCount,
+                        blockLogs,
+                        autoTimerEnabled,
+                        reopenSignal,
+                        substitution: sub ? { exerciseId: sub.id, exerciseName: sub.name, reason: SUBSTITUTION_REASON } : null,
+                        openTechnique,
+                        handleLogged,
+                        handleResult,
+                    }
+                    if (execV3Active && !allowCollapse && effType === 'mobility') {
+                        return <MobilityStepV3 key={block.id} {...typedCommon} />
+                    }
+                    if (execV3Active && !allowCollapse && effType === 'roller') {
+                        return <RollerStepV3 key={block.id} {...typedCommon} />
+                    }
+                    if (execV3Active && !allowCollapse && effType === 'cardio') {
+                        return <CardioStepV3 key={block.id} {...typedCommon} cardio={cardio} />
+                    }
                     return (
                         <Fragment key={block.id}>
                         <SingleExerciseCard
@@ -1775,6 +2090,78 @@ export function WorkoutExecutionClient({
         muted: step.muted,
         complete: isStepComplete(step, sessionLogs),
     }))
+    // Mapa "Plan completo" del ejecutor V3 (QA2-C): SÓLO LECTURA, una fila por EJERCICIO INDIVIDUAL. Los
+    // miembros de una superserie aparecen como filas propias (con su letra) agrupadas bajo "Superserie X".
+    // El conteo (M) coincide con el del header. Sin navegación: es un índice de estado, no un stepper.
+    const blockDoneSets = (b: BlockType) => {
+        let done = 0
+        for (let s = 1; s <= b.sets; s += 1) {
+            if (sessionLogs.some((l) => l.block_id === b.id && l.set_number === s)) done += 1
+        }
+        return done
+    }
+    const execListMapItems: ExecListMapItem[] = steps.flatMap((step) => {
+        const isSS = step.kind === 'superset'
+        const info = isSS ? supersetInfo.get(step.blocks[0].id) ?? null : null
+        const members = [...step.blocks].sort((a, b) => a.order_index - b.order_index)
+        return members.map((b, mi) => ({
+            key: b.id,
+            title: getExercise(b)?.name ?? 'Ejercicio',
+            letter: isSS ? info?.letterByBlock.get(b.id) ?? null : null,
+            groupTitle: isSS && mi === 0 ? `Superserie ${info?.groupLetter ?? ''}`.trim() : null,
+            doneSets: blockDoneSets(b),
+            totalSets: b.sets,
+            complete: isBlockComplete(b, sessionLogs),
+            isCurrent: b.id === headerActiveBlockId,
+        }))
+    })
+
+    // Ejecutor V3 (E3.1): VM del ejercicio "SIGUIENTE" del interstitial de descanso. Deriva del bloque
+    // activo (lo que el alumno está trabajando durante el descanso): nombre, prescripción compacta,
+    // media pasiva (misma resolución que la card) y nota del coach del bloque. Sólo en modo V3.
+    const execInterstitialNext: InterstitialNext | null = (() => {
+        if (!execV3Active) return null
+        const block = activeBlockId != null ? blocks.find((b) => b.id === activeBlockId) : blocks[0]
+        if (!block) return null
+        const exercise = getExercise(block)
+        if (!exercise) return null
+        const rxParts: string[] = [`${block.sets} × ${block.reps}`]
+        if (block.target_weight_kg != null) rxParts.push(`${block.target_weight_kg} kg`)
+        if (block.rir) rxParts.push(`RIR ${block.rir}`)
+        return {
+            name: exercise.name,
+            rxLabel: rxParts.join(' · '),
+            media: resolveExecMedia(exercise),
+            coachMessage: block.notes?.trim() || null,
+        }
+    })()
+
+    // Ejecutor V3 (E3.5): contexto de CIERRE DE RONDA para el interstitial. El descanso de grupo de una
+    // superserie sólo se dispara al cerrar la ronda (los descansos intra-ronda no montan interstitial),
+    // así que si el bloque activo es miembro de una superserie con una ronda recién cerrada Y aún queda
+    // ronda por delante, el interstitial pinta "Ronda N lista" + dots + "Siguiente ronda". Derivado del
+    // engine `superset-rounds` (isRoundComplete); el bloque activo YA apunta al 1er miembro de la ronda
+    // siguiente, así que `execInterstitialNext` cae sobre el ejercicio correcto. El cierre de la ÚLTIMA
+    // ronda mueve el activo fuera de la superserie ⇒ interstitial normal (no hay "siguiente ronda").
+    const execInterstitialRound: InterstitialRound | null = (() => {
+        if (!execV3Active || activeBlockId == null) return null
+        const info = supersetInfo.get(activeBlockId)
+        if (!info) return null
+        const { members, maxSets, letterByBlock } = info
+        let justClosed = 0
+        for (let r = 1; r <= maxSets; r += 1) {
+            if (isRoundComplete(members, r, sessionLogs)) justClosed = r
+            else break
+        }
+        if (justClosed === 0 || justClosed >= maxSets) return null
+        const letter = letterByBlock.get(activeBlockId) ?? null
+        return {
+            justClosed,
+            total: maxSets,
+            nextTag: letter ? `${letter}${justClosed + 1}` : null,
+        }
+    })()
+
     // Pinta el card del paso `index` reusando `renderGroup` (siempre completo — sin colapsar).
     const renderStepNode = (index: number) => {
         const step = steps[index]
@@ -1784,15 +2171,175 @@ export function WorkoutExecutionClient({
         return renderGroup(ctx.group, { allowCollapse: false })
     }
 
+    // Banners de Ola 1 (mockup v3.3): "Editando" (día pasado, `?fecha=`) y "Recuperando" (pendiente de
+    // la semana, `?recuperar=`). Sólo uno suele estar activo; el nombre del día sale de la fecha validada.
+    const editWeekday = targetDate ? weekdayNameFromIso(targetDate) : ''
+    const recoverWeekday = recoverDate ? weekdayNameFromIso(recoverDate) : ''
+
+    // Ejecutor V3 (E4.4): racha semanal derivada del estado de la semana (server-side, flag V3 ON).
+    // Compartida por Inicio (SessionStart) y Final V3. `null` ⇒ la pieza no se muestra (dato ausente).
+    const weeklyStreak = weekStatusDays && weekStatusDays.length > 0 ? computeWeeklyStreak(weekStatusDays) : null
+
+    // Subtítulo contextual del cierre V3 ("Semana 2 · Fase Fuerza · Variante A") — mismos chips que Inicio.
+    const execV3ContextLine =
+        [currentWeek != null ? `Semana ${currentWeek}` : null, phaseName, activeWeekVariant ? `Variante ${activeWeekVariant}` : null]
+            .filter(Boolean)
+            .join(' · ') || null
+
+    // Etiqueta corta del día para el título del cierre V3 ("¡Día 3 completo!", mockup concepto-a-v2
+    // "Final"): sólo si el plan pertenece a un programa y trae `day_of_week` (índice de rotación real).
+    // Sin programa/día → null ⇒ SessionCompleteV3 cae a `plan.title` (comportamiento previo, seguro).
+    const execV3CompletionLabel = program && plan.day_of_week ? `Día ${plan.day_of_week}` : null
+
+    // Ejecutor V3 (E2.2): view-model de la pantalla de Inicio, mapeado de lo que YA viaja al client
+    // (plan/logs/lastSession). Toda pieza sin dato se omite. Sólo se calcula en modo V3.
+    const execV3StartVM = (() => {
+        if (!execV3Active) return null
+        const startIso = targetDate ?? getTodayInSantiago().iso
+        const weekday = weekdayNameFromIso(startIso)
+        const dayNum = Number(startIso.slice(8, 10)) || null
+        const eyebrow = `${targetDate ? '' : 'Hoy · '}${weekday}${dayNum ? ` ${dayNum}` : ''}`.trim()
+
+        const chips: string[] = []
+        if (currentWeek != null) chips.push(`Semana ${currentWeek}`)
+        if (phaseName) chips.push(phaseName)
+        if (activeWeekVariant) chips.push(`Variante ${activeWeekVariant}`)
+
+        const miniList: SessionStartExercise[] = blocks.slice(0, 4).map((b) => {
+            const ex = getExercise(b)
+            const t = effectiveExerciseType(b, ex)
+            const tone: SessionStartExercise['tone'] = t === 'strength' ? 'strength' : t === 'cardio' ? 'cardio' : 'other'
+            return { name: ex?.name ?? 'Ejercicio', tag: RUT_TYPE_META[t].label, tone }
+        })
+
+        let lastVolKg = 0
+        for (const b of blocks) {
+            const ls = lastSessionByBlock[b.id]
+            if (ls) for (const s of ls.sets) lastVolKg += (s.weight_kg ?? 0) * (s.reps_done ?? 0)
+        }
+
+        return {
+            eyebrow,
+            dayTitle: plan.title,
+            chips,
+            plainLast: activeWeekVariant != null,
+            exercisesCount: totalExercises,
+            setsCount: requiredSets,
+            estimatedMin: Math.max(5, Math.round((requiredSets * 2.5) / 5) * 5),
+            miniList,
+            moreCount: Math.max(0, totalExercises - miniList.length),
+            lastVolumeLabel: fmtVolume(lastVolKg),
+            // Nota del coach del día (mockup .a3a-note): globo cableado CONDICIONAL — se pinta sólo si
+            // llega texto. Hoy no hay campo de nota a nivel plan/día en el payload (`workout_plans` sólo
+            // trae id/title/assigned_date/day_of_week/week_variant/program_id/coach_id; `workout_blocks.notes`
+            // es POR-EJERCICIO y ya se muestra en el chip "Nota del coach" del ejercicio). Fuente futura:
+            // una columna de nota de sesión (p. ej. workout_plans.coach_note) — requiere cambio DB, fuera de scope.
+            coachNote: null as string | null,
+            coachName: coachSlug?.trim()?.replace(/^./, (c) => c.toUpperCase()) || null,
+            hasProgress: completedSetCount > 0,
+        }
+    })()
+    // Al arrancar/saltar: gate marcado + aterriza en el primer paso incompleto (el stepper ya lo hace
+    // al montar, pero lo re-sincronizamos por si el usuario tardó en el Inicio).
+    const enterExecV3Session = () => {
+        markExecV3Entered()
+        if (stepperEnabled) setCurrentStepIndex(firstIncompleteStepIndex(steps, sessionLogs))
+        setExecV3Phase('session')
+    }
+    const coachInitial = coachSlug?.trim()?.[0]?.toUpperCase() || null
+    // QA "se ve el stepper por debajo de Inicio": el header + el pager (motor) se renderizan SIEMPRE
+    // (deben quedar montados para drafts/cola/reloj), pero mientras la Entrada/Inicio está encima NO
+    // deben verse ni permitir scroll del fondo. Se ocultan (invisible, conservan montaje) y el root
+    // bloquea el scroll hasta que el alumno entra a la sesión (fase 'session').
+    const execBaseHidden = execV3Active && execV3Phase !== 'session'
+
     return (
-        <WorkoutTimerProvider>
+        <TargetDateProvider value={targetDate}>
+        <RestInterstitialDataProvider
+            value={{ items: execListMapItems, next: execInterstitialNext, round: execInterstitialRound }}
+        >
+        <WorkoutTimerProvider v3={execV3Active}>
           <WorkoutKeypadProvider>
-            <div className="is-workout-page min-h-dvh bg-[var(--ink-950)] text-on-dark">
+            <div
+                ref={execRootRef}
+                data-exec-v3={execV3Active ? '' : undefined}
+                data-exec-hide-effort={execV3Active && !execShowEffort ? '' : undefined}
+                className={cn(
+                    'is-workout-page min-h-dvh text-on-dark',
+                    // V3 pinta el fondo cálido vía [data-exec-v3] + capa ::before; el bg-ink-950 sólo compite.
+                    // V2 conserva su fondo byte-identico.
+                    !execV3Active && 'bg-[var(--ink-950)]',
+                    // Entrada/Inicio encima → sin scroll del fondo (evita revelar el stepper por debajo).
+                    execBaseHidden && 'max-h-dvh overflow-hidden',
+                )}
+            >
+                {execV3Active && (
+                  <div className={cn(execBaseHidden && 'invisible')}>
+                    <ExecHeaderV3
+                        dots={execDots}
+                        exerciseNum={currentExerciseNum}
+                        totalExercises={totalExercises}
+                        completedSets={completedSetCount}
+                        requiredSets={requiredSets}
+                        elapsedLabel={fmtElapsed(sessionElapsed)}
+                        volumeLabel={sessionVolumeLabel}
+                        onExit={() => router.push(`${base}/dashboard`)}
+                        onSettings={() => setShowExecV3Settings(true)}
+                        onViewAll={() => setStepperMode(false)}
+                        showViewAll={stepperEnabled}
+                    />
+                  </div>
+                )}
+
+                {/* Ejecutor V3 (E2.2): Entrada (splash) → Inicio, overlays fixed SOBRE el motor ya montado
+                    (nunca se desmonta el ejecutor → cola/drafts/clock siguen vivos). */}
+                {/* Script inline pre-hidratacion: si esta apertura YA paso el splash (reload), oculta el
+                    cover SSR antes del primer paint (CSS via html[data-exec-v3-entered]). */}
+                {execV3Active && execV3Phase === 'intro' && (
+                    <script
+                        dangerouslySetInnerHTML={{
+                            // Sólo saltar el splash SSR si YA se entró Y no hay handoff de morph pendiente.
+                            // La marca de morph ahora es JSON con TTL (o el '1' legado): cualquier valor
+                            // presente = venimos por morph → NO ocultar el cover (el overlay del Despegue cubre).
+                            __html: `try{if(sessionStorage.getItem(${JSON.stringify(execV3EnteredKey)})==='1'&&sessionStorage.getItem('eva:exec-v3-morph')===null)document.documentElement.setAttribute('data-exec-v3-entered','1')}catch(e){}`,
+                        }}
+                    />
+                )}
+                {execV3Active && (
+                    <AnimatePresence>
+                        {execV3Phase === 'intro' && (
+                            <SessionIntro
+                                key="exec-v3-intro"
+                                coachInitial={coachInitial}
+                                dayTitle={plan.title}
+                                onDone={() => setExecV3Phase('start')}
+                                reducedMotion={reducedMotion}
+                                viaMorph={execV3ViaMorph}
+                            />
+                        )}
+                        {execV3Phase === 'start' && execV3StartVM && (
+                            <SessionStart
+                                key="exec-v3-start"
+                                {...execV3StartVM}
+                                onStart={enterExecV3Session}
+                                onSkip={enterExecV3Session}
+                                streak={weeklyStreak}
+                                reducedMotion={reducedMotion}
+                                viaMorph={execV3ViaMorph}
+                            />
+                        )}
+                    </AnimatePresence>
+                )}
+
+                {/* Header sticky legacy — OCULTO en modo V3 (no se borra): el V3 monta su propio chrome. */}
                 <motion.div
                     initial={{ y: -20, opacity: 0 }}
                     animate={{ y: 0, opacity: 1 }}
                     transition={{ duration: 0.25 }}
-                    className="sticky top-0 z-20 bg-[var(--ink-950)]/95 pt-safe backdrop-blur border-b border-white/10"
+                    className={cn(
+                        'sticky top-0 z-20 bg-[var(--ink-950)]/95 pt-safe backdrop-blur border-b border-white/10',
+                        execV3Active && 'hidden',
+                    )}
                 >
                     <div className="px-4 py-3 md:px-8 max-w-5xl mx-auto w-full">
                         <div className="flex items-center justify-between mb-3 gap-2">
@@ -1895,13 +2442,76 @@ export function WorkoutExecutionClient({
                     </div>
                 </motion.div>
 
-                {isOffline && (
+                {isOffline && (execV3Active ? (
+                    /* V3: píldora oscura CALMADA (mockup concepto-a-v32-estados a3d-offline) — nada se bloquea.
+                       Reemplaza la barra ámbar de alarma del ejecutor viejo (que se conserva sólo para V2). */
+                    <div className="sticky top-[var(--workout-header-h,80px)] z-10 flex justify-center px-4 py-2 pointer-events-none">
+                        <div
+                            className="pointer-events-auto flex items-center gap-2.5 rounded-full border-[1.5px] px-3.5 py-2"
+                            style={{ background: '#1b1b23', borderColor: '#2f2f3a' }}
+                        >
+                            <span className="h-2 w-2 shrink-0 rounded-full bg-amber-400" aria-hidden />
+                            <p className="text-[12.5px] font-semibold" style={{ color: '#c1c1cc' }}>
+                                Sin señal — <b className="font-extrabold" style={{ color: '#e8e8ee' }}>guardando en tu teléfono</b>
+                            </p>
+                        </div>
+                    </div>
+                ) : (
                     <div className="sticky top-[var(--workout-header-h,80px)] z-10 flex items-center gap-2.5 bg-amber-500/90 backdrop-blur-sm px-4 py-2.5 text-amber-950 dark:bg-amber-600/90 dark:text-amber-50">
                         <WifiOff className="w-4 h-4 shrink-0" />
                         <p className="text-xs font-semibold">Sin conexión — los datos se guardarán al reconectar.</p>
                     </div>
+                ))}
+
+                {/* Editando un día PASADO (Ola 1): cada serie edita esa fecha en modo solo-UPDATE.
+                    QA4: descartable con la X (estado local por sesión; el guardado en esa fecha NO cambia). */}
+                {targetDate && !editBannerDismissed && (
+                    <div className="flex items-center gap-2.5 border-b border-white/10 bg-white/[0.05] px-4 py-2.5 backdrop-blur-sm">
+                        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-control bg-[var(--sport-500)]/15 text-[var(--sport-300)]">
+                            <Pencil className="h-3.5 w-3.5" />
+                        </span>
+                        <p className="min-w-0 flex-1 text-xs font-semibold text-on-dark">
+                            Editando registros del{' '}
+                            <span className="font-bold text-on-dark">{editWeekday.toLowerCase()}</span>
+                        </p>
+                        <button
+                            type="button"
+                            onClick={() => setEditBannerDismissed(true)}
+                            className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[#8f8f9c] transition-colors hover:text-on-dark hover:bg-white/10 active:scale-95"
+                            aria-label="Descartar aviso"
+                        >
+                            <X className="h-4 w-4" />
+                        </button>
+                    </div>
                 )}
 
+                {/* Recuperando un pendiente de la semana (Ola 1): SOLO visual; el guardado es de HOY.
+                    QA4: descartable con la X (estado local por sesión; sigue siendo un pendiente de la semana). */}
+                {recoverDate && !recoverBannerDismissed && (
+                    <div className="flex items-center gap-2.5 border-b border-amber-400/25 bg-amber-500/[0.14] px-4 py-2.5 backdrop-blur-sm dark:bg-amber-500/[0.12]">
+                        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-control bg-amber-400/20 text-amber-300">
+                            <CalendarSync className="h-4 w-4" />
+                        </span>
+                        <div className="min-w-0 flex-1">
+                            <p className="text-[13px] font-black leading-tight text-amber-200">
+                                Recuperando: {recoverWeekday}
+                            </p>
+                            <p className="mt-0.5 text-[11px] font-semibold leading-tight text-amber-100/80">
+                                Al terminar, tu {recoverWeekday.toLowerCase()} queda listo en esta semana
+                            </p>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => setRecoverBannerDismissed(true)}
+                            className="flex h-6 w-6 shrink-0 items-center justify-center self-start rounded-full text-[#8f8f9c] transition-colors hover:text-amber-100 hover:bg-white/10 active:scale-95"
+                            aria-label="Descartar aviso"
+                        >
+                            <X className="h-4 w-4" />
+                        </button>
+                    </div>
+                )}
+
+                <div className={cn(execBaseHidden && 'invisible')}>
                 {stepperEnabled ? (
                     /* Modo "paso a paso" — un ejercicio/superserie a la vez (Fase L · workstream A).
                        El RestTimer/WorkoutTimerProvider/header/barra "Finalizar" quedan FUERA del pager. */
@@ -1914,8 +2524,15 @@ export function WorkoutExecutionClient({
                     />
                 ) : (
                 <div className="px-4 py-6 md:px-8 max-w-5xl mx-auto pb-32">
+                    {/* Mapa "Ver todo" (E2.6 + QA2): en V3 la vista es SOLO LECTURA — únicamente el mapa,
+                       sin la lista interactiva legado (registrar series sólo desde el paso a paso). */}
+                    {execV3Active && (
+                        <div className="mb-5">
+                            <ExecListMapV3 items={execListMapItems} />
+                        </div>
+                    )}
                     <div className="space-y-6">
-                        {sectioned.map((section) => (
+                        {!execV3Active && sectioned.map((section) => (
                             <section key={section.sectionKey} className="space-y-3">
                                 <div className="space-y-1.5">
                                     <div className="flex items-center gap-3">
@@ -1945,19 +2562,47 @@ export function WorkoutExecutionClient({
                     </div>
                 </div>
                 )}
+                </div>
 
-                <div className="exec-finish-bar fixed bottom-0 left-0 right-0 z-40 border-t border-white/10 bg-[var(--ink-950)]/90 px-4 pt-4 pb-[calc(1rem+env(safe-area-inset-bottom,0px))] backdrop-blur-xl">
-                    <div className="max-w-5xl mx-auto flex items-center justify-between gap-3">
-                        <ManualTimerButton defaultTime={'90'} />
-                        <button
-                            onClick={handleFinish}
-                            className="h-12 px-5 flex items-center gap-2 rounded-control bg-[var(--sport-500)] text-white font-bold transition-transform active:scale-[0.99]"
-                        >
-                            <CheckCircle2 className="w-4 h-4" />
+                {/* FAB "Volver al ejercicio" (E2.6): sólo en la vista lista V3 — regresa al stepper. */}
+                {execV3Active && !stepperEnabled && (
+                    <button
+                        type="button"
+                        onClick={() => returnToStepper()}
+                        className="exec-v3-fab"
+                    >
+                        <GalleryHorizontal className="h-4 w-4" aria-hidden />
+                        Volver al ejercicio
+                    </button>
+                )}
+
+                {/* Barra "Finalizar" V3 (QA3, decisión CEO: botón a la vista y que funcione): barra fija
+                    delgada con botón fantasma V3 — no compite con el CTA principal del paso. El mismo
+                    handleFinish de siempre; la fila de la tuerca se conserva como acceso secundario. */}
+                {execV3Active && execV3Phase === 'session' && (
+                    <div className="exec-v3-finishbar">
+                        <button type="button" onClick={handleFinish} className="exec-v3-finishbtn">
+                            <Flag className="h-[18px] w-[18px]" aria-hidden />
                             Finalizar entrenamiento
                         </button>
                     </div>
-                </div>
+                )}
+
+                {/* Barra "Finalizar" — V2/legacy byte-idéntica (superficie + botón sport intactos). */}
+                {!execV3Active && (
+                    <div className="exec-finish-bar fixed bottom-0 left-0 right-0 z-40 px-4 pt-4 pb-[calc(1rem+env(safe-area-inset-bottom,0px))] backdrop-blur-xl border-t border-white/10 bg-[var(--ink-950)]/90">
+                        <div className="max-w-3xl mx-auto flex items-center justify-between gap-3">
+                            <ManualTimerButton defaultTime={'90'} />
+                            <button
+                                onClick={handleFinish}
+                                className="h-12 px-5 flex items-center gap-2 rounded-control font-bold transition-colors active:scale-[0.99] bg-[var(--sport-500)] text-white"
+                            >
+                                <CheckCircle2 className="w-4 h-4" />
+                                Finalizar entrenamiento
+                            </button>
+                        </div>
+                    </div>
+                )}
 
                 {/* Descanso, alarma y auto-timer (tuerca header / footer) */}
                 <Dialog open={showTimerSettings} onOpenChange={setShowTimerSettings}>
@@ -1979,8 +2624,40 @@ export function WorkoutExecutionClient({
                     </DialogContent>
                 </Dialog>
 
-                {/* Workout Completed Overlay */}
-                {showCompleted ? createPortal(
+                {/* Ajustes V3 (E3.7) — tuerca del header V3: sheet con el cronómetro (sonido/tono/volumen
+                    REALES), vibración, celebraciones (OFF por diseño), pantalla encendida y RPE/RIR.
+                    Se monta DENTRO de [data-exec-v3] (acento resuelto), sin portal. */}
+                {execV3Active && (
+                    <ExecSettingsSheet
+                        open={showExecV3Settings}
+                        onClose={() => setShowExecV3Settings(false)}
+                        autoTimerEnabled={autoTimerEnabled}
+                        onToggleAutoTimer={toggleAutoTimer}
+                        onFinish={handleFinish}
+                    />
+                )}
+
+                {/* Workout Completed Overlay — Final V3 (E4.3, dentro del root para heredar --exec-brand)
+                    en modo V3; el resumen V2 (portal a body) queda intacto para el ejecutor legacy. */}
+                {showCompleted && execV3Active && (
+                    <SessionCompleteV3
+                        planTitle={plan.title}
+                        completionLabel={execV3CompletionLabel}
+                        contextLine={execV3ContextLine}
+                        logs={sessionLogs}
+                        blocks={plan.workout_blocks}
+                        exerciseMaxes={exerciseMaxes}
+                        exerciseMaxDates={exerciseMaxDates}
+                        durationSec={finishedElapsed ?? sessionElapsed}
+                        plannedSets={requiredSets}
+                        streak={weeklyStreak}
+                        programName={program?.name ?? null}
+                        nextHint={nextHint}
+                        substitutedBlockIds={Object.keys(substitutionByBlock)}
+                        onDone={() => router.push(`${base}/dashboard`)}
+                    />
+                )}
+                {showCompleted && !execV3Active ? createPortal(
                     <WorkoutSummaryOverlay
                         planTitle={plan.title}
                         logs={sessionLogs}
@@ -1998,7 +2675,15 @@ export function WorkoutExecutionClient({
                     document.body
                 ) : null}
 
-                {/* Technique Modal */}
+                {/* Modal de Técnica — en V3 se abre como sheet OSCURA in-context (informe 15, BLOCKER);
+                    el Dialog claro legacy queda SÓLO para el ejecutor V2. */}
+                {execV3Active && (
+                    <TechniqueSheetV3
+                        exercise={showTechnique ? selectedExercise : null}
+                        onClose={() => setShowTechnique(false)}
+                    />
+                )}
+                {!execV3Active && (
                 <Dialog open={showTechnique} onOpenChange={setShowTechnique}>
                     <DialogContent 
                         showCloseButton={false}
@@ -2111,13 +2796,17 @@ export function WorkoutExecutionClient({
                         </div>
                     </DialogContent>
                 </Dialog>
+                )}
 
-                {/* Bottom-sheet de sustitución de máquina ocupada (Fase L · workstream C). */}
+                {/* Bottom-sheet de sustitución de máquina ocupada (Fase L · workstream C). En V3 usa el
+                    sheet "Máquina ocupada" re-pieleado (`SubstituteSheetV3`, mismo contrato/handler); el
+                    legacy queda SÓLO para el ejecutor V2. */}
                 {(() => {
                     const openBlock = substituteSheetBlockId ? blocks.find((b) => b.id === substituteSheetBlockId) : null
                     const openEx = openBlock ? getExercise(openBlock) : null
+                    const SubSheet = execV3Active ? SubstituteSheetV3 : SubstituteExerciseSheet
                     return (
-                        <SubstituteExerciseSheet
+                        <SubSheet
                             open={substituteSheetBlockId != null}
                             onOpenChange={(o) => { if (!o) setSubstituteSheetBlockId(null) }}
                             blockId={substituteSheetBlockId}
@@ -2131,5 +2820,7 @@ export function WorkoutExecutionClient({
             </div>
           </WorkoutKeypadProvider>
         </WorkoutTimerProvider>
+        </RestInterstitialDataProvider>
+        </TargetDateProvider>
     )
 }

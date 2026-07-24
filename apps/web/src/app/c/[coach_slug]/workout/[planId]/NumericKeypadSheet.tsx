@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import type { CSSProperties } from 'react'
 import { motion, useReducedMotion } from 'framer-motion'
 import { Delete, SlidersHorizontal, Check, ArrowRight, ArrowLeft, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -55,6 +56,8 @@ interface Props {
   /** Valores del paso de esfuerzo (mirror del `LogSetForm`). */
   effortRpe: number | null
   effortRir: number | null
+  /** Tope inferior de la escala de RIR (E2.5): 0 en V3, 1 en V2. Default 1. */
+  effortRirMin?: number
   /** Paso configurable de los chips de incremento (kg). */
   step: number
   /** ¿Está abierto el selector de paso? */
@@ -112,6 +115,7 @@ export function NumericKeypadSheet({
   hasEffort,
   effortRpe,
   effortRir,
+  effortRirMin = 1,
   step,
   stepMenuOpen,
   reducedMotion: reducedMotionProp,
@@ -134,6 +138,27 @@ export function NumericKeypadSheet({
   const fallbackReducedMotion = useReducedMotion()
   const reducedMotion = reducedMotionProp ?? fallbackReducedMotion
   const panelRef = useRef<HTMLDivElement>(null)
+
+  // Marca del ejecutor V3 (informe 15, MAYOR): el keypad se portea a <body> (fuera de [data-exec-v3])
+  // por lo que NO recibe el remap `--sport-500 → --exec-brand`; su acento quedaba azul Sport fijo.
+  // Copiamos el `--exec-brand` resuelto del árbol del ejecutor (mismo patrón que DualWheelPicker) y
+  // re-mapeamos la rampa sport INLINE en el panel → confirmar/seleccionados adoptan la marca. Fuera de
+  // V3 (sin nodo [data-exec-v3]) queda undefined ⇒ el keypad conserva el azul Sport del ejecutor legacy.
+  const [execAccent, setExecAccent] = useState<string>()
+  useEffect(() => {
+    if (typeof document === 'undefined') return
+    const root = document.querySelector('[data-exec-v3]')
+    if (!root) return
+    const v = getComputedStyle(root).getPropertyValue('--exec-brand').trim()
+    if (v) setExecAccent(v)
+  }, [])
+  const brandVars: CSSProperties | undefined = execAccent
+    ? ({
+        '--sport-500': execAccent,
+        '--sport-400': `color-mix(in srgb, ${execAccent} 82%, #fff)`,
+        '--sport-300': `color-mix(in srgb, ${execAccent} 68%, #fff)`,
+      } as CSSProperties)
+    : undefined
 
   // Publica la altura real del panel → `--keypad-h` (padding del scroll + scroll-into-view).
   useEffect(() => {
@@ -181,6 +206,7 @@ export function NumericKeypadSheet({
         ref={panelRef}
         role="group"
         aria-label="Teclado numérico"
+        style={brandVars}
         className="fixed inset-x-0 bottom-0 z-50 mx-auto max-w-md rounded-t-sheet border-t border-[var(--border-inverse)] bg-[var(--ink-950)] px-3 pb-safe pt-2 shadow-[0_-16px_48px_-12px_rgba(0,0,0,0.7)]"
         initial={reducedMotion ? false : { y: '100%' }}
         animate={{ y: 0 }}
@@ -256,7 +282,7 @@ export function NumericKeypadSheet({
                   Reps en reserva · RIR
                   <EffortHelp label="RIR" text={RIR_HELP} />
                 </span>
-                <ScaleDots name="RIR" value={effortRir} onChange={onEffortRirChange} reducedMotion={reducedMotion} />
+                <ScaleDots name="RIR" value={effortRir} onChange={onEffortRirChange} reducedMotion={reducedMotion} min={effortRirMin} />
               </div>
             </div>
 

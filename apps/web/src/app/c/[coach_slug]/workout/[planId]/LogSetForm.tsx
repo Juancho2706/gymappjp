@@ -2,7 +2,7 @@
 
 import { useActionState, useEffect, useRef, useOptimistic, useState, startTransition, type RefObject } from 'react'
 import { useParams } from 'next/navigation'
-import { Check, Loader2, StickyNote, CloudOff } from 'lucide-react'
+import { Check, Loader2, StickyNote, CloudOff, ChevronDown, HelpCircle, X } from 'lucide-react'
 import { useFormStatus } from 'react-dom'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { toast } from 'sonner'
@@ -17,15 +17,20 @@ import {
 } from '@/lib/workout-offline-queue'
 import { triggerHaptic } from '@/lib/client/haptics'
 import { useCoarsePointer } from '@/lib/client/useCoarsePointer'
-import { formatWeightEsCl } from '@eva/workout-engine'
+import { formatWeightEsCl, type PrKind } from '@eva/workout-engine'
 import { readDraft, saveDraft, clearDraft, type DraftFields } from './workout-draft-store'
 import { useWorkoutKeypad } from './WorkoutKeypadProvider'
 import { ScaleDots, EffortHelp, RPE_HELP, RIR_HELP } from './EffortScale'
-import { typedKeypadFields, type TypedKeypadMode } from '@eva/workout-engine'
+import { DualWheelPicker } from './v3/DualWheelPicker'
+import { PrCelebration } from './v3/PrCelebration'
+import { classifyThresholdPr } from './v3/pr-adapter'
+import { useCelebrations } from './v3/use-celebrations'
+import { typedKeypadFields, typedLogValues, type TypedKeypadMode } from '@eva/workout-engine'
 import type { OptimisticLogPayload } from '@eva/workout-engine'
 import { cn } from '@/lib/utils'
 import { humanizeStudentWriteError } from '@/lib/student-access'
 import { springs } from '@/lib/animation-presets'
+import { useTargetDate } from './target-date-context'
 
 const initialState: LogState = {}
 
@@ -68,6 +73,8 @@ interface Props {
         actual_distance_m?: number | null
         actual_hold_sec?: number | null
         actual_avg_hr?: number | null
+        /** Hold POR LADO (E0.5/E3.2): {left_sec, right_sec} — siembra los dos campos de la fila per_side. */
+        metadata?: { left_sec?: number | null; right_sec?: number | null } | null
         /**
          * Reconciliación (informe forense 2026-07-04): la serie está en `sessionLogs` porque la reconció
          * el padre desde la COLA offline, pero el server AÚN no la confirmó. `true` ⇒ se muestra como
@@ -131,6 +138,57 @@ interface Props {
      * 'pending' = encolado sin conexión (se sincroniza luego). El motor identidad no cambia.
      */
     onResult?: (blockId: string, setNumber: number, result: SetSyncResult) => void
+    /**
+     * Ejecutor V3 (E2.5/escala): sólo lo pasa `ExerciseStepV3` (modo V3). Habilita la captura DUAL
+     * (long-press en kg/reps → rueda `DualWheelPicker`, tap = teclado como siempre) y baja el tope de
+     * RIR a 0 (RIR 0 = al fallo). Ausente/false ⇒ fila V2 byte-idéntica (anti-regresión).
+     */
+    v3?: boolean
+    /**
+     * Ejecutor V3 · captura HERO (informe 03 · BLOCKER): sólo lo pasa `ExerciseStepV3`. Cuando true y la
+     * fila es la ACTIVA, se renderiza la superficie del mockup a3a — dos tiles de valor grandes (los
+     * mismos `<input>` kg/reps restilizados, sin cambiar refs/handlers), panel de esfuerzo compacto con
+     * pills RPE/RIR + escala de ticks, y un CTA único full-width "Aplastar serie". El motor de guardado
+     * (submit/draft/cola/reconciliación) es EXACTAMENTE el mismo; sólo cambia el RENDER. Ausente/false ⇒
+     * la fila V2/V3-lista byte-idéntica. Requiere `v3` para el gate de rueda/RIR-0.
+     */
+    heroV3?: boolean
+    /**
+     * Ejecutor V3 · panel de esfuerzo COLAPSABLE (QA2 hallazgo 3): estado expandido/colapsado del panel
+     * RPE/RIR del hero, LEVANTADO al `ExerciseStepV3` (por-ejercicio) para que persista entre series del
+     * MISMO ejercicio y se colapse al cambiar de ejercicio. Aditivo: sin la prop, el hero usa estado
+     * local (colapsado por default). NO toca el guardado de rpe/rir — sólo si el panel se ve expandido.
+     */
+    effortExpanded?: boolean
+    onEffortExpandedChange?: (v: boolean) => void
+    /**
+     * Movilidad POR LADO (E3.2 · executor-v3): `side_mode` del bloque. Cuando es `'per_side'` la fila de
+     * movilidad captura DOS holds (`hold_left_sec` / `hold_right_sec`) que el engine (`typedLogValues`)
+     * mapea a `metadata {left_sec, right_sec}` + suma en `actual_hold_sec`. Cualquier otro valor (o
+     * ausente) ⇒ un solo campo `actual_hold_sec`, byte-idéntico al comportamiento previo.
+     */
+    sideMode?: string | null
+    /**
+     * Prefill tipado (E3.3 · roller): al cambiar `nonce`, escribe `reps_done` (pasadas) en el input
+     * uncontrolled de la fila tipada activa — lo alimenta el contador gigante de `RollerStepV3`. NO
+     * cambia el motor de logging; sólo pre-rellena para confirmar. Sin él, la fila no cambia.
+     */
+    typedPrefill?: { repsDone?: number | null; nonce: number }
+    /**
+     * Auto-prellenado de FC promedio (E6.2 · Ola 6 · cardio): el BPM en vivo por Web Bluetooth de
+     * `CardioStepV3` sugiere el promedio del stream. Al cambiar `nonce`, se escribe `bpm` en el input
+     * uncontrolled `actual_avg_hr` SOLO SI está vacío (nunca pisa lo que el alumno ya editó). Mismo patrón
+     * uncontrolled que `typedPrefill`/`prefill`; NO cambia el motor de logging. Solo el flujo cardio lo pasa.
+     */
+    suggestedAvgHr?: { bpm: number; nonce: number }
+    /**
+     * Auto-llenado del HOLD cronometrado (QA4 · movilidad): al detener/completar el anillo de hold, el
+     * `MobilityStepV3` vuelca los segundos sostenidos en el input de la fila activa al cambiar `nonce`.
+     * Uncontrolled (mutación de ref, sin re-render) — mismo patrón que `typedPrefill`/`suggestedAvgHr`;
+     * NO cambia el motor de logging. En per_side usa `leftSec`/`rightSec` (dos inputs); bilateral usa
+     * `holdSec`. Sólo el flujo movilidad V3 lo pasa; sin él la fila no cambia.
+     */
+    holdPrefill?: { holdSec?: number | null; leftSec?: number | null; rightSec?: number | null; nonce: number }
 }
 
 /** Estado de sincronización de una serie de cara al usuario (contrato a). */
@@ -175,6 +233,10 @@ function StrengthLogSetForm({
     substitution,
     onLogged,
     onResult,
+    v3 = false,
+    heroV3 = false,
+    effortExpanded,
+    onEffortExpandedChange,
 }: Props) {
     const params = useParams<{ coach_slug: string; planId: string }>()
     // Teclado numérico custom (Fase L · workstream B). Gate por puntero grueso: en desktop el input
@@ -183,6 +245,14 @@ function StrengthLogSetForm({
     const coarse = useCoarsePointer()
     const keypad = useWorkoutKeypad()
     const useKeypad = coarse && keypad != null
+    // Captura DUAL (E2.5): en V3 + puntero grueso, mantener presionado kg/reps abre la rueda; tap =
+    // teclado. En desktop (puntero fino) la rueda NO se activa (long-press es patrón táctil).
+    const useWheel = v3 && coarse
+    // Escala de RIR: en V3 baja a 0 (RIR 0 = al fallo). En V2 queda en 1 (comportamiento histórico).
+    const rirMin = v3 ? 0 : 1
+    // Día objetivo (Ola 1): si el ejecutor se abrió con `?fecha=…` (editar un día pasado), viaja en
+    // cada submit como `target_date` → la action edita esa fecha en modo solo-UPDATE. null = HOY.
+    const targetDate = useTargetDate()
     const [state, formAction] = useActionState(logSetAction, initialState)
     // Item encolado (sin sincronizar) de ESTA serie tras un reload. Se hidrata en un EFECTO
     // post-montaje (no en el initializer) para evitar mismatch de hidratación: el server no ve
@@ -208,7 +278,7 @@ function StrengthLogSetForm({
             setQueuedInit(q)
             setChipValues({ w: q.weightKg, r: q.repsDone })
             setRpe(q.rpe ?? null)
-            setRir(q.rir != null && q.rir >= 1 && q.rir <= 10 ? q.rir : null)
+            setRir(q.rir != null && q.rir >= rirMin && q.rir <= 10 ? q.rir : null)
             setNote(q.note ?? '')
             setSyncStatus('pending')
             return
@@ -228,7 +298,7 @@ function StrengthLogSetForm({
         }
         if (draft.rir != null && draft.rir !== '') {
             const n = Number(draft.rir)
-            if (Number.isFinite(n) && n >= 1 && n <= 10) setRir(n)
+            if (Number.isFinite(n) && n >= rirMin && n <= 10) setRir(n)
         }
         if (draft.note != null && draft.note !== '') setNote(draft.note)
         keypad?.refreshDisplay()
@@ -247,6 +317,8 @@ function StrengthLogSetForm({
 
     const isLogged = optimisticLogged || syncStatus === 'pending'
     const { startRest, cancelRest } = useWorkoutTimer()
+    // Orquestador de celebraciones (E4.1): sólo se usa en V3 para disparar el háptico/publicar el PR.
+    const { celebrate } = useCelebrations()
     const reducedMotion = useReducedMotion()
     const weightRef = useRef<HTMLInputElement>(null)
     const repsRef = useRef<HTMLInputElement>(null)
@@ -257,21 +329,54 @@ function StrengthLogSetForm({
     // existentes (carga de página) quedan en false ⇒ sin animación fantasma.
     const settleRef = useRef(false)
     const prRef = useRef(false)
+    // PR EN VIVO V3 (E4.2): datos de la celebración dorada de la serie recién cerrada (kg, mejor marca
+    // anterior, eje weight/e1rm del engine). Sólo se puebla al alcanzar el umbral en modo V3.
+    const prV3Ref = useRef<{ kg: number; prevKg: number; kind: PrKind } | null>(null)
+    // Gatillo visible de la celebración (banner + confetti + pulso dorado). Se auto-descarta ~1,5 s.
+    const [prCelebrateOn, setPrCelebrateOn] = useState(false)
     // Reapertura de una serie cerrada (tap en el chip recap → fila editable).
     const [editing, setEditing] = useState(false)
     // Esfuerzo por serie: RPE y RIR, ambos escala 1-10 (dots), ambos opcionales (decisión CEO).
     // El name/payload no cambia — se inyectan en el submit igual que antes.
     const [rpe, setRpe] = useState<number | null>(existingLog?.rpe ?? null)
-    // RIR = reps en reserva. Clampa un legacy fuera del rango de entrada 1-10 (p.ej. rir=0 viejo)
-    // a "sin valor" para no mandar un valor que el Zod (min 1) rechazaría al editar una serie vieja.
+    // RIR = reps en reserva. Clampa a "sin valor" lo que caiga fuera del rango de entrada [rirMin..10]
+    // (en V2, rirMin=1 → un rir=0 legacy no viaja; en V3, rirMin=0 → el 0 "al fallo" SÍ viaja).
     const [rir, setRir] = useState<number | null>(
-        existingLog?.rir != null && existingLog.rir >= 1 && existingLog.rir <= 10 ? existingLog.rir : null,
+        existingLog?.rir != null && existingLog.rir >= rirMin && existingLog.rir <= 10 ? existingLog.rir : null,
     )
+    // Captura HERO (informe 03): qué escala de esfuerzo muestra el panel compacto (pills RPE/RIR). Sólo
+    // presentación — ambos siguen siendo opcionales y viajan por setRpe/setRir sin tocar el submit.
+    const [effortMetric, setEffortMetric] = useState<'rpe' | 'rir'>(
+        rir != null ? 'rir' : rpe != null ? 'rpe' : 'rir',
+    )
+    // Panel de esfuerzo COLAPSABLE (QA2 hallazgo 3). Colapsado por default. El estado real lo levanta
+    // `ExerciseStepV3` (por-ejercicio, persiste entre series y se colapsa al cambiar de ejercicio); si no
+    // llega la prop controlada, cae a este estado local. `effHelpOpen` = mini-sheet (?) RPE/RIR.
+    const [localEffortExpanded, setLocalEffortExpanded] = useState(false)
+    const [effHelpOpen, setEffHelpOpen] = useState(false)
+    const effExpanded = effortExpanded ?? localEffortExpanded
+    const setEffExpanded = (val: boolean) => {
+        if (onEffortExpandedChange) onEffortExpandedChange(val)
+        else setLocalEffortExpanded(val)
+    }
     // Nota rápida por serie (quick-win E2-6). Source of truth = state; viaja por un mirror oculto.
     const [note, setNote] = useState(existingLog?.note ?? '')
     const [noteOpen, setNoteOpen] = useState(false)
     // Respaldo de valores para el chip recap mientras el prop existingLog se propaga (o pendiente de cola).
     const [chipValues, setChipValues] = useState<{ w: number | null; r: number | null } | null>(null)
+    // Captura DUAL (E2.5): estado de la rueda long-press. `wheelInit` congela los valores anteriores
+    // (leídos de los inputs al abrir) para centrar la rueda.
+    const [wheelOpen, setWheelOpen] = useState(false)
+    const [wheelInit, setWheelInit] = useState<{ w: number | null; r: number | null }>({ w: null, r: null })
+    // Gesto del long-press: distingue tap (→ teclado) de mantener presionado (→ rueda), con cancel
+    // por movimiento >10px. Ref (no state) para no re-renderizar durante el gesto.
+    const pressRef = useRef<{ timer: ReturnType<typeof setTimeout> | null; x: number; y: number; moved: boolean; fired: boolean }>({
+        timer: null,
+        x: 0,
+        y: 0,
+        moved: false,
+        fired: false,
+    })
 
     // Prefill "= última vez" (quick-win E2-3): escribe en los inputs uncontrolled al cambiar el nonce.
     useEffect(() => {
@@ -363,6 +468,13 @@ function StrengthLogSetForm({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [state])
 
+    // PR en vivo V3 (E4.2): la celebración dorada dura ~1,5 s y se va sola (no corta el flujo, no es modal).
+    useEffect(() => {
+        if (!prCelebrateOn) return
+        const t = setTimeout(() => setPrCelebrateOn(false), 1600)
+        return () => clearTimeout(t)
+    }, [prCelebrateOn])
+
     const noteTrimmed = note.trim() || null
     const showNoteControls = isActive || editing
 
@@ -415,11 +527,96 @@ function StrengthLogSetForm({
             effort: {
                 rpe,
                 rir,
+                rirMin,
                 onRpeChange: setRpe,
                 onRirChange: setRir,
             },
             requestSubmit: () => formRef.current?.requestSubmit(),
         })
+    }
+
+    // ── Captura DUAL (E2.5): rueda por long-press sobre kg/reps (sólo V3 + puntero grueso) ──────────
+    /** Lee un input es-CL (coma decimal) como número, o null. */
+    const readInputNum = (el: HTMLInputElement | null): number | null => {
+        const raw = el?.value?.trim().replace(',', '.')
+        if (!raw) return null
+        const n = Number(raw)
+        return Number.isFinite(n) ? n : null
+    }
+    const openWheel = () => {
+        setWheelInit({ w: readInputNum(weightRef.current), r: readInputNum(repsRef.current) })
+        triggerHaptic(12)
+        setWheelOpen(true)
+    }
+    /** "Listo" de la rueda: escribe AMBOS valores en los inputs por el MISMO camino que el autollenado
+     *  "Anterior" (mutación de ref + evento `input` nativo → drafts intactos; refresca el mirror del keypad). */
+    const applyWheel = (weightKg: number, reps: number) => {
+        if (weightRef.current) {
+            weightRef.current.value = useKeypad ? formatWeightEsCl(weightKg) : String(weightKg)
+            weightRef.current.dispatchEvent(new Event('input', { bubbles: true }))
+        }
+        if (repsRef.current) {
+            repsRef.current.value = String(reps)
+            repsRef.current.dispatchEvent(new Event('input', { bubbles: true }))
+        }
+        keypad?.refreshDisplay()
+        setWheelOpen(false)
+    }
+    // Handlers del gesto en el input (fix informe 14 · causa A "no sale"). Camino confiable = `onFocus`
+    // abre el teclado (como cardio/V2); el long-press corre EN PARALELO sin `preventDefault` (así el
+    // navegador no cancela el foco). `setPointerCapture` garantiza que el `pointerup` vuelva al mismo
+    // input aunque el dedo se desplace; el umbral de cancelación sube a 16px (tolerancia real de dedo).
+    // El `<input>` lleva `touch-action:none` (clase) SOLO en modo rueda para que el gesto no se robe
+    // como scroll. Al cumplirse los 400ms se abre la rueda y se cierra el teclado que el foco abrió.
+    const onFieldPointerDown = (e: React.PointerEvent<HTMLInputElement>) => {
+        if (!useWheel) return
+        try {
+            e.currentTarget.setPointerCapture(e.pointerId)
+        } catch {
+            /* no soportado: seguimos sin captura */
+        }
+        const p = pressRef.current
+        if (p.timer) clearTimeout(p.timer)
+        p.moved = false
+        p.fired = false
+        p.x = e.clientX
+        p.y = e.clientY
+        p.timer = setTimeout(() => {
+            p.fired = true
+            p.timer = null
+            // Long-press → rueda: cierra el teclado que el foco pudo abrir y quita el foco del input.
+            keypad?.closeKeypad()
+            weightRef.current?.blur()
+            repsRef.current?.blur()
+            openWheel()
+        }, 400)
+    }
+    const onFieldPointerMove = (e: React.PointerEvent<HTMLInputElement>) => {
+        if (!useWheel) return
+        const p = pressRef.current
+        if (p.timer && (Math.abs(e.clientX - p.x) > 16 || Math.abs(e.clientY - p.y) > 16)) {
+            clearTimeout(p.timer)
+            p.timer = null
+            p.moved = true
+        }
+    }
+    const onFieldPointerUp = () => {
+        if (!useWheel) return
+        const p = pressRef.current
+        if (p.timer) {
+            clearTimeout(p.timer)
+            p.timer = null
+        }
+        // Tap corto: el `onFocus` ya abrió el teclado (camino confiable). No reabrimos aquí.
+        p.fired = false
+        p.moved = false
+    }
+    const onFieldPointerCancel = () => {
+        const p = pressRef.current
+        if (p.timer) {
+            clearTimeout(p.timer)
+            p.timer = null
+        }
     }
 
     const handleSubmit = (formData: FormData) => {
@@ -456,9 +653,23 @@ function StrengthLogSetForm({
             substitutedExerciseId: substitution?.exerciseId ?? null,
             substitutedExerciseName: substitution?.exerciseName ?? null,
             substitutionReason: substitution?.reason ?? null,
+            // Edición de día pasado (E1.6): la fecha viaja EN el item — el flush global de reconexión
+            // no conoce el contexto de página; sin esto, la edición encolada se escribiría en HOY.
+            targetDate: targetDate ?? null,
         })
         settleRef.current = true
-        prRef.current = prThresholdKg != null && w != null && w > 0 && w >= prThresholdKg
+        // Umbral de PR EXISTENTE (semántica V2, intacta): alcanzar/superar el máximo histórico de peso.
+        const hitPr = prThresholdKg != null && w != null && w > 0 && w >= prThresholdKg
+        prRef.current = hitPr
+        // PR en vivo V3 (E4.2): el disparo es el umbral de arriba; el EJE (weight/e1rm) lo clasifica el
+        // engine (`detectPR` vía adaptador de borde). Presentación dorada + háptico (pref) por el
+        // orquestador; V2 conserva su pulso ámbar tal cual (no entra a esta rama).
+        if (v3 && hitPr && w != null && prThresholdKg != null) {
+            const eje = classifyThresholdPr(w, r, prThresholdKg)
+            prV3Ref.current = { kg: w, prevKg: prThresholdKg, kind: eje.kind ?? 'weight' }
+            setPrCelebrateOn(true)
+            celebrate('pr_detectado', { isRealPR: true })
+        }
         setChipValues({ w, r })
         // BUG 2: la serie ya está en la cola (la verdad) → el borrador cumplió su función, se limpia.
         clearDraft(params.planId, blockId, setNumber)
@@ -508,9 +719,12 @@ function StrengthLogSetForm({
         const dispR = existingLog?.reps_done ?? chipValues?.r ?? null
         // Se celebra sólo la serie recién cerrada en esta sesión (refs en false para logs cargados).
         const isPending = syncStatus === 'pending'
-        const celebrate = !isPending && settleRef.current && !reducedMotion
-        const prGlow = !isPending && prRef.current && !reducedMotion
-        return (
+        const settleAnim = !isPending && settleRef.current && !reducedMotion
+        // Pulso ámbar LEGACY: sólo V2 (V3 usa la celebración dorada de PR en su lugar). Intacto.
+        const prGlowV2 = !v3 && !isPending && prRef.current && !reducedMotion
+        // PR en vivo V3 (E4.2): borde dorado pulsante + banner + confetti (una oleada). Se auto-descarta.
+        const showPrCel = v3 && !isPending && prCelebrateOn && prV3Ref.current != null
+        const chip = (
             <motion.button
                 layout={!reducedMotion}
                 transition={reducedMotion ? { duration: 0 } : springs.smooth}
@@ -528,7 +742,7 @@ function StrengthLogSetForm({
                         : `Serie ${setNumber} registrada — toca para editar`
                 }
             >
-                {prGlow && (
+                {prGlowV2 && (
                     <motion.span
                         aria-hidden
                         className="pointer-events-none absolute inset-0 rounded-control ring-2 ring-amber-400"
@@ -537,6 +751,7 @@ function StrengthLogSetForm({
                         transition={{ duration: 0.32, times: [0, 0.4, 1] }}
                     />
                 )}
+                {showPrCel && <span aria-hidden className="exec-pr-ring" />}
                 <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--sport-500)]/20 text-[11px] font-black tabular-nums text-[var(--sport-300)]">
                     {setNumber}
                 </span>
@@ -562,21 +777,36 @@ function StrengthLogSetForm({
                 ) : (
                     <motion.span
                         className="ml-auto shrink-0 text-[var(--sport-400)]"
-                        initial={celebrate ? { scale: 0, rotate: -25 } : false}
+                        initial={settleAnim ? { scale: 0, rotate: -25 } : false}
                         animate={{ scale: 1, rotate: 0 }}
-                        transition={celebrate ? springs.elastic : { duration: 0 }}
+                        transition={settleAnim ? springs.elastic : { duration: 0 }}
                     >
                         <Check className="h-4 w-4" />
                     </motion.span>
                 )}
             </motion.button>
         )
+        // PR en vivo V3: banner dorado + confetti ARRIBA del chip, inline (no modal, no corta el flujo).
+        if (showPrCel && prV3Ref.current) {
+            return (
+                <div className="exec-pr-wrap">
+                    <PrCelebration
+                        kg={prV3Ref.current.kg}
+                        prevKg={prV3Ref.current.prevKg}
+                        kind={prV3Ref.current.kind}
+                    />
+                    {chip}
+                </div>
+            )
+        }
+        return chip
     }
 
     // ── Fila de captura (activa = protagonista por TAMAÑO; próxima = compacta, sin atenuar) ──
     const inputClass = cn(
         'w-full rounded-control bg-white/[0.06] border text-center font-semibold font-mono transition-colors focus:outline-none focus:ring-1 text-on-dark border-[var(--border-inverse)] focus:border-[var(--sport-500)] focus:ring-[var(--sport-500)]',
         isActive ? 'h-14 text-2xl' : 'h-11 text-base',
+        useWheel && 'exec-v3-touchnone',
     )
 
     // Con teclado custom el input es `type=text` es-CL (coma decimal, `inputMode=none`, readOnly →
@@ -586,6 +816,299 @@ function StrengthLogSetForm({
         ? (weightDefaultNum != null ? formatWeightEsCl(weightDefaultNum) : '')
         : (weightDefaultNum ?? '')
     const repsDefaultValue = existingLog?.reps_done ?? queuedInit?.repsDone ?? ''
+
+    // ── Captura HERO de fuerza (informe 03 · BLOCKER). Reusa los mismos inputs (refs/handlers/gesto),
+    //    estado rpe/rir y `handleSubmit` — el motor NO cambia, sólo el render. Se renderiza para TODA
+    //    serie no colapsada (activa Y futuras): las futuras las oculta el CSS del slot (is-future). Es
+    //    clave que activa y futura compartan branch → al avanzar `firstUnlogged` el `<input>` NO cambia
+    //    de identidad (mismo elemento) y el listener nativo de BORRADOR sigue ligado (sin perder lo
+    //    tipeado). El `ExerciseStepV3` decide qué slot se ve; aquí sólo importa colapsado vs captura. ──
+    if (heroV3 && !collapsed) {
+        const effortValue = effortMetric === 'rpe' ? rpe : rir
+        const scaleMin = effortMetric === 'rpe' ? 1 : rirMin
+        const scaleMax = 10
+        const ticks: number[] = []
+        for (let n = scaleMin; n <= scaleMax; n++) ticks.push(n)
+        const setEffort = (v: number) => (effortMetric === 'rpe' ? setRpe : setRir)(v === effortValue ? null : v)
+        const ctaLabel = isLogged || editing ? 'Guardar' : 'Aplastar serie'
+
+        return (
+            <div className="exec-v3-hero space-y-3">
+                <form
+                    key={existingLog ? `log-${existingLog.weight_kg}-${existingLog.reps_done}` : 'new'}
+                    ref={formRef}
+                    action={handleSubmit}
+                    className="space-y-3"
+                >
+                    <input type="hidden" name="block_id" value={blockId} />
+                    <input type="hidden" name="set_number" value={setNumber} />
+                    {targetDate && <input type="hidden" name="target_date" value={targetDate} />}
+                    <input type="hidden" name="note" value={note} />
+                    {substitution && (
+                        <>
+                            <input type="hidden" name="substituted_exercise_id" value={substitution.exerciseId} />
+                            <input type="hidden" name="substituted_exercise_name" value={substitution.exerciseName} />
+                            <input type="hidden" name="substitution_reason" value={substitution.reason} />
+                        </>
+                    )}
+
+                    {/* Tiles de valor: los MISMOS inputs kg/reps, restilizados como los números grandes. */}
+                    <div className="exec-v3-cur">
+                        <label className="exec-v3-val">
+                            <input
+                                ref={weightRef}
+                                name="weight_kg"
+                                type={useKeypad ? 'text' : 'number'}
+                                {...(useKeypad ? { readOnly: true } : { step: '0.5', min: '0' })}
+                                inputMode={useKeypad ? 'none' : 'decimal'}
+                                defaultValue={weightDefaultValue}
+                                placeholder="-"
+                                aria-label="Peso en kilos"
+                                onFocus={useKeypad ? () => openKeypadFor('weight') : undefined}
+                                onPointerDown={useWheel ? onFieldPointerDown : undefined}
+                                onPointerMove={useWheel ? onFieldPointerMove : undefined}
+                                onPointerUp={useWheel ? onFieldPointerUp : undefined}
+                                onPointerCancel={useWheel ? onFieldPointerCancel : undefined}
+                                onPointerLeave={useWheel ? onFieldPointerCancel : undefined}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                        e.preventDefault()
+                                        repsRef.current?.focus()
+                                    }
+                                }}
+                                className={cn('exec-v3-valinput', useWheel && 'exec-v3-touchnone')}
+                            />
+                            <span className="exec-v3-valu">KG</span>
+                        </label>
+                        <label className="exec-v3-val">
+                            <input
+                                ref={repsRef}
+                                name="reps_done"
+                                type={useKeypad ? 'text' : 'number'}
+                                {...(useKeypad ? { readOnly: true } : { min: '0' })}
+                                inputMode={useKeypad ? 'none' : 'numeric'}
+                                defaultValue={repsDefaultValue}
+                                placeholder="-"
+                                aria-label="Repeticiones"
+                                onFocus={useKeypad ? () => openKeypadFor('reps') : undefined}
+                                onPointerDown={useWheel ? onFieldPointerDown : undefined}
+                                onPointerMove={useWheel ? onFieldPointerMove : undefined}
+                                onPointerUp={useWheel ? onFieldPointerUp : undefined}
+                                onPointerCancel={useWheel ? onFieldPointerCancel : undefined}
+                                onPointerLeave={useWheel ? onFieldPointerCancel : undefined}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                        e.preventDefault()
+                                        e.currentTarget.blur()
+                                    }
+                                }}
+                                className={cn('exec-v3-valinput', useWheel && 'exec-v3-touchnone')}
+                            />
+                            <span className="exec-v3-valu">REPS</span>
+                        </label>
+                    </div>
+
+                    {/* Panel de esfuerzo compacto y OPCIONAL — COLAPSADO por default (QA2 hallazgo 3): fila
+                        "Esfuerzo · Opcional" + (?) + chevron + (si hay valores) pills; tap expande la escala
+                        con animación chica (height/opacity). Mantiene `exec-v3-effort` para el gear-hide E3.7. */}
+                    <div className={cn('exec-v3-effort exec-v3-effpanel', effExpanded && 'is-open')}>
+                        <div className="exec-v3-efftop">
+                            <button
+                                type="button"
+                                className="exec-v3-effhead"
+                                onClick={() => setEffExpanded(!effExpanded)}
+                                aria-expanded={effExpanded}
+                                aria-label={effExpanded ? 'Colapsar esfuerzo' : 'Registrar esfuerzo (RPE / RIR, opcional)'}
+                            >
+                                <span className="exec-v3-efflbl">Esfuerzo</span>
+                                <span className="exec-v3-effopt">Opcional</span>
+                                <ChevronDown className="exec-v3-effchev" aria-hidden />
+                            </button>
+                            <button
+                                type="button"
+                                className="exec-v3-effhelp"
+                                onClick={() => setEffHelpOpen(true)}
+                                aria-label="¿Qué son RPE y RIR?"
+                            >
+                                <HelpCircle aria-hidden />
+                            </button>
+                            {(effExpanded || rpe != null || rir != null) && (
+                                <span className="exec-v3-effpills">
+                                    <button
+                                        type="button"
+                                        onClick={() => { setEffortMetric('rpe'); if (!effExpanded) setEffExpanded(true) }}
+                                        className={cn('exec-v3-epill', effExpanded && effortMetric === 'rpe' && 'on')}
+                                        aria-pressed={effortMetric === 'rpe'}
+                                    >
+                                        <span className="k">RPE</span>
+                                        <span className={rpe != null ? 'v' : 'em'}>{rpe != null ? rpe : '—'}</span>
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => { setEffortMetric('rir'); if (!effExpanded) setEffExpanded(true) }}
+                                        className={cn('exec-v3-epill', effExpanded && effortMetric === 'rir' && 'on')}
+                                        aria-pressed={effortMetric === 'rir'}
+                                    >
+                                        <span className="k">RIR</span>
+                                        <span className={rir != null ? 'v' : 'em'}>{rir != null ? rir : '—'}</span>
+                                    </button>
+                                </span>
+                            )}
+                        </div>
+                        <AnimatePresence initial={false}>
+                            {effExpanded && (
+                                <motion.div
+                                    initial={reducedMotion ? false : { height: 0, opacity: 0 }}
+                                    animate={{ height: 'auto', opacity: 1 }}
+                                    exit={reducedMotion ? undefined : { height: 0, opacity: 0 }}
+                                    transition={reducedMotion ? { duration: 0 } : { duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
+                                    className="exec-v3-effbody"
+                                >
+                                    <div className="exec-v3-scale" role="group" aria-label={`Escala ${effortMetric.toUpperCase()}`}>
+                                        {ticks.map((n) => (
+                                            <button
+                                                key={n}
+                                                type="button"
+                                                onClick={() => setEffort(n)}
+                                                className={cn('exec-v3-tick', effortValue === n && 'sel')}
+                                                aria-label={`${effortMetric.toUpperCase()} ${n}`}
+                                                aria-pressed={effortValue === n}
+                                            />
+                                        ))}
+                                    </div>
+                                    <div className="exec-v3-scaleends">
+                                        <span>{scaleMin}</span>
+                                        <span>{scaleMax}</span>
+                                    </div>
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
+                    </div>
+
+                    {/* CTA principal juicy full-width */}
+                    <SubmitSetButton isLogged={Boolean(isLogged)} label={ctaLabel} hero />
+
+                    {/* Nota rápida (mismo mirror oculto que la fila V2) */}
+                    {showNoteControls && (
+                        <div>
+                            <button
+                                type="button"
+                                onClick={() => setNoteOpen((o) => !o)}
+                                aria-expanded={noteOpen}
+                                className={cn(
+                                    'flex min-h-[36px] items-center gap-1.5 rounded-control px-2 text-[11px] font-semibold transition-colors',
+                                    noteTrimmed ? 'text-amber-300' : 'text-on-dark-muted hover:text-on-dark',
+                                )}
+                            >
+                                <StickyNote className="h-3.5 w-3.5" />
+                                {noteTrimmed ? 'Nota añadida' : 'Agregar nota'}
+                            </button>
+                            <AnimatePresence initial={false}>
+                                {noteOpen && (
+                                    <motion.div
+                                        initial={reducedMotion ? false : { height: 0, opacity: 0 }}
+                                        animate={{ height: 'auto', opacity: 1 }}
+                                        exit={reducedMotion ? undefined : { height: 0, opacity: 0 }}
+                                        transition={reducedMotion ? { duration: 0 } : { duration: 0.2 }}
+                                        className="overflow-hidden"
+                                    >
+                                        <input
+                                            type="text"
+                                            value={note}
+                                            onChange={(e) => setNote(e.target.value)}
+                                            maxLength={300}
+                                            placeholder="Ej: sentí molestia en el hombro"
+                                            aria-label="Nota de la serie para tu coach"
+                                            className="mt-1.5 w-full rounded-control border border-[var(--border-inverse)] bg-white/[0.06] px-3 py-2 text-[13px] text-on-dark placeholder:text-on-dark-muted/60 focus:border-[var(--sport-500)] focus:outline-none focus:ring-1 focus:ring-[var(--sport-500)]"
+                                        />
+                                    </motion.div>
+                                )}
+                            </AnimatePresence>
+                        </div>
+                    )}
+
+                    {state.error && (
+                        <div className="flex items-center gap-2 px-1">
+                            <p className="flex-1 text-xs text-red-400">{humanizeStudentWriteError(state.error)}</p>
+                            <button
+                                type="button"
+                                onClick={() => formRef.current?.requestSubmit()}
+                                className="shrink-0 rounded-control border border-red-500/30 px-2 py-0.5 text-[10px] font-bold text-red-400 transition-colors hover:bg-red-500/10"
+                            >
+                                Reintentar
+                            </button>
+                        </div>
+                    )}
+                </form>
+
+                {useWheel && (
+                    <DualWheelPicker
+                        open={wheelOpen}
+                        onOpenChange={setWheelOpen}
+                        initialWeight={wheelInit.w}
+                        initialReps={wheelInit.r}
+                        onDone={applyWheel}
+                        reducedMotion={reducedMotion}
+                        setNumber={setNumber}
+                        exerciseName={nextUpLabel}
+                        totalSets={totalSets}
+                    />
+                )}
+
+                {/* Mini-sheet (?) — explica RPE y RIR (QA2 hallazgo 3). Overlay oscuro V3, cierra con tap fuera. */}
+                <AnimatePresence>
+                    {effHelpOpen && (
+                        <motion.div
+                            className="exec-v3-effhelp-scrim"
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            transition={{ duration: reducedMotion ? 0 : 0.18 }}
+                            onClick={() => setEffHelpOpen(false)}
+                            role="button"
+                            aria-label="Cerrar ayuda de esfuerzo"
+                        >
+                            <motion.div
+                                className="exec-v3-effhelp-sheet"
+                                initial={reducedMotion ? { opacity: 0 } : { opacity: 0, y: 24 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={reducedMotion ? { opacity: 0 } : { opacity: 0, y: 24 }}
+                                transition={reducedMotion ? { duration: 0 } : { duration: 0.22, ease: [0.4, 0, 0.2, 1] }}
+                                onClick={(e) => e.stopPropagation()}
+                                role="dialog"
+                                aria-modal="true"
+                                aria-label="Qué son RPE y RIR"
+                            >
+                                <div className="exec-v3-effhelp-hd">
+                                    <span className="exec-v3-effhelp-t">Esfuerzo</span>
+                                    <button
+                                        type="button"
+                                        className="exec-v3-effhelp-x"
+                                        onClick={() => setEffHelpOpen(false)}
+                                        aria-label="Cerrar"
+                                    >
+                                        <X aria-hidden />
+                                    </button>
+                                </div>
+                                <div className="exec-v3-effhelp-row">
+                                    <span className="exec-v3-effhelp-k">RPE</span>
+                                    <p className="exec-v3-effhelp-p">
+                                        <b>Esfuerzo percibido:</b> qué tan dura se sintió la serie, del 1 al 10 (10 = no podías más).
+                                    </p>
+                                </div>
+                                <div className="exec-v3-effhelp-row">
+                                    <span className="exec-v3-effhelp-k">RIR</span>
+                                    <p className="exec-v3-effhelp-p">
+                                        <b>Reps en reserva:</b> cuántas repeticiones te quedaban en el tanque (0 = llegaste al fallo).
+                                    </p>
+                                </div>
+                            </motion.div>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
+            </div>
+        )
+    }
 
     return (
         <motion.div
@@ -606,6 +1129,8 @@ function StrengthLogSetForm({
             >
                 <input type="hidden" name="block_id" value={blockId} />
                 <input type="hidden" name="set_number" value={setNumber} />
+                {/* Día objetivo (Ola 1): sólo montado al editar un día pasado → la action edita esa fecha. */}
+                {targetDate && <input type="hidden" name="target_date" value={targetDate} />}
                 {/* Nota (quick-win E2-6): mirror oculto — SIEMPRE montado → viaja en cada submit sin duplicar name. */}
                 <input type="hidden" name="note" value={note} />
                 {/* Sustitución de máquina ocupada (Fase L · C): sólo montados si el bloque está sustituido. */}
@@ -639,7 +1164,14 @@ function StrengthLogSetForm({
                                 inputMode={useKeypad ? 'none' : 'decimal'}
                                 defaultValue={weightDefaultValue}
                                 placeholder="-"
+                                // Fix informe 14: el foco abre el teclado SIEMPRE (camino confiable),
+                                // incluso en modo rueda; el long-press corre en paralelo (pointerdown).
                                 onFocus={useKeypad ? () => openKeypadFor('weight') : undefined}
+                                onPointerDown={useWheel ? onFieldPointerDown : undefined}
+                                onPointerMove={useWheel ? onFieldPointerMove : undefined}
+                                onPointerUp={useWheel ? onFieldPointerUp : undefined}
+                                onPointerCancel={useWheel ? onFieldPointerCancel : undefined}
+                                onPointerLeave={useWheel ? onFieldPointerCancel : undefined}
                                 // Enter NO cierra la serie (implicit submit) — pasa el foco a reps. Submit solo por "Listo".
                                 onKeyDown={(e) => {
                                     if (e.key === 'Enter') {
@@ -662,6 +1194,11 @@ function StrengthLogSetForm({
                                 defaultValue={repsDefaultValue}
                                 placeholder="-"
                                 onFocus={useKeypad ? () => openKeypadFor('reps') : undefined}
+                                onPointerDown={useWheel ? onFieldPointerDown : undefined}
+                                onPointerMove={useWheel ? onFieldPointerMove : undefined}
+                                onPointerUp={useWheel ? onFieldPointerUp : undefined}
+                                onPointerCancel={useWheel ? onFieldPointerCancel : undefined}
+                                onPointerLeave={useWheel ? onFieldPointerCancel : undefined}
                                 // Enter cierra el teclado (blur) sin submitear — deja meter RPE/RIR antes de "Listo".
                                 onKeyDown={(e) => {
                                     if (e.key === 'Enter') {
@@ -675,8 +1212,9 @@ function StrengthLogSetForm({
                     </div>
                 </div>
 
-                {/* Esfuerzo por serie: RPE y RIR en escala 1-10 (dots), ambos opcionales */}
-                <div className="mt-3 space-y-2.5">
+                {/* Esfuerzo por serie: RPE y RIR en escala 1-10 (dots), ambos opcionales.
+                    E3.7: la tuerca V3 puede ocultar esta sección (clase gateada por [data-exec-hide-effort]). */}
+                <div className={cn('mt-3 space-y-2.5', v3 && 'exec-v3-effort')}>
                     <div>
                         <span className="mb-1 flex items-center gap-1 text-[9.5px] font-bold uppercase tracking-[0.08em] text-on-dark-muted">
                             Esfuerzo · RPE
@@ -689,7 +1227,7 @@ function StrengthLogSetForm({
                             Reps en reserva · RIR
                             <EffortHelp label="RIR" text={RIR_HELP} />
                         </span>
-                        <ScaleDots name="RIR" value={rir} onChange={setRir} reducedMotion={reducedMotion} compact={!isActive} />
+                        <ScaleDots name="RIR" value={rir} onChange={setRir} reducedMotion={reducedMotion} compact={!isActive} min={rirMin} />
                     </div>
                 </div>
 
@@ -749,6 +1287,22 @@ function StrengthLogSetForm({
                     </div>
                 )}
             </form>
+
+            {/* Captura DUAL (E2.5): rueda long-press. Sólo produce valores y los entrega por `applyWheel`
+                (autollenado → inputs); el guardado/draft/cola no se tocan. Sólo montada en V3 táctil. */}
+            {useWheel && (
+                <DualWheelPicker
+                    open={wheelOpen}
+                    onOpenChange={setWheelOpen}
+                    initialWeight={wheelInit.w}
+                    initialReps={wheelInit.r}
+                    onDone={applyWheel}
+                    reducedMotion={reducedMotion}
+                    setNumber={setNumber}
+                    exerciseName={nextUpLabel}
+                    totalSets={totalSets}
+                />
+            )}
         </motion.div>
     )
 }
@@ -776,15 +1330,24 @@ function TypedLogSetRow({
     isActive = false,
     typedObjective,
     supersetRest,
+    sideMode,
+    typedPrefill,
+    suggestedAvgHr,
+    holdPrefill,
+    v3 = false,
     onLogged,
     onResult,
 }: Props & { mode: Exclude<LogSetMode, 'strength'> }) {
+    // Movilidad POR LADO (E3.2): sólo cuenta en modo movilidad. Cualquier otro modo lo ignora.
+    const perSide = mode === 'mobility' && sideMode === 'per_side'
     const params = useParams<{ coach_slug: string; planId: string }>()
     // Teclado numérico custom por campo (gate por puntero grueso, como fuerza). En desktop los inputs
     // quedan EXACTAMENTE como hoy (type=number). El keypad muta `ref.value` → submit/offline intacto.
     const coarse = useCoarsePointer()
     const keypad = useWorkoutKeypad()
     const useKeypad = coarse && keypad != null
+    // Día objetivo (Ola 1): igual que en fuerza, viaja como `target_date` al editar un día pasado.
+    const targetDate = useTargetDate()
     const [state, formAction] = useActionState(logSetAction, initialState)
     const [optimisticLogged, addOptimisticLogged] = useOptimistic(
         !!existingLog || state.success,
@@ -798,6 +1361,8 @@ function TypedLogSetRow({
     const distanceRef = useRef<HTMLInputElement>(null)
     const hrRef = useRef<HTMLInputElement>(null)
     const holdRef = useRef<HTMLInputElement>(null)
+    const holdLeftRef = useRef<HTMLInputElement>(null)
+    const holdRightRef = useRef<HTMLInputElement>(null)
     const durationRef = useRef<HTMLInputElement>(null)
     const passesRef = useRef<HTMLInputElement>(null)
     const refByKey: Record<string, RefObject<HTMLInputElement | null>> = {
@@ -805,17 +1370,56 @@ function TypedLogSetRow({
         actual_distance_m: distanceRef,
         actual_avg_hr: hrRef,
         actual_hold_sec: holdRef,
+        hold_left_sec: holdLeftRef,
+        hold_right_sec: holdRightRef,
         actual_duration_sec: durationRef,
         reps_done: passesRef,
     }
     const [rpeLocal, setRpeLocal] = useState<number | null>(existingLog?.rpe ?? null)
     const reducedMotion = useReducedMotion()
 
+    // Prefill tipado (E3.3 · roller): el contador gigante de `RollerStepV3` escribe las pasadas en el
+    // input uncontrolled de la fila activa al cambiar `nonce`. Uncontrolled = no re-render; mismo patrón
+    // que el prefill "= última vez" de fuerza. Sólo el flujo roller lo pasa.
+    const prefillNonce = typedPrefill?.nonce
+    useEffect(() => {
+        if (prefillNonce == null || typedPrefill?.repsDone == null) return
+        if (passesRef.current) passesRef.current.value = String(typedPrefill.repsDone)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [prefillNonce])
+
+    // Auto-prellenado de FC promedio (E6.2 · cardio BLE): el promedio del stream en vivo alimenta el input
+    // `actual_avg_hr` de la fila activa SOLO SI está vacío — jamás pisa un valor que el alumno ya escribió,
+    // y sigue siendo editable. Uncontrolled = sin re-render; mismo patrón que el prefill roller de arriba.
+    const suggestedHrNonce = suggestedAvgHr?.nonce
+    useEffect(() => {
+        if (suggestedHrNonce == null || suggestedAvgHr?.bpm == null) return
+        const input = hrRef.current
+        if (input && input.value.trim() === '') input.value = String(suggestedAvgHr.bpm)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [suggestedHrNonce])
+
+    // Auto-llenado del HOLD cronometrado (QA4 · movilidad): el anillo vuelca los segundos sostenidos en el
+    // input del lado correspondiente al cambiar `nonce`. Uncontrolled (mutación de ref) = sin re-render;
+    // mismo patrón que el prefill roller/HR. El alumno sólo revisa y confirma (o corrige). NO toca submit.
+    const holdPrefillNonce = holdPrefill?.nonce
+    useEffect(() => {
+        if (holdPrefillNonce == null) return
+        if (perSide) {
+            if (holdPrefill?.leftSec != null && holdLeftRef.current) holdLeftRef.current.value = String(Math.round(holdPrefill.leftSec))
+            if (holdPrefill?.rightSec != null && holdRightRef.current) holdRightRef.current.value = String(Math.round(holdPrefill.rightSec))
+        } else if (holdPrefill?.holdSec != null && holdRef.current) {
+            holdRef.current.value = String(Math.round(holdPrefill.holdSec))
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [holdPrefillNonce])
+
     // Abre el teclado custom en el campo tocado (solo pointer coarse). El objetivo tipado viaja en el
     // header (DB-5); "Listo" reusa `requestSubmit()`. Reglas decimales por campo vienen de typedKeypadFields.
     const openKeypadFor = (key: string) => {
         if (!useKeypad || !keypad) return
-        const fieldDefs = typedKeypadFields(mode as TypedKeypadMode)
+        // Movilidad per_side (E3.2): dos campos hold (izq/der); el resto de modos, campos de siempre.
+        const fieldDefs = typedKeypadFields(mode as TypedKeypadMode, sideMode)
         // Normaliza a coma es-CL los decimales que hayan montado como number (punto) antes del gate coarse.
         for (const f of fieldDefs) {
             if (!f.allowDecimal) continue
@@ -854,7 +1458,37 @@ function TypedLogSetRow({
             formData.delete('cardio_min')
             if (min != null && min > 0) formData.set('actual_duration_sec', String(Math.round(min * 60)))
         }
-        // movilidad usa actual_hold_sec directo; roller usa actual_duration_sec + reps_done
+        // Movilidad per_side (E3.2): dos campos hold (izq/der) → el engine los suma en `actual_hold_sec`
+        // y arma `metadata {left_sec, right_sec}`. Se reusa la MISMA fuente pura que el keypad/RN
+        // (`typedLogValues`) para cero drift. Los inputs por lado no son columnas → se eliminan del payload.
+        if (perSide) {
+            const { actualHoldSec, metadata } = typedLogValues(
+                'mobility',
+                {
+                    hold_left_sec: String(formData.get('hold_left_sec') ?? ''),
+                    hold_right_sec: String(formData.get('hold_right_sec') ?? ''),
+                },
+                'per_side',
+            )
+            formData.delete('hold_left_sec')
+            formData.delete('hold_right_sec')
+            if (actualHoldSec != null) formData.set('actual_hold_sec', String(actualHoldSec))
+            else formData.delete('actual_hold_sec')
+            if (metadata != null) formData.set('metadata', JSON.stringify(metadata))
+            else formData.delete('metadata')
+        }
+        // movilidad bilateral usa actual_hold_sec directo; roller usa actual_duration_sec + reps_done
+    }
+
+    /** Lee la `metadata` per_side (JSON puesto por `normalizeFormData`) o null. */
+    const collectMetadata = (formData: FormData): { left_sec?: number | null; right_sec?: number | null } | null => {
+        const raw = formData.get('metadata')
+        if (raw == null || String(raw).trim() === '') return null
+        try {
+            return JSON.parse(String(raw))
+        } catch {
+            return null
+        }
     }
 
     const collectValues = (formData: FormData) => ({
@@ -864,6 +1498,7 @@ function TypedLogSetRow({
         actualAvgHr: parseNum(formData.get('actual_avg_hr')),
         repsDone: parseNum(formData.get('reps_done')),
         rpe: parseNum(formData.get('rpe')),
+        metadata: collectMetadata(formData),
     })
 
     // Reconciliación del guardado (contrato a + e): éxito → sale de la cola; error → respaldo en cola
@@ -899,9 +1534,13 @@ function TypedLogSetRow({
             actualDistanceM: values.actualDistanceM,
             actualHoldSec: values.actualHoldSec,
             actualAvgHr: values.actualAvgHr,
+            // Hold POR LADO (E3.2): {left_sec, right_sec} viaja EN el item → el flush lo reenvía intacto.
+            metadata: values.metadata,
             planId: params.planId,
             coachSlug: params.coach_slug,
             timestamp: Date.now(),
+            // Edición de día pasado (E1.6): misma razón que en fuerza — la fecha viaja EN el item.
+            targetDate: targetDate ?? null,
         })
 
         if (typeof navigator !== 'undefined' && !navigator.onLine) {
@@ -946,6 +1585,8 @@ function TypedLogSetRow({
             actualDistanceM: values.actualDistanceM,
             actualHoldSec: values.actualHoldSec,
             actualAvgHr: values.actualAvgHr,
+            // Hold POR LADO (E3.2): el optimismo preserva los segundos por lado (fila per_side).
+            metadata: values.metadata,
         })
         formAction(formData)
     }
@@ -968,6 +1609,7 @@ function TypedLogSetRow({
             actualDistanceM: rpeValues.actualDistanceM,
             actualHoldSec: rpeValues.actualHoldSec,
             actualAvgHr: rpeValues.actualAvgHr,
+            metadata: rpeValues.metadata,
         })
         startTransition(() => {
             formAction(fd)
@@ -992,7 +1634,10 @@ function TypedLogSetRow({
             ? 'grid-cols-[auto_3.5rem_3.5rem_3rem_auto] md:grid-cols-[auto_1fr_1fr_1fr_auto]'
             : mode === 'roller'
                 ? 'grid-cols-[auto_3.5rem_3.5rem_auto] md:grid-cols-[auto_1fr_1fr_auto]'
-                : 'grid-cols-[auto_5rem_auto] md:grid-cols-[auto_1fr_auto]'
+                : perSide
+                    // Movilidad per_side (E3.2): hold izquierdo | hold derecho | submit.
+                    ? 'grid-cols-[auto_3.5rem_3.5rem_auto] md:grid-cols-[auto_1fr_1fr_auto]'
+                    : 'grid-cols-[auto_5rem_auto] md:grid-cols-[auto_1fr_auto]'
 
     // Mismos tokens que la fila strength (sport-500 focus, on-dark, font-mono) — re-skin EVA DS.
     const typedInputClass = cn(
@@ -1012,7 +1657,7 @@ function TypedLogSetRow({
             )}
         >
             <form
-                key={existingLog ? `tlog-${existingLog.actual_duration_sec}-${existingLog.actual_hold_sec}-${existingLog.reps_done}` : 'new'}
+                key={existingLog ? `tlog-${existingLog.actual_duration_sec}-${existingLog.actual_hold_sec}-${existingLog.metadata?.left_sec ?? ''}-${existingLog.metadata?.right_sec ?? ''}-${existingLog.reps_done}` : 'new'}
                 ref={formRef}
                 action={handleSubmit}
                 onKeyDown={handleFormKeyDown}
@@ -1020,6 +1665,8 @@ function TypedLogSetRow({
             >
                 <input type="hidden" name="block_id" value={blockId} />
                 <input type="hidden" name="set_number" value={setNumber} />
+                {/* Día objetivo (Ola 1): sólo montado al editar un día pasado → la action edita esa fecha. */}
+                {targetDate && <input type="hidden" name="target_date" value={targetDate} />}
                 {rpeLocal != null && <input type="hidden" name="rpe" value={rpeLocal} />}
 
                 <div className={cn('w-4 md:w-5 text-center text-xs md:text-sm font-bold font-mono tabular-nums', isLogged ? 'text-[var(--sport-300)]' : 'text-on-dark-muted')}>
@@ -1058,7 +1705,7 @@ function TypedLogSetRow({
                     </>
                 )}
 
-                {mode === 'mobility' && (
+                {mode === 'mobility' && !perSide && (
                     <input
                         ref={holdRef}
                         name="actual_hold_sec"
@@ -1068,6 +1715,41 @@ function TypedLogSetRow({
                         aria-label="Segundos de hold"
                         className={typedInputClass}
                     />
+                )}
+
+                {mode === 'mobility' && perSide && (
+                    <>
+                        {/* Hold POR LADO (E3.2): dos segundos independientes; el engine los suma en
+                            `actual_hold_sec` y guarda el desglose en `metadata`. Siembra desde el log.
+                            QA6 (hallazgo CEO): con ambos valores cargados ("60 | 60") el placeholder
+                            desaparece y no había señal de cuál lado es cuál → etiqueta CHICA sobre cada
+                            input (`exec-v3-sidelbl`: 10px/800 uppercase atenuado). Presentación pura: el
+                            motor (name/metadata) NO cambia. */}
+                        <label className="flex flex-col items-stretch gap-1">
+                            <span className="text-center text-[10px] font-extrabold uppercase leading-none tracking-[0.06em] text-[#7f7f8c]">Izq</span>
+                            <input
+                                ref={holdLeftRef}
+                                name="hold_left_sec"
+                                {...fieldProps('hold_left_sec', 'numeric', { min: '0' })}
+                                defaultValue={inputDefault(existingLog?.metadata?.left_sec ?? null)}
+                                placeholder="seg"
+                                aria-label="Segundos de hold — lado izquierdo"
+                                className={typedInputClass}
+                            />
+                        </label>
+                        <label className="flex flex-col items-stretch gap-1">
+                            <span className="text-center text-[10px] font-extrabold uppercase leading-none tracking-[0.06em] text-[#7f7f8c]">Der</span>
+                            <input
+                                ref={holdRightRef}
+                                name="hold_right_sec"
+                                {...fieldProps('hold_right_sec', 'numeric', { min: '0' })}
+                                defaultValue={inputDefault(existingLog?.metadata?.right_sec ?? null)}
+                                placeholder="seg"
+                                aria-label="Segundos de hold — lado derecho"
+                                className={typedInputClass}
+                            />
+                        </label>
+                    </>
                 )}
 
                 {mode === 'roller' && (
@@ -1111,7 +1793,9 @@ function TypedLogSetRow({
             </form>
 
             <AnimatePresence initial={false}>
-                {isLogged && (
+                {/* QA4 · decisión CEO: cardio/movilidad/roller NO llevan RPE ni RIR. En V3 se oculta la
+                    escala post-registro (fuerza intacta; V2 tipado conserva su RPE por `!v3`). */}
+                {isLogged && !v3 && (
                     <motion.div
                         initial={reducedMotion ? false : { height: 0, opacity: 0 }}
                         animate={{ height: 'auto', opacity: 1 }}
@@ -1141,8 +1825,30 @@ function TypedLogSetRow({
     )
 }
 
-function SubmitSetButton({ isLogged, label }: { isLogged: boolean; label?: string }) {
+function SubmitSetButton({ isLogged, label, hero }: { isLogged: boolean; label?: string; hero?: boolean }) {
     const { pending } = useFormStatus()
+    // Variante HERO (informe 03): CTA juicy full-width con círculo-check en tinta on-brand + breathe.
+    if (hero) {
+        return (
+            <button
+                type="submit"
+                className="exec-v3-juicy exec-v3-cta"
+                title={pending ? 'Guardando serie...' : label}
+                aria-label={pending ? 'Guardando serie...' : label}
+            >
+                {pending ? (
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                ) : (
+                    <>
+                        <span className="exec-v3-cta-ck" aria-hidden>
+                            <Check className="h-3.5 w-3.5" strokeWidth={3} />
+                        </span>
+                        {label}
+                    </>
+                )}
+            </button>
+        )
+    }
     // Variante etiquetada ("✓ Listo" / "Guardar") para la serie activa protagonista.
     if (label) {
         return (

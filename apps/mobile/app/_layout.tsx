@@ -12,14 +12,9 @@ import * as SplashScreen from 'expo-splash-screen'
 import { useFonts } from 'expo-font'
 // EVA Design System families (TOKENS.md §4): Archivo (display),
 // Hanken Grotesk (UI/body), JetBrains Mono (metrics/timers).
-import {
-  Archivo_400Regular,
-  Archivo_500Medium,
-  Archivo_600SemiBold,
-  Archivo_700Bold,
-  Archivo_800ExtraBold,
-  Archivo_900Black,
-} from '@expo-google-fonts/archivo'
+// 2R-3: los slots display 600-900 se registran vía brandDisplayFontMap (lib/brand-fonts.ts)
+// — Archivo real por default, o la fuente white-label del coach (espejo de --brand-font web).
+import { Archivo_400Regular, Archivo_500Medium } from '@expo-google-fonts/archivo'
 import {
   HankenGrotesk_400Regular,
   HankenGrotesk_500Medium,
@@ -39,7 +34,9 @@ import * as Sentry from '@sentry/react-native'
 import type { ErrorBoundaryProps } from 'expo-router'
 import { supabase } from '../lib/supabase'
 import { registerSessionCacheJanitor } from '../lib/auth-actions'
-import { ThemeProvider } from '../context/ThemeContext'
+import { brandDisplayFontMap } from '../lib/brand-fonts'
+import { loadStoredBranding, type CoachBranding } from '../lib/branding'
+import { ThemeProvider, useTheme } from '../context/ThemeContext'
 import { configurePushHandler, setupAndroidChannel, syncPushToken } from '../lib/push'
 import { LaunchSplash } from '../components/shared/LaunchSplash'
 import { Toaster } from '../components/Toast'
@@ -75,6 +72,11 @@ function ReportingErrorBoundary(props: ErrorBoundaryProps) {
 export { ReportingErrorBoundary as ErrorBoundary }
 
 configurePushHandler()
+
+function ThemedStatusBar() {
+  const { resolvedScheme } = useTheme()
+  return <StatusBar style={resolvedScheme === 'dark' ? 'light' : 'dark'} />
+}
 
 function RootLayoutNav() {
   const [session, setSession] = useState<Session | null | undefined>(undefined)
@@ -196,14 +198,27 @@ function RootLayoutNav() {
 }
 
 export default function RootLayout() {
+  // 2R-3 tipografía white-label: el branding almacenado decide QUÉ asset se registra bajo
+  // los nombres de slot display ANTES de cargar fuentes (espejo del layout /c web, que fija
+  // --brand-font server-side por request: c/[coach_slug]/layout.tsx:194-195,309). El splash
+  // nativo sigue visible durante esta lectura (preventAutoHideAsync arriba). El mapeo queda
+  // fijo por cold start — mismo contrato que web, donde un cambio de fuente del coach
+  // requiere full reload de la PWA.
+  const [storedBranding, setStoredBranding] = useState<CoachBranding | null | undefined>(undefined)
+  useEffect(() => {
+    loadStoredBranding()
+      .then((b) => setStoredBranding(b))
+      .catch(() => setStoredBranding(null))
+  }, [])
+  if (storedBranding === undefined) return null
+  return <RootLayoutWithFonts branding={storedBranding} />
+}
+
+function RootLayoutWithFonts({ branding }: { branding: CoachBranding | null }) {
   const [fontsLoaded] = useFonts({
     // EVA Design System
     Archivo_400Regular,
     Archivo_500Medium,
-    Archivo_600SemiBold,
-    Archivo_700Bold,
-    Archivo_800ExtraBold,
-    Archivo_900Black,
     HankenGrotesk_400Regular,
     HankenGrotesk_500Medium,
     HankenGrotesk_600SemiBold,
@@ -213,6 +228,10 @@ export default function RootLayout() {
     JetBrainsMono_500Medium,
     JetBrainsMono_600SemiBold,
     JetBrainsMono_700Bold,
+    // Slots display 600-900 ('Archivo_600SemiBold'..'Archivo_900Black'): brand font
+    // resuelta (gate Pro+ + preset + catálogo cerrado) o Archivo real. Va AL FINAL
+    // para que gane sobre cualquier entrada estática homónima.
+    ...brandDisplayFontMap(branding),
   })
   const [splashDone, setSplashDone] = useState(false)
   const finishSplash = useCallback(() => setSplashDone(true), [])
@@ -240,7 +259,7 @@ export default function RootLayout() {
             View— quedan dentro del contexto y los sheets resuelven tokens/marca. */}
         <ThemeProvider>
           <BottomSheetModalProvider>
-            <StatusBar style="light" />
+            <ThemedStatusBar />
             {/* P0 focus-hop: el navegador va en un View PLANO. Antes lo envolvía un
                 MotiView que animaba opacity — vista animada persistente sobre
                 react-native-screens bajo Fabric, un anti-patrón que amplifica el

@@ -15,11 +15,9 @@
  * reintento. Los buckets por franja usan referencias estables (hallazgo M3): las
  * franjas no afectadas por un tap conservan identidad de props y no re-renderizan.
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Alert } from 'react-native'
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import * as Haptics from 'expo-haptics'
 import type {
-  NutritionMealSlotRead,
   NutritionSlotExchangeTargetRead,
   NutritionTodayReadModel,
 } from '@eva/nutrition-v2'
@@ -30,6 +28,7 @@ import {
   cancelQueuedPortionMark,
   getQueuedPortionKeys,
   pickLastSyntheticIntake,
+  queuedPortionOverlayFromMutations,
   reconcilePendingPortionMarks,
   registerPortionUndo,
   stablePortionBuckets,
@@ -42,12 +41,37 @@ import {
   submitCorrectIntake,
   submitRecordIntake,
 } from '../../../lib/nutrition-v2-intake-runner'
+import { getNutritionV2QueuedMutations } from '../../../lib/nutrition-v2-offline'
 import type { PortionSnackbarState } from './PortionSnackbar'
 
 const SNACKBAR_MS = 5000
 const RELOAD_DEBOUNCE_MS = 1200
 const EMPTY_MARKS: PendingPortionMark[] = []
 const EMPTY_VOIDS: PendingPortionVoid[] = []
+
+interface MarkBucketsState {
+  items: PendingPortionMark[]
+  buckets: Record<string, PendingPortionMark[]>
+}
+
+interface VoidBucketsState {
+  items: PendingPortionVoid[]
+  buckets: Record<string, PendingPortionVoid[]>
+}
+
+function reduceMarkBuckets(
+  state: MarkBucketsState,
+  items: PendingPortionMark[],
+): MarkBucketsState {
+  return { items, buckets: stablePortionBuckets(state.buckets, items) }
+}
+
+function reduceVoidBuckets(
+  state: VoidBucketsState,
+  items: PendingPortionVoid[],
+): VoidBucketsState {
+  return { items, buckets: stablePortionBuckets(state.buckets, items) }
+}
 
 export interface UsePortionMarksInput {
   userId: string | null
@@ -83,51 +107,109 @@ export interface UsePortionMarksResult {
 export function usePortionMarks(input: UsePortionMarksInput): UsePortionMarksResult {
   const { userId, deviceId, date, timezone, requestReload, onQueuedChange } = input
 
-  const [marks, setMarks] = useState<PendingPortionMark[]>(EMPTY_MARKS)
-  const [voids, setVoids] = useState<PendingPortionVoid[]>(EMPTY_VOIDS)
+  const [{ items: marks, buckets: pendingBySlot }, dispatchMarks] = useReducer(
+    reduceMarkBuckets,
+    { items: EMPTY_MARKS, buckets: {} },
+  )
+  const [{ items: voids, buckets: voidsBySlot }, dispatchVoids] = useReducer(
+    reduceVoidBuckets,
+    { items: EMPTY_VOIDS, buckets: {} },
+  )
   const [snackbar, setSnackbar] = useState<PortionSnackbarState | null>(null)
 
-  const marksRef = useRef(marks)
-  marksRef.current = marks
-  const voidsRef = useRef(voids)
-  voidsRef.current = voids
+  const marksRef = useRef<PendingPortionMark[]>(EMPTY_MARKS)
+  const voidsRef = useRef<PendingPortionVoid[]>(EMPTY_VOIDS)
   const modelRef = useRef(input.model)
-  modelRef.current = input.model
 
   const mountedRef = useRef(true)
   const snackbarNonce = useRef(0)
   const snackbarTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const reloadTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const marksBucketsRef = useRef<Record<string, PendingPortionMark[]>>({})
-  const voidsBucketsRef = useRef<Record<string, PendingPortionVoid[]>>({})
+  const undoRequestedRef = useRef<Set<string>>(new Set())
+  const markLocksRef = useRef<Set<string>>(new Set())
+  const markLocksPendingReleaseRef = useRef<Map<string, string>>(new Map())
+  const markRef = useRef<UsePortionMarksResult['mark']>(() => {})
 
   useEffect(() => {
     mountedRef.current = true
+    const markLocks = markLocksRef.current
+    const pendingReleases = markLocksPendingReleaseRef.current
     return () => {
       mountedRef.current = false
       if (snackbarTimer.current) clearTimeout(snackbarTimer.current)
       if (reloadTimer.current) clearTimeout(reloadTimer.current)
+      markLocks.clear()
+      pendingReleases.clear()
     }
   }, [])
+
+  const commitMarks = useCallback((next: PendingPortionMark[]) => {
+    marksRef.current = next
+    dispatchMarks(next)
+  }, [])
+
+  const commitVoids = useCallback((next: PendingPortionVoid[]) => {
+    voidsRef.current = next
+    dispatchVoids(next)
+  }, [])
+
+  useEffect(() => {
+    modelRef.current = input.model
+  }, [input.model])
+
+  const releaseMarkLock = useCallback((lockKey: string) => {
+    markLocksRef.current.delete(lockKey)
+    markLocksPendingReleaseRef.current.delete(lockKey)
+  }, [])
+
+  // A lock acquired before the async ordinal allocation remains active until React
+  // has rendered the optimistic mark. A second gesture therefore cannot calculate
+  // coverage from stale props or allocate another ordinal for the same group.
+  useEffect(() => {
+    const renderedKeys = new Set(marks.map((mark) => mark.idempotencyKey))
+    for (const [lockKey, idempotencyKey] of markLocksPendingReleaseRef.current) {
+      if (renderedKeys.has(idempotencyKey)) releaseMarkLock(lockKey)
+    }
+  }, [marks, releaseMarkLock])
+
+  // Rebuild queued portion marks from the authoritative user-scoped queue. This
+  // restores the pending segment/dot after an offline remount without trusting a
+  // second local store or estimating derived coverage.
+  useEffect(() => {
+    commitMarks([])
+    commitVoids([])
+    undoRequestedRef.current.clear()
+    markLocksRef.current.clear()
+    markLocksPendingReleaseRef.current.clear()
+    if (!userId) return
+    let active = true
+    void getNutritionV2QueuedMutations(userId)
+      .then((queued) => {
+        if (!active || !mountedRef.current) return
+        const restored = queuedPortionOverlayFromMutations(queued, date)
+        const existingMarks = new Set(marksRef.current.map((mark) => mark.idempotencyKey))
+        const existingVoids = new Set(voidsRef.current.map((item) => item.idempotencyKey))
+        commitMarks([
+          ...marksRef.current,
+          ...restored.marks.filter((mark) => !existingMarks.has(mark.idempotencyKey)),
+        ])
+        commitVoids([
+          ...voidsRef.current,
+          ...restored.voids.filter((item) => !existingVoids.has(item.idempotencyKey)),
+        ])
+      })
+      .catch(() => {})
+    return () => {
+      active = false
+    }
+  }, [commitMarks, commitVoids, date, userId])
 
   const active = useMemo(() => {
     const model = input.model
     if (!model) return false
-    if ((model.dayCoverage?.length ?? 0) > 0) return true
+    if (model.dayCoverage?.some((row) => row.prescribed > 0)) return true
     return model.mealSlots.some((slot) => (slot.exchangeTargets?.length ?? 0) > 0)
   }, [input.model])
-
-  const pendingBySlot = useMemo(() => {
-    const buckets = stablePortionBuckets(marksBucketsRef.current, marks)
-    marksBucketsRef.current = buckets
-    return buckets
-  }, [marks])
-
-  const voidsBySlot = useMemo(() => {
-    const buckets = stablePortionBuckets(voidsBucketsRef.current, voids)
-    voidsBucketsRef.current = buckets
-    return buckets
-  }, [voids])
 
   const pendingByGroup = useMemo(() => {
     const totals: Record<string, number> = {}
@@ -146,13 +228,16 @@ export function usePortionMarks(input: UsePortionMarksInput): UsePortionMarksRes
     setSnackbar(null)
   }, [])
 
-  const showSnackbar = useCallback((next: Omit<PortionSnackbarState, 'nonce'>) => {
+  const showSnackbar = useCallback((
+    next: Omit<PortionSnackbarState, 'nonce'>,
+    timeoutMs: number = SNACKBAR_MS,
+  ) => {
     snackbarNonce.current += 1
     setSnackbar({ ...next, nonce: snackbarNonce.current })
     if (snackbarTimer.current) clearTimeout(snackbarTimer.current)
     snackbarTimer.current = setTimeout(() => {
       if (mountedRef.current) setSnackbar(null)
-    }, SNACKBAR_MS)
+    }, timeoutMs)
   }, [])
 
   const scheduleReload = useCallback(() => {
@@ -163,14 +248,16 @@ export function usePortionMarks(input: UsePortionMarksInput): UsePortionMarksRes
   }, [requestReload])
 
   const patchMark = useCallback((key: string, patch: Partial<PendingPortionMark>) => {
-    setMarks((prev) =>
-      prev.map((mark) => (mark.idempotencyKey === key ? { ...mark, ...patch } : mark)),
+    commitMarks(
+      marksRef.current.map((mark) =>
+        mark.idempotencyKey === key ? { ...mark, ...patch } : mark,
+      ),
     )
-  }, [])
+  }, [commitMarks])
 
   const removeMark = useCallback((key: string) => {
-    setMarks((prev) => prev.filter((mark) => mark.idempotencyKey !== key))
-  }, [])
+    commitMarks(marksRef.current.filter((mark) => mark.idempotencyKey !== key))
+  }, [commitMarks])
 
   // ── Deshacer de una marca YA reflejada por el read-model (void del último
   // intake sintético del grupo en la franja — camino de corrección existente). ──
@@ -182,71 +269,106 @@ export function usePortionMarks(input: UsePortionMarksInput): UsePortionMarksRes
       const entry = slot ? pickLastSyntheticIntake(slot.intakeItems, groupCode) : null
       if (!entry) return
       const portions = entry.exchangePortions ?? entry.quantity
-      // M1: TODO deshacer incrementa el attempt del ordinal, también este.
-      await registerPortionUndo({ userId, localDate: date, slotCode, groupCode })
-      const payload = buildVoidIntakeCorrection({
-        clientId: userId,
-        deviceId,
-        operationId: newNutritionV2OperationId(),
-        localDate: date,
-        occurredAt: new Date().toISOString(),
-        timezone,
-        entry,
-        planVersionId: model.plan?.versionId ?? null,
-        daySnapshotId: model.snapshotId ?? null,
-        reason: 'Porción desmarcada por el alumno',
-      })
-      const pendingVoid: PendingPortionVoid = {
-        entryId: entry.id,
-        idempotencyKey: payload.idempotencyKey,
-        slotCode,
-        groupCode,
-        portions,
-        status: 'inflight',
-        confirmedAt: null,
-        createdAt: Date.now(),
-      }
-      setVoids((prev) => [...prev, pendingVoid])
-      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-      const outcome = await submitCorrectIntake(userId, payload)
-      if (!mountedRef.current) return
-      if (outcome.status === 'recorded') {
-        setVoids((prev) =>
-          prev.map((item) =>
-            item.idempotencyKey === payload.idempotencyKey
-              ? { ...item, status: 'confirmed', confirmedAt: Date.now() }
-              : item,
-          ),
-        )
-        scheduleReload()
-      } else if (outcome.status === 'queued') {
-        setVoids((prev) =>
-          prev.map((item) =>
-            item.idempotencyKey === payload.idempotencyKey ? { ...item, status: 'queued' } : item,
-          ),
-        )
-        onQueuedChange?.()
-      } else {
-        setVoids((prev) => prev.filter((item) => item.idempotencyKey !== payload.idempotencyKey))
-        Alert.alert('No se pudo deshacer', outcome.error.message)
+      let pendingKey: string | null = null
+      try {
+        // M1: TODO deshacer incrementa el attempt del ordinal, también este.
+        await registerPortionUndo({ userId, localDate: date, slotCode, groupCode })
+        if (!mountedRef.current) return
+        const payload = buildVoidIntakeCorrection({
+          clientId: userId,
+          deviceId,
+          operationId: newNutritionV2OperationId(),
+          localDate: date,
+          timezone,
+          entry,
+          planVersionId: model.plan?.versionId ?? null,
+          daySnapshotId: model.snapshotId ?? null,
+          reason: 'Porción desmarcada por el alumno',
+        })
+        pendingKey = payload.idempotencyKey
+        const pendingVoid: PendingPortionVoid = {
+          entryId: entry.id,
+          idempotencyKey: payload.idempotencyKey,
+          slotCode,
+          groupCode,
+          portions,
+          status: 'inflight',
+          confirmedAt: null,
+          createdAt: Date.now(),
+        }
+        commitVoids([...voidsRef.current, pendingVoid])
+        void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+        const outcome = await submitCorrectIntake(userId, payload)
+        if (!mountedRef.current) return
+        if (outcome.status === 'recorded') {
+          commitVoids(
+            voidsRef.current.map((item) =>
+              item.idempotencyKey === payload.idempotencyKey
+                ? { ...item, status: 'confirmed', confirmedAt: Date.now() }
+                : item,
+            ),
+          )
+          scheduleReload()
+        } else if (outcome.status === 'queued') {
+          commitVoids(
+            voidsRef.current.map((item) =>
+              item.idempotencyKey === payload.idempotencyKey ? { ...item, status: 'queued' } : item,
+            ),
+          )
+          onQueuedChange?.()
+        } else {
+          commitVoids(
+            voidsRef.current.filter((item) => item.idempotencyKey !== payload.idempotencyKey),
+          )
+          showSnackbar({
+            message: PORTIONS_COPY.student.undoFailed,
+            detail: outcome.error.message,
+            tone: 'danger',
+          })
+        }
+      } catch (error) {
+        if (!mountedRef.current) return
+        if (pendingKey) {
+          commitVoids(
+            voidsRef.current.filter((item) => item.idempotencyKey !== pendingKey),
+          )
+        }
+        showSnackbar({
+          message: PORTIONS_COPY.student.undoFailed,
+          detail: error instanceof Error ? error.message : undefined,
+          tone: 'danger',
+        })
       }
     },
-    [date, deviceId, onQueuedChange, scheduleReload, timezone, userId],
+    [
+      commitVoids,
+      date,
+      deviceId,
+      onQueuedChange,
+      scheduleReload,
+      showSnackbar,
+      timezone,
+      userId,
+    ],
   )
 
   // ── Deshacer por key (marca aún en el delta optimista). ──
   const undoByKey = useCallback(
-    async (key: string, retriesLeft = 4): Promise<void> => {
+    async (key: string): Promise<void> => {
       if (!userId) return
+      try {
       const mark = marksRef.current.find((m) => m.idempotencyKey === key)
-      if (!mark) return
-      if (mark.status === 'inflight') {
-        // El outcome del record está por resolverse; reintento corto.
-        if (retriesLeft > 0) {
-          setTimeout(() => void undoByKey(key, retriesLeft - 1), 400)
-        }
+      if (!mark) {
+        undoRequestedRef.current.delete(key)
         return
       }
+      if (mark.status === 'inflight') {
+        // La intencion no expira por tiempo: se consume apenas el record resuelva
+        // como confirmado o encolado, aunque la red tarde mas que el snackbar.
+        undoRequestedRef.current.add(key)
+        return
+      }
+      undoRequestedRef.current.delete(key)
       if (mark.status === 'queued') {
         const removed = await cancelQueuedPortionMark(userId, key)
         // M1: el attempt del ordinal se incrementa AUNQUE solo se haya cancelado la cola.
@@ -285,18 +407,23 @@ export function usePortionMarks(input: UsePortionMarksInput): UsePortionMarksRes
           deviceId,
           operationId: newNutritionV2OperationId(),
           localDate: date,
-          occurredAt: new Date().toISOString(),
           timezone,
           // Entry sintetizada desde la marca (el read-model aún no la trae). Solo se
           // usan los campos que la corrección necesita.
           entry: {
             id: mark.entryId,
+            occurredAt: mark.occurredAt,
             foodId: null,
             customName: null,
             quantity: mark.portions,
             unit: 'porción',
             mealSlot: mark.slotCode,
             prescriptionItemId: null,
+            // buildVoidIntakeCorrection lee estos campos a nivel de entry (no del
+            // snapshot). Sin ellos, queuedPortionOverlayFromMutations descarta el
+            // void al remontar offline y la porción desmarcada reaparece.
+            exchangeGroupCode: mark.groupCode,
+            exchangePortions: mark.portions,
             snapshot: {
               name: 'Porción marcada',
               brand: null,
@@ -321,12 +448,36 @@ export function usePortionMarks(input: UsePortionMarksInput): UsePortionMarksRes
         } else if (outcome.status === 'queued') {
           onQueuedChange?.()
         } else {
-          Alert.alert('No se pudo deshacer', outcome.error.message)
+          showSnackbar({
+            message: PORTIONS_COPY.student.undoFailed,
+            detail: outcome.error.message,
+            tone: 'danger',
+          })
           requestReload()
         }
       }
+      } catch (error) {
+        undoRequestedRef.current.delete(key)
+        if (!mountedRef.current) return
+        showSnackbar({
+          message: PORTIONS_COPY.student.undoFailed,
+          detail: error instanceof Error ? error.message : undefined,
+          tone: 'danger',
+        })
+        requestReload()
+      }
     },
-    [date, deviceId, onQueuedChange, removeMark, requestReload, scheduleReload, timezone, userId],
+    [
+      date,
+      deviceId,
+      onQueuedChange,
+      removeMark,
+      requestReload,
+      scheduleReload,
+      showSnackbar,
+      timezone,
+      userId,
+    ],
   )
 
   const undoSmart = useCallback(
@@ -349,35 +500,92 @@ export function usePortionMarks(input: UsePortionMarksInput): UsePortionMarksRes
       completes: boolean,
     ) => {
       if (!userId || !deviceId) return
+      const lockKey = JSON.stringify([slotCode, target.groupCode])
+      if (markLocksRef.current.has(lockKey)) return
+      markLocksRef.current.add(lockKey)
       void Haptics.selectionAsync()
       void (async () => {
-        const { ordinal, attempt } = await allocatePortionAttempt({
-          userId,
-          localDate: date,
-          slotCode,
-          groupCode: target.groupCode,
-        })
+        let ordinal: number
+        let attempt: number
+        try {
+          const allocation = await allocatePortionAttempt({
+            userId,
+            localDate: date,
+            slotCode,
+            groupCode: target.groupCode,
+          })
+          ordinal = allocation.ordinal
+          attempt = allocation.attempt
+          if (!mountedRef.current) {
+            releaseMarkLock(lockKey)
+            return
+          }
+        } catch (error) {
+          releaseMarkLock(lockKey)
+          if (!mountedRef.current) return
+          void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error)
+          showSnackbar(
+            {
+              message: PORTIONS_COPY.student.markFailed,
+              detail: error instanceof Error ? error.message : undefined,
+              tone: 'danger',
+              actionLabel: PORTIONS_COPY.student.retry,
+              onAction: () => markRef.current(slotCode, target, portions, completes),
+            },
+            6000,
+          )
+          return
+        }
         const model = modelRef.current
-        const { payload, idempotencyKey } = buildPortionMarkMutation({
-          clientId: userId,
-          deviceId,
-          localDate: date,
-          occurredAt: new Date().toISOString(),
-          timezone,
-          slotCode,
-          planVersionId: model?.plan?.versionId ?? null,
-          daySnapshotId: model?.snapshotId ?? null,
-          target,
-          portions,
-          ordinal,
-          attempt,
-        })
-        if (!mountedRef.current) return
+        let mutation: ReturnType<typeof buildPortionMarkMutation>
+        try {
+          mutation = buildPortionMarkMutation({
+            clientId: userId,
+            deviceId,
+            localDate: date,
+            occurredAt: new Date().toISOString(),
+            timezone,
+            slotCode,
+            planVersionId: model?.plan?.versionId ?? null,
+            daySnapshotId: model?.snapshotId ?? null,
+            target,
+            portions,
+            ordinal,
+            attempt,
+          })
+        } catch (error) {
+          await registerPortionUndo({
+            userId,
+            localDate: date,
+            slotCode,
+            groupCode: target.groupCode,
+          }).catch(() => {})
+          releaseMarkLock(lockKey)
+          if (!mountedRef.current) return
+          void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error)
+          showSnackbar(
+            {
+              message: PORTIONS_COPY.student.markFailed,
+              detail: error instanceof Error ? error.message : undefined,
+              tone: 'danger',
+              actionLabel: PORTIONS_COPY.student.retry,
+              onAction: () => markRef.current(slotCode, target, portions, completes),
+            },
+            6000,
+          )
+          return
+        }
+        const { payload, idempotencyKey } = mutation
+        if (!mountedRef.current) {
+          releaseMarkLock(lockKey)
+          return
+        }
         const pendingMark: PendingPortionMark = {
           idempotencyKey,
           slotCode,
           groupCode: target.groupCode,
           portions,
+          occurredAt: payload.occurredAt,
           ordinal,
           attempt,
           status: 'inflight',
@@ -385,7 +593,8 @@ export function usePortionMarks(input: UsePortionMarksInput): UsePortionMarksRes
           confirmedAt: null,
           createdAt: Date.now(),
         }
-        setMarks((prev) => [...prev, pendingMark])
+        markLocksPendingReleaseRef.current.set(lockKey, idempotencyKey)
+        commitMarks([...marksRef.current, pendingMark])
         showSnackbar({
           message:
             portions === 0.5 ? PORTIONS_COPY.student.markedHalf : PORTIONS_COPY.student.marked,
@@ -394,7 +603,33 @@ export function usePortionMarks(input: UsePortionMarksInput): UsePortionMarksRes
         })
         if (completes) void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
 
-        const outcome = await submitRecordIntake(userId, payload)
+        let outcome: Awaited<ReturnType<typeof submitRecordIntake>>
+        try {
+          outcome = await submitRecordIntake(userId, payload)
+        } catch (error) {
+          removeMark(idempotencyKey)
+          releaseMarkLock(lockKey)
+          const undoWasRequested = undoRequestedRef.current.delete(idempotencyKey)
+          await registerPortionUndo({
+            userId,
+            localDate: date,
+            slotCode,
+            groupCode: target.groupCode,
+          }).catch(() => {})
+          if (!mountedRef.current || undoWasRequested) return
+          void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error)
+          showSnackbar(
+            {
+              message: PORTIONS_COPY.student.markFailed,
+              detail: error instanceof Error ? error.message : undefined,
+              tone: 'danger',
+              actionLabel: PORTIONS_COPY.student.retry,
+              onAction: () => markRef.current(slotCode, target, portions, completes),
+            },
+            6000,
+          )
+          return
+        }
         if (!mountedRef.current) return
         if (outcome.status === 'recorded') {
           patchMark(idempotencyKey, {
@@ -403,10 +638,15 @@ export function usePortionMarks(input: UsePortionMarksInput): UsePortionMarksRes
             confirmedAt: Date.now(),
           })
           scheduleReload()
+          if (undoRequestedRef.current.has(idempotencyKey)) {
+            void undoByKey(idempotencyKey)
+          }
         } else if (outcome.status === 'queued') {
           patchMark(idempotencyKey, { status: 'queued' })
           onQueuedChange?.()
-          if (outcome.reason === 'offline') {
+          if (undoRequestedRef.current.has(idempotencyKey)) {
+            void undoByKey(idempotencyKey)
+          } else if (outcome.reason === 'offline') {
             showSnackbar({
               message:
                 portions === 0.5 ? PORTIONS_COPY.student.markedHalf : PORTIONS_COPY.student.marked,
@@ -419,6 +659,8 @@ export function usePortionMarks(input: UsePortionMarksInput): UsePortionMarksRes
           // 4xx determinista: revertir el segmento + rollback del ordinal (attempt++)
           // + snackbar de reintento (SPEC UX-c).
           removeMark(idempotencyKey)
+          releaseMarkLock(lockKey)
+          const undoWasRequested = undoRequestedRef.current.delete(idempotencyKey)
           await registerPortionUndo({
             userId,
             localDate: date,
@@ -426,29 +668,41 @@ export function usePortionMarks(input: UsePortionMarksInput): UsePortionMarksRes
             groupCode: target.groupCode,
           })
           if (!mountedRef.current) return
-          void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error)
-          showSnackbar({
-            message: PORTIONS_COPY.student.markFailed,
-            tone: 'danger',
-            actionLabel: 'Reintentar',
-            onAction: () => mark(slotCode, target, portions, completes),
-          })
+          if (!undoWasRequested) {
+            void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error)
+            showSnackbar(
+              {
+                message: PORTIONS_COPY.student.markFailed,
+                tone: 'danger',
+                actionLabel: PORTIONS_COPY.student.retry,
+                onAction: () => markRef.current(slotCode, target, portions, completes),
+              },
+              6000,
+            )
+          }
         }
       })()
     },
     [
       date,
+      commitMarks,
       deviceId,
       onQueuedChange,
       patchMark,
+      releaseMarkLock,
       removeMark,
       scheduleReload,
       showSnackbar,
       timezone,
+      undoByKey,
       undoSmart,
       userId,
     ],
   )
+
+  useEffect(() => {
+    markRef.current = mark
+  }, [mark])
 
   // ── Reconciliación contra un read-model fresco (F1-front). ──
   const reconcile = useCallback(
@@ -456,11 +710,15 @@ export function usePortionMarks(input: UsePortionMarksInput): UsePortionMarksRes
       if (!userId) return
       void getQueuedPortionKeys(userId).then((queuedKeys) => {
         if (!mountedRef.current) return
-        setMarks((prev) => reconcilePendingPortionMarks(prev, { fetchStartedAt, queuedKeys }))
-        setVoids((prev) => reconcilePendingPortionMarks(prev, { fetchStartedAt, queuedKeys }))
+        commitMarks(
+          reconcilePendingPortionMarks(marksRef.current, { fetchStartedAt, queuedKeys }),
+        )
+        commitVoids(
+          reconcilePendingPortionMarks(voidsRef.current, { fetchStartedAt, queuedKeys }),
+        )
       })
     },
-    [userId],
+    [commitMarks, commitVoids, userId],
   )
 
   return {

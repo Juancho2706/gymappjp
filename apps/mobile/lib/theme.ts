@@ -1,5 +1,6 @@
 import type { ViewStyle } from 'react-native'
-import { resolveBrandTheme, deriveSportTokens } from '@eva/brand-kit'
+import { resolveBrandTheme, deriveSportTokens, resolvePresetBranding } from '@eva/brand-kit'
+import { isBrandingAllowed, type SubscriptionTier } from '@eva/tiers'
 import { GLOWS } from './shadows'
 import { FONT } from './typography'
 
@@ -238,7 +239,161 @@ export const darkTheme: Theme = freezeTheme({
   fontDisplay: FONT.display,
 })
 
+/**
+ * Zonas de frecuencia cardiaca del ejecutor (Z1..Z5). FIJAS: nunca se re-tiñen por la
+ * marca del coach ni flipean en dark — mismo contrato que `--zone-z1..z5` de web
+ * (globals.css, solo en :root). Espejo 1:1 de esos valores. Uso: props de color
+ * imperativas (SVG stroke, lucide `color`) o tokens de ejecutor (Ola 2).
+ */
+export const ZONE_COLORS = {
+  z1: '#38bdf8',
+  z2: '#4ade80',
+  z3: '#facc15',
+  z4: '#fb923c',
+  z5: '#f87171',
+} as const
+
+export type ZoneKey = keyof typeof ZONE_COLORS
+
 const DEFAULT_BRAND = '#007AFF'
+
+/**
+ * Subconjunto estructural del branding persistido que afecta al tema. Mantenerlo
+ * separado de `CoachBranding` evita que este módulo puro dependa de AsyncStorage o
+ * Supabase, y permite probar la misma resolución que usa el Provider.
+ */
+export interface CoachBrandThemeSource {
+  primaryColor?: string | null
+  subscriptionTier?: string | null
+  themePresetKey?: string | null
+  brandSecondaryColor?: string | null
+  accentLight?: string | null
+  accentDark?: string | null
+  neutralTint?: boolean | null
+}
+
+export interface EffectiveCoachBrandTheme {
+  /** Color base que alimenta la rampa sport; no confundir con el acento clampeado. */
+  brandColor: string
+  accentLight: string | null
+  accentDark: string | null
+  secondaryColor: string | null
+  neutralTint: boolean
+}
+
+/** Campos visuales que algunos componentes consumen fuera de los tokens. */
+export interface CoachBrandPresentationSource extends CoachBrandThemeSource {
+  logoUrl?: string | null
+  logoUrlDark?: string | null
+  welcomeMessage?: string | null
+  loginLayoutKey?: string | null
+  brandFontKey?: string | null
+  loaderVariant?: string | null
+  loaderConfig?: string | null
+  useCustomLoader?: boolean | null
+  loaderText?: string | null
+  loaderIconMode?: string | null
+  loaderTextColor?: string | null
+}
+
+export function isCoachBrandingPresentationAllowed(
+  source: CoachBrandThemeSource | null | undefined,
+): boolean {
+  return Boolean(source?.subscriptionTier) &&
+    isBrandingAllowed(source?.subscriptionTier as SubscriptionTier)
+}
+
+/**
+ * Sanea el payload completo que llega a componentes. Con tier bloqueado conserva
+ * identidad/scope (coachId, nombre, slug), pero elimina toda personalización
+ * visual. Para Pro+ materializa el preset en los colores efectivos, evitando que
+ * consumidores legados de `branding.primaryColor` salten la precedencia del tema.
+ */
+export function resolveEffectiveCoachBrandPresentation<T extends CoachBrandPresentationSource>(
+  source: T | null | undefined,
+): T | null {
+  if (!source) return null
+  if (!isCoachBrandingPresentationAllowed(source)) {
+    return {
+      ...source,
+      primaryColor: DEFAULT_BRAND,
+      themePresetKey: null,
+      brandSecondaryColor: null,
+      accentLight: null,
+      accentDark: null,
+      neutralTint: false,
+      logoUrl: null,
+      logoUrlDark: null,
+      welcomeMessage: null,
+      loginLayoutKey: null,
+      brandFontKey: null,
+      loaderVariant: null,
+      loaderConfig: null,
+      useCustomLoader: false,
+      loaderText: null,
+      loaderIconMode: 'eva',
+      loaderTextColor: null,
+    } as T
+  }
+
+  const effective = resolveEffectiveCoachBrandTheme(source)
+  return {
+    ...source,
+    primaryColor: effective.brandColor,
+    brandSecondaryColor: effective.secondaryColor,
+    accentLight: effective.accentLight,
+    accentDark: effective.accentDark,
+    neutralTint: effective.neutralTint,
+  } as T
+}
+
+/**
+ * Resuelve tier + preset antes de derivar tokens, espejo del layout web `/c`.
+ *
+ * Un tier por debajo de Pro, ausente o inválido cae al azul de sistema. Es el
+ * mismo fail-closed de web: una caché legacy nunca concede white-label por sí sola.
+ */
+export function resolveEffectiveCoachBrandTheme(
+  source: CoachBrandThemeSource | null | undefined,
+): EffectiveCoachBrandTheme {
+  if (!source) {
+    return {
+      brandColor: DEFAULT_BRAND,
+      accentLight: null,
+      accentDark: null,
+      secondaryColor: null,
+      neutralTint: false,
+    }
+  }
+
+  const allowed = isBrandingAllowed(source.subscriptionTier as SubscriptionTier)
+  if (!allowed) {
+    return {
+      brandColor: DEFAULT_BRAND,
+      accentLight: null,
+      accentDark: null,
+      secondaryColor: null,
+      neutralTint: false,
+    }
+  }
+
+  const preset = resolvePresetBranding({
+    theme_preset_key: source.themePresetKey ?? null,
+    primary_color: source.primaryColor ?? null,
+    brand_secondary_color: source.brandSecondaryColor ?? null,
+    accent_light: source.accentLight ?? null,
+    accent_dark: source.accentDark ?? null,
+    neutral_tint: source.neutralTint ?? null,
+  })
+
+  return {
+    brandColor: preset.primary_color || source.primaryColor || DEFAULT_BRAND,
+    accentLight: preset.accent_light,
+    accentDark: preset.accent_dark,
+    secondaryColor: preset.brand_secondary_color,
+    neutralTint: preset.neutral_tint === true,
+  }
+}
 
 /** "#rrggbb" -> "r g b" (channels for NativeWind rgb(var(--x) / <alpha>)). */
 export function hexToChannels(hex: string): string {
@@ -312,6 +467,24 @@ export function resolveSportRamp(primaryColor?: string | null): {
   return { sport300: ramp['300'], sport400: ramp['400'], sport500: ramp['500'] }
 }
 
+/**
+ * Colores imperativos de los mini-anillos de macro. Solo carbohidratos sigue la
+ * rampa sport white-label; proteína (ember) y grasas (aqua) permanecen fijos.
+ * Pensado para `stroke` de react-native-svg, donde una utility no puede resolver
+ * el color en runtime.
+ */
+export function resolveNutritionMacroColors(brandColor?: string | null): {
+  protein: string
+  carbs: string
+  fats: string
+} {
+  return {
+    protein: DS.ember500,
+    carbs: resolveSportRamp(brandColor).sport500,
+    fats: DS.aqua500,
+  }
+}
+
 /** Exact gradient stops used by tokenized `ember-100 → sport-100` celebratory surfaces. */
 export function resolveCelebrationSurfaceRamp(
   primaryColor: string | null | undefined,
@@ -331,6 +504,25 @@ export function resolveCelebrationSurfaceRamp(
 export function applyCoachBranding(base: Theme, primaryColor?: string | null): Theme {
   const scheme = base === darkTheme ? 'dark' : 'light'
   const t = resolveBrandTheme({ brandColor: primaryColor || DEFAULT_BRAND })[scheme]
+  return {
+    ...base,
+    primary: t.accent,
+    primaryForeground: t.accentText,
+    accentForeground: t.accent,
+  }
+}
+
+/** Aplica al shim imperativo el branding efectivo ya gateado y resuelto. */
+export function applyEffectiveCoachBranding(base: Theme, effective: EffectiveCoachBrandTheme): Theme {
+  const scheme = base === darkTheme ? 'dark' : 'light'
+  const t = resolveBrandTheme({
+    brandColor: effective.brandColor,
+    accentLight: effective.accentLight,
+    accentDark: effective.accentDark,
+    secondaryLight: effective.secondaryColor,
+    secondaryDark: effective.secondaryColor,
+    neutralTint: effective.neutralTint,
+  })[scheme]
   return {
     ...base,
     primary: t.accent,
@@ -373,6 +565,31 @@ export function brandVars(primaryColor: string | null | undefined, scheme: 'ligh
     '--color-sport-700': hexToChannels(sport700),
     '--color-cta-fill': hexToChannels(sport.ctaFill),
     '--color-focus-ring': hexToChannels(brand),
+  }
+}
+
+/**
+ * Variante efectiva de `brandVars`: conserva la rampa sport derivada del color
+ * base, pero primary/accent siguen el override contrastado del modo actual.
+ */
+export function effectiveBrandVars(
+  effective: EffectiveCoachBrandTheme,
+  scheme: 'light' | 'dark',
+): Record<string, string> {
+  const resolved = resolveBrandTheme({
+    brandColor: effective.brandColor,
+    accentLight: effective.accentLight,
+    accentDark: effective.accentDark,
+    secondaryLight: effective.secondaryColor,
+    secondaryDark: effective.secondaryColor,
+    neutralTint: effective.neutralTint,
+  })[scheme]
+  return {
+    ...brandVars(effective.brandColor, scheme),
+    '--color-primary': hexToChannels(resolved.accent),
+    '--color-primary-foreground': hexToChannels(resolved.accentText),
+    '--color-accent': hexToChannels(resolved.accent),
+    '--color-accent-foreground': hexToChannels(resolved.accent),
   }
 }
 

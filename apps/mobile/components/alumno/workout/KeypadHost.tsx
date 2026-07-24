@@ -10,16 +10,20 @@ import {
   formatWeightEsCl,
   keypadBackspace,
   type OptimisticLogPayload,
+  // Routing PURO tipo->campos (fix QA R4·#5): fuente única de la secuencia de pasos del teclado.
+  keypadStepsForTarget,
+  type KeypadStep,
+  type KeypadTarget,
+  // Mapeo PURO valores->payload, compartido con la `ActiveSetRow` (sin drift entre superficies).
+  buildStrengthPayload,
+  buildTypedPayload,
+  int,
 } from '@eva/workout-engine'
 import { useTheme } from '@/context/ThemeContext'
 import { FONT, textStyle } from '../../../lib/typography'
 import { useEvaMotion } from '../../../lib/motion'
 import { shadow } from '../../../lib/shadows'
 import { haptics } from '../../../lib/haptics'
-// Routing PURO tipo->campos (fix QA R4·#5): fuente única de la secuencia de pasos del teclado.
-import { keypadStepsForTarget, type KeypadStep, type KeypadTarget } from './keypad-flow'
-// Mapeo PURO valores->payload, compartido con la `ActiveSetRow` (sin drift entre superficies).
-import { buildStrengthPayload, buildTypedPayload, int } from './set-log-payload'
 // Primitivas presentacionales + paso de esfuerzo, compartidas con la `ActiveSetRow` (sin duplicar).
 import {
   EffortField,
@@ -38,9 +42,9 @@ const ON_DARK_MUTED = '#939DAB'
 const WHITE = '#FFFFFF'
 const WARNING_500 = '#F5A524' // --color-warning-500 (ámbar de la nota, mirror amber-300/400 web)
 
-// El tipo `KeypadTarget` vive en `keypad-flow` (puro/testeable); se re-exporta para los consumidores
-// que ya lo importaban desde acá (ExecutorV2) sin tocar sus imports.
-export type { KeypadTarget } from './keypad-flow'
+// El tipo `KeypadTarget` vive en `@eva/workout-engine` (keypad-flow, puro/testeable); se re-exporta
+// para los consumidores que ya lo importaban desde acá (ExecutorV2) sin tocar sus imports.
+export type { KeypadTarget } from '@eva/workout-engine'
 
 /** Paso de campo (excluye el paso de esfuerzo) — cada uno es una pestaña del display. */
 type KeypadFieldStep = Extract<KeypadStep, { kind: 'keypad' }>
@@ -65,11 +69,17 @@ export function KeypadHost({
   onClose,
   onCommit,
   onDraftChange,
+  accent,
+  accentText,
 }: {
   target: KeypadTarget | null
   onClose: () => void
   onCommit: (payload: OptimisticLogPayload) => void
   onDraftChange: (values: Record<string, string>, fieldIndex: number) => void
+  /** Acento de MARCA del ejecutor V3 (informe 15, MAYOR): confirmar/seleccionados adoptan la marca en
+   *  vez del azul Sport fijo. Ausente (ejecutor V2) ⇒ conserva `bg-sport-500` + texto blanco. */
+  accent?: string
+  accentText?: string
 }) {
   const insets = useSafeAreaInsets()
   const { resolvedScheme } = useTheme()
@@ -360,11 +370,11 @@ export function KeypadHost({
                     onPress={commit}
                     accessibilityRole="button"
                     accessibilityLabel={`${doneLabel}, guardar serie`}
-                    className="h-14 flex-row items-center justify-center gap-2 rounded-control bg-sport-500 active:scale-[0.98]"
-                    style={{ flex: 1.4 }}
+                    className={`h-14 flex-row items-center justify-center gap-2 rounded-control active:scale-[0.98] ${accent ? '' : 'bg-sport-500'}`}
+                    style={[{ flex: 1.4 }, accent ? { backgroundColor: accent } : null]}
                   >
-                    <Check size={20} color={WHITE} />
-                    <Text style={KEYPAD_ACTION_STYLE} className="text-white">
+                    <Check size={20} color={accent ? accentText ?? WHITE : WHITE} />
+                    <Text style={[KEYPAD_ACTION_STYLE, accent ? { color: accentText ?? WHITE } : null]} className={accent ? undefined : 'text-white'}>
                       {doneLabel}
                     </Text>
                   </Pressable>
@@ -406,19 +416,20 @@ export function KeypadHost({
                     onPress={goNext}
                     accessibilityRole="button"
                     accessibilityLabel={primaryIsNext ? 'Siguiente' : `${doneLabel}, guardar serie`}
-                    className="h-14 w-full flex-row items-center justify-center gap-2 rounded-control bg-sport-500 active:scale-[0.98]"
+                    className={`h-14 w-full flex-row items-center justify-center gap-2 rounded-control active:scale-[0.98] ${accent ? '' : 'bg-sport-500'}`}
+                    style={accent ? { backgroundColor: accent } : undefined}
                   >
                     {primaryIsNext ? (
                       <>
-                        <Text style={KEYPAD_ACTION_STYLE} className="text-white">
+                        <Text style={[KEYPAD_ACTION_STYLE, accent ? { color: accentText ?? WHITE } : null]} className={accent ? undefined : 'text-white'}>
                           Siguiente
                         </Text>
-                        <ArrowRight size={20} color={WHITE} />
+                        <ArrowRight size={20} color={accent ? accentText ?? WHITE : WHITE} />
                       </>
                     ) : (
                       <>
-                        <Check size={20} color={WHITE} />
-                        <Text style={KEYPAD_ACTION_STYLE} className="text-white">
+                        <Check size={20} color={accent ? accentText ?? WHITE : WHITE} />
+                        <Text style={[KEYPAD_ACTION_STYLE, accent ? { color: accentText ?? WHITE } : null]} className={accent ? undefined : 'text-white'}>
                           {doneLabel}
                         </Text>
                       </>

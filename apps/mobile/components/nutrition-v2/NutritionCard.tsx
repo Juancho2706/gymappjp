@@ -1,6 +1,8 @@
 import type { ComponentProps, ReactNode } from 'react'
 import { View } from 'react-native'
 import type { NutritionTone } from '@eva/nutrition-v2'
+import { useTheme } from '../../context/ThemeContext'
+import { shadow } from '../../lib/shadows'
 
 function cx(...values: Array<string | false | null | undefined>): string {
   return values.filter(Boolean).join(' ')
@@ -25,11 +27,16 @@ export function NutritionCard({
   children,
   tone = 'neutral',
   className,
+  style,
   ...props
 }: NutritionCardProps) {
+  const { theme } = useTheme()
   return (
     <View
       className={cx('rounded-card border p-4', toneClasses[tone], className)}
+      // Web NutritionCard (NutritionV2Kit.tsx:503): `shadow-sm` → decisión única del
+      // kit: token de elevación DS RN `shadow('sm', scheme)` de lib/shadows.ts.
+      style={[shadow('sm', theme.scheme), style]}
       {...props}
     >
       {children}

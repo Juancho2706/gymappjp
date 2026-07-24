@@ -66,6 +66,11 @@ export default function CheckInScreen() {
   const [energyLevel, setEnergyLevel] = useState<number | null>(7)
   const [frontPhotoUri, setFrontPhotoUri] = useState<string | null>(null)
   const [backPhotoUri, setBackPhotoUri] = useState<string | null>(null)
+  // Errores de foto INLINE por lado (espejo web `fileErrors`, CheckInForm.tsx:185-201 +
+  // render :568-581/:621-623): borde danger en el tile + texto bajo el slot. Antes eran
+  // Alert nativos (estado simplificado, residuo 2R-5). Los Alert de PERMISOS y el chooser
+  // camara/galeria se conservan (adaptacion nativa sin equivalente web).
+  const [photoErrors, setPhotoErrors] = useState<{ front?: string; back?: string }>({})
   const [notes, setNotes] = useState('')
   const [submitting, setSubmitting] = useState(false)
   // Guarda anti doble-tap SINCRONA (Fabric #45798-adyacente): el state `submitting` solo bloquea
@@ -131,11 +136,13 @@ export default function CheckInScreen() {
 
   // Comprime + valida tamaño + setea (se re-encoda a JPEG, así que la fuente puede ser cámara o galería).
   async function processAsset(asset: ImagePicker.ImagePickerAsset, type: 'front' | 'back') {
+    // Toda nueva seleccion limpia el error previo del lado (web CheckInForm.tsx:185).
+    setPhotoErrors((e) => ({ ...e, [type]: undefined }))
     // NO pre-filtramos por mime: el re-encode a JPEG de abajo normaliza cualquier formato,
     // incluido HEIC de iPhone (bloquearlo antes rompía a los alumnos con cámara Apple). Solo
-    // rechazamos algo declarado que NO sea imagen.
+    // rechazamos algo declarado que NO sea imagen. Copy verbatim web :195.
     if (asset.mimeType && !asset.mimeType.startsWith('image/')) {
-      Alert.alert('Archivo no soportado', 'Selecciona una imagen.')
+      setPhotoErrors((e) => ({ ...e, [type]: 'El archivo no es una imagen. Usa una foto (JPG, PNG, HEIC…).' }))
       return
     }
     const compressed = await ImageManipulator.manipulateAsync(
@@ -145,7 +152,8 @@ export default function CheckInScreen() {
     )
     const info = await FileSystem.getInfoAsync(compressed.uri)
     if (info.exists && 'size' in info && info.size > MAX_BYTES) {
-      Alert.alert('Imagen muy grande', 'No se pudo comprimir suficiente. Intenta con otra imagen.')
+      // Estado "no se pudo optimizar" del web (copy verbatim :217).
+      setPhotoErrors((e) => ({ ...e, [type]: 'No pudimos optimizar esta imagen y pesa más de 5MB. Prueba con otra.' }))
       return
     }
     if (type === 'front') setFrontPhotoUri(compressed.uri)
@@ -458,10 +466,12 @@ export default function CheckInScreen() {
                 resolvedScheme={resolvedScheme}
                 frontPhotoUri={frontPhotoUri}
                 backPhotoUri={backPhotoUri}
+                frontError={photoErrors.front ?? null}
+                backError={photoErrors.back ?? null}
                 onPickFront={() => choosePhotoSource('front')}
                 onPickBack={() => choosePhotoSource('back')}
-                onClearFront={() => setFrontPhotoUri(null)}
-                onClearBack={() => setBackPhotoUri(null)}
+                onClearFront={() => { setFrontPhotoUri(null); setPhotoErrors((e) => ({ ...e, front: undefined })) }}
+                onClearBack={() => { setBackPhotoUri(null); setPhotoErrors((e) => ({ ...e, back: undefined })) }}
                 onNext={goNext}
                 onPrev={goPrev}
               />
@@ -602,12 +612,14 @@ function StepOne({
 }
 
 function StepTwo({
-  theme, resolvedScheme, frontPhotoUri, backPhotoUri, onPickFront, onPickBack, onClearFront, onClearBack, onNext, onPrev,
+  theme, resolvedScheme, frontPhotoUri, backPhotoUri, frontError, backError, onPickFront, onPickBack, onClearFront, onClearBack, onNext, onPrev,
 }: {
   theme: any
   resolvedScheme: 'light' | 'dark'
   frontPhotoUri: string | null
   backPhotoUri: string | null
+  frontError: string | null
+  backError: string | null
   onPickFront: () => void
   onPickBack: () => void
   onClearFront: () => void
@@ -626,6 +638,7 @@ function StepTwo({
           theme={theme}
           label="Foto frontal"
           uri={frontPhotoUri}
+          error={frontError}
           onPick={onPickFront}
           onClear={onClearFront}
           testID="photo-front"
@@ -634,6 +647,7 @@ function StepTwo({
           theme={theme}
           label="Espalda o perfil"
           uri={backPhotoUri}
+          error={backError}
           onPick={onPickBack}
           onClear={onClearBack}
           testID="photo-back"
@@ -657,46 +671,60 @@ function StepTwo({
 }
 
 function PhotoPickerSlot({
-  theme, label, uri, onPick, onClear, testID,
+  theme, label, uri, error, onPick, onClear, testID,
 }: {
   theme: any
   label: string
   uri: string | null
+  error: string | null
   onPick: () => void
   onClear: () => void
   testID?: string
 }) {
+  // Estado de error del tile vacio: borde danger SOLIDO (web CheckInForm.tsx:568-572
+  // `border-2 border-[var(--danger-500)] bg-surface-sunken` — sin dashed) + mensaje
+  // inline bajo el slot (web :579-581 `mt-1.5 text-[11px] font-semibold text-danger-600`).
+  const emptyClass = error
+    ? 'border-2 border-danger-500 bg-surface-sunken'
+    : 'border-2 border-dashed border-default bg-surface-sunken'
   return (
-    <Pressable
-      className={uri ? 'border-2 border-sport-500' : 'border-2 border-dashed border-default bg-surface-sunken'}
-      style={styles.photoSlot}
-      onPress={uri ? undefined : onPick}
-      testID={testID}
-    >
-      {uri ? (
-        <>
-          <Image source={{ uri }} style={StyleSheet.absoluteFill} resizeMode="cover" />
-          <Pressable
-            className="bg-danger-500"
-            style={styles.clearBtn}
-            onPress={onClear}
-            hitSlop={8}
-            testID={`${testID}-clear`}
-          >
-            <X size={16} color={ICON_WHITE} strokeWidth={2.5} />
-          </Pressable>
-          <View style={styles.photoLabelStrip}>
-            <Text style={[textStyle('3xs', FONT.uiBold), { color: ICON_WHITE }]}>{label}</Text>
-          </View>
-        </>
-      ) : (
-        <>
-          <Camera size={28} color={theme.mutedForeground} strokeWidth={2} />
-          <Text className="text-body" style={textStyle('2xs', FONT.uiBold)}>{label}</Text>
-          <Text className="text-subtle" style={textStyle('3xs', FONT.ui)}>Opcional · toca para subir</Text>
-        </>
-      )}
-    </Pressable>
+    <View style={styles.photoCol}>
+      <Pressable
+        className={uri ? 'border-2 border-sport-500' : emptyClass}
+        style={styles.photoSlot}
+        onPress={uri ? undefined : onPick}
+        testID={testID}
+      >
+        {uri ? (
+          <>
+            <Image source={{ uri }} style={StyleSheet.absoluteFill} resizeMode="cover" />
+            <Pressable
+              className="bg-danger-500"
+              style={styles.clearBtn}
+              onPress={onClear}
+              hitSlop={8}
+              testID={`${testID}-clear`}
+            >
+              <X size={16} color={ICON_WHITE} strokeWidth={2.5} />
+            </Pressable>
+            <View style={styles.photoLabelStrip}>
+              <Text style={[textStyle('3xs', FONT.uiBold), { color: ICON_WHITE }]}>{label}</Text>
+            </View>
+          </>
+        ) : (
+          <>
+            <Camera size={28} color={theme.mutedForeground} strokeWidth={2} />
+            <Text className="text-body" style={textStyle('2xs', FONT.uiBold)}>{label}</Text>
+            <Text className="text-subtle" style={textStyle('3xs', FONT.ui)}>Opcional · toca para subir</Text>
+          </>
+        )}
+      </Pressable>
+      {error ? (
+        <Text className="text-danger-600" style={{ marginTop: 6, fontSize: 11, lineHeight: 14, fontFamily: FONT.uiSemibold }} testID={`${testID}-error`}>
+          {error}
+        </Text>
+      ) : null}
+    </View>
   )
 }
 
@@ -795,9 +823,10 @@ const styles = StyleSheet.create({
   weightValueRow: { flexDirection: 'row', alignItems: 'baseline', gap: 4 },
   stepBtn: { width: 48, height: 48, borderRadius: 999, alignItems: 'center', justifyContent: 'center' },
   energyHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  photoRow: { flexDirection: 'row', gap: 10 },
+  photoRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
+  photoCol: { flex: 1, minWidth: 0 },
   photoSlot: {
-    flex: 1, aspectRatio: 3 / 4, borderRadius: 14, overflow: 'hidden',
+    width: '100%', aspectRatio: 3 / 4, borderRadius: 14, overflow: 'hidden',
     alignItems: 'center', justifyContent: 'center', gap: 8,
   },
   clearBtn: { position: 'absolute', top: 8, right: 8, width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },

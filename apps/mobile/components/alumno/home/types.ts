@@ -91,6 +91,16 @@ export interface PlanDayView {
   plan: Plan
   status: DayStatus
   isToday: boolean
+  /** Fecha ISO YYYY-MM-DD de este dia en la semana actual (para params de navegacion recuperar/fecha). */
+  dateIso: string
+  /**
+   * Si el dia quedo 'done' por una sesion hecha en OTRO dia de esta semana (recuperacion), fecha ISO
+   * YYYY-MM-DD de esa sesion; `null` cuando se hizo en su propia fecha (o no esta hecho). Espejo aditivo
+   * de `WeekDay.doneOnDate` (web weekPendingWorkouts.ts, atribucion greedy E1.1).
+   */
+  doneOnDate: string | null
+  /** Nombre completo del dia de `doneOnDate` ("Jueves") para el copy "Hecho el jueves". `null` = mismo caso que doneOnDate. */
+  doneOnLabel: string | null
 }
 
 /** Dia pasado esta semana sin registro → recuperable HOY (delta Fase L / E1-19). */
@@ -98,10 +108,13 @@ export interface PendingDay {
   planId: string
   dayOfWeek: number
   dayLabel: string
+  /** Fecha ISO YYYY-MM-DD de ese dia en la semana actual (param `recuperar` al ejecutor). */
+  dateIso: string
 }
 
 // ── Acentos DS FIJOS (rampas constantes, nunca white-label; sport sigue la marca
 //    en runtime via theme.primary / clases NativeWind). Mirror TOKENS.md. ──
+export const EMBER_400 = '#FF8C66' // fill claro de la barra de racha (web --ember-400, globals.css:405)
 export const EMBER_500 = '#FF6A3D' // accent-nutrition / racha
 export const EMBER_600 = '#E8511E'
 export const EMBER_700 = '#C2410C'

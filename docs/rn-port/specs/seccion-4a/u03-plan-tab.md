@@ -63,3 +63,15 @@ Referencia web: `apps/web/src/app/c/[coach_slug]/nutrition-v2/page.tsx:193-416`.
 Plan con 2 variantes, franja con rango horario + indicaciones + ítem con min/max + franja solo-targets:
 captura web móvil vs RN; verificar subtotales, "Objetivo de la franja", guía "Ajustable entre…",
 "Metas diarias", notas del coach dentro del header card.
+
+## Cierre (2026-07-21)
+
+- Deltas 1-6 aplicados: notas del coach dentro de la card del encabezado (overline "Notas de tu coach"),
+  descripción `text-sm/leading-6/text-body`, nombre `mt-4`; overline "Metas diarias" + `tabular-nums`;
+  variante con `MacroChipRow` cuando hay >1 (`showTargets`), subtítulo `text-sm tabular-nums` y copy de plan
+  sin franjas; nuevo `PlanSlotBlock` (sub-card sunken/40, rango horario mono con en-dash, subtotal kcal,
+  "Objetivo de la franja" con `MacroChipRow`, guía por ítem).
+- Helper `describeItemGuidance` portado 1:1 a `apps/mobile/lib/nutrition-v2-plan.ts` (puro) con test
+  `tests/mobile-nutrition-v2-plan.test.ts` (6 casos: min+max, solo max, solo min, notas, rango+notas, null).
+- Pie "Actualizado {fecha}" retirado (RN-extra sin contraparte web).
+- Copy offline del estado vacío se conserva como adaptación documentada de la cola nativa (delta 7).

@@ -7,7 +7,7 @@ import { useRouter } from 'next/navigation'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { Loader2, Save, ExternalLink, Copy, Check, Type, MessageSquare, QrCode, Play, FileText, Maximize2, X, ImagePlus, Moon } from 'lucide-react'
+import { Loader2, Save, ExternalLink, Copy, Check, Type, MessageSquare, QrCode, Play, FileText, Maximize2, X, ImagePlus, Moon, Activity } from 'lucide-react'
 import { updateBrandSettingsAction, createLogoUploadUrlAction, type BrandSettingsState } from './_actions/settings.actions'
 import { compressLogo, putToSignedUrl } from '@/lib/uploads/logo-upload.client'
 import { cn } from '@/lib/utils'
@@ -141,6 +141,10 @@ export function BrandSettingsForm({ coach }: { coach: Coach }) {
     const [welcomeModalContent, setWelcomeModalContent] = useState(coach.welcome_modal_content ?? '')
     const [welcomeModalType, setWelcomeModalType] = useState<'text' | 'video'>(coach.welcome_modal_type as 'text' | 'video' ?? 'text')
     const [welcomeMessageInput, setWelcomeMessageInput] = useState(coach.welcome_message ?? '')
+    // Ejecutor V3 (E0.7) — tema del ejecutor del alumno: 'coach' = colores del coach, 'eva' = paleta EVA.
+    const [executorTheme, setExecutorTheme] = useState<'coach' | 'eva'>(
+        coach.executor_theme === 'eva' ? 'eva' : 'coach'
+    )
     // white-label v2 (branding avanzado Pro): estado LEVANTADO al padre (antes vivía local en
     // BrandAdvancedSection) para que el preview del teléfono lo refleje y el dirty/beforeunload lo cuente.
     const [secondaryColor, setSecondaryColor] = useState(coach.brand_secondary_color ?? '')
@@ -253,9 +257,11 @@ export function BrandSettingsForm({ coach }: { coach: Coach }) {
             // white-label W1b — tema / layout de login / loader compuesto
             themePresetKey !== (coach.theme_preset_key ?? null) ||
             loginLayoutKey !== resolveLoginLayout(coach.login_layout_key) ||
-            serializeLoaderConfig(loaderConfig) !== serializeLoaderConfig(parseLoaderConfig(coach.loader_config))
+            serializeLoaderConfig(loaderConfig) !== serializeLoaderConfig(parseLoaderConfig(coach.loader_config)) ||
+            // Ejecutor V3 (E0.7) — tema del ejecutor
+            executorTheme !== (coach.executor_theme === 'eva' ? 'eva' : 'coach')
         )
-    }, [selectedColor, useCoachColors, useCustomLoader, loaderText, loaderTextColor, loaderIconMode, welcomeModalEnabled, welcomeModalContent, welcomeModalType, welcomeMessageInput, stagedLogo, stagedLogoDark, secondaryColor, accentLight, accentDark, neutralTint, fontKey, loaderVariant, themePresetKey, loginLayoutKey, loaderConfig, coach])
+    }, [selectedColor, useCoachColors, useCustomLoader, loaderText, loaderTextColor, loaderIconMode, welcomeModalEnabled, welcomeModalContent, welcomeModalType, welcomeMessageInput, stagedLogo, stagedLogoDark, secondaryColor, accentLight, accentDark, neutralTint, fontKey, loaderVariant, themePresetKey, loginLayoutKey, loaderConfig, executorTheme, coach])
 
     // Live Preview Effect (H7: el mockup del teléfono SIEMPRE usa selectedColor; este efecto solo
     // tiñe el CHROME del panel del coach, y solo si use_brand_colors_coach está ON).
@@ -715,6 +721,67 @@ export function BrandSettingsForm({ coach }: { coach: Coach }) {
                                 onChange={(e) => setUseCoachColors(e.target.checked)}
                                 className="w-5 h-5 rounded border-border text-primary focus:ring-primary shrink-0"
                             />
+                        </div>
+                    </div>
+
+                    {/* Ejecutor de entrenamiento (E0.7) — tema de colores del ejecutor del alumno.
+                        Preferencia: "Mis colores" (color de marca) vs "Colores EVA" (Sport/Aqua/Ember).
+                        El hidden input viaja SIEMPRE (aunque el bloque no toque tier). */}
+                    <div className="bg-surface-card border border-subtle rounded-card p-4 sm:p-6 space-y-5 shadow-sm">
+                        <div className="flex items-center gap-2">
+                            <Activity className="w-4 h-4 text-primary" />
+                            <h2 className="text-base font-bold text-strong">Ejecutor de entrenamiento</h2>
+                        </div>
+                        <p className="text-xs text-muted -mt-3">
+                            Elige los colores que ven tus alumnos mientras entrenan.
+                        </p>
+                        <input type="hidden" name="executor_theme" value={executorTheme} />
+                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                            <button
+                                type="button"
+                                onClick={() => setExecutorTheme('coach')}
+                                aria-pressed={executorTheme === 'coach'}
+                                className={cn(
+                                    'flex flex-col gap-3 rounded-control border p-4 text-left transition-all',
+                                    executorTheme === 'coach'
+                                        ? 'border-primary bg-primary/5 ring-1 ring-primary/30'
+                                        : 'border-default bg-surface-sunken hover:border-[var(--sport-400)]'
+                                )}
+                            >
+                                <div className="flex items-center justify-between gap-2">
+                                    <span className="text-sm font-bold text-strong">Mis colores</span>
+                                    {executorTheme === 'coach' && <Check className="h-4 w-4 shrink-0 text-primary" />}
+                                </div>
+                                <div className="flex items-center gap-1.5">
+                                    <span
+                                        className="h-5 w-5 rounded-full border border-black/5"
+                                        style={{ background: effectivePrimary || '#007AFF' }}
+                                    />
+                                </div>
+                                <p className="text-[11px] text-muted">Usa el color de tu marca.</p>
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setExecutorTheme('eva')}
+                                aria-pressed={executorTheme === 'eva'}
+                                className={cn(
+                                    'flex flex-col gap-3 rounded-control border p-4 text-left transition-all',
+                                    executorTheme === 'eva'
+                                        ? 'border-primary bg-primary/5 ring-1 ring-primary/30'
+                                        : 'border-default bg-surface-sunken hover:border-[var(--sport-400)]'
+                                )}
+                            >
+                                <div className="flex items-center justify-between gap-2">
+                                    <span className="text-sm font-bold text-strong">Colores EVA</span>
+                                    {executorTheme === 'eva' && <Check className="h-4 w-4 shrink-0 text-primary" />}
+                                </div>
+                                <div className="flex items-center gap-1.5">
+                                    <span className="h-5 w-5 rounded-full border border-black/5" style={{ background: '#2680FF' }} />
+                                    <span className="h-5 w-5 rounded-full border border-black/5" style={{ background: '#18ABD4' }} />
+                                    <span className="h-5 w-5 rounded-full border border-black/5" style={{ background: '#FF6A3D' }} />
+                                </div>
+                                <p className="text-[11px] text-muted">Paleta EVA multicolor.</p>
+                            </button>
                         </div>
                     </div>
 

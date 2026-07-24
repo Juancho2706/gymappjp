@@ -38,6 +38,12 @@
       "android": {
         "buildType": "apk"
       },
+      "ios": {
+        "buildConfiguration": "Release",
+        "credentialsSource": "local",
+        "distribution": "store",
+        "image": "macos-sequoia-15.6-xcode-26.0"
+      },
       "env": {
         "APP_ENV": "production",
         "EXPO_ROUTER_APP_ROOT": "apps/mobile/app",
@@ -99,6 +105,9 @@
         "ascAppId": "6770426633",
         "appleTeamId": "5GKWMMZ46Q"
       }
+    },
+    "previewv2": {
+      "extends": "prodpreview"
     }
   }
 }

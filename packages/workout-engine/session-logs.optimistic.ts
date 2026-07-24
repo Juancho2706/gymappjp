@@ -1,4 +1,4 @@
-import type { ReconciledSessionLog } from './session-logs.reconcile'
+import type { ReconciledSessionLog, WorkoutLogSideMetadata } from './session-logs.reconcile'
 
 /**
  * Payload de "serie recién confirmada localmente" que el hijo (`LogSetForm` / `TypedLogSetRow`)
@@ -20,6 +20,9 @@ export type OptimisticLogPayload = {
     actualDistanceM?: number | null
     actualHoldSec?: number | null
     actualAvgHr?: number | null
+    // Hold POR LADO (E0.5): metadata jsonb {left_sec, right_sec}. Opcional — el camino strength/tipado
+    // bilateral no lo manda; solo el flujo per_side. Debe PRESERVARSE (mismo bug forense del hold).
+    metadata?: WorkoutLogSideMetadata | null
 }
 
 /**
@@ -45,6 +48,9 @@ export function buildOptimisticSessionLog(payload: OptimisticLogPayload): Reconc
         actual_distance_m: payload.actualDistanceM ?? null,
         actual_hold_sec: payload.actualHoldSec ?? null,
         actual_avg_hr: payload.actualAvgHr ?? null,
+        // Preserva el hold por lado (E0.5) igual que los demás ejes: sin esto, un optimismo sobre una
+        // serie per_side viajaría sin {left_sec, right_sec} y la fila tipada los perdería al confirmar.
+        metadata: payload.metadata ?? null,
     }
 }
 

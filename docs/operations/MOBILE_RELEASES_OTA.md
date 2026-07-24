@@ -1,7 +1,7 @@
 ---
 status: active
 owner: mobile-release
-last_verified: 2026-07-20 @ 34b09d8f
+last_verified: "2026-07-21 @ f5301858"
 canonical: true
 ---
 
@@ -52,7 +52,7 @@ Ante duda, usar binario nuevo. Una migración de base de datos nunca se revierte
 1. Esperar CI verde, incluido `Mobile Integration CI` para cambios en `apps/mobile` o `packages`.
 2. En GitHub Actions, ejecutar `Mobile Build (Local — no EAS credits)` con `app=mobile`, plataforma y perfil correctos.
 3. Para `prodpreview`, `previewv2` y `production`, el workflow inyecta las variables públicas de Supabase desde GitHub Secrets y falla si faltan.
-4. Descargar y probar el artefacto. GitHub lo retiene 14 días.
+4. Descargar y probar el artefacto el mismo día. El workflow solicita 14 días, pero la política efectiva actual del repositorio limita la retención a un día; no depender del valor solicitado sin verificar primero la configuración del repositorio.
 5. Activar `submit_ios` solo para una IPA destinada a TestFlight. Activar `submit_android` solo con perfil `production`; el destino es el track interno de Google Play.
 6. Promover a producción solo después de smoke test en dispositivo real, sin errores de arranque, autenticación, navegación, cámara, notificaciones ni persistencia offline.
 

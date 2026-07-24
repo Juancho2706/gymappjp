@@ -383,9 +383,9 @@ export function OnboardingForm({ coachSlug }: Props) {
                                     />
                                     <span className="text-xs text-muted-foreground leading-snug">
                                         Confirmo que tengo 14 años o más y acepto los{' '}
-                                        <a href="/legal/terms" target="_blank" className="underline hover:text-foreground">términos de uso</a>
+                                        <a href="/legal" target="_blank" className="underline hover:text-foreground">términos de uso</a>
                                         {' '}y la{' '}
-                                        <a href="/legal/privacy" target="_blank" className="underline hover:text-foreground">política de privacidad</a>.*
+                                        <a href="/privacidad" target="_blank" className="underline hover:text-foreground">política de privacidad</a>.*
                                     </span>
                                 </label>
                                 {ageError && <p className="text-xs text-[var(--danger-600)] pl-6">Debes confirmar tu edad para continuar.</p>}
