@@ -150,7 +150,8 @@ export default function WorkoutScreen() {
 
   function renderPlan({ item, index }: { item: Plan; index: number }) {
     // El Despegue nace de la CARD clickeada → cada card mide su rect real (measureMorphOrigin en PlanCard).
-    return <PlanCard item={item} index={index} onStart={(origin) => startMorph({ planId: item.id, origin })} />
+    // `label` = texto real del trigger (título del plan) para la píldora del clon.
+    return <PlanCard item={item} index={index} onStart={(origin, label) => startMorph({ planId: item.id, origin, label })} />
   }
 
   return (
@@ -226,7 +227,7 @@ export default function WorkoutScreen() {
             todayProgress ? (
               <TodayHero
                 progress={todayProgress}
-                onStart={(origin) => startMorph({ planId: todayProgress.planId, origin })}
+                onStart={(origin, label) => startMorph({ planId: todayProgress.planId, origin, label })}
               />
             ) : null
           }
@@ -238,7 +239,7 @@ export default function WorkoutScreen() {
 
 /** Card de un plan de la lista. Mide su rect real al tocarla para que el Despegue NAZCA de la card
  *  clickeada (mismo patrón que el CTA del hero); si la medición falla, el morph cae al origen sintético. */
-function PlanCard({ item, index, onStart }: { item: Plan; index: number; onStart: (origin: MorphOrigin | null) => void }) {
+function PlanCard({ item, index, onStart }: { item: Plan; index: number; onStart: (origin: MorphOrigin | null, label?: string) => void }) {
   const { theme } = useTheme()
   const ref = useRef<View>(null)
   // Ocultar la card real durante el Despegue (el clon la reemplaza); si no, se ve su caja detrás del morph.
@@ -257,7 +258,7 @@ function PlanCard({ item, index, onStart }: { item: Plan; index: number; onStart
           padding={18}
           onPress={() => {
             hide()
-            measureMorphOrigin(ref.current, theme.radius.card, (origin) => onStart(origin))
+            measureMorphOrigin(ref.current, theme.radius.card, (origin) => onStart(origin, item.title))
           }}
           style={styles.card}
         >
@@ -304,7 +305,7 @@ function PlanCard({ item, index, onStart }: { item: Plan; index: number; onStart
 }
 
 /** Hero de HOY — espejo web §4.5: ProgressRing (series/objetivo) + CTA Empezar/Continuar/Ver registro. */
-function TodayHero({ progress, onStart }: { progress: TodayProgress; onStart: (origin?: MorphOrigin | null) => void }) {
+function TodayHero({ progress, onStart }: { progress: TodayProgress; onStart: (origin?: MorphOrigin | null, label?: string) => void }) {
   const { theme } = useTheme()
   const ctaRef = useRef<View>(null)
   // Ocultar el CTA real durante el Despegue (el clon lo reemplaza); si no, se ve la caja del botón detrás.
@@ -365,7 +366,8 @@ function TodayHero({ progress, onStart }: { progress: TodayProgress; onStart: (o
             full
             onPress={() => {
               hideCta()
-              measureMorphOrigin(ctaRef.current, 16, (origin) => onStart(origin))
+              // `ctaLabel` = texto real del botón (Empezar/Continuar/Ver registro) → píldora del Despegue.
+              measureMorphOrigin(ctaRef.current, 16, (origin) => onStart(origin, ctaLabel))
             }}
           />
         </View>

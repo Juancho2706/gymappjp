@@ -70,6 +70,7 @@ import { CelebrationHost } from './celebration-host'
 import { computeLivePr } from './pr-live'
 import {
   deriveWeeklyStreak,
+  greedyDoneDatesForWeek,
   plannedDatesForWeek,
   weekDatesMondayToSunday,
   type WeeklyStreak,
@@ -675,29 +676,40 @@ function ExecutorV3Inner({ planId, recoverDate, editDate }: { planId: string; re
       try {
         const [{ data: programRow }, { data: logRows }] = await Promise.all([
           // Espejo EXACTO de la lectura del dashboard (home.tsx): el programa ACTIVO del alumno con sus
-          // planes (day_of_week / assigned_date). Los planes fuera del programa activo no cuentan — misma
-          // regla que las day-cards, consistencia con la racha del dashboard.
+          // planes (id / day_of_week / assigned_date). Los planes fuera del programa activo no cuentan —
+          // misma regla que las day-cards, consistencia con la racha del dashboard. `id` alimenta la
+          // atribucion greedy por plan (greedyDoneDatesForWeek).
           supabase
             .from('workout_programs')
-            .select('workout_plans ( day_of_week, assigned_date )')
+            .select('workout_plans ( id, day_of_week, assigned_date )')
             .eq('client_id', clientId)
             .eq('is_active', true)
             .maybeSingle(),
+          // Embed `workout_blocks ( plan_id )` = plan dueño del log (mismo embed que el dashboard,
+          // home.tsx / web dashboard.queries.ts): la atribucion greedy necesita a que PLAN pertenece cada
+          // log, no solo su fecha. To-one que llega como objeto en runtime (se normaliza abajo).
           supabase
             .from('workout_logs')
-            .select('logged_at')
+            .select('logged_at, workout_blocks ( plan_id )')
             .eq('client_id', clientId)
             .gte('logged_at', startIso)
             .lt('logged_at', endIso),
         ])
         if (!active) return
-        const rawPlans = ((programRow as { workout_plans?: Array<{ day_of_week: number | null; assigned_date: string | null }> } | null)?.workout_plans) ?? []
-        const plans = rawPlans.map((p) => ({ day_of_week: p.day_of_week ?? null, assigned_date: p.assigned_date ?? null }))
+        const rawPlans = ((programRow as { workout_plans?: Array<{ id: string; day_of_week: number | null; assigned_date: string | null }> } | null)?.workout_plans) ?? []
+        const plans = rawPlans.map((p) => ({ id: p.id, day_of_week: p.day_of_week ?? null, assigned_date: p.assigned_date ?? null }))
         const plannedDates = plannedDatesForWeek(plans, weekDates)
-        const doneDates = new Set<string>()
-        for (const r of (logRows as Array<{ logged_at: string }> | null) ?? []) {
-          doneDates.add(getSantiagoIsoYmdForUtcInstant(r.logged_at))
+        // Logs de la semana con su plan dueño (planId + dia real Santiago) → atribucion GREEDY por plan:
+        // el dia recuperado pinta done igual que las day-cards de la home (decision CEO). Los logs sin
+        // plan (sueltos) no se atribuyen — misma regla que el greedy del dashboard.
+        const rawLogs = (logRows ?? []) as unknown as Array<{ logged_at: string; workout_blocks: { plan_id: string | null } | null }>
+        const weekLogs: Array<{ planId: string; ymd: string }> = []
+        for (const r of rawLogs) {
+          const planId = r.workout_blocks?.plan_id
+          if (!planId) continue
+          weekLogs.push({ planId, ymd: getSantiagoIsoYmdForUtcInstant(r.logged_at) })
         }
+        const doneDates = greedyDoneDatesForWeek(plans, weekLogs, weekDates, today)
         setWeeklyStreak(deriveWeeklyStreak({ weekDates, plannedDates, doneDates, todayIso: today }))
       } catch {
         if (active) setWeeklyStreak(null)

@@ -5,13 +5,13 @@
  *
  * FUENTE DE VERDAD (documentada): el ejecutor NO tiene en memoria el calendario semanal (solo carga EL plan
  * en ejecucion). Para que la racha sea HONESTA y no inventada, `ExecutorV3` hace una lectura acotada a la
- * semana (best-effort, gateada por `clientId`) que espeja la atribucion del dashboard
- * (`home.tsx` momentumDays / web `weekPendingWorkouts`):
+ * semana (best-effort, gateada por `clientId`) que espeja la atribucion GREEDY del dashboard
+ * (`home.tsx` day-cards / web `weekPendingWorkouts`):
  *   · `plannedDates` = dias Lun→Dom con un `workout_plan` del alumno (por `day_of_week` 1..7 o `assigned_date`).
- *   · `doneDates`    = dias Lun→Dom con al menos un `workout_log` (fecha REAL del log en huso Santiago).
- * La racha cuenta la FECHA REAL del entreno (igual que momentumDays: "cuentan la fecha real by design"), no
- * la atribucion greedy por-plan de las day-cards. Si la lectura falla (offline) el ejecutor pasa `null` y la
- * UI oculta la racha — NUNCA se muestra un dato falso.
+ *   · `doneDates`    = dias Lun→Dom `done` bajo atribucion GREEDY por plan (`greedyDoneDatesForWeek`): un dia
+ *     queda done si SU plan tiene log en cualquier dia de la semana → recuperar el lunes un jueves marca el
+ *     LUNES (decision CEO: RN adopta el greedy del web, el dia recuperado pinta done igual que la home).
+ * Si la lectura falla (offline) el ejecutor pasa `null` y la UI oculta la racha — NUNCA se muestra un dato falso.
  */
 import { isoDateAddDays } from '../../../../lib/date-utils'
 
@@ -74,6 +74,68 @@ export function plannedDatesForWeek(
     }
   }
   return planned
+}
+
+/**
+ * ATRIBUCION GREEDY POR PLAN (nucleo PURO compartido) — espejo del fix web `weekPendingWorkouts.ts`
+ * (deriveWeekWorkoutStatus, CEO decision 10 2026-07-22) colapsado al modelo plan-por-slot del movil:
+ * cada plan ocupa UN slot (su `day_of_week`/`assigned_date`), asi las Fases 1 y 2 del web colapsan por
+ * plan. Un dia queda `done` si SU plan tiene un log en CUALQUIER dia de esta semana Santiago:
+ *   · Fase 1: hay log en la PROPIA fecha del dia → done "en fecha" (doneOnDate = null).
+ *   · Fase 2: no en su fecha pero si algun log de la semana → recuperado con el mas antiguo (doneOnDate).
+ * Los dias FUTUROS nunca son elegibles. FUENTE: `workoutPlanDays` = Set de claves `planId|ymd` (dos logs
+ * del mismo plan el mismo dia colapsan a uno). UNICA fuente de verdad del greedy: la usan la home
+ * (`home.tsx` planDays / day-cards) y la racha del ejecutor (WeekStreakDots) — sin duplicar la logica.
+ */
+export function greedyPlanDone(
+  planId: string,
+  slotDateIso: string,
+  isFuture: boolean,
+  weekDates: string[],
+  workoutPlanDays: Set<string>,
+): { done: boolean; doneOnDate: string | null } {
+  if (isFuture) return { done: false, doneOnDate: null }
+  // Fechas (asc, Lun→Dom) de esta semana con log de ESTE plan.
+  const weekLogDates = weekDates.filter((di) => workoutPlanDays.has(`${planId}|${di}`))
+  if (weekLogDates.length === 0) return { done: false, doneOnDate: null }
+  if (weekLogDates.includes(slotDateIso)) return { done: true, doneOnDate: null } // Fase 1: en fecha.
+  return { done: true, doneOnDate: weekLogDates[0] } // Fase 2: recuperado (log mas antiguo cierra el dia).
+}
+
+/** Slot (fecha ISO de esta semana) que ocupa un plan: su `assigned_date` si cae en la semana, si no su
+ *  `day_of_week` (1=Lun..7=Dom) mapeado sobre `weekDates` (Lun→Dom). `null` si no cae en la semana. */
+function planSlotDate(
+  plan: { day_of_week: number | null; assigned_date: string | null },
+  weekDates: string[],
+): string | null {
+  if (plan.assigned_date != null && weekDates.includes(plan.assigned_date)) return plan.assigned_date
+  if (plan.day_of_week != null) return weekDates[((plan.day_of_week - 1) % 7 + 7) % 7] ?? null
+  return null
+}
+
+/**
+ * Conjunto de FECHAS de la semana que quedan `done` bajo la atribucion greedy por plan (recuperaciones
+ * incluidas). Espejo greedy del dashboard aplicado al ejecutor: recuperar el lunes un jueves marca el
+ * LUNES como done (no el jueves), igual que la web. Alimenta `deriveWeeklyStreak.doneDates` para que los
+ * dots del ejecutor pinten igual que las day-cards de la home.
+ */
+export function greedyDoneDatesForWeek(
+  plans: Array<{ id: string; day_of_week: number | null; assigned_date: string | null }>,
+  weekLogs: Array<{ planId: string; ymd: string }>,
+  weekDates: string[],
+  todayIso: string,
+): Set<string> {
+  const workoutPlanDays = new Set<string>()
+  for (const l of weekLogs) workoutPlanDays.add(`${l.planId}|${l.ymd}`)
+
+  const done = new Set<string>()
+  for (const plan of plans) {
+    const slot = planSlotDate(plan, weekDates)
+    if (slot == null) continue
+    const isFuture = slot > todayIso
+    if (greedyPlanDone(plan.id, slot, isFuture, weekDates, workoutPlanDays).done) done.add(slot)
+  }
+  return done
 }
 
 /**

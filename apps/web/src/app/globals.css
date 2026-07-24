@@ -1411,8 +1411,8 @@ body > * {
 .dt-set-embed { max-width: var(--dt-read-narrow); margin: 0 auto; padding: 20px var(--dt-page-x) 40px; }
 
 /* ============ Ejecutor V3 — shell dark-only (E2.1) ============ */
-/* Activado por el flag `executor_v3` (Edge Config + override localStorage). El wrapper del
-   ejecutor recibe [data-exec-v3]; el acento --exec-brand lo resuelve exec-theme.ts en runtime
+/* V3 es el único ejecutor (el flag `executor_v3` se eliminó — decisión CEO 2026-07-23). El wrapper
+   del ejecutor recibe [data-exec-v3]; el acento --exec-brand lo resuelve exec-theme.ts en runtime
    (coach → white-label / eva → Sport). Fallback aquí por si el helper aún no corrió. Dark-only:
    fondo cálido del mockup concepto-a-v3-core, independiente del tema claro/oscuro del sistema. */
 [data-exec-v3] {
@@ -3276,6 +3276,7 @@ html[data-exec-v3-entered] [data-exec-v3] .exec-v3-splash {
   color: #fff;
 }
 .exec-dsp-prep {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 12px;
@@ -3287,10 +3288,36 @@ html[data-exec-v3-entered] [data-exec-v3] .exec-v3-splash {
   font-weight: 800;
   letter-spacing: 0.26em;
   color: color-mix(in srgb, var(--b) 18%, #ffffff);
+  transition: opacity 0.4s ease;
 }
 .exec-dsp-dots {
   display: flex;
   gap: 4px;
+  transition: opacity 0.4s ease;
+}
+/* "LISTO": cruza sobre el bloque de "PREPARANDO…" cuando está listo (crossfade en el mismo lugar). */
+.exec-dsp-prep-ready {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 900;
+  letter-spacing: 0.34em;
+  color: color-mix(in srgb, var(--b) 10%, #ffffff);
+  opacity: 0;
+  transition: opacity 0.4s ease;
+}
+.exec-dsp.is-ready .exec-dsp-prep-t,
+.exec-dsp.is-ready .exec-dsp-dots {
+  opacity: 0;
+}
+.exec-dsp.is-ready .exec-dsp-dots i {
+  animation-play-state: paused;
+}
+.exec-dsp.is-ready .exec-dsp-prep-ready {
+  opacity: 1;
 }
 .exec-dsp-dots i {
   width: 5px;
@@ -3317,10 +3344,21 @@ html[data-exec-v3-entered] [data-exec-v3] .exec-v3-splash {
   font-weight: 700;
   color: rgba(255, 255, 255, 0.5);
   opacity: 0;
-  transition: opacity 0.35s ease;
+  transition: opacity 0.35s ease, font-size 0.35s ease, letter-spacing 0.35s ease, color 0.35s ease;
 }
+/* Al estar listo el hint se vuelve PROTAGONISTA (más grande/nítido) con un pulso sutil en loop, para
+   que el alumno perciba de inmediato que ya puede avanzar (no un texto de 9px perdido abajo). */
 .exec-dsp.is-ready .exec-dsp-hint {
   opacity: 1;
+  font-size: 13px;
+  letter-spacing: 0.26em;
+  font-weight: 800;
+  color: #ffffff;
+  animation: exec-dsp-hintpulse 1.7s ease-in-out 0.35s infinite;
+}
+@keyframes exec-dsp-hintpulse {
+  0%, 100% { opacity: 0.62; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.045); }
 }
 .exec-dsp-tap {
   position: absolute;
@@ -3353,6 +3391,8 @@ html[data-exec-v3-entered] [data-exec-v3] .exec-v3-splash {
   .exec-dsp-ring { display: none; }
   .exec-dsp-prep { opacity: 1; animation: none; }
   .exec-dsp-dots i { animation: none; opacity: 0.7; }
+  /* Sin pulso al estar listo: sólo el cambio de opacidad/tamaño (transiciones), nunca el loop. */
+  .exec-dsp.is-ready .exec-dsp-hint { animation: none; opacity: 1; }
 }
 
 .exec-route-cover {

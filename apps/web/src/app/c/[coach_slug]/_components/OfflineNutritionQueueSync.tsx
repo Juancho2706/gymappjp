@@ -8,6 +8,7 @@ import {
   readNutritionOfflineToggleQueue,
   writeNutritionOfflineToggleQueue,
 } from '@/lib/nutrition-offline-queue'
+import { waitForCeremonyEnd } from '@/lib/workout/launch-ceremony'
 
 /**
  * Drena la cola de toggles nutrición en cualquier ruta /c/[slug] (dashboard + nutrición).
@@ -45,6 +46,9 @@ export function OfflineNutritionQueueSync() {
         writeNutritionOfflineToggleQueue(remaining)
         if (flushed > 0) {
           toast.success(`${flushed} acción${flushed !== 1 ? 'es' : ''} sincronizada${flushed !== 1 ? 's' : ''}`)
+          // El flush ya persistió; SÓLO el refresh se difiere hasta que termine la ceremonia del Despegue
+          // (mismo gate que el sync de workout). Un refresh a media ceremonia remonta el overlay sin tap.
+          await waitForCeremonyEnd(15000)
           router.refresh()
         }
       } finally {

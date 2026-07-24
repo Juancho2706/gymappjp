@@ -6,7 +6,6 @@ import { getExecutorWeekStatusDays } from './_data/week-status.queries'
 import { validateTargetDate } from './_data/target-date'
 import { getClientBasePath } from '@/lib/client/base-path'
 import { getTodayInSantiago } from '@/lib/date-utils'
-import { isExecutorV3Enabled } from '@/services/executor-v3-rollout.service'
 
 export const metadata: Metadata = { title: 'Rutina | EVA' }
 
@@ -31,20 +30,16 @@ export default async function WorkoutExecutionPage({ params, searchParams }: Pro
     const recuperarCheck = typeof recuperar === 'string' ? validateTargetDate(recuperar, todayIso) : null
     const recuperarDate = recuperarCheck?.ok ? recuperarCheck.iso : null
 
-    // Flag ejecutor V3 (E2.1): Edge Config `executor_v3` (fail-safe OFF). El override de dev/QA
-    // por localStorage (`eva:executor-v3`) lo aplica el cliente tras montar, pisando este default.
-    const executorV3 = await isExecutorV3Enabled()
-
     const data = await getWorkoutExecutionData(planId, targetDate ?? undefined)
     const { user, plan } = data
 
     if (!user) redirect(`${base}/login`)
     if (!plan) redirect(`${base}/dashboard`)
 
-    // Racha semanal (E4.4): estado de la semana actual para Inicio + Final V3. Sólo se consulta cuando
-    // el flag V3 viene ON del server (evita 3 lecturas extra en V2 y mientras V3 esté OFF). Si un
-    // override QA enciende V3 en cliente con el server en OFF, la racha no viaja y no se muestra.
-    const weekStatusDays = executorV3 ? await getExecutorWeekStatusDays(user.id) : null
+    // Racha semanal (E4.4): estado de la semana actual para Inicio + Final V3. El ejecutor V3 es el
+    // único camino (decisión CEO 2026-07-23: se eliminó el flag `executor_v3`), así que siempre se
+    // consulta. Sin programa activo ⇒ `null` y la UI omite la racha.
+    const weekStatusDays = await getExecutorWeekStatusDays(user.id)
 
     return (
         <WorkoutExecutionClient
@@ -62,7 +57,7 @@ export default async function WorkoutExecutionPage({ params, searchParams }: Pro
             cardio={data.cardio}
             targetDate={targetDate}
             recoverDate={recuperarDate}
-            executorV3={executorV3}
+            executorV3={true}
             weekStatusDays={weekStatusDays}
         />
     )

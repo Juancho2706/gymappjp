@@ -55,7 +55,7 @@ export function CookieConsent() {
                 <p className="flex-1 text-xs text-muted-foreground leading-relaxed">
                     Usamos cookies analíticas para mejorar la plataforma.
                     Puedes aceptar o rechazar.{' '}
-                    <a href="/legal/privacidad" className="underline hover:text-foreground">Política de privacidad</a>.
+                    <a href="/privacidad" className="underline hover:text-foreground">Política de privacidad</a>.
                 </p>
                 <div className="flex gap-2 shrink-0 w-full sm:w-auto">
                     <button

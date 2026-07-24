@@ -31,8 +31,8 @@ interface ExecHeaderV3Props {
  * (#1a1a22 / borde 1.5px #2f2f3a / #b7b7c2), NO vidrio. Sin fila meta (series/volumen/cronómetro):
  * esa info vive en el peek de descanso y en el resumen final. Dark-only.
  *
- * Reemplaza al header sticky legacy cuando el flag `executor_v3` está activo (el legacy se
- * OCULTA, no se borra). Consume `--exec-brand` (resuelto por `exec-theme.ts`).
+ * Reemplaza al header sticky legacy (V3 es el único ejecutor; el legacy se OCULTA, no se borra).
+ * Consume `--exec-brand` (resuelto por `exec-theme.ts`).
  */
 export function ExecHeaderV3({
     dots,

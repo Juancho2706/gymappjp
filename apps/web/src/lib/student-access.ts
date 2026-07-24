@@ -102,7 +102,7 @@ export function resolveStudentAccessState(
     coach: CoachAccessColumns,
     now: number = Date.now(),
 ): StudentAccessResult {
-    if (hasEffectiveAccess(coach.subscription_status, coach.current_period_end)) {
+    if (hasEffectiveAccess(coach.subscription_status, coach.current_period_end, now)) {
         return { state: 'ok', graceEndsAt: null }
     }
     const end = resolveStudentGraceEndsAt(coach.paid_access_ended_at, coach.current_period_end)
