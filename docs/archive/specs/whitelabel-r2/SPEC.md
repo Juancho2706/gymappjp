@@ -118,7 +118,7 @@ Los tres workstreams:
 
 ### Workstream B
 - [ ] **AC-B1** — Desde el perfil del alumno, un único trigger abre un selector con Progreso / Racha / Resumen mensual; cada uno genera su PNG 1080×1350 vía canvas cliente.
-- [ ] **AC-B2** — La card de **Racha** usa la racha real (`get_client_current_streak`, ya en perfil); el copy dice "días seguidos activo" (racha = entreno **o** nutrición, no solo gym).
+- [ ] **AC-B2** — La card de **Racha** usa la racha real (`get_client_current_streak`, ya en perfil); el copy dice "días seguidos activo". (Nota 2026-07-23: la semántica cambió con la migración `20260723110000` — la racha ahora cuenta días de entrenamiento ASIGNADOS hechos; nutrición quedó FUERA.)
 - [ ] **AC-B3** — El **Resumen mensual** muestra Sesiones y Volumen del mes calendario en TZ `America/Santiago`; v1 **sin** conteo de PRs.
 - [ ] **AC-B4** — Toda card compartida (record, progreso, racha, mensual) lleva el footer con QR de `/join/[invite_code]` + CTA "Escanea para entrenar con {marca}" + código legible. El QR aparece para todos los tiers.
 - [ ] **AC-B5** — El co-branding "vía EVA" se mantiene exactamente como hoy por tier (sin gating nuevo).

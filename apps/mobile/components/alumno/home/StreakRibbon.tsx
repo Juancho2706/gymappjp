@@ -18,7 +18,8 @@ cssInterop(Flame, { className: { target: 'style', nativeStyleToProp: { color: tr
 
 /**
  * §3 StreakRibbon (web `streak/StreakRibbon.tsx`): protagonista de retencion.
- * `streak` = RPC `get_client_current_streak` (MISMA fuente/regla que el web). El
+ * `streak` = RPC `get_client_current_streak` (MISMA fuente/regla que el web:
+ * dias ASIGNADOS hechos, dia sin asignacion neutro — migracion 20260723110000). El
  * diseno no tiene "record" real → se degrada al proximo HITO (7/14/30/60/100/
  * 180/365) por encima de la racha, con copy motivacional + barra al hito. Llama
  * de fondo pulsante (reduced-motion aware), numero grande con count-up.
