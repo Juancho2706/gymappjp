@@ -1,6 +1,8 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { Dimensions, Modal, Pressable, StyleSheet, Text, View } from 'react-native'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { usePathname, useRouter } from 'expo-router'
+import * as Sentry from '@sentry/react-native'
 import { Image } from 'expo-image'
 import { LinearGradient } from 'expo-linear-gradient'
 import Svg, { Path } from 'react-native-svg'
@@ -102,6 +104,9 @@ interface StartMorphArgs {
   origin?: MorphOrigin | null
   /** Params extra de la ruta (recuperar/fecha). */
   params?: Record<string, string>
+  /** Etiqueta REAL del CTA tocado ('Continuar' | 'Ver registro' | 'Empezar entrenamiento'…) para que el
+   *  clon de la píldora muestre el mismo texto (ilusión del swap sin costura). Fallback si no llega. */
+  label?: string
 }
 
 interface SessionMorphContextValue {
@@ -114,16 +119,28 @@ const SessionMorphContext = createContext<SessionMorphContextValue | null>(null)
 // Puente módulo-nivel Despegue ↔ ExecutorV3 (equivalente RN del sessionStorage 'eva:exec-v3-morph' web).
 // ─────────────────────────────────────────────────────────────────────────────────────────────────────
 
-/** Marca "llegué por el morph" → el ExecutorV3 la consume al montar y salta DIRECTO a la fase 'start'. */
-let pendingMorphLaunch = false
+/** Ventana de validez de la marca via-morph: si el ejecutor no la consume en este lapso, se considera
+ *  rancia (un aborto dejó basura global) y NO salta el SessionIntro. Espejo del TTL del fix web. */
+const MORPH_LAUNCH_TTL_MS = 10000
+/** Marca "llegué por el morph" como TIMESTAMP (o null): el ExecutorV3 la consume al montar y —si es
+ *  reciente— salta DIRECTO a la fase 'start'. `markMorphLaunch`/`consumeMorphLaunch` son funciones a
+ *  nivel MÓDULO, así que el `Date.now()` de la marca no cae en el lint react-compiler de los handlers. */
+let pendingMorphLaunch: number | null = null
 export function markMorphLaunch(): void {
-  pendingMorphLaunch = true
+  pendingMorphLaunch = Date.now()
 }
-/** Consume la marca (una sola vez). true ⇒ arrancar en 'start' saltando el SessionIntro. */
+/** Consume la marca (una sola vez). true ⇒ marca presente y con <TTL ⇒ arrancar en 'start' saltando el
+ *  SessionIntro. SIEMPRE limpia la marca (aunque esté vencida), así una lectura tardía no la reusa. */
 export function consumeMorphLaunch(): boolean {
-  const v = pendingMorphLaunch
-  pendingMorphLaunch = false
-  return v
+  const ts = pendingMorphLaunch
+  pendingMorphLaunch = null
+  return ts != null && Date.now() - ts < MORPH_LAUNCH_TTL_MS
+}
+/** Limpia la marca sin consumirla como "vía-morph". Se llama al ABORTAR el Despegue antes de navegar
+ *  (back de hardware / error de nav): si no, la marca queda rancia y la próxima entrada al ejecutor
+ *  saltaría el SessionIntro (splash fantasma) — hallazgo confirmado en la auditoría. */
+export function resetMorphLaunch(): void {
+  pendingMorphLaunch = null
 }
 
 // Señal "escena del ejecutor lista" (via-morph): el ExecutorV3 la emite al terminar de cargar → el
@@ -155,6 +172,8 @@ interface ActiveMorph {
   /** Rect del trigger clickeado (real medido, o sintético si el caller no midió). */
   origin: MorphOrigin
   params?: Record<string, string>
+  /** Etiqueta real del CTA tocado (para el clon de la píldora). */
+  label?: string
 }
 
 /** Origen sintético (fallback digno): un rect tipo píldora centrado-bajo, donde suelen vivir los CTA.
@@ -188,10 +207,16 @@ export function SessionMorphProvider({ children }: { children: React.ReactNode }
   const coachLogoUrl = branding?.logoUrl ?? null
   const coachInitial = ((branding?.displayName?.trim() || 'Tu coach')[0] ?? 'E').toUpperCase()
 
-  const startMorph = useCallback(({ planId, origin, params }: StartMorphArgs) => {
+  const startMorph = useCallback(({ planId, origin, params, label }: StartMorphArgs) => {
     // Guard anti doble-tap: ignora taps mientras un morph está en vuelo.
     if (busyRef.current) return
     busyRef.current = true
+    // Rastro de telemetría: inicio del Despegue (para correlacionar abortos/carreras en device).
+    try {
+      Sentry.addBreadcrumb({ category: 'exec-v3', level: 'info', message: 'Despegue: startMorph', data: { planId } })
+    } catch {
+      // Sentry no inicializado / versión sin API → no-op silencioso.
+    }
     // Marca via-morph + resetea la señal de "listo" ANTES de montar el ejecutor (se consume al montar).
     resetMorphScene()
     markMorphLaunch()
@@ -200,7 +225,7 @@ export function SessionMorphProvider({ children }: { children: React.ReactNode }
     leftRouteRef.current = false
     // El morph NACE del componente clickeado: usa el rect real medido; si el caller no midió, cae al
     // origen sintético centrado-bajo.
-    setActive({ nonce: Date.now(), planId, origin: origin ?? syntheticOrigin(), params })
+    setActive({ nonce: Date.now(), planId, origin: origin ?? syntheticOrigin(), params, label })
   }, [])
 
   const navigate = useCallback(() => {
@@ -211,8 +236,15 @@ export function SessionMorphProvider({ children }: { children: React.ReactNode }
       } else {
         router.push(`/alumno/workout/${active.planId}`)
       }
-    } catch {
-      // Error de navegación: cierra el overlay (el guard se libera en onDone) — sin dejar al usuario pegado.
+    } catch (err) {
+      // Error de navegación: cierra el overlay y LIMPIA la marca via-morph (nadie la va a consumir; si no,
+      // quedaría rancia y saltaría el SessionIntro en la próxima entrada). Sin dejar al usuario pegado.
+      resetMorphLaunch()
+      try {
+        Sentry.captureException(err, { tags: { area: 'exec-v3-despegue' }, extra: { planId: active.planId } })
+      } catch {
+        // Sentry no inicializado → no-op silencioso.
+      }
       setActive(null)
       busyRef.current = false
     }
@@ -220,6 +252,11 @@ export function SessionMorphProvider({ children }: { children: React.ReactNode }
   }, [active, router])
 
   const handleDone = useCallback(() => {
+    // Si el overlay muere SIN haber navegado (back de hardware / onRequestClose antes del push ~1300ms),
+    // el ExecutorV3 nunca montó ni consumió la marca → quedaría rancia y la próxima entrada saltaría el
+    // SessionIntro (splash fantasma). Limpiarla en el aborto. Si ya navegamos (leftRoute=true), el
+    // ejecutor la consumió y este reset es no-op inofensivo.
+    if (!leftRouteRef.current) resetMorphLaunch()
     setActive(null)
     busyRef.current = false
   }, [])
@@ -246,6 +283,8 @@ export function SessionMorphProvider({ children }: { children: React.ReactNode }
           key={active.nonce}
           exec={exec}
           origin={active.origin}
+          planId={active.planId}
+          label={active.label}
           coachLogoUrl={coachLogoUrl}
           coachInitial={coachInitial}
           reducedMotion={reducedMotion}
@@ -442,6 +481,8 @@ function FallLine({
 function DespegueOverlay({
   exec,
   origin,
+  planId,
+  label,
   coachLogoUrl,
   coachInitial,
   reducedMotion,
@@ -450,13 +491,19 @@ function DespegueOverlay({
 }: {
   exec: ExecTheme
   origin: MorphOrigin
+  planId: string
+  label?: string
   coachLogoUrl: string | null
   coachInitial: string
   reducedMotion: boolean
   onNavigate: () => void
   onDone: () => void
 }) {
+  const insets = useSafeAreaInsets()
   const b = exec.accent
+  // Etiqueta real del CTA tocado (o fallback): el clon muestra el MISMO texto que el botón, para que el
+  // swap sea sin costura (el diseño se apoya en la ilusión de que el botón se transforma en la burbuja).
+  const labelText = label ?? 'Empezar entrenamiento'
   // La píldora nace del rect REAL del trigger (measureInWindow): arranca en su tamaño/posición/radio y
   // COLAPSA hacia su propio centro (cx, cy) → burbuja de 52. Sólo el CTA ancho muestra la etiqueta.
   const rectW = origin.width
@@ -477,10 +524,11 @@ function DespegueOverlay({
   const ringColor = mixHex(b, 45, '#ffffff')
   const prepColor = mixHex(b, 18, '#ffffff')
   const dotColor = mixHex(b, 45, '#ffffff')
+  const readyColor = mixHex(b, 6, '#ffffff') // "LISTO": casi blanco, máximo contraste al quedar listo
 
   // Shared values de la coreografía.
   const morph = useSharedValue(0) // píldora morph+despegue
-  const label = useSharedValue(1) // label "Empezar entrenamiento" (fade a 0)
+  const labelFade = useSharedValue(1) // label del clon (fade a 0 al colapsar a burbuja)
   const trail = useSharedValue(0) // estela de la píldora
   const bgTY = useSharedValue(reducedMotion ? 0 : SCREEN_H) // wipe del fondo (100% → 0)
   const land = useSharedValue(reducedMotion ? 1 : 0) // aterrizaje del logo
@@ -493,6 +541,10 @@ function DespegueOverlay({
   const d2 = useSharedValue(0.2)
   const hint = useSharedValue(0) // hint "TOCA PARA COMENZAR"
   const fade = useSharedValue(1) // fade-out global al tap
+  // Percepción del "listo": los dots se desvanecen, "PREPARANDO…" cruza a "LISTO" y el hint se vuelve
+  // prominente. `readyProg` 0→1 al quedar listo; `pulse` late el hint en loop (sólo con movimiento).
+  const readyProg = useSharedValue(0)
+  const pulse = useSharedValue(1)
 
   // Estado tap-driven.
   const [animDone, setAnimDone] = useState(false)
@@ -523,7 +575,7 @@ function DespegueOverlay({
       withTiming(1, { duration: 380, easing: BEZIER_MORPH }),
     )
     // exec-dsp-labelfade 0.26s ease → opacity 1→0.
-    label.value = withTiming(0, { duration: 260, easing: EASE })
+    labelFade.value = withTiming(0, { duration: 260, easing: EASE })
     // exec-dsp-trail 0.5s ease-out 0.5s.
     trail.value = withDelay(500, withTiming(1, { duration: 500, easing: EASE_OUT }))
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -596,11 +648,42 @@ function DespegueOverlay({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Hint "TOCA PARA COMENZAR" — aparece cuando está listo.
+  // Hint "TOCA PARA COMENZAR" + percepción del listo — al quedar listo: dots se desvanecen,
+  // "PREPARANDO…" cruza a "LISTO" y el hint entra prominente con un pulso sutil en loop. Los fades
+  // corren siempre; el pulso sólo con movimiento permitido (reduced-motion = sin pulso, sólo fades).
   useEffect(() => {
     hint.value = withTiming(ready ? 1 : 0, { duration: HINT_FADE_MS, easing: EASE })
+    readyProg.value = withTiming(ready ? 1 : 0, { duration: HINT_FADE_MS, easing: EASE })
+    if (ready && !reducedMotion) {
+      pulse.value = withRepeat(
+        withSequence(
+          withTiming(1.06, { duration: 620, easing: EASE }),
+          withTiming(1, { duration: 620, easing: EASE }),
+        ),
+        -1,
+      )
+    } else {
+      pulse.value = withTiming(1, { duration: HINT_FADE_MS, easing: EASE })
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready])
+
+  // Telemetría: el fallback habilitó el tap SIN que el ejecutor avisara "escena lista" (sceneReady=false).
+  // Señal de que la escena tardó más que READY_FALLBACK_MS (device lento / carga colgada) — no atrapa al
+  // alumno (el tap ya está), pero deja rastro para diagnosticar.
+  useEffect(() => {
+    if (forceReady && !sceneReady) {
+      try {
+        Sentry.captureMessage('exec-v3-despegue-force-ready-sin-escena', {
+          level: 'warning',
+          extra: { planId },
+        })
+      } catch {
+        // Sentry no inicializado → no-op silencioso.
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [forceReady])
 
   const dismiss = useCallback(() => {
     if (!ready) return
@@ -613,16 +696,23 @@ function DespegueOverlay({
   // ── Estilos animados. ──
   const rootStyle = useAnimatedStyle(() => ({ opacity: fade.value }))
   const bgStyle = useAnimatedStyle(() => ({ transform: [{ translateY: bgTY.value }] }))
+  // Distancia de SALIDA del despegue calculada desde la posición real del trigger: un -780 fijo no
+  // alcanza cuando el trigger está bajo (opciones del sheet / pantallas altas) y la burbuja quedaba
+  // asomando arriba toda la ceremonia (QA CEO, espejo del fix web). Centro + radio + sombra de margen.
+  const pillExitTy = -(cy + 140)
   const pillStyle = useAnimatedStyle(() => {
     // width rect→52, height rect→52, radius rect→26; centrado en (cx,cy) vía translate(-w/2,-h/2) que
     // NO se escala (traslaciones fuera del scale, igual que el web `translate(-50%,-50%)`); luego la
     // anticipación (squash) y el despegue (stretch) suman translateY sobre ese centro.
     const w = interpolate(morph.value, MORPH_IN, [rectW, BUBBLE, BUBBLE, BUBBLE, BUBBLE], Extrapolation.CLAMP)
     const h = interpolate(morph.value, MORPH_IN, [rectH, BUBBLE, BUBBLE, BUBBLE, BUBBLE], Extrapolation.CLAMP)
-    const ty = interpolate(morph.value, MORPH_IN, [0, 0, 18, -60, -780], Extrapolation.CLAMP)
+    const ty = interpolate(morph.value, MORPH_IN, [0, 0, 18, -60, pillExitTy], Extrapolation.CLAMP)
     return {
       width: w,
       height: h,
+      // Fade a 0 en el tramo final: aunque la métrica falle en algún device raro, la burbuja jamás
+      // queda visible congelada en el último frame (espejo del opacity del keyframe web).
+      opacity: interpolate(morph.value, [0, 0.6, 1], [1, 1, 0], Extrapolation.CLAMP),
       borderRadius: interpolate(morph.value, MORPH_IN, [rectRadius, BUBBLE_RADIUS, BUBBLE_RADIUS, BUBBLE_RADIUS, BUBBLE_RADIUS], Extrapolation.CLAMP),
       transform: [
         { translateX: -w / 2 },
@@ -632,7 +722,7 @@ function DespegueOverlay({
       ],
     }
   })
-  const labelStyle = useAnimatedStyle(() => ({ opacity: label.value }))
+  const labelStyle = useAnimatedStyle(() => ({ opacity: labelFade.value }))
   const trailStyle = useAnimatedStyle(() => ({
     height: interpolate(trail.value, [0, 0.3, 1], [0, 36, 120], Extrapolation.CLAMP),
     opacity: interpolate(trail.value, [0, 0.3, 1], [0, 0.9, 0], Extrapolation.CLAMP),
@@ -653,7 +743,11 @@ function DespegueOverlay({
   const dot0Style = useAnimatedStyle(() => ({ opacity: d0.value }))
   const dot1Style = useAnimatedStyle(() => ({ opacity: d1.value }))
   const dot2Style = useAnimatedStyle(() => ({ opacity: d2.value }))
-  const hintStyle = useAnimatedStyle(() => ({ opacity: hint.value }))
+  // "PREPARANDO TU SESIÓN" ↔ "LISTO" (crossfade) + dots que se apagan al quedar listo.
+  const prepLabelStyle = useAnimatedStyle(() => ({ opacity: 1 - readyProg.value }))
+  const readyLabelStyle = useAnimatedStyle(() => ({ opacity: readyProg.value }))
+  const dotsWrapStyle = useAnimatedStyle(() => ({ opacity: 1 - readyProg.value }))
+  const hintStyle = useAnimatedStyle(() => ({ opacity: hint.value, transform: [{ scale: pulse.value }] }))
 
   return (
     <Modal
@@ -707,7 +801,7 @@ function DespegueOverlay({
               <Animated.View style={[styles.pillLabel, labelStyle]}>
                 <Play size={15} color="#ffffff" fill="#ffffff" />
                 <Text style={styles.pillLabelText} numberOfLines={1}>
-                  Empezar entrenamiento
+                  {labelText}
                 </Text>
               </Animated.View>
             )}
@@ -748,17 +842,29 @@ function DespegueOverlay({
             </Animated.View>
           </View>
           <Animated.View style={[styles.prep, prepStyle]}>
-            <Text style={[styles.prepText, { color: prepColor }]}>PREPARANDO TU SESIÓN</Text>
-            <View style={styles.dots}>
+            {/* Crossfade PREPARANDO → LISTO: "PREPARANDO…" queda en flujo (define el ancho) y "LISTO"
+                se superpone absoluto encima; al quedar listo el primero se desvanece y el segundo entra. */}
+            <View style={styles.prepTextStack}>
+              <Animated.Text style={[styles.prepText, { color: prepColor }, prepLabelStyle]}>
+                PREPARANDO TU SESIÓN
+              </Animated.Text>
+              <Animated.Text style={[styles.prepText, styles.readyText, { color: readyColor }, readyLabelStyle]}>
+                LISTO
+              </Animated.Text>
+            </View>
+            <Animated.View style={[styles.dots, dotsWrapStyle]}>
               <Animated.View style={[styles.dot, { backgroundColor: dotColor }, dot0Style]} />
               <Animated.View style={[styles.dot, { backgroundColor: dotColor }, dot1Style]} />
               <Animated.View style={[styles.dot, { backgroundColor: dotColor }, dot2Style]} />
-            </View>
+            </Animated.View>
           </Animated.View>
         </View>
 
-        {/* Hint "TOCA PARA COMENZAR". */}
-        <Animated.View style={[styles.hintWrap, hintStyle]} pointerEvents="none">
+        {/* Hint "TOCA PARA COMENZAR" — respeta el safe-area inferior (no pisa el gesto de home del iPhone). */}
+        <Animated.View
+          style={[styles.hintWrap, { bottom: insets.bottom + 24 }, hintStyle]}
+          pointerEvents="none"
+        >
           <Text style={styles.hintText}>TOCA PARA COMENZAR</Text>
         </Animated.View>
 
@@ -844,14 +950,19 @@ const styles = StyleSheet.create({
   logoImg: { width: 72, height: 72 },
   logoInitial: { fontFamily: FONT.displayBlack, fontSize: 44, color: '#ffffff' },
   prep: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  // Pila de textos PREPARANDO/LISTO: el primero define el ancho (en flujo), el segundo se superpone.
+  prepTextStack: { position: 'relative', justifyContent: 'center' },
   prepText: { fontFamily: FONT.uiExtra, fontSize: 11, letterSpacing: 2.86 },
+  // "LISTO" superpuesto sobre "PREPARANDO…" (misma línea), anclado a la izquierda para crossfade en sitio.
+  readyText: { position: 'absolute', left: 0, top: 0 },
   dots: { flexDirection: 'row', gap: 4 },
   dot: { width: 5, height: 5, borderRadius: 2.5 },
-  hintWrap: { position: 'absolute', left: 0, right: 0, bottom: 40, alignItems: 'center' },
+  hintWrap: { position: 'absolute', left: 0, right: 0, alignItems: 'center' },
+  // Prominente (tamaño/peso/contraste): al quedar listo es la llamada a la acción principal del Despegue.
   hintText: {
-    fontFamily: FONT.uiBold,
-    fontSize: 9,
-    letterSpacing: 1.62,
-    color: 'rgba(255,255,255,0.5)',
+    fontFamily: FONT.uiExtra,
+    fontSize: 13,
+    letterSpacing: 2.2,
+    color: 'rgba(255,255,255,0.92)',
   },
 })

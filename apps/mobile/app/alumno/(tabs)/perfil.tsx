@@ -82,25 +82,6 @@ function formatDate(iso: string | null): string | null {
   return new Date(iso).toLocaleDateString('es-CL', { day: 'numeric', month: 'long', year: 'numeric' })
 }
 
-const MS_DAY = 86400000
-function isoDay(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-}
-
-/** Racha: días consecutivos con entreno terminando hoy (o ayer si aún no entrenó hoy). */
-function computeStreak(dayKeys: string[]): number {
-  const set = new Set(dayKeys)
-  if (set.size === 0) return 0
-  const today = new Date()
-  let cursor = set.has(isoDay(today)) ? today : new Date(today.getTime() - MS_DAY)
-  let streak = 0
-  while (set.has(isoDay(cursor))) {
-    streak += 1
-    cursor = new Date(cursor.getTime() - MS_DAY)
-  }
-  return streak
-}
-
 // Section eyebrow — DS SectionTitle: accent bar + uppercase 11px extrabold in
 // text-subtle (1:1 with the web `SectionTitle`).
 function SectionTitle({ children }: { children: string }) {
@@ -277,16 +258,20 @@ export default function AlumnoPerfilScreen() {
     const client = await getClientProfile()
     if (!client) { setLoading(false); return }
 
-    const [{ data: { user } }, { data }, { data: coachData }, daySummaries, monthlyRecap, { data: programRow }] = await Promise.all([
+    const [{ data: { user } }, { data }, { data: coachData }, daySummaries, monthlyRecap, { data: programRow }, { data: streakData }] = await Promise.all([
       supabase.auth.getUser(),
       supabase.from('clients').select('full_name, phone, goal_weight_kg, subscription_start_date').eq('id', client.id).maybeSingle(),
       supabase.from('coaches').select('subscription_tier').eq('id', client.coachId).maybeSingle(),
-      // Entrenos = días con series (últ. 12 meses); racha = derivada de esos días. Mismo RPC del historial.
+      // Entrenos = días con series (últ. 12 meses) para el total del historial.
       getWorkoutDaySummaries(client.id, 365).catch(() => []),
       // Resumen del mes calendario (Santiago) para la share-card mensual — fail-open (nunca lanza).
       getMonthlyRecap(client.id),
       // Programa activo (solo el nombre) — mirror de getActiveProgram web (dashboard.queries.ts:84-101).
       supabase.from('workout_programs').select('name').eq('client_id', client.id).eq('is_active', true).maybeSingle(),
+      // Racha = MISMO RPC que el home (get_client_current_streak, regla "días asignados",
+      // migración 20260723110000) — antes se derivaba local (días consecutivos con entreno)
+      // y divergía del ribbon del home.
+      supabase.rpc('get_client_current_streak', { p_client_id: client.id }),
     ])
 
     setDetail({
@@ -297,9 +282,10 @@ export default function AlumnoPerfilScreen() {
       subscriptionStartDate: data?.subscription_start_date ?? null,
       coachTier: (coachData as any)?.subscription_tier ?? null,
     })
+    const streakN = typeof streakData === 'number' ? streakData : Number(streakData)
     setStats({
       totalWorkouts: daySummaries.length,
-      streak: computeStreak(daySummaries.map((d) => d.dayKey)),
+      streak: Number.isFinite(streakN) ? streakN : 0,
     })
     setMonthly(monthlyRecap)
     setProgramName((programRow as { name?: string | null } | null)?.name?.trim() || null)

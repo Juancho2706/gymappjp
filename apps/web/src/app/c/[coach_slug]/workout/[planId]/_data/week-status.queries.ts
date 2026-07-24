@@ -13,11 +13,9 @@ import type { WeekStatusDaySource } from '../v3/weekly-streak'
  * queries cacheadas (`getActiveProgram` / `getClientWorkoutPlans` / `getRecentWorkoutLogs`) — cero
  * lógica duplicada — y proyecta sólo el shape mínimo (día/estado/hoy) que consume `computeWeeklyStreak`.
  *
- * COSTO / DECISIÓN: son 3 lecturas indexadas extra. Por eso la `page.tsx` sólo la invoca cuando el
- * flag `executor_v3` viene ON del server (Edge Config, hoy OFF por defecto) → cero costo para V2 y
- * mientras V3 no esté desplegado. Si el override QA `eva:executor-v3=on` enciende V3 en cliente con el
- * flag server OFF, este dato no viaja y la racha simplemente NO se muestra (degradación honesta, jamás
- * dato falso). Sin programa activo ⇒ `null` (la UI omite la racha).
+ * COSTO: son 3 lecturas indexadas extra. El ejecutor V3 es el único camino (decisión CEO 2026-07-23:
+ * se eliminó el flag `executor_v3`), así que `page.tsx` siempre la invoca. Sin programa activo ⇒
+ * `null` (la UI omite la racha; jamás dato falso).
  */
 export async function getExecutorWeekStatusDays(clientId: string): Promise<WeekStatusDaySource[] | null> {
     const [program, allPlans, logs] = await Promise.all([

@@ -4,7 +4,10 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState } f
 import { createPortal } from 'react-dom'
 import { usePathname, useRouter } from 'next/navigation'
 import { motion, useReducedMotion } from 'framer-motion'
+import * as Sentry from '@sentry/nextjs'
 import { resolveLaunchBrand } from '@/lib/workout/exec-launch-brand'
+import { clearCeremonyDom, clearMorphFlag, markCeremonyDom, markMorphFlag } from '@/lib/workout/launch-ceremony'
+import { useCaptureStudentWorkoutLaunched } from '@/lib/posthog/events'
 
 /**
  * Ejecutor V3 — DESPEGUE (loader de lanzamiento del workout, diseño del CEO "Despegue Final").
@@ -37,6 +40,9 @@ const READY_FALLBACK_MS = 4600
 /** Fade de salida al tap (revela Inicio ya montado debajo). */
 const EXIT_MS = 320
 
+/** Reloj monótono a nivel módulo (evita `Date.now()` en handlers del render — lint react-compiler). */
+const perfNow = (): number => (typeof performance !== 'undefined' ? performance.now() : Date.now())
+
 interface Rect { top: number; left: number; width: number; height: number; radius: number }
 interface MorphState {
     href: string
@@ -65,6 +71,7 @@ export function WorkoutLaunchProvider({ children }: { children: React.ReactNode 
     const router = useRouter()
     const pathname = usePathname()
     const reduced = useReducedMotion()
+    const captureLaunched = useCaptureStudentWorkoutLaunched()
     const [state, setState] = useState<MorphState | null>(null)
     const [animDone, setAnimDone] = useState(false)
     const [routeReady, setRouteReady] = useState(false)
@@ -77,6 +84,10 @@ export function WorkoutLaunchProvider({ children }: { children: React.ReactNode 
     const [leaving, setLeaving] = useState(false)
     const activeRef = useRef(false)
     const timersRef = useRef<number[]>([])
+    // Espejos de las señales de listo para leerlas SIN cierre stale dentro del timer de `forceReady`
+    // (la telemetría necesita saber si la señal real ya había llegado cuando ganó el fallback).
+    const execReadyRef = useRef(false)
+    const routeReadyRef = useRef(false)
 
     const clearTimers = useCallback(() => {
         timersRef.current.forEach((t) => window.clearTimeout(t))
@@ -86,6 +97,9 @@ export function WorkoutLaunchProvider({ children }: { children: React.ReactNode 
     const clearAll = useCallback(() => {
         clearTimers()
         activeRef.current = false
+        execReadyRef.current = false
+        routeReadyRef.current = false
+        clearCeremonyDom() // se acabó la ceremonia → los sync de cola pueden refrescar
         setState(null)
         setAnimDone(false)
         setRouteReady(false)
@@ -105,34 +119,64 @@ export function WorkoutLaunchProvider({ children }: { children: React.ReactNode 
             // swap (ocultar original → mostrar clon) sea invisible en el CTA.
             const label = (el.textContent || '').replace(/\s+/g, ' ').trim()
             activeRef.current = true
+            execReadyRef.current = false
+            routeReadyRef.current = false
+            const launchedAtPerf = perfNow()
             el.setAttribute('data-exec-morphing', '') // oculta el trigger real COMPLETO durante el vuelo
             // Restaurar sólo bien después de que el wipe de marca ya cubrió todo (~1,2s) y de navegar
             // (~1,3s, donde el dashboard se desmonta): así el trigger nunca reaparece a la vista.
             window.setTimeout(() => el.removeAttribute('data-exec-morphing'), 1500)
 
-            setState({ href, startedAt: performance.now(), startPath: pathname, rect, label, logoUrl: brand.logoUrl, initial: brand.initial })
+            // Marca de ceremonia en el DOM → los sync de cola del layout difieren su refresh mientras dure.
+            markCeremonyDom()
+
+            setState({ href, startedAt: launchedAtPerf, startPath: pathname, rect, label, logoUrl: brand.logoUrl, initial: brand.initial })
             setAnimDone(false)
             setRouteReady(false)
             setExecReady(false)
             setForceReady(false)
             setLeaving(false)
 
+            // Marca de handoff del morph con TTL (el ejecutor la consume en fase 'start'; ver launch-ceremony).
+            markMorphFlag()
             try {
-                sessionStorage.setItem('eva:exec-v3-morph', '1')
                 // Reset de la senal de Inicio-listo del WEC (la del lanzamiento anterior no debe contar).
                 sessionStorage.removeItem('eva:exec-v3-ready')
                 if (brand.logoUrl) sessionStorage.setItem('eva:exec-v3-morph-logo', brand.logoUrl)
                 else sessionStorage.removeItem('eva:exec-v3-morph-logo')
             } catch { /* private mode */ }
 
+            // Telemetría: rastro del lanzamiento (para reconstruir la carrera si el overlay muere).
+            Sentry.addBreadcrumb({ category: 'exec-v3', message: 'launch', level: 'info', data: { startPath: pathname, href } })
+            // Evento de producto del ALUMNO (PostHog ya está gated por consentimiento → no-op sin `ph`).
+            // `start_path` es el origen barato disponible acá; la identidad exacta del trigger exigiría
+            // tocar los call-sites de `launch()` (fuera de carril) → se deja anotado.
+            captureLaunched({ start_path: pathname })
+
             // Navegar DESPUÉS de que el wipe de marca cubrió todo → el swap de ruta queda oculto.
             timersRef.current.push(window.setTimeout(() => {
-                try { router.push(href) } catch { /* fallback habilita el tap y el alumno reintenta */ }
+                try {
+                    router.push(href)
+                } catch (err) {
+                    // Antes se tragaba: reportamos para no perder de vista un push que falló (el fallback
+                    // de ~4,6s habilita igual el tap y el alumno reintenta).
+                    Sentry.captureException(err)
+                }
             }, reduced ? 60 : NAV_AT_MS))
             timersRef.current.push(window.setTimeout(() => setAnimDone(true), reduced ? 500 : ANIM_DONE_MS))
-            timersRef.current.push(window.setTimeout(() => setForceReady(true), READY_FALLBACK_MS))
+            timersRef.current.push(window.setTimeout(() => {
+                // Si el fallback gana la carrera con la señal REAL aún sin llegar, es una degradación
+                // (red lenta / ruta que no commiteó): la reportamos con el tiempo transcurrido.
+                if (!execReadyRef.current || !routeReadyRef.current) {
+                    Sentry.captureMessage('exec-v3: fallback 4.6s gano la carrera', {
+                        level: 'warning',
+                        extra: { sinceLaunchMs: Math.round(perfNow() - launchedAtPerf) },
+                    })
+                }
+                setForceReady(true)
+            }, READY_FALLBACK_MS))
         },
-        [pathname, reduced, router, state]
+        [pathname, reduced, router, state, captureLaunched]
     )
 
     useEffect(() => {
@@ -142,9 +186,16 @@ export function WorkoutLaunchProvider({ children }: { children: React.ReactNode 
             return
         }
         // Volvimos al path de lanzamiento estando ya fuera → el alumno tocó "atrás" del teléfono:
-        // el overlay debe irse (no quedar pegado sobre el dashboard).
-        if (routeReady) clearAll()
+        // el overlay debe irse (no quedar pegado sobre el dashboard). ABORTO: una ceremonia muerta no
+        // debe dejar la marca de morph rancia, o la próxima entrada saltaría fases indebidamente.
+        if (routeReady) {
+            clearMorphFlag()
+            clearAll()
+        }
     }, [pathname, state, routeReady, clearAll])
+
+    // Espejo de las señales de listo en refs (para el timer de `forceReady`, que las lee sin stale).
+    useEffect(() => { routeReadyRef.current = routeReady }, [routeReady])
 
     // El WEC avisa (evento `eva:exec-v3-ready` + flag en sessionStorage) cuando la pantalla de Inicio
     // (SessionStart) ya esta montada y pintada. El provider persiste en el layout /c → este listener ya
@@ -156,6 +207,9 @@ export function WorkoutLaunchProvider({ children }: { children: React.ReactNode 
         try { if (sessionStorage.getItem('eva:exec-v3-ready') === '1') setExecReady(true) } catch { /* private */ }
         return () => window.removeEventListener('eva:exec-v3-ready', onExecReady)
     }, [state])
+
+    // Espejo de la señal de Inicio-listo en un ref (mismo motivo que `routeReadyRef`).
+    useEffect(() => { execReadyRef.current = execReady }, [execReady])
 
     // `ready` (habilita el tap y despide el overlay) exige que el Inicio del ejecutor ya este pintado
     // (`execReady`), no solo que la ruta commiteo (`routeReady`). `forceReady` (fallback ~4,6s) sigue
@@ -171,7 +225,9 @@ export function WorkoutLaunchProvider({ children }: { children: React.ReactNode 
         timersRef.current.push(window.setTimeout(clearAll, EXIT_MS + 40))
     }, [ready, leaving, clearAll])
 
-    useEffect(() => () => clearTimers(), [clearTimers])
+    // Al desmontar el provider (p. ej. navegación dura del layout) no debe quedar la marca de ceremonia
+    // pegada en <html>, o los sync de cola diferirían su refresh eternamente hasta el timeout.
+    useEffect(() => () => { clearTimers(); clearCeremonyDom() }, [clearTimers])
 
     return (
         <WorkoutLaunchContext.Provider value={{ launch }}>
@@ -229,13 +285,19 @@ function DespegueOverlay({
         // ~700ms en vez de 304ms). Con `easing` por keyframe cada segmento usa la curva y los offsets
         // caen en su tiempo real: colapsa a burbuja al 32% (304ms), anticipa, despega.
         const ease = 'cubic-bezier(.6,0,.75,.4)'
+        // Distancia de SALIDA calculada desde la posición real del trigger: un -780px fijo no alcanza
+        // cuando el trigger está bajo (opciones del sheet "Repetir hoy") y la burbuja quedaba PEGADA
+        // asomando arriba toda la ceremonia (QA CEO). Debe superar el centro del rect + radio + sombra.
+        // Además opacity→0 en el tramo final: aunque la métrica falle en algún viewport raro, la burbuja
+        // jamás queda visible (fill:forwards la congela en el último keyframe).
+        const exitY = rect.top + rect.height / 2 + 140
         node.animate(
             [
-                { width: `${rect.width}px`, height: `${rect.height}px`, borderRadius: `${rect.radius}px`, transform: `${base} translateY(0) scale(1,1)`, offset: 0, easing: ease },
+                { width: `${rect.width}px`, height: `${rect.height}px`, borderRadius: `${rect.radius}px`, transform: `${base} translateY(0) scale(1,1)`, opacity: 1, offset: 0, easing: ease },
                 { width: '52px', height: '52px', borderRadius: '50%', transform: `${base} translateY(0) scale(1,1)`, offset: 0.32, easing: ease },
                 { width: '52px', height: '52px', borderRadius: '50%', transform: `${base} translateY(18px) scale(1.18,0.78)`, offset: 0.48, easing: ease },
-                { width: '52px', height: '52px', borderRadius: '50%', transform: `${base} translateY(-60px) scale(0.9,1.3)`, offset: 0.6, easing: ease },
-                { width: '52px', height: '52px', borderRadius: '50%', transform: `${base} translateY(-780px) scale(0.82,1.4)`, offset: 1 },
+                { width: '52px', height: '52px', borderRadius: '50%', transform: `${base} translateY(-60px) scale(0.9,1.3)`, opacity: 1, offset: 0.6, easing: ease },
+                { width: '52px', height: '52px', borderRadius: '50%', transform: `${base} translateY(-${exitY}px) scale(0.82,1.4)`, opacity: 0, offset: 1 },
             ],
             { duration: 950, fill: 'forwards' }
         )
@@ -297,8 +359,10 @@ function DespegueOverlay({
                     </div>
                 </div>
                 <div className="exec-dsp-prep">
+                    {/* Al estar listo, "PREPARANDO…" + dots se desvanecen y "LISTO" cruza en el mismo bloque. */}
                     <span className="exec-dsp-prep-t">PREPARANDO TU SESIÓN</span>
                     <span className="exec-dsp-dots" aria-hidden><i /><i /><i /></span>
+                    <span className="exec-dsp-prep-ready" aria-hidden>LISTO</span>
                 </div>
             </div>
 

@@ -1,18 +1,20 @@
-import { useRef } from 'react'
-import { Text, View } from 'react-native'
+import { useRef, useState } from 'react'
+import { Pressable, Text, View } from 'react-native'
 import { ArrowRight, Check, Dumbbell, Moon, Play } from 'lucide-react-native'
 import { MotiView } from 'moti'
 import { useTheme } from '../../../context/ThemeContext'
 import { useEvaMotion } from '../../../lib/motion'
 import { SHADOWS } from '../../../lib/shadows'
 import { hexToChannels } from '../../../lib/theme'
+import { getTodayInSantiago } from '../../../lib/date-utils'
 import { FONT, textStyle } from '../../../lib/typography'
 import { Button } from '../../Button'
 import { Card } from '../../Card'
 import { measureMorphOrigin, useTriggerMorphHide, type MorphOrigin } from '../workout/v3/session-morph'
 import { InfoTooltip } from '../../InfoTooltip'
 import { ProgressRing } from '../../ProgressRing'
-import type { HeroBlock, Plan } from './types'
+import { DoubleIntentSheet } from './ActiveProgramSection'
+import type { HeroBlock, Plan, PlanDayView } from './types'
 import { DAY_SHORT, SUCCESS_500 } from './types'
 
 // P0-2 — fondo del overlay "Entrenamiento completado". El web (WorkoutHeroCard.tsx:52)
@@ -55,7 +57,7 @@ export function HeroSection({
   hasProgram: boolean
   coachName: string | null
   nutritionEnabled: boolean
-  onStart: (planId: string, origin?: MorphOrigin | null) => void
+  onStart: (planId: string, origin?: MorphOrigin | null, label?: string) => void
   onRest: () => void
   onNoPlan: () => void
 }) {
@@ -79,19 +81,31 @@ function WorkoutHero({
   plan: Plan
   loggedByBlock: Map<string, number>
   isAlreadyLogged: boolean
-  onStart: (planId: string, origin?: MorphOrigin | null) => void
+  onStart: (planId: string, origin?: MorphOrigin | null, label?: string) => void
 }) {
   const { theme } = useTheme()
   const ctaRef = useRef<View>(null)
   // Al lanzar el Despegue el CTA real debe quedar INVISIBLE (el clon flotante lo reemplaza); si no, se
   // ve la caja del botón detrás del morph. Se restaura tras la ventana (ya navegado).
   const { hidden: ctaHidden, hide: hideCta } = useTriggerMorphHide()
+  // MOBILE-2 — hoy completado: el overlay "Entrenamiento completado" abre la ventanita de doble intención
+  // (Repetir hoy / Revisar y editar), igual que la web (WorkoutHeroCard). Antes tapaba el CTA sin acción.
+  const [sheetOpen, setSheetOpen] = useState(false)
   const show = plan.blocks.slice(0, 4)
   const more = plan.blocks.length - show.length
   const totalTarget = plan.blocks.reduce((s, b) => s + (b.sets || 0), 0)
   const totalLogged = plan.blocks.reduce((s, b) => s + Math.min(b.sets || 0, loggedByBlock.get(b.id) ?? 0), 0)
   const pct = totalTarget > 0 ? Math.min(100, (totalLogged / totalTarget) * 100) : 0
   const cta = isAlreadyLogged ? 'Ver registro' : totalLogged > 0 ? 'Continuar' : 'Empezar entrenamiento'
+  // Día de HOY como PlanDayView para la ventanita (done en su propia fecha → doneOnDate/doneOnLabel null).
+  const todayDoneView: PlanDayView = {
+    plan,
+    status: 'done',
+    isToday: true,
+    dateIso: getTodayInSantiago().iso,
+    doneOnDate: null,
+    doneOnLabel: null,
+  }
 
   return (
     <MotiView from={{ opacity: 0, translateY: 16 }} animate={{ opacity: 1, translateY: 0 }} transition={{ type: 'timing', duration: 450, delay: 80 }}>
@@ -159,13 +173,19 @@ function WorkoutHero({
             full
             onPress={() => {
               hideCta()
-              measureMorphOrigin(ctaRef.current, 16, (origin) => onStart(plan.id, origin))
+              // `cta` = texto real del botón → la píldora del Despegue muestra el mismo texto (MOBILE-2).
+              measureMorphOrigin(ctaRef.current, 16, (origin) => onStart(plan.id, origin, cta))
             }}
           />
         </View>
 
         {isAlreadyLogged ? (
-          <View
+          // Overlay ACCIONABLE (MOBILE-2 / paridad web WorkoutHeroCard:62): tapea → ventanita de doble
+          // intención (Repetir hoy / Revisar y editar). Antes era un View muerto que tapaba el CTA.
+          <Pressable
+            onPress={() => setSheetOpen(true)}
+            accessibilityRole="button"
+            accessibilityLabel={`${plan.title} · entrenamiento completado, revisar o repetir`}
             style={{
               position: 'absolute',
               top: 0,
@@ -198,9 +218,20 @@ function WorkoutHero({
               <Check size={28} color="#fff" strokeWidth={2} />
             </View>
             <Text className="text-on-dark" style={{ fontFamily: FONT.displayBlack, fontSize: 14 }}>Entrenamiento completado</Text>
-          </View>
+          </Pressable>
         ) : null}
       </Card>
+
+      {/* Ventanita de doble intención del hero (hoy completado). "Repetir hoy" dispara el Despegue; "Revisar
+          y editar" queda deshabilitada "Disponible pronto" (deuda conocida, igual que en las day-cards). El
+          día se construye como PlanDayView de HOY (done en su propia fecha → doneOnDate null). */}
+      {isAlreadyLogged ? (
+        <DoubleIntentSheet
+          view={sheetOpen ? todayDoneView : null}
+          onClose={() => setSheetOpen(false)}
+          onRepeat={(id) => { setSheetOpen(false); onStart(id, undefined, 'Empezar entrenamiento') }}
+        />
+      ) : null}
     </MotiView>
   )
 }

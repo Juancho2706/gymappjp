@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { RefreshControl, ScrollView, StyleSheet, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { useRouter } from 'expo-router'
+import { useFocusEffect, useRouter } from 'expo-router'
 import { supabase } from '../../../lib/supabase'
 import { getClientProfile } from '../../../lib/client'
 import { getOnboardingStatus } from '../../../lib/alumno-onboarding'
@@ -23,6 +23,7 @@ import { computeCheckInReminder } from '../../../lib/checkin-thresholds'
 import { programWeekIndex1Based, weekIndexToVariantLetter, effectiveWeekVariantFromPlans, workoutPlanMatchesVariant } from '../../../lib/program-week-variant'
 import { HeroSection } from '../../../components/alumno/home/HeroSection'
 import { useSessionMorph } from '../../../components/alumno/workout/v3/session-morph'
+import { greedyPlanDone } from '../../../components/alumno/workout/v3/weekly-streak'
 import { CoachPresenceCard } from '../../../components/alumno/home/CoachPresenceCard'
 import { MomentumCard, type MomentumDay } from '../../../components/alumno/home/MomentumCard'
 import { ActiveProgramSection } from '../../../components/alumno/home/ActiveProgramSection'
@@ -93,8 +94,20 @@ export default function AlumnoHomeScreen() {
 
   useEffect(() => {
     getOnboardingStatus().then((done) => { if (!done) router.replace('/alumno/onboarding') })
-    load().catch(() => setLoading(false))
   }, [])
+
+  // MOBILE-1 — refetch al ENFOCAR: antes la home solo cargaba al montar (deps []), asi el dia recien
+  // entrenado seguia "pendiente"/CTA stale al volver del ejecutor (router.replace no remonta el screen de
+  // tabs que sigue vivo bajo el stack). useFocusEffect corre en el foco INICIAL (montaje) y en CADA regreso.
+  // load() es SILENCIOSO: no toca `loading` (el skeleton solo lo pinta el primer render, cuando aun no hay
+  // datos), y el guard last-writer-wins (loadIdRef) evita que una carrera pise el estado fresco. Paridad con
+  // la frescura RSC de la web y con la home del coach.
+  useFocusEffect(
+    useCallback(() => {
+      load().catch(() => setLoading(false))
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []),
+  )
 
   async function load() {
     const myId = ++loadIdRef.current
@@ -144,10 +157,11 @@ export default function AlumnoHomeScreen() {
         // §1 — anuncios de org (solo si el alumno pertenece a una org).
         client.orgId ? getActiveOrgAnnouncements(client.orgId) : Promise.resolve([]),
         // §3 Racha — 1:1 con web: MISMO RPC (`get_client_current_streak`) que el
-        // dashboard web (StreakRibbonSection). Cuenta workout_logs + comidas
-        // completadas, con dia de gracia (racha viva si la ultima actividad fue
-        // hoy U ayer). Evita el drift de derivar local, que exigia entrenar HOY e
-        // ignoraba la nutricion → mostraba "Empieza tu racha hoy" de mas.
+        // dashboard web (StreakRibbonSection). Regla "dias asignados" (CEO 2026-07-22,
+        // migracion 20260723110000): dia asignado hecho = +1; asignado sin entrenar
+        // nada = corta (hoy en curso no corta; recuperar despues no repara); dia libre
+        // recuperando un dia perdido de la MISMA semana = +1; repeticion/sesion libre =
+        // neutro; nutricion FUERA; sin programa activo todo dia entrenado suma.
         supabase.rpc('get_client_current_streak', { p_client_id: client.id }),
       ])
 
@@ -304,19 +318,9 @@ export default function AlumnoHomeScreen() {
       const dIso = weekDates[idx]
       const isToday = dIso === todayIso
       const isFuture = dIso > todayIso
-      // Fechas (asc, Lun→Dom) de esta semana con log de ESTE plan.
-      const weekLogDates = isFuture ? [] : weekDates.filter((di) => workoutPlanDays.has(`${plan.id}|${di}`))
-      let done = false
-      let doneOnDate: string | null = null
-      if (!isFuture && weekLogDates.length > 0) {
-        if (weekLogDates.includes(dIso)) {
-          done = true // Fase 1: hecho en su propia fecha.
-          doneOnDate = null
-        } else {
-          done = true // Fase 2: recuperado — el log mas antiguo de la semana cierra este dia.
-          doneOnDate = weekLogDates[0]
-        }
-      }
+      // Atribucion greedy por plan (Fase 1 en-fecha / Fase 2 recuperacion): helper PURO compartido con la
+      // racha del ejecutor (weekly-streak.ts) — UNICA fuente de verdad del greedy, sin duplicar la logica.
+      const { done, doneOnDate } = greedyPlanDone(plan.id, dIso, isFuture, weekDates, workoutPlanDays)
       const status = done ? 'done' : isToday ? 'today' : isFuture ? 'upcoming' : 'pending'
       const doneOnLabel = doneOnDate ? DAY_FULL[dbDayByDate.get(doneOnDate) ?? 1] : null
       return { plan, status, isToday, dateIso: dIso, doneOnDate, doneOnLabel }
@@ -427,7 +431,9 @@ export default function AlumnoHomeScreen() {
           hasProgram={!!data?.program}
           coachName={data?.coachName ?? null}
           nutritionEnabled={nutritionEnabled}
-          onStart={(id, origin) => startMorph({ planId: id, origin })}
+          // `label` = texto REAL del CTA tocado (Empezar/Continuar/Ver registro) → la pildora del Despegue
+          // muestra el mismo texto (swap sin costura). MOBILE-2.
+          onStart={(id, origin, label) => startMorph({ planId: id, origin, label })}
           onRest={() => router.push('/alumno/nutricion')}
           onNoPlan={() => router.push('/alumno/check-in')}
         />
@@ -463,7 +469,7 @@ export default function AlumnoHomeScreen() {
             pending={derived.pending}
             todayPlanId={derived.todayPlanId}
             weekVariant={derived.weekVariant}
-            onStart={(id, origin) => startMorph({ planId: id, origin })}
+            onStart={(id, origin, label) => startMorph({ planId: id, origin, label })}
             // Recuperar un dia pendiente: se entrena HOY y el log cae hoy (semantica correcta de
             // recuperacion, ver E1.1); el param `recuperar` solo pinta el banner informativo ambar.
             // El camino "editar fecha pasada" (param `fecha`) queda cableado en [planId].tsx + banner
@@ -472,7 +478,7 @@ export default function AlumnoHomeScreen() {
             // E1.5). El editor de fecha pasada RN llega en ola posterior y reactivara ese onReview.
             // Recuperar dispara el MISMO Despegue que el CTA/day-cards (con el param `recuperar`); el
             // origin (rect del banner/card) lo pasa ActiveProgramSection para que el morph nazca de él.
-            onRecover={(id, fecha, origin) => startMorph({ planId: id, origin, params: { recuperar: fecha } })}
+            onRecover={(id, fecha, origin, label) => startMorph({ planId: id, origin, params: { recuperar: fecha }, label })}
           />
         </View>
 

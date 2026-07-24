@@ -61,11 +61,12 @@ export function ActiveProgramSection({
   // web `{abMode ? ` · Sem ${activeVariant}` : ''}` (ActiveProgramSection.tsx:95).
   weekVariant?: 'A' | 'B' | null
   /** Entreno normal / repetir hoy (sin params). `origin` = rect del day-card para que el Despegue
-   *  nazca de la tarjeta clickeada (null ⇒ el morph cae a su origen sintético). */
-  onStart: (planId: string, origin?: MorphOrigin | null) => void
+   *  nazca de la tarjeta clickeada (null ⇒ el morph cae a su origen sintético). `label` = texto real del
+   *  trigger para la píldora del clon (solo se pinta en rects anchos; las day-cards angostas lo ignoran). */
+  onStart: (planId: string, origin?: MorphOrigin | null, label?: string) => void
   /** Recuperar un dia pendiente → ejecutor con param `recuperar` (banner ambar). `origin` = rect del
    *  trigger (banner o day-card) para que el Despegue nazca de él, igual que el CTA y las day-cards. */
-  onRecover: (planId: string, dateIso: string, origin?: MorphOrigin | null) => void
+  onRecover: (planId: string, dateIso: string, origin?: MorphOrigin | null, label?: string) => void
 }) {
   const { theme, resolvedScheme } = useTheme()
   // Sheet doble intencion (E1.7): el day-card de un dia YA HECHO de OTRO dia lo abre; hoy/pendiente/
@@ -82,8 +83,10 @@ export function ActiveProgramSection({
   //  · resto (today/upcoming/done-hoy) → Despegue directo.
   function handleDayPress(view: PlanDayView, origin: MorphOrigin | null) {
     if (view.status === 'done' && !view.isToday) { setSheetView(view); return }
-    if (view.status === 'pending') { onRecover(view.plan.id, view.dateIso, origin); return }
-    onStart(view.plan.id, origin)
+    // Las day-cards son angostas (96px) → el overlay NO pinta la etiqueta (solo rects anchos); se pasa el
+    // título del plan por si la medición cae al origen sintético (ancho), donde sí se veria.
+    if (view.status === 'pending') { onRecover(view.plan.id, view.dateIso, origin, view.plan.title); return }
+    onStart(view.plan.id, origin, view.plan.title)
   }
 
   // Sin programa activo — web `ActiveProgramSection.tsx:26-34` hace early return de
@@ -137,8 +140,9 @@ export function ActiveProgramSection({
             testID="program-pending-cta"
             onPress={() => {
               hideBanner()
+              // El banner es ancho → la píldora del Despegue SÍ muestra la etiqueta: texto de recuperación.
               measureMorphOrigin(bannerRef.current, theme.radius.control, (origin) =>
-                onRecover(oldestPending.planId, oldestPending.dateIso, origin),
+                onRecover(oldestPending.planId, oldestPending.dateIso, origin, 'Recuperar entrenamiento'),
               )
             }}
             activeOpacity={0.82}
@@ -169,7 +173,7 @@ export function ActiveProgramSection({
       </ScrollView>
 
       {todayPlanId ? (
-        <TouchableOpacity onPress={() => onStart(todayPlanId)} activeOpacity={0.7} accessibilityRole="button">
+        <TouchableOpacity onPress={() => onStart(todayPlanId, null, 'Empezar entrenamiento')} activeOpacity={0.7} accessibilityRole="button">
           <Text className="text-sport-600" style={{ textAlign: 'center', fontFamily: FONT.uiBold, fontSize: 11 }}>Ver entreno de hoy →</Text>
         </TouchableOpacity>
       ) : null}
@@ -178,7 +182,7 @@ export function ActiveProgramSection({
     <DoubleIntentSheet
       view={sheetView}
       onClose={() => setSheetView(null)}
-      onRepeat={(id) => { setSheetView(null); onStart(id) }}
+      onRepeat={(id) => { setSheetView(null); onStart(id, null, 'Empezar entrenamiento') }}
     />
     </>
   )
@@ -196,8 +200,12 @@ export function ActiveProgramSection({
  * hoy → duplicaria en vez de corregir, violando el invariante "editar jamas duplica" del mockup. Por eso
  * el unico camino accionable aqui es "Repetir hoy" (semantica honesta); el editar llega en ola posterior
  * (reactivara un `onReview` que navegue con el param `fecha`, ya soportado por [planId].tsx + RecoveryBanner).
+ *
+ * Exportado: lo reusa también el hero de la home cuando el entreno de HOY ya está completado (MOBILE-2 /
+ * paridad web WorkoutHeroCard: el overlay "Entrenamiento completado" abre esta misma ventanita en vez de
+ * dejar un CTA muerto). "Repetir hoy" dispara el Despegue; "Revisar y editar" sigue deshabilitada.
  */
-function DoubleIntentSheet({
+export function DoubleIntentSheet({
   view,
   onClose,
   onRepeat,

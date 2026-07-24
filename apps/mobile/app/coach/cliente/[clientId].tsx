@@ -106,6 +106,8 @@ export default function ClientDetailScreen() {
   const lastY = useRef(0)
   const tabStickyY = useRef(Number.MAX_SAFE_INTEGER)
   const [tabStuck, setTabStuck] = useState(false)
+  /** Racha del RPC get_client_current_streak (regla "días asignados"); null = RPC no disponible. */
+  const [rpcStreak, setRpcStreak] = useState<number | null>(null)
   const loadedOnceRef = useRef(false)
   const loadSeqRef = useRef(0)
   const daySeqRef = useRef(0)
@@ -116,12 +118,28 @@ export default function ClientDetailScreen() {
     if (!opts?.silent) setLoading(true)
     setLoadError(null)
     try {
-      const res = await getCoachClientDetail(clientId, {
-        kind: workspace.kind,
-        teamId: workspace.teamId,
-        orgId: workspace.orgId,
-      })
-      if (seq === loadSeqRef.current) setData(res)
+      const [res, streakRes] = await Promise.all([
+        getCoachClientDetail(clientId, {
+          kind: workspace.kind,
+          teamId: workspace.teamId,
+          orgId: workspace.orgId,
+        }),
+        // Racha = MISMO RPC que la ficha web (get_client_current_streak, regla "días
+        // asignados", migración 20260723110000). Antes esta pantalla derivaba una racha
+        // local (días consecutivos con workout o nutrición) y divergía de la web.
+        // Fail-open: si el RPC falla, `derived` cae a la derivación local.
+        supabase
+          .rpc('get_client_current_streak', { p_client_id: clientId })
+          .then(
+            (r) => (r.error ? null : r.data),
+            () => null,
+          ),
+      ])
+      if (seq === loadSeqRef.current) {
+        setData(res)
+        const streakN = typeof streakRes === 'number' ? streakRes : Number(streakRes)
+        setRpcStreak(streakRes == null || !Number.isFinite(streakN) ? null : streakN)
+      }
     } catch (e) {
       console.warn('[client-detail] load failed', e)
       if (seq === loadSeqRef.current) setLoadError('No pudimos cargar la ficha. Revisa tu conexión e intenta de nuevo.')
@@ -137,6 +155,7 @@ export default function ClientDetailScreen() {
     loadedOnceRef.current = false
     loadSeqRef.current += 1
     daySeqRef.current += 1
+    setRpcStreak(null)
     const todayIso = getTodayInSantiago().iso
     setTrainingDate(todayIso)
     setNutritionDate(todayIso)
@@ -396,14 +415,20 @@ export default function ClientDetailScreen() {
     const series = [...data.checkIns].filter((c) => c.weight != null).sort((a, b) => String(a.created_at ?? a.date).localeCompare(String(b.created_at ?? b.date)))
     const currentWeight = series.length ? Number(series[series.length - 1]!.weight) : client.initial_weight_kg
     const weightDelta = series.length >= 2 ? round1(Number(series[series.length - 1]!.weight) - Number(series[series.length - 2]!.weight)) : null
-    const activeDays = new Set([
-      ...data.workoutDates371.map((date) => date.slice(0, 10)),
-      ...data.nutritionActivityDates371,
-    ])
-    let cursor = getTodayInSantiago().iso
-    if (!activeDays.has(cursor)) cursor = isoDateAddDays(cursor, -1)
-    let streak = 0
-    while (activeDays.has(cursor)) { streak += 1; cursor = isoDateAddDays(cursor, -1) }
+    // Racha: fuente = RPC get_client_current_streak (misma que la ficha web). La derivación
+    // local (días consecutivos con workout o nutrición) queda SOLO como fallback si el RPC
+    // no respondió — semántica vieja, mejor que mostrar 0 por un fallo transitorio.
+    let streak = rpcStreak ?? -1
+    if (streak < 0) {
+      const activeDays = new Set([
+        ...data.workoutDates371.map((date) => date.slice(0, 10)),
+        ...data.nutritionActivityDates371,
+      ])
+      let cursor = getTodayInSantiago().iso
+      if (!activeDays.has(cursor)) cursor = isoDateAddDays(cursor, -1)
+      streak = 0
+      while (activeDays.has(cursor)) { streak += 1; cursor = isoDateAddDays(cursor, -1) }
+    }
     const trainingAge = formatTrainingAgeLabel(client.subscription_start_date, client.created_at)
     const todayIso = getTodayInSantiago().iso
     const today = data.nutritionTimeline.find((t) => t.date === todayIso) ?? data.nutritionTimeline[0]
@@ -426,7 +451,7 @@ export default function ClientDetailScreen() {
     }
 
     return { currentWeight, weightDelta, streak, trainingAge, today, weeklyPRs, attention, lastActivityIso, planCurrentWeek }
-  }, [data, client])
+  }, [data, client, rpcStreak])
 
   function onScroll(e: NativeSyntheticEvent<NativeScrollEvent>) {
     const y = e.nativeEvent.contentOffset.y

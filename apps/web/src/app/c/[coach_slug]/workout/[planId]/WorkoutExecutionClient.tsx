@@ -8,6 +8,8 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { ArrowLeft, Flag, Info, Dumbbell, Timer, TrendingUp, History, Quote, X, Settings, CheckCircle2, WifiOff, ChevronDown, List, GalleryHorizontal, Pencil, CalendarSync } from 'lucide-react'
 import { computeEffectiveTarget } from '@/lib/workout/progression'
+import { readAndConsumeMorphFlag } from '@/lib/workout/launch-ceremony'
+import { useCaptureStudentWorkoutCompleted } from '@/lib/posthog/events'
 import { LogSetForm, type SetSyncResult } from './LogSetForm'
 import { SingleExerciseCard } from './SingleExerciseCard'
 import {
@@ -240,10 +242,10 @@ interface Props {
      */
     recoverDate?: string | null
     /**
-     * Ejecutor V3 (E2.1): flag `executor_v3` resuelto server-side (Edge Config, default OFF). ON ⇒
-     * chrome V3 (header nuevo con dots + tuerca, shell dark-only) montado SOBRE el mismo estado/motor
-     * (cero cambios a cola/drafts/reconciliación). El override localStorage `eva:executor-v3` (on/off)
-     * se aplica en cliente tras montar, pisando este valor.
+     * Ejecutor V3 (E2.1): chrome V3 (header nuevo con dots + tuerca, shell dark-only) montado SOBRE el
+     * mismo estado/motor (cero cambios a cola/drafts/reconciliación). El flag `executor_v3` se eliminó
+     * (decisión CEO 2026-07-23: V3 es el único camino), así que `page.tsx` siempre pasa `true`. La prop
+     * se conserva porque aún gobierna las ramas del shell V2 legacy (pendientes de limpieza futura).
      */
     executorV3?: boolean
     /**
@@ -1033,6 +1035,7 @@ export function WorkoutExecutionClient({
     weekStatusDays = null,
 }: Props) {
     const router = useRouter()
+    const captureWorkoutCompleted = useCaptureStudentWorkoutCompleted()
     const base = useBasePath(`/c/${coachSlug}`)
     const reducedMotion = useReducedMotion()
     // Marca "esta sesión tuvo actividad" (informe forense 2026-07-04, Fix A). El snapshot viejo del
@@ -1069,12 +1072,10 @@ export function WorkoutExecutionClient({
     const [stepperEnabled, setStepperEnabled] = useState(false)
     const [currentStepIndex, setCurrentStepIndex] = useState(0)
     const [showTimerSettings, setShowTimerSettings] = useState(false)
-    // Ejecutor V3 (E2.1): resuelto tras montar = flag server (prop) pisado por override localStorage
-    // `eva:executor-v3` (on/off). SSR renderiza el flag server-side; el override es hidratación-safe.
-    // QA3: arranca con el flag del SERVER (deterministico SSR=cliente). Antes arrancaba false y el
-    // layout-effect lo prendia post-hidratacion → el HTML del server pintaba el shell legacy/Inicio
-    // segundos antes de hidratar y el splash aparecia tarde y cortado. El override localStorage
-    // (dev) se re-commitea en el layout-effect.
+    // Ejecutor V3 (E2.1): arranca con la prop `executorV3` (hoy siempre `true` — el flag `executor_v3`
+    // se eliminó). QA3: arrancar con este valor mantiene SSR=cliente determinístico. Antes arrancaba
+    // false y el layout-effect lo prendia post-hidratacion → el HTML del server pintaba el shell
+    // legacy/Inicio segundos antes de hidratar y el splash aparecia tarde y cortado.
     const [execV3Active, setExecV3Active] = useState(executorV3)
     const [showExecV3Settings, setShowExecV3Settings] = useState(false)
     // Ejecutor V3 (E3.7): prefs de la tuerca (device-scoped). `showEffort` gobierna si la sesión pinta
@@ -1400,9 +1401,9 @@ export function WorkoutExecutionClient({
 
     // Lectura post-montaje del toggle (hidratación-safe, patrón `omni_autotimer`): si estaba activo,
     // arranca en el primer paso incompleto (no en el 0).
-    // Ola 2 (E2.1): resuelve también el flag V3 (server prop + override localStorage `eva:executor-v3`)
-    // y, en V3, el modo paso-a-paso pasa a ser el DEFAULT — respetando si el alumno ya eligió Lista
-    // (STEPPER_MODE_KEY === 'false'). El acento del shell V3 se setea vía exec-theme.ts.
+    // Ola 2 (E2.1): con V3 activo (siempre — el flag `executor_v3` se eliminó), el modo paso-a-paso
+    // pasa a ser el DEFAULT — respetando si el alumno ya eligió Lista (STEPPER_MODE_KEY === 'false').
+    // El acento del shell V3 se setea vía exec-theme.ts.
     // QA2 (splash fuera de secuencia): esta resolución corre en useLAYOUTeffect, no useEffect. El SSR
     // pinta el shell sin V3 (execV3Active=false); con useEffect (post-paint) el navegador alcanzaba a
     // pintar el Inicio/sesión y RECIÉN después montaba el splash → "aparece luego de la segunda pantalla
@@ -1411,12 +1412,7 @@ export function WorkoutExecutionClient({
     // nunca detrás del Inicio. Hidratación-safe: el render inicial (SSR y primer render cliente) sigue
     // usando los defaults (false/'session'), así que no hay mismatch; el layout-effect sólo re-commitea.
     useLayoutEffect(() => {
-        let v3 = executorV3
-        try {
-            const ov = localStorage.getItem('eva:executor-v3')
-            if (ov === 'on') v3 = true
-            else if (ov === 'off') v3 = false
-        } catch { /* localStorage no disponible: usa el flag server */ }
+        const v3 = executorV3
         setExecV3Active(v3)
         if (v3) {
             applyExecThemeVars(execRootRef.current, readExecutorTheme(execRootRef.current))
@@ -1424,11 +1420,11 @@ export function WorkoutExecutionClient({
             // a la sesión (reload mid-entreno no re-fuerza el splash). El día = fecha objetivo si edita
             // un día pasado, si no la fecha asignada del plan.
             let entered = false
-            let viaMorph = false
+            // Consumo único de la marca de morph con TTL (misma semántica de "leer + borrar", pero sólo
+            // cuenta si la marca es fresca → una ceremonia abandonada no salta el splash; ver launch-ceremony).
+            const viaMorph = readAndConsumeMorphFlag()
             try {
                 entered = sessionStorage.getItem(execV3EnteredKey) === '1'
-                viaMorph = sessionStorage.getItem('eva:exec-v3-morph') === '1'
-                if (viaMorph) sessionStorage.removeItem('eva:exec-v3-morph')
             } catch { /* SSR / private */ }
             // Despegue: llegar por el MORPH salta el splash viejo (SessionIntro) y va DIRECTO a Inicio —
             // el overlay "Despegue" del layout /c ES el splash y cubre todo hasta el tap del alumno.
@@ -1802,6 +1798,8 @@ export function WorkoutExecutionClient({
         // BUG 2: la sesión terminó → los borradores y el snapshot local ya no aplican.
         clearAllDrafts(plan.id)
         clearSessionSnapshot(plan.id, sessionDayIsoRef.current)
+        // Evento de producto del ALUMNO: sesión completada (tras el éxito; PostHog gated por consentimiento).
+        captureWorkoutCompleted({ plan_id: plan.id })
         setShowCompleted(true)
     }
     // Contexto del programa para el nudge "lo que viene" del resumen (reusa la sub-línea del header;
@@ -2300,7 +2298,10 @@ export function WorkoutExecutionClient({
                 {execV3Active && execV3Phase === 'intro' && (
                     <script
                         dangerouslySetInnerHTML={{
-                            __html: `try{if(sessionStorage.getItem(${JSON.stringify(execV3EnteredKey)})==='1'&&sessionStorage.getItem('eva:exec-v3-morph')!=='1')document.documentElement.setAttribute('data-exec-v3-entered','1')}catch(e){}`,
+                            // Sólo saltar el splash SSR si YA se entró Y no hay handoff de morph pendiente.
+                            // La marca de morph ahora es JSON con TTL (o el '1' legado): cualquier valor
+                            // presente = venimos por morph → NO ocultar el cover (el overlay del Despegue cubre).
+                            __html: `try{if(sessionStorage.getItem(${JSON.stringify(execV3EnteredKey)})==='1'&&sessionStorage.getItem('eva:exec-v3-morph')===null)document.documentElement.setAttribute('data-exec-v3-entered','1')}catch(e){}`,
                         }}
                     />
                 )}
