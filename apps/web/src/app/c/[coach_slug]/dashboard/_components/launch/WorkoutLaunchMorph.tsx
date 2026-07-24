@@ -285,13 +285,19 @@ function DespegueOverlay({
         // ~700ms en vez de 304ms). Con `easing` por keyframe cada segmento usa la curva y los offsets
         // caen en su tiempo real: colapsa a burbuja al 32% (304ms), anticipa, despega.
         const ease = 'cubic-bezier(.6,0,.75,.4)'
+        // Distancia de SALIDA calculada desde la posición real del trigger: un -780px fijo no alcanza
+        // cuando el trigger está bajo (opciones del sheet "Repetir hoy") y la burbuja quedaba PEGADA
+        // asomando arriba toda la ceremonia (QA CEO). Debe superar el centro del rect + radio + sombra.
+        // Además opacity→0 en el tramo final: aunque la métrica falle en algún viewport raro, la burbuja
+        // jamás queda visible (fill:forwards la congela en el último keyframe).
+        const exitY = rect.top + rect.height / 2 + 140
         node.animate(
             [
-                { width: `${rect.width}px`, height: `${rect.height}px`, borderRadius: `${rect.radius}px`, transform: `${base} translateY(0) scale(1,1)`, offset: 0, easing: ease },
+                { width: `${rect.width}px`, height: `${rect.height}px`, borderRadius: `${rect.radius}px`, transform: `${base} translateY(0) scale(1,1)`, opacity: 1, offset: 0, easing: ease },
                 { width: '52px', height: '52px', borderRadius: '50%', transform: `${base} translateY(0) scale(1,1)`, offset: 0.32, easing: ease },
                 { width: '52px', height: '52px', borderRadius: '50%', transform: `${base} translateY(18px) scale(1.18,0.78)`, offset: 0.48, easing: ease },
-                { width: '52px', height: '52px', borderRadius: '50%', transform: `${base} translateY(-60px) scale(0.9,1.3)`, offset: 0.6, easing: ease },
-                { width: '52px', height: '52px', borderRadius: '50%', transform: `${base} translateY(-780px) scale(0.82,1.4)`, offset: 1 },
+                { width: '52px', height: '52px', borderRadius: '50%', transform: `${base} translateY(-60px) scale(0.9,1.3)`, opacity: 1, offset: 0.6, easing: ease },
+                { width: '52px', height: '52px', borderRadius: '50%', transform: `${base} translateY(-${exitY}px) scale(0.82,1.4)`, opacity: 0, offset: 1 },
             ],
             { duration: 950, fill: 'forwards' }
         )

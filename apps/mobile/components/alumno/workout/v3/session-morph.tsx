@@ -696,16 +696,23 @@ function DespegueOverlay({
   // ── Estilos animados. ──
   const rootStyle = useAnimatedStyle(() => ({ opacity: fade.value }))
   const bgStyle = useAnimatedStyle(() => ({ transform: [{ translateY: bgTY.value }] }))
+  // Distancia de SALIDA del despegue calculada desde la posición real del trigger: un -780 fijo no
+  // alcanza cuando el trigger está bajo (opciones del sheet / pantallas altas) y la burbuja quedaba
+  // asomando arriba toda la ceremonia (QA CEO, espejo del fix web). Centro + radio + sombra de margen.
+  const pillExitTy = -(cy + 140)
   const pillStyle = useAnimatedStyle(() => {
     // width rect→52, height rect→52, radius rect→26; centrado en (cx,cy) vía translate(-w/2,-h/2) que
     // NO se escala (traslaciones fuera del scale, igual que el web `translate(-50%,-50%)`); luego la
     // anticipación (squash) y el despegue (stretch) suman translateY sobre ese centro.
     const w = interpolate(morph.value, MORPH_IN, [rectW, BUBBLE, BUBBLE, BUBBLE, BUBBLE], Extrapolation.CLAMP)
     const h = interpolate(morph.value, MORPH_IN, [rectH, BUBBLE, BUBBLE, BUBBLE, BUBBLE], Extrapolation.CLAMP)
-    const ty = interpolate(morph.value, MORPH_IN, [0, 0, 18, -60, -780], Extrapolation.CLAMP)
+    const ty = interpolate(morph.value, MORPH_IN, [0, 0, 18, -60, pillExitTy], Extrapolation.CLAMP)
     return {
       width: w,
       height: h,
+      // Fade a 0 en el tramo final: aunque la métrica falle en algún device raro, la burbuja jamás
+      // queda visible congelada en el último frame (espejo del opacity del keyframe web).
+      opacity: interpolate(morph.value, [0, 0.6, 1], [1, 1, 0], Extrapolation.CLAMP),
       borderRadius: interpolate(morph.value, MORPH_IN, [rectRadius, BUBBLE_RADIUS, BUBBLE_RADIUS, BUBBLE_RADIUS, BUBBLE_RADIUS], Extrapolation.CLAMP),
       transform: [
         { translateX: -w / 2 },
