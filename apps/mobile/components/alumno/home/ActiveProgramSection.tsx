@@ -38,7 +38,8 @@ cssInterop(Calendar, { className: { target: 'style', nativeStyleToProp: { color:
  * §8 ActiveProgramSection (web `program/ActiveProgramSection.tsx`): nombre del
  * programa + badge "Semana X de Y" + ProgramPhaseBar (E1-05) + cola de pendientes
  * (E1-19, delta Fase L: dias pasados sin registrar → CTA "Recuperar Día X") +
- * day-cards (today/done/pending/upcoming) + link "Ver entreno de hoy →".
+ * day-cards (today/done/pending/upcoming). El link "Ver entreno de hoy →" se
+ * RETIRO (decision CEO 2026-07-25): duplicaba el day-card de hoy y el hero.
  */
 export function ActiveProgramSection({
   program,
@@ -46,7 +47,6 @@ export function ActiveProgramSection({
   totalWeeks,
   planDays,
   pending,
-  todayPlanId,
   weekVariant = null,
   onStart,
   onRecover,
@@ -56,7 +56,6 @@ export function ActiveProgramSection({
   totalWeeks: number
   planDays: PlanDayView[]
   pending: PendingDay[]
-  todayPlanId: string | null
   // Variante A/B EFECTIVA del ciclo (solo en programas ab_mode); null = sin A/B →
   // sin sufijo. El shell la computa (resolveEffectiveWeekVariant). Espejo del sufijo
   // web `{abMode ? ` · Sem ${activeVariant}` : ''}` (ActiveProgramSection.tsx:95).
@@ -174,12 +173,6 @@ export function ActiveProgramSection({
           <DayCard key={d.plan.id} view={d} onPress={(origin) => handleDayPress(d, origin)} />
         ))}
       </ScrollView>
-
-      {todayPlanId ? (
-        <TouchableOpacity onPress={() => onStart(todayPlanId, null, 'Empezar entrenamiento')} activeOpacity={0.7} accessibilityRole="button">
-          <Text className="text-sport-600" style={{ textAlign: 'center', fontFamily: FONT.uiBold, fontSize: 11 }}>Ver entreno de hoy →</Text>
-        </TouchableOpacity>
-      ) : null}
     </Card>
 
     <DoubleIntentSheet
