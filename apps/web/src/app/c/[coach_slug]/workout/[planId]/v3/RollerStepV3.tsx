@@ -142,7 +142,6 @@ export function RollerStepV3({
             fieldRefs: { reps_done: passesInputRef },
             initialFieldKey: 'reps_done',
             target: { exerciseName: exercise.name, objective: goalPasses != null ? `${goalPasses} pasadas` : undefined },
-            requestSubmit: () => keypad.closeKeypad(),
         })
     }
 

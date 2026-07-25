@@ -48,8 +48,6 @@ export interface OpenKeypadConfig {
   initialFieldKey: string
   /** Objetivo prescrito (viaja con el teclado — DB-5). */
   target?: KeypadTarget
-  /** `form.requestSubmit()` del `LogSetForm` — "Listo" es el único submit. */
-  requestSubmit: () => void
 }
 
 interface KeypadContextValue {
@@ -91,6 +89,8 @@ function scrollInputAboveKeypad(el: HTMLElement | null, keypadH: number, smooth:
  * paso configurable (localStorage `omni_keypad_step`) y publica `--keypad-h` +
  * `body[data-exec-keypad-open]` para que la exec oculte la barra "Finalizar" y reserve espacio
  * (AC-B6). El esfuerzo (RPE/RIR) NO pasa por el teclado: se registra en el panel opcional de la fila.
+ * "Listo" SOLO cierra el teclado (decisión CEO 2026-07-25): el único submit de la serie es el CTA de
+ * la fila (`SubmitSetButton`) — en RN el keypad es un Modal que TAPA la fila, por eso allá sí guarda.
  *
  * El `<input>` real sigue siendo la fuente de verdad (uncontrolled, con su name/label) → el pipeline
  * submit/FormData/offline no se toca. En puntero fino el teclado NUNCA se abre (gate en `LogSetForm`).
@@ -217,12 +217,12 @@ export function WorkoutKeypadProvider({ children }: { children: React.ReactNode 
   )
 
   const onDone = useCallback(() => {
-    const submit = config?.requestSubmit
-    triggerHaptic(20)
+    // "Listo" SOLO cierra el teclado (decisión CEO 2026-07-25): los valores quedan en los inputs y la
+    // serie se concluye con el CTA de la propia fila (`SubmitSetButton`) — antes acá corría el
+    // `requestSubmit()` y guardaba la serie sin que el alumno tocara el check.
+    triggerHaptic(12)
     closeKeypad()
-    // El teclado se cierra al submit exitoso; recién ahí puede arrancar el RestTimer (sin apilarse).
-    submit?.()
-  }, [config, closeKeypad])
+  }, [closeKeypad])
 
   const onNext = useCallback(() => {
     if (!isLastField) {
@@ -230,7 +230,7 @@ export function WorkoutKeypadProvider({ children }: { children: React.ReactNode 
       if (next) onSwitchField(next.key)
       return
     }
-    // Último campo: cierra la serie (el esfuerzo se registra en el panel de la fila, no acá).
+    // Último campo: cierra el teclado; la serie se concluye con el CTA de la fila.
     onDone()
   }, [isLastField, fields, activeIndex, onSwitchField, onDone])
 
