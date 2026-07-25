@@ -5,8 +5,10 @@ import { LinearTransition } from 'react-native-reanimated'
 import { ArrowRightLeft, ArrowUp, Hand, Keyboard, Pencil, TrendingUp, Undo2, X } from 'lucide-react-native'
 import {
   formatWeightEsCl,
+  sessionLogKey,
   type OptimisticLogPayload,
   type ReconciledSessionLog,
+  type RepeatSeedEntry,
 } from '@eva/workout-engine'
 import { FONT } from '../../../../lib/typography'
 import { hexToRgba } from '../../../../lib/theme'
@@ -25,6 +27,23 @@ import type { ExecTheme } from './exec-theme'
 // Reflow del layout (paridad SingleExerciseCard CARD_LAYOUT): anima el cambio de tamaño al
 // completar series. Sólo sin reduced-motion.
 const CARD_LAYOUT = LinearTransition.springify().damping(25).stiffness(200)
+
+/**
+ * Semilla de "repetir un día" traducida a los valores tipeables de una serie de FUERZA (mismas claves
+ * que consume `buildStrengthPayload`: weight/reps/rpe/rir). La NOTA no se siembra (decisión CEO).
+ * Devuelve `null` si el día original no dejó ningún valor útil: así la fila cae a su comportamiento
+ * normal (peso sugerido por progresión) en vez de arrancar con las cajas vacías. La exporta también
+ * `ExecutorV3` para sembrar la ruta de EDICIÓN por teclado (`openSet`) con la misma traducción.
+ */
+export function strengthSeedValues(entry: RepeatSeedEntry | null | undefined): Record<string, string> | null {
+  if (!entry) return null
+  const values: Record<string, string> = {}
+  if (entry.weightKg != null) values.weight = formatWeightEsCl(entry.weightKg)
+  if (entry.repsDone != null) values.reps = String(entry.repsDone)
+  if (entry.rpe != null) values.rpe = String(entry.rpe)
+  if (entry.rir != null) values.rir = String(entry.rir)
+  return Object.keys(values).length > 0 ? values : null
+}
 
 /**
  * Pantalla "Fuerza" del ejecutor V3 (E2.3) — traducción RN del `.a3a-body` (Fuerza) del mockup
@@ -52,6 +71,7 @@ export function ExerciseScreenV3({
   blockLogs,
   prevList,
   restoredDraft,
+  repeatSeed = null,
   reducedMotion = false,
   exec,
   showEffort = true,
@@ -75,6 +95,13 @@ export function ExerciseScreenV3({
   blockLogs: ReconciledSessionLog[]
   prevList: PrevSet[]
   restoredDraft: SessionDraft | null
+  /**
+   * Semilla de "repetir un día" indexada por `sessionLogKey(block_id, set_number)`: precarga la serie
+   * activa con lo que el alumno registró ese día, EDITABLE. Entra por la misma cadena de valores
+   * iniciales que el peso sugerido (`seedValues` de `ActiveSetRow`), nunca como log registrado. El
+   * draft restaurado GANA sobre la semilla (es lo último que el alumno tipeó de verdad).
+   */
+  repeatSeed?: Map<string, RepeatSeedEntry> | null
   reducedMotion?: boolean
   exec: ExecTheme
   /** Mostrar las pills/escala de esfuerzo RPE/RIR (E3.7 — la tuerca). Default true. */
@@ -167,10 +194,12 @@ export function ExerciseScreenV3({
   // guardado/draft/cola/keypad es intocable; sólo cambia la piel a los tiles + esfuerzo + CTA del mockup.
   const activeHero = firstUnlogged != null ? (() => {
     const setNumber = firstUnlogged
+    // Precedencia de la captura: draft restaurado (lo último tipeado, resiliencia E2-03) > semilla del
+    // día repetido > peso sugerido por progresión (lo resuelve la propia fila con `suggestedWeight`).
     const seed =
       restoredDraft && restoredDraft.blockId === block.id && restoredDraft.setNumber === setNumber
         ? restoredDraft.values
-        : null
+        : strengthSeedValues(repeatSeed?.get(sessionLogKey(block.id, setNumber)))
     return (
       <ActiveSetRow
         key={`hero-${setNumber}`}
@@ -223,6 +252,11 @@ export function ExerciseScreenV3({
         syncError={syncErrors?.[`${block.id}:${setNumber}`] ?? null}
         onRetry={() => onRetrySet?.(block.id, setNumber)}
         showEffort={showEffort}
+        // El panel de esfuerzo de la serie ya cerrada es la ÚNICA superficie que queda para corregir un
+        // RPE/RIR: debe usar el acento de marca del coach (`exec`) y admitir el RIR 0 ("al fallo"), igual
+        // que el hero activo. Sin estas dos props pintaba el azul EVA y la escala arrancaba en 1.
+        exec={exec}
+        allowZeroRir
       />
     )
   }).filter(Boolean)

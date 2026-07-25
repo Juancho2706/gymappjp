@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import Svg, { Defs, RadialGradient, Rect, Stop } from 'react-native-svg'
 import { MotiView } from 'moti'
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context'
 import { Confetti } from 'react-native-fast-confetti'
-import { ChevronRight, ClipboardCheck, GitCommit, HeartPulse, Medal, Move, Share2 } from 'lucide-react-native'
+import { Check, ChevronRight, ClipboardCheck, CloudOff, GitCommit, HeartPulse, Medal, Move, Share2 } from 'lucide-react-native'
 import {
   compactDistance,
   formatClockDuration,
@@ -169,6 +169,17 @@ function buildDidRows(
   return rows.sort((a, b) => (order.get(a.key) ?? 0) - (order.get(b.key) ?? 0))
 }
 
+/**
+ * Estado de la sincronización de la cola que corre DETRÁS del resumen (decisión CEO 2026-07-25: el
+ * resumen se muestra al toque y la cola se drena en background). `idle` = no hay nada encolado ⇒ el chip
+ * no se pinta (el camino feliz de RN es instantáneo y no debe llenarse de chrome).
+ */
+export type FinalSyncState =
+  | { status: 'idle'; count?: number }
+  | { status: 'syncing'; count: number }
+  | { status: 'done'; count?: number }
+  | { status: 'pending'; count: number }
+
 export interface SessionCompleteV3Props {
   visible: boolean
   exec: ExecTheme
@@ -190,6 +201,8 @@ export interface SessionCompleteV3Props {
   /** Recordatorio de check-in post-entreno (E2-18), null cuando no toca. */
   checkInReminder?: CheckInReminder | null
   checkInLastRelative?: string | null
+  /** Sincronización en background de la cola de series (chip discreto bajo el título). */
+  syncState?: FinalSyncState
   onCheckIn: () => void
   onDone: () => void
 }
@@ -219,6 +232,7 @@ export function SessionCompleteV3({
   weeklyStreak,
   checkInReminder = null,
   checkInLastRelative = null,
+  syncState,
   onCheckIn,
   onDone,
 }: SessionCompleteV3Props) {
@@ -360,6 +374,9 @@ export function SessionCompleteV3({
               {contextLine ? (
                 <Text style={{ fontFamily: FONT.uiBold, fontSize: 13, color: s.textMuted, textAlign: 'center' }}>{contextLine}</Text>
               ) : null}
+              {/* Chip de sincronización (decisión CEO 2026-07-25) — el resumen NO espera a la cola: se
+                  abre al toque y acá se cuenta lo que se está subiendo detrás. Discreto por diseño. */}
+              <SyncChip state={syncState} exec={exec} />
             </FadeIn>
 
             {/* Fase 2 — stats con tickers (stagger). Grilla 2 columnas del contrato: Duración + secundario
@@ -587,6 +604,57 @@ export function SessionCompleteV3({
         </ShareCardPreview>
       </SafeAreaProvider>
     </Modal>
+  )
+}
+
+/**
+ * Chip de sincronización en background. Tres estados visibles: subiendo (spinner + "Sincronizando N
+ * series…"), listo (check verde) y quedó algo (nube tachada ámbar + "se sincronizan solas"). `idle` no
+ * pinta nada. Copy espejo del chip de la web.
+ */
+function SyncChip({ state, exec }: { state: FinalSyncState | undefined; exec: ExecTheme }) {
+  if (!state || state.status === 'idle') return null
+  const s = exec.surface
+  const syncing = state.status === 'syncing'
+  const pending = state.status === 'pending'
+  const n = state.count ?? 0
+  const plural = n !== 1 ? 's' : ''
+  const tone = pending ? exec.pr : syncing ? s.textMuted : '#4ADE80'
+  const label = syncing
+    ? `Sincronizando ${n} serie${plural}…`
+    : pending
+      ? `${n} serie${plural} sin sincronizar · se suben solas`
+      : 'Todo sincronizado'
+  return (
+    <View
+      testID="final-sync-chip"
+      accessibilityRole="text"
+      accessibilityLabel={label}
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        marginTop: 2,
+        borderRadius: 999,
+        borderWidth: 1,
+        borderColor: hexToRgba(tone, 0.34),
+        backgroundColor: hexToRgba(tone, 0.1),
+        paddingHorizontal: 10,
+        paddingVertical: 5,
+      }}
+    >
+      {syncing ? (
+        // El spinner nativo mide 20dp: se escala para no engordar el chip (mismo alto que los iconos).
+        <ActivityIndicator size="small" color={tone} style={{ width: 14, height: 14, transform: [{ scale: 0.7 }] }} />
+      ) : pending ? (
+        <CloudOff size={13} color={tone} strokeWidth={2.4} />
+      ) : (
+        <Check size={13} color={tone} strokeWidth={2.8} />
+      )}
+      <Text style={{ fontFamily: FONT.uiBold, fontSize: 11.5, color: tone }} numberOfLines={1}>
+        {label}
+      </Text>
+    </View>
   )
 }
 

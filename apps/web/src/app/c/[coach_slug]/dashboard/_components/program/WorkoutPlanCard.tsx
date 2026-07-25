@@ -15,6 +15,7 @@ import {
 } from '@/lib/workout/executor-recovery'
 import { WorkoutDoneSheet } from './WorkoutDoneSheet'
 import { useWorkoutLaunch } from '../launch/WorkoutLaunchMorph'
+import { getTodayInSantiago } from '@/lib/date-utils'
 import type { WeekDayStatus } from '../../_data/weekPendingWorkouts'
 
 const DAYS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
@@ -175,7 +176,11 @@ export function WorkoutPlanCards({
                     editHref={sheetItem.isToday
                         ? buildWorkoutFromDoneHref(base, sheetItem.id)
                         : buildWorkoutEditHref(base, sheetItem.id, sheetItem.doneOnDate ?? sheetItem.dateIso)}
-                    repeatHref={buildWorkoutRepeatHref(base, sheetItem.id)}
+                    // Repetir siembra los valores de la fecha REAL de la sesión (la misma que edita el
+                    // botón de arriba): `doneOnDate` cuando el día se recuperó en otra fecha.
+                    repeatHref={buildWorkoutRepeatHref(base, sheetItem.id, sheetItem.doneOnDate ?? sheetItem.dateIso)}
+                    // Si esa sesión es de HOY, repetir pisaría la misma fila (índice único por día) → se oculta.
+                    showRepeat={(sheetItem.doneOnDate ?? sheetItem.dateIso) !== getTodayInSantiago().iso}
                     onLaunch={launch}
                 />
             ) : null}

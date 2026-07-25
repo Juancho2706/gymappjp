@@ -691,41 +691,6 @@ export function EffortHelp({ label, open, onToggle }: { label: string; open: boo
   )
 }
 
-/**
- * Campo de esfuerzo completo (label + ayuda 1-tap + dots) — mirror de cada bloque RPE/RIR del paso de
- * esfuerzo web (`NumericKeypadSheet.tsx:247-260`). Reusable por el `KeypadHost`.
- */
-export function EffortField({
-  kind,
-  label,
-  help,
-  value,
-  onSelect,
-}: {
-  kind: 'rpe' | 'rir'
-  label: string
-  help: string
-  value: number | null
-  onSelect: (v: number) => void
-}) {
-  const [helpOpen, setHelpOpen] = useState(false)
-  return (
-    <View>
-      <View className="mb-1 flex-row items-center gap-1">
-        <Text style={KEYPAD_EYEBROW_STYLE} className="text-on-dark-muted">
-          {label}
-        </Text>
-        <EffortHelp label={kind.toUpperCase()} open={helpOpen} onToggle={() => setHelpOpen((o) => !o)} />
-      </View>
-      {helpOpen ? (
-        // Ayuda inline a 11px (`textStyle('3xs', FONT.uiMedium)`): antes `TYPE.caption` fijaba fontSize=13 inline
-        // y —por la convención NativeWind v4 (el style inline gana)— mataba el `text-[11px]` del className,
-        // saliendo a 13px. Mismo arreglo que el toggle de nota (`SetRow.tsx`) y los EffortLabel del propio SetRow.
-        <Text style={textStyle('3xs', FONT.uiMedium)} className="mb-1.5 text-on-dark-muted">
-          {help}
-        </Text>
-      ) : null}
-      <EffortScale kind={kind} value={value} onSelect={onSelect} />
-    </View>
-  )
-}
+// `EffortField` (label + ayuda 1-tap + dots, mirror del bloque RPE/RIR del paso de esfuerzo web) vivía
+// acá para el `KeypadHost`. Al sacar el esfuerzo del teclado (decisión CEO) se quedó sin consumidores y
+// se eliminó: la captura de RPE/RIR es hoy `EffortTicksV3` (V3) y el bloque inline de `SetRow` (V2).

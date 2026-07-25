@@ -12,9 +12,12 @@ import { FONT } from '../../../lib/typography'
  *     el guardado RN aun escribe el log de HOY (el solo-UPDATE por target_date es un server action web,
  *     E1.5), por eso el sheet no habilita "Revisar y editar" todavia; este banner queda cableado para
  *     cuando el modo edicion de fecha pasada llegue a RN.
+ *   · `repeatDate` (param `repetir`): franja NEUTRA "Repitiendo el {dia}". El alumno entrena HOY una
+ *     instancia NUEVA con las series precargadas con lo que registro ese dia; los registros del dia
+ *     original NO se tocan. El banner solo explica de donde salen los valores que ve.
  *
  * El ejecutor es dark-only (`bg-ink-950`), asi que los colores estan fijados on-dark (no dependen del
- * theme del usuario) para leer siempre. Prioridad: si por algun motivo llegan ambos, gana `recuperar`.
+ * theme del usuario) para leer siempre. Prioridad si llegan varios: `recuperar` > `repetir` > `fecha`.
  */
 
 const WARNING_500 = '#F5A524' // DS --color-warning-500 (ambar)
@@ -34,10 +37,13 @@ function weekdayEs(ymd: string): string {
 export function RecoveryBanner({
   recoverDate,
   editDate,
+  repeatDate,
   onDismiss,
 }: {
   recoverDate?: string
   editDate?: string
+  /** Dia ya entrenado que se esta repitiendo hoy (ymd Santiago, ya validado por la ruta). */
+  repeatDate?: string
   /**
    * QA4: si se pasa, el banner muestra una X para descartarlo (estado local por sesión, lo posee el
    * consumidor). Solo el ejecutor V3 la pasa; V2 lo omite → banner byte-idéntico (sin X).
@@ -56,6 +62,22 @@ export function RecoveryBanner({
           </Text>
         </View>
         {onDismiss ? <DismissButton onPress={onDismiss} color={ON_WARNING} /> : null}
+      </View>
+    )
+  }
+
+  if (repeatDate) {
+    const dia = weekdayEs(repeatDate)
+    return (
+      <View className="flex-row items-center gap-3 px-4 py-2.5" style={{ backgroundColor: NEUTRAL_BG, borderBottomWidth: 1, borderBottomColor: NEUTRAL_BORDER }}>
+        <RotateCcw size={16} color={NEUTRAL_ICON} strokeWidth={2} />
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text style={{ color: NEUTRAL_TITLE, fontFamily: FONT.uiBold, fontSize: 13 }}>Repitiendo el {dia.toLowerCase()}</Text>
+          <Text numberOfLines={1} style={{ color: NEUTRAL_SUB, fontFamily: FONT.uiSemibold, fontSize: 11.5, marginTop: 1 }}>
+            Tus valores de ese dia vienen cargados; puedes cambiarlos
+          </Text>
+        </View>
+        {onDismiss ? <DismissButton onPress={onDismiss} color={DISMISS_NEUTRAL} /> : null}
       </View>
     )
   }

@@ -86,7 +86,12 @@ export interface ProgramType {
     weeks_to_repeat: number
 }
 
-export const getWorkoutExecutionData = cache(async (planId: string, targetDate?: string) => {
+/**
+ * `targetDate` = editar un día PASADO (mueve la ventana de logs a esa fecha, modo solo-UPDATE).
+ * `repeatDate` = repetir HOY un día hecho en OTRA fecha: NO mueve ninguna ventana (todo lo de hoy
+ * sigue siendo de hoy), solo agrega `seedLogs` con lo registrado ese día para PRECARGAR las series.
+ */
+export const getWorkoutExecutionData = cache(async (planId: string, targetDate?: string, repeatDate?: string) => {
     const supabase = await createClient()
     // getClaims(): verificación local del JWT (ES256), sin /user. El proxy ya validó/refrescó la sesión.
     const { data: __cl } = await supabase.auth.getClaims()
@@ -188,6 +193,28 @@ export const getWorkoutExecutionData = cache(async (planId: string, targetDate?:
             .lt('logged_at', windowEndUtc)
 
         logs = (rawLogs || []) as typeof logs
+    }
+
+    // "Repetir hoy" (`?repetir=YYYY-MM-DD`): registros de ESE día, para SEMBRAR los valores de las
+    // series de hoy (peso/reps/esfuerzo precargados y editables). No son `logs`: entran por la misma
+    // cadena de `defaultValue` que el peso sugerido, así que la serie NO queda marcada como
+    // registrada. La ventana de `logs` (y la de historial/máximos) sigue siendo HOY — lo de hoy es
+    // una instancia NUEVA y el día original no se toca. Se descarta si la fecha es inválida, futura
+    // o es hoy mismo (repetir hoy sobre hoy pisaría la misma fila por el índice único diario).
+    let seedLogs: typeof logs = []
+    const seedDateStr = repeatDate !== undefined && repeatDate !== todayStr && validateTargetDate(repeatDate, todayStr).ok
+        ? repeatDate
+        : null
+    if (seedDateStr && blockIds.length > 0) {
+        const { startIso: seedStartUtc, endIso: seedEndUtc } = getSantiagoUtcBoundsForDay(seedDateStr)
+        const { data: rawSeedLogs } = await supabase
+            .from('workout_logs')
+            .select('block_id, set_number, weight_kg, reps_done, rpe, rir, note, actual_duration_sec, actual_distance_m, actual_hold_sec, actual_avg_hr, substituted_exercise_id, substituted_exercise_name, substitution_reason, metadata')
+            .in('block_id', blockIds)
+            .gte('logged_at', seedStartUtc)
+            .lt('logged_at', seedEndUtc)
+
+        seedLogs = (rawSeedLogs || []) as typeof logs
     }
 
     const exerciseIds = plan.workout_blocks
@@ -337,5 +364,5 @@ export const getWorkoutExecutionData = cache(async (planId: string, targetDate?:
         }
     }
 
-    return { user, plan, program, logs, previousHistory, exerciseMaxes, exerciseMaxDates, activeWeekVariant, currentWeek, lastSessionByBlock, areas, cardio }
+    return { user, plan, program, logs, seedLogs, previousHistory, exerciseMaxes, exerciseMaxDates, activeWeekVariant, currentWeek, lastSessionByBlock, areas, cardio }
 })

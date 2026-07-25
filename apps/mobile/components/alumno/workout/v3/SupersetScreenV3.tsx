@@ -234,6 +234,10 @@ export function SupersetScreenV3({
               syncError={syncErrors?.[`${editVM.block.id}:${setNumber}`] ?? null}
               onRetry={() => onRetrySet?.(editVM.block.id, setNumber)}
               showEffort={showEffort}
+              // Panel de esfuerzo de la serie cerrada: acento de marca del coach + RIR 0 ("al fallo"),
+              // igual que el hero activo. Sin estas props caía al azul EVA y a la escala 1-10.
+              exec={exec}
+              allowZeroRir
             />
           )
         })
@@ -518,6 +522,9 @@ export function SupersetScreenV3({
                   syncError={syncError}
                   onRetry={() => onRetrySet?.(m.block.id, round)}
                   showEffort={showEffort}
+                  // Mismo contrato que el resto del V3: acento de marca + RIR 0 en el panel de esfuerzo.
+                  exec={exec}
+                  allowZeroRir
                 />
               )}
             </MotiView>

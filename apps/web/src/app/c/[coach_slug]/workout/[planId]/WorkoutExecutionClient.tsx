@@ -6,7 +6,7 @@ import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { toast } from 'sonner'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { ArrowLeft, Flag, Info, Dumbbell, Timer, TrendingUp, History, Quote, X, Settings, CheckCircle2, WifiOff, ChevronDown, List, GalleryHorizontal, Pencil, CalendarSync } from 'lucide-react'
+import { ArrowLeft, Flag, Info, Dumbbell, Timer, TrendingUp, History, Quote, X, Settings, CheckCircle2, WifiOff, ChevronDown, List, GalleryHorizontal, Pencil, CalendarSync, Repeat } from 'lucide-react'
 import { computeEffectiveTarget } from '@/lib/workout/progression'
 import { readAndConsumeMorphFlag } from '@/lib/workout/launch-ceremony'
 import { useCaptureStudentWorkoutCompleted } from '@/lib/posthog/events'
@@ -24,6 +24,8 @@ import {
     applyOptimisticSessionLog,
     type OptimisticLogPayload,
     groupContiguousSupersetRuns,
+    buildRepeatSeedMap,
+    type RepeatSeedRow,
     type WorkoutSectionKey,
     executionAreaGroupsFor,
     isTimeableInterval,
@@ -39,7 +41,7 @@ import { SupersetStepV3 } from './v3/SupersetStepV3'
 import { ExecListMapV3, type ExecListMapItem } from './v3/ExecListMapV3'
 import { SessionIntro } from './v3/SessionIntro'
 import { SessionStart, type SessionStartExercise } from './v3/SessionStart'
-import { SessionCompleteV3 } from './v3/SessionCompleteV3'
+import { SessionCompleteV3, type FinishSyncState } from './v3/SessionCompleteV3'
 import { TechniqueSheetV3 } from './v3/TechniqueSheetV3'
 import { computeWeeklyStreak, type WeekStatusDaySource } from './v3/weekly-streak'
 import { ExecSettingsSheet } from './v3/ExecSettingsSheet'
@@ -241,6 +243,19 @@ interface Props {
      * guardado sigue siendo el flujo normal de HOY y la atribución la resuelve `deriveWeekWorkoutStatus`.
      */
     recoverDate?: string | null
+    /**
+     * Repetir un día YA entrenado (decisión CEO 2026-07-25): filas de `workout_logs` de ESA fecha,
+     * resueltas server-side cuando el ejecutor se abrió con `?repetir=YYYY-MM-DD`. Sólo SIEMBRAN cada
+     * serie con lo que el alumno registró ese día (editable) — la sesión corre normal y se guarda como
+     * una instancia NUEVA de hoy; el día original no se toca. `null`/vacío ⇒ sesión normal.
+     */
+    seedLogs?: RepeatSeedRow[] | null
+    /**
+     * Día que se está repitiendo (ISO `YYYY-MM-DD` ya validado). SOLO visual: alimenta el banner
+     * "Repitiendo el …". El guardado NO usa esta fecha (es una sesión de HOY, a diferencia de
+     * `targetDate`, que sí edita el día pasado en modo solo-UPDATE).
+     */
+    repeatDate?: string | null
     /**
      * Ejecutor V3 (E2.1): chrome V3 (header nuevo con dots + tuerca, shell dark-only) montado SOBRE el
      * mismo estado/motor (cero cambios a cola/drafts/reconciliación). El flag `executor_v3` se eliminó
@@ -1031,6 +1046,8 @@ export function WorkoutExecutionClient({
     cardio,
     targetDate = null,
     recoverDate = null,
+    seedLogs = null,
+    repeatDate = null,
     executorV3 = false,
     weekStatusDays = null,
 }: Props) {
@@ -1054,8 +1071,26 @@ export function WorkoutExecutionClient({
     const blockRefs = useRef<Map<string, HTMLDivElement>>(new Map())
     // Superserie (F2): refs por fila de serie (block:set) para el auto-scroll intercalado.
     const setRowRefs = useRef<Map<string, HTMLDivElement>>(new Map())
-    // Guard reentrante del gate de "Finalizar" (evita doble flush si el usuario toca dos veces).
-    const finishing = useRef(false)
+    // Guard reentrante de "Finalizar" (evita doble flush si el usuario toca dos veces). Es un REF a
+    // secas porque gana la carrera del doble tap sin esperar al commit de React, y ya no hay nada que
+    // pintar mientras tanto: con el reorden el resumen se monta en el MISMO tick que el tap (el flush
+    // corre detrás), así que las barras/filas de "Finalizar" se desmontan antes de que un spinner
+    // llegue a verse. Estado de UI para "Finalizando…" = chrome muerto (se sacó).
+    const finishingRef = useRef(false)
+    // Sincronización en background de la cola tras mostrar el resumen (decisión CEO 2026-07-25: el
+    // resumen sale AL TOQUE y la cola se vacía detrás). null ⇒ no había nada pendiente: el chip del
+    // resumen no se pinta (nada que informar).
+    const [finishSync, setFinishSync] = useState<FinishSyncState | null>(null)
+    // Montaje vivo: el flush de la cola se resuelve DESPUÉS del await y el alumno puede haber tocado
+    // "Volver al inicio" (el resumen ya estaba en pantalla) → sin este guard, setState sobre un árbol
+    // desmontado. Mismo criterio que el `mountedRef` de `LogSetForm`.
+    const finishMountedRef = useRef(true)
+    useEffect(() => {
+        finishMountedRef.current = true
+        return () => {
+            finishMountedRef.current = false
+        }
+    }, [])
     const [nextCue, setNextCue] = useState<{ blockId: string; set: number } | null>(null)
     const blocks = useMemo(() => [...plan.workout_blocks].sort((a, b) => a.order_index - b.order_index), [plan.workout_blocks])
     const [showTechnique, setShowTechnique] = useState(false)
@@ -1121,6 +1156,16 @@ export function WorkoutExecutionClient({
     // sigue guardando en esa fecha (modo solo-UPDATE) y `recoverDate` sigue siendo el pendiente de la semana.
     const [editBannerDismissed, setEditBannerDismissed] = useState(false)
     const [recoverBannerDismissed, setRecoverBannerDismissed] = useState(false)
+    const [repeatBannerDismissed, setRepeatBannerDismissed] = useState(false)
+    // Repetir un día ya entrenado (decisión CEO 2026-07-25): semilla indexada por (block_id, set_number)
+    // — el MISMO motor de identidad que la cola y el upsert. Deliberadamente NO entra a `sessionLogs`
+    // (marcaría la serie como registrada y colapsaría la fila), ni al snapshot de sesión, ni rehidrata
+    // sustituciones: sólo baja a cada `LogSetForm` como `seed` (pre-llenado editable de hoy).
+    const seedByKey = useMemo(() => buildRepeatSeedMap(seedLogs ?? []), [seedLogs])
+    // ¿La SESIÓN entera es un "repetir el día"? Es propiedad de la sesión, no de la fila: una serie que
+    // ese día no se hizo no tiene semilla, pero sigue siendo parte del día repetido. Lo usa el umbral de
+    // PR (repitiendo, igualar el máximo no celebra; sólo superarlo) — ver `LogSetForm`.
+    const isRepeatSession = repeatDate != null
     // Modelo de foco (M1): los ejercicios/superseries COMPLETADOS colapsan a un recap delgado; el
     // usuario puede reexpandir cualquiera (para editar una serie) con un tap. Clave = block.id (bloque
     // suelto) o group.key (superserie).
@@ -1724,67 +1769,24 @@ export function WorkoutExecutionClient({
             setTimeout(() => scrollToNextIncomplete(nextLogs), 350)
         }
     }
+    /**
+     * Finalizar (reordenado el 2026-07-25, decisión CEO). ANTES: el único `await` del handler era el
+     * flush de la cola, así que el alumno se quedaba mirando una pantalla muerta (sin nada que
+     * indicara actividad) mientras N series se reenviaban EN SERIE, cada una con
+     * varios round trips al server. Y la cola llegaba llena aun con conexión perfecta porque el único
+     * dequeue vive en un efecto del hijo que no corre si la fila ya se desmontó (garantizado en
+     * superseries) → el "1 serie sin sincronizar" era casi siempre un falso pendiente.
+     *
+     * AHORA: cierre local + resumen PRIMERO (se calcula 100% de `sessionLogs` en memoria: no necesita
+     * al server), y el flush corre en BACKGROUND alimentando el chip del resumen. Nada se pierde: la
+     * cola es idempotente (last-wins por block/set/día) y lo que quede se reintenta solo al reentrar.
+     */
     const handleFinish = async () => {
-        if (finishing.current) return
-        // Contrato (c): no finalizar en falso si quedan series sin sincronizar. PERO el write-through
-        // encola SIEMPRE antes de la red, y la reconciliación que saca el item de la cola vive en un
-        // efecto del hijo que NO corre si la fila colapsó/desmontó (última serie de un bloque/grupo)
-        // antes de que llegara `state.success` → el item queda HUÉRFANO aunque el server YA guardó.
-        // Por eso, si hay pendientes, intentamos un flush inmediato: los huérfanos ya-guardados se
-        // reenvían idempotente (last-wins por block/set/día) y salen de la cola; sólo si algo queda de
-        // verdad (sin red) avisamos. Esto mata el falso "1 serie sin sincronizar" con buena conexión.
+        if (finishingRef.current) return
+        finishingRef.current = true
         const pending = readWorkoutOfflineQueueForPlan(plan.id)
-        if (pending.length > 0) {
-            finishing.current = true
-            let stillPending = pending.length
-            try {
-                const res = await flushWorkoutQueue(
-                    (item) => {
-                        const fd = workoutLogToFormData(item)
-                        // Editando un día pasado: el flush de la cola también debe editar ESA fecha
-                        // (modo solo-UPDATE), no insertar un log de HOY. Sin `targetDate` no-op.
-                        if (targetDate) fd.set('target_date', targetDate)
-                        return logSetAction({}, fd)
-                    },
-                    { planId: plan.id },
-                )
-                stillPending = res.remainingInScope
-                if (res.flushed > 0) router.refresh()
-            } catch {
-                // Flush no pudo correr (excepción global) → conservamos el conteo original y avisamos.
-            } finally {
-                finishing.current = false
-            }
-            if (stillPending > 0) {
-                const n = stillPending
-                toast.warning(
-                    `${n} serie${n !== 1 ? 's' : ''} sin sincronizar`,
-                    {
-                        description: 'Se guardarán cuando vuelva la conexión. Puedes finalizar igual o esperar.',
-                        duration: 6000,
-                        action: {
-                            label: 'Finalizar igual',
-                            onClick: () => {
-                                // Fix C (informe forense, P2): invalidación server-side de la vista al
-                                // terminar (defensa complementaria a A+B, no sustituto). Fire-and-forget.
-                                void revalidateWorkoutViewAction(coachSlug, plan.id).catch(() => {})
-                                markFirstWorkoutCompleted()
-                                // Duración final desde el ancla EN ESTE INSTANTE (no el último tick del
-                                // estado, que puede ir ~1s atrasado). Luego limpiamos el ancla → una 2ª
-                                // sesión del mismo día arranca de cero (BUG 1).
-                                setFinishedElapsed(elapsedSecondsSince(sessionAnchorRef.current, Date.now()))
-                                clearSessionStart(plan.id, sessionDayIsoRef.current)
-                                // BUG 2: la sesión terminó → los borradores y el snapshot local ya no aplican.
-                                clearAllDrafts(plan.id)
-                                clearSessionSnapshot(plan.id, sessionDayIsoRef.current)
-                                setShowCompleted(true)
-                            },
-                        },
-                    },
-                )
-                return
-            }
-        }
+
+        // ── 1) Cierre local inmediato (todo síncrono y barato) ──
         // Fix C (informe forense, P2): al FINALIZAR (no por serie — evita parpadeo/scroll) invalidamos la
         // ruta del workout + dashboard, para que una navegación posterior no reuse una entrada stale.
         // Complementa A+B (el garante de la frescura al reentrar sigue siendo el router.refresh de Fix A).
@@ -1798,9 +1800,49 @@ export function WorkoutExecutionClient({
         // BUG 2: la sesión terminó → los borradores y el snapshot local ya no aplican.
         clearAllDrafts(plan.id)
         clearSessionSnapshot(plan.id, sessionDayIsoRef.current)
-        // Evento de producto del ALUMNO: sesión completada (tras el éxito; PostHog gated por consentimiento).
+        // Evento de producto del ALUMNO: sesión completada. Ahora dispara SIEMPRE — antes vivía sólo en
+        // el camino feliz, y la rama "Finalizar igual" del toast (que también terminaba la sesión) lo
+        // omitía: el evento venía sub-reportado justo para los alumnos con mala conexión.
         captureWorkoutCompleted({ plan_id: plan.id })
+        setFinishSync(pending.length > 0 ? { phase: 'syncing', count: pending.length } : null)
         setShowCompleted(true)
+
+        // ── 2) Sincronización en background (el resumen ya está en pantalla) ──
+        if (pending.length === 0) {
+            finishingRef.current = false
+            return
+        }
+        try {
+            const res = await flushWorkoutQueue(
+                (item) => {
+                    const fd = workoutLogToFormData(item)
+                    // Editando un día pasado: el flush de la cola también debe editar ESA fecha
+                    // (modo solo-UPDATE), no insertar un log de HOY. Sin `targetDate` no-op.
+                    if (targetDate) fd.set('target_date', targetDate)
+                    return logSetAction({}, fd)
+                },
+                { planId: plan.id },
+            )
+            // El chip reporta las DOS cosas por separado: lo que quedó pendiente (se reintenta solo) y
+            // lo que el flush DESCARTÓ (rechazo permanente o tope de reintentos = datos perdidos). Con
+            // descartes, "Listo" sería mentira aunque la cola haya quedado vacía.
+            if (finishMountedRef.current) {
+                setFinishSync({
+                    phase: res.remainingInScope > 0 ? 'pending' : 'synced',
+                    count: res.remainingInScope,
+                    discarded: res.discarded,
+                })
+            }
+        } catch {
+            // Flush no pudo correr (excepción global) → conservamos el conteo original y lo informamos
+            // en el chip; la cola sigue intacta y se reintenta al volver a entrar.
+            if (finishMountedRef.current) setFinishSync({ phase: 'pending', count: pending.length })
+        } finally {
+            finishingRef.current = false
+        }
+        // Sin `router.refresh()` acá: refrescar el RSC de la ruta mientras el resumen entra compite con
+        // su animación (y el resumen no lee del server). La invalidación server-side ya la hizo
+        // `revalidateWorkoutViewAction`, y "Volver al inicio" navega al dashboard con datos frescos.
     }
     // Contexto del programa para el nudge "lo que viene" del resumen (reusa la sub-línea del header;
     // sin queries — el próximo plan concreto no está en el payload → no se resuelve acá).
@@ -1848,6 +1890,8 @@ export function WorkoutExecutionClient({
                         key={group.key}
                         info={info}
                         sessionLogs={sessionLogs}
+                        seedByKey={seedByKey}
+                        isRepeatSession={isRepeatSession}
                         currentWeek={currentWeek}
                         weeksToRepeat={program?.weeks_to_repeat}
                         previousHistory={previousHistory}
@@ -1986,6 +2030,8 @@ export function WorkoutExecutionClient({
                                 firstUnlogged={firstUnlogged}
                                 doneCount={doneCount}
                                 blockLogs={blockLogs}
+                                seedByKey={seedByKey}
+                                isRepeatSession={isRepeatSession}
                                 exerciseMaxes={exerciseMaxes}
                                 fillEntry={fillByBlock[block.id]}
                                 setFillByBlock={setFillByBlock}
@@ -2010,6 +2056,7 @@ export function WorkoutExecutionClient({
                         firstUnlogged,
                         doneCount,
                         blockLogs,
+                        seedByKey,
                         autoTimerEnabled,
                         reopenSignal,
                         substitution: sub ? { exerciseId: sub.id, exerciseName: sub.name, reason: SUBSTITUTION_REASON } : null,
@@ -2175,6 +2222,8 @@ export function WorkoutExecutionClient({
     // la semana, `?recuperar=`). Sólo uno suele estar activo; el nombre del día sale de la fecha validada.
     const editWeekday = targetDate ? weekdayNameFromIso(targetDate) : ''
     const recoverWeekday = recoverDate ? weekdayNameFromIso(recoverDate) : ''
+    // Repetir un día ya entrenado (`?repetir=`): mismo patrón de banner, sólo informativo.
+    const repeatWeekday = repeatDate ? weekdayNameFromIso(repeatDate) : ''
 
     // Ejecutor V3 (E4.4): racha semanal derivada del estado de la semana (server-side, flag V3 ON).
     // Compartida por Inicio (SessionStart) y Final V3. `null` ⇒ la pieza no se muestra (dato ausente).
@@ -2511,6 +2560,33 @@ export function WorkoutExecutionClient({
                     </div>
                 )}
 
+                {/* Repitiendo un día ya entrenado (decisión CEO 2026-07-25): las series abren precargadas
+                    con lo de esa fecha y son EDITABLES; lo que se confirma es una sesión de HOY (el día
+                    original queda intacto). Descartable con la X (estado local; no cambia el guardado). */}
+                {repeatDate && !repeatBannerDismissed && (
+                    <div className="flex items-center gap-2.5 border-b border-white/10 bg-white/[0.05] px-4 py-2.5 backdrop-blur-sm">
+                        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-control bg-[var(--sport-500)]/15 text-[var(--sport-300)]">
+                            <Repeat className="h-4 w-4" />
+                        </span>
+                        <div className="min-w-0 flex-1">
+                            <p className="text-[13px] font-black leading-tight text-on-dark">
+                                Repitiendo el {repeatWeekday.toLowerCase()}
+                            </p>
+                            <p className="mt-0.5 text-[11px] font-semibold leading-tight text-on-dark-muted">
+                                Valores precargados, editables. Se guarda como sesión de hoy.
+                            </p>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => setRepeatBannerDismissed(true)}
+                            className="flex h-6 w-6 shrink-0 items-center justify-center self-start rounded-full text-[#8f8f9c] transition-colors hover:text-on-dark hover:bg-white/10 active:scale-95"
+                            aria-label="Descartar aviso"
+                        >
+                            <X className="h-4 w-4" />
+                        </button>
+                    </div>
+                )}
+
                 <div className={cn(execBaseHidden && 'invisible')}>
                 {stepperEnabled ? (
                     /* Modo "paso a paso" — un ejercicio/superserie a la vez (Fase L · workstream A).
@@ -2654,6 +2730,7 @@ export function WorkoutExecutionClient({
                         programName={program?.name ?? null}
                         nextHint={nextHint}
                         substitutedBlockIds={Object.keys(substitutionByBlock)}
+                        syncStatus={finishSync}
                         onDone={() => router.push(`${base}/dashboard`)}
                     />
                 )}

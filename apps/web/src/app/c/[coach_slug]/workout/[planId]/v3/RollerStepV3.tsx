@@ -9,7 +9,7 @@ import { useWorkoutTimer } from '../WorkoutTimerProvider'
 import { triggerHaptic } from '@/lib/client/haptics'
 import { useCoarsePointer } from '@/lib/client/useCoarsePointer'
 import { useWorkoutKeypad } from '../WorkoutKeypadProvider'
-import { formatTypedObjective, type OptimisticLogPayload } from '@eva/workout-engine'
+import { formatTypedObjective, sessionLogKey, type OptimisticLogPayload, type RepeatSeedEntry } from '@eva/workout-engine'
 import type { BlockType, ExerciseType, WorkoutSessionLog } from '../WorkoutExecutionClient'
 import { ExecTypedMedia } from './ExecTypedMedia'
 import { SingleWheelPicker } from './DualWheelPicker'
@@ -20,6 +20,11 @@ interface RollerStepV3Props {
     firstUnlogged: number | null
     doneCount: number
     blockLogs: WorkoutSessionLog[]
+    /**
+     * Semilla de "repetir el día" indexada por `(block_id, set_number)` (engine `buildRepeatSeedMap`):
+     * pre-llena segundos/pasadas de esa fecha. No marca nada como registrado. Ausente ⇒ sesión normal.
+     */
+    seedByKey?: Map<string, RepeatSeedEntry>
     autoTimerEnabled: boolean
     reopenSignal: { blockId: string; setNumber: number; nonce: number } | null
     substitution?: { exerciseId: string; exerciseName: string; reason: string } | null
@@ -41,6 +46,7 @@ export function RollerStepV3({
     firstUnlogged,
     doneCount,
     blockLogs,
+    seedByKey,
     autoTimerEnabled,
     reopenSignal,
     substitution,
@@ -71,16 +77,27 @@ export function RollerStepV3({
         fired: false,
     })
 
-    // Contador de pasadas de la serie activa. Arranca del log existente (edición) o 0. Se reinicia al
-    // cambiar de serie activa. Cada cambio empuja un prefill tipado a la fila (reps_done, uncontrolled).
-    const [passes, setPasses] = useState<number>(activeLog?.reps_done ?? 0)
+    /**
+     * Pasadas con que arranca una serie: el log existente manda (edición) y, si no hay, la semilla del
+     * día repetido. En táctil la RUEDA/contador es lo que el alumno toca de verdad — arrancarla en 0
+     * mientras el input oculto de la fila iba sembrado mostraba "0 pasadas" y, al tocar +1, pisaba la
+     * semilla con 1. Sin semilla ⇒ 0, exactamente como siempre.
+     */
+    const initialPassesFor = (setNumber: number, log: WorkoutSessionLog | undefined): number => {
+        if (log) return log.reps_done ?? 0
+        return seedByKey?.get(sessionLogKey(block.id, setNumber))?.repsDone ?? 0
+    }
+
+    // Contador de pasadas de la serie activa. Se reinicia al cambiar de serie activa. Cada cambio empuja
+    // un prefill tipado a la fila (reps_done, uncontrolled).
+    const [passes, setPasses] = useState<number>(() => initialPassesFor(activeSet, activeLog))
     const [prefillNonce, setPrefillNonce] = useState(0)
     // Nonce del micro-rebote del número: sólo sube al SUMAR (el pop del mockup salta al añadir pasada).
     const [pop, setPop] = useState(0)
     const perSide = block.side_mode === 'per_side'
 
     useEffect(() => {
-        setPasses(activeLog?.reps_done ?? 0)
+        setPasses(initialPassesFor(activeSet, activeLog))
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [activeSet])
 
@@ -285,6 +302,7 @@ export function RollerStepV3({
                             totalSets={block.sets}
                             nextUpLabel={exercise.name}
                             existingLog={log}
+                            seed={seedByKey?.get(sessionLogKey(block.id, setNumber))}
                             targetReps={block.reps}
                             autoTimerEnabled={autoTimerEnabled}
                             mode="roller"

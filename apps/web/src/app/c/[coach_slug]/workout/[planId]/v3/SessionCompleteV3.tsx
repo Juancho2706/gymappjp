@@ -1,8 +1,8 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { motion, useReducedMotion } from 'framer-motion'
-import { Share2, Check, ArrowRight, HeartPulse, Move, GitCommit } from 'lucide-react'
+import { Share2, Check, ArrowRight, HeartPulse, Move, GitCommit, CloudOff, Loader2, AlertTriangle } from 'lucide-react'
 import { getSantiagoIsoYmdForUtcInstant } from '@/lib/date-utils'
 import { compactDistance } from '@/lib/workout-exercise-type'
 import { MuscleMapSvg } from '../MuscleMapSvg'
@@ -155,6 +155,75 @@ function buildDidRows(
     return rows.sort((a, b) => (order.get(a.key) ?? 0) - (order.get(b.key) ?? 0))
 }
 
+/**
+ * Estado de la sincronización en background de la cola offline (decisión CEO 2026-07-25: el resumen
+ * se muestra AL TOQUE y las series pendientes se envían detrás).
+ *  - `count`     → en 'syncing', cuántas van; en 'synced'/'pending', cuántas QUEDARON sin enviar
+ *                  (siguen en la cola y se reintentan solas al reentrar: nada se perdió).
+ *  - `discarded` → cuántas el flush SACÓ de la cola sin guardarlas (rechazo permanente del server o
+ *                  tope de reintentos). Eso SÍ es pérdida de datos y jamás puede reportarse como
+ *                  "Listo": el chip lo dice explícito aunque no quede nada pendiente.
+ */
+export type FinishSyncState = { phase: 'syncing' | 'synced' | 'pending'; count: number; discarded?: number }
+
+/** "N series" / "1 serie" — pluralización es-CL de una sola línea. */
+function seriesLabel(n: number): string {
+    return `${n} ${n === 1 ? 'serie' : 'series'}`
+}
+
+/**
+ * Chip de sincronización — discreto, informativo, jamás bloqueante: el alumno ya terminó y su resumen
+ * es correcto (sale de los logs en memoria) aunque el envío siga corriendo. Sólo se pinta si al
+ * finalizar había algo en la cola (el host manda `null` cuando no había nada que informar).
+ *
+ * HONESTIDAD (fix 2026-07-25): el chip mira pendientes Y descartadas por separado. Una serie
+ * descartada NO va a llegar nunca al server, así que decir "Listo" porque la cola quedó vacía sería
+ * mentirle al alumno sobre datos que perdió.
+ */
+function SyncChip({ state, reducedMotion }: { state: FinishSyncState; reducedMotion: boolean | null }) {
+    const discarded = state.discarded ?? 0
+    const iconCls = 'h-3 w-3 shrink-0'
+    let icon: ReactNode
+    let text: string
+    let tone: string
+    if (state.phase === 'syncing') {
+        icon = <Loader2 className={`${iconCls} animate-spin`} aria-hidden />
+        text = `Sincronizando ${seriesLabel(state.count)}…`
+        tone = 'var(--text-on-dark-muted)'
+    } else if (discarded > 0) {
+        // Pérdida real: el server las rechazó definitivamente. Se nombra primero y en tono de alerta;
+        // si además quedaron pendientes, se agregan al final (esas sí se reintentan solas).
+        icon = <AlertTriangle className={iconCls} aria-hidden />
+        text =
+            state.count > 0
+                ? `${seriesLabel(discarded)} no se pudieron guardar · ${state.count} pendiente${state.count === 1 ? '' : 's'}`
+                : `${seriesLabel(discarded)} no se pudieron guardar — avisa a tu coach`
+        tone = 'var(--danger-500)'
+    } else if (state.count > 0) {
+        icon = <CloudOff className={iconCls} aria-hidden />
+        text = `${seriesLabel(state.count)} sin sincronizar, se guardarán al volver`
+        tone = 'var(--warning-500)'
+    } else {
+        icon = <Check className={iconCls} aria-hidden />
+        text = 'Listo'
+        tone = 'var(--text-on-dark-muted)'
+    }
+    return (
+        <motion.p
+            role="status"
+            aria-live="polite"
+            initial={reducedMotion ? false : { opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={reducedMotion ? { duration: 0 } : { duration: 0.25 }}
+            className="mt-3 inline-flex max-w-full items-center gap-1.5 rounded-full border-[1.5px] border-[#24242e] bg-[#17171f] px-3 py-1.5 text-[11px] font-bold leading-tight"
+            style={{ color: tone }}
+        >
+            {icon}
+            {text}
+        </motion.p>
+    )
+}
+
 /** Icono por tipo (16px, gris neutro #8f8f9c) — mismos glifos que el resumen V2 (cardio/movilidad/roller). */
 function DidIcon({ type }: { type: DidType }) {
     const cls = 'h-4 w-4 shrink-0'
@@ -186,6 +255,8 @@ export interface SessionCompleteV3Props {
     programName?: string | null
     nextHint?: string | null
     substitutedBlockIds?: string[]
+    /** Sincronización en background de la cola offline. null/omitido ⇒ no había pendientes: sin chip. */
+    syncStatus?: FinishSyncState | null
     onDone: () => void
 }
 
@@ -203,6 +274,7 @@ export function SessionCompleteV3({
     programName = null,
     nextHint = null,
     substitutedBlockIds = [],
+    syncStatus = null,
     onDone,
 }: SessionCompleteV3Props) {
     const reducedMotion = useReducedMotion()
@@ -297,6 +369,10 @@ export function SessionCompleteV3({
                         {contextLine}
                     </motion.p>
                 )}
+
+                {/* Chip de sincronización (2026-07-25): el flush de la cola corre DETRÁS de esta pantalla,
+                    así que acá se reporta su avance sin retener nunca al alumno. */}
+                {syncStatus && <SyncChip state={syncStatus} reducedMotion={reducedMotion} />}
 
                 {/* ── Fase 2: stats en stagger con tickers ── */}
                 <motion.div

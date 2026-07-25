@@ -10,11 +10,12 @@ import {
     formatTypedObjective,
     INTERVAL_PHASE_LABEL,
     compactDistance,
+    sessionLogKey,
     type IntervalPhase,
 } from '@eva/workout-engine'
 import { LogSetForm, type SetSyncResult } from '../LogSetForm'
 import { useWorkoutTimer } from '../WorkoutTimerProvider'
-import type { OptimisticLogPayload } from '@eva/workout-engine'
+import type { OptimisticLogPayload, RepeatSeedEntry } from '@eva/workout-engine'
 import type { BlockType, ExerciseType, WorkoutSessionLog } from '../WorkoutExecutionClient'
 import type { ClientCardioView } from '../_data/workout-execution.queries'
 import { ExecTypedMedia } from './ExecTypedMedia'
@@ -30,6 +31,11 @@ interface CardioStepV3Props {
     firstUnlogged: number | null
     doneCount: number
     blockLogs: WorkoutSessionLog[]
+    /**
+     * Semilla de "repetir el día" indexada por `(block_id, set_number)` (engine `buildRepeatSeedMap`):
+     * pre-llena min/metros/FC de esa fecha. No marca nada como registrado. Ausente ⇒ sesión normal.
+     */
+    seedByKey?: Map<string, RepeatSeedEntry>
     cardio?: ClientCardioView
     autoTimerEnabled: boolean
     reopenSignal: { blockId: string; setNumber: number; nonce: number } | null
@@ -486,6 +492,7 @@ function CaptureRows({
     exercise,
     firstUnlogged,
     blockLogs,
+    seedByKey,
     autoTimerEnabled,
     reopenSignal,
     substitution,
@@ -509,6 +516,7 @@ function CaptureRows({
                         totalSets={block.sets}
                         nextUpLabel={exercise.name}
                         existingLog={log}
+                        seed={seedByKey?.get(sessionLogKey(block.id, setNumber))}
                         targetReps={block.reps}
                         autoTimerEnabled={autoTimerEnabled}
                         mode="cardio"

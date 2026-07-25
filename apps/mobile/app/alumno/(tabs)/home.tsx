@@ -469,7 +469,12 @@ export default function AlumnoHomeScreen() {
             pending={derived.pending}
             todayPlanId={derived.todayPlanId}
             weekVariant={derived.weekVariant}
-            onStart={(id, origin, label) => startMorph({ planId: id, origin, label })}
+            // `repeatDate` (sheet doble intencion → "Repetir hoy" sobre un dia hecho en OTRA fecha) viaja
+            // como param `repetir`: el ejecutor abre una sesion NUEVA de hoy con cada serie precargada con
+            // lo que se registro ese dia (editable). Los registros del dia original no se tocan.
+            onStart={(id, origin, label, repeatDate) =>
+              startMorph({ planId: id, origin, label, params: repeatDate ? { repetir: repeatDate } : undefined })
+            }
             // Recuperar un dia pendiente: se entrena HOY y el log cae hoy (semantica correcta de
             // recuperacion, ver E1.1); el param `recuperar` solo pinta el banner informativo ambar.
             // El camino "editar fecha pasada" (param `fecha`) queda cableado en [planId].tsx + banner

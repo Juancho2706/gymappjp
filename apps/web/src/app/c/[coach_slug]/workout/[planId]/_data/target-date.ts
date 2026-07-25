@@ -33,3 +33,19 @@ export function validateTargetDate(input: string, todayIso: string): TargetDateV
     if (input > todayIso) return { ok: false, reason: 'future' }
     return { ok: true, iso: input }
 }
+
+/**
+ * Resuelve el parámetro `repetir` (repetir HOY un día hecho en OTRA fecha, con las series
+ * precargadas). Devuelve la fecha PASADA válida o `null` cuando no debe sembrarse nada.
+ *
+ * Descartes: entrada ausente/no string, formato o calendario inválidos, futuro, y HOY MISMO — el
+ * índice único de logs es por día, así que repetir hoy sobre hoy pisaría la misma fila (decisión
+ * CEO). La exclusión contra el modo edición (`fecha`) se resuelve en la página, no acá.
+ */
+export function resolveRepeatDate(input: string | undefined | null, todayIso: string): string | null {
+    if (typeof input !== 'string') return null
+    const check = validateTargetDate(input, todayIso)
+    if (!check.ok) return null
+    if (check.iso === todayIso) return null
+    return check.iso
+}

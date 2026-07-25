@@ -5,7 +5,7 @@ import type { Dispatch, SetStateAction } from 'react'
 import { Keyboard, Pencil, Repeat } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { LogSetForm, type SetSyncResult } from '../LogSetForm'
-import type { OptimisticLogPayload } from '@eva/workout-engine'
+import { sessionLogKey, type OptimisticLogPayload, type RepeatSeedEntry } from '@eva/workout-engine'
 import type { ExerciseType as WorkoutKind } from '@/domain/workout/types'
 import {
     type BlockType,
@@ -38,6 +38,18 @@ interface ExerciseStepV3Props {
     doneCount: number
     /** Logs de la sesión de ESTE bloque. */
     blockLogs: WorkoutSessionLog[]
+    /**
+     * Semilla de "repetir el día" indexada por `(block_id, set_number)` (engine `buildRepeatSeedMap`).
+     * Sólo pre-llena las filas: no marca series como registradas. Ausente ⇒ sesión normal.
+     */
+    seedByKey?: Map<string, RepeatSeedEntry>
+    /**
+     * ¿La sesión entera es un "repetir el día"? Propiedad de la SESIÓN, no de la fila: una serie que ese
+     * día no se hizo no tiene semilla pero sigue siendo parte del día repetido. Endurece el umbral de PR
+     * (igualar el máximo no celebra; sólo superarlo). Ausente ⇒ sesión normal.
+     */
+    isRepeatSession?: boolean
+
     /** Máximos históricos por ejercicio (umbral de PR inline). */
     exerciseMaxes: Record<string, number>
     /** Prefill "= última vez" por bloque (entrada del padre). */
@@ -83,6 +95,8 @@ export function ExerciseStepV3({
     firstUnlogged,
     doneCount,
     blockLogs,
+    seedByKey,
+    isRepeatSession,
     exerciseMaxes,
     fillEntry,
     setFillByBlock,
@@ -208,6 +222,8 @@ export function ExerciseStepV3({
                                 totalSets={block.sets}
                                 nextUpLabel={exercise.name}
                                 existingLog={log}
+                                seed={seedByKey?.get(sessionLogKey(block.id, setNumber))}
+                                isRepeatSession={isRepeatSession}
                                 suggestedWeightKg={suggestedWeightKg}
                                 prThresholdKg={exerciseMaxes[exercise.id] ?? null}
                                 targetReps={block.reps}

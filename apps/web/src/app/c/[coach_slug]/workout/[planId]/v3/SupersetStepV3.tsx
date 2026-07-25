@@ -10,9 +10,11 @@ import {
     firstIncompleteInRounds,
     isRoundComplete,
     formatTypedObjective,
+    sessionLogKey,
     type RoundMemberBlock,
     type RoundLogLike,
     type OptimisticLogPayload,
+    type RepeatSeedEntry,
 } from '@eva/workout-engine'
 import { computeEffectiveTarget } from '@/lib/workout/progression'
 import { effectiveExerciseType } from '@/lib/workout-exercise-type'
@@ -41,6 +43,18 @@ interface SupersetStepV3Props {
     previousHistory: Record<string, PrevSet[]>
     lastSessionByBlock: Record<string, { date: string; sets: Array<{ weight_kg: number | null; reps_done: number | null }> }>
     exerciseMaxes: Record<string, number>
+    /**
+     * Semilla de "repetir el día" indexada por `(block_id, set_number)` (engine `buildRepeatSeedMap`).
+     * En la superserie la serie del miembro activo es la RONDA en curso → la entrada se resuelve por
+     * (bloque, ronda). Sólo pre-llena; no marca nada como registrado. Ausente ⇒ sesión normal.
+     */
+    seedByKey?: Map<string, RepeatSeedEntry>
+    /**
+     * ¿La sesión entera es un "repetir el día"? Propiedad de la SESIÓN, no de la fila (una serie que ese
+     * día no se hizo no tiene semilla y sigue siendo parte del día repetido). Endurece el umbral de PR:
+     * igualar el máximo no celebra, sólo superarlo. Ausente ⇒ sesión normal.
+     */
+    isRepeatSession?: boolean
     autoTimerEnabled: boolean
     /** Sustitución activa por bloque (mismo shape del padre; se pasa tal cual al LogSetForm). */
     substitutionByBlock: Record<string, SessionSubstitution | undefined>
@@ -77,6 +91,8 @@ export function SupersetStepV3({
     previousHistory,
     lastSessionByBlock,
     exerciseMaxes,
+    seedByKey,
+    isRepeatSession,
     autoTimerEnabled,
     substitutionByBlock,
     onLogged,
@@ -290,6 +306,8 @@ export function SupersetStepV3({
                                                 totalSets={m.block.sets}
                                                 nextUpLabel={firstName}
                                                 existingLog={sessionLogs.find((l) => l.block_id === m.block.id && l.set_number === currentRound)}
+                                                seed={seedByKey?.get(sessionLogKey(m.block.id, currentRound))}
+                                                isRepeatSession={isRepeatSession}
                                                 suggestedWeightKg={m.suggestedWeightKg}
                                                 prThresholdKg={exerciseMaxes[m.exercise.id] ?? null}
                                                 targetReps={m.block.reps}

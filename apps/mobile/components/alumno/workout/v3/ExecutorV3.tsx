@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Alert, Pressable, Text, View } from 'react-native'
+import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake'
 import { useRouter } from 'expo-router'
@@ -12,8 +12,10 @@ import {
   formatWeightEsCl,
   isRoundComplete,
   isStepComplete,
+  sessionLogKey,
   typedTargetFor,
   type OptimisticLogPayload,
+  type RepeatSeedEntry,
   type SummaryBlock,
   type WorkoutCelebrationEvent,
 } from '@eva/workout-engine'
@@ -35,14 +37,14 @@ import {
   type SessionExercise,
 } from '../../../../lib/workout-session'
 import { setToastDark } from '../../../Toast'
-import { flushLogQueue, getPendingLogCount } from '../../../../lib/offline-cache'
+import { flushLogQueue, getDueLogCount, getPendingLogCount } from '../../../../lib/offline-cache'
 import { OfflineBanner } from '../../../OfflineBanner'
 import { EvaLoaderScreen } from '../../../EvaLoader'
 import { SingleExerciseCard } from '../SingleExerciseCard'
 import { StepperExecution, type StepperStepView } from '../StepperExecution'
 import { KeypadHost, type KeypadTarget } from '../KeypadHost'
 import { TechniqueSheet } from '../TechniqueSheet'
-import { SessionCompleteV3 } from './SessionCompleteV3'
+import { SessionCompleteV3, type FinalSyncState } from './SessionCompleteV3'
 import { RecoveryBanner } from '../RecoveryBanner'
 import { WorkoutTimerProvider, useWorkoutTimers } from '../timers/TimerProvider'
 import { isRestAutoTimerEnabled, parseRestTime, type RestInterstitialRenderer } from '../timers'
@@ -55,7 +57,7 @@ import { resolveExecTheme } from './exec-theme'
 import { SessionIntro } from './SessionIntro'
 import { SessionStart, type StartChip, type StartExercisePreview } from './SessionStart'
 import { consumeMorphLaunch, signalMorphSceneReady } from './session-morph'
-import { ExerciseScreenV3 } from './ExerciseScreenV3'
+import { ExerciseScreenV3, strengthSeedValues } from './ExerciseScreenV3'
 import { SupersetScreenV3, type SupersetMemberSub } from './SupersetScreenV3'
 import { supersetGroupLetter, memberLetter } from './superset-screen-model'
 import { MobilityScreenV3 } from './MobilityScreenV3'
@@ -104,6 +106,40 @@ type ActiveSub = {
 }
 
 /**
+ * Semilla de "repetir un día" traducida a los campos de un bloque TIPADO (cardio/movilidad/resto), con
+ * las MISMAS claves que arma la rama de edición de `openSet`. Sin valores útiles ⇒ null (el teclado abre
+ * limpio). La nota no se siembra.
+ *
+ * Paridad web (`LogSetForm.TypedLogSetRow`, 1765-1858): la fila tipada de la web NO siembra el RPE del
+ * día original — su captura tipada no ofrece esfuerzo, así que sembrarlo escribía en el log de hoy un
+ * RPE que el alumno nunca vio ni confirmó (`buildTypedPayload` lee `values.rpe`). Acá tampoco se siembra;
+ * el RPE de una serie tipada YA registrada lo sigue rehidratando la rama de EDICIÓN de `openSet`.
+ *
+ * El hold POR LADO sí se siembra (web: `seedValues?.metadata?.left_sec/right_sec`): `hold_left_sec` /
+ * `hold_right_sec` son las claves que declara `typedKeypadFields('mobility','per_side')`. En un bloque
+ * bilateral esas claves son inertes (`typedLogValues` sólo las lee con `sideMode==='per_side'`, y en
+ * per_side el hold total se recalcula como suma, así que `actual_hold_sec` tampoco estorba).
+ */
+function typedSeedValues(entry: RepeatSeedEntry | null | undefined, mode: string): Record<string, string> | null {
+  if (!entry) return null
+  const vals: Record<string, string> = {}
+  if (mode === 'cardio') {
+    if (entry.actualDurationSec != null)
+      vals.cardio_min = formatWeightEsCl(Math.round((entry.actualDurationSec / 60) * 10) / 10)
+    if (entry.actualDistanceM != null) vals.actual_distance_m = formatWeightEsCl(entry.actualDistanceM)
+    if (entry.actualAvgHr != null) vals.actual_avg_hr = String(entry.actualAvgHr)
+  } else if (mode === 'mobility') {
+    if (entry.actualHoldSec != null) vals.actual_hold_sec = String(entry.actualHoldSec)
+    if (entry.metadata?.left_sec != null) vals.hold_left_sec = String(entry.metadata.left_sec)
+    if (entry.metadata?.right_sec != null) vals.hold_right_sec = String(entry.metadata.right_sec)
+  } else {
+    if (entry.actualDurationSec != null) vals.actual_duration_sec = String(entry.actualDurationSec)
+    if (entry.repsDone != null) vals.reps_done = String(entry.repsDone)
+  }
+  return Object.keys(vals).length > 0 ? vals : null
+}
+
+/**
  * ExecutorV3 (E2.1) — SHELL de presentacion V3 del ejecutor del alumno. Montado sobre EL MISMO motor
  * headless que ExecutorV2 (`useWorkoutSession` + `WorkoutTimerProvider`): cola offline, drafts,
  * reconciliacion, timers y acciones son INTOCABLES; el V3 solo cambia la PRESENTACION.
@@ -114,15 +150,27 @@ type ActiveSub = {
  * (`buildStepModel` + StepperExecution); (c) el RecoveryBanner si llegan params. La pantalla "Fuerza"
  * V3 completa (media, prescripcion rica, efecto juicy) llega en la wave 2.
  */
-export default function ExecutorV3({ planId, recoverDate, editDate }: { planId: string; recoverDate?: string; editDate?: string }) {
+export default function ExecutorV3({ planId, recoverDate, editDate, repeatDate }: ExecutorV3Props) {
   return (
     <WorkoutTimerProvider>
-      <ExecutorV3Inner planId={planId} recoverDate={recoverDate} editDate={editDate} />
+      <ExecutorV3Inner planId={planId} recoverDate={recoverDate} editDate={editDate} repeatDate={repeatDate} />
     </WorkoutTimerProvider>
   )
 }
 
-function ExecutorV3Inner({ planId, recoverDate, editDate }: { planId: string; recoverDate?: string; editDate?: string }) {
+interface ExecutorV3Props {
+  planId: string
+  recoverDate?: string
+  editDate?: string
+  /**
+   * Día ya entrenado que se está REPITIENDO hoy (`?repetir=`, ya validado por la ruta). La sesión corre
+   * como cualquier otra —confirmar serie, descanso, siguiente— y escribe el log de HOY; lo único que
+   * cambia es que cada serie llega PRECARGADA con lo que se registró ese día (editable).
+   */
+  repeatDate?: string
+}
+
+function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: ExecutorV3Props) {
   const execSettings = useExecSettings()
   // Wake-lock de la sesion — condicional a la preferencia "Mantener pantalla encendida" (E3.7). Por
   // default ON (comportamiento previo). Best-effort: nunca lanza en plataformas sin soporte.
@@ -140,8 +188,14 @@ function ExecutorV3Inner({ planId, recoverDate, editDate }: { planId: string; re
   const { theme, branding } = useTheme()
   const motion = useEvaMotion()
   const timers = useWorkoutTimers()
-  const session = useWorkoutSession(planId)
+  const session = useWorkoutSession(planId, repeatDate)
+  // Finalizar en curso: el REF es el guard de reentrada (bloquea el 2.º tap dentro del mismo render) y el
+  // ESTADO es lo que ve el alumno (botones deshabilitados + spinner). Antes sólo existía el ref, así que
+  // finalizar no daba ninguna señal visual mientras corría (paridad con el fix de la web).
   const finishingRef = useRef(false)
+  const [finishing, setFinishing] = useState(false)
+  // Estado del drenaje en background que alimenta el chip del resumen (decisión CEO 2026-07-25).
+  const [syncState, setSyncState] = useState<FinalSyncState>({ status: 'idle' })
   // Orquestador de celebraciones (E4.1): punto único que dosifica haptics por tier y gobierna el PR en vivo.
   const cel = useCelebrations()
 
@@ -192,10 +246,19 @@ function ExecutorV3Inner({ planId, recoverDate, editDate }: { planId: string; re
 
   useEffect(() => () => { if (recentSetTimer.current) clearTimeout(recentSetTimer.current) }, [])
 
+  // Guard de montaje para el drenaje en background (`syncQueueInBackground`): sus `setSyncState` caen
+  // DESPUÉS de varios awaits y el alumno puede salir del ejecutor mientras la cola sube. Mismo criterio
+  // que el `mountedRef` de la web (LogSetForm.tsx:291-296 / WorkoutExecutionClient.tsx:1086).
+  const mountedRef = useRef(true)
+  useEffect(() => {
+    mountedRef.current = true
+    return () => { mountedRef.current = false }
+  }, [])
+
   const {
     loading, planTitle, programName, phaseName, activeWeekVariant, currentWeek, weeksToRepeat, programStructure,
     dayOfWeek, clientId, blocks, sections, supersetMembersByBlock, sessionLogs, previousHistory, lastSessionByBlock,
-    exerciseMaxes, elapsedSec, isOnline, restoredDraft, saveDraft, logSet, finishSession,
+    exerciseMaxes, repeatSeed, elapsedSec, isOnline, restoredDraft, saveDraft, logSet, finishSession,
   } = session
 
   // Via-morph (Despegue): avisa al overlay de lanzamiento que la escena de Inicio ya cargó → habilita el
@@ -293,6 +356,9 @@ function ExecutorV3Inner({ planId, recoverDate, editDate }: { planId: string; re
         !prefill && restoredDraft && restoredDraft.blockId === blockId && restoredDraft.setNumber === setNumber
           ? restoredDraft
           : null
+      // Semilla del día repetido para ESTA serie (null fuera del modo repetir). Va SIEMPRE al final de
+      // la cadena de valores iniciales: prefill > log existente/edición > draft restaurado > semilla.
+      const seedEntry = repeatSeed?.get(sessionLogKey(blockId, setNumber)) ?? null
 
       const typed = typedTargetFor(block, exercise)
       if (typed) {
@@ -321,7 +387,7 @@ function ExecutorV3Inner({ planId, recoverDate, editDate }: { planId: string; re
           targetReps: '',
           suggestedWeight: null,
           effortKind: null,
-          initialValues: typedEditValues ?? restored?.values,
+          initialValues: typedEditValues ?? restored?.values ?? typedSeedValues(seedEntry, typed.mode) ?? undefined,
           initialFieldIndex: restored?.fieldIndex,
           isEdit: typedEditValues != null,
           typed,
@@ -333,18 +399,22 @@ function ExecutorV3Inner({ planId, recoverDate, editDate }: { planId: string; re
       const eff = effByBlock.get(blockId) ?? null
       const suggested = eff?.weightKg ?? block.target_weight_kg
       const existingLog = sessionLogs.find((l) => l.block_id === blockId && l.set_number === setNumber)
+      // El teclado ya no MUESTRA el esfuerzo (vive en el panel de la fila), pero igual se siembra: es lo
+      // que hace que `buildStrengthPayload` lo vuelva a escribir y corregir peso/reps no borre el RPE/RIR.
+      // El RIR se acepta desde 0 ("al fallo", decisión CEO 8): el filtro previo `>= 1` descartaba ese 0 y
+      // editar la serie lo perdía. Fuera de 0-10 se ignora (valor imposible de la escala).
       const editValues = existingLog
         ? {
             weight: existingLog.weight_kg != null ? formatWeightEsCl(existingLog.weight_kg) : '',
             reps: existingLog.reps_done != null ? String(existingLog.reps_done) : '',
             rpe: existingLog.rpe != null ? String(existingLog.rpe) : '',
-            rir: existingLog.rir != null && existingLog.rir >= 1 && existingLog.rir <= 10 ? String(existingLog.rir) : '',
+            rir: existingLog.rir != null && existingLog.rir >= 0 && existingLog.rir <= 10 ? String(existingLog.rir) : '',
             note: existingLog.note ?? '',
           }
         : null
       const initialValues = prefill
         ? { weight: prefill.weight != null ? String(prefill.weight) : '', reps: prefill.reps != null ? String(prefill.reps) : '' }
-        : editValues ?? restored?.values
+        : editValues ?? restored?.values ?? strengthSeedValues(seedEntry) ?? undefined
       const bestPrev = bestPrevOf(previousHistory[exercise?.id ?? ''] ?? [])
       setKeypadTarget({
         blockId,
@@ -361,7 +431,7 @@ function ExecutorV3Inner({ planId, recoverDate, editDate }: { planId: string; re
       })
       haptics.tap()
     },
-    [blocks, effByBlock, restoredDraft, previousHistory, sessionLogs],
+    [blocks, effByBlock, restoredDraft, previousHistory, sessionLogs, repeatSeed],
   )
 
   const signalCommitted = useCallback((blockId: string, setNumber: number, isPR: boolean) => {
@@ -566,32 +636,51 @@ function ExecutorV3Inner({ planId, recoverDate, editDate }: { planId: string; re
     setSummaryOpen(true)
   }, [elapsedSec, finishSession, cel])
 
+  // Scope de la cola para ESTA sesión — equivalente RN del `{ planId }` de la web: el payload encolado no
+  // lleva plan_id, así que el plan viaja como el conjunto de bloques del plan. Sin esto el chip contaría
+  // series huérfanas de otros planes y diría "sin sincronizar" sobre algo ajeno a este entrenamiento.
+  const queueScope = useMemo(() => ({ blockIds: blocks.map((b) => b.id) }), [blocks])
+
+  /**
+   * Drenaje de la cola DETRÁS del resumen (decisión CEO 2026-07-25). Ya no bloquea el cierre de la sesión:
+   * el resumen se abre al toque y esto reporta por el chip. Sólo se intenta lo VENCIDO (`getDueLogCount`);
+   * lo que sigue en backoff se informa sin fingir un intento, y se reintenta solo al reconectar o al volver
+   * a entrar (flush global del layout de tabs).
+   */
+  const syncQueueInBackground = useCallback(async () => {
+    const pending = await getPendingLogCount(queueScope)
+    if (!mountedRef.current) return
+    if (pending === 0) {
+      setSyncState({ status: 'idle' })
+      return
+    }
+    const due = await getDueLogCount(queueScope)
+    if (!mountedRef.current) return
+    if (due === 0) {
+      setSyncState({ status: 'pending', count: pending })
+      return
+    }
+    setSyncState({ status: 'syncing', count: due })
+    // El flush NO se corta si el alumno sale (el dato debe subir igual); lo que se corta es el setState.
+    try { await flushLogQueue(supabase, queueScope) } catch { /* excepcion global → lo reporta el chip */ }
+    const left = await getPendingLogCount(queueScope)
+    if (!mountedRef.current) return
+    setSyncState(left > 0 ? { status: 'pending', count: left } : { status: 'done' })
+  }, [queueScope])
+
   const handleFinish = useCallback(async () => {
     if (finishingRef.current) return
     finishingRef.current = true
+    setFinishing(true)
     try {
-      const pendingBefore = await getPendingLogCount()
-      if (pendingBefore > 0) {
-        try { await flushLogQueue(supabase) } catch { /* excepcion global → conservamos el aviso */ }
-      }
-      const stillPending = await getPendingLogCount()
-      if (stillPending > 0) {
-        const n = stillPending
-        Alert.alert(
-          `${n} serie${n !== 1 ? 's' : ''} sin sincronizar`,
-          'Se guardarán cuando vuelva la conexión. Puedes finalizar igual o esperar.',
-          [
-            { text: 'Esperar', style: 'cancel' },
-            { text: 'Finalizar igual', style: 'destructive', onPress: () => { void finalizeSession() } },
-          ],
-        )
-        return
-      }
       await finalizeSession()
     } finally {
       finishingRef.current = false
+      setFinishing(false)
     }
-  }, [finalizeSession])
+    // Fire-and-forget: el resumen ya está en pantalla; el chip cuenta lo que queda por subir.
+    void syncQueueInBackground()
+  }, [finalizeSession, syncQueueInBackground])
 
   const summaryBlocks = useMemo<SummaryBlock[]>(
     () =>
@@ -855,6 +944,7 @@ function ExecutorV3Inner({ planId, recoverDate, editDate }: { planId: string; re
             blockLogs={blockLogs}
             prevList={prevList}
             restoredDraft={restoredDraft}
+            repeatSeed={repeatSeed}
             reducedMotion={motion.reduced}
             exec={exec}
             showEffort={execSettings.showRpeRir}
@@ -967,7 +1057,7 @@ function ExecutorV3Inner({ planId, recoverDate, editDate }: { planId: string; re
         />
       )
     },
-    [supersetMembersByBlock, sessionLogs, effByBlock, currentWeek, activeBlockId, previousHistory, openDetails, getSubstitution, openSet, hrZones, hrProfile, restoredDraft, motion.reduced, exec, execSettings.showRpeRir, handleCommit, handleRpeUpdate, saveActiveDraft, recentSet, syncErrors, retryCommit],
+    [supersetMembersByBlock, sessionLogs, effByBlock, currentWeek, activeBlockId, previousHistory, openDetails, getSubstitution, openSet, hrZones, hrProfile, restoredDraft, repeatSeed, motion.reduced, exec, execSettings.showRpeRir, handleCommit, handleRpeUpdate, saveActiveDraft, recentSet, syncErrors, retryCommit],
   )
 
   // ── Modelo de pasos (engine) + vistas del rail + auto-avance ──
@@ -1238,7 +1328,12 @@ function ExecutorV3Inner({ planId, recoverDate, editDate }: { planId: string; re
       <OfflineBanner visible={!isOnline} variant="calm" />
 
       {!bannerDismissed && (
-        <RecoveryBanner recoverDate={recoverDate} editDate={editDate} onDismiss={() => setBannerDismissed(true)} />
+        <RecoveryBanner
+          recoverDate={recoverDate}
+          editDate={editDate}
+          repeatDate={repeatDate}
+          onDismiss={() => setBannerDismissed(true)}
+        />
       )}
 
       {loading ? (
@@ -1274,8 +1369,10 @@ function ExecutorV3Inner({ planId, recoverDate, editDate }: { planId: string; re
           <Pressable
             testID="btn-finish-workout-v3"
             onPress={handleFinish}
+            disabled={finishing}
             accessibilityRole="button"
-            accessibilityLabel="Finalizar entrenamiento"
+            accessibilityState={{ disabled: finishing, busy: finishing }}
+            accessibilityLabel={finishing ? 'Finalizando entrenamiento' : 'Finalizar entrenamiento'}
             style={({ pressed }) => ({
               flexDirection: 'row',
               alignItems: 'center',
@@ -1289,14 +1386,20 @@ function ExecutorV3Inner({ planId, recoverDate, editDate }: { planId: string; re
               borderWidth: 2,
               borderColor: pressed ? '#3a3a45' : exec.surface.borderStrong,
               backgroundColor: exec.surface.surface,
+              opacity: finishing ? 0.7 : 1,
               transform: pressed ? [{ translateY: 1 }] : undefined,
             })}
           >
             {({ pressed }) => (
               <>
-                <Flag size={18} color={pressed ? '#e8e8ee' : '#b7b7c2'} />
-                <Text style={{ fontFamily: FONT.uiExtra, fontSize: 14, color: pressed ? '#e8e8ee' : '#b7b7c2' }}>
-                  Finalizar entrenamiento
+                {/* Mientras cierra la sesión: spinner + copy en gerundio (antes no había NINGUNA señal). */}
+                {finishing ? (
+                  <ActivityIndicator size="small" color="#b7b7c2" style={{ width: 18, height: 18, transform: [{ scale: 0.85 }] }} />
+                ) : (
+                  <Flag size={18} color={pressed ? '#e8e8ee' : '#b7b7c2'} />
+                )}
+                <Text style={{ fontFamily: FONT.uiExtra, fontSize: 14, color: pressed && !finishing ? '#e8e8ee' : '#b7b7c2' }}>
+                  {finishing ? 'Finalizando…' : 'Finalizar entrenamiento'}
                 </Text>
               </>
             )}
@@ -1330,7 +1433,7 @@ function ExecutorV3Inner({ planId, recoverDate, editDate }: { planId: string; re
       />
 
       {/* Tuerca del ejecutor V3 (E3.7) — ajustes del entrenamiento device-scoped. */}
-      <ExecSettingsSheet open={settingsOpen} onClose={() => setSettingsOpen(false)} exec={exec} onFinish={handleFinish} />
+      <ExecSettingsSheet open={settingsOpen} onClose={() => setSettingsOpen(false)} exec={exec} onFinish={handleFinish} finishing={finishing} />
 
       <SubstituteSheetV3
         open={substituteBlockId != null}
@@ -1376,6 +1479,7 @@ function ExecutorV3Inner({ planId, recoverDate, editDate }: { planId: string; re
         weeklyStreak={weeklyStreak}
         checkInReminder={checkInReminder}
         checkInLastRelative={checkInLastRelative}
+        syncState={syncState}
         onCheckIn={() => router.replace('/alumno/check-in')}
         onDone={() => router.replace('/alumno/home')}
       />

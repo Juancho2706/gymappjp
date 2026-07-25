@@ -31,11 +31,8 @@ function targetFor(
   }
 }
 
-/** Keys de los pasos de teclado (los efforts no tienen key). */
-const stepKeys = (t: KeypadTarget | null) =>
-  keypadStepsForTarget(t)
-    .filter((s): s is Extract<typeof s, { kind: 'keypad' }> => s.kind === 'keypad')
-    .map((s) => s.key)
+/** Keys de los pasos del teclado (todos son de campo: el esfuerzo ya no es un paso). */
+const stepKeys = (t: KeypadTarget | null) => keypadStepsForTarget(t).map((s) => s.key)
 
 describe('keypad-flow · typedTargetFor: tipo efectivo -> descriptor tipado (o null en strength)', () => {
   it('bloque sin override y ejercicio sin tipo -> strength (null)', () => {
@@ -87,10 +84,13 @@ describe('keypad-flow · keypadStepsForTarget: pasos que ve el alumno', () => {
     expect(stepKeys(targetFor({}, { exercise_type: 'strength' }, null))).toEqual(['weight', 'reps'])
   })
 
-  it('strength CON esfuerzo (rpe/rir) -> peso, reps y un paso de esfuerzo al final', () => {
+  // Contrato nuevo (decisión CEO): el esfuerzo salió del teclado y se captura en la fila, así que
+  // `effortKind` NO agrega un paso — con RPE, con RIR o sin nada el flujo es el mismo peso→reps.
+  it('strength CON esfuerzo (rpe/rir) -> mismos pasos que sin esfuerzo: peso y reps', () => {
     for (const kind of ['rpe', 'rir'] as const) {
       const steps = keypadStepsForTarget(targetFor({}, { exercise_type: 'strength' }, kind))
-      expect(steps.map((s) => s.kind)).toEqual(['keypad', 'keypad', 'effort'])
+      expect(steps.map((s) => s.kind)).toEqual(['keypad', 'keypad'])
+      expect(steps).toEqual(STRENGTH_KEYPAD_STEPS)
     }
   })
 
@@ -101,9 +101,9 @@ describe('keypad-flow · keypadStepsForTarget: pasos que ve el alumno', () => {
     // Guard explícito de la regresión: ningún paso de peso/reps ni unidad kg.
     expect(stepKeys(t)).not.toContain('weight')
     expect(stepKeys(t)).not.toContain('reps')
-    expect(keypadStepsForTarget(t).some((s) => s.kind === 'keypad' && s.unit === 'kg')).toBe(false)
-    // Y no hay paso de esfuerzo: el flujo tipado no pide RPE en el teclado.
-    expect(keypadStepsForTarget(t).some((s) => s.kind === 'effort')).toBe(false)
+    expect(keypadStepsForTarget(t).some((s) => s.unit === 'kg')).toBe(false)
+    // Todos los pasos son de campo: ningún flujo pide RPE/RIR en el teclado.
+    expect(keypadStepsForTarget(t).every((s) => s.kind === 'keypad')).toBe(true)
   })
 
   it('CARDIO -> min(decimal) · metros(decimal) · FC(integer)', () => {

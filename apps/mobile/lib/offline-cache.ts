@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { toggleMealCompletion } from './nutrition.queries'
 import { getSantiagoIsoYmdForUtcInstant, getSantiagoUtcBoundsForDay } from './date-utils'
-import { enqueueOp, flushQueue, queueCount, type AsyncKV } from './offline-queue'
+import { enqueueOp, flushQueue, queueCount, queueDueCount, type AsyncKV } from './offline-queue'
 
 const PLAN_PREFIX = 'eva_plan_'
 const LOG_QUEUE_KEY = 'eva_log_queue'
@@ -53,12 +53,29 @@ function workoutDedupKey(l: { client_id: string; block_id: string; set_number: n
   return `${l.client_id}:${l.block_id}:${l.set_number}:${day}`
 }
 
+/**
+ * Scope opcional de la cola de series — equivalente RN del `{ planId }` de la web. El payload persistido
+ * NO lleva `plan_id` (ver `PendingLog`), así que el plan viaja como el conjunto de `block_id` de la
+ * sesión: lo que sabe el ejecutor sin cambiar el formato guardado (un APK viejo sigue siendo legible).
+ * Sin scope, todo se comporta como antes (cola global).
+ */
+export interface LogQueueScope {
+  blockIds?: readonly string[]
+}
+
+function scopeFilter(scope?: LogQueueScope): ((l: PendingLog) => boolean) | undefined {
+  const ids = scope?.blockIds
+  if (!ids || ids.length === 0) return undefined
+  const set = new Set(ids)
+  return (l) => set.has(l.block_id)
+}
+
 export async function enqueueLog(log: Omit<PendingLog, 'queued_at'>): Promise<void> {
   const payload: PendingLog = { ...log, queued_at: new Date().toISOString() }
   await enqueueOp(kv, LOG_QUEUE_KEY, workoutDedupKey(payload), payload, workoutDedupKey)
 }
 
-export async function flushLogQueue(supabase: SupabaseClient): Promise<number> {
+export async function flushLogQueue(supabase: SupabaseClient, scope?: LogQueueScope): Promise<number> {
   const res = await flushQueue<PendingLog>(
     kv,
     LOG_QUEUE_KEY,
@@ -99,13 +116,23 @@ export async function flushLogQueue(supabase: SupabaseClient): Promise<number> {
         return 'retry'
       }
     },
-    { deriveKey: workoutDedupKey },
+    { deriveKey: workoutDedupKey, filter: scopeFilter(scope) },
   )
   return res.flushed
 }
 
-export async function getPendingLogCount(): Promise<number> {
-  return queueCount(kv, LOG_QUEUE_KEY)
+/** Series sin subir (incluye las que aún esperan su backoff) — conteo de BADGE. */
+export async function getPendingLogCount(scope?: LogQueueScope): Promise<number> {
+  return queueCount<PendingLog>(kv, LOG_QUEUE_KEY, { deriveKey: workoutDedupKey, filter: scopeFilter(scope) })
+}
+
+/**
+ * Series sin subir VENCIDAS: las que un flush intentaría ahora mismo. Es el conteo que debe gatear los
+ * avisos disparados por el alumno (p.ej. Finalizar): `getPendingLogCount` cuenta también las que siguen
+ * en backoff y avisaba "hay pendientes" sin haber intentado nada.
+ */
+export async function getDueLogCount(scope?: LogQueueScope): Promise<number> {
+  return queueDueCount<PendingLog>(kv, LOG_QUEUE_KEY, { deriveKey: workoutDedupKey, filter: scopeFilter(scope) })
 }
 
 // ─── Nutrition toggle queue ────────────────────────────────────────────────

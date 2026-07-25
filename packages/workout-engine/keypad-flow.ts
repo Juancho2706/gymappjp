@@ -2,7 +2,7 @@
  * Routing PURO tipo->campos del teclado del ejecutor (E2-10 · fix QA Ronda 4 · hallazgo 5).
  *
  * Decide, para UNA serie, qué campos ofrece el teclado según el tipo EFECTIVO del bloque:
- *  - strength → peso(kg) → reps → (esfuerzo RPE/RIR opcional).
+ *  - strength → peso(kg) → reps. El esfuerzo (RPE/RIR) ya no se pide acá: vive en la fila.
  *  - cardio/movilidad/roller → los `typedKeypadFields` del modo (min/metros/FC · hold · seg/pasadas).
  *
  * Fuente ÚNICA testeable (sin React/RN): antes esta decisión vivía duplicada inline en `openSet`
@@ -34,7 +34,11 @@ export interface KeypadTarget {
   suggestedWeight: number | null
   /** Mejor marca previa (para el header "Última vez {kg} × {reps}"). Solo strength. */
   lastPrev?: { weightKg: number | null; reps: number | null } | null
-  /** Si el bloque pide esfuerzo: 'rpe' | 'rir'; null ⇒ el flujo termina en reps (o es tipado). */
+  /**
+   * Si el bloque pide esfuerzo: 'rpe' | 'rir'; null ⇒ no pide (o es tipado). Ya NO agrega pasos al
+   * teclado — el esfuerzo se captura en la fila —; sobrevive porque el host lo usa para decidir qué
+   * columna (`rpe`/`rir`) preservar al editar una serie ya logueada.
+   */
   effortKind: 'rpe' | 'rir' | null
   /** Valores iniciales (draft restaurado o autollenado "última vez"). */
   initialValues?: Record<string, string>
@@ -47,17 +51,28 @@ export interface KeypadTarget {
    */
   isEdit?: boolean
   /**
-   * Bloques TIPADOS (cardio/movilidad/roller): reemplaza el flujo peso→reps→esfuerzo por los campos
+   * Bloques TIPADOS (cardio/movilidad/roller): reemplaza el flujo peso→reps por los campos
    * tipados de `typedKeypadFields`. Ausente ⇒ flujo strength. El commit mapea las keys tipadas a las
    * columnas `actual_*` / `reps_done` (mismo pipeline que web `TypedLogSetRow`).
    */
   typed?: { mode: TypedKeypadMode; fields: TypedKeypadFieldDef[]; objective: string }
 }
 
-/** Paso del host: una pantalla de teclado numérico, o el paso de esfuerzo (dots). */
-export type KeypadStep =
-  | { kind: 'keypad'; key: string; mode: 'weight' | 'reps' | 'decimal' | 'integer'; unit: string; label: string }
-  | { kind: 'effort' }
+/**
+ * Paso del host: una pantalla de teclado numérico.
+ *
+ * Antes existía además una variante `{ kind: 'effort' }` (los dots de RPE/RIR al final del flujo de
+ * fuerza). El esfuerzo salió del teclado por decisión CEO — su única superficie es el panel de la FILA
+ * (`EffortTicksV3` en RN, el bloque de esfuerzo de `LogSetForm` en web) — y ni el host web ni el RN
+ * consumían ya ese paso, así que la variante se eliminó para que el tipo no mienta sobre el flujo real.
+ */
+export type KeypadStep = {
+  kind: 'keypad'
+  key: string
+  mode: 'weight' | 'reps' | 'decimal' | 'integer'
+  unit: string
+  label: string
+}
 
 export const STRENGTH_KEYPAD_STEPS: KeypadStep[] = [
   { kind: 'keypad', key: 'weight', mode: 'weight', unit: 'kg', label: 'Peso (kg)' },
@@ -91,7 +106,8 @@ export function typedTargetFor(block: BlockForKeypad, exercise: ExerciseForKeypa
 
 /**
  * Secuencia de pasos del teclado para un target ya resuelto: campos tipados (si `typed`) o el flujo
- * strength peso→reps→(esfuerzo). `null` ⇒ sin pasos (teclado cerrado). Las reglas decimales de cada
+ * strength peso→reps. `null` ⇒ sin pasos (teclado cerrado). El esfuerzo (RPE/RIR) NO es un paso del
+ * teclado: se captura en la fila, así que `effortKind` no altera esta secuencia. Las reglas decimales de cada
  * campo tipado (min/distancia = decimal; FC/segundos/hold/pasadas = enteros) las decide el engine y
  * acá se mapean a los modos 'decimal' | 'integer' del `TypedKeypad`.
  */
@@ -106,5 +122,5 @@ export function keypadStepsForTarget(target: KeypadTarget | null): KeypadStep[] 
       label: f.label,
     }))
   }
-  return [...STRENGTH_KEYPAD_STEPS, ...(target.effortKind ? [{ kind: 'effort' as const }] : [])]
+  return [...STRENGTH_KEYPAD_STEPS]
 }

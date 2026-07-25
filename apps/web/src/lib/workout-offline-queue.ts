@@ -1,6 +1,9 @@
 import type { WorkoutOfflineLog } from '@eva/workout-engine'
 
 const QUEUE_KEY = 'eva:workout-offline-queue'
+/** Contador de intentos por serie encolada — mapa aparte para no tocar la forma canónica compartida
+ *  con mobile (`WorkoutOfflineLog` vive en `@eva/workout-engine`). Clave = `block:set`. */
+const ATTEMPTS_KEY = 'eva:workout-offline-queue-attempts'
 
 /**
  * Forma canónica de la serie encolada — fuente de verdad en `@eva/workout-engine` (compartida con
@@ -81,6 +84,10 @@ export function enqueueWorkoutLog(log: WorkoutOfflineLog): boolean {
     const q = readWorkoutOfflineQueue()
     try {
         localStorage.setItem(QUEUE_KEY, JSON.stringify(dedupeWorkoutQueue([...q, log])))
+        // Re-encolar = intención NUEVA del alumno (corrigió el peso y reconfirmó la misma serie):
+        // hereda la clave (block,set) pero NO los intentos del payload viejo. Sin este reset, una
+        // versión recién corregida podía descartarse al primer rechazo por deuda ajena.
+        clearWorkoutFlushAttempts([workoutLogKey(log.blockId, log.setNumber)])
         return true
     } catch {
         return false
@@ -92,6 +99,8 @@ export function dequeueWorkoutLog(blockId: string, setNumber: number): void {
     if (typeof localStorage === 'undefined') return
     const key = workoutLogKey(blockId, setNumber)
     const q = readWorkoutOfflineQueue().filter((i) => workoutLogKey(i.blockId, i.setNumber) !== key)
+    // El item se va → su contador de intentos también (si vuelve a encolarse, arranca limpio).
+    clearWorkoutFlushAttempts([key])
     try {
         localStorage.setItem(QUEUE_KEY, JSON.stringify(q))
     } catch {
@@ -104,6 +113,9 @@ export function writeWorkoutOfflineQueue(q: WorkoutOfflineLog[]): void {
     if (typeof localStorage === 'undefined') return
     try {
         localStorage.setItem(QUEUE_KEY, JSON.stringify(q))
+        // La cola es la fuente de verdad del mapa de intentos: todo contador cuya clave ya no está
+        // encolada (poda de huérfanos, reescritura parcial) es basura que sólo crece en localStorage.
+        pruneWorkoutFlushAttempts(q)
     } catch {
         // Best-effort (mismo motivo que dequeue): si no logra persistir el remanente, el próximo ciclo
         // de flush reintenta; jamás lanzar (romper `flushWorkoutQueue` a mitad perdería series válidas).
@@ -148,12 +160,103 @@ export type WorkoutLogSendResult = { success?: boolean; code?: string; error?: s
 export type WorkoutLogSend = (item: WorkoutOfflineLog) => Promise<WorkoutLogSendResult>
 
 /**
- * Flush transaccional de la cola (compartido por `OfflineWorkoutQueueSync` y por el gate de
- * "Finalizar" del ejecutor). Dedup ANTES de enviar (última intención gana); reintenta transitorios,
- * DESCARTA huérfanos (`invalid_block`), y RESUELVE el falso pendiente: una serie ya guardada en el
- * server cuya reconciliación local nunca corrió (la fila colapsó/desmontó antes de `state.success`)
- * queda huérfana en la cola — al reenviarla el upsert es last-wins/idempotente → `success` → sale de
- * la cola. `opts.planId` acota el envío a un plan (preserva intactos los items de otros planes).
+ * CLASIFICACIÓN COMPLETA de los códigos que devuelve `logSetAction` (ver `LogState.code`). Cada
+ * código de la action DEBE estar en una de las dos listas: si agregás uno nuevo allá, decidí acá si
+ * es permanente (se descarta la serie del alumno) o transitorio (se reintenta para siempre). Un
+ * código sin clasificar cae al camino "desconocido": gasta intento y termina descartado por tope.
+ *
+ * PERMANENTES — reenviar el MISMO payload da el MISMO rechazo, reintentar es ruido eterno:
+ *  - `invalid_block`      → el bloque ya no existe (huérfano de reseed / FK 23503).
+ *  - `coach_paused`       → cuenta del coach en pausa: el registro no entrará hasta que reactive.
+ *  - `past_set_not_found` → edición de un día pasado sin fila que editar (nunca se inserta).
+ *  - `validation`         → payload inválido: el server nunca lo va a aceptar así.
+ */
+const PERMANENT_FAILURE_CODES: ReadonlySet<string> = new Set([
+    'invalid_block',
+    'coach_paused',
+    'past_set_not_found',
+    'validation',
+])
+
+/**
+ * TRANSITORIOS — el payload está bien, lo que falló es el entorno; se reintentan SIN gastar intento
+ * (igual que las excepciones de red). Descartarlos sería perder series REALES del alumno:
+ *  - `unauthenticated` → JWT vencido / sesión aún no hidratada. El flush corre en cada montaje del
+ *    layout `/c` y en cada evento `online`: con tope, 5 navegaciones con la sesión fría borraban
+ *    series ya entrenadas.
+ *  - `db`              → error de Postgres/Supabase que no es FK 23503 (blip, timeout, pooler lleno).
+ */
+const TRANSIENT_FAILURE_CODES: ReadonlySet<string> = new Set(['unauthenticated', 'db'])
+
+/**
+ * Tope de rechazos del SERVER por serie antes de descartarla. Sólo cuenta cuando el server respondió
+ * que no con un código que NO sabemos clasificar (ni permanente ni transitorio); los transitorios
+ * conocidos y las excepciones de red NO suman (un alumno una semana sin conexión, o con la sesión
+ * vencida, no puede perder sus series por acumular reintentos). Con el tope, un zombi rechazado con
+ * un código desconocido deja de reintentarse eternamente.
+ */
+export const MAX_WORKOUT_FLUSH_ATTEMPTS = 5
+
+function readWorkoutFlushAttempts(): Record<string, number> {
+    if (typeof localStorage === 'undefined') return {}
+    try {
+        const parsed = JSON.parse(localStorage.getItem(ATTEMPTS_KEY) ?? '{}')
+        return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? (parsed as Record<string, number>) : {}
+    } catch {
+        return {}
+    }
+}
+
+function writeWorkoutFlushAttempts(map: Record<string, number>): void {
+    if (typeof localStorage === 'undefined') return
+    try {
+        if (Object.keys(map).length === 0) localStorage.removeItem(ATTEMPTS_KEY)
+        else localStorage.setItem(ATTEMPTS_KEY, JSON.stringify(map))
+    } catch {
+        // Best-effort (mismo criterio que el resto del módulo): sin contador el peor caso es reintentar
+        // de más, nunca perder una serie ni romper el flush a mitad.
+    }
+}
+
+/** Descarta los contadores cuya clave ya no está en la cola (huérfanos: poda, reescritura parcial). */
+function pruneWorkoutFlushAttempts(q: readonly WorkoutOfflineLog[]): void {
+    const map = readWorkoutFlushAttempts()
+    const keys = Object.keys(map)
+    if (keys.length === 0) return
+    const alive = new Set(q.map((i) => workoutLogKey(i.blockId, i.setNumber)))
+    let touched = false
+    for (const k of keys) {
+        if (!alive.has(k)) {
+            delete map[k]
+            touched = true
+        }
+    }
+    if (touched) writeWorkoutFlushAttempts(map)
+}
+
+/** Olvida el contador de las claves dadas (el item salió de la cola: confirmado o descartado). */
+function clearWorkoutFlushAttempts(keys: readonly string[]): void {
+    if (keys.length === 0) return
+    const map = readWorkoutFlushAttempts()
+    let touched = false
+    for (const k of keys) {
+        if (k in map) {
+            delete map[k]
+            touched = true
+        }
+    }
+    if (touched) writeWorkoutFlushAttempts(map)
+}
+
+/**
+ * Flush transaccional de la cola (compartido por `OfflineWorkoutQueueSync` y por el "Finalizar" del
+ * ejecutor, que ahora lo corre en BACKGROUND detrás del resumen). Dedup ANTES de enviar (última
+ * intención gana); reintenta transitorios, DESCARTA los rechazos permanentes
+ * (`PERMANENT_FAILURE_CODES`) y los zombis que superaron `MAX_WORKOUT_FLUSH_ATTEMPTS` rechazos del
+ * server, y RESUELVE el falso pendiente: una serie ya guardada en el server cuya reconciliación local
+ * nunca corrió (la fila colapsó/desmontó antes de `state.success`) queda huérfana en la cola — al
+ * reenviarla el upsert es last-wins/idempotente → `success` → sale de la cola. `opts.planId` acota el
+ * envío a un plan (preserva intactos los items de otros planes).
  * `send` inyectado ⇒ testeable sin red. Escribe el remanente real de vuelta a localStorage.
  */
 export async function flushWorkoutQueue(
@@ -166,17 +269,41 @@ export async function flushWorkoutQueue(
     const remainingInScope: WorkoutOfflineLog[] = []
     let flushed = 0
     let discarded = 0
+    const attempts = readWorkoutFlushAttempts()
+    // Claves que salieron de la cola en este flush (confirmadas o descartadas) → olvidan su contador.
+    const settledKeys: string[] = []
     for (const item of inScope) {
+        const key = workoutLogKey(item.blockId, item.setNumber)
         try {
             const res = await send(item)
-            if (res.success) flushed++
-            else if (res.code === 'invalid_block') discarded++
-            else remainingInScope.push(item)
+            if (res.success) {
+                flushed++
+                settledKeys.push(key)
+            } else if (res.code && PERMANENT_FAILURE_CODES.has(res.code)) {
+                discarded++
+                settledKeys.push(key)
+            } else if (res.code && TRANSIENT_FAILURE_CODES.has(res.code)) {
+                // Falla del entorno, no del payload (sesión vencida, blip de la DB): se reintenta
+                // indefinidamente SIN gastar intento. Descartar acá sería borrar series reales.
+                remainingInScope.push(item)
+            } else {
+                // El server respondió que no con un código que no sabemos clasificar: cuenta intento.
+                const next = (attempts[key] ?? 0) + 1
+                if (next >= MAX_WORKOUT_FLUSH_ATTEMPTS) {
+                    discarded++
+                    settledKeys.push(key)
+                } else {
+                    attempts[key] = next
+                    remainingInScope.push(item)
+                }
+            }
         } catch {
-            // Excepción (red caída al enviar) → transitorio: se reintenta luego.
+            // Excepción (red caída al enviar) → transitorio puro: se reintenta luego SIN gastar intento.
             remainingInScope.push(item)
         }
     }
+    for (const k of settledKeys) delete attempts[k]
+    writeWorkoutFlushAttempts(attempts)
     const remaining = [...outOfScope, ...remainingInScope]
     writeWorkoutOfflineQueue(remaining)
     return { flushed, discarded, remainingInScope: remainingInScope.length, remaining }

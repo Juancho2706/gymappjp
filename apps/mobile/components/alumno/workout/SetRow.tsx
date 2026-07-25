@@ -19,7 +19,7 @@ import { haptics } from '../../../lib/haptics'
 import { fmtTypedLoggedLine } from './workout-ui'
 import { JuicyButton } from './v3/JuicyButton'
 import { EffortTicksV3 } from './v3/EffortTicksV3'
-import type { ExecTheme } from './v3/exec-theme'
+import { resolveExecTheme, type ExecTheme } from './v3/exec-theme'
 // RPE_HELP/RIR_HELP se importan (fuente única mobile) en vez de re-declararlos: evita el drift que la
 // Ola 0 flagueó (#1). Son mirror literal —con tildes— de la web (`EffortScale.tsx:17-20`).
 import { TypedKeypad, EffortScale, KEYPAD_EYEBROW_STYLE, RPE_HELP, RIR_HELP } from './TypedKeypad'
@@ -49,6 +49,43 @@ const BADGE_ACTIVE_STYLE: TextStyle = { ...textStyle('xs', FONT.displayBlack), f
 const CHIP_MARK_STYLE: TextStyle = { ...textStyle('xs', FONT.monoBold), fontVariant: ['tabular-nums'] }
 const CHIP_EFFORT_STYLE: TextStyle = textStyle('3xs', FONT.monoSemibold)
 const CHIP_TYPED_STYLE: TextStyle = { ...textStyle('xs', FONT.mono), fontVariant: ['tabular-nums'] }
+
+// Tema del ejecutor para el panel de esfuerzo de una serie de FUERZA ya cerrada cuando el caller no pasa
+// el suyo (filas clásicas de `ExecutorV2`, que no conoce `ExecTheme`). Acento Sport EVA = el mismo azul
+// del chip guardado; superficies dark-only, iguales a las del ejecutor. Las pantallas V3 deben pasar su
+// `exec` para que el panel respete la marca del coach.
+const FALLBACK_EXEC_THEME = resolveExecTheme('eva', null, null)
+
+/**
+ * Payload COMPLETO de una serie ya logueada con el esfuerzo parcheado — preserva TODOS los ejes del log
+ * (peso/reps/nota, los `actual_*` de las tipadas y el jsonb `metadata` del hold POR LADO) para que
+ * corregir el RPE/RIR no borre nada. El `??` respeta el RIR 0 ("al fallo", decisión CEO 8 del ejecutor
+ * V3), que un `||` habría descartado.
+ *
+ * `metadata` es el eje que faltaba: una movilidad `per_side` guarda `{left_sec, right_sec}` ahí
+ * (`set-log-payload` E0.5) y `actual_hold_sec` sólo lleva la SUMA, así que omitirlo hacía que un tick de
+ * RPE sobre la serie ya cerrada re-submiteara el log sin los segundos por lado.
+ */
+function effortUpdatePayload(
+  log: ReconciledSessionLog,
+  setNumber: number,
+  effort: { rpe?: number; rir?: number },
+): OptimisticLogPayload {
+  return {
+    blockId: log.block_id,
+    setNumber,
+    weightKg: log.weight_kg ?? null,
+    repsDone: log.reps_done ?? null,
+    rpe: effort.rpe ?? log.rpe ?? null,
+    rir: effort.rir ?? log.rir ?? null,
+    note: log.note ?? null,
+    actualDurationSec: log.actual_duration_sec ?? null,
+    actualDistanceM: log.actual_distance_m ?? null,
+    actualHoldSec: log.actual_hold_sec ?? null,
+    actualAvgHr: log.actual_avg_hr ?? null,
+    metadata: log.metadata ?? null,
+  }
+}
 
 /**
  * Fila de error de sync (mensaje rojo + Editar + Reintentar) — mirror web A.4.e (`LogSetForm.tsx:738-748`
@@ -131,12 +168,22 @@ export function SetRow({
   syncError = null,
   onRetry,
   showEffort = true,
+  exec,
+  allowZeroRir = false,
 }: {
   setNumber: number
   log?: ReconciledSessionLog
   isActive: boolean
   typedMode?: TypedKeypadMode | null
   onPress: () => void
+  /**
+   * Tema del ejecutor para el panel de esfuerzo de la serie de FUERZA ya cerrada (`EffortTicksV3`).
+   * Opcional: sin él cae a `FALLBACK_EXEC_THEME` (acento Sport EVA). Las pantallas V3 deberían pasar su
+   * `exec` para que el panel use el acento de marca del coach, como el hero de la serie activa.
+   */
+  exec?: ExecTheme
+  /** Habilita el 0 en la escala de RIR ("al fallo", decisión CEO 8 del V3). Default false = escala 1-10. */
+  allowZeroRir?: boolean
   /**
    * Mostrar las pills de esfuerzo RPE/RIR de la serie logueada (E3.7 — tuerca V3). Default true =
    * comportamiento previo. En false (V3 con "Mostrar RPE/RIR" apagado) el chip omite RPE/RIR.
@@ -169,7 +216,11 @@ export function SetRow({
    * `TypedLogSetRow` web (`LogSetForm.tsx:1112-1136`): al loguear una serie tipada se despliega la
    * MISMA escala de dots RPE; cambiarla re-submitea el log completo preservando los ejes `actual_*`
    * (crítico anti-bug hold). Opcional: sin este callback la serie tipada queda como chip simple
-   * (comportamiento previo, sin regresión). No aplica a fuerza (RPE/RIR se capturan en la fila activa).
+   * (comportamiento previo, sin regresión).
+   *
+   * En FUERZA cumple el mismo rol desde que el esfuerzo salió del teclado custom (decisión CEO, espejo
+   * del cambio web): es el carril de escritura del panel `EffortTicksV3` de la serie ya cerrada, la única
+   * superficie que queda para corregir un RPE/RIR mal puesto.
    */
   onRpeUpdate?: (payload: OptimisticLogPayload) => void
   /**
@@ -185,23 +236,18 @@ export function SetRow({
   const pending = log?._pending === true
   const [rpeHelpOpen, setRpeHelpOpen] = useState(false)
   const motion = useEvaMotion()
+  // La serie de FUERZA ya cerrada trae su panel de esfuerzo EDITABLE debajo del chip (ver
+  // `strengthEffortEditor`): con el esfuerzo fuera del teclado custom, éste es el único camino para
+  // corregir un RPE/RIR. Cuando el panel está, el chip NO repite las pills (las del panel ya muestran los
+  // valores y además se pueden tocar); sin `onRpeUpdate` el chip sigue mostrando el recap como antes.
+  const canEditEffort = logged && !typedMode && showEffort && !!onRpeUpdate && !!log
 
   // Paridad web B.3: una serie TIPADA logueada muestra la escala RPE debajo de su marca; cambiarla
   // reconstruye el payload desde el log (preservando `actual_*`) y re-submitea vía `onRpeUpdate`.
   if (logged && typedMode && onRpeUpdate && log) {
-    const rpePayload = (v: number): OptimisticLogPayload => ({
-      blockId: log.block_id,
-      setNumber,
-      weightKg: log.weight_kg ?? null,
-      repsDone: log.reps_done ?? null,
-      rpe: v,
-      rir: log.rir ?? null,
-      note: log.note ?? null,
-      actualDurationSec: log.actual_duration_sec ?? null,
-      actualDistanceM: log.actual_distance_m ?? null,
-      actualHoldSec: log.actual_hold_sec ?? null,
-      actualAvgHr: log.actual_avg_hr ?? null,
-    })
+    // Mismo constructor de payload que la fila de FUERZA logueada (`effortUpdatePayload`): un solo mapeo
+    // log→payload para las dos superficies de corrección de esfuerzo, sin drift entre ellas.
+    const rpePayload = (v: number): OptimisticLogPayload => effortUpdatePayload(log, setNumber, { rpe: v })
     return (
       <View
         testID={`set-row-${setNumber}`}
@@ -371,11 +417,12 @@ export function SetRow({
             </Text>
             {/* RPE/RIR: mono 500 (semibold web) a 11px vía CHIP_EFFORT_STYLE (web
                 `font-mono text-[11px] font-semibold`, LogSetForm.tsx:548,551). La tuerca V3 (E3.7)
-                puede ocultarlas con `showEffort={false}`. */}
-            {showEffort && log?.rpe != null && (
+                puede ocultarlas con `showEffort={false}`; con el panel editable debajo (`canEditEffort`)
+                tampoco se pintan, para no duplicar el mismo dato dos veces en la misma fila. */}
+            {showEffort && !canEditEffort && log?.rpe != null && (
               <Text style={CHIP_EFFORT_STYLE} className="text-on-dark-muted">RPE {log.rpe}</Text>
             )}
-            {showEffort && log?.rir != null && (
+            {showEffort && !canEditEffort && log?.rir != null && (
               <Text style={CHIP_EFFORT_STYLE} className="text-on-dark-muted">RIR {log.rir}</Text>
             )}
             {/* Ícono nota (paridad web A.3, `LogSetForm.tsx:553-555`): señala que la serie lleva nota
@@ -417,6 +464,31 @@ export function SetRow({
     </Pressable>
   )
 
+  // Panel de esfuerzo EDITABLE de la serie de fuerza ya cerrada (compensación del cambio CEO que sacó
+  // RPE/RIR del teclado custom): mismo componente que el hero de la serie activa (`EffortTicksV3`),
+  // colapsado por default, así que la fila logueada no engorda salvo que el alumno lo abra. Cada tick
+  // re-submitea el log COMPLETO por el carril que ya existía para las tipadas (`onRpeUpdate` →
+  // `handleRpeUpdate` del ejecutor), preservando peso/reps/nota.
+  //
+  // Ancla de test PROPIA (`effort-editor-set-N`): el panel interno reusa los testID del hero activo
+  // (`effort-panel-v3`/`effort-toggle-v3`), así que un selector global sería ambiguo con la serie en
+  // curso. Los E2E deben scopear por esta ancla —una por número de serie— en vez de buscar el testID
+  // del panel a secas.
+  const strengthEffortEditor =
+    canEditEffort && log ? (
+      <View testID={`effort-editor-set-${setNumber}`}>
+        <EffortTicksV3
+          exec={exec ?? FALLBACK_EXEC_THEME}
+          rpe={log.rpe ?? null}
+          rir={log.rir ?? null}
+          onSelectRpe={(v) => onRpeUpdate?.(effortUpdatePayload(log, setNumber, { rpe: v }))}
+          onSelectRir={(v) => onRpeUpdate?.(effortUpdatePayload(log, setNumber, { rir: v }))}
+          allowZeroRir={allowZeroRir}
+          reducedMotion={motion.reduced}
+        />
+      </View>
+    ) : null
+
   // Estado de error (mirror web A.4.e, `LogSetForm.tsx:738-749`): fila dedicada con el mensaje en rojo.
   // Sólo cuando hay error real (con conexión); offline usa el camino `_pending` ámbar. El chip se conserva
   // intacto arriba (sin regresión de la marca/valores).
@@ -437,7 +509,16 @@ export function SetRow({
     return (
       <View className="gap-1.5">
         {chip}
+        {strengthEffortEditor}
         <SyncErrorRow setNumber={setNumber} message={syncError} onEdit={onPress} onRetry={onRetry} />
+      </View>
+    )
+  }
+  if (strengthEffortEditor) {
+    return (
+      <View className="gap-1.5">
+        {chip}
+        {strengthEffortEditor}
       </View>
     )
   }

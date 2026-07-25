@@ -17,23 +17,19 @@ import {
   // Mapeo PURO valores->payload, compartido con la `ActiveSetRow` (sin drift entre superficies).
   buildStrengthPayload,
   buildTypedPayload,
-  int,
 } from '@eva/workout-engine'
 import { useTheme } from '@/context/ThemeContext'
 import { FONT, textStyle } from '../../../lib/typography'
 import { useEvaMotion } from '../../../lib/motion'
 import { shadow } from '../../../lib/shadows'
 import { haptics } from '../../../lib/haptics'
-// Primitivas presentacionales + paso de esfuerzo, compartidas con la `ActiveSetRow` (sin duplicar).
+// Primitivas presentacionales compartidas con la `ActiveSetRow` (sin duplicar).
 import {
-  EffortField,
   KEYPAD_ACTION_STYLE,
   KEYPAD_EYEBROW_STYLE,
   KeypadDisplayRow,
   KeypadGrid,
   KeypadObjectiveHeader,
-  RIR_HELP,
-  RPE_HELP,
   WeightChips,
 } from './TypedKeypad'
 
@@ -57,8 +53,13 @@ type KeypadFieldStep = Extract<KeypadStep, { kind: 'keypad' }>
  *  - Fase de captura: display con PESTAÑAS de campo (peso↔reps / min↔metros↔FC …) — el alumno salta
  *    entre campos sin wizard —, chips de incremento (sólo peso) + paso configurable, grid 3×4 y un
  *    ÚNICO botón primario (Siguiente / Listo).
- *  - Fase de esfuerzo (sólo fuerza, opcional): AMBAS escalas RPE y RIR (ScaleDots) con ayuda 1-tap,
- *    y botones Omitir / Listo (ambos guardan; el esfuerzo es saltable).
+ *  - Fase de NOTA (sólo fuerza, opcional): la nota rápida de la serie para el coach, con botones
+ *    Omitir / Listo (ambos guardan; la nota es saltable).
+ *
+ * El ESFUERZO (RPE/RIR) ya NO se captura acá (decisión CEO, espejo del cambio web): su única superficie
+ * es el panel de esfuerzo de la FILA (`EffortTicksV3`), tanto en la serie activa como en la ya logueada.
+ * El teclado igual PRESERVA el esfuerzo existente al editar: `openSet` siembra `values.rpe/rir` desde el
+ * log y `buildStrengthPayload` los vuelve a escribir, así corregir el peso no borra lo ya registrado.
  *
  * El valor lo posee este host (`values`, string es-CL); el commit arma el `OptimisticLogPayload` con
  * los builders puros (`buildStrengthPayload`/`buildTypedPayload`, compartidos con `ActiveSetRow`) y lo
@@ -88,16 +89,19 @@ export function KeypadHost({
   const valuesRef = useRef(values)
   valuesRef.current = values
   const [activeKey, setActiveKey] = useState('')
-  const [phase, setPhase] = useState<'input' | 'effort'>('input')
-  // Nota rápida por serie (mirror web A.4.d): desplegable en el paso de esfuerzo. El texto vive en
+  const [phase, setPhase] = useState<'input' | 'note'>('input')
+  // Nota rápida por serie (mirror web A.4.d): desplegable en el paso de nota. El texto vive en
   // `values.note` (mismo carril que rpe/rir → viaja al draft y a `buildStrengthPayload`).
   const [noteOpen, setNoteOpen] = useState(false)
 
   // Secuencia de pasos según el tipo del bloque (routing puro compartido con `openSet`).
   const steps = useMemo(() => keypadStepsForTarget(target), [target])
-  // Los campos son las pestañas del display; el esfuerzo es una FASE aparte (no una pestaña).
+  // Los campos son las pestañas del display; la nota es una FASE aparte (no una pestaña).
   const fields = useMemo(() => steps.filter((s): s is KeypadFieldStep => s.kind === 'keypad'), [steps])
-  const hasEffort = steps.some((s) => s.kind === 'effort')
+  // La nota por serie sólo existe en FUERZA: es lo único que `buildStrengthPayload` lee de `values.note`
+  // (el builder tipado no la escribe). Antes esta segunda fase era el esfuerzo y se derivaba del paso
+  // `effort` del engine; ahora que el esfuerzo salió del teclado, la condición honesta es "no es tipado".
+  const hasNote = !target?.typed
 
   // (Re)inicializa al abrir un target: valores iniciales (draft/autofill) o prefill de peso sugerido
   // (en es-CL, mismo formato que la `ActiveSetRow`). Arranca en el campo tocado (draft) o el primero.
@@ -112,7 +116,9 @@ export function KeypadHost({
     setValues(seed)
     setActiveKey(fields[target.initialFieldIndex ?? 0]?.key ?? fields[0]?.key ?? '')
     setPhase('input')
-    setNoteOpen(false)
+    // Editar una serie que YA lleva nota abre el input desplegado: ahora la nota es lo único de la fase,
+    // así que dejarlo colapsado obligaría a un tap extra sólo para ver lo que se está corrigiendo.
+    setNoteOpen(!!(seed.note ?? '').trim())
   }, [target, fields])
 
   if (!target || fields.length === 0) return null
@@ -120,7 +126,7 @@ export function KeypadHost({
   const activeIndex = Math.max(0, fields.findIndex((f) => f.key === activeKey))
   const activeField = fields[activeIndex]
   const isLastField = activeIndex === fields.length - 1
-  const primaryIsNext = !isLastField || hasEffort
+  const primaryIsNext = !isLastField || hasNote
   const allowDecimal = activeField.mode === 'weight' || activeField.mode === 'decimal'
   const showChips = activeField.mode === 'weight'
 
@@ -163,7 +169,7 @@ export function KeypadHost({
     setActiveKey(key)
     setPhase('input')
   }
-  const onEffortBack = () => {
+  const onNoteBack = () => {
     haptics.tap()
     setPhase('input')
   }
@@ -174,6 +180,8 @@ export function KeypadHost({
     // Cubre las 3 rutas de confirmación de EDICIÓN (Omitir/Guardar/Listo-vía-goNext) que antes no daban
     // feedback háptico, a diferencia de la ruta PRIMARIA (`TypedKeypad` handleDone / `ActiveSetRow`).
     haptics.setDone()
+    // `v` conserva el rpe/rir SEMBRADO por `openSet` al editar (el teclado ya no los muestra, pero
+    // `buildStrengthPayload` los relee) ⇒ corregir peso/reps/nota nunca borra el esfuerzo registrado.
     const v = valuesRef.current
     const payload = target.typed
       ? buildTypedPayload(target.typed.mode, v, target.blockId, target.setNumber)
@@ -181,9 +189,9 @@ export function KeypadHost({
     onCommit(payload)
   }
 
-  // "Siguiente": avanza de campo → entra a esfuerzo → guarda (mirror `WorkoutKeypadProvider:253-271`).
+  // "Siguiente": avanza de campo → entra a la nota → guarda (mirror `WorkoutKeypadProvider:253-271`).
   const goNext = () => {
-    if (phase === 'effort') {
+    if (phase === 'note') {
       commit()
       return
     }
@@ -191,9 +199,9 @@ export function KeypadHost({
       onSwitchField(fields[activeIndex + 1].key)
       return
     }
-    if (hasEffort) {
+    if (hasNote) {
       haptics.tap()
-      setPhase('effort')
+      setPhase('note')
       return
     }
     commit()
@@ -268,15 +276,16 @@ export function KeypadHost({
               last={lastPrev}
             />
 
-            {phase === 'effort' ? (
-              /* ── Paso OPCIONAL de esfuerzo (RPE/RIR) — sólo fuerza, siempre saltable (DB-5) ── */
+            {phase === 'note' ? (
+              /* ── Paso OPCIONAL de NOTA — sólo fuerza, siempre saltable (DB-5). El esfuerzo (RPE/RIR)
+                   salió de acá: se registra y se corrige en el panel de esfuerzo de la FILA. ── */
               <View className="mt-2">
                 <View className="mb-2 flex-row items-center justify-between px-1">
                   <Text style={KEYPAD_EYEBROW_STYLE} className="text-on-dark-muted">
-                    Esfuerzo <Text className="text-on-dark-muted/60">(opcional)</Text>
+                    Nota <Text className="text-on-dark-muted/60">(opcional)</Text>
                   </Text>
                   <Pressable
-                    onPress={onEffortBack}
+                    onPress={onNoteBack}
                     accessibilityRole="button"
                     accessibilityLabel="Volver a los números"
                     className="flex-row items-center gap-1 rounded-control px-2 py-1"
@@ -288,27 +297,11 @@ export function KeypadHost({
                   </Pressable>
                 </View>
 
-                <View className="gap-3 rounded-control border border-inverse/10 bg-white/[0.03] p-3">
-                  <EffortField
-                    kind="rpe"
-                    label="Esfuerzo · RPE"
-                    help={RPE_HELP}
-                    value={int(values.rpe)}
-                    onSelect={(v) => patch({ rpe: String(v) }, activeIndex)}
-                  />
-                  <EffortField
-                    kind="rir"
-                    label="Reps en reserva · RIR"
-                    help={RIR_HELP}
-                    value={int(values.rir)}
-                    onSelect={(v) => patch({ rir: String(v) }, activeIndex)}
-                  />
-                </View>
-
                 {/* Nota rápida por serie (mirror web A.4.d, LogSetForm.tsx:699-736): toggle + input, máx
                     300 chars. Expone la nota en el flujo de EDICIÓN (P1): sin esto, reabrir y confirmar una
-                    serie con nota la borraba (`buildStrengthPayload` leía values.note=undefined→null). */}
-                <View className="mt-2">
+                    serie con nota la borraba (`buildStrengthPayload` leía values.note=undefined→null).
+                    NO se mueve de esta fase: moverla ya provocó esa regresión una vez. */}
+                <View>
                   <Pressable
                     testID="keypad-note-toggle"
                     onPress={() => setNoteOpen((o) => !o)}
@@ -352,13 +345,13 @@ export function KeypadHost({
                   </AnimatePresence>
                 </View>
 
-                {/* Acciones — ambas guardan la serie (el esfuerzo es opcional) */}
+                {/* Acciones — ambas guardan la serie (la nota es opcional) */}
                 <View className="mt-2 flex-row gap-2">
                   <Pressable
-                    testID="keypad-skip-effort"
+                    testID="keypad-skip-note"
                     onPress={commit}
                     accessibilityRole="button"
-                    accessibilityLabel="Omitir el esfuerzo y guardar la serie"
+                    accessibilityLabel="Omitir la nota y guardar la serie"
                     className="h-14 flex-1 items-center justify-center rounded-control border border-inverse/10 bg-white/[0.06] active:scale-[0.98] active:bg-white/[0.10]"
                   >
                     <Text style={KEYPAD_ACTION_STYLE} className="text-on-dark">

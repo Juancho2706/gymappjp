@@ -5,6 +5,7 @@ import {
     enqueueWorkoutLog,
     flushWorkoutQueue,
     isLikelyOfflineError,
+    MAX_WORKOUT_FLUSH_ATTEMPTS,
     pruneOrphanWorkoutLogs,
     readWorkoutOfflineQueue,
     readWorkoutOfflineQueueForPlan,
@@ -15,6 +16,7 @@ import {
 } from './workout-offline-queue'
 
 const QUEUE_KEY = 'eva:workout-offline-queue'
+const ATTEMPTS_KEY = 'eva:workout-offline-queue-attempts'
 
 function make(over: Partial<WorkoutOfflineLog> = {}): WorkoutOfflineLog {
     return {
@@ -35,6 +37,7 @@ function make(over: Partial<WorkoutOfflineLog> = {}): WorkoutOfflineLog {
 describe('workout-offline-queue', () => {
     afterEach(() => {
         localStorage.removeItem(QUEUE_KEY)
+        localStorage.removeItem(ATTEMPTS_KEY)
     })
 
     describe('dedupeWorkoutQueue (pure)', () => {
@@ -315,6 +318,110 @@ describe('workout-offline-queue', () => {
             const left = readWorkoutOfflineQueue()
             expect(left).toHaveLength(1)
             expect(left[0].planId).toBe('p2')
+        })
+
+        // Poda de la cola (2026-07-25): antes SOLO se descartaba `invalid_block`, así que un item con
+        // un rechazo permanente (coach en pausa, edición sin fila, payload inválido) se reintentaba
+        // para siempre en cada flush.
+        it.each(['coach_paused', 'past_set_not_found', 'validation'] as const)(
+            'descarta el rechazo permanente %s sin reintentarlo',
+            async (code) => {
+                enqueueWorkoutLog(make({ setNumber: 1 }))
+                const res = await flushWorkoutQueue(async () => ({ error: 'no', code }))
+                expect(res.discarded).toBe(1)
+                expect(res.remainingInScope).toBe(0)
+                expect(readWorkoutOfflineQueue()).toHaveLength(0)
+            },
+        )
+
+        it('descarta el zombi tras MAX_WORKOUT_FLUSH_ATTEMPTS rechazos con código DESCONOCIDO', async () => {
+            enqueueWorkoutLog(make({ setNumber: 1 }))
+            let calls = 0
+            for (let i = 1; i < MAX_WORKOUT_FLUSH_ATTEMPTS; i++) {
+                const res = await flushWorkoutQueue(async () => {
+                    calls++
+                    return { error: 'raro', code: 'codigo_que_no_existe' }
+                })
+                expect(res.remainingInScope).toBe(1)
+            }
+            const last = await flushWorkoutQueue(async () => {
+                calls++
+                return { error: 'raro', code: 'codigo_que_no_existe' }
+            })
+            expect(calls).toBe(MAX_WORKOUT_FLUSH_ATTEMPTS)
+            expect(last.discarded).toBe(1)
+            expect(readWorkoutOfflineQueue()).toHaveLength(0)
+        })
+
+        // P0 (revisión adversarial 2026-07-25): el tope contaba CUALQUIER no-success, y la action
+        // devuelve `unauthenticated` (JWT vencido) y `db` (blip de Supabase) para fallas del entorno.
+        // Como el flush corre en cada montaje del layout /c y en cada evento `online`, 5 navegaciones
+        // con la sesión fría borraban series REALES ya entrenadas.
+        it.each(['unauthenticated', 'db'] as const)(
+            'el código transitorio %s NUNCA descarta, por muchos flushes que pasen',
+            async (code) => {
+                enqueueWorkoutLog(make({ setNumber: 1, weightKg: 42 }))
+                for (let i = 0; i < MAX_WORKOUT_FLUSH_ATTEMPTS * 3; i++) {
+                    const res = await flushWorkoutQueue(async () => ({ error: 'transitorio', code }))
+                    expect(res.discarded).toBe(0)
+                    expect(res.remainingInScope).toBe(1)
+                }
+                expect(readWorkoutOfflineQueue()).toHaveLength(1)
+                // Y cuando el entorno se recupera, la serie entra intacta.
+                const ok = await flushWorkoutQueue(async () => ({ success: true }))
+                expect(ok.flushed).toBe(1)
+                expect(readWorkoutOfflineQueue()).toHaveLength(0)
+            },
+        )
+
+        // P0: re-encolar = intención nueva del alumno (corrigió el peso). No puede heredar la deuda
+        // de intentos del payload viejo o su corrección se descartaría al primer rechazo.
+        it('re-encolar la misma (block,set) resetea el contador de intentos', async () => {
+            enqueueWorkoutLog(make({ setNumber: 1, weightKg: 35 }))
+            for (let i = 1; i < MAX_WORKOUT_FLUSH_ATTEMPTS; i++) {
+                await flushWorkoutQueue(async () => ({ error: 'raro', code: 'codigo_que_no_existe' }))
+            }
+            // El alumno corrige el peso y reconfirma la MISMA serie.
+            enqueueWorkoutLog(make({ setNumber: 1, weightKg: 40 }))
+            expect(localStorage.getItem(ATTEMPTS_KEY)).toBeNull()
+            const res = await flushWorkoutQueue(async () => ({ error: 'raro', code: 'codigo_que_no_existe' }))
+            expect(res.discarded).toBe(0)
+            expect(readWorkoutOfflineQueue()[0].weightKg).toBe(40)
+        })
+
+        // Fuga del mapa de intentos: reescribir la cola sin sus contadores dejaba basura creciendo en
+        // localStorage (y con el mismo (block,set) reciclado, deuda ajena).
+        it('poda los contadores huérfanos al reescribir la cola', async () => {
+            enqueueWorkoutLog(make({ setNumber: 1, blockId: 'a' }))
+            enqueueWorkoutLog(make({ setNumber: 1, blockId: 'b' }))
+            await flushWorkoutQueue(async () => ({ error: 'raro', code: 'codigo_que_no_existe' }))
+            expect(Object.keys(JSON.parse(localStorage.getItem(ATTEMPTS_KEY) ?? '{}'))).toEqual(['a:1', 'b:1'])
+            // Poda de huérfanos (reseed): sólo sobrevive el bloque 'a'.
+            const { kept } = pruneOrphanWorkoutLogs(readWorkoutOfflineQueue(), ['a'])
+            writeWorkoutOfflineQueue(kept)
+            expect(Object.keys(JSON.parse(localStorage.getItem(ATTEMPTS_KEY) ?? '{}'))).toEqual(['a:1'])
+        })
+
+        it('las excepciones de red NO gastan intentos (offline largo no pierde series)', async () => {
+            enqueueWorkoutLog(make({ setNumber: 1 }))
+            for (let i = 0; i < MAX_WORKOUT_FLUSH_ATTEMPTS + 3; i++) {
+                await flushWorkoutQueue(async () => {
+                    throw new Error('Failed to fetch')
+                })
+            }
+            expect(readWorkoutOfflineQueue()).toHaveLength(1)
+            // Y al volver la conexión sigue entrando normalmente.
+            const ok = await flushWorkoutQueue(async () => ({ success: true }))
+            expect(ok.flushed).toBe(1)
+            expect(readWorkoutOfflineQueue()).toHaveLength(0)
+        })
+
+        it('un envío exitoso limpia el contador de intentos previos', async () => {
+            enqueueWorkoutLog(make({ setNumber: 1 }))
+            await flushWorkoutQueue(async () => ({ error: 'raro', code: 'codigo_que_no_existe' }))
+            expect(localStorage.getItem(ATTEMPTS_KEY)).not.toBeNull()
+            await flushWorkoutQueue(async () => ({ success: true }))
+            expect(localStorage.getItem(ATTEMPTS_KEY)).toBeNull()
         })
 
         it('dedupes before sending (one network call per block/set, last intention)', async () => {
