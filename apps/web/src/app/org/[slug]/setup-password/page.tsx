@@ -3,7 +3,7 @@
 import { useState, useTransition } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { createServiceRoleClient } from '@/lib/supabase/admin-client'
+import { passwordRejectionMessage } from '@eva/schemas'
 import { CheckCircle2, Eye, EyeOff, KeyRound, Loader2, ShieldCheck } from 'lucide-react'
 
 export default function SetupPasswordPage() {
@@ -32,7 +32,11 @@ export default function SetupPasswordPage() {
         startTransition(async () => {
             const supabase = createClient()
             const { error: updateError } = await supabase.auth.updateUser({ password })
-            if (updateError) { setError(updateError.message); return }
+            if (updateError) {
+                setError(passwordRejectionMessage(updateError)
+                    ?? 'No se pudo guardar la contraseña. Intenta de nuevo en unos minutos.')
+                return
+            }
 
             // Clear the requires_password_change flag — service role needed
             // We do it via an API call to a dedicated action

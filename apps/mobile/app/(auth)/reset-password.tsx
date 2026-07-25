@@ -16,6 +16,7 @@ import { MotiView } from 'moti'
 import { supabase } from '../../lib/supabase'
 import { useTheme } from '../../context/ThemeContext'
 import { Button, Input, TopBar } from '../../components'
+import { passwordRejectionMessage } from '@eva/schemas'
 
 export default function ResetPasswordScreen() {
   const { theme } = useTheme()
@@ -38,7 +39,8 @@ export default function ResetPasswordScreen() {
     setLoading(false)
 
     if (error) {
-      Alert.alert('Error', error.message)
+      Alert.alert('Error', passwordRejectionMessage(error)
+        ?? 'No se pudo actualizar la contraseña. El link puede haber expirado.')
       return
     }
 

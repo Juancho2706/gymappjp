@@ -3,6 +3,8 @@
 export * from './brand'
 // LoginSchema, ForgotPasswordSchema, ResetPasswordSchema, ChangePasswordSchema
 export * from './auth'
+// passwordRejectionMessage: traducción de errores GoTrue al cambiar contraseña (HIBP/weak/same)
+export * from './auth-errors'
 // CheckInSchema, QuickWeightSchema, UpsertHabitsSchema
 export * from './client'
 // Nutrition tracking schemas

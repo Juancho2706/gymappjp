@@ -25,6 +25,7 @@ import type { LucideIcon } from 'lucide-react-native'
 import { MotiView } from 'moti'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { supabase } from '../../../lib/supabase'
+import { passwordRejectionMessage } from '@eva/schemas'
 import { signOutAndCleanup } from '../../../lib/auth-actions'
 import { authenticate, isBiometricAvailable, isBiometricLockEnabled, setBiometricLockEnabled } from '../../../lib/biometric'
 import { getClientProfile } from '../../../lib/client'
@@ -301,7 +302,10 @@ export default function AlumnoPerfilScreen() {
     const { error } = await supabase.auth.updateUser({ password: newPassword })
     setChangingPassword(false)
     if (error) {
-      Alert.alert('Error', 'No se pudo cambiar la contraseña. Intenta de nuevo.')
+      // "Intenta de nuevo" con la misma contraseña filtrada era un loop sin salida (incidente
+      // Dudú 2026-07-25): distinguir el rechazo HIBP/weak del error transitorio.
+      Alert.alert('Error', passwordRejectionMessage(error)
+        ?? 'No se pudo cambiar la contraseña. Intenta de nuevo.')
     } else {
       Alert.alert('Listo', 'Contraseña actualizada correctamente.')
       setShowPasswordModal(false)
