@@ -4,6 +4,7 @@ import { ArrowRight, Calendar, CheckCircle2, ChevronRight, Pencil, Play, RotateC
 import { cssInterop } from 'nativewind'
 import { deriveSportTokens } from '@eva/brand-kit'
 import { useTheme } from '../../../context/ThemeContext'
+import { getTodayInSantiago } from '../../../lib/date-utils'
 import { FONT } from '../../../lib/typography'
 import { Badge } from '../../Badge'
 import { Card } from '../../Card'
@@ -60,10 +61,12 @@ export function ActiveProgramSection({
   // sin sufijo. El shell la computa (resolveEffectiveWeekVariant). Espejo del sufijo
   // web `{abMode ? ` · Sem ${activeVariant}` : ''}` (ActiveProgramSection.tsx:95).
   weekVariant?: 'A' | 'B' | null
-  /** Entreno normal / repetir hoy (sin params). `origin` = rect del day-card para que el Despegue
-   *  nazca de la tarjeta clickeada (null ⇒ el morph cae a su origen sintético). `label` = texto real del
-   *  trigger para la píldora del clon (solo se pinta en rects anchos; las day-cards angostas lo ignoran). */
-  onStart: (planId: string, origin?: MorphOrigin | null, label?: string) => void
+  /** Entreno normal / repetir hoy. `origin` = rect del day-card para que el Despegue nazca de la tarjeta
+   *  clickeada (null ⇒ el morph cae a su origen sintético). `label` = texto real del trigger para la
+   *  píldora del clon (solo se pinta en rects anchos; las day-cards angostas lo ignoran). `repeatDate` =
+   *  día ya hecho que se repite hoy → viaja como param `repetir` y precarga las series con lo registrado
+   *  ese día (instancia NUEVA: el log del día original no se toca). */
+  onStart: (planId: string, origin?: MorphOrigin | null, label?: string, repeatDate?: string) => void
   /** Recuperar un dia pendiente → ejecutor con param `recuperar` (banner ambar). `origin` = rect del
    *  trigger (banner o day-card) para que el Despegue nazca de él, igual que el CTA y las day-cards. */
   onRecover: (planId: string, dateIso: string, origin?: MorphOrigin | null, label?: string) => void
@@ -182,42 +185,65 @@ export function ActiveProgramSection({
     <DoubleIntentSheet
       view={sheetView}
       onClose={() => setSheetView(null)}
-      onRepeat={(id) => { setSheetView(null); onStart(id, null, 'Empezar entrenamiento') }}
+      // `repeatDate` = fecha REAL de la sesión de ese día (la del log si fue recuperado): viaja como
+      // param `repetir` para precargar cada serie con lo que se registró esa vez.
+      onRepeat={(id, repeatDate) => { setSheetView(null); onStart(id, null, 'Repetir hoy', repeatDate ?? undefined) }}
     />
     </>
   )
 }
 
 /**
- * Bottom-sheet doble intencion (E1.7, mockup concepto-a-v33): tras tocar un day-card de un dia YA
- * HECHO de OTRO dia. "Revisar y editar" (destacada) → abre los registros de ese dia; "Repetir hoy" →
- * nueva sesion de hoy; Cancelar. Theme-aware (nivel dashboard, claro/oscuro + safe areas via Sheet).
+ * Bottom-sheet doble intención (E1.7, mockup concepto-a-v33): tras tocar un day-card de un día YA
+ * HECHO de OTRO día. "Revisar y editar" (destacada) → abre los registros de ese día; "Repetir hoy" →
+ * nueva sesión de hoy PRECARGADA con lo registrado esa vez; Cancelar. Theme-aware (nivel dashboard,
+ * claro/oscuro + safe areas vía Sheet).
  *
- * DECISION RN (justificada): "Revisar y editar" queda DESHABILITADA con sublabel "Disponible pronto".
- * El guardado del ejecutor RN escribe SIEMPRE el log de HOY (habla PostgREST directo); el solo-UPDATE
- * por `target_date` que edita la fecha pasada es un server action WEB (E1.5), aun no portado a RN. Si
- * habilitaramos "editar", el banner diria "editando el martes" pero cada serie crearia un log NUEVO de
- * hoy → duplicaria en vez de corregir, violando el invariante "editar jamas duplica" del mockup. Por eso
- * el unico camino accionable aqui es "Repetir hoy" (semantica honesta); el editar llega en ola posterior
- * (reactivara un `onReview` que navegue con el param `fecha`, ya soportado por [planId].tsx + RecoveryBanner).
+ * DECISIÓN RN (justificada): "Revisar y editar" queda DESHABILITADA con sublabel "Disponible pronto"
+ * para días PASADOS. El guardado del ejecutor RN escribe SIEMPRE el log de HOY (habla PostgREST
+ * directo); el solo-UPDATE por `target_date` que edita la fecha pasada es un server action WEB (E1.5),
+ * aún no portado a RN. Si lo habilitáramos, el banner diría "editando el martes" pero cada serie crearía
+ * un log NUEVO de hoy → duplicaría en vez de corregir, violando el invariante "editar jamás duplica".
+ * Excepción: cuando el día hecho es HOY (`view.isToday`, único caller = el hero de la home) revisar ES
+ * el flujo normal de hoy — abrir el ejecutor sin params corrige la MISMA fila — así que ahí sí se
+ * habilita, vía `onReview` (espejo del `?desde=hecho` de la web, WorkoutHeroCard.tsx:165-166).
+ *
+ * "Repetir hoy" NO se ofrece cuando la sesión hecha es de HOY (decisión CEO): el índice único de la DB
+ * es por día, así que repetir hoy sobre hoy pisaría la misma fila. Cuenta la FECHA REAL del log
+ * (`doneOnDate ?? dateIso`), no el día del day-card — un día pasado recuperado hoy también queda fuera.
+ * Espejo del `showRepeat` de la web (WorkoutDoneSheet / WorkoutPlanCard.tsx:183).
  *
  * Exportado: lo reusa también el hero de la home cuando el entreno de HOY ya está completado (MOBILE-2 /
  * paridad web WorkoutHeroCard: el overlay "Entrenamiento completado" abre esta misma ventanita en vez de
- * dejar un CTA muerto). "Repetir hoy" dispara el Despegue; "Revisar y editar" sigue deshabilitada.
+ * dejar un CTA muerto).
  */
 export function DoubleIntentSheet({
   view,
   onClose,
   onRepeat,
+  onReview,
 }: {
   view: PlanDayView | null
   onClose: () => void
-  onRepeat: (planId: string) => void
+  /** `repeatDate` = fecha real de la sesión que se repite (param `repetir` del ejecutor). */
+  onRepeat: (planId: string, repeatDate: string | null) => void
+  /** Solo se usa cuando el día hecho es HOY: abre el ejecutor de hoy (revisar/corregir). Sin esta prop
+   *  la opción queda deshabilitada, como en los días pasados. */
+  onReview?: (planId: string) => void
 }) {
   const { theme } = useTheme()
   const dow = view?.plan.day_of_week ?? 1
-  // Fecha real de la sesion a revisar: la del log (doneOnDate si fue recuperado) o la propia del dia.
+  // Fecha real de la sesión a revisar: la del log (doneOnDate si fue recuperado) o la propia del día.
   const reviewDate = view ? (view.doneOnDate ?? view.dateIso) : null
+  // Repetir hoy sobre hoy pisaria la misma fila (indice unico por dia) → la opcion no se ofrece. El
+  // criterio es la FECHA REAL de la sesion hecha, no si el day-card es el de hoy: un dia pasado que se
+  // RECUPERO hoy tiene `isToday === false` pero su log ya es de HOY. Con `!view.isToday` se ofrecia
+  // Repetir, el validador de la ruta descartaba la fecha (== hoy) y el ejecutor abria sin semilla ni
+  // banner, pisando la fila de hoy serie por serie. Espejo exacto del `showRepeat` de la web
+  // (WorkoutPlanCard.tsx:183: `(doneOnDate ?? dateIso) !== getTodayInSantiago().iso`).
+  const showRepeat = !!reviewDate && reviewDate !== getTodayInSantiago().iso
+  // Revisar solo es accionable para HOY (ver nota del componente).
+  const canReview = !!view?.isToday && !!onReview
 
   return (
     <Sheet
@@ -241,40 +267,64 @@ export function DoubleIntentSheet({
           </View>
         ) : null}
 
-        {/* Revisar y editar — DESHABILITADA en RN (ver nota del componente). */}
-        <View
-          accessibilityRole="button"
-          accessibilityState={{ disabled: true }}
-          className="rounded-control border border-subtle bg-surface-sunken/30"
-          style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 14, paddingVertical: 13, opacity: 0.55 }}
-        >
-          <View className="bg-surface-sunken" style={{ width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' }}>
-            <Pencil size={17} color={theme.mutedForeground} strokeWidth={2} />
+        {/* Revisar y editar — accionable SOLO si el día hecho es HOY; deshabilitada en días pasados
+            (el editor por `target_date` aún no existe en RN, ver nota del componente). */}
+        {canReview ? (
+          <TouchableOpacity
+            testID="double-intent-review"
+            onPress={() => view && onReview?.(view.plan.id)}
+            activeOpacity={0.85}
+            accessibilityRole="button"
+            className="rounded-control border border-sport-500 bg-sport-100"
+            style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 14, paddingVertical: 13 }}
+          >
+            <View className="bg-sport-500" style={{ width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' }}>
+              <Pencil size={17} color="#fff" strokeWidth={2} />
+            </View>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text className="text-sport-600" style={{ fontFamily: FONT.uiBold, fontSize: 14 }}>Revisar y editar</Text>
+              <Text className="text-muted" numberOfLines={2} style={{ fontFamily: FONT.ui, fontSize: 11.5, marginTop: 1 }}>Abre tus registros de hoy y corrige lo que quieras</Text>
+            </View>
+            <ChevronRight size={18} color={theme.mutedForeground} />
+          </TouchableOpacity>
+        ) : (
+          <View
+            accessibilityRole="button"
+            accessibilityState={{ disabled: true }}
+            className="rounded-control border border-subtle bg-surface-sunken/30"
+            style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 14, paddingVertical: 13, opacity: 0.55 }}
+          >
+            <View className="bg-surface-sunken" style={{ width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' }}>
+              <Pencil size={17} color={theme.mutedForeground} strokeWidth={2} />
+            </View>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text className="text-strong" style={{ fontFamily: FONT.uiBold, fontSize: 14 }}>Revisar y editar</Text>
+              <Text className="text-muted" numberOfLines={1} style={{ fontFamily: FONT.ui, fontSize: 11.5, marginTop: 1 }}>Disponible pronto</Text>
+            </View>
           </View>
-          <View style={{ flex: 1, minWidth: 0 }}>
-            <Text className="text-strong" style={{ fontFamily: FONT.uiBold, fontSize: 14 }}>Revisar y editar</Text>
-            <Text className="text-muted" numberOfLines={1} style={{ fontFamily: FONT.ui, fontSize: 11.5, marginTop: 1 }}>Disponible pronto</Text>
-          </View>
-        </View>
+        )}
 
-        {/* Repetir hoy — sesion nueva de hoy (funcional en RN). */}
-        <TouchableOpacity
-          testID="double-intent-repeat"
-          onPress={() => view && onRepeat(view.plan.id)}
-          activeOpacity={0.85}
-          accessibilityRole="button"
-          className="rounded-control border border-sport-500 bg-sport-100"
-          style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 14, paddingVertical: 13 }}
-        >
-          <View className="bg-sport-500" style={{ width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' }}>
-            <RotateCcw size={17} color="#fff" strokeWidth={2.25} />
-          </View>
-          <View style={{ flex: 1, minWidth: 0 }}>
-            <Text className="text-sport-600" style={{ fontFamily: FONT.uiBold, fontSize: 14 }}>Repetir hoy</Text>
-            <Text className="text-muted" numberOfLines={2} style={{ fontFamily: FONT.ui, fontSize: 11.5, marginTop: 1 }}>Empieza de cero; tus marcas de esa vez quedan como referencia</Text>
-          </View>
-          <ChevronRight size={18} color={theme.mutedForeground} />
-        </TouchableOpacity>
+        {/* Repetir hoy — instancia NUEVA de hoy, con cada serie precargada con lo que se registró esa
+            vez (editable). No se ofrece cuando la sesión hecha ya es de HOY (decisión CEO, ver nota). */}
+        {showRepeat ? (
+          <TouchableOpacity
+            testID="double-intent-repeat"
+            onPress={() => view && onRepeat(view.plan.id, reviewDate)}
+            activeOpacity={0.85}
+            accessibilityRole="button"
+            className="rounded-control border border-sport-500 bg-sport-100"
+            style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 14, paddingVertical: 13 }}
+          >
+            <View className="bg-sport-500" style={{ width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' }}>
+              <RotateCcw size={17} color="#fff" strokeWidth={2.25} />
+            </View>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text className="text-sport-600" style={{ fontFamily: FONT.uiBold, fontSize: 14 }}>Repetir hoy</Text>
+              <Text className="text-muted" numberOfLines={2} style={{ fontFamily: FONT.ui, fontSize: 11.5, marginTop: 1 }}>Sesión nueva con tus valores de esa vez ya cargados</Text>
+            </View>
+            <ChevronRight size={18} color={theme.mutedForeground} />
+          </TouchableOpacity>
+        ) : null}
 
         <TouchableOpacity onPress={onClose} activeOpacity={0.7} accessibilityRole="button" style={{ paddingVertical: 6 }}>
           <Text className="text-muted" style={{ textAlign: 'center', fontFamily: FONT.uiSemibold, fontSize: 13.5 }}>Cancelar</Text>

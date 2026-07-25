@@ -3,7 +3,7 @@ import type { Metadata } from 'next'
 import { WorkoutExecutionClient } from './WorkoutExecutionClient'
 import { getWorkoutExecutionData } from './_data/workout-execution.queries'
 import { getExecutorWeekStatusDays } from './_data/week-status.queries'
-import { validateTargetDate } from './_data/target-date'
+import { resolveRepeatDate, validateTargetDate } from './_data/target-date'
 import { getClientBasePath } from '@/lib/client/base-path'
 import { getTodayInSantiago } from '@/lib/date-utils'
 
@@ -13,12 +13,13 @@ interface Props {
     params: Promise<{ coach_slug: string; planId: string }>
     // Ola 1 (decisiones CEO 9-10): `fecha` = editar registros de un día PASADO (modo solo-UPDATE);
     // `recuperar` = SOLO banner "Recuperando" (guardado normal de HOY). Ambas se validan server-side.
-    searchParams: Promise<{ fecha?: string; recuperar?: string; desde?: string }>
+    // `repetir` = repetir HOY un día hecho en OTRA fecha, con las series precargadas con lo de ese día.
+    searchParams: Promise<{ fecha?: string; recuperar?: string; desde?: string; repetir?: string }>
 }
 
 export default async function WorkoutExecutionPage({ params, searchParams }: Props) {
     const { coach_slug, planId } = await params
-    const { fecha, recuperar } = await searchParams
+    const { fecha, recuperar, repetir } = await searchParams
     const base = await getClientBasePath(coach_slug)
 
     // Validación server-side de `fecha`: sólo un día pasado/hoy válido activa el modo edición; cualquier
@@ -29,8 +30,12 @@ export default async function WorkoutExecutionPage({ params, searchParams }: Pro
     // `recuperar` es sólo visual: se valida con la misma regla (pasado/hoy) pero jamás toca la query.
     const recuperarCheck = typeof recuperar === 'string' ? validateTargetDate(recuperar, todayIso) : null
     const recuperarDate = recuperarCheck?.ok ? recuperarCheck.iso : null
+    // `repetir`: `resolveRepeatDate` descarta formato/calendario inválidos, futuro y HOY MISMO. Acá
+    // sólo resta la exclusión entre modos: con `fecha` activo gana la edición del día pasado. Al
+    // descartarse, el ejecutor abre como hoy.
+    const repeatDate = targetDate ? null : resolveRepeatDate(repetir, todayIso)
 
-    const data = await getWorkoutExecutionData(planId, targetDate ?? undefined)
+    const data = await getWorkoutExecutionData(planId, targetDate ?? undefined, repeatDate ?? undefined)
     const { user, plan } = data
 
     if (!user) redirect(`${base}/login`)
@@ -46,6 +51,7 @@ export default async function WorkoutExecutionPage({ params, searchParams }: Pro
             plan={plan}
             program={data.program}
             logs={data.logs}
+            seedLogs={data.seedLogs}
             previousHistory={data.previousHistory}
             coachSlug={coach_slug}
             exerciseMaxes={data.exerciseMaxes}
@@ -57,6 +63,7 @@ export default async function WorkoutExecutionPage({ params, searchParams }: Pro
             cardio={data.cardio}
             targetDate={targetDate}
             recoverDate={recuperarDate}
+            repeatDate={repeatDate}
             executorV3={true}
             weekStatusDays={weekStatusDays}
         />

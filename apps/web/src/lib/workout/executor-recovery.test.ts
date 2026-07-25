@@ -46,8 +46,12 @@ describe('builders de URL', () => {
         expect(buildWorkoutEditHref(base, planId, '2026-07-21')).toBe('/c/mi-coach/workout/plan-123?fecha=2026-07-21')
     })
 
-    it('repetir hoy no lleva query', () => {
+    it('repetir hoy sin fecha de origen no lleva query', () => {
         expect(buildWorkoutRepeatHref(base, planId)).toBe('/c/mi-coach/workout/plan-123')
+    })
+
+    it('repetir hoy con fecha de origen lleva ?repetir (siembra los valores de ese día)', () => {
+        expect(buildWorkoutRepeatHref(base, planId, '2026-07-20')).toBe('/c/mi-coach/workout/plan-123?repetir=2026-07-20')
     })
 
     it('desde hecho HOY lleva ?desde=hecho', () => {

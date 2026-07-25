@@ -39,20 +39,6 @@ export interface KeypadFieldDef {
   weightChips?: boolean
 }
 
-/**
- * Paso OPCIONAL de esfuerzo (RPE/RIR) tras el último campo — sólo fuerza (DB-5 del CEO). Los
- * controles del teclado escriben el MISMO estado del `LogSetForm` vía estos callbacks → el valor
- * viaja en el mismo submit sin pipeline nuevo. `rpe`/`rir` son la semilla al abrir.
- */
-export interface KeypadEffortConfig {
-  rpe: number | null
-  rir: number | null
-  /** Tope inferior de la escala de RIR (E2.5): 0 en V3 (RIR 0 = al fallo), 1 en V2. Default 1. */
-  rirMin?: number
-  onRpeChange: (v: number) => void
-  onRirChange: (v: number) => void
-}
-
 export interface OpenKeypadConfig {
   /** Campos del teclado en el orden en que "Siguiente" los recorre. */
   fields: KeypadFieldDef[]
@@ -62,8 +48,6 @@ export interface OpenKeypadConfig {
   initialFieldKey: string
   /** Objetivo prescrito (viaja con el teclado — DB-5). */
   target?: KeypadTarget
-  /** Paso de esfuerzo tras el último campo (sólo fuerza; null/undefined ⇒ "Listo" submitea directo). */
-  effort?: KeypadEffortConfig | null
   /** `form.requestSubmit()` del `LogSetForm` — "Listo" es el único submit. */
   requestSubmit: () => void
 }
@@ -104,13 +88,12 @@ function scrollInputAboveKeypad(el: HTMLElement | null, keypadH: number, smooth:
  * Provider del teclado numérico custom (Fase L · workstream B), análogo a `WorkoutTimerProvider`:
  * UNA sola instancia por sesión, portal a `document.body`. Gestiona el campo activo, el mirror del
  * display, la mutación de `ref.value` (mismo mecanismo del autofill "= última vez"), la háptica, el
- * paso configurable (localStorage `omni_keypad_step`), el paso OPCIONAL de esfuerzo (RPE/RIR de
- * fuerza) y publica `--keypad-h` + `body[data-exec-keypad-open]` para que la exec oculte la barra
- * "Finalizar" y reserve espacio (AC-B6).
+ * paso configurable (localStorage `omni_keypad_step`) y publica `--keypad-h` +
+ * `body[data-exec-keypad-open]` para que la exec oculte la barra "Finalizar" y reserve espacio
+ * (AC-B6). El esfuerzo (RPE/RIR) NO pasa por el teclado: se registra en el panel opcional de la fila.
  *
  * El `<input>` real sigue siendo la fuente de verdad (uncontrolled, con su name/label) → el pipeline
- * submit/FormData/offline no se toca. RPE/RIR viajan por callbacks al estado del `LogSetForm`. En
- * puntero fino el teclado NUNCA se abre (gate en `LogSetForm`).
+ * submit/FormData/offline no se toca. En puntero fino el teclado NUNCA se abre (gate en `LogSetForm`).
  */
 export function WorkoutKeypadProvider({ children }: { children: React.ReactNode }) {
   const reducedMotion = useReducedMotion()
@@ -118,11 +101,6 @@ export function WorkoutKeypadProvider({ children }: { children: React.ReactNode 
   const [config, setConfig] = useState<OpenKeypadConfig | null>(null)
   const [activeKey, setActiveKey] = useState('')
   const [display, setDisplay] = useState('')
-  const [phase, setPhase] = useState<'input' | 'effort'>('input')
-  // Espejo local del esfuerzo: se siembra de `config.effort` al abrir y se empuja al `LogSetForm` en
-  // cada cambio (el config queda congelado al abrir, así que el mirror es la fuente viva del display).
-  const [effortRpe, setEffortRpe] = useState<number | null>(null)
-  const [effortRir, setEffortRir] = useState<number | null>(null)
   const [step, setStep] = useState(DEFAULT_KEYPAD_STEP)
   const [stepMenuOpen, setStepMenuOpen] = useState(false)
   const keypadH = useRef(320)
@@ -140,7 +118,6 @@ export function WorkoutKeypadProvider({ children }: { children: React.ReactNode 
   const activeIndex = fields.findIndex((f) => f.key === activeKey)
   const activeField = activeIndex >= 0 ? fields[activeIndex] : null
   const isLastField = activeIndex >= 0 && activeIndex === fields.length - 1
-  const hasEffort = !!config?.effort
   const allowDecimal = activeField?.allowDecimal ?? false
   const showChips = !!activeField?.weightChips
 
@@ -170,11 +147,8 @@ export function WorkoutKeypadProvider({ children }: { children: React.ReactNode 
     closingRef.current = false
     setConfig(cfg)
     setActiveKey(cfg.initialFieldKey)
-    setPhase('input')
     setStepMenuOpen(false)
     setDisplay(el?.value ?? '')
-    setEffortRpe(cfg.effort?.rpe ?? null)
-    setEffortRir(cfg.effort?.rir ?? null)
     triggerHaptic(8)
   }, [])
 
@@ -184,7 +158,6 @@ export function WorkoutKeypadProvider({ children }: { children: React.ReactNode 
     closingRef.current = true
     setConfig(null)
     setStepMenuOpen(false)
-    setPhase('input')
   }, [])
 
   const refreshDisplay = useCallback(() => {
@@ -236,7 +209,6 @@ export function WorkoutKeypadProvider({ children }: { children: React.ReactNode 
       if (!config?.fieldRefs[key]) return
       const el = refFor(key, config)
       setActiveKey(key)
-      setPhase('input')
       setStepMenuOpen(false)
       setDisplay(el?.value ?? '')
       triggerHaptic(8)
@@ -253,47 +225,14 @@ export function WorkoutKeypadProvider({ children }: { children: React.ReactNode 
   }, [config, closeKeypad])
 
   const onNext = useCallback(() => {
-    if (phase === 'effort') {
-      onDone()
-      return
-    }
     if (!isLastField) {
       const next = fields[activeIndex + 1]
       if (next) onSwitchField(next.key)
       return
     }
-    // Último campo: si hay paso de esfuerzo, entra; si no, cierra la serie.
-    if (hasEffort) {
-      setPhase('effort')
-      setStepMenuOpen(false)
-      triggerHaptic(8)
-      return
-    }
+    // Último campo: cierra la serie (el esfuerzo se registra en el panel de la fila, no acá).
     onDone()
-  }, [phase, isLastField, hasEffort, fields, activeIndex, onSwitchField, onDone])
-
-  const onEffortBack = useCallback(() => {
-    setPhase('input')
-    triggerHaptic(6)
-  }, [])
-
-  const onEffortRpeChange = useCallback(
-    (v: number) => {
-      setEffortRpe(v)
-      config?.effort?.onRpeChange(v)
-      triggerHaptic(8)
-    },
-    [config],
-  )
-
-  const onEffortRirChange = useCallback(
-    (v: number) => {
-      setEffortRir(v)
-      config?.effort?.onRirChange(v)
-      triggerHaptic(8)
-    },
-    [config],
-  )
+  }, [isLastField, fields, activeIndex, onSwitchField, onDone])
 
   const onStepChange = useCallback((next: number) => {
     setStep(next)
@@ -389,12 +328,7 @@ export function WorkoutKeypadProvider({ children }: { children: React.ReactNode 
                 target={config.target}
                 allowDecimal={allowDecimal}
                 showChips={showChips}
-                phase={phase}
                 isLastField={isLastField}
-                hasEffort={hasEffort}
-                effortRpe={effortRpe}
-                effortRir={effortRir}
-                effortRirMin={config.effort?.rirMin ?? 1}
                 step={step}
                 stepMenuOpen={stepMenuOpen}
                 reducedMotion={reducedMotion}
@@ -406,9 +340,6 @@ export function WorkoutKeypadProvider({ children }: { children: React.ReactNode 
                 onSwitchField={onSwitchField}
                 onNext={onNext}
                 onDone={onDone}
-                onEffortBack={onEffortBack}
-                onEffortRpeChange={onEffortRpeChange}
-                onEffortRirChange={onEffortRirChange}
                 onClose={closeKeypad}
                 onToggleStepMenu={() => setStepMenuOpen((o) => !o)}
                 onStepChange={onStepChange}

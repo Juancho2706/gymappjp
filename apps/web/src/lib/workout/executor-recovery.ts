@@ -10,6 +10,10 @@
  *                               `workout-execution.queries.ts` + `workout-log.actions.ts`).
  *   - `?recuperar=YYYY-MM-DD` → SOLO visual: banner ámbar "Recuperando" (el guardado sigue siendo el
  *                               flujo normal de HOY; la atribución la resuelve `deriveWeekWorkoutStatus`).
+ *   - `?repetir=YYYY-MM-DD`  → repetir HOY un día ya hecho en OTRA fecha: el ejecutor abre precargado
+ *                               con los valores registrados ese día (editables) y guarda como una
+ *                               instancia NUEVA de hoy — los registros del día original no se tocan.
+ *                               Si la fecha es inválida, futura o igual a hoy se ignora (abre normal).
  *   - `?desde=hecho`          → tap en un día hecho HOY: el ejecutor lo IGNORA por ahora (queda para
  *                               anteponer el resumen en una ola posterior).
  */
@@ -40,9 +44,13 @@ export function buildWorkoutEditHref(base: string, planId: string, fecha: string
     return `${base}/workout/${planId}?fecha=${fecha}`
 }
 
-/** `${base}/workout/${planId}` — repetir hoy (instancia nueva; sin query). */
-export function buildWorkoutRepeatHref(base: string, planId: string): string {
-    return `${base}/workout/${planId}`
+/**
+ * `${base}/workout/${planId}?repetir=YYYY-MM-DD` — repetir HOY un día hecho en OTRA fecha, con las
+ * series precargadas con lo registrado ese día (instancia nueva; el día original queda intacto).
+ * Sin `fecha` devuelve la URL desnuda (arrancar de cero), que es el comportamiento previo.
+ */
+export function buildWorkoutRepeatHref(base: string, planId: string, fecha?: string): string {
+    return fecha ? `${base}/workout/${planId}?repetir=${fecha}` : `${base}/workout/${planId}`
 }
 
 /** `${base}/workout/${planId}?desde=hecho` — tap en un día hecho HOY (el ejecutor lo ignora por ahora). */

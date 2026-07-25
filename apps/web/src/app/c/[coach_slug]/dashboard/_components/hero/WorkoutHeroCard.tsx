@@ -9,7 +9,7 @@ import { ProgressRing } from '@/components/ui/progress-ring'
 import { InfoTooltip } from '@/components/ui/info-tooltip'
 import { useTranslation } from '@/lib/i18n/LanguageContext'
 import { useBasePath } from '@/components/client/BasePathProvider'
-import { buildWorkoutFromDoneHref, buildWorkoutRepeatHref } from '@/lib/workout/executor-recovery'
+import { buildWorkoutFromDoneHref } from '@/lib/workout/executor-recovery'
 import { WorkoutDoneSheet } from '../program/WorkoutDoneSheet'
 import { useWorkoutLaunch } from '../launch/WorkoutLaunchMorph'
 import { cn } from '@/lib/utils'
@@ -162,9 +162,11 @@ export function WorkoutHeroCard({
                     onOpenChange={setSheetOpen}
                     title={title}
                     subtitle="Hoy"
-                    // HOY hecho → editar es el flujo normal de hoy (`?desde=hecho`); repetir arranca de cero.
+                    // HOY hecho → editar es el flujo normal de hoy (`?desde=hecho`).
                     editHref={buildWorkoutFromDoneHref(base, planId)}
-                    repeatHref={buildWorkoutRepeatHref(base, planId)}
+                    // El hero es SIEMPRE el día de hoy: repetir hoy sobre hoy pisaría la misma fila
+                    // (índice único por día), así que la opción no se ofrece (decisión CEO).
+                    showRepeat={false}
                     onLaunch={launch}
                 />
             ) : null}

@@ -36,7 +36,8 @@ interface ExecSettingsSheetProps {
   onToggleAutoTimer?: () => void
   /** Finalizar entrenamiento — decisión CEO (2026-07-22): la barra fija "Finalizar" NO existe en V3, su
    *  acción se movió acá. Al presionar la fila se cierra el sheet y se dispara el MISMO handler de la
-   *  barra (`handleFinish`: flush + resumen/confirmación). Aditiva: si no se pasa, la fila no se pinta. */
+   *  barra (`handleFinish`: resumen inmediato + sincronización en background). Aditiva: si no se pasa,
+   *  la fila no se pinta. */
   onFinish?: () => void
 }
 

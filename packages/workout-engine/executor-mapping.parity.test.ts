@@ -103,7 +103,9 @@ describe('keypadStepsForTarget', () => {
     expect(keypadStepsForTarget(null)).toEqual([])
   })
 
-  it('strength con esfuerzo => peso, reps, effort', () => {
+  // Contrato nuevo: el esfuerzo (RPE/RIR) salio del teclado (vive en la fila), asi que `effortKind`
+  // NO agrega pasos — un bloque con RPE y uno sin RPE ven exactamente el mismo flujo peso->reps.
+  it('strength con esfuerzo => peso, reps (el esfuerzo ya no es un paso del teclado)', () => {
     const target: KeypadTarget = {
       blockId: 'b1',
       setNumber: 1,
@@ -112,7 +114,8 @@ describe('keypadStepsForTarget', () => {
       suggestedWeight: null,
       effortKind: 'rpe',
     }
-    expect(keypadStepsForTarget(target)).toEqual([...STRENGTH_KEYPAD_STEPS, { kind: 'effort' }])
+    expect(keypadStepsForTarget(target)).toEqual([...STRENGTH_KEYPAD_STEPS])
+    expect(keypadStepsForTarget(target).every((s) => s.kind === 'keypad')).toBe(true)
   })
 
   it('strength sin esfuerzo => peso, reps', () => {

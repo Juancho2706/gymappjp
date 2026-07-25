@@ -140,10 +140,36 @@ export async function readQueue<P>(
   return normalizeQueue<P>(await readRaw(kv, storageKey), deriveKey)
 }
 
-/** Cantidad de operaciones pendientes (incluye no-vencidas). */
-export async function queueCount(kv: AsyncKV, storageKey: string): Promise<number> {
+/**
+ * Cantidad de operaciones pendientes (incluye las que siguen en backoff). Sirve como BADGE ("hay cosas
+ * sin subir"), no como gate de "voy a intentar algo ahora" — para eso está `queueDueCount`.
+ * `filter` acota el conteo a un subconjunto del payload (scope); sin él se conserva la ruta rápida.
+ */
+export async function queueCount<P = unknown>(
+  kv: AsyncKV,
+  storageKey: string,
+  opts?: { deriveKey?: (p: P) => string; filter?: (p: P) => boolean },
+): Promise<number> {
   const raw = await readRaw(kv, storageKey)
-  return Array.isArray(raw) ? raw.length : 0
+  const filter = opts?.filter
+  if (!filter) return Array.isArray(raw) ? raw.length : 0
+  return normalizeQueue<P>(raw, opts?.deriveKey).filter((op) => filter(op.payload)).length
+}
+
+/**
+ * Cantidad de operaciones VENCIDAS (`nextAttemptAt <= now`): exactamente las que un flush intentaría
+ * AHORA. Es el conteo que debe gatear cualquier aviso de "queda algo por sincronizar" disparado por una
+ * acción del usuario: `queueCount` incluye las que aún esperan su backoff y avisaría sin intentar nada.
+ */
+export async function queueDueCount<P = unknown>(
+  kv: AsyncKV,
+  storageKey: string,
+  opts?: { deriveKey?: (p: P) => string; filter?: (p: P) => boolean; now?: () => number },
+): Promise<number> {
+  const nowMs = (opts?.now ?? (() => Date.now()))()
+  const queue = normalizeQueue<P>(await readRaw(kv, storageKey), opts?.deriveKey, nowMs)
+  const filter = opts?.filter
+  return queue.filter((op) => op.nextAttemptAt <= nowMs && (!filter || filter(op.payload))).length
 }
 
 /**
@@ -179,12 +205,17 @@ const inFlight = new Map<string, Promise<FlushSummary>>()
 /**
  * Drena la cola aplicando `apply` por operación vencida. Serializado por `storageKey` (candado). Cada op
  * resuelta como `ok`/`discard` sale; `retry` (o excepción) se conserva con backoff. Devuelve el resumen.
+ *
+ * `opts.filter` acota el drenaje a un subconjunto (scope): las ops que no pasan el filtro se conservan
+ * INTACTAS (sin `attempts++`). GOTCHA: el candado es por `storageKey`, así que un flush con scope que
+ * coalesce con otro sin scope devuelve el resumen del PRIMERO y no cubre el resto — no se pierde nada
+ * (el flush global de reconexión/foco vuelve a pasar), pero el resumen no es exhaustivo.
  */
 export function flushQueue<P>(
   kv: AsyncKV,
   storageKey: string,
   apply: (payload: P, op: QueuedOp<P>) => Promise<FlushOutcome>,
-  opts?: { deriveKey?: (p: P) => string; now?: () => number },
+  opts?: { deriveKey?: (p: P) => string; now?: () => number; filter?: (p: P) => boolean },
 ): Promise<FlushSummary> {
   const existing = inFlight.get(storageKey)
   if (existing) return existing
@@ -199,7 +230,7 @@ async function doFlush<P>(
   kv: AsyncKV,
   storageKey: string,
   apply: (payload: P, op: QueuedOp<P>) => Promise<FlushOutcome>,
-  opts?: { deriveKey?: (p: P) => string; now?: () => number },
+  opts?: { deriveKey?: (p: P) => string; now?: () => number; filter?: (p: P) => boolean },
 ): Promise<FlushSummary> {
   const nowMs = (opts?.now ?? (() => Date.now()))()
   const queue = normalizeQueue<P>(await readRaw(kv, storageKey), opts?.deriveKey, nowMs)
@@ -209,6 +240,10 @@ async function doFlush<P>(
   let discarded = 0
   const remaining: QueuedOp<P>[] = []
   for (const op of queue) {
+    if (opts?.filter && !opts.filter(op.payload)) {
+      remaining.push(op) // fuera del scope pedido → conservar sin tocar
+      continue
+    }
     if (op.nextAttemptAt > nowMs) {
       remaining.push(op) // aún en backoff → conservar sin tocar
       continue

@@ -1,6 +1,6 @@
 'use client'
 
-import { useActionState, useEffect, useRef, useOptimistic, useState, startTransition, type RefObject } from 'react'
+import { useEffect, useRef, useOptimistic, useState, type RefObject } from 'react'
 import { useParams } from 'next/navigation'
 import { Check, Loader2, StickyNote, CloudOff, ChevronDown, HelpCircle, X } from 'lucide-react'
 import { useFormStatus } from 'react-dom'
@@ -17,7 +17,7 @@ import {
 } from '@/lib/workout-offline-queue'
 import { triggerHaptic } from '@/lib/client/haptics'
 import { useCoarsePointer } from '@/lib/client/useCoarsePointer'
-import { formatWeightEsCl, type PrKind } from '@eva/workout-engine'
+import { formatWeightEsCl, type PrKind, type RepeatSeedEntry } from '@eva/workout-engine'
 import { readDraft, saveDraft, clearDraft, type DraftFields } from './workout-draft-store'
 import { useWorkoutKeypad } from './WorkoutKeypadProvider'
 import { ScaleDots, EffortHelp, RPE_HELP, RIR_HELP } from './EffortScale'
@@ -53,6 +53,23 @@ interface Props {
     nextUpLabel?: string
     /** Peso objetivo sugerido (sobrecarga progresiva): pre-llena el input si no hay log aún. */
     suggestedWeightKg?: number | null
+    /**
+     * Semilla de "repetir el día" (decisión CEO 2026-07-25): lo que el alumno registró en ESA serie el
+     * día que está repitiendo (`buildRepeatSeedMap`, engine). Entra por la MISMA cadena de defaults que
+     * `suggestedWeightKg` — sólo pre-llena inputs EDITABLES. Precedencia:
+     * `existingLog` > cola pendiente > borrador > `seed` > `suggestedWeightKg` (el valor real del día
+     * original le GANA al peso sugerido por progresión). La semilla NO marca la serie como registrada,
+     * NO encola nada y NO crea borradores: si el alumno sale sin confirmar, no queda rastro. Sin nota
+     * (decisión CEO: la nota del día original no es un comentario de hoy).
+     */
+    seed?: RepeatSeedEntry | null
+    /**
+     * ¿La SESIÓN es un "repetir el día"? Es propiedad de la sesión, no de la fila: dentro de un día
+     * repetido puede haber series SIN semilla (ese día no se hicieron) y el umbral de PR debe ser el
+     * mismo para todas. Fallback si el host no la manda: `seed != null` (comportamiento previo, estricto
+     * al menos en las filas sembradas).
+     */
+    isRepeatSession?: boolean
     /** Máximo histórico (kg) del ejercicio: si el peso registrado lo iguala o supera, la serie
      *  pulsa dorado (PR inline). Sólo presentación — no cambia el motor de logging. */
     prThresholdKg?: number | null
@@ -195,6 +212,24 @@ interface Props {
 export type SetSyncStatus = 'saved' | 'pending' | 'error'
 export type SetSyncResult = 'ok' | 'error' | 'pending'
 
+/**
+ * Envío de una serie DESACOPLADO del ciclo de vida del componente (fix de la cola huérfana, 2026-07-25).
+ * La promesa se crea en JS plano — NO en un hook —, así la reconciliación (sacar el item de la cola +
+ * avisar al padre) corre SIEMPRE que el server responda, esté la fila montada o no. Con `useActionState`
+ * la reconciliación vivía en un efecto y se perdía en cuanto la fila se desmontaba: en superserie el
+ * desmontaje es determinístico (el `flushSync` del padre marca el miembro como hecho antes de que llegue
+ * la respuesta) y en series sueltas el auto-avance desmonta la última fila del bloque a los ~610 ms → la
+ * cola quedaba llena con conexión perfecta y "finalizar entrenamiento" tenía que vaciarla entera.
+ *
+ * Se devuelve la promesa para que el `action` del form mantenga su transición abierta mientras dura la
+ * petición: spinner (`useFormStatus`) y optimismo (`useOptimistic`) quedan EXACTAMENTE como antes.
+ * Un RECHAZO (red caída de verdad) no trae `LogState` → se reconcilia con `null`: la serie sigue en la
+ * cola (write-through) y el flush la reintenta.
+ */
+function sendLogSet(formData: FormData, reconcile: (result: LogState | null) => void): Promise<void> {
+    return logSetAction(initialState, formData).then(reconcile, () => reconcile(null))
+}
+
 /** Lee el item encolado (sin sincronizar) de una serie concreta, si existe. */
 function readQueuedFor(blockId: string, setNumber: number): WorkoutOfflineLog | null {
     const key = workoutLogKey(blockId, setNumber)
@@ -221,6 +256,8 @@ function StrengthLogSetForm({
     totalSets,
     nextUpLabel,
     suggestedWeightKg,
+    seed,
+    isRepeatSession,
     prThresholdKg,
     targetReps,
     lastSet,
@@ -253,7 +290,19 @@ function StrengthLogSetForm({
     // Día objetivo (Ola 1): si el ejecutor se abrió con `?fecha=…` (editar un día pasado), viaja en
     // cada submit como `target_date` → la action edita esa fecha en modo solo-UPDATE. null = HOY.
     const targetDate = useTargetDate()
-    const [state, formAction] = useActionState(logSetAction, initialState)
+    // Resultado del server (ver `sendLogSet`): sólo alimenta la UI (chip de error + base del optimismo).
+    // El envío YA no lo maneja `useActionState` — vive fuera del fiber para que la reconciliación no
+    // dependa de que la fila siga montada.
+    const [state, setState] = useState<LogState>(initialState)
+    // Montaje vivo: el `.then` del envío corre igual con la fila desmontada, pero ahí no se puede tocar
+    // estado de React (setState sobre un componente muerto).
+    const mountedRef = useRef(true)
+    useEffect(() => {
+        mountedRef.current = true
+        return () => {
+            mountedRef.current = false
+        }
+    }, [])
     // Item encolado (sin sincronizar) de ESTA serie tras un reload. Se hidrata en un EFECTO
     // post-montaje (no en el initializer) para evitar mismatch de hidratación: el server no ve
     // localStorage → render inicial idéntico, y el pendiente aparece al montar en el cliente.
@@ -338,12 +387,17 @@ function StrengthLogSetForm({
     const [editing, setEditing] = useState(false)
     // Esfuerzo por serie: RPE y RIR, ambos escala 1-10 (dots), ambos opcionales (decisión CEO).
     // El name/payload no cambia — se inyectan en el submit igual que antes.
-    const [rpe, setRpe] = useState<number | null>(existingLog?.rpe ?? null)
+    // Semilla de "repetir el día": una serie YA registrada manda íntegra (un esfuerzo que el alumno dejó
+    // vacío ese día debe seguir vacío) → la semilla sólo aplica cuando la fila no tiene `existingLog`.
+    const seedValues = existingLog ? null : seed ?? null
+    const [rpe, setRpe] = useState<number | null>(existingLog?.rpe ?? seedValues?.rpe ?? null)
     // RIR = reps en reserva. Clampa a "sin valor" lo que caiga fuera del rango de entrada [rirMin..10]
-    // (en V2, rirMin=1 → un rir=0 legacy no viaja; en V3, rirMin=0 → el 0 "al fallo" SÍ viaja).
-    const [rir, setRir] = useState<number | null>(
-        existingLog?.rir != null && existingLog.rir >= rirMin && existingLog.rir <= 10 ? existingLog.rir : null,
-    )
+    // (en V2, rirMin=1 → un rir=0 legacy no viaja; en V3, rirMin=0 → el 0 "al fallo" SÍ viaja). El mismo
+    // clamp se aplica a la semilla: el motor la normaliza con su propio piso, acá manda el de esta fila.
+    const [rir, setRir] = useState<number | null>(() => {
+        const raw = existingLog?.rir ?? seedValues?.rir ?? null
+        return raw != null && raw >= rirMin && raw <= 10 ? raw : null
+    })
     // Captura HERO (informe 03): qué escala de esfuerzo muestra el panel compacto (pills RPE/RIR). Sólo
     // presentación — ambos siguen siendo opcionales y viajan por setRpe/setRir sin tocar el submit.
     const [effortMetric, setEffortMetric] = useState<'rpe' | 'rir'>(
@@ -451,22 +505,30 @@ function StrengthLogSetForm({
     // el optimismo. Confirmado → se saca de la cola (write-through) y queda 'saved'. Error → NO se
     // pierde el valor (sigue encolado como respaldo), la fila se REABRE y el padre revierte su log
     // optimista para que el error sea visible aunque el bloque se hubiera colapsado.
-    const lastHandledState = useRef<LogState | null>(null)
-    useEffect(() => {
-        if (state === lastHandledState.current) return
-        if (state.success) {
-            lastHandledState.current = state
+    // Corre desde el `.then` del envío (ya no desde un efecto): el dequeue y el aviso al padre son
+    // OBLIGATORIOS aunque la fila se haya desmontado — ése era el origen de las colas huérfanas. Sólo el
+    // estado de UI queda detrás del ref de montaje. `null` = rechazo de red (sin `LogState`).
+    const reconcile = (result: LogState | null) => {
+        if (result?.success) {
             dequeueWorkoutLog(blockId, setNumber)
-            setSyncStatus('saved')
+            if (mountedRef.current) {
+                setState(result)
+                setSyncStatus('saved')
+            }
             onResult?.(blockId, setNumber, 'ok')
-        } else if (state.error) {
-            lastHandledState.current = state
-            setSyncStatus('error')
-            setEditing(true)
+        } else if (result?.error) {
+            if (mountedRef.current) {
+                setState(result)
+                setSyncStatus('error')
+                setEditing(true)
+            }
             onResult?.(blockId, setNumber, 'error')
+        } else if (result == null) {
+            // Red caída: la serie sigue en la cola → se queda "sin sincronizar" y la reintenta el flush.
+            if (mountedRef.current) setSyncStatus('pending')
+            onResult?.(blockId, setNumber, 'pending')
         }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [state])
+    }
 
     // PR en vivo V3 (E4.2): la celebración dorada dura ~1,5 s y se va sola (no corta el flujo, no es modal).
     useEffect(() => {
@@ -522,15 +584,8 @@ function StrengthLogSetForm({
                 lastReps: lastSet?.reps ?? null,
                 exerciseName: nextUpLabel,
             },
-            // Paso OPCIONAL de esfuerzo tras reps: los controles del teclado escriben el MISMO estado
-            // rpe/rir de esta fila (handleSubmit ya los inyecta al FormData) — cero pipeline nuevo.
-            effort: {
-                rpe,
-                rir,
-                rirMin,
-                onRpeChange: setRpe,
-                onRirChange: setRir,
-            },
+            // El esfuerzo (RPE/RIR) NO vive en el teclado: se registra sólo en el panel opcional de la
+            // fila (decisión del CEO) → "Listo" en el último campo submitea directo.
             requestSubmit: () => formRef.current?.requestSubmit(),
         })
     }
@@ -659,7 +714,13 @@ function StrengthLogSetForm({
         })
         settleRef.current = true
         // Umbral de PR EXISTENTE (semántica V2, intacta): alcanzar/superar el máximo histórico de peso.
-        const hitPr = prThresholdKg != null && w != null && w > 0 && w >= prThresholdKg
+        // Repitiendo un día, la comparación se vuelve ESTRICTA (decisión CEO 5): confirmar el mismo peso
+        // que ya movió ese día no es un record, así que igualar el máximo no celebra; sólo superarlo. El
+        // modo lo decide la SESIÓN (`isRepeatSession`), no la fila: dentro de un día repetido puede haber
+        // series sin semilla (ese día no se hicieron) y con el criterio por-fila igualar el máximo ahí
+        // seguía celebrando. Fuera del modo repetir, el umbral queda exactamente como siempre.
+        const strictPr = isRepeatSession ?? seed != null
+        const hitPr = prThresholdKg != null && w != null && w > 0 && (strictPr ? w > prThresholdKg : w >= prThresholdKg)
         prRef.current = hitPr
         // PR en vivo V3 (E4.2): el disparo es el umbral de arriba; el EJE (weight/e1rm) lo clasifica el
         // engine (`detectPR` vía adaptador de borde). Presentación dorada + háptico (pref) por el
@@ -677,7 +738,7 @@ function StrengthLogSetForm({
         // Offline guard: encolado y en estado PENDIENTE (nunca "guardado ✔"), sin tocar el server.
         if (typeof navigator !== 'undefined' && !navigator.onLine) {
             // Respaldo local falló (Safari private / quota llena) Y estamos offline: la serie no tiene
-            // NINGÚN camino — ni cola local ni `formAction` (offline). Avisar y NO marcarla como guardada
+            // NINGÚN camino — ni cola local ni envío al server (offline). Avisar y NO marcarla como guardada
             // (sin optimismo ni colapso), para que el alumno reintente con conexión antes de salir.
             if (!backedUp) {
                 toast.error('No se pudo guardar localmente — revisa tu conexión antes de salir')
@@ -700,6 +761,10 @@ function StrengthLogSetForm({
         setEditing(false)
         buildRest()
 
+        // La petición sale ANTES del optimismo del padre: `onLogged` dispara un `flushSync` que puede
+        // DESMONTAR esta fila (superserie), y el envío no puede depender de que el fiber siga vivo.
+        const sending = sendLogSet(formData, reconcile)
+
         onLogged?.({
             blockId,
             setNumber,
@@ -710,7 +775,9 @@ function StrengthLogSetForm({
             note: noteTrimmed,
         })
 
-        formAction(formData)
+        // Devolver la promesa mantiene abierta la transición del form mientras dura la petición: el
+        // spinner del CTA y el optimismo se comportan igual que cuando el envío era `useActionState`.
+        return sending
     }
 
     // ── Chip recap (serie cerrada) — tap para reabrir editable ────────────────
@@ -811,11 +878,17 @@ function StrengthLogSetForm({
 
     // Con teclado custom el input es `type=text` es-CL (coma decimal, `inputMode=none`, readOnly →
     // no abre el teclado del SO, viaja igual en FormData); en desktop queda EXACTO como hoy.
-    const weightDefaultNum = existingLog?.weight_kg ?? queuedInit?.weightKg ?? suggestedWeightKg ?? null
+    // La semilla del día repetido entra ACÁ, entre la cola y el peso sugerido: lo que el alumno movió
+    // ese día le gana a la progresión (decisión CEO). El borrador se aplica después por ref (efecto de
+    // rehidratación) → lo tipeado-sin-confirmar sigue mandando sobre la semilla.
+    // Se lee de `seedValues` (no de `seed`): una serie YA registrada manda ÍNTEGRA. Con `seed?.weightKg`
+    // una serie de peso corporal registrada hoy (weight_kg null) se reabría mostrando el peso del día
+    // repetido — y al confirmar lo persistía.
+    const weightDefaultNum = existingLog?.weight_kg ?? queuedInit?.weightKg ?? seedValues?.weightKg ?? suggestedWeightKg ?? null
     const weightDefaultValue = useKeypad
         ? (weightDefaultNum != null ? formatWeightEsCl(weightDefaultNum) : '')
         : (weightDefaultNum ?? '')
-    const repsDefaultValue = existingLog?.reps_done ?? queuedInit?.repsDone ?? ''
+    const repsDefaultValue = existingLog?.reps_done ?? queuedInit?.repsDone ?? seedValues?.repsDone ?? ''
 
     // ── Captura HERO de fuerza (informe 03 · BLOCKER). Reusa los mismos inputs (refs/handlers/gesto),
     //    estado rpe/rir y `handleSubmit` — el motor NO cambia, sólo el render. Se renderiza para TODA
@@ -1309,7 +1382,7 @@ function StrengthLogSetForm({
 
 /**
  * Registro polimórfico: cardio (min/distancia/FC prom), movilidad (hold seg),
- * roller (seg o pasadas). Misma maquinaria: useActionState + useOptimistic +
+ * roller (seg o pasadas). Misma maquinaria: envío desacoplado (`sendLogSet`) + useOptimistic +
  * useFormStatus + cola offline (AC4). Re-skin EVA DS dark (Fase L·CEO 2026-07-04): mismos tokens
  * de input/foco (sport-500) que fuerza, RPE con la escala segmentada `ScaleDots` (adiós barra) y
  * teclado numérico custom por campo en pointer coarse. El pipeline de submit tipado queda INTACTO.
@@ -1325,6 +1398,7 @@ function TypedLogSetRow({
     restTimeStr,
     nextUpLabel,
     existingLog,
+    seed,
     autoTimerEnabled = true,
     mode,
     isActive = false,
@@ -1340,6 +1414,10 @@ function TypedLogSetRow({
 }: Props & { mode: Exclude<LogSetMode, 'strength'> }) {
     // Movilidad POR LADO (E3.2): sólo cuenta en modo movilidad. Cualquier otro modo lo ignora.
     const perSide = mode === 'mobility' && sideMode === 'per_side'
+    // Semilla de "repetir el día": pre-llena los ejes tipados SÓLO si la fila no tiene serie registrada
+    // (una fila con `existingLog` manda íntegra: un eje que quedó vacío ese día debe seguir vacío). Igual
+    // que en fuerza, sólo alimenta `defaultValue` — no marca nada como registrado ni encola.
+    const seedValues = existingLog ? null : seed ?? null
     const params = useParams<{ coach_slug: string; planId: string }>()
     // Teclado numérico custom por campo (gate por puntero grueso, como fuerza). En desktop los inputs
     // quedan EXACTAMENTE como hoy (type=number). El keypad muta `ref.value` → submit/offline intacto.
@@ -1348,7 +1426,16 @@ function TypedLogSetRow({
     const useKeypad = coarse && keypad != null
     // Día objetivo (Ola 1): igual que en fuerza, viaja como `target_date` al editar un día pasado.
     const targetDate = useTargetDate()
-    const [state, formAction] = useActionState(logSetAction, initialState)
+    // Igual que en fuerza: el resultado del server sólo alimenta la UI; el envío vive fuera del fiber
+    // (`sendLogSet`) para que la reconciliación no dependa de que la fila siga montada.
+    const [state, setState] = useState<LogState>(initialState)
+    const mountedRef = useRef(true)
+    useEffect(() => {
+        mountedRef.current = true
+        return () => {
+            mountedRef.current = false
+        }
+    }, [])
     const [optimisticLogged, addOptimisticLogged] = useOptimistic(
         !!existingLog || state.success,
         (_, newValue: boolean) => newValue
@@ -1439,6 +1526,9 @@ function TypedLogSetRow({
 
     /** Default del input: es-CL (coma) en modo teclado; número crudo en desktop. */
     const inputDefault = (n: number | null): string | number => (n == null ? '' : useKeypad ? formatWeightEsCl(n) : n)
+    /** Segundos → minutos con 1 decimal (el input de cardio captura minutos; la columna guarda segundos). */
+    const minutesFromSeconds = (sec: number | null): number | null =>
+        sec == null ? null : Math.round((sec / 60) * 10) / 10
     /** Props del `<input>` según pointer: keypad (readonly text) o nativo (number + reglas). */
     const fieldProps = (key: string, nativeInputMode: 'decimal' | 'numeric', nativeExtra: Record<string, string>) =>
         useKeypad
@@ -1502,20 +1592,21 @@ function TypedLogSetRow({
     })
 
     // Reconciliación del guardado (contrato a + e): éxito → sale de la cola; error → respaldo en cola
-    // + el padre revierte su optimismo (onResult).
-    const lastHandledState = useRef<LogState | null>(null)
-    useEffect(() => {
-        if (state === lastHandledState.current) return
-        if (state.success) {
-            lastHandledState.current = state
+    // + el padre revierte su optimismo (onResult). Corre desde el `.then` del envío, montada o no la
+    // fila (fix de la cola huérfana); sólo el estado de UI queda tras el ref de montaje.
+    const reconcile = (result: LogState | null) => {
+        if (result?.success) {
             dequeueWorkoutLog(blockId, setNumber)
+            if (mountedRef.current) setState(result)
             onResult?.(blockId, setNumber, 'ok')
-        } else if (state.error) {
-            lastHandledState.current = state
+        } else if (result?.error) {
+            if (mountedRef.current) setState(result)
             onResult?.(blockId, setNumber, 'error')
+        } else if (result == null) {
+            // Red caída: el registro sigue en la cola y lo reintenta el flush.
+            onResult?.(blockId, setNumber, 'pending')
         }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [state])
+    }
 
     const handleSubmit = (formData: FormData) => {
         normalizeFormData(formData)
@@ -1544,7 +1635,7 @@ function TypedLogSetRow({
         })
 
         if (typeof navigator !== 'undefined' && !navigator.onLine) {
-            // Respaldo local falló (Safari private / quota) Y estamos offline: sin cola ni `formAction`,
+            // Respaldo local falló (Safari private / quota) Y estamos offline: sin cola ni envío al server,
             // la serie se perdería. Avisar y NO marcarla como guardada (ni optimismo ni pending).
             if (!backedUp) {
                 toast.error('No se pudo guardar localmente — revisa tu conexión antes de salir')
@@ -1557,6 +1648,9 @@ function TypedLogSetRow({
         }
 
         addOptimisticLogged(true)
+        // La petición sale ANTES del optimismo del padre (mismo motivo que en fuerza: su `flushSync`
+        // puede desmontar esta fila antes de que el server responda).
+        const sending = sendLogSet(formData, reconcile)
         // Descanso + auto-skip (M2 · 4): editar una serie ya cerrada no toca el descanso en curso.
         if (!isLogged) {
             if (!autoTimerEnabled) {
@@ -1588,7 +1682,9 @@ function TypedLogSetRow({
             // Hold POR LADO (E3.2): el optimismo preserva los segundos por lado (fila per_side).
             metadata: values.metadata,
         })
-        formAction(formData)
+        // Igual que en fuerza: devolver la promesa mantiene abierta la transición del form (spinner del
+        // botón + optimismo) exactamente como cuando el envío lo manejaba `useActionState`.
+        return sending
     }
 
     const submitRpeUpdate = (rpe: number) => {
@@ -1611,9 +1707,10 @@ function TypedLogSetRow({
             actualAvgHr: rpeValues.actualAvgHr,
             metadata: rpeValues.metadata,
         })
-        startTransition(() => {
-            formAction(fd)
-        })
+        // Actualización de RPE post-registro: mismo envío desacoplado (ya no necesita `startTransition`,
+        // porque no pasa por `useActionState`). No es un submit del form → el botón no muestra spinner,
+        // igual que antes.
+        void sendLogSet(fd, reconcile)
     }
 
     // Enter en cualquier input NO submitea (implicit submission cerraba la serie sin dejar meter RPE):
@@ -1679,7 +1776,7 @@ function TypedLogSetRow({
                             ref={cardioMinRef}
                             name="cardio_min"
                             {...fieldProps('cardio_min', 'decimal', { step: '0.5', min: '0' })}
-                            defaultValue={inputDefault(existingLog?.actual_duration_sec != null ? Math.round((existingLog.actual_duration_sec / 60) * 10) / 10 : null)}
+                            defaultValue={inputDefault(minutesFromSeconds(existingLog?.actual_duration_sec ?? seedValues?.actualDurationSec ?? null))}
                             placeholder="-"
                             aria-label="Minutos"
                             className={typedInputClass}
@@ -1688,7 +1785,7 @@ function TypedLogSetRow({
                             ref={distanceRef}
                             name="actual_distance_m"
                             {...fieldProps('actual_distance_m', 'decimal', { min: '0' })}
-                            defaultValue={inputDefault(existingLog?.actual_distance_m ?? null)}
+                            defaultValue={inputDefault(existingLog?.actual_distance_m ?? seedValues?.actualDistanceM ?? null)}
                             placeholder="-"
                             aria-label="Metros"
                             className={typedInputClass}
@@ -1697,7 +1794,7 @@ function TypedLogSetRow({
                             ref={hrRef}
                             name="actual_avg_hr"
                             {...fieldProps('actual_avg_hr', 'numeric', { min: '25', max: '250' })}
-                            defaultValue={inputDefault(existingLog?.actual_avg_hr ?? null)}
+                            defaultValue={inputDefault(existingLog?.actual_avg_hr ?? seedValues?.actualAvgHr ?? null)}
                             placeholder="-"
                             aria-label="FC promedio"
                             className={typedInputClass}
@@ -1710,7 +1807,7 @@ function TypedLogSetRow({
                         ref={holdRef}
                         name="actual_hold_sec"
                         {...fieldProps('actual_hold_sec', 'numeric', { min: '0' })}
-                        defaultValue={inputDefault(existingLog?.actual_hold_sec ?? null)}
+                        defaultValue={inputDefault(existingLog?.actual_hold_sec ?? seedValues?.actualHoldSec ?? null)}
                         placeholder="seg"
                         aria-label="Segundos de hold"
                         className={typedInputClass}
@@ -1731,7 +1828,7 @@ function TypedLogSetRow({
                                 ref={holdLeftRef}
                                 name="hold_left_sec"
                                 {...fieldProps('hold_left_sec', 'numeric', { min: '0' })}
-                                defaultValue={inputDefault(existingLog?.metadata?.left_sec ?? null)}
+                                defaultValue={inputDefault(existingLog?.metadata?.left_sec ?? seedValues?.metadata?.left_sec ?? null)}
                                 placeholder="seg"
                                 aria-label="Segundos de hold — lado izquierdo"
                                 className={typedInputClass}
@@ -1743,7 +1840,7 @@ function TypedLogSetRow({
                                 ref={holdRightRef}
                                 name="hold_right_sec"
                                 {...fieldProps('hold_right_sec', 'numeric', { min: '0' })}
-                                defaultValue={inputDefault(existingLog?.metadata?.right_sec ?? null)}
+                                defaultValue={inputDefault(existingLog?.metadata?.right_sec ?? seedValues?.metadata?.right_sec ?? null)}
                                 placeholder="seg"
                                 aria-label="Segundos de hold — lado derecho"
                                 className={typedInputClass}
@@ -1758,7 +1855,7 @@ function TypedLogSetRow({
                             ref={durationRef}
                             name="actual_duration_sec"
                             {...fieldProps('actual_duration_sec', 'numeric', { min: '0' })}
-                            defaultValue={inputDefault(existingLog?.actual_duration_sec ?? null)}
+                            defaultValue={inputDefault(existingLog?.actual_duration_sec ?? seedValues?.actualDurationSec ?? null)}
                             placeholder="seg"
                             aria-label="Segundos"
                             className={typedInputClass}
@@ -1767,7 +1864,7 @@ function TypedLogSetRow({
                             ref={passesRef}
                             name="reps_done"
                             {...fieldProps('reps_done', 'numeric', { min: '0' })}
-                            defaultValue={inputDefault(existingLog?.reps_done ?? null)}
+                            defaultValue={inputDefault(existingLog?.reps_done ?? seedValues?.repsDone ?? null)}
                             placeholder="pas."
                             aria-label="Pasadas"
                             className={typedInputClass}

@@ -3,11 +3,10 @@
 import { useEffect, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
 import { motion, useReducedMotion } from 'framer-motion'
-import { Delete, SlidersHorizontal, Check, ArrowRight, ArrowLeft, X } from 'lucide-react'
+import { Delete, SlidersHorizontal, Check, ArrowRight, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { springsSheet } from '@/lib/animation-presets'
 import { incrementChipsForStep, formatWeightEsCl, KEYPAD_STEP_PRESETS } from '@eva/workout-engine'
-import { ScaleDots, EffortHelp, RPE_HELP, RIR_HELP } from './EffortScale'
 
 /** Objetivo prescrito que viaja CON el teclado (DB-5: siempre visible mientras se tipea). */
 export interface KeypadTarget {
@@ -47,17 +46,8 @@ interface Props {
   allowDecimal: boolean
   /** ¿El campo activo muestra los chips de incremento de peso? (sólo peso) */
   showChips: boolean
-  /** Fase actual: captura numérica o paso de esfuerzo (RPE/RIR). */
-  phase: 'input' | 'effort'
   /** ¿El campo activo es el último de la lista? (define "Siguiente" vs "Listo") */
   isLastField: boolean
-  /** ¿Existe paso de esfuerzo tras el último campo? (fuerza) */
-  hasEffort: boolean
-  /** Valores del paso de esfuerzo (mirror del `LogSetForm`). */
-  effortRpe: number | null
-  effortRir: number | null
-  /** Tope inferior de la escala de RIR (E2.5): 0 en V3, 1 en V2. Default 1. */
-  effortRirMin?: number
   /** Paso configurable de los chips de incremento (kg). */
   step: number
   /** ¿Está abierto el selector de paso? */
@@ -71,9 +61,6 @@ interface Props {
   onSwitchField: (key: string) => void
   onNext: () => void
   onDone: () => void
-  onEffortBack: () => void
-  onEffortRpeChange: (v: number) => void
-  onEffortRirChange: (v: number) => void
   onClose: () => void
   onToggleStepMenu: () => void
   onStepChange: (step: number) => void
@@ -98,9 +85,9 @@ function chipLabel(delta: number): string {
  * Panel del teclado numérico custom (Fase L · workstream B). 100% presentacional: el estado y la
  * mutación del `<input>` viven en `WorkoutKeypadProvider`. Superficie MÁS tocada de la app del
  * alumno → tap targets grandes (≥56px), dígitos `font-display`, chips como pills, dark siempre.
- * Sirve tanto a fuerza (peso/reps + paso de esfuerzo RPE/RIR) como a los bloques tipados
- * (duración/distancia/FC/hold/pasadas) — la lista de pestañas y las reglas decimales las manda el
- * provider por props.
+ * Sirve tanto a fuerza (peso/reps) como a los bloques tipados (duración/distancia/FC/hold/pasadas)
+ * — la lista de pestañas y las reglas decimales las manda el provider por props. El esfuerzo
+ * (RPE/RIR) NO se captura acá: vive sólo en el panel opcional de la fila.
  */
 export function NumericKeypadSheet({
   fields,
@@ -110,12 +97,7 @@ export function NumericKeypadSheet({
   target,
   allowDecimal,
   showChips,
-  phase,
   isLastField,
-  hasEffort,
-  effortRpe,
-  effortRir,
-  effortRirMin = 1,
   step,
   stepMenuOpen,
   reducedMotion: reducedMotionProp,
@@ -127,9 +109,6 @@ export function NumericKeypadSheet({
   onSwitchField,
   onNext,
   onDone,
-  onEffortBack,
-  onEffortRpeChange,
-  onEffortRirChange,
   onClose,
   onToggleStepMenu,
   onStepChange,
@@ -174,9 +153,8 @@ export function NumericKeypadSheet({
   }, [onHeight])
 
   const chips = incrementChipsForStep(step)
-  const isEffort = phase === 'effort'
-  // En la captura: "Siguiente" salvo que sea el último campo sin paso de esfuerzo → "Listo".
-  const primaryIsNext = !isLastField || hasEffort
+  // "Siguiente" salvo que sea el último campo → ahí "Listo" cierra la serie.
+  const primaryIsNext = !isLastField
 
   const objectiveLine = (() => {
     if (target?.objective) return target.objective
@@ -253,201 +231,144 @@ export function NumericKeypadSheet({
           )}
         </div>
 
-        {isEffort ? (
-          /* ── Paso OPCIONAL de esfuerzo (RPE/RIR) — sólo fuerza, siempre saltable (DB-5) ── */
-          <div className="mt-2">
-            <div className="mb-2 flex items-center justify-between px-1">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-on-dark-muted">
-                Esfuerzo <span className="text-on-dark-muted/60">(opcional)</span>
-              </span>
-              <button
-                type="button"
-                onClick={onEffortBack}
-                className="inline-flex items-center gap-1 rounded-control px-2 py-1 text-[11px] font-semibold text-on-dark-muted transition-colors hover:text-on-dark"
-              >
-                <ArrowLeft className="h-3.5 w-3.5" /> Volver
-              </button>
-            </div>
-
-            <div className="space-y-3 rounded-control border border-[var(--border-inverse)] bg-white/[0.03] p-3">
-              <div>
-                <span className="mb-1 flex items-center gap-1 text-[9.5px] font-bold uppercase tracking-[0.08em] text-on-dark-muted">
-                  Esfuerzo · RPE
-                  <EffortHelp label="RPE" text={RPE_HELP} />
-                </span>
-                <ScaleDots name="RPE" value={effortRpe} onChange={onEffortRpeChange} reducedMotion={reducedMotion} />
-              </div>
-              <div>
-                <span className="mb-1 flex items-center gap-1 text-[9.5px] font-bold uppercase tracking-[0.08em] text-on-dark-muted">
-                  Reps en reserva · RIR
-                  <EffortHelp label="RIR" text={RIR_HELP} />
-                </span>
-                <ScaleDots name="RIR" value={effortRir} onChange={onEffortRirChange} reducedMotion={reducedMotion} min={effortRirMin} />
-              </div>
-            </div>
-
-            {/* Acciones — ambas cierran la serie (el esfuerzo es opcional) */}
-            <div className="mt-2 flex gap-2">
-              <button
-                type="button"
-                onClick={onDone}
-                aria-label="Omitir el esfuerzo y guardar la serie"
-                className="h-14 flex-1 rounded-control border border-[var(--border-inverse)] bg-white/[0.06] text-[15px] font-bold text-on-dark transition-transform active:scale-[0.98] hover:bg-white/[0.10]"
-              >
-                Omitir
-              </button>
-              <button
-                type="button"
-                onClick={onDone}
-                aria-label="Listo, guardar serie"
-                className="flex h-14 flex-[1.4] items-center justify-center gap-2 rounded-control bg-[var(--sport-500)] text-[15px] font-bold text-white transition-transform active:scale-[0.98]"
-              >
-                <Check className="h-5 w-5" /> Listo
-              </button>
-            </div>
-          </div>
-        ) : (
-          <>
-            {/* Display + pestañas de campo */}
-            <div className="mt-2 flex items-center gap-2 rounded-control border border-[var(--border-inverse)] bg-white/[0.04] p-2 pl-3">
-              {fields.length > 1 && (
-                <div className="flex shrink-0 rounded-control bg-white/[0.05] p-0.5" role="tablist" aria-label="Campo">
-                  {fields.map((f) => {
-                    const selected = f.key === activeKey
-                    return (
-                      <button
-                        key={f.key}
-                        type="button"
-                        role="tab"
-                        aria-selected={selected}
-                        onClick={() => onSwitchField(f.key)}
-                        className={cn(
-                          'rounded-[10px] px-3 py-1.5 text-[12px] font-bold transition-colors',
-                          selected ? 'bg-[var(--sport-500)] text-white' : 'text-on-dark-muted',
-                        )}
-                      >
-                        {f.label}
-                      </button>
-                    )
-                  })}
-                </div>
-              )}
-              <div className="ml-auto flex items-baseline gap-1.5">
-                <span
-                  aria-live="polite"
-                  className={cn(
-                    'font-display text-3xl font-black tabular-nums leading-none',
-                    display === '' ? 'text-on-dark-muted/40' : 'text-on-dark',
-                  )}
-                >
-                  {display === '' ? '0' : display}
-                </span>
-                {unit && <span className="text-[13px] font-bold text-on-dark-muted">{unit}</span>}
-              </div>
-            </div>
-
-            {/* Chips de incremento + engranaje del paso (solo peso) */}
-            {showChips && (
-              <div className="mt-2">
-                <div className="flex items-center gap-1.5">
-                  {chips.map((delta) => (
-                    <button
-                      key={delta}
-                      type="button"
-                      onClick={() => onIncrement(delta)}
-                      aria-label={`${delta > 0 ? 'más' : 'menos'} ${formatWeightEsCl(Math.abs(delta))} kilos`}
-                      className="h-10 flex-1 rounded-full border border-[var(--border-inverse)] bg-white/[0.06] font-mono text-[13px] font-bold tabular-nums text-on-dark transition-transform active:scale-95 hover:bg-white/[0.12]"
-                    >
-                      {chipLabel(delta)}
-                    </button>
-                  ))}
+        {/* Display + pestañas de campo */}
+        <div className="mt-2 flex items-center gap-2 rounded-control border border-[var(--border-inverse)] bg-white/[0.04] p-2 pl-3">
+          {fields.length > 1 && (
+            <div className="flex shrink-0 rounded-control bg-white/[0.05] p-0.5" role="tablist" aria-label="Campo">
+              {fields.map((f) => {
+                const selected = f.key === activeKey
+                return (
                   <button
+                    key={f.key}
                     type="button"
-                    onClick={onToggleStepMenu}
-                    aria-label="Ajustar el paso de los incrementos"
-                    aria-expanded={stepMenuOpen}
+                    role="tab"
+                    aria-selected={selected}
+                    onClick={() => onSwitchField(f.key)}
                     className={cn(
-                      'flex h-10 w-10 shrink-0 items-center justify-center rounded-full border transition-colors',
-                      stepMenuOpen
-                        ? 'border-[var(--sport-500)]/60 bg-[var(--sport-500)]/15 text-[var(--sport-300)]'
-                        : 'border-[var(--border-inverse)] bg-white/[0.06] text-on-dark-muted hover:text-on-dark',
+                      'rounded-[10px] px-3 py-1.5 text-[12px] font-bold transition-colors',
+                      selected ? 'bg-[var(--sport-500)] text-white' : 'text-on-dark-muted',
                     )}
                   >
-                    <SlidersHorizontal className="h-4 w-4" />
+                    {f.label}
                   </button>
-                </div>
-                {stepMenuOpen && (
-                  <div className="mt-2 rounded-control border border-[var(--border-inverse)] bg-white/[0.03] p-2">
-                    <p className="mb-1.5 px-1 text-[10px] font-bold uppercase tracking-wider text-on-dark-muted">
-                      Paso del incremento (kg)
-                    </p>
-                    <div className="flex flex-wrap gap-1.5">
-                      {KEYPAD_STEP_PRESETS.map((preset) => (
-                        <button
-                          key={preset}
-                          type="button"
-                          onClick={() => onStepChange(preset)}
-                          aria-pressed={step === preset}
-                          className={cn(
-                            'h-9 min-w-[52px] flex-1 rounded-control px-2 font-mono text-[13px] font-bold tabular-nums transition-colors',
-                            step === preset
-                              ? 'bg-[var(--sport-500)] text-white'
-                              : 'bg-white/[0.06] text-on-dark hover:bg-white/[0.12]',
-                          )}
-                        >
-                          {formatWeightEsCl(preset)}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Grid 3×4 */}
-            <div className="mt-2 grid grid-cols-3 gap-1.5">
-              {DIGITS.map((d) => (
-                <KeyButton key={d} label={DIGIT_LABEL[d]} onClick={() => onDigit(d)}>
-                  {d}
-                </KeyButton>
-              ))}
-              {/* Fila 4: coma (decimal) · 0 · borrar */}
-              {allowDecimal ? (
-                <KeyButton label="coma decimal" onClick={onDecimal}>
-                  ,
-                </KeyButton>
-              ) : (
-                <div aria-hidden />
-              )}
-              <KeyButton label={DIGIT_LABEL['0']} onClick={() => onDigit('0')}>
-                0
-              </KeyButton>
-              <KeyButton label="borrar" onClick={onBackspace} onLongPress={onClear} className="text-on-dark-muted">
-                <Delete className="h-6 w-6" aria-hidden />
-              </KeyButton>
+                )
+              })}
             </div>
+          )}
+          <div className="ml-auto flex items-baseline gap-1.5">
+            <span
+              aria-live="polite"
+              className={cn(
+                'font-display text-3xl font-black tabular-nums leading-none',
+                display === '' ? 'text-on-dark-muted/40' : 'text-on-dark',
+              )}
+            >
+              {display === '' ? '0' : display}
+            </span>
+            {unit && <span className="text-[13px] font-bold text-on-dark-muted">{unit}</span>}
+          </div>
+        </div>
 
-            {/* Acción — "Siguiente" avanza; "Listo" cierra la serie (AC-B3) */}
-            <div className="mt-2">
+        {/* Chips de incremento + engranaje del paso (solo peso) */}
+        {showChips && (
+          <div className="mt-2">
+            <div className="flex items-center gap-1.5">
+              {chips.map((delta) => (
+                <button
+                  key={delta}
+                  type="button"
+                  onClick={() => onIncrement(delta)}
+                  aria-label={`${delta > 0 ? 'más' : 'menos'} ${formatWeightEsCl(Math.abs(delta))} kilos`}
+                  className="h-10 flex-1 rounded-full border border-[var(--border-inverse)] bg-white/[0.06] font-mono text-[13px] font-bold tabular-nums text-on-dark transition-transform active:scale-95 hover:bg-white/[0.12]"
+                >
+                  {chipLabel(delta)}
+                </button>
+              ))}
               <button
                 type="button"
-                onClick={primaryIsNext ? onNext : onDone}
-                aria-label={primaryIsNext ? 'Siguiente' : 'Listo, guardar serie'}
-                className="flex h-14 w-full items-center justify-center gap-2 rounded-control bg-[var(--sport-500)] text-[15px] font-bold text-white transition-transform active:scale-[0.98]"
-              >
-                {primaryIsNext ? (
-                  <>
-                    Siguiente <ArrowRight className="h-5 w-5" />
-                  </>
-                ) : (
-                  <>
-                    <Check className="h-5 w-5" /> Listo
-                  </>
+                onClick={onToggleStepMenu}
+                aria-label="Ajustar el paso de los incrementos"
+                aria-expanded={stepMenuOpen}
+                className={cn(
+                  'flex h-10 w-10 shrink-0 items-center justify-center rounded-full border transition-colors',
+                  stepMenuOpen
+                    ? 'border-[var(--sport-500)]/60 bg-[var(--sport-500)]/15 text-[var(--sport-300)]'
+                    : 'border-[var(--border-inverse)] bg-white/[0.06] text-on-dark-muted hover:text-on-dark',
                 )}
+              >
+                <SlidersHorizontal className="h-4 w-4" />
               </button>
             </div>
-          </>
+            {stepMenuOpen && (
+              <div className="mt-2 rounded-control border border-[var(--border-inverse)] bg-white/[0.03] p-2">
+                <p className="mb-1.5 px-1 text-[10px] font-bold uppercase tracking-wider text-on-dark-muted">
+                  Paso del incremento (kg)
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {KEYPAD_STEP_PRESETS.map((preset) => (
+                    <button
+                      key={preset}
+                      type="button"
+                      onClick={() => onStepChange(preset)}
+                      aria-pressed={step === preset}
+                      className={cn(
+                        'h-9 min-w-[52px] flex-1 rounded-control px-2 font-mono text-[13px] font-bold tabular-nums transition-colors',
+                        step === preset
+                          ? 'bg-[var(--sport-500)] text-white'
+                          : 'bg-white/[0.06] text-on-dark hover:bg-white/[0.12]',
+                      )}
+                    >
+                      {formatWeightEsCl(preset)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
         )}
+
+        {/* Grid 3×4 */}
+        <div className="mt-2 grid grid-cols-3 gap-1.5">
+          {DIGITS.map((d) => (
+            <KeyButton key={d} label={DIGIT_LABEL[d]} onClick={() => onDigit(d)}>
+              {d}
+            </KeyButton>
+          ))}
+          {/* Fila 4: coma (decimal) · 0 · borrar */}
+          {allowDecimal ? (
+            <KeyButton label="coma decimal" onClick={onDecimal}>
+              ,
+            </KeyButton>
+          ) : (
+            <div aria-hidden />
+          )}
+          <KeyButton label={DIGIT_LABEL['0']} onClick={() => onDigit('0')}>
+            0
+          </KeyButton>
+          <KeyButton label="borrar" onClick={onBackspace} onLongPress={onClear} className="text-on-dark-muted">
+            <Delete className="h-6 w-6" aria-hidden />
+          </KeyButton>
+        </div>
+
+        {/* Acción — "Siguiente" avanza; "Listo" cierra la serie (AC-B3) */}
+        <div className="mt-2">
+          <button
+            type="button"
+            onClick={primaryIsNext ? onNext : onDone}
+            aria-label={primaryIsNext ? 'Siguiente' : 'Listo, guardar serie'}
+            className="flex h-14 w-full items-center justify-center gap-2 rounded-control bg-[var(--sport-500)] text-[15px] font-bold text-white transition-transform active:scale-[0.98]"
+          >
+            {primaryIsNext ? (
+              <>
+                Siguiente <ArrowRight className="h-5 w-5" />
+              </>
+            ) : (
+              <>
+                <Check className="h-5 w-5" /> Listo
+              </>
+            )}
+          </button>
+        </div>
       </motion.div>
     </>
   )

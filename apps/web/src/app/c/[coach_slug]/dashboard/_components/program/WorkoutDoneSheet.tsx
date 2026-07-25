@@ -7,7 +7,8 @@ import { Sheet, SheetContent } from '@/components/ui/sheet'
 /**
  * Sheet de "doble intención" al tocar un día YA HECHO en OTRO día de la semana (mockup v3.3). El
  * alumno elige entre CORREGIR los registros de esa fecha (editar, jamás duplica) o REPETIR hoy como
- * instancia nueva. Nivel dashboard → claro/oscuro + responsive (reusa el bottom-sheet del DS).
+ * instancia nueva precargada con los valores de ese día. Nivel dashboard → claro/oscuro + responsive
+ * (reusa el bottom-sheet del DS).
  *
  * Presentacional puro: las URLs las construye el caller con `buildWorkoutEditHref`/`buildWorkoutRepeatHref`
  * (helpers puros testeables). Navegar cierra el sheet solo; "Cancelar" y el backdrop también.
@@ -19,6 +20,7 @@ export function WorkoutDoneSheet({
     subtitle,
     editHref,
     repeatHref,
+    showRepeat = true,
     onLaunch,
 }: {
     open: boolean
@@ -28,7 +30,13 @@ export function WorkoutDoneSheet({
     /** "Martes — Día 2 · 15 jul" (label del día + fecha). */
     subtitle: string
     editHref: string
-    repeatHref: string
+    /** Destino de "Repetir hoy". Se puede omitir cuando `showRepeat` es `false`. */
+    repeatHref?: string
+    /**
+     * Si el día hecho es HOY MISMO, "Repetir hoy" NO se ofrece (decisión CEO): el índice único de la
+     * DB es por día, así que repetir hoy sobre hoy pisaría la misma fila. Queda solo "Revisar y editar".
+     */
+    showRepeat?: boolean
     /**
      * QA7: al elegir una opción se dispara el MORPH de lanzamiento con el destino elegido (mismo puente
      * visual que un tap directo). Si se omite, los enlaces navegan normal (sin morph). El rect del morph
@@ -87,23 +95,25 @@ export function WorkoutDoneSheet({
                         <ChevronRight className="h-4 w-4 shrink-0 text-sport-600 transition-transform group-hover:translate-x-0.5 dark:text-sport-300" />
                     </Link>
 
-                    {/* Repetir hoy: instancia nueva; las marcas de esa vez quedan como referencia. */}
-                    <Link
-                        href={repeatHref}
-                        onClick={choose(repeatHref)}
-                        className="group flex items-center gap-3.5 rounded-card border border-subtle bg-surface-card p-4 text-left transition-colors hover:bg-surface-sunken"
-                    >
-                        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-control bg-surface-sunken text-subtle">
-                            <RotateCcw className="h-5 w-5" />
-                        </span>
-                        <span className="min-w-0 flex-1">
-                            <span className="block text-[15px] font-black text-strong">Repetir hoy</span>
-                            <span className="mt-0.5 block text-xs font-semibold text-muted">
-                                Empieza de cero; tus marcas de esa vez quedan como referencia
+                    {/* Repetir hoy: instancia nueva de HOY, precargada con lo registrado ese día. */}
+                    {showRepeat && repeatHref ? (
+                        <Link
+                            href={repeatHref}
+                            onClick={choose(repeatHref)}
+                            className="group flex items-center gap-3.5 rounded-card border border-subtle bg-surface-card p-4 text-left transition-colors hover:bg-surface-sunken"
+                        >
+                            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-control bg-surface-sunken text-subtle">
+                                <RotateCcw className="h-5 w-5" />
                             </span>
-                        </span>
-                        <ChevronRight className="h-4 w-4 shrink-0 text-subtle transition-transform group-hover:translate-x-0.5" />
-                    </Link>
+                            <span className="min-w-0 flex-1">
+                                <span className="block text-[15px] font-black text-strong">Repetir hoy</span>
+                                <span className="mt-0.5 block text-xs font-semibold text-muted">
+                                    Arranca con tus valores de ese día, listos para editar
+                                </span>
+                            </span>
+                            <ChevronRight className="h-4 w-4 shrink-0 text-subtle transition-transform group-hover:translate-x-0.5" />
+                        </Link>
+                    ) : null}
 
                     <button
                         type="button"

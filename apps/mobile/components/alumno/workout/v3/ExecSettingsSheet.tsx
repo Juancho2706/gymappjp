@@ -1,5 +1,5 @@
 import { type ReactNode, useCallback, useEffect, useState } from 'react'
-import { LayoutChangeEvent, Platform, Pressable, Text, View } from 'react-native'
+import { ActivityIndicator, LayoutChangeEvent, Platform, Pressable, Text, View } from 'react-native'
 import { Check, ChevronDown, Flag } from 'lucide-react-native'
 import { Gesture, GestureDetector } from 'react-native-gesture-handler'
 import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated'
@@ -59,14 +59,17 @@ export function ExecSettingsSheet({
   onClose,
   exec,
   onFinish,
+  finishing = false,
 }: {
   open: boolean
   onClose: () => void
   exec: ExecTheme
   /** Finalizar entrenamiento — decisión CEO (2026-07-22): la barra fija "Finalizar" NO existe en V3, su
    *  acción se movió acá. Al presionar la fila se cierra el sheet y se dispara el MISMO handler de la
-   *  barra (`handleFinish`: flush + Alert de sin-sincronizar + resumen). Aditiva: sin prop, no se pinta. */
+   *  barra (`handleFinish`: cierra la sesión y abre el resumen). Aditiva: sin prop, no se pinta. */
   onFinish?: () => void
+  /** Cierre de sesión en curso: la fila se deshabilita y muestra spinner + "Finalizando…" (paridad web). */
+  finishing?: boolean
 }) {
   const settings = useExecSettings()
 
@@ -270,14 +273,16 @@ export function ExecSettingsSheet({
 
         {/* Finalizar entrenamiento (decisión CEO 2026-07-22) — sección separada al final del sheet.
             Reemplaza la barra fija retirada en V3: cierra el sheet y dispara el MISMO handler de la barra
-            (`onFinish` = handleFinish); si hay series sin sincronizar sigue mostrando su Alert. */}
+            (`onFinish` = handleFinish). Mientras corre queda deshabilitada con spinner (`finishing`). */}
         {onFinish ? (
           <View style={{ marginTop: 8, paddingTop: 16, borderTopWidth: 1.5, borderTopColor: s.borderSubtle }}>
             <Pressable
               testID="btn-finish-workout-v3"
               onPress={() => { void haptics.tap(); onClose(); onFinish() }}
+              disabled={finishing}
               accessibilityRole="button"
-              accessibilityLabel="Finalizar entrenamiento"
+              accessibilityState={{ disabled: finishing, busy: finishing }}
+              accessibilityLabel={finishing ? 'Finalizando entrenamiento' : 'Finalizar entrenamiento'}
               style={({ pressed }) => ({
                 flexDirection: 'row',
                 alignItems: 'center',
@@ -288,11 +293,17 @@ export function ExecSettingsSheet({
                 borderWidth: 2,
                 borderColor: s.borderStrong,
                 backgroundColor: s.surfaceRaised,
-                opacity: pressed ? 0.92 : 1,
+                opacity: finishing ? 0.7 : pressed ? 0.92 : 1,
               })}
             >
-              <Flag size={19} color={s.text} strokeWidth={2.4} />
-              <Text style={{ fontFamily: FONT.uiExtra, fontSize: 14, color: s.text }}>Finalizar entrenamiento</Text>
+              {finishing ? (
+                <ActivityIndicator size="small" color={s.text} style={{ width: 19, height: 19, transform: [{ scale: 0.85 }] }} />
+              ) : (
+                <Flag size={19} color={s.text} strokeWidth={2.4} />
+              )}
+              <Text style={{ fontFamily: FONT.uiExtra, fontSize: 14, color: s.text }}>
+                {finishing ? 'Finalizando…' : 'Finalizar entrenamiento'}
+              </Text>
             </Pressable>
           </View>
         ) : null}

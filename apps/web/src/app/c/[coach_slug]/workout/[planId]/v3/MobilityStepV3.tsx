@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { Move, Pause, Play, RotateCcw } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { LogSetForm, type SetSyncResult } from '../LogSetForm'
-import { formatTypedObjective, type OptimisticLogPayload } from '@eva/workout-engine'
+import { formatTypedObjective, sessionLogKey, type OptimisticLogPayload, type RepeatSeedEntry } from '@eva/workout-engine'
 import type { BlockType, ExerciseType, WorkoutSessionLog } from '../WorkoutExecutionClient'
 import { ExecTypedMedia } from './ExecTypedMedia'
 import { useExecCountdown, formatCountdown } from './useExecCountdown'
@@ -15,6 +15,11 @@ interface MobilityStepV3Props {
     firstUnlogged: number | null
     doneCount: number
     blockLogs: WorkoutSessionLog[]
+    /**
+     * Semilla de "repetir el día" indexada por `(block_id, set_number)` (engine `buildRepeatSeedMap`):
+     * pre-llena los holds registrados esa fecha. No marca nada como registrado. Ausente ⇒ sesión normal.
+     */
+    seedByKey?: Map<string, RepeatSeedEntry>
     autoTimerEnabled: boolean
     reopenSignal: { blockId: string; setNumber: number; nonce: number } | null
     substitution?: { exerciseId: string; exerciseName: string; reason: string } | null
@@ -41,6 +46,7 @@ export function MobilityStepV3({
     firstUnlogged,
     doneCount,
     blockLogs,
+    seedByKey,
     autoTimerEnabled,
     reopenSignal,
     substitution,
@@ -231,6 +237,7 @@ export function MobilityStepV3({
                             totalSets={block.sets}
                             nextUpLabel={exercise.name}
                             existingLog={log}
+                            seed={seedByKey?.get(sessionLogKey(block.id, setNumber))}
                             targetReps={block.reps}
                             autoTimerEnabled={autoTimerEnabled}
                             mode="mobility"

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { validateTargetDate } from './target-date'
+import { resolveRepeatDate, validateTargetDate } from './target-date'
 
 /**
  * Validación pura de la fecha objetivo para editar un día pasado (Ola 1, E1.5). El "hoy Santiago"
@@ -49,5 +49,41 @@ describe('validateTargetDate', () => {
         '2026-07-00', // día 0
     ])('rechaza fecha de calendario inexistente: %s', (bad) => {
         expect(validateTargetDate(bad, TODAY)).toEqual({ ok: false, reason: 'format' })
+    })
+})
+
+/**
+ * `repetir` = repetir HOY un día hecho en OTRA fecha. A diferencia de `fecha`, HOY MISMO se descarta:
+ * el índice único de logs es por día, así que sembrar hoy sobre hoy pisaría la misma fila.
+ */
+describe('resolveRepeatDate', () => {
+    const TODAY = '2026-07-22'
+
+    it('devuelve la fecha cuando es un día pasado válido', () => {
+        expect(resolveRepeatDate('2026-07-20', TODAY)).toBe('2026-07-20')
+    })
+
+    it('devuelve null cuando la fecha es HOY (pisaría la fila del día por el índice único)', () => {
+        expect(resolveRepeatDate(TODAY, TODAY)).toBeNull()
+    })
+
+    it('devuelve null cuando la fecha es futura', () => {
+        expect(resolveRepeatDate('2026-07-23', TODAY)).toBeNull()
+    })
+
+    it.each([
+        '2026-7-20',   // formato inválido
+        '2026-02-30',  // calendario inexistente
+        'ayer',        // texto
+    ])('devuelve null para entrada inválida: %s', (bad) => {
+        expect(resolveRepeatDate(bad, TODAY)).toBeNull()
+    })
+
+    it.each([
+        ['vacía', ''],
+        ['indefinida', undefined],
+        ['nula', null],
+    ])('devuelve null para entrada %s', (_label, input) => {
+        expect(resolveRepeatDate(input, TODAY)).toBeNull()
     })
 })

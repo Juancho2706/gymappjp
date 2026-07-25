@@ -19,10 +19,12 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 import {
   reconcileSessionLogs,
   applyOptimisticSessionLog,
+  buildRepeatSeedMap,
   executionAreaGroupsFor,
   groupContiguousSupersetRuns,
   type ReconciledSessionLog,
   type OptimisticLogPayload,
+  type RepeatSeedEntry,
   type WorkoutOfflineLog,
   type WorkoutArea,
   type SupersetGroupRow,
@@ -217,6 +219,13 @@ export interface WorkoutSessionState {
   previousHistory: Record<string, PrevSet[]>
   lastSessionByBlock: Record<string, LastSessionForBlock>
   exerciseMaxes: Record<string, number>
+  /**
+   * Semilla de "repetir un día" (`?repetir=YYYY-MM-DD`): lo que el alumno registró ESE día, indexado
+   * por `sessionLogKey(block_id, set_number)`. Es SOLO precarga de la captura — NO entra a `sessionLogs`
+   * (marcaría la serie como registrada) ni al snapshot (que está keyeado por el día de HOY). null cuando
+   * no se abrió en modo repetir. Los registros del día original no se tocan: hoy es una instancia nueva.
+   */
+  repeatSeed: Map<string, RepeatSeedEntry> | null
   /** Segundos transcurridos (congelado al llegar al cap de 4h). */
   elapsedSec: number
   capped: boolean
@@ -247,7 +256,12 @@ export interface LogSetOptions {
   substitution?: { exerciseId: string | null; name: string; reason: string | null }
 }
 
-export function useWorkoutSession(planId: string): WorkoutSessionState {
+/**
+ * @param repeatDate Día ya entrenado que se está REPITIENDO hoy (ymd Santiago, ya validado por la
+ *   ruta: pasado, calendario real y distinto de hoy). Sólo alimenta `repeatSeed`; el guardado sigue
+ *   escribiendo el log de HOY, exactamente igual que una sesión normal.
+ */
+export function useWorkoutSession(planId: string, repeatDate?: string | null): WorkoutSessionState {
   const [loading, setLoading] = useState(true)
   const [planTitle, setPlanTitle] = useState('')
   const [programName, setProgramName] = useState<string | null>(null)
@@ -265,6 +279,7 @@ export function useWorkoutSession(planId: string): WorkoutSessionState {
   const [previousHistory, setPreviousHistory] = useState<Record<string, PrevSet[]>>({})
   const [lastSessionByBlock, setLastSessionByBlock] = useState<Record<string, LastSessionForBlock>>({})
   const [exerciseMaxes, setExerciseMaxes] = useState<Record<string, number>>({})
+  const [repeatSeed, setRepeatSeed] = useState<Map<string, RepeatSeedEntry> | null>(null)
   const [isOnline, setIsOnline] = useState(true)
   const [elapsedSec, setElapsedSec] = useState(0)
   const [restoredDraft, setRestoredDraft] = useState<SessionDraft | null>(null)
@@ -306,7 +321,11 @@ export function useWorkoutSession(planId: string): WorkoutSessionState {
       const { data } = await supabase
         .from('workout_logs')
         .select(
-          'block_id, set_number, weight_kg, reps_done, rpe, rir, note, actual_duration_sec, actual_distance_m, actual_hold_sec, actual_avg_hr, substituted_exercise_id, substituted_exercise_name, substitution_reason',
+          // `metadata` = jsonb {left_sec, right_sec} del hold POR LADO. Sin esta columna la fila logueada
+          // de una movilidad `per_side` llegaba con `metadata: undefined`, así que corregirle el RPE
+          // re-submiteaba el log SIN los segundos por lado (la web sí la selecciona,
+          // `workout-execution.queries.ts`). Mismo eje que ya siembra `loadRepeatSeed`.
+          'block_id, set_number, weight_kg, reps_done, rpe, rir, note, actual_duration_sec, actual_distance_m, actual_hold_sec, actual_avg_hr, metadata, substituted_exercise_id, substituted_exercise_name, substitution_reason',
         )
         .eq('client_id', cid)
         .in('block_id', blockIds)
@@ -324,6 +343,7 @@ export function useWorkoutSession(planId: string): WorkoutSessionState {
         actual_distance_m: (row.actual_distance_m as number) ?? null,
         actual_hold_sec: (row.actual_hold_sec as number) ?? null,
         actual_avg_hr: (row.actual_avg_hr as number) ?? null,
+        metadata: (row.metadata as ReconciledSessionLog['metadata']) ?? null,
         substituted_exercise_id: (row.substituted_exercise_id as string) ?? null,
         substituted_exercise_name: (row.substituted_exercise_name as string) ?? null,
         substitution_reason: (row.substitution_reason as string) ?? null,
@@ -331,6 +351,34 @@ export function useWorkoutSession(planId: string): WorkoutSessionState {
     },
     [],
   )
+
+  /**
+   * Series registradas del día que se está REPITIENDO (`?repetir=`). Misma query que
+   * `loadTodayServerLogs` pero con la ventana [start,end) de ESE día — no existía ningún fetch de una
+   * fecha arbitraria (el historial previo mira "todo lo anterior a hoy", no un día puntual). El mapa lo
+   * arma `buildRepeatSeedMap` del motor (descarta las series hechas con máquina sustituida y no siembra
+   * la nota, decisiones CEO). Sin `day` ⇒ semilla nula (apertura normal, sin regresión).
+   */
+  const loadRepeatSeed = useCallback(async (cid: string, blockIds: string[], day: string | null) => {
+    if (!day || !cid || blockIds.length === 0) {
+      setRepeatSeed(null)
+      return
+    }
+    const { startIso, endIso } = getSantiagoUtcBoundsForDay(day)
+    const { data } = await supabase
+      .from('workout_logs')
+      .select(
+        // `metadata` = jsonb {left_sec, right_sec} del hold POR LADO: sin esta columna la semilla de una
+        // movilidad `per_side` llegaba con `metadata: null` y los dos campos del teclado quedaban vacíos
+        // (la web sí los siembra, LogSetForm.tsx:1817/1829).
+        'block_id, set_number, weight_kg, reps_done, rpe, rir, actual_duration_sec, actual_distance_m, actual_hold_sec, actual_avg_hr, metadata, substituted_exercise_id',
+      )
+      .eq('client_id', cid)
+      .in('block_id', blockIds)
+      .gte('logged_at', startIso)
+      .lt('logged_at', endIso)
+    setRepeatSeed(buildRepeatSeedMap((data ?? []) as Parameters<typeof buildRepeatSeedMap>[0]))
+  }, [])
 
   const loadPreviousHistory = useCallback(
     async (cid: string, planBlocks: SessionBlock[]) => {
@@ -562,6 +610,8 @@ export function useWorkoutSession(planId: string): WorkoutSessionState {
         loadPreviousHistory(client.id, sorted),
         loadExerciseMaxes(client.id, sorted),
         loadLastSession(sorted, blockIds),
+        // Semilla de repetición: query aparte, NUNCA mezclada con los logs de hoy ni con el snapshot.
+        loadRepeatSeed(client.id, blockIds, repeatDate ?? null),
       ])
       // Reconciliación server ∪ snapshot (server gana por block:set; lo local sobrevive _pending).
       const queued = (snapshot?.logs ?? []).map((l) => reconciledToOfflineLog(l, planId))
@@ -571,7 +621,7 @@ export function useWorkoutSession(planId: string): WorkoutSessionState {
     }
 
     setLoading(false)
-  }, [planId, snapshotKey, loadAreas, loadTodayServerLogs, loadPreviousHistory, loadExerciseMaxes, loadLastSession])
+  }, [planId, repeatDate, snapshotKey, loadAreas, loadTodayServerLogs, loadPreviousHistory, loadExerciseMaxes, loadLastSession, loadRepeatSeed])
 
   useEffect(() => {
     void load()
@@ -884,6 +934,7 @@ export function useWorkoutSession(planId: string): WorkoutSessionState {
     previousHistory,
     lastSessionByBlock,
     exerciseMaxes,
+    repeatSeed,
     elapsedSec,
     capped: elapsedSec >= MAX_SESSION_SEC,
     isOnline,

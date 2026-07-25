@@ -222,14 +222,17 @@ function WorkoutHero({
         ) : null}
       </Card>
 
-      {/* Ventanita de doble intención del hero (hoy completado). "Repetir hoy" dispara el Despegue; "Revisar
-          y editar" queda deshabilitada "Disponible pronto" (deuda conocida, igual que en las day-cards). El
-          día se construye como PlanDayView de HOY (done en su propia fecha → doneOnDate null). */}
+      {/* Ventanita de doble intención del hero (hoy completado). El día se construye como PlanDayView de
+          HOY (done en su propia fecha → doneOnDate null), así que la ventanita NO ofrece "Repetir hoy"
+          (repetir hoy sobre hoy pisaría la misma fila del índice único por día — decisión CEO) y en su
+          lugar habilita "Revisar y editar": para HOY eso ES el flujo normal (abrir el ejecutor corrige la
+          misma fila), igual que el `?desde=hecho` de la web. */}
       {isAlreadyLogged ? (
         <DoubleIntentSheet
           view={sheetOpen ? todayDoneView : null}
           onClose={() => setSheetOpen(false)}
           onRepeat={(id) => { setSheetOpen(false); onStart(id, undefined, 'Empezar entrenamiento') }}
+          onReview={(id) => { setSheetOpen(false); onStart(id, undefined, 'Ver registro') }}
         />
       ) : null}
     </MotiView>

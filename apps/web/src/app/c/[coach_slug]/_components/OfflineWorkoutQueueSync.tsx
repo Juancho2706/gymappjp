@@ -3,6 +3,7 @@
 import { useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
+import * as Sentry from '@sentry/nextjs'
 import { logSetAction } from '@/app/c/[coach_slug]/workout/[planId]/_actions/workout-log.actions'
 import {
     flushWorkoutQueue,
@@ -26,6 +27,20 @@ export function OfflineWorkoutQueueSync() {
                 const { flushed, discarded } = await flushWorkoutQueue((item) =>
                     logSetAction({}, workoutLogToFormData(item)),
                 )
+                if (discarded > 0) {
+                    // Un descarte es una serie que el alumno YA entrenó y que no va a llegar al server
+                    // nunca (rechazo permanente o zombi que agotó reintentos). Silenciarlo es pérdida
+                    // de datos invisible: se avisa al alumno y se deja rastro en Sentry para triage.
+                    Sentry.captureMessage('workout-offline-queue: series descartadas en el flush', {
+                        level: 'warning',
+                        extra: { discarded, flushed },
+                    })
+                    toast.error(
+                        discarded === 1
+                            ? 'No pudimos guardar 1 serie registrada sin conexión. Revisa tu entrenamiento.'
+                            : `No pudimos guardar ${discarded} series registradas sin conexión. Revisa tu entrenamiento.`,
+                    )
+                }
                 if (flushed > 0) {
                     toast.success(`${flushed} set${flushed !== 1 ? 's' : ''} sincronizado${flushed !== 1 ? 's' : ''}`)
                     // El flush ya persistió; SÓLO el refresh se difiere hasta que termine la ceremonia del
