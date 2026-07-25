@@ -36,6 +36,7 @@ Leer primero [CURRENT.md](status/CURRENT.md). Este es el único índice manual d
 
 - [Política de auditorías](audits/README.md)
 - [Política de archivo](archive/README.md)
+- [Investigación conservada](research/README.md)
 
 Estas carpetas aportan contexto puntual o trazabilidad; nunca reemplazan estado, runbooks ni specs activas.
 
