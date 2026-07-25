@@ -3,7 +3,16 @@ import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake'
 import { useRouter } from 'expo-router'
-import { Dumbbell, Flag } from 'lucide-react-native'
+import Animated, {
+  Easing,
+  useAnimatedStyle,
+  useSharedValue,
+  withRepeat,
+  withSequence,
+  withSpring,
+  withTiming,
+} from 'react-native-reanimated'
+import { Dumbbell, Flag, Sparkles } from 'lucide-react-native'
 import {
   buildStepModel,
   effectiveExerciseType,
@@ -21,6 +30,7 @@ import {
 } from '@eva/workout-engine'
 import { useTheme } from '../../../../context/ThemeContext'
 import { useEvaMotion } from '../../../../lib/motion'
+import { hexToRgba } from '../../../../lib/theme'
 import { FONT } from '../../../../lib/typography'
 import { useEntitlements } from '../../../../lib/entitlements'
 import { useClientCardioResolved, hrToZoneProfileFromResolved } from '../../../../lib/cardio-zones'
@@ -66,6 +76,7 @@ import { CardioScreenV3 } from './CardioScreenV3'
 import { ExerciseListV3, type ExerciseListItem } from './ExerciseListV3'
 import { RestInterstitialV3, type RestInterstitialData, type RestRoundContext } from './RestInterstitialV3'
 import { ExecSettingsSheet } from './ExecSettingsSheet'
+import { FinishSparks } from './finish-sparks'
 import { useExecSettings } from './exec-settings'
 import { useCelebrations } from './use-celebrations'
 import { CelebrationHost } from './celebration-host'
@@ -321,6 +332,49 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
   )
   const currentExerciseIdx = blocks.findIndex((b) => !isBlockComplete(b))
   const activeBlockId = currentExerciseIdx === -1 ? null : blocks[currentExerciseIdx]?.id ?? null
+
+  // ── Ignición del CTA "Finalizar entrenamiento" ──
+  // `currentExerciseIdx === -1` ⇒ ningún bloque quedó incompleto; las superseries entran solas porque sus
+  // miembros son bloques del MISMO arreglo. Cargando o sin bloques no hay nada que armar.
+  const allDone = !loading && blocks.length > 0 && currentExerciseIdx === -1
+  // Mientras cierra la sesión manda el estado "Finalizando…": el armado no compite con el spinner.
+  const finishArmed = allDone && !finishing
+  const [sparksOn, setSparksOn] = useState(false)
+  const [sparkNonce, setSparkNonce] = useState(0)
+  const prevAllDoneRef = useRef<boolean | null>(null)
+  const finishPop = useSharedValue(1)
+  const finishGlow = useSharedValue(0)
+  const handleSparksDone = useCallback(() => setSparksOn(false), [])
+
+  // Transición false → true DURANTE la sesión: háptico de éxito + pop + chispas, una sola vez. Si la
+  // sesión MONTA ya completa (recuperar/editar un día cerrado) sólo se adopta el estado armado, en
+  // silencio: la primera lectura con datos cargados no dispara nada.
+  useEffect(() => {
+    if (loading) return
+    const prev = prevAllDoneRef.current
+    prevAllDoneRef.current = allDone
+    if (prev === null || prev === allDone || !allDone) return
+    void haptics.success()
+    if (motion.reduced) return
+    setSparkNonce((n) => n + 1)
+    setSparksOn(true)
+    finishPop.value = withSequence(
+      withTiming(1.04, { duration: 150, easing: Easing.out(Easing.quad) }),
+      withSpring(1, { damping: 11, stiffness: 190, mass: 0.6 }),
+    )
+  }, [allDone, loading, motion.reduced, finishPop])
+
+  // Pulso continuo del halo mientras el CTA está armado (opacidad de una capa, nunca layout).
+  useEffect(() => {
+    if (!finishArmed || motion.reduced) {
+      finishGlow.value = withTiming(0, { duration: 160 })
+      return
+    }
+    finishGlow.value = withRepeat(withTiming(1, { duration: 1100, easing: Easing.inOut(Easing.quad) }), -1, true)
+  }, [finishArmed, motion.reduced, finishGlow])
+
+  const finishPopStyle = useAnimatedStyle(() => ({ transform: [{ scale: finishPop.value }] }))
+  const finishGlowStyle = useAnimatedStyle(() => ({ opacity: 0.28 + finishGlow.value * 0.42 }))
 
   // "Ejercicio activo" a nivel INDIVIDUAL para header/dots/lista (QA2-C). En una superserie el motor
   // intercala rondas (A1→B1→A2…), asi que el miembro activo NO es el 1er bloque incompleto del grupo
@@ -814,7 +868,9 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
   // ── Datos del Inicio V3 (E2.2) — derivados ya formateados para SessionStart/SessionIntro. ──
   const coachName = branding?.displayName?.trim() || 'Tu coach'
   const coachInitial = (coachName[0] ?? 'E').toUpperCase()
-  const coachLogoUrl = branding?.logoUrl ?? null
+  // Splash/Inicio V3 son DARK-ONLY: se prefiere el logo para fondo oscuro y se cae al claro si no existe
+  // (mismo criterio que la ceremonia del Despegue en `session-morph`).
+  const coachLogoUrl = branding?.logoUrlDark ?? branding?.logoUrl ?? null
   const startData = useMemo(() => {
     const today = getTodayInSantiago()
     const dayNum = parseInt(today.iso.split('-')[2] ?? '', 10)
@@ -1350,7 +1406,9 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
 
       {/* Barra "Finalizar entrenamiento" V3 (QA3, decisión CEO 2026-07-22: de vuelta A LA VISTA): fija abajo,
           delgada, botón fantasma full-width — no compite con el CTA del paso. Mismo `handleFinish` (la tuerca
-          de ajustes conserva "Finalizar" como acceso secundario). Sólo en la fase de sesión. */}
+          de ajustes conserva "Finalizar" como acceso secundario). Sólo en la fase de sesión.
+          Al completar TODAS las series el botón se ENCIENDE (`finishArmed`): relleno de marca, halo pulsante,
+          pop de ignición y chispas one-shot — deja de ser fantasma y pasa a ser el siguiente paso obvio. */}
       {!loading && steps.length > 0 && (
         <View
           style={{
@@ -1366,44 +1424,91 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
             borderTopColor: exec.surface.borderSubtle,
           }}
         >
-          <Pressable
-            testID="btn-finish-workout-v3"
-            onPress={handleFinish}
-            disabled={finishing}
-            accessibilityRole="button"
-            accessibilityState={{ disabled: finishing, busy: finishing }}
-            accessibilityLabel={finishing ? 'Finalizando entrenamiento' : 'Finalizar entrenamiento'}
-            style={({ pressed }) => ({
-              flexDirection: 'row',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 8,
-              alignSelf: 'center',
-              width: '100%',
-              maxWidth: 768,
-              height: 48,
-              borderRadius: 14,
-              borderWidth: 2,
-              borderColor: pressed ? '#3a3a45' : exec.surface.borderStrong,
-              backgroundColor: exec.surface.surface,
-              opacity: finishing ? 0.7 : 1,
-              transform: pressed ? [{ translateY: 1 }] : undefined,
-            })}
-          >
-            {({ pressed }) => (
-              <>
-                {/* Mientras cierra la sesión: spinner + copy en gerundio (antes no había NINGUNA señal). */}
-                {finishing ? (
-                  <ActivityIndicator size="small" color="#b7b7c2" style={{ width: 18, height: 18, transform: [{ scale: 0.85 }] }} />
-                ) : (
-                  <Flag size={18} color={pressed ? '#e8e8ee' : '#b7b7c2'} />
+          <View style={{ alignSelf: 'center', width: '100%', maxWidth: 768 }}>
+            <Animated.View style={finishPopStyle}>
+              {/* Halo de marca detrás del botón: sólo opacidad anima (nunca layout). Sin reduced-motion. */}
+              {finishArmed && !motion.reduced ? (
+                <Animated.View
+                  pointerEvents="none"
+                  style={[
+                    {
+                      position: 'absolute',
+                      top: -5,
+                      left: -5,
+                      right: -5,
+                      bottom: -5,
+                      borderRadius: 19,
+                      backgroundColor: hexToRgba(exec.accent, 0.45),
+                    },
+                    finishGlowStyle,
+                  ]}
+                />
+              ) : null}
+              <Pressable
+                testID="btn-finish-workout-v3"
+                onPress={handleFinish}
+                disabled={finishing}
+                accessibilityRole="button"
+                accessibilityState={{ disabled: finishing, busy: finishing }}
+                accessibilityLabel={
+                  finishing
+                    ? 'Finalizando entrenamiento'
+                    : finishArmed
+                      ? 'Entrenamiento completo. Finalizar entrenamiento'
+                      : 'Finalizar entrenamiento'
+                }
+                style={({ pressed }) => ({
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 8,
+                  width: '100%',
+                  height: 48,
+                  borderRadius: 14,
+                  borderWidth: 2,
+                  borderColor: finishArmed
+                    ? hexToRgba(exec.accent, pressed ? 0.7 : 0.9)
+                    : pressed
+                      ? '#3a3a45'
+                      : exec.surface.borderStrong,
+                  backgroundColor: finishArmed ? exec.accent : exec.surface.surface,
+                  opacity: finishing ? 0.7 : 1,
+                  transform: pressed ? [{ translateY: 1 }] : undefined,
+                  // Resplandor de marca: iOS por shadow, Android por elevation (moderada).
+                  shadowColor: finishArmed ? exec.accent : undefined,
+                  shadowOpacity: finishArmed ? 0.55 : 0,
+                  shadowRadius: finishArmed ? 14 : 0,
+                  shadowOffset: { width: 0, height: 4 },
+                  elevation: finishArmed ? 8 : 0,
+                })}
+              >
+                {({ pressed }) => (
+                  <>
+                    {/* Mientras cierra la sesión: spinner + copy en gerundio (antes no había NINGUNA señal). */}
+                    {finishing ? (
+                      <ActivityIndicator size="small" color="#b7b7c2" style={{ width: 18, height: 18, transform: [{ scale: 0.85 }] }} />
+                    ) : finishArmed ? (
+                      <Sparkles size={18} color={exec.accentText} strokeWidth={2.4} />
+                    ) : (
+                      <Flag size={18} color={pressed ? '#e8e8ee' : '#b7b7c2'} />
+                    )}
+                    <Text
+                      style={{
+                        fontFamily: FONT.uiExtra,
+                        fontSize: 14,
+                        color: finishArmed && !finishing ? exec.accentText : pressed && !finishing ? '#e8e8ee' : '#b7b7c2',
+                      }}
+                    >
+                      {finishing ? 'Finalizando…' : 'Finalizar entrenamiento'}
+                    </Text>
+                  </>
                 )}
-                <Text style={{ fontFamily: FONT.uiExtra, fontSize: 14, color: pressed && !finishing ? '#e8e8ee' : '#b7b7c2' }}>
-                  {finishing ? 'Finalizando…' : 'Finalizar entrenamiento'}
-                </Text>
-              </>
-            )}
-          </Pressable>
+              </Pressable>
+            </Animated.View>
+
+            {/* Chispas one-shot de la ignición: se desmontan solas (~800ms) y nunca interceptan el tap. */}
+            {sparksOn ? <FinishSparks key={sparkNonce} exec={exec} onDone={handleSparksDone} /> : null}
+          </View>
         </View>
       )}
 
@@ -1433,7 +1538,14 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
       />
 
       {/* Tuerca del ejecutor V3 (E3.7) — ajustes del entrenamiento device-scoped. */}
-      <ExecSettingsSheet open={settingsOpen} onClose={() => setSettingsOpen(false)} exec={exec} onFinish={handleFinish} finishing={finishing} />
+      <ExecSettingsSheet
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        exec={exec}
+        onFinish={handleFinish}
+        finishing={finishing}
+        finishArmed={finishArmed}
+      />
 
       <SubstituteSheetV3
         open={substituteBlockId != null}

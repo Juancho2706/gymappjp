@@ -6,7 +6,7 @@ import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { toast } from 'sonner'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { ArrowLeft, Flag, Info, Dumbbell, Timer, TrendingUp, History, Quote, X, Settings, CheckCircle2, WifiOff, ChevronDown, List, GalleryHorizontal, Pencil, CalendarSync, Repeat } from 'lucide-react'
+import { ArrowLeft, Flag, Info, Dumbbell, Timer, TrendingUp, History, Quote, X, Settings, CheckCircle2, WifiOff, ChevronDown, List, GalleryHorizontal, Pencil, CalendarSync, Repeat, Sparkles } from 'lucide-react'
 import { computeEffectiveTarget } from '@/lib/workout/progression'
 import { readAndConsumeMorphFlag } from '@/lib/workout/launch-ceremony'
 import { useCaptureStudentWorkoutCompleted } from '@/lib/posthog/events'
@@ -1031,6 +1031,19 @@ function CollapsedExerciseBar({
     )
 }
 
+/** Chispas de la ignición del CTA "Finalizar": desplazamiento radial (px) + retardo escalonado (s).
+ *  El CSS sólo las anima dentro de `prefers-reduced-motion: no-preference`. */
+const EXEC_FINISH_SPARKS: { dx: number; dy: number; delay: number }[] = [
+    { dx: 0, dy: -34, delay: 0 },
+    { dx: 44, dy: -26, delay: 0.04 },
+    { dx: 68, dy: 2, delay: 0.08 },
+    { dx: 40, dy: 28, delay: 0.12 },
+    { dx: -6, dy: 36, delay: 0.06 },
+    { dx: -46, dy: 24, delay: 0.1 },
+    { dx: -70, dy: -4, delay: 0.02 },
+    { dx: -38, dy: -28, delay: 0.14 },
+]
+
 export function WorkoutExecutionClient({
     plan,
     program,
@@ -1549,6 +1562,8 @@ export function WorkoutExecutionClient({
     const requiredSets = blocks.reduce((acc, b) => acc + b.sets, 0)
     const completedSetCount = countUniqueLoggedSets(blocks, sessionLogs)
     const completionPct = requiredSets === 0 ? 0 : Math.min(100, Math.round((completedSetCount / requiredSets) * 100))
+    // Todas las series planificadas hechas ⇒ el CTA "Finalizar" se enciende (relleno de marca + chispas).
+    const allDone = requiredSets > 0 && completedSetCount >= requiredSets
     // Volumen de sesión en vivo (quick-win E2-5): Σ peso × reps de los logs locales (cero queries).
     const sessionVolumeKg = sessionLogs.reduce((acc, l) => acc + (l.weight_kg ?? 0) * (l.reps_done ?? 0), 0)
     const sessionVolumeLabel = fmtVolume(sessionVolumeKg)
@@ -2657,10 +2672,36 @@ export function WorkoutExecutionClient({
                     handleFinish de siempre; la fila de la tuerca se conserva como acceso secundario. */}
                 {execV3Active && execV3Phase === 'session' && (
                     <div className="exec-v3-finishbar">
-                        <button type="button" onClick={handleFinish} className="exec-v3-finishbtn">
-                            <Flag className="h-[18px] w-[18px]" aria-hidden />
+                        <button
+                            type="button"
+                            onClick={handleFinish}
+                            className={cn('exec-v3-finishbtn', allDone && 'is-armed')}
+                            aria-label={allDone ? 'Entrenamiento completo. Finalizar entrenamiento' : undefined}
+                        >
+                            {allDone ? (
+                                <Sparkles className="h-[18px] w-[18px]" aria-hidden />
+                            ) : (
+                                <Flag className="h-[18px] w-[18px]" aria-hidden />
+                            )}
                             Finalizar entrenamiento
                         </button>
+                        {/* Chispas de ignición: montan con `allDone` (one-shot, `forwards`). Si el alumno
+                            entra a una sesión ya completa, salen una vez al entrar — aceptado. */}
+                        {allDone && (
+                            <span className="exec-v3-finish-sparks" aria-hidden>
+                                {EXEC_FINISH_SPARKS.map((s) => (
+                                    <span
+                                        key={`${s.dx}:${s.dy}`}
+                                        className="exec-v3-finish-spark"
+                                        style={{
+                                            ['--dx' as string]: `${s.dx}px`,
+                                            ['--dy' as string]: `${s.dy}px`,
+                                            animationDelay: `${s.delay}s`,
+                                        }}
+                                    />
+                                ))}
+                            </span>
+                        )}
                     </div>
                 )}
 
@@ -2710,6 +2751,7 @@ export function WorkoutExecutionClient({
                         autoTimerEnabled={autoTimerEnabled}
                         onToggleAutoTimer={toggleAutoTimer}
                         onFinish={handleFinish}
+                        finishArmed={allDone}
                     />
                 )}
 

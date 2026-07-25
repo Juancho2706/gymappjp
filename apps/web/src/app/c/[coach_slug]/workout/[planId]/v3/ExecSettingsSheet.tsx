@@ -41,6 +41,9 @@ interface ExecSettingsSheetProps {
    *  barra (`handleFinish`: resumen inmediato + sincronización en background). Aditiva: si no se pasa,
    *  la fila no se pinta. */
   onFinish?: () => void
+  /** Todas las series planificadas hechas ⇒ la fila "Finalizar" se enciende igual que la barra fija
+   *  (relleno de marca + glow). Sin chispas: se remontarían en cada apertura del sheet. */
+  finishArmed?: boolean
 }
 
 const TONE_OPTIONS: { value: TimerSound; label: string }[] = [
@@ -83,6 +86,7 @@ export function ExecSettingsSheet({
   autoTimerEnabled = true,
   onToggleAutoTimer,
   onFinish,
+  finishArmed = false,
 }: ExecSettingsSheetProps) {
   const reducedMotion = useReducedMotion()
   const { sound, volume, setSoundPersist, setVolumePersist } = useRestTimerPreferences()
@@ -269,7 +273,8 @@ export function ExecSettingsSheet({
                     onClose()
                     onFinish()
                   }}
-                  className="active:scale-[0.99]"
+                  className={cn('active:scale-[0.99]', finishArmed && 'exec-v3-finish-armed')}
+                  aria-label={finishArmed ? 'Entrenamiento completo. Finalizar entrenamiento' : undefined}
                   style={{
                     display: 'flex',
                     alignItems: 'center',
@@ -277,9 +282,13 @@ export function ExecSettingsSheet({
                     width: '100%',
                     padding: '14px 16px',
                     borderRadius: 14,
-                    border: '2px solid #2f2f3a',
-                    background: '#1c1c24',
-                    color: '#e8e8ee',
+                    // El relleno encendido va INLINE porque el botón se estiliza inline: una clase
+                    // perdería frente a estas declaraciones.
+                    border: finishArmed
+                      ? '2px solid color-mix(in srgb, var(--exec-brand) 55%, #000)'
+                      : '2px solid #2f2f3a',
+                    background: finishArmed ? 'var(--exec-brand)' : '#1c1c24',
+                    color: finishArmed ? 'var(--exec-brand-ink)' : '#e8e8ee',
                     fontSize: 14,
                     fontWeight: 800,
                     textAlign: 'left',

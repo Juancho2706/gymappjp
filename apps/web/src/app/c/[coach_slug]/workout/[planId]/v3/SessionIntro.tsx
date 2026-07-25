@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
-import { resolveLaunchBrand } from '@/lib/workout/exec-launch-brand'
+import { resolveLaunchBrand, type LaunchBrand } from '@/lib/workout/exec-launch-brand'
 
 interface SessionIntroProps {
     /** Inicial del coach para el avatar (fallback a "•" si no hay identidad disponible). */
@@ -31,12 +31,16 @@ export function SessionIntro({ coachInitial, dayTitle, onDone, reducedMotion, vi
     const doneRef = useRef(false)
     // QA6: si el coach tiene logo propio, el avatar muestra el LOGO (mismo que usa el morph de
     // lanzamiento → handoff invisible); si no, cae a la inicial como hoy. Se resuelve del wrapper /c
-    // (data-logo-url) en cliente para no tocar el motor (WorkoutExecutionClient).
+    // (data-logo-dark / data-logo-url) en cliente para no tocar el motor (WorkoutExecutionClient).
     const rootRef = useRef<HTMLDivElement>(null)
-    const [coachLogoUrl, setCoachLogoUrl] = useState<string | null>(null)
+    const [brand, setBrand] = useState<LaunchBrand>({ logoUrl: null, initial: null, brandName: null })
     useEffect(() => {
-        setCoachLogoUrl(resolveLaunchBrand(rootRef.current).logoUrl)
+        setBrand(resolveLaunchBrand(rootRef.current))
     }, [])
+    const coachLogoUrl = brand.logoUrl
+    // La inicial sale del NOMBRE DE MARCA (igual que el morph); `coachInitial` viene del slug en el
+    // motor y sólo actúa de respaldo, para que morph y splash nunca muestren letras distintas.
+    const avatarInitial = brand.initial || coachInitial || '•'
     // QA8 (handoff del morph): si venimos del morph, el avatar YA hizo su entrada en el overlay —
     // llegar re-animando desde scale 0.3 sería un pop doble. El flag lo consume y pasa el WEC.
 
@@ -87,7 +91,7 @@ export function SessionIntro({ coachInitial, dayTitle, onDone, reducedMotion, vi
                         // eslint-disable-next-line @next/next/no-img-element
                         <img src={coachLogoUrl} alt="" className="exec-v3-splash-av-img" />
                     ) : (
-                        coachInitial || '•'
+                        avatarInitial
                     )}
                 </span>
             </motion.div>
