@@ -202,6 +202,14 @@ interface Props {
      */
     distanceUnit?: string | null
     /**
+     * Modalidad de cardio del ejercicio (`exercises.cardio_modality`, Fase C). Decide los EJES de la
+     * ronda vía el motor (`typedKeypadFields('cardio', …)`): elíptica ⇒ Min · FC (sin distancia),
+     * cuerda ⇒ Min · Saltos · FC, escaladora ⇒ Pisos, HIIT ⇒ Reps, run/bike/row ⇒ como hoy (km-aware).
+     * Ausente/desconocida ⇒ Min · Distancia · FC, byte-idéntico al comportamiento previo. El conteo
+     * viaja en `reps_done` (columna existente), como las pasadas de roller.
+     */
+    cardioModality?: string | null
+    /**
      * Prefill tipado (E3.3 · roller): al cambiar `nonce`, escribe `reps_done` (pasadas) en el input
      * uncontrolled de la fila tipada activa — lo alimenta el contador gigante de `RollerStepV3`. NO
      * cambia el motor de logging; sólo pre-rellena para confirmar. Sin él, la fila no cambia.
@@ -1420,6 +1428,7 @@ function TypedLogSetRow({
     supersetRest,
     sideMode,
     distanceUnit,
+    cardioModality,
     typedPrefill,
     suggestedAvgHr,
     holdPrefill,
@@ -1431,10 +1440,15 @@ function TypedLogSetRow({
     const perSide = mode === 'mobility' && sideMode === 'per_side'
     // Contexto tipado que consume el MOTOR (campos del teclado + mapeo a columnas): un solo objeto
     // para que el teclado, las etiquetas visibles y el payload no puedan divergir.
-    const typedCtx = { sideMode, distanceUnit }
+    const typedCtx = { sideMode, distanceUnit, cardioModality }
     const typedFields = typedKeypadFields(mode as TypedKeypadMode, typedCtx)
     // Cardio con distancia prescrita en km: la caja captura KM (label del motor) y guarda metros.
-    const kmCapture = mode === 'cardio' && capturesDistanceInKm(distanceUnit)
+    // Solo aplica si la modalidad realmente TIENE eje de distancia (la elíptica y las rep-based no).
+    const cardioHasDistance = mode === 'cardio' && typedFields.some((f) => f.key === 'actual_distance_m')
+    const kmCapture = cardioHasDistance && capturesDistanceInKm(distanceUnit)
+    // Conteo rep-based de cardio (saltos/reps/pisos → `reps_done`, la MISMA columna de las pasadas de
+    // roller). El motor es la única fuente: si declaró el eje, la caja existe y el valor viaja.
+    const cardioRepsField = mode === 'cardio' ? typedFields.find((f) => f.key === 'reps_done') ?? null : null
     // Semilla de "repetir el día": pre-llena los ejes tipados SÓLO si la fila no tiene serie registrada
     // (una fila con `existingLog` manda íntegra: un eje que quedó vacío ese día debe seguir vacío). Igual
     // que en fuerza, sólo alimenta `defaultValue` — no marca nada como registrado ni encola.
@@ -1568,6 +1582,18 @@ function TypedLogSetRow({
             const min = parseNum(formData.get('cardio_min'))
             formData.delete('cardio_min')
             if (min != null && min > 0) formData.set('actual_duration_sec', String(Math.round(min * 60)))
+            // Ejes de la MODALIDAD (Fase C): lo que el motor no declaró no viaja. Sin eje de
+            // distancia (elíptica / rep-based) la key se borra aunque un flujo previo la hubiera
+            // dejado; sin eje de conteo, `reps_done` tampoco entra (misma regla que `typedLogValues`).
+            if (!cardioHasDistance) formData.delete('actual_distance_m')
+            if (cardioRepsField) {
+                // Conteo entero ≥ 0 (`WorkoutLogSetSchema.reps_done`); vacío ⇒ la key no viaja.
+                const reps = parseNum(formData.get('reps_done'))
+                if (reps == null || reps < 0) formData.delete('reps_done')
+                else formData.set('reps_done', String(Math.round(reps)))
+            } else {
+                formData.delete('reps_done')
+            }
             // Unidad de captura = unidad PRESCRITA (G3): con "5 km" el alumno escribe 5 y la columna
             // (metros) recibe 5000. Con prescripción en metros (o sin ella) el valor pasa intacto.
             if (kmCapture) {
@@ -1769,7 +1795,11 @@ function TypedLogSetRow({
 
     const gridCols =
         mode === 'cardio'
-            ? 'grid-cols-[auto_3.5rem_3.5rem_3rem_auto] md:grid-cols-[auto_1fr_1fr_1fr_auto]'
+            // Fase C: la modalidad decide cuántas cajas hay (elíptica = Min · FC). Literales completos
+            // por columna-count — Tailwind no ve clases concatenadas.
+            ? typedFields.length <= 2
+                ? 'grid-cols-[auto_3.5rem_3rem_auto] md:grid-cols-[auto_1fr_1fr_auto]'
+                : 'grid-cols-[auto_3.5rem_3.5rem_3rem_auto] md:grid-cols-[auto_1fr_1fr_1fr_auto]'
             : mode === 'roller'
                 ? 'grid-cols-[auto_3.5rem_3.5rem_auto] md:grid-cols-[auto_1fr_1fr_auto]'
                 : perSide
@@ -1846,7 +1876,9 @@ function TypedLogSetRow({
                                 className={typedInputClass}
                             />
                         ))}
-                        {withLabel('actual_distance_m', (
+                        {/* 2º eje SEGÚN LA MODALIDAD (Fase C): distancia (run/bike/row/genérica),
+                            conteo (cuerda/HIIT/escaladora) o NADA (elíptica). El motor manda. */}
+                        {cardioHasDistance && withLabel('actual_distance_m', (
                             <input
                                 ref={distanceRef}
                                 name="actual_distance_m"
@@ -1858,6 +1890,17 @@ function TypedLogSetRow({
                                 defaultValue={inputDefault(metersToDistanceCapture(existingLog?.actual_distance_m ?? seedValues?.actualDistanceM ?? null, distanceUnit))}
                                 placeholder="-"
                                 aria-label={kmCapture ? 'Kilómetros' : 'Metros'}
+                                className={typedInputClass}
+                            />
+                        ))}
+                        {cardioRepsField && withLabel('reps_done', (
+                            <input
+                                ref={passesRef}
+                                name="reps_done"
+                                {...fieldProps('reps_done', 'numeric', { min: '0' })}
+                                defaultValue={inputDefault(existingLog?.reps_done ?? seedValues?.repsDone ?? null)}
+                                placeholder="-"
+                                aria-label={cardioRepsField.label}
                                 className={typedInputClass}
                             />
                         ))}

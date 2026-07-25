@@ -13,7 +13,7 @@ import {
   TrendingUp,
   Undo2,
 } from 'lucide-react-native'
-import { formatTypedObjective, formatWeightEsCl, type ExerciseType, type OptimisticLogPayload, type ReconciledSessionLog, type TypedKeypadMode } from '@eva/workout-engine'
+import { formatTypedObjective, formatWeightEsCl, typedKeypadFields, type ExerciseType, type OptimisticLogPayload, type ReconciledSessionLog, type TypedKeypadMode } from '@eva/workout-engine'
 import type { HrZoneRange } from '@eva/cardio'
 import { FONT, TYPE, textStyle } from '../../../lib/typography'
 import { useTheme } from '../../../context/ThemeContext'
@@ -207,6 +207,10 @@ export function SingleExerciseCard({
           blockId={block.id}
           setNumber={setNumber}
           typedMode={typedMode}
+          // Ejes de cardio: unidad de captura = la PRESCRITA (G3/Fase A) + ejes por MODALIDAD (Fase C).
+          // El mapa lo resuelve el motor; acá sólo se propaga el contexto del bloque/ejercicio.
+          distanceUnit={block.distance_unit ?? null}
+          cardioModality={exercise.cardio_modality ?? null}
           isActive={isActiveSet}
           suggestedWeight={suggestedWeightKg ?? null}
           seedValues={seed}
@@ -244,6 +248,7 @@ export function SingleExerciseCard({
         log={log}
         isActive={setNumber === firstUnlogged}
         typedMode={typedMode}
+        cardioModality={exercise.cardio_modality ?? null}
         onPress={() => onOpenSet(setNumber)}
         onRpeUpdate={onRpeUpdate}
         settle={isRecent}
@@ -543,7 +548,11 @@ export function SingleExerciseCard({
         <View className="gap-1.5">{setRows}</View>
       ) : (
         <View className="rounded-card border border-inverse/10 bg-white/[0.02] p-2">
-          <TypedLogHeader kind={effType as TypedKeypadMode} />
+          <TypedLogHeader
+            kind={effType as TypedKeypadMode}
+            distanceUnit={block.distance_unit ?? null}
+            cardioModality={exercise.cardio_modality ?? null}
+          />
           <View className="gap-1 pt-2">{setRows}</View>
         </View>
       )}
@@ -573,9 +582,24 @@ const HEADER_LABEL_STYLE = { fontFamily: FONT.uiBold, fontSize: 10, letterSpacin
  * (`typedKeypadFields`, packages/workout-engine/typed-keypad.ts:29-45). Sólo enmarca el header; el
  * alineado a pixel no es factible sobre las filas-chip de RN, pero devuelve el marco y los rótulos de
  * columna que el web sí muestra.
+ *
+ * Las columnas se LEEN del motor (nunca se hardcodean): con `distanceUnit='km'` la columna dice "Km" y
+ * con una modalidad de cardio pueden ser 2 (elíptica: Min · FC) o decir "Saltos"/"Pisos"/"Reps". El
+ * `?? []` cubre un modo sin campos; movilidad conserva su rótulo largo "Seg de hold" (paridad previa).
  */
-function TypedLogHeader({ kind }: { kind: TypedKeypadMode }) {
-  const cols = kind === 'cardio' ? ['Min', 'Metros', 'FC'] : kind === 'roller' ? ['Seg', 'Pasadas'] : ['Seg de hold']
+function TypedLogHeader({
+  kind,
+  distanceUnit = null,
+  cardioModality = null,
+}: {
+  kind: TypedKeypadMode
+  distanceUnit?: string | null
+  cardioModality?: string | null
+}) {
+  const cols =
+    kind === 'mobility'
+      ? ['Seg de hold']
+      : typedKeypadFields(kind, { distanceUnit, cardioModality }).map((f) => f.label)
   return (
     <View className="flex-row items-center gap-2 border-b border-white/10 px-2 pb-2">
       <Text style={HEADER_LABEL_STYLE} className="w-4 text-center text-on-dark-muted">Set</Text>

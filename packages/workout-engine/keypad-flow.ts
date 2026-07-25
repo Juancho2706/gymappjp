@@ -18,6 +18,7 @@ import { effectiveExerciseType } from './workout-exercise-type'
 import {
   typedKeypadFields,
   formatTypedObjective,
+  type TypedKeypadContext,
   type TypedKeypadFieldDef,
   type TypedKeypadMode,
   type TypedObjectiveInput,
@@ -96,12 +97,20 @@ export interface TypedTargetInfo {
  * (modo + campos del teclado + objetivo formateado) o `null` cuando el tipo efectivo es strength.
  * Un bloque de HOLD pide segundos de hold; cardio min/metros/FC; roller seg/pasadas. El override del
  * bloque gana sobre el tipo del ejercicio (decisión #2 del PLAN movida-entrenamiento).
+ *
+ * 3er argumento OPCIONAL (`TypedKeypadContext`): contexto del bloque que ajusta los campos —
+ * `sideMode` (hold por lado), `distanceUnit` (caja en km) y `cardioModality` (ejes por modalidad).
+ * Sin él el resultado es byte-idéntico al previo, así que los callers actuales no cambian.
  */
-export function typedTargetFor(block: BlockForKeypad, exercise: ExerciseForKeypad): TypedTargetInfo | null {
+export function typedTargetFor(
+  block: BlockForKeypad,
+  exercise: ExerciseForKeypad,
+  ctx?: string | null | TypedKeypadContext,
+): TypedTargetInfo | null {
   const effType = effectiveExerciseType(block, exercise)
   if (effType === 'strength') return null
   const mode = effType as TypedKeypadMode
-  return { mode, fields: typedKeypadFields(mode), objective: formatTypedObjective(block, mode) }
+  return { mode, fields: typedKeypadFields(mode, ctx), objective: formatTypedObjective(block, mode) }
 }
 
 /**

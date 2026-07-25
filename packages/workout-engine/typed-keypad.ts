@@ -6,7 +6,12 @@
  * unidad + regla decimal) y arma el objetivo prescrito que viaja en el header del keypad. Es pura
  * y testeable — la fila (`TypedLogSetRow`) sólo la consume para abrir el teclado con las etiquetas
  * y reglas correctas. El pipeline de submit tipado (keys `actual_*`/`reps_done`) queda intacto.
+ *
+ * Los EJES de cardio ya no viven acá: los resuelve `cardio-modality.ts` a partir de
+ * `exercises.cardio_modality` (Fase C). Este módulo sigue siendo la puerta única del teclado tipado.
  */
+
+import { cardioAxesFor, cardioRepsUnitShort, normalizeCardioRepsUnit } from './cardio-modality'
 
 export type TypedKeypadMode = 'cardio' | 'mobility' | 'roller'
 
@@ -37,6 +42,12 @@ export interface TypedKeypadContext {
     sideMode?: string | null
     /** `distance_unit` prescrita del bloque ('m' | 'km'); 'km' ⇒ la caja de distancia captura KM. */
     distanceUnit?: string | null
+    /**
+     * `exercises.cardio_modality` del ejercicio del bloque (Fase C). Decide los EJES de cardio:
+     * elíptica sin distancia, cuerda por saltos, escaladora por pisos, HIIT por reps.
+     * Ausente / desconocida ⇒ ejes genéricos (Min · Distancia · FC), byte-idénticos a los previos.
+     */
+    cardioModality?: string | null
 }
 
 /** Normaliza el 2º argumento histórico (`sideMode` suelto) al contexto tipado. */
@@ -45,31 +56,17 @@ export function typedKeypadContext(ctx?: string | null | TypedKeypadContext): Ty
     return typeof ctx === 'string' ? { sideMode: ctx } : ctx
 }
 
-/** Metros por kilómetro — factor único de la conversión de captura de distancia. */
-export const METERS_PER_KM = 1000
-
-/** ¿La distancia se CAPTURA en km? (solo cuando el coach prescribió la distancia en km). */
-export function capturesDistanceInKm(distanceUnit?: string | null): boolean {
-    return distanceUnit === 'km'
-}
-
-/** Valor tipeado en la caja de distancia → metros de `actual_distance_m`. */
-export function distanceCaptureToMeters(value: number, distanceUnit?: string | null): number {
-    return capturesDistanceInKm(distanceUnit) ? Math.round(value * METERS_PER_KM) : value
-}
-
 /**
- * Inversa de `distanceCaptureToMeters`: metros de la columna → valor que se muestra en la caja
- * (km con hasta 2 decimales), para que el alumno relea EXACTAMENTE lo que escribió al remontar.
+ * Helpers de la unidad de captura de distancia (A1/RF4). Viven en `cardio-modality.ts` — donde el eje
+ * de distancia se arma — y se RE-EXPORTAN acá para no romper a ningún consumidor histórico
+ * (`import { METERS_PER_KM, distanceCaptureToMeters } from '@eva/workout-engine'` sigue igual).
  */
-export function metersToDistanceCapture(
-    meters: number | null | undefined,
-    distanceUnit?: string | null,
-): number | null {
-    if (meters == null) return null
-    if (!capturesDistanceInKm(distanceUnit)) return meters
-    return Math.round((meters / METERS_PER_KM) * 100) / 100
-}
+export {
+    METERS_PER_KM,
+    capturesDistanceInKm,
+    distanceCaptureToMeters,
+    metersToDistanceCapture,
+} from './cardio-modality'
 
 /**
  * Campos del teclado por modo tipado, en el orden en que el alumno los recorre con "Siguiente".
@@ -86,21 +83,19 @@ export function metersToDistanceCapture(
  * `distanceUnit` (G3 · cardio): la UNIDAD DE CAPTURA es la PRESCRITA. Con 'km' la caja se llama "Km"
  * y declara `toColumnFactor` para que el payload guarde metros; sin prescripción (o con 'm') sigue
  * siendo "Metros" tal cual hoy.
+ *
+ * `cardioModality` (G6 · Fase C): los ejes de cardio los decide `cardio-modality.ts` según la
+ * modalidad del ejercicio (elíptica sin distancia, cuerda por saltos, escaladora por pisos, HIIT por
+ * reps). SIN modalidad (o desconocida) devuelve exactamente los 3 campos de siempre.
  */
 export function typedKeypadFields(
     mode: TypedKeypadMode,
     ctx?: string | null | TypedKeypadContext,
 ): TypedKeypadFieldDef[] {
-    const { sideMode, distanceUnit } = typedKeypadContext(ctx)
+    const { sideMode, distanceUnit, cardioModality } = typedKeypadContext(ctx)
     switch (mode) {
         case 'cardio':
-            return [
-                { key: 'cardio_min', label: 'Min', unit: 'min', allowDecimal: true },
-                capturesDistanceInKm(distanceUnit)
-                    ? { key: 'actual_distance_m', label: 'Km', unit: 'km', allowDecimal: true, toColumnFactor: METERS_PER_KM }
-                    : { key: 'actual_distance_m', label: 'Metros', unit: 'm', allowDecimal: true },
-                { key: 'actual_avg_hr', label: 'FC', unit: 'bpm', allowDecimal: false },
-            ]
+            return cardioAxesFor(cardioModality, { distanceUnit })
         case 'mobility':
             if (sideMode === 'per_side') {
                 return [
@@ -140,13 +135,19 @@ function fmtDuration(sec: number): string {
 
 /**
  * Objetivo prescrito del bloque tipado en una línea corta para el header del teclado
- * ("Duración 20 min · Z4", "Hold 30s · 3 series", "10 pasadas"). Vacío si no hay prescripción.
+ * ("Duración 20 min · Z4", "500 saltos · Z3", "Hold 30s · 3 series", "10 pasadas").
+ * Vacío si no hay prescripción.
  */
 export function formatTypedObjective(block: TypedObjectiveInput, mode: TypedKeypadMode): string {
     const parts: string[] = []
     if (mode === 'cardio') {
         if ((block.duration_sec ?? 0) > 0) parts.push(fmtDuration(block.duration_sec as number))
         if ((block.distance_value ?? 0) > 0) parts.push(`${block.distance_value} ${block.distance_unit ?? 'm'}`)
+        // Objetivo rep-based (RF8): cuerda ⇒ "500 saltos", escaladora ⇒ "40 pisos", HIIT ⇒ "30 reps".
+        const repsUnit = normalizeCardioRepsUnit(block.reps_unit)
+        if (repsUnit != null && (block.reps_value ?? 0) > 0) {
+            parts.push(`${block.reps_value} ${cardioRepsUnitShort(repsUnit)}`)
+        }
         if (block.hr_zone != null) parts.push(`Z${block.hr_zone}`)
         if ((block.sets ?? 0) > 1) parts.push(`${block.sets} rondas`)
     } else if (mode === 'mobility') {

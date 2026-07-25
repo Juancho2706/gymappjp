@@ -896,6 +896,8 @@ export async function getClientWorkoutForDate(clientId: string, date: string) {
         // Ejes TIPADOS (cardio/movilidad/roller): sin `actual_*` + `metadata` el coach veía una
         // serie vacía donde el alumno registró 45 min y 6.200 m (G1). `exercise_type` del catálogo
         // y `exercise_type_override` del bloque son lo que necesita `effectiveExerciseType`.
+        // `cardio_modality` (Fase C) da la UNIDAD del conteo de cardio: sin ella, 420 saltos de
+        // cuerda se imprimirían como "420 reps".
         .select(`
             set_number, weight_kg, reps_done, rpe, rir, note, logged_at,
             target_weight_at_log, target_reps_at_log,
@@ -906,7 +908,7 @@ export async function getClientWorkoutForDate(clientId: string, date: string) {
                 progression_mode, progression_type, progression_value, tempo,
                 exercise_type_override, duration_sec, distance_value, distance_unit,
                 hr_zone, interval_config, reps_value, reps_unit, side_mode,
-                exercises (name, muscle_group, exercise_type),
+                exercises (name, muscle_group, exercise_type, cardio_modality),
                 workout_plans (title, day_of_week)
             )
         `)

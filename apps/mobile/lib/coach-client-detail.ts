@@ -216,6 +216,11 @@ export interface WorkoutDaySet {
   actualHoldSec: number | null
   /** jsonb `{left_sec, right_sec}` de movilidad por lado. */
   metadata: unknown
+  /**
+   * `exercises.cardio_modality` (Fase C): da la unidad del conteo de cardio para que el coach lea
+   * "420 saltos" / "45 pisos" y no un "reps" genérico. Null ⇒ línea de cardio como hasta ahora.
+   */
+  cardioModality: string | null
   substitutedExerciseName: string | null
   substitutionReason: string | null
   targetReps: string | null
@@ -1172,7 +1177,7 @@ export async function getCoachClientDayDetail(
           target_weight_kg, reps, sets, rir, progression_mode, progression_value, tempo,
           exercise_type_override, duration_sec, distance_value, distance_unit,
           hr_zone, interval_config, reps_value, reps_unit, side_mode,
-          exercises ( name, muscle_group, exercise_type ),
+          exercises ( name, muscle_group, exercise_type, cardio_modality ),
           workout_plans ( title )
         )
       `)
@@ -1224,6 +1229,7 @@ export async function getCoachClientDayDetail(
       actualAvgHr: row.actual_avg_hr ?? null,
       actualHoldSec: row.actual_hold_sec ?? null,
       metadata: row.metadata ?? null,
+      cardioModality: block?.exercises?.cardio_modality ?? null,
       substitutedExerciseName: row.substituted_exercise_name ?? null,
       substitutionReason: row.substitution_reason ?? null,
       targetReps: row.target_reps_at_log ?? null,

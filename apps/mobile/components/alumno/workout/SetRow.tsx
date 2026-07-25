@@ -159,6 +159,7 @@ export function SetRow({
   log,
   isActive,
   typedMode,
+  cardioModality = null,
   onPress,
   onRpeUpdate,
   settle = false,
@@ -175,6 +176,11 @@ export function SetRow({
   log?: ReconciledSessionLog
   isActive: boolean
   typedMode?: TypedKeypadMode | null
+  /**
+   * `exercises.cardio_modality` del bloque (Fase C): etiqueta el CONTEO de la línea registrada
+   * ("420 saltos" / "45 pisos" en vez de un número pelado). Ausente ⇒ línea idéntica a la previa.
+   */
+  cardioModality?: string | null
   onPress: () => void
   /**
    * Tema del ejecutor para el panel de esfuerzo de la serie de FUERZA ya cerrada (`EffortTicksV3`).
@@ -282,7 +288,7 @@ export function SetRow({
             {/* Mark siempre text-on-dark (paridad web LogSetForm.tsx:542: la marca nunca se recolorea;
                 el ámbar de pending vive en el contenedor/badge/estado, no en el valor). */}
             <Text style={CHIP_TYPED_STYLE} className="text-on-dark" numberOfLines={1}>
-              {fmtTypedLoggedLine(log, typedMode)}
+              {fmtTypedLoggedLine(log, typedMode, { cardioModality })}
             </Text>
           </View>
           {pending && (
@@ -403,7 +409,7 @@ export function SetRow({
           // Mark siempre text-on-dark (paridad web LogSetForm.tsx:542): el valor nunca se recolorea; el
           // ámbar de pending vive en el contenedor/badge/estado a la derecha, no en la cifra.
           <Text style={CHIP_TYPED_STYLE} className="text-on-dark" numberOfLines={1}>
-            {fmtTypedLoggedLine(log, typedMode)}
+            {fmtTypedLoggedLine(log, typedMode, { cardioModality })}
           </Text>
         ) : (
           <View className="flex-row flex-wrap items-center gap-x-2">
@@ -637,6 +643,7 @@ export function ActiveSetRow({
   typedMode,
   sideMode = null,
   distanceUnit = null,
+  cardioModality = null,
   suggestedWeight,
   seedValues,
   autofill,
@@ -674,6 +681,14 @@ export function ActiveSetRow({
    * la misma fuente que consume la web ⇒ paridad sin duplicar reglas.
    */
   distanceUnit?: string | null
+  /**
+   * `exercises.cardio_modality` del ejercicio del bloque (Fase C · specs/cardio-ejes-y-fixes). Decide
+   * los EJES de cardio que pinta la fila: elíptica ⇒ Min · FC (sin distancia); cuerda ⇒ Min · Saltos ·
+   * FC; escaladora ⇒ Pisos; HIIT ⇒ Reps (todos a `workout_logs.reps_done`, columna existente).
+   * ADITIVO: sin la prop (default null) los campos son byte-idénticos a los previos (Min · Distancia ·
+   * FC). El mapa vive en el MOTOR (`typedKeypadFields` → `cardioAxesFor`), la misma fuente que la web.
+   */
+  cardioModality?: string | null
   /** Peso sugerido (sobrecarga) — pre-llena la caja KG en strength. */
   suggestedWeight: number | null
   /**
@@ -753,7 +768,7 @@ export function ActiveSetRow({
 }) {
   const fields: RowField[] = useMemo(() => {
     if (typedMode) {
-      return typedKeypadFields(typedMode, { sideMode, distanceUnit }).map((f) => ({
+      return typedKeypadFields(typedMode, { sideMode, distanceUnit, cardioModality }).map((f) => ({
         key: f.key,
         label: f.label,
         unit: f.unit,
@@ -764,7 +779,7 @@ export function ActiveSetRow({
       { key: 'weight', label: 'Kg', unit: 'kg', mode: 'weight' },
       { key: 'reps', label: 'Reps', unit: 'reps', mode: 'reps' },
     ]
-  }, [typedMode, sideMode, distanceUnit])
+  }, [typedMode, sideMode, distanceUnit, cardioModality])
 
   const motion = useEvaMotion()
 
@@ -815,7 +830,7 @@ export function ActiveSetRow({
 
   const commit = () => {
     const payload = typedMode
-      ? buildTypedPayload(typedMode, valuesRef.current, blockId, setNumber, { sideMode, distanceUnit })
+      ? buildTypedPayload(typedMode, valuesRef.current, blockId, setNumber, { sideMode, distanceUnit, cardioModality })
       : buildStrengthPayload(valuesRef.current, blockId, setNumber)
     onCommit(payload)
   }

@@ -21,6 +21,7 @@ import {
   type TypedKeypadContext,
   type TypedKeypadMode,
 } from './typed-keypad'
+import { cardioHasDistanceAxis, repsUnitForModality } from './cardio-modality'
 
 /** Parsea un string es-CL (coma decimal) a número, o null si vacío/NaN. */
 export function num(v: string | undefined): number | null {
@@ -83,13 +84,18 @@ export function derivedPaceSecPerKm(
  *
  * `distanceUnit` (G3): con la prescripción en km la caja captura KM → acá se guarda ×1000 en
  * `actual_distance_m` (metros, unidad de la columna). Sin contexto la distancia se guarda tal cual.
+ *
+ * `cardioModality` (Fase C): los ejes de cardio dependen de la modalidad del ejercicio. Una modalidad
+ * rep-based (cuerda/HIIT/escaladora) captura CONTEO en `reps_done` y NO tiene caja de distancia; la
+ * elíptica tampoco. Acá se leen SOLO las keys que el teclado declaró para esa modalidad: lo que no se
+ * pidió no se inventa (queda `null`). Sin modalidad ⇒ Min · Distancia · FC, byte-idéntico a lo previo.
  */
 export function typedLogValues(
   mode: TypedKeypadMode,
   values: Record<string, string>,
   ctx?: string | null | TypedKeypadContext,
 ): TypedLogValues {
-  const { sideMode, distanceUnit } = typedKeypadContext(ctx)
+  const { sideMode, distanceUnit, cardioModality } = typedKeypadContext(ctx)
   let actualDurationSec: number | null = null
   let actualDistanceM: number | null = null
   let actualHoldSec: number | null = null
@@ -100,8 +106,16 @@ export function typedLogValues(
   if (mode === 'cardio') {
     const min = num(values.cardio_min)
     actualDurationSec = min != null && min > 0 ? Math.round(min * 60) : null
-    const distance = num(values.actual_distance_m)
-    actualDistanceM = distance == null ? null : distanceCaptureToMeters(distance, distanceUnit)
+    if (cardioHasDistanceAxis(cardioModality)) {
+      const distance = num(values.actual_distance_m)
+      actualDistanceM = distance == null ? null : distanceCaptureToMeters(distance, distanceUnit)
+    }
+    // Conteo de la modalidad rep-based (saltos/reps/pisos) → `reps_done`, entero ≥ 0. Es la MISMA
+    // columna que usan fuerza y las pasadas de roller; la semántica la da la modalidad del ejercicio.
+    if (repsUnitForModality(cardioModality) != null) {
+      const reps = int(values.reps_done)
+      repsDone = reps != null && reps >= 0 ? reps : null
+    }
     actualAvgHr = int(values.actual_avg_hr)
   } else if (mode === 'mobility') {
     if (sideMode === 'per_side') {

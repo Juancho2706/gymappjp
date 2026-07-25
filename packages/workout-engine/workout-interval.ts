@@ -3,8 +3,14 @@
  *
  * Decisión #6 del PLAN (specs/movida-entrenamiento): las plantillas system viven en código
  * (sin tabla nueva); las plantillas curadas del coach son los programas template existentes.
- * El timer solo soporta pasos CON duración: un work por distancia (sin duración) no genera
- * fase cronometrable — la UI muestra la distancia objetivo y deshabilita el timer.
+ *
+ * Fase D (G2/RF7): un paso de trabajo por DISTANCIA (8×400m, HYROX) ya no queda sin guía. La
+ * secuencia completa la arma `buildIntervalSequence`, donde cada fase declara su `mode`:
+ *  · `timed`  — tiene duración ⇒ se cronometra (warmup, cooldown, recuperaciones y works por tiempo).
+ *  · `manual` — se prescribió por distancia ⇒ NO se cronometra, avanza con "Fase siguiente".
+ * `buildIntervalPhases` se mantiene EXACTAMENTE con su contrato histórico (solo fases
+ * cronometrables; `[]` si el work es por distancia) porque los timers globales flotantes
+ * (`WorkoutTimerProvider` web / `TimerProvider` RN) solo saben contar hacia atrás.
  */
 
 /**
@@ -35,43 +41,97 @@ export interface IntervalConfig {
 
 export type IntervalPhaseKind = 'warmup' | 'work' | 'recovery' | 'cooldown'
 
+/**
+ * Cómo avanza una fase: `timed` = cuenta regresiva (contrato histórico, es el default cuando el campo
+ * viene ausente); `manual` = la fase se prescribió por DISTANCIA y espera que el alumno confirme
+ * ("Fase siguiente"). Aditivo: ningún consumidor previo necesita mirarlo.
+ */
+export type IntervalPhaseMode = 'timed' | 'manual'
+
 export interface IntervalPhase {
     kind: IntervalPhaseKind
+    /** Segundos de la fase. En fases `manual` es 0 (no se cronometra). */
     durationSec: number
     /** Número de intervalo (1-based) para "intervalo N de M"; solo en work/recovery. */
     repeat?: number
     /** M total de intervalos (repeats × sets). */
     totalRepeats?: number
+    /** Ausente ⇒ `timed` (retrocompat). `buildIntervalSequence` siempre lo declara. */
+    mode?: IntervalPhaseMode
+    /** Metros prescritos de la fase; solo viaja en fases `manual`. */
+    distanceM?: number
+}
+
+/** ¿La fase avanza a mano (prescrita por distancia) en vez de cronometrarse? */
+export function isManualPhase(phase: IntervalPhase | null | undefined): boolean {
+    return phase?.mode === 'manual'
+}
+
+function positive(value: number | null | undefined): number {
+    return value != null && Number.isFinite(value) && value > 0 ? value : 0
+}
+
+/** Arma una fase de un paso (work/recovery): por tiempo ⇒ `timed`; por distancia ⇒ `manual`. */
+function stepPhase(
+    kind: IntervalPhaseKind,
+    step: { duration_sec?: number; distance_m?: number } | undefined,
+    marks?: { repeat: number; totalRepeats: number },
+): IntervalPhase | null {
+    const sec = positive(step?.duration_sec)
+    if (sec > 0) {
+        return { kind, durationSec: Math.round(sec), mode: 'timed', ...marks }
+    }
+    const meters = positive(step?.distance_m)
+    if (meters > 0) {
+        return { kind, durationSec: 0, mode: 'manual', distanceM: Math.round(meters), ...marks }
+    }
+    return null
 }
 
 /**
- * Secuencia de fases: warmup → (work → recovery)×(repeats×sets) → cooldown.
+ * Secuencia COMPLETA de fases: warmup → (work → recovery)×(repeats×sets) → cooldown.
  * La última recovery se omite (no tiene sentido descansar después del último intervalo).
- * Fases sin duración (> 0) se omiten. Devuelve [] si el work no es cronometrable.
+ * Un paso sin duración NI distancia se omite; si el work no tiene ninguna de las dos, devuelve [].
+ *
+ * Fase D: los pasos por DISTANCIA entran a la secuencia como fases `manual` (8×400m genera 8 fases de
+ * 400 m intercaladas con las recuperaciones por tiempo, que sí se cronometran).
  */
-export function buildIntervalPhases(config: IntervalConfig, sets: number = 1): IntervalPhase[] {
+export function buildIntervalSequence(config: IntervalConfig, sets: number = 1): IntervalPhase[] {
     const safeSets = Number.isFinite(sets) && sets >= 1 ? Math.round(sets) : 1
-    const repeats = Number.isFinite(config.repeats) && config.repeats >= 1 ? Math.round(config.repeats) : 1
+    const repeats = Number.isFinite(config?.repeats) && config.repeats >= 1 ? Math.round(config.repeats) : 1
     const total = repeats * safeSets
 
-    const workSec = config.work?.duration_sec ?? 0
-    if (!Number.isFinite(workSec) || workSec <= 0) return []
+    // Sin trabajo prescrito (ni tiempo ni distancia) no hay secuencia que correr.
+    if (stepPhase('work', config?.work) == null) return []
 
     const phases: IntervalPhase[] = []
-    if (config.warmup_sec && config.warmup_sec > 0) {
-        phases.push({ kind: 'warmup', durationSec: Math.round(config.warmup_sec) })
-    }
-    const recoverySec = config.recovery?.duration_sec ?? 0
+    const warmupSec = positive(config?.warmup_sec)
+    if (warmupSec > 0) phases.push({ kind: 'warmup', durationSec: Math.round(warmupSec), mode: 'timed' })
+
     for (let i = 1; i <= total; i += 1) {
-        phases.push({ kind: 'work', durationSec: Math.round(workSec), repeat: i, totalRepeats: total })
-        if (recoverySec > 0 && i < total) {
-            phases.push({ kind: 'recovery', durationSec: Math.round(recoverySec), repeat: i, totalRepeats: total })
+        const marks = { repeat: i, totalRepeats: total }
+        const work = stepPhase('work', config.work, marks)
+        if (work) phases.push(work)
+        if (i < total) {
+            const recovery = stepPhase('recovery', config.recovery, marks)
+            if (recovery) phases.push(recovery)
         }
     }
-    if (config.cooldown_sec && config.cooldown_sec > 0) {
-        phases.push({ kind: 'cooldown', durationSec: Math.round(config.cooldown_sec) })
-    }
+
+    const cooldownSec = positive(config?.cooldown_sec)
+    if (cooldownSec > 0) phases.push({ kind: 'cooldown', durationSec: Math.round(cooldownSec), mode: 'timed' })
     return phases
+}
+
+/**
+ * Fases CRONOMETRABLES (contrato histórico intacto): warmup → (work → recovery)×N → cooldown, solo con
+ * pasos por tiempo. Devuelve [] si el work es por distancia — los timers globales flotantes solo saben
+ * contar hacia atrás, así que jamás deben recibir una fase manual. Para la secuencia completa (con las
+ * fases por distancia) usar `buildIntervalSequence`.
+ */
+export function buildIntervalPhases(config: IntervalConfig, sets: number = 1): IntervalPhase[] {
+    if (!isTimeableInterval(config)) return []
+    return buildIntervalSequence(config, sets).filter((p) => p.mode !== 'manual')
 }
 
 /** Duración total (s) de la secuencia de fases cronometrables. */
@@ -79,9 +139,40 @@ export function intervalTotalDurationSec(config: IntervalConfig, sets: number = 
     return buildIntervalPhases(config, sets).reduce((acc, p) => acc + p.durationSec, 0)
 }
 
-/** ¿El interval_config es cronometrable (work por tiempo)? */
+/**
+ * Clasificador del timer de un `interval_config` (Fase D):
+ *  · `timeable` — el work tiene duración ⇒ secuencia 100% cronometrable (comportamiento de siempre).
+ *  · `manual`   — el work se prescribió por distancia ⇒ secuencia con fases de avance manual.
+ *  · `none`     — no hay config o el work no prescribe ni tiempo ni distancia ⇒ no hay intervalos.
+ */
+export type IntervalTimerKind = 'timeable' | 'manual' | 'none'
+
+export function intervalTimerKind(config: IntervalConfig | null | undefined): IntervalTimerKind {
+    if (!config) return 'none'
+    if (positive(config.work?.duration_sec) > 0) return 'timeable'
+    if (positive(config.work?.distance_m) > 0) return 'manual'
+    return 'none'
+}
+
+/** ¿El interval_config es cronometrable (work por tiempo)? Wrapper retrocompatible. */
 export function isTimeableInterval(config: IntervalConfig | null | undefined): boolean {
-    return !!config && (config.work?.duration_sec ?? 0) > 0
+    return intervalTimerKind(config) === 'timeable'
+}
+
+/** Distancia de una fase manual en texto corto es-neutro ("400 m", "1 km", "1,5 km"). */
+export function formatIntervalPhaseDistance(meters: number | null | undefined): string {
+    const m = positive(meters)
+    if (m <= 0) return ''
+    if (m < 1000) return `${Math.round(m)} m`
+    const km = m / 1000
+    if (Number.isInteger(km)) return `${km} km`
+    return `${km.toFixed(1).replace('.', ',')} km`
+}
+
+/** Objetivo visible de una fase: distancia si es manual, vacío si se cronometra (lo pinta el reloj). */
+export function intervalPhaseTargetLabel(phase: IntervalPhase | null | undefined): string {
+    if (!phase || !isManualPhase(phase)) return ''
+    return formatIntervalPhaseDistance(phase.distanceM)
 }
 
 /** Etiquetas es-neutro de las fases (UI alumno). */

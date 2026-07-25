@@ -626,7 +626,7 @@ function targetWeightForSet(s: WorkoutLog): number | null {
 function WorkoutDayReadOnly({ logs }: { logs: WorkoutLog[] }) {
     const byExercise = new Map<
         string,
-        { name: string; muscle: string; kind: ExerciseType; sets: WorkoutLog[] }
+        { name: string; muscle: string; kind: ExerciseType; cardioModality: string | null; sets: WorkoutLog[] }
     >()
 
     for (const log of logs) {
@@ -640,6 +640,9 @@ function WorkoutDayReadOnly({ logs }: { logs: WorkoutLog[] }) {
                 // Tipo efectivo: override del bloque > tipo del catálogo > 'strength' (un plan
                 // viejo sin ninguno de los dos sigue pintando la fila de fuerza de siempre).
                 kind: effectiveExerciseType(block, exercise),
+                // Modalidad de cardio del catálogo (Fase C): da la unidad del conteo registrado
+                // ("420 saltos" / "45 pisos"). null ⇒ genérico, la línea queda como hasta ahora.
+                cardioModality: (exercise?.cardio_modality as string | null | undefined) ?? null,
                 sets: [],
             })
         }
@@ -661,7 +664,7 @@ function WorkoutDayReadOnly({ logs }: { logs: WorkoutLog[] }) {
             </div>
 
             <div className="space-y-3">
-                {exercises.map(({ name, muscle, kind, sets }) => {
+                {exercises.map(({ name, muscle, kind, cardioModality, sets }) => {
                     const sortedSets = [...sets].sort((a, b) => (a.set_number ?? 0) - (b.set_number ?? 0))
                     // Prescripción/progresión: propiedad del BLOQUE → leer una sola vez por ejercicio.
                     const block = (sortedSets[0] as any)?.workout_blocks
@@ -729,7 +732,7 @@ function WorkoutDayReadOnly({ logs }: { logs: WorkoutLog[] }) {
                                 {sortedSets.map((s, si) => {
                                     // Ronda tipada (cardio/movilidad/roller): los ejes viven en
                                     // `actual_*`/`metadata`, no en peso × reps (G1).
-                                    const typedLine = formatLoggedSetLine(kind, s)
+                                    const typedLine = formatLoggedSetLine(kind, s, { cardioModality })
                                     if (typedLine != null) {
                                         const isEmptyRound = typedLine === EMPTY_LOGGED_SET_LABEL
                                         return (

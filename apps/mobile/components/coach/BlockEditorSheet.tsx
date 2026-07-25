@@ -12,7 +12,9 @@ import { getMuscleColor } from '../../lib/muscle-colors'
 import {
   EXERCISE_TYPES,
   INTERVAL_TEMPLATES,
+  cardioRepsUnitShort,
   effectiveExerciseType,
+  repsUnitForModality,
   type ExerciseType,
   type IntervalConfig,
 } from '@eva/workout-engine'
@@ -83,6 +85,10 @@ export const BlockEditorSheet = forwardRef<BottomSheetModal, Props>(function Blo
   const draftType: ExerciseType = draft
     ? effectiveExerciseType(draft, { exercise_type: draft.exercise_type })
     : 'strength'
+
+  // Unidad del objetivo rep-based según la MODALIDAD del ejercicio (Fase C): 'jumps' (cuerda),
+  // 'floors' (escaladora), 'reps' (HIIT). null en run/bike/row/elíptica/genérica ⇒ sin campo extra.
+  const cardioRepsUnit = draftType === 'cardio' ? repsUnitForModality(draft?.cardio_modality) : null
 
   // Historial del ejercicio para este alumno (última sesión registrada) — solo fuerza (E5-11).
   useEffect(() => {
@@ -298,6 +304,28 @@ export const BlockEditorSheet = forwardRef<BottomSheetModal, Props>(function Blo
               <StepperField theme={theme} label="Series (rondas)" value={draft.sets ?? 1} onChange={(n: number) => patch({ sets: n || 1 })} />
             </View>
 
+            {/* Objetivo en la unidad PROPIA de la modalidad (Fase C · RF8, espejo del BlockEditSheet
+                web): cuerda ⇒ saltos, escaladora ⇒ pisos, HIIT ⇒ reps. Se guarda en `reps_value` +
+                `reps_unit` (columnas existentes; 'jumps'/'floors' ya válidos en el CHECK de la
+                migración 20260725221804). Las modalidades sin conteo (run/bike/row/elíptica/genérica)
+                NO ven este campo ⇒ su formulario queda exactamente como hoy. */}
+            {cardioRepsUnit ? (
+              <View style={styles.row2}>
+                <IntField
+                  theme={theme}
+                  label={`Objetivo (${cardioRepsUnitShort(cardioRepsUnit)})`}
+                  value={draft.reps_unit === cardioRepsUnit ? (draft.reps_value ?? null) : null}
+                  onCommit={(n) => patch({ reps_value: n, reps_unit: n != null ? cardioRepsUnit : null })}
+                  placeholder={cardioRepsUnit === 'jumps' ? '500' : cardioRepsUnit === 'floors' ? '40' : '30'}
+                />
+                <View style={{ flex: 1, justifyContent: 'flex-end', paddingBottom: 6 }}>
+                  <Text style={{ color: theme.mutedForeground, fontFamily: theme.fontSans, fontSize: 10.5, lineHeight: 14 }}>
+                    Opcional · el alumno registra sus {cardioRepsUnitShort(cardioRepsUnit)} por ronda.
+                  </Text>
+                </View>
+              </View>
+            ) : null}
+
             <Label theme={theme}>Zona de FC objetivo</Label>
             <HrZoneSelector theme={theme} value={draft.hr_zone ?? null} onChange={(z) => patch({ hr_zone: z })} />
 
@@ -312,8 +340,11 @@ export const BlockEditorSheet = forwardRef<BottomSheetModal, Props>(function Blo
             )}
             {/* Plantillas de intervalos (system) */}
             <View style={styles.tplRow}>
+              {/* Fase D (G2), espejo del BlockEditSheet web: aplicar una plantilla YA NO borra
+                  `duration_sec` / `distance_value`. El ejecutor prioriza los intervalos cuando existen
+                  (`cardioTimerMode` → 'interval'), así que la prescripción continua no se pierde. */}
               {INTERVAL_TEMPLATES.map((tpl) => (
-                <TouchableOpacity key={tpl.id} onPress={() => patch({ interval_config: tpl.config, hr_zone: tpl.suggestedHrZone ?? draft.hr_zone ?? null, duration_sec: null, distance_value: '' })}
+                <TouchableOpacity key={tpl.id} onPress={() => patch({ interval_config: tpl.config, hr_zone: tpl.suggestedHrZone ?? draft.hr_zone ?? null })}
                   activeOpacity={0.8} style={[styles.tplChip, { borderColor: theme.border, backgroundColor: theme.secondary }]}>
                   <Text style={{ fontSize: 10, fontFamily: FONT.uiSemibold, color: theme.foreground }}>{tpl.name}</Text>
                 </TouchableOpacity>

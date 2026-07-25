@@ -422,7 +422,12 @@ export function SingleExerciseCard({
                 </div>
             ) : (
                 <div className="rounded-card border border-[var(--border-inverse)] bg-white/[0.02] p-2">
-                    <TypedLogHeader kind={effType} distanceUnit={block.distance_unit ?? null} />
+                    <TypedLogHeader
+                        kind={effType}
+                        distanceUnit={block.distance_unit ?? null}
+                        // Fase C: la modalidad del catálogo decide las columnas (elíptica = 2 ejes).
+                        cardioModality={exercise.cardio_modality ?? null}
+                    />
                     <div className="space-y-1 pt-2">
                         {Array.from({ length: block.sets }).map((_, i) => {
                             const setNumber = i + 1
@@ -441,6 +446,8 @@ export function SingleExerciseCard({
                                     isActive={setNumber === firstUnlogged}
                                     // Misma unidad de captura que el encabezado de arriba (G3).
                                     distanceUnit={block.distance_unit ?? null}
+                                    // Mismos EJES que el encabezado de arriba (Fase C).
+                                    cardioModality={exercise.cardio_modality ?? null}
                                     typedObjective={formatTypedObjective(block, effType)}
                                     onLogged={handleLogged}
                                     onResult={handleResult}

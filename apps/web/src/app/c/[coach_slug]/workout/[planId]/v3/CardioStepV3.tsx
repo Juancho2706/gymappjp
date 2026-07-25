@@ -4,8 +4,10 @@ import { useState } from 'react'
 import { Bluetooth, HeartPulse, Pause, Play, Repeat, RotateCcw, Ruler, SkipForward, Timer, Zap } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import {
-    buildIntervalPhases,
-    isTimeableInterval,
+    buildIntervalSequence,
+    intervalTimerKind,
+    intervalPhaseTargetLabel,
+    isManualPhase,
     computeCardioProgress,
     formatTypedObjective,
     INTERVAL_PHASE_LABEL,
@@ -77,7 +79,10 @@ export function CardioStepV3(props: CardioStepV3Props) {
     const { block, exercise, cardio, openTechnique } = props
     const coachNote = block.notes?.trim() || null
     const intervalConfig = block.interval_config ?? null
-    const isInterval = !!intervalConfig && isTimeableInterval(intervalConfig)
+    // Fase D (G2): los intervalos por DISTANCIA (8×400m, HYROX) también montan la cara de intervalos —
+    // sus fases de trabajo esperan avance MANUAL y las de tiempo (warmup/recuperación/cooldown) se
+    // cronometran igual que siempre. `none` ⇒ sin intervalos usables ⇒ cara continua de siempre.
+    const isInterval = intervalTimerKind(intervalConfig) !== 'none'
 
     const zone = block.hr_zone ?? null
     const zoneRange =
@@ -117,7 +122,7 @@ export function CardioStepV3(props: CardioStepV3Props) {
             />
 
             {isInterval && intervalConfig ? (
-                <IntervalFace phases={buildIntervalPhases(intervalConfig, block.sets)} zone={zone} zoneRange={zoneRange} />
+                <IntervalFace phases={buildIntervalSequence(intervalConfig, block.sets)} zone={zone} zoneRange={zoneRange} />
             ) : (
                 <ContinuousFace block={block} zone={zone} zoneRange={zoneRange} />
             )}
@@ -243,6 +248,28 @@ function CardioPauseButton({ active, onToggle }: { active: boolean; onToggle: ()
     )
 }
 
+/**
+ * CTA de las fases por DISTANCIA (Fase D): el alumno confirma que terminó el tramo y la secuencia
+ * avanza (si la fase siguiente es por tiempo, arranca sola). Misma identidad juicy que "Pausar" —
+ * cero CSS nuevo, así que respeta los tokens `[data-exec-v3]` y reduced-motion tal cual.
+ */
+function IntervalNextButton({ onNext, phase }: { onNext: () => void; phase: IntervalPhase | null }) {
+    const target = intervalPhaseTargetLabel(phase)
+    return (
+        <button
+            type="button"
+            onClick={onNext}
+            className="exec-v3-juicy exec-v3-pausebtn"
+            aria-label={target ? `Fase siguiente — terminé los ${target}` : 'Fase siguiente'}
+        >
+            <span className="exec-v3-pauseicon" aria-hidden>
+                <SkipForward className="h-5 w-5" fill="currentColor" />
+            </span>
+            Fase siguiente
+        </button>
+    )
+}
+
 /** Cardio CONTINUO: countdown (o distancia) en el color de la zona. */
 function ContinuousFace({
     block,
@@ -355,6 +382,13 @@ function ContinuousFace({
     )
 }
 
+/** Valor mostrado de una fase: distancia si avanza a mano, reloj si se cronometra. */
+function phaseValue(phase: IntervalPhase | null, timeLeft: number): string {
+    if (!phase) return formatCountdown(timeLeft)
+    if (isManualPhase(phase)) return intervalPhaseTargetLabel(phase)
+    return formatCountdown(timeLeft)
+}
+
 /** Cardio POR INTERVALOS: anillo por fase (colores fijos) + barra de fases + "intervalo N de M". */
 function IntervalFace({
     phases,
@@ -369,17 +403,68 @@ function IntervalFace({
     const { phase, timeLeft, finished, frac, isActive } = runner
     const color = phase ? phaseColor(phase.kind) : 'var(--exec-brand)'
     const dashoffset = DASH * (1 - frac)
+    // Fase D: la fase actual se prescribió por DISTANCIA ⇒ el anillo queda lleno y estático, y el
+    // avance lo confirma el alumno con el CTA "Fase siguiente" (nada se cronometra a sus espaldas).
+    const manual = !finished && runner.isManual
 
     const nextPhase = phases[runner.phaseIndex + 1] ?? null
     const totalIntervals = phases.filter((p) => p.kind === 'work').length || 1
     const currentInterval = phase?.repeat ?? (finished ? totalIntervals : 0)
-    // Duraciones de fase derivadas de la prescripción (chips honestos: trabajo / recupera).
+    // Duraciones/distancias de fase derivadas de la prescripción (chips honestos: trabajo / recupera).
     const workPhase = phases.find((p) => p.kind === 'work') ?? null
     const recoveryPhase = phases.find((p) => p.kind === 'recovery') ?? null
+
+    const ringInner = (
+        <>
+            <svg className="exec-v3-hold-svg" viewBox="0 0 208 208" aria-hidden>
+                <circle cx="104" cy="104" r="92" className="exec-v3-hold-track" fill="none" strokeWidth="22" />
+                <circle
+                    cx="104"
+                    cy="104"
+                    r="92"
+                    className="exec-v3-cardio-fill"
+                    fill="none"
+                    strokeWidth="22"
+                    strokeLinecap="round"
+                    strokeDasharray={DASH}
+                    strokeDashoffset={dashoffset}
+                    style={{ stroke: color }}
+                />
+            </svg>
+            <div className="exec-v3-holdtxt">
+                <div className="exec-v3-phaselbl" style={{ color }}>
+                    {finished ? 'Completado' : phase ? INTERVAL_PHASE_LABEL[phase.kind] : ''}
+                </div>
+                <div className={cn('exec-v3-holdnum tabular-nums', finished && 'is-done')}>
+                    {finished ? '¡Listo!' : phaseValue(phase, timeLeft)}
+                </div>
+                {/* Affordance de tap DENTRO del anillo (QA4): Play/Pause 18px justo bajo el número.
+                    En una fase por distancia no hay conteo que pausar ⇒ regla (no promete un timer). */}
+                <span className="exec-v3-hold-icon" aria-hidden>
+                    {finished ? <RotateCcw className="h-[18px] w-[18px]" /> : manual ? <Ruler className="h-[18px] w-[18px]" /> : isActive ? <Pause className="h-[18px] w-[18px]" /> : <Play className="h-[18px] w-[18px]" />}
+                </span>
+                <div className="exec-v3-holdlbl">
+                    {finished ? 'Registra abajo' : manual ? 'Avanza al terminar' : 'Restante en fase'}
+                </div>
+            </div>
+        </>
+    )
 
     return (
         <div className="flex flex-col items-center gap-2.5">
             <div className="exec-v3-ringrow">
+            {manual ? (
+                // Sin cuenta regresiva no hay nada que pausar: el anillo deja de ser botón (evita un
+                // control que no hace nada) y el avance vive en el CTA explícito de abajo.
+                <div
+                    className="exec-v3-holdwrap"
+                    style={{ width: 224, height: 224 } as React.CSSProperties}
+                    role="group"
+                    aria-label={`Fase actual: ${phase ? INTERVAL_PHASE_LABEL[phase.kind] : ''} ${intervalPhaseTargetLabel(phase)}`}
+                >
+                    {ringInner}
+                </div>
+            ) : (
             <button
                 type="button"
                 onClick={finished ? runner.restart : runner.toggle}
@@ -387,35 +472,9 @@ function IntervalFace({
                 style={{ width: 224, height: 224 } as React.CSSProperties}
                 aria-label={finished ? 'Reiniciar intervalos' : isActive ? 'Pausar' : 'Iniciar intervalos'}
             >
-                <svg className="exec-v3-hold-svg" viewBox="0 0 208 208" aria-hidden>
-                    <circle cx="104" cy="104" r="92" className="exec-v3-hold-track" fill="none" strokeWidth="22" />
-                    <circle
-                        cx="104"
-                        cy="104"
-                        r="92"
-                        className="exec-v3-cardio-fill"
-                        fill="none"
-                        strokeWidth="22"
-                        strokeLinecap="round"
-                        strokeDasharray={DASH}
-                        strokeDashoffset={dashoffset}
-                        style={{ stroke: color }}
-                    />
-                </svg>
-                <div className="exec-v3-holdtxt">
-                    <div className="exec-v3-phaselbl" style={{ color }}>
-                        {finished ? 'Completado' : phase ? INTERVAL_PHASE_LABEL[phase.kind] : ''}
-                    </div>
-                    <div className={cn('exec-v3-holdnum tabular-nums', finished && 'is-done')}>
-                        {finished ? '¡Listo!' : formatCountdown(timeLeft)}
-                    </div>
-                    {/* Affordance de tap DENTRO del anillo (QA4): Play/Pause 18px justo bajo el número. */}
-                    <span className="exec-v3-hold-icon" aria-hidden>
-                        {finished ? <RotateCcw className="h-[18px] w-[18px]" /> : isActive ? <Pause className="h-[18px] w-[18px]" /> : <Play className="h-[18px] w-[18px]" />}
-                    </span>
-                    <div className="exec-v3-holdlbl">{finished ? 'Registra abajo' : 'Restante en fase'}</div>
-                </div>
+                {ringInner}
             </button>
+            )}
                 {/* QA5 h3: reinicia los intervalos desde la primera fase (mecanismo `restart` del runner). */}
                 <button
                     type="button"
@@ -431,7 +490,9 @@ function IntervalFace({
                 <div className="exec-v3-nextphase" style={{ '--np': phaseColor(nextPhase.kind) } as React.CSSProperties}>
                     <span className="exec-v3-nextphase-dot" aria-hidden />
                     Luego: <b>{INTERVAL_PHASE_LABEL[nextPhase.kind]}</b>{' '}
-                    <span className="tabular-nums">{formatCountdown(nextPhase.durationSec)}</span>
+                    <span className="tabular-nums">
+                        {isManualPhase(nextPhase) ? intervalPhaseTargetLabel(nextPhase) : formatCountdown(nextPhase.durationSec)}
+                    </span>
                 </div>
             )}
 
@@ -454,18 +515,18 @@ function IntervalFace({
                 <div className="exec-v3-cchips">
                     {workPhase && (
                         <MetricChip
-                            icon={<Zap className="h-4 w-4" />}
+                            icon={isManualPhase(workPhase) ? <Ruler className="h-4 w-4" /> : <Zap className="h-4 w-4" />}
                             iconColor="var(--zone-z4)"
-                            value={formatCountdown(workPhase.durationSec)}
+                            value={isManualPhase(workPhase) ? intervalPhaseTargetLabel(workPhase) : formatCountdown(workPhase.durationSec)}
                             label="Trabajo"
                             wide={!recoveryPhase}
                         />
                     )}
                     {recoveryPhase && (
                         <MetricChip
-                            icon={<Repeat className="h-4 w-4" />}
+                            icon={isManualPhase(recoveryPhase) ? <Ruler className="h-4 w-4" /> : <Repeat className="h-4 w-4" />}
                             iconColor="var(--zone-z2)"
-                            value={formatCountdown(recoveryPhase.durationSec)}
+                            value={isManualPhase(recoveryPhase) ? intervalPhaseTargetLabel(recoveryPhase) : formatCountdown(recoveryPhase.durationSec)}
                             label="Recupera"
                             wide={!workPhase}
                         />
@@ -475,18 +536,26 @@ function IntervalFace({
 
             <div className="flex items-center gap-2">
                 <ZoneChip zone={zone} zoneRange={zoneRange} />
-                {!finished && (
+                {/* "Saltar fase" es el escape de una fase CRONOMETRADA; en una fase manual el avance ya
+                    es el CTA principal, así que no se duplica el control. */}
+                {!finished && !manual && (
                     <button type="button" onClick={runner.skip} className="exec-v3-skipphase" aria-label="Saltar fase">
                         <SkipForward className="h-3.5 w-3.5" aria-hidden /> Saltar fase
                     </button>
                 )}
             </div>
-            {!finished && <CardioPauseButton active={isActive} onToggle={runner.toggle} />}
+            {!finished && (manual
+                ? <IntervalNextButton onNext={runner.next} phase={phase} />
+                : <CardioPauseButton active={isActive} onToggle={runner.toggle} />)}
         </div>
     )
 }
 
-/** Filas de captura tipada de cardio (min / metros / FC) — LogSetForm REUSADO. */
+/**
+ * Filas de captura tipada de cardio — LogSetForm REUSADO. Los EJES salen del motor según la
+ * modalidad del ejercicio (Fase C): Min · Distancia · FC por defecto, Min · FC en elíptica,
+ * Min · Saltos/Reps/Pisos · FC en las rep-based.
+ */
 function CaptureRows({
     block,
     exercise,
@@ -523,6 +592,9 @@ function CaptureRows({
                         // Unidad de captura = unidad PRESCRITA (G3): con "5 km" la caja se llama "Km" y
                         // el motor guarda 5000 en `actual_distance_m`. Sin prescripción ⇒ "Metros".
                         distanceUnit={block.distance_unit ?? null}
+                        // Ejes por MODALIDAD (Fase C): elíptica ⇒ Min · FC; cuerda/HIIT/escaladora ⇒
+                        // Min · Saltos|Reps|Pisos · FC; run/bike/row ⇒ como hoy. null ⇒ genérica.
+                        cardioModality={exercise.cardio_modality ?? null}
                         typedObjective={formatTypedObjective(block, 'cardio')}
                         isActive={isActive}
                         reopenNonce={

@@ -92,7 +92,7 @@ function dayLabel(structure: ProgramStructureType, d: DayState): string {
 }
 
 // PostgREST puede devolver la FK `exercises` como objeto o como array de un elemento.
-function embeddedExerciseRow(raw: any): { name?: string; muscle_group?: string; gif_url?: string; video_url?: string; exercise_type?: string } | null {
+function embeddedExerciseRow(raw: any): { name?: string; muscle_group?: string; gif_url?: string; video_url?: string; exercise_type?: string; cardio_modality?: string | null } | null {
   if (raw == null) return null
   if (Array.isArray(raw)) return raw[0] && typeof raw[0] === 'object' ? raw[0] : null
   return typeof raw === 'object' ? raw : null
@@ -125,6 +125,10 @@ function mapDbBlock(b: any): BuilderBlock {
     // guardado los persista via serialize.ts. `exercise_type` viene del catalogo (embed);
     // el resto son columnas de workout_blocks. distance/load/warmup_rest = strings (input).
     exercise_type: (ex?.exercise_type as BuilderBlock['exercise_type']) ?? (b.exercise_type as BuilderBlock['exercise_type']) ?? null,
+    // Solo-memoria (Fase C, espejo de `mapDbBlockToBuilderBlock` de web): NO es columna de
+    // `workout_blocks` — viene del catálogo y sirve para que el editor ofrezca el objetivo en la
+    // unidad propia (saltos/pisos/reps). `serialize.ts` no la escribe (whitelist de columnas).
+    cardio_modality: ex?.cardio_modality ?? null,
     exercise_type_override: (b.exercise_type_override as BuilderBlock['exercise_type_override']) ?? null,
     side_mode: (b.side_mode as BuilderBlock['side_mode']) ?? null,
     reps_value: b.reps_value ?? null,
@@ -154,7 +158,7 @@ function mapDbBlock(b: any): BuilderBlock {
 // polimorficos), necesarias para el passthrough. `*` es resiliente: en una prod
 // standalone sin esas columnas simplemente no las devuelve (no falla).
 const PROGRAM_SELECT =
-  'id, client_id, coach_id, org_id, updated_at, start_date, end_date, source_template_id, last_edited_by_coach_id, name, program_structure_type, duration_type, weeks_to_repeat, cycle_length, ab_mode, workout_plans ( id, title, group_name, day_of_week, week_variant, workout_blocks ( *, exercises ( name, muscle_group, gif_url, video_url, exercise_type ) ) )'
+  'id, client_id, coach_id, org_id, updated_at, start_date, end_date, source_template_id, last_edited_by_coach_id, name, program_structure_type, duration_type, weeks_to_repeat, cycle_length, ab_mode, workout_plans ( id, title, group_name, day_of_week, week_variant, workout_blocks ( *, exercises ( name, muscle_group, gif_url, video_url, exercise_type, cardio_modality ) ) )'
 // Rico = base + meta extra (notas/fecha/phases). Si la columna falta, selectWithFallback usa el base.
 const PROGRAM_SELECT_RICH = PROGRAM_SELECT.replace(
   'ab_mode,',

@@ -10,6 +10,7 @@ import {
   PHASE_COLORS,
   cardioDetailLabel,
   cardioDistanceObjective,
+  cardioIntervalIsManual,
   cardioObjective,
   cardioTimerMode,
   formatClock,
@@ -74,8 +75,16 @@ describe('cardioTimerMode', () => {
   })
   it('stopwatch cuando no hay ni intervalos ni duración (distancia)', () => {
     expect(cardioTimerMode({ distance_value: 5000 } as { duration_sec?: null })).toBe('stopwatch')
-    // interval por distancia (sin duración en work) NO es cronometrable → cronómetro
-    expect(cardioTimerMode({ interval_config: { repeats: 4, work: { distance_m: 400 } } })).toBe('stopwatch')
+    // interval sin trabajo prescrito (ni tiempo ni distancia) → no hay secuencia que correr
+    expect(cardioTimerMode({ interval_config: { repeats: 4, work: {} } })).toBe('stopwatch')
+  })
+  // Fase D (G2/RF7): ANTES este caso devolvía 'stopwatch' (cronómetro pelado, sin fases: era el bug
+  // reportado como G2). Ahora monta el hero de intervalos con fases de avance MANUAL.
+  it('interval por DISTANCIA monta el hero de intervalos (avance manual)', () => {
+    expect(cardioTimerMode({ interval_config: { repeats: 8, work: { distance_m: 400 } } })).toBe('interval')
+    expect(cardioIntervalIsManual({ interval_config: { repeats: 8, work: { distance_m: 400 } } })).toBe(true)
+    expect(cardioIntervalIsManual({ interval_config: { repeats: 8, work: { duration_sec: 60 } } })).toBe(false)
+    expect(cardioIntervalIsManual({})).toBe(false)
   })
 })
 

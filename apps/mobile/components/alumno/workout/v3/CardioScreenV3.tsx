@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Pressable, Text, TouchableOpacity, View } from 'react-native'
 import { MotiView } from 'moti'
-import { HeartPulse, Pause, Play, Repeat, RotateCcw, Ruler, Timer, Watch, Zap } from 'lucide-react-native'
+import { HeartPulse, Pause, Play, Repeat, RotateCcw, Ruler, SkipForward, Timer, Watch, Zap } from 'lucide-react-native'
 import {
   INTERVAL_PHASE_LABEL,
-  buildIntervalPhases,
+  buildIntervalSequence,
   computeCardioProgress,
   formatTypedObjective,
+  intervalPhaseTargetLabel,
+  isManualPhase,
   type IntervalConfig,
   type OptimisticLogPayload,
   type ReconciledSessionLog,
@@ -168,6 +170,7 @@ export function CardioScreenV3({
         log={log}
         isActive={false}
         typedMode="cardio"
+        cardioModality={exercise.cardio_modality ?? null}
         onPress={() => onOpenSet(setNumber)}
         settle={isRecent}
         pr={isRecent && !!recentSet?.pr}
@@ -323,6 +326,9 @@ export function CardioScreenV3({
             // Unidad de captura = unidad PRESCRITA (G3): con "5 km" la caja se llama "Km" y el motor
             // guarda 5000 en `actual_distance_m`. Sin prescripción en km ⇒ "Metros" como siempre.
             distanceUnit={block.distance_unit ?? null}
+            // Ejes por MODALIDAD (Fase C · G6): elíptica ⇒ Min · FC; cuerda ⇒ Saltos; escaladora ⇒
+            // Pisos; HIIT ⇒ Reps (todo a `reps_done`). Sin modalidad ⇒ Min · Distancia · FC de siempre.
+            cardioModality={exercise.cardio_modality ?? null}
             suggestedWeight={null}
             seedValues={captureSeed}
             header={{ exerciseName: exercise.name, objectiveLine }}
@@ -418,8 +424,10 @@ function IntervalHero({
   exec: ExecTheme
 }) {
   const s = exec.surface
+  // Fase D (G2/RF7): secuencia COMPLETA — incluye las fases por distancia (avance manual) además de
+  // las cronometrables. Espejo exacto del `IntervalFace` web.
   const phases = useMemo(
-    () => buildIntervalPhases((block.interval_config ?? {}) as IntervalConfig, block.sets || 1),
+    () => buildIntervalSequence((block.interval_config ?? {}) as IntervalConfig, block.sets || 1),
     [block.interval_config, block.sets],
   )
   const [flash, setFlash] = useState(0)
@@ -430,6 +438,7 @@ function IntervalHero({
 
   const phase = runner.phase
   const phaseColor = phase ? PHASE_COLORS[phase.kind] : zoneColor
+  const manual = !runner.finished && runner.isManual
   const totalIntervals = phases.filter((p) => p.kind === 'work').length
   const currentInterval = phase?.repeat ?? (runner.finished ? totalIntervals : 1)
   const nextPhase = phases[runner.phaseIndex + 1] ?? null
@@ -445,7 +454,8 @@ function IntervalHero({
       <ProgressRing
         size={224}
         strokeWidth={22}
-        fill={phase && phase.durationSec > 0 ? runner.remaining / phase.durationSec : runner.finished ? 0 : 1}
+        // Fase manual (por distancia): anillo LLENO y estático — no hay cuenta que drenar.
+        fill={manual ? 1 : phase && phase.durationSec > 0 ? runner.remaining / phase.durationSec : runner.finished ? 0 : 1}
         color={phaseColor}
         trackColor="#26262f"
         reducedMotion={reducedMotion}
@@ -475,11 +485,14 @@ function IntervalHero({
                 animate={{ scale: reducedMotion ? 1 : 1.02 }}
                 transition={{ type: 'timing', duration: 1400, loop: !reducedMotion, repeatReverse: true }}
               >
-                <Text style={{ fontFamily: FONT.displayBlack, fontSize: 56, letterSpacing: -2, lineHeight: 58, color: s.text, fontVariant: ['tabular-nums'] }}>
-                  {formatClock(runner.remaining)}
+                {/* Fase por distancia ⇒ el número grande ES el objetivo del tramo ("400 m"). */}
+                <Text numberOfLines={1} style={{ fontFamily: FONT.displayBlack, fontSize: manual ? 44 : 56, letterSpacing: -2, lineHeight: manual ? 48 : 58, color: s.text, fontVariant: ['tabular-nums'] }}>
+                  {manual ? intervalPhaseTargetLabel(phase) : formatClock(runner.remaining)}
                 </Text>
               </MotiView>
-              <Text numberOfLines={1} style={{ fontFamily: FONT.uiBold, fontSize: 10, letterSpacing: 1.2, color: s.textMuted, textTransform: 'uppercase', marginTop: 4, maxWidth: 150, textAlign: 'center' }}>Restante en fase</Text>
+              <Text numberOfLines={1} style={{ fontFamily: FONT.uiBold, fontSize: 10, letterSpacing: 1.2, color: s.textMuted, textTransform: 'uppercase', marginTop: 4, maxWidth: 150, textAlign: 'center' }}>
+                {manual ? 'Avanza al terminar' : 'Restante en fase'}
+              </Text>
             </>
           )}
         </View>
@@ -506,7 +519,9 @@ function IntervalHero({
           <View style={{ width: 9, height: 9, borderRadius: 5, backgroundColor: nextPhaseColor }} />
           <Text style={{ fontFamily: FONT.uiBold, fontSize: 13, color: hexToRgba(nextPhaseColor, 0.9) }}>
             Luego: <Text style={{ color: s.text }}>{INTERVAL_PHASE_LABEL[nextPhase.kind]}</Text>{' '}
-            <Text style={{ color: s.text, fontVariant: ['tabular-nums'] }}>{formatClock(nextPhase.durationSec)}</Text>
+            <Text style={{ color: s.text, fontVariant: ['tabular-nums'] }}>
+              {isManualPhase(nextPhase) ? intervalPhaseTargetLabel(nextPhase) : formatClock(nextPhase.durationSec)}
+            </Text>
           </Text>
         </View>
       ) : null}
@@ -542,15 +557,42 @@ function IntervalHero({
       {(workPhase || recoveryPhase) && (
         <CardioChipsRow>
           {workPhase ? (
-            <MetricChipRN icon={<Zap size={16} color={PHASE_COLORS.work} />} value={formatClock(workPhase.durationSec)} label="Trabajo" wide={!recoveryPhase} />
+            <MetricChipRN
+              icon={isManualPhase(workPhase) ? <Ruler size={16} color={PHASE_COLORS.work} /> : <Zap size={16} color={PHASE_COLORS.work} />}
+              value={isManualPhase(workPhase) ? intervalPhaseTargetLabel(workPhase) : formatClock(workPhase.durationSec)}
+              label="Trabajo"
+              wide={!recoveryPhase}
+            />
           ) : null}
           {recoveryPhase ? (
-            <MetricChipRN icon={<Repeat size={16} color={PHASE_COLORS.recovery} />} value={formatClock(recoveryPhase.durationSec)} label="Recupera" wide={!workPhase} />
+            <MetricChipRN
+              icon={isManualPhase(recoveryPhase) ? <Ruler size={16} color={PHASE_COLORS.recovery} /> : <Repeat size={16} color={PHASE_COLORS.recovery} />}
+              value={isManualPhase(recoveryPhase) ? intervalPhaseTargetLabel(recoveryPhase) : formatClock(recoveryPhase.durationSec)}
+              label="Recupera"
+              wide={!workPhase}
+            />
           ) : null}
         </CardioChipsRow>
       )}
 
-      {!runner.finished && <PauseButton running={runner.running} onToggle={runner.toggle} exec={exec} reducedMotion={reducedMotion} />}
+      {/* Fase D: en una fase por DISTANCIA no hay conteo que pausar — el CTA es el avance explícito
+          del alumno ("Fase siguiente"), que además deja corriendo la recuperación por tiempo. */}
+      {!runner.finished && (manual ? (
+        <View style={{ width: '100%' }}>
+          <JuicyButton
+            testID="btn-cardio-nextphase-v3"
+            label="Fase siguiente"
+            icon={<SkipForward size={18} color={exec.accentText} fill={exec.accentText} />}
+            onPress={runner.next}
+            exec={exec}
+            height={56}
+            reducedMotion={reducedMotion}
+            accessibilityLabel={intervalPhaseTargetLabel(phase) ? `Fase siguiente — terminé los ${intervalPhaseTargetLabel(phase)}` : 'Fase siguiente'}
+          />
+        </View>
+      ) : (
+        <PauseButton running={runner.running} onToggle={runner.toggle} exec={exec} reducedMotion={reducedMotion} />
+      ))}
     </View>
   )
 }

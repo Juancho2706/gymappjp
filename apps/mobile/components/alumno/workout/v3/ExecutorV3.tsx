@@ -15,17 +15,21 @@ import Animated, {
 import { Dumbbell, Flag, Sparkles } from 'lucide-react-native'
 import {
   buildStepModel,
+  cardioHasDistanceAxis,
   effectiveExerciseType,
   firstIncompleteInRounds,
   firstIncompleteStepIndex,
   formatWeightEsCl,
   isRoundComplete,
   isStepComplete,
+  metersToDistanceCapture,
+  repsUnitForModality,
   sessionLogKey,
   typedTargetFor,
   type OptimisticLogPayload,
   type RepeatSeedEntry,
   type SummaryBlock,
+  type TypedKeypadContext,
   type WorkoutCelebrationEvent,
 } from '@eva/workout-engine'
 import { useTheme } from '../../../../context/ThemeContext'
@@ -414,7 +418,20 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
       // la cadena de valores iniciales: prefill > log existente/edición > draft restaurado > semilla.
       const seedEntry = repeatSeed?.get(sessionLogKey(blockId, setNumber)) ?? null
 
-      const typed = typedTargetFor(block, exercise)
+      // Contexto del bloque para el teclado de EDICIÓN (cierra el pendiente de la Fase A): los MISMOS
+      // ejes, etiquetas y conversiones que la fila de registro. `distanceUnit` hace que la caja se
+      // llame "Km" y el commit guarde ×1000 (G3); `cardioModality` decide los ejes de la modalidad
+      // (elíptica sin distancia, cuerda/escaladora/HIIT por conteo en `reps_done`). Sin bloque de
+      // cardio ambos son null ⇒ comportamiento byte-idéntico al previo.
+      //
+      // DELIBERADAMENTE SIN `sideMode`: pasarlo haría que un hold `per_side` abriera DOS campos en el
+      // teclado de edición mientras la siembra de valores sigue escribiendo `actual_hold_sec` (un solo
+      // eje) ⇒ confirmar borraría el hold guardado. Ese cableado es de movilidad, no de esta fase.
+      const typedCtx: TypedKeypadContext = {
+        distanceUnit: block.distance_unit ?? null,
+        cardioModality: exercise?.cardio_modality ?? null,
+      }
+      const typed = typedTargetFor(block, exercise, typedCtx)
       if (typed) {
         const typedLog = sessionLogs.find((l) => l.block_id === blockId && l.set_number === setNumber)
         let typedEditValues: Record<string, string> | null = null
@@ -423,7 +440,17 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
           if (typed.mode === 'cardio') {
             if (typedLog.actual_duration_sec != null)
               vals.cardio_min = formatWeightEsCl(Math.round((typedLog.actual_duration_sec / 60) * 10) / 10)
-            if (typedLog.actual_distance_m != null) vals.actual_distance_m = formatWeightEsCl(typedLog.actual_distance_m)
+            // La caja se relee en la MISMA unidad en que se escribió: con prescripción en km la
+            // columna (metros) vuelve a km (`metersToDistanceCapture`), así reabrir y confirmar no
+            // convierte 5 km en 5.000 km. En una modalidad sin eje de distancia no se siembra nada.
+            if (typedLog.actual_distance_m != null && cardioHasDistanceAxis(typedCtx.cardioModality)) {
+              const shown = metersToDistanceCapture(typedLog.actual_distance_m, typedCtx.distanceUnit)
+              if (shown != null) vals.actual_distance_m = formatWeightEsCl(shown)
+            }
+            // Conteo de la modalidad rep-based (saltos/pisos/reps) — misma columna `reps_done`.
+            if (typedLog.reps_done != null && repsUnitForModality(typedCtx.cardioModality) != null) {
+              vals.reps_done = String(typedLog.reps_done)
+            }
             if (typedLog.actual_avg_hr != null) vals.actual_avg_hr = String(typedLog.actual_avg_hr)
           } else if (typed.mode === 'mobility') {
             if (typedLog.actual_hold_sec != null) vals.actual_hold_sec = String(typedLog.actual_hold_sec)
@@ -487,6 +514,23 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
     },
     [blocks, effByBlock, restoredDraft, previousHistory, sessionLogs, repeatSeed],
   )
+
+  /**
+   * Contexto de campos del bloque cuyo teclado está abierto — el `KeypadHost` lo necesita para que el
+   * COMMIT de una edición use el mismo mapeo que la fila (`buildTypedPayload`): distancia en km ⇒ ×1000
+   * a metros, conteo rep-based ⇒ `reps_done`, y nada de inventar la distancia en una modalidad que no la
+   * pide. Espeja exactamente el ctx con que `openSet` armó los campos (sin `sideMode`, ver ahí).
+   * `undefined` fuera de bloques tipados ⇒ el host se comporta igual que antes.
+   */
+  const keypadTypedContext = useMemo<TypedKeypadContext | undefined>(() => {
+    if (!keypadTarget?.typed) return undefined
+    const block = blocks.find((b) => b.id === keypadTarget.blockId)
+    if (!block) return undefined
+    return {
+      distanceUnit: block.distance_unit ?? null,
+      cardioModality: resolveExercise(block)?.cardio_modality ?? null,
+    }
+  }, [keypadTarget, blocks])
 
   const signalCommitted = useCallback((blockId: string, setNumber: number, isPR: boolean) => {
     if (recentSetTimer.current) clearTimeout(recentSetTimer.current)
@@ -742,7 +786,17 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
         const ex = resolveExercise(b)
         return {
           id: b.id,
-          exercises: ex ? { id: ex.id, name: ex.name, muscle_group: ex.muscle_group ?? '', exercise_type: ex.exercise_type } : null,
+          // `cardio_modality` (Fase C): el motor la usa para etiquetar el CONTEO del resumen
+          // ("420 saltos" / "45 pisos") en vez de un "reps" genérico. Ausente ⇒ items idénticos.
+          exercises: ex
+            ? {
+                id: ex.id,
+                name: ex.name,
+                muscle_group: ex.muscle_group ?? '',
+                exercise_type: ex.exercise_type,
+                cardio_modality: ex.cardio_modality ?? null,
+              }
+            : null,
           exercise_type_override: b.exercise_type_override ?? null,
           sets: b.sets,
           duration_sec: b.duration_sec ?? null,
@@ -1518,6 +1572,10 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
 
       <KeypadHost
         target={keypadTarget}
+        // Contexto de CAMPOS del bloque en edición (Fase A pendiente + Fase C): el commit del teclado
+        // usa las mismas conversiones que la fila (km ×1000, conteo rep-based en `reps_done`). NO toca
+        // el flujo del botón primario ("Listo"/"Guardar" siguen commiteando, decisión CEO PR #168).
+        typedContext={keypadTypedContext}
         onClose={() => setKeypadTarget(null)}
         onCommit={handleCommit}
         onDraftChange={handleDraftChange}

@@ -1,6 +1,6 @@
 # TASKS — Cardio: ejes por modalidad + fixes
 
-Estado: **Fases A y B CONSTRUIDAS** (2026-07-25, PR #170); C y D pendientes de arranque.
+Estado: **Fases A, B, C y D CONSTRUIDAS** (2026-07-25, PR #170). Resta QA device del owner y la deuda listada al final.
 
 ## Fase A — datos correctos (sin migración) — HECHA
 - [x] A1. Caja de distancia en la unidad prescrita (motor `TypedKeypadContext` retrocompatible; web + RN). NOTA: la ruta de EDICIÓN del keypad RN (`KeypadHost`/`keypad-flow.ts:104`) queda en metros a propósito — cablearla es Fase C.
@@ -17,24 +17,28 @@ Estado: **Fases A y B CONSTRUIDAS** (2026-07-25, PR #170); C y D pendientes de a
 - [x] B3. RN ficha coach (`AnalisisTab` + `coach-client-detail.ts`): mismo select, mismo render del motor.
 - [ ] B4. QA device del owner.
 
-### Deuda anotada (para C o después)
-- Analytics de la ficha (1RM/tonelaje/radar/`workoutHistory` 548d) siguen ciegas a cardio: métricas nuevas de minutos/distancia = fase posterior.
-- `fmtTypedLoggedLine` del ejecutor RN del alumno (`workout-ui.ts:96`) duplica formato → delegar en `formatLoggedSetLine`.
-- Mostrar `actual_pace_sec_per_km` en la ficha (ya se puebla desde A3): una línea en `logged-set-summary.ts`.
-- Cabecera de la ficha dice "sets" aunque sean rondas (cosmético).
+### Deuda anotada (post C+D, priorizada)
+1. **GRAVE — cola offline RN pierde los ejes de cardio**: `PendingLog` (`apps/mobile/lib/offline-cache.ts:23-34`) solo persiste `weight_kg/reps_done/rpe/rir/note`; una ronda de cardio encolada sin red se sube con minutos/distancia/FC en NULL (el conteo rep-based sí sobrevive). Preexistente; primer candidato de la próxima tanda (tocar guardado offline exige su propio plan — historial de incidentes de cola).
+2. Analytics de la ficha (1RM/tonelaje/radar/`workoutHistory` 548d) siguen ciegas a cardio: métricas de minutos/distancia por semana = fase posterior.
+3. `fmtTypedLoggedLine` (ejecutor RN alumno) duplica formato de `formatLoggedSetLine` → consolidar.
+4. `legacyRepsSummaryFor` no imprime el objetivo rep-based (bloque solo-conteo guarda `reps='cardio'` legacy; ~3 líneas en el motor).
+5. Bloque nuevo desde el catálogo RN no hereda `exercise_type` (`ExerciseSearchSheet.handleSelect`) — el coach debe tocar "Cardio" a mano; web sí lo hereda.
+6. Timers globales flotantes siguen solo-cronómetro con intervalos por distancia (sin UI de avance manual ahí); `intervalTotalDurationSec` anuncia 0 en plantillas por distancia.
+7. Mostrar `actual_pace_sec_per_km` en la ficha (ya se puebla desde A3); cabecera "sets" vs rondas (cosmético); etiquetas de modalidad duplicadas web/RN → subir a `cardio-modality.ts`.
+8. Plan cacheado offline previo a C no trae `cardio_modality` → primera apertura sin red pinta ejes genéricos (degradación segura, se auto-corrige).
 
-## Fase C — ejes por modalidad (1 migración)
-- [ ] C1. Migración aditiva: `exercises.cardio_modality` + CHECK + backfill 8 seed + (D4) INSERT Escaladora + extensión CHECK `reps_unit` + grants verificados. Snapshot antes, advisors después.
-- [ ] C2. Regenerar `database.types.ts`; validar web/mobile/enterprise.
-- [ ] C3. Motor: `packages/workout-engine/cardio-modality.ts` (mapa modalidad→ejes) + `typedKeypadFields('cardio', modality)` + rama reps en `buildTypedPayload`. Tests.
-- [ ] C4. Ejecutor web: `CardioStepV3`/`LogSetForm` leen ejes del motor (labels/decimales/orden).
-- [ ] C5. Ejecutor RN: `CardioScreenV3`/`SetRow` ídem (debería ser casi solo pasar la modalidad).
-- [ ] C6. Resumen de sesión + vista coach: etiqueta correcta del eje reps (saltos/reps/pisos).
-- [ ] C7. Builder (web y RN): objetivo rep-based con `reps_value`/`reps_unit` cuando la modalidad es rep-based; selector opcional de modalidad en el editor de ejercicios del coach.
-- [ ] C8. Gates completos + QA device.
+## Fase C — ejes por modalidad (1 migración) — HECHA
+- [x] C1. Migración `20260725221804` APLICADA EN LIVE (dry-run BEGIN/ROLLBACK previo; advisors 0 nuevos): `cardio_modality` + CHECK, backfill de los 8 por id determinístico, Escaladora insertada (`stairs`), `reps_unit` ampliado a `jumps`/`floors`. `exercises` tiene grants table-level ⇒ sin GRANT extra.
+- [x] C2. `database.types.ts` actualizado; tsc web/mobile/enterprise verdes. Seed idempotente con modalidad + Escaladora oid(9).
+- [x] C3. Motor: `cardio-modality.ts` (mapa aprobado, normalize, ejes, `formatCardioReps`), `typedKeypadFields` delega, `reps_done` solo en rep-based, `formatLoggedSetLine(…, {cardioModality})`, `CardioItem.repsDone/repsUnit`, `typedTargetFor` con ctx. GOTCHA: helpers de km MOVIDOS a `cardio-modality.ts` (typed-keypad re-exporta) para evitar ciclo ESM.
+- [x] C4. Web: query + `LogSetForm` con ejes dinámicos del motor (elíptica 2 cajas, conteo rep-based), `TypedLogHeader` itera (bug de desestructuración posicional arreglado), superseries ganan `distanceUnit`+modalidad, resumen V3/V2 con conteo.
+- [x] C5. RN: espejo completo + **ruta de edición del keypad cableada** (`typedContext` en KeypadHost, siembra en km, sin tocar primaryIsNext/onDone; `sideMode` excluido a propósito — cablearlo mal borraría holds per_side).
+- [x] C6. Ficha coach web+RN con "420 saltos"/"45 pisos" (`cardio_modality` en ambos selects).
+- [x] C7. Builder web+RN: campo "Objetivo (saltos|pisos|reps)" → `reps_value`+`reps_unit`; selector de modalidad en editor de ejercicios web (Select) y RN (chips), solo tipo cardio, default genérica. `REPS_UNIT_VALUES` de schemas ampliado (superset del CHECK).
+- [ ] C8. QA device del owner (gates verdes: tsc x3, lint 0 errores, 3.936 tests).
 
-## Fase D — intervalos por distancia
-- [ ] D1. Motor: fases por distancia como pasos manuales (`workout-interval.ts`: modelo de fase distance con avance manual; recovery por tiempo cronometrada).
-- [ ] D2. UI web `IntervalFace` + RN: botón "Fase siguiente", contador "Intervalo N de M" para distancia.
-- [ ] D3. Builder: aplicar plantilla deja de borrar `duration_sec`/`distance_value` (`BlockEditSheet.tsx:342`).
-- [ ] D4. Gates + QA.
+## Fase D — intervalos por distancia — HECHA
+- [x] D1. Motor: `buildIntervalSequence` (fases `timed`/`manual` con `distanceM`), `intervalTimerKind` (timeable|manual|none), `buildIntervalPhases` conserva contrato EXACTO (timers globales solo cronometrables). 16 casos nuevos.
+- [x] D2. Web `IntervalFace` + RN `IntervalHero`: fase manual con "400 m" + CTA "Fase siguiente" (avanza y arranca sola la recuperación cronometrada); anillo estático accesible; 8x400m y HYROX dejan de caer a cronómetro pelado. Único test editado: `executor-v3-typed-screens.test.ts` que codificaba el bug G2 como expectativa.
+- [x] D3. Builders web+RN: aplicar plantilla ya NO borra `duration_sec`/`distance_value` (el ejecutor prioriza intervalos; el dato continuo queda visible en el objetivo).
+- [ ] D4. QA device del owner.

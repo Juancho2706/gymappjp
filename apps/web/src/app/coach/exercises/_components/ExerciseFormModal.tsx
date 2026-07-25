@@ -50,6 +50,26 @@ function mmssToSeconds(str: string): number | null {
     return isNaN(n) ? null : n
 }
 
+/**
+ * Modalidades de cardio (Fase C · specs/cardio-ejes-y-fixes). El valor `''` = genérica (columna
+ * NULL): el alumno registra Min · Distancia · FC, exactamente como hasta hoy. La lista de valores
+ * es el espejo de `CARDIO_MODALITIES` del motor (`cardio-modality.ts`) y del CHECK de la migración
+ * 20260725221804; las etiquetas viven acá porque son solo presentación de esta pantalla.
+ */
+const CARDIO_MODALITY_OPTIONS: { value: string; label: string; hint: string }[] = [
+    { value: '', label: 'Genérica', hint: 'Min · Distancia · FC' },
+    { value: 'run', label: 'Correr / caminar', hint: 'Min · Distancia · FC' },
+    { value: 'bike', label: 'Bicicleta', hint: 'Min · Distancia · FC' },
+    { value: 'row', label: 'Remo', hint: 'Min · Distancia · FC' },
+    { value: 'elliptical', label: 'Elíptica', hint: 'Min · FC' },
+    { value: 'jump_rope', label: 'Saltar la cuerda', hint: 'Min · Saltos · FC' },
+    { value: 'hiit_reps', label: 'HIIT por repeticiones', hint: 'Min · Reps · FC' },
+    { value: 'stairs', label: 'Escaladora', hint: 'Min · Pisos · FC' },
+]
+
+/** Sentinela del Select para la opción "Genérica" (Radix no admite `value=""`). */
+const GENERIC_MODALITY = '__generic__'
+
 const EQUIPMENT_OPTIONS = [
     'Peso libre',
     'Máquina',
@@ -94,6 +114,10 @@ export function ExerciseFormModal({ open, onClose, exercise }: Props) {
     const [videoDuration, setVideoDuration] = useState<number | null>(null)
     const [durationError, setDurationError] = useState<string | null>(null)
     const [exerciseType, setExerciseType] = useState((exercise as Record<string, unknown> | undefined)?.exercise_type as string ?? 'strength')
+    // Modalidad de cardio (Fase C): sentinela para "Genérica"; se envía '' ⇒ la action guarda NULL.
+    const [cardioModality, setCardioModality] = useState(
+        ((exercise as Record<string, unknown> | undefined)?.cardio_modality as string | null) ?? ''
+    )
     const [difficulty, setDifficulty] = useState(exercise?.difficulty ?? '')
 
     useEffect(() => {
@@ -104,6 +128,7 @@ export function ExerciseFormModal({ open, onClose, exercise }: Props) {
         setVideoStart(secondsToMmss((exercise as Record<string, unknown>)?.video_start_time as number | null | undefined))
         setVideoEnd(secondsToMmss((exercise as Record<string, unknown>)?.video_end_time as number | null | undefined))
         setExerciseType((exercise as Record<string, unknown> | undefined)?.exercise_type as string ?? 'strength')
+        setCardioModality(((exercise as Record<string, unknown> | undefined)?.cardio_modality as string | null) ?? '')
         setDifficulty(exercise?.difficulty ?? '')
     }, [exercise])
 
@@ -210,6 +235,39 @@ export function ExerciseFormModal({ open, onClose, exercise }: Props) {
                             Define qué campos muestra el builder y la app del alumno.
                         </p>
                     </div>
+
+                    {/* Modalidad de cardio (Fase C) — SOLO para ejercicios de tipo cardio. Decide los
+                        ejes que el alumno registra por ronda. Genérica (default) = comportamiento de
+                        siempre. El valor viaja como hidden input: '' ⇒ la action guarda NULL. */}
+                    {exerciseType === 'cardio' && (
+                        <div className="space-y-1.5">
+                            <label className="text-sm font-medium text-strong">Modalidad de cardio</label>
+                            <input type="hidden" name="cardio_modality" value={cardioModality} />
+                            <Select
+                                value={cardioModality === '' ? GENERIC_MODALITY : cardioModality}
+                                onValueChange={(v) => setCardioModality(!v || v === GENERIC_MODALITY ? '' : v)}
+                            >
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Genérica (Min · Distancia · FC)">
+                                        {CARDIO_MODALITY_OPTIONS.find((o) => o.value === cardioModality)?.label ?? 'Genérica'}
+                                    </SelectValue>
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {CARDIO_MODALITY_OPTIONS.map(({ value, label, hint }) => (
+                                        <SelectItem key={value || GENERIC_MODALITY} value={value || GENERIC_MODALITY}>
+                                            {label} · {hint}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                            <p className="text-xs text-muted">
+                                Define qué registra el alumno en cada ronda. Genérica pide minutos, distancia y FC.
+                            </p>
+                            {state.fieldErrors?.cardio_modality && (
+                                <p className="text-xs text-[var(--danger-600)]">{state.fieldErrors.cardio_modality[0]}</p>
+                            )}
+                        </div>
+                    )}
 
                     {/* Equipo + Dificultad */}
                     <div className="grid grid-cols-2 gap-3">

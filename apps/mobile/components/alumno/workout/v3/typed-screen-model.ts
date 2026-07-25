@@ -12,7 +12,7 @@
 import {
   compactDistance,
   compactDuration,
-  isTimeableInterval,
+  intervalTimerKind,
   type IntervalConfig,
   type IntervalPhaseKind,
 } from '@eva/workout-engine'
@@ -82,7 +82,9 @@ export type CardioTimerMode = 'interval' | 'countdown' | 'stopwatch'
 
 /**
  * Modo del timer cardio según la prescripción:
- *  · `interval`  — hay `interval_config` cronometrable (work por tiempo) → runner de fases.
+ *  · `interval`  — hay `interval_config` usable → runner de fases. Fase D (G2/RF7): incluye los
+ *    intervalos por DISTANCIA (8×400m, HYROX), cuyas fases de trabajo avanzan MANUAL y cuyas fases
+ *    por tiempo (warmup/recuperación/cooldown) se cronometran igual. Antes caían a cronómetro pelado.
  *  · `countdown` — hay `duration_sec` > 0 → cuenta regresiva con anillo de zona.
  *  · `stopwatch` — ni intervalos ni duración (típicamente por distancia) → cronómetro count-up.
  */
@@ -91,9 +93,14 @@ export function cardioTimerMode(block: {
   interval_config?: unknown
 }): CardioTimerMode {
   const interval = (block.interval_config ?? null) as IntervalConfig | null
-  if (interval && isTimeableInterval(interval)) return 'interval'
+  if (intervalTimerKind(interval) !== 'none') return 'interval'
   if ((block.duration_sec ?? 0) > 0) return 'countdown'
   return 'stopwatch'
+}
+
+/** ¿Los intervalos del bloque avanzan a mano (work por distancia)? Alimenta el CTA "Fase siguiente". */
+export function cardioIntervalIsManual(block: { interval_config?: unknown }): boolean {
+  return intervalTimerKind((block.interval_config ?? null) as IntervalConfig | null) === 'manual'
 }
 
 /** Detalle corto del chip "Cardio · {detalle}" según la prescripción (identidad de la pantalla). */

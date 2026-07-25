@@ -9,7 +9,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { AppState } from 'react-native'
-import type { IntervalPhase } from '@eva/workout-engine'
+import { isManualPhase, type IntervalPhase } from '@eva/workout-engine'
 
 // ─── Cuenta regresiva (hold de movilidad · countdown de cardio) ──────────────────────────────────
 export interface CountdownApi {
@@ -159,19 +159,27 @@ export interface IntervalRunnerApi {
   remaining: number
   running: boolean
   finished: boolean
+  /** ¿La fase actual espera avance MANUAL (prescrita por distancia)? */
+  isManual: boolean
   /** Fracción transcurrida de la fase actual [0,1]. */
   phaseProgress: number
   toggle: () => void
   /** Salta a la fase siguiente (o termina si es la última). */
   skip: () => void
+  /** Avance explícito del alumno ("Fase siguiente"); deja corriendo la fase siguiente si es por tiempo. */
+  next: () => void
   /** Reinicia la secuencia desde la primera fase y vuelve a correr (QA5 h3). */
   restart: () => void
 }
 
 /**
- * Corre una secuencia de `IntervalPhase[]` (del engine `buildIntervalPhases`). Mirror EXACTO de
+ * Corre una secuencia de `IntervalPhase[]` (del engine `buildIntervalSequence`). Mirror EXACTO de
  * `IntervalTimer`: avanza fase a fase por `endTime`, dispara `onPhaseChange` en cada cambio y
  * `onFinish` al terminar (para que la pantalla emita el cue háptico/flash). Background-safe.
+ *
+ * Fase D (G2/RF7): una fase `manual` (paso por DISTANCIA) NO se cronometra — el reloj se detiene ahí
+ * hasta que el alumno confirma con "Fase siguiente". Las fases por tiempo de la misma secuencia
+ * (warmup, recuperaciones, cooldown) cuentan como siempre.
  */
 export function useIntervalRunner(
   phases: IntervalPhase[],
@@ -190,6 +198,8 @@ export function useIntervalRunner(
     onFinishRef.current = opts?.onFinish
   })
 
+  const isManual = isManualPhase(phases[phaseIndex] ?? null)
+
   const advance = useCallback(() => {
     const next = phaseIndexRef.current + 1
     if (next >= phases.length) {
@@ -202,13 +212,14 @@ export function useIntervalRunner(
     phaseIndexRef.current = next
     setPhaseIndex(next)
     setRemaining(phases[next].durationSec)
-    endRef.current = Date.now() + phases[next].durationSec * 1000
+    // Una fase manual (por distancia) no tiene fin programado: espera el toque del alumno.
+    endRef.current = isManualPhase(phases[next]) ? null : Date.now() + phases[next].durationSec * 1000
     onPhaseChangeRef.current?.()
   }, [phases])
 
   useEffect(() => {
     let interval: ReturnType<typeof setInterval> | undefined
-    if (running && !finished) {
+    if (running && !finished && !isManual) {
       if (!endRef.current) endRef.current = Date.now() + remaining * 1000
       interval = setInterval(() => {
         if (!endRef.current) return
@@ -220,7 +231,7 @@ export function useIntervalRunner(
       endRef.current = null
     }
     return () => clearInterval(interval)
-  }, [running, finished, phaseIndex, remaining, advance])
+  }, [running, finished, phaseIndex, remaining, advance, isManual])
 
   useEffect(() => {
     const sub = AppState.addEventListener('change', (next) => {
@@ -234,6 +245,14 @@ export function useIntervalRunner(
 
   const toggle = useCallback(() => setRunning((v) => !v), [])
   const skip = useCallback(() => advance(), [advance])
+  /** CTA "Fase siguiente" de las fases por distancia: avanza y deja corriendo la fase siguiente. */
+  const next = useCallback(() => {
+    if (finished) return
+    const isLast = phaseIndexRef.current + 1 >= phases.length
+    endRef.current = null
+    advance()
+    if (!isLast) setRunning(true)
+  }, [finished, advance, phases.length])
   const restart = useCallback(() => {
     phaseIndexRef.current = 0
     endRef.current = null
@@ -244,6 +263,7 @@ export function useIntervalRunner(
   }, [phases])
 
   const phase = phases[phaseIndex] ?? null
-  const phaseProgress = phase && phase.durationSec > 0 ? (phase.durationSec - remaining) / phase.durationSec : 0
-  return { phaseIndex, phase, remaining, running, finished, phaseProgress, toggle, skip, restart }
+  // Fase manual ⇒ progreso 0 (anillo lleno y estático: no hay cuenta que drenar).
+  const phaseProgress = !isManual && phase && phase.durationSec > 0 ? (phase.durationSec - remaining) / phase.durationSec : 0
+  return { phaseIndex, phase, remaining, running, finished, isManual, phaseProgress, toggle, skip, next, restart }
 }

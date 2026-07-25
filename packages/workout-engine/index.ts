@@ -16,6 +16,7 @@
 
 export * from './session-logs.reconcile'
 export * from './session-logs.optimistic'
+export * from './cardio-modality'
 export * from './typed-keypad'
 export * from './keypad-logic'
 export * from './keypad-flow'

@@ -42,6 +42,23 @@ function mmssToSeconds(str: string): number | null {
   return isNaN(n) ? null : n
 }
 
+/**
+ * Modalidades de cardio (Fase C · specs/cardio-ejes-y-fixes) — espejo EXACTO del selector web
+ * (`ExerciseFormModal`) y de `CARDIO_MODALITIES` del motor / del CHECK de la migración 20260725221804.
+ * `''` = genérica (columna NULL): el alumno registra Min · Distancia · FC, como hasta hoy. Las
+ * etiquetas viven acá porque son sólo presentación de esta pantalla.
+ */
+const CARDIO_MODALITY_OPTIONS: { value: string; label: string; hint: string }[] = [
+  { value: '', label: 'Genérica', hint: 'Min · Distancia · FC' },
+  { value: 'run', label: 'Correr / caminar', hint: 'Min · Distancia · FC' },
+  { value: 'bike', label: 'Bicicleta', hint: 'Min · Distancia · FC' },
+  { value: 'row', label: 'Remo', hint: 'Min · Distancia · FC' },
+  { value: 'elliptical', label: 'Elíptica', hint: 'Min · FC' },
+  { value: 'jump_rope', label: 'Saltar la cuerda', hint: 'Min · Saltos · FC' },
+  { value: 'hiit_reps', label: 'HIIT por repeticiones', hint: 'Min · Reps · FC' },
+  { value: 'stairs', label: 'Escaladora', hint: 'Min · Pisos · FC' },
+]
+
 interface Props {
   /** Exercise being edited; null = create mode. */
   exercise: ExerciseRow | null
@@ -59,6 +76,8 @@ export const ExerciseFormSheet = forwardRef<BottomSheetModal, Props>(function Ex
   const [name, setName] = useState('')
   const [muscle, setMuscle] = useState('')
   const [exerciseType, setExerciseType] = useState('strength')
+  // Modalidad de cardio (Fase C): '' = genérica ⇒ se guarda NULL. Solo se muestra en tipo cardio.
+  const [cardioModality, setCardioModality] = useState('')
   const [equipment, setEquipment] = useState<string | null>(null)
   const [difficulty, setDifficulty] = useState<string | null>(null)
   const [secondary, setSecondary] = useState('')
@@ -93,6 +112,7 @@ export const ExerciseFormSheet = forwardRef<BottomSheetModal, Props>(function Ex
     setName(exercise?.name ?? '')
     setMuscle(exercise?.muscle_group ?? '')
     setExerciseType(exercise?.exercise_type ?? 'strength')
+    setCardioModality(exercise?.cardio_modality ?? '')
     setEquipment(exercise?.equipment ?? null)
     setDifficulty(exercise?.difficulty ?? null)
     setSecondary(exercise?.secondary_muscles?.join(', ') ?? '')
@@ -118,6 +138,8 @@ export const ExerciseFormSheet = forwardRef<BottomSheetModal, Props>(function Ex
       name: name.trim(),
       muscle_group: muscle,
       exercise_type: exerciseType,
+      // Fuera de cardio la lib ya la anula; se manda igual para no depender del orden de los estados.
+      cardio_modality: exerciseType === 'cardio' ? cardioModality || null : null,
       equipment,
       difficulty,
       secondary_muscles: secondary.split(',').map((s) => s.trim()).filter(Boolean),
@@ -194,6 +216,43 @@ export const ExerciseFormSheet = forwardRef<BottomSheetModal, Props>(function Ex
           })}
         </View>
         <Text className="text-muted font-sans" style={styles.hint}>Define qué campos muestra el builder y la app del alumno.</Text>
+
+        {/* Modalidad de cardio (Fase C) — SOLO en tipo cardio. Decide los ejes que el alumno registra
+            por ronda (elíptica sin distancia, cuerda por saltos, escaladora por pisos, HIIT por reps).
+            Genérica (default) = comportamiento de siempre. Espejo del selector web. */}
+        {exerciseType === 'cardio' ? (
+          <>
+            <Label>Modalidad de cardio</Label>
+            <View style={styles.chips}>
+              {CARDIO_MODALITY_OPTIONS.map(({ value, label, hint }) => {
+                const active = value === cardioModality
+                return (
+                  <TouchableOpacity
+                    key={value || 'generic'}
+                    testID={`cardio-modality-${value || 'generic'}`}
+                    onPress={() => setCardioModality(value)}
+                    activeOpacity={0.8}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: active }}
+                    accessibilityLabel={`${label}: ${hint}`}
+                    className={`rounded-pill ${active ? 'bg-sport-500' : 'bg-surface-card border border-default'}`}
+                    style={styles.chip}
+                  >
+                    <Text className={`${active ? 'text-on-sport' : 'text-body'} font-sans-bold`} style={styles.chipText}>
+                      {label}
+                    </Text>
+                    <Text className={`${active ? 'text-on-sport' : 'text-muted'} font-sans`} style={styles.chipHint}>
+                      {hint}
+                    </Text>
+                  </TouchableOpacity>
+                )
+              })}
+            </View>
+            <Text className="text-muted font-sans" style={styles.hint}>
+              Define qué registra el alumno en cada ronda. Genérica pide minutos, distancia y FC.
+            </Text>
+          </>
+        ) : null}
 
         <Label>Equipo</Label>
         <Chips options={EQUIPMENT_OPTIONS as readonly string[]} value={equipment} onSelect={(v) => setEquipment(v === equipment ? null : v)} />
@@ -336,6 +395,8 @@ const styles = StyleSheet.create({
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chip: { paddingHorizontal: 13, paddingVertical: 8 },
   chipText: { fontSize: 13 },
+  // Sub-línea del chip de modalidad ("Min · Saltos · FC"): dice qué va a registrar el alumno.
+  chipHint: { fontSize: 10, marginTop: 1 },
   saveWrap: { marginTop: 10 },
   removeWrap: { marginTop: 4 },
 })

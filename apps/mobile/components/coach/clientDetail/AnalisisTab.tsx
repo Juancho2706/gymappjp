@@ -603,7 +603,7 @@ function ExerciseSession({ name, muscle, kind, sets, last }: { name: string; mus
             actual_avg_hr: set.actualAvgHr,
             actual_hold_sec: set.actualHoldSec,
             metadata: set.metadata,
-          })
+          }, { cardioModality: set.cardioModality })
           if (typedLine != null) {
             return (
               <View key={`${set.setNumber ?? index}-${index}`} className="border border-subtle bg-surface-sunken" style={styles.setPill}>

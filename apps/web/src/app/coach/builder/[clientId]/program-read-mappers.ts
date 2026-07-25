@@ -31,6 +31,8 @@ export type EmbeddedExercise = {
     video_url?: string | null
     thumbnail_url?: string | null
     exercise_type?: string | null
+    /** Modalidad de cardio del catálogo (Fase C) — el editor la usa para el objetivo rep-based. */
+    cardio_modality?: string | null
 }
 
 /** PostgREST puede devolver la FK `exercises` como objeto o como array de un elemento. */
@@ -79,6 +81,10 @@ export function mapDbBlockToBuilderBlock(
         // Polimórfico (specs/movida-entrenamiento): round-trip de los campos tipados.
         // Filas legacy: todo NULL ⇒ el bloque queda byte-identical al mapeo de siempre.
         exercise_type: ((exRel?.exercise_type ?? cat?.exercise_type) || null) as BuilderBlock['exercise_type'],
+        // Solo-memoria (Fase C): NO es columna de workout_blocks; el sheet la usa para saber si el
+        // ejercicio se prescribe por conteo (saltos/pisos/reps). El save la ignora (whitelist).
+        cardio_modality:
+            (exRel?.cardio_modality ?? (cat as { cardio_modality?: string | null } | undefined)?.cardio_modality) ?? null,
         exercise_type_override: (b.exercise_type_override ?? null) as BuilderBlock['exercise_type_override'],
         side_mode: b.side_mode ?? null,
         reps_value: b.reps_value ?? null,
@@ -136,6 +142,8 @@ export function createDefaultBlock(exercise: Exercise): BuilderBlock {
         section_template_id: null,
         is_override: false,
         exercise_type: exerciseType,
+        // Fase C: viaja con el bloque para que el sheet ofrezca el objetivo en la unidad propia.
+        cardio_modality: (exercise as { cardio_modality?: string | null }).cardio_modality ?? null,
     }
     // Defaults por tipo (ejercicios strength: EXACTAMENTE el default de siempre — AC3)
     if (exerciseType === 'cardio') {

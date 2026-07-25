@@ -123,6 +123,9 @@ export function TemplatePickerDialog({ open, onClose, hasExistingData, onApply }
                         // guardar (data-loss silencioso de toda la prescripción tipada). Espejo de
                         // mapDbBlockToBuilderBlock (round-trip canónico).
                         exercise_type: b.exercises?.exercise_type ?? null,
+                        // Fase C (solo-memoria): la modalidad del catálogo alimenta el objetivo
+                        // rep-based del sheet. Sin ella el bloque cae a genérico (degradación segura).
+                        cardio_modality: b.exercises?.cardio_modality ?? null,
                         exercise_type_override: b.exercise_type_override ?? null,
                         side_mode: b.side_mode ?? null,
                         reps_value: b.reps_value ?? null,

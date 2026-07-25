@@ -15,6 +15,7 @@
  */
 
 import type { ExerciseType } from './workout-exercise-type'
+import { formatCardioReps, repsUnitForModality } from './cardio-modality'
 
 /** Subconjunto de `workout_logs` que necesita la línea (todas las columnas ya existen). */
 export interface LoggedSetLike {
@@ -70,12 +71,18 @@ function positive(value: number | null | undefined): number | null {
     return value != null && value > 0 ? value : null
 }
 
-function cardioParts(log: LoggedSetLike): string[] {
+function cardioParts(log: LoggedSetLike, cardioModality?: string | null): string[] {
     const parts: string[] = []
     const duration = positive(log.actual_duration_sec)
     if (duration != null) parts.push(formatLoggedDuration(duration))
+    // La distancia se imprime siempre que exista en el log: aunque la modalidad ya no la pida (una
+    // elíptica, por ejemplo), un registro viejo con metros es dato real del alumno y el coach debe verlo.
     const distance = positive(log.actual_distance_m)
     if (distance != null) parts.push(`${formatEsNumber(distance, 1)} m`)
+    // Conteo de las modalidades rep-based, con la etiqueta correcta (saltos/pisos/reps). Sin modalidad
+    // (ejercicio genérico o plan viejo) un `reps_done` en cardio se imprime como "N reps".
+    const reps = positive(log.reps_done)
+    if (reps != null) parts.push(formatCardioReps(reps, repsUnitForModality(cardioModality)))
     const hr = positive(log.actual_avg_hr)
     if (hr != null) parts.push(`FC ${formatEsNumber(hr)}`)
     return parts
@@ -105,16 +112,33 @@ function rollerParts(log: LoggedSetLike): string[] {
     return parts
 }
 
+/** Contexto OPCIONAL de la línea. Sin él, el resultado es byte-idéntico al de la Fase B. */
+export interface LoggedSetLineOptions {
+    /** `exercises.cardio_modality` del ejercicio del bloque: da la etiqueta del conteo en cardio. */
+    cardioModality?: string | null
+}
+
 /**
  * Línea de lo registrado en UNA ronda/serie tipada:
- *   cardio    → "12,5 min · 3.200 m · FC 148"
+ *   cardio    → "12,5 min · 3.200 m · FC 148" · "8 min · 420 saltos · FC 152" · "12 min · 45 pisos"
  *   movilidad → "30 s por lado" / "Izq. 30 s · Der. 25 s" / "45 s"
  *   roller    → "45 s · 3 pasadas"
  * Sin ningún dato ⇒ `EMPTY_LOGGED_SET_LABEL`. `strength` ⇒ `null` (lo pinta el caller como hoy).
+ *
+ * 3er argumento (Fase C, opcional y retrocompatible): la modalidad de cardio, para que un conteo de
+ * `reps_done` se imprima "420 saltos" y no "420 reps". Los callers existentes compilan sin cambios.
  */
-export function formatLoggedSetLine(kind: ExerciseType, log: LoggedSetLike): string | null {
+export function formatLoggedSetLine(
+    kind: ExerciseType,
+    log: LoggedSetLike,
+    opts?: LoggedSetLineOptions,
+): string | null {
     if (kind === 'strength') return null
     const parts =
-        kind === 'cardio' ? cardioParts(log) : kind === 'mobility' ? mobilityParts(log) : rollerParts(log)
+        kind === 'cardio'
+            ? cardioParts(log, opts?.cardioModality)
+            : kind === 'mobility'
+              ? mobilityParts(log)
+              : rollerParts(log)
     return parts.length > 0 ? parts.join(' · ') : EMPTY_LOGGED_SET_LABEL
 }

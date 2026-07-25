@@ -60,6 +60,12 @@ export interface ExerciseRow {
   muscle_group: string
   /** Tipo polimórfico (strength/cardio/mobility/roller). Default 'strength' en DB. */
   exercise_type: string | null
+  /**
+   * Modalidad de cardio (Fase C · specs/cardio-ejes-y-fixes, migración 20260725221804):
+   * run/bike/row/elliptical/jump_rope/hiit_reps/stairs. NULL = genérica ⇒ el alumno registra
+   * Min · Distancia · FC como siempre. Solo tiene sentido con `exercise_type = 'cardio'`.
+   */
+  cardio_modality: string | null
   equipment: string | null
   difficulty: string | null
   body_part: string | null
@@ -82,6 +88,8 @@ export interface ExerciseInput {
   name: string
   muscle_group: string
   exercise_type?: string | null
+  /** Modalidad de cardio (Fase C). Vacío/ausente ⇒ NULL = genérica. Fuera de cardio se fuerza NULL. */
+  cardio_modality?: string | null
   equipment?: string | null
   difficulty?: string | null
   body_part?: string | null
@@ -160,13 +168,13 @@ export function filterExercises<T extends {
 }
 
 const SELECT_COLUMNS =
-  'id, name, muscle_group, exercise_type, equipment, difficulty, body_part, secondary_muscles, instructions, video_url, gif_url, image_url, video_start_time, video_end_time, coach_id, org_id'
+  'id, name, muscle_group, exercise_type, cardio_modality, equipment, difficulty, body_part, secondary_muscles, instructions, video_url, gif_url, image_url, video_start_time, video_end_time, coach_id, org_id'
 // Sin columnas enterprise (org_id) — para prod standalone que aún no las tiene.
 const SELECT_COLUMNS_MIN =
-  'id, name, muscle_group, exercise_type, equipment, difficulty, body_part, secondary_muscles, instructions, video_url, gif_url, image_url, video_start_time, video_end_time, coach_id'
+  'id, name, muscle_group, exercise_type, cardio_modality, equipment, difficulty, body_part, secondary_muscles, instructions, video_url, gif_url, image_url, video_start_time, video_end_time, coach_id'
 
 const BUILDER_EXERCISE_COLUMNS =
-  'id, name, muscle_group, exercise_type, equipment, difficulty, body_part, secondary_muscles, instructions, video_url, gif_url, image_url, video_start_time, video_end_time, coach_id, org_id, team_id'
+  'id, name, muscle_group, exercise_type, cardio_modality, equipment, difficulty, body_part, secondary_muscles, instructions, video_url, gif_url, image_url, video_start_time, video_end_time, coach_id, org_id, team_id'
 
 /**
  * Catálogo del builder con scope explícito; no consulta claims/JWT legacy.
@@ -312,6 +320,9 @@ export async function createExercise(input: ExerciseInput): Promise<{ ok: boolea
       name,
       muscle_group: input.muscle_group,
       exercise_type: input.exercise_type ?? 'strength',
+      // Modalidad SOLO en cardio (mirror de la action web): en cualquier otro tipo se guarda NULL
+      // para no dejar filas inconsistentes. Vacío ⇒ NULL = genérica (Min · Distancia · FC).
+      cardio_modality: input.exercise_type === 'cardio' ? input.cardio_modality || null : null,
       equipment: input.equipment ?? null,
       difficulty: input.difficulty ?? null,
       body_part: input.body_part ?? null,
@@ -358,6 +369,8 @@ export async function updateExercise(
       name,
       muscle_group: input.muscle_group,
       exercise_type: input.exercise_type ?? 'strength',
+      // Igual que en el create: fuera de cardio la modalidad se limpia (NULL).
+      cardio_modality: input.exercise_type === 'cardio' ? input.cardio_modality || null : null,
       equipment: input.equipment ?? null,
       difficulty: input.difficulty ?? null,
       body_part: input.body_part ?? null,
@@ -406,6 +419,8 @@ export async function cloneExercise(row: ExerciseRow): Promise<{ ok: boolean; id
     name: `${row.name} (copia)`,
     muscle_group: row.muscle_group ?? '',
     exercise_type: row.exercise_type ?? 'strength',
+    // La copia conserva la modalidad del original (si era cardio); en otro tipo el create la anula.
+    cardio_modality: row.cardio_modality ?? null,
     equipment: row.equipment ?? null,
     difficulty: (row.difficulty as ExerciseInput['difficulty']) ?? null,
     body_part: row.body_part ?? null,

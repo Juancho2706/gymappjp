@@ -13,7 +13,19 @@ import type { BuilderBlock } from '../../lib/plan-builder/types'
 const RECENTS_KEY = 'builder_recent_exercises'
 const EMPTY: Ex[] = [] // ref estable para no virtualizar nada con el sheet colapsado
 
-type Ex = Pick<ExerciseRow, 'id' | 'name' | 'muscle_group' | 'gif_url' | 'image_url' | 'video_url' | 'secondary_muscles' | 'body_part' | 'equipment'>
+type Ex = Pick<
+  ExerciseRow,
+  | 'id'
+  | 'name'
+  | 'muscle_group'
+  | 'gif_url'
+  | 'image_url'
+  | 'video_url'
+  | 'secondary_muscles'
+  | 'body_part'
+  | 'equipment'
+  | 'cardio_modality'
+>
 
 function hexToRgba(hex: string, a: number): string {
   const c = hex.replace('#', '')
@@ -80,6 +92,9 @@ export const ExerciseSearchSheet = forwardRef<BottomSheet, Props>(
         muscle_group: ex.muscle_group ?? 'General',
         gif_url: ex.gif_url ?? undefined,
         video_url: ex.video_url ?? undefined,
+        // Solo-memoria (Fase C): viaja con el bloque para que el editor ofrezca el objetivo en la
+        // unidad propia de la modalidad (saltos/pisos/reps). No es columna: el save la ignora.
+        cardio_modality: ex.cardio_modality ?? null,
         sets: 3,
         reps: '8-10',
         rest_time: '60s',

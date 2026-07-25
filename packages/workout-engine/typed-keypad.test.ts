@@ -123,3 +123,27 @@ describe('formatTypedObjective', () => {
         expect(formatTypedObjective({}, 'cardio')).toBe('')
     })
 })
+
+// ── Objetivo rep-based de cardio (RF8 · Fase C): saltos / pisos / reps ──
+describe('formatTypedObjective — cardio rep-based', () => {
+    it('imprime el conteo prescrito con la unidad de la modalidad', () => {
+        expect(formatTypedObjective({ reps_value: 500, reps_unit: 'jumps' }, 'cardio')).toBe('500 saltos')
+        expect(formatTypedObjective({ reps_value: 40, reps_unit: 'floors' }, 'cardio')).toBe('40 pisos')
+        expect(formatTypedObjective({ reps_value: 30, reps_unit: 'reps' }, 'cardio')).toBe('30 reps')
+    })
+
+    it('convive con duración, zona y rondas en el orden del header', () => {
+        expect(
+            formatTypedObjective({ duration_sec: 480, reps_value: 500, reps_unit: 'jumps', hr_zone: 3, sets: 2 }, 'cardio'),
+        ).toBe('8 min · 500 saltos · Z3 · 2 rondas')
+    })
+
+    it('sin valor, con valor 0 o con unidades de otros tipos ⇒ no aporta nada', () => {
+        expect(formatTypedObjective({ reps_unit: 'jumps' }, 'cardio')).toBe('')
+        expect(formatTypedObjective({ reps_value: 0, reps_unit: 'jumps' }, 'cardio')).toBe('')
+        expect(formatTypedObjective({ reps_value: 10, reps_unit: 'passes' }, 'cardio')).toBe('')
+        expect(formatTypedObjective({ reps_value: 5, reps_unit: 'breaths' }, 'cardio')).toBe('')
+        // Y no toca a movilidad ni roller (sus reglas siguen intactas).
+        expect(formatTypedObjective({ reps_value: 500, reps_unit: 'jumps' }, 'roller')).toBe('')
+    })
+})

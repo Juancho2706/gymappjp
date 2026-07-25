@@ -17,12 +17,15 @@
  */
 
 import { effectiveExerciseType, type ExerciseType as WorkoutKind } from './workout-exercise-type'
+import { repsUnitForModality, type CardioRepsUnit } from './cardio-modality'
 
 export interface SummaryExercise {
     id: string
     name: string
     muscle_group: string
     exercise_type?: string | null
+    /** `exercises.cardio_modality` (Fase C): da la unidad del conteo de cardio (saltos/pisos/reps). */
+    cardio_modality?: string | null
 }
 
 export interface SummaryBlock {
@@ -69,6 +72,14 @@ export interface CardioItem {
     distanceM: number | null
     /** FC media registrada (bpm), o null. */
     avgHr: number | null
+    /**
+     * Conteo total registrado (`reps_done`) en modalidades rep-based (cuerda/HIIT/escaladora).
+     * La key SOLO aparece cuando el ejercicio tiene una modalidad rep-based y hubo algo registrado
+     * ⇒ los items de cardio de siempre quedan byte-idénticos (paridad con los consumidores actuales).
+     */
+    repsDone?: number | null
+    /** Unidad del conteo de arriba ('jumps' | 'floors' | 'reps'); ausente si no aplica. */
+    repsUnit?: CardioRepsUnit
 }
 
 export interface MobilityItem {
@@ -147,6 +158,11 @@ export function summarizeSessionByKind(
             const hrs = blockLogs
                 .map((l) => l.actual_avg_hr)
                 .filter((h): h is number => h != null && h > 0)
+            // Conteo rep-based (Fase C): solo si la modalidad del ejercicio lo captura y hubo dato.
+            // Sin modalidad rep-based el item NO gana las keys ⇒ cero impacto en los consumidores.
+            const repsUnit = repsUnitForModality(exercise?.cardio_modality)
+            const repsList = repsUnit != null ? blockLogs.map((l) => l.reps_done) : []
+            const repsDone = repsList.some((r) => r != null) ? sumNullable(repsList) : null
             cardio.push({
                 blockId: block.id,
                 name,
@@ -154,6 +170,7 @@ export function summarizeSessionByKind(
                 durationSec: durations.some((d) => d != null) ? sumNullable(durations) : null,
                 distanceM: distances.some((d) => d != null) ? sumNullable(distances) : null,
                 avgHr: hrs.length > 0 ? Math.round(sumNullable(hrs) / hrs.length) : null,
+                ...(repsUnit != null && repsDone != null ? { repsDone, repsUnit } : {}),
             })
             continue // cardio EXCLUIDO del mapa muscular
         }

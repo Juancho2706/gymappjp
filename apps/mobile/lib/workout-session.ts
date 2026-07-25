@@ -58,6 +58,13 @@ export interface SessionExercise {
   gif_url: string | null
   instructions: string[] | null
   exercise_type: string | null
+  /**
+   * `exercises.cardio_modality` (Fase C · specs/cardio-ejes-y-fixes): decide los EJES de captura de
+   * cardio (elíptica sin distancia, cuerda por saltos, escaladora por pisos, HIIT por reps). NULL /
+   * ausente ⇒ ejes genéricos (Min · Distancia · FC), byte-idéntico al comportamiento previo — los
+   * planes viejos y los ejercicios de cardio creados por coaches no cambian.
+   */
+  cardio_modality?: string | null
 }
 
 /**
@@ -548,7 +555,7 @@ export function useWorkoutSession(planId: string, repeatDate?: string | null): W
       .from('workout_plans')
       .select(
         `id, title, week_variant, program_id, day_of_week,
-         workout_blocks ( *, exercises ( id, name, muscle_group, video_url, video_start_time, video_end_time, gif_url, instructions, exercise_type ) )`,
+         workout_blocks ( *, exercises ( id, name, muscle_group, video_url, video_start_time, video_end_time, gif_url, instructions, exercise_type, cardio_modality ) )`,
       )
       .eq('id', planId)
       .maybeSingle()

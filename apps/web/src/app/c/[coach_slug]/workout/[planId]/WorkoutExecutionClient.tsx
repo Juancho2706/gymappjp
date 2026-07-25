@@ -30,6 +30,8 @@ import {
     executionAreaGroupsFor,
     isTimeableInterval,
     typedKeypadFields,
+    normalizeCardioRepsUnit,
+    cardioRepsLabel,
 } from '@eva/workout-engine'
 import { StepperExecution, type StepperStepView } from './StepperExecution'
 import { ExecHeaderV3, type ExecDotState } from './v3/ExecHeaderV3'
@@ -107,6 +109,11 @@ export interface ExerciseType {
     gif_url: string | null
     instructions: string[] | null
     exercise_type?: string | null
+    /**
+     * Modalidad de cardio del catálogo (Fase C · `cardio-modality.ts`): decide los ejes de captura
+     * de la ronda. null/desconocida ⇒ Min · Distancia · FC, byte-idéntico a lo previo.
+     */
+    cardio_modality?: string | null
 }
 
 export interface BlockType {
@@ -350,6 +357,12 @@ export function TypedTargetGrid({ block, kind, cardio }: { block: BlockType; kin
         }
         if ((block.duration_sec ?? 0) > 0) cards.push({ label: 'Duración', value: compactDuration(block.duration_sec as number) })
         if ((block.distance_value ?? 0) > 0) cards.push({ label: 'Distancia', value: compactDistance(block.distance_value as number, block.distance_unit) })
+        // Objetivo rep-based prescrito (Fase C · RF8): "500 saltos" / "40 pisos" / "30 reps".
+        // Las unidades que no son de cardio ('passes'/'breaths') no entran acá.
+        const cardioRepsUnit = normalizeCardioRepsUnit(block.reps_unit)
+        if (cardioRepsUnit != null && (block.reps_value ?? 0) > 0) {
+            cards.push({ label: cardioRepsLabel(cardioRepsUnit), value: `${block.reps_value}` })
+        }
         if (block.target_pace_sec_per_km != null) cards.push({ label: 'Pace objetivo', value: `${formatPace(block.target_pace_sec_per_km)} /km` })
         if (block.hr_zone != null) {
             const range = cardio?.enabled ? cardio.zones?.find((z) => z.zone === block.hr_zone) ?? null : null
@@ -459,16 +472,33 @@ export function TypedBlockTimerButton({ block, kind }: { block: BlockType; kind:
  * Encabezados de la tabla de registro por tipo (la de strength queda intacta).
  * `distanceUnit`: unidad de distancia PRESCRITA del bloque — con 'km' la columna de distancia se
  * rotula "Km" (mismo texto que declara el motor para la caja, G3). Ausente ⇒ "Metros" como siempre.
+ * `cardioModality` (Fase C): la MODALIDAD manda cuántas columnas hay — la elíptica trae 2 ejes
+ * (Min · FC) y las rep-based cambian la 2ª por Saltos/Reps/Pisos. Por eso las columnas se ITERAN
+ * desde el motor en vez de desestructurarse por posición (con 2 ejes, la 3ª sería `undefined`).
  */
-export function TypedLogHeader({ kind, distanceUnit }: { kind: WorkoutKind; distanceUnit?: string | null }) {
+export function TypedLogHeader({
+    kind,
+    distanceUnit,
+    cardioModality,
+}: {
+    kind: WorkoutKind
+    distanceUnit?: string | null
+    cardioModality?: string | null
+}) {
     if (kind === 'cardio') {
-        const [minField, distanceField, hrField] = typedKeypadFields('cardio', { distanceUnit })
+        const fields = typedKeypadFields('cardio', { distanceUnit, cardioModality })
+        // Mismas plantillas de grilla que la fila tipada (`LogSetForm`): literales completos para que
+        // Tailwind las vea en el código (no se pueden concatenar).
+        const gridCols =
+            fields.length <= 2
+                ? 'grid-cols-[auto_3.5rem_3rem_auto] md:grid-cols-[auto_1fr_1fr_auto]'
+                : 'grid-cols-[auto_3.5rem_3.5rem_3rem_auto] md:grid-cols-[auto_1fr_1fr_1fr_auto]'
         return (
-            <div className="grid grid-cols-[auto_3.5rem_3.5rem_3rem_auto] md:grid-cols-[auto_1fr_1fr_1fr_auto] gap-2 px-2 pb-2 text-[10px] font-bold text-on-dark-muted uppercase tracking-wider border-b border-white/10">
+            <div className={`grid ${gridCols} gap-2 px-2 pb-2 text-[10px] font-bold text-on-dark-muted uppercase tracking-wider border-b border-white/10`}>
                 <div className="w-4 text-center">Set</div>
-                <div className="text-center">{minField.label}</div>
-                <div className="text-center">{distanceField.label}</div>
-                <div className="text-center">{hrField.label}</div>
+                {fields.map((f) => (
+                    <div key={f.key} className="text-center">{f.label}</div>
+                ))}
                 <div className="w-8"></div>
             </div>
         )
@@ -964,6 +994,10 @@ function SupersetGroupCard({
                                             autoTimerEnabled={autoTimerEnabled}
                                             mode={m.effType}
                                             isActive={isNext}
+                                            // Miembro tipado de superserie (V2): mismos ejes que la pantalla
+                                            // dedicada — unidad prescrita (G3) + modalidad (Fase C).
+                                            distanceUnit={m.block.distance_unit ?? null}
+                                            cardioModality={m.exercise.cardio_modality ?? null}
                                             typedObjective={m.effType !== 'strength' ? formatTypedObjective(m.block, m.effType) : undefined}
                                             supersetRest={{
                                                 groupRestSeconds,

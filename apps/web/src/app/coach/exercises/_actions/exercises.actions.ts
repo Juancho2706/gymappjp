@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { CloneExerciseSchema } from '@eva/schemas'
+import { CARDIO_MODALITIES } from '@eva/workout-engine'
 import { z } from 'zod'
 import { getTierCapabilities, type SubscriptionTier } from '@/lib/constants'
 import { getCoachOrgContext } from '@/lib/coach-context'
@@ -18,6 +19,16 @@ const exerciseSchema = z.object({
     muscle_group: z.string().min(1, 'Selecciona un grupo muscular'),
     // Polimórfico (specs/movida-entrenamiento): default strength = comportamiento de siempre.
     exercise_type: z.enum(['strength', 'cardio', 'mobility', 'roller']).default('strength'),
+    /**
+     * Modalidad de cardio (Fase C · specs/cardio-ejes-y-fixes). Espejo EXACTO del CHECK
+     * `exercises_cardio_modality_check` (migración 20260725221804) y de `CARDIO_MODALITIES` del
+     * motor. Vacío/ausente ⇒ null = genérica (Min · Distancia · FC, comportamiento de siempre).
+     * En un ejercicio que NO es cardio se fuerza a null más abajo: la modalidad no significa nada ahí.
+     */
+    cardio_modality: z
+        .union([z.enum(CARDIO_MODALITIES as readonly string[] as [string, ...string[]]), z.literal(''), z.null()])
+        .optional()
+        .transform((v) => (v ? v : null)),
     equipment: z.string().optional(),
     difficulty: z.string().optional(),
     secondary_muscles: z.array(z.string()).optional(),
@@ -69,6 +80,7 @@ function parseExerciseFormData(formData: FormData) {
         name: formData.get('name') as string,
         muscle_group: formData.get('muscle_group') as string,
         exercise_type: (formData.get('exercise_type') as string) || 'strength',
+        cardio_modality: (formData.get('cardio_modality') as string) || '',
         equipment: (formData.get('equipment') as string) || undefined,
         difficulty: (formData.get('difficulty') as string) || undefined,
         secondary_muscles: rawSecondary
@@ -282,6 +294,8 @@ export async function createExerciseAction(
             name: parsed.data.name,
             muscle_group: parsed.data.muscle_group,
             exercise_type: parsed.data.exercise_type,
+            // Solo tiene sentido en cardio: en otro tipo se guarda NULL (evita filas inconsistentes).
+            cardio_modality: parsed.data.exercise_type === 'cardio' ? parsed.data.cardio_modality : null,
             equipment: parsed.data.equipment ?? null,
             difficulty: parsed.data.difficulty ?? null,
             secondary_muscles: parsed.data.secondary_muscles ?? [],
@@ -360,6 +374,8 @@ export async function updateExerciseAction(
             name: parsed.data.name,
             muscle_group: parsed.data.muscle_group,
             exercise_type: parsed.data.exercise_type,
+            // Igual que en el create: fuera de cardio la modalidad se limpia (NULL).
+            cardio_modality: parsed.data.exercise_type === 'cardio' ? parsed.data.cardio_modality : null,
             equipment: parsed.data.equipment ?? null,
             difficulty: parsed.data.difficulty ?? null,
             secondary_muscles: parsed.data.secondary_muscles ?? [],

@@ -87,3 +87,36 @@ describe('formatLoggedSetLine', () => {
         expect(formatLoggedSetLine('strength', { actual_duration_sec: 750 })).toBeNull()
     })
 })
+
+// ── Conteo de cardio con la etiqueta de la MODALIDAD (Fase C) ──
+describe('formatLoggedSetLine — cardio rep-based', () => {
+    it('imprime saltos / pisos / reps según la modalidad del ejercicio', () => {
+        expect(
+            formatLoggedSetLine('cardio', { actual_duration_sec: 480, reps_done: 420, actual_avg_hr: 152 }, {
+                cardioModality: 'jump_rope',
+            }),
+        ).toBe('8 min · 420 saltos · FC 152')
+        expect(
+            formatLoggedSetLine('cardio', { actual_duration_sec: 720, reps_done: 45 }, { cardioModality: 'stairs' }),
+        ).toBe('12 min · 45 pisos')
+        expect(
+            formatLoggedSetLine('cardio', { actual_duration_sec: 600, reps_done: 30 }, { cardioModality: 'hiit_reps' }),
+        ).toBe('10 min · 30 reps')
+    })
+
+    it('sin modalidad (o desconocida) un conteo en cardio se imprime genérico', () => {
+        expect(formatLoggedSetLine('cardio', { actual_duration_sec: 600, reps_done: 30 })).toBe('10 min · 30 reps')
+        expect(formatLoggedSetLine('cardio', { reps_done: 1 }, { cardioModality: 'jump_rope' })).toBe('1 salto')
+        expect(formatLoggedSetLine('cardio', { reps_done: 12 }, { cardioModality: 'swim' })).toBe('12 reps')
+    })
+
+    it('sin conteo la línea no cambia; el 3er argumento es opcional y no altera nada más', () => {
+        const log = { actual_duration_sec: 750, actual_distance_m: 3200, actual_avg_hr: 148 }
+        expect(formatLoggedSetLine('cardio', log, { cardioModality: 'run' })).toBe('12,5 min · 3.200 m · FC 148')
+        expect(formatLoggedSetLine('cardio', log, { cardioModality: 'run' })).toBe(formatLoggedSetLine('cardio', log))
+        expect(formatLoggedSetLine('cardio', {}, { cardioModality: 'stairs' })).toBe(EMPTY_LOGGED_SET_LABEL)
+        // Movilidad y roller ignoran la modalidad (roller sigue con "pasadas").
+        expect(formatLoggedSetLine('roller', { reps_done: 3 }, { cardioModality: 'jump_rope' })).toBe('3 pasadas')
+        expect(formatLoggedSetLine('mobility', { actual_hold_sec: 45 }, { cardioModality: 'stairs' })).toBe('45 s')
+    })
+})
