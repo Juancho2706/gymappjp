@@ -1,7 +1,7 @@
 ---
 status: active
 owner: product-engineering
-last_verified: "2026-07-22 @ 6338f4a4"
+last_verified: "2026-07-25 @ 1da8d3bb"
 canonical: true
 ---
 
@@ -13,10 +13,11 @@ Esta es la única vista global de qué está en producción, qué está en integ
 
 | Referencia | Estado al revisar |
 |---|---|
-| Rama de trabajo | `rnmobiledenuevo` |
-| Corte de `master` integrado | `origin/master` en `029c8791` |
-| Base RN anterior a esta sincronización | `7a0ec0cb` |
-| Merge de sincronización | `bc9ac09f` (`7a0ec0cb` + `029c8791`) |
+| Rama de trabajo | `rnmobiledenuevo`, única rama viva junto a `master` |
+| Corte de `master` integrado | `origin/master` en `6a19d421` |
+| Merge de sincronización | `e8abd82c` (sin cambios de contenido: `#164` ya estaba por `82ebe932`) |
+| Integración a producción | PR #146 fuera de borrador, `MERGEABLE`/`CLEAN`; el merge a `master` es decisión pendiente |
+| Gate `quality` | Verde en `30163399603` tras `22235f70`; estuvo rojo desde el 2026-07-22 por un import solo-mobile en un test de la raíz |
 | Ajuste de submit móvil | `f5301858` añade `submit.previewv2` |
 | Relación | `rnmobiledenuevo` contiene el corte productivo y conserva la paridad móvil aún no promovida |
 
