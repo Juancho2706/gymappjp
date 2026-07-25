@@ -14,7 +14,13 @@
  */
 import type { OptimisticLogPayload } from './session-logs.optimistic'
 import type { WorkoutLogSideMetadata } from './session-logs.reconcile'
-import type { TypedKeypadMode } from './typed-keypad'
+import {
+  distanceCaptureToMeters,
+  typedKeypadContext,
+  METERS_PER_KM,
+  type TypedKeypadContext,
+  type TypedKeypadMode,
+} from './typed-keypad'
 
 /** Parsea un string es-CL (coma decimal) a número, o null si vacío/NaN. */
 export function num(v: string | undefined): number | null {
@@ -42,18 +48,48 @@ export interface TypedLogValues {
 }
 
 /**
+ * Rango del pace aceptado por `WorkoutLogSetSchema.actual_pace_sec_per_km` (packages/schemas).
+ * Fuera de rango ⇒ el pace NO viaja (el resto de la serie se guarda igual).
+ */
+export const PACE_MIN_SEC_PER_KM = 1
+export const PACE_MAX_SEC_PER_KM = 3600
+
+/**
+ * Pace real DERIVADO de la ronda (RF5): con tiempo y distancia registrados no hace falta pedirle
+ * nada más al alumno. Misma fórmula que `timeToPaceSecPerKm` de `@eva/cardio`
+ * (`Math.round(timeSec / distanceKm)`), reimplementada acá porque el motor no toma dependencias.
+ * Devuelve null si falta un eje, si alguno es 0, o si el resultado cae fuera del rango del schema.
+ */
+export function derivedPaceSecPerKm(
+  durationSec: number | null | undefined,
+  distanceM: number | null | undefined,
+): number | null {
+  if (durationSec == null || distanceM == null) return null
+  if (!(durationSec > 0) || !(distanceM > 0)) return null
+  const pace = Math.round(durationSec / (distanceM / METERS_PER_KM))
+  if (!Number.isFinite(pace) || pace < PACE_MIN_SEC_PER_KM || pace > PACE_MAX_SEC_PER_KM) return null
+  return pace
+}
+
+/**
  * Mapea los valores tipados (por modo) a las columnas del log (`actual_*` / `reps_done`).
+ *
+ * 3er argumento: `side_mode` suelto (forma histórica) o el `TypedKeypadContext` completo.
  *
  * `sideMode` (E0.5): en movilidad `per_side` el hold se tipea por lado (`hold_left_sec` /
  * `hold_right_sec`) → arma `metadata {left_sec, right_sec}` y deja `actual_hold_sec` = SUMA L+R
  * (compatibilidad con todo consumidor que ya lee el hold total). SIN `sideMode` (o cualquier otro
  * valor) el resultado es byte-idéntico al previo: un solo `actual_hold_sec` y sin key `metadata`.
+ *
+ * `distanceUnit` (G3): con la prescripción en km la caja captura KM → acá se guarda ×1000 en
+ * `actual_distance_m` (metros, unidad de la columna). Sin contexto la distancia se guarda tal cual.
  */
 export function typedLogValues(
   mode: TypedKeypadMode,
   values: Record<string, string>,
-  sideMode?: string | null,
+  ctx?: string | null | TypedKeypadContext,
 ): TypedLogValues {
+  const { sideMode, distanceUnit } = typedKeypadContext(ctx)
   let actualDurationSec: number | null = null
   let actualDistanceM: number | null = null
   let actualHoldSec: number | null = null
@@ -64,7 +100,8 @@ export function typedLogValues(
   if (mode === 'cardio') {
     const min = num(values.cardio_min)
     actualDurationSec = min != null && min > 0 ? Math.round(min * 60) : null
-    actualDistanceM = num(values.actual_distance_m)
+    const distance = num(values.actual_distance_m)
+    actualDistanceM = distance == null ? null : distanceCaptureToMeters(distance, distanceUnit)
     actualAvgHr = int(values.actual_avg_hr)
   } else if (mode === 'mobility') {
     if (sideMode === 'per_side') {
@@ -91,9 +128,12 @@ export function buildTypedPayload(
   values: Record<string, string>,
   blockId: string,
   setNumber: number,
-  sideMode?: string | null,
+  ctx?: string | null | TypedKeypadContext,
 ): OptimisticLogPayload {
-  const v = typedLogValues(mode, values, sideMode)
+  const v = typedLogValues(mode, values, ctx)
+  // Pace REAL derivado (RF5): solo cuando la ronda quedó con tiempo Y distancia y el resultado cae en
+  // el rango del schema. Sin ambos ejes el payload NO gana la key (paridad byte-idéntica con lo previo).
+  const pace = derivedPaceSecPerKm(v.actualDurationSec, v.actualDistanceM)
   return {
     blockId,
     setNumber,
@@ -110,6 +150,7 @@ export function buildTypedPayload(
     actualDistanceM: v.actualDistanceM,
     actualHoldSec: v.actualHoldSec,
     actualAvgHr: v.actualAvgHr,
+    ...(pace != null ? { actualPaceSecPerKm: pace } : {}),
     // Solo el flujo per_side define `v.metadata` ⇒ solo entonces el payload gana la key `metadata`
     // (los 30 asserts de paridad, sin sideMode, siguen viendo el objeto SIN `metadata`).
     ...(v.metadata !== undefined ? { metadata: v.metadata } : {}),

@@ -520,6 +520,9 @@ function CaptureRows({
                         targetReps={block.reps}
                         autoTimerEnabled={autoTimerEnabled}
                         mode="cardio"
+                        // Unidad de captura = unidad PRESCRITA (G3): con "5 km" la caja se llama "Km" y
+                        // el motor guarda 5000 en `actual_distance_m`. Sin prescripción ⇒ "Metros".
+                        distanceUnit={block.distance_unit ?? null}
                         typedObjective={formatTypedObjective(block, 'cardio')}
                         isActive={isActive}
                         reopenNonce={

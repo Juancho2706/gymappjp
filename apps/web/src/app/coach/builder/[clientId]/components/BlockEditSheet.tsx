@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Image from 'next/image'
-import { Minus, Plus } from 'lucide-react'
+import { Lock, Minus, Plus } from 'lucide-react'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { InfoTooltip } from '@/components/ui/info-tooltip'
 import { Input } from '@/components/ui/input'
@@ -605,16 +605,25 @@ export function BlockEditSheet({ block, clientId, cardio, isMobile = false, onCl
                                 const meta = EXERCISE_TYPE_META[type]
                                 const Icon = meta.icon
                                 const active = effectiveType === type
+                                // Gate del módulo Cardio (paridad con RN `BlockEditorSheet`): sin el módulo
+                                // NO se puede ELEGIR el tipo Cardio. Un bloque que YA es cardio se sigue
+                                // mostrando y editando (nunca se bloquea el trabajo ya prescrito). Misma
+                                // fuente de entitlement que las plantillas y los rangos de bpm de esta hoja.
+                                const locked = type === 'cardio' && !cardio?.enabled && !active
                                 return (
                                     <button
                                         key={type}
                                         type="button"
+                                        disabled={locked}
+                                        title={locked ? 'Cardio requiere el módulo Cardio (plan del coach).' : undefined}
                                         onClick={() => setOverride(type)}
                                         aria-pressed={active}
                                         className={`flex min-h-[44px] flex-col items-center justify-center gap-1 rounded-control border px-1 py-2 text-[11px] font-semibold transition-colors md:min-h-[40px] ${
                                             active
                                                 ? ''
-                                                : 'border-border text-muted-foreground hover:bg-muted dark:border-[var(--border-default)]'
+                                                : locked
+                                                    ? 'border-border text-muted-foreground opacity-40'
+                                                    : 'border-border text-muted-foreground hover:bg-muted dark:border-[var(--border-default)]'
                                         }`}
                                         style={active ? {
                                             backgroundColor: `color-mix(in srgb, ${meta.color} 18%, transparent)`,
@@ -622,12 +631,21 @@ export function BlockEditSheet({ block, clientId, cardio, isMobile = false, onCl
                                             color: meta.color,
                                         } : undefined}
                                     >
-                                        <Icon className="h-4 w-4" style={active ? { color: meta.color } : undefined} />
+                                        {locked ? (
+                                            <Lock className="h-4 w-4" />
+                                        ) : (
+                                            <Icon className="h-4 w-4" style={active ? { color: meta.color } : undefined} />
+                                        )}
                                         <span>{meta.label}</span>
                                     </button>
                                 )
                             })}
                         </div>
+                        {!cardio?.enabled && (
+                            <p className="text-[10px] text-muted-foreground/60">
+                                Cardio requiere el módulo Cardio (plan del coach).
+                            </p>
+                        )}
                         {block.exercise_type_override != null && (
                             <p className="text-[9px] text-muted-foreground/60 uppercase tracking-widest">
                                 Tipo modificado solo en este bloque

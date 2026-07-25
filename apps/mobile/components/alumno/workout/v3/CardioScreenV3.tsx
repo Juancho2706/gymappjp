@@ -320,6 +320,9 @@ export function CardioScreenV3({
             blockId={block.id}
             setNumber={firstUnlogged}
             typedMode="cardio"
+            // Unidad de captura = unidad PRESCRITA (G3): con "5 km" la caja se llama "Km" y el motor
+            // guarda 5000 en `actual_distance_m`. Sin prescripción en km ⇒ "Metros" como siempre.
+            distanceUnit={block.distance_unit ?? null}
             suggestedWeight={null}
             seedValues={captureSeed}
             header={{ exerciseName: exercise.name, objectiveLine }}

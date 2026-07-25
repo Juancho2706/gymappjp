@@ -19,6 +19,14 @@ import { SectionTitle } from './_components/SectionTitle'
 import type { MuscleVolumeRow } from './profileDataHelpers'
 import { getClientWorkoutForDate, getClientWorkoutActivityDates } from './_actions/client-detail.actions'
 import {
+    effectiveExerciseType,
+    typedBlockSummary,
+    formatLoggedSetLine,
+    EMPTY_LOGGED_SET_LABEL,
+    EXERCISE_TYPE_LABEL,
+    type ExerciseType,
+} from '@eva/workout-engine'
+import {
     findWeeklyWeightPRs,
     buildDailyTonnageSeries,
     detectVolumeImbalances,
@@ -616,7 +624,10 @@ function targetWeightForSet(s: WorkoutLog): number | null {
 }
 
 function WorkoutDayReadOnly({ logs }: { logs: WorkoutLog[] }) {
-    const byExercise = new Map<string, { name: string; muscle: string; sets: WorkoutLog[] }>()
+    const byExercise = new Map<
+        string,
+        { name: string; muscle: string; kind: ExerciseType; sets: WorkoutLog[] }
+    >()
 
     for (const log of logs) {
         const block = (log as any).workout_blocks
@@ -626,6 +637,9 @@ function WorkoutDayReadOnly({ logs }: { logs: WorkoutLog[] }) {
             byExercise.set(key, {
                 name: exercise?.name ?? 'Ejercicio',
                 muscle: exercise?.muscle_group ?? '',
+                // Tipo efectivo: override del bloque > tipo del catálogo > 'strength' (un plan
+                // viejo sin ninguno de los dos sigue pintando la fila de fuerza de siempre).
+                kind: effectiveExerciseType(block, exercise),
                 sets: [],
             })
         }
@@ -635,6 +649,7 @@ function WorkoutDayReadOnly({ logs }: { logs: WorkoutLog[] }) {
     const planTitle = (logs[0] as any)?.workout_blocks?.workout_plans?.title
     const exercises = [...byExercise.values()]
     const totalSets = logs.length
+    const hasStrength = exercises.some((e) => e.kind === 'strength')
 
     return (
         <Card padding="md" className="gap-0">
@@ -646,23 +661,28 @@ function WorkoutDayReadOnly({ logs }: { logs: WorkoutLog[] }) {
             </div>
 
             <div className="space-y-3">
-                {exercises.map(({ name, muscle, sets }) => {
+                {exercises.map(({ name, muscle, kind, sets }) => {
                     const sortedSets = [...sets].sort((a, b) => (a.set_number ?? 0) - (b.set_number ?? 0))
                     // Prescripción/progresión: propiedad del BLOQUE → leer una sola vez por ejercicio.
                     const block = (sortedSets[0] as any)?.workout_blocks
                     const prog = progressionLabel(block?.progression_mode, block?.progression_value)
+                    const isTyped = kind !== 'strength'
                     const metaWeight = block?.target_weight_kg as number | null | undefined
                     const metaReps = block?.reps as string | null | undefined
                     const metaSets = block?.sets as number | null | undefined
                     const metaRir = block?.rir as string | null | undefined
                     const metaTempo = block?.tempo as string | null | undefined
-                    const metaParts = [
-                        metaWeight != null ? `${metaWeight}kg` : null,
-                        metaReps ? `×${metaReps}` : null,
-                        metaSets != null ? `· ${metaSets} series` : null,
-                        metaRir ? `· RIR ${metaRir}` : null,
-                        metaTempo ? `· tempo ${metaTempo}` : null,
-                    ].filter(Boolean)
+                    // En bloques tipados el `reps` persistido es un resumen legacy ("20min Z2") →
+                    // imprimirlo como "×20min Z2" se lee mal; el motor arma la prescripción real.
+                    const metaParts = isTyped
+                        ? [block ? typedBlockSummary(block, kind) : null].filter(Boolean)
+                        : [
+                              metaWeight != null ? `${metaWeight}kg` : null,
+                              metaReps ? `×${metaReps}` : null,
+                              metaSets != null ? `· ${metaSets} series` : null,
+                              metaRir ? `· RIR ${metaRir}` : null,
+                              metaTempo ? `· tempo ${metaTempo}` : null,
+                          ].filter(Boolean)
                     // Sustitución de máquina ocupada (Fase L · C, AC-C6): el alumno hizo el sustituto
                     // en vez del prescrito. Snapshot del nombre → no requiere JOIN. Todas las series
                     // del bloque comparten la sustitución; tomo el primer nombre presente.
@@ -672,6 +692,11 @@ function WorkoutDayReadOnly({ logs }: { logs: WorkoutLog[] }) {
                         <div key={name}>
                             <div className="mb-1 flex items-center gap-2">
                                 <span className="text-[13px] font-bold text-strong">{name}</span>
+                                {isTyped && (
+                                    <span className="rounded-pill border border-subtle bg-surface-sunken px-1.5 py-[1px] text-[9.5px] font-bold uppercase tracking-wide text-muted">
+                                        {EXERCISE_TYPE_LABEL[kind]}
+                                    </span>
+                                )}
                                 {muscle && <span className="text-[11px] text-muted">{muscle}</span>}
                             </div>
                             {substitutedName && (
@@ -702,6 +727,24 @@ function WorkoutDayReadOnly({ logs }: { logs: WorkoutLog[] }) {
                             )}
                             <div className="flex flex-wrap gap-1.5">
                                 {sortedSets.map((s, si) => {
+                                    // Ronda tipada (cardio/movilidad/roller): los ejes viven en
+                                    // `actual_*`/`metadata`, no en peso × reps (G1).
+                                    const typedLine = formatLoggedSetLine(kind, s)
+                                    if (typedLine != null) {
+                                        const isEmptyRound = typedLine === EMPTY_LOGGED_SET_LABEL
+                                        return (
+                                            <span
+                                                key={si}
+                                                className={cn(
+                                                    'rounded-[var(--radius-xs)] border border-subtle bg-surface-sunken px-1.5 py-[3px] text-[11.5px]',
+                                                    isEmptyRound ? 'text-muted' : 'text-strong'
+                                                )}
+                                                style={{ fontFamily: 'var(--font-mono)' }}
+                                            >
+                                                {s.set_number ?? si + 1}: {typedLine}
+                                            </span>
+                                        )
+                                    }
                                     const target = targetWeightForSet(s)
                                     const done = s.weight_kg
                                     const cmp =
@@ -761,18 +804,21 @@ function WorkoutDayReadOnly({ logs }: { logs: WorkoutLog[] }) {
                 })}
             </div>
 
-            {/* Explicabilidad inline: leyenda de la jerga */}
-            <p className="mt-2.5 border-t border-subtle pt-2 text-[10px] leading-relaxed text-muted">
-                <span className="text-strong">Meta</span> = prescrito · color del peso: los que{' '}
-                <span className="text-[var(--success-600)]">superan</span> /{' '}
-                <span className="text-[var(--warning-600)]">no alcanzan</span> la meta.{' '}
-                <span className="text-strong">RPE</span>
-                <MetricInfo term="rpe" className="ml-0.5 align-middle" iconClassName="h-3 w-3" /> = esfuerzo
-                percibido 6-10 (10 = al fallo).{' '}
-                <span className="text-strong">RIR</span>
-                <MetricInfo term="rir" className="ml-0.5 align-middle" iconClassName="h-3 w-3" /> = reps en
-                reserva (0 = al fallo).
-            </p>
+            {/* Explicabilidad inline: leyenda de la jerga. Solo aplica a filas de FUERZA — una
+                sesión 100% cardio/movilidad no tiene peso ni RPE/RIR que explicar. */}
+            {hasStrength && (
+                <p className="mt-2.5 border-t border-subtle pt-2 text-[10px] leading-relaxed text-muted">
+                    <span className="text-strong">Meta</span> = prescrito · color del peso: los que{' '}
+                    <span className="text-[var(--success-600)]">superan</span> /{' '}
+                    <span className="text-[var(--warning-600)]">no alcanzan</span> la meta.{' '}
+                    <span className="text-strong">RPE</span>
+                    <MetricInfo term="rpe" className="ml-0.5 align-middle" iconClassName="h-3 w-3" /> =
+                    esfuerzo percibido 6-10 (10 = al fallo).{' '}
+                    <span className="text-strong">RIR</span>
+                    <MetricInfo term="rir" className="ml-0.5 align-middle" iconClassName="h-3 w-3" /> = reps
+                    en reserva (0 = al fallo).
+                </p>
+            )}
         </Card>
     )
 }

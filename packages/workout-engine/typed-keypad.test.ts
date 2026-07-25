@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest'
-import { typedKeypadFields, formatTypedObjective } from './typed-keypad'
+import {
+    typedKeypadFields,
+    formatTypedObjective,
+    distanceCaptureToMeters,
+    metersToDistanceCapture,
+} from './typed-keypad'
 
 describe('typedKeypadFields', () => {
     it('cardio → min (decimal), metros (decimal), FC (entero)', () => {
@@ -37,6 +42,53 @@ describe('typedKeypadFields', () => {
         // per_side NO afecta cardio ni roller
         expect(typedKeypadFields('cardio', 'per_side').map((x) => x.key)).toEqual(['cardio_min', 'actual_distance_m', 'actual_avg_hr'])
         expect(typedKeypadFields('roller', 'per_side').map((x) => x.key)).toEqual(['actual_duration_sec', 'reps_done'])
+    })
+})
+
+// ── Unidad de captura = unidad PRESCRITA (G3 / RF4) ──
+describe('typedKeypadFields — distancia en la unidad prescrita', () => {
+    it('cardio con distance_unit km → caja "Km" decimal con factor a metros', () => {
+        const f = typedKeypadFields('cardio', { distanceUnit: 'km' })
+        expect(f.map((x) => x.key)).toEqual(['cardio_min', 'actual_distance_m', 'actual_avg_hr'])
+        expect(f[1]).toEqual({
+            key: 'actual_distance_m',
+            label: 'Km',
+            unit: 'km',
+            allowDecimal: true,
+            toColumnFactor: 1000,
+        })
+    })
+
+    it('fallback: sin unidad, con "m", o con el sideMode suelto → "Metros" sin factor', () => {
+        const metros = { key: 'actual_distance_m', label: 'Metros', unit: 'm', allowDecimal: true }
+        expect(typedKeypadFields('cardio')[1]).toEqual(metros)
+        expect(typedKeypadFields('cardio', { distanceUnit: 'm' })[1]).toEqual(metros)
+        expect(typedKeypadFields('cardio', { distanceUnit: null })[1]).toEqual(metros)
+        expect(typedKeypadFields('cardio', 'per_side')[1]).toEqual(metros)
+        expect(typedKeypadFields('cardio')[1].toColumnFactor).toBeUndefined()
+    })
+
+    it('la unidad de distancia no toca movilidad ni roller', () => {
+        expect(typedKeypadFields('mobility', { distanceUnit: 'km' })).toEqual(typedKeypadFields('mobility'))
+        expect(typedKeypadFields('roller', { distanceUnit: 'km' })).toEqual(typedKeypadFields('roller'))
+        expect(typedKeypadFields('mobility', { sideMode: 'per_side', distanceUnit: 'km' }).map((x) => x.key)).toEqual([
+            'hold_left_sec',
+            'hold_right_sec',
+        ])
+    })
+
+    it('conversión ida y vuelta km ↔ metros (lo que el alumno escribe es lo que relee)', () => {
+        expect(distanceCaptureToMeters(5, 'km')).toBe(5000)
+        expect(distanceCaptureToMeters(5.25, 'km')).toBe(5250)
+        expect(metersToDistanceCapture(5000, 'km')).toBe(5)
+        expect(metersToDistanceCapture(5250, 'km')).toBe(5.25)
+        // Redondeo a 2 decimales en la relectura (no arrastra ruido de punto flotante).
+        expect(metersToDistanceCapture(5253, 'km')).toBe(5.25)
+        // Sin km: valores intactos en ambas direcciones.
+        expect(distanceCaptureToMeters(400, 'm')).toBe(400)
+        expect(distanceCaptureToMeters(400)).toBe(400)
+        expect(metersToDistanceCapture(400, 'm')).toBe(400)
+        expect(metersToDistanceCapture(null, 'km')).toBeNull()
     })
 })
 

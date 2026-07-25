@@ -636,6 +636,7 @@ export function ActiveSetRow({
   setNumber,
   typedMode,
   sideMode = null,
+  distanceUnit = null,
   suggestedWeight,
   seedValues,
   autofill,
@@ -665,6 +666,14 @@ export function ActiveSetRow({
    * previo (un solo campo). El engine ya soporta ambos ejes; acá solo se CONSUME.
    */
   sideMode?: string | null
+  /**
+   * Unidad de distancia PRESCRITA del bloque (`workout_blocks.distance_unit`, 'm' | 'km'). Con 'km' la
+   * caja de cardio se rotula "Km" y `buildTypedPayload` guarda ×1000 en `actual_distance_m` (G3: el
+   * coach prescribe "5 km" y el alumno escribía 5 → 5 metros). Ausente/'m' ⇒ "Metros", byte-idéntico
+   * al comportamiento previo. Las etiquetas y el factor los declara el MOTOR (`typedKeypadFields`),
+   * la misma fuente que consume la web ⇒ paridad sin duplicar reglas.
+   */
+  distanceUnit?: string | null
   /** Peso sugerido (sobrecarga) — pre-llena la caja KG en strength. */
   suggestedWeight: number | null
   /**
@@ -744,7 +753,7 @@ export function ActiveSetRow({
 }) {
   const fields: RowField[] = useMemo(() => {
     if (typedMode) {
-      return typedKeypadFields(typedMode, sideMode).map((f) => ({
+      return typedKeypadFields(typedMode, { sideMode, distanceUnit }).map((f) => ({
         key: f.key,
         label: f.label,
         unit: f.unit,
@@ -755,7 +764,7 @@ export function ActiveSetRow({
       { key: 'weight', label: 'Kg', unit: 'kg', mode: 'weight' },
       { key: 'reps', label: 'Reps', unit: 'reps', mode: 'reps' },
     ]
-  }, [typedMode, sideMode])
+  }, [typedMode, sideMode, distanceUnit])
 
   const motion = useEvaMotion()
 
@@ -806,7 +815,7 @@ export function ActiveSetRow({
 
   const commit = () => {
     const payload = typedMode
-      ? buildTypedPayload(typedMode, valuesRef.current, blockId, setNumber, sideMode)
+      ? buildTypedPayload(typedMode, valuesRef.current, blockId, setNumber, { sideMode, distanceUnit })
       : buildStrengthPayload(valuesRef.current, blockId, setNumber)
     onCommit(payload)
   }

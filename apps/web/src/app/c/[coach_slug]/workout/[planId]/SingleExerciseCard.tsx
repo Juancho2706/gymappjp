@@ -422,7 +422,7 @@ export function SingleExerciseCard({
                 </div>
             ) : (
                 <div className="rounded-card border border-[var(--border-inverse)] bg-white/[0.02] p-2">
-                    <TypedLogHeader kind={effType} />
+                    <TypedLogHeader kind={effType} distanceUnit={block.distance_unit ?? null} />
                     <div className="space-y-1 pt-2">
                         {Array.from({ length: block.sets }).map((_, i) => {
                             const setNumber = i + 1
@@ -439,6 +439,8 @@ export function SingleExerciseCard({
                                     autoTimerEnabled={autoTimerEnabled}
                                     mode={effType}
                                     isActive={setNumber === firstUnlogged}
+                                    // Misma unidad de captura que el encabezado de arriba (G3).
+                                    distanceUnit={block.distance_unit ?? null}
                                     typedObjective={formatTypedObjective(block, effType)}
                                     onLogged={handleLogged}
                                     onResult={handleResult}

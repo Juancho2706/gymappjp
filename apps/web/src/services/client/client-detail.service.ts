@@ -893,14 +893,20 @@ export async function getClientWorkoutForDate(clientId: string, date: string) {
         .from('workout_logs')
         // P1-3: sin !inner → un set logueado cuyo bloque fue borrado (block_id NULL) sigue
         // apareciendo en el detalle del día (el consumidor ya es null-safe: cae a "Ejercicio").
+        // Ejes TIPADOS (cardio/movilidad/roller): sin `actual_*` + `metadata` el coach veía una
+        // serie vacía donde el alumno registró 45 min y 6.200 m (G1). `exercise_type` del catálogo
+        // y `exercise_type_override` del bloque son lo que necesita `effectiveExerciseType`.
         .select(`
             set_number, weight_kg, reps_done, rpe, rir, note, logged_at,
             target_weight_at_log, target_reps_at_log,
+            actual_duration_sec, actual_distance_m, actual_avg_hr, actual_hold_sec, metadata,
             substituted_exercise_id, substituted_exercise_name, substitution_reason,
             workout_blocks (
                 section, order_index, target_weight_kg, reps, sets, rir,
                 progression_mode, progression_type, progression_value, tempo,
-                exercises (name, muscle_group),
+                exercise_type_override, duration_sec, distance_value, distance_unit,
+                hr_zone, interval_config, reps_value, reps_unit, side_mode,
+                exercises (name, muscle_group, exercise_type),
                 workout_plans (title, day_of_week)
             )
         `)

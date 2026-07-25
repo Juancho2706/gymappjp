@@ -25,7 +25,15 @@ import { DualWheelPicker } from './v3/DualWheelPicker'
 import { PrCelebration } from './v3/PrCelebration'
 import { classifyThresholdPr } from './v3/pr-adapter'
 import { useCelebrations } from './v3/use-celebrations'
-import { typedKeypadFields, typedLogValues, type TypedKeypadMode } from '@eva/workout-engine'
+import {
+    typedKeypadFields,
+    typedLogValues,
+    metersToDistanceCapture,
+    distanceCaptureToMeters,
+    capturesDistanceInKm,
+    derivedPaceSecPerKm,
+    type TypedKeypadMode,
+} from '@eva/workout-engine'
 import type { OptimisticLogPayload } from '@eva/workout-engine'
 import { cn } from '@/lib/utils'
 import { humanizeStudentWriteError } from '@/lib/student-access'
@@ -185,6 +193,14 @@ interface Props {
      * ausente) ⇒ un solo campo `actual_hold_sec`, byte-idéntico al comportamiento previo.
      */
     sideMode?: string | null
+    /**
+     * Unidad de distancia PRESCRITA del bloque (`workout_blocks.distance_unit`, 'm' | 'km'). Con 'km'
+     * la caja de distancia de cardio se llama "Km" y el valor se guarda ×1000 en `actual_distance_m`
+     * (G3: el coach prescribe "5 km" y el alumno escribía 5 → 5 metros). Ausente/'m' ⇒ "Metros",
+     * byte-idéntico al comportamiento previo. Las etiquetas y el factor salen del motor
+     * (`typedKeypadFields`), así que web y RN quedan a paridad sin duplicar reglas.
+     */
+    distanceUnit?: string | null
     /**
      * Prefill tipado (E3.3 · roller): al cambiar `nonce`, escribe `reps_done` (pasadas) en el input
      * uncontrolled de la fila tipada activa — lo alimenta el contador gigante de `RollerStepV3`. NO
@@ -1403,6 +1419,7 @@ function TypedLogSetRow({
     typedObjective,
     supersetRest,
     sideMode,
+    distanceUnit,
     typedPrefill,
     suggestedAvgHr,
     holdPrefill,
@@ -1412,6 +1429,12 @@ function TypedLogSetRow({
 }: Props & { mode: Exclude<LogSetMode, 'strength'> }) {
     // Movilidad POR LADO (E3.2): sólo cuenta en modo movilidad. Cualquier otro modo lo ignora.
     const perSide = mode === 'mobility' && sideMode === 'per_side'
+    // Contexto tipado que consume el MOTOR (campos del teclado + mapeo a columnas): un solo objeto
+    // para que el teclado, las etiquetas visibles y el payload no puedan divergir.
+    const typedCtx = { sideMode, distanceUnit }
+    const typedFields = typedKeypadFields(mode as TypedKeypadMode, typedCtx)
+    // Cardio con distancia prescrita en km: la caja captura KM (label del motor) y guarda metros.
+    const kmCapture = mode === 'cardio' && capturesDistanceInKm(distanceUnit)
     // Semilla de "repetir el día": pre-llena los ejes tipados SÓLO si la fila no tiene serie registrada
     // (una fila con `existingLog` manda íntegra: un eje que quedó vacío ese día debe seguir vacío). Igual
     // que en fuerza, sólo alimenta `defaultValue` — no marca nada como registrado ni encola.
@@ -1505,7 +1528,7 @@ function TypedLogSetRow({
     const openKeypadFor = (key: string) => {
         if (!useKeypad || !keypad) return
         // Movilidad per_side (E3.2): dos campos hold (izq/der); el resto de modos, campos de siempre.
-        const fieldDefs = typedKeypadFields(mode as TypedKeypadMode, sideMode)
+        const fieldDefs = typedFields
         // Normaliza a coma es-CL los decimales que hayan montado como number (punto) antes del gate coarse.
         for (const f of fieldDefs) {
             if (!f.allowDecimal) continue
@@ -1545,6 +1568,22 @@ function TypedLogSetRow({
             const min = parseNum(formData.get('cardio_min'))
             formData.delete('cardio_min')
             if (min != null && min > 0) formData.set('actual_duration_sec', String(Math.round(min * 60)))
+            // Unidad de captura = unidad PRESCRITA (G3): con "5 km" el alumno escribe 5 y la columna
+            // (metros) recibe 5000. Con prescripción en metros (o sin ella) el valor pasa intacto.
+            if (kmCapture) {
+                const typedDistance = parseNum(formData.get('actual_distance_m'))
+                if (typedDistance != null) {
+                    formData.set('actual_distance_m', String(distanceCaptureToMeters(typedDistance, distanceUnit)))
+                }
+            }
+            // Pace real DERIVADO (RF5): tiempo + distancia ⇒ seg/km, sin pedirle nada más al alumno.
+            // Fuera del rango del schema (1..3600) el motor devuelve null y la key no viaja.
+            const pace = derivedPaceSecPerKm(
+                parseNum(formData.get('actual_duration_sec')),
+                parseNum(formData.get('actual_distance_m')),
+            )
+            if (pace != null) formData.set('actual_pace_sec_per_km', String(pace))
+            else formData.delete('actual_pace_sec_per_km')
         }
         // Movilidad per_side (E3.2): dos campos hold (izq/der) → el engine los suma en `actual_hold_sec`
         // y arma `metadata {left_sec, right_sec}`. Se reusa la MISMA fuente pura que el keypad/RN
@@ -1582,6 +1621,8 @@ function TypedLogSetRow({
     const collectValues = (formData: FormData) => ({
         actualDurationSec: parseNum(formData.get('actual_duration_sec')),
         actualDistanceM: parseNum(formData.get('actual_distance_m')),
+        // Ya derivado y escrito por `normalizeFormData` (RF5) — acá sólo se lee para la cola offline.
+        actualPaceSecPerKm: parseNum(formData.get('actual_pace_sec_per_km')),
         actualHoldSec: parseNum(formData.get('actual_hold_sec')),
         actualAvgHr: parseNum(formData.get('actual_avg_hr')),
         repsDone: parseNum(formData.get('reps_done')),
@@ -1621,6 +1662,8 @@ function TypedLogSetRow({
             rir: null,
             actualDurationSec: values.actualDurationSec,
             actualDistanceM: values.actualDistanceM,
+            // Pace derivado (RF5): viaja EN el item para que el flush reenvíe lo mismo que el submit online.
+            actualPaceSecPerKm: values.actualPaceSecPerKm,
             actualHoldSec: values.actualHoldSec,
             actualAvgHr: values.actualAvgHr,
             // Hold POR LADO (E3.2): {left_sec, right_sec} viaja EN el item → el flush lo reenvía intacto.
@@ -1734,6 +1777,25 @@ function TypedLogSetRow({
                     ? 'grid-cols-[auto_3.5rem_3.5rem_auto] md:grid-cols-[auto_1fr_1fr_auto]'
                     : 'grid-cols-[auto_5rem_auto] md:grid-cols-[auto_1fr_auto]'
 
+    // Etiqueta VISIBLE sobre cada caja tipada (D1 · paridad RN, que ya las muestra). El texto sale del
+    // MOTOR (`typedKeypadFields`), así "Km" vs "Metros" queda correcto sin otra fuente de verdad. Mismo
+    // tratamiento discreto que los rótulos Izq/Der del hold per_side (`exec-v3-sidelbl`). Sólo en V3: la
+    // fila V2/lista ya lleva su encabezado de columnas (`TypedLogHeader`) y no debe duplicarlo.
+    // Función (no componente): mantiene la identidad del elemento entre renders → los `<input>`
+    // uncontrolled NO remontan ni pierden lo tipeado.
+    const withLabel = (fieldKey: string, node: React.ReactNode) => {
+        const label = typedFields.find((f) => f.key === fieldKey)?.label
+        if (!v3 || !label) return node
+        return (
+            <label key={fieldKey} className="flex flex-col items-stretch gap-1">
+                <span className="text-center text-[10px] font-extrabold uppercase leading-none tracking-[0.06em] text-[#7f7f8c]">
+                    {label}
+                </span>
+                {node}
+            </label>
+        )
+    }
+
     // Mismos tokens que la fila strength (sport-500 focus, on-dark, font-mono) — re-skin EVA DS.
     const typedInputClass = cn(
         'w-full h-11 md:h-10 rounded-control border bg-white/[0.06] px-1 text-center text-sm font-semibold font-mono text-on-dark transition-colors focus:outline-none focus:ring-1 focus:border-[var(--sport-500)] focus:ring-[var(--sport-500)]',
@@ -1752,7 +1814,10 @@ function TypedLogSetRow({
             )}
         >
             <form
-                key={existingLog ? `tlog-${existingLog.actual_duration_sec}-${existingLog.actual_hold_sec}-${existingLog.metadata?.left_sec ?? ''}-${existingLog.metadata?.right_sec ?? ''}-${existingLog.reps_done}` : 'new'}
+                // La key incluye TODOS los ejes tipados (G8): sin `actual_distance_m`/`actual_avg_hr` un
+                // log que cambiaba sólo en distancia o FC (siembra de "repetir el día", reconciliación de
+                // cola) no remontaba y los inputs uncontrolled seguían mostrando el `defaultValue` rancio.
+                key={existingLog ? `tlog-${existingLog.actual_duration_sec}-${existingLog.actual_distance_m}-${existingLog.actual_avg_hr}-${existingLog.actual_hold_sec}-${existingLog.metadata?.left_sec ?? ''}-${existingLog.metadata?.right_sec ?? ''}-${existingLog.reps_done}` : 'new'}
                 ref={formRef}
                 action={handleSubmit}
                 onKeyDown={handleFormKeyDown}
@@ -1770,37 +1835,47 @@ function TypedLogSetRow({
 
                 {mode === 'cardio' && (
                     <>
-                        <input
-                            ref={cardioMinRef}
-                            name="cardio_min"
-                            {...fieldProps('cardio_min', 'decimal', { step: '0.5', min: '0' })}
-                            defaultValue={inputDefault(minutesFromSeconds(existingLog?.actual_duration_sec ?? seedValues?.actualDurationSec ?? null))}
-                            placeholder="-"
-                            aria-label="Minutos"
-                            className={typedInputClass}
-                        />
-                        <input
-                            ref={distanceRef}
-                            name="actual_distance_m"
-                            {...fieldProps('actual_distance_m', 'decimal', { min: '0' })}
-                            defaultValue={inputDefault(existingLog?.actual_distance_m ?? seedValues?.actualDistanceM ?? null)}
-                            placeholder="-"
-                            aria-label="Metros"
-                            className={typedInputClass}
-                        />
-                        <input
-                            ref={hrRef}
-                            name="actual_avg_hr"
-                            {...fieldProps('actual_avg_hr', 'numeric', { min: '25', max: '250' })}
-                            defaultValue={inputDefault(existingLog?.actual_avg_hr ?? seedValues?.actualAvgHr ?? null)}
-                            placeholder="-"
-                            aria-label="FC promedio"
-                            className={typedInputClass}
-                        />
+                        {withLabel('cardio_min', (
+                            <input
+                                ref={cardioMinRef}
+                                name="cardio_min"
+                                {...fieldProps('cardio_min', 'decimal', { step: '0.5', min: '0' })}
+                                defaultValue={inputDefault(minutesFromSeconds(existingLog?.actual_duration_sec ?? seedValues?.actualDurationSec ?? null))}
+                                placeholder="-"
+                                aria-label="Minutos"
+                                className={typedInputClass}
+                            />
+                        ))}
+                        {withLabel('actual_distance_m', (
+                            <input
+                                ref={distanceRef}
+                                name="actual_distance_m"
+                                // En km el input nativo necesita `step="any"` o el navegador marca 5,2 como
+                                // stepMismatch y bloquea el submit (el default de type=number es step=1).
+                                {...fieldProps('actual_distance_m', 'decimal', kmCapture ? { min: '0', step: 'any' } : { min: '0' })}
+                                // Relectura en la MISMA unidad que se capturó (G3): la columna guarda metros;
+                                // con prescripción en km la caja vuelve a mostrar km (2 decimales).
+                                defaultValue={inputDefault(metersToDistanceCapture(existingLog?.actual_distance_m ?? seedValues?.actualDistanceM ?? null, distanceUnit))}
+                                placeholder="-"
+                                aria-label={kmCapture ? 'Kilómetros' : 'Metros'}
+                                className={typedInputClass}
+                            />
+                        ))}
+                        {withLabel('actual_avg_hr', (
+                            <input
+                                ref={hrRef}
+                                name="actual_avg_hr"
+                                {...fieldProps('actual_avg_hr', 'numeric', { min: '25', max: '250' })}
+                                defaultValue={inputDefault(existingLog?.actual_avg_hr ?? seedValues?.actualAvgHr ?? null)}
+                                placeholder="-"
+                                aria-label="FC promedio"
+                                className={typedInputClass}
+                            />
+                        ))}
                     </>
                 )}
 
-                {mode === 'mobility' && !perSide && (
+                {mode === 'mobility' && !perSide && withLabel('actual_hold_sec', (
                     <input
                         ref={holdRef}
                         name="actual_hold_sec"
@@ -1810,7 +1885,7 @@ function TypedLogSetRow({
                         aria-label="Segundos de hold"
                         className={typedInputClass}
                     />
-                )}
+                ))}
 
                 {mode === 'mobility' && perSide && (
                     <>
@@ -1849,24 +1924,28 @@ function TypedLogSetRow({
 
                 {mode === 'roller' && (
                     <>
-                        <input
-                            ref={durationRef}
-                            name="actual_duration_sec"
-                            {...fieldProps('actual_duration_sec', 'numeric', { min: '0' })}
-                            defaultValue={inputDefault(existingLog?.actual_duration_sec ?? seedValues?.actualDurationSec ?? null)}
-                            placeholder="seg"
-                            aria-label="Segundos"
-                            className={typedInputClass}
-                        />
-                        <input
-                            ref={passesRef}
-                            name="reps_done"
-                            {...fieldProps('reps_done', 'numeric', { min: '0' })}
-                            defaultValue={inputDefault(existingLog?.reps_done ?? seedValues?.repsDone ?? null)}
-                            placeholder="pas."
-                            aria-label="Pasadas"
-                            className={typedInputClass}
-                        />
+                        {withLabel('actual_duration_sec', (
+                            <input
+                                ref={durationRef}
+                                name="actual_duration_sec"
+                                {...fieldProps('actual_duration_sec', 'numeric', { min: '0' })}
+                                defaultValue={inputDefault(existingLog?.actual_duration_sec ?? seedValues?.actualDurationSec ?? null)}
+                                placeholder="seg"
+                                aria-label="Segundos"
+                                className={typedInputClass}
+                            />
+                        ))}
+                        {withLabel('reps_done', (
+                            <input
+                                ref={passesRef}
+                                name="reps_done"
+                                {...fieldProps('reps_done', 'numeric', { min: '0' })}
+                                defaultValue={inputDefault(existingLog?.reps_done ?? seedValues?.repsDone ?? null)}
+                                placeholder="pas."
+                                aria-label="Pasadas"
+                                className={typedInputClass}
+                            />
+                        ))}
                     </>
                 )}
 

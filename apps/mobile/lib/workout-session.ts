@@ -785,6 +785,10 @@ export function useWorkoutSession(planId: string, repeatDate?: string | null): W
       if (payload.note != null) logData.note = payload.note
       if (payload.actualDurationSec != null) logData.actual_duration_sec = payload.actualDurationSec
       if (payload.actualDistanceM != null) logData.actual_distance_m = payload.actualDistanceM
+      // Pace real DERIVADO de tiempo+distancia (RF5, `derivedPaceSecPerKm` del motor): mismo criterio
+      // que el resto de los ejes — solo se escribe cuando el payload lo trae (una edición sin ambos
+      // ejes no pisa con null lo ya guardado).
+      if (payload.actualPaceSecPerKm != null) logData.actual_pace_sec_per_km = payload.actualPaceSecPerKm
       if (payload.actualHoldSec != null) logData.actual_hold_sec = payload.actualHoldSec
       if (payload.actualAvgHr != null) logData.actual_avg_hr = payload.actualAvgHr
       if (sub) {

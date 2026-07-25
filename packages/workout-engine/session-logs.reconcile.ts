@@ -36,6 +36,9 @@ export type WorkoutOfflineLog = {
     actualDistanceM?: number | null
     actualHoldSec?: number | null
     actualAvgHr?: number | null
+    // Pace real DERIVADO (RF5): viaja EN el item para que el flush offline reenvíe la serie con el
+    // mismo dato que el submit online. Opcional/aditivo: los items legacy siguen parseando.
+    actualPaceSecPerKm?: number | null
     // ── Sustitución de máquina ocupada (Fase L · workstream C, DC-1) ──
     // Opcionales/aditivos: los items legacy encolados (sin estas keys) siguen parseando; el flush
     // last-wins reenvía la serie con su marca de sustitución intacta.

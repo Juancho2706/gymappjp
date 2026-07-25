@@ -58,12 +58,12 @@ Investigación del 2026-07-25 (informe en artifact `informe-cardio-eva`, hallazg
   la unidad propia (saltos/reps/pisos) usando `workout_blocks.reps_value` + `reps_unit`
   (CHECK actual `('reps','passes','breaths')` se extiende de forma aditiva).
 
-## Decisiones abiertas (owner)
+## Decisiones del owner (resueltas 2026-07-25)
 
-- D1: alcance de la primera tanda (ver PLAN §5, fases A-D).
-- D2: mapa exacto de ejes por modalidad (RF2) — en particular bici con o sin distancia y elíptica.
-- D3: ¿ronda cerrable totalmente vacía se mantiene (marca rápida de "hecho") o se exige ≥1 dato? (G9)
-- D4: ¿agregar "Escaladora" como 9º ejercicio de sistema con eje Pisos?
+- D1: **Fases A+B primero** (datos correctos + visibilidad coach); C y D después.
+- D2: **mapa aprobado tal cual** — bici CON distancia, elíptica solo Min · FC.
+- D3: **ronda vacía se mantiene** (marca rápida de "hecho"); el coach la verá sin datos.
+- D4: **Escaladora SÍ se agrega** como 9º ejercicio de sistema (modalidad stairs, entra en Fase C).
 
 ## No-objetivos
 

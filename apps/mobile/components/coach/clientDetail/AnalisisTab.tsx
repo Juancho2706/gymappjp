@@ -24,6 +24,7 @@ import {
 } from '../../../lib/coach-client-detail-logic'
 import { FONT } from '../../../lib/typography'
 import { getTodayInSantiago } from '../../../lib/date-utils'
+import { EMPTY_LOGGED_SET_LABEL, EXERCISE_TYPE_LABEL, formatLoggedSetLine } from '@eva/workout-engine'
 
 const GLOSSARY = {
   e1rm: { title: '1RM estimado', content: '1RM estimado por fórmula Epley a partir de tus series.' },
@@ -513,14 +514,16 @@ function SessionChip({ date, selected, onPress }: { date: string; selected: bool
 function SessionDetail({ detail }: { detail: ClientDayDetail }) {
   const { theme } = useTheme()
   const groups = useMemo(() => {
-    const map = new Map<string, { muscle: string | null; sets: WorkoutDaySet[] }>()
+    const map = new Map<string, { muscle: string | null; kind: WorkoutDaySet['kind']; sets: WorkoutDaySet[] }>()
     for (const set of detail.workoutSets) {
-      if (!map.has(set.exerciseName)) map.set(set.exerciseName, { muscle: set.muscleGroup, sets: [] })
+      if (!map.has(set.exerciseName)) map.set(set.exerciseName, { muscle: set.muscleGroup, kind: set.kind, sets: [] })
       map.get(set.exerciseName)!.sets.push(set)
     }
     return [...map.entries()].map(([name, group]) => ({ name, ...group, sets: [...group.sets].sort((a, b) => (a.setNumber ?? 0) - (b.setNumber ?? 0)) }))
   }, [detail.workoutSets])
   const title = detail.workoutSets[0]?.planTitle || 'Sesión'
+  // La leyenda explica peso/RPE/RIR: una sesión 100% cardio/movilidad no tiene nada que explicar.
+  const hasStrength = groups.some((group) => group.kind === 'strength')
 
   return (
     <StatCard>
@@ -528,40 +531,51 @@ function SessionDetail({ detail }: { detail: ClientDayDetail }) {
         <Text className="text-strong" style={styles.sessionTitle}>{title}</Text>
         <Text className="text-muted" style={styles.sessionCount}>{groups.length} ej. · {detail.workoutSets.length} sets</Text>
       </View>
-      {groups.map((group, index) => <ExerciseSession key={group.name} name={group.name} muscle={group.muscle} sets={group.sets} last={index === groups.length - 1} />)}
-      <View className="border-t border-subtle" style={styles.jargonRow}>
-        <Text className="text-muted" style={styles.jargonText}>
-          <Text className="text-strong">Meta</Text> = prescrito · color del peso: los que <Text className="text-success-600">superan</Text> / <Text className="text-warning-600">no alcanzan</Text> la meta.
-        </Text>
-        <View style={styles.glossaryLine}>
-          <Text className="text-muted" style={styles.jargonText}><Text className="text-strong">RPE</Text> = esfuerzo percibido 6-10 (10 = al fallo).</Text>
-          <InfoTooltip title={GLOSSARY.rpe.title} content={GLOSSARY.rpe.content} size={12} />
+      {groups.map((group, index) => <ExerciseSession key={group.name} name={group.name} muscle={group.muscle} kind={group.kind} sets={group.sets} last={index === groups.length - 1} />)}
+      {hasStrength ? (
+        <View className="border-t border-subtle" style={styles.jargonRow}>
+          <Text className="text-muted" style={styles.jargonText}>
+            <Text className="text-strong">Meta</Text> = prescrito · color del peso: los que <Text className="text-success-600">superan</Text> / <Text className="text-warning-600">no alcanzan</Text> la meta.
+          </Text>
+          <View style={styles.glossaryLine}>
+            <Text className="text-muted" style={styles.jargonText}><Text className="text-strong">RPE</Text> = esfuerzo percibido 6-10 (10 = al fallo).</Text>
+            <InfoTooltip title={GLOSSARY.rpe.title} content={GLOSSARY.rpe.content} size={12} />
+          </View>
+          <View style={styles.glossaryLine}>
+            <Text className="text-muted" style={styles.jargonText}><Text className="text-strong">RIR</Text> = reps en reserva (0 = al fallo).</Text>
+            <InfoTooltip title={GLOSSARY.rir.title} content={GLOSSARY.rir.content} size={12} />
+          </View>
         </View>
-        <View style={styles.glossaryLine}>
-          <Text className="text-muted" style={styles.jargonText}><Text className="text-strong">RIR</Text> = reps en reserva (0 = al fallo).</Text>
-          <InfoTooltip title={GLOSSARY.rir.title} content={GLOSSARY.rir.content} size={12} />
-        </View>
-      </View>
+      ) : null}
     </StatCard>
   )
 }
 
-function ExerciseSession({ name, muscle, sets, last }: { name: string; muscle: string | null; sets: WorkoutDaySet[]; last: boolean }) {
+function ExerciseSession({ name, muscle, kind, sets, last }: { name: string; muscle: string | null; kind: WorkoutDaySet['kind']; sets: WorkoutDaySet[]; last: boolean }) {
   const substituted = sets.find((set) => set.substitutedExerciseName)?.substitutedExerciseName
   const first = sets[0]!
+  const isTyped = kind !== 'strength'
   const progression = trainingProgressionLabel(first.progressionMode, first.progressionValue)
-  const metaParts = [
-    first.blockTargetWeightKg != null ? `${first.blockTargetWeightKg}kg` : null,
-    first.blockReps ? `×${first.blockReps}` : null,
-    first.blockSets != null ? `· ${first.blockSets} series` : null,
-    first.blockRir ? `· RIR ${first.blockRir}` : null,
-    first.blockTempo ? `· tempo ${first.blockTempo}` : null,
-  ].filter((part): part is string => Boolean(part))
+  const metaParts = (isTyped
+    ? [first.typedMeta]
+    : [
+        first.blockTargetWeightKg != null ? `${first.blockTargetWeightKg}kg` : null,
+        first.blockReps ? `×${first.blockReps}` : null,
+        first.blockSets != null ? `· ${first.blockSets} series` : null,
+        first.blockRir ? `· RIR ${first.blockRir}` : null,
+        first.blockTempo ? `· tempo ${first.blockTempo}` : null,
+      ]
+  ).filter((part): part is string => Boolean(part))
 
   return (
     <View className={last ? undefined : 'border-b border-subtle'} style={[styles.exerciseSession, last ? null : styles.exerciseDivider]}>
       <View style={styles.exerciseNameRow}>
         <Text className="text-strong" style={styles.exerciseName}>{name}</Text>
+        {isTyped ? (
+          <View className="border border-subtle bg-surface-sunken" style={styles.kindChip}>
+            <Text className="text-muted" style={styles.kindChipText}>{EXERCISE_TYPE_LABEL[kind]}</Text>
+          </View>
+        ) : null}
         {muscle ? <Text className="text-muted" style={styles.exerciseMuscle}>{muscle}</Text> : null}
       </View>
       {substituted ? (
@@ -580,6 +594,25 @@ function ExerciseSession({ name, muscle, sets, last }: { name: string; muscle: s
       ) : null}
       <View style={styles.setWrap}>
         {sets.map((set, index) => {
+          // Ronda tipada (cardio/movilidad/roller): los ejes viven en `actual_*`/`metadata`.
+          // Misma línea que la ficha web — el formato lo arma el motor compartido.
+          const typedLine = formatLoggedSetLine(kind, {
+            reps_done: set.repsDone,
+            actual_duration_sec: set.actualDurationSec,
+            actual_distance_m: set.actualDistanceM,
+            actual_avg_hr: set.actualAvgHr,
+            actual_hold_sec: set.actualHoldSec,
+            metadata: set.metadata,
+          })
+          if (typedLine != null) {
+            return (
+              <View key={`${set.setNumber ?? index}-${index}`} className="border border-subtle bg-surface-sunken" style={styles.setPill}>
+                <Text className={typedLine === EMPTY_LOGGED_SET_LABEL ? 'text-muted' : 'text-strong'} style={styles.setText}>
+                  {set.setNumber ?? index + 1}: {typedLine}
+                </Text>
+              </View>
+            )
+          }
           const target = set.targetWeightKg ?? set.blockTargetWeightKg
           const comparison = target != null && set.weightKg != null ? Math.sign(set.weightKg - target) : 0
           const weightTone = comparison > 0 ? 'text-success-600' : comparison < 0 ? 'text-warning-600' : 'text-strong'
@@ -666,6 +699,8 @@ const styles = StyleSheet.create({
   exerciseNameRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8 },
   exerciseName: { fontSize: 13, fontFamily: FONT.uiBold },
   exerciseMuscle: { fontSize: 11, fontFamily: FONT.ui },
+  kindChip: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 6, paddingVertical: 1 },
+  kindChipText: { fontSize: 9.5, letterSpacing: 0.3, textTransform: 'uppercase', fontFamily: FONT.uiBold },
   substitutionBanner: { flexDirection: 'row', alignItems: 'flex-start', gap: 6, borderWidth: 1, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 5 },
   substitutionCopy: { flex: 1, fontSize: 11, lineHeight: 15, fontFamily: FONT.ui },
   bold: { fontFamily: FONT.uiBold },

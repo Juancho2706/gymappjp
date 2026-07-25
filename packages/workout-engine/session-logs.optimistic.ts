@@ -20,6 +20,10 @@ export type OptimisticLogPayload = {
     actualDistanceM?: number | null
     actualHoldSec?: number | null
     actualAvgHr?: number | null
+    // Pace real DERIVADO de tiempo+distancia (RF5, `derivedPaceSecPerKm`). Opcional: solo lo trae la
+    // ronda de cardio que registró ambos ejes. No se refleja en el log optimista (ninguna pantalla
+    // lo muestra todavía); viaja al server para que el dato quede en la columna.
+    actualPaceSecPerKm?: number | null
     // Hold POR LADO (E0.5): metadata jsonb {left_sec, right_sec}. Opcional — el camino strength/tipado
     // bilateral no lo manda; solo el flujo per_side. Debe PRESERVARSE (mismo bug forense del hold).
     metadata?: WorkoutLogSideMetadata | null

@@ -1,21 +1,27 @@
 # TASKS — Cardio: ejes por modalidad + fixes
 
-Estado: **pendiente de aprobación** (ver decisiones D1-D4 en SPEC.md). No iniciar sin OK del owner.
+Estado: **Fases A y B CONSTRUIDAS** (2026-07-25, PR #170); C y D pendientes de arranque.
 
-## Fase A — datos correctos (sin migración)
-- [ ] A1. Caja de distancia en la unidad prescrita: `distance_unit='km'` → label "Km", decimal, guarda ×1000 (`LogSetForm.tsx` web + regla en `typed-keypad.ts` para que RN herede). Sin prescripción → "Metros".
-- [ ] A2. Etiquetas visibles Min/Distancia/FC sobre las cajas de la pantalla cardio V3 web (hoy solo aria-label; RN ya las tiene).
-- [ ] A3. Pace real derivado: al armar el payload con tiempo+distancia, calcular `actual_pace_sec_per_km` (`set-log-payload.ts`, usa `packages/cardio/pace.ts`). Test unitario.
-- [ ] A4. Key de remonte de fila incluye `actual_distance_m` + `actual_avg_hr` (`LogSetForm.tsx:1755`).
-- [ ] A5. Builder web: candado del tipo Cardio sin módulo (paridad RN `BlockEditorSheet`).
-- [ ] A6. Consolidar `legacyRepsSummaryFor` en `packages/workout-engine`; web importa del package; borrar copia `apps/web/src/lib/workout-exercise-type.ts` (o reducirla a re-export).
-- [ ] A7. Gates + QA device corta.
+## Fase A — datos correctos (sin migración) — HECHA
+- [x] A1. Caja de distancia en la unidad prescrita (motor `TypedKeypadContext` retrocompatible; web + RN). NOTA: la ruta de EDICIÓN del keypad RN (`KeypadHost`/`keypad-flow.ts:104`) queda en metros a propósito — cablearla es Fase C.
+- [x] A2. Etiquetas visibles sobre las cajas tipadas en V3 web (labels del motor; `TypedLogHeader` también lee del motor).
+- [x] A3. Pace real derivado (`derivedPaceSecPerKm` en el motor, clamp 1..3600; FormData web + cola offline + escritura RN).
+- [x] A4. Key de remonte incluye `actual_distance_m` + `actual_avg_hr`.
+- [x] A5. Builder web: candado del tipo Cardio sin módulo (misma fuente `cardio?.enabled`, copy de RN).
+- [x] A6. `legacyRepsSummaryFor` consolidado en el package (web re-exporta; copias eran idénticas).
+- [ ] A7. QA device del owner (gates corridos verdes: vitest engine 232, suite 3.880, tsc x3, lint 0 errores).
 
-## Fase B — el coach ve cardio (sin migración)
-- [ ] B1. `client-detail.service.ts` select + tipos: `actual_duration_sec, actual_distance_m, actual_avg_hr, actual_hold_sec, reps_done, metadata`.
-- [ ] B2. Render del detalle de día (ficha alumno web): línea tipada por ronda según tipo de ejercicio (cardio/movilidad/roller), formato "12,5 min · 3.200 m · FC 148".
-- [ ] B3. RN ficha coach: mismo render (reusar formateadores del motor `session-summary.ts` si calzan).
-- [ ] B4. Gates + QA.
+## Fase B — el coach ve cardio (sin migración) — HECHA
+- [x] B1. Select ampliado en `getClientWorkoutForDate` (+ `exercise_type`/override y prescripción tipada del bloque).
+- [x] B2. Ficha web `TrainingTabB4Panels`: chip de tipo + línea por ronda vía `formatLoggedSetLine` (motor nuevo `logged-set-summary.ts`, 9 tests); "Registrado sin datos" en ronda vacía (D3); leyenda RPE/RIR solo si hay fuerza.
+- [x] B3. RN ficha coach (`AnalisisTab` + `coach-client-detail.ts`): mismo select, mismo render del motor.
+- [ ] B4. QA device del owner.
+
+### Deuda anotada (para C o después)
+- Analytics de la ficha (1RM/tonelaje/radar/`workoutHistory` 548d) siguen ciegas a cardio: métricas nuevas de minutos/distancia = fase posterior.
+- `fmtTypedLoggedLine` del ejecutor RN del alumno (`workout-ui.ts:96`) duplica formato → delegar en `formatLoggedSetLine`.
+- Mostrar `actual_pace_sec_per_km` en la ficha (ya se puebla desde A3): una línea en `logged-set-summary.ts`.
+- Cabecera de la ficha dice "sets" aunque sean rondas (cosmético).
 
 ## Fase C — ejes por modalidad (1 migración)
 - [ ] C1. Migración aditiva: `exercises.cardio_modality` + CHECK + backfill 8 seed + (D4) INSERT Escaladora + extensión CHECK `reps_unit` + grants verificados. Snapshot antes, advisors después.

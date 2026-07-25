@@ -20,25 +20,85 @@ export interface TypedKeypadFieldDef {
     unit: string
     /** ¿Admite coma decimal? (distancia/min sí; FC/segundos/pasadas no). */
     allowDecimal: boolean
+    /**
+     * Factor del valor TIPEADO hacia la unidad de la COLUMNA del log. Ausente ⇒ 1 (se guarda tal
+     * cual, comportamiento de siempre). Hoy solo lo declara la distancia cuando el coach prescribió
+     * en km: la caja captura km y `actual_distance_m` guarda metros (×1000).
+     */
+    toColumnFactor?: number
+}
+
+/**
+ * Contexto OPCIONAL del bloque que ajusta los campos del teclado tipado. Aditivo: sin contexto (o
+ * pasando el `side_mode` suelto, forma histórica) los campos son byte-idénticos a los previos.
+ */
+export interface TypedKeypadContext {
+    /** `side_mode` del bloque (movilidad `per_side` ⇒ dos holds). */
+    sideMode?: string | null
+    /** `distance_unit` prescrita del bloque ('m' | 'km'); 'km' ⇒ la caja de distancia captura KM. */
+    distanceUnit?: string | null
+}
+
+/** Normaliza el 2º argumento histórico (`sideMode` suelto) al contexto tipado. */
+export function typedKeypadContext(ctx?: string | null | TypedKeypadContext): TypedKeypadContext {
+    if (ctx == null) return {}
+    return typeof ctx === 'string' ? { sideMode: ctx } : ctx
+}
+
+/** Metros por kilómetro — factor único de la conversión de captura de distancia. */
+export const METERS_PER_KM = 1000
+
+/** ¿La distancia se CAPTURA en km? (solo cuando el coach prescribió la distancia en km). */
+export function capturesDistanceInKm(distanceUnit?: string | null): boolean {
+    return distanceUnit === 'km'
+}
+
+/** Valor tipeado en la caja de distancia → metros de `actual_distance_m`. */
+export function distanceCaptureToMeters(value: number, distanceUnit?: string | null): number {
+    return capturesDistanceInKm(distanceUnit) ? Math.round(value * METERS_PER_KM) : value
+}
+
+/**
+ * Inversa de `distanceCaptureToMeters`: metros de la columna → valor que se muestra en la caja
+ * (km con hasta 2 decimales), para que el alumno relea EXACTAMENTE lo que escribió al remontar.
+ */
+export function metersToDistanceCapture(
+    meters: number | null | undefined,
+    distanceUnit?: string | null,
+): number | null {
+    if (meters == null) return null
+    if (!capturesDistanceInKm(distanceUnit)) return meters
+    return Math.round((meters / METERS_PER_KM) * 100) / 100
 }
 
 /**
  * Campos del teclado por modo tipado, en el orden en que el alumno los recorre con "Siguiente".
  * Reglas decimales (CEO 2026-07-04): distancia y minutos = decimal; FC, segundos y pasadas = enteros.
  *
- * `sideMode` (E0.5 · executor-v3): opcional. Cuando un bloque de MOVILIDAD es unilateral
+ * 2º argumento: `side_mode` suelto (forma histórica) o el `TypedKeypadContext` completo.
+ *
+ * `sideMode` (E0.5 · executor-v3): cuando un bloque de MOVILIDAD es unilateral
  * (`side_mode === 'per_side'`), el hold se captura POR LADO → el teclado declara DOS campos
  * (`hold_left_sec` / `hold_right_sec`) que `typedLogValues` mapea a `metadata {left_sec, right_sec}`
  * y suma en `actual_hold_sec`. SIN el argumento (o cualquier otro `side_mode`) el comportamiento es
- * byte-idéntico al previo: un solo campo `actual_hold_sec`. La UI que consume estos campos llega en
- * Ola 3; acá solo se declara el descriptor.
+ * byte-idéntico al previo: un solo campo `actual_hold_sec`.
+ *
+ * `distanceUnit` (G3 · cardio): la UNIDAD DE CAPTURA es la PRESCRITA. Con 'km' la caja se llama "Km"
+ * y declara `toColumnFactor` para que el payload guarde metros; sin prescripción (o con 'm') sigue
+ * siendo "Metros" tal cual hoy.
  */
-export function typedKeypadFields(mode: TypedKeypadMode, sideMode?: string | null): TypedKeypadFieldDef[] {
+export function typedKeypadFields(
+    mode: TypedKeypadMode,
+    ctx?: string | null | TypedKeypadContext,
+): TypedKeypadFieldDef[] {
+    const { sideMode, distanceUnit } = typedKeypadContext(ctx)
     switch (mode) {
         case 'cardio':
             return [
                 { key: 'cardio_min', label: 'Min', unit: 'min', allowDecimal: true },
-                { key: 'actual_distance_m', label: 'Metros', unit: 'm', allowDecimal: true },
+                capturesDistanceInKm(distanceUnit)
+                    ? { key: 'actual_distance_m', label: 'Km', unit: 'km', allowDecimal: true, toColumnFactor: METERS_PER_KM }
+                    : { key: 'actual_distance_m', label: 'Metros', unit: 'm', allowDecimal: true },
                 { key: 'actual_avg_hr', label: 'FC', unit: 'bpm', allowDecimal: false },
             ]
         case 'mobility':

@@ -29,6 +29,7 @@ import {
     type WorkoutSectionKey,
     executionAreaGroupsFor,
     isTimeableInterval,
+    typedKeypadFields,
 } from '@eva/workout-engine'
 import { StepperExecution, type StepperStepView } from './StepperExecution'
 import { ExecHeaderV3, type ExecDotState } from './v3/ExecHeaderV3'
@@ -454,15 +455,20 @@ export function TypedBlockTimerButton({ block, kind }: { block: BlockType; kind:
     return null
 }
 
-/** Encabezados de la tabla de registro por tipo (la de strength queda intacta). */
-export function TypedLogHeader({ kind }: { kind: WorkoutKind }) {
+/**
+ * Encabezados de la tabla de registro por tipo (la de strength queda intacta).
+ * `distanceUnit`: unidad de distancia PRESCRITA del bloque — con 'km' la columna de distancia se
+ * rotula "Km" (mismo texto que declara el motor para la caja, G3). Ausente ⇒ "Metros" como siempre.
+ */
+export function TypedLogHeader({ kind, distanceUnit }: { kind: WorkoutKind; distanceUnit?: string | null }) {
     if (kind === 'cardio') {
+        const [minField, distanceField, hrField] = typedKeypadFields('cardio', { distanceUnit })
         return (
             <div className="grid grid-cols-[auto_3.5rem_3.5rem_3rem_auto] md:grid-cols-[auto_1fr_1fr_1fr_auto] gap-2 px-2 pb-2 text-[10px] font-bold text-on-dark-muted uppercase tracking-wider border-b border-white/10">
                 <div className="w-4 text-center">Set</div>
-                <div className="text-center">Min</div>
-                <div className="text-center">Metros</div>
-                <div className="text-center">FC</div>
+                <div className="text-center">{minField.label}</div>
+                <div className="text-center">{distanceField.label}</div>
+                <div className="text-center">{hrField.label}</div>
                 <div className="w-8"></div>
             </div>
         )
