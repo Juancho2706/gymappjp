@@ -25,7 +25,12 @@ import {
   type NutritionPlanDraft,
   type NutritionStrategy,
 } from '@eva/nutrition-v2'
-import { calculateFoodItemMacros, type FoodMacrosRow } from '@eva/nutrition-engine'
+import { calculateFoodItemMacros, type ExchangeGroup, type FoodMacrosRow } from '@eva/nutrition-engine'
+import { buildFrozenPortionGroups, type PortionsBySlot } from './nutrition-v2-builder-portions'
+// Reuso de la persistencia congelada del quick-edit (afirmación 8 de la spec 4B-11): NO se
+// duplica `buildPortionTargetInsertRows`. La lib del quick-edit vive en `lib/` (no en
+// `components/quick-edit/**`, territorio vetado), y ya exporta estas piezas.
+import { buildPortionTargetInsertRows } from './nutrition-v2-quick-edit'
 
 // ---------------------------------------------------------------------------
 // Estado del wizard (PORTADO 1:1 desde la web draft-builder.ts)
@@ -53,6 +58,18 @@ export interface BuilderFood {
   media: { bucket: string; objectPath: string; version: number } | null
 }
 
+/**
+ * Reemplazo autorizado por el coach dentro del builder (F-02). La afordancia agrega SOLO
+ * alimentos del catalogo (buscador), asi que el reemplazo siempre lleva un `food`. `key` es
+ * la key estable de UI (chip removible). `assembleDraft` lo mapea al draft con foodId +
+ * quantity/unit null ("misma porcion que el prescrito"); el server congela el snapshot.
+ * Espejo 1:1 de la web draft-builder.ts.
+ */
+export interface BuilderItemSubstitution {
+  key: string
+  food: BuilderFood
+}
+
 export interface BuilderItem {
   key: string
   food: BuilderFood | null
@@ -65,7 +82,13 @@ export interface BuilderItem {
   customProteinG: string
   customCarbsG: string
   customFatsG: string
+  /** Reemplazos autorizados por el coach (F-02). Vacio = item sin capa de reemplazos. */
+  substitutions: BuilderItemSubstitution[]
 }
+
+/** Tope de reemplazos por item (limite legado V1 = 8). El contrato lo refuerza con
+ *  NutritionItemSubstitutionSchema array `.max(8)`. No hardcodear el 8 en reducer/UI. */
+export const MAX_ITEM_SUBSTITUTIONS = 8
 
 export interface BuilderSlot {
   key: string
@@ -103,6 +126,18 @@ export function strategyUsesSlots(strategy: NutritionStrategy | null): boolean {
   return strategy === 'structured' || strategy === 'hybrid'
 }
 
+/**
+ * ¿El borrador tiene contenido que valga la pena respaldar? Evita el autosave (y el aviso de
+ * salida) por un wizard recién abierto o vaciado. PURA y testeable; espejo 1:1 de la web
+ * PlanBuilderClient.tsx:1033-1038 (allí vive inline). La consumen el autosave y el guard de salida.
+ */
+export function builderHasSignificantContent(state: BuilderState): boolean {
+  if (state.strategy !== null) return true
+  if (state.planName.trim() !== '') return true
+  if (state.slots.length > 0) return true
+  return (['calories', 'proteinG', 'carbsG', 'fatsG'] as const).some((f) => state.targets[f].trim() !== '')
+}
+
 export function defaultPermissionsFor(strategy: NutritionStrategy | null): BuilderPermissions {
   const strict = strategy === 'structured'
   return {
@@ -137,6 +172,7 @@ export function createEmptyItem(key: string): BuilderItem {
     customProteinG: '',
     customCarbsG: '',
     customFatsG: '',
+    substitutions: [],
   }
 }
 
@@ -159,6 +195,9 @@ export type BuilderAction =
   | { type: 'ADD_ITEM'; slotKey: string; key: string; food: BuilderFood | null }
   | { type: 'REMOVE_ITEM'; slotKey: string; itemKey: string }
   | { type: 'UPDATE_ITEM'; slotKey: string; itemKey: string; patch: Partial<Omit<BuilderItem, 'key'>> }
+  | { type: 'ADD_ITEM_SUBSTITUTION'; slotKey: string; itemKey: string; key: string; food: BuilderFood }
+  | { type: 'REMOVE_ITEM_SUBSTITUTION'; slotKey: string; itemKey: string; subKey: string }
+  | { type: 'RESTORE'; state: BuilderState }
 
 function clampStep(step: number): number {
   return Math.max(0, Math.min(BUILDER_STEP_COUNT - 1, step))
@@ -219,6 +258,39 @@ export function builderReducer(state: BuilderState, action: BuilderAction): Buil
         ...slot,
         items: slot.items.map((item) => (item.key === action.itemKey ? { ...item, ...action.patch } : item)),
       }))
+    case 'ADD_ITEM_SUBSTITUTION':
+      return mapSlot(state, action.slotKey, (slot) => ({
+        ...slot,
+        items: slot.items.map((item) => {
+          if (item.key !== action.itemKey) return item
+          const subs = item.substitutions ?? []
+          // Cinturon: no pasar del tope, no duplicar el mismo alimento como reemplazo, ni
+          // ofrecer como reemplazo el propio alimento prescrito (la UI ya lo evita).
+          if (subs.length >= MAX_ITEM_SUBSTITUTIONS) return item
+          if (subs.some((sub) => sub.food.id === action.food.id)) return item
+          if (item.food && item.food.id === action.food.id) return item
+          return { ...item, substitutions: [...subs, { key: action.key, food: action.food }] }
+        }),
+      }))
+    case 'REMOVE_ITEM_SUBSTITUTION':
+      return mapSlot(state, action.slotKey, (slot) => ({
+        ...slot,
+        items: slot.items.map((item) =>
+          item.key === action.itemKey
+            ? { ...item, substitutions: (item.substitutions ?? []).filter((sub) => sub.key !== action.subKey) }
+            : item,
+        ),
+      }))
+    case 'RESTORE': {
+      // Reemplazo TOTAL del arbol desde un borrador restaurado (AsyncStorage). Validacion minima
+      // defensiva: un payload corrupto (sin `slots` array) se ignora — jamas rompe el wizard. El
+      // `step` se re-clampa a [0, BUILDER_STEP_COUNT-1] por si el JSON persistido trae un indice
+      // fuera de rango o no finito (cae a 0). Espejo 1:1 de la web draft-builder.ts:252-261.
+      const next = action.state
+      if (next == null || typeof next !== 'object' || !Array.isArray(next.slots)) return state
+      const step = Number.isFinite(next.step) ? clampStep(next.step) : 0
+      return { ...next, step }
+    }
     default:
       return state
   }
@@ -444,6 +516,13 @@ export interface AssembleOptions {
   clientId: string
   planId?: string | null
   timezone?: string
+  /**
+   * Capa opcional de porciones a elección (4B-11): mapa `slot.key -> targets`. Solo se
+   * cuelga en franjas structured/hybrid; una franja sin porciones (o su ausencia) deja el
+   * slot byte-idéntico a hoy (sin la clave `exchangeTargets`). El caller la pasa desde el
+   * controlador de porciones del wizard.
+   */
+  portionsBySlot?: PortionsBySlot
 }
 
 export function assembleDraft(state: BuilderState, options: AssembleOptions): NutritionPlanDraft {
@@ -451,7 +530,11 @@ export function assembleDraft(state: BuilderState, options: AssembleOptions): Nu
   const usesSlots = strategyUsesSlots(strategy)
 
   const mealSlots: DraftMealSlot[] = usesSlots
-    ? state.slots.map((slot, slotIndex) => ({
+    ? state.slots.map((slot, slotIndex) => {
+        // Porciones a elección de la franja (4B-11): filtra > 0 y mapea al contrato del draft.
+        // Sin porciones => sin la clave (byte-idéntico a hoy); el server/insert congela el snapshot.
+        const portionTargets = (options.portionsBySlot?.[slot.key] ?? []).filter((t) => t.portions > 0)
+        return {
         code: 'slot-' + (slotIndex + 1),
         name: slot.name.trim(),
         startTime: slot.startTime.trim() === '' ? null : slot.startTime.trim(),
@@ -461,20 +544,51 @@ export function assembleDraft(state: BuilderState, options: AssembleOptions): Nu
         targets: {},
         instructions: null,
         orderIndex: slotIndex,
-        items: slot.items.map((item, itemIndex): DraftPrescriptionItem => ({
-          foodId: item.food ? item.food.id : null,
-          recipeId: null,
-          customName: item.food ? null : ((item.customName ?? '').trim() || null),
-          quantity: Number(item.quantity) || 0,
-          unit: item.unit,
-          minimumQuantity: null,
-          maximumQuantity: null,
-          optional: item.optional,
-          substitutionGroupId: null,
-          notes: item.notes && item.notes.trim() !== '' ? item.notes.trim() : null,
-          orderIndex: itemIndex,
-        })),
-      }))
+        ...(portionTargets.length > 0
+          ? {
+              exchangeTargets: portionTargets.map((t, orderIndex) => ({
+                exchangeGroupId: t.exchangeGroupId,
+                portions: t.portions,
+                notes: null,
+                orderIndex,
+              })),
+            }
+          : {}),
+        items: slot.items.map((item, itemIndex): DraftPrescriptionItem => {
+          // Reemplazos autorizados (F-02): catalogo -> foodId; quantity/unit null = "misma
+          // porcion que el prescrito". Capa opcional: sin reemplazos el item queda identico
+          // a hoy (sin la clave), y el server congela el snapshot de cada uno al persistir.
+          const substitutions = item.substitutions ?? []
+          return {
+            foodId: item.food ? item.food.id : null,
+            recipeId: null,
+            customName: item.food ? null : ((item.customName ?? '').trim() || null),
+            quantity: Number(item.quantity) || 0,
+            unit: item.unit,
+            minimumQuantity: null,
+            maximumQuantity: null,
+            optional: item.optional,
+            substitutionGroupId: null,
+            notes: item.notes && item.notes.trim() !== '' ? item.notes.trim() : null,
+            orderIndex: itemIndex,
+            ...(substitutions.length > 0
+              ? {
+                  substitutions: substitutions.map(
+                    (sub, subIndex): NutritionItemSubstitution => ({
+                      foodId: sub.food.id,
+                      recipeId: null,
+                      customName: null,
+                      quantity: null,
+                      unit: null,
+                      orderIndex: subIndex,
+                    }),
+                  ),
+                }
+              : {}),
+          }
+        }),
+        }
+      })
     : []
 
   const variant: DraftDayVariant = {
@@ -889,8 +1003,18 @@ export async function persistAndPublishDraft(input: {
   draft: NutritionPlanDraft
   idempotencyKey: string
   effectiveFrom: string
+  /**
+   * Catálogo de grupos de intercambio para CONGELAR el snapshot de las porciones a elección
+   * (4B-11). Opcional: un draft sin porciones no lo necesita y publica byte-idéntico a hoy.
+   * Si el draft trae `exchangeTargets` pero un grupo no resuelve contra este catálogo, el
+   * publish corta con `EXCHANGE_GROUP_UNRESOLVED` (jamás una fila con snapshot NULL).
+   */
+  portionGroups?: ExchangeGroup[]
 }): Promise<PublishResult> {
-  const { db, userId, draft, idempotencyKey, effectiveFrom } = input
+  const { db, userId, draft, idempotencyKey, effectiveFrom, portionGroups } = input
+  // Dict congelado del catálogo (por valor): alimenta el mismo `buildPortionTargetInsertRows`
+  // del quick-edit. Vacío si no se pasó catálogo (un draft sin porciones nunca lo consulta).
+  const frozenPortionGroups = buildFrozenPortionGroups(portionGroups ?? [])
 
   const existing = await db
     .from('nutrition_plan_versions_v2')
@@ -1050,6 +1174,30 @@ export async function persistAndPublishDraft(input: {
           if (subsIns.error) return mapWriteError(subsIns.error, 'reemplazos')
         }
       }
+
+      // Porciones a elección (4B-11): inserta las filas de la franja con snapshot congelado.
+      // Gateado por `slot.exchangeTargets?.length`: una franja sin porciones no toca la tabla
+      // (byte-idéntico a hoy). Reusa `buildPortionTargetInsertRows` del quick-edit; si un grupo
+      // no resuelve contra el catálogo congelado, corta en voz alta (jamás snapshot NULL).
+      const exchangeTargets = slot.exchangeTargets ?? []
+      if (exchangeTargets.length > 0) {
+        const targetRows = buildPortionTargetInsertRows({
+          versionId,
+          mealSlotId,
+          targets: exchangeTargets,
+          groupsById: frozenPortionGroups,
+        })
+        if (targetRows == null) {
+          return publishFail(
+            'EXCHANGE_GROUP_UNRESOLVED',
+            'No se pudieron congelar los grupos de porciones del plan. Recarga el catálogo e intenta de nuevo.',
+          )
+        }
+        const targetsIns = await db
+          .from('nutrition_slot_exchange_targets_v2')
+          .insert(targetRows as unknown as Record<string, unknown>[])
+        if (targetsIns.error) return mapWriteError(targetsIns.error, 'porciones')
+      }
     }
   }
 
@@ -1105,6 +1253,8 @@ export async function publishDraftRN(input: {
   idempotencyKey: string
   effectiveFrom: string
   hasNutritionPro: boolean
+  /** Catálogo de grupos para congelar las porciones a elección (4B-11); ver persistAndPublishDraft. */
+  portionGroups?: ExchangeGroup[]
 }): Promise<PublishResult> {
   const parsed = PublishInputSchema.safeParse({
     draft: input.draft,
@@ -1132,5 +1282,102 @@ export async function publishDraftRN(input: {
     draft,
     idempotencyKey,
     effectiveFrom,
+    portionGroups: input.portionGroups,
   })
+}
+
+// ---------------------------------------------------------------------------
+// Alimento coach-scoped desde "alimento libre con macros" del builder (sub-delta b).
+// Espejo 1:1 de la web createCoachFoodAction (builder.actions.ts:137-190): valida con
+// CoachFoodInputSchema, inserta en `foods` con macros POR 100 (serving_size = 100),
+// catalog_source='coach' y verification_status='coach_verified'; coach_id = userId lo exige
+// la RLS `foods_insert_own` (org_id NULL). Devuelve el alimento como BuilderFood para que el
+// item pase a referenciar su id (deja de ser libre). La RLS es la barrera real: un 42501 aca
+// == SCOPE_DENIED via mapWriteError. Sin revalidatePath (no aplica en RN).
+// ---------------------------------------------------------------------------
+
+export async function createCoachFoodV2(input: {
+  db: NutritionV2WriteClient
+  userId: string
+  input: CoachFoodInput
+}): Promise<{ ok: true; food: BuilderFood } | PublishFailure> {
+  const parsed = CoachFoodInputSchema.safeParse(input.input)
+  if (!parsed.success) {
+    return publishFail('INVALID_PAYLOAD', 'El alimento tiene datos invalidos.', zodFields(parsed.error))
+  }
+  const { name, brand, unit, calories, proteinG, carbsG, fatsG } = parsed.data
+
+  const ins = await input.db
+    .from('foods')
+    .insert({
+      name,
+      brand,
+      coach_id: input.userId,
+      org_id: null,
+      calories,
+      protein_g: proteinG,
+      carbs_g: carbsG,
+      fats_g: fatsG,
+      serving_size: 100,
+      serving_unit: unit,
+      is_liquid: unit === 'ml',
+      category: 'otro',
+      country_code: 'CL',
+      catalog_source: 'coach',
+      verification_status: 'coach_verified',
+    })
+    .select('id')
+    .single()
+  if (ins.error || !ins.data) return mapWriteError(ins.error ?? { message: 'no food' }, 'alimento')
+
+  const food: BuilderFood = {
+    id: ins.data.id,
+    name,
+    brand,
+    calories,
+    proteinG,
+    carbsG,
+    fatsG,
+    fiberG: null,
+    servingSize: 100,
+    servingUnit: unit,
+    category: 'otro',
+    media: null,
+  }
+  return { ok: true, food }
+}
+
+// ---------------------------------------------------------------------------
+// Conflicto de "fecha de vigencia" al publicar (sub-delta c) — helpers PUROS.
+// Espejo de apps/web/.../builder/_lib/publish-conflict.ts. El plan vigente de un alumno solo
+// puede ser reemplazado por una version cuya fecha sea POSTERIOR a la actual (barrera real =
+// RPC publish_nutrition_plan_v2). Estos helpers espejan la regla del lado cliente para abrir el
+// modal SIN gastar un round-trip fallido; el RPC sigue siendo la red de seguridad (fail-closed).
+// ---------------------------------------------------------------------------
+
+/**
+ * True cuando la fecha elegida choca con la de la version vigente: es igual o anterior, y por
+ * tanto el RPC la rechazaria. Fechas ISO YYYY-MM-DD comparan lexicograficamente = por dia. Si
+ * falta cualquiera de las dos, no bloquea (deja que el servidor decida). Identica a la web.
+ */
+export function effectiveDateConflicts(
+  chosen: string | null | undefined,
+  current: string | null | undefined,
+): boolean {
+  if (!chosen || !current) return false
+  return chosen <= current
+}
+
+/**
+ * "Archivar y reemplazar" archiva el plan vigente y DESPUES publica el nuevo. Decide si, tras
+ * intentar el archivado, se puede avanzar a publicar. El archivado es idempotente: el UPDATE exige
+ * `lifecycle_status='active'`, asi que archivar un plan ya archivado (reintento/otra pestana/web)
+ * afecta 0 filas y `archiveNutritionPlan` devuelve `PLAN_NOT_FOUND`; ese caso ya cumple el objetivo
+ * (el plan viejo dejo de regir), asi que se puede continuar. Cualquier OTRO fallo bloquea el flujo.
+ *
+ * NOTA de divergencia con la web: el `ArchiveWriteOutcome` de RN usa `code: 'OK'` en el exito (no
+ * `ok: true` como el ActionResult web), asi que aceptamos ambas formas por robustez.
+ */
+export function canProceedToPublishAfterArchive(result: { ok?: boolean; code?: string }): boolean {
+  return result.ok === true || result.code === 'OK' || result.code === 'PLAN_NOT_FOUND'
 }

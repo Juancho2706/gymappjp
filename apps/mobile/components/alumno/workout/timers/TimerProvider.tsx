@@ -3,7 +3,7 @@ import { StyleSheet, View } from 'react-native'
 import { AnimatePresence } from 'moti'
 import { buildIntervalPhases, type IntervalConfig, type IntervalPhase } from '@eva/workout-engine'
 import { toast } from '../../../Toast'
-import { RestTimerBar } from './RestTimerBar'
+import { RestTimerHost, type RestInterstitialRenderer } from './RestTimerHost'
 import { HoldTimer } from './HoldTimer'
 import { IntervalTimer } from './IntervalTimer'
 import { StopwatchTimer } from './StopwatchTimer'
@@ -48,6 +48,13 @@ export interface WorkoutTimersApi {
   close: () => void
   /** Timer activo (o null). Tipado laxo en el contrato (`unknown`). */
   state: ActiveTimer | null
+  /**
+   * Registra (o limpia con null) la presentacion interstitial V3 del descanso (E3.1). Solo `ExecutorV3`
+   * lo llama; mientras haya un renderer registrado, el descanso se monta como overlay fullscreen (con la
+   * barra compacta como estado minimizado). Sin renderer registrado, el descanso usa la barra clasica —
+   * asi `ExecutorV2` queda intacto.
+   */
+  setRestInterstitial: (renderer: RestInterstitialRenderer | null) => void
 }
 
 const Ctx = createContext<WorkoutTimersApi | null>(null)
@@ -153,6 +160,13 @@ export function WorkoutTimerProvider({ children }: { children: React.ReactNode }
     setActive((cur) => (cur?.kind === 'rest' ? null : cur))
   }, [])
 
+  // Renderer del interstitial V3 (E3.1). `ExecutorV3` lo registra; se guarda envuelto en un objeto para
+  // que un renderer (funcion) no se confunda con el updater funcional de `useState`.
+  const [restInterstitial, setRestInterstitialState] = useState<{ render: RestInterstitialRenderer } | null>(null)
+  const setRestInterstitial = useCallback((renderer: RestInterstitialRenderer | null) => {
+    setRestInterstitialState(renderer ? { render: renderer } : null)
+  }, [])
+
   // Silenciar la alarma con un toque en CUALQUIER parte del ejecutor (paridad web
   // `RestTimer.tsx:102-111`: mientras `isAlarmRinging`, un listener GLOBAL en `document`
   // escucha `click`/`touchstart` y CUALQUIER toque en cualquier zona llama `stopAlarm()`).
@@ -174,8 +188,8 @@ export function WorkoutTimerProvider({ children }: { children: React.ReactNode }
   }, [])
 
   const api = useMemo<WorkoutTimersApi>(
-    () => ({ startRest, startHold, startInterval, startStopwatch, cancelRest, close, state: active }),
-    [startRest, startHold, startInterval, startStopwatch, cancelRest, close, active],
+    () => ({ startRest, startHold, startInterval, startStopwatch, cancelRest, close, state: active, setRestInterstitial }),
+    [startRest, startHold, startInterval, startStopwatch, cancelRest, close, active, setRestInterstitial],
   )
 
   return (
@@ -195,7 +209,7 @@ export function WorkoutTimerProvider({ children }: { children: React.ReactNode }
         {active ? (
           <View key="timer-overlay" pointerEvents="box-none" style={StyleSheet.absoluteFill}>
             {active.kind === 'rest' ? (
-              <RestTimerBar
+              <RestTimerHost
                 key={active.nonce}
                 initialSeconds={active.seconds}
                 autoStart={active.autoStart}
@@ -203,6 +217,7 @@ export function WorkoutTimerProvider({ children }: { children: React.ReactNode }
                 warmup={active.warmup}
                 onClose={close}
                 registerAlarmSilencer={registerAlarmSilencer}
+                renderInterstitial={restInterstitial?.render ?? null}
               />
             ) : null}
             {active.kind === 'hold' ? (

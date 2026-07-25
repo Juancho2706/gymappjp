@@ -113,6 +113,17 @@ function buildForm() {
     return f
 }
 
+function buildFormWithTarget(targetDate: string) {
+    const f = buildForm()
+    f.set('target_date', targetDate)
+    return f
+}
+
+// Fechas deterministas respecto del reloj real del runner: '2020-01-01' es SIEMPRE pasado y
+// '2999-12-31' SIEMPRE futuro, así que no dependen de `getTodayInSantiago()` congelado.
+const PAST_DATE = '2020-01-01'
+const FUTURE_DATE = '2999-12-31'
+
 describe('logSetAction — resiliencia WA-2', () => {
     beforeEach(() => {
         vi.clearAllMocks()
@@ -216,5 +227,77 @@ describe('logSetAction — resiliencia WA-2', () => {
         expect(logs.updates).toHaveLength(1)
         expect(logs.eqCalls).toContainEqual(['id', 'a'])
         expect(logs.deletes).toContainEqual({ col: 'id', ids: ['b'] })
+    })
+})
+
+describe('logSetAction — edición de día pasado (target_date, E1.5)', () => {
+    beforeEach(() => {
+        vi.clearAllMocks()
+    })
+
+    it('target_date + fila existente ⇒ SOLO-UPDATE (jamás INSERT)', async () => {
+        const logs = makeWorkoutLogsMock({
+            selectResults: [{ data: [{ id: 'past-row' }] }],
+            updateResult: { error: null },
+        })
+        wireSupabase(logs)
+
+        const result = await logSetAction({}, buildFormWithTarget(PAST_DATE))
+
+        expect(result.success).toBe(true)
+        expect(logs.updates).toHaveLength(1)
+        expect(logs.inserts).toHaveLength(0)
+        expect(logs.eqCalls).toContainEqual(['id', 'past-row'])
+    })
+
+    it('target_date + fila inexistente ⇒ past_set_not_found, NUNCA inserta', async () => {
+        const logs = makeWorkoutLogsMock({ selectResults: [{ data: [] }] })
+        wireSupabase(logs)
+
+        const result = await logSetAction({}, buildFormWithTarget(PAST_DATE))
+
+        expect(result).toEqual({
+            error: 'No existe un registro de esa serie para editar en esa fecha.',
+            code: 'past_set_not_found',
+        })
+        expect(logs.inserts).toHaveLength(0)
+        expect(logs.updates).toHaveLength(0)
+    })
+
+    it('target_date futuro ⇒ rechazado (validation), sin tocar workout_logs', async () => {
+        const logs = makeWorkoutLogsMock({ selectResults: [{ data: [] }] })
+        wireSupabase(logs)
+
+        const result = await logSetAction({}, buildFormWithTarget(FUTURE_DATE))
+
+        expect(result).toEqual({ error: 'Fecha inválida.', code: 'validation' })
+        expect(logs.inserts).toHaveLength(0)
+        expect(logs.updates).toHaveLength(0)
+    })
+
+    it('target_date con formato inválido ⇒ rechazado (validation)', async () => {
+        const logs = makeWorkoutLogsMock({ selectResults: [{ data: [] }] })
+        wireSupabase(logs)
+
+        const result = await logSetAction({}, buildFormWithTarget('2026/07/20'))
+
+        expect(result).toEqual({ error: 'Fecha inválida.', code: 'validation' })
+        expect(logs.inserts).toHaveLength(0)
+    })
+
+    it('target_date + duplicados ⇒ UPDATE al más reciente + purga (misma semántica que hoy)', async () => {
+        const logs = makeWorkoutLogsMock({
+            selectResults: [{ data: [{ id: 'keep' }, { id: 'dupe' }] }],
+            updateResult: { error: null },
+        })
+        wireSupabase(logs)
+
+        const result = await logSetAction({}, buildFormWithTarget(PAST_DATE))
+
+        expect(result.success).toBe(true)
+        expect(logs.inserts).toHaveLength(0)
+        expect(logs.updates).toHaveLength(1)
+        expect(logs.eqCalls).toContainEqual(['id', 'keep'])
+        expect(logs.deletes).toContainEqual({ col: 'id', ids: ['dupe'] })
     })
 })

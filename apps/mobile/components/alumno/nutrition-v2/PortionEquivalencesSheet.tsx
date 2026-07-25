@@ -12,7 +12,8 @@
  * es frágil bajo Fabric — patrón Sheet nativeModal existente del repo).
  */
 import { useEffect, useMemo, useState } from 'react'
-import { Pressable, Text, View } from 'react-native'
+import { Pressable, Text, TextInput, View } from 'react-native'
+import { Search } from 'lucide-react-native'
 import type {
   NutritionExchangeFoodRead,
   NutritionSlotExchangeTargetRead,
@@ -21,10 +22,13 @@ import { Sheet } from '../../Sheet'
 import { NutritionMotionButton } from '../../nutrition-v2'
 import { PORTIONS_COPY } from '../../../lib/nutrition-portions-copy'
 import {
+  filterPortionExchangeFoods,
   formatPortionsCl,
   nextPortionStep,
+  orderedPortionTargets,
   type PortionCoverageView,
 } from '../../../lib/nutrition-v2-portions'
+import { useTheme } from '../../../context/ThemeContext'
 import { GroupDot } from './PortionChip'
 import { portionTargetColor } from './PortionSlotSection'
 
@@ -55,30 +59,34 @@ export function PortionEquivalencesSheet({
   onMark,
   onRegister,
 }: PortionEquivalencesSheetProps) {
+  const { theme } = useTheme()
   const [activeGroup, setActiveGroup] = useState<string | null>(null)
+  const [search, setSearch] = useState('')
   const [confirmExtra, setConfirmExtra] = useState(false)
 
   useEffect(() => {
     setActiveGroup(open?.groupCode ?? null)
+    setSearch('')
     setConfirmExtra(false)
   }, [open])
 
+  const orderedTargets = useMemo(() => orderedPortionTargets(targets), [targets])
+
   const target = useMemo(
     () =>
-      targets.find((t) => t.groupCode === (activeGroup ?? open?.groupCode)) ??
-      targets[0] ??
+      orderedTargets.find((t) => t.groupCode === (activeGroup ?? open?.groupCode)) ??
+      orderedTargets[0] ??
       null,
-    [activeGroup, open, targets],
+    [activeGroup, open, orderedTargets],
   )
 
   const foods = useMemo(
-    () => (target ? exchangeFoods.filter((f) => f.groupCode === target.groupCode) : []),
-    [exchangeFoods, target],
+    () => (target ? filterPortionExchangeFoods(exchangeFoods, target.groupCode, search) : []),
+    [exchangeFoods, search, target],
   )
 
   const view = target ? views[target.groupCode] : undefined
   const step = view ? nextPortionStep(view) : { portions: 1 as const, requiresConfirm: false }
-  const showDupWarning = view != null && view.marcadas > 0
 
   const handleMark = () => {
     if (!target) return
@@ -88,6 +96,9 @@ export function PortionEquivalencesSheet({
     }
     setConfirmExtra(false)
     onMark(target, step.portions)
+    // `nativeModal` lives above the screen tree; close after marking so the global
+    // snackbar + Undo are immediately visible instead of expiring behind the modal.
+    onClose()
   }
 
   return (
@@ -95,8 +106,7 @@ export function PortionEquivalencesSheet({
       open={open != null}
       onClose={onClose}
       nativeModal
-      title={target ? PORTIONS_COPY.student.sheetTitle(target.groupName) : undefined}
-      snapPoints={['88%']}
+      snapPoints={['85%']}
       accessibilityLabel={
         target ? PORTIONS_COPY.student.sheetTitle(target.groupName) : PORTIONS_COPY.student.equivalences
       }
@@ -104,40 +114,62 @@ export function PortionEquivalencesSheet({
         target ? (
           <View className="gap-2">
             {confirmExtra ? (
-              <Text className="text-xs leading-4 text-warning-700">
+              <Text
+                accessibilityLiveRegion="assertive"
+                accessibilityRole="alert"
+                className="text-xs leading-4 text-warning-700"
+              >
                 {PORTIONS_COPY.student.extraConfirm(target.groupName)}
               </Text>
             ) : null}
-            {showDupWarning ? (
-              <Text className="text-xs leading-4 text-text-muted">
-                {PORTIONS_COPY.student.dupWarning(
-                  `${formatPortionsCl(view?.marcadas ?? 0)} ${(view?.marcadas ?? 0) === 1 ? 'porción' : 'porciones'}`,
-                  target.groupName,
-                )}
-              </Text>
-            ) : null}
-            <NutritionMotionButton
-              accessibilityLabel={`${PORTIONS_COPY.student.sheetMark} de ${target.groupName}`}
-              onPress={handleMark}
-            >
-              {PORTIONS_COPY.student.sheetMark}
-            </NutritionMotionButton>
-            <NutritionMotionButton
-              accessibilityLabel={`${PORTIONS_COPY.student.sheetRegister} en esta comida`}
-              tone="neutral"
-              onPress={onRegister}
-            >
-              {PORTIONS_COPY.student.sheetRegister}
-            </NutritionMotionButton>
+            <View className="flex-row flex-wrap items-center gap-2">
+              <View className="min-w-36 flex-1">
+                <NutritionMotionButton
+                  accessibilityLabel={`${PORTIONS_COPY.student.sheetMark} de ${target.groupName}`}
+                  tone={confirmExtra ? 'warning' : 'nutrition'}
+                  onPress={handleMark}
+                >
+                  {PORTIONS_COPY.student.sheetMark}
+                </NutritionMotionButton>
+              </View>
+              <View className="min-w-36 flex-1">
+                <NutritionMotionButton
+                  accessibilityLabel={`${PORTIONS_COPY.student.sheetRegister} en esta comida`}
+                  tone="neutral"
+                  onPress={onRegister}
+                >
+                  {PORTIONS_COPY.student.sheetRegister}
+                </NutritionMotionButton>
+              </View>
+            </View>
           </View>
         ) : undefined
       }
     >
       {target ? (
         <View className="gap-4">
-          {targets.length > 1 ? (
+          <View className="flex-row items-start gap-3 pr-10">
+            <GroupDot code={target.groupCode} color={portionTargetColor(target)} size={36} />
+            <View className="min-w-0 flex-1">
+              <Text className="font-display text-base font-semibold text-text-strong" numberOfLines={2}>
+                {PORTIONS_COPY.student.sheetTitle(target.groupName)}
+              </Text>
+              <Text className="text-[11px] leading-4 text-text-muted">
+                {`≈ ${Math.round(target.ref.calories)} kcal · P ${formatPortionsCl(target.ref.proteinG)} g · C ${formatPortionsCl(target.ref.carbsG)} g · G ${formatPortionsCl(target.ref.fatsG)} g`}
+              </Text>
+              {!target.macrosConfirmed ? (
+                <View className="mt-1 self-start rounded-pill border border-warning-500/30 bg-warning-500/10 px-2 py-0.5">
+                  <Text className="text-[10px] font-semibold text-warning-700">
+                    {PORTIONS_COPY.builder.referentialBadge}
+                  </Text>
+                </View>
+              ) : null}
+            </View>
+          </View>
+
+          {orderedTargets.length > 1 ? (
             <View className="flex-row flex-wrap gap-2">
-              {targets.map((t) => {
+              {orderedTargets.map((t) => {
                 const active = t.groupCode === target.groupCode
                 return (
                   <Pressable
@@ -150,18 +182,18 @@ export function PortionEquivalencesSheet({
                       setConfirmExtra(false)
                     }}
                     className={cx(
-                      'min-h-9 flex-row items-center gap-1.5 rounded-pill border px-2.5 py-1',
-                      active ? 'border-primary bg-primary/10' : 'border-border-subtle bg-surface-sunken',
+                      'min-h-9 flex-row items-center rounded-pill border px-3 py-1',
+                      active ? 'border-primary bg-primary' : 'border-border-subtle bg-surface-card',
                     )}
                   >
-                    <GroupDot code={t.groupCode} color={portionTargetColor(t)} size={16} />
                     <Text
                       className={cx(
                         'text-xs font-semibold',
-                        active ? 'text-primary' : 'text-text-muted',
+                        !active && 'text-text-strong',
                       )}
+                      style={active ? { color: theme.primaryForeground } : undefined}
                     >
-                      {t.groupName}
+                      {t.groupCode} · {t.groupName}
                     </Text>
                   </Pressable>
                 )
@@ -169,29 +201,30 @@ export function PortionEquivalencesSheet({
             </View>
           ) : null}
 
-          <View className="flex-row items-center gap-3">
-            <GroupDot code={target.groupCode} color={portionTargetColor(target)} size={36} />
-            <View className="min-w-0 flex-1">
-              <Text className="text-xs leading-4 text-text-muted">
-                {`1 porción ≈ ${Math.round(target.ref.calories)} kcal · P ${formatPortionsCl(target.ref.proteinG)} g · C ${formatPortionsCl(target.ref.carbsG)} g · G ${formatPortionsCl(target.ref.fatsG)} g`}
-              </Text>
-              {!target.macrosConfirmed ? (
-                <View className="mt-1 self-start rounded-pill border border-warning-500/30 bg-warning-500/10 px-2 py-0.5">
-                  <Text className="text-[10px] font-semibold text-warning-700">
-                    {PORTIONS_COPY.builder.referentialBadge}
-                  </Text>
-                </View>
-              ) : null}
-            </View>
-          </View>
-
-          <Text className="text-sm font-semibold text-text-strong">
+          <Text className="text-xs font-medium text-text-muted">
             {PORTIONS_COPY.student.sheetSubtitle}
           </Text>
 
+          <View className="min-h-11 flex-row items-center gap-2 rounded-control border border-border-default bg-surface-app px-3">
+            <Search color={theme.textSecondary} size={16} />
+            <TextInput
+              accessibilityLabel={PORTIONS_COPY.student.sheetSearchAria}
+              autoCapitalize="none"
+              autoCorrect={false}
+              className="min-w-0 flex-1 py-2 text-sm text-text-strong"
+              onChangeText={setSearch}
+              placeholder={PORTIONS_COPY.student.sheetSearchPlaceholder}
+              placeholderTextColor={theme.textSecondary}
+              returnKeyType="search"
+              value={search}
+            />
+          </View>
+
           {foods.length === 0 ? (
-            <Text className="py-6 text-center text-sm text-text-muted">
-              {PORTIONS_COPY.student.sheetEmpty}
+            <Text className="py-8 text-center text-xs text-text-muted">
+              {search.trim().length > 0
+                ? PORTIONS_COPY.student.sheetNoResults
+                : PORTIONS_COPY.student.sheetEmpty}
             </Text>
           ) : (
             <View>
@@ -203,12 +236,14 @@ export function PortionEquivalencesSheet({
                     index > 0 && 'border-t border-border-subtle',
                   )}
                 >
-                  <Text className="min-w-0 flex-1 text-sm font-semibold text-text-strong" numberOfLines={2}>
-                    {food.name}
+                  <View className="min-w-0 flex-1">
+                    <Text className="text-sm font-semibold text-text-strong" numberOfLines={1}>
+                      {food.name}
+                    </Text>
                     {food.brand ? (
-                      <Text className="text-xs font-normal text-text-muted">{` · ${food.brand}`}</Text>
+                      <Text className="text-xs text-text-muted" numberOfLines={1}>{food.brand}</Text>
                     ) : null}
-                  </Text>
+                  </View>
                   <View className="items-end">
                     <Text
                       className={cx(

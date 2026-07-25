@@ -1,114 +1,217 @@
 /**
- * coach-nutrition-v2-tab-logic — helper PURO (sin react-native / supabase) que colapsa el read model
- * profesional de Nutricion V2 (`NutritionClientDetailReadModel`) al view model que consume el resumen
- * V2 del tab de nutricion de la ficha de alumno del coach (paralelo del tab web de Tanda 8).
+ * coach-nutrition-v2-tab-logic — helper PURO (sin react-native / supabase) del tab Nutrición V2
+ * embebido en la ficha del alumno del coach. Espejo RN 1:1 de
+ * `apps/web/src/app/coach/clients/[clientId]/nutritionTabV2.logic.ts` (view model del
+ * `NutritionTabV2` web): misma forma, mismos labels y las mismas reglas de negocio.
  *
- * Vive fuera de los V2_ROOTS del boundary guard a proposito: es logica neutral y testeable que la UI
- * (NutricionTab / NutritionV2Summary) importa. No renderiza nada.
+ * Diferencias deliberadas (adaptación nativa, documentadas en
+ * docs/rn-port/specs/seccion-3/verify-fix/ficha-nutricion-v2.md):
+ *  - `detailHref`/`builderHref` apuntan a las rutas expo-router del monorepo móvil
+ *    (`/coach/nutrition-v2/[clientId]` y `/coach/nutrition-v2/builder/[clientId]`), no a los
+ *    segmentos Next (`.../builder`). Mismo destino funcional.
+ *  - El recorte del historial sin addon Pro ocurre en el componente (cliente) con
+ *    `filterHistoryDaysToBaseWindow`, porque RN no tiene RSC; misma función y ventana que web.
  */
 import {
-  NUTRITION_STRATEGIES,
+  createNutritionMacroValue,
   type NutritionClientDetailReadModel,
+  type NutritionHistoryDay,
+  type NutritionMacroValue,
   type NutritionStrategy,
 } from '@eva/nutrition-v2'
 
-export type NutritionV2MacroKey = 'protein' | 'carbs' | 'fats'
-
-export type NutritionV2MacroLine = {
-  key: NutritionV2MacroKey
-  label: string
-  consumed: number
-  target: number
-  /** 0..100, capeado (nunca sobre 100 aunque el consumo exceda la meta). */
-  progressPct: number
-  /** "X / Y g" con enteros redondeados. */
-  metaLabel: string
-}
-
-export type NutritionV2CaloriesLine = {
-  consumed: number
-  target: number
-  progressPct: number
-  remaining: number
-}
-
-export type NutritionV2TabViewModel = {
+/**
+ * View model del tab (contrato de render de `NutritionV2Summary`). Espejo campo a campo del
+ * `NutritionTabV2ViewModel` web:
+ *  - `hasPlan`: existe ALGÚN plan (vigente publicado) → gobierna el label del CTA del builder
+ *    ("Crear plan" vs "Nueva versión") — web nutritionTabV2.logic.ts:120,158.
+ *  - `plan`: el plan VIGENTE HOY (`today.plan`). Si es null → estado vacío con CTA al builder
+ *    (web nutritionTabV2.logic.ts:121-122,159).
+ *  - `showHistoryUpgradeCta`: sin el addon Nutrición Pro el histórico se recorta a la ventana
+ *    base (~30d) y se ofrece el upgrade (web nutritionTabV2.logic.ts:183).
+ */
+export interface NutritionTabV2ViewModel {
+  clientId: string
   clientName: string
-  localDate: string
-  /** Hay un plan vigente para hoy (today.plan != null). */
+  /** Existe algún plan V2 (para el label del CTA del builder). */
   hasPlan: boolean
-  strategy: NutritionStrategy | null
-  strategyLabel: string | null
-  planName: string | null
-  versionNumber: number | null
-  status: 'published' | 'superseded' | null
-  calories: NutritionV2CaloriesLine
-  macros: NutritionV2MacroLine[]
-  /** Hay al menos un registro de consumo hoy (entryCount > 0). */
-  hasIntakeToday: boolean
+  /** Hay un plan VIGENTE hoy (gobierna resumen vs estado vacío). */
+  hasActivePlan: boolean
+  /** Ruta expo-router de la ficha nutrición completa. */
+  detailHref: string
+  /** Ruta expo-router del builder V2. */
+  builderHref: string
+  /** Ruta canónica de upgrade del addon Pro (web: '/coach/subscription'). */
+  historyUpgradeHref: string
+  builderCtaLabel: 'Crear plan' | 'Nueva versión'
+  /** Resumen del plan vigente (null si no hay plan vigente hoy). */
+  plan: {
+    strategy: NutritionStrategy
+    versionNumber: number
+    status: 'published' | 'superseded'
+    effectiveFrom: string
+    /** `effectiveFrom` formateado es-CL ("15 jul 2026") para pintar sin fechas ISO crudas. */
+    effectiveFromLabel: string
+    name: string | null
+    visibleNotes: string | null
+  } | null
+  /** Consumo de HOY vs meta (kcal + macros) del read model del día. */
+  today: {
+    calories: { consumed: number; target: number }
+    macros: NutritionMacroValue[]
+    remainingCalories: number
+    entryCount: number
+    mealSlotCount: number
+  }
+  /** Últimos días (ya recortados a la ventana base si no hay addon Pro). */
+  recentDays: Array<{ localDate: string; label: string; calories: number; entryCount: number }>
+  /** Sin addon Pro → mostrar CTA "Histórico completo con Nutrición Pro". */
+  showHistoryUpgradeCta: boolean
 }
 
-const MACRO_LABELS: Record<NutritionV2MacroKey, string> = {
-  protein: 'Proteína',
-  carbs: 'Carbohidratos',
-  fats: 'Grasas',
+export interface BuildNutritionTabV2Input {
+  clientId: string
+  detail: NutritionClientDetailReadModel
+  /** Entitlement del addon `nutrition_exchanges` (useEntitlements().hasModule, fail-closed). */
+  nutritionProEnabled: boolean
+  /** Últimos días YA recortados a la ventana visible. El mapper no vuelve a recortar. */
+  recentDaysForDisplay: NutritionHistoryDay[]
+  /** Ruta de upgrade del addon (default: la canónica web '/coach/subscription'). */
+  historyUpgradeHref?: string
 }
 
-function finiteOrZero(value: number | null | undefined): number {
+// Nutrición Pro viene incluido en los planes pagos — el CTA apunta al upgrade de plan
+// (web nutritionTabV2.logic.ts:80 DEFAULT_HISTORY_UPGRADE_HREF).
+const DEFAULT_HISTORY_UPGRADE_HREF = '/coach/subscription'
+
+function num(value: number | null | undefined): number {
   return typeof value === 'number' && Number.isFinite(value) ? value : 0
 }
 
-function progressPct(consumed: number, target: number): number {
-  return target > 0 ? Math.min(100, Math.round((consumed / target) * 100)) : 0
+const ES_CL_DATE_FORMAT = new Intl.DateTimeFormat('es-CL', {
+  day: 'numeric',
+  month: 'short',
+  year: 'numeric',
+  timeZone: 'UTC',
+})
+
+/**
+ * Formatea una fecha LOCAL `YYYY-MM-DD` a es-CL ("15 jul 2026") SIN desfase de zona
+ * (espejo exacto de web nutritionTabV2.logic.ts:100-109). Componentes parseados a mano y
+ * fecha construida/formateada en UTC para que el día jamás se corra por timezone. Si el
+ * string no calza con el patrón, se devuelve tal cual (defensivo).
+ */
+export function formatLocalDateEsCl(localDate: string): string {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(localDate)
+  if (!match) return localDate
+  const year = Number(match[1])
+  const month = Number(match[2])
+  const day = Number(match[3])
+  const date = new Date(Date.UTC(year, month - 1, day))
+  if (Number.isNaN(date.getTime())) return localDate
+  return ES_CL_DATE_FORMAT.format(date)
 }
 
 /**
- * Colapsa el read model del dia al view model del resumen. `null` solo cuando NO hay detail (el caller
- * cae a V1). Con detail pero sin plan vigente devuelve un view model con `hasPlan=false` para que la UI
- * muestre el estado "sin plan V2" + CTA a la ficha completa.
+ * 4B-04 — Decisión de swap del tab GLOBAL "Nutrición" del coach (NO confundir con el
+ * view model per-alumno de arriba). Espejo del swap web
+ * `nutrition-plans/_lib/nutrition-v2-swap.ts:19-31` + `page.tsx:38-40` y del gate del
+ * tab del alumno 4A-01 (`alumno/(tabs)/nutricion.tsx`): con entitlements listos y el
+ * flag `nutritionV2Coach` ON el tab abre el Centro V2; OFF → shell V1 (rollback puro,
+ * decisión owner 1). Mientras los entitlements no estén hidratados NO se decide todavía
+ * (`'loading'`) para NUNCA flashear V1 antes de resolver el swap. PURA (sin
+ * react-native / supabase) y por eso testeable de forma aislada.
+ *
+ * Fail-closed: el flag default del bundle es `false` (`lib/flags.ts:19`); solo el Edge
+ * Config remoto lo abre. Esta decisión usa el MISMO flag que el hub V2
+ * (`nutrition-v2/index.tsx:81`) y no lo debilita: el hub conserva su propio gate más
+ * estricto (entitlements + scope de workspace), así que `'v2'` aquí solo elige QUÉ
+ * superficie montar, no autoriza datos.
  */
-export function buildNutritionV2TabViewModel(
-  detail: NutritionClientDetailReadModel | null | undefined,
-): NutritionV2TabViewModel | null {
-  if (!detail) return null
+export type CoachNutritionTabMode = 'loading' | 'v1' | 'v2'
 
-  const { today } = detail
-  const plan = today.plan
-  const consumed = today.consumed
-  const targets = today.targets
+export function resolveCoachNutritionTabMode(input: {
+  /** `useEntitlements().ready` — config remota (flags incluidos) ya hidratada. */
+  entitlementsReady: boolean
+  /** `isEnabled('nutritionV2Coach')` — mismo flag que el hub V2, fail-closed. */
+  nutritionV2CoachEnabled: boolean
+}): CoachNutritionTabMode {
+  if (!input.entitlementsReady) return 'loading'
+  return input.nutritionV2CoachEnabled ? 'v2' : 'v1'
+}
 
-  const caloriesConsumed = finiteOrZero(consumed.calories)
-  const caloriesTarget = finiteOrZero(targets.calories)
+/**
+ * PURA: read model del detalle V2 + flags → props del tab. Espejo 1:1 de
+ * `buildNutritionTabV2ViewModel` web (nutritionTabV2.logic.ts:115-185).
+ */
+export function buildNutritionTabV2ViewModel(
+  input: BuildNutritionTabV2Input,
+): NutritionTabV2ViewModel {
+  const { clientId, detail, nutritionProEnabled, recentDaysForDisplay } = input
 
-  const macroDefs: Array<{ key: NutritionV2MacroKey; consumed: number; target: number }> = [
-    { key: 'protein', consumed: finiteOrZero(consumed.proteinG), target: finiteOrZero(targets.proteinG) },
-    { key: 'carbs', consumed: finiteOrZero(consumed.carbsG), target: finiteOrZero(targets.carbsG) },
-    { key: 'fats', consumed: finiteOrZero(consumed.fatsG), target: finiteOrZero(targets.fatsG) },
+  const hasPlan = detail.plan.plan !== null
+  const activePlan = detail.today.plan
+  const hasActivePlan = activePlan !== null
+
+  const consumed = detail.today.consumed
+  const targets = detail.today.targets
+  const remaining = detail.today.remaining
+
+  const targetCalories = num(targets.calories)
+  const consumedCalories = num(consumed.calories)
+  const remainingCalories =
+    remaining.calories != null && Number.isFinite(remaining.calories)
+      ? Math.max(num(remaining.calories), 0)
+      : Math.max(targetCalories - consumedCalories, 0)
+
+  const macros: NutritionMacroValue[] = [
+    createNutritionMacroValue('protein', {
+      consumed: num(consumed.proteinG),
+      target: num(targets.proteinG),
+    }),
+    createNutritionMacroValue('carbs', {
+      consumed: num(consumed.carbsG),
+      target: num(targets.carbsG),
+    }),
+    createNutritionMacroValue('fats', {
+      consumed: num(consumed.fatsG),
+      target: num(targets.fatsG),
+    }),
   ]
 
   return {
+    clientId,
     clientName: detail.client.fullName,
-    localDate: today.localDate,
-    hasPlan: plan != null,
-    strategy: plan?.strategy ?? null,
-    strategyLabel: plan ? NUTRITION_STRATEGIES[plan.strategy].label : null,
-    planName: plan?.name ?? null,
-    versionNumber: plan?.versionNumber ?? null,
-    status: plan?.status ?? null,
-    calories: {
-      consumed: caloriesConsumed,
-      target: caloriesTarget,
-      progressPct: progressPct(caloriesConsumed, caloriesTarget),
-      remaining: Math.max(caloriesTarget - caloriesConsumed, 0),
+    hasPlan,
+    hasActivePlan,
+    detailHref: `/coach/nutrition-v2/${clientId}`,
+    builderHref: `/coach/nutrition-v2/builder/${clientId}`,
+    historyUpgradeHref: input.historyUpgradeHref ?? DEFAULT_HISTORY_UPGRADE_HREF,
+    builderCtaLabel: hasPlan ? 'Nueva versión' : 'Crear plan',
+    plan: activePlan
+      ? {
+          strategy: activePlan.strategy,
+          versionNumber: activePlan.versionNumber,
+          status: activePlan.status,
+          effectiveFrom: activePlan.effectiveFrom,
+          effectiveFromLabel: formatLocalDateEsCl(activePlan.effectiveFrom),
+          name: detail.plan.plan?.name ?? activePlan.name,
+          visibleNotes: detail.plan.visibleNotes,
+        }
+      : null,
+    today: {
+      calories: { consumed: consumedCalories, target: targetCalories },
+      macros,
+      remainingCalories,
+      entryCount: consumed.entryCount,
+      mealSlotCount: detail.today.mealSlots.length,
     },
-    macros: macroDefs.map((macro) => ({
-      key: macro.key,
-      label: MACRO_LABELS[macro.key],
-      consumed: macro.consumed,
-      target: macro.target,
-      progressPct: progressPct(macro.consumed, macro.target),
-      metaLabel: `${Math.round(macro.consumed)} / ${Math.round(macro.target)} g`,
+    recentDays: recentDaysForDisplay.map((day) => ({
+      localDate: day.localDate,
+      label: formatLocalDateEsCl(day.localDate),
+      calories: num(day.consumed.calories),
+      entryCount: day.activeEntryCount,
     })),
-    hasIntakeToday: finiteOrZero(consumed.entryCount) > 0,
+    showHistoryUpgradeCta: !nutritionProEnabled,
   }
 }

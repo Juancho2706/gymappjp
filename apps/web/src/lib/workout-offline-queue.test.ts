@@ -227,12 +227,33 @@ describe('workout-offline-queue', () => {
             expect(fd.has('note')).toBe(false)
         })
 
+        // E1.6: la fecha de edición viaja EN el item — el flush global de reconexión no conoce el
+        // contexto de página; sin esto, una edición de día pasado encolada offline insertaría en HOY.
+        it('serializa target_date cuando el item es una edición de día pasado (y la omite si no)', () => {
+            const conFecha = workoutLogToFormData(make({ targetDate: '2026-07-21' }))
+            expect(conFecha.get('target_date')).toBe('2026-07-21')
+            const sinFecha = workoutLogToFormData(make({}))
+            expect(sinFecha.has('target_date')).toBe(false)
+            const nula = workoutLogToFormData(make({ targetDate: null }))
+            expect(nula.has('target_date')).toBe(false)
+        })
+
         it('serializes the polymorphic (cardio/mobility) mirror keys', () => {
             const fd = workoutLogToFormData(make({ actualDurationSec: 600, actualDistanceM: 1200, actualHoldSec: 45, actualAvgHr: 150 }))
             expect(fd.get('actual_duration_sec')).toBe('600')
             expect(fd.get('actual_distance_m')).toBe('1200')
             expect(fd.get('actual_hold_sec')).toBe('45')
             expect(fd.get('actual_avg_hr')).toBe('150')
+        })
+
+        // E3.2: el hold POR LADO {left_sec,right_sec} viaja como JSON → el action lo parsea y escribe
+        // workout_logs.metadata. Sólo la fila per_side de movilidad lo trae; el resto no gana la key.
+        it('serializes per_side hold metadata as JSON (and omits it when absent/null)', () => {
+            const perSide = workoutLogToFormData(make({ actualHoldSec: 55, metadata: { left_sec: 30, right_sec: 25 } }))
+            expect(perSide.get('metadata')).toBe('{"left_sec":30,"right_sec":25}')
+            expect(perSide.get('actual_hold_sec')).toBe('55')
+            expect(workoutLogToFormData(make({})).has('metadata')).toBe(false)
+            expect(workoutLogToFormData(make({ metadata: null })).has('metadata')).toBe(false)
         })
     })
 

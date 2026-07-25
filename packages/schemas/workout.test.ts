@@ -343,17 +343,35 @@ describe('WorkoutLogSetSchema — espejo polimórfico (AC4)', () => {
         expect(WorkoutLogSetSchema.safeParse({ ...baseLog, actual_avg_hr: 300 }).success).toBe(false)
     })
 
-    // Escala 1-10 para AMBOS (decisión CEO, pisa RPE 6-10 / RIR 0-5 anteriores).
-    it('acepta RPE y RIR en el borde 1 y 10', () => {
-        expect(WorkoutLogSetSchema.safeParse({ ...baseLog, rpe: '1', rir: '1' }).success).toBe(true)
+    // Escalas executor-v3 (corrección CEO 2026-07-22): RPE 1-10; RIR 0-10 (0 = al fallo).
+    it('acepta los bordes válidos: RPE 1 y 10, RIR 0 y 10', () => {
+        expect(WorkoutLogSetSchema.safeParse({ ...baseLog, rpe: '1', rir: '0' }).success).toBe(true)
         expect(WorkoutLogSetSchema.safeParse({ ...baseLog, rpe: '10', rir: '10' }).success).toBe(true)
     })
 
-    it('rechaza RPE/RIR fuera de 1-10 (0 y 11)', () => {
+    it('rechaza RPE 0 pero acepta RIR 0 (coaccionado a número, no descartado como falsy)', () => {
         expect(WorkoutLogSetSchema.safeParse({ ...baseLog, rpe: '0' }).success).toBe(false)
-        expect(WorkoutLogSetSchema.safeParse({ ...baseLog, rir: '0' }).success).toBe(false)
+        const result = WorkoutLogSetSchema.safeParse({ ...baseLog, rir: '0' })
+        expect(result.success).toBe(true)
+        if (result.success) {
+            expect(result.data.rir).toBe(0)
+        }
+    })
+
+    it('rechaza RPE/RIR fuera de rango (RPE 0 y 11, RIR -1 y 11)', () => {
+        expect(WorkoutLogSetSchema.safeParse({ ...baseLog, rpe: '0' }).success).toBe(false)
+        expect(WorkoutLogSetSchema.safeParse({ ...baseLog, rir: '-1' }).success).toBe(false)
         expect(WorkoutLogSetSchema.safeParse({ ...baseLog, rpe: '11' }).success).toBe(false)
         expect(WorkoutLogSetSchema.safeParse({ ...baseLog, rir: '11' }).success).toBe(false)
+    })
+
+    it('acepta RPE/RIR ausentes (undefined es válido — el esfuerzo es opcional)', () => {
+        const result = WorkoutLogSetSchema.safeParse({ ...baseLog, weight_kg: '60', reps_done: '10' })
+        expect(result.success).toBe(true)
+        if (result.success) {
+            expect(result.data.rpe).toBeUndefined()
+            expect(result.data.rir).toBeUndefined()
+        }
     })
 
     // Sustitución de máquina ocupada (Fase L · workstream C) — 3 campos opcionales/aditivos.
@@ -386,6 +404,35 @@ describe('WorkoutLogSetSchema — espejo polimórfico (AC4)', () => {
 
     it('rechaza un substituted_exercise_id que no es uuid', () => {
         expect(WorkoutLogSetSchema.safeParse({ ...baseLog, substituted_exercise_id: 'no-es-uuid' }).success).toBe(false)
+    })
+
+    // ── Hold POR LADO (E0.5) — metadata jsonb {left_sec, right_sec} ──
+    it('log SIN metadata pasa idéntico y no gana la key', () => {
+        const result = WorkoutLogSetSchema.safeParse({ ...baseLog, weight_kg: '60', reps_done: '10' })
+        expect(result.success).toBe(true)
+        if (result.success) {
+            expect(result.data.metadata).toBeUndefined()
+        }
+    })
+
+    it('acepta metadata {left_sec, right_sec} con coerción de strings', () => {
+        const result = WorkoutLogSetSchema.safeParse({ ...baseLog, metadata: { left_sec: '30', right_sec: '25' } })
+        expect(result.success).toBe(true)
+        if (result.success) {
+            expect(result.data.metadata).toEqual({ left_sec: 30, right_sec: 25 })
+        }
+    })
+
+    it('acepta metadata parcial (un solo lado), null y objeto vacío', () => {
+        expect(WorkoutLogSetSchema.safeParse({ ...baseLog, metadata: { left_sec: 40 } }).success).toBe(true)
+        expect(WorkoutLogSetSchema.safeParse({ ...baseLog, metadata: { left_sec: null, right_sec: null } }).success).toBe(true)
+        expect(WorkoutLogSetSchema.safeParse({ ...baseLog, metadata: null }).success).toBe(true)
+        expect(WorkoutLogSetSchema.safeParse({ ...baseLog, metadata: {} }).success).toBe(true)
+    })
+
+    it('rechaza segundos por lado fuera de rango (negativo o > 86400)', () => {
+        expect(WorkoutLogSetSchema.safeParse({ ...baseLog, metadata: { left_sec: -1 } }).success).toBe(false)
+        expect(WorkoutLogSetSchema.safeParse({ ...baseLog, metadata: { right_sec: 86401 } }).success).toBe(false)
     })
 })
 

@@ -1,13 +1,22 @@
+import { useRef, useState } from 'react'
 import { ScrollView, Text, TouchableOpacity, View } from 'react-native'
-import { ArrowRight, Calendar, CheckCircle2, ChevronRight, Play, RotateCcw } from 'lucide-react-native'
+import { ArrowRight, Calendar, CheckCircle2, ChevronRight, Pencil, Play, RotateCcw } from 'lucide-react-native'
+import { cssInterop } from 'nativewind'
 import { deriveSportTokens } from '@eva/brand-kit'
 import { useTheme } from '../../../context/ThemeContext'
 import { FONT } from '../../../lib/typography'
 import { Badge } from '../../Badge'
 import { Card } from '../../Card'
+import { Sheet } from '../../Sheet'
 import { ProgramPhaseBar } from './ProgramPhaseBar'
-import { DAY_SHORT } from './types'
+import { measureMorphOrigin, useTriggerMorphHide, type MorphOrigin } from '../workout/v3/session-morph'
+import { DAY_FULL, DAY_SHORT } from './types'
 import type { PendingDay, PlanDayView, Program } from './types'
+
+/** "martes 15 de julio" — dia calendario es-CL desde un ymd (mediodia UTC evita cruce de huso). */
+function fmtSheetDate(ymd: string): string {
+  return new Date(`${ymd}T12:00:00Z`).toLocaleDateString('es-CL', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' })
+}
 
 // Rampas DS FIJAS (nunca white-label) resueltas por esquema para props de color
 // de iconos lucide (className no las expresa). Valores verbatim de TOKENS.md:
@@ -17,6 +26,12 @@ import type { PendingDay, PlanDayView, Program } from './types'
 const EMBER_700_ICON = { light: '#C23E14', dark: '#FFB79E' } as const
 const INK_300 = { light: '#A8B1BD', dark: '#414C5A' } as const
 const ON_EMBER = '#0B0E13'
+
+// className→color del glyph Calendar: el header web lo pinta `text-sport-500`
+// (ActiveProgramSection.tsx:90, rampa de marca verbatim SIN contrast-clamp) — con
+// cssInterop la clase brand-aware colorea el trazo (mismo patron que Flame en
+// StreakRibbon). Sin registro, lucide-react-native ignora className.
+cssInterop(Calendar, { className: { target: 'style', nativeStyleToProp: { color: true } } })
 
 /**
  * §8 ActiveProgramSection (web `program/ActiveProgramSection.tsx`): nombre del
@@ -33,6 +48,7 @@ export function ActiveProgramSection({
   todayPlanId,
   weekVariant = null,
   onStart,
+  onRecover,
 }: {
   program: Program | null
   currentWeek: number
@@ -44,9 +60,34 @@ export function ActiveProgramSection({
   // sin sufijo. El shell la computa (resolveEffectiveWeekVariant). Espejo del sufijo
   // web `{abMode ? ` · Sem ${activeVariant}` : ''}` (ActiveProgramSection.tsx:95).
   weekVariant?: 'A' | 'B' | null
-  onStart: (planId: string) => void
+  /** Entreno normal / repetir hoy (sin params). `origin` = rect del day-card para que el Despegue
+   *  nazca de la tarjeta clickeada (null ⇒ el morph cae a su origen sintético). `label` = texto real del
+   *  trigger para la píldora del clon (solo se pinta en rects anchos; las day-cards angostas lo ignoran). */
+  onStart: (planId: string, origin?: MorphOrigin | null, label?: string) => void
+  /** Recuperar un dia pendiente → ejecutor con param `recuperar` (banner ambar). `origin` = rect del
+   *  trigger (banner o day-card) para que el Despegue nazca de él, igual que el CTA y las day-cards. */
+  onRecover: (planId: string, dateIso: string, origin?: MorphOrigin | null, label?: string) => void
 }) {
   const { theme, resolvedScheme } = useTheme()
+  // Sheet doble intencion (E1.7): el day-card de un dia YA HECHO de OTRO dia lo abre; hoy/pendiente/
+  // futuro navegan directo. Guarda la vista tocada para pintar dia/fecha del subtitulo.
+  const [sheetView, setSheetView] = useState<PlanDayView | null>(null)
+  // Banner de pendientes: dispara el MISMO Despegue que el CTA/day-cards. Mide su rect y se oculta
+  // durante el morph (el clon lo reemplaza).
+  const bannerRef = useRef<View>(null)
+  const { hidden: bannerHidden, hide: hideBanner } = useTriggerMorphHide()
+
+  // Enrutado por estado del day-card:
+  //  · done && !isToday → sheet "Ya hiciste este entrenamiento" (revisar/repetir).
+  //  · pending          → recuperar (param `recuperar`, banner ambar, se entrena hoy) — vía Despegue.
+  //  · resto (today/upcoming/done-hoy) → Despegue directo.
+  function handleDayPress(view: PlanDayView, origin: MorphOrigin | null) {
+    if (view.status === 'done' && !view.isToday) { setSheetView(view); return }
+    // Las day-cards son angostas (96px) → el overlay NO pinta la etiqueta (solo rects anchos); se pasa el
+    // título del plan por si la medición cae al origen sintético (ancho), donde sí se veria.
+    if (view.status === 'pending') { onRecover(view.plan.id, view.dateIso, origin, view.plan.title); return }
+    onStart(view.plan.id, origin, view.plan.title)
+  }
 
   // Sin programa activo — web `ActiveProgramSection.tsx:26-34` hace early return de
   // esta card guia ANTES de tocar planes (misma precedencia que aca). Espejo 1:1:
@@ -78,10 +119,12 @@ export function ActiveProgramSection({
   }
 
   return (
+    <>
     <Card padding="md" style={{ gap: 16 }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 1, minWidth: 0 }}>
-          <Calendar size={16} color={theme.primary} strokeWidth={2.25} />
+          {/* Web h-4 w-4 (16) text-sport-500 stroke default 2 (ActiveProgramSection.tsx:90). */}
+          <Calendar size={16} className="text-sport-500" strokeWidth={2} />
           <Text className="text-strong" numberOfLines={1} style={{ flexShrink: 1, minWidth: 0, fontFamily: FONT.displayBold, fontSize: 16 }}>{program.name}</Text>
         </View>
         <Badge tone="sport" variant="soft">Semana {currentWeek} de {totalWeeks}{weekVariant ? ` · Sem ${weekVariant}` : ''}</Badge>
@@ -90,50 +133,175 @@ export function ActiveProgramSection({
       <ProgramPhaseBar phases={program.phases} currentWeek={currentWeek} totalWeeks={totalWeeks} />
 
       {oldestPending ? (
-        <TouchableOpacity
-          testID="program-pending-cta"
-          onPress={() => onStart(oldestPending.planId)}
-          activeOpacity={0.82}
-          accessibilityRole="button"
-          className="rounded-control border border-ember-200 bg-ember-100"
-          style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 14, paddingVertical: 12 }}
-        >
-          <View className="bg-ember-500" style={{ width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' }}>
-            <RotateCcw size={18} color={ON_EMBER} strokeWidth={2.25} />
-          </View>
-          <View style={{ flex: 1, minWidth: 0 }}>
-            <Text className="text-ember-700" style={{ fontFamily: FONT.uiBold, fontSize: 13 }}>
-              {pending.length === 1 ? 'Tenés 1 día pendiente' : `Tenés ${pending.length} días pendientes`} esta semana
-            </Text>
-            <Text className="text-ember-700/80" numberOfLines={1} style={{ fontFamily: FONT.uiSemibold, fontSize: 11.5, marginTop: 2 }}>
-              Recuperar Día {oldestPending.dayOfWeek} · {oldestPending.dayLabel}
-            </Text>
-          </View>
-          <ArrowRight size={16} color={EMBER_700_ICON[resolvedScheme]} />
-        </TouchableOpacity>
+        // Wrapper medible + ocultable: el banner de pendientes dispara el MISMO Despegue que el CTA/cards
+        // (mide su rect, se oculta durante el vuelo del clon).
+        <View ref={bannerRef} collapsable={false} style={{ opacity: bannerHidden ? 0 : 1 }}>
+          <TouchableOpacity
+            testID="program-pending-cta"
+            onPress={() => {
+              hideBanner()
+              // El banner es ancho → la píldora del Despegue SÍ muestra la etiqueta: texto de recuperación.
+              measureMorphOrigin(bannerRef.current, theme.radius.control, (origin) =>
+                onRecover(oldestPending.planId, oldestPending.dateIso, origin, 'Recuperar entrenamiento'),
+              )
+            }}
+            activeOpacity={0.82}
+            accessibilityRole="button"
+            className="rounded-control border border-ember-200 bg-ember-100"
+            style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 14, paddingVertical: 12 }}
+          >
+            <View className="bg-ember-500" style={{ width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' }}>
+              <RotateCcw size={18} color={ON_EMBER} strokeWidth={2.25} />
+            </View>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text className="text-ember-700" style={{ fontFamily: FONT.uiBold, fontSize: 13 }}>
+                {pending.length === 1 ? 'Tenés 1 día pendiente' : `Tenés ${pending.length} días pendientes`} esta semana
+              </Text>
+              <Text className="text-ember-700/80" numberOfLines={1} style={{ fontFamily: FONT.uiSemibold, fontSize: 11.5, marginTop: 2 }}>
+                Recuperar Día {oldestPending.dayOfWeek} · {oldestPending.dayLabel}
+              </Text>
+            </View>
+            <ArrowRight size={16} color={EMBER_700_ICON[resolvedScheme]} />
+          </TouchableOpacity>
+        </View>
       ) : null}
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingRight: 2 }}>
         {planDays.map((d) => (
-          <DayCard key={d.plan.id} view={d} onPress={() => onStart(d.plan.id)} />
+          <DayCard key={d.plan.id} view={d} onPress={(origin) => handleDayPress(d, origin)} />
         ))}
       </ScrollView>
 
       {todayPlanId ? (
-        <TouchableOpacity onPress={() => onStart(todayPlanId)} activeOpacity={0.7} accessibilityRole="button">
+        <TouchableOpacity onPress={() => onStart(todayPlanId, null, 'Empezar entrenamiento')} activeOpacity={0.7} accessibilityRole="button">
           <Text className="text-sport-600" style={{ textAlign: 'center', fontFamily: FONT.uiBold, fontSize: 11 }}>Ver entreno de hoy →</Text>
         </TouchableOpacity>
       ) : null}
     </Card>
+
+    <DoubleIntentSheet
+      view={sheetView}
+      onClose={() => setSheetView(null)}
+      onRepeat={(id) => { setSheetView(null); onStart(id, null, 'Empezar entrenamiento') }}
+    />
+    </>
   )
 }
 
-function DayCard({ view, onPress }: { view: PlanDayView; onPress: () => void }) {
+/**
+ * Bottom-sheet doble intencion (E1.7, mockup concepto-a-v33): tras tocar un day-card de un dia YA
+ * HECHO de OTRO dia. "Revisar y editar" (destacada) → abre los registros de ese dia; "Repetir hoy" →
+ * nueva sesion de hoy; Cancelar. Theme-aware (nivel dashboard, claro/oscuro + safe areas via Sheet).
+ *
+ * DECISION RN (justificada): "Revisar y editar" queda DESHABILITADA con sublabel "Disponible pronto".
+ * El guardado del ejecutor RN escribe SIEMPRE el log de HOY (habla PostgREST directo); el solo-UPDATE
+ * por `target_date` que edita la fecha pasada es un server action WEB (E1.5), aun no portado a RN. Si
+ * habilitaramos "editar", el banner diria "editando el martes" pero cada serie crearia un log NUEVO de
+ * hoy → duplicaria en vez de corregir, violando el invariante "editar jamas duplica" del mockup. Por eso
+ * el unico camino accionable aqui es "Repetir hoy" (semantica honesta); el editar llega en ola posterior
+ * (reactivara un `onReview` que navegue con el param `fecha`, ya soportado por [planId].tsx + RecoveryBanner).
+ *
+ * Exportado: lo reusa también el hero de la home cuando el entreno de HOY ya está completado (MOBILE-2 /
+ * paridad web WorkoutHeroCard: el overlay "Entrenamiento completado" abre esta misma ventanita en vez de
+ * dejar un CTA muerto). "Repetir hoy" dispara el Despegue; "Revisar y editar" sigue deshabilitada.
+ */
+export function DoubleIntentSheet({
+  view,
+  onClose,
+  onRepeat,
+}: {
+  view: PlanDayView | null
+  onClose: () => void
+  onRepeat: (planId: string) => void
+}) {
+  const { theme } = useTheme()
+  const dow = view?.plan.day_of_week ?? 1
+  // Fecha real de la sesion a revisar: la del log (doneOnDate si fue recuperado) o la propia del dia.
+  const reviewDate = view ? (view.doneOnDate ?? view.dateIso) : null
+
+  return (
+    <Sheet
+      open={!!view}
+      onClose={onClose}
+      title="Ya hiciste este entrenamiento"
+      snapPoints={['42%']}
+      dynamicSizing
+    >
+      <View style={{ gap: 16 }}>
+        {view ? (
+          <View style={{ gap: 2 }}>
+            <Text className="text-strong" style={{ fontFamily: FONT.uiBold, fontSize: 15 }}>
+              {view.plan.title} · {DAY_FULL[dow]} — Día {dow}
+            </Text>
+            {reviewDate ? (
+              <Text className="text-muted" style={{ fontFamily: FONT.ui, fontSize: 12.5, textTransform: 'capitalize' }}>
+                {fmtSheetDate(reviewDate)}
+              </Text>
+            ) : null}
+          </View>
+        ) : null}
+
+        {/* Revisar y editar — DESHABILITADA en RN (ver nota del componente). */}
+        <View
+          accessibilityRole="button"
+          accessibilityState={{ disabled: true }}
+          className="rounded-control border border-subtle bg-surface-sunken/30"
+          style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 14, paddingVertical: 13, opacity: 0.55 }}
+        >
+          <View className="bg-surface-sunken" style={{ width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' }}>
+            <Pencil size={17} color={theme.mutedForeground} strokeWidth={2} />
+          </View>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text className="text-strong" style={{ fontFamily: FONT.uiBold, fontSize: 14 }}>Revisar y editar</Text>
+            <Text className="text-muted" numberOfLines={1} style={{ fontFamily: FONT.ui, fontSize: 11.5, marginTop: 1 }}>Disponible pronto</Text>
+          </View>
+        </View>
+
+        {/* Repetir hoy — sesion nueva de hoy (funcional en RN). */}
+        <TouchableOpacity
+          testID="double-intent-repeat"
+          onPress={() => view && onRepeat(view.plan.id)}
+          activeOpacity={0.85}
+          accessibilityRole="button"
+          className="rounded-control border border-sport-500 bg-sport-100"
+          style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 14, paddingVertical: 13 }}
+        >
+          <View className="bg-sport-500" style={{ width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' }}>
+            <RotateCcw size={17} color="#fff" strokeWidth={2.25} />
+          </View>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text className="text-sport-600" style={{ fontFamily: FONT.uiBold, fontSize: 14 }}>Repetir hoy</Text>
+            <Text className="text-muted" numberOfLines={2} style={{ fontFamily: FONT.ui, fontSize: 11.5, marginTop: 1 }}>Empieza de cero; tus marcas de esa vez quedan como referencia</Text>
+          </View>
+          <ChevronRight size={18} color={theme.mutedForeground} />
+        </TouchableOpacity>
+
+        <TouchableOpacity onPress={onClose} activeOpacity={0.7} accessibilityRole="button" style={{ paddingVertical: 6 }}>
+          <Text className="text-muted" style={{ textAlign: 'center', fontFamily: FONT.uiSemibold, fontSize: 13.5 }}>Cancelar</Text>
+        </TouchableOpacity>
+      </View>
+    </Sheet>
+  )
+}
+
+function DayCard({ view, onPress }: { view: PlanDayView; onPress: (origin: MorphOrigin | null) => void }) {
   const { theme, resolvedScheme } = useTheme()
-  const { plan, status, isToday } = view
+  // Ref medible: al tocar la tarjeta se mide su rect real en ventana para que el Despegue nazca EXACTO
+  // de la day-card clickeada (mismo patrón que el CTA del hero). Si la medición falla → origen sintético.
+  const ref = useRef<View>(null)
+  // Ocultar la card real durante el Despegue (el clon la reemplaza) — SÓLO cuando de verdad morfea:
+  // los estados que abren el sheet (done de otro día) o recuperan (pending) NO lanzan el morph.
+  const { hidden: cardHidden, hide: hideCard } = useTriggerMorphHide()
+  const { plan, status, isToday, doneOnLabel } = view
   const dow = plan.day_of_week ?? 1
   const done = status === 'done'
   const pending = status === 'pending'
+  // handleDayPress morfea en TODO salvo done-de-otro-día (abre el sheet): hoy/futuro/done-hoy → Despegue
+  // (onStart) y pending → Despegue de recuperación (onRecover). Sólo el sheet no morfea.
+  const willMorph = !(done && !isToday)
+  // "Hecho el jueves" solo cuando el dia se cerro por una sesion de OTRO dia (recuperacion):
+  // label discreto que espeja el copy web (doneOnLabel). Done en su propia fecha → "Día N".
+  const doneElsewhere = done && !!doneOnLabel
 
   // Superficie y neutros via clases DS (theme + white-label aware): hoy=sport,
   // pendiente=ember, resto=neutro. Espejo de web WorkoutPlanCard.tsx:48-84.
@@ -144,36 +312,49 @@ function DayCard({ view, onPress }: { view: PlanDayView; onPress: () => void }) 
   // text-sport-600, no sport-500. Solo se deriva en la card de hoy.
   const playColor = resolvedScheme === 'dark' ? deriveSportTokens(theme.primary).dark['600'] : deriveSportTokens(theme.primary).ramp['600']
 
-  const a11yLabel = pending ? `${plan.title} · pendiente, recuperar` : isToday ? `${plan.title} · hoy` : plan.title
+  const a11yLabel = pending
+    ? `${plan.title} · pendiente, recuperar`
+    : isToday
+      ? `${plan.title} · hoy`
+      : doneElsewhere
+        ? `${plan.title} · hecho el ${doneOnLabel!.toLowerCase()}`
+        : plan.title
 
   return (
-    <TouchableOpacity
-      testID={`program-day-${plan.id}`}
-      onPress={onPress}
-      activeOpacity={0.8}
-      accessibilityRole="button"
-      accessibilityLabel={a11yLabel}
-      className={`rounded-control border ${cardClass}`}
-      style={{ width: 96, padding: 12 }}
-    >
-      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-        <Text className={labelClass} style={{ fontFamily: FONT.uiExtra, fontSize: 10.5, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-          {DAY_SHORT[dow]}
+    // Wrapper medible (patrón del hero): `collapsable={false}` evita que Android colapse el View y
+    // measureInWindow devuelva 0. El wrapper se ciñe al TouchableOpacity (width 96) → su rect == la card.
+    <View ref={ref} collapsable={false} style={{ opacity: cardHidden ? 0 : 1 }}>
+      <TouchableOpacity
+        testID={`program-day-${plan.id}`}
+        onPress={() => {
+          if (willMorph) hideCard()
+          measureMorphOrigin(ref.current, theme.radius.control, (origin) => onPress(origin))
+        }}
+        activeOpacity={0.8}
+        accessibilityRole="button"
+        accessibilityLabel={a11yLabel}
+        className={`rounded-control border ${cardClass}`}
+        style={{ width: 96, padding: 12 }}
+      >
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+          <Text className={labelClass} style={{ fontFamily: FONT.uiExtra, fontSize: 10.5, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+            {DAY_SHORT[dow]}
+          </Text>
+          {done ? (
+            <CheckCircle2 size={14} color={theme.success} strokeWidth={2.4} />
+          ) : isToday ? (
+            <Play size={12} color={playColor} strokeWidth={2.6} />
+          ) : pending ? (
+            <View className="bg-ember-500" style={{ width: 8, height: 8, borderRadius: 4 }} />
+          ) : (
+            <ChevronRight size={13} color={INK_300[resolvedScheme]} />
+          )}
+        </View>
+        <Text className="text-strong" numberOfLines={2} style={{ marginTop: 6, fontFamily: FONT.uiBold, fontSize: 13, lineHeight: 16 }}>{plan.title}</Text>
+        <Text className={pieClass} numberOfLines={1} style={{ marginTop: 2, fontSize: 10.5, fontFamily: pending ? FONT.uiBold : FONT.ui }}>
+          {pending ? 'Pendiente' : doneElsewhere ? `Hecho el ${doneOnLabel!.toLowerCase()}` : `Día ${dow}`}
         </Text>
-        {done ? (
-          <CheckCircle2 size={14} color={theme.success} strokeWidth={2.4} />
-        ) : isToday ? (
-          <Play size={12} color={playColor} strokeWidth={2.6} />
-        ) : pending ? (
-          <View className="bg-ember-500" style={{ width: 8, height: 8, borderRadius: 4 }} />
-        ) : (
-          <ChevronRight size={13} color={INK_300[resolvedScheme]} />
-        )}
-      </View>
-      <Text className="text-strong" numberOfLines={2} style={{ marginTop: 6, fontFamily: FONT.uiBold, fontSize: 13, lineHeight: 16 }}>{plan.title}</Text>
-      <Text className={pieClass} numberOfLines={1} style={{ marginTop: 2, fontSize: 10.5, fontFamily: pending ? FONT.uiBold : FONT.ui }}>
-        {pending ? 'Pendiente' : `Día ${dow}`}
-      </Text>
-    </TouchableOpacity>
+      </TouchableOpacity>
+    </View>
   )
 }

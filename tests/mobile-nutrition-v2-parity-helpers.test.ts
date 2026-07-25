@@ -1,9 +1,17 @@
 import { describe, expect, it } from 'vitest'
 import {
+  NUTRITION_SORT_OPTIONS,
   applyNutritionAttentionFilter,
+  applyNutritionRosterFilters,
+  filterNutritionPickerEntries,
   isNutritionHubPageComplete,
+  isNutritionRosterFiltered,
   localDateOf,
   mapNutritionHubMetrics,
+  normalizeText,
+  nutritionAttentionCardDescription,
+  nutritionAttentionCardTitle,
+  nutritionAttentionCardTone,
   nutritionAttentionLabel,
   nutritionHubMetricScopeLabel,
   nutritionPlanCtaLabel,
@@ -50,8 +58,126 @@ describe('nutrition-v2-hub CTA label', () => {
 })
 
 describe('nutrition-v2-hub builder href', () => {
-  it('apunta a la ruta convenida con clientId codificado', () => {
-    expect(nutritionV2BuilderHref('abc 123')).toBe('/coach/nutrition-v2/builder?clientId=abc%20123')
+  it('apunta al segmento dinamico real con clientId codificado', () => {
+    // Ruta RN = `builder/[clientId].tsx` (no existe `builder/index.tsx`): debe ser segmento, no query.
+    expect(nutritionV2BuilderHref('abc 123')).toBe('/coach/nutrition-v2/builder/abc%20123')
+  })
+})
+
+describe('nutrition-v2-hub normalizeText', () => {
+  it('baja a minusculas, quita tildes y recorta', () => {
+    expect(normalizeText('  JOSÉ Ñoño  ')).toBe('jose nono')
+    expect(normalizeText('Ángela')).toBe('angela')
+  })
+})
+
+describe('nutrition-v2-hub opciones de orden', () => {
+  it('espeja las 4 claves web con labels acentuados (regla espanol latam)', () => {
+    expect(NUTRITION_SORT_OPTIONS.map((o) => o.value)).toEqual(['default', 'name', 'activity', 'attention'])
+    const byValue = Object.fromEntries(NUTRITION_SORT_OPTIONS.map((o) => [o.value, o.label]))
+    expect(byValue.default).toBe('Actividad reciente')
+    expect(byValue.name).toBe('Nombre (A-Z)')
+    expect(byValue.activity).toBe('Último registro')
+    expect(byValue.attention).toBe('Prioridad de atención')
+  })
+})
+
+describe('nutrition-v2-hub applyNutritionRosterFilters', () => {
+  const items = [
+    makeItem({ clientName: 'Carla', attentionReason: 'none', lastIntakeAt: '2026-07-10T12:00:00Z' }),
+    makeItem({ clientName: 'Ángela', attentionReason: 'no_plan', lastIntakeAt: null }),
+    makeItem({ clientName: 'Bruno', attentionReason: 'draft_pending', lastIntakeAt: '2026-07-15T12:00:00Z' }),
+    makeItem({ clientName: 'Álvaro', attentionReason: 'no_recent_intake', lastIntakeAt: '2026-07-01T12:00:00Z' }),
+  ]
+
+  it('default no reordena (respeta el orden del servidor) sin filtro', () => {
+    expect(
+      applyNutritionRosterFilters(items, { search: '', attention: 'all', sort: 'default' }).map((i) => i.clientName),
+    ).toEqual(['Carla', 'Ángela', 'Bruno', 'Álvaro'])
+  })
+
+  it('busca por nombre tolerante a acentos', () => {
+    expect(
+      applyNutritionRosterFilters(items, { search: 'angela', attention: 'all', sort: 'default' }).map((i) => i.clientName),
+    ).toEqual(['Ángela'])
+    expect(
+      applyNutritionRosterFilters(items, { search: 'AL', attention: 'all', sort: 'default' }).map((i) => i.clientName),
+    ).toEqual(['Álvaro'])
+  })
+
+  it('ordena por nombre A-Z normalizado', () => {
+    expect(
+      applyNutritionRosterFilters(items, { search: '', attention: 'all', sort: 'name' }).map((i) => i.clientName),
+    ).toEqual(['Álvaro', 'Ángela', 'Bruno', 'Carla'])
+  })
+
+  it('ordena por ultimo registro desc con nulls al final', () => {
+    expect(
+      applyNutritionRosterFilters(items, { search: '', attention: 'all', sort: 'activity' }).map((i) => i.clientName),
+    ).toEqual(['Bruno', 'Carla', 'Álvaro', 'Ángela'])
+  })
+
+  it('ordena por prioridad de atencion (no_plan primero, none al final)', () => {
+    expect(
+      applyNutritionRosterFilters(items, { search: '', attention: 'all', sort: 'attention' }).map((i) => i.clientName),
+    ).toEqual(['Ángela', 'Bruno', 'Álvaro', 'Carla'])
+  })
+
+  it('combina filtro de atencion con busqueda y orden', () => {
+    expect(
+      applyNutritionRosterFilters(items, { search: '', attention: 'needs_attention', sort: 'name' }).map((i) => i.clientName),
+    ).toEqual(['Álvaro', 'Ángela', 'Bruno'])
+  })
+})
+
+describe('nutrition-v2-hub isNutritionRosterFiltered', () => {
+  it('true cuando cualquier eje difiere del default', () => {
+    expect(isNutritionRosterFiltered({ search: '', attention: 'all', sort: 'default' })).toBe(false)
+    expect(isNutritionRosterFiltered({ search: '  ', attention: 'all', sort: 'default' })).toBe(false)
+    expect(isNutritionRosterFiltered({ search: 'x', attention: 'all', sort: 'default' })).toBe(true)
+    expect(isNutritionRosterFiltered({ search: '', attention: 'no_plan', sort: 'default' })).toBe(true)
+    expect(isNutritionRosterFiltered({ search: '', attention: 'all', sort: 'name' })).toBe(true)
+  })
+})
+
+describe('nutrition-v2-hub filterNutritionPickerEntries', () => {
+  const roster = [
+    { clientId: '1', clientName: 'José Pérez' },
+    { clientId: '2', clientName: 'María López' },
+    { clientId: '3', clientName: 'Ana Ruiz' },
+  ]
+
+  it('query vacia devuelve una copia intacta (preserva orden)', () => {
+    const out = filterNutritionPickerEntries(roster, '')
+    expect(out.map((e) => e.clientId)).toEqual(['1', '2', '3'])
+    expect(out).not.toBe(roster)
+  })
+
+  it('filtra por nombre tolerante a acentos/mayusculas', () => {
+    expect(filterNutritionPickerEntries(roster, 'jose').map((e) => e.clientId)).toEqual(['1'])
+    expect(filterNutritionPickerEntries(roster, 'LOPEZ').map((e) => e.clientId)).toEqual(['2'])
+  })
+})
+
+describe('nutrition-v2-hub mapa de tarjeta de atencion', () => {
+  it('titulo/descripcion/tono por motivo (espejo web, con tildes)', () => {
+    expect(nutritionAttentionCardTitle('no_plan')).toBe('Sin plan publicado')
+    expect(nutritionAttentionCardDescription('no_plan')).toBe(
+      'Este alumno todavía no tiene una prescripción versionada.',
+    )
+    expect(nutritionAttentionCardTone('no_plan')).toBe('warning')
+
+    expect(nutritionAttentionCardTitle('draft_pending')).toBe('Borrador pendiente')
+    expect(nutritionAttentionCardDescription('draft_pending')).toBe(
+      'Existe una versión que aún no ha sido publicada.',
+    )
+    expect(nutritionAttentionCardTone('draft_pending')).toBe('info')
+
+    expect(nutritionAttentionCardTitle('no_recent_intake')).toBe('Sin consumo reciente')
+    expect(nutritionAttentionCardDescription('no_recent_intake')).toBe(
+      'No hay registros canónicos durante los últimos siete días.',
+    )
+    expect(nutritionAttentionCardTone('no_recent_intake')).toBe('info')
   })
 })
 

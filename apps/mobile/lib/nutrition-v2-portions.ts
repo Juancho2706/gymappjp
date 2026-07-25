@@ -26,6 +26,7 @@ import {
   NutritionIntakeMutationSchema,
   buildNutritionPortionIntakeKey,
   type NutritionDayCoverageRead,
+  type NutritionExchangeFoodRead,
   type NutritionIntakeMutation,
   type NutritionIntakeReadItem,
   type NutritionSlotExchangeTargetRead,
@@ -33,6 +34,7 @@ import {
 import {
   getNutritionV2QueuedKeys,
   removeNutritionV2QueuedMutation,
+  type NutritionV2QueuedMutation,
 } from './nutrition-v2-offline'
 
 // ---------------------------------------------------------------------------
@@ -311,6 +313,8 @@ export interface PendingPortionMark {
   slotCode: string
   groupCode: string
   portions: number
+  /** Instante original del record; se conserva al construir una correccion/void. */
+  occurredAt: string
   ordinal: number
   attempt: number
   status: PendingPortionStatus
@@ -318,6 +322,47 @@ export interface PendingPortionMark {
   entryId: string | null
   confirmedAt: number | null
   createdAt: number
+}
+
+/** Rebuild the optimistic overlay directly from the authoritative user-scoped queue. */
+export function queuedPortionMarksFromMutations(
+  items: ReadonlyArray<NutritionV2QueuedMutation>,
+  localDate: string,
+): PendingPortionMark[] {
+  return queuedPortionOverlayFromMutations(items, localDate).marks
+}
+
+function queuedPortionMarksOnly(
+  items: ReadonlyArray<NutritionV2QueuedMutation>,
+  localDate: string,
+): PendingPortionMark[] {
+  const marks: PendingPortionMark[] = []
+  for (const item of items) {
+    if (item.action !== 'record' || item.payload.localDate !== localDate) continue
+    const slotCode = item.payload.mealSlot
+    const groupCode = item.payload.snapshot.exchangeGroupCode
+    const portions = item.payload.snapshot.exchangePortions
+    if (
+      !slotCode ||
+      !groupCode ||
+      (portions !== 0.5 && portions !== 1)
+    ) continue
+    const suffix = item.idempotencyKey.match(/-(\d+)-a(\d+)$/)
+    marks.push({
+      idempotencyKey: item.idempotencyKey,
+      slotCode,
+      groupCode,
+      portions,
+      occurredAt: item.payload.occurredAt,
+      ordinal: suffix ? Number(suffix[1]) : 0,
+      attempt: suffix ? Number(suffix[2]) : 1,
+      status: 'queued',
+      entryId: null,
+      confirmedAt: null,
+      createdAt: item.queuedAt,
+    })
+  }
+  return marks
 }
 
 /** Void optimista de una entry que el read-model AÚN cuenta como marcada. */
@@ -330,6 +375,45 @@ export interface PendingPortionVoid {
   status: PendingPortionStatus
   confirmedAt: number | null
   createdAt: number
+}
+
+export interface QueuedPortionOverlay {
+  marks: PendingPortionMark[]
+  voids: PendingPortionVoid[]
+}
+
+/**
+ * Reconstruye marcas Y desmarcados desde la cola. Los voids de porción llevan
+ * grupo/porciones dentro del snapshot de la corrección; eso permite restaurar el
+ * descuento aun sin red ni read-model fresco después de matar la app.
+ */
+export function queuedPortionOverlayFromMutations(
+  items: ReadonlyArray<NutritionV2QueuedMutation>,
+  localDate: string,
+): QueuedPortionOverlay {
+  const marks = queuedPortionMarksOnly(items, localDate)
+  const voids: PendingPortionVoid[] = []
+  for (const item of items) {
+    if (
+      item.action !== 'correct' ||
+      item.payload.localDate !== localDate ||
+      item.payload.note !== 'Registro retirado'
+    ) continue
+    const groupCode = item.payload.snapshot.exchangeGroupCode
+    const portions = item.payload.snapshot.exchangePortions
+    if (!groupCode || portions == null || portions <= 0) continue
+    voids.push({
+      entryId: item.payload.correctsEntryId,
+      idempotencyKey: item.idempotencyKey,
+      slotCode: item.payload.mealSlot,
+      groupCode,
+      portions,
+      status: 'queued',
+      confirmedAt: null,
+      createdAt: item.queuedAt,
+    })
+  }
+  return { marks, voids }
 }
 
 /**
@@ -427,8 +511,10 @@ export interface PortionCoverageView {
   marcadas: number
   derivadas: number
   coverage: number
+  /** Visible n/N numerator, capped at N; excess is rendered separately as +n. */
+  displayCoverage: number
   complete: boolean
-  /** Exceso sobre lo prescrito, cuantizado a 0,5 ("+n" — nunca descuenta otros grupos). */
+  /** Exceso exacto a 1 decimal sobre lo prescrito ("+n"; nunca descuenta otros grupos). */
   excess: number
   /** ¿Hay marcas aún sin sincronizar? (estilo pending: opacidad + puntito ámbar). */
   unsynced: boolean
@@ -437,8 +523,8 @@ export interface PortionCoverageView {
 
 /**
  * Llenado de segmentos por floor(x·2)/2: medias-unidades secuenciales — primero las
- * marcadas sincronizadas, luego las derivadas de alimentos (estilo anillo), al final
- * las pendientes (estilo pending). Las derivadas vienen SIEMPRE del read-model.
+ * marcadas sincronizadas, luego las pendientes (tambien son marcadas), y al final
+ * las derivadas de alimentos (estilo anillo). Las derivadas vienen SIEMPRE del read-model.
  */
 export function buildPortionCoverageView(input: {
   prescribed: number
@@ -468,12 +554,12 @@ export function buildPortionCoverageView(input: {
     if (markedHalves > 0) {
       halves.push('marked')
       markedHalves -= 1
-    } else if (derivedHalves > 0) {
-      halves.push('derived')
-      derivedHalves -= 1
     } else if (pendingHalves > 0) {
       halves.push('pending')
       pendingHalves -= 1
+    } else if (derivedHalves > 0) {
+      halves.push('derived')
+      derivedHalves -= 1
     } else {
       halves.push('empty')
     }
@@ -493,8 +579,9 @@ export function buildPortionCoverageView(input: {
     marcadas,
     derivadas,
     coverage,
+    displayCoverage: Math.min(round1(coverage), prescribed),
     complete: coverage + 1e-9 >= prescribed && prescribed > 0,
-    excess: Math.max(floorHalf(coverage) - prescribed, 0),
+    excess: round1(Math.max(coverage - prescribed, 0)),
     unsynced: input.pendingUnsynced,
     segments,
   }
@@ -536,7 +623,7 @@ export function buildDayCoverageView(
   row: NutritionDayCoverageRead,
   pendingByGroup: Readonly<Record<string, number>>,
   voidedByGroup: Readonly<Record<string, number>>,
-): { coverage: number; complete: boolean; excess: number } {
+): { coverage: number; displayCoverage: number; complete: boolean; excess: number } {
   const marcadas = Math.max(
     round1(row.marcadas + (pendingByGroup[row.groupCode] ?? 0) - (voidedByGroup[row.groupCode] ?? 0)),
     0,
@@ -544,9 +631,38 @@ export function buildDayCoverageView(
   const coverage = round1(marcadas + row.derivadas)
   return {
     coverage,
+    displayCoverage: Math.min(coverage, row.prescribed),
     complete: row.prescribed > 0 && coverage + 1e-9 >= row.prescribed,
-    excess: Math.max(floorHalf(coverage) - row.prescribed, 0),
+    excess: round1(Math.max(coverage - row.prescribed, 0)),
   }
+}
+
+/** Canon web: the day row only lists groups prescribed for that day. */
+export function visibleDayCoverageRows(
+  rows: ReadonlyArray<NutritionDayCoverageRead>,
+): NutritionDayCoverageRead[] {
+  return rows.filter((row) => row.prescribed > 0)
+}
+
+/** Stable visual order shared by chips and equivalence tabs. */
+export function orderedPortionTargets(
+  targets: ReadonlyArray<NutritionSlotExchangeTargetRead>,
+): NutritionSlotExchangeTargetRead[] {
+  return [...targets].sort((a, b) => a.orderIndex - b.orderIndex)
+}
+
+/** Canon web search: case-insensitive substring over the food name. */
+export function filterPortionExchangeFoods(
+  foods: ReadonlyArray<NutritionExchangeFoodRead>,
+  groupCode: string,
+  search: string,
+): NutritionExchangeFoodRead[] {
+  const term = search.trim().toLocaleLowerCase('es-CL')
+  return foods.filter(
+    (food) =>
+      food.groupCode === groupCode &&
+      (term.length === 0 || food.name.toLocaleLowerCase('es-CL').includes(term)),
+  )
 }
 
 /**

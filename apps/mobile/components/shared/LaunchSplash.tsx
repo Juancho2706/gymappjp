@@ -6,6 +6,10 @@ import { MotiView } from 'moti'
 import { Easing } from 'react-native-reanimated'
 import { loadStoredBranding, type CoachBranding } from '../../lib/branding'
 import { FONT } from '../../lib/typography'
+import {
+  isCoachBrandingPresentationAllowed,
+  resolveEffectiveCoachBrandPresentation,
+} from '../../lib/theme'
 
 const INK = '#07080C'
 const EVA_BLUE = '#007AFF'
@@ -33,7 +37,11 @@ export function LaunchSplash({ onFinish }: Props) {
       .then((value) => {
         if (!active) return
         clearTimeout(timeout)
-        setBranding(value)
+        setBranding(
+          isCoachBrandingPresentationAllowed(value)
+            ? resolveEffectiveCoachBrandPresentation(value)
+            : null,
+        )
         setResolved(true)
       })
       .catch(() => {

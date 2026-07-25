@@ -595,6 +595,9 @@ export const RIR_HELP =
  * paso de esfuerzo del keypad): filled = sport-500, vacío = white/15, readout = sport-300.
  */
 const EFFORT_SCALE = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] as const
+// Escala RIR con el 0 habilitado (11 posiciones 0-10) — decision CEO 8 del ejecutor V3: el 0 = "al fallo".
+// Los datos ya validan 0 desde la Ola 0; solo se pinta bajo V3 via `allowZero` (RPE queda SIEMPRE 1-10).
+const EFFORT_SCALE_WITH_ZERO = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10] as const
 
 export function EffortScale(props: {
   kind: 'rpe' | 'rir'
@@ -606,20 +609,29 @@ export function EffortScale(props: {
    * Sin prop ⇒ 10px + text-xs (fila activa protagonista), paridad con `compact=false` web.
    */
   compact?: boolean
+  /**
+   * Habilita el 0 en la escala (11 posiciones 0-10) — decision CEO 8 del ejecutor V3: en RIR el 0 = "al
+   * fallo". SOLO se pasa desde V3 (`ActiveSetRow.allowZeroRir`); sin la prop la escala arranca en 1
+   * (comportamiento V2 intacto). RPE nunca la usa (queda 1-10). El filled sigue siendo `n <= value`, asi
+   * que value=0 no llena ningun dot y el readout muestra "0".
+   */
+  allowZero?: boolean
 }) {
-  const { kind, value, onSelect, compact = false } = props
+  const { kind, value, onSelect, compact = false, allowZero = false } = props
   const motion = useEvaMotion()
   const label = kind.toUpperCase()
   const dotSize = compact ? 8 : 10
+  const scale = allowZero ? EFFORT_SCALE_WITH_ZERO : EFFORT_SCALE
+  const rangeLabel = allowZero ? '0 a 10' : '1 a 10'
 
   return (
     <View
       accessibilityRole="radiogroup"
-      accessibilityLabel={`${label} (escala 1 a 10)`}
+      accessibilityLabel={`${label} (escala ${rangeLabel})`}
       className="flex-row items-center"
       style={{ gap: 2 }}
     >
-      {EFFORT_SCALE.map((n) => {
+      {scale.map((n) => {
         const filled = value != null && n <= value
         const selected = value === n
         return (

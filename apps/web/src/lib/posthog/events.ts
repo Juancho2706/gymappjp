@@ -126,3 +126,31 @@ export function useCaptureAddonFunnel() {
         [ph]
     )
 }
+
+/**
+ * Eventos de producto del ALUMNO (superficie /c). El provider de PostHog vive en el layout raíz, así
+ * que también envuelve la zona del alumno. Como el resto, están gated por el consentimiento de cookies
+ * (no-op sin `ph`) y NO llevan montos ni datos personales:
+ *
+ *   student_workout_launched  → el alumno disparó el Despegue (tap en el CTA o en una day-card)
+ *   student_workout_completed → el alumno finalizó la sesión (pantalla de resumen visible)
+ */
+export function useCaptureStudentWorkoutLaunched() {
+    const ph = usePostHog()
+    return useCallback(
+        (props?: { start_path?: string }) => {
+            ph?.capture('student_workout_launched', { start_path: props?.start_path ?? null })
+        },
+        [ph]
+    )
+}
+
+export function useCaptureStudentWorkoutCompleted() {
+    const ph = usePostHog()
+    return useCallback(
+        (props?: { plan_id?: string }) => {
+            ph?.capture('student_workout_completed', { plan_id: props?.plan_id ?? null })
+        },
+        [ph]
+    )
+}

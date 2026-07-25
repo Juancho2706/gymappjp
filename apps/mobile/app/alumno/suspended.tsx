@@ -95,7 +95,7 @@ export default function SuspendedScreen() {
               <Text className="text-strong font-sans-semibold">{s.brandName}</Text> para reactivar tu cuenta.
             </Text>
             <Text className="text-subtle font-sans" style={styles.subtle}>
-              Todos tus progresos y datos están a salvo.
+              Tus datos y todo tu historial siguen guardados.
             </Text>
           </>
         )}

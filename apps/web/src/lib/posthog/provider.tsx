@@ -4,6 +4,7 @@ import posthog from 'posthog-js'
 import { PostHogProvider as PHProvider, usePostHog } from 'posthog-js/react'
 import { useEffect, Suspense } from 'react'
 import { usePathname, useSearchParams } from 'next/navigation'
+import { applyConsent, getStoredConsent } from '@/lib/posthog/consent'
 
 export function PostHogProvider({ children }: { children: React.ReactNode }) {
     const token = process.env.NEXT_PUBLIC_POSTHOG_TOKEN
@@ -19,6 +20,9 @@ export function PostHogProvider({ children }: { children: React.ReactNode }) {
             person_profiles: 'identified_only',
             capture_pageview: false,
             capture_pageleave: true,
+            // Re-aplica el consentimiento GUARDADO recién cuando posthog terminó de iniciar: el effect
+            // del banner puede correr antes que este init (carrera de montaje) y su opt-in se perdería.
+            loaded: () => applyConsent(getStoredConsent()),
         })
     }, [token, uiHost])
 

@@ -69,6 +69,7 @@ const {
   enqueueNutritionV2Mutation,
   flushNutritionV2MutationQueue,
   getNutritionV2QueueStatus,
+  getNutritionV2QueuedMutations,
 } = await import('../apps/mobile/lib/nutrition-v2-offline')
 
 const QUEUE_KEY = 'eva:nutrition-v2:mutations:v1'
@@ -148,11 +149,45 @@ describe('enqueue - dedup por idempotency key', () => {
     expect(status.pending).toBe(2)
   })
 
+  it('dos enqueue simultáneos con keys distintas no pierden ninguna escritura', async () => {
+    await Promise.all([
+      enqueueNutritionV2Mutation({ action: 'record', userId: USER_A, payload: mutation({ idempotencyKey: 'parallel-1' }) }),
+      enqueueNutritionV2Mutation({ action: 'record', userId: USER_A, payload: mutation({ idempotencyKey: 'parallel-2' }) }),
+    ])
+
+    const queued = await getNutritionV2QueuedMutations(USER_A)
+    expect(queued.map((item) => item.idempotencyKey).sort()).toEqual(['parallel-1', 'parallel-2'])
+  })
+
   it('misma idempotencyKey pero distinto usuario NO colapsa (aislado por usuario)', async () => {
     await enqueueNutritionV2Mutation({ action: 'record', userId: USER_A, payload: mutation({ idempotencyKey: 'shared-key' }) })
     await enqueueNutritionV2Mutation({ action: 'record', userId: USER_B, payload: mutation({ idempotencyKey: 'shared-key' }) })
     expect((await getNutritionV2QueueStatus(USER_A)).pending).toBe(1)
     expect((await getNutritionV2QueueStatus(USER_B)).pending).toBe(1)
+  })
+
+  it('la lectura user-scoped conserva íntegro el motivo de una corrección', async () => {
+    await enqueueNutritionV2Mutation({
+      action: 'correct',
+      userId: USER_A,
+      payload: {
+        ...mutation({ idempotencyKey: 'correction-with-reason' }),
+        correctsEntryId: '22222222-2222-4222-8222-222222222222',
+        correctionReason: 'comí un poco menos',
+      },
+    })
+    await enqueueNutritionV2Mutation({
+      action: 'record',
+      userId: USER_B,
+      payload: mutation({ idempotencyKey: 'other-user' }),
+    })
+
+    const queued = await getNutritionV2QueuedMutations(USER_A)
+    expect(queued).toHaveLength(1)
+    expect(queued[0]?.action).toBe('correct')
+    if (queued[0]?.action === 'correct') {
+      expect(queued[0].payload.correctionReason).toBe('comí un poco menos')
+    }
   })
 })
 
@@ -170,6 +205,48 @@ describe('flush - separacion por usuario', () => {
 
     expect((await getNutritionV2QueueStatus(USER_A)).pending).toBe(0)
     expect((await getNutritionV2QueueStatus(USER_B)).pending).toBe(1)
+  })
+
+  it('flush simultáneos de usuarios distintos procesan ambos scopes', async () => {
+    online()
+    await enqueueNutritionV2Mutation({ action: 'record', userId: USER_A, payload: mutation({ idempotencyKey: 'a-parallel' }) })
+    await enqueueNutritionV2Mutation({ action: 'record', userId: USER_B, payload: mutation({ idempotencyKey: 'b-parallel' }) })
+    recordNutritionIntakeV2Mock.mockResolvedValue({ ok: true, id: 'srv', action: 'record' })
+
+    const [resultA, resultB] = await Promise.all([
+      flushNutritionV2MutationQueue(USER_A),
+      flushNutritionV2MutationQueue(USER_B),
+    ])
+
+    expect(resultA.sent).toBe(1)
+    expect(resultB.sent).toBe(1)
+    expect((await getNutritionV2QueueStatus(USER_A)).pending).toBe(0)
+    expect((await getNutritionV2QueueStatus(USER_B)).pending).toBe(0)
+  })
+
+  it('un enqueue durante el replay se conserva al aplicar el resultado del flush', async () => {
+    online()
+    await enqueueNutritionV2Mutation({ action: 'record', userId: USER_A, payload: mutation({ idempotencyKey: 'replay-old' }) })
+
+    let releaseReplay!: () => void
+    let signalStarted!: () => void
+    const replayStarted = new Promise<void>((resolve) => { signalStarted = resolve })
+    const replayRelease = new Promise<void>((resolve) => { releaseReplay = resolve })
+    recordNutritionIntakeV2Mock.mockImplementationOnce(async () => {
+      signalStarted()
+      await replayRelease
+      return { ok: true, id: 'srv-old', action: 'record' }
+    })
+
+    const flushing = flushNutritionV2MutationQueue(USER_A)
+    await replayStarted
+    await enqueueNutritionV2Mutation({ action: 'record', userId: USER_A, payload: mutation({ idempotencyKey: 'replay-new' }) })
+    releaseReplay()
+    const result = await flushing
+
+    expect(result.sent).toBe(1)
+    const queued = await getNutritionV2QueuedMutations(USER_A)
+    expect(queued.map((item) => item.idempotencyKey)).toEqual(['replay-new'])
   })
 })
 

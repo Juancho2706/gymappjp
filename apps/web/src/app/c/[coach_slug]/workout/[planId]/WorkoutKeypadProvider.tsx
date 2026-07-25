@@ -47,6 +47,8 @@ export interface KeypadFieldDef {
 export interface KeypadEffortConfig {
   rpe: number | null
   rir: number | null
+  /** Tope inferior de la escala de RIR (E2.5): 0 en V3 (RIR 0 = al fallo), 1 en V2. Default 1. */
+  rirMin?: number
   onRpeChange: (v: number) => void
   onRirChange: (v: number) => void
 }
@@ -392,6 +394,7 @@ export function WorkoutKeypadProvider({ children }: { children: React.ReactNode 
                 hasEffort={hasEffort}
                 effortRpe={effortRpe}
                 effortRir={effortRir}
+                effortRirMin={config.effort?.rirMin ?? 1}
                 step={step}
                 stepMenuOpen={stepMenuOpen}
                 reducedMotion={reducedMotion}

@@ -1,4 +1,18 @@
 /**
+ * Metadata jsonb de la serie (`workout_logs.metadata`). Hoy solo transporta el hold de movilidad
+ * POR LADO (E0.5 · executor-v3): segundos de sostén izquierdo/derecho de un ejercicio unilateral
+ * (`side_mode === 'per_side'`). Espejo VERBATIM de la columna jsonb (keys snake_case `left_sec`/
+ * `right_sec`) — así viaja sin traducción de nombres por todo el pipeline (cola → reconcile →
+ * optimismo → insert). Opcional/anidado a propósito: convive con `actual_hold_sec`, que lleva la
+ * SUMA L+R (compatibilidad con todo consumidor que ya lee el hold total). La UI de captura por lado
+ * llega en Ola 3; esto es solo la capa de datos.
+ */
+export type WorkoutLogSideMetadata = {
+    left_sec?: number | null
+    right_sec?: number | null
+}
+
+/**
  * Forma canónica de una serie encolada offline. Vive acá (motor puro) porque es la ENTRADA de
  * `reconcileSessionLogs` y el shape que web (`lib/workout-offline-queue.ts`) y mobile
  * (`lib/offline-cache.ts`) deben respetar al encolar. Web re-exporta este tipo desde su cola —
@@ -28,6 +42,16 @@ export type WorkoutOfflineLog = {
     substitutedExerciseId?: string | null
     substitutedExerciseName?: string | null
     substitutionReason?: string | null
+    // ── Hold POR LADO (E0.5) — metadata jsonb {left_sec, right_sec} ──
+    // Opcional/aditivo: los items legacy encolados (sin la key) siguen parseando; el flush lo reenvía
+    // intacto a `workout_logs.metadata`.
+    metadata?: WorkoutLogSideMetadata | null
+    // ── Edición de día pasado (E1.5/E1.6) — fecha objetivo yyyy-mm-dd Santiago ──
+    // Opcional/aditivo: solo presente cuando la serie se editó con `?fecha=` (modo solo-UPDATE).
+    // Sin ella, el flush escribe HOY como siempre. CRÍTICO que viaje EN el item: el flush global de
+    // reconexión (OfflineWorkoutQueueSync) no conoce el contexto de página — si la fecha no viaja
+    // acá, una edición de día pasado encolada offline se re-sincronizaría como log de HOY.
+    targetDate?: string | null
 }
 
 /**
@@ -56,6 +80,9 @@ export type ReconciledSessionLog = {
     substituted_exercise_id?: string | null
     substituted_exercise_name?: string | null
     substitution_reason?: string | null
+    // Hold POR LADO (E0.5): espejo de `workout_logs.metadata` jsonb {left_sec, right_sec}. El server
+    // devuelve la columna tal cual tras reload; la fila tipada per_side la pintará en Ola 3.
+    metadata?: WorkoutLogSideMetadata | null
     /** true ⇒ en la cola offline, sin confirmar por el server (ver doc del tipo). */
     _pending?: boolean
 }
@@ -122,6 +149,7 @@ export function reconcileSessionLogs(
             substituted_exercise_id: q.substitutedExerciseId ?? null,
             substituted_exercise_name: q.substitutedExerciseName ?? null,
             substitution_reason: q.substitutionReason ?? null,
+            metadata: q.metadata ?? null,
             _pending: true,
         })
     }

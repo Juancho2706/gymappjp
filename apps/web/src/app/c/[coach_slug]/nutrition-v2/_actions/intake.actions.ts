@@ -17,6 +17,7 @@ import { COACH_ACCOUNT_PAUSED_CODE, STUDENT_ACCESS_COPY } from '@/lib/student-ac
 import { resolveStudentAccessForCoach } from '@/lib/student-access.server'
 import { getClientNutritionUser } from '../../nutrition/_data/nutrition-auth.queries'
 import { getClientScope } from '../../nutrition/_data/client-scope.queries'
+import { resolveNutritionDomainEnabled } from '@/services/feature-prefs.service'
 
 /**
  * Registro de consumo del alumno para nutrición.
@@ -129,16 +130,27 @@ async function authorizeStudentWrite(
   }
 
   const scope = await getClientScope(user.id)
-  const enabled = await isNutritionV2Enabled({
-    surface: 'webStudent',
-    userId: user.id,
-    clientId: user.id,
-    coachId: scope.coachId,
-    teamId: scope.teamId,
-    orgId: scope.orgId,
-  })
+  const [enabled, domainEnabled] = await Promise.all([
+    isNutritionV2Enabled({
+      surface: 'webStudent',
+      userId: user.id,
+      clientId: user.id,
+      coachId: scope.coachId,
+      teamId: scope.teamId,
+      orgId: scope.orgId,
+    }),
+    resolveNutritionDomainEnabled({
+      coachId: scope.coachId ?? '',
+      clientId: user.id,
+      clientTeamId: scope.teamId,
+      clientOrgId: scope.orgId,
+    }),
+  ])
   if (!enabled) {
     return fail('ROLLOUT_DISABLED', 'La nueva experiencia de nutrición no está habilitada para tu cuenta.')
+  }
+  if (!domainEnabled) {
+    return fail('NUTRITION_DOMAIN_DISABLED', 'Tu coach no tiene activada la sección de nutrición por ahora.')
   }
 
   const supabaseReal = await createClient()

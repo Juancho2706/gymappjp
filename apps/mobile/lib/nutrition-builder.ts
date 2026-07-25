@@ -1,5 +1,6 @@
 import { supabase } from './supabase'
 import { getCoachOrgContext } from './org'
+import { foodWorkspaceFilter } from './foods-scope'
 import { getTodayInSantiago, isoDateAddDays } from './date-utils'
 import { reconcileMeals } from '@eva/nutrition-engine'
 import { buildMealReconcileInput } from './nutrition-reconcile'
@@ -120,6 +121,17 @@ function uid(prefix: string): string {
 async function currentCoachId(): Promise<string | null> {
   const { data } = await supabase.auth.getUser()
   return data.user?.id ?? null
+}
+
+/**
+ * org_id del workspace activo desde la sesión (app_metadata) — mismo origen que
+ * `getCoachOrgContext`, pero SIN la query del nombre de la org: este resolver se
+ * llama en cada búsqueda de alimentos. null = standalone.
+ */
+async function activeOrgId(): Promise<string | null> {
+  const { data: { session } } = await supabase.auth.getSession()
+  const meta = session?.user?.app_metadata as Record<string, string> | undefined
+  return meta?.org_id ?? null
 }
 
 export function emptyPlanDraft(): PlanDraft {
@@ -343,7 +355,13 @@ export async function searchFoods(query: string, opts: SearchFoodsOptions = {}):
     .select('id, name, calories, protein_g, carbs_g, fats_g, serving_size, serving_unit, is_liquid, category, brand, household_grams, household_label')
   if (scope === 'mine' && coachId) q = q.eq('coach_id', coachId)
   else if (scope === 'system') q = q.is('coach_id', null)
-  else q = q.or(coachId ? `coach_id.is.null,coach_id.eq.${coachId}` : 'coach_id.is.null')
+  else {
+    // 4B-02: scope 'all' respeta el workspace activo (espejo web). En enterprise
+    // devuelve sistema + org (antes mezclaba sistema + propios del coach, ignorando
+    // la org); en standalone, sistema + propios. RLS sigue siendo la barrera real.
+    const orgId = await activeOrgId()
+    q = q.or(foodWorkspaceFilter(coachId, orgId))
+  }
   if (category && category !== 'todos') q = q.eq('category', category)
   if (maxCalories != null && maxCalories > 0) q = q.lte('calories', maxCalories)
   if (query.trim().length >= 2) q = q.ilike('name', `%${query.trim()}%`)

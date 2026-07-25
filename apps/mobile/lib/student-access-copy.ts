@@ -16,12 +16,29 @@ export const STUDENT_ACCESS_COPY = {
     /** Banner discreto del alumno durante la gracia (home). Sin countdown por decision CEO. */
     graceBanner: 'Tu coach está poniendo al día su cuenta. Tu acceso sigue funcionando con normalidad.',
     /** Estado post-gracia (solo-lectura): titulo + cuerpo honestos, sin culpar al alumno. */
-    pausedTitle: 'La cuenta de tu coach está en pausa',
-    pausedBody: 'Tu progreso está guardado y podrás retomarlo apenas se reactive.',
-    pausedHint: 'Mientras tanto puedes revisar tu plan y tu historial de entrenamientos.',
+    pausedTitle: 'Tu cuenta está en pausa',
+    pausedBody: 'El plan de tu coach está inactivo. Escríbele para reactivar tu acceso.',
+    pausedHint: 'Tu progreso está guardado y te espera cuando tu coach reactive su cuenta.',
     /** Error humano cuando un guardado rebota por COACH_ACCOUNT_PAUSED. */
     pausedWriteError:
         'La cuenta de tu coach está en pausa, así que por ahora no se pueden guardar registros nuevos. Tu plan y tu historial siguen disponibles.',
+    /**
+     * Bloqueo TOTAL post-gracia (executor-v3 decision 9, mockup "Bloqueo total" v3.3): pantalla
+     * fullscreen calma al login pasados los 7 dias — ni dashboard ni plan ni historial. Un solo
+     * camino: escribirle al coach para reactivar. Tono cuidado (esta en pausa, no bloqueada; nunca
+     * culpa al alumno). Espejo del contrato web (apps/web/src/lib/student-access.ts / /suspended).
+     */
+    blockScreen: {
+        /** Standalone (coach): titulo + cuerpo del mockup, framing "en pausa". */
+        title: 'Tu cuenta está en pausa',
+        body: 'El plan de tu coach está inactivo. Escríbele para reactivar tu acceso.',
+        /** Contexto pool/team: la pausa la gestiona el dueño del equipo (sin WhatsApp personal). */
+        bodyTeam: 'El acceso de tu equipo está en pausa. Contacta a tu equipo para reactivar tu acceso.',
+        /** CTA unico hacia el coach (solo standalone con WhatsApp cargado). */
+        contactCta: 'Escribir a mi coach',
+        /** Salida secundaria calma (link, no boton principal). */
+        logout: 'Cerrar sesión',
+    },
 } as const
 
 /** ¿Este error (string / Error / envelope) es el rebote COACH_ACCOUNT_PAUSED? */

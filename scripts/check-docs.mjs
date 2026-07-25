@@ -192,7 +192,7 @@ function placeholderCredential(value) {
 }
 
 function validateLiteralCredentials(file, content) {
-  const prose = content
+  const prose = stripFencedCode(content)
   const patterns = [
     /^\s*(?:[-*]\s*)?(?:password|contraseña|passcode)\s*(?:[:=]|[—–-])\s*(\S.*)$/gim,
     /["'](?:password|contraseña|passcode)["']\s*:\s*["'`]([^"'`\r\n]+)["'`]/gim,

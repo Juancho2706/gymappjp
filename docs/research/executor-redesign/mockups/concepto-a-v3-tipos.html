@@ -1,0 +1,1028 @@
+<section class="concept" id="concept-a3b" data-name="Impulso v3 — tipos y extras">
+  <style>
+    @property --a3b-hold { syntax: '<angle>'; inherits: false; initial-value: 12deg; }
+
+    #concept-a3b {
+      --brand-a3b: var(--brand, #58cc02);
+      --calm-a3b: #8ab6c8;            /* movilidad: tono sereno, menos saturado */
+      --z1: #38bdf8; --z2: #4ade80; --z3: #facc15; --z4: #fb923c; --z5: #f87171;
+      --gold: #f5c451;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      color: #f4f4f6;
+      padding: 36px 28px 56px;
+      background: #0c0c11;
+      -webkit-font-smoothing: antialiased;
+    }
+    #concept-a3b *,
+    #concept-a3b *::before,
+    #concept-a3b *::after { box-sizing: border-box; }
+
+    /* ===== header (pequeño) ===== */
+    #concept-a3b .a3b-head { max-width: 1320px; margin: 0 auto 34px; }
+    #concept-a3b .a3b-eyebrow {
+      display: inline-block;
+      font-size: 11px; font-weight: 800; letter-spacing: .18em; text-transform: uppercase;
+      color: #0c0c11; background: var(--brand-a3b);
+      padding: 5px 12px; border-radius: 999px; margin-bottom: 13px;
+    }
+    #concept-a3b .a3b-title {
+      font-size: clamp(26px, 3.4vw, 40px); font-weight: 900; letter-spacing: -.025em;
+      line-height: 1.02; margin: 0 0 10px;
+      background: linear-gradient(120deg, #ffffff 32%, var(--brand-a3b) 128%);
+      -webkit-background-clip: text; background-clip: text; color: transparent;
+    }
+    #concept-a3b .a3b-sub { font-size: 15.5px; line-height: 1.5; color: #a8a8b3; max-width: 720px; margin: 0; }
+
+    /* ===== layout ===== */
+    #concept-a3b .a3b-row {
+      display: flex; flex-wrap: wrap; gap: 44px 44px; justify-content: center;
+      max-width: 2100px; margin: 0 auto;
+    }
+    #concept-a3b .a3b-col { width: 375px; }
+    #concept-a3b .a3b-label {
+      display: flex; align-items: center; gap: 9px;
+      font-size: 15px; font-weight: 800; letter-spacing: -.01em; margin: 0 0 14px 6px;
+    }
+    #concept-a3b .a3b-label span {
+      width: 9px; height: 9px; border-radius: 50%; background: var(--brand-a3b);
+      box-shadow: 0 0 0 4px color-mix(in srgb, var(--brand-a3b) 22%, transparent);
+    }
+    #concept-a3b .a3b-label.calm span { background: var(--calm-a3b); box-shadow: 0 0 0 4px color-mix(in srgb, var(--calm-a3b) 22%, transparent); }
+    #concept-a3b .a3b-label em {
+      font-style: normal; font-size: 10px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase;
+      color: #0c0c11; background: var(--brand-a3b); padding: 2px 7px; border-radius: 999px; margin-left: 2px;
+    }
+    #concept-a3b .a3b-label.calm em { background: var(--calm-a3b); }
+
+    /* ===== phone shell ===== */
+    #concept-a3b .a3b-phone {
+      width: 375px; height: 760px; border-radius: 44px;
+      background: #050507; padding: 11px;
+      box-shadow: 0 0 0 2px #26262e, 0 30px 60px -22px rgba(0,0,0,.85), inset 0 1px 0 rgba(255,255,255,.05);
+      position: relative;
+    }
+    #concept-a3b .a3b-screen {
+      position: relative; width: 100%; height: 100%; border-radius: 34px; overflow: hidden;
+      background: radial-gradient(120% 80% at 50% -8%, #1c1c24 0%, #16161d 42%, #121218 100%);
+      display: flex; flex-direction: column;
+    }
+    #concept-a3b .a3b-screen.calm {
+      background: radial-gradient(120% 80% at 50% -8%, #1a2026 0%, #161a1f 44%, #12151a 100%);
+    }
+    #concept-a3b .a3b-notch {
+      position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
+      width: 118px; height: 26px; background: #050507; border-radius: 999px; z-index: 40;
+    }
+    #concept-a3b .a3b-body { flex: 1; display: flex; flex-direction: column; padding: 40px 18px 18px; min-height: 0; }
+
+    /* ===== shared bits ===== */
+    #concept-a3b .a3b-chip {
+      display: inline-flex; align-items: center; gap: 6px;
+      font-size: 12px; font-weight: 700; padding: 5px 11px; border-radius: 999px;
+      background: color-mix(in srgb, var(--brand-a3b) 16%, #16161d);
+      color: color-mix(in srgb, var(--brand-a3b) 82%, #ffffff);
+      border: 1.5px solid color-mix(in srgb, var(--brand-a3b) 34%, transparent);
+    }
+    #concept-a3b .a3b-chip.plain { background: #1c1c24; color: #b7b7c2; border-color: #33333f; }
+    #concept-a3b .a3b-chip.calm {
+      background: color-mix(in srgb, var(--calm-a3b) 14%, #16161d);
+      color: color-mix(in srgb, var(--calm-a3b) 85%, #fff);
+      border-color: color-mix(in srgb, var(--calm-a3b) 32%, transparent);
+    }
+    #concept-a3b .a3b-tnum { font-variant-numeric: tabular-nums; }
+
+    /* juicy button base (sombra dura 5px que se hunde) */
+    #concept-a3b .a3b-juicy {
+      border: 2px solid color-mix(in srgb, var(--brand-a3b) 55%, #000);
+      background: var(--brand-a3b);
+      color: #072100; font-weight: 900; letter-spacing: -.01em;
+      border-radius: 16px;
+      box-shadow: 0 5px 0 0 color-mix(in srgb, var(--brand-a3b) 55%, #000);
+      transition: transform .12s ease, box-shadow .12s ease;
+      cursor: default;
+    }
+    #concept-a3b .a3b-juicy:active {
+      transform: translateY(5px); box-shadow: 0 0 0 0 color-mix(in srgb, var(--brand-a3b) 55%, #000);
+    }
+    #concept-a3b .a3b-juicy.calm {
+      background: var(--calm-a3b); color: #08222b;
+      border-color: color-mix(in srgb, var(--calm-a3b) 55%, #000);
+      box-shadow: 0 5px 0 0 color-mix(in srgb, var(--calm-a3b) 55%, #000);
+    }
+    #concept-a3b .a3b-juicy.calm:active {
+      transform: translateY(5px); box-shadow: 0 0 0 0 color-mix(in srgb, var(--calm-a3b) 55%, #000);
+    }
+
+    /* progress dots + gear header */
+    #concept-a3b .a3b-tophead { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+    #concept-a3b .a3b-gear {
+      width: 34px; height: 34px; flex-shrink: 0; border-radius: 11px;
+      background: #1c1c24; border: 2px solid #2f2f3a; color: #b7b7c2;
+      display: flex; align-items: center; justify-content: center;
+    }
+    #concept-a3b .a3b-gear svg { width: 19px; height: 19px; }
+    #concept-a3b .a3b-dots { display: flex; gap: 7px; flex: 1; }
+    #concept-a3b .a3b-dot { flex: 1; height: 9px; border-radius: 999px; background: #2a2a34; }
+    #concept-a3b .a3b-dot.done { background: color-mix(in srgb, var(--brand-a3b) 60%, #16161d); }
+    #concept-a3b .a3b-dot.now {
+      background: var(--brand-a3b);
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand-a3b) 25%, transparent);
+    }
+    #concept-a3b .a3b-count { font-size: 12px; font-weight: 800; color: #8f8f9c; white-space: nowrap; }
+
+    #concept-a3b .a3b-exname { font-size: 26px; font-weight: 900; letter-spacing: -.02em; margin: 2px 0 8px; }
+    #concept-a3b .a3b-exname.calm-t { color: #eef4f6; }
+    #concept-a3b .a3b-chiprow { display: flex; gap: 8px; margin-bottom: 12px; align-items: center; }
+
+    /* ===== media card + shimmer ===== */
+    #concept-a3b .a3b-media {
+      position: relative; height: 150px; border-radius: 22px; overflow: hidden;
+      border: 2px solid #2f2f3a;
+      background: linear-gradient(160deg, #202029, #17171f);
+      margin-bottom: 12px; display: flex; align-items: flex-end; justify-content: center;
+    }
+    #concept-a3b .a3b-media.calm { background: linear-gradient(160deg, #1c242a, #161b20); border-color: #2a333a; }
+    #concept-a3b .a3b-media::after {
+      content: ""; position: absolute; inset: 0;
+      background: linear-gradient(105deg, transparent 20%, rgba(255,255,255,.06) 45%, transparent 68%);
+      background-size: 220% 100%;
+    }
+    #concept-a3b .a3b-medialbl {
+      position: absolute; top: 10px; left: 12px; font-size: 11px; font-weight: 800;
+      letter-spacing: .04em; color: #cfcfd8; background: rgba(0,0,0,.4); padding: 3px 9px; border-radius: 999px;
+      display: flex; align-items: center; gap: 6px; z-index: 3;
+    }
+    #concept-a3b .a3b-live { width: 6px; height: 6px; border-radius: 50%; background: var(--brand-a3b); }
+    #concept-a3b .a3b-live.calm { background: var(--calm-a3b); }
+
+    /* ===== bullets ===== */
+    #concept-a3b .a3b-bullets { list-style: none; padding: 0; margin: 18px 4px 0; }
+    #concept-a3b .a3b-bullets li {
+      position: relative; padding-left: 22px; margin-bottom: 10px; font-size: 13.5px; line-height: 1.45; color: #b7b7c2;
+    }
+    #concept-a3b .a3b-bullets li::before {
+      content: ""; position: absolute; left: 0; top: 6px; width: 12px; height: 12px; border-radius: 4px;
+      background: var(--brand-a3b); box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand-a3b) 20%, transparent);
+    }
+    #concept-a3b .a3b-bullets.calm li::before { background: var(--calm-a3b); box-shadow: 0 0 0 3px color-mix(in srgb, var(--calm-a3b) 20%, transparent); }
+    #concept-a3b .a3b-bullets b { color: #eeeef2; font-weight: 800; }
+
+    /* ============================================================
+       SCREEN 1 · SUPERSERIE
+       ============================================================ */
+    #concept-a3b .a3b-ss-titrow { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; margin: 2px 0 14px; }
+    #concept-a3b .a3b-ss-tit { font-size: 26px; font-weight: 900; letter-spacing: -.02em; }
+    #concept-a3b .a3b-roundchip {
+      display: inline-flex; align-items: center; gap: 8px;
+      font-size: 12px; font-weight: 800; padding: 5px 11px 5px 12px; border-radius: 999px;
+      background: color-mix(in srgb, var(--brand-a3b) 15%, #16161d);
+      color: color-mix(in srgb, var(--brand-a3b) 85%, #fff);
+      border: 1.5px solid color-mix(in srgb, var(--brand-a3b) 34%, transparent);
+    }
+    #concept-a3b .a3b-rounddots { display: inline-flex; gap: 5px; }
+    #concept-a3b .a3b-rd { width: 8px; height: 8px; border-radius: 50%; background: #2f3a2a; box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--brand-a3b) 30%, transparent); }
+    #concept-a3b .a3b-rd.done { background: color-mix(in srgb, var(--brand-a3b) 55%, #16161d); box-shadow: none; }
+    #concept-a3b .a3b-rd.now { background: var(--brand-a3b); box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand-a3b) 24%, transparent); }
+
+    #concept-a3b .a3b-excard {
+      display: flex; align-items: center; gap: 12px;
+      border-radius: 18px; padding: 12px; margin-bottom: 10px;
+    }
+    #concept-a3b .a3b-excard.active {
+      background: color-mix(in srgb, var(--brand-a3b) 10%, #1a1a22);
+      border: 2px solid color-mix(in srgb, var(--brand-a3b) 55%, transparent);
+      box-shadow: 0 0 0 4px color-mix(in srgb, var(--brand-a3b) 10%, transparent);
+    }
+    #concept-a3b .a3b-excard.next {
+      background: #17171f; border: 2px solid #2a2a34; opacity: .62;
+    }
+    #concept-a3b .a3b-exletter {
+      width: 30px; height: 30px; flex-shrink: 0; border-radius: 10px; font-size: 15px; font-weight: 900;
+      display: flex; align-items: center; justify-content: center;
+    }
+    #concept-a3b .a3b-excard.active .a3b-exletter { background: var(--brand-a3b); color: #072100; }
+    #concept-a3b .a3b-excard.next .a3b-exletter { background: #26262f; color: #9a9aa6; border: 1.5px solid #3a3a45; }
+    #concept-a3b .a3b-exmini {
+      width: 60px; height: 60px; flex-shrink: 0; border-radius: 13px; position: relative; overflow: hidden;
+      background: linear-gradient(160deg, #23232c, #17171f); border: 1.5px solid #34343f;
+    }
+    #concept-a3b .a3b-exmini::after {
+      content: ""; position: absolute; inset: 0;
+      background: linear-gradient(105deg, transparent 30%, rgba(255,255,255,.07) 50%, transparent 70%);
+      background-size: 220% 100%;
+    }
+    /* overhead-press mini silhouette */
+    #concept-a3b .a3b-ohp { position: absolute; inset: 0; }
+    #concept-a3b .a3b-ohp .head { position: absolute; bottom: 24px; left: 50%; transform: translateX(-50%); width: 12px; height: 12px; border-radius: 50%; background: color-mix(in srgb, var(--brand-a3b) 55%, #2a2a34); }
+    #concept-a3b .a3b-ohp .torso { position: absolute; bottom: 6px; left: 50%; transform: translateX(-50%); width: 16px; height: 22px; border-radius: 7px; background: color-mix(in srgb, var(--brand-a3b) 45%, #2a2a34); }
+    #concept-a3b .a3b-ohp .armL, #concept-a3b .a3b-ohp .armR { position: absolute; bottom: 30px; width: 5px; height: 16px; border-radius: 3px; background: color-mix(in srgb, var(--brand-a3b) 45%, #2a2a34); }
+    #concept-a3b .a3b-ohp .armL { left: 19px; transform: rotate(14deg); } #concept-a3b .a3b-ohp .armR { right: 19px; transform: rotate(-14deg); }
+    #concept-a3b .a3b-ohp .bar { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); width: 42px; height: 5px; border-radius: 3px; background: var(--brand-a3b); box-shadow: 0 0 10px color-mix(in srgb, var(--brand-a3b) 55%, transparent); }
+    #concept-a3b .a3b-ohp .bar::before, #concept-a3b .a3b-ohp .bar::after { content: ""; position: absolute; top: -4px; width: 7px; height: 13px; border-radius: 3px; background: color-mix(in srgb, var(--brand-a3b) 78%, #000); }
+    #concept-a3b .a3b-ohp .bar::before { left: -4px; } #concept-a3b .a3b-ohp .bar::after { right: -4px; }
+    /* lateral-raise mini silhouette (next) */
+    #concept-a3b .a3b-lat { position: absolute; inset: 0; }
+    #concept-a3b .a3b-lat .head { position: absolute; bottom: 26px; left: 50%; transform: translateX(-50%); width: 11px; height: 11px; border-radius: 50%; background: #3a3a45; }
+    #concept-a3b .a3b-lat .torso { position: absolute; bottom: 6px; left: 50%; transform: translateX(-50%); width: 15px; height: 22px; border-radius: 7px; background: #34343f; }
+    #concept-a3b .a3b-lat .armL, #concept-a3b .a3b-lat .armR { position: absolute; bottom: 24px; width: 15px; height: 5px; border-radius: 3px; background: #3a3a45; }
+    #concept-a3b .a3b-lat .armL { left: 8px; } #concept-a3b .a3b-lat .armR { right: 8px; }
+
+    #concept-a3b .a3b-exinfo { flex: 1; min-width: 0; }
+    #concept-a3b .a3b-exhd { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+    #concept-a3b .a3b-exnm { font-size: 15px; font-weight: 900; letter-spacing: -.01em; }
+    #concept-a3b .a3b-excard.next .a3b-exnm { color: #c4c4cf; }
+    #concept-a3b .a3b-exstate {
+      font-size: 9px; font-weight: 900; letter-spacing: .1em; text-transform: uppercase;
+      padding: 2px 7px; border-radius: 999px;
+    }
+    #concept-a3b .a3b-exstate.now { background: var(--brand-a3b); color: #072100; }
+    #concept-a3b .a3b-exstate.after { background: #26262f; color: #9a9aa6; }
+    #concept-a3b .a3b-exrx { font-size: 13px; font-weight: 800; color: #d4d4dc; }
+    #concept-a3b .a3b-excard.next .a3b-exrx { color: #8f8f9c; }
+
+    #concept-a3b .a3b-linkpill {
+      display: flex; align-items: center; justify-content: center; gap: 10px;
+      background: color-mix(in srgb, var(--brand-a3b) 12%, #16161d);
+      border: 1.5px solid color-mix(in srgb, var(--brand-a3b) 30%, transparent);
+      border-radius: 999px; padding: 9px 14px; margin: 4px 0 14px;
+      font-size: 13px; font-weight: 800; color: color-mix(in srgb, var(--brand-a3b) 88%, #fff);
+    }
+    #concept-a3b .a3b-arrow {
+      position: relative; width: 20px; height: 12px;
+    }
+    #concept-a3b .a3b-arrow::before {
+      content: ""; position: absolute; top: 50%; left: 0; width: 13px; height: 2.5px; border-radius: 2px;
+      background: var(--brand-a3b); transform: translateY(-50%);
+    }
+    #concept-a3b .a3b-arrow::after {
+      content: ""; position: absolute; top: 50%; right: 1px; width: 8px; height: 8px;
+      border-top: 2.5px solid var(--brand-a3b); border-right: 2.5px solid var(--brand-a3b);
+      transform: translateY(-50%) rotate(45deg);
+    }
+    #concept-a3b .a3b-ss-cta {
+      height: 62px; width: 100%; font-size: 18px; display: flex; align-items: center; justify-content: center; gap: 10px;
+      margin-bottom: 12px; margin-top: auto;
+    }
+    #concept-a3b .a3b-ck {
+      width: 22px; height: 22px; border-radius: 50%; background: rgba(7,33,0,.22);
+      display: flex; align-items: center; justify-content: center;
+    }
+    #concept-a3b .a3b-ck::before {
+      content: ""; display: block; width: 6px; height: 11px; border: solid #072100; border-width: 0 2.5px 2.5px 0;
+      transform: rotate(45deg) translate(-1px,-1px);
+    }
+    #concept-a3b .a3b-restnote {
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+      font-size: 12px; font-weight: 800; color: #8f8f9c;
+      background: #15151c; border: 1.5px solid #24242e; border-radius: 12px; padding: 9px 12px;
+    }
+    #concept-a3b .a3b-restnote .clk {
+      width: 14px; height: 14px; border-radius: 50%; border: 2px solid #6f6f7c; position: relative; flex-shrink: 0;
+    }
+    #concept-a3b .a3b-restnote .clk::before { content: ""; position: absolute; top: 2px; left: 50%; width: 2px; height: 5px; background: #6f6f7c; transform: translateX(-50%); border-radius: 1px; }
+    #concept-a3b .a3b-restnote b { color: #cfcfd8; }
+
+    /* ============================================================
+       SCREEN 2 · MOVILIDAD (calmo)
+       ============================================================ */
+    #concept-a3b .a3b-mob { align-items: center; text-align: center; gap: 12px; }
+    /* seated hamstring stretch silhouette */
+    #concept-a3b .a3b-stretch { position: absolute; bottom: 22px; left: 50%; transform: translateX(-50%); width: 168px; height: 92px; }
+    #concept-a3b .a3b-st-floor { position: absolute; bottom: 0; left: 8px; right: 8px; height: 4px; border-radius: 3px; background: #33333f; }
+    #concept-a3b .a3b-st-legs { position: absolute; bottom: 4px; left: 30px; width: 110px; height: 12px; border-radius: 8px; background: color-mix(in srgb, var(--calm-a3b) 40%, #2a2a34); }
+    #concept-a3b .a3b-st-foot { position: absolute; bottom: 4px; right: 22px; width: 12px; height: 22px; border-radius: 5px; background: color-mix(in srgb, var(--calm-a3b) 55%, #2a2a34); }
+    #concept-a3b .a3b-st-hip { position: absolute; bottom: 4px; left: 22px; width: 22px; height: 22px; border-radius: 8px; background: color-mix(in srgb, var(--calm-a3b) 45%, #2a2a34); }
+    #concept-a3b .a3b-st-torso { position: absolute; bottom: 14px; left: 34px; width: 20px; height: 42px; border-radius: 10px; background: color-mix(in srgb, var(--calm-a3b) 45%, #2a2a34); transform-origin: bottom left; transform: rotate(34deg); }
+    #concept-a3b .a3b-st-head { position: absolute; bottom: 44px; left: 66px; width: 17px; height: 17px; border-radius: 50%; background: color-mix(in srgb, var(--calm-a3b) 55%, #2a2a34); }
+    #concept-a3b .a3b-st-arm { position: absolute; bottom: 34px; left: 60px; width: 46px; height: 6px; border-radius: 4px; background: color-mix(in srgb, var(--calm-a3b) 40%, #2a2a34); transform-origin: left center; transform: rotate(20deg); }
+    #concept-a3b .a3b-st-sway { transform-origin: 34px bottom; }
+
+    #concept-a3b .a3b-sidepill {
+      display: inline-flex; align-items: center; gap: 10px; padding: 10px 20px; border-radius: 999px;
+      background: color-mix(in srgb, var(--calm-a3b) 15%, #16161d);
+      border: 2px solid color-mix(in srgb, var(--calm-a3b) 36%, transparent);
+      font-size: 19px; font-weight: 900; letter-spacing: -.01em; color: color-mix(in srgb, var(--calm-a3b) 90%, #fff);
+    }
+    #concept-a3b .a3b-sidepill .lr { width: 14px; height: 14px; border-radius: 50%; background: var(--calm-a3b); box-shadow: 0 0 0 4px color-mix(in srgb, var(--calm-a3b) 22%, transparent); }
+
+    #concept-a3b .a3b-holdwrap { position: relative; width: 214px; height: 214px; margin: 4px 0 2px; }
+    #concept-a3b .a3b-holdring {
+      width: 100%; height: 100%; border-radius: 50%;
+      background: conic-gradient(var(--calm-a3b) var(--a3b-hold), #262c31 0);
+      -webkit-mask: radial-gradient(closest-side, transparent 77%, #000 78%);
+      mask: radial-gradient(closest-side, transparent 77%, #000 78%);
+    }
+    #concept-a3b .a3b-holdtxt { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+    #concept-a3b .a3b-holdnum { font-size: 60px; font-weight: 900; letter-spacing: -.04em; line-height: 1; color: #eef4f6; }
+    #concept-a3b .a3b-holdlbl { font-size: 11px; font-weight: 800; color: #8fa3ab; letter-spacing: .16em; text-transform: uppercase; margin-top: 8px; }
+    #concept-a3b .a3b-thenlbl { font-size: 12px; font-weight: 800; color: #6f7c82; letter-spacing: .02em; }
+    #concept-a3b .a3b-thenlbl b { color: #9fb2b9; }
+    #concept-a3b .a3b-mob-set { font-size: 12px; font-weight: 800; color: #8fa3ab; letter-spacing: .06em; }
+    #concept-a3b .a3b-mob-cta {
+      height: 60px; width: 100%; font-size: 17px; display: flex; align-items: center; justify-content: center; gap: 9px;
+      margin-top: auto;
+    }
+    #concept-a3b .a3b-mob-cta .ck { background: rgba(8,34,43,.22); }
+    #concept-a3b .a3b-mob-cta .a3b-ck::before { border-color: #08222b; }
+
+    /* ============================================================
+       SCREEN 3 · ROLLER (simple / táctil)
+       ============================================================ */
+    #concept-a3b .a3b-roll { align-items: center; text-align: center; }
+    /* foam roller silhouette */
+    #concept-a3b .a3b-rollfig { position: absolute; bottom: 26px; left: 50%; transform: translateX(-50%); width: 170px; height: 96px; }
+    #concept-a3b .a3b-rl-floor { position: absolute; bottom: 0; left: 6px; right: 6px; height: 4px; border-radius: 3px; background: #33333f; }
+    #concept-a3b .a3b-rl-cyl {
+      position: absolute; bottom: 4px; left: 50%; transform: translateX(-50%); width: 116px; height: 26px; border-radius: 13px;
+      background: repeating-linear-gradient(115deg, color-mix(in srgb, var(--brand-a3b) 62%, #2a2a34) 0 8px, color-mix(in srgb, var(--brand-a3b) 40%, #1c1c24) 8px 16px);
+      box-shadow: 0 0 12px color-mix(in srgb, var(--brand-a3b) 30%, transparent);
+    }
+    #concept-a3b .a3b-rl-thigh { position: absolute; bottom: 22px; left: 34px; width: 96px; height: 16px; border-radius: 9px; background: color-mix(in srgb, var(--brand-a3b) 42%, #2a2a34); transform: rotate(-6deg); transform-origin: left center; }
+    #concept-a3b .a3b-rl-torso { position: absolute; bottom: 30px; left: 108px; width: 20px; height: 34px; border-radius: 9px; background: color-mix(in srgb, var(--brand-a3b) 45%, #2a2a34); transform: rotate(-22deg); transform-origin: bottom left; }
+    #concept-a3b .a3b-rl-head { position: absolute; bottom: 60px; left: 122px; width: 16px; height: 16px; border-radius: 50%; background: color-mix(in srgb, var(--brand-a3b) 55%, #2a2a34); }
+    #concept-a3b .a3b-rl-arm { position: absolute; bottom: 12px; left: 118px; width: 6px; height: 40px; border-radius: 4px; background: color-mix(in srgb, var(--brand-a3b) 38%, #2a2a34); transform: rotate(10deg); }
+
+    #concept-a3b .a3b-roll-goal {
+      font-size: 13px; font-weight: 800; color: #c4c4cf; margin-bottom: 14px;
+    }
+    #concept-a3b .a3b-roll-goal b { color: #fff; }
+    #concept-a3b .a3b-counter {
+      display: flex; flex-direction: column; align-items: center; gap: 2px; margin-bottom: 6px;
+    }
+    #concept-a3b .a3b-bignumber {
+      font-size: 116px; font-weight: 900; letter-spacing: -.05em; line-height: .9; color: #fff;
+      font-variant-numeric: tabular-nums;
+    }
+    #concept-a3b .a3b-counter .goalof { font-size: 14px; font-weight: 800; color: #8f8f9c; letter-spacing: .04em; }
+    #concept-a3b .a3b-counter .lbl { font-size: 11px; font-weight: 800; color: #7f7f8c; letter-spacing: .16em; text-transform: uppercase; margin-top: 2px; }
+    #concept-a3b .a3b-plusbtn {
+      width: 100%; height: 92px; border-radius: 22px; font-size: 24px; letter-spacing: -.01em;
+      display: flex; align-items: center; justify-content: center; gap: 14px; margin: 10px 0 12px;
+    }
+    #concept-a3b .a3b-plusbtn .plus {
+      width: 34px; height: 34px; border-radius: 50%; background: rgba(7,33,0,.2); position: relative; flex-shrink: 0;
+    }
+    #concept-a3b .a3b-plusbtn .plus::before, #concept-a3b .a3b-plusbtn .plus::after {
+      content: ""; position: absolute; top: 50%; left: 50%; background: #072100; border-radius: 2px;
+    }
+    #concept-a3b .a3b-plusbtn .plus::before { width: 16px; height: 4px; transform: translate(-50%,-50%); }
+    #concept-a3b .a3b-plusbtn .plus::after { width: 4px; height: 16px; transform: translate(-50%,-50%); }
+    #concept-a3b .a3b-roll-foot { display: flex; align-items: center; gap: 10px; width: 100%; margin-top: auto; }
+    #concept-a3b .a3b-timerchip {
+      display: inline-flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 800; color: #b7b7c2;
+      background: #1c1c24; border: 1.5px solid #2f2f3a; border-radius: 12px; padding: 10px 14px;
+    }
+    #concept-a3b .a3b-timerchip .clk {
+      width: 14px; height: 14px; border-radius: 50%; border: 2px solid #b7b7c2; position: relative; flex-shrink: 0;
+    }
+    #concept-a3b .a3b-timerchip .clk::before { content: ""; position: absolute; top: 2px; left: 50%; width: 2px; height: 5px; background: #b7b7c2; transform: translateX(-50%); border-radius: 1px; }
+    #concept-a3b .a3b-timerchip .opt { font-size: 9px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: #6a6a76; }
+    #concept-a3b .a3b-roll-done {
+      flex: 1; height: 54px; border-radius: 15px; font-size: 15px; font-weight: 800;
+      background: #1c1c24; border: 2px solid #2f2f3a; color: #e8e8ee;
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+    }
+
+    /* ============================================================
+       SCREEN 4 · FINAL (clon v2)
+       ============================================================ */
+    #concept-a3b .a3b-final { align-items: center; text-align: center; gap: 0; position: relative; }
+    #concept-a3b .a3b-finalconf { position: absolute; top: 20px; left: 0; right: 0; height: 60px; pointer-events: none; }
+    #concept-a3b .a3b-confetti { position: absolute; inset: 0; pointer-events: none; overflow: visible; }
+    #concept-a3b .a3b-conf { position: absolute; top: 50%; left: 50%; width: 7px; height: 7px; border-radius: 2px; opacity: 0; }
+    #concept-a3b .a3b-finaltitle { font-size: 28px; font-weight: 900; letter-spacing: -.02em; margin: 6px 0 4px; }
+    #concept-a3b .a3b-finalsub { font-size: 13px; font-weight: 700; color: #a8a8b3; margin-bottom: 16px; }
+    #concept-a3b .a3b-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; width: 100%; margin-bottom: 16px; }
+    #concept-a3b .a3b-stat {
+      background: #1a1a22; border: 1.5px solid #2a2a34; border-radius: 16px; padding: 12px 10px; text-align: left;
+    }
+    #concept-a3b .a3b-stat .sv { font-size: 24px; font-weight: 900; letter-spacing: -.03em; line-height: 1; }
+    #concept-a3b .a3b-stat .sl { font-size: 10px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: #7f7f8c; margin-top: 6px; }
+    #concept-a3b .a3b-stat.pr {
+      grid-column: 1 / -1;
+      background: linear-gradient(135deg, color-mix(in srgb, var(--gold) 20%, #16161d), #17171f);
+      border-color: color-mix(in srgb, var(--gold) 45%, transparent);
+      display: flex; align-items: center; gap: 12px;
+    }
+    #concept-a3b .a3b-stat.pr .medal {
+      width: 34px; height: 34px; border-radius: 50%; flex-shrink: 0;
+      background: radial-gradient(circle at 40% 35%, #ffe9a8, var(--gold) 60%, #c99326);
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--gold) 22%, transparent);
+    }
+    #concept-a3b .a3b-stat.pr .sv { color: var(--gold); font-size: 20px; }
+    #concept-a3b .a3b-stat.pr .sl { color: color-mix(in srgb, var(--gold) 75%, #fff); }
+    #concept-a3b .a3b-muscle {
+      width: 100%; background: #15151c; border: 1.5px solid #24242e; border-radius: 16px;
+      padding: 12px 12px 10px; margin-bottom: 14px;
+    }
+    #concept-a3b .a3b-musclehd { font-size: 10px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: #7f7f8c; margin-bottom: 6px; text-align: left; }
+    #concept-a3b .a3b-bodies { display: flex; justify-content: center; gap: 22px; }
+    #concept-a3b .a3b-bodyfig { text-align: center; }
+    #concept-a3b .a3b-bodyfig svg { display: block; width: 74px; height: 132px; }
+    #concept-a3b .a3b-bodyfig .cap { font-size: 9px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: #7f7f8c; margin-top: 4px; }
+    #concept-a3b .a3b-mm-base { fill: #2c2c37; }
+    #concept-a3b .a3b-mm-strong { fill: var(--brand-a3b); }
+    #concept-a3b .a3b-mm-med { fill: color-mix(in srgb, var(--brand-a3b) 52%, transparent); }
+    #concept-a3b .a3b-mm-soft { fill: color-mix(in srgb, var(--brand-a3b) 26%, transparent); }
+    #concept-a3b .a3b-legend { display: flex; justify-content: center; gap: 14px; margin-top: 8px; }
+    #concept-a3b .a3b-legend span { display: inline-flex; align-items: center; gap: 5px; font-size: 10px; font-weight: 800; color: #9a9aa6; }
+    #concept-a3b .a3b-legend i { width: 10px; height: 10px; border-radius: 3px; }
+    #concept-a3b .a3b-legend .l3 { background: var(--brand-a3b); }
+    #concept-a3b .a3b-legend .l2 { background: color-mix(in srgb, var(--brand-a3b) 52%, transparent); }
+    #concept-a3b .a3b-legend .l1 { background: color-mix(in srgb, var(--brand-a3b) 26%, transparent); }
+    #concept-a3b .a3b-streak { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+    #concept-a3b .a3b-streaklbl { font-size: 11px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: #8f8f9c; }
+    #concept-a3b .a3b-scount { font-size: 12px; font-weight: 800; color: #8f8f9c; white-space: nowrap; }
+    #concept-a3b .a3b-sdots { display: flex; gap: 8px; margin-left: auto; }
+    #concept-a3b .a3b-sd { width: 16px; height: 16px; border-radius: 50%; background: #26262f; border: 2px solid #33333f; }
+    #concept-a3b .a3b-sd.on { background: var(--brand-a3b); border-color: color-mix(in srgb, var(--brand-a3b) 55%, #000); box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand-a3b) 20%, transparent); }
+    #concept-a3b .a3b-finalcta { height: 60px; width: 100%; font-size: 17px; display: flex; align-items: center; justify-content: center; gap: 9px; margin-bottom: 10px; }
+    #concept-a3b .a3b-share { width: 16px; height: 16px; position: relative; }
+    #concept-a3b .a3b-share::before {
+      content: ""; position: absolute; inset: 0;
+      background:
+        radial-gradient(circle at 4px 4px, #072100 3px, transparent 3.5px),
+        radial-gradient(circle at 12px 3px, #072100 3px, transparent 3.5px),
+        radial-gradient(circle at 12px 13px, #072100 3px, transparent 3.5px);
+    }
+    #concept-a3b .a3b-share::after {
+      content: ""; position: absolute; top: 5px; left: 5px; width: 8px; height: 6px;
+      border-top: 2px solid #072100; border-bottom: 2px solid #072100; transform: skewY(20deg);
+    }
+    #concept-a3b .a3b-finalsec {
+      height: 52px; width: 100%; border-radius: 15px; font-size: 15px; font-weight: 800;
+      background: #1c1c24; border: 2px solid #2f2f3a; color: #e8e8ee;
+      display: flex; align-items: center; justify-content: center;
+    }
+
+    /* ============================================================
+       SCREEN 5 · AJUSTES (sheet abierto sobre fuerza atenuada)
+       ============================================================ */
+    #concept-a3b .a3b-bgdim { flex: 1; display: flex; flex-direction: column; padding: 40px 18px 18px; opacity: .4; filter: saturate(.6); pointer-events: none; }
+    #concept-a3b .a3b-bg-media {
+      position: relative; height: 118px; border-radius: 20px; overflow: hidden; border: 2px solid #2f2f3a;
+      background: linear-gradient(160deg, #202029, #17171f); margin-bottom: 12px;
+    }
+    #concept-a3b .a3b-bg-rx { font-size: 13px; font-weight: 700; color: #c4c4cf; text-align: center; margin-bottom: 10px; }
+    #concept-a3b .a3b-bg-cur { display: flex; gap: 10px; margin-bottom: 10px; }
+    #concept-a3b .a3b-bg-val { flex: 1; text-align: center; padding: 10px 8px; border-radius: 16px; background: #1c1c24; border: 2px solid #2f2f3a; }
+    #concept-a3b .a3b-bg-val .n { font-size: 28px; font-weight: 900; letter-spacing: -.03em; line-height: 1; }
+    #concept-a3b .a3b-bg-val .u { font-size: 11px; font-weight: 800; color: #8f8f9c; letter-spacing: .08em; margin-top: 4px; }
+    #concept-a3b .a3b-bg-cta { height: 58px; border-radius: 16px; background: var(--brand-a3b); }
+    #concept-a3b .a3b-scrim { position: absolute; inset: 0; background: rgba(6,6,10,.55); z-index: 10; }
+
+    #concept-a3b .a3b-sheet {
+      position: absolute; left: 0; right: 0; bottom: 0; height: 75%;
+      background: #1a1a22; border-top: 2px solid #33333f;
+      border-radius: 24px 24px 0 0; padding: 10px 16px 16px;
+      box-shadow: 0 -22px 46px -18px rgba(0,0,0,.8); z-index: 20;
+      display: flex; flex-direction: column;
+    }
+    #concept-a3b .a3b-handle { width: 40px; height: 5px; border-radius: 999px; background: #45454f; margin: 0 auto 10px; }
+    #concept-a3b .a3b-sheethd { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+    #concept-a3b .a3b-sheethd .t { font-size: 16px; font-weight: 900; letter-spacing: -.01em; }
+    #concept-a3b .a3b-x {
+      width: 30px; height: 30px; border-radius: 50%; background: #26262f; border: 1.5px solid #3a3a45; position: relative; flex-shrink: 0;
+    }
+    #concept-a3b .a3b-x::before, #concept-a3b .a3b-x::after {
+      content: ""; position: absolute; top: 50%; left: 50%; width: 12px; height: 2px; border-radius: 2px; background: #b7b7c2;
+    }
+    #concept-a3b .a3b-x::before { transform: translate(-50%,-50%) rotate(45deg); }
+    #concept-a3b .a3b-x::after { transform: translate(-50%,-50%) rotate(-45deg); }
+    #concept-a3b .a3b-setrows { overflow: hidden; }
+    #concept-a3b .a3b-setrow {
+      display: flex; align-items: center; gap: 12px; padding: 11px 2px; border-top: 1.5px solid #26262f;
+    }
+    #concept-a3b .a3b-setrow.first { border-top: none; }
+    #concept-a3b .a3b-setmain { flex: 1; min-width: 0; }
+    #concept-a3b .a3b-setname { font-size: 14px; font-weight: 800; color: #eaeaf0; letter-spacing: -.01em; }
+    #concept-a3b .a3b-setsub { font-size: 11.5px; font-weight: 600; color: #8f8f9c; margin-top: 3px; line-height: 1.35; }
+    /* toggle */
+    #concept-a3b .a3b-tog {
+      width: 48px; height: 28px; border-radius: 999px; position: relative; flex-shrink: 0;
+      background: #2a2a34; border: 2px solid #3a3a45; transition: background .2s ease;
+    }
+    #concept-a3b .a3b-tog .knob {
+      position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: #c9c9d2;
+    }
+    #concept-a3b .a3b-tog.on { background: var(--brand-a3b); border-color: color-mix(in srgb, var(--brand-a3b) 55%, #000); }
+    #concept-a3b .a3b-tog.on .knob { left: auto; right: 3px; background: #072100; }
+    /* selector value */
+    #concept-a3b .a3b-selval {
+      display: inline-flex; align-items: center; gap: 8px; flex-shrink: 0;
+      font-size: 13px; font-weight: 800; color: #e8e8ee;
+      background: #24242e; border: 1.5px solid #3a3a45; border-radius: 10px; padding: 8px 11px;
+    }
+    #concept-a3b .a3b-caret { width: 0; height: 0; border-style: solid; border-width: 5px 4px 0 4px; border-color: #b7b7c2 transparent transparent transparent; }
+    /* slider */
+    #concept-a3b .a3b-setrow.slider { flex-direction: column; align-items: stretch; gap: 9px; }
+    #concept-a3b .a3b-slidertop { display: flex; align-items: center; justify-content: space-between; }
+    #concept-a3b .a3b-slidertop .pct { font-size: 13px; font-weight: 900; color: var(--brand-a3b); font-variant-numeric: tabular-nums; }
+    #concept-a3b .a3b-slider { position: relative; height: 8px; border-radius: 999px; background: #2a2a34; margin: 4px 11px 4px 0; }
+    #concept-a3b .a3b-slider > i { position: absolute; left: 0; top: 0; bottom: 0; width: 70%; border-radius: 999px; background: var(--brand-a3b); }
+    #concept-a3b .a3b-sliderknob {
+      position: absolute; top: 50%; left: 70%; transform: translate(-50%,-50%);
+      width: 22px; height: 22px; border-radius: 50%; background: #fff;
+      border: 4px solid var(--brand-a3b); box-shadow: 0 2px 6px rgba(0,0,0,.4);
+    }
+
+    /* ===== motion signature ===== */
+    #concept-a3b .a3b-motion {
+      max-width: 1320px; margin: 48px auto 0; padding: 24px 26px;
+      border-radius: 20px; background: #14141b; border: 1.5px solid #26262f;
+    }
+    #concept-a3b .a3b-motion h4 {
+      font-size: 12px; font-weight: 900; letter-spacing: .16em; text-transform: uppercase;
+      color: var(--brand-a3b); margin: 0 0 14px;
+    }
+    #concept-a3b .a3b-motion ul { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px 26px; }
+    #concept-a3b .a3b-motion li { font-size: 13.5px; line-height: 1.5; color: #b7b7c2; }
+    #concept-a3b .a3b-motion li b { color: #eeeef2; font-weight: 800; }
+
+    /* ============================================================
+       ANIMATIONS (decorativas — off en reduced-motion)
+       ============================================================ */
+    @media (prefers-reduced-motion: no-preference) {
+      #concept-a3b .a3b-media::after { animation: concept-a3b-shimmer 3.2s linear infinite; }
+      #concept-a3b .a3b-exmini::after { animation: concept-a3b-shimmer 3.2s linear infinite; }
+      #concept-a3b .a3b-live { animation: concept-a3b-pulse 1.6s ease-in-out infinite; }
+      #concept-a3b .a3b-dot.now { animation: concept-a3b-beat 1.4s ease-in-out infinite; }
+      #concept-a3b .a3b-rd.now { animation: concept-a3b-beat 1.4s ease-in-out infinite; }
+
+      /* superserie: overhead press + arrow sliding */
+      #concept-a3b .a3b-ohp .bar, #concept-a3b .a3b-ohp .armL, #concept-a3b .a3b-ohp .armR { animation: concept-a3b-ohp 2.6s ease-in-out infinite; }
+      #concept-a3b .a3b-arrow::after { animation: concept-a3b-arrow 1.6s ease-in-out infinite; }
+      #concept-a3b .a3b-arrow::before { animation: concept-a3b-arrowline 1.6s ease-in-out infinite; }
+      #concept-a3b .a3b-ss-cta { animation: concept-a3b-breathe 2.6s ease-in-out infinite; }
+
+      /* movilidad: serene fill (30s lineal) + gentle sway */
+      #concept-a3b .a3b-holdring { animation: concept-a3b-holdfill 30s linear infinite; }
+      #concept-a3b .a3b-st-sway { animation: concept-a3b-sway 6s ease-in-out infinite; }
+      #concept-a3b .a3b-sidepill .lr { animation: concept-a3b-pulse 3s ease-in-out infinite; }
+
+      /* roller: cylinder rolls + counter micro-spring + juicy plus breathes */
+      #concept-a3b .a3b-rl-cyl { animation: concept-a3b-roll 2.4s linear infinite; }
+      #concept-a3b .a3b-bignumber { animation: concept-a3b-tickpop 2.8s ease-in-out infinite; }
+      #concept-a3b .a3b-plusbtn { animation: concept-a3b-breathe 2.4s ease-in-out infinite; }
+
+      /* final: confetti + medal + glow */
+      #concept-a3b .a3b-finaltitle { animation: concept-a3b-breathe 3s ease-in-out infinite; }
+      #concept-a3b .a3b-stat.pr .medal { animation: concept-a3b-pop 3.2s ease-in-out infinite; }
+      #concept-a3b .a3b-mm-strong { animation: concept-a3b-glow 2.6s ease-in-out infinite; }
+      #concept-a3b .a3b-conf { animation: concept-a3b-confetti 6s ease-in-out infinite; }
+      #concept-a3b .a3b-conf:nth-child(1) { --cx: -46px; --cy: -20px; background: var(--brand-a3b); animation-delay: 0s; }
+      #concept-a3b .a3b-conf:nth-child(2) { --cx: 44px; --cy: -24px; background: var(--z3); animation-delay: .3s; }
+      #concept-a3b .a3b-conf:nth-child(3) { --cx: -54px; --cy: 12px; background: var(--z1); animation-delay: .6s; }
+      #concept-a3b .a3b-conf:nth-child(4) { --cx: 56px; --cy: 8px; background: var(--z4); animation-delay: .15s; }
+      #concept-a3b .a3b-conf:nth-child(5) { --cx: -20px; --cy: -34px; background: #f472b6; animation-delay: .45s; }
+      #concept-a3b .a3b-conf:nth-child(6) { --cx: 22px; --cy: -32px; background: var(--brand-a3b); animation-delay: .75s; }
+      #concept-a3b .a3b-conf:nth-child(7) { --cx: -38px; --cy: 24px; background: var(--z3); animation-delay: .55s; }
+      #concept-a3b .a3b-conf:nth-child(8) { --cx: 40px; --cy: 22px; background: var(--z1); animation-delay: .9s; }
+
+      /* ajustes: toggle knob slide + slider knob subtle */
+      #concept-a3b .a3b-tog.on .knob { animation: concept-a3b-knobtap 4s ease-in-out infinite; }
+    }
+    @keyframes concept-a3b-shimmer { to { background-position: -220% 0; } }
+    @keyframes concept-a3b-pulse { 0%,100% { opacity: 1; transform: scale(1); } 50% { opacity: .4; transform: scale(.7); } }
+    @keyframes concept-a3b-beat { 0%,100% { transform: scale(1); } 30% { transform: scale(1.3); } 45% { transform: scale(1); } }
+    @keyframes concept-a3b-breathe { 0%,100% { transform: scale(1); } 50% { transform: scale(1.03); } }
+    @keyframes concept-a3b-pop { 0%,80%,100% { transform: scale(1); } 40% { transform: scale(1.18); } }
+    @keyframes concept-a3b-glow { 0%,100% { opacity: 1; } 50% { opacity: .78; } }
+    @keyframes concept-a3b-ohp { 0%,100% { transform: translateY(4px); } 45% { transform: translateY(-6px); } }
+    @keyframes concept-a3b-arrow { 0%,100% { transform: translateY(-50%) rotate(45deg) translate(0,0); opacity: .8; } 50% { transform: translateY(-50%) rotate(45deg) translate(3px,-3px); opacity: 1; } }
+    @keyframes concept-a3b-arrowline { 0%,100% { transform: translateY(-50%) scaleX(1); } 50% { transform: translateY(-50%) scaleX(1.15); } }
+    @keyframes concept-a3b-holdfill { from { --a3b-hold: 12deg; } to { --a3b-hold: 360deg; } }
+    @keyframes concept-a3b-sway { 0%,100% { transform: rotate(0deg); } 50% { transform: rotate(3deg); } }
+    @keyframes concept-a3b-roll { to { background-position: 32px 0; } }
+    @keyframes concept-a3b-tickpop { 0%,72%,100% { transform: scale(1); } 80% { transform: scale(1.08); } 88% { transform: scale(.98); } }
+    @keyframes concept-a3b-knobtap { 0%,90%,100% { transform: translateX(0); } 95% { transform: translateX(-3px); } }
+    @keyframes concept-a3b-confetti {
+      0%, 4% { opacity: 0; transform: translate(-50%,-50%) scale(.3); }
+      8% { opacity: 1; }
+      22% { opacity: 1; transform: translate(calc(-50% + var(--cx)), calc(-50% + var(--cy))) scale(1) rotate(180deg); }
+      34%, 100% { opacity: 0; transform: translate(calc(-50% + var(--cx)), calc(-50% + var(--cy) + 24px)) scale(.6) rotate(320deg); }
+    }
+  </style>
+
+  <div class="a3b-head">
+    <span class="a3b-eyebrow">Impulso — v3</span>
+    <h2 class="a3b-title">Impulso v3 — Tipos unicos y extras</h2>
+    <p class="a3b-sub">El mismo lenguaje juicy de Impulso llevado a los ejercicios que se salen del molde: superseries encadenadas, movilidad serena y roller de conteo tactil — mas el cierre celebratorio y el sheet de ajustes del cronometro que abre la tuerca.</p>
+  </div>
+
+  <div class="a3b-row">
+
+    <!-- ============ 1 · SUPERSERIE ============ -->
+    <div class="a3b-col">
+      <p class="a3b-label"><span></span>Superserie <em>nueva</em></p>
+      <div class="a3b-phone">
+        <div class="a3b-screen">
+          <div class="a3b-notch"></div>
+          <div class="a3b-body">
+            <div class="a3b-tophead">
+              <div class="a3b-gear">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                  <circle cx="12" cy="12" r="3.1"></circle>
+                  <path d="M12 2.6v3M12 18.4v3M2.6 12h3M18.4 12h3M5.4 5.4l2.1 2.1M16.5 16.5l2.1 2.1M18.6 5.4l-2.1 2.1M7.5 16.5l-2.1 2.1"></path>
+                </svg>
+              </div>
+              <div class="a3b-dots">
+                <div class="a3b-dot done"></div><div class="a3b-dot done"></div>
+                <div class="a3b-dot done"></div><div class="a3b-dot now"></div>
+                <div class="a3b-dot"></div><div class="a3b-dot"></div>
+                <div class="a3b-dot"></div><div class="a3b-dot"></div>
+              </div>
+              <div class="a3b-count a3b-tnum">4 de 8</div>
+            </div>
+
+            <div class="a3b-ss-titrow">
+              <div class="a3b-ss-tit">Superserie A</div>
+              <span class="a3b-roundchip">
+                Ronda 2 de 4
+                <span class="a3b-rounddots">
+                  <span class="a3b-rd done"></span><span class="a3b-rd now"></span>
+                  <span class="a3b-rd"></span><span class="a3b-rd"></span>
+                </span>
+              </span>
+            </div>
+
+            <!-- ACTIVE exercise -->
+            <div class="a3b-excard active">
+              <div class="a3b-exmini">
+                <div class="a3b-ohp">
+                  <div class="bar"></div><div class="armL"></div><div class="armR"></div>
+                  <div class="head"></div><div class="torso"></div>
+                </div>
+              </div>
+              <div class="a3b-exinfo">
+                <div class="a3b-exhd">
+                  <span class="a3b-exletter">A</span>
+                  <span class="a3b-exnm">Press militar</span>
+                  <span class="a3b-exstate now">Ahora</span>
+                </div>
+                <div class="a3b-exrx a3b-tnum">8 reps · 30 kg</div>
+              </div>
+            </div>
+
+            <!-- NEXT exercise (dimmed) -->
+            <div class="a3b-excard next">
+              <div class="a3b-exmini">
+                <div class="a3b-lat">
+                  <div class="armL"></div><div class="armR"></div>
+                  <div class="head"></div><div class="torso"></div>
+                </div>
+              </div>
+              <div class="a3b-exinfo">
+                <div class="a3b-exhd">
+                  <span class="a3b-exletter">B</span>
+                  <span class="a3b-exnm">Elevaciones laterales</span>
+                  <span class="a3b-exstate after">Sigue</span>
+                </div>
+                <div class="a3b-exrx a3b-tnum">12 reps · 8 kg</div>
+              </div>
+            </div>
+
+            <div class="a3b-linkpill">
+              Sin descanso — sigue con B
+              <span class="a3b-arrow"></span>
+            </div>
+
+            <div class="a3b-juicy a3b-ss-cta">
+              <span class="a3b-ck"></span> Completar serie de A
+            </div>
+
+            <div class="a3b-restnote">
+              <span class="clk"></span>
+              Descanso <b class="a3b-tnum">120s</b> al cerrar la ronda
+            </div>
+          </div>
+        </div>
+      </div>
+      <ul class="a3b-bullets">
+        <li><b>Ejecucion intercalada real</b>: A1 → B1 → A2 → B2, tal como el engine encadena la superserie hoy, sin inventar un flujo nuevo.</li>
+        <li><b>Descanso solo al cerrar la ronda</b>: pasas directo de A a B sin cronometro entremedio; el timer aparece recien al terminar B.</li>
+        <li><b>Foco en el activo</b>: la tarjeta de A se enciende con borde de marca; B queda atenuada pero visible para anticipar.</li>
+      </ul>
+    </div>
+
+    <!-- ============ 2 · MOVILIDAD ============ -->
+    <div class="a3b-col">
+      <p class="a3b-label calm"><span></span>Movilidad <em>nueva</em></p>
+      <div class="a3b-phone">
+        <div class="a3b-screen calm">
+          <div class="a3b-notch"></div>
+          <div class="a3b-body a3b-mob">
+            <div class="a3b-exname calm-t">Estiramiento de isquios</div>
+            <div class="a3b-chiprow" style="justify-content:center;">
+              <span class="a3b-chip calm">Movilidad</span>
+              <span class="a3b-mob-set a3b-tnum">Serie 1 de 3</span>
+            </div>
+
+            <div class="a3b-media calm" style="width:100%;">
+              <div class="a3b-medialbl"><span class="a3b-live calm"></span>Manten</div>
+              <div class="a3b-stretch">
+                <div class="a3b-st-floor"></div>
+                <div class="a3b-st-legs"></div>
+                <div class="a3b-st-foot"></div>
+                <div class="a3b-st-hip"></div>
+                <div class="a3b-st-sway">
+                  <div class="a3b-st-torso"></div>
+                  <div class="a3b-st-head"></div>
+                  <div class="a3b-st-arm"></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="a3b-sidepill"><span class="lr"></span> Lado izquierdo</div>
+
+            <div class="a3b-holdwrap">
+              <div class="a3b-holdring"></div>
+              <div class="a3b-holdtxt">
+                <div class="a3b-holdnum a3b-tnum">0:30</div>
+                <div class="a3b-holdlbl">Sosten</div>
+              </div>
+            </div>
+
+            <div class="a3b-thenlbl">luego: <b>lado derecho</b></div>
+
+            <div class="a3b-juicy calm a3b-mob-cta">
+              <span class="a3b-ck"></span> Listo este lado
+            </div>
+          </div>
+        </div>
+      </div>
+      <ul class="a3b-bullets calm">
+        <li><b>Secuencia por lado automatica</b>: al llegar a 0, vibra suave y pasa solo al otro lado; eyes-free, sin tocar la pantalla.</li>
+        <li><b>Sin RPE ni RIR</b>: en movilidad no aplican, asi que la pantalla respira y solo pide sostener con un anillo sereno.</li>
+        <li><b>Anillo sin rebotes</b>: el tiempo se llena lento y lineal en 30s, acompanando la respiracion en vez de apurarla.</li>
+      </ul>
+    </div>
+
+    <!-- ============ 3 · ROLLER ============ -->
+    <div class="a3b-col">
+      <p class="a3b-label"><span></span>Roller <em>nueva</em></p>
+      <div class="a3b-phone">
+        <div class="a3b-screen">
+          <div class="a3b-notch"></div>
+          <div class="a3b-body a3b-roll">
+            <div class="a3b-exname" style="text-align:center; width:100%;">Foam roller</div>
+            <div class="a3b-chiprow" style="justify-content:center;">
+              <span class="a3b-chip">Roller</span>
+              <span class="a3b-chip plain">Cuadriceps</span>
+            </div>
+
+            <div class="a3b-media" style="width:100%;">
+              <div class="a3b-medialbl"><span class="a3b-live"></span>En loop</div>
+              <div class="a3b-rollfig">
+                <div class="a3b-rl-floor"></div>
+                <div class="a3b-rl-thigh"></div>
+                <div class="a3b-rl-torso"></div>
+                <div class="a3b-rl-head"></div>
+                <div class="a3b-rl-arm"></div>
+                <div class="a3b-rl-cyl"></div>
+              </div>
+            </div>
+
+            <div class="a3b-roll-goal a3b-tnum">Objetivo: <b>10-12 pasadas</b> por pierna</div>
+
+            <div class="a3b-counter">
+              <div class="a3b-bignumber">8</div>
+              <div class="goalof a3b-tnum">de 12</div>
+              <div class="lbl">Pasadas</div>
+            </div>
+
+            <div class="a3b-juicy a3b-plusbtn">
+              <span class="plus"></span> +1 pasada
+            </div>
+
+            <div class="a3b-roll-foot">
+              <span class="a3b-timerchip">
+                <span class="clk"></span>
+                <span class="a3b-tnum">1:24</span>
+                <span class="opt">Opcional</span>
+              </span>
+              <div class="a3b-roll-done">Completar</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <ul class="a3b-bullets">
+        <li><b>Tap = +1 con tick haptico</b>: el boton gigante suma una pasada y confirma con una micro-vibracion; es EL boton de la pantalla.</li>
+        <li><b>Cero teclado</b>: pensada para usarse desde el suelo, sin escribir numeros ni abrir sheets.</li>
+        <li><b>Contador enorme</b>: el 8 salta con un micro-rebote cada vez que sumas, legible de reojo.</li>
+      </ul>
+    </div>
+
+    <!-- ============ 4 · FINAL (clon v2) ============ -->
+    <div class="a3b-col">
+      <p class="a3b-label"><span></span>Final <em>clon v2</em></p>
+      <div class="a3b-phone">
+        <div class="a3b-screen">
+          <div class="a3b-notch"></div>
+          <div class="a3b-body a3b-final">
+            <div class="a3b-finalconf">
+              <div class="a3b-confetti">
+                <span class="a3b-conf"></span><span class="a3b-conf"></span>
+                <span class="a3b-conf"></span><span class="a3b-conf"></span>
+                <span class="a3b-conf"></span><span class="a3b-conf"></span>
+                <span class="a3b-conf"></span><span class="a3b-conf"></span>
+              </div>
+            </div>
+
+            <div class="a3b-finaltitle">¡Dia 3 completo!</div>
+            <div class="a3b-finalsub">Empuje · Semana 2 · Fase Fuerza</div>
+
+            <div class="a3b-stats">
+              <div class="a3b-stat"><div class="sv a3b-tnum">52:18</div><div class="sl">Duracion</div></div>
+              <div class="a3b-stat"><div class="sv a3b-tnum">4.860 kg</div><div class="sl">Volumen</div></div>
+              <div class="a3b-stat"><div class="sv a3b-tnum">24 / 24</div><div class="sl">Series</div></div>
+              <div class="a3b-stat pr">
+                <span class="medal"></span>
+                <div>
+                  <div class="sv a3b-tnum">62,5 kg</div>
+                  <div class="sl">PR · Press banca</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="a3b-muscle">
+              <div class="a3b-musclehd">Trabajado hoy</div>
+              <div class="a3b-bodies">
+                <div class="a3b-bodyfig">
+                  <svg viewBox="0 0 80 148" aria-hidden="true">
+                    <circle class="a3b-mm-base" cx="40" cy="13" r="10"></circle>
+                    <rect class="a3b-mm-base" x="36" y="22" width="8" height="7" rx="3"></rect>
+                    <path class="a3b-mm-base" d="M20 33 Q40 27 60 33 L56 60 Q54 84 50 100 L30 100 Q26 84 24 60 Z"></path>
+                    <rect class="a3b-mm-base" x="12" y="34" width="10" height="46" rx="5"></rect>
+                    <rect class="a3b-mm-base" x="58" y="34" width="10" height="46" rx="5"></rect>
+                    <rect class="a3b-mm-base" x="29" y="98" width="10" height="46" rx="5"></rect>
+                    <rect class="a3b-mm-base" x="41" y="98" width="10" height="46" rx="5"></rect>
+                    <ellipse class="a3b-mm-med" cx="22" cy="37" rx="7" ry="6"></ellipse>
+                    <ellipse class="a3b-mm-med" cx="58" cy="37" rx="7" ry="6"></ellipse>
+                    <ellipse class="a3b-mm-strong" cx="33" cy="50" rx="8" ry="7"></ellipse>
+                    <ellipse class="a3b-mm-strong" cx="47" cy="50" rx="8" ry="7"></ellipse>
+                  </svg>
+                  <div class="cap">Frente</div>
+                </div>
+                <div class="a3b-bodyfig">
+                  <svg viewBox="0 0 80 148" aria-hidden="true">
+                    <circle class="a3b-mm-base" cx="40" cy="13" r="10"></circle>
+                    <rect class="a3b-mm-base" x="36" y="22" width="8" height="7" rx="3"></rect>
+                    <path class="a3b-mm-base" d="M20 33 Q40 27 60 33 L56 60 Q54 84 50 100 L30 100 Q26 84 24 60 Z"></path>
+                    <rect class="a3b-mm-base" x="12" y="34" width="10" height="46" rx="5"></rect>
+                    <rect class="a3b-mm-base" x="58" y="34" width="10" height="46" rx="5"></rect>
+                    <rect class="a3b-mm-base" x="29" y="98" width="10" height="46" rx="5"></rect>
+                    <rect class="a3b-mm-base" x="41" y="98" width="10" height="46" rx="5"></rect>
+                    <ellipse class="a3b-mm-med" cx="24" cy="37" rx="6" ry="6"></ellipse>
+                    <ellipse class="a3b-mm-med" cx="56" cy="37" rx="6" ry="6"></ellipse>
+                    <ellipse class="a3b-mm-med" cx="17" cy="50" rx="4.5" ry="9"></ellipse>
+                    <ellipse class="a3b-mm-med" cx="63" cy="50" rx="4.5" ry="9"></ellipse>
+                    <ellipse class="a3b-mm-soft" cx="40" cy="48" rx="12" ry="10"></ellipse>
+                  </svg>
+                  <div class="cap">Espalda</div>
+                </div>
+              </div>
+              <div class="a3b-legend">
+                <span><i class="l3"></i>Fuerte</span>
+                <span><i class="l2"></i>Medio</span>
+                <span><i class="l1"></i>Leve</span>
+              </div>
+            </div>
+
+            <div class="a3b-streak">
+              <span class="a3b-streaklbl">Racha semanal</span>
+              <span class="a3b-scount a3b-tnum">3 de 4</span>
+              <span class="a3b-sdots">
+                <span class="a3b-sd on"></span><span class="a3b-sd on"></span><span class="a3b-sd on"></span><span class="a3b-sd"></span>
+              </span>
+            </div>
+
+            <div class="a3b-juicy a3b-finalcta"><span class="a3b-share"></span> Compartir logro</div>
+            <div class="a3b-finalsec">Volver al inicio</div>
+          </div>
+        </div>
+      </div>
+      <ul class="a3b-bullets">
+        <li><b>Cierre que celebra</b>: confetti sutil, titulo con nombre del dia y numeros grandes tipo ticker.</li>
+        <li><b>El PR brilla</b>: record del dia en dorado con medalla, separado del resto para que se sienta ganado.</li>
+        <li><b>Mapa muscular con glow</b>: dos siluetas frente/espalda muestran que trabajaste y con que intensidad.</li>
+      </ul>
+    </div>
+
+    <!-- ============ 5 · AJUSTES ============ -->
+    <div class="a3b-col">
+      <p class="a3b-label"><span></span>Ajustes <em>tuerca</em></p>
+      <div class="a3b-phone">
+        <div class="a3b-screen">
+          <div class="a3b-notch"></div>
+
+          <!-- fuerza atenuada de fondo -->
+          <div class="a3b-bgdim">
+            <div class="a3b-tophead">
+              <div class="a3b-gear"></div>
+              <div class="a3b-dots">
+                <div class="a3b-dot done"></div><div class="a3b-dot done"></div>
+                <div class="a3b-dot now"></div><div class="a3b-dot"></div>
+                <div class="a3b-dot"></div><div class="a3b-dot"></div>
+                <div class="a3b-dot"></div><div class="a3b-dot"></div>
+              </div>
+            </div>
+            <div class="a3b-exname">Press banca</div>
+            <div class="a3b-bg-media"></div>
+            <div class="a3b-bg-rx a3b-tnum">4 x 8 · 60 kg · RIR 2</div>
+            <div class="a3b-bg-cur">
+              <div class="a3b-bg-val"><div class="n a3b-tnum">60</div><div class="u">KG</div></div>
+              <div class="a3b-bg-val"><div class="n a3b-tnum">8</div><div class="u">REPS</div></div>
+            </div>
+            <div class="a3b-bg-cta"></div>
+          </div>
+
+          <div class="a3b-scrim"></div>
+
+          <!-- bottom-sheet abierto ~75% -->
+          <div class="a3b-sheet">
+            <div class="a3b-handle"></div>
+            <div class="a3b-sheethd">
+              <div class="t">Ajustes del entrenamiento</div>
+              <div class="a3b-x"></div>
+            </div>
+
+            <div class="a3b-setrows">
+              <div class="a3b-setrow first">
+                <div class="a3b-setmain">
+                  <div class="a3b-setname">Sonido del cronometro</div>
+                  <div class="a3b-setsub">Suena al terminar el descanso</div>
+                </div>
+                <div class="a3b-tog on"><span class="knob"></span></div>
+              </div>
+
+              <div class="a3b-setrow">
+                <div class="a3b-setmain">
+                  <div class="a3b-setname">Tono</div>
+                  <div class="a3b-setsub">o elige: Campana · Beep · Digital</div>
+                </div>
+                <span class="a3b-selval">Del sistema <span class="a3b-caret"></span></span>
+              </div>
+
+              <div class="a3b-setrow slider">
+                <div class="a3b-slidertop">
+                  <div class="a3b-setname">Volumen</div>
+                  <div class="pct a3b-tnum">70%</div>
+                </div>
+                <div class="a3b-slider">
+                  <i></i><span class="a3b-sliderknob"></span>
+                </div>
+              </div>
+
+              <div class="a3b-setrow">
+                <div class="a3b-setmain">
+                  <div class="a3b-setname">Vibracion</div>
+                </div>
+                <div class="a3b-tog on"><span class="knob"></span></div>
+              </div>
+
+              <div class="a3b-setrow">
+                <div class="a3b-setmain">
+                  <div class="a3b-setname">Sonidos de celebracion</div>
+                  <div class="a3b-setsub">El resto de la app permanece en silencio</div>
+                </div>
+                <div class="a3b-tog"><span class="knob"></span></div>
+              </div>
+
+              <div class="a3b-setrow">
+                <div class="a3b-setmain">
+                  <div class="a3b-setname">Mantener pantalla encendida</div>
+                </div>
+                <div class="a3b-tog on"><span class="knob"></span></div>
+              </div>
+
+              <div class="a3b-setrow">
+                <div class="a3b-setmain">
+                  <div class="a3b-setname">Mostrar RPE/RIR en fuerza</div>
+                </div>
+                <div class="a3b-tog on"><span class="knob"></span></div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+      <ul class="a3b-bullets">
+        <li><b>Sonido global OFF por diseno</b>: solo el cronometro suena; el resto de la app permanece en silencio.</li>
+        <li><b>Tono flexible</b>: usa el del sistema (Android) o elige del catalogo propio — Campana, Beep o Digital.</li>
+        <li><b>Persiste por dispositivo</b>: cada telefono recuerda sus ajustes, sin tocar los de los demas.</li>
+      </ul>
+    </div>
+
+  </div>
+
+  <div class="a3b-motion">
+    <h4>Firma de motion — Impulso v3</h4>
+    <ul>
+      <li><b>Cada tipo, su tempo</b>: la superserie empuja con la flecha "sigue con B" deslizando a 1.6s y el press aereo bombeando; el roller celebra cada pasada con un micro-rebote de 220ms sobre el numero gigante.</li>
+      <li><b>Movilidad baja las revoluciones</b>: el anillo se llena en 30s lineales, sin rebotes ni destellos, y la figura sentada se mece 3 grados — motion que acompana la respiracion en vez de apurarla.</li>
+      <li><b>Los extras respetan el sistema</b>: toggles y slider dibujados en CSS con la misma marca; el sheet de ajustes ocupa 75% y el fondo de fuerza se atenua bajo un scrim.</li>
+      <li><b>Springs con haptica por hito</b>: +1 pasada, cierre de ronda y fin de lado confirman con vibracion; ritmo 200-450ms, y todo se apaga limpio en prefers-reduced-motion.</li>
+    </ul>
+  </div>
+</section>

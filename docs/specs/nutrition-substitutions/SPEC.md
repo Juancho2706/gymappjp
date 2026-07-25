@@ -25,7 +25,7 @@ Tabla `nutrition_item_substitutions_v2` (espejo de `nutrition_slot_exchange_targ
 ## Lectura (sin tocar hot-path)
 El cliente lee directo la tabla RLS-scoped (`.eq('version_id', v)`), mapea con
 `mapNutritionItemSubstitutionRow`, y mergea por `prescriptionItemId`. Se usa en:
-- **Display alumno**: Today + "ver plan", una lista "Puedes reemplazar por: …" por item.
+- **Display alumno Today**: una lista "Puedes reemplazar por: …" por item, en web y RN.
 - **Carry-over coach**: al abrir el plan para EDITAR (builder + quick-edit), se fetchean los
   reemplazos de la versión base y se inyectan en el draft, para que republicar NO los pierda
   (misma clase del bug private_notes — carry-over obligatorio).
@@ -33,16 +33,22 @@ El cliente lee directo la tabla RLS-scoped (`.eq('version_id', v)`), mapea con
 ## Escritura
 `persistAndPublishDraft` (web) y el persist del builder RN: tras insertar items (con id explícito),
 resuelven server-side los foods de reemplazo, **congelan** el snapshot y hacen insert en la tabla.
-`publish_nutrition_plan_v2` y los read-models quedan INTACTOS.
+`publish_nutrition_plan_v2` y los read-models base quedan intactos; la capa adicional se lee por RLS
+y se mergea en los consumidores.
 
 ## UI
-- **Coach (builder web + RN)**: por cada item, afordancia "Reemplazos autorizados" que reusa el
-  buscador de alimentos (chips add/remove, máx 8). Visible solo en structured/hybrid.
-- **Alumno (Today + plan, web + RN)**: bajo cada item con reemplazos, "Puedes reemplazar por: X, Y"
+- **Coach web**: por cada item, afordancia "Reemplazos autorizados" que reusa el buscador de
+  alimentos (chips add/remove, máx 8). Visible solo en structured/hybrid.
+- **Coach RN**: persistencia, fetch y carry-over están conectados; el editor visual de reemplazos
+  sigue diferido y no debe declararse disponible.
+- **Alumno Today (web + RN)**: bajo cada item con reemplazos, "Puedes reemplazar por: X, Y"
   (nombre + kcal de referencia). Reemplaza el render del `notes` legado (fallback si no hay
   estructura).
+- **Alumno Plan (web + RN)**: integración pendiente; no debe declararse disponible todavía.
 
 ## No-objetivos
 - No recrear `get_nutrition_today_v2` / `get_nutrition_plan_read_v2` (riesgo hot-path).
 - No migrar los 69 textos legados (se conservan como fallback de solo-lectura).
 - Sin registro interactivo del swap por el alumno (el enum `substitution` existe; fast-follow).
+- El editor coach RN queda como follow-up explícito; no bloquea la lectura alumno ni la
+  preservación de reemplazos existentes al republicar desde mobile.

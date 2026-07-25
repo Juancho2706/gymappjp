@@ -65,6 +65,10 @@ import {
 } from '../../../lib/recipes-coach'
 import { canUseNutrition, type SubscriptionTier } from '../../../lib/coach-tiers'
 import { getApiBaseUrl } from '../../../lib/api'
+import { isEnabled } from '../../../lib/flags'
+import { useEntitlements } from '../../../lib/entitlements'
+import { resolveCoachNutritionTabMode } from '../../../lib/coach-nutrition-v2-tab-logic'
+import CoachNutritionV2Screen from '../nutrition-v2'
 
 // Acentos de dominio FIJOS de TOKENS.md (§1 — NO white-label, seguros para SVG).
 const EMBER = '#FF6A3D' // ember-500 — planes personalizados / dominio nutrición
@@ -115,7 +119,53 @@ function macroSplit(cal: number, p: number, c: number, f: number): { pPct: numbe
   return { pPct, cPct, fPct }
 }
 
-export default function CoachNutricionScreen() {
+/**
+ * 4B-04 — Swap del tab "Nutrición" del coach (espejo del swap web
+ * `nutrition-plans/page.tsx:38-40` + `_lib/nutrition-v2-swap.ts:19-31`, y del gate del
+ * tab del alumno 4A-01 `alumno/(tabs)/nutricion.tsx`). Con el flag `nutritionV2Coach`
+ * ON (Edge Config remoto; default `false` en el bundle → fail-closed) el tab monta el
+ * Centro V2 (hub coach); OFF → shell V1 intacto (rollback puro, decisión owner 1: V1 al
+ * olvido, sin trabajo nuevo). La decisión vive en el helper puro
+ * `resolveCoachNutritionTabMode` (ready + flag → 'loading' | 'v1' | 'v2').
+ *
+ * El hub se renderiza INLINE (no un `router.replace`): la cápsula del coach es flotante
+ * y su tile activo deriva del nombre de la tab (`nutricion`, CoachMobileChrome.tsx:111),
+ * así el Centro V2 aterriza CONSERVANDO la navegación de la cápsula y el tile "Nutrición"
+ * resaltado, sin mover rutas de expo-router (los deep-links a `/coach/nutrition-v2*`
+ * desde ficha/builder siguen pusheando la ruta standalone sin cambios). El hub conserva
+ * su PROPIO fail-closed (entitlements listos + scope de workspace,
+ * `nutrition-v2/index.tsx:81,73-79`): el swap usa el MISMO flag y jamás lo debilita.
+ * Mientras los entitlements no estén listos: loader (mismo `EvaLoaderScreen` que 4A-01),
+ * NUNCA flashear V1. El canary por-alumno (`fetchNutritionV2CoachFlagForClient`) NO abre
+ * este hub global — espejo web: el swap resuelve por coach/workspace, no por alumno.
+ */
+export default function CoachNutricionTab() {
+  const { theme } = useTheme()
+  const { ready } = useEntitlements()
+  const mode = resolveCoachNutritionTabMode({
+    entitlementsReady: ready,
+    nutritionV2CoachEnabled: isEnabled('nutritionV2Coach'),
+  })
+
+  // Pre-decisión (entitlements aún no hidratados): loader neutro, sin pintar la
+  // superficie V1 antes de resolver el swap.
+  if (mode === 'loading') {
+    return (
+      <SafeAreaView edges={['top']} style={[styles.container, { backgroundColor: theme.background }]}>
+        <AppBackground />
+        <EvaLoaderScreen subtitle="Cargando nutrición…" />
+      </SafeAreaView>
+    )
+  }
+
+  // Flag ON → Centro V2 dentro del tab (cápsula intacta).
+  if (mode === 'v2') return <CoachNutritionV2Screen />
+
+  // Flag OFF → shell V1 intacto (rollback).
+  return <CoachNutricionV1Screen />
+}
+
+function CoachNutricionV1Screen() {
   const { theme } = useTheme()
   const router = useRouter()
   const params = useLocalSearchParams<{ tab?: string }>()

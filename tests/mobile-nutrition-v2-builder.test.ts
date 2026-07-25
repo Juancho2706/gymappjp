@@ -1,16 +1,21 @@
 import { describe, expect, it } from 'vitest'
 import { NutritionPlanDraftSchema } from '@eva/nutrition-v2'
 import {
+  MAX_ITEM_SUBSTITUTIONS,
   assembleAndValidateDraft,
   assembleDraft,
   buildItemInsertRow,
   buildPublishIdempotencyKey,
   buildSlotInsertRow,
   buildVariantInsertRow,
+  builderHasSignificantContent,
   builderReducer,
+  canProceedToPublishAfterArchive,
   computeItemMacros,
+  createCoachFoodV2,
   createEmptyBuilderState,
   createEmptyItem,
+  effectiveDateConflicts,
   itemMacros,
   mapFoodCatalogItemToBuilderFood,
   mapWriteError,
@@ -29,6 +34,7 @@ const CLIENT_ID = '11111111-1111-4111-8111-111111111111'
 const PLAN_ID = '22222222-2222-4222-8222-222222222222'
 const FOOD_ID = '33333333-3333-4333-8333-333333333333'
 const PUBLISHED_ID = '44444444-4444-4444-8444-444444444444'
+const SUB_FOOD_ID = '55555555-5555-4555-8555-555555555555'
 
 const FOOD: BuilderFood = {
   id: FOOD_ID,
@@ -45,6 +51,10 @@ const FOOD: BuilderFood = {
 
 function foodItem(overrides: Partial<BuilderItem> = {}): BuilderItem {
   return { ...createEmptyItem('i1'), food: FOOD, customName: null, quantity: '200', unit: 'g', ...overrides }
+}
+
+function subFood(id: string, name: string): BuilderFood {
+  return { ...FOOD, id, name }
 }
 
 function structuredState(): BuilderState {
@@ -76,6 +86,83 @@ describe('reducer / paridad con web', () => {
     state = builderReducer(state, { type: 'ADD_ITEM', slotKey, key: 'itemK', food: FOOD })
     expect(state.slots[0].items[0].quantity).toBe('50')
     expect(state.slots[0].items[0].unit).toBe('g')
+  })
+
+  it('SET_PERMISSION conmuta un permiso; assembleDraft emite la eleccion del coach (sub-delta a)', () => {
+    let state = builderReducer(createEmptyBuilderState('2026-07-20'), { type: 'SET_STRATEGY', strategy: 'structured', firstSlotKey: 'k1' })
+    // Default structured: registrar OFF, sustituir OFF.
+    expect(state.permissions.canRegisterFreely).toBe(false)
+    expect(state.permissions.canSubstitute).toBe(false)
+    state = builderReducer(state, { type: 'SET_PERMISSION', field: 'canSubstitute', value: true })
+    expect(state.permissions.canSubstitute).toBe(true)
+    const draft = assembleDraft(state, { clientId: CLIENT_ID })
+    expect(draft.permissions.canSubstitute).toBe(true)
+    expect(draft.permissions.canRegisterFreely).toBe(false)
+  })
+})
+
+describe('reducer / reemplazos autorizados F-02 (cinturon triple + remocion)', () => {
+  const SLOT = 'slot-a'
+  const ITEM = 'i1'
+
+  function addSub(state: BuilderState, food: BuilderFood, key: string): BuilderState {
+    return builderReducer(state, { type: 'ADD_ITEM_SUBSTITUTION', slotKey: SLOT, itemKey: ITEM, key, food })
+  }
+
+  it('agrega reemplazos del catalogo hasta el tope y rechaza el excedente', () => {
+    let state = structuredState()
+    for (let i = 0; i < MAX_ITEM_SUBSTITUTIONS; i++) {
+      state = addSub(state, subFood('sub-' + i, 'Sub ' + i), 'k' + i)
+    }
+    expect(state.slots[0].items[0].substitutions).toHaveLength(MAX_ITEM_SUBSTITUTIONS)
+    const overflow = addSub(state, subFood('sub-extra', 'Extra'), 'kX')
+    expect(overflow.slots[0].items[0].substitutions).toHaveLength(MAX_ITEM_SUBSTITUTIONS)
+  })
+
+  it('rechaza duplicar el mismo alimento como reemplazo (por food.id)', () => {
+    let state = addSub(structuredState(), subFood('sub-x', 'X'), 'k1')
+    state = addSub(state, subFood('sub-x', 'X otra vez'), 'k2')
+    expect(state.slots[0].items[0].substitutions).toHaveLength(1)
+  })
+
+  it('rechaza el propio alimento prescrito como reemplazo', () => {
+    const state = addSub(structuredState(), subFood(FOOD_ID, 'Prescrito'), 'k1')
+    expect(state.slots[0].items[0].substitutions).toHaveLength(0)
+  })
+
+  it('remueve un reemplazo por subKey', () => {
+    let state = addSub(structuredState(), subFood('sub-a', 'A'), 'k1')
+    state = addSub(state, subFood('sub-b', 'B'), 'k2')
+    state = builderReducer(state, { type: 'REMOVE_ITEM_SUBSTITUTION', slotKey: SLOT, itemKey: ITEM, subKey: 'k1' })
+    expect(state.slots[0].items[0].substitutions.map((s) => s.key)).toEqual(['k2'])
+  })
+})
+
+describe('assembleDraft / reemplazos F-02 (spread condicional)', () => {
+  it('omite la clave substitutions cuando no hay reemplazos (byte-identico a hoy)', () => {
+    const draft = assembleDraft(structuredState(), { clientId: CLIENT_ID })
+    expect('substitutions' in draft.dayVariants[0].mealSlots[0].items[0]).toBe(false)
+  })
+
+  it('emite substitutions mapeada al contrato solo con >=1 y valida contra el schema', () => {
+    const withSub = builderReducer(structuredState(), {
+      type: 'ADD_ITEM_SUBSTITUTION',
+      slotKey: 'slot-a',
+      itemKey: 'i1',
+      key: 'k1',
+      food: subFood(SUB_FOOD_ID, 'Pavo'),
+    })
+    const subs = assembleDraft(withSub, { clientId: CLIENT_ID }).dayVariants[0].mealSlots[0].items[0].substitutions
+    expect(subs).toHaveLength(1)
+    expect(subs?.[0]).toEqual({
+      foodId: SUB_FOOD_ID,
+      recipeId: null,
+      customName: null,
+      quantity: null,
+      unit: null,
+      orderIndex: 0,
+    })
+    expect(() => assembleAndValidateDraft(withSub, { clientId: CLIENT_ID })).not.toThrow()
   })
 })
 
@@ -247,6 +334,110 @@ describe('persistAndPublishDraft (orden de escritura)', () => {
   })
 })
 
+describe('createCoachFoodV2 (alimento coach-scoped, sub-delta b)', () => {
+  it('inserta en foods con macros por 100 + coach_id y devuelve el BuilderFood', async () => {
+    const { client, inserts } = makeClient()
+    const res = await createCoachFoodV2({
+      db: client,
+      userId: 'coach-1',
+      input: { clientId: CLIENT_ID, name: 'Salsa casera', brand: null, unit: 'g', calories: 120, proteinG: 3, carbsG: 10, fatsG: 8 },
+    })
+    expect(res.ok).toBe(true)
+    if (res.ok) {
+      expect(res.food.id).toBe('foods-1')
+      expect(res.food.servingSize).toBe(100)
+      expect(res.food.servingUnit).toBe('g')
+      expect(res.food.calories).toBe(120)
+      expect(res.food.fiberG).toBeNull()
+      expect(res.food.category).toBe('otro')
+    }
+    expect(inserts).toHaveLength(1)
+    expect(inserts[0].table).toBe('foods')
+    const row = inserts[0].rows as Record<string, unknown>
+    expect(row.coach_id).toBe('coach-1')
+    expect(row.org_id).toBeNull()
+    expect(row.serving_size).toBe(100)
+    expect(row.serving_unit).toBe('g')
+    expect(row.catalog_source).toBe('coach')
+    expect(row.verification_status).toBe('coach_verified')
+    expect(row.is_liquid).toBe(false)
+    expect(row.protein_g).toBe(3)
+    expect(row.carbs_g).toBe(10)
+    expect(row.fats_g).toBe(8)
+  })
+
+  it('unit ml => is_liquid true + serving_unit ml', async () => {
+    const { client, inserts } = makeClient()
+    const res = await createCoachFoodV2({
+      db: client,
+      userId: 'coach-1',
+      input: { clientId: CLIENT_ID, name: 'Bebida', brand: null, unit: 'ml', calories: 40, proteinG: 0, carbsG: 10, fatsG: 0 },
+    })
+    expect(res.ok).toBe(true)
+    const row = inserts[0].rows as Record<string, unknown>
+    expect(row.is_liquid).toBe(true)
+    expect(row.serving_unit).toBe('ml')
+  })
+
+  it('input invalido (nombre vacio) => INVALID_PAYLOAD sin tocar la BD', async () => {
+    const { client, inserts } = makeClient()
+    const res = await createCoachFoodV2({
+      db: client,
+      userId: 'coach-1',
+      input: { clientId: CLIENT_ID, name: '', brand: null, unit: 'g', calories: 100, proteinG: 5, carbsG: 5, fatsG: 5 },
+    })
+    expect(res.ok).toBe(false)
+    if (!res.ok) expect(res.code).toBe('INVALID_PAYLOAD')
+    expect(inserts).toHaveLength(0)
+  })
+
+  it('error 42501 en el insert => SCOPE_DENIED (la RLS es la barrera real)', async () => {
+    const failClient = {
+      from() {
+        return {
+          insert() {
+            return {
+              select() {
+                return { async single() { return { data: null, error: { message: 'denied', code: '42501' } } } }
+              },
+            }
+          },
+        }
+      },
+    } as unknown as NutritionV2WriteClient
+    const res = await createCoachFoodV2({
+      db: failClient,
+      userId: 'coach-1',
+      input: { clientId: CLIENT_ID, name: 'Salsa', brand: null, unit: 'g', calories: 100, proteinG: 5, carbsG: 5, fatsG: 5 },
+    })
+    expect(res.ok).toBe(false)
+    if (!res.ok) expect(res.code).toBe('SCOPE_DENIED')
+  })
+})
+
+describe('effectiveDateConflicts (sub-delta c)', () => {
+  it('igual o anterior choca; posterior no; faltante no bloquea', () => {
+    expect(effectiveDateConflicts('2026-07-20', '2026-07-20')).toBe(true)
+    expect(effectiveDateConflicts('2026-07-19', '2026-07-20')).toBe(true)
+    expect(effectiveDateConflicts('2026-07-21', '2026-07-20')).toBe(false)
+    expect(effectiveDateConflicts(null, '2026-07-20')).toBe(false)
+    expect(effectiveDateConflicts('2026-07-20', null)).toBe(false)
+    expect(effectiveDateConflicts(undefined, undefined)).toBe(false)
+  })
+})
+
+describe('canProceedToPublishAfterArchive (sub-delta c)', () => {
+  it('OK y PLAN_NOT_FOUND avanzan; otros fallos bloquean', () => {
+    // Forma RN del ArchiveWriteOutcome (code: 'OK') + PLAN_NOT_FOUND idempotente.
+    expect(canProceedToPublishAfterArchive({ code: 'OK' })).toBe(true)
+    expect(canProceedToPublishAfterArchive({ code: 'PLAN_NOT_FOUND' })).toBe(true)
+    // Forma web (ok: true) por robustez.
+    expect(canProceedToPublishAfterArchive({ ok: true })).toBe(true)
+    expect(canProceedToPublishAfterArchive({ code: 'SCOPE_DENIED' })).toBe(false)
+    expect(canProceedToPublishAfterArchive({ code: 'WRITE_FAILED' })).toBe(false)
+  })
+})
+
 describe('publishDraftRN (gate Pro cliente)', () => {
   it('hybrid sin Pro => UPGRADE_REQUIRED, sin tocar la BD', async () => {
     const draft = assembleAndValidateDraft(hybridState(), { clientId: CLIENT_ID })
@@ -272,5 +463,91 @@ describe('publishDraftRN (gate Pro cliente)', () => {
     const res = await publishDraftRN({ db: client, userId: 'coach-1', draft: { nope: true }, idempotencyKey: 'publish:key:abcdef', effectiveFrom: '2026-07-20', hasNutritionPro: true })
     expect(res.ok).toBe(false)
     if (!res.ok) expect(res.code).toBe('INVALID_PAYLOAD')
+  })
+})
+
+describe('reducer / RESTORE (respaldo local del builder, 4B-13)', () => {
+  it('un payload valido reemplaza el arbol completo y re-clampa el step', () => {
+    // Estado inicial distinto (vacio) para probar que RESTORE reemplaza TODO, no fusiona.
+    const restored = builderReducer(createEmptyBuilderState('2026-07-20'), {
+      type: 'RESTORE',
+      state: structuredState(),
+    })
+    expect(restored.strategy).toBe('structured')
+    expect(restored.planName).toBe('Plan estructurado')
+    expect(restored.slots).toHaveLength(1)
+    expect(restored.slots[0].items[0].food?.id).toBe(FOOD_ID)
+    expect(restored.step).toBe(3)
+  })
+
+  it('round-trip por AsyncStorage (JSON) del payload { state, portionsBySlot }: arbol Y porciones intactos', () => {
+    // Simula el sobre persistido por writeNutritionDraft: el payload viaja como JSON y vuelve.
+    const portionsBySlot = { 'slot-a': [{ exchangeGroupId: 'grp-1', portions: 2 }] }
+    const payload = { clientId: CLIENT_ID, planId: PLAN_ID, state: structuredState(), portionsBySlot }
+    const roundTripped = JSON.parse(JSON.stringify(payload)) as typeof payload
+    // El reducer rehidrata el arbol...
+    const restored = builderReducer(createEmptyBuilderState('2026-07-20'), { type: 'RESTORE', state: roundTripped.state })
+    expect(restored).toEqual(structuredState())
+    // ...y el mapa hermano de porciones (que restoreBySlot mete via setBySlot) sobrevive identico.
+    expect(roundTripped.portionsBySlot).toEqual(portionsBySlot)
+  })
+
+  it('un payload sin `slots` array (corrupto) se ignora: devuelve el state intacto', () => {
+    const current = structuredState()
+    const restored = builderReducer(current, {
+      type: 'RESTORE',
+      state: { ...createEmptyBuilderState('2026-07-20'), slots: undefined as unknown as BuilderState['slots'] },
+    })
+    expect(restored).toBe(current)
+  })
+
+  it('step no finito en el payload => 0', () => {
+    const restored = builderReducer(createEmptyBuilderState('2026-07-20'), {
+      type: 'RESTORE',
+      state: { ...structuredState(), step: Number.NaN },
+    })
+    expect(restored.step).toBe(0)
+  })
+
+  it('step fuera de rango en el payload => re-clampado al maximo (3)', () => {
+    const restored = builderReducer(createEmptyBuilderState('2026-07-20'), {
+      type: 'RESTORE',
+      state: { ...structuredState(), step: 99 },
+    })
+    expect(restored.step).toBe(3)
+  })
+})
+
+describe('builderHasSignificantContent (guard de autosave + salida, 4B-13)', () => {
+  it('un wizard recien abierto (vacio) => false', () => {
+    expect(builderHasSignificantContent(createEmptyBuilderState('2026-07-20'))).toBe(false)
+  })
+
+  it('con estrategia elegida => true', () => {
+    const state = { ...createEmptyBuilderState('2026-07-20'), strategy: 'flexible' as const }
+    expect(builderHasSignificantContent(state)).toBe(true)
+  })
+
+  it('con nombre de plan (aunque sea solo espacios significativos) => true', () => {
+    const state = { ...createEmptyBuilderState('2026-07-20'), planName: 'Mi plan' }
+    expect(builderHasSignificantContent(state)).toBe(true)
+  })
+
+  it('nombre de plan solo con espacios en blanco => false', () => {
+    const state = { ...createEmptyBuilderState('2026-07-20'), planName: '   ' }
+    expect(builderHasSignificantContent(state)).toBe(false)
+  })
+
+  it('con al menos una franja => true', () => {
+    const state = { ...createEmptyBuilderState('2026-07-20'), slots: [{ key: 's1', name: '', startTime: '', items: [] }] }
+    expect(builderHasSignificantContent(state)).toBe(true)
+  })
+
+  it('con al menos una meta con valor => true', () => {
+    const state = {
+      ...createEmptyBuilderState('2026-07-20'),
+      targets: { calories: '2000', proteinG: '', carbsG: '', fatsG: '' },
+    }
+    expect(builderHasSignificantContent(state)).toBe(true)
   })
 })

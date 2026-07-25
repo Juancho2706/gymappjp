@@ -25,8 +25,15 @@ export interface TypedKeypadFieldDef {
 /**
  * Campos del teclado por modo tipado, en el orden en que el alumno los recorre con "Siguiente".
  * Reglas decimales (CEO 2026-07-04): distancia y minutos = decimal; FC, segundos y pasadas = enteros.
+ *
+ * `sideMode` (E0.5 · executor-v3): opcional. Cuando un bloque de MOVILIDAD es unilateral
+ * (`side_mode === 'per_side'`), el hold se captura POR LADO → el teclado declara DOS campos
+ * (`hold_left_sec` / `hold_right_sec`) que `typedLogValues` mapea a `metadata {left_sec, right_sec}`
+ * y suma en `actual_hold_sec`. SIN el argumento (o cualquier otro `side_mode`) el comportamiento es
+ * byte-idéntico al previo: un solo campo `actual_hold_sec`. La UI que consume estos campos llega en
+ * Ola 3; acá solo se declara el descriptor.
  */
-export function typedKeypadFields(mode: TypedKeypadMode): TypedKeypadFieldDef[] {
+export function typedKeypadFields(mode: TypedKeypadMode, sideMode?: string | null): TypedKeypadFieldDef[] {
     switch (mode) {
         case 'cardio':
             return [
@@ -35,6 +42,12 @@ export function typedKeypadFields(mode: TypedKeypadMode): TypedKeypadFieldDef[] 
                 { key: 'actual_avg_hr', label: 'FC', unit: 'bpm', allowDecimal: false },
             ]
         case 'mobility':
+            if (sideMode === 'per_side') {
+                return [
+                    { key: 'hold_left_sec', label: 'Hold izq.', unit: 'seg', allowDecimal: false },
+                    { key: 'hold_right_sec', label: 'Hold der.', unit: 'seg', allowDecimal: false },
+                ]
+            }
             return [{ key: 'actual_hold_sec', label: 'Hold', unit: 'seg', allowDecimal: false }]
         case 'roller':
             return [

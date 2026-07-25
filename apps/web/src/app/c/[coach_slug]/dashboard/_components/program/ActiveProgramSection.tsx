@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { ArrowRight, Calendar, RotateCcw } from 'lucide-react'
+import { Calendar } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { getActiveProgram, getClientWorkoutPlans, getRecentWorkoutLogs } from '../../_data/dashboard.queries'
@@ -9,10 +9,12 @@ import {
     resolveEffectiveWeekVariant,
     workoutPlanMatchesVariant,
 } from '@/lib/workout/programWeekVariant'
-import { deriveWeekWorkoutStatus, type WeekDayStatus } from '../../_data/weekPendingWorkouts'
+import { deriveWeekWorkoutStatus } from '../../_data/weekPendingWorkouts'
 import { ProgramPhaseBar, type PhaseSeg } from './ProgramPhaseBar'
 import { WorkoutPlanCards, type WorkoutPlanCardItem } from './WorkoutPlanCard'
+import { WorkoutRecoverBanner } from './WorkoutRecoverBanner'
 import { getClientBasePath } from '@/lib/client/base-path'
+import { buildWorkoutRecoverHref } from '@/lib/workout/executor-recovery'
 
 export async function ActiveProgramSection({ userId, coachSlug }: { userId: string; coachSlug: string }) {
     const base = await getClientBasePath(coachSlug)
@@ -59,17 +61,22 @@ export async function ActiveProgramSection({ userId, coachSlug }: { userId: stri
 
     // Estado por día de la semana + cola de pendientes (misma resolución que la tira/adherencia).
     const week = deriveWeekWorkoutStatus({ userLocalDate, todayIso: today, program, activePlans, logs })
-    const statusByDow = new Map<number, WeekDayStatus>()
-    for (const d of week.days) statusByDow.set(d.dayOfWeek, d.status)
+    const dayByDow = new Map<number, (typeof week.days)[number]>()
+    for (const d of week.days) dayByDow.set(d.dayOfWeek, d)
 
     const cardPlans: WorkoutPlanCardItem[] = programPlans.map((p) => {
         const dow = p.day_of_week ?? 0
+        const day = dayByDow.get(dow) ?? null
         return {
             id: p.id,
             title: p.title,
             day_of_week: p.day_of_week,
-            status: statusByDow.get(dow) ?? 'upcoming',
+            status: day?.status ?? 'upcoming',
             isToday: dow === todayDow,
+            // Atribución (E1.6): fecha de la celda + fecha/label del día en que realmente se registró.
+            dateIso: day?.dateIso ?? '',
+            doneOnDate: day?.doneOnDate ?? null,
+            doneOnLabel: day?.doneOnLabel ?? null,
         }
     })
 
@@ -100,24 +107,12 @@ export async function ActiveProgramSection({ userId, coachSlug }: { userId: stri
             {/* Cola de pendientes: días de esta semana ya pasados sin registrar → recuperables HOY.
                 CTA al más antiguo; la ejecución no tiene candado de fecha (el log cuenta el día real). */}
             {oldestPending ? (
-                <Link
-                    href={`${base}/workout/${oldestPending.planId}`}
-                    className="group flex items-center gap-3 rounded-control border border-ember-200 bg-ember-100 px-3.5 py-3 transition-colors hover:bg-ember-200"
-                >
-                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-ember-500 text-[var(--text-on-ember)]">
-                        <RotateCcw className="h-[18px] w-[18px]" />
-                    </span>
-                    <div className="min-w-0 flex-1">
-                        <p className="text-[13px] font-bold leading-tight text-ember-700">
-                            {pending.length === 1 ? 'Tienes 1 día pendiente' : `Tienes ${pending.length} días pendientes`} esta
-                            semana
-                        </p>
-                        <p className="mt-0.5 truncate text-[11.5px] font-semibold text-ember-700/80">
-                            Recuperar Día {oldestPending.dayOfWeek} · {oldestPending.dayLabel}
-                        </p>
-                    </div>
-                    <ArrowRight className="h-4 w-4 shrink-0 text-ember-700 transition-transform group-hover:translate-x-0.5" />
-                </Link>
+                <WorkoutRecoverBanner
+                    href={buildWorkoutRecoverHref(base, oldestPending.planId, oldestPending.dateIso)}
+                    pendingCount={pending.length}
+                    dayOfWeek={oldestPending.dayOfWeek}
+                    dayLabel={oldestPending.dayLabel}
+                />
             ) : null}
 
             <WorkoutPlanCards coachSlug={coachSlug} plans={cardPlans} />

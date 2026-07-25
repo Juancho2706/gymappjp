@@ -152,6 +152,7 @@ export type QuickEditPortionsAction =
   | { type: 'REMOVE_TARGET'; slotKey: string; targetKey: string }
   | { type: 'RESTORE_TARGET'; slotKey: string; index: number; target: QuickEditPortionTarget }
   | { type: 'ADD_TARGET'; slotKey: string; key: string; group: QuickEditPortionGroup }
+  | { type: 'RESTORE_PORTIONS'; state: QuickEditPortionsState }
 
 /** Alta desde el picker: arranca en 1 porcion (ajustable con el stepper) — espejo web. */
 export function createPortionTarget(key: string, group: QuickEditPortionGroup): QuickEditPortionTarget {
@@ -216,6 +217,14 @@ export function portionsReducer(
           ? targets
           : [...targets, createPortionTarget(action.key, action.group)],
       )
+    case 'RESTORE_PORTIONS':
+      // Rehidrata la capa de porciones COMPLETA desde el respaldo local (par del RESTORE_DRAFT
+      // del reducer principal): en RN las porciones viven en un reducer SEPARADO, asi que el
+      // restore debe despachar a los DOS. Guarda defensiva contra payload corrupto: requiere un
+      // `bySlot` objeto; si no, conserva el estado actual (mejor no restaurar que romper).
+      return action.state && typeof action.state.bySlot === 'object' && action.state.bySlot !== null
+        ? { bySlot: action.state.bySlot }
+        : state
     default:
       return state
   }

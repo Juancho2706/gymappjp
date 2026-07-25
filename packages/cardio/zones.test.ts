@@ -6,6 +6,7 @@ import {
     HR_ZONE_BOUNDS,
     ageFromBirthDate,
     hrRangeForZone,
+    hrToZone,
     hrZonesFromMax,
     hrZonesKarvonen,
     karvonenBpm,
@@ -269,5 +270,63 @@ describe('hrRangeForZone (chip "Z4 · 150-168 bpm" en builder/ejecucion)', () =>
     it('perfil sin edad ni override → null (la UI muestra solo "Z4" + CTA)', () => {
         expect(hrRangeForZone(4, emptyProfile, TODAY)).toBeNull()
         expect(hrRangeForZone(2, profile({ restingHr: 58 }), TODAY)).toBeNull()
+    })
+})
+
+describe('hrToZone (clasifica un bpm en vivo, sensor BLE/reloj)', () => {
+    it('clasifica con %FCmax usando los MISMOS cortes que la prescripcion (FCmax 187)', () => {
+        // Zonas %FCmax de 187: Z4 = 150-168.
+        expect(hrToZone(155, { max_hr: 187 })).toEqual({
+            zone: 4,
+            rangeBpm: [150, 168],
+            pctOfMax: 0.83, // 155/187 = 0.8288 → 0.83
+        })
+    })
+
+    it('un bpm en el borde pertenece a la zona superior', () => {
+        // 112 = Z1.max = Z2.min → Z2.
+        expect(hrToZone(112, { max_hr: 187 })?.zone).toBe(2)
+    })
+
+    it('clampa por debajo de Z1 a la zona 1', () => {
+        expect(hrToZone(90, { max_hr: 187 })).toEqual({
+            zone: 1,
+            rangeBpm: [94, 112],
+            pctOfMax: 0.48, // 90/187 = 0.481 → 0.48
+        })
+    })
+
+    it('clampa por sobre la FCmax a la zona 5 (pctOfMax puede superar 1)', () => {
+        expect(hrToZone(200, { max_hr: 187 })).toEqual({
+            zone: 5,
+            rangeBpm: [168, 187],
+            pctOfMax: 1.07, // 200/187 = 1.069 → 1.07
+        })
+    })
+
+    it('usa Karvonen cuando hay FC reposo valida y menor a la FCmax', () => {
+        // Karvonen 187/60: Z4 = 162-174.
+        expect(hrToZone(165, { max_hr: 187, resting_hr: 60 })).toEqual({
+            zone: 4,
+            rangeBpm: [162, 174],
+            pctOfMax: 0.88, // 165/187 = 0.8823 → 0.88
+        })
+    })
+
+    it('FC reposo degenerada (>= FCmax) cae a %FCmax', () => {
+        // Con %FCmax de 187, 155 cae en Z4; con Karvonen degenerado seria otra cosa.
+        expect(hrToZone(155, { max_hr: 187, resting_hr: 187 })?.rangeBpm).toEqual([150, 168])
+    })
+
+    it('null si el bpm no es utilizable', () => {
+        expect(hrToZone(0, { max_hr: 187 })).toBeNull()
+        expect(hrToZone(-10, { max_hr: 187 })).toBeNull()
+        expect(hrToZone(Number.NaN, { max_hr: 187 })).toBeNull()
+    })
+
+    it('null si no hay FCmax utilizable', () => {
+        expect(hrToZone(150, {})).toBeNull()
+        expect(hrToZone(150, { max_hr: 0 })).toBeNull()
+        expect(hrToZone(150, { max_hr: null })).toBeNull()
     })
 })

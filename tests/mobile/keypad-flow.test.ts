@@ -11,7 +11,7 @@ import {
   type BlockForKeypad,
   type ExerciseForKeypad,
   type KeypadTarget,
-} from '../../apps/mobile/components/alumno/workout/keypad-flow'
+} from '@eva/workout-engine'
 
 /** Construye un `KeypadTarget` igual que `openSet`: si el bloque es tipado, `effortKind` va null. */
 function targetFor(

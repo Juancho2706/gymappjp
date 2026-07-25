@@ -30,6 +30,16 @@ export type NutritionPrescriptionItemRead = NutritionMealSlotRead['prescriptionI
 export type NutritionIntakeSource = z.infer<typeof NutritionIntakeSourceSchema>
 export type NutritionCaptureMethod = z.infer<typeof NutritionCaptureMethodSchema>
 
+function coerceIntakeSource(value: string | null | undefined): NutritionIntakeSource {
+  const parsed = NutritionIntakeSourceSchema.safeParse(value)
+  return parsed.success ? parsed.data : 'offplan'
+}
+
+function coerceCaptureMethod(value: string | null | undefined): NutritionCaptureMethod {
+  const parsed = NutritionCaptureMethodSchema.safeParse(value)
+  return parsed.success ? parsed.data : 'manual'
+}
+
 /** Snapshot inmutable del alimento congelado en cada registro (per-serving, igual que el catalogo). */
 export interface NutritionIntakeSnapshotInput {
   name: string
@@ -41,6 +51,8 @@ export interface NutritionIntakeSnapshotInput {
   fiberG?: number | null
   servingSize?: number | null
   servingUnit?: string | null
+  exchangeGroupCode?: string
+  exchangePortions?: number
 }
 
 export interface BuildIntakeInput {
@@ -97,6 +109,8 @@ function snapshotPayload(snapshot: NutritionIntakeSnapshotInput) {
     fiberG: snapshot.fiberG ?? null,
     servingSize: snapshot.servingSize ?? null,
     servingUnit: snapshot.servingUnit ?? null,
+    ...(snapshot.exchangeGroupCode ? { exchangeGroupCode: snapshot.exchangeGroupCode } : {}),
+    ...(snapshot.exchangePortions != null ? { exchangePortions: snapshot.exchangePortions } : {}),
   }
 }
 
@@ -210,43 +224,40 @@ export function buildAteAsPrescribedMutation(input: {
 }
 
 /**
- * Editar (correction) un registro consumido cambiando cantidad/unidad. Reusa el alimento y snapshot
- * originales del entry; solo cambian cantidad/unidad (y opcionalmente la franja).
+ * Editar (correction) un registro consumido cambiando SOLO la cantidad. Igual que la web,
+ * conserva unidad, franja, instante, fuente/captura validas y snapshot del registro original.
  */
 export function buildEditIntakeCorrection(input: {
   clientId: string
   deviceId: string
   operationId: string
   localDate: string
-  occurredAt: string
   timezone: string
   entry: NutritionIntakeReadItem
   quantity: number
-  unit: string
-  mealSlot?: string | null
   planVersionId?: string | null
   daySnapshotId?: string | null
-  reason?: string
+  reason: string
 }): NutritionIntakeCorrection {
   return buildCorrectionMutation({
     clientId: input.clientId,
     deviceId: input.deviceId,
     operationId: input.operationId,
     localDate: input.localDate,
-    occurredAt: input.occurredAt,
+    occurredAt: input.entry.occurredAt,
     timezone: input.timezone,
     foodId: input.entry.foodId,
     customName: input.entry.foodId ? null : input.entry.customName ?? input.entry.snapshot.name,
     quantity: input.quantity,
-    unit: input.unit,
-    mealSlot: input.mealSlot === undefined ? input.entry.mealSlot : input.mealSlot,
-    source: 'substitution',
-    captureMethod: 'manual',
+    unit: input.entry.unit,
+    mealSlot: input.entry.mealSlot,
+    source: coerceIntakeSource(input.entry.source),
+    captureMethod: coerceCaptureMethod(input.entry.captureMethod),
     planVersionId: input.planVersionId ?? null,
     prescriptionItemId: input.entry.prescriptionItemId,
     daySnapshotId: input.daySnapshotId ?? null,
     correctsEntryId: input.entry.id,
-    correctionReason: input.reason?.trim() || 'Ajuste de cantidad del alumno',
+    correctionReason: input.reason.trim(),
     snapshot: {
       name: input.entry.snapshot.name,
       brand: input.entry.snapshot.brand,
@@ -257,6 +268,8 @@ export function buildEditIntakeCorrection(input: {
       fiberG: input.entry.snapshot.fiberG,
       servingSize: input.entry.snapshot.servingSize,
       servingUnit: input.entry.snapshot.servingUnit,
+      exchangeGroupCode: input.entry.exchangeGroupCode ?? undefined,
+      exchangePortions: input.entry.exchangePortions ?? undefined,
     },
   })
 }
@@ -272,19 +285,18 @@ export function buildVoidIntakeCorrection(input: {
   deviceId: string
   operationId: string
   localDate: string
-  occurredAt: string
   timezone: string
   entry: NutritionIntakeReadItem
   planVersionId?: string | null
   daySnapshotId?: string | null
-  reason?: string
+  reason: string
 }): NutritionIntakeCorrection {
   return buildCorrectionMutation({
     clientId: input.clientId,
     deviceId: input.deviceId,
     operationId: input.operationId,
     localDate: input.localDate,
-    occurredAt: input.occurredAt,
+    occurredAt: input.entry.occurredAt,
     timezone: input.timezone,
     foodId: input.entry.foodId,
     customName: input.entry.foodId ? null : input.entry.customName ?? input.entry.snapshot.name,
@@ -297,7 +309,7 @@ export function buildVoidIntakeCorrection(input: {
     prescriptionItemId: input.entry.prescriptionItemId,
     daySnapshotId: input.daySnapshotId ?? null,
     correctsEntryId: input.entry.id,
-    correctionReason: input.reason?.trim() || 'Registro retirado por el alumno',
+    correctionReason: input.reason.trim(),
     note: 'Registro retirado',
     snapshot: {
       name: input.entry.snapshot.name,
@@ -309,6 +321,8 @@ export function buildVoidIntakeCorrection(input: {
       fiberG: 0,
       servingSize: input.entry.snapshot.servingSize,
       servingUnit: input.entry.snapshot.servingUnit,
+      exchangeGroupCode: input.entry.exchangeGroupCode ?? undefined,
+      exchangePortions: input.entry.exchangePortions ?? undefined,
     },
   })
 }
@@ -342,6 +356,16 @@ export interface NutritionIntakeTotals {
   fiberG: number
 }
 
+/**
+ * La fila visual optimista conserva también la cantidad estructurada. La UI la
+ * necesita para compartir exactamente el mismo estado que muestra mientras una
+ * escritura sigue en vuelo o en la cola, sin volver a parsear `quantityLabel`.
+ */
+export interface OptimisticNutritionFoodRowModel extends NutritionFoodRowModel {
+  shareQuantity: number
+  shareUnit: string
+}
+
 /** Totales de UN registro (snapshot per-serving x factor), redondeados a 1 decimal como el servidor. */
 export function computeIntakeTotals(
   quantity: number,
@@ -373,11 +397,13 @@ export function optimisticIntakeRow(input: {
   unit: string
   status: 'pending' | 'offline'
   totals: NutritionIntakeTotals
-}): NutritionFoodRowModel {
+}): OptimisticNutritionFoodRowModel {
   return {
     id: input.id,
     name: input.name,
     detail: input.brand ?? null,
+    shareQuantity: input.quantity,
+    shareUnit: input.unit,
     quantityLabel: `${new Intl.NumberFormat('es-CL', { maximumFractionDigits: 1 }).format(input.quantity)} ${input.unit}`,
     calories: input.totals.calories,
     proteinG: input.totals.proteinG,

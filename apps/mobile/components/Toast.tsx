@@ -81,11 +81,28 @@ const nextId = () => `t${++counter}`
 class ToastStore {
   private toasts: ToastData[] = []
   private listeners = new Set<Listener>()
+  // Override de superficie OSCURA (informe 15, MAYOR): mientras el ejecutor V3 (dark-only) está montado,
+  // los toasts deben salir oscuros aunque el dispositivo esté en tema claro. El ejecutor lo enciende al
+  // montar y lo apaga al desmontar (contador para tolerar montajes solapados).
+  private darkRefs = 0
+  private darkListeners = new Set<(dark: boolean) => void>()
 
   subscribe(fn: Listener): () => void {
     this.listeners.add(fn)
     fn(this.toasts)
     return () => this.listeners.delete(fn)
+  }
+
+  subscribeDark(fn: (dark: boolean) => void): () => void {
+    this.darkListeners.add(fn)
+    fn(this.darkRefs > 0)
+    return () => this.darkListeners.delete(fn)
+  }
+
+  setDark(on: boolean) {
+    this.darkRefs = Math.max(0, this.darkRefs + (on ? 1 : -1))
+    const dark = this.darkRefs > 0
+    this.darkListeners.forEach((l) => l(dark))
   }
 
   private emit() {
@@ -155,6 +172,15 @@ export function useToast(): ToastApi {
   return toast
 }
 
+/**
+ * Fuerza (ON) la superficie OSCURA de los toasts mientras una superficie dark-only está montada
+ * (ejecutor V3, informe 15). Contador interno → montajes solapados no se pisan. Llamar `setToastDark(true)`
+ * al montar y `setToastDark(false)` al desmontar (idealmente en el cleanup de un `useEffect`).
+ */
+export function setToastDark(on: boolean): void {
+  store.setDark(on)
+}
+
 // ---- rendering ----
 
 function useVariantIcon() {
@@ -186,7 +212,11 @@ function SpinningLoader({ color }: { color: string }) {
   )
 }
 
-function ToastRow({ data, onDismiss }: { data: ToastData; onDismiss: (id: string) => void }) {
+// Superficie OSCURA del toast en V3 (informe 15): #1d1d26 + borde #33333f + texto on-dark, coherente
+// con las sheets del ejecutor. Los iconos conservan su hue semántico (variante).
+const DARK_TOAST = { bg: '#1d1d26', border: '#33333f', text: '#f4f4f6', textMuted: '#b0b0bd' }
+
+function ToastRow({ data, onDismiss, dark }: { data: ToastData; onDismiss: (id: string) => void; dark: boolean }) {
   const { theme, resolvedScheme } = useTheme()
   const variants = useVariantIcon()
   const { Icon, color } = variants[data.variant]
@@ -248,8 +278,9 @@ function ToastRow({ data, onDismiss }: { data: ToastData; onDismiss: (id: string
   return (
     <GestureDetector gesture={pan}>
       <Animated.View
-        style={[styles.rowShadow, SHADOWS[resolvedScheme].lg, rowStyle]}
-        // bg + border + radius from DS tokens (dark-aware). surface-card ≈ web --popover.
+        style={[styles.rowShadow, SHADOWS[resolvedScheme].lg, rowStyle, dark ? { backgroundColor: DARK_TOAST.bg, borderColor: DARK_TOAST.border } : null]}
+        // bg + border + radius from DS tokens (dark-aware). surface-card ≈ web --popover. En V3 el
+        // override oscuro (style) pisa las clases claras.
         className="flex-row items-center gap-3 rounded-2xl border border-subtle bg-surface-card px-4 py-3"
         accessibilityRole="alert"
       >
@@ -259,11 +290,11 @@ function ToastRow({ data, onDismiss }: { data: ToastData; onDismiss: (id: string
           <Icon size={20} color={color} />
         )}
         <View style={styles.textCol}>
-          <Text style={[TYPE.label, { color: theme.text }]} numberOfLines={2}>
+          <Text style={[TYPE.label, { color: dark ? DARK_TOAST.text : theme.text }]} numberOfLines={2}>
             {data.message}
           </Text>
           {data.description ? (
-            <Text style={[TYPE.caption, { color: theme.mutedForeground, marginTop: 2 }]} numberOfLines={3}>
+            <Text style={[TYPE.caption, { color: dark ? DARK_TOAST.textMuted : theme.mutedForeground, marginTop: 2 }]} numberOfLines={3}>
               {data.description}
             </Text>
           ) : null}
@@ -277,6 +308,7 @@ function ToastRow({ data, onDismiss }: { data: ToastData; onDismiss: (id: string
 export function Toaster() {
   const insets = useSafeAreaInsets()
   const [toasts, setToasts] = useState<ToastData[]>([])
+  const [dark, setDark] = useState(false)
   const mounted = useRef(true)
 
   useEffect(() => {
@@ -284,9 +316,13 @@ export function Toaster() {
     const unsub = store.subscribe((next) => {
       if (mounted.current) setToasts(next)
     })
+    const unsubDark = store.subscribeDark((d) => {
+      if (mounted.current) setDark(d)
+    })
     return () => {
       mounted.current = false
       unsub()
+      unsubDark()
     }
   }, [])
 
@@ -302,7 +338,7 @@ export function Toaster() {
     >
       {toasts.map((t) => (
         <View key={t.id} style={styles.rowWrap} pointerEvents="box-none">
-          <ToastRow data={t} onDismiss={handleDismiss} />
+          <ToastRow data={t} onDismiss={handleDismiss} dark={dark} />
         </View>
       ))}
     </View>

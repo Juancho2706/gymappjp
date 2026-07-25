@@ -5,8 +5,11 @@
 - [x] T3. Persistencia web: id explícito por item + freeze + insert (`buildItemSubstitutionInsertRow`, `collectSubstitutionFoodIds`) en `plan-persistence.ts`.
 - [x] T4. Read type/mapper: `NutritionItemSubstitutionReadSchema` + `mapNutritionItemSubstitutionRow` + `NUTRITION_ITEM_SUBSTITUTION_SELECT`.
 - [x] T5. Test del freeze + collect.
-- [ ] T6. Fetch server + carry-over: inyectar reemplazos de la versión base en builder/quick-edit (web) para preservarlos al republicar. Test de carry-over.
-- [ ] T7. UI coach builder web: editor de reemplazos por item (reusa buscador de alimentos, ≤8, solo structured/hybrid).
-- [ ] T8. UI alumno web: render de reemplazos por item (Today + plan), fallback `notes` legado.
-- [ ] T9. RN: persist de reemplazos en el builder móvil + editor coach RN + render alumno RN + fetch/merge.
-- [ ] T10. Gates (tsc web+mobile, vitest, eslint) + PR (stacked) + doc MOBILE_PARITY. QA device.
+- [x] T6. Fetch server + carry-over: inyectar reemplazos de la versión base en builder/quick-edit web y preservarlos al republicar; test incluido.
+- [x] T7. UI coach builder web: editor de reemplazos por item (reusa buscador de alimentos, ≤8, solo structured/hybrid).
+- [x] T8. UI alumno web Today: render de reemplazos por item, fallback `notes` legado.
+- [x] T9. RN data path: persist en builder móvil + fetch/merge/carry-over + render alumno en Today.
+- [ ] T10. UI alumno Plan web/RN: integrar reemplazos estructurados y fallback legado.
+- [ ] T11. RN coach: editor visual de reemplazos en quick-edit/builder.
+- [x] T12. Gates estáticos (tsc web+mobile, vitest, eslint, boundaries) + PR #159 integrado en `master`.
+- [ ] T13. QA device web/RN del flujo completo; seguimiento consolidado en `MOBILE_PARITY.md`.

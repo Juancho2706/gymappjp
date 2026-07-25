@@ -49,7 +49,11 @@ export function MacroChipRow({
   return (
     <View className={cx('flex-row flex-wrap items-center', sm ? 'gap-1' : 'gap-1.5')}>
       {calories != null ? (
-        <Text className={cx('font-bold text-text-strong', sm ? 'text-xs' : 'text-sm')}>
+        // Web: `tabular-nums` en las cifras (MacroChipRow.tsx:50) → fontVariant RN.
+        <Text
+          className={cx('font-bold text-text-strong', sm ? 'text-xs' : 'text-sm')}
+          style={{ fontVariant: ['tabular-nums'] }}
+        >
           {Math.round(calories)}
           <Text className={cx('font-semibold text-text-muted', sm ? 'text-[10px]' : 'text-[11px]')}>
             {' kcal'}
@@ -66,14 +70,18 @@ export function MacroChipRow({
             key={key}
             className={cx(
               'flex-row items-center gap-1 rounded-pill border border-border-subtle bg-surface-sunken',
-              sm ? 'px-2 py-0.5' : 'px-2.5 py-1',
+              // Paddings 1:1 con web MacroChipRow.tsx:72 (sm px-1.5 py-0.5 / md px-2 py-0.5).
+              sm ? 'px-1.5 py-0.5' : 'px-2 py-0.5',
             )}
           >
             <View className={cx('rounded-full', meta.nativeClass)} style={{ width: 6, height: 6 }} />
             <Text className={cx('font-semibold text-text-muted', sm ? 'text-[10px]' : 'text-[11px]')}>
               {meta.shortLabel}
             </Text>
-            <Text className={cx('font-semibold text-text-body', sm ? 'text-[10px]' : 'text-[11px]')}>
+            <Text
+              className={cx('font-semibold text-text-body', sm ? 'text-[10px]' : 'text-[11px]')}
+              style={{ fontVariant: ['tabular-nums'] }}
+            >
               {fmtMacro(value)}
             </Text>
           </View>

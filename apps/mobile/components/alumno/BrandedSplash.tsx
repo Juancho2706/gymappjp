@@ -6,6 +6,10 @@ import { MotiView } from 'moti'
 import { Easing } from 'react-native-reanimated'
 import { FONT } from '../../lib/typography'
 import { loadStoredBranding, type CoachBranding } from '../../lib/branding'
+import {
+  isCoachBrandingPresentationAllowed,
+  resolveEffectiveCoachBrandPresentation,
+} from '../../lib/theme'
 
 /**
  * Principios de splash premium (research 2025/2026 — Nike Training Club, Whoop,
@@ -93,8 +97,11 @@ export function BrandedSplash({ onFinish }: Props) {
         if (settled) return
         settled = true
         clearTimeout(timeout)
-        if (b && hexToRgb(b.primaryColor)) {
-          setBranding(b)
+        const effective = isCoachBrandingPresentationAllowed(b)
+          ? resolveEffectiveCoachBrandPresentation(b)
+          : null
+        if (effective && hexToRgb(effective.primaryColor)) {
+          setBranding(effective)
           setPhase('brand')
         } else {
           setPhase('eva')

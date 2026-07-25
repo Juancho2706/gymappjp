@@ -2,13 +2,16 @@
  * Cue de audio de los timers (E2-09) — canal SECUNDARIO. La háptica es el canal
  * primario en móvil (siempre suena en el device); el audio refuerza.
  *
- * Estado del subsistema: mobile aún NO tiene librería de audio. Se DECLARA
- * `expo-audio` en `package.json` (dep, install diferido por el orquestador) y se
- * carga con `require` GUARDADO — mismo patrón que `VideoPlayer.tsx` con
- * `expo-video`. Consecuencia:
- *   · Antes de `expo install expo-audio` + un asset de cue, TODO acá es no-op
- *     seguro (nunca lanza, no rompe el typecheck: no hay import estático).
- *   · Tras instalar y registrar un asset vía `registerTimerCue`, reproduce.
+ * Estado del subsistema (Ola 5): `expo-audio` YA está instalado (dep en `package.json` + lockfile raíz)
+ * y se carga con `require` GUARDADO — mismo patrón que `VideoPlayer.tsx` con `expo-video`. Consecuencia:
+ *   · Si el `require('expo-audio')` resuelve (build nativo con el módulo enlazado) y hay un asset
+ *     registrado, reproduce de verdad. Los assets `.wav` YA están bundleados (ver abajo).
+ *   · Si el módulo no estuviera enlazado (p.ej. un runtime viejo), TODO acá es no-op seguro (nunca
+ *     lanza, no rompe el typecheck: no hay import estático). La reproducción real se confirma en device.
+ *
+ * Tono del SISTEMA (E5.2, solo Android): si la pref `restTimerSystemTone` está ON, las alarmas/timbres
+ * reproducen el alias `content://settings/system/alarm_alert`; si ese disparo lanza, se apaga la pref
+ * (fallback marcado a catálogo) y se cae al primer timbre. Guard de plataforma: Android-only.
  *
  * Gating: la ALARMA y el TICK del rest-timer respetan `isRestTimerMuted()` (default
  * web = ON), espejando que en web `readRestTimerMuted` se lee SOLO en la barra de
@@ -18,11 +21,19 @@
  * leen mute). La háptica NO pasa por acá y nunca se silencia.
  *
  * NOTA de integración: los assets de sonido YA están bundleados y registrados al
- * cargar el módulo (un `.wav` por timbre + el tick de countdown, ver abajo). Sólo
- * falta (a) `expo install expo-audio` para que el `require('expo-audio')` guardado
- * resuelva; hasta entonces `playTimerCue` es no-op seguro (no hay import estático).
+ * cargar el módulo (un `.wav` por timbre + el tick de countdown, ver abajo), y
+ * `expo-audio` YA está instalado. La reproducción real depende de un build nativo
+ * (EAS) que enlace el módulo; se confirma en device (QA CEO).
  */
-import { isRestTimerMuted, getRestTimerVolume, getRestTimerSound, type TimerSound } from './rest-timer-preferences'
+import { Platform } from 'react-native'
+import {
+  isRestTimerMuted,
+  getRestTimerVolume,
+  getRestTimerSound,
+  isRestTimerSystemToneEnabled,
+  setRestTimerSystemTone,
+  type TimerSound,
+} from './rest-timer-preferences'
 
 /** Superficie mínima de expo-audio que usamos (tipada acá para no exigir sus tipos pre-install). */
 interface AudioPlayerLike {
@@ -61,6 +72,35 @@ const cueSources: Partial<Record<TimerCueKind, CueSource>> = {}
 // un asset por timbre (digital/bell/classic/boxing).
 const soundAssets: Partial<Record<TimerSound, CueSource>> = {}
 const players: Record<string, AudioPlayerLike> = {}
+
+/**
+ * Alias ESTABLE del tono de alarma del sistema en Android (E5.2). Es la ruta canonica documentada por
+ * Android para el sonido de alarma configurado por el usuario; expo-audio la abre como cualquier `{ uri }`.
+ * iOS no tiene equivalente → el tono del sistema es Android-only (guard en `playTimerCue` y en la tuerca).
+ */
+const SYSTEM_ALARM_URI = 'content://settings/system/alarm_alert'
+
+/**
+ * Intenta reproducir el tono del SISTEMA (Android). Devuelve `true` si el disparo no lanzo; `false` si
+ * fallo de forma sincrona (createAudioPlayer/play lanzo). NOTA HONESTA: la carga de un `content://` es
+ * asincrona, asi que un fallo silencioso de la fuente (URI no resoluble en un device concreto) NO se
+ * detecta aca — se confirma en QA de device (CEO). Un fallo sincrono cae al catalogo en `playTimerCue`.
+ */
+function tryPlaySystemTone(mod: ExpoAudioLike): boolean {
+  try {
+    let player = players.system
+    if (!player) {
+      player = mod.createAudioPlayer({ uri: SYSTEM_ALARM_URI })
+      players.system = player
+    }
+    player.volume = getRestTimerVolume()
+    player.seekTo(0)
+    player.play()
+    return true
+  } catch {
+    return false
+  }
+}
 
 /** Registra el asset de un cue genérico (tick/done/phase/finish). */
 export function registerTimerCue(kind: TimerCueKind, source: CueSource): void {
@@ -116,10 +156,20 @@ export function playTimerCue(kind: TimerCueKind, opts?: { force?: boolean }): vo
   // genérico 'alarm' si aún no se bundleó un asset por-timbre. Solo 'tick' (beep de
   // countdown por segundo) conserva su propia fuente.
   const usesTimbre = kind === 'alarm' || kind === 'done' || kind === 'phase' || kind === 'finish'
+  if (!mod) return
+
+  // Tono del SISTEMA (E5.2, solo Android): las alarmas/timbres (usesTimbre) intentan primero el
+  // `content://settings/system/alarm_alert`. Si el disparo lanza (URI no soportada en este device),
+  // se APAGA la pref (fallback marcado a catalogo) y se cae al primer timbre — nunca deja el cue mudo.
+  if (usesTimbre && Platform.OS === 'android' && isRestTimerSystemToneEnabled()) {
+    if (tryPlaySystemTone(mod)) return
+    setRestTimerSystemTone(false)
+  }
+
   const sound = usesTimbre ? getRestTimerSound() : null
   const source = usesTimbre ? (soundAssets[sound!] ?? cueSources.alarm) : cueSources[kind]
   const key = usesTimbre ? `alarm:${sound}` : kind
-  if (!mod || source == null) return
+  if (source == null) return
   try {
     let player = players[key]
     if (!player) {
@@ -144,8 +194,8 @@ export function playTimerCue(kind: TimerCueKind, opts?: { force?: boolean }): vo
 // no resolviera). El 'tick' 3-2-1 tiene su propio asset corto (sine 760Hz ~0.16s,
 // espeja `playCountdownBeep` audioUtils.ts:8-33) — NO reusa la alarma completa, así
 // el beep de countdown suena por segundo sin repetir la alarma. Metro empaqueta los
-// .wav; reproduce SOLO cuando expo-audio esté instalado (`expo install expo-audio`) +
-// un build nativo lo incluya; hasta entonces `playTimerCue` es no-op seguro.
+// .wav; reproduce cuando un build nativo (EAS) enlace expo-audio (ya instalado); hasta
+// entonces `playTimerCue` es no-op seguro.
 try {
   /* eslint-disable @typescript-eslint/no-require-imports */
   registerTimerCue('alarm', require('../../../../assets/audio/rest-cue.wav'))

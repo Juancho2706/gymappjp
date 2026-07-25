@@ -1,0 +1,800 @@
+<section class="concept" id="concept-a3e" data-name="Impulso v3.2 — momentos">
+  <style>
+    #concept-a3e {
+      --brand-a3e: var(--brand, #58cc02);
+      --gold-a3e: #f5c451;
+      --z1: #38bdf8; --z2: #4ade80; --z3: #facc15; --z4: #fb923c; --z5: #f87171;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      color: #f4f4f6;
+      padding: 40px 28px 56px;
+      background: #0c0c11;
+      -webkit-font-smoothing: antialiased;
+    }
+    #concept-a3e *,
+    #concept-a3e *::before,
+    #concept-a3e *::after { box-sizing: border-box; }
+
+    /* ===== header ===== */
+    #concept-a3e .a3e-head { max-width: 1320px; margin: 0 auto 40px; }
+    #concept-a3e .a3e-eyebrow {
+      display: inline-block;
+      font-size: 12px; font-weight: 800; letter-spacing: .18em; text-transform: uppercase;
+      color: #0c0c11; background: var(--brand-a3e);
+      padding: 5px 12px; border-radius: 999px; margin-bottom: 16px;
+    }
+    #concept-a3e .a3e-title {
+      font-size: clamp(30px, 5vw, 50px); font-weight: 900; letter-spacing: -.03em;
+      line-height: 1; margin: 0 0 12px;
+      background: linear-gradient(120deg, #ffffff 30%, var(--brand-a3e) 130%);
+      -webkit-background-clip: text; background-clip: text; color: transparent;
+    }
+    #concept-a3e .a3e-sub { font-size: 16px; line-height: 1.5; color: #a8a8b3; max-width: 780px; margin: 0; }
+
+    /* ===== layout ===== */
+    #concept-a3e .a3e-row {
+      display: flex; flex-wrap: wrap; gap: 44px 44px; justify-content: center;
+      max-width: 1780px; margin: 0 auto;
+    }
+    #concept-a3e .a3e-col { width: 375px; }
+    #concept-a3e .a3e-label {
+      display: flex; align-items: center; gap: 9px;
+      font-size: 15px; font-weight: 800; letter-spacing: -.01em; margin: 0 0 14px 6px;
+    }
+    #concept-a3e .a3e-label span {
+      width: 9px; height: 9px; border-radius: 50%; background: var(--brand-a3e);
+      box-shadow: 0 0 0 4px color-mix(in srgb, var(--brand-a3e) 22%, transparent);
+    }
+    #concept-a3e .a3e-label em {
+      font-style: normal; font-size: 10px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase;
+      color: #0c0c11; background: var(--brand-a3e); padding: 2px 7px; border-radius: 999px; margin-left: 2px;
+    }
+    #concept-a3e .a3e-label em.gold { background: var(--gold-a3e); }
+    #concept-a3e .a3e-label em.amber { background: var(--z4); color: #2a1400; }
+
+    /* ===== phone shell ===== */
+    #concept-a3e .a3e-phone {
+      width: 375px; height: 760px; border-radius: 44px;
+      background: #050507; padding: 11px;
+      box-shadow: 0 0 0 2px #26262e, 0 30px 60px -22px rgba(0,0,0,.85), inset 0 1px 0 rgba(255,255,255,.05);
+      position: relative;
+    }
+    #concept-a3e .a3e-screen {
+      position: relative; width: 100%; height: 100%; border-radius: 34px; overflow: hidden;
+      background: radial-gradient(120% 80% at 50% -8%, #1c1c24 0%, #16161d 42%, #121218 100%);
+      display: flex; flex-direction: column;
+    }
+    #concept-a3e .a3e-notch {
+      position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
+      width: 118px; height: 26px; background: #050507; border-radius: 999px; z-index: 40;
+    }
+    #concept-a3e .a3e-body { flex: 1; display: flex; flex-direction: column; padding: 40px 18px 18px; min-height: 0; }
+
+    /* ===== shared bits ===== */
+    #concept-a3e .a3e-chip {
+      display: inline-flex; align-items: center; gap: 6px;
+      font-size: 12px; font-weight: 700; padding: 5px 11px; border-radius: 999px;
+      background: color-mix(in srgb, var(--brand-a3e) 16%, #16161d);
+      color: color-mix(in srgb, var(--brand-a3e) 82%, #ffffff);
+      border: 1.5px solid color-mix(in srgb, var(--brand-a3e) 34%, transparent);
+    }
+    #concept-a3e .a3e-chip.plain { background: #1c1c24; color: #b7b7c2; border-color: #33333f; }
+    #concept-a3e .a3e-chip.amber {
+      background: color-mix(in srgb, var(--z4) 16%, #16161d);
+      color: color-mix(in srgb, var(--z4) 88%, #fff);
+      border-color: color-mix(in srgb, var(--z4) 40%, transparent);
+    }
+    #concept-a3e .a3e-tnum { font-variant-numeric: tabular-nums; }
+
+    /* juicy button base */
+    #concept-a3e .a3e-juicy {
+      border: 2px solid color-mix(in srgb, var(--brand-a3e) 55%, #000);
+      background: var(--brand-a3e);
+      color: #072100; font-weight: 900; letter-spacing: -.01em;
+      border-radius: 16px;
+      box-shadow: 0 5px 0 0 color-mix(in srgb, var(--brand-a3e) 55%, #000);
+      transition: transform .12s ease, box-shadow .12s ease;
+      cursor: default;
+    }
+    #concept-a3e .a3e-juicy:active {
+      transform: translateY(5px); box-shadow: 0 0 0 0 color-mix(in srgb, var(--brand-a3e) 55%, #000);
+    }
+
+    /* gear button */
+    #concept-a3e .a3e-gear {
+      width: 36px; height: 36px; flex-shrink: 0; border-radius: 11px;
+      background: #1a1a22; border: 1.5px solid #2f2f3a; color: #b7b7c2;
+      display: flex; align-items: center; justify-content: center;
+    }
+    #concept-a3e .a3e-gear svg { display: block; width: 19px; height: 19px; }
+
+    /* progress dots */
+    #concept-a3e .a3e-progress { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+    #concept-a3e .a3e-dots { display: flex; gap: 7px; flex: 1; }
+    #concept-a3e .a3e-dot { flex: 1; height: 9px; border-radius: 999px; background: #2a2a34; }
+    #concept-a3e .a3e-dot.done { background: color-mix(in srgb, var(--brand-a3e) 60%, #16161d); }
+    #concept-a3e .a3e-dot.now { background: var(--brand-a3e); box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand-a3e) 25%, transparent); }
+    #concept-a3e .a3e-count { font-size: 12px; font-weight: 800; color: #8f8f9c; white-space: nowrap; }
+
+    /* exercise heading */
+    #concept-a3e .a3e-exname { font-size: 25px; font-weight: 900; letter-spacing: -.02em; margin: 2px 0 8px; }
+    #concept-a3e .a3e-chiprow { display: flex; gap: 8px; margin-bottom: 12px; }
+
+    /* media card + silhouette */
+    #concept-a3e .a3e-media {
+      position: relative; height: 104px; border-radius: 20px; overflow: hidden;
+      border: 2px solid #2f2f3a; background: linear-gradient(160deg, #202029, #17171f);
+      margin-bottom: 12px;
+    }
+    #concept-a3e .a3e-media::after {
+      content: ""; position: absolute; inset: 0;
+      background: linear-gradient(105deg, transparent 20%, rgba(255,255,255,.07) 45%, transparent 68%);
+      background-size: 220% 100%;
+    }
+    #concept-a3e .a3e-fig { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); width: 150px; height: 70px; }
+    #concept-a3e .a3e-bench { position: absolute; bottom: 0; left: 27px; width: 96px; height: 11px; border-radius: 6px; background: #3b3b48; }
+    #concept-a3e .a3e-benchleg { position: absolute; bottom: -14px; width: 8px; height: 14px; background: #33333f; border-radius: 3px; }
+    #concept-a3e .a3e-torso { position: absolute; bottom: 11px; left: 40px; width: 70px; height: 18px; border-radius: 11px; background: color-mix(in srgb, var(--gold-a3e) 42%, #2a2a34); }
+    #concept-a3e .a3e-headc { position: absolute; bottom: 11px; left: 26px; width: 18px; height: 18px; border-radius: 50%; background: color-mix(in srgb, var(--gold-a3e) 42%, #2a2a34); }
+    #concept-a3e .a3e-bar {
+      position: absolute; left: 50%; transform: translateX(-50%);
+      width: 108px; height: 7px; border-radius: 4px; background: var(--gold-a3e); bottom: 44px;
+      box-shadow: 0 0 12px color-mix(in srgb, var(--gold-a3e) 60%, transparent);
+    }
+    #concept-a3e .a3e-bar::before, #concept-a3e .a3e-bar::after {
+      content: ""; position: absolute; top: -6px; width: 16px; height: 19px; border-radius: 4px; background: color-mix(in srgb, var(--gold-a3e) 78%, #000);
+    }
+    #concept-a3e .a3e-bar::before { left: -6px; } #concept-a3e .a3e-bar::after { right: -6px; }
+    #concept-a3e .a3e-arm { position: absolute; bottom: 22px; width: 7px; height: 26px; border-radius: 4px; background: color-mix(in srgb, var(--gold-a3e) 42%, #2a2a34); }
+    #concept-a3e .a3e-arm.l { left: 52px; } #concept-a3e .a3e-arm.r { right: 52px; }
+
+    /* ===== PR banner (screen 1) ===== */
+    #concept-a3e .a3e-prwrap { position: relative; margin-bottom: 11px; }
+    #concept-a3e .a3e-prbanner {
+      position: relative; display: flex; align-items: center; gap: 11px;
+      padding: 11px 14px; border-radius: 15px;
+      background: linear-gradient(120deg, color-mix(in srgb, var(--gold-a3e) 26%, #1a1710), color-mix(in srgb, var(--gold-a3e) 12%, #16161d));
+      border: 2px solid color-mix(in srgb, var(--gold-a3e) 55%, transparent);
+      box-shadow: 0 8px 22px -12px color-mix(in srgb, var(--gold-a3e) 70%, transparent);
+    }
+    #concept-a3e .a3e-medal {
+      position: relative; width: 34px; height: 34px; flex-shrink: 0; border-radius: 50%;
+      background: radial-gradient(circle at 38% 32%, #ffe9a8, var(--gold-a3e) 55%, #c8963a);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.5), 0 0 0 3px color-mix(in srgb, var(--gold-a3e) 24%, transparent);
+      display: flex; align-items: center; justify-content: center;
+    }
+    #concept-a3e .a3e-medal::before {
+      content: ""; position: absolute; inset: 6px; border-radius: 50%;
+      box-shadow: inset 0 0 0 1.5px rgba(120,80,10,.35);
+    }
+    #concept-a3e .a3e-medal .star {
+      width: 15px; height: 15px; background: #7a531a;
+      clip-path: polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%);
+    }
+    #concept-a3e .a3e-prtxt { min-width: 0; flex: 1; }
+    #concept-a3e .a3e-prtxt .k { font-size: 10px; font-weight: 900; letter-spacing: .16em; text-transform: uppercase; color: var(--gold-a3e); }
+    #concept-a3e .a3e-prtxt .v { font-size: 16px; font-weight: 900; letter-spacing: -.02em; color: #fff8e6; margin-top: 1px; }
+    #concept-a3e .a3e-prtxt .v small { font-size: 12px; font-weight: 800; color: #d9c489; }
+
+    /* micro-confetti (gold) */
+    #concept-a3e .a3e-prconfetti { position: absolute; inset: -10px 0 -6px 6px; pointer-events: none; overflow: visible; }
+    #concept-a3e .a3e-prconf { position: absolute; top: 50%; left: 26px; width: 6px; height: 6px; border-radius: 2px; opacity: 0; }
+
+    /* serie card with gold pulsing border */
+    #concept-a3e .a3e-prcard {
+      display: flex; gap: 10px; padding: 12px 10px; border-radius: 18px;
+      background: #1c1c24; border: 2px solid var(--gold-a3e); margin-bottom: 10px;
+    }
+    #concept-a3e .a3e-val { flex: 1; text-align: center; }
+    #concept-a3e .a3e-val + .a3e-val { border-left: 1.5px solid #2f2f3a; }
+    #concept-a3e .a3e-val .n { font-size: 30px; font-weight: 900; letter-spacing: -.03em; line-height: 1; }
+    #concept-a3e .a3e-val .n.gold { color: var(--gold-a3e); }
+    #concept-a3e .a3e-val .u { font-size: 11px; font-weight: 800; color: #8f8f9c; letter-spacing: .08em; margin-top: 5px; }
+
+    /* prev superado */
+    #concept-a3e .a3e-prev {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 14px; border-radius: 14px; margin-bottom: 12px;
+      background: #1b1b23; border: 2px dashed #34343f;
+    }
+    #concept-a3e .a3e-prev .l { font-size: 12px; color: #8f8f9c; font-weight: 700; }
+    #concept-a3e .a3e-prev .r { font-size: 14px; font-weight: 800; color: #7f7f8c; text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--gold-a3e) 70%, transparent); text-decoration-thickness: 2px; }
+    #concept-a3e .a3e-uparrow { position: relative; width: 12px; height: 16px; margin-left: auto; }
+    #concept-a3e .a3e-uparrow::before {
+      content: ""; position: absolute; left: 4px; bottom: 0; width: 4px; height: 10px; border-radius: 2px; background: var(--gold-a3e);
+    }
+    #concept-a3e .a3e-uparrow::after {
+      content: ""; position: absolute; top: 0; left: 0; width: 0; height: 0;
+      border-style: solid; border-width: 0 6px 8px 6px; border-color: transparent transparent var(--gold-a3e) transparent;
+    }
+    #concept-a3e .a3e-prev .sup { font-size: 11px; font-weight: 900; letter-spacing: .05em; text-transform: uppercase; color: var(--gold-a3e); }
+
+    #concept-a3e .a3e-cta {
+      height: 60px; width: 100%; font-size: 18px; display: flex; align-items: center; justify-content: center; gap: 9px; margin-bottom: 10px;
+    }
+    #concept-a3e .a3e-cta .ck { width: 22px; height: 22px; border-radius: 50%; background: rgba(7,33,0,.22); display: flex; align-items: center; justify-content: center; }
+    #concept-a3e .a3e-ck::before {
+      content: ""; display: block; width: 6px; height: 11px; border: solid #072100; border-width: 0 2.5px 2.5px 0; transform: rotate(45deg) translate(-1px,-1px);
+    }
+    #concept-a3e .a3e-foot { display: flex; align-items: center; justify-content: space-between; margin-top: auto; }
+    #concept-a3e .a3e-sets { display: flex; gap: 6px; align-items: center; }
+    #concept-a3e .a3e-sq { width: 24px; height: 24px; border-radius: 8px; background: #26262f; border: 2px solid #34343f; }
+    #concept-a3e .a3e-sq.on { background: var(--brand-a3e); border-color: color-mix(in srgb, var(--brand-a3e) 55%, #000); }
+    #concept-a3e .a3e-sq.gold { background: var(--gold-a3e); border-color: color-mix(in srgb, var(--gold-a3e) 55%, #000); }
+    #concept-a3e .a3e-setlbl { font-size: 12px; font-weight: 800; color: #8f8f9c; margin-left: 4px; }
+    #concept-a3e .a3e-tools { display: flex; gap: 8px; }
+    #concept-a3e .a3e-tool { width: 38px; height: 38px; border-radius: 12px; background: #1c1c24; border: 2px solid #2f2f3a; display: flex; align-items: center; justify-content: center; }
+    #concept-a3e .a3e-tool.kb::before { content: ""; width: 18px; height: 12px; border: 2px solid #b7b7c2; border-radius: 3px; }
+    #concept-a3e .a3e-tool.pen::before { content: ""; width: 13px; height: 3px; background: #b7b7c2; border-radius: 2px; transform: rotate(-45deg); box-shadow: 0 -4px 0 -1px #b7b7c2; }
+
+    /* ===== screen 2 — intervalos ===== */
+    #concept-a3e .a3e-cardio { align-items: center; text-align: center; gap: 12px; }
+    #concept-a3e .a3e-chead { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 2px; }
+    #concept-a3e .a3e-ctitle { font-size: 21px; font-weight: 900; letter-spacing: -.02em; }
+
+    #concept-a3e .a3e-phasering { position: relative; width: 228px; height: 228px; margin-top: 4px; }
+    #concept-a3e .a3e-phasering .ring {
+      width: 100%; height: 100%; border-radius: 50%;
+      background: conic-gradient(var(--z4) 0deg 96deg, #2a2431 96deg 360deg);
+      -webkit-mask: radial-gradient(closest-side, transparent 78%, #000 79%);
+      mask: radial-gradient(closest-side, transparent 78%, #000 79%);
+    }
+    #concept-a3e .a3e-phasetxt { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+    #concept-a3e .a3e-phaselbl { font-size: 15px; font-weight: 900; letter-spacing: .2em; text-transform: uppercase; color: var(--z4); }
+    #concept-a3e .a3e-phasenum { font-size: 60px; font-weight: 900; letter-spacing: -.04em; line-height: 1; margin-top: 2px; }
+    #concept-a3e .a3e-phasesub { font-size: 10px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; color: #8f8f9c; margin-top: 6px; }
+
+    #concept-a3e .a3e-next-phase {
+      display: inline-flex; align-items: center; gap: 8px; padding: 7px 14px; border-radius: 999px;
+      background: color-mix(in srgb, var(--z2) 12%, #16161d); border: 1.5px solid color-mix(in srgb, var(--z2) 30%, transparent);
+      font-size: 13px; font-weight: 800; color: color-mix(in srgb, var(--z2) 82%, #fff); opacity: .82;
+    }
+    #concept-a3e .a3e-next-phase .dt { width: 9px; height: 9px; border-radius: 50%; background: var(--z2); }
+    #concept-a3e .a3e-next-phase b { color: #dff5e2; }
+
+    #concept-a3e .a3e-segwrap { width: 100%; }
+    #concept-a3e .a3e-segs { display: flex; gap: 5px; margin-bottom: 7px; }
+    #concept-a3e .a3e-seg { flex: 1; height: 10px; border-radius: 4px; background: #26262f; }
+    #concept-a3e .a3e-seg.fill { background: var(--z4); }
+    #concept-a3e .a3e-seg.cur { background: var(--z4); box-shadow: 0 0 0 3px color-mix(in srgb, var(--z4) 22%, transparent); }
+    #concept-a3e .a3e-seglbl { font-size: 12px; font-weight: 800; color: #9a9aa6; letter-spacing: .02em; }
+    #concept-a3e .a3e-seglbl b { color: var(--z4); }
+
+    #concept-a3e .a3e-cchips2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; width: 100%; }
+    #concept-a3e .a3e-cchip {
+      display: flex; align-items: center; gap: 9px; text-align: left;
+      background: #1a1a22; border: 1.5px solid #2a2a34; border-radius: 14px; padding: 10px 12px;
+    }
+    #concept-a3e .a3e-cchip .ci { width: 20px; height: 20px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
+    #concept-a3e .a3e-cchip .cv { font-size: 16px; font-weight: 900; letter-spacing: -.01em; line-height: 1.05; }
+    #concept-a3e .a3e-cchip .cl { font-size: 9px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: #7f7f8c; margin-top: 2px; }
+    #concept-a3e .a3e-hbeat { width: 13px; height: 13px; border-radius: 50%; background: var(--z4); box-shadow: 0 0 0 4px color-mix(in srgb, var(--z4) 22%, transparent); }
+    #concept-a3e .a3e-rpm { position: relative; width: 18px; height: 18px; border-radius: 50%; border: 2px solid color-mix(in srgb, var(--brand-a3e) 65%, #2a2a34); }
+    #concept-a3e .a3e-rpm::before { content: ""; position: absolute; top: 50%; left: 50%; width: 2px; height: 6px; background: var(--brand-a3e); transform-origin: bottom center; transform: translate(-50%,-100%) rotate(40deg); }
+    #concept-a3e .a3e-pause { width: 100%; height: 58px; border-radius: 16px; font-size: 16px; font-weight: 900; display: flex; align-items: center; justify-content: center; gap: 10px; margin-top: 2px; }
+    #concept-a3e .a3e-pauseicon { display: inline-flex; gap: 4px; }
+    #concept-a3e .a3e-pauseicon i { width: 5px; height: 16px; background: #072100; border-radius: 2px; }
+
+    /* ===== screen 3 — conectar sensor ===== */
+    #concept-a3e .a3e-sensorbody { padding: 0; position: relative; }
+    #concept-a3e .a3e-dim {
+      position: absolute; inset: 0; padding: 44px 18px 18px;
+      display: flex; flex-direction: column; align-items: center; gap: 12px;
+      opacity: .35; filter: saturate(.7);
+    }
+    #concept-a3e .a3e-dimring { position: relative; width: 190px; height: 190px; margin-top: 4px; }
+    #concept-a3e .a3e-dimring .ring {
+      width: 100%; height: 100%; border-radius: 50%;
+      background: conic-gradient(var(--brand-a3e) 0deg 150deg, #26262f 150deg 360deg);
+      -webkit-mask: radial-gradient(closest-side, transparent 78%, #000 79%);
+      mask: radial-gradient(closest-side, transparent 78%, #000 79%);
+    }
+    #concept-a3e .a3e-dimtxt { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+    #concept-a3e .a3e-dimnum { font-size: 48px; font-weight: 900; letter-spacing: -.04em; }
+    #concept-a3e .a3e-dimchip {
+      display: inline-flex; align-items: center; gap: 8px; padding: 8px 15px; border-radius: 999px;
+      background: color-mix(in srgb, var(--z2) 16%, #16161d); border: 2px solid color-mix(in srgb, var(--z2) 38%, transparent);
+      font-size: 14px; font-weight: 900; color: var(--z2);
+    }
+    #concept-a3e .a3e-dimchip i { width: 10px; height: 10px; border-radius: 50%; background: var(--z2); }
+    #concept-a3e .a3e-scrim { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(6,6,10,.55) 0%, rgba(6,6,10,.78) 55%, rgba(6,6,10,.9) 100%); z-index: 5; }
+
+    #concept-a3e .a3e-sheet {
+      position: absolute; left: 0; right: 0; bottom: 0; height: 65%; z-index: 10;
+      background: #1b1b24; border-top: 2px solid #33333f; border-radius: 24px 24px 0 0;
+      padding: 10px 18px 18px; display: flex; flex-direction: column;
+      box-shadow: 0 -22px 46px -18px rgba(0,0,0,.8);
+    }
+    #concept-a3e .a3e-handle { width: 42px; height: 5px; border-radius: 999px; background: #45454f; margin: 0 auto 12px; }
+    #concept-a3e .a3e-sheettitle { font-size: 17px; font-weight: 900; letter-spacing: -.01em; text-align: center; margin-bottom: 2px; }
+
+    #concept-a3e .a3e-radar { position: relative; height: 92px; display: flex; align-items: center; justify-content: center; margin: 4px 0 8px; }
+    #concept-a3e .a3e-radarwave { position: absolute; top: 50%; left: 50%; width: 40px; height: 40px; margin: -20px 0 0 -20px; border-radius: 50%; border: 2px solid color-mix(in srgb, var(--z5) 65%, transparent); opacity: 0; }
+    #concept-a3e .a3e-radarcore { position: relative; width: 44px; height: 44px; border-radius: 50%; background: color-mix(in srgb, var(--z5) 18%, #16161d); border: 1.5px solid color-mix(in srgb, var(--z5) 40%, transparent); display: flex; align-items: center; justify-content: center; z-index: 2; }
+    #concept-a3e .a3e-hshape { position: relative; width: 20px; height: 18px; }
+    #concept-a3e .a3e-hshape::before, #concept-a3e .a3e-hshape::after { content: ""; position: absolute; top: 0; width: 10px; height: 16px; border-radius: 10px 10px 0 0; background: var(--z5); }
+    #concept-a3e .a3e-hshape::before { left: 10px; transform: rotate(-45deg); transform-origin: 0 100%; }
+    #concept-a3e .a3e-hshape::after { left: 0; transform: rotate(45deg); transform-origin: 100% 100%; }
+
+    #concept-a3e .a3e-dev {
+      display: flex; align-items: center; gap: 12px; padding: 12px 13px; border-radius: 15px; margin-bottom: 9px;
+      background: #16161d; border: 1.5px solid #2a2a34;
+    }
+    #concept-a3e .a3e-dev.on { border-color: color-mix(in srgb, var(--brand-a3e) 55%, transparent); background: color-mix(in srgb, var(--brand-a3e) 8%, #16161d); }
+    #concept-a3e .a3e-dev.faint { opacity: .5; }
+    #concept-a3e .a3e-devico { width: 40px; height: 40px; flex-shrink: 0; border-radius: 11px; background: #22222b; border: 1.5px solid #33333f; display: flex; align-items: center; justify-content: center; }
+    #concept-a3e .a3e-devico .a3e-hshape { transform: scale(.72); }
+    #concept-a3e .a3e-devico .a3e-hshape::before, #concept-a3e .a3e-devico .a3e-hshape::after { background: #9a9aa6; }
+    #concept-a3e .a3e-dev.on .a3e-devico { background: color-mix(in srgb, var(--brand-a3e) 16%, #16161d); border-color: color-mix(in srgb, var(--brand-a3e) 40%, transparent); }
+    #concept-a3e .a3e-dev.on .a3e-devico .a3e-hshape::before, #concept-a3e .a3e-dev.on .a3e-devico .a3e-hshape::after { background: var(--z5); }
+    #concept-a3e .a3e-devmid { flex: 1; min-width: 0; }
+    #concept-a3e .a3e-devname { font-size: 15px; font-weight: 800; color: #eaeaf0; }
+    #concept-a3e .a3e-devsub { font-size: 11px; font-weight: 700; color: #8f8f9c; margin-top: 2px; display: flex; align-items: center; gap: 7px; }
+    #concept-a3e .a3e-ble { font-size: 9px; font-weight: 900; letter-spacing: .08em; padding: 2px 7px; border-radius: 999px; background: #24242e; color: #9a9aa6; border: 1.5px solid #33333f; }
+    #concept-a3e .a3e-dev.on .a3e-ble { background: color-mix(in srgb, var(--brand-a3e) 16%, #16161d); color: color-mix(in srgb, var(--brand-a3e) 85%, #fff); border-color: color-mix(in srgb, var(--brand-a3e) 45%, transparent); }
+    #concept-a3e .a3e-sig { display: flex; align-items: flex-end; gap: 2px; height: 15px; }
+    #concept-a3e .a3e-sig i { width: 3.5px; border-radius: 1px; background: #3a3a45; }
+    #concept-a3e .a3e-sig i:nth-child(1) { height: 5px; } #concept-a3e .a3e-sig i:nth-child(2) { height: 8px; }
+    #concept-a3e .a3e-sig i:nth-child(3) { height: 11px; } #concept-a3e .a3e-sig i:nth-child(4) { height: 15px; }
+    #concept-a3e .a3e-dev.on .a3e-sig i { background: var(--brand-a3e); }
+    #concept-a3e .a3e-dev.faint .a3e-sig i:nth-child(3), #concept-a3e .a3e-dev.faint .a3e-sig i:nth-child(4) { background: #26262f; }
+
+    #concept-a3e .a3e-connect { height: 58px; width: 100%; font-size: 17px; display: flex; align-items: center; justify-content: center; gap: 10px; margin-top: auto; }
+    #concept-a3e .a3e-btico { position: relative; width: 16px; height: 16px; }
+    #concept-a3e .a3e-btico::before { content: ""; position: absolute; inset: 0; border: 2px solid #072100; border-radius: 4px; transform: rotate(45deg); }
+    #concept-a3e .a3e-note {
+      display: flex; align-items: flex-start; gap: 8px; margin-top: 10px;
+      font-size: 11px; line-height: 1.4; font-weight: 700; color: #9a9aa6; text-align: left;
+    }
+    #concept-a3e .a3e-note::before { content: ""; flex-shrink: 0; width: 15px; height: 15px; border-radius: 50%; border: 1.5px solid #55555f; position: relative; margin-top: 1px; }
+    #concept-a3e .a3e-note b { color: #cfcfd8; font-weight: 800; }
+
+    /* ===== screen 4 — ronda cerrada ===== */
+    #concept-a3e .a3e-rest { align-items: center; text-align: center; gap: 13px; }
+    #concept-a3e .a3e-roundban {
+      position: relative; display: inline-flex; align-items: center; gap: 10px;
+      padding: 10px 18px; border-radius: 999px; font-size: 14px; font-weight: 900;
+      background: color-mix(in srgb, var(--brand-a3e) 15%, #16161d);
+      border: 2px solid color-mix(in srgb, var(--brand-a3e) 40%, transparent);
+      color: color-mix(in srgb, var(--brand-a3e) 88%, #fff);
+    }
+    #concept-a3e .a3e-dblcheck { position: relative; width: 26px; height: 20px; flex-shrink: 0; }
+    #concept-a3e .a3e-dblcheck::before, #concept-a3e .a3e-dblcheck::after {
+      content: ""; position: absolute; top: 3px; width: 7px; height: 13px;
+      border: solid var(--brand-a3e); border-width: 0 3px 3px 0; transform: rotate(45deg);
+    }
+    #concept-a3e .a3e-dblcheck::before { left: 4px; } #concept-a3e .a3e-dblcheck::after { left: 12px; }
+
+    #concept-a3e .a3e-rdots { display: flex; align-items: center; gap: 9px; }
+    #concept-a3e .a3e-rdotlbl { font-size: 11px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: #8f8f9c; }
+    #concept-a3e .a3e-rd { width: 16px; height: 16px; border-radius: 50%; background: #26262f; border: 2px solid #33333f; }
+    #concept-a3e .a3e-rd.done { background: var(--brand-a3e); border-color: color-mix(in srgb, var(--brand-a3e) 55%, #000); }
+    #concept-a3e .a3e-rd.fill { background: var(--brand-a3e); border-color: color-mix(in srgb, var(--brand-a3e) 55%, #000); box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand-a3e) 22%, transparent); }
+
+    #concept-a3e .a3e-ringwrap { position: relative; width: 196px; height: 196px; margin: 2px 0; }
+    #concept-a3e .a3e-ring {
+      width: 100%; height: 100%; border-radius: 50%;
+      background: conic-gradient(var(--brand-a3e) 0deg 300deg, #26262f 300deg 360deg);
+      -webkit-mask: radial-gradient(closest-side, transparent 76%, #000 77%);
+      mask: radial-gradient(closest-side, transparent 76%, #000 77%);
+    }
+    #concept-a3e .a3e-ringtxt { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+    #concept-a3e .a3e-bignum { font-size: 52px; font-weight: 900; letter-spacing: -.04em; line-height: 1; }
+    #concept-a3e .a3e-restlbl { font-size: 10px; font-weight: 800; color: #8f8f9c; letter-spacing: .14em; text-transform: uppercase; margin-top: 6px; }
+    #concept-a3e .a3e-grouptag {
+      display: inline-flex; align-items: center; gap: 7px; font-size: 10px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase;
+      color: color-mix(in srgb, var(--brand-a3e) 40%, #fff); background: color-mix(in srgb, var(--brand-a3e) 10%, #16161d);
+      padding: 4px 10px; border-radius: 999px; margin-top: 8px;
+    }
+    #concept-a3e .a3e-restbtns { display: flex; gap: 10px; width: 100%; }
+    #concept-a3e .a3e-rb { flex: 1; height: 56px; border-radius: 15px; font-size: 15px; font-weight: 800; background: #1c1c24; border: 2px solid #2f2f3a; color: #e8e8ee; display: flex; align-items: center; justify-content: center; }
+    #concept-a3e .a3e-rb.skip { background: var(--brand-a3e); border-color: color-mix(in srgb, var(--brand-a3e) 55%, #000); color: #072100; box-shadow: 0 5px 0 0 color-mix(in srgb, var(--brand-a3e) 55%, #000); }
+
+    #concept-a3e .a3e-nextround {
+      width: 100%; display: flex; gap: 12px; align-items: center; text-align: left; margin-top: auto;
+      background: #1a1a22; border: 2px solid #2f2f3a; border-radius: 18px; padding: 11px;
+    }
+    #concept-a3e .a3e-nrmini { width: 56px; height: 56px; border-radius: 12px; flex-shrink: 0; position: relative; overflow: hidden; background: linear-gradient(160deg, #23232c, #17171f); border: 1.5px solid #34343f; }
+    #concept-a3e .a3e-nrmini::after { content: ""; position: absolute; inset: 0; background: linear-gradient(105deg, transparent 30%, rgba(255,255,255,.08) 50%, transparent 70%); background-size: 220% 100%; }
+    #concept-a3e .a3e-nrfig { position: absolute; bottom: 9px; left: 50%; transform: translateX(-50%); width: 30px; height: 30px; }
+    #concept-a3e .a3e-nrfig .h { position: absolute; top: 0; left: 50%; transform: translateX(-50%); width: 11px; height: 11px; border-radius: 50%; background: color-mix(in srgb, var(--brand-a3e) 60%, #2a2a34); }
+    #concept-a3e .a3e-nrfig .b { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); width: 8px; height: 16px; border-radius: 4px; background: color-mix(in srgb, var(--brand-a3e) 55%, #2a2a34); }
+    #concept-a3e .a3e-nrfig .barb { position: absolute; top: 3px; left: 50%; transform: translateX(-50%); width: 30px; height: 4px; border-radius: 2px; background: color-mix(in srgb, var(--brand-a3e) 70%, #000); }
+    #concept-a3e .a3e-nrinfo .k { font-size: 10px; font-weight: 800; letter-spacing: .12em; color: var(--brand-a3e); text-transform: uppercase; }
+    #concept-a3e .a3e-nrinfo .t { font-size: 16px; font-weight: 900; letter-spacing: -.01em; margin: 3px 0; }
+    #concept-a3e .a3e-nrinfo .d { font-size: 12px; font-weight: 700; color: #a8a8b3; }
+    #concept-a3e .a3e-nrtag { margin-left: auto; align-self: flex-start; font-size: 10px; font-weight: 900; letter-spacing: .04em; padding: 3px 8px; border-radius: 999px; background: color-mix(in srgb, var(--brand-a3e) 16%, #16161d); color: color-mix(in srgb, var(--brand-a3e) 82%, #fff); }
+
+    /* ===== bullets ===== */
+    #concept-a3e .a3e-bullets { list-style: none; padding: 0; margin: 18px 4px 0; }
+    #concept-a3e .a3e-bullets li { position: relative; padding-left: 22px; margin-bottom: 10px; font-size: 13.5px; line-height: 1.45; color: #b7b7c2; }
+    #concept-a3e .a3e-bullets li::before { content: ""; position: absolute; left: 0; top: 6px; width: 12px; height: 12px; border-radius: 4px; background: var(--brand-a3e); box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand-a3e) 20%, transparent); }
+    #concept-a3e .a3e-bullets b { color: #eeeef2; font-weight: 800; }
+
+    /* ===== firma de motion ===== */
+    #concept-a3e .a3e-sign {
+      max-width: 1780px; margin: 48px auto 0; padding: 22px 24px; border-radius: 20px;
+      background: linear-gradient(140deg, #17171f, #131319);
+      border: 1.5px solid #26262f;
+    }
+    #concept-a3e .a3e-sign h3 {
+      display: inline-flex; align-items: center; gap: 9px;
+      font-size: 13px; font-weight: 900; letter-spacing: .12em; text-transform: uppercase; color: var(--brand-a3e); margin: 0 0 12px;
+    }
+    #concept-a3e .a3e-sign h3::before { content: ""; width: 10px; height: 10px; border-radius: 3px; background: var(--brand-a3e); box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand-a3e) 22%, transparent); }
+    #concept-a3e .a3e-sign ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 9px; }
+    #concept-a3e .a3e-sign li { position: relative; padding-left: 18px; font-size: 13.5px; line-height: 1.5; color: #b7b7c2; }
+    #concept-a3e .a3e-sign li::before { content: ""; position: absolute; left: 0; top: 8px; width: 7px; height: 7px; border-radius: 50%; background: color-mix(in srgb, var(--brand-a3e) 70%, #000); }
+    #concept-a3e .a3e-sign b { color: #eeeef2; font-weight: 800; }
+    #concept-a3e .a3e-sign .gold { color: var(--gold-a3e); }
+    #concept-a3e .a3e-sign .amber { color: var(--z4); }
+
+    /* ============ ANIMATIONS ============ */
+    @media (prefers-reduced-motion: no-preference) {
+      #concept-a3e .a3e-media::after { animation: concept-a3e-shimmer 3.2s linear infinite; }
+      #concept-a3e .a3e-nrmini::after { animation: concept-a3e-shimmer 3.2s linear infinite; }
+      #concept-a3e .a3e-dot.now { animation: concept-a3e-beat 1.4s ease-in-out infinite; }
+      #concept-a3e .a3e-bar, #concept-a3e .a3e-arm { animation: concept-a3e-press 2.4s ease-in-out infinite; }
+      #concept-a3e .a3e-cta, #concept-a3e .a3e-bignum, #concept-a3e .a3e-phasenum { animation: concept-a3e-breathe 2.6s ease-in-out infinite; }
+
+      /* screen 1 — PR */
+      #concept-a3e .a3e-prbanner { animation: concept-a3e-prbanner 6s ease-in-out infinite; }
+      #concept-a3e .a3e-prcard { animation: concept-a3e-goldpulse 1.9s ease-in-out infinite; }
+      #concept-a3e .a3e-medal { animation: concept-a3e-medalpop 6s ease-in-out infinite; }
+      #concept-a3e .a3e-prconf { animation: concept-a3e-prconf 6s ease-in-out infinite; }
+      #concept-a3e .a3e-prconf:nth-child(1) { --cx: -30px; --cy: -22px; background: var(--gold-a3e); }
+      #concept-a3e .a3e-prconf:nth-child(2) { --cx: 34px; --cy: -20px; background: #ffe08a; animation-delay: .08s; }
+      #concept-a3e .a3e-prconf:nth-child(3) { --cx: 68px; --cy: -14px; background: var(--z4); animation-delay: .16s; }
+      #concept-a3e .a3e-prconf:nth-child(4) { --cx: -12px; --cy: -30px; background: #fff3cf; animation-delay: .04s; }
+      #concept-a3e .a3e-prconf:nth-child(5) { --cx: 14px; --cy: -28px; background: var(--gold-a3e); animation-delay: .2s; }
+      #concept-a3e .a3e-prconf:nth-child(6) { --cx: 92px; --cy: -8px; background: #ffe08a; animation-delay: .12s; }
+      #concept-a3e .a3e-prconf:nth-child(7) { --cx: 50px; --cy: -26px; background: var(--z3); animation-delay: .24s; }
+
+      /* screen 2 — intervalos */
+      #concept-a3e .a3e-hbeat { animation: concept-a3e-beat 1s ease-in-out infinite; }
+      #concept-a3e .a3e-seg.cur { animation: concept-a3e-pulsephase 1.6s ease-in-out infinite; }
+      #concept-a3e .a3e-rpm::before { transform-origin: bottom center; animation: concept-a3e-spin 1.4s linear infinite; }
+
+      /* screen 3 — sensor */
+      #concept-a3e .a3e-radarcore .a3e-hshape { animation: concept-a3e-beat 1s ease-in-out infinite; }
+      #concept-a3e .a3e-radarwave { animation: concept-a3e-radar 2.4s ease-out infinite; }
+      #concept-a3e .a3e-radarwave:nth-child(2) { animation-delay: .8s; }
+      #concept-a3e .a3e-radarwave:nth-child(3) { animation-delay: 1.6s; }
+      #concept-a3e .a3e-dev.faint { animation: concept-a3e-devin 6s ease-in-out infinite; }
+      #concept-a3e .a3e-dev.on .a3e-sig i { animation: concept-a3e-sigbar 1.6s ease-in-out infinite; }
+      #concept-a3e .a3e-dev.on .a3e-sig i:nth-child(2) { animation-delay: .12s; }
+      #concept-a3e .a3e-dev.on .a3e-sig i:nth-child(3) { animation-delay: .24s; }
+      #concept-a3e .a3e-dev.on .a3e-sig i:nth-child(4) { animation-delay: .36s; }
+
+      /* screen 4 — ronda */
+      #concept-a3e .a3e-roundban { animation: concept-a3e-brandpulse 2.2s ease-in-out infinite; }
+      #concept-a3e .a3e-rd.fill { animation: concept-a3e-rdfill 2.4s ease-in-out infinite; }
+    }
+
+    @keyframes concept-a3e-shimmer { to { background-position: -220% 0; } }
+    @keyframes concept-a3e-press { 0%,100% { transform: translateX(-50%) translateY(0); } 45% { transform: translateX(-50%) translateY(13px); } }
+    @keyframes concept-a3e-beat { 0%,100% { transform: scale(1); } 30% { transform: scale(1.3); } 45% { transform: scale(1); } }
+    @keyframes concept-a3e-breathe { 0%,100% { transform: scale(1); } 50% { transform: scale(1.035); } }
+    @keyframes concept-a3e-spin { to { transform: translate(-50%,-100%) rotate(360deg); } }
+    @keyframes concept-a3e-pulsephase { 0%,100% { box-shadow: 0 0 0 3px color-mix(in srgb, var(--z4) 22%, transparent); } 50% { box-shadow: 0 0 0 6px color-mix(in srgb, var(--z4) 8%, transparent); } }
+    @keyframes concept-a3e-goldpulse {
+      0%,100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--gold-a3e) 45%, transparent); border-color: var(--gold-a3e); }
+      50% { box-shadow: 0 0 0 6px color-mix(in srgb, var(--gold-a3e) 0%, transparent); border-color: color-mix(in srgb, var(--gold-a3e) 70%, #000); }
+    }
+    @keyframes concept-a3e-prbanner {
+      0% { transform: translateY(-8px) scale(.96); opacity: 0; }
+      6% { transform: translateY(0) scale(1.02); opacity: 1; }
+      10%, 88% { transform: translateY(0) scale(1); opacity: 1; }
+      100% { transform: translateY(0) scale(1); opacity: 1; }
+    }
+    @keyframes concept-a3e-medalpop { 0%,6% { transform: scale(.5) rotate(-18deg); } 12% { transform: scale(1.16) rotate(6deg); } 18%,100% { transform: scale(1) rotate(0); } }
+    @keyframes concept-a3e-prconf {
+      0%, 2% { opacity: 0; transform: translate(-50%,-50%) scale(.3); }
+      7% { opacity: 1; }
+      20% { opacity: 1; transform: translate(calc(-50% + var(--cx)), calc(-50% + var(--cy))) scale(1) rotate(170deg); }
+      30%, 100% { opacity: 0; transform: translate(calc(-50% + var(--cx)), calc(-50% + var(--cy) + 20px)) scale(.5) rotate(300deg); }
+    }
+    @keyframes concept-a3e-radar { 0% { transform: scale(.3); opacity: .9; } 80%,100% { transform: scale(3.1); opacity: 0; } }
+    @keyframes concept-a3e-sigbar { 0%,100% { opacity: 1; } 50% { opacity: .45; } }
+    @keyframes concept-a3e-devin {
+      0%, 60% { opacity: .5; transform: translateY(0); }
+      70% { opacity: .18; transform: translateY(6px); }
+      82%, 100% { opacity: .5; transform: translateY(0); }
+    }
+    @keyframes concept-a3e-brandpulse {
+      0%,100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--brand-a3e) 35%, transparent); }
+      50% { box-shadow: 0 0 0 7px color-mix(in srgb, var(--brand-a3e) 0%, transparent); }
+    }
+    @keyframes concept-a3e-rdfill {
+      0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--brand-a3e) 30%, transparent); transform: scale(1); }
+      45% { box-shadow: 0 0 0 5px color-mix(in srgb, var(--brand-a3e) 12%, transparent); transform: scale(1.14); }
+      100% { box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand-a3e) 22%, transparent); transform: scale(1); }
+    }
+  </style>
+
+  <div class="a3e-head">
+    <span class="a3e-eyebrow">Impulso · v3.2</span>
+    <h2 class="a3e-title">Impulso v3.2 — Momentos</h2>
+    <p class="a3e-sub">Las pantallas que faltaban: el PR que celebra sin cortar, el intervalo que se lee de reojo, la puerta del sensor de pulso y el cierre de ronda de una superserie.</p>
+  </div>
+
+  <div class="a3e-row">
+
+    <!-- ============ 1 · PR EN VIVO ============ -->
+    <div class="a3e-col">
+      <p class="a3e-label"><span></span>PR en vivo <em class="gold">nuevo</em></p>
+      <div class="a3e-phone">
+        <div class="a3e-screen">
+          <div class="a3e-notch"></div>
+          <div class="a3e-body">
+            <div class="a3e-progress">
+              <div class="a3e-dots">
+                <div class="a3e-dot done"></div><div class="a3e-dot done"></div>
+                <div class="a3e-dot done"></div><div class="a3e-dot now"></div>
+                <div class="a3e-dot"></div><div class="a3e-dot"></div>
+                <div class="a3e-dot"></div><div class="a3e-dot"></div>
+              </div>
+              <div class="a3e-count a3e-tnum">Ejercicio 4 de 8</div>
+              <div class="a3e-gear" role="button" aria-label="Ajustes del entrenamiento">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <circle cx="12" cy="12" r="3.2"/>
+                  <path d="M19.4 13a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+                </svg>
+              </div>
+            </div>
+
+            <div class="a3e-exname">Press banca</div>
+            <div class="a3e-chiprow"><span class="a3e-chip">Fuerza · Pecho</span></div>
+
+            <div class="a3e-media">
+              <div class="a3e-fig">
+                <div class="a3e-bench"></div>
+                <div class="a3e-benchleg" style="left:33px;"></div>
+                <div class="a3e-benchleg" style="right:33px;"></div>
+                <div class="a3e-headc"></div>
+                <div class="a3e-torso"></div>
+                <div class="a3e-arm l"></div>
+                <div class="a3e-arm r"></div>
+                <div class="a3e-bar"></div>
+              </div>
+            </div>
+
+            <div class="a3e-prwrap">
+              <div class="a3e-prconfetti">
+                <span class="a3e-prconf"></span><span class="a3e-prconf"></span>
+                <span class="a3e-prconf"></span><span class="a3e-prconf"></span>
+                <span class="a3e-prconf"></span><span class="a3e-prconf"></span>
+                <span class="a3e-prconf"></span>
+              </div>
+              <div class="a3e-prbanner">
+                <span class="a3e-medal"><span class="star"></span></span>
+                <span class="a3e-prtxt">
+                  <span class="k">¡PR! Nuevo récord</span>
+                  <span class="v a3e-tnum">62,5 kg <small>— tu mejor marca</small></span>
+                </span>
+              </div>
+            </div>
+
+            <div class="a3e-prcard">
+              <div class="a3e-val"><div class="n gold a3e-tnum">62,5</div><div class="u">KG</div></div>
+              <div class="a3e-val"><div class="n a3e-tnum">8</div><div class="u">REPS</div></div>
+            </div>
+
+            <div class="a3e-prev">
+              <div class="l">Anterior</div>
+              <div class="r a3e-tnum">60 kg</div>
+              <span class="a3e-uparrow"></span>
+              <span class="sup">Superado</span>
+            </div>
+
+            <div class="a3e-juicy a3e-cta"><span class="ck"><span class="a3e-ck"></span></span> Aplastar serie</div>
+
+            <div class="a3e-foot">
+              <div class="a3e-sets">
+                <div class="a3e-sq gold"></div><div class="a3e-sq on"></div>
+                <div class="a3e-sq"></div><div class="a3e-sq"></div>
+                <div class="a3e-setlbl a3e-tnum">2/4</div>
+              </div>
+              <div class="a3e-tools">
+                <div class="a3e-tool kb"></div>
+                <div class="a3e-tool pen"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <ul class="a3e-bullets">
+        <li><b>Celebración media, inline</b>: banner dorado + micro-confetti sobre la card; nunca un modal que corte el flujo. El CTA sigue visible.</li>
+        <li><b>Se siente</b>: haptic doble y un destello de borde dorado; en la app dura ~1,5 s y sigues.</li>
+        <li><b>PR real</b>: compara contra tu histórico verdadero de ese ejercicio y <b>excluye los sustituidos</b>, para no cantar récords falsos.</li>
+      </ul>
+    </div>
+
+    <!-- ============ 2 · INTERVALO EN FASE ============ -->
+    <div class="a3e-col">
+      <p class="a3e-label"><span></span>Intervalo en fase <em class="amber">nuevo</em></p>
+      <div class="a3e-phone">
+        <div class="a3e-screen">
+          <div class="a3e-notch"></div>
+          <div class="a3e-body a3e-cardio">
+            <div class="a3e-chead">
+              <div class="a3e-ctitle">Bici estática</div>
+              <span class="a3e-chip amber">Cardio · Intervalos</span>
+            </div>
+
+            <div class="a3e-phasering">
+              <div class="ring"></div>
+              <div class="a3e-phasetxt">
+                <div class="a3e-phaselbl">Trabajo</div>
+                <div class="a3e-phasenum a3e-tnum">0:22</div>
+                <div class="a3e-phasesub">Restante en fase</div>
+              </div>
+            </div>
+
+            <div class="a3e-next-phase">
+              <span class="dt"></span>Luego: <b>Recupera</b> <span class="a3e-tnum">0:45</span>
+            </div>
+
+            <div class="a3e-segwrap">
+              <div class="a3e-segs">
+                <span class="a3e-seg fill"></span><span class="a3e-seg fill"></span>
+                <span class="a3e-seg cur"></span><span class="a3e-seg"></span>
+                <span class="a3e-seg"></span><span class="a3e-seg"></span>
+                <span class="a3e-seg"></span><span class="a3e-seg"></span>
+              </div>
+              <div class="a3e-seglbl a3e-tnum">Intervalo <b>3 de 8</b></div>
+            </div>
+
+            <div class="a3e-cchips2">
+              <div class="a3e-cchip">
+                <span class="ci"><span class="a3e-hbeat"></span></span>
+                <span><span class="cv a3e-tnum">158</span><span class="cl">BPM · Zona 4</span></span>
+              </div>
+              <div class="a3e-cchip">
+                <span class="ci"><span class="a3e-rpm"></span></span>
+                <span><span class="cv a3e-tnum">92</span><span class="cl">Cadencia · RPM</span></span>
+              </div>
+            </div>
+
+            <div class="a3e-juicy a3e-pause"><span class="a3e-pauseicon"><i></i><i></i></span> Pausar</div>
+          </div>
+        </div>
+      </div>
+      <ul class="a3e-bullets">
+        <li><b>Color = fase, siempre igual</b>: esfuerzo en ámbar cálido, recuperación en verde frío. No necesitas leer para saber dónde estás.</li>
+        <li><b>Eyes-free</b>: cada cambio de fase suena un beep y da haptic fuerte; puedes pedalear sin mirar la pantalla.</li>
+        <li><b>La secuencia es del coach</b>: 8 intervalos, trabajo y recuperación vienen tal cual del plan; el motor solo los corre.</li>
+      </ul>
+    </div>
+
+    <!-- ============ 3 · CONECTAR SENSOR ============ -->
+    <div class="a3e-col">
+      <p class="a3e-label"><span></span>Conectar sensor <em>nuevo</em></p>
+      <div class="a3e-phone">
+        <div class="a3e-screen">
+          <div class="a3e-notch"></div>
+          <div class="a3e-body a3e-sensorbody">
+            <!-- cardio atenuado detrás -->
+            <div class="a3e-dim" aria-hidden="true">
+              <div class="a3e-dimring">
+                <div class="ring"></div>
+                <div class="a3e-dimtxt"><div class="a3e-dimnum a3e-tnum">12:24</div></div>
+              </div>
+              <div class="a3e-dimchip"><i></i>Z2 · Manten el ritmo</div>
+            </div>
+            <div class="a3e-scrim"></div>
+
+            <!-- bottom-sheet 65% -->
+            <div class="a3e-sheet">
+              <div class="a3e-handle"></div>
+              <div class="a3e-sheettitle">Conectar sensor de pulso</div>
+
+              <div class="a3e-radar">
+                <span class="a3e-radarwave"></span>
+                <span class="a3e-radarwave"></span>
+                <span class="a3e-radarwave"></span>
+                <span class="a3e-radarcore"><span class="a3e-hshape"></span></span>
+              </div>
+
+              <div class="a3e-dev on">
+                <span class="a3e-devico"><span class="a3e-hshape"></span></span>
+                <span class="a3e-devmid">
+                  <span class="a3e-devname">Polar H10</span>
+                  <span class="a3e-devsub"><span class="a3e-ble">BLE</span> Señal fuerte</span>
+                </span>
+                <span class="a3e-sig"><i></i><i></i><i></i><i></i></span>
+              </div>
+
+              <div class="a3e-dev faint">
+                <span class="a3e-devico"><span class="a3e-hshape"></span></span>
+                <span class="a3e-devmid">
+                  <span class="a3e-devname">Garmin HRM-Dual</span>
+                  <span class="a3e-devsub"><span class="a3e-ble">BLE</span> Buscando…</span>
+                </span>
+                <span class="a3e-sig"><i></i><i></i><i></i><i></i></span>
+              </div>
+
+              <div class="a3e-juicy a3e-connect"><span class="a3e-btico"></span> Conectar</div>
+
+              <div class="a3e-note">
+                Cintas y relojes compatibles (<b>Bluetooth estándar</b>) · Apple Watch y Galaxy Watch llegan con la app del reloj.
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <ul class="a3e-bullets">
+        <li><b>Una sola integración Bluetooth</b> cubre la mayoría de cintas de pecho y relojes deportivos: emparejas y listo.</li>
+        <li><b>Radar honesto</b>: anillos que laten desde el corazón mientras busca; el encontrado se resalta con borde de marca.</li>
+        <li><b>Sin trampa</b>: si no hay sensor conectado, el BPM simplemente <b>no se muestra</b>; jamás inventamos pulso.</li>
+      </ul>
+    </div>
+
+    <!-- ============ 4 · RONDA CERRADA ============ -->
+    <div class="a3e-col">
+      <p class="a3e-label"><span></span>Ronda cerrada <em>nuevo</em></p>
+      <div class="a3e-phone">
+        <div class="a3e-screen">
+          <div class="a3e-notch"></div>
+          <div class="a3e-body a3e-rest">
+            <div class="a3e-roundban">
+              <span class="a3e-dblcheck"></span> Ronda 2 lista
+            </div>
+
+            <div class="a3e-rdots">
+              <span class="a3e-rdotlbl">Ronda</span>
+              <span class="a3e-rd done"></span>
+              <span class="a3e-rd fill"></span>
+              <span class="a3e-rd"></span>
+              <span class="a3e-rd"></span>
+              <span class="a3e-count a3e-tnum">2 / 4</span>
+            </div>
+
+            <div class="a3e-ringwrap">
+              <div class="a3e-ring"></div>
+              <div class="a3e-ringtxt">
+                <div class="a3e-bignum a3e-tnum">02:00</div>
+                <div class="a3e-restlbl">Descanso de grupo</div>
+              </div>
+            </div>
+
+            <div class="a3e-grouptag">Solo al cerrar la ronda completa</div>
+
+            <div class="a3e-restbtns">
+              <div class="a3e-rb a3e-tnum">-15s</div>
+              <div class="a3e-rb skip">Saltar</div>
+              <div class="a3e-rb a3e-tnum">+15s</div>
+            </div>
+
+            <div class="a3e-nextround">
+              <div class="a3e-nrmini">
+                <div class="a3e-nrfig"><span class="h"></span><span class="barb"></span><span class="b"></span></div>
+              </div>
+              <div class="a3e-nrinfo">
+                <div class="k">Siguiente ronda</div>
+                <div class="t">Press militar</div>
+                <div class="d a3e-tnum">4 x 8 · 30 kg</div>
+              </div>
+              <span class="a3e-nrtag">A3</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <ul class="a3e-bullets">
+        <li><b>Dentro de la ronda no hay descanso</b>: A1 a B1 van seguidos; el motor solo abre pausa al cerrar la ronda completa.</li>
+        <li><b>Descanso de grupo protagonista</b>: anillo de 02:00 grande, con la tarjeta de la siguiente ronda ya lista.</li>
+        <li><b>Celebración media por ronda</b>: check doble + pulso de marca al cerrar cada una; la épica se guarda para el final.</li>
+      </ul>
+    </div>
+
+  </div>
+
+  <div class="a3e-sign">
+    <h3>Firma de motion — estos momentos</h3>
+    <ul>
+      <li><b class="gold">PR en vivo:</b> el banner cae con overshoot, la medalla hace pop y suelta una única oleada de micro-confetti dorado; la card late en borde dorado ~1,5 s y el flujo nunca se detiene.</li>
+      <li><b class="amber">Intervalo:</b> el color manda por encima del texto — ámbar es esfuerzo, verde es recuperación — y el cambio de fase se anuncia con beep + haptic para leerlo de reojo.</li>
+      <li><b>Conectar sensor:</b> anillos de radar expanden desde un corazón que late; al hallar el sensor sus barras de señal cobran vida y el candidato se resalta con borde de marca.</li>
+      <li><b>Ronda cerrada:</b> check doble con pulso de marca y el dot de la ronda que se llena con un latido; se reserva la celebración épica solo para el cierre total de la sesión.</li>
+    </ul>
+  </div>
+</section>

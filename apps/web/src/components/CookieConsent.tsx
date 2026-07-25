@@ -2,18 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { Cookie, X } from 'lucide-react'
-
-const STORAGE_KEY = 'eva-cookie-consent-v1'
-
-type ConsentValue = 'accepted' | 'rejected' | null
-
-function getStoredConsent(): ConsentValue {
-    try { return (localStorage.getItem(STORAGE_KEY) as ConsentValue) ?? null } catch { return null }
-}
-
-function setStoredConsent(value: 'accepted' | 'rejected') {
-    try { localStorage.setItem(STORAGE_KEY, value) } catch { /* noop */ }
-}
+import { applyConsent, getStoredConsent, setStoredConsent } from '@/lib/posthog/consent'
 
 export function CookieConsent() {
     const [visible, setVisible] = useState(false)
@@ -24,22 +13,17 @@ export function CookieConsent() {
             setVisible(true)
             return
         }
-        // Apply stored preference to PostHog if available
-        if (typeof window !== 'undefined' && (window as Window & { posthog?: { opt_in_capturing: () => void; opt_out_capturing: () => void } }).posthog) {
-            const ph = (window as Window & { posthog?: { opt_in_capturing: () => void; opt_out_capturing: () => void } }).posthog!
-            if (stored === 'accepted') ph.opt_in_capturing()
-            else ph.opt_out_capturing()
-        }
+        // Re-aplica la preferencia guardada sobre la instancia REAL del módulo posthog-js.
+        // (El bug histórico: acá se hablaba con `window.posthog`, que con el paquete npm no existe →
+        // el opt-in caía al vacío y PostHog quedó mudo desde 2026-06-08. El provider además re-aplica
+        // en su callback `loaded`, así que el orden de montaje da lo mismo.)
+        applyConsent(stored)
     }, [])
 
     const handle = (choice: 'accepted' | 'rejected') => {
         setStoredConsent(choice)
         setVisible(false)
-        if (typeof window !== 'undefined' && (window as Window & { posthog?: { opt_in_capturing: () => void; opt_out_capturing: () => void } }).posthog) {
-            const ph = (window as Window & { posthog?: { opt_in_capturing: () => void; opt_out_capturing: () => void } }).posthog!
-            if (choice === 'accepted') ph.opt_in_capturing()
-            else ph.opt_out_capturing()
-        }
+        applyConsent(choice)
     }
 
     if (!visible) return null
@@ -55,7 +39,7 @@ export function CookieConsent() {
                 <p className="flex-1 text-xs text-muted-foreground leading-relaxed">
                     Usamos cookies analíticas para mejorar la plataforma.
                     Puedes aceptar o rechazar.{' '}
-                    <a href="/legal/privacidad" className="underline hover:text-foreground">Política de privacidad</a>.
+                    <a href="/privacidad" className="underline hover:text-foreground">Política de privacidad</a>.
                 </p>
                 <div className="flex gap-2 shrink-0 w-full sm:w-auto">
                     <button

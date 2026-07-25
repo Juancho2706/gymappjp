@@ -28,8 +28,8 @@ import { submitIntake } from '../../lib/alumno-onboarding'
 // retomar donde se quedo (web = localStorage; RN = AsyncStorage).
 
 const DRAFT_KEY_PREFIX = 'onboarding_draft'
-const TERMS_URL = 'https://eva-app.cl/legal/terms'
-const PRIVACY_URL = 'https://eva-app.cl/legal/privacy'
+const TERMS_URL = 'https://www.eva-app.cl/legal'
+const PRIVACY_URL = 'https://www.eva-app.cl/privacidad'
 
 type Option = { value: string; label: string }
 

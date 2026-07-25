@@ -10,7 +10,6 @@
 import { memo } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import { MotiView } from 'moti'
-import { Check } from 'lucide-react-native'
 import { NUTRITION_MOTION, type NutritionSlotExchangeTargetRead } from '@eva/nutrition-v2'
 import { PORTIONS_COPY } from '../../../lib/nutrition-portions-copy'
 import {
@@ -23,7 +22,6 @@ import {
   type PortionSegmentView,
 } from '../../../lib/nutrition-v2-portions'
 import { useEvaMotion } from '../../../lib/motion'
-import { useTheme } from '../../../context/ThemeContext'
 
 function cx(...values: Array<string | false | null | undefined>): string {
   return values.filter(Boolean).join(' ')
@@ -53,7 +51,7 @@ export function GroupDot({ code, color, size = 20 }: { code: string; color: stri
 const HALF_FILL: Record<PortionHalfKind, string> = {
   empty: '',
   marked: 'bg-primary',
-  derived: 'bg-primary',
+  derived: 'bg-primary/70',
   pending: 'bg-primary/50',
 }
 
@@ -65,33 +63,21 @@ function SegmentHalf({ kind, side }: { kind: PortionHalfKind; side: 'left' | 'ri
 function Segment({ segment }: { segment: PortionSegmentView }) {
   const isHalfWidth = segment.right === null
   const hasDerived = segment.left === 'derived' || segment.right === 'derived'
-  const body = (
+  const filled = segment.left !== 'empty' || (segment.right !== 'empty' && segment.right !== null)
+  return (
     <View
       className={cx(
-        'flex-row overflow-hidden border',
-        segment.left === 'empty' && (segment.right === 'empty' || segment.right === null)
-          ? 'border-border-default'
-          : 'border-transparent',
-        'bg-surface-sunken',
+        'flex-row overflow-hidden border bg-surface-sunken',
+        hasDerived ? 'border-primary' : filled ? 'border-primary/60' : 'border-border-default',
       )}
       style={
         isHalfWidth
-          ? { width: 8, height: 14, borderTopLeftRadius: 7, borderBottomLeftRadius: 7 }
-          : { width: 14, height: 14, borderRadius: 7 }
+          ? { width: 7, height: 12, borderTopLeftRadius: 6, borderBottomLeftRadius: 6 }
+          : { width: 12, height: 12, borderRadius: 6 }
       }
     >
       <SegmentHalf kind={segment.left} side="left" />
       {segment.right !== null ? <SegmentHalf kind={segment.right} side="right" /> : null}
-    </View>
-  )
-  if (!hasDerived) return body
-  // Derivado-de-alimento: anillo fino `primary` alrededor del relleno (SPEC UX-b).
-  return (
-    <View
-      className="items-center justify-center rounded-full border border-primary"
-      style={{ width: 18, height: 18, padding: 1 }}
-    >
-      {body}
     </View>
   )
 }
@@ -107,7 +93,6 @@ export interface PortionChipProps {
 }
 
 function PortionChipBase({ target, view, color, onPress, onLongPress, disabled }: PortionChipProps) {
-  const { theme } = useTheme()
   const { reduced, duration } = useEvaMotion()
   const step = nextPortionStep(view)
   // Cap visual H4: >8 segmentos ⇒ barra continua compacta (jamás desborda en 360 px).
@@ -130,13 +115,14 @@ function PortionChipBase({ target, view, color, onPress, onLongPress, disabled }
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={aria}
-      accessibilityState={{ disabled: disabled === true }}
+      accessibilityHint={PORTIONS_COPY.student.equivalencesHint}
+      accessibilityState={{ disabled: disabled === true, busy: view.unsynced }}
       disabled={disabled}
       onPress={onPress}
       onLongPress={onLongPress}
-      delayLongPress={350}
+      delayLongPress={450}
       hitSlop={4}
-      className="min-h-11 flex-row items-center gap-2 rounded-control px-1"
+      className="min-h-11 flex-row items-center gap-2.5 rounded-control border border-border-subtle bg-surface-card px-2.5 py-1.5"
     >
       {({ pressed }) => (
         <MotiView
@@ -148,6 +134,20 @@ function PortionChipBase({ target, view, color, onPress, onLongPress, disabled }
           <Text className="min-w-0 flex-1 text-sm font-medium text-text-strong" numberOfLines={1}>
             {target.groupName}
           </Text>
+          {view.unsynced ? (
+            <MotiView
+              accessibilityElementsHidden
+              importantForAccessibility="no-hide-descendants"
+              from={reduced ? undefined : { opacity: 0.45 }}
+              animate={{ opacity: 1 }}
+              transition={
+                reduced
+                  ? undefined
+                  : { type: 'timing', duration: 700, loop: true, repeatReverse: true }
+              }
+              className="h-1.5 w-1.5 rounded-full bg-warning-500"
+            />
+          ) : null}
           {/* Segmentos/barra decorativos: el contador n/N es el texto real (a11y del SPEC). */}
           <MotiView
             key={`${view.marcadas}-${view.derivadas}`}
@@ -160,7 +160,13 @@ function PortionChipBase({ target, view, color, onPress, onLongPress, disabled }
           >
             {compact && bar ? (
               // Barra continua compacta (H4): relleno pleno = marcadas, atenuado = derivadas.
-              <View className="h-2.5 w-16 flex-row overflow-hidden rounded-full border border-border-default bg-surface-sunken">
+              <View
+                className={cx(
+                  'h-2.5 w-16 flex-row overflow-hidden rounded-full border bg-surface-sunken',
+                  bar.marked + bar.derived > 0 ? 'border-primary/60' : 'border-border-default',
+                  view.unsynced && 'opacity-60',
+                )}
+              >
                 <View className="h-full bg-primary" style={{ width: `${bar.marked * 100}%` }} />
                 <View className="h-full bg-primary/70" style={{ width: `${bar.derived * 100}%` }} />
               </View>
@@ -168,19 +174,19 @@ function PortionChipBase({ target, view, color, onPress, onLongPress, disabled }
               view.segments.map((segment) => <Segment key={segment.key} segment={segment} />)
             )}
           </MotiView>
-          {view.unsynced ? (
-            <View className="h-1.5 w-1.5 rounded-full bg-warning-500" />
-          ) : null}
-          <Text className="font-mono text-xs font-semibold text-text-body" style={{ fontVariant: ['tabular-nums'] }}>
-            {formatPortionsCl(view.coverage)}/{formatPortionsCl(view.prescribed)}
-          </Text>
           {view.excess > 0 ? (
-            <Text className="text-xs font-bold text-warning-700">
-              {PORTIONS_COPY.student.extraBadge(formatPortionsCl(view.excess))}
-            </Text>
-          ) : view.complete ? (
-            <Check color={theme.success} size={14} />
+            <View className="rounded-pill border border-warning-500/40 bg-warning-500/10 px-1.5 py-0.5">
+              <Text className="text-[10px] font-bold text-warning-700">
+                {PORTIONS_COPY.student.extraBadge(formatPortionsCl(view.excess))}
+              </Text>
+            </View>
           ) : null}
+          <Text
+            className="text-xs font-semibold text-text-muted"
+            style={{ fontVariant: ['tabular-nums'] }}
+          >
+            {formatPortionsCl(view.displayCoverage)}/{formatPortionsCl(view.prescribed)}
+          </Text>
         </MotiView>
       )}
     </Pressable>

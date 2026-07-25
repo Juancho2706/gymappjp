@@ -5,11 +5,8 @@
 
 /** Flags conocidos y su default local. Única fuente de verdad de las keys. */
 export const FLAGS = {
-  /**
-   * Ejecutor de rutina v2. ON en la rama rnmobiledenuevo para QA en device.
-   * El override remoto puede apagarlo sin release.
-   */
-  executorV2: true,
+  // Los flags `executorV2` y `executorV3` se eliminaron (decisión CEO 2026-07-23): el ejecutor V3
+  // es el único camino, así que dejaron de tener consumidor. La pantalla monta ExecutorV3 directo.
 
   /**
    * Nutrición V2 jamás se habilita por el bundle. Solo Edge Config puede abrir

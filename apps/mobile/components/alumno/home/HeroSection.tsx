@@ -1,15 +1,20 @@
-import { Text, View } from 'react-native'
+import { useRef, useState } from 'react'
+import { Pressable, Text, View } from 'react-native'
 import { ArrowRight, Check, Dumbbell, Moon, Play } from 'lucide-react-native'
 import { MotiView } from 'moti'
 import { useTheme } from '../../../context/ThemeContext'
 import { useEvaMotion } from '../../../lib/motion'
 import { SHADOWS } from '../../../lib/shadows'
 import { hexToChannels } from '../../../lib/theme'
+import { getTodayInSantiago } from '../../../lib/date-utils'
 import { FONT, textStyle } from '../../../lib/typography'
 import { Button } from '../../Button'
 import { Card } from '../../Card'
+import { measureMorphOrigin, useTriggerMorphHide, type MorphOrigin } from '../workout/v3/session-morph'
+import { InfoTooltip } from '../../InfoTooltip'
 import { ProgressRing } from '../../ProgressRing'
-import type { HeroBlock, Plan } from './types'
+import { DoubleIntentSheet } from './ActiveProgramSection'
+import type { HeroBlock, Plan, PlanDayView } from './types'
 import { DAY_SHORT, SUCCESS_500 } from './types'
 
 // P0-2 — fondo del overlay "Entrenamiento completado". El web (WorkoutHeroCard.tsx:52)
@@ -52,7 +57,7 @@ export function HeroSection({
   hasProgram: boolean
   coachName: string | null
   nutritionEnabled: boolean
-  onStart: (planId: string) => void
+  onStart: (planId: string, origin?: MorphOrigin | null, label?: string) => void
   onRest: () => void
   onNoPlan: () => void
 }) {
@@ -76,15 +81,31 @@ function WorkoutHero({
   plan: Plan
   loggedByBlock: Map<string, number>
   isAlreadyLogged: boolean
-  onStart: (planId: string) => void
+  onStart: (planId: string, origin?: MorphOrigin | null, label?: string) => void
 }) {
   const { theme } = useTheme()
+  const ctaRef = useRef<View>(null)
+  // Al lanzar el Despegue el CTA real debe quedar INVISIBLE (el clon flotante lo reemplaza); si no, se
+  // ve la caja del botón detrás del morph. Se restaura tras la ventana (ya navegado).
+  const { hidden: ctaHidden, hide: hideCta } = useTriggerMorphHide()
+  // MOBILE-2 — hoy completado: el overlay "Entrenamiento completado" abre la ventanita de doble intención
+  // (Repetir hoy / Revisar y editar), igual que la web (WorkoutHeroCard). Antes tapaba el CTA sin acción.
+  const [sheetOpen, setSheetOpen] = useState(false)
   const show = plan.blocks.slice(0, 4)
   const more = plan.blocks.length - show.length
   const totalTarget = plan.blocks.reduce((s, b) => s + (b.sets || 0), 0)
   const totalLogged = plan.blocks.reduce((s, b) => s + Math.min(b.sets || 0, loggedByBlock.get(b.id) ?? 0), 0)
   const pct = totalTarget > 0 ? Math.min(100, (totalLogged / totalTarget) * 100) : 0
   const cta = isAlreadyLogged ? 'Ver registro' : totalLogged > 0 ? 'Continuar' : 'Empezar entrenamiento'
+  // Día de HOY como PlanDayView para la ventanita (done en su propia fecha → doneOnDate/doneOnLabel null).
+  const todayDoneView: PlanDayView = {
+    plan,
+    status: 'done',
+    isToday: true,
+    dateIso: getTodayInSantiago().iso,
+    doneOnDate: null,
+    doneOnLabel: null,
+  }
 
   return (
     <MotiView from={{ opacity: 0, translateY: 16 }} animate={{ opacity: 1, translateY: 0 }} transition={{ type: 'timing', duration: 450, delay: 80 }}>
@@ -94,9 +115,14 @@ function WorkoutHero({
       <Card variant="inverse" padding="lg" style={SHADOWS[theme.scheme].lg}>
         <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
           <View style={{ flex: 1, minWidth: 0 }}>
-            <Text className="text-sport-400" style={{ fontFamily: FONT.uiBold, fontSize: 11, textTransform: 'uppercase', letterSpacing: 1 }}>
-              Hoy entrenas
-            </Text>
+            {/* Eyebrow + InfoTooltip (web WorkoutHeroCard.tsx:62-65 `flex items-center gap-2`
+                + `<InfoTooltip content={t('section.workoutHero')} />`; copy es.json:416). */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <Text className="text-sport-400" style={{ fontFamily: FONT.uiBold, fontSize: 11, textTransform: 'uppercase', letterSpacing: 1 }}>
+                Hoy entrenas
+              </Text>
+              <InfoTooltip content="Tu entrenamiento asignado para hoy. Toca la tarjeta para comenzar y registrar tus series una por una." />
+            </View>
             <Text className="text-on-dark" numberOfLines={1} style={[textStyle('2xl', FONT.displayBlack, { lh: 'tight', ls: 'tight' }), { marginTop: 6, fontSize: 23 }]}>
               {plan.title}
             </Text>
@@ -134,10 +160,32 @@ function WorkoutHero({
           <View style={{ height: 16 }} />
         )}
 
-        <Button testID="home-hero-start" label={cta} variant="sport" size="lg" leftIcon={Play} full onPress={() => onStart(plan.id)} />
+        {/* Ref-wrapper medible: al tocar el CTA se mide su rect real en ventana para que el morph
+            "Impulso" nazca EXACTO del botón (QA6). `collapsable={false}` evita que Android colapse el
+            View y measureInWindow devuelva 0. Si la medición falla, el morph cae al origen sintético. */}
+        <View ref={ctaRef} collapsable={false} style={{ opacity: ctaHidden ? 0 : 1 }}>
+          <Button
+            testID="home-hero-start"
+            label={cta}
+            variant="sport"
+            size="lg"
+            leftIcon={Play}
+            full
+            onPress={() => {
+              hideCta()
+              // `cta` = texto real del botón → la píldora del Despegue muestra el mismo texto (MOBILE-2).
+              measureMorphOrigin(ctaRef.current, 16, (origin) => onStart(plan.id, origin, cta))
+            }}
+          />
+        </View>
 
         {isAlreadyLogged ? (
-          <View
+          // Overlay ACCIONABLE (MOBILE-2 / paridad web WorkoutHeroCard:62): tapea → ventanita de doble
+          // intención (Repetir hoy / Revisar y editar). Antes era un View muerto que tapaba el CTA.
+          <Pressable
+            onPress={() => setSheetOpen(true)}
+            accessibilityRole="button"
+            accessibilityLabel={`${plan.title} · entrenamiento completado, revisar o repetir`}
             style={{
               position: 'absolute',
               top: 0,
@@ -170,9 +218,20 @@ function WorkoutHero({
               <Check size={28} color="#fff" strokeWidth={2} />
             </View>
             <Text className="text-on-dark" style={{ fontFamily: FONT.displayBlack, fontSize: 14 }}>Entrenamiento completado</Text>
-          </View>
+          </Pressable>
         ) : null}
       </Card>
+
+      {/* Ventanita de doble intención del hero (hoy completado). "Repetir hoy" dispara el Despegue; "Revisar
+          y editar" queda deshabilitada "Disponible pronto" (deuda conocida, igual que en las day-cards). El
+          día se construye como PlanDayView de HOY (done en su propia fecha → doneOnDate null). */}
+      {isAlreadyLogged ? (
+        <DoubleIntentSheet
+          view={sheetOpen ? todayDoneView : null}
+          onClose={() => setSheetOpen(false)}
+          onRepeat={(id) => { setSheetOpen(false); onStart(id, undefined, 'Empezar entrenamiento') }}
+        />
+      ) : null}
     </MotiView>
   )
 }
@@ -195,7 +254,8 @@ function HeroBlockRow({ block, logged, first }: { block: HeroBlock; logged: numb
         <Text className={full ? 'text-sport-500' : 'text-on-dark-muted'} style={{ fontFamily: FONT.uiBold, fontSize: 11.5, fontVariant: ['tabular-nums'] }}>
           {logged}/{block.sets}
         </Text>
-        {full ? <Check size={14} color={theme.primary} strokeWidth={2.6} /> : null}
+        {/* Web Check h-3.5 (14) con stroke lucide default 2 (WorkoutHeroCard.tsx:114). */}
+        {full ? <Check size={14} color={theme.primary} strokeWidth={2} /> : null}
       </View>
     </View>
   )
@@ -219,7 +279,8 @@ function RestDayCard({ nextPlan, nutritionEnabled, onRest }: { nextPlan: Plan | 
           className="bg-aqua-100 dark:bg-aqua-100/[0.18]"
           style={{ marginBottom: 12, width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center' }}
         >
-          <Moon size={26} color={theme.aqua700} strokeWidth={2.25} />
+          {/* Web Moon h-7 w-7 (28) stroke default 2 (RestDayCard.tsx:29). */}
+          <Moon size={28} color={theme.aqua700} strokeWidth={2} />
         </MotiView>
         <Text className="text-strong" style={[textStyle('xl', FONT.displayBlack, { lh: 'snug', ls: 'tight' }), { textAlign: 'center' }]}>Día de descanso</Text>
         <Text className="text-muted font-sans" style={{ textAlign: 'center', fontSize: 13.5, lineHeight: 20, marginTop: 6, maxWidth: 280 }}>

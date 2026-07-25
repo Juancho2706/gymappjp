@@ -126,37 +126,73 @@ describe('nutrition v2 intake - builders validados', () => {
     expect(payload.snapshot.calories).toBe(330)
   })
 
-  it('editar produce una correction con correctsEntryId y razon', () => {
+  it('editar produce una correction con motivo y conserva unidad, hora, fuente y captura', () => {
     const payload = buildEditIntakeCorrection({
       clientId: CLIENT,
       deviceId: DEVICE,
       operationId: OP_A,
       localDate: '2026-07-15',
-      occurredAt: NOW,
       timezone: 'America/Santiago',
       entry: consumedEntry,
       quantity: 250,
-      unit: 'g',
+      reason: 'comí un poco menos',
     })
     expect(payload.correctsEntryId).toBe(ENTRY)
     expect(payload.quantity).toBe(250)
-    expect(payload.correctionReason.length).toBeGreaterThanOrEqual(3)
+    expect(payload.unit).toBe(consumedEntry.unit)
+    expect(payload.occurredAt).toBe(consumedEntry.occurredAt)
+    expect(payload.source).toBe(consumedEntry.source)
+    expect(payload.captureMethod).toBe(consumedEntry.captureMethod)
+    expect(payload.correctionReason).toBe('comí un poco menos')
   })
 
-  it('retirar (void) zerea los macros pero mantiene quantity > 0 y la cadena', () => {
+  it('retirar (void) zerea los macros, conserva la cadena y transporta el motivo', () => {
     const payload = buildVoidIntakeCorrection({
       clientId: CLIENT,
       deviceId: DEVICE,
       operationId: OP_A,
       localDate: '2026-07-15',
-      occurredAt: NOW,
       timezone: 'America/Santiago',
       entry: consumedEntry,
+      reason: 'lo registré por error',
     })
     expect(payload.correctsEntryId).toBe(ENTRY)
     expect(payload.quantity).toBeGreaterThan(0)
+    expect(payload.occurredAt).toBe(consumedEntry.occurredAt)
+    expect(payload.correctionReason).toBe('lo registré por error')
     expect(payload.snapshot.calories).toBe(0)
     expect(payload.snapshot.proteinG).toBe(0)
+  })
+
+  it('el void de una porción conserva su metadata en la cola para rehidratar el descuento', () => {
+    const payload = buildVoidIntakeCorrection({
+      clientId: CLIENT,
+      deviceId: DEVICE,
+      operationId: OP_B,
+      localDate: '2026-07-15',
+      timezone: 'America/Santiago',
+      entry: { ...consumedEntry, exchangeGroupCode: 'C', exchangePortions: 0.5 },
+      reason: 'porción desmarcada',
+    })
+
+    expect(payload.snapshot.exchangeGroupCode).toBe('C')
+    expect(payload.snapshot.exchangePortions).toBe(0.5)
+    expect(payload.note).toBe('Registro retirado')
+  })
+
+  it('rechaza un motivo menor a tres caracteres', () => {
+    expect(() =>
+      buildEditIntakeCorrection({
+        clientId: CLIENT,
+        deviceId: DEVICE,
+        operationId: OP_A,
+        localDate: '2026-07-15',
+        timezone: 'America/Santiago',
+        entry: consumedEntry,
+        quantity: 120,
+        reason: 'no',
+      }),
+    ).toThrow()
   })
 })
 
@@ -200,5 +236,7 @@ describe('nutrition v2 intake - fila optimista', () => {
     expect(row.status).toBe('offline')
     expect(row.calories).toBe(195)
     expect(row.quantityLabel).toContain('g')
+    expect(row.shareQuantity).toBe(150)
+    expect(row.shareUnit).toBe('g')
   })
 })

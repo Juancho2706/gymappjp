@@ -142,10 +142,19 @@ export function ClientNav({ coachSlug, basePath, coachBrand, coachLogoUrl, coach
     // ítem tocado es EL ÚNICO activo (pendingHref ?? pathname): el OR anterior dejaba TAMBIÉN
     // activo el de la ruta actual → el findIndex de la píldora móvil devolvía el VIEJO si venía
     // antes en la lista y la píldora no saltaba hasta el commit de la navegación.
-    const isActiveHref = (href: string) =>
-        isNavigating != null
-            ? isNavigating === href
-            : pathname === href || pathname.startsWith(href + '/workout')
+    const isActiveHref = (href: string) => {
+        if (isNavigating != null) return isNavigating === href
+
+        // Nutrición mantiene `/nutrition` como enlace estable porque esa ruta
+        // decide V1/V2 por rollout. Una vez redirigido a V2, el mismo tab debe
+        // seguir activo en la page y en scanner, igual que en la chrome RN.
+        const nutritionV2Base = `${base}/nutrition-v2`
+        const isNutritionV2Route =
+            href === `${base}/nutrition` &&
+            (pathname === nutritionV2Base || pathname.startsWith(`${nutritionV2Base}/`))
+
+        return pathname === href || pathname.startsWith(href + '/workout') || isNutritionV2Route
+    }
 
     // Píldora deslizante de la cápsula flotante (mobile): índice del tab activo entre los
     // `baseItems` + el botón "Más" (último). -1 => ninguno (indicador oculto).

@@ -1,7 +1,7 @@
 ---
 status: active
 owner: Juan Manuel Villegas
-last_verified: "2026-07-20 @ 3867e8ad"
+last_verified: "2026-07-21 @ f5301858"
 canonical: live-backlog
 source_of_truth: docs/status/MOBILE_PARITY.md
 ---
@@ -64,10 +64,12 @@ Solo contiene trabajo accionable. La matriz histórica E0–E8 permanece en Git 
 
 ## Build gate actual
 
-- [x] Android `previewv2` construyó correctamente, reportado por el usuario el 2026-07-20.
-- [x] Configuración iOS `previewv2` corregida en `c6743ef3` (`credentialsSource=local`, `distribution=store`).
-- [ ] Reejecutar build iOS en GitHub Actions.
-- [ ] Registrar artefacto/run y resultado en `MOBILE_PARITY.md`.
+- [x] Android `previewv2` compiló y subió artefacto en el run `29766013009` sobre `c6743ef3`.
+- [x] iOS `previewv2` compiló y subió IPA en el run `29765692202` sobre `c6743ef3`.
+- [x] Registrar ambos runs, su expiración y el fallo de submit iOS en los documentos canónicos.
+- [x] Añadir `submit.previewv2` en `f5301858` para alinear el workflow con `eas.json`.
+- [ ] Generar y retener artefactos firmados del candidato actual.
+- [ ] Completar el submit TestFlight y verificar procesamiento en App Store Connect.
 - [ ] Instalar/probar ambos artefactos; build verde no equivale a QA.
 
 ## Supabase — solo si una unidad requiere DB

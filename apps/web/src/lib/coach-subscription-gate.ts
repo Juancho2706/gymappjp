@@ -13,10 +13,15 @@ export function isManagedSubscription(status: string | null | undefined): boolea
 /**
  * Returns true if the coach has effective access based on status and period end date.
  * A canceled coach keeps access until current_period_end.
+ *
+ * `now` es inyectable (default `Date.now()` a nivel de firma, no en render) para que toda la cadena
+ * pura del gate sea determinista end-to-end: quien inyecta `now` arriba (resolveStudentAccessState,
+ * resolveCoachSubscriptionRedirect) lo propaga hasta acá y no queda ningún reloj real escondido.
  */
 export function hasEffectiveAccess(
     subscriptionStatus: string | null | undefined,
-    currentPeriodEnd: string | null | undefined
+    currentPeriodEnd: string | null | undefined,
+    now: number = Date.now()
 ): boolean {
     if (isManagedSubscription(subscriptionStatus)) return true
     const status = subscriptionStatus ?? ''
@@ -33,7 +38,7 @@ export function hasEffectiveAccess(
         status === 'past_due'
     ) {
         if (!currentPeriodEnd) return false
-        return new Date(currentPeriodEnd).getTime() > Date.now()
+        return new Date(currentPeriodEnd).getTime() > now
     }
 
     // Estados duros SIN gracia (pending_payment, expired): bloqueo inmediato.
@@ -49,7 +54,8 @@ export function hasEffectiveAccess(
 export function resolveCoachSubscriptionRedirect(
     pathname: string,
     subscriptionStatus: string | null | undefined,
-    currentPeriodEnd?: string | null
+    currentPeriodEnd?: string | null,
+    now: number = Date.now()
 ): CoachSubscriptionRedirect {
     // org_managed / team_managed: acceso siempre — plan gestionado por org o team
     if (!subscriptionStatus || isManagedSubscription(subscriptionStatus)) return null
@@ -57,7 +63,7 @@ export function resolveCoachSubscriptionRedirect(
     const isReactivatePage = pathname.startsWith('/coach/reactivate')
     const isSubscriptionProcessingPage = pathname.startsWith('/coach/subscription/processing')
     const isSubscriptionGatePage = isReactivatePage || isSubscriptionProcessingPage
-    const isBlocked = !hasEffectiveAccess(subscriptionStatus, currentPeriodEnd)
+    const isBlocked = !hasEffectiveAccess(subscriptionStatus, currentPeriodEnd, now)
 
     if (isBlocked && !isSubscriptionGatePage) {
         return '/coach/reactivate'

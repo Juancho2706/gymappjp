@@ -1,10 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { rpc, getUser, getScope, isEnabled, revalidate, rateIntake, rateSearch } = vi.hoisted(() => ({
+const { rpc, getUser, getScope, isEnabled, domainEnabled, revalidate, rateIntake, rateSearch } = vi.hoisted(() => ({
   rpc: vi.fn(),
   getUser: vi.fn(),
   getScope: vi.fn(),
   isEnabled: vi.fn(),
+  domainEnabled: vi.fn(),
   revalidate: vi.fn(),
   rateIntake: vi.fn(),
   rateSearch: vi.fn(),
@@ -15,6 +16,7 @@ vi.mock('@/lib/supabase/server', () => ({ createClient: vi.fn(async () => ({ rpc
 vi.mock('../../nutrition/_data/nutrition-auth.queries', () => ({ getClientNutritionUser: getUser }))
 vi.mock('../../nutrition/_data/client-scope.queries', () => ({ getClientScope: getScope }))
 vi.mock('@/services/nutrition-v2-rollout.service', () => ({ isNutritionV2Enabled: isEnabled }))
+vi.mock('@/services/feature-prefs.service', () => ({ resolveNutritionDomainEnabled: domainEnabled }))
 vi.mock('@/lib/rate-limit', () => ({
   rateLimitNutritionIntake: rateIntake,
   rateLimitNutritionCatalogSearch: rateSearch,
@@ -70,6 +72,7 @@ beforeEach(() => {
   getUser.mockResolvedValue({ user: { id: CLIENT_ID }, hasClientRow: true })
   getScope.mockResolvedValue({ coachId: null, teamId: null, orgId: null })
   isEnabled.mockResolvedValue(true)
+  domainEnabled.mockResolvedValue(true)
   rpc.mockResolvedValue({ data: NEW_ID, error: null })
   rateIntake.mockResolvedValue({ ok: true })
   rateSearch.mockResolvedValue({ ok: true })
@@ -131,6 +134,15 @@ describe('recordIntakeAction', () => {
 
     expect(res.ok).toBe(false)
     if (!res.ok) expect(res.code).toBe('ROLLOUT_DISABLED')
+    expect(rpc).not.toHaveBeenCalled()
+  })
+
+  it('rechaza escrituras si el master switch de nutrición está apagado', async () => {
+    domainEnabled.mockResolvedValue(false)
+    const res = await recordIntakeAction({ payload: basePayload(), revalidatePath: REVALIDATE })
+
+    expect(res.ok).toBe(false)
+    if (!res.ok) expect(res.code).toBe('NUTRITION_DOMAIN_DISABLED')
     expect(rpc).not.toHaveBeenCalled()
   })
 

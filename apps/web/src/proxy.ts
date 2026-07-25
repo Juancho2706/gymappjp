@@ -205,7 +205,7 @@ export async function proxy(request: NextRequest) {
         ? (() => {
               const base = supabase
                   .from('coaches')
-                  .select('id, brand_name, primary_color, logo_url, slug, loader_text, use_custom_loader, loader_text_color, loader_icon_mode, subscription_tier, brand_secondary_color, accent_light, accent_dark, neutral_tint, logo_url_dark, brand_font_key, loader_variant, theme_preset_key, login_layout_key, loader_config')
+                  .select('id, brand_name, primary_color, logo_url, slug, loader_text, use_custom_loader, loader_text_color, loader_icon_mode, subscription_tier, brand_secondary_color, accent_light, accent_dark, neutral_tint, logo_url_dark, brand_font_key, loader_variant, theme_preset_key, login_layout_key, loader_config, executor_theme')
               if (INVITE_CODE_RE.test(cRouteSlug)) return base.eq('invite_code', cRouteSlug).maybeSingle()
               if (SLUG_RE.test(cRouteSlug)) return base.eq('slug', cRouteSlug).maybeSingle()
               return null
@@ -744,7 +744,7 @@ export async function proxy(request: NextRequest) {
             coachData = minData as typeof coachData
         }
 
-        const coach = coachData as Pick<Coach, 'id' | 'brand_name' | 'primary_color' | 'logo_url' | 'slug' | 'loader_text' | 'use_custom_loader' | 'loader_text_color' | 'loader_icon_mode' | 'subscription_tier' | 'brand_secondary_color' | 'accent_light' | 'accent_dark' | 'neutral_tint' | 'logo_url_dark' | 'brand_font_key' | 'loader_variant' | 'theme_preset_key' | 'loader_config'> | null
+        const coach = coachData as Pick<Coach, 'id' | 'brand_name' | 'primary_color' | 'logo_url' | 'slug' | 'loader_text' | 'use_custom_loader' | 'loader_text_color' | 'loader_icon_mode' | 'subscription_tier' | 'brand_secondary_color' | 'accent_light' | 'accent_dark' | 'neutral_tint' | 'logo_url_dark' | 'brand_font_key' | 'loader_variant' | 'theme_preset_key' | 'loader_config' | 'executor_theme'> | null
 
         if (!coach) {
             // No error + no fila → coach genuinamente inexistente → 404
@@ -766,6 +766,10 @@ export async function proxy(request: NextRequest) {
             h.set('x-coach-slug', coach.slug)
             h.set('x-coach-brand-name', coach.brand_name || 'EVA')
             h.set('x-coach-subscription-tier', tier)
+            // Ejecutor V3 (E0.7) — preferencia de tema del ejecutor del alumno: NO es branding visual
+            // gateado, solo indica qué paleta usa el ejecutor ('coach' = colores del coach, 'eva' =
+            // paleta EVA multicolor). Se expone SIEMPRE (paid o free); la Ola 2 lo consume, hoy nadie lo lee.
+            h.set('x-coach-executor-theme', coach.executor_theme || 'coach')
             if (brandingAllowed) {
                 h.set('x-coach-primary-color', resolvedColor)
                 h.set('x-coach-logo-url', coach.logo_url?.trim() || BRAND_APP_ICON)
@@ -964,25 +968,18 @@ export async function proxy(request: NextRequest) {
             // NOTA: esto es SOLO la capa UI — la RLS/RPC de la base es la barrera REAL de datos (RN habla
             // PostgREST directo y no pasa por aca). Fail-OPEN: managed org/team resuelve `ok` por
             // hasEffectiveAccess; un fallo de lectura tambien degrada a `ok` (nunca bloquea por esta capa).
+            let studentBlocked = false
             const studentGateEnabled = await isStudentAccessGateEnabled()
             if (studentGateEnabled) {
                 const access = await resolveStudentAccessForCoach(supabase, coach.id, { gateEnabled: true })
                 if (access.state === 'readonly') {
-                    // Allowlist de LECTURA (fix r2 'ux'): sin ella el CTA "Ver mi historial" de
-                    // /suspended re-entraba a este mismo redirect → loop, y el copy "puedes revisar
-                    // tu plan y tu historial" mentia. Se permiten: dashboard (plan + rachas),
-                    // detalle del plan (/workout/[planId] — sus escrituras rebotan en la action con
-                    // COACH_ACCOUNT_PAUSED y copy honesto), historial, perfil y change-password
-                    // (para no pelear con el forced-flow de mas abajo). Todo lo demas (check-in,
-                    // nutricion, bodycomp, movimiento, ...) cae a /suspended?reason=coach.
-                    const isReadSurface =
-                        pathname.includes('/suspended') ||
-                        pathname.includes('/dashboard') ||
-                        pathname.includes('/workout-history') ||
-                        pathname.includes('/workout/') ||
-                        pathname.includes('/perfil') ||
-                        pathname.includes('/change-password')
-                    if (!isReadSurface) {
+                    // Bloqueo TOTAL post-gracia (decision CEO #9, ejecutor V3): pasada la gracia el
+                    // alumno NO ve nada — ni dashboard, ni plan, ni historial. La UNICA superficie
+                    // visible es /suspended (variante reason=coach = pantalla calma "habla con tu
+                    // coach"). Todo el resto del arbol /c redirige alli. Reemplaza el hibrido
+                    // solo-lectura anterior. El logout (/auth/signout) y los assets (_next) viven
+                    // FUERA de /c, asi que pasan sin necesidad de allowlist aca.
+                    if (!pathname.includes('/suspended')) {
                         const redirectUrl = request.nextUrl.clone()
                         redirectUrl.pathname = `/c/${coachSlug}/suspended`
                         redirectUrl.searchParams.set('reason', 'coach')
@@ -992,12 +989,10 @@ export async function proxy(request: NextRequest) {
                         })
                         return redirect
                     }
-                    // Superficie de lectura servida en modo readonly → banner honesto persistente
-                    // en el layout (espejo del StudentAccessBanner 'blocked' de RN). En /suspended
-                    // no se manda: la pantalla ya ES el estado honesto (banner seria redundante).
-                    if (!pathname.includes('/suspended')) {
-                        requestHeaders.set(STUDENT_ACCESS_STATE_HEADER, 'readonly')
-                    }
+                    // Ya estamos en /suspended (la pantalla de bloqueo): marcamos al alumno como
+                    // bloqueado para que el forced-password flow de mas abajo NO intente sacarlo de
+                    // aca (seria un loop /suspended ↔ /change-password). El bloqueo total manda.
+                    studentBlocked = true
                 }
                 if (access.state === 'grace') {
                     requestHeaders.set(STUDENT_ACCESS_STATE_HEADER, 'grace')
@@ -1016,8 +1011,9 @@ export async function proxy(request: NextRequest) {
                 return NextResponse.redirect(redirectUrl)
             }
 
-            // Force password change flow
-            if (!isBlocked && client.force_password_change && !pathname.includes('/change-password')) {
+            // Force password change flow. `studentBlocked` (bloqueo total post-gracia) lo suprime:
+            // el alumno bloqueado solo puede ver /suspended, sacarlo a /change-password loopearia.
+            if (!isBlocked && !studentBlocked && client.force_password_change && !pathname.includes('/change-password')) {
                 const redirectUrl = request.nextUrl.clone()
                 redirectUrl.pathname = `/c/${coachSlug}/change-password`
                 return NextResponse.redirect(redirectUrl)

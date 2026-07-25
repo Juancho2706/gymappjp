@@ -60,6 +60,7 @@ vi.mock('../apps/mobile/lib/nutrition-v2.api', () => ({
 
 const portions = await import('../apps/mobile/lib/nutrition-v2-portions')
 const offline = await import('../apps/mobile/lib/nutrition-v2-offline')
+const intake = await import('../apps/mobile/lib/nutrition-v2-intake')
 
 const {
   allocatePortionAttempt,
@@ -68,23 +69,28 @@ const {
   buildPortionCoverageView,
   buildPortionMarkMutation,
   cancelQueuedPortionMark,
+  filterPortionExchangeFoods,
   floorHalf,
   formatPortionsCl,
   getQueuedPortionKeys,
   nextPortionStep,
+  orderedPortionTargets,
   pendingPortionsFor,
   pickLastSyntheticIntake,
   PORTION_SEGMENT_CAP,
   portionBarFractions,
   portionChipIsCompact,
   prunePortionAttemptDates,
+  queuedPortionMarksFromMutations,
+  queuedPortionOverlayFromMutations,
   reconcilePendingPortionMarks,
   registerPortionUndo,
   registerPortionUndoOrdinal,
   stablePortionBuckets,
+  visibleDayCoverageRows,
 } = portions
 
-const USER = 'alumno-1'
+const USER = '11111111-1111-4111-8111-111111111111'
 const DATE = '2026-07-18'
 
 beforeEach(() => {
@@ -259,7 +265,7 @@ describe('buildPortionCoverageView', () => {
     })
     expect(view.segments).toHaveLength(3)
     expect(view.segments[0]).toMatchObject({ left: 'marked', right: 'marked' })
-    expect(view.segments[1]).toMatchObject({ left: 'derived', right: 'pending' })
+    expect(view.segments[1]).toMatchObject({ left: 'pending', right: 'derived' })
     expect(view.segments[2]).toMatchObject({ left: 'empty', right: 'empty' })
     expect(view.coverage).toBe(2.3)
     expect(view.complete).toBe(false)
@@ -280,15 +286,17 @@ describe('buildPortionCoverageView', () => {
     expect(view.complete).toBe(true)
   })
 
-  it('exceso "+n" cuantizado a 0,5 y voids optimistas descuentan marcadas (clamp ≥ 0)', () => {
+  it('exceso "+n" conserva 1 decimal y voids optimistas descuentan marcadas (clamp ≥ 0)', () => {
     const excess = buildPortionCoverageView({
       prescribed: 2,
-      marcadas: 3,
-      derivadas: 0,
+      marcadas: 2,
+      derivadas: 0.8,
       pendingMarcadas: 0,
       pendingUnsynced: false,
     })
-    expect(excess.excess).toBe(1)
+    expect(excess.coverage).toBe(2.8)
+    expect(excess.displayCoverage).toBe(2)
+    expect(excess.excess).toBe(0.8)
     const voided = buildPortionCoverageView({
       prescribed: 2,
       marcadas: 1,
@@ -331,8 +339,53 @@ describe('buildDayCoverageView', () => {
     }
     const view = buildDayCoverageView(row, { C: 0.5 }, {})
     expect(view.coverage).toBe(2)
+    expect(view.displayCoverage).toBe(2)
     expect(view.complete).toBe(true)
     expect(view.excess).toBe(0)
+  })
+
+  it('capea el numerador y conserva el exceso decimal del canon web', () => {
+    const row = {
+      groupCode: 'C',
+      groupName: 'Cereales',
+      color: '#F59E0B',
+      prescribed: 2,
+      marcadas: 2,
+      derivadas: 0.8,
+      coverage: 2.8,
+    }
+    expect(buildDayCoverageView(row, {}, {})).toMatchObject({
+      coverage: 2.8,
+      displayCoverage: 2,
+      complete: true,
+      excess: 0.8,
+    })
+  })
+})
+
+describe('vistas canon web', () => {
+  it('oculta grupos sin prescripcion diaria y ordena targets por orderIndex', () => {
+    const rows = [
+      { groupCode: 'X', groupName: 'Extra', color: null, prescribed: 0, marcadas: 0, derivadas: 1, coverage: 1 },
+      { groupCode: 'C', groupName: 'Cereales', color: null, prescribed: 2, marcadas: 0, derivadas: 0, coverage: 0 },
+    ]
+    expect(visibleDayCoverageRows(rows).map((row) => row.groupCode)).toEqual(['C'])
+
+    const targets = [
+      { id: 'b', orderIndex: 2 },
+      { id: 'a', orderIndex: 0 },
+      { id: 'c', orderIndex: 1 },
+    ]
+    expect(orderedPortionTargets(targets as never).map((target) => target.id)).toEqual(['a', 'c', 'b'])
+  })
+
+  it('filtra equivalencias por grupo y nombre sin distinguir mayusculas', () => {
+    const foods = [
+      { foodId: '1', groupCode: 'C', name: 'Arroz integral' },
+      { foodId: '2', groupCode: 'C', name: 'Pan pita' },
+      { foodId: '3', groupCode: 'P', name: 'Arroz proteico' },
+    ]
+    expect(filterPortionExchangeFoods(foods as never, 'C', 'ARROZ').map((food) => food.foodId)).toEqual(['1'])
   })
 })
 
@@ -346,6 +399,7 @@ function markFixture(over: Partial<PendingPortionMark>): PendingPortionMark {
     slotCode: 'almuerzo',
     groupCode: 'C',
     portions: 1,
+    occurredAt: '2026-07-18T12:00:00.000Z',
     ordinal: 0,
     attempt: 1,
     status: 'inflight',
@@ -377,6 +431,158 @@ describe('reconcilePendingPortionMarks', () => {
       queuedKeys: new Set(['q1']),
     })
     expect(result.map((m) => m.idempotencyKey)).toEqual(['q1', 'q3'])
+  })
+})
+
+describe('rehidratacion del overlay offline de porciones', () => {
+  it('reconstruye solo records sinteticos del dia desde la cola user-scoped', async () => {
+    const target = {
+      groupCode: 'C',
+      groupName: 'Cereales',
+      ref: { calories: 70, proteinG: 2, carbsG: 15, fatsG: 0 },
+      macrosConfirmed: true,
+    }
+    const { payload } = buildPortionMarkMutation({
+      clientId: USER,
+      deviceId: 'ios-device',
+      localDate: DATE,
+      occurredAt: '2026-07-18T12:00:00.000Z',
+      timezone: 'America/Santiago',
+      slotCode: 'almuerzo',
+      planVersionId: null,
+      daySnapshotId: null,
+      target,
+      portions: 0.5,
+      ordinal: 3,
+      attempt: 2,
+    })
+    await offline.enqueueNutritionV2Mutation({ action: 'record', userId: USER, payload })
+    const queued = await offline.getNutritionV2QueuedMutations(USER)
+    const restored = queuedPortionMarksFromMutations(queued, DATE)
+    expect(restored).toHaveLength(1)
+    expect(restored[0]).toMatchObject({
+      slotCode: 'almuerzo',
+      groupCode: 'C',
+      portions: 0.5,
+      ordinal: 3,
+      attempt: 2,
+      status: 'queued',
+    })
+  })
+
+  it('rehidrata un void sintetico encolado y lo separa de las marcas pendientes', () => {
+    const restored = queuedPortionOverlayFromMutations([
+      {
+        queueVersion: 1,
+        action: 'correct',
+        userId: USER,
+        clientId: USER,
+        idempotencyKey: 'portion-void-key',
+        queuedAt: 123,
+        attempts: 0,
+        nextAttemptAt: 123,
+        lastErrorCode: null,
+        payload: {
+          localDate: DATE,
+          mealSlot: 'almuerzo',
+          note: 'Registro retirado',
+          correctsEntryId: '22222222-2222-4222-8222-222222222222',
+          snapshot: { exchangeGroupCode: 'C', exchangePortions: 0.5 },
+        },
+      },
+    ] as never, DATE)
+
+    expect(restored.marks).toEqual([])
+    expect(restored.voids).toEqual([
+      expect.objectContaining({
+        entryId: '22222222-2222-4222-8222-222222222222',
+        slotCode: 'almuerzo',
+        groupCode: 'C',
+        portions: 0.5,
+        status: 'queued',
+      }),
+    ])
+  })
+
+  it('rehidrata el void que undoByKey sintetiza desde la marca (campos de intercambio a nivel de entry)', () => {
+    // Reproduce el entry sintetizado en usePortionMarks.undoByKey: los campos de
+    // intercambio viven a nivel de entry (no del snapshot). Regresión: si no se
+    // propagan, buildVoidIntakeCorrection los deja undefined y el overlay descarta
+    // el void al remontar offline, reapareciendo la porción desmarcada.
+    const payload = intake.buildVoidIntakeCorrection({
+      clientId: USER,
+      deviceId: 'ios-device',
+      operationId: 'op-undo-void-1',
+      localDate: DATE,
+      timezone: 'America/Santiago',
+      entry: {
+        id: '33333333-3333-4333-8333-333333333333',
+        occurredAt: '2026-07-18T12:00:00.000Z',
+        foodId: null,
+        customName: null,
+        quantity: 0.5,
+        unit: 'porción',
+        mealSlot: 'almuerzo',
+        prescriptionItemId: null,
+        exchangeGroupCode: 'C',
+        exchangePortions: 0.5,
+        snapshot: {
+          name: 'Porción marcada',
+          brand: null,
+          calories: 0,
+          proteinG: 0,
+          carbsG: 0,
+          fatsG: 0,
+          fiberG: 0,
+          servingSize: null,
+          servingUnit: 'porción',
+        },
+      } as never,
+      planVersionId: null,
+      daySnapshotId: null,
+      reason: 'Porción desmarcada por el alumno',
+    })
+
+    // El snapshot de la corrección DEBE portar los campos de intercambio.
+    expect(payload.snapshot.exchangeGroupCode).toBe('C')
+    expect(payload.snapshot.exchangePortions).toBe(0.5)
+
+    const restored = queuedPortionOverlayFromMutations(
+      [
+        {
+          queueVersion: 1,
+          action: 'correct',
+          userId: USER,
+          clientId: USER,
+          idempotencyKey: 'undo-void-key',
+          queuedAt: 456,
+          attempts: 0,
+          nextAttemptAt: 456,
+          lastErrorCode: null,
+          payload,
+        },
+      ] as never,
+      DATE,
+    )
+
+    expect(restored.voids).toEqual([
+      expect.objectContaining({
+        entryId: '33333333-3333-4333-8333-333333333333',
+        slotCode: 'almuerzo',
+        groupCode: 'C',
+        portions: 0.5,
+        status: 'queued',
+      }),
+    ])
+  })
+
+  it('la lectura de cola nunca filtra items de otro usuario hacia el caller', async () => {
+    const payload = {
+      clientId: 'otro',
+      idempotencyKey: 'intake:otro:device:operation',
+    } as never
+    await offline.enqueueNutritionV2Mutation({ action: 'record', userId: 'otro', payload })
+    expect(await offline.getNutritionV2QueuedMutations(USER)).toEqual([])
   })
 })
 

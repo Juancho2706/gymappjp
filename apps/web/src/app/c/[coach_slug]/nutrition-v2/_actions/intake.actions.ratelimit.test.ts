@@ -3,6 +3,7 @@ import { describe, expect, it, vi, beforeEach } from 'vitest'
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }))
 vi.mock('@/lib/supabase/server', () => ({ createClient: vi.fn() }))
 vi.mock('@/services/nutrition-v2-rollout.service', () => ({ isNutritionV2Enabled: vi.fn() }))
+vi.mock('@/services/feature-prefs.service', () => ({ resolveNutritionDomainEnabled: vi.fn() }))
 vi.mock('../../nutrition/_data/nutrition-auth.queries', () => ({ getClientNutritionUser: vi.fn() }))
 vi.mock('../../nutrition/_data/client-scope.queries', () => ({ getClientScope: vi.fn() }))
 

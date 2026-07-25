@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
-import { X, Play, Pause, RotateCcw, Volume2, VolumeX } from "lucide-react";
+import { X, Play, Pause, RotateCcw, Volume2, VolumeX, Maximize2 } from "lucide-react";
 import { playTimerSound, playCountdownBeep } from "@/lib/audioUtils";
 import { BRAND_APP_ICON } from "@/lib/brand-assets";
 import { triggerHaptic } from "@/lib/client/haptics";
@@ -14,6 +14,8 @@ import {
   readRestTimerMuted,
   writeRestTimerMuted,
 } from "./rest-timer-preferences";
+import { readExecVibration, readExecKeepAwake } from "./v3/exec-settings";
+import { RestInterstitialV3 } from "./v3/RestInterstitialV3";
 
 interface RestTimerProps {
   initialSeconds: number;
@@ -21,6 +23,12 @@ interface RestTimerProps {
   nextLabel?: string;
   /** Descanso de aproximación (warmup) vs efectivo — sólo cambia la etiqueta. */
   warmup?: boolean;
+  /**
+   * Ejecutor V3 (E3.1): `'v3'` presenta el descanso como interstitial a pantalla completa (misma
+   * instancia/estado que la barra — minimizar sólo cambia la presentación, nunca reinicia el conteo).
+   * `'compact'` (default) = barra inferior histórica (legacy intacto).
+   */
+  variant?: "compact" | "v3";
   onClose: () => void;
 }
 
@@ -32,6 +40,7 @@ export function RestTimer({
   initialSeconds,
   nextLabel,
   warmup = false,
+  variant = "compact",
   onClose,
 }: RestTimerProps) {
   const [timeLeft, setTimeLeft] = useState(initialSeconds);
@@ -39,7 +48,18 @@ export function RestTimer({
   const [isActive, setIsActive] = useState(true);
   const [isAlarmRinging, setIsAlarmRinging] = useState(false);
   const [muted, setMuted] = useState(false);
+  // Ejecutor V3 (E3.1): en `variant='v3'` el descanso arranca como interstitial; minimizar cambia sólo
+  // la presentación (barra compacta) sin desmontar → el conteo/alarma/WakeLock siguen vivos.
+  const [minimized, setMinimized] = useState(false);
+  // Ejecutor V3 (QA4): la píldora del descanso existe SÓLO mientras el alumno descansa. Al llegar a 0
+  // arrancamos la salida suave (`leaving`) y descartamos el descanso; nunca persiste al siguiente paso.
+  const [leaving, setLeaving] = useState(false);
   const reducedMotion = useReducedMotion();
+
+  // Háptico gateado por la pref de vibración (E3.7 · tuerca). Default ON (histórico) si nunca se tocó.
+  const haptic = useCallback((pattern: number | number[]) => {
+    if (readExecVibration()) triggerHaptic(pattern);
+  }, []);
 
   const isAlarmRingingRef = useRef(false);
   const alarmIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -80,6 +100,10 @@ export function RestTimer({
     endTimeRef.current = null;
     lastBeepRef.current = null;
     setIsActive(true);
+    // V3: un descanso nuevo reabre el interstitial (por si el anterior quedó minimizado) y cancela
+    // cualquier salida en curso (por si el descanso previo estaba auto-descartándose).
+    setMinimized(false);
+    setLeaving(false);
   }, [initialSeconds]);
 
   const stopAlarm = useCallback(() => {
@@ -125,7 +149,7 @@ export function RestTimer({
         stopAlarm();
       } else {
         if (!mutedRef.current) playTimerSound(readRestTimerSound(), readRestTimerVolume());
-        triggerHaptic([200, 100, 200, 100, 400]);
+        haptic([200, 100, 200, 100, 400]);
       }
     }, 3000);
 
@@ -147,17 +171,18 @@ export function RestTimer({
       });
     }
 
-    triggerHaptic([200, 100, 200, 100, 400]);
+    haptic([200, 100, 200, 100, 400]);
     setIsActive(false);
     endTimeRef.current = null;
-  }, [stopAlarm]);
+  }, [stopAlarm, haptic]);
 
   // Wake lock durante el descanso (la sesión ya tiene su propio lock; esto refuerza en background).
   useEffect(() => {
     let wakeLock: { release: () => Promise<void> } | null = null;
     const requestWakeLock = async () => {
       try {
-        if ("wakeLock" in navigator && document.visibilityState === "visible") {
+        // Gate por la pref "Mantener pantalla encendida" (E3.7 · tuerca). Default ON (histórico).
+        if ("wakeLock" in navigator && document.visibilityState === "visible" && readExecKeepAwake()) {
           wakeLock = await navigator.wakeLock.request("screen");
         }
       } catch (err) {
@@ -208,10 +233,10 @@ export function RestTimer({
       lastBeepRef.current = timeLeft;
       if (!mutedRef.current) {
         playCountdownBeep(readRestTimerVolume());
-        triggerHaptic(30);
+        haptic(30);
       }
     }
-  }, [timeLeft, isActive]);
+  }, [timeLeft, isActive, haptic]);
 
   const formatTime = (seconds: number) => {
     const m = Math.floor(seconds / 60);
@@ -234,7 +259,7 @@ export function RestTimer({
   // ±15s al vuelo (M2 · 2). Reanuda si veníamos del 0 (alarma); mantiene pausa si estaba pausado.
   const adjust = useCallback(
     (delta: number) => {
-      triggerHaptic(10);
+      haptic(10);
       const prev = timeLeftRef.current;
       const next = Math.max(0, prev + delta);
       timeLeftRef.current = next;
@@ -254,7 +279,7 @@ export function RestTimer({
         endTimeRef.current = null;
       }
     },
-    [stopAlarm]
+    [stopAlarm, haptic]
   );
 
   const toggleMute = () => {
@@ -293,11 +318,50 @@ export function RestTimer({
   const frac = Math.max(0, Math.min(1, timeLeft / (totalSeconds || 1)));
   const dashoffset = RING_C * (1 - frac);
 
+  // V3 (E3.1 → QA4): la píldora del descanso existe SÓLO mientras el alumno descansa (la minimiza para
+  // mirar otras cosas). Al llegar a 0 mostramos "¡A entrenar!" ~1.5s y AUTO-DESCARTAMOS el descanso
+  // (salida suave), sea el interstitial a pantalla completa o la barra minimizada — así JAMÁS queda
+  // pegada "DESCANSO 0:00" al pasar al siguiente ejercicio. El motor de tiempo/alarma queda INTACTO
+  // (misma instancia); sólo se retira la presentación. "Saltar"/cerrar la ronda → onClose inmediato.
+  useEffect(() => {
+    if (variant !== "v3" || !done) return;
+    const t = setTimeout(() => setLeaving(true), reducedMotion ? 700 : 1500);
+    return () => clearTimeout(t);
+  }, [variant, done, reducedMotion]);
+
+  // Al arrancar la salida, AnimatePresence retira el nodo (fade/slide); tras la animación descartamos
+  // el descanso por completo (onClose → el provider desmonta el RestTimer). Reduced-motion: inmediato.
+  useEffect(() => {
+    if (!leaving) return;
+    const t = setTimeout(() => onClose(), reducedMotion ? 0 : 320);
+    return () => clearTimeout(t);
+  }, [leaving, reducedMotion, onClose]);
+
   const utilityBtn =
     "flex h-9 w-9 items-center justify-center rounded-full text-on-dark-muted transition-colors hover:text-on-dark hover:bg-white/10";
 
+  // V3: presentación a pantalla completa mientras no esté minimizado (mismo estado/controles).
+  if (variant === "v3" && !minimized) {
+    return (
+      <RestInterstitialV3
+        timeLeft={timeLeft}
+        total={totalSeconds}
+        done={done}
+        isActive={isActive}
+        nextLabel={nextLabel}
+        warmup={warmup}
+        formatTime={formatTime}
+        onAdjust={adjust}
+        onSkip={onClose}
+        onMinimize={() => setMinimized(true)}
+        leaving={leaving}
+      />
+    );
+  }
+
   return (
     <AnimatePresence>
+      {!leaving && (
       <motion.div
         // Marca para el gate del auto-scroll (BUG 2 · sub-fix 3): el ejecutor mide el borde superior de
         // este sheet inferior para no disparar un scroll cuando la fila destino ya está a la vista.
@@ -376,6 +440,11 @@ export function RestTimer({
                 </p>
               </div>
               <div className="flex shrink-0 items-center">
+                {variant === "v3" && (
+                  <button type="button" onClick={() => setMinimized(false)} className={utilityBtn} aria-label="Ampliar el descanso">
+                    <Maximize2 className="h-4 w-4" />
+                  </button>
+                )}
                 <button type="button" onClick={toggleTimer} className={utilityBtn} aria-label={isActive ? "Pausar" : "Reanudar"}>
                   {isActive ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
                 </button>
@@ -424,6 +493,7 @@ export function RestTimer({
           </div>
         </div>
       </motion.div>
+      )}
     </AnimatePresence>
   );
 }

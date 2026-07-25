@@ -25,6 +25,11 @@ vi.mock('@/services/nutrition-v2-rollout.service', () => ({
   resolveNutritionV2RolloutDecision: (...a: unknown[]) => resolveNutritionV2RolloutDecision(...a),
 }))
 
+const resolveNutritionDomainEnabled = vi.fn()
+vi.mock('@/services/feature-prefs.service', () => ({
+  resolveNutritionDomainEnabled: (...a: unknown[]) => resolveNutritionDomainEnabled(...a),
+}))
+
 const userRpc = vi.fn()
 vi.mock('@supabase/supabase-js', () => ({
   createClient: vi.fn(() => ({ rpc: userRpc })),
@@ -80,10 +85,20 @@ beforeEach(() => {
       : { data: null, error: null },
   )
   resolveNutritionV2RolloutDecision.mockResolvedValue({ enabled: true, reason: 'test' })
+  resolveNutritionDomainEnabled.mockResolvedValue(true)
   userRpc.mockResolvedValue({ data: { schemaVersion: 1, items: [], nextCursor: null, hasMore: false }, error: null })
 })
 
 describe('GET /api/mobile/nutrition-v2/catalog · rate limit', () => {
+  it('404 cuando el master switch de nutrición del alumno está apagado', async () => {
+    resolveNutritionDomainEnabled.mockResolvedValue(false)
+    const res = await GET(getReq())
+    expect(res.status).toBe(404)
+    expect((await res.json()).code).toBe('NUTRITION_DOMAIN_DISABLED')
+    expect(rateLimitNutritionCatalogSearch).not.toHaveBeenCalled()
+    expect(userRpc).not.toHaveBeenCalled()
+  })
+
   it('429 cuando el limitador de busqueda niega, sin tocar la RPC', async () => {
     searchAllowed = false
     const res = await GET(getReq())

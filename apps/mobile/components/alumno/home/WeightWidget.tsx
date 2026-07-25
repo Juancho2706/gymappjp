@@ -99,9 +99,9 @@ export function WeightWidget({
       </View>
       <Text className="text-muted font-sans" style={{ fontSize: 12, marginTop: 4 }}>{formatRelativeDate(last.date, todayIso)}</Text>
       <View style={{ marginTop: 12 }}>
-        {/* Web usa 72px (WeightSparkline `:48`). endDot + strokeWidth 2 + gradiente
-            0.25 + curva monotone viven en el primitivo compartido (cambiosShell). */}
-        <Sparkline values={spark} width={Math.max(0, width - 64)} height={72} color={theme.primary} />
+        {/* Web WeightSparkline.tsx:48-57 — `mt-3 h-[72px]`, curva monotone strokeWidth 2,
+            gradiente 0.25→0 y dot final r=4 con ring surface-card 2.5 (:35-44). */}
+        <Sparkline values={spark} width={Math.max(0, width - 64)} height={72} color={theme.primary} strokeWidth={2} gradientOpacity={0.25} curve="monotone" endDot />
       </View>
       <WeightQuickLog clientId={clientId} onSaved={onSaved} />
     </Card>
@@ -136,11 +136,11 @@ function TrendArrow({ trend, deltaKg }: { trend: Trend; deltaKg: number }) {
         <Icon className={colorClass} size={14} strokeWidth={2} />
       </Animated.View>
       {trend !== 'stable' ? (
-        // deltaKg siempre > 0 (computeTrend usa Math.abs en down). Web muestra '+' tambien
-        // en down (TrendArrow `:35`, ola0 lo marca probable bug); RN omite el '+' en down
-        // → "1.2 kg" con flecha abajo, mas coherente. Divergencia documentada.
+        // Verbatim web TrendArrow.tsx:35 `{deltaKg > 0 ? '+' : ''}`: deltaKg llega en
+        // positivo tambien en down (Math.abs, WeightWidget.tsx:23) → web muestra "+1.2 kg"
+        // con flecha abajo. Paridad 2R-5: se replica tal cual (antes RN omitía el '+').
         <Text className={colorClass} style={{ fontFamily: FONT.uiBold, fontSize: 13, fontVariant: ['tabular-nums'] }}>
-          {trend === 'up' ? '+' : ''}{deltaKg.toFixed(1)} kg
+          {deltaKg > 0 ? '+' : ''}{deltaKg.toFixed(1)} kg
         </Text>
       ) : null}
     </View>

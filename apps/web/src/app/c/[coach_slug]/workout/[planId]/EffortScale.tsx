@@ -19,7 +19,12 @@ export const RPE_HELP =
 export const RIR_HELP =
     'RIR = cuántas reps te quedaban en el tanque. Si te quedaba 1, es 1. Así de simple.'
 
-const SCALE_OPTS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] as const
+/** Escala de la fila (RPE siempre 1-10). `min` la baja a 0 para RIR en V3 (RIR 0 = al fallo). */
+function scaleOpts(min: number): number[] {
+    const opts: number[] = []
+    for (let n = min; n <= 10; n += 1) opts.push(n)
+    return opts
+}
 
 /**
  * Botoncito (?) accesible junto a los labels de RPE/RIR: Popover con explicación corta para
@@ -55,16 +60,19 @@ export function ScaleDots({
     reducedMotion,
     name,
     compact = false,
+    min = 1,
 }: {
     value: number | null
     onChange: (v: number) => void
     reducedMotion: boolean | null
     name: string
     compact?: boolean
+    /** Tope inferior de la escala. Default 1 (RPE, V2 idéntico); 0 para RIR en V3. */
+    min?: number
 }) {
     return (
-        <div role="radiogroup" aria-label={`${name} (escala 1 a 10)`} className="flex items-center gap-0.5">
-            {SCALE_OPTS.map((n) => {
+        <div role="radiogroup" aria-label={`${name} (escala ${min} a 10)`} className="flex items-center gap-0.5">
+            {scaleOpts(min).map((n) => {
                 const filled = value != null && n <= value
                 const selected = value === n
                 return (

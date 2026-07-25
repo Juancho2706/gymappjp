@@ -3,6 +3,7 @@ import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import { verifyMobileBearer, isBlockedClientRow } from '@/lib/mobile-auth'
 import { resolveNutritionV2RolloutDecision } from '@/services/nutrition-v2-rollout.service'
+import { resolveNutritionDomainEnabled } from '@/services/feature-prefs.service'
 import type { NutritionV2Surface } from '@eva/nutrition-v2'
 
 type RpcError = { message: string; code?: string; details?: string | null }
@@ -131,6 +132,30 @@ export async function gateNutritionV2Api(
       auth: { persistSession: false, autoRefreshToken: false },
     },
   )
+
+  // El rollout técnico no reemplaza el master switch funcional del alumno.
+  // El scope proviene de la fila autenticada, nunca del body; el servicio conserva
+  // su fail-open deliberado cuando FEATURE_PREFS está apagado/no disponible.
+  if (studentSurface) {
+    const domainEnabled = await resolveNutritionDomainEnabled(
+      {
+        coachId: client?.coach_id ?? '',
+        clientId: client?.id ?? null,
+        clientTeamId: client?.team_id ?? null,
+        clientOrgId: client?.org_id ?? null,
+      },
+      userClient as never,
+    )
+    if (!domainEnabled) {
+      return {
+        ok: false,
+        response: jsonNoStore(
+          { error: 'Nutrition is disabled for this student.', code: 'NUTRITION_DOMAIN_DISABLED' },
+          404,
+        ),
+      }
+    }
+  }
 
   return {
     ok: true,

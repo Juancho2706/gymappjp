@@ -46,6 +46,15 @@ const MOBILE_TAB_KEYS = ['dashboard', 'clients', 'programs', 'nutrition', 'optio
 // contra un blanco movil (era el rebote irregular reportado por el CEO).
 const NAV_SPRING = SPRING.ui
 const CAPSULE_PAD = 8
+
+/**
+ * Espacio (px) que un scroll debe reservar en su base para que la capsula flotante del coach
+ * (overlay `absoluteFill` en `bottom: insets.bottom + 16`) no tape el ultimo contenido. Fuente
+ * unica: es el mismo `120` que los tabs del coach ya reservan de forma fija (p.ej.
+ * `coach/(tabs)/clientes.tsx`). Los consumidores lo suman a `insets.bottom` (espejo del alumno,
+ * `ALUMNO_TABBAR_CLEARANCE`) para superar tambien la safe-area inferior.
+ */
+export const COACH_TABBAR_CLEARANCE = 120
 const INSET_OPEN = 14
 const INSET_MIN = 72
 const LABEL_H = 14

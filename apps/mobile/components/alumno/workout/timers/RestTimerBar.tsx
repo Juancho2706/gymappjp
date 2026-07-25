@@ -1,14 +1,13 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { AppState, Pressable, StyleSheet, Text, View } from 'react-native'
+import { useCallback, useEffect } from 'react'
+import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import Svg, { Circle, G } from 'react-native-svg'
 import { MotiView } from 'moti'
 import Animated, { Easing, useAnimatedProps, useSharedValue, withTiming } from 'react-native-reanimated'
-import { Pause, Play, RotateCcw, Volume2, VolumeX, X } from 'lucide-react-native'
+import { ChevronUp, Pause, Play, RotateCcw, Volume2, VolumeX, X } from 'lucide-react-native'
 import { useEvaMotion } from '../../../../lib/motion'
 import { textStyle, FONT } from '../../../../lib/typography'
 import { SHADOWS } from '../../../../lib/shadows'
-import { haptics, timerHaptics } from '../../../../lib/haptics'
 import {
   EMBER_200,
   EMBER_300,
@@ -18,59 +17,31 @@ import {
   ON_DARK_MUTED,
   TRACK_ON_DARK,
 } from './timer-colors'
-import { isRestTimerMuted, setRestTimerMuted, subscribeRestTimerPrefs } from './rest-timer-preferences'
-import { playTimerCue } from './sound'
-import {
-  cancelRestEndNotification,
-  dismissRestEndNotification,
-  ensureRestNotifPermission,
-  scheduleRestEndNotification,
-  sweepRestNotifications,
-} from './rest-notification'
-import { showRestLiveCountdown, stopRestLiveCountdown } from './rest-live-notification'
+import type { RestTimerEngine } from './useRestTimerEngine'
 
 /**
  * Descanso PROTAGONISTA (E2-09) — barra/overlay inferior con cuenta regresiva.
  * Port RN de la web Fase M `RestTimer.tsx`: anillo grande + tiempo mono gigante,
- * ±15s, pausa/reset/cerrar, mute, alarma al llegar a 0 (háptica en loop + pulso
- * ember + cue de audio gateado), y beeps 3-2-1. Sin confetti (la web solo hace el
- * pulso ember al `done`; el confetti de PR vive a nivel ExecutorV2, no en la barra).
+ * ±15s, pausa/reset/cerrar, mute, alarma al llegar a 0 (pulso ember), y beeps 3-2-1.
  *
- * Background-safe: la cuenta se calcula desde `endTimeRef` (Date.now() al montar),
- * NO acumulando ticks. Si el SO congela el JS en background, al volver a `active`
- * el tiempo se recalcula correcto (listener de AppState fuerza el recompute).
- * El wake-lock lo maneja el núcleo del ejecutor, no este componente.
- *
- * OMISIÓN CONOCIDA — Media Session / controles de lock-screen y auriculares:
- * la web (`RestTimer.tsx:269-290`) publica `MediaMetadata` mientras corre (title
- * "Descanso activo", artist "{M:SS} restantes", album "EVA Fitness", artwork icono
- * de marca) y registra handlers `pause`→pausa / `play`→reanuda para la pantalla de
- * bloqueo y los botones de auriculares. Este port NO lo replica: RN carecería de un
- * módulo nativo de "now playing" (no hay react-native-track-player / expo-music-control
- * en las deps), así que el descanso NO se puede pausar/reanudar desde la pantalla de
- * bloqueo ni desde los auriculares, ni se muestra metadata ahí. La cuenta en sí sí
- * sigue en background (notif local de fin, ver `rest-notification.ts`); lo omitido es
- * SOLO el control multimedia de lock-screen. Portarlo requeriría añadir un módulo
- * nativo con su config de build (fuera del alcance de esta unidad).
+ * REFACTOR E3.1: esta barra ya NO posee el cronometro — es PURA PRESENTACION. El motor
+ * (cuenta endTime-based, alarma, notificaciones, controles) vive en `useRestTimerEngine`
+ * y lo instancia el `RestTimerHost` UNA vez, pasandolo aqui por prop. Asi el interstitial
+ * V3 y esta barra comparten EL MISMO cronometro (al minimizar/expandir no se re-monta el
+ * motor). El comportamiento observable es identico al de Ola 2.
  */
 interface RestTimerBarProps {
-  initialSeconds: number
+  /** Motor compartido (instanciado por el host). */
+  engine: RestTimerEngine
   /** "Qué sigue" (próxima serie/ejercicio) mostrado en la barra. */
   nextLabel?: string
   /** Descanso de aproximación (warmup) vs efectivo — solo cambia la etiqueta. */
   warmup?: boolean
-  /** Arrancar corriendo (auto-timer) o montar en pausa. Default true. */
-  autoStart?: boolean
-  onClose: () => void
   /**
-   * Registra en el provider el `stopAlarm` de esta barra mientras la alarma suena,
-   * para que un toque en CUALQUIER parte de la pantalla del ejecutor la silencie —
-   * paridad con el listener GLOBAL de `document` de la web (`RestTimer.tsx:102-111`).
-   * El provider lo invoca desde su observador de responder de pantalla completa
-   * (`onStartShouldSetResponderCapture`). Se registra al empezar a sonar y se limpia
-   * al parar/desmontar. Opcional: si no se pasa, solo silencia el toque SOBRE la barra.
+   * Si se pasa, la barra es el estado MINIMIZADO del interstitial V3: se muestra un boton
+   * "expandir" que vuelve al overlay fullscreen. Fuera de V3 no se pasa (barra clasica).
    */
-  registerAlarmSilencer?: (silence: (() => void) | null) => void
+  onExpand?: () => void
 }
 
 const RING_R = 52
@@ -87,303 +58,32 @@ function formatTime(seconds: number): string {
   return `${m}:${s.toString().padStart(2, '0')}`
 }
 
-export function RestTimerBar({
-  initialSeconds,
-  nextLabel,
-  warmup = false,
-  autoStart = true,
-  onClose,
-  registerAlarmSilencer,
-}: RestTimerBarProps) {
+export function RestTimerBar({ engine, nextLabel, warmup = false, onExpand }: RestTimerBarProps) {
   const insets = useSafeAreaInsets()
   const motion = useEvaMotion()
 
-  const [timeLeft, setTimeLeft] = useState(initialSeconds)
-  const [totalSeconds, setTotalSeconds] = useState(initialSeconds)
-  const [isActive, setIsActive] = useState(autoStart)
-  const [isAlarmRinging, setIsAlarmRinging] = useState(false)
-  const [muted, setMuted] = useState(isRestTimerMuted())
+  const {
+    timeLeft,
+    totalSeconds,
+    isActive,
+    isAlarmRinging,
+    muted,
+    done,
+    toggleTimer,
+    resetTimer,
+    adjust,
+    toggleMute,
+    stopAlarm,
+    close: handleClose,
+  } = engine
 
-  const endTimeRef = useRef<number | null>(null)
-  const timeLeftRef = useRef(initialSeconds)
-  const isActiveRef = useRef(autoStart)
-  const mountedRef = useRef(true)
-  const alarmIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
-  const alarmCountRef = useRef(0)
-  const alarmRingingRef = useRef(false)
-  const lastBeepRef = useRef<number | null>(null)
-
-  useEffect(() => {
-    isActiveRef.current = isActive
-  }, [isActive])
-
-  // Sincroniza el mute con la preferencia global (panel de ajustes ↔ barra).
-  useEffect(() => {
-    const unsub = subscribeRestTimerPrefs(() => setMuted(isRestTimerMuted()))
-    return unsub
-  }, [])
-
-  // Permiso de notificaciones (fix QA-3): ver el efecto `ensureRestNotifPermission` más
-  // abajo — se pide la PRIMERA vez que se monta un descanso. Diverge a propósito de la web
-  // (`RestTimer.tsx:132-148`, que nunca promptea): en móvil el aviso de fondo es una
-  // capacidad NATIVA que el CEO sancionó pedir una vez para que el cronómetro suene aunque
-  // el alumno apague la pantalla o salga de la app.
-
-  const stopAlarm = useCallback(() => {
-    if (alarmIntervalRef.current) {
-      clearInterval(alarmIntervalRef.current)
-      alarmIntervalRef.current = null
-    }
-    alarmRingingRef.current = false
-    alarmCountRef.current = 0
-    setIsAlarmRinging(false)
-  }, [])
-
-  // Limpieza dura al desmontar: corta el loop de alarma y cancela cualquier
-  // notificación de fin programada (descanso saltado / cerrado no debe sonar luego).
-  useEffect(() => () => {
-    mountedRef.current = false
-    if (alarmIntervalRef.current) clearInterval(alarmIntervalRef.current)
-    void cancelRestEndNotification()
-    // Al desmontar el ejecutor: retira el cronómetro vivo (QA-11) y barre cualquier
-    // notificación de descanso ya ENTREGADA/pintada (QA-10 (b)) para que MIUI no las deje.
-    void stopRestLiveCountdown()
-    void dismissRestEndNotification()
-  }, [])
-
-  // Silenciar-alarma-en-cualquier-lado (paridad web `RestTimer.tsx:102-111`): mientras
-  // suena, la web añade un listener GLOBAL en `document` que cualquier click/touchstart
-  // (en cualquier zona) detiene. Aquí registramos `stopAlarm` en el provider SOLO mientras
-  // `isAlarmRinging`, gateado igual que el efecto web (add al empezar / remove al parar),
-  // y el observador de pantalla del provider lo invoca ante cualquier toque. Al desmontar
-  // limpiamos el registro (equiv. del cleanup `removeEventListener` web).
-  useEffect(() => {
-    if (!registerAlarmSilencer) return
-    registerAlarmSilencer(isAlarmRinging ? stopAlarm : null)
-    return () => registerAlarmSilencer(null)
-  }, [isAlarmRinging, stopAlarm, registerAlarmSilencer])
-
-  const triggerAlarm = useCallback(() => {
-    if (alarmRingingRef.current) return
-    alarmRingingRef.current = true
-    alarmCountRef.current = 1
-    setIsAlarmRinging(true)
-    setIsActive(false)
-    endTimeRef.current = null
-
-    // Cue HÁPTICO fuerte (primario, nunca se silencia) + audio gateado por mute.
-    // Patrón EXACTO de la web (`RestTimer.tsx:128,150`: `triggerHaptic([200,100,200,100,400])`)
-    // vía `timerHaptics.restAlarm` — en Android emite esos ms exactos (antes `alarm()` daba
-    // Heavy+Success+Heavy, un patrón distinto). El alarma llegó en foreground: cancela la notif
-    // local programada (evita el beep duplicado al minimizar justo en el 0).
-    timerHaptics.restAlarm()
-    void cancelRestEndNotification()
-    // Fin natural: retira el cronómetro vivo — el "¡Descanso listo!" toma la posta (QA-11).
-    void stopRestLiveCountdown()
-    playTimerCue('alarm')
-
-    // Recordatorio en loop: refuerzo háptico cada 3s hasta 5 veces (como web, que repite el
-    // MISMO patrón `[200,100,200,100,400]` en cada iteración — `RestTimer.tsx:128`).
-    alarmIntervalRef.current = setInterval(() => {
-      alarmCountRef.current += 1
-      if (alarmCountRef.current > 5) {
-        stopAlarm()
-      } else {
-        timerHaptics.restAlarm()
-        playTimerCue('alarm')
-      }
-    }, 3000)
-  }, [stopAlarm])
-
-  // Cronómetro real de fondo (fix QA-3): mantiene la notificación local de FIN de descanso
-  // sincronizada con `endTimeRef` (el timestamp ABSOLUTO de término). Se (re)programa cuando
-  // cambia el fin (arranque, ±15s, reanudar) y se cancela al pausar/saltar/terminar. Es
-  // idempotente: `scheduleRestEndNotification` cancela la programación previa antes de crear
-  // la nueva. `endTimeRef` sólo es no-null mientras el descanso corre, así que basta con leerlo.
-  const syncEndNotification = useCallback(async () => {
-    const end = endTimeRef.current
-    if (!end) {
-      await cancelRestEndNotification()
-      void stopRestLiveCountdown()
-      return
-    }
-    const remaining = Math.max(0, Math.ceil((end - Date.now()) / 1000))
-    if (remaining <= 0) {
-      await cancelRestEndNotification()
-      void stopRestLiveCountdown()
-      return
-    }
-    await scheduleRestEndNotification(remaining)
-    // Cronómetro vivo (QA-11): notificación ongoing con cuenta regresiva nativa hasta `end`.
-    // Mismo id → arranque / ±15s / reanudar la ACTUALIZAN en su sitio (no apila). Android-only
-    // + no-op si Notifee no está enlazado (build sin la dep nativa) — ver rest-live-notification.
-    void showRestLiveCountdown(end)
-  }, [])
-
-  // Permiso de notificaciones (fix QA-3, pedido explícito del CEO): se solicita la PRIMERA
-  // vez que se monta un descanso. `ensureRestNotifPermission` es lazy + cacheado a nivel de
-  // módulo → nunca vuelve a preguntar (flujo amable). Al concederlo, arma la notif de fondo;
-  // si lo niega, el cronómetro sigue 100% en foreground (audio/háptica in-app) y no re-pregunta.
-  useEffect(() => {
-    // Barrido al arrancar un descanso nuevo (QA-10 (d)): cancela cualquier notificación de
-    // descanso PROGRAMADA huérfana de un mount/build previo antes de armar la de este descanso.
-    void sweepRestNotifications()
-    void ensureRestNotifPermission().then(() => {
-      if (mountedRef.current) void syncEndNotification()
-    })
-  }, [syncEndNotification])
-
-  // Cuenta regresiva basada en endTime (resiste throttling de background).
-  useEffect(() => {
-    let interval: ReturnType<typeof setInterval> | undefined
-    if (isActive && timeLeft > 0) {
-      if (!endTimeRef.current) {
-        endTimeRef.current = Date.now() + timeLeft * 1000
-        // Arma la notif local de fin AL ARRANCAR el descanso (no al minimizar). Así el aviso
-        // persiste aunque el SO congele/mate el JS al apagar la pantalla o irse a background —
-        // crítico en OEMs agresivos (Xiaomi/MIUI), donde el handler de AppState podría no
-        // alcanzar a programarla a tiempo al momento de minimizar.
-        void syncEndNotification()
-      }
-      interval = setInterval(() => {
-        if (!endTimeRef.current) return
-        const next = Math.max(0, Math.ceil((endTimeRef.current - Date.now()) / 1000))
-        timeLeftRef.current = next
-        setTimeLeft(next)
-        // El JS sólo tickea en FOREGROUND: en los últimos segundos cancela la notif de fondo
-        // para que el 0 lo cubra la alarma IN-APP (evita el doble aviso notif del SO + alarma
-        // in-app). Si el alumno minimiza en esta ventana, el handler de AppState la reprograma.
-        if (next <= 2) void cancelRestEndNotification()
-        if (next === 0) triggerAlarm()
-      }, 500)
-    } else if (timeLeft === 0 && isActive) {
-      triggerAlarm()
-    } else if (!isActive) {
-      // Pausa: descarta el fin absoluto y cancela la notif de fondo (no debe sonar en pausa).
-      endTimeRef.current = null
-      void cancelRestEndNotification()
-      void stopRestLiveCountdown() // retira el cronómetro vivo en pausa (QA-11)
-    }
-    return () => clearInterval(interval)
-  }, [isActive, timeLeft, triggerAlarm, syncEndNotification])
-
-  // Beeps/hápticos suaves 3-2-1 en los últimos 3s (el 0 lo cubre la alarma).
-  useEffect(() => {
-    if (!isActive) return
-    if (timeLeft > 0 && timeLeft <= 3 && lastBeepRef.current !== timeLeft) {
-      lastBeepRef.current = timeLeft
-      // Paridad de contrato con la web (`RestTimer.tsx:207-213`): en los últimos 3s tanto el beep
-      // COMO la háptica están AMBOS dentro del guard `if (!mutedRef.current)`. Con mute activo el
-      // countdown 3-2-1 queda totalmente silencioso Y sin háptica (antes RN vibraba igual). La
-      // alarma FINAL sí conserva háptica con mute en ambos lados; el 3-2-1 no.
-      if (!isRestTimerMuted()) {
-        void haptics.select()
-        playTimerCue('tick')
-      }
-    }
-  }, [timeLeft, isActive])
-
-  // AppState: al VOLVER a foreground cancela la notif de fondo (el cue lo da el timer
-  // in-app) y recomputa desde endTime (corrige el tiempo congelado). Al IRSE a background
-  // reafirma la notif para el tiempo restante — la notif YA quedó armada al arrancar el
-  // descanso (ver countdown effect); esto la reprograma por si la cancelamos en los últimos
-  // segundos en foreground y el alumno minimizó justo ahí. Idempotente.
-  useEffect(() => {
-    const sub = AppState.addEventListener('change', (nextState) => {
-      if (nextState === 'active') {
-        void cancelRestEndNotification()
-        // De vuelta en foreground el cue lo da el timer in-app: retira cualquier notif de
-        // descanso ya ENTREGADA/pintada (QA-10 (c)). No toca el cronómetro vivo de Notifee
-        // (id/canal propios) si el descanso sigue corriendo.
-        void dismissRestEndNotification()
-        if (!endTimeRef.current) return
-        const remaining = Math.max(0, Math.ceil((endTimeRef.current - Date.now()) / 1000))
-        timeLeftRef.current = remaining
-        setTimeLeft(remaining)
-        if (remaining === 0) triggerAlarm()
-      } else {
-        // background / inactive: reafirma la notif de fondo para el tiempo restante.
-        void syncEndNotification()
-      }
-    })
-    return () => sub.remove()
-  }, [triggerAlarm, syncEndNotification])
-
-  const toggleTimer = useCallback(() => {
-    void haptics.tap()
-    setIsActive((a) => !a)
-  }, [])
-
-  const resetTimer = useCallback(() => {
-    stopAlarm()
-    void cancelRestEndNotification()
-    // Retira el cronómetro vivo; se re-arma al re-disparar el countdown (QA-11).
-    void stopRestLiveCountdown()
-    void haptics.tap()
-    setTimeLeft(initialSeconds)
-    setTotalSeconds(initialSeconds)
-    timeLeftRef.current = initialSeconds
-    lastBeepRef.current = null
-    endTimeRef.current = null
-    setIsActive(true)
-  }, [initialSeconds, stopAlarm])
-
-  // ±15s al vuelo. Reanuda si veníamos del 0 (alarma); mantiene pausa si pausado.
-  const adjust = useCallback(
-    (delta: number) => {
-      void haptics.select()
-      const prev = timeLeftRef.current
-      const next = Math.max(0, prev + delta)
-      timeLeftRef.current = next
-      setTimeLeft(next)
-      setTotalSeconds((t) => (next > t ? next : t))
-      if (next <= 3) lastBeepRef.current = null
-
-      if (next === 0) {
-        endTimeRef.current = null
-      } else if (prev === 0) {
-        stopAlarm()
-        setIsActive(true)
-        endTimeRef.current = Date.now() + next * 1000
-      } else if (isActiveRef.current) {
-        endTimeRef.current = Date.now() + next * 1000
-      } else {
-        endTimeRef.current = null
-      }
-      // Reprograma/cancela la notif de fondo tras cambiar el fin absoluto (±15s).
-      void syncEndNotification()
-    },
-    [stopAlarm, syncEndNotification],
-  )
-
-  const toggleMute = useCallback(() => {
-    void haptics.tap()
-    setRestTimerMuted(!isRestTimerMuted())
-  }, [])
-
-  const handleClose = useCallback(() => {
-    stopAlarm()
-    void cancelRestEndNotification()
-    // Cerrar/saltar el descanso: retira el cronómetro vivo (QA-11) y barre las notifs de
-    // descanso ya ENTREGADAS/pintadas (QA-10 (b)) — MIUI no debe dejar ninguna colgada.
-    void stopRestLiveCountdown()
-    void dismissRestEndNotification()
-    onClose()
-  }, [onClose, stopAlarm])
-
-  // Tap-para-silenciar SOBRE la barra (paridad web `RestTimer.tsx:102-111`: mientras
-  // suena, un `click`/`touchstart` detiene la alarma). `onTouchStart` corre al iniciar
-  // el gesto aunque el toque caiga sobre un botón interno (pausa/±15s/mute), así el toque
-  // detiene la alarma y además ejecuta su acción. La paridad COMPLETA con el listener
-  // global de `document` de la web (silenciar tocando la fila de serie, el fondo o
-  // cualquier zona fuera de la barra) la aporta el observador de pantalla del provider
-  // (`onStartShouldSetResponderCapture` en `TimerProvider`, alimentado por
-  // `registerAlarmSilencer`); este handler local queda como refuerzo directo sobre la barra.
+  // Tap-para-silenciar SOBRE la barra (paridad web `RestTimer.tsx:102-111`): mientras suena,
+  // un toque detiene la alarma. El observador de pantalla del provider aporta la paridad completa
+  // (silenciar tocando cualquier zona); este handler es el refuerzo directo sobre la barra.
   const handleBarTouchStart = useCallback(() => {
-    if (alarmRingingRef.current) stopAlarm()
-  }, [stopAlarm])
+    if (isAlarmRinging) stopAlarm()
+  }, [isAlarmRinging, stopAlarm])
 
-  const done = timeLeft === 0
   const frac = Math.max(0, Math.min(1, timeLeft / (totalSeconds || 1)))
   const dashoffset = RING_C * (1 - frac)
 
@@ -484,6 +184,11 @@ export function RestTimerBar({
                   </Text>
                 </View>
                 <View style={styles.utilRow}>
+                  {onExpand ? (
+                    <UtilButton testID="rest-timer-expand" onPress={onExpand} label="Ver descanso completo">
+                      <ChevronUp size={16} color={ON_DARK_MUTED} />
+                    </UtilButton>
+                  ) : null}
                   <UtilButton testID="rest-timer-pause" onPress={toggleTimer} label={isActive ? 'Pausar' : 'Reanudar'}>
                     {isActive ? <Pause size={16} color={ON_DARK_MUTED} /> : <Play size={16} color={ON_DARK_MUTED} />}
                   </UtilButton>

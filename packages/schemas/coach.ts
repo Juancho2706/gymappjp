@@ -26,6 +26,9 @@ export const BrandSettingsSchema = z.object({
     welcome_modal_enabled: z.boolean().default(false),
     welcome_modal_content: z.string().max(1000, 'Máximo 1000 caracteres').optional().or(z.literal('')),
     welcome_modal_type: z.enum(['text', 'video']).default('text'),
+    // Ejecutor V3 (E0.7) — tema del ejecutor del alumno: 'coach' usa los colores del coach,
+    // 'eva' usa la paleta EVA (Sport/Aqua/Ember). Preferencia (no branding visual gateado).
+    executor_theme: z.enum(['coach', 'eva']).default('coach'),
 }).superRefine((data, ctx) => {
     if (data.welcome_modal_enabled && data.welcome_modal_type === 'video' && data.welcome_modal_content) {
         const videoUrlPattern = /^(https?:\/\/)?(www\.)?(youtube\.com|youtu\.be|vimeo\.com)\/.+$/i

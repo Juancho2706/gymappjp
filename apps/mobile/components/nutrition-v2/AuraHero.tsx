@@ -7,17 +7,23 @@
  * - "Aura"/glow detrás del anillo: halo translúcido del primario cuya opacidad
  *   crece con el % (auraGlowAlpha) + shadowColor del primario (iOS) / elevation
  *   con halo (Android).
- * - 3 mini-anillos de macro con su paleta categórica FIJA (MACRO_COLORS).
+ * - 3 mini-anillos de macro: ember/aqua fijos y sport desde la marca efectiva.
  * - Respeta reduce-motion (estado final directo, sin resorte) vía useEvaMotion.
  *
  * La celebración de la meta de energía la dispara el contenedor (TodayTab) sobre
  * el CelebrationOverlay ya existente — este componente es solo el hero visual.
  */
-import { useEffect, useState, type ReactNode } from 'react'
-import { StyleSheet, Text, View } from 'react-native'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { StyleSheet, Text, useWindowDimensions, View } from 'react-native'
 import Svg, { Circle } from 'react-native-svg'
 import { MotiView } from 'moti'
-import Animated, { useAnimatedProps, useSharedValue, withSpring } from 'react-native-reanimated'
+import Animated, {
+  runOnJS,
+  useAnimatedProps,
+  useAnimatedReaction,
+  useSharedValue,
+  withSpring,
+} from 'react-native-reanimated'
 import {
   auraGlowAlpha,
   energyProgressRatio,
@@ -28,15 +34,27 @@ import {
 } from '@eva/nutrition-v2'
 import { useTheme } from '../../context/ThemeContext'
 import { useEvaMotion } from '../../lib/motion'
-import { hexToRgba } from '../../lib/theme'
-import { MACRO_COLORS } from '../MacroRingSummary'
+import {
+  hexToRgba,
+  resolveEffectiveCoachBrandTheme,
+  resolveNutritionMacroColors,
+} from '../../lib/theme'
+import { shadow } from '../../lib/shadows'
+import { FONT, TYPE_SCALE } from '../../lib/typography'
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle)
 
-const MAIN_SIZE = 208
-const MAIN_STROKE = 15
+const MAIN_SIZE = 216
+const MAIN_STROKE = 16
 const MINI_SIZE = 74
-const MINI_STROKE = 7
+const MINI_STROKE = 8
+
+const MACRO_LABEL_CLASSES: Record<NutritionMacroKey, string> = {
+  protein: 'text-ember-700 dark:text-ember-300',
+  carbs: 'text-sport-700 dark:text-sport-300',
+  // El DS no define aqua-300; aqua-700 ya cambia al foreground legible bajo `.dark`.
+  fats: 'text-aqua-700',
+}
 
 interface MacroValue {
   consumed: number
@@ -56,6 +74,7 @@ function AuraRing({
   ratio,
   color,
   trackColor,
+  accessibilityLabel,
   children,
 }: {
   size: number
@@ -63,6 +82,7 @@ function AuraRing({
   ratio: number
   color: string
   trackColor: string
+  accessibilityLabel: string
   children?: ReactNode
 }) {
   const motion = useEvaMotion()
@@ -81,7 +101,12 @@ function AuraRing({
   const animatedProps = useAnimatedProps(() => ({ strokeDashoffset: offset.value }))
 
   return (
-    <View style={{ width: size, height: size }}>
+    <View
+      accessible
+      accessibilityLabel={accessibilityLabel}
+      accessibilityRole="image"
+      style={{ width: size, height: size }}
+    >
       <Svg width={size} height={size}>
         <Circle cx={size / 2} cy={size / 2} r={r} stroke={trackColor} strokeWidth={stroke} fill="none" />
         <AnimatedCircle
@@ -104,139 +129,236 @@ function AuraRing({
   )
 }
 
-function MacroMiniRing({ macro, value }: { macro: NutritionMacroKey; value: MacroValue }) {
-  const { theme } = useTheme()
+function MacroMiniRing({
+  macro,
+  value,
+  color,
+}: {
+  macro: NutritionMacroKey
+  value: MacroValue
+  color: string
+}) {
   const meta = NUTRITION_MACROS[macro]
-  const color = MACRO_COLORS[macro]
   const ratio = energyProgressRatio(value.consumed, value.target)
   const hasTarget = value.target != null && value.target > 0
+  const accessibilityLabel = hasTarget
+    ? `${meta.label}: ${Math.round(value.consumed)} de ${Math.round(value.target as number)} g`
+    : `${meta.label}: ${Math.round(value.consumed)} g`
 
   return (
     <View style={styles.miniWrap}>
-      <AuraRing size={MINI_SIZE} stroke={MINI_STROKE} ratio={ratio} color={color} trackColor={hexToRgba(color, 0.16)}>
-        <Text style={[styles.miniValue, { color: theme.foreground, fontFamily: 'Archivo_800ExtraBold' }]}>
+      <AuraRing
+        accessibilityLabel={accessibilityLabel}
+        size={MINI_SIZE}
+        stroke={MINI_STROKE}
+        ratio={ratio}
+        color={color}
+        trackColor={hexToRgba(color, 0.16)}
+      >
+        <Text className="text-text-strong" style={styles.miniValue}>
           {Math.round(value.consumed)}
         </Text>
         {hasTarget ? (
-          <Text style={[styles.miniTarget, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+          <Text className="text-text-subtle" style={styles.miniTarget}>
             / {Math.round(value.target as number)}
           </Text>
         ) : null}
       </AuraRing>
-      <Text style={[styles.miniLabel, { color, fontFamily: 'HankenGrotesk_700Bold' }]}>{meta.shortLabel}</Text>
+      <Text accessible={false} className={MACRO_LABEL_CLASSES[macro]} style={styles.miniLabel}>
+        {meta.shortLabel}
+      </Text>
     </View>
   )
 }
 
-export function AuraHero({ greetingName, calories, macros }: Props) {
-  const { theme } = useTheme()
+/** Número de kcal con resorte, estático cuando el sistema reduce movimiento. */
+function AnimatedKcal({ value }: { value: number }) {
   const motion = useEvaMotion()
+  const rounded = Math.max(Math.round(value), 0)
+  const animatedValue = useSharedValue(motion.reduced ? rounded : 0)
+  const [display, setDisplay] = useState(motion.reduced ? rounded : 0)
+
+  useAnimatedReaction(
+    () => Math.max(Math.round(animatedValue.value), 0),
+    (next, previous) => {
+      if (next !== previous) runOnJS(setDisplay)(next)
+    },
+    [],
+  )
+
+  useEffect(() => {
+    if (motion.reduced) {
+      animatedValue.value = rounded
+      setDisplay(rounded)
+      return
+    }
+    animatedValue.value = withSpring(rounded, motion.spring('ui') as Parameters<typeof withSpring>[1])
+    // `animatedValue` es estable; `motion.spring` cambia de identidad en cada render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rounded, motion.reduced])
+
+  return <>{new Intl.NumberFormat('es-CL').format(display)}</>
+}
+
+export function AuraHero({ greetingName, calories, macros }: Props) {
+  const { theme, branding } = useTheme()
+  const motion = useEvaMotion()
+  const { width } = useWindowDimensions()
+  const expanded = width >= 640
   const [hour] = useState(() => new Date().getHours())
   const greeting = greetingForHour(hour, greetingName)
+  const effectiveBrand = useMemo(() => resolveEffectiveCoachBrandTheme(branding), [branding])
+  const macroColors = useMemo(
+    () => resolveNutritionMacroColors(effectiveBrand.brandColor),
+    [effectiveBrand.brandColor],
+  )
 
   const { consumed, target } = calories
   const ratio = energyProgressRatio(consumed, target)
   const alpha = auraGlowAlpha(consumed, target)
   const hasTarget = target != null && target > 0
   const remaining = hasTarget ? Math.max((target as number) - consumed, 0) : null
+  const energyAccessibilityLabel = hasTarget
+    ? `${Math.round(consumed)} de ${Math.round(target as number)} kcal`
+    : `${Math.round(consumed)} kcal consumidas`
 
   return (
     <MotiView
-      accessibilityLabel="Resumen de energía de hoy"
+      className="bg-surface-card"
       from={motion.reduced ? undefined : { opacity: 0, translateY: 8 }}
       animate={{ opacity: 1, translateY: 0 }}
-      transition={{ type: 'timing', duration: motion.duration('base') }}
-      style={[
-        styles.card,
-        { backgroundColor: theme.card, borderColor: theme.border, borderRadius: theme.radius.card },
-      ]}
+      transition={{ type: 'timing', duration: motion.duration('slower') }}
+      style={[{ borderRadius: theme.radius.card }, shadow('sm', theme.scheme)]}
     >
-      <Text style={[styles.greeting, { color: theme.foreground, fontFamily: theme.fontDisplay }]}>{greeting}</Text>
-      <Text style={[styles.subtitle, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
-        {hasTarget ? 'Tu energía de hoy' : 'Vas sumando tu día'}
-      </Text>
-
-      <View style={styles.ringStage}>
-        {/* Aura/glow detrás del anillo — deriva del primario, intensidad ↑ con el %. */}
+      <View
+        className="overflow-hidden rounded-card border border-border-subtle bg-surface-card"
+        style={{ padding: expanded ? 24 : 20 }}
+      >
         <MotiView
-          pointerEvents="none"
-          from={motion.reduced ? undefined : { opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ type: 'timing', duration: motion.duration('slow') }}
-          style={[
-            styles.glow,
-            {
-              width: MAIN_SIZE * 0.9,
-              height: MAIN_SIZE * 0.9,
-              backgroundColor: hexToRgba(theme.primary, alpha),
-              shadowColor: theme.primary,
-              shadowOpacity: 0.15 + ratio * 0.35,
-              shadowRadius: 26,
-              elevation: 10,
-            },
-          ]}
-        />
-        <AuraRing
-          size={MAIN_SIZE}
-          stroke={MAIN_STROKE}
-          ratio={ratio}
-          color={theme.primary}
-          trackColor={hexToRgba(theme.primary, 0.13)}
+          from={motion.reduced ? undefined : { opacity: 0, translateY: 6 }}
+          animate={{ opacity: 1, translateY: 0 }}
+          transition={{ type: 'timing', duration: motion.duration('slow'), delay: motion.reduced ? 0 : 50 }}
         >
-          <Text style={[styles.kcal, { color: theme.foreground, fontFamily: 'Archivo_800ExtraBold' }]}>
-            {new Intl.NumberFormat('es-CL').format(Math.max(Math.round(consumed), 0))}
+          <Text
+            className="text-text-strong"
+            style={[
+              styles.greeting,
+              { fontSize: expanded ? TYPE_SCALE['2xl'] : TYPE_SCALE.xl },
+            ]}
+          >
+            {greeting}
           </Text>
-          <Text style={[styles.kcalUnit, { color: theme.mutedForeground, fontFamily: 'HankenGrotesk_700Bold' }]}>
-            kcal
+          <Text className="text-text-muted" style={styles.subtitle}>
+            {hasTarget ? 'Tu energía de hoy' : 'Vas sumando tu día'}
           </Text>
-          {hasTarget ? (
-            <Text style={[styles.kcalTarget, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
-              de {formatNutritionCalories(target as number)}
-            </Text>
-          ) : (
-            <Text style={[styles.kcalHint, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
-              Registra lo que comas para ver tu avance
-            </Text>
-          )}
-        </AuraRing>
-      </View>
+        </MotiView>
 
-      {remaining != null ? (
-        <Text style={[styles.remaining, { color: theme.primary, fontFamily: 'Archivo_800ExtraBold' }]}>
-          {remaining > 0 ? `${formatNutritionCalories(remaining)} restantes` : 'Meta de energía cumplida'}
-        </Text>
-      ) : null}
+        <View style={styles.ringStage}>
+          {/* Aura/glow detrás del anillo — deriva del primario, intensidad ↑ con el %. */}
+          <MotiView
+            pointerEvents="none"
+            from={motion.reduced ? undefined : { opacity: 0, scale: 0.92 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ type: 'timing', duration: motion.duration('slower') }}
+            style={[
+              styles.glow,
+              {
+                width: MAIN_SIZE * 0.9,
+                height: MAIN_SIZE * 0.9,
+                backgroundColor: hexToRgba(theme.primary, alpha),
+                shadowColor: theme.primary,
+                shadowOpacity: 0.15 + ratio * 0.35,
+                shadowRadius: 26,
+                elevation: 10,
+              },
+            ]}
+          />
+          <AuraRing
+            accessibilityLabel={energyAccessibilityLabel}
+            size={MAIN_SIZE}
+            stroke={MAIN_STROKE}
+            ratio={ratio}
+            color={theme.primary}
+            trackColor={hexToRgba(theme.primary, 0.13)}
+          >
+            <Text
+              className="text-text-strong"
+              style={[
+                styles.kcal,
+                {
+                  fontSize: expanded ? TYPE_SCALE['5xl'] : TYPE_SCALE['4xl'],
+                  lineHeight: expanded ? TYPE_SCALE['5xl'] : TYPE_SCALE['4xl'],
+                },
+              ]}
+            >
+              <AnimatedKcal value={consumed} />
+            </Text>
+            <Text className="text-text-subtle" style={styles.kcalUnit}>
+              kcal
+            </Text>
+            {hasTarget ? (
+              <Text className="text-text-muted" style={styles.kcalTarget}>
+                de{' '}
+                <Text className="text-text-body" style={styles.kcalTargetValue}>
+                  {formatNutritionCalories(target as number)}
+                </Text>
+              </Text>
+            ) : (
+              <Text className="text-text-muted" style={styles.kcalHint}>
+                Registra lo que comas para ver tu avance
+              </Text>
+            )}
+          </AuraRing>
+        </View>
 
-      <View style={[styles.miniRow, { borderTopColor: theme.border }]}>
-        <MacroMiniRing macro="protein" value={macros.protein} />
-        <MacroMiniRing macro="carbs" value={macros.carbs} />
-        <MacroMiniRing macro="fats" value={macros.fats} />
+        {remaining != null ? (
+          <Text className="text-primary" style={styles.remaining}>
+            {remaining > 0 ? `${formatNutritionCalories(remaining)} restantes` : 'Meta de energía cumplida'}
+          </Text>
+        ) : null}
+
+        <MotiView
+          from={motion.reduced ? undefined : { opacity: 0, translateY: 6 }}
+          animate={{ opacity: 1, translateY: 0 }}
+          transition={{ type: 'timing', duration: motion.duration('slow'), delay: motion.reduced ? 0 : 120 }}
+          style={[styles.miniRow, { borderTopColor: theme.border }]}
+        >
+          <MacroMiniRing macro="protein" value={macros.protein} color={macroColors.protein} />
+          <MacroMiniRing macro="carbs" value={macros.carbs} color={macroColors.carbs} />
+          <MacroMiniRing macro="fats" value={macros.fats} color={macroColors.fats} />
+        </MotiView>
       </View>
     </MotiView>
   )
 }
 
 const styles = StyleSheet.create({
-  card: { padding: 18, borderWidth: 1, gap: 4 },
-  greeting: { fontSize: 20, letterSpacing: -0.4 },
-  subtitle: { fontSize: 13, marginTop: 2 },
-  ringStage: { alignItems: 'center', justifyContent: 'center', marginTop: 14 },
+  greeting: { fontFamily: FONT.display, letterSpacing: TYPE_SCALE.xl * -0.015 },
+  subtitle: { fontFamily: FONT.ui, fontSize: TYPE_SCALE.sm, marginTop: 2 },
+  ringStage: { alignItems: 'center', justifyContent: 'center', marginTop: 20 },
   glow: { position: 'absolute', borderRadius: 999, shadowOffset: { width: 0, height: 0 } },
   center: { alignItems: 'center', justifyContent: 'center' },
-  kcal: { fontSize: 42, letterSpacing: -1.5, fontVariant: ['tabular-nums'], lineHeight: 46 },
-  kcalUnit: { fontSize: 12, marginTop: 2 },
-  kcalTarget: { fontSize: 12, marginTop: 6 },
-  kcalHint: { fontSize: 11, marginTop: 6, textAlign: 'center', maxWidth: 150 },
-  remaining: { fontSize: 14, textAlign: 'center', marginTop: 12, fontVariant: ['tabular-nums'] },
+  kcal: { fontFamily: FONT.display, fontVariant: ['tabular-nums'] },
+  kcalUnit: { fontFamily: FONT.uiMedium, fontSize: TYPE_SCALE.xs, marginTop: 4 },
+  kcalTarget: { fontFamily: FONT.ui, fontSize: TYPE_SCALE.xs, marginTop: 8 },
+  kcalTargetValue: { fontFamily: FONT.uiSemibold, fontVariant: ['tabular-nums'] },
+  kcalHint: { fontFamily: FONT.ui, fontSize: TYPE_SCALE.xs, marginTop: 8, textAlign: 'center', maxWidth: 160 },
+  remaining: {
+    fontFamily: FONT.uiSemibold,
+    fontSize: TYPE_SCALE.sm,
+    textAlign: 'center',
+    marginTop: 12,
+    fontVariant: ['tabular-nums'],
+  },
   miniRow: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
-    marginTop: 16,
-    paddingTop: 16,
+    gap: 12,
+    marginTop: 20,
+    paddingTop: 20,
     borderTopWidth: 1,
   },
-  miniWrap: { alignItems: 'center', gap: 6 },
-  miniValue: { fontSize: 15, letterSpacing: -0.3, lineHeight: 17 },
-  miniTarget: { fontSize: 10, lineHeight: 12 },
-  miniLabel: { fontSize: 12, letterSpacing: 0.5, marginTop: 2 },
+  miniWrap: { flex: 1, alignItems: 'center', gap: 6 },
+  miniValue: { fontFamily: FONT.uiBold, fontSize: TYPE_SCALE.sm, fontVariant: ['tabular-nums'], lineHeight: TYPE_SCALE.sm },
+  miniTarget: { fontFamily: FONT.ui, fontSize: 10, fontVariant: ['tabular-nums'], lineHeight: 10 },
+  miniLabel: { fontFamily: FONT.uiSemibold, fontSize: TYPE_SCALE.xs, marginTop: 2 },
 })

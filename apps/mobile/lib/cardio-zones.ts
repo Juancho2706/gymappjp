@@ -13,7 +13,7 @@
  * fallback por edad (Tanaka) cuando falta FCmax medida ya lo resuelve @eva/cardio.
  */
 import { useEffect, useState } from 'react'
-import { resolveClientZones, type CardioProfile, type HrZoneRange } from '@eva/cardio'
+import { resolveClientZones, type CardioProfile, type HrToZoneProfile, type HrZoneRange, type ResolvedClientZones } from '@eva/cardio'
 import { supabase } from './supabase'
 
 export function useClientCardioZones(enabled: boolean): HrZoneRange[] | null {
@@ -59,4 +59,60 @@ export function useClientCardioZones(enabled: boolean): HrZoneRange[] | null {
   }, [enabled])
 
   return zones
+}
+
+/**
+ * Variante que devuelve las zonas resueltas COMPLETAS (`ResolvedClientZones`): mismos datos y misma
+ * lectura money-safe que `useClientCardioZones`, pero conserva la FCmax/FC-reposo efectivas para
+ * clasificar el BPM EN VIVO del sensor BLE (E6.1) con `hrToZone`. Una sola lectura de la fila propia.
+ * El ejecutor V3 la usa; V2 sigue con `useClientCardioZones` (sin sensor) intacto.
+ */
+export function useClientCardioResolved(enabled: boolean): ResolvedClientZones | null {
+  const [resolved, setResolved] = useState<ResolvedClientZones | null>(null)
+
+  useEffect(() => {
+    if (!enabled) {
+      setResolved(null)
+      return
+    }
+    let cancelled = false
+    void (async () => {
+      try {
+        const {
+          data: { user },
+        } = await supabase.auth.getUser()
+        if (!user) return
+        const { data } = await supabase
+          .from('clients')
+          .select('birth_date, resting_hr, max_hr_override')
+          .eq('id', user.id)
+          .maybeSingle()
+        if (cancelled || !data) return
+        const row = data as {
+          birth_date?: string | null
+          resting_hr?: number | null
+          max_hr_override?: number | null
+        }
+        const profile: CardioProfile = {
+          birthDate: row.birth_date ?? null,
+          restingHr: row.resting_hr ?? null,
+          maxHrOverride: row.max_hr_override ?? null,
+        }
+        setResolved(resolveClientZones(profile))
+      } catch {
+        if (!cancelled) setResolved(null)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [enabled])
+
+  return resolved
+}
+
+/** Deriva el perfil mínimo para `hrToZone` (BPM en vivo) desde las zonas resueltas. null si no hay FCmax. */
+export function hrToZoneProfileFromResolved(resolved: ResolvedClientZones | null): HrToZoneProfile | null {
+  if (!resolved) return null
+  return { max_hr: resolved.maxHr, resting_hr: resolved.restingHr }
 }

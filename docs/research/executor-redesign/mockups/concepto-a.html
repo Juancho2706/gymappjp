@@ -1,0 +1,540 @@
+<section class="concept" id="concept-a" data-name="Impulso">
+  <style>
+    #concept-a {
+      --z2: #4ade80;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      color: #f4f4f6;
+      padding: 40px 28px 56px;
+      background: #0c0c11;
+      -webkit-font-smoothing: antialiased;
+    }
+    #concept-a *,
+    #concept-a *::before,
+    #concept-a *::after { box-sizing: border-box; }
+
+    #concept-a .ca-head { max-width: 1240px; margin: 0 auto 40px; }
+    #concept-a .ca-eyebrow {
+      display: inline-block;
+      font-size: 12px; font-weight: 800; letter-spacing: .18em; text-transform: uppercase;
+      color: #0c0c11; background: var(--brand, #58cc02);
+      padding: 5px 12px; border-radius: 999px; margin-bottom: 16px;
+    }
+    #concept-a .ca-title {
+      font-size: clamp(38px, 6vw, 64px); font-weight: 900; letter-spacing: -.03em;
+      line-height: .98; margin: 0 0 12px;
+      background: linear-gradient(120deg, #ffffff 30%, var(--brand, #58cc02) 130%);
+      -webkit-background-clip: text; background-clip: text; color: transparent;
+    }
+    #concept-a .ca-sub { font-size: 17px; line-height: 1.5; color: #a8a8b3; max-width: 640px; margin: 0; }
+
+    #concept-a .ca-row {
+      display: flex; flex-wrap: wrap; gap: 40px 44px; justify-content: center;
+      max-width: 1320px; margin: 0 auto;
+    }
+    #concept-a .ca-col { width: 375px; }
+    #concept-a .ca-label {
+      display: flex; align-items: center; gap: 9px;
+      font-size: 15px; font-weight: 800; letter-spacing: -.01em; margin: 0 0 14px 6px;
+    }
+    #concept-a .ca-label span {
+      width: 9px; height: 9px; border-radius: 50%; background: var(--brand, #58cc02);
+      box-shadow: 0 0 0 4px color-mix(in srgb, var(--brand, #58cc02) 22%, transparent);
+    }
+
+    /* ---- phone shell ---- */
+    #concept-a .ca-phone {
+      width: 375px; height: 760px; border-radius: 44px;
+      background: #050507;
+      padding: 11px;
+      box-shadow: 0 0 0 2px #26262e, 0 30px 60px -22px rgba(0,0,0,.85), inset 0 1px 0 rgba(255,255,255,.05);
+      position: relative;
+    }
+    #concept-a .ca-screen {
+      position: relative; width: 100%; height: 100%; border-radius: 34px; overflow: hidden;
+      background: radial-gradient(120% 80% at 50% -8%, #1c1c24 0%, #16161d 42%, #121218 100%);
+      display: flex; flex-direction: column;
+    }
+    #concept-a .ca-notch {
+      position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
+      width: 118px; height: 26px; background: #050507; border-radius: 999px; z-index: 40;
+    }
+    #concept-a .ca-body { flex: 1; display: flex; flex-direction: column; padding: 40px 18px 18px; min-height: 0; }
+
+    /* ---- shared bits ---- */
+    #concept-a .ca-chip {
+      display: inline-flex; align-items: center; gap: 6px;
+      font-size: 12px; font-weight: 700; padding: 5px 11px; border-radius: 999px;
+      background: color-mix(in srgb, var(--brand, #58cc02) 16%, #16161d);
+      color: color-mix(in srgb, var(--brand, #58cc02) 82%, #ffffff);
+      border: 1.5px solid color-mix(in srgb, var(--brand, #58cc02) 34%, transparent);
+    }
+    #concept-a .ca-tnum { font-variant-numeric: tabular-nums; }
+
+    /* juicy button base */
+    #concept-a .ca-juicy {
+      border: 2px solid color-mix(in srgb, var(--brand, #58cc02) 55%, #000);
+      background: var(--brand, #58cc02);
+      color: #072100; font-weight: 900; letter-spacing: -.01em;
+      border-radius: 16px;
+      box-shadow: 0 5px 0 0 color-mix(in srgb, var(--brand, #58cc02) 55%, #000);
+      transition: transform .12s ease, box-shadow .12s ease;
+      cursor: default;
+    }
+
+    /* ===== SESSION PROGRESS (dots) ===== */
+    #concept-a .ca-progress { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; }
+    #concept-a .ca-dots { display: flex; gap: 7px; flex: 1; }
+    #concept-a .ca-dot {
+      flex: 1; height: 9px; border-radius: 999px; background: #2a2a34;
+    }
+    #concept-a .ca-dot.done { background: color-mix(in srgb, var(--brand, #58cc02) 60%, #16161d); }
+    #concept-a .ca-dot.now {
+      background: var(--brand, #58cc02);
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand, #58cc02) 25%, transparent);
+    }
+    #concept-a .ca-count { font-size: 12px; font-weight: 800; color: #8f8f9c; white-space: nowrap; }
+
+    /* ===== exercise heading ===== */
+    #concept-a .ca-exname { font-size: 27px; font-weight: 900; letter-spacing: -.02em; margin: 2px 0 8px; }
+    #concept-a .ca-chiprow { display: flex; gap: 8px; margin-bottom: 14px; }
+
+    /* ===== MEDIA card w/ animated silhouette ===== */
+    #concept-a .ca-media {
+      position: relative; height: 168px; border-radius: 22px; overflow: hidden;
+      border: 2px solid #2f2f3a;
+      background: linear-gradient(160deg, #202029, #17171f);
+      margin-bottom: 14px; display: flex; align-items: flex-end; justify-content: center;
+    }
+    #concept-a .ca-media::after {
+      content: ""; position: absolute; inset: 0;
+      background: linear-gradient(105deg, transparent 20%, rgba(255,255,255,.07) 45%, transparent 68%);
+      background-size: 220% 100%;
+    }
+    /* bench figure */
+    #concept-a .ca-fig { position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%); width: 150px; height: 96px; }
+    #concept-a .ca-bench { position: absolute; bottom: 0; left: 27px; width: 96px; height: 12px; border-radius: 6px; background: #3b3b48; }
+    #concept-a .ca-benchleg { position: absolute; bottom: -18px; width: 8px; height: 18px; background: #33333f; border-radius: 3px; }
+    #concept-a .ca-torso { position: absolute; bottom: 12px; left: 40px; width: 70px; height: 20px; border-radius: 12px; background: color-mix(in srgb, var(--brand, #58cc02) 40%, #2a2a34); }
+    #concept-a .ca-head-c { position: absolute; bottom: 12px; left: 26px; width: 20px; height: 20px; border-radius: 50%; background: color-mix(in srgb, var(--brand, #58cc02) 40%, #2a2a34); }
+    #concept-a .ca-bar {
+      position: absolute; left: 50%; transform: translateX(-50%);
+      width: 108px; height: 7px; border-radius: 4px;
+      background: var(--brand, #58cc02); bottom: 58px;
+      box-shadow: 0 0 12px color-mix(in srgb, var(--brand, #58cc02) 60%, transparent);
+    }
+    #concept-a .ca-bar::before, #concept-a .ca-bar::after {
+      content: ""; position: absolute; top: -6px; width: 16px; height: 19px; border-radius: 4px; background: color-mix(in srgb, var(--brand, #58cc02) 75%, #000);
+    }
+    #concept-a .ca-bar::before { left: -6px; }
+    #concept-a .ca-bar::after { right: -6px; }
+    #concept-a .ca-arm { position: absolute; bottom: 30px; width: 7px; height: 30px; border-radius: 4px; background: color-mix(in srgb, var(--brand, #58cc02) 40%, #2a2a34); }
+    #concept-a .ca-arm.l { left: 52px; } #concept-a .ca-arm.r { right: 52px; }
+    #concept-a .ca-medialbl {
+      position: absolute; top: 10px; left: 12px; font-size: 11px; font-weight: 800;
+      letter-spacing: .04em; color: #cfcfd8; background: rgba(0,0,0,.4); padding: 3px 9px; border-radius: 999px;
+      display: flex; align-items: center; gap: 6px; z-index: 3;
+    }
+    #concept-a .ca-live { width: 6px; height: 6px; border-radius: 50%; background: var(--brand, #58cc02); }
+
+    /* ===== prescription ===== */
+    #concept-a .ca-rx {
+      font-size: 13px; font-weight: 700; color: #c4c4cf; text-align: center; margin-bottom: 12px;
+      letter-spacing: .01em;
+    }
+    #concept-a .ca-rx b { color: #fff; }
+
+    /* previous set — tappable */
+    #concept-a .ca-prev {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 12px 15px; border-radius: 14px; margin-bottom: 12px;
+      background: #1b1b23; border: 2px dashed #34343f;
+    }
+    #concept-a .ca-prev .l { font-size: 12px; color: #8f8f9c; font-weight: 700; }
+    #concept-a .ca-prev .r { font-size: 14px; font-weight: 800; color: #e8e8ee; }
+    #concept-a .ca-prev .tap { font-size: 11px; font-weight: 800; color: var(--brand, #58cc02); }
+
+    /* current set values */
+    #concept-a .ca-cur { display: flex; gap: 10px; margin-bottom: 14px; }
+    #concept-a .ca-val {
+      flex: 1; text-align: center; padding: 12px 8px 10px; border-radius: 16px;
+      background: #1c1c24; border: 2px solid #2f2f3a;
+    }
+    #concept-a .ca-val .n { font-size: 34px; font-weight: 900; letter-spacing: -.03em; line-height: 1; }
+    #concept-a .ca-val .u { font-size: 11px; font-weight: 800; color: #8f8f9c; letter-spacing: .08em; margin-top: 5px; }
+
+    /* main complete button */
+    #concept-a .ca-cta {
+      height: 62px; width: 100%; font-size: 18px; display: flex; align-items: center; justify-content: center; gap: 9px;
+      margin-bottom: 12px;
+    }
+    #concept-a .ca-cta .ck {
+      width: 22px; height: 22px; border-radius: 50%; background: rgba(7,33,0,.22);
+      display: flex; align-items: center; justify-content: center; font-size: 13px;
+    }
+
+    /* set indicator + tools */
+    #concept-a .ca-foot { display: flex; align-items: center; justify-content: space-between; }
+    #concept-a .ca-sets { display: flex; gap: 6px; align-items: center; }
+    #concept-a .ca-sq { width: 26px; height: 26px; border-radius: 8px; background: #26262f; border: 2px solid #34343f; }
+    #concept-a .ca-sq.on { background: var(--brand, #58cc02); border-color: color-mix(in srgb, var(--brand, #58cc02) 55%, #000); }
+    #concept-a .ca-setlbl { font-size: 12px; font-weight: 800; color: #8f8f9c; margin-left: 4px; }
+    #concept-a .ca-tools { display: flex; gap: 8px; }
+    #concept-a .ca-tool {
+      width: 40px; height: 40px; border-radius: 12px; background: #1c1c24; border: 2px solid #2f2f3a;
+      display: flex; align-items: center; justify-content: center; font-size: 15px; color: #b7b7c2;
+    }
+
+    /* ============ REST SCREEN ============ */
+    #concept-a .ca-rest { justify-content: space-between; align-items: center; text-align: center; }
+    #concept-a .ca-restcel { font-size: 12px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: var(--brand, #58cc02); margin-bottom: 4px; }
+    #concept-a .ca-celly {
+      position: relative; display: inline-flex; align-items: center; gap: 8px;
+      background: color-mix(in srgb, var(--brand, #58cc02) 14%, #16161d);
+      border: 2px solid color-mix(in srgb, var(--brand, #58cc02) 34%, transparent);
+      padding: 8px 16px; border-radius: 999px; font-size: 13px; font-weight: 800; margin-top: 6px;
+    }
+    #concept-a .ca-celly .b {
+      width: 22px; height: 22px; border-radius: 50%; background: var(--brand, #58cc02); color: #072100;
+      display: flex; align-items: center; justify-content: center; font-size: 12px;
+    }
+    /* confetti */
+    #concept-a .ca-confetti { position: absolute; inset: -14px -20px; pointer-events: none; overflow: visible; }
+    #concept-a .ca-conf { position: absolute; top: 50%; left: 50%; width: 7px; height: 7px; border-radius: 2px; opacity: 0; }
+
+    /* ring */
+    #concept-a .ca-ringwrap { position: relative; width: 232px; height: 232px; }
+    #concept-a .ca-ring {
+      width: 100%; height: 100%; border-radius: 50%;
+      background: conic-gradient(var(--brand, #58cc02) 0deg 224deg, #26262f 224deg 360deg);
+      -webkit-mask: radial-gradient(closest-side, transparent 76%, #000 77%);
+      mask: radial-gradient(closest-side, transparent 76%, #000 77%);
+    }
+    #concept-a .ca-ringtxt {
+      position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    }
+    #concept-a .ca-bignum { font-size: 62px; font-weight: 900; letter-spacing: -.04em; line-height: 1; }
+    #concept-a .ca-restlbl { font-size: 12px; font-weight: 800; color: #8f8f9c; letter-spacing: .16em; text-transform: uppercase; margin-top: 6px; }
+
+    #concept-a .ca-restbtns { display: flex; gap: 10px; width: 100%; }
+    #concept-a .ca-rb {
+      flex: 1; height: 56px; border-radius: 15px; font-size: 15px; font-weight: 800;
+      background: #1c1c24; border: 2px solid #2f2f3a; color: #e8e8ee;
+      display: flex; align-items: center; justify-content: center;
+    }
+    #concept-a .ca-rb.skip { background: var(--brand, #58cc02); border-color: color-mix(in srgb, var(--brand,#58cc02) 55%, #000); color: #072100; box-shadow: 0 5px 0 0 color-mix(in srgb, var(--brand,#58cc02) 55%, #000); }
+
+    /* NEXT card */
+    #concept-a .ca-next {
+      width: 100%; display: flex; gap: 12px; align-items: center; text-align: left;
+      background: #1a1a22; border: 2px solid #2f2f3a; border-radius: 18px; padding: 12px;
+    }
+    #concept-a .ca-nextmini {
+      width: 62px; height: 62px; border-radius: 12px; flex-shrink: 0; position: relative; overflow: hidden;
+      background: linear-gradient(160deg, #23232c, #17171f); border: 1.5px solid #34343f;
+    }
+    #concept-a .ca-nextmini::after {
+      content: ""; position: absolute; inset: 0;
+      background: linear-gradient(105deg, transparent 30%, rgba(255,255,255,.08) 50%, transparent 70%);
+      background-size: 220% 100%;
+    }
+    #concept-a .ca-minidot { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); width: 30px; height: 6px; border-radius: 3px; background: color-mix(in srgb, var(--brand,#58cc02) 70%, #000); }
+    #concept-a .ca-nextinfo .k { font-size: 10px; font-weight: 800; letter-spacing: .12em; color: var(--brand, #58cc02); text-transform: uppercase; }
+    #concept-a .ca-nextinfo .t { font-size: 16px; font-weight: 900; letter-spacing: -.01em; margin: 3px 0; }
+    #concept-a .ca-nextinfo .d { font-size: 12px; font-weight: 700; color: #a8a8b3; }
+    #concept-a .ca-coach {
+      font-size: 14px; font-weight: 800; color: #e8e8ee; line-height: 1.35; max-width: 280px;
+    }
+    #concept-a .ca-coach .q { color: var(--brand, #58cc02); }
+
+    /* ============ CARDIO SCREEN ============ */
+    #concept-a .ca-cardio { justify-content: space-between; align-items: center; text-align: center; }
+    #concept-a .ca-cardtop { display: flex; align-items: center; justify-content: space-between; width: 100%; }
+    #concept-a .ca-interv { font-size: 13px; font-weight: 800; color: #c4c4cf; }
+    #concept-a .ca-interv b { color: #fff; }
+    #concept-a .ca-bpm {
+      display: inline-flex; align-items: center; gap: 8px;
+      background: #1c1c24; border: 2px solid #2f2f3a; border-radius: 999px; padding: 6px 13px 6px 10px;
+    }
+    #concept-a .ca-heart { width: 12px; height: 12px; border-radius: 50%; background: #f87171; }
+    #concept-a .ca-bpm .v { font-size: 17px; font-weight: 900; }
+    #concept-a .ca-bpm .s { font-size: 9px; font-weight: 700; color: #8f8f9c; text-align: left; line-height: 1; }
+
+    #concept-a .ca-cardring { position: relative; width: 250px; height: 250px; }
+    #concept-a .ca-cardring .ring2 {
+      width: 100%; height: 100%; border-radius: 50%;
+      background: conic-gradient(var(--brand, #58cc02) 0deg 148deg, #26262f 148deg 360deg);
+      -webkit-mask: radial-gradient(closest-side, transparent 78%, #000 79%);
+      mask: radial-gradient(closest-side, transparent 78%, #000 79%);
+    }
+    #concept-a .ca-cardtxt { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+    #concept-a .ca-cardnum { font-size: 66px; font-weight: 900; letter-spacing: -.04em; line-height: 1; }
+    #concept-a .ca-cardsub { font-size: 11px; font-weight: 800; letter-spacing: .16em; text-transform: uppercase; color: #8f8f9c; margin-top: 6px; }
+
+    #concept-a .ca-zone {
+      display: inline-flex; align-items: center; gap: 9px; padding: 10px 18px; border-radius: 999px;
+      background: color-mix(in srgb, #4ade80 16%, #16161d); border: 2px solid color-mix(in srgb, #4ade80 40%, transparent);
+      font-size: 16px; font-weight: 900;
+    }
+    #concept-a .ca-zone .zd { width: 12px; height: 12px; border-radius: 50%; background: #4ade80; box-shadow: 0 0 0 4px color-mix(in srgb, #4ade80 25%, transparent); }
+    #concept-a .ca-zone .zt { color: #4ade80; }
+    #concept-a .ca-zone .zk { color: #cbd5c9; font-weight: 700; font-size: 13px; }
+
+    #concept-a .ca-pause {
+      width: 100%; height: 58px; border-radius: 16px; font-size: 16px; font-weight: 900;
+      display: flex; align-items: center; justify-content: center; gap: 9px;
+    }
+
+    /* ===== bullets ===== */
+    #concept-a .ca-bullets { list-style: none; padding: 0; margin: 18px 4px 0; }
+    #concept-a .ca-bullets li {
+      position: relative; padding-left: 22px; margin-bottom: 10px; font-size: 13.5px; line-height: 1.45; color: #b7b7c2;
+    }
+    #concept-a .ca-bullets li::before {
+      content: ""; position: absolute; left: 0; top: 6px; width: 12px; height: 12px; border-radius: 4px;
+      background: var(--brand, #58cc02); box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand,#58cc02) 20%, transparent);
+    }
+    #concept-a .ca-bullets b { color: #eeeef2; font-weight: 800; }
+
+    /* ===== motion signature ===== */
+    #concept-a .ca-motion {
+      max-width: 1240px; margin: 48px auto 0; padding: 24px 26px;
+      border-radius: 20px; background: #14141b; border: 1.5px solid #26262f;
+    }
+    #concept-a .ca-motion h4 {
+      font-size: 12px; font-weight: 900; letter-spacing: .16em; text-transform: uppercase;
+      color: var(--brand, #58cc02); margin: 0 0 14px;
+    }
+    #concept-a .ca-motion ul { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px 26px; }
+    #concept-a .ca-motion li { font-size: 13.5px; line-height: 1.5; color: #b7b7c2; }
+    #concept-a .ca-motion li b { color: #eeeef2; font-weight: 800; }
+
+    /* ============ ANIMATIONS ============ */
+    @media (prefers-reduced-motion: no-preference) {
+      #concept-a .ca-media::after { animation: concept-a-shimmer 3.2s linear infinite; }
+      #concept-a .ca-nextmini::after { animation: concept-a-shimmer 3.2s linear infinite; }
+      #concept-a .ca-bar { animation: concept-a-press 2.4s ease-in-out infinite; }
+      #concept-a .ca-arm { animation: concept-a-press 2.4s ease-in-out infinite; }
+      #concept-a .ca-live { animation: concept-a-pulse 1.6s ease-in-out infinite; }
+      #concept-a .ca-dot.now { animation: concept-a-beat 1.4s ease-in-out infinite; }
+      #concept-a .ca-cta { animation: concept-a-breathe 2.6s ease-in-out infinite; }
+      #concept-a .ca-bignum { animation: concept-a-breathe 2.6s ease-in-out infinite; }
+      #concept-a .ca-cardnum { animation: concept-a-breathe 2.8s ease-in-out infinite; }
+      #concept-a .ca-heart { animation: concept-a-beat 1s ease-in-out infinite; }
+      #concept-a .ca-zone .zd { animation: concept-a-pulse 1.8s ease-in-out infinite; }
+      #concept-a .ca-celly .b { animation: concept-a-pop 3.6s ease-in-out infinite; }
+      #concept-a .ca-next { animation: concept-a-slidein 4s ease-in-out infinite; }
+      #concept-a .ca-conf { animation: concept-a-confetti 7s ease-in-out infinite; }
+      #concept-a .ca-conf:nth-child(1) { --cx: -46px; --cy: -30px; background: #58cc02; animation-delay: 0s; }
+      #concept-a .ca-conf:nth-child(2) { --cx: 44px; --cy: -34px; background: #facc15; animation-delay: .3s; }
+      #concept-a .ca-conf:nth-child(3) { --cx: -54px; --cy: 10px; background: #38bdf8; animation-delay: .6s; }
+      #concept-a .ca-conf:nth-child(4) { --cx: 56px; --cy: 6px; background: #fb923c; animation-delay: .15s; }
+      #concept-a .ca-conf:nth-child(5) { --cx: -20px; --cy: -46px; background: #f472b6; animation-delay: .45s; }
+      #concept-a .ca-conf:nth-child(6) { --cx: 22px; --cy: -44px; background: #58cc02; animation-delay: .75s; }
+      #concept-a .ca-conf:nth-child(7) { --cx: -38px; --cy: 34px; background: #facc15; animation-delay: .55s; }
+      #concept-a .ca-conf:nth-child(8) { --cx: 40px; --cy: 32px; background: #38bdf8; animation-delay: .9s; }
+      #concept-a .ca-cardprog { animation: concept-a-cardgrow 8s linear infinite; }
+    }
+    @keyframes concept-a-shimmer { to { background-position: -220% 0; } }
+    @keyframes concept-a-press { 0%,100% { transform: translateX(-50%) translateY(0); } 45% { transform: translateX(-50%) translateY(16px); } }
+    @keyframes concept-a-pulse { 0%,100% { opacity: 1; transform: scale(1); } 50% { opacity: .4; transform: scale(.7); } }
+    @keyframes concept-a-beat { 0%,100% { transform: scale(1); } 30% { transform: scale(1.3); } 45% { transform: scale(1); } }
+    @keyframes concept-a-breathe { 0%,100% { transform: scale(1); } 50% { transform: scale(1.035); } }
+    @keyframes concept-a-pop { 0%,80%,100% { transform: scale(1); } 40% { transform: scale(1.18); } }
+    @keyframes concept-a-slidein { 0%,100% { transform: translateX(0); opacity: 1; } }
+    @keyframes concept-a-confetti {
+      0%, 4% { opacity: 0; transform: translate(-50%,-50%) scale(.3); }
+      8% { opacity: 1; }
+      22% { opacity: 1; transform: translate(calc(-50% + var(--cx)), calc(-50% + var(--cy))) scale(1) rotate(180deg); }
+      34%, 100% { opacity: 0; transform: translate(calc(-50% + var(--cx)), calc(-50% + var(--cy) + 24px)) scale(.6) rotate(320deg); }
+    }
+    @keyframes concept-a-cardgrow { from { transform: scaleX(.25); } to { transform: scaleX(1); } }
+  </style>
+
+  <div class="ca-head">
+    <span class="ca-eyebrow">Concepto A</span>
+    <h2 class="ca-title">Impulso</h2>
+    <p class="ca-sub">ADN de un juego bien disenado llevado al gimnasio: cada serie cerrada devuelve una reaccion. Botones jugosos que se hunden, dots que celebran, micro-copy con caracter. Entrenar se siente como avanzar de nivel.</p>
+  </div>
+
+  <div class="ca-row">
+
+    <!-- ============ FUERZA ============ -->
+    <div class="ca-col">
+      <p class="ca-label"><span></span>Fuerza</p>
+      <div class="ca-phone">
+        <div class="ca-screen">
+          <div class="ca-notch"></div>
+          <div class="ca-body">
+            <div class="ca-progress">
+              <div class="ca-dots">
+                <div class="ca-dot done"></div><div class="ca-dot done"></div>
+                <div class="ca-dot now"></div><div class="ca-dot"></div>
+                <div class="ca-dot"></div><div class="ca-dot"></div>
+                <div class="ca-dot"></div><div class="ca-dot"></div>
+              </div>
+              <div class="ca-count ca-tnum">3 / 8</div>
+            </div>
+
+            <div class="ca-exname">Press banca</div>
+            <div class="ca-chiprow">
+              <span class="ca-chip">Fuerza</span>
+              <span class="ca-chip">Pecho</span>
+            </div>
+
+            <div class="ca-media">
+              <div class="ca-medialbl"><span class="ca-live"></span>En loop</div>
+              <div class="ca-fig">
+                <div class="ca-bench"></div>
+                <div class="ca-benchleg" style="left:33px;"></div>
+                <div class="ca-benchleg" style="right:33px;"></div>
+                <div class="ca-head-c"></div>
+                <div class="ca-torso"></div>
+                <div class="ca-arm l"></div>
+                <div class="ca-arm r"></div>
+                <div class="ca-bar"></div>
+              </div>
+            </div>
+
+            <div class="ca-rx ca-tnum">4 x 8 &middot; <b>60 kg</b> &middot; RIR 2 &middot; desc 90s</div>
+
+            <div class="ca-prev">
+              <div class="l">Anterior</div>
+              <div class="r ca-tnum">60 kg &times; 8</div>
+              <div class="tap">1 tap ↻</div>
+            </div>
+
+            <div class="ca-cur">
+              <div class="ca-val"><div class="n ca-tnum">60</div><div class="u">KG</div></div>
+              <div class="ca-val"><div class="n ca-tnum">8</div><div class="u">REPS</div></div>
+            </div>
+
+            <div class="ca-juicy ca-cta"><span class="ck">✓</span> Aplastar serie</div>
+
+            <div class="ca-foot">
+              <div class="ca-sets">
+                <div class="ca-sq on"></div><div class="ca-sq on"></div>
+                <div class="ca-sq"></div><div class="ca-sq"></div>
+                <div class="ca-setlbl ca-tnum">2/4</div>
+              </div>
+              <div class="ca-tools">
+                <div class="ca-tool">⌨</div>
+                <div class="ca-tool">✎</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <ul class="ca-bullets">
+        <li><b>Un ejercicio a la vez</b>: la media corre sola al centro, cero taps para ver la tecnica.</li>
+        <li><b>Boton que se hunde</b>: sombra dura de 5px; al presionar cae y devuelve el logro con rebote.</li>
+        <li><b>Auto-fill de 1 tap</b> desde la serie anterior; valores gigantes 60/8 imposibles de errar.</li>
+      </ul>
+    </div>
+
+    <!-- ============ DESCANSO ============ -->
+    <div class="ca-col">
+      <p class="ca-label"><span></span>Descanso</p>
+      <div class="ca-phone">
+        <div class="ca-screen">
+          <div class="ca-notch"></div>
+          <div class="ca-body ca-rest">
+            <div>
+              <div class="ca-restcel">Serie cerrada</div>
+              <div class="ca-celly">
+                <div class="ca-confetti">
+                  <span class="ca-conf"></span><span class="ca-conf"></span>
+                  <span class="ca-conf"></span><span class="ca-conf"></span>
+                  <span class="ca-conf"></span><span class="ca-conf"></span>
+                  <span class="ca-conf"></span><span class="ca-conf"></span>
+                </div>
+                <span class="b">✓</span> +1 serie &middot; vas volando
+              </div>
+            </div>
+
+            <div class="ca-ringwrap">
+              <div class="ca-ring"></div>
+              <div class="ca-ringtxt">
+                <div class="ca-bignum ca-tnum">01:07</div>
+                <div class="ca-restlbl">Descanso</div>
+              </div>
+            </div>
+
+            <div class="ca-restbtns">
+              <div class="ca-rb ca-tnum">-15s</div>
+              <div class="ca-rb skip">Saltar</div>
+              <div class="ca-rb ca-tnum">+15s</div>
+            </div>
+
+            <div class="ca-next">
+              <div class="ca-nextmini"><div class="ca-minidot"></div></div>
+              <div class="ca-nextinfo">
+                <div class="k">Siguiente</div>
+                <div class="t">Sentadilla bulgara</div>
+                <div class="d ca-tnum">3 x 10 &middot; 40 kg</div>
+              </div>
+            </div>
+
+            <div class="ca-coach"><span class="q">"</span>Vamos, ultima ronda del bloque. La bajaste perfecto.<span class="q">"</span></div>
+          </div>
+        </div>
+      </div>
+      <ul class="ca-bullets">
+        <li><b>El descanso ES la transicion</b>: fullscreen, anillo grueso juguetón, numero que respira.</li>
+        <li><b>Micro-celebracion viva</b>: check con confetti CSS en loop suave y "+1 serie" que salta con spring.</li>
+        <li><b>Preview con media mini</b> del siguiente ejercicio para llegar mentalmente listo.</li>
+      </ul>
+    </div>
+
+    <!-- ============ CARDIO ============ -->
+    <div class="ca-col">
+      <p class="ca-label"><span></span>Cardio</p>
+      <div class="ca-phone">
+        <div class="ca-screen">
+          <div class="ca-notch"></div>
+          <div class="ca-body ca-cardio">
+            <div class="ca-cardtop">
+              <div class="ca-interv ca-tnum">Intervalo <b>3</b> de 6</div>
+              <div class="ca-bpm">
+                <span class="ca-heart"></span>
+                <span class="v ca-tnum">142</span>
+                <span class="s">BPM<br>Apple Watch</span>
+              </div>
+            </div>
+
+            <div class="ca-cardring">
+              <div class="ring2"></div>
+              <div class="ca-cardtxt">
+                <div class="ca-cardnum ca-tnum">12:24</div>
+                <div class="ca-cardsub">Restante</div>
+              </div>
+            </div>
+
+            <div class="ca-zone">
+              <span class="zd"></span>
+              <span class="zt">Z2</span>
+              <span class="zk">mantiene</span>
+            </div>
+
+            <div class="ca-juicy ca-pause">❚❚ Pausar</div>
+          </div>
+        </div>
+      </div>
+      <ul class="ca-bullets">
+        <li><b>Tiempo restante gigante</b> con anillo de countdown como heroe: legible a un metro.</li>
+        <li><b>Zona con color semantico fijo</b> (Z2 verde, no de marca) para leer esfuerzo de un vistazo.</li>
+        <li><b>BPM con punto latiendo</b> y fuente del dato (Apple Watch) en letra chica y honesta.</li>
+      </ul>
+    </div>
+
+  </div>
+
+  <div class="ca-motion">
+    <h4>Firma de motion — Impulso</h4>
+    <ul>
+      <li><b>Springs con rebote</b>: checks y "+1 serie" entran con overshoot elastico (stiffness alta, damping bajo, ~1.1 de escala pico).</li>
+      <li><b>Boton juicy</b>: press hunde 5px en 120ms ease-out, rebota al soltar; el color oscurecido de la sombra es la "profundidad".</li>
+      <li><b>Ritmo 200-450ms</b>: numero de descanso respira a 2.6s, anillo avanza continuo, shimmer del media a 3.2s lineal.</li>
+      <li><b>Haptica</b>: impacto medio al cerrar serie, doble tap ligero en celebracion PR, tick suave en cada -15s/+15s.</li>
+    </ul>
+  </div>
+</section>

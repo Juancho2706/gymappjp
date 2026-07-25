@@ -45,3 +45,13 @@ Archivos RN: `apps/mobile/app/alumno/nutrition-v2/index.tsx` (bloques `StudentNu
 
 Captura del header+toolbar web móvil vs RN en los 3 tabs; medir radio/padding/gap del toolbar y del
 pill activo; verificar labels/íconos y ausencia de eyebrow (4A-01).
+
+## Cierre (2026-07-21)
+
+- Toolbar alineado al web (`NutritionToolbar`): `rounded-card` + `p-2` + `gap-2` + `min-h-12` +
+  `flex-wrap items-center`; sombra = decisión única del kit RN (`shadow('sm', scheme)`, misma que
+  NutritionCard). Pills con `gap-2`; conservan `min-h-11` (44pt táctil, adaptación documentada;
+  web usa min-h-10).
+- Sin cambio, documentadas como adaptaciones vigentes: persistencia de vista por stack (item 3),
+  fade Moti entre tabs (item 4, la web "anima" con skeleton RSC), gate no-habilitado como fallback
+  (item 5) y skeleton del shell sin toolbar (item 6).
