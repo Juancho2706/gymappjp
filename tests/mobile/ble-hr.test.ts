@@ -3,7 +3,6 @@
  * Fixtures uint8 vs uint16, señal→barras y promedio de stream. No toca la libreria nativa.
  */
 import { describe, expect, it } from 'vitest'
-import { encode as encodeBase64 } from 'base64-arraybuffer'
 import {
   averageBpm,
   base64ToBytes,
@@ -12,8 +11,11 @@ import {
   rssiToBars,
 } from '../../apps/mobile/lib/ble-hr-parse'
 
+// Los fixtures se codifican con `Buffer` de Node: este test vive en la raiz del monorepo y
+// `base64-arraybuffer` solo esta declarado en `apps/mobile` (.npmrc usa shamefully-hoist=false,
+// asi que la raiz no lo resuelve en una instalacion limpia).
 function toBase64(bytes: number[]): string {
-  return encodeBase64(new Uint8Array(bytes).buffer)
+  return Buffer.from(Uint8Array.from(bytes)).toString('base64')
 }
 
 describe('parseHeartRateMeasurement (0x2A37)', () => {
