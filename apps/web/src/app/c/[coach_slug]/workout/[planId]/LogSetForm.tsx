@@ -563,7 +563,8 @@ function StrengthLogSetForm({
     }
 
     // Abre el teclado numérico custom en el campo tocado (solo pointer coarse + provider presente).
-    // El objetivo prescrito viaja en el header del keypad (DB-5); "Listo" reusa `requestSubmit()`.
+    // El objetivo prescrito viaja en el header del keypad (DB-5); "Listo" solo CIERRA el teclado
+    // (decisión CEO 2026-07-25) — la serie se concluye con el CTA de la fila.
     const openKeypadFor = (initialField: 'weight' | 'reps') => {
         if (!useKeypad || !keypad) return
         // El input pudo montar como number (punto decimal) antes del gate coarse; normaliza a coma.
@@ -584,9 +585,6 @@ function StrengthLogSetForm({
                 lastReps: lastSet?.reps ?? null,
                 exerciseName: nextUpLabel,
             },
-            // El esfuerzo (RPE/RIR) NO vive en el teclado: se registra sólo en el panel opcional de la
-            // fila (decisión del CEO) → "Listo" en el último campo submitea directo.
-            requestSubmit: () => formRef.current?.requestSubmit(),
         })
     }
 
@@ -1502,7 +1500,8 @@ function TypedLogSetRow({
     }, [holdPrefillNonce])
 
     // Abre el teclado custom en el campo tocado (solo pointer coarse). El objetivo tipado viaja en el
-    // header (DB-5); "Listo" reusa `requestSubmit()`. Reglas decimales por campo vienen de typedKeypadFields.
+    // header (DB-5); "Listo" solo CIERRA el teclado (decisión CEO 2026-07-25) — la serie se concluye
+    // con el CTA de la fila. Reglas decimales por campo vienen de typedKeypadFields.
     const openKeypadFor = (key: string) => {
         if (!useKeypad || !keypad) return
         // Movilidad per_side (E3.2): dos campos hold (izq/der); el resto de modos, campos de siempre.
@@ -1520,7 +1519,6 @@ function TypedLogSetRow({
             fieldRefs,
             initialFieldKey: key,
             target: { exerciseName: nextUpLabel, objective: typedObjective },
-            requestSubmit: () => formRef.current?.requestSubmit(),
         })
     }
 

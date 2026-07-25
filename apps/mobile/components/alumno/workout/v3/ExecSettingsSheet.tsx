@@ -10,9 +10,11 @@ import { Sheet } from '../../../Sheet'
 import {
   getRestTimerSound,
   getRestTimerVolume,
+  isRestAutoTimerEnabled,
   isRestTimerMuted,
   isRestTimerSystemToneEnabled,
   isRestTimerVibrationEnabled,
+  setRestAutoTimerEnabled,
   setRestTimerMuted,
   setRestTimerSound,
   setRestTimerSystemTone,
@@ -38,7 +40,8 @@ import type { ExecTheme } from './exec-theme'
  * Todos espejan la card `RestAlarmPreference` del perfil y el panel web `WorkoutTimerSettingsPanel`
  * (elegir tono/volumen SIEMPRE previsualiza, sin gatear por mute — el mute silencia la alarma real, no
  * la prueba directa del usuario). Siguen funcionales: Vibración, Sonidos de celebración (Ola 4),
- * Mantener pantalla encendida y Mostrar RPE/RIR.
+ * Mantener pantalla encendida y Mostrar RPE/RIR. Primera fila: Cronómetro automático (`omni_autotimer`,
+ * decisión CEO 2026-07-25 — ver comentario en la fila); con OFF se pinta en rojo con aviso.
  *
  * Persistencia AsyncStorage: sonido/tono/volumen/vibración/tono-sistema viven en `rest-timer-preferences`
  * (los consume el motor); keep-awake/RPE/celebración en `exec-settings` (useSyncExternalStore).
@@ -75,6 +78,7 @@ export function ExecSettingsSheet({
 
   // Prefs del cronómetro (viven en `rest-timer-preferences`); suscribimos para reflejar cambios externos
   // (barra ↔ tuerca ↔ card del perfil).
+  const [autoTimer, setAutoTimerState] = useState(isRestAutoTimerEnabled())
   const [vibration, setVibrationState] = useState(isRestTimerVibrationEnabled())
   const [soundOn, setSoundOn] = useState(!isRestTimerMuted())
   const [tone, setTone] = useState<TimerSound>(getRestTimerSound())
@@ -85,6 +89,7 @@ export function ExecSettingsSheet({
 
   useEffect(() => {
     const sync = () => {
+      setAutoTimerState(isRestAutoTimerEnabled())
       setVibrationState(isRestTimerVibrationEnabled())
       setSoundOn(!isRestTimerMuted())
       setTone(getRestTimerSound())
@@ -131,12 +136,38 @@ export function ExecSettingsSheet({
       accessibilityLabel="Ajustes del entrenamiento"
     >
       <View style={{ paddingBottom: 8 }}>
+        {/* Cronómetro automático — de vuelta en la tuerca (decisión CEO 2026-07-25): la fila se retiró
+            por fidelidad al mockup y un `omni_autotimer` OFF heredado del ejecutor V2 quedaba atrapado
+            sin UI para revertirlo. OFF ⇒ fila roja + aviso: no habrá cronómetro de descanso. */}
+        <SettingRow
+          exec={exec}
+          name="Cronómetro automático"
+          sublabel={autoTimer
+            ? 'El descanso empieza solo al guardar cada serie'
+            : 'No habrá cronómetro de descanso al guardar tus series'}
+          first
+          danger={!autoTimer}
+          control={
+            <Toggle
+              testID="setting-autotimer"
+              value={autoTimer}
+              exec={exec}
+              danger={!autoTimer}
+              accessibilityLabel="Cronómetro automático de descanso"
+              onChange={(v) => {
+                void haptics.tap()
+                setRestAutoTimerEnabled(v)
+                setAutoTimerState(v)
+              }}
+            />
+          }
+        />
+
         {/* Sonido del cronómetro — controla `restTimerMuted`. ON = suena la alarma. */}
         <SettingRow
           exec={exec}
           name="Sonido del cronómetro"
           sublabel="La vibración sigue activa aunque lo apagues."
-          first
           control={
             <Toggle
               testID="setting-sound"
@@ -312,18 +343,24 @@ export function ExecSettingsSheet({
   )
 }
 
+/** Rojo de advertencia del sheet forceDark (paridad web: red-400 sobre superficie oscura). */
+const DANGER = '#f87171'
+
 function SettingRow({
   exec,
   name,
   sublabel,
   control,
   first = false,
+  danger = false,
 }: {
   exec: ExecTheme
   name: string
   sublabel?: string
   control: ReactNode
   first?: boolean
+  /** Estado de advertencia (apagado peligroso): nombre y sublabel en rojo. */
+  danger?: boolean
 }) {
   const s = exec.surface
   return (
@@ -338,9 +375,14 @@ function SettingRow({
       }}
     >
       <View style={{ flex: 1, minWidth: 0 }}>
-        <Text style={{ fontFamily: FONT.uiBold, fontSize: 14, letterSpacing: -0.1, color: s.text }}>{name}</Text>
+        <Text style={{ fontFamily: FONT.uiBold, fontSize: 14, letterSpacing: -0.1, color: danger ? DANGER : s.text }}>{name}</Text>
         {sublabel ? (
-          <Text style={{ fontFamily: FONT.uiMedium, fontSize: 12, color: s.textMuted, marginTop: 3, lineHeight: 16 }}>{sublabel}</Text>
+          <Text
+            accessibilityLiveRegion={danger ? 'polite' : 'none'}
+            style={{ fontFamily: danger ? FONT.uiBold : FONT.uiMedium, fontSize: 12, color: danger ? DANGER : s.textMuted, marginTop: 3, lineHeight: 16 }}
+          >
+            {sublabel}
+          </Text>
         ) : null}
       </View>
       {control}
@@ -513,6 +555,7 @@ function Toggle({
   onChange,
   exec,
   disabled = false,
+  danger = false,
   testID,
   accessibilityLabel,
 }: {
@@ -520,10 +563,13 @@ function Toggle({
   onChange: (v: boolean) => void
   exec: ExecTheme
   disabled?: boolean
+  /** Estado de advertencia (apagado peligroso): tiñe el toggle de rojo. */
+  danger?: boolean
   testID?: string
   accessibilityLabel?: string
 }) {
   const s = exec.surface
+  const warn = danger && !value
   return (
     <Pressable
       testID={testID}
@@ -540,8 +586,8 @@ function Toggle({
         borderWidth: 2,
         justifyContent: 'center',
         paddingHorizontal: 3,
-        backgroundColor: value ? exec.accent : s.border,
-        borderColor: value ? hexToRgba(exec.accent, 0.6) : s.borderStrong,
+        backgroundColor: warn ? hexToRgba(DANGER, 0.18) : value ? exec.accent : s.border,
+        borderColor: warn ? hexToRgba(DANGER, 0.7) : value ? hexToRgba(exec.accent, 0.6) : s.borderStrong,
         opacity: disabled ? 0.5 : 1,
       }}
     >

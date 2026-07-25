@@ -153,7 +153,8 @@ export function NumericKeypadSheet({
   }, [onHeight])
 
   const chips = incrementChipsForStep(step)
-  // "Siguiente" salvo que sea el último campo → ahí "Listo" cierra la serie.
+  // "Siguiente" salvo que sea el último campo → ahí "Listo" cierra el TECLADO (no la serie: el
+  // submit vive en el CTA de la fila — decisión CEO 2026-07-25).
   const primaryIsNext = !isLastField
 
   const objectiveLine = (() => {
@@ -350,12 +351,12 @@ export function NumericKeypadSheet({
           </KeyButton>
         </div>
 
-        {/* Acción — "Siguiente" avanza; "Listo" cierra la serie (AC-B3) */}
+        {/* Acción — "Siguiente" avanza; "Listo" cierra el teclado (la serie se guarda con el CTA de la fila) */}
         <div className="mt-2">
           <button
             type="button"
             onClick={primaryIsNext ? onNext : onDone}
-            aria-label={primaryIsNext ? 'Siguiente' : 'Listo, guardar serie'}
+            aria-label={primaryIsNext ? 'Siguiente' : 'Listo, cerrar teclado'}
             className="flex h-14 w-full items-center justify-center gap-2 rounded-control bg-[var(--sport-500)] text-[15px] font-bold text-white transition-transform active:scale-[0.98]"
           >
             {primaryIsNext ? (

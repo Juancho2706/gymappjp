@@ -175,8 +175,10 @@ export function KeypadHost({
   }
 
   const commit = () => {
-    // Háptica de "serie guardada" — la más fuerte del keypad (mirror web `onDone` → `triggerHaptic(20)`
-    // antes de `closeKeypad()`+`requestSubmit()`, `WorkoutKeypadProvider.tsx:245-251`, spec §7/§11.3).
+    // Háptica de "serie guardada" — la más fuerte del keypad. DIVERGENCIA INTENCIONAL con web
+    // (decisión CEO 2026-07-25): allá "Listo" solo CIERRA el teclado y la serie se guarda con el CTA
+    // de la fila (visible junto al sheet); acá el keypad es un Modal full-screen que TAPA la fila,
+    // así que "Listo"/"Guardar" sigue siendo el commit (no hay otro botón alcanzable).
     // Cubre las 3 rutas de confirmación de EDICIÓN (Omitir/Guardar/Listo-vía-goNext) que antes no daban
     // feedback háptico, a diferencia de la ruta PRIMARIA (`TypedKeypad` handleDone / `ActiveSetRow`).
     haptics.setDone()

@@ -30,8 +30,10 @@ import { useExecSettings } from './exec-settings'
 interface ExecSettingsSheetProps {
   open: boolean
   onClose: () => void
-  /** Auto-cronómetro: se conserva por compatibilidad con el call-site del motor. Su control YA no vive
-   *  en esta tuerca (no está en el mockup ni en RN) — el toggle real está en la pista de descanso. */
+  /** Cronómetro automático — el descanso arranca solo al guardar cada serie. La pref (`omni_autotimer`)
+   *  es device-scoped y también la escribía la tuerca legacy (V2): QA1 retiró esta fila por fidelidad
+   *  al mockup y un OFF heredado quedaba ATRAPADO sin UI para revertirlo (cronómetro muerto). Vuelve por
+   *  decisión CEO 2026-07-25; con OFF la fila se pinta en rojo con aviso explícito. */
   autoTimerEnabled?: boolean
   onToggleAutoTimer?: () => void
   /** Finalizar entrenamiento — decisión CEO (2026-07-22): la barra fija "Finalizar" NO existe en V3, su
@@ -52,10 +54,13 @@ function Toggle({
   checked,
   onChange,
   label,
+  danger = false,
 }: {
   checked: boolean
   onChange: (next: boolean) => void
   label: string
+  /** Estado de advertencia (apagado peligroso): tiñe el toggle de rojo. */
+  danger?: boolean
 }) {
   return (
     <button
@@ -65,6 +70,7 @@ function Toggle({
       aria-label={label}
       onClick={() => onChange(!checked)}
       className={cn('exec-v3-tog', checked && 'is-on')}
+      style={danger && !checked ? { borderColor: 'rgba(248,113,113,0.7)', background: 'rgba(248,113,113,0.18)' } : undefined}
     >
       <span className="exec-v3-tog-knob" aria-hidden />
     </button>
@@ -74,6 +80,8 @@ function Toggle({
 export function ExecSettingsSheet({
   open,
   onClose,
+  autoTimerEnabled = true,
+  onToggleAutoTimer,
   onFinish,
 }: ExecSettingsSheetProps) {
   const reducedMotion = useReducedMotion()
@@ -135,9 +143,36 @@ export function ExecSettingsSheet({
             </div>
 
             <div className="exec-v3-setrows">
-              {/* Sonido del cronómetro (mute REAL del RestTimer). Primera fila (mockup: sin "Cronómetro
-                  automático" — ese toggle vive en la pista de descanso, no en la tuerca). */}
-              <div className="exec-v3-setrow is-first">
+              {/* Cronómetro automático — de vuelta en la tuerca (decisión CEO 2026-07-25): QA1 la retiró
+                  por fidelidad al mockup y un `omni_autotimer` OFF heredado de la tuerca legacy quedaba
+                  atrapado sin UI. OFF ⇒ fila roja + aviso: no habrá cronómetro de descanso. */}
+              {onToggleAutoTimer && (
+                <div className="exec-v3-setrow is-first">
+                  <div className="exec-v3-setmain">
+                    <div className="exec-v3-setname" style={autoTimerEnabled ? undefined : { color: '#f87171' }}>
+                      Cronómetro automático
+                    </div>
+                    <div
+                      className="exec-v3-setsub"
+                      style={autoTimerEnabled ? undefined : { color: '#f87171', fontWeight: 700 }}
+                      role={autoTimerEnabled ? undefined : 'alert'}
+                    >
+                      {autoTimerEnabled
+                        ? 'El descanso empieza solo al guardar cada serie'
+                        : 'No habrá cronómetro de descanso al guardar tus series'}
+                    </div>
+                  </div>
+                  <Toggle
+                    checked={autoTimerEnabled}
+                    onChange={() => onToggleAutoTimer()}
+                    label="Cronómetro automático"
+                    danger={!autoTimerEnabled}
+                  />
+                </div>
+              )}
+
+              {/* Sonido del cronómetro (mute REAL del RestTimer). */}
+              <div className={cn('exec-v3-setrow', !onToggleAutoTimer && 'is-first')}>
                 <div className="exec-v3-setmain">
                   <div className="exec-v3-setname">Sonido del cronómetro</div>
                   <div className="exec-v3-setsub">Suena al terminar el descanso</div>
