@@ -66,6 +66,7 @@ const EXERCISES = [
         id: oid(1),
         name: 'Carrera / trote en cinta de correr',
         equipment: 'Cinta de correr',
+        cardio_modality: 'run',
         difficulty: 'Principiante',
         instructions: [
             'Ajusta la velocidad y la inclinación para que el esfuerzo coincida con la zona prescrita; corre suelto, sin agarrarte del frente.',
@@ -78,6 +79,7 @@ const EXERCISES = [
         id: oid(2),
         name: 'Trote / carrera al aire libre',
         equipment: 'Ninguno',
+        cardio_modality: 'run',
         difficulty: 'Principiante',
         instructions: [
             'Comienza con un trote suave para entrar en la zona objetivo; regula el ritmo por la sensación de esfuerzo.',
@@ -90,6 +92,7 @@ const EXERCISES = [
         id: oid(3),
         name: 'Caminata',
         equipment: 'Ninguno',
+        cardio_modality: 'run',
         difficulty: 'Principiante',
         instructions: [
             'Camina a paso firme, apoyando talón y punta, con el pecho arriba y los brazos acompañando el ritmo.',
@@ -102,6 +105,7 @@ const EXERCISES = [
         id: oid(4),
         name: 'Bicicleta estática',
         equipment: 'Bicicleta estática',
+        cardio_modality: 'bike',
         difficulty: 'Principiante',
         instructions: [
             'Ajusta el sillín a la altura de la cadera y regula la resistencia según la zona objetivo.',
@@ -114,6 +118,7 @@ const EXERCISES = [
         id: oid(5),
         name: 'Máquina de remo',
         equipment: 'Remoergómetro',
+        cardio_modality: 'row',
         difficulty: 'Intermedio',
         instructions: [
             'Sujeta el mango con la espalda neutra y empuja primero con las piernas, luego abre la cadera y jala con los brazos.',
@@ -126,6 +131,7 @@ const EXERCISES = [
         id: oid(6),
         name: 'Elíptica',
         equipment: 'Máquina elíptica',
+        cardio_modality: 'elliptical',
         difficulty: 'Principiante',
         instructions: [
             'Mantente erguido con el core activo y usa los manubrios móviles para sumar el tren superior.',
@@ -138,6 +144,7 @@ const EXERCISES = [
         id: oid(7),
         name: 'Saltar la cuerda',
         equipment: 'Cuerda para saltar',
+        cardio_modality: 'jump_rope',
         difficulty: 'Intermedio',
         instructions: [
             'Gira la cuerda con las muñecas, no con los brazos; da saltos bajos, solo lo justo para pasarla.',
@@ -150,12 +157,28 @@ const EXERCISES = [
         id: oid(8),
         name: 'Burpees (HIIT)',
         equipment: 'Ninguno',
+        cardio_modality: 'hiit_reps',
         difficulty: 'Avanzado',
         instructions: [
             'De pie, baja a cuclillas, apoya las manos y lleva los pies atrás hasta la plancha; baja el pecho controlado.',
             'Vuelve los pies bajo la cadera de un salto y, al subir, da un salto vertical con los brazos arriba.',
             'Trabaja por intervalos cortos manteniendo un ritmo sostenible; cuida la técnica antes que la velocidad.',
             'Prescripción sugerida: intervalos Z4-Z5 (ej. 30 s trabajo / 30 s descanso) o AMRAP por tiempo en Z4.',
+        ],
+    },
+    {
+        // Decisión owner D4 (2026-07-25, specs/cardio-ejes-y-fixes): 9ª modalidad, eje "Pisos".
+        // También insertada por la migración 20260725221804 (ON CONFLICT DO NOTHING = idempotente).
+        id: oid(9),
+        name: 'Escaladora',
+        equipment: 'Escaladora',
+        cardio_modality: 'stairs',
+        difficulty: 'Principiante',
+        instructions: [
+            'Sube con el torso erguido y el peso en toda la planta del pie; usa los pasamanos solo para equilibrio, sin descargar el peso en ellos.',
+            'Pisa escalones completos y alterna piernas con ritmo constante; ajusta la velocidad para mantenerte en la zona prescrita.',
+            'Evita bloquear las rodillas al extender; el impulso sale de glúteos y cuádriceps, no de los brazos.',
+            'Prescripción sugerida: 10-20 min continuos en Z2-Z3, o intervalos de 1-2 min fuertes con 1 min suave.',
         ],
     },
 ]
