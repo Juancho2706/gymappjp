@@ -9,6 +9,7 @@ import { AppBackground } from '../components/AppBackground'
 import { supabase } from '../lib/supabase'
 import { clearForcePasswordChange } from '../lib/api'
 import { sessionFlags } from '../lib/session-flags'
+import { passwordRejectionMessage } from '@eva/schemas'
 
 export default function ChangePasswordScreen() {
   const { theme } = useTheme()
@@ -35,7 +36,12 @@ export default function ChangePasswordScreen() {
     if (!canSubmit) return
     setSaving(true)
     const { error: err } = await supabase.auth.updateUser({ password: pwd })
-    if (err) { setSaving(false); setError(err.message); return }
+    if (err) {
+      setSaving(false)
+      setError(passwordRejectionMessage(err)
+        ?? 'No se pudo guardar la contraseña. Intenta de nuevo en unos minutos.')
+      return
+    }
 
     // E1-18: limpieza AUTORITATIVA del flag via endpoint service-role (evita el loop del gate si
     // una policy bloquea el UPDATE por PostgREST). sessionFlags es el backstop optimista local.

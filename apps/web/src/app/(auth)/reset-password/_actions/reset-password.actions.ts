@@ -2,7 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
-import { ResetPasswordSchema } from '@eva/schemas'
+import { ResetPasswordSchema, passwordRejectionMessage } from '@eva/schemas'
 
 export type ResetPasswordState = {
     error?: string
@@ -28,7 +28,12 @@ export async function resetPasswordAction(
     const { error } = await supabase.auth.updateUser({ password: parsed.data.password })
 
     if (error) {
-        return { error: 'Error al actualizar la contraseña. El link puede haber expirado.' }
+        // Distinguir rechazo de la contraseña (HIBP/débil/igual) de un link vencido: culpar al
+        // link cuando la contraseña está filtrada deja al usuario pidiendo resets infinitos.
+        return {
+            error: passwordRejectionMessage(error)
+                ?? 'Error al actualizar la contraseña. El link puede haber expirado.',
+        }
     }
 
     // El alumno de team vuelve a su login de pool white-label; el standalone al /c del coach.

@@ -3,7 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import { redirect } from 'next/navigation'
-import { ClientLoginSchema, ChangePasswordSchema } from '@eva/schemas'
+import { ClientLoginSchema, ChangePasswordSchema, passwordRejectionMessage } from '@eva/schemas'
 import type { Tables } from '@/lib/database.types'
 import type { WorkspaceSummary } from '@/domain/auth/types'
 import { setLastWorkspace } from '@/services/auth/workspace.service'
@@ -186,7 +186,12 @@ export async function changePasswordAction(
     if (!user) return { error: 'Sesión expirada. Por favor inicia sesión de nuevo.' }
 
     const { error: authError } = await supabase.auth.updateUser({ password })
-    if (authError) return { error: authError.message }
+    if (authError) {
+        return {
+            error: passwordRejectionMessage(authError)
+                ?? 'No se pudo guardar la contraseña. Intenta de nuevo en unos minutos.',
+        }
+    }
 
     // UPDATE self: la policy "Client can update their own profile" lo cubre → user-scoped.
     await supabase

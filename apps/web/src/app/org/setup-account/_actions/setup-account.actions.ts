@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation'
 import { z } from 'zod/v4'
 import { createClient } from '@/lib/supabase/server'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
+import { passwordRejectionMessage } from '@eva/schemas'
 
 const SetupSchema = z.object({
     password: z.string().min(8, 'Mínimo 8 caracteres'),
@@ -57,7 +58,12 @@ export async function setupAccountAction(
 
     // Set password
     const { error: passwordErr } = await supabase.auth.updateUser({ password: parsed.data.password })
-    if (passwordErr) return { error: passwordErr.message }
+    if (passwordErr) {
+        return {
+            error: passwordRejectionMessage(passwordErr)
+                ?? 'No se pudo guardar la contraseña. Intenta de nuevo en unos minutos.',
+        }
+    }
 
     // Get org slug to redirect
     const { data: org } = await admin
