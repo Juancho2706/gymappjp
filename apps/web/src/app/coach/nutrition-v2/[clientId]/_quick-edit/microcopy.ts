@@ -50,8 +50,11 @@ export const QE_COPY = {
   restoreBanner: 'Tienes cambios sin publicar de una sesión anterior.',
   restoreCta: 'Restaurar',
   restoreDismiss: 'Descartar borrador',
-  /** edit.readonlyHint */
-  readonlyHint: 'Para cambiar la estrategia o las notas, usa Rehacer con el asistente.',
+  /** edit.readonlyHint — solo estrategia y permisos quedan fuera del quick-edit. */
+  readonlyHint: 'Para cambiar la estrategia o los permisos, usa Rehacer con el asistente.',
+  /** edit.notesLabel — visible_notes editable (el alumno las ve en su plan). */
+  notesLabel: 'Notas para tu alumno',
+  notesPlaceholder: 'Escribe indicaciones visibles para tu alumno (bienvenida, comida libre, recordatorios…).',
   /** Error red/servidor en la barra: el draft NO se pierde; reintento reusa la misma clave. */
   publishFailed: 'No se pudo publicar. Reintentar',
   discardConfirm: (n: number) => `¿Descartar ${cambios(n)}? Esta acción no se puede deshacer.`,

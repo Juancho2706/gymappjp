@@ -19,8 +19,9 @@ import {
 
 // Quick-edit V2 (edicion fluida del plan, web coach): publica una VERSION NUEVA por el MISMO
 // pipeline canonico del builder (persistAndPublishDraft -> publish_nutrition_plan_v2), pero con:
-//  - carry-over de notas server-side (el read model NO expone private_notes; se conservan las de
-//    la version base para no perderlas y para que F1 nunca modifique notas),
+//  - visible_notes EDITABLES (viajan en el draft del cliente); carry-over server-side solo de
+//    protocol_notes (F1 no lo edita) y private_notes (el read model no las expone; viven en
+//    nutrition_plan_private_notes_v2 y republicar no las toca),
 //  - delta-gate Pro (solo gatea features Pro NUEVAS; preserva las grandfathered de un plan
 //    convertido de V1 sin atrapar al coach),
 //  - guard optimista de concurrencia (expectedCurrentVersionId = baseVersionId).
@@ -161,14 +162,16 @@ export async function quickEditPublishAction(input: unknown): Promise<QuickEditP
   if (variantsRes.error) return { ok: false, code: 'UNKNOWN' }
   const baseVariantCount = variantsRes.data?.length ?? 0
 
-  // (3) Carry-over de notas server-side: F1 NUNCA edita notas. Se escriben SIEMPRE las de la
-  // version base (ignora lo que venga del cliente) -> cero ambiguedad de forja. `privateNotes`
-  // queda null: la columna same-row esta deprecada y no es legible por `authenticated`; las
-  // notas privadas viven en nutrition_plan_private_notes_v2 (independientes de la version), asi
-  // que republicar NO las toca ni las pierde.
+  // (3) Notas: `visibleNotes` es EDITABLE en el quick-edit — viaja del cliente (ya paso el
+  // schema: trim + max 8000; el coach esta autorizado sobre el alumno via authorizeCoach + RLS,
+  // no hay forja posible mas alla de su propio contenido). '' se normaliza a null (paridad con
+  // builder/conversion). protocol_notes sigue en carry-over desde la version base (F1 no lo
+  // edita) y `privateNotes` queda null: la columna same-row esta deprecada y no es legible por
+  // `authenticated`; las notas privadas viven en nutrition_plan_private_notes_v2 (independientes
+  // de la version), asi que republicar NO las toca ni las pierde.
   const draftFinal: NutritionPlanDraft = {
     ...draft,
-    visibleNotes: base.visible_notes,
+    visibleNotes: hasText(draft.visibleNotes) ? draft.visibleNotes : null,
     privateNotes: null,
     protocolNotes: base.protocol_notes,
   }

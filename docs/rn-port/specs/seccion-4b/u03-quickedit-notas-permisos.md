@@ -52,3 +52,16 @@ reemplazos. Iconos muteados vía `theme.textSecondary` (espejo del `text-muted` 
 Hallazgo: la ruta real de la referencia web es
 `apps/web/src/app/coach/nutrition-v2/[clientId]/_quick-edit/QuickEditPlanView.tsx` (sub-dir
 `_quick-edit`, no `_components`).
+
+## Actualizacion (2026-07-26) — visibleNotes ahora EDITABLES
+
+Las notas visibles (`visible_notes`) dejaron de ser read-only en el quick-edit (web y RN, en
+paridad): `TextInput` multiline en la card "Notas y permisos", accion `SET_VISIBLE_NOTES` en el
+reducer, contador de cambios normalizado (trim / '' → null), tope 8000 del contrato y publish
+SIN el pisado server/cliente de la nota base (solo `protocol_notes` sigue en carry-over;
+`private_notes` sigue null). Motivo: no existia NINGUNA superficie para editar la nota (el
+builder "Rehacer" la resetea a null) y los coaches quedaban atrapados con la nota migrada de
+V1. `readonlyHint` ahora dice "estrategia o los permisos"; `notesEmpty` fue reemplazado por
+`notesLabel` + `notesPlaceholder`. Los permisos y `protocolNotes` siguen read-only. Tests:
+`tests/mobile-nutrition-v2-quick-edit-notes.test.ts` (RN) y
+`quick-edit-state.test.ts` / `quick-edit.actions.test.ts` (web).

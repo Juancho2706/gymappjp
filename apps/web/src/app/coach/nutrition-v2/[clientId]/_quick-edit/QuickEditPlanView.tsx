@@ -9,7 +9,7 @@
  */
 
 import { useState } from 'react'
-import { History, Info, LockKeyhole, Plus, X } from 'lucide-react'
+import { History, Info, NotebookPen, Plus, X } from 'lucide-react'
 import { StrategyBadge } from '@/components/nutrition-v2'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { useQuickEdit, genQuickEditKey } from './QuickEditProvider'
@@ -23,11 +23,13 @@ import { QE_COPY } from './microcopy'
 export function QuickEditPlanView() {
   const {
     state,
+    dispatch,
     clientName,
     strategy,
-    visibleNotes,
     protocolNotes,
     permissions,
+    errors,
+    showErrors,
     isPending,
     requestExit,
     pendingRestore,
@@ -119,15 +121,29 @@ export function QuickEditPlanView() {
           </section>
         ))}
 
-        {/* Fuera de alcance en modo edicion (F1): notas y permisos en read-only con hint. */}
+        {/* Notas visibles EDITABLES (visible_notes); permisos siguen read-only con hint. */}
         <section className="rounded-card border border-border-subtle bg-surface-card p-4">
           <div className="flex items-center gap-2">
-            <LockKeyhole aria-hidden="true" className="h-4 w-4 text-muted" />
+            <NotebookPen aria-hidden="true" className="h-4 w-4 text-muted" />
             <h2 className="font-display text-base font-semibold text-strong">Notas y permisos</h2>
           </div>
-          <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-body">
-            {visibleNotes || 'Sin indicaciones visibles.'}
-          </p>
+          <label htmlFor="qe-visible-notes" className="mt-3 block text-xs font-semibold text-muted">
+            {QE_COPY.notesLabel}
+          </label>
+          <textarea
+            id="qe-visible-notes"
+            value={state.visibleNotes}
+            onChange={(event) => dispatch({ type: 'SET_VISIBLE_NOTES', value: event.target.value })}
+            placeholder={QE_COPY.notesPlaceholder}
+            rows={5}
+            maxLength={8000}
+            disabled={isPending}
+            aria-invalid={showErrors && Boolean(errors['plan.visibleNotes'])}
+            className="mt-1.5 w-full resize-y rounded-control border border-border-subtle bg-surface-app px-3 py-2.5 text-sm leading-6 text-body placeholder:text-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          />
+          {showErrors && errors['plan.visibleNotes'] ? (
+            <p className="mt-1 text-xs text-rose-600 dark:text-rose-300">{errors['plan.visibleNotes']}</p>
+          ) : null}
           {protocolNotes ? (
             <p className="mt-2 whitespace-pre-wrap text-xs leading-5 text-muted">{protocolNotes}</p>
           ) : null}
