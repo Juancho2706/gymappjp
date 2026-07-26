@@ -1,7 +1,7 @@
 ---
 status: active
 owner: Juan Manuel Villegas
-last_verified: "2026-07-25 @ a59acfd1"
+last_verified: "2026-07-25 @ 856829fa"
 canonical: true
 source_of_truth: apps/web responsive + apps/mobile
 ---
@@ -77,10 +77,10 @@ fuera, RN-extras estricto).
 
 | Plataforma | Profile | Resultado conocido | Qué significa |
 |---|---|---|---|
-| Android | `production` | Build **y submit a Play internal testing** verdes en los runs [29885773193](https://github.com/Juancho2706/gymappjp/actions/runs/29885773193) sobre `4382ff6c` (2026-07-22) y [30063566202](https://github.com/Juancho2706/gymappjp/actions/runs/30063566202) sobre `335c88da` (2026-07-24); artefactos con retención de 1 día | La vía Android completa (build + submit) funciona; falta artefacto del corte integrado |
-| iOS | `production` | Build **y submit a TestFlight** verdes en el [run 29885773193](https://github.com/Juancho2706/gymappjp/actions/runs/29885773193) sobre `4382ff6c`; **falló el build** en [29976332962](https://github.com/Juancho2706/gymappjp/actions/runs/29976332962) (`b7e5e34d`) y [30063566202](https://github.com/Juancho2706/gymappjp/actions/runs/30063566202) (`335c88da`), logs expirados | El submit quedó probado end-to-end; el build iOS está roto desde el 2026-07-23 y no hay binario del corte actual |
+| Android | `production` | Build + **Submit a Play internal testing** verdes en el [run 30185211552](https://github.com/Juancho2706/gymappjp/actions/runs/30185211552) sobre `856829fa` (2026-07-25, corte con deuda cardio + universal links); previos `4382ff6c`/`335c88da` también verdes | Vía completa funcionando sobre el corte actual; retener artefacto (1 día) |
+| iOS | `production` | Build + **Submit a TestFlight** verdes en el [run 30185211552](https://github.com/Juancho2706/gymappjp/actions/runs/30185211552) sobre `856829fa`, con el profile regenerado (HealthKit + Associated Domains; la falla de capability de los runs 07-23/24 quedó cerrada) | Binario del corte actual existe y fue enviado; falta verificación en App Store Connect y QA device |
 
-Los runs `previewv2` sobre `c6743ef3` quedaron superados por la vía `production`. No existe build sobre el corte integrado `a59acfd1`; un build/submit verde no sustituye la verificación manual en App Store Connect/Play Console ni el QA en dispositivo.
+Un build/submit verde no sustituye la verificación manual en App Store Connect/Play Console ni el QA en dispositivo (universal links incluidos — el CDN del AASA de Apple puede tardar horas).
 
 ## Siguiente horizonte
 

@@ -1,7 +1,7 @@
 ---
 status: active
 owner: product-engineering
-last_verified: "2026-07-25 @ a59acfd1"
+last_verified: "2026-07-25 @ 856829fa"
 canonical: true
 ---
 
@@ -14,8 +14,8 @@ Esta es la única vista global de qué está en producción, qué está en integ
 | Referencia | Estado al revisar |
 |---|---|
 | Rama de trabajo | `rnmobiledenuevo`, única rama viva junto a `master` |
-| Corte de `master` integrado | `origin/master` en `a59acfd1` (docs post-merge PR #170 `60090f90`, 2026-07-25) |
-| Relación de ramas | `rnmobiledenuevo` == `master` en `a59acfd1` (ambas sincronizadas) |
+| Corte de `master` integrado | `origin/master` en `a59acfd1` (post-merge PR #170) |
+| Relación de ramas | `rnmobiledenuevo` en `856829fa`, ADELANTE de `master` (docs sync + deuda cardio/executor + fix iOS); integrar a `master` cuando el owner lo decida |
 | PR #170 (mergeada) | Ejecutor V3 (ceremonia logo dark + ignición del CTA Finalizar), home alumno (link retirado + scroll-top), cardio fases A-D completas (ejes por modalidad, coach ve registros, intervalos por distancia), pulido del creador de ejercicios |
 | Migración DB | `20260725221804_cardio_modality_axes` APLICADA en LIVE antes del merge (aditiva: `exercises.cardio_modality`, Escaladora, `reps_unit` +jumps/floors) |
 | Gate `quality` | Verde en el [run 30181033720](https://github.com/Juancho2706/gymappjp/actions/runs/30181033720) sobre `baef4283`: docs, lint 0 errores, typecheck web, tokens y Vitest 3940 aprobados / 4 omitidos (330 archivos). `tsc --noEmit` web+mobile+enterprise re-ejecutados verdes en local sobre `a59acfd1` (2026-07-25) |
@@ -45,12 +45,12 @@ Este bloque es un snapshot, no reemplaza `git fetch`, `git status` ni los checks
 
 ## Gates que siguen abiertos
 
-- Build firmado Android/iOS del corte actual (`a59acfd1`); el submit iOS ya quedó probado verde vía perfil `production` sobre `4382ff6c`, pero el build iOS falló en los dos intentos posteriores.
+- ~~Build firmado Android/iOS del corte actual~~ → HECHO (`856829fa`, run `30185211552`, submits incluidos). Quedan: retener artefactos, verificar App Store Connect/Play Console y QA física.
 - Certificación física de cámara, gestos, teclado, safe areas, offline y notificaciones en ambos sistemas.
 - Cierre verificable de la paridad móvil restante; código presente no equivale a QA aprobada.
 - Confirmación del rollout/configuración de Nutrition V2 en el entorno objetivo antes de una promoción.
 
-Builds `production` (workflow manual): Android e iOS verdes **con submit a Play internal testing y TestFlight incluidos** en el [run 29885773193](https://github.com/Juancho2706/gymappjp/actions/runs/29885773193) sobre `4382ff6c` (2026-07-22). Android repitió verde con submit en el [run 30063566202](https://github.com/Juancho2706/gymappjp/actions/runs/30063566202) sobre `335c88da` (2026-07-24). iOS `production` está roto desde la Ola 6 de wearables: **el profile `evaapp_production` no incluye la capability HealthKit** (causa confirmada en el run diagnóstico [30183498116](https://github.com/Juancho2706/gymappjp/actions/runs/30183498116) sobre `a59acfd1`; arreglo manual en MANUAL_TASKS → MOB-01). No existe build del corte integrado y nada de esto certifica QA física.
+Builds `production`: el [run 30185211552](https://github.com/Juancho2706/gymappjp/actions/runs/30185211552) sobre `856829fa` (2026-07-25) dejó **Android e iOS verdes end-to-end con submits incluidos** (AAB a Play internal testing + IPA a TestFlight), usando el profile regenerado con HealthKit + Associated Domains (la falla de capability de los runs 07-23/24 quedó cerrada; diagnóstico [30183498116](https://github.com/Juancho2706/gymappjp/actions/runs/30183498116)). Ese binario incluye la deuda cardio saldada y los universal links repuestos. Pendiente humano: retener artefactos (1 día), verificar procesamiento en App Store Connect/Play Console y QA física — nada de esto certifica QA device.
 
 ## Nutrition V2: criterio actual
 

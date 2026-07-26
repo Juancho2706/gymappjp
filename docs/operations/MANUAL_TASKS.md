@@ -1,7 +1,7 @@
 ---
 status: active
 owner: product-owner
-last_verified: "2026-07-25 @ a59acfd1"
+last_verified: "2026-07-25 @ 856829fa"
 canonical: true
 ---
 
@@ -28,9 +28,9 @@ Arreglo (portal Apple + secret):
 
 - [x] App ID `cl.evaapp.eva` con capability **HealthKit** (y **Associated Domains**) habilitadas — hecho por el dueño de la cuenta; profile `evaapp_production` regenerado el 2026-07-24 con ambas capabilities + push (expira 2027-05-18).
 - [x] Secret `IOS_PROVISIONING_PROFILE_BASE64` actualizado con el profile nuevo (2026-07-26; el `.p12` no cambió). `ios.associatedDomains` repuesto en `app.json` en el mismo paso (universal links vuelven en el próximo binario).
-- [ ] Relanzar **Mobile Build (Local — no EAS credits)**: `branch rnmobiledenuevo · app mobile · platform all · profile production · submit_ios true · submit_android true`.
-- [ ] Verificar en App Store Connect que el build de `4382ff6c` procesó en TestFlight y que el nuevo build también; verificar el AAB en Play Console → internal testing.
-- [ ] Descargar/retener los artefactos el mismo día (retención 1 día) y registrar el resultado en [TEST_STATUS.md](../testing/TEST_STATUS.md) y [MOBILE_PARITY.md](../status/MOBILE_PARITY.md).
+- [x] Workflow relanzado: [run 30185211552](https://github.com/Juancho2706/gymappjp/actions/runs/30185211552) sobre `856829fa` — Android e iOS verdes **con ambos submits success** (2026-07-25).
+- [ ] Verificar en App Store Connect que los builds (`4382ff6c` y `856829fa`) procesaron en TestFlight; verificar los AAB en Play Console → internal testing.
+- [ ] Descargar/retener HOY los artefactos del run `30185211552` (retención 1 día) y registrar el resultado en [TEST_STATUS.md](../testing/TEST_STATUS.md) y [MOBILE_PARITY.md](../status/MOBILE_PARITY.md).
 
 ### MOB-02 — Certificar paridad en dispositivos reales
 
