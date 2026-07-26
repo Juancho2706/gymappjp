@@ -316,6 +316,11 @@ export function SupersetStepV3({
                                                 mode={m.effType}
                                                 isActive
                                                 prefill={fill ?? undefined}
+                                                // Un miembro de superserie puede ser tipado: los ejes salen del
+                                                // motor igual que en la pantalla dedicada (unidad prescrita G3 +
+                                                // modalidad Fase C). En strength ambas props son inertes.
+                                                distanceUnit={m.block.distance_unit ?? null}
+                                                cardioModality={m.exercise.cardio_modality ?? null}
                                                 typedObjective={m.effType !== 'strength' ? formatTypedObjective(m.block, m.effType) : undefined}
                                                 substitution={sub ? { exerciseId: sub.id, exerciseName: sub.name, reason: SUBSTITUTION_REASON } : null}
                                                 supersetRest={{
@@ -500,6 +505,10 @@ export function SupersetStepV3({
                                             }
                                             autoTimerEnabled={autoTimerEnabled}
                                             mode={editVM.effType}
+                                            // Mismos ejes que en la captura (si no, al EDITAR una ronda
+                                            // tipada las cajas no coincidirían con las de registro).
+                                            distanceUnit={editVM.block.distance_unit ?? null}
+                                            cardioModality={editVM.exercise.cardio_modality ?? null}
                                             typedObjective={
                                                 editVM.effType !== 'strength'
                                                     ? formatTypedObjective(editVM.block, editVM.effType)

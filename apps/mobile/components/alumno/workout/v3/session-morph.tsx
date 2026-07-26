@@ -203,8 +203,10 @@ export function SessionMorphProvider({ children }: { children: React.ReactNode }
     () => resolveExecTheme(branding?.executorTheme, theme.primary, theme.primaryForeground),
     [branding?.executorTheme, theme.primary, theme.primaryForeground],
   )
-  // El MISMO logo/inicial que mostrará el SessionStart del ejecutor: handoff exacto.
-  const coachLogoUrl = branding?.logoUrl ?? null
+  // El MISMO logo/inicial que mostrará el SessionStart del ejecutor: handoff exacto. La ceremonia y el
+  // ejecutor son DARK-ONLY, así que se prefiere el logo para fondo oscuro (`logo_url_dark`) y sólo se cae
+  // al claro si el coach no subió variante dark. Ambos vienen ya gateados por tier desde el shim de tema.
+  const coachLogoUrl = branding?.logoUrlDark ?? branding?.logoUrl ?? null
   const coachInitial = ((branding?.displayName?.trim() || 'Tu coach')[0] ?? 'E').toUpperCase()
 
   const startMorph = useCallback(({ planId, origin, params, label }: StartMorphArgs) => {

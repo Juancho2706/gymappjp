@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Image from 'next/image'
-import { Minus, Plus } from 'lucide-react'
+import { Lock, Minus, Plus } from 'lucide-react'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { InfoTooltip } from '@/components/ui/info-tooltip'
 import { Input } from '@/components/ui/input'
@@ -13,7 +13,7 @@ import type { BuilderBlock, BuilderCardioContext } from '../types'
 import type { ExerciseType, IntervalConfig, SideMode } from '@/domain/workout/types'
 import { EXERCISE_TYPE_META, effectiveExerciseType } from '@/lib/workout-exercise-type'
 import { exerciseThumbnailUrl } from '@/lib/youtube'
-import { INTERVAL_TEMPLATES } from '@eva/workout-engine'
+import { INTERVAL_TEMPLATES, repsUnitForModality, cardioRepsUnitShort } from '@eva/workout-engine'
 import { HR_ZONES } from '@eva/cardio'
 
 interface ExerciseHistory {
@@ -335,12 +335,15 @@ function IntervalEditor({
                         onChange={(e) => {
                             const tpl = INTERVAL_TEMPLATES.find((t) => t.id === e.target.value)
                             if (!tpl) return
+                            // Fase D (G2): aplicar una plantilla YA NO borra `duration_sec` /
+                            // `distance_value` del bloque. El ejecutor prioriza los intervalos cuando
+                            // existen (web `intervalTimerKind(...) !== 'none'` en CardioStepV3; RN
+                            // `cardioTimerMode` → 'interval'), así que la prescripción continua queda
+                            // como respaldo visible en vez de perderse.
                             onChange({
                                 ...block,
                                 interval_config: tpl.config,
                                 hr_zone: tpl.suggestedHrZone ?? block.hr_zone ?? null,
-                                duration_sec: null,
-                                distance_value: '',
                             })
                         }}
                         className="h-9 max-w-[180px] rounded-lg border border-border bg-background px-2 text-[10px] font-bold uppercase tracking-widest text-muted-foreground focus:border-primary focus:outline-none"
@@ -512,6 +515,11 @@ export function BlockEditSheet({ block, clientId, cardio, isMobile = false, onCl
     const distanceNumber = parseFloat((block.distance_value || '').replace(',', '.'))
     const hasDistance = Number.isFinite(distanceNumber) && distanceNumber > 0
 
+    // Unidad del objetivo rep-based según la MODALIDAD del ejercicio (Fase C): 'jumps' (cuerda),
+    // 'floors' (escaladora), 'reps' (HIIT). null en run/bike/row/elíptica/genérica ⇒ el campo no
+    // se renderiza y el formulario de cardio queda EXACTAMENTE como hoy.
+    const cardioRepsUnit = effectiveType === 'cardio' ? repsUnitForModality(block.cardio_modality) : null
+
     // Thumbnail del ejercicio (gif > imagen > thumbnail de YouTube > media directa). Iguala la app
     // del alumno: un ejercicio solo-YouTube ya no muestra la inicial. img.youtube.com está en
     // next.config remotePatterns; `unoptimized` para servir gif/mp4 externos tal cual (igual que antes).
@@ -605,16 +613,25 @@ export function BlockEditSheet({ block, clientId, cardio, isMobile = false, onCl
                                 const meta = EXERCISE_TYPE_META[type]
                                 const Icon = meta.icon
                                 const active = effectiveType === type
+                                // Gate del módulo Cardio (paridad con RN `BlockEditorSheet`): sin el módulo
+                                // NO se puede ELEGIR el tipo Cardio. Un bloque que YA es cardio se sigue
+                                // mostrando y editando (nunca se bloquea el trabajo ya prescrito). Misma
+                                // fuente de entitlement que las plantillas y los rangos de bpm de esta hoja.
+                                const locked = type === 'cardio' && !cardio?.enabled && !active
                                 return (
                                     <button
                                         key={type}
                                         type="button"
+                                        disabled={locked}
+                                        title={locked ? 'Cardio requiere el módulo Cardio (plan del coach).' : undefined}
                                         onClick={() => setOverride(type)}
                                         aria-pressed={active}
                                         className={`flex min-h-[44px] flex-col items-center justify-center gap-1 rounded-control border px-1 py-2 text-[11px] font-semibold transition-colors md:min-h-[40px] ${
                                             active
                                                 ? ''
-                                                : 'border-border text-muted-foreground hover:bg-muted dark:border-[var(--border-default)]'
+                                                : locked
+                                                    ? 'border-border text-muted-foreground opacity-40'
+                                                    : 'border-border text-muted-foreground hover:bg-muted dark:border-[var(--border-default)]'
                                         }`}
                                         style={active ? {
                                             backgroundColor: `color-mix(in srgb, ${meta.color} 18%, transparent)`,
@@ -622,12 +639,21 @@ export function BlockEditSheet({ block, clientId, cardio, isMobile = false, onCl
                                             color: meta.color,
                                         } : undefined}
                                     >
-                                        <Icon className="h-4 w-4" style={active ? { color: meta.color } : undefined} />
+                                        {locked ? (
+                                            <Lock className="h-4 w-4" />
+                                        ) : (
+                                            <Icon className="h-4 w-4" style={active ? { color: meta.color } : undefined} />
+                                        )}
                                         <span>{meta.label}</span>
                                     </button>
                                 )
                             })}
                         </div>
+                        {!cardio?.enabled && (
+                            <p className="text-[10px] text-muted-foreground/60">
+                                Cardio requiere el módulo Cardio (plan del coach).
+                            </p>
+                        )}
                         {block.exercise_type_override != null && (
                             <p className="text-[9px] text-muted-foreground/60 uppercase tracking-widest">
                                 Tipo modificado solo en este bloque
@@ -870,6 +896,34 @@ export function BlockEditSheet({ block, clientId, cardio, isMobile = false, onCl
                                     <p className="text-[10px] text-muted-foreground/50 text-center">rondas del mismo trabajo</p>
                                 </div>
                             </div>
+
+                            {/* Objetivo en la unidad PROPIA de la modalidad (Fase C · RF8): cuerda
+                                ⇒ saltos, escaladora ⇒ pisos, HIIT ⇒ reps. Se guarda en
+                                `reps_value` + `reps_unit` (columnas existentes; 'jumps'/'floors' ya
+                                válidos en el CHECK). Las modalidades sin conteo (run/bike/row/
+                                elíptica/genérica) NO ven este campo: nada cambia para ellas. */}
+                            {cardioRepsUnit && (
+                                <div className="space-y-3">
+                                    <label className={FIELD_LABEL_CLASS}>
+                                        Objetivo ({cardioRepsUnitShort(cardioRepsUnit)})
+                                    </label>
+                                    <OptionalIntInput
+                                        value={block.reps_unit === cardioRepsUnit ? block.reps_value ?? null : null}
+                                        onCommit={(n) =>
+                                            onChange({
+                                                ...block,
+                                                reps_value: n,
+                                                reps_unit: n != null ? cardioRepsUnit : null,
+                                            })
+                                        }
+                                        placeholder={cardioRepsUnit === 'jumps' ? 'Ej. 500' : cardioRepsUnit === 'floors' ? 'Ej. 40' : 'Ej. 30'}
+                                        max={100000}
+                                    />
+                                    <p className="text-[10px] text-muted-foreground/50 text-center">
+                                        opcional · el alumno registra sus {cardioRepsUnitShort(cardioRepsUnit)} por ronda
+                                    </p>
+                                </div>
+                            )}
 
                             <HrZoneSelector block={block} cardio={cardio} onChange={onChange} />
 

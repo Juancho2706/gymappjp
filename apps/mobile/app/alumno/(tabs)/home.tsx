@@ -9,7 +9,7 @@ import { getDailyHabits } from '../../../lib/habits.queries'
 import { getActiveOrgAnnouncements } from '../../../lib/org-announcements'
 import { useEntitlements } from '../../../lib/entitlements'
 import { useTheme } from '../../../context/ThemeContext'
-import { useAlumnoScrollHandler } from '../../../lib/alumno-chrome-scroll'
+import { resetChromeScroll, useAlumnoScrollHandler } from '../../../lib/alumno-chrome-scroll'
 import { formatLongDate, getSantiagoIsoYmdForUtcInstant, getTodayInSantiago, formatRelativeDate, timeGreeting } from '../../../lib/date-utils'
 import { AppBackground } from '../../../components/AppBackground'
 import { ALUMNO_TABBAR_CLEARANCE } from '../../../components/alumno/AlumnoMobileChrome'
@@ -72,6 +72,7 @@ export default function AlumnoHomeScreen() {
   // pantalla /alumno/nutrition-v2.
   const nutritionV2Enabled = entitlementsReady && isEnabled('nutritionV2Student')
   const onScrollChrome = useAlumnoScrollHandler()
+  const scrollRef = useRef<ScrollView>(null)
   const [data, setData] = useState<HomeData | null>(null)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
@@ -104,6 +105,12 @@ export default function AlumnoHomeScreen() {
   // la frescura RSC de la web y con la home del coach.
   useFocusEffect(
     useCallback(() => {
+      // Al volver a la home (p.ej. del ejecutor) la vista quedaba donde el alumno la dejó — scrolleada
+      // hasta el programa — y había que subir a mano (decisión CEO 2026-07-25: el regreso arranca ARRIBA).
+      // El screen de tabs sigue vivo bajo el stack, así que el reset es explícito; `resetChromeScroll`
+      // revela la cápsula del tab bar (scrollTo programático no garantiza el evento de scroll).
+      scrollRef.current?.scrollTo({ y: 0, animated: false })
+      resetChromeScroll()
       load().catch(() => setLoading(false))
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []),
@@ -393,6 +400,7 @@ export default function AlumnoHomeScreen() {
     <View style={styles.container} className="bg-surface-app">
       <AppBackground />
       <ScrollView
+        ref={scrollRef}
         contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + ALUMNO_TABBAR_CLEARANCE }]}
         showsVerticalScrollIndicator={false}
         onScroll={onScrollChrome}
@@ -467,7 +475,6 @@ export default function AlumnoHomeScreen() {
             totalWeeks={derived.totalWeeks}
             planDays={derived.planDays}
             pending={derived.pending}
-            todayPlanId={derived.todayPlanId}
             weekVariant={derived.weekVariant}
             // `repeatDate` (sheet doble intencion → "Repetir hoy" sobre un dia hecho en OTRA fecha) viaja
             // como param `repetir`: el ejecutor abre una sesion NUEVA de hoy con cada serie precargada con

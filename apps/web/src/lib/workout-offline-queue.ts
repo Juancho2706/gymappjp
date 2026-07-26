@@ -140,6 +140,9 @@ export function workoutLogToFormData(item: WorkoutOfflineLog): FormData {
     // Polimórfico (AC4): los items legacy no traen estas keys — no-op.
     if (item.actualDurationSec != null) fd.set('actual_duration_sec', String(item.actualDurationSec))
     if (item.actualDistanceM != null) fd.set('actual_distance_m', String(item.actualDistanceM))
+    // Pace derivado (RF5): ya viene calculado en metros/segundos desde la fila (mismo valor que el
+    // submit online) — el flush solo lo reenvía.
+    if (item.actualPaceSecPerKm != null) fd.set('actual_pace_sec_per_km', String(item.actualPaceSecPerKm))
     if (item.actualHoldSec != null) fd.set('actual_hold_sec', String(item.actualHoldSec))
     if (item.actualAvgHr != null) fd.set('actual_avg_hr', String(item.actualAvgHr))
     // Sustitución (Fase L · C): sólo viajan cuando la serie se logueó con sustitución activa.

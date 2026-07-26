@@ -18,7 +18,8 @@ export type SideMode = 'bilateral' | 'per_side' | 'alternating'
 export type LoadType = 'weight' | 'time' | 'bodyweight' | 'none'
 export type LoadUnit = 'kg' | 'lb' | 'sec'
 export type DistanceUnit = 'm' | 'km'
-export type RepsUnit = 'reps' | 'passes' | 'breaths'
+/** 'jumps'/'floors': conteo propio de cardio rep-based (Fase C — cuerda y escaladora). */
+export type RepsUnit = 'reps' | 'passes' | 'breaths' | 'jumps' | 'floors'
 
 export type BuilderSection = 'warmup' | 'main' | 'cooldown'
 
@@ -53,6 +54,12 @@ export interface BuilderBlock {
     exercise_type?: ExerciseType | null
     /** Override explícito del coach a nivel bloque (manda sobre exercise_type). */
     exercise_type_override?: ExerciseType | null
+    /**
+     * `exercises.cardio_modality` del ejercicio del bloque (Fase C). NO es una columna de
+     * `workout_blocks`: viaja SOLO en memoria (viene del catálogo) para que el editor sepa qué ejes
+     * ofrecer (cuerda ⇒ saltos, escaladora ⇒ pisos, HIIT ⇒ reps). No se serializa al guardar.
+     */
+    cardio_modality?: string | null
     side_mode?: SideMode | null
     reps_value?: number | null
     reps_unit?: RepsUnit | null

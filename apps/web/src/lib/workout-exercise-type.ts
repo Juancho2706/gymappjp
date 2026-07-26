@@ -12,6 +12,7 @@
 
 import type { LucideIcon } from 'lucide-react'
 import { Dumbbell, GitCommit, HeartPulse, Move } from 'lucide-react'
+import { legacyRepsSummaryFor } from '@eva/workout-engine'
 import type { DistanceUnit, ExerciseType, IntervalConfig, SideMode } from '@/domain/workout/types'
 
 export const EXERCISE_TYPES: readonly ExerciseType[] = ['strength', 'cardio', 'mobility', 'roller']
@@ -112,68 +113,17 @@ function sideSuffix(sideMode: string | null | undefined): string {
     return sideMode === 'per_side' || sideMode === 'alternating' ? '/lado' : ''
 }
 
-function truncate20(text: string): string {
-    return text.length <= 20 ? text : `${text.slice(0, 19)}…`
-}
-
 /**
- * Resumen legacy corto (≤20 chars, es-neutro) para persistir en `reps` cuando el coach
- * prescribe con campos tipados. NO se usa para bloques strength con reps manual
- * (ahí el texto del coach manda — "8-10", "AMRAP").
+ * Resumen legacy corto (≤20 chars, es-neutro) para persistir en `reps` cuando el coach prescribe con
+ * campos tipados. NO se usa para bloques strength con reps manual (ahí el texto del coach manda —
+ * "8-10", "AMRAP").
+ *
+ * G11 (fix duplicación): la implementación vive SOLO en `@eva/workout-engine` — la copia web era un
+ * espejo línea por línea y cualquier ajuste en una sola producía planes con resúmenes distintos según
+ * dónde se hubieran creado (el builder web escribía por acá, el móvil por el motor). Acá queda el
+ * re-export para no tocar a los consumidores (`WeeklyPlanBuilder`, tests de este módulo).
  */
-export function legacyRepsSummaryFor(block: TypedBlockFields, type: ExerciseType): string {
-    const side = sideSuffix(block.side_mode)
-
-    if (type === 'cardio') {
-        const interval = block.interval_config
-        if (interval) {
-            const work = interval.work.distance_m != null
-                ? compactDistance(interval.work.distance_m, 'm')
-                : interval.work.duration_sec != null
-                    ? compactDuration(interval.work.duration_sec)
-                    : ''
-            const zone = block.hr_zone != null ? ` @ Z${block.hr_zone}` : ''
-            if (work) return truncate20(`${interval.repeats}×${work}${zone}`)
-        }
-        const zone = block.hr_zone != null ? ` Z${block.hr_zone}` : ''
-        if (block.duration_sec != null && block.duration_sec > 0) {
-            return truncate20(`${compactDuration(block.duration_sec)}${zone}`)
-        }
-        if (block.distance_value != null && block.distance_value > 0) {
-            return truncate20(`${compactDistance(block.distance_value, block.distance_unit)}${zone}`)
-        }
-        if (zone) return truncate20(zone.trim())
-        return 'cardio'
-    }
-
-    if (type === 'mobility') {
-        if (block.duration_sec != null && block.duration_sec > 0) {
-            return truncate20(`${compactDuration(block.duration_sec)}${side}`)
-        }
-        if (block.reps_value != null && block.reps_value > 0) {
-            const unit = block.reps_unit === 'breaths' ? ' resp' : ''
-            return truncate20(`${block.reps_value}${unit}${side}`)
-        }
-        return block.reps?.trim() || 'movilidad'
-    }
-
-    if (type === 'roller') {
-        if (block.reps_value != null && block.reps_value > 0 && block.reps_unit === 'passes') {
-            return truncate20(`${block.reps_value} pasadas${side}`)
-        }
-        if (block.duration_sec != null && block.duration_sec > 0) {
-            return truncate20(`${compactDuration(block.duration_sec)}${side}`)
-        }
-        return block.reps?.trim() || 'roller'
-    }
-
-    // strength: el texto manual del coach manda; el resumen solo cubre distancia (farmer carry)
-    if (block.reps?.trim()) return block.reps.trim()
-    if (block.distance_value != null && block.distance_value > 0) {
-        return truncate20(`${compactDistance(block.distance_value, block.distance_unit)}${side}`)
-    }
-    return '—'
-}
+export { legacyRepsSummaryFor }
 
 /**
  * Resumen visible por tipo para chips del builder/preview ("4×400m @ Z4", "30s ×3 por lado").

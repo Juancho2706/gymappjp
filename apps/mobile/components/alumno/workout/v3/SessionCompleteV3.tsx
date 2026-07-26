@@ -7,6 +7,7 @@ import { Confetti } from 'react-native-fast-confetti'
 import { Check, ChevronRight, ClipboardCheck, CloudOff, GitCommit, HeartPulse, Medal, Move, Share2 } from 'lucide-react-native'
 import {
   compactDistance,
+  formatCardioReps,
   formatClockDuration,
   formatSessionDuration,
   formatWeightEsCl,
@@ -94,11 +95,17 @@ function fmtDidDistance(m: number): string {
   return `${Math.round(m)} m`
 }
 
-/** Cardio → "Xmin · Y,Z km" con "· N bpm" si hubo FC media; sólo lo registrado (fallback: rondas). */
+/**
+ * Cardio → "Xmin · Y,Z km" con "· N bpm" si hubo FC media; sólo lo registrado (fallback: rondas).
+ * En las modalidades rep-based (Fase C) el motor entrega además el CONTEO con su unidad, así que la
+ * cuerda dice "8min · 420 saltos · 152 bpm" y la escaladora "12min · 45 pisos" en vez de esconder el
+ * dato. `repsUnit` sólo viaja cuando la modalidad lo pide ⇒ el resto del resumen queda igual.
+ */
 function cardioDidData(c: CardioItem): string {
   const parts: string[] = []
   if (c.durationSec != null && c.durationSec > 0) parts.push(fmtDidDuration(c.durationSec))
   if (c.distanceM != null && c.distanceM > 0) parts.push(fmtDidDistance(c.distanceM))
+  if (c.repsDone != null && c.repsDone > 0) parts.push(formatCardioReps(c.repsDone, c.repsUnit ?? null))
   if (c.avgHr != null && c.avgHr > 0) parts.push(`${c.avgHr} bpm`)
   if (parts.length === 0) parts.push(`${c.rounds} ${c.rounds === 1 ? 'ronda' : 'rondas'}`)
   return parts.join(' · ')

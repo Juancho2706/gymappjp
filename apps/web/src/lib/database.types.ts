@@ -1700,6 +1700,7 @@ export type Database = {
       exercises: {
         Row: {
           body_part: string | null
+          cardio_modality: string | null
           coach_id: string | null
           created_at: string
           deleted_at: string | null
@@ -1725,6 +1726,7 @@ export type Database = {
         }
         Insert: {
           body_part?: string | null
+          cardio_modality?: string | null
           coach_id?: string | null
           created_at?: string
           deleted_at?: string | null
@@ -1750,6 +1752,7 @@ export type Database = {
         }
         Update: {
           body_part?: string | null
+          cardio_modality?: string | null
           coach_id?: string | null
           created_at?: string
           deleted_at?: string | null

@@ -4,6 +4,7 @@ import { headers } from 'next/headers'
 import type { Metadata } from 'next'
 
 import { DashboardShell } from './_components/DashboardShell'
+import { ScrollTopOnMount } from './_components/ScrollTopOnMount'
 import { DashboardPullToRefresh } from './_components/DashboardPullToRefresh'
 import { DashboardHeader } from './_components/DashboardHeader'
 import { StreakRibbonSection } from './_components/streak/StreakRibbonSection'
@@ -73,6 +74,7 @@ export default async function ClientDashboardPage({ params }: Props) {
     return (
         <DashboardPullToRefresh>
             <DashboardShell>
+                <ScrollTopOnMount />
                 {announcements.length > 0 && <OrgAnnouncementBanner announcements={announcements} />}
 
                 {/* ───────── Móvil (<760): alumno-dashboard.jsx verbatim · columna única ───────── */}

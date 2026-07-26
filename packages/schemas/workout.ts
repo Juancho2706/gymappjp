@@ -55,7 +55,13 @@ export const SIDE_MODE_VALUES = ['bilateral', 'per_side', 'alternating'] as cons
 export const LOAD_TYPE_VALUES = ['weight', 'time', 'bodyweight', 'none'] as const
 export const LOAD_UNIT_VALUES = ['kg', 'lb', 'sec'] as const
 export const DISTANCE_UNIT_VALUES = ['m', 'km'] as const
-export const REPS_UNIT_VALUES = ['reps', 'passes', 'breaths'] as const
+/**
+ * Unidades del conteo prescrito (`workout_blocks.reps_unit`). 'jumps' (saltos) y 'floors' (pisos)
+ * entran en la Fase C de cardio (specs/cardio-ejes-y-fixes, RF8): la cuerda y la escaladora se
+ * prescriben por conteo propio. Superset EXACTO del CHECK `workout_blocks_poly_check` ampliado por
+ * la migración 20260725221804 — sin esto Zod rechazaría un bloque que la DB sí acepta.
+ */
+export const REPS_UNIT_VALUES = ['reps', 'passes', 'breaths', 'jumps', 'floors'] as const
 
 const IntervalTargetSchema = z.object({
     kind: z.enum(['hr_zone', 'pace', 'rpe', 'none']),

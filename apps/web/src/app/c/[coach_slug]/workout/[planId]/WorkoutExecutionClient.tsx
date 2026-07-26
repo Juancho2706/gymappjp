@@ -6,7 +6,7 @@ import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { toast } from 'sonner'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { ArrowLeft, Flag, Info, Dumbbell, Timer, TrendingUp, History, Quote, X, Settings, CheckCircle2, WifiOff, ChevronDown, List, GalleryHorizontal, Pencil, CalendarSync, Repeat } from 'lucide-react'
+import { ArrowLeft, Flag, Info, Dumbbell, Timer, TrendingUp, History, Quote, X, Settings, CheckCircle2, WifiOff, ChevronDown, List, GalleryHorizontal, Pencil, CalendarSync, Repeat, Sparkles } from 'lucide-react'
 import { computeEffectiveTarget } from '@/lib/workout/progression'
 import { readAndConsumeMorphFlag } from '@/lib/workout/launch-ceremony'
 import { useCaptureStudentWorkoutCompleted } from '@/lib/posthog/events'
@@ -29,6 +29,9 @@ import {
     type WorkoutSectionKey,
     executionAreaGroupsFor,
     isTimeableInterval,
+    typedKeypadFields,
+    normalizeCardioRepsUnit,
+    cardioRepsLabel,
 } from '@eva/workout-engine'
 import { StepperExecution, type StepperStepView } from './StepperExecution'
 import { ExecHeaderV3, type ExecDotState } from './v3/ExecHeaderV3'
@@ -106,6 +109,11 @@ export interface ExerciseType {
     gif_url: string | null
     instructions: string[] | null
     exercise_type?: string | null
+    /**
+     * Modalidad de cardio del catálogo (Fase C · `cardio-modality.ts`): decide los ejes de captura
+     * de la ronda. null/desconocida ⇒ Min · Distancia · FC, byte-idéntico a lo previo.
+     */
+    cardio_modality?: string | null
 }
 
 export interface BlockType {
@@ -349,6 +357,12 @@ export function TypedTargetGrid({ block, kind, cardio }: { block: BlockType; kin
         }
         if ((block.duration_sec ?? 0) > 0) cards.push({ label: 'Duración', value: compactDuration(block.duration_sec as number) })
         if ((block.distance_value ?? 0) > 0) cards.push({ label: 'Distancia', value: compactDistance(block.distance_value as number, block.distance_unit) })
+        // Objetivo rep-based prescrito (Fase C · RF8): "500 saltos" / "40 pisos" / "30 reps".
+        // Las unidades que no son de cardio ('passes'/'breaths') no entran acá.
+        const cardioRepsUnit = normalizeCardioRepsUnit(block.reps_unit)
+        if (cardioRepsUnit != null && (block.reps_value ?? 0) > 0) {
+            cards.push({ label: cardioRepsLabel(cardioRepsUnit), value: `${block.reps_value}` })
+        }
         if (block.target_pace_sec_per_km != null) cards.push({ label: 'Pace objetivo', value: `${formatPace(block.target_pace_sec_per_km)} /km` })
         if (block.hr_zone != null) {
             const range = cardio?.enabled ? cardio.zones?.find((z) => z.zone === block.hr_zone) ?? null : null
@@ -454,15 +468,37 @@ export function TypedBlockTimerButton({ block, kind }: { block: BlockType; kind:
     return null
 }
 
-/** Encabezados de la tabla de registro por tipo (la de strength queda intacta). */
-export function TypedLogHeader({ kind }: { kind: WorkoutKind }) {
+/**
+ * Encabezados de la tabla de registro por tipo (la de strength queda intacta).
+ * `distanceUnit`: unidad de distancia PRESCRITA del bloque — con 'km' la columna de distancia se
+ * rotula "Km" (mismo texto que declara el motor para la caja, G3). Ausente ⇒ "Metros" como siempre.
+ * `cardioModality` (Fase C): la MODALIDAD manda cuántas columnas hay — la elíptica trae 2 ejes
+ * (Min · FC) y las rep-based cambian la 2ª por Saltos/Reps/Pisos. Por eso las columnas se ITERAN
+ * desde el motor en vez de desestructurarse por posición (con 2 ejes, la 3ª sería `undefined`).
+ */
+export function TypedLogHeader({
+    kind,
+    distanceUnit,
+    cardioModality,
+}: {
+    kind: WorkoutKind
+    distanceUnit?: string | null
+    cardioModality?: string | null
+}) {
     if (kind === 'cardio') {
+        const fields = typedKeypadFields('cardio', { distanceUnit, cardioModality })
+        // Mismas plantillas de grilla que la fila tipada (`LogSetForm`): literales completos para que
+        // Tailwind las vea en el código (no se pueden concatenar).
+        const gridCols =
+            fields.length <= 2
+                ? 'grid-cols-[auto_3.5rem_3rem_auto] md:grid-cols-[auto_1fr_1fr_auto]'
+                : 'grid-cols-[auto_3.5rem_3.5rem_3rem_auto] md:grid-cols-[auto_1fr_1fr_1fr_auto]'
         return (
-            <div className="grid grid-cols-[auto_3.5rem_3.5rem_3rem_auto] md:grid-cols-[auto_1fr_1fr_1fr_auto] gap-2 px-2 pb-2 text-[10px] font-bold text-on-dark-muted uppercase tracking-wider border-b border-white/10">
+            <div className={`grid ${gridCols} gap-2 px-2 pb-2 text-[10px] font-bold text-on-dark-muted uppercase tracking-wider border-b border-white/10`}>
                 <div className="w-4 text-center">Set</div>
-                <div className="text-center">Min</div>
-                <div className="text-center">Metros</div>
-                <div className="text-center">FC</div>
+                {fields.map((f) => (
+                    <div key={f.key} className="text-center">{f.label}</div>
+                ))}
                 <div className="w-8"></div>
             </div>
         )
@@ -958,6 +994,10 @@ function SupersetGroupCard({
                                             autoTimerEnabled={autoTimerEnabled}
                                             mode={m.effType}
                                             isActive={isNext}
+                                            // Miembro tipado de superserie (V2): mismos ejes que la pantalla
+                                            // dedicada — unidad prescrita (G3) + modalidad (Fase C).
+                                            distanceUnit={m.block.distance_unit ?? null}
+                                            cardioModality={m.exercise.cardio_modality ?? null}
                                             typedObjective={m.effType !== 'strength' ? formatTypedObjective(m.block, m.effType) : undefined}
                                             supersetRest={{
                                                 groupRestSeconds,
@@ -1030,6 +1070,19 @@ function CollapsedExerciseBar({
         </motion.button>
     )
 }
+
+/** Chispas de la ignición del CTA "Finalizar": desplazamiento radial (px) + retardo escalonado (s).
+ *  El CSS sólo las anima dentro de `prefers-reduced-motion: no-preference`. */
+const EXEC_FINISH_SPARKS: { dx: number; dy: number; delay: number }[] = [
+    { dx: 0, dy: -34, delay: 0 },
+    { dx: 44, dy: -26, delay: 0.04 },
+    { dx: 68, dy: 2, delay: 0.08 },
+    { dx: 40, dy: 28, delay: 0.12 },
+    { dx: -6, dy: 36, delay: 0.06 },
+    { dx: -46, dy: 24, delay: 0.1 },
+    { dx: -70, dy: -4, delay: 0.02 },
+    { dx: -38, dy: -28, delay: 0.14 },
+]
 
 export function WorkoutExecutionClient({
     plan,
@@ -1549,6 +1602,8 @@ export function WorkoutExecutionClient({
     const requiredSets = blocks.reduce((acc, b) => acc + b.sets, 0)
     const completedSetCount = countUniqueLoggedSets(blocks, sessionLogs)
     const completionPct = requiredSets === 0 ? 0 : Math.min(100, Math.round((completedSetCount / requiredSets) * 100))
+    // Todas las series planificadas hechas ⇒ el CTA "Finalizar" se enciende (relleno de marca + chispas).
+    const allDone = requiredSets > 0 && completedSetCount >= requiredSets
     // Volumen de sesión en vivo (quick-win E2-5): Σ peso × reps de los logs locales (cero queries).
     const sessionVolumeKg = sessionLogs.reduce((acc, l) => acc + (l.weight_kg ?? 0) * (l.reps_done ?? 0), 0)
     const sessionVolumeLabel = fmtVolume(sessionVolumeKg)
@@ -2657,10 +2712,36 @@ export function WorkoutExecutionClient({
                     handleFinish de siempre; la fila de la tuerca se conserva como acceso secundario. */}
                 {execV3Active && execV3Phase === 'session' && (
                     <div className="exec-v3-finishbar">
-                        <button type="button" onClick={handleFinish} className="exec-v3-finishbtn">
-                            <Flag className="h-[18px] w-[18px]" aria-hidden />
+                        <button
+                            type="button"
+                            onClick={handleFinish}
+                            className={cn('exec-v3-finishbtn', allDone && 'is-armed')}
+                            aria-label={allDone ? 'Entrenamiento completo. Finalizar entrenamiento' : undefined}
+                        >
+                            {allDone ? (
+                                <Sparkles className="h-[18px] w-[18px]" aria-hidden />
+                            ) : (
+                                <Flag className="h-[18px] w-[18px]" aria-hidden />
+                            )}
                             Finalizar entrenamiento
                         </button>
+                        {/* Chispas de ignición: montan con `allDone` (one-shot, `forwards`). Si el alumno
+                            entra a una sesión ya completa, salen una vez al entrar — aceptado. */}
+                        {allDone && (
+                            <span className="exec-v3-finish-sparks" aria-hidden>
+                                {EXEC_FINISH_SPARKS.map((s) => (
+                                    <span
+                                        key={`${s.dx}:${s.dy}`}
+                                        className="exec-v3-finish-spark"
+                                        style={{
+                                            ['--dx' as string]: `${s.dx}px`,
+                                            ['--dy' as string]: `${s.dy}px`,
+                                            animationDelay: `${s.delay}s`,
+                                        }}
+                                    />
+                                ))}
+                            </span>
+                        )}
                     </div>
                 )}
 
@@ -2710,6 +2791,7 @@ export function WorkoutExecutionClient({
                         autoTimerEnabled={autoTimerEnabled}
                         onToggleAutoTimer={toggleAutoTimer}
                         onFinish={handleFinish}
+                        finishArmed={allDone}
                     />
                 )}
 

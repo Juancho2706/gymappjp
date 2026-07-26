@@ -17,6 +17,7 @@ import {
   // Mapeo PURO valores->payload, compartido con la `ActiveSetRow` (sin drift entre superficies).
   buildStrengthPayload,
   buildTypedPayload,
+  type TypedKeypadContext,
 } from '@eva/workout-engine'
 import { useTheme } from '@/context/ThemeContext'
 import { FONT, textStyle } from '../../../lib/typography'
@@ -67,6 +68,7 @@ type KeypadFieldStep = Extract<KeypadStep, { kind: 'keypad' }>
  */
 export function KeypadHost({
   target,
+  typedContext,
   onClose,
   onCommit,
   onDraftChange,
@@ -74,6 +76,17 @@ export function KeypadHost({
   accentText,
 }: {
   target: KeypadTarget | null
+  /**
+   * Contexto de CAMPOS del bloque en edición (`distanceUnit` / `cardioModality`; Fase A+C de
+   * specs/cardio-ejes-y-fixes). Sólo alimenta a `buildTypedPayload`, que así aplica las MISMAS
+   * conversiones que la fila de registro: la caja "Km" guarda metros (×1000) y el conteo rep-based
+   * (saltos/pisos/reps) viaja en `reps_done`. Sin la prop el payload es byte-idéntico al previo.
+   *
+   * NO altera el flujo del teclado: los pasos vienen de `target.typed.fields` (que `openSet` ya armó
+   * con este mismo contexto) y el botón primario conserva su comportamiento — en RN "Listo"/"Guardar"
+   * commitea (divergencia intencional con web, decisión CEO PR #168).
+   */
+  typedContext?: TypedKeypadContext
   onClose: () => void
   onCommit: (payload: OptimisticLogPayload) => void
   onDraftChange: (values: Record<string, string>, fieldIndex: number) => void
@@ -186,7 +199,7 @@ export function KeypadHost({
     // `buildStrengthPayload` los relee) ⇒ corregir peso/reps/nota nunca borra el esfuerzo registrado.
     const v = valuesRef.current
     const payload = target.typed
-      ? buildTypedPayload(target.typed.mode, v, target.blockId, target.setNumber)
+      ? buildTypedPayload(target.typed.mode, v, target.blockId, target.setNumber, typedContext)
       : buildStrengthPayload(v, target.blockId, target.setNumber)
     onCommit(payload)
   }

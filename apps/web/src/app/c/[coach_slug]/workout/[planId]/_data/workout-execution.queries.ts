@@ -20,6 +20,13 @@ export interface ExerciseType {
     instructions: string[] | null
     /** Tipo del catálogo (strength|cardio|mobility|roller); null en snapshots legacy. */
     exercise_type?: string | null
+    /**
+     * Modalidad de cardio del catálogo (run|bike|row|elliptical|jump_rope|hiit_reps|stairs).
+     * Decide los EJES de captura de la ronda (Fase C · `cardio-modality.ts`): la elíptica no pide
+     * distancia, la cuerda pide saltos, la escaladora pisos, el HIIT reps. null/desconocida ⇒ ejes
+     * genéricos (Min · Distancia · FC), byte-idéntico al comportamiento previo.
+     */
+    cardio_modality?: string | null
 }
 
 export interface BlockType {
@@ -107,7 +114,7 @@ export const getWorkoutExecutionData = cache(async (planId: string, targetDate?:
                 exercise_type_override, side_mode, reps_value, reps_unit, load_value, load_unit,
                 distance_value, distance_unit, duration_sec, target_pace_sec_per_km, hr_zone,
                 instructions, interval_config,
-                exercises ( id, name, muscle_group, video_url, video_start_time, video_end_time, gif_url, instructions, exercise_type )
+                exercises ( id, name, muscle_group, video_url, video_start_time, video_end_time, gif_url, instructions, exercise_type, cardio_modality )
             )
         `)
         .eq('id', planId)

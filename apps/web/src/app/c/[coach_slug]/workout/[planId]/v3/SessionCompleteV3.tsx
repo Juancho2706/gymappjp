@@ -5,6 +5,7 @@ import { motion, useReducedMotion } from 'framer-motion'
 import { Share2, Check, ArrowRight, HeartPulse, Move, GitCommit, CloudOff, Loader2, AlertTriangle } from 'lucide-react'
 import { getSantiagoIsoYmdForUtcInstant } from '@/lib/date-utils'
 import { compactDistance } from '@/lib/workout-exercise-type'
+import { formatCardioReps } from '@eva/workout-engine'
 import { MuscleMapSvg } from '../MuscleMapSvg'
 import {
     formatSessionDuration,
@@ -80,11 +81,16 @@ function fmtDidDistance(m: number): string {
     return `${Math.round(m)} m`
 }
 
-/** Cardio → "Xmin · Y,Z km" con "· N bpm" si hubo FC media; sólo lo registrado (fallback: rondas). */
+/**
+ * Cardio → "Xmin · Y,Z km" con "· N bpm" si hubo FC media; sólo lo registrado (fallback: rondas).
+ * Fase C: en las modalidades rep-based el motor entrega el conteo con su unidad ("420 saltos",
+ * "45 pisos", "30 reps") — la key sólo existe cuando hubo dato, así que el resto queda igual.
+ */
 function cardioDidData(c: CardioItem): string {
     const parts: string[] = []
     if (c.durationSec != null && c.durationSec > 0) parts.push(fmtDidDuration(c.durationSec))
     if (c.distanceM != null && c.distanceM > 0) parts.push(fmtDidDistance(c.distanceM))
+    if (c.repsDone != null && c.repsDone > 0) parts.push(formatCardioReps(c.repsDone, c.repsUnit ?? null))
     if (c.avgHr != null && c.avgHr > 0) parts.push(`${c.avgHr} bpm`)
     if (parts.length === 0) parts.push(`${c.rounds} ${c.rounds === 1 ? 'ronda' : 'rondas'}`)
     return parts.join(' · ')

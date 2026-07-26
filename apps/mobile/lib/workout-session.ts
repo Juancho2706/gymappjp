@@ -58,6 +58,13 @@ export interface SessionExercise {
   gif_url: string | null
   instructions: string[] | null
   exercise_type: string | null
+  /**
+   * `exercises.cardio_modality` (Fase C · specs/cardio-ejes-y-fixes): decide los EJES de captura de
+   * cardio (elíptica sin distancia, cuerda por saltos, escaladora por pisos, HIIT por reps). NULL /
+   * ausente ⇒ ejes genéricos (Min · Distancia · FC), byte-idéntico al comportamiento previo — los
+   * planes viejos y los ejercicios de cardio creados por coaches no cambian.
+   */
+  cardio_modality?: string | null
 }
 
 /**
@@ -548,7 +555,7 @@ export function useWorkoutSession(planId: string, repeatDate?: string | null): W
       .from('workout_plans')
       .select(
         `id, title, week_variant, program_id, day_of_week,
-         workout_blocks ( *, exercises ( id, name, muscle_group, video_url, video_start_time, video_end_time, gif_url, instructions, exercise_type ) )`,
+         workout_blocks ( *, exercises ( id, name, muscle_group, video_url, video_start_time, video_end_time, gif_url, instructions, exercise_type, cardio_modality ) )`,
       )
       .eq('id', planId)
       .maybeSingle()
@@ -785,6 +792,10 @@ export function useWorkoutSession(planId: string, repeatDate?: string | null): W
       if (payload.note != null) logData.note = payload.note
       if (payload.actualDurationSec != null) logData.actual_duration_sec = payload.actualDurationSec
       if (payload.actualDistanceM != null) logData.actual_distance_m = payload.actualDistanceM
+      // Pace real DERIVADO de tiempo+distancia (RF5, `derivedPaceSecPerKm` del motor): mismo criterio
+      // que el resto de los ejes — solo se escribe cuando el payload lo trae (una edición sin ambos
+      // ejes no pisa con null lo ya guardado).
+      if (payload.actualPaceSecPerKm != null) logData.actual_pace_sec_per_km = payload.actualPaceSecPerKm
       if (payload.actualHoldSec != null) logData.actual_hold_sec = payload.actualHoldSec
       if (payload.actualAvgHr != null) logData.actual_avg_hr = payload.actualAvgHr
       if (sub) {

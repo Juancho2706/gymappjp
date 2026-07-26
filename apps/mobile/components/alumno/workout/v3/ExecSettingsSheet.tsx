@@ -1,6 +1,6 @@
 import { type ReactNode, useCallback, useEffect, useState } from 'react'
 import { ActivityIndicator, LayoutChangeEvent, Platform, Pressable, Text, View } from 'react-native'
-import { Check, ChevronDown, Flag } from 'lucide-react-native'
+import { Check, ChevronDown, Flag, Sparkles } from 'lucide-react-native'
 import { Gesture, GestureDetector } from 'react-native-gesture-handler'
 import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated'
 import { FONT } from '../../../../lib/typography'
@@ -63,6 +63,7 @@ export function ExecSettingsSheet({
   exec,
   onFinish,
   finishing = false,
+  finishArmed = false,
 }: {
   open: boolean
   onClose: () => void
@@ -73,6 +74,9 @@ export function ExecSettingsSheet({
   onFinish?: () => void
   /** Cierre de sesión en curso: la fila se deshabilita y muestra spinner + "Finalizando…" (paridad web). */
   finishing?: boolean
+  /** Todas las series de la sesión están completas: la fila adopta el relleno de marca (estático — la
+   *  ignición con pop y chispas vive sólo en la barra fija del ejecutor). */
+  finishArmed?: boolean
 }) {
   const settings = useExecSettings()
 
@@ -322,17 +326,25 @@ export function ExecSettingsSheet({
                 paddingHorizontal: 16,
                 borderRadius: 14,
                 borderWidth: 2,
-                borderColor: s.borderStrong,
-                backgroundColor: s.surfaceRaised,
+                borderColor: finishArmed && !finishing ? hexToRgba(exec.accent, 0.9) : s.borderStrong,
+                backgroundColor: finishArmed && !finishing ? exec.accent : s.surfaceRaised,
                 opacity: finishing ? 0.7 : pressed ? 0.92 : 1,
               })}
             >
               {finishing ? (
                 <ActivityIndicator size="small" color={s.text} style={{ width: 19, height: 19, transform: [{ scale: 0.85 }] }} />
+              ) : finishArmed ? (
+                <Sparkles size={19} color={exec.pr} strokeWidth={2.4} />
               ) : (
                 <Flag size={19} color={s.text} strokeWidth={2.4} />
               )}
-              <Text style={{ fontFamily: FONT.uiExtra, fontSize: 14, color: s.text }}>
+              <Text
+                style={{
+                  fontFamily: FONT.uiExtra,
+                  fontSize: 14,
+                  color: finishArmed && !finishing ? exec.accentText : s.text,
+                }}
+              >
                 {finishing ? 'Finalizando…' : 'Finalizar entrenamiento'}
               </Text>
             </Pressable>

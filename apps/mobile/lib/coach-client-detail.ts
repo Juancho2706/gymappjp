@@ -47,6 +47,7 @@ import {
   type ModuleKey,
   type NutritionSectionKey,
 } from '@eva/feature-prefs'
+import { effectiveExerciseType, typedBlockSummary, type ExerciseType } from '@eva/workout-engine'
 
 // Coach-side client detail data. Reads via Supabase (RLS: coach sees own clients).
 // Mutations (update/archive/review) also use the coach session. Service-role never runs in RN.
@@ -200,12 +201,26 @@ export interface ActivityDay {
 export interface WorkoutDaySet {
   exerciseName: string
   muscleGroup: string | null
+  /** Tipo efectivo del bloque (override > catálogo > 'strength') → decide qué línea se pinta. */
+  kind: ExerciseType
   setNumber: number | null
   weightKg: number | null
   repsDone: number | null
   rpe: number | null
   rir: number | null
   note: string | null
+  // Ejes TIPADOS de la ronda (cardio/movilidad/roller). Sin ellos el coach veía la ronda vacía (G1).
+  actualDurationSec: number | null
+  actualDistanceM: number | null
+  actualAvgHr: number | null
+  actualHoldSec: number | null
+  /** jsonb `{left_sec, right_sec}` de movilidad por lado. */
+  metadata: unknown
+  /**
+   * `exercises.cardio_modality` (Fase C): da la unidad del conteo de cardio para que el coach lea
+   * "420 saltos" / "45 pisos" y no un "reps" genérico. Null ⇒ línea de cardio como hasta ahora.
+   */
+  cardioModality: string | null
   substitutedExerciseName: string | null
   substitutionReason: string | null
   targetReps: string | null
@@ -216,6 +231,8 @@ export interface WorkoutDaySet {
   blockSets: number | null
   blockRir: string | null
   blockTempo: string | null
+  /** Prescripción tipada resumida ("3× 20min Z2"); null en fuerza (ahí manda peso × reps). */
+  typedMeta: string | null
   progressionMode: string | null
   progressionValue: number | null
   planTitle: string | null
@@ -1150,12 +1167,17 @@ export async function getCoachClientDayDetail(
   const [workoutRes, nutritionRes, habitsRes] = await Promise.all([
     supabase
       .from('workout_logs')
+      // Espejo del select de la ficha web (`client-detail.service.ts`): los ejes tipados
+      // (`actual_*` + `metadata`) y el tipo del ejercicio/bloque son lo que hace visible el cardio.
       .select(`
         set_number, weight_kg, reps_done, rpe, rir, note, substituted_exercise_name, substitution_reason,
         target_reps_at_log, target_weight_at_log, plan_name_at_log, logged_at,
+        actual_duration_sec, actual_distance_m, actual_avg_hr, actual_hold_sec, metadata,
         workout_blocks (
           target_weight_kg, reps, sets, rir, progression_mode, progression_value, tempo,
-          exercises ( name, muscle_group ),
+          exercise_type_override, duration_sec, distance_value, distance_unit,
+          hr_zone, interval_config, reps_value, reps_unit, side_mode,
+          exercises ( name, muscle_group, exercise_type, cardio_modality ),
           workout_plans ( title )
         )
       `)
@@ -1189,29 +1211,43 @@ export async function getCoachClientDayDetail(
   const detailError = workoutRes.error ?? nutritionRes.error ?? habitsRes.error
   if (detailError) throw detailError
 
-  const workoutSets = ((workoutRes.data as any[] | null) ?? []).map((row) => ({
-    exerciseName: row.workout_blocks?.exercises?.name ?? 'Ejercicio',
-    muscleGroup: row.workout_blocks?.exercises?.muscle_group ?? null,
-    setNumber: row.set_number ?? null,
-    weightKg: row.weight_kg ?? null,
-    repsDone: row.reps_done ?? null,
-    rpe: row.rpe ?? null,
-    rir: row.rir ?? null,
-    note: row.note ?? null,
-    substitutedExerciseName: row.substituted_exercise_name ?? null,
-    substitutionReason: row.substitution_reason ?? null,
-    targetReps: row.target_reps_at_log ?? null,
-    targetWeightKg: row.target_weight_at_log ?? null,
-    planName: row.plan_name_at_log ?? null,
-    blockTargetWeightKg: row.workout_blocks?.target_weight_kg ?? null,
-    blockReps: row.workout_blocks?.reps ?? null,
-    blockSets: row.workout_blocks?.sets ?? null,
-    blockRir: row.workout_blocks?.rir ?? null,
-    blockTempo: row.workout_blocks?.tempo ?? null,
-    progressionMode: row.workout_blocks?.progression_mode ?? null,
-    progressionValue: row.workout_blocks?.progression_value ?? null,
-    planTitle: row.workout_blocks?.workout_plans?.title ?? null,
-  }))
+  const workoutSets: WorkoutDaySet[] = ((workoutRes.data as any[] | null) ?? []).map((row) => {
+    const block = row.workout_blocks ?? null
+    const kind = effectiveExerciseType(block, block?.exercises ?? null)
+    return {
+      exerciseName: block?.exercises?.name ?? 'Ejercicio',
+      muscleGroup: block?.exercises?.muscle_group ?? null,
+      kind,
+      setNumber: row.set_number ?? null,
+      weightKg: row.weight_kg ?? null,
+      repsDone: row.reps_done ?? null,
+      rpe: row.rpe ?? null,
+      rir: row.rir ?? null,
+      note: row.note ?? null,
+      actualDurationSec: row.actual_duration_sec ?? null,
+      actualDistanceM: row.actual_distance_m ?? null,
+      actualAvgHr: row.actual_avg_hr ?? null,
+      actualHoldSec: row.actual_hold_sec ?? null,
+      metadata: row.metadata ?? null,
+      cardioModality: block?.exercises?.cardio_modality ?? null,
+      substitutedExerciseName: row.substituted_exercise_name ?? null,
+      substitutionReason: row.substitution_reason ?? null,
+      targetReps: row.target_reps_at_log ?? null,
+      targetWeightKg: row.target_weight_at_log ?? null,
+      planName: row.plan_name_at_log ?? null,
+      blockTargetWeightKg: block?.target_weight_kg ?? null,
+      blockReps: block?.reps ?? null,
+      blockSets: block?.sets ?? null,
+      blockRir: block?.rir ?? null,
+      blockTempo: block?.tempo ?? null,
+      // En bloques tipados el `reps` persistido es un resumen legacy ("20min Z2") → el motor arma
+      // la prescripción real; en fuerza queda null y manda la línea peso × reps de siempre.
+      typedMeta: kind === 'strength' || !block ? null : typedBlockSummary(block, kind),
+      progressionMode: block?.progression_mode ?? null,
+      progressionValue: block?.progression_value ?? null,
+      planTitle: block?.workout_plans?.title ?? null,
+    }
+  })
 
   const nutritionMeals = (((nutritionRes.data as any)?.nutrition_meal_logs ?? []) as any[])
     .sort((a, b) => (a.nutrition_meals?.order_index ?? 0) - (b.nutrition_meals?.order_index ?? 0))
@@ -1400,12 +1436,18 @@ export async function getCoachNutritionZoneC(clientId: string, logDate: string):
 
   // Flag Edge Config (FEATURE_PREFS_ENABLED) + kill-switch de operador — server-only, vía el
   // endpoint mobile. Fail-OPEN: cualquier fallo => prefs ignoradas = mostrar todo lo entitled.
+  // `enabledModules` del mismo payload viene YA DERIVADO server-side ("plan pago ⇒ los 4 módulos",
+  // getCoachEnabledModules): es la fuente de entitlement del coach standalone — la lectura cruda de
+  // `coaches.enabled_modules` de abajo queda solo de fallback si el endpoint falló (drift QA CEO
+  // 2026-07-25: un coach Pro sin flags crudos veía la Zona C apagada).
   let disabledModules: string[] = []
   let prefsEnabled = false
+  let derivedCoachModules: string[] | null = null
   try {
-    const cfg = await apiFetch<{ disabledModules?: string[]; featurePrefsEnabled?: boolean }>('/api/mobile/config', { authenticated: true })
+    const cfg = await apiFetch<{ disabledModules?: string[]; featurePrefsEnabled?: boolean; enabledModules?: string[] }>('/api/mobile/config', { authenticated: true })
     disabledModules = cfg.disabledModules ?? []
     prefsEnabled = cfg.featurePrefsEnabled === true
+    derivedCoachModules = Array.isArray(cfg.enabledModules) ? cfg.enabledModules : null
   } catch { /* fail-open */ }
 
   const [notesRes, commentsRes, targetsRes, overrideRes, clientRes] = await Promise.all([
@@ -1431,11 +1473,17 @@ export async function getCoachNutritionZoneC(clientId: string, logDate: string):
   // Enterprise (org) => sin resolución client-side de módulos => todo false (mismo fail-closed web).
   let enabledModules: Record<string, unknown> = {}
   if (useTeamBase) {
-    const { data } = await supabase.from('teams').select('enabled_modules').eq('id', teamId).maybeSingle()
-    enabledModules = ((data as any)?.enabled_modules ?? {}) as Record<string, unknown>
+    // Un pool es PAGO por diseño ⇒ los 4 módulos incluidos (espejo exacto de
+    // `getTeamEnabledModules` web: UNION raw + todos-on; el raw queda irrelevante en lectura).
+    enabledModules = { cardio: true, movement_assessment: true, body_composition: true, nutrition_exchanges: true }
   } else if (!orgId) {
-    const { data } = await supabase.from('coaches').select('enabled_modules').eq('id', coachId).maybeSingle()
-    enabledModules = ((data as any)?.enabled_modules ?? {}) as Record<string, unknown>
+    if (derivedCoachModules) {
+      enabledModules = Object.fromEntries(derivedCoachModules.map((k) => [k, true]))
+    } else {
+      // Fallback sin red al endpoint: flags crudos (comportamiento histórico, sin derivación).
+      const { data } = await supabase.from('coaches').select('enabled_modules').eq('id', coachId).maybeSingle()
+      enabledModules = ((data as any)?.enabled_modules ?? {}) as Record<string, unknown>
+    }
   }
   const ent = (k: ModuleKey): boolean => enabledModules[k] === true && !disabledModules.includes(k)
   const entitledByModule: NutritionEntitledByModule = {

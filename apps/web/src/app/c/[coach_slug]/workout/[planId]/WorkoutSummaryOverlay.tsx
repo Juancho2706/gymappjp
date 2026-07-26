@@ -6,6 +6,7 @@ import { Trophy, Share2, Check, ArrowRight, HeartPulse, Move, GitCommit } from '
 import { getSantiagoIsoYmdForUtcInstant } from '@/lib/date-utils'
 import { springs, fadeSlideUp, staggerContainer } from '@/lib/animation-presets'
 import { compactDistance } from '@/lib/workout-exercise-type'
+import { cardioRepsLabel } from '@eva/workout-engine'
 import { MuscleMapSvg } from './MuscleMapSvg'
 import {
     formatSessionDuration,
@@ -66,6 +67,10 @@ function cardioTiles(c: CardioItem): SummaryTile[] {
     const tiles: SummaryTile[] = []
     if (c.durationSec != null && c.durationSec > 0) tiles.push({ value: formatClockDuration(c.durationSec), label: 'Tiempo' })
     if (c.distanceM != null && c.distanceM > 0) tiles.push({ value: compactDistance(c.distanceM, 'm'), label: 'Distancia' })
+    // Conteo rep-based (Fase C): sólo existe en cuerda/HIIT/escaladora y con dato registrado.
+    if (c.repsDone != null && c.repsDone > 0) {
+        tiles.push({ value: String(c.repsDone), label: cardioRepsLabel(c.repsUnit ?? 'reps') })
+    }
     if (c.avgHr != null && c.avgHr > 0) tiles.push({ value: String(c.avgHr), unit: 'bpm', label: 'FC media' })
     if (c.rounds > 1) tiles.push({ value: String(c.rounds), label: 'Rondas' })
     // Cardio sin actuals registrados: al menos mostramos que se completó (no dejar la card vacía).

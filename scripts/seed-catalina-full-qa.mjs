@@ -13,8 +13,10 @@
  *   1. New ACTIVE program "QA² Power Building" (weekly, 6 wks, started 25d ago =>
  *      currentWeek 4 => Intensificación phase). Deactivates her current active
  *      program and records its id to restore on --down.
- *   2. 4 training days (Lun/Mié/Vie/Sáb). Vie (day_of_week=5) == TODAY and is the
- *      richest day (2 superseries + core) so the CEO can train it today.
+ *   2. 5 training days (Lun/Mié/Vie/Sáb/Dom). Sáb (day_of_week=6) == TODAY = "Cardio
+ *      total": un bloque por modalidad de la Fase C (km, metros, elíptica 2 cajas,
+ *      saltos, pisos, reps) + hold, para QA-ear el ejecutor completo hoy. Dom trae
+ *      los intervalos por distancia 8x400m (Fase D, "Fase siguiente"). Vie = superseries.
  *   3. ~3 weeks of workout_logs on the strength/cardio/hold blocks with weekly
  *      progression, a clear press-banca PR yesterday, RPE/RIR, one per-set note
  *      ("molestia leve en el hombro izquierdo"), last session = YESTERDAY, none today.
@@ -91,6 +93,11 @@ const EX = {
   bulgaria: { id: '59ad47a6-7b03-49d7-9195-19404964ac0e', name: 'Sentadilla búlgara con mancuernas' },
   plancha: { id: '62e38fb9-65b7-4343-8b4b-2b50745f8a4a', name: 'Plancha frontal con peso' },
   cuerda: { id: '00000000-0000-0000-0ca0-000000000007', name: 'Saltar la cuerda' },
+  // Fase C cardio (migración 20260725221804): modalidades con ejes propios.
+  remoErg: { id: '00000000-0000-0000-0ca0-000000000005', name: 'Máquina de remo' },
+  eliptica: { id: '00000000-0000-0000-0ca0-000000000006', name: 'Elíptica' },
+  burpees: { id: '00000000-0000-0000-0ca0-000000000008', name: 'Burpees (HIIT)' },
+  escaladora: { id: '00000000-0000-0000-0ca0-000000000009', name: 'Escaladora' },
 }
 
 // section_template_id (áreas). section string is the legacy CHECK: warmup|main|cooldown only.
@@ -103,11 +110,12 @@ const TMPL = {
 }
 
 // ── program timing ───────────────────────────────────────────────────────────
-const START_DAYS_AGO = 25 // ceil(25/7)=4 => currentWeek 4 (Intensificación)
+const START_DAYS_AGO = 26 // ceil(26/7)=4 => currentWeek 4 (Intensificación). Corrida un SÁBADO.
 const TOTAL_WEEKS = 6
 
 // ── block definitions per day (order matters: superset = same group + contiguous order_index) ──
-// dow: 1=Lun 3=Mié 5=Vie(HOY) 6=Sáb. Día 3 (Vie) is today's richest workout.
+// dow: 1=Lun 3=Mié 5=Vie 6=Sáb(HOY) 7=Dom. Recalibrado 2026-07-25 (QA cardio A-D): HOY (Sáb)
+// es el día rico de cardio por modalidad; Dom trae los intervalos por distancia (Fase D).
 const DAYS = [
   {
     key: 'd1', title: `${PROGRAM_NAME} — Día 1 · Empuje/Tracción`, dow: 1,
@@ -127,7 +135,7 @@ const DAYS = [
     ],
   },
   {
-    key: 'd3', title: `${PROGRAM_NAME} — Día 3 · Hombro/Brazo (HOY)`, dow: 5,
+    key: 'd3', title: `${PROGRAM_NAME} — Día 3 · Hombro/Brazo`, dow: 5,
     blocks: [
       // SUPERSERIE A (3 ej) en el ÁREA CUSTOM del coach: "Hyrox"
       { key: 'd3_a1', ex: EX.elevLat, oi: 0, ss: 'A', section: 'main', tmpl: TMPL.HYROX, sets: 3, reps: '12', rest: '60s' },
@@ -141,31 +149,51 @@ const DAYS = [
     ],
   },
   {
-    key: 'd4', title: `${PROGRAM_NAME} — Día 4 · Mixto`, dow: 6,
+    // HOY (Sáb): un bloque por modalidad de la Fase C — cada uno abre cajas distintas.
+    key: 'd4', title: `${PROGRAM_NAME} — Día 4 · Cardio total (HOY)`, dow: 6,
     blocks: [
-      { key: 'd4_bulgaria', ex: EX.bulgaria, oi: 0, section: 'main', tmpl: TMPL.MAIN, sets: 3, reps: '10', rest: '90s' },
-      // hold / isometría => exercise_type_override='mobility' + duration_sec (loguea actual_hold_sec)
-      { key: 'd4_hold', ex: EX.plancha, oi: 1, section: 'main', tmpl: TMPL.CORE, sets: 3, reps: '45s', rest: '60s', override: 'mobility', duration_sec: 45 },
-      { key: 'd4_cardio', ex: EX.cuerda, oi: 2, section: 'main', tmpl: TMPL.CONDITIONING, sets: 1, reps: '5min Z4', override: 'cardio', hr_zone: 4, duration_sec: 300 },
+      // run + prescripción en KM => la caja de distancia dice "Km" y guarda ×1000 (fix G3); pace derivado.
+      { key: 'd4_cinta', ex: EX.cinta, oi: 0, section: 'main', tmpl: TMPL.CONDITIONING, sets: 1, reps: '5km Z2', rest: '0s', override: 'cardio', hr_zone: 2, duration_sec: 1500, distance_value: 5, distance_unit: 'km', target_pace_sec_per_km: 330 },
+      // row en metros + 2 rondas => footer "N/M rondas".
+      { key: 'd4_remo', ex: EX.remoErg, oi: 1, section: 'main', tmpl: TMPL.CONDITIONING, sets: 2, reps: '1000m Z3', rest: '120s', override: 'cardio', hr_zone: 3, distance_value: 1000, distance_unit: 'm' },
+      // elliptical => SOLO 2 cajas (Min · FC).
+      { key: 'd4_eliptica', ex: EX.eliptica, oi: 2, section: 'main', tmpl: TMPL.CONDITIONING, sets: 1, reps: '12min Z2', rest: '90s', override: 'cardio', hr_zone: 2, duration_sec: 720 },
+      // jump_rope => caja "Saltos" + objetivo rep-based (reps_value/reps_unit, CHECK ampliado).
+      { key: 'd4_cuerda', ex: EX.cuerda, oi: 3, section: 'main', tmpl: TMPL.CONDITIONING, sets: 1, reps: '300 saltos', rest: '90s', override: 'cardio', hr_zone: 3, duration_sec: 480, reps_value: 300, reps_unit: 'jumps' },
+      // stairs (Escaladora, ejercicio nuevo de la migración) => caja "Pisos".
+      { key: 'd4_escaladora', ex: EX.escaladora, oi: 4, section: 'main', tmpl: TMPL.CONDITIONING, sets: 1, reps: '40 pisos', rest: '90s', override: 'cardio', hr_zone: 3, duration_sec: 600, reps_value: 40, reps_unit: 'floors' },
+      // hiit_reps => caja "Reps".
+      { key: 'd4_burpees', ex: EX.burpees, oi: 5, section: 'main', tmpl: TMPL.CONDITIONING, sets: 1, reps: '30 reps Z4', rest: '60s', override: 'cardio', hr_zone: 4, duration_sec: 300, reps_value: 30, reps_unit: 'reps' },
+      // hold simple (isometría) para cerrar el día y probar la ignición con tipos mezclados.
+      { key: 'd4_hold', ex: EX.plancha, oi: 6, section: 'cooldown', tmpl: TMPL.CORE, sets: 2, reps: '45s', rest: '60s', override: 'mobility', duration_sec: 45 },
+    ],
+  },
+  {
+    // Dom: Fase D — intervalos por DISTANCIA (plantilla 8x400m): fases manuales + "Fase siguiente".
+    key: 'd5', title: `${PROGRAM_NAME} — Día 5 · Pista 8x400m`, dow: 7,
+    blocks: [
+      { key: 'd5_intervalos', ex: EX.cinta, oi: 0, section: 'main', tmpl: TMPL.CONDITIONING, sets: 1, reps: '8x400m @ Z4', rest: '0s', override: 'cardio', hr_zone: 4, interval_config: { warmup_sec: 300, cooldown_sec: 180, repeats: 8, work: { distance_m: 400, target: { kind: 'hr_zone', hr_zone: 4 } }, recovery: { duration_sec: 90, mode: 'jog' } } },
     ],
   },
 ]
 
 // ── log history plan ─────────────────────────────────────────────────────────
 // Each session: { d: daysAgo, sets: [ {key, kind, rows:[...] } ] }
-// strength row: {w, r, rpe, rir?, note?}  cardio row: {durSec, distM?, hr?, pace?, rpe}  hold row: {holdSec, rpe}
+// strength row: {w, r, rpe, rir?, note?}  cardio row: {durSec, distM?, hr?, pace?, reps?, rpe}
+// hold row: {holdSec, rpe}
+// Fechas ancladas a HOY = SÁBADO: esta semana Lun=d5 · Mié=d3 · Vie=d1(AYER); semanas previas +7.
 const NOTE_SHOULDER = 'Sentí una molestia leve en el hombro izquierdo'
 const SESSIONS = [
-  // ---- week 1 (program start ~25d ago) ----
-  { d: 24, sets: [
+  // ---- week 1 (program start 26d ago = Lun) ----
+  { d: 26, sets: [
     { key: 'd1_press', kind: 's', rows: [{ w: 40, r: 10, rpe: 7 }, { w: 40, r: 10, rpe: 7 }, { w: 40, r: 9, rpe: 8 }, { w: 40, r: 8, rpe: 8 }] },
     { key: 'd1_remo', kind: 's', rows: [{ w: 45, r: 10, rpe: 7 }, { w: 45, r: 10, rpe: 7 }, { w: 45, r: 10, rpe: 8 }, { w: 45, r: 9, rpe: 8 }] },
     { key: 'd1_squat', kind: 's', rows: [{ w: 60, r: 5, rpe: 7, rir: 3 }, { w: 60, r: 5, rpe: 7, rir: 3 }, { w: 60, r: 5, rpe: 8, rir: 2 }, { w: 60, r: 5, rpe: 8, rir: 2 }, { w: 60, r: 5, rpe: 8, rir: 2 }] },
   ] },
-  { d: 22, sets: [
+  { d: 24, sets: [
     { key: 'd2_cardio', kind: 'c', rows: [{ durSec: 1500, distM: 4300, hr: 148, rpe: 6 }] },
   ] },
-  { d: 20, sets: [
+  { d: 22, sets: [
     { key: 'd3_a1', kind: 's', rows: [{ w: 10, r: 12, rpe: 7 }, { w: 10, r: 12, rpe: 7 }, { w: 10, r: 11, rpe: 8 }] },
     { key: 'd3_a2', kind: 's', rows: [{ w: 25, r: 10, rpe: 7 }, { w: 25, r: 10, rpe: 8 }, { w: 25, r: 10, rpe: 8 }] },
     { key: 'd3_a3', kind: 's', rows: [{ w: 7, r: 15, rpe: 7 }, { w: 7, r: 15, rpe: 8 }, { w: 7, r: 12, rpe: 8 }] },
@@ -173,37 +201,31 @@ const SESSIONS = [
     { key: 'd3_b2', kind: 's', rows: [{ w: 18, r: 12, rpe: 7 }, { w: 18, r: 12, rpe: 8 }, { w: 18, r: 12, rpe: 8 }] },
     { key: 'd3_core', kind: 's', rows: [{ w: null, r: 15, rpe: 7 }, { w: null, r: 15, rpe: 8 }, { w: null, r: 12, rpe: 8 }] },
   ] },
-  { d: 19, sets: [
-    { key: 'd4_bulgaria', kind: 's', rows: [{ w: 20, r: 10, rpe: 7 }, { w: 20, r: 10, rpe: 8 }, { w: 20, r: 9, rpe: 8 }] },
-    { key: 'd4_hold', kind: 'h', rows: [{ holdSec: 40, rpe: 7 }, { holdSec: 45, rpe: 8 }, { holdSec: 45, rpe: 8 }] },
-    { key: 'd4_cardio', kind: 'c', rows: [{ durSec: 300, hr: 150, rpe: 6 }] },
-  ] },
   // ---- week 2 ----
-  { d: 13, sets: [
+  { d: 19, sets: [
     { key: 'd1_press', kind: 's', rows: [{ w: 42.5, r: 9, rpe: 8 }, { w: 42.5, r: 9, rpe: 8 }, { w: 42.5, r: 8, rpe: 8 }, { w: 42.5, r: 8, rpe: 9 }] },
     { key: 'd1_remo', kind: 's', rows: [{ w: 47.5, r: 10, rpe: 7 }, { w: 47.5, r: 10, rpe: 8 }, { w: 47.5, r: 9, rpe: 8 }, { w: 47.5, r: 9, rpe: 9 }] },
     { key: 'd1_squat', kind: 's', rows: [{ w: 62.5, r: 5, rpe: 7, rir: 3 }, { w: 62.5, r: 5, rpe: 8, rir: 2 }, { w: 62.5, r: 5, rpe: 8, rir: 2 }, { w: 62.5, r: 5, rpe: 8, rir: 2 }, { w: 62.5, r: 5, rpe: 9, rir: 1 }] },
   ] },
-  { d: 11, sets: [
+  { d: 17, sets: [
+    { key: 'd2_cardio', kind: 'c', rows: [{ durSec: 1620, distM: 4600, hr: 151, rpe: 6 }] },
+  ] },
+  { d: 15, sets: [
     { key: 'd3_a1', kind: 's', rows: [{ w: 11, r: 12, rpe: 7 }, { w: 11, r: 12, rpe: 8 }, { w: 11, r: 12, rpe: 8 }] },
     { key: 'd3_a2', kind: 's', rows: [{ w: 27, r: 10, rpe: 8 }, { w: 27, r: 10, rpe: 8 }, { w: 27, r: 10, rpe: 8 }] },
     { key: 'd3_b1', kind: 's', rows: [{ w: 9, r: 12, rpe: 8 }, { w: 9, r: 12, rpe: 8 }, { w: 9, r: 11, rpe: 9 }] },
     { key: 'd3_b2', kind: 's', rows: [{ w: 19, r: 12, rpe: 8 }, { w: 19, r: 12, rpe: 8 }, { w: 19, r: 12, rpe: 8 }] },
   ] },
-  { d: 10, sets: [
-    { key: 'd2_cardio', kind: 'c', rows: [{ durSec: 1620, distM: 4600, hr: 151, rpe: 6 }] },
-  ] },
-  { d: 8, sets: [
-    { key: 'd4_bulgaria', kind: 's', rows: [{ w: 22.5, r: 10, rpe: 8 }, { w: 22.5, r: 10, rpe: 8 }, { w: 22.5, r: 10, rpe: 9 }] },
-    { key: 'd4_hold', kind: 'h', rows: [{ holdSec: 50, rpe: 7 }, { holdSec: 50, rpe: 8 }, { holdSec: 55, rpe: 8 }] },
-  ] },
-  // ---- week 3 (last week: the shoulder-note set) ----
-  { d: 6, sets: [
+  // ---- week 3 (last week: shoulder note + primer cardio por modalidades) ----
+  { d: 12, sets: [
     { key: 'd1_press', kind: 's', rows: [{ w: 45, r: 8, rpe: 8 }, { w: 45, r: 8, rpe: 8, note: NOTE_SHOULDER }, { w: 45, r: 8, rpe: 9 }, { w: 45, r: 7, rpe: 9 }] },
     { key: 'd1_remo', kind: 's', rows: [{ w: 50, r: 9, rpe: 8 }, { w: 50, r: 9, rpe: 8 }, { w: 50, r: 9, rpe: 9 }, { w: 50, r: 8, rpe: 9 }] },
     { key: 'd1_squat', kind: 's', rows: [{ w: 65, r: 5, rpe: 8, rir: 2 }, { w: 65, r: 5, rpe: 8, rir: 2 }, { w: 65, r: 5, rpe: 8, rir: 2 }, { w: 65, r: 5, rpe: 9, rir: 1 }, { w: 65, r: 5, rpe: 9, rir: 1 }] },
   ] },
-  { d: 4, sets: [
+  { d: 10, sets: [
+    { key: 'd2_cardio', kind: 'c', rows: [{ durSec: 1560, distM: 4700, hr: 149, rpe: 6 }] },
+  ] },
+  { d: 8, sets: [
     { key: 'd3_a1', kind: 's', rows: [{ w: 12, r: 12, rpe: 8 }, { w: 12, r: 11, rpe: 8 }, { w: 12, r: 10, rpe: 9 }] },
     { key: 'd3_a2', kind: 's', rows: [{ w: 30, r: 10, rpe: 8 }, { w: 30, r: 10, rpe: 8 }, { w: 30, r: 9, rpe: 9 }] },
     { key: 'd3_a3', kind: 's', rows: [{ w: 8, r: 15, rpe: 8 }, { w: 8, r: 14, rpe: 8 }, { w: 8, r: 12, rpe: 9 }] },
@@ -211,11 +233,35 @@ const SESSIONS = [
     { key: 'd3_b2', kind: 's', rows: [{ w: 20, r: 12, rpe: 8 }, { w: 20, r: 12, rpe: 8 }, { w: 20, r: 11, rpe: 9 }] },
     { key: 'd3_core', kind: 's', rows: [{ w: null, r: 15, rpe: 8 }, { w: null, r: 15, rpe: 8 }, { w: null, r: 15, rpe: 9 }] },
   ] },
-  // ---- YESTERDAY: Día 1 heavy, press-banca PR, live streak ----
-  { d: 1, sets: [
-    { key: 'd1_press', kind: 's', rows: [{ w: 47.5, r: 9, rpe: 8 }, { w: 47.5, r: 9, rpe: 8 }, { w: 47.5, r: 8, rpe: 9 }, { w: 47.5, r: 8, rpe: 9 }] }, // PR (Epley 47.5x9=61.75 > 45x8=57)
+  // Sáb pasado: el día de modalidades COMPLETO — así la ficha del coach ya muestra
+  // "310 saltos" / "38 pisos" / "28 reps" y el pace real registrado (QA Fase B+C).
+  { d: 7, sets: [
+    { key: 'd4_cinta', kind: 'c', rows: [{ durSec: 1480, distM: 4800, hr: 147, pace: 308, rpe: 7 }] },
+    { key: 'd4_remo', kind: 'c', rows: [{ durSec: 245, distM: 1000, hr: 152, rpe: 7 }, { durSec: 252, distM: 1000, hr: 156, rpe: 8 }] },
+    { key: 'd4_eliptica', kind: 'c', rows: [{ durSec: 700, hr: 150, rpe: 6 }] },
+    { key: 'd4_cuerda', kind: 'c', rows: [{ durSec: 470, reps: 310, hr: 158, rpe: 7 }] },
+    { key: 'd4_escaladora', kind: 'c', rows: [{ durSec: 610, reps: 38, hr: 155, rpe: 7 }] },
+    { key: 'd4_burpees', kind: 'c', rows: [{ durSec: 290, reps: 28, hr: 164, rpe: 8 }] },
+    { key: 'd4_hold', kind: 'h', rows: [{ holdSec: 50, rpe: 7 }, { holdSec: 52, rpe: 8 }] },
+  ] },
+  // ---- semana actual ----
+  // Lun: Día 1 pesado con PR de press banca (Epley 47.5x9=61.75 > 45x8=57).
+  { d: 5, sets: [
+    { key: 'd1_press', kind: 's', rows: [{ w: 47.5, r: 9, rpe: 8 }, { w: 47.5, r: 9, rpe: 8 }, { w: 47.5, r: 8, rpe: 9 }, { w: 47.5, r: 8, rpe: 9 }] },
     { key: 'd1_remo', kind: 's', rows: [{ w: 52.5, r: 9, rpe: 8 }, { w: 52.5, r: 9, rpe: 8 }, { w: 52.5, r: 8, rpe: 9 }, { w: 52.5, r: 8, rpe: 9 }] },
     { key: 'd1_squat', kind: 's', rows: [{ w: 67.5, r: 5, rpe: 8, rir: 2 }, { w: 67.5, r: 5, rpe: 9, rir: 1 }, { w: 67.5, r: 5, rpe: 9, rir: 1 }, { w: 67.5, r: 5, rpe: 9, rir: 1 }, { w: 67.5, r: 5, rpe: 9, rir: 0 }] },
+  ] },
+  { d: 3, sets: [
+    { key: 'd2_cardio', kind: 'c', rows: [{ durSec: 1500, distM: 4900, hr: 150, pace: 306, rpe: 6 }] },
+  ] },
+  // AYER (Vie): superseries semana 4 — última sesión, racha viva; HOY queda pendiente el cardio.
+  { d: 1, sets: [
+    { key: 'd3_a1', kind: 's', rows: [{ w: 12.5, r: 12, rpe: 8 }, { w: 12.5, r: 12, rpe: 8 }, { w: 12.5, r: 11, rpe: 9 }] },
+    { key: 'd3_a2', kind: 's', rows: [{ w: 32, r: 10, rpe: 8 }, { w: 32, r: 10, rpe: 8 }, { w: 32, r: 9, rpe: 9 }] },
+    { key: 'd3_a3', kind: 's', rows: [{ w: 8, r: 15, rpe: 8 }, { w: 8, r: 15, rpe: 8 }, { w: 8, r: 13, rpe: 9 }] },
+    { key: 'd3_b1', kind: 's', rows: [{ w: 10, r: 12, rpe: 8 }, { w: 10, r: 12, rpe: 9 }, { w: 10, r: 11, rpe: 9 }] },
+    { key: 'd3_b2', kind: 's', rows: [{ w: 21, r: 12, rpe: 8 }, { w: 21, r: 12, rpe: 8 }, { w: 21, r: 11, rpe: 9 }] },
+    { key: 'd3_core', kind: 's', rows: [{ w: null, r: 15, rpe: 8 }, { w: null, r: 15, rpe: 9 }, { w: null, r: 15, rpe: 9 }] },
   ] },
 ]
 
@@ -420,6 +466,10 @@ async function up() {
       distance_unit: b.distance_unit ?? null,
       target_pace_sec_per_km: b.target_pace_sec_per_km ?? null,
       side_mode: b.side_mode ?? null,
+      // Fase C/D cardio: objetivo rep-based (saltos/pisos/reps) + intervalos por distancia.
+      reps_value: b.reps_value ?? null,
+      reps_unit: b.reps_unit ?? null,
+      interval_config: b.interval_config ?? null,
     }))
     const { data: blocks, error: bErr } = await sb.from('workout_blocks').insert(rows).select('id,order_index')
     if (bErr) throw new Error(`blocks ${day.key}: ${bErr.message}`)
@@ -454,7 +504,8 @@ async function up() {
         if (grp.kind === 's') {
           logRows.push({ ...base, weight_kg: row.w, reps_done: row.r, rir: row.rir ?? null, target_weight_at_log: def.prog?.target != null ? row.w : null })
         } else if (grp.kind === 'c') {
-          logRows.push({ ...base, actual_duration_sec: row.durSec ?? null, actual_distance_m: row.distM ?? null, actual_avg_hr: row.hr ?? null, actual_pace_sec_per_km: row.pace ?? null })
+          // `reps` = conteo rep-based (saltos/pisos/reps) — misma columna reps_done que fuerza.
+          logRows.push({ ...base, actual_duration_sec: row.durSec ?? null, actual_distance_m: row.distM ?? null, actual_avg_hr: row.hr ?? null, actual_pace_sec_per_km: row.pace ?? null, reps_done: row.reps ?? null })
         } else if (grp.kind === 'h') {
           logRows.push({ ...base, actual_hold_sec: row.holdSec ?? null })
         }
@@ -534,6 +585,19 @@ async function up() {
       createdMealLogIds.push(ml.id)
     }
     if (mealByOrder.length >= 4) {
+      // Self-heal (corridas previas crasheadas o seeds paralelos QA³): borrar los daily logs de
+      // HOY y AYER de este plan (con sus meal_logs) antes de recrearlos — evita duplicados aunque
+      // no exista manifest.
+      const { data: staleDl } = await sb
+        .from('daily_nutrition_logs')
+        .select('id')
+        .eq('client_id', CLIENT_ID)
+        .in('log_date', [ymdAgo(1), ymdAgo(0)])
+      const staleIds = (staleDl ?? []).map((r) => r.id)
+      if (staleIds.length) {
+        await sb.from('nutrition_meal_logs').delete().in('daily_log_id', staleIds)
+        await sb.from('daily_nutrition_logs').delete().in('id', staleIds)
+      }
       // YESTERDAY: 2 de 4 completadas; una (Almuerzo) al 50% con satisfacción
       const yLog = await mkDailyLog(1)
       await mkMealLog(yLog, mealByOrder[0].id, 1, { satisfaction_score: 3 }) // Desayuno full
@@ -569,7 +633,9 @@ async function up() {
     notes: h.notes,
     updated_at: isoAgo(d),
   }))
-  const { error: habErr } = await sb.from('daily_habits').insert(habitRows)
+  // Upsert por (client_id, log_date): seeds paralelos (QA³) o corridas crasheadas pueden haber
+  // dejado hábitos en estas fechas — pisarlos es correcto (datos QA de la misma alumna).
+  const { error: habErr } = await sb.from('daily_habits').upsert(habitRows, { onConflict: 'client_id,log_date' })
   if (habErr) throw new Error(`daily_habits: ${habErr.message}`)
   for (const r of habitRows) createdHabitDates.push(r.log_date)
 
@@ -591,7 +657,7 @@ async function up() {
     programName: PROGRAM_NAME,
     startDate,
     endDate,
-    todayTrainsDayOfWeek: 5,
+    todayTrainsDayOfWeek: 6,
     deactivatedProgramIds,
     createdProgramId: prog.id,
     createdPlanIds,
@@ -624,7 +690,7 @@ async function up() {
   console.log(`deactivated previous program(s): ${deactivatedProgramIds.join(', ') || 'none'}`)
   console.log('\nactive program(s) now for Catalina (SELECT via same service-role client):')
   console.log(JSON.stringify(activeProg, null, 2))
-  console.log(`\nHOY es viernes (day_of_week=5) -> le toca "Día 3 · Hombro/Brazo (HOY)" (2 superseries + core). Sin logs hoy.`)
+  console.log(`\nHOY es sábado (day_of_week=6) -> le toca "Día 4 · Cardio total (HOY)" (6 modalidades + hold). Sin logs hoy. Mañana (Dom): 8x400m por distancia.`)
   console.log(`Manifest: ${MANIFEST_PATH}`)
 }
 

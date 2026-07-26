@@ -2837,6 +2837,122 @@ html[data-exec-v3-entered] [data-exec-v3] .exec-v3-splash {
   border-color: #3a3a45;
 }
 
+/* ---- Ignición del CTA "Finalizar" (todas las series hechas): el botón fantasma se enciende con el
+   relleno de la MARCA (white-label safe) + glow. Con reduced-motion queda ESTÁTICO: relleno y glow
+   fijos, sin ignición, sin pulso y sin chispas. ---- */
+[data-exec-v3] .exec-v3-finishbtn.is-armed {
+  position: relative;
+  overflow: hidden;
+  background: var(--exec-brand);
+  color: var(--exec-brand-ink);
+  /* Borde LUMINOSO (mezcla hacia blanco, no hacia negro): QA CEO 2026-07-25 — el armed debe
+     gritar "terminaste", no verse como un relleno plano. */
+  border-color: color-mix(in srgb, var(--exec-brand) 50%, #fff);
+  box-shadow: 0 0 22px 3px color-mix(in srgb, var(--exec-brand) 42%, transparent);
+  transition: background 0.28s ease, color 0.28s ease, border-color 0.28s ease, box-shadow 0.28s ease,
+    transform 0.12s ease;
+}
+/* Veladura de celebración sobre el relleno de marca (z-index -1 = tras el contenido inline, sobre
+   el background del botón; el stacking context lo crea el propio .is-armed). --exec-celebration es
+   fija EVA (no se re-tiñe por white-label, igual que el oro del PR). */
+[data-exec-v3] .exec-v3-finishbtn.is-armed::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: linear-gradient(115deg, transparent 38%, color-mix(in srgb, var(--exec-celebration) 52%, transparent));
+}
+/* Ícono Sparkles en el ORO del PR (token fijo, jamás re-teñido) con brillo propio. */
+[data-exec-v3] .exec-v3-finishbtn.is-armed > svg {
+  color: var(--exec-pr);
+  filter: drop-shadow(0 0 5px color-mix(in srgb, var(--exec-pr) 70%, transparent));
+}
+[data-exec-v3] .exec-v3-finish-sparks {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+[data-exec-v3] .exec-v3-finish-spark {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 7px;
+  height: 7px;
+  margin: -3.5px 0 0 -3.5px;
+  border-radius: 999px;
+  /* Sin animación (reduced-motion) las chispas no deben verse: sólo aparecen al animarse. */
+  opacity: 0;
+  background: var(--exec-pr);
+}
+[data-exec-v3] .exec-v3-finish-spark:nth-child(3n + 2) {
+  background: var(--exec-celebration);
+}
+[data-exec-v3] .exec-v3-finish-spark:nth-child(3n) {
+  background: #fff;
+}
+@media (prefers-reduced-motion: no-preference) {
+  [data-exec-v3] .exec-v3-finishbtn.is-armed {
+    /* Sin fill-mode: al terminar la ignición el `transform` vuelve al declarado y `:active` (hundido)
+       sigue respondiendo. El glow arranca justo después. */
+    animation: exec-v3-finish-ignite 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) 1,
+      exec-v3-finish-glow 1.8s ease-in-out 0.45s infinite;
+  }
+  [data-exec-v3] .exec-v3-finish-spark {
+    animation: exec-v3-finish-spark 0.7s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
+}
+@keyframes exec-v3-finish-ignite {
+  0% {
+    transform: scale(1);
+    filter: brightness(1);
+  }
+  45% {
+    transform: scale(1.05);
+    filter: brightness(1.35);
+  }
+  100% {
+    transform: scale(1);
+    filter: brightness(1);
+  }
+}
+@keyframes exec-v3-finish-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 14px 1px color-mix(in srgb, var(--exec-brand) 26%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 26px 5px color-mix(in srgb, var(--exec-brand) 46%, transparent);
+  }
+}
+/* Fila "Finalizar entrenamiento" del sheet de ajustes con el CTA encendido: el relleno de marca va
+   INLINE (el botón se estiliza inline y así gana a [data-exec-v3]); acá sólo el glow. Sin chispas:
+   se remontarían en cada apertura del sheet. */
+[data-exec-v3] .exec-v3-finish-armed {
+  box-shadow: 0 0 14px 1px color-mix(in srgb, var(--exec-brand) 26%, transparent);
+}
+@media (prefers-reduced-motion: no-preference) {
+  [data-exec-v3] .exec-v3-finish-armed {
+    animation: exec-v3-finish-glow 1.8s ease-in-out infinite;
+  }
+}
+@keyframes exec-v3-finish-spark {
+  0% {
+    opacity: 0;
+    transform: translate(0, 0) scale(1);
+  }
+  12% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(var(--dx, 0), var(--dy, 0)) scale(0);
+  }
+}
+
 /* ---- Entrada / splash (E2.2) ---- */
 [data-exec-v3] .exec-v3-splash {
   overflow: hidden;
@@ -3386,6 +3502,8 @@ html[data-exec-v3-entered] [data-exec-v3] .exec-v3-splash {
 /* Reduced-motion: sin vuelo — el fondo, el logo asentado y "PREPARANDO" aparecen con un fade suave. */
 @media (prefers-reduced-motion: reduce) {
   .exec-dsp-bg { transform: translateY(0); animation: none; }
+  /* La ola del fondo corría en loop infinito aunque el resto de la ceremonia quedara quieta. */
+  .exec-dsp-wave, .exec-dsp-wave::before { animation: none; }
   .exec-dsp-pill, .exec-dsp-trail, .exec-dsp-line { display: none; }
   .exec-dsp-logo { animation: none; }
   .exec-dsp-ring { display: none; }

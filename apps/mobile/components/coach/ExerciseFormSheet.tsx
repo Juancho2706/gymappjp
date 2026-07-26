@@ -4,7 +4,7 @@ import { BottomSheetModal, BottomSheetScrollView } from '@gorhom/bottom-sheet'
 import { Image } from 'expo-image'
 import * as ImagePicker from 'expo-image-picker'
 import { ImagePlus, Trash2, X } from 'lucide-react-native'
-import { EXERCISE_TYPE_OPTIONS } from '@eva/workout-engine'
+import { CARDIO_MODALITY_OPTIONS, EXERCISE_TYPE_OPTIONS, cardioAxisLabels } from '@eva/workout-engine'
 import { useTheme } from '../../context/ThemeContext'
 import { Button, Input, SegmentedTabs, Textarea, VideoPlayer } from '../index'
 import {
@@ -42,6 +42,9 @@ function mmssToSeconds(str: string): number | null {
   return isNaN(n) ? null : n
 }
 
+/** Campo señalado por la validación local (el mensaje se pinta EN el campo, no solo arriba). */
+type FieldError = { field: 'name' | 'muscle' | 'video'; message: string }
+
 interface Props {
   /** Exercise being edited; null = create mode. */
   exercise: ExerciseRow | null
@@ -59,6 +62,8 @@ export const ExerciseFormSheet = forwardRef<BottomSheetModal, Props>(function Ex
   const [name, setName] = useState('')
   const [muscle, setMuscle] = useState('')
   const [exerciseType, setExerciseType] = useState('strength')
+  // Modalidad de cardio (Fase C): '' = genérica ⇒ se guarda NULL. Solo se muestra en tipo cardio.
+  const [cardioModality, setCardioModality] = useState('')
   const [equipment, setEquipment] = useState<string | null>(null)
   const [difficulty, setDifficulty] = useState<string | null>(null)
   const [secondary, setSecondary] = useState('')
@@ -71,6 +76,7 @@ export const ExerciseFormSheet = forwardRef<BottomSheetModal, Props>(function Ex
   const [uploading, setUploading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [fieldError, setFieldError] = useState<FieldError | null>(null)
 
   // E-F1: subir imagen del ejercicio desde galería del device.
   async function pickImage() {
@@ -89,10 +95,12 @@ export const ExerciseFormSheet = forwardRef<BottomSheetModal, Props>(function Ex
   // Reset form whenever the target exercise changes (open for create/edit).
   useEffect(() => {
     setError(null)
+    setFieldError(null)
     setSaving(false)
     setName(exercise?.name ?? '')
     setMuscle(exercise?.muscle_group ?? '')
     setExerciseType(exercise?.exercise_type ?? 'strength')
+    setCardioModality(exercise?.cardio_modality ?? '')
     setEquipment(exercise?.equipment ?? null)
     setDifficulty(exercise?.difficulty ?? null)
     setSecondary(exercise?.secondary_muscles?.join(', ') ?? '')
@@ -104,20 +112,33 @@ export const ExerciseFormSheet = forwardRef<BottomSheetModal, Props>(function Ex
     setImageUrl(exercise?.image_url ?? '')
   }, [exercise])
 
+  /** Salir de cardio limpia la modalidad (la lib también la anula: acá solo espejamos la UI). */
+  function changeType(next: string) {
+    setExerciseType(next)
+    if (next !== 'cardio') setCardioModality('')
+  }
+
   async function save() {
     setError(null)
-    if (name.trim().length < 2) { setError('El nombre debe tener al menos 2 caracteres.'); return }
-    if (!muscle) { setError('Selecciona un grupo muscular.'); return }
+    setFieldError(null)
+    if (name.trim().length < 2) {
+      setFieldError({ field: 'name', message: 'El nombre debe tener al menos 2 caracteres.' }); return
+    }
+    if (!muscle) {
+      setFieldError({ field: 'muscle', message: 'Selecciona un grupo muscular.' }); return
+    }
     const startSec = mmssToSeconds(videoStart)
     const endSec = mmssToSeconds(videoEnd)
     if (startSec != null && endSec != null && endSec <= startSec) {
-      setError('El tiempo de fin del video debe ser mayor que el de inicio.'); return
+      setFieldError({ field: 'video', message: 'El tiempo de fin debe ser mayor que el de inicio.' }); return
     }
     setSaving(true)
     const input = {
       name: name.trim(),
       muscle_group: muscle,
       exercise_type: exerciseType,
+      // Fuera de cardio la lib ya la anula; se manda igual para no depender del orden de los estados.
+      cardio_modality: exerciseType === 'cardio' ? cardioModality || null : null,
       equipment,
       difficulty,
       secondary_muscles: secondary.split(',').map((s) => s.trim()).filter(Boolean),
@@ -145,6 +166,11 @@ export const ExerciseFormSheet = forwardRef<BottomSheetModal, Props>(function Ex
     ;(ref as React.RefObject<BottomSheetModal>).current?.dismiss()
   }
 
+  const isCardio = exerciseType === 'cardio'
+  // Preview de las cajas que verá el alumno: derivado del MOTOR (cardioAxesFor), nunca de una lista
+  // local — si el mapa de ejes cambia, estos chips cambian solos.
+  const cardioAxisPreview = cardioAxisLabels(cardioModality || null)
+
   return (
     <BottomSheetModal
       ref={ref}
@@ -159,9 +185,14 @@ export const ExerciseFormSheet = forwardRef<BottomSheetModal, Props>(function Ex
       handleIndicatorStyle={{ backgroundColor: theme.mutedForeground }}
     >
       <BottomSheetScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
-        <Text className="text-strong font-display" style={styles.title}>
-          {editing ? 'Editar ejercicio' : 'Nuevo ejercicio'}
-        </Text>
+        <View style={styles.header}>
+          <Text className="text-strong font-display" style={styles.title}>
+            {editing ? 'Editar ejercicio' : 'Nuevo ejercicio'}
+          </Text>
+          <Text className="text-muted font-sans" style={styles.subtitle}>
+            Lo que definas acá manda en el builder y en la app del alumno.
+          </Text>
+        </View>
 
         {error ? (
           <View className="border border-danger-500/30 bg-danger-100 dark:bg-danger-100/[0.18] rounded-control" style={styles.errorBox}>
@@ -169,31 +200,33 @@ export const ExerciseFormSheet = forwardRef<BottomSheetModal, Props>(function Ex
           </View>
         ) : null}
 
-        <Input label="Nombre *" value={name} onChangeText={setName} placeholder="Ej: Press banca inclinado" />
+        <SectionHeader
+          first
+          title="Identidad"
+          description="Cómo se llama el ejercicio y dónde queda ordenado en tu catálogo."
+        />
+
+        <Input
+          label="Nombre *"
+          value={name}
+          onChangeText={setName}
+          placeholder="Ej: Press banca inclinado"
+          error={fieldError?.field === 'name' ? fieldError.message : null}
+        />
 
         <Label>Grupo muscular *</Label>
         <Chips options={MUSCLE_GROUPS as readonly string[]} value={muscle} onSelect={setMuscle} />
+        {fieldError?.field === 'muscle' ? (
+          <Text className="text-danger-600 font-sans" style={styles.hint}>{fieldError.message}</Text>
+        ) : null}
 
-        {/* E5-08: tipo de ejercicio polimórfico (define los ejes del builder/alumno). */}
-        <Label>Tipo de ejercicio</Label>
-        <View style={styles.chips}>
-          {EXERCISE_TYPE_OPTIONS.map((o) => {
-            const active = o.value === exerciseType
-            return (
-              <TouchableOpacity
-                key={o.value}
-                testID={`exercise-type-${o.value}`}
-                onPress={() => setExerciseType(o.value)}
-                activeOpacity={0.8}
-                className={`rounded-pill ${active ? 'bg-sport-500' : 'bg-surface-card border border-default'}`}
-                style={styles.chip}
-              >
-                <Text className={`${active ? 'text-on-sport' : 'text-body'} font-sans-bold`} style={styles.chipText}>{o.label}</Text>
-              </TouchableOpacity>
-            )
-          })}
-        </View>
-        <Text className="text-muted font-sans" style={styles.hint}>Define qué campos muestra el builder y la app del alumno.</Text>
+        <Input
+          label="Músculos secundarios"
+          value={secondary}
+          onChangeText={setSecondary}
+          placeholder="Tríceps, Deltoides"
+          hint="Opcional. Separa cada músculo con coma."
+        />
 
         <Label>Equipo</Label>
         <Chips options={EQUIPMENT_OPTIONS as readonly string[]} value={equipment} onSelect={(v) => setEquipment(v === equipment ? null : v)} />
@@ -205,7 +238,82 @@ export const ExerciseFormSheet = forwardRef<BottomSheetModal, Props>(function Ex
           onChange={(v) => setDifficulty(v === difficulty ? null : v)}
         />
 
-        <Input label="Músculos secundarios" value={secondary} onChangeText={setSecondary} placeholder="Tríceps, Deltoides (separados por coma)" />
+        <SectionHeader
+          title="Tipo de ejercicio"
+          description="Define qué campos muestra el builder y qué registra el alumno en cada serie."
+        />
+
+        {/* E5-08: tipo de ejercicio polimórfico (define los ejes del builder/alumno). */}
+        <View style={styles.chips}>
+          {EXERCISE_TYPE_OPTIONS.map((o) => {
+            const active = o.value === exerciseType
+            return (
+              <TouchableOpacity
+                key={o.value}
+                testID={`exercise-type-${o.value}`}
+                onPress={() => changeType(o.value)}
+                activeOpacity={0.8}
+                accessibilityRole="button"
+                accessibilityState={{ selected: active }}
+                className={`rounded-pill ${active ? 'bg-sport-500' : 'bg-surface-card border border-default'}`}
+                style={styles.chip}
+              >
+                <Text className={`${active ? 'text-on-sport' : 'text-body'} font-sans-bold`} style={styles.chipText}>{o.label}</Text>
+              </TouchableOpacity>
+            )
+          })}
+        </View>
+
+        {/* Modalidad de cardio (Fase C) — SOLO en tipo cardio. Decide los ejes que el alumno registra
+            por ronda (elíptica sin distancia, cuerda por saltos, escaladora por pisos, HIIT por reps).
+            Genérica (default) = comportamiento de siempre. Espejo del selector web. */}
+        {isCardio ? (
+          <View className="rounded-control border border-subtle bg-surface-sunken/50" style={styles.cardioBox}>
+            <Label>Modalidad de cardio</Label>
+            <View style={styles.chips}>
+              {CARDIO_MODALITY_OPTIONS.map(({ value, label, hint }) => {
+                const active = value === cardioModality
+                return (
+                  <TouchableOpacity
+                    key={value || 'generic'}
+                    testID={`cardio-modality-${value || 'generic'}`}
+                    onPress={() => setCardioModality(value)}
+                    activeOpacity={0.8}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: active }}
+                    accessibilityLabel={`${label}: ${hint}`}
+                    className={`rounded-pill ${active ? 'bg-sport-500' : 'bg-surface-card border border-default'}`}
+                    style={styles.chip}
+                  >
+                    <Text className={`${active ? 'text-on-sport' : 'text-body'} font-sans-bold`} style={styles.chipText}>
+                      {label}
+                    </Text>
+                  </TouchableOpacity>
+                )
+              })}
+            </View>
+
+            <View className="rounded-control border border-subtle bg-surface-card" style={styles.previewBox}>
+              <Text className="text-muted font-sans-bold" style={styles.previewTitle}>EL ALUMNO REGISTRA POR RONDA</Text>
+              <View style={styles.previewChips}>
+                {cardioAxisPreview.map((axis) => (
+                  <View key={axis} className="rounded-pill border border-subtle bg-surface-sunken" style={styles.previewChip}>
+                    <Text className="text-strong font-sans-bold" style={styles.previewChipText}>{axis}</Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+
+            <Text className="text-muted font-sans" style={styles.hint}>
+              Si cambias el tipo de ejercicio, la modalidad vuelve a Genérica.
+            </Text>
+          </View>
+        ) : null}
+
+        <SectionHeader
+          title="Demostración visual"
+          description="Video, GIF o imagen. Es lo primero que ve el alumno antes de ejecutar."
+        />
 
         <Input label="Video (YouTube)" value={videoUrl} onChangeText={setVideoUrl} placeholder="https://youtu.be/..." autoCapitalize="none" keyboardType="url" />
 
@@ -217,7 +325,14 @@ export const ExerciseFormSheet = forwardRef<BottomSheetModal, Props>(function Ex
                 <Input label="Empieza en (m:ss)" value={videoStart} onChangeText={setVideoStart} placeholder="0:20" keyboardType="numbers-and-punctuation" />
               </View>
               <View style={styles.trimCol}>
-                <Input label="Termina en (opcional)" value={videoEnd} onChangeText={setVideoEnd} placeholder="1:30" keyboardType="numbers-and-punctuation" />
+                <Input
+                  label="Termina en (opcional)"
+                  value={videoEnd}
+                  onChangeText={setVideoEnd}
+                  placeholder="1:30"
+                  keyboardType="numbers-and-punctuation"
+                  error={fieldError?.field === 'video' ? fieldError.message : null}
+                />
               </View>
             </View>
             <Text className="text-muted font-sans" style={styles.hint}>El video loopea ese tramo (salta intro/charla). Vacío = video completo.</Text>
@@ -239,7 +354,14 @@ export const ExerciseFormSheet = forwardRef<BottomSheetModal, Props>(function Ex
           {imageUrl ? (
             <View>
               <Image source={{ uri: imageUrl }} style={[styles.imgThumb, { borderColor: theme.border }]} contentFit="cover" transition={150} />
-              <TouchableOpacity onPress={() => setImageUrl('')} className="bg-cta-danger items-center justify-center" style={styles.imgClear} hitSlop={6}>
+              <TouchableOpacity
+                onPress={() => setImageUrl('')}
+                className="bg-cta-danger items-center justify-center"
+                style={styles.imgClear}
+                hitSlop={6}
+                accessibilityRole="button"
+                accessibilityLabel="Quitar imagen"
+              >
                 <X size={12} color="#fff" />
               </TouchableOpacity>
             </View>
@@ -248,6 +370,7 @@ export const ExerciseFormSheet = forwardRef<BottomSheetModal, Props>(function Ex
             onPress={pickImage}
             disabled={uploading}
             activeOpacity={0.85}
+            accessibilityRole="button"
             className="flex-1 flex-row items-center justify-center border border-sport-500/40 bg-sport-100 dark:bg-sport-100/20 rounded-control"
             style={styles.imgBtn}
           >
@@ -256,12 +379,18 @@ export const ExerciseFormSheet = forwardRef<BottomSheetModal, Props>(function Ex
           </TouchableOpacity>
         </View>
 
+        <SectionHeader
+          title="Instrucciones"
+          description="Claves de técnica que el alumno lee en la ficha del ejercicio."
+        />
+
         <Textarea
-          label="Instrucciones"
+          accessibilityLabel="Instrucciones"
           value={instructions}
           onChangeText={setInstructions}
-          placeholder="Una instrucción por línea"
+          placeholder={'Espalda apoyada en el banco\nBaja controlado en 2 segundos'}
           minRows={4}
+          hint="Una instrucción por línea."
         />
 
         <View style={styles.saveWrap}>
@@ -297,6 +426,18 @@ function Label({ children }: { children: React.ReactNode }) {
   return <Text className="text-strong font-sans-semibold" style={styles.label}>{children}</Text>
 }
 
+/** Encabezado de grupo del formulario (identidad · tipo · media · instrucciones). */
+function SectionHeader({ title, description, first }: { title: string; description?: string; first?: boolean }) {
+  return (
+    <View className="border-subtle" style={[styles.sectionHeader, first ? styles.sectionHeaderFirst : null]}>
+      <Text className="text-muted font-sans-bold" style={styles.sectionTitle}>{title.toUpperCase()}</Text>
+      {description ? (
+        <Text className="text-subtle font-sans" style={styles.sectionDesc}>{description}</Text>
+      ) : null}
+    </View>
+  )
+}
+
 function Chips({ options, value, onSelect }: { options: readonly string[]; value: string | null; onSelect: (v: string) => void }) {
   return (
     <View style={styles.chips}>
@@ -307,6 +448,8 @@ function Chips({ options, value, onSelect }: { options: readonly string[]; value
             key={o}
             onPress={() => onSelect(o)}
             activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityState={{ selected: active }}
             className={`rounded-pill ${active ? 'bg-sport-500' : 'bg-surface-card border border-default'}`}
             style={styles.chip}
           >
@@ -320,11 +463,18 @@ function Chips({ options, value, onSelect }: { options: readonly string[]; value
 
 const styles = StyleSheet.create({
   body: { paddingHorizontal: 18, paddingBottom: 48, gap: 12 },
+  header: { gap: 2 },
   title: { fontSize: 19, letterSpacing: -0.3 },
+  subtitle: { fontSize: 12, lineHeight: 16 },
   errorBox: { paddingHorizontal: 12, paddingVertical: 10 },
   errorText: { fontSize: 13 },
   label: { fontSize: 13, marginTop: 4 },
   hint: { fontSize: 12, marginTop: -4 },
+  // Grupo del formulario: hairline superior + título corto (el primero va sin regla ni aire extra).
+  sectionHeader: { borderTopWidth: StyleSheet.hairlineWidth, marginTop: 8, paddingTop: 14, gap: 2 },
+  sectionHeaderFirst: { borderTopWidth: 0, marginTop: 0, paddingTop: 0 },
+  sectionTitle: { fontSize: 11, letterSpacing: 1 },
+  sectionDesc: { fontSize: 12, lineHeight: 16 },
   trimRow: { flexDirection: 'row', gap: 12 },
   trimCol: { flex: 1 },
   trimPreview: { marginTop: 4 },
@@ -336,6 +486,13 @@ const styles = StyleSheet.create({
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chip: { paddingHorizontal: 13, paddingVertical: 8 },
   chipText: { fontSize: 13 },
+  // Caja de la modalidad: agrupa selector + preview para que se lean como una sola decisión.
+  cardioBox: { padding: 12, gap: 10 },
+  previewBox: { paddingHorizontal: 12, paddingVertical: 10, gap: 8 },
+  previewTitle: { fontSize: 10, letterSpacing: 0.8 },
+  previewChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  previewChip: { paddingHorizontal: 10, paddingVertical: 5 },
+  previewChipText: { fontSize: 12 },
   saveWrap: { marginTop: 10 },
   removeWrap: { marginTop: 4 },
 })

@@ -225,6 +225,7 @@ export function SupersetScreenV3({
               log={log}
               isActive={false}
               typedMode={editVM.typedMode}
+              cardioModality={editVM.exercise.cardio_modality ?? null}
               onPress={() => onOpenSet(editVM.block.id, setNumber)}
               onRpeUpdate={onRpeUpdate}
               settle={isRecent}
@@ -420,6 +421,11 @@ export function SupersetScreenV3({
                   blockId={m.block.id}
                   setNumber={round}
                   typedMode={m.typedMode}
+                  // Ejes de cardio del miembro (Fase A `distanceUnit` + Fase C `cardioModality`): un
+                  // bloque de cardio DENTRO de una superserie captura con las mismas cajas y las mismas
+                  // conversiones que en su pantalla propia (km ×1000, saltos/pisos/reps en `reps_done`).
+                  distanceUnit={m.block.distance_unit ?? null}
+                  cardioModality={m.exercise.cardio_modality ?? null}
                   isActive
                   heroMode
                   exec={exec}
@@ -513,6 +519,7 @@ export function SupersetScreenV3({
                   log={log!}
                   isActive={false}
                   typedMode={m.typedMode}
+                  cardioModality={m.exercise.cardio_modality ?? null}
                   onPress={() => onOpenSet(m.block.id, round)}
                   onRpeUpdate={onRpeUpdate}
                   settle={isRecent}

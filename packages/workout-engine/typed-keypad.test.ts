@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest'
-import { typedKeypadFields, formatTypedObjective } from './typed-keypad'
+import {
+    typedKeypadFields,
+    formatTypedObjective,
+    distanceCaptureToMeters,
+    metersToDistanceCapture,
+} from './typed-keypad'
 
 describe('typedKeypadFields', () => {
     it('cardio → min (decimal), metros (decimal), FC (entero)', () => {
@@ -40,6 +45,53 @@ describe('typedKeypadFields', () => {
     })
 })
 
+// ── Unidad de captura = unidad PRESCRITA (G3 / RF4) ──
+describe('typedKeypadFields — distancia en la unidad prescrita', () => {
+    it('cardio con distance_unit km → caja "Km" decimal con factor a metros', () => {
+        const f = typedKeypadFields('cardio', { distanceUnit: 'km' })
+        expect(f.map((x) => x.key)).toEqual(['cardio_min', 'actual_distance_m', 'actual_avg_hr'])
+        expect(f[1]).toEqual({
+            key: 'actual_distance_m',
+            label: 'Km',
+            unit: 'km',
+            allowDecimal: true,
+            toColumnFactor: 1000,
+        })
+    })
+
+    it('fallback: sin unidad, con "m", o con el sideMode suelto → "Metros" sin factor', () => {
+        const metros = { key: 'actual_distance_m', label: 'Metros', unit: 'm', allowDecimal: true }
+        expect(typedKeypadFields('cardio')[1]).toEqual(metros)
+        expect(typedKeypadFields('cardio', { distanceUnit: 'm' })[1]).toEqual(metros)
+        expect(typedKeypadFields('cardio', { distanceUnit: null })[1]).toEqual(metros)
+        expect(typedKeypadFields('cardio', 'per_side')[1]).toEqual(metros)
+        expect(typedKeypadFields('cardio')[1].toColumnFactor).toBeUndefined()
+    })
+
+    it('la unidad de distancia no toca movilidad ni roller', () => {
+        expect(typedKeypadFields('mobility', { distanceUnit: 'km' })).toEqual(typedKeypadFields('mobility'))
+        expect(typedKeypadFields('roller', { distanceUnit: 'km' })).toEqual(typedKeypadFields('roller'))
+        expect(typedKeypadFields('mobility', { sideMode: 'per_side', distanceUnit: 'km' }).map((x) => x.key)).toEqual([
+            'hold_left_sec',
+            'hold_right_sec',
+        ])
+    })
+
+    it('conversión ida y vuelta km ↔ metros (lo que el alumno escribe es lo que relee)', () => {
+        expect(distanceCaptureToMeters(5, 'km')).toBe(5000)
+        expect(distanceCaptureToMeters(5.25, 'km')).toBe(5250)
+        expect(metersToDistanceCapture(5000, 'km')).toBe(5)
+        expect(metersToDistanceCapture(5250, 'km')).toBe(5.25)
+        // Redondeo a 2 decimales en la relectura (no arrastra ruido de punto flotante).
+        expect(metersToDistanceCapture(5253, 'km')).toBe(5.25)
+        // Sin km: valores intactos en ambas direcciones.
+        expect(distanceCaptureToMeters(400, 'm')).toBe(400)
+        expect(distanceCaptureToMeters(400)).toBe(400)
+        expect(metersToDistanceCapture(400, 'm')).toBe(400)
+        expect(metersToDistanceCapture(null, 'km')).toBeNull()
+    })
+})
+
 describe('formatTypedObjective', () => {
     it('cardio con duración en minutos + zona FC', () => {
         expect(formatTypedObjective({ duration_sec: 1200, hr_zone: 4 }, 'cardio')).toBe('20 min · Z4')
@@ -69,5 +121,29 @@ describe('formatTypedObjective', () => {
 
     it('sin prescripción → vacío', () => {
         expect(formatTypedObjective({}, 'cardio')).toBe('')
+    })
+})
+
+// ── Objetivo rep-based de cardio (RF8 · Fase C): saltos / pisos / reps ──
+describe('formatTypedObjective — cardio rep-based', () => {
+    it('imprime el conteo prescrito con la unidad de la modalidad', () => {
+        expect(formatTypedObjective({ reps_value: 500, reps_unit: 'jumps' }, 'cardio')).toBe('500 saltos')
+        expect(formatTypedObjective({ reps_value: 40, reps_unit: 'floors' }, 'cardio')).toBe('40 pisos')
+        expect(formatTypedObjective({ reps_value: 30, reps_unit: 'reps' }, 'cardio')).toBe('30 reps')
+    })
+
+    it('convive con duración, zona y rondas en el orden del header', () => {
+        expect(
+            formatTypedObjective({ duration_sec: 480, reps_value: 500, reps_unit: 'jumps', hr_zone: 3, sets: 2 }, 'cardio'),
+        ).toBe('8 min · 500 saltos · Z3 · 2 rondas')
+    })
+
+    it('sin valor, con valor 0 o con unidades de otros tipos ⇒ no aporta nada', () => {
+        expect(formatTypedObjective({ reps_unit: 'jumps' }, 'cardio')).toBe('')
+        expect(formatTypedObjective({ reps_value: 0, reps_unit: 'jumps' }, 'cardio')).toBe('')
+        expect(formatTypedObjective({ reps_value: 10, reps_unit: 'passes' }, 'cardio')).toBe('')
+        expect(formatTypedObjective({ reps_value: 5, reps_unit: 'breaths' }, 'cardio')).toBe('')
+        // Y no toca a movilidad ni roller (sus reglas siguen intactas).
+        expect(formatTypedObjective({ reps_value: 500, reps_unit: 'jumps' }, 'roller')).toBe('')
     })
 })
