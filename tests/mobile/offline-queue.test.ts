@@ -182,6 +182,29 @@ describe('flushQueue — outcomes', () => {
     expect(await queueCount(kv, KEY)).toBe(0)
   })
 
+  // El resumen COMPLETO es el contrato que consume `flushLogQueue` (offline-cache) para avisar la
+  // pérdida: si el descarte no viaja en el retorno, el chip del ejecutor queda en "Todo sincronizado"
+  // verde sobre series entrenadas que nunca van a subir.
+  it('un flush mixto reporta ok / discard / retry por separado en el resumen', async () => {
+    const kv = memKV()
+    await enqueueOp<Toggle>(kv, KEY, 'ok:d1', { mealId: 'ok', date: 'd1', completed: true }, toggleKey)
+    await enqueueOp<Toggle>(kv, KEY, 'dead:d1', { mealId: 'dead', date: 'd1', completed: true }, toggleKey)
+    await enqueueOp<Toggle>(kv, KEY, 'later:d1', { mealId: 'later', date: 'd1', completed: true }, toggleKey)
+    const res = await flushQueue<Toggle>(kv, KEY, async (p) =>
+      p.mealId === 'ok' ? 'ok' : p.mealId === 'dead' ? 'discard' : 'retry',
+    )
+    expect(res).toEqual({ flushed: 1, discarded: 1, remaining: 1 })
+    // El descartado NO vuelve a la cola (no loopea); el de retry sí, con su backoff.
+    expect((await raw(kv)).map((o) => o.dedupKey)).toEqual(['later:d1'])
+  })
+
+  it('un descarte solitario deja flushed en 0 y discarded en 1 (nada que celebrar)', async () => {
+    const kv = memKV()
+    await enqueueOp<Toggle>(kv, KEY, 'dead:d1', { mealId: 'dead', date: 'd1', completed: true }, toggleKey)
+    const res = await flushQueue<Toggle>(kv, KEY, async () => 'discard')
+    expect(res).toEqual({ flushed: 0, discarded: 1, remaining: 0 })
+  })
+
   it('skips items still in backoff without applying them', async () => {
     const kv = memKV()
     const seeded: QueuedOp<Toggle> = { opId: 'x', dedupKey: 'm1:d1', payload: { mealId: 'm1', date: 'd1', completed: true }, enqueuedAt: 'now', attempts: 1, nextAttemptAt: 10_000 }

@@ -760,9 +760,19 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
     }
     setSyncState({ status: 'syncing', count: due })
     // El flush NO se corta si el alumno sale (el dato debe subir igual); lo que se corta es el setState.
-    try { await flushLogQueue(supabase, queueScope) } catch { /* excepcion global → lo reporta el chip */ }
+    let discarded = 0
+    try {
+      const res = await flushLogQueue(supabase, queueScope)
+      discarded = res.discarded
+    } catch { /* excepcion global → lo reporta el chip */ }
     const left = await getPendingLogCount(queueScope)
     if (!mountedRef.current) return
+    // Un descarte (FK 23503, bloque borrado por reseed) es una serie entrenada que NO va a subir nunca:
+    // manda sobre el resto. Antes el chip quedaba en 'done' verde encima de una perdida de datos.
+    if (discarded > 0) {
+      setSyncState({ status: 'discarded', count: discarded })
+      return
+    }
     setSyncState(left > 0 ? { status: 'pending', count: left } : { status: 'done' })
   }, [queueScope])
 

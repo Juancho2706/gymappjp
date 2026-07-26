@@ -45,6 +45,11 @@ vi.doMock(path.join(mobileDir, 'lib', 'nutrition.queries.ts'), () => ({
   toggleMealCompletion: vi.fn(async () => ({ success: true })),
 }))
 
+// `@sentry/react-native` (telemetría del descarte 23503) arrastra la misma cadena react-native: se
+// mockea por path resuelto igual que async-storage. El espía además fija el contrato del evento.
+const captureMessage = vi.fn()
+vi.doMock(resolveMobileDep('@sentry/react-native'), () => ({ captureMessage }))
+
 const { enqueueLog, flushLogQueue } = await import('../apps/mobile/lib/offline-cache')
 
 /** Supabase mínimo para el drain: SELECT-por-día vacío ⇒ camino INSERT; captura el payload. */
@@ -62,6 +67,24 @@ function makeSupabase(captured: Record<string, unknown>[]) {
         captured.push(row)
         return Promise.resolve({ error: null })
       },
+      update: () => ({ eq: () => Promise.resolve({ error: null }) }),
+      delete: () => ({ in: () => Promise.resolve({ error: null }) }),
+    }),
+  } as never
+}
+
+/** Supabase que rechaza el INSERT con el código PG pedido (23503 = FK del bloque borrado por reseed). */
+function makeSupabaseRejecting(code: string) {
+  const query = {
+    eq() { return this },
+    gte() { return this },
+    lt() { return this },
+    order() { return Promise.resolve({ data: [], error: null }) },
+  }
+  return {
+    from: () => ({
+      select: () => query,
+      insert: () => Promise.resolve({ error: { code } }),
       update: () => ({ eq: () => Promise.resolve({ error: null }) }),
       delete: () => ({ in: () => Promise.resolve({ error: null }) }),
     }),
@@ -94,9 +117,11 @@ describe('cola offline RN — ejes tipados (deuda GRAVE #1 cardio-ejes)', () => 
     })
 
     const captured: Record<string, unknown>[] = []
-    const flushed = await flushLogQueue(makeSupabase(captured))
+    const res = await flushLogQueue(makeSupabase(captured))
 
-    expect(flushed).toBe(1)
+    // `flushLogQueue` devuelve el RESUMEN completo (antes sólo `flushed`): el `discarded` es el que
+    // deja de mentir al chip del ejecutor.
+    expect(res).toEqual({ flushed: 1, discarded: 0, remaining: 0 })
     expect(captured).toHaveLength(1)
     const row = captured[0]
     expect(row).toMatchObject({
@@ -170,5 +195,48 @@ describe('cola offline RN — ejes tipados (deuda GRAVE #1 cardio-ejes)', () => 
       expect(keys).not.toContain(nueva)
     }
     expect(captured[0]).toMatchObject({ weight_kg: 80, reps_done: 8 })
+  })
+})
+
+// El descarte 23503 era la ÚNICA pérdida silenciosa real de la cola RN: `flushLogQueue` devolvía sólo
+// `flushed` y nadie se enteraba. Ahora viaja en el resumen y deja rastro en Sentry.
+describe('cola offline RN — descarte 23503 (telemetría + resumen honesto)', () => {
+  it('un INSERT rechazado por FK descarta la serie, la reporta a Sentry y NO la cuenta como subida', async () => {
+    await enqueueLog({
+      block_id: 'blk-borrado',
+      client_id: 'cli-1',
+      set_number: 3,
+      weight_kg: 60,
+      reps_done: 10,
+      exercise_name_at_log: 'Press banca',
+    })
+
+    const res = await flushLogQueue(makeSupabaseRejecting('23503'))
+
+    expect(res).toEqual({ flushed: 0, discarded: 1, remaining: 0 })
+    expect(captureMessage).toHaveBeenCalledTimes(1)
+    const [msg, opts] = captureMessage.mock.calls[0] as [string, Record<string, unknown>]
+    expect(msg).toBe('workout-offline-queue: descarte 23503')
+    expect(opts).toMatchObject({
+      level: 'warning',
+      tags: { area: 'workout-offline-queue', platform: 'rn', discard_code: '23503' },
+      extra: { blockId: 'blk-borrado', setNumber: 3 },
+    })
+  })
+
+  it('un error transitorio (no 23503) NO descarta ni reporta: reintenta con backoff', async () => {
+    await enqueueLog({
+      block_id: 'blk-4',
+      client_id: 'cli-1',
+      set_number: 1,
+      weight_kg: 40,
+      reps_done: 12,
+      exercise_name_at_log: 'Remo',
+    })
+
+    const res = await flushLogQueue(makeSupabaseRejecting('08006')) // connection_failure
+
+    expect(res).toEqual({ flushed: 0, discarded: 0, remaining: 1 })
+    expect(captureMessage).not.toHaveBeenCalled()
   })
 })
