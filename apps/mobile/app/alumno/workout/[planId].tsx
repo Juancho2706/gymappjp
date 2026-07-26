@@ -23,9 +23,8 @@ function validateRepeatDate(input: string, todayIso: string): string | null {
 
 /**
  * Pantalla de ejecución de rutina del alumno. V3 es el ÚNICO camino (decisión CEO 2026-07-23): el
- * antiguo switch por flag `executorV3`/`executorV2` (V3 → V2 → Legacy) se eliminó junto con el flag.
- * Los componentes ExecutorV2 y LegacyExecutor quedan en el árbol para limpieza futura, pero ya no
- * tienen importador.
+ * antiguo switch por flag `executorV3`/`executorV2` (V3 → V2 → Legacy) se eliminó junto con el flag,
+ * y los componentes `ExecutorV2`/`LegacyExecutor` se retiraron del árbol (cierre EC.2, 2026-07-25).
  */
 export default function WorkoutExecutionScreen() {
   // `recuperar` (dia pendiente de la semana) y `fecha` (dia ya hecho a revisar) los envia el sheet

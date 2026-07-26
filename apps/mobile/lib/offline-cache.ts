@@ -29,6 +29,21 @@ interface PendingLog {
   rpe?: number | null
   rir?: number | null
   note?: string | null
+  // Ejes tipados + sustitución (deuda GRAVE #1 · specs/cardio-ejes-y-fixes): sin estos campos una
+  // ronda de cardio/movilidad/roller encolada sin red subía con minutos/distancia/FC/pace/hold/lados
+  // en NULL (y perdía la sustitución). Aditivo y retrocompatible: entradas viejas en AsyncStorage no
+  // traen las keys (⇒ undefined ⇒ no viajan al insert/update) y el drain de `flushLogQueue` ya
+  // spreadea el item completo menos `queued_at`, así que no necesita cambios.
+  actual_duration_sec?: number | null
+  actual_distance_m?: number | null
+  actual_pace_sec_per_km?: number | null
+  actual_hold_sec?: number | null
+  actual_avg_hr?: number | null
+  /** jsonb `{left_sec, right_sec}` del hold por lado (E0.5). */
+  metadata?: { left_sec?: number | null; right_sec?: number | null } | null
+  substituted_exercise_id?: string | null
+  substituted_exercise_name?: string | null
+  substitution_reason?: string | null
   exercise_name_at_log: string | null
   queued_at: string
 }

@@ -1,7 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { StyleSheet, View } from 'react-native'
 import { AnimatePresence } from 'moti'
-import { buildIntervalPhases, type IntervalConfig, type IntervalPhase } from '@eva/workout-engine'
+import { buildIntervalSequence, type IntervalConfig, type IntervalPhase } from '@eva/workout-engine'
 import { toast } from '../../../Toast'
 import { RestTimerHost, type RestInterstitialRenderer } from './RestTimerHost'
 import { HoldTimer } from './HoldTimer'
@@ -51,8 +51,8 @@ export interface WorkoutTimersApi {
   /**
    * Registra (o limpia con null) la presentacion interstitial V3 del descanso (E3.1). Solo `ExecutorV3`
    * lo llama; mientras haya un renderer registrado, el descanso se monta como overlay fullscreen (con la
-   * barra compacta como estado minimizado). Sin renderer registrado, el descanso usa la barra clasica —
-   * asi `ExecutorV2` queda intacto.
+   * barra compacta como estado minimizado). Sin renderer registrado, el descanso usa la barra clasica
+   * (fallback sin interstitial).
    */
   setRestInterstitial: (renderer: RestInterstitialRenderer | null) => void
 }
@@ -138,11 +138,12 @@ export function WorkoutTimerProvider({ children }: { children: React.ReactNode }
 
   const startInterval = useCallback(
     (config: IntervalConfig, sets = 1) => {
-      const phases = buildIntervalPhases(config, sets)
-      if (phases.length === 0) {
-        toast.info('Este bloque se prescribe por distancia — usa el cronómetro')
-        return
-      }
+      // Secuencia COMPLETA (Fase D · deuda #6 cardio-ejes): los pasos por DISTANCIA entran como
+      // fases `manual` y el overlay muestra la distancia + "Fase siguiente" — antes acá había un
+      // early-return con toast y 8×400m/HYROX quedaban sin timer flotante. `[]` solo si el work no
+      // prescribe ni tiempo ni distancia (nada que correr).
+      const phases = buildIntervalSequence(config, sets)
+      if (phases.length === 0) return
       nonceRef.current += 1
       replaceWith({ kind: 'interval', nonce: nonceRef.current, phases })
     },

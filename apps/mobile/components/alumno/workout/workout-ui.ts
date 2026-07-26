@@ -4,9 +4,8 @@
  * volumen/cronómetro, parse de descanso). Puros y compartidos por las cards + el header.
  */
 import {
-  compactDuration,
-  formatCardioReps,
-  repsUnitForModality,
+  EMPTY_LOGGED_SET_LABEL,
+  formatLoggedSetLine,
   type ReconciledSessionLog,
   type TypedKeypadMode,
 } from '@eva/workout-engine'
@@ -96,34 +95,18 @@ export function fmtVolume(kg: number): string | null {
 
 /**
  * Línea de valores de una serie TIPADA ya registrada (para la SetRow de cardio/movilidad/roller).
- * Lee las columnas `actual_*` / `reps_done` del log — mismo formato que el objetivo del keypad.
- * "20 min · 5000 m · 150 bpm" · "45 s" · "30 s · 10 pasadas". Vacío ⇒ "Registrado".
  *
- * 3er argumento OPCIONAL (Fase C · specs/cardio-ejes-y-fixes): la `cardio_modality` del ejercicio, que
- * etiqueta el CONTEO de las modalidades rep-based ("420 saltos", "45 pisos", "30 reps" — todos en
- * `reps_done`). Sin él la línea es byte-idéntica a la previa. La unidad la resuelve el MOTOR
- * (`repsUnitForModality`/`formatCardioReps`), la misma fuente que usa la ficha del coach.
+ * Consolidada en el MOTOR (deuda #3 · specs/cardio-ejes-y-fixes): delega en `formatLoggedSetLine`,
+ * la MISMA línea que ve el coach en la ficha (números es-neutro, holds por lado desde `metadata`,
+ * saltos/pisos/reps vía modalidad) — antes esto era una copia divergente con formato propio.
+ * Única divergencia consciente: la ronda sin datos acá dice "Registrado" (chip compacto del
+ * alumno) en vez del "Registrado sin datos" de la ficha del coach.
  */
 export function fmtTypedLoggedLine(
-  log: Pick<ReconciledSessionLog, 'actual_duration_sec' | 'actual_distance_m' | 'actual_avg_hr' | 'actual_hold_sec' | 'reps_done'>,
+  log: Pick<ReconciledSessionLog, 'actual_duration_sec' | 'actual_distance_m' | 'actual_avg_hr' | 'actual_hold_sec' | 'reps_done' | 'metadata'>,
   mode: TypedKeypadMode,
   opts?: { cardioModality?: string | null },
 ): string {
-  const parts: string[] = []
-  if (mode === 'cardio') {
-    if (log.actual_duration_sec != null && log.actual_duration_sec > 0) parts.push(compactDuration(log.actual_duration_sec))
-    if (log.actual_distance_m != null && log.actual_distance_m > 0) parts.push(`${log.actual_distance_m} m`)
-    // Conteo de la modalidad rep-based. Se imprime también SIN modalidad conocida (cae a "N reps"):
-    // un `reps_done` en una ronda de cardio es dato real del alumno y antes quedaba invisible.
-    if (log.reps_done != null && log.reps_done > 0) {
-      parts.push(formatCardioReps(log.reps_done, repsUnitForModality(opts?.cardioModality)))
-    }
-    if (log.actual_avg_hr != null && log.actual_avg_hr > 0) parts.push(`${log.actual_avg_hr} bpm`)
-  } else if (mode === 'mobility') {
-    if (log.actual_hold_sec != null && log.actual_hold_sec > 0) parts.push(`${log.actual_hold_sec} s`)
-  } else {
-    if (log.actual_duration_sec != null && log.actual_duration_sec > 0) parts.push(`${log.actual_duration_sec} s`)
-    if (log.reps_done != null && log.reps_done > 0) parts.push(`${log.reps_done} pasadas`)
-  }
-  return parts.length ? parts.join(' · ') : 'Registrado'
+  const line = formatLoggedSetLine(mode, log, opts)
+  return line == null || line === EMPTY_LOGGED_SET_LABEL ? 'Registrado' : line
 }

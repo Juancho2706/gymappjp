@@ -18,25 +18,20 @@ Reglas:
 
 ## P1 — Cierre del build y QA móvil
 
-### MOB-01 — Build del corte actual y verificación de los submits ya hechos
+### MOB-01 — Reparar provisioning iOS (HealthKit) y build del corte actual
 
-El [run 29885773193](https://github.com/Juancho2706/gymappjp/actions/runs/29885773193) (2026-07-22, `4382ff6c`, perfil `production`, platform `all`) compiló Android+iOS y **completó los submits**: AAB a Play internal testing e IPA a TestFlight, ambos verdes. Después el build iOS `production` falló dos veces ([29976332962](https://github.com/Juancho2706/gymappjp/actions/runs/29976332962) sobre `b7e5e34d` y [30063566202](https://github.com/Juancho2706/gymappjp/actions/runs/30063566202) sobre `335c88da`, donde Android sí quedó verde con submit) y los logs de las fallas ya expiraron.
+El [run 29885773193](https://github.com/Juancho2706/gymappjp/actions/runs/29885773193) (2026-07-22, `4382ff6c`, perfil `production`, platform `all`) compiló Android+iOS y **completó los submits**: AAB a Play internal testing e IPA a TestFlight, ambos verdes. Después el build iOS `production` falló en [29976332962](https://github.com/Juancho2706/gymappjp/actions/runs/29976332962) (`b7e5e34d`) y [30063566202](https://github.com/Juancho2706/gymappjp/actions/runs/30063566202) (`335c88da`; Android verde con submit ahí).
 
-GitHub Actions → **Mobile Build (Local — no EAS credits)**:
+**Causa raíz confirmada** (run diagnóstico [30183498116](https://github.com/Juancho2706/gymappjp/actions/runs/30183498116) sobre `a59acfd1`, 2026-07-25): `Provisioning profile "evaapp_production" doesn't include the HealthKit capability (target 'EVA')`. La Ola 6 de wearables (`de3ce837`) agregó el entitlement `com.apple.developer.healthkit` vía el plugin de `react-native-health`; el profile guardado en secrets es anterior. El primer build verde (`4382ff6c`) fue el último corte SIN wearables.
 
-```text
-branch: rnmobiledenuevo
-app: mobile
-platform: all
-profile: production
-submit_ios: true
-submit_android: true
-```
+Arreglo (portal Apple + secret, ~10 min):
 
-- [ ] Verificar en App Store Connect que el build de `4382ff6c` procesó y está en TestFlight; verificar el AAB en Play Console → internal testing.
-- [ ] Relanzar el workflow sobre el corte actual (`a59acfd1` o descendiente); si iOS vuelve a fallar, conservar enlace y logs el mismo día — la retención es de 1 día.
-- [ ] Descargar/retener los artefactos el mismo día.
-- [ ] Registrar el resultado en [TEST_STATUS.md](../testing/TEST_STATUS.md) y [MOBILE_PARITY.md](../status/MOBILE_PARITY.md).
+- [ ] developer.apple.com → Identifiers → App ID `cl.evaapp.eva` → habilitar capability **HealthKit** → Save.
+- [ ] Profiles → `evaapp_production` (quedó "Invalid" tras el paso anterior) → Edit → Generate → descargar el `.mobileprovision` nuevo.
+- [ ] Actualizar el secret de GitHub `IOS_PROVISIONING_PROFILE_BASE64` con el base64 del archivo nuevo (el certificado `.p12` NO cambia).
+- [ ] Relanzar **Mobile Build (Local — no EAS credits)**: `branch rnmobiledenuevo · app mobile · platform all · profile production · submit_ios true · submit_android true`.
+- [ ] Verificar en App Store Connect que el build de `4382ff6c` procesó en TestFlight y que el nuevo build también; verificar el AAB en Play Console → internal testing.
+- [ ] Descargar/retener los artefactos el mismo día (retención 1 día) y registrar el resultado en [TEST_STATUS.md](../testing/TEST_STATUS.md) y [MOBILE_PARITY.md](../status/MOBILE_PARITY.md).
 
 ### MOB-02 — Certificar paridad en dispositivos reales
 

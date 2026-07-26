@@ -524,12 +524,15 @@ function SessionDetail({ detail }: { detail: ClientDayDetail }) {
   const title = detail.workoutSets[0]?.planTitle || 'Sesión'
   // La leyenda explica peso/RPE/RIR: una sesión 100% cardio/movilidad no tiene nada que explicar.
   const hasStrength = groups.some((group) => group.kind === 'strength')
+  // Cabecera honesta (deuda #7 cardio-ejes, espejo web): cardio registra RONDAS, no "sets";
+  // sesión mixta usa el neutro "registros".
+  const setsNoun = groups.every((group) => group.kind === 'strength') ? 'sets' : hasStrength ? 'registros' : 'rondas'
 
   return (
     <StatCard>
       <View style={styles.sessionHeader}>
         <Text className="text-strong" style={styles.sessionTitle}>{title}</Text>
-        <Text className="text-muted" style={styles.sessionCount}>{groups.length} ej. · {detail.workoutSets.length} sets</Text>
+        <Text className="text-muted" style={styles.sessionCount}>{groups.length} ej. · {detail.workoutSets.length} {setsNoun}</Text>
       </View>
       {groups.map((group, index) => <ExerciseSession key={group.name} name={group.name} muscle={group.muscle} kind={group.kind} sets={group.sets} last={index === groups.length - 1} />)}
       {hasStrength ? (
@@ -602,6 +605,7 @@ function ExerciseSession({ name, muscle, kind, sets, last }: { name: string; mus
             actual_distance_m: set.actualDistanceM,
             actual_avg_hr: set.actualAvgHr,
             actual_hold_sec: set.actualHoldSec,
+            actual_pace_sec_per_km: set.actualPaceSecPerKm,
             metadata: set.metadata,
           }, { cardioModality: set.cardioModality })
           if (typedLine != null) {

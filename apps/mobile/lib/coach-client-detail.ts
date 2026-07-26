@@ -214,6 +214,8 @@ export interface WorkoutDaySet {
   actualDistanceM: number | null
   actualAvgHr: number | null
   actualHoldSec: number | null
+  /** Pace real derivado (seg/km, RF5) — la ficha lo pinta vía el motor (deuda #7). */
+  actualPaceSecPerKm: number | null
   /** jsonb `{left_sec, right_sec}` de movilidad por lado. */
   metadata: unknown
   /**
@@ -1172,7 +1174,7 @@ export async function getCoachClientDayDetail(
       .select(`
         set_number, weight_kg, reps_done, rpe, rir, note, substituted_exercise_name, substitution_reason,
         target_reps_at_log, target_weight_at_log, plan_name_at_log, logged_at,
-        actual_duration_sec, actual_distance_m, actual_avg_hr, actual_hold_sec, metadata,
+        actual_duration_sec, actual_distance_m, actual_avg_hr, actual_hold_sec, actual_pace_sec_per_km, metadata,
         workout_blocks (
           target_weight_kg, reps, sets, rir, progression_mode, progression_value, tempo,
           exercise_type_override, duration_sec, distance_value, distance_unit,
@@ -1228,6 +1230,7 @@ export async function getCoachClientDayDetail(
       actualDistanceM: row.actual_distance_m ?? null,
       actualAvgHr: row.actual_avg_hr ?? null,
       actualHoldSec: row.actual_hold_sec ?? null,
+      actualPaceSecPerKm: row.actual_pace_sec_per_km ?? null,
       metadata: row.metadata ?? null,
       cardioModality: block?.exercises?.cardio_modality ?? null,
       substitutedExerciseName: row.substituted_exercise_name ?? null,

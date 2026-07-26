@@ -24,6 +24,8 @@ export interface LoggedSetLike {
     actual_distance_m?: number | null
     actual_avg_hr?: number | null
     actual_hold_sec?: number | null
+    /** Pace real derivado (seg/km, RF5); poblado desde la Fase A. */
+    actual_pace_sec_per_km?: number | null
     /** jsonb `{left_sec, right_sec}` de movilidad por lado; cualquier otra forma se ignora. */
     metadata?: unknown
 }
@@ -50,6 +52,14 @@ export function formatEsNumber(value: number, maxDecimals = 0): string {
 export function formatLoggedDuration(sec: number): string {
     if (sec < 60) return `${formatEsNumber(sec)} s`
     return `${formatEsNumber(sec / 60, 1)} min`
+}
+
+/** Pace registrado (seg/km) → "5:20 /km". Mono-friendly, mm:ss fijo. */
+export function formatLoggedPace(secPerKm: number): string {
+    const total = Math.max(0, Math.round(secPerKm))
+    const m = Math.floor(total / 60)
+    const s = total % 60
+    return `${m}:${String(s).padStart(2, '0')} /km`
 }
 
 interface SideSeconds {
@@ -79,6 +89,9 @@ function cardioParts(log: LoggedSetLike, cardioModality?: string | null): string
     // elíptica, por ejemplo), un registro viejo con metros es dato real del alumno y el coach debe verlo.
     const distance = positive(log.actual_distance_m)
     if (distance != null) parts.push(`${formatEsNumber(distance, 1)} m`)
+    // Pace derivado (deuda #7 cardio-ejes): se poblaba desde la Fase A pero ninguna ficha lo pintaba.
+    const pace = positive(log.actual_pace_sec_per_km)
+    if (pace != null) parts.push(formatLoggedPace(pace))
     // Conteo de las modalidades rep-based, con la etiqueta correcta (saltos/pisos/reps). Sin modalidad
     // (ejercicio genérico o plan viejo) un `reps_done` en cardio se imprime como "N reps".
     const reps = positive(log.reps_done)

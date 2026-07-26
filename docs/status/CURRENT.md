@@ -50,7 +50,7 @@ Este bloque es un snapshot, no reemplaza `git fetch`, `git status` ni los checks
 - Cierre verificable de la paridad móvil restante; código presente no equivale a QA aprobada.
 - Confirmación del rollout/configuración de Nutrition V2 en el entorno objetivo antes de una promoción.
 
-Builds `production` (workflow manual): Android e iOS verdes **con submit a Play internal testing y TestFlight incluidos** en el [run 29885773193](https://github.com/Juancho2706/gymappjp/actions/runs/29885773193) sobre `4382ff6c` (2026-07-22). Android repitió verde con submit en el [run 30063566202](https://github.com/Juancho2706/gymappjp/actions/runs/30063566202) sobre `335c88da` (2026-07-24), pero iOS `production` falló ahí y en el [run 29976332962](https://github.com/Juancho2706/gymappjp/actions/runs/29976332962) sobre `b7e5e34d`; los logs de ambas fallas expiraron (retención 1 día). No existe build del corte integrado `a59acfd1` y nada de esto certifica QA física.
+Builds `production` (workflow manual): Android e iOS verdes **con submit a Play internal testing y TestFlight incluidos** en el [run 29885773193](https://github.com/Juancho2706/gymappjp/actions/runs/29885773193) sobre `4382ff6c` (2026-07-22). Android repitió verde con submit en el [run 30063566202](https://github.com/Juancho2706/gymappjp/actions/runs/30063566202) sobre `335c88da` (2026-07-24). iOS `production` está roto desde la Ola 6 de wearables: **el profile `evaapp_production` no incluye la capability HealthKit** (causa confirmada en el run diagnóstico [30183498116](https://github.com/Juancho2706/gymappjp/actions/runs/30183498116) sobre `a59acfd1`; arreglo manual en MANUAL_TASKS → MOB-01). No existe build del corte integrado y nada de esto certifica QA física.
 
 ## Nutrition V2: criterio actual
 

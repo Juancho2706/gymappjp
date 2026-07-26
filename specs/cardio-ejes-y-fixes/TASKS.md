@@ -17,15 +17,29 @@ Estado: **Fases A, B, C y D CONSTRUIDAS** (2026-07-25, PR #170). Resta QA device
 - [x] B3. RN ficha coach (`AnalisisTab` + `coach-client-detail.ts`): mismo select, mismo render del motor.
 - [ ] B4. QA device del owner.
 
-### Deuda anotada (post C+D, priorizada)
-1. **GRAVE — cola offline RN pierde los ejes de cardio**: `PendingLog` (`apps/mobile/lib/offline-cache.ts:23-34`) solo persiste `weight_kg/reps_done/rpe/rir/note`; una ronda de cardio encolada sin red se sube con minutos/distancia/FC en NULL (el conteo rep-based sí sobrevive). Preexistente; primer candidato de la próxima tanda (tocar guardado offline exige su propio plan — historial de incidentes de cola).
-2. Analytics de la ficha (1RM/tonelaje/radar/`workoutHistory` 548d) siguen ciegas a cardio: métricas de minutos/distancia por semana = fase posterior.
-3. `fmtTypedLoggedLine` (ejecutor RN alumno) duplica formato de `formatLoggedSetLine` → consolidar.
-4. `legacyRepsSummaryFor` no imprime el objetivo rep-based (bloque solo-conteo guarda `reps='cardio'` legacy; ~3 líneas en el motor).
-5. Bloque nuevo desde el catálogo RN no hereda `exercise_type` (`ExerciseSearchSheet.handleSelect`) — el coach debe tocar "Cardio" a mano; web sí lo hereda.
-6. Timers globales flotantes siguen solo-cronómetro con intervalos por distancia (sin UI de avance manual ahí); `intervalTotalDurationSec` anuncia 0 en plantillas por distancia.
-7. Mostrar `actual_pace_sec_per_km` en la ficha (ya se puebla desde A3); cabecera "sets" vs rondas (cosmético); etiquetas de modalidad duplicadas web/RN → subir a `cardio-modality.ts`.
-8. Plan cacheado offline previo a C no trae `cardio_modality` → primera apertura sin red pinta ejes genéricos (degradación segura, se auto-corrige).
+### Deuda anotada (post C+D, priorizada) — barrida 2026-07-25 (sesión "haz toda la deuda")
+1. [x] **GRAVE — cola offline RN pierde los ejes de cardio**: RESUELTA. `PendingLog` amplió con
+   `actual_duration_sec/distance_m/pace/hold/avg_hr + metadata + substituted_*` (aditivo,
+   retrocompatible con entradas viejas en AsyncStorage) y `enqueueLog` calca `logData` con el
+   criterio "solo si presente"; el drain spreadea el item completo sin cambios. BONUS descubierto:
+   `logSet` RN tampoco escribía `metadata` (lados per_side) ONLINE — corregido en el mismo paso.
+   Suite nueva `tests/mobile-offline-cache-typed-axes.test.ts` (round-trip + legado sin columnas).
+2. [ ] Analytics de la ficha (1RM/tonelaje/radar/`workoutHistory` 548d) siguen ciegas a cardio:
+   métricas de minutos/distancia por semana = fase posterior (única deuda que queda viva).
+3. [x] `fmtTypedLoggedLine` → RESUELTA: delega en `formatLoggedSetLine` del motor (misma línea que
+   la ficha del coach; "Registrado" se conserva como copy del chip vacío del alumno).
+4. [x] `legacyRepsSummaryFor` → RESUELTA: rama rep-based en el motor ("420 saltos", "45 pisos Z2");
+   tests en `apps/web/src/lib/workout-exercise-type.test.ts`.
+5. [x] Herencia de `exercise_type` en `ExerciseSearchSheet.handleSelect` → RESUELTA (viaja con el
+   bloque nuevo igual que web; el editor deriva el tipo efectivo).
+6. [x] Timers globales flotantes → RESUELTA: `startInterval` (web+RN) usa `buildIntervalSequence`;
+   `IntervalTimer` muestra la distancia y CTA "Fase siguiente" en fases manuales (sin countdown ni
+   barra; sin auto-avance en background). Las galerías ya decían "por distancia" desde la Fase D.
+7. [x] Pace en la ficha → RESUELTA: `actual_pace_sec_per_km` en los selects web+RN y en
+   `formatLoggedSetLine` ("5:00 /km"); cabecera "sets" ahora dice rondas/registros según el
+   contenido. Las etiquetas de modalidad ya estaban consolidadas en `cardio-modality.ts` (baef4283).
+8. [—] Plan cacheado offline previo a C sin `cardio_modality`: degradación segura, se auto-corrige
+   con la primera carga online; sin acción.
 
 ## Fase C — ejes por modalidad (1 migración) — HECHA
 - [x] C1. Migración `20260725221804` APLICADA EN LIVE (dry-run BEGIN/ROLLBACK previo; advisors 0 nuevos): `cardio_modality` + CHECK, backfill de los 8 por id determinístico, Escaladora insertada (`stairs`), `reps_unit` ampliado a `jumps`/`floors`. `exercises` tiene grants table-level ⇒ sin GRANT extra.

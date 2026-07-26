@@ -40,7 +40,7 @@ const WHITE = '#FFFFFF'
 const WARNING_500 = '#F5A524' // --color-warning-500 (ámbar de la nota, mirror amber-300/400 web)
 
 // El tipo `KeypadTarget` vive en `@eva/workout-engine` (keypad-flow, puro/testeable); se re-exporta
-// para los consumidores que ya lo importaban desde acá (ExecutorV2) sin tocar sus imports.
+// para los consumidores que ya lo importaban desde acá sin tocar sus imports.
 export type { KeypadTarget } from '@eva/workout-engine'
 
 /** Paso de campo (excluye el paso de esfuerzo) — cada uno es una pestaña del display. */

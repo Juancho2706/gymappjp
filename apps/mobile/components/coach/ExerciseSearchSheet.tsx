@@ -25,6 +25,7 @@ type Ex = Pick<
   | 'body_part'
   | 'equipment'
   | 'cardio_modality'
+  | 'exercise_type'
 >
 
 function hexToRgba(hex: string, a: number): string {
@@ -95,6 +96,11 @@ export const ExerciseSearchSheet = forwardRef<BottomSheet, Props>(
         // Solo-memoria (Fase C): viaja con el bloque para que el editor ofrezca el objetivo en la
         // unidad propia de la modalidad (saltos/pisos/reps). No es columna: el save la ignora.
         cardio_modality: ex.cardio_modality ?? null,
+        // Deuda #5 (cardio-ejes): el tipo del ejercicio viaja con el bloque nuevo — igual que web —
+        // para que el editor derive el tipo efectivo (cardio/movilidad/roller) sin que el coach
+        // tenga que marcarlo a mano. `effectiveExerciseType` lo lee como fallback del override.
+        // Cast seguro: la columna tiene CHECK de valores y el editor re-normaliza igual.
+        exercise_type: (ex.exercise_type ?? null) as BuilderBlock['exercise_type'],
         sets: 3,
         reps: '8-10',
         rest_time: '60s',

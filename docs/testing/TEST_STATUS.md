@@ -54,7 +54,7 @@ Estado confirmado al 25 de julio de 2026 (`a59acfd1`, post-merge PR #170):
 | Integración PR #170 en `master` | verde | job `quality` en el [run 30181033720](https://github.com/Juancho2706/gymappjp/actions/runs/30181033720) sobre `baef4283`: docs, lint 0 errores, typecheck web, tokens y Vitest 328 archivos aprobados, 2 omitidos; 3940 tests aprobados, 4 omitidos |
 | TypeScript móvil/enterprise | verde local | `tsc --noEmit` de web, `@eva/mobile` y `@eva/enterprise` ejecutados el 2026-07-25 sobre `a59acfd1` |
 | Android `production` | build + submit verdes | runs [29885773193](https://github.com/Juancho2706/gymappjp/actions/runs/29885773193) (`4382ff6c`) y [30063566202](https://github.com/Juancho2706/gymappjp/actions/runs/30063566202) (`335c88da`); AAB enviado a Play internal testing en ambos; artefactos con retención de 1 día |
-| iOS `production` | verde en `4382ff6c`; roto después | build + upload + **submit TestFlight verdes** en [29885773193](https://github.com/Juancho2706/gymappjp/actions/runs/29885773193); build fallido en [29976332962](https://github.com/Juancho2706/gymappjp/actions/runs/29976332962) (`b7e5e34d`) y [30063566202](https://github.com/Juancho2706/gymappjp/actions/runs/30063566202) (`335c88da`), logs expirados (retención 1 día) |
+| iOS `production` | verde en `4382ff6c`; roto después por provisioning | build + upload + **submit TestFlight verdes** en [29885773193](https://github.com/Juancho2706/gymappjp/actions/runs/29885773193); fallas en [29976332962](https://github.com/Juancho2706/gymappjp/actions/runs/29976332962) y [30063566202](https://github.com/Juancho2706/gymappjp/actions/runs/30063566202). Causa confirmada en el run diagnóstico [30183498116](https://github.com/Juancho2706/gymappjp/actions/runs/30183498116) (`a59acfd1`): el profile `evaapp_production` no incluye la capability HealthKit que exige la Ola 6 de wearables (`de3ce837`). Arreglo manual en [MANUAL_TASKS.md → MOB-01](../operations/MANUAL_TASKS.md) |
 | Submit TestFlight | ejecutado verde una vez | paso "Submit IPA to TestFlight" success sobre `4382ff6c`; verificación del procesamiento en App Store Connect pendiente (manual) |
 | Expo Doctor | no revalidado en el HEAD integrado | evidencia previa 18/18 sobre `c6743ef3`; el comando no está instalado como ejecutable del workspace local |
 | Config EAS | vía `production` validada end-to-end | los runs recientes usan `production` (inyección de env prodpreview/production); `previewv2` sigue definido pero ya no es la vía activa |
@@ -122,7 +122,7 @@ No pegar logs extensos, screenshots, payloads, credenciales ni listas de cientos
 
 ## Pendientes actuales
 
-- [ ] Reparar el build iOS `production` (falla en `b7e5e34d` y `335c88da`; los logs expiraron — relanzar y capturar el error el mismo día).
+- [ ] Reparar el build iOS `production`: regenerar el profile `evaapp_production` con HealthKit y actualizar el secret (causa confirmada; pasos en MANUAL_TASKS → MOB-01).
 - [ ] Generar y retener artefactos Android/iOS firmados del corte integrado (`a59acfd1` o descendiente).
 - [ ] Verificar en App Store Connect que el build de `4382ff6c` procesó y está disponible en TestFlight; verificar el AAB en Play internal testing.
 - [ ] Completar smoke Android/iOS de la paridad activa.

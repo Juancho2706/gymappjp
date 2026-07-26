@@ -13,6 +13,7 @@
  */
 
 import type { IntervalConfig } from './workout-interval'
+import { formatCardioReps, normalizeCardioRepsUnit } from './cardio-modality'
 
 export type ExerciseType = 'strength' | 'cardio' | 'mobility' | 'roller'
 
@@ -148,6 +149,11 @@ export function legacyRepsSummaryFor(block: TypedBlockFields, type: ExerciseType
         }
         if (block.distance_value != null && block.distance_value > 0) {
             return truncate20(`${compactDistance(block.distance_value, block.distance_unit)}${zone}`)
+        }
+        // Bloque solo-conteo (saltos/pisos/reps): antes caía al literal 'cardio' y el objetivo
+        // rep-based quedaba invisible en chips/resúmenes legacy.
+        if (block.reps_value != null && block.reps_value > 0) {
+            return truncate20(`${formatCardioReps(block.reps_value, normalizeCardioRepsUnit(block.reps_unit))}${zone}`)
         }
         if (zone) return truncate20(zone.trim())
         return 'cardio'
