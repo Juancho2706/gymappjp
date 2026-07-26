@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { DAY_COMPLETION_FIXTURES } from '@eva/workout-engine'
 import { deriveWeekWorkoutStatus, type WeekLogRow, type WeekPlanRow } from './weekPendingWorkouts'
 
 // Semana de referencia: hoy = miércoles 2026-07-08 (dow 3). Lunes de la semana = 2026-07-06.
@@ -38,8 +39,17 @@ const AB_PLANS: WeekPlanRow[] = [
 // ab_mode con start el lunes de esta semana → semana 1 → variante A.
 const AB_PROGRAM = { id: PROG, ab_mode: true, start_date: '2026-07-06', weeks_to_repeat: 4 }
 
-function log(planId: string, isoUtc: string): WeekLogRow {
-    return { logged_at: isoUtc, workout_blocks: { plan_id: planId } }
+/**
+ * Serie registrada. Sin `blockId` el plan no trae bloques en estos fixtures → aplica la REGLA LEGACY
+ * (≥1 serie = hecho), que es justo lo que ejercitan los casos históricos de atribución de abajo.
+ */
+function log(planId: string, isoUtc: string, blockId: string | null = null, setNumber: number | null = null): WeekLogRow {
+    return { logged_at: isoUtc, block_id: blockId, set_number: setNumber, workout_blocks: { plan_id: planId } }
+}
+
+/** N series (1…n) de un bloque, todas el mismo día — el shape que produce `getRecentWorkoutLogs`. */
+function setsOf(planId: string, isoUtc: string, blockId: string, n: number): WeekLogRow[] {
+    return Array.from({ length: n }, (_, i) => log(planId, isoUtc, blockId, i + 1))
 }
 
 describe('deriveWeekWorkoutStatus', () => {
@@ -292,6 +302,249 @@ describe('deriveWeekWorkoutStatus', () => {
         expect(r.pending.map((p) => p.dayOfWeek)).toEqual([1, 2])
         expect(r.pending[0].dateIso).toBe('2026-07-06')
         expect(r.pending[1].dateIso).toBe('2026-07-07')
+    })
+
+    // ── Completitud del día (spec `workout-day-in-progress`, CEO O2 2026-07-26) ───────────────────
+    // `done` sólo con el 100% de las series esperadas; 1–99% ⇒ `in_progress`. La regla vive en
+    // `deriveDayCompletion` (@eva/workout-engine): acá se verifica el ADAPTADOR web (que los targets
+    // y los `block_id`/`set_number` lleguen enteros hasta el motor).
+    describe('completitud del día: done = 100%, parcial = in_progress', () => {
+        const SIMPLE_PROGRAM = { id: PROG, ab_mode: false, start_date: '2026-07-06', weeks_to_repeat: 1 }
+        // Lunes: 2 bloques = 5 series esperadas. Miércoles (HOY): 1 bloque = 4 series.
+        const MON = plan({
+            id: PLAN_MON,
+            day_of_week: 1,
+            week_variant: null,
+            title: 'Empuje',
+            workout_blocks: [
+                { id: 'bm1', sets: 3 },
+                { id: 'bm2', sets: 2 },
+            ],
+        })
+        const WED = plan({
+            id: PLAN_WED,
+            day_of_week: 3,
+            week_variant: null,
+            title: 'Full body',
+            workout_blocks: [{ id: 'bw1', sets: 4 }],
+        })
+
+        it('PARCIAL HOY: 2 de 4 series ⇒ in_progress (antes decía "hecho" con 1 sola serie)', () => {
+            const r = deriveWeekWorkoutStatus({
+                userLocalDate: TODAY_DATE,
+                todayIso: TODAY_ISO,
+                program: SIMPLE_PROGRAM,
+                activePlans: [WED],
+                logs: setsOf(PLAN_WED, '2026-07-08T15:00:00.000Z', 'bw1', 2),
+            })
+            const wed = r.days.find((d) => d.dayOfWeek === 3)
+            expect(wed?.status).toBe('in_progress')
+            expect(wed?.completionPct).toBe(0.5)
+            expect(wed?.isToday).toBe(true)
+            // HOY jamás entra a la cola de recuperables (es trabajo del hero).
+            expect(r.pending).toHaveLength(0)
+        })
+
+        it('HOY al 100% ⇒ done (el sheet clásico sólo aparece acá)', () => {
+            const r = deriveWeekWorkoutStatus({
+                userLocalDate: TODAY_DATE,
+                todayIso: TODAY_ISO,
+                program: SIMPLE_PROGRAM,
+                activePlans: [WED],
+                logs: setsOf(PLAN_WED, '2026-07-08T15:00:00.000Z', 'bw1', 4),
+            })
+            const wed = r.days.find((d) => d.dayOfWeek === 3)
+            expect(wed?.status).toBe('done')
+            expect(wed?.completionPct).toBe(1)
+            expect(wed?.doneOnDate).toBeNull()
+        })
+
+        it('PARCIAL DÍA PASADO: 3 de 5 el lunes ⇒ in_progress y entra a la cola como "in_progress"', () => {
+            const r = deriveWeekWorkoutStatus({
+                userLocalDate: TODAY_DATE,
+                todayIso: TODAY_ISO,
+                program: SIMPLE_PROGRAM,
+                activePlans: [MON, WED],
+                logs: [
+                    ...setsOf(PLAN_MON, '2026-07-06T15:00:00.000Z', 'bm1', 3),
+                    // bm2 (2 series) sin registrar → 3/5
+                ],
+            })
+            const mon = r.days.find((d) => d.dayOfWeek === 1)
+            expect(mon?.status).toBe('in_progress')
+            expect(mon?.completionPct).toBeCloseTo(0.6, 5)
+            expect(r.pending.map((p) => [p.dayOfWeek, p.status])).toEqual([[1, 'in_progress']])
+        })
+
+        it('DÍA PASADO al 100% ⇒ done y sale de la cola', () => {
+            const r = deriveWeekWorkoutStatus({
+                userLocalDate: TODAY_DATE,
+                todayIso: TODAY_ISO,
+                program: SIMPLE_PROGRAM,
+                activePlans: [MON, WED],
+                logs: [
+                    ...setsOf(PLAN_MON, '2026-07-06T15:00:00.000Z', 'bm1', 3),
+                    ...setsOf(PLAN_MON, '2026-07-06T15:20:00.000Z', 'bm2', 2),
+                ],
+            })
+            expect(r.days.find((d) => d.dayOfWeek === 1)?.status).toBe('done')
+            expect(r.pending).toHaveLength(0)
+        })
+
+        it('CARDIO-ONLY (sets null/0): cada bloque vale 1 unidad — mitad ⇒ in_progress, ambos ⇒ done', () => {
+            const cardio = plan({
+                id: PLAN_TUE_A,
+                day_of_week: 2,
+                week_variant: null,
+                title: 'Cardio',
+                workout_blocks: [
+                    { id: 'c1', sets: null },
+                    { id: 'c2', sets: 0 },
+                ],
+            })
+            const half = deriveWeekWorkoutStatus({
+                userLocalDate: TODAY_DATE,
+                todayIso: TODAY_ISO,
+                program: SIMPLE_PROGRAM,
+                activePlans: [cardio],
+                logs: setsOf(PLAN_TUE_A, '2026-07-07T15:00:00.000Z', 'c1', 1),
+            })
+            expect(half.days.find((d) => d.dayOfWeek === 2)?.status).toBe('in_progress')
+            expect(half.days.find((d) => d.dayOfWeek === 2)?.completionPct).toBe(0.5)
+
+            const full = deriveWeekWorkoutStatus({
+                userLocalDate: TODAY_DATE,
+                todayIso: TODAY_ISO,
+                program: SIMPLE_PROGRAM,
+                activePlans: [cardio],
+                logs: [
+                    ...setsOf(PLAN_TUE_A, '2026-07-07T15:00:00.000Z', 'c1', 1),
+                    ...setsOf(PLAN_TUE_A, '2026-07-07T15:10:00.000Z', 'c2', 1),
+                ],
+            })
+            expect(full.days.find((d) => d.dayOfWeek === 2)?.status).toBe('done')
+        })
+
+        it('series de MÁS (coach bajó las series después) no rompen: el día sigue done, nunca >100%', () => {
+            const r = deriveWeekWorkoutStatus({
+                userLocalDate: TODAY_DATE,
+                todayIso: TODAY_ISO,
+                program: SIMPLE_PROGRAM,
+                activePlans: [WED],
+                logs: setsOf(PLAN_WED, '2026-07-08T15:00:00.000Z', 'bw1', 7),
+            })
+            const wed = r.days.find((d) => d.dayOfWeek === 3)
+            expect(wed?.status).toBe('done')
+            expect(wed?.completionPct).toBe(1)
+        })
+
+        it('compatibilidad: plan SIN la relación de bloques conserva la regla legacy (≥1 serie = done)', () => {
+            const sinBloques = plan({ id: PLAN_MON, day_of_week: 1, week_variant: null, title: 'Empuje' })
+            const r = deriveWeekWorkoutStatus({
+                userLocalDate: TODAY_DATE,
+                todayIso: TODAY_ISO,
+                program: SIMPLE_PROGRAM,
+                activePlans: [sinBloques],
+                logs: [log(PLAN_MON, '2026-07-06T15:00:00.000Z')],
+            })
+            expect(r.days.find((d) => d.dayOfWeek === 1)?.status).toBe('done')
+        })
+
+        it('targets ANIDADOS del programa activo también alimentan el denominador', () => {
+            // El plan llega SIN bloques (como `getClientWorkoutPlans` antiguo) pero el programa sí los trae.
+            const sinBloques = plan({ id: PLAN_WED, day_of_week: 3, week_variant: null, title: 'Full body' })
+            const r = deriveWeekWorkoutStatus({
+                userLocalDate: TODAY_DATE,
+                todayIso: TODAY_ISO,
+                program: {
+                    ...SIMPLE_PROGRAM,
+                    workout_plans: [{ id: PLAN_WED, workout_blocks: [{ id: 'bw1', sets: 4 }] }],
+                },
+                activePlans: [sinBloques],
+                logs: setsOf(PLAN_WED, '2026-07-08T15:00:00.000Z', 'bw1', 1),
+            })
+            // Con targets conocidos 1 de 4 ya NO es "hecho".
+            expect(r.days.find((d) => d.dayOfWeek === 3)?.status).toBe('in_progress')
+        })
+
+        it('la recuperación PARCIAL en otra fecha no cierra el día ajeno (la atribución greedy sólo mira sesiones completas)', () => {
+            const tue = plan({
+                id: PLAN_TUE_A,
+                day_of_week: 2,
+                week_variant: null,
+                title: 'Tirón',
+                workout_blocks: [{ id: 'bt1', sets: 4 }],
+            })
+            const r = deriveWeekWorkoutStatus({
+                userLocalDate: TODAY_DATE,
+                todayIso: TODAY_ISO,
+                program: SIMPLE_PROGRAM,
+                activePlans: [tue, WED],
+                // El plan del martes se retoma HOY (miércoles) pero sólo 1 de 4 series.
+                logs: setsOf(PLAN_TUE_A, '2026-07-08T15:00:00.000Z', 'bt1', 1),
+            })
+            expect(r.days.find((d) => d.dayOfWeek === 2)?.status).toBe('pending')
+            expect(r.days.find((d) => d.dayOfWeek === 2)?.completionPct).toBe(0)
+            // El miércoles (hoy) tiene SU propio plan sin tocar.
+            expect(r.days.find((d) => d.dayOfWeek === 3)?.status).toBe('today')
+        })
+
+        it('la recuperación COMPLETA en otra fecha sigue cerrando el día (regresión de la atribución)', () => {
+            const tue = plan({
+                id: PLAN_TUE_A,
+                day_of_week: 2,
+                week_variant: null,
+                title: 'Tirón',
+                workout_blocks: [{ id: 'bt1', sets: 4 }],
+            })
+            const r = deriveWeekWorkoutStatus({
+                userLocalDate: TODAY_DATE,
+                todayIso: TODAY_ISO,
+                program: SIMPLE_PROGRAM,
+                activePlans: [tue, WED],
+                logs: setsOf(PLAN_TUE_A, '2026-07-08T15:00:00.000Z', 'bt1', 4),
+            })
+            const mar = r.days.find((d) => d.dayOfWeek === 2)
+            expect(mar?.status).toBe('done')
+            expect(mar?.doneOnDate).toBe('2026-07-08')
+            expect(mar?.doneOnLabel).toBe('Miércoles')
+        })
+    })
+
+    // Paridad con el motor: los MISMOS fixtures que consumen el paquete y RN, atravesando el
+    // adaptador web (bloques del plan + filas `block_id`/`set_number` de `getRecentWorkoutLogs`).
+    // `none` se proyecta como `today` porque el día del fixture es HOY sin nada válido registrado.
+    describe('paridad con DAY_COMPLETION_FIXTURES (@eva/workout-engine)', () => {
+        const PROGRAM = { id: PROG, ab_mode: false, start_date: '2026-07-06', weeks_to_repeat: 1 }
+        const EXPECTED_STATUS = { done: 'done', in_progress: 'in_progress', none: 'today' } as const
+
+        for (const fixture of DAY_COMPLETION_FIXTURES) {
+            it(fixture.name, () => {
+                const logs = Object.entries(fixture.input.loggedSetsByBlock).flatMap(([blockId, n]) =>
+                    setsOf(PLAN_WED, '2026-07-08T15:00:00.000Z', blockId, n)
+                )
+                const r = deriveWeekWorkoutStatus({
+                    userLocalDate: TODAY_DATE,
+                    todayIso: TODAY_ISO,
+                    program: PROGRAM,
+                    activePlans: [
+                        plan({
+                            id: PLAN_WED,
+                            day_of_week: 3,
+                            week_variant: null,
+                            title: 'Full body',
+                            workout_blocks: fixture.input.blocks,
+                        }),
+                    ],
+                    logs,
+                })
+                const wed = r.days.find((d) => d.dayOfWeek === 3)
+                expect(wed?.status).toBe(EXPECTED_STATUS[fixture.expected.state])
+                if (fixture.expected.state !== 'none') {
+                    expect(wed?.completionPct).toBeCloseTo(fixture.expected.pct, 5)
+                }
+            })
+        }
     })
 
     it('programa sin A/B: plan con week_variant null cuenta como A y no genera falsos pendientes en descanso', () => {

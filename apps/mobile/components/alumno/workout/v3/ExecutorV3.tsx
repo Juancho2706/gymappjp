@@ -16,6 +16,7 @@ import { Dumbbell, Flag, Sparkles } from 'lucide-react-native'
 import {
   buildStepModel,
   cardioHasDistanceAxis,
+  countLoggedSetsByBlock,
   effectiveExerciseType,
   firstIncompleteInRounds,
   firstIncompleteStepIndex,
@@ -26,6 +27,8 @@ import {
   repsUnitForModality,
   sessionLogKey,
   typedTargetFor,
+  type DayCompletionBlock,
+  type LoggedSetRow,
   type OptimisticLogPayload,
   type RepeatSeedEntry,
   type SummaryBlock,
@@ -87,9 +90,10 @@ import { CelebrationHost } from './celebration-host'
 import { computeLivePr } from './pr-live'
 import {
   deriveWeeklyStreak,
-  greedyDoneDatesForWeek,
+  greedyStatesForWeek,
   plannedDatesForWeek,
   weekDatesMondayToSunday,
+  type PlanWeekCompletionSource,
   type WeeklyStreak,
 } from './weekly-streak'
 
@@ -883,41 +887,54 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
       try {
         const [{ data: programRow }, { data: logRows }] = await Promise.all([
           // Espejo EXACTO de la lectura del dashboard (home.tsx): el programa ACTIVO del alumno con sus
-          // planes (id / day_of_week / assigned_date). Los planes fuera del programa activo no cuentan —
-          // misma regla que las day-cards, consistencia con la racha del dashboard. `id` alimenta la
-          // atribucion greedy por plan (greedyDoneDatesForWeek).
+          // planes (id / day_of_week / assigned_date) y sus bloques (`id, sets` = denominador del dia,
+          // regla de completitud del spec `workout-day-in-progress`). Los planes fuera del programa activo
+          // no cuentan — misma regla que las day-cards, consistencia con la racha del dashboard.
           supabase
             .from('workout_programs')
-            .select('workout_plans ( id, day_of_week, assigned_date )')
+            .select('workout_plans ( id, day_of_week, assigned_date, workout_blocks ( id, sets ) )')
             .eq('client_id', clientId)
             .eq('is_active', true)
             .maybeSingle(),
           // Embed `workout_blocks ( plan_id )` = plan dueño del log (mismo embed que el dashboard,
           // home.tsx / web dashboard.queries.ts): la atribucion greedy necesita a que PLAN pertenece cada
           // log, no solo su fecha. To-one que llega como objeto en runtime (se normaliza abajo).
+          // `block_id`/`set_number` = granularidad de SERIE: un dia solo cierra al 100%, no con un log.
           supabase
             .from('workout_logs')
-            .select('logged_at, workout_blocks ( plan_id )')
+            .select('logged_at, block_id, set_number, workout_blocks ( plan_id )')
             .eq('client_id', clientId)
             .gte('logged_at', startIso)
             .lt('logged_at', endIso),
         ])
         if (!active) return
-        const rawPlans = ((programRow as { workout_plans?: Array<{ id: string; day_of_week: number | null; assigned_date: string | null }> } | null)?.workout_plans) ?? []
+        const rawPlans = ((programRow as { workout_plans?: Array<{ id: string; day_of_week: number | null; assigned_date: string | null; workout_blocks?: Array<{ id: string; sets: number | null }> }> } | null)?.workout_plans) ?? []
         const plans = rawPlans.map((p) => ({ id: p.id, day_of_week: p.day_of_week ?? null, assigned_date: p.assigned_date ?? null }))
         const plannedDates = plannedDatesForWeek(plans, weekDates)
-        // Logs de la semana con su plan dueño (planId + dia real Santiago) → atribucion GREEDY por plan:
-        // el dia recuperado pinta done igual que las day-cards de la home (decision CEO). Los logs sin
-        // plan (sueltos) no se atribuyen — misma regla que el greedy del dashboard.
-        const rawLogs = (logRows ?? []) as unknown as Array<{ logged_at: string; workout_blocks: { plan_id: string | null } | null }>
-        const weekLogs: Array<{ planId: string; ymd: string }> = []
+        // Series de la semana por (plan, dia) — MISMA fuente que las day-cards de la home: el bucketing por
+        // bloque (con dedup de `(block_id, set_number)`) lo hace el engine. Los logs sin plan (sueltos) no
+        // se atribuyen — misma regla que el greedy del dashboard.
+        const rawLogs = (logRows ?? []) as unknown as Array<LoggedSetRow & { logged_at: string; workout_blocks: { plan_id: string | null } | null }>
+        const rowsByPlanDay = new Map<string, LoggedSetRow[]>()
         for (const r of rawLogs) {
           const planId = r.workout_blocks?.plan_id
-          if (!planId) continue
-          weekLogs.push({ planId, ymd: getSantiagoIsoYmdForUtcInstant(r.logged_at) })
+          if (!planId || !r.block_id) continue
+          const key = `${planId}|${getSantiagoIsoYmdForUtcInstant(r.logged_at)}`
+          const bucket = rowsByPlanDay.get(key)
+          if (bucket) bucket.push(r)
+          else rowsByPlanDay.set(key, [r])
         }
-        const doneDates = greedyDoneDatesForWeek(plans, weekLogs, weekDates, today)
-        setWeeklyStreak(deriveWeeklyStreak({ weekDates, plannedDates, doneDates, todayIso: today }))
+        const completionSource: PlanWeekCompletionSource = {
+          blocksByPlan: new Map<string, DayCompletionBlock[]>(
+            rawPlans.map((p) => [p.id, (p.workout_blocks ?? []).map((b) => ({ id: b.id, sets: b.sets }))]),
+          ),
+          loggedSetsByPlanDay: new Map(
+            [...rowsByPlanDay].map(([key, bucket]) => [key, countLoggedSetsByBlock(bucket)]),
+          ),
+        }
+        // Dia cerrado (100%) vs a medias: los dots del ejecutor pintan la MISMA verdad que la day-card.
+        const { doneDates, inProgressDates } = greedyStatesForWeek(plans, weekDates, today, completionSource)
+        setWeeklyStreak(deriveWeeklyStreak({ weekDates, plannedDates, doneDates, inProgressDates, todayIso: today }))
       } catch {
         if (active) setWeeklyStreak(null)
       }

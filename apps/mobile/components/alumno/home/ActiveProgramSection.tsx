@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
 import { ScrollView, Text, TouchableOpacity, View } from 'react-native'
-import { ArrowRight, Calendar, CheckCircle2, ChevronRight, Pencil, Play, RotateCcw } from 'lucide-react-native'
+import { ArrowRight, Calendar, CheckCircle2, ChevronRight, CircleDashed, Pencil, Play, RotateCcw } from 'lucide-react-native'
 import { cssInterop } from 'nativewind'
 import { deriveSportTokens } from '@eva/brand-kit'
 import { useTheme } from '../../../context/ThemeContext'
@@ -80,11 +80,16 @@ export function ActiveProgramSection({
   const { hidden: bannerHidden, hide: hideBanner } = useTriggerMorphHide()
 
   // Enrutado por estado del day-card:
-  //  · done && !isToday → sheet "Ya hiciste este entrenamiento" (revisar/repetir).
-  //  · pending          → recuperar (param `recuperar`, banner ambar, se entrena hoy) — vía Despegue.
+  //  · done && !isToday        → sheet "Ya hiciste este entrenamiento" (revisar/repetir).
+  //  · in_progress && !isToday → MISMO sheet con copy "Entrenamiento incompleto" (spec
+  //    `workout-day-in-progress`): la sesión de ese día quedó a medias y el camino sigue siendo el de
+  //    siempre (editar esa fecha / repetir hoy), solo cambia lo que se le dice al alumno.
+  //  · in_progress && isToday  → Despegue directo (continuar la sesión de hoy, NUNCA el sheet: ése era
+  //    el trap del incidente P0 — "Ya hiciste este entrenamiento" a mitad de entreno).
+  //  · pending                 → recuperar (param `recuperar`, banner ambar, se entrena hoy) — vía Despegue.
   //  · resto (today/upcoming/done-hoy) → Despegue directo.
   function handleDayPress(view: PlanDayView, origin: MorphOrigin | null) {
-    if (view.status === 'done' && !view.isToday) { setSheetView(view); return }
+    if ((view.status === 'done' || view.status === 'in_progress') && !view.isToday) { setSheetView(view); return }
     // Las day-cards son angostas (96px) → el overlay NO pinta la etiqueta (solo rects anchos); se pasa el
     // título del plan por si la medición cae al origen sintético (ancho), donde sí se veria.
     if (view.status === 'pending') { onRecover(view.plan.id, view.dateIso, origin, view.plan.title); return }
@@ -209,6 +214,12 @@ export function ActiveProgramSection({
  * Exportado: lo reusa también el hero de la home cuando el entreno de HOY ya está completado (MOBILE-2 /
  * paridad web WorkoutHeroCard: el overlay "Entrenamiento completado" abre esta misma ventanita en vez de
  * dejar un CTA muerto).
+ *
+ * DÍA PASADO A MEDIAS (spec `workout-day-in-progress`): el mismo sheet, con el título "Entrenamiento
+ * incompleto" y un subtítulo honesto. Las acciones NO cambian (misma semántica: editar esa fecha —hoy
+ * deshabilitada en RN— o repetir hoy); lo que se corrige es la mentira de decirle "ya hiciste este
+ * entrenamiento" a alguien que dejó series sin registrar. El día de HOY a medias jamás llega acá: su
+ * day-card navega directo al ejecutor a continuar.
  */
 export function DoubleIntentSheet({
   view,
@@ -237,12 +248,14 @@ export function DoubleIntentSheet({
   const showRepeat = !!reviewDate && reviewDate !== getTodayInSantiago().iso
   // Revisar solo es accionable para HOY (ver nota del componente).
   const canReview = !!view?.isToday && !!onReview
+  // Día a medias → otro título/subtítulo, mismas acciones (ver nota del componente).
+  const incomplete = view?.status === 'in_progress'
 
   return (
     <Sheet
       open={!!view}
       onClose={onClose}
-      title="Ya hiciste este entrenamiento"
+      title={incomplete ? 'Entrenamiento incompleto' : 'Ya hiciste este entrenamiento'}
       snapPoints={['42%']}
       dynamicSizing
     >
@@ -255,6 +268,11 @@ export function DoubleIntentSheet({
             {reviewDate ? (
               <Text className="text-muted" style={{ fontFamily: FONT.ui, fontSize: 12.5, textTransform: 'capitalize' }}>
                 {fmtSheetDate(reviewDate)}
+              </Text>
+            ) : null}
+            {incomplete ? (
+              <Text className="text-muted" style={{ fontFamily: FONT.ui, fontSize: 12.5, marginTop: 2 }}>
+                Esa sesión quedó con series sin registrar.
               </Text>
             ) : null}
           </View>
@@ -339,29 +357,42 @@ function DayCard({ view, onPress }: { view: PlanDayView; onPress: (origin: Morph
   const dow = plan.day_of_week ?? 1
   const done = status === 'done'
   const pending = status === 'pending'
-  // handleDayPress morfea en TODO salvo done-de-otro-día (abre el sheet): hoy/futuro/done-hoy → Despegue
-  // (onStart) y pending → Despegue de recuperación (onRecover). Sólo el sheet no morfea.
-  const willMorph = !(done && !isToday)
+  // Tercera visual (spec `workout-day-in-progress`): sesión empezada sin cerrar. Sobria y en tokens —
+  // círculo punteado en color de marca + pie "En progreso"; el día de HOY conserva su superficie sport
+  // (hoy manda en el color) y un día pasado a medias se distingue del neutro con un borde sport tenue,
+  // sin robarle el ámbar al pendiente (ése sí no tiene nada registrado).
+  const inProgress = status === 'in_progress'
+  // handleDayPress morfea en TODO salvo done/in_progress de otro día (abren el sheet): hoy/futuro/
+  // done-hoy/in_progress-hoy → Despegue (onStart) y pending → Despegue de recuperación (onRecover).
+  const willMorph = !((done || inProgress) && !isToday)
   // "Hecho el jueves" solo cuando el dia se cerro por una sesion de OTRO dia (recuperacion):
   // label discreto que espeja el copy web (doneOnLabel). Done en su propia fecha → "Día N".
   const doneElsewhere = done && !!doneOnLabel
 
   // Superficie y neutros via clases DS (theme + white-label aware): hoy=sport,
   // pendiente=ember, resto=neutro. Espejo de web WorkoutPlanCard.tsx:48-84.
-  const cardClass = isToday ? 'border-sport-500 bg-sport-100' : pending ? 'border-ember-200 bg-ember-100' : 'border-subtle bg-surface-card'
-  const labelClass = isToday ? 'text-sport-600' : pending ? 'text-ember-700' : 'text-subtle'
-  const pieClass = pending ? 'text-ember-700' : 'text-subtle'
+  const cardClass = isToday
+    ? 'border-sport-500 bg-sport-100'
+    : pending
+      ? 'border-ember-200 bg-ember-100'
+      : inProgress
+        ? 'border-sport-500/40 bg-surface-card'
+        : 'border-subtle bg-surface-card'
+  const labelClass = isToday ? 'text-sport-600' : pending ? 'text-ember-700' : inProgress ? 'text-sport-600' : 'text-subtle'
+  const pieClass = pending ? 'text-ember-700' : inProgress ? 'text-sport-600' : 'text-subtle'
   // Play (hoy) = sport-600 resuelto por esquema (dark aclara el foreground); web usa
   // text-sport-600, no sport-500. Solo se deriva en la card de hoy.
   const playColor = resolvedScheme === 'dark' ? deriveSportTokens(theme.primary).dark['600'] : deriveSportTokens(theme.primary).ramp['600']
 
   const a11yLabel = pending
     ? `${plan.title} · pendiente, recuperar`
-    : isToday
-      ? `${plan.title} · hoy`
-      : doneElsewhere
-        ? `${plan.title} · hecho el ${doneOnLabel!.toLowerCase()}`
-        : plan.title
+    : inProgress
+      ? `${plan.title} · en progreso, ${isToday ? 'continuar' : 'revisar'}`
+      : isToday
+        ? `${plan.title} · hoy`
+        : doneElsewhere
+          ? `${plan.title} · hecho el ${doneOnLabel!.toLowerCase()}`
+          : plan.title
 
   return (
     // Wrapper medible (patrón del hero): `collapsable={false}` evita que Android colapse el View y
@@ -385,6 +416,9 @@ function DayCard({ view, onPress }: { view: PlanDayView; onPress: (origin: Morph
           </Text>
           {done ? (
             <CheckCircle2 size={14} color={theme.success} strokeWidth={2.4} />
+          ) : inProgress ? (
+            // Círculo punteado = empezado sin cerrar (ni check verde ni punto ámbar de pendiente).
+            <CircleDashed size={14} color={playColor} strokeWidth={2.4} />
           ) : isToday ? (
             <Play size={12} color={playColor} strokeWidth={2.6} />
           ) : pending ? (
@@ -394,8 +428,8 @@ function DayCard({ view, onPress }: { view: PlanDayView; onPress: (origin: Morph
           )}
         </View>
         <Text className="text-strong" numberOfLines={2} style={{ marginTop: 6, fontFamily: FONT.uiBold, fontSize: 13, lineHeight: 16 }}>{plan.title}</Text>
-        <Text className={pieClass} numberOfLines={1} style={{ marginTop: 2, fontSize: 10.5, fontFamily: pending ? FONT.uiBold : FONT.ui }}>
-          {pending ? 'Pendiente' : doneElsewhere ? `Hecho el ${doneOnLabel!.toLowerCase()}` : `Día ${dow}`}
+        <Text className={pieClass} numberOfLines={1} style={{ marginTop: 2, fontSize: 10.5, fontFamily: pending || inProgress ? FONT.uiBold : FONT.ui }}>
+          {pending ? 'Pendiente' : inProgress ? 'En progreso' : doneElsewhere ? `Hecho el ${doneOnLabel!.toLowerCase()}` : `Día ${dow}`}
         </Text>
       </TouchableOpacity>
     </View>

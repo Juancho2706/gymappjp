@@ -10,12 +10,16 @@ import { Sheet, SheetContent } from '@/components/ui/sheet'
  * instancia nueva precargada con los valores de ese día. Nivel dashboard → claro/oscuro + responsive
  * (reusa el bottom-sheet del DS).
  *
+ * El titular es variable (`heading`): el mismo sheet sirve al día PASADO a medias ("Entrenamiento
+ * incompleto", spec `workout-day-in-progress`), donde el copy de "ya hiciste" sería falso.
+ *
  * Presentacional puro: las URLs las construye el caller con `buildWorkoutEditHref`/`buildWorkoutRepeatHref`
  * (helpers puros testeables). Navegar cierra el sheet solo; "Cancelar" y el backdrop también.
  */
 export function WorkoutDoneSheet({
     open,
     onOpenChange,
+    heading = 'Ya hiciste este entrenamiento',
     title,
     subtitle,
     editHref,
@@ -25,6 +29,8 @@ export function WorkoutDoneSheet({
 }: {
     open: boolean
     onOpenChange: (open: boolean) => void
+    /** Titular del sheet. Por defecto el de un día completo; el día a medias manda el suyo. */
+    heading?: string
     /** Nombre del entreno (título del plan). */
     title: string
     /** "Martes — Día 2 · 15 jul" (label del día + fecha). */
@@ -62,14 +68,12 @@ export function WorkoutDoneSheet({
                 // van con `!` (important). Centrado robusto sin transform: inset-0 + margin auto + alto
                 // intrinseco (evita chocar con la translate-y de entrada del sheet).
                 className="max-h-[85dvh] gap-0 rounded-t-sheet p-0 md:inset-0! md:m-auto! md:h-max! md:w-full! md:max-w-md! md:rounded-2xl! md:border!"
-                aria-label="Ya hiciste este entrenamiento"
+                aria-label={heading}
             >
                 <div className="flex flex-col gap-1 px-5 pb-2 pt-4">
                     {/* Asa de arrastre: solo en el bottom sheet movil; en el modal desktop no aplica. */}
                     <div className="mx-auto mb-3 h-1.5 w-10 shrink-0 rounded-full bg-border md:hidden dark:bg-white/15" aria-hidden />
-                    <h2 className="font-display text-xl font-black tracking-tight text-strong">
-                        Ya hiciste este entrenamiento
-                    </h2>
+                    <h2 className="font-display text-xl font-black tracking-tight text-strong">{heading}</h2>
                     <p className="text-[13px] font-semibold text-muted">
                         <span className="text-strong">{title}</span>
                         {subtitle ? <> · {subtitle}</> : null}

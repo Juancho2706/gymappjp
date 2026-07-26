@@ -8,15 +8,24 @@
  * semana (best-effort, gateada por `clientId`) que espeja la atribucion GREEDY del dashboard
  * (`home.tsx` day-cards / web `weekPendingWorkouts`):
  *   · `plannedDates` = dias Lun→Dom con un `workout_plan` del alumno (por `day_of_week` 1..7 o `assigned_date`).
- *   · `doneDates`    = dias Lun→Dom `done` bajo atribucion GREEDY por plan (`greedyDoneDatesForWeek`): un dia
- *     queda done si SU plan tiene log en cualquier dia de la semana → recuperar el lunes un jueves marca el
- *     LUNES (decision CEO: RN adopta el greedy del web, el dia recuperado pinta done igual que la home).
+ *   · `doneDates`    = dias Lun→Dom `done` bajo atribucion GREEDY por plan (`greedyStatesForWeek`): un dia
+ *     queda done si SU plan tiene una sesion COMPLETA en cualquier dia de la semana → recuperar el lunes un
+ *     jueves marca el LUNES (decision CEO: RN adopta el greedy del web, el dia recuperado pinta done igual
+ *     que la home).
+ *   · `inProgressDates` = dias con sesion PARCIAL (1–99% de las series) — tercera visual, ver abajo.
  * Si la lectura falla (offline) el ejecutor pasa `null` y la UI oculta la racha — NUNCA se muestra un dato falso.
+ *
+ * COMPLETITUD (spec `workout-day-in-progress`, decision CEO O2 2026-07-26): "hecho" ya NO es ">=1 log del
+ * plan" sino el 100% de las series esperadas. La regla NO vive aca: es `deriveDayCompletion` de
+ * `@eva/workout-engine`, la MISMA funcion que consume la web — este modulo solo la aplica sobre la
+ * atribucion greedy por plan. Un dia a medias queda `in_progress` (ni pendiente ni hecho) para que el
+ * alumno interrumpido no caiga al sheet "Ya hiciste este entrenamiento" (incidente P0 2026-07-26).
  */
+import { deriveDayCompletion, type DayCompletionBlock, type DayCompletionState } from '@eva/workout-engine'
 import { isoDateAddDays } from '../../../../lib/date-utils'
 
-/** Estado visual de un dot de la semana. */
-export type WeekDotState = 'done' | 'today' | 'pending' | 'rest'
+/** Estado visual de un dot de la semana. `in_progress` = sesion empezada sin cerrar (1–99%). */
+export type WeekDotState = 'done' | 'in_progress' | 'today' | 'pending' | 'rest'
 
 /** Un dia de la semana (Lun→Dom) ya resuelto para pintar. */
 export interface WeekDot {
@@ -30,7 +39,7 @@ export interface WeekDot {
 export interface WeeklyStreak {
   /** 7 dots Lun→Dom. */
   dots: WeekDot[]
-  /** Sesiones hechas esta semana (fecha real). */
+  /** Sesiones CERRADAS esta semana (100% de las series); las parciales no suman. */
   doneCount: number
   /** Denominador honesto = dias con plan U dias con sesion (nunca menor que doneCount). */
   plannedCount: number
@@ -77,29 +86,84 @@ export function plannedDatesForWeek(
 }
 
 /**
+ * FUENTE de completitud por (plan, dia) que consume el greedy. Reemplaza al viejo `workoutPlanDays`
+ * (Set de claves `planId|ymd` = "hay >=1 log"), que era la copia RN del concepto de "hecho" y mentia con
+ * una sola serie registrada:
+ *   · `blocksByPlan` — bloques VIGENTES de cada plan (`{ id, sets }`), el denominador del dia.
+ *   · `loggedSetsByPlanDay` — series registradas por dia calendario Santiago: clave `planId|ymd` →
+ *     `{ [blockId]: cantidad }` (armado con `countLoggedSetsByBlock` del engine, que ya deduplica por
+ *     `(block_id, set_number)`).
+ * Un plan/dia ausente en los mapas simplemente no tiene series ⇒ `none`.
+ */
+export interface PlanWeekCompletionSource {
+  blocksByPlan: ReadonlyMap<string, readonly DayCompletionBlock[]>
+  loggedSetsByPlanDay: ReadonlyMap<string, Readonly<Record<string, number>>>
+}
+
+/** Estado de completitud de UN plan en UN dia calendario, via la regla unica del engine. */
+export function planDayCompletionState(
+  source: PlanWeekCompletionSource,
+  planId: string,
+  dateIso: string,
+): DayCompletionState {
+  return deriveDayCompletion({
+    blocks: source.blocksByPlan.get(planId) ?? [],
+    loggedSetsByBlock: source.loggedSetsByPlanDay.get(`${planId}|${dateIso}`) ?? {},
+  }).state
+}
+
+/** Resultado de la atribucion greedy de UN dia del programa. */
+export interface GreedyPlanDay {
+  /** Estado del dia ya atribuido (`none` incluye los dias futuros). */
+  state: DayCompletionState
+  /**
+   * Fecha ISO de la sesion que se atribuye a este dia cuando NO ocurrio en su propia fecha
+   * (recuperacion/adelanto); `null` si la sesion es de su fecha o si no hay sesion. Aplica tanto al dia
+   * cerrado (`done` → copy "Hecho el jueves") como al parcial (`in_progress` → sheet "Entrenamiento
+   * incompleto" sobre esa fecha).
+   */
+  doneOnDate: string | null
+}
+
+/**
  * ATRIBUCION GREEDY POR PLAN (nucleo PURO compartido) — espejo del fix web `weekPendingWorkouts.ts`
  * (deriveWeekWorkoutStatus, CEO decision 10 2026-07-22) colapsado al modelo plan-por-slot del movil:
  * cada plan ocupa UN slot (su `day_of_week`/`assigned_date`), asi las Fases 1 y 2 del web colapsan por
- * plan. Un dia queda `done` si SU plan tiene un log en CUALQUIER dia de esta semana Santiago:
- *   · Fase 1: hay log en la PROPIA fecha del dia → done "en fecha" (doneOnDate = null).
- *   · Fase 2: no en su fecha pero si algun log de la semana → recuperado con el mas antiguo (doneOnDate).
- * Los dias FUTUROS nunca son elegibles. FUENTE: `workoutPlanDays` = Set de claves `planId|ymd` (dos logs
- * del mismo plan el mismo dia colapsan a uno). UNICA fuente de verdad del greedy: la usan la home
- * (`home.tsx` planDays / day-cards) y la racha del ejecutor (WeekStreakDots) — sin duplicar la logica.
+ * plan. Los dias FUTUROS nunca son elegibles.
+ *
+ * Con la regla de completitud (spec `workout-day-in-progress`) el greedy CIERRA un dia solo con `done`
+ * (100% de las series), y `in_progress` queda como senal de que la sesion existe pero no se cerro.
+ * Precedencia, en orden:
+ *   1. Su PROPIA fecha al 100% → `done` en fecha (doneOnDate null).
+ *   2. Otra fecha de la semana al 100% (la mas antigua) → `done` recuperado (doneOnDate).
+ *   3. Su propia fecha a medias → `in_progress` en fecha.
+ *   4. Otra fecha a medias (la mas antigua) → `in_progress` con esa fecha.
+ *   5. Nada → `none`.
+ * Un parcial en la propia fecha NUNCA le gana a una sesion COMPLETA del mismo plan en otro dia: si el
+ * alumno dejo el lunes a medias y lo rehizo entero el miercoles, el slot del lunes queda hecho.
+ *
+ * UNICA fuente de verdad del greedy: la usan la home (`home.tsx` planDays / day-cards) y la racha del
+ * ejecutor (WeekStreakDots) — sin duplicar la logica.
  */
 export function greedyPlanDone(
   planId: string,
   slotDateIso: string,
   isFuture: boolean,
   weekDates: string[],
-  workoutPlanDays: Set<string>,
-): { done: boolean; doneOnDate: string | null } {
-  if (isFuture) return { done: false, doneOnDate: null }
-  // Fechas (asc, Lun→Dom) de esta semana con log de ESTE plan.
-  const weekLogDates = weekDates.filter((di) => workoutPlanDays.has(`${planId}|${di}`))
-  if (weekLogDates.length === 0) return { done: false, doneOnDate: null }
-  if (weekLogDates.includes(slotDateIso)) return { done: true, doneOnDate: null } // Fase 1: en fecha.
-  return { done: true, doneOnDate: weekLogDates[0] } // Fase 2: recuperado (log mas antiguo cierra el dia).
+  source: PlanWeekCompletionSource,
+): GreedyPlanDay {
+  if (isFuture) return { state: 'none', doneOnDate: null }
+  const ownState = planDayCompletionState(source, planId, slotDateIso)
+  if (ownState === 'done') return { state: 'done', doneOnDate: null } // 1 — en fecha, cerrado.
+  // Otras fechas de la semana con sesion de ESTE plan, asc (Lun→Dom): la primera coincidencia es la mas
+  // antigua, igual que el greedy original.
+  const otherDates = weekDates.filter((di) => di !== slotDateIso)
+  const doneElsewhere = otherDates.find((di) => planDayCompletionState(source, planId, di) === 'done')
+  if (doneElsewhere) return { state: 'done', doneOnDate: doneElsewhere } // 2 — recuperado/adelantado.
+  if (ownState === 'in_progress') return { state: 'in_progress', doneOnDate: null } // 3 — a medias hoy/su dia.
+  const partialElsewhere = otherDates.find((di) => planDayCompletionState(source, planId, di) === 'in_progress')
+  if (partialElsewhere) return { state: 'in_progress', doneOnDate: partialElsewhere } // 4 — a medias otro dia.
+  return { state: 'none', doneOnDate: null } // 5 — sin sesion del plan esta semana.
 }
 
 /** Slot (fecha ISO de esta semana) que ocupa un plan: su `assigned_date` si cae en la semana, si no su
@@ -113,53 +177,69 @@ function planSlotDate(
   return null
 }
 
+/** Fechas de la semana por estado bajo la atribucion greedy (las que no aparecen no tienen sesion). */
+export interface GreedyWeekStates {
+  /** Dias cerrados al 100% (recuperaciones incluidas). */
+  doneDates: Set<string>
+  /** Dias con sesion parcial (1–99%): ni pendientes ni hechos. */
+  inProgressDates: Set<string>
+}
+
 /**
- * Conjunto de FECHAS de la semana que quedan `done` bajo la atribucion greedy por plan (recuperaciones
- * incluidas). Espejo greedy del dashboard aplicado al ejecutor: recuperar el lunes un jueves marca el
- * LUNES como done (no el jueves), igual que la web. Alimenta `deriveWeeklyStreak.doneDates` para que los
- * dots del ejecutor pinten igual que las day-cards de la home.
+ * FECHAS de la semana por estado bajo la atribucion greedy por plan. Espejo greedy del dashboard aplicado
+ * al ejecutor: recuperar el lunes un jueves marca el LUNES como done (no el jueves), igual que la web.
+ * Alimenta `deriveWeeklyStreak` para que los dots del ejecutor pinten igual que las day-cards de la home,
+ * tercera visual incluida.
  */
-export function greedyDoneDatesForWeek(
+export function greedyStatesForWeek(
   plans: Array<{ id: string; day_of_week: number | null; assigned_date: string | null }>,
-  weekLogs: Array<{ planId: string; ymd: string }>,
   weekDates: string[],
   todayIso: string,
-): Set<string> {
-  const workoutPlanDays = new Set<string>()
-  for (const l of weekLogs) workoutPlanDays.add(`${l.planId}|${l.ymd}`)
-
-  const done = new Set<string>()
+  source: PlanWeekCompletionSource,
+): GreedyWeekStates {
+  const doneDates = new Set<string>()
+  const inProgressDates = new Set<string>()
   for (const plan of plans) {
     const slot = planSlotDate(plan, weekDates)
     if (slot == null) continue
-    const isFuture = slot > todayIso
-    if (greedyPlanDone(plan.id, slot, isFuture, weekDates, workoutPlanDays).done) done.add(slot)
+    const { state } = greedyPlanDone(plan.id, slot, slot > todayIso, weekDates, source)
+    if (state === 'done') doneDates.add(slot)
+    else if (state === 'in_progress') inProgressDates.add(slot)
   }
-  return done
+  // Dos planes en el mismo slot (A/B mal armado): uno cerrado gana al parcial, sin dot ambiguo.
+  for (const iso of doneDates) inProgressDates.delete(iso)
+  return { doneDates, inProgressDates }
 }
 
 /**
  * Deriva la racha semanal. Estado por dia (Lun→Dom):
- *   · `done`    — hay sesion en esa fecha real.
- *   · `today`   — es hoy y no hay sesion (aun).
- *   · `pending` — hay plan ese dia (pasado o futuro) y no hay sesion.
- *   · `rest`    — sin plan y sin sesion (descanso).
- * Denominador honesto = |plannedDates ∪ doneDates| (una sesion extra fuera de plan suma al denominador, asi
- * doneCount nunca supera plannedCount). Copy neutro, sin culpa.
+ *   · `done`        — sesion CERRADA (100% de las series esperadas) atribuida a esa fecha.
+ *   · `in_progress` — sesion a medias (1–99%): empezada y sin cerrar. Gana a `today` (dice mas).
+ *   · `today`       — es hoy y no hay sesion (aun).
+ *   · `pending`     — hay plan ese dia (pasado o futuro) y no hay sesion.
+ *   · `rest`        — sin plan y sin sesion (descanso).
+ * Denominador honesto = |plannedDates ∪ doneDates ∪ inProgressDates| (una sesion extra fuera de plan suma
+ * al denominador, asi doneCount nunca supera plannedCount). `doneCount` cuenta SOLO los dias cerrados: un
+ * dia a medias ya no infla el "N de M" (era parte de la mentira del incidente P0). Copy neutro, sin culpa.
  */
 export function deriveWeeklyStreak(input: {
   weekDates: string[]
   plannedDates: Set<string>
   doneDates: Set<string>
+  /** Dias con sesion parcial. Opcional: sin el, la racha se comporta como antes (todo o nada). */
+  inProgressDates?: Set<string>
   todayIso: string
 }): WeeklyStreak {
   const { weekDates, plannedDates, doneDates, todayIso } = input
+  const inProgressDates = input.inProgressDates ?? new Set<string>()
   const expected = new Set<string>(plannedDates)
   for (const iso of doneDates) if (weekDates.includes(iso)) expected.add(iso)
+  for (const iso of inProgressDates) if (weekDates.includes(iso)) expected.add(iso)
 
   const dots: WeekDot[] = weekDates.map((iso, i) => {
     let state: WeekDotState
     if (doneDates.has(iso)) state = 'done'
+    else if (inProgressDates.has(iso)) state = 'in_progress'
     else if (iso === todayIso) state = 'today'
     else if (plannedDates.has(iso)) state = 'pending'
     else state = 'rest'

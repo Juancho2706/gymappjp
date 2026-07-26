@@ -67,6 +67,14 @@ fuera, RN-extras estricto).
 | Aplicada (wave 4B.6, `6338f4a4`) | 4B-13 Builder drafts (autosave + Restaurar + guard warn-only; cierra la ola) |
 | Fuera de rama | 4B-16 deuda transversal nutrition-pro (toca web+packages; abrir en rama de web) |
 
+## Estado "En progreso" del día (O2, cerrado estático 2026-07-26)
+
+SDD: [`docs/specs/workout-day-in-progress/`](../specs/workout-day-in-progress/SPEC.md). Regla única
+`deriveDayCompletion` en `@eva/workout-engine` (done = 100% de series; cardio sin `sets` = 1 unidad)
+con 12 fixtures de paridad consumidos por los tests de AMBAS plataformas. Web y RN comparten visual
+(`CircleDashed` + "En progreso") y copy del sheet ("Entrenamiento incompleto"). La racha del RPC no
+se tocó (decisión CEO). Falta QA device (4 escenarios del PLAN).
+
 ### Dónde retomar
 
 1. Abrir la ola 5 (builder y programas de entrenamiento del coach) con inventario contra código. El ejecutor V3 del alumno ya está integrado en `master` (PR #170); las unidades de ola 5 que toquen el visor del alumno se contrastan contra ese código, sin coordinación pendiente.
