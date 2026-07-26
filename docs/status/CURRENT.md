@@ -14,9 +14,10 @@ Esta es la única vista global de qué está en producción, qué está en integ
 | Referencia | Estado al revisar |
 |---|---|
 | Rama de trabajo | `rnmobiledenuevo`, única rama viva junto a `master` |
-| Corte de `master` integrado | `origin/master` en `f4b8d83d` (post-merge PR #171, hotfix P0) |
-| Relación de ramas | `rnmobiledenuevo` en `80995cae` (pusheada), ADELANTE de `master` (docs sync + deuda cardio/executor + fix iOS); el hotfix P0 vive en ambas ramas (`80995cae` ≙ cherry-pick `ba9068ec`); integrar a `master` cuando el owner lo decida |
+| Corte de `master` integrado | merge de `rnmobiledenuevo` completo (ola post-incidente P0) — ramas igualadas por decisión del owner 2026-07-26 |
+| Relación de ramas | `master` == `rnmobiledenuevo` tras el merge de la ola post-incidente; trabajo nuevo sigue en `rnmobiledenuevo` |
 | Hotfix P0 2026-07-26 (PR #171, EN PROD) | Ejecutor alumno perdía series al reentrar un día recuperado: `?fecha=<hoy>` activaba el modo solo-UPDATE (jamás inserta) y la cola offline descartaba cada rechazo `past_set_not_found`. Fix en 3 capas (action, page, `buildWorkoutDoneEditHref`); `?fecha=` queda reservado a días realmente pasados. CI quality verde ([run 30214247333](https://github.com/Juancho2706/gymappjp/actions/runs/30214247333)), Vercel prod READY |
+| Ola post-incidente (local → merge) | Telemetría de descartes por code en la cola offline (web+RN, evento Sentry por causa, chip RN honesto), `CountUpText` compartido que extingue la clase EVA-NEXTJS-10/E (7 superficies migradas), dedup (plan, día) en la atribución semanal, banner RN acotado al plan de hoy, y paquete SDD `docs/specs/workout-day-in-progress` (decisión CEO O2 "En progreso", implementación pendiente). Suite completa 3964 tests verdes |
 | PR #170 (mergeada) | Ejecutor V3 (ceremonia logo dark + ignición del CTA Finalizar), home alumno (link retirado + scroll-top), cardio fases A-D completas (ejes por modalidad, coach ve registros, intervalos por distancia), pulido del creador de ejercicios |
 | Migración DB | `20260725221804_cardio_modality_axes` APLICADA en LIVE antes del merge (aditiva: `exercises.cardio_modality`, Escaladora, `reps_unit` +jumps/floors) |
 | Gate `quality` | Verde en el [run 30181033720](https://github.com/Juancho2706/gymappjp/actions/runs/30181033720) sobre `baef4283`: docs, lint 0 errores, typecheck web, tokens y Vitest 3940 aprobados / 4 omitidos (330 archivos). `tsc --noEmit` web+mobile+enterprise re-ejecutados verdes en local sobre `a59acfd1` (2026-07-25) |
