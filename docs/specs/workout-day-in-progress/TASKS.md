@@ -29,7 +29,7 @@
 
 ## F4 · Cierre
 - [x] Gates: lint, typecheck, vitest targeted, tsc web + mobile.
-- [ ] QA manual 4 escenarios (parcial hoy / parcial pasado / 100% / cardio-only) — pendiente owner (device).
+- [x] QA manual (owner, 2026-07-26, preview Vercel vs prod DB): parcial hoy, parcial pasado, 100%, cardio-only y sheet/banner — aprobado. Hallazgo colateral: planes de programas inactivos con assigned_date secuestran celdas (backlog).
 - [x] `MOBILE_PARITY.md` + `CURRENT.md`.
 - [ ] QA fisica device: pendiente owner.
 
