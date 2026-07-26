@@ -6,6 +6,7 @@ import {
     buildWorkoutRepeatHref,
     buildWorkoutFromDoneHref,
     buildWorkoutRecoverHref,
+    buildWorkoutDoneEditHref,
 } from './executor-recovery'
 
 describe('weekdayNameFromIso', () => {
@@ -60,5 +61,35 @@ describe('builders de URL', () => {
 
     it('recuperar pendiente lleva ?recuperar', () => {
         expect(buildWorkoutRecoverHref(base, planId, '2026-07-20')).toBe('/c/mi-coach/workout/plan-123?recuperar=2026-07-20')
+    })
+})
+
+describe('buildWorkoutDoneEditHref (guard del incidente 2026-07-26)', () => {
+    const base = '/c/mi-coach'
+    const planId = 'plan-123'
+    const hoy = '2026-07-26'
+
+    it('celda de HOY ya hecha usa el flujo normal de hoy', () => {
+        expect(buildWorkoutDoneEditHref(base, planId, hoy, hoy, true)).toBe('/c/mi-coach/workout/plan-123?desde=hecho')
+    })
+
+    it('día recuperado HOY desde la celda de otro día NO emite ?fecha (regresión del incidente)', () => {
+        // Viernes pendiente recuperado el domingo: `doneOnDate` = hoy y la celda NO es hoy. Con
+        // `?fecha=<hoy>` el ejecutor entraba en modo solo-UPDATE y descartaba cada serie nueva.
+        const href = buildWorkoutDoneEditHref(base, planId, hoy, hoy, false)
+        expect(href).toBe('/c/mi-coach/workout/plan-123?desde=hecho')
+        expect(href).not.toContain('fecha=')
+    })
+
+    it('sesión REALMENTE pasada conserva ?fecha (modo solo-UPDATE, anti-farmeo)', () => {
+        expect(buildWorkoutDoneEditHref(base, planId, '2026-07-24', hoy, false)).toBe(
+            '/c/mi-coach/workout/plan-123?fecha=2026-07-24'
+        )
+    })
+
+    it('celda de HOY manda aunque la sesión esté atribuida a otra fecha', () => {
+        expect(buildWorkoutDoneEditHref(base, planId, '2026-07-24', hoy, true)).toBe(
+            '/c/mi-coach/workout/plan-123?desde=hecho'
+        )
     })
 })

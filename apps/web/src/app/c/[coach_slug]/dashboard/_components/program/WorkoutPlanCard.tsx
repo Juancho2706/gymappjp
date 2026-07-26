@@ -6,9 +6,8 @@ import { CheckCircle2, ChevronRight, Play } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useBasePath } from '@/components/client/BasePathProvider'
 import {
-    buildWorkoutEditHref,
+    buildWorkoutDoneEditHref,
     buildWorkoutRepeatHref,
-    buildWorkoutFromDoneHref,
     buildWorkoutRecoverHref,
     weekdayNameFromIso,
     doneAttributionLabel,
@@ -60,6 +59,11 @@ export function WorkoutPlanCards({
     const [sheetItem, setSheetItem] = useState<WorkoutPlanCardItem | null>(null)
     // QA6: morph de lanzamiento desde el rect de la card (mismo destino de navegación).
     const { launch, morph } = useWorkoutLaunch()
+
+    const todayIso = getTodayInSantiago().iso
+    // Fecha REAL de la sesión del sheet: si el día se recuperó en otra fecha manda `doneOnDate`, no
+    // la fecha de la celda. Una sola fuente para editar / repetir / decidir si repetir se ofrece.
+    const sessionDate = sheetItem ? (sheetItem.doneOnDate ?? sheetItem.dateIso) : null
 
     return (
         <>
@@ -165,22 +169,23 @@ export function WorkoutPlanCards({
                 })}
             </div>
 
-            {sheetItem ? (
+            {sheetItem && sessionDate ? (
                 <WorkoutDoneSheet
                     open={sheetItem != null}
                     onOpenChange={(o) => { if (!o) setSheetItem(null) }}
                     title={sheetItem.title}
                     subtitle={`${weekdayNameFromIso(sheetItem.dateIso)} — Día ${sheetItem.day_of_week ?? 1} · ${fmtShortDate(sheetItem.dateIso)}`}
-                    // HOY hecho → editar es el flujo normal de hoy (`?desde=hecho`, sin modo UPDATE-only de
-                    // día pasado); OTRO día → editar esa fecha con `?fecha=`.
-                    editHref={sheetItem.isToday
-                        ? buildWorkoutFromDoneHref(base, sheetItem.id)
-                        : buildWorkoutEditHref(base, sheetItem.id, sheetItem.doneOnDate ?? sheetItem.dateIso)}
+                    // Sesión de HOY (celda de hoy hecha, o día recuperado HOY desde otra celda) → flujo
+                    // normal de hoy (`?desde=hecho`). Solo una sesión REALMENTE pasada usa `?fecha=`.
+                    // Incidente 2026-07-26: la celda de otro día recuperada HOY mandaba `?fecha=<hoy>`,
+                    // que abre el modo solo-UPDATE del día pasado y no inserta series nuevas — el alumno
+                    // perdió todo lo que registró después de la serie 1.
+                    editHref={buildWorkoutDoneEditHref(base, sheetItem.id, sessionDate, todayIso, sheetItem.isToday)}
                     // Repetir siembra los valores de la fecha REAL de la sesión (la misma que edita el
                     // botón de arriba): `doneOnDate` cuando el día se recuperó en otra fecha.
-                    repeatHref={buildWorkoutRepeatHref(base, sheetItem.id, sheetItem.doneOnDate ?? sheetItem.dateIso)}
+                    repeatHref={buildWorkoutRepeatHref(base, sheetItem.id, sessionDate)}
                     // Si esa sesión es de HOY, repetir pisaría la misma fila (índice único por día) → se oculta.
-                    showRepeat={(sheetItem.doneOnDate ?? sheetItem.dateIso) !== getTodayInSantiago().iso}
+                    showRepeat={sessionDate !== todayIso}
                     onLaunch={launch}
                 />
             ) : null}

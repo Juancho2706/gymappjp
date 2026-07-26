@@ -58,6 +58,34 @@ export function buildWorkoutFromDoneHref(base: string, planId: string): string {
     return `${base}/workout/${planId}?desde=hecho`
 }
 
+/**
+ * Href del botón "Revisar y editar" del sheet de doble intención (día ya hecho).
+ *
+ * Incidente 2026-07-26 (alumno perdió las series de su entreno): un día recuperado HOY —celda de
+ * otro día de la semana, `doneOnDate` = hoy— abría `?fecha=<hoy>`, es decir el modo solo-UPDATE del
+ * día pasado, que JAMÁS inserta: cada serie nueva moría con `past_set_not_found` y la cola offline
+ * la descartaba como fallo permanente. Por eso `?fecha=` queda reservado a sesiones REALMENTE
+ * pasadas (anti-farmeo de adherencia retroactiva, decisión de diseño intacta); si la sesión es de
+ * HOY el upsert normal es seguro e idéntico a entrar sin query.
+ *
+ * @param sessionDate  Fecha REAL de la sesión: `doneOnDate` si el día se recuperó en otra fecha, si
+ *                     no la fecha de la celda.
+ * @param todayIso     Hoy en Santiago (`getTodayInSantiago().iso`).
+ * @param isTodayCell  La celda es la de HOY (ya hecha) → flujo normal de hoy aunque `sessionDate`
+ *                     venga atribuida a otra fecha.
+ */
+export function buildWorkoutDoneEditHref(
+    base: string,
+    planId: string,
+    sessionDate: string,
+    todayIso: string,
+    isTodayCell = false
+): string {
+    return isTodayCell || sessionDate === todayIso
+        ? buildWorkoutFromDoneHref(base, planId)
+        : buildWorkoutEditHref(base, planId, sessionDate)
+}
+
 /** `${base}/workout/${planId}?recuperar=YYYY-MM-DD` — abrir un pendiente de la semana con banner. */
 export function buildWorkoutRecoverHref(base: string, planId: string, fecha: string): string {
     return `${base}/workout/${planId}?recuperar=${fecha}`

@@ -25,6 +25,9 @@ vi.mock('next/cache', () => ({
 }))
 
 import { logSetAction } from './workout-log.actions'
+// Mismo "hoy Santiago" que resuelve el action (función pura, sin mock): así el caso
+// `target_date == HOY` no depende de congelar el reloj del runner.
+import { getTodayInSantiago } from '@/lib/date-utils'
 
 // UUID RFC 4122 válido (versión 4, variante 8): `z.string().uuid()` de Zod v4 rechaza los que no
 // cumplen los nibbles de versión/variante (gotcha de seeds no-RFC del repo).
@@ -123,6 +126,7 @@ function buildFormWithTarget(targetDate: string) {
 // '2999-12-31' SIEMPRE futuro, así que no dependen de `getTodayInSantiago()` congelado.
 const PAST_DATE = '2020-01-01'
 const FUTURE_DATE = '2999-12-31'
+const TODAY_DATE = getTodayInSantiago().iso
 
 describe('logSetAction — resiliencia WA-2', () => {
     beforeEach(() => {
@@ -283,6 +287,40 @@ describe('logSetAction — edición de día pasado (target_date, E1.5)', () => {
 
         expect(result).toEqual({ error: 'Fecha inválida.', code: 'validation' })
         expect(logs.inserts).toHaveLength(0)
+    })
+
+    /**
+     * Incidente 2026-07-26 (alumno perdió series): un día recuperado quedaba atribuido a HOY, el sheet
+     * "Revisar y editar" linkeaba a `?fecha=<hoy>` y el modo solo-UPDATE rechazaba TODA serie nueva con
+     * `past_set_not_found` (fallo permanente ⇒ la cola offline la descartaba). `target_date == HOY`
+     * debe degradar al upsert normal de hoy; el anti-farmeo sigue vivo SÓLO para fechas pasadas.
+     */
+    it('target_date == HOY + sin fila previa ⇒ INSERT normal (nunca past_set_not_found)', async () => {
+        const logs = makeWorkoutLogsMock({ selectResults: [{ data: [] }], insertResult: { error: null } })
+        wireSupabase(logs)
+
+        const result = await logSetAction({}, buildFormWithTarget(TODAY_DATE))
+
+        expect(result.success).toBe(true)
+        expect(result.code).toBeUndefined()
+        expect(logs.inserts).toHaveLength(1)
+        expect(logs.inserts[0]).toMatchObject({ client_id: 'client-1', block_id: BLOCK_ID, set_number: 1 })
+        expect(logs.updates).toHaveLength(0)
+    })
+
+    it('target_date == HOY + fila existente ⇒ UPDATE sobre esa fila (upsert de hoy)', async () => {
+        const logs = makeWorkoutLogsMock({
+            selectResults: [{ data: [{ id: 'today-row' }] }],
+            updateResult: { error: null },
+        })
+        wireSupabase(logs)
+
+        const result = await logSetAction({}, buildFormWithTarget(TODAY_DATE))
+
+        expect(result.success).toBe(true)
+        expect(logs.inserts).toHaveLength(0)
+        expect(logs.updates).toHaveLength(1)
+        expect(logs.eqCalls).toContainEqual(['id', 'today-row'])
     })
 
     it('target_date + duplicados ⇒ UPDATE al más reciente + purga (misma semántica que hoy)', async () => {
