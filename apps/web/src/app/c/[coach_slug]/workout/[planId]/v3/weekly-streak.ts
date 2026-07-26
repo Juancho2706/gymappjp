@@ -6,7 +6,9 @@
  * sin completar (`pending`) NO se pinta como fallo — se muestra igual que un día futuro pendiente
  * (`todo`), de modo que el mensaje siempre es "vas 3 de 4", jamás "fallaste el martes".
  *
- * N (`done`)     = sesiones hechas esta semana (días con estado `done`, incluye recuperaciones).
+ * N (`done`)     = sesiones COMPLETAS esta semana (estado `done` = 100% de las series, incluye
+ *                  recuperaciones). Un día a medias (`in_progress`) NO suma: la racha visual dejó de
+ *                  heredar la mentira de "1 serie = hecho" (spec `workout-day-in-progress`).
  * M (`planned`)  = días con plan esta semana (todo lo que no sea `rest`).
  * `label`        = "N de M" para el copy; `null` cuando no hay plan (M = 0) → la UI omite la pieza.
  *
@@ -15,7 +17,7 @@
  */
 
 /** Estado de un día tal como lo emite `deriveWeekWorkoutStatus`. */
-export type WeekDayStatus = 'rest' | 'done' | 'today' | 'pending' | 'upcoming'
+export type WeekDayStatus = 'rest' | 'done' | 'in_progress' | 'today' | 'pending' | 'upcoming'
 
 /** Entrada mínima por día (subconjunto estructural de `WeekDay`). */
 export interface WeekStatusDaySource {
@@ -25,8 +27,11 @@ export interface WeekStatusDaySource {
     isToday: boolean
 }
 
-/** Estado visual del punto (dot). `todo` = pendiente sin culpa (pasado o futuro por igual). */
-export type WeeklyStreakDotState = 'done' | 'today' | 'rest' | 'todo'
+/**
+ * Estado visual del punto (dot). `todo` = pendiente sin culpa (pasado o futuro por igual);
+ * `partial` = empezado y sin cerrar (dot a medio llenar, tampoco es culpa).
+ */
+export type WeeklyStreakDotState = 'done' | 'partial' | 'today' | 'rest' | 'todo'
 
 export interface WeeklyStreakDay {
     dayOfWeek: number
@@ -45,11 +50,16 @@ export interface WeeklyStreak {
     label: string | null
 }
 
-/** Estado de dot sin culpa: `pending`/`upcoming` colapsan a `todo` (mismo visual, cero guilt). */
+/**
+ * Estado de dot sin culpa: `pending`/`upcoming` colapsan a `todo` (mismo visual, cero guilt).
+ * `in_progress` gana sobre `today` incluso siendo hoy: el dato útil es "lo empezaste, falta cerrarlo".
+ */
 function dotStateFor(status: WeekDayStatus): WeeklyStreakDotState {
     switch (status) {
         case 'done':
             return 'done'
+        case 'in_progress':
+            return 'partial'
         case 'today':
             return 'today'
         case 'rest':

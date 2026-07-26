@@ -10,7 +10,8 @@ import { getActiveOrgAnnouncements } from '../../../lib/org-announcements'
 import { useEntitlements } from '../../../lib/entitlements'
 import { useTheme } from '../../../context/ThemeContext'
 import { resetChromeScroll, useAlumnoScrollHandler } from '../../../lib/alumno-chrome-scroll'
-import { formatLongDate, getSantiagoIsoYmdForUtcInstant, getTodayInSantiago, formatRelativeDate, timeGreeting } from '../../../lib/date-utils'
+import { countLoggedSetsByBlock, deriveDayCompletion, type DayCompletionBlock, type LoggedSetRow } from '@eva/workout-engine'
+import { formatLongDate, getSantiagoIsoYmdForUtcInstant, getSantiagoUtcBoundsForDay, getTodayInSantiago, formatRelativeDate, isoDateAddDays, timeGreeting } from '../../../lib/date-utils'
 import { AppBackground } from '../../../components/AppBackground'
 import { ALUMNO_TABBAR_CLEARANCE } from '../../../components/alumno/AlumnoMobileChrome'
 import { Skeleton } from '../../../components/Skeleton'
@@ -23,7 +24,7 @@ import { computeCheckInReminder } from '../../../lib/checkin-thresholds'
 import { programWeekIndex1Based, weekIndexToVariantLetter, effectiveWeekVariantFromPlans, workoutPlanMatchesVariant } from '../../../lib/program-week-variant'
 import { HeroSection } from '../../../components/alumno/home/HeroSection'
 import { useSessionMorph } from '../../../components/alumno/workout/v3/session-morph'
-import { greedyPlanDone } from '../../../components/alumno/workout/v3/weekly-streak'
+import { greedyPlanDone, weekDatesMondayToSunday, type PlanWeekCompletionSource } from '../../../components/alumno/workout/v3/weekly-streak'
 import { CoachPresenceCard } from '../../../components/alumno/home/CoachPresenceCard'
 import { MomentumCard, type MomentumDay } from '../../../components/alumno/home/MomentumCard'
 import { ActiveProgramSection } from '../../../components/alumno/home/ActiveProgramSection'
@@ -76,12 +77,15 @@ export default function AlumnoHomeScreen() {
   const [data, setData] = useState<HomeData | null>(null)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
-  // Sub-P1 (done-por-plan): set de claves `${planId}|${ymdSantiago}` — un dia del
-  // programa solo se marca 'done' si hay log de ESE plan en ese mismo dia calendario
-  // Santiago (paridad web weekPendingWorkouts.ts:142-149, `plan_id===dayPlan.id &&
-  // getSantiagoIsoYmdForUtcInstant(logged_at)===dStr`), no por cualquier entreno del
-  // dia. Vive fuera de HomeData (types.ts es off-limits en esta tarea).
-  const [workoutPlanDays, setWorkoutPlanDays] = useState<Set<string>>(() => new Set())
+  // Series registradas de la SEMANA por (plan, dia): clave `${planId}|${ymdSantiago}` →
+  // `{ [blockId]: cantidad }`. Reemplaza al viejo Set `planId|ymd` ("hay >=1 log"), que
+  // marcaba un dia como hecho con UNA sola serie (incidente P0 2026-07-26): con las series
+  // por bloque el estado del dia lo decide `deriveDayCompletion` del engine — la MISMA
+  // regla que la web (spec `workout-day-in-progress`, decision CEO O2). Sigue la dimension
+  // plan_id que exige la paridad web (weekPendingWorkouts.ts:142-149): un dia solo cuenta
+  // sesiones de SU plan, no cualquier entreno del dia. Vive fuera de HomeData (types.ts
+  // describe el fetch de 30 dias, esta lectura es semanal).
+  const [loggedSetsByPlanDay, setLoggedSetsByPlanDay] = useState<Map<string, Record<string, number>>>(() => new Map())
   // Señal de frescura para los widgets que fetchean por su cuenta (p.ej.
   // NutritionDailySummary): se incrementa en cada load() exitoso (montaje,
   // pull-to-refresh, onSaved) para que el widget re-consulte y no quede congelado
@@ -124,8 +128,16 @@ export default function AlumnoHomeScreen() {
 
     const { iso: todayIso } = getTodayInSantiago()
     const since30Iso = isoDate(new Date(Date.now() - 29 * MS_DAY))
+    // Ventana UTC de la SEMANA Santiago (Lun→Dom) para la lectura serie-a-serie que alimenta el estado de
+    // las day-cards. Margen de ±1 dia a proposito: `derived` ancla su semana con la fecha LOCAL del
+    // dispositivo y esta con la de Santiago — en un telefono con otro huso ambas pueden diferir un dia, y
+    // un lookup por clave exacta `planId|ymd` no perdona un dia faltante. El margen no cambia semantica
+    // (las claves fuera de la semana derivada simplemente no se consultan).
+    const santiagoWeek = weekDatesMondayToSunday(todayIso)
+    const { startIso: weekStartIso } = getSantiagoUtcBoundsForDay(isoDateAddDays(santiagoWeek[0], -1))
+    const { endIso: weekEndIso } = getSantiagoUtcBoundsForDay(isoDateAddDays(santiagoWeek[6], 1))
 
-    const [{ data: programData }, { data: workoutRows }, { data: nutritionRows }, { data: checkInRows }, { data: coachData }, habitsData, announcements, { data: streakData }] =
+    const [{ data: programData }, { data: workoutRows }, { data: weekSetRows }, { data: nutritionRows }, { data: checkInRows }, { data: coachData }, habitsData, announcements, { data: streakData }] =
       await Promise.all([
         supabase
           .from('workout_programs')
@@ -133,15 +145,28 @@ export default function AlumnoHomeScreen() {
           .eq('client_id', client.id)
           .eq('is_active', true)
           .maybeSingle(),
+        // 30 dias — solo FECHAS de entreno (momentum/cumplimiento) y actividad reciente. Ya no trae
+        // `block_id`/`workout_blocks(plan_id)`: el estado por dia se calcula con la lectura semanal de
+        // abajo, que no depende del `limit(200)` (200 series se agotan en ~6 sesiones y truncaban la
+        // semana en un alumno con volumen alto).
         supabase
           .from('workout_logs')
-          // `workout_blocks ( plan_id )` = plan dueño del log (sub-P1 done-por-plan);
-          // mismo embed que web dashboard.queries.ts:150 (`workout_blocks(plan_id)`).
-          .select('id, logged_at, exercise_name_at_log, block_id, workout_blocks ( plan_id )')
+          .select('id, logged_at, exercise_name_at_log')
           .eq('client_id', client.id)
           .gte('logged_at', `${since30Iso}T00:00:00.000Z`)
           .order('logged_at', { ascending: false })
           .limit(200),
+        // SEMANA serie-a-serie — insumo de la regla de completitud (spec `workout-day-in-progress`):
+        // `block_id` + `set_number` dan las series por bloque y `workout_blocks ( plan_id )` el plan dueño
+        // del log (mismo embed que web dashboard.queries.ts:150). Acotada a la semana ⇒ el volumen es de
+        // una semana de entreno, no de 30 dias.
+        supabase
+          .from('workout_logs')
+          .select('logged_at, block_id, set_number, workout_blocks ( plan_id )')
+          .eq('client_id', client.id)
+          .gte('logged_at', weekStartIso)
+          .lt('logged_at', weekEndIso)
+          .limit(1000),
         supabase
           .from('daily_nutrition_logs')
           .select('id, log_date')
@@ -203,26 +228,32 @@ export default function AlumnoHomeScreen() {
         }
       : null
 
+    const rows = (workoutRows ?? []) as { id: string; logged_at: string; exercise_name_at_log: string | null }[]
+    const workoutDates = new Set(rows.map((r) => getSantiagoIsoYmdForUtcInstant(r.logged_at)))
+
     // `as unknown as` (mismo patron que web dashboard.queries.ts:155): el embed to-one
     // `workout_blocks` llega como OBJETO en runtime, pero los tipos generados infieren
     // array — se overridea la cardinalidad al shape real que consume web.
-    const rows = (workoutRows ?? []) as unknown as { id: string; logged_at: string; exercise_name_at_log: string | null; block_id: string | null; workout_blocks: { plan_id: string | null } | null }[]
-    const workoutDates = new Set(rows.map((r) => getSantiagoIsoYmdForUtcInstant(r.logged_at)))
-    // Set plan-dia (sub-P1): clave `${planId}|${ymdSantiago}` por log con plan dueño.
-    // MISMO helper Santiago que workoutDates → mismo dia calendario; solo agrega la
-    // dimension plan_id que exige web (weekPendingWorkouts.ts:145-148).
-    const workoutPlanDays = new Set<string>()
-    for (const r of rows) {
+    const weekRows = (weekSetRows ?? []) as unknown as (LoggedSetRow & { logged_at: string; workout_blocks: { plan_id: string | null } | null })[]
+    // Series por (plan, dia) — el bucketing por bloque (con dedup de `(block_id, set_number)`, que la cola
+    // offline puede duplicar antes de reconciliar) lo hace `countLoggedSetsByBlock` del engine: web y RN
+    // no vuelven a escribirlo. MISMO helper Santiago que workoutDates → mismo dia calendario.
+    const rowsByPlanDay = new Map<string, LoggedSetRow[]>()
+    for (const r of weekRows) {
       const planId = r.workout_blocks?.plan_id
-      if (!planId) continue
-      workoutPlanDays.add(`${planId}|${getSantiagoIsoYmdForUtcInstant(r.logged_at)}`)
+      if (!planId || !r.block_id) continue
+      const key = `${planId}|${getSantiagoIsoYmdForUtcInstant(r.logged_at)}`
+      const bucket = rowsByPlanDay.get(key)
+      if (bucket) bucket.push(r)
+      else rowsByPlanDay.set(key, [r])
     }
-    const todayLoggedByBlock = new Map<string, number>()
-    for (const r of rows) {
-      if (!r.block_id) continue
-      if (getSantiagoIsoYmdForUtcInstant(r.logged_at) !== todayIso) continue
-      todayLoggedByBlock.set(r.block_id, (todayLoggedByBlock.get(r.block_id) ?? 0) + 1)
-    }
+    const loggedSetsByPlanDay = new Map<string, Record<string, number>>()
+    for (const [key, bucket] of rowsByPlanDay) loggedSetsByPlanDay.set(key, countLoggedSetsByBlock(bucket))
+    // Progreso del hero (series por bloque de HOY): los ids de bloque son unicos por plan, asi que contar
+    // todas las series de hoy y leerlas por bloque equivale a filtrar por plan.
+    const todayLoggedByBlock = new Map<string, number>(
+      Object.entries(countLoggedSetsByBlock(weekRows.filter((r) => getSantiagoIsoYmdForUtcInstant(r.logged_at) === todayIso))),
+    )
 
     const welcomeModal = (coachData as any)?.welcome_modal_enabled
       ? {
@@ -250,7 +281,7 @@ export default function AlumnoHomeScreen() {
       welcomeModal,
       streak,
     })
-    setWorkoutPlanDays(workoutPlanDays)
+    setLoggedSetsByPlanDay(loggedSetsByPlanDay)
     setReloadKey((k) => k + 1)
     setLoading(false)
     setRefreshing(false)
@@ -306,6 +337,12 @@ export default function AlumnoHomeScreen() {
     const dbDayByDate = new Map<string, number>()
     for (let i = 0; i < 7; i++) dbDayByDate.set(weekDates[i], jsDayToDbDay(new Date(monday.getTime() + i * MS_DAY).getDay()))
 
+    // Denominador de cada dia: bloques VIGENTES del plan (`sets` null/0 = 1 unidad, regla del engine).
+    // Ya viajan en el fetch del programa (`workout_blocks ( id, sets, ... )`), no hay query extra.
+    const blocksByPlan = new Map<string, DayCompletionBlock[]>()
+    for (const p of plans) blocksByPlan.set(p.id, p.blocks.map((b) => ({ id: b.id, sets: b.sets })))
+    const completionSource: PlanWeekCompletionSource = { blocksByPlan, loggedSetsByPlanDay }
+
     const programPlans = plans.filter((p) => p.day_of_week != null && workoutPlanMatchesVariant(p, activeVariant, abMode))
     // ATRIBUCION GREEDY POR PLAN — espejo EXACTO del fix web weekPendingWorkouts.ts (Paso 2+3,
     // atribucion greedy, CEO decision 10 2026-07-22): un dia X queda 'done' si SU plan tiene un log
@@ -314,11 +351,14 @@ export default function AlumnoHomeScreen() {
     //   Fase 1: el log en la PROPIA fecha del dia cierra "en fecha" (doneOnDate=null), consume su log.
     //   Fase 2: los logs sobrantes cierran el dia PENDIENTE mas antiguo del plan (recuperacion).
     // En el modelo plan-centrico del movil cada plan es UN slot (su day_of_week), asi que las dos
-    // fases del web colapsan por plan: si hay log en su propia fecha → done en fecha; si no y hay
-    // algun log de la semana → done recuperado con el mas antiguo. Los dias FUTUROS nunca son
+    // fases del web colapsan por plan: si hay sesion en su propia fecha → cierra en fecha; si no y hay
+    // alguna sesion de la semana → recuperado con la mas antigua. Los dias FUTUROS nunca son
     // elegibles. NO toca momentum/racha (cuentan la fecha real by design) — solo descubribilidad +
-    // estado visual. FUENTE: el movil solo tiene `workoutPlanDays` (Set `planId|ymd`, granularidad
-    // (plan,dia); dos logs del mismo plan el mismo dia colapsan a uno) — fiel para "que dias hay sesion".
+    // estado visual.
+    // COMPLETITUD (spec `workout-day-in-progress`, CEO O2 2026-07-26): el greedy ya no cierra con ">=1
+    // log" sino con el 100% de las series esperadas (`deriveDayCompletion` del engine, misma regla que la
+    // web); una sesion a medias deja el dia en 'in_progress' — ni pendiente (ya entreno) ni hecho (le
+    // faltan series), y su day-card lleva al ejecutor en vez del sheet "Ya hiciste este entrenamiento".
     const planDays: PlanDayView[] = programPlans.map((plan) => {
       const dow = plan.day_of_week as number
       const idx = ((dow - 1) % 7 + 7) % 7
@@ -327,11 +367,14 @@ export default function AlumnoHomeScreen() {
       const isFuture = dIso > todayIso
       // Atribucion greedy por plan (Fase 1 en-fecha / Fase 2 recuperacion): helper PURO compartido con la
       // racha del ejecutor (weekly-streak.ts) — UNICA fuente de verdad del greedy, sin duplicar la logica.
-      const { done, doneOnDate } = greedyPlanDone(plan.id, dIso, isFuture, weekDates, workoutPlanDays)
-      const status = done ? 'done' : isToday ? 'today' : isFuture ? 'upcoming' : 'pending'
+      const { state, doneOnDate } = greedyPlanDone(plan.id, dIso, isFuture, weekDates, completionSource)
+      const status: PlanDayView['status'] =
+        state === 'done' ? 'done' : state === 'in_progress' ? 'in_progress' : isToday ? 'today' : isFuture ? 'upcoming' : 'pending'
       const doneOnLabel = doneOnDate ? DAY_FULL[dbDayByDate.get(doneOnDate) ?? 1] : null
       return { plan, status, isToday, dateIso: dIso, doneOnDate, doneOnLabel }
     })
+    // Banner ambar = dias SIN NADA registrado que ya pasaron. Un dia 'in_progress' no entra (igual que
+    // antes, cuando caia en 'done'): el alumno ya entreno ahi, el banner no lo reclama como pendiente.
     const pending: PendingDay[] = planDays
       .filter((d) => d.status === 'pending')
       .map((d) => ({ planId: d.plan.id, dayOfWeek: d.plan.day_of_week as number, dayLabel: DAY_FULL[d.plan.day_of_week as number], dateIso: d.dateIso }))
@@ -369,11 +412,20 @@ export default function AlumnoHomeScreen() {
     // registro" sin haber entrenado lo de hoy. DECISION: se acota al plan del hero (`todayPlan`, el que
     // el hero realmente pinta), no a "cualquier plan del programa" — paridad con la web, que filtra
     // `plan_id === todayPlan.id && ymdSantiago(logged_at) === hoy` (heroComplianceBundle.ts:121-129).
-    // Fuente = `workoutPlanDays` (Set `planId|ymd`), el mismo que ya alimenta el greedy de las day-cards.
-    // NO se usa el greedy aqui a proposito: el greedy puede marcar el dia de hoy como done por un log en
-    // OTRA fecha de la semana (adelantar el plan del miercoles el lunes); el hero habla del dia real, y
-    // la recuperacion/repeticion vive en las day-cards (igual que en la web).
-    const doneToday = !!todayPlan && workoutPlanDays.has(`${todayPlan.id}|${todayIso}`)
+    // Fuente = `loggedSetsByPlanDay` (series por `planId|ymd`), la misma que alimenta el greedy de las
+    // day-cards. NO se usa el greedy aqui a proposito: el greedy puede marcar el dia de hoy como done por
+    // una sesion en OTRA fecha de la semana (adelantar el plan del miercoles el lunes); el hero habla del
+    // dia real, y la recuperacion/repeticion vive en las day-cards (igual que en la web).
+    // COMPLETITUD (spec `workout-day-in-progress`): el overlay "Entrenamiento completado" ahora exige el
+    // 100% de las series del plan de hoy — con la sesion a medias el hero deja el CTA vivo en "Continuar"
+    // (lo decide `totalLogged > 0` dentro del hero) en vez de taparlo con el check verde.
+    const todayCompletion = todayPlan
+      ? deriveDayCompletion({
+          blocks: blocksByPlan.get(todayPlan.id) ?? [],
+          loggedSetsByBlock: loggedSetsByPlanDay.get(`${todayPlan.id}|${todayIso}`) ?? {},
+        })
+      : null
+    const doneToday = todayCompletion?.state === 'done'
 
     return {
       todayPlan, nextPlan, momentumDays, planDays, pending, todayPlanId, currentWeek, totalWeeks,
@@ -383,7 +435,7 @@ export default function AlumnoHomeScreen() {
       checkInEmpty: data ? checkIns.length === 0 : true,
       streak, ciVariant, ciDays, ciRelative, doneToday,
     }
-  }, [data, workoutPlanDays])
+  }, [data, loggedSetsByPlanDay])
 
   // Fallback 'Atleta' = web `DashboardHeader.tsx:13`; el saludo cargado siempre lleva
   // nombre. Durante loading NO se pinta saludo (skeleton), asi el texto aparece una

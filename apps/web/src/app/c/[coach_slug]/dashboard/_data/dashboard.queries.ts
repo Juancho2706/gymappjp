@@ -101,12 +101,22 @@ export const getActiveProgram = cache(async (clientId: string) => {
     return (data as ActiveProgramRow | null) ?? null
 })
 
-/** Planes sueltos y de programa (mismo criterio que el dashboard legacy). */
+/**
+ * Planes sueltos y de programa (mismo criterio que el dashboard legacy).
+ *
+ * `workout_blocks(id, sets)` viaja anidado (spec `workout-day-in-progress`, F2): es el DENOMINADOR
+ * de la regla de completitud del día (`deriveDayCompletion`), y los planes SUELTOS —los que no
+ * cuelgan del programa activo— no lo traen por ningún otro camino (`getActiveProgram` sólo anida los
+ * suyos). Un plan sin bloques devuelve `[]`, que la derivación distingue de "no se pidieron"
+ * (`undefined`) para no degradar días hechos a pendientes.
+ */
 export const getClientWorkoutPlans = cache(async (clientId: string) => {
     const supabase = await createClient()
     const { data } = await supabase
         .from('workout_plans')
-        .select('id, title, assigned_date, group_name, day_of_week, week_variant, program_id, created_at')
+        .select(
+            'id, title, assigned_date, group_name, day_of_week, week_variant, program_id, created_at, workout_blocks ( id, sets )'
+        )
         .eq('client_id', clientId)
         .order('assigned_date', { ascending: false })
     return data ?? []

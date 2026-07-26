@@ -12,12 +12,14 @@ import type { WeeklyStreak, WeeklyStreakDotState } from './weekly-streak'
  * día) es NEUTRO: no cuenta al denominador (ya lo excluye `computeWeeklyStreak`) NI corta la cadena, y
  * se pinta DISTINTO — punto pequeño y tenue SIN borde de "fallo" — para que la fila Lun→Dom lea a los
  * días entrenados como una cadena que SALTA los neutros, en vez de un `todo` bordeado que parecía un
- * eslabón roto. `done` usa el acento (`--exec-brand`); `today` va en anillo; `todo` (asignado sin hacer)
+ * eslabón roto. `done` usa el acento (`--exec-brand`); `partial` (empezado sin cerrar, spec
+ * `workout-day-in-progress`) lo llena a MEDIAS; `today` va en anillo; `todo` (asignado sin hacer)
  * conserva el punto del track con borde tenue. Compartida por Inicio (SessionStart) y Final V3.
  */
 
 const DOT_TITLE: Record<WeeklyStreakDotState, string> = {
     done: 'Completado',
+    partial: 'En progreso',
     today: 'Hoy',
     rest: 'Sin asignación',
     todo: 'Pendiente',
@@ -34,6 +36,14 @@ function dotStyle(state: WeeklyStreakDotState, isToday: boolean): React.CSSPrope
             background: 'var(--exec-brand)',
             border: '2px solid color-mix(in srgb, var(--exec-brand) 55%, #000)',
             boxShadow: '0 0 0 3px color-mix(in srgb, var(--exec-brand) 20%, transparent)',
+        }
+    }
+    if (state === 'partial') {
+        // Empezado sin cerrar: MEDIO dot de marca (mismo lenguaje que `done`, sin su glow ni su
+        // borde oscuro). Va antes que `today` a propósito — un día de hoy a medias se lee a medias.
+        return {
+            background: 'linear-gradient(90deg, var(--exec-brand) 0 50%, #26262f 50% 100%)',
+            border: '2px solid color-mix(in srgb, var(--exec-brand) 55%, transparent)',
         }
     }
     if (state === 'today' || isToday) {

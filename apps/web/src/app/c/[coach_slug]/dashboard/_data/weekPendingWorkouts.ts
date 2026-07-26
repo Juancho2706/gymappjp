@@ -1,3 +1,9 @@
+import {
+    countLoggedSetsByBlock,
+    deriveDayCompletion,
+    type DayCompletionBlock,
+    type LoggedSetRow,
+} from '@eva/workout-engine'
 import { getSantiagoIsoYmdForUtcInstant } from '@/lib/date-utils'
 import {
     programWeekIndex1Based,
@@ -17,9 +23,15 @@ export type WeekPlanRow = {
     program_id: string | null
     day_of_week: number | null
     week_variant?: string | null
+    /**
+     * Bloques del plan = DENOMINADOR de la completitud del día (`getClientWorkoutPlans` ampliado).
+     * `[]` = el plan REALMENTE no tiene bloques; `undefined`/`null` = el caller no los pidió → se
+     * conserva la regla legacy (≥1 serie = hecho). Ver `blocksByPlan` más abajo.
+     */
+    workout_blocks?: readonly DayCompletionBlock[] | null
 }
 
-export type WeekLogRow = {
+export type WeekLogRow = LoggedSetRow & {
     logged_at: string
     workout_blocks: { plan_id: string | null } | null
 }
@@ -29,17 +41,27 @@ export type WeekProgramRow = {
     ab_mode?: boolean | null
     start_date?: string | null
     weeks_to_repeat?: number | null
+    /** Planes anidados de `getActiveProgram` — su `workout_blocks` es la fuente preferente de targets. */
+    workout_plans?: ReadonlyArray<{
+        id: string
+        workout_blocks?: readonly DayCompletionBlock[] | null
+    }> | null
 }
 
 /** Estado de un día de la semana actual del alumno. */
 export type WeekDayStatus =
     /** No hay plan para ese día = descanso (nunca pendiente). */
     | 'rest'
-    /** El plan de ese día tiene un log en CUALQUIER día de esta semana (atribución al plan). */
+    /** El plan de ese día completó el 100% de sus series en CUALQUIER día de esta semana (atribución al plan). */
     | 'done'
-    /** Es HOY y aún sin completar (lo gestiona el hero). */
+    /**
+     * Sesión PARCIAL (1–99% de las series esperadas) en la propia fecha del día: empezado y sin
+     * cerrar. Aplica tanto a HOY como a un día pasado (spec `workout-day-in-progress`, CEO O2).
+     */
+    | 'in_progress'
+    /** Es HOY, sin ninguna serie registrada (lo gestiona el hero). */
     | 'today'
-    /** Día pasado con plan y sin log → recuperable. */
+    /** Día pasado con plan y sin ninguna serie → recuperable. */
     | 'pending'
     /** Día futuro con plan. */
     | 'upcoming'
@@ -61,6 +83,12 @@ export type WeekDay = {
      * `null` en los mismos casos que `doneOnDate`. Campo aditivo: la UI del label llega en E1.6.
      */
     doneOnLabel: string | null
+    /**
+     * Fracción [0,1] de series esperadas ya registradas EN LA PROPIA FECHA del día (regla del engine).
+     * `1` en un día `done` (incluidas las recuperaciones), `0` en descanso / futuro / sin registros.
+     * Alimenta copys y a11y ("en progreso, 40%"); nunca decide el estado por su cuenta.
+     */
+    completionPct: number
 }
 
 export type PendingWorkout = {
@@ -74,12 +102,17 @@ export type PendingWorkout = {
     dayLabel: string
     /** "Mar". */
     shortLabel: string
+    /** `pending` (cero series) o `in_progress` (empezado y sin cerrar) — cambia el copy del banner. */
+    status: Extract<WeekDayStatus, 'pending' | 'in_progress'>
 }
 
 export type WeekWorkoutStatus = {
     /** Los 7 días de la semana actual (Lun→Dom) con su estado. */
     days: WeekDay[]
-    /** Sólo los días PASADOS con plan sin registrar, del más antiguo al más nuevo. */
+    /**
+     * Días PASADOS con plan que siguen abiertos, del más antiguo al más nuevo: sin ninguna serie
+     * (`pending`) o con una sesión PARCIAL (`in_progress`). HOY nunca entra (es trabajo del hero).
+     */
     pending: PendingWorkout[]
 }
 
@@ -92,9 +125,16 @@ function pad(n: number): string {
  * (días pasados de esta semana con plan y sin registro). Función PURA — misma resolución de
  * `dayPlan` / variante A-B que `MomentumCard` y `computeWorkoutScore30d`.
  *
+ * COMPLETITUD (spec `workout-day-in-progress`, CEO O2 2026-07-26): un día sólo queda `done` con el
+ * 100% de sus series esperadas — la regla vive en `deriveDayCompletion` (`@eva/workout-engine`),
+ * única para web y RN. Una sesión de 1–99% deja el día `in_progress` (antes bastaba UNA serie para
+ * decir "hecho" y el alumno interrumpido caía al sheet "Ya hiciste este entrenamiento": incidente P0).
+ * Sólo las sesiones al 100% participan de la atribución greedy de recuperaciones (cambia el UMBRAL
+ * de "cerrado", no la atribución); una sesión parcial marca únicamente SU propia fecha.
+ *
  * Atribución al PLAN (fix del gap real, CEO decisión 10, 2026-07-22): un día X queda `done` si SU
- * plan (`dayPlan.id`) tiene un log en CUALQUIER día de esta semana Santiago — no sólo en su propia
- * fecha calendario. Así, recuperar el martes un jueves marca el martes (`doneOnDate`/`doneOnLabel` =
+ * plan (`dayPlan.id`) tiene una sesión COMPLETA en CUALQUIER día de esta semana Santiago — no sólo en
+ * su propia fecha calendario. Así, recuperar el martes un jueves marca el martes (`doneOnDate`/`doneOnLabel` =
  * "Hecho el jueves") y limpia el pendiente. Reglas de la atribución greedy por plan:
  *   1) cada día completado en SU MISMA fecha consume su propio log primero (done "en fecha", sin
  *      `doneOn` ajeno);
@@ -174,29 +214,63 @@ export function deriveWeekWorkoutStatus(input: {
         })
     }
 
-    // Paso 2: DÍAS de ESTA semana con sesión, por plan (asc). Sólo los que caen en los 7 días de la
-    // semana cuentan para la atribución (el caller trae más historial del necesario).
+    // Paso 2a: targets (denominador) por plan. Mandan los bloques ANIDADOS del programa activo
+    // (`getActiveProgram`); los planes SUELTOS aportan los suyos desde el select ampliado de
+    // `getClientWorkoutPlans`. Un plan que NO trae la relación (`undefined`) queda fuera del mapa a
+    // propósito: ver la regla legacy del paso 2b.
+    const blocksByPlan = new Map<string, readonly DayCompletionBlock[]>()
+    for (const p of activePlans) {
+        if (p.workout_blocks != null) blocksByPlan.set(p.id, p.workout_blocks)
+    }
+    for (const p of program.workout_plans ?? []) {
+        if (p.workout_blocks != null) blocksByPlan.set(p.id, p.workout_blocks)
+    }
+
+    // Paso 2b: SESIONES de esta semana, agrupadas por (plan, DÍA Santiago). Sólo los días que caen en
+    // los 7 de la semana cuentan (el caller trae más historial del necesario).
     // OJO (fix): la unidad es (plan, DÍA), no el log. `logs` trae UNA fila por SERIE, así que una
     // única sesión de 5 series dejaba 5 elementos y la fase 2 greedy los gastaba cerrando OTROS días
     // del mismo plan con la MISMA sesión (plan repetido Lun+Vie + 5 series el lunes ⇒ el viernes salía
     // "Hecho el lunes"). Deduplicar por día ANTES del greedy conserva la regla "1 sesión ↔ 1 día".
     // Espejo del Set `planId|ymd` de RN (weekly-streak.ts:99 / home.tsx `workoutPlanDays`).
     const weekDateSet = new Set(slots.map((s) => s.dateIso))
-    const weekLogDaysByPlan = new Map<string, Set<string>>()
+    type WeekSession = { planId: string; ymd: string; rows: WeekLogRow[] }
+    const sessions = new Map<string, WeekSession>()
     for (const l of logs) {
         const planId = l.workout_blocks?.plan_id
         if (!planId) continue
         const ymd = getSantiagoIsoYmdForUtcInstant(l.logged_at)
         if (!weekDateSet.has(ymd)) continue
-        const set = weekLogDaysByPlan.get(planId)
+        const key = `${planId}|${ymd}`
+        const s = sessions.get(key)
+        if (s) s.rows.push(l)
+        else sessions.set(key, { planId, ymd, rows: [l] })
+    }
+
+    // Cada sesión se mide con la regla ÚNICA del engine. Sólo las COMPLETAS entran a la atribución
+    // greedy; el `pct` por (plan, día) queda a mano para marcar el estado parcial en su propia fecha.
+    const doneDaysByPlan = new Map<string, Set<string>>()
+    const pctByPlanDay = new Map<string, number>()
+    for (const { planId, ymd, rows } of sessions.values()) {
+        const blocks = blocksByPlan.get(planId)
+        // REGLA LEGACY de compatibilidad: si el caller no pidió los bloques del plan (`undefined`, no
+        // `[]`) no hay denominador que medir, y degradar a "nunca done" convertiría días REALES en
+        // pendientes. En ese caso se conserva el comportamiento previo: ≥1 serie = hecho.
+        const completion = blocks
+            ? deriveDayCompletion({ blocks, loggedSetsByBlock: countLoggedSetsByBlock(rows) })
+            : { state: 'done' as const, pct: 1 }
+        pctByPlanDay.set(`${planId}|${ymd}`, completion.pct)
+        if (completion.state !== 'done') continue
+        const set = doneDaysByPlan.get(planId)
         if (set) set.add(ymd)
-        else weekLogDaysByPlan.set(planId, new Set([ymd]))
+        else doneDaysByPlan.set(planId, new Set([ymd]))
     }
     const weekLogsByPlan = new Map<string, string[]>()
-    for (const [planId, set] of weekLogDaysByPlan) weekLogsByPlan.set(planId, [...set].sort())
+    for (const [planId, set] of doneDaysByPlan) weekLogsByPlan.set(planId, [...set].sort())
 
-    // Paso 3: atribución greedy por plan. `doneOnByDate` mapea el día cerrado → fecha real del log que
-    // lo cerró (`null` = hecho en su propia fecha). Los días futuros nunca son elegibles.
+    // Paso 3: atribución greedy por plan (sólo sesiones COMPLETAS). `doneOnByDate` mapea el día
+    // cerrado → fecha real de la sesión que lo cerró (`null` = hecho en su propia fecha). Los días
+    // futuros nunca son elegibles.
     const doneOnByDate = new Map<string, string | null>()
     const slotsByPlan = new Map<string, DaySlot[]>()
     for (const s of slots) {
@@ -232,10 +306,16 @@ export function deriveWeekWorkoutStatus(input: {
     const days: WeekDay[] = slots.map((s) => {
         const isDone = !!s.dayPlan && doneOnByDate.has(s.dateIso)
         const doneOnDate = isDone ? (doneOnByDate.get(s.dateIso) ?? null) : null
+        // Sesión PARCIAL en la PROPIA fecha del día: las recuperaciones parciales no marcan días
+        // ajenos (la atribución greedy sigue siendo sólo de sesiones completas — SPEC no-objetivos).
+        const ownPct =
+            s.dayPlan && !s.isFuture ? (pctByPlanDay.get(`${s.dayPlan.id}|${s.dateIso}`) ?? 0) : 0
+        const isPartial = !isDone && ownPct > 0
 
         let status: WeekDayStatus
         if (!s.dayPlan) status = 'rest'
         else if (isDone) status = 'done'
+        else if (isPartial) status = 'in_progress'
         else if (s.isToday) status = 'today'
         else if (s.isFuture) status = 'upcoming'
         else status = 'pending'
@@ -251,11 +331,17 @@ export function deriveWeekWorkoutStatus(input: {
             isToday: s.isToday,
             doneOnDate,
             doneOnLabel,
+            completionPct: isDone ? 1 : ownPct,
         }
     })
 
+    // Cola de abiertos: día pasado sin nada (`pending`) o empezado a medias (`in_progress`). HOY
+    // queda fuera aunque esté a medias — el hero es el dueño del día en curso.
     const pending: PendingWorkout[] = days
-        .filter((d): d is WeekDay & { planId: string; title: string } => d.status === 'pending' && !!d.planId)
+        .filter(
+            (d): d is WeekDay & { planId: string; title: string; status: 'pending' | 'in_progress' } =>
+                (d.status === 'pending' || d.status === 'in_progress') && !d.isToday && !!d.planId
+        )
         .sort((a, b) => (a.dateIso < b.dateIso ? -1 : 1))
         .map((d) => ({
             planId: d.planId,
@@ -264,6 +350,7 @@ export function deriveWeekWorkoutStatus(input: {
             dateIso: d.dateIso,
             dayLabel: DAY_NAMES_FULL[d.dayOfWeek - 1],
             shortLabel: DAY_NAMES_SHORT[d.dayOfWeek - 1],
+            status: d.status,
         }))
 
     return { days, pending }

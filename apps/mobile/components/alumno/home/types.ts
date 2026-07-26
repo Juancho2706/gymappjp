@@ -84,8 +84,13 @@ export interface HomeData {
   streak: number
 }
 
-/** Estado de un dia del programa en la semana actual (espejo de `WeekDayStatus`, incluye 'rest' = dia sin plan). */
-export type DayStatus = 'today' | 'done' | 'pending' | 'upcoming' | 'rest'
+/**
+ * Estado de un dia del programa en la semana actual (espejo de `WeekDayStatus`, incluye 'rest' = dia sin
+ * plan). `in_progress` = sesion empezada y sin cerrar (1–99% de las series esperadas, regla unica
+ * `deriveDayCompletion` de `@eva/workout-engine`; spec `workout-day-in-progress`, CEO O2 2026-07-26):
+ * ni 'pending' (ya entreno) ni 'done' (le faltan series).
+ */
+export type DayStatus = 'today' | 'done' | 'in_progress' | 'pending' | 'upcoming' | 'rest'
 
 export interface PlanDayView {
   plan: Plan
@@ -94,9 +99,10 @@ export interface PlanDayView {
   /** Fecha ISO YYYY-MM-DD de este dia en la semana actual (para params de navegacion recuperar/fecha). */
   dateIso: string
   /**
-   * Si el dia quedo 'done' por una sesion hecha en OTRO dia de esta semana (recuperacion), fecha ISO
-   * YYYY-MM-DD de esa sesion; `null` cuando se hizo en su propia fecha (o no esta hecho). Espejo aditivo
-   * de `WeekDay.doneOnDate` (web weekPendingWorkouts.ts, atribucion greedy E1.1).
+   * Si la sesion atribuida a este dia ocurrio en OTRO dia de esta semana (recuperacion/adelanto), fecha
+   * ISO YYYY-MM-DD de esa sesion; `null` cuando se hizo en su propia fecha (o no hay sesion). Aplica a
+   * 'done' (copy "Hecho el jueves") y tambien a 'in_progress' (la sesion parcial vive en esa fecha).
+   * Espejo aditivo de `WeekDay.doneOnDate` (web weekPendingWorkouts.ts, atribucion greedy E1.1).
    */
   doneOnDate: string | null
   /** Nombre completo del dia de `doneOnDate` ("Jueves") para el copy "Hecho el jueves". `null` = mismo caso que doneOnDate. */

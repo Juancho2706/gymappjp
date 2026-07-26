@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { CheckCircle2, ChevronRight, Play } from 'lucide-react'
+import { CheckCircle2, ChevronRight, CircleDashed, Play } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useBasePath } from '@/components/client/BasePathProvider'
 import {
@@ -36,6 +36,8 @@ export type WorkoutPlanCardItem = {
     doneOnDate: string | null
     /** Nombre del día de `doneOnDate` (p. ej. "Jueves") para el label "Hecho el jueves". `null` si no aplica. */
     doneOnLabel: string | null
+    /** Fracción [0,1] de series registradas del día (sólo para el a11y label de "En progreso"). */
+    completionPct: number
 }
 
 /** "15 jul" — fecha corta es-CL de una fecha de calendario ISO (mediodía UTC, sin corrimiento). */
@@ -73,21 +75,30 @@ export function WorkoutPlanCards({
                     const dow = p.day_of_week ?? 1
                     const done = p.status === 'done'
                     const pending = p.status === 'pending'
+                    // Tercera visual (spec `workout-day-in-progress`): empezado y sin cerrar.
+                    const inProgress = p.status === 'in_progress'
                     const isToday = p.isToday
                     // Sub-label de la celda: recuperado → "Hecho el jueves"; resto conserva "Día N" / "Pendiente".
-                    const subLabel = pending
-                        ? 'Pendiente'
-                        : done && p.doneOnLabel
-                          ? doneAttributionLabel(p.doneOnLabel)
-                          : `Día ${dow}`
+                    const subLabel = inProgress
+                        ? 'En progreso'
+                        : pending
+                          ? 'Pendiente'
+                          : done && p.doneOnLabel
+                            ? doneAttributionLabel(p.doneOnLabel)
+                            : `Día ${dow}`
 
+                    // "En progreso" toma el MISMO lenguaje visual de la celda de hoy (ramp sport,
+                    // white-label) y se separa por el borde punteado: empezado ≠ cerrado. Gana sobre
+                    // `isToday` porque un día de hoy a medias es, ante todo, un día a medias.
                     const cardClass = cn(
                         'block w-24 shrink-0 rounded-control border p-3 text-left transition-colors',
-                        isToday
-                            ? 'border-sport-500 bg-sport-100'
-                            : pending
-                              ? 'border-ember-200 bg-ember-100 hover:bg-ember-200'
-                              : 'border-subtle bg-surface-card hover:bg-surface-sunken'
+                        inProgress
+                            ? 'border-dashed border-sport-400 bg-sport-100 hover:bg-sport-200'
+                            : isToday
+                              ? 'border-sport-500 bg-sport-100'
+                              : pending
+                                ? 'border-ember-200 bg-ember-100 hover:bg-ember-200'
+                                : 'border-subtle bg-surface-card hover:bg-surface-sunken'
                     )
 
                     const inner = (
@@ -96,13 +107,19 @@ export function WorkoutPlanCards({
                                 <span
                                     className={cn(
                                         'text-[10.5px] font-extrabold uppercase tracking-wide',
-                                        isToday ? 'text-sport-600' : pending ? 'text-ember-700' : 'text-subtle'
+                                        inProgress || isToday
+                                            ? 'text-sport-600'
+                                            : pending
+                                              ? 'text-ember-700'
+                                              : 'text-subtle'
                                     )}
                                 >
                                     {DAYS[dow - 1]}
                                 </span>
                                 {done ? (
                                     <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-[var(--success-500)]" />
+                                ) : inProgress ? (
+                                    <CircleDashed className="h-3.5 w-3.5 shrink-0 text-sport-600" />
                                 ) : isToday ? (
                                     <Play className="h-3 w-3 shrink-0 text-sport-600" />
                                 ) : pending ? (
@@ -115,7 +132,11 @@ export function WorkoutPlanCards({
                             <p
                                 className={cn(
                                     'mt-0.5 text-[10.5px]',
-                                    pending ? 'font-bold text-ember-700' : 'text-subtle'
+                                    inProgress
+                                        ? 'font-bold text-sport-600'
+                                        : pending
+                                          ? 'font-bold text-ember-700'
+                                          : 'text-subtle'
                                 )}
                             >
                                 {subLabel}
@@ -123,17 +144,25 @@ export function WorkoutPlanCards({
                         </>
                     )
 
-                    // QA7: TODO día con registros (hecho HOY o en OTRO día de la semana) abre el sheet de
+                    // QA7: TODO día COMPLETO (hecho HOY o en OTRO día de la semana) abre el sheet de
                     // doble intención ("Ya hiciste este entrenamiento" → Revisar y editar / Repetir hoy).
                     // El morph NO se dispara aquí: sale de la opción elegida en el sheet (onLaunch). Antes
                     // el día hecho HOY navegaba directo con `?desde=hecho` y se saltaba la ventanita (bug QA CEO).
-                    if (done) {
+                    // Un día PASADO a medias abre el MISMO sheet con el copy "Entrenamiento incompleto"
+                    // (misma doble intención); el de HOY jamás lo abre: sigue directo al ejecutor.
+                    const opensSheet = done || (inProgress && !isToday)
+                    if (opensSheet) {
+                        const pctLabel = `${Math.round(p.completionPct * 100)}%`
                         return (
                             <button
                                 key={p.id}
                                 type="button"
                                 onClick={() => setSheetItem(p)}
-                                aria-label={`${p.title} · ${p.doneOnLabel ? doneAttributionLabel(p.doneOnLabel) : 'hecho'}, revisar o repetir`}
+                                aria-label={
+                                    done
+                                        ? `${p.title} · ${p.doneOnLabel ? doneAttributionLabel(p.doneOnLabel) : 'hecho'}, revisar o repetir`
+                                        : `${p.title} · entrenamiento incompleto (${pctLabel}), revisar o repetir`
+                                }
                                 className={cardClass}
                             >
                                 {inner}
@@ -141,7 +170,8 @@ export function WorkoutPlanCards({
                         )
                     }
 
-                    // Sin registros → morph directo: pendiente de la semana → recuperar (banner ámbar); resto → normal.
+                    // Resto → morph directo: pendiente de la semana → recuperar (banner ámbar); HOY a
+                    // medias → flujo normal de hoy (el ejecutor retoma donde quedó); resto → normal.
                     const href = pending && p.dateIso
                         ? buildWorkoutRecoverHref(base, p.id, p.dateIso)
                         : buildWorkoutRepeatHref(base, p.id)
@@ -155,11 +185,13 @@ export function WorkoutPlanCards({
                                 launch(e.currentTarget, href)
                             }}
                             aria-label={
-                                pending
-                                    ? `${p.title} · pendiente, recuperar`
-                                    : isToday
-                                      ? `${p.title} · hoy`
-                                      : p.title
+                                inProgress
+                                    ? `${p.title} · en progreso (${Math.round(p.completionPct * 100)}%), continuar`
+                                    : pending
+                                      ? `${p.title} · pendiente, recuperar`
+                                      : isToday
+                                        ? `${p.title} · hoy`
+                                        : p.title
                             }
                             className={cardClass}
                         >
@@ -173,6 +205,13 @@ export function WorkoutPlanCards({
                 <WorkoutDoneSheet
                     open={sheetItem != null}
                     onOpenChange={(o) => { if (!o) setSheetItem(null) }}
+                    // Día a medias: el titular NO puede decir "ya hiciste este entrenamiento" (era
+                    // justo el trap del incidente P0). Las dos intenciones sí son las mismas.
+                    heading={
+                        sheetItem.status === 'in_progress'
+                            ? 'Entrenamiento incompleto'
+                            : 'Ya hiciste este entrenamiento'
+                    }
                     title={sheetItem.title}
                     subtitle={`${weekdayNameFromIso(sheetItem.dateIso)} — Día ${sheetItem.day_of_week ?? 1} · ${fmtShortDate(sheetItem.dateIso)}`}
                     // Sesión de HOY (celda de hoy hecha, o día recuperado HOY desde otra celda) → flujo

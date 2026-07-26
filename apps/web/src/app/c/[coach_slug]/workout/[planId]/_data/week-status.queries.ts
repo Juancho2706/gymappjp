@@ -12,6 +12,8 @@ import type { WeekStatusDaySource } from '../v3/weekly-streak'
  * (Inicio + Final V3). Reusa la MISMA derivación del dashboard (`deriveWeekWorkoutStatus`) y sus
  * queries cacheadas (`getActiveProgram` / `getClientWorkoutPlans` / `getRecentWorkoutLogs`) — cero
  * lógica duplicada — y proyecta sólo el shape mínimo (día/estado/hoy) que consume `computeWeeklyStreak`.
+ * Al reusarla hereda gratis la regla de completitud del día (spec `workout-day-in-progress`): un día a
+ * medias llega como `in_progress` y la racha lo pinta como dot parcial en vez de contarlo como hecho.
  *
  * COSTO: son 3 lecturas indexadas extra. El ejecutor V3 es el único camino (decisión CEO 2026-07-23:
  * se eliminó el flag `executor_v3`), así que `page.tsx` siempre la invoca. Sin programa activo ⇒

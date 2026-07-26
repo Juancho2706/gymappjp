@@ -11,13 +11,16 @@ import type { WeeklyStreak, WeekDotState } from './weekly-streak'
  * (`hasSignal === false`) — nunca pinta "0 de 0". Sin guilt-copy: la ausencia de sesion es un dot neutro.
  *
  * Estados del dot (QA6, decision CEO 2026-07-22 — la racha cuenta DIAS ASIGNADOS COMPLETADOS):
- *   · done    — relleno de acento (dia entrenado).
- *   · today   — anillo de acento hueco (hoy, aun sin sesion).
- *   · pending — punto tenue del track CON borde (dia ASIGNADO sin hacer, pasado o futuro; sin culpa).
- *   · rest    — dia SIN asignacion (sin plan ni descanso explicito: ambos persisten igual, sin fila de
- *               plan). NEUTRO: no cuenta al denominador ni corta la cadena, y se pinta DISTINTO — punto
- *               ~7px muy tenue SIN borde — para que la cadena de dias entrenados salte el hueco sin
- *               parecer un eslabon roto (antes rest y pending se veian identicos).
+ *   · done        — relleno de acento (dia entrenado ENTERO: 100% de las series esperadas).
+ *   · in_progress — anillo de acento con nucleo pequeno relleno: sesion empezada y sin cerrar (1–99%,
+ *                   spec `workout-day-in-progress`). Se lee "arrancado" sin mentir "hecho"; es el mismo
+ *                   tercer estado que la day-card de la home ("En progreso").
+ *   · today       — anillo de acento hueco (hoy, aun sin sesion).
+ *   · pending     — punto tenue del track CON borde (dia ASIGNADO sin hacer, pasado o futuro; sin culpa).
+ *   · rest        — dia SIN asignacion (sin plan ni descanso explicito: ambos persisten igual, sin fila de
+ *                   plan). NEUTRO: no cuenta al denominador ni corta la cadena, y se pinta DISTINTO — punto
+ *                   ~7px muy tenue SIN borde — para que la cadena de dias entrenados salte el hueco sin
+ *                   parecer un eslabon roto (antes rest y pending se veian identicos).
  */
 export function WeekStreakDots({
   streak,
@@ -82,6 +85,17 @@ function Dot({ state, exec }: { state: WeekDotState; exec: ExecTheme }) {
         style={{ width: 22, height: 22, borderRadius: 11, alignItems: 'center', justifyContent: 'center', backgroundColor: hexToRgba(accent, 0.2) }}
       >
         <View style={{ width: 16, height: 16, borderRadius: 8, backgroundColor: accent, borderWidth: 2, borderColor: hexToRgba(accent, 0.55) }} />
+      </View>
+    )
+  }
+  if (state === 'in_progress') {
+    // Mismo diametro que `today` (no rompe el ritmo del track) pero con nucleo relleno: la sesion existe,
+    // solo que sin cerrar. Sin halo — ese lo reserva `done`.
+    return (
+      <View
+        style={{ width: 16, height: 16, borderRadius: 8, borderWidth: 2, borderColor: hexToRgba(accent, 0.7), backgroundColor: '#26262f', alignItems: 'center', justifyContent: 'center' }}
+      >
+        <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: accent }} />
       </View>
     )
   }

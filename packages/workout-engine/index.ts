@@ -12,6 +12,10 @@
  * quede self-contained (mismo criterio que @eva/nutrition-engine). `WorkoutOfflineLog`
  * (session-logs.reconcile) es la forma canónica de la serie encolada; web
  * `lib/workout-offline-queue.ts` la re-exporta desde acá.
+ *
+ * `day-completion` agrega la regla ÚNICA de completitud del día (none / in_progress / done, spec
+ * `workout-day-in-progress`) junto con sus fixtures de paridad, que web y RN consumen desde acá para
+ * que la day-card no pueda divergir entre plataformas.
  */
 
 export * from './session-logs.reconcile'
@@ -37,3 +41,5 @@ export * from './celebration'
 export * from './cardio-progress'
 export * from './pr-detect'
 export * from './repeat-seed'
+export * from './day-completion'
+export * from './day-completion.fixtures'

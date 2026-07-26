@@ -109,6 +109,28 @@ describe('computeWeeklyStreak', () => {
         expect(s.days.find((d) => d.dayOfWeek === 3)!.state).toBe('done')
     })
 
+    // Spec `workout-day-in-progress`: la racha visual deja de heredar "1 serie = hecho". Un día a
+    // medias es su propio dot (`partial`) y NO suma a N, pero sí cuenta al denominador.
+    it('día a medias (in_progress) ⇒ dot "partial", no suma a N y sí cuenta a M', () => {
+        const s = computeWeeklyStreak([
+            { dayOfWeek: 1, status: 'done', isToday: false },
+            { dayOfWeek: 2, status: 'in_progress', isToday: false },
+            { dayOfWeek: 3, status: 'rest', isToday: false },
+        ])
+        expect(s.days.map((d) => d.state)).toEqual(['done', 'partial', 'rest'])
+        expect(s.done).toBe(1)
+        expect(s.planned).toBe(2)
+        expect(s.label).toBe('1 de 2')
+    })
+
+    it('HOY a medias se pinta "partial" (el dato útil es que falta cerrarlo), conservando isToday', () => {
+        const s = computeWeeklyStreak([{ dayOfWeek: 4, status: 'in_progress', isToday: true }])
+        const hoy = s.days[0]
+        expect(hoy.state).toBe('partial')
+        expect(hoy.isToday).toBe(true)
+        expect(s.label).toBe('0 de 1')
+    })
+
     it('distingue día SIN asignación (rest) de día ASIGNADO sin hacer (todo) — para pintarlos distinto', () => {
         const mix: WeekStatusDaySource[] = [
             { dayOfWeek: 1, status: 'pending', isToday: false }, // asignado, no hecho → 'todo' (dot bordeado)

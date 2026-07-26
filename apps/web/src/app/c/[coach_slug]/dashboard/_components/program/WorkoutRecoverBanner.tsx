@@ -9,17 +9,23 @@ import { useWorkoutLaunch } from '../launch/WorkoutLaunchMorph'
  * ejecutor: al tocarlo dispara el mismo loader "Despegue" que el CTA y las day-cards (morph desde su
  * propio rect → burbuja → despegue → Inicio). Client component porque `ActiveProgramSection` es server
  * y el morph necesita el hook `useWorkoutLaunch`. Navega al MISMO href de recuperación de siempre.
+ *
+ * La cola incluye los días pasados EMPEZADOS a medias (`in_progress`, spec `workout-day-in-progress`):
+ * el verbo del CTA cambia a "Continuar" cuando el más antiguo ya tiene series registradas.
  */
 export function WorkoutRecoverBanner({
     href,
     pendingCount,
     dayOfWeek,
     dayLabel,
+    oldestStatus = 'pending',
 }: {
     href: string
     pendingCount: number
     dayOfWeek: number
     dayLabel: string
+    /** Estado del día del CTA: sin nada registrado (`pending`) o a medias (`in_progress`). */
+    oldestStatus?: 'pending' | 'in_progress'
 }) {
     const { launch } = useWorkoutLaunch()
     return (
@@ -40,7 +46,7 @@ export function WorkoutRecoverBanner({
                     {pendingCount === 1 ? 'Tienes 1 día pendiente' : `Tienes ${pendingCount} días pendientes`} esta semana
                 </p>
                 <p className="mt-0.5 truncate text-[11.5px] font-semibold text-ember-700/80">
-                    Recuperar Día {dayOfWeek} · {dayLabel}
+                    {oldestStatus === 'in_progress' ? 'Continuar' : 'Recuperar'} Día {dayOfWeek} · {dayLabel}
                 </p>
             </div>
             <ArrowRight className="h-4 w-4 shrink-0 text-ember-700 transition-transform group-hover:translate-x-0.5" />

@@ -76,6 +76,7 @@ export async function ActiveProgramSection({ userId, coachSlug }: { userId: stri
             dateIso: day?.dateIso ?? '',
             doneOnDate: day?.doneOnDate ?? null,
             doneOnLabel: day?.doneOnLabel ?? null,
+            completionPct: day?.completionPct ?? 0,
         }
     })
 
@@ -102,14 +103,16 @@ export async function ActiveProgramSection({ userId, coachSlug }: { userId: stri
             </div>
             <ProgramPhaseBar phases={phases} currentWeek={currentWeek} totalWeeks={totalWeeks} />
 
-            {/* Cola de pendientes: días de esta semana ya pasados sin registrar → recuperables HOY.
-                CTA al más antiguo; la ejecución no tiene candado de fecha (el log cuenta el día real). */}
+            {/* Cola de abiertos: días de esta semana ya pasados sin registrar O empezados a medias
+                (`in_progress`, spec `workout-day-in-progress`) → recuperables HOY. CTA al más antiguo;
+                la ejecución no tiene candado de fecha (el log cuenta el día real). */}
             {oldestPending ? (
                 <WorkoutRecoverBanner
                     href={buildWorkoutRecoverHref(base, oldestPending.planId, oldestPending.dateIso)}
                     pendingCount={pending.length}
                     dayOfWeek={oldestPending.dayOfWeek}
                     dayLabel={oldestPending.dayLabel}
+                    oldestStatus={oldestPending.status}
                 />
             ) : null}
 

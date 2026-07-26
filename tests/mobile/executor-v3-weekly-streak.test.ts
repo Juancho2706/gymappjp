@@ -1,15 +1,36 @@
 /**
  * Racha semanal del ejecutor V3 (E4.4) — helpers puros. Verifica el anclaje Lun→Dom (incluye borde de
- * domingo, que en JS es getUTCDay()===0), la atribucion de estados (done/today/pending/rest), el
- * denominador honesto (sesion extra fuera de plan suma al total) y el copy neutro sin culpa.
+ * domingo, que en JS es getUTCDay()===0), la atribucion de estados (done/in_progress/today/pending/rest),
+ * el denominador honesto (sesion extra fuera de plan suma al total) y el copy neutro sin culpa.
+ *
+ * Ademas cubre la REGLA DE COMPLETITUD (spec `workout-day-in-progress`, CEO O2 2026-07-26) tal como la
+ * consume RN: los mismos `DAY_COMPLETION_FIXTURES` del engine que consumira la web, pasados por el
+ * adaptador RN (`PlanWeekCompletionSource` → `planDayCompletionState`). Si el adaptador pierde `sets` o
+ * `set_number` por el camino, el caso falla aca.
  */
 import { describe, expect, it } from 'vitest'
+import { DAY_COMPLETION_FIXTURES, countLoggedSetsByBlock, type DayCompletionBlock } from '@eva/workout-engine'
 import {
   deriveWeeklyStreak,
+  greedyPlanDone,
+  greedyStatesForWeek,
+  planDayCompletionState,
   plannedDatesForWeek,
   weekDatesMondayToSunday,
   WEEK_LETTERS_ES,
+  type PlanWeekCompletionSource,
 } from '../../apps/mobile/components/alumno/workout/v3/weekly-streak'
+
+/** Arma la fuente de completitud del movil: bloques por plan + series por `planId|ymd`. */
+function sourceOf(
+  blocksByPlan: Record<string, DayCompletionBlock[]>,
+  loggedSetsByPlanDay: Record<string, Record<string, number>>,
+): PlanWeekCompletionSource {
+  return {
+    blocksByPlan: new Map(Object.entries(blocksByPlan)),
+    loggedSetsByPlanDay: new Map(Object.entries(loggedSetsByPlanDay)),
+  }
+}
 
 describe('weekDatesMondayToSunday', () => {
   it('un miercoles ancla al lunes de esa semana y da 7 dias Lun→Dom', () => {
@@ -61,6 +82,150 @@ describe('plannedDatesForWeek', () => {
   it('ignora fechas fuera de la semana', () => {
     const planned = plannedDatesForWeek([{ day_of_week: null, assigned_date: '2026-07-19' }], week)
     expect(planned.size).toBe(0)
+  })
+})
+
+describe('paridad con @eva/workout-engine (regla de completitud del dia)', () => {
+  // El estado que RN pinta para un dia debe ser EXACTAMENTE el del fixture: mismos bloques, mismas series.
+  for (const f of DAY_COMPLETION_FIXTURES) {
+    it(`fixture: ${f.name}`, () => {
+      const source = sourceOf(
+        { p1: [...f.input.blocks] },
+        { 'p1|2026-07-22': { ...f.input.loggedSetsByBlock } },
+      )
+      expect(planDayCompletionState(source, 'p1', '2026-07-22')).toBe(f.expected.state)
+    })
+  }
+
+  it('el adaptador RN cuenta series desde las filas crudas (dedup por block_id+set_number)', () => {
+    // Dos veces la MISMA serie (la cola offline puede reenviarla antes de reconciliar) no infla el conteo:
+    // 3 filas → 2 series de b1 → 2 de 3 esperadas = in_progress, jamas done.
+    const logged = countLoggedSetsByBlock([
+      { block_id: 'b1', set_number: 1 },
+      { block_id: 'b1', set_number: 1 },
+      { block_id: 'b1', set_number: 2 },
+    ])
+    const source = sourceOf({ p1: [{ id: 'b1', sets: 3 }] }, { 'p1|2026-07-22': logged })
+    expect(planDayCompletionState(source, 'p1', '2026-07-22')).toBe('in_progress')
+  })
+})
+
+describe('greedyPlanDone (atribucion greedy + completitud)', () => {
+  const week = weekDatesMondayToSunday('2026-07-22') // Lun 20 .. Dom 26, hoy = mie 22
+  const LUN = '2026-07-20'
+  const JUE = '2026-07-23'
+  const blocks = { p1: [{ id: 'b1', sets: 3 }, { id: 'b2', sets: 3 }] }
+
+  it('CASO P0: UNA sola serie en su fecha => in_progress (antes daba done)', () => {
+    const source = sourceOf(blocks, { [`p1|${LUN}`]: { b1: 1 } })
+    expect(greedyPlanDone('p1', LUN, false, week, source)).toEqual({ state: 'in_progress', doneOnDate: null })
+  })
+
+  it('100% de las series en su fecha => done en fecha', () => {
+    const source = sourceOf(blocks, { [`p1|${LUN}`]: { b1: 3, b2: 3 } })
+    expect(greedyPlanDone('p1', LUN, false, week, source)).toEqual({ state: 'done', doneOnDate: null })
+  })
+
+  it('recuperacion: el plan del lunes se completa el jueves => done con doneOnDate jueves', () => {
+    const source = sourceOf(blocks, { [`p1|${JUE}`]: { b1: 3, b2: 3 } })
+    expect(greedyPlanDone('p1', LUN, false, week, source)).toEqual({ state: 'done', doneOnDate: JUE })
+  })
+
+  it('recuperacion a medias => in_progress con la fecha de esa sesion (no cierra el dia)', () => {
+    const source = sourceOf(blocks, { [`p1|${JUE}`]: { b1: 2 } })
+    expect(greedyPlanDone('p1', LUN, false, week, source)).toEqual({ state: 'in_progress', doneOnDate: JUE })
+  })
+
+  it('parcial en su fecha + sesion COMPLETA otro dia => done (la completa manda)', () => {
+    const source = sourceOf(blocks, { [`p1|${LUN}`]: { b1: 1 }, [`p1|${JUE}`]: { b1: 3, b2: 3 } })
+    expect(greedyPlanDone('p1', LUN, false, week, source)).toEqual({ state: 'done', doneOnDate: JUE })
+  })
+
+  it('un dia FUTURO nunca se atribuye', () => {
+    const source = sourceOf(blocks, { [`p1|${JUE}`]: { b1: 3, b2: 3 } })
+    expect(greedyPlanDone('p1', '2026-07-24', true, week, source)).toEqual({ state: 'none', doneOnDate: null })
+  })
+
+  it('cardio (sets null = 1 unidad): una serie por bloque cierra el dia', () => {
+    const source = sourceOf({ p1: [{ id: 'c1', sets: null }, { id: 'c2' }] }, { [`p1|${LUN}`]: { c1: 1, c2: 1 } })
+    expect(greedyPlanDone('p1', LUN, false, week, source).state).toBe('done')
+    const partial = sourceOf({ p1: [{ id: 'c1', sets: null }, { id: 'c2' }] }, { [`p1|${LUN}`]: { c1: 1 } })
+    expect(greedyPlanDone('p1', LUN, false, week, partial).state).toBe('in_progress')
+  })
+
+  it('logs de OTRO plan no atribuyen nada (dimension plan_id)', () => {
+    const source = sourceOf({ ...blocks, p2: [{ id: 'x1', sets: 3 }] }, { [`p2|${LUN}`]: { x1: 3 } })
+    expect(greedyPlanDone('p1', LUN, false, week, source)).toEqual({ state: 'none', doneOnDate: null })
+  })
+})
+
+describe('greedyStatesForWeek', () => {
+  const week = weekDatesMondayToSunday('2026-07-22') // Lun 20 .. Dom 26
+  const plans = [
+    { id: 'p1', day_of_week: 1, assigned_date: null }, // Lun 20
+    { id: 'p2', day_of_week: 3, assigned_date: null }, // Mie 22 (hoy)
+    { id: 'p3', day_of_week: 5, assigned_date: null }, // Vie 24 (futuro)
+  ]
+  const blocks = {
+    p1: [{ id: 'a1', sets: 2 }],
+    p2: [{ id: 'b1', sets: 2 }],
+    p3: [{ id: 'c1', sets: 2 }],
+  }
+
+  it('separa dias cerrados de dias a medias y no toca el futuro', () => {
+    const source = sourceOf(blocks, {
+      'p1|2026-07-20': { a1: 2 }, // lunes completo
+      'p2|2026-07-22': { b1: 1 }, // hoy a medias
+      'p3|2026-07-24': { c1: 2 }, // futuro (imposible en la practica): jamas se atribuye
+    })
+    const { doneDates, inProgressDates } = greedyStatesForWeek(plans, week, '2026-07-22', source)
+    expect([...doneDates]).toEqual(['2026-07-20'])
+    expect([...inProgressDates]).toEqual(['2026-07-22'])
+  })
+
+  it('el dia a medias pinta dot in_progress, suma al denominador y NO al doneCount', () => {
+    const source = sourceOf(blocks, { 'p1|2026-07-20': { a1: 2 }, 'p2|2026-07-22': { b1: 1 } })
+    const { doneDates, inProgressDates } = greedyStatesForWeek(plans, week, '2026-07-22', source)
+    const r = deriveWeeklyStreak({
+      weekDates: week,
+      plannedDates: plannedDatesForWeek(plans, week),
+      doneDates,
+      inProgressDates,
+      todayIso: '2026-07-22',
+    })
+    expect(r.dots.map((d) => d.state)).toEqual([
+      'done',        // Lun 20 cerrado
+      'rest',        // Mar 21 sin plan
+      'in_progress', // Mie 22 hoy a medias (gana a 'today')
+      'rest',        // Jue 23
+      'pending',     // Vie 24 con plan, futuro
+      'rest',        // Sab 25
+      'rest',        // Dom 26
+    ])
+    expect(r.doneCount).toBe(1)
+    expect(r.plannedCount).toBe(3)
+    expect(r.copy).toBe('1 de 3 esta semana')
+  })
+
+  it('una sesion PARCIAL fuera de plan suma al denominador (nunca "N de menos")', () => {
+    const soloVie = [{ id: 'p3', day_of_week: 5, assigned_date: null }]
+    const source = sourceOf({ p3: blocks.p3, p1: blocks.p1 }, { 'p1|2026-07-20': { a1: 1 } })
+    const { doneDates, inProgressDates } = greedyStatesForWeek(
+      [...soloVie, { id: 'p1', day_of_week: 1, assigned_date: null }],
+      week,
+      '2026-07-26',
+      source,
+    )
+    const r = deriveWeeklyStreak({
+      weekDates: week,
+      plannedDates: plannedDatesForWeek(soloVie, week),
+      doneDates,
+      inProgressDates,
+      todayIso: '2026-07-26',
+    })
+    expect(r.doneCount).toBe(0)
+    expect(r.plannedCount).toBe(2) // Vie planificado + Lun con sesion parcial
+    expect(r.copy).toBe('0 de 2 esta semana')
   })
 })
 
