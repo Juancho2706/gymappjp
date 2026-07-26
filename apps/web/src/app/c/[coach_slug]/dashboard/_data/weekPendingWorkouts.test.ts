@@ -165,6 +165,33 @@ describe('deriveWeekWorkoutStatus', () => {
             expect(r.pending.map((p) => p.dayOfWeek)).toEqual([5])
         })
 
+        // Regresión del fix: `logs` trae UNA fila por SERIE. 5 series de la MISMA sesión no pueden
+        // cerrar dos días del plan repetido (antes el viernes salía done "Hecho el lunes").
+        it('1 sola sesión con 5 series (lunes) marca SOLO el lunes; el viernes sigue pendiente', () => {
+            const r = deriveWeekWorkoutStatus({
+                userLocalDate: SAT_DATE,
+                todayIso: SAT_ISO,
+                program: REP_PROGRAM,
+                activePlans: REP_PLANS,
+                logs: [
+                    // misma sesión del lunes 07-06, 5 series (5 filas en workout_logs)
+                    log(PLAN_REP, '2026-07-06T15:00:00.000Z'),
+                    log(PLAN_REP, '2026-07-06T15:04:00.000Z'),
+                    log(PLAN_REP, '2026-07-06T15:09:00.000Z'),
+                    log(PLAN_REP, '2026-07-06T15:13:00.000Z'),
+                    log(PLAN_REP, '2026-07-06T15:18:00.000Z'),
+                ],
+            })
+            const mon = r.days.find((d) => d.dayOfWeek === 1)
+            const fri = r.days.find((d) => d.dayOfWeek === 5)
+            expect(mon?.status).toBe('done')
+            expect(mon?.doneOnDate).toBeNull() // hecho en su propia fecha
+            expect(fri?.status).toBe('pending')
+            expect(fri?.doneOnDate).toBeNull()
+            expect(fri?.doneOnLabel).toBeNull()
+            expect(r.pending.map((p) => p.dayOfWeek)).toEqual([5])
+        })
+
         it('2 sesiones (miércoles + jueves) marcan AMBOS días', () => {
             const r = deriveWeekWorkoutStatus({
                 userLocalDate: SAT_DATE,

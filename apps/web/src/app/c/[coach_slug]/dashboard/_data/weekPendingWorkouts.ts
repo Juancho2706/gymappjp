@@ -174,20 +174,26 @@ export function deriveWeekWorkoutStatus(input: {
         })
     }
 
-    // Paso 2: logs de ESTA semana por plan, con su día real Santiago (asc). Sólo los que caen en los
-    // 7 días de la semana cuentan para la atribución (el caller trae más historial del necesario).
+    // Paso 2: DÍAS de ESTA semana con sesión, por plan (asc). Sólo los que caen en los 7 días de la
+    // semana cuentan para la atribución (el caller trae más historial del necesario).
+    // OJO (fix): la unidad es (plan, DÍA), no el log. `logs` trae UNA fila por SERIE, así que una
+    // única sesión de 5 series dejaba 5 elementos y la fase 2 greedy los gastaba cerrando OTROS días
+    // del mismo plan con la MISMA sesión (plan repetido Lun+Vie + 5 series el lunes ⇒ el viernes salía
+    // "Hecho el lunes"). Deduplicar por día ANTES del greedy conserva la regla "1 sesión ↔ 1 día".
+    // Espejo del Set `planId|ymd` de RN (weekly-streak.ts:99 / home.tsx `workoutPlanDays`).
     const weekDateSet = new Set(slots.map((s) => s.dateIso))
-    const weekLogsByPlan = new Map<string, string[]>()
+    const weekLogDaysByPlan = new Map<string, Set<string>>()
     for (const l of logs) {
         const planId = l.workout_blocks?.plan_id
         if (!planId) continue
         const ymd = getSantiagoIsoYmdForUtcInstant(l.logged_at)
         if (!weekDateSet.has(ymd)) continue
-        const arr = weekLogsByPlan.get(planId)
-        if (arr) arr.push(ymd)
-        else weekLogsByPlan.set(planId, [ymd])
+        const set = weekLogDaysByPlan.get(planId)
+        if (set) set.add(ymd)
+        else weekLogDaysByPlan.set(planId, new Set([ymd]))
     }
-    for (const arr of weekLogsByPlan.values()) arr.sort()
+    const weekLogsByPlan = new Map<string, string[]>()
+    for (const [planId, set] of weekLogDaysByPlan) weekLogsByPlan.set(planId, [...set].sort())
 
     // Paso 3: atribución greedy por plan. `doneOnByDate` mapea el día cerrado → fecha real del log que
     // lo cerró (`null` = hecho en su propia fecha). Los días futuros nunca son elegibles.
