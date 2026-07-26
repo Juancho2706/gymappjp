@@ -22,11 +22,16 @@ export default async function WorkoutExecutionPage({ params, searchParams }: Pro
     const { fecha, recuperar, repetir } = await searchParams
     const base = await getClientBasePath(coach_slug)
 
-    // Validación server-side de `fecha`: sólo un día pasado/hoy válido activa el modo edición; cualquier
+    // Validación server-side de `fecha`: sólo un día PASADO válido activa el modo edición; cualquier
     // otra cosa (formato malo, futuro) se ignora y el ejecutor abre en modo HOY normal.
+    // `?fecha=<hoy>` degrada a `null` ⇒ flujo normal de hoy (upsert). Incidente 2026-07-26: la
+    // atribución semanal marcaba el día recuperado con `doneOnDate = HOY`, el sheet "Revisar y editar"
+    // linkeaba a `?fecha=<hoy>` y el modo solo-UPDATE dejaba TODA serie nueva sin poder guardarse
+    // (`past_set_not_found` ⇒ la cola offline la descartaba). Con fecha de hoy el upsert es idéntico
+    // al flujo sin `?fecha` y es seguro; el anti-farmeo sólo aplica a fechas pasadas.
     const { iso: todayIso } = getTodayInSantiago()
     const fechaCheck = typeof fecha === 'string' ? validateTargetDate(fecha, todayIso) : null
-    const targetDate = fechaCheck?.ok ? fechaCheck.iso : null
+    const targetDate = fechaCheck?.ok && fechaCheck.iso !== todayIso ? fechaCheck.iso : null
     // `recuperar` es sólo visual: se valida con la misma regla (pasado/hoy) pero jamás toca la query.
     const recuperarCheck = typeof recuperar === 'string' ? validateTargetDate(recuperar, todayIso) : null
     const recuperarDate = recuperarCheck?.ok ? recuperarCheck.iso : null
