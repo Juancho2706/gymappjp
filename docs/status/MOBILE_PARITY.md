@@ -1,7 +1,7 @@
 ---
 status: active
 owner: Juan Manuel Villegas
-last_verified: "2026-07-22 @ 6338f4a4"
+last_verified: "2026-07-25 @ a59acfd1"
 canonical: true
 source_of_truth: apps/web responsive + apps/mobile
 ---
@@ -26,6 +26,8 @@ La paridad global **no está certificada todavía**.
 | Ola 4B — nutrición del coach y catálogos | **Cerrada: 15/15 unidades de rama** | Pendiente | Cerrada estática; no certificada |
 
 “Cerrado estático” significa que código, spec y verificaciones automatizadas disponibles convergieron. No significa que el comportamiento visual, gestos, teclado, cámara, safe areas u offline estén aprobados en hardware real.
+
+> **2026-07-25 (PR #170, `60090f90`)**: el ejecutor del alumno quedó rediseñado a **V3** — único camino en web y RN, flags eliminados — e integró **cardio fases A-D** (ejes de captura por modalidad, Escaladora, intervalos por distancia, coach ve los registros). La Sección 1 sigue “cerrada estática” sobre ese código nuevo; la deuda cardio priorizada vive en [`specs/cardio-ejes-y-fixes/TASKS.md`](../../specs/cardio-ejes-y-fixes/TASKS.md) y la cola del ejecutor en [`specs/executor-v3/TASKS.md`](../../specs/executor-v3/TASKS.md).
 
 ## Ola 4A (cerrada estática)
 
@@ -67,7 +69,7 @@ fuera, RN-extras estricto).
 
 ### Dónde retomar
 
-1. Abrir la ola 5 (builder y programas de entrenamiento del coach) con inventario contra código. **Coordinación**: el visor/ejecutor de workout del alumno está siendo trabajado en paralelo en otra sesión — excluirlo o sincronizar antes de abrir unidades que lo toquen.
+1. Abrir la ola 5 (builder y programas de entrenamiento del coach) con inventario contra código. El ejecutor V3 del alumno ya está integrado en `master` (PR #170); las unidades de ola 5 que toquen el visor del alumno se contrastan contra ese código, sin coordinación pendiente.
 2. Completar matriz device de 4A/4B y regresión dirigida de Secciones 1–3/2R (requiere build nativa).
 3. Deuda 4B-16 (consolidar nutrition-pro puro en `@eva/nutrition-v2`) en rama de web.
 
@@ -75,10 +77,10 @@ fuera, RN-extras estricto).
 
 | Plataforma | Profile | Resultado conocido | Qué significa |
 |---|---|---|---|
-| Android | `previewv2` | Build y upload OK en el [run 29766013009](https://github.com/Juancho2706/gymappjp/actions/runs/29766013009) sobre `c6743ef3`; artefacto expirado | Valida ese corte, no el candidato actual ni el QA funcional/visual |
-| iOS | `previewv2` | Build y upload de IPA OK en el [run 29765692202](https://github.com/Juancho2706/gymappjp/actions/runs/29765692202) sobre `c6743ef3`; falló el submit a TestFlight y el artefacto expiró | La compilación nativa quedó probada en ese corte; distribución y QA siguen pendientes |
+| Android | `production` | Build **y submit a Play internal testing** verdes en los runs [29885773193](https://github.com/Juancho2706/gymappjp/actions/runs/29885773193) sobre `4382ff6c` (2026-07-22) y [30063566202](https://github.com/Juancho2706/gymappjp/actions/runs/30063566202) sobre `335c88da` (2026-07-24); artefactos con retención de 1 día | La vía Android completa (build + submit) funciona; falta artefacto del corte integrado |
+| iOS | `production` | Build **y submit a TestFlight** verdes en el [run 29885773193](https://github.com/Juancho2706/gymappjp/actions/runs/29885773193) sobre `4382ff6c`; **falló el build** en [29976332962](https://github.com/Juancho2706/gymappjp/actions/runs/29976332962) (`b7e5e34d`) y [30063566202](https://github.com/Juancho2706/gymappjp/actions/runs/30063566202) (`335c88da`), logs expirados | El submit quedó probado end-to-end; el build iOS está roto desde el 2026-07-23 y no hay binario del corte actual |
 
-La sincronización `bc9ac09f` pasó `expo export` local para Android e iOS. El perfil de submit `previewv2` quedó alineado en `f5301858`, pero aún requiere una ejecución real. Ninguna de esas verificaciones sustituye un build firmado retenido ni el QA en dispositivo.
+Los runs `previewv2` sobre `c6743ef3` quedaron superados por la vía `production`. No existe build sobre el corte integrado `a59acfd1`; un build/submit verde no sustituye la verificación manual en App Store Connect/Play Console ni el QA en dispositivo.
 
 ## Siguiente horizonte
 

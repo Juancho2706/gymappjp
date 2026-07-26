@@ -1,7 +1,7 @@
 ---
 status: active
 owner: product-owner
-last_verified: "2026-07-21 @ f5301858"
+last_verified: "2026-07-25 @ a59acfd1"
 canonical: true
 ---
 
@@ -18,24 +18,24 @@ Reglas:
 
 ## P1 — Cierre del build y QA móvil
 
-### MOB-01 — Generar IPA actual y completar TestFlight
+### MOB-01 — Build del corte actual y verificación de los submits ya hechos
 
-El [run 29765692202](https://github.com/Juancho2706/gymappjp/actions/runs/29765692202) compiló y subió una IPA de `c6743ef3`, pero el paso de submit a TestFlight falló y el artefacto ya expiró. `f5301858` añadió el perfil `submit.previewv2`; falta validarlo con un binario del candidato actual.
+El [run 29885773193](https://github.com/Juancho2706/gymappjp/actions/runs/29885773193) (2026-07-22, `4382ff6c`, perfil `production`, platform `all`) compiló Android+iOS y **completó los submits**: AAB a Play internal testing e IPA a TestFlight, ambos verdes. Después el build iOS `production` falló dos veces ([29976332962](https://github.com/Juancho2706/gymappjp/actions/runs/29976332962) sobre `b7e5e34d` y [30063566202](https://github.com/Juancho2706/gymappjp/actions/runs/30063566202) sobre `335c88da`, donde Android sí quedó verde con submit) y los logs de las fallas ya expiraron.
 
 GitHub Actions → **Mobile Build (Local — no EAS credits)**:
 
 ```text
 branch: rnmobiledenuevo
 app: mobile
-platform: ios
-profile: previewv2
+platform: all
+profile: production
 submit_ios: true
+submit_android: true
 ```
 
-- [ ] Esperar los checks verdes del commit candidato y ejecutar el workflow.
-- [ ] Descargar/retener la IPA el mismo día; la retención efectiva del repositorio es actualmente de un día.
-- [ ] Verificar que el paso de submit termine verde y que el build aparezca/procese en App Store Connect.
-- [ ] Si falla, conservar el enlace del run y los logs completos; no atribuir una causa sin evidencia ni copiar secretos al issue.
+- [ ] Verificar en App Store Connect que el build de `4382ff6c` procesó y está en TestFlight; verificar el AAB en Play Console → internal testing.
+- [ ] Relanzar el workflow sobre el corte actual (`a59acfd1` o descendiente); si iOS vuelve a fallar, conservar enlace y logs el mismo día — la retención es de 1 día.
+- [ ] Descargar/retener los artefactos el mismo día.
 - [ ] Registrar el resultado en [TEST_STATUS.md](../testing/TEST_STATUS.md) y [MOBILE_PARITY.md](../status/MOBILE_PARITY.md).
 
 ### MOB-02 — Certificar paridad en dispositivos reales
@@ -81,17 +81,6 @@ Las suites E2E no bloquean PR automáticamente porque utilizan un entorno Supaba
 - [ ] Ejecutar manualmente el workflow **CI** con `workflow_dispatch` antes de cambios de auth, RLS, pagos, nutrición o releases de tienda.
 - [ ] Confirmar que los secrets E2E existen en el environment de GitHub.
 - [ ] Guardar el run y resultado consolidado en [TEST_STATUS.md](../testing/TEST_STATUS.md).
-
-### STORE-01 — Primera publicación Android en Play Console
-
-La automatización de `eas submit` solo funciona después de que la app y su primer AAB existan en Play Console.
-
-- [ ] Crear/verificar la app con package `cl.evaapp.eva`.
-- [ ] Subir manualmente el primer AAB `production` al track Internal testing si aún no existe uno.
-- [ ] Verificar testers y enlace de opt-in.
-- [ ] Confirmar `GOOGLE_SERVICE_ACCOUNT_JSON` y permiso de publicación al track de pruebas antes de activar `submit_android=true`.
-
-No usar un binario de otro pipeline: `versionCode` debe quedar alineado con el contador remoto de EAS.
 
 ## Cuándo agregar una tarea
 

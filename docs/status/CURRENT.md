@@ -1,7 +1,7 @@
 ---
 status: active
 owner: product-engineering
-last_verified: "2026-07-25 @ 60090f90"
+last_verified: "2026-07-25 @ a59acfd1"
 canonical: true
 ---
 
@@ -14,11 +14,11 @@ Esta es la única vista global de qué está en producción, qué está en integ
 | Referencia | Estado al revisar |
 |---|---|
 | Rama de trabajo | `rnmobiledenuevo`, única rama viva junto a `master` |
-| Corte de `master` integrado | `origin/master` en `60090f90` (merge PR #170, 2026-07-25) |
-| Relación de ramas | `rnmobiledenuevo` == `master` en `60090f90` (fast-forward post-merge; ambas sincronizadas) |
+| Corte de `master` integrado | `origin/master` en `a59acfd1` (docs post-merge PR #170 `60090f90`, 2026-07-25) |
+| Relación de ramas | `rnmobiledenuevo` == `master` en `a59acfd1` (ambas sincronizadas) |
 | PR #170 (mergeada) | Ejecutor V3 (ceremonia logo dark + ignición del CTA Finalizar), home alumno (link retirado + scroll-top), cardio fases A-D completas (ejes por modalidad, coach ve registros, intervalos por distancia), pulido del creador de ejercicios |
 | Migración DB | `20260725221804_cardio_modality_axes` APLICADA en LIVE antes del merge (aditiva: `exercises.cardio_modality`, Escaladora, `reps_unit` +jumps/floors) |
-| Gate `quality` | Verde en el run `30181033720` sobre `baef4283` (tsc x3, lint 0 errores, 3.940 tests) |
+| Gate `quality` | Verde en el [run 30181033720](https://github.com/Juancho2706/gymappjp/actions/runs/30181033720) sobre `baef4283`: docs, lint 0 errores, typecheck web, tokens y Vitest 3940 aprobados / 4 omitidos (330 archivos). `tsc --noEmit` web+mobile+enterprise re-ejecutados verdes en local sobre `a59acfd1` (2026-07-25) |
 | QA | Ronda funcional del owner aprobada en web/emulador; QA física fina Android/iOS pendiente (háptico, reduced-motion) |
 
 Este bloque es un snapshot, no reemplaza `git fetch`, `git status` ni los checks remotos antes de integrar.
@@ -37,20 +37,20 @@ Este bloque es un snapshot, no reemplaza `git fetch`, `git status` ni los checks
 
 ## Prioridad actual
 
-1. Olas 4A y 4B **cerradas estáticas** (nutrición alumno + coach en paridad 1:1 de código). Siguiente: ola 5 (entrenamiento coach, coordinar con la sesión paralela del ejecutor) según `MOBILE_PARITY.md`; QA device pendiente para todo.
+1. Olas 4A y 4B **cerradas estáticas** (nutrición alumno + coach en paridad 1:1 de código). Siguiente: ola 5 (builder y programas del coach; el ejecutor V3 del alumno ya quedó integrado en PR #170, sin coordinación pendiente) según `MOBILE_PARITY.md`; QA device pendiente para todo.
 2. Ejecutar los gates web/mobile completos sobre cada checkpoint candidato.
-3. Generar y retener artefactos Android/iOS del candidato final; completar el submit a TestFlight.
+3. Generar y retener artefactos Android/iOS del corte actual (el build iOS `production` está roto desde el 2026-07-23) y verificar en App Store Connect/Play Console los submits ya realizados.
 4. Completar QA en dispositivos Android/iOS de los recorridos críticos.
 5. Integrar `rnmobiledenuevo` a `master` solo con evidencia verde y sin migraciones o artefactos locales pendientes.
 
 ## Gates que siguen abiertos
 
-- Build firmado Android/iOS del candidato actual y submit iOS verificado con `submit.previewv2`.
+- Build firmado Android/iOS del corte actual (`a59acfd1`); el submit iOS ya quedó probado verde vía perfil `production` sobre `4382ff6c`, pero el build iOS falló en los dos intentos posteriores.
 - Certificación física de cámara, gestos, teclado, safe areas, offline y notificaciones en ambos sistemas.
 - Cierre verificable de la paridad móvil restante; código presente no equivale a QA aprobada.
 - Confirmación del rollout/configuración de Nutrition V2 en el entorno objetivo antes de una promoción.
 
-El corte `c6743ef3` compiló y subió artefactos Android en el [run 29766013009](https://github.com/Juancho2706/gymappjp/actions/runs/29766013009) e iOS en el [run 29765692202](https://github.com/Juancho2706/gymappjp/actions/runs/29765692202); el segundo falló después, durante el submit a TestFlight. Ambos artefactos expiraron y no representan el candidato integrado en `bc9ac09f` ni certifican QA física.
+Builds `production` (workflow manual): Android e iOS verdes **con submit a Play internal testing y TestFlight incluidos** en el [run 29885773193](https://github.com/Juancho2706/gymappjp/actions/runs/29885773193) sobre `4382ff6c` (2026-07-22). Android repitió verde con submit en el [run 30063566202](https://github.com/Juancho2706/gymappjp/actions/runs/30063566202) sobre `335c88da` (2026-07-24), pero iOS `production` falló ahí y en el [run 29976332962](https://github.com/Juancho2706/gymappjp/actions/runs/29976332962) sobre `b7e5e34d`; los logs de ambas fallas expiraron (retención 1 día). No existe build del corte integrado `a59acfd1` y nada de esto certifica QA física.
 
 ## Nutrition V2: criterio actual
 

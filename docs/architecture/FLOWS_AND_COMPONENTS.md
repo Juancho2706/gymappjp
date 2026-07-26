@@ -1,7 +1,7 @@
 ---
 status: active
 owner: engineering
-last_verified: 2026-07-20
+last_verified: "2026-07-25 @ a59acfd1"
 canonical: true
 ---
 
@@ -87,14 +87,14 @@ Dashboard → rutina del día → Executor → log optimista/offline
 
 | Etapa | Web/PWA | Mobile |
 |---|---|---|
-| Entrada | `/c/[coach_slug]/dashboard` y `/workout/[planId]` | `app/alumno/(tabs)/workout.tsx`, `alumno/workout/[planId].tsx` |
+| Entrada | `/c/[coach_slug]/dashboard` y `/c/[coach_slug]/workout/[planId]` | `app/alumno/(tabs)/workout.tsx`, `alumno/workout/[planId].tsx` |
 | Lectura | `_data/workout-execution.queries.ts` | `lib/workout-session.ts` |
-| Ejecución | `WorkoutExecutionClient.tsx` | `components/alumno/workout/ExecutorV2.tsx` |
+| Ejecución | `WorkoutExecutionClient.tsx` + pantallas tipadas `v3/*` (`ExerciseStepV3`, `CardioStepV3`, `MobilityStepV3`, `RollerStepV3`) | `components/alumno/workout/v3/ExecutorV3.tsx` — V3 es el único camino; `ExecutorV2`/legacy quedaron sin importador, pendientes de retiro |
 | Registro | `_actions/workout-log.actions.ts` | cola/offline y Supabase con RLS |
 | UI portable | lista/paso a paso, keypad, timers, superseries, sustitución | mismos conceptos con controles native |
 | Cierre | `WorkoutSummaryOverlay.tsx` | overlay/resumen native |
 
-Los motores de objetivos, intervalos y reconciliación viven en `@eva/workout-engine`. La UI no recalcula reglas de dominio con fórmulas propias.
+Los motores de objetivos, ejes de captura cardio por modalidad (`cardio-modality.ts`), intervalos y reconciliación viven en `@eva/workout-engine`. La UI no recalcula reglas de dominio con fórmulas propias. El coach revisa lo registrado — incluido cardio — en `/coach/clients/[clientId]` (`TrainingTabB4Panels.tsx`).
 
 ## Nutrition V2: coach prescribe
 
@@ -126,7 +126,7 @@ Hoy/Plan/Historial → read model versionado → intake idempotente
 | Etapa | Web/PWA | Mobile |
 |---|---|---|
 | Entrada | `/c/[coach_slug]/nutrition-v2` | `app/alumno/(tabs)/nutrition-v2/index.tsx` |
-| Catálogo/alta | `/nutrition-v2/scanner`, `/nutrition/add` | scanner y `add-food-v2.tsx` |
+| Catálogo/alta | `/c/[coach_slug]/nutrition-v2/scanner`, `/c/[coach_slug]/nutrition/add` | scanner y `add-food-v2.tsx` |
 | Experiencia diaria | `TodayExperience.tsx` | componentes `alumno/nutrition-v2/*` |
 | Mutación | `_actions/intake.actions.ts` | `lib/nutrition-v2-intake*.ts`, cola offline |
 | Backend nativo | Server Action/RPC | `app/api/mobile/nutrition-v2/intake` y `catalog` |
@@ -171,6 +171,7 @@ Archivos centrales: `services/auth/workspace-brand.service.ts`, `@eva/brand-kit`
 4. Webhook firmado reconsulta/normaliza el evento y ejecuta el pipeline idempotente.
 5. La suscripción actualizada gobierna acceso, cupo y branding.
 6. Crons reconcilian drift, vencimientos y eventos terminales perdidos.
+7. Un coach cancelado o bloqueado por cupo reactiva en `/coach/reactivate`.
 
 Implementación: `apps/web/src/lib/payments/`, `apps/web/src/app/api/payments/` y `apps/web/src/services/billing/`.
 

@@ -1,7 +1,7 @@
 ---
 status: active
 owner: product
-last_verified: 2026-07-20
+last_verified: "2026-07-25 @ a59acfd1"
 canonical: true
 ---
 
@@ -47,8 +47,8 @@ Teams no es una versión reducida de Enterprise. Tiene tablas, permisos y ciclo 
 - biblioteca de ejercicios y media;
 - programas reutilizables y asignados;
 - builder por días, áreas, bloques, superseries, fases y variantes A/B;
-- objetivos tipados: fuerza, cardio, duración, distancia e intervalos;
-- ejecución con registro de series, timers, sustitución de ejercicios, modo lista/paso a paso y resumen;
+- objetivos tipados: fuerza, cardio, duración, distancia e intervalos; en cardio, ejes de captura por modalidad (minutos/distancia/FC, saltos, pisos o repeticiones según el ejercicio) e intervalos por distancia;
+- ejecución con el ejecutor V3 (único camino en web y RN): pantallas tipadas por tipo de ejercicio (fuerza, cardio, movilidad, roller), registro de series, timers, sustitución, modo lista/paso a paso, celebraciones y resumen;
 - historial, PRs, fuerza, tonelaje, adherencia y exportación.
 
 La reconciliación y reglas del programa compartidas viven en `@eva/workout-engine` y `@eva/plan-builder`.
@@ -71,7 +71,7 @@ El rollout se autoriza server-side mediante Edge Config. Nutrition V1 permanece 
 
 - ficha integral del alumno;
 - check-ins con peso, energía, notas y fotografías;
-- progreso corporal y analítica de entrenamiento;
+- progreso corporal y analítica de entrenamiento; el coach ve los registros cardio del alumno en la ficha;
 - composición corporal BIA/ISAK;
 - evaluación de movimiento;
 - perfiles y zonas cardio;

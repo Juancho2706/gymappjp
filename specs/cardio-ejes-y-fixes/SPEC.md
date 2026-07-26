@@ -1,6 +1,6 @@
 # SPEC — Cardio: ejes de captura por modalidad + fixes de la investigación 2026-07-25
 
-Estado: **en diseño — pendiente de aprobación del owner**. Nada de esto está construido.
+Estado: **construido — fases A, B, C y D mergeadas en PR #170 (`60090f90`, 2026-07-25)**; migración `20260725221804_cardio_modality_axes` aplicada en LIVE. Restan el QA device del owner y la deuda priorizada al final de [TASKS.md](TASKS.md). Este SPEC queda como registro del diseño aprobado.
 
 ## Problema
 
