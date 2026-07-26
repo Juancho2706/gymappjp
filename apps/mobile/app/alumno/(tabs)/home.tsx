@@ -363,7 +363,17 @@ export default function AlumnoHomeScreen() {
     const ciDays = ci.daysSince
     const ciRelative = ci.lastDay ? formatRelativeDate(ci.lastDay, todayIso) : null
 
-    const doneToday = !!todayPlan && workoutDates.has(todayIso)
+    // Overlay "Entrenamiento completado" del hero (§5): SOLO si el plan que rige HOY tiene sesion HOY.
+    // Antes era `workoutDates.has(todayIso)` = cualquier log del dia, de CUALQUIER plan: recuperar el
+    // martes hoy (o repetir otro dia) tapaba el hero de hoy con el check verde y el CTA pasaba a "Ver
+    // registro" sin haber entrenado lo de hoy. DECISION: se acota al plan del hero (`todayPlan`, el que
+    // el hero realmente pinta), no a "cualquier plan del programa" — paridad con la web, que filtra
+    // `plan_id === todayPlan.id && ymdSantiago(logged_at) === hoy` (heroComplianceBundle.ts:121-129).
+    // Fuente = `workoutPlanDays` (Set `planId|ymd`), el mismo que ya alimenta el greedy de las day-cards.
+    // NO se usa el greedy aqui a proposito: el greedy puede marcar el dia de hoy como done por un log en
+    // OTRA fecha de la semana (adelantar el plan del miercoles el lunes); el hero habla del dia real, y
+    // la recuperacion/repeticion vive en las day-cards (igual que en la web).
+    const doneToday = !!todayPlan && workoutPlanDays.has(`${todayPlan.id}|${todayIso}`)
 
     return {
       todayPlan, nextPlan, momentumDays, planDays, pending, todayPlanId, currentWeek, totalWeeks,

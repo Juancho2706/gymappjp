@@ -4,7 +4,7 @@ import Svg, { Defs, RadialGradient, Rect, Stop } from 'react-native-svg'
 import { MotiView } from 'moti'
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context'
 import { Confetti } from 'react-native-fast-confetti'
-import { Check, ChevronRight, ClipboardCheck, CloudOff, GitCommit, HeartPulse, Medal, Move, Share2 } from 'lucide-react-native'
+import { AlertTriangle, Check, ChevronRight, ClipboardCheck, CloudOff, GitCommit, HeartPulse, Medal, Move, Share2 } from 'lucide-react-native'
 import {
   compactDistance,
   formatCardioReps,
@@ -186,6 +186,12 @@ export type FinalSyncState =
   | { status: 'syncing'; count: number }
   | { status: 'done'; count?: number }
   | { status: 'pending'; count: number }
+  /**
+   * Series DESCARTADAS por el flush (FK 23503: el bloque ya no existe tras un reseed del plan). No es
+   * "pendiente": son series entrenadas que NO van a subir nunca. Manda sobre cualquier otro estado —
+   * jamás puede quedar un 'done' verde encima de una pérdida de datos.
+   */
+  | { status: 'discarded'; count: number }
 
 export interface SessionCompleteV3Props {
   visible: boolean
@@ -615,23 +621,27 @@ export function SessionCompleteV3({
 }
 
 /**
- * Chip de sincronización en background. Tres estados visibles: subiendo (spinner + "Sincronizando N
- * series…"), listo (check verde) y quedó algo (nube tachada ámbar + "se sincronizan solas"). `idle` no
- * pinta nada. Copy espejo del chip de la web.
+ * Chip de sincronización en background. Cuatro estados visibles: subiendo (spinner + "Sincronizando N
+ * series…"), listo (check verde), quedó algo (nube tachada ámbar + "se sincronizan solas") y DESCARTE
+ * (triángulo rojo + el copy de pérdida de datos, espejo literal del toast web de `OfflineWorkoutQueueSync`).
+ * `idle` no pinta nada. El descarte NO puede caer al camino verde: son series entrenadas que se perdieron.
  */
 function SyncChip({ state, exec }: { state: FinalSyncState | undefined; exec: ExecTheme }) {
   if (!state || state.status === 'idle') return null
   const s = exec.surface
   const syncing = state.status === 'syncing'
   const pending = state.status === 'pending'
+  const discarded = state.status === 'discarded'
   const n = state.count ?? 0
   const plural = n !== 1 ? 's' : ''
-  const tone = pending ? exec.pr : syncing ? s.textMuted : '#4ADE80'
-  const label = syncing
-    ? `Sincronizando ${n} serie${plural}…`
-    : pending
-      ? `${n} serie${plural} sin sincronizar · se suben solas`
-      : 'Todo sincronizado'
+  const tone = discarded ? '#F04438' : pending ? exec.pr : syncing ? s.textMuted : '#4ADE80'
+  const label = discarded
+    ? `No pudimos guardar ${n} serie${plural} registrada${plural} sin conexión. Revisa tu entrenamiento.`
+    : syncing
+      ? `Sincronizando ${n} serie${plural}…`
+      : pending
+        ? `${n} serie${plural} sin sincronizar · se suben solas`
+        : 'Todo sincronizado'
   return (
     <View
       testID="final-sync-chip"
@@ -642,7 +652,9 @@ function SyncChip({ state, exec }: { state: FinalSyncState | undefined; exec: Ex
         alignItems: 'center',
         gap: 6,
         marginTop: 2,
-        borderRadius: 999,
+        // El copy del descarte es una frase completa: el chip deja de ser píldora de una línea y pasa a
+        // caja redondeada que envuelve (14px de radio) para no truncar el aviso.
+        borderRadius: discarded ? 14 : 999,
         borderWidth: 1,
         borderColor: hexToRgba(tone, 0.34),
         backgroundColor: hexToRgba(tone, 0.1),
@@ -653,12 +665,18 @@ function SyncChip({ state, exec }: { state: FinalSyncState | undefined; exec: Ex
       {syncing ? (
         // El spinner nativo mide 20dp: se escala para no engordar el chip (mismo alto que los iconos).
         <ActivityIndicator size="small" color={tone} style={{ width: 14, height: 14, transform: [{ scale: 0.7 }] }} />
+      ) : discarded ? (
+        <AlertTriangle size={13} color={tone} strokeWidth={2.6} />
       ) : pending ? (
         <CloudOff size={13} color={tone} strokeWidth={2.4} />
       ) : (
         <Check size={13} color={tone} strokeWidth={2.8} />
       )}
-      <Text style={{ fontFamily: FONT.uiBold, fontSize: 11.5, color: tone }} numberOfLines={1}>
+      <Text
+        testID="final-sync-chip-label"
+        style={{ flexShrink: 1, fontFamily: FONT.uiBold, fontSize: 11.5, color: tone }}
+        numberOfLines={discarded ? 3 : 1}
+      >
         {label}
       </Text>
     </View>

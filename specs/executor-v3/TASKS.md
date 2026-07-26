@@ -86,5 +86,9 @@
 - **Gate Ola 7B**: build EAS + QA con relojes físicos (sesión completa de cardio con BPM en vivo desde cada reloj); review App Store + Play.
 
 ## Cierre (post-olas)
-- [ ] **EC.1** Encendido gradual de flags (RN remote + Edge Config) → QA CEO → default ON.
-- [ ] **EC.2** Actualizar docs canónicos (`CURRENT.md`, `MOBILE_PARITY.md`) al mergear a `rnmobiledenuevo`; retiro de `LegacyExecutor` y evaluación de retiro de ExecutorV2 = decisión CEO separada.
+- [x] **EC.1** OBSOLETA por decisión CEO 2026-07-23: los flags `executorV2`/`executorV3` se
+  ELIMINARON (no hubo encendido gradual — V3 quedó como único camino en web y RN; QA funcional CEO
+  aprobado en la ronda de PR #170).
+- [x] **EC.2** Docs canónicos sincronizados (`d7067023`, 2026-07-25). Retiro EJECUTADO el
+  2026-07-25 (sesión "haz toda la deuda" del CEO): `ExecutorV2.tsx` y `LegacyExecutor.tsx` fuera del
+  árbol (0 importadores verificados por grep; solo quedaban comentarios, actualizados).

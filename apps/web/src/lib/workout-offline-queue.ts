@@ -261,17 +261,29 @@ function clearWorkoutFlushAttempts(keys: readonly string[]): void {
  * reenviarla el upsert es last-wins/idempotente → `success` → sale de la cola. `opts.planId` acota el
  * envío a un plan (preserva intactos los items de otros planes).
  * `send` inyectado ⇒ testeable sin red. Escribe el remanente real de vuelta a localStorage.
+ *
+ * Telemetría (aditiva): `discardedByCode` desglosa el total de `discarded` POR CAUSA. Sin el desglose,
+ * un contador plano no distingue "el coach está en pausa" (esperable) de "un código nuevo del action
+ * sin clasificar está comiéndose series reales" (regresión). Claves: el `code` del server para los
+ * descartes permanentes, y `max_attempts:<code>` para los zombis que agotaron el tope.
  */
 export async function flushWorkoutQueue(
     send: WorkoutLogSend,
     opts?: { planId?: string },
-): Promise<{ flushed: number; discarded: number; remainingInScope: number; remaining: WorkoutOfflineLog[] }> {
+): Promise<{
+    flushed: number
+    discarded: number
+    discardedByCode: Record<string, number>
+    remainingInScope: number
+    remaining: WorkoutOfflineLog[]
+}> {
     const all = dedupeWorkoutQueue(readWorkoutOfflineQueue())
     const inScope = opts?.planId ? all.filter((i) => i.planId === opts.planId) : all
     const outOfScope = opts?.planId ? all.filter((i) => i.planId !== opts.planId) : []
     const remainingInScope: WorkoutOfflineLog[] = []
     let flushed = 0
     let discarded = 0
+    const discardedByCode: Record<string, number> = {}
     const attempts = readWorkoutFlushAttempts()
     // Claves que salieron de la cola en este flush (confirmadas o descartadas) → olvidan su contador.
     const settledKeys: string[] = []
@@ -284,6 +296,8 @@ export async function flushWorkoutQueue(
                 settledKeys.push(key)
             } else if (res.code && PERMANENT_FAILURE_CODES.has(res.code)) {
                 discarded++
+                // Cardinalidad acotada: la clave es el propio código permanente (set cerrado).
+                discardedByCode[res.code] = (discardedByCode[res.code] ?? 0) + 1
                 settledKeys.push(key)
             } else if (res.code && TRANSIENT_FAILURE_CODES.has(res.code)) {
                 // Falla del entorno, no del payload (sesión vencida, blip de la DB): se reintenta
@@ -294,6 +308,11 @@ export async function flushWorkoutQueue(
                 const next = (attempts[key] ?? 0) + 1
                 if (next >= MAX_WORKOUT_FLUSH_ATTEMPTS) {
                     discarded++
+                    // Prefijo `max_attempts:` para no confundir el descarte por tope con un rechazo
+                    // permanente clasificado; el código va adentro porque ES el dato accionable
+                    // (un código desconocido recurrente = falta clasificarlo en la action).
+                    const byMax = `max_attempts:${res.code ?? 'sin_code'}`
+                    discardedByCode[byMax] = (discardedByCode[byMax] ?? 0) + 1
                     settledKeys.push(key)
                 } else {
                     attempts[key] = next
@@ -309,7 +328,7 @@ export async function flushWorkoutQueue(
     writeWorkoutFlushAttempts(attempts)
     const remaining = [...outOfScope, ...remainingInScope]
     writeWorkoutOfflineQueue(remaining)
-    return { flushed, discarded, remainingInScope: remainingInScope.length, remaining }
+    return { flushed, discarded, discardedByCode, remainingInScope: remainingInScope.length, remaining }
 }
 
 /**

@@ -5,7 +5,7 @@ import { MotiView } from 'moti'
 import { BlurView } from 'expo-blur'
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake'
 import { Pause, Play, SkipForward, Sun, X } from 'lucide-react-native'
-import { INTERVAL_PHASE_LABEL, type IntervalPhase, type IntervalPhaseKind } from '@eva/workout-engine'
+import { INTERVAL_PHASE_LABEL, intervalPhaseTargetLabel, isManualPhase, type IntervalPhase, type IntervalPhaseKind } from '@eva/workout-engine'
 import { useEvaMotion, EASE } from '../../../../lib/motion'
 import { useTheme } from '../../../../context/ThemeContext'
 import { textStyle, FONT } from '../../../../lib/typography'
@@ -74,6 +74,9 @@ export function IntervalTimer({ phases, onClose }: IntervalTimerProps) {
   const wakeLockOnRef = useRef(false)
 
   const phase = phases[phaseIndex] ?? null
+  // Fase MANUAL (Fase D · deuda #6 cardio-ejes): prescrita por DISTANCIA — no se cronometra; el
+  // display muestra los metros y se avanza con el CTA "Fase siguiente". Countdown y barra se apagan.
+  const manual = isManualPhase(phase)
 
   const cue = useCallback((double: boolean) => {
     // Web IntervalTimer.tsx:45 triggerHaptic(double ? [200,100,200,100,400] : [200,100,200]):
@@ -102,12 +105,13 @@ export function IntervalTimer({ phases, onClose }: IntervalTimerProps) {
     phaseIndexRef.current = next
     setPhaseIndex(next)
     setTimeLeft(phases[next].durationSec)
-    endTimeRef.current = Date.now() + phases[next].durationSec * 1000
+    // Fase manual ⇒ SIN deadline: ni el tick ni el resume de AppState deben auto-avanzarla.
+    endTimeRef.current = isManualPhase(phases[next]) ? null : Date.now() + phases[next].durationSec * 1000
   }, [phases, cue])
 
   useEffect(() => {
     let interval: ReturnType<typeof setInterval> | undefined
-    if (isActive && !finished) {
+    if (isActive && !finished && !manual) {
       if (!endTimeRef.current) endTimeRef.current = Date.now() + timeLeft * 1000
       interval = setInterval(() => {
         if (!endTimeRef.current) return
@@ -209,7 +213,7 @@ export function IntervalTimer({ phases, onClose }: IntervalTimerProps) {
                     <Text style={styles.repeat}> · intervalo {phase.repeat} de {phase.totalRepeats}</Text>
                   ) : null}
                 </Text>
-                <Text style={styles.bigTime}>{formatTime(timeLeft)}</Text>
+                <Text style={styles.bigTime}>{manual ? intervalPhaseTargetLabel(phase) : formatTime(timeLeft)}</Text>
               </>
             )}
           </View>
@@ -228,7 +232,7 @@ export function IntervalTimer({ phases, onClose }: IntervalTimerProps) {
             >
               <Sun size={14} color={wakeLockOn ? WARNING_500 : ON_DARK_MUTED} />
             </Pressable>
-            {!finished ? (
+            {!finished && !manual ? (
               <>
                 <Pressable
                   testID="interval-timer-pause"
@@ -263,7 +267,7 @@ export function IntervalTimer({ phases, onClose }: IntervalTimerProps) {
             </Pressable>
           </View>
         </View>
-        {!finished && phase ? (
+        {!finished && phase && !manual ? (
           <View style={styles.track}>
             {/* Web IntervalTimer.tsx:195 el relleno lleva `transition-all duration-300 ease-linear`
                 y su width se recalcula por-segundo, llenándose de forma FLUIDA. Esa micro-animación es
@@ -277,6 +281,22 @@ export function IntervalTimer({ phases, onClose }: IntervalTimerProps) {
               transition={{ type: 'timing', duration: 300, easing: EASE.linear }}
             />
           </View>
+        ) : null}
+        {!finished && manual ? (
+          <Pressable
+            testID="interval-timer-next-phase"
+            onPress={skip}
+            accessibilityRole="button"
+            accessibilityLabel="Fase siguiente"
+            style={({ pressed }) => [
+              styles.nextPhaseBtn,
+              { backgroundColor: theme.primary },
+              pressed && styles.utilBtnPressed,
+            ]}
+          >
+            <Text style={[styles.nextPhaseLabel, { color: theme.primaryForeground }]}>Fase siguiente</Text>
+            <SkipForward size={14} color={theme.primaryForeground} />
+          </Pressable>
         ) : null}
         {wakeLockOn ? (
           <Text style={styles.batteryNote}>Pantalla siempre encendida activa — consume más batería.</Text>
@@ -331,6 +351,9 @@ const styles = StyleSheet.create({
   utilBtnPressed: { transform: [{ scale: 0.97 }] },
   wakeOn: { backgroundColor: `${WARNING_500}1A` }, // warning-500 @ 10% (espeja `bg-[var(--warning-500)]/10`)
   track: { marginTop: 6, height: 4, borderRadius: 999, backgroundColor: TRACK_ON_DARK, overflow: 'hidden' },
+  // CTA de fase manual (Fase D): pill primario con el mismo alto táctil 44 de los util buttons.
+  nextPhaseBtn: { marginTop: 8, minHeight: 44, borderRadius: 999, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingHorizontal: 14 },
+  nextPhaseLabel: { ...textStyle('sm', FONT.uiBold) },
   fill: { height: '100%', borderRadius: 999 },
   // Web IntervalTimer.tsx:204 `text-[9px]` = 9px (sin token en la escala; 3xs=11 era ~22% mayor).
   batteryNote: { fontSize: 9, lineHeight: 13, fontFamily: FONT.ui, color: ON_DARK_MUTED, marginTop: 4 },

@@ -1,7 +1,7 @@
 ---
 status: active
 owner: product-engineering
-last_verified: "2026-07-25 @ 60090f90"
+last_verified: "2026-07-26 @ 80995cae"
 canonical: true
 ---
 
@@ -14,11 +14,13 @@ Esta es la única vista global de qué está en producción, qué está en integ
 | Referencia | Estado al revisar |
 |---|---|
 | Rama de trabajo | `rnmobiledenuevo`, única rama viva junto a `master` |
-| Corte de `master` integrado | `origin/master` en `60090f90` (merge PR #170, 2026-07-25) |
-| Relación de ramas | `rnmobiledenuevo` == `master` en `60090f90` (fast-forward post-merge; ambas sincronizadas) |
+| Corte de `master` integrado | merge de `rnmobiledenuevo` completo (ola post-incidente P0) — ramas igualadas por decisión del owner 2026-07-26 |
+| Relación de ramas | `master` == `rnmobiledenuevo` tras el merge de la ola post-incidente; trabajo nuevo sigue en `rnmobiledenuevo` |
+| Hotfix P0 2026-07-26 (PR #171, EN PROD) | Ejecutor alumno perdía series al reentrar un día recuperado: `?fecha=<hoy>` activaba el modo solo-UPDATE (jamás inserta) y la cola offline descartaba cada rechazo `past_set_not_found`. Fix en 3 capas (action, page, `buildWorkoutDoneEditHref`); `?fecha=` queda reservado a días realmente pasados. CI quality verde ([run 30214247333](https://github.com/Juancho2706/gymappjp/actions/runs/30214247333)), Vercel prod READY |
+| Ola post-incidente (local → merge) | Telemetría de descartes por code en la cola offline (web+RN, evento Sentry por causa, chip RN honesto), `CountUpText` compartido que extingue la clase EVA-NEXTJS-10/E (7 superficies migradas), dedup (plan, día) en la atribución semanal, banner RN acotado al plan de hoy, y paquete SDD `docs/specs/workout-day-in-progress` (decisión CEO O2 "En progreso", implementación pendiente). Suite completa 3964 tests verdes |
 | PR #170 (mergeada) | Ejecutor V3 (ceremonia logo dark + ignición del CTA Finalizar), home alumno (link retirado + scroll-top), cardio fases A-D completas (ejes por modalidad, coach ve registros, intervalos por distancia), pulido del creador de ejercicios |
 | Migración DB | `20260725221804_cardio_modality_axes` APLICADA en LIVE antes del merge (aditiva: `exercises.cardio_modality`, Escaladora, `reps_unit` +jumps/floors) |
-| Gate `quality` | Verde en el run `30181033720` sobre `baef4283` (tsc x3, lint 0 errores, 3.940 tests) |
+| Gate `quality` | Verde en el [run 30181033720](https://github.com/Juancho2706/gymappjp/actions/runs/30181033720) sobre `baef4283`: docs, lint 0 errores, typecheck web, tokens y Vitest 3940 aprobados / 4 omitidos (330 archivos). `tsc --noEmit` web+mobile+enterprise re-ejecutados verdes en local sobre `a59acfd1` (2026-07-25) |
 | QA | Ronda funcional del owner aprobada en web/emulador; QA física fina Android/iOS pendiente (háptico, reduced-motion) |
 
 Este bloque es un snapshot, no reemplaza `git fetch`, `git status` ni los checks remotos antes de integrar.
@@ -37,20 +39,20 @@ Este bloque es un snapshot, no reemplaza `git fetch`, `git status` ni los checks
 
 ## Prioridad actual
 
-1. Olas 4A y 4B **cerradas estáticas** (nutrición alumno + coach en paridad 1:1 de código). Siguiente: ola 5 (entrenamiento coach, coordinar con la sesión paralela del ejecutor) según `MOBILE_PARITY.md`; QA device pendiente para todo.
+1. Olas 4A y 4B **cerradas estáticas** (nutrición alumno + coach en paridad 1:1 de código). Siguiente: ola 5 (builder y programas del coach; el ejecutor V3 del alumno ya quedó integrado en PR #170, sin coordinación pendiente) según `MOBILE_PARITY.md`; QA device pendiente para todo.
 2. Ejecutar los gates web/mobile completos sobre cada checkpoint candidato.
-3. Generar y retener artefactos Android/iOS del candidato final; completar el submit a TestFlight.
+3. Generar y retener artefactos Android/iOS del corte actual (el build iOS `production` está roto desde el 2026-07-23) y verificar en App Store Connect/Play Console los submits ya realizados.
 4. Completar QA en dispositivos Android/iOS de los recorridos críticos.
 5. Integrar `rnmobiledenuevo` a `master` solo con evidencia verde y sin migraciones o artefactos locales pendientes.
 
 ## Gates que siguen abiertos
 
-- Build firmado Android/iOS del candidato actual y submit iOS verificado con `submit.previewv2`.
+- ~~Build firmado Android/iOS del corte actual~~ → HECHO (`856829fa`, run `30185211552`, submits incluidos). Quedan: retener artefactos, verificar App Store Connect/Play Console y QA física.
 - Certificación física de cámara, gestos, teclado, safe areas, offline y notificaciones en ambos sistemas.
 - Cierre verificable de la paridad móvil restante; código presente no equivale a QA aprobada.
 - Confirmación del rollout/configuración de Nutrition V2 en el entorno objetivo antes de una promoción.
 
-El corte `c6743ef3` compiló y subió artefactos Android en el [run 29766013009](https://github.com/Juancho2706/gymappjp/actions/runs/29766013009) e iOS en el [run 29765692202](https://github.com/Juancho2706/gymappjp/actions/runs/29765692202); el segundo falló después, durante el submit a TestFlight. Ambos artefactos expiraron y no representan el candidato integrado en `bc9ac09f` ni certifican QA física.
+Builds `production`: el [run 30185211552](https://github.com/Juancho2706/gymappjp/actions/runs/30185211552) sobre `856829fa` (2026-07-25) dejó **Android e iOS verdes end-to-end con submits incluidos** (AAB a Play internal testing + IPA a TestFlight), usando el profile regenerado con HealthKit + Associated Domains (la falla de capability de los runs 07-23/24 quedó cerrada; diagnóstico [30183498116](https://github.com/Juancho2706/gymappjp/actions/runs/30183498116)). Ese binario incluye la deuda cardio saldada y los universal links repuestos. Pendiente humano: retener artefactos (1 día), verificar procesamiento en App Store Connect/Play Console y QA física — nada de esto certifica QA device.
 
 ## Nutrition V2: criterio actual
 

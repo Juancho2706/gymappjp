@@ -62,6 +62,7 @@ import {
     readWorkoutOfflineQueueForPlan,
     workoutLogToFormData,
 } from '@/lib/workout-offline-queue'
+import { reportWorkoutQueueDiscards } from '@/lib/workout/report-discards'
 import { WorkoutTimerProvider, useWorkoutTimer, parseRestTime } from './WorkoutTimerProvider'
 import { WorkoutKeypadProvider } from './WorkoutKeypadProvider'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose } from '@/components/ui/dialog'
@@ -1881,6 +1882,17 @@ export function WorkoutExecutionClient({
             // El chip reporta las DOS cosas por separado: lo que quedó pendiente (se reintenta solo) y
             // lo que el flush DESCARTÓ (rechazo permanente o tope de reintentos = datos perdidos). Con
             // descartes, "Listo" sería mentira aunque la cola haya quedado vacía.
+            if (res.discarded > 0) {
+                // Este flush es el que más duele (el alumno acaba de terminar y perdió series) y hasta
+                // ahora NO dejaba rastro en Sentry: sólo el chip lo veía. Un evento por causa.
+                reportWorkoutQueueDiscards({
+                    discardedByCode: res.discardedByCode,
+                    totalDiscarded: res.discarded,
+                    flushed: res.flushed,
+                    surface: 'finish',
+                    extra: { planId: plan.id, targetDate },
+                })
+            }
             if (finishMountedRef.current) {
                 setFinishSync({
                     phase: res.remainingInScope > 0 ? 'pending' : 'synced',

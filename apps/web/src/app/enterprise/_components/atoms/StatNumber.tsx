@@ -1,7 +1,8 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
-import { useInView, useMotionValue, animate, motion } from 'framer-motion'
+import { useRef } from 'react'
+import { useInView } from 'framer-motion'
+import { CountUpText } from '@/components/ui/count-up'
 
 type StatNumberProps = {
   value: number
@@ -25,6 +26,17 @@ const compactFormatter = new Intl.NumberFormat('es-CL', {
   maximumFractionDigits: 1,
 })
 
+function formatStat(v: number, format: NonNullable<StatNumberProps['format']>, decimals: number) {
+  if (format === 'currency-clp') return clpFormatter.format(Math.round(v))
+  if (format === 'compact') return compactFormatter.format(v)
+  return v.toFixed(decimals)
+}
+
+/**
+ * Métrica de la landing enterprise: cuenta hacia arriba al entrar en viewport (1×).
+ * El texto lo escribe `CountUpText` vía MotionValue — nada de `setState` por frame,
+ * que es lo que hace explotar a React 19 (ver `components/ui/count-up.tsx`).
+ */
 export function StatNumber({
   value,
   prefix = '',
@@ -37,40 +49,17 @@ export function StatNumber({
 }: StatNumberProps) {
   const ref = useRef<HTMLSpanElement>(null)
   const inView = useInView(ref, { once: true, amount: 0.4 })
-  const mv = useMotionValue(0)
-  const [text, setText] = useState(`${prefix}0${suffix}`)
-
-  useEffect(() => {
-    if (!inView) return
-    const controls = animate(mv, value, {
-      duration,
-      ease: [0.16, 1, 0.3, 1],
-    })
-    return controls.stop
-  }, [inView, value, duration, mv])
-
-  useEffect(() => {
-    const unsub = mv.on('change', v => {
-      let formatted: string
-      if (format === 'currency-clp') {
-        formatted = clpFormatter.format(Math.round(v))
-      } else if (format === 'compact') {
-        formatted = compactFormatter.format(v)
-      } else {
-        formatted = v.toFixed(decimals)
-      }
-      setText(`${prefix}${formatted}${suffix}`)
-    })
-    return unsub
-  }, [mv, prefix, suffix, decimals, format])
 
   return (
-    <motion.span
+    <CountUpText
       ref={ref}
+      // Fuera de viewport se queda en 0; al entrar, el resorte lo lleva al valor.
+      value={inView ? value : 0}
+      // Resorte sin rebote con la misma duración del tween anterior (ease expo-out).
+      spring={{ duration, bounce: 0 }}
+      format={v => `${prefix}${formatStat(v, format, decimals)}${suffix}`}
       className={className}
       aria-label={ariaLabel ?? `${prefix}${value}${suffix}`}
-    >
-      {text}
-    </motion.span>
+    />
   )
 }

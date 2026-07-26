@@ -424,6 +424,28 @@ describe('workout-offline-queue', () => {
             expect(localStorage.getItem(ATTEMPTS_KEY)).toBeNull()
         })
 
+        // Telemetría por causa (2026-07-26): el conteo plano `discarded` no distingue "coach en pausa"
+        // (esperable) de "código nuevo sin clasificar comiéndose series" (regresión). El desglose es
+        // lo que después agrupa Sentry en un issue por causa.
+        it('desglosa el descarte permanente en discardedByCode', async () => {
+            enqueueWorkoutLog(make({ setNumber: 1 }))
+            const res = await flushWorkoutQueue(async () => ({ error: 'no', code: 'past_set_not_found' }))
+            expect(res.discarded).toBe(1)
+            expect(res.discardedByCode).toEqual({ past_set_not_found: 1 })
+        })
+
+        it('desglosa el descarte por tope como max_attempts:<code>', async () => {
+            enqueueWorkoutLog(make({ setNumber: 1 }))
+            for (let i = 1; i < MAX_WORKOUT_FLUSH_ATTEMPTS; i++) {
+                const res = await flushWorkoutQueue(async () => ({ error: 'raro', code: 'codigo_que_no_existe' }))
+                // Mientras no agota el tope no hay descarte que reportar.
+                expect(res.discardedByCode).toEqual({})
+            }
+            const last = await flushWorkoutQueue(async () => ({ error: 'raro', code: 'codigo_que_no_existe' }))
+            expect(last.discarded).toBe(1)
+            expect(last.discardedByCode).toEqual({ 'max_attempts:codigo_que_no_existe': 1 })
+        })
+
         it('dedupes before sending (one network call per block/set, last intention)', async () => {
             enqueueWorkoutLog(make({ setNumber: 1, weightKg: 35 }))
             enqueueWorkoutLog(make({ setNumber: 1, weightKg: 40 }))

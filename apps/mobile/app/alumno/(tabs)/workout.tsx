@@ -143,9 +143,16 @@ export default function WorkoutScreen() {
 
   async function handleSync() {
     setSyncing(true)
-    const synced = await flushLogQueue(supabase)
-    if (synced > 0) setPendingLogs(0)
-    setSyncing(false)
+    try {
+      await flushLogQueue(supabase)
+      // El badge cuenta lo que QUEDA, no "hubo un flush": ponerlo en 0 porque subió alguna serie
+      // mentía cuando quedaban items en backoff o descartados (23503). Se relee el conteo real.
+      setPendingLogs(await getPendingLogCount())
+    } catch {
+      // Cola intacta → el badge conserva su valor anterior.
+    } finally {
+      setSyncing(false)
+    }
   }
 
   function renderPlan({ item, index }: { item: Plan; index: number }) {

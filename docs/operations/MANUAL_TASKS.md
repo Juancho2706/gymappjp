@@ -1,7 +1,7 @@
 ---
 status: active
 owner: product-owner
-last_verified: "2026-07-21 @ f5301858"
+last_verified: "2026-07-25 @ 856829fa"
 canonical: true
 ---
 
@@ -18,32 +18,12 @@ Reglas:
 
 ## P1 — Cierre del build y QA móvil
 
-### MOB-01 — Generar IPA actual y completar TestFlight
-
-El [run 29765692202](https://github.com/Juancho2706/gymappjp/actions/runs/29765692202) compiló y subió una IPA de `c6743ef3`, pero el paso de submit a TestFlight falló y el artefacto ya expiró. `f5301858` añadió el perfil `submit.previewv2`; falta validarlo con un binario del candidato actual.
-
-GitHub Actions → **Mobile Build (Local — no EAS credits)**:
-
-```text
-branch: rnmobiledenuevo
-app: mobile
-platform: ios
-profile: previewv2
-submit_ios: true
-```
-
-- [ ] Esperar los checks verdes del commit candidato y ejecutar el workflow.
-- [ ] Descargar/retener la IPA el mismo día; la retención efectiva del repositorio es actualmente de un día.
-- [ ] Verificar que el paso de submit termine verde y que el build aparezca/procese en App Store Connect.
-- [ ] Si falla, conservar el enlace del run y los logs completos; no atribuir una causa sin evidencia ni copiar secretos al issue.
-- [ ] Registrar el resultado en [TEST_STATUS.md](../testing/TEST_STATUS.md) y [MOBILE_PARITY.md](../status/MOBILE_PARITY.md).
-
 ### MOB-02 — Certificar paridad en dispositivos reales
 
-Código estático y tests no sustituyen esta prueba.
+MOB-01 quedó CERRADO el 2026-07-25: profile con HealthKit + Associated Domains validado en el [run 30185211552](https://github.com/Juancho2706/gymappjp/actions/runs/30185211552) (`856829fa`, Android+iOS verdes con submits), procesamiento verificado por el owner en App Store Connect y Play Console, artefactos retenidos en `D:\tmp\eva-artifacts-856829fa\`. Código estático y tests no sustituyen esta prueba.
 
 - [ ] Android: smoke de alumno y coach, light/dark y marca EVA/custom.
-- [ ] iOS: mismo smoke con la IPA actual cuando MOB-01 quede verde.
+- [ ] iOS: mismo smoke con el build de TestFlight (`856829fa`).
 - [ ] Validar navegación, safe areas, teclado, cámara/scanner, offline/reintentos y cambio de workspace.
 - [ ] Registrar cada defecto con plataforma, build, pantalla, pasos, resultado esperado/real y captura.
 - [ ] Actualizar únicamente el resultado consolidado en [MOBILE_PARITY.md](../status/MOBILE_PARITY.md).
@@ -81,17 +61,6 @@ Las suites E2E no bloquean PR automáticamente porque utilizan un entorno Supaba
 - [ ] Ejecutar manualmente el workflow **CI** con `workflow_dispatch` antes de cambios de auth, RLS, pagos, nutrición o releases de tienda.
 - [ ] Confirmar que los secrets E2E existen en el environment de GitHub.
 - [ ] Guardar el run y resultado consolidado en [TEST_STATUS.md](../testing/TEST_STATUS.md).
-
-### STORE-01 — Primera publicación Android en Play Console
-
-La automatización de `eas submit` solo funciona después de que la app y su primer AAB existan en Play Console.
-
-- [ ] Crear/verificar la app con package `cl.evaapp.eva`.
-- [ ] Subir manualmente el primer AAB `production` al track Internal testing si aún no existe uno.
-- [ ] Verificar testers y enlace de opt-in.
-- [ ] Confirmar `GOOGLE_SERVICE_ACCOUNT_JSON` y permiso de publicación al track de pruebas antes de activar `submit_android=true`.
-
-No usar un binario de otro pipeline: `versionCode` debe quedar alineado con el contador remoto de EAS.
 
 ## Cuándo agregar una tarea
 

@@ -1,8 +1,7 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { useReducedMotion, useMotionValue, useSpring, useMotionValueEvent } from 'framer-motion'
 import { Card } from '@/components/ui/card'
+import { CountUpText } from '@/components/ui/count-up'
 import { ProgressRing } from '@/components/ui/progress-ring'
 import { InfoTooltip } from '@/components/ui/info-tooltip'
 import { useTranslation } from '@/lib/i18n/LanguageContext'
@@ -26,25 +25,7 @@ const stroke: Record<RingColor, string> = {
 const emptyStroke = 'var(--ink-300)'
 
 export function ComplianceRing({ value, label, color, empty }: ComplianceRingProps) {
-    const reduce = useReducedMotion()
-    const [animated, setAnimated] = useState(reduce ? value : 0)
-    const mv = useMotionValue(0)
-    const spring = useSpring(mv, { stiffness: 60, damping: 20 })
-
-    useEffect(() => {
-        if (empty) {
-            mv.set(0)
-            setAnimated(0)
-            return
-        }
-        mv.set(value)
-    }, [value, mv, empty])
-
-    useMotionValueEvent(spring, 'change', (v) => {
-        setAnimated(Math.round(v))
-    })
-
-    const displayPct = empty ? 0 : reduce ? value : animated
+    // El count-up vive en `CountUpText` (MotionValue → DOM, cero estado React).
     const ringValue = empty ? 0 : value
     const pathColor = empty ? emptyStroke : stroke[color]
 
@@ -60,7 +41,7 @@ export function ComplianceRing({ value, label, color, empty }: ComplianceRingPro
                         <span className="font-display text-lg font-black text-subtle">—</span>
                     ) : (
                         <span className="font-display text-[19px] font-black tabular-nums tracking-[-0.03em] text-strong">
-                            {displayPct}
+                            <CountUpText value={value} />
                             <span className="text-[11px]">%</span>
                         </span>
                     )

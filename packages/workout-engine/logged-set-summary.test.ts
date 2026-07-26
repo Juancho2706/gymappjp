@@ -3,6 +3,7 @@ import {
     EMPTY_LOGGED_SET_LABEL,
     formatEsNumber,
     formatLoggedDuration,
+    formatLoggedPace,
     formatLoggedSetLine,
     loggedSideSeconds,
 } from './logged-set-summary'
@@ -41,7 +42,31 @@ describe('loggedSideSeconds', () => {
     })
 })
 
+describe('formatLoggedPace', () => {
+    it('seg/km → "m:ss /km"', () => {
+        expect(formatLoggedPace(300)).toBe('5:00 /km')
+        expect(formatLoggedPace(322)).toBe('5:22 /km')
+        expect(formatLoggedPace(59)).toBe('0:59 /km')
+    })
+})
+
 describe('formatLoggedSetLine', () => {
+    it('cardio: pace derivado entre distancia y conteo/FC (deuda #7 cardio-ejes)', () => {
+        expect(
+            formatLoggedSetLine('cardio', {
+                actual_duration_sec: 1500,
+                actual_distance_m: 5000,
+                actual_pace_sec_per_km: 300,
+                actual_avg_hr: 155,
+            }),
+        ).toBe('25 min · 5.000 m · 5:00 /km · FC 155')
+        expect(formatLoggedSetLine('cardio', { actual_pace_sec_per_km: 322 })).toBe('5:22 /km')
+        // Sin pace la línea queda byte-idéntica a la previa (retrocompat).
+        expect(
+            formatLoggedSetLine('cardio', { actual_duration_sec: 750, actual_distance_m: 3200, actual_avg_hr: 148 }),
+        ).toBe('12,5 min · 3.200 m · FC 148')
+    })
+
     it('cardio: tiempo · distancia · FC, solo las partes con dato', () => {
         expect(
             formatLoggedSetLine('cardio', {

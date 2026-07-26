@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { playTimerSound } from '@/lib/audioUtils'
 import { triggerHaptic } from '@/lib/client/haptics'
 import { readRestTimerSound, readRestTimerVolume } from './rest-timer-preferences'
-import { INTERVAL_PHASE_LABEL, type IntervalPhase } from '@eva/workout-engine'
+import { INTERVAL_PHASE_LABEL, intervalPhaseTargetLabel, isManualPhase, type IntervalPhase } from '@eva/workout-engine'
 
 interface IntervalTimerProps {
     phases: IntervalPhase[]
@@ -39,6 +39,9 @@ export function IntervalTimer({ phases, onClose }: IntervalTimerProps) {
     const phaseIndexRef = useRef(0)
 
     const phase = phases[phaseIndex] ?? null
+    // Fase MANUAL (Fase D · deuda #6 cardio-ejes): prescrita por DISTANCIA — sin countdown ni barra;
+    // el display muestra los metros y se avanza con el CTA "Fase siguiente".
+    const manual = isManualPhase(phase)
 
     const beep = useCallback((double = false) => {
         playTimerSound(readRestTimerSound(), readRestTimerVolume())
@@ -58,12 +61,13 @@ export function IntervalTimer({ phases, onClose }: IntervalTimerProps) {
         phaseIndexRef.current = next
         setPhaseIndex(next)
         setTimeLeft(phases[next].durationSec)
-        endTimeRef.current = Date.now() + phases[next].durationSec * 1000
+        // Fase manual ⇒ SIN deadline: el tick jamás debe auto-avanzarla.
+        endTimeRef.current = isManualPhase(phases[next]) ? null : Date.now() + phases[next].durationSec * 1000
     }, [phases, beep])
 
     useEffect(() => {
         let interval: ReturnType<typeof setInterval> | undefined
-        if (isActive && !finished) {
+        if (isActive && !finished && !manual) {
             if (!endTimeRef.current) endTimeRef.current = Date.now() + timeLeft * 1000
             interval = setInterval(() => {
                 if (!endTimeRef.current) return
@@ -137,7 +141,7 @@ export function IntervalTimer({ phases, onClose }: IntervalTimerProps) {
                                     )}
                                 </p>
                                 <p className="text-2xl font-black tabular-nums text-on-dark leading-tight">
-                                    {formatTime(timeLeft)}
+                                    {manual ? intervalPhaseTargetLabel(phase) : formatTime(timeLeft)}
                                 </p>
                             </>
                         )}
@@ -154,7 +158,7 @@ export function IntervalTimer({ phases, onClose }: IntervalTimerProps) {
                         >
                             <Sun className="w-3.5 h-3.5" />
                         </Button>
-                        {!finished && (
+                        {!finished && !manual && (
                             <>
                                 <Button
                                     variant="ghost"
@@ -189,7 +193,7 @@ export function IntervalTimer({ phases, onClose }: IntervalTimerProps) {
                     </div>
                 </div>
                 {/* Barra de progreso de la fase actual */}
-                {!finished && phase && (
+                {!finished && phase && !manual && (
                     <div className="mt-1.5 h-1 rounded-full bg-white/10 overflow-hidden">
                         <div
                             className="h-full rounded-full transition-all duration-300 ease-linear"
@@ -199,6 +203,17 @@ export function IntervalTimer({ phases, onClose }: IntervalTimerProps) {
                             }}
                         />
                     </div>
+                )}
+                {!finished && manual && (
+                    <Button
+                        size="sm"
+                        className="mt-2 w-full rounded-full font-bold"
+                        onClick={advance}
+                        aria-label="Fase siguiente"
+                    >
+                        Fase siguiente
+                        <SkipForward className="ml-1.5 w-3.5 h-3.5" />
+                    </Button>
                 )}
                 {wakeLockOn && (
                     <p className="mt-1 text-[9px] text-on-dark-muted">

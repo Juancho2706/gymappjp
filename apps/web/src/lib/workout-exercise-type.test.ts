@@ -52,6 +52,15 @@ describe('legacyRepsSummaryFor (≤20 chars, es-neutro)', () => {
         expect(legacyRepsSummaryFor({ distance_value: 5, distance_unit: 'km' }, 'cardio')).toBe('5km')
     })
 
+    it('cardio solo-conteo imprime el objetivo rep-based (deuda #4 cardio-ejes)', () => {
+        expect(legacyRepsSummaryFor({ reps_value: 420, reps_unit: 'jumps' }, 'cardio')).toBe('420 saltos')
+        expect(legacyRepsSummaryFor({ reps_value: 45, reps_unit: 'floors', hr_zone: 2 }, 'cardio')).toBe('45 pisos Z2')
+        expect(legacyRepsSummaryFor({ reps_value: 30, reps_unit: 'reps' }, 'cardio')).toBe('30 reps')
+        expect(legacyRepsSummaryFor({ reps_value: 1, reps_unit: 'floors' }, 'cardio')).toBe('1 piso')
+        // La duración sigue mandando sobre el conteo (orden de prioridad intacto).
+        expect(legacyRepsSummaryFor({ duration_sec: 600, reps_value: 420, reps_unit: 'jumps' }, 'cardio')).toBe('10min')
+    })
+
     it('movilidad con hold por lado: "30s/lado"', () => {
         expect(legacyRepsSummaryFor({ duration_sec: 30, side_mode: 'per_side' }, 'mobility')).toBe('30s/lado')
     })

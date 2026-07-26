@@ -1,8 +1,9 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
+import * as Sentry from '@sentry/react-native'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { toggleMealCompletion } from './nutrition.queries'
 import { getSantiagoIsoYmdForUtcInstant, getSantiagoUtcBoundsForDay } from './date-utils'
-import { enqueueOp, flushQueue, queueCount, queueDueCount, type AsyncKV } from './offline-queue'
+import { enqueueOp, flushQueue, queueCount, queueDueCount, type AsyncKV, type FlushSummary } from './offline-queue'
 
 const PLAN_PREFIX = 'eva_plan_'
 const LOG_QUEUE_KEY = 'eva_log_queue'
@@ -29,6 +30,21 @@ interface PendingLog {
   rpe?: number | null
   rir?: number | null
   note?: string | null
+  // Ejes tipados + sustitución (deuda GRAVE #1 · specs/cardio-ejes-y-fixes): sin estos campos una
+  // ronda de cardio/movilidad/roller encolada sin red subía con minutos/distancia/FC/pace/hold/lados
+  // en NULL (y perdía la sustitución). Aditivo y retrocompatible: entradas viejas en AsyncStorage no
+  // traen las keys (⇒ undefined ⇒ no viajan al insert/update) y el drain de `flushLogQueue` ya
+  // spreadea el item completo menos `queued_at`, así que no necesita cambios.
+  actual_duration_sec?: number | null
+  actual_distance_m?: number | null
+  actual_pace_sec_per_km?: number | null
+  actual_hold_sec?: number | null
+  actual_avg_hr?: number | null
+  /** jsonb `{left_sec, right_sec}` del hold por lado (E0.5). */
+  metadata?: { left_sec?: number | null; right_sec?: number | null } | null
+  substituted_exercise_id?: string | null
+  substituted_exercise_name?: string | null
+  substitution_reason?: string | null
   exercise_name_at_log: string | null
   queued_at: string
 }
@@ -75,7 +91,15 @@ export async function enqueueLog(log: Omit<PendingLog, 'queued_at'>): Promise<vo
   await enqueueOp(kv, LOG_QUEUE_KEY, workoutDedupKey(payload), payload, workoutDedupKey)
 }
 
-export async function flushLogQueue(supabase: SupabaseClient, scope?: LogQueueScope): Promise<number> {
+/**
+ * Drena la cola de series y devuelve el RESUMEN COMPLETO (`flushed` + `discarded` + `remaining`).
+ *
+ * Antes devolvía sólo `flushed` y tiraba `discarded` a la basura: un descarte 23503 (bloque borrado por
+ * un reseed del plan) es una serie que el alumno YA entrenó y que no va a llegar al server NUNCA, así que
+ * silenciarlo era pérdida de datos invisible — y peor, dejaba al chip del ejecutor en "Todo sincronizado"
+ * verde. Los consumidores necesitan el descarte para avisar (espejo del `OfflineWorkoutQueueSync` web).
+ */
+export async function flushLogQueue(supabase: SupabaseClient, scope?: LogQueueScope): Promise<FlushSummary> {
   const res = await flushQueue<PendingLog>(
     kv,
     LOG_QUEUE_KEY,
@@ -108,7 +132,21 @@ export async function flushLogQueue(supabase: SupabaseClient, scope?: LogQueueSc
           // 23505 = el índice único de prod ya tiene la fila (otro flush/optimista la insertó primero) →
           // éxito idempotente, drenar. 23503 = FK del bloque borrado (reseed) → descartar, no loopear.
           if (code === '23505') return 'ok'
-          if (code === '23503') return 'discard'
+          if (code === '23503') {
+            // Descarte = pérdida REAL de un dato ya entrenado. Se deja rastro en Sentry para triage
+            // (mismo evento que emite la web en `OfflineWorkoutQueueSync`); el aviso al alumno lo da
+            // el consumidor con el `discarded` del resumen.
+            try {
+              Sentry.captureMessage('workout-offline-queue: descarte 23503', {
+                level: 'warning',
+                tags: { area: 'workout-offline-queue', platform: 'rn', discard_code: '23503' },
+                extra: { blockId: log.block_id, setNumber: log.set_number },
+              })
+            } catch {
+              // Sentry no inicializado (sin DSN) / versión sin API → no-op silencioso.
+            }
+            return 'discard'
+          }
           return 'retry'
         }
         return 'ok'
@@ -118,7 +156,7 @@ export async function flushLogQueue(supabase: SupabaseClient, scope?: LogQueueSc
     },
     { deriveKey: workoutDedupKey, filter: scopeFilter(scope) },
   )
-  return res.flushed
+  return res
 }
 
 /** Series sin subir (incluye las que aún esperan su backoff) — conteo de BADGE. */

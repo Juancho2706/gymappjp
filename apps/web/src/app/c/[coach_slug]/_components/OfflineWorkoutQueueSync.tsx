@@ -3,13 +3,13 @@
 import { useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import * as Sentry from '@sentry/nextjs'
 import { logSetAction } from '@/app/c/[coach_slug]/workout/[planId]/_actions/workout-log.actions'
 import {
     flushWorkoutQueue,
     readWorkoutOfflineQueue,
     workoutLogToFormData,
 } from '@/lib/workout-offline-queue'
+import { reportWorkoutQueueDiscards } from '@/lib/workout/report-discards'
 import { waitForCeremonyEnd } from '@/lib/workout/launch-ceremony'
 
 export function OfflineWorkoutQueueSync() {
@@ -24,16 +24,20 @@ export function OfflineWorkoutQueueSync() {
             try {
                 // Dedupe + reenvío + poda de huérfanos vive en el helper compartido (mismo camino que
                 // el gate de "Finalizar" del ejecutor). last-wins/idempotente por (block,set,día).
-                const { flushed, discarded } = await flushWorkoutQueue((item) =>
+                const { flushed, discarded, discardedByCode } = await flushWorkoutQueue((item) =>
                     logSetAction({}, workoutLogToFormData(item)),
                 )
                 if (discarded > 0) {
                     // Un descarte es una serie que el alumno YA entrenó y que no va a llegar al server
                     // nunca (rechazo permanente o zombi que agotó reintentos). Silenciarlo es pérdida
                     // de datos invisible: se avisa al alumno y se deja rastro en Sentry para triage.
-                    Sentry.captureMessage('workout-offline-queue: series descartadas en el flush', {
-                        level: 'warning',
-                        extra: { discarded, flushed },
+                    // Un evento POR CAUSA (ver el helper): un issue por coach en pausa no puede tapar
+                    // un código nuevo sin clasificar.
+                    reportWorkoutQueueDiscards({
+                        discardedByCode,
+                        totalDiscarded: discarded,
+                        flushed,
+                        surface: 'layout-sync',
                     })
                     toast.error(
                         discarded === 1

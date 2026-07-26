@@ -653,13 +653,16 @@ function WorkoutDayReadOnly({ logs }: { logs: WorkoutLog[] }) {
     const exercises = [...byExercise.values()]
     const totalSets = logs.length
     const hasStrength = exercises.some((e) => e.kind === 'strength')
+    // Cabecera honesta (deuda #7 cardio-ejes): una sesión de cardio registra RONDAS, no "sets".
+    // Solo-fuerza conserva el copy de siempre; mixta usa el neutro "registros".
+    const setsNoun = exercises.every((e) => e.kind === 'strength') ? 'sets' : hasStrength ? 'registros' : 'rondas'
 
     return (
         <Card padding="md" className="gap-0">
             <div className="mb-2.5 flex items-baseline justify-between gap-3">
                 <div className="text-[14.5px] font-black text-strong">{planTitle || 'Sesión'}</div>
                 <div className="shrink-0 text-[11.5px] text-muted">
-                    {exercises.length} ej. · {totalSets} sets
+                    {exercises.length} ej. · {totalSets} {setsNoun}
                 </div>
             </div>
 

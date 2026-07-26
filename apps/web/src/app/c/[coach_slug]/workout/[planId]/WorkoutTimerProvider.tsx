@@ -6,7 +6,7 @@ import { RestTimer } from './RestTimer'
 import { HoldTimer } from './HoldTimer'
 import { IntervalTimer } from './IntervalTimer'
 import { Stopwatch } from './Stopwatch'
-import { buildIntervalPhases, type IntervalPhase } from '@eva/workout-engine'
+import { buildIntervalSequence, type IntervalPhase } from '@eva/workout-engine'
 import type { IntervalConfig } from '@/domain/workout/types'
 
 /**
@@ -117,11 +117,12 @@ export function WorkoutTimerProvider({
     }, [replaceWith])
 
     const startInterval = useCallback((config: IntervalConfig, sets: number = 1) => {
-        const phases = buildIntervalPhases(config, sets)
-        if (phases.length === 0) {
-            toast.info('Este bloque se prescribe por distancia — usa el cronómetro')
-            return
-        }
+        // Secuencia COMPLETA (Fase D · deuda #6 cardio-ejes): los pasos por DISTANCIA entran como
+        // fases `manual` y el overlay muestra la distancia + "Fase siguiente" — antes acá había un
+        // early-return con toast y 8×400m/HYROX quedaban sin timer flotante. `[]` solo si el work
+        // no prescribe ni tiempo ni distancia.
+        const phases = buildIntervalSequence(config, sets)
+        if (phases.length === 0) return
         replaceWith({ kind: 'interval', phases })
     }, [replaceWith])
 

@@ -798,6 +798,11 @@ export function useWorkoutSession(planId: string, repeatDate?: string | null): W
       if (payload.actualPaceSecPerKm != null) logData.actual_pace_sec_per_km = payload.actualPaceSecPerKm
       if (payload.actualHoldSec != null) logData.actual_hold_sec = payload.actualHoldSec
       if (payload.actualAvgHr != null) logData.actual_avg_hr = payload.actualAvgHr
+      // Hold POR LADO (E0.5): el flujo per_side trae `metadata {left_sec, right_sec}` en el payload,
+      // pero acá se descartaba y los lados JAMÁS llegaban a la columna desde RN (la web sí los
+      // escribe vía su action). Mismo criterio "solo si presente": una edición por keypad (sin
+      // sideMode) no trae metadata y no pisa los lados ya guardados.
+      if (payload.metadata != null) logData.metadata = payload.metadata
       if (sub) {
         logData.substituted_exercise_id = sub.exerciseId
         logData.substituted_exercise_name = sub.name
@@ -874,6 +879,10 @@ export function useWorkoutSession(planId: string, repeatDate?: string | null): W
       if (error) {
         // Encolar SIEMPRE por seguridad del dato. Pero el banner "Sin conexion" refleja la red REAL,
         // no la presencia de un error: un error no-de-red (RLS, 4xx) con conexión plena NO es offline.
+        // Deuda GRAVE #1 (specs/cardio-ejes-y-fixes): la cola persistía SOLO ejes de fuerza — una
+        // ronda de cardio/movilidad/roller encolada subía con actual_*/metadata en NULL y perdía la
+        // sustitución. Ahora el item calca `logData` con el mismo criterio "solo si presente" del
+        // guardado online de arriba; el drain (`flushLogQueue`) spreadea el item completo sin cambios.
         await enqueueLog({
           block_id: payload.blockId,
           client_id: cid,
@@ -884,6 +893,19 @@ export function useWorkoutSession(planId: string, repeatDate?: string | null): W
           rir: clampIntInRange(payload.rir, 0, 10),
           // Sólo si el payload trae nota (no pisar con null la nota guardada en un flush de edición).
           ...(payload.note != null ? { note: payload.note } : {}),
+          ...(payload.actualDurationSec != null ? { actual_duration_sec: payload.actualDurationSec } : {}),
+          ...(payload.actualDistanceM != null ? { actual_distance_m: payload.actualDistanceM } : {}),
+          ...(payload.actualPaceSecPerKm != null ? { actual_pace_sec_per_km: payload.actualPaceSecPerKm } : {}),
+          ...(payload.actualHoldSec != null ? { actual_hold_sec: payload.actualHoldSec } : {}),
+          ...(payload.actualAvgHr != null ? { actual_avg_hr: payload.actualAvgHr } : {}),
+          ...(payload.metadata != null ? { metadata: payload.metadata } : {}),
+          ...(sub
+            ? {
+                substituted_exercise_id: sub.exerciseId,
+                substituted_exercise_name: sub.name,
+                substitution_reason: sub.reason,
+              }
+            : {}),
           exercise_name_at_log: (logData.exercise_name_at_log as string) ?? null,
         })
         const online = await checkOnline()
