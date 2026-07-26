@@ -18,26 +18,12 @@ Reglas:
 
 ## P1 — Cierre del build y QA móvil
 
-### MOB-01 — Reparar provisioning iOS (HealthKit) y build del corte actual
-
-El [run 29885773193](https://github.com/Juancho2706/gymappjp/actions/runs/29885773193) (2026-07-22, `4382ff6c`, perfil `production`, platform `all`) compiló Android+iOS y **completó los submits**: AAB a Play internal testing e IPA a TestFlight, ambos verdes. Después el build iOS `production` falló en [29976332962](https://github.com/Juancho2706/gymappjp/actions/runs/29976332962) (`b7e5e34d`) y [30063566202](https://github.com/Juancho2706/gymappjp/actions/runs/30063566202) (`335c88da`; Android verde con submit ahí).
-
-**Causa raíz confirmada** (run diagnóstico [30183498116](https://github.com/Juancho2706/gymappjp/actions/runs/30183498116) sobre `a59acfd1`, 2026-07-25): `Provisioning profile "evaapp_production" doesn't include the HealthKit capability (target 'EVA')`. La Ola 6 de wearables (`de3ce837`) agregó el entitlement `com.apple.developer.healthkit` vía el plugin de `react-native-health`; el profile guardado en secrets es anterior. El primer build verde (`4382ff6c`) fue el último corte SIN wearables.
-
-Arreglo (portal Apple + secret):
-
-- [x] App ID `cl.evaapp.eva` con capability **HealthKit** (y **Associated Domains**) habilitadas — hecho por el dueño de la cuenta; profile `evaapp_production` regenerado el 2026-07-24 con ambas capabilities + push (expira 2027-05-18).
-- [x] Secret `IOS_PROVISIONING_PROFILE_BASE64` actualizado con el profile nuevo (2026-07-26; el `.p12` no cambió). `ios.associatedDomains` repuesto en `app.json` en el mismo paso (universal links vuelven en el próximo binario).
-- [x] Workflow relanzado: [run 30185211552](https://github.com/Juancho2706/gymappjp/actions/runs/30185211552) sobre `856829fa` — Android e iOS verdes **con ambos submits success** (2026-07-25).
-- [ ] Verificar en App Store Connect que los builds (`4382ff6c` y `856829fa`) procesaron en TestFlight; verificar los AAB en Play Console → internal testing.
-- [ ] Descargar/retener HOY los artefactos del run `30185211552` (retención 1 día) y registrar el resultado en [TEST_STATUS.md](../testing/TEST_STATUS.md) y [MOBILE_PARITY.md](../status/MOBILE_PARITY.md).
-
 ### MOB-02 — Certificar paridad en dispositivos reales
 
-Código estático y tests no sustituyen esta prueba.
+MOB-01 quedó CERRADO el 2026-07-25: profile con HealthKit + Associated Domains validado en el [run 30185211552](https://github.com/Juancho2706/gymappjp/actions/runs/30185211552) (`856829fa`, Android+iOS verdes con submits), procesamiento verificado por el owner en App Store Connect y Play Console, artefactos retenidos en `D:\tmp\eva-artifacts-856829fa\`. Código estático y tests no sustituyen esta prueba.
 
 - [ ] Android: smoke de alumno y coach, light/dark y marca EVA/custom.
-- [ ] iOS: mismo smoke con la IPA actual cuando MOB-01 quede verde.
+- [ ] iOS: mismo smoke con el build de TestFlight (`856829fa`).
 - [ ] Validar navegación, safe areas, teclado, cámara/scanner, offline/reintentos y cambio de workspace.
 - [ ] Registrar cada defecto con plataforma, build, pantalla, pasos, resultado esperado/real y captura.
 - [ ] Actualizar únicamente el resultado consolidado en [MOBILE_PARITY.md](../status/MOBILE_PARITY.md).

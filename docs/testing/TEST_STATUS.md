@@ -122,8 +122,7 @@ No pegar logs extensos, screenshots, payloads, credenciales ni listas de cientos
 
 ## Pendientes actuales
 
-- [ ] Descargar/retener HOY los artefactos del run `30185211552` (retención 1 día).
-- [ ] Verificar en App Store Connect que los builds (`4382ff6c` y `856829fa`) procesaron en TestFlight; verificar los AAB en Play internal testing.
+- [x] Artefactos del run `30185211552` retenidos (`D:\tmp\eva-artifacts-856829fa\`: build.aab + build.ipa) y procesamiento en TestFlight/Play internal verificado por el owner (2026-07-25).
 - [ ] Completar smoke Android/iOS de la paridad activa.
 - [ ] Ejecutar E2E manual antes del siguiente release con cambios de auth/RLS/pagos/nutrición.
 - [ ] Hacer deterministas los jobs Playwright antes de volverlos obligatorios en cada PR.
