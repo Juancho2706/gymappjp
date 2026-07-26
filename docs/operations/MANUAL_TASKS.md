@@ -24,11 +24,10 @@ El [run 29885773193](https://github.com/Juancho2706/gymappjp/actions/runs/298857
 
 **Causa raíz confirmada** (run diagnóstico [30183498116](https://github.com/Juancho2706/gymappjp/actions/runs/30183498116) sobre `a59acfd1`, 2026-07-25): `Provisioning profile "evaapp_production" doesn't include the HealthKit capability (target 'EVA')`. La Ola 6 de wearables (`de3ce837`) agregó el entitlement `com.apple.developer.healthkit` vía el plugin de `react-native-health`; el profile guardado en secrets es anterior. El primer build verde (`4382ff6c`) fue el último corte SIN wearables.
 
-Arreglo (portal Apple + secret, ~10 min):
+Arreglo (portal Apple + secret):
 
-- [ ] developer.apple.com → Identifiers → App ID `cl.evaapp.eva` → habilitar capability **HealthKit** → Save.
-- [ ] Profiles → `evaapp_production` (quedó "Invalid" tras el paso anterior) → Edit → Generate → descargar el `.mobileprovision` nuevo.
-- [ ] Actualizar el secret de GitHub `IOS_PROVISIONING_PROFILE_BASE64` con el base64 del archivo nuevo (el certificado `.p12` NO cambia).
+- [x] App ID `cl.evaapp.eva` con capability **HealthKit** (y **Associated Domains**) habilitadas — hecho por el dueño de la cuenta; profile `evaapp_production` regenerado el 2026-07-24 con ambas capabilities + push (expira 2027-05-18).
+- [x] Secret `IOS_PROVISIONING_PROFILE_BASE64` actualizado con el profile nuevo (2026-07-26; el `.p12` no cambió). `ios.associatedDomains` repuesto en `app.json` en el mismo paso (universal links vuelven en el próximo binario).
 - [ ] Relanzar **Mobile Build (Local — no EAS credits)**: `branch rnmobiledenuevo · app mobile · platform all · profile production · submit_ios true · submit_android true`.
 - [ ] Verificar en App Store Connect que el build de `4382ff6c` procesó en TestFlight y que el nuevo build también; verificar el AAB en Play Console → internal testing.
 - [ ] Descargar/retener los artefactos el mismo día (retención 1 día) y registrar el resultado en [TEST_STATUS.md](../testing/TEST_STATUS.md) y [MOBILE_PARITY.md](../status/MOBILE_PARITY.md).
