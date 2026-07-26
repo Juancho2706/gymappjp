@@ -1,12 +1,12 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { useReducedMotion, useMotionValue, useSpring, useMotionValueEvent } from 'framer-motion'
+import { CountUpText } from '@/components/ui/count-up'
 
 /**
- * Numero con count-up (mismo patron que ComplianceRing: useMotionValue + useSpring{60,20} +
- * useMotionValueEvent). reduced-motion => salta al valor final (sin animar). `format` recibe el
- * valor interpolado y devuelve el texto mostrado (ej. `(v) => v.toFixed(1) + '%'`).
+ * Numero con count-up de composicion corporal. Wrapper delgado sobre
+ * `CountUpText` (mismo resorte 60/20 de siempre, ahora sin un setState por
+ * frame: ver `components/ui/count-up.tsx`). `format` recibe el valor
+ * interpolado y devuelve el texto mostrado (ej. `(v) => v.toFixed(1) + '%'`).
  */
 export function CountUpValue({
     value,
@@ -17,22 +17,5 @@ export function CountUpValue({
     format: (v: number) => string
     className?: string
 }) {
-    const reduce = useReducedMotion()
-    const [animated, setAnimated] = useState(reduce ? value : 0)
-    const mv = useMotionValue(0)
-    const spring = useSpring(mv, { stiffness: 60, damping: 20 })
-
-    useEffect(() => {
-        if (reduce) {
-            setAnimated(value)
-            return
-        }
-        mv.set(value)
-    }, [value, mv, reduce])
-
-    useMotionValueEvent(spring, 'change', (v) => {
-        setAnimated(v)
-    })
-
-    return <span className={className}>{format(reduce ? value : animated)}</span>
+    return <CountUpText value={value} format={format} className={className} />
 }

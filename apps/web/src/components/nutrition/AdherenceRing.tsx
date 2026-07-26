@@ -1,14 +1,10 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import {
-  useReducedMotion,
-  useMotionValue,
-  useSpring,
-  useMotionValueEvent,
-} from 'framer-motion'
-import { CircularProgressbar, buildStyles } from 'react-circular-progressbar'
+import { useReducedMotion } from 'framer-motion'
+import { CircularProgressbarWithChildren, buildStyles } from 'react-circular-progressbar'
 import 'react-circular-progressbar/dist/styles.css'
+import { CountUpText } from '@/components/ui/count-up'
 import { cn } from '@/lib/utils'
 import { MACRO_GOAL_COLOR } from './macro-tokens'
 
@@ -33,11 +29,20 @@ export interface AdherenceRingProps {
 
 const EMPTY_STROKE = '#9ca3af'
 
+/** `textSize` de la librería va en unidades del viewBox 0 0 100 100. */
+const CENTER_TEXT_UNITS = 26
+const EMPTY_TEXT_UNITS = 22
+
 /**
  * Single circular progress ring for adherence/compliance percentages.
  * Presentational + a11y-complete: `role="progressbar"` with `aria-valuetext`
  * (never color-alone). Animates with a spring; collapses to the final value
  * under `prefers-reduced-motion`.
+ *
+ * El número del centro lo interpola `CountUpText` (MotionValue → DOM) y el arco
+ * lo mueve la transición CSS de la librería. Antes un único `setState` por frame
+ * manejaba las dos cosas: eso es lo que dispara el "Maximum update depth
+ * exceeded" de React 19 (ver `components/ui/count-up.tsx`).
  */
 export function AdherenceRing({
   value,
@@ -50,27 +55,21 @@ export function AdherenceRing({
 }: AdherenceRingProps) {
   const reduce = useReducedMotion()
   const clamped = Math.max(0, Math.min(100, Math.round(value)))
-  const [animated, setAnimated] = useState(reduce ? clamped : 0)
-  const mv = useMotionValue(0)
-  const spring = useSpring(mv, { stiffness: 60, damping: 20 })
 
+  // Un ÚNICO commit al montar dispara el barrido 0 → valor del arco por CSS.
+  const [mounted, setMounted] = useState(false)
   useEffect(() => {
-    if (empty) {
-      mv.set(0)
-      setAnimated(0)
-      return
-    }
-    mv.set(clamped)
-  }, [clamped, mv, empty])
+    setMounted(true)
+  }, [])
 
-  useMotionValueEvent(spring, 'change', (v) => setAnimated(Math.round(v)))
-
-  const displayPct = empty ? 0 : reduce ? clamped : animated
+  const ringValue = empty || !mounted ? 0 : clamped
   const pathColor = empty ? EMPTY_STROKE : color
-  const centerText = empty ? '—' : `${displayPct}%`
   const valueText = empty
     ? `${label}: sin datos en el periodo`
     : (ariaValueText ?? `${label}: ${clamped} por ciento`)
+
+  // Centro en HTML (antes era `<text>` SVG): hay que pasar el tamaño del viewBox a px reales.
+  const centerFontSize = (size * (empty ? EMPTY_TEXT_UNITS : CENTER_TEXT_UNITS)) / 100
 
   return (
     <div className={cn('flex flex-col items-center gap-1', className)}>
@@ -83,17 +82,31 @@ export function AdherenceRing({
         aria-label={label}
         style={{ width: size, height: size }}
       >
-        <CircularProgressbar
-          value={displayPct}
-          text={centerText}
+        <CircularProgressbarWithChildren
+          value={ringValue}
           styles={buildStyles({
             pathColor,
             trailColor: 'var(--ring-track-strong)',
-            textColor: empty ? 'var(--muted-foreground)' : 'var(--foreground)',
-            textSize: empty ? '22px' : '26px',
-            pathTransitionDuration: reduce ? 0 : 0.001,
+            pathTransitionDuration: reduce ? 0 : 0.8,
           })}
-        />
+        >
+          {empty ? (
+            <span
+              aria-hidden
+              style={{ fontSize: centerFontSize, color: 'var(--muted-foreground)' }}
+            >
+              —
+            </span>
+          ) : (
+            <span
+              aria-hidden
+              className="tabular-nums"
+              style={{ fontSize: centerFontSize, color: 'var(--foreground)' }}
+            >
+              <CountUpText value={clamped} />%
+            </span>
+          )}
+        </CircularProgressbarWithChildren>
       </div>
       <span className="text-center text-[10px] font-medium text-muted-foreground sm:text-xs">
         {label}

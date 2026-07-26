@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { AnimatePresence, motion, useReducedMotion, useSpring } from 'framer-motion'
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import {
   NUTRITION_MACROS,
   auraGlowAlpha,
@@ -12,6 +12,7 @@ import {
   type NutritionMacroKey,
 } from '@eva/nutrition-v2'
 import { nutritionIllustrationSource } from '@/components/nutrition-v2'
+import { CountUpText } from '@/components/ui/count-up'
 import { confettiHuePalette } from './aura-hero.logic'
 
 // Confeti diferido: se importa solo al celebrar (no infla el bundle de la vista).
@@ -175,7 +176,7 @@ export function AuraHero({ greetingName, calories, macros, dateKey }: AuraHeroPr
             </svg>
             <div className="absolute inset-0 flex flex-col items-center justify-center px-6 text-center">
               <span className="font-display text-4xl font-bold tabular-nums leading-none text-strong sm:text-5xl">
-                <AnimatedKcal value={consumed} reduce={Boolean(reduce)} />
+                <AnimatedKcal value={consumed} />
               </span>
               <span className="mt-1 text-xs font-medium text-subtle">kcal</span>
               {target != null && target > 0 ? (
@@ -244,26 +245,21 @@ export function AuraHero({ greetingName, calories, macros, dateKey }: AuraHeroPr
   )
 }
 
-/** Número de kcal con transición de resorte al montar y al cambiar (estático si reduce-motion). */
-function AnimatedKcal({ value, reduce }: { value: number; reduce: boolean }) {
-  const spring = useSpring(0, { stiffness: 130, damping: 22, mass: 0.7 })
-  const [display, setDisplay] = useState(reduce ? Math.round(value) : 0)
+const KCAL_FORMATTER = new Intl.NumberFormat('es-CL')
 
-  useEffect(() => {
-    if (reduce) {
-      setDisplay(Math.round(value))
-      return
-    }
-    spring.set(value)
-  }, [value, reduce, spring])
-
-  useEffect(() => {
-    if (reduce) return
-    const unsub = spring.on('change', (v) => setDisplay(Math.round(v)))
-    return () => unsub()
-  }, [spring, reduce])
-
-  return <>{new Intl.NumberFormat('es-CL').format(Math.max(display, 0))}</>
+/**
+ * Número de kcal con transición de resorte al montar y al cambiar (estático si reduce-motion).
+ * El texto lo escribe `CountUpText` vía MotionValue: cero renders de React por frame
+ * (ver `components/ui/count-up.tsx`).
+ */
+function AnimatedKcal({ value }: { value: number }) {
+  return (
+    <CountUpText
+      value={value}
+      spring={{ stiffness: 130, damping: 22, mass: 0.7 }}
+      format={(v) => KCAL_FORMATTER.format(Math.max(Math.round(v), 0))}
+    />
+  )
 }
 
 // Geometría del mini-anillo.

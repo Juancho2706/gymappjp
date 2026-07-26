@@ -17,9 +17,10 @@ import {
     LayoutGrid,
     Link as LinkIcon,
 } from 'lucide-react'
-import { motion, useMotionValue, useSpring, useMotionValueEvent } from 'framer-motion'
+import { motion } from 'framer-motion'
 import { CreateClientModal } from './CreateClientModal'
 import { Button } from '@/components/ui/button'
+import { CountUpText } from '@/components/ui/count-up'
 import { IconButton } from '@/components/ui/icon-button'
 import type { DirectoryPulseRow } from '@/services/dashboard.service'
 import type { DirectoryRiskFilter } from './directory-types'
@@ -44,20 +45,15 @@ interface CoachWarRoomProps {
     toolsEnabled?: boolean
 }
 
+/** Contador del pulso del directorio. Mismo resorte de siempre, sin estado por frame. */
 function AnimatedNumber({ value }: { value: number }) {
-    const mv = useMotionValue(0)
-    const spring = useSpring(mv, { stiffness: 120, damping: 22, mass: 0.4 })
-    const [text, setText] = useState('0')
-
-    useEffect(() => {
-        mv.set(value)
-    }, [value, mv])
-
-    useMotionValueEvent(spring, 'change', (v) => {
-        setText(String(Math.round(v)))
-    })
-
-    return <span className="tabular-nums">{text}</span>
+    return (
+        <CountUpText
+            value={value}
+            className="tabular-nums"
+            spring={{ stiffness: 120, damping: 22, mass: 0.4 }}
+        />
+    )
 }
 
 // ===== DirPulseCard · prioridad jerárquica (Riesgo / Atención) — botón-filtro =====
