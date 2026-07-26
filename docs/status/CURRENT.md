@@ -1,7 +1,7 @@
 ---
 status: active
 owner: product-engineering
-last_verified: "2026-07-25 @ 1da8d3bb"
+last_verified: "2026-07-25 @ 60090f90"
 canonical: true
 ---
 
@@ -14,12 +14,12 @@ Esta es la única vista global de qué está en producción, qué está en integ
 | Referencia | Estado al revisar |
 |---|---|
 | Rama de trabajo | `rnmobiledenuevo`, única rama viva junto a `master` |
-| Corte de `master` integrado | `origin/master` en `6a19d421` |
-| Merge de sincronización | `e8abd82c` (sin cambios de contenido: `#164` ya estaba por `82ebe932`) |
-| Integración a producción | PR #146 fuera de borrador, `MERGEABLE`/`CLEAN`; el merge a `master` es decisión pendiente |
-| Gate `quality` | Verde en `30163399603` tras `22235f70`; estuvo rojo desde el 2026-07-22 por un import solo-mobile en un test de la raíz |
-| Ajuste de submit móvil | `f5301858` añade `submit.previewv2` |
-| Relación | `rnmobiledenuevo` contiene el corte productivo y conserva la paridad móvil aún no promovida |
+| Corte de `master` integrado | `origin/master` en `60090f90` (merge PR #170, 2026-07-25) |
+| Relación de ramas | `rnmobiledenuevo` == `master` en `60090f90` (fast-forward post-merge; ambas sincronizadas) |
+| PR #170 (mergeada) | Ejecutor V3 (ceremonia logo dark + ignición del CTA Finalizar), home alumno (link retirado + scroll-top), cardio fases A-D completas (ejes por modalidad, coach ve registros, intervalos por distancia), pulido del creador de ejercicios |
+| Migración DB | `20260725221804_cardio_modality_axes` APLICADA en LIVE antes del merge (aditiva: `exercises.cardio_modality`, Escaladora, `reps_unit` +jumps/floors) |
+| Gate `quality` | Verde en el run `30181033720` sobre `baef4283` (tsc x3, lint 0 errores, 3.940 tests) |
+| QA | Ronda funcional del owner aprobada en web/emulador; QA física fina Android/iOS pendiente (háptico, reduced-motion) |
 
 Este bloque es un snapshot, no reemplaza `git fetch`, `git status` ni los checks remotos antes de integrar.
 
