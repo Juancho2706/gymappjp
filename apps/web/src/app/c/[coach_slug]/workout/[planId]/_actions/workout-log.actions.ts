@@ -16,9 +16,10 @@ export type LogState = {
      * `invalid_block` = el block_id no existe (huérfano de reseed / FK 23503) → descartar, no reintentar.
      * `coach_paused` = la cuenta del coach está en pausa (post-gracia, solo-lectura) → el flush NO debe
      * reintentar en loop; el registro no entrará hasta que el coach reactive.
-     * `past_set_not_found` = edición de un día pasado (`target_date`) donde NO existe la fila de esa
-     * serie → jamás se inserta (imposible farmear adherencia retroactiva); el llamador informa "no hay
-     * registro que editar", nunca reintenta.
+     * `past_set_not_found` = edición de un día PASADO (`target_date` anterior a hoy) donde NO existe la
+     * fila de esa serie → jamás se inserta (imposible farmear adherencia retroactiva); el llamador
+     * informa "no hay registro que editar", nunca reintenta. OJO: un `target_date` igual a HOY NO puede
+     * producir este código — degrada al upsert normal de hoy (ver bloque de validación abajo).
      */
     code?: 'invalid_block' | 'unauthenticated' | 'validation' | 'db' | 'coach_paused' | 'past_set_not_found'
 }
@@ -62,9 +63,9 @@ export async function logSetAction(
         }
     }
 
-    // Edición de día pasado (Ola 1, decisión CEO 10): `target_date` opcional `yyyy-mm-dd`. Su sola
-    // presencia conmuta el flujo a modo SOLO-UPDATE (nunca inserta). Ausente = comportamiento actual
-    // byte-idéntico (upsert de HOY). Se valida server-side más abajo, tras autenticar.
+    // Edición de día pasado (Ola 1, decisión CEO 10): `target_date` opcional `yyyy-mm-dd`. Un
+    // `target_date` PASADO conmuta el flujo a modo SOLO-UPDATE (nunca inserta); igual a HOY o ausente =
+    // upsert de HOY byte-idéntico. Se valida server-side más abajo, tras autenticar.
     const targetDate = rawText('target_date')
 
     const raw = {
@@ -117,15 +118,19 @@ export async function logSetAction(
     // (client_manage_logs) → cliente user-scoped. RLS ademas acota el DELETE de duplicados.
     const { iso: todayStr } = getTodayInSantiago()
     // Ventana del día a escribir. Sin `target_date` = HOY (upsert clásico). Con `target_date` se valida
-    // estricto (formato + pasado u hoy; el futuro se rechaza) y define la ventana de esa fecha; la sola
-    // presencia de un `target_date` VÁLIDO activa el modo solo-UPDATE de abajo.
+    // estricto (formato + pasado u hoy; el futuro se rechaza) y define la ventana de esa fecha.
+    // SÓLO una fecha PASADA activa el modo solo-UPDATE de abajo: `target_date == HOY` degrada al upsert
+    // normal de hoy (misma ventana, mismo comportamiento que sin `target_date`). Eso cubre las dos
+    // entradas del incidente 2026-07-26: la URL `?fecha=<hoy>` y los items de la cola offline YA
+    // serializados con `target_date` de hoy (que se descartaban como `past_set_not_found` y perdían la
+    // serie). El anti-farmeo de adherencia retroactiva se conserva intacto para el pasado.
     let windowDateStr = todayStr
     let pastEditMode = false
     if (targetDate !== undefined) {
         const validated = validateTargetDate(targetDate, todayStr)
         if (!validated.ok) return { error: 'Fecha inválida.', code: 'validation' }
         windowDateStr = validated.iso
-        pastEditMode = true
+        pastEditMode = validated.iso !== todayStr
     }
     const { startIso: startTs, endIso: endTs } = getSantiagoUtcBoundsForDay(windowDateStr)
 
