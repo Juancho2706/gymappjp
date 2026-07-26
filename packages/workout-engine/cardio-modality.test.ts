@@ -1,9 +1,15 @@
 import { describe, it, expect } from 'vitest'
 import {
     CARDIO_MODALITIES,
+    CARDIO_MODALITY_GENERIC_LABEL,
+    CARDIO_MODALITY_LABEL,
+    CARDIO_MODALITY_OPTIONS,
     CARDIO_REPS_UNITS,
     cardioAxesFor,
+    cardioAxesHint,
+    cardioAxisLabels,
     cardioHasDistanceAxis,
+    cardioModalityLabel,
     cardioRepsLabel,
     cardioRepsUnitShort,
     formatCardioReps,
@@ -163,6 +169,49 @@ describe('cardioAxesFor — la distancia respeta la unidad prescrita (A1/RF4)', 
             'reps_done',
             'actual_avg_hr',
         ])
+    })
+})
+
+describe('etiquetas del selector del coach (fuente única web + RN)', () => {
+    it('label por modalidad + fallback genérico', () => {
+        expect(cardioModalityLabel('jump_rope')).toBe('Saltar la cuerda')
+        expect(cardioModalityLabel('stairs')).toBe('Escaladora')
+        expect(cardioModalityLabel(null)).toBe(CARDIO_MODALITY_GENERIC_LABEL)
+        expect(cardioModalityLabel('swim')).toBe(CARDIO_MODALITY_GENERIC_LABEL)
+        for (const m of CARDIO_MODALITIES) expect(cardioModalityLabel(m)).toBe(CARDIO_MODALITY_LABEL[m])
+    })
+
+    it('los chips de preview salen del mapa de ejes, no de una lista paralela', () => {
+        expect(cardioAxisLabels(null)).toEqual(['Min', 'Distancia', 'FC'])
+        expect(cardioAxisLabels('run')).toEqual(['Min', 'Distancia', 'FC'])
+        expect(cardioAxisLabels('elliptical')).toEqual(['Min', 'FC'])
+        expect(cardioAxisLabels('jump_rope')).toEqual(['Min', 'Saltos', 'FC'])
+        expect(cardioAxisLabels('hiit_reps')).toEqual(['Min', 'Reps', 'FC'])
+        expect(cardioAxisLabels('stairs')).toEqual(['Min', 'Pisos', 'FC'])
+        expect(cardioAxesHint('jump_rope')).toBe('Min · Saltos · FC')
+        // Un eje nuevo/renombrado en `cardioAxesFor` viaja solo al preview del formulario.
+        for (const m of [...CARDIO_MODALITIES, null]) {
+            expect(cardioAxisLabels(m)).toHaveLength(cardioAxesFor(m).length)
+        }
+    })
+
+    it('con unidad prescrita la distancia usa el label real del eje', () => {
+        expect(cardioAxisLabels('run', { distanceUnit: 'km' })).toEqual(['Min', 'Km', 'FC'])
+        expect(cardioAxisLabels('run', { distanceUnit: 'm' })).toEqual(['Min', 'Metros', 'FC'])
+    })
+
+    it('opciones del selector: genérica primero y las 7 modalidades del CHECK', () => {
+        expect(CARDIO_MODALITY_OPTIONS.map((o) => o.value)).toEqual(['', ...CARDIO_MODALITIES])
+        expect(CARDIO_MODALITY_OPTIONS[0]).toEqual({
+            value: '',
+            label: 'Genérica',
+            axisLabels: ['Min', 'Distancia', 'FC'],
+            hint: 'Min · Distancia · FC',
+        })
+        for (const o of CARDIO_MODALITY_OPTIONS) {
+            expect(o.label).toBe(cardioModalityLabel(o.value || null))
+            expect(o.hint).toBe(cardioAxesHint(o.value || null))
+        }
     })
 })
 

@@ -2841,12 +2841,32 @@ html[data-exec-v3-entered] [data-exec-v3] .exec-v3-splash {
    relleno de la MARCA (white-label safe) + glow. Con reduced-motion queda ESTÁTICO: relleno y glow
    fijos, sin ignición, sin pulso y sin chispas. ---- */
 [data-exec-v3] .exec-v3-finishbtn.is-armed {
+  position: relative;
+  overflow: hidden;
   background: var(--exec-brand);
   color: var(--exec-brand-ink);
-  border-color: color-mix(in srgb, var(--exec-brand) 55%, #000);
-  box-shadow: 0 0 18px 2px color-mix(in srgb, var(--exec-brand) 32%, transparent);
+  /* Borde LUMINOSO (mezcla hacia blanco, no hacia negro): QA CEO 2026-07-25 — el armed debe
+     gritar "terminaste", no verse como un relleno plano. */
+  border-color: color-mix(in srgb, var(--exec-brand) 50%, #fff);
+  box-shadow: 0 0 22px 3px color-mix(in srgb, var(--exec-brand) 42%, transparent);
   transition: background 0.28s ease, color 0.28s ease, border-color 0.28s ease, box-shadow 0.28s ease,
     transform 0.12s ease;
+}
+/* Veladura de celebración sobre el relleno de marca (z-index -1 = tras el contenido inline, sobre
+   el background del botón; el stacking context lo crea el propio .is-armed). --exec-celebration es
+   fija EVA (no se re-tiñe por white-label, igual que el oro del PR). */
+[data-exec-v3] .exec-v3-finishbtn.is-armed::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: linear-gradient(115deg, transparent 38%, color-mix(in srgb, var(--exec-celebration) 52%, transparent));
+}
+/* Ícono Sparkles en el ORO del PR (token fijo, jamás re-teñido) con brillo propio. */
+[data-exec-v3] .exec-v3-finishbtn.is-armed > svg {
+  color: var(--exec-pr);
+  filter: drop-shadow(0 0 5px color-mix(in srgb, var(--exec-pr) 70%, transparent));
 }
 [data-exec-v3] .exec-v3-finish-sparks {
   position: absolute;

@@ -334,7 +334,7 @@ export function ExecSettingsSheet({
               {finishing ? (
                 <ActivityIndicator size="small" color={s.text} style={{ width: 19, height: 19, transform: [{ scale: 0.85 }] }} />
               ) : finishArmed ? (
-                <Sparkles size={19} color={exec.accentText} strokeWidth={2.4} />
+                <Sparkles size={19} color={exec.pr} strokeWidth={2.4} />
               ) : (
                 <Flag size={19} color={s.text} strokeWidth={2.4} />
               )}

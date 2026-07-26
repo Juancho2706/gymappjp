@@ -1436,12 +1436,18 @@ export async function getCoachNutritionZoneC(clientId: string, logDate: string):
 
   // Flag Edge Config (FEATURE_PREFS_ENABLED) + kill-switch de operador — server-only, vía el
   // endpoint mobile. Fail-OPEN: cualquier fallo => prefs ignoradas = mostrar todo lo entitled.
+  // `enabledModules` del mismo payload viene YA DERIVADO server-side ("plan pago ⇒ los 4 módulos",
+  // getCoachEnabledModules): es la fuente de entitlement del coach standalone — la lectura cruda de
+  // `coaches.enabled_modules` de abajo queda solo de fallback si el endpoint falló (drift QA CEO
+  // 2026-07-25: un coach Pro sin flags crudos veía la Zona C apagada).
   let disabledModules: string[] = []
   let prefsEnabled = false
+  let derivedCoachModules: string[] | null = null
   try {
-    const cfg = await apiFetch<{ disabledModules?: string[]; featurePrefsEnabled?: boolean }>('/api/mobile/config', { authenticated: true })
+    const cfg = await apiFetch<{ disabledModules?: string[]; featurePrefsEnabled?: boolean; enabledModules?: string[] }>('/api/mobile/config', { authenticated: true })
     disabledModules = cfg.disabledModules ?? []
     prefsEnabled = cfg.featurePrefsEnabled === true
+    derivedCoachModules = Array.isArray(cfg.enabledModules) ? cfg.enabledModules : null
   } catch { /* fail-open */ }
 
   const [notesRes, commentsRes, targetsRes, overrideRes, clientRes] = await Promise.all([
@@ -1467,11 +1473,17 @@ export async function getCoachNutritionZoneC(clientId: string, logDate: string):
   // Enterprise (org) => sin resolución client-side de módulos => todo false (mismo fail-closed web).
   let enabledModules: Record<string, unknown> = {}
   if (useTeamBase) {
-    const { data } = await supabase.from('teams').select('enabled_modules').eq('id', teamId).maybeSingle()
-    enabledModules = ((data as any)?.enabled_modules ?? {}) as Record<string, unknown>
+    // Un pool es PAGO por diseño ⇒ los 4 módulos incluidos (espejo exacto de
+    // `getTeamEnabledModules` web: UNION raw + todos-on; el raw queda irrelevante en lectura).
+    enabledModules = { cardio: true, movement_assessment: true, body_composition: true, nutrition_exchanges: true }
   } else if (!orgId) {
-    const { data } = await supabase.from('coaches').select('enabled_modules').eq('id', coachId).maybeSingle()
-    enabledModules = ((data as any)?.enabled_modules ?? {}) as Record<string, unknown>
+    if (derivedCoachModules) {
+      enabledModules = Object.fromEntries(derivedCoachModules.map((k) => [k, true]))
+    } else {
+      // Fallback sin red al endpoint: flags crudos (comportamiento histórico, sin derivación).
+      const { data } = await supabase.from('coaches').select('enabled_modules').eq('id', coachId).maybeSingle()
+      enabledModules = ((data as any)?.enabled_modules ?? {}) as Record<string, unknown>
+    }
   }
   const ent = (k: ModuleKey): boolean => enabledModules[k] === true && !disabledModules.includes(k)
   const entitledByModule: NutritionEntitledByModule = {

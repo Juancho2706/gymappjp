@@ -4,6 +4,7 @@ import { useActionState, useEffect, useState, useTransition } from 'react'
 import {
     Dialog,
     DialogContent,
+    DialogDescription,
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog'
@@ -18,7 +19,12 @@ import {
     SelectValue,
 } from '@/components/ui/select'
 import { MUSCLE_GROUPS } from '@/lib/constants'
-import { EXERCISE_TYPE_OPTIONS } from '@eva/workout-engine'
+import {
+    CARDIO_MODALITY_OPTIONS,
+    EXERCISE_TYPE_OPTIONS,
+    cardioAxisLabels,
+    cardioModalityLabel,
+} from '@eva/workout-engine'
 import {
     createExerciseAction,
     updateExerciseAction,
@@ -50,24 +56,7 @@ function mmssToSeconds(str: string): number | null {
     return isNaN(n) ? null : n
 }
 
-/**
- * Modalidades de cardio (Fase C · specs/cardio-ejes-y-fixes). El valor `''` = genérica (columna
- * NULL): el alumno registra Min · Distancia · FC, exactamente como hasta hoy. La lista de valores
- * es el espejo de `CARDIO_MODALITIES` del motor (`cardio-modality.ts`) y del CHECK de la migración
- * 20260725221804; las etiquetas viven acá porque son solo presentación de esta pantalla.
- */
-const CARDIO_MODALITY_OPTIONS: { value: string; label: string; hint: string }[] = [
-    { value: '', label: 'Genérica', hint: 'Min · Distancia · FC' },
-    { value: 'run', label: 'Correr / caminar', hint: 'Min · Distancia · FC' },
-    { value: 'bike', label: 'Bicicleta', hint: 'Min · Distancia · FC' },
-    { value: 'row', label: 'Remo', hint: 'Min · Distancia · FC' },
-    { value: 'elliptical', label: 'Elíptica', hint: 'Min · FC' },
-    { value: 'jump_rope', label: 'Saltar la cuerda', hint: 'Min · Saltos · FC' },
-    { value: 'hiit_reps', label: 'HIIT por repeticiones', hint: 'Min · Reps · FC' },
-    { value: 'stairs', label: 'Escaladora', hint: 'Min · Pisos · FC' },
-]
-
-/** Sentinela del Select para la opción "Genérica" (Radix no admite `value=""`). */
+/** Sentinela del Select para la opción "Genérica" (el Select no admite `value=""`). */
 const GENERIC_MODALITY = '__generic__'
 
 const EQUIPMENT_OPTIONS = [
@@ -100,6 +89,52 @@ function initialMedia(exercise: ExerciseCatalogRow | undefined): MediaValue {
     if ((exercise as Record<string, unknown>).image_url) return { kind: 'image', value: (exercise as Record<string, unknown>).image_url as string }
     if (exercise.video_url) return { kind: 'youtube', value: exercise.video_url }
     return { kind: 'youtube', value: '' }
+}
+
+/** Bloque visual del formulario: título + apoyo + campos. Agrupa para no leerlo como una lista plana. */
+function FormSection({
+    title,
+    description,
+    children,
+}: {
+    title: string
+    description?: string
+    children: React.ReactNode
+}) {
+    return (
+        <section className="space-y-3 rounded-card border border-subtle bg-surface-sunken/50 p-4">
+            <div className="space-y-0.5">
+                <h3 className="text-sm font-semibold text-strong">{title}</h3>
+                {description && <p className="text-xs text-muted">{description}</p>}
+            </div>
+            {children}
+        </section>
+    )
+}
+
+/** Campo con label + control + ayuda/error (los `Input` traen el suyo; esto cubre `Select`). */
+function Field({
+    label,
+    hint,
+    error,
+    children,
+}: {
+    label: string
+    hint?: string
+    error?: string
+    children: React.ReactNode
+}) {
+    return (
+        <div className="space-y-1.5">
+            <label className="block text-[13px] font-semibold text-strong">{label}</label>
+            {children}
+            {error ? (
+                <p className="text-xs text-[var(--danger-600)]" role="alert">{error}</p>
+            ) : hint ? (
+                <p className="text-xs text-muted">{hint}</p>
+            ) : null}
+        </div>
+    )
 }
 
 export function ExerciseFormModal({ open, onClose, exercise }: Props) {
@@ -165,145 +200,187 @@ export function ExerciseFormModal({ open, onClose, exercise }: Props) {
         }
     }, [state.success, onClose])
 
+    const isCardio = exerciseType === 'cardio'
+    // Preview de las cajas que verá el alumno: derivado del MOTOR (cardioAxesFor), nunca de una
+    // lista local — si el mapa de ejes cambia, estos chips cambian solos.
+    const cardioAxisPreview = cardioAxisLabels(cardioModality || null)
+
+    /** Salir de cardio limpia la modalidad (la action también la anula: acá solo espejamos la UI). */
+    const handleTypeChange = (value: string | null) => {
+        const next = value ?? 'strength'
+        setExerciseType(next)
+        if (next !== 'cardio') setCardioModality('')
+    }
+
     return (
         <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
             <DialogContent className="max-w-2xl max-h-[90dvh] overflow-y-auto">
                 <DialogHeader>
                     <DialogTitle>{exercise ? 'Editar ejercicio' : 'Crear ejercicio'}</DialogTitle>
+                    <DialogDescription>
+                        Lo que definas acá manda en el builder y en la app del alumno.
+                    </DialogDescription>
                 </DialogHeader>
 
                 <form action={handleSubmit} className="space-y-4 mt-2">
                     {state.error && state.error !== 'upgrade_required' && (
-                        <p className="text-sm text-[var(--danger-600)] rounded-control border border-[var(--danger-500)]/30 bg-[var(--danger-100)] px-3 py-2">
+                        <p
+                            role="alert"
+                            className="text-sm text-[var(--danger-600)] rounded-control border border-[var(--danger-500)]/30 bg-[var(--danger-100)] px-3 py-2"
+                        >
                             {state.error}
                         </p>
                     )}
 
-                    {/* Nombre */}
-                    <div className="space-y-1.5">
-                        <label className="text-sm font-medium text-strong">Nombre *</label>
+                    <FormSection
+                        title="Identidad"
+                        description="Cómo se llama el ejercicio y dónde queda ordenado en tu catálogo."
+                    >
                         <Input
                             name="name"
+                            label="Nombre *"
                             value={name}
                             onChange={(e) => setName(e.target.value)}
                             placeholder="Ej: Press banca inclinado"
                             required
+                            error={state.fieldErrors?.name?.[0]}
                         />
-                        {state.fieldErrors?.name && (
-                            <p className="text-xs text-[var(--danger-600)]">{state.fieldErrors.name[0]}</p>
-                        )}
-                    </div>
 
-                    {/* Grupo muscular */}
-                    <div className="space-y-1.5">
-                        <label className="text-sm font-medium text-strong">Grupo muscular *</label>
-                        <Select name="muscle_group" defaultValue={exercise?.muscle_group ?? ''} required>
-                            <SelectTrigger>
-                                <SelectValue placeholder="Selecciona un grupo" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {MUSCLE_GROUPS.map((mg) => (
-                                    <SelectItem key={mg} value={mg}>{mg}</SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                        {state.fieldErrors?.muscle_group && (
-                            <p className="text-xs text-[var(--danger-600)]">{state.fieldErrors.muscle_group[0]}</p>
-                        )}
-                    </div>
-
-                    {/* Tipo de ejercicio (polimórfico) */}
-                    <div className="space-y-1.5">
-                        <label className="text-sm font-medium text-strong">Tipo de ejercicio</label>
-                        <Select
-                            name="exercise_type"
-                            value={exerciseType}
-                            onValueChange={(v) => setExerciseType(v ?? 'strength')}
+                        <Field
+                            label="Grupo muscular *"
+                            hint="Define en qué grupo lo encuentras al armar el plan."
+                            error={state.fieldErrors?.muscle_group?.[0]}
                         >
-                            <SelectTrigger>
-                                <SelectValue placeholder="Fuerza (series × reps)">
-                                    {EXERCISE_TYPE_OPTIONS.find((o) => o.value === exerciseType)?.label ?? exerciseType}
-                                </SelectValue>
-                            </SelectTrigger>
-                            <SelectContent>
-                                {EXERCISE_TYPE_OPTIONS.map(({ value, label }) => (
-                                    <SelectItem key={value} value={value}>{label}</SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                        <p className="text-xs text-muted">
-                            Define qué campos muestra el builder y la app del alumno.
-                        </p>
-                    </div>
+                            <Select name="muscle_group" defaultValue={exercise?.muscle_group ?? ''} required>
+                                <SelectTrigger className="w-full" aria-label="Grupo muscular">
+                                    <SelectValue placeholder="Selecciona un grupo" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {MUSCLE_GROUPS.map((mg) => (
+                                        <SelectItem key={mg} value={mg}>{mg}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </Field>
 
-                    {/* Modalidad de cardio (Fase C) — SOLO para ejercicios de tipo cardio. Decide los
-                        ejes que el alumno registra por ronda. Genérica (default) = comportamiento de
-                        siempre. El valor viaja como hidden input: '' ⇒ la action guarda NULL. */}
-                    {exerciseType === 'cardio' && (
-                        <div className="space-y-1.5">
-                            <label className="text-sm font-medium text-strong">Modalidad de cardio</label>
-                            <input type="hidden" name="cardio_modality" value={cardioModality} />
+                        <Input
+                            name="secondary_muscles"
+                            label="Músculos secundarios"
+                            value={secondaryMuscles}
+                            onChange={(e) => setSecondaryMuscles(e.target.value)}
+                            placeholder="Tríceps, Deltoides"
+                            hint="Opcional. Separa cada músculo con coma."
+                        />
+
+                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                            <Field label="Equipo">
+                                <Select name="equipment" defaultValue={exercise?.equipment ?? ''}>
+                                    <SelectTrigger className="w-full" aria-label="Equipo">
+                                        <SelectValue placeholder="Selecciona equipo" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {EQUIPMENT_OPTIONS.map((eq) => (
+                                            <SelectItem key={eq} value={eq}>{eq}</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </Field>
+                            <Field label="Dificultad">
+                                <Select name="difficulty" value={difficulty} onValueChange={(v) => setDifficulty(v ?? '')}>
+                                    <SelectTrigger className="w-full" aria-label="Dificultad">
+                                        <SelectValue placeholder="Selecciona dificultad">
+                                            {difficulty ? (DIFFICULTY_OPTIONS.find((o) => o.value === difficulty)?.label ?? difficulty) : null}
+                                        </SelectValue>
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {DIFFICULTY_OPTIONS.map(({ value, label }) => (
+                                            <SelectItem key={value} value={value}>{label}</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </Field>
+                        </div>
+                    </FormSection>
+
+                    <FormSection
+                        title="Tipo de ejercicio"
+                        description="Define qué campos muestra el builder y qué registra el alumno en cada serie."
+                    >
+                        <Field label="Tipo">
                             <Select
-                                value={cardioModality === '' ? GENERIC_MODALITY : cardioModality}
-                                onValueChange={(v) => setCardioModality(!v || v === GENERIC_MODALITY ? '' : v)}
+                                name="exercise_type"
+                                value={exerciseType}
+                                onValueChange={handleTypeChange}
                             >
-                                <SelectTrigger>
-                                    <SelectValue placeholder="Genérica (Min · Distancia · FC)">
-                                        {CARDIO_MODALITY_OPTIONS.find((o) => o.value === cardioModality)?.label ?? 'Genérica'}
+                                <SelectTrigger className="w-full" aria-label="Tipo de ejercicio">
+                                    <SelectValue placeholder="Fuerza (series × reps)">
+                                        {EXERCISE_TYPE_OPTIONS.find((o) => o.value === exerciseType)?.label ?? exerciseType}
                                     </SelectValue>
                                 </SelectTrigger>
                                 <SelectContent>
-                                    {CARDIO_MODALITY_OPTIONS.map(({ value, label, hint }) => (
-                                        <SelectItem key={value || GENERIC_MODALITY} value={value || GENERIC_MODALITY}>
-                                            {label} · {hint}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                            <p className="text-xs text-muted">
-                                Define qué registra el alumno en cada ronda. Genérica pide minutos, distancia y FC.
-                            </p>
-                            {state.fieldErrors?.cardio_modality && (
-                                <p className="text-xs text-[var(--danger-600)]">{state.fieldErrors.cardio_modality[0]}</p>
-                            )}
-                        </div>
-                    )}
-
-                    {/* Equipo + Dificultad */}
-                    <div className="grid grid-cols-2 gap-3">
-                        <div className="space-y-1.5">
-                            <label className="text-sm font-medium text-strong">Equipo</label>
-                            <Select name="equipment" defaultValue={exercise?.equipment ?? ''}>
-                                <SelectTrigger>
-                                    <SelectValue placeholder="Selecciona equipo" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {EQUIPMENT_OPTIONS.map((eq) => (
-                                        <SelectItem key={eq} value={eq}>{eq}</SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
-                        <div className="space-y-1.5">
-                            <label className="text-sm font-medium text-strong">Dificultad</label>
-                            <Select name="difficulty" value={difficulty} onValueChange={(v) => setDifficulty(v ?? '')}>
-                                <SelectTrigger>
-                                    <SelectValue placeholder="Selecciona dificultad">
-                                        {difficulty ? (DIFFICULTY_OPTIONS.find((o) => o.value === difficulty)?.label ?? difficulty) : null}
-                                    </SelectValue>
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {DIFFICULTY_OPTIONS.map(({ value, label }) => (
+                                    {EXERCISE_TYPE_OPTIONS.map(({ value, label }) => (
                                         <SelectItem key={value} value={value}>{label}</SelectItem>
                                     ))}
                                 </SelectContent>
                             </Select>
-                        </div>
-                    </div>
+                        </Field>
 
-                    {/* Media picker */}
-                    <div className="space-y-1.5">
-                        <label className="text-sm font-medium text-strong">Demostración visual</label>
+                        {/* Modalidad de cardio (Fase C) — SOLO para ejercicios de tipo cardio. Decide los
+                            ejes que el alumno registra por ronda. Genérica (default) = comportamiento de
+                            siempre. El valor viaja como hidden input: '' ⇒ la action guarda NULL. */}
+                        {isCardio && (
+                            <div className="space-y-3 rounded-control border border-subtle bg-surface-card p-3">
+                                <Field
+                                    label="Modalidad de cardio"
+                                    hint="Si cambias el tipo de ejercicio, la modalidad vuelve a Genérica."
+                                    error={state.fieldErrors?.cardio_modality?.[0]}
+                                >
+                                    <input type="hidden" name="cardio_modality" value={cardioModality} />
+                                    <Select
+                                        value={cardioModality === '' ? GENERIC_MODALITY : cardioModality}
+                                        onValueChange={(v) => setCardioModality(!v || v === GENERIC_MODALITY ? '' : v)}
+                                    >
+                                        <SelectTrigger className="w-full" aria-label="Modalidad de cardio">
+                                            <SelectValue placeholder="Genérica">
+                                                {cardioModalityLabel(cardioModality || null)}
+                                            </SelectValue>
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {CARDIO_MODALITY_OPTIONS.map(({ value, label, hint }) => (
+                                                <SelectItem key={value || GENERIC_MODALITY} value={value || GENERIC_MODALITY}>
+                                                    <span>{label}</span>
+                                                    {/* En pantallas angostas el hint se oculta: los chips de abajo ya
+                                                        muestran los ejes de la opción elegida. */}
+                                                    <span className="ml-auto hidden shrink-0 text-xs text-muted sm:block">{hint}</span>
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </Field>
+
+                                <div className="rounded-control border border-subtle bg-surface-sunken/60 px-3 py-2.5">
+                                    <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">
+                                        El alumno registra por ronda
+                                    </p>
+                                    <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                                        {cardioAxisPreview.map((axis) => (
+                                            <span
+                                                key={axis}
+                                                className="rounded-pill border border-subtle bg-surface-card px-2.5 py-1 text-xs font-semibold text-strong"
+                                            >
+                                                {axis}
+                                            </span>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </FormSection>
+
+                    <FormSection
+                        title="Demostración visual"
+                        description="Video de YouTube, GIF o imagen. Es lo primero que ve el alumno antes de ejecutar."
+                    >
                         <ExerciseMediaPicker
                             value={media}
                             onChange={setMedia}
@@ -314,67 +391,49 @@ export function ExerciseFormModal({ open, onClose, exercise }: Props) {
                                 state.fieldErrors?.image_url?.[0]
                             }
                         />
-                    </div>
 
-                    {/* Recorte del video de YouTube (start/end) — loopea el tramo (salta intro) */}
-                    {media.kind === 'youtube' && media.value && (
-                        <div className="space-y-1.5">
-                            <div className="grid grid-cols-2 gap-3">
-                                <div className="space-y-1.5">
-                                    <label className="text-sm font-medium text-strong">Empieza en (m:ss)</label>
+                        {/* Recorte del video de YouTube (start/end) — loopea el tramo (salta intro) */}
+                        {media.kind === 'youtube' && media.value && (
+                            <div className="space-y-1.5">
+                                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                                     <Input
+                                        label="Empieza en (m:ss)"
                                         value={videoStart}
                                         onChange={(e) => setVideoStart(e.target.value)}
                                         placeholder="0:20"
                                         inputMode="numeric"
                                     />
-                                </div>
-                                <div className="space-y-1.5">
-                                    <label className="text-sm font-medium text-strong">Termina en (opcional)</label>
                                     <Input
+                                        label="Termina en (opcional)"
                                         value={videoEnd}
                                         onChange={(e) => setVideoEnd(e.target.value)}
                                         placeholder="1:30"
                                         inputMode="numeric"
+                                        error={durationError ?? state.fieldErrors?.video_end_time?.[0]}
                                     />
                                 </div>
+                                <p className="text-xs text-muted">
+                                    El video loopea ese tramo (salta intro/charla). Vacío = video completo.
+                                    {videoDuration != null && ` El video dura ${secondsToMmss(Math.floor(videoDuration))}.`}
+                                </p>
                             </div>
-                            <p className="text-xs text-muted">
-                                El video loopea ese tramo (salta intro/charla). Vacío = video completo.
-                                {videoDuration != null && ` El video dura ${secondsToMmss(Math.floor(videoDuration))}.`}
-                            </p>
-                            {durationError && (
-                                <p className="text-xs text-[var(--danger-600)]">{durationError}</p>
-                            )}
-                            {state.fieldErrors?.video_end_time && (
-                                <p className="text-xs text-[var(--danger-600)]">{state.fieldErrors.video_end_time[0]}</p>
-                            )}
-                        </div>
-                    )}
+                        )}
+                    </FormSection>
 
-                    {/* Músculos secundarios */}
-                    <div className="space-y-1.5">
-                        <label className="text-sm font-medium text-strong">Músculos secundarios</label>
-                        <Input
-                            name="secondary_muscles"
-                            value={secondaryMuscles}
-                            onChange={(e) => setSecondaryMuscles(e.target.value)}
-                            placeholder="Ej: Tríceps, Deltoides (separados por coma)"
-                        />
-                    </div>
-
-                    {/* Instrucciones */}
-                    <div className="space-y-1.5">
-                        <label className="text-sm font-medium text-strong">Instrucciones</label>
+                    <FormSection
+                        title="Instrucciones"
+                        description="Claves de técnica que el alumno lee en la ficha del ejercicio."
+                    >
                         <Textarea
                             name="instructions"
                             value={instructions}
                             onChange={(e) => setInstructions(e.target.value)}
-                            placeholder="Una instrucción por línea..."
+                            placeholder={'Espalda apoyada en el banco\nBaja controlado en 2 segundos'}
                             rows={4}
+                            aria-label="Instrucciones"
                         />
                         <p className="text-xs text-muted">Una instrucción por línea.</p>
-                    </div>
+                    </FormSection>
 
                     <div className="flex items-center justify-end gap-3 pt-2 border-t border-subtle">
                         <Button type="button" variant="secondary" onClick={onClose}>

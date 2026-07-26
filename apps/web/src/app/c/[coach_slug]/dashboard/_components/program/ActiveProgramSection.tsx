@@ -1,4 +1,3 @@
-import Link from 'next/link'
 import { Calendar } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -83,7 +82,6 @@ export async function ActiveProgramSection({ userId, coachSlug }: { userId: stri
     const pending = week.pending
     const oldestPending = pending[0] ?? null
 
-    const todayPlanId = week.days.find((d) => d.isToday)?.planId ?? null
 
     const totalWeeks = Math.max(1, program.weeks_to_repeat ?? 1)
     const currentWeek = weekIdx ?? 1
@@ -115,12 +113,9 @@ export async function ActiveProgramSection({ userId, coachSlug }: { userId: stri
                 />
             ) : null}
 
+            {/* El link "Ver entreno de hoy →" se RETIRO (decision CEO 2026-07-25): duplicaba el
+                day-card de hoy y el CTA del hero. Espejo del mismo retiro en RN. */}
             <WorkoutPlanCards coachSlug={coachSlug} plans={cardPlans} />
-            {todayPlanId ? (
-                <Link href={`${base}/workout/${todayPlanId}`} className="block text-center text-[11px] font-bold text-sport-600">
-                    Ver entreno de hoy →
-                </Link>
-            ) : null}
         </Card>
     )
 }

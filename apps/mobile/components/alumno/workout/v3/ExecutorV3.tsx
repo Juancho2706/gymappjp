@@ -378,7 +378,7 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
   }, [finishArmed, motion.reduced, finishGlow])
 
   const finishPopStyle = useAnimatedStyle(() => ({ transform: [{ scale: finishPop.value }] }))
-  const finishGlowStyle = useAnimatedStyle(() => ({ opacity: 0.28 + finishGlow.value * 0.42 }))
+  const finishGlowStyle = useAnimatedStyle(() => ({ opacity: 0.34 + finishGlow.value * 0.5 }))
 
   // "Ejercicio activo" a nivel INDIVIDUAL para header/dots/lista (QA2-C). En una superserie el motor
   // intercala rondas (A1→B1→A2…), asi que el miembro activo NO es el 1er bloque incompleto del grupo
@@ -1492,7 +1492,7 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
                       right: -5,
                       bottom: -5,
                       borderRadius: 19,
-                      backgroundColor: hexToRgba(exec.accent, 0.45),
+                      backgroundColor: hexToRgba(exec.accent, 0.55),
                     },
                     finishGlowStyle,
                   ]}
@@ -1520,8 +1520,10 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
                   height: 48,
                   borderRadius: 14,
                   borderWidth: 2,
+                  // Borde LUMINOSO cuando esta armado (blanco translucido sobre el relleno de
+                  // marca — QA CEO 2026-07-25: debe destacar, no fundirse con el fill).
                   borderColor: finishArmed
-                    ? hexToRgba(exec.accent, pressed ? 0.7 : 0.9)
+                    ? `rgba(255,255,255,${pressed ? 0.6 : 0.4})`
                     : pressed
                       ? '#3a3a45'
                       : exec.surface.borderStrong,
@@ -1542,7 +1544,9 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
                     {finishing ? (
                       <ActivityIndicator size="small" color="#b7b7c2" style={{ width: 18, height: 18, transform: [{ scale: 0.85 }] }} />
                     ) : finishArmed ? (
-                      <Sparkles size={18} color={exec.accentText} strokeWidth={2.4} />
+                      // Oro del PR (token fijo, no se re-tine por white-label): el icono debe
+                      // DESTACAR sobre el relleno de marca (QA CEO 2026-07-25).
+                      <Sparkles size={18} color={exec.pr} strokeWidth={2.4} fill={hexToRgba(exec.pr, 0.35)} />
                     ) : (
                       <Flag size={18} color={pressed ? '#e8e8ee' : '#b7b7c2'} />
                     )}

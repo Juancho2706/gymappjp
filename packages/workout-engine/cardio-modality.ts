@@ -194,3 +194,78 @@ export function cardioAxesFor(
     axes.push(hrAxis())
     return axes
 }
+
+// ── Presentación compartida del selector del coach (web + RN) ────────────────────────────────────
+// Las etiquetas viven acá y NO en cada pantalla: web (`ExerciseFormModal`) y RN (`ExerciseFormSheet`)
+// mantenían dos copias del mismo mapa label+hint, con riesgo de drift si el mapa de ejes cambiaba.
+
+/** Etiqueta es-neutro de cada modalidad (selector del coach, chips, resúmenes). */
+export const CARDIO_MODALITY_LABEL: Record<CardioModality, string> = {
+    run: 'Correr / caminar',
+    bike: 'Bicicleta',
+    row: 'Remo',
+    elliptical: 'Elíptica',
+    jump_rope: 'Saltar la cuerda',
+    hiit_reps: 'HIIT por repeticiones',
+    stairs: 'Escaladora',
+}
+
+/** Etiqueta de la opción SIN modalidad (columna NULL): ejes genéricos de siempre. */
+export const CARDIO_MODALITY_GENERIC_LABEL = 'Genérica'
+
+/** Etiqueta de una modalidad cruda de la DB; `null`/desconocida ⇒ "Genérica". */
+export function cardioModalityLabel(modality: string | null | undefined): string {
+    const m = normalizeCardioModality(modality)
+    return m == null ? CARDIO_MODALITY_GENERIC_LABEL : CARDIO_MODALITY_LABEL[m]
+}
+
+/**
+ * Nombre unit-agnostic del eje de distancia para pantallas de CATÁLOGO: ahí el ejercicio todavía no
+ * sabe si el coach prescribirá metros o km (eso lo decide cada bloque), así que decimos "Distancia".
+ */
+const CATALOG_DISTANCE_LABEL = 'Distancia'
+
+/**
+ * Etiquetas de los ejes que el alumno registra por ronda, DERIVADAS de `cardioAxesFor` — nunca una
+ * lista paralela: si el mapa de ejes cambia, este preview cambia solo.
+ * Sin `distanceUnit` (catálogo) la distancia se muestra genérica; con unidad prescrita respeta el
+ * label real del eje ("Metros" / "Km").
+ */
+export function cardioAxisLabels(
+    modality: string | null | undefined,
+    ctx?: CardioAxesContext,
+): string[] {
+    const catalogDistance = ctx?.distanceUnit == null
+    return cardioAxesFor(modality, ctx).map((axis) =>
+        catalogDistance && axis.key === 'actual_distance_m' ? CATALOG_DISTANCE_LABEL : axis.label,
+    )
+}
+
+/** Los ejes de la modalidad en una línea: "Min · Saltos · FC". */
+export function cardioAxesHint(modality: string | null | undefined, ctx?: CardioAxesContext): string {
+    return cardioAxisLabels(modality, ctx).join(' · ')
+}
+
+/** Opción del selector "Modalidad de cardio" del formulario del coach. */
+export interface CardioModalityOption {
+    /** `''` = genérica ⇒ la columna se guarda NULL. */
+    value: '' | CardioModality
+    label: string
+    /** Ejes derivados del motor, para el preview de chips. */
+    axisLabels: string[]
+    /** `axisLabels` en una línea ("Min · Saltos · FC"). */
+    hint: string
+}
+
+/** Opción del selector para un valor dado (`''` = genérica). */
+export function cardioModalityOption(value: '' | CardioModality): CardioModalityOption {
+    const modality = value === '' ? null : value
+    const axisLabels = cardioAxisLabels(modality)
+    return { value, label: cardioModalityLabel(modality), axisLabels, hint: axisLabels.join(' · ') }
+}
+
+/** Opciones del selector del coach: genérica primero + las 7 modalidades en el orden del CHECK. */
+export const CARDIO_MODALITY_OPTIONS: readonly CardioModalityOption[] = [
+    cardioModalityOption(''),
+    ...CARDIO_MODALITIES.map((m) => cardioModalityOption(m)),
+]

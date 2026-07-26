@@ -9,7 +9,7 @@ export default async function TemplateBuilderPage(
 ) {
     const searchParams = await props.searchParams;
     const { programId } = searchParams
-    const { user, exercises, initialProgram, areas } = await getTemplateBuilderData(programId)
+    const { user, exercises, initialProgram, areas, cardio } = await getTemplateBuilderData(programId)
     if (!user) redirect('/login')
 
     return (
@@ -17,6 +17,7 @@ export default async function TemplateBuilderPage(
             exercises={exercises}
             initialProgram={initialProgram}
             areas={areas}
+            cardio={cardio}
         />
     )
 }
