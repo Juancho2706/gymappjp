@@ -70,7 +70,6 @@ interface QuickEditContextValue {
   clientId: string
   clientName: string
   strategy: NutritionStrategy
-  visibleNotes: string | null
   protocolNotes: string | null
   permissions: NutritionPlanReadModel['permissions']
   /**
@@ -143,7 +142,8 @@ export function QuickEditProvider({
     () => readModelToEditState(planModel, substitutionsByItemId),
     [planModel, substitutionsByItemId],
   )
-  // El server pisa effectiveFrom (max(hoy, base)) y las notas (carry-over §2.3).
+  // El server pisa effectiveFrom (max(hoy, base)) y las notas protocolo/privadas (carry-over
+  // §2.3); las visibles viajan editadas desde el estado.
   const baseDraft = useMemo(() => readModelToDraft(planModel, clientId), [planModel, clientId])
   const portionGroups = useMemo(() => collectPortionGroups(planModel), [planModel])
 
@@ -387,7 +387,6 @@ export function QuickEditProvider({
     clientId,
     clientName,
     strategy: planModel.plan?.strategy ?? 'flexible',
-    visibleNotes: planModel.visibleNotes,
     protocolNotes: planModel.protocolNotes,
     permissions: planModel.permissions,
     portionGroups,

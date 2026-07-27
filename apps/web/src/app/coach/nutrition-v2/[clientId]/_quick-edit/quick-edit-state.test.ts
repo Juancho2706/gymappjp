@@ -469,6 +469,64 @@ describe('quick-edit-state — RESTORE_DRAFT', () => {
     const emptyPayload = {} as unknown as QuickEditState
     expect(quickEditReducer(state, { type: 'RESTORE_DRAFT', state: emptyPayload })).toBe(state)
   })
+
+  it('un borrador pre-notas (sin visibleNotes) restaura el arbol y conserva las notas actuales', () => {
+    const { state } = hydrate()
+    const legacy = { variants: state.variants } as unknown as QuickEditState
+    const restored = quickEditReducer(state, { type: 'RESTORE_DRAFT', state: legacy })
+    expect(restored.variants).toBe(legacy.variants)
+    expect(restored.visibleNotes).toBe('Toma agua')
+  })
+})
+
+// ── Notas visibles editables (visible_notes) ─────────────────────────────────────────────
+
+describe('quick-edit-state — notas visibles', () => {
+  it('hidrata las notas del read model y proyectarlas sin editar da CERO cambios', () => {
+    const { state, baseline } = hydrate()
+    expect(state.visibleNotes).toBe('Toma agua')
+    expect(countDraftChanges(baseline, currentDraftOf(state))).toBe(0)
+  })
+
+  it('editar las notas cuenta 1 cambio, proyecta trimmed y el draft pasa el Zod', () => {
+    const { state, baseline } = hydrate()
+    const edited = quickEditReducer(state, { type: 'SET_VISIBLE_NOTES', value: '  Nueva pauta  ' })
+    const draft = currentDraftOf(edited)
+    expect(draft.visibleNotes).toBe('Nueva pauta')
+    expect(countDraftChanges(baseline, draft)).toBe(1)
+    expect(NutritionPlanDraftSchema.safeParse(draft).success).toBe(true)
+  })
+
+  it('borrar las notas proyecta null y cuenta 1 cambio; solo espacios NO cuenta', () => {
+    const { state, baseline } = hydrate()
+    const cleared = quickEditReducer(state, { type: 'SET_VISIBLE_NOTES', value: '' })
+    expect(currentDraftOf(cleared).visibleNotes).toBeNull()
+    expect(countDraftChanges(baseline, currentDraftOf(cleared))).toBe(1)
+    // Mismo texto con espacios alrededor = sin cambio real (proyeccion normaliza).
+    const padded = quickEditReducer(state, { type: 'SET_VISIBLE_NOTES', value: '  Toma agua  ' })
+    expect(countDraftChanges(baseline, currentDraftOf(padded))).toBe(0)
+  })
+
+  it('editar variantes/items NO pierde las notas (spread del estado en mapVariant)', () => {
+    const { state } = hydrate()
+    const withNotes = quickEditReducer(state, { type: 'SET_VISIBLE_NOTES', value: 'Persistente' })
+    const edited = quickEditReducer(withNotes, {
+      type: 'SET_ITEM_QUANTITY',
+      variantKey: VARIANT_ID,
+      slotKey: SLOT_ID,
+      itemKey: ITEM_ID,
+      value: '90',
+    })
+    expect(edited.visibleNotes).toBe('Persistente')
+  })
+
+  it('notas sobre el tope (8000) marcan error de validacion local', () => {
+    const { state } = hydrate()
+    const tooLong = quickEditReducer(state, { type: 'SET_VISIBLE_NOTES', value: 'x'.repeat(8001) })
+    const validation = validateQuickEdit(tooLong)
+    expect(validation.ok).toBe(false)
+    expect(validation.errors['plan.visibleNotes']).toBeTruthy()
+  })
 })
 
 // ── Carry-over de reemplazos autorizados (F-02): el read-model NO los transporta, se fetchean

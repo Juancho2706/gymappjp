@@ -228,8 +228,8 @@ describe('quickEditPublishAction — delta-gate Pro (grandfathering)', () => {
   })
 })
 
-describe('quickEditPublishAction — carry-over de notas', () => {
-  it('carry-over de visible/protocol desde la base; private_notes NUNCA (columna deprecada) y forja ignorada', async () => {
+describe('quickEditPublishAction — notas', () => {
+  it('visibleNotes EDITABLES viajan del cliente; protocol carry-over de la base; private_notes NUNCA (columna deprecada)', async () => {
     authOk(makeDb({
       baseVersion: baseVersionRow({ protocol_notes: 'protocolo' }),
       plan: { id: PLAN, client_id: CLIENT },
@@ -239,14 +239,42 @@ describe('quickEditPublishAction — carry-over de notas', () => {
     vi.mocked(hasModule).mockResolvedValue(false)
     // El cliente manda privateNotes forjadas; el server las descarta. La columna same-row
     // private_notes esta deprecada e ilegible por `authenticated`, asi que NO se lee ni se
-    // copia: el draft final siempre lleva privateNotes = null.
-    await quickEditPublishAction(input({ draft: draft({ privateNotes: 'FORJADA' }) }))
+    // copia: el draft final siempre lleva privateNotes = null. visibleNotes en cambio es
+    // editable: la del cliente PISA la de la base ('Toma agua').
+    await quickEditPublishAction(
+      input({ draft: draft({ privateNotes: 'FORJADA', visibleNotes: '  Nota nueva del coach  ' }) }),
+    )
     expect(persistAndPublishDraft).toHaveBeenCalledTimes(1)
     const call = vi.mocked(persistAndPublishDraft).mock.calls[0][0]
     expect(call.draft.privateNotes).toBeNull()
     expect(call.draft.protocolNotes).toBe('protocolo')
-    expect(call.draft.visibleNotes).toBe('Toma agua')
+    // El schema de entrada trimea; la base 'Toma agua' queda superada.
+    expect(call.draft.visibleNotes).toBe('Nota nueva del coach')
     expect(call.expectedCurrentVersionId).toBe(BASE_VERSION)
+  })
+
+  it('visibleNotes vacias/en blanco del cliente => null (borrar la nota es una edicion valida)', async () => {
+    authOk(makeDb({
+      baseVersion: baseVersionRow(),
+      plan: { id: PLAN, client_id: CLIENT },
+      variants: [{ id: 'v1' }],
+      versionNumber: 4,
+    }))
+    await quickEditPublishAction(input({ draft: draft({ visibleNotes: '   ' }) }))
+    const call = vi.mocked(persistAndPublishDraft).mock.calls[0][0]
+    expect(call.draft.visibleNotes).toBeNull()
+  })
+
+  it('visibleNotes sobre el tope del contrato (8000) => VALIDATION sin publicar', async () => {
+    authOk(makeDb({
+      baseVersion: baseVersionRow(),
+      plan: { id: PLAN, client_id: CLIENT },
+      variants: [{ id: 'v1' }],
+      versionNumber: 4,
+    }))
+    const res = await quickEditPublishAction(input({ draft: draft({ visibleNotes: 'x'.repeat(8001) }) }))
+    expect(res).toEqual({ ok: false, code: 'VALIDATION' })
+    expect(persistAndPublishDraft).not.toHaveBeenCalled()
   })
 })
 

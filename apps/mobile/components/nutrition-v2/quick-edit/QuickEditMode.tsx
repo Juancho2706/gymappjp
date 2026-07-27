@@ -7,10 +7,11 @@ import {
   Pressable,
   ScrollView,
   Text,
+  TextInput,
   View,
 } from 'react-native'
 import NetInfo from '@react-native-community/netinfo'
-import { ArrowLeft, History, Info, LockKeyhole, X } from 'lucide-react-native'
+import { ArrowLeft, History, Info, NotebookPen, X } from 'lucide-react-native'
 import type { FoodCatalogItem, NutritionItemSubstitution, NutritionPlanReadModel } from '@eva/nutrition-v2'
 import { NutritionCard } from '../NutritionCard'
 import { NutritionHeader, NutritionStatePanel, StrategyBadge } from '../NutritionV2Kit'
@@ -700,19 +701,35 @@ export function QuickEditMode({
             </View>
           ))}
 
-          {/* Fuera de alcance en modo edicion (F1): notas y permisos read-only con hint.
-              Espejo de QuickEditPlanView.tsx:123-159 — visibleNotes, protocolNotes, 3 pills
-              de permisos y hint, en ese orden y jerarquia. Datos ya presentes en el read-model. */}
+          {/* Notas visibles EDITABLES (visible_notes, espejo web QuickEditPlanView); permisos
+              siguen read-only con hint. protocolNotes read-only (carry-over del publish). */}
           <NutritionCard>
             <View className="flex-row items-center gap-2">
-              <LockKeyhole color={theme.textSecondary} size={16} />
+              <NotebookPen color={theme.textSecondary} size={16} />
               <Text className="font-display text-base font-semibold text-text-strong">
                 {QUICK_EDIT_COPY.notesPermissionsTitle}
               </Text>
             </View>
-            <Text className="mt-2 text-sm leading-6 text-text-body">
-              {planModel.visibleNotes || QUICK_EDIT_COPY.notesEmpty}
+            <Text className="mt-3 text-xs font-semibold text-text-muted">
+              {QUICK_EDIT_COPY.notesLabel}
             </Text>
+            <TextInput
+              accessibilityLabel={QUICK_EDIT_COPY.notesLabel}
+              value={state.visibleNotes}
+              onChangeText={(value) => dispatch({ type: 'SET_VISIBLE_NOTES', value })}
+              editable={!publishing}
+              multiline
+              maxLength={8000}
+              textAlignVertical="top"
+              placeholder={QUICK_EDIT_COPY.notesPlaceholder}
+              placeholderTextColor={theme.mutedForeground}
+              className="mt-1.5 min-h-28 rounded-control border border-border-default bg-surface-card px-2.5 py-2 text-sm leading-6 text-text-body"
+            />
+            {errors['plan.visibleNotes'] ? (
+              <Text className="mt-1 text-xs font-medium text-danger-600">
+                {errors['plan.visibleNotes']}
+              </Text>
+            ) : null}
             {planModel.protocolNotes ? (
               <Text className="mt-2 text-xs leading-5 text-text-muted">{planModel.protocolNotes}</Text>
             ) : null}

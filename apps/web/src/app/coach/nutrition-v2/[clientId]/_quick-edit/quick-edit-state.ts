@@ -157,6 +157,21 @@ export interface QeVariant {
 
 export interface QuickEditState {
   variants: QeVariant[]
+  /**
+   * Notas visibles para el alumno (visible_notes de la version), editables en el
+   * quick-edit. Texto plano ('' = sin notas; se normaliza a null al proyectar).
+   * protocol_notes y private_notes siguen FUERA del estado (carry-over server-side).
+   */
+  visibleNotes: string
+}
+
+/** Tope del contrato (`NutritionPlanDraftSchema.visibleNotes`: max 8000 tras trim). */
+export const VISIBLE_NOTES_MAX = 8000
+
+/** Normaliza el texto editable al contrato del draft: trim; '' → null. */
+export function normalizeVisibleNotes(value: string | null | undefined): string | null {
+  const trimmed = (value ?? '').trim()
+  return trimmed === '' ? null : trimmed
 }
 
 // ---------------------------------------------------------------------------
@@ -337,7 +352,10 @@ export function readModelToEditState(
   subsByItemId: SubstitutionsByItemId = {},
 ): QuickEditState | null {
   if (planModel.plan === null) return null
-  return { variants: planModel.dayVariants.map((variant) => hydrateVariant(variant, subsByItemId)) }
+  return {
+    variants: planModel.dayVariants.map((variant) => hydrateVariant(variant, subsByItemId)),
+    visibleNotes: planModel.visibleNotes ?? '',
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -360,6 +378,7 @@ export type QuickEditAction =
   | { type: 'ADD_SLOT'; variantKey: string; key: string; name: string; startTime: string }
   | { type: 'SET_TARGET'; variantKey: string; field: keyof QeTargetsText; value: string }
   | { type: 'STEP_TARGET'; variantKey: string; field: keyof QeTargetsText; direction: 1 | -1 }
+  | { type: 'SET_VISIBLE_NOTES'; value: string }
   | { type: 'SET_PORTION_TARGET'; variantKey: string; slotKey: string; targetKey: string; value: string }
   | { type: 'STEP_PORTION_TARGET'; variantKey: string; slotKey: string; targetKey: string; direction: 1 | -1 }
   | { type: 'REMOVE_PORTION_TARGET'; variantKey: string; slotKey: string; targetKey: string }
@@ -431,7 +450,9 @@ export function stepPortionsText(current: string, direction: 1 | -1): string {
 }
 
 function mapVariant(state: QuickEditState, variantKey: string, fn: (v: QeVariant) => QeVariant): QuickEditState {
-  return { variants: state.variants.map((v) => (v.key === variantKey ? fn(v) : v)) }
+  // Spread OBLIGATORIO: el estado tiene campos hermanos de `variants` (visibleNotes);
+  // reconstruir solo `{ variants }` los perderia en silencio en cada edicion.
+  return { ...state, variants: state.variants.map((v) => (v.key === variantKey ? fn(v) : v)) }
 }
 
 function mapSlot(
@@ -658,6 +679,8 @@ export function quickEditReducer(state: QuickEditState, action: QuickEditAction)
           ? slot
           : { ...slot, portionTargets: [...slot.portionTargets, createPortionTarget(action.key, action.group)] },
       )
+    case 'SET_VISIBLE_NOTES':
+      return { ...state, visibleNotes: action.value }
     case 'SET_TARGET':
       return mapVariant(state, action.variantKey, (variant) => ({
         ...variant,
@@ -677,8 +700,11 @@ export function quickEditReducer(state: QuickEditState, action: QuickEditAction)
       // Restaura un borrador local (localStorage) reemplazando el arbol completo. Validacion
       // defensiva minima: si el payload guardado esta corrupto o es de un shape viejo (variants
       // ausente o no-array), se ignora y se conserva el estado actual — mejor no restaurar que
-      // romper la pantalla.
-      return Array.isArray(action.state?.variants) ? action.state : state
+      // romper la pantalla. Un borrador pre-notas (sin `visibleNotes`) restaura el arbol y
+      // conserva las notas actuales (hidratadas del read model): jamas un undefined en el estado.
+      if (!Array.isArray(action.state?.variants)) return state
+      if (typeof action.state.visibleNotes === 'string') return action.state
+      return { ...action.state, visibleNotes: state.visibleNotes }
     default:
       return state
   }
@@ -740,6 +766,11 @@ const MAX_MACRO_G = 2000
 
 export function validateQuickEdit(state: QuickEditState): QuickEditValidation {
   const errors: Record<string, string> = {}
+  // Espejo del contrato (max 8000 tras trim): corta ANTES de que el server responda un
+  // VALIDATION generico sin señalar el campo.
+  if ((state.visibleNotes ?? '').trim().length > VISIBLE_NOTES_MAX) {
+    errors['plan.visibleNotes'] = `Las notas superan los ${VISIBLE_NOTES_MAX} caracteres.`
+  }
   for (const variant of state.variants) {
     for (const [field, max] of [
       ['calories', MAX_KCAL],
@@ -881,10 +912,15 @@ function projectVariant(variant: QeVariant, orderIndex: number): DraftVariant {
 
 /**
  * Proyecta el arbol editable sobre el draft base (readModelToDraft del paquete): conserva
- * planId/nombre/estrategia/permisos/notas del base (F1 no los edita) y reemplaza dayVariants.
+ * planId/nombre/estrategia/permisos del base (F1 no los edita) y reemplaza dayVariants y
+ * visibleNotes (editables). protocol/private notes siguen siendo carry-over server-side.
  * Usar tambien para derivar el BASELINE de comparacion (proyectar el estado hidratado sin
  * tocar) de modo que el contador de cambios nunca acuse diferencias de normalizacion.
  */
 export function applyQuickEditToDraft(base: NutritionPlanDraft, state: QuickEditState): NutritionPlanDraft {
-  return { ...base, dayVariants: state.variants.map(projectVariant) }
+  return {
+    ...base,
+    visibleNotes: normalizeVisibleNotes(state.visibleNotes),
+    dayVariants: state.variants.map(projectVariant),
+  }
 }

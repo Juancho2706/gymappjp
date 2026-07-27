@@ -184,6 +184,21 @@ export interface QuickEditVariant {
 
 export interface QuickEditState {
   variants: QuickEditVariant[]
+  /**
+   * Notas visibles para el alumno (visible_notes de la version), EDITABLES en el
+   * quick-edit (paridad web). '' = sin notas; se normaliza a null al proyectar.
+   * protocol_notes y private_notes siguen fuera del estado (carry-over en el publish).
+   */
+  visibleNotes: string
+}
+
+/** Tope del contrato (`NutritionPlanDraftSchema.visibleNotes`: max 8000 tras trim). */
+export const VISIBLE_NOTES_MAX = 8000
+
+/** Normaliza el texto editable al contrato del draft: trim; '' → null. */
+export function normalizeVisibleNotes(value: string | null | undefined): string | null {
+  const trimmed = (value ?? '').trim()
+  return trimmed === '' ? null : trimmed
 }
 
 function numToStr(value: number | null | undefined): string {
@@ -205,6 +220,7 @@ export function planModelToQuickEditState(
   genKey: (prefix: string) => string,
 ): QuickEditState {
   return {
+    visibleNotes: planModel.visibleNotes ?? '',
     variants: planModel.dayVariants.map((variant) => ({
       key: variant.key,
       id: variant.id,
@@ -264,6 +280,7 @@ export function planModelToQuickEditState(
 export type QuickEditTargetField = keyof QuickEditTargetsText
 
 export type QuickEditAction =
+  | { type: 'SET_VISIBLE_NOTES'; value: string }
   | { type: 'SET_TARGET'; variantKey: string; field: QuickEditTargetField; value: string }
   | { type: 'SET_ITEM_QUANTITY'; variantKey: string; slotKey: string; itemKey: string; value: string }
   | { type: 'SET_ITEM_UNIT'; variantKey: string; slotKey: string; itemKey: string; unit: string }
@@ -283,7 +300,10 @@ function mapVariant(
   variantKey: string,
   fn: (variant: QuickEditVariant) => QuickEditVariant,
 ): QuickEditState {
+  // Spread OBLIGATORIO: el estado tiene campos hermanos de `variants` (visibleNotes);
+  // reconstruir solo `{ variants }` los perderia en silencio en cada edicion.
   return {
+    ...state,
     variants: state.variants.map((variant) => (variant.key === variantKey ? fn(variant) : variant)),
   }
 }
@@ -328,6 +348,8 @@ function insertAt<T>(list: T[], index: number, value: T): T[] {
 
 export function quickEditReducer(state: QuickEditState, action: QuickEditAction): QuickEditState {
   switch (action.type) {
+    case 'SET_VISIBLE_NOTES':
+      return { ...state, visibleNotes: action.value }
     case 'SET_TARGET':
       return mapVariant(state, action.variantKey, (variant) => ({
         ...variant,
@@ -433,8 +455,12 @@ export function quickEditReducer(state: QuickEditState, action: QuickEditAction)
       // Rehidrata el arbol COMPLETO desde un respaldo local (AsyncStorage) — a diferencia de
       // RESTORE_ITEM/RESTORE_SLOT (undo puntual), reemplaza todo el estado. Guarda defensiva:
       // si el payload esta corrupto o es de un shape viejo (variants ausente o no-array) se
-      // conserva el estado actual — mejor no restaurar que romper la pantalla.
-      return Array.isArray(action.state?.variants) ? action.state : state
+      // conserva el estado actual — mejor no restaurar que romper la pantalla. Un borrador
+      // pre-notas (sin `visibleNotes`) restaura el arbol y conserva las notas actuales
+      // (hidratadas del read model): jamas un undefined en el estado.
+      if (!Array.isArray(action.state?.variants)) return state
+      if (typeof action.state.visibleNotes === 'string') return action.state
+      return { ...action.state, visibleNotes: state.visibleNotes }
     default:
       return state
   }
@@ -486,6 +512,10 @@ function targetsChanged(a: QuickEditVariant, b: QuickEditVariant): boolean {
  */
 export function countQuickEditChanges(baseline: QuickEditState, current: QuickEditState): number {
   let count = 0
+  // Notas visibles editadas = 1 operacion (comparacion normalizada: espacios/'' no cuentan).
+  if (normalizeVisibleNotes(baseline.visibleNotes) !== normalizeVisibleNotes(current.visibleNotes)) {
+    count += 1
+  }
   for (const curVariant of current.variants) {
     const baseVariant = baseline.variants.find((v) => v.key === curVariant.key)
     if (!baseVariant) {
@@ -535,6 +565,10 @@ const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/
 
 export function validateQuickEditState(state: QuickEditState): QuickEditValidation {
   const errors: Record<string, string> = {}
+  // Espejo del contrato (max 8000 tras trim): corta ANTES del VALIDATION generico del publish.
+  if ((state.visibleNotes ?? '').trim().length > VISIBLE_NOTES_MAX) {
+    errors['plan.visibleNotes'] = `Las notas superan los ${VISIBLE_NOTES_MAX} caracteres.`
+  }
   for (const variant of state.variants) {
     let anyTarget = false
     for (const field of TARGET_FIELDS) {
@@ -710,8 +744,9 @@ export async function loadQuickEditFoods(
 
 /**
  * Ensambla el draft canonico SIN validar (la validacion Zod corre en el publish).
- * Las notas van con los valores del baseline como placeholder: el publish las PISA
- * con el carry-over leido de la version base (regla F1: quick-edit nunca toca notas).
+ * `visibleNotes` sale EDITADO del estado (normalizado trim/''→null). protocol_notes va
+ * con el valor del baseline como placeholder: el publish lo PISA con el carry-over
+ * leido fresco de la version base (F1 no lo edita).
  */
 export function quickEditStateToDraft(input: {
   state: QuickEditState
@@ -773,7 +808,7 @@ export function quickEditStateToDraft(input: {
     effectiveFrom,
     timezone: baseline.timezone,
     permissions: baseline.permissions,
-    visibleNotes: baseline.visibleNotes,
+    visibleNotes: normalizeVisibleNotes(state.visibleNotes),
     privateNotes: null,
     protocolNotes: baseline.protocolNotes,
     dayVariants,
@@ -1102,11 +1137,12 @@ interface BaseVersionNotesRow {
  * Publica el quick-edit desde el movil (espejo del quickEditPublishAction web, §2.3):
  *  1. Lee las notas de la version base (RLS coach) y valida que pertenece al plan del
  *     draft (anti-confusion de ids; fail-closed si no es legible).
- *  2. Carry-over: pisa visible/protocol con los valores de la base — cero forja. NO se
- *     lee ni copia `private_notes`: la columna same-row esta deprecada e ilegible por
- *     `authenticated` (grant SELECT revocado; notas privadas viven en
- *     nutrition_plan_private_notes_v2), asi que privateNotes queda null y republicar no
- *     las toca. Pedirla producia 42501 "permission denied for table ..." y el publish fallaba.
+ *  2. Notas: `visibleNotes` es EDITABLE (sale del estado, normalizada); solo protocol_notes
+ *     se pisa con el carry-over de la base (F1 no lo edita). NO se lee ni copia
+ *     `private_notes`: la columna same-row esta deprecada e ilegible por `authenticated`
+ *     (grant SELECT revocado; notas privadas viven en nutrition_plan_private_notes_v2), asi
+ *     que privateNotes queda null y republicar no las toca. Pedirla producia 42501
+ *     "permission denied for table ..." y el publish fallaba.
  *  3. Valida el draft con NutritionPlanDraftSchema.
  *  4. Delta-gate Pro: solo gatea features NUEVAS (contenido grandfathered pasa).
  *  5. Persiste y publica con p_expected_current_version_id = version base (CAS).
@@ -1177,7 +1213,9 @@ export async function publishQuickEditRN(input: {
   const rawDraft = carryOverSubstitutions
     ? injectSubstitutionsIntoDraft(withTargets, carryOverSubstitutions)
     : withTargets
-  rawDraft.visibleNotes = baseRow.visible_notes
+  // `visibleNotes` NO se pisa: es editable en el quick-edit y ya viene del estado (normalizado
+  // por quickEditStateToDraft). protocol_notes si es carry-over fresco de la base (F1 no lo
+  // edita) y privateNotes queda null (columna same-row deprecada e ilegible; ver punto 2 arriba).
   rawDraft.privateNotes = null
   rawDraft.protocolNotes = baseRow.protocol_notes
   const parsed = NutritionPlanDraftSchema.safeParse(rawDraft)
