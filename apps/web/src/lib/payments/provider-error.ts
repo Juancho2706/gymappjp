@@ -31,4 +31,19 @@ export class ProviderRequestError extends Error {
     get isNotFound(): boolean {
         return this.status === 404
     }
+
+    /**
+     * MP 400 "the preapprovalId is not valid for callerId": el preapproval existe pero pertenece a
+     * OTRA cuenta MP — en la práctica, la cuenta vieja pre-migración del 2026-07-05, cuyos
+     * preapprovals fueron cancelados out-of-band. Para el caller actual es inalcanzable e
+     * incobrable → equivale a suscripción MUERTA (caso movida-la2yw4 27-jul: quedó Pro gratis
+     * porque este 400 caía como error transitorio permanente).
+     */
+    get isForeignAccount(): boolean {
+        return (
+            this.provider === 'mercadopago' &&
+            this.status === 400 &&
+            this.message.includes('not valid for callerId')
+        )
+    }
 }

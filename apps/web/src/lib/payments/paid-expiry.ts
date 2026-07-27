@@ -19,12 +19,15 @@
  *  - `status`: el snapshot se leyó bien; `mappedStatus` = `mapProviderStatus(snap.status)`
  *    (vocabulario EVA: 'active' | 'trialing' | 'paused' | 'pending_payment' | 'canceled' | 'expired').
  *  - `not_found`: el gateway respondió 404 / no existe la suscripción → MUERTA.
+ *  - `foreign_account`: MP 400 "not valid for callerId" — el preapproval pertenece a la cuenta MP
+ *    vieja (pre-migración 2026-07-05), cancelado out-of-band e incobrable → MUERTA.
  *  - `error`: fallo transitorio (5xx, red, timeout) → indeterminado.
  *  - `no_sub_id`: el coach no tiene id de suscripción del gateway para verificar.
  */
 export type RemoteVerification =
     | { kind: 'status'; mappedStatus: string }
     | { kind: 'not_found' }
+    | { kind: 'foreign_account' }
     | { kind: 'error' }
     | { kind: 'no_sub_id' }
 
@@ -64,6 +67,12 @@ export function resolvePaidExpiryDecision(input: {
         case 'not_found':
             // Regla 1: la suscripción ya no existe en el gateway → MUERTA.
             return { action: 'expire', reason: 'remote_not_found' }
+
+        case 'foreign_account':
+            // Regla 1: preapproval en la cuenta MP vieja (pre-migración), cancelado out-of-band
+            // e incobrable por el caller actual → MUERTA. Sin esta rama caía como error transitorio
+            // PERMANENTE y el coach quedaba Pro gratis indefinido (caso movida-la2yw4 27-jul).
+            return { action: 'expire', reason: 'remote_foreign_account' }
 
         case 'status': {
             const mapped = remote.mappedStatus

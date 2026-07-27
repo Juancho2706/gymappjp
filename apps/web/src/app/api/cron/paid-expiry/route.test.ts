@@ -159,6 +159,31 @@ describe('GET /api/cron/paid-expiry — EXPIRE (remota muerta)', () => {
         expect(json).toMatchObject({ expired: 1, errors: 0 })
     })
 
+    it('MP 400 "not valid for callerId" (preapproval de cuenta vieja) → expira (caso movida-la2yw4)', async () => {
+        candidates = [
+            {
+                id: 'c10',
+                slug: 'movida-la2yw4',
+                subscription_status: 'active',
+                subscription_provider: 'mercadopago',
+                subscription_mp_id: 'pre_old_account',
+                subscription_provider_external_id: null,
+            },
+        ]
+        snapshots.set('pre_old_account', {
+            throw: new ProviderRequestError(
+                'mercadopago',
+                400,
+                'MercadoPago request failed (400): {"message":"the preapprovalId is not valid for callerId","status":400}'
+            ),
+        })
+        const json = await (await GET(authedReq())).json()
+        expect(json).toMatchObject({ expired: 1, errors: 0 })
+        const upd = coachUpdates.find((u) => u.id === 'c10')!.update
+        expect(upd.subscription_status).toBe('expired')
+        expect(upd.subscription_mp_id).toBeNull()
+    })
+
     it('Flow suscripción cancelada (status mapeado canceled) → nulea subscription_provider_external_id', async () => {
         candidates = [
             {
@@ -252,6 +277,25 @@ describe('GET /api/cron/paid-expiry — ALERT-ONLY (no cortar)', () => {
         const json = await (await GET(authedReq())).json()
         // El error no tumba el cron: el segundo coach igual se procesa y expira.
         expect(json).toMatchObject({ ok: true, candidates: 2, expired: 1, errors: 1 })
+    })
+
+    it('MP 400 GENÉRICO (sin "not valid for callerId") → error fail-safe, NO expira', async () => {
+        candidates = [
+            {
+                id: 'c11',
+                slug: 'bad-request',
+                subscription_status: 'active',
+                subscription_provider: 'mercadopago',
+                subscription_mp_id: 'pre_400',
+                subscription_provider_external_id: null,
+            },
+        ]
+        snapshots.set('pre_400', {
+            throw: new ProviderRequestError('mercadopago', 400, 'MercadoPago request failed (400): invalid parameters'),
+        })
+        const json = await (await GET(authedReq())).json()
+        expect(json).toMatchObject({ expired: 0, errors: 1 })
+        expect(coachUpdates).toHaveLength(0)
     })
 })
 

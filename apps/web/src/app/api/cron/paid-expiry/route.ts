@@ -23,7 +23,8 @@ import type { TablesInsert } from '@/lib/database.types'
  * DISEÑO PROVIDER-VERIFIED (no negociable): NUNCA se expira solo por la fecha — eso cortaría a un coach
  * que el gateway AÚN puede cobrar (dunning). Antes de expirar se verifica el estado REAL en el gateway
  * (preapproval MP / suscripción Flow) y se decide con la función pura `resolvePaidExpiryDecision`:
- *   1. Remota MUERTA (cancelled/rejected, o 404) → EXPIRE.
+ *   1. Remota MUERTA (cancelled/rejected, 404, o MP 400 "not valid for callerId" = preapproval de la
+ *      cuenta vieja pre-migración, incobrable) → EXPIRE.
  *   2. DB 'canceled' sin id de suscripción → EXPIRE.
  *   3. Remota VIVA (authorized/active/pending/paused) → ALERT-ONLY (nulear el id rompería el matching
  *      del webhook de recuperación del dunning = cobro real perdido).
@@ -74,6 +75,9 @@ async function verifyRemote(coach: CandidateCoach): Promise<RemoteVerification> 
     } catch (err) {
         if (err instanceof ProviderRequestError && err.isNotFound) {
             return { kind: 'not_found' }
+        }
+        if (err instanceof ProviderRequestError && err.isForeignAccount) {
+            return { kind: 'foreign_account' }
         }
         throw err
     }
