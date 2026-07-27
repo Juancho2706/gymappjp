@@ -1,7 +1,7 @@
 ---
 status: active
 owner: Juan Manuel Villegas
-last_verified: "2026-07-25 @ 856829fa"
+last_verified: "2026-07-26 @ ba38b0fa"
 canonical: true
 source_of_truth: apps/web responsive + apps/mobile
 ---
@@ -66,6 +66,11 @@ fuera, RN-extras estricto).
 | Aplicada (wave 4B.5, `a9b8958e`) | 4B-12 Builder permisos del alumno + guardar-en-catálogo + archivar-y-reemplazar (idempotencia estable) |
 | Aplicada (wave 4B.6, `6338f4a4`) | 4B-13 Builder drafts (autosave + Restaurar + guard warn-only; cierra la ola) |
 | Fuera de rama | 4B-16 deuda transversal nutrition-pro (toca web+packages; abrir en rama de web) |
+
+> **2026-07-26 (`c159d67a`)**: 4B-03 evolucionó en paridad — las notas visibles (`visible_notes`)
+> pasaron de read-only a **editables** en el quick-edit de AMBAS plataformas (misma acción,
+> normalización, tope 8000 y microcopy espejo). Detalle en
+> [`u03-quickedit-notas-permisos.md`](../rn-port/specs/seccion-4b/u03-quickedit-notas-permisos.md).
 
 ## Estado "En progreso" del día (O2, cerrado estático 2026-07-26)
 

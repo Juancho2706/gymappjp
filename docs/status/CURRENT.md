@@ -1,7 +1,7 @@
 ---
 status: active
 owner: product-engineering
-last_verified: "2026-07-26 @ 80995cae"
+last_verified: "2026-07-26 @ ba38b0fa"
 canonical: true
 ---
 
@@ -19,6 +19,7 @@ Esta es la única vista global de qué está en producción, qué está en integ
 | Hotfix P0 2026-07-26 (PR #171, EN PROD) | Ejecutor alumno perdía series al reentrar un día recuperado: `?fecha=<hoy>` activaba el modo solo-UPDATE (jamás inserta) y la cola offline descartaba cada rechazo `past_set_not_found`. Fix en 3 capas (action, page, `buildWorkoutDoneEditHref`); `?fecha=` queda reservado a días realmente pasados. CI quality verde ([run 30214247333](https://github.com/Juancho2706/gymappjp/actions/runs/30214247333)), Vercel prod READY |
 | Ola post-incidente (PR #172, EN PROD) | Telemetría de descartes por code en la cola offline (web+RN, evento Sentry por causa, chip RN honesto), `CountUpText` compartido que extingue la clase EVA-NEXTJS-10/E (7 superficies migradas), dedup (plan, día) en la atribución semanal, banner RN acotado al plan de hoy. Issues Sentry EVA-NEXTJS-10/E/11 resueltos con evidencia |
 | Estado "En progreso" (O2) | Implementado sobre `docs/specs/workout-day-in-progress`: `deriveDayCompletion` en `@eva/workout-engine` (12 fixtures de paridad), day-cards/sheet/banner/dots en web y RN con visual y copy espejados; racha RPC intacta. Suite completa 4054 tests verdes. QA manual del owner aprobado (2026-07-26, preview vs prod DB); QA física device RN pendiente. Backlog nuevo: la resolución de celda semanal no debe honrar `assigned_date` de planes de programas inactivos |
+| Notas visibles editables en quick-edit (`c159d67a`) | Reporte de coach en prod: `visible_notes` del plan V2 no tenía superficie de edición (quick-edit read-only, builder "Rehacer" la resetea a null). Ahora editable en el quick-edit web y RN (textarea/TextInput, tope 8000, trim→null, contador de cambios, borradores pre-notas compatibles); publish deja de pisar la nota con la base (protocol/private siguen carry-over). QA owner en preview aprobado; deuda anotada: carry-over de la nota en el builder "Rehacer" |
 | PR #170 (mergeada) | Ejecutor V3 (ceremonia logo dark + ignición del CTA Finalizar), home alumno (link retirado + scroll-top), cardio fases A-D completas (ejes por modalidad, coach ve registros, intervalos por distancia), pulido del creador de ejercicios |
 | Migración DB | `20260725221804_cardio_modality_axes` APLICADA en LIVE antes del merge (aditiva: `exercises.cardio_modality`, Escaladora, `reps_unit` +jumps/floors) |
 | Gate `quality` | Verde en el [run 30181033720](https://github.com/Juancho2706/gymappjp/actions/runs/30181033720) sobre `baef4283`: docs, lint 0 errores, typecheck web, tokens y Vitest 3940 aprobados / 4 omitidos (330 archivos). `tsc --noEmit` web+mobile+enterprise re-ejecutados verdes en local sobre `a59acfd1` (2026-07-25) |
