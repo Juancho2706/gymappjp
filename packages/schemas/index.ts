@@ -3,6 +3,8 @@
 export * from './brand'
 // LoginSchema, ForgotPasswordSchema, ResetPasswordSchema, ChangePasswordSchema
 export * from './auth'
+// Identificador público de coach y contrato del gate de acceso mobile.
+export * from './coach-identifier'
 // passwordRejectionMessage: traducción de errores GoTrue al cambiar contraseña (HIBP/weak/same)
 export * from './auth-errors'
 // CheckInSchema, QuickWeightSchema, UpsertHabitsSchema

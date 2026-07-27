@@ -1,7 +1,7 @@
 ---
 status: active
 owner: engineering
-last_verified: "2026-07-25 @ a59acfd1"
+last_verified: "2026-07-26 @ e0db4285"
 canonical: true
 ---
 
@@ -41,6 +41,26 @@ Archivos principales:
 - `apps/mobile/components/coach/WorkspaceSwitcherSheet.tsx`
 
 El identificador recibido desde el navegador o móvil nunca autoriza por sí solo. El servidor vuelve a validar membership, rol y ownership.
+
+### Entrada pública y login del alumno nativo
+
+```text
+campo o deep link
+  → parseCoachIdentifier en @eva/schemas
+  → branding público permitido
+  → ThemeContext en memoria + caché de continuidad
+  → Supabase Auth signInWithPassword
+  → POST /api/mobile/auth/validate-student-workspace
+  → identidad desde bearer + listClientWorkspaces
+  → client/workspace exacto activo y no archivado
+  → setLastWorkspace + destino autenticado
+```
+
+`/c/<slug>` y `/invite/<code>` solo preseleccionan contexto y convergen con el campo manual dentro
+del árbol React. `coachId`, branding y `AsyncStorage` no prueban identidad ni conceden acceso. La
+ruta server-side valida el bearer y el body con Zod, reutiliza el descubrimiento canónico de
+workspaces y devuelve únicamente `ok`/`forcePasswordChange` o un error seguro. Cualquier cliente
+administrativo permanece en servidor; mobile nunca recibe `SUPABASE_SERVICE_ROLE_KEY`.
 
 ## Coach crea y gestiona un alumno
 

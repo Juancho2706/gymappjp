@@ -8,11 +8,6 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "icon": "./assets/icon.png",
-    "splash": {
-      "image": "./assets/eva-mark-filled.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#07080C"
-    },
     "ios": {
       "icon": "./assets/icon-ios.png",
       "bundleIdentifier": "cl.evaapp.eva",
@@ -107,6 +102,19 @@
         {
           "android": {
             "minSdkVersion": 26
+          }
+        }
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/eva-mark-filled.png",
+          "imageWidth": 180,
+          "resizeMode": "contain",
+          "backgroundColor": "#07080C",
+          "dark": {
+            "image": "./assets/eva-mark-filled.png",
+            "backgroundColor": "#07080C"
           }
         }
       ],

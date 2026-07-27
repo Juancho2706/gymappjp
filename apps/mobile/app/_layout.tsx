@@ -38,7 +38,6 @@ import { brandDisplayFontMap } from '../lib/brand-fonts'
 import { loadStoredBranding, type CoachBranding } from '../lib/branding'
 import { ThemeProvider, useTheme } from '../context/ThemeContext'
 import { configurePushHandler, setupAndroidChannel, syncPushToken } from '../lib/push'
-import { LaunchSplash } from '../components/shared/LaunchSplash'
 import { Toaster } from '../components/Toast'
 import { AppErrorBoundary } from '../components/AppErrorBoundary'
 import { BiometricLock } from '../components/BiometricLock'
@@ -46,7 +45,9 @@ import { isBiometricLockEnabled } from '../lib/biometric'
 import { checkForOtaUpdate } from '../lib/ota'
 import { AppState, View } from 'react-native'
 
-SplashScreen.preventAutoHideAsync()
+// Retain the native launch screen until stored branding and fonts are ready.
+// During Fast Refresh it may already be hidden, so that rejection is harmless.
+void SplashScreen.preventAutoHideAsync().catch(() => {})
 
 // Telemetría de errores (E0-G1 / G11 §1.8). Gateado por env: sin DSN es no-op TOTAL
 // (cero llamadas de red, cero riesgo de crash). El DSN se inyecta vía EAS build
@@ -86,7 +87,7 @@ function RootLayoutNav() {
   const responseListener = useRef<Notifications.EventSubscription | null>(null)
 
   // Process deep link URL: parse auth hash tokens for password recovery
-  function processDeepLink(url: string) {
+  const processDeepLink = useCallback((url: string) => {
     const hash = url.split('#')[1]
     if (!hash) return
     const params = new URLSearchParams(hash)
@@ -98,7 +99,7 @@ function RootLayoutNav() {
         if (type === 'recovery') router.replace('/(auth)/reset-password')
       })
     }
-  }
+  }, [router])
 
   useEffect(() => {
     setupAndroidChannel()
@@ -119,7 +120,7 @@ function RootLayoutNav() {
       responseListener.current?.remove()
       linkSub.remove()
     }
-  }, [])
+  }, [processDeepLink, router])
 
   useEffect(() => {
     registerSessionCacheJanitor()
@@ -163,7 +164,7 @@ function RootLayoutNav() {
         }
       })
     }
-  }, [session, segments])
+  }, [router, session, segments])
 
   // Sync push token once per session
   useEffect(() => {
@@ -233,17 +234,21 @@ function RootLayoutWithFonts({ branding }: { branding: CoachBranding | null }) {
     // para que gane sobre cualquier entrada estática homónima.
     ...brandDisplayFontMap(branding),
   })
-  const [splashDone, setSplashDone] = useState(false)
-  const finishSplash = useCallback(() => setSplashDone(true), [])
-
-  useEffect(() => {
-    if (fontsLoaded) SplashScreen.hideAsync()
-  }, [fontsLoaded])
+  const splashHiddenRef = useRef(false)
+  const handleRootLayout = useCallback(() => {
+    if (splashHiddenRef.current) return
+    splashHiddenRef.current = true
+    // Hide only after React has committed its first ready frame. There is no
+    // timer or second JS splash between the native launch screen and the app.
+    void SplashScreen.hideAsync().catch(() => {
+      splashHiddenRef.current = false
+    })
+  }, [])
 
   if (!fontsLoaded) return null
 
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
+    <GestureHandlerRootView style={{ flex: 1 }} onLayout={handleRootLayout}>
       <ReducedMotionConfig mode={ReduceMotion.System} />
       <SafeAreaProvider>
         {/* ThemeProvider DEBE envolver a BottomSheetModalProvider (no al revés).
@@ -263,14 +268,13 @@ function RootLayoutWithFonts({ branding }: { branding: CoachBranding | null }) {
             {/* P0 focus-hop: el navegador va en un View PLANO. Antes lo envolvía un
                 MotiView que animaba opacity — vista animada persistente sobre
                 react-native-screens bajo Fabric, un anti-patrón que amplifica el
-                robo de foco. El cross-fade del arranque lo hace SOLO el overlay del
-                BrandedSplash (fade-out por encima), no un fade-in del navegador. */}
+                robo de foco. La transición de arranque termina al ocultar el splash
+                nativo después del primer layout listo, sin animar el navegador. */}
             <View style={{ flex: 1 }}>
               <RootLayoutNav />
             </View>
             {/* Transient feedback overlay — single mount point (parity with web <Toaster/>). */}
             <Toaster />
-            {!splashDone && <LaunchSplash onFinish={finishSplash} />}
           </BottomSheetModalProvider>
         </ThemeProvider>
       </SafeAreaProvider>

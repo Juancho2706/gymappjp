@@ -1,7 +1,7 @@
 ---
 status: active
 owner: product-engineering
-last_verified: "2026-07-26 @ ba38b0fa"
+last_verified: "2026-07-26 @ e0db4285"
 canonical: true
 ---
 
@@ -32,7 +32,7 @@ Este bloque es un snapshot, no reemplaza `git fetch`, `git status` ni los checks
 | Frente | Estado | Fuente de detalle |
 |---|---|---|
 | Web/PWA | Plataforma productiva; `master` es la línea de producción | [Testing](../testing/TEST_STATUS.md), [Runbook](../operations/RUNBOOK.md) |
-| App nativa | Desarrollo de paridad activo sobre `rnmobiledenuevo`; no declarar cierre sin build y QA física | [Mobile parity](MOBILE_PARITY.md) |
+| App nativa | Entrada cerrada estática sobre `rnmobiledenuevo`; nueva config de splash requiere build y QA física antes de certificar | [Mobile parity](MOBILE_PARITY.md) |
 | Nutrition V2 | Implementación web/mobile y contratos compartidos presentes; rollout autorizado server-side y con fallback OFF si falta configuración válida | [Product overview](../product/PRODUCT_OVERVIEW.md), [Runbook V2](../operations/NUTRITION_V2_ROLLOUT_RUNBOOK.md) |
 | Teams | Pool compartido, membresías, marca, módulos y workspace coach/alumno implementados | [Flows](../architecture/FLOWS_AND_COMPONENTS.md#team) |
 | Enterprise | Panel org, roles, asignaciones, programas, nutrición, reportes, pagos, marca y auditoría implementados en web | [Flows](../architecture/FLOWS_AND_COMPONENTS.md#enterprise) |
@@ -41,11 +41,11 @@ Este bloque es un snapshot, no reemplaza `git fetch`, `git status` ni los checks
 
 ## Prioridad actual
 
-1. Olas 4A y 4B **cerradas estáticas** (nutrición alumno + coach en paridad 1:1 de código). Siguiente: ola 5 (builder y programas del coach; el ejecutor V3 del alumno ya quedó integrado en PR #170, sin coordinación pendiente) según `MOBILE_PARITY.md`; QA device pendiente para todo.
-2. Ejecutar los gates web/mobile completos sobre cada checkpoint candidato.
-3. Generar y retener artefactos Android/iOS del corte actual (el build iOS `production` está roto desde el 2026-07-23) y verificar en App Store Connect/Play Console los submits ya realizados.
-4. Completar QA en dispositivos Android/iOS de los recorridos críticos.
-5. Integrar `rnmobiledenuevo` a `master` solo con evidencia verde y sin migraciones o artefactos locales pendientes.
+1. Generar un build EAS Android/iOS del corte de [experiencia de entrada mobile](../../specs/mobile-entry-experience/SPEC.md): código, auth autoritativa, assets, selector, splash y exports están cerrados estáticamente; la nueva configuración nativa no sale por OTA.
+2. Ejecutar QA física del tramo completo en Android/iOS, incluidos cold/warm start, teclado, código/slug/links, EVA/custom, light/dark, offline y lectores de pantalla.
+3. Ejecutar los gates web/mobile completos sobre cada checkpoint candidato.
+4. Retener los artefactos Android/iOS del corte nuevo y verificar procesamiento en App Store Connect/Play Console.
+5. Sin P0/P1/P2 de entrada, abrir la ola 5 (builder y programas del coach) según `MOBILE_PARITY.md`.
 
 ## Gates que siguen abiertos
 

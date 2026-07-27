@@ -1,7 +1,7 @@
 ---
 status: active
 owner: Juan Manuel Villegas
-last_verified: "2026-07-25 @ a59acfd1"
+last_verified: "2026-07-26 @ e0db4285"
 canonical: live-backlog
 source_of_truth: docs/status/MOBILE_PARITY.md
 ---
@@ -30,10 +30,21 @@ Solo contiene trabajo accionable. La matriz histórica E0–E8 permanece en Git 
 - [ ] QA device de la ola.
 - [ ] 4B-16 — deuda transversal nutrition-pro: consolidar en `@eva/nutrition-v2` desde una rama de web, no aquí.
 
+## Frente prioritario — Experiencia de entrada (cerrado estático)
+
+- [x] Audit multidisciplinario y paquete SDD:
+      [`SPEC`](../mobile-entry-experience/SPEC.md) ·
+      [`PLAN`](../mobile-entry-experience/PLAN.md) ·
+      [`TASKS`](../mobile-entry-experience/TASKS.md).
+- [x] Aprobación del owner.
+- [x] P0 de branding/workspace implementado antes del pulido visual.
+- [x] Splash, walkthrough y selector/login implementados según el SDD aprobado.
+- [ ] Build EAS nuevo y QA física Android/iOS según el SDD.
+
 ## Build gate actual
 
-- [x] Vía `production` validada end-to-end: build + submit Android (Play internal testing) e iOS (TestFlight) verdes en el run `29885773193` sobre `4382ff6c` (2026-07-22).
-- [ ] Reparar el build iOS `production` (falló en `b7e5e34d` y `335c88da`; logs expirados).
+- [x] Vía `production` validada end-to-end: build + submit Android (Play internal testing) e iOS
+      (TestFlight) verdes en el run `30185211552` sobre `856829fa` (2026-07-25).
 - [ ] Generar y retener artefactos firmados del corte integrado actual.
 - [ ] Instalar/probar ambos artefactos; build verde no equivale a QA.
 
@@ -50,7 +61,8 @@ Solo contiene trabajo accionable. La matriz histórica E0–E8 permanece en Git 
 ## Cola posterior
 
 - [x] Inventario/spec de 4B — hecho; vive en [`docs/rn-port/specs/seccion-4b/`](../../docs/rn-port/specs/seccion-4b/).
-- [ ] Inventario/spec de la ola 5 — builder y programas del coach (siguiente frente; contrastar contra el código ya integrado del ejecutor V3).
+- [ ] Inventario/spec de la ola 5 — builder y programas del coach (después del frente de entrada;
+      contrastar contra el código ya integrado del ejecutor V3).
 - [ ] Inventario de dominios restantes en lotes de 10–15 superficies.
 - [ ] Certificación transversal de rutas, branding, accesibilidad, offline y deep links.
 - [ ] Release estable a stores después de todos los gates.

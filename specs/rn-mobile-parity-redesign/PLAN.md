@@ -1,7 +1,7 @@
 ---
 status: active
 owner: Juan Manuel Villegas
-last_verified: "2026-07-21 @ f5301858"
+last_verified: "2026-07-26 @ e0db4285"
 canonical: implementation-plan
 source_of_truth: docs/status/MOBILE_PARITY.md
 ---
@@ -10,31 +10,34 @@ source_of_truth: docs/status/MOBILE_PARITY.md
 
 ## Objetivo inmediato
 
-Terminar Ola 4A de nutrición del alumno y luego certificar en dispositivo el trabajo acumulado de Secciones 1–3 y 2R. Hoy 4A tiene 5/12 unidades aplicadas; el detalle efectivo está en [`MOBILE_PARITY.md`](../../docs/status/MOBILE_PARITY.md).
+Olas 4A, 4B y la [experiencia de entrada mobile](../mobile-entry-experience/SPEC.md) están cerradas
+estáticas. El siguiente checkpoint es generar el binario con el splash nuevo y certificar la entrada
+en Android/iOS antes de abrir ola 5; después se continúa la certificación del trabajo acumulado. El
+detalle efectivo está en [`MOBILE_PARITY.md`](../../docs/status/MOBILE_PARITY.md).
 
 ## Secuencia activa
 
-### Wave C
+### Frente 0 — Entrada mobile (cerrado estático)
 
-- `4A-06`: edición y retiro, incluyendo motivo, confirmación y errores visibles.
-- `4A-08`: `AuraHero`, macros y white-label.
-- `4A-09`: porciones, chips, filtros y sheet de equivalencias.
+1. [x] [`SPEC.md`](../mobile-entry-experience/SPEC.md) aprobada por el owner.
+2. [x] Contrato/auth y validación autoritativa del workspace implementados y testeados.
+3. [x] Walkthrough con assets, selector/campo único y splash nativo continuo aplicados.
+4. [ ] Cerrar certificación con build EAS y QA física Android/iOS.
 
-Pueden avanzar en paralelo mientras sus archivos sigan disjuntos. Integrar y ejecutar gates como un solo checkpoint.
+La estrategia y el backlog detallados viven en
+[`PLAN.md`](../mobile-entry-experience/PLAN.md) y
+[`TASKS.md`](../mobile-entry-experience/TASKS.md).
 
-### Wave D
+### Ola 5 — Builder y programas
 
-- `4A-03`: vista Plan.
-- `4A-12`: celebraciones y divergencias nativas ya decididas.
+Abrir inventario nuevo contra web responsive y RN actual cuando el frente de entrada no tenga
+P0/P1/P2. El ejecutor V3 del alumno ya está integrado; no se reactiva un checklist histórico sin
+revalidar código.
 
-Revisar consumidores del kit `4A-07` y evitar duplicar componentes.
+### Certificación transversal
 
-### Wave E
-
-- `4A-04`: historial.
-- `4A-05`: shell/tab bar, después de `4A-04` si ambas editan `index.tsx`.
-
-Al terminar: barrido 4A completo contra web actual, corrección de residuos y cierre estático.
+Completar device QA de Secciones 1–3, 2R, 4A/4B y entrada: teclado/timers, sheets, cámara,
+safe areas, offline, foreground, branding y deep links.
 
 ## Gate de cada wave
 
@@ -89,15 +92,16 @@ Aplicar el protocolo aditivo-en-LIVE: snapshot, cambio mínimo, datos sintético
 
 - Trabajo: `rnmobiledenuevo`.
 - Producción: `master` mediante merge revisado.
-- Android `previewv2`: build y upload OK en el run `29766013009` sobre `c6743ef3`; artefacto expirado y QA device pendiente.
-- iOS `previewv2`: build y upload IPA OK en el run `29765692202` sobre `c6743ef3`; el submit TestFlight falló y el artefacto expiró.
-- `bc9ac09f` exportó localmente Android/iOS; `f5301858` añadió `submit.previewv2`. Falta generar y retener binarios del candidato actual, completar submit y hacer QA física.
+- Android/iOS `production`: build + submit verdes en el
+  [run 30185211552](https://github.com/Juancho2706/gymappjp/actions/runs/30185211552) sobre
+  `856829fa` (2026-07-25).
+- Falta retener/verificar artefactos en stores y completar QA física.
 - Cambios JS-only compatibles pueden usar OTA; cambios nativos requieren binario.
 - No promover a stores una ola parcialmente visible.
 
-## Después de 4A
+## Secuencia posterior
 
-1. Inventariar y especificar 4B — nutrición coach/catálogos.
+1. Certificar experiencia de entrada en binario y dispositivo.
 2. Inventariar y especificar 5 — builder/programas.
 3. Agrupar dominios restantes en olas pequeñas con archivos disjuntos.
 4. Certificación transversal: rutas, branding, estados, accesibilidad, offline, deep links y releases.
