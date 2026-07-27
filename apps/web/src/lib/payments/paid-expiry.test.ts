@@ -23,6 +23,11 @@ describe('resolvePaidExpiryDecision — remota MUERTA → EXPIRE (regla 1)', () 
             expect(d.action).toBe('expire')
             expect(d.reason).toBe('remote_not_found')
         })
+        it(`foreign_account / MP 400 callerId (db=${dbStatus}) → expire (cuenta vieja, incobrable)`, () => {
+            const d = resolvePaidExpiryDecision({ dbStatus, remote: { kind: 'foreign_account' } })
+            expect(d.action).toBe('expire')
+            expect(d.reason).toBe('remote_foreign_account')
+        })
     }
 })
 
