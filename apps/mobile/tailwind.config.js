@@ -96,6 +96,18 @@ module.exports = {
         'surface-inverse': ch('surface-inverse'),
         'surface-inverse-2': ch('surface-inverse-2'),
         'surface-overlay': ch('surface-overlay'),
+        // ---- Entrada dark v1 (tokens :root que NO flipean, global.css) ----
+        // `canvas-entry` es CANAL -> admite modificador (bg-canvas-entry/80).
+        // `surface-veil*` y `glass-inset` traen el alpha HORNEADO en el token
+        // (misma convención que border-subtle/default/strong): var() directo, sin
+        // <alpha-value>; usar la clase pelada y NUNCA el modificador /[x].
+        // Los stops de gradiente (--glass-top/-bottom/-highlight), el crosshatch
+        // (--grain-*) y la capa de luz (--lux-*) NO llevan utilidad: se consumen
+        // imperativamente (LinearGradient / SVG) desde ENTRY_TOKENS de lib/theme.ts.
+        'canvas-entry': ch('canvas-entry'),
+        'surface-veil': 'var(--color-surface-veil)',
+        'surface-veil-2': 'var(--color-surface-veil-2)',
+        'glass-inset': 'var(--glass-inset)',
       },
 
       // Semantic text -> text-strong / text-body / text-muted / text-subtle / text-link
@@ -111,6 +123,12 @@ module.exports = {
         'on-ember': ch('text-on-ember'),
         'on-dark': ch('text-on-dark'),
         'on-dark-muted': ch('text-on-dark-muted'),
+        // ---- Entrada dark v1: escalones bajo `subtle` + foreground sobre glass ----
+        // Declarados como COLOR COMPLETO en global.css (no canal) -> var() directo,
+        // igual que borderColor subtle/default/strong: clase pelada, sin /[x].
+        faint: 'var(--color-text-faint)',
+        ghost: 'var(--color-text-ghost)',
+        'on-glass-brand': 'var(--color-text-on-glass-brand)',
       },
 
       // Semantic borders -> border-subtle / border-default / border-strong / border-inverse

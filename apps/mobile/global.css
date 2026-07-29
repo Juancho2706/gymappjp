@@ -151,6 +151,33 @@
     --color-cyan: 24 171 212;               /* aqua-500 (recovery) */
     --color-destructive: 244 54 90;         /* danger-500 */
     --color-success: 31 184 119;            /* success-500 */
+
+    /* ============ Entrada dark v1 — tokens DARK-ONLY que NO flipean ============
+       Los consume SOLO la familia de entrada (splash → selector → código/login),
+       que es dark FORZADO (`ForceScheme scheme="dark"`). Por eso se declaran una
+       única vez acá, en :root, con el MISMO valor en ambos esquemas: NO se repiten
+       en el bloque `.dark` y NO entran en LIGHT_SCHEME_VARS / DARK_SCHEME_VARS
+       (lib/theme.ts) — si entraran, ForceScheme los pisaría por esquema y dejarían
+       de ser constantes. Contrato: TOKENS.md §3 (superficies/texto), §5 (Glass y
+       Textura), §7 (capa de luz white-label).
+       Espejo imperativo (SVG stopColor/stroke, LinearGradient, props que no
+       aceptan className): `ENTRY_TOKENS` en lib/theme.ts — mantener en sincronía.
+       Los que llevan el alpha HORNEADO siguen la convención de --color-border-*
+       (color COMPLETO, no canal): clase pelada, NUNCA modificador /[x]. */
+    --color-canvas-entry: 7 8 12;           /* #07080C — fondo de la entrada = mismo hex del splash nativo. NO mover --color-surface-app (#0A0D12) */
+    --color-surface-veil: rgba(255, 255, 255, 0.045);  /* velo elevado plano (bg-surface-veil) */
+    --color-surface-veil-2: rgba(255, 255, 255, 0.07); /* velo del estado pressed */
+    --color-text-faint: #6E7883;            /* escalón bajo text-subtle (tiletag, foot, labels de tab bar) */
+    --color-text-ghost: #5C656F;            /* escalón más bajo aún (separador "o", placeholders) */
+    --color-text-on-glass-brand: #B7CDF0;   /* foreground sobre glass teñido de marca */
+    --glass-top: rgba(255, 255, 255, 0.055);      /* stop superior de TODA superficie glass */
+    --glass-bottom: rgba(255, 255, 255, 0.018);   /* stop inferior */
+    --glass-highlight: rgba(255, 255, 255, 0.32); /* pico del highlight superior de 1 pt */
+    --glass-inset: rgba(255, 255, 255, 0.075);    /* hairline interno por defecto (las variantes .07-.28 van por prop insetAlpha) */
+    --grain-line-h: rgba(255, 255, 255, 0.012);   /* crosshatch: línea horizontal */
+    --grain-line-v: rgba(255, 255, 255, 0.01);    /* crosshatch: línea vertical (celda 3 pt y opacidad 0.5 son numéricos → solo ENTRY_TOKENS) */
+    --lux-rgb: 26 107 230;                  /* #1A6BE6 — canal de la capa de luz (default EVA; el acento del coach llega por prop, no por vars()) */
+    --lux-soft-rgb: 127 176 255;            /* #7FB0FF — canal del horizonte de la capa de luz */
   }
 
   .dark:root,

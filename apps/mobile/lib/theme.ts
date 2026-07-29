@@ -596,8 +596,9 @@ export function effectiveBrandVars(
 /**
  * Valores LIGHT (canales "r g b") de EXACTAMENTE los CSS-vars que el bloque
  * `.dark` de `global.css` sobreescribe. Se spreadean con `vars()` en la <View>
- * de `ForceLightTheme` (context/ThemeContext) para SCOPEAR el tema claro a la
- * familia de entrada: el var mas cercano gana sobre el `.dark` del root, asi que
+ * de `ForceScheme scheme="light"` (context/ThemeContext, alias `ForceLightTheme`)
+ * para SCOPEAR el tema claro a un subarbol: el var mas cercano gana sobre el
+ * `.dark` del root, asi que
  * los tokens semanticos (bg-surface-app, text-strong, border-subtle…) resuelven
  * claro SOLO en ese subarbol —sin tocar el colorScheme GLOBAL— y las clases
  * dark: quedan inertes ahi. El resto de la app sigue dark-aware.
@@ -677,3 +678,154 @@ export const LIGHT_SCHEME_VARS: Record<string, string> = {
   '--color-destructive': '244 54 90',
   '--color-success': '31 184 119',
 }
+
+/**
+ * Espejo DARK de `LIGHT_SCHEME_VARS`: MISMO juego de keys, con los valores del
+ * bloque `.dark:root, .dark { … }` de `global.css`. Lo spreadea `vars()` en la
+ * <View> de `ForceScheme scheme="dark"` para SCOPEAR el tema oscuro a un subarbol
+ * aunque el SO (y por tanto el colorScheme global de NativeWind) este en claro —
+ * es el mecanismo que hace dark la familia de entrada sin tocar el lever app-wide.
+ *
+ * ⚠️ MANTENIMIENTO: espejo del bloque `.dark` de global.css, igual que su gemelo
+ * LIGHT. Los dos objetos deben tener SIEMPRE las MISMAS keys (si una key existe en
+ * uno y no en el otro, ese token se "filtra" del root al subarbol forzado). Las
+ * keys de marca (primary, accent, la rampa sport, cta-fill, focus-ring) las pisa
+ * `effectiveBrandVars(brand,'dark')` al mergearse despues.
+ *
+ * ⚠️ LIMITE conocido (heredado del enfoque de LIGHT): esto re-declara VARS, no
+ * activa el colorScheme de NativeWind. Dentro del subarbol los tokens semanticos
+ * resuelven dark, pero las clases con prefijo `dark:` siguen INERTES si el SO esta
+ * en claro. En la familia de entrada usar tokens semanticos, nunca variantes `dark:`.
+ *
+ * Drift resuelto (auditoria a1 §3.1/§3.3): `surface-inverse` #2A323D,
+ * `surface-inverse-2` #232A33 y `text-muted` #98A2B0 son los valores REALES de
+ * global.css y de `apps/web/src/app/globals.css:642-649` (la fuente materializada
+ * del contrato). TOKENS.md §3 listaba #16273C / #0E1722 / #8A95A3 — doc viejo, ya
+ * corregido ahi. El legacy `--color-muted-foreground` sigue en #8A95A3 porque eso
+ * es lo que declara global.css hoy: se copia VERBATIM, no se "arregla" aca (mover
+ * ese alias cambia superficies en prod y no es alcance de esta fase).
+ */
+export const DARK_SCHEME_VARS: Record<string, string> = {
+  // Rampa neutra (chips / tracks / icon fills)
+  '--color-ink-100': '35 42 51',
+  '--color-ink-200': '49 58 69',
+  '--color-ink-300': '65 76 90',
+  '--color-ink-700': '194 201 210',
+  '--color-ink-800': '221 226 232',
+  // Foregrounds de status (soft-chips) — aclarados para seguir legibles en dark
+  '--color-success-700': '111 227 180',
+  '--color-success-600': '79 217 160',
+  '--color-warning-700': '255 212 137',
+  '--color-warning-600': '255 200 97',
+  '--color-danger-700': '255 156 176',
+  '--color-danger-600': '255 124 151',
+  '--color-info-600': '127 176 255',
+  '--color-sport-700': '169 203 255',
+  '--color-sport-600': '127 176 255',
+  '--color-ember-600': '255 157 126',
+  '--color-ember-700': '255 183 158',
+  '--color-aqua-700': '111 211 234',
+  '--color-aqua-600': '111 211 234',
+  // Tints suaves de status — en dark son CANALES de marca/status: consumir con
+  // modificador (/18../20). La clase pelada (bg-sport-100) da color SOLIDO.
+  '--color-success-100': '31 184 119',
+  '--color-warning-100': '245 165 36',
+  '--color-danger-100': '244 54 90',
+  '--color-info-100': '38 128 255',
+  '--color-sport-100': '38 128 255',
+  '--color-ember-100': '255 106 61',
+  '--color-aqua-100': '24 171 212',
+  // Superficies
+  '--color-surface-app': '10 13 18',
+  '--color-surface-card': '22 27 34',
+  '--color-surface-sunken': '31 38 47',
+  '--color-surface-inverse': '42 50 61',
+  '--color-surface-inverse-2': '35 42 51',
+  '--color-surface-overlay': '0 0 0',
+  // Texto
+  '--color-text-strong': '244 246 248',
+  '--color-text-body': '205 211 219',
+  '--color-text-muted': '152 162 176',
+  '--color-text-subtle': '134 145 158',
+  '--color-text-on-dark': '244 246 248',
+  '--color-text-on-dark-muted': '147 157 171',
+  '--color-text-link': '92 157 255',
+  // Bordes / divisores — COLOR COMPLETO con el alpha HORNEADO (no canal), espejo del
+  // bloque dark: la clase bare border-* ya resuelve el alpha; NO usar /[x] sobre estos.
+  '--color-border-subtle': 'rgba(255, 255, 255, 0.07)',
+  '--color-border-default': 'rgba(255, 255, 255, 0.13)',
+  '--color-border-strong': 'rgba(255, 255, 255, 0.22)',
+  '--color-track': '255 255 255',
+  // Accion / marca fuerte
+  '--color-action-primary': '26 107 230',
+  '--color-action-primary-hover': '26 107 230',
+  '--color-brand-strong': '127 176 255',
+  // Legacy compat
+  '--color-primary': '38 128 255',
+  '--color-primary-foreground': '255 255 255',
+  '--color-background': '10 13 18',
+  '--color-card': '22 27 34',
+  '--color-foreground': '244 246 248',
+  '--color-muted': '31 38 47',
+  '--color-muted-foreground': '138 149 163',
+  '--color-border': '255 255 255',
+  '--color-accent': '38 128 255',
+  '--color-accent-foreground': '38 128 255',
+  '--color-cyan': '24 171 212',
+  '--color-destructive': '244 54 90',
+  '--color-success': '31 184 119',
+}
+
+/**
+ * Tokens de la familia de ENTRADA (dark v1) en forma IMPERATIVA — DESIGN-SPEC
+ * `docs/specs/entrada-dark-v1/DESIGN-SPEC.md` §5.1.
+ *
+ * Por que viven aca y no en `DS`: `DS` es la paleta unica de `lightTheme`/`darkTheme`
+ * y todo lo que declara termina en un `Theme`. Estos tokens NO pertenecen a ningun
+ * Theme: son dark-only, no flipean y solo los consume la entrada. Su declaracion
+ * canonica para clases es `:root` de `global.css`; este objeto es su espejo para
+ * props que NO aceptan className (`stopColor`/`stopOpacity` y `stroke` de
+ * react-native-svg, `colors` de expo-linear-gradient, tamanos numericos).
+ *
+ * ⚠️ MANTENIMIENTO: cada campo tiene su gemelo en el bloque "Entrada dark v1" de
+ * `apps/mobile/global.css`. Si cambia uno, cambian los dos. `grainCell`/`grainOpacity`
+ * son numericos y existen SOLO aca (no hay var CSS equivalente).
+ *
+ * Recordatorio de la convencion de svg (auditoria a1 §2.2): el alpha NUNCA va dentro
+ * de `stopColor` — react-native-svg lo descarta; va en `stopOpacity`. Los valores
+ * `rgba(...)` de abajo son validos como `fill`/`stroke`/`backgroundColor`, no como stop.
+ */
+export const ENTRY_TOKENS = Object.freeze({
+  /** `--color-canvas-entry` (canal `7 8 12`). Fondo de la entrada = hex del splash nativo. */
+  canvasEntry: '#07080C',
+  /** `--color-surface-veil`. Velo elevado plano. */
+  surfaceVeil: 'rgba(255,255,255,0.045)',
+  /** `--color-surface-veil-2`. Velo del estado pressed. */
+  surfaceVeil2: 'rgba(255,255,255,0.07)',
+  /** `--glass-top`. Stop superior de toda superficie glass. */
+  glassTop: 'rgba(255,255,255,0.055)',
+  /** `--glass-bottom`. Stop inferior. */
+  glassBottom: 'rgba(255,255,255,0.018)',
+  /** `--glass-highlight`. Pico del highlight superior de 1 pt. */
+  glassHighlight: 'rgba(255,255,255,0.32)',
+  /** `--glass-inset`. Hairline interno por defecto; las variantes .07-.28 van por prop `insetAlpha`. */
+  glassInset: 'rgba(255,255,255,0.075)',
+  /** `--color-text-faint` #6E7883. Escalon bajo text-subtle. */
+  textFaint: '#6E7883',
+  /** `--color-text-ghost` #5C656F. Escalon mas bajo aun. */
+  textGhost: '#5C656F',
+  /** `--color-text-on-glass-brand` #B7CDF0. Foreground sobre glass tenido de marca. */
+  textOnGlassBrand: '#B7CDF0',
+  /** `--grain-line-h`. Linea horizontal del crosshatch. */
+  grainLineH: 'rgba(255,255,255,0.012)',
+  /** `--grain-line-v`. Linea vertical del crosshatch. */
+  grainLineV: 'rgba(255,255,255,0.010)',
+  /** `--grain-cell`: celda del pattern, en pt. Solo TS. */
+  grainCell: 3,
+  /** `--grain-opacity`: opacidad de la capa completa de textura. Solo TS. */
+  grainOpacity: 0.5,
+  /** `--lux-rgb` (canal `26 107 230`) en hex: canal de la capa de luz, default EVA. El acento del coach llega por prop. */
+  lux: '#1A6BE6',
+  /** `--lux-soft-rgb` (canal `127 176 255`) en hex: horizonte de la capa de luz. */
+  luxSoft: '#7FB0FF',
+})

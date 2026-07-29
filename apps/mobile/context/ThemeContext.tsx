@@ -6,6 +6,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 import {
   applyEffectiveCoachBranding,
   darkTheme,
+  DARK_SCHEME_VARS,
   effectiveBrandVars,
   lightTheme,
   LIGHT_SCHEME_VARS,
@@ -104,31 +105,43 @@ export function useTheme(): ThemeContextValue {
 }
 
 /**
- * Fuerza TEMA CLARO en la familia de entrada (selector, walkthrough, login,
- * register, forgot/reset/verify, onboarding) — ruling CEO ronda 4 (#13). Estas
- * pantallas NUNCA reaccionan al dark del sistema; el resto de la app SIGUE
- * dark-aware.
+ * Fija un ESQUEMA (claro u oscuro) en un subarbol, ignorando el dark del sistema.
+ * Hoy lo usan: la familia de entrada clara heredada (selector, walkthrough, login,
+ * register, forgot/reset/verify, onboarding — ruling CEO ronda 4 #13) y, desde el
+ * rediseño "entrada dark v1", las pantallas que van dark forzado. El resto de la
+ * app SIGUE dark-aware.
  *
  * Por que este enfoque gana (simple + robusto): NO toca el colorScheme GLOBAL de
  * NativeWind. Ese lever es app-wide y forzarlo por-pantalla dependeria del orden
- * de focus/blur al navegar (flashes de un frame y fugas de "light" a pantallas
- * dark). En su lugar el claro se SCOPEA al subarbol por dos vias, ambas locales:
- *   1. useTheme(): ThemeContext ANIDADO con mode/resolvedScheme='light' y theme =
- *      lightTheme brandeado. Cubre theme.*, AppBackground(mode),
+ * de focus/blur al navegar (flashes de un frame y fugas de esquema entre pantallas).
+ * En su lugar el esquema se SCOPEA al subarbol por dos vias, ambas locales:
+ *   1. useTheme(): ThemeContext ANIDADO con mode/resolvedScheme = `scheme` y theme =
+ *      lightTheme/darkTheme brandeado. Cubre theme.*, AppBackground(mode),
  *      AmbientBrandGlow(resolvedScheme), SHADOWS[resolvedScheme] y el calculo de
  *      marca del login.
- *   2. clases dark: de NativeWind: en la <View> contenedora se re-declaran los
- *      CSS-vars a sus valores LIGHT (LIGHT_SCHEME_VARS + brandVars light). El var
- *      mas cercano gana sobre el bloque `.dark` del root → los tokens semanticos
- *      resuelven claro SOLO aca y las clases dark: quedan inertes en el subarbol.
+ *   2. CSS-vars de NativeWind: en la <View> contenedora se re-declaran los vars al
+ *      juego del esquema pedido (LIGHT_SCHEME_VARS o DARK_SCHEME_VARS + brandVars
+ *      del mismo esquema). El var mas cercano gana sobre el bloque `.dark` del root
+ *      → los tokens semanticos resuelven SOLO aca al esquema forzado.
+ * Y el StatusBar sigue al esquema: glifos oscuros sobre claro, claros sobre oscuro.
+ *
+ * ⚠️ Limite: esto re-declara VARS, no activa el colorScheme global. Las clases con
+ * prefijo `dark:` quedan INERTES dentro del subarbol cuando el SO esta en claro (y
+ * ACTIVAS cuando el SO esta en dark, aunque se fuerce claro). Dentro de un subarbol
+ * forzado usar tokens semanticos (bg-surface-app, text-strong…), nunca `dark:`.
+ *
  * Nota: el login brandeado conserva los colores del coach porque el theme y las
- * vars se derivan del branding sobre base CLARA (applyCoachBranding/brandVars).
+ * vars se derivan del branding sobre la base del esquema (applyEffectiveCoachBranding
+ * / effectiveBrandVars).
  */
-export function ForceLightTheme({
+export function ForceScheme({
   children,
+  scheme,
   branded = true,
 }: {
   children: React.ReactNode
+  /** Esquema aplicado al subarbol. */
+  scheme: 'light' | 'dark'
   /**
    * Login white-label conserva la marca. Selector, walkthrough y captura de un coach nuevo pasan
    * `false` para no teñirse con una marca cacheada que el usuario está intentando reemplazar.
@@ -142,22 +155,50 @@ export function ForceLightTheme({
     [visibleBranding],
   )
 
-  const theme = useMemo(() => applyEffectiveCoachBranding(lightTheme, effectiveBrand), [effectiveBrand])
+  const theme = useMemo(
+    () => applyEffectiveCoachBranding(scheme === 'dark' ? darkTheme : lightTheme, effectiveBrand),
+    [scheme, effectiveBrand],
+  )
   const themeVars = useMemo(
-    () => ({ ...vars({ ...LIGHT_SCHEME_VARS, ...effectiveBrandVars(effectiveBrand, 'light') }) }),
-    [effectiveBrand],
+    () => ({
+      ...vars({
+        ...(scheme === 'dark' ? DARK_SCHEME_VARS : LIGHT_SCHEME_VARS),
+        ...effectiveBrandVars(effectiveBrand, scheme),
+      }),
+    }),
+    [scheme, effectiveBrand],
   )
   const value = useMemo<ThemeContextValue>(
-    () => ({ ...parent, branding: visibleBranding, theme, mode: 'light', resolvedScheme: 'light' }),
-    [parent, visibleBranding, theme],
+    () => ({ ...parent, branding: visibleBranding, theme, mode: scheme, resolvedScheme: scheme }),
+    [parent, visibleBranding, theme, scheme],
   )
 
   return (
     <ThemeContext.Provider value={value}>
       <View style={[{ flex: 1 }, themeVars]}>
-        <StatusBar style="dark" />
+        <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
         {children}
       </View>
     </ThemeContext.Provider>
+  )
+}
+
+/**
+ * Alias de compatibilidad de `ForceScheme scheme="light"`. Se conserva porque hoy
+ * lo consumen 4 call sites ((auth)/_layout, alumno/codigo, alumno/onboarding,
+ * app/index) que NO cambian de comportamiento en esta fase; a medida que cada
+ * pantalla migre a dark se reemplaza por `ForceScheme` explicito.
+ */
+export function ForceLightTheme({
+  children,
+  branded = true,
+}: {
+  children: React.ReactNode
+  branded?: boolean
+}) {
+  return (
+    <ForceScheme scheme="light" branded={branded}>
+      {children}
+    </ForceScheme>
   )
 }
