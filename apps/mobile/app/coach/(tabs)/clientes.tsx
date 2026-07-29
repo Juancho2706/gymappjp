@@ -337,7 +337,6 @@ export default function ClientesScreen() {
   const [orgContextReady, setOrgContextReady] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<DirectoryClient | null>(null)
-  const [deleteConfirm, setDeleteConfirm] = useState('')
   const [deleting, setDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
   const [resetTarget, setResetTarget] = useState<DirectoryClient | null>(null)
@@ -567,18 +566,16 @@ export default function ClientesScreen() {
     }
   }
   function handleDelete(c: DirectoryClient) {
-    setDeleteConfirm('')
     setDeleteError(null)
     setDeleteTarget(c)
   }
   async function confirmDelete() {
-    if (!deleteTarget || deleting || deleteConfirm.trim().toLowerCase() !== deleteTarget.fullName.toLowerCase()) return
+    if (!deleteTarget || deleting) return
     setDeleting(true)
     setDeleteError(null)
     try {
       await deleteClient(deleteTarget.id, { kind: workspace.kind, teamId: workspace.teamId, orgId: workspace.orgId })
       setDeleteTarget(null)
-      setDeleteConfirm('')
       await load(true)
     } catch (error) {
       setDeleteError(error instanceof Error ? error.message : 'No se pudo eliminar el alumno.')
@@ -991,33 +988,22 @@ export default function ClientesScreen() {
         {deleteTarget ? (
           <View style={{ gap: 14 }}>
             <Text style={{ color: theme.mutedForeground, fontFamily: FONT.ui, fontSize: 13.5, lineHeight: 19 }}>
-              Esta acción elimina a {deleteTarget.fullName} y no se puede deshacer.
+              ¿Seguro que quieres eliminar a <Text style={{ color: theme.foreground, fontFamily: FONT.uiBold }}>{deleteTarget.fullName}</Text>? Esta acción eliminará su cuenta y todos sus datos asociados (rutinas, check-ins, progreso). No se puede deshacer.
             </Text>
-            <View style={{ gap: 6 }}>
-              <Text style={{ color: theme.mutedForeground, fontFamily: FONT.ui, fontSize: 12 }}>
-                Escribe <Text style={{ color: theme.foreground, fontFamily: FONT.uiBold }}>{deleteTarget.fullName}</Text> para confirmar:
-              </Text>
-              <Input
-                testID="directory-delete-confirm-input"
-                value={deleteConfirm}
-                onChangeText={setDeleteConfirm}
-                placeholder={deleteTarget.fullName}
-                editable={!deleting}
-                autoCapitalize="words"
-              />
-            </View>
             {deleteError ? <Text style={{ color: theme.destructive, fontFamily: FONT.uiSemibold, fontSize: 13 }}>{deleteError}</Text> : null}
-            <View style={{ flexDirection: 'row', gap: 10 }}>
-              <Button label="Cancelar" variant="ghost" onPress={() => setDeleteTarget(null)} disabled={deleting} style={{ flex: 1 }} />
+            {/* Par apilado (no en fila): "Eliminar definitivamente" no cabe en media
+                columna del diálogo y Button trunca a una línea (numberOfLines={1}). */}
+            <View style={{ gap: 10 }}>
               <Button
                 testID="directory-delete-confirm"
-                label={deleting ? 'Eliminando…' : 'Eliminar'}
+                label={deleting ? 'Eliminando…' : 'Eliminar definitivamente'}
                 variant="danger"
                 onPress={confirmDelete}
                 loading={deleting}
-                disabled={deleting || deleteConfirm.trim().toLowerCase() !== deleteTarget.fullName.toLowerCase()}
-                style={{ flex: 1 }}
+                disabled={deleting}
+                full
               />
+              <Button label="Cancelar" variant="ghost" onPress={() => setDeleteTarget(null)} disabled={deleting} full />
             </View>
           </View>
         ) : null}

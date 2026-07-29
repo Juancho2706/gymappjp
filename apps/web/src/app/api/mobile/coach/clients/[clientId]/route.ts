@@ -10,6 +10,7 @@ import { sendTransactionalEmail } from '@/lib/email/send-email'
 import { buildClientArchivedEmail, buildClientUnarchivedEmail } from '@/lib/email/transactional-templates'
 import { resolveStudentEmailBranding } from '@/lib/email/email-brand'
 import { getCoachPublicIdentifier } from '@/lib/coach/public-identifier'
+import { deleteClientHard } from '@/services/client/client-deletion.service'
 
 const isoDateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'La fecha debe usar el formato YYYY-MM-DD.').refine((value) => {
     const [year, month, day] = value.split('-').map(Number)
@@ -36,23 +37,10 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
     if (!(await mobileContextOwnsClient(a, clientId))) {
         return NextResponse.json({ error: 'Alumno no encontrado.', code: 'NOT_FOUND' }, { status: 404 })
     }
-    const { data: coachProfile, error: coachLookupError } = await a.admin
-        .from('coaches')
-        .select('id')
-        .eq('id', clientId)
-        .maybeSingle()
-    if (coachLookupError) {
-        return NextResponse.json({ error: 'No se pudo verificar la identidad del alumno.', code: 'COACH_LOOKUP_FAILED' }, { status: 500 })
-    }
-    if (coachProfile) {
-        const { error } = await applyMobileClientScope(a.admin.from('clients').delete().eq('id', clientId), a)
-        if (error) return NextResponse.json({ error: error.message, code: 'DELETE_FAILED' }, { status: 500 })
-    } else {
-        // GoTrue elimina en cascada la identidad de alumno. No borrar primero la fila:
-        // si GoTrue falla, debemos conservar un estado reintentable y reportar el error.
-        const { error } = await a.admin.auth.admin.deleteUser(clientId)
-        if (error) return NextResponse.json({ error: error.message, code: 'AUTH_DELETE_FAILED' }, { status: 500 })
-    }
+    // `mobileContextOwnsClient` ya verifico ownership + scope: el service borra (fotos de check-in,
+    // rama coach-como-alumno y cascada de GoTrue) y devuelve el codigo estable para la respuesta.
+    const { error, code } = await deleteClientHard(a.admin, clientId)
+    if (error) return NextResponse.json({ error, code: code ?? 'DELETE_FAILED' }, { status: 500 })
     return NextResponse.json({ ok: true })
 }
 
