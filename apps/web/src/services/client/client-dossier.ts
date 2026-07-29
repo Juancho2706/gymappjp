@@ -72,10 +72,15 @@ export type ClientDossierData = {
         workoutsDone: number
         workoutsTarget: number
         adherenceWeeklyPct: number
-        mealsDoneToday: number
-        mealsTotalToday: number
-        nutritionTodayPct: number
-        nutritionAdherence30dPct: number | null
+        /**
+         * Nutrición V2 — `null` = sin plan V2 vigente ⇒ el PDF muestra "—", nunca 0 %.
+         * Antes eran `todayMealsDone/Total` + `nutritionCompliancePercent` +
+         * `nutritionMonthlyAvgPct`, TODOS de las tablas V1 (auditoría §2.2).
+         */
+        nutritionTodayKcal: { consumed: number; target: number | null } | null
+        nutritionTodayPct: number | null
+        /** Días de la semana en rango / días transcurridos que cubre el plan. */
+        nutritionWeeklyInRangePct: number | null
         checkInCompliancePct: number
         planCurrentWeek: number
         planTotalWeeks: number
@@ -91,18 +96,30 @@ export type ClientDossierData = {
         personalRecords: DossierPersonalRecord[]
         muscleVolume: DossierMuscleVolume[]
     }
+    /**
+     * Plan de nutrición V2 VIGENTE. `null` = el alumno no tiene plan V2 publicado vigente ⇒ el PDF
+     * imprime la nota "sin plan de nutrición vigente". NUNCA se exporta el plan V1 (que podía estar
+     * convertido u obsoleto y viajaba al alumno en el PDF: auditoría §2.2).
+     */
     nutrition: {
         planName: string
+        /** Metas del día vigente (variante que aplica hoy). */
         goals: {
             calories: number | null
             protein: number | null
             carbs: number | null
             fats: number | null
         }
-        /** Total de comidas del plan (si hay day-specific NO equivale a "por día"). */
+        /** Franjas prescritas para el día vigente. */
         mealsTotal: number
-        /** true si ALGUNA comida es específica de un día (day_of_week != null). */
+        /** true si el plan tiene más de una variante de día (metas que varían por día). */
         hasDaySpecificMeals: boolean
+        /** Metas de energía por variante — se imprimen cuando el plan es multi-día. */
+        dayTargets: { label: string; calories: number | null }[]
+        /** Adherencia de la semana en curso (días en rango / días computados). `null` = sin dato. */
+        weeklyInRangePct: number | null
+        weeklyInRangeDays: number
+        weeklyTrackedDays: number
     } | null
     /** Últimos MAX_CHECKINS check-ins (DESC). El total real vive en checkInsTotal. */
     checkIns: DossierCheckIn[]
@@ -140,14 +157,34 @@ type ProfileProgram = {
 type ProfileCompliance = {
     workoutsThisWeek?: number
     workoutsTarget?: number
-    nutritionCompliancePercent?: number
-    todayMealsDone?: number
-    todayMealsTotal?: number
     currentStreak?: number
     planCurrentWeek?: number
     planTotalWeeks?: number
     planDaysRemaining?: number
     checkInCompliancePercent?: number
+}
+
+/**
+ * Señal de nutrición V2 (`NutritionV2Signal` de `nutritionTabV2.logic.ts`), resuelta por el server
+ * action del dossier en la MISMA lectura que alimenta el tab. Estructural a propósito, como el
+ * resto de las entradas de este módulo: mantiene el builder puro y sin imports de la capa app.
+ */
+type ProfileNutritionV2 = {
+    hasActivePlan?: boolean
+    planName?: string | null
+    today?: { calories?: { consumed?: number | null; target?: number | null } | null } | null
+    todayPct?: number | null
+    todayMacroTargets?: {
+        calories?: number | null
+        proteinG?: number | null
+        carbsG?: number | null
+        fatsG?: number | null
+    } | null
+    todaySlotCount?: number | null
+    weeklyInRangePct?: number | null
+    weeklyInRangeDays?: number | null
+    weeklyTrackedDays?: number | null
+    dayTargets?: { label?: string | null; calories?: number | null }[] | null
 }
 
 type ProfileCheckIn = {
@@ -156,20 +193,6 @@ type ProfileCheckIn = {
     energy_level?: number | null
     notes?: string | null
     front_photo_url?: string | null
-}
-
-type ProfileNutritionMeal = {
-    /** null/undefined = comida de TODOS los días; número = day-specific. */
-    day_of_week?: number | null
-}
-
-type ProfileNutritionPlan = {
-    name?: string | null
-    daily_calories?: number | null
-    protein_g?: number | null
-    carbs_g?: number | null
-    fats_g?: number | null
-    nutrition_meals?: ProfileNutritionMeal[] | null
 }
 
 type ProfilePersonalRecord = {
@@ -187,12 +210,16 @@ type ProfileMuscleVolume = {
 export type ClientDossierInput = {
     client: ProfileClient
     activeProgram?: ProfileProgram | null
-    activeNutritionPlanWithMeals?: ProfileNutritionPlan | null
     checkIns?: ProfileCheckIn[] | null
     compliance?: ProfileCompliance | null
     personalRecords?: ProfilePersonalRecord[] | null
     muscleVolumeByGroup?: ProfileMuscleVolume[] | null
-    nutritionMonthlyAvgPct?: number | null
+    /**
+     * Señal de nutrición V2 de la misma carga (server action `getClientDossier`). Ausente/`null`
+     * ⇒ el dossier omite la sección de nutrición. Reemplaza a `activeNutritionPlanWithMeals` +
+     * `nutritionMonthlyAvgPct`, que eran V1.
+     */
+    nutritionV2?: ProfileNutritionV2 | null
     attentionScore?: number | null
     profileLastActivityAt?: string | null
     /**
@@ -322,25 +349,32 @@ export function buildClientDossier(
             volume: Math.round(toNum(v.volume)),
         }))
 
-    // ── Nutrición: plan activo (empty-state si no hay).
+    // ── Nutrición: plan V2 VIGENTE (empty-state si no hay). Sin plan vigente el PDF no imprime
+    //    plan alguno: exportar el V1 mandaba al alumno un plan viejo/convertido (auditoría §2.2).
+    const nv2 = input.nutritionV2
     let nutrition: ClientDossierData['nutrition'] = null
-    const np = input.activeNutritionPlanWithMeals
-    if (np) {
-        // nutrition_meals puede mezclar comidas de todos los días (day_of_week null) con
-        // comidas day-specific (day_of_week != null). Si hay day-specific, el total del
-        // plan NO es "por día" (7 días × 4 comidas diría "28 por día") → el generador
-        // etiqueta distinto según hasDaySpecificMeals.
-        const meals = Array.isArray(np.nutrition_meals) ? np.nutrition_meals : []
+    if (nv2?.hasActivePlan === true) {
+        const dayTargets = (nv2.dayTargets ?? [])
+            .filter((v): v is { label?: string | null; calories?: number | null } => !!v)
+            .map((v) => ({
+                label: (v.label ?? '').trim() || 'Plan del día',
+                calories: v.calories ?? null,
+            }))
         nutrition = {
-            planName: (np.name ?? '').trim() || 'Plan nutricional',
+            planName: (nv2.planName ?? '').trim() || 'Plan de nutrición',
             goals: {
-                calories: np.daily_calories ?? null,
-                protein: np.protein_g ?? null,
-                carbs: np.carbs_g ?? null,
-                fats: np.fats_g ?? null,
+                calories: nv2.todayMacroTargets?.calories ?? null,
+                protein: nv2.todayMacroTargets?.proteinG ?? null,
+                carbs: nv2.todayMacroTargets?.carbsG ?? null,
+                fats: nv2.todayMacroTargets?.fatsG ?? null,
             },
-            mealsTotal: meals.length,
-            hasDaySpecificMeals: meals.some((m) => m?.day_of_week != null),
+            mealsTotal: Math.max(0, toNum(nv2.todaySlotCount)),
+            // Multi-día = más de una variante: las metas cambian según el día.
+            hasDaySpecificMeals: dayTargets.length > 1,
+            dayTargets,
+            weeklyInRangePct: nv2.weeklyInRangePct ?? null,
+            weeklyInRangeDays: Math.max(0, toNum(nv2.weeklyInRangeDays)),
+            weeklyTrackedDays: Math.max(0, toNum(nv2.weeklyTrackedDays)),
         }
     }
 
@@ -370,11 +404,22 @@ export function buildClientDossier(
             workoutsDone,
             workoutsTarget,
             adherenceWeeklyPct,
-            mealsDoneToday: Math.max(0, toNum(compliance.todayMealsDone)),
-            mealsTotalToday: Math.max(1, toNum(compliance.todayMealsTotal) || 1),
-            nutritionTodayPct: Math.min(100, Math.max(0, Math.round(toNum(compliance.nutritionCompliancePercent)))),
-            nutritionAdherence30dPct:
-                input.nutritionMonthlyAvgPct == null ? null : Math.round(toNum(input.nutritionMonthlyAvgPct)),
+            nutritionTodayKcal:
+                nv2?.hasActivePlan === true
+                    ? {
+                          consumed: Math.max(0, toNum(nv2.today?.calories?.consumed)),
+                          target: nv2.today?.calories?.target ?? null,
+                      }
+                    : null,
+            // Sin tope en 100: comer 130 % de la meta se lee 130 %, igual que la ficha V2.
+            nutritionTodayPct:
+                nv2?.hasActivePlan === true && nv2.todayPct != null
+                    ? Math.max(0, Math.round(nv2.todayPct))
+                    : null,
+            nutritionWeeklyInRangePct:
+                nv2?.hasActivePlan === true && nv2.weeklyInRangePct != null
+                    ? Math.min(100, Math.max(0, Math.round(nv2.weeklyInRangePct)))
+                    : null,
             checkInCompliancePct: Math.min(100, Math.max(0, Math.round(toNum(compliance.checkInCompliancePercent)))),
             planCurrentWeek: Math.max(0, toNum(compliance.planCurrentWeek)),
             planTotalWeeks: Math.max(1, toNum(compliance.planTotalWeeks) || 1),

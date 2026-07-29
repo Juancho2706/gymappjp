@@ -222,15 +222,17 @@ export async function downloadClientDossierPdf(dossier: ClientDossierData): Prom
             subColor: C.textMid,
         },
         {
-            label: 'Nutrición 30d',
-            value: m.nutritionAdherence30dPct == null ? '—' : `${m.nutritionAdherence30dPct}%`,
-            sub: 'adherencia',
+            // Nutrición V2: días de la semana en rango. "—" cuando no hay plan V2 vigente (antes
+            // era la adherencia 30d de las tablas V1 y salía 0 % / — con la semana verde al lado).
+            label: 'Nutrición semana',
+            value: m.nutritionWeeklyInRangePct == null ? '—' : `${m.nutritionWeeklyInRangePct}%`,
+            sub: m.nutritionWeeklyInRangePct == null ? 'sin plan vigente' : 'días en rango',
             subColor:
-                m.nutritionAdherence30dPct == null
+                m.nutritionWeeklyInRangePct == null
                     ? C.muted
-                    : m.nutritionAdherence30dPct >= 80
+                    : m.nutritionWeeklyInRangePct >= 80
                       ? C.success
-                      : m.nutritionAdherence30dPct >= 50
+                      : m.nutritionWeeklyInRangePct >= 50
                         ? C.warning
                         : C.danger,
         },
@@ -411,7 +413,7 @@ export async function downloadClientDossierPdf(dossier: ClientDossierData): Prom
     // ─── NUTRICIÓN ──────────────────────────────────────────────────────────────
     sectionHeader('Nutrición')
     if (!dossier.nutrition) {
-        emptyState('Sin plan de nutrición activo.')
+        emptyState('Sin plan de nutrición vigente.')
     } else {
         const n = dossier.nutrition
         doc.setFont('helvetica', 'bold')
@@ -422,12 +424,17 @@ export async function downloadClientDossierPdf(dossier: ClientDossierData): Prom
         doc.setFont('helvetica', 'normal')
         doc.setFontSize(8.5)
         setColor(C.muted)
-        // Con comidas day-specific el total del plan NO es "por día" (7×4 diría "28 por día").
-        const mealsNoun = `comida${n.mealsTotal === 1 ? '' : 's'}`
+        // Plan V2: franjas del día vigente. Multi-día ⇒ se avisa que las metas cambian por día
+        // (el detalle por variante va abajo).
+        const mealsNoun = `franja${n.mealsTotal === 1 ? '' : 's'}`
         const mealsLabel = n.hasDaySpecificMeals
-            ? `${n.mealsTotal} ${mealsNoun} en el plan (varía por día)`
+            ? `${n.mealsTotal} ${mealsNoun} hoy (las metas varían por día)`
             : `${n.mealsTotal} ${mealsNoun} por día`
-        doc.text(mealsLabel, margin, y)
+        const weeklyLabel =
+            n.weeklyInRangePct == null
+                ? null
+                : `Adherencia semanal ${n.weeklyInRangePct}% (${n.weeklyInRangeDays} de ${n.weeklyTrackedDays} día${n.weeklyTrackedDays === 1 ? '' : 's'} en rango)`
+        doc.text([mealsLabel, weeklyLabel].filter(Boolean).join('   ·   '), margin, y)
         y += 6
 
         // Chips de objetivos.
@@ -454,6 +461,29 @@ export async function downloadClientDossierPdf(dossier: ClientDossierData): Prom
             doc.text(goals[i].value, gx + 3.5, y + 11)
         }
         y += gH + 4
+
+        // Plan multi-día: kcal por variante ("Base 2.200 kcal · Sábado 2.600 kcal"). Los chips de
+        // arriba son las metas de HOY; sin esta línea el PDF ocultaría que el plan cambia por día.
+        if (n.dayTargets.length > 1) {
+            checkPage(6)
+            doc.setFont('helvetica', 'bold')
+            doc.setFontSize(6.5)
+            setColor(C.muted)
+            doc.text('METAS POR DÍA', margin, y, { charSpace: 0.3 })
+            y += 4
+            doc.setFont('helvetica', 'normal')
+            doc.setFontSize(8)
+            setColor(C.textMid)
+            const perDay = n.dayTargets
+                .map((v) => `${v.label}: ${v.calories == null ? '—' : `${v.calories.toLocaleString('es-CL')} kcal`}`)
+                .join('   ·   ')
+            for (const line of doc.splitTextToSize(perDay, contentW)) {
+                checkPage(4.6)
+                doc.text(line, margin, y)
+                y += 4.2
+            }
+            y += 1
+        }
     }
     y += 2
 

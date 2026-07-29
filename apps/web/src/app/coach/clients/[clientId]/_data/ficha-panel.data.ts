@@ -1,19 +1,16 @@
 import 'server-only'
 
-import { createClient } from '@/lib/supabase/server'
 import { getClientProfileData } from '@/services/client/client-detail.service'
-import { hasModule } from '@/services/entitlements.service'
 import {
-    resolveClientFeaturePrefsOverrideContext,
-    resolveFeaturePrefs,
-    resolveNutritionDomainEnabled,
-} from '@/services/feature-prefs.service'
-import { getCoachNutrientTargets } from './nutrient-targets.queries'
-import { getCoachPrivateNotes, getCoachMealComments } from './nutrition-notes.queries'
+    getEnabledModulesForRender,
+    hasModuleFromMap,
+} from '@/services/entitlements-render-cache'
+import { applyNutritionAttentionScore } from '@/services/dashboard.service'
+import { resolveNutritionTabV2 } from './nutrition-tab-v2.data'
 
 /**
- * Arma el bundle serializable de la ficha del alumno (hero + dashboard completo + zona C
- * de nutrición + entitlements de módulos) para renderizarla INLINE en el panel derecho
+ * Arma el bundle serializable de la ficha del alumno (hero + dashboard completo + resumen
+ * de nutrición V2 + entitlements de módulos) para renderizarla INLINE en el panel derecho
  * del master-detail de Alumnos (desktop).
  *
  * Espejo verbatim del ensamblado server-side de `ProfileContent` en
@@ -27,71 +24,33 @@ export async function assembleClientFichaPanel(clientId: string) {
     const data = await getClientProfileData(clientId)
     const { client, nutritionPlans, checkIns, compliance } = data
 
-    const nutritionTodayIso = (data.todayIso as string | undefined) ?? ''
-
     const nutritionClient = client as {
         coach_id?: string | null
         team_id?: string | null
         org_id?: string | null
     }
-    const nutritionCoachId = nutritionClient.coach_id ?? ''
-    const activeNutritionPlanId =
-        (data.activeNutritionPlanWithMeals as { id?: string } | null | undefined)?.id ?? null
-    const featurePrefsInput = {
-        coachId: nutritionCoachId,
-        clientId,
-        clientTeamId: nutritionClient.team_id ?? null,
-        clientOrgId: nutritionClient.org_id ?? null,
-    }
 
     // Entitlements de módulos por el contexto del RECURSO del alumno (team del pool
     // manda; si no, el coach). Enterprise (org_id) fuera en v1 → todo false. Espejo del
     // gate server-side de cada página de módulo (assertModule) y de ModuleLinksRow.
-    const supabase = await createClient()
+    // Poda 2026-07-29: UNA lectura memoizada del mapa en vez de 3 `hasModule` = 3 SELECT
+    // idénticos por selección de alumno en el rail.
     const isOrgScoped = !!nutritionClient.org_id
-    const moduleCtx = nutritionClient.team_id
-        ? { teamId: nutritionClient.team_id }
-        : { coachId: nutritionClient.coach_id ?? '' }
 
-    const [
-        coachNutrientTargets,
-        coachPrivateNotes,
-        coachMealComments,
-        nutritionDomainEnabled,
-        nutritionSectionFlags,
-        nutritionOverrideContext,
-        cardio,
-        movement,
-        bodycomp,
-        nutritionPro,
-    ] = await Promise.all([
-        getCoachNutrientTargets(clientId),
-        getCoachPrivateNotes(clientId),
-        nutritionTodayIso
-            ? getCoachMealComments(clientId, nutritionTodayIso)
-            : Promise.resolve([]),
-        resolveNutritionDomainEnabled(featurePrefsInput),
-        resolveFeaturePrefs({
-            domain: 'nutrition',
-            ...featurePrefsInput,
-            planId: activeNutritionPlanId,
-        }),
-        resolveClientFeaturePrefsOverrideContext({
-            domain: 'nutrition',
-            ...featurePrefsInput,
-            planId: activeNutritionPlanId,
-        }),
-        isOrgScoped ? Promise.resolve(false) : hasModule(supabase, 'cardio', moduleCtx),
+    const [enabledModules, nutritionV2] = await Promise.all([
         isOrgScoped
-            ? Promise.resolve(false)
-            : hasModule(supabase, 'movement_assessment', moduleCtx),
-        isOrgScoped
-            ? Promise.resolve(false)
-            : hasModule(supabase, 'body_composition', moduleCtx),
-        isOrgScoped
-            ? Promise.resolve(false)
-            : hasModule(supabase, 'nutrition_exchanges', moduleCtx),
+            ? Promise.resolve({})
+            : getEnabledModulesForRender(
+                  nutritionClient.team_id ?? null,
+                  nutritionClient.coach_id ?? null
+              ),
+        // Poda 2026-07-29: el panel resuelve el MISMO resumen V2 que la ruta standalone. Antes
+        // no lo resolvía, así que este camino mostraba el tab V1 (borrado) pase lo que pase.
+        resolveNutritionTabV2(clientId),
     ])
+    const cardio = hasModuleFromMap(enabledModules, 'cardio')
+    const movement = hasModuleFromMap(enabledModules, 'movement_assessment')
+    const bodycomp = hasModuleFromMap(enabledModules, 'body_composition')
 
     const sortedCheckIns = [...(checkIns || [])].sort(
         (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
@@ -124,7 +83,12 @@ export async function assembleClientFichaPanel(clientId: string) {
             },
             compliance,
             profileLastActivityAt: data.profileLastActivityAt,
-            attentionScore: data.attentionScore,
+            // Mismo cierre que la ruta standalone: el service ya no mira nutrición, la señal V2 de
+            // esta misma carga completa el score (sin plan V2 vigente NO penaliza).
+            attentionScore: applyNutritionAttentionScore(
+                data.attentionScore,
+                nutritionV2?.isAtRisk ?? null
+            ),
             currentWeightKg,
             weightDeltaKg,
             nutritionPlansLength: nutritionPlans.length,
@@ -134,13 +98,8 @@ export async function assembleClientFichaPanel(clientId: string) {
         },
         /** Accesos a módulos movida (espejo visual de ModuleLinksRow). */
         moduleFlags: { cardio, movement, bodycomp },
-        coachNutrientTargets,
-        coachPrivateNotes,
-        coachMealComments,
-        nutritionProEnabled: nutritionPro,
-        nutritionDomainEnabled,
-        nutritionSectionFlags,
-        nutritionOverrideContext,
+        /** Resumen del tab Nutrición (SIEMPRE V2). `null` ⇒ el tab pinta su estado degradado. */
+        nutritionV2,
     }
 }
 

@@ -2,6 +2,7 @@ import {
   addNutritionDays,
   buildNutritionWeek,
   nutritionWeekStartIso,
+  sortNutritionDayVariantsForDisplay,
   type NutritionClientDetailReadModel,
   type NutritionHistoryDay,
   type NutritionStrategy,
@@ -30,13 +31,77 @@ export interface NutritionTabV2SummaryDay {
   isToday: boolean
 }
 
-export interface NutritionTabV2ViewModel {
+/** Umbral de riesgo de nutrición (mismo 60 % que el resto de la ficha y `@eva/profile-analytics`). */
+export const NUTRITION_V2_RISK_BELOW_PCT = 60
+
+/** Meta de energía de una variante del plan (multi-día: una entrada por variante). */
+export interface NutritionV2DayTarget {
+  /** Etiqueta de la variante ("Base", "Sábado"…). */
+  label: string
+  /** Meta de energía de la variante; `null` si la variante no fija kcal. */
+  calories: number | null
+}
+
+/**
+ * Señal de nutrición V2 del alumno — FUENTE ÚNICA de todas las superficies de la ficha que
+ * hablan de nutrición fuera del tab: chip del hero, anillo "Nutrición" del Resumen, pill de
+ * la card Programa, badge del tab, `attentionScore` y la sección del PDF (dossier).
+ *
+ * Antes cada una leía las tablas V1 (`daily_nutrition_logs` + `nutrition_meal_logs`) mientras
+ * el tab y la ficha dedicada leían V2 ⇒ un alumno que registra en V2 veía "0 / 1 comidas",
+ * anillo 0 %, "Nutrición en riesgo" pulsante y un PDF con el plan V1 obsoleto, con la semana
+ * verde al lado (auditoría `audit3-perfil-cliente.md` §2.2).
+ *
+ * Regla de honestidad: sin plan V2 vigente (o sin ningún día de la semana cubierto por el plan)
+ * los campos derivados quedan `null` y la señal se OMITE en cada superficie. Nunca se afirma
+ * riesgo por falta de datos, y jamás se cae a V1.
+ */
+export interface NutritionV2Signal {
+  /** Hay un plan VIGENTE hoy (gobierna resumen vs estado vacío, y si hay señal que mostrar). */
+  hasActivePlan: boolean
+  /** Nombre del plan vigente (null sin plan vigente). */
+  planName: string | null
+  /** Energía de HOY vs meta, para la barra del resumen y el chip del hero. */
+  today: {
+    calories: { consumed: number; target: number }
+  }
+  /** % de la meta de energía consumido HOY; `null` si el plan no fija kcal. */
+  todayPct: number | null
+  /** Metas de macros de HOY (variante vigente) — alimenta los chips del PDF. */
+  todayMacroTargets: {
+    calories: number | null
+    proteinG: number | null
+    carbsG: number | null
+    fatsG: number | null
+  }
+  /** Franjas prescritas para HOY (variante vigente). */
+  todaySlotCount: number
+  /**
+   * Adherencia de la SEMANA en curso: días en rango / días ya transcurridos que el plan cubre
+   * (hoy solo cuenta si ya registró algo, igual que la racha). `null` = sin dato honesto
+   * (sin plan vigente, o el plan arrancó después de todos los días transcurridos).
+   */
+  weeklyInRangePct: number | null
+  weeklyInRangeDays: number
+  weeklyTrackedDays: number
+  /** `true`/`false` solo con dato real; `null` ⇒ la señal se omite (no penaliza, no alarma). */
+  isAtRisk: boolean | null
+  /** Metas de energía por variante; >1 entrada ⇒ el plan es multi-día. */
+  dayTargets: NutritionV2DayTarget[]
+  /** Días de `week` con energía dentro de rango (90-110% de la meta). */
+  completedCount: number
+  /** Días de `week` con registro pero fuera de rango. */
+  partialCount: number
+  /** Racha de días consecutivos con registro, contando hacia atrás desde ayer (u hoy, si hoy ya
+   *  registró algo). El día en curso nunca corta una racha previa mientras no tenga registro. */
+  streakDays: number
+}
+
+export interface NutritionTabV2ViewModel extends NutritionV2Signal {
   clientId: string
   clientName: string
   /** Existe algún plan V2 (para el label del CTA del builder en el estado vacío). */
   hasPlan: boolean
-  /** Hay un plan VIGENTE hoy (gobierna resumen vs estado vacío). */
-  hasActivePlan: boolean
   /** /coach/nutrition-v2/[clientId] — CTA "Abrir ficha de nutrición". */
   detailHref: string
   /** /coach/nutrition-v2/[clientId]/builder — CTA del estado vacío ("Crear plan"). */
@@ -46,17 +111,6 @@ export interface NutritionTabV2ViewModel {
   strategy: NutritionStrategy | null
   /** Semana en curso (lunes a domingo), 7 celdas; [] sin plan vigente. */
   week: NutritionTabV2SummaryDay[]
-  /** Energía de HOY vs meta, para la barra del resumen. */
-  today: {
-    calories: { consumed: number; target: number }
-  }
-  /** Días de `week` con energía dentro de rango (90-110% de la meta). */
-  completedCount: number
-  /** Días de `week` con registro pero fuera de rango. */
-  partialCount: number
-  /** Racha de días consecutivos con registro, contando hacia atrás desde ayer (u hoy, si hoy ya
-   *  registró algo). El día en curso nunca corta una racha previa mientras no tenga registro. */
-  streakDays: number
 }
 
 export interface BuildNutritionTabV2Input {
@@ -75,6 +129,47 @@ export interface BuildNutritionTabV2Input {
 
 function num(value: number | null | undefined): number {
   return typeof value === 'number' && Number.isFinite(value) ? value : 0
+}
+
+function numOrNull(value: number | null | undefined): number | null {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null
+}
+
+/**
+ * Adherencia semanal V2 (la que pinta el anillo "Nutrición" y decide `isAtRisk`).
+ *
+ * Cuenta los días de la semana YA TRANSCURRIDOS que el plan cubre (`effectiveFrom` en adelante:
+ * un plan publicado el miércoles no puede "reprobar" el lunes) y mide cuántos cerraron dentro de
+ * rango. Hoy solo entra al denominador si ya registró algo — misma convención que la racha: el
+ * día en curso no penaliza mientras siga abierto.
+ *
+ * `null` cuando no hay ningún día computable ⇒ la ficha OMITE la señal en vez de mostrar 0 %.
+ */
+export function computeNutritionWeeklyAdherence(input: {
+  week: readonly NutritionTabV2SummaryDay[]
+  /** `effectiveFrom` del plan vigente; `null` = sin recorte por inicio de plan. */
+  planEffectiveFrom: string | null
+  todayHasIntake: boolean
+}): { pct: number | null; inRangeDays: number; trackedDays: number } {
+  const covered = (isoDate: string) =>
+    input.planEffectiveFrom == null || isoDate >= input.planEffectiveFrom
+
+  let trackedDays = 0
+  let inRangeDays = 0
+  for (const day of input.week) {
+    if (day.status === 'future') continue
+    if (!covered(day.isoDate)) continue
+    // El día en curso todavía no es un veredicto: entra solo si ya registró algo.
+    if (day.isToday && !input.todayHasIntake) continue
+    trackedDays += 1
+    if (day.status === 'done') inRangeDays += 1
+  }
+
+  return {
+    pct: trackedDays > 0 ? Math.round((inRangeDays / trackedDays) * 100) : null,
+    inRangeDays,
+    trackedDays,
+  }
 }
 
 /** Clasifica una celda PASADA de la semana en el estado que pintan los dots del resumen (mockup
@@ -178,11 +273,20 @@ export function buildNutritionTabV2ViewModel(
     }
   })
 
+  // Señal semanal + riesgo: se computan UNA vez acá y viajan a hero/anillo/pill/badge/score/PDF.
+  const weekly = computeNutritionWeeklyAdherence({
+    week,
+    planEffectiveFrom: activePlan?.effectiveFrom ?? null,
+    todayHasIntake,
+  })
+  const targetCalories = numOrNull(targets.calories)
+
   return {
     clientId,
     clientName: detail.client.fullName,
     hasPlan,
     hasActivePlan,
+    planName: activePlan?.name?.trim() ? activePlan.name.trim() : null,
     detailHref: `/coach/nutrition-v2/${clientId}`,
     builderHref: `/coach/nutrition-v2/${clientId}/builder`,
     builderCtaLabel: hasPlan ? 'Nueva versión' : 'Crear plan',
@@ -191,6 +295,31 @@ export function buildNutritionTabV2ViewModel(
     today: {
       calories: { consumed: num(consumed.calories), target: num(targets.calories) },
     },
+    // Derivados de HOY: solo con plan vigente. Sin plan no hay meta que comparar ⇒ `null`
+    // (la ficha muestra "—", nunca un 0 % que el coach lea como incumplimiento).
+    todayPct:
+      hasActivePlan && targetCalories != null && targetCalories > 0
+        ? Math.round((num(consumed.calories) / targetCalories) * 100)
+        : null,
+    todayMacroTargets: {
+      calories: hasActivePlan ? targetCalories : null,
+      proteinG: hasActivePlan ? numOrNull(targets.proteinG) : null,
+      carbsG: hasActivePlan ? numOrNull(targets.carbsG) : null,
+      fatsG: hasActivePlan ? numOrNull(targets.fatsG) : null,
+    },
+    todaySlotCount:
+      hasActivePlan && Array.isArray(detail.today.mealSlots) ? detail.today.mealSlots.length : 0,
+    weeklyInRangePct: hasActivePlan ? weekly.pct : null,
+    weeklyInRangeDays: hasActivePlan ? weekly.inRangeDays : 0,
+    weeklyTrackedDays: hasActivePlan ? weekly.trackedDays : 0,
+    isAtRisk:
+      hasActivePlan && weekly.pct != null ? weekly.pct < NUTRITION_V2_RISK_BELOW_PCT : null,
+    dayTargets: hasActivePlan
+      ? sortNutritionDayVariantsForDisplay(detail.plan.dayVariants ?? []).map((variant) => ({
+          label: variant.label?.trim() || 'Plan del día',
+          calories: numOrNull(variant.targets?.calories),
+        }))
+      : [],
     completedCount: week.filter((day) => day.status === 'done').length,
     partialCount: week.filter((day) => day.status === 'partial').length,
     streakDays: hasActivePlan

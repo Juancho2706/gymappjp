@@ -46,3 +46,12 @@ auditoría `D:\tmp\nutricion-ui-audit-20260729\audit2-*.md`, mockups aprobados "
 - Cero migraciones DB; contratos compatibles hacia atrás; gates completos por ola.
 - Tokens runtime white-label, dark premium, tabular-nums, 44pt RN, sin className+style-función.
 - Prohibido `get_nutrition_today_v2` con fecha ≠ hoy. Snapshot gana sobre proyección.
+
+## Decisiones owner 2026-07-29 (noche) — cascada V1 restante
+
+1. **Micros V1: matar del todo.** UI restante que los muestre se retira con el retiro V1; tabla `nutrient_targets` queda congelada (cero DDL).
+2. **Hilo de comentarios por comida: matar.** "Feedback por comida" queda anotado como candidato V2 futuro (sobre registros/notas visibles).
+3. **Restricciones alimentarias: PORTAR a V2** (spec corta futura: alumno declara, coach VE en ficha + aviso en builder al prescribir restringido). `ClientFoodRestrictionsCard` huerfana se CONSERVA como base.
+4. **Nota privada del coach: REPONER en la ficha V2** (`CoachPrivateNotesPanel` al mount señalado en `coach/nutrition-v2/[clientId]/page.tsx`).
+
+Ademas (auditoria audit3): señales del perfil (hero/pill/badge/score/PDF) pasan a fuente V2; queries muertas y huerfanos barridos. El retiro completo de superficies V1 del alumno sigue siendo ola propia.

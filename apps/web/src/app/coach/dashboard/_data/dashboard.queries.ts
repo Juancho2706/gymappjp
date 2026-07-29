@@ -37,7 +37,11 @@ export interface ActivityItemClient {
     reviewed?: boolean
 }
 
-/** Align with BillingTabB8: only completed / paid rows count toward coach revenue. */
+/**
+ * Only completed / paid rows count toward coach revenue. Criterio heredado de `BillingTabB8`
+ * (tab de Facturación de la ficha, borrado en la poda 2026-07-29): esta es hoy la definición
+ * canónica y la única superficie que agrega `client_payments` para el coach.
+ */
 function isClientPaymentCountedForRevenue(status: string | null | undefined): boolean {
     const s = String(status || '').toLowerCase()
     return s === 'paid' || s === 'pagado' || s === 'completed'

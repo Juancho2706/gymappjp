@@ -44,14 +44,24 @@ import { GlowBorderCard } from '@/components/coach/GlowBorderCard'
 type HeroCompliance = {
     workoutsThisWeek?: number
     workoutsTarget?: number
-    nutritionCompliancePercent?: number
-    todayMealsDone?: number
-    todayMealsTotal?: number
     planCurrentWeek?: number
     planTotalWeeks?: number
     currentStreak?: number
     /** Días restantes del ciclo (el objeto lo trae; se declara para el status del hero). */
     planDaysRemaining?: number
+}
+
+/**
+ * Señal de nutrición V2 del alumno (subconjunto de `NutritionV2Signal` que usa el hero).
+ * `null`/`undefined` o `hasActivePlan: false` ⇒ el chip NO afirma nada (sin 0 %, sin color de
+ * alarma): la nutrición del alumno no se lee de V1 nunca más (auditoría §2.2).
+ */
+type HeroNutritionV2 = {
+    hasActivePlan: boolean
+    today: { calories: { consumed: number; target: number } }
+    todayPct: number | null
+    weeklyInRangePct: number | null
+    isAtRisk: boolean | null
 }
 
 /** Nivel de estado → tono del badge único (danger/warning/success). */
@@ -86,6 +96,12 @@ type ClientProfileHeroProps = {
     /** Entitlements de módulos movida (espejo del gate server-side). */
     moduleFlags?: { cardio: boolean; movement: boolean; bodycomp: boolean }
     /**
+     * Señal de nutrición V2 resuelta en la MISMA carga de la ficha (`resolveNutritionTabV2`, la
+     * fuente del tab). Alimenta el chip "Nutrición hoy" y el motivo de adherencia del badge de
+     * estado. `null` ⇒ sin plan V2 vigente (o la lectura falló) y el chip queda neutro.
+     */
+    nutritionV2?: HeroNutritionV2 | null
+    /**
      * Estado unificado del alumno ya computado server-side (con las señales crudas
      * precisas: días sin check-in/entrenar, adherencia 30d, días de ciclo). Si no se
      * pasa, el hero cae a un fallback derivado de las señales que ya recibe.
@@ -104,6 +120,7 @@ export function ClientProfileHero({
     weightDeltaKg,
     activeProgramName,
     moduleFlags,
+    nutritionV2,
     status: statusProp,
 }: ClientProfileHeroProps) {
     const [actionsOpen, setActionsOpen] = useState(false)
@@ -121,10 +138,21 @@ export function ClientProfileHero({
     const workoutsThisWeek = compliance.workoutsThisWeek ?? 0
     const workoutsTarget = Math.max(1, compliance.workoutsTarget ?? 1)
     const adherencePct = Math.min(100, Math.round((workoutsThisWeek / workoutsTarget) * 100))
-    const nutritionPct = compliance.nutritionCompliancePercent ?? 0
-    const mealsDone = compliance.todayMealsDone ?? 0
-    const mealsTotal = Math.max(1, compliance.todayMealsTotal ?? 1)
     const planCur = compliance.planCurrentWeek ?? null
+
+    // Chip de nutrición — V2 y solo V2. Antes mostraba `todayMealsDone/Total` + "% plan" de las
+    // tablas V1 ⇒ "0/1 · 0% plan" en ámbar para cualquier alumno que registra en V2.
+    const nutritionSignal = nutritionV2?.hasActivePlan ? nutritionV2 : null
+    const nutritionTodayValue = nutritionSignal
+        ? `${Math.round(nutritionSignal.today.calories.consumed).toLocaleString('es-CL')} kcal`
+        : '—'
+    const nutritionTodaySub = nutritionSignal
+        ? nutritionSignal.today.calories.target > 0
+            ? `de ${Math.round(nutritionSignal.today.calories.target).toLocaleString('es-CL')} kcal${
+                  nutritionSignal.todayPct != null ? ` · ${nutritionSignal.todayPct}%` : ''
+              }`
+            : 'sin meta de energía'
+        : 'sin plan de nutrición'
 
     // Eyebrow del TopBar: "{PROGRAMA} · Semana {N}" (el programa/semana ya no vive en un chip del hero).
     const programName = activeProgramName?.trim() || null
@@ -145,7 +173,9 @@ export function ClientProfileHero({
             daysSinceCheckin: null,
             daysSinceWorkout: null,
             hasActiveWorkoutProgram: Boolean(programName),
-            nutritionAdherencePct: null,
+            // Adherencia semanal V2 (días en rango / días transcurridos con plan). `null` cuando no
+            // hay plan V2 vigente ⇒ `deriveClientStatus` no agrega el motivo de nutrición.
+            nutritionAdherencePct: nutritionSignal?.weeklyInRangePct ?? null,
             planDaysRemaining: compliance.planDaysRemaining ?? null,
         })
 
@@ -329,11 +359,19 @@ export function ClientProfileHero({
                         sub={<span className="text-on-dark-muted">esta semana</span>}
                     />
                     <HeroStatChip
-                        label="Comidas hoy"
-                        value={`${mealsDone}/${mealsTotal}`}
+                        label="Nutrición hoy"
+                        value={nutritionTodayValue}
                         sub={
-                            <span className={nutritionPct >= 80 ? 'text-[var(--success-500)]' : 'text-[var(--warning-500)]'}>
-                                {nutritionPct}% plan
+                            <span
+                                className={
+                                    nutritionSignal == null || nutritionSignal.todayPct == null
+                                        ? 'text-on-dark-muted'
+                                        : nutritionSignal.todayPct >= 90 && nutritionSignal.todayPct <= 110
+                                          ? 'text-[var(--success-500)]'
+                                          : 'text-[var(--warning-500)]'
+                                }
+                            >
+                                {nutritionTodaySub}
                             </span>
                         }
                     />
