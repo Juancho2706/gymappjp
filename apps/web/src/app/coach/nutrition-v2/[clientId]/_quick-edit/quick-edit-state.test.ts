@@ -12,7 +12,14 @@ import {
   collectPortionGroups,
   createCatalogItem,
   normalizeTimeHHMM,
+  qeExchangeGroups,
   qeItemMacros,
+  qeSlotPortionTotals,
+  qeSlotSubtotal,
+  qeSlotSubtotalWithPortions,
+  qeVariantPortionTotals,
+  qeVariantTotal,
+  qeVariantTotalWithPortions,
   quickEditReducer,
   readModelToEditState,
   stepPortionsText,
@@ -442,6 +449,68 @@ describe('quick-edit-state — porciones', () => {
   })
 })
 
+// ── Totales CON porciones: la queja del coach (los grupos no sumaban en el total) ────────
+
+describe('quick-edit-state — totales con porciones a eleccion', () => {
+  it('el subtotal de franja suma items + porciones (2C + 1,5V sobre los snapshots)', () => {
+    const { state, groups } = hydratePortions()
+    const dict = qeExchangeGroups(groups)
+    const slot = state.variants[0].slots[0]
+    const soloItems = qeSlotSubtotal(slot)
+    const conPorciones = qeSlotSubtotalWithPortions(slot, dict)
+    // 2 x C{70,2,15,0.5} + 1,5 x V{25,2,5,0} = {177.5, 7, 37.5, 1}
+    const derivado = qeSlotPortionTotals(slot, dict)
+    expect(derivado).toEqual({ calories: 177.5, proteinG: 7, carbsG: 37.5, fatsG: 1 })
+    expect(conPorciones.calories).toBe(Math.round((soloItems.calories + 177.5) * 10) / 10)
+    expect(conPorciones.calories).toBeGreaterThan(soloItems.calories)
+    // Las macros de los items no se pierden por el camino.
+    expect(conPorciones.proteinG).toBe(Math.round((soloItems.proteinG + 7) * 10) / 10)
+  })
+
+  it('el total prescrito de la variante suma las porciones de TODAS sus franjas', () => {
+    const { state, groups } = hydratePortions()
+    const dict = qeExchangeGroups(groups)
+    const variant = state.variants[0]
+    const total = qeVariantTotalWithPortions(variant, dict)
+    const soloItems = qeVariantTotal(variant)
+    expect(total.calories).toBe(Math.round((soloItems.calories + 177.5) * 10) / 10)
+    expect(qeVariantPortionTotals(variant, dict)).toEqual({
+      calories: 177.5,
+      proteinG: 7,
+      carbsG: 37.5,
+      fatsG: 1,
+    })
+  })
+
+  it('plan SIN porciones: los totales combinados son IDENTICOS a los de solo items', () => {
+    const { state } = hydrate()
+    const dict = qeExchangeGroups(collectPortionGroups(makePlanModel()))
+    expect(dict).toEqual([])
+    const slot = state.variants[0].slots[0]
+    expect(qeSlotPortionTotals(slot, dict)).toBeNull()
+    expect(qeSlotSubtotalWithPortions(slot, dict)).toEqual(qeSlotSubtotal(slot))
+    expect(qeVariantTotalWithPortions(state.variants[0], dict)).toEqual(qeVariantTotal(state.variants[0]))
+  })
+
+  it('porciones en cero/texto invalido no contaminan el subtotal (jamas NaN)', () => {
+    const { state, groups } = hydratePortions()
+    const dict = qeExchangeGroups(groups)
+    const roto: QuickEditState = {
+      ...state,
+      variants: state.variants.map((variant) => ({
+        ...variant,
+        slots: variant.slots.map((slot) => ({
+          ...slot,
+          portionTargets: slot.portionTargets.map((target) => ({ ...target, portions: 'abc' })),
+        })),
+      })),
+    }
+    const slot = roto.variants[0].slots[0]
+    expect(qeSlotPortionTotals(slot, dict)).toBeNull()
+    expect(qeSlotSubtotalWithPortions(slot, dict)).toEqual(qeSlotSubtotal(slot))
+  })
+})
+
 // ── RESTORE_DRAFT: respaldo local restaurable (banner de sesion anterior) ────────────────
 
 describe('quick-edit-state — RESTORE_DRAFT', () => {
@@ -627,5 +696,174 @@ describe('quick-edit-state — carry-over de reemplazos (F-02)', () => {
     if (!state || !baseDraft) throw new Error('fixture sin plan')
     const draft = applyQuickEditToDraft(baseDraft, state)
     expect(draft.dayVariants[0].mealSlots[0].items[0]).not.toHaveProperty('substitutions')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// FD5 — multi-dia desde el quick-edit: agregar dias (clonando o vacios), cambiar el dia,
+// renombrar y eliminar, sosteniendo los invariantes de la base (una sola variante default,
+// dia de semana unico, dia base intocable) y publicando las N variantes.
+// ---------------------------------------------------------------------------
+
+describe('quick-edit-state — multi-dia (FD5)', () => {
+  const SATURDAY = 6
+  const SUNDAY = 0
+  const MONDAY = 1
+
+  it('agregar un dia CLONA el dia base (franjas, items y metas) sin tocar la base', () => {
+    const { state } = hydrate()
+    const next = quickEditReducer(state, { type: 'ADD_VARIANT', days: [SATURDAY], source: 'clone' })
+
+    expect(next.variants).toHaveLength(2)
+    const [base, saturday] = next.variants
+    // La base queda EXACTAMENTE igual (misma referencia: el alta no la reescribe).
+    expect(base).toBe(state.variants[0])
+    expect(saturday.dayOfWeek).toBe(SATURDAY)
+    expect(saturday.label).toBe('Sábado')
+    expect(saturday.isDefault).toBe(false)
+    expect(saturday.id).toBeNull()
+    // Contenido clonado con metas heredadas...
+    expect(saturday.targets).toEqual(base.targets)
+    expect(saturday.slots).toHaveLength(1)
+    expect(saturday.slots[0].items[0].displayName).toBe('Avena')
+    // ...pero con keys de UI PROPIAS (dos dias homonimos no pueden compartir key).
+    expect(saturday.slots[0].key).not.toBe(base.slots[0].key)
+    expect(saturday.slots[0].items[0].key).not.toBe(base.slots[0].items[0].key)
+    // Editar el clon no toca la base (clon profundo, no alias del mismo objeto).
+    const edited = quickEditReducer(next, {
+      type: 'SET_ITEM_QUANTITY',
+      variantKey: saturday.key,
+      slotKey: saturday.slots[0].key,
+      itemKey: saturday.slots[0].items[0].key,
+      value: '150',
+    })
+    expect(edited.variants[0].slots[0].items[0].quantity).toBe('80')
+    expect(edited.variants[1].slots[0].items[0].quantity).toBe('150')
+  })
+
+  it('agregar varios dias de una: ordena Lu→Do, ignora ocupados e invalidos y da keys unicas', () => {
+    const { state } = hydrate()
+    const withWeekend = quickEditReducer(state, {
+      type: 'ADD_VARIANT',
+      days: [SUNDAY, SATURDAY],
+      source: 'clone',
+    })
+    expect(withWeekend.variants.map((variant) => variant.dayOfWeek)).toEqual([null, SATURDAY, SUNDAY])
+    expect(new Set(withWeekend.variants.map((variant) => variant.variantKey)).size).toBe(3)
+
+    // Sabado ya esta ocupado y 9 no es un dia valido: solo entra el lunes.
+    const again = quickEditReducer(withWeekend, {
+      type: 'ADD_VARIANT',
+      days: [SATURDAY, 9, MONDAY],
+      source: 'clone',
+    })
+    expect(again.variants.map((variant) => variant.dayOfWeek)).toEqual([null, SATURDAY, SUNDAY, MONDAY])
+    // Nada que agregar => estado INTACTO (misma referencia, sin re-render inutil).
+    expect(quickEditReducer(again, { type: 'ADD_VARIANT', days: [SATURDAY], source: 'clone' })).toBe(again)
+  })
+
+  it('agregar un dia VACIO hereda las metas del base pero no sus franjas', () => {
+    const { state } = hydrate()
+    const next = quickEditReducer(state, { type: 'ADD_VARIANT', days: [SATURDAY], source: 'empty' })
+    expect(next.variants[1].slots).toHaveLength(0)
+    expect(next.variants[1].targets).toEqual(state.variants[0].targets)
+  })
+
+  it('invariantes: una sola default, dia unico y el dia base no se elimina ni cambia de dia', () => {
+    const { state } = hydrate()
+    const withDays = quickEditReducer(state, {
+      type: 'ADD_VARIANT',
+      days: [SATURDAY, SUNDAY],
+      source: 'clone',
+    })
+    const base = withDays.variants[0]
+    const saturday = withDays.variants[1]
+
+    // Exactamente una default en todo momento.
+    expect(withDays.variants.filter((variant) => variant.isDefault)).toHaveLength(1)
+
+    // La base es intocable: no se elimina y no cambia de dia.
+    expect(quickEditReducer(withDays, { type: 'REMOVE_VARIANT', variantKey: base.key }).variants).toHaveLength(3)
+    const baseDayAttempt = quickEditReducer(withDays, {
+      type: 'SET_VARIANT_DAY',
+      variantKey: base.key,
+      dayOfWeek: MONDAY,
+    })
+    expect(baseDayAttempt).toBe(withDays)
+
+    // Un dia ya ocupado por otra variante no se puede robar.
+    expect(
+      quickEditReducer(withDays, { type: 'SET_VARIANT_DAY', variantKey: saturday.key, dayOfWeek: SUNDAY }),
+    ).toBe(withDays)
+
+    // Cambiar a un dia libre SI: se mueve y se re-etiqueta (la etiqueta seguia siendo la automatica).
+    const moved = quickEditReducer(withDays, {
+      type: 'SET_VARIANT_DAY',
+      variantKey: saturday.key,
+      dayOfWeek: MONDAY,
+    })
+    expect(moved.variants[1]).toMatchObject({ dayOfWeek: MONDAY, label: 'Lunes' })
+
+    // Con renombre manual, cambiar el dia NO pisa el nombre elegido por el coach.
+    const renamed = quickEditReducer(withDays, {
+      type: 'SET_VARIANT_LABEL',
+      variantKey: saturday.key,
+      value: 'Día de carga',
+    })
+    const renamedAndMoved = quickEditReducer(renamed, {
+      type: 'SET_VARIANT_DAY',
+      variantKey: saturday.key,
+      dayOfWeek: MONDAY,
+    })
+    expect(renamedAndMoved.variants[1]).toMatchObject({ dayOfWeek: MONDAY, label: 'Día de carga' })
+  })
+
+  it('eliminar un dia especifico se deshace exacto (RESTORE_VARIANT en su posicion)', () => {
+    const { state } = hydrate()
+    const withDays = quickEditReducer(state, {
+      type: 'ADD_VARIANT',
+      days: [SATURDAY, SUNDAY],
+      source: 'clone',
+    })
+    const removedVariant = withDays.variants[1]
+    const removed = quickEditReducer(withDays, { type: 'REMOVE_VARIANT', variantKey: removedVariant.key })
+    expect(removed.variants.map((variant) => variant.dayOfWeek)).toEqual([null, SUNDAY])
+    const restored = quickEditReducer(removed, { type: 'RESTORE_VARIANT', index: 1, variant: removedVariant })
+    expect(restored.variants).toEqual(withDays.variants)
+  })
+
+  it('el publish del quick-edit emite las N variantes y pasa el contrato', () => {
+    const { state, baseline } = hydrate()
+    const withWeekend = quickEditReducer(state, {
+      type: 'ADD_VARIANT',
+      days: [SATURDAY, SUNDAY],
+      source: 'clone',
+    })
+    const draft = currentDraftOf(withWeekend)
+
+    expect(draft.dayVariants).toHaveLength(3)
+    expect(draft.dayVariants.map((variant) => variant.dayOfWeek)).toEqual([null, SATURDAY, SUNDAY])
+    expect(draft.dayVariants.filter((variant) => variant.default)).toHaveLength(1)
+    // Claves unicas (unique (version_id, variant_key)) y orderIndex por posicion.
+    expect(new Set(draft.dayVariants.map((variant) => variant.key)).size).toBe(3)
+    expect(draft.dayVariants.map((variant) => variant.orderIndex)).toEqual([0, 1, 2])
+    // El contenido clonado viaja completo (no son dias vacios).
+    expect(draft.dayVariants[1].mealSlots[0].items).toHaveLength(1)
+    expect(() => NutritionPlanDraftSchema.parse(draft)).not.toThrow()
+    expect(countDraftChanges(baseline, draft)).toBeGreaterThan(0)
+  })
+
+  it('validacion local: dia sin nombre corta el publish antes del server', () => {
+    const { state } = hydrate()
+    const withDay = quickEditReducer(state, { type: 'ADD_VARIANT', days: [SATURDAY], source: 'clone' })
+    expect(validateQuickEdit(withDay).ok).toBe(true)
+    const blank = quickEditReducer(withDay, {
+      type: 'SET_VARIANT_LABEL',
+      variantKey: withDay.variants[1].key,
+      value: '   ',
+    })
+    const validation = validateQuickEdit(blank)
+    expect(validation.ok).toBe(false)
+    expect(validation.errors[`variant.${withDay.variants[1].key}.label`]).toBeTruthy()
   })
 })

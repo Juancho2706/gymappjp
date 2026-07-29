@@ -1,9 +1,17 @@
+import {
+  CATALOG_MACROS_BASIS,
+  normalizeIntakeUnit,
+  prescribedSnapshotMacros,
+  scaleSnapshotMacros,
+  type NutritionMacroTotalsLike,
+} from '@eva/nutrition-v2'
 import type {
   FoodCatalogItem,
   NutritionFoodRowModel,
   NutritionIntakeCorrection,
   NutritionIntakeMutation,
   NutritionIntakeReadItem,
+  NutritionIntakeVoid,
   NutritionItemSubstitutionRead,
   NutritionMealSlotRead,
   NutritionTodayReadModel,
@@ -39,12 +47,6 @@ export function newIdempotencyKey(prefix: 'intake' | 'correction' | 'void' | 'cl
       ? crypto.randomUUID()
       : `${Date.now()}-${Math.random().toString(36).slice(2)}`
   return `${prefix}-${uuid}`
-}
-
-/** Divide preservando null (macros por unidad prescrita). */
-function perUnit(value: number | null, quantity: number): number | null {
-  if (value === null || !Number.isFinite(value) || quantity <= 0) return value === null ? null : value
-  return value / quantity
 }
 
 /** Todas las franjas del dia como opciones {code,label} (sin franjas hardcodeadas). */
@@ -100,7 +102,8 @@ export function contextFromToday(today: NutritionTodayReadModel, clientId: strin
 /**
  * "Lo comi": registra exactamente lo prescrito. Normaliza los macros a por-unidad
  * con servingSize=1 para que el total recomputado por el RPC == macros mostrados,
- * cualquiera sea la unidad (g/ml o unidades discretas).
+ * cualquiera sea la unidad (g/ml o unidades discretas). La normalizacion vive en
+ * `@eva/nutrition-v2/intake-normalize`, compartida byte a byte con RN.
  */
 export function buildPrescribedIntakePayload(input: {
   context: Context
@@ -131,20 +134,37 @@ export function buildPrescribedIntakePayload(input: {
     snapshot: {
       name,
       brand: item.brand,
-      calories: perUnit(item.macros.calories, item.quantity),
-      proteinG: perUnit(item.macros.proteinG, item.quantity),
-      carbsG: perUnit(item.macros.carbsG, item.quantity),
-      fatsG: perUnit(item.macros.fatsG, item.quantity),
-      fiberG: perUnit(item.macros.fiberG, item.quantity),
-      servingSize: 1,
+      ...prescribedSnapshotMacros(item.macros, item.quantity),
       servingUnit: item.unit,
     },
   }
 }
 
 /**
- * Alimento libre del catalogo. Los macros del catalogo son por-porcion
- * (servingSize/servingUnit); el RPC escala segun la cantidad y unidad elegidas.
+ * Total ESTIMADO de un alimento del catalogo para la cantidad/unidad elegidas. Usa la MISMA
+ * funcion pura que el servidor (`scaleSnapshotMacros` ⇒ `intakeEntryFactor`) con la base
+ * declarada del catalogo, de modo que el numero del formulario y el que persiste el RPC son el
+ * mismo. Es lo que vuelve OBVIO un cambio de unidad mal hecho antes de guardar (NUT-017).
+ */
+export function estimateCatalogIntakeTotals(input: {
+  food: Pick<FoodCatalogItem, 'calories' | 'proteinG' | 'carbsG' | 'fatsG' | 'fiberG' | 'servingSize'>
+  quantity: number
+  unit: string
+}): NutritionMacroTotalsLike {
+  return scaleSnapshotMacros(input.food, {
+    quantity: input.quantity,
+    unit: normalizeIntakeUnit(input.unit) ?? input.unit,
+    servingSize: input.food.servingSize,
+    basis: CATALOG_MACROS_BASIS,
+  })
+}
+
+/**
+ * Alimento libre del catalogo. Los macros del catalogo son POR 100 g/ml (contrato del importador,
+ * `docs/operations/FOOD_CATALOG_CL_IMPORT.md:89`) y `servingSize` solo describe la porcion; por eso
+ * el payload DECLARA `macrosBasis: 'per_100'` y el servidor escala con esa base en vez de la
+ * legada (que dividia por `servingSize` e inflaba 100 g del alimento ejemplo a 258,3 kcal —
+ * NUT-001). La unidad se manda ya normalizada al codigo canonico (g|ml|un).
  */
 export function buildCatalogIntakePayload(input: {
   context: Context
@@ -164,7 +184,7 @@ export function buildCatalogIntakePayload(input: {
     foodId: food.id,
     customName: null,
     quantity: input.quantity,
-    unit: input.unit,
+    unit: normalizeIntakeUnit(input.unit) ?? input.unit,
     mealSlot: input.mealSlotCode,
     source: 'offplan',
     captureMethod: 'search',
@@ -183,6 +203,7 @@ export function buildCatalogIntakePayload(input: {
       fiberG: food.fiberG,
       servingSize: food.servingSize,
       servingUnit: food.servingUnit,
+      macrosBasis: CATALOG_MACROS_BASIS,
     },
   }
 }
@@ -227,6 +248,9 @@ export function buildCorrectionPayload(input: {
       fiberG: entry.snapshot.fiberG,
       servingSize: entry.snapshot.servingSize,
       servingUnit: entry.snapshot.servingUnit,
+      // La base viaja con el snapshot: sin esto la correccion caeria a la formula LEGADA y el
+      // mismo alimento cambiaria de calorias solo por editar la cantidad (NUT-001).
+      ...(entry.snapshot.macrosBasis ? { macrosBasis: entry.snapshot.macrosBasis } : {}),
     },
     correctsEntryId: entry.id,
     correctionReason: input.reason,
@@ -234,49 +258,28 @@ export function buildCorrectionPayload(input: {
 }
 
 /**
- * "Retirar" un registro. Sin un RPC de void dedicado, el único mecanismo del contrato es una
- * corrección de contribución CERO: conserva cantidad/unidad/franja/alimento del original, marca
- * source/captureMethod 'manual' y pone los macros del snapshot en 0. Así el original queda
- * `corrected` (fuera de totales) y el reemplazo activo no aporta al día, preservando la cadena de
- * auditoría (correctsEntryId). Paridad 1:1 con RN (buildVoidIntakeCorrection).
+ * "Retirar" un registro (NUT-010, opción A: estado TERMINAL `voided`).
+ *
+ * Antes esto construía una corrección de contribución CERO que conservaba cantidad, unidad, franja
+ * y `prescriptionItemId` del original. Esa entry correctora nacía ACTIVA, así que el item prescrito
+ * seguía contando como "consumido" (sin botón "Lo comí" de vuelta), el medidor de la franja seguía
+ * "completo", la cobertura de porciones DERIVADA no bajaba, `entryCount` quedaba inflado para el
+ * coach y la propia correctora era retirable — generando otra correctora, sin estado terminal.
+ *
+ * Ahora el retiro es un gesto propio contra `void_nutrition_intake_v2`: payload MÍNIMO, y toda la
+ * reversión ocurre porque los read models ya filtran `entry_status = 'active'`.
  */
 export function buildVoidPayload(input: {
   context: Context
   entry: NutritionIntakeReadItem
   reason: string
   idempotencyKey: string
-}): NutritionIntakeCorrection {
-  const { context, entry } = input
+}): NutritionIntakeVoid {
   return {
-    clientId: context.clientId,
-    localDate: context.date,
-    occurredAt: entry.occurredAt,
-    timezone: context.timezone,
-    foodId: entry.foodId,
-    customName: entry.foodId ? null : entry.customName ?? entry.snapshot.name,
-    quantity: entry.quantity,
-    unit: entry.unit,
-    mealSlot: entry.mealSlot,
-    source: 'manual',
-    captureMethod: 'manual',
-    daySnapshotId: context.snapshotId,
-    planVersionId: context.planVersionId,
-    prescriptionItemId: entry.prescriptionItemId,
+    clientId: input.context.clientId,
+    entryId: input.entry.id,
+    reason: input.reason.trim() || 'Registro retirado por el alumno',
     idempotencyKey: input.idempotencyKey,
-    note: 'Registro retirado',
-    snapshot: {
-      name: entry.snapshot.name,
-      brand: entry.snapshot.brand,
-      calories: 0,
-      proteinG: 0,
-      carbsG: 0,
-      fatsG: 0,
-      fiberG: 0,
-      servingSize: entry.snapshot.servingSize,
-      servingUnit: entry.snapshot.servingUnit,
-    },
-    correctsEntryId: entry.id,
-    correctionReason: input.reason.trim() || 'Registro retirado por el alumno',
   }
 }
 
@@ -302,28 +305,23 @@ export function buildBulkPrescribedPayloads(input: {
 }
 
 /**
- * Payloads de "deshacer" para los registros recién creados por el bulk: una corrección de
- * contribución CERO por cada id creado (mismo mecanismo que "Retirar registro"), reusando el
- * payload original enviado (mismo alimento/cantidad/franja) para no depender del read-model
- * refrescado. Empareja por índice payloads[i] ↔ createdIds[i].
+ * Payloads de "deshacer" para los registros recién creados por el bulk: un retiro TERMINAL por
+ * cada id creado (mismo mecanismo que "Retirar registro"). Solo hace falta el id devuelto por el
+ * servidor, así que no depende del read-model refrescado. Empareja por índice
+ * payloads[i] ↔ createdIds[i] (los payloads solo aportan el clientId y el largo de la tanda).
  */
 export function buildBulkUndoPayloads(
   payloads: NutritionIntakeMutation[],
   createdIds: string[],
-): NutritionIntakeCorrection[] {
+): NutritionIntakeVoid[] {
   const n = Math.min(payloads.length, createdIds.length)
-  const out: NutritionIntakeCorrection[] = []
+  const out: NutritionIntakeVoid[] = []
   for (let i = 0; i < n; i += 1) {
-    const p = payloads[i]
     out.push({
-      ...p,
-      source: 'manual',
-      captureMethod: 'manual',
-      note: 'Registro retirado',
+      clientId: payloads[i].clientId,
+      entryId: createdIds[i],
+      reason: 'Deshacer registro de la comida',
       idempotencyKey: newIdempotencyKey('void'),
-      snapshot: { ...p.snapshot, calories: 0, proteinG: 0, carbsG: 0, fatsG: 0, fiberG: 0 },
-      correctsEntryId: createdIds[i],
-      correctionReason: 'Deshacer registro de la comida',
     })
   }
   return out

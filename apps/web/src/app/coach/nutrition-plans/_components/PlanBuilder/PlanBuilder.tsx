@@ -648,17 +648,14 @@ export function PlanBuilder({ mode, coachId, clientId, initialData, clientProfil
     }
     setIsSavingGroup(true)
     try {
-      const res = await saveMealGroup(
-        {
-          name,
-          items: meal.foodItems.map((fi) => ({
-            food_id: fi.food_id,
-            quantity: fi.quantity,
-            unit: fi.unit,
-          })),
-        },
-        coachId
-      )
+      const res = await saveMealGroup({
+        name,
+        items: meal.foodItems.map((fi) => ({
+          food_id: fi.food_id,
+          quantity: fi.quantity,
+          unit: fi.unit,
+        })),
+      })
       if ('success' in res && res.success) {
         toast.success('Grupo guardado — disponible en Grupos')
         setSaveGroupState(null)
@@ -669,7 +666,7 @@ export function PlanBuilder({ mode, coachId, clientId, initialData, clientProfil
     } finally {
       setIsSavingGroup(false)
     }
-  }, [saveGroupState, meals, coachId])
+  }, [saveGroupState, meals])
 
   // Totales del sidebar: en modo porciones se derivan de los targets (Σ porciones × ref).
   const sidebarTotals = useMemo(() => {

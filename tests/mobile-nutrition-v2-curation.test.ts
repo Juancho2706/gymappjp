@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+import type { NutritionV2CoachScope } from '@eva/nutrition-v2'
 import {
   createCoachFoodForCurationV2,
   formatRelativeDate,
@@ -8,108 +9,30 @@ import {
 } from '../apps/mobile/lib/nutrition-v2-curation.api'
 
 // ---------------------------------------------------------------------------
-// Mock del cliente supabase-js (subconjunto estructural que consume la curación).
-// Cada `from(table)` devuelve encadenables thenables que resuelven un resultado
-// preprogramado; el log registra inserts / updates / deletes para las aserciones.
+// Mock del cliente supabase-js: la curación ya no usa PostgREST, solo `rpc(...)`
+// contra las funciones scoped. El log registra nombre + argumentos de cada llamada
+// para assertar que el workspace activo viaja al servidor.
 // ---------------------------------------------------------------------------
 
 type Result = { data: unknown; error: { code?: string; message?: string } | null }
 
-interface MockOpts {
-  missingSelect?: Result
-  missingUpdate?: Result
-  foodsSelect?: Result
-  foodsInsert?: Result
-  foodsDelete?: Result
-}
-
-function makeDb(opts: MockOpts = {}) {
-  const log = {
-    inserts: [] as Array<Record<string, unknown>>,
-    updates: [] as Array<Record<string, unknown>>,
-    deletes: [] as Array<Record<string, unknown>>,
-  }
-
+function makeDb(result: Result = { data: null, error: null }) {
+  const calls: Array<{ name: string; args: Record<string, unknown> }> = []
   const db = {
-    from(table: string) {
-      if (table === 'food_catalog_missing_codes') {
-        return {
-          select() {
-            const chain: Record<string, unknown> = {}
-            const passthrough = () => chain
-            chain.is = passthrough
-            chain.order = passthrough
-            chain.range = passthrough
-            chain.eq = passthrough
-            chain.ilike = passthrough
-            chain.limit = passthrough
-            chain.then = (resolve: (v: Result) => void) =>
-              resolve(opts.missingSelect ?? { data: [], error: null })
-            return chain
-          },
-          update(values: Record<string, unknown>) {
-            log.updates.push(values)
-            const chain: Record<string, unknown> = {}
-            const passthrough = () => chain
-            chain.eq = passthrough
-            chain.is = passthrough
-            chain.then = (resolve: (v: Result) => void) =>
-              resolve(opts.missingUpdate ?? { data: null, error: null })
-            return chain
-          },
-        }
-      }
-      if (table === 'foods') {
-        return {
-          select() {
-            const chain: Record<string, unknown> = {}
-            const passthrough = () => chain
-            chain.eq = passthrough
-            chain.is = passthrough
-            chain.ilike = passthrough
-            chain.order = passthrough
-            chain.range = passthrough
-            chain.limit = passthrough
-            chain.then = (resolve: (v: Result) => void) =>
-              resolve(opts.foodsSelect ?? { data: [], error: null })
-            return chain
-          },
-          insert(rows: Record<string, unknown>) {
-            log.inserts.push(rows)
-            return {
-              select() {
-                return {
-                  single: async () => opts.foodsInsert ?? { data: { id: 'new-food' }, error: null },
-                }
-              },
-              then: (resolve: (v: Result) => void) => resolve({ data: null, error: null }),
-            }
-          },
-          delete() {
-            const captured: Record<string, unknown> = {}
-            const chain: Record<string, unknown> = {}
-            chain.eq = (col: string, val: unknown) => {
-              captured[col] = val
-              return chain
-            }
-            chain.then = (resolve: (v: Result) => void) => {
-              log.deletes.push(captured)
-              resolve(opts.foodsDelete ?? { data: null, error: null })
-            }
-            return chain
-          },
-        }
-      }
-      throw new Error(`unexpected table ${table}`)
-    },
+    rpc: vi.fn(async (name: string, args: Record<string, unknown>) => {
+      calls.push({ name, args })
+      return result
+    }),
   }
-
-  return { db: db as unknown as CurationWriteClient, log }
+  return { db: db as unknown as CurationWriteClient, calls, rpc: db.rpc }
 }
 
 const MISSING_ID = '11111111-1111-4111-8111-111111111111'
 const FOOD_ID = '22222222-2222-4222-8222-222222222222'
-const USER_ID = 'coach-1'
+const TEAM_ID = '33333333-3333-4333-8333-333333333333'
+
+const STANDALONE: NutritionV2CoachScope = { scopeType: 'standalone', teamId: null, orgId: null }
+const TEAM: NutritionV2CoachScope = { scopeType: 'team', teamId: TEAM_ID, orgId: null }
 
 function rawRow(i: number) {
   return {
@@ -147,9 +70,41 @@ describe('formatRelativeDate', () => {
 })
 
 describe('listMissingFoodCodesV2', () => {
+  it('llama la RPC scoped con el scope de equipo recibido', async () => {
+    const { db, calls } = makeDb({ data: [rawRow(1)], error: null })
+    const res = await listMissingFoodCodesV2({ db, scope: TEAM, offset: 0 })
+    expect(res.ok).toBe(true)
+    expect(calls).toHaveLength(1)
+    expect(calls[0].name).toBe('list_missing_food_codes_scoped_v2')
+    expect(calls[0].args).toMatchObject({
+      p_scope_type: 'team',
+      p_team_id: TEAM_ID,
+      p_org_id: null,
+      p_offset: 0,
+      p_page_size: 21,
+    })
+  })
+
+  it('sin scope devuelve SCOPE_REQUIRED sin tocar la DB', async () => {
+    const { db, rpc } = makeDb()
+    const res = await listMissingFoodCodesV2({ db, scope: null })
+    expect(res).toMatchObject({ ok: false, code: 'SCOPE_REQUIRED' })
+    expect(rpc).not.toHaveBeenCalled()
+  })
+
+  it('scope team sin teamId es fail-closed (SCOPE_REQUIRED, cero llamadas)', async () => {
+    const { db, rpc } = makeDb()
+    const res = await listMissingFoodCodesV2({
+      db,
+      scope: { scopeType: 'team', teamId: null, orgId: null } as NutritionV2CoachScope,
+    })
+    expect(res).toMatchObject({ ok: false, code: 'SCOPE_REQUIRED' })
+    expect(rpc).not.toHaveBeenCalled()
+  })
+
   it('mapea snake→camel y reporta hasMore=false con <21 filas', async () => {
-    const { db } = makeDb({ missingSelect: { data: [rawRow(1), rawRow(2)], error: null } })
-    const res = await listMissingFoodCodesV2({ db, offset: 0 })
+    const { db } = makeDb({ data: [rawRow(1), rawRow(2)], error: null })
+    const res = await listMissingFoodCodesV2({ db, scope: STANDALONE, offset: 0 })
     expect(res.ok).toBe(true)
     if (!res.ok) return
     expect(res.items).toHaveLength(2)
@@ -167,8 +122,8 @@ describe('listMissingFoodCodesV2', () => {
 
   it('con 21 filas recorta a 20 y avanza el offset', async () => {
     const data = Array.from({ length: 21 }, (_, i) => rawRow(i))
-    const { db } = makeDb({ missingSelect: { data, error: null } })
-    const res = await listMissingFoodCodesV2({ db, offset: 40 })
+    const { db } = makeDb({ data, error: null })
+    const res = await listMissingFoodCodesV2({ db, scope: STANDALONE, offset: 40 })
     expect(res.ok).toBe(true)
     if (!res.ok) return
     expect(res.items).toHaveLength(20)
@@ -177,36 +132,81 @@ describe('listMissingFoodCodesV2', () => {
   })
 
   it('mapea 42501 a SCOPE_DENIED', async () => {
-    const { db } = makeDb({ missingSelect: { data: null, error: { code: '42501' } } })
-    const res = await listMissingFoodCodesV2({ db })
+    const { db } = makeDb({ data: null, error: { code: '42501' } })
+    const res = await listMissingFoodCodesV2({ db, scope: STANDALONE })
     expect(res).toMatchObject({ ok: false, code: 'SCOPE_DENIED' })
   })
 
   it('mapea otros errores a CURATION_READ_FAILED', async () => {
-    const { db } = makeDb({ missingSelect: { data: null, error: { code: '500' } } })
-    const res = await listMissingFoodCodesV2({ db })
+    const { db } = makeDb({ data: null, error: { code: '500' } })
+    const res = await listMissingFoodCodesV2({ db, scope: STANDALONE })
     expect(res).toMatchObject({ ok: false, code: 'CURATION_READ_FAILED' })
   })
 })
 
 describe('resolveMissingFoodCodeV2', () => {
-  it('vincula y escribe resolved_food_id + resolved_at', async () => {
-    const { db, log } = makeDb()
-    const res = await resolveMissingFoodCodeV2({ db, missingCodeId: MISSING_ID, resolvedFoodId: FOOD_ID })
+  it('vincula por la RPC scoped pasando codigo, alimento y workspace', async () => {
+    const { db, calls } = makeDb({ data: MISSING_ID, error: null })
+    const res = await resolveMissingFoodCodeV2({
+      db,
+      scope: TEAM,
+      missingCodeId: MISSING_ID,
+      resolvedFoodId: FOOD_ID,
+    })
     expect(res.ok).toBe(true)
-    expect(log.updates[0].resolved_food_id).toBe(FOOD_ID)
-    expect(typeof log.updates[0].resolved_at).toBe('string')
+    expect(calls[0].name).toBe('resolve_missing_food_code_scoped_v2')
+    expect(calls[0].args).toEqual({
+      p_missing_code_id: MISSING_ID,
+      p_food_id: FOOD_ID,
+      p_scope_type: 'team',
+      p_team_id: TEAM_ID,
+      p_org_id: null,
+    })
+  })
+
+  it('sin scope devuelve SCOPE_REQUIRED sin tocar la DB', async () => {
+    const { db, rpc } = makeDb()
+    const res = await resolveMissingFoodCodeV2({
+      db,
+      scope: null,
+      missingCodeId: MISSING_ID,
+      resolvedFoodId: FOOD_ID,
+    })
+    expect(res).toMatchObject({ ok: false, code: 'SCOPE_REQUIRED' })
+    expect(rpc).not.toHaveBeenCalled()
   })
 
   it('rechaza input vacio con INVALID_PAYLOAD', async () => {
-    const { db } = makeDb()
-    const res = await resolveMissingFoodCodeV2({ db, missingCodeId: '', resolvedFoodId: FOOD_ID })
+    const { db, rpc } = makeDb()
+    const res = await resolveMissingFoodCodeV2({
+      db,
+      scope: STANDALONE,
+      missingCodeId: '',
+      resolvedFoodId: FOOD_ID,
+    })
     expect(res).toMatchObject({ ok: false, code: 'INVALID_PAYLOAD' })
+    expect(rpc).not.toHaveBeenCalled()
+  })
+
+  it('P0002 (cero filas actualizadas) => CURATION_ALREADY_RESOLVED, sin exito falso', async () => {
+    const { db } = makeDb({ data: null, error: { code: 'P0002', message: 'not found' } })
+    const res = await resolveMissingFoodCodeV2({
+      db,
+      scope: STANDALONE,
+      missingCodeId: MISSING_ID,
+      resolvedFoodId: FOOD_ID,
+    })
+    expect(res).toMatchObject({ ok: false, code: 'CURATION_ALREADY_RESOLVED' })
   })
 
   it('mapea 42501 a SCOPE_DENIED', async () => {
-    const { db } = makeDb({ missingUpdate: { data: null, error: { code: '42501' } } })
-    const res = await resolveMissingFoodCodeV2({ db, missingCodeId: MISSING_ID, resolvedFoodId: FOOD_ID })
+    const { db } = makeDb({ data: null, error: { code: '42501' } })
+    const res = await resolveMissingFoodCodeV2({
+      db,
+      scope: STANDALONE,
+      missingCodeId: MISSING_ID,
+      resolvedFoodId: FOOD_ID,
+    })
     expect(res).toMatchObject({ ok: false, code: 'SCOPE_DENIED' })
   })
 })
@@ -223,84 +223,69 @@ describe('createCoachFoodForCurationV2', () => {
     fatsG: 2,
   }
 
-  it('crea el alimento con los campos coach-scoped y vincula', async () => {
-    const { db, log } = makeDb({ foodsInsert: { data: { id: FOOD_ID }, error: null } })
-    const res = await createCoachFoodForCurationV2({ db, userId: USER_ID, ...validInput })
+  it('crea y vincula en UNA sola llamada atomica con el scope activo', async () => {
+    const { db, calls } = makeDb({ data: FOOD_ID, error: null })
+    const res = await createCoachFoodForCurationV2({ db, scope: TEAM, ...validInput })
     expect(res.ok).toBe(true)
-    expect(log.inserts).toHaveLength(1)
-    expect(log.inserts[0]).toMatchObject({
-      name: 'Yogur natural',
-      brand: 'Soprole',
-      coach_id: USER_ID,
-      org_id: null,
-      serving_size: 100,
-      serving_unit: 'g',
-      is_liquid: false,
-      category: 'otro',
-      country_code: 'CL',
-      catalog_source: 'coach',
-      verification_status: 'coach_verified',
-      protein_g: 4,
-      carbs_g: 5,
-      fats_g: 2,
+    expect(calls).toHaveLength(1)
+    expect(calls[0].name).toBe('create_food_and_resolve_missing_code_scoped_v2')
+    expect(calls[0].args).toEqual({
+      p_missing_code_id: MISSING_ID,
+      p_name: 'Yogur natural',
+      p_calories: 60,
+      p_protein_g: 4,
+      p_carbs_g: 5,
+      p_fats_g: 2,
+      p_brand: 'Soprole',
+      p_unit: 'g',
+      p_scope_type: 'team',
+      p_team_id: TEAM_ID,
+      p_org_id: null,
     })
-    expect(log.updates[0].resolved_food_id).toBe(FOOD_ID)
-    expect(log.deletes).toHaveLength(0)
   })
 
-  it('is_liquid=true cuando la unidad es ml', async () => {
-    const { db, log } = makeDb()
-    await createCoachFoodForCurationV2({ db, userId: USER_ID, ...validInput, unit: 'ml' })
-    expect(log.inserts[0]).toMatchObject({ serving_unit: 'ml', is_liquid: true })
+  it('propaga la unidad ml', async () => {
+    const { db, calls } = makeDb()
+    await createCoachFoodForCurationV2({ db, scope: STANDALONE, ...validInput, unit: 'ml' })
+    expect(calls[0].args).toMatchObject({ p_unit: 'ml', p_scope_type: 'standalone', p_team_id: null })
   })
 
-  it('idempotencia: reusa un alimento existente por nombre normalizado (sin insertar)', async () => {
-    const { db, log } = makeDb({
-      foodsSelect: { data: [{ id: 'existing-food', name: 'YOGUR NATURAL' }], error: null },
-    })
-    const res = await createCoachFoodForCurationV2({ db, userId: USER_ID, ...validInput })
-    expect(res.ok).toBe(true)
-    expect(log.inserts).toHaveLength(0)
-    expect(log.updates[0].resolved_food_id).toBe('existing-food')
+  it('sin scope devuelve SCOPE_REQUIRED sin tocar la DB', async () => {
+    const { db, rpc } = makeDb()
+    const res = await createCoachFoodForCurationV2({ db, scope: null, ...validInput })
+    expect(res).toMatchObject({ ok: false, code: 'SCOPE_REQUIRED' })
+    expect(rpc).not.toHaveBeenCalled()
   })
 
-  it('compensa borrando el alimento recien creado si el vinculo falla', async () => {
-    const { db, log } = makeDb({
-      foodsInsert: { data: { id: FOOD_ID }, error: null },
-      missingUpdate: { data: null, error: { code: '23503', message: 'fk' } },
-    })
-    const res = await createCoachFoodForCurationV2({ db, userId: USER_ID, ...validInput })
-    expect(res).toMatchObject({ ok: false, code: 'CURATION_RESOLVE_FAILED' })
-    expect(log.deletes).toHaveLength(1)
-    expect(log.deletes[0]).toEqual({ id: FOOD_ID, coach_id: USER_ID })
+  it('P0002 => CURATION_ALREADY_RESOLVED y ninguna compensacion (la RPC es atomica)', async () => {
+    const { db, rpc } = makeDb({ data: null, error: { code: 'P0002', message: 'not found' } })
+    const res = await createCoachFoodForCurationV2({ db, scope: STANDALONE, ...validInput })
+    expect(res).toMatchObject({ ok: false, code: 'CURATION_ALREADY_RESOLVED' })
+    // Una sola llamada: no hay insert previo que compensar con un delete.
+    expect(rpc).toHaveBeenCalledTimes(1)
   })
 
-  it('NO compensa (no borra) si reuso un alimento preexistente y el vinculo falla', async () => {
-    const { db, log } = makeDb({
-      foodsSelect: { data: [{ id: 'existing-food', name: 'Yogur natural' }], error: null },
-      missingUpdate: { data: null, error: { code: '23503', message: 'fk' } },
-    })
-    const res = await createCoachFoodForCurationV2({ db, userId: USER_ID, ...validInput })
-    expect(res).toMatchObject({ ok: false, code: 'CURATION_RESOLVE_FAILED' })
-    expect(log.deletes).toHaveLength(0)
-  })
-
-  it('mapea 42501 del insert a SCOPE_DENIED', async () => {
-    const { db } = makeDb({ foodsInsert: { data: null, error: { code: '42501' } } })
-    const res = await createCoachFoodForCurationV2({ db, userId: USER_ID, ...validInput })
+  it('mapea 42501 a SCOPE_DENIED', async () => {
+    const { db } = makeDb({ data: null, error: { code: '42501' } })
+    const res = await createCoachFoodForCurationV2({ db, scope: STANDALONE, ...validInput })
     expect(res).toMatchObject({ ok: false, code: 'SCOPE_DENIED' })
   })
 
-  it('rechaza macros fuera de rango con INVALID_PAYLOAD', async () => {
-    const { db, log } = makeDb()
-    const res = await createCoachFoodForCurationV2({ db, userId: USER_ID, ...validInput, calories: 3000 })
+  it('rechaza macros fuera de rango con INVALID_PAYLOAD sin tocar la DB', async () => {
+    const { db, rpc } = makeDb()
+    const res = await createCoachFoodForCurationV2({
+      db,
+      scope: STANDALONE,
+      ...validInput,
+      calories: 3000,
+    })
     expect(res).toMatchObject({ ok: false, code: 'INVALID_PAYLOAD' })
-    expect(log.inserts).toHaveLength(0)
+    expect(rpc).not.toHaveBeenCalled()
   })
 
   it('rechaza nombre vacio con INVALID_PAYLOAD', async () => {
     const { db } = makeDb()
-    const res = await createCoachFoodForCurationV2({ db, userId: USER_ID, ...validInput, name: '   ' })
+    const res = await createCoachFoodForCurationV2({ db, scope: STANDALONE, ...validInput, name: '   ' })
     expect(res).toMatchObject({ ok: false, code: 'INVALID_PAYLOAD' })
   })
 })

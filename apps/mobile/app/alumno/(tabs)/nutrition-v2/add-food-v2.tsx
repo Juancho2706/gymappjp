@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Alert, Pressable, ScrollView, Text, TextInput, View } from 'react-native'
-import { useLocalSearchParams, useRouter } from 'expo-router'
+import { Alert, AppState, Pressable, ScrollView, Text, TextInput, View } from 'react-native'
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
 import * as Haptics from 'expo-haptics'
 import { AlertTriangle, ChevronLeft, Search, Star } from 'lucide-react-native'
 import {
@@ -18,7 +18,13 @@ import { ALUMNO_TABBAR_CLEARANCE } from '../../../../components/alumno/AlumnoMob
 import { NutritionDomainOff } from '../../../../components/alumno/nutrition'
 import { useAlumnoScrollHandler } from '../../../../lib/alumno-chrome-scroll'
 import {
+  CATALOG_MACROS_BASIS,
   NutritionTodayReadModelSchema,
+  convertIntakeQuantity,
+  defaultCatalogUnit,
+  intakeUnitLabel,
+  normalizeIntakeUnit,
+  scaleSnapshotMacros,
   sortFoodsByFavoriteFirst,
   type FoodCatalogItem,
   type NutritionTodayReadModel,
@@ -51,8 +57,10 @@ import {
   dupPortionInfo,
   mealSlotOptions,
   portionsCountLabelEs,
+  resolveCatalogSearchState,
   unitOptionsFor,
 } from '../../../../lib/nutrition-v2-add-food.logic'
+import { useLocalDay } from '../../../../lib/nutrition-v2-date'
 import { PORTIONS_COPY } from '../../../../lib/nutrition-portions-copy'
 import { humanizeStudentWriteError } from '../../../../lib/student-access-copy'
 import { decideMealLoggedCelebration, type CelebrationDecision } from '../../../../lib/nutrition-v2-celebrations'
@@ -63,13 +71,10 @@ import { useTheme } from '../../../../context/ThemeContext'
 // queda; la web tendrá su propia tarea para subir live-search al buscador.
 const SEARCH_DEBOUNCE_MS = 300
 
-function todayInSantiago(): string {
-  return new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'America/Santiago',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).format(new Date())
+/** El abort del debounce (o del unmount) NO es un fallo del catálogo. */
+function isAbortError(error: unknown): boolean {
+  if (error instanceof Error) return error.name === 'AbortError'
+  return typeof error === 'object' && error !== null && (error as { name?: unknown }).name === 'AbortError'
 }
 
 export default function NutritionV2AddFoodScreen() {
@@ -89,6 +94,12 @@ export default function NutritionV2AddFoodScreen() {
   const [term, setTerm] = useState('')
   const [results, setResults] = useState<FoodCatalogItem[]>([])
   const [searching, setSearching] = useState(false)
+  // NUT-020: el fallo del live-search tiene estado PROPIO. Antes el `.catch` solo vaciaba los
+  // resultados y el alumno veía "Sin resultados en el catálogo local" con la red caída.
+  const [searchError, setSearchError] = useState(false)
+  // Fuerza el refetch del término ACTUAL sin obligar al alumno a retocar el texto (el efecto
+  // depende de `term`, así que re-escribir lo mismo no dispara nada).
+  const [retryTick, setRetryTick] = useState(0)
   const [selected, setSelected] = useState<FoodCatalogItem | null>(null)
   const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set())
   const [favoriteFoods, setFavoriteFoods] = useState<FoodCatalogItem[]>([])
@@ -111,8 +122,27 @@ export default function NutritionV2AddFoodScreen() {
     setCelebration({ ...decision, nonce: celebrationNonce.current })
   }, [])
 
-  const date = useMemo(todayInSantiago, [])
+  // Día local VIVO (NUT-018): antes se congelaba al montar y un registro a las 00:30 se
+  // persistía con la fecha de ayer. El timer interno cubre la app despierta; `recheckDate` cubre
+  // lo que el timer NO puede ver — el proceso suspendido en background y el regreso a esta
+  // pantalla desde otra (el alumno pudo dejarla abierta y cruzar la medianoche).
+  const [date, recheckDate] = useLocalDay()
   const rolloutEnabled = entitlements.ready && isEnabled('nutritionV2Student')
+
+  // Revalidar el día al recuperar el foco y al volver del background: si cambió, el efecto del
+  // read-model se reencadena solo con la fecha nueva y el registro se persiste en el día correcto.
+  useFocusEffect(
+    useCallback(() => {
+      recheckDate()
+    }, [recheckDate]),
+  )
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') recheckDate()
+    })
+    return () => subscription.remove()
+  }, [recheckDate])
 
   const mountedRef = useRef(true)
   const searchControllerRef = useRef<AbortController | null>(null)
@@ -175,10 +205,13 @@ export default function NutritionV2AddFoodScreen() {
     if (normalized.length < 2) {
       setResults([])
       setSearching(false)
+      // El error no puede quedar pegado al borrar el término (volvemos al hint).
+      setSearchError(false)
       return
     }
     let cancelled = false
     setSearching(true)
+    setSearchError(false)
     const timer = setTimeout(() => {
       searchControllerRef.current?.abort()
       const controller = new AbortController()
@@ -187,8 +220,13 @@ export default function NutritionV2AddFoodScreen() {
         .then((page) => {
           if (!cancelled && mountedRef.current) setResults(page.items)
         })
-        .catch(() => {
-          if (!cancelled && mountedRef.current) setResults([])
+        .catch((error: unknown) => {
+          if (cancelled || !mountedRef.current) return
+          // El aborto lo provoca el PROPIO debounce al tipear rápido: no es un fallo del
+          // catálogo y marcarlo como error haría parpadear "No pudimos consultar" en cada tecla.
+          if (isAbortError(error)) return
+          setResults([])
+          setSearchError(true)
         })
         .finally(() => {
           if (!cancelled && mountedRef.current) setSearching(false)
@@ -198,7 +236,7 @@ export default function NutritionV2AddFoodScreen() {
       cancelled = true
       clearTimeout(timer)
     }
-  }, [selected, term])
+  }, [retryTick, selected, term])
 
   // Favoritos del alumno (misma tabla V1 `client_food_preferences`): ids para la estrella y el
   // orden, y foods hidratados para el acceso rápido "Tus favoritos" con el buscador vacío.
@@ -223,7 +261,8 @@ export default function NutritionV2AddFoodScreen() {
     // Defaults web (TodayExperience.tsx:752-756): cantidad = porción del
     // catálogo, unidad = servingUnit del alimento.
     setQuantity(String(food.servingSize))
-    setUnit(food.servingUnit)
+    // Unidad CANÓNICA (g|ml|un), no el texto libre del catálogo (NUT-017).
+    setUnit(defaultCatalogUnit(food.servingUnit))
   }, [])
 
   // Toggle optimista con rollback: la estrella cambia al instante; si el server falla, revierte
@@ -274,6 +313,13 @@ export default function NutritionV2AddFoodScreen() {
   // Favoritos PRIMERO en los resultados (reordena en cliente, sin tocar la búsqueda).
   const orderedResults = useMemo(() => sortFoodsByFavoriteFirst(results, favoriteIds), [results, favoriteIds])
   const showFavoritesShortcut = term.trim().length < 2 && favoriteFoods.length > 0
+  // Decisión de estado del buscador en un helper PURO (testeable sin render RN) — NUT-020.
+  const searchState = resolveCatalogSearchState({
+    termLength: term.trim().length,
+    searching,
+    error: searchError,
+    resultCount: results.length,
+  })
 
   // Franjas del selector (web slotOptions ← mealSlotOptions(today), TodayExperience.tsx:328).
   const slotOptions = useMemo(() => (todayModel ? mealSlotOptions(todayModel) : []), [todayModel])
@@ -282,6 +328,44 @@ export default function NutritionV2AddFoodScreen() {
   const validQuantity = Number.isFinite(parsedQuantity) && parsedQuantity > 0
   // canSubmit web (TodayExperience.tsx:764-765): cantidad válida + unidad no vacía.
   const canSubmit = selected !== null && validQuantity && unit.trim().length > 0
+
+  /**
+   * Cambio de unidad: CONVIERTE la cantidad (NUT-017). 100 g de un alimento con porción 60 g
+   * pasan a 1,7 un; si la conversión no es representable se limpia el campo en vez de arrastrar
+   * un número que ya no significa lo mismo. Espejo del `changeUnit` web.
+   */
+  const changeUnit = useCallback((nextUnit: string) => {
+    void Haptics.selectionAsync()
+    setUnit((currentUnit) => {
+      const from = normalizeIntakeUnit(currentUnit)
+      const to = normalizeIntakeUnit(nextUnit)
+      if (selected && from && to && from !== to) {
+        const converted = convertIntakeQuantity({
+          quantity: Number(quantity.replace(',', '.')),
+          from,
+          to,
+          servingSize: selected.servingSize,
+        })
+        setQuantity(converted === null ? '' : String(converted))
+      }
+      return nextUnit
+    })
+  }, [quantity, selected])
+
+  /**
+   * Total ESTIMADO con la MISMA función pura que usa el servidor: el x100 de un cambio de unidad
+   * mal hecho se ve ANTES de registrar. RN había retirado el preview por paridad con la web; ahora
+   * la web también lo muestra, así que vuelve por paridad (y por seguridad del dato).
+   */
+  const estimatedTotals = useMemo(() => {
+    if (!selected || !validQuantity) return null
+    return scaleSnapshotMacros(selected, {
+      quantity: parsedQuantity,
+      unit: normalizeIntakeUnit(unit) ?? unit,
+      servingSize: selected.servingSize,
+      basis: CATALOG_MACROS_BASIS,
+    })
+  }, [parsedQuantity, selected, unit, validQuantity])
 
   // Aviso anti-duplicado (no bloqueante, web TodayExperience.tsx:769-772,866-873):
   // el alimento elegido pertenece a un grupo con porciones YA marcadas en la
@@ -311,7 +395,7 @@ export default function NutritionV2AddFoodScreen() {
         timezone: 'America/Santiago',
         foodId: selected.id,
         quantity: parsedQuantity,
-        unit: unit.trim(),
+        unit: normalizeIntakeUnit(unit) ?? unit.trim(),
         mealSlot: mealSlot === '' ? null : mealSlot,
         source: 'offplan',
         captureMethod: 'search',
@@ -325,6 +409,8 @@ export default function NutritionV2AddFoodScreen() {
           fiberG: selected.fiberG,
           servingSize: selected.servingSize,
           servingUnit: selected.servingUnit,
+          // Base declarada: los macros del catálogo son por 100 g/ml (NUT-001).
+          macrosBasis: CATALOG_MACROS_BASIS,
         },
       })
       const outcome = await submitRecordIntake(userId, payload)
@@ -462,7 +548,7 @@ export default function NutritionV2AddFoodScreen() {
             Escanear código
           </NutritionMotionButton>
 
-          {term.trim().length < 2 ? (
+          {searchState === 'hint' ? (
             showFavoritesShortcut ? (
               <View className="gap-2">
                 <View className="flex-row items-center gap-1.5">
@@ -493,11 +579,29 @@ export default function NutritionV2AddFoodScreen() {
                 description="Escribe al menos 2 caracteres."
               />
             )
-          ) : searching ? (
+          ) : searchState === 'searching' ? (
             // Estado propio del live-search (la web muestra pending en el botón
             // "Buscar"): adaptación escrita de la decisión del owner #3.
             <NutritionStatePanel icon="info" title="Buscando…" description="Consultando el catálogo de EVA." />
-          ) : results.length === 0 ? (
+          ) : searchState === 'error' ? (
+            // NUT-020: el fallo del catálogo NO puede parecer "sin resultados". Tono warning
+            // (mismo del aviso del scanner) + reintento explícito del término actual.
+            <NutritionStatePanel
+              icon="info"
+              tone="warning"
+              title="No pudimos consultar el catálogo"
+              description="Revisa tu conexión e intenta de nuevo."
+              action={
+                <NutritionMotionButton
+                  accessibilityLabel="Reintentar búsqueda en el catálogo"
+                  tone="neutral"
+                  onPress={() => setRetryTick((tick) => tick + 1)}
+                >
+                  Reintentar
+                </NutritionMotionButton>
+              }
+            />
+          ) : searchState === 'empty' ? (
             // Título 1:1 web (TodayExperience.tsx:748); la descripción es requerida
             // por el kit RN y se conserva como guía nativa documentada.
             <NutritionStatePanel
@@ -583,14 +687,35 @@ export default function NutritionV2AddFoodScreen() {
                 {unitOptionsFor(selected).map((value) => (
                   <SelectChip
                     key={value}
-                    accessibilityLabel={`Unidad ${value}`}
+                    accessibilityLabel={`Unidad ${intakeUnitLabel(value)}`}
                     active={unit === value}
-                    label={value}
-                    onPress={() => setUnit(value)}
+                    label={intakeUnitLabel(value)}
+                    onPress={() => changeUnit(value)}
                   />
                 ))}
               </View>
             </View>
+
+            {/* Total ESTIMADO (NUT-017): misma función pura que el servidor, así un cambio de
+                unidad mal hecho se ve ANTES de registrar. Paridad con el web. */}
+            {estimatedTotals ? (
+              <View
+                accessibilityLiveRegion="polite"
+                className="mt-3 rounded-control border border-border-subtle bg-surface-sunken px-3 py-2"
+              >
+                <Text className="text-xs font-semibold text-text-muted">Total estimado</Text>
+                <View className="mt-1">
+                  <MacroChipRow
+                    calories={estimatedTotals.calories}
+                    proteinG={estimatedTotals.proteinG}
+                    carbsG={estimatedTotals.carbsG}
+                    fatsG={estimatedTotals.fatsG}
+                    per={`por ${quantity} ${intakeUnitLabel(normalizeIntakeUnit(unit) ?? 'g')}`}
+                    size="sm"
+                  />
+                </View>
+              </View>
+            ) : null}
 
             {/* Selector de franja — web "Franja (opcional)" con "Sin franja" + TODAS
                 las franjas del día (TodayExperience.tsx:851-865), preseleccionada por

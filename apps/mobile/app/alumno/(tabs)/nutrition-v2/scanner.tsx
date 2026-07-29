@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Pressable, ScrollView, Text, TextInput, View } from 'react-native'
-import { useRouter } from 'expo-router'
+import { AppState, Pressable, ScrollView, Text, TextInput, View } from 'react-native'
+import { useFocusEffect, useRouter } from 'expo-router'
 import { CameraView, useCameraPermissions, type BarcodeScanningResult } from 'expo-camera'
 import {
   AlertTriangle,
@@ -26,7 +26,13 @@ import { ALUMNO_TABBAR_CLEARANCE } from '../../../../components/alumno/AlumnoMob
 import { NutritionDomainOff } from '../../../../components/alumno/nutrition'
 import { useAlumnoScrollHandler } from '../../../../lib/alumno-chrome-scroll'
 import {
+  CATALOG_MACROS_BASIS,
   NutritionTodayReadModelSchema,
+  convertIntakeQuantity,
+  defaultCatalogUnit,
+  intakeUnitLabel,
+  normalizeIntakeUnit,
+  scaleSnapshotMacros,
   type FoodBarcodeLookupReadModel,
   type FoodCatalogItem,
 } from '@eva/nutrition-v2'
@@ -61,17 +67,16 @@ import {
 import { decideScannerHitCelebration, type CelebrationDecision } from '../../../../lib/nutrition-v2-celebrations'
 import { claimScannerHitCelebration } from '../../../../lib/nutrition-v2-celebrations.storage'
 import { useTheme } from '../../../../context/ThemeContext'
+import { useLocalDay } from '../../../../lib/nutrition-v2-date'
 
 const BARCODE_TYPES = ['ean13', 'ean8', 'upc_a', 'upc_e'] as const
 
-function todayInSantiago(): string {
-  return new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'America/Santiago',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).format(new Date())
-}
+/**
+ * Ventana anti-rebote tras un lookup FALLIDO. Al despausar la cámara en el `catch` (NUT-021) el
+ * mismo código puede volver a dispararse de inmediato si el producto sigue enfocado; con la
+ * ventana normal de 2 s eso genera un bucle de reintentos mientras dura el corte de red.
+ */
+const FAILED_SCAN_COOLDOWN_MS = 10_000
 
 export default function NutritionV2ScannerScreen() {
   // 4A-01: la pantalla vive bajo (tabs) con la cápsula visible (espejo web:
@@ -105,6 +110,25 @@ export default function NutritionV2ScannerScreen() {
     setCelebration({ ...decision, nonce: celebrationNonce.current })
   }, [])
   const lastScanRef = useRef<{ code: string; at: number } | null>(null)
+  // Día local VIVO (NUT-018): el registro del alimento escaneado usa la MISMA fecha que el Hoy,
+  // sin congelarla al montar (la app puede cruzar la medianoche abierta o en background). El timer
+  // interno cubre la app despierta; `recheckDate` cubre lo que el timer NO ve — proceso suspendido
+  // y regreso a esta pantalla desde otra.
+  const [date, recheckDate] = useLocalDay()
+
+  useFocusEffect(
+    useCallback(() => {
+      recheckDate()
+    }, [recheckDate]),
+  )
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') recheckDate()
+    })
+    return () => subscription.remove()
+  }, [recheckDate])
+
   const rolloutEnabled = entitlements.ready && isEnabled('nutritionV2Student')
   const enabled = rolloutEnabled && entitlements.nutritionEnabled
   const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL ?? ''
@@ -130,7 +154,6 @@ export default function NutritionV2ScannerScreen() {
   useEffect(() => {
     if (!userId || !enabled) return
     let active = true
-    const date = todayInSantiago()
     void getNutritionTodayV2({ date })
       .then((today) => {
         if (active) setRegistration(registrationContextFromToday(today))
@@ -149,7 +172,7 @@ export default function NutritionV2ScannerScreen() {
     return () => {
       active = false
     }
-  }, [enabled, userId])
+  }, [date, enabled, userId])
 
   const lookup = useCallback(async (rawCode: string) => {
     const code = rawCode.replace(/\D/g, '')
@@ -171,6 +194,12 @@ export default function NutritionV2ScannerScreen() {
     } catch {
       // Espejo web FoodScannerClient.tsx:103: fallo del lookup visible, no silencioso.
       setNotice('No se pudo consultar el catálogo local. Revisa tu conexión.')
+      // NUT-021: sin esto la cámara quedaba pausada PARA SIEMPRE. `onReset` solo es alcanzable
+      // desde `ResultCard`, que no se monta cuando el lookup falla (`result` sigue null), así
+      // que el alumno se quedaba mirando "Scanner pausado mientras revisas el resultado" sin
+      // nada que revisar. Se despausa aquí, y el cooldown largo evita el bucle de reintentos.
+      setScannerPaused(false)
+      lastScanRef.current = { code, at: Date.now() + FAILED_SCAN_COOLDOWN_MS - 2_000 }
     } finally {
       setLoading(false)
     }
@@ -611,13 +640,28 @@ function RegisterScannedFoodSheet({
 }) {
   const { theme } = useTheme()
   const [quantity, setQuantity] = useState(String(food.servingSize))
-  const [unit, setUnit] = useState(food.servingUnit)
+  const [unit, setUnit] = useState<string>(defaultCatalogUnit(food.servingUnit))
   const [mealSlot, setMealSlot] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // Mismas opciones de unidad que el diálogo web (FoodScannerClient.tsx:389-391).
+  // Mismas opciones de unidad que el diálogo web: códigos canónicos g|ml|un (NUT-017).
   const unitOptions = useMemo(() => scannedFoodUnitOptions(food), [food])
+
+  /** Cambio de unidad: convierte la cantidad (o la limpia si no es convertible). NUT-017. */
+  const changeUnit = (nextUnit: string) => {
+    const from = normalizeIntakeUnit(unit)
+    const to = normalizeIntakeUnit(nextUnit)
+    setUnit(nextUnit)
+    if (!from || !to || from === to) return
+    const converted = convertIntakeQuantity({
+      quantity: Number(quantity.replace(',', '.')),
+      from,
+      to,
+      servingSize: food.servingSize,
+    })
+    setQuantity(converted === null ? '' : String(converted))
+  }
   const slotOptions = useMemo(
     () => [{ code: '', label: 'Sin franja' }, ...registration.slotOptions],
     [registration.slotOptions],
@@ -625,6 +669,17 @@ function RegisterScannedFoodSheet({
   const quantityNumber = Number(quantity)
   const canSubmit =
     Number.isFinite(quantityNumber) && quantityNumber > 0 && unit.trim().length > 0 && !submitting
+
+  // Total ESTIMADO con la MISMA función pura del servidor (paridad con web y con add-food).
+  const estimatedTotals = useMemo(() => {
+    if (!Number.isFinite(quantityNumber) || quantityNumber <= 0) return null
+    return scaleSnapshotMacros(food, {
+      quantity: quantityNumber,
+      unit: normalizeIntakeUnit(unit) ?? unit,
+      servingSize: food.servingSize,
+      basis: CATALOG_MACROS_BASIS,
+    })
+  }, [food, quantityNumber, unit])
 
   const submit = async () => {
     if (!canSubmit) return
@@ -752,19 +807,38 @@ function RegisterScannedFoodSheet({
                   key={option}
                   accessibilityRole="button"
                   accessibilityState={{ selected: active }}
-                  accessibilityLabel={`Unidad ${option}`}
+                  accessibilityLabel={`Unidad ${intakeUnitLabel(option)}`}
                   onPress={() => {
                     void Haptics.selectionAsync()
-                    setUnit(option)
+                    changeUnit(option)
                   }}
                   className={`min-h-11 items-center justify-center rounded-control border px-3 ${active ? 'border-primary bg-primary/10' : 'border-border-default bg-surface-app'}`}
                 >
-                  <Text className={`text-sm font-semibold ${active ? 'text-primary' : 'text-text-muted'}`}>{option}</Text>
+                  <Text className={`text-sm font-semibold ${active ? 'text-primary' : 'text-text-muted'}`}>{intakeUnitLabel(option)}</Text>
                 </Pressable>
               )
             })}
           </View>
         </View>
+
+        {estimatedTotals ? (
+          <View
+            accessibilityLiveRegion="polite"
+            className="rounded-control border border-border-subtle bg-surface-sunken px-3 py-2"
+          >
+            <Text className="text-xs font-semibold text-text-muted">Total estimado</Text>
+            <View className="mt-1">
+              <MacroChipRow
+                calories={estimatedTotals.calories}
+                proteinG={estimatedTotals.proteinG}
+                carbsG={estimatedTotals.carbsG}
+                fatsG={estimatedTotals.fatsG}
+                per={`por ${quantity} ${intakeUnitLabel(normalizeIntakeUnit(unit) ?? 'g')}`}
+                size="sm"
+              />
+            </View>
+          </View>
+        ) : null}
 
         <View>
           <Text className="mb-1 text-xs font-semibold text-text-muted">Franja (opcional)</Text>

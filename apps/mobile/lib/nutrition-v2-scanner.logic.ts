@@ -18,10 +18,14 @@
  *    offline, `nutrition-v2-intake.ts`), para que reintento/encolado dedupliquen extremo a
  *    extremo. 'pending_verification' NO bloquea: es curación del catálogo, no un permiso.
  */
-import type {
-  FoodCatalogItem,
-  NutritionIntakeMutation,
-  NutritionTodayReadModel,
+import {
+  CATALOG_MACROS_BASIS,
+  catalogUnitOptions,
+  normalizeIntakeUnit,
+  type FoodCatalogItem,
+  type NutritionCatalogUnit,
+  type NutritionIntakeMutation,
+  type NutritionTodayReadModel,
 } from '@eva/nutrition-v2'
 import { buildRecordIntakeMutation } from './nutrition-v2-intake'
 
@@ -84,9 +88,14 @@ export function registrationContextFromToday(
   }
 }
 
-/** Opciones de unidad del diálogo de registro (espejo FoodScannerClient.tsx:389-391). */
-export function scannedFoodUnitOptions(food: Pick<FoodCatalogItem, 'servingUnit'>): string[] {
-  return Array.from(new Set([food.servingUnit, 'g', 'ml', 'porción', 'unidad']))
+/**
+ * Opciones de unidad del diálogo de registro: códigos CANÓNICOS (g|ml según la magnitud del
+ * alimento + un), espejo de la web vía el helper compartido `catalogUnitOptions` (NUT-017).
+ */
+export function scannedFoodUnitOptions(
+  food: Pick<FoodCatalogItem, 'servingUnit'>,
+): readonly NutritionCatalogUnit[] {
+  return catalogUnitOptions(food.servingUnit)
 }
 
 /**
@@ -116,7 +125,7 @@ export function buildScannedFoodIntakeMutation(input: {
     timezone: registration.timezone,
     foodId: food.id,
     quantity: input.quantity,
-    unit: input.unit,
+    unit: normalizeIntakeUnit(input.unit) ?? input.unit,
     mealSlot: input.mealSlotCode,
     source: 'offplan',
     captureMethod: 'barcode',
@@ -132,6 +141,9 @@ export function buildScannedFoodIntakeMutation(input: {
       fiberG: food.fiberG,
       servingSize: food.servingSize,
       servingUnit: food.servingUnit,
+      // Los macros del catálogo son POR 100 g/ml: declararlo evita que el servidor los escale
+      // con la fórmula legada (que dividía por `servingSize` e inflaba el registro — NUT-001).
+      macrosBasis: CATALOG_MACROS_BASIS,
     },
   })
 }

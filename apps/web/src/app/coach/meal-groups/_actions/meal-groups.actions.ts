@@ -8,6 +8,17 @@ import { revalidatePath } from 'next/cache'
 
 const listMealGroupsSchema = z.object({ coachId: z.string().uuid() })
 
+// Cast acotado (mismo patrón que `RpcClient` en `services/nutrition-v2-read.service.ts`): el
+// cliente tipado generado todavía no conoce `save_meal_group_v2` — la crea la migración
+// aditiva `20260728132500_save_meal_group_v2_transactional.sql`. Retirar el cast al regenerar
+// `database.types.ts` con la migración LIVE.
+type MealGroupRpcClient = {
+    rpc: (
+        name: string,
+        args: Record<string, unknown>,
+    ) => Promise<{ data: unknown; error: { message: string; code?: string } | null }>
+}
+
 /**
  * Lectura de los grupos del coach para el builder de planes (tab "Grupos" del
  * FoodSearchDrawer). Reusa el query canónico `getMealGroups` (ya filtra los
@@ -28,63 +39,56 @@ export async function listCoachMealGroups(coachId: string) {
     return getMealGroups(user.id, orgId)
 }
 
-export async function saveMealGroup(groupData: { id?: string, name: string, items: { food_id: string, quantity: number, unit?: string }[] }, coachId: string) {
+/**
+ * NUT-028 — Guardado ATÓMICO del grupo y su composición completa.
+ *
+ * Antes esto eran cuatro round-trips PostgREST (update → delete de todos los items →
+ * insert de los nuevos → select). Si el insert fallaba, el grupo quedaba con cero items y
+ * la composición anterior era irrecuperable; y con `items: []` el delete se ejecutaba, el
+ * insert se saltaba y la action devolvía `success: true` — vaciado silencioso.
+ *
+ * Ahora todo vive en `save_meal_group_v2` (SECURITY INVOKER: la RLS de `saved_meals` /
+ * `saved_meal_items` sigue siendo el guardián real), que además rechaza la lista vacía.
+ * `org_id` se sigue derivando del workspace ACTIVO server-side, nunca del body.
+ */
+// Nota: el antiguo segundo argumento `coachId` desapareció — la identidad del coach la fija
+// `auth.uid()` dentro del RPC (y la RLS), nunca un argumento que llegue del cliente.
+export async function saveMealGroup(
+    groupData: { id?: string, name: string, items: { food_id: string, quantity: number, unit?: string }[] },
+) {
     const supabase = await createClient()
 
+    const name = groupData.name.trim()
+    if (name.length === 0) {
+        return { error: 'Indica un nombre para el grupo.' }
+    }
+    // Espejo cliente del guard del RPC: evita el round-trip y da un mensaje accionable.
+    if (groupData.items.length === 0) {
+        return { error: 'Agrega al menos un alimento al grupo.' }
+    }
+
     try {
-        let groupId = groupData.id
-
-        if (groupId) {
-            const { error: updateError } = await supabase
-                .from('saved_meals')
-                .update({ name: groupData.name })
-                .eq('id', groupId)
-                .eq('coach_id', coachId)
-
-            if (updateError) throw updateError
-
-            const { error: deleteError } = await supabase.from('saved_meal_items').delete().eq('saved_meal_id', groupId)
-            if (deleteError) throw deleteError
-        } else {
+        let orgId: string | null = null
+        if (!groupData.id) {
             // org_id se deriva del workspace ACTIVO server-side (nunca del body): en enterprise el
             // grupo pertenece a la org; en standalone/team es de la librería personal del coach.
             const { data: { user } } = await supabase.auth.getUser()
             const workspace = user ? await resolvePreferredWorkspace(supabase, user.id) : null
-            const orgId = workspace?.type === 'enterprise_coach' ? workspace.orgId : null
-
-            const { data: newGroup, error: insertError } = await supabase
-                .from('saved_meals')
-                .insert({ name: groupData.name, coach_id: coachId, org_id: orgId })
-                .select()
-                .single()
-
-            if (insertError) throw insertError
-            groupId = newGroup.id
+            orgId = workspace?.type === 'enterprise_coach' ? workspace.orgId : null
         }
 
-        if (groupData.items.length > 0) {
-            const itemsToInsert = groupData.items.map(item => ({
-                saved_meal_id: groupId!,
+        const { data: fullGroup, error } = await (supabase as unknown as MealGroupRpcClient).rpc('save_meal_group_v2', {
+            p_name: name,
+            p_items: groupData.items.map((item) => ({
                 food_id: item.food_id,
                 quantity: item.quantity,
-                unit: item.unit || 'g'
-            }))
+                unit: item.unit || 'g',
+            })),
+            p_group_id: groupData.id ?? null,
+            p_org_id: orgId,
+        })
 
-            const { error: itemsError } = await supabase
-                .from('saved_meal_items')
-                .insert(itemsToInsert)
-                .select()
-
-            if (itemsError) throw itemsError
-        }
-
-        const { data: fullGroup, error: fetchError } = await supabase
-            .from('saved_meals')
-            .select(`*, items:saved_meal_items(id, food_id, quantity, unit, food:foods(*))`)
-            .eq('id', groupId)
-            .single()
-
-        if (fetchError) throw fetchError
+        if (error) throw new Error(error.message)
 
         revalidatePath('/coach/meal-groups')
         return { success: true, group: fullGroup }

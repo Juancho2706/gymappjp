@@ -18,6 +18,7 @@ import { nutritionV2CoachScope } from '../../../lib/nutrition-v2.api'
 import { supabase } from '../../../lib/supabase'
 import { searchFoodCatalogV2 } from '../../../lib/nutrition-v2-catalog.api'
 import {
+  CURATION_ALREADY_RESOLVED,
   createCoachFoodForCurationV2,
   formatRelativeDate,
   listMissingFoodCodesV2,
@@ -25,6 +26,7 @@ import {
   type CurationWriteClient,
   type MissingCodeRow,
 } from '../../../lib/nutrition-v2-curation.api'
+import type { NutritionV2CoachScope } from '@eva/nutrition-v2'
 
 /**
  * Cola de curación V2 del coach (RN) — port 1:1 de
@@ -35,8 +37,9 @@ import {
  * una fila del catálogo o CREANDO un alimento coach-scoped y vinculándolo en un paso. Es
  * el ÚNICO alta de alimento custom del coach en V2 (el catálogo `foods.tsx` es read-only).
  *
- * Persistencia directa por supabase-js (`nutrition-v2-curation.api.ts`), RLS = barrera;
- * el gate cliente de superficie es suave y fail-closed (igual que el hub `index.tsx`).
+ * Persistencia por RPC scoped (`nutrition-v2-curation.api.ts`): el workspace activo VIAJA
+ * al servidor en cada operación (bandeja y mutaciones), que revalida y filtra; el gate
+ * cliente de superficie es suave y fail-closed (igual que el hub `index.tsx`).
  *
  * FRONTERA con el tablist del hub (4B-17): además del default export de la ruta,
  * exportamos el cuerpo embebible `CurationQueueScreen({ embedded })`. `embedded=true`
@@ -75,17 +78,6 @@ export function CurationQueueScreen({ embedded = false }: { embedded?: boolean }
   )
   const enabled = entitlements.ready && isEnabled('nutritionV2Coach')
 
-  const [userId, setUserId] = useState<string | null>(null)
-  useEffect(() => {
-    let active = true
-    void supabase.auth.getSession().then(({ data }) => {
-      if (active) setUserId(data.session?.user.id ?? null)
-    })
-    return () => {
-      active = false
-    }
-  }, [])
-
   const [rows, setRows] = useState<MissingCodeRow[]>([])
   const [loading, setLoading] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
@@ -93,14 +85,16 @@ export function CurationQueueScreen({ embedded = false }: { embedded?: boolean }
   const [loadError, setLoadError] = useState<string | null>(null)
   const [feedback, setFeedback] = useState<Feedback | null>(null)
   const [selected, setSelected] = useState<MissingCodeRow | null>(null)
+  // Se incrementa cuando el servidor avisa que la bandeja quedó vieja (código ya resuelto).
+  const [reloadToken, setReloadToken] = useState(0)
 
-  // Carga inicial (offset 0) una vez que el gate cliente abre.
+  // Carga inicial (offset 0) una vez que el gate cliente abre; se repite ante `reloadToken`.
   useEffect(() => {
     if (!enabled || !scope) return
     let active = true
     setLoading(true)
     setLoadError(null)
-    void listMissingFoodCodesV2({ db, offset: 0 }).then((res) => {
+    void listMissingFoodCodesV2({ db, scope, offset: 0 }).then((res) => {
       if (!active) return
       if (!res.ok) {
         setLoadError(res.error)
@@ -114,12 +108,12 @@ export function CurationQueueScreen({ embedded = false }: { embedded?: boolean }
     return () => {
       active = false
     }
-  }, [enabled, scope])
+  }, [enabled, scope, reloadToken])
 
   const loadMore = useCallback(async () => {
     if (nextOffset == null || loadingMore) return
     setLoadingMore(true)
-    const res = await listMissingFoodCodesV2({ db, offset: nextOffset })
+    const res = await listMissingFoodCodesV2({ db, scope, offset: nextOffset })
     if (!res.ok) {
       setFeedback({ kind: 'error', text: res.error })
       setLoadingMore(false)
@@ -128,7 +122,7 @@ export function CurationQueueScreen({ embedded = false }: { embedded?: boolean }
     setRows((prev) => [...prev, ...res.items])
     setNextOffset(res.nextOffset)
     setLoadingMore(false)
-  }, [nextOffset, loadingMore])
+  }, [nextOffset, loadingMore, scope])
 
   // Éxito de resolución: quita la fila (paridad exacta con web `setRows(filter)`), cierra
   // la hoja y muestra confirmación inline (RN no tiene toast). Copy verbatim.
@@ -136,6 +130,14 @@ export function CurationQueueScreen({ embedded = false }: { embedded?: boolean }
     setRows((prev) => prev.filter((row) => row.id !== id))
     setSelected(null)
     setFeedback({ kind: 'success', text: message })
+  }, [])
+
+  // El código ya estaba resuelto (o no es de este workspace): cerramos la hoja, avisamos sin
+  // fingir éxito y recargamos la bandeja para que la fila desaparezca de verdad.
+  const handleStale = useCallback((message: string) => {
+    setSelected(null)
+    setFeedback({ kind: 'error', text: message })
+    setReloadToken((token) => token + 1)
   }, [])
 
   // ── Estados (copys verbatim del web `CurationQueue.tsx:76-99`) ──
@@ -258,9 +260,10 @@ export function CurationQueueScreen({ embedded = false }: { embedded?: boolean }
     <ResolveSheet
       open={selected != null}
       row={selected}
-      userId={userId}
+      scope={scope}
       onClose={() => setSelected(null)}
       onResolved={handleResolved}
+      onStale={handleStale}
     />
   )
 
@@ -329,15 +332,17 @@ function FeedbackBanner({
 function ResolveSheet({
   open,
   row,
-  userId,
+  scope,
   onClose,
   onResolved,
+  onStale,
 }: {
   open: boolean
   row: MissingCodeRow | null
-  userId: string | null
+  scope: NutritionV2CoachScope | null
   onClose: () => void
   onResolved: (id: string, message: string) => void
+  onStale: (message: string) => void
 }) {
   const { theme } = useTheme()
   // Conservamos la última fila (en estado, no ref-en-render) para pintar el contenido
@@ -365,9 +370,18 @@ function ResolveSheet({
     if (busy || !shown) return
     setBusy(true)
     setError(null)
-    const res = await resolveMissingFoodCodeV2({ db, missingCodeId: shown.id, resolvedFoodId: food.id })
+    const res = await resolveMissingFoodCodeV2({
+      db,
+      scope,
+      missingCodeId: shown.id,
+      resolvedFoodId: food.id,
+    })
     setBusy(false)
     if (!res.ok) {
+      if (res.code === CURATION_ALREADY_RESOLVED) {
+        onStale(res.error)
+        return
+      }
       setError(res.error)
       return
     }
@@ -384,20 +398,20 @@ function ResolveSheet({
     fatsG: number
   }) {
     if (busy || !shown) return
-    if (!userId) {
-      setError('No se pudo identificar tu sesion. Reintenta.')
-      return
-    }
     setBusy(true)
     setError(null)
     const res = await createCoachFoodForCurationV2({
       db,
-      userId,
+      scope,
       missingCodeId: shown.id,
       ...input,
     })
     setBusy(false)
     if (!res.ok) {
+      if (res.code === CURATION_ALREADY_RESOLVED) {
+        onStale(res.error)
+        return
+      }
       setError(res.error)
       return
     }

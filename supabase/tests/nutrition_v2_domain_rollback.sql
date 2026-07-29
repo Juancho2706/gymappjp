@@ -3,7 +3,8 @@
 -- Safe by construction:
 --   * selects one existing standalone coach/client scope;
 --   * creates only V2 records with generated identifiers;
---   * uses the far-future date 2099-12-31;
+--   * uses current_date (NO una fecha lejana: desde NUT-016 el snapshot diario solo
+--     acepta fechas dentro de [hoy-400, hoy+1]);
 --   * finishes with ROLLBACK;
 --   * raises on any failed security, idempotency or history assertion.
 --
@@ -61,7 +62,7 @@ select
   gen_random_uuid(),
   gen_random_uuid(),
   gen_random_uuid(),
-  date '2099-12-31'
+  current_date
 from public.clients c
 where c.org_id is null
   and c.team_id is null
@@ -605,7 +606,7 @@ begin
   entry_id := public.record_nutrition_intake_v2(
     ctx.client_id,
     ctx.test_date,
-    timestamptz '2099-12-31 16:00:00-03',
+    (ctx.test_date + time '16:00') at time zone 'America/Santiago',
     'America/Santiago',
     null,
     'Yogur de prueba',
@@ -623,7 +624,7 @@ begin
   repeated_entry_id := public.record_nutrition_intake_v2(
     ctx.client_id,
     ctx.test_date,
-    timestamptz '2099-12-31 16:00:00-03',
+    (ctx.test_date + time '16:00') at time zone 'America/Santiago',
     'America/Santiago',
     null,
     'Yogur de prueba',
@@ -656,7 +657,7 @@ begin
     'Cantidad corregida en smoke test',
     ctx.client_id,
     ctx.test_date,
-    timestamptz '2099-12-31 16:05:00-03',
+    (ctx.test_date + time '16:05') at time zone 'America/Santiago',
     'America/Santiago',
     null,
     'Yogur de prueba',
@@ -731,7 +732,7 @@ begin
   begin
     update public.nutrition_intake_entries
     set idempotency_key = 'promote:rollback-smoke:001',
-        occurred_at = timestamptz '2099-12-31 18:00:00-03',
+        occurred_at = (ctx.test_date + time '18:00') at time zone 'America/Santiago',
         timezone = 'America/Santiago'
     where id = legacy_entry_id;
     raise exception 'SMOKE FALLO: promocion V1->V2 permitida (guard sin parchear)';

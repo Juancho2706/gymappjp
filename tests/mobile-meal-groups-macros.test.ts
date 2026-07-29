@@ -45,11 +45,22 @@ const H = vi.hoisted(() => {
     }
     return builder
   }
+  // NUT-028: saveMealGroup ya no inserta por PostgREST — llama al RPC transaccional
+  // `save_meal_group_v2`. Capturamos sus args para las aserciones de cantidad cruda.
+  const rpcCapture: { fn: string | null; args: any } = { fn: null, args: null }
   const supabase = {
     auth: { getUser: () => Promise.resolve({ data: { user: { id: 'coach1' } } }) },
     from: (table: string) => makeBuilder(table),
+    rpc(fn: string, args: any) {
+      rpcCapture.fn = fn
+      rpcCapture.args = args
+      return Promise.resolve({
+        data: { id: 'g1', name: args?.p_name ?? 'Grupo', org_id: args?.p_org_id ?? null, items: args?.p_items ?? [] },
+        error: null,
+      })
+    },
   }
-  return { supabase, capture }
+  return { supabase, capture, rpcCapture }
 })
 
 vi.mock('../apps/mobile/lib/supabase', () => ({ supabase: H.supabase }))
@@ -144,15 +155,17 @@ describe('mealGroupTotals', () => {
 
 describe('saveMealGroup (cantidad decimal)', () => {
   it('persiste la cantidad cruda 0.5 sin redondear (paridad web)', async () => {
-    H.capture.items = null
+    H.rpcCapture.fn = null
+    H.rpcCapture.args = null
     const res = await saveMealGroup({
       name: 'Test decimal',
       items: [{ food_id: 'egg', quantity: 0.5, unit: 'un' }],
     })
     expect(res.ok).toBe(true)
-    expect(H.capture.items).not.toBeNull()
-    expect(H.capture.items![0].quantity).toBe(0.5)
+    // NUT-028: la escritura viaja entera en p_items del RPC transaccional.
+    expect(H.rpcCapture.fn).toBe('save_meal_group_v2')
+    expect(H.rpcCapture.args.p_items[0].quantity).toBe(0.5)
     // NO el 1 (o 0) que dejaba el `Math.round` previo.
-    expect(H.capture.items![0].quantity).not.toBe(1)
+    expect(H.rpcCapture.args.p_items[0].quantity).not.toBe(1)
   })
 })

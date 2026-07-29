@@ -57,11 +57,13 @@ class MockApiError extends Error {
 
 const recordNutritionIntakeV2Mock = vi.fn()
 const correctNutritionIntakeV2Mock = vi.fn()
+const voidNutritionIntakeV2Mock = vi.fn()
 
 vi.mock('../apps/mobile/lib/api', () => ({ ApiError: MockApiError }))
 vi.mock('../apps/mobile/lib/nutrition-v2.api', () => ({
   recordNutritionIntakeV2: recordNutritionIntakeV2Mock,
   correctNutritionIntakeV2: correctNutritionIntakeV2Mock,
+  voidNutritionIntakeV2: voidNutritionIntakeV2Mock,
 }))
 
 const {
@@ -121,6 +123,7 @@ beforeEach(() => {
   asyncStore.clear()
   recordNutritionIntakeV2Mock.mockReset()
   correctNutritionIntakeV2Mock.mockReset()
+  voidNutritionIntakeV2Mock.mockReset()
   netInfoFetchMock.mockReset()
   vi.useFakeTimers()
   vi.setSystemTime(new Date('2026-07-14T12:00:00.000Z'))
@@ -436,5 +439,58 @@ describe('clearNutritionV2QueueForUser - borra SOLO lo del usuario', () => {
 
     expect((await getNutritionV2QueueStatus(USER_A)).pending).toBe(0)
     expect((await getNutritionV2QueueStatus(USER_B)).pending).toBe(1)
+  })
+})
+
+/**
+ * NUT-010 — el RETIRO terminal viaja por la cola como su propia accion.
+ *
+ * Convive con `correct` a proposito: los retiros encolados ANTES del deploy siguen siendo
+ * correcciones de contribucion cero y tienen que drenar por su camino original al menos un ciclo
+ * de release. Por eso el drenaje despacha por `action` en vez de asumir "todo lo que no es record
+ * es correct".
+ */
+describe('accion void en la cola (NUT-010)', () => {
+  const VOID_PAYLOAD = {
+    clientId: '11111111-1111-4111-8111-111111111111',
+    entryId: '99999999-9999-4999-8999-999999999999',
+    reason: 'lo registre por error',
+    idempotencyKey: null,
+  }
+
+  it('drena por voidNutritionIntakeV2, no por el camino de correccion', async () => {
+    online()
+    await enqueueNutritionV2Mutation({ action: 'void', userId: USER_A, payload: VOID_PAYLOAD })
+    voidNutritionIntakeV2Mock.mockResolvedValueOnce({ ok: true, id: VOID_PAYLOAD.entryId, action: 'void' })
+
+    const result = await flushNutritionV2MutationQueue(USER_A)
+
+    expect(result.sent).toBe(1)
+    expect(voidNutritionIntakeV2Mock).toHaveBeenCalledTimes(1)
+    expect(correctNutritionIntakeV2Mock).not.toHaveBeenCalled()
+    expect((await getNutritionV2QueueStatus(USER_A)).pending).toBe(0)
+  })
+
+  it('sin idempotencyKey sintetiza una estable por entry: dos taps de "Retirar" deduplican', async () => {
+    const first = await enqueueNutritionV2Mutation({ action: 'void', userId: USER_A, payload: VOID_PAYLOAD })
+    const second = await enqueueNutritionV2Mutation({ action: 'void', userId: USER_A, payload: VOID_PAYLOAD })
+
+    expect(first.deduplicated).toBe(false)
+    expect(second.deduplicated).toBe(true)
+    expect((await getNutritionV2QueueStatus(USER_A)).pending).toBe(1)
+  })
+
+  it('un 403 del guard de permisos es TERMINAL: no gasta 8 reintentos contra una regla del coach', async () => {
+    online()
+    await enqueueNutritionV2Mutation({ action: 'record', userId: USER_A, payload: mutation({ idempotencyKey: 'perm-denied' }) })
+    recordNutritionIntakeV2Mock.mockRejectedValueOnce(
+      new MockApiError('denied', 403, 'PLAN_PERMISSION_DENIED'),
+    )
+
+    const result = await flushNutritionV2MutationQueue(USER_A)
+
+    expect(result.terminal).toBe(1)
+    expect(result.pending).toBe(0)
+    expect(recordNutritionIntakeV2Mock).toHaveBeenCalledTimes(1)
   })
 })

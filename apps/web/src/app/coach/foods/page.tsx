@@ -4,9 +4,11 @@ import { ArrowLeft, Apple } from 'lucide-react'
 import { getFoodLibrary } from '@/app/coach/nutrition-plans/_data/nutrition-coach.queries'
 import { FoodBrowser } from './_components/FoodBrowser'
 import { AddFoodSheet } from './_components/AddFoodSheet'
+import { ClassifyFoodSheet } from './_components/ClassifyFoodSheet'
 import { getCoachFoodsUser } from './_data/foods.queries'
 import { createClient } from '@/lib/supabase/server'
 import { resolveCoachScope } from '@/services/auth/coach-scope.service'
+import { getExchangeGroups } from '@/app/coach/nutrition-plans/_data/exchange.queries'
 
 export default async function CoachFoodsPage() {
   const user = await getCoachFoodsUser()
@@ -16,7 +18,18 @@ export default async function CoachFoodsPage() {
   // Fase 2C: scope foods to the active workspace (standalone vs org).
   const scope = await resolveCoachScope(await createClient(), coachId)
   const orgId = scope.ok ? scope.orgId : null
+  const activeTeamId = scope.ok ? scope.activeTeamId : null
   const { foods, total } = await getFoodLibrary(coachId, { page: 0, pageSize: 120, orgId })
+
+  // Grupos de porciones VISIBLES (system + propios + team activo) para el bloque opcional
+  // "Equivalencia de porciones" del alta (P-B). Se resuelve server-side: los services de
+  // intercambios jamás entran al bundle cliente.
+  const exchangeGroups = (await getExchangeGroups(coachId, { orgId, activeTeamId })).map((group) => ({
+    id: group.id,
+    code: group.code,
+    name: group.name,
+    isSystem: group.isSystem,
+  }))
 
   return (
     <div className="max-w-6xl mx-auto animate-fade-in mb-24 md:mb-0 px-4 md:px-6 space-y-8">
@@ -42,7 +55,10 @@ export default async function CoachFoodsPage() {
             </p>
           </div>
         </div>
-        <AddFoodSheet coachId={coachId} />
+        <div className="flex flex-col sm:flex-row gap-2 shrink-0">
+          <ClassifyFoodSheet coachId={coachId} exchangeGroups={exchangeGroups} />
+          <AddFoodSheet coachId={coachId} exchangeGroups={exchangeGroups} />
+        </div>
       </div>
 
       <FoodBrowser coachId={coachId} initialFoods={foods} totalFoods={total} />

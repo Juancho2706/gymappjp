@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { normalizeIntakeUnit } from './intake-units'
 
 export const NutritionStrategySchema = z.enum(['structured', 'flexible', 'hybrid'])
 export const NutritionPlanStatusSchema = z.enum(['draft', 'published', 'superseded', 'archived'])
@@ -22,6 +23,28 @@ export const NutritionIntakeSourceSchema = z.enum([
   'manual',
   'legacy',
 ])
+
+/** Base declarada de los macros congelados en un registro (NUT-001). */
+export const NutritionMacrosBasisSchema = z.enum(['per_100', 'per_serving'])
+
+/**
+ * Unidad de una ESCRITURA NUEVA de intake (NUT-017). Acepta los sinonimos historicos
+ * ('unidad', 'gr', 'porcion', …) para no romper superficies aun no migradas, pero rechaza
+ * cualquier cosa fuera del vocabulario del factor: sin esto, el `z.string().max(32)` anterior
+ * dejaba pasar "100 unidad" y persistia `100 x macros` (x100 silencioso, sin tope server-side).
+ *
+ * NO transforma: el tipo de salida sigue siendo `string` para no romper los constructores
+ * literales de payload de web/RN. La normalizacion a codigo canonico la hace la UI con
+ * `normalizeIntakeUnit`.
+ */
+export const NutritionIntakeUnitSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(32)
+  .refine((value) => normalizeIntakeUnit(value) !== null, {
+    message: 'Unidad no soportada. Usa gramos (g), mililitros (ml), unidad o porción.',
+  })
 
 export const NutritionMacroTargetsSchema = z.object({
   calories: z.number().nonnegative().nullable().default(null),
@@ -194,7 +217,7 @@ export const NutritionIntakeMutationSchema = z
     foodId: z.string().uuid().nullable().default(null),
     customName: z.string().trim().min(1).max(180).nullable().default(null),
     quantity: z.number().positive(),
-    unit: z.string().trim().min(1).max(32),
+    unit: NutritionIntakeUnitSchema,
     mealSlot: z.string().trim().max(64).nullable().default(null),
     source: NutritionIntakeSourceSchema,
     captureMethod: NutritionCaptureMethodSchema,
@@ -213,6 +236,11 @@ export const NutritionIntakeMutationSchema = z
       fiberG: z.number().nonnegative().nullable().default(null),
       servingSize: z.number().positive().nullable().default(null),
       servingUnit: z.string().trim().max(32).nullable().default(null),
+      // Base declarada de los macros (NUT-001, transporte doble con p_snapshot_macros_basis).
+      // `.optional()` SIN default: un payload que no la declara conserva la formula LEGADA en el
+      // servidor (`snapshot_macros_basis` queda NULL). Un re-parse (route mobile / cola offline)
+      // nunca debe inventarla ni stripearla — ausente queda ausente.
+      macrosBasis: NutritionMacrosBasisSchema.optional(),
       // Porciones (SPEC R4, transporte B1): viajan DENTRO del snapshot hasta el RPC,
       // que las extrae a columnas. `.optional()` (sin default): un re-parse del
       // mutation (route mobile / cola offline) NUNCA debe stripearlas ni inventarlas
@@ -236,10 +264,74 @@ export const NutritionIntakeMutationSchema = z
     }
   })
 
-export const NutritionIntakeCorrectionSchema = NutritionIntakeMutationSchema.extend({
+/**
+ * Correccion / retiro de un registro EXISTENTE.
+ *
+ * `unit` vuelve a ser permisiva a proposito (whitelist SOLO en escrituras nuevas, riesgo (b) de
+ * la verificacion G1): una correccion copia la unidad de la fila original, y hay filas historicas
+ * con unidades libres. Validarla aqui dejaria al alumno sin poder editar ni RETIRAR esos
+ * registros — un fix que crea un lockout peor que el bug que cierra.
+ *
+ * `safeExtend` (no `extend`): Zod 4 prohibe SOBRESCRIBIR llaves con `.extend()` sobre un schema
+ * con refinements ("Cannot overwrite keys on object schemas containing refinements"). El
+ * superRefine de la base (alimento o nombre obligatorio) se conserva igual.
+ */
+export const NutritionIntakeCorrectionSchema = NutritionIntakeMutationSchema.safeExtend({
+  unit: z.string().trim().min(1).max(32),
   correctsEntryId: z.string().uuid(),
   correctionReason: z.string().trim().min(3).max(1000),
 })
+
+/**
+ * "Retirar" un registro (NUT-010, opcion A: estado TERMINAL `voided`).
+ *
+ * Antes el retiro se modelaba como una CORRECCION de contribucion cero: el original quedaba
+ * `corrected` y nacia un reemplazo ACTIVO con macros en 0 que heredaba `prescription_item_id`.
+ * Ese reemplazo seguia contando como "consumido" para el bulk-mark, mantenia la cobertura de
+ * porciones DERIVADA, inflaba `entryCount` y ademas era el mismo retirable — una cadena de
+ * fantasmas sin estado terminal. Ahora hay un RPC dedicado (`void_nutrition_intake_v2`) que
+ * marca la fila `voided` SIN insertar nada: los read models ya filtran `entry_status = 'active'`,
+ * asi que desaparece de consumido, de las derivadas y del conteo de una sola vez.
+ *
+ * Por eso el payload es MINIMO: el servidor no necesita el snapshot ni la cantidad para retirar.
+ * `idempotencyKey` es opcional (solo alimenta la auditoria); el retiro es idempotente por estado
+ * (`already_voided` devuelve el mismo id).
+ */
+export const NutritionIntakeVoidSchema = z.object({
+  clientId: z.string().uuid(),
+  entryId: z.string().uuid(),
+  reason: z.string().trim().min(3).max(1000),
+  idempotencyKey: z.string().trim().min(8).max(200).nullable().default(null),
+})
+
+/**
+ * Mensaje canonico que levanta el guard de permisos del alumno dentro de
+ * `record_/correct_/void_nutrition_intake_v2` (errcode 42501). El sufijo `:<regla>` identifica
+ * cual permiso nego la escritura. Se compara por PREFIJO para no acoplarse al sufijo.
+ *
+ * NO se mapea a `SCOPE_DENIED`: ese codigo ya esta sobrecargado con `coach_account_paused` y con
+ * el scope real (fila de otro alumno). Un permiso del plan denegado NO es un fallo de scope y NO
+ * es reintentable: la cola offline debe descartarlo, no gastar 8 intentos.
+ */
+export const NUTRITION_V2_PERMISSION_DENIED = 'nutrition_v2_permission_denied'
+
+/** Reglas del plan que pueden negar una escritura del alumno (sufijo del mensaje del RPC). */
+export const NUTRITION_V2_PERMISSION_RULES = [
+  'free_registration',
+  'quantity_adjustment',
+  'quantity_adjustment_range',
+  'meal_slot_move',
+] as const
+
+export type NutritionV2PermissionRule = (typeof NUTRITION_V2_PERMISSION_RULES)[number]
+
+/** Codigo tipado que devuelven las server actions y la API movil cuando el plan niega el gesto. */
+export const NUTRITION_V2_PERMISSION_DENIED_CODE = 'PLAN_PERMISSION_DENIED'
+
+/** True si el error del RPC es un permiso del plan denegado (no un scope ni una pausa del coach). */
+export function isNutritionV2PermissionDenied(message: string | null | undefined): boolean {
+  return typeof message === 'string' && message.includes(NUTRITION_V2_PERMISSION_DENIED)
+}
 
 export const NutritionDaySnapshotSchema = z.object({
   id: z.string().uuid(),
@@ -279,6 +371,7 @@ export type NutritionStudentPermissions = z.infer<typeof NutritionStudentPermiss
 export type NutritionPlanDraft = z.infer<typeof NutritionPlanDraftSchema>
 export type NutritionIntakeMutation = z.infer<typeof NutritionIntakeMutationSchema>
 export type NutritionIntakeCorrection = z.infer<typeof NutritionIntakeCorrectionSchema>
+export type NutritionIntakeVoid = z.infer<typeof NutritionIntakeVoidSchema>
 export type NutritionDaySnapshot = z.infer<typeof NutritionDaySnapshotSchema>
 export type NutritionLegacyHistoryItem = z.infer<typeof NutritionLegacyHistoryItemSchema>
 

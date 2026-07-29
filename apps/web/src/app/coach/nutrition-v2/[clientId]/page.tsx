@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { CheckCircle2, Info, LockKeyhole, Plus } from 'lucide-react'
 import {
+  DayVariantWeekStrip,
   MacroBudget,
   MacroChipRow,
   NutritionCard,
@@ -10,13 +11,19 @@ import {
   PlanVersionBadge,
   StrategyBadge,
 } from '@/components/nutrition-v2'
-import { createNutritionMacroValue, describeLegacyHistoryDay } from '@eva/nutrition-v2'
+import {
+  createNutritionMacroValue,
+  describeLegacyHistoryDay,
+  formatNutritionCalories,
+  resolveNutritionDayVariantForDate,
+  sortNutritionDayVariantsForDisplay,
+} from '@eva/nutrition-v2'
 import { formatDateDdMmYyyySantiago, getTodayInSantiago } from '@/lib/date-utils'
 import { getNutritionPlansPageCoach } from '../../nutrition-plans/_data/nutrition-page.queries'
 import { getPreferredWorkspaceForRender } from '@/services/auth/workspace-render-cache'
 import {
   getNutritionClientDetailV2ForWeb,
-  getNutritionCoachHubV2ForWeb,
+  getNutritionCoachRosterV2ForWeb,
   getNutritionConversionLinkForWeb,
   nutritionV2CoachScopeFromWorkspace,
 } from '@/services/nutrition-v2-read.service'
@@ -32,7 +39,10 @@ import { AssignPlanToClientsDialog, type AssignRosterEntry } from '../_component
 import { ArchivePlanButton } from '../_components/ArchivePlanButton'
 import { ConvertedPlanBanner } from '../_components/ConvertedPlanBanner'
 import { canAssignSourcePlan } from '../_lib/assign-plan'
-import { fetchItemSubstitutionsForVersion } from '../_data/item-substitutions.data'
+import {
+  fetchItemSubstitutionsForVersion,
+  type ItemSubstitutionsLoad,
+} from '../_data/item-substitutions.data'
 import { QuickEditEntry } from './_quick-edit/QuickEditEntry'
 import { PortionDayCoverageCard } from './PortionDayCoverageCard'
 
@@ -87,30 +97,21 @@ export default async function CoachNutritionV2ClientPage({ params, searchParams 
     : filterHistoryDaysToBaseWindow(detail.recentDays, today)
 
   // Roster del workspace para "Asignar a otros alumnos": solo se carga si hay plan publicado.
-  // Pagina el hub scoped (keyset por updatedAt) hasta un tope y excluye al alumno fuente.
+  // NUT-026: primera pagina alfabetica server-side (antes: bucle de 8 paginas x 50 sobre el hub
+  // scoped, tope silencioso de 399 destinos y busqueda client-side sobre el array truncado).
+  // El dialogo busca en TODO el workspace via `searchCoachRosterAction`.
   let assignRoster: AssignRosterEntry[] = []
+  let assignRosterHasMore = false
   if (canAssign) {
-    const collected: AssignRosterEntry[] = []
-    let cursor: { updatedAt: string; clientId: string } | null = null
-    for (let page = 0; page < 8; page += 1) {
-      const hub = await getNutritionCoachHubV2ForWeb({
-        scope,
-        cursorUpdatedAt: cursor?.updatedAt ?? null,
-        cursorClientId: cursor?.clientId ?? null,
-        pageSize: 50,
-      })
-      for (const item of hub.items) {
-        if (item.clientId === clientId) continue
-        collected.push({
-          clientId: item.clientId,
-          clientName: item.clientName,
-          hasPlan: item.planStatus === 'published',
-        })
-      }
-      if (!hub.hasMore || !hub.nextCursor) break
-      cursor = hub.nextCursor
-    }
-    assignRoster = collected
+    const rosterPage = await getNutritionCoachRosterV2ForWeb({ scope, pageSize: 50 })
+    assignRoster = rosterPage.items
+      .filter((item) => item.clientId !== clientId)
+      .map((item) => ({
+        clientId: item.clientId,
+        clientName: item.clientName ?? 'Alumno',
+        hasPlan: item.planStatus === 'published',
+      }))
+    assignRosterHasMore = rosterPage.hasMore
   }
 
   // El plan vigente (`detail.plan.plan`) es la senal en vivo del plan activo/publicado. El bloque
@@ -124,6 +125,18 @@ export default async function CoachNutritionV2ClientPage({ params, searchParams 
       ? 'El plan vigente ya está publicado. El registro de hoy todavía no tiene metas asignadas; desde mañana se aplican las del nuevo plan.'
       : 'El plan vigente ya está publicado. Los registros de hoy siguen mostrando el plan anterior; desde mañana se usa el nuevo.'
 
+  // FD3 (multi-dia): las cards de "Estructura prescrita" se ordenan con el dia base primero y
+  // despues los dias especificos de lunes a domingo, y cada una muestra su tira Lu-Do. La card
+  // que aplica hoy se marca solo si el registro del dia ya es del plan vigente (durante el lag
+  // el snapshot es de otra version, nombrar la variante nueva seria mentir). Cero seleccion nueva:
+  // se replica la regla que el snapshot ya congelo.
+  const orderedVariants = sortNutritionDayVariantsForDisplay(detail.plan.dayVariants)
+  const multiDayPlan = detail.plan.dayVariants.length > 1
+  const todayVariant =
+    multiDayPlan && !showTodayPlanLag
+      ? resolveNutritionDayVariantForDate(detail.plan.dayVariants, today)
+      : null
+
   // Banner "plan convertido" (SPEC AC8): solo se consulta cuando hay plan vigente, y solo se
   // renderiza si existe link (`nutrition_v2_conversion_links`). Sin plan o sin link → cero query
   // extra visible / cero render, el read degrada a `null` si la tabla no esta disponible.
@@ -134,10 +147,14 @@ export default async function CoachNutritionV2ClientPage({ params, searchParams 
 
   // Carry-over F-02: reemplazos autorizados congelados de la version vigente. El read-model
   // hot-path no los transporta; se leen aparte (RLS-scoped) y se inyectan en el quick-edit para
-  // que republicar NO los borre. Solo con plan vigente (el entry solo se monta ahi); fail-soft a [].
-  const itemSubstitutions = hasPlan
+  // que republicar NO los borre. Solo con plan vigente (el entry solo se monta ahi).
+  // NUT-008: un fallo de lectura NO degrada a [] — viaja como `substitutionsLoadFailed` y el
+  // quick-edit bloquea "Publicar" (republicar con el mapa vacio borraria los reemplazos).
+  const substitutionsLoad: ItemSubstitutionsLoad = hasPlan
     ? await fetchItemSubstitutionsForVersion(detail.plan.plan?.versionId)
-    : []
+    : { ok: true, rows: [] }
+  const itemSubstitutions = substitutionsLoad.ok ? substitutionsLoad.rows : []
+  const substitutionsLoadFailed = !substitutionsLoad.ok
 
   return (
     // Header movil compacto: flecha (vuelve al Centro) + eyebrow/nombre + UNA CTA primaria.
@@ -156,7 +173,9 @@ export default async function CoachNutritionV2ClientPage({ params, searchParams 
             clientName={detail.client.fullName}
             planModel={detail.plan}
             itemSubstitutions={itemSubstitutions}
+            substitutionsLoadFailed={substitutionsLoadFailed}
             today={today}
+            hasNutritionPro={nutritionProEnabled}
           />
         ) : (
           <Link
@@ -168,18 +187,13 @@ export default async function CoachNutritionV2ClientPage({ params, searchParams 
           </Link>
         )
       }
-      aside={
-        <NutritionCard tone="neutral">
-          <div className="flex items-center gap-2">
-            <LockKeyhole className="h-4 w-4 text-primary" />
-            <h2 className="font-display text-base font-semibold text-strong">Nota profesional</h2>
-          </div>
-          <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-body">
-            {detail.privateNote?.note || 'Sin nota privada para la version vigente.'}
-          </p>
-          <p className="mt-3 text-xs text-muted">El alumno no recibe esta informacion.</p>
-        </NutritionCard>
-      }
+      // NUT-007 (opcion A): el aside "Nota profesional" se retiro. Leia
+      // `nutrition_plan_private_notes_v2`, una tabla que NINGUN camino de escritura puebla
+      // (no hay input de nota privada en el builder, en RN ni en quick-edit), asi que el
+      // panel mostraba el fallback "Sin nota privada" de forma permanente para todo coach.
+      // Las notas privadas del coach por alumno viven hoy en la ficha del alumno
+      // (`nutrition_private_notes`, CoachPrivateNotesPanel). Reponer una nota clinica POR
+      // VERSION exige SPEC + UI de escritura + copy-forward al republicar (opcion B).
     >
       {published ? (
         <div className="mb-5 flex items-center gap-2 rounded-control border border-emerald-300 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300">
@@ -232,6 +246,7 @@ export default async function CoachNutritionV2ClientPage({ params, searchParams 
                   sourcePlanVersion={detail.plan.plan.versionNumber}
                   sourcePlanName={detail.plan.plan.name}
                   roster={assignRoster}
+                  rosterHasMore={assignRosterHasMore}
                   today={today}
                 />
               </div>
@@ -294,14 +309,31 @@ export default async function CoachNutritionV2ClientPage({ params, searchParams 
             <section>
               <h2 className="mb-3 font-display text-xl font-semibold text-strong">Estructura prescrita</h2>
               <div className="space-y-4">
-                {detail.plan.dayVariants.map((variant) => (
+                {orderedVariants.map((variant) => (
                   <NutritionCard key={variant.id}>
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                      <h3 className="font-display text-base font-semibold text-strong">{variant.label}</h3>
-                      <span className="text-xs text-muted">
-                        {variant.targets.calories ?? 0} kcal objetivo
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h3 className="font-display text-base font-semibold text-strong">{variant.label}</h3>
+                        {todayVariant?.id === variant.id ? (
+                          <span className="rounded-pill border border-primary/30 bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary dark:border-primary/40 dark:bg-primary/15">
+                            Hoy aplica
+                          </span>
+                        ) : null}
+                      </div>
+                      <span className="text-xs tabular-nums text-muted">
+                        {variant.targets.calories != null
+                          ? `${formatNutritionCalories(variant.targets.calories)} objetivo`
+                          : 'Sin objetivo de energía'}
                       </span>
                     </div>
+                    {/* Tira Lu-Do de la variante (FD3): con un solo día no aporta y no se pinta. */}
+                    {multiDayPlan ? (
+                      <DayVariantWeekStrip
+                        variants={detail.plan.dayVariants}
+                        variant={variant}
+                        todayIso={today}
+                      />
+                    ) : null}
                     {variant.mealSlots.length === 0 ? (
                       <p className="mt-2 text-sm text-muted">Plan flexible: sin franjas prescritas.</p>
                     ) : (
@@ -349,6 +381,36 @@ export default async function CoachNutritionV2ClientPage({ params, searchParams 
                 Historico completo con Nutricion Pro
               </Link>
             ) : null}
+            {/* NUT-041: sin empty-state el coach veia el titulo y un grid vacio, ambiguo entre
+                "no registro nada", "el filtro sin Pro recorto la ventana" y "fallo la lectura".
+                Los dos vacios se distinguen: si `detail.recentDays` trae dias pero `recentDays`
+                quedo vacio, el recorte lo hizo la ventana BASE (sin Nutricion Pro) -> upsell. */}
+            {recentDays.length === 0 ? (
+              <NutritionStatePanel
+                illustration="historial-vacio"
+                title={
+                  detail.recentDays.length > 0 && !nutritionProEnabled
+                    ? 'Historial fuera de tu ventana'
+                    : 'Sin días registrados todavía'
+                }
+                description={
+                  detail.recentDays.length > 0 && !nutritionProEnabled
+                    ? 'Los días de este alumno quedan fuera de la ventana incluida en tu plan. Con Nutrición Pro ves el histórico completo.'
+                    : 'Aparecerán aquí cuando el alumno registre su primer día.'
+                }
+                action={
+                  detail.recentDays.length > 0 && !nutritionProEnabled ? (
+                    <Link
+                      href={NUTRITION_PRO_UPGRADE_HREF}
+                      className="inline-flex min-h-11 items-center gap-2 rounded-control bg-primary/100 px-4 text-sm font-semibold text-white"
+                    >
+                      <LockKeyhole className="h-4 w-4" />
+                      Activar Nutrición Pro
+                    </Link>
+                  ) : undefined
+                }
+              />
+            ) : (
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
               {recentDays.map((day) => {
                 const legacy = describeLegacyHistoryDay(day)
@@ -392,6 +454,7 @@ export default async function CoachNutritionV2ClientPage({ params, searchParams 
                 )
               })}
             </div>
+            )}
           </section>
 
           {/* Zona inferior discreta: archivar el plan vigente. Aislado del CTA primario del header

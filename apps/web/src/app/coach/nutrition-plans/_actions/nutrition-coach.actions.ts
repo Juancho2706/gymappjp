@@ -11,7 +11,15 @@ import {
   ClientPlanSchema,
   CustomFoodSchema,
 } from '@/lib/nutrition-schemas'
-import { ExchangesClientPlanSchema } from '@eva/schemas/nutrition-exchanges'
+import {
+  EXCHANGE_PORTION_GRAMS_MAX,
+  EXCHANGE_PORTION_LABEL_MAX,
+  ExchangesClientPlanSchema,
+  foodExchangeEquivalenceIssue,
+  normalizeFoodExchangeEquivalence,
+  type FoodExchangeEquivalenceInput,
+} from '@eva/schemas/nutrition-exchanges'
+import { isExchangeGroupVisibleToActor } from '@/services/nutrition-exchanges/nutrition-exchanges.service'
 import { fetchClientPlanSnapshotPayload } from '@/lib/nutrition-plan-snapshot'
 import {
   nutritionPlanCycleUpsertSchema,
@@ -859,6 +867,47 @@ export async function getCoachClientsLite(
   return (data ?? []).map((c) => ({ id: c.id as string, full_name: c.full_name as string }))
 }
 
+/**
+ * Lee el bloque opcional "Equivalencia de porciones" del form de alta de alimento
+ * (specs/nutrition-custom-portions §P-B). Los 3 inputs viajan siempre (hidden): vacíos =
+ * alimento sin clasificar. Solo saneo + trío junto-o-nada; la visibilidad del grupo la
+ * verifica el llamador contra la DB (RLS `xg_select` es el techo).
+ *
+ * No se exporta: en un archivo 'use server' todo export debe ser una server action async.
+ */
+function parseExchangeEquivalenceFormFields(
+  formData: FormData
+): { ok: true; value: FoodExchangeEquivalenceInput } | { ok: false; error: string } {
+  const groupIdRaw = (formData.get('exchange_group_id') as string | null)?.trim() ?? ''
+  const gramsRaw = (formData.get('exchange_portion_grams') as string | null)?.trim() ?? ''
+  const labelRaw = (formData.get('exchange_portion_label') as string | null)?.trim() ?? ''
+
+  if (groupIdRaw !== '' && !z.guid().safeParse(groupIdRaw).success) {
+    return { ok: false, error: 'Grupo de porciones inválido.' }
+  }
+
+  let grams: number | null = null
+  if (gramsRaw !== '') {
+    const parsedGrams = Number(gramsRaw.replace(',', '.'))
+    if (!Number.isFinite(parsedGrams) || parsedGrams <= 0) {
+      return { ok: false, error: 'Los gramos por porción deben ser mayores a 0.' }
+    }
+    if (parsedGrams > EXCHANGE_PORTION_GRAMS_MAX) {
+      return { ok: false, error: `Máximo ${EXCHANGE_PORTION_GRAMS_MAX} g por porción.` }
+    }
+    grams = parsedGrams
+  }
+
+  const value: FoodExchangeEquivalenceInput = {
+    exchangeGroupId: groupIdRaw === '' ? null : groupIdRaw,
+    exchangePortionGrams: grams,
+    exchangePortionLabel: labelRaw === '' ? null : labelRaw.slice(0, EXCHANGE_PORTION_LABEL_MAX),
+  }
+  const issue = foodExchangeEquivalenceIssue(value)
+  if (issue) return { ok: false, error: issue.message }
+  return { ok: true, value }
+}
+
 export async function saveCustomFood(coachId: string, prevState: unknown, formData: FormData) {
   const { supabase, error: authErr } = await requireCoachSession(coachId)
   if (!supabase) return { error: authErr ?? 'No autorizado.', success: false }
@@ -900,6 +949,18 @@ export async function saveCustomFood(coachId: string, prevState: unknown, formDa
       return { error: zodErrorMessage(parsed.error.issues), success: false }
     }
 
+    // Equivalencia de porciones (P-B): bloque opcional del alta. Trío junto-o-nada y grupo
+    // VISIBLE para el coach (system + propios + team) — el FK de `foods` no valida
+    // visibilidad, así que un id ajeno pegado a mano clasificaría el alimento en un grupo
+    // de otro coach. Mismas reglas que `insertCoachFood` (alta V2 / builder / RN).
+    const equivalenceInput = parseExchangeEquivalenceFormFields(formData)
+    if (!equivalenceInput.ok) return { error: equivalenceInput.error, success: false }
+    const equivalence = normalizeFoodExchangeEquivalence(equivalenceInput.value)
+    if (equivalence.exchangeGroupId) {
+      const visible = await isExchangeGroupVisibleToActor(supabase, equivalence.exchangeGroupId)
+      if (!visible) return { error: 'Ese grupo de porciones ya no está disponible.', success: false }
+    }
+
     const { error } = await supabase.from('foods').insert({
       name: parsed.data.name,
       calories: parsed.data.calories,
@@ -913,6 +974,9 @@ export async function saveCustomFood(coachId: string, prevState: unknown, formDa
       coach_id: coachId,
       household_grams: parsed.data.household_grams ?? null,
       household_label: parsed.data.household_label ?? null,
+      exchange_group_id: equivalence.exchangeGroupId,
+      exchange_portion_grams: equivalence.exchangePortionGrams,
+      exchange_portion_label: equivalence.exchangePortionLabel,
     })
 
     if (error) throw error

@@ -184,7 +184,11 @@ export async function fetchExchangeEquivalences(groupIds: string[]): Promise<Exc
 
 type MutResult = { ok: boolean; error?: string }
 
-async function post<T = unknown>(path: string, body: unknown, method: 'POST' | 'DELETE' = 'POST'): Promise<MutResult & { data?: T }> {
+async function post<T = unknown>(
+  path: string,
+  body: unknown,
+  method: 'POST' | 'PATCH' | 'DELETE' = 'POST',
+): Promise<MutResult & { data?: T }> {
   try {
     const data = await apiFetch<T>(path, { method, authenticated: true, body })
     return { ok: true, data }
@@ -218,4 +222,108 @@ export function deletePlanDayVariant(variantId: string): Promise<MutResult> {
 /** Asigna (o limpia con null) la variante de día de una comida. */
 export function assignMealDayVariant(mealId: string, variantId: string | null): Promise<MutResult> {
   return post('/api/mobile/nutrition/exchanges/meal-variant', { mealId, variantId })
+}
+
+// ─── Grupos de porciones PROPIOS del coach (porciones propias — P-A / FD6a) ─────
+//
+// UNICO camino de escritura: `POST|PATCH|DELETE /api/mobile/nutrition/exchanges/groups`
+// (lección NUT-005 — cero escrituras Supabase directas nuevas desde mobile). El endpoint
+// corre el mismo `CreateExchangeGroupSchema`/`UpdateExchangeGroupSchema` de `@eva/schemas`
+// y el mismo servicio que las server actions web, así que la unicidad de code/slug, el cap
+// de grupos propios y el `macros_confirmed = false` forzado son idénticos en las dos
+// superficies. La respuesta trae el grupo ya escrito (fila de `exchange_groups`), que se
+// mapea con el MISMO `mapGroupRow` de las lecturas para que el catálogo no drifee.
+
+/** Valores editables de un grupo propio (espejo de `ExchangeGroupFormValues` web). */
+export interface CoachExchangeGroupValues {
+  name: string
+  code: string
+  refCalories: number
+  refProteinG: number
+  refCarbsG: number
+  refFatsG: number
+  color: string | null
+}
+
+export type ExchangeGroupWriteResult =
+  | { ok: true; group: ExchangeGroup }
+  | { ok: false; error: string }
+
+/**
+ * La API devuelve `{ ok, group }` con el grupo YA mapeado por el repositorio web
+ * (`mapExchangeGroupRow`), es decir en **camelCase** — no la fila cruda. Aquí solo se
+ * re-tipa defensivamente (números por `Number(...) || 0`, nullables por `?? null`) para que
+ * un cuerpo incompleto no meta `NaN` en el catálogo. Sin `id` no hay grupo que devolver: se
+ * degrada a error explícito en vez de inventar uno.
+ */
+function toGroupResult(res: MutResult & { data?: { group?: unknown } }): ExchangeGroupWriteResult {
+  if (!res.ok) return { ok: false, error: res.error ?? 'No pudimos guardar el grupo. Intenta nuevamente.' }
+  const raw = res.data?.group as Partial<ExchangeGroup> | undefined
+  if (!raw || typeof raw.id !== 'string') {
+    return { ok: false, error: 'No pudimos guardar el grupo. Intenta nuevamente.' }
+  }
+  return {
+    ok: true,
+    group: {
+      id: raw.id,
+      slug: raw.slug ?? '',
+      code: raw.code ?? '',
+      name: raw.name ?? '',
+      coachId: raw.coachId ?? null,
+      teamId: raw.teamId ?? null,
+      // Un grupo escrito por el coach JAMAS es del sistema (el schema rechaza `isSystem`).
+      isSystem: raw.isSystem === true,
+      refCalories: Number(raw.refCalories) || 0,
+      refProteinG: Number(raw.refProteinG) || 0,
+      refCarbsG: Number(raw.refCarbsG) || 0,
+      refFatsG: Number(raw.refFatsG) || 0,
+      color: raw.color ?? null,
+      sortOrder: Number(raw.sortOrder) || 0,
+      composedOf: raw.composedOf ?? null,
+      macrosConfirmed: raw.macrosConfirmed === true,
+    },
+  }
+}
+
+/** Crea un grupo de porciones propio del coach. */
+export async function createCoachExchangeGroup(
+  values: CoachExchangeGroupValues,
+): Promise<ExchangeGroupWriteResult> {
+  const res = await post<{ ok: boolean; group?: unknown }>('/api/mobile/nutrition/exchanges/groups', {
+    name: values.name,
+    code: values.code,
+    refCalories: values.refCalories,
+    refProteinG: values.refProteinG,
+    refCarbsG: values.refCarbsG,
+    refFatsG: values.refFatsG,
+    color: values.color,
+  })
+  return toGroupResult(res)
+}
+
+/** Edita un grupo propio (los del sistema los niega la RLS `xg_update` y el servicio). */
+export async function updateCoachExchangeGroup(
+  groupId: string,
+  values: CoachExchangeGroupValues,
+): Promise<ExchangeGroupWriteResult> {
+  const res = await post<{ ok: boolean; group?: unknown }>(
+    '/api/mobile/nutrition/exchanges/groups',
+    {
+      groupId,
+      name: values.name,
+      code: values.code,
+      refCalories: values.refCalories,
+      refProteinG: values.refProteinG,
+      refCarbsG: values.refCarbsG,
+      refFatsG: values.refFatsG,
+      color: values.color,
+    },
+    'PATCH',
+  )
+  return toGroupResult(res)
+}
+
+/** Soft-delete de un grupo propio. Los planes publicados conservan su snapshot congelado. */
+export async function deleteCoachExchangeGroup(groupId: string): Promise<MutResult> {
+  return post('/api/mobile/nutrition/exchanges/groups', { groupId }, 'DELETE')
 }

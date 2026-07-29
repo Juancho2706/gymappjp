@@ -30,8 +30,70 @@ export interface PortionTargetDraft {
   portions: number
 }
 
-/** Mapa `BuilderSlot.key -> targets de porciones` (estado hermano del wizard). */
+/**
+ * Mapa `clave de franja -> targets de porciones` (estado hermano del wizard).
+ *
+ * Multi-dia: la clave es COMPUESTA (`variantKey::slotKey`, ver `portionsKey`). Con la clave
+ * plana anterior, dos dias con franjas homonimas —el caso normal: el sabado se clona del
+ * base y conserva "Almuerzo"— compartian porciones y editar el sabado movia el lunes.
+ */
 export type PortionsBySlot = Record<string, PortionTargetDraft[]>
+
+/** Separador de la clave compuesta. `::` no aparece en las keys (uuid / uuid~uuid). */
+const PORTIONS_KEY_SEPARATOR = '::'
+
+/** Clave del mapa de porciones para una franja DENTRO de un dia. */
+export function portionsKey(variantKey: string, slotKey: string): string {
+  return variantKey + PORTIONS_KEY_SEPARATOR + slotKey
+}
+
+/** Forma minima de un dia del wizard para derivar sus claves (sin importar `_lib`). */
+export interface PortionsVariantLike {
+  key: string
+  slots: ReadonlyArray<{ key: string }>
+}
+
+/** Claves de porciones por dia, alineadas por indice con `dayVariants` del draft. */
+export function variantPortionKeys(variants: ReadonlyArray<PortionsVariantLike>): string[][] {
+  return variants.map((variant) => variant.slots.map((slot) => portionsKey(variant.key, slot.key)))
+}
+
+/** Todas las claves VIVAS del wizard (todos los dias), para `hasAnyPortions`/derivaciones. */
+export function livePortionKeys(variants: ReadonlyArray<PortionsVariantLike>): string[] {
+  return variantPortionKeys(variants).flat()
+}
+
+/**
+ * Copia las porciones de un dia a otro al CLONAR (multi-select "copiar del base" o
+ * "duplicar como otro dia"). Las franjas clonadas tienen keys derivadas, asi que el llamador
+ * pasa los pares origen -> destino y aca solo se re-etiqueta el mapa (puro).
+ */
+export function clonePortionsForVariant(
+  map: PortionsBySlot,
+  params: {
+    sourceVariantKey: string
+    targetVariantKey: string
+    slotKeyPairs: ReadonlyArray<{ from: string; to: string }>
+  },
+): PortionsBySlot {
+  const next = { ...map }
+  let changed = false
+  for (const pair of params.slotKeyPairs) {
+    const targets = map[portionsKey(params.sourceVariantKey, pair.from)]
+    if (targets == null || targets.length === 0) continue
+    next[portionsKey(params.targetVariantKey, pair.to)] = targets.map((target) => ({ ...target }))
+    changed = true
+  }
+  return changed ? next : map
+}
+
+/** Descarta las porciones de un dia eliminado (no dejar basura en el borrador local). */
+export function dropVariantPortions(map: PortionsBySlot, variantKey: string): PortionsBySlot {
+  const prefix = variantKey + PORTIONS_KEY_SEPARATOR
+  const entries = Object.entries(map).filter(([key]) => !key.startsWith(prefix))
+  if (entries.length === Object.keys(map).length) return map
+  return Object.fromEntries(entries)
+}
 
 export const PORTIONS_STEP = 0.5
 export const PORTIONS_MIN = 0.5
@@ -193,23 +255,25 @@ export function combineSubtotals<T extends SubtotalMacros>(
 
 /**
  * Inyecta los targets de porciones al draft YA ensamblado/validado por el wizard y
- * re-valida contra el contrato. Los mealSlots del draft están alineados por índice
- * con `slotKeys` (assembleDraft los emite en el orden de state.slots). Franjas sin
- * porciones quedan EXACTAMENTE iguales (sin la clave `exchangeTargets`): un plan sin
- * porciones produce un draft byte-idéntico al de hoy (SPEC R1 / criterio Q1).
+ * re-valida contra el contrato. `keysByVariant` viene alineado por índice con
+ * `draft.dayVariants` y, dentro de cada día, con sus `mealSlots` (assembleDraft emite los
+ * días en el orden de `state.variants` y las franjas en el orden de `variant.slots`, así que
+ * `variantPortionKeys(state.variants)` produce exactamente esa forma). Franjas sin porciones
+ * quedan EXACTAMENTE iguales (sin la clave `exchangeTargets`): un plan sin porciones produce
+ * un draft byte-idéntico al de hoy (SPEC R1 / criterio Q1).
  */
 export function attachPortionsAndValidate(
   draft: NutritionPlanDraft,
-  slotKeys: string[],
+  keysByVariant: string[][],
   map: PortionsBySlot,
 ): NutritionPlanDraft {
-  if (!hasAnyPortions(map, slotKeys)) return draft
+  if (!hasAnyPortions(map, keysByVariant.flat())) return draft
   const withPortions: NutritionPlanDraft = {
     ...draft,
-    dayVariants: draft.dayVariants.map((variant) => ({
+    dayVariants: draft.dayVariants.map((variant, variantIndex) => ({
       ...variant,
       mealSlots: variant.mealSlots.map((slot, index) => {
-        const key = slotKeys[index]
+        const key = keysByVariant[variantIndex]?.[index]
         const targets = key == null ? [] : slotPortionTargets(map, key).filter((t) => t.portions > 0)
         if (targets.length === 0) return slot
         return {

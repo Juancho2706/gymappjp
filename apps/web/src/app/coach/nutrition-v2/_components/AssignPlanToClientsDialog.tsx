@@ -1,6 +1,6 @@
 'use client'
 
-import { useId, useMemo, useRef, useState, useTransition } from 'react'
+import { useEffect, useId, useMemo, useRef, useState, useTransition } from 'react'
 import { AlertTriangle, Check, CheckCircle2, Loader2, Search, UserPlus, Users, XCircle } from 'lucide-react'
 import {
   Dialog,
@@ -10,6 +10,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { assignPlanToClientsAction } from '../_actions/nutrition-assign.actions'
+import { searchCoachRosterAction } from '../_actions/roster-search.actions'
 import type { AssignClientResult, AssignSummary } from '../_lib/assign-plan'
 
 // "Asignar este plan a otros alumnos" (web coach). Isla cliente montada en la ficha V2 cuando
@@ -17,12 +18,19 @@ import type { AssignClientResult, AssignSummary } from '../_lib/assign-plan'
 // insignia para quienes YA tienen plan) + fecha de vigencia, y al confirmar muestra el reporte
 // por alumno (ok/fallo con motivo). useTransition + doble-submit bloqueado. La barrera real es
 // server-side (assignPlanToClientsAction); esta UI solo espeja.
+//
+// NUT-026: el RSC entrega solo la PRIMERA pagina alfabetica del roster; a partir de 2
+// caracteres la busqueda es server-side sobre TODO el workspace (antes: bucle de 8 paginas x
+// 50 en el render y filtro client-side, con el alumno #400+ invisible e imbuscable).
 
 export interface AssignRosterEntry {
   clientId: string
   clientName: string
   hasPlan: boolean
 }
+
+const SEARCH_DEBOUNCE_MS = 300
+const MIN_SERVER_SEARCH_LEN = 2
 
 function genOperationId(): string {
   if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) return crypto.randomUUID()
@@ -42,16 +50,25 @@ export function AssignPlanToClientsDialog({
   sourcePlanVersion,
   sourcePlanName,
   roster,
+  rosterHasMore = false,
   today,
 }: {
   sourceClientId: string
   sourcePlanVersion: number
   sourcePlanName: string
   roster: AssignRosterEntry[]
+  /** Hay mas alumnos que los de la primera pagina: la busqueda deja de ser opcional. */
+  rosterHasMore?: boolean
   today: string
 }) {
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
+  const [remote, setRemote] = useState<AssignRosterEntry[] | null>(null)
+  const [searching, setSearching] = useState(false)
+  const [searchError, setSearchError] = useState<string | null>(null)
+  // Nombres ya vistos en cualquier página/búsqueda de esta sesión del diálogo.
+  const [seenNames, setSeenNames] = useState<Record<string, string>>({})
+  const requestRef = useRef(0)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [effectiveFrom, setEffectiveFrom] = useState(today)
   const [results, setResults] = useState<{ items: AssignClientResult[]; summary: AssignSummary } | null>(null)
@@ -61,22 +78,74 @@ export function AssignPlanToClientsDialog({
   const searchId = useId()
   const dateId = useId()
 
-  const nameById = useMemo(() => {
-    const map = new Map<string, string>()
-    for (const entry of roster) map.set(entry.clientId, entry.clientName)
-    return map
-  }, [roster])
+  const term = search.trim()
+  const useRemote = term.length >= MIN_SERVER_SEARCH_LEN
+
+  // Busqueda server-side con debounce; `requestRef` descarta respuestas fuera de orden.
+  useEffect(() => {
+    if (!open || !useRemote) {
+      setRemote(null)
+      setSearching(false)
+      setSearchError(null)
+      return
+    }
+    setSearching(true)
+    setSearchError(null)
+    const ticket = ++requestRef.current
+    const timer = setTimeout(() => {
+      void searchCoachRosterAction({ search: term, excludeClientId: sourceClientId, pageSize: 50 })
+        .then((res) => {
+          if (ticket !== requestRef.current) return
+          if (res.ok) {
+            setRemote(
+              res.items.map((item) => ({
+                clientId: item.clientId,
+                clientName: item.clientName,
+                hasPlan: item.planStatus === 'published',
+              })),
+            )
+            setSeenNames((prev) => {
+              const next = { ...prev }
+              for (const item of res.items) next[item.clientId] = item.clientName
+              return next
+            })
+          } else {
+            setSearchError(res.error)
+          }
+        })
+        .catch(() => {
+          if (ticket === requestRef.current) setSearchError('No pudimos buscar alumnos. Intenta de nuevo.')
+        })
+        .finally(() => {
+          if (ticket === requestRef.current) setSearching(false)
+        })
+    }, SEARCH_DEBOUNCE_MS)
+    return () => clearTimeout(timer)
+  }, [open, term, useRemote, sourceClientId])
 
   const filtered = useMemo(() => {
+    if (useRemote) return remote ?? []
     const needle = normalize(search)
     if (needle.length === 0) return roster
     return roster.filter((entry) => normalize(entry.clientName).includes(needle))
-  }, [roster, search])
+  }, [useRemote, remote, roster, search])
+
+  // Los seleccionados pueden venir de una busqueda ya descartada, asi que los nombres se
+  // ACUMULAN (el reporte final debe nombrar a cada alumno, no caer a "Alumno").
+  const nameById = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const entry of roster) map.set(entry.clientId, entry.clientName)
+    for (const [clientId, clientName] of Object.entries(seenNames)) map.set(clientId, clientName)
+    return map
+  }, [roster, seenNames])
 
   function resetForNewRun() {
     operationId.current = genOperationId()
     setSelected(new Set())
     setSearch('')
+    setRemote(null)
+    setSearchError(null)
+    setSeenNames({})
     setEffectiveFrom(today)
     setResults(null)
     setTopError(null)
@@ -217,9 +286,23 @@ export function AssignPlanToClientsDialog({
                       value={search}
                       onChange={(event) => setSearch(event.target.value.slice(0, 120))}
                       placeholder="Buscar alumno…"
-                      className="min-h-11 w-full rounded-control border border-border-default bg-surface-card pl-10 pr-4 text-base text-strong outline-none placeholder:text-muted focus:ring-2 focus:ring-ring md:text-sm"
+                      className="min-h-11 w-full rounded-control border border-border-default bg-surface-card pl-10 pr-10 text-base text-strong outline-none placeholder:text-muted focus:ring-2 focus:ring-ring md:text-sm"
                     />
+                    {searching ? (
+                      <Loader2 className="pointer-events-none absolute right-3.5 top-1/2 size-4 -translate-y-1/2 animate-spin text-subtle" />
+                    ) : null}
                   </div>
+
+                  {rosterHasMore && !useRemote ? (
+                    <p className="text-xs text-muted">
+                      Tu espacio tiene más alumnos de los que caben aquí. Escribe para buscarlos a todos.
+                    </p>
+                  ) : null}
+                  {searchError ? (
+                    <p className="rounded-control border border-red-300 bg-red-50 px-3 py-2 text-xs font-semibold text-red-800 dark:border-red-800 dark:bg-red-950/40 dark:text-red-300">
+                      {searchError}
+                    </p>
+                  ) : null}
 
                   <div className="flex items-center justify-between text-xs text-muted">
                     <span>
@@ -271,8 +354,10 @@ export function AssignPlanToClientsDialog({
                         </li>
                       )
                     })}
-                    {filtered.length === 0 ? (
-                      <li className="px-1 py-6 text-center text-sm text-muted">Sin coincidencias.</li>
+                    {filtered.length === 0 && !searching ? (
+                      <li className="px-1 py-6 text-center text-sm text-muted">
+                        {searchError ? 'No pudimos completar la búsqueda.' : 'Sin coincidencias.'}
+                      </li>
                     ) : null}
                   </ul>
 

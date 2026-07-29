@@ -77,6 +77,12 @@ export interface SaveMealGroupInput {
 /**
  * Crea o actualiza un grupo (INSERT o UPDATE + reemplazo total de items).
  * Devuelve el grupo completo (con `food` embebido) para refrescar la UI sin recargar.
+ *
+ * NUT-028: la escritura vive en el RPC `save_meal_group_v2` (una sola invocación =>
+ * atómica). Antes eran update + DELETE de todos los items + INSERT + SELECT en cuatro
+ * round-trips: si el INSERT fallaba, el grupo quedaba con cero items y la composición
+ * anterior era irrecuperable. El RPC es SECURITY INVOKER, así que la RLS de `saved_meals` /
+ * `saved_meal_items` sigue siendo el guardián real, y rechaza la lista vacía server-side.
  */
 export async function saveMealGroup(
   input: SaveMealGroupInput
@@ -88,46 +94,24 @@ export async function saveMealGroup(
   if (!input.items.length) return { ok: false, error: 'Agrega al menos un alimento.' }
 
   try {
-    let groupId = input.id
-    if (groupId) {
-      const { error: upErr } = await supabase
-        .from('saved_meals')
-        .update({ name })
-        .eq('id', groupId)
-        .eq('coach_id', coachId)
-      if (upErr) throw upErr
-      const { error: delErr } = await supabase.from('saved_meal_items').delete().eq('saved_meal_id', groupId)
-      if (delErr) throw delErr
-    } else {
-      // org_id del workspace ACTIVO (enterprise), nunca del body — igual que web.
-      const { orgId } = await getCoachOrgContext().catch(() => ({ orgId: null as string | null }))
-      const { data: created, error: insErr } = await supabase
-        .from('saved_meals')
-        .insert({ name, coach_id: coachId, org_id: orgId })
-        .select('id')
-        .single()
-      if (insErr) throw insErr
-      groupId = (created as { id: string }).id
-    }
+    // org_id del workspace ACTIVO (enterprise), nunca del body — igual que web. Solo aplica
+    // al crear: en la edición el grupo conserva el suyo.
+    const orgId = input.id
+      ? null
+      : (await getCoachOrgContext().catch(() => ({ orgId: null as string | null }))).orgId
 
-    const { error: itemsErr } = await supabase.from('saved_meal_items').insert(
-      input.items.map((it) => ({
-        saved_meal_id: groupId!,
+    const { data: full, error } = await supabase.rpc('save_meal_group_v2', {
+      p_name: name,
+      p_items: input.items.map((it) => ({
         food_id: it.food_id,
-        // Persiste la cantidad CRUDA (permite fracciones como la web,
-        // MealGroupModal.tsx:163); antes hacía `Math.round`, perdiendo decimales.
         quantity: Number(it.quantity) || 0,
         unit: it.unit || 'g',
-      }))
-    )
-    if (itemsErr) throw itemsErr
+      })),
+      p_group_id: input.id ?? null,
+      p_org_id: orgId,
+    })
+    if (error) throw error
 
-    const { data: full, error: fetchErr } = await supabase
-      .from('saved_meals')
-      .select(GROUP_SELECT)
-      .eq('id', groupId)
-      .single()
-    if (fetchErr) throw fetchErr
     const g = full as any
     return {
       ok: true,

@@ -20,8 +20,9 @@ import {
 // Quick-edit V2 (edicion fluida del plan, web coach): publica una VERSION NUEVA por el MISMO
 // pipeline canonico del builder (persistAndPublishDraft -> publish_nutrition_plan_v2), pero con:
 //  - visible_notes EDITABLES (viajan en el draft del cliente); carry-over server-side solo de
-//    protocol_notes (F1 no lo edita) y private_notes (el read model no las expone; viven en
-//    nutrition_plan_private_notes_v2 y republicar no las toca),
+//    protocol_notes (F1 no lo edita). `privateNotes` queda SIEMPRE null: no existe feature de
+//    nota privada versionada (la columna same-row esta deprecada e ilegible y la tabla canonica
+//    `nutrition_plan_private_notes_v2` no la escribe nadie — ver NUT-007),
 //  - delta-gate Pro (solo gatea features Pro NUEVAS; preserva las grandfathered de un plan
 //    convertido de V1 sin atrapar al coach),
 //  - guard optimista de concurrencia (expectedCurrentVersionId = baseVersionId).
@@ -167,8 +168,11 @@ export async function quickEditPublishAction(input: unknown): Promise<QuickEditP
   // no hay forja posible mas alla de su propio contenido). '' se normaliza a null (paridad con
   // builder/conversion). protocol_notes sigue en carry-over desde la version base (F1 no lo
   // edita) y `privateNotes` queda null: la columna same-row esta deprecada y no es legible por
-  // `authenticated`; las notas privadas viven en nutrition_plan_private_notes_v2 (independientes
-  // de la version), asi que republicar NO las toca ni las pierde.
+  // `authenticated`. OJO (NUT-007): NO existe hoy una feature de nota privada versionada. La
+  // tabla canonica `nutrition_plan_private_notes_v2` tiene PK `version_id` y NINGUN camino de
+  // la app la escribe, asi que no hay nada que preservar aqui; el dia que se implemente hara
+  // falta copy-forward explicito de la nota de `baseVersionId` a la version nueva (sin eso,
+  // cada republicacion la dejaria fuera del read model, que busca por la version vigente).
   const draftFinal: NutritionPlanDraft = {
     ...draft,
     visibleNotes: hasText(draft.visibleNotes) ? draft.visibleNotes : null,

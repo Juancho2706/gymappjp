@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Pressable, ScrollView, Text, TextInput, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { useRouter } from 'expo-router'
+import { useLocalSearchParams, useRouter } from 'expo-router'
 import { FlashList } from '@shopify/flash-list'
 import {
   Apple,
@@ -61,6 +61,8 @@ import {
   nutritionHubMetricScopeLabel,
   nutritionPlanCtaLabel,
   nutritionV2BuilderHref,
+  resolveNutritionHubInitialTab,
+  type NutritionHubTabKey,
   type NutritionRosterFilters,
   type NutritionSortKey,
 } from '../../../lib/nutrition-v2-hub'
@@ -79,11 +81,14 @@ const PICKER_PAGE_SIZE = 50
 const PICKER_MAX_PAGES = 8
 
 type HubCursor = { updatedAt: string; clientId: string }
-type PickerEntry = { clientId: string; clientName: string; planStatus: string | null }
+// `planId` (NUT-004): raiz de plan ACTIVA del alumno. Viaja al builder por query para que publique
+// una version nueva sobre ella en vez de insertar otra raiz activa.
+type PickerEntry = { clientId: string; clientName: string; planStatus: string | null; planId: string | null }
 
 // Tablist del hub — espejo de web `NutritionHubTabs.tsx:10-14`: orden fijo, copys verbatim,
-// default "Alumnos". Estado local (no `?tab=`), se resetea al remontar (igual que web).
-type HubTabKey = 'roster' | 'foods' | 'curation'
+// default "Alumnos". Estado local; el deep link `?tab=` (NUT-027) solo fija el valor INICIAL y se
+// re-aplica si el parametro cambia (nunca pisa la seleccion manual del coach).
+type HubTabKey = NutritionHubTabKey
 const HUB_TABS: Array<{ key: HubTabKey; label: string; icon: typeof Users }> = [
   { key: 'roster', label: 'Alumnos', icon: Users },
   { key: 'foods', label: 'Alimentos', icon: Apple },
@@ -102,8 +107,16 @@ export default function CoachNutritionV2Screen() {
     orgId: workspaceOrgId,
   } = useWorkspace()
   const [userId, setUserId] = useState<string | null>(null)
-  // Tab activa del hub (estado local efímero; espejo de web `useState('roster')`).
-  const [activeTab, setActiveTab] = useState<HubTabKey>('roster')
+  // Deep link `/coach/foods` -> `/coach/nutricion?tab=foods` (NUT-027): con V2 ON el hub montaba
+  // con `roster` fijo y el parametro se perdia. Se lee aqui (la pantalla se monta embebida en el
+  // tab del coach, asi que ve los params de esa ruta) y se traduce con el helper puro.
+  const routeParams = useLocalSearchParams<{ tab?: string }>()
+  const tabParam = Array.isArray(routeParams.tab) ? (routeParams.tab[0] ?? null) : (routeParams.tab ?? null)
+  // Tab activa del hub (estado local efímero; inicial derivada del `?tab=`).
+  const [activeTab, setActiveTab] = useState<HubTabKey>(() => resolveNutritionHubInitialTab(tabParam))
+  // Re-sincroniza SOLO cuando el parametro cambia (otro deep link con el hub ya montado): sin este
+  // guard, cada render pisaria la pestana que el coach eligio a mano.
+  const lastTabParamRef = useRef<string | null>(tabParam)
   const [page, setPage] = useState<NutritionCoachHubPageReadModel | null>(null)
   const [items, setItems] = useState<NutritionCoachHubItem[]>([])
   const [pageIndex, setPageIndex] = useState(0)
@@ -135,6 +148,12 @@ export default function CoachNutritionV2Screen() {
     () => localDateOf(new Date().toISOString(), COACH_TIMEZONE) ?? '',
     [],
   )
+
+  useEffect(() => {
+    if (tabParam === lastTabParamRef.current) return
+    lastTabParamRef.current = tabParam
+    if (tabParam != null) setActiveTab(resolveNutritionHubInitialTab(tabParam))
+  }, [tabParam])
 
   useEffect(() => {
     let active = true
@@ -248,7 +267,12 @@ export default function CoachNutritionV2Screen() {
           pageSize: PICKER_PAGE_SIZE,
         })
         for (const it of chunk.items) {
-          acc.push({ clientId: it.clientId, clientName: it.clientName, planStatus: it.planStatus })
+          acc.push({
+            clientId: it.clientId,
+            clientName: it.clientName,
+            planStatus: it.planStatus,
+            planId: it.planId,
+          })
         }
         if (!chunk.hasMore || !chunk.nextCursor) break
         cursor = chunk.nextCursor
@@ -269,9 +293,9 @@ export default function CoachNutritionV2Screen() {
   }, [loadPickerRoster])
 
   const choosePickerClient = useCallback(
-    (clientId: string) => {
+    (clientId: string, planId: string | null) => {
       setPickerOpen(false)
-      router.push(nutritionV2BuilderHref(clientId))
+      router.push(nutritionV2BuilderHref(clientId, planId))
     },
     [router],
   )
@@ -296,7 +320,12 @@ export default function CoachNutritionV2Screen() {
     () =>
       pickerRoster.length > 0
         ? pickerRoster
-        : items.map((it) => ({ clientId: it.clientId, clientName: it.clientName, planStatus: it.planStatus })),
+        : items.map((it) => ({
+            clientId: it.clientId,
+            clientName: it.clientName,
+            planStatus: it.planStatus,
+            planId: it.planId,
+          })),
     [pickerRoster, items],
   )
   const clearFilters = useCallback(() => setFilters(DEFAULT_NUTRITION_ROSTER_FILTERS), [])
@@ -450,10 +479,21 @@ export default function CoachNutritionV2Screen() {
         }
         ListEmptyComponent={
           items.length === 0 ? (
-            <NutritionStatePanel
-              title="No hay alumnos en este scope"
-              description="El Centro respeta el workspace activo y no mezcla pools."
-            />
+            // NUT-024: sin items hay DOS causas distintas y antes ambas decían lo mismo.
+            // Con `offline` en true la primera carga falló y no había caché: el roster no
+            // está vacío, no lo pudimos leer. El badge "Sin conexión" del header ya lo
+            // anuncia; el empty-state deja de contradecirlo.
+            offline ? (
+              <NutritionStatePanel
+                title="Sin conexión y sin datos guardados"
+                description="No pudimos cargar tu roster y no hay una copia local de este espacio. Revisa tu conexión y desliza hacia abajo para reintentar."
+              />
+            ) : (
+              <NutritionStatePanel
+                title="No hay alumnos en este scope"
+                description="El Centro respeta el workspace activo y no mezcla pools."
+              />
+            )
           ) : (
             <View className="gap-3">
               <NutritionStatePanel
@@ -521,7 +561,7 @@ export default function CoachNutritionV2Screen() {
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={`${nutritionPlanCtaLabel(item.planStatus)} para ${item.clientName}`}
-              onPress={() => router.push(nutritionV2BuilderHref(item.clientId))}
+              onPress={() => router.push(nutritionV2BuilderHref(item.clientId, item.planId))}
               className="mt-3 min-h-11 flex-row items-center justify-center gap-1.5 rounded-control border border-primary/30 bg-primary/10 px-3"
             >
               <Plus color={theme.primary} size={15} />
@@ -695,7 +735,7 @@ function NewPlanPickerSheet({
   onSearch: (value: string) => void
   roster: PickerEntry[]
   loading: boolean
-  onChoose: (clientId: string) => void
+  onChoose: (clientId: string, planId: string | null) => void
   textSecondary: string
 }) {
   const filtered = useMemo(() => filterNutritionPickerEntries(roster, search), [roster, search])
@@ -742,7 +782,7 @@ function NewPlanPickerSheet({
                   key={entry.clientId}
                   accessibilityRole="button"
                   accessibilityLabel={`${nutritionPlanCtaLabel(entry.planStatus)} para ${entry.clientName}`}
-                  onPress={() => onChoose(entry.clientId)}
+                  onPress={() => onChoose(entry.clientId, entry.planId)}
                   className="min-h-11 flex-row items-center gap-3 rounded-control border border-border-default bg-surface-card px-3 py-2.5"
                 >
                   <Text className="min-w-0 flex-1 font-semibold text-text-strong" numberOfLines={1}>

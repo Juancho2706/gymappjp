@@ -21,12 +21,17 @@ import {
     findMealVariantAssignments,
     findPlanModuleContext,
     insertDayVariant,
+    insertExchangeGroup,
     renameDayVariant,
     replaceMealExchangeTargets,
     setMealDayVariant,
     setPlanLastEditedBy,
     setPlanMode,
+    softDeleteExchangeGroup,
+    updateExchangeGroup,
+    type ExchangeGroupWriteValues,
 } from '@/infrastructure/db/exchanges.repository'
+import { toExchangeGroupSlug } from '@eva/schemas/nutrition-exchanges'
 
 /**
  * Servicio de aplicación del módulo `nutrition_exchanges`.
@@ -92,6 +97,155 @@ export async function getExchangeGroupsForCoach(
     return findExchangeGroupsForScope(db, coachId, scope)
 }
 
+// ─── Grupos PROPIOS del coach (porciones propias, P-A) ──────────────────────────
+//
+// Gating: las porciones NO son Pro ni exigen módulo nuevo (decisión vigente del SPEC de
+// porciones) ⇒ acá NO se llama `assertModule`. El techo de autorización lo pone el CALLER
+// (server action: `authorizeCoach` = sesión + rate limit + rollout V2 + workspace activo;
+// API mobile: `gateExchanges`) y, debajo de todo, la RLS `xg_insert/update/delete`.
+//
+// F1: el grupo se crea SIEMPRE coach-scoped (`coach_id = actor`, `team_id NULL`). Los grupos
+// de POOL quedan fuera de alcance porque `xg_insert` los restringe a gestores del team
+// (`current_user_managed_team_ids()`) y un coach miembro recibiría un 42501 opaco.
+
+export const MAX_CUSTOM_EXCHANGE_GROUPS = 30
+
+/** Scope de workspace con el que se resuelve el catálogo visible (system + propios + team). */
+export type ExchangeGroupScope = { orgId: string | null; activeTeamId: string | null }
+
+export type ExchangeGroupInput = {
+    name: string
+    code: string
+    /** Opcional: si falta se deriva del nombre (`toExchangeGroupSlug`). */
+    slug?: string | null
+    refCalories: number
+    refProteinG: number
+    refCarbsG: number
+    refFatsG: number
+    color?: string | null
+}
+
+export type ExchangeGroupConflict = 'code' | 'slug' | null
+
+/**
+ * Unicidad CASE-INSENSITIVE de `code` y `slug` contra TODO el catálogo visible (los 9
+ * system + los propios + los del team activo). Es una decisión PURA para poder testearla
+ * sin DB. Los índices únicos de la tabla son solo por `(coach_id, slug)`: NO impiden que un
+ * coach cree su propia "C" y confunda al alumno, por eso el chequeo del código vive acá.
+ * `excludeId` deja fuera el grupo que se está editando (renombrarlo a sí mismo no colisiona).
+ */
+export function findExchangeGroupConflict(
+    catalog: Pick<ExchangeGroup, 'id' | 'code' | 'slug'>[],
+    candidate: { code: string; slug: string },
+    excludeId?: string | null
+): ExchangeGroupConflict {
+    const code = candidate.code.trim().toLowerCase()
+    const slug = candidate.slug.trim().toLowerCase()
+    for (const group of catalog) {
+        if (excludeId && group.id === excludeId) continue
+        if (group.code.trim().toLowerCase() === code) return 'code'
+    }
+    for (const group of catalog) {
+        if (excludeId && group.id === excludeId) continue
+        if (group.slug.trim().toLowerCase() === slug) return 'slug'
+    }
+    return null
+}
+
+export function exchangeGroupConflictMessage(conflict: Exclude<ExchangeGroupConflict, null>, code: string): string {
+    return conflict === 'code'
+        ? `Ya existe un grupo con el código «${code}». Elige otro.`
+        : 'Ya tienes un grupo con ese nombre. Elige otro.'
+}
+
+/** Normaliza el payload validado a las columnas de la tabla (slug derivado, código en mayúsculas). */
+function toWriteValues(input: ExchangeGroupInput): ExchangeGroupWriteValues {
+    const name = input.name.trim()
+    const slug = (input.slug ?? '').trim().toLowerCase() || toExchangeGroupSlug(name)
+    return {
+        slug,
+        code: input.code.trim().toUpperCase(),
+        name,
+        refCalories: input.refCalories,
+        refProteinG: input.refProteinG,
+        refCarbsG: input.refCarbsG,
+        refFatsG: input.refFatsG,
+        color: input.color ?? null,
+    }
+}
+
+export type ExchangeGroupWriteResult =
+    | { success: true; group: ExchangeGroup }
+    | { success: false; error: string }
+
+export async function createCoachExchangeGroup(
+    db: DB,
+    input: { actorCoachId: string; scope: ExchangeGroupScope; values: ExchangeGroupInput }
+): Promise<ExchangeGroupWriteResult> {
+    const values = toWriteValues(input.values)
+    if (!values.slug) return { success: false, error: 'El nombre debe tener al menos una letra o número.' }
+
+    const catalog = await findExchangeGroupsForScope(db, input.actorCoachId, input.scope)
+    const own = catalog.filter((g) => !g.isSystem)
+    if (own.length >= MAX_CUSTOM_EXCHANGE_GROUPS) {
+        return { success: false, error: `Alcanzaste el máximo de ${MAX_CUSTOM_EXCHANGE_GROUPS} grupos propios.` }
+    }
+    const conflict = findExchangeGroupConflict(catalog, values)
+    if (conflict) return { success: false, error: exchangeGroupConflictMessage(conflict, values.code) }
+
+    // Los custom van SIEMPRE después de los system en el picker (sortGroupsForPicker ordena
+    // por isSystem primero); el sort_order solo estabiliza el orden entre propios.
+    const { group, error } = await insertExchangeGroup(
+        db,
+        { coachId: input.actorCoachId, teamId: null },
+        values,
+        100 + own.length
+    )
+    if (error || !group) return { success: false, error: error ?? 'No se pudo crear el grupo.' }
+    return { success: true, group }
+}
+
+export async function updateCoachExchangeGroup(
+    db: DB,
+    input: { actorCoachId: string; scope: ExchangeGroupScope; groupId: string; values: ExchangeGroupInput }
+): Promise<ExchangeGroupWriteResult> {
+    const values = toWriteValues(input.values)
+    if (!values.slug) return { success: false, error: 'El nombre debe tener al menos una letra o número.' }
+
+    const catalog = await findExchangeGroupsForScope(db, input.actorCoachId, input.scope)
+    const target = catalog.find((g) => g.id === input.groupId)
+    if (!target) return { success: false, error: 'Ese grupo ya no está disponible.' }
+    if (target.isSystem) return { success: false, error: 'Los grupos del sistema no se pueden editar.' }
+    if (target.composedOf) return { success: false, error: 'Los grupos compuestos todavía no se pueden editar.' }
+
+    const conflict = findExchangeGroupConflict(catalog, values, input.groupId)
+    if (conflict) return { success: false, error: exchangeGroupConflictMessage(conflict, values.code) }
+
+    const { group, error } = await updateExchangeGroup(db, input.groupId, values)
+    if (error || !group) return { success: false, error: error ?? 'No se pudo editar el grupo.' }
+    return { success: true, group }
+}
+
+/**
+ * Soft-delete del grupo propio. Lo YA publicado no cambia (snapshots congelados); lo que sí
+ * rompe es un BORRADOR que siga apuntando al grupo: `resolveExchangeGroupsForDraft` falla
+ * cerrado con `EXCHANGE_GROUP_NOT_FOUND` al publicar. Por eso la UI quita el grupo de las
+ * franjas en edición al borrarlo y el aviso lo dice explícito.
+ */
+export async function deleteCoachExchangeGroup(
+    db: DB,
+    input: { actorCoachId: string; scope: ExchangeGroupScope; groupId: string }
+): Promise<{ success: boolean; error?: string }> {
+    const catalog = await findExchangeGroupsForScope(db, input.actorCoachId, input.scope)
+    const target = catalog.find((g) => g.id === input.groupId)
+    if (!target) return { success: false, error: 'Ese grupo ya no está disponible.' }
+    if (target.isSystem) return { success: false, error: 'Los grupos del sistema no se pueden eliminar.' }
+
+    const { error } = await softDeleteExchangeGroup(db, input.groupId)
+    if (error) return { success: false, error }
+    return { success: true }
+}
+
 /**
  * Coerción server-side del payload client-controlled (gotcha F4 de movida-areas):
  * todo `exchangeGroupId` debe resolver contra los grupos VISIBLES para el actor
@@ -112,6 +266,18 @@ export async function verifyGroupsVisibleToActor(
     const visible = new Set((data ?? []).map((g) => g.id as string))
     const missing = unique.filter((id) => !visible.has(id))
     return { ok: missing.length === 0, missing }
+}
+
+/**
+ * Variante de 1 grupo para el alta/edición de alimentos propios (P-B, clasificar): antes de
+ * escribir `foods.exchange_group_id` hay que confirmar que ese grupo es VISIBLE para el coach
+ * (system o propio/team). El FK de `foods` acepta cualquier grupo existente — incluido el
+ * custom de OTRO coach — así que sin esta verificación un id pegado a mano clasificaría el
+ * alimento en un grupo ajeno. Misma regla, mismo techo (RLS `xg_select`).
+ */
+export async function isExchangeGroupVisibleToActor(db: DB, groupId: string): Promise<boolean> {
+    const { ok } = await verifyGroupsVisibleToActor(db, [groupId])
+    return ok
 }
 
 export async function saveMealExchangeTargets(

@@ -17,10 +17,19 @@ import { QE_COPY } from './microcopy'
 const NUTRITION_PRO_UPGRADE_HREF = '/coach/subscription'
 
 export function PublishBar() {
-  const { changeCount, isPending, publishError, upgradeRequired, openConfirm, retryPublish, discardChanges } =
-    useQuickEdit()
+  const {
+    changeCount,
+    isPending,
+    publishError,
+    upgradeRequired,
+    substitutionsFailed,
+    retrySubstitutions,
+    openConfirm,
+    retryPublish,
+    discardChanges,
+  } = useQuickEdit()
 
-  const visible = changeCount > 0 || publishError !== null || upgradeRequired
+  const visible = changeCount > 0 || publishError !== null || upgradeRequired || substitutionsFailed
   if (!visible) return null
 
   return (
@@ -35,6 +44,28 @@ export function PublishBar() {
                 Mejorar mi plan
               </Link>
             </p>
+          </div>
+        ) : null}
+        {/* NUT-008: la lectura de los reemplazos autorizados fallo. Publicar los borraria
+            (la publicacion reescribe el plan completo), asi que se bloquea con reintento. */}
+        {substitutionsFailed ? (
+          <div
+            data-testid="qe-substitutions-error"
+            className="mb-2 flex flex-col gap-2 rounded-control border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200"
+          >
+            <div className="flex items-start gap-2">
+              <AlertTriangle aria-hidden="true" className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+              <p>{QE_COPY.substitutionsFailed}</p>
+            </div>
+            <button
+              type="button"
+              onClick={retrySubstitutions}
+              disabled={isPending}
+              className="inline-flex min-h-9 items-center justify-center gap-1.5 self-start rounded-control border border-amber-400 bg-surface-card px-3 text-xs font-semibold text-amber-900 transition-colors hover:bg-amber-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 dark:bg-transparent dark:text-amber-200 dark:hover:bg-amber-950/60"
+            >
+              <RefreshCcw aria-hidden="true" className="h-3.5 w-3.5" />
+              {QE_COPY.substitutionsRetry}
+            </button>
           </div>
         ) : null}
         {publishError ? (
@@ -68,7 +99,7 @@ export function PublishBar() {
             <button
               type="button"
               onClick={openConfirm}
-              disabled={isPending || changeCount === 0}
+              disabled={isPending || changeCount === 0 || substitutionsFailed}
               className="inline-flex min-h-11 items-center gap-2 rounded-control bg-primary/100 px-4 text-sm font-semibold text-white transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
             >
               {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}

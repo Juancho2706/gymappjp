@@ -34,6 +34,13 @@ export const QUICK_EDIT_COPY = {
   permSubstitute: 'Puede sustituir',
   publishError: 'No se pudo publicar.',
   retry: 'Reintentar',
+  /**
+   * NUT-008: el carry-over de reemplazos autorizados no esta resuelto. Publicar los borraria
+   * (la publicacion reescribe el plan completo), asi que se bloquea hasta tenerlos.
+   */
+  substitutionsLoading: 'Estamos cargando los reemplazos autorizados. Espera un segundo antes de publicar.',
+  substitutionsFailed:
+    'No pudimos cargar los reemplazos autorizados de este plan. Reintenta antes de publicar: si publicas ahora, tu alumno los perdería.',
   emptySlot: 'Franja sin alimentos.',
   addFood: 'Agregar alimento',
   addSlot: 'Agregar franja',
@@ -42,6 +49,32 @@ export const QUICK_EDIT_COPY = {
   targetsTitle: 'Metas diarias',
   flexibleHint: 'Plan flexible: el alumno registra libre contra estas metas. Ajusta y publica.',
   lastSlotBlocked: 'El plan estructurado necesita al menos una franja.',
+  // ── Multi-día (FD5): alta/baja/cambio de día desde el modo edición (espejo web) ──
+  baseDayEyebrow: 'Día base',
+  baseDayHint: 'Se aplica en los días que no tienen plan propio.',
+  specificDayEyebrow: 'Día específico',
+  addDay: 'Agregar día',
+  addDayTitle: 'Agregar días al plan',
+  addDayHint: 'Elige uno o más días. Los días que no elijas siguen con el día base.',
+  addDaySourceLabel: 'Contenido del día nuevo',
+  addDaySourceClone: 'Copiar el día base',
+  addDaySourceEmpty: 'Empezar vacío',
+  addDayEmptySelection: 'Elige al menos un día.',
+  dayTaken: 'Ya tiene plan propio',
+  dayMenuTitle: 'Opciones del día',
+  changeDay: 'Cambiar día',
+  changeDayTitle: 'Cambiar el día',
+  changeDayHint: 'Elige el día de la semana que sigue este plan.',
+  renameDay: 'Renombrar',
+  renameDayTitle: 'Renombrar el día',
+  dayNameLabel: 'Nombre del día',
+  dayNamePlaceholder: 'Sábado, Día de entrenamiento...',
+  removeDay: 'Eliminar día',
+  removeDayTitle: '¿Eliminar el día?',
+  dayRemovedUndo: 'Día eliminado',
+  /** Gate Pro `multi_variant`: el server rechaza igual; el candado evita el callejón. */
+  multiDayLocked:
+    'Armar días distintos (por ejemplo el fin de semana) es parte de Nutrición Pro, incluido en los planes pagos.',
   discardTitle: '¿Descartar los cambios?',
   editingEyebrow: 'Modo edición',
   editingHint: 'Toca una cantidad para ajustarla. Publica cuando termines.',
@@ -59,6 +92,16 @@ export function discardConfirmBody(n: number): string {
 export function publishConfirmBody(studentName: string, futureDate: string | null): string {
   const cuando = futureDate ? `desde el ${futureDate}` : 'desde hoy'
   return `Los cambios aplican ${cuando} y ${studentName} verá el plan actualizado de inmediato. Lo que ya registró hoy no se modifica.`
+}
+
+/** CTA del sheet de alta de días: "Agregar día" / "Agregar 2 días". */
+export function addDayCta(n: number): string {
+  return n <= 1 ? 'Agregar día' : `Agregar ${n} días`
+}
+
+/** Cuerpo del confirm de baja de un día específico. */
+export function removeDayConfirmBody(label: string): string {
+  return `Se quitará "${label}" con sus franjas. Ese día vuelve a seguir el día base.`
 }
 
 export function publishSuccessToast(studentName: string): string {

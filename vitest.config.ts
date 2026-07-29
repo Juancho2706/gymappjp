@@ -29,6 +29,10 @@ export default defineConfig({
       // Subpath ANTES del paquete raiz (resolucion por prefijo).
       '@eva/schemas/screening': path.resolve(__dirname, './packages/schemas/screening.ts'),
       '@eva/schemas/bodycomp': path.resolve(__dirname, './packages/schemas/bodycomp.ts'),
+      // Alcanzado desde `api/mobile/nutrition-v2/_shared` -> feature-prefs.service ->
+      // nutrition-exchanges.service. Sin este subpath el alias raiz resolvia a
+      // `packages/schemas/index.ts/nutrition-exchanges` y la suite del endpoint no cargaba.
+      '@eva/schemas/nutrition-exchanges': path.resolve(__dirname, './packages/schemas/nutrition-exchanges.ts'),
       '@eva/schemas': path.resolve(__dirname, './packages/schemas/index.ts'),
       '@eva/calc': path.resolve(__dirname, './packages/calc/index.ts'),
       '@eva/tiers': path.resolve(__dirname, './packages/tiers/index.ts'),

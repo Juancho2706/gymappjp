@@ -19,12 +19,13 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { qeSlotSubtotal, type QeSlot } from './quick-edit-state'
+import { qeSlotPortionTotals, qeSlotSubtotal, qeCombineSubtotals, type QeSlot } from './quick-edit-state'
 import { useQuickEdit, genQuickEditKey } from './QuickEditProvider'
 import { EditableItemRow } from './EditableItemRow'
 import { EditablePortionsCard } from './EditablePortionsCard'
 import { FoodPickerSheet } from './FoodPickerSheet'
 import { QE_COPY } from './microcopy'
+import { PORTIONS_COPY } from '@/lib/nutrition-portions-copy'
 
 export function EditableSlotCard({
   variantKey,
@@ -35,10 +36,13 @@ export function EditableSlotCard({
   slot: QeSlot
   index: number
 }) {
-  const { clientId, dispatch, errors, showErrors, isPending } = useQuickEdit()
+  const { clientId, dispatch, errors, showErrors, isPending, exchangeGroups } = useQuickEdit()
   const [addOpen, setAddOpen] = useState(false)
   const [confirmingDelete, setConfirmingDelete] = useState(false)
-  const subtotal = qeSlotSubtotal(slot)
+  // El subtotal SUMA las porciones a eleccion de la franja (macros congelados del plan),
+  // igual que el builder: la card de porciones se edita justo arriba y antes no contaba.
+  const portionTotals = qeSlotPortionTotals(slot, exchangeGroups)
+  const subtotal = qeCombineSubtotals(qeSlotSubtotal(slot), portionTotals)
   const nameError = showErrors ? errors[`slot.${slot.key}.name`] : undefined
 
   function handleRemoveSlot() {
@@ -167,6 +171,12 @@ export function EditableSlotCard({
           carbsG={subtotal.carbsG}
           fatsG={subtotal.fatsG}
         />
+        {portionTotals ? (
+          // Redondeo entero + prefijo ~: valor referencial (mismo copy que el builder).
+          <p className="w-full text-xs text-muted">
+            {PORTIONS_COPY.builder.subtotalPortionsNote(String(Math.round(portionTotals.calories)))}
+          </p>
+        ) : null}
       </div>
 
       <FoodPickerSheet

@@ -4,6 +4,7 @@ import { getNutritionPlansPageCoach } from '../nutrition-plans/_data/nutrition-p
 import { getPreferredWorkspaceForRender } from '@/services/auth/workspace-render-cache'
 import {
   getNutritionCoachHubV2ForWeb,
+  getNutritionCoachRosterV2ForWeb,
   nutritionV2CoachScopeFromWorkspace,
 } from '@/services/nutrition-v2-read.service'
 import { isNutritionV2Enabled } from '@/services/nutrition-v2-rollout.service'
@@ -50,30 +51,17 @@ export default async function CoachNutritionV2Page({ searchParams }: Props) {
     pageSize: 25,
   })
 
-  // Roster completo del workspace para el picker global "Nuevo plan" (CTA sin alumno
-  // seleccionado). Pagina el hub scoped (keyset por updatedAt) hasta un tope; el picker
-  // filtra client-side. Independiente de la paginacion visible del roster de abajo.
-  const pickerRoster: NewPlanPickerEntry[] = []
-  {
-    let cursor: { updatedAt: string; clientId: string } | null = null
-    for (let page = 0; page < 8; page += 1) {
-      const chunk = await getNutritionCoachHubV2ForWeb({
-        scope,
-        cursorUpdatedAt: cursor?.updatedAt ?? null,
-        cursorClientId: cursor?.clientId ?? null,
-        pageSize: 50,
-      })
-      for (const item of chunk.items) {
-        pickerRoster.push({
-          clientId: item.clientId,
-          clientName: item.clientName,
-          planStatus: item.planStatus,
-        })
-      }
-      if (!chunk.hasMore || !chunk.nextCursor) break
-      cursor = chunk.nextCursor
-    }
-  }
+  // NUT-026: primera pagina alfabetica del roster para el picker global "Nuevo plan". Antes
+  // aqui vivia un bucle de 8 paginas x 50 sobre el hub scoped (8 round-trips encadenados en
+  // el render, tope silencioso de 400 alumnos, busqueda client-side sobre el array truncado).
+  // Ahora el picker busca server-side (`searchCoachRosterAction`) y esta pagina es solo el
+  // estado inicial del dialogo.
+  const initialRoster = await getNutritionCoachRosterV2ForWeb({ scope, pageSize: 50 })
+  const pickerRoster: NewPlanPickerEntry[] = initialRoster.items.map((item) => ({
+    clientId: item.clientId,
+    clientName: item.clientName ?? 'Alumno',
+    planStatus: item.planStatus,
+  }))
 
   const initialFilters = parseRosterFilters(query)
   const todayLocalDate = localDateOf(new Date().toISOString(), COACH_TIMEZONE) ?? ''
@@ -88,7 +76,7 @@ export default async function CoachNutritionV2Page({ searchParams }: Props) {
       backHref="/coach/dashboard"
       title="Centro de Nutrición"
       description="Planes, consumo reciente y alumnos por atender."
-      actions={<NewPlanPickerButton roster={pickerRoster} />}
+      actions={<NewPlanPickerButton roster={pickerRoster} hasMore={initialRoster.hasMore} />}
     >
       <NutritionHubTabs
         roster={
