@@ -194,6 +194,18 @@ interface BaseVersionRow {
   protocol_notes: string | null
 }
 
+/**
+ * Version base leida por el `publish` del wizard: solo las notas que el asistente NO edita.
+ * OJO: nunca seleccionar `private_notes` (columna deprecada, sin grant de SELECT para
+ * `authenticated`: pedirla tira 42501 sobre nutrition_plan_versions_v2).
+ */
+interface PublishBaseVersionRow {
+  id: string
+  plan_id: string
+  protocol_notes: string | null
+  visible_notes: string | null
+}
+
 export async function POST(request: NextRequest) {
   const startedAt = Date.now()
 
@@ -283,10 +295,44 @@ async function handlePublish(
     )
   }
 
+  // Carry-over de NOTAS al republicar desde el asistente RN (misma perdida de datos que la ola 0
+  // arreglo en la web): publicar reescribe la version COMPLETA, asi que lo que el wizard no edita
+  // hay que reponerlo desde la version base que el coach tenia en pantalla (la misma del CAS).
+  //  - `protocol_notes`: SIEMPRE server-side. El wizard no tiene campo y `assembleDraft` emite
+  //    null; reponerlo DESPUES del gate Pro es grandfathering por construccion (el valor sale de
+  //    una version YA publicada, no es forjable desde el cliente) y no bloquea a un coach base.
+  //  - `visible_notes`: RESPALDO defensivo. El draft las trae desde la rehidratacion del wizard;
+  //    solo si llegan vacias (binario RN viejo, sin el carry-over cliente) se reponen de la base.
+  //    NO es capacidad Pro, asi que no toca el gate. El borrado intencional de notas vive en la
+  //    edicion rapida (`quickEditPublish`, que SI las edita y por eso no lleva este respaldo).
+  let draftToPersist = draft
+  if (expectedCurrentVersionId && draft.planId) {
+    const baseRes = await db
+      .from('nutrition_plan_versions_v2')
+      .select<PublishBaseVersionRow>('id, plan_id, protocol_notes, visible_notes')
+      .eq('id', expectedCurrentVersionId)
+      .maybeSingle()
+    // Fail-closed: sin la version base no podemos garantizar que la publicacion no borre notas.
+    if (baseRes.error) {
+      return failure(startedAt, 'SCOPE_DENIED', 'No pudimos leer la versión vigente del plan.', {}, gate.rolloutReason)
+    }
+    const base = baseRes.data
+    // Anti-confusion de ids: la version base debe pertenecer al plan que el draft republica.
+    if (base && base.plan_id === draft.planId) {
+      draftToPersist = {
+        ...draft,
+        ...(hasContent(base.protocol_notes) ? { protocolNotes: base.protocol_notes } : {}),
+        ...(!hasContent(draft.visibleNotes) && hasContent(base.visible_notes)
+          ? { visibleNotes: base.visible_notes }
+          : {}),
+      }
+    }
+  }
+
   const result = await persistAndPublishDraft({
     db,
     userId: gate.userId,
-    draft,
+    draft: draftToPersist,
     idempotencyKey,
     effectiveFrom,
     ...(expectedCurrentVersionId ? { expectedCurrentVersionId } : {}),

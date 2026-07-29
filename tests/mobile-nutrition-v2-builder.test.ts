@@ -75,6 +75,8 @@ function structuredState(): BuilderState {
     effectiveFrom: '2026-07-20',
     targets: { calories: '2000', proteinG: '150', carbsG: '', fatsG: '' },
     permissions: { canRegisterFreely: false, canAdjustPrescribedQuantity: true, canSubstitute: false },
+    // Carry-over del plan vigente (el wizard no las edita): presente y en null como el estado real.
+    visibleNotes: null,
     variants: [
       {
         ...createBaseVariant(),
@@ -405,6 +407,36 @@ describe('reducer / reemplazos autorizados F-02 (cinturon triple + remocion)', (
   })
 })
 
+// Perdida de datos (P0, paridad de la ola 0 web): publicar reescribe la version COMPLETA y las
+// notas visibles se escriben en la edicion rapida, no en el wizard. Emitirlas de vuelta es lo
+// unico que evita que "Rehacer con el asistente" las borre en silencio desde la app.
+describe('assembleDraft / notas del plan (carry-over)', () => {
+  it('emite las notas visibles del estado, ya trimeadas', () => {
+    const state = { ...structuredState(), visibleNotes: '  Domingo comida libre, hidratate  ' }
+    const draft = assembleAndValidateDraft(state, { clientId: CLIENT_ID })
+    expect(draft.visibleNotes).toBe('Domingo comida libre, hidratate')
+  })
+
+  it('notas visibles vacias o ausentes => null (paridad con la edicion rapida)', () => {
+    const blank = assembleDraft({ ...structuredState(), visibleNotes: '   ' }, { clientId: CLIENT_ID })
+    expect(blank.visibleNotes).toBeNull()
+    const sinClave: BuilderState = { ...structuredState() }
+    delete sinClave.visibleNotes
+    expect(assembleDraft(sinClave, { clientId: CLIENT_ID }).visibleNotes).toBeNull()
+  })
+
+  it('el protocolo profesional NO viaja del cliente (lo repone el endpoint movil)', () => {
+    const state = { ...structuredState(), visibleNotes: 'Hidratate' }
+    expect(assembleDraft(state, { clientId: CLIENT_ID }).protocolNotes).toBeNull()
+    expect(assembleDraft(state, { clientId: CLIENT_ID }).privateNotes).toBeNull()
+  })
+
+  it('las notas visibles NO son capacidad Pro: un coach base publica igual', () => {
+    const state = { ...structuredState(), visibleNotes: 'Toma agua' }
+    expect(requiredNutritionProFeature(assembleDraft(state, { clientId: CLIENT_ID }))).toBeNull()
+  })
+})
+
 describe('assembleDraft / reemplazos F-02 (spread condicional)', () => {
   it('omite la clave substitutions cuando no hay reemplazos (byte-identico a hoy)', () => {
     const draft = assembleDraft(structuredState(), { clientId: CLIENT_ID })
@@ -689,6 +721,37 @@ describe('reducer / RESTORE (respaldo local del builder, 4B-13)', () => {
       state: { ...structuredState(), step: 99 },
     })
     expect(restored.step).toBe(3)
+  })
+
+  // Las notas visibles son carry-over del plan, no contenido del wizard: un borrador guardado en
+  // AsyncStorage ANTES del carry-over no las trae y restaurarlo NO puede borrarlas.
+  it('un borrador PRE-notas conserva las notas visibles del plan rehidratado', () => {
+    const current = { ...createEmptyBuilderState('2026-07-20'), visibleNotes: 'Domingo comida libre' }
+    const legacy: Record<string, unknown> = { ...structuredState() }
+    delete legacy.visibleNotes
+    const restored = builderReducer(current, { type: 'RESTORE', state: legacy })
+    expect(restored.visibleNotes).toBe('Domingo comida libre')
+    expect(restored.planName).toBe('Plan estructurado')
+  })
+
+  it('un borrador que SI trae la clave manda (incluso si las dejo vacias)', () => {
+    const current = { ...createEmptyBuilderState('2026-07-20'), visibleNotes: 'Vieja' }
+    const restored = builderReducer(current, {
+      type: 'RESTORE',
+      state: { ...structuredState(), visibleNotes: null },
+    })
+    expect(restored.visibleNotes).toBeNull()
+  })
+
+  // El camino REAL de la rehidratacion RN: `rehydrateBuilderState` empuja el plan vigente por
+  // RESTORE, asi que la clave tiene que sobrevivir al reducer o el carry-over no sirve de nada.
+  it('RESTORE desde la rehidratacion propaga las notas del plan al estado', () => {
+    const restored = builderReducer(createEmptyBuilderState('2026-07-20'), {
+      type: 'RESTORE',
+      state: { ...structuredState(), visibleNotes: 'Toma 2L de agua' },
+    })
+    expect(restored.visibleNotes).toBe('Toma 2L de agua')
+    expect(assembleDraft(restored, { clientId: CLIENT_ID }).visibleNotes).toBe('Toma 2L de agua')
   })
 })
 

@@ -247,6 +247,27 @@ describe('rehydrateBuilderState RN — plan vigente -> estado del wizard', () =>
     ])
   })
 
+  // PERDIDA DE DATOS (P0): las "Notas para tu alumno" se escriben en la edición rápida y el wizard
+  // RN no tiene campo para editarlas. Como publicar reescribe la versión COMPLETA, sin este
+  // round-trip "Rehacer con el asistente" + publicar las borraba en silencio desde la app.
+  it('round-trip: rehidrata las notas visibles y re-publicar las CONSERVA', () => {
+    const model = { ...planModel([variant()]), visibleNotes: 'Domingo comida libre, hidrátate' }
+    const result = rehydrateBuilderState({ planModel: model, effectiveFrom: '2026-07-28' })!
+    expect(result.state.visibleNotes).toBe('Domingo comida libre, hidrátate')
+
+    const draft = assembleDraft(result.state, { clientId: CLIENT_ID, planId: PLAN_ID })
+    expect(draft.visibleNotes).toBe('Domingo comida libre, hidrátate')
+    // El protocolo profesional NO viaja del cliente: es capacidad Pro y lo repone el endpoint
+    // móvil desde la versión base (carry-over server-side).
+    expect(draft.protocolNotes).toBeNull()
+  })
+
+  it('plan sin notas visibles: el draft las emite null (no inventa contenido)', () => {
+    const result = rehydrateBuilderState({ planModel: planModel([variant()]), effectiveFrom: '2026-07-28' })!
+    expect(result.state.visibleNotes).toBeNull()
+    expect(assembleDraft(result.state, { clientId: CLIENT_ID, planId: PLAN_ID }).visibleNotes).toBeNull()
+  })
+
   it('normaliza un read-model con dos variantes marcadas default (dato imposible, tolerado)', () => {
     const model = planModel([variant(), variant({ key: 'otra', label: 'Otra', dayOfWeek: null, isDefault: true })])
     const state = rehydrateBuilderState({ planModel: model, effectiveFrom: '2026-07-28' })!.state

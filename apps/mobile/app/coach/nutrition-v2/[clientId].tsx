@@ -30,11 +30,14 @@ import {
   NutritionCard,
   PlanVersionBadge,
   PortionDayCoverageCard,
+  PrescribedPortionChips,
   StrategyBadge,
+  WeekDayNav,
 } from '../../../components/nutrition-v2'
 import { Sheet } from '../../../components/Sheet'
 import {
   NutritionClientDetailReadModelSchema,
+  buildNutritionWeek,
   createNutritionMacroValue,
   describeLegacyHistoryDay,
   formatNutritionCalories,
@@ -42,7 +45,9 @@ import {
   sortNutritionDayVariantsForDisplay,
   type NutritionClientDetailReadModel,
   type NutritionV2CoachScope,
+  type NutritionWeekCell,
 } from '@eva/nutrition-v2'
+import { formatNutritionShortDate } from '../../../lib/date-utils'
 import { isEnabled } from '../../../lib/flags'
 import { useEntitlements, useNutritionV2CoachFlagForClient } from '../../../lib/entitlements'
 import { useWorkspace } from '../../../lib/workspace'
@@ -126,6 +131,16 @@ function formatConvertedAtSantiago(isoTimestamp: string): string {
 // Copy offline compartido con el quick-edit (delta 11): assign/archive fallan-cerrado sin red.
 const OFFLINE_COPY = 'Sin conexión. Reintenta cuando vuelvas a tener señal.'
 const EFFECTIVE_DATE_RE = /^\d{4}-\d{2}-\d{2}$/
+
+/**
+ * Celda de la semana de la ficha con los tipos REALES del read model del coach: la variante trae
+ * `label`/`mealSlots` y la fila de historial su capa legacy, así el cuerpo del día no castea nada
+ * (el helper compartido es genérico justamente para esto).
+ */
+type CoachWeekCell = NutritionWeekCell<
+  NutritionClientDetailReadModel['plan']['dayVariants'][number],
+  NutritionClientDetailReadModel['recentDays'][number]
+>
 
 /** Fila del roster de destino para asignar (espejo de la web AssignRosterEntry). */
 interface AssignRosterEntry {
@@ -214,6 +229,10 @@ export default function CoachNutritionV2ClientScreen() {
   // null = sin link (o fail-soft) => sin banner, paridad con el `null` del web.
   const [convertedAtLabel, setConvertedAtLabel] = useState<string | null>(null)
   const date = useMemo(todayInSantiago, [])
+  // T3.5 — semana Lu-Do del alumno dentro de la ficha. Estado LOCAL (la ficha no navega ni vuelve
+  // a pedir nada): la semana se pinta con el payload que `clientDetail` ya trajo. Hoy arranca
+  // seleccionado porque es el día del que el coach pregunta primero.
+  const [selectedIso, setSelectedIso] = useState(date)
   // Fail-closed: only fetch once the workspace resolved AND collapses to a valid coach scope.
   const scope = useMemo(
     () =>
@@ -303,6 +322,28 @@ export default function CoachNutritionV2ClientScreen() {
     return hasNutritionPro ? detail.recentDays : filterHistoryDaysToBaseWindow(detail.recentDays, date)
   }, [date, detail, hasNutritionPro])
   const showHistoryUpsell = shouldShowNutritionProHistoryBanner({ hasNutritionPro })
+
+  // Semana Lu-Do compuesta con datos YA descargados: plan completo (`dayVariants`, el RPC devuelve
+  // TODAS las variantes) + historial disperso (`recentDays`, ya recortado a la ventana del addon).
+  // CERO fetch por celda y, sobre todo, cero `get_nutrition_today_v2` con otra fecha: ese RPC es
+  // `volatile` (materializa snapshots) y revienta con fecha > hoy+1. Días pasados = snapshot del
+  // historial; días futuros = proyección client-side de la variante que aplica.
+  const weekCells = useMemo<CoachWeekCell[]>(
+    () =>
+      detail
+        ? buildNutritionWeek({
+            variants: detail.plan.dayVariants,
+            history: recentDays,
+            weekStartIso: date,
+            todayIso: date,
+          })
+        : [],
+    [date, detail, recentDays],
+  )
+  const selectedCell = useMemo(
+    () => weekCells.find((cell) => cell.isoDate === selectedIso) ?? null,
+    [weekCells, selectedIso],
+  )
 
   // Banner "plan convertido" (D-08): solo se consulta cuando hay plan vigente; si no existe link
   // (o la lectura degrada), queda null y no se renderiza nada (paridad con el fail-soft del web).
@@ -403,6 +444,17 @@ export default function CoachNutritionV2ClientScreen() {
     multiDayPlan && !showTodayPlanLag
       ? resolveNutritionDayVariantForDate(detail.plan.dayVariants, date)
       : null
+
+  // T3.5 — día seleccionado de la semana. Sin celda (semana no compuesta) la ficha se comporta
+  // exactamente como antes: hoy. La sección del día NUNCA ofrece registro: la ficha del coach es
+  // read-only y el pasado, además, es solo lectura por regla de producto.
+  const showingToday = selectedCell == null || selectedCell.state === 'today'
+  const selectedDayLabel = formatNutritionShortDate(selectedIso, { todayIso: date, relative: true })
+  // "Aplica el sábado" SOLO para días futuros: rotular la variante de hoy sobre un día PASADO
+  // sería proyectar el plan vigente hacia atrás (el snapshot de ese día pudo congelar otra
+  // versión). El pasado se cuenta con su historial, nunca con la estructura de hoy.
+  const highlightedVariantId =
+    selectedCell != null && selectedCell.state === 'future' ? (selectedCell.variant?.id ?? null) : null
 
   // Modo edicion in-place (quick-edit): misma ruta, estado cliente. Al publicar, la
   // ficha re-lee el read model (reloadNonce) y el baseline se re-hidrata solo.
@@ -518,31 +570,82 @@ export default function CoachNutritionV2ClientScreen() {
         />
       ) : (
         <>
-          <MacroBudget
-            calories={{
-              consumed: detail.today.consumed.calories,
-              target: detail.today.targets.calories ?? 0,
-            }}
-            macros={[
-              createNutritionMacroValue('protein', {
-                consumed: detail.today.consumed.proteinG,
-                target: detail.today.targets.proteinG ?? 0,
-              }),
-              createNutritionMacroValue('carbs', {
-                consumed: detail.today.consumed.carbsG,
-                target: detail.today.targets.carbsG ?? 0,
-              }),
-              createNutritionMacroValue('fats', {
-                consumed: detail.today.consumed.fatsG,
-                target: detail.today.targets.fatsG ?? 0,
-              }),
-            ]}
-          />
+          {/* T3.5 — semana Lu-Do del alumno. La tira NO se desmonta al cambiar de día (solo cambia
+              el cuerpo de abajo) y HOY queda marcado aunque el coach esté mirando el sábado. Todo
+              sale del payload que la ficha ya trajo: cambiar de día no dispara una sola lectura. */}
+          <View className="gap-3">
+            <View className="flex-row flex-wrap items-center justify-between gap-2">
+              <Text className="font-display text-xl font-semibold text-text-strong">La semana</Text>
+              {!showingToday ? (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Volver a hoy"
+                  onPress={() => setSelectedIso(date)}
+                  className="min-h-11 flex-row items-center justify-center rounded-control border border-border-subtle bg-surface-card px-3"
+                >
+                  <Text className="text-xs font-semibold text-primary">Volver a hoy</Text>
+                </Pressable>
+              ) : null}
+            </View>
 
-          {/* Fila "Porciones" read-only bajo los macros del día (SPEC UX-b; web
-              coach/nutrition-v2/[clientId]/page.tsx:260-263). Misma fuente que el alumno
-              (read-model), cero cálculo nuevo; sin targets de porciones no renderiza nada. */}
-          <PortionDayCoverageCard coverage={detail.today.dayCoverage} />
+            <WeekDayNav
+              cells={weekCells}
+              selectedIso={selectedIso}
+              onSelect={setSelectedIso}
+              label={`Días de la semana de ${detail.client.fullName}`}
+            />
+
+            <Text className="text-xs font-semibold uppercase tracking-wide text-text-subtle">
+              {selectedDayLabel}
+            </Text>
+
+            {showingToday || selectedCell == null ? (
+              <>
+                <MacroBudget
+                  calories={{
+                    consumed: detail.today.consumed.calories,
+                    target: detail.today.targets.calories ?? 0,
+                  }}
+                  macros={[
+                    createNutritionMacroValue('protein', {
+                      consumed: detail.today.consumed.proteinG,
+                      target: detail.today.targets.proteinG ?? 0,
+                    }),
+                    createNutritionMacroValue('carbs', {
+                      consumed: detail.today.consumed.carbsG,
+                      target: detail.today.targets.carbsG ?? 0,
+                    }),
+                    createNutritionMacroValue('fats', {
+                      consumed: detail.today.consumed.fatsG,
+                      target: detail.today.targets.fatsG ?? 0,
+                    }),
+                  ]}
+                />
+
+                {/* Fila "Porciones" read-only bajo los macros del día (SPEC UX-b; web
+                    coach/nutrition-v2/[clientId]/page.tsx:260-263). Misma fuente que el alumno
+                    (read-model), cero cálculo nuevo; sin targets de porciones no renderiza nada.
+                    Solo HOY: `recentDays` no trae cobertura de porciones por día. */}
+                <PortionDayCoverageCard coverage={detail.today.dayCoverage} />
+
+                {/* Card "Hoy" (web page.tsx:273-281; copy verbatim del web, incluida la
+                    ortografía "segun/dia" sin tilde del original). */}
+                <NutritionCard>
+                  <Text className="font-display text-lg font-semibold text-text-strong">Hoy</Text>
+                  <Text className="mt-1 text-sm text-text-muted">
+                    {detail.today.consumed.entryCount} registro
+                    {detail.today.consumed.entryCount === 1 ? '' : 's'} ·{' '}
+                    {detail.today.mealSlots.length} franjas
+                  </Text>
+                  <Text className="mt-3 text-sm text-text-body">
+                    {detail.today.remaining.calories ?? 0} kcal restantes segun el snapshot del dia.
+                  </Text>
+                </NutritionCard>
+              </>
+            ) : (
+              <WeekDaySummaryCard cell={selectedCell} />
+            )}
+          </View>
 
           <NutritionCard>
             <Text className="font-display text-lg font-semibold text-text-strong">Plan vigente</Text>
@@ -560,20 +663,6 @@ export default function CoachNutritionV2ClientScreen() {
               </NutritionMotionButton>
             </View>
           </NutritionCard>
-
-          {/* Card "Hoy" (web page.tsx:273-281; copy verbatim del web, incluida la
-              ortografía "segun/dia" sin tilde del original). */}
-          <NutritionCard>
-            <Text className="font-display text-lg font-semibold text-text-strong">Hoy</Text>
-            <Text className="mt-1 text-sm text-text-muted">
-              {detail.today.consumed.entryCount} registro
-              {detail.today.consumed.entryCount === 1 ? '' : 's'} · {detail.today.mealSlots.length}{' '}
-              franjas
-            </Text>
-            <Text className="mt-3 text-sm text-text-body">
-              {detail.today.remaining.calories ?? 0} kcal restantes segun el snapshot del dia.
-            </Text>
-          </NutritionCard>
         </>
       )}
 
@@ -588,6 +677,16 @@ export default function CoachNutritionV2ClientScreen() {
                   {todayVariant?.id === variant.id ? (
                     <View className="rounded-pill border border-primary/30 bg-primary/10 px-2 py-0.5">
                       <Text className="text-[10px] font-semibold text-primary">Hoy aplica</Text>
+                    </View>
+                  ) : null}
+                  {/* T3.5: con un día FUTURO seleccionado en la tira, la estructura que le toca
+                      queda rotulada ("Aplica el sábado"). Solo futuro: rotular el pasado con el
+                      plan de hoy sería proyectar hacia atrás una versión que ese día no tuvo. */}
+                  {highlightedVariantId === variant.id && selectedCell != null ? (
+                    <View className="rounded-pill border border-border-default bg-surface-sunken px-2 py-0.5">
+                      <Text className="text-[10px] font-semibold text-text-body">
+                        Aplica el {selectedCell.longLabel.toLowerCase()}
+                      </Text>
                     </View>
                   ) : null}
                 </View>
@@ -628,9 +727,15 @@ export default function CoachNutritionV2ClientScreen() {
                             </View>
                           ))}
                         </View>
-                      ) : (
+                      ) : null}
+                      {/* Capa de porciones (P0-3, paridad con web page.tsx:362-368): la franja puede
+                          prescribir SOLO porciones, o porciones ademas de los alimentos fijos. Sin
+                          targets no pinta nada. */}
+                      <PrescribedPortionChips className="mt-2" targets={slot.exchangeTargets} />
+                      {slot.prescriptionItems.length === 0 &&
+                      (slot.exchangeTargets?.length ?? 0) === 0 ? (
                         <Text className="mt-2 text-xs text-text-muted">Sin alimentos prescritos en esta franja.</Text>
-                      )}
+                      ) : null}
                     </View>
                   ))}
                 </View>
@@ -678,7 +783,11 @@ export default function CoachNutritionV2ClientScreen() {
                   <View className="flex-row items-start justify-between gap-3">
                     <View className="min-w-0 flex-1">
                       <View className="flex-row flex-wrap items-center gap-2">
-                        <Text className="font-semibold text-text-strong">{day.localDate}</Text>
+                        {/* QW-10: fecha legible ("ayer", "sáb 25 jul"), no el ISO crudo. Mismo
+                            helper y mismas opciones que el historial del alumno RN. */}
+                        <Text className="font-semibold text-text-strong">
+                          {formatNutritionShortDate(day.localDate, { todayIso: date, relative: true })}
+                        </Text>
                         {legacy.isLegacy ? (
                           <View className="rounded-pill border border-warning-500/40 bg-warning-500/10 px-2 py-0.5">
                             <Text className="text-[10px] font-semibold text-warning-700">Historial anterior</Text>
@@ -784,6 +893,180 @@ export default function CoachNutritionV2ClientScreen() {
         />
       ) : null}
     </ScrollView>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Cuerpo del día seleccionado cuando NO es hoy (T3.5). Read-only estricto: el pasado muestra los
+// resultados congelados del snapshot del historial y el futuro, el plan proyectado — ninguno de los
+// dos ofrece jamás un control de registro (la ficha del coach no registra, y el alumno solo puede
+// registrar el día en curso). Se pinta con datos que la ficha YA tenía: cero fetch al cambiar de día.
+//
+// Reglas de datos que este componente respeta al pie de la letra:
+//  - `consumed = null` es SIN REGISTRO, no "registró cero": no se pintan ceros inventados.
+//  - las metas del pasado salen del snapshot (`cell.targets` con `targetsSource = 'snapshot'`),
+//    nunca de la estructura vigente, así republicar el plan no reescribe la historia;
+//  - un día del sistema anterior se cuenta con su capa legacy (sus totales V2 son ceros por
+//    construcción y mostrarían "0 kcal" sobre un día que sí tuvo registros).
+// Tono: pasado sin rojo ni culpa — "sin registros" es un dato, no un reproche.
+// ---------------------------------------------------------------------------
+
+/** ¿El snapshot dejó alguna meta comparable? Sin ninguna, las barras mentirían un "de 0". */
+function hasAnyMacroTarget(targets: {
+  calories: number | null
+  proteinG: number | null
+  carbsG: number | null
+  fatsG: number | null
+}): boolean {
+  return (
+    targets.calories != null ||
+    targets.proteinG != null ||
+    targets.carbsG != null ||
+    targets.fatsG != null
+  )
+}
+
+function WeekDaySummaryCard({ cell }: { cell: CoachWeekCell }) {
+  const targets = cell.targets
+  const consumed = cell.consumed
+  const legacy = cell.legacy
+
+  if (cell.state === 'future') {
+    return (
+      <NutritionCard>
+        <View className="flex-row flex-wrap items-center justify-between gap-2">
+          <Text className="min-w-0 flex-1 font-display text-base font-semibold text-text-strong">
+            {cell.variant ? cell.variant.label : 'Sin estructura para este día'}
+          </Text>
+          <View className="rounded-pill border border-border-subtle bg-surface-sunken px-2 py-0.5">
+            <Text className="text-[10px] font-semibold text-text-muted">Próximo</Text>
+          </View>
+        </View>
+        <Text className="mt-1 text-sm leading-5 text-text-muted">
+          {cell.variant
+            ? 'Esto es lo que le va a tocar. Todavía no hay nada que registrar.'
+            : 'El plan vigente no prescribe una estructura para este día.'}
+        </Text>
+        {targets ? (
+          <View className="mt-3">
+            <Text className="text-[11px] font-semibold uppercase tracking-wide text-text-subtle">
+              Metas del día
+            </Text>
+            <View className="mt-1">
+              <MacroChipRow
+                calories={targets.calories}
+                proteinG={targets.proteinG}
+                carbsG={targets.carbsG}
+                fatsG={targets.fatsG}
+                size="sm"
+              />
+            </View>
+          </View>
+        ) : null}
+      </NutritionCard>
+    )
+  }
+
+  if (cell.state === 'past-empty') {
+    return (
+      <NutritionCard>
+        <Text className="font-display text-base font-semibold text-text-strong">Sin registros</Text>
+        <Text className="mt-1 text-sm leading-5 text-text-muted">
+          Ese día no quedó ningún registro. No es un cero: simplemente no hay datos.
+        </Text>
+      </NutritionCard>
+    )
+  }
+
+  // Día del sistema anterior sin detalle V2: manda la capa legacy (mismas frases que "Últimos días").
+  if (legacy?.legacyOnly) {
+    return (
+      <NutritionCard>
+        <View className="flex-row flex-wrap items-center gap-2">
+          <Text className="font-display text-base font-semibold text-text-strong">Registro anterior</Text>
+          <View className="rounded-pill border border-warning-500/40 bg-warning-500/10 px-2 py-0.5">
+            <Text className="text-[10px] font-semibold text-warning-700">Historial anterior</Text>
+          </View>
+        </View>
+        {legacy.hasMacros && legacy.consumed ? (
+          <View className="mt-2">
+            <MacroChipRow
+              calories={legacy.consumed.calories}
+              proteinG={legacy.consumed.proteinG}
+              carbsG={legacy.consumed.carbsG}
+              fatsG={legacy.consumed.fatsG}
+              size="sm"
+            />
+          </View>
+        ) : (
+          <Text className="mt-1 text-sm text-text-muted">
+            {legacy.completionCount > 0 ? legacy.completionsLabel : 'Registrado en el sistema anterior'}
+          </Text>
+        )}
+        {legacy.mealsLabel ? (
+          <Text className="mt-2 text-xs leading-5 text-text-subtle">{legacy.mealsLabel}</Text>
+        ) : null}
+      </NutritionCard>
+    )
+  }
+
+  // Pasado con registro V2 y metas congeladas: mismo lenguaje visual que el bloque de hoy. Un
+  // snapshot puede existir con TODAS las metas en null (plan flexible o sin objetivos): ahí no hay
+  // adherencia que comparar y las barras dirían "de 0", así que cae al bloque honesto de abajo.
+  if (consumed && targets && hasAnyMacroTarget(targets)) {
+    return (
+      <>
+        <MacroBudget
+          calories={{ consumed: consumed.calories, target: targets.calories ?? 0 }}
+          macros={[
+            createNutritionMacroValue('protein', {
+              consumed: consumed.proteinG,
+              target: targets.proteinG ?? 0,
+            }),
+            createNutritionMacroValue('carbs', {
+              consumed: consumed.carbsG,
+              target: targets.carbsG ?? 0,
+            }),
+            createNutritionMacroValue('fats', {
+              consumed: consumed.fatsG,
+              target: targets.fatsG ?? 0,
+            }),
+          ]}
+        />
+        <NutritionCard>
+          <Text className="text-sm text-text-muted" style={{ fontVariant: ['tabular-nums'] }}>
+            {consumed.entryCount} registro{consumed.entryCount === 1 ? '' : 's'} ese día
+          </Text>
+          <Text className="mt-2 text-sm leading-5 text-text-body">
+            Resultados del día, tal como quedaron. Solo lectura.
+          </Text>
+          {legacy?.secondaryLabel ? (
+            <Text className="mt-2 text-xs text-text-subtle">{legacy.secondaryLabel}</Text>
+          ) : null}
+        </NutritionCard>
+      </>
+    )
+  }
+
+  // Hubo actividad pero el snapshot no dejó metas (o el consumo no viaja): se dice tal cual.
+  return (
+    <NutritionCard>
+      <Text className="font-display text-base font-semibold text-text-strong">Con actividad</Text>
+      {consumed ? (
+        <View className="mt-2">
+          <MacroChipRow
+            calories={consumed.calories}
+            proteinG={consumed.proteinG}
+            carbsG={consumed.carbsG}
+            fatsG={consumed.fatsG}
+            size="sm"
+          />
+        </View>
+      ) : null}
+      <Text className="mt-2 text-sm leading-5 text-text-muted">
+        Ese día no quedaron metas asignadas en el registro, así que no hay adherencia que comparar.
+      </Text>
+    </NutritionCard>
   )
 }
 

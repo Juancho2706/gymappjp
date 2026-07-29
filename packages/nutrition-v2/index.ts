@@ -7,6 +7,7 @@ export * from './aura'
 // the '@eva/nutrition-v2/conversion' subpath export (see package.json).
 export * from './read-models'
 export * from './day-variants'
+export * from './week-view'
 export * from './intake-normalize'
 export * from './intake-units'
 export * from './bulk-mark'
