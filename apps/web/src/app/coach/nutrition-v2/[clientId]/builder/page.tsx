@@ -52,6 +52,12 @@ export default async function CoachNutritionV2BuilderPage({ params }: Props) {
         strategy: existing.strategy,
         effectiveFrom: existing.effectiveFrom,
         name: existing.name,
+        // Guard multi-día (F0): el wizard ensambla SIEMPRE una variante ("Todos los días"),
+        // así que republicar desde aquí colapsaría un plan con varios días — hoy solo
+        // existen por conversión V1→V2 — a uno solo, sin aviso. El builder bloquea el
+        // publish cuando esto es > 1 y empuja a Edición rápida, que sí respeta variantes.
+        // (La creación multi-variante es la feature F1, fuera de alcance.)
+        dayVariantCount: detail.plan.dayVariants.length,
       }
     : null
 

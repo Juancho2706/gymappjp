@@ -1,8 +1,8 @@
 'use client'
 
-import { useMemo, useState, useId } from 'react'
+import { useEffect, useMemo, useRef, useState, useId } from 'react'
 import { useRouter } from 'next/navigation'
-import { ChevronRight, FilePlus2, Plus, Search, Users } from 'lucide-react'
+import { ChevronRight, FilePlus2, Loader2, Plus, Search, Users } from 'lucide-react'
 import {
   Dialog,
   DialogContent,
@@ -11,11 +11,15 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { filterPickerEntries, planCtaLabel } from '../_lib/hub-roster'
+import { searchCoachRosterAction } from '../_actions/roster-search.actions'
 
 // CTA global "Nuevo plan" del Centro V2. El hub no tiene un alumno seleccionado, asi que el
 // boton abre un selector con el roster del workspace (buscable) y, al elegir, navega al builder
-// del alumno (/coach/nutrition-v2/[clientId]/builder). Isla cliente delgada: recibe el roster
-// ya cargado por el RSC y filtra client-side (mismo criterio tolerante a acentos del hub).
+// del alumno (/coach/nutrition-v2/[clientId]/builder).
+//
+// NUT-026: el RSC entrega solo la PRIMERA pagina alfabetica; escribir dispara busqueda
+// server-side (debounce 300 ms) sobre TODO el workspace. Antes el RSC pre-cargaba hasta 400
+// alumnos y el filtro era client-side: el alumno #401 era invisible e imbuscable.
 
 export interface NewPlanPickerEntry {
   clientId: string
@@ -24,16 +28,71 @@ export interface NewPlanPickerEntry {
   planStatus: string | null
 }
 
-export function NewPlanPickerButton({ roster }: { roster: NewPlanPickerEntry[] }) {
+const SEARCH_DEBOUNCE_MS = 300
+const MIN_SERVER_SEARCH_LEN = 2
+
+export function NewPlanPickerButton({
+  roster,
+  hasMore = false,
+}: {
+  roster: NewPlanPickerEntry[]
+  /** Hay mas alumnos que los de la primera pagina: la busqueda deja de ser opcional. */
+  hasMore?: boolean
+}) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
+  const [remote, setRemote] = useState<NewPlanPickerEntry[] | null>(null)
+  const [searching, setSearching] = useState(false)
+  const [searchError, setSearchError] = useState<string | null>(null)
   const searchId = useId()
+  const requestRef = useRef(0)
 
-  const filtered = useMemo(() => filterPickerEntries(roster, search), [roster, search])
+  const term = search.trim()
+  const useRemote = term.length >= MIN_SERVER_SEARCH_LEN
+
+  // Busqueda server-side con debounce. `requestRef` descarta respuestas fuera de orden
+  // (el coach sigue tecleando mientras vuelve una consulta vieja).
+  useEffect(() => {
+    if (!open || !useRemote) {
+      setRemote(null)
+      setSearching(false)
+      setSearchError(null)
+      return
+    }
+    setSearching(true)
+    setSearchError(null)
+    const ticket = ++requestRef.current
+    const timer = setTimeout(() => {
+      void searchCoachRosterAction({ search: term, pageSize: 50 })
+        .then((res) => {
+          if (ticket !== requestRef.current) return
+          if (res.ok) setRemote(res.items)
+          else setSearchError(res.error)
+        })
+        .catch(() => {
+          if (ticket === requestRef.current) setSearchError('No pudimos buscar alumnos. Intenta de nuevo.')
+        })
+        .finally(() => {
+          if (ticket === requestRef.current) setSearching(false)
+        })
+    }, SEARCH_DEBOUNCE_MS)
+    return () => clearTimeout(timer)
+  }, [open, term, useRemote])
+
+  // Con termino corto se filtra la primera pagina en memoria (respuesta instantanea);
+  // desde 2 caracteres manda el servidor.
+  const filtered = useMemo(
+    () => (useRemote ? (remote ?? []) : filterPickerEntries(roster, search)),
+    [useRemote, remote, roster, search],
+  )
 
   function onOpenChange(next: boolean) {
-    if (next) setSearch('')
+    if (next) {
+      setSearch('')
+      setRemote(null)
+      setSearchError(null)
+    }
     setOpen(next)
   }
 
@@ -85,9 +144,23 @@ export function NewPlanPickerButton({ roster }: { roster: NewPlanPickerEntry[] }
                     value={search}
                     onChange={(event) => setSearch(event.target.value.slice(0, 120))}
                     placeholder="Buscar alumno…"
-                    className="min-h-11 w-full rounded-control border border-border-default bg-surface-card pl-10 pr-4 text-base text-strong outline-none placeholder:text-muted focus:ring-2 focus:ring-ring md:text-sm"
+                    className="min-h-11 w-full rounded-control border border-border-default bg-surface-card pl-10 pr-10 text-base text-strong outline-none placeholder:text-muted focus:ring-2 focus:ring-ring md:text-sm"
                   />
+                  {searching ? (
+                    <Loader2 className="pointer-events-none absolute right-3.5 top-1/2 size-4 -translate-y-1/2 animate-spin text-subtle" />
+                  ) : null}
                 </div>
+
+                {hasMore && !useRemote ? (
+                  <p className="text-xs text-muted">
+                    Tu espacio tiene más alumnos de los que caben aquí. Escribe para buscarlos a todos.
+                  </p>
+                ) : null}
+                {searchError ? (
+                  <p className="rounded-control border border-red-300 bg-red-50 px-3 py-2 text-xs font-semibold text-red-800 dark:border-red-800 dark:bg-red-950/40 dark:text-red-300">
+                    {searchError}
+                  </p>
+                ) : null}
 
                 <ul className="max-h-[46vh] space-y-1.5 overflow-y-auto pr-1">
                   {filtered.map((entry) => (
@@ -108,8 +181,10 @@ export function NewPlanPickerButton({ roster }: { roster: NewPlanPickerEntry[] }
                       </button>
                     </li>
                   ))}
-                  {filtered.length === 0 ? (
-                    <li className="px-1 py-6 text-center text-sm text-muted">Sin coincidencias.</li>
+                  {filtered.length === 0 && !searching ? (
+                    <li className="px-1 py-6 text-center text-sm text-muted">
+                      {searchError ? 'No pudimos completar la búsqueda.' : 'Sin coincidencias.'}
+                    </li>
                   ) : null}
                 </ul>
               </>

@@ -3,11 +3,13 @@ import NetInfo from '@react-native-community/netinfo'
 import type {
   NutritionIntakeCorrection,
   NutritionIntakeMutation,
+  NutritionIntakeVoid,
 } from '@eva/nutrition-v2'
 import { ApiError } from './api'
 import {
   correctNutritionIntakeV2,
   recordNutritionIntakeV2,
+  voidNutritionIntakeV2,
 } from './nutrition-v2.api'
 
 const QUEUE_KEY = 'eva:nutrition-v2:mutations:v1'
@@ -42,7 +44,29 @@ type QueuedCorrection = {
   lastErrorCode: string | null
 }
 
-export type NutritionV2QueuedMutation = QueuedRecord | QueuedCorrection
+/**
+ * Retiro TERMINAL (NUT-010, opción A). Convive con `QueuedCorrection` a propósito: los retiros
+ * encolados ANTES del deploy siguen siendo `action: 'correct'` con el payload viejo (corrección de
+ * contribución cero) y tienen que drenar por su camino original al menos un ciclo de release. Por
+ * eso el drenaje despacha por `action` y `correctNutritionIntakeV2` queda intacto.
+ *
+ * `idempotencyKey` de la cola es la clave de deduplicación LOCAL; el payload la lleva opcional
+ * (solo alimenta la auditoría server-side), así que aquí se sintetiza si no viene.
+ */
+type QueuedVoid = {
+  queueVersion: 1
+  action: 'void'
+  userId: string
+  clientId: string
+  idempotencyKey: string
+  payload: NutritionIntakeVoid
+  queuedAt: number
+  attempts: number
+  nextAttemptAt: number
+  lastErrorCode: string | null
+}
+
+export type NutritionV2QueuedMutation = QueuedRecord | QueuedCorrection | QueuedVoid
 
 type DeadLetter = NutritionV2QueuedMutation & {
   failedAt: number
@@ -74,7 +98,7 @@ function parseQueue(raw: string | null): NutritionV2QueuedMutation[] {
       if (!item || typeof item !== 'object') return false
       return (
         item.queueVersion === 1 &&
-        (item.action === 'record' || item.action === 'correct') &&
+        (item.action === 'record' || item.action === 'correct' || item.action === 'void') &&
         typeof item.userId === 'string' &&
         typeof item.clientId === 'string' &&
         typeof item.idempotencyKey === 'string' &&
@@ -131,10 +155,16 @@ function isRetryable(error: unknown): boolean {
 export async function enqueueNutritionV2Mutation(input:
   | { action: 'record'; userId: string; payload: NutritionIntakeMutation }
   | { action: 'correct'; userId: string; payload: NutritionIntakeCorrection }
+  | { action: 'void'; userId: string; payload: NutritionIntakeVoid }
 ): Promise<{ queued: true; deduplicated: boolean }> {
   return withStorageMutation(async () => {
     const queue = await readQueue()
-    const idempotencyKey = input.payload.idempotencyKey
+    // El retiro trae la key opcional (el RPC es idempotente por ESTADO, no por key). Se sintetiza
+    // una estable por entry para que dos taps de "Retirar" sobre la misma fila deduppen en la cola.
+    const idempotencyKey =
+      input.action === 'void'
+        ? input.payload.idempotencyKey ?? `void-${input.payload.entryId}`
+        : input.payload.idempotencyKey
     const existing = queue.some(
       (item) => item.userId === input.userId && item.idempotencyKey === idempotencyKey,
     )
@@ -202,7 +232,12 @@ async function performFlush(userId: string): Promise<NutritionV2FlushResult> {
     try {
       if (item.action === 'record') {
         await recordNutritionIntakeV2(item.payload)
+      } else if (item.action === 'void') {
+        await voidNutritionIntakeV2(item.payload)
       } else {
+        // Compatibilidad hacia atrás: retiros encolados con el payload VIEJO (corrección de
+        // contribución cero) siguen drenando por `correct_`. No convertirlos aquí: la conversión
+        // necesitaría el read model del día, que offline no existe.
         await correctNutritionIntakeV2(item.payload)
       }
       sent += 1

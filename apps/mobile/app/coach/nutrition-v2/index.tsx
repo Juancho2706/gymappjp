@@ -479,10 +479,21 @@ export default function CoachNutritionV2Screen() {
         }
         ListEmptyComponent={
           items.length === 0 ? (
-            <NutritionStatePanel
-              title="No hay alumnos en este scope"
-              description="El Centro respeta el workspace activo y no mezcla pools."
-            />
+            // NUT-024: sin items hay DOS causas distintas y antes ambas decían lo mismo.
+            // Con `offline` en true la primera carga falló y no había caché: el roster no
+            // está vacío, no lo pudimos leer. El badge "Sin conexión" del header ya lo
+            // anuncia; el empty-state deja de contradecirlo.
+            offline ? (
+              <NutritionStatePanel
+                title="Sin conexión y sin datos guardados"
+                description="No pudimos cargar tu roster y no hay una copia local de este espacio. Revisa tu conexión y desliza hacia abajo para reintentar."
+              />
+            ) : (
+              <NutritionStatePanel
+                title="No hay alumnos en este scope"
+                description="El Centro respeta el workspace activo y no mezcla pools."
+              />
+            )
           ) : (
             <View className="gap-3">
               <NutritionStatePanel

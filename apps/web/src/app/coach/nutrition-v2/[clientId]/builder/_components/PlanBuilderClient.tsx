@@ -1088,6 +1088,9 @@ function builderHasSignificantContent(state: BuilderState): boolean {
 
 const LEAVE_GUARD_COPY = 'Tienes un borrador sin publicar. ¿Salir y descartarlo?'
 
+const MULTI_DAY_LOCK_COPY =
+  'Este plan tiene días distintos y rehacerlo aquí lo reduciría a uno. Usa Edición rápida.'
+
 export function PlanBuilderClient({
   clientId,
   existingPlan,
@@ -1103,6 +1106,8 @@ export function PlanBuilderClient({
     strategy: NutritionStrategy
     effectiveFrom: string
     name: string
+    /** Variantes de día del plan vigente. > 1 bloquea el publish (ver `multiDayLocked`). */
+    dayVariantCount: number
   } | null
   today: string
   nutritionProEnabled: boolean
@@ -1191,6 +1196,14 @@ export function PlanBuilderClient({
     window.addEventListener('beforeunload', handler)
     return () => window.removeEventListener('beforeunload', handler)
   }, [state])
+
+  // Guard multi-dia (F0, quick win): el wizard NO tiene concepto de dias — `assembleDraft`
+  // emite siempre `dayVariants: [una variante "Todos los dias"]`. Si el plan vigente tiene
+  // varias (hoy solo por conversion V1->V2, que si genera una variante por dia con comidas),
+  // publicar desde aqui las colapsa a una y la perdida es irreversible y silenciosa. Se
+  // bloquea la publicacion y se empuja a "Edicion rapida", que edita por variante.
+  const multiDayVariantCount = existingPlan?.dayVariantCount ?? 0
+  const multiDayLocked = multiDayVariantCount > 1
 
   const validation = useMemo(() => validateStep(state, state.step), [state])
 
@@ -1346,6 +1359,13 @@ export function PlanBuilderClient({
   }
 
   function handlePublish() {
+    // Guard multi-dia (F0): este wizard solo sabe emitir UNA variante, asi que republicar
+    // sobre un plan con varios dias los borra en silencio. Bloqueo duro; la ruta viva es
+    // "Edicion rapida", que si respeta las variantes existentes.
+    if (multiDayLocked) {
+      setPublishError(MULTI_DAY_LOCK_COPY)
+      return
+    }
     // Pre-chequeo sin ida y vuelta: si la fecha elegida choca con el plan que ya rige, abre el
     // modal de decision directo. El RPC sigue siendo la barrera real (ver runPublish).
     if (existingPlan && effectiveDateConflicts(state.effectiveFrom, existingPlan.effectiveFrom)) {
@@ -1469,6 +1489,36 @@ export function PlanBuilderClient({
         </div>
       </div>
     ) : null}
+    {/* Guard multi-dia (F0): aviso bloqueante al tope, por encima del wizard, con la salida
+        real (Edicion rapida en la ficha del alumno). No implementa multi-variante — solo
+        impide que "Rehacer" destruya los dias que el plan ya tiene. */}
+    {multiDayLocked ? (
+      <div
+        role="alert"
+        className="mb-4 rounded-card border border-amber-300/70 bg-amber-50 p-3 dark:border-amber-500/30 dark:bg-amber-500/10"
+      >
+        <div className="flex items-start gap-2">
+          <AlertTriangle aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 text-amber-700 dark:text-amber-300" />
+          <div className="min-w-0 flex-1 space-y-1">
+            <p className="text-xs font-semibold text-amber-900 dark:text-amber-200">
+              Este plan tiene {multiDayVariantCount} días distintos; rehacerlo aquí lo reduciría a uno.
+              Usa Edición rápida.
+            </p>
+            <p className="text-xs leading-relaxed text-amber-800 dark:text-amber-300/90">
+              El asistente de creación arma un solo día (“Todos los días”). Para ajustar un plan con
+              días distintos, vuelve a la ficha del alumno y abre <span className="font-semibold">Edición rápida</span>,
+              que conserva cada día con sus comidas y metas.
+            </p>
+            <Link
+              href={'/coach/nutrition-v2/' + clientId}
+              className="inline-flex min-h-9 items-center gap-1.5 rounded-control border border-amber-400/70 bg-white/70 px-3 text-xs font-semibold text-amber-900 hover:bg-white dark:border-amber-500/40 dark:bg-transparent dark:text-amber-200"
+            >
+              Volver a la ficha del alumno
+            </Link>
+          </div>
+        </div>
+      </div>
+    ) : null}
     <div className="grid gap-5 lg:grid-cols-[240px_minmax(0,1fr)]">
       <div className="space-y-3 lg:sticky lg:top-6 lg:self-start">
         <MobileBuilderStepper steps={steps} />
@@ -1529,7 +1579,8 @@ export function PlanBuilderClient({
             <button
               type="button"
               onClick={handlePublish}
-              disabled={isPending}
+              disabled={isPending || multiDayLocked}
+              title={multiDayLocked ? MULTI_DAY_LOCK_COPY : undefined}
               className={primaryButtonClass + ' flex-1 justify-center gap-2 sm:flex-none'}
             >
               {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}

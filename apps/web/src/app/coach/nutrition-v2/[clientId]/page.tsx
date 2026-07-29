@@ -16,7 +16,7 @@ import { getNutritionPlansPageCoach } from '../../nutrition-plans/_data/nutritio
 import { getPreferredWorkspaceForRender } from '@/services/auth/workspace-render-cache'
 import {
   getNutritionClientDetailV2ForWeb,
-  getNutritionCoachHubV2ForWeb,
+  getNutritionCoachRosterV2ForWeb,
   getNutritionConversionLinkForWeb,
   nutritionV2CoachScopeFromWorkspace,
 } from '@/services/nutrition-v2-read.service'
@@ -90,30 +90,21 @@ export default async function CoachNutritionV2ClientPage({ params, searchParams 
     : filterHistoryDaysToBaseWindow(detail.recentDays, today)
 
   // Roster del workspace para "Asignar a otros alumnos": solo se carga si hay plan publicado.
-  // Pagina el hub scoped (keyset por updatedAt) hasta un tope y excluye al alumno fuente.
+  // NUT-026: primera pagina alfabetica server-side (antes: bucle de 8 paginas x 50 sobre el hub
+  // scoped, tope silencioso de 399 destinos y busqueda client-side sobre el array truncado).
+  // El dialogo busca en TODO el workspace via `searchCoachRosterAction`.
   let assignRoster: AssignRosterEntry[] = []
+  let assignRosterHasMore = false
   if (canAssign) {
-    const collected: AssignRosterEntry[] = []
-    let cursor: { updatedAt: string; clientId: string } | null = null
-    for (let page = 0; page < 8; page += 1) {
-      const hub = await getNutritionCoachHubV2ForWeb({
-        scope,
-        cursorUpdatedAt: cursor?.updatedAt ?? null,
-        cursorClientId: cursor?.clientId ?? null,
-        pageSize: 50,
-      })
-      for (const item of hub.items) {
-        if (item.clientId === clientId) continue
-        collected.push({
-          clientId: item.clientId,
-          clientName: item.clientName,
-          hasPlan: item.planStatus === 'published',
-        })
-      }
-      if (!hub.hasMore || !hub.nextCursor) break
-      cursor = hub.nextCursor
-    }
-    assignRoster = collected
+    const rosterPage = await getNutritionCoachRosterV2ForWeb({ scope, pageSize: 50 })
+    assignRoster = rosterPage.items
+      .filter((item) => item.clientId !== clientId)
+      .map((item) => ({
+        clientId: item.clientId,
+        clientName: item.clientName ?? 'Alumno',
+        hasPlan: item.planStatus === 'published',
+      }))
+    assignRosterHasMore = rosterPage.hasMore
   }
 
   // El plan vigente (`detail.plan.plan`) es la senal en vivo del plan activo/publicado. El bloque
@@ -235,6 +226,7 @@ export default async function CoachNutritionV2ClientPage({ params, searchParams 
                   sourcePlanVersion={detail.plan.plan.versionNumber}
                   sourcePlanName={detail.plan.plan.name}
                   roster={assignRoster}
+                  rosterHasMore={assignRosterHasMore}
                   today={today}
                 />
               </div>

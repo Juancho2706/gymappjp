@@ -70,7 +70,9 @@ function macrosForItem(item: Item) {
   })
 }
 
-export function MealGroupModal({ isOpen, onClose, onSave, editingGroup, coachId }: any) {
+// `coachId` sigue en el contrato del componente (lo pasa MealGroupLibraryClient) pero ya no
+// viaja al servidor: la identidad del coach la fija `auth.uid()` dentro del RPC de guardado.
+export function MealGroupModal({ isOpen, onClose, onSave, editingGroup }: any) {
   const [name, setName] = useState(editingGroup?.name || '')
   const [items, setItems] = useState<Item[]>(
     editingGroup?.items?.map((item: any) => {
@@ -164,7 +166,7 @@ export function MealGroupModal({ isOpen, onClose, onSave, editingGroup, coachId 
       })),
     }
 
-    const result = await saveMealGroup(groupData, coachId)
+    const result = await saveMealGroup(groupData)
     if (result.success && result.group) {
       onSave(result.group)
       toast.success('Grupo guardado correctamente')

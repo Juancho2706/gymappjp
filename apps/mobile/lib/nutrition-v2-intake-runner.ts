@@ -13,11 +13,13 @@ import NetInfo from '@react-native-community/netinfo'
 import type {
   NutritionIntakeCorrection,
   NutritionIntakeMutation,
+  NutritionIntakeVoid,
 } from '@eva/nutrition-v2'
 import { ApiError } from './api'
 import {
   correctNutritionIntakeV2,
   recordNutritionIntakeV2,
+  voidNutritionIntakeV2,
 } from './nutrition-v2.api'
 import { enqueueNutritionV2Mutation } from './nutrition-v2-offline'
 import { shouldQueueNutritionV2Error } from './nutrition-v2-intake'
@@ -69,6 +71,31 @@ export async function submitCorrectIntake(
   } catch (error) {
     if (shouldQueueNutritionV2Error(error)) {
       await enqueueNutritionV2Mutation({ action: 'correct', userId, payload })
+      return { status: 'queued', reason: 'error' }
+    }
+    return { status: 'failed', error: error as ApiError }
+  }
+}
+
+/**
+ * Retira un intake (NUT-010, opción A): online contra `void_nutrition_intake_v2`, o cola offline
+ * con el mismo payload mínimo. El RPC es idempotente por ESTADO, así que un replay tras un flush
+ * dudoso jamás duplica ni falla.
+ */
+export async function submitVoidIntake(
+  userId: string,
+  payload: NutritionIntakeVoid,
+): Promise<NutritionIntakeSubmitOutcome> {
+  if (await isOffline()) {
+    await enqueueNutritionV2Mutation({ action: 'void', userId, payload })
+    return { status: 'queued', reason: 'offline' }
+  }
+  try {
+    const result = await voidNutritionIntakeV2(payload)
+    return { status: 'recorded', id: result.id }
+  } catch (error) {
+    if (shouldQueueNutritionV2Error(error)) {
+      await enqueueNutritionV2Mutation({ action: 'void', userId, payload })
       return { status: 'queued', reason: 'error' }
     }
     return { status: 'failed', error: error as ApiError }
