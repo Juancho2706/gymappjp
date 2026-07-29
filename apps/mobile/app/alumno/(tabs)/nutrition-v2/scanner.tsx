@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Pressable, ScrollView, Text, TextInput, View } from 'react-native'
-import { useRouter } from 'expo-router'
+import { AppState, Pressable, ScrollView, Text, TextInput, View } from 'react-native'
+import { useFocusEffect, useRouter } from 'expo-router'
 import { CameraView, useCameraPermissions, type BarcodeScanningResult } from 'expo-camera'
 import {
   AlertTriangle,
@@ -111,8 +111,24 @@ export default function NutritionV2ScannerScreen() {
   }, [])
   const lastScanRef = useRef<{ code: string; at: number } | null>(null)
   // Día local VIVO (NUT-018): el registro del alimento escaneado usa la MISMA fecha que el Hoy,
-  // sin congelarla al montar (la app puede cruzar la medianoche abierta o en background).
-  const [date] = useLocalDay()
+  // sin congelarla al montar (la app puede cruzar la medianoche abierta o en background). El timer
+  // interno cubre la app despierta; `recheckDate` cubre lo que el timer NO ve — proceso suspendido
+  // y regreso a esta pantalla desde otra.
+  const [date, recheckDate] = useLocalDay()
+
+  useFocusEffect(
+    useCallback(() => {
+      recheckDate()
+    }, [recheckDate]),
+  )
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') recheckDate()
+    })
+    return () => subscription.remove()
+  }, [recheckDate])
+
   const rolloutEnabled = entitlements.ready && isEnabled('nutritionV2Student')
   const enabled = rolloutEnabled && entitlements.nutritionEnabled
   const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL ?? ''

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Alert, Pressable, ScrollView, Text, TextInput, View } from 'react-native'
-import { useLocalSearchParams, useRouter } from 'expo-router'
+import { Alert, AppState, Pressable, ScrollView, Text, TextInput, View } from 'react-native'
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
 import * as Haptics from 'expo-haptics'
 import { AlertTriangle, ChevronLeft, Search, Star } from 'lucide-react-native'
 import {
@@ -123,9 +123,26 @@ export default function NutritionV2AddFoodScreen() {
   }, [])
 
   // Día local VIVO (NUT-018): antes se congelaba al montar y un registro a las 00:30 se
-  // persistía con la fecha de ayer. `recheck` lo revalida al volver del background/foco.
-  const [date] = useLocalDay()
+  // persistía con la fecha de ayer. El timer interno cubre la app despierta; `recheckDate` cubre
+  // lo que el timer NO puede ver — el proceso suspendido en background y el regreso a esta
+  // pantalla desde otra (el alumno pudo dejarla abierta y cruzar la medianoche).
+  const [date, recheckDate] = useLocalDay()
   const rolloutEnabled = entitlements.ready && isEnabled('nutritionV2Student')
+
+  // Revalidar el día al recuperar el foco y al volver del background: si cambió, el efecto del
+  // read-model se reencadena solo con la fecha nueva y el registro se persiste en el día correcto.
+  useFocusEffect(
+    useCallback(() => {
+      recheckDate()
+    }, [recheckDate]),
+  )
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') recheckDate()
+    })
+    return () => subscription.remove()
+  }, [recheckDate])
 
   const mountedRef = useRef(true)
   const searchControllerRef = useRef<AbortController | null>(null)

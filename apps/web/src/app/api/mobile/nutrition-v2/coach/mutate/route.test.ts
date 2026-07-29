@@ -33,7 +33,10 @@ vi.mock('@/services/nutrition-v2-rollout.service', () => ({
 }))
 
 const userRpc = vi.fn()
-const userClient = { rpc: userRpc }
+// `from` existe porque las acciones que escriben tablas (archive, createFood) usan el cliente RLS
+// del propio coach: si un test lo llama sin declarar implementacion, el fallo es explicito.
+const userFrom = vi.fn()
+const userClient = { rpc: userRpc, from: (...a: unknown[]) => userFrom(...a) }
 vi.mock('@supabase/supabase-js', () => ({
   createClient: vi.fn(() => userClient),
 }))
@@ -51,10 +54,17 @@ vi.mock('@/app/coach/nutrition-v2/_lib/nutrition-pro', async (importOriginal) =>
 
 const persistAndPublishDraft = vi.fn()
 const resolveActiveClientPlanId = vi.fn()
-vi.mock('@/app/coach/nutrition-v2/_actions/plan-persistence', () => ({
-  persistAndPublishDraft: (...a: unknown[]) => persistAndPublishDraft(...a),
-  resolveActiveClientPlanId: (...a: unknown[]) => resolveActiveClientPlanId(...a),
-}))
+// Mock PARCIAL: solo se doblan las dos rutinas de persistencia. Los helpers puros de mapeo de
+// errores (`mapWriteError`, `fail`, `zodFields`) quedan REALES porque `insertCoachFood` los usa y
+// el 42501 -> SCOPE_DENIED es justamente lo que este archivo verifica.
+vi.mock('@/app/coach/nutrition-v2/_actions/plan-persistence', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>()
+  return {
+    ...actual,
+    persistAndPublishDraft: (...a: unknown[]) => persistAndPublishDraft(...a),
+    resolveActiveClientPlanId: (...a: unknown[]) => resolveActiveClientPlanId(...a),
+  }
+})
 
 const COACH = '99999999-9999-4999-8999-999999999999'
 const CLIENT = '11111111-1111-4111-8111-111111111111'
@@ -259,5 +269,94 @@ describe('POST coach/mutate · archive', () => {
   it('valida los ids y no escribe con un payload malformado', async () => {
     const res = await POST(req({ action: 'archive', workspace: SCOPE, clientId: 'no-uuid', planId: PLAN_ROOT }))
     expect(res.status).toBe(400)
+  })
+})
+
+// NUT-005 — el alta de alimento coach-scoped del builder RN era el ULTIMO write del coach movil
+// fuera de este endpoint (`createCoachFoodV2` insertaba directo en `foods`). Ahora comparte gate y
+// reusa `insertCoachFood`, el MISMO insert de la server action web.
+describe('POST coach/mutate · createFood', () => {
+  const FOOD = {
+    action: 'createFood',
+    workspace: SCOPE,
+    clientId: CLIENT,
+    name: 'Salsa casera',
+    brand: null,
+    unit: 'g',
+    calories: 120,
+    proteinG: 3,
+    carbsG: 10,
+    fatsG: 8,
+  }
+
+  beforeEach(() => {
+    userFrom.mockReset()
+  })
+
+  it('inserta con el cliente RLS del coach y devuelve el alimento como BuilderFood', async () => {
+    const single = vi.fn(async () => ({ data: { id: 'food-1' }, error: null }))
+    const rows: Record<string, unknown>[] = []
+    const insert = vi.fn((row: Record<string, unknown>) => {
+      rows.push(row)
+      return { select: () => ({ single }) }
+    })
+    userFrom.mockImplementation(() => ({ insert }))
+
+    const res = await POST(req(FOOD))
+    const body = await res.json()
+    expect(res.status).toBe(200)
+    expect(body.food).toMatchObject({ id: 'food-1', name: 'Salsa casera', servingSize: 100, servingUnit: 'g', category: 'otro' })
+    expect(userFrom).toHaveBeenCalledWith('foods')
+    const row = rows[0]
+    expect(row).toMatchObject({
+      coach_id: COACH,
+      org_id: null,
+      serving_size: 100,
+      serving_unit: 'g',
+      is_liquid: false,
+      catalog_source: 'coach',
+      verification_status: 'coach_verified',
+      protein_g: 3,
+      carbs_g: 10,
+      fats_g: 8,
+    })
+    // El sobre del transporte no debe filtrarse a la fila.
+    expect(row.action).toBeUndefined()
+    expect(row.workspace).toBeUndefined()
+  })
+
+  it('rollout OFF => 404 NUTRITION_V2_DISABLED y NO inserta nada', async () => {
+    resolveNutritionV2RolloutDecision.mockResolvedValue({ enabled: false, reason: 'mode_off' })
+    const res = await POST(req(FOOD))
+    const body = await res.json()
+    expect(res.status).toBe(404)
+    expect(body.code).toBe('NUTRITION_V2_DISABLED')
+    expect(userFrom).not.toHaveBeenCalled()
+  })
+
+  it('campos invalidos (nombre vacio, macros negativas) => 400 INVALID_PAYLOAD sin tocar la BD', async () => {
+    const vacio = await POST(req({ ...FOOD, name: '   ' }))
+    expect(vacio.status).toBe(400)
+    expect((await vacio.json()).code).toBe('INVALID_PAYLOAD')
+
+    const negativo = await POST(req({ ...FOOD, proteinG: -1 }))
+    expect(negativo.status).toBe(400)
+
+    const sinCliente = await POST(req({ ...FOOD, clientId: 'no-uuid' }))
+    expect(sinCliente.status).toBe(400)
+
+    const unidad = await POST(req({ ...FOOD, unit: 'un' }))
+    expect(unidad.status).toBe(400)
+
+    expect(userFrom).not.toHaveBeenCalled()
+  })
+
+  it('42501 de la RLS => 403 SCOPE_DENIED (la RLS sigue siendo la barrera de tenencia)', async () => {
+    const single = vi.fn(async () => ({ data: null, error: { message: 'denied', code: '42501' } }))
+    userFrom.mockImplementation(() => ({ insert: () => ({ select: () => ({ single }) }) }))
+    const res = await POST(req(FOOD))
+    const body = await res.json()
+    expect(res.status).toBe(403)
+    expect(body.code).toBe('SCOPE_DENIED')
   })
 })

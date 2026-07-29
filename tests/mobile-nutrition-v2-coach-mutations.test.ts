@@ -85,6 +85,14 @@ describe('frontera: la lib del coach RN ya no expone escrituras directas', () =>
     expect('publishDraftRN' in builderLib).toBe(false)
   })
 
+  it('nutrition-v2-builder ya no expone el alta de alimento con insert directo', () => {
+    // `createCoachFoodV2` insertaba en `foods` con el JWT de la sesion: la RLS acotaba la fila al
+    // coach dueno, pero el rollout de Nutricion V2 no miraba ese camino.
+    expect('createCoachFoodV2' in builderLib).toBe(false)
+    // La validacion de forma SI se queda (la comparten pantalla y cliente de la API).
+    expect(typeof builderLib.CoachFoodInputSchema.safeParse).toBe('function')
+  })
+
   it('nutrition-v2-quick-edit solo arma el draft (sin publicar)', () => {
     expect('persistAndPublishQuickEdit' in quickEditLib).toBe(false)
     expect(typeof quickEditLib.buildQuickEditPublishDraft).toBe('function')
@@ -272,5 +280,108 @@ describe('archiveNutritionPlan', () => {
     const res = await api.archiveNutritionPlan({ scope: SCOPE, clientId: 'no-uuid', planId: PLAN_ROOT })
     expect(res.code).toBe('WRITE_FAILED')
     expect(apiFetchMock).not.toHaveBeenCalled()
+  })
+})
+
+describe('createCoachFoodRN (alta de alimento coach-scoped)', () => {
+  const FOOD = {
+    clientId: CLIENT,
+    name: 'Salsa casera',
+    brand: null,
+    unit: 'g' as const,
+    calories: 120,
+    proteinG: 3,
+    carbsG: 10,
+    fatsG: 8,
+  }
+
+  it('POSTea createFood al endpoint (nunca inserta en `foods` desde el dispositivo)', async () => {
+    const food = { id: 'food-1', name: 'Salsa casera', brand: null, calories: 120, proteinG: 3, carbsG: 10, fatsG: 8, fiberG: null, servingSize: 100, servingUnit: 'g', category: 'otro', media: null }
+    apiFetchMock.mockResolvedValue({ ok: true, food })
+    const res = await api.createCoachFoodRN({ scope: SCOPE, input: FOOD })
+    expect(res.ok).toBe(true)
+    if (res.ok) expect(res.food.id).toBe('food-1')
+    expect(apiFetchMock).toHaveBeenCalledTimes(1)
+    expect(apiFetchMock.mock.calls[0][0]).toBe(MUTATE_PATH)
+    expect(apiFetchMock.mock.calls[0][1]).toMatchObject({ method: 'POST', authenticated: true })
+    expect(lastBody()).toMatchObject({
+      action: 'createFood',
+      workspace: SCOPE,
+      clientId: CLIENT,
+      name: 'Salsa casera',
+      unit: 'g',
+      calories: 120,
+    })
+  })
+
+  it('input invalido (nombre vacio) => INVALID_PAYLOAD sin tocar la red', async () => {
+    const res = await api.createCoachFoodRN({ scope: SCOPE, input: { ...FOOD, name: '' } })
+    expect(res.ok).toBe(false)
+    if (!res.ok) expect(res.code).toBe('INVALID_PAYLOAD')
+    expect(apiFetchMock).not.toHaveBeenCalled()
+  })
+
+  it('rollout OFF => propaga NUTRITION_V2_DISABLED del servidor', async () => {
+    apiFetchMock.mockRejectedValue(
+      new FakeApiError('Nutrition V2 is not enabled for this scope.', 404, 'NUTRITION_V2_DISABLED'),
+    )
+    const res = await api.createCoachFoodRN({ scope: SCOPE, input: FOOD })
+    expect(res.ok).toBe(false)
+    if (!res.ok) expect(res.code).toBe('NUTRITION_V2_DISABLED')
+  })
+})
+
+// NUT-026 — el picker de "Asignar a otros alumnos" ya no pagina 8x50 el hub para filtrar en
+// memoria: pide una pagina del roster scoped con busqueda server-side. Es una LECTURA (RPC scoped
+// que re-valida el workspace contra auth.uid()), asi que va por el cliente RLS, no por el endpoint.
+describe('getNutritionCoachRosterV2', () => {
+  function rosterDb(response: { data: unknown; error: { message: string } | null }) {
+    const calls: Array<{ name: string; args?: Record<string, unknown> }> = []
+    const db = {
+      from() {
+        throw new Error('el roster no debe leer tablas directo')
+      },
+      async rpc(name: string, args?: Record<string, unknown>) {
+        calls.push({ name, args })
+        return response
+      },
+    }
+    return { db: db as unknown as Parameters<typeof api.getNutritionCoachRosterV2>[0]['db'], calls }
+  }
+
+  const PAGE = {
+    schemaVersion: 1,
+    generatedAt: '2026-07-28T12:00:00.000Z',
+    items: [{ clientId: TARGET, clientName: 'Ana', planStatus: 'published' }],
+    nextCursor: { name: 'Ana', clientId: TARGET },
+    hasMore: true,
+  }
+
+  it('llama la RPC scoped con el termino y el tamano de pagina', async () => {
+    const { db, calls } = rosterDb({ data: PAGE, error: null })
+    const page = await api.getNutritionCoachRosterV2({ db, scope: SCOPE, search: '  jos  ' })
+    expect(page.items).toHaveLength(1)
+    expect(page.hasMore).toBe(true)
+    expect(calls).toHaveLength(1)
+    expect(calls[0].name).toBe('get_nutrition_coach_roster_scoped_v2')
+    expect(calls[0].args).toMatchObject({
+      p_scope_type: 'standalone',
+      p_team_id: null,
+      p_org_id: null,
+      p_search: 'jos',
+      p_cursor_name: null,
+      p_page_size: api.NUTRITION_COACH_ROSTER_PAGE_SIZE,
+    })
+  })
+
+  it('termino vacio => p_search null (primera pagina alfabetica completa)', async () => {
+    const { db, calls } = rosterDb({ data: { ...PAGE, hasMore: false, nextCursor: null }, error: null })
+    await api.getNutritionCoachRosterV2({ db, scope: SCOPE, search: '   ' })
+    expect(calls[0].args?.p_search).toBeNull()
+  })
+
+  it('error de la RPC => lanza (el dialogo decide la degradacion, no silencia el tope)', async () => {
+    const { db } = rosterDb({ data: null, error: { message: 'denied' } })
+    await expect(api.getNutritionCoachRosterV2({ db, scope: SCOPE })).rejects.toThrow('denied')
   })
 })

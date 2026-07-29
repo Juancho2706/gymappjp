@@ -20,6 +20,7 @@ import {
   XCircle,
 } from 'lucide-react-native'
 import {
+  DayVariantWeekStrip,
   MacroBudget,
   MacroChipRow,
   NutritionHeader,
@@ -36,6 +37,9 @@ import {
   NutritionClientDetailReadModelSchema,
   createNutritionMacroValue,
   describeLegacyHistoryDay,
+  formatNutritionCalories,
+  resolveNutritionDayVariantForDate,
+  sortNutritionDayVariantsForDisplay,
   type NutritionClientDetailReadModel,
   type NutritionV2CoachScope,
 } from '@eva/nutrition-v2'
@@ -46,8 +50,9 @@ import {
   archiveNutritionPlan,
   assignNutritionPlanToClients,
   getNutritionClientDetailV2,
-  getNutritionCoachHubV2,
+  getNutritionCoachRosterV2,
   getNutritionConversionLinkV2,
+  NUTRITION_COACH_ROSTER_PAGE_SIZE,
   nutritionV2CoachScope,
   nutritionV2CoachScopeCacheKey,
 } from '../../../lib/nutrition-v2.api'
@@ -129,6 +134,11 @@ interface AssignRosterEntry {
   hasPlan: boolean
 }
 
+// NUT-026: a partir de 2 caracteres la búsqueda deja de filtrar la primera página en memoria y
+// pasa a ser SERVER-SIDE sobre todo el workspace (mismos umbrales que el diálogo web).
+const ROSTER_SEARCH_DEBOUNCE_MS = 300
+const ROSTER_MIN_SERVER_SEARCH_LEN = 2
+
 /**
  * Normaliza para búsqueda tolerante a acentos (misma pieza que el resto del móvil:
  * `.normalize('NFD')` + strip de marcas combinantes U+0300–U+036F). "josé" matchea "Jose".
@@ -139,6 +149,24 @@ function normalizeName(value: string): string {
     .replace(/[̀-ͯ]/g, '')
     .toLowerCase()
     .trim()
+}
+
+/**
+ * Página del roster scoped -> filas del selector: excluye al alumno FUENTE (no tiene sentido
+ * asignarle su propio plan) y marca "Ya tiene plan" con el mismo criterio que la web
+ * (`planStatus === 'published'`). Sin nombre => "Alumno", como en la action web.
+ */
+function rosterEntriesFrom(
+  items: ReadonlyArray<{ clientId: string; clientName: string | null; planStatus: string | null }>,
+  sourceClientId: string,
+): AssignRosterEntry[] {
+  return items
+    .filter((item) => item.clientId !== sourceClientId)
+    .map((item) => ({
+      clientId: item.clientId,
+      clientName: item.clientName ?? 'Alumno',
+      hasPlan: item.planStatus === 'published',
+    }))
 }
 
 /**
@@ -366,6 +394,16 @@ export default function CoachNutritionV2ClientScreen() {
       ? 'El plan vigente ya está publicado. El registro de hoy todavía no tiene metas asignadas; desde mañana se aplican las del nuevo plan.'
       : 'El plan vigente ya está publicado. Los registros de hoy siguen mostrando el plan anterior; desde mañana se usa el nuevo.'
 
+  // FD3 (espejo de web coach/nutrition-v2/[clientId]/page.tsx): día base primero y después los
+  // días específicos Lu→Do, cada card con su tira de días. "Hoy aplica" solo si el registro del
+  // día ya es del plan vigente (con lag el snapshot es de otra versión). Cero selección nueva.
+  const orderedVariants = sortNutritionDayVariantsForDisplay(detail.plan.dayVariants)
+  const multiDayPlan = detail.plan.dayVariants.length > 1
+  const todayVariant =
+    multiDayPlan && !showTodayPlanLag
+      ? resolveNutritionDayVariantForDate(detail.plan.dayVariants, date)
+      : null
+
   // Modo edicion in-place (quick-edit): misma ruta, estado cliente. Al publicar, la
   // ficha re-lee el read model (reloadNonce) y el baseline se re-hidrata solo.
   if (editing && activePlan && userId) {
@@ -541,12 +579,31 @@ export default function CoachNutritionV2ClientScreen() {
       {detail.plan.plan && detail.plan.dayVariants.length > 0 ? (
         <View className="gap-3">
           <Text className="font-display text-xl font-semibold text-text-strong">Estructura prescrita</Text>
-          {detail.plan.dayVariants.map((variant) => (
+          {orderedVariants.map((variant) => (
             <NutritionCard key={variant.id}>
               <View className="flex-row flex-wrap items-center justify-between gap-2">
-                <Text className="font-display text-base font-semibold text-text-strong">{variant.label}</Text>
-                <Text className="text-xs text-text-muted">{variant.targets.calories ?? 0} kcal objetivo</Text>
+                <View className="flex-row flex-wrap items-center gap-2">
+                  <Text className="font-display text-base font-semibold text-text-strong">{variant.label}</Text>
+                  {todayVariant?.id === variant.id ? (
+                    <View className="rounded-pill border border-primary/30 bg-primary/10 px-2 py-0.5">
+                      <Text className="text-[10px] font-semibold text-primary">Hoy aplica</Text>
+                    </View>
+                  ) : null}
+                </View>
+                <Text className="text-xs text-text-muted" style={{ fontVariant: ['tabular-nums'] }}>
+                  {variant.targets.calories != null
+                    ? `${formatNutritionCalories(variant.targets.calories)} objetivo`
+                    : 'Sin objetivo de energía'}
+                </Text>
               </View>
+              {/* Tira Lu-Do de la variante (FD3): con un solo día no aporta y no se pinta. */}
+              {multiDayPlan ? (
+                <DayVariantWeekStrip
+                  variants={detail.plan.dayVariants}
+                  variant={variant}
+                  todayIso={date}
+                />
+              ) : null}
               {variant.mealSlots.length === 0 ? (
                 <Text className="mt-2 text-sm text-text-muted">Plan flexible: sin franjas prescritas.</Text>
               ) : (
@@ -825,9 +882,18 @@ function AssignPlanModal({
 }) {
   const { theme } = useTheme()
   const [roster, setRoster] = useState<AssignRosterEntry[]>([])
+  const [rosterHasMore, setRosterHasMore] = useState(false)
   const [rosterLoading, setRosterLoading] = useState(false)
   const [rosterError, setRosterError] = useState(false)
   const [search, setSearch] = useState('')
+  // Resultados de la búsqueda server-side (null = todavía no aplica: término corto o sin respuesta).
+  const [remote, setRemote] = useState<AssignRosterEntry[] | null>(null)
+  const [searching, setSearching] = useState(false)
+  const [searchError, setSearchError] = useState<string | null>(null)
+  // Nombres vistos en CUALQUIER página o búsqueda de esta apertura: el reporte final debe poder
+  // nombrar a un alumno seleccionado en una búsqueda ya descartada (si no, caería a "Alumno").
+  const [seenNames, setSeenNames] = useState<Record<string, string>>({})
+  const searchTicketRef = useRef(0)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [effectiveFrom, setEffectiveFrom] = useState(today)
   const [submitting, setSubmitting] = useState(false)
@@ -843,12 +909,20 @@ function AssignPlanModal({
     }
   }, [])
 
-  // Carga bajo demanda (al abrir): reset del estado + paginación keyset del hub scoped (tope 8×50,
-  // excluye la fuente, marca hasPlan), misma fuente que el web. Fresh operationId por apertura.
+  const term = search.trim()
+  const useRemote = term.length >= ROSTER_MIN_SERVER_SEARCH_LEN
+
+  // Carga bajo demanda (al abrir): reset del estado + PRIMERA página alfabética del roster scoped
+  // (NUT-026). Antes se encadenaban hasta 8 páginas del hub (tope silencioso de 400 alumnos, con el
+  // #401 invisible e imbuscable) y se filtraba en memoria. Fresh operationId por apertura.
   useEffect(() => {
     if (!visible) return
     operationId.current = genAssignOperationId()
     setSearch('')
+    setRemote(null)
+    setSearching(false)
+    setSearchError(null)
+    setSeenNames({})
     setSelected(new Set())
     setEffectiveFrom(today)
     setTopError(null)
@@ -858,27 +932,14 @@ function AssignPlanModal({
     let active = true
     void (async () => {
       try {
-        const collected: AssignRosterEntry[] = []
-        let cursor: { updatedAt: string; clientId: string } | null = null
-        for (let page = 0; page < 8; page += 1) {
-          const hub = await getNutritionCoachHubV2({
-            scope,
-            cursorUpdatedAt: cursor?.updatedAt ?? null,
-            cursorClientId: cursor?.clientId ?? null,
-            pageSize: 50,
-          })
-          for (const item of hub.items) {
-            if (item.clientId === sourceClientId) continue
-            collected.push({
-              clientId: item.clientId,
-              clientName: item.clientName,
-              hasPlan: item.planStatus === 'published',
-            })
-          }
-          if (!hub.hasMore || !hub.nextCursor) break
-          cursor = hub.nextCursor
-        }
-        if (active) setRoster(collected)
+        const page = await getNutritionCoachRosterV2({
+          db: supabase as unknown as NutritionV2WriteClient,
+          scope,
+          pageSize: NUTRITION_COACH_ROSTER_PAGE_SIZE,
+        })
+        if (!active) return
+        setRoster(rosterEntriesFrom(page.items, sourceClientId))
+        setRosterHasMore(page.hasMore)
       } catch {
         if (active) setRosterError(true)
       } finally {
@@ -890,17 +951,60 @@ function AssignPlanModal({
     }
   }, [visible, scope, sourceClientId, today])
 
+  // Búsqueda server-side con debounce de 300 ms; `searchTicketRef` descarta respuestas fuera de
+  // orden (una petición lenta no puede pisar el resultado de un término más nuevo).
+  useEffect(() => {
+    if (!visible || !useRemote) {
+      setRemote(null)
+      setSearching(false)
+      setSearchError(null)
+      return
+    }
+    setSearching(true)
+    setSearchError(null)
+    const ticket = ++searchTicketRef.current
+    const timer = setTimeout(() => {
+      void getNutritionCoachRosterV2({
+        db: supabase as unknown as NutritionV2WriteClient,
+        scope,
+        search: term,
+        pageSize: NUTRITION_COACH_ROSTER_PAGE_SIZE,
+      })
+        .then((page) => {
+          if (ticket !== searchTicketRef.current) return
+          const entries = rosterEntriesFrom(page.items, sourceClientId)
+          setRemote(entries)
+          setSeenNames((prev) => {
+            const next = { ...prev }
+            for (const entry of entries) next[entry.clientId] = entry.clientName
+            return next
+          })
+        })
+        .catch(() => {
+          if (ticket === searchTicketRef.current) {
+            setSearchError('No pudimos buscar alumnos. Intenta de nuevo.')
+          }
+        })
+        .finally(() => {
+          if (ticket === searchTicketRef.current) setSearching(false)
+        })
+    }, ROSTER_SEARCH_DEBOUNCE_MS)
+    return () => clearTimeout(timer)
+  }, [visible, useRemote, term, scope, sourceClientId])
+
   const nameById = useMemo(() => {
     const map = new Map<string, string>()
     for (const entry of roster) map.set(entry.clientId, entry.clientName)
+    for (const [clientId, clientName] of Object.entries(seenNames)) map.set(clientId, clientName)
     return map
-  }, [roster])
+  }, [roster, seenNames])
 
   const filtered = useMemo(() => {
+    if (useRemote) return remote ?? []
     const needle = normalizeName(search)
     if (needle.length === 0) return roster
     return roster.filter((entry) => normalizeName(entry.clientName).includes(needle))
-  }, [roster, search])
+  }, [useRemote, remote, roster, search])
 
   const toggle = useCallback((clientId: string) => {
     setSelected((prev) => {
@@ -915,6 +1019,9 @@ function AssignPlanModal({
     operationId.current = genAssignOperationId()
     setSelected(new Set())
     setSearch('')
+    setRemote(null)
+    setSearchError(null)
+    setSeenNames({})
     setEffectiveFrom(today)
     setResults(null)
     setTopError(null)
@@ -1040,7 +1147,7 @@ function AssignPlanModal({
                   No pudimos cargar la lista de alumnos. Cierra y vuelve a intentar.
                 </Text>
               </View>
-            ) : roster.length === 0 ? (
+            ) : roster.length === 0 && !rosterHasMore ? (
               <View className="items-center rounded-control border border-border-subtle bg-surface-sunken px-4 py-8">
                 <Users color={theme.mutedForeground} size={28} />
                 <Text className="mt-2 text-center text-sm text-text-muted">
@@ -1056,9 +1163,23 @@ function AssignPlanModal({
                     onChangeText={(value) => setSearch(value.slice(0, 120))}
                     placeholder="Buscar alumno…"
                     placeholderTextColor={theme.mutedForeground}
+                    autoCorrect={false}
                     className="min-h-11 flex-1 py-2 text-base text-text-strong"
                   />
+                  {searching ? <ActivityIndicator color={theme.mutedForeground} size="small" /> : null}
                 </View>
+
+                {/* Honestidad del tope (NUT-026): la primera página no es todo el espacio. */}
+                {rosterHasMore && !useRemote ? (
+                  <Text className="text-xs text-text-muted">
+                    Tu espacio tiene más alumnos de los que caben aquí. Escribe para buscarlos a todos.
+                  </Text>
+                ) : null}
+                {searchError ? (
+                  <View className="rounded-control border border-danger-500/30 bg-danger-500/10 px-3 py-2">
+                    <Text className="text-sm font-medium text-danger-600">{searchError}</Text>
+                  </View>
+                ) : null}
 
                 <View className="flex-row items-center justify-between">
                   <Text className="text-xs text-text-muted">
@@ -1086,7 +1207,15 @@ function AssignPlanModal({
 
                 <View className="gap-2">
                   {filtered.length === 0 ? (
-                    <Text className="py-6 text-center text-sm text-text-muted">Sin coincidencias.</Text>
+                    searching ? (
+                      <View className="items-center py-6">
+                        <ActivityIndicator color={theme.primary} />
+                      </View>
+                    ) : (
+                      <Text className="py-6 text-center text-sm text-text-muted">
+                        {searchError ? 'No pudimos completar la búsqueda.' : 'Sin coincidencias.'}
+                      </Text>
+                    )
                   ) : (
                     filtered.map((entry) => {
                       const isSelected = selected.has(entry.clientId)

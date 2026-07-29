@@ -6,6 +6,7 @@ import { FlashList } from '@shopify/flash-list'
 import { MotiView } from 'moti'
 import {
   AlertTriangle,
+  CalendarDays,
   Check,
   CheckCircle2,
   History,
@@ -21,6 +22,7 @@ import {
 } from 'lucide-react-native'
 import {
   AuraHero,
+  DayVariantWeekStrip,
   FoodRow,
   MacroChipRow,
   NutritionCard,
@@ -72,7 +74,10 @@ import {
   firstNameFromFullName,
   formatNutritionAmount,
   formatNutritionCalories,
+  formatNutritionTodayVariantBadge,
   mapNutritionItemSubstitutionRow,
+  resolveNutritionDayVariantForDate,
+  sortNutritionDayVariantsForDisplay,
   type NutritionFoodRowModel,
   type NutritionItemSubstitutionRead,
   type NutritionHistoryDay,
@@ -1206,6 +1211,14 @@ function TodayTab() {
       ? 'Tu nuevo plan ya está publicado. Las metas y comidas de hoy se activan mañana; hoy puedes registrar lo que comas.'
       : 'Tu nuevo plan ya está publicado. Hoy todavía ves las metas del plan anterior; desde mañana se aplican las del nuevo.'
 
+  // FD3 (espejo de web page.tsx): badge multi-día SOLO con más de una variante y SOLO cuando el
+  // registro del día ya es del plan vigente — durante el lag el snapshot es de otra versión y
+  // nombrar la variante nueva sería mentir. No decide nada: explica lo que el snapshot ya fijó.
+  const todayVariant =
+    (livePlan?.dayVariants.length ?? 0) > 1 && !showTodayPlanLag
+      ? resolveNutritionDayVariantForDate(livePlan?.dayVariants ?? [], date)
+      : null
+
   // 4A-02: copia RN de slotsWithPrescribedContent (web portion-marks.logic.ts:357-363):
   // solo franjas con items fijos O con targets de porciones aparecen en "Tu plan de hoy".
   const slotsWithPrescription = model.mealSlots.filter(
@@ -1281,6 +1294,16 @@ function TodayTab() {
           <View className="flex-row items-start gap-2 rounded-control border border-border-subtle bg-surface-sunken px-4 py-3">
             <Info color={theme.textSecondary} size={16} style={{ marginTop: 2 }} />
             <Text className="min-w-0 flex-1 text-sm leading-5 text-text-body">{lagMessage}</Text>
+          </View>
+        ) : null}
+
+        {todayVariant ? (
+          // Badge "Hoy: plan de {día} · {kcal}" (web page.tsx, mismo texto por helper compartido).
+          <View className="flex-row items-center gap-2 self-start rounded-pill border border-primary/30 bg-primary/10 px-3 py-1">
+            <CalendarDays color={theme.primary} size={14} />
+            <Text className="text-xs font-semibold text-primary">
+              {formatNutritionTodayVariantBadge(todayVariant)}
+            </Text>
           </View>
         ) : null}
 
@@ -2245,6 +2268,9 @@ function PlanTab() {
 
   const summary = plan.plan
   const defaultVariant = plan.dayVariants.find((variant) => variant.isDefault) ?? plan.dayVariants[0] ?? null
+  // FD3 (espejo de web page.tsx): día base primero y después los días específicos Lu→Do.
+  const orderedVariants = sortNutritionDayVariantsForDisplay(plan.dayVariants)
+  const multiDay = plan.dayVariants.length > 1
 
   return (
     <ScrollView
@@ -2284,8 +2310,15 @@ function PlanTab() {
 
       <PlanRulesCard permissions={plan.permissions} />
 
-      {plan.dayVariants.map((variant) => (
-        <PlanVariantCard key={variant.id} variant={variant} showTargets={plan.dayVariants.length > 1} />
+      {orderedVariants.map((variant) => (
+        <PlanVariantCard
+          key={variant.id}
+          variant={variant}
+          variants={plan.dayVariants}
+          showTargets={multiDay}
+          showWeekStrip={multiDay}
+          todayIso={date}
+        />
       ))}
     </ScrollView>
   )
@@ -2343,7 +2376,19 @@ function PlanRulesCard({ permissions }: { permissions: NutritionPlanReadModel['p
   )
 }
 
-function PlanVariantCard({ variant, showTargets }: { variant: PlanVariant; showTargets: boolean }) {
+function PlanVariantCard({
+  variant,
+  variants,
+  showTargets,
+  showWeekStrip,
+  todayIso,
+}: {
+  variant: PlanVariant
+  variants: readonly PlanVariant[]
+  showTargets: boolean
+  showWeekStrip: boolean
+  todayIso: string
+}) {
   return (
     <NutritionCard>
       <View className="flex-row flex-wrap items-center justify-between gap-2">
@@ -2358,6 +2403,8 @@ function PlanVariantCard({ variant, showTargets }: { variant: PlanVariant; showT
         {variant.mealSlots.length} franja{variant.mealSlots.length === 1 ? '' : 's'}
         {variant.targets.calories != null ? ` · ${formatNutritionCalories(variant.targets.calories)}` : ''}
       </Text>
+      {/* FD3: con un solo día la tira sería ruido; con varios explica qué días le tocan a esta card. */}
+      {showWeekStrip ? <DayVariantWeekStrip variants={variants} variant={variant} todayIso={todayIso} /> : null}
       {showTargets ? (
         <View className="mt-2">
           <MacroChipRow

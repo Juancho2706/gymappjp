@@ -19,12 +19,15 @@ import {
   type NutritionTodayReadModel,
   type NutritionV2CoachScope,
 } from '@eva/nutrition-v2'
+import { z } from 'zod'
 import { ApiError, apiFetch } from './api'
 import {
+  CoachFoodInputSchema,
   NUTRITION_PRO_FEATURE_LABEL,
   publishFail,
   requiredNutritionProFeature,
   zodFields,
+  type BuilderFood,
   type NutritionProFeature,
   type NutritionV2WriteClient,
   type PublishFailure,
@@ -152,6 +155,71 @@ export async function getNutritionClientDetailV2(input: {
     { authenticated: true, signal: input.signal },
   )
   return NutritionClientDetailReadModelSchema.parse(raw)
+}
+
+// ---------------------------------------------------------------------------
+// NUT-026 — Roster liviano del workspace para el selector de alumnos (diálogo "Asignar a otros
+// alumnos"). Antes el diálogo RN resolvía el roster paginando el hub scoped con un bucle
+// `for (page = 0; page < 8; page += 1)` de `pageSize: 50` y filtraba client-side: tope silencioso
+// de 400 alumnos (el #401 invisible E inbuscable, sin aviso), ocho round-trips encadenados al
+// abrir, y cada uno calculando métricas de consumo que el picker no usa.
+//
+// Ahora la búsqueda y la paginación viven en `get_nutrition_coach_roster_scoped_v2` (migración
+// 20260728132000), la MISMA RPC que alimenta los pickers web. Es una LECTURA scoped: la función
+// re-valida contra `auth.uid()` que cada alumno pertenece al workspace declarado, así que el scope
+// nunca se cree del cliente y no hace falta un endpoint intermedio (las ESCRITURAS del coach sí
+// pasan siempre por `/api/mobile/nutrition-v2/coach/mutate`, NUT-005).
+//
+// El read model es local a este módulo a propósito: es una proyección de UI del roster, no un
+// contrato de dominio compartido (idéntica decisión que en `nutrition-v2-read.service.ts`).
+// ---------------------------------------------------------------------------
+
+const NutritionCoachRosterPageSchema = z.object({
+  schemaVersion: z.number(),
+  generatedAt: z.string(),
+  items: z.array(
+    z.object({
+      clientId: z.string(),
+      clientName: z.string().nullable(),
+      planStatus: z.string().nullable(),
+    }),
+  ),
+  nextCursor: z.object({ name: z.string(), clientId: z.string() }).nullable(),
+  hasMore: z.boolean(),
+})
+
+export type NutritionCoachRosterPage = z.infer<typeof NutritionCoachRosterPageSchema>
+export type NutritionCoachRosterEntry = NutritionCoachRosterPage['items'][number]
+
+/** Tope de la RPC (`least(greatest(p_page_size,1),100)`): pedir más no trae más. */
+export const NUTRITION_COACH_ROSTER_PAGE_SIZE = 50
+
+/**
+ * Una página alfabética del roster del workspace. `search` (>= 1 carácter útil) filtra
+ * SERVER-SIDE sobre todo el workspace, tolerante a mayúsculas y acentos; `cursorName`/
+ * `cursorClientId` continúan el keyset. Lanza si la RPC falla o el contrato no calza: el
+ * llamador decide la degradación (el diálogo muestra el aviso de fallo).
+ */
+export async function getNutritionCoachRosterV2(input: {
+  db: NutritionV2WriteClient
+  scope: NutritionV2CoachScope
+  search?: string | null
+  cursorName?: string | null
+  cursorClientId?: string | null
+  pageSize?: number
+}): Promise<NutritionCoachRosterPage> {
+  const search = input.search?.trim() ? input.search.trim().slice(0, 120) : null
+  const { data, error } = await input.db.rpc('get_nutrition_coach_roster_scoped_v2', {
+    p_scope_type: input.scope.scopeType,
+    p_team_id: input.scope.teamId,
+    p_org_id: input.scope.orgId,
+    p_search: search,
+    p_cursor_name: input.cursorName ?? null,
+    p_cursor_client_id: input.cursorClientId ?? null,
+    p_page_size: input.pageSize ?? NUTRITION_COACH_ROSTER_PAGE_SIZE,
+  })
+  if (error) throw new Error(error.message || 'nutrition_v2_coach_roster_failed')
+  return NutritionCoachRosterPageSchema.parse(data)
 }
 
 // Interfaz mínima para leer `nutrition_v2_conversion_links` (espejo 1:1 del cast web
@@ -496,4 +564,30 @@ export async function archiveNutritionPlan(input: {
     return { code: res.code, error: res.error }
   }
   return { code: 'WRITE_FAILED', error: res.error }
+}
+
+/**
+ * "Guardar en mi catálogo": alta de un alimento coach-scoped desde el "alimento libre con macros"
+ * del builder RN. Era el ÚLTIMO camino de escritura del coach móvil que quedaba fuera del endpoint
+ * (`createCoachFoodV2` insertaba directo en `foods` con el JWT de la sesión: la RLS lo acotaba al
+ * coach dueño, pero el rollout de Nutrición V2 no lo miraba). Ahora POSTea la acción `createFood`,
+ * que reusa el MISMO insert que la server action web y devuelve el alimento ya creado para que el
+ * ítem pase a referenciar su id.
+ */
+export async function createCoachFoodRN(input: {
+  scope: NutritionV2CoachScope
+  input: unknown
+}): Promise<{ ok: true; food: BuilderFood } | PublishFailure> {
+  const parsed = CoachFoodInputSchema.safeParse(input.input)
+  if (!parsed.success) {
+    return publishFail('INVALID_PAYLOAD', 'El alimento tiene datos invalidos.', zodFields(parsed.error))
+  }
+
+  const res = await coachMutate<{ ok: true; food: BuilderFood }>({
+    action: 'createFood',
+    workspace: input.scope,
+    ...parsed.data,
+  })
+  if (!res.ok) return res
+  return { ok: true, food: res.data.food }
 }

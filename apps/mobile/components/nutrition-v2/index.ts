@@ -1,6 +1,7 @@
 export * from './NutritionCard'
 export * from './NutritionV2Kit'
 export * from './MacroChipRow'
+export * from './DayVariantWeekStrip'
 export * from './state-illustration'
 export * from './PortionDayCoverageCard'
 export * from './CelebrationOverlay'

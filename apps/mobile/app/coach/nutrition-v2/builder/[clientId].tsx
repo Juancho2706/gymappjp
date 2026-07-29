@@ -65,6 +65,7 @@ import { useEntitlements, useNutritionV2CoachFlagForClient } from '../../../../l
 import { useWorkspace } from '../../../../lib/workspace'
 import {
   archiveNutritionPlan,
+  createCoachFoodRN,
   getNutritionClientDetailV2,
   nutritionV2CoachScope,
   publishDraftRN,
@@ -88,7 +89,6 @@ import {
   builderHasSignificantContent,
   builderReducer,
   canProceedToPublishAfterArchive,
-  createCoachFoodV2,
   createEmptyBuilderState,
   customMacrosOf,
   dayTotals,
@@ -104,7 +104,6 @@ import {
   type BuilderSlot,
   type BuilderState,
   type BuilderUnit,
-  type NutritionV2WriteClient,
 } from '../../../../lib/nutrition-v2-builder'
 import { foodCategoryEmoji, foodMediaThumbnailUrl } from '../../../../lib/nutrition-v2-food-media'
 
@@ -754,9 +753,11 @@ export default function CoachNutritionV2BuilderScreen() {
   // "Guardar en mi catálogo" (sub-delta b): crea el alimento coach-scoped desde el "alimento libre"
   // y, al OK, despacha UPDATE_ITEM para que el item pase a referenciarlo (deja de ser libre). El
   // componente profundo (ItemEditor) no toca la red: recibe este callback (patron de onSearch).
+  // NUT-005: el alta pasa por la API móvil (acción `createFood`), NO por un insert directo en
+  // `foods` — así el rollout y el gate del workspace también cubren este camino.
   const handleSaveCustomFood = useCallback(
     async (item: BuilderItem, slotKey: string): Promise<{ ok: boolean; error?: string }> => {
-      if (!userId || !clientId) return { ok: false, error: 'Sesión no disponible. Reintenta.' }
+      if (!clientId || !scope) return { ok: false, error: 'Sesión no disponible. Reintenta.' }
       const unit = item.unit === 'ml' ? 'ml' : 'g'
       const macros = customMacrosOf(item)
       const parsed = CoachFoodInputSchema.safeParse({
@@ -772,11 +773,7 @@ export default function CoachNutritionV2BuilderScreen() {
       if (!parsed.success) {
         return { ok: false, error: 'Completa el nombre y macros validas (no negativas) antes de guardar.' }
       }
-      const res = await createCoachFoodV2({
-        db: supabase as unknown as NutritionV2WriteClient,
-        userId,
-        input: parsed.data,
-      })
+      const res = await createCoachFoodRN({ scope, input: parsed.data })
       if (!res.ok) return { ok: false, error: res.error }
       dispatch({
         type: 'UPDATE_ITEM',
@@ -793,7 +790,7 @@ export default function CoachNutritionV2BuilderScreen() {
       })
       return { ok: true }
     },
-    [userId, clientId],
+    [clientId, scope],
   )
 
   const handleSelectFood = useCallback(

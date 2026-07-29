@@ -34,6 +34,7 @@ import {
   type AssignClientResult,
 } from '@/app/coach/nutrition-v2/_lib/assign-plan'
 import { ArchivePlanInputSchema, classifyArchiveWrite } from '@/app/coach/nutrition-v2/_lib/archive-plan'
+import { CoachFoodInputSchema, insertCoachFood } from '@/app/coach/nutrition-v2/_lib/coach-food'
 
 /**
  * Escrituras del COACH en mobile (NUT-005). Antes RN escribia DIRECTO contra PostgREST/RPC con el
@@ -93,6 +94,17 @@ const ArchiveSchema = z.object({
   workspace: WorkspaceSchema,
   clientId: z.string().uuid(),
   planId: z.string().uuid(),
+})
+
+/**
+ * Alta de alimento coach-scoped desde el "alimento libre con macros" del builder RN. Era el
+ * ULTIMO camino de escritura del coach movil fuera de este endpoint: `createCoachFoodV2`
+ * insertaba directo en `foods` con el JWT de la sesion, asi que la RLS lo acotaba al coach dueno
+ * pero el rollout de Nutricion V2 no lo tocaba. Ahora comparte gate y el mismo INSERT que la web.
+ */
+const CreateFoodSchema = CoachFoodInputSchema.extend({
+  action: z.literal('createFood'),
+  workspace: WorkspaceSchema,
 })
 
 const ROUTE = 'mobile.nutrition-v2.coach.mutate'
@@ -235,6 +247,8 @@ export async function POST(request: NextRequest) {
       return handleAssign(gate, db, raw, startedAt, workspace.data)
     case 'archive':
       return handleArchive(gate, db, raw, startedAt)
+    case 'createFood':
+      return handleCreateFood(gate, db, raw, startedAt)
     default:
       return failure(startedAt, 'INVALID_ACTION', 'Acción inválida.', {}, gate.rolloutReason)
   }
@@ -531,6 +545,39 @@ async function handleArchive(
   }
 
   const payload = { ok: true as const }
+  logNutritionV2Api({ route: ROUTE, startedAt, status: 200, payload, rolloutReason: gate.rolloutReason })
+  return jsonNoStore(payload)
+}
+
+/**
+ * "Guardar en mi catálogo" del builder RN. Sin gate Pro (paridad con la web: crear un alimento
+ * propio es BASE); la barrera de tenencia es la RLS `foods_insert_own` sobre el cliente del propio
+ * coach, y el gate de rollout/workspace ya corrió en `POST`. El INSERT es el MISMO que usa la
+ * server action web (`insertCoachFood`).
+ */
+async function handleCreateFood(
+  gate: NutritionV2ApiGate,
+  db: NutritionV2Db,
+  raw: Record<string, unknown>,
+  startedAt: number,
+) {
+  const parsed = CreateFoodSchema.safeParse(raw)
+  if (!parsed.success) {
+    return failure(
+      startedAt,
+      'INVALID_PAYLOAD',
+      'El alimento tiene datos inválidos.',
+      { fields: zodFields(parsed.error) },
+      gate.rolloutReason,
+    )
+  }
+  // `insertCoachFood` re-valida con `CoachFoodInputSchema`, que descarta `action`/`workspace`.
+  const created = await insertCoachFood({ db, userId: gate.userId, input: parsed.data })
+  if (!created.ok) {
+    return failure(startedAt, created.code, created.error, {}, gate.rolloutReason)
+  }
+
+  const payload = { ok: true as const, food: created.food }
   logNutritionV2Api({ route: ROUTE, startedAt, status: 200, payload, rolloutReason: gate.rolloutReason })
   return jsonNoStore(payload)
 }

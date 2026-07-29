@@ -963,66 +963,14 @@ export function buildPublishIdempotencyKey(input: {
   })
 }
 
-// ---------------------------------------------------------------------------
-// Alimento coach-scoped desde "alimento libre con macros" del builder (sub-delta b).
-// Espejo 1:1 de la web createCoachFoodAction (builder.actions.ts:137-190): valida con
-// CoachFoodInputSchema, inserta en `foods` con macros POR 100 (serving_size = 100),
-// catalog_source='coach' y verification_status='coach_verified'; coach_id = userId lo exige
-// la RLS `foods_insert_own` (org_id NULL). Devuelve el alimento como BuilderFood para que el
-// item pase a referenciar su id (deja de ser libre). La RLS es la barrera real: un 42501 aca
-// == SCOPE_DENIED via mapWriteError. Sin revalidatePath (no aplica en RN).
-// ---------------------------------------------------------------------------
-
-export async function createCoachFoodV2(input: {
-  db: NutritionV2WriteClient
-  userId: string
-  input: CoachFoodInput
-}): Promise<{ ok: true; food: BuilderFood } | PublishFailure> {
-  const parsed = CoachFoodInputSchema.safeParse(input.input)
-  if (!parsed.success) {
-    return publishFail('INVALID_PAYLOAD', 'El alimento tiene datos invalidos.', zodFields(parsed.error))
-  }
-  const { name, brand, unit, calories, proteinG, carbsG, fatsG } = parsed.data
-
-  const ins = await input.db
-    .from('foods')
-    .insert({
-      name,
-      brand,
-      coach_id: input.userId,
-      org_id: null,
-      calories,
-      protein_g: proteinG,
-      carbs_g: carbsG,
-      fats_g: fatsG,
-      serving_size: 100,
-      serving_unit: unit,
-      is_liquid: unit === 'ml',
-      category: 'otro',
-      country_code: 'CL',
-      catalog_source: 'coach',
-      verification_status: 'coach_verified',
-    })
-    .select('id')
-    .single()
-  if (ins.error || !ins.data) return mapWriteError(ins.error ?? { message: 'no food' }, 'alimento')
-
-  const food: BuilderFood = {
-    id: ins.data.id,
-    name,
-    brand,
-    calories,
-    proteinG,
-    carbsG,
-    fatsG,
-    fiberG: null,
-    servingSize: 100,
-    servingUnit: unit,
-    category: 'otro',
-    media: null,
-  }
-  return { ok: true, food }
-}
+// NOTA (NUT-005): el alta de alimento coach-scoped ("Guardar en mi catálogo" del builder) tampoco
+// vive ya aquí. `createCoachFoodV2` insertaba DIRECTO en `foods` con el JWT de la sesión: la RLS
+// `foods_insert_own` acotaba la fila al coach dueño, pero el rollout de Nutrición V2 no miraba ese
+// camino, así que era el último write del coach móvil fuera del endpoint. Ahora es
+// `createCoachFoodRN` (`lib/nutrition-v2.api.ts`) -> acción `createFood` de
+// POST /api/mobile/nutrition-v2/coach/mutate, que reusa el MISMO insert de la web
+// (`apps/web/src/app/coach/nutrition-v2/_lib/coach-food.ts`). `CoachFoodInputSchema` se queda aquí:
+// es la validación de forma que comparten la pantalla y el cliente de la API.
 
 // ---------------------------------------------------------------------------
 // Conflicto de "fecha de vigencia" al publicar (sub-delta c) — helpers PUROS.
