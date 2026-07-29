@@ -10,6 +10,7 @@ import {
     ChevronRight,
     Dumbbell,
     MessageCircle,
+    MoreHorizontal,
     Download,
     Archive,
     AlertTriangle,
@@ -28,6 +29,7 @@ import {
     AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
 import { bulkArchiveClientsAction } from './_actions/clients.actions'
+import type { StatusDirectoryFilter } from './directory-types'
 import type { DirectoryPulseRow } from '@/services/dashboard.service'
 
 /**
@@ -108,6 +110,9 @@ interface RosterRow {
     week: number
     last: string | null
     phone: string | null
+    archived: boolean
+    /** Cliente crudo: lo necesita el sheet de acciones (email, teléfono, flags). */
+    raw: any
 }
 
 interface DesktopRosterTableProps {
@@ -115,6 +120,12 @@ interface DesktopRosterTableProps {
     pulseByClientId: Record<string, DirectoryPulseRow>
     coachSlug?: string
     appUrl: string
+    /** Abre el sheet de acciones del alumno (ver ficha, editar, archivar, eliminar…). */
+    onActions?: (client: any) => void
+    /** Filtro de estado compartido con el directorio móvil: 'archived' muestra los archivados. */
+    statusFilter?: StatusDirectoryFilter
+    onStatusFilterChange?: (v: StatusDirectoryFilter) => void
+    archivedCount?: number
 }
 
 /** StatusBadge (Badge tone=… dot size=sm) — transcripción del DS Badge. */
@@ -174,6 +185,10 @@ export function DesktopRosterTable({
     pulseByClientId,
     coachSlug,
     appUrl,
+    onActions,
+    statusFilter = 'any',
+    onStatusFilterChange,
+    archivedCount = 0,
 }: DesktopRosterTableProps) {
     const router = useRouter()
     const [q, setQ] = useState('')
@@ -186,10 +201,13 @@ export function DesktopRosterTable({
 
     const loginUrl = coachSlug && appUrl ? `${appUrl}/c/${coachSlug}/login` : ''
 
-    // Filas enriquecidas con data REAL. Excluimos archivados (igual que el rail Ficha).
+    const showArchived = statusFilter === 'archived'
+
+    // Filas enriquecidas con data REAL. Respetamos el filtro de estado del directorio:
+    // 'archived' muestra SOLO archivados; cualquier otro los excluye (vista por defecto).
     const enriched = useMemo<RosterRow[]>(() => {
         return clients
-            .filter((c) => c.is_archived !== true)
+            .filter((c) => (showArchived ? c.is_archived === true : c.is_archived !== true))
             .map((c) => {
                 const pulse = pulseByClientId[c.id]
                 const program = c.workout_programs?.find((p: any) => p.is_active)?.name ?? null
@@ -203,9 +221,11 @@ export function DesktopRosterTable({
                     week: pulse?.planCurrentWeek ?? 0,
                     last: pulse?.lastWorkoutDate ?? null,
                     phone: c.phone ?? null,
+                    archived: c.is_archived === true,
+                    raw: c,
                 }
             })
-    }, [clients, pulseByClientId])
+    }, [clients, pulseByClientId, showArchived])
 
     const ql = q.trim().toLowerCase()
     const rows = useMemo(() => {
@@ -225,7 +245,12 @@ export function DesktopRosterTable({
             .sort((a, b) => cmp(a, b) * dir)
     }, [enriched, ql, sortKey, dir])
 
-    const selIds = Object.keys(sel).filter((k) => sel[k])
+    // La selección solo cuenta sobre filas VISIBLES: al cambiar de búsqueda o al pasar a
+    // "Archivados" no arrastramos ids que ya no están en pantalla.
+    const selectedRows = rows.filter((r) => sel[r.id])
+    const selIds = selectedRows.map((r) => r.id)
+    // Archivar nunca debe tocar a un ya-archivado.
+    const archivableIds = selectedRows.filter((r) => !r.archived).map((r) => r.id)
     const allOn = rows.length > 0 && rows.every((r) => sel[r.id])
     const toggleAll = () =>
         setSel(allOn ? {} : Object.fromEntries(rows.map((r) => [r.id, true])))
@@ -243,8 +268,6 @@ export function DesktopRosterTable({
     }
 
     // ── Acciones masivas (data REAL, sin mock) ───────────────────────────────
-    const selectedRows = rows.filter((r) => sel[r.id])
-
     const handleAsignar = () => {
         // Sin endpoint de asignación masiva: entramos a la ficha del primero (ahí se asigna).
         const first = selIds[0]
@@ -292,9 +315,10 @@ export function DesktopRosterTable({
     }
 
     const handleArchive = () => {
+        if (archivableIds.length === 0) return
         setArchiveError(undefined)
         startArchive(async () => {
-            const result = await bulkArchiveClientsAction(selIds)
+            const result = await bulkArchiveClientsAction(archivableIds)
             if (result.error) {
                 setArchiveError(result.error)
                 return
@@ -323,8 +347,37 @@ export function DesktopRosterTable({
                     />
                 </div>
                 <span className="whitespace-nowrap text-[13px] font-semibold text-muted">
-                    {rows.length} alumnos
+                    {rows.length} {rows.length === 1 ? 'alumno' : 'alumnos'}
+                    {showArchived ? ' archivados' : ''}
                 </span>
+                {/* Archivados: mismo estado de filtro que el directorio móvil, para poder
+                    verlos y operarlos (desarchivar / eliminar) desde desktop. */}
+                {onStatusFilterChange && (archivedCount > 0 || showArchived) && (
+                    <button
+                        type="button"
+                        onClick={() => onStatusFilterChange(showArchived ? 'any' : 'archived')}
+                        aria-pressed={showArchived}
+                        className={cn(
+                            'eva-press ml-auto inline-flex h-9 shrink-0 items-center gap-1.5 rounded-control border px-3 text-[13px] font-bold transition-colors',
+                            showArchived
+                                ? 'border-[var(--text-strong)] bg-[var(--text-strong)] text-[var(--surface-card)]'
+                                : 'border-subtle bg-surface-card text-muted hover:text-strong'
+                        )}
+                    >
+                        <Archive className="h-[15px] w-[15px]" />
+                        Archivados
+                        <span
+                            className={cn(
+                                'rounded-pill px-[7px] py-px text-[11px] font-extrabold',
+                                showArchived
+                                    ? 'bg-white/20 text-[var(--surface-card)]'
+                                    : 'bg-surface-sunken text-subtle'
+                            )}
+                        >
+                            {archivedCount}
+                        </span>
+                    </button>
+                )}
             </div>
 
             {/* ── dt-tbl-wrap: tabla con nav por teclado ───────────────────── */}
@@ -376,7 +429,7 @@ export function DesktopRosterTable({
                                     colSpan={7}
                                     className="px-4 py-12 text-center text-[13px] text-muted"
                                 >
-                                    Sin resultados
+                                    {showArchived ? 'No tienes alumnos archivados' : 'Sin resultados'}
                                 </td>
                             </tr>
                         ) : (
@@ -460,9 +513,24 @@ export function DesktopRosterTable({
                                         <td className="px-4 py-[10px] align-middle text-[13.5px] text-muted">
                                             {lastSessionLabel(s.last)}
                                         </td>
-                                        {/* chevron */}
-                                        <td className="w-[40px] px-4 py-[10px] text-right align-middle text-[var(--ink-300)]">
-                                            <ChevronRight className="ml-auto h-4 w-4" />
+                                        {/* acciones + chevron */}
+                                        <td className="w-[76px] px-4 py-[10px] text-right align-middle text-[var(--ink-300)]">
+                                            <div className="flex items-center justify-end gap-1">
+                                                {onActions && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation()
+                                                            onActions(s.raw)
+                                                        }}
+                                                        aria-label={`Acciones de ${s.name}`}
+                                                        className="eva-press inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-control text-muted transition-colors hover:bg-surface-sunken hover:text-strong"
+                                                    >
+                                                        <MoreHorizontal className="h-4 w-4" />
+                                                    </button>
+                                                )}
+                                                <ChevronRight className="h-4 w-4" />
+                                            </div>
                                         </td>
                                     </tr>
                                 )
@@ -500,6 +568,8 @@ export function DesktopRosterTable({
                         >
                             <Download className="h-[15px] w-[15px]" /> Exportar CSV
                         </button>
+                        {/* Archivar solo si hay algún seleccionado NO archivado. */}
+                        {archivableIds.length > 0 && (
                         <AlertDialog>
                             <AlertDialogTrigger>
                                 <span className="eva-press inline-flex h-[34px] items-center gap-1.5 rounded-control bg-[var(--danger-500)] px-[14px] text-[13px] font-bold text-white transition-colors hover:bg-[var(--danger-600)]">
@@ -512,7 +582,8 @@ export function DesktopRosterTable({
                                         <AlertTriangle className="h-[22px] w-[22px]" />
                                     </div>
                                     <AlertDialogTitle className="font-display font-extrabold normal-case tracking-[-0.01em] text-strong">
-                                        Archivar {selIds.length} alumnos
+                                        Archivar {archivableIds.length}{' '}
+                                        {archivableIds.length === 1 ? 'alumno' : 'alumnos'}
                                     </AlertDialogTitle>
                                     <AlertDialogDescription className="text-muted">
                                         Dejarán de tener acceso a su app hasta que los desarchives. Sus datos y su historial se conservan.
@@ -535,6 +606,7 @@ export function DesktopRosterTable({
                                 </AlertDialogFooter>
                             </AlertDialogContent>
                         </AlertDialog>
+                        )}
                     </div>
                     <button
                         type="button"

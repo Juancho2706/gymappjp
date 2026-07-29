@@ -46,7 +46,6 @@ function ConfirmBody({
     body,
     cta,
     danger,
-    confirmName,
     pending,
     error,
     onCancel,
@@ -58,15 +57,12 @@ function ConfirmBody({
     body: string
     cta: string
     danger?: boolean
-    confirmName?: string | null
     pending: boolean
     error?: string
     onCancel: () => void
     onConfirm: () => void
 }) {
-    const [typed, setTyped] = useState('')
     const [bg, fg] = CONFIRM_TONES[tone]
-    const ok = !confirmName || typed.trim().toLowerCase() === confirmName.toLowerCase()
     return (
         <div className="px-6 pb-6 pt-1">
             <div
@@ -76,25 +72,7 @@ function ConfirmBody({
                 <Icon className="h-[23px] w-[23px]" />
             </div>
             <div className="mb-1.5 font-display text-[19px] font-extrabold text-strong">{title}</div>
-            <div className={cn('text-[13.5px] leading-normal text-muted', confirmName ? 'mb-3' : 'mb-5')}>
-                {body}
-            </div>
-            {confirmName && (
-                <div className="mb-5">
-                    <div className="mb-1.5 text-xs text-muted">
-                        Escribe <strong className="text-strong">{confirmName}</strong> para confirmar:
-                    </div>
-                    <input
-                        value={typed}
-                        onChange={(e) => setTyped(e.target.value)}
-                        placeholder={confirmName}
-                        className={cn(
-                            'w-full rounded-[var(--radius-md)] border-[1.5px] bg-surface-card px-[13px] py-[11px] font-ui text-[14.5px] text-strong outline-none placeholder:text-subtle',
-                            ok ? 'border-[var(--danger-500)]' : 'border-default'
-                        )}
-                    />
-                </div>
-            )}
+            <div className="mb-5 text-[13.5px] leading-normal text-muted">{body}</div>
             {error && <p className="mb-3 text-sm font-semibold text-[var(--danger-600)]">{error}</p>}
             <div className="flex gap-2.5">
                 <Button variant="ghost" size="lg" onClick={onCancel} disabled={pending}>
@@ -104,7 +82,7 @@ function ConfirmBody({
                     variant={danger ? 'danger' : 'sport'}
                     size="lg"
                     className="flex-1"
-                    disabled={!ok || pending}
+                    disabled={pending}
                     onClick={onConfirm}
                 >
                     {pending ? 'Guardando…' : cta}
@@ -328,10 +306,9 @@ export function ClientActionsSheet({ client, loginUrl, onClose, onEdit }: Client
                 icon={Trash2}
                 tone="danger"
                 title="Eliminar alumno"
-                body="Esta acción eliminará su cuenta y todos sus datos asociados (rutinas, check-ins, progreso). No se puede deshacer."
+                body={`Esta acción eliminará la cuenta de ${name} y todos sus datos asociados (rutinas, check-ins, progreso). No se puede deshacer.`}
                 cta="Eliminar definitivamente"
                 danger
-                confirmName={name}
                 pending={isPending}
                 error={error}
                 onCancel={() => setConfirm(null)}
