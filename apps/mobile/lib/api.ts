@@ -1,4 +1,5 @@
 import * as Sentry from '@sentry/react-native'
+import type { MobileStudentWorkspaceValidationResponse } from '@eva/schemas'
 import { supabase } from './supabase'
 import { humanizeStudentWriteError, isCoachAccountPausedError } from './student-access-copy'
 
@@ -177,5 +178,17 @@ export function clearForcePasswordChange() {
   return apiFetch<{ ok: true }>('/api/mobile/auth/clear-force-password', {
     method: 'POST',
     authenticated: true,
+  })
+}
+
+/**
+ * Valida después del sign-in que el alumno pertenece al coach cuya marca eligió.
+ * La identidad proviene del bearer; `coachId` solo acota el workspace solicitado.
+ */
+export function validateStudentWorkspace(coachId: string) {
+  return apiFetch<Extract<MobileStudentWorkspaceValidationResponse, { ok: true }>>('/api/mobile/auth/validate-student-workspace', {
+    method: 'POST',
+    authenticated: true,
+    body: { coachId },
   })
 }

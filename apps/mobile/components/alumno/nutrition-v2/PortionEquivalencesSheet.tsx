@@ -47,7 +47,12 @@ export interface PortionEquivalencesSheetProps {
   views: Readonly<Record<string, PortionCoverageView>>
   onClose: () => void
   onMark: (target: NutritionSlotExchangeTargetRead, portions: 1 | 0.5) => void
-  onRegister: () => void
+  /**
+   * Atajo a "Registrar alimento" desde el sheet. `null` cuando el plan está en solo alimentos
+   * prescritos (`canRegisterFreely = false`, NUT-009): el botón desaparece en vez de abrir un
+   * formulario cuya escritura el servidor va a rechazar.
+   */
+  onRegister: (() => void) | null
 }
 
 export function PortionEquivalencesSheet({
@@ -132,15 +137,17 @@ export function PortionEquivalencesSheet({
                   {PORTIONS_COPY.student.sheetMark}
                 </NutritionMotionButton>
               </View>
-              <View className="min-w-36 flex-1">
-                <NutritionMotionButton
-                  accessibilityLabel={`${PORTIONS_COPY.student.sheetRegister} en esta comida`}
-                  tone="neutral"
-                  onPress={onRegister}
-                >
-                  {PORTIONS_COPY.student.sheetRegister}
-                </NutritionMotionButton>
-              </View>
+              {onRegister ? (
+                <View className="min-w-36 flex-1">
+                  <NutritionMotionButton
+                    accessibilityLabel={`${PORTIONS_COPY.student.sheetRegister} en esta comida`}
+                    tone="neutral"
+                    onPress={onRegister}
+                  >
+                    {PORTIONS_COPY.student.sheetRegister}
+                  </NutritionMotionButton>
+                </View>
+              ) : null}
             </View>
           </View>
         ) : undefined

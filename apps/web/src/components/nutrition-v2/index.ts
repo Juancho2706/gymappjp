@@ -25,6 +25,7 @@ export {
   StudentPreview,
 } from './NutritionV2Overrides'
 export { MacroChipRow, type MacroChipRowProps } from './MacroChipRow'
+export { DayVariantWeekStrip } from './DayVariantWeekStrip'
 export * from './NutritionV2Motion'
 export {
   NUTRITION_ILLUSTRATIONS,

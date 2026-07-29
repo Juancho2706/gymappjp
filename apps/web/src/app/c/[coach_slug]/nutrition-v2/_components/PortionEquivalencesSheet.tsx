@@ -41,7 +41,12 @@ export function PortionEquivalencesSheet({
   api: PortionMarksApi
   onClose: () => void
   /** Abre el flujo de registro existente preseleccionando la franja. */
-  onRegister: (slotCode: string) => void
+  /**
+   * Atajo a "Registrar alimento" desde el sheet. `null` cuando el plan está en solo alimentos
+   * prescritos (`canRegisterFreely = false`, NUT-009): el botón desaparece en vez de abrir un
+   * diálogo cuya escritura el servidor va a rechazar.
+   */
+  onRegister: ((slotCode: string) => void) | null
 }) {
   const reduceMotion = useReducedMotion()
   const [activeCode, setActiveCode] = useState<string | null>(initialGroupCode)
@@ -238,13 +243,15 @@ export function PortionEquivalencesSheet({
                 >
                   {PORTIONS_COPY.student.sheetMark}
                 </NutritionMotionButton>
-                <NutritionMotionButton
-                  className="min-h-11 flex-1"
-                  onClick={() => onRegister(slot.code)}
-                  tone="neutral"
-                >
-                  {PORTIONS_COPY.student.sheetRegister}
-                </NutritionMotionButton>
+                {onRegister ? (
+                  <NutritionMotionButton
+                    className="min-h-11 flex-1"
+                    onClick={() => onRegister(slot.code)}
+                    tone="neutral"
+                  >
+                    {PORTIONS_COPY.student.sheetRegister}
+                  </NutritionMotionButton>
+                ) : null}
               </div>
             </div>
           </motion.div>

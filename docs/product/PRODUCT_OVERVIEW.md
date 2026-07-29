@@ -1,7 +1,7 @@
 ---
 status: active
 owner: product
-last_verified: "2026-07-25 @ a59acfd1"
+last_verified: "2026-07-28 @ 0fbf850d"
 canonical: true
 ---
 
@@ -113,7 +113,7 @@ La fuente de verdad de tiers es `packages/tiers`; no duplicar precios, límites 
 - onboarding de organización y MFA para acciones sensibles;
 - roles y permisos de staff;
 - coaches, alumnos y asignaciones;
-- programas y plantillas nutricionales organizacionales;
+- programas; Nutrition multi-coach se resuelve mediante Team, no Enterprise;
 - marca con borrador/publicación;
 - check-ins, anuncios, confianza y prueba operativa;
 - reportes/exportaciones, registros de pagos y audit log.

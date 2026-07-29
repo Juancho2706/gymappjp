@@ -1,16 +1,18 @@
 ---
 status: reference
 owner: engineering
-last_verified: 2026-07-20
+last_verified: 2026-07-28
 canonical: false
 ---
 
 # Auditorías conservadas
 
-Estas auditorías son evidencia puntual del 18 de julio de 2026. No describen por sí solas el estado actual ni crean backlog.
+Estas auditorías son evidencia puntual del commit y fecha indicados en cada informe. No describen
+por sí solas el estado actual ni crean backlog.
 
 - [Bundle y PWA](bundle-pwa-2026-07-18.md)
 - [Salud de base de datos](db-salud-2026-07-18.md)
+- [Nutrición V2 — coach/alumno standalone + Team](nutricion-v2-coach-alumno-2026-07-28.md)
 - [SEO](seo-2026-07-18.md)
 - [Mapa de deprecación V1](v1-deprecation-map-2026-07-18.md)
 

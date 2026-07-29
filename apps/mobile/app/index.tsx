@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native'
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router'
-import { LinearGradient } from 'expo-linear-gradient'
-import { ArrowUpRight, ChevronRight, Dumbbell, Shield, Ticket, Users } from 'lucide-react-native'
+import { ChevronRight, Dumbbell, ShieldCheck, Users } from 'lucide-react-native'
 import { MotiView } from 'moti'
+import { useReducedMotion } from 'react-native-reanimated'
 import { ForceLightTheme, useTheme } from '../context/ThemeContext'
 import { AppBackground } from '../components/AppBackground'
 import { AmbientBrandGlow } from '../components/AmbientBrandGlow'
@@ -18,29 +18,13 @@ import { getCoachProfile } from '../lib/coach'
 
 type Phase = 'checking' | 'walkthrough' | 'selector'
 
-/** Oscurece un hex mezclandolo con negro (para el gradiente del card sport). */
-function mixBlack(hex: string, amount: number): string {
-  const h = hex.replace('#', '')
-  const ch = (i: number) => Math.round((parseInt(h.slice(i, i + 2), 16) || 0) * (1 - amount))
-  const to2 = (n: number) => n.toString(16).padStart(2, '0')
-  return `#${to2(ch(0))}${to2(ch(2))}${to2(ch(4))}`
-}
-
-/** rgba() de un color solido `#rrggbb` (el foreground CONTRAST-AWARE de la marca) a una
- *  opacidad dada — texto "muted" del hero derivado del color legible, no blanco fijo. */
-function withAlpha(hex: string, a: number): string {
-  const h = hex.replace('#', '')
-  const r = parseInt(h.slice(0, 2), 16) || 0
-  const g = parseInt(h.slice(2, 4), 16) || 0
-  const b = parseInt(h.slice(4, 6), 16) || 0
-  return `rgba(${r}, ${g}, ${b}, ${a})`
-}
-
-// Familia de entrada = SIEMPRE tema claro (#13). El wrapper scopea el claro a
-// todo el arbol del selector (incluye el Walkthrough que renderiza abajo).
+/**
+ * La familia pública de entrada usa identidad EVA, no el color del último coach cacheado.
+ * El login white-label recupera la marca después de resolver el contexto correcto.
+ */
 export default function RoleSelectorRoute() {
   return (
-    <ForceLightTheme>
+    <ForceLightTheme branded={false}>
       <RoleSelector />
     </ForceLightTheme>
   )
@@ -48,63 +32,62 @@ export default function RoleSelectorRoute() {
 
 function RoleSelector() {
   const router = useRouter()
-  const { theme } = useTheme()
-  // Hero del alumno: texto sobre el gradiente de MARCA. Usa el foreground CONTRAST-AWARE
-  // (accentText) en vez de blanco fijo. Marca oscura => blanco + gradiente con profundidad;
-  // marca clara => casi-negro + gradiente aplanado (el oscurecido rompe el texto negro).
-  const heroTextLight = theme.primaryForeground.toLowerCase() === '#ffffff'
-  const heroMuted = withAlpha(theme.primaryForeground, 0.92)
-  // `?pick=1` = el alumno tocó "Elegir otro rol" en el login brandeado → forzar
-  // el selector aunque haya un coach cacheado (si no, el flujo inteligente lo
-  // devolvería al login en loop).
+  const { theme, setBranding } = useTheme()
+  const reducedMotion = useReducedMotion()
   const { pick } = useLocalSearchParams<{ pick?: string }>()
-  // Flujo de entrada inteligente (feedback CEO). Orden de decisión:
-  //   1. sesión activa            → dashboard (coach/alumno)
-  //   2. pidió elegir otro rol    → selector
-  //   3. coach cacheado           → login brandeado del alumno DIRECTO
-  //   4. primer arranque          → walkthrough → selector
-  //   5. resto                    → selector
-  // Los deep links /c y /invite NO montan esta ruta (ver app/+native-intent.ts).
   const [phase, setPhase] = useState<Phase>('checking')
   const routed = useRef(false)
 
   useEffect(() => {
-    (async () => {
+    let active = true
+
+    void (async () => {
       try {
         const { data } = await supabase.auth.getSession()
+        if (!active || routed.current) return
+
         if (data.session) {
           const coach = await getCoachProfile()
-          if (routed.current) return
+          if (!active || routed.current) return
           routed.current = true
           router.replace(coach ? '/coach/home' : '/alumno/home')
           return
         }
+
         if (pick === '1') {
           setPhase('selector')
           return
         }
-        const branding = await loadStoredBranding()
-        if (branding?.coachId) {
-          if (routed.current) return
+
+        const storedBranding = await loadStoredBranding()
+        if (!active || routed.current) return
+        if (storedBranding?.coachId) {
+          // Mantener memoria y caché alineadas antes de montar el login.
+          setBranding(storedBranding)
           routed.current = true
-          // El branding ya vive en ThemeContext (loadStoredBranding en el provider),
-          // así que el login resuelve la marca del coach sin pasar por el código.
           router.replace('/(auth)/login?role=alumno&switch=1')
           return
         }
+
         const seen = await hasSeenWalkthrough()
-        setPhase(seen ? 'selector' : 'walkthrough')
+        if (active) setPhase(seen ? 'selector' : 'walkthrough')
       } catch {
-        setPhase('selector')
+        if (active) setPhase('selector')
       }
     })()
-  }, [router, pick])
+
+    return () => {
+      active = false
+    }
+  }, [pick, router, setBranding])
 
   if (phase === 'checking') {
     return (
       <View className="bg-surface-app" style={styles.root}>
         <AppBackground />
-        <SafeAreaView style={{ flex: 1 }}><EvaLoaderScreen subtitle="Cargando…" /></SafeAreaView>
+        <SafeAreaView style={styles.root}>
+          <EvaLoaderScreen subtitle="Preparando EVA…" />
+        </SafeAreaView>
       </View>
     )
   }
@@ -113,176 +96,179 @@ function RoleSelector() {
     return <Walkthrough onDone={() => setPhase('selector')} />
   }
 
+  const enter = reducedMotion
+    ? { opacity: 1 }
+    : { opacity: 0, translateY: 14 }
+  const settled = { opacity: 1, translateY: 0 }
+
   return (
     <View className="bg-surface-app" style={styles.root} testID="role-selector">
       <AppBackground />
       <AmbientBrandGlow />
-      <SafeAreaView style={styles.safe}>
-        <View style={styles.top}>
-          {/* Logo EVA pequeño — wordmark de marca (display face, token de acento). */}
-          <MotiView
-            from={{ opacity: 0, translateY: 14 }}
-            animate={{ opacity: 1, translateY: 0 }}
-            transition={{ type: 'timing', duration: 460 }}
-            style={styles.header}
-          >
-            <Text className="text-primary" style={styles.mark}>EVA</Text>
-            <Text className="text-strong" style={[TYPE.h1, styles.title]}>¿Cómo quieres entrar?</Text>
-            <Text className="text-muted" style={[TYPE.body, styles.subtitle]}>
-              Elige tu rol para empezar en EVA.
-            </Text>
-          </MotiView>
-
-          <View style={styles.cards}>
-            {/* Alumno — protagonista, gradiente sport (blanco sobre marca). */}
-            <MotiView
-              from={{ opacity: 0, translateY: 22 }}
-              animate={{ opacity: 1, translateY: 0 }}
-              transition={{ type: 'timing', duration: 480, delay: 200 }}
-            >
-              <TouchableOpacity
-                testID="role-alumno"
-                accessibilityRole="button"
-                accessibilityLabel="Soy alumno"
-                activeOpacity={0.9}
-                onPress={() => router.push('/alumno/codigo')}
-                style={[styles.hero, { borderRadius: theme.radius['3xl'] }, theme.shadowGlowBlue]}
-              >
-                <LinearGradient
-                  colors={heroTextLight
-                    ? [theme.primary, mixBlack(theme.primary, 0.34)]
-                    : [theme.primary, mixBlack(theme.primary, 0.1)]}
-                  start={{ x: 0.1, y: 0 }}
-                  end={{ x: 0.9, y: 1 }}
-                  style={[StyleSheet.absoluteFill, { borderRadius: theme.radius['3xl'] }]}
-                  pointerEvents="none"
-                />
-                <LinearGradient
-                  colors={['rgba(255,255,255,0.18)', 'transparent']}
-                  start={{ x: 0.15, y: 0 }}
-                  end={{ x: 0.7, y: 0.55 }}
-                  style={[StyleSheet.absoluteFill, { borderRadius: theme.radius['3xl'] }]}
-                  pointerEvents="none"
-                />
-
-                <View style={styles.heroTopRow}>
-                  <View style={[styles.glassTile, { borderRadius: theme.radius.xl }]}>
-                    <Dumbbell size={24} color={theme.primaryForeground} strokeWidth={2} />
-                  </View>
-                  <View style={styles.arrowCircle}>
-                    <ArrowUpRight size={20} color={theme.primaryForeground} strokeWidth={2.25} />
-                  </View>
-                </View>
-
-                <View style={styles.heroText}>
-                  <Text style={[TYPE.eyebrow, { color: heroMuted }]}>Para entrenar</Text>
-                  <Text style={[TYPE.h3, { color: theme.primaryForeground, marginTop: 4 }]}>Soy alumno</Text>
-                  <Text style={[TYPE.body, styles.heroDesc, { color: heroMuted }]}>
-                    Entrena con tu coach. Tu plan, tu progreso y tus check-ins en un solo lugar.
-                  </Text>
-                </View>
-
-                <View style={styles.chip}>
-                  <Ticket size={14} color={theme.primaryForeground} strokeWidth={2} />
-                  <Text style={[TYPE.caption, { color: theme.primaryForeground }]}>Con el código de tu coach</Text>
-                </View>
-              </TouchableOpacity>
-            </MotiView>
-
-            {/* Coach — card secundaria, superficie limpia. */}
-            <MotiView
-              from={{ opacity: 0, translateY: 22 }}
-              animate={{ opacity: 1, translateY: 0 }}
-              transition={{ type: 'timing', duration: 480, delay: 320 }}
-            >
-              <TouchableOpacity
-                testID="role-coach"
-                accessibilityRole="button"
-                accessibilityLabel="Soy coach"
-                activeOpacity={0.9}
-                onPress={() => router.push('/(auth)/login?role=coach')}
-                className="bg-surface-card border border-subtle"
-                style={[styles.coach, { borderRadius: theme.radius['2xl'] }]}
-              >
-                <View className="bg-sport-100" style={[styles.coachTile, { borderRadius: theme.radius.xl }]}>
-                  <Users size={22} color={theme.primary} strokeWidth={2} />
-                </View>
-                <View style={styles.coachText}>
-                  <Text className="text-strong" style={TYPE.title}>Soy coach</Text>
-                  <Text className="text-muted" style={[TYPE.caption, { marginTop: 2 }]}>
-                    Gestiona tu marca, tus alumnos y tu negocio.
-                  </Text>
-                </View>
-                <ChevronRight size={22} color={theme.mutedForeground} strokeWidth={2} />
-              </TouchableOpacity>
-            </MotiView>
-          </View>
-        </View>
-
-        <MotiView
-          from={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ type: 'timing', duration: 400, delay: 520 }}
-          style={styles.footer}
+      <SafeAreaView style={styles.root}>
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={styles.scrollContent}
         >
-          <Shield size={13} color={theme.mutedForeground} strokeWidth={2} />
-          <Text className="text-subtle" style={TYPE.caption}>Acceso seguro · una cuenta por coach</Text>
-        </MotiView>
+          <View style={styles.content}>
+            <MotiView
+              from={enter}
+              animate={settled}
+              transition={{ type: 'timing', duration: reducedMotion ? 0 : 360 }}
+              style={styles.header}
+            >
+              <Text className="text-primary" style={styles.mark}>EVA</Text>
+              <Text className="text-strong" style={[TYPE.h1, styles.title]}>
+                Elige cómo entrar
+              </Text>
+              <Text className="text-muted" style={[TYPE.body, styles.subtitle]}>
+                Tu plan o tu negocio, en el mismo lugar.
+              </Text>
+            </MotiView>
+
+            <View style={styles.roles}>
+              <MotiView
+                from={enter}
+                animate={settled}
+                transition={{ type: 'timing', duration: reducedMotion ? 0 : 380, delay: reducedMotion ? 0 : 90 }}
+              >
+                <Pressable
+                  testID="role-alumno"
+                  accessibilityRole="button"
+                  accessibilityLabel="Entrar como alumno"
+                  accessibilityHint="Usa el código o enlace de tu coach"
+                  onPress={() => router.push('/alumno/codigo')}
+                  style={({ pressed }) => [
+                    styles.roleCard,
+                    styles.studentCard,
+                    {
+                      borderRadius: theme.radius['2xl'],
+                      backgroundColor: theme.primary,
+                      opacity: pressed ? 0.9 : 1,
+                      transform: [{ scale: pressed ? 0.985 : 1 }],
+                    },
+                  ]}
+                >
+                  <View style={[styles.roleIcon, styles.studentIcon]}>
+                    <Dumbbell size={23} color={theme.primaryForeground} strokeWidth={2} />
+                  </View>
+                  <View style={styles.roleCopy}>
+                    <Text style={[TYPE.eyebrow, { color: withAlpha(theme.primaryForeground, 0.76) }]}>
+                      Para entrenar
+                    </Text>
+                    <Text style={[TYPE.title, { color: theme.primaryForeground }]}>Soy alumno</Text>
+                    <Text style={[TYPE.caption, { color: withAlpha(theme.primaryForeground, 0.82) }]}>
+                      Entra con tu coach
+                    </Text>
+                  </View>
+                  <ChevronRight size={23} color={theme.primaryForeground} strokeWidth={2.25} />
+                </Pressable>
+              </MotiView>
+
+              <MotiView
+                from={enter}
+                animate={settled}
+                transition={{ type: 'timing', duration: reducedMotion ? 0 : 380, delay: reducedMotion ? 0 : 150 }}
+              >
+                <Pressable
+                  testID="role-coach"
+                  accessibilityRole="button"
+                  accessibilityLabel="Entrar como coach"
+                  accessibilityHint="Abre el acceso para gestionar alumnos y programas"
+                  onPress={() => router.push('/(auth)/login?role=coach')}
+                  className="bg-surface-card border border-default"
+                  style={({ pressed }) => [
+                    styles.roleCard,
+                    {
+                      borderRadius: theme.radius['2xl'],
+                      opacity: pressed ? 0.75 : 1,
+                      transform: [{ scale: pressed ? 0.985 : 1 }],
+                    },
+                  ]}
+                >
+                  <View className="bg-sport-100" style={[styles.roleIcon, { borderRadius: theme.radius.xl }]}>
+                    <Users size={23} color={theme.primary} strokeWidth={2} />
+                  </View>
+                  <View style={styles.roleCopy}>
+                    <Text className="text-muted" style={TYPE.eyebrow}>Para gestionar</Text>
+                    <Text className="text-strong" style={TYPE.title}>Soy coach</Text>
+                    <Text className="text-muted" style={TYPE.caption}>Administra alumnos y programas</Text>
+                  </View>
+                  <ChevronRight size={23} color={theme.mutedForeground} strokeWidth={2.25} />
+                </Pressable>
+              </MotiView>
+            </View>
+          </View>
+
+          <View style={styles.footer}>
+            <ShieldCheck size={15} color={theme.mutedForeground} strokeWidth={2} />
+            <Text className="text-muted" style={TYPE.caption}>Acceso seguro para alumnos y coaches</Text>
+          </View>
+        </ScrollView>
       </SafeAreaView>
     </View>
   )
 }
 
+function withAlpha(hex: string, alpha: number): string {
+  const clean = hex.replace('#', '')
+  if (!/^[0-9a-f]{6}$/i.test(clean)) return `rgba(255,255,255,${alpha})`
+  const r = Number.parseInt(clean.slice(0, 2), 16)
+  const g = Number.parseInt(clean.slice(2, 4), 16)
+  const b = Number.parseInt(clean.slice(4, 6), 16)
+  return `rgba(${r},${g},${b},${alpha})`
+}
+
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  safe: { flex: 1, justifyContent: 'space-between', paddingHorizontal: 24, paddingVertical: 32 },
-  top: { gap: 24 },
-  header: { alignItems: 'center', paddingTop: 24 },
-  // Wordmark EVA — Archivo Black, tracking cerrado. Color vía text-primary token.
-  mark: { fontFamily: FONT.displayBlack, fontSize: 30, lineHeight: 32, letterSpacing: -2, marginBottom: 20 },
+  scrollContent: {
+    flexGrow: 1,
+    justifyContent: 'space-between',
+    paddingHorizontal: 22,
+    paddingTop: 32,
+    paddingBottom: 22,
+  },
+  content: { width: '100%', maxWidth: 460, alignSelf: 'center' },
+  header: { alignItems: 'center', paddingHorizontal: 8, paddingTop: 12 },
+  mark: {
+    fontFamily: FONT.displayBlack,
+    fontSize: 28,
+    lineHeight: 30,
+    letterSpacing: -1.8,
+    marginBottom: 18,
+  },
   title: { textAlign: 'center' },
-  subtitle: { textAlign: 'center', marginTop: 8 },
-  cards: { gap: 14 },
-  // Alumno hero card
-  hero: { padding: 22, overflow: 'hidden', minHeight: 200, justifyContent: 'space-between' },
-  heroTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
-  glassTile: {
-    width: 52,
-    height: 52,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.18)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.26)',
-  },
-  arrowCircle: {
-    width: 40,
-    height: 40,
-    borderRadius: 9999,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.18)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.26)',
-  },
-  heroText: { marginTop: 18 },
-  heroDesc: { color: 'rgba(255,255,255,0.82)', marginTop: 6 },
-  chip: {
+  subtitle: { textAlign: 'center', marginTop: 9, maxWidth: 320 },
+  roles: { gap: 12, marginTop: 34 },
+  roleCard: {
+    minHeight: 92,
     flexDirection: 'row',
     alignItems: 'center',
-    alignSelf: 'flex-start',
-    gap: 7,
-    marginTop: 18,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 9999,
+    gap: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
+  studentCard: { overflow: 'hidden' },
+  roleIcon: {
+    width: 50,
+    height: 50,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  studentIcon: {
+    borderRadius: 18,
     backgroundColor: 'rgba(255,255,255,0.16)',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.24)',
+    borderColor: 'rgba(255,255,255,0.22)',
   },
-  // Coach card
-  coach: { flexDirection: 'row', alignItems: 'center', gap: 14, padding: 18 },
-  coachTile: { width: 50, height: 50, alignItems: 'center', justifyContent: 'center' },
-  coachText: { flex: 1 },
-  footer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, paddingTop: 12 },
+  roleCopy: { flex: 1, gap: 2 },
+  footer: {
+    minHeight: 48,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 7,
+    marginTop: 32,
+  },
 })

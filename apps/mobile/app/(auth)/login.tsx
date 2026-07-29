@@ -22,6 +22,7 @@ import { LoginSchema } from '@eva/schemas'
 import { resolveBrandTheme, resolvePresetBranding } from '@eva/brand-kit'
 import { isBrandingAllowed, type SubscriptionTier } from '@eva/tiers'
 import { supabase } from '../../lib/supabase'
+import { ApiError, validateStudentWorkspace } from '../../lib/api'
 import { translateAuthError } from '../../lib/auth-errors'
 import {
   GoogleSignInError,
@@ -34,7 +35,7 @@ import { useTheme } from '../../context/ThemeContext'
 import { FONT, TYPE } from '../../lib/typography'
 import { SHADOWS } from '../../lib/shadows'
 import { AuthDivider, Card, GoogleSignInButton, Input } from '../../components'
-import { EvaLoader } from '../../components/EvaLoader'
+import { EvaLoader, EvaLoaderScreen } from '../../components/EvaLoader'
 
 const REMEMBER_KEY = 'eva_remember_email'
 
@@ -106,6 +107,12 @@ export default function LoginScreen() {
     })
   }, [])
 
+  useEffect(() => {
+    if (isAlumno && !branding?.coachId) {
+      router.replace('/alumno/codigo')
+    }
+  }, [branding?.coachId, isAlumno, router])
+
   // ── Theming white-label del login (gate Pro+ como web) ──
   // Tier < Pro => branding EVA conservando el nombre (isBrandingAllowed). El preset curado
   // (theme_preset_key) override color/color2/acento ANTES de derivar el tema (paridad web).
@@ -153,9 +160,22 @@ export default function LoginScreen() {
   const tagline = branding?.welcomeMessage?.trim() || 'Tu plataforma de entrenamiento personalizado'
   const layout = brandingAllowed ? resolveLoginLayout(branding?.loginLayoutKey) : 'clasico'
 
+  if (isAlumno && !branding?.coachId) {
+    return (
+      <View className="bg-surface-app" style={{ flex: 1 }}>
+        <EvaLoaderScreen subtitle="Buscando a tu coach…" />
+      </View>
+    )
+  }
+
   async function handleLogin() {
-    setLoading(true)
     setError(null)
+    if (isAlumno && !branding?.coachId) {
+      setError('Primero ingresa el código o enlace de tu coach.')
+      return
+    }
+
+    setLoading(true)
     const parsed = LoginSchema.safeParse({ email: email.trim(), password })
     if (!parsed.success) {
       setError(parsed.error.issues[0]?.message ?? 'Datos inválidos')
@@ -169,13 +189,21 @@ export default function LoginScreen() {
       return
     }
 
-    // E1-17 — validacion de workspace/coach (espejo de clientLoginAction en web): el email
-    // autenticado debe pertenecer al coach cuyo branding se cargo (standalone) o a un coach de
-    // su misma org (enterprise). Evita entrar "brandeado por X" con la cuenta de otro coach.
+    let forcePasswordChange = false
     if (isAlumno) {
-      const workspaceError = await validateAlumnoWorkspace(branding?.coachId ?? null)
-      if (workspaceError) {
-        setError(workspaceError)
+      try {
+        const validation = await validateStudentWorkspace(branding!.coachId)
+        forcePasswordChange = validation.forcePasswordChange
+      } catch (validationError) {
+        const apiError = validationError instanceof ApiError ? validationError : null
+        // Un scope denegado/pausado o un token confirmado como inválido no debe dejar sesión viva.
+        if (
+          apiError?.status === 403 ||
+          apiError?.code === 'INVALID_TOKEN'
+        ) {
+          await supabase.auth.signOut().catch(() => {})
+        }
+        setError(studentWorkspaceErrorCopy(apiError))
         setLoading(false)
         return
       }
@@ -184,7 +212,13 @@ export default function LoginScreen() {
     if (remember) await AsyncStorage.setItem(REMEMBER_KEY, email.trim())
     else await AsyncStorage.removeItem(REMEMBER_KEY)
     await AsyncStorage.setItem('eva_user_role', role ?? 'coach')
-    router.replace(isAlumno ? '/alumno/home' : '/coach/home')
+    router.replace(
+      isAlumno
+        ? forcePasswordChange
+          ? '/change-password'
+          : '/alumno/home'
+        : '/coach/home',
+    )
   }
 
   // ── Google Sign-In nativo (coach) — espejo del GoogleSignInButton web (intent=login) ──
@@ -608,59 +642,22 @@ export default function LoginScreen() {
   )
 }
 
-/**
- * E1-17 — Verifica que el alumno autenticado pertenezca al coach del branding cargado.
- * Espejo de `clientLoginAction` (web): match standalone (coach_id) o enterprise (org membership).
- * Devuelve un mensaje de error (y hace signOut) si no hay acceso; null si el workspace es valido.
- *
- * Nota RN: sin service-role, la rama enterprise se resuelve bajo RLS del alumno (best-effort). Un
- * alumno standalone (caso comun) se valida por `coach_id`. Si el alumno enterprise no puede leer
- * `organization_members` bajo RLS, se le niega el acceso por el slug de OTRO coach de su org.
- */
-async function validateAlumnoWorkspace(coachId: string | null): Promise<string | null> {
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) {
-    await supabase.auth.signOut()
-    return 'No se pudo obtener la sesión.'
+function studentWorkspaceErrorCopy(error: ApiError | null): string {
+  switch (error?.code) {
+    case 'ACCESS_DENIED':
+      return 'Esta cuenta no pertenece a la plataforma de este coach.'
+    case 'ACCOUNT_PAUSED':
+      return 'Tu cuenta ha sido pausada. Contacta a tu coach para más información.'
+    case 'INVALID_TOKEN':
+    case 'MISSING_TOKEN':
+      return 'Tu sesión no pudo validarse. Vuelve a intentarlo.'
+    case 'VALIDATION_UNAVAILABLE':
+      return 'No pudimos verificar tu acceso ahora. Comprueba tu conexión e inténtalo otra vez.'
+    case 'VALIDATION_ERROR':
+      return 'No pudimos identificar la plataforma de tu coach. Vuelve a ingresar su código.'
+    default:
+      return 'No pudimos verificar tu acceso. Inténtalo otra vez.'
   }
-
-  const { data: client } = await supabase
-    .from('clients')
-    .select('id, coach_id, org_id, is_active, is_archived')
-    .eq('id', user.id)
-    .maybeSingle()
-
-  if (!client) {
-    await supabase.auth.signOut()
-    return 'No tienes acceso a esta plataforma.'
-  }
-
-  let matched = !!coachId && client.coach_id === coachId
-  if (!matched && client.org_id && coachId) {
-    const { data: member } = await supabase
-      .from('organization_members')
-      .select('id')
-      .eq('org_id', client.org_id)
-      .eq('coach_id', coachId)
-      .eq('status', 'active')
-      .is('deleted_at', null)
-      .maybeSingle()
-    matched = !!member
-  }
-
-  if (!matched) {
-    await supabase.auth.signOut()
-    return 'No tienes acceso a esta plataforma.'
-  }
-
-  if (client.is_active === false || client.is_archived === true) {
-    await supabase.auth.signOut()
-    return 'Tu cuenta ha sido pausada. Contacta a tu coach para más información.'
-  }
-
-  return null
 }
 
 /** Brand-mark reutilizable (logo del coach o iniciales). `glass` = sobre el hero oscuro. */
@@ -699,6 +696,7 @@ function BrandMark({
         }}
       >
         <Image
+          alt="Logo de la marca"
           source={{ uri: logoUrl }}
           style={{ width: px, height: px, padding: Math.round(px * 0.16) }}
           contentFit="contain"

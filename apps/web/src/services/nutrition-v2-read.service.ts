@@ -1,6 +1,7 @@
 import 'server-only'
 
 import { unstable_noStore as noStore } from 'next/cache'
+import { z } from 'zod'
 import {
   NutritionClientDetailReadModelSchema,
   NutritionCoachHubPageReadModelSchema,
@@ -142,6 +143,53 @@ export function getNutritionCoachHubV2ForWeb(input: {
       p_page_size: input.pageSize ?? 25,
     },
     parse: (value) => NutritionCoachHubPageReadModelSchema.parse(value),
+  })
+}
+
+/**
+ * NUT-026 — Roster liviano del workspace para los selectores de alumno (picker "Nuevo plan"
+ * y "Asignar a otros alumnos"). Reemplaza el bucle de 8 paginas x 50 sobre el hub scoped que
+ * topaba en 400 alumnos SIN aviso y encadenaba 8 round-trips en el render RSC: aqui la
+ * busqueda y la paginacion son server-side (`get_nutrition_coach_roster_scoped_v2`).
+ *
+ * El read model es local a este servicio a proposito: es una proyeccion de UI del roster, no
+ * un contrato de dominio compartido con RN.
+ */
+const NutritionCoachRosterPageSchema = z.object({
+  schemaVersion: z.number(),
+  generatedAt: z.string(),
+  items: z.array(
+    z.object({
+      clientId: z.string(),
+      clientName: z.string().nullable(),
+      planStatus: z.string().nullable(),
+    }),
+  ),
+  nextCursor: z.object({ name: z.string(), clientId: z.string() }).nullable(),
+  hasMore: z.boolean(),
+})
+
+export type NutritionCoachRosterPage = z.infer<typeof NutritionCoachRosterPageSchema>
+
+export function getNutritionCoachRosterV2ForWeb(input: {
+  scope: NutritionV2CoachScope
+  search?: string | null
+  cursorName?: string | null
+  cursorClientId?: string | null
+  pageSize?: number
+}): Promise<NutritionCoachRosterPage> {
+  return rpcRead({
+    name: 'get_nutrition_coach_roster_scoped_v2',
+    args: {
+      p_scope_type: input.scope.scopeType,
+      p_team_id: input.scope.teamId,
+      p_org_id: input.scope.orgId,
+      p_search: input.search?.trim() ? input.search.trim().slice(0, 120) : null,
+      p_cursor_name: input.cursorName ?? null,
+      p_cursor_client_id: input.cursorClientId ?? null,
+      p_page_size: input.pageSize ?? 50,
+    },
+    parse: (value) => NutritionCoachRosterPageSchema.parse(value),
   })
 }
 

@@ -14,9 +14,11 @@ import {
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router'
-import { AlertTriangle, CalendarClock, Check, ChevronLeft, ChevronRight, History, Lock, Minus, Plus, RefreshCw, Repeat, Search, Sparkles, Trash2, X } from 'lucide-react-native'
+import { AlertTriangle, CalendarClock, Check, ChevronLeft, ChevronRight, History, Lock, Minus, Pencil, Plus, RefreshCw, Repeat, Search, Sparkles, Trash2, X } from 'lucide-react-native'
 import {
+  BuilderDayVariantBar,
   BuilderStepList,
+  ExchangeGroupFormSheet,
   FoodThumbnail,
   NutritionCard,
   NutritionHeader,
@@ -26,6 +28,8 @@ import {
   SelectableStrategyCard,
   StrategyBadge,
   StudentPreview,
+  type BuilderDayVariantBarHandlers,
+  type ExchangeGroupFormInitial,
 } from '../../../../components/nutrition-v2'
 // Import por ruta directa (no via el barrel index.ts): respeta el contrato de MacroChipRow.
 import { MacroChipRow } from '../../../../components/nutrition-v2/MacroChipRow'
@@ -40,6 +44,7 @@ import {
   portionsSummaryLabel,
   type ExchangeGroup,
 } from '@eva/nutrition-engine'
+import { foodExchangeEquivalenceIssue } from '@eva/schemas'
 import { Sheet } from '../../../../components/Sheet'
 import { useTheme } from '../../../../context/ThemeContext'
 import { isEnabled } from '../../../../lib/flags'
@@ -49,11 +54,14 @@ import {
   PORTIONS_MAX,
   PORTIONS_MIN,
   addPortionGroup,
+  clonePortionsForVariant,
   combineSubtotals,
   derivePortionTotals,
+  dropVariantPortions,
   esDecimal,
   formatPortionsEs,
   hasAnyPortions,
+  portionsKey,
   removePortionGroup,
   slotPortionTargets,
   slotPortionTotals,
@@ -61,9 +69,19 @@ import {
   stepPortionValue,
   type PortionsBySlot,
 } from '../../../../lib/nutrition-v2-builder-portions'
+import {
+  loadBuilderSubstitutionsForVersion,
+  rehydrateBuilderState,
+} from '../../../../lib/nutrition-v2-builder-rehydrate'
 import { useEntitlements, useNutritionV2CoachFlagForClient } from '../../../../lib/entitlements'
 import { useWorkspace } from '../../../../lib/workspace'
-import { archiveNutritionPlan, getNutritionClientDetailV2, nutritionV2CoachScope } from '../../../../lib/nutrition-v2.api'
+import {
+  archiveNutritionPlan,
+  createCoachFoodRN,
+  getNutritionClientDetailV2,
+  nutritionV2CoachScope,
+  publishDraftRN,
+} from '../../../../lib/nutrition-v2.api'
 import { searchFoodCatalogV2 } from '../../../../lib/nutrition-v2-catalog.api'
 import {
   builderDraftKey,
@@ -76,30 +94,35 @@ import { supabase } from '../../../../lib/supabase'
 import {
   BUILDER_UNITS,
   CoachFoodInputSchema,
+  MAX_DAY_VARIANTS,
   MAX_ITEM_SUBSTITUTIONS,
   NUTRITION_PRO_MODULE_KEY,
+  activeVariantOf,
   assembleAndValidateDraft,
+  baseVariantOf,
   buildPublishIdempotencyKey,
   builderHasSignificantContent,
   builderReducer,
   canProceedToPublishAfterArchive,
-  createCoachFoodV2,
+  clonedKey,
   createEmptyBuilderState,
   customMacrosOf,
-  dayTotals,
   effectiveDateConflicts,
   itemMacros,
   macroEnergyMismatch,
   mapFoodCatalogItemToBuilderFood,
-  publishDraftRN,
   slotSubtotal,
   strategyUsesSlots,
+  takenDayOfWeeks,
   validateStep,
+  variantEffectiveTargets,
+  variantTotals,
   type BuilderItem,
   type BuilderPermissions,
   type BuilderSlot,
   type BuilderState,
   type BuilderUnit,
+  type BuilderVariant,
   type NutritionV2WriteClient,
 } from '../../../../lib/nutrition-v2-builder'
 import { foodCategoryEmoji, foodMediaThumbnailUrl } from '../../../../lib/nutrition-v2-food-media'
@@ -122,9 +145,10 @@ function genKey(prefix: string): string {
 // Target del buscador de catalogo (un solo modal reusado). 'item' = agregar alimento a una
 // franja (flujo original); 'substitution' = agregar un reemplazo autorizado a un item (F-02).
 // Espejo del patron ya sancionado en el quick-edit RN (SearchTarget mode 'add' | 'swap').
+// Multi-dia: TODA mutacion viaja scoped al dia (`variantKey`), nunca al plan entero.
 type SearchTarget =
-  | { mode: 'item'; slotKey: string }
-  | { mode: 'substitution'; slotKey: string; itemKey: string }
+  | { mode: 'item'; variantKey: string; slotKey: string }
+  | { mode: 'substitution'; variantKey: string; slotKey: string; itemKey: string }
 
 function todayInSantiago(): string {
   return new Intl.DateTimeFormat('en-CA', {
@@ -154,10 +178,47 @@ function first(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : value
 }
 
+/**
+ * FD6b — bloque opcional "Equivalencia de porciones" del alta de alimento libre (P-B). Vive como
+ * estado LOCAL del `ItemEditor` (texto crudo) y sube al `handleSaveCustomFood` de la pantalla, que
+ * lo normaliza a las 3 columnas `exchange_*`. `null` = el coach no abrio el bloque.
+ */
+interface FoodEquivalenceDraft {
+  exchangeGroupId: string | null
+  /** Texto libre del input (acepta coma decimal es-CL). */
+  exchangePortionGrams: string
+  exchangePortionLabel: string
+}
+
+/** Gramos por porcion: texto -> numero > 0, o `null` (campo vacio / invalido). */
+function parseEquivalenceGrams(raw: string): number | null {
+  const normalized = raw.trim().replace(',', '.')
+  if (normalized === '') return null
+  const n = Number(normalized)
+  return Number.isFinite(n) && n > 0 ? n : null
+}
+
+// FD4 — el wizard RN ya construye N dias y la rehidratacion abre el plan vigente COMPLETO, asi
+// que el guard anti-perdida de dias dejo de ser la regla: ahora es el FALLBACK del unico caso
+// peligroso que sobrevive — la rehidratacion FALLO (lectura de reemplazos caida) y publicar en
+// blanco reduciria el plan a un dia. Espejo del `multiDayLocked` web (rehydrationFailed && >1 dia).
+function multiDayBlockCopy(dayCount: number): string {
+  return `No pudimos cargar los ${dayCount} días de este plan; rehacerlo aquí lo reduciría a uno. Usa Edición rápida.`
+}
+
 // Plan vigente del alumno (sub-delta c): habilita la rama "Archivar y reemplazar". Se lee LOCAL
 // con getNutritionClientDetailV2 (no llega por nav params — decision del juez, evita tocar la
 // ficha/href de otras unidades). Espejo del `existingPlan` server-provisto del web.
-type ExistingPlan = { id: string; effectiveFrom: string; versionNumber: number; name: string }
+type ExistingPlan = {
+  id: string
+  /** Version vigente al abrir el wizard: viaja como CAS al publicar (NUT-011). */
+  versionId: string
+  effectiveFrom: string
+  versionNumber: number
+  name: string
+  /** Dias distintos del plan vigente: >1 dispara el guard anti-perdida (el wizard solo hace uno). */
+  dayVariantCount: number
+}
 
 // Respaldo local del wizard (4B-13): DOS piezas de estado independientes viajan juntas — el arbol
 // del reducer (BuilderState) y el mapa hermano de porciones (PortionsBySlot). Sin `portionsBySlot`
@@ -168,6 +229,15 @@ interface BuilderDraftPayload {
   planId: string | null
   state: BuilderState
   portionsBySlot: PortionsBySlot
+  /**
+   * Clave de idempotencia del intento de publicacion en curso + firma del contenido con el que se
+   * acuño (NUT-011, espejo del web PlanBuilderClient). Restaurar el borrador restaura tambien la
+   * clave: si el publish se corto (red / app matada) el reintento con el MISMO contenido reusa la
+   * clave y el servidor devuelve la version YA publicada en vez de crear una segunda. Ausente en
+   * borradores viejos => se acuña una clave nueva (comportamiento anterior).
+   */
+  publishKey?: string | null
+  publishSignature?: string | null
 }
 
 // Copy LITERAL del aviso de salida (web PlanBuilderClient.tsx:1040). Warn-only: "Salir" deja la
@@ -208,6 +278,21 @@ interface PortionsController {
   step: (slotKey: string, exchangeGroupId: string, direction: 1 | -1) => void
   /** Rehidrata el mapa completo de porciones desde un borrador restaurado (4B-13). */
   restoreBySlot: (map: PortionsBySlot) => void
+  /** Multi-día (FD4): copia las porciones de un día al clonarlo (keys derivadas). */
+  cloneVariant: (params: {
+    sourceVariantKey: string
+    targetVariantKey: string
+    slotKeyPairs: ReadonlyArray<{ from: string; to: string }>
+  }) => void
+  /** Multi-día (FD4): descarta las porciones de un día eliminado. */
+  dropVariant: (variantKey: string) => void
+  /** Porciones propias (FD6a): grupo recién creado/editado -> catálogo en memoria, SIN refetch. */
+  upsertCatalogGroup: (group: ExchangeGroup) => void
+  /**
+   * Porciones propias (FD6a): grupo eliminado -> fuera del catálogo Y de las franjas en edición.
+   * Dejarlo colgando en el borrador rompería el publish (`EXCHANGE_GROUP_NOT_FOUND` al congelar).
+   */
+  dropCatalogGroup: (exchangeGroupId: string) => void
 }
 
 function usePortionsBuilder(): PortionsController {
@@ -263,7 +348,60 @@ function usePortionsBuilder(): PortionsController {
   // del reducer — persistir solo `state` perderia silenciosamente las porciones a eleccion.
   const restoreBySlot = useCallback((map: PortionsBySlot) => setBySlot(map), [])
 
-  return { bySlot, groups, groupsLoading, groupsError, ensureGroupsLoaded, retryGroups, addGroup, removeGroup, step, restoreBySlot }
+  // Multi-dia (FD4): las porciones viven FUERA del reducer, asi que crear/duplicar/eliminar un dia
+  // mueve DOS piezas. Las keys de las franjas clonadas son deterministas (`clonedKey`), asi que el
+  // mapa se re-etiqueta sin adivinar. Espejo del web `portions.cloneVariant`/`dropVariant`.
+  const cloneVariant = useCallback(
+    (params: {
+      sourceVariantKey: string
+      targetVariantKey: string
+      slotKeyPairs: ReadonlyArray<{ from: string; to: string }>
+    }) => setBySlot((prev) => clonePortionsForVariant(prev, params)),
+    [],
+  )
+  const dropVariant = useCallback(
+    (variantKey: string) => setBySlot((prev) => dropVariantPortions(prev, variantKey)),
+    [],
+  )
+
+  // Porciones propias (FD6a): tras un POST/PATCH exitoso el catalogo en memoria se actualiza en el
+  // acto (el picker sigue abierto y el grupo ya se puede asignar), sin un refetch de red.
+  const upsertCatalogGroup = useCallback((group: ExchangeGroup) => {
+    setGroups((prev) => {
+      const next = prev == null ? [group] : [...prev.filter((g) => g.id !== group.id), group]
+      return sortGroupsForPicker(next)
+    })
+  }, [])
+  const dropCatalogGroup = useCallback((exchangeGroupId: string) => {
+    setGroups((prev) => (prev == null ? prev : prev.filter((g) => g.id !== exchangeGroupId)))
+    setBySlot((prev) => {
+      let changed = false
+      const next: PortionsBySlot = {}
+      for (const [key, targets] of Object.entries(prev)) {
+        const kept = targets.filter((t) => t.exchangeGroupId !== exchangeGroupId)
+        if (kept.length !== targets.length) changed = true
+        next[key] = kept
+      }
+      return changed ? next : prev
+    })
+  }, [])
+
+  return {
+    bySlot,
+    groups,
+    groupsLoading,
+    groupsError,
+    ensureGroupsLoaded,
+    retryGroups,
+    addGroup,
+    removeGroup,
+    step,
+    restoreBySlot,
+    cloneVariant,
+    dropVariant,
+    upsertCatalogGroup,
+    dropCatalogGroup,
+  }
 }
 
 export default function CoachNutritionV2BuilderScreen() {
@@ -307,9 +445,17 @@ export default function CoachNutritionV2BuilderScreen() {
   // (seteado en AMBAS ramas del fetch) fija la key ANTES de leer/escribir: nada de read+banner ni
   // autosave hasta que resuelva. Sin homologo web (alli `existingPlan` es server-provisto sincrono).
   const [existingPlanResolved, setExistingPlanResolved] = useState(false)
+  // FD4 — rehidratacion del plan vigente: `true` cuando el alumno TIENE plan pero no pudimos
+  // reconstruirlo (lectura de reemplazos caida). Publicar desde un wizard en blanco reescribiria
+  // el arbol completo, asi que ese —y solo ese— caso mantiene el guard anti-perdida de dias.
+  const [rehydrationFailed, setRehydrationFailed] = useState(false)
   const [showDraftBanner, setShowDraftBanner] = useState(false)
   const draftPayloadRef = useRef<BuilderDraftPayload | null>(null)
   const isFirstRenderRef = useRef(true)
+  // La rehidratacion (FD4) empuja el plan vigente al reducer + al mapa de porciones. Ese cambio NO
+  // es una edicion del coach: se salta UN ciclo de autosave para no dejar un "borrador" que es un
+  // clon del plan publicado (y el banner ofreciendolo la proxima vez).
+  const skipAutosaveOnceRef = useRef(false)
   const { theme } = useTheme()
   const operationId = useRef(genKey('op'))
   // Reemplazo "archivar->publicar" reanudable (sub-delta c): clave de idempotencia ESTABLE por
@@ -317,6 +463,11 @@ export default function CoachNutritionV2BuilderScreen() {
   // archivar reintente SOLO la publicacion sin duplicar el plan ni re-archivar. Espejo del web.
   const replaceKeyRef = useRef<string | null>(null)
   const replaceArchivedRef = useRef(false)
+  // Idempotencia ESTABLE del publish normal (NUT-011, espejo del web PlanBuilderClient): clave +
+  // firma del draft con el que se acuño. Mismo contenido => misma clave en todos los reintentos;
+  // contenido editado => clave nueva (otra intencion). Se persisten con el borrador local.
+  const publishKeyRef = useRef<string | null>(null)
+  const publishSignatureRef = useRef<string | null>(null)
   const mountedRef = useRef(true)
 
   useEffect(() => {
@@ -342,23 +493,69 @@ export default function CoachNutritionV2BuilderScreen() {
   useEffect(() => {
     if (!clientId || !scope) return
     let active = true
-    void getNutritionClientDetailV2({ clientId, scope, date: today })
-      .then((detail) => {
+    void (async () => {
+      try {
+        const detail = await getNutritionClientDetailV2({ clientId, scope, date: today })
         if (!active) return
         const p = detail.plan.plan
         setExistingPlan(
-          p ? { id: p.id, effectiveFrom: p.effectiveFrom, versionNumber: p.versionNumber, name: p.name } : null,
+          p
+            ? {
+                id: p.id,
+                versionId: p.versionId,
+                effectiveFrom: p.effectiveFrom,
+                versionNumber: p.versionNumber,
+                name: p.name,
+                dayVariantCount: detail.plan.dayVariants.length,
+              }
+            : null,
         )
+        // FD4 — REHIDRATACION: "Rehacer con el asistente" abre el wizard con los N dias, franjas,
+        // items, reemplazos y porciones del plan, para que publicar sin tocar nada produzca el
+        // MISMO plan. Los reemplazos NO viajan en el read-model (misma clase del bug
+        // private_notes): se leen aparte, RLS-scoped. Si esa lectura falla NO rehidratamos a
+        // medias — el guard anti-colapso es preferible a un wizard mutilado.
+        if (p) {
+          const subs = await loadBuilderSubstitutionsForVersion(
+            supabase as unknown as NutritionV2WriteClient,
+            p.versionId,
+          )
+          if (!active || !mountedRef.current) return
+          const rehydrated =
+            subs.status === 'loaded'
+              ? rehydrateBuilderState({
+                  planModel: detail.plan,
+                  substitutionsByItemId: subs.byItemId,
+                  // Version nueva: arranca vigente hoy (igual que un wizard en blanco).
+                  effectiveFrom: today,
+                })
+              : null
+          if (rehydrated) {
+            skipAutosaveOnceRef.current = true
+            dispatch({ type: 'RESTORE', state: rehydrated.state })
+            portions.restoreBySlot(rehydrated.portionsBySlot)
+            if (strategyUsesSlots(rehydrated.state.strategy)) portions.ensureGroupsLoaded()
+            setRehydrationFailed(false)
+          } else {
+            setRehydrationFailed(true)
+          }
+        } else {
+          setRehydrationFailed(false)
+        }
         setExistingPlanResolved(true)
-      })
-      .catch(() => {
+      } catch {
         if (!active) return
         setExistingPlan(null)
+        setRehydrationFailed(false)
         setExistingPlanResolved(true)
-      })
+      }
+    })()
     return () => {
       active = false
     }
+    // `portions` es un controlador estable por callbacks; se omite a proposito para no re-disparar
+    // la lectura del plan en cada cambio del mapa de porciones.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clientId, scope, today])
 
   // Respaldo local — higiene (4B-13): barre borradores vencidos de AMBOS prefijos (TTL 7d). No
@@ -400,12 +597,23 @@ export default function CoachNutritionV2BuilderScreen() {
       isFirstRenderRef.current = false
       return
     }
+    if (skipAutosaveOnceRef.current) {
+      skipAutosaveOnceRef.current = false
+      return
+    }
     if (!existingPlanResolved) return
     const timer = setTimeout(() => {
       if (builderHasSignificantContent(state)) {
         void writeNutritionDraft<BuilderDraftPayload>(
           draftKey,
-          { clientId, planId: existingPlan?.id ?? null, state, portionsBySlot: portions.bySlot },
+          {
+            clientId,
+            planId: existingPlan?.id ?? null,
+            state,
+            portionsBySlot: portions.bySlot,
+            publishKey: publishKeyRef.current,
+            publishSignature: publishSignatureRef.current,
+          },
           Date.now(),
         )
       } else {
@@ -416,6 +624,34 @@ export default function CoachNutritionV2BuilderScreen() {
   }, [state, portions.bySlot, draftKey, existingPlanResolved, clientId, existingPlan?.id])
 
   const validation = useMemo(() => validateStep(state, state.step), [state])
+
+  // Dia en edicion + dia base (multi-dia): TODA la UI de Construccion trabaja scoped al activo.
+  const activeVariant = activeVariantOf(state)
+  const baseVariant = baseVariantOf(state)
+
+  // FD4: el guard solo sobrevive para la rehidratacion FALLIDA de un plan de varios dias — ahi
+  // publicar en blanco los reduciria a uno. Con rehidratacion OK el wizard los edita todos.
+  const multiDayBlocked = rehydrationFailed && (existingPlan?.dayVariantCount ?? 0) > 1
+
+  // Coach BASE: publicar mas de un dia exige Nutricion Pro (`multi_variant`). El candado del CTA
+  // "Agregar dia" es anti-friccion; la barrera real la pone el servidor.
+  const addDayLocked = !hasNutritionPro
+
+  // kcal por dia para los chips (items fijos + porciones a eleccion del MISMO dia).
+  const kcalByVariantKey = useMemo(() => {
+    const out: Record<string, number> = {}
+    for (const variant of state.variants) {
+      const keys = variant.slots.map((slot) => portionsKey(variant.key, slot.key))
+      const derived = portions.groups ? derivePortionTotals(keys, portions.bySlot, portions.groups) : null
+      out[variant.key] = combineSubtotals(variantTotals(variant), derived).calories
+    }
+    return out
+  }, [state.variants, portions.bySlot, portions.groups])
+
+  // Copy del encabezado: la raiz puede venir por query (CTA del hub/ficha) o del plan vigente ya
+  // resuelto (deep link viejo). El numero de version sale del param cuando viaja y si no del plan.
+  const headerPlanId = planId ?? existingPlan?.id ?? null
+  const headerVersionNumber = versionNumber || existingPlan?.versionNumber || 0
 
   const steps = STEP_META.map((meta, index) => {
     let stepState: 'upcoming' | 'current' | 'complete' | 'error' = 'upcoming'
@@ -451,6 +687,63 @@ export default function CoachNutritionV2BuilderScreen() {
     [hasNutritionPro],
   )
 
+  // ── Multi-dia: handlers de la barra de dias (espejo 1:1 del web PlanBuilderClient) ─────────
+  // Las porciones viven FUERA del reducer, asi que crear/duplicar/eliminar un dia mueve DOS
+  // piezas: el arbol (dispatch) y el mapa de porciones (controlador). Las keys de las franjas
+  // clonadas son deterministas (`clonedKey`), asi que el mapa se re-etiqueta sin adivinar.
+
+  function cloneVariantPortions(sourceVariant: BuilderVariant, targetVariantKey: string) {
+    portions.cloneVariant({
+      sourceVariantKey: sourceVariant.key,
+      targetVariantKey,
+      slotKeyPairs: sourceVariant.slots.map((slot) => ({ from: slot.key, to: clonedKey(targetVariantKey, slot.key) })),
+    })
+  }
+
+  function handleAddDays(days: number[], origin: 'copy-base' | 'empty') {
+    // Se filtra aca lo mismo que rechaza el reducer (dia ocupado / tope), para que las keys
+    // generadas queden alineadas con los dias que SI se crean y el clon de porciones no apunte
+    // a una variante inexistente.
+    const taken = new Set(takenDayOfWeeks(state))
+    const accepted: number[] = []
+    for (const day of days) {
+      if (taken.has(day) || accepted.length + taken.size >= MAX_DAY_VARIANTS) continue
+      accepted.push(day)
+    }
+    if (accepted.length === 0) return
+    const keys = accepted.map(() => genKey('variant'))
+    dispatch({ type: 'ADD_VARIANTS', days: accepted, keys, origin })
+    if (origin === 'copy-base') {
+      for (const key of keys) cloneVariantPortions(baseVariant, key)
+    }
+  }
+
+  function handleDuplicateVariant(sourceVariantKey: string, dayOfWeek: number) {
+    const source = state.variants.find((variant) => variant.key === sourceVariantKey)
+    if (!source || takenDayOfWeeks(state).includes(dayOfWeek)) return
+    const key = genKey('variant')
+    dispatch({ type: 'DUPLICATE_VARIANT_AS', sourceVariantKey, key, dayOfWeek })
+    cloneVariantPortions(source, key)
+  }
+
+  function handleRemoveVariant(variantKey: string) {
+    dispatch({ type: 'REMOVE_VARIANT', variantKey })
+    portions.dropVariant(variantKey)
+  }
+
+  const dayHandlers: BuilderDayVariantBarHandlers = {
+    onSelect: (variantKey) => dispatch({ type: 'SET_ACTIVE_VARIANT', variantKey }),
+    onAddDays: handleAddDays,
+    onRename: (variantKey, label) => dispatch({ type: 'SET_VARIANT_LABEL', variantKey, value: label }),
+    onChangeDay: (variantKey, dayOfWeek) => dispatch({ type: 'SET_VARIANT_DAY', variantKey, dayOfWeek }),
+    onDuplicate: handleDuplicateVariant,
+    onSetTargetsMode: (variantKey, mode) => dispatch({ type: 'SET_VARIANT_TARGETS_MODE', variantKey, mode }),
+    onSetVariantTarget: (variantKey, field, value) =>
+      dispatch({ type: 'SET_VARIANT_TARGETS', variantKey, field, value }),
+    onRemove: handleRemoveVariant,
+    onUpgrade: () => router.push('/coach/modules'),
+  }
+
   // Punto comun de exito de las DOS ramas de publicacion (normal / "Archivar y reemplazar"): limpia
   // el respaldo local antes de navegar — el plan ya esta en el servidor. Best-effort sin await (la
   // pantalla se desmonta al navegar). Espejo del web goToPublished (PlanBuilderClient.tsx:1159-1162).
@@ -467,6 +760,10 @@ export default function CoachNutritionV2BuilderScreen() {
     if (payload != null) {
       dispatch({ type: 'RESTORE', state: payload.state })
       portions.restoreBySlot(payload.portionsBySlot ?? {})
+      // Idempotencia (NUT-011): recuperar la clave del intento interrumpido es lo que hace que
+      // reintentar tras matar la app no publique una segunda version del mismo contenido.
+      publishKeyRef.current = payload.publishKey ?? null
+      publishSignatureRef.current = payload.publishSignature ?? null
       if (strategyUsesSlots(payload.state.strategy)) portions.ensureGroupsLoaded()
     }
     setShowDraftBanner(false)
@@ -480,9 +777,42 @@ export default function CoachNutritionV2BuilderScreen() {
     setShowDraftBanner(false)
   }, [draftKey])
 
+  // Clave de idempotencia ESTABLE por "intento logico" (NUT-011): se acuña una vez para un
+  // contenido dado y se REUSA en todos los reintentos de ese contenido, para que un retry tras una
+  // respuesta perdida devuelva la version YA publicada en vez de crear otra. Solo rota cuando el
+  // coach cambia el draft o la fecha (otra intencion). Se persiste de inmediato junto al borrador
+  // local para sobrevivir a que la app muera a mitad del publish. Espejo del web.
+  const stableIdempotencyKey = useCallback(
+    (draft: unknown, effectiveFrom: string): string => {
+      const signature = effectiveFrom + '|' + JSON.stringify(draft)
+      if (publishKeyRef.current && publishSignatureRef.current === signature) {
+        return publishKeyRef.current
+      }
+      operationId.current = genKey('op')
+      publishKeyRef.current = buildPublishIdempotencyKey({ clientId, operationId: operationId.current })
+      publishSignatureRef.current = signature
+      if (builderHasSignificantContent(state)) {
+        void writeNutritionDraft<BuilderDraftPayload>(
+          draftKey,
+          {
+            clientId,
+            planId: existingPlan?.id ?? null,
+            state,
+            portionsBySlot: portions.bySlot,
+            publishKey: publishKeyRef.current,
+            publishSignature: signature,
+          },
+          Date.now(),
+        )
+      }
+      return publishKeyRef.current
+    },
+    [clientId, draftKey, existingPlan?.id, portions.bySlot, state],
+  )
+
   const handlePublish = useCallback(
     async (effectiveFromOverride?: string) => {
-      if (!userId || !clientId) return
+      if (!userId || !clientId || !scope) return
       const chosenFrom = effectiveFromOverride ?? state.effectiveFrom ?? today
       // Pre-chequeo sin round-trip: si la fecha elegida choca con el plan que ya rige, abrimos la
       // card de decision directo. Solo en el submit normal — "Empezar manana" ya trae fecha avanzada
@@ -500,27 +830,43 @@ export default function CoachNutritionV2BuilderScreen() {
       setPublishError(null)
       setConflictError(null)
       setDateConflict(false)
+      // NUT-004: publicar SIN la raiz del alumno inserta OTRA raiz activa (la DB no tiene invariante
+      // de una-raiz-por-alumno) y reinicia el versionado en v1. La ruta puede no traer `planId`
+      // (deep link viejo / borrador restaurado), asi que caemos al plan vigente ya resuelto. Y si la
+      // lectura aun no resolvio, NO publicamos: hacerlo por carrera de carga crearia la raiz extra.
+      if (!existingPlanResolved) {
+        setPublishError('Estamos verificando si el alumno ya tiene un plan. Espera un segundo y vuelve a intentar.')
+        return
+      }
+      // F0 — perdida silenciosa de dias: el wizard RN construye UN solo dia. Republicar sobre un
+      // plan con varias variantes reescribe el arbol completo y las reduciria a una. Hasta que el
+      // constructor sepa crear variantes, se corta aqui (la UI ya lo avisa y deshabilita el CTA).
+      if (multiDayBlocked) {
+        setPublishError(multiDayBlockCopy(existingPlan?.dayVariantCount ?? 2))
+        return
+      }
+      const effectivePlanId = planId ?? existingPlan?.id ?? null
       let draft
       try {
-        draft = assembleAndValidateDraft(state, { clientId, planId, portionsBySlot: portions.bySlot })
+        draft = assembleAndValidateDraft(state, { clientId, planId: effectivePlanId, portionsBySlot: portions.bySlot })
       } catch {
         setShowErrors(true)
         setPublishError('El plan tiene datos incompletos. Revisa los pasos marcados y vuelve a intentar.')
         return
       }
-      // Clave fresca por intento: evita reutilizar la de un intento fallido (versiones huerfanas).
-      operationId.current = genKey('op')
-      const idempotencyKey = buildPublishIdempotencyKey({ clientId, operationId: operationId.current })
+      const idempotencyKey = stableIdempotencyKey(draft, chosenFrom)
       setPublishing(true)
+      // NUT-005: la publicacion pasa por la API movil (rollout + entitlement + RLS server-side).
+      // CAS (NUT-011): al publicar una version NUEVA del plan vigente mandamos la version base que
+      // el wizard tenia en pantalla; si otra sesion publico entremedio, el servidor corta con
+      // STALE_BASE en vez de superponer una version calculada sobre datos viejos.
       const res = await publishDraftRN({
-        db: supabase as unknown as NutritionV2WriteClient,
-        userId,
+        scope,
         draft,
         idempotencyKey,
         effectiveFrom: chosenFrom,
         hasNutritionPro,
-        // Catálogo para congelar el snapshot de las porciones (4B-11); sin porciones es inocuo.
-        portionGroups: portions.groups ?? undefined,
+        expectedCurrentVersionId: effectivePlanId && existingPlan ? existingPlan.versionId : null,
       })
       if (!mountedRef.current) return
       setPublishing(false)
@@ -540,7 +886,22 @@ export default function CoachNutritionV2BuilderScreen() {
       }
       setPublishError(res.error)
     },
-    [userId, clientId, planId, state, today, hasNutritionPro, portions.bySlot, portions.groups, existingPlan, goToPublished],
+    [
+      userId,
+      clientId,
+      planId,
+      state,
+      today,
+      hasNutritionPro,
+      portions.bySlot,
+      portions.groups,
+      existingPlan,
+      existingPlanResolved,
+      // FD4: `multiDayBlocked` deriva de este flag — sin él, un publish disparado con la
+      // rehidratación ya fallada usaría el guard desactualizado.
+      rehydrationFailed,
+      goToPublished,
+    ],
   )
 
   // "Empezar manana": mueve la vigencia al dia siguiente al del plan vigente (garantiza que el RPC
@@ -558,7 +919,7 @@ export default function CoachNutritionV2BuilderScreen() {
   // PLAN NUEVO (planId null) con la MISMA fecha. Orden archivar-primero + key estable + guard
   // archivado-una-vez para reintento seguro. Espejo 1:1 del web handleReplaceToday.
   const handleReplaceToday = useCallback(async () => {
-    if (!userId || !clientId || !existingPlan) return
+    if (!userId || !clientId || !scope || !existingPlan) return
     setConflictError(null)
     // Validamos el draft del plan NUEVO (planId null) ANTES de archivar nada: si esta incompleto, no
     // tocamos el plan vigente del alumno.
@@ -584,8 +945,7 @@ export default function CoachNutritionV2BuilderScreen() {
     // saca de la seleccion. Idempotente: gateado por replaceArchivedRef, se salta en reintentos.
     if (!replaceArchivedRef.current) {
       const archived = await archiveNutritionPlan({
-        db: supabase as unknown as NutritionV2WriteClient,
-        userId,
+        scope,
         clientId,
         planId: existingPlan.id,
       })
@@ -600,14 +960,13 @@ export default function CoachNutritionV2BuilderScreen() {
     // PASO 2 — publicar el draft como plan NUEVO con la key estable + la fecha elegida (hoy). Si falla,
     // el alumno quedo momentaneamente sin plan vigente: ofrecemos reintentar SOLO la publicacion (sin
     // re-archivar, gracias a replaceArchivedRef) con un mensaje honesto.
+    // Plan NUEVO: sin CAS (no hay version base con la que comparar).
     const res = await publishDraftRN({
-      db: supabase as unknown as NutritionV2WriteClient,
-      userId,
+      scope,
       draft,
       idempotencyKey,
       effectiveFrom,
       hasNutritionPro,
-      portionGroups: portions.groups ?? undefined,
     })
     if (!mountedRef.current) return
     setPublishing(false)
@@ -618,7 +977,7 @@ export default function CoachNutritionV2BuilderScreen() {
     setConflictError(
       'Archivamos el plan anterior, pero no pudimos publicar el nuevo, así que el alumno quedó sin plan vigente. Vuelve a tocar "Archivar el actual y reemplazar" para reintentar solo la publicación (no se archivará de nuevo).',
     )
-  }, [userId, clientId, existingPlan, state, today, hasNutritionPro, portions.bySlot, portions.groups, goToPublished])
+  }, [userId, clientId, scope, existingPlan, state, today, hasNutritionPro, portions.bySlot, goToPublished])
 
   // "Cancelar" la card de conflicto: la cierra y arranca limpia la proxima decision (nuevo archivado
   // + nueva clave). Espejo del web handleConflictOpenChange al cerrar el modal.
@@ -632,11 +991,39 @@ export default function CoachNutritionV2BuilderScreen() {
   // "Guardar en mi catálogo" (sub-delta b): crea el alimento coach-scoped desde el "alimento libre"
   // y, al OK, despacha UPDATE_ITEM para que el item pase a referenciarlo (deja de ser libre). El
   // componente profundo (ItemEditor) no toca la red: recibe este callback (patron de onSearch).
+  // NUT-005: el alta pasa por la API móvil (acción `createFood`), NO por un insert directo en
+  // `foods` — así el rollout y el gate del workspace también cubren este camino.
   const handleSaveCustomFood = useCallback(
-    async (item: BuilderItem, slotKey: string): Promise<{ ok: boolean; error?: string }> => {
-      if (!userId || !clientId) return { ok: false, error: 'Sesión no disponible. Reintenta.' }
+    async (
+      item: BuilderItem,
+      variantKey: string,
+      slotKey: string,
+      equivalence: FoodEquivalenceDraft | null,
+    ): Promise<{ ok: boolean; error?: string }> => {
+      if (!clientId || !scope) return { ok: false, error: 'Sesión no disponible. Reintenta.' }
       const unit = item.unit === 'ml' ? 'ml' : 'g'
       const macros = customMacrosOf(item)
+      // FD6b — "Equivalencia de porciones" (P-B): el trio `exchange_*` viaja en el MISMO payload
+      // del alta. Regla junto-o-nada (grupo ⇔ gramos) validada con el helper compartido para dar
+      // el mensaje exacto antes de gastar un round-trip; el servidor la re-valida igual y ademas
+      // verifica que el grupo sea VISIBLE para el coach.
+      const equivalencePayload = equivalence
+        ? {
+            exchangeGroupId: equivalence.exchangeGroupId,
+            exchangePortionGrams: parseEquivalenceGrams(equivalence.exchangePortionGrams),
+            exchangePortionLabel: equivalence.exchangePortionLabel.trim() || null,
+          }
+        : {}
+      const issue = equivalence ? foodExchangeEquivalenceIssue(equivalencePayload) : null
+      if (issue) {
+        return {
+          ok: false,
+          error:
+            issue.path === 'exchangeGroupId'
+              ? PORTIONS_COPY.foodEquivalence.groupRequired
+              : PORTIONS_COPY.foodEquivalence.gramsRequired,
+        }
+      }
       const parsed = CoachFoodInputSchema.safeParse({
         clientId,
         name: (item.customName ?? '').trim(),
@@ -646,18 +1033,16 @@ export default function CoachNutritionV2BuilderScreen() {
         proteinG: macros.proteinG,
         carbsG: macros.carbsG,
         fatsG: macros.fatsG,
+        ...equivalencePayload,
       })
       if (!parsed.success) {
         return { ok: false, error: 'Completa el nombre y macros validas (no negativas) antes de guardar.' }
       }
-      const res = await createCoachFoodV2({
-        db: supabase as unknown as NutritionV2WriteClient,
-        userId,
-        input: parsed.data,
-      })
+      const res = await createCoachFoodRN({ scope, input: parsed.data })
       if (!res.ok) return { ok: false, error: res.error }
       dispatch({
         type: 'UPDATE_ITEM',
+        variantKey,
         slotKey,
         itemKey: item.key,
         patch: {
@@ -671,7 +1056,7 @@ export default function CoachNutritionV2BuilderScreen() {
       })
       return { ok: true }
     },
-    [userId, clientId],
+    [clientId, scope],
   )
 
   const handleSelectFood = useCallback(
@@ -679,10 +1064,17 @@ export default function CoachNutritionV2BuilderScreen() {
       if (!searchTarget) return
       const builderFood = mapFoodCatalogItemToBuilderFood(food)
       if (searchTarget.mode === 'item') {
-        dispatch({ type: 'ADD_ITEM', slotKey: searchTarget.slotKey, key: genKey('item'), food: builderFood })
+        dispatch({
+          type: 'ADD_ITEM',
+          variantKey: searchTarget.variantKey,
+          slotKey: searchTarget.slotKey,
+          key: genKey('item'),
+          food: builderFood,
+        })
       } else {
         dispatch({
           type: 'ADD_ITEM_SUBSTITUTION',
+          variantKey: searchTarget.variantKey,
           slotKey: searchTarget.slotKey,
           itemKey: searchTarget.itemKey,
           key: genKey('sub'),
@@ -781,12 +1173,24 @@ export default function CoachNutritionV2BuilderScreen() {
             </View>
           ) : null}
 
+          {/* F0 — plan con varios días: el wizard solo construye uno y la publicación reescribe el
+              árbol completo, así que rehacerlo aquí borraría los demás días. Se avisa desde el
+              paso 1 (no al final) y el CTA de publicar queda deshabilitado. */}
+          {multiDayBlocked ? (
+            <View className="flex-row items-start gap-3 rounded-card border border-warning-500/30 bg-warning-500/10 p-3">
+              <AlertTriangle color={theme.warning} size={16} />
+              <Text className="min-w-0 flex-1 text-xs font-semibold leading-5 text-warning-700">
+                {multiDayBlockCopy(existingPlan?.dayVariantCount ?? 2)}
+              </Text>
+            </View>
+          ) : null}
+
           <NutritionHeader
-            eyebrow={planId ? 'Nueva version' : 'Nuevo plan'}
+            eyebrow={headerPlanId ? 'Nueva versión' : 'Nuevo plan'}
             title={clientName || 'Constructor de nutrición'}
             description={
-              planId
-                ? `Al publicar se creará la versión v${versionNumber + 1} y la actual pasará a anterior.`
+              headerPlanId
+                ? `Al publicar se creará la versión v${headerVersionNumber + 1} y la actual pasará a anterior.`
                 : 'Arma el plan en cuatro pasos y publícalo.'
             }
           />
@@ -802,6 +1206,10 @@ export default function CoachNutritionV2BuilderScreen() {
           {state.step === 2 ? (
             <ConstructionStep
               state={state}
+              variant={activeVariant}
+              kcalByVariantKey={kcalByVariantKey}
+              addDayLocked={addDayLocked}
+              dayHandlers={dayHandlers}
               dispatch={dispatch}
               errors={errors}
               onSearch={(target) => setSearchTarget(target)}
@@ -842,8 +1250,8 @@ export default function CoachNutritionV2BuilderScreen() {
           ) : (
             <NutritionMotionButton
               accessibilityLabel="Publicar plan"
-              pending={publishing}
-              disabled={publishing}
+              pending={publishing || !existingPlanResolved}
+              disabled={publishing || !existingPlanResolved || multiDayBlocked}
               onPress={() => void handlePublish()}
             >
               Publicar plan
@@ -979,8 +1387,14 @@ function TargetsStep({
       />
 
       <NutritionCard>
-        <Text className="font-display text-base font-semibold text-text-strong">Metas diarias</Text>
-        <Text className="mt-1 text-xs text-text-muted">Define al menos una meta (kcal o un macro).</Text>
+        <Text className="font-display text-base font-semibold text-text-strong">
+          {state.variants.length > 1 ? 'Metas del día base' : 'Metas diarias'}
+        </Text>
+        <Text className="mt-1 text-xs text-text-muted">
+          {state.variants.length > 1
+            ? 'Los días específicos las heredan salvo que les pongas objetivos propios.'
+            : 'Define al menos una meta (kcal o un macro).'}
+        </Text>
         <View className="mt-3 gap-3">
           <LabeledInput
             label="Energía (kcal)"
@@ -1152,6 +1566,14 @@ function PortionsStepper({
  * Bottom sheet de altas (nativeModal, gorhom vetado bajo reanimated 4): el CATÁLOGO COMPLETO
  * del coach con estados loading/error/reintento (afirmación 5/6). Los grupos ya presentes en
  * la franja quedan deshabilitados (UNIQUE franja+grupo).
+ *
+ * Porciones propias (FD6a): al final de la lista va "+ Crear grupo nuevo", y cada fila PROPIA
+ * (`!isSystem`) lleva su afordancia de opciones. Ambas abren el `ExchangeGroupFormSheet`, que se
+ * monta DENTRO de este sheet a propósito: en RN dos `Modal` hermanos no apilan de forma confiable
+ * en iOS, y anidarlo mantiene el picker abierto debajo — al guardar, la lista se refresca en el
+ * acto (`controller.upsertCatalogGroup`) sin cerrar nada ni volver a pegarle a la red. El menú
+ * "Editar/Eliminar" del web se colapsa en una sola entrada: el formulario de edición ya expone
+ * Guardar y Eliminar (adaptación nativa, mismas dos acciones).
  */
 function PortionsGroupPickerSheet({
   open,
@@ -1168,6 +1590,27 @@ function PortionsGroupPickerSheet({
 }) {
   const { theme } = useTheme()
   const groups = controller.groups
+  const [formOpen, setFormOpen] = useState(false)
+  const [editingGroup, setEditingGroup] = useState<ExchangeGroupFormInitial | null>(null)
+
+  function openCreate() {
+    setEditingGroup(null)
+    setFormOpen(true)
+  }
+  function openEdit(group: ExchangeGroup) {
+    setEditingGroup({
+      id: group.id,
+      name: group.name,
+      code: group.code,
+      refCalories: group.refCalories,
+      refProteinG: group.refProteinG,
+      refCarbsG: group.refCarbsG,
+      refFatsG: group.refFatsG,
+      color: group.color,
+    })
+    setFormOpen(true)
+  }
+
   return (
     <Sheet
       open={open}
@@ -1199,46 +1642,86 @@ function PortionsGroupPickerSheet({
           {(groups ?? []).map((group) => {
             const used = usedGroupIds.has(group.id)
             return (
-              <Pressable
-                key={group.id}
-                accessibilityRole="button"
-                accessibilityLabel={
-                  used ? `${group.name}: ${PORTIONS_COPY.builder.groupUsed}` : `Agregar ${group.name}`
-                }
-                disabled={used}
-                onPress={() => onPick(group.id)}
-                className={`min-h-12 flex-row items-center gap-3 rounded-control px-2 py-2 ${used ? 'opacity-50' : 'active:bg-surface-sunken'}`}
-              >
-                <PortionsGroupDot code={group.code} color={group.color} sortOrder={group.sortOrder} />
-                <View className="min-w-0 flex-1">
-                  <View className="flex-row items-center gap-1.5">
-                    <Text className="shrink text-sm font-semibold text-text-strong" numberOfLines={1}>
-                      {group.name}
+              <View key={group.id} className="flex-row items-center gap-1">
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={
+                    used ? `${group.name}: ${PORTIONS_COPY.builder.groupUsed}` : `Agregar ${group.name}`
+                  }
+                  disabled={used}
+                  onPress={() => onPick(group.id)}
+                  className={`min-h-12 min-w-0 flex-1 flex-row items-center gap-3 rounded-control px-2 py-2 ${used ? 'opacity-50' : 'active:bg-surface-sunken'}`}
+                >
+                  <PortionsGroupDot code={group.code} color={group.color} sortOrder={group.sortOrder} />
+                  <View className="min-w-0 flex-1">
+                    <View className="flex-row items-center gap-1.5">
+                      <Text className="shrink text-sm font-semibold text-text-strong" numberOfLines={1}>
+                        {group.name}
+                      </Text>
+                      {!group.macrosConfirmed ? (
+                        <View className="shrink-0 rounded-pill border border-warning-500/30 bg-warning-500/10 px-1.5 py-px">
+                          <Text className="text-[10px] font-semibold text-warning-700">
+                            {PORTIONS_COPY.builder.referentialBadge}
+                          </Text>
+                        </View>
+                      ) : null}
+                    </View>
+                    <Text className="text-xs text-text-muted" numberOfLines={1}>
+                      {used
+                        ? PORTIONS_COPY.builder.groupUsed
+                        : `1 porción ≈ ${Math.round(group.refCalories)} kcal · ${Math.round(group.refCarbsG)} C · ${Math.round(group.refProteinG)} P`}
                     </Text>
-                    {!group.macrosConfirmed ? (
-                      <View className="shrink-0 rounded-pill border border-warning-500/30 bg-warning-500/10 px-1.5 py-px">
-                        <Text className="text-[10px] font-semibold text-warning-700">
-                          {PORTIONS_COPY.builder.referentialBadge}
-                        </Text>
-                      </View>
-                    ) : null}
                   </View>
-                  <Text className="text-xs text-text-muted" numberOfLines={1}>
-                    {used
-                      ? PORTIONS_COPY.builder.groupUsed
-                      : `1 porción ≈ ${Math.round(group.refCalories)} kcal · ${Math.round(group.refCarbsG)} C · ${Math.round(group.refProteinG)} P`}
-                  </Text>
-                </View>
-              </Pressable>
+                </Pressable>
+                {/* Grupos PROPIOS del coach: editar/eliminar. Los del sistema no se tocan (la
+                    RLS `xg_update`/`xg_delete` los niega igual). */}
+                {!group.isSystem ? (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={PORTIONS_COPY.groupEditor.manageAria(group.name)}
+                    onPress={() => openEdit(group)}
+                    hitSlop={4}
+                    className="h-11 w-11 items-center justify-center rounded-control"
+                  >
+                    <Pencil color={theme.mutedForeground} size={16} />
+                  </Pressable>
+                ) : null}
+              </View>
             )
           })}
+
+          {/* Porciones propias (FD6a): alta sin salir del picker. */}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={PORTIONS_COPY.groupEditor.createRow}
+            onPress={openCreate}
+            className="mt-1 min-h-12 flex-row items-center gap-3 rounded-control border border-dashed border-border-default px-2 py-2 active:bg-surface-sunken"
+          >
+            <View className="h-5 w-5 items-center justify-center rounded-full border border-dashed border-primary/60">
+              <Plus color={theme.primary} size={12} />
+            </View>
+            <Text className="text-sm font-semibold text-primary">{PORTIONS_COPY.groupEditor.createRow}</Text>
+          </Pressable>
         </View>
       )}
+
+      {/* Anidado DENTRO del picker a propósito (dos Modal hermanos no apilan bien en iOS). */}
+      <ExchangeGroupFormSheet
+        open={formOpen}
+        initial={editingGroup}
+        onClose={() => setFormOpen(false)}
+        onSaved={(group) => controller.upsertCatalogGroup(group)}
+        onDeleted={(groupId) => controller.dropCatalogGroup(groupId)}
+      />
     </Sheet>
   )
 }
 
-/** Sección "Porciones a elección" de una franja (dentro de SlotEditor, bajo el buscador). */
+/**
+ * Sección "Porciones a elección" de una franja (dentro de SlotEditor, bajo el buscador).
+ * `slotKey` YA viene compuesto (`variantKey::slotKey`): dos días con una franja homónima
+ * ("Almuerzo" clonado del base) no comparten porciones.
+ */
 function BuilderPortionsSection({
   slotKey,
   controller,
@@ -1344,7 +1827,10 @@ function PortionsDeriveCard({
   dispatch: BuilderDispatch
 }) {
   const { theme } = useTheme()
-  const liveKeys = state.slots.map((s) => s.key)
+  // Multi-dia: los objetivos del paso son los del DIA BASE, asi que la card deriva desde las
+  // porciones del dia base (no de todo el plan: sumar los 7 dias daria una semana, no un dia).
+  const base = baseVariantOf(state)
+  const liveKeys = base.slots.map((slot) => portionsKey(base.key, slot.key))
   if (portions.groups == null || !hasAnyPortions(portions.bySlot, liveKeys)) return null
   const totals = derivePortionTotals(liveKeys, portions.bySlot, portions.groups)
   const kcal = String(Math.round(totals.calories))
@@ -1377,26 +1863,31 @@ function PortionsDeriveCard({
 }
 
 /**
- * Chips read-only + banner referencial en Revisión (solo structured/hybrid con porciones).
- * `portionsSummaryLabel` ("2C · 1,5V") con coma decimal es-CL; el banner aparece si algún
- * grupo usado tiene `macros_confirmed=false`. No duplica totales. Espejo de `PortionsReviewSection` web.
+ * Chips read-only + banner referencial en Revisión, de UN día (solo structured/hybrid con
+ * porciones). `portionsSummaryLabel` ("2C · 1,5V") con coma decimal es-CL; el banner aparece si
+ * algún grupo usado tiene `macros_confirmed=false`. No duplica totales. Multi-día: la Revisión
+ * monta una card por día, así que esta sección recibe la variante ya elegida.
  */
 function PortionsReviewSection({
-  state,
+  strategy,
+  variant,
   portions,
 }: {
-  state: BuilderState
+  strategy: BuilderState['strategy']
+  variant: BuilderVariant
   portions: PortionsController
 }) {
-  const usesSlots = strategyUsesSlots(state.strategy)
-  const liveKeys = state.slots.map((s) => s.key)
+  const usesSlots = strategyUsesSlots(strategy)
+  const liveKeys = variant.slots.map((slot) => portionsKey(variant.key, slot.key))
   const groups = portions.groups
   if (!usesSlots || groups == null || !hasAnyPortions(portions.bySlot, liveKeys)) return null
-  const rows = state.slots
+  const rows = variant.slots
     .map((slot, index) => ({
       slot,
       index,
-      targets: slotPortionTargets(portions.bySlot, slot.key).filter((t) => t.portions > 0),
+      targets: slotPortionTargets(portions.bySlot, portionsKey(variant.key, slot.key)).filter(
+        (t) => t.portions > 0,
+      ),
     }))
     .filter((r) => r.targets.length > 0)
   const anyUnconfirmed = rows.some((r) => hasUnconfirmedMacros(r.targets, groups))
@@ -1452,35 +1943,47 @@ function UnitToggle({ unit, onChange }: { unit: BuilderUnit; onChange: (unit: Bu
 }
 
 function ItemEditor({
+  variantKey,
   slotKey,
   item,
   dispatch,
   errors,
   onSearch,
   onSaveCustomFood,
+  portions,
 }: {
+  variantKey: string
   slotKey: string
   item: BuilderItem
   dispatch: BuilderDispatch
   errors: Record<string, string>
   onSearch: (target: SearchTarget) => void
-  onSaveCustomFood: (item: BuilderItem, slotKey: string) => Promise<{ ok: boolean; error?: string }>
+  onSaveCustomFood: (
+    item: BuilderItem,
+    variantKey: string,
+    slotKey: string,
+    equivalence: FoodEquivalenceDraft | null,
+  ) => Promise<{ ok: boolean; error?: string }>
+  portions: PortionsController
 }) {
   const { theme } = useTheme()
   const macros = itemMacros(item)
   const isCustom = item.food === null
   const patch = (p: Partial<Omit<BuilderItem, 'key'>>) =>
-    dispatch({ type: 'UPDATE_ITEM', slotKey, itemKey: item.key, patch: p })
+    dispatch({ type: 'UPDATE_ITEM', variantKey, slotKey, itemKey: item.key, patch: p })
   // "Guardar en mi catálogo" (sub-delta b): estado local del alta + aviso de mismatch de energia
   // (macroEnergyMismatch, umbral 40% Atwater). Solo aplica al bloque custom (isCustom).
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
+  // FD6b — bloque opcional "Equivalencia de porciones" (P-B), colapsado por defecto: la enorme
+  // mayoría de las altas no clasifica nada. `null` = cerrado (no viaja nada en el payload).
+  const [equivalence, setEquivalence] = useState<FoodEquivalenceDraft | null>(null)
   const showMismatch = isCustom && macroEnergyMismatch(customMacrosOf(item))
 
   async function handleSaveCustom() {
     setSaveError(null)
     setSaving(true)
-    const res = await onSaveCustomFood(item, slotKey)
+    const res = await onSaveCustomFood(item, variantKey, slotKey, equivalence)
     setSaving(false)
     if (!res.ok) setSaveError(res.error ?? 'No se pudo guardar el alimento.')
   }
@@ -1515,7 +2018,7 @@ function ItemEditor({
           accessibilityLabel="Quitar alimento"
           accessibilityRole="button"
           className="min-h-10 min-w-10 items-center justify-center rounded-control"
-          onPress={() => dispatch({ type: 'REMOVE_ITEM', slotKey, itemKey: item.key })}
+          onPress={() => dispatch({ type: 'REMOVE_ITEM', variantKey, slotKey, itemKey: item.key })}
         >
           <Trash2 color={theme.destructive} size={17} />
         </Pressable>
@@ -1568,6 +2071,7 @@ function ItemEditor({
               </Text>
             </View>
           ) : null}
+          <FoodEquivalenceField value={equivalence} onChange={setEquivalence} portions={portions} />
           <View className="mt-2 flex-row flex-wrap items-center gap-2">
             <Pressable
               accessibilityRole="button"
@@ -1592,7 +2096,155 @@ function ItemEditor({
         <MacroChipRow size="sm" calories={macros.calories} proteinG={macros.proteinG} carbsG={macros.carbsG} fatsG={macros.fatsG} />
       </View>
 
-      <SubstitutionsField slotKey={slotKey} item={item} dispatch={dispatch} onSearch={onSearch} />
+      <SubstitutionsField
+        variantKey={variantKey}
+        slotKey={slotKey}
+        item={item}
+        dispatch={dispatch}
+        onSearch={onSearch}
+      />
+    </View>
+  )
+}
+
+/**
+ * FD6b — bloque opcional "Equivalencia de porciones" del alta de alimento libre (P-B).
+ *
+ * Colapsado por defecto ("Agregar equivalencia"): abrirlo declara la intención de clasificar el
+ * alimento dentro de un grupo ("1 porción de C = 120 g de arroz"). Reusa el CATÁLOGO ya cargado
+ * del controlador de porciones (mismos grupos del picker, con loading/error/reintento) en vez de
+ * un fetch propio. La regla junto-o-nada (grupo ⇔ gramos) la valida `handleSaveCustomFood` con el
+ * helper compartido y la RE-valida el servidor, que además verifica visibilidad del grupo.
+ */
+function FoodEquivalenceField({
+  value,
+  onChange,
+  portions,
+}: {
+  value: FoodEquivalenceDraft | null
+  onChange: (value: FoodEquivalenceDraft | null) => void
+  portions: PortionsController
+}) {
+  const { theme } = useTheme()
+  const COPY = PORTIONS_COPY.foodEquivalence
+  const groups = portions.groups
+  const selected = value?.exchangeGroupId ? (groups ?? []).find((g) => g.id === value.exchangeGroupId) : null
+  const grams = value ? parseEquivalenceGrams(value.exchangePortionGrams) : null
+
+  if (value == null) {
+    return (
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={COPY.expand}
+        onPress={() => {
+          portions.ensureGroupsLoaded()
+          onChange({ exchangeGroupId: null, exchangePortionGrams: '', exchangePortionLabel: '' })
+        }}
+        className="mt-2 min-h-11 flex-row items-center gap-1.5 self-start rounded-control px-2 active:bg-primary/10"
+      >
+        <Plus color={theme.primary} size={14} />
+        <Text className="text-xs font-semibold text-primary">{COPY.expand}</Text>
+      </Pressable>
+    )
+  }
+
+  return (
+    <View className="mt-2 gap-2 rounded-control border border-border-subtle bg-surface-card p-2.5">
+      <View className="flex-row items-start justify-between gap-2">
+        <View className="min-w-0 flex-1">
+          <Text className="text-xs font-semibold text-text-strong">{COPY.sectionTitle}</Text>
+          <Text className="mt-0.5 text-[11px] leading-snug text-text-muted">{COPY.sectionHint}</Text>
+        </View>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={COPY.collapse}
+          onPress={() => onChange(null)}
+          hitSlop={6}
+          className="h-11 w-8 items-center justify-center rounded-control"
+        >
+          <X color={theme.mutedForeground} size={14} />
+        </Pressable>
+      </View>
+
+      <Text className="text-[10px] font-medium uppercase tracking-wide text-text-muted">{COPY.groupLabel}</Text>
+      {groups == null && portions.groupsLoading ? (
+        <Text className="text-xs text-text-muted">{COPY.groupsLoading}</Text>
+      ) : groups == null && portions.groupsError ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={PORTIONS_COPY.builder.pickerRetry}
+          onPress={() => portions.retryGroups()}
+          className="min-h-11 justify-center"
+        >
+          <Text className="text-xs font-semibold text-primary underline">{COPY.groupsError}</Text>
+        </Pressable>
+      ) : (groups ?? []).length === 0 ? (
+        <Text className="text-xs text-text-muted">{COPY.groupsEmpty}</Text>
+      ) : (
+        <View className="flex-row flex-wrap gap-1.5">
+          {(groups ?? []).map((group) => {
+            const on = value.exchangeGroupId === group.id
+            return (
+              <Pressable
+                key={group.id}
+                accessibilityRole="button"
+                accessibilityState={{ selected: on }}
+                accessibilityLabel={group.name}
+                onPress={() => onChange({ ...value, exchangeGroupId: on ? null : group.id })}
+                className={`min-h-11 flex-row items-center gap-1.5 rounded-pill border px-2.5 ${
+                  on ? 'border-primary bg-primary/10' : 'border-border-default bg-surface-sunken'
+                }`}
+              >
+                <PortionsGroupDot code={group.code} color={group.color} sortOrder={group.sortOrder} />
+                <Text
+                  className={`shrink text-xs font-semibold ${on ? 'text-primary' : 'text-text-strong'}`}
+                  numberOfLines={1}
+                >
+                  {group.name}
+                </Text>
+              </Pressable>
+            )
+          })}
+        </View>
+      )}
+
+      <View className="flex-row gap-2">
+        <View className="flex-1">
+          <Text className="mb-1 text-[10px] font-medium uppercase tracking-wide text-text-muted">
+            {COPY.gramsLabel}
+          </Text>
+          <TextInput
+            accessibilityLabel={COPY.gramsLabel}
+            value={value.exchangePortionGrams}
+            onChangeText={(text) => onChange({ ...value, exchangePortionGrams: text })}
+            keyboardType="decimal-pad"
+            placeholder={COPY.gramsPlaceholder}
+            placeholderTextColor={theme.mutedForeground}
+            className="min-h-11 rounded-control border border-border-default bg-surface-card px-2 py-1.5 text-sm text-text-strong"
+            style={{ fontVariant: ['tabular-nums'] }}
+          />
+        </View>
+        <View className="flex-1">
+          <Text className="mb-1 text-[10px] font-medium uppercase tracking-wide text-text-muted">
+            {COPY.labelLabel}
+          </Text>
+          <TextInput
+            accessibilityLabel={COPY.labelLabel}
+            value={value.exchangePortionLabel}
+            onChangeText={(text) => onChange({ ...value, exchangePortionLabel: text })}
+            maxLength={40}
+            placeholder={COPY.labelPlaceholder}
+            placeholderTextColor={theme.mutedForeground}
+            className="min-h-11 rounded-control border border-border-default bg-surface-card px-2 py-1.5 text-sm text-text-strong"
+          />
+        </View>
+      </View>
+
+      {selected && grams != null ? (
+        <Text className="text-[11px] text-text-muted">
+          {COPY.preview(selected.name, String(grams), value.exchangePortionLabel.trim() || null)}
+        </Text>
+      ) : null}
     </View>
   )
 }
@@ -1604,11 +2256,13 @@ function ItemEditor({
 // El alumno vera estas opciones; el server congela el snapshot de cada reemplazo al publicar.
 // Espejo del SubstitutionsField de la web (PlanBuilderClient.tsx).
 function SubstitutionsField({
+  variantKey,
   slotKey,
   item,
   dispatch,
   onSearch,
 }: {
+  variantKey: string
   slotKey: string
   item: BuilderItem
   dispatch: BuilderDispatch
@@ -1648,7 +2302,13 @@ function SubstitutionsField({
                 accessibilityRole="button"
                 className="min-h-11 min-w-11 items-center justify-center rounded-full"
                 onPress={() =>
-                  dispatch({ type: 'REMOVE_ITEM_SUBSTITUTION', slotKey, itemKey: item.key, subKey: sub.key })
+                  dispatch({
+                    type: 'REMOVE_ITEM_SUBSTITUTION',
+                    variantKey,
+                    slotKey,
+                    itemKey: item.key,
+                    subKey: sub.key,
+                  })
                 }
               >
                 <X color={theme.mutedForeground} size={13} />
@@ -1671,7 +2331,7 @@ function SubstitutionsField({
           accessibilityLabel="Agregar reemplazo autorizado"
           accessibilityRole="button"
           className="mt-1.5 min-h-11 flex-row items-center justify-center gap-1.5 self-start rounded-control border border-border-default bg-surface-card px-3"
-          onPress={() => onSearch({ mode: 'substitution', slotKey, itemKey: item.key })}
+          onPress={() => onSearch({ mode: 'substitution', variantKey, slotKey, itemKey: item.key })}
         >
           <Plus color={theme.foreground} size={14} />
           <Text className="text-xs font-semibold text-text-strong">Reemplazo</Text>
@@ -1682,6 +2342,7 @@ function SubstitutionsField({
 }
 
 function SlotEditor({
+  variantKey,
   slot,
   index,
   dispatch,
@@ -1690,18 +2351,28 @@ function SlotEditor({
   onSaveCustomFood,
   portions,
 }: {
+  /** Día (variante) al que pertenece la franja: toda mutación viaja scoped a él. */
+  variantKey: string
   slot: BuilderSlot
   index: number
   dispatch: BuilderDispatch
   errors: Record<string, string>
   onSearch: (target: SearchTarget) => void
-  onSaveCustomFood: (item: BuilderItem, slotKey: string) => Promise<{ ok: boolean; error?: string }>
+  onSaveCustomFood: (
+    item: BuilderItem,
+    variantKey: string,
+    slotKey: string,
+    equivalence: FoodEquivalenceDraft | null,
+  ) => Promise<{ ok: boolean; error?: string }>
   portions: PortionsController
 }) {
   const { theme } = useTheme()
   // Subtotal combinado (items fijos + derivado de porciones, 4B-11). Sin porciones (o catálogo
   // sin cargar) `slotPortionTotals` devuelve null y `combineSubtotals` deja el objeto de items intacto.
-  const portionTotals = slotPortionTotals(portions.bySlot, slot.key, portions.groups)
+  // Multi-día: la clave de porciones es `variantKey::slotKey` — dos días con una franja homónima
+  // ("Almuerzo" clonado) ya no comparten porciones.
+  const portionsSlotKey = portionsKey(variantKey, slot.key)
+  const portionTotals = slotPortionTotals(portions.bySlot, portionsSlotKey, portions.groups)
   const subtotal = combineSubtotals(slotSubtotal(slot), portionTotals)
   const showSubtotal = slot.items.length > 0 || portionTotals != null
   return (
@@ -1714,7 +2385,7 @@ function SlotEditor({
           accessibilityLabel="Quitar franja"
           accessibilityRole="button"
           className="min-h-9 min-w-9 items-center justify-center rounded-control"
-          onPress={() => dispatch({ type: 'REMOVE_SLOT', slotKey: slot.key })}
+          onPress={() => dispatch({ type: 'REMOVE_SLOT', variantKey, slotKey: slot.key })}
         >
           <Trash2 color={theme.destructive} size={16} />
         </Pressable>
@@ -1724,7 +2395,9 @@ function SlotEditor({
         <View className="flex-1">
           <TextInput
             value={slot.name}
-            onChangeText={(value) => dispatch({ type: 'UPDATE_SLOT', slotKey: slot.key, patch: { name: value } })}
+            onChangeText={(value) =>
+              dispatch({ type: 'UPDATE_SLOT', variantKey, slotKey: slot.key, patch: { name: value } })
+            }
             placeholder="Nombre (ej: Desayuno)"
             placeholderTextColor={theme.mutedForeground}
             className="min-h-11 rounded-control border border-border-default bg-surface-card px-2.5 py-2 text-sm font-semibold text-text-strong"
@@ -1733,7 +2406,9 @@ function SlotEditor({
         <View className="w-24">
           <TextInput
             value={slot.startTime}
-            onChangeText={(value) => dispatch({ type: 'UPDATE_SLOT', slotKey: slot.key, patch: { startTime: value } })}
+            onChangeText={(value) =>
+              dispatch({ type: 'UPDATE_SLOT', variantKey, slotKey: slot.key, patch: { startTime: value } })
+            }
             placeholder="HH:MM"
             placeholderTextColor={theme.mutedForeground}
             className="min-h-11 rounded-control border border-border-default bg-surface-card px-2.5 py-2 text-sm text-text-strong"
@@ -1746,12 +2421,14 @@ function SlotEditor({
         {slot.items.map((item) => (
           <ItemEditor
             key={item.key}
+            variantKey={variantKey}
             slotKey={slot.key}
             item={item}
             dispatch={dispatch}
             errors={errors}
             onSearch={onSearch}
             onSaveCustomFood={onSaveCustomFood}
+            portions={portions}
           />
         ))}
       </View>
@@ -1761,7 +2438,7 @@ function SlotEditor({
           accessibilityLabel="Buscar alimento del catálogo"
           accessibilityRole="button"
           className="min-h-11 flex-1 flex-row items-center justify-center gap-1.5 rounded-control border border-primary/30 bg-primary/10 px-3"
-          onPress={() => onSearch({ mode: 'item', slotKey: slot.key })}
+          onPress={() => onSearch({ mode: 'item', variantKey, slotKey: slot.key })}
         >
           <Search color={theme.primary} size={15} />
           <Text className="text-sm font-semibold text-primary">Buscar alimento</Text>
@@ -1770,14 +2447,16 @@ function SlotEditor({
           accessibilityLabel="Agregar alimento libre"
           accessibilityRole="button"
           className="min-h-11 flex-row items-center justify-center gap-1.5 rounded-control border border-border-default bg-surface-card px-3"
-          onPress={() => dispatch({ type: 'ADD_ITEM', slotKey: slot.key, key: genKey('item'), food: null })}
+          onPress={() =>
+            dispatch({ type: 'ADD_ITEM', variantKey, slotKey: slot.key, key: genKey('item'), food: null })
+          }
         >
           <Plus color={theme.foreground} size={15} />
           <Text className="text-sm font-semibold text-text-strong">Libre</Text>
         </Pressable>
       </View>
 
-      <BuilderPortionsSection slotKey={slot.key} controller={portions} />
+      <BuilderPortionsSection slotKey={portionsSlotKey} controller={portions} />
 
       {showSubtotal ? (
         <View className="mt-3 border-t border-border-subtle pt-2">
@@ -1796,6 +2475,10 @@ function SlotEditor({
 
 function ConstructionStep({
   state,
+  variant,
+  kcalByVariantKey,
+  addDayLocked,
+  dayHandlers,
   dispatch,
   errors,
   onSearch,
@@ -1803,10 +2486,20 @@ function ConstructionStep({
   portions,
 }: {
   state: BuilderState
+  /** Día en edición (chip activo). TODA la sección trabaja scoped a él. */
+  variant: BuilderVariant
+  kcalByVariantKey: Record<string, number>
+  addDayLocked: boolean
+  dayHandlers: BuilderDayVariantBarHandlers
   dispatch: BuilderDispatch
   errors: Record<string, string>
   onSearch: (target: SearchTarget) => void
-  onSaveCustomFood: (item: BuilderItem, slotKey: string) => Promise<{ ok: boolean; error?: string }>
+  onSaveCustomFood: (
+    item: BuilderItem,
+    variantKey: string,
+    slotKey: string,
+    equivalence: FoodEquivalenceDraft | null,
+  ) => Promise<{ ok: boolean; error?: string }>
   portions: PortionsController
 }) {
   if (!strategyUsesSlots(state.strategy)) {
@@ -1821,17 +2514,27 @@ function ConstructionStep({
     )
   }
 
-  // Total del día combinado (items + porciones a elección, 4B-11). Sin catálogo cargado el
+  // Total del día ACTIVO combinado (items + porciones a elección, 4B-11). Sin catálogo cargado el
   // derivado es null y `combineSubtotals` devuelve los totales de items intactos (jamás NaN).
-  const liveKeys = state.slots.map((s) => s.key)
+  const liveKeys = variant.slots.map((slot) => portionsKey(variant.key, slot.key))
   const portionDay = portions.groups ? derivePortionTotals(liveKeys, portions.bySlot, portions.groups) : null
-  const totals = combineSubtotals(dayTotals(state), portionDay)
+  const totals = combineSubtotals(variantTotals(variant), portionDay)
   return (
     <View className="gap-3">
+      {/* Barra de días: chips scrolleables + "Agregar día" + banner de herencia de objetivos. */}
+      <BuilderDayVariantBar
+        variants={state.variants}
+        activeVariantKey={variant.key}
+        kcalByVariantKey={kcalByVariantKey}
+        baseTargets={state.targets}
+        addDayLocked={addDayLocked}
+        handlers={dayHandlers}
+      />
       <ErrorText message={errors.slots} />
-      {state.slots.map((slot, index) => (
+      {variant.slots.map((slot, index) => (
         <SlotEditor
           key={slot.key}
+          variantKey={variant.key}
           slot={slot}
           index={index}
           dispatch={dispatch}
@@ -1845,14 +2548,16 @@ function ConstructionStep({
         accessibilityLabel="Agregar franja"
         accessibilityRole="button"
         className="min-h-12 flex-row items-center justify-center gap-1.5 rounded-card border border-dashed border-border-default bg-surface-card px-3"
-        onPress={() => dispatch({ type: 'ADD_SLOT', key: genKey('slot') })}
+        onPress={() => dispatch({ type: 'ADD_SLOT', variantKey: variant.key, key: genKey('slot') })}
       >
         <Plus color="#8A94A6" size={16} />
         <Text className="text-sm font-semibold text-text-muted">Agregar franja</Text>
       </Pressable>
-      {state.slots.length > 0 ? (
+      {variant.slots.length > 0 ? (
         <View className="px-1">
-          <Text className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-text-muted">Total del día</Text>
+          <Text className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-text-muted">
+            {state.variants.length > 1 ? `Total de ${variant.label}` : 'Total del día'}
+          </Text>
           <MacroChipRow calories={totals.calories} proteinG={totals.proteinG} carbsG={totals.carbsG} fatsG={totals.fatsG} />
         </View>
       ) : null}
@@ -1901,6 +2606,89 @@ function ConflictOptionButton({
   )
 }
 
+/** Línea "2000 kcal · P 150 · C 200 · G 60" de las metas de un día (o el vacío honesto). */
+function targetsSummary(targets: BuilderState['targets']): string {
+  return (
+    [
+      targets.calories ? `${targets.calories} kcal` : null,
+      targets.proteinG ? `P ${targets.proteinG}` : null,
+      targets.carbsG ? `C ${targets.carbsG}` : null,
+      targets.fatsG ? `G ${targets.fatsG}` : null,
+    ]
+      .filter(Boolean)
+      .join(' · ') || 'Sin metas definidas'
+  )
+}
+
+/**
+ * Bloque de UN día en la Revisión: encabezado con el nombre del día (solo si el plan tiene
+ * varios), metas EFECTIVAS de ese día, sus franjas y su total prescrito combinado (items fijos +
+ * porciones a elección — la misma matemática del paso Construcción, Dudu-B F2).
+ */
+function ReviewVariantSection({
+  state,
+  variant,
+  showDayHeading,
+  portions,
+}: {
+  state: BuilderState
+  variant: BuilderVariant
+  showDayHeading: boolean
+  portions: PortionsController
+}) {
+  const liveKeys = variant.slots.map((slot) => portionsKey(variant.key, slot.key))
+  const portionDay = portions.groups ? derivePortionTotals(liveKeys, portions.bySlot, portions.groups) : null
+  const totals = combineSubtotals(variantTotals(variant), portionDay)
+  const effectiveTargets = variantEffectiveTargets(state, variant)
+  return (
+    <View className="gap-2">
+      {showDayHeading ? (
+        <Text className="text-[11px] font-semibold uppercase tracking-wide text-primary">{variant.label}</Text>
+      ) : null}
+
+      <View className="rounded-control border border-border-subtle bg-surface-sunken p-3">
+        <Text className="text-xs font-semibold uppercase tracking-wide text-text-subtle">
+          {showDayHeading ? `Metas de ${variant.label}` : 'Metas diarias'}
+        </Text>
+        <Text className="mt-1 font-mono text-sm text-text-strong">{targetsSummary(effectiveTargets)}</Text>
+        {showDayHeading && !variant.isDefault && variant.targetsMode !== 'custom' ? (
+          <Text className="mt-0.5 text-[11px] text-text-muted">Heredadas del día base.</Text>
+        ) : null}
+      </View>
+
+      {variant.slots.map((slot, index) => (
+        <View key={slot.key} className="rounded-control border border-border-subtle bg-surface-card p-3">
+          <Text className="text-sm font-semibold text-text-strong">
+            {slot.name || `Franja ${index + 1}`}
+            {slot.startTime ? ` · ${slot.startTime}` : ''}
+          </Text>
+          {slot.items.length === 0 ? (
+            <Text className="mt-1 text-xs text-text-muted">Sin alimentos</Text>
+          ) : (
+            slot.items.map((item) => (
+              <Text key={item.key} className="mt-1 text-xs text-text-body">
+                {(item.food?.name ?? item.customName ?? 'Alimento') + ` · ${item.quantity || '0'} ${item.unit}`}
+              </Text>
+            ))
+          )}
+        </View>
+      ))}
+
+      <View className="px-1">
+        <Text className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-text-muted">
+          {showDayHeading ? `Total de ${variant.label}` : 'Total prescrito'}
+        </Text>
+        <MacroChipRow calories={totals.calories} proteinG={totals.proteinG} carbsG={totals.carbsG} fatsG={totals.fatsG} />
+        {portionDay != null ? (
+          <Text className="mt-1 text-[11px] text-text-muted">
+            {PORTIONS_COPY.builder.subtotalPortionsNote(String(Math.round(portionDay.calories)))}
+          </Text>
+        ) : null}
+      </View>
+    </View>
+  )
+}
+
 function ReviewStep({
   state,
   publishError,
@@ -1928,8 +2716,8 @@ function ReviewStep({
 }) {
   const { theme } = useTheme()
   const strategy = state.strategy ?? 'flexible'
-  const totals = dayTotals(state)
   const usesSlots = strategyUsesSlots(state.strategy)
+  const multiDay = state.variants.length > 1
   return (
     <View className="gap-4">
       <View className="flex-row flex-wrap items-center gap-2">
@@ -1943,51 +2731,45 @@ function ReviewStep({
             <Text className="mt-0.5 text-xs text-text-muted">Vigente desde {state.effectiveFrom || 'hoy'}</Text>
           </View>
 
-          <View className="rounded-control border border-border-subtle bg-surface-sunken p-3">
-            <Text className="text-xs font-semibold uppercase tracking-wide text-text-subtle">Metas diarias</Text>
-            <Text className="mt-1 font-mono text-sm text-text-strong">
-              {[
-                state.targets.calories ? `${state.targets.calories} kcal` : null,
-                state.targets.proteinG ? `P ${state.targets.proteinG}` : null,
-                state.targets.carbsG ? `C ${state.targets.carbsG}` : null,
-                state.targets.fatsG ? `G ${state.targets.fatsG}` : null,
-              ]
-                .filter(Boolean)
-                .join(' · ') || 'Sin metas definidas'}
-            </Text>
-          </View>
-
           {usesSlots ? (
-            <View className="gap-2">
-              {state.slots.map((slot, index) => (
-                <View key={slot.key} className="rounded-control border border-border-subtle bg-surface-card p-3">
-                  <Text className="text-sm font-semibold text-text-strong">
-                    {slot.name || `Franja ${index + 1}`}
-                    {slot.startTime ? ` · ${slot.startTime}` : ''}
-                  </Text>
-                  {slot.items.length === 0 ? (
-                    <Text className="mt-1 text-xs text-text-muted">Sin alimentos</Text>
-                  ) : (
-                    slot.items.map((item) => (
-                      <Text key={item.key} className="mt-1 text-xs text-text-body">
-                        {(item.food?.name ?? item.customName ?? 'Alimento') + ` · ${item.quantity || '0'} ${item.unit}`}
-                      </Text>
-                    ))
-                  )}
-                </View>
+            // Multi-día: la revisión se agrupa POR DÍA (una sección por variante, en el orden en
+            // que se publican). Cada día muestra sus metas EFECTIVAS (propias o heredadas del
+            // base), sus franjas y su total prescrito combinado.
+            <View className="gap-4">
+              {state.variants.map((variant) => (
+                <ReviewVariantSection
+                  key={variant.key}
+                  state={state}
+                  variant={variant}
+                  showDayHeading={multiDay}
+                  portions={portions}
+                />
               ))}
-              <View className="px-1">
-                <Text className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-text-muted">Total prescrito</Text>
-                <MacroChipRow calories={totals.calories} proteinG={totals.proteinG} carbsG={totals.carbsG} fatsG={totals.fatsG} />
-              </View>
             </View>
           ) : (
-            <Text className="text-sm text-text-muted">Registro libre del alumno contra las metas diarias.</Text>
+            <>
+              <View className="rounded-control border border-border-subtle bg-surface-sunken p-3">
+                <Text className="text-xs font-semibold uppercase tracking-wide text-text-subtle">Metas diarias</Text>
+                <Text className="mt-1 font-mono text-sm text-text-strong">
+                  {targetsSummary(state.targets)}
+                </Text>
+              </View>
+              <Text className="text-sm text-text-muted">Registro libre del alumno contra las metas diarias.</Text>
+            </>
           )}
         </View>
       </StudentPreview>
 
-      <PortionsReviewSection state={state} portions={portions} />
+      {usesSlots
+        ? state.variants.map((variant) => (
+            <PortionsReviewSection
+              key={variant.key}
+              strategy={state.strategy}
+              variant={variant}
+              portions={portions}
+            />
+          ))
+        : null}
 
       {dateConflict ? (
         <View className="gap-3 rounded-card border border-border-default bg-surface-card p-4">

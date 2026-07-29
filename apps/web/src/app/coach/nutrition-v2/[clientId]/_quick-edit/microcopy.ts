@@ -57,11 +57,34 @@ export const QE_COPY = {
   notesPlaceholder: 'Escribe indicaciones visibles para tu alumno (bienvenida, comida libre, recordatorios…).',
   /** Error red/servidor en la barra: el draft NO se pierde; reintento reusa la misma clave. */
   publishFailed: 'No se pudo publicar. Reintentar',
+  /**
+   * NUT-008: no pudimos leer los reemplazos autorizados de la version vigente. Publicar
+   * ahora los borraria (la publicacion reescribe el plan completo), asi que se bloquea.
+   */
+  substitutionsFailed:
+    'No pudimos cargar los reemplazos autorizados de este plan. Recarga antes de publicar: si publicas ahora, tu alumno los perdería.',
+  substitutionsRetry: 'Reintentar',
   discardConfirm: (n: number) => `¿Descartar ${cambios(n)}? Esta acción no se puede deshacer.`,
   emptySlot: 'Franja sin alimentos',
   addFood: 'Agregar alimento',
   addSlot: 'Agregar franja',
   removeSlot: 'Eliminar franja',
+  // ── Multi-día (FD5): menú por día en el modo edición. El alta vive en `AddDayPopover`
+  //    (compartido con el builder), que trae su propio copy y su upsell del gate Pro.
+  baseDayEyebrow: 'Día base',
+  baseDayHint: 'Se aplica en los días que no tienen plan propio.',
+  specificDayEyebrow: 'Día específico',
+  dayMenu: (label: string) => `Opciones del día ${label}`,
+  changeDay: 'Cambiar día',
+  changeDayTitle: 'Cambiar el día',
+  changeDayHint: 'Elige el día de la semana que sigue este plan.',
+  renameDay: 'Renombrar',
+  renameDayTitle: 'Renombrar el día',
+  dayNameLabel: 'Nombre del día',
+  dayNamePlaceholder: 'Sábado, Día de entrenamiento...',
+  removeDay: 'Eliminar día',
+  dayRemovedUndo: 'Día eliminado',
+  dayTaken: 'Ya tiene plan propio',
   freeFood: 'Alimento libre',
   upgradeRequired: 'Este cambio requiere Nutrición Pro, incluido en los planes pagos.',
   invalidDraft: 'Hay campos con valores inválidos. Revisa las cantidades y nombres marcados.',

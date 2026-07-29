@@ -1,7 +1,7 @@
 ---
 status: active
 owner: Juan Manuel Villegas
-last_verified: "2026-07-26 @ ba38b0fa"
+last_verified: "2026-07-26 @ e0db4285"
 canonical: true
 source_of_truth: apps/web responsive + apps/mobile
 ---
@@ -24,6 +24,7 @@ La paridad global **no está certificada todavía**.
 | Ola 2R — residuos del alumno | Cerrado | Pendiente | Cerrado estático; no certificado |
 | Ola 4A — nutrición del alumno | **12/12 aplicadas** | Pendiente | Cerrada estática; no certificada |
 | Ola 4B — nutrición del coach y catálogos | **Cerrada: 15/15 unidades de rama** | Pendiente | Cerrada estática; no certificada |
+| Experiencia de entrada — splash/onboarding/acceso | Cerrada estática | Pendiente | Código y exports verdes; requiere build nuevo + QA física |
 
 “Cerrado estático” significa que código, spec y verificaciones automatizadas disponibles convergieron. No significa que el comportamiento visual, gestos, teclado, cámara, safe areas u offline estén aprobados en hardware real.
 
@@ -80,11 +81,39 @@ con 12 fixtures de paridad consumidos por los tests de AMBAS plataformas. Web y 
 (`CircleDashed` + "En progreso") y copy del sheet ("Entrenamiento incompleto"). La racha del RPC no
 se tocó (decisión CEO). Falta QA device (4 escenarios del PLAN).
 
+## Experiencia de entrada (cerrada estática 2026-07-26)
+
+Fuente: [`specs/mobile-entry-experience/`](../../specs/mobile-entry-experience/SPEC.md).
+
+El owner aprobó las cuatro decisiones de la SPEC y el frente quedó aplicado sobre
+`rnmobiledenuevo`:
+
+- `expo-splash-screen` gobierna un único launch nativo continuo, sin espera React artificial; se
+  retiraron tres componentes splash sin importadores;
+- walkthrough de tres escenas locales 1×/2× con `coach-plan`, `alumno-scan`, `progreso` y `logro`
+  como acento, preload, reduce motion, safe areas y adaptación a 320×568/texto ampliado;
+- selector compacto y un solo campo accesible para código, slug o enlace, con submit explícito,
+  errores diferenciados y protección contra doble envío;
+- parser compartido en `@eva/schemas`, intents sin fetch fuera de React y branding vivo antes de la
+  persistencia;
+- login alumno fail-closed sin coach y endpoint autenticado que deriva identidad del bearer,
+  valida el workspace exacto con la misma fuente canónica de web y solo después persiste el último
+  workspace. La caché y el `coachId` del body no autorizan.
+
+Evidencia estática: 61 tests focalizados y suite completa de 4130 tests verdes, typecheck
+web/mobile, ESLint afectado sin warnings, tokens `86/86`, docs y exports Expo Android/iOS verdes.
+No hubo cambio de schema, RLS ni dependencias. Como `app.json` cambió configuración nativa, falta
+un build EAS nuevo y QA física; no es un cambio certificable por OTA.
+
 ### Dónde retomar
 
-1. Abrir la ola 5 (builder y programas de entrenamiento del coach) con inventario contra código. El ejecutor V3 del alumno ya está integrado en `master` (PR #170); las unidades de ola 5 que toquen el visor del alumno se contrastan contra ese código, sin coordinación pendiente.
-2. Completar matriz device de 4A/4B y regresión dirigida de Secciones 1–3/2R (requiere build nativa).
-3. Deuda 4B-16 (consolidar nutrition-pro puro en `@eva/nutrition-v2`) en rama de web.
+1. Generar build EAS Android/iOS del corte con la nueva configuración de splash.
+2. Ejecutar matriz de entrada en hardware: cold/warm start, primer/segundo uso, sesión, teclado,
+   código/slug/links, cuatro presets, EVA/custom, light/dark, red/offline y VoiceOver/TalkBack.
+3. Corregir cualquier P0/P1/P2 y solo entonces certificar la entrada.
+4. Abrir la ola 5 (builder y programas de entrenamiento del coach) con inventario contra código.
+5. Completar matriz device de 4A/4B y regresión dirigida de Secciones 1–3/2R.
+6. Deuda 4B-16 (consolidar nutrition-pro puro en `@eva/nutrition-v2`) en rama de web.
 
 ## Builds móviles
 
@@ -97,7 +126,7 @@ Un build/submit verde no sustituye la verificación manual en App Store Connect/
 
 ## Siguiente horizonte
 
-Después de cerrar y certificar 4A y 4B:
+Después de cerrar la experiencia de entrada y certificar el trabajo acumulado:
 
 1. 5 — builder y programas del coach.
 2. 6 — dominios restantes, inventariados en lotes pequeños.

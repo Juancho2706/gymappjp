@@ -1,7 +1,7 @@
 ---
 status: active
 owner: product-engineering
-last_verified: "2026-07-26 @ ba38b0fa"
+last_verified: "2026-07-28 @ 0fbf850d"
 canonical: true
 ---
 
@@ -32,27 +32,27 @@ Este bloque es un snapshot, no reemplaza `git fetch`, `git status` ni los checks
 | Frente | Estado | Fuente de detalle |
 |---|---|---|
 | Web/PWA | Plataforma productiva; `master` es la línea de producción | [Testing](../testing/TEST_STATUS.md), [Runbook](../operations/RUNBOOK.md) |
-| App nativa | Desarrollo de paridad activo sobre `rnmobiledenuevo`; no declarar cierre sin build y QA física | [Mobile parity](MOBILE_PARITY.md) |
-| Nutrition V2 | Implementación web/mobile y contratos compartidos presentes; rollout autorizado server-side y con fallback OFF si falta configuración válida | [Product overview](../product/PRODUCT_OVERVIEW.md), [Runbook V2](../operations/NUTRITION_V2_ROLLOUT_RUNBOOK.md) |
+| App nativa | Entrada cerrada estática sobre `rnmobiledenuevo`; nueva config de splash requiere build y QA física antes de certificar | [Mobile parity](MOBILE_PARITY.md) |
+| Nutrition V2 | Auditoría verificada y remediación completa (42 hallazgos: P0-P2 cerrados, P3 estructurales salvo types); migraciones `202607281*` + saneos APLICADOS a LIVE el 2026-07-28; features nuevas: multi-día por semana (builder/quick-edit/alumno web+RN) y porciones propias del coach (grupos custom + clasificar alimentos). Pendiente: QA física y OTA/build de la app | [Auditoría coach/alumno](../audits/nutricion-v2-coach-alumno-2026-07-28.md), [Specs multi-día](../../specs/nutrition-multiday/SPEC.md), [Runbook V2](../operations/NUTRITION_V2_ROLLOUT_RUNBOOK.md) |
 | Teams | Pool compartido, membresías, marca, módulos y workspace coach/alumno implementados | [Flows](../architecture/FLOWS_AND_COMPONENTS.md#team) |
-| Enterprise | Panel org, roles, asignaciones, programas, nutrición, reportes, pagos, marca y auditoría implementados en web | [Flows](../architecture/FLOWS_AND_COMPONENTS.md#enterprise) |
+| Enterprise | Panel org, roles, asignaciones, programas, reportes, pagos, marca y auditoría presentes en web; Nutrition queda fuera de ese flujo | [Flows](../architecture/FLOWS_AND_COMPONENTS.md#enterprise) |
 | Dependencias | Automatización limitada a seguridad; previews de ramas Dependabot deshabilitadas en Vercel | `vercel.json`, `.github/dependabot.yml` |
 | Documentación | Núcleo canónico reducido; material histórico no gobierna decisiones | [Docs index](../README.md) |
 
 ## Prioridad actual
 
-1. Olas 4A y 4B **cerradas estáticas** (nutrición alumno + coach en paridad 1:1 de código). Siguiente: ola 5 (builder y programas del coach; el ejecutor V3 del alumno ya quedó integrado en PR #170, sin coordinación pendiente) según `MOBILE_PARITY.md`; QA device pendiente para todo.
-2. Ejecutar los gates web/mobile completos sobre cada checkpoint candidato.
-3. Generar y retener artefactos Android/iOS del corte actual (el build iOS `production` está roto desde el 2026-07-23) y verificar en App Store Connect/Play Console los submits ya realizados.
-4. Completar QA en dispositivos Android/iOS de los recorridos críticos.
-5. Integrar `rnmobiledenuevo` a `master` solo con evidencia verde y sin migraciones o artefactos locales pendientes.
+1. Generar un build EAS Android/iOS del corte de [experiencia de entrada mobile](../../specs/mobile-entry-experience/SPEC.md): código, auth autoritativa, assets, selector, splash y exports están cerrados estáticamente; la nueva configuración nativa no sale por OTA.
+2. Ejecutar QA física del tramo completo en Android/iOS, incluidos cold/warm start, teclado, código/slug/links, EVA/custom, light/dark, offline y lectores de pantalla.
+3. Ejecutar los gates web/mobile completos sobre cada checkpoint candidato.
+4. Retener los artefactos Android/iOS del corte nuevo y verificar procesamiento en App Store Connect/Play Console.
+5. Sin P0/P1/P2 de entrada, abrir la ola 5 (builder y programas del coach) según `MOBILE_PARITY.md`.
 
 ## Gates que siguen abiertos
 
 - ~~Build firmado Android/iOS del corte actual~~ → HECHO (`856829fa`, run `30185211552`, submits incluidos). Quedan: retener artefactos, verificar App Store Connect/Play Console y QA física.
 - Certificación física de cámara, gestos, teclado, safe areas, offline y notificaciones en ambos sistemas.
 - Cierre verificable de la paridad móvil restante; código presente no equivale a QA aprobada.
-- Confirmación del rollout/configuración de Nutrition V2 en el entorno objetivo antes de una promoción.
+- Nutrition V2: migraciones y saneos ya aplicados a LIVE (2026-07-28). Quedan: QA física del tramo nutrición (multi-día, porciones propias, void, permisos) en Android/iOS; OTA/build de la app para que el boundary coach mobile y los fixes RN rijan en dispositivos; `_PENDING_AUDIT_nutrition_v2_prescribed_intent_once` (índice duro de doble-registro requiere decisión de producto: ¿repetir plato el mismo día es válido?); regenerar `database.types.ts` exige un PR dedicado de nulabilidad (~130 call sites V1 legacy).
 
 Builds `production`: el [run 30185211552](https://github.com/Juancho2706/gymappjp/actions/runs/30185211552) sobre `856829fa` (2026-07-25) dejó **Android e iOS verdes end-to-end con submits incluidos** (AAB a Play internal testing + IPA a TestFlight), usando el profile regenerado con HealthKit + Associated Domains (la falla de capability de los runs 07-23/24 quedó cerrada; diagnóstico [30183498116](https://github.com/Juancho2706/gymappjp/actions/runs/30183498116)). Ese binario incluye la deuda cardio saldada y los universal links repuestos. Pendiente humano: retener artefactos (1 día), verificar procesamiento en App Store Connect/Play Console y QA física — nada de esto certifica QA device.
 
@@ -60,8 +60,9 @@ Builds `production`: el [run 30185211552](https://github.com/Juancho2706/gymappj
 
 - V2 es el destino funcional para trabajo nuevo.
 - V1 se conserva como compatibilidad y rollback, no como segunda línea de producto.
-- Edge Config y el gate server-side deciden disponibilidad real por superficie/scope.
-- Mobile usa endpoints autoritativos para intake, catálogo y operaciones coach V2; la caché local no concede permisos.
+- Edge Config y el gate server-side controlan entrada/lecturas. En esta rama las mutaciones coach mobile (publish, quick-edit, assign, archive) pasan por `/api/mobile/nutrition-v2/coach/mutate` con rollout + entitlement server-side; el kill-switch queda completo cuando esta rama esté deployada, con migraciones aplicadas y app actualizada. Excepción conocida: el alta de alimento coach RN (`createCoachFoodV2`) aún escribe directo bajo RLS.
+- Intake y catálogo mobile pasan por endpoints autoritativos; los permisos del alumno y el retiro (`voided`) se imponen también dentro de las RPC.
+- El alcance Nutrition soportado es standalone + Team; Enterprise queda fuera de este flujo.
 - Importaciones del catálogo chileno requieren fuente y licencia verificables; no inventar GTIN ni nutrientes.
 
 Acciones operativas o manuales pendientes van en [MANUAL_TASKS.md](../operations/MANUAL_TASKS.md), no en este archivo.

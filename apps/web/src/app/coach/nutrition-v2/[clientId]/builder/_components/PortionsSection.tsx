@@ -20,11 +20,19 @@ import { motion, useReducedMotion } from 'framer-motion'
 import { NUTRITION_MOTION } from '@eva/nutrition-v2'
 import type { ExchangeGroup } from '@eva/nutrition-engine'
 import { PORTIONS_COPY } from '@/lib/nutrition-portions-copy'
+import {
+  createExchangeGroupAction,
+  deleteExchangeGroupAction,
+  updateExchangeGroupAction,
+} from '@/app/coach/nutrition-v2/_actions/exchange-groups.actions'
 import { loadExchangeGroupsForBuilderAction } from './PortionsGroupsAction'
 import { PortionsGroupDot } from './PortionsGroupDot'
 import { PortionsGroupPicker } from './PortionsGroupPicker'
+import type { ExchangeGroupFormValues } from './PortionsGroupForm'
 import {
   addPortionGroup,
+  clonePortionsForVariant,
+  dropVariantPortions,
   formatPortionsEs,
   parsePortionsInput,
   removePortionGroup,
@@ -62,10 +70,36 @@ export interface PortionsController {
    * `ensureGroupsLoaded()` si la estrategia usa franjas.
    */
   restoreBySlot: (map: PortionsBySlot) => void
+  /**
+   * Multi-día: copia las porciones de un día a otro al clonarlo (multi-select "copiar del
+   * base" / "duplicar como otro día"). Las claves del mapa son `variantKey::slotKey`, así que
+   * clonar franjas exige re-etiquetar; sin esto el día nuevo nacería sin porciones.
+   */
+  cloneVariant: (params: {
+    sourceVariantKey: string
+    targetVariantKey: string
+    slotKeyPairs: ReadonlyArray<{ from: string; to: string }>
+  }) => void
+  /** Descarta las porciones de un día eliminado. */
+  dropVariant: (variantKey: string) => void
+  /**
+   * Grupos PROPIOS del coach (porciones propias P-A). Escriben por server action; el
+   * catálogo en memoria se actualiza para que el grupo recién creado quede seleccionable
+   * sin cerrar el picker. Borrar además LIMPIA los targets del draft que apuntaban al
+   * grupo: si quedaran, `resolveExchangeGroupsForDraft` haría fallar el publish con
+   * `EXCHANGE_GROUP_NOT_FOUND` (el grupo soft-borrado ya no es visible para `xg_select`).
+   */
+  createGroup: (values: ExchangeGroupFormValues) => Promise<GroupWriteOutcome>
+  updateGroup: (groupId: string, values: ExchangeGroupFormValues) => Promise<GroupWriteOutcome>
+  deleteGroup: (groupId: string) => Promise<GroupWriteOutcome>
 }
 
-export function usePortionsBuilder(clientId: string): PortionsController {
-  const [bySlot, setBySlot] = useState<PortionsBySlot>({})
+export type GroupWriteOutcome = { ok: true } | { ok: false; error: string }
+
+export function usePortionsBuilder(clientId: string, initialBySlot?: PortionsBySlot): PortionsController {
+  // `initialBySlot` = porciones rehidratadas del plan vigente (FD1c). Solo se lee al montar
+  // (initializer perezoso): después manda el estado del wizard.
+  const [bySlot, setBySlot] = useState<PortionsBySlot>(() => initialBySlot ?? {})
   const [groups, setGroups] = useState<ExchangeGroup[] | null>(null)
   const [groupsLoading, setGroupsLoading] = useState(false)
   const [groupsError, setGroupsError] = useState<string | null>(null)
@@ -126,6 +160,52 @@ export function usePortionsBuilder(clientId: string): PortionsController {
     restoreBySlot: useCallback(
       (map: PortionsBySlot) => setBySlot(map != null && typeof map === 'object' ? map : {}),
       [],
+    ),
+    cloneVariant: useCallback(
+      (params: {
+        sourceVariantKey: string
+        targetVariantKey: string
+        slotKeyPairs: ReadonlyArray<{ from: string; to: string }>
+      }) => setBySlot((prev) => clonePortionsForVariant(prev, params)),
+      [],
+    ),
+    dropVariant: useCallback((variantKey: string) => setBySlot((prev) => dropVariantPortions(prev, variantKey)), []),
+    createGroup: useCallback(
+      async (values: ExchangeGroupFormValues): Promise<GroupWriteOutcome> => {
+        const res = await createExchangeGroupAction({ clientId, ...values })
+        if (!res.ok) return { ok: false, error: res.error }
+        setGroups((prev) => sortGroupsForPicker([...(prev ?? []), res.group]))
+        return { ok: true }
+      },
+      [clientId],
+    ),
+    updateGroup: useCallback(
+      async (groupId: string, values: ExchangeGroupFormValues): Promise<GroupWriteOutcome> => {
+        const res = await updateExchangeGroupAction({ clientId, groupId, ...values })
+        if (!res.ok) return { ok: false, error: res.error }
+        setGroups((prev) =>
+          sortGroupsForPicker((prev ?? []).map((g) => (g.id === res.group.id ? res.group : g))),
+        )
+        return { ok: true }
+      },
+      [clientId],
+    ),
+    deleteGroup: useCallback(
+      async (groupId: string): Promise<GroupWriteOutcome> => {
+        const res = await deleteExchangeGroupAction({ clientId, groupId })
+        if (!res.ok) return { ok: false, error: res.error }
+        setGroups((prev) => (prev ?? []).filter((g) => g.id !== groupId))
+        // El draft en edición no puede quedar apuntando a un grupo que ya no existe.
+        setBySlot((prev) => {
+          const next: PortionsBySlot = {}
+          for (const [slotKey, targets] of Object.entries(prev)) {
+            next[slotKey] = targets.filter((t) => t.exchangeGroupId !== groupId)
+          }
+          return next
+        })
+        return { ok: true }
+      },
+      [clientId],
     ),
   }
 }

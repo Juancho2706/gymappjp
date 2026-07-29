@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  NUTRITION_HUB_TAB_KEYS,
   NUTRITION_SORT_OPTIONS,
   applyNutritionAttentionFilter,
   applyNutritionRosterFilters,
@@ -16,6 +17,7 @@ import {
   nutritionHubMetricScopeLabel,
   nutritionPlanCtaLabel,
   nutritionV2BuilderHref,
+  resolveNutritionHubInitialTab,
   type NutritionHubItemLike,
 } from '../apps/mobile/lib/nutrition-v2-hub'
 import {
@@ -61,6 +63,37 @@ describe('nutrition-v2-hub builder href', () => {
   it('apunta al segmento dinamico real con clientId codificado', () => {
     // Ruta RN = `builder/[clientId].tsx` (no existe `builder/index.tsx`): debe ser segmento, no query.
     expect(nutritionV2BuilderHref('abc 123')).toBe('/coach/nutrition-v2/builder/abc%20123')
+  })
+  it('NUT-004: propaga la raiz del plan vigente como ?planId= (no crea otra raiz)', () => {
+    expect(nutritionV2BuilderHref('cli-1', 'plan 9')).toBe('/coach/nutrition-v2/builder/cli-1?planId=plan%209')
+  })
+  it('omite el query sin plan vigente (null/undefined/vacio)', () => {
+    expect(nutritionV2BuilderHref('cli-1', null)).toBe('/coach/nutrition-v2/builder/cli-1')
+    expect(nutritionV2BuilderHref('cli-1', undefined)).toBe('/coach/nutrition-v2/builder/cli-1')
+    expect(nutritionV2BuilderHref('cli-1', '')).toBe('/coach/nutrition-v2/builder/cli-1')
+  })
+})
+
+describe('nutrition-v2-hub resolveNutritionHubInitialTab (NUT-027)', () => {
+  it('el deep link /coach/foods (?tab=foods) aterriza en la pestana Alimentos', () => {
+    expect(resolveNutritionHubInitialTab('foods')).toBe('foods')
+    expect(resolveNutritionHubInitialTab('curation')).toBe('curation')
+  })
+  it('traduce el vocabulario legacy V1 y cae a roster ante cualquier otro valor', () => {
+    expect(resolveNutritionHubInitialTab('clients')).toBe('roster')
+    expect(resolveNutritionHubInitialTab('templates')).toBe('roster')
+    expect(resolveNutritionHubInitialTab('recipes')).toBe('roster')
+    expect(resolveNutritionHubInitialTab('basura')).toBe('roster')
+    expect(resolveNutritionHubInitialTab(undefined)).toBe('roster')
+    expect(resolveNutritionHubInitialTab(null)).toBe('roster')
+  })
+  it('tolera arrays (useLocalSearchParams) y mayusculas/espacios', () => {
+    expect(resolveNutritionHubInitialTab(['foods', 'roster'])).toBe('foods')
+    expect(resolveNutritionHubInitialTab(' FOODS ')).toBe('foods')
+    expect(resolveNutritionHubInitialTab([])).toBe('roster')
+  })
+  it('solo expone las 3 claves del tablist', () => {
+    expect([...NUTRITION_HUB_TAB_KEYS]).toEqual(['roster', 'foods', 'curation'])
   })
 })
 

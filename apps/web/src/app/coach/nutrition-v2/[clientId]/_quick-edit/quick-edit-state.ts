@@ -12,12 +12,20 @@
  */
 
 import type {
+  NutritionExchangeComposedPart,
+  NutritionExchangeGroupRead,
   NutritionItemSubstitution,
   NutritionItemSubstitutionRead,
   NutritionMacroTargets,
   NutritionPlanDraft,
   NutritionPlanReadModel,
 } from '@eva/nutrition-v2'
+import {
+  NUTRITION_WEEK_ORDER,
+  formatNutritionDayOfWeek,
+  reconstructExchangeGroups,
+} from '@eva/nutrition-v2'
+import { macrosForTargets, type ExchangeMacroTotals } from '@eva/nutrition-engine'
 import {
   computeItemMacros,
   type BuilderFood,
@@ -115,6 +123,11 @@ export interface QePortionGroup {
   groupName: string
   color: string | null
   ref: { calories: number; proteinG: number; carbsG: number; fatsG: number }
+  /**
+   * Composicion congelada del grupo (LEG = 1P + 1C). Necesaria para que el engine expanda
+   * los compuestos al sumar las porciones en los subtotales; null = grupo simple.
+   */
+  composedOf: NutritionExchangeComposedPart[] | null
   macrosConfirmed: boolean
 }
 
@@ -306,6 +319,7 @@ export function collectPortionGroups(planModel: NutritionPlanReadModel): QePorti
           groupName: target.groupName,
           color: target.color,
           ref: target.ref,
+          composedOf: target.composedOf,
           macrosConfirmed: target.macrosConfirmed,
         })
       }
@@ -376,6 +390,11 @@ export type QuickEditAction =
   | { type: 'REMOVE_SLOT'; variantKey: string; slotKey: string }
   | { type: 'RESTORE_SLOT'; variantKey: string; index: number; slot: QeSlot }
   | { type: 'ADD_SLOT'; variantKey: string; key: string; name: string; startTime: string }
+  | { type: 'ADD_VARIANT'; days: readonly number[]; source: 'clone' | 'empty' }
+  | { type: 'REMOVE_VARIANT'; variantKey: string }
+  | { type: 'RESTORE_VARIANT'; index: number; variant: QeVariant }
+  | { type: 'SET_VARIANT_DAY'; variantKey: string; dayOfWeek: number }
+  | { type: 'SET_VARIANT_LABEL'; variantKey: string; value: string }
   | { type: 'SET_TARGET'; variantKey: string; field: keyof QeTargetsText; value: string }
   | { type: 'STEP_TARGET'; variantKey: string; field: keyof QeTargetsText; direction: 1 | -1 }
   | { type: 'SET_VISIBLE_NOTES'; value: string }
@@ -558,6 +577,150 @@ function mapPortionTarget(
   }))
 }
 
+// ---------------------------------------------------------------------------
+// Variantes de dia (FD5): alta multi-dia, baja, cambio de dia y renombre
+//
+// El backend YA soporta N variantes por version (`nutrition_day_variants_v2`, contrato
+// `min(1)` sin tope, snapshot que elige por fecha), pero hasta aca ninguna superficie las
+// podia CREAR. El quick-edit ya editaba N variantes; lo que faltaba era el alta/baja.
+//
+// Invariantes que este modulo sostiene (espejo de los del builder y de la base):
+//  - exactamente UNA variante default (indice unico `..._default_unique` en la DB): las
+//    variantes nuevas nunca son default y la default no se elimina ni cambia de dia;
+//  - `dayOfWeek` unico entre las variantes especificas (la resolucion del snapshot es
+//    "match exacto gana, si no cae al default": dos variantes del mismo dia serian un
+//    empate no determinista);
+//  - `variantKey` unico dentro de la version (`unique (version_id, variant_key)`).
+//
+// Los ids de franja/item del dia CLONADO se conservan a proposito: la persistencia los
+// IGNORA (cada publicacion inserta filas nuevas — ver `buildVariantInsertRow` /
+// `buildPersistDraftPayload`) y en RN son la llave del carry-over de reemplazos
+// autorizados, asi que el dia clonado hereda tambien esa capa. Las keys de UI si se
+// re-generan (prefijadas por la key de la variante nueva) para que el reducer nunca
+// confunda dos filas homonimas de dias distintos.
+// ---------------------------------------------------------------------------
+
+/** Posicion del dia en la lectura Lu→Do (para ordenar altas multiples de forma estable). */
+function weekRank(dayOfWeek: number): number {
+  const index = NUTRITION_WEEK_ORDER.indexOf(dayOfWeek as (typeof NUTRITION_WEEK_ORDER)[number])
+  return index < 0 ? NUTRITION_WEEK_ORDER.length : index
+}
+
+function isValidDow(dayOfWeek: number): boolean {
+  return Number.isInteger(dayOfWeek) && dayOfWeek >= 0 && dayOfWeek <= 6
+}
+
+/** Dias de semana ya reclamados por una variante especifica (la base no reclama ninguno). */
+export function takenDayVariantDows(state: QuickEditState): Set<number> {
+  const taken = new Set<number>()
+  for (const variant of state.variants) {
+    if (variant.dayOfWeek != null) taken.add(variant.dayOfWeek)
+  }
+  return taken
+}
+
+/** Variante base (default) del estado; null si el plan no tiene ninguna (dato invalido). */
+export function defaultQeVariant(state: QuickEditState): QeVariant | null {
+  return state.variants.find((variant) => variant.isDefault) ?? null
+}
+
+/** Clave de variante unica dentro de la version: 'dia-6' (y 'dia-6-2' si ya existiera). */
+export function buildDayVariantKey(existingKeys: ReadonlySet<string>, dayOfWeek: number): string {
+  const base = `dia-${dayOfWeek}`
+  if (!existingKeys.has(base)) return base
+  let suffix = 2
+  while (existingKeys.has(`${base}-${suffix}`)) suffix += 1
+  return `${base}-${suffix}`
+}
+
+/** Etiqueta automatica del dia ("Sábado"); fallback defensivo si el dow no es valido. */
+export function autoDayVariantLabel(dayOfWeek: number): string {
+  return formatNutritionDayOfWeek(dayOfWeek) ?? 'Día específico'
+}
+
+function cloneQeItem(item: QeItem, keyPrefix: string): QeItem {
+  return {
+    ...item,
+    key: `${keyPrefix}:${item.key}`,
+    food: item.food ? { ...item.food } : null,
+    macroBase: item.macroBase ? { quantity: item.macroBase.quantity, macros: { ...item.macroBase.macros } } : null,
+    substitutions: item.substitutions.map((sub) => ({ ...sub })),
+  }
+}
+
+function cloneQeSlot(slot: QeSlot, keyPrefix: string): QeSlot {
+  return {
+    ...slot,
+    key: `${keyPrefix}:${slot.key}`,
+    targets: { ...slot.targets },
+    items: slot.items.map((item) => cloneQeItem(item, keyPrefix)),
+    portionTargets: slot.portionTargets.map((target) => ({ ...target, key: `${keyPrefix}:${target.key}` })),
+  }
+}
+
+/**
+ * Dia nuevo clonando el contenido del dia base (franjas, items, porciones y metas). Nunca
+ * default; la etiqueta arranca con el nombre del dia y es renombrable.
+ */
+export function cloneQeVariantForDay(source: QeVariant, dayOfWeek: number, variantKey: string): QeVariant {
+  return {
+    key: variantKey,
+    id: null,
+    variantKey,
+    label: autoDayVariantLabel(dayOfWeek),
+    dayOfWeek,
+    isDefault: false,
+    targets: { ...source.targets },
+    passthroughTargets: { ...source.passthroughTargets },
+    slots: source.slots.map((slot) => cloneQeSlot(slot, variantKey)),
+  }
+}
+
+/**
+ * Dia nuevo VACIO (sin franjas). Las metas se heredan del dia base igual que en el clon
+ * (SPEC: "metas de dia especifico heredan el base salvo personalizacion explicita").
+ */
+export function createEmptyQeVariantForDay(source: QeVariant, dayOfWeek: number, variantKey: string): QeVariant {
+  return {
+    key: variantKey,
+    id: null,
+    variantKey,
+    label: autoDayVariantLabel(dayOfWeek),
+    dayOfWeek,
+    isDefault: false,
+    targets: { ...source.targets },
+    passthroughTargets: { ...source.passthroughTargets },
+    slots: [],
+  }
+}
+
+/**
+ * Alta de uno o varios dias (ej. Sa+Do en un solo gesto). Ignora en silencio los dias
+ * invalidos o ya ocupados: el picker los deshabilita, esto es el cinturon del reducer.
+ * Sin dia base no hay de donde clonar => estado intacto.
+ */
+function addDayVariants(state: QuickEditState, days: readonly number[], source: 'clone' | 'empty'): QuickEditState {
+  const base = defaultQeVariant(state)
+  if (!base) return state
+  const taken = takenDayVariantDows(state)
+  const keys = new Set(state.variants.map((variant) => variant.variantKey))
+  const ordered = [...new Set(days)].sort((a, b) => weekRank(a) - weekRank(b))
+  const added: QeVariant[] = []
+  for (const dayOfWeek of ordered) {
+    if (!isValidDow(dayOfWeek) || taken.has(dayOfWeek)) continue
+    const variantKey = buildDayVariantKey(keys, dayOfWeek)
+    keys.add(variantKey)
+    taken.add(dayOfWeek)
+    added.push(
+      source === 'clone'
+        ? cloneQeVariantForDay(base, dayOfWeek, variantKey)
+        : createEmptyQeVariantForDay(base, dayOfWeek, variantKey),
+    )
+  }
+  if (added.length === 0) return state
+  return { ...state, variants: [...state.variants, ...added] }
+}
+
 function normalizeBuilderUnit(servingUnit: string | null | undefined): string {
   const u = String(servingUnit ?? '').toLowerCase()
   if (u === 'ml') return 'ml'
@@ -681,6 +844,39 @@ export function quickEditReducer(state: QuickEditState, action: QuickEditAction)
       )
     case 'SET_VISIBLE_NOTES':
       return { ...state, visibleNotes: action.value }
+    case 'ADD_VARIANT':
+      return addDayVariants(state, action.days, action.source)
+    case 'REMOVE_VARIANT':
+      // La variante base es intocable (el snapshot cae a ella los dias sin plan propio).
+      return {
+        ...state,
+        variants: state.variants.filter(
+          (variant) => variant.isDefault || variant.key !== action.variantKey,
+        ),
+      }
+    case 'RESTORE_VARIANT':
+      return { ...state, variants: insertAt(state.variants, action.index, action.variant) }
+    case 'SET_VARIANT_DAY': {
+      const target = state.variants.find((variant) => variant.key === action.variantKey)
+      if (!target || target.isDefault || !isValidDow(action.dayOfWeek)) return state
+      // Unicidad de dia: el picker deshabilita los ocupados; esto es el cinturon.
+      if (state.variants.some((variant) => variant.key !== action.variantKey && variant.dayOfWeek === action.dayOfWeek)) {
+        return state
+      }
+      const previousAutoLabel = target.dayOfWeek == null ? null : autoDayVariantLabel(target.dayOfWeek)
+      return mapVariant(state, action.variantKey, (variant) => ({
+        ...variant,
+        dayOfWeek: action.dayOfWeek,
+        // El renombre manual manda: solo se re-etiqueta si la etiqueta seguia siendo la
+        // automatica del dia anterior.
+        label:
+          previousAutoLabel !== null && variant.label.trim() === previousAutoLabel
+            ? autoDayVariantLabel(action.dayOfWeek)
+            : variant.label,
+      }))
+    }
+    case 'SET_VARIANT_LABEL':
+      return mapVariant(state, action.variantKey, (variant) => ({ ...variant, label: action.value }))
     case 'SET_TARGET':
       return mapVariant(state, action.variantKey, (variant) => ({
         ...variant,
@@ -753,6 +949,111 @@ export function qeVariantTotal(variant: QeVariant): ItemMacros {
 }
 
 // ---------------------------------------------------------------------------
+// Totales CON porciones a eleccion (queja del coach: los grupos no sumaban)
+//
+// Las porciones a eleccion ("2 porciones de Proteina") son una capa hermana de los items
+// fijos. Hasta ahora el quick-edit las editaba pero NO las sumaba: el "Subtotal franja" y el
+// "Total prescrito" mostraban solo los items, dejando dos matematicas distintas en la misma
+// pantalla (el builder ya combinaba el subtotal de franja). Los macros salen de los
+// snapshots CONGELADOS del read model (nunca del catalogo vivo) y se expanden por el mismo
+// motor que ve el alumno (`macrosForTargets`, incluye grupos compuestos tipo LEG = 1P + 1C).
+// ---------------------------------------------------------------------------
+
+/** Diccionario del engine reconstruido desde los snapshots (forma de `ExchangeGroup`). */
+export type QeExchangeGroup = NutritionExchangeGroupRead
+
+/**
+ * Reconstruye el diccionario de grupos (directos + bases de compuestos) desde los grupos
+ * que el plan ya usa. Sin porciones => [] (todas las lecturas degradan a "solo items").
+ */
+export function qeExchangeGroups(groups: readonly QePortionGroup[]): QeExchangeGroup[] {
+  if (groups.length === 0) return []
+  return reconstructExchangeGroups(
+    groups.map((group) => ({
+      exchangeGroupId: group.exchangeGroupId,
+      groupCode: group.groupCode,
+      groupName: group.groupName,
+      color: group.color,
+      ref: group.ref,
+      composedOf: group.composedOf ?? null,
+      macrosConfirmed: group.macrosConfirmed,
+    })),
+  )
+}
+
+/**
+ * Macros derivados de las porciones de UNA franja. `null` cuando la franja no tiene
+ * porciones validas o el diccionario esta vacio: el subtotal muestra solo los items
+ * (identico a antes, jamas NaN).
+ */
+export function qeSlotPortionTotals(
+  slot: QeSlot,
+  groups: QeExchangeGroup[],
+): ExchangeMacroTotals | null {
+  if (groups.length === 0) return null
+  const targets = slot.portionTargets
+    .map((target) => ({
+      exchangeGroupId: target.exchangeGroupId,
+      portions: parsePortionsValue(target.portions) ?? 0,
+    }))
+    .filter((target) => target.portions > 0)
+  if (targets.length === 0) return null
+  return macrosForTargets(targets, groups)
+}
+
+/** Suma de las porciones de TODAS las franjas de la variante (null = sin porciones). */
+export function qeVariantPortionTotals(
+  variant: QeVariant,
+  groups: QeExchangeGroup[],
+): ExchangeMacroTotals | null {
+  let acc: ExchangeMacroTotals | null = null
+  for (const slot of variant.slots) {
+    const slotTotals = qeSlotPortionTotals(slot, groups)
+    if (!slotTotals) continue
+    acc = acc
+      ? {
+          calories: acc.calories + slotTotals.calories,
+          proteinG: acc.proteinG + slotTotals.proteinG,
+          carbsG: acc.carbsG + slotTotals.carbsG,
+          fatsG: acc.fatsG + slotTotals.fatsG,
+        }
+      : slotTotals
+  }
+  return acc
+}
+
+/**
+ * Combina items fijos + derivado de porciones (redondeo a 1 decimal, espejo de `addMacros`).
+ * Sin porciones devuelve EXACTAMENTE el objeto de items (misma referencia).
+ */
+export function qeCombineSubtotals(items: ItemMacros, portions: ExchangeMacroTotals | null): ItemMacros {
+  if (portions == null) return items
+  return {
+    ...items,
+    calories: round1(items.calories + portions.calories),
+    proteinG: round1(items.proteinG + portions.proteinG),
+    carbsG: round1(items.carbsG + portions.carbsG),
+    fatsG: round1(items.fatsG + portions.fatsG),
+  }
+}
+
+/** Subtotal de franja CON porciones (lo que el coach espera ver bajo la franja). */
+export function qeSlotSubtotalWithPortions(
+  slot: QeSlot,
+  groups: QeExchangeGroup[],
+): ItemMacros {
+  return qeCombineSubtotals(qeSlotSubtotal(slot), qeSlotPortionTotals(slot, groups))
+}
+
+/** Total prescrito de la variante CON porciones (items de todas las franjas + grupos). */
+export function qeVariantTotalWithPortions(
+  variant: QeVariant,
+  groups: QeExchangeGroup[],
+): ItemMacros {
+  return qeCombineSubtotals(qeVariantTotal(variant), qeVariantPortionTotals(variant, groups))
+}
+
+// ---------------------------------------------------------------------------
 // Validacion local (pre-publish; el servidor re-valida con Zod)
 // ---------------------------------------------------------------------------
 
@@ -763,6 +1064,8 @@ export interface QuickEditValidation {
 
 const MAX_KCAL = 12000
 const MAX_MACRO_G = 2000
+/** Tope del contrato (`NutritionDayVariantSchema.label`: max 120 tras trim). */
+export const VARIANT_LABEL_MAX = 120
 
 export function validateQuickEdit(state: QuickEditState): QuickEditValidation {
   const errors: Record<string, string> = {}
@@ -771,7 +1074,28 @@ export function validateQuickEdit(state: QuickEditState): QuickEditValidation {
   if ((state.visibleNotes ?? '').trim().length > VISIBLE_NOTES_MAX) {
     errors['plan.visibleNotes'] = `Las notas superan los ${VISIBLE_NOTES_MAX} caracteres.`
   }
+  // Invariantes multi-dia (espejo de la base: default unico + dia de semana unico). El
+  // reducer ya los sostiene; esto corta el publish si un respaldo local viejo o un estado
+  // corrupto llegara con dos bases o dos dias iguales, en vez de dejar que el RPC falle.
+  if (state.variants.filter((variant) => variant.isDefault).length !== 1) {
+    errors['plan.dayVariants'] = 'El plan necesita exactamente un día base.'
+  } else {
+    const seenDows = new Set<number>()
+    for (const variant of state.variants) {
+      if (variant.dayOfWeek == null) continue
+      if (seenDows.has(variant.dayOfWeek)) {
+        errors['plan.dayVariants'] = 'Hay dos días del plan asignados al mismo día de la semana.'
+        break
+      }
+      seenDows.add(variant.dayOfWeek)
+    }
+  }
   for (const variant of state.variants) {
+    const label = variant.label.trim()
+    if (label.length === 0) errors[`variant.${variant.key}.label`] = 'El día necesita un nombre.'
+    else if (label.length > VARIANT_LABEL_MAX) {
+      errors[`variant.${variant.key}.label`] = `El nombre no puede superar los ${VARIANT_LABEL_MAX} caracteres.`
+    }
     for (const [field, max] of [
       ['calories', MAX_KCAL],
       ['proteinG', MAX_MACRO_G],
@@ -893,7 +1217,9 @@ function projectVariant(variant: QeVariant, orderIndex: number): DraftVariant {
   return {
     ...(variant.id ? { id: variant.id } : {}),
     key: variant.variantKey,
-    label: variant.label,
+    // Trim explicito (el contrato ya trimea): baseline y current pasan por esta MISMA
+    // proyeccion, asi que renombrar con espacios de sobra no inventa un cambio.
+    label: variant.label.trim(),
     dayOfWeek: variant.dayOfWeek,
     default: variant.isDefault,
     targets: {
@@ -908,6 +1234,33 @@ function projectVariant(variant: QeVariant, orderIndex: number): DraftVariant {
     orderIndex,
     mealSlots: variant.slots.map(projectSlot),
   }
+}
+
+/**
+ * Cambios de ENCABEZADO de dia (etiqueta / dia de semana) entre dos drafts, emparejando por
+ * `id` (solo variantes que ya existian en la version base).
+ *
+ * Se suma aparte porque `countDraftChanges` del paquete compara metas/franjas/items pero NO
+ * el encabezado de la variante: sin esto, renombrar un dia o moverlo de Sabado a Domingo
+ * dejaria la barra en "0 cambios" y el coach no podria publicar su propia edicion. El
+ * paquete es compartido con otras superficies y queda fuera de este cluster.
+ */
+export function countVariantHeaderChanges(
+  baseline: NutritionPlanDraft,
+  current: NutritionPlanDraft,
+): number {
+  const baselineById = new Map<string, NutritionPlanDraft['dayVariants'][number]>()
+  for (const variant of baseline.dayVariants) {
+    if (variant.id) baselineById.set(variant.id, variant)
+  }
+  let count = 0
+  for (const variant of current.dayVariants) {
+    if (!variant.id) continue
+    const base = baselineById.get(variant.id)
+    if (!base) continue
+    if (base.label !== variant.label || base.dayOfWeek !== variant.dayOfWeek) count += 1
+  }
+  return count
 }
 
 /**

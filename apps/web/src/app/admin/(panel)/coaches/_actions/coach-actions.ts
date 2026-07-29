@@ -207,8 +207,23 @@ export async function extendCoachPeriodAction(coachId: string, days: 7 | 14 | 30
 export async function suspendCoachAction(coachId: string, reason?: string) {
     const { adminClient } = await assertAdmin()
 
+    // ANCLA de la gracia de ALUMNOS (NUT-033): suspender dejaba `paid_access_ended_at` NULL.
+    // Si además el coach no tiene `current_period_end` (free / legacy / nunca pagó), el gate
+    // de DB `private.student_write_allowed` se quedaba SIN ancla y —hasta el fix fail-closed—
+    // dejaba escribir, mientras el resolver TS (`apps/web/src/lib/student-access.ts:101-114`)
+    // ya devolvía `readonly`. Mismo patrón que `expireCoachAction`: anclamos al period_end
+    // vigente o, si no hay, al momento del corte. `reactivateCoachAdminAction` la limpia.
+    const { data: coach } = await adminClient
+        .from('coaches')
+        .select('current_period_end')
+        .eq('id', coachId)
+        .maybeSingle()
+
     const { error } = await adminClient.from('coaches')
-        .update({ subscription_status: 'paused' })
+        .update({
+            subscription_status: 'paused',
+            paid_access_ended_at: coach?.current_period_end ?? new Date().toISOString(),
+        })
         .eq('id', coachId)
     if (error) return { error: error.message }
 

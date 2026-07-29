@@ -10,7 +10,7 @@ import {
   type QuickEditSlot,
 } from '../../../lib/nutrition-v2-quick-edit'
 import { EditableItemRow } from './EditableItemRow'
-import { EditablePortionsSection } from './EditablePortionsSection'
+import { EditablePortionsSection, type QuickEditGroupAdmin } from './EditablePortionsSection'
 import {
   type QuickEditPortionGroup,
   type QuickEditPortionTarget,
@@ -44,6 +44,7 @@ export function EditableSlotCard({
   onPortionNotes,
   onPortionRemove,
   onPortionAdd,
+  portionGroupAdmin,
 }: {
   slot: QuickEditSlot
   index: number
@@ -66,6 +67,8 @@ export function EditableSlotCard({
   onPortionNotes: (targetKey: string, value: string) => void
   onPortionRemove: (target: QuickEditPortionTarget, index: number) => void
   onPortionAdd: (group: QuickEditPortionGroup) => void
+  /** Porciones propias (FD6a): altas/edición de grupos desde el picker. Ausente = sin esa UI. */
+  portionGroupAdmin?: QuickEditGroupAdmin
 }) {
   const { theme } = useTheme()
   const subtotal: ItemMacros = quickEditSlotSubtotal(slot, foodsById)
@@ -171,6 +174,7 @@ export function EditableSlotCard({
         onSetNotes={onPortionNotes}
         onRemove={onPortionRemove}
         onAdd={onPortionAdd}
+        groupAdmin={portionGroupAdmin}
       />
 
       {slot.items.length > 0 ? (

@@ -6,6 +6,9 @@ export * from './aura'
 // Metro from bundling dead conversion logic into the RN app. The driver imports it via
 // the '@eva/nutrition-v2/conversion' subpath export (see package.json).
 export * from './read-models'
+export * from './day-variants'
+export * from './intake-normalize'
+export * from './intake-units'
 export * from './bulk-mark'
 export * from './quick-edit'
 export * from './catalog'
@@ -14,6 +17,13 @@ export * from './food-category'
 export * from './favorites'
 export * from './share'
 export {
+  NUTRITION_V2_PERMISSION_DENIED,
+  NUTRITION_V2_PERMISSION_DENIED_CODE,
+  NUTRITION_V2_PERMISSION_RULES,
+  NutritionIntakeVoidSchema,
+  isNutritionV2PermissionDenied,
+  type NutritionIntakeVoid,
+  type NutritionV2PermissionRule,
   NutritionActorRoleSchema,
   NutritionCaptureMethodSchema,
   NutritionDaySnapshotSchema,
@@ -23,6 +33,8 @@ export {
   NutritionIntakeCorrectionSchema,
   NutritionIntakeMutationSchema,
   NutritionIntakeSourceSchema,
+  NutritionIntakeUnitSchema,
+  NutritionMacrosBasisSchema,
   NutritionItemSubstitutionSchema,
   NutritionLegacyHistoryItemSchema,
   NutritionMacroTargetsSchema,

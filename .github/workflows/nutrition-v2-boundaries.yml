@@ -9,9 +9,14 @@ on:
       - 'apps/web/src/app/c/**/nutrition-v2/**'
       - 'apps/web/src/app/coach/nutrition-v2/**'
       - 'apps/web/src/components/nutrition-v2/**'
-      - 'apps/mobile/app/alumno/nutrition-v2/**'
+      # La superficie del alumno RN vive bajo el grupo de rutas `(tabs)`. El path literal
+      # con paréntesis tampoco es seguro en globs, así que se usa el comodín intermedio
+      # (mismo gotcha documentado arriba para [coach_slug]).
+      - 'apps/mobile/app/alumno/**/nutrition-v2/**'
       - 'apps/mobile/app/coach/nutrition-v2/**'
       - 'apps/mobile/components/nutrition-v2/**'
+      # Helpers V2 del cliente móvil (fórmulas de intake, builder, quick-edit, api).
+      - 'apps/mobile/lib/*nutrition-v2*'
       - 'packages/nutrition-v2/**'
       - 'scripts/check-nutrition-v2-boundaries.mjs'
       - 'package.json'

@@ -1,18 +1,25 @@
 /**
- * Cola de curación V2 (RN coach) — contrato de datos + persistencia DIRECTA por
- * supabase-js (PostgREST), espejo 1:1 de
- * `apps/web/src/app/coach/nutrition-v2/_actions/curation.actions.ts`.
+ * Cola de curación V2 (RN coach) — contrato de datos + persistencia por RPC scoped,
+ * espejo 1:1 de `apps/web/src/app/coach/nutrition-v2/_actions/curation.actions.ts`.
  *
- * Igual que el builder V2 (`nutrition-v2-builder.ts`), NO hay endpoint móvil ni RPC de
- * curación: se opera contra `food_catalog_missing_codes` / `foods` mediante el cliente
- * `supabase-js` autenticado, y la RLS del servidor re-valida cada operación. Un `42501`
- * aquí == `SCOPE_DENIED` (mismo mapeo que el web `:115,165,253`). La UI nunca autoriza;
- * la barrera real es la RLS.
+ * Las tres operaciones van por `db.rpc(...)` contra las funciones
+ * `*_scoped_v2` (`supabase/migrations/20260728131000_nutrition_v2_curation_scoped.sql`):
+ *  - filtran por el workspace ACTIVO (`private.nutrition_v2_client_matches_workspace`), no
+ *    por la union de policies PERMISSIVE (que mezclaba el pool propio con el de todos los
+ *    teams activos del coach);
+ *  - lanzan `P0002` cuando el UPDATE no toca ninguna fila (codigo ya resuelto, inexistente
+ *    o de otro workspace) en vez de reportar exito falso;
+ *  - resuelven crear+vincular en UNA transaccion del servidor (sin compensacion best-effort).
  *
- * El cliente de escritura se INYECTA (`db`) como en `persistAndPublishDraft({ db, … })`
- * para que la lógica sea pura y testeable con un mock; la pantalla pasa
+ * `scope` es OBLIGATORIO y fail-closed: sin scope valido no se toca la red. El servidor
+ * revalida igual (SECURITY DEFINER + auth.uid()); la UI nunca autoriza.
+ *
+ * El cliente se INYECTA (`db`) como en `persistAndPublishDraft({ db, … })` para que la
+ * lógica sea pura y testeable con un mock; la pantalla pasa
  * `supabase as unknown as CurationWriteClient`.
  */
+
+import type { NutritionV2CoachScope } from '@eva/nutrition-v2'
 
 // ---------------------------------------------------------------------------
 // Cliente de escritura (subconjunto estructural de supabase-js)
@@ -21,43 +28,13 @@
 export type DbError = { message?: string; code?: string }
 export type DbResult<T> = { data: T | null; error: DbError | null }
 
-/** Encadenable de lectura (`select().is().order().range()` o `.eq().ilike().limit()`). */
-interface ReadFilter<T> extends PromiseLike<DbResult<T[]>> {
-  eq(column: string, value: unknown): ReadFilter<T>
-  is(column: string, value: unknown): ReadFilter<T>
-  ilike(column: string, pattern: string): ReadFilter<T>
-  order(column: string, options: { ascending: boolean }): ReadFilter<T>
-  range(from: number, to: number): ReadFilter<T>
-  limit(count: number): ReadFilter<T>
-}
-
-/** Encadenable de mutación filtrada (`update(...).eq().is()` / `delete().eq().eq()`). */
-interface MutateFilter extends PromiseLike<DbResult<null>> {
-  eq(column: string, value: unknown): MutateFilter
-  is(column: string, value: unknown): MutateFilter
-}
-
-interface InsertSelect {
-  single(): Promise<DbResult<{ id: string }>>
-}
-interface InsertBuilder extends PromiseLike<DbResult<null>> {
-  select(columns: string): InsertSelect
-}
-
-interface CurationTableApi {
-  select(columns: string): ReadFilter<Record<string, unknown>>
-  insert(rows: Record<string, unknown>): InsertBuilder
-  update(values: Record<string, unknown>): MutateFilter
-  delete(): MutateFilter
-}
-
 /**
  * Subconjunto del cliente supabase-js que consume la curación. El cliente real del móvil
  * (`lib/supabase.ts`) es estructuralmente compatible: se pasa con
  * `supabase as unknown as CurationWriteClient` (igual que el builder castea su cliente).
  */
 export interface CurationWriteClient {
-  from(table: string): CurationTableApi
+  rpc(name: string, args: Record<string, unknown>): PromiseLike<DbResult<unknown>>
 }
 
 // ---------------------------------------------------------------------------
@@ -81,8 +58,30 @@ export type ResolveResult = { ok: true } | CurationFailure
 
 const PAGE_SIZE = 20
 
+/** Copy compartido con el web: el codigo ya estaba resuelto o no es del workspace activo. */
+export const CURATION_ALREADY_RESOLVED = 'CURATION_ALREADY_RESOLVED'
+const ALREADY_RESOLVED_MESSAGE =
+  'Ese código ya fue resuelto o no está en tu espacio de trabajo. Actualizamos la bandeja.'
+
 function fail(code: string, error: string): CurationFailure {
   return { ok: false, code, error }
+}
+
+/** Argumentos de scope comunes a las tres RPC. `null` cuando el scope no los usa. */
+function scopeArgs(scope: NutritionV2CoachScope): Record<string, unknown> {
+  return {
+    p_scope_type: scope.scopeType,
+    p_team_id: scope.teamId,
+    p_org_id: scope.orgId,
+  }
+}
+
+function isValidScope(scope: NutritionV2CoachScope | null | undefined): scope is NutritionV2CoachScope {
+  if (!scope) return false
+  if (scope.scopeType === 'standalone') return true
+  if (scope.scopeType === 'team') return typeof scope.teamId === 'string' && scope.teamId.length > 0
+  if (scope.scopeType === 'organization') return typeof scope.orgId === 'string' && scope.orgId.length > 0
+  return false
 }
 
 // ---------------------------------------------------------------------------
@@ -103,7 +102,7 @@ export function formatRelativeDate(value: string): string {
 }
 
 // ---------------------------------------------------------------------------
-// Listar GTIN sin match (resolved_at NULL), paginado por offset
+// Listar GTIN sin match (resolved_at NULL) del workspace activo, paginado por offset
 // ---------------------------------------------------------------------------
 
 interface RawMissingCodeRow {
@@ -127,23 +126,25 @@ function mapRow(row: RawMissingCodeRow): MissingCodeRow {
 }
 
 /**
- * Lista los códigos pendientes ordenados por última aparición (desc), 20 por página.
- * Pide 21 (`range(from, from + 20)`) para saber si hay más sin un COUNT extra, igual que
- * el web (`curation.actions.ts:105-134`). RLS acota la vista al coach.
+ * Lista los códigos pendientes del workspace activo ordenados por última aparición (desc),
+ * 20 por página. Pide 21 (`p_page_size = PAGE_SIZE + 1`) para saber si hay más sin un COUNT
+ * extra, igual que el web.
  */
 export async function listMissingFoodCodesV2(input: {
   db: CurationWriteClient
+  scope: NutritionV2CoachScope | null
   offset?: number
 }): Promise<ListResult> {
+  if (!isValidScope(input.scope)) {
+    return fail('SCOPE_REQUIRED', 'Debes tener un espacio de trabajo de coach activo.')
+  }
+
   const offset = Math.max(0, Math.min(100_000, Math.trunc(input.offset ?? 0)))
-  const from = offset
-  const to = from + PAGE_SIZE
-  const { data, error } = await input.db
-    .from('food_catalog_missing_codes')
-    .select('id, barcode, country_code, sightings, first_seen_at, last_seen_at')
-    .is('resolved_at', null)
-    .order('last_seen_at', { ascending: false })
-    .range(from, to)
+  const { data, error } = await input.db.rpc('list_missing_food_codes_scoped_v2', {
+    ...scopeArgs(input.scope),
+    p_offset: offset,
+    p_page_size: PAGE_SIZE + 1,
+  })
 
   if (error) {
     if (error.code === '42501') return fail('SCOPE_DENIED', 'No tienes permiso para ver la cola.')
@@ -157,7 +158,7 @@ export async function listMissingFoodCodesV2(input: {
     ok: true,
     items: page.map(mapRow),
     hasMore,
-    nextOffset: hasMore ? from + PAGE_SIZE : null,
+    nextOffset: hasMore ? offset + PAGE_SIZE : null,
   }
 }
 
@@ -170,28 +171,31 @@ function isNonEmptyString(value: unknown): value is string {
 }
 
 /**
- * Vincula un GTIN con una fila del catálogo (`foods.id`). No inventa nutrientes: solo
- * asocia el código. RLS es la frontera (`curation.actions.ts:155-170`).
+ * Vincula un GTIN con una fila del catálogo (`foods.id`) dentro del workspace activo. No
+ * inventa nutrientes: solo asocia el código. Si la RPC no actualiza ninguna fila devuelve
+ * `CURATION_ALREADY_RESOLVED` (P0002), nunca un éxito falso.
  */
 export async function resolveMissingFoodCodeV2(input: {
   db: CurationWriteClient
+  scope: NutritionV2CoachScope | null
   missingCodeId: string
   resolvedFoodId: string
 }): Promise<ResolveResult> {
+  if (!isValidScope(input.scope)) {
+    return fail('SCOPE_REQUIRED', 'Debes tener un espacio de trabajo de coach activo.')
+  }
   if (!isNonEmptyString(input.missingCodeId) || !isNonEmptyString(input.resolvedFoodId)) {
     return fail('INVALID_PAYLOAD', 'Datos invalidos.')
   }
 
-  const { error } = await input.db
-    .from('food_catalog_missing_codes')
-    .update({
-      resolved_food_id: input.resolvedFoodId,
-      resolved_at: new Date().toISOString(),
-    })
-    .eq('id', input.missingCodeId)
-    .is('resolved_at', null)
+  const { error } = await input.db.rpc('resolve_missing_food_code_scoped_v2', {
+    p_missing_code_id: input.missingCodeId,
+    p_food_id: input.resolvedFoodId,
+    ...scopeArgs(input.scope),
+  })
 
   if (error) {
+    if (error.code === 'P0002') return fail(CURATION_ALREADY_RESOLVED, ALREADY_RESOLVED_MESSAGE)
     if (error.code === '42501') return fail('SCOPE_DENIED', 'No tienes permiso para vincular el codigo.')
     return fail('CURATION_RESOLVE_FAILED', 'No se pudo vincular el codigo. Intenta nuevamente.')
   }
@@ -200,7 +204,7 @@ export async function resolveMissingFoodCodeV2(input: {
 }
 
 // ---------------------------------------------------------------------------
-// Crear alimento coach-scoped + vincular (flujo NO atómico con mitigaciones)
+// Crear alimento coach-scoped + vincular (atómico en el servidor)
 // ---------------------------------------------------------------------------
 
 export interface CreateCoachFoodInput {
@@ -225,7 +229,7 @@ interface ValidatedCreate {
   fatsG: number
 }
 
-/** Guarda de rango, espejo del Zod web (`curation.actions.ts:173-182`). */
+/** Guarda de rango, espejo del Zod web (`CreateAndResolveInputSchema`). */
 function inRange(value: unknown, max: number): value is number {
   return typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= max
 }
@@ -271,97 +275,43 @@ function validateCreateInput(
 
 /**
  * Crea un alimento coach-scoped (macros POR 100, `catalog_source='coach'`,
- * `verification_status='coach_verified'`, `org_id NULL`; `coach_id=userId` lo exige la
- * RLS `foods_insert_own`) y vincula el código pendiente en un paso.
- *
- * LIMITACIÓN CONOCIDA (portada 1:1 del web `:190-283`): insert(foods) + update(missing)
- * NO son atómicos. Mitigaciones:
- *  1) Idempotencia best-effort ANTES de crear: si un intento previo dejó un alimento
- *     coach-scoped con el mismo nombre normalizado, se reusa en vez de duplicar (sin
- *     índice único; solo reduce duplicados).
- *  2) Compensación best-effort DESPUÉS: si el vínculo falla y el alimento se creó en
- *     ESTA llamada, se borra para no dejarlo huérfano.
+ * `verification_status='coach_verified'`, `org_id NULL`, `coach_id = auth.uid()`) y vincula
+ * el código pendiente, TODO en una sola función plpgsql: la atomicidad la garantiza el
+ * servidor. La RPC reusa el alimento del coach con el mismo nombre (idempotencia del
+ * reintento) y escribe `foods.barcode` cuando está libre, para que el próximo escaneo del
+ * alumno encuentre el producto.
  */
 export async function createCoachFoodForCurationV2(
-  input: { db: CurationWriteClient; userId: string } & CreateCoachFoodInput,
+  input: {
+    db: CurationWriteClient
+    scope: NutritionV2CoachScope | null
+  } & CreateCoachFoodInput,
 ): Promise<ResolveResult> {
+  if (!isValidScope(input.scope)) {
+    return fail('SCOPE_REQUIRED', 'Debes tener un espacio de trabajo de coach activo.')
+  }
+
   const parsed = validateCreateInput(input)
   if (!parsed.ok) return parsed
   const data = parsed.value
-  const { db, userId } = input
 
-  if (!isNonEmptyString(userId)) return fail('SCOPE_DENIED', 'No tienes permiso para crear alimentos.')
+  const { error } = await input.db.rpc('create_food_and_resolve_missing_code_scoped_v2', {
+    p_missing_code_id: data.missingCodeId,
+    p_name: data.name,
+    p_calories: data.calories,
+    p_protein_g: data.proteinG,
+    p_carbs_g: data.carbsG,
+    p_fats_g: data.fatsG,
+    p_brand: data.brand,
+    p_unit: data.unit,
+    ...scopeArgs(input.scope),
+  })
 
-  const normalizedName = data.name.toLowerCase()
-  // Escapamos comodines de ILIKE (% y _) para que el nombre matchee literal (ej "Leche 2%").
-  const likePattern = data.name.replace(/[%_]/g, (m) => `\\${m}`)
-
-  let foodId: string | null = null
-  const existing = await db
-    .from('foods')
-    .select('id, name')
-    .eq('coach_id', userId)
-    .is('org_id', null)
-    .eq('catalog_source', 'coach')
-    .ilike('name', likePattern)
-    .limit(20)
-  if (!existing.error && existing.data) {
-    const match = (existing.data as Array<{ id: string; name: string }>).find(
-      (row) => row.name.trim().toLowerCase() === normalizedName,
-    )
-    if (match) foodId = match.id
-  }
-
-  const createdNow = foodId === null
-  if (createdNow) {
-    const ins = await db
-      .from('foods')
-      .insert({
-        name: data.name,
-        brand: data.brand,
-        coach_id: userId,
-        org_id: null,
-        calories: data.calories,
-        protein_g: data.proteinG,
-        carbs_g: data.carbsG,
-        fats_g: data.fatsG,
-        serving_size: 100,
-        serving_unit: data.unit,
-        is_liquid: data.unit === 'ml',
-        category: 'otro',
-        country_code: 'CL',
-        catalog_source: 'coach',
-        verification_status: 'coach_verified',
-      })
-      .select('id')
-      .single()
-
-    if (ins.error || !ins.data) {
-      if (ins.error?.code === '42501') return fail('SCOPE_DENIED', 'No tienes permiso para crear alimentos.')
-      return fail('FOOD_CREATE_FAILED', 'No se pudo crear el alimento. Intenta nuevamente.')
-    }
-    foodId = ins.data.id
-  }
-
-  if (foodId === null) {
-    // Inalcanzable (o reusamos un id o lo insertamos); defensivo para el narrowing.
+  if (error) {
+    if (error.code === 'P0002') return fail(CURATION_ALREADY_RESOLVED, ALREADY_RESOLVED_MESSAGE)
+    if (error.code === '42501') return fail('SCOPE_DENIED', 'No tienes permiso para crear alimentos.')
+    if (error.code === '22023') return fail('INVALID_PAYLOAD', 'El alimento tiene datos invalidos.')
     return fail('FOOD_CREATE_FAILED', 'No se pudo crear el alimento. Intenta nuevamente.')
-  }
-
-  const resolve = await db
-    .from('food_catalog_missing_codes')
-    .update({ resolved_food_id: foodId, resolved_at: new Date().toISOString() })
-    .eq('id', data.missingCodeId)
-    .is('resolved_at', null)
-
-  if (resolve.error) {
-    // Compensación best-effort: solo borramos si el alimento lo creamos en ESTA llamada.
-    // RLS `foods_delete_own` acota el DELETE al coach dueño. Si el DELETE también falla
-    // queda un huérfano, pero la idempotencia de arriba lo reusará en el próximo retry.
-    if (createdNow) {
-      await db.from('foods').delete().eq('id', foodId).eq('coach_id', userId)
-    }
-    return fail('CURATION_RESOLVE_FAILED', 'Se creo el alimento pero no se pudo vincular el codigo.')
   }
 
   return { ok: true }

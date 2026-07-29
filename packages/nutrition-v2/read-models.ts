@@ -35,6 +35,11 @@ export const NutritionFoodSnapshotSchema = z.object({
   fiberG: NullableNumberSchema,
   servingSize: NullableNumberSchema,
   servingUnit: z.string().nullable(),
+  // Base declarada de los macros congelados (NUT-001). `.optional().nullable()`: las entries
+  // LEGADAS no la tienen (y conservan la formula historica), y el read-model puede desplegarse
+  // antes o despues del cliente — mismo criterio de tolerancia que `media` y las porciones.
+  // Se propaga a las CORRECCIONES para que editar/retirar no reescale con otra base.
+  macrosBasis: z.enum(['per_100', 'per_serving']).nullable().optional(),
 })
 
 export const NutritionIntakeReadItemSchema = z.object({

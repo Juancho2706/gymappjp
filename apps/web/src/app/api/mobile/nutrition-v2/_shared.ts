@@ -4,7 +4,8 @@ import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import { verifyMobileBearer, isBlockedClientRow } from '@/lib/mobile-auth'
 import { resolveNutritionV2RolloutDecision } from '@/services/nutrition-v2-rollout.service'
 import { resolveNutritionDomainEnabled } from '@/services/feature-prefs.service'
-import type { NutritionV2Surface } from '@eva/nutrition-v2'
+import { resolveMobileCoachRolloutContext } from '@/services/mobile-nutrition-v2-rollout-context'
+import type { NutritionV2CoachScope, NutritionV2Surface } from '@eva/nutrition-v2'
 
 type RpcError = { message: string; code?: string; details?: string | null }
 
@@ -37,9 +38,26 @@ export function bearerToken(request: NextRequest): string | null {
   return value.slice('Bearer '.length).trim() || null
 }
 
+/**
+ * Gate unico de la API movil de Nutricion V2.
+ *
+ * NUT-013 — superficie COACH: el contexto de rollout se deriva del WORKSPACE que el llamador
+ * declara (`coachScope`, ya validado de forma) y del alumno de la pantalla (`requestedClientId`),
+ * resueltos por `resolveMobileCoachRolloutContext` ANTES de consultar Edge Config. La fila
+ * `clients` del propio usuario se IGNORA en esa rama: un coach que ademas es alumno de otro coach
+ * ya no arrastra el team/org de esa membresia a su decision de rollout. Sin `coachScope` (rutas
+ * que aun no lo declaran, p.ej. el catalogo) el contexto queda acotado al coach, sin team/org.
+ */
 export async function gateNutritionV2Api(
   request: NextRequest,
-  options: { surface: NutritionV2Surface; mutation?: boolean },
+  options: {
+    surface: NutritionV2Surface
+    mutation?: boolean
+    /** Workspace coach declarado por el cliente; su pertenencia se valida server-side. */
+    coachScope?: NutritionV2CoachScope | null
+    /** Alumno de la pantalla; solo alimenta el canary por alumno si el workspace lo posee. */
+    requestedClientId?: string | null
+  },
 ): Promise<NutritionV2ApiGate | NutritionV2ApiGateError> {
   const token = bearerToken(request)
   if (!token) {
@@ -105,13 +123,47 @@ export async function gateNutritionV2Api(
     }
   }
 
+  // Contexto de rollout. ALUMNO: sale de su propia fila `clients`. COACH: sale del workspace
+  // declarado + el alumno validado (helper compartido con `api/mobile/config`), jamas de la fila
+  // `clients` del propio coach.
+  let rolloutContext: { clientId: string | null; coachId: string | null; teamId: string | null; orgId: string | null }
+  if (coachSurface) {
+    if (options.coachScope) {
+      const resolved = await resolveMobileCoachRolloutContext(
+        admin,
+        userId,
+        options.coachScope,
+        options.requestedClientId ?? null,
+      )
+      if (!resolved.ok) {
+        return {
+          ok: false,
+          response: jsonNoStore(
+            { error: 'Workspace no autorizado.', code: 'WORKSPACE_NOT_ALLOWED' },
+            403,
+          ),
+        }
+      }
+      rolloutContext = resolved.context
+    } else {
+      rolloutContext = { clientId: null, coachId: userId, teamId: null, orgId: null }
+    }
+  } else {
+    rolloutContext = {
+      clientId: client?.id ?? null,
+      coachId: studentSurface ? client?.coach_id ?? null : coach?.id ?? null,
+      teamId: client?.team_id ?? null,
+      orgId: client?.org_id ?? null,
+    }
+  }
+
   const decision = await resolveNutritionV2RolloutDecision({
     surface: options.surface,
     userId,
-    clientId: client?.id ?? null,
-    coachId: studentSurface ? client?.coach_id ?? null : coach?.id ?? null,
-    teamId: client?.team_id ?? null,
-    orgId: client?.org_id ?? null,
+    clientId: rolloutContext.clientId,
+    coachId: rolloutContext.coachId,
+    teamId: rolloutContext.teamId,
+    orgId: rolloutContext.orgId,
   })
 
   if (!decision.enabled) {
@@ -160,10 +212,12 @@ export async function gateNutritionV2Api(
   return {
     ok: true,
     userId,
-    clientId: client?.id ?? null,
-    coachId: coach?.id ?? client?.coach_id ?? null,
-    teamId: client?.team_id ?? null,
-    orgId: client?.org_id ?? null,
+    // Superficie coach: los ids describen el WORKSPACE operado (y el alumno validado del canary),
+    // no una eventual membresia de alumno del propio coach.
+    clientId: coachSurface ? rolloutContext.clientId : client?.id ?? null,
+    coachId: coachSurface ? userId : client?.coach_id ?? null,
+    teamId: rolloutContext.teamId,
+    orgId: rolloutContext.orgId,
     rpc: userClient as unknown as NutritionV2RpcClient,
     rolloutReason: decision.reason,
   }

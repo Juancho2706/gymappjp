@@ -1,8 +1,8 @@
 'use server'
 
-import type { SupabaseClient } from '@supabase/supabase-js'
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
+import type { NutritionV2CoachScope } from '@eva/nutrition-v2'
 import { createClient } from '@/lib/supabase/server'
 import { rateLimitNutritionCoachWrite } from '@/lib/rate-limit'
 import { getPreferredWorkspaceForRender } from '@/services/auth/workspace-render-cache'
@@ -11,18 +11,32 @@ import { nutritionV2CoachScopeFromWorkspace } from '@/services/nutrition-v2-read
 import { getNutritionPlansPageCoach } from '../../nutrition-plans/_data/nutrition-page.queries'
 
 // Cola de curacion del Centro V2 (hub coach): codigos escaneados (GTIN) que aun no
-// existen en el catalogo local. Replica la logica de la V1 (FoodCatalogCurationQueue)
-// pero con el patron V2: cada accion re-verifica el gate (isNutritionV2Enabled,
-// webCoach) y el scope del workspace activo (fail-closed), valida con Zod, y pasa por
-// el server client (coach derivado de la sesion). RLS de food_catalog_missing_codes /
-// foods sigue siendo la frontera real de autorizacion.
+// existen en el catalogo local. Cada accion re-verifica el gate (isNutritionV2Enabled,
+// webCoach), deriva el scope del workspace activo (fail-closed) y lo PASA al servidor:
+// las tres operaciones van por las RPC scoped `*_scoped_v2`
+// (20260728131000_nutrition_v2_curation_scoped.sql), que filtran con
+// private.nutrition_v2_client_matches_workspace y devuelven error real cuando no
+// actualizan ninguna fila. Antes se operaba por PostgREST crudo: la union de policies
+// PERMISSIVE mezclaba el pool propio con el de TODOS los teams activos (NUT-014) y un
+// UPDATE de cero filas se reportaba como exito (NUT-023).
 
 const PAGE_SIZE = 20
 
 type ActionFailure = { ok: false; code: string; error: string }
 
+/** Codigo compartido con RN: el codigo ya estaba resuelto o no es del workspace activo. */
+const ALREADY_RESOLVED_MESSAGE =
+  'Ese código ya fue resuelto o no está en tu espacio de trabajo. Actualizamos la bandeja.'
+
 function fail(code: string, error: string): ActionFailure {
   return { ok: false, code, error }
+}
+
+type CurationRpc = {
+  rpc: (
+    name: string,
+    args: Record<string, unknown>,
+  ) => Promise<{ data: unknown; error: { message: string; code?: string } | null }>
 }
 
 export interface MissingCodeRow {
@@ -40,7 +54,7 @@ type ResolveSuccess = { ok: true }
 async function authorizeHubCoach(
   enforceCoachWriteLimit = false,
 ): Promise<
-  { ok: true; db: SupabaseClient; userId: string } | ActionFailure
+  { ok: true; db: CurationRpc; scope: NutritionV2CoachScope } | ActionFailure
 > {
   const { user } = await getNutritionPlansPageCoach()
   if (!user) return fail('UNAUTHENTICATED', 'Debes iniciar sesion para gestionar la curacion.')
@@ -66,14 +80,17 @@ async function authorizeHubCoach(
   })
   if (!enabled) return fail('ROLLOUT_DISABLED', 'La nueva experiencia de nutricion no esta habilitada.')
 
+  // El scope VIAJA al servidor (antes se calculaba y se descartaba): es el filtro real de
+  // la bandeja y de cada mutacion, no solo un gate de render.
+  let scope: NutritionV2CoachScope
   try {
-    nutritionV2CoachScopeFromWorkspace(workspace)
+    scope = nutritionV2CoachScopeFromWorkspace(workspace)
   } catch {
     return fail('SCOPE_REQUIRED', 'Debes tener un espacio de trabajo de coach activo.')
   }
 
-  const db = (await createClient()) as unknown as SupabaseClient
-  return { ok: true, db, userId: user.id }
+  const db = (await createClient()) as unknown as CurationRpc
+  return { ok: true, db, scope }
 }
 
 const ListInputSchema = z.object({
@@ -90,8 +107,9 @@ interface RawMissingCodeRow {
 }
 
 /**
- * Lista los GTIN sin match local pendientes (resolved_at NULL), paginados de a 20 por
- * offset y ordenados por ultima aparicion. RLS acota la vista al coach.
+ * Lista los GTIN sin match local pendientes (resolved_at NULL) del workspace activo,
+ * paginados de a 20 por offset y ordenados por ultima aparicion. La RPC pide 21 filas
+ * para saber si hay mas sin un COUNT extra.
  */
 export async function listMissingFoodCodesHubAction(
   input: unknown,
@@ -103,13 +121,13 @@ export async function listMissingFoodCodesHubAction(
   if (!auth.ok) return auth
 
   const from = parsed.data.offset
-  const to = from + PAGE_SIZE
-  const { data, error } = await auth.db
-    .from('food_catalog_missing_codes')
-    .select('id, barcode, country_code, sightings, first_seen_at, last_seen_at')
-    .is('resolved_at', null)
-    .order('last_seen_at', { ascending: false })
-    .range(from, to)
+  const { data, error } = await auth.db.rpc('list_missing_food_codes_scoped_v2', {
+    p_scope_type: auth.scope.scopeType,
+    p_team_id: auth.scope.teamId,
+    p_org_id: auth.scope.orgId,
+    p_offset: from,
+    p_page_size: PAGE_SIZE + 1,
+  })
 
   if (error) {
     if (error.code === '42501') return fail('SCOPE_DENIED', 'No tienes permiso para ver la cola.')
@@ -141,7 +159,8 @@ const ResolveInputSchema = z.object({
 
 /**
  * Vincula un GTIN con una fila del catalogo local (foods.id). No inventa nutrientes:
- * solo ensena a EVA que fila corresponde a ese codigo. RLS es la frontera.
+ * solo ensena a EVA que fila corresponde a ese codigo. La RPC valida el workspace, exige
+ * que el alimento destino sea legible por el coach y lanza P0002 si no actualizo nada.
  */
 export async function resolveMissingFoodCodeHubAction(
   input: unknown,
@@ -152,16 +171,16 @@ export async function resolveMissingFoodCodeHubAction(
   const auth = await authorizeHubCoach(true)
   if (!auth.ok) return auth
 
-  const { error } = await auth.db
-    .from('food_catalog_missing_codes')
-    .update({
-      resolved_food_id: parsed.data.resolvedFoodId,
-      resolved_at: new Date().toISOString(),
-    })
-    .eq('id', parsed.data.missingCodeId)
-    .is('resolved_at', null)
+  const { error } = await auth.db.rpc('resolve_missing_food_code_scoped_v2', {
+    p_missing_code_id: parsed.data.missingCodeId,
+    p_food_id: parsed.data.resolvedFoodId,
+    p_scope_type: auth.scope.scopeType,
+    p_team_id: auth.scope.teamId,
+    p_org_id: auth.scope.orgId,
+  })
 
   if (error) {
+    if (error.code === 'P0002') return fail('CURATION_ALREADY_RESOLVED', ALREADY_RESOLVED_MESSAGE)
     if (error.code === '42501') return fail('SCOPE_DENIED', 'No tienes permiso para vincular el codigo.')
     return fail('CURATION_RESOLVE_FAILED', 'No se pudo vincular el codigo. Intenta nuevamente.')
   }
@@ -183,9 +202,11 @@ const CreateAndResolveInputSchema = z.object({
 
 /**
  * Crea un alimento coach-scoped (macros POR 100, catalog_source='coach',
- * verification_status='coach_verified'; coach_id = auth.uid() lo exige la RLS
- * foods_insert_own con org_id NULL) y vincula el codigo pendiente con el. Mismo patron
- * que createCoachFoodAction del builder, sin dependencia de clientId.
+ * verification_status='coach_verified', coach_id = auth.uid() con org_id NULL) y vincula
+ * el codigo pendiente con el, TODO dentro de una sola funcion plpgsql: la atomicidad es
+ * del servidor, ya no hay compensacion best-effort (insert huerfano si el vinculo fallaba).
+ * La RPC ademas escribe `foods.barcode` cuando esta libre, para que el proximo escaneo del
+ * alumno encuentre el alimento.
  */
 export async function createCoachFoodForCurationAction(
   input: unknown,
@@ -195,87 +216,27 @@ export async function createCoachFoodForCurationAction(
 
   const auth = await authorizeHubCoach(true)
   if (!auth.ok) return auth
-  const { db, userId } = auth
   const data = parsed.data
 
-  // LIMITACIÓN CONOCIDA: insert(foods) + update(missing_codes) NO son atómicos (no hay RPC
-  // transaccional a mano). Mitigamos el riesgo del retry en dos frentes:
-  //  1) Idempotencia best-effort ANTES de crear: si un intento previo ya dejó un alimento
-  //     coach-scoped con el mismo nombre normalizado, lo reusamos en vez de duplicar. No es
-  //     garantía fuerte (no hay índice único sobre el nombre), solo reduce duplicados.
-  //  2) Compensación best-effort DESPUÉS: si el vínculo falla y el alimento lo creamos en
-  //     esta llamada, lo borramos para no dejarlo huérfano.
-  const normalizedName = data.name.trim().toLowerCase()
-  // Escapamos comodines de ILIKE (% y _ y \) para que el nombre matchee literal (ej "Leche 2%").
-  const likePattern = data.name.trim().replace(/[\%_]/g, (m) => `\${m}`)
+  const { error } = await auth.db.rpc('create_food_and_resolve_missing_code_scoped_v2', {
+    p_missing_code_id: data.missingCodeId,
+    p_name: data.name,
+    p_calories: data.calories,
+    p_protein_g: data.proteinG,
+    p_carbs_g: data.carbsG,
+    p_fats_g: data.fatsG,
+    p_scope_type: auth.scope.scopeType,
+    p_brand: data.brand,
+    p_unit: data.unit,
+    p_team_id: auth.scope.teamId,
+    p_org_id: auth.scope.orgId,
+  })
 
-  let foodId: string | null = null
-  const existing = await db
-    .from('foods')
-    .select('id, name')
-    .eq('coach_id', userId)
-    .is('org_id', null)
-    .eq('catalog_source', 'coach')
-    .ilike('name', likePattern)
-    .limit(20)
-  if (!existing.error && existing.data) {
-    const match = (existing.data as Array<{ id: string; name: string }>).find(
-      (row) => row.name.trim().toLowerCase() === normalizedName,
-    )
-    if (match) foodId = match.id
-  }
-
-  const createdNow = foodId === null
-  if (createdNow) {
-    const ins = await db
-      .from('foods')
-      .insert({
-        name: data.name,
-        brand: data.brand,
-        coach_id: userId,
-        org_id: null,
-        calories: data.calories,
-        protein_g: data.proteinG,
-        carbs_g: data.carbsG,
-        fats_g: data.fatsG,
-        serving_size: 100,
-        serving_unit: data.unit,
-        is_liquid: data.unit === 'ml',
-        category: 'otro',
-        country_code: 'CL',
-        catalog_source: 'coach',
-        verification_status: 'coach_verified',
-      })
-      .select('id')
-      .single()
-
-    if (ins.error || !ins.data) {
-      if (ins.error?.code === '42501') return fail('SCOPE_DENIED', 'No tienes permiso para crear alimentos.')
-      return fail('FOOD_CREATE_FAILED', 'No se pudo crear el alimento. Intenta nuevamente.')
-    }
-    foodId = (ins.data as { id: string }).id
-  }
-
-  if (foodId === null) {
-    // Inalcanzable (o reusamos un id o lo insertamos); defensivo para el narrowing.
+  if (error) {
+    if (error.code === 'P0002') return fail('CURATION_ALREADY_RESOLVED', ALREADY_RESOLVED_MESSAGE)
+    if (error.code === '42501') return fail('SCOPE_DENIED', 'No tienes permiso para crear alimentos.')
+    if (error.code === '22023') return fail('INVALID_PAYLOAD', 'El alimento tiene datos invalidos.')
     return fail('FOOD_CREATE_FAILED', 'No se pudo crear el alimento. Intenta nuevamente.')
-  }
-
-  const resolve = await db
-    .from('food_catalog_missing_codes')
-    .update({ resolved_food_id: foodId, resolved_at: new Date().toISOString() })
-    .eq('id', data.missingCodeId)
-    .is('resolved_at', null)
-
-  if (resolve.error) {
-    // Compensación best-effort: solo borramos si el alimento lo creamos en ESTA llamada (no
-    // si reusamos uno preexistente). RLS `foods_delete_own` acota el DELETE al coach dueño.
-    // Si el DELETE también falla queda un huérfano, pero el chequeo de idempotencia de arriba
-    // lo reusará en el próximo retry sin duplicar.
-    if (createdNow) {
-      await db.from('foods').delete().eq('id', foodId).eq('coach_id', userId)
-    }
-    return fail('CURATION_RESOLVE_FAILED', 'Se creo el alimento pero no se pudo vincular el codigo.')
   }
 
   revalidatePath('/coach/nutrition-v2')

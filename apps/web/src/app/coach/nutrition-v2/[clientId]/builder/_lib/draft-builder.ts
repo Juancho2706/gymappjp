@@ -9,12 +9,17 @@
 import { z } from 'zod'
 import {
   NutritionPlanDraftSchema,
+  formatNutritionDayOfWeek,
   type NutritionPlanDraft,
   type NutritionStrategy,
   type NutritionExchangeTarget,
   type NutritionItemSubstitution,
 } from '@eva/nutrition-v2'
 import { calculateFoodItemMacros, type FoodMacrosRow } from '@eva/nutrition-engine'
+import {
+  foodExchangeEquivalenceShape,
+  refineFoodExchangeEquivalence,
+} from '@eva/schemas/nutrition-exchanges'
 
 export type DraftDayVariant = NutritionPlanDraft['dayVariants'][number]
 export type DraftMealSlot = DraftDayVariant['mealSlots'][number]
@@ -90,17 +95,56 @@ export interface BuilderPermissions {
   canSubstitute: boolean
 }
 
+/** Origen de las metas de una variante: heredadas del dia base o propias. */
+export type BuilderTargetsMode = 'inherit' | 'custom'
+
+/**
+ * Variante de dia del wizard (multi-dia, SPEC nutrition-multiday). Un plan = 1 dia base
+ * ("Todos los dias", `isDefault`, `dayOfWeek` null) + 0..7 dias especificos, uno por
+ * `dayOfWeek` (0=domingo … 6=sabado, misma convencion que el snapshot y `extract(dow)`).
+ *
+ * Cada variante tiene sus propias franjas/items/porciones. Sus METAS heredan las del dia
+ * base (`targetsMode: 'inherit'`, el caso por defecto) salvo personalizacion explicita
+ * (`'custom'` + `targets` propios). El dia base SIEMPRE hereda: sus metas son las del paso
+ * "Objetivos" (`BuilderState.targets`), asi que su campo `targets` no se usa.
+ */
+export interface BuilderVariant {
+  key: string
+  label: string
+  dayOfWeek: number | null
+  isDefault: boolean
+  targetsMode: BuilderTargetsMode
+  targets: BuilderTargets
+  slots: BuilderSlot[]
+}
+
 export interface BuilderState {
   step: number
   strategy: NutritionStrategy | null
   planName: string
   effectiveFrom: string
+  /** Metas del dia BASE (paso "Objetivos"). Las variantes `inherit` las congelan al ensamblar. */
   targets: BuilderTargets
   permissions: BuilderPermissions
-  slots: BuilderSlot[]
+  /** Dias del plan. Invariantes: exactamente una `isDefault`; `dayOfWeek` unico entre las demas. */
+  variants: BuilderVariant[]
+  /** Dia en edicion (chip activo de la barra de dias). Se persiste con el borrador local. */
+  activeVariantKey: string
 }
 
 export const BUILDER_STEP_COUNT = 4
+
+/** Key/label del dia base. La key viaja al draft tal cual (contrato `dayVariants[].key`). */
+export const BASE_VARIANT_KEY = 'default'
+export const BASE_VARIANT_LABEL = 'Todos los días'
+
+/** Cantidad maxima de dias especificos (uno por dia de semana). */
+export const MAX_DAY_VARIANTS = 7
+
+/** Etiqueta automatica de un dia especifico ("Sábado"). Fallback defensivo para dow invalido. */
+export function autoVariantLabel(dayOfWeek: number | null): string {
+  return formatNutritionDayOfWeek(dayOfWeek) ?? BASE_VARIANT_LABEL
+}
 
 export function strategyUsesSlots(strategy: NutritionStrategy | null): boolean {
   return strategy === 'structured' || strategy === 'hybrid'
@@ -115,16 +159,97 @@ export function defaultPermissionsFor(strategy: NutritionStrategy | null): Build
   }
 }
 
+export function createEmptyTargets(): BuilderTargets {
+  return { calories: '', proteinG: '', carbsG: '', fatsG: '' }
+}
+
+/** Dia base vacio: el estado inicial de todo plan nuevo (retrocompatible con el wizard de 1 dia). */
+export function createBaseVariant(): BuilderVariant {
+  return {
+    key: BASE_VARIANT_KEY,
+    label: BASE_VARIANT_LABEL,
+    dayOfWeek: null,
+    isDefault: true,
+    targetsMode: 'inherit',
+    targets: createEmptyTargets(),
+    slots: [],
+  }
+}
+
+/** Dia especifico nuevo (clonado o vacio segun lo que le cargue el reducer). */
+export function createDayVariant(key: string, dayOfWeek: number, label?: string): BuilderVariant {
+  return {
+    key,
+    label: (label ?? '').trim() === '' ? autoVariantLabel(dayOfWeek) : (label as string).trim(),
+    dayOfWeek,
+    isDefault: false,
+    targetsMode: 'inherit',
+    targets: createEmptyTargets(),
+    slots: [],
+  }
+}
+
 export function createEmptyBuilderState(effectiveFrom: string): BuilderState {
   return {
     step: 0,
     strategy: null,
     planName: '',
     effectiveFrom,
-    targets: { calories: '', proteinG: '', carbsG: '', fatsG: '' },
+    targets: createEmptyTargets(),
     permissions: defaultPermissionsFor(null),
-    slots: [],
+    variants: [createBaseVariant()],
+    activeVariantKey: BASE_VARIANT_KEY,
   }
+}
+
+/** Dia base del estado (siempre existe: las invariantes garantizan una variante default). */
+export function baseVariantOf(state: BuilderState): BuilderVariant {
+  return state.variants.find((variant) => variant.isDefault) ?? state.variants[0]
+}
+
+/** Dia en edicion. Cae al dia base si la key activa quedo huerfana (variante eliminada). */
+export function activeVariantOf(state: BuilderState): BuilderVariant {
+  return state.variants.find((variant) => variant.key === state.activeVariantKey) ?? baseVariantOf(state)
+}
+
+/**
+ * Metas EFECTIVAS de una variante: las propias si el coach las personalizo, las del dia
+ * base en cualquier otro caso (el dia base siempre usa las del paso "Objetivos").
+ */
+export function variantEffectiveTargets(state: BuilderState, variant: BuilderVariant): BuilderTargets {
+  if (variant.isDefault || variant.targetsMode !== 'custom') return state.targets
+  return variant.targets
+}
+
+/** Dias de semana ya ocupados por variantes especificas (excluye `exceptKey`). */
+export function takenDayOfWeeks(state: BuilderState, exceptKey?: string): number[] {
+  return state.variants
+    .filter((variant) => !variant.isDefault && variant.key !== exceptKey && variant.dayOfWeek != null)
+    .map((variant) => variant.dayOfWeek as number)
+}
+
+/**
+ * Key derivada al CLONAR (variante nueva a partir de otra). Determinista a proposito: el
+ * reducer es puro (sin `crypto` adentro) y el llamador puede recalcular las claves de
+ * porciones del dia clonado sin adivinar (ver `clonePortionsForVariant`).
+ */
+export function clonedKey(variantKey: string, sourceKey: string): string {
+  return variantKey + '~' + sourceKey
+}
+
+function cloneSlotsForVariant(variantKey: string, slots: BuilderSlot[]): BuilderSlot[] {
+  return slots.map((slot) => ({
+    ...slot,
+    key: clonedKey(variantKey, slot.key),
+    items: slot.items.map((item) => ({
+      ...item,
+      key: clonedKey(variantKey, item.key),
+      substitutions: (item.substitutions ?? []).map((sub) => ({
+        ...sub,
+        key: clonedKey(variantKey, sub.key),
+      })),
+    })),
+  }))
 }
 
 export function createEmptyItem(key: string): BuilderItem {
@@ -157,22 +282,55 @@ export type BuilderAction =
   | { type: 'SET_EFFECTIVE_FROM'; value: string }
   | { type: 'SET_TARGET'; field: keyof BuilderTargets; value: string }
   | { type: 'SET_PERMISSION'; field: keyof BuilderPermissions; value: boolean }
-  | { type: 'ADD_SLOT'; key: string }
-  | { type: 'REMOVE_SLOT'; slotKey: string }
-  | { type: 'UPDATE_SLOT'; slotKey: string; patch: Partial<Pick<BuilderSlot, 'name' | 'startTime'>> }
-  | { type: 'ADD_ITEM'; slotKey: string; key: string; food: BuilderFood | null }
-  | { type: 'REMOVE_ITEM'; slotKey: string; itemKey: string }
-  | { type: 'UPDATE_ITEM'; slotKey: string; itemKey: string; patch: Partial<Omit<BuilderItem, 'key'>> }
-  | { type: 'ADD_ITEM_SUBSTITUTION'; slotKey: string; itemKey: string; key: string; food: BuilderFood }
-  | { type: 'REMOVE_ITEM_SUBSTITUTION'; slotKey: string; itemKey: string; subKey: string }
-  | { type: 'RESTORE'; state: BuilderState }
+  // — Multi-dia —
+  | { type: 'SET_ACTIVE_VARIANT'; variantKey: string }
+  | { type: 'ADD_VARIANTS'; days: number[]; keys: string[]; origin: 'copy-base' | 'empty' }
+  | { type: 'REMOVE_VARIANT'; variantKey: string }
+  | { type: 'SET_VARIANT_DAY'; variantKey: string; dayOfWeek: number }
+  | { type: 'SET_VARIANT_LABEL'; variantKey: string; value: string }
+  | { type: 'DUPLICATE_VARIANT_AS'; sourceVariantKey: string; key: string; dayOfWeek: number }
+  | { type: 'SET_VARIANT_TARGETS_MODE'; variantKey: string; mode: BuilderTargetsMode }
+  | { type: 'SET_VARIANT_TARGETS'; variantKey: string; field: keyof BuilderTargets; value: string }
+  // — Franjas / items (siempre dentro de UNA variante) —
+  | { type: 'ADD_SLOT'; variantKey: string; key: string }
+  | { type: 'REMOVE_SLOT'; variantKey: string; slotKey: string }
+  | { type: 'UPDATE_SLOT'; variantKey: string; slotKey: string; patch: Partial<Pick<BuilderSlot, 'name' | 'startTime'>> }
+  | { type: 'ADD_ITEM'; variantKey: string; slotKey: string; key: string; food: BuilderFood | null }
+  | { type: 'REMOVE_ITEM'; variantKey: string; slotKey: string; itemKey: string }
+  | { type: 'UPDATE_ITEM'; variantKey: string; slotKey: string; itemKey: string; patch: Partial<Omit<BuilderItem, 'key'>> }
+  | { type: 'ADD_ITEM_SUBSTITUTION'; variantKey: string; slotKey: string; itemKey: string; key: string; food: BuilderFood }
+  | { type: 'REMOVE_ITEM_SUBSTITUTION'; variantKey: string; slotKey: string; itemKey: string; subKey: string }
+  | { type: 'RESTORE'; state: unknown }
 
 function clampStep(step: number): number {
   return Math.max(0, Math.min(BUILDER_STEP_COUNT - 1, step))
 }
 
-function mapSlot(state: BuilderState, slotKey: string, fn: (slot: BuilderSlot) => BuilderSlot): BuilderState {
-  return { ...state, slots: state.slots.map((slot) => (slot.key === slotKey ? fn(slot) : slot)) }
+function mapVariant(
+  state: BuilderState,
+  variantKey: string,
+  fn: (variant: BuilderVariant) => BuilderVariant,
+): BuilderState {
+  return {
+    ...state,
+    variants: state.variants.map((variant) => (variant.key === variantKey ? fn(variant) : variant)),
+  }
+}
+
+function mapSlot(
+  state: BuilderState,
+  variantKey: string,
+  slotKey: string,
+  fn: (slot: BuilderSlot) => BuilderSlot,
+): BuilderState {
+  return mapVariant(state, variantKey, (variant) => ({
+    ...variant,
+    slots: variant.slots.map((slot) => (slot.key === slotKey ? fn(slot) : slot)),
+  }))
+}
+
+function isValidDow(day: unknown): day is number {
+  return typeof day === 'number' && Number.isInteger(day) && day >= 0 && day <= 6
 }
 
 export function builderReducer(state: BuilderState, action: BuilderAction): BuilderState {
@@ -185,12 +343,19 @@ export function builderReducer(state: BuilderState, action: BuilderAction): Buil
       return { ...state, step: clampStep(state.step - 1) }
     case 'SET_STRATEGY': {
       const usesSlots = strategyUsesSlots(action.strategy)
-      const slots = usesSlots
-        ? state.slots.length > 0
-          ? state.slots
-          : [createEmptySlot(action.firstSlotKey, 'Desayuno')]
-        : []
-      return { ...state, strategy: action.strategy, permissions: defaultPermissionsFor(action.strategy), slots }
+      // La primera franja se siembra SOLO en el dia base; los dias especificos (si ya
+      // existieran) conservan lo suyo. Sin franjas (flexible) se vacian todos los dias.
+      const variants = state.variants.map((variant) => {
+        if (!usesSlots) return variant.slots.length === 0 ? variant : { ...variant, slots: [] }
+        if (!variant.isDefault || variant.slots.length > 0) return variant
+        return { ...variant, slots: [createEmptySlot(action.firstSlotKey, 'Desayuno')] }
+      })
+      return {
+        ...state,
+        strategy: action.strategy,
+        permissions: defaultPermissionsFor(action.strategy),
+        variants,
+      }
     }
     case 'SET_PLAN_NAME':
       return { ...state, planName: action.value }
@@ -200,34 +365,143 @@ export function builderReducer(state: BuilderState, action: BuilderAction): Buil
       return { ...state, targets: { ...state.targets, [action.field]: action.value } }
     case 'SET_PERMISSION':
       return { ...state, permissions: { ...state.permissions, [action.field]: action.value } }
+
+    case 'SET_ACTIVE_VARIANT': {
+      if (!state.variants.some((variant) => variant.key === action.variantKey)) return state
+      return { ...state, activeVariantKey: action.variantKey }
+    }
+
+    case 'ADD_VARIANTS': {
+      // Multi-select de dias: se ignoran dias invalidos, repetidos dentro de la misma
+      // accion y ya ocupados por otra variante (invariante `day_of_week` unico).
+      const taken = new Set(takenDayOfWeeks(state))
+      const base = baseVariantOf(state)
+      const created: BuilderVariant[] = []
+      action.days.forEach((day, index) => {
+        const key = action.keys[index]
+        if (!isValidDow(day) || typeof key !== 'string' || key.trim() === '') return
+        if (taken.has(day)) return
+        if (state.variants.some((variant) => variant.key === key)) return
+        // `taken` YA incluye los dias creados en esta misma accion (se agregan abajo).
+        if (taken.size >= MAX_DAY_VARIANTS) return
+        taken.add(day)
+        const variant = createDayVariant(key, day)
+        created.push(
+          action.origin === 'copy-base'
+            ? { ...variant, slots: cloneSlotsForVariant(key, base.slots) }
+            : variant,
+        )
+      })
+      if (created.length === 0) return state
+      return {
+        ...state,
+        variants: [...state.variants, ...created],
+        activeVariantKey: created[0].key,
+      }
+    }
+
+    case 'REMOVE_VARIANT': {
+      const target = state.variants.find((variant) => variant.key === action.variantKey)
+      // El dia base no se elimina (invariante: exactamente una variante default).
+      if (!target || target.isDefault) return state
+      const variants = state.variants.filter((variant) => variant.key !== action.variantKey)
+      const activeVariantKey =
+        state.activeVariantKey === action.variantKey ? baseVariantOf({ ...state, variants }).key : state.activeVariantKey
+      return { ...state, variants, activeVariantKey }
+    }
+
+    case 'SET_VARIANT_DAY': {
+      const target = state.variants.find((variant) => variant.key === action.variantKey)
+      // El dia base no cambia de dia; un dia ocupado por otra variante se rechaza.
+      if (!target || target.isDefault || !isValidDow(action.dayOfWeek)) return state
+      if (takenDayOfWeeks(state, action.variantKey).includes(action.dayOfWeek)) return state
+      return mapVariant(state, action.variantKey, (variant) => ({
+        ...variant,
+        dayOfWeek: action.dayOfWeek,
+        // La etiqueta automatica sigue al dia; una etiqueta escrita por el coach se respeta.
+        label: variant.label === autoVariantLabel(variant.dayOfWeek) ? autoVariantLabel(action.dayOfWeek) : variant.label,
+      }))
+    }
+
+    case 'SET_VARIANT_LABEL': {
+      const value = action.value.slice(0, 120)
+      return mapVariant(state, action.variantKey, (variant) => ({ ...variant, label: value }))
+    }
+
+    case 'DUPLICATE_VARIANT_AS': {
+      const source = state.variants.find((variant) => variant.key === action.sourceVariantKey)
+      if (!source || !isValidDow(action.dayOfWeek)) return state
+      if (takenDayOfWeeks(state).includes(action.dayOfWeek)) return state
+      if (state.variants.some((variant) => variant.key === action.key)) return state
+      if (takenDayOfWeeks(state).length >= MAX_DAY_VARIANTS) return state
+      const created: BuilderVariant = {
+        ...createDayVariant(action.key, action.dayOfWeek),
+        // Duplicar copia TAMBIEN la personalizacion de metas del origen (el coach duplica
+        // "el finde" esperando el finde completo, no solo sus comidas).
+        targetsMode: source.isDefault ? 'inherit' : source.targetsMode,
+        targets: source.isDefault ? createEmptyTargets() : { ...source.targets },
+        slots: cloneSlotsForVariant(action.key, source.slots),
+      }
+      return { ...state, variants: [...state.variants, created], activeVariantKey: created.key }
+    }
+
+    case 'SET_VARIANT_TARGETS_MODE': {
+      const target = state.variants.find((variant) => variant.key === action.variantKey)
+      // El dia base SIEMPRE usa las metas del paso "Objetivos": no se personaliza aparte.
+      if (!target || target.isDefault) return state
+      if (action.mode === 'inherit') return mapVariant(state, action.variantKey, (v) => ({ ...v, targetsMode: 'inherit' }))
+      // Al personalizar, se parte de las metas del dia base (edicion incremental, no en blanco).
+      const seed = { ...state.targets }
+      return mapVariant(state, action.variantKey, (variant) => ({
+        ...variant,
+        targetsMode: 'custom',
+        targets: variant.targetsMode === 'custom' ? variant.targets : seed,
+      }))
+    }
+
+    case 'SET_VARIANT_TARGETS': {
+      const target = state.variants.find((variant) => variant.key === action.variantKey)
+      if (!target || target.isDefault) return state
+      return mapVariant(state, action.variantKey, (variant) => ({
+        ...variant,
+        targets: { ...variant.targets, [action.field]: action.value },
+      }))
+    }
+
     case 'ADD_SLOT':
-      return { ...state, slots: [...state.slots, createEmptySlot(action.key)] }
+      return mapVariant(state, action.variantKey, (variant) => ({
+        ...variant,
+        slots: [...variant.slots, createEmptySlot(action.key)],
+      }))
     case 'REMOVE_SLOT':
-      return { ...state, slots: state.slots.filter((slot) => slot.key !== action.slotKey) }
+      return mapVariant(state, action.variantKey, (variant) => ({
+        ...variant,
+        slots: variant.slots.filter((slot) => slot.key !== action.slotKey),
+      }))
     case 'UPDATE_SLOT':
-      return mapSlot(state, action.slotKey, (slot) => ({ ...slot, ...action.patch }))
+      return mapSlot(state, action.variantKey, action.slotKey, (slot) => ({ ...slot, ...action.patch }))
     case 'ADD_ITEM': {
       const item: BuilderItem = {
         ...createEmptyItem(action.key),
         food: action.food,
         customName: action.food ? null : '',
         quantity: action.food ? String(action.food.servingSize || '') : '',
-        unit: action.food ? normalizeUnit(action.food.servingUnit) : 'g',
+        unit: action.food ? toBuilderUnit(action.food.servingUnit) : 'g',
       }
-      return mapSlot(state, action.slotKey, (slot) => ({ ...slot, items: [...slot.items, item] }))
+      return mapSlot(state, action.variantKey, action.slotKey, (slot) => ({ ...slot, items: [...slot.items, item] }))
     }
     case 'REMOVE_ITEM':
-      return mapSlot(state, action.slotKey, (slot) => ({
+      return mapSlot(state, action.variantKey, action.slotKey, (slot) => ({
         ...slot,
         items: slot.items.filter((item) => item.key !== action.itemKey),
       }))
     case 'UPDATE_ITEM':
-      return mapSlot(state, action.slotKey, (slot) => ({
+      return mapSlot(state, action.variantKey, action.slotKey, (slot) => ({
         ...slot,
         items: slot.items.map((item) => (item.key === action.itemKey ? { ...item, ...action.patch } : item)),
       }))
     case 'ADD_ITEM_SUBSTITUTION':
-      return mapSlot(state, action.slotKey, (slot) => ({
+      return mapSlot(state, action.variantKey, action.slotKey, (slot) => ({
         ...slot,
         items: slot.items.map((item) => {
           if (item.key !== action.itemKey) return item
@@ -241,7 +515,7 @@ export function builderReducer(state: BuilderState, action: BuilderAction): Buil
         }),
       }))
     case 'REMOVE_ITEM_SUBSTITUTION':
-      return mapSlot(state, action.slotKey, (slot) => ({
+      return mapSlot(state, action.variantKey, action.slotKey, (slot) => ({
         ...slot,
         items: slot.items.map((item) =>
           item.key === action.itemKey
@@ -250,21 +524,127 @@ export function builderReducer(state: BuilderState, action: BuilderAction): Buil
         ),
       }))
     case 'RESTORE': {
-      // Reemplazo TOTAL del arbol desde un borrador restaurado (localStorage). Validacion
-      // minima defensiva: un payload corrupto (sin `slots` array) se ignora — jamas rompe el
-      // wizard. El `step` se re-clampa a [0, BUILDER_STEP_COUNT-1] por si el JSON persistido
-      // trae un indice fuera de rango o no finito (cae a 0).
-      const next = action.state
-      if (next == null || typeof next !== 'object' || !Array.isArray(next.slots)) return state
-      const step = Number.isFinite(next.step) ? clampStep(next.step) : 0
-      return { ...next, step }
+      // Reemplazo TOTAL del arbol desde un borrador restaurado (localStorage). Acepta el
+      // formato NUEVO (`variants`) y el VIEJO (`slots` planos, borradores guardados antes
+      // de multi-dia): `migrateBuilderState` los normaliza. Un payload corrupto se ignora —
+      // jamas rompe el wizard.
+      const next = migrateBuilderState(action.state, state.effectiveFrom)
+      return next ?? state
     }
     default:
       return state
   }
 }
 
-function normalizeUnit(servingUnit: string | null | undefined): BuilderUnit {
+// ── Migracion / normalizacion del arbol persistido (autosave v1 -> v2) ────────────────────────
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value != null && typeof value === 'object' && !Array.isArray(value)
+}
+
+function normalizeTargetsShape(value: unknown): BuilderTargets {
+  const raw = isRecord(value) ? value : {}
+  const str = (field: keyof BuilderTargets): string =>
+    typeof raw[field] === 'string' ? (raw[field] as string) : ''
+  return { calories: str('calories'), proteinG: str('proteinG'), carbsG: str('carbsG'), fatsG: str('fatsG') }
+}
+
+function normalizeVariantShape(value: unknown, index: number): BuilderVariant | null {
+  if (!isRecord(value)) return null
+  const key = typeof value.key === 'string' && value.key.trim() !== '' ? value.key : null
+  if (key == null || !Array.isArray(value.slots)) return null
+  const dayOfWeek = isValidDow(value.dayOfWeek) ? value.dayOfWeek : null
+  const isDefault = value.isDefault === true || (index === 0 && dayOfWeek == null && value.isDefault == null)
+  return {
+    key,
+    label: typeof value.label === 'string' && value.label.trim() !== '' ? value.label : autoVariantLabel(dayOfWeek),
+    dayOfWeek: isDefault ? null : dayOfWeek,
+    isDefault,
+    targetsMode: value.targetsMode === 'custom' ? 'custom' : 'inherit',
+    targets: normalizeTargetsShape(value.targets),
+    slots: value.slots as BuilderSlot[],
+  }
+}
+
+/**
+ * Aplica las invariantes al arreglo de variantes: exactamente UNA default (la primera
+ * marcada, o la primera del arreglo), sin `dayOfWeek` en la default, y `dayOfWeek` unico
+ * entre las especificas (las repetidas o invalidas se descartan — un borrador corrupto no
+ * puede producir un draft que el servidor rechace).
+ */
+export function normalizeBuilderVariants(variants: BuilderVariant[]): BuilderVariant[] {
+  const valid = variants.filter((variant) => variant != null && typeof variant.key === 'string')
+  if (valid.length === 0) return [createBaseVariant()]
+  const defaultIndex = Math.max(0, valid.findIndex((variant) => variant.isDefault))
+  const seenDays = new Set<number>()
+  const seenKeys = new Set<string>()
+  const out: BuilderVariant[] = []
+  valid.forEach((variant, index) => {
+    if (seenKeys.has(variant.key)) return
+    if (index === defaultIndex) {
+      seenKeys.add(variant.key)
+      out.push({ ...variant, isDefault: true, dayOfWeek: null, targetsMode: 'inherit' })
+      return
+    }
+    if (!isValidDow(variant.dayOfWeek) || seenDays.has(variant.dayOfWeek)) return
+    seenDays.add(variant.dayOfWeek)
+    seenKeys.add(variant.key)
+    out.push({ ...variant, isDefault: false })
+  })
+  // La default queda primera: es el orden de lectura del wizard y el `orderIndex` del draft.
+  return [...out.filter((variant) => variant.isDefault), ...out.filter((variant) => !variant.isDefault)]
+}
+
+/**
+ * Normaliza CUALQUIER arbol persistido a un `BuilderState` valido, migrando el formato v1
+ * (`{ slots: [...] }`, un solo dia) al v2 (`{ variants: [...] }`). Devuelve `null` si el
+ * payload no es un estado del wizard (corrupto / de otra feature): el caller conserva el suyo.
+ */
+export function migrateBuilderState(raw: unknown, fallbackEffectiveFrom: string): BuilderState | null {
+  if (!isRecord(raw)) return null
+
+  const hasVariants = Array.isArray(raw.variants)
+  const hasLegacySlots = Array.isArray(raw.slots)
+  if (!hasVariants && !hasLegacySlots) return null
+
+  const variants = hasVariants
+    ? normalizeBuilderVariants(
+        (raw.variants as unknown[]).map((variant, index) => normalizeVariantShape(variant, index)).filter(
+          (variant): variant is BuilderVariant => variant != null,
+        ),
+      )
+    : // v1: TODO el plan vivia en un solo arreglo de franjas => se convierte en el dia base.
+      [{ ...createBaseVariant(), slots: raw.slots as BuilderSlot[] }]
+
+  const strategy = raw.strategy === 'structured' || raw.strategy === 'flexible' || raw.strategy === 'hybrid'
+    ? (raw.strategy as NutritionStrategy)
+    : null
+  const permissions = isRecord(raw.permissions)
+    ? {
+        canRegisterFreely: raw.permissions.canRegisterFreely === true,
+        canAdjustPrescribedQuantity: raw.permissions.canAdjustPrescribedQuantity !== false,
+        canSubstitute: raw.permissions.canSubstitute === true,
+      }
+    : defaultPermissionsFor(strategy)
+  const activeKey = typeof raw.activeVariantKey === 'string' ? raw.activeVariantKey : null
+
+  return {
+    step: Number.isFinite(raw.step) ? clampStep(raw.step as number) : 0,
+    strategy,
+    planName: typeof raw.planName === 'string' ? raw.planName : '',
+    effectiveFrom: typeof raw.effectiveFrom === 'string' && raw.effectiveFrom !== '' ? raw.effectiveFrom : fallbackEffectiveFrom,
+    targets: normalizeTargetsShape(raw.targets),
+    permissions,
+    variants,
+    activeVariantKey:
+      activeKey != null && variants.some((variant) => variant.key === activeKey)
+        ? activeKey
+        : (variants.find((variant) => variant.isDefault) ?? variants[0]).key,
+  }
+}
+
+/** Unidad libre (catalogo / read-model) -> unidad del wizard. Desconocida => gramos. */
+export function toBuilderUnit(servingUnit: string | null | undefined): BuilderUnit {
   const u = String(servingUnit ?? '').toLowerCase()
   if (u === 'ml') return 'ml'
   if (u === 'un' || u === 'unit' || u === 'unidad') return 'un'
@@ -344,8 +724,13 @@ export function slotSubtotal(slot: BuilderSlot): ItemMacros {
   return slot.items.reduce((acc, item) => addMacros(acc, itemMacros(item)), ZERO_MACROS)
 }
 
-export function dayTotals(state: BuilderState): ItemMacros {
-  return state.slots.reduce((acc, slot) => addMacros(acc, slotSubtotal(slot)), ZERO_MACROS)
+/**
+ * Total de items fijos de UN dia (variante). Reemplaza al viejo `dayTotals(state)`: con
+ * multi-dia no existe "el total del plan", sino el de cada dia. Las porciones a eleccion se
+ * suman aparte (`slotPortionTotals` / `derivePortionTotals` en `portions-state`).
+ */
+export function variantTotals(variant: BuilderVariant): ItemMacros {
+  return variant.slots.reduce((acc, slot) => addMacros(acc, slotSubtotal(slot)), ZERO_MACROS)
 }
 
 // -- Alimento libre con macros (contrato de la accion "Guardar en mi catalogo") --
@@ -353,17 +738,25 @@ export function dayTotals(state: BuilderState): ItemMacros {
 /**
  * Macros por 100 g/ml de un alimento libre. No-negativos y con topes razonables.
  * Reusado por el cliente (validacion de formulario) y el servidor (server action).
+ *
+ * Incluye el trio opcional de "Equivalencia de porciones" (P-B): el bloque colapsado del
+ * builder manda `exchangeGroupId` + `exchangePortionGrams` (+ medida casera) en el MISMO
+ * payload. Espejo EXACTO de `_lib/coach-food.ts` (el schema del servidor, que ademas
+ * verifica que el grupo sea visible para el coach antes de escribir).
  */
-export const CoachFoodInputSchema = z.object({
-  clientId: z.string().uuid(),
-  name: z.string().trim().min(1).max(180),
-  brand: z.string().trim().max(180).nullable().default(null),
-  unit: z.enum(['g', 'ml']).default('g'),
-  calories: z.number().nonnegative().max(2000),
-  proteinG: z.number().nonnegative().max(500),
-  carbsG: z.number().nonnegative().max(500),
-  fatsG: z.number().nonnegative().max(500),
-})
+export const CoachFoodInputSchema = z
+  .object({
+    clientId: z.string().uuid(),
+    name: z.string().trim().min(1).max(180),
+    brand: z.string().trim().max(180).nullable().default(null),
+    unit: z.enum(['g', 'ml']).default('g'),
+    calories: z.number().nonnegative().max(2000),
+    proteinG: z.number().nonnegative().max(500),
+    carbsG: z.number().nonnegative().max(500),
+    fatsG: z.number().nonnegative().max(500),
+    ...foodExchangeEquivalenceShape,
+  })
+  .superRefine(refineFoodExchangeEquivalence)
 
 export type CoachFoodInput = z.infer<typeof CoachFoodInputSchema>
 
@@ -442,21 +835,29 @@ export function validateStep(state: BuilderState, step: number): StepValidation 
   }
 
   if (step === 2 && strategyUsesSlots(state.strategy)) {
-    if (state.slots.length === 0) {
-      errors.slots = 'Agrega al menos una franja.'
-    }
-    state.slots.forEach((slot) => {
-      if (slot.name.trim().length === 0) errors['slot.' + slot.key + '.name'] = 'La franja necesita un nombre.'
-      if (slot.startTime && !/^([01]\d|2[0-3]):[0-5]\d$/.test(slot.startTime)) {
-        errors['slot.' + slot.key + '.startTime'] = 'Hora invalida (usa HH:MM).'
+    // Se validan TODOS los dias (no solo el activo): publicar emite las N variantes, asi que
+    // un dia sin franjas o con un item incompleto tiene que bloquear igual. Las claves de
+    // franja/item son unicas entre dias, asi que no colisionan.
+    const activeKey = activeVariantOf(state).key
+    state.variants.forEach((variant) => {
+      if (variant.slots.length === 0) {
+        errors['variant.' + variant.key + '.slots'] = 'Agrega al menos una franja en ' + variant.label + '.'
+        if (variant.key === activeKey) errors.slots = 'Agrega al menos una franja.'
+        else errors.slots = errors.slots ?? 'Agrega al menos una franja en ' + variant.label + '.'
       }
-      slot.items.forEach((item) => {
-        const hasSource = Boolean(item.food) || (item.customName ?? '').trim().length > 0
-        if (!hasSource) errors['item.' + item.key + '.food'] = 'Selecciona un alimento o escribe un nombre.'
-        const q = Number(item.quantity)
-        if (!(item.quantity.trim() !== '' && Number.isFinite(q) && q > 0)) {
-          errors['item.' + item.key + '.quantity'] = 'Cantidad invalida.'
+      variant.slots.forEach((slot) => {
+        if (slot.name.trim().length === 0) errors['slot.' + slot.key + '.name'] = 'La franja necesita un nombre.'
+        if (slot.startTime && !/^([01]\d|2[0-3]):[0-5]\d$/.test(slot.startTime)) {
+          errors['slot.' + slot.key + '.startTime'] = 'Hora invalida (usa HH:MM).'
         }
+        slot.items.forEach((item) => {
+          const hasSource = Boolean(item.food) || (item.customName ?? '').trim().length > 0
+          if (!hasSource) errors['item.' + item.key + '.food'] = 'Selecciona un alimento o escribe un nombre.'
+          const q = Number(item.quantity)
+          if (!(item.quantity.trim() !== '' && Number.isFinite(q) && q > 0)) {
+            errors['item.' + item.key + '.quantity'] = 'Cantidad invalida.'
+          }
+        })
       })
     })
   }
@@ -493,18 +894,10 @@ export interface AssembleOptions {
   timezone?: string
 }
 
-/**
- * Construye el draft canonico (NutritionPlanDraft) desde el estado del wizard.
- * MVP: una unica variante por defecto ("todos los dias") con las metas del paso 2;
- * estructurado/hibrido cuelga las franjas + items prescritos de esa variante.
- * NO incluye macros de snapshot: el servidor las re-deriva desde foods (autoritativo).
- */
-export function assembleDraft(state: BuilderState, options: AssembleOptions): NutritionPlanDraft {
-  const strategy = state.strategy ?? 'flexible'
-  const usesSlots = strategyUsesSlots(strategy)
-
-  const mealSlots: DraftMealSlot[] = usesSlots
-    ? state.slots.map((slot, slotIndex) => ({
+/** Franjas de UNA variante -> franjas del draft. `slot-N` se numera dentro del dia. */
+function assembleSlots(slots: BuilderSlot[], usesSlots: boolean): DraftMealSlot[] {
+  return usesSlots
+    ? slots.map((slot, slotIndex) => ({
         code: 'slot-' + (slotIndex + 1),
         name: slot.name.trim(),
         startTime: slot.startTime.trim() === '' ? null : slot.startTime.trim(),
@@ -547,16 +940,33 @@ export function assembleDraft(state: BuilderState, options: AssembleOptions): Nu
         }),
       }))
     : []
+}
 
-  const variant: DraftDayVariant = {
-    key: 'default',
-    label: 'Todos los dias',
-    dayOfWeek: null,
-    default: true,
-    targets: targetsToMacros(state.targets),
-    orderIndex: 0,
-    mealSlots,
-  }
+/**
+ * Construye el draft canonico (NutritionPlanDraft) desde el estado del wizard.
+ *
+ * Multi-dia: emite UNA variante por dia del wizard, en el orden del estado (el dia base
+ * primero, `orderIndex` por posicion). Las variantes con metas heredadas (`inherit`)
+ * CONGELAN aqui las metas del dia base: el contrato exige `targets` por variante y el
+ * alumno no debe depender de una herencia implicita en la base de datos.
+ *
+ * NO incluye macros de snapshot: el servidor las re-deriva desde foods (autoritativo).
+ * Un plan de un solo dia produce exactamente el mismo draft que antes de multi-dia
+ * (variante `default` / "Todos los días").
+ */
+export function assembleDraft(state: BuilderState, options: AssembleOptions): NutritionPlanDraft {
+  const strategy = state.strategy ?? 'flexible'
+  const usesSlots = strategyUsesSlots(strategy)
+
+  const dayVariants: DraftDayVariant[] = state.variants.map((variant, index) => ({
+    key: variant.key,
+    label: variant.label.trim() === '' ? autoVariantLabel(variant.dayOfWeek) : variant.label.trim(),
+    dayOfWeek: variant.isDefault ? null : variant.dayOfWeek,
+    default: variant.isDefault,
+    targets: targetsToMacros(variantEffectiveTargets(state, variant)),
+    orderIndex: index,
+    mealSlots: assembleSlots(variant.slots, usesSlots),
+  }))
 
   return {
     ...(options.planId ? { planId: options.planId } : {}),
@@ -576,7 +986,7 @@ export function assembleDraft(state: BuilderState, options: AssembleOptions): Nu
     visibleNotes: null,
     privateNotes: null,
     protocolNotes: null,
-    dayVariants: [variant],
+    dayVariants,
   }
 }
 

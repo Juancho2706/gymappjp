@@ -1,7 +1,7 @@
 ---
 status: active
 owner: engineering
-last_verified: "2026-07-25 @ 856829fa"
+last_verified: "2026-07-26 @ e0db4285"
 canonical: true
 ---
 
@@ -61,6 +61,23 @@ Estado confirmado al 25 de julio de 2026 (`a59acfd1`, post-merge PR #170):
 | Smoke device Android/iOS | pendiente | seguimiento en [MOBILE_PARITY.md](../status/MOBILE_PARITY.md) |
 
 No marcar distribución ni paridad como completas hasta retener artefactos del corte integrado, verificar los submits en App Store Connect/Play Console y ejecutar smoke en dispositivo.
+
+### Candidato local: experiencia de entrada
+
+Estado al 2026-07-26 sobre `rnmobiledenuevo` desde el baseline `e0db4285`:
+
+| Gate | Resultado |
+|---|---|
+| Vitest focalizado | 5 archivos, 61 tests aprobados: parser, servicio/ruta de workspace, intents y transición de branding |
+| Vitest completo | 339 archivos aprobados, 2 omitidos; 4130 tests aprobados, 4 omitidos |
+| TypeScript | `pnpm typecheck` y `pnpm --filter @eva/mobile exec tsc --noEmit` verdes |
+| Lint | archivos afectados con 0 errores/advertencias; gate raíz con 0 errores y 438 warnings preexistentes fuera del diff |
+| Tokens | `pnpm check:tokens`, 86/86 |
+| Bundle JS | `expo export --platform android` y `--platform ios`, ambos verdes |
+| Binario/dispositivo | pendiente: `app.json` cambió el config plugin del splash y requiere build EAS nuevo; export verde no certifica launch, teclado, links ni accesibilidad física |
+
+El frente no agregó dependencias, DDL ni migraciones. La validación nueva usa el schema y las
+relaciones existentes.
 
 ## Comandos locales
 

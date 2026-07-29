@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
+import { parseCoachIdentifier } from '@eva/schemas'
 import { supabase } from './supabase'
 
 export interface CoachBranding {
@@ -50,21 +51,17 @@ export interface CoachBranding {
 }
 
 const BRANDING_KEY = 'eva_coach_branding'
-const INVITE_CODE_RE = /^[A-Z2-9]{5}$/
-const SLUG_RE = /^[a-z0-9-]{3,50}$/
+
+export class CoachBrandingLookupError extends Error {
+  constructor() {
+    super('No se pudo consultar el branding del coach')
+    this.name = 'CoachBrandingLookupError'
+  }
+}
 
 export function normalizeCoachIdentifier(input: string): string {
-  const trimmed = input.trim()
-  const fromUrl = trimmed.match(/\/c\/([^/?#]+)/i)?.[1]
-  const raw = decodeURIComponent(fromUrl ?? trimmed)
-    .replace(/^https?:\/\//i, '')
-    .replace(/^eva-app\.cl\/c\//i, '')
-    .replace(/\/(login|dashboard|nutrition|check-in|workout.*)?$/i, '')
-    .trim()
-
-  return INVITE_CODE_RE.test(raw.toUpperCase())
-    ? raw.toUpperCase()
-    : raw.toLowerCase().replace(/[^a-z0-9-]/g, '')
+  const parsed = parseCoachIdentifier(input)
+  return parsed.type === 'invalid' ? '' : parsed.value
 }
 
 // Nota: `display_name` NO es columna de `coaches` (fuente de verdad = `brand_name`, alineado con la
@@ -75,21 +72,22 @@ const BRANDING_COLS_RICH =
 const BRANDING_COLS_MIN = 'id, slug, primary_color, brand_name, invite_code'
 
 export async function fetchBrandingByCoachIdentifier(identifierInput: string): Promise<CoachBranding | null> {
-  const identifier = normalizeCoachIdentifier(identifierInput)
+  const identifier = parseCoachIdentifier(identifierInput)
+  if (identifier.type === 'invalid') return null
+
   const runQuery = (cols: string) => {
     const q = supabase.from('coaches').select(cols)
-    return INVITE_CODE_RE.test(identifier)
-      ? q.eq('invite_code', identifier).maybeSingle()
-      : SLUG_RE.test(identifier)
-        ? q.eq('slug', identifier).maybeSingle()
-        : q.eq('invite_code', '__invalid__').maybeSingle()
+    return identifier.type === 'code'
+      ? q.eq('invite_code', identifier.value).maybeSingle()
+      : q.eq('slug', identifier.value).maybeSingle()
   }
 
   // M-F1: intenta columnas de loader; si la DB no las tiene, cae a las mínimas.
   let res = (await runQuery(BRANDING_COLS_RICH)) as { data: any; error: any }
   if (res.error) res = (await runQuery(BRANDING_COLS_MIN)) as { data: any; error: any }
   const data = res.data
-  if (res.error || !data) return null
+  if (res.error) throw new CoachBrandingLookupError()
+  if (!data) return null
 
   const rawLoaderConfig = data.loader_config
   const branding: CoachBranding = {
@@ -123,7 +121,6 @@ export async function fetchBrandingByCoachIdentifier(identifierInput: string): P
     executorTheme: data.executor_theme ?? 'coach',
   }
 
-  await AsyncStorage.setItem(BRANDING_KEY, JSON.stringify(branding))
   return branding
 }
 
@@ -139,12 +136,30 @@ export async function loadStoredBranding(): Promise<CoachBranding | null> {
   const raw = await AsyncStorage.getItem(BRANDING_KEY)
   if (!raw) return null
   try {
-    return JSON.parse(raw) as CoachBranding
+    const parsed = JSON.parse(raw) as unknown
+    if (isStoredCoachBranding(parsed)) return parsed
+    await AsyncStorage.removeItem(BRANDING_KEY)
+    return null
   } catch {
+    await AsyncStorage.removeItem(BRANDING_KEY).catch(() => {})
     return null
   }
 }
 
 export async function clearBranding(): Promise<void> {
   await AsyncStorage.removeItem(BRANDING_KEY)
+}
+
+function isStoredCoachBranding(value: unknown): value is CoachBranding {
+  if (!value || typeof value !== 'object') return false
+  const candidate = value as Partial<CoachBranding>
+  return (
+    typeof candidate.coachId === 'string' &&
+    candidate.coachId.length > 0 &&
+    typeof candidate.coachSlug === 'string' &&
+    candidate.coachSlug.length > 0 &&
+    typeof candidate.primaryColor === 'string' &&
+    typeof candidate.displayName === 'string' &&
+    typeof candidate.inviteCode === 'string'
+  )
 }

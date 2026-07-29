@@ -1,7 +1,7 @@
 ---
 status: active
 owner: engineering
-last_verified: "2026-07-25 @ a59acfd1"
+last_verified: "2026-07-28 @ 0fbf850d"
 canonical: true
 ---
 
@@ -41,6 +41,26 @@ Archivos principales:
 - `apps/mobile/components/coach/WorkspaceSwitcherSheet.tsx`
 
 El identificador recibido desde el navegador o móvil nunca autoriza por sí solo. El servidor vuelve a validar membership, rol y ownership.
+
+### Entrada pública y login del alumno nativo
+
+```text
+campo o deep link
+  → parseCoachIdentifier en @eva/schemas
+  → branding público permitido
+  → ThemeContext en memoria + caché de continuidad
+  → Supabase Auth signInWithPassword
+  → POST /api/mobile/auth/validate-student-workspace
+  → identidad desde bearer + listClientWorkspaces
+  → client/workspace exacto activo y no archivado
+  → setLastWorkspace + destino autenticado
+```
+
+`/c/<slug>` y `/invite/<code>` solo preseleccionan contexto y convergen con el campo manual dentro
+del árbol React. `coachId`, branding y `AsyncStorage` no prueban identidad ni conceden acceso. La
+ruta server-side valida el bearer y el body con Zod, reutiliza el descubrimiento canónico de
+workspaces y devuelve únicamente `ok`/`forcePasswordChange` o un error seguro. Cualquier cliente
+administrativo permanece en servidor; mobile nunca recibe `SUPABASE_SERVICE_ROLE_KEY`.
 
 ## Coach crea y gestiona un alumno
 
@@ -98,7 +118,10 @@ Los motores de objetivos, ejes de captura cardio por modalidad (`cardio-modality
 
 ## Nutrition V2: coach prescribe
 
-1. El gate server-side valida rollout, entitlement y scope.
+El alcance funcional de Nutrition es standalone + Team; Enterprise no participa en este flujo.
+
+1. Web valida rollout, entitlement y scope antes de mutar. Mobile aún conserva escrituras coach
+   directas bajo RLS que no revalidan rollout/entitlement y deben converger al mismo boundary.
 2. El hub carga alumnos y planes del workspace activo.
 3. El coach crea o edita un draft versionado.
 4. Publicar valida el draft completo y detecta conflictos.
@@ -110,9 +133,9 @@ Los motores de objetivos, ejes de captura cardio por modalidad (`cardio-modality
 | Hub | `/coach/nutrition-v2` | `app/coach/nutrition-v2/index.tsx` |
 | Detalle/quick edit | `/coach/nutrition-v2/[clientId]` | `app/coach/nutrition-v2/[clientId].tsx` |
 | Builder | `/coach/nutrition-v2/[clientId]/builder` | `app/coach/nutrition-v2/builder/[clientId].tsx` |
-| Persistencia web | `_actions/plan-persistence.ts` | API Nutrition V2 para operaciones server-authoritative |
+| Persistencia | `_actions/plan-persistence.ts` | helpers mobile con escrituras Supabase/RPC directas bajo RLS |
 | Contratos/read models | `@eva/nutrition-v2` | `@eva/nutrition-v2` |
-| Autorización | `nutrition-v2-rollout.service.ts`, RPCs scoped | `app/api/mobile/nutrition-v2/*` |
+| Autorización | `nutrition-v2-rollout.service.ts`, actions y RPCs scoped | config/API para entrada y lectura; RLS/RPC para writes, con gap conocido de rollout/Pro |
 
 Nutrition V1 permanece como fallback/compatibilidad. No mezclar tablas o actions V1/V2 en un recorrido nuevo sin una estrategia explícita de conversión.
 
@@ -131,7 +154,9 @@ Hoy/Plan/Historial → read model versionado → intake idempotente
 | Mutación | `_actions/intake.actions.ts` | `lib/nutrition-v2-intake*.ts`, cola offline |
 | Backend nativo | Server Action/RPC | `app/api/mobile/nutrition-v2/intake` y `catalog` |
 
-Cada consumo conserva snapshot de cantidad y nutrientes. Las idempotency keys evitan duplicados por retry; un estado optimista debe reconciliarse o revertirse según la respuesta autoritativa.
+Cada consumo conserva snapshot de cantidad y nutrientes. Reutilizar una idempotency key evita el
+duplicado de ese mismo retry; claves distintas no deduplican un doble toque. El estado optimista y
+la cola deben bloquear otra intención equivalente hasta reconciliar o revertir la primera.
 
 ## Check-in y progreso
 
@@ -196,7 +221,10 @@ Org login/MFA → rol staff → org guard → feature action
               → org service/repository → RLS + audit event
 ```
 
-`/org/[slug]` incluye dashboard, coaches, clientes, asignaciones, programas, nutrición, check-ins, marca, equipo staff, pagos, reportes y auditoría. Las acciones sensibles validan permisos granulares definidos en `domain/org/permissions.ts`.
+`/org/[slug]` incluye dashboard, coaches, clientes, asignaciones, programas, check-ins, marca,
+equipo staff, pagos, reportes y auditoría. Nutrition multi-coach usa Team y no forma parte del
+flujo Enterprise. Las acciones sensibles validan permisos granulares definidos en
+`domain/org/permissions.ts`.
 
 Código principal:
 

@@ -34,9 +34,12 @@ export function CurationQueue({ countryCode = 'CL' }: { countryCode?: string }) 
   const [nextOffset, setNextOffset] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [selected, setSelected] = useState<MissingCodeRow | null>(null)
+  // Se incrementa cuando el servidor avisa que la bandeja quedo vieja (codigo ya resuelto).
+  const [reloadToken, setReloadToken] = useState(0)
 
   useEffect(() => {
     let active = true
+    setLoading(true)
     void listMissingFoodCodesHubAction({ offset: 0 }).then((res) => {
       if (!active) return
       if (!res.ok) {
@@ -46,12 +49,13 @@ export function CurationQueue({ countryCode = 'CL' }: { countryCode?: string }) 
       }
       setRows(res.items)
       setNextOffset(res.nextOffset)
+      setError(null)
       setLoading(false)
     })
     return () => {
       active = false
     }
-  }, [])
+  }, [reloadToken])
 
   const loadMore = useCallback(async () => {
     if (nextOffset == null || loadingMore) return
@@ -71,6 +75,14 @@ export function CurationQueue({ countryCode = 'CL' }: { countryCode?: string }) 
     setRows((prev) => prev.filter((row) => row.id !== id))
     setSelected(null)
     toast.success(message)
+  }, [])
+
+  // El codigo ya estaba resuelto (o no es de este workspace): sin exito falso, cerramos el
+  // dialogo y recargamos la bandeja para que la fila desaparezca de verdad.
+  const handleStale = useCallback((message: string) => {
+    setSelected(null)
+    toast.error(message)
+    setReloadToken((token) => token + 1)
   }, [])
 
   if (loading) {
@@ -158,6 +170,7 @@ export function CurationQueue({ countryCode = 'CL' }: { countryCode?: string }) 
           countryCode={countryCode}
           onClose={() => setSelected(null)}
           onResolved={handleResolved}
+          onStale={handleStale}
         />
       ) : null}
     </div>
@@ -171,11 +184,13 @@ function ResolveDialog({
   countryCode,
   onClose,
   onResolved,
+  onStale,
 }: {
   row: MissingCodeRow
   countryCode: string
   onClose: () => void
   onResolved: (id: string, message: string) => void
+  onStale: (message: string) => void
 }) {
   const [mode, setMode] = useState<Mode>('search')
   const [busy, setBusy] = useState(false)
@@ -199,6 +214,10 @@ function ResolveDialog({
     })
     setBusy(false)
     if (!res.ok) {
+      if (res.code === 'CURATION_ALREADY_RESOLVED') {
+        onStale(res.error)
+        return
+      }
       toast.error(res.error)
       return
     }
@@ -219,6 +238,10 @@ function ResolveDialog({
     const res = await createCoachFoodForCurationAction({ missingCodeId: row.id, ...input })
     setBusy(false)
     if (!res.ok) {
+      if (res.code === 'CURATION_ALREADY_RESOLVED') {
+        onStale(res.error)
+        return
+      }
       toast.error(res.error)
       return
     }

@@ -54,7 +54,10 @@ export default async function NutritionV2ScannerPage({ params }: Props) {
     planVersionId: today.plan?.versionId ?? null,
     snapshotId: today.snapshotId,
     slotOptions: today.mealSlots.map((slot) => ({ code: slot.code, label: slot.name })),
-    revalidatePath: `${base}/nutrition-v2`,
+    // Ruta de VUELTA al Hoy del alumno (link "ver registro"). Antes era `revalidatePath`
+    // reutilizado como href: dos responsabilidades en un campo. La revalidacion ahora la
+    // deriva el servidor del header del proxy (NUT-006); esto es solo navegacion.
+    backHref: `${base}/nutrition-v2`,
   }
 
   return (

@@ -124,11 +124,22 @@ export function useTheme(): ThemeContextValue {
  * Nota: el login brandeado conserva los colores del coach porque el theme y las
  * vars se derivan del branding sobre base CLARA (applyCoachBranding/brandVars).
  */
-export function ForceLightTheme({ children }: { children: React.ReactNode }) {
+export function ForceLightTheme({
+  children,
+  branded = true,
+}: {
+  children: React.ReactNode
+  /**
+   * Login white-label conserva la marca. Selector, walkthrough y captura de un coach nuevo pasan
+   * `false` para no teñirse con una marca cacheada que el usuario está intentando reemplazar.
+   */
+  branded?: boolean
+}) {
   const parent = useTheme()
+  const visibleBranding = branded ? parent.branding : null
   const effectiveBrand = useMemo(
-    () => resolveEffectiveCoachBrandTheme(parent.branding),
-    [parent.branding],
+    () => resolveEffectiveCoachBrandTheme(visibleBranding),
+    [visibleBranding],
   )
 
   const theme = useMemo(() => applyEffectiveCoachBranding(lightTheme, effectiveBrand), [effectiveBrand])
@@ -137,8 +148,8 @@ export function ForceLightTheme({ children }: { children: React.ReactNode }) {
     [effectiveBrand],
   )
   const value = useMemo<ThemeContextValue>(
-    () => ({ ...parent, theme, mode: 'light', resolvedScheme: 'light' }),
-    [parent, theme],
+    () => ({ ...parent, branding: visibleBranding, theme, mode: 'light', resolvedScheme: 'light' }),
+    [parent, visibleBranding, theme],
   )
 
   return (

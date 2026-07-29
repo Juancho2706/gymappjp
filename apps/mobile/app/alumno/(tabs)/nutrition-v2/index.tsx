@@ -6,11 +6,13 @@ import { FlashList } from '@shopify/flash-list'
 import { MotiView } from 'moti'
 import {
   AlertTriangle,
+  CalendarDays,
   Check,
   CheckCircle2,
   History,
   Info,
   ListChecks,
+  Lock,
   Pencil,
   Plus,
   ScanBarcode,
@@ -20,6 +22,7 @@ import {
 } from 'lucide-react-native'
 import {
   AuraHero,
+  DayVariantWeekStrip,
   FoodRow,
   MacroChipRow,
   NutritionCard,
@@ -71,7 +74,10 @@ import {
   firstNameFromFullName,
   formatNutritionAmount,
   formatNutritionCalories,
+  formatNutritionTodayVariantBadge,
   mapNutritionItemSubstitutionRow,
+  resolveNutritionDayVariantForDate,
+  sortNutritionDayVariantsForDisplay,
   type NutritionFoodRowModel,
   type NutritionItemSubstitutionRead,
   type NutritionHistoryDay,
@@ -97,22 +103,31 @@ import {
   flushNutritionV2MutationQueue,
   getNutritionV2QueueStatus,
   getNutritionV2QueuedMutations,
-  type NutritionV2QueuedMutation,
+  removeNutritionV2QueuedMutation,
 } from '../../../../lib/nutrition-v2-offline'
 import {
+  EMPTY_QUEUED_INTAKE_OVERLAY,
   buildAteAsPrescribedMutation,
+  bulkAteSnackbarState,
   buildEditIntakeCorrection,
-  buildVoidIntakeCorrection,
+  buildQueuedIntakeOverlay,
+  buildVoidIntakeRequest,
   computeIntakeTotals,
   optimisticIntakeRow,
+  prescribedIntakeSnapshotMacros,
+  prescribedIntakeTotals,
+  prescribedIntentOperationId,
   type OptimisticNutritionFoodRowModel,
   type NutritionIntakeTotals,
+  type QueuedIntakeOverlay,
 } from '../../../../lib/nutrition-v2-intake'
+import { NUTRITION_TZ, useLocalDay } from '../../../../lib/nutrition-v2-date'
 import {
   getStableDeviceId,
   newNutritionV2OperationId,
   submitCorrectIntake,
   submitRecordIntake,
+  submitVoidIntake,
 } from '../../../../lib/nutrition-v2-intake-runner'
 import { useEvaMotion } from '../../../../lib/motion'
 import { shadow } from '../../../../lib/shadows'
@@ -136,83 +151,25 @@ import {
   nextHistoryCursor,
 } from '../../../../lib/nutrition-v2-history'
 
-const TZ = 'America/Santiago'
+// La fecha del dia (y su TZ) viven en `nutrition-v2-date`: el dia local es un VALOR VIVO
+// (`useLocalDay`), no un memo congelado al montar — cruzar medianoche con la app abierta ya no deja
+// el "Hoy" y los `log_date` anclados a ayer (NUT-018).
+const TZ = NUTRITION_TZ
 
-function todayInSantiago(): string {
-  return new Intl.DateTimeFormat('en-CA', {
-    timeZone: TZ,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).format(new Date())
-}
-
-interface OptimisticOverlay {
-  addedBySlot: Record<string, OptimisticNutritionFoodRowModel[]>
-  addedUnassigned: OptimisticNutritionFoodRowModel[]
-  hiddenIds: string[]
-}
+type OptimisticOverlay = QueuedIntakeOverlay
 
 type EntryCorrectionAction = {
   kind: 'edit' | 'void'
   entry: NutritionIntakeReadItem
 }
 
-const EMPTY_OVERLAY: OptimisticOverlay = { addedBySlot: {}, addedUnassigned: [], hiddenIds: [] }
+const EMPTY_OVERLAY: OptimisticOverlay = EMPTY_QUEUED_INTAKE_OVERLAY
 // Constantes de referencia ESTABLE para props de cards memoizadas (hallazgo M3):
 // `?? []` inline crearía un array nuevo por render y rompería React.memo.
 const EMPTY_PORTION_MARKS: PendingPortionMark[] = []
 const EMPTY_PORTION_VOIDS: PendingPortionVoid[] = []
 // Referencia estable para el lookup de reemplazos por item (F-02): `?? []` inline rompería memo.
 const EMPTY_SUBSTITUTIONS: NutritionItemSubstitutionRead[] = []
-
-/**
- * Reconstruye la representación optimista de records/correcciones normales desde
- * la cola autoritativa. Las marcas sintéticas de porciones tienen su propio lente
- * (`usePortionMarks`) y se excluyen para no mostrarlas como alimentos consumidos.
- */
-function queuedIntakeOverlay(
-  queued: ReadonlyArray<NutritionV2QueuedMutation>,
-  localDate: string,
-): OptimisticOverlay {
-  const records: NutritionV2QueuedMutation[] = []
-  const corrections = new Map<string, NutritionV2QueuedMutation>()
-
-  for (const item of queued) {
-    if (item.payload.localDate !== localDate) continue
-    if (item.action === 'correct') corrections.set(item.payload.correctsEntryId, item)
-    else if (!item.payload.snapshot.exchangeGroupCode) records.push(item)
-  }
-
-  const overlay: OptimisticOverlay = { addedBySlot: {}, addedUnassigned: [], hiddenIds: [] }
-  const append = (item: NutritionV2QueuedMutation) => {
-    const payload = item.payload
-    const totals = computeIntakeTotals(payload.quantity, payload.unit, payload.snapshot)
-    const row = optimisticIntakeRow({
-      id: `queued-${item.idempotencyKey}`,
-      name: payload.snapshot.name,
-      brand: payload.snapshot.brand,
-      quantity: payload.quantity,
-      unit: payload.unit,
-      status: 'offline',
-      totals,
-    })
-    if (payload.mealSlot) {
-      overlay.addedBySlot[payload.mealSlot] = [...(overlay.addedBySlot[payload.mealSlot] ?? []), row]
-    } else {
-      overlay.addedUnassigned.push(row)
-    }
-  }
-
-  records.forEach(append)
-  for (const [correctsEntryId, item] of corrections) {
-    overlay.hiddenIds.push(correctsEntryId)
-    // El void conserva auditoría con una corrección de aporte cero, pero no se
-    // representa como una fila consumida. Una edición sí muestra su reemplazo.
-    if (item.payload.note !== 'Registro retirado' && !item.payload.snapshot.exchangeGroupCode) append(item)
-  }
-  return overlay
-}
 
 function TodayTab() {
   const router = useRouter()
@@ -266,7 +223,9 @@ function TodayTab() {
     celebrationNonce.current += 1
     setCelebration({ ...decision, nonce: celebrationNonce.current })
   }, [])
-  const date = useMemo(todayInSantiago, [])
+  // Día local VIVO (NUT-018): se reevalúa al cruzar medianoche y cuando la pantalla lo revalida
+  // (foco / vuelta del background). `load` depende de `date`, así que el cambio reencadena el fetch.
+  const [date, recheckDate] = useLocalDay(TZ)
   const enabled = entitlements.ready && isEnabled('nutritionV2Student')
 
   const mountedRef = useRef(true)
@@ -391,17 +350,21 @@ function TodayTab() {
 
   useFocusEffect(
     useCallback(() => {
+      // Revalidar el día ANTES de refrescar: si cambió, `load` se reencadena solo con la fecha nueva.
+      recheckDate()
       if (userId && enabled) void load(true)
-    }, [enabled, load, userId]),
+    }, [enabled, load, recheckDate, userId]),
   )
 
   useEffect(() => {
     if (!userId || !enabled) return
     const subscription = AppState.addEventListener('change', (state) => {
-      if (state === 'active') void load(true)
+      if (state !== 'active') return
+      recheckDate()
+      void load(true)
     })
     return () => subscription.remove()
-  }, [enabled, load, userId])
+  }, [enabled, load, recheckDate, userId])
 
   // Una edición/retiro/alta aceptada offline debe sobrevivir remount, focus y
   // reinicio. La cola es la única fuente persistida; no duplicamos estado local.
@@ -410,7 +373,7 @@ function TodayTab() {
     let active = true
     void getNutritionV2QueuedMutations(userId)
       .then((queued) => {
-        if (active && mountedRef.current) setOverlay(queuedIntakeOverlay(queued, date))
+        if (active && mountedRef.current) setOverlay(buildQueuedIntakeOverlay(queued, date))
       })
       .catch(() => {})
     return () => {
@@ -460,6 +423,36 @@ function TodayTab() {
     if (mountedRef.current) setPending(q.pending)
   }, [userId])
 
+  /** Reconstruye el overlay desde la cola (única fuente persistida) tras cancelar/encolar algo. */
+  const syncOverlayFromQueue = useCallback(async () => {
+    if (!userId) return
+    const queued = await getNutritionV2QueuedMutations(userId).catch(() => null)
+    if (queued && mountedRef.current) setOverlay(buildQueuedIntakeOverlay(queued, date))
+  }, [date, userId])
+
+  /**
+   * Retirar una fila que todavía está EN COLA. No hay entry server-side que anular: se cancela la
+   * mutación por su idempotency key (mismo modelo que el deshacer de porciones, sin rastro de
+   * auditoría). Si un flush la envió primero el remove devuelve false y el registro ya existe: se
+   * refresca para que aparezca como fila real, con su lápiz y su papelera normales.
+   */
+  const onCancelQueued = useCallback(
+    async (queuedKey: string) => {
+      if (!userId) return
+      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
+      const removed = await removeNutritionV2QueuedMutation(userId, queuedKey)
+      if (!mountedRef.current) return
+      if (!removed) {
+        setMutationError('Ese registro ya se sincronizó. Lo actualicé para que puedas retirarlo.')
+        void load(true)
+        return
+      }
+      await refreshPending()
+      await syncOverlayFromQueue()
+    },
+    [load, refreshPending, syncOverlayFromQueue, userId],
+  )
+
   // ── Porciones (SPEC nutrition-portions UX-b/UX-c). Callbacks ESTABLES para no
   // romper el React.memo de las cards por franja (hallazgo M3). ──
   const requestReload = useCallback(() => {
@@ -484,13 +477,23 @@ function TodayTab() {
     setEquivOpen({ slotCode, groupCode })
   }, [])
   const hiddenSet = useMemo(() => new Set(overlay.hiddenIds), [overlay.hiddenIds])
-  // Set de items prescritos ya consumidos (misma verdad que la web): alimenta el medidor de
-  // progreso por franja y el estado del control de registro en bloque. Deriva del snapshot del
-  // servidor (`model`), no del overlay optimista, así se estabiliza tras cada `load(true)`.
-  const consumedIds = useMemo(
-    () => (model ? consumedPrescriptionItemIds(model) : new Set<string>()),
-    [model],
+  // Items prescritos con un registro AÚN encolado (offline). La cola es autoritativa y persistida:
+  // sin esto el botón "Lo comí" volvía a habilitarse apenas la mutación se encolaba y un segundo
+  // toque generaba una segunda entrada (NUT-003).
+  const queuedItemIds = useMemo(
+    () => new Set(overlay.queuedPrescriptionItemIds),
+    [overlay.queuedPrescriptionItemIds],
   )
+  // Set de items prescritos ya consumidos (misma verdad que la web): alimenta el medidor de
+  // progreso por franja y el estado del control de registro en bloque. Une el snapshot del servidor
+  // (`model`, estable tras cada `load(true)`) con lo que sigue en la cola local.
+  const consumedIds = useMemo(() => {
+    const server = model ? consumedPrescriptionItemIds(model) : new Set<string>()
+    if (queuedItemIds.size === 0) return server
+    const merged = new Set(server)
+    queuedItemIds.forEach((id) => merged.add(id))
+    return merged
+  }, [model, queuedItemIds])
 
   const addRow = useCallback((slotCode: string | null, row: OptimisticNutritionFoodRowModel) => {
     setOverlay((prev) =>
@@ -508,14 +511,33 @@ function TodayTab() {
     )
   }, [])
 
-  const markRowOffline = useCallback((slotCode: string | null, id: string) => {
-    const patch = (rows: OptimisticNutritionFoodRowModel[]) => rows.map((r) => (r.id === id ? { ...r, status: 'offline' as const } : r))
-    setOverlay((prev) =>
-      slotCode
-        ? { ...prev, addedBySlot: { ...prev.addedBySlot, [slotCode]: patch(prev.addedBySlot[slotCode] ?? []) } }
-        : { ...prev, addedUnassigned: patch(prev.addedUnassigned) },
-    )
-  }, [])
+  /**
+   * Marca la fila optimista como encolada. Además de pintarla `offline`, le adosa la
+   * `idempotencyKey` (habilita el "Retirar" de una fila en cola) y, si vino de un item prescrito,
+   * lo registra como encolado para apagar su botón "Lo comí" de forma SÍNCRONA — sin depender del
+   * efecto async que relee la cola (NUT-003 capa 2).
+   */
+  const markRowOffline = useCallback(
+    (slotCode: string | null, id: string, queuedKey: string, prescriptionItemId?: string | null) => {
+      const patch = (rows: OptimisticNutritionFoodRowModel[]) =>
+        rows.map((r) => (r.id === id ? { ...r, status: 'offline' as const, queuedKey } : r))
+      setOverlay((prev) => {
+        const base = slotCode
+          ? { ...prev, addedBySlot: { ...prev.addedBySlot, [slotCode]: patch(prev.addedBySlot[slotCode] ?? []) } }
+          : { ...prev, addedUnassigned: patch(prev.addedUnassigned) }
+        if (!prescriptionItemId || base.queuedKeyByPrescriptionItemId[prescriptionItemId]) return base
+        return {
+          ...base,
+          queuedPrescriptionItemIds: [...base.queuedPrescriptionItemIds, prescriptionItemId],
+          queuedKeyByPrescriptionItemId: {
+            ...base.queuedKeyByPrescriptionItemId,
+            [prescriptionItemId]: queuedKey,
+          },
+        }
+      })
+    },
+    [],
+  )
 
   const setHidden = useCallback((id: string, hidden: boolean) => {
     setOverlay((prev) => ({
@@ -531,16 +553,12 @@ function TodayTab() {
       setMutationError(null)
       setEatingId(item.id)
       void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-      const operationId = newNutritionV2OperationId()
+      // Intención lógica, no gesto: (día + item prescrito) ⇒ MISMA idempotency key. Dos toques
+      // colapsan en la cola (dedup por userId+key) y en el RPC (dedup por client_id+key) — NUT-003.
+      const operationId = prescribedIntentOperationId({ localDate: date, prescriptionItemId: item.id })
       const tempId = `opt-${operationId}`
-      const totals: NutritionIntakeTotals = computeIntakeTotals(item.quantity, item.unit, {
-        calories: item.macros.calories,
-        proteinG: item.macros.proteinG,
-        carbsG: item.macros.carbsG,
-        fatsG: item.macros.fatsG,
-        fiberG: item.macros.fiberG,
-        servingSize: null,
-      })
+      // Totales optimistas con el MISMO snapshot normalizado que viaja al servidor (NUT-002).
+      const totals: NutritionIntakeTotals = prescribedIntakeTotals(item)
       addRow(slot.code, optimisticIntakeRow({
         id: tempId,
         name: item.name ?? 'Alimento prescrito',
@@ -571,20 +589,26 @@ function TodayTab() {
       }
       const outcome = await submitRecordIntake(userId, payload)
       if (!mountedRef.current) return
-      setEatingId((cur) => (cur === item.id ? null : cur))
       if (outcome.status === 'recorded') {
         void (async () => {
           const claimed = await claimMealLoggedCelebration(userId, date)
           const decision = decideMealLoggedCelebration(!claimed)
           if (decision && mountedRef.current) fireCelebration(decision)
         })()
-        void load(true)
+        // El botón sigue pending HASTA que la verdad del servidor llegue: entre `setEatingId(null)`
+        // y el refetch había una ventana de cientos de ms con el botón habilitado y `consumedIds`
+        // todavía sin el item — un doble toque nervioso con red normal duplicaba igual (NUT-003).
+        await load(true)
+        if (!mountedRef.current) return
+        setEatingId((cur) => (cur === item.id ? null : cur))
       } else if (outcome.status === 'queued') {
-        markRowOffline(slot.code, tempId)
+        markRowOffline(slot.code, tempId, payload.idempotencyKey, item.id)
+        setEatingId((cur) => (cur === item.id ? null : cur))
         void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning)
         await refreshPending()
       } else {
         removeRow(slot.code, tempId)
+        setEatingId((cur) => (cur === item.id ? null : cur))
         // Banner inline con copy humanizado (web TodayExperience.tsx:119,216-225).
         setMutationError(humanizeStudentWriteError(outcome.error.message, 'No se pudo completar la acción.'))
       }
@@ -603,19 +627,19 @@ function TodayTab() {
       setMutationError(null)
       void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
       try {
-        const payload = buildVoidIntakeCorrection({
+        // NUT-010 (opción A): retiro TERMINAL. Antes esto mandaba una corrección de contribución
+        // cero cuyo reemplazo quedaba ACTIVO — el item del plan seguía "consumido" y la cobertura
+        // derivada no bajaba. Ahora `void_nutrition_intake_v2` marca la fila `voided` y los read
+        // models (que filtran `active`) la dejan de ver.
+        const payload = buildVoidIntakeRequest({
           clientId: userId,
           deviceId,
           operationId: newNutritionV2OperationId(),
-          localDate: date,
-          timezone: TZ,
           entry,
-          planVersionId: model?.plan?.versionId ?? null,
-          daySnapshotId: model?.snapshotId ?? null,
           reason,
         })
         setHidden(entry.id, true)
-        const outcome = await submitCorrectIntake(userId, payload)
+        const outcome = await submitVoidIntake(userId, payload)
         if (!mountedRef.current) return
         if (outcome.status === 'recorded') {
           setEntryAction(null)
@@ -640,7 +664,7 @@ function TodayTab() {
         )
       }
     },
-    [date, deviceId, load, model, refreshPending, setHidden, userId],
+    [deviceId, load, refreshPending, setHidden, userId],
   )
 
   // ── Snackbar del bulk-mark (mismo componente que porciones, estado propio) ──
@@ -665,30 +689,31 @@ function TodayTab() {
     [],
   )
 
-  // Deshacer una tanda: anula (corrección de aporte CERO) cada registro creado por el bulk, vía el
+  // Deshacer una tanda: RETIRA (estado terminal `voided`) cada registro creado por el bulk, vía el
   // MISMO runner de void del "Retirar" individual. Recibe entries sintetizados con el id REAL
-  // devuelto por el servidor (correctsEntryId), así no depende del refetch para poder deshacer.
+  // devuelto por el servidor, así no depende del refetch para poder deshacer.
+  //
+  // Lo ENCOLADO no se anula con un void (todavía no existe server-side): se CANCELA en la cola por
+  // su idempotency key, exactamente como ya hace el deshacer de porciones
+  // (usePortionMarks → cancelQueuedPortionMark). Sin esto el undo dejaba vivas las mutaciones
+  // offline y minutos después reaparecían como registros (NUT-019).
   const onBulkUndo = useCallback(
-    async (slotName: string, entries: NutritionIntakeReadItem[]) => {
-      if (!userId || !deviceId || entries.length === 0) return
+    async (slotName: string, entries: NutritionIntakeReadItem[], queuedKeys: string[]) => {
+      if (!userId || !deviceId || (entries.length === 0 && queuedKeys.length === 0)) return
       dismissBulkSnackbar()
       void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
       let undone = 0
       let queued = 0
       for (const entry of entries) {
         setHidden(entry.id, true)
-        const payload = buildVoidIntakeCorrection({
+        const payload = buildVoidIntakeRequest({
           clientId: userId,
           deviceId,
           operationId: newNutritionV2OperationId(),
-          localDate: date,
-          timezone: TZ,
           entry,
-          planVersionId: model?.plan?.versionId ?? null,
-          daySnapshotId: model?.snapshotId ?? null,
           reason: 'Deshacer registro de la comida',
         })
-        const outcome = await submitCorrectIntake(userId, payload)
+        const outcome = await submitVoidIntake(userId, payload)
         if (!mountedRef.current) return
         if (outcome.status === 'recorded') undone += 1
         else if (outcome.status === 'queued') queued += 1
@@ -696,19 +721,50 @@ function TodayTab() {
           setHidden(entry.id, false)
         }
       }
+      // Carrera real: un flush pudo enviar la mutación entre el tap de "Deshacer" y el remove. En
+      // ese caso `removeNutritionV2QueuedMutation` devuelve false y el intake YA existe server-side.
+      let cancelled = 0
+      let raced = 0
+      for (const key of queuedKeys) {
+        const removed = await removeNutritionV2QueuedMutation(userId, key)
+        if (!mountedRef.current) return
+        if (removed) cancelled += 1
+        else raced += 1
+      }
       if (!mountedRef.current) return
-      if (undone > 0) void load(true)
-      if (queued > 0) await refreshPending()
-      if (undone === 0 && queued === 0) {
+      if (undone > 0 || raced > 0) void load(true)
+      if (queued > 0 || cancelled > 0) {
+        await refreshPending()
+        await syncOverlayFromQueue()
+      }
+      if (!mountedRef.current) return
+      if (undone === 0 && queued === 0 && cancelled === 0) {
         showBulkSnackbar({
           message: 'No se pudo deshacer. Retira los registros uno por uno en la comida.',
           tone: 'danger',
         })
       } else {
-        showBulkSnackbar({ message: `Deshice el registro de ${slotName}.` })
+        showBulkSnackbar({
+          message: `Deshice el registro de ${slotName}.`,
+          detail:
+            raced > 0
+              ? raced === 1
+                ? '1 alcanzó a sincronizarse: retíralo desde "Consumido hoy".'
+                : `${raced} alcanzaron a sincronizarse: retíralos desde "Consumido hoy".`
+              : null,
+        })
       }
     },
-    [date, deviceId, dismissBulkSnackbar, load, model, refreshPending, setHidden, showBulkSnackbar, userId],
+    [
+      deviceId,
+      dismissBulkSnackbar,
+      load,
+      refreshPending,
+      setHidden,
+      showBulkSnackbar,
+      syncOverlayFromQueue,
+      userId,
+    ],
   )
 
   // Registro en bloque de una franja ("Comí toda esta comida"). Por cada item ELEGIBLE (el helper
@@ -726,19 +782,15 @@ function TodayTab() {
       let recorded = 0
       let queued = 0
       const undoEntries: NutritionIntakeReadItem[] = []
+      const queuedKeys: string[] = []
       const nowIso = new Date().toISOString()
 
       for (const item of eligible) {
-        const operationId = newNutritionV2OperationId()
+        // Misma clave determinista que el "Lo comí" individual: registrar la franja completa y
+        // luego marcar un item suelto del mismo día colapsa en UNA escritura (NUT-003).
+        const operationId = prescribedIntentOperationId({ localDate: date, prescriptionItemId: item.id })
         const tempId = `opt-${operationId}`
-        const totals: NutritionIntakeTotals = computeIntakeTotals(item.quantity, item.unit, {
-          calories: item.macros.calories,
-          proteinG: item.macros.proteinG,
-          carbsG: item.macros.carbsG,
-          fatsG: item.macros.fatsG,
-          fiberG: item.macros.fiberG,
-          servingSize: null,
-        })
+        const totals: NutritionIntakeTotals = prescribedIntakeTotals(item)
         addRow(slot.code, optimisticIntakeRow({
           id: tempId,
           name: item.name ?? 'Alimento prescrito',
@@ -773,7 +825,8 @@ function TodayTab() {
           undoEntries.push(synthPrescribedIntakeEntry(item, slot.code, outcome.id, nowIso))
         } else if (outcome.status === 'queued') {
           queued += 1
-          markRowOffline(slot.code, tempId)
+          queuedKeys.push(payload.idempotencyKey)
+          markRowOffline(slot.code, tempId, payload.idempotencyKey, item.id)
         } else {
           removeRow(slot.code, tempId)
         }
@@ -795,24 +848,22 @@ function TodayTab() {
       }
       setBulkBusySlot(null)
 
-      // Feedback + "Deshacer" transitorio.
-      if (recorded === 0 && queued === 0) {
-        showBulkSnackbar({ message: `No se pudo registrar tu ${slot.name}.`, tone: 'danger' })
-        return
-      }
-      if (recorded === 0 && queued > 0) {
-        showBulkSnackbar({
-          message: `Guardé tu ${slot.name} sin conexión.`,
-          detail: 'Se registrará cuando vuelvas a tener internet.',
-        })
-        return
-      }
-      const leftover = eligible.length - recorded - queued
+      // Feedback + "Deshacer" transitorio. El copy y la disponibilidad del undo salen de un reducer
+      // PURO (fijado por tests): el detalle nombra siempre lo que quedó en cola y el "Deshacer"
+      // cubre registrado + encolado, incluido el caso "todo offline" (NUT-019).
+      const snack = bulkAteSnackbarState({
+        slotName: slot.name,
+        eligible: eligible.length,
+        recorded,
+        queued,
+      })
+      const canUndo = snack.canUndo && (undoEntries.length > 0 || queuedKeys.length > 0)
       showBulkSnackbar({
-        message: `Registraste tu ${slot.name}`,
-        detail: leftover > 0 ? `Registré ${recorded} de ${eligible.length}. Quedaron ${leftover}.` : null,
-        actionLabel: undoEntries.length > 0 ? 'Deshacer' : null,
-        onAction: undoEntries.length > 0 ? () => void onBulkUndo(slot.name, undoEntries) : null,
+        message: snack.message,
+        detail: snack.detail,
+        tone: snack.tone === 'danger' ? 'danger' : undefined,
+        actionLabel: canUndo ? 'Deshacer' : null,
+        onAction: canUndo ? () => void onBulkUndo(slot.name, undoEntries, queuedKeys) : null,
       })
     },
     [addRow, date, deviceId, fireCelebration, load, markRowOffline, model, onBulkUndo, refreshPending, removeRow, showBulkSnackbar, userId],
@@ -868,7 +919,8 @@ function TodayTab() {
           setEntryActionPending(false)
           void load(true)
         } else if (outcome.status === 'queued') {
-          markRowOffline(entry.mealSlot, tempId)
+          // Una corrección encolada no bloquea ningún item prescrito: solo se marca la fila.
+          markRowOffline(entry.mealSlot, tempId, payload.idempotencyKey)
           setEntryAction(null)
           setEntryActionPending(false)
           void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning)
@@ -1159,6 +1211,14 @@ function TodayTab() {
       ? 'Tu nuevo plan ya está publicado. Las metas y comidas de hoy se activan mañana; hoy puedes registrar lo que comas.'
       : 'Tu nuevo plan ya está publicado. Hoy todavía ves las metas del plan anterior; desde mañana se aplican las del nuevo.'
 
+  // FD3 (espejo de web page.tsx): badge multi-día SOLO con más de una variante y SOLO cuando el
+  // registro del día ya es del plan vigente — durante el lag el snapshot es de otra versión y
+  // nombrar la variante nueva sería mentir. No decide nada: explica lo que el snapshot ya fijó.
+  const todayVariant =
+    (livePlan?.dayVariants.length ?? 0) > 1 && !showTodayPlanLag
+      ? resolveNutritionDayVariantForDate(livePlan?.dayVariants ?? [], date)
+      : null
+
   // 4A-02: copia RN de slotsWithPrescribedContent (web portion-marks.logic.ts:357-363):
   // solo franjas con items fijos O con targets de porciones aparecen en "Tu plan de hoy".
   const slotsWithPrescription = model.mealSlots.filter(
@@ -1168,15 +1228,21 @@ function TodayTab() {
   // 4A-02: "Consumido hoy" agregado (web TodayExperience.tsx:274-323): TODOS los registros
   // activos del día (franjas + sin franja) ordenados por hora (consumedEntries,
   // nutrition-today.logic.ts:55-59) + las filas optimistas de la cola offline nativa al final.
-  const consumedRows: Array<{ row: NutritionFoodRowModel; entry: NutritionIntakeReadItem | null }> = [
+  // `queuedKey` habilita el "Retirar" de una fila que todavía está en la cola: sin él, el alumno
+  // veía el registro offline y no tenía ninguna acción para sacarlo (NUT-003 / NUT-019).
+  const consumedRows: Array<{
+    row: NutritionFoodRowModel
+    entry: NutritionIntakeReadItem | null
+    queuedKey: string | null
+  }> = [
     ...[...model.mealSlots.flatMap((slot) => slot.intakeItems), ...model.unassignedIntake]
       .filter((entry) => !hiddenSet.has(entry.id))
       .sort((a, b) => a.occurredAt.localeCompare(b.occurredAt))
-      .map((entry) => ({ row: intakeToRow(entry), entry })),
+      .map((entry) => ({ row: intakeToRow(entry), entry, queuedKey: null })),
     ...Object.values(overlay.addedBySlot)
       .flat()
-      .map((row) => ({ row, entry: null })),
-    ...overlay.addedUnassigned.map((row) => ({ row, entry: null })),
+      .map((row) => ({ row, entry: null, queuedKey: row.queuedKey ?? null })),
+    ...overlay.addedUnassigned.map((row) => ({ row, entry: null, queuedKey: row.queuedKey ?? null })),
   ]
 
   // Sheet de equivalencias: datos derivados de la franja abierta (solo cuando está
@@ -1228,6 +1294,16 @@ function TodayTab() {
           <View className="flex-row items-start gap-2 rounded-control border border-border-subtle bg-surface-sunken px-4 py-3">
             <Info color={theme.textSecondary} size={16} style={{ marginTop: 2 }} />
             <Text className="min-w-0 flex-1 text-sm leading-5 text-text-body">{lagMessage}</Text>
+          </View>
+        ) : null}
+
+        {todayVariant ? (
+          // Badge "Hoy: plan de {día} · {kcal}" (web page.tsx, mismo texto por helper compartido).
+          <View className="flex-row items-center gap-2 self-start rounded-pill border border-primary/30 bg-primary/10 px-3 py-1">
+            <CalendarDays color={theme.primary} size={14} />
+            <Text className="text-xs font-semibold text-primary">
+              {formatNutritionTodayVariantBadge(todayVariant)}
+            </Text>
           </View>
         ) : null}
 
@@ -1291,15 +1367,29 @@ function TodayTab() {
           </View>
         ) : null}
 
-        {/* Fila de CTAs (web TodayExperience.tsx:228-248): Registrar + Escanear + Compartir. */}
+        {/* Fila de CTAs (web TodayExperience.tsx): Registrar + Escanear + Compartir.
+            NUT-009: con "Solo alimentos prescritos" (canRegisterFreely = false) desaparecen
+            Registrar y Escanear — antes se ofrecían igual y el alumno rompía la regla del coach sin
+            enterarse. La UI no autoriza: el guard real está en la API móvil y en el RPC. */}
         <View className="flex-row flex-wrap gap-2">
-          <TodayCta Icon={Plus} label="Registrar alimento" tone="nutrition" onPress={() => onRegister()} />
-          <TodayCta
-            Icon={ScanBarcode}
-            label="Escanear"
-            tone="neutral"
-            onPress={() => router.push('/alumno/nutrition-v2/scanner')}
-          />
+          {model.permissions.canRegisterFreely ? (
+            <>
+              <TodayCta Icon={Plus} label="Registrar alimento" tone="nutrition" onPress={() => onRegister()} />
+              <TodayCta
+                Icon={ScanBarcode}
+                label="Escanear"
+                tone="neutral"
+                onPress={() => router.push('/alumno/nutrition-v2/scanner')}
+              />
+            </>
+          ) : (
+            <View className="flex-row items-start gap-2 rounded-card border border-border-subtle bg-surface-sunken px-3 py-2">
+              <Lock color={theme.textSecondary} size={16} style={{ marginTop: 2 }} />
+              <Text className="min-w-0 flex-1 text-sm leading-5 text-text-secondary">
+                Tu coach dejó el plan en solo alimentos prescritos: marca lo que comiste del plan.
+              </Text>
+            </View>
+          )}
           <TodayCta Icon={Share2} label="Compartir" tone="neutral" onPress={() => void onShareDay()} />
         </View>
 
@@ -1314,6 +1404,7 @@ function TodayTab() {
                 slot={slot}
                 today={model}
                 consumedIds={consumedIds}
+                queuedItemIds={queuedItemIds}
                 substitutionsByItemId={substitutionsByItemId}
                 eatingId={eatingId}
                 onAte={onAtePrescribed}
@@ -1342,7 +1433,7 @@ function TodayTab() {
             />
           ) : (
             <NutritionCard>
-              {consumedRows.map(({ row, entry }, index) => (
+              {consumedRows.map(({ row, entry, queuedKey }, index) => (
                 <View key={row.id} className={index > 0 ? 'border-t border-border-subtle' : undefined}>
                   <FoodRow
                     food={row}
@@ -1352,18 +1443,24 @@ function TodayTab() {
                         // Icon-buttons lápiz/papelera: cada uno abre su corrección dedicada,
                         // igual que EditQuantityDialog/VoidEntryDialog en web (4A-06).
                         <View className="flex-row items-center gap-1">
-                          <Pressable
-                            accessibilityRole="button"
-                            accessibilityLabel="Editar cantidad"
-                            hitSlop={8}
-                            onPress={() => {
-                              setEntryActionError(null)
-                              setEntryAction({ kind: 'edit', entry })
-                            }}
-                            className="h-10 w-10 items-center justify-center rounded-control"
-                          >
-                            <Pencil color={theme.textSecondary} size={16} />
-                          </Pressable>
+                          {/* NUT-009: "Editar cantidad" solo si el plan lo permite. La regla
+                              gobierna los registros ligados a un item PRESCRITO; un alimento libre
+                              ya registrado se corrige siempre. "Retirar" NUNCA se esconde: dejar un
+                              registro erróneo imborrable sería peor que la regla que protege. */}
+                          {entry.prescriptionItemId === null || model.permissions.canAdjustPrescribedQuantity ? (
+                            <Pressable
+                              accessibilityRole="button"
+                              accessibilityLabel="Editar cantidad"
+                              hitSlop={8}
+                              onPress={() => {
+                                setEntryActionError(null)
+                                setEntryAction({ kind: 'edit', entry })
+                              }}
+                              className="h-10 w-10 items-center justify-center rounded-control"
+                            >
+                              <Pencil color={theme.textSecondary} size={16} />
+                            </Pressable>
+                          ) : null}
                           <Pressable
                             accessibilityRole="button"
                             accessibilityLabel="Retirar registro"
@@ -1377,6 +1474,18 @@ function TodayTab() {
                             <Trash2 color={theme.destructive} size={16} />
                           </Pressable>
                         </View>
+                      ) : queuedKey ? (
+                        // Fila aún EN COLA: no existe server-side, así que no hay edición ni void.
+                        // La papelera cancela la mutación encolada (mismo modelo que porciones).
+                        <Pressable
+                          accessibilityRole="button"
+                          accessibilityLabel="Retirar registro en cola"
+                          hitSlop={8}
+                          onPress={() => void onCancelQueued(queuedKey)}
+                          className="h-10 w-10 items-center justify-center rounded-control"
+                        >
+                          <Trash2 color={theme.destructive} size={16} />
+                        </Pressable>
                       ) : undefined
                     }
                   />
@@ -1406,7 +1515,7 @@ function TodayTab() {
         views={equivViews}
         onClose={() => setEquivOpen(null)}
         onMark={onSheetMark}
-        onRegister={onSheetRegister}
+        onRegister={model.permissions.canRegisterFreely ? onSheetRegister : null}
       />
       <PortionSnackbar state={portions.snackbar} onDismiss={portions.dismissSnackbar} />
       <PortionSnackbar state={bulkSnackbar} onDismiss={dismissBulkSnackbar} />
@@ -1511,15 +1620,12 @@ function synthPrescribedIntakeEntry(
     revision: 1,
     correctsEntryId: null,
     prescriptionItemId: item.id,
+    // Mismo snapshot NORMALIZADO (per-unidad, servingSize 1) que viajó en el registro original:
+    // el void lo reusa y debe describir la misma base (NUT-002).
     snapshot: {
       name: item.name ?? 'Alimento prescrito',
       brand: item.brand,
-      calories: item.macros.calories,
-      proteinG: item.macros.proteinG,
-      carbsG: item.macros.carbsG,
-      fatsG: item.macros.fatsG,
-      fiberG: item.macros.fiberG,
-      servingSize: null,
+      ...prescribedIntakeSnapshotMacros(item),
       servingUnit: item.unit,
     },
     totals: { calories: 0, proteinG: 0, carbsG: 0, fatsG: 0, fiberG: 0 },
@@ -1533,6 +1639,7 @@ const TodaySlotCard = memo(function TodaySlotCard({
   slot,
   today,
   consumedIds,
+  queuedItemIds,
   substitutionsByItemId,
   eatingId,
   onAte,
@@ -1546,6 +1653,8 @@ const TodaySlotCard = memo(function TodaySlotCard({
   slot: NutritionMealSlotRead
   today: NutritionTodayReadModel
   consumedIds: Set<string>
+  /** Subconjunto de `consumedIds` que aún NO llegó al servidor (mutación en cola). */
+  queuedItemIds: Set<string>
   substitutionsByItemId: ReadonlyMap<string, NutritionItemSubstitutionRead[]>
   eatingId: string | null
   onAte: (slot: NutritionMealSlotRead, item: NutritionMealSlotRead['prescriptionItems'][number]) => void
@@ -1601,12 +1710,21 @@ const TodaySlotCard = memo(function TodaySlotCard({
                   note={displayNote}
                   actions={
                     consumed ? (
-                      // Estado "Registrado" (web TodayExperience.tsx:608-611): check esmeralda
-                      // del canvas web → tono success del kit RN (contrato white-label).
-                      <View className="flex-row items-center gap-1">
-                        <CheckCircle2 color={theme.success} size={16} />
-                        <Text className="text-xs font-semibold text-success-700">Registrado</Text>
-                      </View>
+                      queuedItemIds.has(item.id) ? (
+                        // Encolado: el botón queda apagado igual (no se puede volver a marcar) pero
+                        // el chip NO miente — todavía no llegó al servidor.
+                        <View className="flex-row items-center gap-1">
+                          <History color={theme.textSecondary} size={16} />
+                          <Text className="text-xs font-semibold text-text-muted">En cola</Text>
+                        </View>
+                      ) : (
+                        // Estado "Registrado" (web TodayExperience.tsx:608-611): check esmeralda
+                        // del canvas web → tono success del kit RN (contrato white-label).
+                        <View className="flex-row items-center gap-1">
+                          <CheckCircle2 color={theme.success} size={16} />
+                          <Text className="text-xs font-semibold text-success-700">Registrado</Text>
+                        </View>
+                      )
                     ) : (
                       <NutritionMotionButton
                         accessibilityLabel={`Lo comí: ${item.name ?? 'alimento prescrito'}`}
@@ -2036,7 +2154,8 @@ function PlanTab() {
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [offline, setOffline] = useState(false)
-  const date = useMemo(todayInSantiago, [])
+  // Día local VIVO (NUT-018): la pestaña Plan también deja de quedar anclada al día del montaje.
+  const [date] = useLocalDay(TZ)
 
   const mountedRef = useRef(true)
   const controllerRef = useRef<AbortController | null>(null)
@@ -2149,6 +2268,9 @@ function PlanTab() {
 
   const summary = plan.plan
   const defaultVariant = plan.dayVariants.find((variant) => variant.isDefault) ?? plan.dayVariants[0] ?? null
+  // FD3 (espejo de web page.tsx): día base primero y después los días específicos Lu→Do.
+  const orderedVariants = sortNutritionDayVariantsForDisplay(plan.dayVariants)
+  const multiDay = plan.dayVariants.length > 1
 
   return (
     <ScrollView
@@ -2188,8 +2310,15 @@ function PlanTab() {
 
       <PlanRulesCard permissions={plan.permissions} />
 
-      {plan.dayVariants.map((variant) => (
-        <PlanVariantCard key={variant.id} variant={variant} showTargets={plan.dayVariants.length > 1} />
+      {orderedVariants.map((variant) => (
+        <PlanVariantCard
+          key={variant.id}
+          variant={variant}
+          variants={plan.dayVariants}
+          showTargets={multiDay}
+          showWeekStrip={multiDay}
+          todayIso={date}
+        />
       ))}
     </ScrollView>
   )
@@ -2247,7 +2376,19 @@ function PlanRulesCard({ permissions }: { permissions: NutritionPlanReadModel['p
   )
 }
 
-function PlanVariantCard({ variant, showTargets }: { variant: PlanVariant; showTargets: boolean }) {
+function PlanVariantCard({
+  variant,
+  variants,
+  showTargets,
+  showWeekStrip,
+  todayIso,
+}: {
+  variant: PlanVariant
+  variants: readonly PlanVariant[]
+  showTargets: boolean
+  showWeekStrip: boolean
+  todayIso: string
+}) {
   return (
     <NutritionCard>
       <View className="flex-row flex-wrap items-center justify-between gap-2">
@@ -2262,6 +2403,8 @@ function PlanVariantCard({ variant, showTargets }: { variant: PlanVariant; showT
         {variant.mealSlots.length} franja{variant.mealSlots.length === 1 ? '' : 's'}
         {variant.targets.calories != null ? ` · ${formatNutritionCalories(variant.targets.calories)}` : ''}
       </Text>
+      {/* FD3: con un solo día la tira sería ruido; con varios explica qué días le tocan a esta card. */}
+      {showWeekStrip ? <DayVariantWeekStrip variants={variants} variant={variant} todayIso={todayIso} /> : null}
       {showTargets ? (
         <View className="mt-2">
           <MacroChipRow

@@ -20,6 +20,7 @@ import {
   XCircle,
 } from 'lucide-react-native'
 import {
+  DayVariantWeekStrip,
   MacroBudget,
   MacroChipRow,
   NutritionHeader,
@@ -36,6 +37,9 @@ import {
   NutritionClientDetailReadModelSchema,
   createNutritionMacroValue,
   describeLegacyHistoryDay,
+  formatNutritionCalories,
+  resolveNutritionDayVariantForDate,
+  sortNutritionDayVariantsForDisplay,
   type NutritionClientDetailReadModel,
   type NutritionV2CoachScope,
 } from '@eva/nutrition-v2'
@@ -46,16 +50,15 @@ import {
   archiveNutritionPlan,
   assignNutritionPlanToClients,
   getNutritionClientDetailV2,
-  getNutritionCoachHubV2,
+  getNutritionCoachRosterV2,
   getNutritionConversionLinkV2,
+  NUTRITION_COACH_ROSTER_PAGE_SIZE,
   nutritionV2CoachScope,
   nutritionV2CoachScopeCacheKey,
 } from '../../../lib/nutrition-v2.api'
 import {
   canAssignSourcePlan,
-  planReadModelToAssignSource,
   type AssignClientResult,
-  type AssignSourcePlan,
   type AssignSummary,
 } from '../../../lib/nutrition-v2-assign-archive'
 import type { NutritionV2WriteClient } from '../../../lib/nutrition-v2-builder'
@@ -131,6 +134,11 @@ interface AssignRosterEntry {
   hasPlan: boolean
 }
 
+// NUT-026: a partir de 2 caracteres la búsqueda deja de filtrar la primera página en memoria y
+// pasa a ser SERVER-SIDE sobre todo el workspace (mismos umbrales que el diálogo web).
+const ROSTER_SEARCH_DEBOUNCE_MS = 300
+const ROSTER_MIN_SERVER_SEARCH_LEN = 2
+
 /**
  * Normaliza para búsqueda tolerante a acentos (misma pieza que el resto del móvil:
  * `.normalize('NFD')` + strip de marcas combinantes U+0300–U+036F). "josé" matchea "Jose".
@@ -141,6 +149,24 @@ function normalizeName(value: string): string {
     .replace(/[̀-ͯ]/g, '')
     .toLowerCase()
     .trim()
+}
+
+/**
+ * Página del roster scoped -> filas del selector: excluye al alumno FUENTE (no tiene sentido
+ * asignarle su propio plan) y marca "Ya tiene plan" con el mismo criterio que la web
+ * (`planStatus === 'published'`). Sin nombre => "Alumno", como en la action web.
+ */
+function rosterEntriesFrom(
+  items: ReadonlyArray<{ clientId: string; clientName: string | null; planStatus: string | null }>,
+  sourceClientId: string,
+): AssignRosterEntry[] {
+  return items
+    .filter((item) => item.clientId !== sourceClientId)
+    .map((item) => ({
+      clientId: item.clientId,
+      clientName: item.clientName ?? 'Alumno',
+      hasPlan: item.planStatus === 'published',
+    }))
 }
 
 /**
@@ -359,12 +385,24 @@ export default function CoachNutritionV2ClientScreen() {
   })
   const planStatus = activePlan ? 'published' : null
   const ctaLabel = nutritionPlanCtaLabel(planStatus)
-  const builderHref = nutritionV2BuilderHref(detail.client.id)
+  // NUT-004: con plan vigente el builder DEBE recibir la raiz (`?planId=`) para publicar una
+  // version nueva sobre ella; sin plan queda sin query y crea la primera raiz. Espejo del web.
+  const builderHref = nutritionV2BuilderHref(detail.client.id, activePlan?.id ?? null)
   const showTodayPlanLag = activePlan !== null && (todayPlan === null || todayPlan.id !== activePlan.id)
   const todayPlanLagMessage =
     todayPlan === null
       ? 'El plan vigente ya está publicado. El registro de hoy todavía no tiene metas asignadas; desde mañana se aplican las del nuevo plan.'
       : 'El plan vigente ya está publicado. Los registros de hoy siguen mostrando el plan anterior; desde mañana se usa el nuevo.'
+
+  // FD3 (espejo de web coach/nutrition-v2/[clientId]/page.tsx): día base primero y después los
+  // días específicos Lu→Do, cada card con su tira de días. "Hoy aplica" solo si el registro del
+  // día ya es del plan vigente (con lag el snapshot es de otra versión). Cero selección nueva.
+  const orderedVariants = sortNutritionDayVariantsForDisplay(detail.plan.dayVariants)
+  const multiDayPlan = detail.plan.dayVariants.length > 1
+  const todayVariant =
+    multiDayPlan && !showTodayPlanLag
+      ? resolveNutritionDayVariantForDate(detail.plan.dayVariants, date)
+      : null
 
   // Modo edicion in-place (quick-edit): misma ruta, estado cliente. Al publicar, la
   // ficha re-lee el read model (reloadNonce) y el baseline se re-hidrata solo.
@@ -375,9 +413,9 @@ export default function CoachNutritionV2ClientScreen() {
         clientId={detail.client.id}
         clientName={clientFullName}
         planModel={detail.plan}
-        hasNutritionPro={hasNutritionPro}
-        userId={userId}
+        scope={scope}
         todayIso={date}
+        hasNutritionPro={hasNutritionPro}
         onExit={() => setEditing(false)}
         onPublished={() => {
           setEditing(false)
@@ -431,17 +469,28 @@ export default function CoachNutritionV2ClientScreen() {
             effectiveLabel={`desde ${(detail.today.plan ?? detail.plan.plan).effectiveFrom}`}
           />
           {/* Disparador secundario "Asignar a otros alumnos" (delta 2): en la fila de badges, a
-              la derecha (ml-auto), NUNCA en el header. Gateado por canAssign (delta 1). */}
+              la derecha (ml-auto), NUNCA en el header. Gateado por canAssign (delta 1).
+              NUT-012 — fail-closed con cache stale: `offline` significa que la ficha se está
+              mostrando desde la copia local (el refresco falló), así que el plan visible puede no
+              ser el vigente. Se deshabilita el disparador en vez de arriesgar copiar un plan viejo
+              a otros alumnos; al recuperar señal la ficha se re-lee y el CTA vuelve. */}
           {canAssign && userId ? (
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Asignar a otros alumnos"
+              accessibilityState={{ disabled: offline }}
+              disabled={offline}
               onPress={() => setAssignOpen(true)}
-              className="ml-auto min-h-11 flex-row items-center gap-1.5 rounded-control border border-border-subtle bg-surface-card px-3"
+              className={`ml-auto min-h-11 flex-row items-center gap-1.5 rounded-control border border-border-subtle bg-surface-card px-3 ${offline ? 'opacity-50' : ''}`}
             >
-              <UserPlus color={theme.primary} size={14} />
+              <UserPlus color={offline ? theme.textSecondary : theme.primary} size={14} />
               <Text className="text-xs font-semibold text-text-body">Asignar a otros alumnos</Text>
             </Pressable>
+          ) : null}
+          {canAssign && userId && offline ? (
+            <Text className="w-full text-[11px] text-text-muted">
+              Sin conexión no podemos confirmar que este sea el plan vigente: reintenta al recuperar señal.
+            </Text>
           ) : null}
         </View>
       ) : null}
@@ -531,12 +580,31 @@ export default function CoachNutritionV2ClientScreen() {
       {detail.plan.plan && detail.plan.dayVariants.length > 0 ? (
         <View className="gap-3">
           <Text className="font-display text-xl font-semibold text-text-strong">Estructura prescrita</Text>
-          {detail.plan.dayVariants.map((variant) => (
+          {orderedVariants.map((variant) => (
             <NutritionCard key={variant.id}>
               <View className="flex-row flex-wrap items-center justify-between gap-2">
-                <Text className="font-display text-base font-semibold text-text-strong">{variant.label}</Text>
-                <Text className="text-xs text-text-muted">{variant.targets.calories ?? 0} kcal objetivo</Text>
+                <View className="flex-row flex-wrap items-center gap-2">
+                  <Text className="font-display text-base font-semibold text-text-strong">{variant.label}</Text>
+                  {todayVariant?.id === variant.id ? (
+                    <View className="rounded-pill border border-primary/30 bg-primary/10 px-2 py-0.5">
+                      <Text className="text-[10px] font-semibold text-primary">Hoy aplica</Text>
+                    </View>
+                  ) : null}
+                </View>
+                <Text className="text-xs text-text-muted" style={{ fontVariant: ['tabular-nums'] }}>
+                  {variant.targets.calories != null
+                    ? `${formatNutritionCalories(variant.targets.calories)} objetivo`
+                    : 'Sin objetivo de energía'}
+                </Text>
               </View>
+              {/* Tira Lu-Do de la variante (FD3): con un solo día no aporta y no se pinta. */}
+              {multiDayPlan ? (
+                <DayVariantWeekStrip
+                  variants={detail.plan.dayVariants}
+                  variant={variant}
+                  todayIso={date}
+                />
+              ) : null}
               {variant.mealSlots.length === 0 ? (
                 <Text className="mt-2 text-sm text-text-muted">Plan flexible: sin franjas prescritas.</Text>
               ) : (
@@ -687,6 +755,8 @@ export default function CoachNutritionV2ClientScreen() {
         </View>
       ) : null}
 
+      {/* NUT-012: la pantalla ya NO entrega la copia del plan (podría venir de cache stale); solo
+          el id de la versión vigente que mostró. La lib relee la fuente y corta si cambió. */}
       {canAssign && userId ? (
         <AssignPlanModal
           visible={assignOpen}
@@ -694,9 +764,7 @@ export default function CoachNutritionV2ClientScreen() {
           scope={scope}
           sourceClientId={detail.client.id}
           sourcePlanName={detail.plan.plan?.name ?? 'este plan'}
-          source={planReadModelToAssignSource(detail.plan)}
-          userId={userId}
-          hasNutritionPro={hasNutritionPro}
+          sourceVersionId={activePlan?.versionId ?? ''}
           today={date}
         />
       ) : null}
@@ -704,10 +772,10 @@ export default function CoachNutritionV2ClientScreen() {
       {activePlan && userId ? (
         <ArchivePlanConfirmSheet
           open={archiveOpen}
+          scope={scope}
           clientId={detail.client.id}
           planId={activePlan.id}
           planName={activePlan.name}
-          userId={userId}
           onClose={() => setArchiveOpen(false)}
           onArchived={() => {
             setArchiveOpen(false)
@@ -791,7 +859,8 @@ function ConvertedPlanBanner({
 // Diálogo "Asignar plan a otros alumnos" (delta 4/5/6). Modal full-screen (patrón FoodSearchModal,
 // resolución del juez: consistencia con los flujos coach existentes), NO Sheet. Roster paginado
 // del workspace + buscador acento-insensible + "Vigente desde" YYYY-MM-DD + reporte parcial.
-// La escritura la hace assignNutritionPlanToClients (lib) contra el cliente RLS de la sesión.
+// La escritura la hace assignNutritionPlanToClients, que POSTea al endpoint de mutaciones del
+// coach (NUT-005): rollout, workspace, gate Pro y relectura de la fuente se validan server-side.
 // ---------------------------------------------------------------------------
 
 function AssignPlanModal({
@@ -800,9 +869,7 @@ function AssignPlanModal({
   scope,
   sourceClientId,
   sourcePlanName,
-  source,
-  userId,
-  hasNutritionPro,
+  sourceVersionId,
   today,
 }: {
   visible: boolean
@@ -810,16 +877,24 @@ function AssignPlanModal({
   scope: NutritionV2CoachScope
   sourceClientId: string
   sourcePlanName: string
-  source: AssignSourcePlan
-  userId: string
-  hasNutritionPro: boolean
+  /** Versión vigente que la ficha mostró: CAS anti-stale que el servidor valida tras releer la fuente. */
+  sourceVersionId: string
   today: string
 }) {
   const { theme } = useTheme()
   const [roster, setRoster] = useState<AssignRosterEntry[]>([])
+  const [rosterHasMore, setRosterHasMore] = useState(false)
   const [rosterLoading, setRosterLoading] = useState(false)
   const [rosterError, setRosterError] = useState(false)
   const [search, setSearch] = useState('')
+  // Resultados de la búsqueda server-side (null = todavía no aplica: término corto o sin respuesta).
+  const [remote, setRemote] = useState<AssignRosterEntry[] | null>(null)
+  const [searching, setSearching] = useState(false)
+  const [searchError, setSearchError] = useState<string | null>(null)
+  // Nombres vistos en CUALQUIER página o búsqueda de esta apertura: el reporte final debe poder
+  // nombrar a un alumno seleccionado en una búsqueda ya descartada (si no, caería a "Alumno").
+  const [seenNames, setSeenNames] = useState<Record<string, string>>({})
+  const searchTicketRef = useRef(0)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [effectiveFrom, setEffectiveFrom] = useState(today)
   const [submitting, setSubmitting] = useState(false)
@@ -835,12 +910,20 @@ function AssignPlanModal({
     }
   }, [])
 
-  // Carga bajo demanda (al abrir): reset del estado + paginación keyset del hub scoped (tope 8×50,
-  // excluye la fuente, marca hasPlan), misma fuente que el web. Fresh operationId por apertura.
+  const term = search.trim()
+  const useRemote = term.length >= ROSTER_MIN_SERVER_SEARCH_LEN
+
+  // Carga bajo demanda (al abrir): reset del estado + PRIMERA página alfabética del roster scoped
+  // (NUT-026). Antes se encadenaban hasta 8 páginas del hub (tope silencioso de 400 alumnos, con el
+  // #401 invisible e imbuscable) y se filtraba en memoria. Fresh operationId por apertura.
   useEffect(() => {
     if (!visible) return
     operationId.current = genAssignOperationId()
     setSearch('')
+    setRemote(null)
+    setSearching(false)
+    setSearchError(null)
+    setSeenNames({})
     setSelected(new Set())
     setEffectiveFrom(today)
     setTopError(null)
@@ -850,27 +933,14 @@ function AssignPlanModal({
     let active = true
     void (async () => {
       try {
-        const collected: AssignRosterEntry[] = []
-        let cursor: { updatedAt: string; clientId: string } | null = null
-        for (let page = 0; page < 8; page += 1) {
-          const hub = await getNutritionCoachHubV2({
-            scope,
-            cursorUpdatedAt: cursor?.updatedAt ?? null,
-            cursorClientId: cursor?.clientId ?? null,
-            pageSize: 50,
-          })
-          for (const item of hub.items) {
-            if (item.clientId === sourceClientId) continue
-            collected.push({
-              clientId: item.clientId,
-              clientName: item.clientName,
-              hasPlan: item.planStatus === 'published',
-            })
-          }
-          if (!hub.hasMore || !hub.nextCursor) break
-          cursor = hub.nextCursor
-        }
-        if (active) setRoster(collected)
+        const page = await getNutritionCoachRosterV2({
+          db: supabase as unknown as NutritionV2WriteClient,
+          scope,
+          pageSize: NUTRITION_COACH_ROSTER_PAGE_SIZE,
+        })
+        if (!active) return
+        setRoster(rosterEntriesFrom(page.items, sourceClientId))
+        setRosterHasMore(page.hasMore)
       } catch {
         if (active) setRosterError(true)
       } finally {
@@ -882,17 +952,60 @@ function AssignPlanModal({
     }
   }, [visible, scope, sourceClientId, today])
 
+  // Búsqueda server-side con debounce de 300 ms; `searchTicketRef` descarta respuestas fuera de
+  // orden (una petición lenta no puede pisar el resultado de un término más nuevo).
+  useEffect(() => {
+    if (!visible || !useRemote) {
+      setRemote(null)
+      setSearching(false)
+      setSearchError(null)
+      return
+    }
+    setSearching(true)
+    setSearchError(null)
+    const ticket = ++searchTicketRef.current
+    const timer = setTimeout(() => {
+      void getNutritionCoachRosterV2({
+        db: supabase as unknown as NutritionV2WriteClient,
+        scope,
+        search: term,
+        pageSize: NUTRITION_COACH_ROSTER_PAGE_SIZE,
+      })
+        .then((page) => {
+          if (ticket !== searchTicketRef.current) return
+          const entries = rosterEntriesFrom(page.items, sourceClientId)
+          setRemote(entries)
+          setSeenNames((prev) => {
+            const next = { ...prev }
+            for (const entry of entries) next[entry.clientId] = entry.clientName
+            return next
+          })
+        })
+        .catch(() => {
+          if (ticket === searchTicketRef.current) {
+            setSearchError('No pudimos buscar alumnos. Intenta de nuevo.')
+          }
+        })
+        .finally(() => {
+          if (ticket === searchTicketRef.current) setSearching(false)
+        })
+    }, ROSTER_SEARCH_DEBOUNCE_MS)
+    return () => clearTimeout(timer)
+  }, [visible, useRemote, term, scope, sourceClientId])
+
   const nameById = useMemo(() => {
     const map = new Map<string, string>()
     for (const entry of roster) map.set(entry.clientId, entry.clientName)
+    for (const [clientId, clientName] of Object.entries(seenNames)) map.set(clientId, clientName)
     return map
-  }, [roster])
+  }, [roster, seenNames])
 
   const filtered = useMemo(() => {
+    if (useRemote) return remote ?? []
     const needle = normalizeName(search)
     if (needle.length === 0) return roster
     return roster.filter((entry) => normalizeName(entry.clientName).includes(needle))
-  }, [roster, search])
+  }, [useRemote, remote, roster, search])
 
   const toggle = useCallback((clientId: string) => {
     setSelected((prev) => {
@@ -907,6 +1020,9 @@ function AssignPlanModal({
     operationId.current = genAssignOperationId()
     setSelected(new Set())
     setSearch('')
+    setRemote(null)
+    setSearchError(null)
+    setSeenNames({})
     setEffectiveFrom(today)
     setResults(null)
     setTopError(null)
@@ -927,20 +1043,18 @@ function AssignPlanModal({
     setSubmitting(true)
     setTopError(null)
     const res = await assignNutritionPlanToClients({
-      db: supabase as unknown as NutritionV2WriteClient,
-      userId,
-      source,
       sourceClientId,
+      sourceScope: scope,
+      expectedVersionId: sourceVersionId,
       targetClientIds: [...selected],
       effectiveFrom: effectiveFrom.trim(),
       operationId: operationId.current,
-      hasNutritionPro,
     })
     if (!mountedRef.current) return
     setSubmitting(false)
     if (res.ok) setResults({ items: res.results, summary: res.summary })
     else setTopError(res.error)
-  }, [selected, submitting, effectiveFrom, userId, source, sourceClientId, hasNutritionPro])
+  }, [selected, submitting, effectiveFrom, scope, sourceClientId, sourceVersionId])
 
   const confirmLabel = submitting
     ? 'Asignando…'
@@ -1034,7 +1148,7 @@ function AssignPlanModal({
                   No pudimos cargar la lista de alumnos. Cierra y vuelve a intentar.
                 </Text>
               </View>
-            ) : roster.length === 0 ? (
+            ) : roster.length === 0 && !rosterHasMore ? (
               <View className="items-center rounded-control border border-border-subtle bg-surface-sunken px-4 py-8">
                 <Users color={theme.mutedForeground} size={28} />
                 <Text className="mt-2 text-center text-sm text-text-muted">
@@ -1050,9 +1164,23 @@ function AssignPlanModal({
                     onChangeText={(value) => setSearch(value.slice(0, 120))}
                     placeholder="Buscar alumno…"
                     placeholderTextColor={theme.mutedForeground}
+                    autoCorrect={false}
                     className="min-h-11 flex-1 py-2 text-base text-text-strong"
                   />
+                  {searching ? <ActivityIndicator color={theme.mutedForeground} size="small" /> : null}
                 </View>
+
+                {/* Honestidad del tope (NUT-026): la primera página no es todo el espacio. */}
+                {rosterHasMore && !useRemote ? (
+                  <Text className="text-xs text-text-muted">
+                    Tu espacio tiene más alumnos de los que caben aquí. Escribe para buscarlos a todos.
+                  </Text>
+                ) : null}
+                {searchError ? (
+                  <View className="rounded-control border border-danger-500/30 bg-danger-500/10 px-3 py-2">
+                    <Text className="text-sm font-medium text-danger-600">{searchError}</Text>
+                  </View>
+                ) : null}
 
                 <View className="flex-row items-center justify-between">
                   <Text className="text-xs text-text-muted">
@@ -1080,7 +1208,15 @@ function AssignPlanModal({
 
                 <View className="gap-2">
                   {filtered.length === 0 ? (
-                    <Text className="py-6 text-center text-sm text-text-muted">Sin coincidencias.</Text>
+                    searching ? (
+                      <View className="items-center py-6">
+                        <ActivityIndicator color={theme.primary} />
+                      </View>
+                    ) : (
+                      <Text className="py-6 text-center text-sm text-text-muted">
+                        {searchError ? 'No pudimos completar la búsqueda.' : 'Sin coincidencias.'}
+                      </Text>
+                    )
                   ) : (
                     filtered.map((entry) => {
                       const isSelected = selected.has(entry.clientId)
@@ -1153,23 +1289,24 @@ function AssignPlanModal({
 // ---------------------------------------------------------------------------
 // Confirmación "Archivar plan vigente" (delta 8). Sheet nativeModal (patrón PublishConfirmSheet,
 // resolución del juez), copy no tóxico, botón destructivo + Cancelar, bloqueo durante la escritura
-// y offline fail-closed. La escritura la hace archiveNutritionPlan (UPDATE RLS-scoped idempotente).
+// y offline fail-closed. La escritura la hace archiveNutritionPlan via la API movil (UPDATE
+// RLS-scoped e idempotente server-side; NUT-005).
 // ---------------------------------------------------------------------------
 
 function ArchivePlanConfirmSheet({
   open,
+  scope,
   clientId,
   planId,
   planName,
-  userId,
   onClose,
   onArchived,
 }: {
   open: boolean
+  scope: NutritionV2CoachScope
   clientId: string
   planId: string
   planName: string
-  userId: string
   onClose: () => void
   onArchived: () => void
 }) {
@@ -1203,12 +1340,7 @@ function ArchivePlanConfirmSheet({
       return
     }
     setPending(true)
-    const outcome = await archiveNutritionPlan({
-      db: supabase as unknown as NutritionV2WriteClient,
-      userId,
-      clientId,
-      planId,
-    })
+    const outcome = await archiveNutritionPlan({ scope, clientId, planId })
     if (!mountedRef.current) return
     setPending(false)
     if (outcome.code === 'OK') {
@@ -1216,7 +1348,7 @@ function ArchivePlanConfirmSheet({
       return
     }
     setError(outcome.error)
-  }, [pending, userId, clientId, planId, onArchived])
+  }, [pending, scope, clientId, planId, onArchived])
 
   return (
     <Sheet
