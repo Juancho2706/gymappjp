@@ -111,16 +111,23 @@ function DismissButton({ onPress, color }: { onPress: () => void; color: string 
       accessibilityRole="button"
       accessibilityLabel="Descartar aviso"
       hitSlop={10}
-      style={({ pressed }) => ({
-        width: 28,
-        height: 28,
-        borderRadius: 14,
-        alignItems: 'center',
-        justifyContent: 'center',
-        opacity: pressed ? 0.6 : 1,
-      })}
     >
-      <X size={16} color={color} strokeWidth={2.2} />
+      {/* css-interop descarta `style` cuando es funcion (auditoria a1 §2.1): el layout vive en esta
+          View interna con `style` estatico y el estado `pressed` llega por children-as-function. */}
+      {({ pressed }) => (
+        <View
+          style={{
+            width: 28,
+            height: 28,
+            borderRadius: 14,
+            alignItems: 'center',
+            justifyContent: 'center',
+            opacity: pressed ? 0.6 : 1,
+          }}
+        >
+          <X size={16} color={color} strokeWidth={2.2} />
+        </View>
+      )}
     </Pressable>
   )
 }

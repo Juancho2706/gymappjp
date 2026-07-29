@@ -412,28 +412,33 @@ export function WorkoutSummaryOverlay({
                 <Pressable
                   testID={`summary-pr-${pr.exerciseName}`}
                   onPress={() => onOpenPr(pr)}
-                  // rounded-lg (8px) es la excepción visual explícita de la card dorada (spec §5.2 /
-                  // web WorkoutSummaryOverlay.tsx:346), NO el rounded-control del DS.
-                  style={({ pressed }) => ({ borderRadius: 8, borderWidth: 1, borderColor: 'rgba(251,191,36,0.25)', backgroundColor: pressed ? 'rgba(255,255,255,0.12)' : W06, paddingHorizontal: 12, paddingVertical: 8 })}
                 >
-                  <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
-                    <Text style={{ flex: 1, fontFamily: BOLD, fontSize: 14, color: ON_DARK }}>{pr.exerciseName}</Text>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                      <Share2 size={12} color="rgba(253,230,138,0.9)" />
-                      <Text style={{ fontFamily: SEMIBOLD, fontSize: 10, color: 'rgba(253,230,138,0.9)' }}>Compartir</Text>
+                  {/* css-interop descarta `style` cuando es función (auditoría a1 §2.1): el chrome de la
+                      card vive en esta View interna con `style` estático y `pressed` llega por
+                      children-as-function. rounded-lg (8px) es la excepción visual explícita de la card
+                      dorada (spec §5.2 / web WorkoutSummaryOverlay.tsx:346), NO el rounded-control del DS. */}
+                  {({ pressed }) => (
+                    <View style={{ borderRadius: 8, borderWidth: 1, borderColor: 'rgba(251,191,36,0.25)', backgroundColor: pressed ? 'rgba(255,255,255,0.12)' : W06, paddingHorizontal: 12, paddingVertical: 8 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
+                        <Text style={{ flex: 1, fontFamily: BOLD, fontSize: 14, color: ON_DARK }}>{pr.exerciseName}</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                          <Share2 size={12} color="rgba(253,230,138,0.9)" />
+                          <Text style={{ fontFamily: SEMIBOLD, fontSize: 10, color: 'rgba(253,230,138,0.9)' }}>Compartir</Text>
+                        </View>
+                      </View>
+                      <Text style={{ fontFamily: theme.fontSans, fontSize: 12, color: ON_DARK_MUTED, marginTop: 2 }}>
+                        {pr.prevWeightKg} kg → {pr.newWeightKg} kg{pr.pct > 0 ? ` (+${pr.pct}%)` : ''}
+                      </Text>
+                      {pr.prevAchievedAt ? (
+                        <Text style={{ fontFamily: theme.fontSans, fontSize: 10, color: 'rgba(253,230,138,0.8)', marginTop: 4 }}>
+                          Superaste tus {pr.prevWeightKg} kg del {fmtShortDate(pr.prevAchievedAt)}
+                        </Text>
+                      ) : null}
+                      <Text style={{ fontFamily: theme.fontSans, fontSize: 10, color: ON_DARK_MUTED, marginTop: 4 }}>
+                        1RM estimado: <Text style={{ fontFamily: SEMIBOLD, color: ON_DARK }}>{pr.estimated1RM} kg</Text>
+                      </Text>
                     </View>
-                  </View>
-                  <Text style={{ fontFamily: theme.fontSans, fontSize: 12, color: ON_DARK_MUTED, marginTop: 2 }}>
-                    {pr.prevWeightKg} kg → {pr.newWeightKg} kg{pr.pct > 0 ? ` (+${pr.pct}%)` : ''}
-                  </Text>
-                  {pr.prevAchievedAt ? (
-                    <Text style={{ fontFamily: theme.fontSans, fontSize: 10, color: 'rgba(253,230,138,0.8)', marginTop: 4 }}>
-                      Superaste tus {pr.prevWeightKg} kg del {fmtShortDate(pr.prevAchievedAt)}
-                    </Text>
-                  ) : null}
-                  <Text style={{ fontFamily: theme.fontSans, fontSize: 10, color: ON_DARK_MUTED, marginTop: 4 }}>
-                    1RM estimado: <Text style={{ fontFamily: SEMIBOLD, color: ON_DARK }}>{pr.estimated1RM} kg</Text>
-                  </Text>
+                  )}
                 </Pressable>
                 </FadeIn>
               ))}
@@ -569,13 +574,18 @@ export function WorkoutSummaryOverlay({
           <Pressable
             testID="summary-share"
             onPress={() => { haptics.tap(); setShareOpen(true) }}
-            // h-10 (40px) secundario / h-12 (48px) primario — paridad numérica con web
-            // (WorkoutSummaryOverlay.tsx:509,520).
-            style={({ pressed }) => ({ height: 40, borderRadius: 14, borderWidth: 1, borderColor: BORDER_INV, backgroundColor: pressed ? 'rgba(255,255,255,0.14)' : W08, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 })}
           >
-            <Share2 size={16} color={ON_DARK} />
-            {/* Web (WorkoutSummaryOverlay.tsx:509): `font-semibold text-sm` (peso 600), no bold. */}
-            <Text style={{ fontFamily: SEMIBOLD, fontSize: 14, color: ON_DARK }}>Compartir logro</Text>
+            {/* css-interop descarta `style` cuando es función (auditoría a1 §2.1): alto, borde y fondo
+                viven en esta View interna con `style` estático y `pressed` llega por children-as-function.
+                h-10 (40px) secundario / h-12 (48px) primario — paridad numérica con web
+                (WorkoutSummaryOverlay.tsx:509,520). */}
+            {({ pressed }) => (
+              <View style={{ height: 40, borderRadius: 14, borderWidth: 1, borderColor: BORDER_INV, backgroundColor: pressed ? 'rgba(255,255,255,0.14)' : W08, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                <Share2 size={16} color={ON_DARK} />
+                {/* Web (WorkoutSummaryOverlay.tsx:509): `font-semibold text-sm` (peso 600), no bold. */}
+                <Text style={{ fontFamily: SEMIBOLD, fontSize: 14, color: ON_DARK }}>Compartir logro</Text>
+              </View>
+            )}
           </Pressable>
           <Pressable
             testID="summary-done"

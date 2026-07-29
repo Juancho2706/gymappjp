@@ -247,22 +247,29 @@ export function RollerScreenV3({
                 testID="btn-roller-dec-v3"
                 onPress={dec}
                 disabled={count === 0}
-                style={({ pressed }) => ({
-                  height: 72,
-                  borderRadius: 16,
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  borderWidth: 2,
-                  borderColor: hexToRgba('#f87171', 0.55),
-                  backgroundColor: hexToRgba('#f87171', 0.14),
-                  opacity: count === 0 ? 0.4 : 1,
-                  transform: [{ translateY: pressed && count > 0 ? 5 : 0 }],
-                })}
                 accessibilityRole="button"
                 accessibilityLabel="Restar una pasada"
               >
-                <Minus size={24} color="#f87171" strokeWidth={3} />
+                {/* css-interop descarta `style` cuando es función (auditoría a1 §2.1): la cara roja del
+                    botón vive en esta View interna con `style` estático. */}
+                {({ pressed }) => (
+                  <View
+                    style={{
+                      height: 72,
+                      borderRadius: 16,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      borderWidth: 2,
+                      borderColor: hexToRgba('#f87171', 0.55),
+                      backgroundColor: hexToRgba('#f87171', 0.14),
+                      opacity: count === 0 ? 0.4 : 1,
+                      transform: [{ translateY: pressed && count > 0 ? 5 : 0 }],
+                    }}
+                  >
+                    <Minus size={24} color="#f87171" strokeWidth={3} />
+                  </View>
+                )}
               </Pressable>
             </View>
           </View>

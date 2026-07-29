@@ -391,27 +391,34 @@ export function SupersetScreenV3({
                   <Pressable
                     testID={`btn-prev-autofill-ss-${m.block.id}`}
                     onPress={() => setAutofill({ weight: m.bestPrev!.weight_kg, reps: m.bestPrev!.reps_done, nonce: Date.now() })}
-                    style={({ pressed }) => ({
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      gap: 8,
-                      paddingHorizontal: 15,
-                      paddingVertical: 11,
-                      borderRadius: 14,
-                      borderWidth: 2,
-                      borderStyle: 'dashed',
-                      borderColor: s.borderStrong,
-                      backgroundColor: pressed ? hexToRgba(exec.accent, 0.08) : s.surfaceRaised,
-                    })}
                     accessibilityRole="button"
                     accessibilityLabel={m.bestPrev.weight_kg ? `Usar la última vez: ${m.bestPrev.weight_kg} kg por ${m.bestPrev.reps_done ?? '-'} reps` : undefined}
                   >
-                    <Text style={{ fontFamily: FONT.uiSemibold, fontSize: 12, color: s.textMuted }}>Anterior</Text>
-                    <Text style={{ fontFamily: FONT.monoBold, fontSize: 14, color: s.text, fontVariant: ['tabular-nums'] }}>
-                      {m.bestPrev.weight_kg ? `${m.bestPrev.weight_kg} kg` : '-'} × {m.bestPrev.reps_done || '-'}
-                    </Text>
-                    <Text style={{ fontFamily: FONT.uiExtra, fontSize: 11, color: exec.accent }}>1 tap ↻</Text>
+                    {/* css-interop descarta `style` cuando es función (auditoría a1 §2.1): el chrome
+                        punteado de la fila vive en esta View interna con `style` estático. */}
+                    {({ pressed }) => (
+                      <View
+                        style={{
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          gap: 8,
+                          paddingHorizontal: 15,
+                          paddingVertical: 11,
+                          borderRadius: 14,
+                          borderWidth: 2,
+                          borderStyle: 'dashed',
+                          borderColor: s.borderStrong,
+                          backgroundColor: pressed ? hexToRgba(exec.accent, 0.08) : s.surfaceRaised,
+                        }}
+                      >
+                        <Text style={{ fontFamily: FONT.uiSemibold, fontSize: 12, color: s.textMuted }}>Anterior</Text>
+                        <Text style={{ fontFamily: FONT.monoBold, fontSize: 14, color: s.text, fontVariant: ['tabular-nums'] }}>
+                          {m.bestPrev!.weight_kg ? `${m.bestPrev!.weight_kg} kg` : '-'} × {m.bestPrev!.reps_done || '-'}
+                        </Text>
+                        <Text style={{ fontFamily: FONT.uiExtra, fontSize: 11, color: exec.accent }}>1 tap ↻</Text>
+                      </View>
+                    )}
                   </Pressable>
                 )}
 

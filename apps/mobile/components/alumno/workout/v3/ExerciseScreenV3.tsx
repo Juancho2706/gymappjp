@@ -340,50 +340,57 @@ export function ExerciseScreenV3({
           testID="btn-prev-autofill-v3"
           disabled={firstUnlogged == null}
           onPress={() => { if (firstUnlogged != null) setAutofill({ weight: bestPrev.weight_kg, reps: bestPrev.reps_done, nonce: Date.now() }) }}
-          style={({ pressed }) => ({
-            flexDirection: 'row',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: 8,
-            paddingHorizontal: 15,
-            paddingVertical: 11,
-            borderRadius: 14,
-            borderWidth: 2,
-            borderStyle: 'dashed',
-            borderColor: s.borderStrong,
-            backgroundColor: pressed && firstUnlogged != null ? hexToRgba(exec.accent, 0.08) : s.surfaceRaised,
-            opacity: firstUnlogged == null ? 0.55 : 1,
-          })}
           accessibilityRole="button"
           accessibilityLabel={firstUnlogged != null && bestPrev.weight_kg ? `Usar la última vez: ${bestPrev.weight_kg} kg por ${bestPrev.reps_done ?? '-'} reps` : undefined}
         >
-          {/* Mockup `.a3a-prev .l`: sólo el rótulo "Anterior" (sin ícono extra). */}
-          <Text style={{ fontFamily: FONT.uiSemibold, fontSize: 12, color: prRecent ? exec.pr : s.textMuted }}>Anterior</Text>
-          {/* Marca previa: tachada cuando la serie recién cerrada la superó (PR en vivo). */}
-          <Text
-            style={{
-              fontFamily: FONT.monoBold,
-              fontSize: 14,
-              color: prRecent ? s.textMuted : s.text,
-              fontVariant: ['tabular-nums'],
-              textDecorationLine: prRecent ? 'line-through' : 'none',
-            }}
-          >
-            {bestPrev.weight_kg ? `${bestPrev.weight_kg} kg` : '-'} × {bestPrev.reps_done || '-'}
-          </Text>
-          {prRecent ? (
-            // Flecha arriba dorada + peso que superó la marca (mockup "PR en vivo").
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
-              <ArrowUp size={14} color={exec.pr} strokeWidth={3} />
-              {prNewWeightKg != null && (
-                <Text style={{ fontFamily: FONT.monoBold, fontSize: 14, color: exec.pr, fontVariant: ['tabular-nums'] }}>
-                  {prNewWeightKg} kg
-                </Text>
-              )}
+          {/* css-interop descarta `style` cuando es función (auditoría a1 §2.1): el chrome punteado de
+              la fila vive en esta View interna con `style` estático. */}
+          {({ pressed }) => (
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 8,
+                paddingHorizontal: 15,
+                paddingVertical: 11,
+                borderRadius: 14,
+                borderWidth: 2,
+                borderStyle: 'dashed',
+                borderColor: s.borderStrong,
+                backgroundColor: pressed && firstUnlogged != null ? hexToRgba(exec.accent, 0.08) : s.surfaceRaised,
+                opacity: firstUnlogged == null ? 0.55 : 1,
+              }}
+            >
+              {/* Mockup `.a3a-prev .l`: sólo el rótulo "Anterior" (sin ícono extra). */}
+              <Text style={{ fontFamily: FONT.uiSemibold, fontSize: 12, color: prRecent ? exec.pr : s.textMuted }}>Anterior</Text>
+              {/* Marca previa: tachada cuando la serie recién cerrada la superó (PR en vivo). */}
+              <Text
+                style={{
+                  fontFamily: FONT.monoBold,
+                  fontSize: 14,
+                  color: prRecent ? s.textMuted : s.text,
+                  fontVariant: ['tabular-nums'],
+                  textDecorationLine: prRecent ? 'line-through' : 'none',
+                }}
+              >
+                {bestPrev.weight_kg ? `${bestPrev.weight_kg} kg` : '-'} × {bestPrev.reps_done || '-'}
+              </Text>
+              {prRecent ? (
+                // Flecha arriba dorada + peso que superó la marca (mockup "PR en vivo").
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+                  <ArrowUp size={14} color={exec.pr} strokeWidth={3} />
+                  {prNewWeightKg != null && (
+                    <Text style={{ fontFamily: FONT.monoBold, fontSize: 14, color: exec.pr, fontVariant: ['tabular-nums'] }}>
+                      {prNewWeightKg} kg
+                    </Text>
+                  )}
+                </View>
+              ) : firstUnlogged != null ? (
+                <Text style={{ fontFamily: FONT.uiExtra, fontSize: 11, color: exec.accent }}>1 tap ↻</Text>
+              ) : null}
             </View>
-          ) : firstUnlogged != null ? (
-            <Text style={{ fontFamily: FONT.uiExtra, fontSize: 11, color: exec.accent }}>1 tap ↻</Text>
-          ) : null}
+          )}
         </Pressable>
       )}
 

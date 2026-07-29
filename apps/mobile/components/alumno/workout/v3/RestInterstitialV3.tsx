@@ -554,7 +554,12 @@ function RestButton({
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel ?? label}
-      style={({ pressed: p }) => ({
+      // css-interop descarta `style` cuando es funcion (auditoria a1 §2.1) y el boton perdia flex/alto/
+      // borde. El `flex:1` DEBE vivir aqui (los secundarios comparten fila), asi que el estado de
+      // pulsacion pasa por onPressIn/onPressOut — el mismo que ya usa la rama `primary`.
+      onPressIn={() => setPressed(true)}
+      onPressOut={() => setPressed(false)}
+      style={{
         flex: 1,
         height: 54,
         borderRadius: 15,
@@ -565,8 +570,8 @@ function RestButton({
         borderWidth: 2,
         backgroundColor: s.surfaceRaised,
         borderColor: s.borderStrong,
-        transform: [{ scale: p ? 0.96 : 1 }],
-      })}
+        transform: [{ scale: pressed ? 0.96 : 1 }],
+      }}
     >
       {icon}
       <Text style={{ fontFamily: FONT.uiExtra, fontSize: 15, color: s.text, fontVariant: ['tabular-nums'] }}>{label}</Text>

@@ -228,9 +228,14 @@ export function IntervalTimer({ phases, onClose }: IntervalTimerProps) {
               // `selected` mapeaba a otra semántica (listas/tabs), no a toggle.
               accessibilityRole="togglebutton"
               accessibilityState={{ checked: wakeLockOn }}
-              style={({ pressed }) => [styles.utilBtn, wakeLockOn ? styles.wakeOn : null, pressed && styles.utilBtnPressed]}
             >
-              <Sun size={14} color={wakeLockOn ? WARNING_500 : ON_DARK_MUTED} />
+              {/* css-interop descarta `style` cuando es función (auditoría a1 §2.1): el círculo/pill de
+                  44px vive en una View interna estática y `pressed` llega por children-as-function. */}
+              {({ pressed }) => (
+                <View style={[styles.utilBtn, wakeLockOn ? styles.wakeOn : null, pressed && styles.utilBtnPressed]}>
+                  <Sun size={14} color={wakeLockOn ? WARNING_500 : ON_DARK_MUTED} />
+                </View>
+              )}
             </Pressable>
             {!finished && !manual ? (
               <>
@@ -240,9 +245,12 @@ export function IntervalTimer({ phases, onClose }: IntervalTimerProps) {
                   accessibilityRole="button"
                   accessibilityLabel={isActive ? 'Pausar' : 'Reanudar'}
                   hitSlop={6}
-                  style={({ pressed }) => [styles.utilBtn, pressed && styles.utilBtnPressed]}
                 >
-                  {isActive ? <Pause size={14} color={ON_DARK_MUTED} /> : <Play size={14} color={ON_DARK_MUTED} />}
+                  {({ pressed }) => (
+                    <View style={[styles.utilBtn, pressed && styles.utilBtnPressed]}>
+                      {isActive ? <Pause size={14} color={ON_DARK_MUTED} /> : <Play size={14} color={ON_DARK_MUTED} />}
+                    </View>
+                  )}
                 </Pressable>
                 <Pressable
                   testID="interval-timer-skip"
@@ -250,9 +258,12 @@ export function IntervalTimer({ phases, onClose }: IntervalTimerProps) {
                   accessibilityRole="button"
                   accessibilityLabel="Saltar fase"
                   hitSlop={6}
-                  style={({ pressed }) => [styles.utilBtn, pressed && styles.utilBtnPressed]}
                 >
-                  <SkipForward size={14} color={ON_DARK_MUTED} />
+                  {({ pressed }) => (
+                    <View style={[styles.utilBtn, pressed && styles.utilBtnPressed]}>
+                      <SkipForward size={14} color={ON_DARK_MUTED} />
+                    </View>
+                  )}
                 </Pressable>
               </>
             ) : null}
@@ -261,9 +272,12 @@ export function IntervalTimer({ phases, onClose }: IntervalTimerProps) {
               onPress={onClose}
               accessibilityRole="button"
               accessibilityLabel="Cerrar timer"
-              style={({ pressed }) => [styles.utilBtn, pressed && styles.utilBtnPressed]}
             >
-              <X size={14} color={ON_DARK_MUTED} />
+              {({ pressed }) => (
+                <View style={[styles.utilBtn, pressed && styles.utilBtnPressed]}>
+                  <X size={14} color={ON_DARK_MUTED} />
+                </View>
+              )}
             </Pressable>
           </View>
         </View>
@@ -288,14 +302,21 @@ export function IntervalTimer({ phases, onClose }: IntervalTimerProps) {
             onPress={skip}
             accessibilityRole="button"
             accessibilityLabel="Fase siguiente"
-            style={({ pressed }) => [
-              styles.nextPhaseBtn,
-              { backgroundColor: theme.primary },
-              pressed && styles.utilBtnPressed,
-            ]}
           >
-            <Text style={[styles.nextPhaseLabel, { color: theme.primaryForeground }]}>Fase siguiente</Text>
-            <SkipForward size={14} color={theme.primaryForeground} />
+            {/* css-interop descarta `style` cuando es función (auditoría a1 §2.1): el pill primario vive
+                en esta View interna con `style` estático. */}
+            {({ pressed }) => (
+              <View
+                style={[
+                  styles.nextPhaseBtn,
+                  { backgroundColor: theme.primary },
+                  pressed && styles.utilBtnPressed,
+                ]}
+              >
+                <Text style={[styles.nextPhaseLabel, { color: theme.primaryForeground }]}>Fase siguiente</Text>
+                <SkipForward size={14} color={theme.primaryForeground} />
+              </View>
+            )}
           </Pressable>
         ) : null}
         {wakeLockOn ? (

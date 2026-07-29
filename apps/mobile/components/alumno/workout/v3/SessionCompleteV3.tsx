@@ -436,42 +436,49 @@ export function SessionCompleteV3({
                 <Pressable
                   testID="final-pr"
                   onPress={() => setPrCard(topPr)}
-                  style={({ pressed }) => ({
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    gap: 12,
-                    borderRadius: 16,
-                    borderWidth: 2,
-                    borderColor: hexToRgba(gold, 0.5),
-                    backgroundColor: hexToRgba(gold, pressed ? 0.24 : 0.14),
-                    paddingHorizontal: 14,
-                    paddingVertical: 12,
-                  })}
                 >
-                  <View style={{ width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: gold }}>
-                    <Medal size={20} color="#3a2a06" strokeWidth={2.6} />
-                  </View>
-                  <View style={{ flex: 1, minWidth: 0 }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 6 }}>
-                      <NumberTicker
-                        value={topPr.newWeightKg}
-                        format={(n) => formatWeightEsCl(n)}
-                        play={showStats}
-                        reduced={reducedMotion}
-                        delayMs={reducedMotion ? 0 : 160}
-                        style={{ fontFamily: FONT.displayBlack, fontSize: 22, color: gold, fontVariant: ['tabular-nums'] }}
-                      />
-                      <Text style={{ fontFamily: FONT.uiBold, fontSize: 13, color: hexToRgba(gold, 0.9) }}>kg</Text>
+                  {/* css-interop descarta `style` cuando es funcion (auditoria a1 §2.1): el chrome dorado
+                      vive en esta View interna con `style` estatico. */}
+                  {({ pressed }) => (
+                    <View
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: 12,
+                        borderRadius: 16,
+                        borderWidth: 2,
+                        borderColor: hexToRgba(gold, 0.5),
+                        backgroundColor: hexToRgba(gold, pressed ? 0.24 : 0.14),
+                        paddingHorizontal: 14,
+                        paddingVertical: 12,
+                      }}
+                    >
+                      <View style={{ width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: gold }}>
+                        <Medal size={20} color="#3a2a06" strokeWidth={2.6} />
+                      </View>
+                      <View style={{ flex: 1, minWidth: 0 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 6 }}>
+                          <NumberTicker
+                            value={topPr.newWeightKg}
+                            format={(n) => formatWeightEsCl(n)}
+                            play={showStats}
+                            reduced={reducedMotion}
+                            delayMs={reducedMotion ? 0 : 160}
+                            style={{ fontFamily: FONT.displayBlack, fontSize: 22, color: gold, fontVariant: ['tabular-nums'] }}
+                          />
+                          <Text style={{ fontFamily: FONT.uiBold, fontSize: 13, color: hexToRgba(gold, 0.9) }}>kg</Text>
+                        </View>
+                        <Text style={{ fontFamily: FONT.uiBold, fontSize: 12, color: s.textMuted }} numberOfLines={1}>
+                          PR · {topPr.exerciseName}
+                          {detectedPRs.length > 1 ? ` · +${detectedPRs.length - 1} más` : ''}
+                        </Text>
+                      </View>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+                        <Share2 size={13} color={hexToRgba(gold, 0.9)} />
+                        <Text style={{ fontFamily: FONT.uiSemibold, fontSize: 10, color: hexToRgba(gold, 0.9) }}>Compartir</Text>
+                      </View>
                     </View>
-                    <Text style={{ fontFamily: FONT.uiBold, fontSize: 12, color: s.textMuted }} numberOfLines={1}>
-                      PR · {topPr.exerciseName}
-                      {detectedPRs.length > 1 ? ` · +${detectedPRs.length - 1} más` : ''}
-                    </Text>
-                  </View>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
-                    <Share2 size={13} color={hexToRgba(gold, 0.9)} />
-                    <Text style={{ fontFamily: FONT.uiSemibold, fontSize: 10, color: hexToRgba(gold, 0.9) }}>Compartir</Text>
-                  </View>
+                  )}
                 </Pressable>
               </FadeIn>
             ) : null}
@@ -557,17 +564,24 @@ export function SessionCompleteV3({
               onPress={onDone}
               accessibilityRole="button"
               accessibilityLabel="Volver al inicio"
-              style={({ pressed }) => ({
-                height: 52,
-                borderRadius: 15,
-                backgroundColor: pressed ? '#22222c' : '#1c1c24',
-                borderWidth: 2,
-                borderColor: '#2f2f3a',
-                alignItems: 'center',
-                justifyContent: 'center',
-              })}
             >
-              <Text style={{ fontFamily: FONT.uiExtra, fontSize: 15, letterSpacing: 0.3, color: '#e8e8ee' }}>Volver al inicio</Text>
+              {/* css-interop descarta `style` cuando es funcion (auditoria a1 §2.1): el chrome del
+                  secundario vive en esta View interna con `style` estatico. */}
+              {({ pressed }) => (
+                <View
+                  style={{
+                    height: 52,
+                    borderRadius: 15,
+                    backgroundColor: pressed ? '#22222c' : '#1c1c24',
+                    borderWidth: 2,
+                    borderColor: '#2f2f3a',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <Text style={{ fontFamily: FONT.uiExtra, fontSize: 15, letterSpacing: 0.3, color: '#e8e8ee' }}>Volver al inicio</Text>
+                </View>
+              )}
             </Pressable>
           </View>
         </SafeAreaView>

@@ -122,42 +122,56 @@ export function StopwatchTimer({ onClose }: StopwatchTimerProps) {
             <Text style={styles.eyebrow}>Cronómetro</Text>
             <Text style={styles.bigTime}>{formatTime(elapsed)}</Text>
           </View>
+          {/* css-interop descarta `style` cuando es función (auditoría a1 §2.1): el círculo de 44px vive
+              en una View interna con `style` estático y `pressed` llega por children-as-function. */}
           <View style={styles.utilRow}>
             <Pressable
               testID="stopwatch-lap"
               onPress={addLap}
               accessibilityRole="button"
               accessibilityLabel="Marcar vuelta"
-              style={({ pressed }) => [styles.utilBtn, pressed && styles.utilBtnPressed]}
             >
-              <Flag size={14} color={ON_DARK_MUTED} />
+              {({ pressed }) => (
+                <View style={[styles.utilBtn, pressed && styles.utilBtnPressed]}>
+                  <Flag size={14} color={ON_DARK_MUTED} />
+                </View>
+              )}
             </Pressable>
             <Pressable
               testID="stopwatch-pause"
               onPress={togglePause}
               accessibilityRole="button"
               accessibilityLabel={isActive ? 'Pausar' : 'Reanudar'}
-              style={({ pressed }) => [styles.utilBtn, pressed && styles.utilBtnPressed]}
             >
-              {isActive ? <Pause size={14} color={ON_DARK_MUTED} /> : <Play size={14} color={ON_DARK_MUTED} />}
+              {({ pressed }) => (
+                <View style={[styles.utilBtn, pressed && styles.utilBtnPressed]}>
+                  {isActive ? <Pause size={14} color={ON_DARK_MUTED} /> : <Play size={14} color={ON_DARK_MUTED} />}
+                </View>
+              )}
             </Pressable>
             <Pressable
               testID="stopwatch-reset"
               onPress={reset}
               accessibilityRole="button"
               accessibilityLabel="Reiniciar"
-              style={({ pressed }) => [styles.utilBtn, pressed && styles.utilBtnPressed]}
             >
-              <RotateCcw size={14} color={ON_DARK_MUTED} />
+              {({ pressed }) => (
+                <View style={[styles.utilBtn, pressed && styles.utilBtnPressed]}>
+                  <RotateCcw size={14} color={ON_DARK_MUTED} />
+                </View>
+              )}
             </Pressable>
             <Pressable
               testID="stopwatch-close"
               onPress={onClose}
               accessibilityRole="button"
               accessibilityLabel="Cerrar cronómetro"
-              style={({ pressed }) => [styles.utilBtn, pressed && styles.utilBtnPressed]}
             >
-              <X size={14} color={ON_DARK_MUTED} />
+              {({ pressed }) => (
+                <View style={[styles.utilBtn, pressed && styles.utilBtnPressed]}>
+                  <X size={14} color={ON_DARK_MUTED} />
+                </View>
+              )}
             </Pressable>
           </View>
         </View>

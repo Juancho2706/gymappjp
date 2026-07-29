@@ -197,9 +197,15 @@ export function CommandPalette<T = unknown>({
                   }}
                   hitSlop={10}
                   accessibilityLabel="Limpiar"
-                  style={({ pressed }) => [styles.clearBtn, pressed && { backgroundColor: theme.muted }]}
                 >
-                  <X size={14} color={theme.mutedForeground} />
+                  {/* css-interop descarta `style` cuando es función en cualquier
+                      componente RN core (auditoría a1 §2.1): estilo estático en
+                      esta View interna, pressed via children-as-function. */}
+                  {({ pressed }) => (
+                    <View style={[styles.clearBtn, pressed && { backgroundColor: theme.muted }]}>
+                      <X size={14} color={theme.mutedForeground} />
+                    </View>
+                  )}
                 </Pressable>
               ) : null}
             </View>

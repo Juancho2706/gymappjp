@@ -73,6 +73,95 @@ function hexToRgba(hex: string, alpha: number): string {
   return `rgba(${r},${g},${b},${alpha})`
 }
 
+interface TabBarButtonProps {
+  item: TabBarItem
+  active: boolean
+  floating: boolean
+  minimized: boolean
+  brand: string
+  onPress: (value: string) => void
+}
+
+// css-interop descarta `style` cuando es función en cualquier componente RN
+// core (auditoría a1 §2.1). El estilo pressed (scale) vive en el mismo
+// contenedor que el layout flex:1/gap/padding, así que se resuelve con
+// estado local (onPressIn/onPressOut) en vez de `style={({pressed}) => …}`.
+// Componente propio (no closure dentro de .map) para que useState sea legal.
+function TabBarButton({ item, active, floating, minimized, brand, onPress }: TabBarButtonProps) {
+  const [pressed, setPressed] = useState(false)
+  const Icon = item.icon
+  const color = active ? brand : INK_400
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityState={{ selected: active }}
+      accessibilityLabel={item.label}
+      onPress={() => onPress(item.value)}
+      onPressIn={() => setPressed(true)}
+      onPressOut={() => setPressed(false)}
+      style={[
+        {
+          position: 'relative',
+          zIndex: 1,
+          flex: 1,
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: floating && minimized ? 0 : 3,
+          paddingVertical: floating ? (minimized ? 5 : 6) : 4,
+        },
+        pressed ? { transform: [{ scale: 0.96 }] } : null,
+      ]}
+    >
+      <MotiView
+        animate={{ translateY: active ? -1 : 0 }}
+        transition={SPRING}
+        style={{ width: 24, height: 24, alignItems: 'center', justifyContent: 'center' }}
+      >
+        <Icon
+          size={24}
+          color={color}
+          strokeWidth={2}
+          // Active glyph fills with the brand color at low opacity (DS
+          // `.eva-tabbar-ico-on svg { fill: currentColor; fill-opacity:.18 }`).
+          // lucide-react-native spreads fill/fillOpacity onto each child node.
+          {...(active ? { fill: brand, fillOpacity: 0.18 } : null)}
+        />
+      </MotiView>
+      {floating ? (
+        <MotiView
+          animate={{ height: minimized ? 0 : 14, opacity: minimized ? 0 : 1 }}
+          transition={{ type: 'timing', duration: 220 }}
+          style={{ overflow: 'hidden', justifyContent: 'center' }}
+        >
+          <Text
+            numberOfLines={1}
+            style={{
+              fontSize: 10,
+              letterSpacing: 0.1,
+              color,
+              fontFamily: active ? 'HankenGrotesk_800ExtraBold' : 'HankenGrotesk_600SemiBold',
+            }}
+          >
+            {item.label}
+          </Text>
+        </MotiView>
+      ) : (
+        <Text
+          numberOfLines={1}
+          style={{
+            fontSize: 10.5,
+            letterSpacing: 0.1,
+            color,
+            fontFamily: active ? 'HankenGrotesk_700Bold' : 'HankenGrotesk_600SemiBold',
+          }}
+        >
+          {item.label}
+        </Text>
+      )}
+    </Pressable>
+  )
+}
+
 export function TabBar({
   items = [],
   value,
@@ -100,77 +189,16 @@ export function TabBar({
   }
 
   function renderButton(it: TabBarItem) {
-    const active = it.value === value
-    const Icon = it.icon
-    const color = active ? brand : INK_400
-    const isFloating = floating
     return (
-      <Pressable
+      <TabBarButton
         key={it.value}
-        accessibilityRole="button"
-        accessibilityState={{ selected: active }}
-        accessibilityLabel={it.label}
-        onPress={() => handlePress(it.value)}
-        style={({ pressed }) => [
-          {
-            position: 'relative',
-            zIndex: 1,
-            flex: 1,
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: isFloating && minimized ? 0 : 3,
-            paddingVertical: isFloating ? (minimized ? 5 : 6) : 4,
-          },
-          pressed ? { transform: [{ scale: 0.96 }] } : null,
-        ]}
-      >
-        <MotiView
-          animate={{ translateY: active ? -1 : 0 }}
-          transition={SPRING}
-          style={{ width: 24, height: 24, alignItems: 'center', justifyContent: 'center' }}
-        >
-          <Icon
-            size={24}
-            color={color}
-            strokeWidth={2}
-            // Active glyph fills with the brand color at low opacity (DS
-            // `.eva-tabbar-ico-on svg { fill: currentColor; fill-opacity:.18 }`).
-            // lucide-react-native spreads fill/fillOpacity onto each child node.
-            {...(active ? { fill: brand, fillOpacity: 0.18 } : null)}
-          />
-        </MotiView>
-        {isFloating ? (
-          <MotiView
-            animate={{ height: minimized ? 0 : 14, opacity: minimized ? 0 : 1 }}
-            transition={{ type: 'timing', duration: 220 }}
-            style={{ overflow: 'hidden', justifyContent: 'center' }}
-          >
-            <Text
-              numberOfLines={1}
-              style={{
-                fontSize: 10,
-                letterSpacing: 0.1,
-                color,
-                fontFamily: active ? 'HankenGrotesk_800ExtraBold' : 'HankenGrotesk_600SemiBold',
-              }}
-            >
-              {it.label}
-            </Text>
-          </MotiView>
-        ) : (
-          <Text
-            numberOfLines={1}
-            style={{
-              fontSize: 10.5,
-              letterSpacing: 0.1,
-              color,
-              fontFamily: active ? 'HankenGrotesk_700Bold' : 'HankenGrotesk_600SemiBold',
-            }}
-          >
-            {it.label}
-          </Text>
-        )}
-      </Pressable>
+        item={it}
+        active={it.value === value}
+        floating={floating}
+        minimized={minimized}
+        brand={brand}
+        onPress={handlePress}
+      />
     )
   }
 

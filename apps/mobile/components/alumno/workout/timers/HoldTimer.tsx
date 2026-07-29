@@ -193,33 +193,44 @@ export function HoldTimer({ initialSeconds, label, onClose }: HoldTimerProps) {
             </Text>
           </View>
         </View>
+        {/* css-interop descarta `style` cuando es función (auditoría a1 §2.1): el círculo de 44px vive
+            en una View interna con `style` estático y `pressed` llega por children-as-function. */}
         <View style={styles.utilRow}>
           <Pressable
             testID="hold-timer-pause"
             onPress={toggle}
             accessibilityRole="button"
             accessibilityLabel={isActive ? 'Pausar' : 'Reanudar'}
-            style={({ pressed }) => [styles.utilBtn, pressed && styles.utilBtnPressed]}
           >
-            {isActive ? <Pause size={14} color={ON_DARK_MUTED} /> : <Play size={14} color={ON_DARK_MUTED} />}
+            {({ pressed }) => (
+              <View style={[styles.utilBtn, pressed && styles.utilBtnPressed]}>
+                {isActive ? <Pause size={14} color={ON_DARK_MUTED} /> : <Play size={14} color={ON_DARK_MUTED} />}
+              </View>
+            )}
           </Pressable>
           <Pressable
             testID="hold-timer-restart"
             onPress={restart}
             accessibilityRole="button"
             accessibilityLabel="Repetir hold"
-            style={({ pressed }) => [styles.utilBtn, pressed && styles.utilBtnPressed]}
           >
-            <RotateCcw size={14} color={ON_DARK_MUTED} />
+            {({ pressed }) => (
+              <View style={[styles.utilBtn, pressed && styles.utilBtnPressed]}>
+                <RotateCcw size={14} color={ON_DARK_MUTED} />
+              </View>
+            )}
           </Pressable>
           <Pressable
             testID="hold-timer-close"
             onPress={onClose}
             accessibilityRole="button"
             accessibilityLabel="Cerrar timer"
-            style={({ pressed }) => [styles.utilBtn, pressed && styles.utilBtnPressed]}
           >
-            <X size={14} color={ON_DARK_MUTED} />
+            {({ pressed }) => (
+              <View style={[styles.utilBtn, pressed && styles.utilBtnPressed]}>
+                <X size={14} color={ON_DARK_MUTED} />
+              </View>
+            )}
           </Pressable>
         </View>
       </MotiView>

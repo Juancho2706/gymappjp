@@ -318,35 +318,42 @@ export function ExecSettingsSheet({
               accessibilityRole="button"
               accessibilityState={{ disabled: finishing, busy: finishing }}
               accessibilityLabel={finishing ? 'Finalizando entrenamiento' : 'Finalizar entrenamiento'}
-              style={({ pressed }) => ({
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: 12,
-                paddingVertical: 14,
-                paddingHorizontal: 16,
-                borderRadius: 14,
-                borderWidth: 2,
-                borderColor: finishArmed && !finishing ? hexToRgba(exec.accent, 0.9) : s.borderStrong,
-                backgroundColor: finishArmed && !finishing ? exec.accent : s.surfaceRaised,
-                opacity: finishing ? 0.7 : pressed ? 0.92 : 1,
-              })}
             >
-              {finishing ? (
-                <ActivityIndicator size="small" color={s.text} style={{ width: 19, height: 19, transform: [{ scale: 0.85 }] }} />
-              ) : finishArmed ? (
-                <Sparkles size={19} color={exec.pr} strokeWidth={2.4} />
-              ) : (
-                <Flag size={19} color={s.text} strokeWidth={2.4} />
+              {/* css-interop descarta `style` cuando es función (auditoría a1 §2.1): el chrome del CTA
+                  vive en esta View interna con `style` estático. */}
+              {({ pressed }) => (
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 12,
+                    paddingVertical: 14,
+                    paddingHorizontal: 16,
+                    borderRadius: 14,
+                    borderWidth: 2,
+                    borderColor: finishArmed && !finishing ? hexToRgba(exec.accent, 0.9) : s.borderStrong,
+                    backgroundColor: finishArmed && !finishing ? exec.accent : s.surfaceRaised,
+                    opacity: finishing ? 0.7 : pressed ? 0.92 : 1,
+                  }}
+                >
+                  {finishing ? (
+                    <ActivityIndicator size="small" color={s.text} style={{ width: 19, height: 19, transform: [{ scale: 0.85 }] }} />
+                  ) : finishArmed ? (
+                    <Sparkles size={19} color={exec.pr} strokeWidth={2.4} />
+                  ) : (
+                    <Flag size={19} color={s.text} strokeWidth={2.4} />
+                  )}
+                  <Text
+                    style={{
+                      fontFamily: FONT.uiExtra,
+                      fontSize: 14,
+                      color: finishArmed && !finishing ? exec.accentText : s.text,
+                    }}
+                  >
+                    {finishing ? 'Finalizando…' : 'Finalizar entrenamiento'}
+                  </Text>
+                </View>
               )}
-              <Text
-                style={{
-                  fontFamily: FONT.uiExtra,
-                  fontSize: 14,
-                  color: finishArmed && !finishing ? exec.accentText : s.text,
-                }}
-              >
-                {finishing ? 'Finalizando…' : 'Finalizar entrenamiento'}
-              </Text>
             </Pressable>
           </View>
         ) : null}

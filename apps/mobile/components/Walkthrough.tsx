@@ -141,9 +141,16 @@ export function Walkthrough({ onDone }: Props) {
               accessibilityLabel="Saltar introducción"
               hitSlop={8}
               onPress={() => void finish()}
-              style={({ pressed }) => [styles.skip, pressed ? styles.pressed : null]}
+              style={styles.skip}
             >
-              <Text className="text-muted" style={TYPE.label}>Saltar</Text>
+              {/* css-interop descarta `style` cuando es función (auditoría a1
+                  §2.1): styles.skip es estático, pressed via children-as-function
+                  aplicado al Text (el pressed original solo tocaba opacity). */}
+              {({ pressed }) => (
+                <Text className="text-muted" style={[TYPE.label, pressed ? styles.pressed : null]}>
+                  Saltar
+                </Text>
+              )}
             </Pressable>
           ) : (
             <View style={styles.skipPlaceholder} />

@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { MotiView } from 'moti'
@@ -29,6 +30,10 @@ function WhatsAppGlyph({ size = 19 }: { size?: number }) {
 
 export function ProfileFloatingActions({ onWhatsApp, compact, enabled = true }: { onWhatsApp: () => void; compact: boolean; enabled?: boolean }) {
   const insets = useSafeAreaInsets()
+  // css-interop descarta `style` cuando es función (auditoría a1 §2.1): el
+  // estilo pressed vive en el mismo contenedor que backgroundColor/flex, así
+  // que se resuelve con estado local en vez de `style={({pressed}) => …}`.
+  const [pressed, setPressed] = useState(false)
   return (
     <MotiView
       pointerEvents="box-none"
@@ -48,11 +53,13 @@ export function ProfileFloatingActions({ onWhatsApp, compact, enabled = true }: 
             Haptics.selectionAsync().catch(() => {})
             onWhatsApp()
           }}
+          onPressIn={() => setPressed(true)}
+          onPressOut={() => setPressed(false)}
           accessibilityRole="button"
           accessibilityLabel={enabled ? 'Contactar por WhatsApp' : 'Sin teléfono para WhatsApp'}
           accessibilityState={{ disabled: !enabled }}
           testID="ficha-whatsapp"
-          style={({ pressed }) => [styles.btn, !enabled ? styles.disabled : null, pressed && enabled ? { opacity: 0.9 } : null]}
+          style={[styles.btn, !enabled ? styles.disabled : null, pressed && enabled ? { opacity: 0.9 } : null]}
         >
           <WhatsAppGlyph />
           <Text style={styles.label}>WhatsApp</Text>

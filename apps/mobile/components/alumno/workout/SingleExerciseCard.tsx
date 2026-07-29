@@ -142,6 +142,9 @@ export function SingleExerciseCard({
   const { theme } = useTheme()
   // Autollenado "= usar ultima vez": siembra las cajas KG/REPS de la fila activa (nonce dispara).
   const [autofill, setAutofill] = useState<{ weight: number | null; reps: number | null; nonce: number } | null>(null)
+  // Press de la fila "Ultima vez": css-interop descarta `style` cuando es funcion (auditoria a1 §2.1),
+  // asi que el estado viaja por onPressIn/onPressOut y `style` queda ESTATICO.
+  const [lastTimePressed, setLastTimePressed] = useState(false)
   const isStrength = effType === 'strength'
   const typeMeta = EXERCISE_TYPE_META[effType]
   const TypeIcon = typeMeta.Icon
@@ -447,7 +450,9 @@ export function SingleExerciseCard({
           // Feedback de presión: web escala la fila a 0.99 al presionar (enabled:active:scale-[0.99],
           // SingleExerciseCard web:299). RN colapsa hover+active en el press, así que mantenemos el tinte
           // (active:bg, equivalente al hover-tint de web) Y añadimos el scale del active de web.
-          style={({ pressed }) => (pressed && firstUnlogged != null ? { transform: [{ scale: 0.99 }] } : null)}
+          onPressIn={() => setLastTimePressed(true)}
+          onPressOut={() => setLastTimePressed(false)}
+          style={lastTimePressed && firstUnlogged != null ? { transform: [{ scale: 0.99 }] } : null}
           className="min-h-[40px] w-full flex-row flex-wrap items-center gap-x-2 gap-y-0.5 rounded-control py-1 active:bg-white/[0.05]"
           accessibilityRole="button"
           accessibilityLabel={firstUnlogged != null && bestPrev.weight_kg ? `Autollenar la serie activa con ${bestPrev.weight_kg} kg por ${bestPrev.reps_done ?? '-'} reps` : undefined}

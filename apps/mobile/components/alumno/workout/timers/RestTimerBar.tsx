@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import Svg, { Circle, G } from 'react-native-svg'
@@ -61,6 +61,10 @@ function formatTime(seconds: number): string {
 export function RestTimerBar({ engine, nextLabel, warmup = false, onExpand }: RestTimerBarProps) {
   const insets = useSafeAreaInsets()
   const motion = useEvaMotion()
+  // css-interop descarta `style` cuando es función (auditoría a1 §2.1) y los ±15s/mute perdían borde,
+  // fondo y `flex:1`. El `flex:1` DEBE vivir en el Pressable (si no, la fila se descuadra), así que el
+  // estado de pulsación pasa por onPressIn/onPressOut y `style` queda ESTÁTICO.
+  const [pressedKey, setPressedKey] = useState<'sub' | 'add' | 'mute' | null>(null)
 
   const {
     timeLeft,
@@ -209,7 +213,9 @@ export function RestTimerBar({ engine, nextLabel, warmup = false, onExpand }: Re
                   accessibilityRole="button"
                   accessibilityLabel="Restar 15 segundos"
                   // Micro-escala al presionar (espeja `active:scale-95` web `RestTimer.tsx:396`).
-                  style={({ pressed }) => [styles.adjustBtn, pressed && styles.pressedScale]}
+                  onPressIn={() => setPressedKey('sub')}
+                  onPressOut={() => setPressedKey(null)}
+                  style={[styles.adjustBtn, pressedKey === 'sub' && styles.pressedScale]}
                 >
                   <Text style={styles.adjustLabel}>−15s</Text>
                 </Pressable>
@@ -219,7 +225,9 @@ export function RestTimerBar({ engine, nextLabel, warmup = false, onExpand }: Re
                   accessibilityRole="button"
                   accessibilityLabel="Sumar 15 segundos"
                   // Micro-escala al presionar (espeja `active:scale-95` web `RestTimer.tsx:404`).
-                  style={({ pressed }) => [styles.adjustBtn, pressed && styles.pressedScale]}
+                  onPressIn={() => setPressedKey('add')}
+                  onPressOut={() => setPressedKey(null)}
+                  style={[styles.adjustBtn, pressedKey === 'add' && styles.pressedScale]}
                 >
                   <Text style={styles.adjustLabel}>+15s</Text>
                 </Pressable>
@@ -230,10 +238,12 @@ export function RestTimerBar({ engine, nextLabel, warmup = false, onExpand }: Re
                   accessibilityState={{ selected: muted }}
                   accessibilityLabel={muted ? 'Activar sonido del descanso' : 'Silenciar descanso'}
                   // Micro-escala al presionar (espeja `active:scale-95` web `RestTimer.tsx:414`).
-                  style={({ pressed }) => [
+                  onPressIn={() => setPressedKey('mute')}
+                  onPressOut={() => setPressedKey(null)}
+                  style={[
                     styles.muteBtn,
                     muted ? styles.muteOff : styles.muteOn,
-                    pressed && styles.pressedScale,
+                    pressedKey === 'mute' && styles.pressedScale,
                   ]}
                 >
                   {muted ? <VolumeX size={16} color={ON_DARK_MUTED} /> : <Volume2 size={16} color={EMBER_200} />}

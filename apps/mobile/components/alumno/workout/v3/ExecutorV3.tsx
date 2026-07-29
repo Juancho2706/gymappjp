@@ -1538,35 +1538,38 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
                       ? 'Entrenamiento completo. Finalizar entrenamiento'
                       : 'Finalizar entrenamiento'
                 }
-                style={({ pressed }) => ({
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: 8,
-                  width: '100%',
-                  height: 48,
-                  borderRadius: 14,
-                  borderWidth: 2,
-                  // Borde LUMINOSO cuando esta armado (blanco translucido sobre el relleno de
-                  // marca — QA CEO 2026-07-25: debe destacar, no fundirse con el fill).
-                  borderColor: finishArmed
-                    ? `rgba(255,255,255,${pressed ? 0.6 : 0.4})`
-                    : pressed
-                      ? '#3a3a45'
-                      : exec.surface.borderStrong,
-                  backgroundColor: finishArmed ? exec.accent : exec.surface.surface,
-                  opacity: finishing ? 0.7 : 1,
-                  transform: pressed ? [{ translateY: 1 }] : undefined,
-                  // Resplandor de marca: iOS por shadow, Android por elevation (moderada).
-                  shadowColor: finishArmed ? exec.accent : undefined,
-                  shadowOpacity: finishArmed ? 0.55 : 0,
-                  shadowRadius: finishArmed ? 14 : 0,
-                  shadowOffset: { width: 0, height: 4 },
-                  elevation: finishArmed ? 8 : 0,
-                })}
               >
+                {/* css-interop descarta `style` cuando es funcion (auditoria a1 §2.1) y la barra perdia
+                    TODO su chrome. El chrome vive ahora en esta View interna con `style` estatico. */}
                 {({ pressed }) => (
-                  <>
+                  <View
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 8,
+                      width: '100%',
+                      height: 48,
+                      borderRadius: 14,
+                      borderWidth: 2,
+                      // Borde LUMINOSO cuando esta armado (blanco translucido sobre el relleno de
+                      // marca — QA CEO 2026-07-25: debe destacar, no fundirse con el fill).
+                      borderColor: finishArmed
+                        ? `rgba(255,255,255,${pressed ? 0.6 : 0.4})`
+                        : pressed
+                          ? '#3a3a45'
+                          : exec.surface.borderStrong,
+                      backgroundColor: finishArmed ? exec.accent : exec.surface.surface,
+                      opacity: finishing ? 0.7 : 1,
+                      transform: pressed ? [{ translateY: 1 }] : undefined,
+                      // Resplandor de marca: iOS por shadow, Android por elevation (moderada).
+                      shadowColor: finishArmed ? exec.accent : undefined,
+                      shadowOpacity: finishArmed ? 0.55 : 0,
+                      shadowRadius: finishArmed ? 14 : 0,
+                      shadowOffset: { width: 0, height: 4 },
+                      elevation: finishArmed ? 8 : 0,
+                    }}
+                  >
                     {/* Mientras cierra la sesión: spinner + copy en gerundio (antes no había NINGUNA señal). */}
                     {finishing ? (
                       <ActivityIndicator size="small" color="#b7b7c2" style={{ width: 18, height: 18, transform: [{ scale: 0.85 }] }} />
@@ -1586,7 +1589,7 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
                     >
                       {finishing ? 'Finalizando…' : 'Finalizar entrenamiento'}
                     </Text>
-                  </>
+                  </View>
                 )}
               </Pressable>
             </Animated.View>
