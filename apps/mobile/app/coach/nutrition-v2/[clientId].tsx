@@ -53,9 +53,7 @@ import {
 } from '../../../lib/nutrition-v2.api'
 import {
   canAssignSourcePlan,
-  planReadModelToAssignSource,
   type AssignClientResult,
-  type AssignSourcePlan,
   type AssignSummary,
 } from '../../../lib/nutrition-v2-assign-archive'
 import type { NutritionV2WriteClient } from '../../../lib/nutrition-v2-builder'
@@ -359,7 +357,9 @@ export default function CoachNutritionV2ClientScreen() {
   })
   const planStatus = activePlan ? 'published' : null
   const ctaLabel = nutritionPlanCtaLabel(planStatus)
-  const builderHref = nutritionV2BuilderHref(detail.client.id)
+  // NUT-004: con plan vigente el builder DEBE recibir la raiz (`?planId=`) para publicar una
+  // version nueva sobre ella; sin plan queda sin query y crea la primera raiz. Espejo del web.
+  const builderHref = nutritionV2BuilderHref(detail.client.id, activePlan?.id ?? null)
   const showTodayPlanLag = activePlan !== null && (todayPlan === null || todayPlan.id !== activePlan.id)
   const todayPlanLagMessage =
     todayPlan === null
@@ -431,17 +431,28 @@ export default function CoachNutritionV2ClientScreen() {
             effectiveLabel={`desde ${(detail.today.plan ?? detail.plan.plan).effectiveFrom}`}
           />
           {/* Disparador secundario "Asignar a otros alumnos" (delta 2): en la fila de badges, a
-              la derecha (ml-auto), NUNCA en el header. Gateado por canAssign (delta 1). */}
+              la derecha (ml-auto), NUNCA en el header. Gateado por canAssign (delta 1).
+              NUT-012 — fail-closed con cache stale: `offline` significa que la ficha se está
+              mostrando desde la copia local (el refresco falló), así que el plan visible puede no
+              ser el vigente. Se deshabilita el disparador en vez de arriesgar copiar un plan viejo
+              a otros alumnos; al recuperar señal la ficha se re-lee y el CTA vuelve. */}
           {canAssign && userId ? (
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Asignar a otros alumnos"
+              accessibilityState={{ disabled: offline }}
+              disabled={offline}
               onPress={() => setAssignOpen(true)}
-              className="ml-auto min-h-11 flex-row items-center gap-1.5 rounded-control border border-border-subtle bg-surface-card px-3"
+              className={`ml-auto min-h-11 flex-row items-center gap-1.5 rounded-control border border-border-subtle bg-surface-card px-3 ${offline ? 'opacity-50' : ''}`}
             >
-              <UserPlus color={theme.primary} size={14} />
+              <UserPlus color={offline ? theme.textSecondary : theme.primary} size={14} />
               <Text className="text-xs font-semibold text-text-body">Asignar a otros alumnos</Text>
             </Pressable>
+          ) : null}
+          {canAssign && userId && offline ? (
+            <Text className="w-full text-[11px] text-text-muted">
+              Sin conexión no podemos confirmar que este sea el plan vigente: reintenta al recuperar señal.
+            </Text>
           ) : null}
         </View>
       ) : null}
@@ -687,6 +698,8 @@ export default function CoachNutritionV2ClientScreen() {
         </View>
       ) : null}
 
+      {/* NUT-012: la pantalla ya NO entrega la copia del plan (podría venir de cache stale); solo
+          el id de la versión vigente que mostró. La lib relee la fuente y corta si cambió. */}
       {canAssign && userId ? (
         <AssignPlanModal
           visible={assignOpen}
@@ -694,7 +707,7 @@ export default function CoachNutritionV2ClientScreen() {
           scope={scope}
           sourceClientId={detail.client.id}
           sourcePlanName={detail.plan.plan?.name ?? 'este plan'}
-          source={planReadModelToAssignSource(detail.plan)}
+          sourceVersionId={activePlan?.versionId ?? ''}
           userId={userId}
           hasNutritionPro={hasNutritionPro}
           today={date}
@@ -800,7 +813,7 @@ function AssignPlanModal({
   scope,
   sourceClientId,
   sourcePlanName,
-  source,
+  sourceVersionId,
   userId,
   hasNutritionPro,
   today,
@@ -810,7 +823,8 @@ function AssignPlanModal({
   scope: NutritionV2CoachScope
   sourceClientId: string
   sourcePlanName: string
-  source: AssignSourcePlan
+  /** Versión vigente que la ficha mostró: CAS anti-stale que la lib valida tras releer la fuente. */
+  sourceVersionId: string
   userId: string
   hasNutritionPro: boolean
   today: string
@@ -929,8 +943,10 @@ function AssignPlanModal({
     const res = await assignNutritionPlanToClients({
       db: supabase as unknown as NutritionV2WriteClient,
       userId,
-      source,
       sourceClientId,
+      sourceScope: scope,
+      expectedVersionId: sourceVersionId,
+      today,
       targetClientIds: [...selected],
       effectiveFrom: effectiveFrom.trim(),
       operationId: operationId.current,
@@ -940,7 +956,7 @@ function AssignPlanModal({
     setSubmitting(false)
     if (res.ok) setResults({ items: res.results, summary: res.summary })
     else setTopError(res.error)
-  }, [selected, submitting, effectiveFrom, userId, source, sourceClientId, hasNutritionPro])
+  }, [selected, submitting, effectiveFrom, userId, scope, sourceClientId, sourceVersionId, today, hasNutritionPro])
 
   const confirmLabel = submitting
     ? 'Asignando…'

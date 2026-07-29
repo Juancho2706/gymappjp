@@ -823,16 +823,27 @@ export function quickEditStateToDraft(input: {
 // quick-edit F1 (van fuera del QuickEditState para no ensuciar el diff): son carry-over puro.
 // ---------------------------------------------------------------------------
 
+/** Resultado del fetch de reemplazos: `error` NO es "sin reemplazos" (ver abajo). */
+export interface QuickEditSubstitutionsLoad {
+  status: 'loaded' | 'error'
+  byItem: Map<string, NutritionItemSubstitution[]>
+}
+
 /**
- * Fetch best-effort de los reemplazos de la version base, agrupados por `prescriptionItemId` y
- * convertidos a la forma de draft (`NutritionItemSubstitution`). Lectura directa RLS-scoped
+ * Fetch de los reemplazos de la version base, agrupados por `prescriptionItemId` y convertidos
+ * a la forma de draft (`NutritionItemSubstitution`). Lectura directa RLS-scoped
  * (`can_read_version`) con `NUTRITION_ITEM_SUBSTITUTION_SELECT` + `mapNutritionItemSubstitutionRow`
- * del paquete. Un error/plan sin reemplazos => mapa vacio (jamas bloquea la edicion).
+ * del paquete.
+ *
+ * El resultado es DISCRIMINADO a proposito (NUT-008): un fallo de lectura NO puede degradarse a
+ * mapa vacio, porque el publish reescribe el arbol COMPLETO y publicar sin carry-over BORRA los
+ * reemplazos que no se pudieron leer. `status: 'error'` obliga a la UI a bloquear el publish;
+ * un plan sin reemplazos es `status: 'loaded'` con el mapa vacio.
  */
 export async function loadQuickEditSubstitutions(
   db: NutritionV2WriteClient,
   versionId: string,
-): Promise<Map<string, NutritionItemSubstitution[]>> {
+): Promise<QuickEditSubstitutionsLoad> {
   const byItem = new Map<string, NutritionItemSubstitution[]>()
   try {
     const res = await db
@@ -840,7 +851,7 @@ export async function loadQuickEditSubstitutions(
       .select(NUTRITION_ITEM_SUBSTITUTION_SELECT)
       .eq('version_id', versionId)
       .order('order_index', { ascending: true })
-    if (res.error || !res.data) return byItem
+    if (res.error || !res.data) return { status: 'error', byItem }
     const rows = res.data as Parameters<typeof mapNutritionItemSubstitutionRow>[0][]
     for (const row of rows) {
       const mapped = mapNutritionItemSubstitutionRow(row)
@@ -858,10 +869,11 @@ export async function loadQuickEditSubstitutions(
       byItem.set(mapped.prescriptionItemId, bucket)
     }
   } catch {
-    // best-effort: sin carry-over el publish no pierde datos que no pudo leer, pero tampoco
-    // reintroduce reemplazos ilegibles — el fail-closed lo cubre el propio scope RLS.
+    // Red/parse caidos: NO es "sin reemplazos". Publicar con el mapa vacio los borraria del
+    // plan del alumno, asi que el estado viaja como 'error' y la UI bloquea el publish.
+    return { status: 'error', byItem: new Map() }
   }
-  return byItem
+  return { status: 'loaded', byItem }
 }
 
 /**
@@ -1140,9 +1152,10 @@ interface BaseVersionNotesRow {
  *  2. Notas: `visibleNotes` es EDITABLE (sale del estado, normalizada); solo protocol_notes
  *     se pisa con el carry-over de la base (F1 no lo edita). NO se lee ni copia
  *     `private_notes`: la columna same-row esta deprecada e ilegible por `authenticated`
- *     (grant SELECT revocado; notas privadas viven en nutrition_plan_private_notes_v2), asi
- *     que privateNotes queda null y republicar no las toca. Pedirla producia 42501
- *     "permission denied for table ..." y el publish fallaba.
+ *     (grant SELECT revocado) y pedirla producia 42501 "permission denied for table ...".
+ *     OJO (NUT-007): tampoco existe hoy una feature de nota privada versionada — la tabla
+ *     canonica `nutrition_plan_private_notes_v2` (PK version_id) NO la escribe nadie, asi que
+ *     no hay nada que preservar; implementarla exigira copy-forward explicito al republicar.
  *  3. Valida el draft con NutritionPlanDraftSchema.
  *  4. Delta-gate Pro: solo gatea features NUEVAS (contenido grandfathered pasa).
  *  5. Persiste y publica con p_expected_current_version_id = version base (CAS).

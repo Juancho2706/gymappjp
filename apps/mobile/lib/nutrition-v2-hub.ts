@@ -10,6 +10,27 @@
 
 export type NutritionAttentionReason = 'no_plan' | 'draft_pending' | 'no_recent_intake' | 'none'
 
+/** Claves del tablist del hub V2 (orden fijo, espejo de web `NutritionHubTabs`). */
+export const NUTRITION_HUB_TAB_KEYS = ['roster', 'foods', 'curation'] as const
+export type NutritionHubTabKey = (typeof NUTRITION_HUB_TAB_KEYS)[number]
+
+/**
+ * Tab inicial del hub a partir del query `?tab=` (NUT-027). El deep link `/coach/foods` redirige a
+ * `/coach/nutricion?tab=foods`, pero con V2 ON el hub montaba con `roster` fijo y el parametro se
+ * perdia. Traduce ADEMAS el vocabulario legacy de V1 (`templates|clients|foods|recipes`) al de V2:
+ * `foods` mapea directo y todo lo demas (incluido un valor invalido o ausente) cae a `roster`.
+ * `useLocalSearchParams` puede entregar `string[]`; se toma el primer valor.
+ */
+export function resolveNutritionHubInitialTab(
+  tab: string | string[] | null | undefined,
+): NutritionHubTabKey {
+  const raw = Array.isArray(tab) ? tab[0] : tab
+  const value = typeof raw === 'string' ? raw.trim().toLowerCase() : ''
+  if (value === 'foods') return 'foods'
+  if (value === 'curation') return 'curation'
+  return 'roster'
+}
+
 export type NutritionAttentionFilter =
   | 'all'
   | 'needs_attention'
@@ -242,9 +263,16 @@ export function nutritionPlanCtaLabel(planStatus: string | null): 'Crear plan' |
  * (`app/coach/nutrition-v2/builder/[clientId].tsx`, lee `params.clientId`) y NO existe
  * `builder/index.tsx`, asi que la forma de query (`builder?clientId=`) navegaba a una ruta sin
  * match. Espeja al web, que navega por segmento (`/coach/nutrition-v2/{clientId}/builder`).
+ *
+ * `planId` (NUT-004): cuando el alumno YA tiene una raiz de plan activa hay que propagarla para
+ * que el builder publique una VERSION NUEVA de esa raiz en vez de insertar otra raiz
+ * (`nutrition_plans_v2` no tiene invariante de una-raiz-activa-por-alumno). Espeja al web, que
+ * arma el draft con `existingPlan?.id` (PlanBuilderClient.tsx). Sin plan vigente se omite el
+ * query y el builder crea la primera raiz, como siempre.
  */
-export function nutritionV2BuilderHref(clientId: string): string {
-  return `/coach/nutrition-v2/builder/${encodeURIComponent(clientId)}`
+export function nutritionV2BuilderHref(clientId: string, planId?: string | null): string {
+  const base = `/coach/nutrition-v2/builder/${encodeURIComponent(clientId)}`
+  return planId ? `${base}?planId=${encodeURIComponent(planId)}` : base
 }
 
 /** Fecha local (YYYY-MM-DD) de un ISO en la zona horaria dada; null si no parsea. */

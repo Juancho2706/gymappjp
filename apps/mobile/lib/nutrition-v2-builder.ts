@@ -991,6 +991,38 @@ function collectFoodIds(draft: NutritionPlanDraft): string[] {
 }
 
 /**
+ * Resuelve un plan V2 ACTIVO del alumno que todavia NO tiene version publicada
+ * (`current_published_version_id` null) para REUTILIZARLO en vez de crear un duplicado.
+ * Espejo 1:1 del web `resolveReusableUnpublishedPlanId` (plan-persistence.ts), que RN nunca
+ * habia portado (NUT-004): sin este guard, cada reintento tras un fallo entre el INSERT del plan
+ * y el de la version dejaba una raiz huerfana y creaba OTRA, acumulando planes activos por alumno
+ * (la DB no tiene invariante de una-raiz-activa).
+ *
+ * RLS-scoped. Nunca reutiliza un plan ya publicado: esa ruta va por `draft.planId` explicito del
+ * builder (edicion), asi no tocamos un plan vivo.
+ */
+export async function resolveReusableUnpublishedPlanIdRN(
+  db: NutritionV2WriteClient,
+  clientId: string,
+): Promise<{ ok: true; planId: string | null } | { ok: false; code: string; error: string }> {
+  const res = await db
+    .from('nutrition_plans_v2')
+    .select('id, current_published_version_id')
+    .eq('client_id', clientId)
+    .eq('lifecycle_status', 'active')
+    .order('updated_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  if (res.error) {
+    const failure = mapWriteError(res.error, 'plan-huerfano')
+    return { ok: false, code: failure.code, error: failure.error }
+  }
+  const row = res.data as { id: string; current_published_version_id: string | null } | null
+  if (!row || row.current_published_version_id != null) return { ok: true, planId: null }
+  return { ok: true, planId: row.id }
+}
+
+/**
  * Persiste un draft (plan/version/variantes/franjas/items) via las tablas versionadas
  * RLS-scoped y publica transaccionalmente con publish_nutrition_plan_v2 (idempotente por
  * clave estable). MISMO camino de escritura que el web persistAndPublishDraft. NO hace el
@@ -1061,22 +1093,41 @@ export async function persistAndPublishDraft(input: {
     const maxRow = maxRes.data as { version_number: number } | null
     nextVersion = (maxRow?.version_number ?? 0) + 1
   } else {
-    const planIns = await db
-      .from('nutrition_plans_v2')
-      .insert({
-        client_id: draft.clientId,
-        coach_id: clientScope.coach_id,
-        org_id: clientScope.org_id,
-        team_id: clientScope.team_id,
-        name: draft.name,
-        strategy: draft.strategy,
-        created_by: userId,
-        updated_by: userId,
-      })
-      .select('id')
-      .single()
-    if (planIns.error || !planIns.data) return mapWriteError(planIns.error ?? { message: 'no plan' }, 'plan')
-    planId = planIns.data.id
+    // Prevencion de planes huerfanos / raices duplicadas (NUT-004, paridad con web): si el alumno
+    // ya tiene un plan ACTIVO sin version publicada (basura de un intento previo que fallo entre el
+    // INSERT del plan y el de la version), REUTILIZALO en vez de crear otro.
+    const reusable = await resolveReusableUnpublishedPlanIdRN(db, draft.clientId)
+    if (!reusable.ok) return publishFail(reusable.code, reusable.error)
+    if (reusable.planId) {
+      planId = reusable.planId
+      const maxRes = await db
+        .from('nutrition_plan_versions_v2')
+        .select('version_number')
+        .eq('plan_id', planId)
+        .order('version_number', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+      if (maxRes.error) return mapWriteError(maxRes.error, 'version')
+      const maxRow = maxRes.data as { version_number: number } | null
+      nextVersion = (maxRow?.version_number ?? 0) + 1
+    } else {
+      const planIns = await db
+        .from('nutrition_plans_v2')
+        .insert({
+          client_id: draft.clientId,
+          coach_id: clientScope.coach_id,
+          org_id: clientScope.org_id,
+          team_id: clientScope.team_id,
+          name: draft.name,
+          strategy: draft.strategy,
+          created_by: userId,
+          updated_by: userId,
+        })
+        .select('id')
+        .single()
+      if (planIns.error || !planIns.data) return mapWriteError(planIns.error ?? { message: 'no plan' }, 'plan')
+      planId = planIns.data.id
+    }
   }
 
   const versionIns = await db

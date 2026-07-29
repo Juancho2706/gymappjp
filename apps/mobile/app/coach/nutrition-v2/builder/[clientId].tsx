@@ -417,6 +417,11 @@ export default function CoachNutritionV2BuilderScreen() {
 
   const validation = useMemo(() => validateStep(state, state.step), [state])
 
+  // Copy del encabezado: la raiz puede venir por query (CTA del hub/ficha) o del plan vigente ya
+  // resuelto (deep link viejo). El numero de version sale del param cuando viaja y si no del plan.
+  const headerPlanId = planId ?? existingPlan?.id ?? null
+  const headerVersionNumber = versionNumber || existingPlan?.versionNumber || 0
+
   const steps = STEP_META.map((meta, index) => {
     let stepState: 'upcoming' | 'current' | 'complete' | 'error' = 'upcoming'
     if (index === state.step) stepState = showErrors && !validation.ok ? 'error' : 'current'
@@ -500,9 +505,18 @@ export default function CoachNutritionV2BuilderScreen() {
       setPublishError(null)
       setConflictError(null)
       setDateConflict(false)
+      // NUT-004: publicar SIN la raiz del alumno inserta OTRA raiz activa (la DB no tiene invariante
+      // de una-raiz-por-alumno) y reinicia el versionado en v1. La ruta puede no traer `planId`
+      // (deep link viejo / borrador restaurado), asi que caemos al plan vigente ya resuelto. Y si la
+      // lectura aun no resolvio, NO publicamos: hacerlo por carrera de carga crearia la raiz extra.
+      if (!existingPlanResolved) {
+        setPublishError('Estamos verificando si el alumno ya tiene un plan. Espera un segundo y vuelve a intentar.')
+        return
+      }
+      const effectivePlanId = planId ?? existingPlan?.id ?? null
       let draft
       try {
-        draft = assembleAndValidateDraft(state, { clientId, planId, portionsBySlot: portions.bySlot })
+        draft = assembleAndValidateDraft(state, { clientId, planId: effectivePlanId, portionsBySlot: portions.bySlot })
       } catch {
         setShowErrors(true)
         setPublishError('El plan tiene datos incompletos. Revisa los pasos marcados y vuelve a intentar.')
@@ -540,7 +554,19 @@ export default function CoachNutritionV2BuilderScreen() {
       }
       setPublishError(res.error)
     },
-    [userId, clientId, planId, state, today, hasNutritionPro, portions.bySlot, portions.groups, existingPlan, goToPublished],
+    [
+      userId,
+      clientId,
+      planId,
+      state,
+      today,
+      hasNutritionPro,
+      portions.bySlot,
+      portions.groups,
+      existingPlan,
+      existingPlanResolved,
+      goToPublished,
+    ],
   )
 
   // "Empezar manana": mueve la vigencia al dia siguiente al del plan vigente (garantiza que el RPC
@@ -782,11 +808,11 @@ export default function CoachNutritionV2BuilderScreen() {
           ) : null}
 
           <NutritionHeader
-            eyebrow={planId ? 'Nueva version' : 'Nuevo plan'}
+            eyebrow={headerPlanId ? 'Nueva versión' : 'Nuevo plan'}
             title={clientName || 'Constructor de nutrición'}
             description={
-              planId
-                ? `Al publicar se creará la versión v${versionNumber + 1} y la actual pasará a anterior.`
+              headerPlanId
+                ? `Al publicar se creará la versión v${headerVersionNumber + 1} y la actual pasará a anterior.`
                 : 'Arma el plan en cuatro pasos y publícalo.'
             }
           />
@@ -842,8 +868,8 @@ export default function CoachNutritionV2BuilderScreen() {
           ) : (
             <NutritionMotionButton
               accessibilityLabel="Publicar plan"
-              pending={publishing}
-              disabled={publishing}
+              pending={publishing || !existingPlanResolved}
+              disabled={publishing || !existingPlanResolved}
               onPress={() => void handlePublish()}
             >
               Publicar plan
@@ -1928,8 +1954,14 @@ function ReviewStep({
 }) {
   const { theme } = useTheme()
   const strategy = state.strategy ?? 'flexible'
-  const totals = dayTotals(state)
   const usesSlots = strategyUsesSlots(state.strategy)
+  // Total prescrito COMBINADO (items + porciones a elección), idéntico al "Total del día" del paso
+  // Construcción (Dudu-B F2): antes este paso sumaba solo `dayTotals(state)`, así que la misma
+  // pantalla mostraba dos matemáticas distintas. Sin catálogo cargado el derivado es null y
+  // `combineSubtotals` devuelve los totales de items intactos (jamás NaN).
+  const liveKeys = state.slots.map((s) => s.key)
+  const portionDay = portions.groups ? derivePortionTotals(liveKeys, portions.bySlot, portions.groups) : null
+  const totals = combineSubtotals(dayTotals(state), portionDay)
   return (
     <View className="gap-4">
       <View className="flex-row flex-wrap items-center gap-2">
@@ -1979,6 +2011,11 @@ function ReviewStep({
               <View className="px-1">
                 <Text className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-text-muted">Total prescrito</Text>
                 <MacroChipRow calories={totals.calories} proteinG={totals.proteinG} carbsG={totals.carbsG} fatsG={totals.fatsG} />
+                {portionDay != null ? (
+                  <Text className="mt-1 text-[11px] text-text-muted">
+                    {PORTIONS_COPY.builder.subtotalPortionsNote(String(Math.round(portionDay.calories)))}
+                  </Text>
+                ) : null}
               </View>
             </View>
           ) : (

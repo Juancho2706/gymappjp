@@ -30,6 +30,7 @@ import {
   assignmentKeyForClient,
   buildDraftForTarget,
   classifyArchiveWrite,
+  planReadModelToAssignSource,
   validateAssignTargets,
   ArchivePlanInputSchema,
   type AssignClientResult,
@@ -282,18 +283,29 @@ export type AssignNutritionPlanResult =
 
 /**
  * Asigna el plan FUENTE a otros alumnos (D-03). Espejo 1:1 del web assignPlanToClientsAction:
- * valida la selección (pura), aplica el gate Pro UNA vez sobre el draft resultante (fail-closed:
- * sin addon + estrategia híbrida/multi-variante => UPGRADE_REQUIRED sin tocar la red) y, por CADA
- * destino, resuelve el plan activo (append-versión) o crea uno nuevo, valida el draft copiado
- * contra el contrato y publica con clave de idempotencia estable por (operación, destino). Reporte
- * PARCIAL: no aborta al primer fallo. La `source` es la estructura del plan que ya está en pantalla
- * (read-model del detalle), no re-consulta nada.
+ * valida la selección (pura), RELEE la fuente, aplica el gate Pro UNA vez sobre el draft resultante
+ * (fail-closed: sin addon + estrategia híbrida/multi-variante => UPGRADE_REQUIRED sin tocar la red)
+ * y, por CADA destino, resuelve el plan activo (append-versión) o crea uno nuevo, valida el draft
+ * copiado contra el contrato y publica con clave de idempotencia estable por (operación, destino).
+ * Reporte PARCIAL: no aborta al primer fallo.
+ *
+ * NUT-012 — frescura de la FUENTE: antes se copiaba el read-model que ya estaba en pantalla, que en
+ * RN puede venir de la CACHE STALE (la ficha hidrata con `allowStale: true` y se queda con el
+ * payload viejo si el refresco falla). Ahora la fuente se re-lee AQUI y se compara contra
+ * `expectedVersionId` (la versión que el coach vio al abrir el diálogo): si cambió, se corta con
+ * SOURCE_VERSION_MISMATCH en vez de propagar un plan viejo a hasta MAX_ASSIGN_TARGETS alumnos.
+ * Espejo del guard web (nutrition-assign.actions.ts), que también re-lee server-side.
  */
 export async function assignNutritionPlanToClients(input: {
   db: NutritionV2WriteClient
   userId: string
-  source: AssignSourcePlan
   sourceClientId: string
+  /** Scope del workspace activo del coach (el read model del detalle es scoped, fail-closed). */
+  sourceScope: NutritionV2CoachScope
+  /** `versionId` del plan vigente que la pantalla mostró al abrir el diálogo (CAS anti-stale). */
+  expectedVersionId: string
+  /** Fecha local (YYYY-MM-DD) con la que se lee el read model de la fuente. */
+  today: string
   targetClientIds: string[]
   effectiveFrom: string
   operationId: string
@@ -303,7 +315,39 @@ export async function assignNutritionPlanToClients(input: {
   if (!targetsCheck.ok) return { ok: false, code: targetsCheck.code, error: targetsCheck.error }
   const targets = targetsCheck.targets
 
-  if (!input.source.plan || input.source.dayVariants.length === 0) {
+  // Re-lectura de la FUENTE (nunca la cache de la pantalla). Si falla, cortamos ruidosamente: es
+  // preferible un error honesto a copiar un plan potencialmente viejo (par obligado del guard
+  // offline de la pantalla).
+  let sourceDetail: NutritionClientDetailReadModel
+  try {
+    sourceDetail = await getNutritionClientDetailV2({
+      clientId: input.sourceClientId,
+      scope: input.sourceScope,
+      date: input.today,
+    })
+  } catch {
+    return {
+      ok: false,
+      code: 'SOURCE_READ_FAILED',
+      error: 'No pudimos releer el plan de origen. Revisa tu conexión e intenta de nuevo.',
+    }
+  }
+
+  const freshPlan = sourceDetail.plan.plan
+  if (!freshPlan || sourceDetail.plan.dayVariants.length === 0) {
+    return { ok: false, code: 'SOURCE_NO_PLAN', error: 'El alumno de origen no tiene un plan V2 vigente para copiar.' }
+  }
+  // Guarda anti-stale: la versión vigente debe ser la MISMA que el coach vio al abrir el diálogo.
+  if (freshPlan.versionId !== input.expectedVersionId) {
+    return {
+      ok: false,
+      code: 'SOURCE_VERSION_MISMATCH',
+      error: 'El plan de origen cambió. Vuelve a abrir el diálogo e intenta de nuevo.',
+    }
+  }
+
+  const source: AssignSourcePlan = planReadModelToAssignSource(sourceDetail.plan)
+  if (!source.plan || source.dayVariants.length === 0) {
     return { ok: false, code: 'SOURCE_NO_PLAN', error: 'El alumno de origen no tiene un plan V2 vigente para copiar.' }
   }
 
@@ -311,7 +355,7 @@ export async function assignNutritionPlanToClients(input: {
   // destinos): estrategia híbrida o múltiples variantes exigen el addon. Se checa UNA vez. El
   // servidor (RLS + RPC) lo RE-VALIDA; este chequeo cliente solo evita fricción.
   const probe = buildDraftForTarget({
-    source: input.source,
+    source,
     targetClientId: targets[0],
     effectiveFrom: input.effectiveFrom,
   })
@@ -336,7 +380,7 @@ export async function assignNutritionPlanToClients(input: {
     }
 
     const built = buildDraftForTarget({
-      source: input.source,
+      source,
       targetClientId,
       effectiveFrom: input.effectiveFrom,
       planId: planIdRes.planId,
